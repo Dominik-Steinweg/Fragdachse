@@ -204,7 +204,7 @@
       "burrow": {
         "maxDurationMs": 2000,
         "speedFactor": 1,
-        "spawnBurrowedAtLeftEdge": true,
+        "spawnBurrowedAtEdge": true,
         "spawnTunnelMinDistancePx": 96,
         "spawnTunnelTimeoutMs": 5000,
         "crossesTrainTracks": true
@@ -330,7 +330,7 @@
       "burrow": {
         "maxDurationMs": 2000,
         "speedFactor": 1.6,
-        "spawnBurrowedAtLeftEdge": true,
+        "spawnBurrowedAtEdge": true,
         "spawnTunnelMinDistancePx": 0,
         "spawnTunnelTimeoutMs": 3000,
         "crossesTrainTracks": true
@@ -442,7 +442,7 @@
       "burrow": {
         "maxDurationMs": 8000,
         "speedFactor": 1,
-        "spawnBurrowedAtLeftEdge": false,
+        "spawnBurrowedAtEdge": false,
         "spawnTunnelMinDistancePx": 0,
         "spawnTunnelTimeoutMs": 8000,
         "crossesTrainTracks": false

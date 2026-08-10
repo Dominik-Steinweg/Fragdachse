@@ -1091,6 +1091,7 @@ export class HostUpdateCoordinator {
         state.phaseStartedAtMs,
         state.phaseEndsAtMs ?? 'open',
         state.spawnComplete ?? 'unknown',
+        state.fronts.join(','),
         // Jeder erledigte Gegner ist ein echter Anzeigewechsel und muss repliziert werden.
         state.enemiesDefeated ?? 'none',
         state.enemiesTotal ?? 'none',

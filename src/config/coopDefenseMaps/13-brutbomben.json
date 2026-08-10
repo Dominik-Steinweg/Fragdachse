@@ -2,6 +2,7 @@
   "mapId": "13",
   "displayName": "Map 13 - Brutbomben",
   "arenaWidthCells": 135,
+  "arenaHeightCells": 40,
   "timeOfDay": "18:45",
   "tutorialText": "Wurf-Dachse schleudern Brutbomben, aus denen Tollwut-Dachse schlüpfen. Fangt sie früh ab. Der größere Brutbau wird von zwei Fliegenpilztürmen verteidigt, die auf euch schießen.",
   "tutorialDurationMs": 10000,
@@ -619,6 +620,7 @@
       "intervalMs": 11000,
       "countPerTick": 1,
       "startAtMs": 0,
+      "front": "north",
       "source": {
         "type": "map"
       }
@@ -678,12 +680,14 @@
       "groups": [
         {
           "enemyKind": "demon-badger",
-          "count": 2
+          "count": 2,
+          "front": "west"
         },
         {
           "enemyKind": "spore-warden",
           "count": 1,
-          "delayMs": 2500
+          "delayMs": 2500,
+          "front": "west"
         }
       ]
     },
@@ -696,7 +700,8 @@
       "groups": [
         {
           "enemyKind": "rabid-badger",
-          "count": 2
+          "count": 2,
+          "front": "south"
         }
       ]
     }

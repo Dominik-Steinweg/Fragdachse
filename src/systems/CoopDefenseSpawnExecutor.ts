@@ -6,11 +6,19 @@ import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyKind,
 } from '../config/coopDefenseEnemies';
+import type { SpawnFront } from '../types';
+import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_GROUP_DISTANCE_CELLS = 2;
 const SPAWN_TUNNEL_DIG_TOLERANCE_CELLS = 2;
+const EDGE_BAND_RATIO = 0.15;
+
+interface SpawnCell {
+  readonly gridX: number;
+  readonly gridY: number;
+}
 
 /**
  * Gemeinsame autoritative Spawn-Ausfuehrung fuer Encounter, Druckquellen und Bosses.
@@ -27,13 +35,27 @@ export class CoopDefenseSpawnExecutor {
   ) {}
 
   /** Spawn-Pfad fuer endliche Encounter; die Herkunft bleibt fuer Clear-Tracking erhalten. */
-  hostSpawnEncounterGroup(kind: CoopDefenseEnemyKind, count: number, originId?: string): readonly string[] {
-    return this.spawnArenaGroup(kind, count, originId ? { originId } : undefined);
+  hostSpawnEncounterGroup(
+    kind: CoopDefenseEnemyKind,
+    count: number,
+    originId?: string,
+    front: SpawnFront = DEFAULT_SPAWN_FRONT,
+  ): readonly string[] {
+    return this.spawnArenaGroup(
+      kind,
+      count,
+      { ...(originId ? { originId } : {}), spawnFront: front },
+      front,
+    );
   }
 
   /** Map-gebundene persistente Quelle; diese Gegner gehoeren keinem Encounter an. */
-  hostSpawnPersistentMapGroup(kind: CoopDefenseEnemyKind, count: number): readonly string[] {
-    return this.spawnArenaGroup(kind, count);
+  hostSpawnPersistentMapGroup(
+    kind: CoopDefenseEnemyKind,
+    count: number,
+    front: SpawnFront = DEFAULT_SPAWN_FRONT,
+  ): readonly string[] {
+    return this.spawnArenaGroup(kind, count, { spawnFront: front }, front);
   }
 
   /** Strukturgebundene Quelle mit unveraendertem Spawnzentrum und Burrow-Sonderbehandlung. */
@@ -50,15 +72,15 @@ export class CoopDefenseSpawnExecutor {
     }
   }
 
-  /** Einmaliger Boss-Spawn; die Boss-Quelle nutzt dieselbe raeumliche Auswahl wie Map-Spawns. */
+  /** Einmaliger Boss-Spawn; der bestehende Boss-Pfad bleibt auf der Westfront. */
   hostSpawnBoss(kind: CoopDefenseEnemyKind): boolean {
-    const candidates = this.collectCandidates(kind, this.bossFlowFieldService ?? undefined);
+    const candidates = this.collectCandidates(kind, DEFAULT_SPAWN_FRONT, this.bossFlowFieldService ?? undefined);
     if (candidates.length === 0) {
       this.warnExhausted();
       return false;
     }
 
-    const pick = Phaser.Math.RND.pick(candidates) as { gridX: number; gridY: number };
+    const pick = Phaser.Math.RND.pick(candidates);
     this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
     this.pushRecent(this.key(pick.gridX, pick.gridY));
     return true;
@@ -67,11 +89,12 @@ export class CoopDefenseSpawnExecutor {
   private spawnArenaGroup(
     kind: CoopDefenseEnemyKind,
     count: number,
-    spawnOptions?: EnemySpawnOptions,
+    spawnOptions: EnemySpawnOptions,
+    front: SpawnFront,
   ): string[] {
     const spawnedEnemyIds: string[] = [];
     if (count <= 0) return spawnedEnemyIds;
-    const candidatesAll = this.collectCandidates(kind);
+    const candidatesAll = this.collectCandidates(kind, front);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
       return spawnedEnemyIds;
@@ -87,7 +110,7 @@ export class CoopDefenseSpawnExecutor {
         return spawnedEnemyIds;
       }
 
-      const pick = Phaser.Math.RND.pick(candidates) as { gridX: number; gridY: number };
+      const pick = Phaser.Math.RND.pick(candidates);
       const enemy = this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind, spawnOptions);
       spawnedEnemyIds.push(enemy.id);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
@@ -101,68 +124,107 @@ export class CoopDefenseSpawnExecutor {
 
   private collectCandidates(
     kind: CoopDefenseEnemyKind,
+    front: SpawnFront,
     flowFieldService = this.flowFieldService,
-  ): { gridX: number; gridY: number }[] {
-    if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtLeftEdge) {
-      return this.collectLeftEdgeCandidates(kind);
+  ): SpawnCell[] {
+    if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
+      return this.collectEdgeBurrowCandidates(kind, front, flowFieldService);
     }
 
     const enemies = this.enemyManager.getAllEnemies();
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
-    const cells: { gridX: number; gridY: number }[] = [];
-    // Derived from the live grid so a wide Coop map does not inherit the width that was
-    // active when this module was imported.
-    const maxGridX = Math.min(Math.max(2, Math.floor(GRID_COLS * 0.15)), GRID_COLS - 1);
-    for (let gridX = 0; gridX <= maxGridX; gridX += 1) {
-      for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+    const cells: SpawnCell[] = [];
+    const edgeBand = this.getEdgeBand(front);
+    for (let gridX = edgeBand.minGridX; gridX <= edgeBand.maxGridX; gridX += 1) {
+      for (let gridY = edgeBand.minGridY; gridY <= edgeBand.maxGridY; gridY += 1) {
         if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
         if (flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
         const world = flowFieldService.gridToWorld(gridX, gridY);
         if (!world) continue;
-        const overlapsEnemy = enemies.some((enemy) => {
-          const minimumDistance = spawnRadius + enemy.getCollisionRadius();
-          return Phaser.Math.Distance.Squared(world.x, world.y, enemy.sprite.x, enemy.sprite.y)
-            < minimumDistance * minimumDistance;
-        });
-        if (!overlapsEnemy) cells.push({ gridX, gridY });
+        if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
+        cells.push({ gridX, gridY });
       }
     }
     return cells;
   }
 
-  private collectLeftEdgeCandidates(kind: CoopDefenseEnemyKind): { gridX: number; gridY: number }[] {
+  /** Edge-burrow candidates may start inside blocked border cells, but their tunnel must reach
+   * the same reachable flow-field network as ordinary spawns. */
+  private collectEdgeBurrowCandidates(
+    kind: CoopDefenseEnemyKind,
+    front: SpawnFront,
+    flowFieldService: EnemyFlowFieldService,
+  ): SpawnCell[] {
     const enemies = this.enemyManager.getAllEnemies();
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
-    const rows: { gridY: number; digCells: number | null }[] = [];
+    const edgeCells: Array<{ cell: SpawnCell; digCells: number }> = [];
     let shortestDigCells = Number.POSITIVE_INFINITY;
-    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
-      const world = this.flowFieldService.gridToWorld(0, gridY);
-      if (!world) continue;
-      const overlapsEnemy = enemies.some((enemy) => {
-        const minimumDistance = spawnRadius + enemy.getCollisionRadius();
-        return Phaser.Math.Distance.Squared(world.x, world.y, enemy.sprite.x, enemy.sprite.y)
-          < minimumDistance * minimumDistance;
-      });
-      if (overlapsEnemy) continue;
-      const digCells = this.measureLeftEdgeDigDistance(gridY);
-      if (digCells !== null) shortestDigCells = Math.min(shortestDigCells, digCells);
-      rows.push({ gridY, digCells });
+
+    for (const cell of this.getEdgeLine(front)) {
+      const world = flowFieldService.gridToWorld(cell.gridX, cell.gridY);
+      if (!world || this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
+      const digCells = this.measureEdgeDigDistance(front, cell, flowFieldService);
+      if (digCells === null) continue;
+      shortestDigCells = Math.min(shortestDigCells, digCells);
+      edgeCells.push({ cell, digCells });
     }
 
-    if (!Number.isFinite(shortestDigCells)) return rows.map((row) => ({ gridX: 0, gridY: row.gridY }));
+    if (!Number.isFinite(shortestDigCells)) return [];
     const maxDigCells = shortestDigCells + SPAWN_TUNNEL_DIG_TOLERANCE_CELLS;
-    return rows
-      .filter((row) => row.digCells !== null && row.digCells <= maxDigCells)
-      .map((row) => ({ gridX: 0, gridY: row.gridY }));
+    return edgeCells
+      .filter(({ digCells }) => digCells <= maxDigCells)
+      .map(({ cell }) => cell);
   }
 
-  private measureLeftEdgeDigDistance(gridY: number): number | null {
-    for (let gridX = 0; gridX < GRID_COLS; gridX += 1) {
-      if (!this.flowFieldService.isTraversableAt(gridX, gridY)) continue;
-      if (this.flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
-      return gridX;
+  private measureEdgeDigDistance(
+    front: SpawnFront,
+    edgeCell: SpawnCell,
+    flowFieldService: EnemyFlowFieldService,
+  ): number | null {
+    const inward = getFrontInwardStep(front);
+    const maxDistance = front === 'west' || front === 'east' ? GRID_COLS : GRID_ROWS;
+    for (let distance = 0; distance < maxDistance; distance += 1) {
+      const gridX = edgeCell.gridX + inward.x * distance;
+      const gridY = edgeCell.gridY + inward.y * distance;
+      if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) break;
+      if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
+      if (flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
+      return distance;
     }
     return null;
+  }
+
+  private getEdgeLine(front: SpawnFront): SpawnCell[] {
+    if (front === 'west' || front === 'east') {
+      const gridX = front === 'west' ? 0 : GRID_COLS - 1;
+      return Array.from({ length: GRID_ROWS }, (_, gridY) => ({ gridX, gridY }));
+    }
+    const gridY = front === 'north' ? 0 : GRID_ROWS - 1;
+    return Array.from({ length: GRID_COLS }, (_, gridX) => ({ gridX, gridY }));
+  }
+
+  private getEdgeBand(front: SpawnFront): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {
+    const depthX = Math.min(Math.max(2, Math.floor(GRID_COLS * EDGE_BAND_RATIO)), GRID_COLS - 1);
+    const depthY = Math.min(Math.max(2, Math.floor(GRID_ROWS * EDGE_BAND_RATIO)), GRID_ROWS - 1);
+    switch (front) {
+      case 'west': return { minGridX: 0, maxGridX: depthX, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+      case 'east': return { minGridX: GRID_COLS - 1 - depthX, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+      case 'north': return { minGridX: 0, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: depthY };
+      case 'south': return { minGridX: 0, maxGridX: GRID_COLS - 1, minGridY: GRID_ROWS - 1 - depthY, maxGridY: GRID_ROWS - 1 };
+    }
+  }
+
+  private overlapsEnemy(
+    x: number,
+    y: number,
+    spawnRadius: number,
+    enemies: readonly ReturnType<EnemyManager['getAllEnemies']>[number][],
+  ): boolean {
+    return enemies.some((enemy) => {
+      const minimumDistance = spawnRadius + enemy.getCollisionRadius();
+      return Phaser.Math.Distance.Squared(x, y, enemy.sprite.x, enemy.sprite.y)
+        < minimumDistance * minimumDistance;
+    });
   }
 
   private pushRecent(key: string): void {
@@ -173,10 +235,19 @@ export class CoopDefenseSpawnExecutor {
   private warnExhausted(): void {
     if (this.exhaustionWarned) return;
     this.exhaustionWarned = true;
-    console.warn('[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen mehr im linken Arena-Bereich.');
+    console.warn('[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.');
   }
 
   private key(gridX: number, gridY: number): string {
     return `${gridX}:${gridY}`;
+  }
+}
+
+function getFrontInwardStep(front: SpawnFront): { x: number; y: number } {
+  switch (front) {
+    case 'north': return { x: 0, y: 1 };
+    case 'east': return { x: -1, y: 0 };
+    case 'south': return { x: 0, y: -1 };
+    case 'west': return { x: 1, y: 0 };
   }
 }

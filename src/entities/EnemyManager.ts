@@ -12,7 +12,7 @@ import {
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
-import type { BurrowPhase, SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
+import type { BurrowPhase, SpawnFront, SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import {
   decodeEnemyUpserts,
   encodeEnemyUpsert,
@@ -101,6 +101,8 @@ interface WildfirePanicState extends WildfireSourceInfo {
 export interface EnemySpawnOptions {
   /** Spawn visual is represented by the burrow effect instead of the normal materialization burst. */
   readonly spawnBurrowed?: boolean;
+  /** Authored edge for generic edge-burrow spawns; legacy callers default to west. */
+  readonly spawnFront?: SpawnFront;
   /** Host-only generic provenance, e.g. the owning encounter id. */
   readonly originId?: string;
 }
@@ -248,7 +250,7 @@ export class EnemyManager {
    * unsichtbar, und ihr Auftauchen hat mit dem Buddel-Effekt bereits seine eigene Ankündigung.
    */
   private playSpawnEffect(enemy: EnemyEntity, options: EnemySpawnOptions): void {
-    if (options.spawnBurrowed || this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtLeftEdge) return;
+    if (options.spawnBurrowed || this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtEdge) return;
     this.visualSink?.playEnemySpawnEffect(enemy.sprite.x, enemy.sprite.y, enemy.getSpawnEffectColor());
   }
 

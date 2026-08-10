@@ -150,6 +150,34 @@ describe('Coop defense map progression', () => {
     ))).toBe(true);
   });
 
+  it('authors A9 front variation while keeping Map 1 as the west-only reference', () => {
+    const map1 = getCoopDefenseMapConfig('1');
+    expect(map1.arenaWidthCells).toBe(60);
+    expect(map1.arenaHeightCells).toBe(33);
+    expect(map1.encounters?.flatMap((encounter) => encounter.groups).every((group) => group.front === 'west')).toBe(true);
+
+    const map2 = getCoopDefenseMapConfig('2');
+    expect(map2.arenaHeightCells).toBe(38);
+    expect(map2.persistentSpawns?.map((source) => source.front)).toEqual(['west', 'north']);
+
+    const map8 = getCoopDefenseMapConfig('8');
+    expect(map8.arenaHeightCells).toBe(52);
+    expect(new Set(map8.persistentSpawns?.map((source) => source.front))).toEqual(new Set(['west', 'north', 'south']));
+
+    const map11 = getCoopDefenseMapConfig('11');
+    expect(map11.arenaHeightCells).toBe(39);
+    expect(map11.encounters?.map((encounter) => new Set(encounter.groups.map((group) => group.front)))).toEqual([
+      new Set(['west']),
+      new Set(['north']),
+      new Set(['south']),
+      new Set(['west', 'south']),
+    ]);
+
+    const map14 = getCoopDefenseMapConfig('14');
+    expect(map14.arenaHeightCells).toBe(40);
+    expect(new Set(map14.persistentSpawns?.map((source) => source.front))).toEqual(new Set(['west', 'north', 'south']));
+  });
+
   it('uses Map 0 as the only explicitly budgeted A4 survival reference and keeps legacy maps unlimited', () => {
     expect(getCoopDefenseMapConfig('0').objective).toBe('survive');
     expect(getCoopDefenseMapConfig('0').surviveRespawnsPerPlayer).toBe(2);

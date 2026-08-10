@@ -41,7 +41,7 @@ describe('Coop defense encounters', () => {
         id: 'opening',
         start: { type: 'time', atMs: 0 },
         restAfterMs: 0,
-        groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0 }],
+        groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0, front: 'west' }],
       },
     ]);
     expect(resolveCoopDefenseMapEncounterConfigs(normalized, 4)).toEqual([
@@ -49,7 +49,7 @@ describe('Coop defense encounters', () => {
         id: 'opening',
         start: { type: 'time', atMs: 0 },
         restAfterMs: 0,
-        groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0 }],
+        groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0, front: 'west' }],
       },
     ]);
   });
@@ -161,8 +161,8 @@ describe('Coop defense encounters', () => {
         start: { type: 'time', atMs: 1_500 },
         restAfterMs: 0,
         groups: [
-          { enemyKind: 'zombie-badger', count: 4, delayMs: 0 },
-          { enemyKind: 'demon-badger', count: 2, delayMs: 1_500 },
+          { enemyKind: 'zombie-badger', count: 4, delayMs: 0, front: 'west' },
+          { enemyKind: 'demon-badger', count: 2, delayMs: 1_500, front: 'west' },
         ],
       },
     ]);

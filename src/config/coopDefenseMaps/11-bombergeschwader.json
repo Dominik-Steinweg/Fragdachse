@@ -2,6 +2,7 @@
   "mapId": "11",
   "displayName": "Map 11 - Bombergeschwader",
   "arenaWidthCells": 60,
+  "arenaHeightCells": 39,
   "timeOfDay": "10:30",
   "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
   "tutorialDurationMs": 10000,
@@ -169,12 +170,14 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 6
+          "count": 6,
+          "front": "west"
         },
         {
           "enemyKind": "demon-badger",
           "count": 3,
-          "delayMs": 1200
+          "delayMs": 1200,
+          "front": "west"
         }
       ]
     },
@@ -187,17 +190,20 @@
       "groups": [
         {
           "enemyKind": "spore-warden",
-          "count": 4
+          "count": 4,
+          "front": "north"
         },
         {
           "enemyKind": "void-stalker",
           "count": 3,
-          "delayMs": 900
+          "delayMs": 900,
+          "front": "north"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "delayMs": 1800
+          "delayMs": 1800,
+          "front": "north"
         }
       ]
     },
@@ -210,17 +216,20 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 5
+          "count": 5,
+          "front": "south"
         },
         {
           "enemyKind": "demon-badger",
           "count": 3,
-          "delayMs": 700
+          "delayMs": 700,
+          "front": "south"
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
-          "delayMs": 1600
+          "delayMs": 1600,
+          "front": "south"
         }
       ]
     },
@@ -232,17 +241,37 @@
       "groups": [
         {
           "enemyKind": "spore-warden",
-          "count": 5
+          "count": 3,
+          "front": "west"
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 2,
+          "front": "south"
         },
         {
           "enemyKind": "void-stalker",
-          "count": 3,
-          "delayMs": 800
+          "count": 2,
+          "delayMs": 800,
+          "front": "west"
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 1,
+          "delayMs": 800,
+          "front": "south"
         },
         {
           "enemyKind": "stink-broodmother",
-          "count": 2,
-          "delayMs": 1700
+          "count": 1,
+          "delayMs": 1700,
+          "front": "west"
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "delayMs": 1700,
+          "front": "south"
         }
       ]
     }

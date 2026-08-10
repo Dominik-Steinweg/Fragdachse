@@ -3,10 +3,11 @@ import {
   ARENA_HEIGHT,
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
+  ARENA_WIDTH,
   COLORS,
   DEPTH_FX,
 } from '../config';
-import type { CoopDefenseEncounterPresentationState } from '../types';
+import type { CoopDefenseEncounterPresentationState, SpawnFront } from '../types';
 import {
   ensureCanvasTexture,
   killAllAndResetParticlePositions,
@@ -18,7 +19,7 @@ const TEX_ENCOUNTER_BAND = '__coop_defense_encounter_band';
 const TEX_ENCOUNTER_EDGE = '__coop_defense_encounter_edge';
 
 /** Vertikale Reserve, damit die Front nicht in den Arenarahmen läuft. */
-const TELEGRAPH_INSET_Y = 30;
+const TELEGRAPH_INSET = 30;
 const CHEVRON_ROWS = 7;
 /** Weglänge einer Marschmarke, bevor sie wieder an der Kante beginnt. */
 const CHEVRON_TRAVEL = 190;
@@ -29,14 +30,19 @@ const CHEVRON_THICKNESS = 5;
 
 interface TelegraphProfile {
   readonly color: number;
-  /** Breite des einlaufenden Lichtbands in Weltpixeln. */
   readonly bandWidth: number;
-  /** Marschgeschwindigkeit der Richtungsmarken in Weltpixeln pro Sekunde. */
   readonly chevronSpeed: number;
   readonly chevronsPerRow: number;
   readonly intensity: number;
   readonly sparkFrequency: number;
   readonly sparkTints: readonly number[];
+}
+
+interface TelegraphFrontVisual {
+  readonly band: Phaser.GameObjects.Image;
+  readonly edge: Phaser.GameObjects.Image;
+  readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
+  readonly sparkEmitZone: Phaser.Geom.Rectangle;
 }
 
 const PROFILE_INCOMING: TelegraphProfile = {
@@ -48,10 +54,6 @@ const PROFILE_INCOMING: TelegraphProfile = {
   sparkFrequency: 55,
   sparkTints: [0xffffff, COLORS.GOLD_1, COLORS.RED_1],
 };
-/**
- * Während des laufenden Angriffs bleibt nur eine ruhige Richtungsangabe stehen. Die volle
- * Warnstärke gehört der Ankündigung; neben Gegnern und Kampfeffekten wäre sie nur Rauschen.
- */
 const PROFILE_ACTIVE: TelegraphProfile = {
   color: COLORS.GOLD_1,
   bandWidth: 94,
@@ -61,7 +63,6 @@ const PROFILE_ACTIVE: TelegraphProfile = {
   sparkFrequency: 150,
   sparkTints: [0xffffff, COLORS.GOLD_1, COLORS.GOLD_3],
 };
-/** Abklingende Front nach dem Clear – dieselbe Grüntönung wie im HUD-Panel. */
 const PROFILE_CLEARED: TelegraphProfile = {
   color: COLORS.GREEN_2,
   bandWidth: 94,
@@ -72,23 +73,10 @@ const PROFILE_CLEARED: TelegraphProfile = {
   sparkTints: [0xffffff, COLORS.GREEN_1, COLORS.GREEN_3],
 };
 
-/**
- * Welt-Telegraph für den nächsten endlichen Encounter.
- *
- * Die Richtung ist hier absichtlich die bestehende Arena-Ecke links. Eine spätere Front-
- * Abstraktion gehört in die Map-/Spawn-Verträge und wird nicht aus diesem Effekt vorweggenommen.
- * Der Effekt liest ausschließlich den host-autoritativ replizierten Präsentationszustand.
- *
- * Gezeichnet wird genau **eine** Front: Sie steht an der Arenakante und wird an den sichtbaren
- * Bildrand geklemmt, sobald die Kante aus dem Bild gescrollt ist. Ein zweiter, bildschirmfester
- * Hinweis daneben verdoppelte bei nicht gescrollter Kamera nur dieselbe Aussage.
- */
+/** Welt-Telegraph für den host-autoritativ replizierten Encounter-Zustand. */
 export class CoopDefenseEncounterTelegraphRenderer {
   private readonly graphics: Phaser.GameObjects.Graphics;
-  private band: Phaser.GameObjects.Image | null = null;
-  private edge: Phaser.GameObjects.Image | null = null;
-  private sparks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
-  private sparkEmitZone: Phaser.Geom.Rectangle | null = null;
+  private readonly visuals = new Map<SpawnFront, TelegraphFrontVisual>();
   private activeProfile: TelegraphProfile | null = null;
   private readonly chevronPoints: Phaser.Math.Vector2[] = Array.from(
     { length: 6 },
@@ -98,7 +86,6 @@ export class CoopDefenseEncounterTelegraphRenderer {
   constructor(private readonly scene: Phaser.Scene) {
     this.graphics = scene.add.graphics()
       .setDepth(DEPTH_FX)
-      // Dieser Telegraph muss auch bei hellem Tagesboden lesbar bleiben.
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
   }
@@ -114,9 +101,6 @@ export class CoopDefenseEncounterTelegraphRenderer {
       ctx.fillRect(0, 0, 12, 12);
     });
 
-    // Band und Kantenschein tragen ihren vertikalen Auslauf in der Textur. Gestreckt bleibt
-    // der Anteil dadurch proportional, und die Front endet oben und unten weich statt mit
-    // einer harten Linie quer durch die Arena.
     ensureCanvasTexture(this.scene.textures, TEX_ENCOUNTER_BAND, 64, 64, (ctx) => {
       const horizontal = ctx.createLinearGradient(0, 0, 64, 0);
       horizontal.addColorStop(0, 'rgba(255,255,255,0.9)');
@@ -140,45 +124,44 @@ export class CoopDefenseEncounterTelegraphRenderer {
       applyVerticalFalloff(ctx, 32, 64);
     });
 
-    this.band ??= this.scene.add.image(0, 0, TEX_ENCOUNTER_BAND)
-      .setOrigin(0, 0.5)
-      .setDepth(DEPTH_FX - 0.2)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(false);
-    this.edge ??= this.scene.add.image(0, 0, TEX_ENCOUNTER_EDGE)
-      .setOrigin(0.5, 0.5)
-      .setDepth(DEPTH_FX - 0.1)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(false);
-
-    if (this.sparks) return;
-    this.sparks = this.scene.add.particles(0, 0, TEX_ENCOUNTER_SPARK, {
-      lifespan: { min: 320, max: 720 },
-      frequency: 90,
-      quantity: 1,
-      speedX: { min: 42, max: 110 },
-      speedY: { min: -24, max: 24 },
-      scale: { start: 0.62, end: 0.08 },
-      alpha: { start: 0.78, end: 0 },
-      tint: [0xffffff, COLORS.GOLD_1, COLORS.RED_1],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    });
-    this.sparks
-      .setDepth(DEPTH_FX + 0.1)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(false);
-    this.sparkEmitZone = new Phaser.Geom.Rectangle(
-      0,
-      -ARENA_HEIGHT / 2 + TELEGRAPH_INSET_Y,
-      8,
-      ARENA_HEIGHT - TELEGRAPH_INSET_Y * 2,
-    );
-    this.sparks.addEmitZone({
-      type: 'random',
-      source: this.sparkEmitZone,
-    } as unknown as Phaser.Types.GameObjects.Particles.EmitZoneData);
-    this.sparks.stop();
+    for (const front of ['west', 'north', 'east', 'south'] as const) {
+      if (this.visuals.has(front)) continue;
+      const band = this.scene.add.image(0, 0, TEX_ENCOUNTER_BAND)
+        .setOrigin(0, 0.5)
+        .setDepth(DEPTH_FX - 0.2)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false);
+      const edge = this.scene.add.image(0, 0, TEX_ENCOUNTER_EDGE)
+        .setOrigin(0.5, 0.5)
+        .setDepth(DEPTH_FX - 0.1)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false);
+      const sparkEmitZone = front === 'west' || front === 'east'
+        ? new Phaser.Geom.Rectangle(0, -ARENA_HEIGHT / 2 + TELEGRAPH_INSET, 8, ARENA_HEIGHT - TELEGRAPH_INSET * 2)
+        : new Phaser.Geom.Rectangle(-ARENA_WIDTH / 2 + TELEGRAPH_INSET, 0, ARENA_WIDTH - TELEGRAPH_INSET * 2, 8);
+      const sparks = this.scene.add.particles(0, 0, TEX_ENCOUNTER_SPARK, {
+        lifespan: { min: 320, max: 720 },
+        frequency: 90,
+        quantity: 1,
+        speedX: this.getSparkSpeedX(front),
+        speedY: this.getSparkSpeedY(front),
+        scale: { start: 0.62, end: 0.08 },
+        alpha: { start: 0.78, end: 0 },
+        tint: [0xffffff, COLORS.GOLD_1, COLORS.RED_1],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      sparks
+        .setDepth(DEPTH_FX + 0.1)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false);
+      sparks.addEmitZone({
+        type: 'random',
+        source: sparkEmitZone,
+      } as unknown as Phaser.Types.GameObjects.Particles.EmitZoneData);
+      sparks.stop();
+      this.visuals.set(front, { band, edge, sparks, sparkEmitZone });
+    }
   }
 
   sync(
@@ -191,17 +174,14 @@ export class CoopDefenseEncounterTelegraphRenderer {
       || !inArena
       || state.phase === 'rest'
       || state.phase === 'complete'
-      // Nach der letzten ausgespielten Gruppe wäre eine Anmarschfront irreführend. Der
-      // tatsächliche Kampf bleibt über Gegner und HUD sichtbar; die Front gehört nur Ankunft.
       || (state.phase === 'active' && state.spawnComplete === true)
-      || !this.sparks
-      || !this.band
-      || !this.edge
+      || this.visuals.size === 0
     ) {
       this.clear();
       return;
     }
 
+    const fronts = state.fronts?.length > 0 ? state.fronts : ['west'] as const;
     const now = Number.isFinite(elapsedMs) ? elapsedMs : 0;
     const phaseProgress = state.phaseEndsAtMs === null
       ? 1
@@ -213,7 +193,6 @@ export class CoopDefenseEncounterTelegraphRenderer {
     const isIncoming = state.phase === 'incoming';
     const isCleared = state.phase === 'cleared';
     const profile = isIncoming ? PROFILE_INCOMING : isCleared ? PROFILE_CLEARED : PROFILE_ACTIVE;
-    // Die abgewehrte Front verlischt über ihre Haltezeit, statt schlagartig zu verschwinden.
     const fade = isCleared ? 1 - phaseProgress : 1;
     const pulse = 0.78 + Math.sin(now / (isIncoming ? 115 : 210)) * 0.16;
     const intensity = Phaser.Math.Clamp(profile.intensity * fade * pulse, 0, 1);
@@ -222,95 +201,143 @@ export class CoopDefenseEncounterTelegraphRenderer {
       return;
     }
 
-    const top = ARENA_OFFSET_Y + TELEGRAPH_INSET_Y;
-    const bottom = ARENA_OFFSET_Y + ARENA_HEIGHT - TELEGRAPH_INSET_Y;
-    const height = bottom - top;
-    const centerY = (top + bottom) / 2;
-    this.sparkEmitZone?.setTo(
-      0,
-      -ARENA_HEIGHT / 2 + TELEGRAPH_INSET_Y,
-      8,
-      Math.max(1, ARENA_HEIGHT - TELEGRAPH_INSET_Y * 2),
-    );
-    // Die Front bleibt an der Arenakante, wird aber in den sichtbaren Ausschnitt geklemmt.
-    // Ohne die Klemmung stünde bei gescrollter Kamera gar kein Hinweis mehr im Bild.
+    this.graphics.clear().setVisible(true);
     const camera = this.scene.cameras.main;
     const zoom = Math.max(0.1, camera.zoom);
-    const anchorX = Math.max(ARENA_OFFSET_X + 5, camera.scrollX + 6 / zoom);
+    const visibleLeft = camera.scrollX + 6 / zoom;
+    const visibleRight = camera.scrollX + camera.width / zoom - 6 / zoom;
+    const visibleTop = camera.scrollY + 6 / zoom;
+    const visibleBottom = camera.scrollY + camera.height / zoom - 6 / zoom;
+    const top = ARENA_OFFSET_Y + TELEGRAPH_INSET;
+    const bottom = ARENA_OFFSET_Y + ARENA_HEIGHT - TELEGRAPH_INSET;
+    const left = ARENA_OFFSET_X + 5;
+    const right = ARENA_OFFSET_X + ARENA_WIDTH - 5;
 
-    this.band
-      .setPosition(anchorX, centerY)
-      .setDisplaySize(profile.bandWidth, height)
-      .setTint(profile.color)
-      .setAlpha(Phaser.Math.Clamp(0.62 * intensity, 0, 1))
-      .setVisible(true);
-    this.edge
-      .setPosition(anchorX, centerY)
-      .setDisplaySize(26, height)
-      .setTint(profile.color)
-      .setAlpha(Phaser.Math.Clamp(0.85 * intensity, 0, 1))
-      .setVisible(true);
+    for (const [front, visual] of this.visuals) {
+      if (!fronts.includes(front)) {
+        this.hideVisual(visual);
+        continue;
+      }
+      const layout = this.getFrontLayout(front, left, right, top, bottom, visibleLeft, visibleRight, visibleTop, visibleBottom);
+      visual.band
+        .setOrigin(layout.bandOriginX, 0.5)
+        .setPosition(layout.bandX, layout.bandY)
+        .setRotation(layout.rotation)
+        .setFlipX(layout.flipX)
+        .setDisplaySize(profile.bandWidth, layout.bandHeight)
+        .setTint(profile.color)
+        .setAlpha(Phaser.Math.Clamp(0.62 * intensity, 0, 1))
+        .setVisible(true);
+      visual.edge
+        .setPosition(layout.edgeX, layout.edgeY)
+        .setRotation(layout.rotation)
+        .setDisplaySize(layout.edgeWidth, layout.edgeHeight)
+        .setTint(profile.color)
+        .setAlpha(Phaser.Math.Clamp(0.85 * intensity, 0, 1))
+        .setVisible(true);
 
-    this.drawChevrons(anchorX, top, height, now, profile, intensity);
+      this.drawChevrons(front, layout, now, profile, intensity);
 
-    this.sparks
-      .setPosition(anchorX + 4, centerY)
-      // Die Funken folgen der Intensität bis auf null, damit die abklingende Front nicht mit
-      // einem harten Schnitt endet, wenn der Effekt sich abschaltet.
-      .setAlpha(Phaser.Math.Clamp(intensity * 1.1, 0, 1))
-      .setVisible(true);
-    this.sparks.frequency = profile.sparkFrequency;
-    // Array-Tints muessen ueber loadConfig neu gebunden werden; `setParticleTint` allein
-    // erreicht die Emit-Methode nicht (siehe `setEmitterTintArray`).
-    if (profile !== this.activeProfile) {
-      setEmitterTintArray(this.sparks, [...profile.sparkTints]);
-      this.activeProfile = profile;
+      visual.sparks
+        .setPosition(layout.sparkX, layout.sparkY)
+        .setAlpha(Phaser.Math.Clamp(intensity * 1.1, 0, 1))
+        .setVisible(true);
+      visual.sparks.frequency = profile.sparkFrequency;
+      if (profile !== this.activeProfile) {
+        setEmitterTintArray(visual.sparks, [...profile.sparkTints]);
+      }
+      if (!visual.sparks.emitting) visual.sparks.start();
     }
-    if (!this.sparks.emitting) this.sparks.start();
+    this.activeProfile = profile;
   }
 
   clear(): void {
     this.graphics.clear().setVisible(false);
-    this.band?.setVisible(false);
-    this.edge?.setVisible(false);
-    if (!this.sparks) return;
-    this.sparks.stop();
-    killAllAndResetParticlePositions(this.sparks);
-    this.sparks.setVisible(false);
+    for (const visual of this.visuals.values()) this.hideVisual(visual);
   }
 
   destroy(): void {
     this.clear();
-    this.sparks?.destroy();
-    this.sparks = null;
+    for (const visual of this.visuals.values()) {
+      visual.sparks.destroy();
+      visual.band.destroy();
+      visual.edge.destroy();
+    }
+    this.visuals.clear();
     this.activeProfile = null;
-    this.band?.destroy();
-    this.band = null;
-    this.edge?.destroy();
-    this.edge = null;
     this.graphics.destroy();
   }
 
-  /**
-   * Nach innen marschierende Richtungsmarken. Sie geben die Anmarschrichtung an, ohne einen
-   * einzelnen exakten Spawnpunkt zu behaupten: Position, Deckkraft und Größe leiten sich
-   * allein aus dem Weganteil ab, deshalb erscheinen und verlöschen sie weich.
-   */
-  private drawChevrons(
-    anchorX: number,
+  private hideVisual(visual: TelegraphFrontVisual): void {
+    visual.band.setVisible(false);
+    visual.edge.setVisible(false);
+    visual.sparks.stop();
+    killAllAndResetParticlePositions(visual.sparks);
+    visual.sparks.setVisible(false);
+  }
+
+  private getFrontLayout(
+    front: SpawnFront,
+    left: number,
+    right: number,
     top: number,
-    height: number,
+    bottom: number,
+    visibleLeft: number,
+    visibleRight: number,
+    visibleTop: number,
+    visibleBottom: number,
+  ) {
+    const centerX = (left + right) / 2;
+    const centerY = (top + bottom) / 2;
+    if (front === 'west') {
+      const anchor = Math.max(left, visibleLeft);
+      return {
+        bandX: anchor, bandY: centerY, bandWidth: PROFILE_INCOMING.bandWidth, bandHeight: bottom - top,
+        bandOriginX: 0, edgeX: anchor, edgeY: centerY, edgeWidth: 26, edgeHeight: bottom - top,
+        sparkX: anchor + 4, sparkY: centerY, rotation: 0, flipX: false,
+        spanStart: top, spanLength: bottom - top, boundary: anchor,
+      };
+    }
+    if (front === 'east') {
+      const anchor = Math.min(right, visibleRight);
+      return {
+        bandX: anchor, bandY: centerY, bandWidth: PROFILE_INCOMING.bandWidth, bandHeight: bottom - top,
+        bandOriginX: 1, edgeX: anchor, edgeY: centerY, edgeWidth: 26, edgeHeight: bottom - top,
+        sparkX: anchor - 4, sparkY: centerY, rotation: 0, flipX: true,
+        spanStart: top, spanLength: bottom - top, boundary: anchor,
+      };
+    }
+    if (front === 'north') {
+      const anchor = Math.max(top, visibleTop);
+      return {
+        bandX: centerX, bandY: anchor, bandWidth: PROFILE_INCOMING.bandWidth, bandHeight: bottom - top,
+        bandOriginX: 0, edgeX: centerX, edgeY: anchor, edgeWidth: bottom - top, edgeHeight: 26,
+        sparkX: centerX, sparkY: anchor + 4, rotation: Math.PI / 2, flipX: false,
+        spanStart: left, spanLength: right - left, boundary: anchor,
+      };
+    }
+    const anchor = Math.min(bottom, visibleBottom);
+    return {
+      bandX: centerX, bandY: anchor, bandWidth: PROFILE_INCOMING.bandWidth, bandHeight: bottom - top,
+      bandOriginX: 0, edgeX: centerX, edgeY: anchor, edgeWidth: bottom - top, edgeHeight: 26,
+      sparkX: centerX, sparkY: anchor - 4, rotation: -Math.PI / 2, flipX: false,
+      spanStart: left, spanLength: right - left, boundary: anchor,
+    };
+  }
+
+  private drawChevrons(
+    front: SpawnFront,
+    layout: ReturnType<CoopDefenseEncounterTelegraphRenderer['getFrontLayout']>,
     now: number,
     profile: TelegraphProfile,
     intensity: number,
   ): void {
-    this.graphics.clear().setVisible(true);
-    const rowSpacing = height / CHEVRON_ROWS;
+    const rowSpacing = layout.spanLength / CHEVRON_ROWS;
     const travelPhase = (now / 1000) * profile.chevronSpeed;
+    const inwardSign = front === 'west' || front === 'north' ? 1 : -1;
 
     for (let row = 0; row < CHEVRON_ROWS; row += 1) {
-      const y = top + rowSpacing * (row + 0.5);
-      // Äußere Reihen laufen schwächer, damit die Front zu den Rändern hin ausläuft.
+      const cross = layout.spanStart + rowSpacing * (row + 0.5);
       const rowEnvelope = 0.55 + Math.sin(Math.PI * ((row + 0.5) / CHEVRON_ROWS)) * 0.45;
       for (let index = 0; index < profile.chevronsPerRow; index += 1) {
         const offset = (row * 41 + index * (CHEVRON_TRAVEL / profile.chevronsPerRow)) % CHEVRON_TRAVEL;
@@ -319,40 +346,60 @@ export class CoopDefenseEncounterTelegraphRenderer {
         const alpha = intensity * rowEnvelope * Math.sin(Math.PI * progress);
         if (alpha <= 0.02) continue;
         const scale = 0.72 + (1 - progress) * 0.38;
+        const distance = CHEVRON_START_OFFSET + travelled * inwardSign;
+        const x = front === 'west' || front === 'east' ? layout.boundary + distance : cross;
+        const y = front === 'north' || front === 'south' ? layout.boundary + distance : cross;
         this.graphics.fillStyle(profile.color, alpha);
-        this.graphics.fillPoints(
-          this.buildChevron(anchorX + CHEVRON_START_OFFSET + travelled, y, scale),
-          true,
-        );
+        this.graphics.fillPoints(this.buildChevron(front, x, y, scale), true);
       }
     }
 
-    // Harte Kernlinie direkt auf der Kante: Sie hält die Front auch dann ablesbar, wenn der
-    // additive Schein über hellem Boden flach wird.
     this.graphics.lineStyle(2.5, profile.color, Phaser.Math.Clamp(0.8 * intensity, 0, 1));
     this.graphics.beginPath();
-    this.graphics.moveTo(anchorX, top);
-    this.graphics.lineTo(anchorX, top + height);
+    if (front === 'west' || front === 'east') {
+      this.graphics.moveTo(layout.boundary, layout.spanStart);
+      this.graphics.lineTo(layout.boundary, layout.spanStart + layout.spanLength);
+    } else {
+      this.graphics.moveTo(layout.spanStart, layout.boundary);
+      this.graphics.lineTo(layout.spanStart + layout.spanLength, layout.boundary);
+    }
     this.graphics.strokePath();
   }
 
-  /** Füllt den wiederverwendeten Punktpuffer mit einem nach rechts zeigenden Chevron. */
-  private buildChevron(x: number, y: number, scale: number): Phaser.Math.Vector2[] {
+  private buildChevron(front: SpawnFront, x: number, y: number, scale: number): Phaser.Math.Vector2[] {
     const halfH = CHEVRON_HALF_H * scale;
     const length = CHEVRON_LENGTH * scale;
     const thickness = CHEVRON_THICKNESS * scale;
     const points = this.chevronPoints;
-    points[0].set(x, y - halfH);
-    points[1].set(x + length, y);
-    points[2].set(x, y + halfH);
-    points[3].set(x - thickness, y + halfH);
-    points[4].set(x + length - thickness, y);
-    points[5].set(x - thickness, y - halfH);
+    if (front === 'west') {
+      points[0].set(x, y - halfH); points[1].set(x + length, y); points[2].set(x, y + halfH);
+      points[3].set(x - thickness, y + halfH); points[4].set(x + length - thickness, y); points[5].set(x - thickness, y - halfH);
+    } else if (front === 'east') {
+      points[0].set(x, y - halfH); points[1].set(x - length, y); points[2].set(x, y + halfH);
+      points[3].set(x + thickness, y + halfH); points[4].set(x - length + thickness, y); points[5].set(x + thickness, y - halfH);
+    } else if (front === 'north') {
+      points[0].set(x - halfH, y); points[1].set(x, y + length); points[2].set(x + halfH, y);
+      points[3].set(x + halfH, y - thickness); points[4].set(x, y + length - thickness); points[5].set(x - halfH, y - thickness);
+    } else {
+      points[0].set(x - halfH, y); points[1].set(x, y - length); points[2].set(x + halfH, y);
+      points[3].set(x + halfH, y + thickness); points[4].set(x, y - length + thickness); points[5].set(x - halfH, y + thickness);
+    }
     return points;
+  }
+
+  private getSparkSpeedX(front: SpawnFront) {
+    if (front === 'west') return { min: 42, max: 110 };
+    if (front === 'east') return { min: -110, max: -42 };
+    return { min: -24, max: 24 };
+  }
+
+  private getSparkSpeedY(front: SpawnFront) {
+    if (front === 'north') return { min: 42, max: 110 };
+    if (front === 'south') return { min: -110, max: -42 };
+    return { min: -24, max: 24 };
   }
 }
 
-/** Blendet eine Canvas-Textur an ihrer Ober- und Unterkante weich aus. */
 function applyVerticalFalloff(ctx: CanvasRenderingContext2D, width: number, height: number): void {
   const previousOperation = ctx.globalCompositeOperation;
   ctx.globalCompositeOperation = 'destination-in';

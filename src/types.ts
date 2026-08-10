@@ -1,5 +1,8 @@
 import type Phaser from 'phaser';
 
+/** Authored edge from which a Coop-Defense attack enters the arena. */
+export type SpawnFront = 'west' | 'north' | 'east' | 'south';
+
 /** Spielerprofil – spiellogik-seitig, kein Transporttyp */
 export interface PlayerProfile {
   id:       string;
@@ -54,6 +57,8 @@ export interface CoopDefenseEncounterPresentationState {
   phaseStartedAtMs: number;
   /** Host-Rundenzeit des nächsten Phasenwechsels; null für offene Phasen. */
   phaseEndsAtMs: number | null;
+  /** Fronts currently arriving or still relevant for the presented encounter. */
+  fronts: readonly SpawnFront[];
   /** True, sobald alle Gruppen dieses Encounters autoritativ ausgespielt wurden. */
   spawnComplete?: boolean;
   /**

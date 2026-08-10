@@ -19,8 +19,8 @@ describe('Alien-Dachs', () => {
     expect(alien.movementTarget).toBe('players');
   });
 
-  it('spawns burrowed at the left edge and can dive under the tracks for at most 2 seconds', () => {
-    expect(alien.burrow?.spawnBurrowedAtLeftEdge).toBe(true);
+  it('spawns burrowed at an authored edge and can dive under the tracks for at most 2 seconds', () => {
+    expect(alien.burrow?.spawnBurrowedAtEdge).toBe(true);
     expect(alien.burrow?.crossesTrainTracks).toBe(true);
     expect(alien.burrow?.maxDurationMs).toBeLessThanOrEqual(2000);
     expect(alien.burrow?.spawnTunnelMinDistancePx).toBeGreaterThan(0);
@@ -142,7 +142,7 @@ describe('Pyro-Dachs', () => {
   });
 
   it('surfaces immediately after spawning instead of tunnelling through the rock field', () => {
-    expect(pyro.burrow?.spawnBurrowedAtLeftEdge).toBe(true);
+    expect(pyro.burrow?.spawnBurrowedAtEdge).toBe(true);
     expect(pyro.burrow?.spawnTunnelMinDistancePx).toBe(0);
     expect(pyro.burrow!.spawnTunnelTimeoutMs).toBeLessThan(alien.burrow!.spawnTunnelTimeoutMs);
     expect(pyro.burrow!.speedFactor).toBeGreaterThan(alien.burrow!.speedFactor);

@@ -1,10 +1,11 @@
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyBurrowConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyBurrowMovementSource, EnemyManager, EnemySpawnOptions } from '../entities/EnemyManager';
+import { DEFAULT_SPAWN_FRONT, getSpawnFrontInwardVector } from '../utils/spawnFront';
 
 /**
  * Grund, aus dem ein Gegner gerade eingebuddelt ist.
- * - `spawn-tunnel`: Anfahrt vom linken Spielfeldrand, bis ein freies Feld erreicht ist.
+ * - `spawn-tunnel`: Anfahrt von der authored Arena-Front, bis ein freies Feld erreicht ist.
  * - `train-crossing`: kurzes Untertauchen, um die Gleise trotz fahrendem Zug zu queren.
  * - `scripted-phase`: zeitlich exakt festgelegtes Untertauchen einer Bossphase.
  */
@@ -15,6 +16,8 @@ interface EnemyBurrowState {
   readonly endsAt: number;
   /** Startposition der Anfahrt – Grundlage für die Mindest-Grabstrecke. */
   readonly startX: number;
+  readonly startY: number;
+  readonly inward: { x: number; y: number } | null;
 }
 
 const SPAWN_POINT_BURROW_DURATION_MS = 1_200;
@@ -36,7 +39,7 @@ const BURROW_SAFE_RETRY_INTERVAL_MS = 250;
  * Einschränkungen wie beim Spieler: keine Kollisionen, keine Angriffe, unverwundbar.
  *
  * Zwei Anwendungsfälle, beide rein datengetrieben über {@link CoopDefenseEnemyBurrowConfig}:
- *  1. Gegner mit `spawnBurrowedAtLeftEdge` erscheinen eingebuddelt am linken Rand und graben sich
+ *  1. Gegner mit `spawnBurrowedAtEdge` erscheinen eingebuddelt an der authored Front und graben sich
  *     geradeaus nach rechts, bis ein freies Feld erreicht ist – dann tauchen sie auf.
  *  2. Gegner mit `crossesTrainTracks` buddeln sich ein, statt vor den Gleisen auf den Zug zu warten.
  */
@@ -68,8 +71,14 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
       return;
     }
     const burrow = this.getBurrowConfig(enemy);
-    if (!burrow?.spawnBurrowedAtLeftEdge) return;
-    this.startBurrow(enemy, 'spawn-tunnel', spawnNow + burrow.spawnTunnelTimeoutMs);
+    if (!burrow?.spawnBurrowedAtEdge) return;
+    const front = options.spawnFront ?? DEFAULT_SPAWN_FRONT;
+    this.startBurrow(
+      enemy,
+      'spawn-tunnel',
+      spawnNow + burrow.spawnTunnelTimeoutMs,
+      getSpawnFrontInwardVector(front),
+    );
   }
 
   isBurrowed(enemyId: string): boolean {
@@ -84,7 +93,7 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
   getForcedDirection(enemyId: string): { x: number; y: number } | null {
     // Nur die Anfahrt gräbt stur geradeaus; beim Gleis-Queren bleibt die normale Wegfindung aktiv.
     const reason = this.states.get(enemyId)?.reason;
-    if (reason === 'spawn-tunnel') return { x: 1, y: 0 };
+    if (reason === 'spawn-tunnel') return this.states.get(enemyId)?.inward ?? null;
     if (reason === 'spawn-point') return { x: 0, y: 0 };
     return null;
   }
@@ -125,7 +134,10 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
       // Boden erreicht. Die maximale Grabzeit loest nur den begrenzten Sicherheitsversuch aus;
       // ein blockierter Gegner bleibt bis zu einer sicheren Position unter der Erde.
       const reachedFreeGround = state.reason === 'spawn-tunnel'
-        && enemy.sprite.x - state.startX >= (this.getBurrowConfig(enemy)?.spawnTunnelMinDistancePx ?? 0)
+        && state.inward !== null
+        && (enemy.sprite.x - state.startX) * state.inward.x
+          + (enemy.sprite.y - state.startY) * state.inward.y
+          >= (this.getBurrowConfig(enemy)?.spawnTunnelMinDistancePx ?? 0)
         && this.isFreeGroundAt(enemy.sprite.x, enemy.sprite.y, enemy.getCollisionRadius());
       if (reachedFreeGround) {
         this.endBurrow(enemy);
@@ -166,8 +178,19 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
     }
   }
 
-  private startBurrow(enemy: EnemyEntity, reason: EnemyBurrowReason, endsAt: number): void {
-    this.states.set(enemy.id, { reason, endsAt, startX: enemy.sprite.x });
+  private startBurrow(
+    enemy: EnemyEntity,
+    reason: EnemyBurrowReason,
+    endsAt: number,
+    inward: { x: number; y: number } | null = null,
+  ): void {
+    this.states.set(enemy.id, {
+      reason,
+      endsAt,
+      startX: enemy.sprite.x,
+      startY: enemy.sprite.y,
+      inward,
+    });
     this.enemyManager.setEnemyBurrowed(enemy.id, true);
     this.setEnemyCollisionsEnabled(enemy.id, false);
   }

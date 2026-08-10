@@ -782,7 +782,7 @@ export class ArenaLifecycleCoordinator {
         if (coopDefenseEncounterConfigs.length > 0) {
           this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
             coopDefenseEncounterConfigs,
-            (enemyKind, count, originId) => this.ctx.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(enemyKind, count, originId),
+            (enemyKind, count, originId, front) => this.ctx.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(enemyKind, count, originId, front),
             {
               mode: coopDefenseMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
               showComplete: coopDefenseMapConfig?.objective === 'repel-assault',

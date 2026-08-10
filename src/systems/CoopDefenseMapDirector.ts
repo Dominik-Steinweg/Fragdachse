@@ -7,13 +7,16 @@ import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import type {
   CoopDefenseEncounterPresentationPhase,
   CoopDefenseEncounterPresentationState,
+  SpawnFront,
 } from '../types';
+import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 
 /** Ausfuehrungsschnitt des Directors zur bestehenden normalen Spawnlogik. */
 export type CoopDefenseEncounterSpawnHandler = (
   enemyKind: CoopDefenseEnemyKind,
   count: number,
   originId?: string,
+  front?: SpawnFront,
 ) => readonly string[] | void;
 
 const DEFAULT_SPAWN_BACKSTOP_MS = 30_000;
@@ -400,6 +403,9 @@ export class CoopDefenseMapDirector {
         'incoming',
         pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS,
         pending.startAtMs,
+        null,
+        undefined,
+        pending.startAtMs,
       );
     }
 
@@ -468,6 +474,9 @@ export class CoopDefenseMapDirector {
           'incoming',
           this.restUntilMs - ENCOUNTER_INCOMING_TELEGRAPH_MS,
           this.restUntilMs,
+          null,
+          undefined,
+          this.restUntilMs,
         );
       }
       return this.createPresentationState(
@@ -505,6 +514,9 @@ export class CoopDefenseMapDirector {
         pending.index,
         'incoming',
         pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS,
+        pending.startAtMs,
+        null,
+        undefined,
         pending.startAtMs,
       );
     }
@@ -544,6 +556,7 @@ export class CoopDefenseMapDirector {
     phaseEndsAtMs: number | null,
     enemyProgress: EncounterEnemyProgress | null = null,
     spawnComplete: boolean | undefined = undefined,
+    encounterStartAtMs: number | undefined = undefined,
   ): CoopDefenseEncounterPresentationState {
     return {
       encounterId: this.encounters[index]?.id ?? '',
@@ -552,11 +565,37 @@ export class CoopDefenseMapDirector {
       phase,
       phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
       phaseEndsAtMs: phaseEndsAtMs === null ? null : Math.max(0, phaseEndsAtMs),
+      fronts: this.getPresentationFronts(index, encounterStartAtMs),
       ...(spawnComplete === undefined ? {} : { spawnComplete }),
       ...(enemyProgress === null
         ? {}
         : { enemiesDefeated: enemyProgress.defeated, enemiesTotal: enemyProgress.total }),
     };
+  }
+
+  /**
+   * Returns only fronts that have spawned or are close enough to their authored group arrival to
+   * be useful as a telegraph. This keeps a delayed south group from being advertised together
+   * with an opening west group for the entire encounter.
+   */
+  private getPresentationFronts(index: number, encounterStartAtMs?: number): SpawnFront[] {
+    const encounter = this.encounters[index];
+    if (!encounter) return [DEFAULT_SPAWN_FRONT];
+    const state = this.executionStates[index];
+    const startAtMs = encounterStartAtMs
+      ?? (state?.started ? state.startedAtMs : this.elapsedMs);
+    const fronts: SpawnFront[] = [];
+    for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
+      const group = encounter.groups[groupIndex];
+      const groupStartAtMs = startAtMs + Math.max(0, Math.floor(group.delayMs));
+      const groupHasSpawned = state?.groupSpawnedCounts[groupIndex] > 0;
+      if (!groupHasSpawned && groupStartAtMs > this.elapsedMs + ENCOUNTER_INCOMING_TELEGRAPH_MS) continue;
+      const front = group.front ?? DEFAULT_SPAWN_FRONT;
+      if (!fronts.includes(front)) fronts.push(front);
+    }
+    if (fronts.length > 0) return fronts;
+    const firstFront = encounter.groups[0]?.front ?? DEFAULT_SPAWN_FRONT;
+    return [firstFront];
   }
 
   /**
@@ -662,7 +701,10 @@ export class CoopDefenseMapDirector {
       return;
     }
 
-    const spawnResult = this.spawnGroup(group.enemyKind, remainingCount, state.encounterId);
+    const front = group.front ?? DEFAULT_SPAWN_FRONT;
+    const spawnResult = front === DEFAULT_SPAWN_FRONT
+      ? this.spawnGroup(group.enemyKind, remainingCount, state.encounterId)
+      : this.spawnGroup(group.enemyKind, remainingCount, state.encounterId, front);
     // Older scheduled callbacks were void-returning. Preserve their once-only semantics while
     // treating an explicit [] as a real zero-spawn result that remains retryable.
     if (spawnResult === undefined) {

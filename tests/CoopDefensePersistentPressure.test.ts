@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CoopDefensePersistentPressureSystem } from '../src/systems/CoopDefensePersistentPressureSystem';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
+import type { SpawnFront } from '../src/types';
 
 function source(
   id: string,
   source: { type: 'map' } | { type: 'base'; baseId: string },
   startAtMs = 0,
+  front?: SpawnFront,
 ) {
   return {
     id,
@@ -15,6 +17,7 @@ function source(
     countPerTick: 2,
     startAtMs,
     source,
+    ...(front ? { front } : {}),
   } as const;
 }
 
@@ -30,7 +33,7 @@ describe('CoopDefensePersistentPressureSystem', () => {
     const activeBaseIds = new Set([base.id]);
     const system = new CoopDefensePersistentPressureSystem(
       [
-        source('map-pressure', { type: 'map' }),
+        source('map-pressure', { type: 'map' }, 0, 'north'),
         source('structure-pressure', { type: 'base', baseId: base.id }, 500),
       ],
       {
@@ -43,10 +46,12 @@ describe('CoopDefensePersistentPressureSystem', () => {
 
     system.hostUpdate(16, false);
     expect(mapSpawn).toHaveBeenCalledTimes(1);
+    expect(mapSpawn).toHaveBeenNthCalledWith(1, 'zombie-badger', 2, 'north');
     expect(structureSpawn).toHaveBeenCalledTimes(0);
 
     system.hostUpdate(1_000, false);
     expect(mapSpawn).toHaveBeenCalledTimes(2);
+    expect(mapSpawn).toHaveBeenNthCalledWith(2, 'zombie-badger', 2, 'north');
     expect(structureSpawn).toHaveBeenCalledTimes(1);
 
     activeBaseIds.clear();

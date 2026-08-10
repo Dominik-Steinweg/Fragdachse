@@ -88,8 +88,8 @@ export interface CoopDefenseEnemyBurrowConfig {
   readonly maxDurationMs: number;
   /** Geschwindigkeitsfaktor unter der Erde (1 = unveraendert). */
   readonly speedFactor: number;
-  /** True: Gegner erscheint eingebuddelt am linken Spielfeldrand und graebt sich geradeaus nach rechts frei. */
-  readonly spawnBurrowedAtLeftEdge: boolean;
+  /** True: Gegner erscheint eingebuddelt am authored arena edge and tunnels inward. */
+  readonly spawnBurrowedAtEdge: boolean;
   /** Mindest-Grabstrecke der Anfahrt, bevor der Gegner ueberhaupt auftauchen darf. */
   readonly spawnTunnelMinDistancePx: number;
   /** Not-Aus fuer die Einbuddel-Anfahrt; danach taucht der Gegner auf, wo er gerade steht. */
@@ -556,7 +556,7 @@ function normalizeBurrowConfig(
   return {
     maxDurationMs: Math.max(1, Math.floor(config.maxDurationMs)),
     speedFactor: Math.max(0.05, config.speedFactor),
-    spawnBurrowedAtLeftEdge: config.spawnBurrowedAtLeftEdge === true,
+    spawnBurrowedAtEdge: config.spawnBurrowedAtEdge === true,
     spawnTunnelMinDistancePx: Math.max(0, config.spawnTunnelMinDistancePx),
     spawnTunnelTimeoutMs: Math.max(1, Math.floor(config.spawnTunnelTimeoutMs)),
     crossesTrainTracks: config.crossesTrainTracks === true,

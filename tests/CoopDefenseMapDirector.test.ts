@@ -190,6 +190,33 @@ describe('CoopDefenseMapDirector', () => {
     });
   });
 
+  it('tracks active and imminent encounter fronts for the shared telegraph', () => {
+    const activeEnemyIds = new Set<string>();
+    let nextId = 0;
+    const director = new CoopDefenseMapDirector([{
+      id: 'multi-front',
+      start: { type: 'time', atMs: 0 },
+      restAfterMs: 0,
+      groups: [
+        { enemyKind: 'zombie-badger', count: 1, delayMs: 0, front: 'west' },
+        { enemyKind: 'demon-badger', count: 1, delayMs: 1_500, front: 'north' },
+      ],
+    }], () => {
+      const id = `multi-front-${nextId++}`;
+      activeEnemyIds.add(id);
+      return [id];
+    }, { isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId) });
+
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.fronts).toEqual(['west']);
+
+    director.hostUpdate(600, false);
+    expect(director.getPresentationState()?.fronts).toEqual(['west', 'north']);
+
+    director.hostUpdate(900, false);
+    expect(director.getPresentationState()?.fronts).toEqual(['west', 'north']);
+  });
+
   it('shows event-triggered encounters active immediately or incoming only for an authored delay', () => {
     let phase = 1;
     const immediateIds = new Set<string>();

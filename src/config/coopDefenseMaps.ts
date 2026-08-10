@@ -15,6 +15,8 @@ import {
 } from '../config';
 import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '../effects/TimeOfDay';
 import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
+import type { SpawnFront } from '../types';
+import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
@@ -121,6 +123,7 @@ export interface CoopDefenseMapPersistentSpawnConfig {
   readonly countPerTick: number;
   readonly startAtMs?: number;
   readonly source: CoopDefenseMapPersistentSpawnSource;
+  readonly front?: SpawnFront;
 }
 
 export interface ResolvedCoopDefenseMapPersistentSpawnConfig {
@@ -130,6 +133,7 @@ export interface ResolvedCoopDefenseMapPersistentSpawnConfig {
   readonly countPerTick: number;
   readonly startAtMs: number;
   readonly source: CoopDefenseMapPersistentSpawnSource;
+  readonly front?: SpawnFront;
 }
 
 /** Eine endliche Gegnergruppe innerhalb eines Encounters. */
@@ -138,6 +142,7 @@ export interface CoopDefenseMapEncounterGroupConfig {
   readonly count: number;
   /** Verzögerung relativ zum Start des Encounters; Standard 0. */
   readonly delayMs?: number;
+  readonly front?: SpawnFront;
 }
 
 /** Kleine, bewusst typisierte Startbedingungen fuer einen endlichen Encounter. */
@@ -161,6 +166,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly count: number;
   readonly delayMs: number;
+  readonly front?: SpawnFront;
 }
 
 export interface ResolvedCoopDefenseMapEncounterConfig {
@@ -417,6 +423,9 @@ export function resolveCoopDefenseMapPersistentSpawnConfigs(
       countPerTick: resolvedSpawnConfig.countPerTick,
       startAtMs: Math.max(0, Math.floor(spawnConfig.startAtMs ?? 0)),
       source: spawnConfig.source,
+      ...(spawnConfig.source.type === 'map'
+        ? { front: normalizeSpawnFront(mapConfig.mapId, spawnConfig.id, spawnConfig.front) }
+        : {}),
     };
   });
 }
@@ -440,6 +449,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
         enemyKind: group.enemyKind,
         count: resolvedGroup.countPerTick,
         delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
+        front: group.front ?? DEFAULT_SPAWN_FRONT,
       };
     }),
   }));
@@ -770,7 +780,16 @@ function normalizeEncounterGroup(
     enemyKind: group.enemyKind,
     count: Math.floor(group.count),
     delayMs: normalizeNonNegativeMilliseconds(group.delayMs),
+    front: normalizeSpawnFront(mapId, encounterId, group.front),
   };
+}
+
+function normalizeSpawnFront(mapId: string, ownerId: string, value: SpawnFront | undefined): SpawnFront {
+  if (value === undefined) return DEFAULT_SPAWN_FRONT;
+  if (!isSpawnFront(value)) {
+    throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} has unknown spawn front: ${value}`);
+  }
+  return value;
 }
 
 function normalizeNonNegativeMilliseconds(value: number | undefined): number {
@@ -1170,6 +1189,9 @@ function normalizePersistentSpawnConfigs(
     }
 
     const source = normalizePersistentSpawnSource(mapId, id, spawnConfig.source, bases);
+    if (source.type === 'base' && spawnConfig.front !== undefined) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} is structure-bound and cannot declare a front`);
+    }
     return {
       id,
       enemyKind: spawnConfig.enemyKind,
@@ -1177,6 +1199,9 @@ function normalizePersistentSpawnConfigs(
       countPerTick: Math.max(1, Math.floor(spawnConfig.countPerTick)),
       startAtMs: Math.max(0, Math.floor(spawnConfig.startAtMs ?? 0)),
       source,
+      ...(source.type === 'map'
+        ? { front: normalizeSpawnFront(mapId, id, spawnConfig.front) }
+        : {}),
     };
   });
 }

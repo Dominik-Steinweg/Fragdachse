@@ -25,6 +25,10 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
   Map- und strukturgebundene Druckquellen werden vom `CoopDefensePersistentPressureSystem` getaktet; Boss-Timing liegt beim `CoopDefenseBossSystem`. Der Director meldet den
   Assault-Fortschritt nur an den `CoopDefenseRoundStateSystem`, der als einzige Instanz Sieg oder
   Niederlage abschließt.
+- `CoopDefenseSpawnExecutor` bleibt die gemeinsame Spawn-Grenze für Encounter und mapgebundene
+  Druckquellen: eine authored Front wählt eine erreichbare Randzone, während eine Burrow-Front
+  zusätzlich den kürzesten erreichbaren Tunnel durch blockierte Randzellen prüft. Encounter-IDs
+  und Clear-Provenance bleiben dabei über alle Fronten hinweg gemeinsam.
 - Encounter-Starts sind eine kleine discriminated union (`time`, `after-previous`,
   `opening-airstrike-complete`, `boss-phase`, `base-destroyed`). Fachsysteme liefern dafür
   persistente State-Abfragen über die Arena-Verdrahtung; der Director importiert weder Airstrike-,

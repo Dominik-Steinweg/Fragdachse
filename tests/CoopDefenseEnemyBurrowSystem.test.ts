@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CoopDefenseEnemyBurrowSystem } from '../src/systems/CoopDefenseEnemyBurrowSystem';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
+import type { SpawnFront } from '../src/types';
 
 interface FakeEnemy {
   id: string;
@@ -68,6 +69,27 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     expect(enemy.burrowed).toBe(true);
     expect(collisionCalls).toEqual([{ enemyId: 'e1', enabled: false }]);
     expect(system.getForcedDirection(enemy.id)).toEqual({ x: 1, y: 0 });
+  });
+
+  it('burrows toward the arena interior from every authored front', () => {
+    const cases: Array<{ front: SpawnFront; direction: { x: number; y: number } }> = [
+      { front: 'west', direction: { x: 1, y: 0 } },
+      { front: 'north', direction: { x: 0, y: 1 } },
+      { front: 'east', direction: { x: -1, y: 0 } },
+      { front: 'south', direction: { x: 0, y: -1 } },
+    ];
+
+    for (const { front, direction } of cases) {
+      const enemy = createEnemy('alien-badger', front === 'east' ? 400 : 0);
+      const { system } = createSystem(enemy, () => true);
+      system.notifyEnemySpawned(enemy as unknown as EnemyEntity, { spawnFront: front }, 0);
+
+      expect(system.getForcedDirection(enemy.id)).toEqual(direction);
+      enemy.sprite.x += direction.x * 200;
+      enemy.sprite.y += direction.y * 200;
+      system.hostUpdate(100);
+      expect(system.isBurrowed(enemy.id)).toBe(false);
+    }
   });
 
   it('leaves enemies without a burrow config alone', () => {

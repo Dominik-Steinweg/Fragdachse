@@ -2,8 +2,9 @@
   "mapId": "2",
   "displayName": "Map 2 - Zweite Front",
   "arenaWidthCells": 70,
+  "arenaHeightCells": 38,
   "timeOfDay": "05:00",
-  "tutorialText": "Auf dieser größeren Map hat die Basis im mittleren Bereich einen Geschützturm. Nutzt den längeren Anmarschweg, bevor die Gegner die Basen erreichen. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
+  "tutorialText": "Die zweite Front kommt jetzt auch aus dem Norden. Die mittlere Basis hat einen Geschützturm; nutzt die unterschiedlichen Anmarschwege, bevor die Gegner die Basen erreichen. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
   "rockFillRatio": 0.15,
   "train": {
     "firstArrival": {
@@ -61,6 +62,7 @@
       "intervalMs": 4000,
       "countPerTick": 1,
       "startAtMs": 0,
+      "front": "west",
       "source": {
         "type": "map"
       }
@@ -71,6 +73,7 @@
       "intervalMs": 3000,
       "countPerTick": 2,
       "startAtMs": 10000,
+      "front": "north",
       "source": {
         "type": "map"
       }

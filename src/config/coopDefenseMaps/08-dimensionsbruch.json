@@ -200,7 +200,7 @@
       "anchor": {
         "kind": "grid",
         "gridX": 36,
-        "gridY": 6
+        "gridY": 10
       },
       "shape": {
         "kind": "rectangle",
@@ -226,7 +226,7 @@
       "anchor": {
         "kind": "grid",
         "gridX": 36,
-        "gridY": 12
+        "gridY": 42
       },
       "shape": {
         "kind": "rectangle",
@@ -273,6 +273,7 @@
       "intervalMs": 12000,
       "countPerTick": 1,
       "startAtMs": 0,
+      "front": "west",
       "source": {
         "type": "map"
       }
@@ -283,6 +284,7 @@
       "intervalMs": 6000,
       "countPerTick": 1,
       "startAtMs": 5000,
+      "front": "north",
       "source": {
         "type": "map"
       }
@@ -293,6 +295,7 @@
       "intervalMs": 10000,
       "countPerTick": 1,
       "startAtMs": 10000,
+      "front": "south",
       "source": {
         "type": "map"
       }

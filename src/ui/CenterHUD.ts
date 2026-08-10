@@ -160,6 +160,16 @@ function resolveEncounterStyleId(phase: CoopDefenseEncounterPresentationState['p
   return 'incoming';
 }
 
+function formatEncounterFronts(fronts: readonly string[] | undefined): string {
+  const labels = (fronts ?? ['west']).map((front) => ({
+    west: 'WEST',
+    north: 'NORD',
+    east: 'OST',
+    south: 'SÜD',
+  } as Record<string, string>)[front] ?? 'WEST');
+  return labels.length > 1 ? labels.join(' + ') : labels[0] ?? 'WEST';
+}
+
 const STACK_BAR_W      = 212;
 const STACK_BAR_H      = 14;
 const STACK_LABEL_H    = 20;
@@ -958,7 +968,7 @@ export class CenterHUD {
       this.encounterKicker.setText(`ANGRIFF ${Math.min(state.sequenceIndex, count)} / ${count}`);
       return;
     }
-    this.encounterKicker.setText('ANGRIFFSSERIE');
+    this.encounterKicker.setText(formatEncounterFronts(state.fronts));
 
     const totalW = count * ENCOUNTER_PIP_W + (count - 1) * ENCOUNTER_PIP_GAP;
     const startX = ENCOUNTER_CONTENT_RIGHT - totalW;
