@@ -29,6 +29,7 @@ import {
   getCoopDefenseTutorialPanelHeight,
 } from '../config/coopDefenseTutorial';
 import { HELP_CONTROLS } from '../config/helpControls';
+import { ensureFlatPanelTexture } from './uiTextures';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const CENTER_X       = GAME_WIDTH / 2;
@@ -76,15 +77,80 @@ const TRAIN_PAL: LivingBarPalette = { dark: 0x3d1812, mid: 0xcf573c, light: 0xff
 const TRAIN_PANEL_Y    = 78;
 const TRAIN_PANEL_H    = 54;
 
-const ENCOUNTER_PANEL_W = 392;
-const ENCOUNTER_PANEL_H = 54;
-const ENCOUNTER_PANEL_X = GAME_WIDTH - ENCOUNTER_PANEL_W / 2 - 22;
-const ENCOUNTER_PANEL_Y = 28;
+// ── Encounter-Panel ──────────────────────────────────────────────────────────
+// Anzeige der Coop-Defense-Angriffsserie. Die Wellenposition trägt die Pip-Leiste,
+// die Phase die Statuszeile, die Restzeit der eigene Countdown – jede Information
+// steht damit genau einmal im Panel.
+const ENCOUNTER_PANEL_W = 400;
+const ENCOUNTER_PANEL_H = 84;
+const ENCOUNTER_PANEL_X = GAME_WIDTH - ENCOUNTER_PANEL_W / 2 - 24;
+const ENCOUNTER_PANEL_Y = 22 + ENCOUNTER_PANEL_H / 2;
 const ENCOUNTER_PANEL_LEFT = -ENCOUNTER_PANEL_W / 2;
 const ENCOUNTER_PANEL_TOP = -ENCOUNTER_PANEL_H / 2;
-const ENCOUNTER_PROGRESS_W = ENCOUNTER_PANEL_W - 34;
-const ENCOUNTER_PROGRESS_Y = ENCOUNTER_PANEL_H / 2 - 6;
+const ENCOUNTER_PANEL_RADIUS = 10;
+const ENCOUNTER_CONTENT_LEFT = ENCOUNTER_PANEL_LEFT + 24;
+const ENCOUNTER_CONTENT_RIGHT = -ENCOUNTER_PANEL_LEFT - 20;
+const ENCOUNTER_RAIL_X = ENCOUNTER_PANEL_LEFT + 9;
+const ENCOUNTER_RAIL_H = ENCOUNTER_PANEL_H - 24;
+const ENCOUNTER_KICKER_Y = ENCOUNTER_PANEL_TOP + 19;
+const ENCOUNTER_STATUS_Y = ENCOUNTER_PANEL_TOP + 46;
+const ENCOUNTER_PROGRESS_Y = ENCOUNTER_PANEL_TOP + 69;
+const ENCOUNTER_PROGRESS_H = 6;
+const ENCOUNTER_PROGRESS_W = ENCOUNTER_CONTENT_RIGHT - ENCOUNTER_CONTENT_LEFT;
+const ENCOUNTER_FILL_H = ENCOUNTER_PROGRESS_H - 2;
+const ENCOUNTER_FILL_W = ENCOUNTER_PROGRESS_W - 2;
+const ENCOUNTER_PIP_W = 17;
+const ENCOUNTER_PIP_H = 5;
+const ENCOUNTER_PIP_GAP = 5;
+/** Über dieser Wellenzahl bleibt die Pip-Leiste ungezeichnet; die Pips wären nicht mehr zählbar. */
+const ENCOUNTER_PIP_MAX = 9;
 const ENCOUNTER_FADE_MS = 180;
+const ENCOUNTER_BG_TEX = '_center_encounter_bg';
+
+type EncounterStyleId = 'incoming' | 'active' | 'done' | 'rest';
+
+interface EncounterStyle {
+  /** Leitfarbe für Rahmen, Schiene, Pips, Balken und Statuszeile. */
+  readonly accent: number;
+  /** Gedämpfte Zweitfarbe für Kicker und ruhende Pips. */
+  readonly muted: number;
+  readonly palette: LivingBarPalette;
+  readonly barTex: string;
+}
+
+const ENCOUNTER_STYLES: Record<EncounterStyleId, EncounterStyle> = {
+  incoming: {
+    accent: COLORS.RED_1,
+    muted: COLORS.GOLD_3,
+    palette: { dark: 0x4a1c12, mid: COLORS.RED_2, light: COLORS.RED_1 },
+    barTex: '_center_encounter_bar_incoming',
+  },
+  active: {
+    accent: COLORS.GOLD_1,
+    muted: COLORS.GOLD_3,
+    palette: { dark: 0x4d3210, mid: COLORS.GOLD_2, light: COLORS.GOLD_1 },
+    barTex: '_center_encounter_bar_active',
+  },
+  done: {
+    accent: COLORS.GREEN_2,
+    muted: COLORS.GREEN_4,
+    palette: { dark: 0x1d3a1a, mid: COLORS.GREEN_3, light: COLORS.GREEN_1 },
+    barTex: '_center_encounter_bar_done',
+  },
+  rest: {
+    accent: COLORS.BLUE_2,
+    muted: COLORS.BLUE_4,
+    palette: { dark: 0x16303f, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
+    barTex: '_center_encounter_bar_rest',
+  },
+};
+
+function resolveEncounterStyleId(phase: CoopDefenseEncounterPresentationState['phase']): EncounterStyleId {
+  if (phase === 'active') return 'active';
+  if (phase === 'cleared' || phase === 'complete') return 'done';
+  if (phase === 'rest') return 'rest';
+  return 'incoming';
+}
 
 const STACK_BAR_W      = 212;
 const STACK_BAR_H      = 14;
@@ -134,6 +200,16 @@ const TUTORIAL_CONTROLS_KEY_FONT = {
 };
 const TUTORIAL_CONTROLS_DESC_FONT = {
   fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
+};
+const ENCOUNTER_KICKER_FONT = {
+  fontSize: '13px', fontFamily: 'monospace', fontStyle: 'bold',
+  color: toCssColor(COLORS.GREY_4), letterSpacing: 2,
+};
+const ENCOUNTER_STATUS_FONT = {
+  fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+};
+const ENCOUNTER_COUNTDOWN_FONT = {
+  fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
 };
 
 function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
@@ -206,13 +282,16 @@ export class CenterHUD {
   private announcementText!: Phaser.GameObjects.Text;
   private announcementTween: Phaser.Tweens.Tween | null = null;
   private encounterPanel!: Phaser.GameObjects.Container;
-  private encounterGraphics!: Phaser.GameObjects.Graphics;
-  private encounterMarker!: Phaser.GameObjects.Arc;
-  private encounterProgress!: Phaser.GameObjects.Rectangle;
-  private encounterProgressBg!: Phaser.GameObjects.Rectangle;
-  private encounterTitle!: Phaser.GameObjects.Text;
+  private encounterBg!: Phaser.GameObjects.Image;
+  private encounterFrame!: Phaser.GameObjects.Graphics;
+  private encounterPips!: Phaser.GameObjects.Graphics;
+  private encounterRailGlow!: Phaser.GameObjects.Rectangle;
+  private encounterRail!: Phaser.GameObjects.Rectangle;
+  private encounterProgressFill!: Phaser.GameObjects.Image;
+  private encounterProgressHead!: Phaser.GameObjects.Image;
+  private encounterKicker!: Phaser.GameObjects.Text;
   private encounterStatus!: Phaser.GameObjects.Text;
-  private encounterSequence!: Phaser.GameObjects.Text;
+  private encounterCountdown!: Phaser.GameObjects.Text;
   private encounterTween: Phaser.Tweens.Tween | null = null;
   private encounterPulseTween: Phaser.Tweens.Tween | null = null;
 
@@ -233,6 +312,11 @@ export class CenterHUD {
   private lastSurvivalText: string | null = null;
   private lastEncounterPresentationSignature: string | null = null;
   private lastEncounterPresentationPhase: CoopDefenseEncounterPresentationState['phase'] | null = null;
+  private lastEncounterStyleId: EncounterStyleId | null = null;
+  private lastEncounterPipSignature: string | null = null;
+  private lastEncounterProgressWidth = -1;
+  private lastEncounterCountdownText: string | null = null;
+  private lastEncounterDeterminate: boolean | null = null;
   private lastTrainText: string | null = null;
   private lastTrainBarWidth = -1;
   private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
@@ -293,42 +377,66 @@ export class CenterHUD {
   }
 
   private buildEncounterPanel(): void {
-    this.encounterGraphics = this.scene.add.graphics();
-    this.encounterMarker = this.scene.add.circle(ENCOUNTER_PANEL_LEFT + 18, 0, 5, COLORS.RED_1, 1);
-    this.encounterTitle = this.scene.add.text(ENCOUNTER_PANEL_LEFT + 34, -19, 'ANGRIFF', {
-      fontSize: '13px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
-    }).setOrigin(0, 0.5);
-    this.encounterStatus = this.scene.add.text(ENCOUNTER_PANEL_LEFT + 34, 2, '', {
-      fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_1),
-    }).setOrigin(0, 0.5);
-    this.encounterSequence = this.scene.add.text(-ENCOUNTER_PANEL_LEFT - 16, -18, '', {
-      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
-    }).setOrigin(1, 0.5);
-    this.encounterProgressBg = this.scene.add.rectangle(
-      ENCOUNTER_PANEL_LEFT + 17,
-      ENCOUNTER_PROGRESS_Y,
-      ENCOUNTER_PROGRESS_W,
-      2,
+    // Grundfläche als geteilte Panel-Textur: gleicher Verlauf, Radius und Randton wie die
+    // übrigen Menü- und Overlay-Flächen. Nur die farbführenden Teile liegen als eigene
+    // Objekte darüber und werden bei einem Phasenwechsel neu gezeichnet, nicht pro Frame.
+    ensureFlatPanelTexture(
+      this.scene,
+      ENCOUNTER_BG_TEX,
+      ENCOUNTER_PANEL_W,
+      ENCOUNTER_PANEL_H,
       COLORS.GREY_8,
-      0.85,
-    ).setOrigin(0, 0.5);
-    this.encounterProgress = this.scene.add.rectangle(
-      ENCOUNTER_PANEL_LEFT + 17,
-      ENCOUNTER_PROGRESS_Y,
-      ENCOUNTER_PROGRESS_W,
-      2,
-      COLORS.RED_1,
-      1,
-    ).setOrigin(0, 0.5);
+      COLORS.GREY_6,
+      { radius: ENCOUNTER_PANEL_RADIUS, fillAlpha: 0.88, strokeAlpha: 0.45 },
+    );
+    for (const style of Object.values(ENCOUNTER_STYLES)) {
+      if (this.scene.textures.exists(style.barTex)) continue;
+      createGradientTexture(this.scene, style.barTex, style.palette, ENCOUNTER_FILL_W, ENCOUNTER_FILL_H);
+    }
+
+    this.encounterBg = this.scene.add.image(0, 0, ENCOUNTER_BG_TEX).setOrigin(0.5);
+    this.encounterFrame = this.scene.add.graphics();
+    this.encounterRailGlow = this.scene.add
+      .rectangle(ENCOUNTER_RAIL_X, 0, 14, ENCOUNTER_RAIL_H, ENCOUNTER_STYLES.incoming.accent, 0.22)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.encounterRail = this.scene.add
+      .rectangle(ENCOUNTER_RAIL_X, 0, 4, ENCOUNTER_RAIL_H, ENCOUNTER_STYLES.incoming.accent, 1);
+    this.encounterPips = this.scene.add.graphics();
+
+    this.encounterKicker = this.scene.add
+      .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_KICKER_Y, 'ANGRIFFSSERIE', ENCOUNTER_KICKER_FONT)
+      .setOrigin(0, 0.5);
+    this.encounterStatus = this.scene.add
+      .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_STATUS_Y, '', ENCOUNTER_STATUS_FONT)
+      .setOrigin(0, 0.5);
+    this.encounterCountdown = this.scene.add
+      .text(ENCOUNTER_CONTENT_RIGHT, ENCOUNTER_STATUS_Y, '', ENCOUNTER_COUNTDOWN_FONT)
+      .setOrigin(1, 0.5);
+
+    this.encounterProgressFill = this.scene.add
+      .image(ENCOUNTER_CONTENT_LEFT + 1, ENCOUNTER_PROGRESS_Y - ENCOUNTER_FILL_H / 2, ENCOUNTER_STYLES.incoming.barTex)
+      .setOrigin(0, 0);
+    this.encounterProgressFill.setCrop(0, 0, 0, ENCOUNTER_FILL_H);
+    // Laufende Spitze des Balkens: dieselbe Radialtextur wie die Kernpartikel des unteren
+    // Stacks, additiv und eingefärbt – sie macht den Fortschritt auch bei 6 px Höhe ablesbar.
+    this.encounterProgressHead = this.scene.add
+      .image(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_PROGRESS_Y, STACK_CORE_TEX)
+      .setOrigin(0.5)
+      .setScale(1.6)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
 
     this.encounterPanel = this.scene.add.container(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y, [
-      this.encounterGraphics,
-      this.encounterProgressBg,
-      this.encounterProgress,
-      this.encounterMarker,
-      this.encounterTitle,
+      this.encounterBg,
+      this.encounterFrame,
+      this.encounterRailGlow,
+      this.encounterRail,
+      this.encounterProgressFill,
+      this.encounterProgressHead,
+      this.encounterPips,
+      this.encounterKicker,
       this.encounterStatus,
-      this.encounterSequence,
+      this.encounterCountdown,
     ]).setScrollFactor(0).setVisible(false).setAlpha(1);
     this.container.add(this.encounterPanel);
   }
@@ -619,105 +727,190 @@ export class CenterHUD {
     const remainingMs = state.phaseEndsAtMs === null
       ? 0
       : Math.max(0, state.phaseEndsAtMs - elapsed);
-    const remainingText = remainingMs >= 10_000
-      ? `${Math.ceil(remainingMs / 1000)}s`
-      : `${(remainingMs / 1000).toFixed(1)}s`;
+    const hasCountdown = state.phaseEndsAtMs !== null
+      && (state.phase === 'incoming' || state.phase === 'rest');
+    const countdownText = !hasCountdown
+      ? ''
+      : remainingMs >= 10_000
+        ? `${Math.ceil(remainingMs / 1000)}s`
+        : `${(remainingMs / 1000).toFixed(1)}s`;
     const statusText = state.phase === 'incoming'
-      ? `EINSATZ IN ${remainingText}`
+      ? 'ANGRIFF ROLLT AN'
       : state.phase === 'active'
         ? 'ANGRIFF LÄUFT'
         : state.phase === 'cleared'
-          ? 'ABGEWEHRT'
+          ? 'ANGRIFF ABGEWEHRT'
           : state.phase === 'rest'
-            ? `NÄCHSTER IN ${remainingText}`
+            ? 'NÄCHSTER ANGRIFF'
             : 'SERIE ABGEWEHRT';
-    const titleText = state.phase === 'complete'
-      ? 'ENDE DER ANGRIFFSSERIE'
-      : `ANGRIFF ${state.sequenceIndex} / ${state.sequenceCount}`;
-    const textSignature = [state.encounterId, state.phase, titleText, statusText].join('|');
+    const styleId = resolveEncounterStyleId(state.phase);
+    const style = ENCOUNTER_STYLES[styleId];
+    const textSignature = [state.encounterId, state.phase, statusText].join('|');
     const phaseChanged = state.phase !== this.lastEncounterPresentationPhase;
 
     if (textSignature !== this.lastEncounterPresentationSignature) {
-      this.encounterTitle.setText(titleText);
       this.encounterStatus.setText(statusText);
-      this.encounterSequence.setText(`${state.sequenceIndex}/${state.sequenceCount}`);
       this.lastEncounterPresentationSignature = textSignature;
     }
+    if (countdownText !== this.lastEncounterCountdownText) {
+      this.encounterCountdown.setText(countdownText).setVisible(countdownText.length > 0);
+      this.lastEncounterCountdownText = countdownText;
+    }
 
-    const style = this.getEncounterStyle(state.phase);
-    this.encounterTitle.setColor(toCssColor(style.color));
-    this.encounterStatus.setColor(toCssColor(style.color));
-    this.encounterSequence.setColor(toCssColor(style.secondary));
-    this.encounterMarker.setFillStyle(style.color, 1);
-    this.encounterProgress.setFillStyle(style.color, 1);
-    this.encounterProgress.setScale(
-      state.phaseEndsAtMs === null
-        ? 1
-        : Phaser.Math.Clamp(
-          (elapsed - state.phaseStartedAtMs) / Math.max(1, state.phaseEndsAtMs - state.phaseStartedAtMs),
-          0,
-          1,
-        ),
-      1,
-    );
-    this.drawEncounterFrame(style.color);
+    if (styleId !== this.lastEncounterStyleId) {
+      this.applyEncounterStyle(style);
+      this.lastEncounterStyleId = styleId;
+    }
+    this.drawEncounterPips(state, style);
+
+    const progress = state.phaseEndsAtMs === null
+      ? 1
+      : Phaser.Math.Clamp(
+        (elapsed - state.phaseStartedAtMs) / Math.max(1, state.phaseEndsAtMs - state.phaseStartedAtMs),
+        0,
+        1,
+      );
+    // Nur eine Phase mit bekanntem Ende darf einen echten Fortschritt behaupten. Der laufende
+    // Angriff endet erst mit dem letzten Gegner: dort steht der Balken voll, aber gedämpft –
+    // ein leerer Balken läse sich als Stillstand, ein voller heller als abgeschlossen.
+    const determinate = state.phaseEndsAtMs !== null && state.phase !== 'active';
+    const fillW = Math.round(ENCOUNTER_FILL_W * progress);
+    if (fillW !== this.lastEncounterProgressWidth) {
+      this.encounterProgressFill.setCrop(0, 0, fillW, ENCOUNTER_FILL_H);
+      this.encounterProgressHead.setX(ENCOUNTER_CONTENT_LEFT + 1 + fillW);
+      this.lastEncounterProgressWidth = fillW;
+    }
+    if (determinate !== this.lastEncounterDeterminate) {
+      this.encounterProgressFill.setAlpha(determinate ? 1 : 0.32);
+      this.lastEncounterDeterminate = determinate;
+    }
+    this.encounterProgressHead.setVisible(determinate && fillW > 4 && fillW < ENCOUNTER_FILL_W);
 
     if (phaseChanged || !this.encounterPanel.visible) {
-      this.encounterTween?.destroy();
-      this.encounterPanel.setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y + 8).setVisible(true).setAlpha(0);
-      this.encounterTween = this.scene.tweens.add({
-        targets: this.encounterPanel,
-        alpha: 1,
-        y: ENCOUNTER_PANEL_Y,
-        duration: ENCOUNTER_FADE_MS,
-        ease: 'Quad.easeOut',
-        onComplete: () => { this.encounterTween = null; },
-      });
-      this.encounterPulseTween?.destroy();
-      this.encounterPulseTween = null;
-      if (state.phase === 'incoming' || state.phase === 'cleared') {
-        this.encounterPulseTween = this.scene.tweens.add({
-          targets: this.encounterMarker,
-          scaleX: 1.35,
-          scaleY: 1.35,
-          alpha: 0.45,
-          duration: state.phase === 'incoming' ? 360 : 500,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
+      this.playEncounterPhaseEntry(state.phase);
     }
     this.lastEncounterPresentationPhase = state.phase;
   }
 
-  private getEncounterStyle(phase: CoopDefenseEncounterPresentationState['phase']): { color: number; secondary: number } {
-    if (phase === 'active') return { color: COLORS.GOLD_1, secondary: COLORS.GOLD_2 };
-    if (phase === 'cleared' || phase === 'complete') return { color: COLORS.GREEN_1, secondary: COLORS.BLUE_2 };
-    if (phase === 'rest') return { color: COLORS.BLUE_2, secondary: COLORS.GREY_3 };
-    return { color: COLORS.RED_1, secondary: COLORS.GOLD_2 };
+  /** Farbführende Teile des Panels. Läuft nur beim Wechsel der Phasenfarbe. */
+  private applyEncounterStyle(style: EncounterStyle): void {
+    this.encounterRail.setFillStyle(style.accent, 1);
+    this.encounterRailGlow.setFillStyle(style.accent, 0.22);
+    this.encounterStatus.setColor(toCssColor(style.accent));
+    this.encounterCountdown.setColor(toCssColor(style.accent));
+    this.encounterKicker.setColor(toCssColor(style.muted));
+    this.encounterProgressFill.setTexture(style.barTex);
+    this.encounterProgressFill.setCrop(0, 0, Math.max(0, this.lastEncounterProgressWidth), ENCOUNTER_FILL_H);
+    this.encounterProgressHead.setTint(style.accent);
+
+    const frame = this.encounterFrame;
+    frame.clear();
+    frame.lineStyle(1.5, style.accent, 0.5);
+    frame.strokeRoundedRect(
+      ENCOUNTER_PANEL_LEFT + 1,
+      ENCOUNTER_PANEL_TOP + 1,
+      ENCOUNTER_PANEL_W - 2,
+      ENCOUNTER_PANEL_H - 2,
+      ENCOUNTER_PANEL_RADIUS,
+    );
+    frame.fillStyle(COLORS.GREY_9, 0.9);
+    frame.fillRoundedRect(
+      ENCOUNTER_CONTENT_LEFT,
+      ENCOUNTER_PROGRESS_Y - ENCOUNTER_PROGRESS_H / 2,
+      ENCOUNTER_PROGRESS_W,
+      ENCOUNTER_PROGRESS_H,
+      ENCOUNTER_PROGRESS_H / 2,
+    );
+    frame.lineStyle(1, style.accent, 0.28);
+    frame.strokeRoundedRect(
+      ENCOUNTER_CONTENT_LEFT,
+      ENCOUNTER_PROGRESS_Y - ENCOUNTER_PROGRESS_H / 2,
+      ENCOUNTER_PROGRESS_W,
+      ENCOUNTER_PROGRESS_H,
+      ENCOUNTER_PROGRESS_H / 2,
+    );
   }
 
-  private drawEncounterFrame(color: number): void {
-    this.encounterGraphics.clear();
-    this.encounterGraphics.fillStyle(PANEL_BG_COL, 0.64);
-    this.encounterGraphics.fillRoundedRect(
-      ENCOUNTER_PANEL_LEFT,
-      ENCOUNTER_PANEL_TOP,
-      ENCOUNTER_PANEL_W,
-      ENCOUNTER_PANEL_H,
-      8,
-    );
-    this.encounterGraphics.lineStyle(1.5, color, 0.78);
-    this.encounterGraphics.strokeRoundedRect(
-      ENCOUNTER_PANEL_LEFT,
-      ENCOUNTER_PANEL_TOP,
-      ENCOUNTER_PANEL_W,
-      ENCOUNTER_PANEL_H,
-      8,
-    );
-    this.encounterGraphics.fillStyle(color, 0.92);
-    this.encounterGraphics.fillRoundedRect(ENCOUNTER_PANEL_LEFT, ENCOUNTER_PANEL_TOP, 4, ENCOUNTER_PANEL_H, 2);
+  /**
+   * Wellenposition als Segmentleiste. Sie ersetzt die frühere doppelte Zahlenangabe:
+   * abgewehrt, laufend und ausstehend sind an Farbe und Deckkraft unterscheidbar.
+   */
+  private drawEncounterPips(state: CoopDefenseEncounterPresentationState, style: EncounterStyle): void {
+    const count = Math.max(1, Math.floor(state.sequenceCount));
+    const isDone = state.phase === 'cleared' || state.phase === 'complete';
+    const clearedCount = state.phase === 'complete'
+      ? count
+      : isDone
+        ? state.sequenceIndex
+        : state.sequenceIndex - 1;
+    const currentIndex = isDone ? -1 : state.sequenceIndex - 1;
+    const signature = `${count}|${clearedCount}|${currentIndex}|${style.accent}`;
+    if (signature === this.lastEncounterPipSignature) return;
+    this.lastEncounterPipSignature = signature;
+
+    this.encounterPips.clear();
+    if (count > ENCOUNTER_PIP_MAX) {
+      // Zu viele Wellen für eine zählbare Leiste – die Position wandert dann in den Kicker.
+      this.encounterKicker.setText(`ANGRIFF ${Math.min(state.sequenceIndex, count)} / ${count}`);
+      return;
+    }
+    this.encounterKicker.setText('ANGRIFFSSERIE');
+
+    const totalW = count * ENCOUNTER_PIP_W + (count - 1) * ENCOUNTER_PIP_GAP;
+    const startX = ENCOUNTER_CONTENT_RIGHT - totalW;
+    const top = ENCOUNTER_KICKER_Y - ENCOUNTER_PIP_H / 2;
+    for (let index = 0; index < count; index += 1) {
+      const x = startX + index * (ENCOUNTER_PIP_W + ENCOUNTER_PIP_GAP);
+      if (index === currentIndex) {
+        this.encounterPips.fillStyle(style.accent, 0.22);
+        this.encounterPips.fillRoundedRect(x - 2, top - 2, ENCOUNTER_PIP_W + 4, ENCOUNTER_PIP_H + 4, 4);
+        this.encounterPips.fillStyle(style.accent, 1);
+      } else if (index < clearedCount) {
+        this.encounterPips.fillStyle(style.accent, 0.75);
+      } else {
+        this.encounterPips.fillStyle(COLORS.GREY_6, 0.7);
+      }
+      this.encounterPips.fillRoundedRect(x, top, ENCOUNTER_PIP_W, ENCOUNTER_PIP_H, 2);
+    }
+  }
+
+  /**
+   * Auftritt bei Phasenwechsel. Der Container sitzt auf der Panelmitte und trägt lokal
+   * platzierte Kinder – ein Skalierungs-Tween wächst hier deshalb um die eigene Mitte.
+   */
+  private playEncounterPhaseEntry(phase: CoopDefenseEncounterPresentationState['phase']): void {
+    this.encounterTween?.destroy();
+    this.encounterPanel
+      .setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y + 8)
+      .setScale(0.97)
+      .setVisible(true)
+      .setAlpha(0);
+    this.encounterTween = this.scene.tweens.add({
+      targets: this.encounterPanel,
+      alpha: 1,
+      y: ENCOUNTER_PANEL_Y,
+      scaleX: 1,
+      scaleY: 1,
+      duration: ENCOUNTER_FADE_MS,
+      ease: 'Back.easeOut',
+      onComplete: () => { this.encounterTween = null; },
+    });
+
+    this.encounterPulseTween?.destroy();
+    this.encounterPulseTween = null;
+    this.encounterRailGlow.setScale(1, 1).setAlpha(1);
+    if (phase !== 'incoming' && phase !== 'cleared') return;
+    // Nur die beiden kurzen Signalphasen atmen. Ein Dauerpuls während des Angriffs
+    // würde neben den Kampfeffekten nur flimmern.
+    this.encounterPulseTween = this.scene.tweens.add({
+      targets: this.encounterRailGlow,
+      scaleX: 2.1,
+      alpha: 0.35,
+      duration: phase === 'incoming' ? 340 : 480,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   private hideEncounterPresentation(): void {
@@ -725,9 +918,19 @@ export class CenterHUD {
     this.encounterTween = null;
     this.encounterPulseTween?.destroy();
     this.encounterPulseTween = null;
-    this.encounterPanel?.setVisible(false).setAlpha(1).setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y);
+    this.encounterPanel
+      ?.setVisible(false)
+      .setAlpha(1)
+      .setScale(1)
+      .setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y);
+    this.encounterRailGlow?.setScale(1, 1).setAlpha(1);
     this.lastEncounterPresentationSignature = null;
     this.lastEncounterPresentationPhase = null;
+    this.lastEncounterStyleId = null;
+    this.lastEncounterPipSignature = null;
+    this.lastEncounterProgressWidth = -1;
+    this.lastEncounterCountdownText = null;
+    this.lastEncounterDeterminate = null;
   }
 
   /**

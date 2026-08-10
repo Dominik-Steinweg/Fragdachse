@@ -5,12 +5,72 @@ import {
   ARENA_OFFSET_Y,
   COLORS,
   DEPTH_FX,
-  GAME_HEIGHT,
 } from '../config';
 import type { CoopDefenseEncounterPresentationState } from '../types';
-import { ensureCanvasTexture, killAllAndResetParticlePositions } from './EffectUtils';
+import {
+  ensureCanvasTexture,
+  killAllAndResetParticlePositions,
+  setEmitterTintArray,
+} from './EffectUtils';
 
 const TEX_ENCOUNTER_SPARK = '__coop_defense_encounter_spark';
+const TEX_ENCOUNTER_BAND = '__coop_defense_encounter_band';
+const TEX_ENCOUNTER_EDGE = '__coop_defense_encounter_edge';
+
+/** Vertikale Reserve, damit die Front nicht in den Arenarahmen läuft. */
+const TELEGRAPH_INSET_Y = 30;
+const CHEVRON_ROWS = 7;
+/** Weglänge einer Marschmarke, bevor sie wieder an der Kante beginnt. */
+const CHEVRON_TRAVEL = 190;
+const CHEVRON_START_OFFSET = 16;
+const CHEVRON_HALF_H = 11;
+const CHEVRON_LENGTH = 15;
+const CHEVRON_THICKNESS = 5;
+
+interface TelegraphProfile {
+  readonly color: number;
+  /** Breite des einlaufenden Lichtbands in Weltpixeln. */
+  readonly bandWidth: number;
+  /** Marschgeschwindigkeit der Richtungsmarken in Weltpixeln pro Sekunde. */
+  readonly chevronSpeed: number;
+  readonly chevronsPerRow: number;
+  readonly intensity: number;
+  readonly sparkFrequency: number;
+  readonly sparkTints: readonly number[];
+}
+
+const PROFILE_INCOMING: TelegraphProfile = {
+  color: COLORS.RED_1,
+  bandWidth: 152,
+  chevronSpeed: 118,
+  chevronsPerRow: 2,
+  intensity: 1,
+  sparkFrequency: 55,
+  sparkTints: [0xffffff, COLORS.GOLD_1, COLORS.RED_1],
+};
+/**
+ * Während des laufenden Angriffs bleibt nur eine ruhige Richtungsangabe stehen. Die volle
+ * Warnstärke gehört der Ankündigung; neben Gegnern und Kampfeffekten wäre sie nur Rauschen.
+ */
+const PROFILE_ACTIVE: TelegraphProfile = {
+  color: COLORS.GOLD_1,
+  bandWidth: 94,
+  chevronSpeed: 62,
+  chevronsPerRow: 1,
+  intensity: 0.44,
+  sparkFrequency: 150,
+  sparkTints: [0xffffff, COLORS.GOLD_1, COLORS.GOLD_3],
+};
+/** Abklingende Front nach dem Clear – dieselbe Grüntönung wie im HUD-Panel. */
+const PROFILE_CLEARED: TelegraphProfile = {
+  color: COLORS.GREEN_2,
+  bandWidth: 94,
+  chevronSpeed: 38,
+  chevronsPerRow: 1,
+  intensity: 0.55,
+  sparkFrequency: 220,
+  sparkTints: [0xffffff, COLORS.GREEN_1, COLORS.GREEN_3],
+};
 
 /**
  * Welt-Telegraph für den nächsten endlichen Encounter.
@@ -18,10 +78,21 @@ const TEX_ENCOUNTER_SPARK = '__coop_defense_encounter_spark';
  * Die Richtung ist hier absichtlich die bestehende Arena-Ecke links. Eine spätere Front-
  * Abstraktion gehört in die Map-/Spawn-Verträge und wird nicht aus diesem Effekt vorweggenommen.
  * Der Effekt liest ausschließlich den host-autoritativ replizierten Präsentationszustand.
+ *
+ * Gezeichnet wird genau **eine** Front: Sie steht an der Arenakante und wird an den sichtbaren
+ * Bildrand geklemmt, sobald die Kante aus dem Bild gescrollt ist. Ein zweiter, bildschirmfester
+ * Hinweis daneben verdoppelte bei nicht gescrollter Kamera nur dieselbe Aussage.
  */
 export class CoopDefenseEncounterTelegraphRenderer {
   private readonly graphics: Phaser.GameObjects.Graphics;
+  private band: Phaser.GameObjects.Image | null = null;
+  private edge: Phaser.GameObjects.Image | null = null;
   private sparks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private activeProfile: TelegraphProfile | null = null;
+  private readonly chevronPoints: Phaser.Math.Vector2[] = Array.from(
+    { length: 6 },
+    () => new Phaser.Math.Vector2(0, 0),
+  );
 
   constructor(private readonly scene: Phaser.Scene) {
     this.graphics = scene.add.graphics()
@@ -42,6 +113,43 @@ export class CoopDefenseEncounterTelegraphRenderer {
       ctx.fillRect(0, 0, 12, 12);
     });
 
+    // Band und Kantenschein tragen ihren vertikalen Auslauf in der Textur. Gestreckt bleibt
+    // der Anteil dadurch proportional, und die Front endet oben und unten weich statt mit
+    // einer harten Linie quer durch die Arena.
+    ensureCanvasTexture(this.scene.textures, TEX_ENCOUNTER_BAND, 64, 64, (ctx) => {
+      const horizontal = ctx.createLinearGradient(0, 0, 64, 0);
+      horizontal.addColorStop(0, 'rgba(255,255,255,0.9)');
+      horizontal.addColorStop(0.16, 'rgba(255,255,255,0.42)');
+      horizontal.addColorStop(0.55, 'rgba(255,255,255,0.12)');
+      horizontal.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = horizontal;
+      ctx.fillRect(0, 0, 64, 64);
+      applyVerticalFalloff(ctx, 64, 64);
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_ENCOUNTER_EDGE, 32, 64, (ctx) => {
+      const horizontal = ctx.createLinearGradient(0, 0, 32, 0);
+      horizontal.addColorStop(0, 'rgba(255,255,255,0)');
+      horizontal.addColorStop(0.42, 'rgba(255,255,255,0.55)');
+      horizontal.addColorStop(0.5, 'rgba(255,255,255,1)');
+      horizontal.addColorStop(0.58, 'rgba(255,255,255,0.55)');
+      horizontal.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = horizontal;
+      ctx.fillRect(0, 0, 32, 64);
+      applyVerticalFalloff(ctx, 32, 64);
+    });
+
+    this.band ??= this.scene.add.image(0, 0, TEX_ENCOUNTER_BAND)
+      .setOrigin(0, 0.5)
+      .setDepth(DEPTH_FX - 0.2)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    this.edge ??= this.scene.add.image(0, 0, TEX_ENCOUNTER_EDGE)
+      .setOrigin(0.5, 0.5)
+      .setDepth(DEPTH_FX - 0.1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+
     if (this.sparks) return;
     this.sparks = this.scene.add.particles(0, 0, TEX_ENCOUNTER_SPARK, {
       lifespan: { min: 320, max: 720 },
@@ -61,7 +169,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
       .setVisible(false);
     this.sparks.addEmitZone({
       type: 'random',
-      source: new Phaser.Geom.Rectangle(0, -ARENA_HEIGHT / 2, 8, ARENA_HEIGHT),
+      source: new Phaser.Geom.Rectangle(0, -ARENA_HEIGHT / 2 + TELEGRAPH_INSET_Y, 8, ARENA_HEIGHT - TELEGRAPH_INSET_Y * 2),
     } as unknown as Phaser.Types.GameObjects.Particles.EmitZoneData);
     this.sparks.stop();
   }
@@ -71,7 +179,15 @@ export class CoopDefenseEncounterTelegraphRenderer {
     elapsedMs: number,
     inArena: boolean,
   ): void {
-    if (!state || !inArena || state.phase === 'rest' || state.phase === 'complete' || !this.sparks) {
+    if (
+      !state
+      || !inArena
+      || state.phase === 'rest'
+      || state.phase === 'complete'
+      || !this.sparks
+      || !this.band
+      || !this.edge
+    ) {
       this.clear();
       return;
     }
@@ -86,58 +202,61 @@ export class CoopDefenseEncounterTelegraphRenderer {
       );
     const isIncoming = state.phase === 'incoming';
     const isCleared = state.phase === 'cleared';
+    const profile = isIncoming ? PROFILE_INCOMING : isCleared ? PROFILE_CLEARED : PROFILE_ACTIVE;
+    // Die abgewehrte Front verlischt über ihre Haltezeit, statt schlagartig zu verschwinden.
     const fade = isCleared ? 1 - phaseProgress : 1;
-    const pulse = 0.72 + Math.sin(now / (isIncoming ? 105 : 180)) * 0.18;
-    const intensity = Phaser.Math.Clamp((isIncoming ? 1 : 0.58) * fade * pulse, 0, 1);
-    const color = isIncoming ? COLORS.RED_1 : COLORS.GOLD_1;
-    const arenaTop = ARENA_OFFSET_Y + 32;
-    const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT - 32;
-    const arenaLeft = ARENA_OFFSET_X + 5;
-    const worldRayLength = isIncoming ? 150 : 95;
-
-    this.graphics.clear().setVisible(true);
-    this.graphics.fillStyle(color, 0.045 * intensity);
-    this.graphics.fillRect(arenaLeft, arenaTop, 20, arenaBottom - arenaTop);
-    this.graphics.lineStyle(3, color, 0.74 * intensity);
-    this.drawLine(arenaLeft, arenaTop, arenaLeft, arenaBottom);
-
-    // Mehrere kurze, nach innen laufende Scanlinien geben die Richtung an, ohne einen
-    // einzelnen exakten Spawnpunkt zu behaupten.
-    for (let i = 0; i < 7; i += 1) {
-      const y = arenaTop + 42 + i * ((arenaBottom - arenaTop - 84) / 6);
-      const linePulse = 0.58 + Math.sin(now / 130 + i * 0.75) * 0.28;
-      this.graphics.lineStyle(2, color, intensity * linePulse);
-      this.drawLine(arenaLeft + 8, y, arenaLeft + worldRayLength * (0.72 + linePulse * 0.28), y);
-      this.graphics.lineStyle(2, color, intensity * 0.74 * linePulse);
-      this.drawLine(arenaLeft + 32, y - 11, arenaLeft + 20, y);
-      this.drawLine(arenaLeft + 20, y, arenaLeft + 32, y + 11);
+    const pulse = 0.78 + Math.sin(now / (isIncoming ? 115 : 210)) * 0.16;
+    const intensity = Phaser.Math.Clamp(profile.intensity * fade * pulse, 0, 1);
+    if (intensity <= 0.02) {
+      this.clear();
+      return;
     }
 
-    // Screen-edge cue: an die sichtbare linke Kante der horizontal scrollenden Kamera gebunden.
+    const top = ARENA_OFFSET_Y + TELEGRAPH_INSET_Y;
+    const bottom = ARENA_OFFSET_Y + ARENA_HEIGHT - TELEGRAPH_INSET_Y;
+    const height = bottom - top;
+    const centerY = (top + bottom) / 2;
+    // Die Front bleibt an der Arenakante, wird aber in den sichtbaren Ausschnitt geklemmt.
+    // Ohne die Klemmung stünde bei gescrollter Kamera gar kein Hinweis mehr im Bild.
     const camera = this.scene.cameras.main;
     const zoom = Math.max(0.1, camera.zoom);
-    const cueX = camera.scrollX + 34 / zoom;
-    const cueTop = camera.scrollY + 166 / zoom;
-    const cueBottom = camera.scrollY + (GAME_HEIGHT - 166) / zoom;
-    const cueWidth = 2 / zoom;
-    this.graphics.lineStyle(cueWidth, color, 0.55 * intensity);
-    this.drawLine(cueX, cueTop, cueX, cueBottom);
-    for (let i = 0; i < 4; i += 1) {
-      const y = cueTop + 54 / zoom + i * ((cueBottom - cueTop - 108 / zoom) / 3);
-      this.graphics.lineStyle(cueWidth, color, 0.8 * intensity);
-      this.drawLine(cueX + 18 / zoom, y - 15 / zoom, cueX, y);
-      this.drawLine(cueX, y, cueX + 18 / zoom, y + 15 / zoom);
-    }
+    const anchorX = Math.max(ARENA_OFFSET_X + 5, camera.scrollX + 6 / zoom);
+
+    this.band
+      .setPosition(anchorX, centerY)
+      .setDisplaySize(profile.bandWidth, height)
+      .setTint(profile.color)
+      .setAlpha(Phaser.Math.Clamp(0.62 * intensity, 0, 1))
+      .setVisible(true);
+    this.edge
+      .setPosition(anchorX, centerY)
+      .setDisplaySize(26, height)
+      .setTint(profile.color)
+      .setAlpha(Phaser.Math.Clamp(0.85 * intensity, 0, 1))
+      .setVisible(true);
+
+    this.drawChevrons(anchorX, top, height, now, profile, intensity);
 
     this.sparks
-      .setPosition(arenaLeft + 5, ARENA_OFFSET_Y + ARENA_HEIGHT / 2)
-      .setAlpha(Phaser.Math.Clamp(0.35 + intensity * 0.65, 0, 1))
+      .setPosition(anchorX + 4, centerY)
+      // Die Funken folgen der Intensität bis auf null, damit die abklingende Front nicht mit
+      // einem harten Schnitt endet, wenn der Effekt sich abschaltet.
+      .setAlpha(Phaser.Math.Clamp(intensity * 1.1, 0, 1))
       .setVisible(true);
+    this.sparks.frequency = profile.sparkFrequency;
+    // Array-Tints muessen ueber loadConfig neu gebunden werden; `setParticleTint` allein
+    // erreicht die Emit-Methode nicht (siehe `setEmitterTintArray`).
+    if (profile !== this.activeProfile) {
+      setEmitterTintArray(this.sparks, [...profile.sparkTints]);
+      this.activeProfile = profile;
+    }
     if (!this.sparks.emitting) this.sparks.start();
   }
 
   clear(): void {
     this.graphics.clear().setVisible(false);
+    this.band?.setVisible(false);
+    this.edge?.setVisible(false);
     if (!this.sparks) return;
     this.sparks.stop();
     killAllAndResetParticlePositions(this.sparks);
@@ -148,13 +267,85 @@ export class CoopDefenseEncounterTelegraphRenderer {
     this.clear();
     this.sparks?.destroy();
     this.sparks = null;
+    this.activeProfile = null;
+    this.band?.destroy();
+    this.band = null;
+    this.edge?.destroy();
+    this.edge = null;
     this.graphics.destroy();
   }
 
-  private drawLine(x1: number, y1: number, x2: number, y2: number): void {
+  /**
+   * Nach innen marschierende Richtungsmarken. Sie geben die Anmarschrichtung an, ohne einen
+   * einzelnen exakten Spawnpunkt zu behaupten: Position, Deckkraft und Größe leiten sich
+   * allein aus dem Weganteil ab, deshalb erscheinen und verlöschen sie weich.
+   */
+  private drawChevrons(
+    anchorX: number,
+    top: number,
+    height: number,
+    now: number,
+    profile: TelegraphProfile,
+    intensity: number,
+  ): void {
+    this.graphics.clear().setVisible(true);
+    const rowSpacing = height / CHEVRON_ROWS;
+    const travelPhase = (now / 1000) * profile.chevronSpeed;
+
+    for (let row = 0; row < CHEVRON_ROWS; row += 1) {
+      const y = top + rowSpacing * (row + 0.5);
+      // Äußere Reihen laufen schwächer, damit die Front zu den Rändern hin ausläuft.
+      const rowEnvelope = 0.55 + Math.sin(Math.PI * ((row + 0.5) / CHEVRON_ROWS)) * 0.45;
+      for (let index = 0; index < profile.chevronsPerRow; index += 1) {
+        const offset = (row * 41 + index * (CHEVRON_TRAVEL / profile.chevronsPerRow)) % CHEVRON_TRAVEL;
+        const travelled = (travelPhase + offset) % CHEVRON_TRAVEL;
+        const progress = travelled / CHEVRON_TRAVEL;
+        const alpha = intensity * rowEnvelope * Math.sin(Math.PI * progress);
+        if (alpha <= 0.02) continue;
+        const scale = 0.72 + (1 - progress) * 0.38;
+        this.graphics.fillStyle(profile.color, alpha);
+        this.graphics.fillPoints(
+          this.buildChevron(anchorX + CHEVRON_START_OFFSET + travelled, y, scale),
+          true,
+        );
+      }
+    }
+
+    // Harte Kernlinie direkt auf der Kante: Sie hält die Front auch dann ablesbar, wenn der
+    // additive Schein über hellem Boden flach wird.
+    this.graphics.lineStyle(2.5, profile.color, Phaser.Math.Clamp(0.8 * intensity, 0, 1));
     this.graphics.beginPath();
-    this.graphics.moveTo(x1, y1);
-    this.graphics.lineTo(x2, y2);
+    this.graphics.moveTo(anchorX, top);
+    this.graphics.lineTo(anchorX, top + height);
     this.graphics.strokePath();
   }
+
+  /** Füllt den wiederverwendeten Punktpuffer mit einem nach rechts zeigenden Chevron. */
+  private buildChevron(x: number, y: number, scale: number): Phaser.Math.Vector2[] {
+    const halfH = CHEVRON_HALF_H * scale;
+    const length = CHEVRON_LENGTH * scale;
+    const thickness = CHEVRON_THICKNESS * scale;
+    const points = this.chevronPoints;
+    points[0].set(x, y - halfH);
+    points[1].set(x + length, y);
+    points[2].set(x, y + halfH);
+    points[3].set(x - thickness, y + halfH);
+    points[4].set(x + length - thickness, y);
+    points[5].set(x - thickness, y - halfH);
+    return points;
+  }
+}
+
+/** Blendet eine Canvas-Textur an ihrer Ober- und Unterkante weich aus. */
+function applyVerticalFalloff(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const previousOperation = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'destination-in';
+  const vertical = ctx.createLinearGradient(0, 0, 0, height);
+  vertical.addColorStop(0, 'rgba(0,0,0,0)');
+  vertical.addColorStop(0.16, 'rgba(0,0,0,1)');
+  vertical.addColorStop(0.84, 'rgba(0,0,0,1)');
+  vertical.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vertical;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = previousOperation;
 }
