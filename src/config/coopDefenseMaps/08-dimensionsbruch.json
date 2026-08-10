@@ -2,6 +2,7 @@
   "mapId": "8",
   "displayName": "Map 8 - Dimensionsbruch",
   "arenaWidthCells": 92,
+  "arenaHeightCells": 52,
   "timeOfDay": "20:45",
   "rockFillRatio": 0.15,
   "train": {

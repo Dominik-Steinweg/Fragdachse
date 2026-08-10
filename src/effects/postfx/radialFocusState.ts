@@ -1,8 +1,8 @@
 import {
-  ARENA_HEIGHT,
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   ARENA_VIEWPORT_WIDTH,
+  ARENA_VIEWPORT_HEIGHT,
 } from '../../config';
 
 export type RadialFocusQualityLevel = 'high' | 'medium' | 'low';
@@ -62,7 +62,7 @@ export function resolveRadialFocusFrame(
       x: ARENA_OFFSET_X,
       y: ARENA_OFFSET_Y,
       width: ARENA_VIEWPORT_WIDTH,
-      height: ARENA_HEIGHT,
+      height: ARENA_VIEWPORT_HEIGHT,
     },
   };
 }

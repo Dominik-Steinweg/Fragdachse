@@ -260,6 +260,7 @@ export class ArenaLifecycleCoordinator {
       bridge.getGameMode(),
       'ARENA',
       coopDefenseMapConfig?.arenaWidthCells,
+      coopDefenseMapConfig?.arenaHeightCells,
     );
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), arenaStartTime);
@@ -2387,7 +2388,13 @@ export class ArenaLifecycleCoordinator {
       ? getCoopDefenseMapConfig(roundState.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : null;
     const coopDefenseArenaWidthCells = coopDefenseMapConfig?.arenaWidthCells;
-    applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA', coopDefenseArenaWidthCells);
+    const coopDefenseArenaHeightCells = coopDefenseMapConfig?.arenaHeightCells;
+    applyArenaMetricsForMode(
+      bridge.getGameMode(),
+      'ARENA',
+      coopDefenseArenaWidthCells,
+      coopDefenseArenaHeightCells,
+    );
     this.buildArena(layout);
     this.arenaBuilt = true;
 

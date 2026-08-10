@@ -58,7 +58,7 @@ import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, GAME_WIDTH, GAME_HEIGHT, CELL_SIZE, COLORS, DEPTH,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_MAX_Y, ARENA_VIEWPORT_WIDTH, ARENA_VIEWPORT_HEIGHT, GAME_WIDTH, GAME_HEIGHT, CELL_SIZE, COLORS, DEPTH,
   NET_SMOOTH_TIME_MS,
   ACTIVE_ARENA_METRICS_PROFILE,
   applyArenaMetricsForMode,
@@ -260,9 +260,13 @@ export class ArenaScene extends Phaser.Scene {
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private lastCameraScrollX = 0;
+  private lastCameraScrollY = 0;
   private spectatorCameraScrollX = 0;
+  private spectatorCameraScrollY = 0;
   private spectatorCameraLeftKey: Phaser.Input.Keyboard.Key | null = null;
   private spectatorCameraRightKey: Phaser.Input.Keyboard.Key | null = null;
+  private spectatorCameraUpKey: Phaser.Input.Keyboard.Key | null = null;
+  private spectatorCameraDownKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
   private coopDefenseDebugDamageKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
@@ -512,6 +516,8 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.spectatorCameraLeftKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A, false) ?? null;
     this.spectatorCameraRightKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, false) ?? null;
+    this.spectatorCameraUpKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W, false) ?? null;
+    this.spectatorCameraDownKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S, false) ?? null;
     projectileManager.setAudioSystem(gameAudioSystem);
     effectSystem.setAudioSystem(gameAudioSystem);
 
@@ -2522,6 +2528,7 @@ export class ArenaScene extends Phaser.Scene {
       bridge.getGameMode(),
       bridge.getGamePhase(),
       this.resolveCoopDefenseArenaWidthCells(),
+      this.resolveCoopDefenseArenaHeightCells(),
     );
     this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), bridge.getGamePhase());
     this.redrawArenaClipMask();
@@ -2578,7 +2585,7 @@ export class ArenaScene extends Phaser.Scene {
       (camera.width  - camera.displayWidth)  / 2 - pad,
       (camera.height - camera.displayHeight) / 2 - pad,
       Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X) + pad * 2,
-      GAME_HEIGHT + pad * 2,
+      Math.max(GAME_HEIGHT, ARENA_MAX_Y + ARENA_OFFSET_Y) + pad * 2,
     );
   }
 
@@ -2592,15 +2599,20 @@ export class ArenaScene extends Phaser.Scene {
    */
   private syncMainCamera(delta: number, inArena: boolean): void {
     const camera = this.cameras.main;
-    camera.scrollY = 0;
 
     const spectator = inArena && (this.localPlayerState.spectator || bridge.isLocalSpectator());
     const arenaWidth = Math.max(0, ARENA_MAX_X - ARENA_OFFSET_X);
-    const canSpectatorPan = arenaWidth > ARENA_VIEWPORT_WIDTH;
+    const arenaHeight = Math.max(0, ARENA_MAX_Y - ARENA_OFFSET_Y);
+    const canSpectatorPanX = arenaWidth > ARENA_VIEWPORT_WIDTH;
+    const canSpectatorPanY = arenaHeight > ARENA_VIEWPORT_HEIGHT;
+    const canSpectatorPan = canSpectatorPanX || canSpectatorPanY;
     if (!inArena || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
       this.lastCameraScrollX = 0;
+      this.lastCameraScrollY = 0;
       this.spectatorCameraScrollX = 0;
+      this.spectatorCameraScrollY = 0;
       camera.scrollX = 0;
+      camera.scrollY = 0;
       setCameraBaseScroll(this, 0, 0);
       return;
     }
@@ -2614,26 +2626,42 @@ export class ArenaScene extends Phaser.Scene {
         arenaWidth,
         viewportWidth: ARENA_VIEWPORT_WIDTH,
       });
+      this.spectatorCameraScrollY = advanceSpectatorCameraScroll({
+        currentScrollX: this.spectatorCameraScrollY,
+        deltaMs: delta,
+        moveLeft: this.spectatorCameraUpKey?.isDown === true,
+        moveRight: this.spectatorCameraDownKey?.isDown === true,
+        arenaWidth: arenaHeight,
+        viewportWidth: ARENA_VIEWPORT_HEIGHT,
+      });
       this.lastCameraScrollX = this.spectatorCameraScrollX;
+      this.lastCameraScrollY = this.spectatorCameraScrollY;
       camera.scrollX = this.spectatorCameraScrollX;
-      setCameraBaseScroll(this, this.spectatorCameraScrollX, 0);
+      camera.scrollY = this.spectatorCameraScrollY;
+      setCameraBaseScroll(this, this.spectatorCameraScrollX, this.spectatorCameraScrollY);
       return;
     }
 
     const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     if (!localSprite?.active || !this.localPlayerState.alive) {
       camera.scrollX = this.lastCameraScrollX;
-      setCameraBaseScroll(this, this.lastCameraScrollX, 0);
+      camera.scrollY = this.lastCameraScrollY;
+      setCameraBaseScroll(this, this.lastCameraScrollX, this.lastCameraScrollY);
       return;
     }
 
     const maxScrollX = Math.max(0, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH));
+    const maxScrollY = Math.max(0, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT));
     const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
+    const focusScreenY = ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5;
     const targetScrollX = Phaser.Math.Clamp(localSprite.x - focusScreenX, 0, maxScrollX);
+    const targetScrollY = Phaser.Math.Clamp(localSprite.y - focusScreenY, 0, maxScrollY);
     const followLerp = 1 - Math.exp(-delta / 120);
     this.lastCameraScrollX = Phaser.Math.Linear(this.lastCameraScrollX, targetScrollX, followLerp);
+    this.lastCameraScrollY = Phaser.Math.Linear(this.lastCameraScrollY, targetScrollY, followLerp);
     camera.scrollX = this.lastCameraScrollX;
-    setCameraBaseScroll(this, this.lastCameraScrollX, 0);
+    camera.scrollY = this.lastCameraScrollY;
+    setCameraBaseScroll(this, this.lastCameraScrollX, this.lastCameraScrollY);
   }
 
   /**
@@ -2676,6 +2704,14 @@ export class ArenaScene extends Phaser.Scene {
       ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : bridge.getCoopDefenseMapId();
     return getCoopDefenseMapConfig(mapId).arenaWidthCells;
+  }
+
+  private resolveCoopDefenseArenaHeightCells(): number | undefined {
+    if (!isCoopDefenseMode(bridge.getGameMode())) return undefined;
+    const mapId = bridge.getGamePhase() === 'ARENA'
+      ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+      : bridge.getCoopDefenseMapId();
+    return getCoopDefenseMapConfig(mapId).arenaHeightCells;
   }
 
   private getPointerWorldPoint(): Phaser.Math.Vector2 {

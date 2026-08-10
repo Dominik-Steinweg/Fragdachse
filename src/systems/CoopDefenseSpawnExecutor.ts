@@ -8,7 +8,6 @@ import {
 } from '../config/coopDefenseEnemies';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
-const LEFT_SPAWN_GRID_X_MAX = Math.max(2, Math.floor(GRID_COLS * 0.15));
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_GROUP_DISTANCE_CELLS = 2;
 const SPAWN_TUNNEL_DIG_TOLERANCE_CELLS = 2;
@@ -111,7 +110,9 @@ export class CoopDefenseSpawnExecutor {
     const enemies = this.enemyManager.getAllEnemies();
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
     const cells: { gridX: number; gridY: number }[] = [];
-    const maxGridX = Math.min(LEFT_SPAWN_GRID_X_MAX, GRID_COLS - 1);
+    // Derived from the live grid so a wide Coop map does not inherit the width that was
+    // active when this module was imported.
+    const maxGridX = Math.min(Math.max(2, Math.floor(GRID_COLS * 0.15)), GRID_COLS - 1);
     for (let gridX = 0; gridX <= maxGridX; gridX += 1) {
       for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
         if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;

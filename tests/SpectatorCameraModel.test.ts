@@ -46,4 +46,34 @@ describe('spectator camera model', () => {
       viewportWidth: 1920,
     })).toBe(0);
   });
+
+  it('uses the same clamped model for vertical W/S movement', () => {
+    expect(advanceSpectatorCameraScroll({
+      currentScrollX: 0,
+      deltaMs: 1000,
+      moveLeft: false,
+      moveRight: true,
+      arenaWidth: 1_664,
+      viewportWidth: 1_056,
+      speedPxPerSecond: 500,
+    })).toBe(500);
+    expect(advanceSpectatorCameraScroll({
+      currentScrollX: 500,
+      deltaMs: 1000,
+      moveLeft: false,
+      moveRight: true,
+      arenaWidth: 1_664,
+      viewportWidth: 1_056,
+      speedPxPerSecond: 500,
+    })).toBe(608);
+    expect(advanceSpectatorCameraScroll({
+      currentScrollX: 120,
+      deltaMs: 1000,
+      moveLeft: true,
+      moveRight: false,
+      arenaWidth: 1_664,
+      viewportWidth: 1_056,
+      speedPxPerSecond: 500,
+    })).toBe(0);
+  });
 });

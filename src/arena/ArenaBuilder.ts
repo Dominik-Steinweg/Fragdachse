@@ -76,7 +76,7 @@ export class ArenaBuilder {
   private scene: Phaser.Scene;
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
   private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
-  private arenaBackground: Phaser.GameObjects.Image | null = null;
+  private arenaBackground: Phaser.GameObjects.TileSprite | null = null;
   private lobbyBackground: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -115,29 +115,12 @@ export class ArenaBuilder {
 
     if (this.arenaBackground) {
       const background = resolveArenaBackgroundSpec(mode, ARENA_WIDTH);
-      // Vor einem Texturwechsel den Crop der bisherigen Frame-Größe lösen. Andernfalls würde
-      // `setTexture()` die alten Crop-Koordinaten kurz gegen den neuen Frame aktualisieren.
-      this.arenaBackground.setCrop();
       this.arenaBackground
         .setTexture(background.textureKey)
         .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
-        .setScale(1)
+        .setSize(ARENA_WIDTH, ARENA_HEIGHT)
+        .setTilePosition(background.sourceX, background.sourceY)
         .setVisible(inArena);
-      if (
-        background.sourceX === 0
-        && background.sourceY === 0
-        && background.sourceWidth === this.arenaBackground.frame.cutWidth
-        && background.sourceHeight === this.arenaBackground.frame.cutHeight
-      ) {
-        this.arenaBackground.setCrop();
-      } else {
-        this.arenaBackground.setCrop(
-          background.sourceX,
-          background.sourceY,
-          background.sourceWidth,
-          background.sourceHeight,
-        );
-      }
     }
 
     if (this.lobbyBackground) {
@@ -629,7 +612,13 @@ export class ArenaBuilder {
   private ensureArenaBackground(): void {
     if (this.arenaBackground) return;
     this.arenaBackground = this.scene.add
-      .image(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5, 'gras_bg_dm')
+      .tileSprite(
+        ARENA_OFFSET_X + ARENA_WIDTH * 0.5,
+        ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5,
+        ARENA_WIDTH,
+        ARENA_HEIGHT,
+        'gras_bg_dm',
+      )
       .setDepth(DEPTH.GRASS);
   }
 

@@ -1,6 +1,6 @@
 import {
-  ARENA_HEIGHT,
   CAPTURE_THE_BEER_ARENA_WIDTH,
+  DEFAULT_ARENA_HEIGHT,
   FULL_ARENA_WIDTH,
 } from '../config';
 import { CAPTURE_THE_BEER_MODE } from '../gameModes';
@@ -30,6 +30,8 @@ export function resolveArenaBackgroundSpec(mode: GameMode, arenaWidth: number): 
     sourceX: Math.floor((textureWidth - sourceWidth) * 0.5),
     sourceY: 0,
     sourceWidth,
-    sourceHeight: ARENA_HEIGHT,
+    // The supplied terrain sheets are 1056 px high. Keep that native slice so high
+    // arenas repeat the source vertically instead of stretching it.
+    sourceHeight: DEFAULT_ARENA_HEIGHT,
   };
 }

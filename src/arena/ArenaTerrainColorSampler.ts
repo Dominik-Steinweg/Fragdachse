@@ -22,7 +22,7 @@ export function createArenaTerrainColorSampler(
   ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
   const background = resolveArenaBackgroundSpec(mode, ARENA_WIDTH);
-  drawImageFrameRegion(
+  drawRepeatedImageFrameRegion(
     scene,
     ctx,
     background.textureKey,
@@ -192,6 +192,42 @@ function drawImageFrameRegion(
     width,
     height,
   );
+}
+
+function drawRepeatedImageFrameRegion(
+  scene: Phaser.Scene,
+  ctx: CanvasRenderingContext2D,
+  textureKey: string,
+  frameName: string | number | undefined,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  if (sourceHeight <= 0 || height <= 0) return;
+  let offsetY = 0;
+  while (offsetY < height) {
+    const sliceHeight = Math.min(sourceHeight, height - offsetY);
+    drawImageFrameRegion(
+      scene,
+      ctx,
+      textureKey,
+      frameName,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sliceHeight,
+      x,
+      y + offsetY,
+      width,
+      sliceHeight,
+    );
+    offsetY += sliceHeight;
+  }
 }
 
 function getFrameSource(frame: Phaser.Textures.Frame): CanvasImageSource | null {

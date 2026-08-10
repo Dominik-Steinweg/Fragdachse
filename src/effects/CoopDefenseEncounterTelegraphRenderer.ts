@@ -88,6 +88,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
   private band: Phaser.GameObjects.Image | null = null;
   private edge: Phaser.GameObjects.Image | null = null;
   private sparks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private sparkEmitZone: Phaser.Geom.Rectangle | null = null;
   private activeProfile: TelegraphProfile | null = null;
   private readonly chevronPoints: Phaser.Math.Vector2[] = Array.from(
     { length: 6 },
@@ -167,9 +168,15 @@ export class CoopDefenseEncounterTelegraphRenderer {
       .setDepth(DEPTH_FX + 0.1)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
+    this.sparkEmitZone = new Phaser.Geom.Rectangle(
+      0,
+      -ARENA_HEIGHT / 2 + TELEGRAPH_INSET_Y,
+      8,
+      ARENA_HEIGHT - TELEGRAPH_INSET_Y * 2,
+    );
     this.sparks.addEmitZone({
       type: 'random',
-      source: new Phaser.Geom.Rectangle(0, -ARENA_HEIGHT / 2 + TELEGRAPH_INSET_Y, 8, ARENA_HEIGHT - TELEGRAPH_INSET_Y * 2),
+      source: this.sparkEmitZone,
     } as unknown as Phaser.Types.GameObjects.Particles.EmitZoneData);
     this.sparks.stop();
   }
@@ -219,6 +226,12 @@ export class CoopDefenseEncounterTelegraphRenderer {
     const bottom = ARENA_OFFSET_Y + ARENA_HEIGHT - TELEGRAPH_INSET_Y;
     const height = bottom - top;
     const centerY = (top + bottom) / 2;
+    this.sparkEmitZone?.setTo(
+      0,
+      -ARENA_HEIGHT / 2 + TELEGRAPH_INSET_Y,
+      8,
+      Math.max(1, ARENA_HEIGHT - TELEGRAPH_INSET_Y * 2),
+    );
     // Die Front bleibt an der Arenakante, wird aber in den sichtbaren Ausschnitt geklemmt.
     // Ohne die Klemmung stünde bei gescrollter Kamera gar kein Hinweis mehr im Bild.
     const camera = this.scene.cameras.main;

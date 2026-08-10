@@ -15,7 +15,11 @@ import {
   isCoopDefenseBaseObstacleClearanceCell,
   resolveCoopDefenseBases,
 } from '../src/arena/BaseRegistry';
-import { MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS } from '../src/config';
+import {
+  DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+  MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+  MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+} from '../src/config';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { formatTimeOfDay, parseTimeOfDay, resolveSkyState } from '../src/effects/TimeOfDay';
 
@@ -41,7 +45,12 @@ describe('Coop defense map progression', () => {
       expect(Number.isInteger(map.arenaWidthCells), map.mapId).toBe(true);
       expect(map.arenaWidthCells, map.mapId).toBeGreaterThan(0);
       expect(map.arenaWidthCells, map.mapId).toBeLessThanOrEqual(MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS);
+      expect(Number.isInteger(map.arenaHeightCells), map.mapId).toBe(true);
+      expect(map.arenaHeightCells, map.mapId).toBeGreaterThanOrEqual(DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS);
+      expect(map.arenaHeightCells, map.mapId).toBeLessThanOrEqual(MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS);
     }
+    expect(getCoopDefenseMapConfig('1').arenaHeightCells).toBe(DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS);
+    expect(getCoopDefenseMapConfig('8').arenaHeightCells).toBe(52);
   });
 
   it('keeps configured item rewards valid and non-decreasing through campaign progression', () => {

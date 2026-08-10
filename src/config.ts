@@ -4,6 +4,7 @@ import { CAPTURE_THE_BEER_MODE, COOP_DEFENSE_MODE } from './gameModes';
 // ---- Display ----
 export const GAME_WIDTH = 1920;
 export const GAME_HEIGHT = 1080;
+export const CELL_SIZE = 32;
 
 export const DEFAULT_ARENA_WIDTH = 1440;
 export const FULL_ARENA_WIDTH = GAME_WIDTH;
@@ -11,6 +12,9 @@ export const CAPTURE_THE_BEER_ARENA_WIDTH = DEFAULT_ARENA_WIDTH * 3;
 export const MAX_ARENA_WIDTH = CAPTURE_THE_BEER_ARENA_WIDTH;
 export const DEFAULT_ARENA_OFFSET_X = (GAME_WIDTH - DEFAULT_ARENA_WIDTH) / 2; // 240
 export const DEFAULT_ARENA_VIEWPORT_WIDTH = GAME_WIDTH - DEFAULT_ARENA_OFFSET_X * 2;
+export const DEFAULT_ARENA_HEIGHT = 1056;
+export const DEFAULT_ARENA_OFFSET_Y = 12;
+export const DEFAULT_ARENA_VIEWPORT_HEIGHT = GAME_HEIGHT - DEFAULT_ARENA_OFFSET_Y * 2;
 export const LOBBY_ARENA_OFFSET_X = DEFAULT_ARENA_OFFSET_X;
 export const LOBBY_ARENA_VIEWPORT_WIDTH = DEFAULT_ARENA_VIEWPORT_WIDTH;
 export const MAX_ARENA_RENDER_WIDTH = DEFAULT_ARENA_OFFSET_X + MAX_ARENA_WIDTH;
@@ -19,6 +23,9 @@ export interface ArenaMetricsProfile {
   arenaWidth: number;
   arenaOffsetX: number;
   arenaViewportWidth: number;
+  arenaHeight: number;
+  arenaOffsetY: number;
+  arenaViewportHeight: number;
   usesDynamicCamera: boolean;
   showStaticArenaFrames: boolean;
 }
@@ -27,6 +34,9 @@ const DEFAULT_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
   arenaWidth: DEFAULT_ARENA_WIDTH,
   arenaOffsetX: DEFAULT_ARENA_OFFSET_X,
   arenaViewportWidth: DEFAULT_ARENA_VIEWPORT_WIDTH,
+  arenaHeight: DEFAULT_ARENA_HEIGHT,
+  arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
+  arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
   usesDynamicCamera: false,
   showStaticArenaFrames: true,
 };
@@ -35,6 +45,9 @@ const FULL_WIDTH_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
   arenaWidth: FULL_ARENA_WIDTH,
   arenaOffsetX: 0,
   arenaViewportWidth: GAME_WIDTH,
+  arenaHeight: DEFAULT_ARENA_HEIGHT,
+  arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
+  arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
   usesDynamicCamera: false,
   showStaticArenaFrames: false,
 };
@@ -43,19 +56,23 @@ const CAPTURE_THE_BEER_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
   arenaWidth: CAPTURE_THE_BEER_ARENA_WIDTH,
   arenaOffsetX: 0,
   arenaViewportWidth: GAME_WIDTH,
+  arenaHeight: DEFAULT_ARENA_HEIGHT,
+  arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
+  arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
   usesDynamicCamera: true,
   showStaticArenaFrames: false,
 };
 
 export let ACTIVE_ARENA_METRICS_PROFILE: ArenaMetricsProfile = DEFAULT_ARENA_METRICS_PROFILE;
 export let ARENA_WIDTH = DEFAULT_ARENA_WIDTH;
-export const ARENA_HEIGHT = 1056;
+export let ARENA_HEIGHT = DEFAULT_ARENA_HEIGHT;
 export let ARENA_OFFSET_X = DEFAULT_ARENA_OFFSET_X;
-export const ARENA_OFFSET_Y = 12;
+export let ARENA_OFFSET_Y = DEFAULT_ARENA_OFFSET_Y;
 export let ARENA_VIEWPORT_WIDTH = DEFAULT_ARENA_VIEWPORT_WIDTH;
+export let ARENA_VIEWPORT_HEIGHT = DEFAULT_ARENA_VIEWPORT_HEIGHT;
 export let ARENA_STATIC_FRAMES_VISIBLE = DEFAULT_ARENA_METRICS_PROFILE.showStaticArenaFrames;
 export let ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
-export const ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
+export let ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
 
 // ---- Audio ----
 export const SOUND_ENABLED = true;
@@ -408,17 +425,21 @@ export const DEPTH_AIM = DEPTH.CANOPY - 0.4;
 export const DEPTH_LIGHTING = DEPTH.CANOPY - 0.5;
 
 // ---- Prozedurales Arena-Grid ----
-export const CELL_SIZE           = 32;
 /** Lobby side menus extend two grid cells farther toward the screen centre than the arena HUD. */
 export const LOBBY_SIDE_MENU_WIDTH = DEFAULT_ARENA_OFFSET_X + CELL_SIZE * 2;
 /** The lobby rock frames gain one grid row at their lower edge. */
 export const LOBBY_SIDE_MENU_EXTRA_HEIGHT = CELL_SIZE;
 export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 / 135
-export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
+export let GRID_ROWS              = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 33
 /** Aktuelle Coop-Breite: 60 Rasterzellen entsprechen der 1920-px-Designbreite. */
 export const DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS = FULL_ARENA_WIDTH / CELL_SIZE;
 /** Das vorhandene CTB-Hintergrundbild definiert die gemeinsame maximale Arenabreite. */
 export const MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS = CAPTURE_THE_BEER_ARENA_WIDTH / CELL_SIZE;
+/** Bestehende Coop-Maps bleiben ohne Angabe bei 33 Zeilen (1056 px). */
+export const DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS = DEFAULT_ARENA_HEIGHT / CELL_SIZE;
+export const MIN_COOP_DEFENSE_ARENA_HEIGHT_CELLS = DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS;
+/** Obergrenze fuer vertikale Render- und Sampler-Puffer: 56 Zeilen = 1792 px. */
+export const MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS = 56;
 export const ROCK_FILL_RATIO     = 0.30;
 export const DIRT_FILL_RATIO     = 0.05;   
 export const DEFAULT_TREE_COUNT  = 3;
@@ -555,7 +576,7 @@ export function isCoopDefenseBasesActive(): boolean {
   return COOP_DEFENSE_BASES_ACTIVE;
 }
 
-const COOP_DEFENSE_ARENA_METRICS_PROFILES = new Map<number, ArenaMetricsProfile>();
+const COOP_DEFENSE_ARENA_METRICS_PROFILES = new Map<string, ArenaMetricsProfile>();
 
 export function normalizeCoopDefenseArenaWidthCells(widthCells: number | undefined): number {
   if (typeof widthCells !== 'number' || !Number.isFinite(widthCells)) {
@@ -567,20 +588,39 @@ export function normalizeCoopDefenseArenaWidthCells(widthCells: number | undefin
   );
 }
 
-function getCoopDefenseArenaMetricsProfile(widthCells: number | undefined): ArenaMetricsProfile {
+export function normalizeCoopDefenseArenaHeightCells(heightCells: number | undefined): number {
+  if (typeof heightCells !== 'number' || !Number.isFinite(heightCells)) {
+    return DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS;
+  }
+  return Math.max(
+    MIN_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+    Math.min(MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS, Math.floor(heightCells)),
+  );
+}
+
+function getCoopDefenseArenaMetricsProfile(
+  widthCells: number | undefined,
+  heightCells: number | undefined,
+): ArenaMetricsProfile {
   const normalizedWidthCells = normalizeCoopDefenseArenaWidthCells(widthCells);
-  const cached = COOP_DEFENSE_ARENA_METRICS_PROFILES.get(normalizedWidthCells);
+  const normalizedHeightCells = normalizeCoopDefenseArenaHeightCells(heightCells);
+  const cacheKey = `${normalizedWidthCells}:${normalizedHeightCells}`;
+  const cached = COOP_DEFENSE_ARENA_METRICS_PROFILES.get(cacheKey);
   if (cached) return cached;
 
   const arenaWidth = normalizedWidthCells * CELL_SIZE;
+  const arenaHeight = normalizedHeightCells * CELL_SIZE;
   const profile: ArenaMetricsProfile = {
     arenaWidth,
     arenaOffsetX: 0,
+    arenaHeight,
+    arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
     arenaViewportWidth: GAME_WIDTH,
-    usesDynamicCamera: arenaWidth > GAME_WIDTH,
+    arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
+    usesDynamicCamera: arenaWidth > GAME_WIDTH || arenaHeight > DEFAULT_ARENA_VIEWPORT_HEIGHT,
     showStaticArenaFrames: false,
   };
-  COOP_DEFENSE_ARENA_METRICS_PROFILES.set(normalizedWidthCells, profile);
+  COOP_DEFENSE_ARENA_METRICS_PROFILES.set(cacheKey, profile);
   return profile;
 }
 
@@ -588,10 +628,13 @@ export function getArenaMetricsProfile(
   mode: GameMode,
   phase: GamePhase,
   coopDefenseArenaWidthCells?: number,
+  coopDefenseArenaHeightCells?: number,
 ): ArenaMetricsProfile {
   if (phase !== 'ARENA') return DEFAULT_ARENA_METRICS_PROFILE;
   if (mode === CAPTURE_THE_BEER_MODE) return CAPTURE_THE_BEER_ARENA_METRICS_PROFILE;
-  if (mode === COOP_DEFENSE_MODE) return getCoopDefenseArenaMetricsProfile(coopDefenseArenaWidthCells);
+  if (mode === COOP_DEFENSE_MODE) {
+    return getCoopDefenseArenaMetricsProfile(coopDefenseArenaWidthCells, coopDefenseArenaHeightCells);
+  }
   return FULL_WIDTH_ARENA_METRICS_PROFILE;
 }
 
@@ -599,16 +642,27 @@ export function applyArenaMetricsForMode(
   mode: GameMode,
   phase: GamePhase,
   coopDefenseArenaWidthCells?: number,
+  coopDefenseArenaHeightCells?: number,
 ): void {
-  ACTIVE_ARENA_METRICS_PROFILE = getArenaMetricsProfile(mode, phase, coopDefenseArenaWidthCells);
+  ACTIVE_ARENA_METRICS_PROFILE = getArenaMetricsProfile(
+    mode,
+    phase,
+    coopDefenseArenaWidthCells,
+    coopDefenseArenaHeightCells,
+  );
   ARENA_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaWidth;
   ARENA_OFFSET_X = ACTIVE_ARENA_METRICS_PROFILE.arenaOffsetX;
   ARENA_VIEWPORT_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaViewportWidth;
+  ARENA_HEIGHT = ACTIVE_ARENA_METRICS_PROFILE.arenaHeight;
+  ARENA_OFFSET_Y = ACTIVE_ARENA_METRICS_PROFILE.arenaOffsetY;
+  ARENA_VIEWPORT_HEIGHT = ACTIVE_ARENA_METRICS_PROFILE.arenaViewportHeight;
   ARENA_STATIC_FRAMES_VISIBLE = ACTIVE_ARENA_METRICS_PROFILE.showStaticArenaFrames;
   ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
+  ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
   SHOT_AUDIO_REMOTE_MAX_DISTANCE = ARENA_WIDTH;
   SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;
   GRID_COLS = Math.floor(ARENA_WIDTH / CELL_SIZE);
+  GRID_ROWS = Math.floor(ARENA_HEIGHT / CELL_SIZE);
   TRACK_SPAWN_MIN_COL = Math.floor(GRID_COLS * 0.25);
   TRACK_SPAWN_MAX_COL = Math.floor(GRID_COLS * 0.75);
   CAPTURE_THE_BEER_BASES_ACTIVE = mode === CAPTURE_THE_BEER_MODE;

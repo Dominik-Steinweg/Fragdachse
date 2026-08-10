@@ -7,7 +7,9 @@ import {
 } from './coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
 import {
+  DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  normalizeCoopDefenseArenaHeightCells,
   normalizeCoopDefenseArenaWidthCells,
   ROCK_FILL_RATIO,
 } from '../config';
@@ -306,6 +308,8 @@ export interface CoopDefenseMapConfig {
    * die gemeinsame CTB-Maximalbreite von 135 Zellen begrenzt.
    */
   readonly arenaWidthCells?: number;
+  /** Vertikale Arenahoehe im 32-px-Raster; ohne Angabe bleibt die bestehende Hoehe aktiv. */
+  readonly arenaHeightCells?: number;
   readonly tutorialText?: string;
   /** Anzeigedauer des Tutorial-Fensters; Standard ist COOP_DEFENSE_TUTORIAL_DURATION_MS. */
   readonly tutorialDurationMs?: number;
@@ -546,6 +550,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     displayName: mapConfig.displayName,
     arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
       mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+    ),
+    arenaHeightCells: normalizeCoopDefenseArenaHeightCells(
+      mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
     ),
     tutorialText: typeof mapConfig.tutorialText === 'string' && mapConfig.tutorialText.trim().length > 0
       ? mapConfig.tutorialText.trim()
