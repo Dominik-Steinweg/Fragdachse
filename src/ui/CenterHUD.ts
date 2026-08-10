@@ -7,6 +7,7 @@
 import * as Phaser from 'phaser';
 import { ARMOR_COLOR, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
+import type { CoopDefenseSurvivalPlayerState } from '../types';
 import {
   rgbStr,
   type LivingBarPalette,
@@ -180,6 +181,7 @@ export class CenterHUD {
   private container!: Phaser.GameObjects.Container;
 
   private timerText!: Phaser.GameObjects.Text;
+  private survivalText!: Phaser.GameObjects.Text;
   private tutorialContainer!: Phaser.GameObjects.Container;
   private tutorialGraphics!: Phaser.GameObjects.Graphics;
   private tutorialTitle!: Phaser.GameObjects.Text;
@@ -208,6 +210,7 @@ export class CenterHUD {
 
   private lastTimerText: string | null = null;
   private lastTimerColor: string | null = null;
+  private lastSurvivalText: string | null = null;
   private lastTrainText: string | null = null;
   private lastTrainBarWidth = -1;
   private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
@@ -260,7 +263,10 @@ export class CenterHUD {
     this.timerText = this.scene.add.text(CENTER_X, TIMER_Y, '2:00', {
       fontSize: '32px', fontFamily: 'monospace', color: TIMER_COLOR_NORMAL, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.container.add([timerBg, this.timerText]);
+    this.survivalText = this.scene.add.text(CENTER_X + PANEL_WIDTH / 2 + 18, TIMER_Y, '', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#ffd166', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+    this.container.add([timerBg, this.timerText, this.survivalText]);
   }
 
   private buildTutorialPanel(): void {
@@ -485,6 +491,8 @@ export class CenterHUD {
     this.ultimateReadyActive = false;
     this.lastTimerText = null;
     this.lastTimerColor = null;
+    this.lastSurvivalText = null;
+    this.survivalText.setVisible(false);
   }
 
   setPuContainer(c: Phaser.GameObjects.Container): void {
@@ -509,6 +517,28 @@ export class CenterHUD {
       this.timerText.setColor(nextColor);
       this.lastTimerColor = nextColor;
     }
+  }
+
+  /** Kompakter Hinweis nur fuer bewusst migrierte Survival-Maps mit begrenzten Respawns. */
+  updateSurvivalStatus(status: CoopDefenseSurvivalPlayerState | null): void {
+    if (!status) {
+      if (this.survivalText.visible) this.survivalText.setVisible(false);
+      this.lastSurvivalText = null;
+      return;
+    }
+
+    const nextText = status.eliminated
+      ? 'AUSGESCHIEDEN'
+      : status.alive && status.remainingRespawns === 0
+        ? 'LETZTES LEBEN'
+        : `RESPAWNS: ${status.remainingRespawns}`;
+    if (nextText !== this.lastSurvivalText) {
+      this.survivalText.setText(nextText);
+      this.lastSurvivalText = nextText;
+    }
+    this.survivalText
+      .setColor(status.eliminated ? '#ff5555' : status.alive && status.remainingRespawns === 0 ? '#ffb347' : '#ffd166')
+      .setVisible(true);
   }
 
   /**

@@ -84,6 +84,24 @@ describe('CoopDefenseRoundStateSystem', () => {
       isAssaultRepelled: () => true,
     }).update()).toBe('defeat');
   });
+
+  it('prefers a survival team wipe over the time-limit victory', () => {
+    expect(new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(500)),
+      objective: 'survive',
+      getSecondsLeft: () => 0,
+      isSurvivalTeamWiped: () => true,
+    }).update()).toBe('defeat');
+  });
+
+  it('does not apply the survival team-wipe rule to other objectives', () => {
+    expect(new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(500)),
+      objective: 'repel-assault',
+      getSecondsLeft: () => 10,
+      isSurvivalTeamWiped: () => true,
+    }).update()).toBeNull();
+  });
 });
 
 describe('CoopDefenseRoundStateSystem with a hostile base', () => {

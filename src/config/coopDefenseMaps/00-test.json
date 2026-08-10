@@ -5,6 +5,8 @@
   "timeOfDay": "12:00",
   "rockFillRatio": 0.3,
   "roundDurationSec": 600,
+  "objective": "survive",
+  "surviveRespawnsPerPlayer": 2,
   "bases": [
     {
       "id": "dev-test-base",

@@ -50,6 +50,8 @@ Ein Spieler ist Host und besitzt die autoritative Simulation: Positionen, Treffe
 
 ## Replizierter Zustand
 
+Der globale `CoopDefenseSurvivalState`-Snapshot (`csv`) ist ebenfalls reliable. Er ändert sich nur bei Initial-/Respawn-/Todes-Lifecycle und versorgt lokale HUD-/Observer-Darstellung sowie die Eliminierungs-Sperre; er gehört nicht in den hochfrequenten `KEY_GAME_STATE`-Pfad.
+
 `PeerRoom` bietet einen Key-Value-Store, global und pro Spieler. Verträge:
 
 - **Lokale Schreibvorgänge wirken sofort lokal** und werden danach verteilt. `setLocalReady(true)` gefolgt von `getPlayerReady(localId)` liefert ohne Roundtrip `true`.

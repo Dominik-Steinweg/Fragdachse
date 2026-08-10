@@ -331,8 +331,12 @@ export class CombatSystem {
     attackerId: string,
     sourceSlot?: LoadoutSlot,
   ) => void) | null = null;
-  /** Host-authoritative round-role gates shared by initial spawn and every respawn. */
+  /** Host-authoritative gate for actual post-death respawns. */
   private respawnAllowedResolver: ((playerId: string) => boolean) | null = null;
+  /** Initialspawn has intentionally different semantics from a post-death respawn. */
+  private initialSpawnAllowedResolver: ((playerId: string) => boolean) | null = null;
+  /** Called exactly once after the respawn gate passes and a real respawn is committed. */
+  private onRespawnCb: ((playerId: string) => boolean | void) | null = null;
   private playerActionAllowedResolver: ((playerId: string) => boolean) | null = null;
   private onDirectPrimaryHit: ((
     attackerId: string,
@@ -416,6 +420,12 @@ export class CombatSystem {
     return Math.max(0, this.targetIncomingDamageMultiplierResolver?.(target) ?? 1);
   }
   setRespawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.respawnAllowedResolver = resolver; }
+  setInitialSpawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void {
+    this.initialSpawnAllowedResolver = resolver;
+  }
+  setRespawnCallback(cb: ((playerId: string) => boolean | void) | null): void {
+    this.onRespawnCb = cb;
+  }
   setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
   /**
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
@@ -535,7 +545,7 @@ export class CombatSystem {
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
-    if (this.respawnAllowedResolver && !this.respawnAllowedResolver(id)) return;
+    if (this.initialSpawnAllowedResolver && !this.initialSpawnAllowedResolver(id)) return;
     const maxHp = this.resolvePlayerMaxHp(id);
     this.maxHp.set(id, maxHp);
     this.hp.set(id, maxHp);
@@ -3580,6 +3590,7 @@ export class CombatSystem {
   private respawn(playerId: string): void {
     this.respawnTimers.delete(playerId);
     if (this.respawnAllowedResolver && !this.respawnAllowedResolver(playerId)) return;
+    if (this.onRespawnCb && this.onRespawnCb(playerId) === false) return;
     this.hp.set(playerId, this.getMaxHp(playerId));
     this.armor.set(playerId, 0);
     this.alive.set(playerId, true);

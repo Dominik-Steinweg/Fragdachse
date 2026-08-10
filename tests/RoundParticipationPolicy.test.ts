@@ -8,6 +8,7 @@ import {
   getRoundResultEligibleIds,
   markRoundLateJoiner,
 } from '../src/scenes/arena/RoundParticipationPolicy';
+import { CoopDefenseSurvivalSystem } from '../src/systems/CoopDefenseSurvivalSystem';
 
 describe('round participation policy', () => {
   it('marks a latejoiner as spectator and excludes it from spawn, respawn and results', () => {
@@ -43,5 +44,17 @@ describe('round participation policy', () => {
     expect(getRoundPlayerRole(nextRound, 'p1')).toBe('participant');
     expect(canRoundPlayerSpawnOrRespawn(nextRound, 'p1')).toBe(true);
     expect(canRoundPlayerReceiveRewards(nextRound, 'p1')).toBe(true);
+  });
+
+  it('keeps a survival-eliminated participant eligible without moving it into spectatorIds', () => {
+    const started = createRoundParticipationState(1000, ['p1', 'p2']);
+    const survival = new CoopDefenseSurvivalSystem({ respawnsPerPlayer: 0, participantIds: ['p1', 'p2'] });
+    survival.handlePlayerDeath('p1');
+
+    expect(getRoundPlayerRole(started, 'p1')).toBe('participant');
+    expect(started.spectatorIds).not.toContain('p1');
+    expect(canRoundPlayerReceiveRewards(started, 'p1')).toBe(true);
+    expect(getRoundResultEligibleIds(started, ['p1', 'p2'])).toContain('p1');
+    expect(survival.isPlayerEliminated('p1')).toBe(true);
   });
 });

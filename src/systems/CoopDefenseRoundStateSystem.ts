@@ -10,6 +10,8 @@ export interface CoopDefenseRoundStateSystemOptions {
   readonly isBossDefeated?: () => boolean;
   /** `repel-assault`: wird vom host-only MapDirector gesetzt, loest aber selbst keinen Sieg aus. */
   readonly isAssaultRepelled?: () => boolean;
+  /** `survive`: true, sobald kein relevanter Teilnehmer mehr kaempfen oder respawnen kann. */
+  readonly isSurvivalTeamWiped?: () => boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export class CoopDefenseRoundStateSystem {
   private readonly getSecondsLeft: () => number;
   private readonly isBossDefeated: () => boolean;
   private readonly isAssaultRepelled: () => boolean;
+  private readonly isSurvivalTeamWiped: () => boolean;
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
@@ -33,6 +36,7 @@ export class CoopDefenseRoundStateSystem {
     this.getSecondsLeft = options.getSecondsLeft;
     this.isBossDefeated = options.isBossDefeated ?? (() => false);
     this.isAssaultRepelled = options.isAssaultRepelled ?? (() => false);
+    this.isSurvivalTeamWiped = options.isSurvivalTeamWiped ?? (() => false);
   }
 
   update(): RoundOutcome | null {
@@ -69,6 +73,11 @@ export class CoopDefenseRoundStateSystem {
         return 'victory';
       }
       return null;
+    }
+
+    if (this.objective === 'survive' && this.isSurvivalTeamWiped()) {
+      this.concluded = true;
+      return 'defeat';
     }
 
     if (this.getSecondsLeft() <= 0) {

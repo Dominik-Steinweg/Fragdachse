@@ -25,6 +25,11 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
   Legacy-`waves`, Spawnpunkt-Wellen und Boss-Spawns bleiben getrennt. Der Director meldet den
   Assault-Fortschritt nur an den `CoopDefenseRoundStateSystem`, der als einzige Instanz Sieg oder
   Niederlage abschließt.
+- `CoopDefenseSurvivalSystem` ist ein separates host-only Round-System für bewusst konfigurierte
+  `survive`-Maps. Es hält pro Round-Participant Budget, Lebensstatus und Eliminierung, während
+  `CoopDefenseRoundStateSystem` nur den Team-Wipe als booleschen Regelinput abfragt. Der Zustand
+  wird über den kleinen globalen Reliable-Key `csv` repliziert; die bestehende
+  `RoundParticipationState`-Rolle bleibt bei Survival-Eliminierung unverändert.
 - `src/entities/`: Entity-Lifecycle, Manager, Host-Objekte und Clientdarstellung replizierter Entities.
 - `src/effects/`: nicht-autoritative visuelle Reaktion, Partikel und Renderer. Effekte entscheiden keinen Schaden.
 - `src/arena/`: Layout-Erzeugung, Terrain, Registrys und statische/dynamische Arena-Objekte.

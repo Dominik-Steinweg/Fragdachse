@@ -25,7 +25,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -132,6 +132,7 @@ const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
 const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
+const KEY_COOP_SURVIVAL = 'csv'; // global reliable: CoopDefenseSurvivalState | null
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
@@ -1396,8 +1397,27 @@ export class NetworkBridge {
       && canRoundPlayerSpawnOrRespawn(this.getRoundParticipation(), playerId);
   }
 
+  /** Initialspawn/Reentry: Survival-Eliminierte bleiben Teilnehmer, werden aber nicht neu aktiviert. */
+  canPlayerInitialSpawn(playerId: string): boolean {
+    if (!this.canPlayerSpawnOrRespawn(playerId)) return false;
+    return this.getCoopDefenseSurvivalState()?.players[playerId]?.eliminated !== true;
+  }
+
+  /** Echter Post-Death-Respawn; der Initialspawn benutzt separat canPlayerInitialSpawn(). */
+  canPlayerRespawn(playerId: string): boolean {
+    if (!this.canPlayerSpawnOrRespawn(playerId)) return false;
+    const survival = this.getCoopDefenseSurvivalState();
+    if (!survival) return true; // Legacy-Survive und alle anderen Modi bleiben unveraendert.
+    const state = survival.players[playerId];
+    // Der Host publiziert den Zustand vor dem Arenaphasenwechsel. Ein fehlender Snapshot darf
+    // einen bestehenden Spieler trotzdem nicht dauerhaft blockieren.
+    if (!state) return true;
+    return !state.eliminated && !state.alive && state.remainingRespawns > 0;
+  }
+
   canPlayerAct(playerId: string): boolean {
-    return this.canPlayerSpawnOrRespawn(playerId);
+    if (!this.canPlayerSpawnOrRespawn(playerId)) return false;
+    return this.getCoopDefenseSurvivalState()?.players[playerId]?.eliminated !== true;
   }
 
   canPlayerReceiveRoundRewards(playerId: string): boolean {
@@ -1406,6 +1426,41 @@ export class NetworkBridge {
 
   getRoundResultEligiblePlayerIds(): string[] {
     return getRoundResultEligibleIds(this.getRoundParticipation(), this.getConnectedPlayerIds());
+  }
+
+  publishCoopDefenseSurvivalState(state: CoopDefenseSurvivalState | null): void {
+    if (!isHost()) return;
+    setState(KEY_COOP_SURVIVAL, state, true);
+  }
+
+  getCoopDefenseSurvivalState(): CoopDefenseSurvivalState | null {
+    const raw = getState(KEY_COOP_SURVIVAL) as Partial<CoopDefenseSurvivalState> | null | undefined;
+    if (!raw || typeof raw !== 'object' || typeof raw.respawnsPerPlayer !== 'number'
+      || !Number.isFinite(raw.respawnsPerPlayer) || raw.respawnsPerPlayer < 0
+      || !raw.players || typeof raw.players !== 'object') return null;
+
+    const players: Record<string, CoopDefenseSurvivalPlayerState> = {};
+    for (const [playerId, value] of Object.entries(raw.players)) {
+      if (!value || typeof value !== 'object') continue;
+      const candidate = value as Partial<CoopDefenseSurvivalPlayerState>;
+      if (typeof candidate.remainingRespawns !== 'number'
+        || !Number.isFinite(candidate.remainingRespawns) || candidate.remainingRespawns < 0
+        || typeof candidate.alive !== 'boolean' || typeof candidate.eliminated !== 'boolean') continue;
+      players[playerId] = {
+        remainingRespawns: Math.floor(candidate.remainingRespawns),
+        alive: candidate.alive,
+        eliminated: candidate.eliminated,
+      };
+    }
+    return {
+      respawnsPerPlayer: Math.floor(raw.respawnsPerPlayer),
+      players,
+    };
+  }
+
+  getLocalCoopDefenseSurvivalState(): CoopDefenseSurvivalPlayerState | null {
+    const state = this.getCoopDefenseSurvivalState()?.players[this.getLocalPlayerId()];
+    return state ? { ...state } : null;
   }
 
   isLocalRoundResultEligible(results = this.getRoundResults()): boolean {

@@ -328,6 +328,8 @@ export interface CoopDefenseMapConfig {
   readonly boss?: CoopDefenseMapBossConfig;
   /** Standard `survive` for legacy maps; migrated maps may explicitly use `repel-assault`. */
   readonly objective?: CoopDefenseMapObjective;
+  /** Aktiviert die begrenzte Survival-Lebensregel nur fuer bewusst migrierte Maps. */
+  readonly surviveRespawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
 }
@@ -488,6 +490,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     uniqueBaseIds.add(baseConfig.id);
     return normalizeBaseConfig(baseConfig);
   });
+  const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss);
 
   return {
     mapId: mapConfig.mapId,
@@ -516,9 +519,27 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     waves: mapConfig.waves.map(normalizeWaveConfig),
     encounters: normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters),
     boss: normalizeBossConfig(mapConfig),
-    objective: normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss),
+    objective,
+    surviveRespawnsPerPlayer: normalizeSurviveRespawnsPerPlayer(
+      mapConfig.mapId,
+      objective,
+      mapConfig.surviveRespawnsPerPlayer,
+    ),
     itemDrop: normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop),
   };
+}
+
+function normalizeSurviveRespawnsPerPlayer(
+  mapId: string,
+  objective: CoopDefenseMapObjective,
+  value: number | undefined,
+): number | undefined {
+  // Legacy-Survive bleibt absichtlich unbegrenzt, solange die Map nicht explizit migriert wurde.
+  if (objective !== 'survive' || value === undefined) return undefined;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`[coopDefenseMaps] Invalid surviveRespawnsPerPlayer on map ${mapId}: ${value}`);
+  }
+  return Math.floor(value);
 }
 
 function normalizeObjective(

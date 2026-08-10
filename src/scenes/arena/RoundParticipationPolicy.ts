@@ -66,7 +66,7 @@ export function isRoundParticipant(
   return getRoundPlayerRole(state, playerId) === 'participant';
 }
 
-/** Spawn und Respawn teilen bewusst denselben zentralen Berechtigungsvertrag. */
+/** Rollen-Gate fuer Spawn und Respawn; Survival-Lebensregeln liegen bewusst darueber. */
 export function canRoundPlayerSpawnOrRespawn(
   state: RoundParticipationState | null | undefined,
   playerId: string,

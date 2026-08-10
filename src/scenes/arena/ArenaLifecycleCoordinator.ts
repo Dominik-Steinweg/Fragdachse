@@ -36,6 +36,7 @@ import { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSyst
 import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
+import { CoopDefenseSurvivalSystem } from '../../systems/CoopDefenseSurvivalSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import {
@@ -283,7 +284,7 @@ export class ArenaLifecycleCoordinator {
   spawnReadyPlayers(): void {
     if (!bridge.isHost()) return;
     for (const profile of bridge.getConnectedPlayers()) {
-      if (bridge.canPlayerSpawnOrRespawn(profile.id)
+      if (bridge.canPlayerInitialSpawn(profile.id)
         && bridge.getPlayerReady(profile.id)
         && !this.ctx.playerManager.hasPlayer(profile.id)) {
         // Erst spawnen, wenn der host das verbindliche Loadout-Snapshot wirklich hat. Sonst würde
@@ -294,6 +295,7 @@ export class ArenaLifecycleCoordinator {
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
         this.ctx.playerManager.addPlayer(profile);
         this.ctx.combatSystem.initPlayer(profile.id);
+        this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
         this.ctx.resourceSystem?.initPlayer(profile.id);
         this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
         this.ctx.burrowSystem?.initPlayer(profile.id);
@@ -371,6 +373,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     this.hostSaveRoundResults(roundEndedAt);
+    bridge.publishCoopDefenseSurvivalState(null);
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -421,7 +424,10 @@ export class ArenaLifecycleCoordinator {
     }
 
     const localId = bridge.getLocalPlayerId();
-    const spectator = bridge.isRoundSpectator(localId);
+    // Survival-Eliminierung ist nur eine lokale Darstellungs-/Aktionssperre. Die Netzwerkrolle
+    // bleibt participant, damit Result-/Reward-Eligibility und der Round-Snapshot erhalten bleiben.
+    const spectator = bridge.isRoundSpectator(localId)
+      || bridge.getLocalCoopDefenseSurvivalState()?.eliminated === true;
     this.localPlayerState.spectator = spectator;
     if (spectator) {
       this.localPlayerState.alive = false;
@@ -540,6 +546,23 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseEncounterConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapEncounterConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
+    if (bridge.isHost()) {
+      if (coopDefenseMapConfig?.surviveRespawnsPerPlayer !== undefined) {
+        const participantIds = bridge.getRoundParticipation()?.participantIds
+          ?? bridge.getConnectedPlayerIds();
+        this.ctx.coopDefenseSurvivalSystem = new CoopDefenseSurvivalSystem({
+          respawnsPerPlayer: coopDefenseMapConfig.surviveRespawnsPerPlayer,
+          participantIds,
+        });
+        bridge.publishCoopDefenseSurvivalState(this.ctx.coopDefenseSurvivalSystem.getSnapshot());
+      } else {
+        // Legacy-Survive and every other objective deliberately have no budgeted life state.
+        this.ctx.coopDefenseSurvivalSystem = null;
+        bridge.publishCoopDefenseSurvivalState(null);
+      }
+    } else {
+      this.ctx.coopDefenseSurvivalSystem = null;
+    }
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
@@ -604,6 +627,14 @@ export class ArenaLifecycleCoordinator {
         getSecondsLeft: () => bridge.computeSecondsLeft(),
         isBossDefeated: () => this.ctx.coopDefenseWaveSpawner?.isBossDefeated() ?? false,
         isAssaultRepelled: () => this.ctx.coopDefenseMapDirector?.isAssaultRepelled() ?? false,
+        isSurvivalTeamWiped: () => {
+          const survival = this.ctx.coopDefenseSurvivalSystem;
+          if (!survival) return false;
+          return survival.isTeamWiped(
+            bridge.getConnectedPlayerIds(),
+            bridge.getRoundParticipation()?.spectatorIds ?? [],
+          );
+        },
       })
       : null;
     if (bridge.isHost()) {
@@ -901,7 +932,15 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
     });
-    this.ctx.combatSystem.setRespawnAllowedResolver((playerId) => bridge.canPlayerSpawnOrRespawn(playerId));
+    this.ctx.combatSystem.setInitialSpawnAllowedResolver((playerId) => bridge.canPlayerInitialSpawn(playerId));
+    this.ctx.combatSystem.setRespawnAllowedResolver((playerId) => bridge.canPlayerRespawn(playerId));
+    this.ctx.combatSystem.setRespawnCallback((playerId) => {
+      const survival = this.ctx.coopDefenseSurvivalSystem;
+      if (!survival) return true;
+      const consumed = survival.consumeRespawn(playerId);
+      if (consumed) bridge.publishCoopDefenseSurvivalState(survival.getSnapshot());
+      return consumed;
+    });
     this.ctx.combatSystem.setPlayerActionAllowedResolver((playerId) => bridge.canPlayerAct(playerId));
     this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
       // Waffen- und Item-Reduktion addieren sich. Die Summe bleibt hier ungedeckelt; das
@@ -1154,6 +1193,10 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
+      this.ctx.coopDefenseSurvivalSystem?.handlePlayerDeath(playerId);
+      if (this.ctx.coopDefenseSurvivalSystem) {
+        bridge.publishCoopDefenseSurvivalState(this.ctx.coopDefenseSurvivalSystem.getSnapshot());
+      }
       this.ctx.flamethrowerUpgradeSystem?.handlePlayerDeath(playerId, x, y);
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
       this.ctx.gameAudioSystem.playSound('sfx_player_death', x, y);
@@ -2096,12 +2139,15 @@ export class ArenaLifecycleCoordinator {
     this.ctx.flamethrowerUpgradeSystem?.clear();
     this.ctx.flamethrowerUpgradeSystem = null;
     this.ctx.weaponUpgradeSystem = null;
+    this.ctx.coopDefenseSurvivalSystem = null;
     this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
     this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.combatSystem.setEnemyDeathCallback(null);
     this.ctx.combatSystem.setPlayerMaxHpResolver(null);
+    this.ctx.combatSystem.setInitialSpawnAllowedResolver(null);
     this.ctx.combatSystem.setRespawnAllowedResolver(null);
+    this.ctx.combatSystem.setRespawnCallback(null);
     this.ctx.combatSystem.setPlayerActionAllowedResolver(null);
     this.ctx.combatSystem.setPlayerDamageReductionResolver(null);
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
@@ -2288,12 +2334,15 @@ export class ArenaLifecycleCoordinator {
     this.arenaBuilt = true;
 
     for (const profile of bridge.getConnectedPlayers()) {
-      if (bridge.canPlayerSpawnOrRespawn(profile.id)
+      const canCreatePlayer = bridge.canPlayerSpawnOrRespawn(profile.id)
+        && (!bridge.isHost() || bridge.canPlayerInitialSpawn(profile.id));
+      if (canCreatePlayer
         && bridge.getPlayerReady(profile.id)
         && !this.ctx.playerManager.hasPlayer(profile.id)) {
         this.ctx.playerManager.addPlayer(profile);
         if (bridge.isHost()) {
           this.ctx.combatSystem.initPlayer(profile.id);
+          this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
           this.ctx.resourceSystem?.initPlayer(profile.id);
           this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
           this.ctx.burrowSystem?.initPlayer(profile.id);

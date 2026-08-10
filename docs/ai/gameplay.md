@@ -23,6 +23,12 @@ Die Match-Auswertung ist absichtlich **keine dritte Netzwerkphase**. Nach dem ho
 
 `RoundParticipationState` friert beim Wechsel in die Arena die `participantIds` ein. Spieler, die danach beitreten, werden host-autoritativ als Spectator ergänzt; ein freiwilliger Wechsel fügt einen aktiven Teilnehmer ebenfalls dauerhaft zu `spectatorIds` hinzu. `NetworkBridge.canPlayerSpawnOrRespawn()`, `canPlayerAct()` und `canPlayerReceiveRoundRewards()` lösen alle drei Regeln aus demselben Vertrag auf. Beim Rundenende wird der Snapshot gelöscht, sodass ein ehemaliger Spectator in der nächsten Lobby wieder normal teilnehmen kann. Ergebnisse, XP, Freischaltungen und Item-Belohnungen verwenden ausschließlich die Teilnehmerliste.
 
+### Bewusst aktivierter Survival-Spezialmodus
+
+Nur eine Map mit `objective: "survive"` und `surviveRespawnsPerPlayer` aktiviert die begrenzte Lebensregel. Legacy-Maps mit dem alten impliziten `survive` bleiben ohne dieses Feld beim unbegrenzten Respawnpfad; Map 0 ist die technische Referenzmigration. Der Initialspawn verbraucht kein Budget. `0` verbleibende Respawns beschreibt ein lebendes letztes Leben; erst dessen Tod setzt `eliminated`.
+
+`CoopDefenseSurvivalSystem` verwaltet diesen host-autoritären Rundenzustand getrennt vom `CoopDefenseRoundStateSystem`. Der Respawn-Gate ist rein lesend; das Budget wird erst im Combat-Callback beim tatsächlich ausgeführten Post-Death-Respawn einmalig verbraucht. Eine Survival-Eliminierung setzt niemanden in `spectatorIds`: Die Netzwerkrolle bleibt Teilnehmer und damit für Ergebnis-/Reward-Eligibility erhalten, während lokale Aktionseingabe, Figurendarstellung und Kamera spectator-like werden. Der `survive`-Team-Wipe berücksichtigt nur verbundene Rundenteilnehmer, die keine freiwilligen Spectatoren sind; Latejoiner und dauerhaft getrennte Spieler blockieren ihn nicht.
+
 ## Spielmodi
 
 Die tatsächlichen Modus-IDs stehen in `src/types.ts`, die Modusregeln in `src/gameModes.ts`:

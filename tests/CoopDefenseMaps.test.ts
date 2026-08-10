@@ -114,6 +114,15 @@ describe('Coop defense map progression', () => {
     expect(map.bases.some((base) => base.role === 'spawn-point')).toBe(false);
   });
 
+  it('uses Map 0 as the only explicitly budgeted A4 survival reference and keeps legacy maps unlimited', () => {
+    expect(getCoopDefenseMapConfig('0').objective).toBe('survive');
+    expect(getCoopDefenseMapConfig('0').surviveRespawnsPerPlayer).toBe(2);
+
+    for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
+      expect(map.surviveRespawnsPerPlayer).toBeUndefined();
+    }
+  });
+
   it('uses the central enemy-wave resolver for Map 1 encounter XP instead of legacy waves', () => {
     const map = getCoopDefenseMapConfig('1');
     const singlePlayerXp = getCoopDefenseMapScheduledXp(map, [], 1);

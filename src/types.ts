@@ -24,6 +24,18 @@ export interface RoundParticipationState {
   spectatorIds: string[];
 }
 
+/** Host-autoritärer, replizierter Lebenszustand einer aktivierten Survival-Runde. */
+export interface CoopDefenseSurvivalPlayerState {
+  remainingRespawns: number;
+  alive: boolean;
+  eliminated: boolean;
+}
+
+export interface CoopDefenseSurvivalState {
+  respawnsPerPlayer: number;
+  players: Record<string, CoopDefenseSurvivalPlayerState>;
+}
+
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
   dx: number;  // -1 | 0 | 1
