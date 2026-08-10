@@ -6,6 +6,13 @@
   "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn der Boss fällt. Beim ersten Sieg gibt es einen Boss-Punkt für spezielle Upgrades. Nach Abschluss von Map 5 werden außerdem die Klassen freigeschaltet.",
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 45,
   "bases": [
     {

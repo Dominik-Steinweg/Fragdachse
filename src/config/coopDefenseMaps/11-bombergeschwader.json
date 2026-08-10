@@ -11,6 +11,13 @@
   },
   "rockFillRatio": 0.4,
   "tutorialRockArmorDropMult": 0.02,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 90,
   "objective": "repel-assault",
   "bases": [

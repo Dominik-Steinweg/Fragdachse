@@ -3,6 +3,13 @@
   "displayName": "Map 14 - Brandschneise",
   "arenaWidthCells": 60,
   "timeOfDay": "21:30",
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 90,
   "rockField": {
     "corridorRadiusCells": 1.35,

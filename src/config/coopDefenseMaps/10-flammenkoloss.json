@@ -4,6 +4,13 @@
   "arenaWidthCells": 96,
   "timeOfDay": "22:45",
   "rockFillRatio": 0.1,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 45,
   "objective": "defeat-boss",
   "bases": [

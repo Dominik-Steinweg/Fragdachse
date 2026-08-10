@@ -70,6 +70,7 @@ import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
+import { getNextTrainArrivalAt, resolveTrainEventPlan, type TrainEventPlan } from '../../train/TrainEvent';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
@@ -2060,9 +2061,16 @@ export class ArenaLifecycleCoordinator {
         this.hostUpdate.applySupportProjectileImpact(projectile, impact);
       });
 
+      // Gleise und Zug sind getrennt: nur wenn die Map ein Zug-Event konfiguriert (bzw. der
+      // Modus keine Map-Konfiguration hat), fährt überhaupt ein Zug über den Korridor.
       const trackCell = layout.tracks?.[0];
-      if (trackCell !== undefined) {
-        this.setupHostTrainEvent(trackCell.gridX);
+      const trainEventPlan = resolveTrainEventPlan(coopDefenseMapConfig);
+      if (trackCell !== undefined && trainEventPlan) {
+        this.setupHostTrainEvent(trackCell.gridX, trainEventPlan);
+      } else {
+        // Das Zug-Event ist reliable und überlebt den Rundenwechsel; ohne aktives Löschen
+        // würde eine zuglose Map das HUD der Vorrunde weiterspielen.
+        bridge.clearTrainEvent();
       }
 
       this.ctx.captureTheBeerSystem?.setInteractionPredicate((playerId) => {
@@ -2498,10 +2506,10 @@ export class ArenaLifecycleCoordinator {
     return this.getEnemyNavigationFlowField()?.hasWalkableCircleLine(fromX, fromY, toX, toY, radius) ?? true;
   }
 
-  private setupHostTrainEvent(trackGridX: number): void {
+  private setupHostTrainEvent(trackGridX: number, plan: TrainEventPlan): void {
     const trackX     = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE;
     const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-    const spawnAt    = bridge.getArenaStartTime() + TRAIN.SPAWN_DELAY_S * 1000;
+    const spawnAt    = bridge.getArenaStartTime() + plan.firstArrivalDelayMs;
 
     bridge.publishTrainEvent({ trackX, direction, spawnAt });
 
@@ -2596,8 +2604,14 @@ export class ArenaLifecycleCoordinator {
     this.ctx.trainManager.setExitedCallback(() => {
       const currentEvent = bridge.getTrainEvent();
       if (!currentEvent) return;
+      const newSpawnAt = getNextTrainArrivalAt(Date.now(), plan);
+      if (newSpawnAt === null) {
+        // Einmalige Einfahrt: ohne Event bleibt der Zug draußen, das HUD blendet aus und die
+        // Gegner-KI weicht keinem Zug mehr aus, der nicht mehr kommt.
+        bridge.clearTrainEvent();
+        return;
+      }
       const newDirection: 1 | -1 = currentEvent.direction === 1 ? -1 : 1;
-      const newSpawnAt = Date.now() + TRAIN.SPAWN_DELAY_S * 1000;
       bridge.publishTrainEvent({ trackX: currentEvent.trackX, direction: newDirection, spawnAt: newSpawnAt });
       this.ctx.trainManager?.prepareReentry(newDirection);
       this.hostUpdate.setTrainSpawned(false);

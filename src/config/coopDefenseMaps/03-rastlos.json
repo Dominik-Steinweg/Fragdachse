@@ -5,6 +5,13 @@
   "timeOfDay": "17:00",
   "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
   "rockFillRatio": 0.4,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 60,
   "bases": [
     {

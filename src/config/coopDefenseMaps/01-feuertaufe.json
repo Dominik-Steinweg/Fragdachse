@@ -7,6 +7,13 @@
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "rockFillRatio": 0.3,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 40,
   "objective": "repel-assault",
   "bases": [

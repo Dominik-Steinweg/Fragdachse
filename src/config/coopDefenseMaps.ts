@@ -224,6 +224,26 @@ export interface CoopDefenseMapPowerUpConfig {
 
 export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
 
+/**
+ * Startbedingung der ersten Zugeinfahrt. Bewusst als getaggte Union wie
+ * {@link CoopDefenseMapEncounterStart}, damit später semantische Auslöser (`boss-phase`,
+ * `base-destroyed`) ergänzt werden können – ohne dafür jetzt eine allgemeine Trigger-Engine
+ * zu bauen.
+ */
+export type CoopDefenseMapTrainArrival =
+  | { readonly type: 'time'; readonly atMs: number };
+
+/**
+ * Der Zug als eigenständiges Umgebungs-Event der Map – unabhängig von den Gleisen.
+ * `trackMode` entscheidet nur, ob der Korridor Gleise bekommt; erst dieses Feld schickt
+ * einen Zug darüber. Maps mit Gleisen, aber ohne `train`, sind damit möglich.
+ */
+export interface CoopDefenseMapTrainConfig {
+  readonly firstArrival: CoopDefenseMapTrainArrival;
+  /** Pause zwischen Verlassen der Arena und nächster Einfahrt; fehlt = nur eine Einfahrt. */
+  readonly repeatAfterExitMs?: number;
+}
+
 export interface CoopDefenseMapPermanentGroundFireConfig {
   readonly randomPatchCount: number;
   readonly minPatchRadiusCells: number;
@@ -313,6 +333,8 @@ export interface CoopDefenseMapConfig {
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
   readonly trackMode?: CoopDefenseMapTrackMode;
+  /** Gesetzt: Auf dieser Map fährt der Zug RB 54. Ohne dieses Feld bleiben die Gleise leer. */
+  readonly train?: CoopDefenseMapTrainConfig;
   readonly permanentGroundFire?: CoopDefenseMapPermanentGroundFireConfig;
   /**
    * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
@@ -517,6 +539,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     airstrikes: enemyAirstrikes,
     boss,
   });
+  const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
 
   return {
     mapId: mapConfig.mapId,
@@ -535,7 +558,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     enemyAirstrikes,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
-    trackMode: mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails',
+    trackMode,
+    train: normalizeTrainConfig(mapConfig.mapId, mapConfig.train, trackMode),
     permanentGroundFire: normalizePermanentGroundFire(mapConfig.permanentGroundFire),
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
@@ -756,6 +780,39 @@ function normalizeItemDropConfig(
     throw new Error(`[coopDefenseMaps] Item drop on map ${mapId} needs an itemLevel of at least 1`);
   }
   return { itemLevel: Math.floor(itemDrop.itemLevel) };
+}
+
+/**
+ * Prüft das Zug-Event der Map. Ein Zug ohne Gleise wäre kein Balancing-Detail, sondern eine
+ * Lok, die über blanken Boden fährt – deshalb ein Konfigurationsfehler statt stiller Rückfall.
+ */
+function normalizeTrainConfig(
+  mapId: string,
+  train: CoopDefenseMapTrainConfig | undefined,
+  trackMode: CoopDefenseMapTrackMode,
+): CoopDefenseMapTrainConfig | undefined {
+  if (!train) return undefined;
+  if (trackMode !== 'rails') {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train but no rails (trackMode: ${trackMode})`);
+  }
+
+  const firstArrival = train.firstArrival;
+  if (!firstArrival || firstArrival.type !== 'time') {
+    throw new Error(`[coopDefenseMaps] Train on map ${mapId} needs a supported first-arrival trigger`);
+  }
+  if (typeof firstArrival.atMs !== 'number' || !Number.isFinite(firstArrival.atMs)) {
+    throw new Error(`[coopDefenseMaps] Train on map ${mapId} has an invalid first-arrival time`);
+  }
+  const repeatAfterExitMs = train.repeatAfterExitMs;
+  if (repeatAfterExitMs !== undefined
+    && (typeof repeatAfterExitMs !== 'number' || !Number.isFinite(repeatAfterExitMs) || repeatAfterExitMs < 0)) {
+    throw new Error(`[coopDefenseMaps] Train on map ${mapId} has an invalid repeatAfterExitMs`);
+  }
+
+  return {
+    firstArrival: { type: 'time', atMs: Math.max(0, Math.floor(firstArrival.atMs)) },
+    repeatAfterExitMs: repeatAfterExitMs === undefined ? undefined : Math.max(0, Math.floor(repeatAfterExitMs)),
+  };
 }
 
 function normalizePermanentGroundFire(

@@ -11,6 +11,13 @@
     "huntIntervalMs": 25000
   },
   "rockFillRatio": 0.3,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 90,
   "bases": [
     {

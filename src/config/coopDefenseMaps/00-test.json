@@ -4,6 +4,13 @@
   "arenaWidthCells": 90,
   "timeOfDay": "12:00",
   "rockFillRatio": 0.3,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 600,
   "objective": "survive",
   "surviveRespawnsPerPlayer": 2,

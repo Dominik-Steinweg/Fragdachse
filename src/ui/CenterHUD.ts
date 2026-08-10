@@ -14,6 +14,7 @@ import {
   ensureLivingBarTextures, createGradientTexture, LivingBarEffect, randomEmitZoneData,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import { formatTrainArrivalLabel } from '../train/TrainEvent';
 import {
   COOP_DEFENSE_TUTORIAL_CONTROLS_BODY_H,
   COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X,
@@ -1098,10 +1099,9 @@ export class CenterHUD {
     });
   }
 
+  /** @param arrivalTimerSecs Verbleibende Sekunden bis zur nächsten Einfahrt. */
   setTrainArrival(arrivalTimerSecs: number): void {
-    const mm = Math.floor(arrivalTimerSecs / 60);
-    const ss = arrivalTimerSecs % 60;
-    const nextText = `RB 54 um ${mm}:${ss.toString().padStart(2, '0')}`;
+    const nextText = formatTrainArrivalLabel(arrivalTimerSecs);
     if (this.lastTrainText !== nextText) {
       this.trainText.setText(nextText);
       this.lastTrainText = nextText;

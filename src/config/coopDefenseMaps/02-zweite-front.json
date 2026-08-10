@@ -5,6 +5,13 @@
   "timeOfDay": "05:00",
   "tutorialText": "Auf dieser größeren Map hat die Basis im mittleren Bereich einen Geschützturm. Nutzt den längeren Anmarschweg, bevor die Gegner die Basen erreichen. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
   "rockFillRatio": 0.15,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 60,
   "bases": [
     {

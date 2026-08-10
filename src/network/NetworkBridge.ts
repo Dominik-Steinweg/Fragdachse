@@ -140,7 +140,7 @@ const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, hos
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
 const KEY_NUKE_STRIKES   = 'nks'; // global: SyncedNukeStrike[]      (unreliable, host-authoritative aktive Nukes)
 const KEY_AIR_STRIKES    = 'ask'; // global: SyncedAirstrikeStrike[] (unreliable, host-authoritative Luftangriffe)
-const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   einmalig pro Runde)
+const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig|null (reliable, pro Einfahrt aktualisiert)
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
@@ -2005,16 +2005,24 @@ export class NetworkBridge {
   /** Monoton steigender Zähler, wird nur bei tatsächlich neuem Server-State inkrementiert. */
   getGameStateVersion(): number { return this.gameStateVersion; }
 
-  // ── Zug-Event: Host → Alle (global, reliable, einmalig pro Runde) ──────────
+  // ── Zug-Event: Host → Alle (global, reliable, je Einfahrt aktualisiert) ────
 
-  /** Host-only: Veröffentlicht die Zug-Konfiguration für die Runde. */
+  /**
+   * Host-only: Veröffentlicht die nächste Zug-Einfahrt. Wird pro Runde mehrfach gesendet –
+   * jede Wiedereinfahrt trägt eine neue Richtung und ein neues `spawnAt`.
+   */
   publishTrainEvent(cfg: TrainEventConfig): void {
     setState(KEY_TRAIN_EVENT, cfg, true);
   }
 
-  /** Liest die Zug-Event-Konfiguration (undefined = noch nicht gesetzt). */
+  /** Host-only: Löscht das Zug-Event (Map ohne Zug bzw. keine weitere Einfahrt). */
+  clearTrainEvent(): void {
+    setState(KEY_TRAIN_EVENT, null, true);
+  }
+
+  /** Liest die Zug-Event-Konfiguration (undefined = kein Zug bzw. keine weitere Einfahrt). */
   getTrainEvent(): TrainEventConfig | undefined {
-    return getState(KEY_TRAIN_EVENT) as TrainEventConfig | undefined;
+    return (getState(KEY_TRAIN_EVENT) as TrainEventConfig | null | undefined) ?? undefined;
   }
 
   // ── Zug-Zerstörung: Host → Alle (RPC, einmalig) ───────────────────────────

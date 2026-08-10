@@ -124,6 +124,7 @@ import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
+import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
@@ -1388,24 +1389,19 @@ export class ArenaScene extends Phaser.Scene {
         activeMapConfig?.tutorialShowControls === true,
       );
 
-      // Train widget
-      const hasTrainTrack = (bridge.getArenaLayout()?.tracks?.length ?? 0) > 0;
-      if (!hasTrainTrack) {
-        // Some maps deliberately reserve the corridor without creating rails or
-        // a train. Hide the widget explicitly so stale reliable train state and
-        // its particle effect cannot leak into the fixed HUD position.
+      // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
+      // Gleisen ohne Zug und Runden ohne weitere Einfahrt haben schlicht kein Event.
+      const trainEvent = bridge.getTrainEvent();
+      if (!trainEvent) {
         this.ctx.centerHUD.hideTrainWidget();
-      } else {
-        const trainEvent = bridge.getTrainEvent();
-        if (trainEvent && !this.lifecycle.isTrainDestroyedShown()) {
-          const latestState = bridge.getLatestGameState();
-          const trainState  = latestState?.train ?? null;
-          if (trainState?.alive) {
-            this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
-          } else if (bridge.getSynchronizedNow() < trainEvent.spawnAt) {
-            const arrivalTimerSecs = Math.max(0, Math.ceil((bridge.getRoundEndTime() - trainEvent.spawnAt) / 1000));
-            this.ctx.centerHUD.setTrainArrival(arrivalTimerSecs);
-          }
+      } else if (!this.lifecycle.isTrainDestroyedShown()) {
+        const trainState = bridge.getLatestGameState()?.train ?? null;
+        if (trainState?.alive) {
+          this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
+        } else {
+          // Echte Restzeit bis zur Einfahrt; der Rundentimer spielt dabei keine Rolle.
+          const arrivalSecs = getTrainArrivalCountdownSecs(trainEvent.spawnAt, bridge.getSynchronizedNow());
+          if (arrivalSecs !== null) this.ctx.centerHUD.setTrainArrival(arrivalSecs);
         }
       }
       arenaHudMs = performance.now() - arenaHudStartedAt;

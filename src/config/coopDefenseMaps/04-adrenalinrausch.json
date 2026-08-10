@@ -5,6 +5,13 @@
   "timeOfDay": "06:00",
   "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
   "rockFillRatio": 0.3,
+  "train": {
+    "firstArrival": {
+      "type": "time",
+      "atMs": 10000
+    },
+    "repeatAfterExitMs": 10000
+  },
   "roundDurationSec": 60,
   "bases": [
     {

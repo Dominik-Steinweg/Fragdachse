@@ -388,26 +388,6 @@ export class TrainManager {
   }
 
   /**
-   * Setzt den Zug-Zustand für einen erneuten Durchlauf zurück.
-   * Muss vor dem nächsten `spawn()` aufgerufen werden.
-   */
-  reset(): void {
-    this.hp        = TRAIN.HP_MAX;
-    this.alive     = false;
-    this.active    = false;
-    this.destroyed = false;
-    this.lastHitter = null;
-    this.locoY     = this.initialLocoY();
-    this.burrowDamageTimers.clear();
-    this.hitEnemyIds.clear();
-    // Hitboxen repositionieren und deaktivieren
-    this.updateSegmentPositions();
-    for (const s of this.segObjects) {
-      (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
-    }
-  }
-
-  /**
    * Bereitet den Zug für eine erneute Einfahrt vor, ohne die HP zurückzusetzen.
    * Wird nach natürlichem Verlassen der Arena aufgerufen (Multi-Spawn).
    * @param newDirection - neue Fahrtrichtung (alternierend)

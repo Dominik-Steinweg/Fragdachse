@@ -1539,11 +1539,14 @@ export interface SyncedTunnel {
   entranceB: SyncedTunnelEndpoint;
 }
 
-/** Konfiguration des Zug-Events – einmalig vom Host veröffentlicht (reliable) */
+/**
+ * Nächste Einfahrt des Zug-Events – vom Host veröffentlicht (reliable) und bei jeder
+ * Wiedereinfahrt erneuert. Fehlt der Wert, fährt auf dieser Map kein Zug (mehr).
+ */
 export interface TrainEventConfig {
   trackX:    number;   // Welt-X der Gleisspalte (Mitte)
   direction: 1 | -1;  // 1 = oben→unten, -1 = unten→oben
-  spawnAt:   number;   // Spielzeit in ms ab Match-Start (wann spawnt der Zug)
+  spawnAt:   number;   // absoluter Zeitstempel (ms) der nächsten Einfahrt
 }
 
 /**

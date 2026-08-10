@@ -32,8 +32,15 @@ export const TRAIN = {
   /** Frags, die dem Last-Hit-Spieler gutgeschrieben werden */
   KILL_FRAGS:      1,
 
-  /** Sekunden nach Rundenstart bis der Zug einfährt */
-  SPAWN_DELAY_S:   10,
+  /**
+   * Erste Einfahrt in Modi ohne Map-Konfiguration (Deathmatch, Team-Deathmatch, Capture the Beer),
+   * in ms nach Rundenstart. Coop-Defense-Maps konfigurieren das Zug-Event stattdessen selbst
+   * (siehe `CoopDefenseMapTrainConfig`).
+   */
+  DEFAULT_FIRST_ARRIVAL_MS: 10_000,
+
+  /** Pause zwischen Verlassen der Arena und nächster Einfahrt in denselben Modi. */
+  DEFAULT_REPEAT_AFTER_EXIT_MS: 10_000,
 
   /** Streifenhöhe in px für den Waggon-Geschwindigkeitseffekt */
   WAGON_STRIPE_H:  8,
