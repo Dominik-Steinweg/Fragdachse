@@ -69,6 +69,8 @@ export interface GroundFireCellOptions {
   sourceKey: string;
   ownerId: string;
   durationMs: number;
+  /** Bleibt bis zum Arena-Teardown aktiv; `durationMs` dient nur als gueltiger Aufrufwert. */
+  permanent?: boolean;
   damagePerTick?: number;
   allowTeamDamage?: boolean;
   burn?: BurnOnHitConfig;
@@ -213,6 +215,7 @@ export class FireSystem {
   hostRefreshGroundCell(x: number, y: number, options: GroundFireCellOptions, now = Date.now()): void {
     const durationMs = Math.max(0, options.durationMs);
     if (durationMs <= 0) return;
+    const expiresAt = options.permanent === true ? Number.MAX_SAFE_INTEGER : now + durationMs;
 
     const gridX = Math.floor(x / GROUND_FIRE_CELL_SIZE);
     const gridY = Math.floor(y / GROUND_FIRE_CELL_SIZE);
@@ -232,7 +235,7 @@ export class FireSystem {
         y: centerY,
         radius: GROUND_FIRE_CELL_SIZE * 0.5,
         createdAt: now,
-        expiresAt: now + durationMs,
+        expiresAt,
         damagePerTick: Math.max(0, options.damagePerTick ?? 0),
         allowTeamDamage: options.allowTeamDamage === true,
         burn: options.burn ? { ...options.burn } : undefined,
@@ -249,7 +252,7 @@ export class FireSystem {
       this.sources.set(key, source);
       this.attachSourceToCell(source, gridX, gridY);
     } else {
-      source.expiresAt = now + durationMs;
+      source.expiresAt = expiresAt;
       source.damagePerTick = Math.max(0, options.damagePerTick ?? 0);
       source.burn = options.burn ? { ...options.burn } : undefined;
       source.igniteProjectiles = options.igniteProjectiles === true;

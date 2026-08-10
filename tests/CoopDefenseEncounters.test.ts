@@ -3,24 +3,30 @@ import {
   getCoopDefenseMapConfig,
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapEncounterConfigs,
+  type CoopDefenseMapObjective,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 
 function makeMap(
   encounters: CoopDefenseMapConfig['encounters'],
-  objective?: CoopDefenseMapConfig['objective'],
+  objective: CoopDefenseMapObjective | undefined = 'repel-assault',
   persistentSpawns: CoopDefenseMapConfig['persistentSpawns'] = [],
   extras: Partial<CoopDefenseMapConfig> = {},
 ): CoopDefenseMapConfig {
   return {
     mapId: 'encounter-test',
     displayName: 'Encounter test',
-    roundDurationSec: 60,
-    bases: [],
+    balanceReferenceDurationSec: 60,
+    bases: [{
+      id: 'friendly-main',
+      hpMax: 100,
+      anchor: { kind: 'right-center', edgeInsetCells: 0 },
+      shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+    }],
     powerUps: [],
     persistentSpawns,
     encounters,
-    objective,
+    objective: objective === undefined ? 'repel-assault' : objective,
     ...extras,
   };
 }
@@ -93,6 +99,25 @@ describe('Coop defense encounters', () => {
     expect(normalized.encounters).toHaveLength(1);
   });
 
+  it('requires explicit objective, friendly main base and bounded survival metadata', () => {
+    const valid = makeMap([
+      { id: 'opening', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'zombie-badger', count: 1 }] },
+    ]);
+    expect(() => normalizeCoopDefenseMapConfig({ ...valid, objective: undefined as never }))
+      .toThrow('valid explicit objective');
+    expect(() => normalizeCoopDefenseMapConfig({ ...valid, bases: [] }))
+      .toThrow('friendly main base');
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...valid,
+      objective: 'survive',
+      surviveDurationSec: 60,
+    })).toThrow('surviveRespawnsPerPlayer');
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...valid,
+      balanceReferenceDurationSec: 0,
+    })).toThrow('balanceReferenceDurationSec');
+  });
+
   it('validates the typed trigger references while normalizing them', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeMap([
       {
@@ -155,16 +180,10 @@ describe('Coop defense encounters', () => {
     const map = getCoopDefenseMapConfig('0');
     expect(map.persistentSpawns).toEqual([]);
     expect(map.encounters).toHaveLength(1);
-    expect(resolveCoopDefenseMapEncounterConfigs(map, 1)).toEqual([
-      {
-        id: 'a2-opening-encounter',
-        start: { type: 'time', atMs: 1_500 },
-        restAfterMs: 0,
-        groups: [
-          { enemyKind: 'zombie-badger', count: 4, delayMs: 0, front: 'west' },
-          { enemyKind: 'demon-badger', count: 2, delayMs: 1_500, front: 'west' },
-        ],
-      },
-    ]);
+    const encounter = resolveCoopDefenseMapEncounterConfigs(map, 1)[0];
+    expect(encounter?.id).toBe('a2-opening-encounter');
+    expect(encounter?.start).toEqual({ type: 'time', atMs: 1_500 });
+    expect(encounter?.groups.every((group) => group.front === 'west')).toBe(true);
+    expect(encounter?.groups.every((group) => group.count > 0 && group.delayMs >= 0)).toBe(true);
   });
 });

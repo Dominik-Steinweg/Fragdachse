@@ -198,7 +198,7 @@ export interface CoopDefenseMapBossConfig {
  */
 export type CoopDefenseMapObjective = 'repel-assault' | 'survive' | 'defeat-boss' | 'destroy-hostile-bases';
 
-export function getCoopDefenseMapObjectiveLabel(objective: CoopDefenseMapObjective | undefined): string {
+export function getCoopDefenseMapObjectiveLabel(objective: CoopDefenseMapObjective): string {
   switch (objective) {
     case 'repel-assault':
       return 'ANGRIFF ABWEHREN';
@@ -207,8 +207,9 @@ export function getCoopDefenseMapObjectiveLabel(objective: CoopDefenseMapObjecti
     case 'destroy-hostile-bases':
       return 'FEINDBASIS ZERSTÖREN';
     case 'survive':
-    default:
       return 'ZEIT ÜBERLEBEN';
+    default:
+      throw new Error(`[coopDefenseMaps] Unknown objective: ${objective}`);
   }
 }
 
@@ -362,7 +363,10 @@ export interface CoopDefenseMapConfig {
    * `DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT` – kann pro Map zum Finetuning überschrieben werden.
    */
   readonly tutorialRockArmorDropMult?: number;
-  readonly roundDurationSec: number;
+  /** Echte Rundendauer; nur fuer `survive` gesetzt und siegrelevant. */
+  readonly surviveDurationSec?: number;
+  /** Explizite, reine Balancing-Referenz fuer Druck-/Drop-Normalisierung. */
+  readonly balanceReferenceDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
   /** Optionale, zeitlich unbegrenzte Quellen fuer den Hintergrunddruck. */
@@ -370,9 +374,9 @@ export interface CoopDefenseMapConfig {
   /** Optionale endliche Encounter; beide Modelle koennen parallel aktiv sein. */
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
-  /** Standard `survive` for legacy maps; migrated maps may explicitly use `repel-assault`. */
-  readonly objective?: CoopDefenseMapObjective;
-  /** Aktiviert die begrenzte Survival-Lebensregel nur fuer bewusst migrierte Maps. */
+  /** Jede Map muss ihr Ziel explizit konfigurieren. */
+  readonly objective: CoopDefenseMapObjective;
+  /** Fuer jede Survival-Map zwingend: begrenzte persoenliche Respawns. */
   readonly surviveRespawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
@@ -430,7 +434,7 @@ export function resolveCoopDefenseMapPersistentSpawnConfigs(
   });
 }
 
-/** Löst Encounter-Gruppenzahlen über denselben Enemy-Spawn-Resolver wie Legacy-Waves auf. */
+/** Loest Encounter-Gruppenzahlen ueber denselben zentralen Enemy-Spawn-Resolver auf. */
 export function resolveCoopDefenseMapEncounterConfigs(
   mapConfig: CoopDefenseMapConfig,
   humanPlayerCount: number,
@@ -471,16 +475,15 @@ export function getCoopDefenseMapScheduledXp(
 }
 
 /**
- * Technische XP-Referenz fuer Drop-Chancen. Persistente Quellen werden ueber die konfigurierte
- * Rundendauer geschaetzt; ihre tatsaechliche Laufzeit kann durch Strukturzerstoerung oder ein
- * frueheres Missionsende kleiner sein. Dieser Wert ist kein garantierter Rundenertrag.
+ * Technische XP-Referenz fuer Drop-Chancen. Persistente Quellen werden ueber eine explizite
+ * Balancing-Referenz geschaetzt; diese ist kein Gameplay-Timer und kein garantierter Rundenertrag.
  */
 export function getCoopDefenseMapXpReference(
   mapConfig: CoopDefenseMapConfig,
   persistentSpawns: readonly ResolvedCoopDefenseMapPersistentSpawnConfig[],
   humanPlayerCount = 1,
 ): number {
-  const durationMs = mapConfig.roundDurationSec * 1000;
+  const durationMs = mapConfig.balanceReferenceDurationSec * 1000;
   const finiteXp = getCoopDefenseMapScheduledXp(mapConfig, humanPlayerCount);
   const persistentEstimate = persistentSpawns.reduce(
     (sum, spawn) => sum + getScheduledPersistentSpawnXp(spawn, durationMs),
@@ -543,11 +546,17 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     uniqueBaseIds.add(baseConfig.id);
     return normalizeBaseConfig(baseConfig);
   });
-  const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss);
+  const boss = normalizeBossConfig(mapConfig);
+  const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, boss);
   const persistentSpawns = Array.isArray(mapConfig.persistentSpawns) ? mapConfig.persistentSpawns : [];
   validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters);
+  validateFriendlyMainBase(mapConfig.mapId, bases);
+  const surviveDurationSec = normalizeSurviveDurationSec(mapConfig.mapId, objective, mapConfig.surviveDurationSec);
+  const balanceReferenceDurationSec = normalizeBalanceReferenceDurationSec(
+    mapConfig.mapId,
+    mapConfig.balanceReferenceDurationSec,
+  );
   const enemyAirstrikes = normalizeAirstrikeConfig(mapConfig.enemyAirstrikes);
-  const boss = normalizeBossConfig(mapConfig);
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
     bases,
     airstrikes: enemyAirstrikes,
@@ -580,7 +589,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     permanentGroundFire: normalizePermanentGroundFire(mapConfig.permanentGroundFire),
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
-    roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
+    surviveDurationSec,
+    balanceReferenceDurationSec,
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
@@ -607,14 +617,56 @@ function validateMapSpawnModel(
   }
 }
 
+function validateFriendlyMainBase(mapId: string, bases: readonly CoopBaseConfig[]): void {
+  if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly main base`);
+  }
+}
+
+function normalizeSurviveDurationSec(
+  mapId: string,
+  objective: CoopDefenseMapObjective,
+  value: number | undefined,
+): number | undefined {
+  if (objective !== 'survive') {
+    if (value !== undefined) {
+      throw new Error(`[coopDefenseMaps] Only survive maps may declare surviveDurationSec: ${mapId}`);
+    }
+    return undefined;
+  }
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`[coopDefenseMaps] Survive map ${mapId} needs a positive surviveDurationSec`);
+  }
+  const normalized = Math.floor(value);
+  if (normalized <= 0) {
+    throw new Error(`[coopDefenseMaps] Survive map ${mapId} needs a positive surviveDurationSec`);
+  }
+  return normalized;
+}
+
+function normalizeBalanceReferenceDurationSec(mapId: string, value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} needs a positive balanceReferenceDurationSec`);
+  }
+  const normalized = Math.floor(value);
+  if (normalized <= 0) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} needs a positive balanceReferenceDurationSec`);
+  }
+  return normalized;
+}
+
 function normalizeSurviveRespawnsPerPlayer(
   mapId: string,
   objective: CoopDefenseMapObjective,
   value: number | undefined,
 ): number | undefined {
-  // Legacy-Survive bleibt absichtlich unbegrenzt, solange die Map nicht explizit migriert wurde.
-  if (objective !== 'survive' || value === undefined) return undefined;
-  if (!Number.isFinite(value) || value < 0) {
+  if (objective !== 'survive') {
+    if (value !== undefined) {
+      throw new Error(`[coopDefenseMaps] Only survive maps may declare surviveRespawnsPerPlayer: ${mapId}`);
+    }
+    return undefined;
+  }
+  if (value === undefined || !Number.isFinite(value) || value < 0) {
     throw new Error(`[coopDefenseMaps] Invalid surviveRespawnsPerPlayer on map ${mapId}: ${value}`);
   }
   return Math.floor(value);
@@ -622,11 +674,19 @@ function normalizeSurviveRespawnsPerPlayer(
 
 function normalizeObjective(
   mapId: string,
-  objective: CoopDefenseMapObjective | undefined,
+  objective: CoopDefenseMapObjective,
   bases: readonly CoopBaseConfig[],
   boss: CoopDefenseMapBossConfig | undefined,
 ): CoopDefenseMapObjective {
-  const normalizedObjective = objective ?? (boss ? 'defeat-boss' : 'survive');
+  if (
+    objective !== 'repel-assault'
+    && objective !== 'survive'
+    && objective !== 'defeat-boss'
+    && objective !== 'destroy-hostile-bases'
+  ) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} needs a valid explicit objective`);
+  }
+  const normalizedObjective = objective;
 
   if (boss && normalizedObjective !== 'defeat-boss') {
     throw new Error(`[coopDefenseMaps] Boss map ${mapId} must use the defeat-boss objective`);
@@ -638,7 +698,7 @@ function normalizeObjective(
     return normalizedObjective;
   }
   if (normalizedObjective === 'repel-assault') return normalizedObjective;
-  if (normalizedObjective !== 'destroy-hostile-bases') return 'survive';
+  if (normalizedObjective === 'survive') return normalizedObjective;
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
   if (!bases.some((baseConfig) => baseConfig.faction === 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} wants destroy-hostile-bases but declares no hostile main base`);
@@ -976,6 +1036,10 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
   }
   if (!mapConfig.boss) return undefined;
 
+  if (!Number.isFinite(mapConfig.boss.spawnAtMs) || mapConfig.boss.spawnAtMs < 0) {
+    throw new Error(`[coopDefenseMaps] Boss slot on map ${mapConfig.mapId} needs a non-negative spawnAtMs`);
+  }
+
   const enemyConfig = getCoopDefenseEnemyConfig(mapConfig.boss.enemyKind);
   if (!enemyConfig.isBoss) {
     throw new Error(
@@ -985,10 +1049,7 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
 
   return {
     enemyKind: mapConfig.boss.enemyKind,
-    spawnAtMs: Math.max(0, Math.min(
-      mapConfig.roundDurationSec * 1000 - 1,
-      Math.floor(mapConfig.boss.spawnAtMs),
-    )),
+    spawnAtMs: Math.floor(mapConfig.boss.spawnAtMs),
   };
 }
 

@@ -12,7 +12,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 60,
+  "balanceReferenceDurationSec": 60,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -63,36 +64,29 @@
     }
   ],
   "powerUps": [],
-  "persistentSpawns": [
+  "encounters": [
     {
-      "id": "map-3-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 6000,
-      "countPerTick": 2,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "restless-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 5000,
+      "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
     },
     {
-      "id": "map-3-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 6000,
-      "countPerTick": 1,
-      "startAtMs": 5000,
-      "source": {
-        "type": "map"
-      }
+      "id": "restless-mix",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 6000,
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 6, "delayMs": 900, "front": "north" }
+      ]
     },
     {
-      "id": "map-3-pressure-2",
-      "enemyKind": "rabid-badger",
-      "intervalMs": 5000,
-      "countPerTick": 2,
-      "startAtMs": 5000,
-      "source": {
-        "type": "map"
-      }
+      "id": "spore-breakthrough",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "spore-warden", "count": 3, "front": "north" },
+        { "enemyKind": "rabid-badger", "count": 7, "delayMs": 1200, "front": "west" }
+      ]
     }
   ]
 }

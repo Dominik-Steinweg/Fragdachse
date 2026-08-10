@@ -12,7 +12,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 60,
+  "balanceReferenceDurationSec": 60,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -116,36 +117,30 @@
       "spawnOnArenaStart": false
     }
   ],
-  "persistentSpawns": [
+  "encounters": [
     {
-      "id": "map-4-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 1500,
-      "countPerTick": 2,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "adrenaline-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 5000,
+      "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
     },
     {
-      "id": "map-4-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 6000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "adrenaline-rush",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 6000,
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "north" }
+      ]
     },
     {
-      "id": "map-4-pressure-2",
-      "enemyKind": "rabid-badger",
-      "intervalMs": 5000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "adrenaline-finale",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 14, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 7, "delayMs": 1000, "front": "north" },
+        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 1800, "front": "south" }
+      ]
     }
   ]
 }

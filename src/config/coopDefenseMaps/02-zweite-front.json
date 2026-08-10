@@ -13,7 +13,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 60,
+  "balanceReferenceDurationSec": 60,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -55,6 +56,31 @@
     }
   ],
   "powerUps": [],
+  "encounters": [
+    {
+      "id": "west-introduction",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 5000,
+      "groups": [{ "enemyKind": "zombie-badger", "count": 8, "front": "west" }]
+    },
+    {
+      "id": "north-arrival",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 6000,
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 5, "front": "north" },
+        { "enemyKind": "zombie-badger", "count": 6, "delayMs": 800, "front": "west" }
+      ]
+    },
+    {
+      "id": "two-front-crossfire",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 5, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" }
+      ]
+    }
+  ],
   "persistentSpawns": [
     {
       "id": "map-2-pressure-0",

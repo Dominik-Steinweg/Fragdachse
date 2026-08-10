@@ -15,7 +15,7 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 90,
+  "balanceReferenceDurationSec": 90,
   "bases": [
     {
       "id": "coop-base-rear",

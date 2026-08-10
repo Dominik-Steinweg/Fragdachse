@@ -33,11 +33,13 @@ describe('CoopDefenseRoundStateSystem', () => {
   it('loses only after all friendly bases are destroyed', () => {
     expect(new CoopDefenseRoundStateSystem({
       baseManager: createBaseManager(friendly(0, 500)),
+      objective: 'survive',
       getSecondsLeft: () => 10,
     }).update()).toBeNull();
 
     expect(new CoopDefenseRoundStateSystem({
       baseManager: createBaseManager(friendly(0, 0)),
+      objective: 'survive',
       getSecondsLeft: () => 10,
     }).update()).toBe('defeat');
   });
@@ -45,6 +47,7 @@ describe('CoopDefenseRoundStateSystem', () => {
   it('wins a survive map when the timer expires', () => {
     expect(new CoopDefenseRoundStateSystem({
       baseManager: createBaseManager(friendly(500)),
+      objective: 'survive',
       getSecondsLeft: () => 0,
     }).update()).toBe('victory');
   });

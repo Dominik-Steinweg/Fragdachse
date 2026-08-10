@@ -11,7 +11,10 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 90,
+  "surviveDurationSec": 90,
+  "balanceReferenceDurationSec": 90,
+  "objective": "survive",
+  "surviveRespawnsPerPlayer": 2,
   "bases": [
     {
       "id": "coop-base-rear",
@@ -131,6 +134,38 @@
       "region": "rear",
       "respawnMs": 10000,
       "spawnOnArenaStart": true
+    }
+  ],
+  "encounters": [
+    {
+      "id": "survival-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
+    },
+    {
+      "id": "survival-escalation",
+      "start": { "type": "time", "atMs": 18000 },
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "plague-medic", "count": 2, "delayMs": 1200, "front": "north" }
+      ]
+    },
+    {
+      "id": "survival-brood",
+      "start": { "type": "time", "atMs": 42000 },
+      "groups": [
+        { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1400, "front": "north" }
+      ]
+    },
+    {
+      "id": "survival-last-stand",
+      "start": { "type": "time", "atMs": 68000 },
+      "groups": [
+        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 4, "delayMs": 1800, "front": "south" }
+      ]
     }
   ],
   "persistentSpawns": [

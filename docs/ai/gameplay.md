@@ -23,11 +23,13 @@ Die Match-Auswertung ist absichtlich **keine dritte Netzwerkphase**. Nach dem ho
 
 `RoundParticipationState` friert beim Wechsel in die Arena die `participantIds` ein. Spieler, die danach beitreten, werden host-autoritativ als Spectator ergänzt; ein freiwilliger Wechsel fügt einen aktiven Teilnehmer ebenfalls dauerhaft zu `spectatorIds` hinzu. `NetworkBridge.canPlayerSpawnOrRespawn()`, `canPlayerAct()` und `canPlayerReceiveRoundRewards()` lösen alle drei Regeln aus demselben Vertrag auf. Beim Rundenende wird der Snapshot gelöscht, sodass ein ehemaliger Spectator in der nächsten Lobby wieder normal teilnehmen kann. Ergebnisse, XP, Freischaltungen und Item-Belohnungen verwenden ausschließlich die Teilnehmerliste.
 
-### Bewusst aktivierter Survival-Spezialmodus
+### Expliziter Survival-Spezialmodus
 
-Nur eine Map mit `objective: "survive"` und `surviveRespawnsPerPlayer` aktiviert die begrenzte Lebensregel. Legacy-Maps mit dem alten impliziten `survive` bleiben ohne dieses Feld beim unbegrenzten Respawnpfad; Map 0 ist die technische Referenzmigration. Der Initialspawn verbraucht kein Budget. `0` verbleibende Respawns beschreibt ein lebendes letztes Leben; erst dessen Tod setzt `eliminated`.
+Jede Map mit `objective: "survive"` konfiguriert zwingend `surviveDurationSec` und `surviveRespawnsPerPlayer`; es gibt keinen unbegrenzten oder impliziten Survivalpfad. Map 0 bleibt die technische Referenzmigration, Map 9 ist die erste Kampagnen-Survival-Map. Der Initialspawn verbraucht kein Budget. `0` verbleibende Respawns beschreibt ein lebendes letztes Leben; erst dessen Tod setzt `eliminated`.
 
 `CoopDefenseSurvivalSystem` verwaltet diesen host-autoritären Rundenzustand getrennt vom `CoopDefenseRoundStateSystem`. Der Respawn-Gate ist rein lesend; das Budget wird erst im Combat-Callback beim tatsächlich ausgeführten Post-Death-Respawn einmalig verbraucht. Eine Survival-Eliminierung setzt niemanden in `spectatorIds`: Die Netzwerkrolle bleibt Teilnehmer und damit für Ergebnis-/Reward-Eligibility erhalten, während lokale Aktionseingabe, Figurendarstellung und Kamera spectator-like werden. Der `survive`-Team-Wipe berücksichtigt nur verbundene Rundenteilnehmer, die keine freiwilligen Spectatoren sind; Latejoiner und dauerhaft getrennte Spieler blockieren ihn nicht.
+
+Coop-Maps mit `repel-assault`, `defeat-boss` oder `destroy-hostile-bases` haben keinen Rundentimer: Sieg und Niederlage werden ausschliesslich vom Objective und den Basen entschieden, `roundEndTime` bleibt fuer diese Maps ungesetzt. Nur `surviveDurationSec` speist den Survival-Timer und das Survival-HUD. `balanceReferenceDurationSec` ist davon getrennt und darf nur die Druck-/Drop-Normalisierung beeinflussen; es steuert weder Sieg, Hazard-Lifetime, Zug, Encounter noch Boss-Lifecycle.
 
 ## Spielmodi
 

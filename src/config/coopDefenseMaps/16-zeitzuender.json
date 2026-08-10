@@ -14,7 +14,7 @@
     "weaponName": "Morgenleerer Voidbrand"
   },
   "rockFillRatio": 0.12,
-  "roundDurationSec": 90,
+  "balanceReferenceDurationSec": 90,
   "objective": "destroy-hostile-bases",
   "bases": [
     {

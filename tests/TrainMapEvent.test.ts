@@ -17,8 +17,16 @@ function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfi
   return normalizeCoopDefenseMapConfig({
     mapId: 'train-test',
     displayName: 'Train test',
-    roundDurationSec: 60,
-    bases: [],
+    balanceReferenceDurationSec: 60,
+    objective: 'survive',
+    surviveDurationSec: 60,
+    surviveRespawnsPerPlayer: 0,
+    bases: [{
+      id: 'friendly-main',
+      hpMax: 100,
+      anchor: { kind: 'right-center', edgeInsetCells: 0 },
+      shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+    }],
     powerUps: [],
     ...overrides,
   } as CoopDefenseMapConfig);

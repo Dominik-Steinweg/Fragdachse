@@ -11,7 +11,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 600,
+  "surviveDurationSec": 600,
+  "balanceReferenceDurationSec": 600,
   "objective": "survive",
   "surviveRespawnsPerPlayer": 2,
   "bases": [

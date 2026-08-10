@@ -11,7 +11,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 70,
+  "balanceReferenceDurationSec": 70,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -202,56 +203,38 @@
       "spawnOnArenaStart": false
     }
   ],
-  "persistentSpawns": [
+  "encounters": [
     {
-      "id": "map-7-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 1200,
-      "countPerTick": 2,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "medic-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 6000,
+      "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
     },
     {
-      "id": "map-7-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 10000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "medic-response",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "plague-medic", "count": 2, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 900, "front": "north" }
+      ]
     },
     {
-      "id": "map-7-pressure-2",
-      "enemyKind": "rabid-badger",
-      "intervalMs": 12000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "medic-pressure",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 8, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1100, "front": "north" }
+      ]
     },
     {
-      "id": "map-7-pressure-3",
-      "enemyKind": "spore-warden",
-      "intervalMs": 20000,
-      "countPerTick": 1,
-      "startAtMs": 10000,
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-7-pressure-4",
-      "enemyKind": "plague-medic",
-      "intervalMs": 15000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "medic-finale",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "plague-medic", "count": 3, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "north" }
+      ]
     }
   ]
 }

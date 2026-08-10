@@ -4,8 +4,8 @@ import type { RoundOutcome } from '../network/NetworkBridge';
 
 export interface CoopDefenseRoundStateSystemOptions {
   readonly baseManager: BaseManager;
-  /** Standard `survive`: Sieg ueber das Zeitlimit. */
-  readonly objective?: CoopDefenseMapObjective;
+  /** Explizites Map-Ziel; es gibt keinen impliziten Survival-Fallback. */
+  readonly objective: CoopDefenseMapObjective;
   readonly getSecondsLeft: () => number;
   readonly isBossDefeated?: () => boolean;
   /** `repel-assault`: wird vom host-only MapDirector gesetzt, loest aber selbst keinen Sieg aus. */
@@ -32,7 +32,7 @@ export class CoopDefenseRoundStateSystem {
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
-    this.objective = options.objective ?? 'survive';
+    this.objective = options.objective;
     this.getSecondsLeft = options.getSecondsLeft;
     this.isBossDefeated = options.isBossDefeated ?? (() => false);
     this.isAssaultRepelled = options.isAssaultRepelled ?? (() => false);
@@ -75,14 +75,16 @@ export class CoopDefenseRoundStateSystem {
       return null;
     }
 
-    if (this.objective === 'survive' && this.isSurvivalTeamWiped()) {
-      this.concluded = true;
-      return 'defeat';
-    }
+    if (this.objective === 'survive') {
+      if (this.isSurvivalTeamWiped()) {
+        this.concluded = true;
+        return 'defeat';
+      }
 
-    if (this.getSecondsLeft() <= 0) {
-      this.concluded = true;
-      return 'victory';
+      if (this.getSecondsLeft() <= 0) {
+        this.concluded = true;
+        return 'victory';
+      }
     }
 
     return null;

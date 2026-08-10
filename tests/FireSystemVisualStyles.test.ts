@@ -106,4 +106,20 @@ describe('FireSystem visual styles and damage targets', () => {
       ),
     );
   });
+
+  it('keeps map fire alive beyond any gameplay timer until arena teardown', () => {
+    const fireSystem = new FireSystem({} as Phaser.Scene);
+    const now = 3_000;
+
+    fireSystem.hostRefreshGroundCell(300, 300, {
+      sourceKey: 'map:permanent-hazard',
+      ownerId: 'map-hazard:15',
+      durationMs: 1,
+      permanent: true,
+    }, now);
+
+    expect(fireSystem.hostUpdate(now + 60_000).ground.cells).toHaveLength(1);
+    fireSystem.destroyAll();
+    expect(fireSystem.hostUpdate(now + 60_000).ground.cells).toEqual([]);
+  });
 });

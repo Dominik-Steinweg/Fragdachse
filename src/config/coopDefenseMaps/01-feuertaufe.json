@@ -14,7 +14,7 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 40,
+  "balanceReferenceDurationSec": 40,
   "objective": "repel-assault",
   "bases": [
     {

@@ -1410,7 +1410,7 @@ export class NetworkBridge {
   canPlayerRespawn(playerId: string): boolean {
     if (!this.canPlayerSpawnOrRespawn(playerId)) return false;
     const survival = this.getCoopDefenseSurvivalState();
-    if (!survival) return true; // Legacy-Survive und alle anderen Modi bleiben unveraendert.
+    if (!survival) return true; // Nicht-Survival-Modi haben kein persoenliches Respawn-Budget.
     const state = survival.players[playerId];
     // Der Host publiziert den Zustand vor dem Arenaphasenwechsel. Ein fehlender Snapshot darf
     // einen bestehenden Spieler trotzdem nicht dauerhaft blockieren.

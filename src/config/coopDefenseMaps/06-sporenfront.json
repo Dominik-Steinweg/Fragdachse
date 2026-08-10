@@ -11,7 +11,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 60,
+  "balanceReferenceDurationSec": 60,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -210,46 +211,38 @@
       "spawnOnArenaStart": false
     }
   ],
-  "persistentSpawns": [
+  "encounters": [
     {
-      "id": "map-6-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 8000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "spore-front-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 6000,
+      "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
     },
     {
-      "id": "map-6-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 7000,
-      "countPerTick": 1,
-      "startAtMs": 5000,
-      "source": {
-        "type": "map"
-      }
+      "id": "spore-front-wardens",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "spore-warden", "count": 4, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" }
+      ]
     },
     {
-      "id": "map-6-pressure-2",
-      "enemyKind": "rabid-badger",
-      "intervalMs": 10000,
-      "countPerTick": 1,
-      "startAtMs": 10000,
-      "source": {
-        "type": "map"
-      }
+      "id": "spore-front-surge",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 8, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
+      ]
     },
     {
-      "id": "map-6-pressure-3",
-      "enemyKind": "spore-warden",
-      "intervalMs": 6000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "spore-front-finale",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "spore-warden", "count": 5, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 900, "front": "north" }
+      ]
     }
   ]
 }

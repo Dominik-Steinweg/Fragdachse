@@ -12,7 +12,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 80,
+  "balanceReferenceDurationSec": 80,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -264,6 +265,44 @@
       "region": "rear",
       "respawnMs": 30000,
       "spawnOnArenaStart": false
+    }
+  ],
+  "encounters": [
+    {
+      "id": "dimension-west",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 6000,
+      "groups": [
+        { "enemyKind": "spore-warden", "count": 4, "front": "west" },
+        { "enemyKind": "zombie-badger", "count": 8, "delayMs": 1000, "front": "west" }
+      ]
+    },
+    {
+      "id": "dimension-north",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 7, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "west" }
+      ]
+    },
+    {
+      "id": "dimension-south",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "void-stalker", "count": 4, "front": "south" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1100, "front": "north" }
+      ]
+    },
+    {
+      "id": "dimension-collapse",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "void-stalker", "count": 5, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 4, "delayMs": 900, "front": "south" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1800, "front": "north" }
+      ]
     }
   ],
   "persistentSpawns": [

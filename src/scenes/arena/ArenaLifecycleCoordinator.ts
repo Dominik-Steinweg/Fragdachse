@@ -266,11 +266,23 @@ export class ArenaLifecycleCoordinator {
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), arenaStartTime);
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
-    const roundDurationSec = coopDefenseMapConfig?.roundDurationSec ?? ARENA_DURATION_SEC;
+    const isCoopDefense = isCoopDefenseMode(bridge.getGameMode());
     const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
     bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
     bridge.setArenaStartTime(arenaStartTime);
-    bridge.setRoundEndTime(arenaStartTime + roundDurationSec * 1000);
+    let roundEndTime = arenaStartTime + ARENA_DURATION_SEC * 1000;
+    if (isCoopDefense) {
+      if (coopDefenseMapConfig?.objective === 'survive') {
+        const surviveDurationSec = coopDefenseMapConfig.surviveDurationSec;
+        if (surviveDurationSec === undefined) {
+          throw new Error(`[ArenaLifecycleCoordinator] Survival map ${coopDefenseMapConfig.mapId} has no surviveDurationSec`);
+        }
+        roundEndTime = arenaStartTime + surviveDurationSec * 1000;
+      } else {
+        roundEndTime = 0;
+      }
+    }
+    bridge.setRoundEndTime(roundEndTime);
     const roundState: RoundState = {
       status: 'active',
       roundStartTime: arenaStartTime,
@@ -563,16 +575,19 @@ export class ArenaLifecycleCoordinator {
       ? resolveCoopDefenseMapEncounterConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
     if (bridge.isHost()) {
-      if (coopDefenseMapConfig?.surviveRespawnsPerPlayer !== undefined) {
+      if (coopDefenseMapConfig?.objective === 'survive') {
+        const respawnsPerPlayer = coopDefenseMapConfig.surviveRespawnsPerPlayer;
+        if (respawnsPerPlayer === undefined) {
+          throw new Error(`[ArenaLifecycleCoordinator] Survival map ${coopDefenseMapConfig.mapId} has no surviveRespawnsPerPlayer`);
+        }
         const participantIds = bridge.getRoundParticipation()?.participantIds
           ?? bridge.getConnectedPlayerIds();
         this.ctx.coopDefenseSurvivalSystem = new CoopDefenseSurvivalSystem({
-          respawnsPerPlayer: coopDefenseMapConfig.surviveRespawnsPerPlayer,
+          respawnsPerPlayer,
           participantIds,
         });
         bridge.publishCoopDefenseSurvivalState(this.ctx.coopDefenseSurvivalSystem.getSnapshot());
       } else {
-        // Legacy-Survive and every other objective deliberately have no budgeted life state.
         this.ctx.coopDefenseSurvivalSystem = null;
         bridge.publishCoopDefenseSurvivalState(null);
       }
@@ -636,10 +651,13 @@ export class ArenaLifecycleCoordinator {
     // Brennende Gegner leuchten wie brennende Projektile; das Licht hängt am
     // EntityBurnRenderer der jeweiligen Entity.
     this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
-    this.ctx.coopDefenseRoundStateSystem = bridge.isHost() && this.ctx.baseManager && isCoopDefenseMode(bridge.getGameMode())
+    this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
+      && this.ctx.baseManager
+      && isCoopDefenseMode(bridge.getGameMode())
+      && coopDefenseMapConfig
       ? new CoopDefenseRoundStateSystem({
         baseManager: this.ctx.baseManager,
-        objective: coopDefenseMapConfig?.objective,
+        objective: coopDefenseMapConfig.objective,
         getSecondsLeft: () => bridge.computeSecondsLeft(),
         isBossDefeated: () => this.ctx.coopDefenseBossSystem?.isBossDefeated() ?? false,
         isAssaultRepelled: () => this.ctx.coopDefenseMapDirector?.isAssaultRepelled() ?? false,
@@ -943,7 +961,6 @@ export class ArenaLifecycleCoordinator {
       },
     );
     if (bridge.isHost()) {
-      const permanentFireDurationMs = ((coopDefenseMapConfig?.roundDurationSec ?? 120) * 1000) + 30_000;
       const createdAt = Date.now();
       for (const zone of layout.permanentGroundFireZones ?? []) {
         for (const cell of zone.cells) {
@@ -957,7 +974,8 @@ export class ArenaLifecycleCoordinator {
                 {
                   sourceKey: `map:${zone.id}`,
                   ownerId: `map-hazard:${coopDefenseMapConfig?.mapId ?? 'arena'}`,
-                  durationMs: permanentFireDurationMs,
+                  durationMs: 1,
+                  permanent: true,
                   damagePerTick: 0,
                   burn: {
                     durationMs: zone.burnDurationMs,

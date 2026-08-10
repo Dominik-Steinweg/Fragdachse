@@ -14,7 +14,8 @@ const C_SHAPE = {
 const STRUCTURE_SCALING_MAP: CoopDefenseMapConfig = {
   mapId: 'structure-scaling-test',
   displayName: 'Structure scaling test',
-  roundDurationSec: 60,
+  balanceReferenceDurationSec: 60,
+  objective: 'repel-assault',
   bases: [
     {
       id: 'friendly-main',

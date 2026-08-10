@@ -11,7 +11,8 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "roundDurationSec": 90,
+  "balanceReferenceDurationSec": 90,
+  "objective": "repel-assault",
   "rockField": {
     "corridorRadiusCells": 1.35,
     "corridorRadiusVarianceCells": 0.4,
@@ -347,6 +348,47 @@
   "itemDrop": {
     "itemLevel": 3
   },
+  "encounters": [
+    {
+      "id": "three-front-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 7000,
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 8, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 4, "delayMs": 900, "front": "north" },
+        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 1300, "front": "south" }
+      ]
+    },
+    {
+      "id": "three-front-pyro",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 8000,
+      "groups": [
+        { "enemyKind": "pyro-badger", "count": 3, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1000, "front": "south" },
+        { "enemyKind": "zombie-badger", "count": 6, "delayMs": 1500, "front": "west" }
+      ]
+    },
+    {
+      "id": "three-front-surge",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 8000,
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
+        { "enemyKind": "pyro-badger", "count": 3, "delayMs": 1000, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1600, "front": "south" }
+      ]
+    },
+    {
+      "id": "three-front-finale",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "pyro-badger", "count": 4, "front": "north" },
+        { "enemyKind": "pyro-badger", "count": 4, "delayMs": 700, "front": "south" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1400, "front": "west" }
+      ]
+    }
+  ],
   "persistentSpawns": [
     {
       "id": "map-14-pressure-0",

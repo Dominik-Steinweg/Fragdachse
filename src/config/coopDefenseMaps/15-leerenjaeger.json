@@ -15,7 +15,7 @@
     "weaponName": "Lila Leerenbrand"
   },
   "rockFillRatio": 0.08,
-  "roundDurationSec": 45,
+  "balanceReferenceDurationSec": 45,
   "objective": "defeat-boss",
   "bases": [
     {
