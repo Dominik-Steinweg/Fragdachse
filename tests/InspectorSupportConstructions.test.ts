@@ -288,6 +288,7 @@ describe('Inspector automated support turrets', () => {
       expect(fire).toHaveBeenCalledOnce();
       expect(fire.mock.calls[0][2]).toBe(weaponId);
       expect(fire.mock.calls[0].slice(3, 8)).toEqual([16, 0, 0, 100, 0]);
+      expect(fire.mock.calls[0][11]).toBe(1);
     },
   );
 });

@@ -56,6 +56,7 @@ type TurretFireHandler = (
   damageFactor?: number,
   rangeFactor?: number,
   sourceTurretId?: AutomatedTurretId,
+  skipRockIndex?: number,
 ) => void;
 
 export class TurretSystem {
@@ -177,6 +178,7 @@ export class TurretSystem {
           pendingBurst.damageMultiplier,
           pendingBurst.rangeFactor,
           turret.id,
+          turret.skipRockIndex,
         );
         pendingBurst.shotsRemaining -= 1;
         if (pendingBurst.shotsRemaining > 0) {
@@ -208,7 +210,20 @@ export class TurretSystem {
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
-      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, damageMultiplier, rangeFactor, turret.id);
+      this.fireHandler?.(
+        turret.ownerId,
+        turret.ownerColor,
+        turretWeaponId,
+        muzzleX,
+        muzzleY,
+        angle,
+        target.x,
+        target.y,
+        damageMultiplier,
+        rangeFactor,
+        turret.id,
+        turret.skipRockIndex,
+      );
       const burstCount = turretWeaponConfig.turretBurst
         ? Math.max(1, Math.floor(turretWeaponConfig.turretBurst.count))
         : 1;
@@ -235,7 +250,20 @@ export class TurretSystem {
         );
         if (secondTarget) {
           const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
-          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier, rangeFactor, turret.id);
+          this.fireHandler?.(
+            turret.ownerId,
+            turret.ownerColor,
+            turretWeaponId,
+            muzzleX,
+            muzzleY,
+            secondAngle,
+            secondTarget.x,
+            secondTarget.y,
+            (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier,
+            rangeFactor,
+            turret.id,
+            turret.skipRockIndex,
+          );
         }
       }
     }

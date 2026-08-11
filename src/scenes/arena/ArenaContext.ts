@@ -63,7 +63,6 @@ import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefe
 import type { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
 import type { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
-import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import type { BaseManager }          from '../../entities/BaseManager';
@@ -187,7 +186,6 @@ export interface ArenaContext {
   coopDefenseObjectiveRepairSystem: CoopDefenseObjectiveRepairSystem | null;
   /** Host-only: one-shot placement rewards from completed Hold objectives. */
   coopDefenseObjectivePlacementRewardSystem: CoopDefenseObjectivePlacementRewardSystem | null;
-  coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;
   trainManager:      TrainManager      | null;

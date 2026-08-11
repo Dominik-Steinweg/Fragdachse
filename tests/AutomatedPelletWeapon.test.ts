@@ -18,7 +18,7 @@ describe('automated projectile weapons', () => {
     });
 
     expect(manager.fireAutomatedWeapon(
-      WEAPON_CONFIGS.TURRET_ROCKET,
+      WEAPON_CONFIGS.TURRET_ROCKET_BURST,
       100,
       200,
       0,
@@ -26,12 +26,31 @@ describe('automated projectile weapons', () => {
       200,
       'player-owner',
       0xff8a3d,
-      { sourceSlot: 'utility' },
+      { sourceSlot: 'utility', ignoreRockIndex: 7 },
     )).toBe(true);
 
     expect(dispatchWeaponFire).toHaveBeenCalledOnce();
     expect(dispatchWeaponFire.mock.calls[0][6]).toBe('player-owner');
     expect(dispatchWeaponFire.mock.calls[0][8]).toBe('utility');
+    expect(dispatchWeaponFire.mock.calls[0][10]).toMatchObject({ ignoreRockIndex: 7 });
+  });
+
+  it('passes turret support collision filters into the spawned projectile', () => {
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    const spawnProjectile = vi.fn(() => 42);
+    Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile } });
+
+    manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.TURRET_ROCKET_BURST,
+      100, 200, 0, 400, 200, 'player-owner', 0xff8a3d,
+      { ignoreBaseCollisions: true, ignoreRockIndex: 7, sourceTurretId: '7' },
+    );
+
+    expect(spawnProjectile.mock.calls[0]?.[4]).toMatchObject({
+      ignoreBaseCollisions: true,
+      ignoreRockIndex: 7,
+      sourceTurretId: '7',
+    });
   });
 
   it('applies one shared tower multiplier to direct, explosive, cloud and burn damage', () => {
@@ -40,15 +59,15 @@ describe('automated projectile weapons', () => {
     Object.defineProperty(manager, 'dispatchWeaponFire', { value: dispatchWeaponFire });
 
     manager.fireAutomatedWeapon(
-      WEAPON_CONFIGS.TURRET_ROCKET,
+      WEAPON_CONFIGS.TURRET_ROCKET_BURST,
       0, 0, 0, 100, 0, 'owner', 0xffffff,
       { directDamageMultiplier: 1.25, payloadDamageMultiplier: 2.5, sourceSlot: 'utility' },
     );
     const rocket = dispatchWeaponFire.mock.calls[0][0];
-    expect(rocket.damage).toBeCloseTo(WEAPON_CONFIGS.TURRET_ROCKET.damage * 1.25, 10);
+    expect(rocket.damage).toBeCloseTo(WEAPON_CONFIGS.TURRET_ROCKET_BURST.damage * 1.25, 10);
     expect(rocket.fire.impactExplosion.maxDamage).toBeCloseTo(
-      WEAPON_CONFIGS.TURRET_ROCKET.fire.type === 'projectile'
-        ? (WEAPON_CONFIGS.TURRET_ROCKET.fire.impactExplosion?.maxDamage ?? 0) * 2.5
+      WEAPON_CONFIGS.TURRET_ROCKET_BURST.fire.type === 'projectile'
+        ? (WEAPON_CONFIGS.TURRET_ROCKET_BURST.fire.impactExplosion?.maxDamage ?? 0) * 2.5
         : 0,
       10,
     );

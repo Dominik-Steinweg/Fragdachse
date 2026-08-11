@@ -1,5 +1,7 @@
 # Gameplay
 
+- Spielergebaeude reichen ihren `skipRockIndex` als `ignoreRockIndex` bis in den Projektil-Collider weiter, sodass nur der eigene Traegerfels uebersprungen wird; fremde Felsen und normale Sichtlinien bleiben Hindernisse.
+
 Feindliche `BaseSpec`-HP werden im gemeinsamen `BaseRegistry`-Pfad aus der beim Rundenstart festgelegten `coopDefenseHumanPlayerCount` aufgeloest: Standard sind 0,5 (50 %) je zusaetzlichem Spieler, `playerScaling.maxHpFactorPerAdditionalPlayer` ueberschreibt den Faktor pro Struktur. Freundliche Strukturen bleiben ohne ausdruecklichen Override unveraendert. Host und Client loesen die HP vor dem Erzeugen der `BaseEntity` identisch auf; spaetere Spielerabgaenge veraendern weder Maximal- noch aktuelle HP.
 
 Modusgebundene Spielerwaffen tragen `allowedModes` direkt in ihrer `WeaponConfig`. `LoadoutCatalog` filtert diese Liste für die Auswahl, und `sanitizeWeaponForMode` erzwingt denselben Vertrag bei gespeicherten oder replizierten Loadouts; die drei Inspector-Supportwaffen sind deshalb auf `coop_defense` begrenzt.
@@ -46,7 +48,7 @@ PvP- und PvE-Regeln teilen Kernsysteme wie Spieler, Combat, Projektile, Ressourc
 
 ## Spielgefühl und Lesbarkeit
 
-- Maps mit `enemyAirstrikes` lassen den `CoopDefenseAirstrikeDirector` das regulaere, host-autoritaere `AirstrikeSystem` mit der synthetischen ID `COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID` beschicken. Dadurch bleiben Schaden und Replikation gemeinsam, waehrend der Client den gegnerischen Warn-/Telegraphen ueber die Void-Palette lila zeichnet; die Explosion bleibt bewusst der warme `nuke`-Effekt.
+- Authored Zombie-Luftangriffe liegen als `mapEvents` mit den festen Mustern `tutorial-sweep`, `zone-barrage` oder `player-hunt` vor. Der typisierte Airstrike-Handler plant pro `eventId` und `occurrence`, waehrend das gemeinsame `AirstrikeSystem` weiterhin Warnung, Schaden, Explosion und Replikation besitzt; gegnerische Telegraphen verwenden unveraendert die Void-Palette.
 
 - Strategische Gegnerziele sind pro Gegnertyp als `bases`, `players` oder `players-and-armed-constructs` konfiguriert. Der kombinierte Modus sammelt aktive Spieler, intakte platzierte Objekte mit `kind: 'turret'` (einschließlich Fliegenpilzen) und intakte bewaffnete freundliche Außenposten; Hauptbasen, Mauern und Utility-Konstrukte gehören nicht zu dieser Zielmenge. Alle Kandidaten speisen genau ein dynamisches Multi-Source-Flowfield. `EnemyStrategicTargetService` ordnet dessen tatsächlich erreichte Quellzelle wieder einem konkreten Ziel zu, sodass Wegkosten statt bloßer Luftlinie entscheiden; fest gebundene Spezialzustände dürfen auf demselben Kostenraster punktuell A* nutzen, erzeugen aber kein weiteres Flowfield. Ein zwischengespeicherter Einzelpfad-Wegpunkt gilt nur bis zum Eintritt in seine Rasterzelle und wird beim Wechsel auf direkte Zielsteuerung sofort verworfen, damit schnelle Gegner nicht zu einem inzwischen hinter ihnen liegenden Punkt zurücklaufen. Beginnt ein Gegner eine zeitgebundene Sichtprüfung, bindet er deren Kandidaten individuell bis zum Erfolg oder tatsächlichen Sichtverlust; wechselnde Präferenzen des gemeinsamen Flowfields dürfen diesen Timer nicht zurücksetzen.
 

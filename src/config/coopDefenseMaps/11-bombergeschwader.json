@@ -6,10 +6,6 @@
   "timeOfDay": "10:30",
   "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
   "tutorialDurationMs": 10000,
-  "enemyAirstrikes": {
-    "bombTutorialRock": true,
-    "huntIntervalMs": 10000
-  },
   "rockFillRatio": 0.4,
   "tutorialRockArmorDropMult": 0.02,
   "mapEvents": [{
@@ -17,6 +13,18 @@
     "type": "train",
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
+  }, {
+    "id": "opening-barrage",
+    "type": "airstrike",
+    "start": { "type": "time", "atMs": 0 },
+    "delayMs": 8200,
+    "pattern": "tutorial-sweep"
+  }, {
+    "id": "player-hunt",
+    "type": "airstrike",
+    "start": { "type": "time", "atMs": 20000 },
+    "pattern": "player-hunt",
+    "intervalMs": 10000
   }],
   "balanceReferenceDurationSec": 110,
   "objective": "repel-assault",
@@ -183,7 +191,8 @@
     {
       "id": "post-barrage-assault",
       "start": {
-        "type": "opening-airstrike-complete"
+        "type": "after-event",
+        "eventId": "opening-barrage"
       },
       "restAfterMs": 5500,
       "groups": [

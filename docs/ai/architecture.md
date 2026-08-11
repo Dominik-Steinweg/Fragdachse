@@ -30,9 +30,11 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
   zusätzlich den kürzesten erreichbaren Tunnel durch blockierte Randzellen prüft. Encounter-IDs
   und Clear-Provenance bleiben dabei über alle Fronten hinweg gemeinsam.
 - Encounter-Starts sind eine kleine discriminated union (`time`, `after-previous`,
-  `opening-airstrike-complete`, `boss-phase`, `base-destroyed`). Fachsysteme liefern dafür
-  persistente State-Abfragen über die Arena-Verdrahtung; der Director importiert weder Airstrike-,
-  Boss- noch Basislogik und startet ein erfülltes Gate höchstens einmal.
+  `after-encounter`, `after-event`, `boss-phase`, `base-destroyed`). Die Map-Normalisierung prüft
+  Encounter-/Event-Referenzen und Zyklen in einem gemeinsamen Abhängigkeitsgraphen; Fachsysteme
+  liefern dafür persistente State-Abfragen über die Arena-Verdrahtung. Der MapDirector fragt den
+  semantischen Abschlusszustand des EventDirectors ab und importiert weder Airstrike-, Boss- noch
+  Basislogik.
 - `CoopDefenseSurvivalSystem` ist ein separates host-only Round-System für bewusst konfigurierte
   `survive`-Maps. Es hält pro Round-Participant Budget, Lebensstatus und Eliminierung, während
   `CoopDefenseRoundStateSystem` nur den Team-Wipe als booleschen Regelinput abfragt. Der Zustand

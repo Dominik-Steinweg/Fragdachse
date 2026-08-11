@@ -41,16 +41,16 @@ import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor
 import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
-import { CoopDefenseMapEventDirector } from '../../systems/CoopDefenseMapEventDirector';
+import { CoopDefenseMapEventDirector, type CoopDefenseMapEventHandler } from '../../systems/CoopDefenseMapEventDirector';
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
 import { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import {
-  CoopDefenseAirstrikeDirector,
+  CoopDefenseAirstrikeEventHandler,
   isPointNearBaseRegion,
-} from '../../systems/CoopDefenseAirstrikeDirector';
+} from '../../systems/CoopDefenseAirstrikeEventHandler';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
@@ -850,8 +850,8 @@ export class ArenaLifecycleCoordinator {
               isEnemyActive: (enemyId) => this.ctx.enemyManager?.getEnemy(enemyId)?.sprite.active === true,
               isEncounterStartSatisfied: (start) => {
                 switch (start.type) {
-                  case 'opening-airstrike-complete':
-                    return this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? false;
+                  case 'after-event':
+                    return this.ctx.coopDefenseMapEventDirector?.isEventCompleted(start.eventId) ?? false;
                   case 'boss-phase':
                     return this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false;
                   case 'after-encounter':
@@ -1846,7 +1846,7 @@ export class ArenaLifecycleCoordinator {
           if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
       });
-      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId) => {
+      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
         const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
@@ -1878,6 +1878,7 @@ export class ArenaLifecycleCoordinator {
           color,
           {
             ignoreBaseCollisions: isBaseTurret,
+            ignoreRockIndex: skipRockIndex,
             // Spielerbauten bleiben ihrem Besitzer zugerechnet und laufen als Utility-Schaden
             // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
             sourceSlot: isBaseTurret ? undefined : 'utility',
@@ -2115,22 +2116,15 @@ export class ArenaLifecycleCoordinator {
         bridge.broadcastExplosionEffect(x, y, radius, 0xff9933, 'nuke');
         this.hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, cfg, triggeredBy);
       });
-      this.ctx.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, cfg) => {
-        const player = this.ctx.playerManager.getPlayer(playerId);
-        if (!player || !this.ctx.combatSystem.isAlive(playerId)) return false;
-        this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
-        return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
-      });
-      // Zombie-Luftangriffe: Auf Maps mit enemyAirstrikes bombardiert die Gegner-
-      // fraktion optional erst den Tutorial-Felsbereich und jagt danach im
-      // konfigurierten Abstand zufällige Spieler.
-      const enemyAirstrikeConfig = coopDefenseMapConfig?.enemyAirstrikes;
-      const resolvedEnemyAirstrikeConfig = typeof enemyAirstrikeConfig === 'object' ? enemyAirstrikeConfig : undefined;
-      this.ctx.coopDefenseAirstrikeDirector = resolvedEnemyAirstrikeConfig
-        ? new CoopDefenseAirstrikeDirector({
-          scheduleStrike: (x, y, cfg) => {
-            this.ctx.airstrikeSystem?.scheduleStrike(COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, x, y, cfg);
-          },
+      const coopDefenseAirstrikeEventHandler = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig
+        ? new CoopDefenseAirstrikeEventHandler({
+          scheduleStrike: (x, y, cfg, metadata) => this.ctx.airstrikeSystem?.scheduleStrike(
+            COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
+            x,
+            y,
+            cfg,
+            metadata,
+          ) ?? false,
           getAlivePlayerPositions: () => this.ctx.playerManager.getAllPlayers()
             .filter((player) => this.ctx.combatSystem.isAlive(player.id))
             .map((player) => ({ x: player.sprite.x, y: player.sprite.y })),
@@ -2142,11 +2136,25 @@ export class ArenaLifecycleCoordinator {
           playStrikeAudio: (x, y) => {
             this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);
           },
-        }, {
-          bombTutorialRock: resolvedEnemyAirstrikeConfig.bombTutorialRock ?? true,
-          huntIntervalMs: resolvedEnemyAirstrikeConfig.huntIntervalMs ?? 10_000,
+          getArenaStartTimeMs: () => bridge.getArenaStartTime(),
+          getNowMs: () => Date.now(),
+          getActiveRoundTimeMs: () => Math.max(0, Date.now() - bridge.getArenaStartTime()),
+          arenaWidthCells: coopDefenseMapConfig.arenaWidthCells ?? GRID_COLS,
+          arenaHeightCells: coopDefenseMapConfig.arenaHeightCells ?? GRID_ROWS,
+          tutorialShowControls: coopDefenseMapConfig.tutorialShowControls,
         })
         : null;
+      this.ctx.airstrikeSystem.setResolvedCallback((resolution) => {
+        coopDefenseAirstrikeEventHandler?.handleStrikeResolved(resolution);
+      });
+      this.ctx.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, cfg) => {
+        const player = this.ctx.playerManager.getPlayer(playerId);
+        if (!player || !this.ctx.combatSystem.isAlive(playerId)) return false;
+        this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
+        return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
+      });
+      // Player-Ultimates and authored Map-Events share the same AirstrikeSystem.
+      // Authored event parameters remain behind the typed airstrike handler boundary.
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.combatSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.burrowSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
@@ -2265,11 +2273,16 @@ export class ArenaLifecycleCoordinator {
       const trackCell = layout.tracks?.[0];
       const coopDefenseMapEvents = coopDefenseMapConfig?.mapEvents ?? [];
       if (isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig) {
-        if (trackCell !== undefined && coopDefenseMapEvents.length > 0) {
+        const mapEventHandlers: CoopDefenseMapEventHandler[] = [];
+        if (trackCell !== undefined && coopDefenseMapEvents.some((event) => event.type === 'train')) {
           const trainHandler = this.setupCoopTrainEventHandler(trackCell.gridX);
+          mapEventHandlers.push(trainHandler);
+        }
+        if (coopDefenseAirstrikeEventHandler) mapEventHandlers.push(coopDefenseAirstrikeEventHandler);
+        if (coopDefenseMapEvents.length > 0) {
           this.ctx.coopDefenseMapEventDirector = new CoopDefenseMapEventDirector(
             coopDefenseMapEvents,
-            [trainHandler],
+            mapEventHandlers,
             {
               isTriggerSatisfied: (start) => start.type === 'after-encounter'
                 && (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false),
@@ -2574,8 +2587,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.armageddonSystem?.destroyAll();
     this.ctx.armageddonSystem = null;
     this.ctx.airstrikeSystem?.clear();
+    this.ctx.airstrikeSystem?.setResolvedCallback(null);
     this.ctx.airstrikeSystem = null;
-    this.ctx.coopDefenseAirstrikeDirector = null;
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;

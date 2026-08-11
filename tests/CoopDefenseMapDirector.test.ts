@@ -547,7 +547,7 @@ describe('CoopDefenseMapDirector', () => {
       },
       {
         id: 'after-barrage',
-        start: { type: 'opening-airstrike-complete' },
+        start: { type: 'after-event', eventId: 'opening-barrage' },
         groups: [{ enemyKind: 'demon-badger', count: 1, delayMs: 250 }],
       },
     ], (_kind, count) => {
@@ -557,7 +557,7 @@ describe('CoopDefenseMapDirector', () => {
     }, {
       mode: 'repel-assault',
       isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId),
-      isEncounterStartSatisfied: (start) => start.type === 'opening-airstrike-complete' && barrageComplete,
+      isEncounterStartSatisfied: (start) => start.type === 'after-event' && start.eventId === 'opening-barrage' && barrageComplete,
     });
 
     director.hostUpdate(0, false);

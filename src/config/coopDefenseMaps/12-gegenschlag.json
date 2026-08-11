@@ -6,16 +6,18 @@
   "tutorialText": "Erstmals steht der Brutbau der Zombies auf der Karte. Verteidigen allein reicht nicht mehr: Die Runde ist erst gewonnen, wenn die rote Feindbasis fällt. Ein Zeitlimit gibt es nicht.",
   "tutorialDurationMs": 12000,
   "objective": "destroy-hostile-bases",
-  "enemyAirstrikes": {
-    "bombTutorialRock": false,
-    "huntIntervalMs": 25000
-  },
   "rockFillRatio": 0.3,
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
+  }, {
+    "id": "player-hunt",
+    "type": "airstrike",
+    "start": { "type": "time", "atMs": 20000 },
+    "pattern": "player-hunt",
+    "intervalMs": 25000
   }],
   "balanceReferenceDurationSec": 130,
   "bases": [
@@ -285,7 +287,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
     }

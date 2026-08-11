@@ -599,6 +599,7 @@ export class ProjectileManager {
       createdAt:      Date.now(),
       ownerId,
       ignoreBaseCollisions: cfg.ignoreBaseCollisions,
+      ignoreRockIndex: cfg.ignoreRockIndex,
       color:          cfg.color,
       allowTeamDamage: cfg.allowTeamDamage,
       ownerColor:     cfg.ownerColor,
@@ -775,6 +776,13 @@ export class ProjectileManager {
     return id;
   }
 
+  /** Placeable turret shots ignore only their own supporting runtime rock. */
+  private canCollideWithRock(tracked: TrackedProjectile, rockGO: Phaser.GameObjects.GameObject): boolean {
+    if (tracked.ignoreRockIndex === undefined) return true;
+    const rockIndex = this.rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+    return rockIndex !== tracked.ignoreRockIndex;
+  }
+
   /**
    * Richtet je nach Projektiltyp die Welt-Bounds-/Hindernis-Collider ein:
    * BFG/Gauss durchdringen (Overlap-Schaden), Impact-Cloud/Explosion zerstören bei Kontakt,
@@ -821,7 +829,7 @@ export class ProjectileManager {
             const rockMult = tracked.rockDamageMult ?? 1;
             onHit(idx, tracked.damage * rockMult, tracked.ownerId);
           }
-        });
+        }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
 
@@ -859,7 +867,7 @@ export class ProjectileManager {
         const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
           this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
           this.queueDestroyProjectile(tracked);
-        });
+        }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
@@ -903,7 +911,7 @@ export class ProjectileManager {
       if (this.rockGroup) {
         const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
           this.queueProjectileExplosion(tracked, false, true);
-        });
+        }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
@@ -976,7 +984,7 @@ export class ProjectileManager {
       if (this.rockGroup) {
         const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
           body.setVelocity(0, 0);
-        });
+        }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
@@ -1037,7 +1045,7 @@ export class ProjectileManager {
           ? tracked.damage
           : tracked.damage * (tracked.rockDamageMult ?? 1);
         if (damage !== 0) onHit?.(idx, damage, tracked.ownerId);
-      });
+      }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
       tracked.colliders.push(c);
     }
     if (this.trunkGroup) {
@@ -1075,7 +1083,7 @@ export class ProjectileManager {
     if (this.rockGroup) {
       const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
         this.queueDestroyProjectile(tracked);
-      });
+      }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
       tracked.colliders.push(c);
     }
     if (this.trunkGroup) {
@@ -1191,7 +1199,7 @@ export class ProjectileManager {
           }
           const impact = this.resolveObstacleImpactPoint(tracked, rockGO as Phaser.GameObjects.GameObject);
           playImpact(impact.x, impact.y, body.velocity.x, body.velocity.y, tracked.color);
-        });
+        }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(rockOverlap);
       } else {
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
@@ -1239,7 +1247,7 @@ export class ProjectileManager {
           body.setVelocity(0, 0);
           body.enable = false;
         }
-      });
+      }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
       tracked.colliders.push(rockCollider);
       }
     }

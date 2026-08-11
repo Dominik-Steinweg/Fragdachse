@@ -125,7 +125,7 @@
             "gridY": 1
           },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
     },
@@ -151,7 +151,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
     }

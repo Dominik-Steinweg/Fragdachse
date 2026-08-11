@@ -12,6 +12,7 @@ import {
   getTrainArrivalCountdownSecs,
 } from '../src/train/TrainEvent';
 import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
+import type { CoopDefenseMapEventCycleFinished } from '../src/systems/CoopDefenseMapEventDirector';
 import { TRAIN } from '../src/train/TrainConfig';
 
 function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
@@ -34,15 +35,20 @@ function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfi
 }
 
 function fakeTrainHandler() {
-  let onFinished: ((eventId: string, occurrence: number, exitedAtMs: number) => void) | null = null;
+  let onFinished: ((completion: CoopDefenseMapEventCycleFinished) => void) | null = null;
   return {
     type: 'train' as const,
     schedule: vi.fn(),
     hostUpdate: vi.fn(),
     reset: vi.fn(),
     setCycleFinishedCallback: vi.fn((callback: typeof onFinished) => { onFinished = callback; }),
-    finish(eventId: string, occurrence: number, exitedAtMs: number): void {
-      onFinished?.(eventId, occurrence, exitedAtMs);
+    finish(eventId: string, occurrence: number, completedAtMs: number, nextActionAtMs?: number): void {
+      onFinished?.({
+        eventId,
+        occurrence,
+        completedAtMs,
+        ...(nextActionAtMs === undefined ? {} : { nextActionAtMs }),
+      });
     },
   };
 }
@@ -53,8 +59,8 @@ describe('Train as a standalone map event', () => {
     expect(railsMaps.length).toBeGreaterThan(0);
 
     for (const map of railsMaps) {
-      expect(map.mapEvents, map.mapId).toHaveLength(1);
-      expect(map.mapEvents?.[0], map.mapId).toMatchObject({
+      const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
+      expect(trainEvent, map.mapId).toMatchObject({
         id: 'train-rhythm',
         type: 'train',
         start: { type: 'time', atMs: 10_000 },
@@ -108,7 +114,7 @@ describe('Train as a standalone map event', () => {
     expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'after-encounter', encounterId: 'missing' } }] })).toThrow(/unknown encounter/);
     expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, delayMs: -1 }] })).toThrow(/delayMs/);
     expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 0 }] })).toThrow(/repeatAfterExitMs/);
-    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, type: 'airstrike' }] })).toThrow(/unsupported map event type/);
+    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, type: 'ground-hazard' }] })).toThrow(/unsupported map event type/);
   });
 
   it('keeps the 00-test C1 slice one-shot with encounter clear and five seconds warning', () => {
@@ -156,7 +162,7 @@ describe('Train as a standalone map event', () => {
       delayMs: 0,
     }], [handler]);
     director.hostUpdate(0, false);
-    handler.finish('repeat-train', 1, 1_000);
+    handler.finish('repeat-train', 1, 1_000, 8_000);
     // Die Wiedereinfahrt hängt am Zeitpunkt des Verlassens, nicht am Rundenstart.
     expect(director.getPresentationState()?.[0]).toMatchObject({
       state: 'waiting-repeat',

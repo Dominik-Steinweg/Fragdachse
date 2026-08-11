@@ -173,7 +173,6 @@ export class HostUpdateCoordinator {
     // Read active structure sources after the objective transition so pressure starts in the same
     // host frame in which its linked dormant base becomes active.
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
-    this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?

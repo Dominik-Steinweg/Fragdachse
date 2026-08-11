@@ -19,8 +19,18 @@ export interface CoopDefenseMapEventHandler {
   hostUpdate(deltaMs: number, countdownActive: boolean): void;
   reset(): void;
   setCycleFinishedCallback(
-    callback: ((eventId: string, occurrence: number, exitedAtMs: number) => void) | null,
+    callback: ((completion: CoopDefenseMapEventCycleFinished) => void) | null,
   ): void;
+}
+
+/** Ergebnis eines fachlich abgeschlossenen Event-Zyklus. Der Handler entscheidet nicht Ã¼ber Map-Trigger. */
+export interface CoopDefenseMapEventCycleFinished {
+  readonly eventId: string;
+  readonly occurrence: number;
+  /** Autoritative Rundenzeit des tatsÃ¤chlichen Fachabschlusses. */
+  readonly completedAtMs: number;
+  /** Gesetzt: nÃ¤chster authored Zyklus; fehlt: endgÃ¼ltig completed. */
+  readonly nextActionAtMs?: number;
 }
 
 interface MapEventRuntimeState {
@@ -67,8 +77,8 @@ export class CoopDefenseMapEventDirector {
         throw new Error(`[CoopDefenseMapEventDirector] Duplicate handler type: ${handler.type}`);
       }
       this.handlers.set(handler.type, handler);
-      handler.setCycleFinishedCallback((eventId, occurrence, exitedAtMs) => {
-        this.handleCycleFinished(eventId, occurrence, exitedAtMs);
+      handler.setCycleFinishedCallback((completion) => {
+        this.handleCycleFinished(completion);
       });
     }
   }
@@ -111,6 +121,11 @@ export class CoopDefenseMapEventDirector {
     return this.elapsedMs;
   }
 
+  /** Semantischer Completion-Zustand fÃ¼r `after-event`; keine Fachsystem-SonderfÃ¤lle. */
+  isEventCompleted(eventId: string): boolean {
+    return this.runtimes.some((runtime) => runtime.config.id === eventId && runtime.state === 'completed');
+  }
+
   getPresentationState(): CoopDefenseMapEventPresentationState | null {
     if (this.runtimes.length === 0) return null;
     return this.runtimes.map((runtime) => ({
@@ -139,22 +154,18 @@ export class CoopDefenseMapEventDirector {
     runtime.nextActionAtMs = actionAtMs;
   }
 
-  private handleCycleFinished(eventId: string, occurrence: number, exitedAtMs: number): void {
-    const runtime = this.runtimes.find((candidate) => candidate.config.id === eventId);
-    if (!runtime || runtime.state !== 'active' || runtime.occurrence !== occurrence) return;
-    if (runtime.config.type !== 'train') return;
-
-    const repeatAfterExitMs = runtime.config.repeatAfterExitMs;
-    const completedAtMs = Math.max(0, Math.floor(exitedAtMs));
-    if (repeatAfterExitMs === undefined) {
+  private handleCycleFinished(completion: CoopDefenseMapEventCycleFinished): void {
+    const runtime = this.runtimes.find((candidate) => candidate.config.id === completion.eventId);
+    if (!runtime || runtime.state !== 'active' || runtime.occurrence !== completion.occurrence) return;
+    const completedAtMs = Math.max(0, Math.floor(completion.completedAtMs));
+    if (completion.nextActionAtMs === undefined) {
       runtime.state = 'completed';
       runtime.stateChangedAtMs = completedAtMs;
       runtime.nextActionAtMs = null;
       return;
     }
-
-    const nextActionAtMs = completedAtMs + repeatAfterExitMs;
-    this.scheduleOccurrence(runtime, occurrence + 1, nextActionAtMs);
+    const nextActionAtMs = Math.max(completedAtMs, Math.floor(completion.nextActionAtMs));
+    this.scheduleOccurrence(runtime, runtime.occurrence + 1, nextActionAtMs);
   }
 
   private isStartSatisfied(start: CoopDefenseMapEventStart): boolean {

@@ -48,6 +48,18 @@ export interface LoadoutSelection {
   utility?:  UtilityConfig;
   ultimate?: UltimateConfig;
 }
+
+interface AutomatedWeaponFireOptions {
+  ignoreBaseCollisions?: boolean;
+  ignoreRockIndex?: number;
+  sourceSlot?: LoadoutSlot;
+  /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
+  sourceTurretId?: string;
+  /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
+  directDamageMultiplier?: number;
+  /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
+  payloadDamageMultiplier?: number;
+}
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
@@ -514,16 +526,7 @@ export class LoadoutManager {
     targetY: number,
     playerId: string,
     playerColor: number,
-    options?: {
-      ignoreBaseCollisions?: boolean;
-      sourceSlot?: LoadoutSlot;
-      /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
-      sourceTurretId?: string;
-      /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
-      directDamageMultiplier?: number;
-      /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
-      payloadDamageMultiplier?: number;
-    },
+    options?: AutomatedWeaponFireOptions,
   ): boolean {
     const resolvedConfig = scaleAutomatedWeaponDamage(
       config,
@@ -1959,7 +1962,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     shotId?:     number,
-    options?: { ignoreBaseCollisions?: boolean; sourceTurretId?: string },
+    options?: AutomatedWeaponFireOptions,
   ): boolean {
     switch (config.fire.type) {
       case 'projectile':
@@ -1972,10 +1975,10 @@ export class LoadoutManager {
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
 
       case 'flamethrower':
-        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options);
 
       case 'leaf_blower':
-        return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+        return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options);
 
       case 'reinforcement_matrix':
         return this.fireReinforcementMatrixWeapon(
@@ -2163,7 +2166,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
-    options?: { ignoreBaseCollisions?: boolean; sourceTurretId?: string },
+    options?: AutomatedWeaponFireOptions,
   ): boolean {
     const cursorRange = Math.hypot(targetX - x, targetY - y);
     const effectiveRange = fireConfig.limitRangeToCursor
@@ -2177,6 +2180,7 @@ export class LoadoutManager {
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
       ignoreBaseCollisions: options?.ignoreBaseCollisions,
+      ignoreRockIndex: options?.ignoreRockIndex,
       sourceTurretId:     options?.sourceTurretId,
       size:            fireConfig.projectileSize,
       damage:          config.directDamageOverride ?? config.damage,
@@ -2372,6 +2376,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
+    options?: AutomatedWeaponFireOptions,
   ): boolean {
     const fireball = fireConfig.fireball;
     if ((fireball?.enabled ?? 0) > 0) {
@@ -2384,6 +2389,8 @@ export class LoadoutManager {
       const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
       this.projectileManager.spawnProjectile(x, y, angle, playerId, {
         speed: fireball?.projectileSpeed ?? 450,
+        ignoreBaseCollisions: options?.ignoreBaseCollisions,
+        ignoreRockIndex: options?.ignoreRockIndex,
         size: fireball?.projectileSize ?? 28,
         damage: config.damage,
         color: 0xff7417,
@@ -2418,6 +2425,7 @@ export class LoadoutManager {
         },
         fireTrail: (fireball?.trailEnabled ?? 0) > 0 ? groundEffect : undefined,
         sourceSlot,
+        sourceTurretId: options?.sourceTurretId,
         shotAudioKey: config.shotAudio?.successKey,
       });
       return true;
@@ -2427,6 +2435,8 @@ export class LoadoutManager {
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
+      ignoreBaseCollisions: options?.ignoreBaseCollisions,
+      ignoreRockIndex: options?.ignoreRockIndex,
       size:            fireConfig.hitboxStartSize,
       damage:          config.damage,
       color:           config.projectileColor ?? playerColor,
@@ -2448,6 +2458,7 @@ export class LoadoutManager {
       projectileBurnVisualStyle: config.projectileBurnVisualStyle,
       flamePiercing:     (fireConfig.piercingCount ?? 0) > 0,
       sourceSlot,
+      sourceTurretId:    options?.sourceTurretId,
       shotAudioKey:    config.shotAudio?.successKey,
     });
 
@@ -2463,11 +2474,14 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
+    options?: AutomatedWeaponFireOptions,
   ): boolean {
     const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
+      ignoreBaseCollisions: options?.ignoreBaseCollisions,
+      ignoreRockIndex: options?.ignoreRockIndex,
       size:            fireConfig.hitboxStartSize,
       damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? playerColor,
@@ -2487,6 +2501,7 @@ export class LoadoutManager {
       leafBlowerMaxKnockback: fireConfig.maxKnockback,
       leafBlowerSelfPush: fireConfig.selfPush,
       sourceSlot,
+      sourceTurretId:    options?.sourceTurretId,
       shotAudioKey:    config.shotAudio?.successKey,
     });
 

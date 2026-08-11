@@ -184,7 +184,7 @@ describe('coop-defense hostile bases', () => {
     const outposts = specs.filter((spec) => spec.role === 'outpost');
     expect(outposts).toHaveLength(1);
     expect(outposts[0].turrets).toHaveLength(2);
-    expect(outposts[0].turrets.every((turret) => turret.weaponId === 'TURRET_ROCKET')).toBe(true);
+    expect(outposts[0].turrets.every((turret) => turret.weaponId === 'TURRET_ROCKET_BURST')).toBe(true);
   });
 
   it('carries every configured base faction through to the resolved spec', () => {

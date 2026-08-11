@@ -1,6 +1,9 @@
 import { bridge } from '../network/bridge';
 import type { ResolvedCoopDefenseMapEventConfig } from '../config/coopDefenseMaps';
-import type { CoopDefenseMapEventHandler } from '../systems/CoopDefenseMapEventDirector';
+import type {
+  CoopDefenseMapEventCycleFinished,
+  CoopDefenseMapEventHandler,
+} from '../systems/CoopDefenseMapEventDirector';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { TrainManager } from './TrainManager';
 
@@ -9,6 +12,7 @@ interface ScheduledTrainOccurrence {
   readonly occurrence: number;
   readonly spawnAt: number;
   readonly direction: 1 | -1;
+  readonly repeatAfterExitMs?: number;
 }
 
 /** Adapter zwischen der gemeinsamen Event-Schicht und dem bestehenden TrainManager. */
@@ -19,7 +23,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
   private trainSpawned = false;
   private readonly initialDirection: 1 | -1;
   private nextDirection: 1 | -1;
-  private onCycleFinished: ((eventId: string, occurrence: number, exitedAtMs: number) => void) | null = null;
+  private onCycleFinished: ((completion: CoopDefenseMapEventCycleFinished) => void) | null = null;
 
   constructor(
     private readonly trainManager: TrainManager,
@@ -38,7 +42,15 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
       bridge.clearTrainEvent();
       this.nextDirection = finished.direction === 1 ? -1 : 1;
       trainManager.prepareReentry(this.nextDirection);
-      this.onCycleFinished?.(finished.eventId, finished.occurrence, this.getActiveRoundTimeMs());
+      const completedAtMs = this.getActiveRoundTimeMs();
+      this.onCycleFinished?.({
+        eventId: finished.eventId,
+        occurrence: finished.occurrence,
+        completedAtMs,
+        ...(finished.repeatAfterExitMs === undefined
+          ? {}
+          : { nextActionAtMs: completedAtMs + finished.repeatAfterExitMs }),
+      });
     });
   }
 
@@ -56,6 +68,11 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
       occurrence,
       spawnAt,
       direction,
+      ...(event.type === 'train' && event.repeatAfterExitMs === undefined
+        ? {}
+        : event.type === 'train'
+          ? { repeatAfterExitMs: event.repeatAfterExitMs }
+          : {}),
     };
     this.trainSpawned = false;
     bridge.publishTrainEvent({
@@ -84,7 +101,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
   }
 
   setCycleFinishedCallback(
-    callback: ((eventId: string, occurrence: number, exitedAtMs: number) => void) | null,
+    callback: ((completion: CoopDefenseMapEventCycleFinished) => void) | null,
   ): void {
     this.onCycleFinished = callback;
   }

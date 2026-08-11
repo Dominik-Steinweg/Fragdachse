@@ -826,6 +826,8 @@ export interface ProjectileSpawnConfig {
   proximityArc?: ProjectileProximityArcConfig;
   /** Base-mounted turret projectiles pass through their own base footprint. */
   ignoreBaseCollisions?: boolean;
+  /** Placeable turret projectiles pass through the runtime rock they are mounted on. */
+  ignoreRockIndex?: number;
   speed:           number;
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
@@ -1148,6 +1150,7 @@ export interface TrackedProjectile {
   createdAt:       number;
   ownerId:         string;
   ignoreBaseCollisions?: boolean;
+  ignoreRockIndex?: number;
   color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape
   allowTeamDamage?: boolean;
   ownerColor?:     number;
@@ -1525,7 +1528,6 @@ export type TurretWeaponId =
   | 'SPOREN'
   | 'BASE_SPOREN'
   | 'FLIEGENPILZ_PLASMA'
-  | 'TURRET_ROCKET'
   | 'TURRET_ROCKET_BURST'
   | 'TURRET_MG'
   | 'TURRET_FLAME'

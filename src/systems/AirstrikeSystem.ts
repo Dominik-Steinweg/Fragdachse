@@ -10,6 +10,23 @@ interface ActiveAirstrikeStrike {
   explodeAt:   number;
   triggeredBy: string;
   config:      AirstrikeUltimateConfig;
+  metadata?:  AirstrikeStrikeMetadata;
+}
+
+/** Optionale Herkunft eines authored Map-Airstrike-Zyklus. Player-Ultimates setzen sie nicht. */
+export interface AirstrikeStrikeMetadata {
+  readonly eventId: string;
+  readonly occurrence: number;
+}
+
+export interface AirstrikeStrikeResolution {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly triggeredBy: string;
+  readonly config: AirstrikeUltimateConfig;
+  readonly metadata?: AirstrikeStrikeMetadata;
 }
 
 export type AirstrikeExplodedCallback = (
@@ -18,6 +35,7 @@ export type AirstrikeExplodedCallback = (
   radius:      number,
   triggeredBy: string,
   config:      AirstrikeUltimateConfig,
+  metadata?:  AirstrikeStrikeMetadata,
 ) => void;
 
 /**
@@ -32,9 +50,15 @@ export class AirstrikeSystem {
   private strikes    = new Map<number, ActiveAirstrikeStrike>();
   private nextId     = 0;
   private onExploded: AirstrikeExplodedCallback | null = null;
+  private onResolved: ((strike: AirstrikeStrikeResolution) => void) | null = null;
 
   setExplodedCallback(cb: AirstrikeExplodedCallback): void {
     this.onExploded = cb;
+  }
+
+  /** Meldet nach der bestehenden Explosions-/Schadensverarbeitung den echten Strike-Abschluss. */
+  setResolvedCallback(cb: ((strike: AirstrikeStrikeResolution) => void) | null): void {
+    this.onResolved = cb;
   }
 
   /**
@@ -47,6 +71,7 @@ export class AirstrikeSystem {
     targetX:  number,
     targetY:  number,
     config:   AirstrikeUltimateConfig,
+    metadata?: AirstrikeStrikeMetadata,
   ): boolean {
     const armedAt = Date.now();
     const count = Math.max(1, Math.floor(config.carpetStrikeCount ?? 1));
@@ -69,6 +94,7 @@ export class AirstrikeSystem {
         explodeAt: armedAt + config.delayMs + index * (config.carpetIntervalMs ?? 0),
         triggeredBy: playerId,
         config: strikeConfig,
+        metadata,
       };
       this.strikes.set(strike.id, strike);
     }
@@ -79,13 +105,34 @@ export class AirstrikeSystem {
   update(now: number): void {
     for (const [id, strike] of this.strikes) {
       if (now >= strike.explodeAt) {
-        this.onExploded?.(
-          strike.x,
-          strike.y,
-          strike.radius,
-          strike.triggeredBy,
-          strike.config,
-        );
+        const resolution: AirstrikeStrikeResolution = {
+          id: strike.id,
+          x: strike.x,
+          y: strike.y,
+          radius: strike.radius,
+          triggeredBy: strike.triggeredBy,
+          config: strike.config,
+          ...(strike.metadata === undefined ? {} : { metadata: strike.metadata }),
+        };
+        if (strike.metadata === undefined) {
+          this.onExploded?.(
+            strike.x,
+            strike.y,
+            strike.radius,
+            strike.triggeredBy,
+            strike.config,
+          );
+        } else {
+          this.onExploded?.(
+            strike.x,
+            strike.y,
+            strike.radius,
+            strike.triggeredBy,
+            strike.config,
+            strike.metadata,
+          );
+        }
+        this.onResolved?.(resolution);
         this.strikes.delete(id);
       }
     }

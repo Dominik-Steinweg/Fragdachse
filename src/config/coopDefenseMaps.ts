@@ -33,9 +33,6 @@ const MAX_ROCK_FILL_RATIO = 0.85;
  */
 const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 
-/** Standard-Abstand der Verfolgungs-Einzelschläge, wenn eine Map keinen eigenen Wert setzt. */
-const DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS = 10_000;
-
 /** Standardfenster, in dem die Gegner einer Encounter-Gruppe einzeln eintreffen. */
 export const DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS = 1_500;
 
@@ -70,7 +67,6 @@ export type CoopBaseTurretWeaponId =
   | 'SPOREN'
   | 'BASE_SPOREN'
   | 'FLIEGENPILZ_PLASMA'
-  | 'TURRET_ROCKET'
   | 'TURRET_ROCKET_BURST'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
@@ -167,7 +163,7 @@ export type CoopDefenseMapEncounterStart =
   | { readonly type: 'time'; readonly atMs: number }
   | { readonly type: 'after-previous' }
   | { readonly type: 'after-encounter'; readonly encounterId: string }
-  | { readonly type: 'opening-airstrike-complete' }
+  | { readonly type: 'after-event'; readonly eventId: string }
   | { readonly type: 'boss-phase'; readonly phase: number }
   | { readonly type: 'base-destroyed'; readonly baseId: string };
 
@@ -310,14 +306,6 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
 export type CoopDefenseSecondaryObjectiveConfig = CoopDefenseMapSecondaryObjectiveConfig;
 export type ResolvedCoopDefenseSecondaryObjectiveConfig = ResolvedCoopDefenseMapSecondaryObjectiveConfig;
 
-/** Konfiguriert die Zombie-Luftangriffe einer Map (siehe `CoopDefenseAirstrikeDirector`). */
-export interface CoopDefenseMapAirstrikeConfig {
-  /** True: Eröffnungsbombardement räumt den Tutorial-Felsbereich (Default: true). */
-  readonly bombTutorialRock?: boolean;
-  /** Abstand zwischen den Verfolgungs-Einzelschlägen nach der Eröffnung, in ms (Default: 10000). */
-  readonly huntIntervalMs?: number;
-}
-
 export interface CoopDefenseMapBossConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly spawnAtMs: number;
@@ -373,7 +361,7 @@ export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
  * `base-destroyed`) ergänzt werden können – ohne dafür jetzt eine allgemeine Trigger-Engine
  * zu bauen.
  */
-/** Kleine C1-Triggerunion; spaetere Eventtypen erweitern sie ohne eine Script-Engine. */
+/** Kleine Triggerunion; C2 erweitert sie um den semantischen Event-Abschluss. */
 export type CoopDefenseMapEventStart =
   | { readonly type: 'time'; readonly atMs: number }
   | { readonly type: 'after-encounter'; readonly encounterId: string };
@@ -393,10 +381,31 @@ export interface CoopDefenseMapTrainEventConfig extends CoopDefenseMapEventBase 
   readonly repeatAfterExitMs?: number;
 }
 
-/** Gemeinsame Typvorbereitung fuer C2; wird erst mit dem Airstrike-Handler authoring-faehig. */
+export type CoopDefenseMapAirstrikePattern = 'tutorial-sweep' | 'player-hunt' | 'zone-barrage';
+
+/** Feste Grid-Zone fuer einen authored Luftangriff. */
+export interface CoopDefenseMapAirstrikeArea {
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly widthCells: number;
+  readonly heightCells: number;
+}
+
+/** C2-Airstrike-Event; die drei Muster besitzen bewusst nur feste, kleine Parameter. */
 export interface CoopDefenseMapAirstrikeEventConfig extends CoopDefenseMapEventBase {
   readonly type: 'airstrike';
+  readonly pattern: CoopDefenseMapAirstrikePattern;
+  /** Abstand zwischen abgeschlossenen Player-Hunt-Zyklen. Nur fuer `player-hunt`. */
+  readonly intervalMs?: number;
+  /** Einschlagsanzahl fuer `tutorial-sweep` bzw. `zone-barrage`. */
+  readonly strikeCount?: number;
+  /** Authored Zielzone fuer `zone-barrage`. */
+  readonly area?: CoopDefenseMapAirstrikeArea;
+  /** Geordnete Streuung innerhalb der Zone. Nur fuer `zone-barrage`. */
+  readonly orderedSweep?: boolean;
 }
+
+export type ResolvedCoopDefenseMapAirstrikeEventConfig = CoopDefenseMapAirstrikeEventConfig;
 
 /** Gemeinsame Typvorbereitung fuer C3; wird erst mit dem Ground-Hazard-Handler authoring-faehig. */
 export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEventBase {
@@ -488,8 +497,6 @@ export interface CoopDefenseMapConfig {
    * die Felsformation darunter entsprechend größer.
    */
   readonly tutorialShowControls?: boolean;
-  /** True/Konfiguration: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
-  readonly enemyAirstrikes?: boolean | CoopDefenseMapAirstrikeConfig;
   /**
    * Anteil der Zellen, die vor dem Cellular-Automata-Smoothing als Fels ausgewürfelt werden
    * (0…1, Standard entspricht dem globalen `ROCK_FILL_RATIO`). Steuert, wie voll die Map mit
@@ -745,26 +752,31 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     mapConfig.mapId,
     mapConfig.balanceReferenceDurationSec,
   );
-  const enemyAirstrikes = normalizeAirstrikeConfig(mapConfig.enemyAirstrikes);
-  const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
-    bases,
-    airstrikes: enemyAirstrikes,
-    boss,
-  });
+  const arenaWidthCells = normalizeCoopDefenseArenaWidthCells(
+    mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  );
+  const arenaHeightCells = normalizeCoopDefenseArenaHeightCells(
+    mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+  );
+  const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, { bases, boss });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
-  const mapEvents = normalizeMapEvents(mapConfig.mapId, mapConfig.mapEvents, encounters ?? [], trackMode);
+  const mapEvents = normalizeMapEvents(
+    mapConfig.mapId,
+    mapConfig.mapEvents,
+    encounters ?? [],
+    trackMode,
+    arenaWidthCells,
+    arenaHeightCells,
+  );
+  validateMapEventDependencyGraph(mapConfig.mapId, encounters ?? [], mapEvents);
   const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
     bases,
     encounters,
     objective,
     itemDrop,
-    arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
-      mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
-    ),
-    arenaHeightCells: normalizeCoopDefenseArenaHeightCells(
-      mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
-    ),
+    arenaWidthCells,
+    arenaHeightCells,
   });
   return {
     mapId: mapConfig.mapId,
@@ -783,7 +795,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
       : undefined,
     tutorialPersistent: mapConfig.tutorialPersistent === true,
     tutorialShowControls: mapConfig.tutorialShowControls === true,
-    enemyAirstrikes,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     trackMode,
@@ -1573,7 +1584,6 @@ function validateSecondaryObjectiveWindows(
 
 interface EncounterTriggerNormalizationContext {
   readonly bases: readonly CoopBaseConfig[];
-  readonly airstrikes: CoopDefenseMapAirstrikeConfig | undefined;
   readonly boss: CoopDefenseMapBossConfig | undefined;
 }
 
@@ -1599,13 +1609,16 @@ function normalizeEncounterStart(
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} has no previous encounter`);
       }
       return { type: 'after-previous' };
-    case 'opening-airstrike-complete':
-      if (!context.airstrikes?.bombTutorialRock) {
-        throw new Error(
-          `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an opening airstrike barrage`,
-        );
+    case 'after-encounter':
+      if (typeof start.encounterId !== 'string' || start.encounterId.trim().length === 0) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an encounter id`);
       }
-      return { type: 'opening-airstrike-complete' };
+      return { type: 'after-encounter', encounterId: start.encounterId.trim() };
+    case 'after-event':
+      if (typeof start.eventId !== 'string' || start.eventId.trim().length === 0) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an event id`);
+      }
+      return { type: 'after-event', eventId: start.eventId.trim() };
     case 'boss-phase':
       if (!Number.isFinite(start.phase) || !Number.isInteger(start.phase) || start.phase !== 2) {
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} supports boss phase 2 only`);
@@ -1703,15 +1716,14 @@ function normalizeItemDropConfig(
   return { itemLevel: Math.floor(itemDrop.itemLevel) };
 }
 
-/**
- * Prüft das Zug-Event der Map. Ein Zug ohne Gleise wäre kein Balancing-Detail, sondern eine
- * Lok, die über blanken Boden fährt – deshalb ein Konfigurationsfehler statt stiller Rückfall.
- */
+/** Normalisiert die kleinen, festen C1/C2-Map-Event-Konfigurationen. */
 function normalizeMapEvents(
   mapId: string,
   events: readonly CoopDefenseMapEventConfig[] | undefined,
   encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
   trackMode: CoopDefenseMapTrackMode,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
 ): readonly ResolvedCoopDefenseMapEventConfig[] {
   if (events === undefined) return [];
   if (!Array.isArray(events)) {
@@ -1730,27 +1742,135 @@ function normalizeMapEvents(
       throw new Error(`[coopDefenseMaps] Duplicate map event id in map ${mapId}: ${event.id}`);
     }
     eventIds.add(event.id);
-    if (event.type !== 'train') {
-      throw new Error(`[coopDefenseMaps] Map ${mapId} has an unsupported map event type: ${event.type}`);
-    }
-    if (trackMode !== 'rails') {
-      throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train event but no rails (trackMode: ${trackMode})`);
-    }
-
     const start = normalizeMapEventStart(mapId, event.id, event.start, encounters);
     const delayMs = normalizeMapEventMilliseconds(mapId, event.id, event.delayMs ?? 0, 'delayMs');
-    const repeatAfterExitMs = event.repeatAfterExitMs === undefined
-      ? undefined
-      : normalizeMapEventMilliseconds(mapId, event.id, event.repeatAfterExitMs, 'repeatAfterExitMs', true);
+    if (event.type === 'train') {
+      if (trackMode !== 'rails') {
+        throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train event but no rails (trackMode: ${trackMode})`);
+      }
+      const repeatAfterExitMs = event.repeatAfterExitMs === undefined
+        ? undefined
+        : normalizeMapEventMilliseconds(mapId, event.id, event.repeatAfterExitMs, 'repeatAfterExitMs', true);
+      return {
+        id: event.id,
+        type: 'train',
+        start,
+        delayMs,
+        ...(repeatAfterExitMs === undefined ? {} : { repeatAfterExitMs }),
+      };
+    }
+    if (event.type === 'airstrike') {
+      return normalizeAirstrikeMapEvent(
+        mapId,
+        event,
+        start,
+        delayMs,
+        arenaWidthCells,
+        arenaHeightCells,
+      );
+    }
+    throw new Error(`[coopDefenseMaps] Map ${mapId} has an unsupported map event type: ${event.type}`);
+  });
+}
 
+function normalizeAirstrikeMapEvent(
+  mapId: string,
+  event: CoopDefenseMapAirstrikeEventConfig,
+  start: CoopDefenseMapEventStart,
+  delayMs: number,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): ResolvedCoopDefenseMapAirstrikeEventConfig {
+  if (event.pattern === 'player-hunt') {
+    if (event.intervalMs === undefined) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} needs intervalMs for player-hunt`);
+    }
+    if (event.area !== undefined || event.strikeCount !== undefined || event.orderedSweep !== undefined) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has parameters invalid for player-hunt`);
+    }
     return {
       id: event.id,
-      type: 'train',
+      type: 'airstrike',
       start,
       delayMs,
-      ...(repeatAfterExitMs === undefined ? {} : { repeatAfterExitMs }),
+      pattern: 'player-hunt',
+      intervalMs: normalizeMapEventMilliseconds(mapId, event.id, event.intervalMs, 'intervalMs', true),
     };
-  });
+  }
+
+  if (event.pattern === 'tutorial-sweep') {
+    if (event.area !== undefined || event.intervalMs !== undefined || event.orderedSweep !== undefined) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has parameters invalid for tutorial-sweep`);
+    }
+    const strikeCount = event.strikeCount === undefined
+      ? undefined
+      : normalizePositiveMapEventInteger(mapId, event.id, event.strikeCount, 'strikeCount');
+    return {
+      id: event.id,
+      type: 'airstrike',
+      start,
+      delayMs,
+      pattern: 'tutorial-sweep',
+      ...(strikeCount === undefined ? {} : { strikeCount }),
+    };
+  }
+
+  if (event.pattern === 'zone-barrage') {
+    if (event.intervalMs !== undefined) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has intervalMs invalid for zone-barrage`);
+    }
+    if (event.strikeCount === undefined) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} needs strikeCount for zone-barrage`);
+    }
+    if (event.area === undefined) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} needs area for zone-barrage`);
+    }
+    const area = normalizeAirstrikeArea(mapId, event.id, event.area, arenaWidthCells, arenaHeightCells);
+    const orderedSweep = event.orderedSweep === undefined ? false : event.orderedSweep;
+    if (typeof orderedSweep !== 'boolean') {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} needs a boolean orderedSweep`);
+    }
+    return {
+      id: event.id,
+      type: 'airstrike',
+      start,
+      delayMs,
+      pattern: 'zone-barrage',
+      strikeCount: normalizePositiveMapEventInteger(mapId, event.id, event.strikeCount, 'strikeCount'),
+      area,
+      orderedSweep,
+    };
+  }
+
+  throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has an unknown pattern: ${event.pattern}`);
+}
+
+function normalizeAirstrikeArea(
+  mapId: string,
+  eventId: string,
+  area: CoopDefenseMapAirstrikeArea,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): CoopDefenseMapAirstrikeArea {
+  const values = [area.gridX, area.gridY, area.widthCells, area.heightCells];
+  if (values.some((value) => typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value))) {
+    throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${eventId} needs integer area coordinates`);
+  }
+  if (area.gridX < 0 || area.gridY < 0 || area.widthCells <= 0 || area.heightCells <= 0) {
+    throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${eventId} needs a positive in-arena area`);
+  }
+  if (
+    area.gridX + area.widthCells > arenaWidthCells
+    || area.gridY + area.heightCells > arenaHeightCells
+  ) {
+    throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${eventId} area is outside the arena`);
+  }
+  return {
+    gridX: area.gridX,
+    gridY: area.gridY,
+    widthCells: area.widthCells,
+    heightCells: area.heightCells,
+  };
 }
 
 function normalizeMapEventStart(
@@ -1795,6 +1915,103 @@ function normalizeMapEventMilliseconds(
   return Math.floor(value);
 }
 
+function normalizePositiveMapEventInteger(
+  mapId: string,
+  eventId: string,
+  value: number | undefined,
+  fieldName: string,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a positive integer ${fieldName}`);
+  }
+  return value;
+}
+
+type MapEventDependencyNode = `encounter:${string}` | `event:${string}`;
+
+function validateMapEventDependencyGraph(
+  mapId: string,
+  encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
+  events: readonly ResolvedCoopDefenseMapEventConfig[],
+): void {
+  const encounterIds = new Set(encounters.map((encounter) => encounter.id));
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const adjacency = new Map<MapEventDependencyNode, MapEventDependencyNode[]>();
+  const addNode = (node: MapEventDependencyNode): void => {
+    if (!adjacency.has(node)) adjacency.set(node, []);
+  };
+  const addDependency = (source: MapEventDependencyNode, dependent: MapEventDependencyNode): void => {
+    addNode(source);
+    addNode(dependent);
+    adjacency.get(source)!.push(dependent);
+  };
+
+  for (let index = 0; index < encounters.length; index += 1) {
+    const encounter = encounters[index];
+    const dependent = `encounter:${encounter.id}` as const;
+    addNode(dependent);
+    if (encounter.start.type === 'after-previous') {
+      const previous = encounters[index - 1];
+      if (!previous) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounter.id} has no previous encounter`);
+      }
+      addDependency(`encounter:${previous.id}`, dependent);
+    } else if (encounter.start.type === 'after-encounter') {
+      if (!encounterIds.has(encounter.start.encounterId)) {
+        throw new Error(
+          `[coopDefenseMaps] Encounter ${mapId}:${encounter.id} references unknown encounter: ${encounter.start.encounterId}`,
+        );
+      }
+      addDependency(`encounter:${encounter.start.encounterId}`, dependent);
+    } else if (encounter.start.type === 'after-event') {
+      const source = eventById.get(encounter.start.eventId);
+      if (!source) {
+        throw new Error(
+          `[coopDefenseMaps] Encounter ${mapId}:${encounter.id} references unknown map event: ${encounter.start.eventId}`,
+        );
+      }
+      if (!isFiniteMapEvent(source)) {
+        throw new Error(
+          `[coopDefenseMaps] Encounter ${mapId}:${encounter.id} cannot wait for repeatable or persistent event: ${source.id}`,
+        );
+      }
+      addDependency(`event:${source.id}`, dependent);
+    }
+  }
+
+  for (const event of events) {
+    const dependent = `event:${event.id}` as const;
+    addNode(dependent);
+    if (event.start.type !== 'after-encounter') continue;
+    if (!encounterIds.has(event.start.encounterId)) {
+      throw new Error(
+        `[coopDefenseMaps] Map event ${mapId}:${event.id} references unknown encounter: ${event.start.encounterId}`,
+      );
+    }
+    addDependency(`encounter:${event.start.encounterId}`, dependent);
+  }
+
+  const visiting = new Set<MapEventDependencyNode>();
+  const visited = new Set<MapEventDependencyNode>();
+  const visit = (node: MapEventDependencyNode): void => {
+    if (visiting.has(node)) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} has a cyclic encounter/map-event dependency`);
+    }
+    if (visited.has(node)) return;
+    visiting.add(node);
+    for (const dependent of adjacency.get(node) ?? []) visit(dependent);
+    visiting.delete(node);
+    visited.add(node);
+  };
+  for (const node of adjacency.keys()) visit(node);
+}
+
+function isFiniteMapEvent(event: ResolvedCoopDefenseMapEventConfig): boolean {
+  if (event.type === 'train') return event.repeatAfterExitMs === undefined;
+  if (event.type === 'airstrike') return event.pattern !== 'player-hunt';
+  return false;
+}
+
 function normalizePermanentGroundFire(
   config: CoopDefenseMapPermanentGroundFireConfig | undefined,
 ): CoopDefenseMapPermanentGroundFireConfig | undefined {
@@ -1824,17 +2041,6 @@ function normalizeTimeOfDayValue(mapId: string, timeOfDay: string | undefined): 
     throw new Error(`[coopDefenseMaps] Invalid timeOfDay in map ${mapId}: ${timeOfDay} (expected "HH:MM")`);
   }
   return formatTimeOfDay(minutes);
-}
-
-function normalizeAirstrikeConfig(
-  enemyAirstrikes: boolean | CoopDefenseMapAirstrikeConfig | undefined,
-): CoopDefenseMapAirstrikeConfig | undefined {
-  if (!enemyAirstrikes) return undefined;
-  const config = enemyAirstrikes === true ? {} : enemyAirstrikes;
-  return {
-    bombTutorialRock: config.bombTutorialRock ?? true,
-    huntIntervalMs: Math.max(1, Math.floor(config.huntIntervalMs ?? DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS)),
-  };
 }
 
 function normalizeRockFieldConfig(
@@ -2075,7 +2281,6 @@ function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig)
     turret.weaponId !== 'SPOREN'
     && turret.weaponId !== 'BASE_SPOREN'
     && turret.weaponId !== 'FLIEGENPILZ_PLASMA'
-    && turret.weaponId !== 'TURRET_ROCKET'
     && turret.weaponId !== 'TURRET_ROCKET_BURST'
     && turret.weaponId !== 'TURRET_MG'
     && turret.weaponId !== 'TURRET_FLAME'

@@ -1,0 +1,332 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  getCoopDefenseMapConfig,
+  normalizeCoopDefenseMapConfig,
+  type CoopDefenseMapConfig,
+} from '../src/config/coopDefenseMaps';
+import { AirstrikeSystem } from '../src/systems/AirstrikeSystem';
+import { CoopDefenseAirstrikeEventHandler } from '../src/systems/CoopDefenseAirstrikeEventHandler';
+import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
+
+function makeMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
+  return {
+    mapId: 'c2-test',
+    displayName: 'C2 test',
+    arenaWidthCells: 60,
+    arenaHeightCells: 34,
+    balanceReferenceDurationSec: 60,
+    objective: 'survive',
+    surviveDurationSec: 60,
+    surviveRespawnsPerPlayer: 0,
+    bases: [{
+      id: 'friendly-main',
+      hpMax: 100,
+      anchor: { kind: 'right-center', edgeInsetCells: 0 },
+      shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+    }],
+    powerUps: [],
+    ...overrides,
+  };
+}
+
+const finiteZoneEvent = {
+  id: 'barrage',
+  type: 'airstrike' as const,
+  start: { type: 'time' as const, atMs: 0 },
+  pattern: 'zone-barrage' as const,
+  strikeCount: 3,
+  area: { gridX: 4, gridY: 4, widthCells: 8, heightCells: 5 },
+};
+
+describe('Coop Defense C2 configuration', () => {
+  it('normalizes all three fixed airstrike patterns', () => {
+    const normalized = normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [
+        {
+          id: 'tutorial',
+          type: 'airstrike',
+          start: { type: 'time', atMs: 0 },
+          pattern: 'tutorial-sweep',
+          strikeCount: 8,
+        },
+        {
+          id: 'hunt',
+          type: 'airstrike',
+          start: { type: 'time', atMs: 1_000 },
+          pattern: 'player-hunt',
+          intervalMs: 10_000,
+        },
+        finiteZoneEvent,
+      ],
+    }));
+
+    expect(normalized.mapEvents).toMatchObject([
+      { id: 'tutorial', type: 'airstrike', pattern: 'tutorial-sweep', strikeCount: 8 },
+      { id: 'hunt', type: 'airstrike', pattern: 'player-hunt', intervalMs: 10_000 },
+      {
+        id: 'barrage',
+        type: 'airstrike',
+        pattern: 'zone-barrage',
+        strikeCount: 3,
+        area: { gridX: 4, gridY: 4, widthCells: 8, heightCells: 5 },
+        orderedSweep: false,
+      },
+    ]);
+  });
+
+  it('rejects missing or pattern-incompatible airstrike parameters', () => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [{
+        id: 'hunt',
+        type: 'airstrike',
+        start: { type: 'time', atMs: 0 },
+        pattern: 'player-hunt',
+      }],
+    }))).toThrow(/intervalMs/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [{
+        id: 'barrage',
+        type: 'airstrike',
+        start: { type: 'time', atMs: 0 },
+        pattern: 'zone-barrage',
+        strikeCount: 0,
+      }],
+    }))).toThrow(/area/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [{
+        id: 'barrage',
+        type: 'airstrike',
+        start: { type: 'time', atMs: 0 },
+        pattern: 'zone-barrage',
+        strikeCount: 2,
+        area: { gridX: 58, gridY: 4, widthCells: 4, heightCells: 2 },
+      }],
+    }))).toThrow(/outside the arena/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [{
+        id: 'tutorial',
+        type: 'airstrike',
+        start: { type: 'time', atMs: 0 },
+        pattern: 'tutorial-sweep',
+        intervalMs: 1_000,
+      }],
+    }))).toThrow(/invalid for tutorial-sweep/);
+  });
+
+  it('validates unknown references, persistent sources and direct or indirect cycles', () => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      encounters: [{
+        id: 'after-missing',
+        start: { type: 'after-event', eventId: 'missing' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      }],
+    }))).toThrow(/unknown map event/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      encounters: [{
+        id: 'after-hunt',
+        start: { type: 'after-event', eventId: 'hunt' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      }],
+      mapEvents: [{
+        id: 'hunt',
+        type: 'airstrike',
+        start: { type: 'time', atMs: 0 },
+        pattern: 'player-hunt',
+        intervalMs: 1_000,
+      }],
+    }))).toThrow(/repeatable or persistent/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      encounters: [{
+        id: 'after-train',
+        start: { type: 'after-event', eventId: 'repeat-train' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      }],
+      mapEvents: [{
+        id: 'repeat-train',
+        type: 'train',
+        start: { type: 'time', atMs: 0 },
+        repeatAfterExitMs: 1_000,
+      }],
+    }))).toThrow(/repeatable or persistent/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      encounters: [{
+        id: 'encounter-a',
+        start: { type: 'after-event', eventId: 'event-a' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      }],
+      mapEvents: [{
+        ...finiteZoneEvent,
+        id: 'event-a',
+        start: { type: 'after-encounter', encounterId: 'encounter-a' },
+      }],
+    }))).toThrow(/cyclic/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      encounters: [
+        {
+          id: 'encounter-a',
+          start: { type: 'after-event', eventId: 'event-b' },
+          groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+        },
+        {
+          id: 'encounter-b',
+          start: { type: 'after-previous' },
+          groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+        },
+        {
+          id: 'encounter-c',
+          start: { type: 'after-event', eventId: 'event-a' },
+          groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+        },
+      ],
+      mapEvents: [
+        {
+          ...finiteZoneEvent,
+          id: 'event-a',
+          start: { type: 'after-encounter', encounterId: 'encounter-b' },
+        },
+        {
+          ...finiteZoneEvent,
+          id: 'event-b',
+          start: { type: 'after-encounter', encounterId: 'encounter-c' },
+        },
+      ],
+    }))).toThrow(/cyclic/);
+  });
+
+  it('migrates the authored Map 11 chain and keeps Map 11/12 hunts repeatable', () => {
+    const map11 = getCoopDefenseMapConfig('11');
+    const map12 = getCoopDefenseMapConfig('12');
+    const opening = map11.mapEvents?.find((event) => event.id === 'opening-barrage');
+    const postBarrage = map11.encounters?.find((encounter) => encounter.id === 'post-barrage-assault');
+
+    expect('enemyAirstrikes' in map11).toBe(false);
+    expect(opening).toMatchObject({ pattern: 'tutorial-sweep', delayMs: 8_200 });
+    expect(postBarrage?.start).toEqual({ type: 'after-event', eventId: 'opening-barrage' });
+    expect(map11.mapEvents?.find((event) => event.id === 'player-hunt')).toMatchObject({
+      pattern: 'player-hunt',
+      intervalMs: 10_000,
+    });
+    expect('enemyAirstrikes' in map12).toBe(false);
+    expect(map12.mapEvents?.find((event) => event.id === 'player-hunt')).toMatchObject({
+      pattern: 'player-hunt',
+      intervalMs: 25_000,
+    });
+  });
+});
+
+describe('Coop Defense C2 airstrike lifecycle', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function createHarness(
+    eventOverrides: Partial<typeof finiteZoneEvent> = {},
+    playerCount = 1,
+    additionalEvents: readonly typeof finiteZoneEvent[] = [],
+  ) {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const system = new AirstrikeSystem();
+    const handler = new CoopDefenseAirstrikeEventHandler({
+      scheduleStrike: (x, y, config, metadata) => system.scheduleStrike(
+        'coop-zombie-bomber',
+        x,
+        y,
+        { ...config, delayMs: 2_000 },
+        metadata,
+      ),
+      getAlivePlayerPositions: () => Array.from({ length: playerCount }, (_, index) => ({
+        x: 600 + index * 64,
+        y: 500,
+      })),
+      isProtectedBasePoint: () => false,
+      playStrikeAudio: () => undefined,
+      getArenaStartTimeMs: () => 0,
+      getNowMs: () => now,
+      getActiveRoundTimeMs: () => now,
+      arenaWidthCells: 60,
+      arenaHeightCells: 34,
+      random: () => 0.5,
+    });
+    system.setResolvedCallback((resolution) => handler.handleStrikeResolved(resolution));
+    const event = {
+      ...finiteZoneEvent,
+      ...eventOverrides,
+    } as typeof finiteZoneEvent;
+    const director = new CoopDefenseMapEventDirector([event, ...additionalEvents], [handler]);
+    return {
+      system,
+      handler,
+      director,
+      setNow(value: number): void { now = value; },
+    };
+  }
+
+  it('completes a barrage only after the actual last impact', () => {
+    const harness = createHarness();
+    harness.director.hostUpdate(0, false);
+    expect(harness.director.getPresentationState()?.[0].state).toBe('active');
+    expect(harness.system.getSnapshot()).toHaveLength(3);
+
+    harness.setNow(1_999);
+    harness.system.update(1_999);
+    expect(harness.director.getPresentationState()?.[0].state).toBe('active');
+
+    harness.setNow(2_000);
+    harness.system.update(2_000);
+    expect(harness.system.getSnapshot()).toEqual([]);
+    expect(harness.director.getPresentationState()?.[0].state).toBe('completed');
+  });
+
+  it('keeps simultaneous same-pattern events independent by event id and occurrence', () => {
+    const first = { ...finiteZoneEvent, id: 'first' };
+    const second = { ...finiteZoneEvent, id: 'second', strikeCount: 2 };
+    const harness = createHarness(first, 1, [second]);
+    harness.director.hostUpdate(0, false);
+    expect(harness.system.getSnapshot()).toHaveLength(5);
+    harness.setNow(2_000);
+    harness.system.update(2_000);
+    expect(harness.director.getPresentationState()?.map((entry) => entry.state)).toEqual(['completed', 'completed']);
+  });
+
+  it('keeps player-hunt in waiting-repeat and never marks it completed', () => {
+    const harness = createHarness({
+      id: 'hunt',
+      pattern: 'player-hunt',
+      intervalMs: 1_000,
+      strikeCount: undefined,
+      area: undefined,
+    });
+    harness.director.hostUpdate(0, false);
+    harness.setNow(2_000);
+    harness.system.update(2_000);
+    expect(harness.director.getPresentationState()?.[0]).toMatchObject({
+      state: 'waiting-repeat',
+      occurrence: 2,
+      nextActionAtMs: 3_000,
+    });
+
+    harness.setNow(3_000);
+    harness.director.hostUpdate(3_000, false);
+    expect(harness.director.getPresentationState()?.[0].state).toBe('active');
+    expect(harness.system.getSnapshot()).toHaveLength(1);
+  });
+
+  it('clears in-flight handler state on reset', () => {
+    const harness = createHarness();
+    harness.director.hostUpdate(0, false);
+    expect(harness.system.getSnapshot()).toHaveLength(3);
+    harness.handler.reset();
+    harness.system.clear();
+    harness.setNow(10_000);
+    harness.handler.hostUpdate(10_000, false);
+    expect(harness.system.getSnapshot()).toEqual([]);
+  });
+});

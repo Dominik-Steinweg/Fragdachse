@@ -153,6 +153,41 @@ describe('projectile performance paths', () => {
     expect(body.setVelocity).toHaveBeenCalledWith(0, 0);
   });
 
+  it('skips only the supporting rock for a turret projectile', () => {
+    type ColliderCallback = (object1: unknown, object2: unknown) => void;
+    type ProcessCallback = (object1: unknown, object2: unknown) => boolean;
+    const ownRock = {} as Phaser.GameObjects.Image;
+    const otherRock = {} as Phaser.GameObjects.Image;
+    const processCallbacks: ProcessCallback[] = [];
+    const scene = {
+      physics: {
+        add: {
+          collider: vi.fn((_left: unknown, _right: unknown, callback?: ColliderCallback, process?: ProcessCallback) => {
+            if (process) processCallbacks.push(process);
+            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
+          }),
+        },
+      },
+    } as unknown as Phaser.Scene;
+    const manager = new ProjectileManager(scene);
+    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [ownRock, otherRock], null);
+
+    const body = { setBounce: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
+    const tracked = {
+      ignoreRockIndex: 0,
+      pendingDestroy: false,
+      body,
+      colliders: [],
+    } as unknown as TrackedProjectile;
+
+    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: TrackedProjectile) => void })
+      .setupFlameColliders({}, body, tracked);
+
+    expect(processCallbacks).toHaveLength(1);
+    expect(processCallbacks[0]?.({}, ownRock)).toBe(false);
+    expect(processCallbacks[0]?.({}, otherRock)).toBe(true);
+  });
+
   it('clears a flame obstacle-hit set during projectile cleanup', () => {
     const scene = {
       physics: { world: { off: vi.fn() } },

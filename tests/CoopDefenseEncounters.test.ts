@@ -165,11 +165,11 @@ describe('Coop defense encounters', () => {
 
     expect(() => normalizeCoopDefenseMapConfig(makeMap([
       {
-        id: 'needs-airstrike',
-        start: { type: 'opening-airstrike-complete' },
+        id: 'needs-event',
+        start: { type: 'after-event', eventId: 'missing-event' },
         groups: [{ enemyKind: 'zombie-badger', count: 1 }],
       },
-    ]))).toThrow('opening airstrike barrage');
+    ]))).toThrow('unknown map event');
 
     expect(() => normalizeCoopDefenseMapConfig(makeMap([
       {
@@ -263,6 +263,6 @@ describe('Coop defense encounters', () => {
       dormant: true,
       startHpFactor: 0.25,
     });
-    expect(outpost?.turrets?.map((turret) => turret.weaponId)).toEqual(['TURRET_ROCKET', 'TURRET_ROCKET']);
+    expect(outpost?.turrets?.map((turret) => turret.weaponId)).toEqual(['TURRET_ROCKET_BURST', 'TURRET_ROCKET_BURST']);
   });
 });

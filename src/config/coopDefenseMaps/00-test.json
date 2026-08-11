@@ -13,6 +13,34 @@
         "encounterId": "a2-opening-encounter"
       },
       "delayMs": 5000
+    },
+    {
+      "id": "c2-zone-barrage",
+      "type": "airstrike",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "a2-opening-encounter"
+      },
+      "delayMs": 1000,
+      "pattern": "zone-barrage",
+      "strikeCount": 3,
+      "area": {
+        "gridX": 32,
+        "gridY": 4,
+        "widthCells": 8,
+        "heightCells": 5
+      },
+      "orderedSweep": true
+    },
+    {
+      "id": "c2-player-hunt",
+      "type": "airstrike",
+      "start": {
+        "type": "time",
+        "atMs": 5000
+      },
+      "pattern": "player-hunt",
+      "intervalMs": 10000
     }
   ],
   "surviveDurationSec": 600,
@@ -132,13 +160,13 @@
           "id": "rocket-north",
           "cellOffset": { "gridX": 0, "gridY": 0 },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         },
         {
           "id": "rocket-south",
           "cellOffset": { "gridX": 0, "gridY": 1 },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
     },
@@ -163,13 +191,13 @@
           "id": "supply-rocket-north",
           "cellOffset": { "gridX": 0, "gridY": 0 },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         },
         {
           "id": "supply-rocket-south",
           "cellOffset": { "gridX": 0, "gridY": 1 },
           "mountSide": "front",
-          "weaponId": "TURRET_ROCKET"
+          "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
     }
@@ -245,6 +273,19 @@
           "enemyKind": "demon-badger",
           "count": 2,
           "delayMs": 1500
+        }
+      ]
+    },
+    {
+      "id": "c2-after-zone-barrage",
+      "start": {
+        "type": "after-event",
+        "eventId": "c2-zone-barrage"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 1
         }
       ]
     }

@@ -149,7 +149,7 @@ describe('Coop defense map progression', () => {
     expect(bomberMap.persistentSpawns).toEqual([]);
     expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',
-      'opening-airstrike-complete',
+      'after-event',
       'after-previous',
       'after-previous',
     ]);
@@ -439,7 +439,7 @@ describe('Coop defense map progression', () => {
     expect(target?.startHpFactor).toBeGreaterThan(0);
     expect(target?.startHpFactor).toBeLessThan(1);
     expect(target?.turrets).toHaveLength(2);
-    expect(target?.turrets?.every((turret) => turret.weaponId === 'TURRET_ROCKET')).toBe(true);
+    expect(target?.turrets?.every((turret) => turret.weaponId === 'TURRET_ROCKET_BURST')).toBe(true);
 
     const startIndex = hold?.start.type === 'after-encounter'
       ? encounterIds.indexOf(hold.start.encounterId)
