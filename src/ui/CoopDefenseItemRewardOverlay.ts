@@ -433,7 +433,9 @@ export class CoopDefenseItemRewardOverlay {
     const options = this.presentation?.options ?? [];
 
     this.title?.setText('BELOHNUNG').setVisible(true);
-    this.subtitle?.setText('Wähle genau ein Teil. Es wandert dauerhaft in dein Inventar.').setVisible(true);
+    this.subtitle?.setText(this.buildOfferSubtitle(
+      'Wähle genau ein Teil. Es wandert dauerhaft in dein Inventar.',
+    )).setVisible(true);
     this.salvageTitle?.setVisible(false);
     for (const row of this.salvageRows) row.container.setVisible(false);
     this.backButton?.setVisible(false);
@@ -520,12 +522,12 @@ export class CoopDefenseItemRewardOverlay {
     this.salvageAction = action;
 
     this.title?.setText('KATEGORIE VOLL');
-    this.subtitle?.setText(
+    this.subtitle?.setText(this.buildOfferSubtitle(
       action === 'equip'
         ? `${this.describeSlot(option.item)}: Das bisher getragene Teil wandert ins Inventar. `
           + 'Wähle vorher ein ungetragenes Teil zum Zerlegen.'
         : `${this.describeSlot(option.item)}: wähle, was zerlegt wird. Die XP fließen in dein Level.`,
-    );
+    ));
     for (const card of this.cards) card.container.setVisible(false);
     this.salvageTitle?.setText('ZERLEGEN').setVisible(true);
     this.backButton?.setVisible(true);
@@ -612,6 +614,13 @@ export class CoopDefenseItemRewardOverlay {
 
   private describeSlot(item: CoopDefenseItem): string {
     return getCoopDefenseItemSlotDefinition(item.slot).label;
+  }
+
+  private buildOfferSubtitle(instruction: string): string {
+    const count = this.presentation?.rareGuaranteeCount ?? 0;
+    return count > 0
+      ? `${count}/3 OPTIONEN: SELTEN ODER BESSER GARANTIERT · ${instruction}`
+      : instruction;
   }
 
   private describeItemLines(item: CoopDefenseItem): string {

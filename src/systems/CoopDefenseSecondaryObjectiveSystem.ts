@@ -19,6 +19,11 @@ export interface CoopDefenseSecondaryObjectiveSystemOptions {
   readonly onHoldCompleted?: (objectiveId: string) => void;
 }
 
+/** Autoritativer, nur rundenlanger Reward-Zustand des Objective-Systems. */
+export interface CoopDefenseSecondaryObjectiveRewardLedger {
+  readonly rareGuaranteeCount: number;
+}
+
 interface SecondaryObjectiveRuntimeState {
   readonly config: ResolvedCoopDefenseMapSecondaryObjectiveConfig;
   readonly resolvedTargetIds: Set<string>;
@@ -38,6 +43,7 @@ interface SecondaryObjectiveRuntimeState {
 export class CoopDefenseSecondaryObjectiveSystem {
   private elapsedMs = 0;
   private focusedObjectiveIndex: number | null = null;
+  private rareGuaranteeCount = 0;
   private readonly isEncounterCleared: ((encounterId: string) => boolean) | null;
   private readonly onObjectiveActivated: ((objectiveId: string) => void) | null;
   private readonly onHoldFailed: ((objectiveId: string) => void) | null;
@@ -89,6 +95,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
   reset(): void {
     this.elapsedMs = 0;
     this.focusedObjectiveIndex = null;
+    this.rareGuaranteeCount = 0;
     for (const state of this.objectiveStates) {
       state.resolvedTargetIds.clear();
       state.state = 'dormant';
@@ -113,6 +120,14 @@ export class CoopDefenseSecondaryObjectiveSystem {
   getTargetResolutionXp(objectiveId: string): number {
     const value = this.findObjectiveState(objectiveId)?.config.rewards?.xpPerTarget;
     return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  }
+
+  getRewardLedger(): CoopDefenseSecondaryObjectiveRewardLedger {
+    return { rareGuaranteeCount: this.rareGuaranteeCount };
+  }
+
+  getRareGuaranteeCount(): number {
+    return this.rareGuaranteeCount;
   }
 
   /**
@@ -141,7 +156,9 @@ export class CoopDefenseSecondaryObjectiveSystem {
   reportCarryDelivered(objectiveId: string, itemId: string): boolean {
     const state = this.findObjectiveState(objectiveId);
     if (!state || state.state !== 'active' || state.config.type !== 'carry') return false;
-    return this.resolveTarget(state, itemId);
+    const accepted = this.resolveTarget(state, itemId);
+    if (accepted) this.rareGuaranteeCount = Math.min(3, this.rareGuaranteeCount + 1);
+    return accepted;
   }
 
   /** Host-only Naht für Archetypen mit einer echten Fail-Bedingung. */

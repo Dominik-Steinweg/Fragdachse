@@ -124,6 +124,7 @@ export class ArenaLifecycleCoordinator {
   private isLocalReady      = false;
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
   private trainDestroyedShown = false;
+  private trainExplosionTimers: Phaser.Time.TimerEvent[] = [];
 
   private layoutRetryCount = 0;
   private arenaEnteredAt   = 0;
@@ -360,9 +361,13 @@ export class ArenaLifecycleCoordinator {
   hostSaveRoundResults(roundEndedAt = Date.now()): void {
     if (!bridge.isHost()) return;
     const gameMode = bridge.getGameMode();
+    const roundState = bridge.getRoundState();
     const mapName = isCoopDefenseMode(gameMode)
-      ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()).displayName
+      ? getCoopDefenseMapConfig(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()).displayName
       : 'Zufallsarena';
+    const rareGuaranteeCount = isCoopDefenseMode(gameMode) && roundState?.status === 'victory'
+      ? this.ctx.coopDefenseSecondaryObjectiveSystem?.getRareGuaranteeCount() ?? 0
+      : 0;
     const eligibleIds = new Set(bridge.getRoundResultEligiblePlayerIds());
     const results: RoundResult[] = bridge.getConnectedPlayers()
       .filter((p) => eligibleIds.has(p.id))
@@ -381,6 +386,7 @@ export class ArenaLifecycleCoordinator {
             ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
             : undefined,
           sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
+          rareGuaranteeCount: isCoopDefenseMode(gameMode) ? rareGuaranteeCount : undefined,
         };
       });
     bridge.publishRoundResults(results);
@@ -2267,6 +2273,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    this.cancelTrainExplosionTimers();
     // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurücksetzen, damit die
     // Lobby nicht die Dämpfung der letzten Map erbt.
     setEmissiveScale(1);
@@ -2753,10 +2760,18 @@ export class ArenaLifecycleCoordinator {
           });
         }
       }
+      let latestWagonDelay = 0;
       for (const seg of result.segmentPositions) {
-        bridge.broadcastExplosionEffect(seg.x, seg.y, 80, undefined, 'train');
+        const delay = Math.round(Math.random() * TRAIN.EXPLOSION_WAGON_DELAY_MAX_MS);
+        latestWagonDelay = Math.max(latestWagonDelay, delay);
+        this.scheduleTrainExplosion(seg.x, seg.y, 80, delay);
       }
-      bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160, undefined, 'train');
+      this.scheduleTrainExplosion(
+        result.centerX,
+        result.centerY,
+        160,
+        latestWagonDelay + TRAIN.EXPLOSION_CENTER_DELAY_MS,
+      );
 
       const arenaTop    = ARENA_OFFSET_Y;
       const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
@@ -2788,6 +2803,20 @@ export class ArenaLifecycleCoordinator {
       this.ctx.trainManager?.prepareReentry(newDirection);
       this.hostUpdate.setTrainSpawned(false);
     });
+  }
+
+  private scheduleTrainExplosion(x: number, y: number, radius: number, delayMs: number): void {
+    let timer: Phaser.Time.TimerEvent;
+    timer = this.scene.time.delayedCall(delayMs, () => {
+      this.trainExplosionTimers = this.trainExplosionTimers.filter(candidate => candidate !== timer);
+      bridge.broadcastExplosionEffect(x, y, radius, undefined, 'train');
+    });
+    this.trainExplosionTimers.push(timer);
+  }
+
+  private cancelTrainExplosionTimers(): void {
+    for (const timer of this.trainExplosionTimers) timer.remove();
+    this.trainExplosionTimers.length = 0;
   }
 
   private placePlaceableRock(

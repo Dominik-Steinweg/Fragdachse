@@ -15,6 +15,9 @@
   "balanceReferenceDurationSec": 600,
   "objective": "survive",
   "surviveRespawnsPerPlayer": 2,
+  "itemDrop": {
+    "itemLevel": 1
+  },
   "bases": [
     {
       "id": "dev-test-base",

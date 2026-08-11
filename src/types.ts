@@ -664,6 +664,8 @@ export interface CoopDefenseItem {
 export interface CoopDefensePendingItemReward {
   readonly roundEndedAt: number;
   readonly offers: readonly CoopDefenseItem[];
+  /** Bereits beim Würfeln angewandte autoritative B8-Garantie; 0/undefined = keine. */
+  readonly rareGuaranteeCount?: number;
 }
 
 /** Entscheidung fuer ein offenes Item-Angebot. */

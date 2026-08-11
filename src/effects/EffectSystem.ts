@@ -15,6 +15,16 @@ import {
   spawnBloodStain,
 } from './BloodEffectShared';
 import { circleZone, createQualityEmitter, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
+import { emissiveAlpha } from './EmissiveScale';
+import {
+  ensureFlameTextures,
+  FLAME_COLORS_CORE,
+  FLAME_COLORS_OUTER,
+  FLAME_COLORS_SPARK,
+  TEX_FLAME_CORE,
+  TEX_FLAME_EMBER,
+  TEX_FLAME_SPARK,
+} from './FlameShared';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { PlasmaBurnerRenderer } from './PlasmaBurnerRenderer';
 import { BiteRenderer } from './BiteRenderer';
@@ -209,6 +219,7 @@ export class EffectSystem implements EnemyVisualSink {
   private ensureTextures(): void {
     if (this.texturesGenerated) return;
     this.texturesGenerated = true;
+    ensureFlameTextures(this.scene);
 
     // Soft-Dot für Funken
     if (!this.scene.textures.exists(TEX_EXPLOSION_SPARK)) {
@@ -277,6 +288,160 @@ export class EffectSystem implements EnemyVisualSink {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 24, 24);
     });
+  }
+
+  private playTrainExplosionEffect(x: number, y: number, radius: number, color?: number): void {
+    const fillColor = color ?? 0xff5a1e;
+    const coreColor = this.mixColor(fillColor, 0xffffff, 0.78);
+    const haloColor = this.mixColor(fillColor, 0xffffff, 0.52);
+    const startRadius = Math.max(6, radius * 0.11);
+
+    const flash = this.scene.add.circle(x, y, startRadius, 0xffffe2, 1);
+    flash.setDepth(DEPTH_FX + 1);
+    makeAdditive(flash);
+    this.scene.tweens.add({
+      targets: flash,
+      scaleX: (radius * 0.62) / startRadius,
+      scaleY: (radius * 0.62) / startRadius,
+      alpha: 0,
+      duration: 150,
+      ease: 'Expo.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    const core = this.scene.add.circle(x, y, startRadius, coreColor, 0.82);
+    core.setDepth(DEPTH_FX + 0.6);
+    makeAdditive(core);
+    this.scene.tweens.add({
+      targets: core,
+      scaleX: (radius * 0.78) / startRadius,
+      scaleY: (radius * 0.78) / startRadius,
+      alpha: 0,
+      duration: 320,
+      ease: 'Cubic.easeOut',
+      onComplete: () => core.destroy(),
+    });
+
+    const blast = this.scene.add.circle(x, y, startRadius, fillColor, 0.72);
+    blast.setDepth(DEPTH_FX + 0.2);
+    makeAdditive(blast);
+    this.scene.tweens.add({
+      targets: blast,
+      scaleX: (radius * 1.08) / startRadius,
+      scaleY: (radius * 1.08) / startRadius,
+      alpha: 0,
+      duration: 720,
+      ease: 'Cubic.easeOut',
+      onComplete: () => blast.destroy(),
+    });
+
+    const halo = this.scene.add.circle(x, y, startRadius, haloColor, 0.32);
+    halo.setDepth(DEPTH_FX + 0.1);
+    makeAdditive(halo);
+    this.scene.tweens.add({
+      targets: halo,
+      scaleX: (radius * 1.55) / startRadius,
+      scaleY: (radius * 1.55) / startRadius,
+      alpha: 0,
+      duration: 1120,
+      ease: 'Sine.easeOut',
+      onComplete: () => halo.destroy(),
+    });
+
+    const ringProfiles = [
+      { start: 0.24, end: 1.18, width: 5, duration: 470, alpha: 0.9 },
+      { start: 0.48, end: 1.48, width: 2.5, duration: 780, alpha: 0.68 },
+    ];
+    for (const profile of ringProfiles) {
+      const ring = this.scene.add.circle(x, y, Math.max(5, radius * profile.start));
+      ring.setFillStyle(0, 0);
+      ring.setStrokeStyle(profile.width, profile.start < 0.3 ? coreColor : fillColor, profile.alpha);
+      ring.setDepth(DEPTH_FX + 0.16);
+      makeAdditive(ring);
+      this.scene.tweens.add({
+        targets: ring,
+        scaleX: (radius * profile.end) / Math.max(5, radius * profile.start),
+        scaleY: (radius * profile.end) / Math.max(5, radius * profile.start),
+        alpha: 0,
+        duration: profile.duration,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    // Der groÃŸe Zugblitz belichtet die Szene mit, Ã¤hnlich wie die Nuke-Regie. Er wird
+    // nur einmal fÃ¼r die Mittel-Detonation erzeugt, nicht fÃ¼r jeden einzelnen Waggon.
+    if (radius >= 140) {
+      const skyFlash = this.scene.add.rectangle(
+        GAME_WIDTH * 0.5,
+        GAME_HEIGHT * 0.5,
+        GAME_WIDTH,
+        GAME_HEIGHT,
+        0xffedc7,
+        0.18,
+      );
+      skyFlash.setScrollFactor(0);
+      skyFlash.setDepth(DEPTH.OVERLAY - 2);
+      makeAdditive(skyFlash);
+      this.scene.tweens.add({
+        targets: skyFlash,
+        alpha: 0,
+        duration: 360,
+        ease: 'Quad.easeOut',
+        onComplete: () => skyFlash.destroy(),
+      });
+    }
+
+    const chunkEmitter = createQualityEmitter(this.scene, x, y, TEX_FLAME_EMBER, {
+      lifespan: { min: 620, max: 1450 },
+      speed: { min: radius * 0.42, max: radius * 2.15 },
+      scale: { start: 1.65, end: 0.08 },
+      alpha: { start: 0.96, end: 0 },
+      tint: [0xffffff, ...FLAME_COLORS_CORE, ...FLAME_COLORS_OUTER],
+      gravityY: 170,
+      rotate: { min: -180, max: 180 },
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, 'critical');
+    chunkEmitter.setDepth(DEPTH_FX + 0.24);
+    chunkEmitter.setAlpha(emissiveAlpha(1));
+    chunkEmitter.addEmitZone(circleZone(Math.max(6, radius * 0.24)));
+    chunkEmitter.explode(Math.max(48, Math.ceil(radius * 1.05)));
+    this.scene.time.delayedCall(1650, () => chunkEmitter.destroy());
+
+    const sparkEmitter = createQualityEmitter(this.scene, x, y, TEX_FLAME_SPARK, {
+      lifespan: { min: 260, max: 720 },
+      speed: { min: radius * 0.55, max: radius * 2.45 },
+      scale: { start: 1.4, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0xffffff, ...FLAME_COLORS_SPARK, coreColor],
+      gravityY: 95,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, 'critical');
+    sparkEmitter.setDepth(DEPTH_FX + 0.3);
+    sparkEmitter.setAlpha(emissiveAlpha(1));
+    sparkEmitter.explode(Math.max(28, Math.ceil(radius * 0.62)));
+    this.scene.time.delayedCall(820, () => sparkEmitter.destroy());
+
+    const coreEmitter = createQualityEmitter(this.scene, x, y, TEX_FLAME_CORE, {
+      lifespan: { min: 320, max: 860 },
+      speed: { min: radius * 0.28, max: radius * 1.25 },
+      scale: { start: 1.05, end: 0.05 },
+      alpha: { start: 0.84, end: 0 },
+      tint: [0xffffff, coreColor, haloColor],
+      gravityY: 110,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, 'critical');
+    coreEmitter.setDepth(DEPTH_FX + 0.34);
+    coreEmitter.setAlpha(emissiveAlpha(1));
+    coreEmitter.explode(Math.max(16, Math.ceil(radius * 0.38)));
+    this.scene.time.delayedCall(980, () => coreEmitter.destroy());
+
+    if (radius >= 140) {
+      this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
+    }
   }
 
   private getNukeParticleEmitters(radius: number): NukeParticleEmitters {
@@ -877,6 +1042,11 @@ export class EffectSystem implements EnemyVisualSink {
     this.ensureTextures();
     this.emitExplosionLight(x, y, radius, color, visualStyle);
 
+    if (visualStyle === 'train') {
+      this.playTrainExplosionEffect(x, y, radius, color);
+      return;
+    }
+
     if (visualStyle === 'lightning') {
       this.playLightningExplosionEffect(x, y, radius, color ?? 0x78dfff);
       return;
@@ -1380,7 +1550,9 @@ export class EffectSystem implements EnemyVisualSink {
     // begrenzt der schwächste Kanal, wie hell der Boden werden kann. Ein Feuerorange
     // bliebe selbst bei voller Intensität ein rötlicher Schleier. Der Weißanteil ist
     // aber nur so hoch wie nötig – darüber verliert die Detonation ihren warmen Ton.
-    const lightColor = visualStyle === 'lightning'
+    const lightColor = visualStyle === 'train'
+      ? mixColors(color ?? 0xff5a1e, 0xffffff, 0.72)
+      : visualStyle === 'lightning'
       ? 0xcdf1ff
       : visualStyle === 'regeneration'
         ? mixColors(color ?? PLASMA_BURNER_COLOR, 0xffffff, 0.45)
@@ -1395,11 +1567,13 @@ export class EffectSystem implements EnemyVisualSink {
     this.lighting.pulse('explosion', x, y, {
       // Größe skaliert durchgehend mit der Detonation – auch bei sehr großen Radien,
       // dort verzichtet das Licht stattdessen auf seinen Schattenwurf.
-      radiusPx: radius * EXPLOSION_LIGHT_RADIUS_FACTOR,
+      radiusPx: radius * (visualStyle === 'train' ? 2.8 : EXPLOSION_LIGHT_RADIUS_FACTOR),
       color: lightColor,
       intensity: 1,
       // Größere Detonationen glühen deutlich länger nach.
-      durationMs: Phaser.Math.Clamp(300 + radius * 1.6, 320, 1100),
+      durationMs: visualStyle === 'train'
+        ? Phaser.Math.Clamp(520 + radius * 1.9, 540, 1350)
+        : Phaser.Math.Clamp(300 + radius * 1.6, 320, 1100),
       occludes: radius >= EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
     });
   }

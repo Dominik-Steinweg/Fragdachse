@@ -248,6 +248,8 @@ export interface RoundResult {
   mapName: string;
   teamScore?: number;
   sharedXp?: number;
+  /** Gemeinsame, autoritative B8-Garantie; pro berechtigter Zeile wiederholt. */
+  rareGuaranteeCount?: number;
 }
 
 export type RoundOutcome = 'victory' | 'defeat';

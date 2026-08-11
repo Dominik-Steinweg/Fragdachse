@@ -1471,11 +1471,17 @@ function describeRewards(
     });
   }
   if (itemReward && itemReward.options.length > 0) {
+    const guaranteeText = itemReward.rareGuaranteeCount > 0
+      ? ` · ${itemReward.rareGuaranteeCount}/3 SELTEN ODER BESSER GARANTIERT`
+      : '';
     descriptors.push({
       glyph: '◈',
-      label: `1 VON ${itemReward.options.length} ITEMS WÄHLEN`,
+      label: `1 VON ${itemReward.options.length} ITEMS WÄHLEN${guaranteeText}`,
       color: COLORS.BLUE_2,
-      tooltip: 'Die Auswahl öffnet sich direkt nach diesem Bildschirm und bleibt bis zur Entscheidung offen.',
+      tooltip: itemReward.rareGuaranteeCount > 0
+        ? `${itemReward.rareGuaranteeCount} von ${itemReward.options.length} Optionen sind mindestens selten. `
+          + 'Die Anhebung wurde vor dem Speichern auf die bestehenden Rolls angewandt.'
+        : 'Die Auswahl öffnet sich direkt nach diesem Bildschirm und bleibt bis zur Entscheidung offen.',
       itemOffer: true,
     });
   }

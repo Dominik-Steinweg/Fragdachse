@@ -44,6 +44,10 @@ export const TRAIN = {
 
   /** Streifenhöhe in px für den Waggon-Geschwindigkeitseffekt */
   WAGON_STRIPE_H:  8,
+  /** Maximale zufaellige Verzoegerung zwischen den Waggon-Detonationen. */
+  EXPLOSION_WAGON_DELAY_MAX_MS: 220,
+  /** Abstand der grossen Mittel-Detonation zum spaetesten Waggon. */
+  EXPLOSION_CENTER_DELAY_MS:     260,
 
   // ── Beleuchtung (nur im Nachtprofil aktiv) ────────────────────────────────
   /** Querversatz der beiden Frontscheinwerfer von der Gleismitte, wie beim Vorbild. */

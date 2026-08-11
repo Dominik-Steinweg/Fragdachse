@@ -46,6 +46,7 @@ import {
 import {
   createMatchItemRewardPresentation,
   createMatchProgressDelta,
+  resolveCoopDefenseRareGuaranteeCount,
   resolvePersonalMatchOutcome,
   sortMatchLeaderboard,
   type MatchItemRewardPresentation,
@@ -103,7 +104,11 @@ import {
   unlockStoredCoopDefenseMapAfterVictory,
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
-import { getEquippedCoopDefenseItems, rollCoopDefenseItemOffer } from '../utils/coopDefenseItems';
+import {
+  applyCoopDefenseRareGuarantee,
+  getEquippedCoopDefenseItems,
+  rollCoopDefenseItemOffer,
+} from '../utils/coopDefenseItems';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
 import { installTextResolution } from '../graphics/TextResolution';
@@ -3629,9 +3634,12 @@ export class ArenaScene extends Phaser.Scene {
         // eingefroren, waehrend die Klassenauswahl im Speicher schon wieder wandern koennte.
         const playedClassId = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())
           ?.coopDefenseClassId ?? null;
+        const rareGuaranteeCount = resolveCoopDefenseRareGuaranteeCount(results, roundState);
+        const offers = rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel, playedClassId);
         setStoredPendingCoopDefenseItemReward({
           roundEndedAt: endedAt,
-          offers: rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel, playedClassId),
+          rareGuaranteeCount,
+          offers: applyCoopDefenseRareGuarantee(offers, rareGuaranteeCount, playedClassId),
         });
       }
     }

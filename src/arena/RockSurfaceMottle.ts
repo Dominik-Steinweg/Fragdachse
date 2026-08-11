@@ -79,8 +79,13 @@ export const ROCK_MOTTLE = {
    * entscheidet sich pro Zelle einzeln.
    */
   passes: [
-    { perCell: 1.35, minScale: 0.7, maxScale: 1.4, alpha: 1 },
-    { perCell: 0.3, minScale: 2.2, maxScale: 3.6, alpha: 0.6 },
+    // Etwa ein Detailstempel je Zelle verhindert, dass sich dasselbe 32-px-Materialmotiv
+    // mehrfach innerhalb jeder Zelle ueberlagert. Die groessere Streuung von Position,
+    // Rotation und Massstab macht die verbleibenden Stempel weniger rasterfoermig.
+    { perCell: 1.15, minScale: 0.6, maxScale: 1.85, alpha: 0.86 },
+    // Eine sparsame Grossform verbindet mehrere Zellen, bleibt aber schwach genug, damit
+    // sie nicht selbst als wiederkehrendes Fleckenmuster gelesen wird.
+    { perCell: 0.38, minScale: 2.4, maxScale: 4.6, alpha: 0.32 },
   ],
 } as const;
 

@@ -102,6 +102,11 @@ function sanitizeItemLevel(itemLevel: number): number {
   return Math.max(1, Math.floor(itemLevel));
 }
 
+export function normalizeCoopDefenseRareGuaranteeCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(COOP_DEFENSE_ITEM_OFFER_SIZE, Math.floor(value)));
+}
+
 function rollBaseValue(slot: CoopDefenseItemSlot, itemLevel: number, random: () => number): number {
   const definition = getCoopDefenseItemSlotDefinition(slot);
   const nominal = definition.baseValueAtLevel1 + definition.baseValuePerLevel * (itemLevel - 1);
@@ -244,6 +249,71 @@ export function rollCoopDefenseItemOffer(
     offers = addCoopDefenseItem(offers, rollCoopDefenseItem(slot, itemLevel, classId, random));
   }
   return offers;
+}
+
+/**
+ * Hebt die niedrigsten Angebote bis zur autoritativen Mindestanzahl auf mindestens selten an.
+ * Die Anhebung ist bewusst in place: UID, Slot, Item-Level, Basiswert und bereits gezogene
+ * Affixe bleiben unverändert. Nur die fehlenden Affixe werden nach denselben Slot-, Klassen- und
+ * Gewichtsregeln ergänzt, die auch beim normalen Roll gelten.
+ */
+export function applyCoopDefenseRareGuarantee(
+  offers: readonly CoopDefenseItem[],
+  rareGuaranteeCount: number,
+  classId: CoopDefenseClassId | null = null,
+  random: () => number = Math.random,
+): CoopDefenseItem[] {
+  const guaranteed = normalizeCoopDefenseRareGuaranteeCount(rareGuaranteeCount);
+  if (guaranteed === 0 || offers.length === 0) return [...offers];
+
+  const rareCount = offers.filter((item) => RARITY_RANK[item.rarity] >= RARITY_RANK.blue).length;
+  let missingGuarantees = Math.max(0, guaranteed - rareCount);
+  if (missingGuarantees === 0) return [...offers];
+
+  const upgraded = [...offers];
+  const candidates = offers
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.rarity === 'white')
+    .sort((left, right) => left.index - right.index);
+
+  for (const candidate of candidates) {
+    if (missingGuarantees <= 0) break;
+    const raised = raiseCoopDefenseItemToRare(candidate.item, classId, random);
+    if (!raised) continue;
+    upgraded[candidate.index] = raised;
+    missingGuarantees -= 1;
+  }
+  return upgraded;
+}
+
+function raiseCoopDefenseItemToRare(
+  item: CoopDefenseItem,
+  classId: CoopDefenseClassId | null,
+  random: () => number,
+): CoopDefenseItem | null {
+  const requiredAffixes = getCoopDefenseItemRarityDefinition('blue').affixCount;
+  const missingAffixes = Math.max(0, requiredAffixes - item.affixes.length);
+  const existingAffixIds = new Set(item.affixes.map((affix) => affix.affixId));
+  const newAffixDefinitions = pickWeightedDistinct(
+    getCoopDefenseItemAffixesForRoll(item.slot, classId)
+      .filter((definition) => !existingAffixIds.has(definition.id)),
+    missingAffixes,
+    (definition) => definition.weight,
+    random,
+  );
+  if (newAffixDefinitions.length < missingAffixes) return null;
+
+  return {
+    ...item,
+    rarity: 'blue',
+    affixes: [
+      ...item.affixes,
+      ...newAffixDefinitions.map((definition) => ({
+        affixId: definition.id,
+        value: rollAffixValue(definition, item.itemLevel, random),
+      })),
+    ],
+  };
 }
 
 // ── Beschreiben und Vergleichen ─────────────────────────────────────────────
@@ -632,7 +702,11 @@ export function sanitizeCoopDefensePendingItemReward(raw: unknown): CoopDefenseP
       .filter((item): item is CoopDefenseItem => item !== null)
       .slice(0, COOP_DEFENSE_ITEM_OFFER_SIZE)
     : [];
-  return offers.length > 0 ? { roundEndedAt, offers } : null;
+  if (offers.length === 0) return null;
+  const rareGuaranteeCount = normalizeCoopDefenseRareGuaranteeCount(raw.rareGuaranteeCount);
+  return rareGuaranteeCount > 0
+    ? { roundEndedAt, offers, rareGuaranteeCount }
+    : { roundEndedAt, offers };
 }
 
 /** Für Tests und Diagnose: alle Affix-IDs, die eine Kategorie tragen kann. */
