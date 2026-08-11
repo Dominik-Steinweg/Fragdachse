@@ -950,7 +950,9 @@ export class HostUpdateCoordinator {
       this.rockVisualHelper.removePlaceableRockVisual(expiredRock, true);
       emitArenaMapGridChanged(this.scene.game.events, {
         reason: 'placeable_expired',
-        source: expiredRock.kind === 'rock' ? 'placeable_rock' : 'placeable_turret',
+        source: expiredRock.kind === 'rock'
+          ? 'placeable_rock'
+          : expiredRock.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
         obstacleId: expiredRock.id,
         gridX: expiredRock.gridX,
         gridY: expiredRock.gridY,

@@ -5,6 +5,7 @@ import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } 
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
+import { createCoopDefensePlaceablePedestalUtility } from '../../loadout/CoopDefenseMissionUtility';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
@@ -841,11 +842,21 @@ export class ClientUpdateCoordinator {
     for (const pu of powerups) {
       const dist = Math.hypot(pu.x - px, pu.y - py);
       if (dist <= PICKUP_RADIUS * 2) {
+        const isSpecialPickup = pu.pickupKind === 'objective-placement'
+          || pu.defId === 'BFG'
+          || pu.defId === 'NUKE'
+          || pu.defId === 'HOLY_HAND_GRENADE';
+        if (isSpecialPickup && (
+          this.clientUtilityOverride !== null
+          || bridge.getPlayerUtilityOverrideName(localId) !== ''
+        )) continue;
         if (bridge.isHost()) {
           this.ctx.powerUpSystem?.tryPickup(localId, pu.uid, px, py);
         } else {
           bridge.sendPickupPowerUp(pu.uid);
-          if (pu.defId === 'BFG') {
+          if (pu.pickupKind === 'objective-placement' && pu.objectiveId) {
+            this.clientUtilityOverride = createCoopDefensePlaceablePedestalUtility(pu.objectiveId, pu.defId);
+          } else if (pu.defId === 'BFG') {
             this.clientUtilityOverride = UTILITY_CONFIGS.BFG;
           } else if (pu.defId === 'NUKE') {
             this.clientUtilityOverride = UTILITY_CONFIGS.NUKE;

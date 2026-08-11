@@ -110,6 +110,7 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   translocator: [],
   placeable_rock: ['placeable'],
   placeable_turret: ['placeable', 'weaponId'],
+  placeable_pedestal: ['placeable', 'rewardObjectiveId', 'powerUpDefId'],
 };
 
 const ULTIMATE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
@@ -257,6 +258,9 @@ export function validateResolvedUtility(value: unknown): string[] {
   }
   if (value.type === 'placeable_turret' && isRecord(value.placeable) && value.placeable.kind !== 'turret') {
     issues.push('$.placeable.kind: placeable_turret verlangt kind=turret');
+  }
+  if (value.type === 'placeable_pedestal' && isRecord(value.placeable) && value.placeable.kind !== 'pedestal') {
+    issues.push('$.placeable.kind: placeable_pedestal verlangt kind=pedestal');
   }
   for (const field of ['cooldown', 'projectileSpeed', 'projectileSize', 'fuseTime', 'maxBounces']) {
     if (typeof value[field] !== 'number' || value[field] < 0) issues.push(`$.${field}: endliche nichtnegative Zahl erforderlich`);

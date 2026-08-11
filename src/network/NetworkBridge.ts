@@ -499,7 +499,8 @@ function isSamePlacementPreview(
   return left.active === right.active
     && left.kind === right.kind
     && left.gridX === right.gridX
-    && left.gridY === right.gridY;
+    && left.gridY === right.gridY
+    && left.powerUpDefId === right.powerUpDefId;
 }
 
 function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): boolean {

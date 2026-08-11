@@ -296,13 +296,16 @@ export class BaseManager {
   }
 
   /**
-   * Delta-Snapshot für GameState. Sendet Basen mit reduzierter HP sowie aktive
-   * Basistürme, deren Zielwinkel für die Clients synchronisiert werden muss.
+   * Delta-Snapshot für GameState. Sendet nicht-dormante Basen mit reduzierter HP
+   * (einschließlich explizit zerstörter Basen mit HP 0) sowie aktive Basistürme,
+   * deren Zielwinkel für die Clients synchronisiert werden muss.
    */
   getNetSnapshot(): SyncedBaseState[] {
     const snapshot: SyncedBaseState[] = [];
     for (const entity of this.entities) {
-      if (entity.isInert()) continue;
+      // Dormante Strukturen existieren für den Peer noch nicht. Zerstörte aktive
+      // Strukturen müssen dagegen einmalig bzw. weiter als HP=0 sichtbar bleiben.
+      if (entity.isDormant()) continue;
       const turrets = entity.getSyncedTurretStates();
       if (entity.getHp() < entity.getMaxHp() || turrets.length > 0) {
         snapshot.push({
@@ -320,8 +323,9 @@ export class BaseManager {
   applySnapshot(snapshot: readonly SyncedBaseState[]): void {
     // Fehlende Einträge = volle HP und keine synchronisierten Turret-Winkel
     // (Delta-Convention). Erst auf Max setzen, dann gesendete Werte überschreiben.
-    // Inerte Basen bleiben ausgespart – symmetrisch zu getNetSnapshot(), das sie ebenfalls nicht
-    // sendet. Sonst verlöre eine dormante Missionsstruktur ihren authored Startzustand.
+    // Dormante und bereits zerstörte Basen bleiben vom Reset ausgespart. Dadurch bleibt der
+    // authored Startzustand dormanter B2-Strukturen erhalten und ein zerstörter Client-State
+    // kann durch ein später fehlendes Delta nicht wiederbelebt werden.
     for (const entity of this.entities) {
       if (entity.isInert()) continue;
       entity.setHp(entity.getMaxHp());

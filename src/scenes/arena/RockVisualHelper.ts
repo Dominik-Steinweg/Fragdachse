@@ -15,6 +15,7 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import { isCoopDefenseMode } from '../../gameModes';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
+import { getTurretVisualSpec } from '../../config/turretVisuals';
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
@@ -54,95 +55,6 @@ export class RockVisualHelper {
       [0.46, 'rgba(255,255,255,0.16)'],
       [1, 'rgba(255,255,255,0)'],
     ]);
-    if (!this.scene.textures.exists('placeable_turret')) {
-      const g = this.scene.make.graphics({ x: 0, y: 0 });
-      g.clear();
-      g.fillStyle(0x000000, 0.18); g.fillEllipse(16, 18, 20, 12);
-      g.fillStyle(0x78161e, 1);    g.fillCircle(16, 14, 10.5);
-      g.fillStyle(0xa91e24, 1);    g.fillCircle(16, 13, 9.5);
-      g.fillStyle(0xcf3135, 1);    g.fillCircle(16, 12, 8.4);
-      g.fillStyle(0xf4f0e6, 1);
-      g.fillCircle(11.5, 9.8, 1.9); g.fillCircle(16.2, 8.4, 1.5);
-      g.fillCircle(20.3, 10.8, 1.8); g.fillCircle(12.8, 14.2, 1.6);
-      g.fillCircle(19.4, 15.2, 1.3);
-      g.fillStyle(0xe6dcc1, 1);    g.fillEllipse(16, 18.6, 7.5, 5.5);
-      g.lineStyle(1.2, 0x4a1014, 0.7); g.strokeCircle(16, 13.4, 9.8);
-      g.generateTexture('placeable_turret', 32, 32);
-      g.destroy();
-    }
-    this.ensureConstructionTexture('construction_rocket_turret', (g) => {
-      g.fillStyle(0x16202a, 1); g.fillCircle(16, 16, 12);
-      g.lineStyle(2, 0x5f7485, 1); g.strokeCircle(16, 16, 11);
-      g.fillStyle(0x314657, 1); g.fillRoundedRect(10, 9, 15, 14, 3);
-      g.fillStyle(0xd9e4eb, 1); g.fillRoundedRect(17, 10, 10, 4, 2);
-      g.fillStyle(0xff8a3d, 1); g.fillTriangle(27, 10, 31, 12, 27, 14);
-      g.fillStyle(0xd9e4eb, 1); g.fillRoundedRect(17, 18, 10, 4, 2);
-      g.fillStyle(0xff8a3d, 1); g.fillTriangle(27, 18, 31, 20, 27, 22);
-      g.fillStyle(0x9ec7d8, 0.8); g.fillCircle(13, 16, 3);
-    });
-    this.ensureConstructionTexture('construction_machine_gun_turret', (g) => {
-      g.fillStyle(0x17201e, 1); g.fillCircle(16, 16, 12);
-      g.lineStyle(2, 0x708077, 1); g.strokeCircle(16, 16, 11);
-      g.fillStyle(0x3e4b46, 1); g.fillCircle(15, 16, 7);
-      g.fillStyle(0xc2ab72, 1); g.fillRoundedRect(15, 13, 15, 6, 2);
-      g.fillStyle(0x1c2422, 1); g.fillRect(27, 14, 5, 4);
-      g.fillStyle(0xf5d37a, 0.9); g.fillCircle(12, 16, 2);
-    });
-    this.ensureConstructionTexture('construction_flame_turret', (g) => {
-      g.fillStyle(0x241a18, 1); g.fillCircle(16, 16, 12);
-      g.lineStyle(2, 0x8a6251, 1); g.strokeCircle(16, 16, 11);
-      g.fillStyle(0x7d3424, 1); g.fillCircle(12, 12, 4); g.fillCircle(12, 20, 4);
-      g.fillStyle(0x4a4540, 1); g.fillCircle(17, 16, 6);
-      g.fillStyle(0xb66b3d, 1); g.fillRoundedRect(17, 12, 12, 8, 3);
-      g.fillStyle(0xffb347, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
-      g.fillStyle(0xff6a2a, 0.95); g.fillTriangle(27, 14, 31, 16, 27, 18);
-    });
-    this.ensureConstructionTexture('construction_plasma_turret', (g) => {
-      g.fillStyle(0x111d35, 1); g.fillCircle(16, 16, 12);
-      g.lineStyle(2, 0x5275a8, 1); g.strokeCircle(16, 16, 11);
-      g.fillStyle(0x223a68, 1); g.fillCircle(14, 16, 7);
-      g.fillStyle(0x6fc7ff, 1); g.fillCircle(14, 16, 4.2);
-      g.fillStyle(0xd9f7ff, 0.95); g.fillCircle(13, 15, 1.8);
-      g.fillStyle(0x8edcff, 0.9); g.fillRoundedRect(18, 12, 11, 8, 3);
-      g.fillStyle(0x4af0ff, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
-      g.lineStyle(1, 0xc4fbff, 0.9); g.strokeCircle(16, 16, 8.5);
-    });
-    this.ensureConstructionTexture('construction_gravity_turret', (g) => {
-      g.fillStyle(0x100d1c, 1); g.fillCircle(16, 16, 12);
-      g.lineStyle(2, 0x76529d, 1); g.strokeCircle(16, 16, 11);
-      g.fillStyle(0x32204d, 1); g.fillCircle(14, 16, 7);
-      g.lineStyle(1.5, 0xb785ff, 0.9); g.strokeCircle(14, 16, 5);
-      g.fillStyle(0x030207, 1); g.fillCircle(14, 16, 3.5);
-      g.fillStyle(0x6d3da2, 1); g.fillRoundedRect(18, 12, 11, 8, 3);
-      g.fillStyle(0xd7b7ff, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
-    });
-    this.ensureConstructionTexture('construction_slow_bubble_turret', (g) => {
-      g.fillStyle(0x10222b, 1); g.fillCircle(16, 16, 12);
-      g.lineStyle(2, 0x5f9fb2, 1); g.strokeCircle(16, 16, 11);
-      g.fillStyle(0x285267, 1); g.fillCircle(14, 16, 7);
-      g.lineStyle(1.4, 0xc4f7ff, 0.95); g.strokeCircle(14, 16, 4.5);
-      g.fillStyle(0x8edcff, 0.82); g.fillCircle(14, 16, 3);
-      g.fillStyle(0x407b8d, 1); g.fillRoundedRect(18, 12, 11, 8, 3);
-      g.fillStyle(0xdffcff, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
-    });
-    if (!this.scene.textures.exists('placeable_turret_proxy')) {
-      const g = this.scene.make.graphics({ x: 0, y: 0 });
-      g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 32, 32);
-      g.generateTexture('placeable_turret_proxy', 32, 32);
-      g.destroy();
-    }
-  }
-
-  private ensureConstructionTexture(
-    key: string,
-    draw: (graphics: Phaser.GameObjects.Graphics) => void,
-  ): void {
-    if (this.scene.textures.exists(key)) return;
-    const graphics = this.scene.make.graphics({ x: 0, y: 0 });
-    graphics.clear();
-    draw(graphics);
-    graphics.generateTexture(key, 32, 32);
-    graphics.destroy();
   }
 
   materializePlaceableRock(rock: SyncedPlaceableRock, playSpawnFx: boolean): void {
@@ -182,20 +94,22 @@ export class RockVisualHelper {
         rock.maxHp,
       );
       refreshStaticShadows = true;
-    } else if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind !== 'rock') {
-      const world = this.gridToWorld(rock.gridX, rock.gridY);
-      const proxy = this.scene.add.image(world.x, world.y, 'placeable_turret_proxy')
-        .setDisplaySize(CELL_SIZE, CELL_SIZE)
-        .setDepth(DEPTH.ROCKS)
-        .setVisible(false)
-        .setActive(true);
-      this.ctx.arenaResult.rockObjects[rock.id] = proxy;
-      this.ctx.arenaResult.rockGroup.add(proxy);
-      (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-      this.ctx.arenaResult.rockGroup.refresh();
+    } else if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'turret') {
+      ArenaBuilder.spawnRockAndRetile(
+        this.scene,
+        this.ctx.arenaResult.rockObjects,
+        this.ctx.arenaResult.rockGroup,
+        this.ctx.arenaResult.rockGrid,
+        this.ctx.currentLayout.rocks,
+        rock.id,
+        undefined,
+        0,
+        rock.hp,
+        rock.maxHp,
+      );
       this.createOrUpdateTurretVisual(rock);
       refreshStaticShadows = true;
-    } else if (rock.kind !== 'rock') {
+    } else if (rock.kind === 'turret') {
       this.createOrUpdateTurretVisual(rock);
     }
 
@@ -254,9 +168,14 @@ export class RockVisualHelper {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
       }
     }
-    if (rock.kind !== 'rock') {
-      ArenaBuilder.destroyRock(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.rockGroup, rock.id);
-      this.ctx.arenaResult.rockGrid.remove(rock.gridX, rock.gridY);
+    if (rock.kind === 'turret') {
+      ArenaBuilder.destroyRockAndRetile(
+        this.ctx.arenaResult.rockObjects,
+        this.ctx.arenaResult.rockGroup,
+        this.ctx.arenaResult.rockGrid,
+        this.ctx.currentLayout.rocks,
+        rock.id,
+      );
       this.destroyTurretVisual(rock.id);
       this.markObstaclesDirty();
       return;
@@ -276,6 +195,15 @@ export class RockVisualHelper {
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock?.kind === 'pedestal') return;
     if (runtimeRock && runtimeRock.kind !== 'rock') {
+      ArenaBuilder.updateRockVisual(
+        this.ctx.arenaResult.rockObjects,
+        this.ctx.arenaResult.rockGroup,
+        this.ctx.arenaResult.rockGrid,
+        this.ctx.currentLayout.rocks,
+        rockId,
+        hp,
+        runtimeRock.maxHp,
+      );
       this.createOrUpdateTurretVisual({ ...runtimeRock, hp });
       return;
     }
@@ -359,7 +287,9 @@ export class RockVisualHelper {
       this.removePlaceableRockVisual(runtimeRock, true);
       emitArenaMapGridChanged(this.scene.game.events, {
         reason: 'placeable_removed',
-        source: runtimeRock.kind === 'rock' ? 'placeable_rock' : 'placeable_turret',
+        source: runtimeRock.kind === 'rock'
+          ? 'placeable_rock'
+          : runtimeRock.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
         obstacleId: runtimeRock.id,
         gridX: runtimeRock.gridX,
         gridY: runtimeRock.gridY,
@@ -399,6 +329,8 @@ export class RockVisualHelper {
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {
     const world = this.gridToWorld(rock.gridX, rock.gridY);
+    const weaponId = rock.turretWeaponId ?? 'SPOREN';
+    const visualSpec = getTurretVisualSpec(weaponId);
     let visual = this.turretVisuals.get(rock.id);
     if (!visual) {
       const aura = this.scene.add.image(world.x, world.y, TEX_TURRET_AURA)
@@ -407,8 +339,8 @@ export class RockVisualHelper {
         .setAlpha(0.2)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(DEPTH.ROCKS + 0.1);
-      const image = this.scene.add.image(world.x, world.y, this.getTurretTextureKey(rock))
-        .setDisplaySize(CELL_SIZE, CELL_SIZE)
+      const image = this.scene.add.image(world.x, world.y, visualSpec.textureKey)
+        .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
         .setDepth(DEPTH.ROCKS + 0.2);
 
       const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
@@ -431,9 +363,10 @@ export class RockVisualHelper {
     const indestructible = definition?.indestructible === true;
     const ratio = Phaser.Math.Clamp(rock.hp / Math.max(1, rock.maxHp), 0, 1);
     visual.image
-      .setTexture(this.getTurretTextureKey(rock))
+      .setTexture(visualSpec.textureKey)
+      .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
       .setPosition(world.x, world.y)
-      .setRotation(rock.kind === 'pedestal' ? 0 : rock.angle);
+      .setRotation(rock.angle + visualSpec.rotationOffset);
     visual.aura
       .setPosition(world.x, world.y)
       .setTint(rock.ownerColor)
@@ -521,10 +454,6 @@ export class RockVisualHelper {
       cloud.rockDamageMult ?? 1,
       cloud.trainDamageMult ?? 1,
     );
-  }
-
-  private getTurretTextureKey(rock: SyncedPlaceableRock): string {
-    return rock.constructionId ? `construction_${rock.constructionId}` : 'placeable_turret';
   }
 
   private getPlaceableRockConfig(rock: SyncedPlaceableRock): PlaceableRockUtilityConfig {
@@ -635,6 +564,9 @@ export class RockVisualHelper {
   }
 
   private refreshObstacleVisuals(): void {
+    if (this.ctx.arenaResult && this.ctx.currentLayout) {
+      ArenaBuilder.rebuildRockDecals(this.scene, this.ctx.arenaResult, this.ctx.currentLayout);
+    }
     this.shadowSystem?.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,

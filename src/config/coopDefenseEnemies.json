@@ -323,7 +323,7 @@
       "attackScanIntervalMs": 140,
       "attackStopDurationMs": 120,
       "obstacleAttackDelayMs": 500,
-      "imageKey": "enemy_alien_badger",
+      "imageKey": "enemy_pyro_badger",
       "displayName": "Pyro-Dachs",
       "color": 11749375,
       "glow": { "color": 12799231, "sizeFactor": 1.7, "alpha": 0.85, "lightRadiusPx": 85, "lightIntensity": 1 },
@@ -371,7 +371,7 @@
       "attackScanIntervalMs": 120,
       "attackStopDurationMs": 100,
       "obstacleAttackDelayMs": 450,
-      "imageKey": "enemy_zombie_badger",
+      "imageKey": "enemy_timebomb_badger",
       "color": 12072191,
       "glow": {
         "color": 12072191,

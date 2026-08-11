@@ -1351,6 +1351,7 @@ export class InputSystem {
       anchorX: preview.anchorX,
       anchorY: preview.anchorY,
       constructionId: preview.constructionId,
+      powerUpDefId: preview.powerUpDefId,
     };
   }
 

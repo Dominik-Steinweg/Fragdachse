@@ -93,6 +93,8 @@ export const DEPTH = {
   BASES: 4,
   DECALS: 5,
   ROCKS: 9,
+  /** Gebackene Riss-/Moos-Decals liegen knapp ueber den live-zerstoerbaren Felsen. */
+  ROCK_DECALS: 9.1,
   PLAYERS: 10,
   TRAIN: 11,  
   PROJECTILES: 15,

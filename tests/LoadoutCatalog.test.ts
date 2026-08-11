@@ -100,7 +100,7 @@ describe('loadout catalog', () => {
 
   it('uses final dedicated upgrade icons without undoing existing aliases', () => {
     expect(getCoopDefenseUpgradeTextureKey('dash_fire_trail')).toBe('UPGRADE_DASH_FIRE_TRAIL');
-    expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_ASMD_PRIMARY_RANGE');
+    expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_SHOTGUN_RANGE');
     expect(getCoopDefenseUpgradeTextureKey('glock_adrenaline_gain')).toBe('UPGRADE_GLOCK_ADRENALINE_GAIN');
     expect(getCoopDefenseUpgradeTextureKey('flamethrower_adrenalin_efficiency')).toBe(
       'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',

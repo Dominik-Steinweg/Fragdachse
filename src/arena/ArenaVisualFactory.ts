@@ -11,7 +11,7 @@ import {
   TRUNK_RADIUS,
 } from '../config';
 import type { DecalCell, DirtCell, TrackCell, TreeCell } from '../types';
-import { DECAL_SIZE } from './DecalConfig';
+import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
 
@@ -99,25 +99,45 @@ export class ArenaVisualFactory {
     return result;
   }
 
-  static createDecals(scene: Phaser.Scene, decals: DecalCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.Image[] {
+  static createDecals(
+    scene: Phaser.Scene,
+    decals: DecalCell[],
+    metrics?: ArenaVisualGridMetrics,
+    surface: 'ground' | 'rock' = 'ground',
+    activeRockIds?: ReadonlySet<number>,
+  ): Phaser.GameObjects.Image[] {
     if (decals.length === 0) return [];
 
     const gridMetrics = getMetrics(metrics);
     const result: Phaser.GameObjects.Image[] = [];
-    for (const { gridX, gridY, textureKey, offsetX, offsetY } of decals) {
+    for (const decal of decals) {
+      if ((decal.surface ?? 'ground') !== surface) continue;
+      if (surface === 'rock' && activeRockIds && decal.rockIds?.some((id) => !activeRockIds.has(id))) continue;
+
+      const { gridX, gridY, textureKey, offsetX, offsetY } = decal;
       const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
       const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
       const img = scene.add.image(worldX, worldY, textureKey);
-      img.setDisplaySize(DECAL_SIZE, DECAL_SIZE);
+      const displaySize = surface === 'rock' ? ROCK_DECAL_DISPLAY_SIZE : DECAL_SIZE;
+      img.setDisplaySize(displaySize, displaySize);
       // Decals are decorative and are baked immediately after creation. Keeping the
       // random transform on the temporary Image lets both the RenderTexture and the
       // terrain sampler consume the exact same placement.
-      img.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
-      img.setDepth(DEPTH.DECALS);
+      img.setRotation(decal.rotation ?? Phaser.Math.FloatBetween(0, Math.PI * 2));
+      img.setDepth(surface === 'rock' ? DEPTH.ROCK_DECALS : DEPTH.DECALS);
       result.push(img);
     }
 
     return result;
+  }
+
+  static createRockDecals(
+    scene: Phaser.Scene,
+    decals: DecalCell[],
+    metrics?: ArenaVisualGridMetrics,
+    activeRockIds?: ReadonlySet<number>,
+  ): Phaser.GameObjects.Image[] {
+    return this.createDecals(scene, decals, metrics, 'rock', activeRockIds);
   }
 
   static createTracks(scene: Phaser.Scene, tracks: TrackCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.TileSprite[] {

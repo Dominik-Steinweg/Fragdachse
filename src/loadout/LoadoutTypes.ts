@@ -383,7 +383,7 @@ export interface NegevKillstreakConfig {
   readonly fireChunkBurnDamagePerTick: number;
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'time_bubble' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser' | 'decoy';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'time_bubble' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' | 'taser' | 'decoy';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -420,7 +420,7 @@ export type UtilityActivationConfig =
   | PlacementModeUtilityActivationConfig;
 
 export interface PlaceablePlacementConfig {
-  readonly kind: 'rock' | 'turret';
+  readonly kind: 'rock' | 'turret' | 'pedestal';
   readonly range: number;
   readonly footprint: readonly PlaceableFootprintCell[];
   readonly maxHp: number;
@@ -430,6 +430,8 @@ export interface PlaceablePlacementConfig {
   readonly warningPulseMs: number;
   readonly spawnShakeDuration: number;
   readonly spawnShakeIntensity: number;
+  /** Missions-Podeste werden nicht durch Schaden entfernt. */
+  readonly indestructible?: boolean;
 }
 
 export interface PlaceableRockPlacementConfig extends PlaceablePlacementConfig {
@@ -459,7 +461,7 @@ export interface PlaceableTunnelPlacementConfig {
   readonly ownerTintStrength: number;
 }
 
-interface BaseUtilityConfig {
+export interface BaseUtilityConfig {
   readonly id: string;
   readonly displayName: string;
   readonly type: UtilityType;
@@ -612,9 +614,22 @@ export interface PlaceableTurretUtilityConfig extends BaseUtilityConfig {
   readonly weaponId: string;
 }
 
-export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
+export interface PlaceablePedestalPlacementConfig extends PlaceablePlacementConfig {
+  readonly kind: 'pedestal';
+}
 
-export type UtilityConfigShape = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | TimeBubbleUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
+/** Einmaliger Missions-Override: setzt genau ein Runtime-PowerUp-Podest. */
+export interface PlaceablePedestalUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'placeable_pedestal';
+  readonly activation: PlacementModeUtilityActivationConfig;
+  readonly placeable: PlaceablePedestalPlacementConfig;
+  readonly rewardObjectiveId: string;
+  readonly powerUpDefId: string;
+}
+
+export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig | PlaceablePedestalUtilityConfig;
+
+export type UtilityConfigShape = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | TimeBubbleUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig | PlaceablePedestalUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',

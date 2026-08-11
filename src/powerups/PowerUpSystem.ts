@@ -31,6 +31,8 @@ interface WorldItem {
   def:  PowerUpDef;
   x:    number; // Welt-Koordinate
   y:    number;
+  pickupKind?: 'objective-placement';
+  objectiveId?: string;
 }
 
 interface PedestalRuntime {
@@ -77,11 +79,13 @@ export interface ConfiguredNukeStrike {
 }
 
 interface PowerUpSystemOptions {
-  onNukePickup?: (playerId: string) => void;
+  onNukePickup?: (playerId: string) => boolean | void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
   onConfiguredNukeExploded?: (strike: SyncedNukeStrike) => void;
-  onHolyHandGrenadePickup?: (playerId: string) => void;
-  onBfgPickup?: (playerId: string) => void;
+  onHolyHandGrenadePickup?: (playerId: string) => boolean | void;
+  onBfgPickup?: (playerId: string) => boolean | void;
+  /** Claims a mission reward without applying the referenced PowerUpDef directly. */
+  onObjectiveRewardPickup?: (objectiveId: string, playerId: string) => boolean;
   /** Finite XP plus a clearly documented round-duration estimate for persistent pressure. */
   coopDefenseMapXpReference?: number;
   isAdrenalineDropEnabled?: (playerId: string) => boolean;
@@ -119,6 +123,7 @@ export class PowerUpSystem {
   private worldItems  = new Map<number, WorldItem>();
   private readonly netSnapshotCache = new Map<number, SyncedPowerUp>();
   private readonly pendingRemovalUids = new Set<number>();
+  private readonly objectiveRewardUids = new Map<string, number>();
   private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId → Buffs
   private activeNukes = new Map<number, ActiveNukeStrike>();
   private pedestals   = new Map<number, PedestalRuntime>();
@@ -164,6 +169,7 @@ export class PowerUpSystem {
     this.worldItems.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovalUids.clear();
+    this.objectiveRewardUids.clear();
     this.activeBuffs.clear();
     this.activeNukes.clear();
     this.itemToPedestal.clear();
@@ -359,6 +365,24 @@ export class PowerUpSystem {
    * Vom Host aufgerufen, wenn ein Client `pickup_powerup` sendet.
    * Validiert Existenz + Nähe, entfernt das Item und wendet den Effekt an.
    */
+  /**
+   * Spawns the visible team reward pickup. It is tagged separately from normal PowerUps so a
+   * client cannot interpret a Holy Hand Grenade reward as an instant HHG.
+   */
+  spawnObjectiveRewardPickup(objectiveId: string, defId: string, x: number, y: number): number | null {
+    const def = POWERUP_DEFS[defId];
+    if (!def || !TIMED_POWERUP_PEDESTAL_CONFIGS[defId]) return null;
+    const existingUid = this.objectiveRewardUids.get(objectiveId);
+    if (existingUid !== undefined && this.worldItems.has(existingUid)) return existingUid;
+
+    const uid = this.spawnPowerUpDef(def, x, y, {
+      pickupKind: 'objective-placement',
+      objectiveId,
+    });
+    this.objectiveRewardUids.set(objectiveId, uid);
+    return uid;
+  }
+
   tryPickup(playerId: string, uid: number, playerX: number, playerY: number): void {
     const item = this.worldItems.get(uid);
     if (!item) return; // Existiert nicht (mehr)
@@ -367,6 +391,11 @@ export class PowerUpSystem {
 
     const dist = Phaser.Math.Distance.Between(playerX, playerY, item.x, item.y);
     if (dist > PICKUP_RADIUS * 2) return; // Zu weit weg → ignorieren (großzügiger Check)
+
+    const consumed = item.pickupKind === 'objective-placement'
+      ? Boolean(item.objectiveId && this.options.onObjectiveRewardPickup?.(item.objectiveId, playerId))
+      : this.applyEffect(playerId, item.def);
+    if (!consumed) return;
 
     this.worldItems.delete(uid);
     this.pendingRemovalUids.add(uid);
@@ -383,12 +412,16 @@ export class PowerUpSystem {
       }
       this.itemToPedestal.delete(uid);
     }
-    this.applyEffect(playerId, item.def);
+    if (item.pickupKind === 'objective-placement' && item.objectiveId) {
+      if (this.objectiveRewardUids.get(item.objectiveId) === uid) {
+        this.objectiveRewardUids.delete(item.objectiveId);
+      }
+    }
   }
 
   // ── Effekt-Anwendung ────────────────────────────────────────────────────
 
-  private applyEffect(playerId: string, def: PowerUpDef): void {
+  private applyEffect(playerId: string, def: PowerUpDef): boolean {
     switch (def.type) {
       case 'instant_heal':
         this.combat.healToFull(playerId);
@@ -421,15 +454,13 @@ export class PowerUpSystem {
         break;
       }
       case 'global_nuke':
-        this.options.onNukePickup?.(playerId);
-        break;
+        return this.options.onNukePickup?.(playerId) !== false;
       case 'holy_hand_grenade':
-        this.options.onHolyHandGrenadePickup?.(playerId);
-        break;
+        return this.options.onHolyHandGrenadePickup?.(playerId) !== false;
       case 'bfg':
-        this.options.onBfgPickup?.(playerId);
-        break;
+        return this.options.onBfgPickup?.(playerId) !== false;
     }
+    return true;
   }
 
   scheduleNukeStrike(playerId: string, targetX: number, targetY: number): boolean {
@@ -545,7 +576,14 @@ export class PowerUpSystem {
   getWorldItemSnapshot(): SyncedPowerUp[] {
     const result: SyncedPowerUp[] = [];
     for (const item of this.worldItems.values()) {
-      result.push({ uid: item.uid, defId: item.def.id, x: item.x, y: item.y });
+      result.push({
+        uid: item.uid,
+        defId: item.def.id,
+        x: item.x,
+        y: item.y,
+        ...(item.pickupKind === 'objective-placement' ? { pickupKind: item.pickupKind } : {}),
+        ...(item.objectiveId === undefined ? {} : { objectiveId: item.objectiveId }),
+      });
     }
     result.sort((left, right) => left.uid - right.uid);
     return result;
@@ -815,9 +853,14 @@ export class PowerUpSystem {
     return true;
   }
 
-  private spawnPowerUpDef(def: PowerUpDef, x: number, y: number): number {
+  private spawnPowerUpDef(
+    def: PowerUpDef,
+    x: number,
+    y: number,
+    metadata?: Pick<WorldItem, 'pickupKind' | 'objectiveId'>,
+  ): number {
     const uid = this.nextUid++;
-    this.worldItems.set(uid, { uid, def, x, y });
+    this.worldItems.set(uid, { uid, def, x, y, ...metadata });
     return uid;
   }
 

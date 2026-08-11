@@ -272,6 +272,49 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.getNetSnapshot()).toHaveLength(0);
   });
 
+  it('includes a destroyed active structure as an explicit zero-hp snapshot', () => {
+    const { scene } = makeScene();
+    const active = makeBaseSpec('destroyed-active-outpost');
+    const manager = new BaseManager(scene, [active]);
+
+    manager.applyDamage(active.id, active.hpMax);
+
+    const snapshot = manager.getNetSnapshot();
+    expect(snapshot).toHaveLength(1);
+    expect(snapshot[0]).toMatchObject({ id: active.id, hp: 0, maxHp: active.hpMax });
+  });
+
+  it('applies an explicit zero-hp snapshot to the client as a destroyed state', () => {
+    const { scene: hostScene } = makeScene();
+    const active = makeBaseSpec('destroyed-active-outpost');
+    const host = new BaseManager(hostScene, [active]);
+    host.applyDamage(active.id, active.hpMax);
+
+    const { scene: clientScene } = makeScene();
+    const client = new BaseManager(clientScene, [active]);
+    client.applySnapshot(host.getNetSnapshot());
+
+    const clientBase = client.getBase(active.id)!;
+    expect(clientBase.getHp()).toBe(0);
+    expect(clientBase.isDestroyed()).toBe(true);
+  });
+
+  it('does not revive a client-destroyed structure when a later delta omits it', () => {
+    const { scene: hostScene } = makeScene();
+    const active = makeBaseSpec('destroyed-active-outpost');
+    const host = new BaseManager(hostScene, [active]);
+    host.applyDamage(active.id, active.hpMax);
+
+    const { scene: clientScene } = makeScene();
+    const client = new BaseManager(clientScene, [active]);
+    client.applySnapshot(host.getNetSnapshot());
+    client.applySnapshot([]);
+
+    const clientBase = client.getBase(active.id)!;
+    expect(clientBase.getHp()).toBe(0);
+    expect(clientBase.isDestroyed()).toBe(true);
+  });
+
   it('keeps dormant structures out of world state until the objective activates', () => {
     const { scene } = makeScene();
     const active = makeBaseSpec('active-outpost', { turret: true });

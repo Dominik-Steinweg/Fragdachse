@@ -34,6 +34,8 @@ Auch die Arena-Decals sind zur Laufzeit unveränderlich (rein visuell, keine Kol
 
 Dieselbe Backregel gilt für die gesamte Lobby-/Menü-Vorschau, nicht nur für ihren Boden: `MenuArenaPreviewRenderer.bakeLayer()` backt Dirt, Decals, Felsen und Kronen je als ein Tiefenband an den Vorschau-Bounds (Kamera-Scroll auf `bounds.offsetX/offsetY`). Die Bänder bleiben getrennt, weil die Schatten-Graphics des `ShadowSystem` zwischen ihnen liegen (Fels-Schatten unter `DEPTH.ROCKS`, Kronen-Schatten unter `DEPTH.CANOPY`).
 
+Fels-Decals liegen in einem getrennten gebackenen `rockDecalLayer` knapp ueber den live-zerstoerbaren 47-Blob-Felsen. `ArenaBuilder.rebuildRockDecals()` filtert sie ueber ihre getragene Fels-ID-Menge; ein ueber eine Zellgrenze laufendes Decal verschwindet deshalb konservativ vollstaendig, sobald einer seiner Traeger zerstoert wurde. `RockVisualHelper.markObstaclesDirty()` sammelt dieselbe Hindernisaenderung wie Schatten und Light-Occluder und backt das Layer hoechstens einmal am Frame-Ende neu. So entstehen keine per-Fels-Decal-Images im Renderwalk und keine schwebenden Riss-/Moosreste nach Retiling oder Zerstoerung.
+
 Zwei nicht offensichtliche Regeln dabei:
 
 - Zufällige Decal-Rotationen werden am temporären Image gesetzt und zusammen mit der Rotation in `decalStamps` übernommen. Der CPU-Terrain-Sampler zeichnet diese Stamps mit derselben Transformation nach, damit seine Farbprobe zum gebackenen Decal-Layer passt.

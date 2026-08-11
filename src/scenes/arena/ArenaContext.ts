@@ -57,6 +57,7 @@ import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefe
 import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import type { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
+import type { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
 import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
@@ -171,6 +172,8 @@ export interface ArenaContext {
   coopDefenseSecondaryObjectiveConfigs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[];
   /** Host-only: Wiederherstellung eines gehaltenen Missionsziels. */
   coopDefenseObjectiveRepairSystem: CoopDefenseObjectiveRepairSystem | null;
+  /** Host-only: one-shot placement rewards from completed Hold objectives. */
+  coopDefenseObjectivePlacementRewardSystem: CoopDefenseObjectivePlacementRewardSystem | null;
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;

@@ -13,6 +13,7 @@ import {
   TEAM_RED_COLOR,
 } from '../config';
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
+import { getTurretVisualSpec } from '../config/turretVisuals';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import { makeAdditive } from '../effects/EffectUtils';
@@ -61,6 +62,7 @@ export class BaseEntity {
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly turretAngles = new Map<string, number>();
+  private readonly turretRotationOffsets = new Map<string, number>();
   private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private readonly hpBarWidth: number;
@@ -137,13 +139,14 @@ export class BaseEntity {
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {
-      const image = this.scene.add.image(turret.x, turret.y, getBaseTurretTextureKey(turret.weaponId))
-        .setDisplaySize(CELL_SIZE, CELL_SIZE)
-        .setRotation(turret.initialAngle)
-        .setTint(hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR)
+      const visual = getTurretVisualSpec(turret.weaponId);
+      const image = this.scene.add.image(turret.x, turret.y, visual.textureKey)
+        .setDisplaySize(visual.displaySize, visual.displaySize)
+        .setRotation(turret.initialAngle + visual.rotationOffset)
         .setDepth(DEPTH.BASES + 3);
       this.turretImages.set(turret.id, image);
       this.turretAngles.set(turret.id, turret.initialAngle);
+      this.turretRotationOffsets.set(turret.id, visual.rotationOffset);
     }
 
     if (this.spec.role === 'spawn-point' && this.spec.spawnCenter) {
@@ -331,7 +334,7 @@ export class BaseEntity {
   setTurretAngle(turretId: string, angle: number): void {
     if (this.isInert() || !Number.isFinite(angle) || !this.turretAngles.has(turretId)) return;
     this.turretAngles.set(turretId, angle);
-    this.turretImages.get(turretId)?.setRotation(angle);
+    this.turretImages.get(turretId)?.setRotation(angle + (this.turretRotationOffsets.get(turretId) ?? 0));
   }
 
   applyTurretSnapshot(turrets: readonly SyncedBaseTurretState[]): void {
@@ -404,6 +407,7 @@ export class BaseEntity {
       if (image.active) image.destroy();
     }
     this.turretImages.clear();
+    this.turretRotationOffsets.clear();
 
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
 
@@ -434,27 +438,10 @@ export class BaseEntity {
     }
     this.turretImages.clear();
     this.turretAngles.clear();
+    this.turretRotationOffsets.clear();
     this.spawnCenterTween?.stop();
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
     if (this.hpBarBg?.active) this.hpBarBg.destroy();
     if (this.hpBarFg?.active) this.hpBarFg.destroy();
-  }
-}
-
-function getBaseTurretTextureKey(weaponId: CoopBaseTurretWeaponId): string {
-  switch (weaponId) {
-    case 'FLIEGENPILZ_PLASMA':
-      return 'construction_plasma_turret';
-    case 'TURRET_ROCKET':
-      return 'construction_rocket_turret';
-    case 'TURRET_MG':
-      return 'construction_machine_gun_turret';
-    case 'TURRET_FLAME':
-    case 'TURRET_VOID_FLAME':
-      return 'construction_flame_turret';
-    case 'SPOREN':
-    case 'BASE_SPOREN':
-    case 'TURRET_SPORE':
-      return 'placeable_turret';
   }
 }

@@ -117,6 +117,8 @@ export interface PlacementPreviewNetState {
   anchorX?: number;
   anchorY?: number;
   constructionId?: ConstructionId;
+  /** Missions-Podest: welches Power-Up auf dem Runtime-Podest erscheinen wird. */
+  powerUpDefId?: string;
 }
 
 /** Waffen-Slots mit Spread/Crosshair-Relevanz. */
@@ -787,6 +789,8 @@ export interface UtilityPlacementPreviewState {
   anchorGridY?: number;
   sourceSlot?: 'weapon2' | 'utility' | 'ultimate';
   constructionId?: ConstructionId;
+  /** Missions-Podest: welches Power-Up auf dem Runtime-Podest erscheint. */
+  powerUpDefId?: string;
   /** 'dismantle' markiert ein eigenes Konstrukt zum Rueckbau statt eine Bauflaeche. */
   mode?: 'place' | 'dismantle';
 }
@@ -1305,7 +1309,10 @@ export interface TrackCell { gridX: number; gridY: number; }
 /** Eine Dirt-Gitterzelle (rein visuell, keine Kollision) */
 export interface DirtCell { gridX: number; gridY: number; }
 
-export type DecalTerrainLayer = 'dirt' | 'grass';
+export type DecalTerrainLayer = 'dirt' | 'grass' | 'rock';
+
+/** Visuelle Oberflaeche, auf der ein Decal liegt. */
+export type DecalSurface = 'ground' | 'rock';
 
 export type DecalKey = string;
 
@@ -1317,6 +1324,12 @@ export interface DecalCell {
   offsetX: number;
   offsetY: number;
   terrain: DecalTerrainLayer;
+  /** Fehlend bedeutet aus Kompatibilitaetsgruenden: Boden-Decal. */
+  surface?: DecalSurface;
+  /** IDs aller Felsen, die dieses (ggf. uebergreifende) Decal beruehrt. */
+  rockIds?: number[];
+  /** Seeded Rotation in Radiant; alte Layouts duerfen sie weglassen. */
+  rotation?: number;
 }
 
 /** Ein fester Power-Up-Podest-Slot der gesamten Runde. */
@@ -1457,6 +1470,8 @@ export interface SyncedPlaceableRock {
   expiresAt: number;
   warningStartsAt: number;
   angle: number;
+  /** Runtime-Missions-Podeste bleiben bis zum Round-Teardown bestehen. */
+  indestructible?: boolean;
   enemyDestroyedExplosionRadius?: number;
   enemyDestroyedExplosionDamage?: number;
   enemyDestroyedExplosionKnockback?: number;
@@ -1577,8 +1592,9 @@ export interface TrainEventConfig {
 
 /**
  * Per-Frame Zustand einer Coop-Defense-Basis (Host → Clients, unreliable).
- * Delta-Kompression über GameState: Basen mit reduzierten HP sowie Basen mit
- * aktiven Geschütztürmen werden gesendet; sonst gilt fehlend = volle HP.
+ * Delta-Kompression über GameState: Nicht-dormante Basen mit reduzierten HP
+ * (einschließlich HP 0) sowie Basen mit aktiven Geschütztürmen werden gesendet;
+ * sonst gilt für eine lebende Basis fehlend = volle HP.
  */
 export interface SyncedBaseState {
   id:     string;
@@ -1678,6 +1694,9 @@ export interface SyncedPowerUp {
   defId: string;   // Schlüssel in POWERUP_DEFS
   x:     number;
   y:     number;
+  /** Mission reward pickups are placement grants, not direct power-up effects. */
+  pickupKind?: 'objective-placement';
+  objectiveId?: string;
 }
 
 /** Snapshot-Hülle für Boden-Power-Ups mit Spawn-/Pickup-Deltas. */

@@ -42,6 +42,7 @@ import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePe
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
+import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import {
   CoopDefenseAirstrikeDirector,
@@ -494,6 +495,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
     this.ctx.energyInjectorSystem?.removeOwner(playerId);
     if (bridge.isHost()) {
+      this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
       this.ctx.combatSystem.removePlayer(playerId);
       this.ctx.resourceSystem?.removePlayer(playerId);
       this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
@@ -584,6 +586,7 @@ export class ArenaLifecycleCoordinator {
       : [];
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseObjectiveRepairSystem = null;
+    this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
     if (bridge.isHost()) {
       if (coopDefenseMapConfig?.objective === 'survive') {
@@ -860,6 +863,17 @@ export class ArenaLifecycleCoordinator {
           getBaseMaxHp: (baseId) => baseManager.getBase(baseId)?.getMaxHp() ?? null,
         })
         : null;
+      this.ctx.coopDefenseObjectivePlacementRewardSystem = bridge.isHost() && baseManager
+        ? new CoopDefenseObjectivePlacementRewardSystem(coopDefenseSecondaryObjectiveConfigs, {
+          isEligiblePlayer: (playerId) => bridge.canPlayerAct(playerId),
+          getBasePosition: (baseId) => baseManager.getBase(baseId)?.getSpawnCenterWorldPosition() ?? null,
+          spawnPickup: (objectiveId, powerUpDefId, x, y) => (
+            this.ctx.powerUpSystem?.spawnObjectiveRewardPickup(objectiveId, powerUpDefId, x, y) !== null
+          ),
+          overrideUtility: (playerId, config) => this.ctx.loadoutManager?.overrideUtility(playerId, config, 1) ?? false,
+          releaseUtilityOverride: (playerId) => this.ctx.loadoutManager?.releaseUtilityOverride(playerId),
+        })
+        : null;
       this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
         ? new CoopDefenseSecondaryObjectiveSystem(coopDefenseSecondaryObjectiveConfigs, {
           isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
@@ -867,9 +881,13 @@ export class ArenaLifecycleCoordinator {
           onHoldCompleted: (objectiveId) => {
             if (!bridge.isHost()) return;
             const config = coopDefenseSecondaryObjectiveConfigs.find((entry) => entry.id === objectiveId);
-            if (config?.rewards?.repairTargetOnComplete !== true) return;
-            for (const targetId of config.targets) {
-              this.ctx.coopDefenseObjectiveRepairSystem?.start(targetId);
+            if (config?.rewards?.repairTargetOnComplete === true) {
+              for (const targetId of config.targets) {
+                this.ctx.coopDefenseObjectiveRepairSystem?.start(targetId);
+              }
+            }
+            if (config?.rewards?.placeablePedestalOnComplete) {
+              this.ctx.coopDefenseObjectivePlacementRewardSystem?.activate(objectiveId);
             }
           },
         })
@@ -1326,6 +1344,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
+      this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
       this.ctx.coopDefenseSurvivalSystem?.handlePlayerDeath(playerId);
       if (this.ctx.coopDefenseSurvivalSystem) {
         bridge.publishCoopDefenseSurvivalState(this.ctx.coopDefenseSurvivalSystem.getSnapshot());
@@ -1889,7 +1908,7 @@ export class ArenaLifecycleCoordinator {
 
       this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
         onNukePickup: (playerId) => {
-          this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1);
+          return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1) ?? false;
         },
         onNukeExploded: (x, y, radius, triggeredBy) => {
           bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a, 'nuke');
@@ -1901,11 +1920,14 @@ export class ArenaLifecycleCoordinator {
           this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike);
         },
         onHolyHandGrenadePickup: (playerId) => {
-          this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1);
+          return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1) ?? false;
         },
         onBfgPickup: (playerId) => {
-          this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1);
+          return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1) ?? false;
         },
+        onObjectiveRewardPickup: (objectiveId, playerId) => (
+          this.ctx.coopDefenseObjectivePlacementRewardSystem?.claim(objectiveId, playerId) ?? false
+        ),
         coopDefenseMapXpReference: coopDefenseMapConfig
           ? getCoopDefenseMapXpReference(
             coopDefenseMapConfig,
@@ -2385,6 +2407,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseSecondaryObjectiveConfigs = [];
     this.ctx.coopDefenseObjectiveRepairSystem?.reset();
     this.ctx.coopDefenseObjectiveRepairSystem = null;
+    this.ctx.coopDefenseObjectivePlacementRewardSystem?.reset();
+    this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     this.ctx.coopDefensePersistentPressureSystem?.reset();
     this.ctx.coopDefensePersistentPressureSystem = null;
@@ -2726,6 +2750,47 @@ export class ArenaLifecycleCoordinator {
     now: number,
     playerColor: number,
   ): boolean {
+    if (cfg.type === 'placeable_pedestal') {
+      const rewardSystem = this.ctx.coopDefenseObjectivePlacementRewardSystem;
+      if (!rewardSystem?.canPlace(cfg.rewardObjectiveId, playerId)) return false;
+
+      const pedestal = this.ctx.placementSystem?.tryPlaceRock(
+        cfg,
+        playerId,
+        playerColor,
+        originX,
+        originY,
+        targetX,
+        targetY,
+        now,
+      );
+      if (!pedestal) return false;
+
+      const world = this.rockVisualHelper.gridToWorld(pedestal.gridX, pedestal.gridY);
+      const registered = this.ctx.powerUpSystem?.registerConstructionPedestal(
+        pedestal.id,
+        cfg.powerUpDefId,
+        world.x,
+        world.y,
+        playerColor,
+      ) ?? false;
+      if (!registered || !rewardSystem.consume(cfg.rewardObjectiveId, playerId)) {
+        if (registered) this.ctx.powerUpSystem?.unregisterConstructionPedestal(pedestal.id);
+        this.ctx.placementSystem?.removeRock(pedestal.id);
+        return false;
+      }
+
+      this.rockVisualHelper.materializePlaceableRock(pedestal, true);
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeable_added',
+        source: 'placeable_pedestal',
+        obstacleId: pedestal.id,
+        gridX: pedestal.gridX,
+        gridY: pedestal.gridY,
+      });
+      return true;
+    }
+
     const rock = this.ctx.placementSystem?.tryPlaceRock(cfg, playerId, playerColor, originX, originY, targetX, targetY, now);
     if (!rock) return false;
     this.rockVisualHelper.materializePlaceableRock(rock, true);

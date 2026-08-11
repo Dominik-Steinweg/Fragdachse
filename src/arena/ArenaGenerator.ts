@@ -1,6 +1,6 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
-import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
 import type { ArenaGroundFireZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
@@ -694,11 +694,83 @@ export class ArenaGenerator {
           offsetX: ArenaGenerator.randomOffset(rng, maxOffsetX),
           offsetY: ArenaGenerator.randomOffset(rng, maxOffsetY),
           terrain,
+          surface: 'ground',
+          rotation: ArenaGenerator.randomRotation(rng),
         });
       }
     }
 
+    // Fels-Decals werden getrennt vom Boden gebacken. Ein Eintrag kennt alle Felsen,
+    // die seine gedrehnete Bounds beruehren; beim naechsten Rock-Bake bleibt er nur
+    // sichtbar, wenn diese gesamte kleine Gruppe noch existiert. Dadurch duerfen
+    // einzelne Risse/Moosflaechen ueber Zellgrenzen laufen, ohne nach einer Zerstoerung
+    // als schwebender Rest auf dem Nachbarfelsen zu bleiben.
+    const rockIndexByKey = new Map<number, number>();
+    rocks.forEach((rock, index) => rockIndexByKey.set(ArenaGenerator.cellKey(rock.gridX, rock.gridY), index));
+    const rockMaxOffsetX = Math.min(ROCK_DECAL_CONFIG.maxOffsetX, ROCK_DECAL_CONFIG.maxOffsetY);
+    const rockMaxOffsetY = Math.min(ROCK_DECAL_CONFIG.maxOffsetX, ROCK_DECAL_CONFIG.maxOffsetY);
+    for (let rockId = 0; rockId < rocks.length; rockId += 1) {
+      const rock = rocks[rockId];
+      if (!ArenaGenerator.rollPercent(rng, ROCK_DECAL_CONFIG.coveragePercent)) continue;
+
+      const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, ROCK_DECAL_CONFIG.variants);
+      if (!textureKey) continue;
+
+      const offsetX = ArenaGenerator.randomOffset(rng, rockMaxOffsetX);
+      const offsetY = ArenaGenerator.randomOffset(rng, rockMaxOffsetY);
+      const rotation = ArenaGenerator.randomRotation(rng);
+      const centerX = rock.gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
+      const centerY = rock.gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
+      const rockIds = ArenaGenerator.getRockIdsTouchedByDecal(
+        rocks,
+        rockIndexByKey,
+        centerX,
+        centerY,
+        rotation,
+      );
+
+      decals.push({
+        gridX: rock.gridX,
+        gridY: rock.gridY,
+        textureKey,
+        offsetX,
+        offsetY,
+        terrain: 'rock',
+        surface: 'rock',
+        rockIds,
+        rotation,
+      });
+    }
+
     return decals;
+  }
+
+  private static getRockIdsTouchedByDecal(
+    rocks: readonly RockCell[],
+    rockIndexByKey: ReadonlyMap<number, number>,
+    centerX: number,
+    centerY: number,
+    rotation: number,
+  ): number[] {
+    const halfExtentX = Math.abs(Math.cos(rotation)) * 13 + Math.abs(Math.sin(rotation)) * 13;
+    const halfExtentY = Math.abs(Math.sin(rotation)) * 13 + Math.abs(Math.cos(rotation)) * 13;
+    const minGridX = Math.max(0, Math.floor((centerX - halfExtentX) / CELL_SIZE));
+    const maxGridX = Math.min(GRID_COLS - 1, Math.floor((centerX + halfExtentX - 0.001) / CELL_SIZE));
+    const minGridY = Math.max(0, Math.floor((centerY - halfExtentY) / CELL_SIZE));
+    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor((centerY + halfExtentY - 0.001) / CELL_SIZE));
+    const touched: number[] = [];
+
+    for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
+      for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
+        const id = rockIndexByKey.get(ArenaGenerator.cellKey(gridX, gridY));
+        if (id !== undefined) touched.push(id);
+      }
+    }
+
+    return touched.length > 0 ? touched : [rocks.findIndex((rock) => (
+      rock.gridX === Math.floor((centerX - CELL_SIZE / 2) / CELL_SIZE)
+      && rock.gridY === Math.floor((centerY - CELL_SIZE / 2) / CELL_SIZE)
+    ))];
   }
 
   private static generatePermanentGroundFireZones(
@@ -895,6 +967,10 @@ export class ArenaGenerator {
   private static randomOffset(rng: () => number, maxOffset: number): number {
     if (maxOffset <= 0) return 0;
     return Math.floor(rng() * (maxOffset * 2 + 1)) - maxOffset;
+  }
+
+  private static randomRotation(rng: () => number): number {
+    return rng() * Math.PI * 2;
   }
 
   private static cellKey(gx: number, gy: number): number {

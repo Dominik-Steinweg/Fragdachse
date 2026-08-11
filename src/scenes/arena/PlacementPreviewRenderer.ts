@@ -6,6 +6,8 @@ import { GAME_WIDTH, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } f
 import type { ArenaContext }             from './ArenaContext';
 import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
+import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
+import { getTurretVisualSpec } from '../../config/turretVisuals';
 
 interface TunnelPreviewVisualState {
   keyBase: string;
@@ -23,7 +25,9 @@ interface TunnelPreviewVisualState {
  */
 export class PlacementPreviewRenderer {
   private localPlacementPreviewImage: Phaser.GameObjects.Image | null = null;
+  private localTurretPreviewImage: Phaser.GameObjects.Image | null = null;
   private readonly remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
+  private readonly remoteTurretPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly localTunnelPreview: TunnelPreviewVisualState;
   private readonly remoteTunnelPreviews = new Map<string, TunnelPreviewVisualState>();
 
@@ -70,6 +74,7 @@ export class PlacementPreviewRenderer {
 
     if (!inArena || !preview || !localPlayerAlive || localPlayerBurrowed) {
       this.localPlacementPreviewImage?.setVisible(false);
+      this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
       return;
     }
@@ -77,6 +82,7 @@ export class PlacementPreviewRenderer {
     const localPlayer = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
     if (!localPlayer) {
       this.localPlacementPreviewImage?.setVisible(false);
+      this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
       return;
     }
@@ -85,6 +91,7 @@ export class PlacementPreviewRenderer {
     if (preview.mode === 'dismantle') {
       // Rueckbau zeigt kein Bau-Ghost, sondern markiert das anvisierte eigene Konstrukt.
       this.localPlacementPreviewImage?.setVisible(false);
+      this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
       this.drawDismantleMarker(preview);
       this.rangeGraphics.lineStyle(2, ownerColor, 0.5);
@@ -93,10 +100,11 @@ export class PlacementPreviewRenderer {
     }
     if (preview.kind === 'tunnel') {
       this.localPlacementPreviewImage?.setVisible(false);
+      this.localTurretPreviewImage?.setVisible(false);
       this.drawTunnelPreview(this.localTunnelPreview, preview, ownerColor, this.getPlacementPreviewAlpha(preview.kind), true);
     } else {
       this.hideTunnelPreview(this.localTunnelPreview);
-      const image = this.ensurePlacementPreviewImage(undefined, preview.kind, preview.constructionId);
+      const image = this.ensurePlacementPreviewImage(undefined, preview.kind, preview.constructionId, preview.powerUpDefId);
       image
         .setPosition(preview.targetX, preview.targetY)
         .setTint(ownerColor)
@@ -104,6 +112,16 @@ export class PlacementPreviewRenderer {
         .setVisible(true);
       if (preview.kind === 'rock') {
         image.setFrame(preview.frame);
+      }
+      if (preview.kind === 'turret') {
+        image.setFrame(preview.frame);
+        this.ensureTurretPreviewImage(undefined, preview.constructionId)
+          .setPosition(preview.targetX, preview.targetY)
+          .setRotation(preview.angle + this.getTurretPreviewSpec(preview.constructionId).rotationOffset)
+          .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
+          .setVisible(true);
+      } else {
+        this.localTurretPreviewImage?.setVisible(false);
       }
     }
 
@@ -146,6 +164,9 @@ export class PlacementPreviewRenderer {
       for (const preview of this.remotePlacementPreviewImages.values()) {
         preview.setVisible(false);
       }
+      for (const preview of this.remoteTurretPreviewImages.values()) {
+        preview.setVisible(false);
+      }
       for (const preview of this.remoteTunnelPreviews.values()) {
         this.hideTunnelPreview(preview);
       }
@@ -161,6 +182,7 @@ export class PlacementPreviewRenderer {
       const ownerColor = bridge.getPlayerColor(playerId) ?? COLORS.GREY_3;
       if (preview.kind === 'tunnel') {
         this.remotePlacementPreviewImages.get(playerId)?.setVisible(false);
+        this.remoteTurretPreviewImages.get(playerId)?.setVisible(false);
         const tunnelPreview = this.ensureRemoteTunnelPreview(playerId);
         this.drawTunnelPreview(tunnelPreview, {
           angle: 0,
@@ -183,14 +205,25 @@ export class PlacementPreviewRenderer {
           playerId,
           preview.kind,
           preview.constructionId,
+          preview.powerUpDefId,
         );
         image
           .setPosition(preview.x, preview.y)
           .setTint(ownerColor)
           .setAlpha(preview.isValid ? 0.38 : 0.18)
           .setVisible(true);
-        if (preview.kind === 'rock') {
+        if (preview.kind === 'rock' || preview.kind === 'turret') {
           image.setFrame(preview.frame);
+        }
+        if (preview.kind === 'turret') {
+          const spec = this.getTurretPreviewSpec(preview.constructionId);
+          this.ensureTurretPreviewImage(playerId, preview.constructionId)
+            .setPosition(preview.x, preview.y)
+            .setRotation(spec.rotationOffset)
+            .setAlpha(preview.isValid ? 0.38 : 0.18)
+            .setVisible(true);
+        } else {
+          this.remoteTurretPreviewImages.get(playerId)?.setVisible(false);
         }
         const tunnelPreview = this.remoteTunnelPreviews.get(playerId);
         if (tunnelPreview) {
@@ -200,6 +233,10 @@ export class PlacementPreviewRenderer {
     }
 
     for (const [playerId, image] of this.remotePlacementPreviewImages) {
+      if (activeIds.has(playerId)) continue;
+      image.setVisible(false);
+    }
+    for (const [playerId, image] of this.remoteTurretPreviewImages) {
       if (activeIds.has(playerId)) continue;
       image.setVisible(false);
     }
@@ -233,6 +270,9 @@ export class PlacementPreviewRenderer {
     } else if (preview?.kind === 'tunnel') {
       this.placeableUtilityHintTitle.setText(`DACHS-TUNNEL ${preview.stage ?? 1}/2`);
       this.placeableUtilityHintSubtitle.setText('E oder Linksklick: setzen   Rechtsklick oder Q: abbrechen');
+    } else if (preview?.kind === 'pedestal') {
+      this.placeableUtilityHintTitle.setText('MISSIONS-PODEST');
+      this.placeableUtilityHintSubtitle.setText('E oder Linksklick: setzen   Rechtsklick: abbrechen');
     } else {
       this.placeableUtilityHintTitle.setText('BAUMODUS');
       this.placeableUtilityHintSubtitle.setText('E oder Linksklick: bauen   Rechtsklick: abbrechen');
@@ -258,6 +298,7 @@ export class PlacementPreviewRenderer {
     this.rangeGraphics.clear();
     this.invalidGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);
+    this.localTurretPreviewImage?.setVisible(false);
     this.destroyTunnelPreview(this.localTunnelPreview);
     this.placeableUtilityHint.setVisible(false);
     this.airstrikeTargetingHint.setVisible(false);
@@ -266,6 +307,10 @@ export class PlacementPreviewRenderer {
       preview.destroy();
     }
     this.remotePlacementPreviewImages.clear();
+    for (const preview of this.remoteTurretPreviewImages.values()) {
+      preview.destroy();
+    }
+    this.remoteTurretPreviewImages.clear();
     for (const preview of this.remoteTunnelPreviews.values()) {
       this.destroyTunnelPreview(preview);
     }
@@ -276,8 +321,9 @@ export class PlacementPreviewRenderer {
     playerId: string | undefined,
     kind: PlacementPreviewNetState['kind'],
     constructionId?: PlacementPreviewNetState['constructionId'],
+    powerUpDefId?: string,
   ): Phaser.GameObjects.Image {
-    const texture = this.getPlaceableTextureKey(kind, constructionId);
+    const texture = this.getPlaceableTextureKey(kind, constructionId, powerUpDefId);
     if (playerId === undefined) {
       if (!this.localPlacementPreviewImage) {
         this.localPlacementPreviewImage = this.scene.add.image(0, 0, texture, 0)
@@ -315,11 +361,51 @@ export class PlacementPreviewRenderer {
   private getPlaceableTextureKey(
     kind: PlacementPreviewNetState['kind'],
     constructionId?: PlacementPreviewNetState['constructionId'],
+    powerUpDefId?: string,
   ): string {
+    if (powerUpDefId === 'HOLY_HAND_GRENADE') return 'powerup_hhg';
     if (constructionId === 'medic_pedestal') return 'powerup_hp';
     if (constructionId === 'armor_pedestal') return 'powerup_arm';
-    if (constructionId) return `construction_${constructionId}`;
-    return kind === 'turret' || kind === 'pedestal' ? 'placeable_turret' : 'rocks';
+    if (constructionId) return kind === 'turret' ? 'rocks' : `construction_${constructionId}`;
+    return kind === 'turret' ? 'rocks' : kind === 'pedestal' ? 'placeable_turret' : 'rocks';
+  }
+
+  private getTurretPreviewSpec(constructionId?: PlacementPreviewNetState['constructionId']) {
+    if (constructionId) {
+      const definition = getCoopDefenseConstructionDefinition(constructionId);
+      if (definition.kind === 'turret') return getTurretVisualSpec(definition.weaponId);
+    }
+    return getTurretVisualSpec('SPOREN');
+  }
+
+  private ensureTurretPreviewImage(
+    playerId: string | undefined,
+    constructionId?: PlacementPreviewNetState['constructionId'],
+  ): Phaser.GameObjects.Image {
+    const spec = this.getTurretPreviewSpec(constructionId);
+    if (playerId === undefined) {
+      if (!this.localTurretPreviewImage) {
+        this.localTurretPreviewImage = this.scene.add.image(0, 0, spec.textureKey)
+          .setDepth(DEPTH.OVERLAY - 1)
+          .setVisible(false);
+      }
+      return this.localTurretPreviewImage
+        .setTexture(spec.textureKey)
+        .setDisplaySize(spec.displaySize, spec.displaySize)
+        .clearTint();
+    }
+
+    let image = this.remoteTurretPreviewImages.get(playerId);
+    if (!image) {
+      image = this.scene.add.image(0, 0, spec.textureKey)
+        .setDepth(DEPTH.OVERLAY - 2)
+        .setVisible(false);
+      this.remoteTurretPreviewImages.set(playerId, image);
+    }
+    return image
+      .setTexture(spec.textureKey)
+      .setDisplaySize(spec.displaySize, spec.displaySize)
+      .clearTint();
   }
 
   private ensureRemoteTunnelPreview(playerId: string): TunnelPreviewVisualState {

@@ -101,8 +101,11 @@ export class PlacementSystem {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
     if (
+      rock.indestructible === true
+      || (
       rock.constructionId
       && getCoopDefenseConstructionDefinition(rock.constructionId).indestructible === true
+      )
     ) {
       return { ...rock };
     }
@@ -195,6 +198,10 @@ export class PlacementSystem {
     const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, cfg.placementRange);
     if (!targetCell) return undefined;
     const targetWorld = this.gridToWorld(targetCell.gridX, targetCell.gridY);
+    const mask = AutoTiler.computeMask(targetCell.gridX, targetCell.gridY, (gx, gy) => {
+      if (gx === targetCell.gridX && gy === targetCell.gridY) return true;
+      return this.rockGrid.isOccupied(gx, gy);
+    });
     return {
       angle: Phaser.Math.Angle.Between(originX, originY, targetWorld.x, targetWorld.y),
       targetX: targetWorld.x,
@@ -202,7 +209,7 @@ export class PlacementSystem {
       gridX: targetCell.gridX,
       gridY: targetCell.gridY,
       isValid: this.canPlaceSingleCell(targetCell.gridX, targetCell.gridY),
-      frame: 0,
+      frame: cfg.kind === 'turret' ? AutoTiler.getFrame(mask, ROCK_AUTOTILE) : 0,
       range: cfg.placementRange,
       kind: cfg.kind,
       sourceSlot: 'weapon2',
@@ -269,6 +276,7 @@ export class PlacementSystem {
         ? 0
         : now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
       angle: preview.angle,
+      indestructible: cfg.placeable.indestructible,
       toolRef: { kind: 'utility', id: cfg.id } satisfies LoadoutToolRef,
       enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
       enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
@@ -325,6 +333,7 @@ export class PlacementSystem {
         || current.warningStartsAt !== incoming.warningStartsAt
         || current.kind !== incoming.kind
         || current.angle !== incoming.angle
+        || current.indestructible !== incoming.indestructible
         || current.constructionId !== incoming.constructionId
         || current.toolRef?.kind !== incoming.toolRef?.kind
         || current.toolRef?.id !== incoming.toolRef?.id
@@ -367,10 +376,11 @@ export class PlacementSystem {
       gridX: targetCell.gridX,
       gridY: targetCell.gridY,
       isValid,
-      frame: AutoTiler.getFrame(mask, ROCK_AUTOTILE),
+      frame: cfg.placeable.kind === 'turret' ? AutoTiler.getFrame(mask, ROCK_AUTOTILE) : 0,
       range: cfg.placeable.range,
       kind: cfg.placeable.kind,
       sourceSlot: 'utility',
+      powerUpDefId: cfg.type === 'placeable_pedestal' ? cfg.powerUpDefId : undefined,
     };
   }
 

@@ -59,6 +59,8 @@ export interface ArenaBuilderResult {
    * Terrain-Farb-Sampler braucht sie, weil die Live-Images nicht mehr existieren.
    */
   decalStamps: DirtStamp[];
+  /** Gebackene Fels-Decals. Wird bei einer Fels-Aenderung einmalig neu aufgebaut. */
+  rockDecalLayer: Phaser.GameObjects.RenderTexture | null;
 }
 
 /** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
@@ -193,7 +195,7 @@ export class ArenaBuilder {
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
-    return {
+    const result: ArenaBuilderResult = {
       baseZoneObjects,
       rockGroup,
       rockObjects,
@@ -206,7 +208,13 @@ export class ArenaBuilder {
       dirtStamps,
       decalLayer,
       decalStamps,
+      rockDecalLayer: null,
     };
+
+    // Erst nach dem Erzeugen der Live-Felsen backen, damit der Layer exakt die aktiven
+    // Fels-IDs kennt. Zerstorungen bauen denselben Layer spaeter gesammelt neu.
+    ArenaBuilder.rebuildRockDecals(this.scene, result, layout);
+    return result;
   }
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
@@ -344,6 +352,40 @@ export class ArenaBuilder {
     rockObjects[id] = null;
   }
 
+  /**
+   * Backt alle noch getragenen Fels-Decals in ein einziges Layer. Ein Decal, das mehrere
+   * Felsen beruehrt, bleibt nur sichtbar, solange alle seine Traeger aktiv sind. Das ist
+   * bewusst ein Rebuild bei Hindernisaenderungen und kein Live-Image pro Fels: dadurch
+   * bleiben die rund 10 Varianten und viele Instanzen im Renderwalk ein einziges Objekt.
+   */
+  static rebuildRockDecals(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    layout: ArenaLayout,
+  ): void {
+    if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
+    result.rockDecalLayer = null;
+
+    if (!layout.decals?.some((decal) => decal.surface === 'rock')) return;
+
+    const activeRockIds = new Set<number>();
+    for (let id = 0; id < layout.rocks.length; id += 1) {
+      if (result.rockObjects[id]?.active) activeRockIds.add(id);
+    }
+
+    const images = ArenaVisualFactory.createRockDecals(scene, layout.decals, undefined, activeRockIds);
+    if (images.length === 0) return;
+
+    const layer = scene.add.renderTexture(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    layer.setOrigin(0, 0);
+    layer.setDepth(DEPTH.ROCK_DECALS);
+    layer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
+    layer.draw(images);
+    layer.render();
+    for (const image of images) image.destroy();
+    result.rockDecalLayer = layer;
+  }
+
   // ── Teardown ────────────────────────────────────────────────────────────────
 
   /**
@@ -391,6 +433,9 @@ export class ArenaBuilder {
     if (result.decalLayer?.active) result.decalLayer.destroy();
     result.decalLayer = null;
     result.decalStamps.length = 0;
+
+    if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
+    result.rockDecalLayer = null;
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────

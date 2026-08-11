@@ -53,15 +53,15 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 }
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  critical_chance: 'UPGRADE_AK47_ACCURACY',
-  critical_damage: 'UPGRADE_AK47_FOCUS_DAMAGE',
+  critical_chance: 'UPGRADE_CRITICAL_CHANCE',
+  critical_damage: 'UPGRADE_CRITICAL_DAMAGE',
   glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
-  shotgun_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
-  shotgun_lightning_radius: 'UPGRADE_ASMD_SECONDARY_EXPLOSION_RADIUS',
-  molotov_grenade_radius: 'UPGRADE_ASMD_PRIMARY_COOLDOWN',
-  mini_rocket_launcher_homing_turn: 'UPGRADE_P90_HOMING_TURN',
-  flamethrower_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
-  armageddon_radius: 'UPGRADE_AIRSTRIKE_RADIUS',
+  shotgun_range: 'UPGRADE_SHOTGUN_RANGE',
+  shotgun_lightning_radius: 'UPGRADE_SHOTGUN_LIGHTNING_RADIUS',
+  molotov_grenade_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
+  mini_rocket_launcher_homing_turn: 'UPGRADE_MINI_ROCKET_LAUNCHER_HOMING_TURN',
+  flamethrower_range: 'UPGRADE_FLAMETHROWER_RANGE',
+  armageddon_radius: 'UPGRADE_ARMAGEDDON_RADIUS',
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {

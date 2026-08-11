@@ -214,10 +214,14 @@ export class ShadowSystem {
 
       const cell = layout.rocks[id];
       const runtime = runtimeById.get(id);
-      const preset = runtime && runtime.kind !== 'rock' ? SHADOW_CASTERS.turret : SHADOW_CASTERS.rock;
       const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(this.getLayer(preset.layerDepth, 'rocks').staticGraphics, worldX, worldY, preset);
+      const rockPreset = SHADOW_CASTERS.rock;
+      this.drawFootprint(this.getLayer(rockPreset.layerDepth, 'rocks').staticGraphics, worldX, worldY, rockPreset);
+      if (runtime?.kind === 'turret') {
+        const turretPreset = SHADOW_CASTERS.turret;
+        this.drawFootprint(this.getLayer(turretPreset.layerDepth, 'rocks').staticGraphics, worldX, worldY, turretPreset);
+      }
     }
 
     this.bakeStaticGroup('rocks');

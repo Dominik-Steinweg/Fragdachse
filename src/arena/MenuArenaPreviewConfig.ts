@@ -1,7 +1,7 @@
 import { ARENA_BACKGROUND_TEXTURE_KEY } from './ArenaBackground';
 import { ARENA_HEIGHT, ARENA_OFFSET_Y, CELL_SIZE, COLORS, FULL_ARENA_WIDTH, FULL_ARENA_WIDTH as MENU_PREVIEW_WIDTH, GAME_HEIGHT, GAME_WIDTH, GRID_ROWS } from '../config';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, TreeCell } from '../types';
-import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey } from './DecalConfig';
 
 interface GridRect {
   minX: number;
@@ -432,8 +432,30 @@ function generatePreviewDecals(
         offsetX: randomOffset(rng, clampDecalOffsetPx(layerConfig.maxOffsetX)),
         offsetY: randomOffset(rng, clampDecalOffsetPx(layerConfig.maxOffsetY)),
         terrain,
+        surface: 'ground',
+        rotation: rng() * Math.PI * 2,
       });
     }
+  }
+
+  const rockIndexByKey = new Map<number, number>();
+  rocks.forEach((rock, index) => rockIndexByKey.set(cellKey(rock.gridX, rock.gridY), index));
+  for (const rock of rocks) {
+    if (!rollPercent(rng, ROCK_DECAL_CONFIG.coveragePercent)) continue;
+    const textureKey = pickWeightedDecalTextureKey(rng, ROCK_DECAL_CONFIG.variants);
+    if (!textureKey) continue;
+    const rotation = rng() * Math.PI * 2;
+    decals.push({
+      gridX: rock.gridX,
+      gridY: rock.gridY,
+      textureKey,
+      offsetX: randomOffset(rng, ROCK_DECAL_CONFIG.maxOffsetX),
+      offsetY: randomOffset(rng, ROCK_DECAL_CONFIG.maxOffsetY),
+      terrain: 'rock',
+      surface: 'rock',
+      rockIds: [rockIndexByKey.get(cellKey(rock.gridX, rock.gridY)) ?? -1],
+      rotation,
+    });
   }
 
   return decals;

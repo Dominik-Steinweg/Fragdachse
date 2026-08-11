@@ -644,18 +644,14 @@ export class LoadoutManager {
    * Überschreibt den Utility-Slot eines Spielers temporär.
    * Der aktuelle Zustand (Config + Cooldown) wird zwischengespeichert.
    */
-  overrideUtility(playerId: string, config: UtilityConfig, ammo: number): void {
+  overrideUtility(playerId: string, config: UtilityConfig, ammo: number): boolean {
     const loadout = this.loadouts.get(playerId);
-    if (!loadout) return;
+    if (!loadout || this.savedUtilities.has(playerId)) return false;
 
-    // Nur das urspruengliche Basis-Utility sichern. Wenn bereits ein Spezial-Utility aktiv ist,
-    // darf ein neu eingesammeltes Spezial-Utility diesen Snapshot nicht ueberschreiben.
-    if (!this.savedUtilities.has(playerId)) {
-      this.savedUtilities.set(playerId, {
-        config:     loadout.utility.config,
-        lastUsedAt: loadout.utility.getLastUsedAt(),
-      });
-    }
+    this.savedUtilities.set(playerId, {
+      config:     loadout.utility.config,
+      lastUsedAt: loadout.utility.getLastUsedAt(),
+    });
 
     // Neues Utility einsetzen
     const modifierSource = this.utilityConfigModifierSource?.(playerId);
@@ -664,6 +660,17 @@ export class LoadoutManager {
     this.utilityAmmo.set(playerId, ammo);
     this.bridge.publishUtilityCooldownUntil(playerId, 0, config.id); // sofort einsatzbereit
     this.bridge.publishUtilityOverrideName(playerId, effectiveConfig.displayName);
+    return true;
+  }
+
+  /** True, solange der Utility-Slot bereits durch ein temporaeres Item belegt ist. */
+  hasUtilityOverride(playerId: string): boolean {
+    return this.savedUtilities.has(playerId);
+  }
+
+  /** Bricht einen temporaeren Utility-Override bei Tod, Spectator-Wechsel oder Disconnect ab. */
+  releaseUtilityOverride(playerId: string): void {
+    this.restoreUtility(playerId);
   }
 
   /**
@@ -1697,7 +1704,7 @@ export class LoadoutManager {
         break;
 
       case 'placement_mode':
-        if (cfg.type === 'placeable_rock' || cfg.type === 'placeable_turret') {
+        if (cfg.type === 'placeable_rock' || cfg.type === 'placeable_turret' || cfg.type === 'placeable_pedestal') {
           didUse = this.placeableRockHandler?.(cfg as PlaceableUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor) ?? false;
         }
         break;

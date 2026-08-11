@@ -13,6 +13,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { RockGridIndex } from '../src/arena/RockGridIndex';
+import { AutoTiler, ROCK_AUTOTILE } from '../src/arena/AutoTiler';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../src/config';
 import {
   COOP_DEFENSE_CONSTRUCTIONS,
@@ -381,5 +382,30 @@ describe('dynamic construction pedestals', () => {
     expect(placement.applyDamage(placed!.id, 999, 'enemy')?.hp).toBe(1);
     expect(placement.removeRockAt(placed!.gridX, placed!.gridY, 'inspector')?.id).toBe(placed!.id);
     expect(rockGrid.isOccupied(placed!.gridX, placed!.gridY)).toBe(false);
+  });
+
+  it('previews turret bases with the connected rock autotile frame', () => {
+    const connectedLayout = { ...layout, rocks: [{ gridX: 5, gridY: 3 }] };
+    const rockGrid = new RockGridIndex(connectedLayout.rocks);
+    const placement = new PlacementSystem(
+      connectedLayout,
+      rockGrid,
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
+    );
+    const originX = ARENA_OFFSET_X + CELL_SIZE * 3.5;
+    const originY = ARENA_OFFSET_Y + CELL_SIZE * 3.5;
+    const preview = placement.getConstructionPlacementPreview(
+      COOP_DEFENSE_CONSTRUCTIONS.rocket_turret,
+      originX,
+      originY,
+      ARENA_OFFSET_X + CELL_SIZE * 4.5,
+      originY,
+    );
+    const expectedMask = AutoTiler.computeMask(4, 3, (gx, gy) => (
+      (gx === 4 && gy === 3) || rockGrid.isOccupied(gx, gy)
+    ));
+
+    expect(preview).toMatchObject({ kind: 'turret', gridX: 4, gridY: 3 });
+    expect(preview?.frame).toBe(AutoTiler.getFrame(expectedMask, ROCK_AUTOTILE));
   });
 });

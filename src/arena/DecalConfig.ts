@@ -16,6 +16,9 @@ export interface DecalLayerConfig {
 
 export const DECAL_SIZE = 16;
 export const DECAL_MAX_SAFE_OFFSET_PX = Math.floor((CELL_SIZE - DECAL_SIZE) / 2);
+/** Rock decals are intentionally slightly larger than ground specks so a few can cross a cell seam. */
+export const ROCK_DECAL_SIZE = 26;
+export const ROCK_DECAL_MAX_OFFSET_PX = 7;
 const DECAL_ASSET_PATH = './assets/sprites/decals';
 
 export const ARENA_DECAL_CONFIG = {
@@ -53,7 +56,25 @@ export const ARENA_DECAL_CONFIG = {
       { fileName: 'pilz01.png', frequencyPercent: 30 },
     ],
   },
-} satisfies Record<DecalTerrainLayer, DecalLayerConfig>;
+} satisfies Record<Exclude<DecalTerrainLayer, 'rock'>, DecalLayerConfig>;
+
+export const ROCK_DECAL_CONFIG: DecalLayerConfig = {
+  coveragePercent: 14,
+  maxOffsetX: ROCK_DECAL_MAX_OFFSET_PX,
+  maxOffsetY: ROCK_DECAL_MAX_OFFSET_PX,
+  variants: [
+    { fileName: 'rock_crack_hairline.png', frequencyPercent: 18 },
+    { fileName: 'rock_crack_branch.png', frequencyPercent: 14 },
+    { fileName: 'rock_crack_fracture.png', frequencyPercent: 10 },
+    { fileName: 'rock_moss_fringe.png', frequencyPercent: 12 },
+    { fileName: 'rock_lichen_patch.png', frequencyPercent: 10 },
+    { fileName: 'rock_moss_crescent.png', frequencyPercent: 10 },
+    { fileName: 'rock_sprout_pair.png', frequencyPercent: 8 },
+    { fileName: 'rock_fern_cluster.png', frequencyPercent: 6 },
+    { fileName: 'rock_pebbles.png', frequencyPercent: 7 },
+    { fileName: 'rock_mineral_streak.png', frequencyPercent: 5 },
+  ],
+};
 
 export function getDecalTextureKey(fileName: string): DecalKey {
   return fileName.replace(/\.[^.]+$/, '');
@@ -61,7 +82,7 @@ export function getDecalTextureKey(fileName: string): DecalKey {
 
 export function preloadArenaDecalAssets(loader: Phaser.Loader.LoaderPlugin): void {
   const seen = new Set<string>();
-  for (const layerConfig of Object.values(ARENA_DECAL_CONFIG)) {
+  for (const layerConfig of [...Object.values(ARENA_DECAL_CONFIG), ROCK_DECAL_CONFIG]) {
     for (const variant of layerConfig.variants) {
       if (seen.has(variant.fileName)) continue;
       seen.add(variant.fileName);

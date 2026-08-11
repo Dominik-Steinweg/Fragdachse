@@ -5,7 +5,7 @@ import {
   resolveCoopDefenseEnemySpawnConfig,
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
-import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
+import { POWERUP_DEFS, shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
 import {
   DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
@@ -203,6 +203,10 @@ export interface CoopDefenseMapSecondaryObjectiveRewards {
    * Hold mit anderem Reward (Podest) setzt ihn ausdruecklich auf `false`.
    */
   readonly repairTargetOnComplete?: boolean;
+  /** Nur fuer `hold`: ein einmaliger Reward, der ein Power-Up-Podest platzierbar macht. */
+  readonly placeablePedestalOnComplete?: {
+    readonly powerUpDefId: string;
+  };
 }
 
 export interface CoopDefenseMapSecondaryObjectiveConfig {
@@ -1081,15 +1085,53 @@ function normalizeSecondaryObjectiveRewards(
       `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has a non-boolean repairTargetOnComplete`,
     );
   }
+  const hasPlaceablePedestalReward = Object.prototype.hasOwnProperty.call(rewards, 'placeablePedestalOnComplete');
+  if (hasPlaceablePedestalReward && objectiveType !== 'hold') {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} must not declare placeablePedestalOnComplete`,
+    );
+  }
+  const placeableReward = rewards.placeablePedestalOnComplete;
+  if (hasPlaceablePedestalReward && (
+    typeof placeableReward !== 'object'
+    || placeableReward === null
+    || Array.isArray(placeableReward)
+    || typeof placeableReward.powerUpDefId !== 'string'
+    || placeableReward.powerUpDefId.trim().length === 0
+  )) {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has an invalid placeablePedestalOnComplete`,
+    );
+  }
+  const normalizedPowerUpDefId = hasPlaceablePedestalReward
+    ? placeableReward?.powerUpDefId.trim()
+    : undefined;
+  if (normalizedPowerUpDefId !== undefined && (
+    POWERUP_DEFS[normalizedPowerUpDefId] === undefined
+    || TIMED_POWERUP_PEDESTAL_CONFIGS[normalizedPowerUpDefId] === undefined
+  )) {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} references unknown timed Power-Up pedestal: ${normalizedPowerUpDefId}`,
+    );
+  }
+  if (normalizedPowerUpDefId !== undefined && rewards.repairTargetOnComplete !== false) {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} must set repairTargetOnComplete=false when placing a pedestal reward`,
+    );
+  }
   // Die Wiederherstellung ist der Standardreward eines Holds; ein Hold mit anderem Reward schaltet
   // sie ausdruecklich ab, statt sie durch eine fehlende Zeile zu verlieren.
   const repair = objectiveType === 'hold'
     ? { repairTargetOnComplete: hasRepairFlag ? rewards.repairTargetOnComplete === true : true }
     : {};
-  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) return repair;
+  const placement = normalizedPowerUpDefId === undefined
+    ? {}
+    : { placeablePedestalOnComplete: { powerUpDefId: normalizedPowerUpDefId } };
+  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) return { ...repair, ...placement };
   const value = rewards.xpPerTarget;
   return {
     ...repair,
+    ...placement,
     xpPerTarget: typeof value === 'number' && Number.isFinite(value)
       ? Math.max(0, Math.floor(value))
       : 0,

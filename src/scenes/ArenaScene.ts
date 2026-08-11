@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
+import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
 import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
 import { PlayerManager }         from '../entities/PlayerManager';
@@ -363,6 +364,7 @@ export class ArenaScene extends Phaser.Scene {
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
+    preloadTurretVisualAssets(this.load);
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
@@ -722,7 +724,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
