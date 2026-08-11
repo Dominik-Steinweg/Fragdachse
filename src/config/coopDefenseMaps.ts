@@ -103,6 +103,12 @@ export type CoopBaseRole = 'main' | 'outpost' | 'spawn-point';
 export interface CoopBaseConfig {
   readonly id: string;
   readonly hpMax: number;
+  /**
+   * Beschaedigter Startzustand als Anteil von `hpMax` (0 < f <= 1). Gedacht fuer Missionsziele, die
+   * bewusst angeschlagen auftauchen. Beide Peers loesen ihn deterministisch aus der Map auf; nur die
+   * spaetere HP-Aenderung laeuft ueber den replizierten Basis-Delta-Snapshot.
+   */
+  readonly startHpFactor?: number;
   /** Optionaler HP-Faktor; feindliche Strukturen verwenden sonst den zentralen Standard. */
   readonly playerScaling?: CoopBasePlayerScaling;
   readonly faction?: CoopBaseFaction;
@@ -189,8 +195,14 @@ export interface ResolvedCoopDefenseMapEncounterConfig {
 export type CoopDefenseSecondaryObjectiveType = 'destroy' | 'hold' | 'carry';
 
 export interface CoopDefenseMapSecondaryObjectiveRewards {
-  /** B1 stores this value only; reward booking is added in a later expansion step. */
+  /** Team-XP je aufgeloestem Ziel; gebucht beim Ziel, nicht beim Missionsabschluss. */
   readonly xpPerTarget?: number;
+  /**
+   * Nur fuer `hold`: Missionsdrohnen stellen das ueberlebende Ziel wieder her. Ohne Angabe ist der
+   * Wert fuer `hold` `true` – eine vergessene Zeile soll den Reward nicht still verschlucken. Ein
+   * Hold mit anderem Reward (Podest) setzt ihn ausdruecklich auf `false`.
+   */
+  readonly repairTargetOnComplete?: boolean;
 }
 
 export interface CoopDefenseMapSecondaryObjectiveConfig {
@@ -198,6 +210,11 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly type: CoopDefenseSecondaryObjectiveType;
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
+  /**
+   * Nur fuer `hold` und dort Pflicht: Zeitpunkt, bis zu dem das Ziel leben muss. Hold besitzt keinen
+   * Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
+   */
+  readonly holdUntil?: CoopDefenseMapEncounterStart;
   readonly targets: readonly string[];
   readonly targetGoal?: number;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
@@ -216,6 +233,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly type: CoopDefenseSecondaryObjectiveType;
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
+  readonly holdUntil?: CoopDefenseMapEncounterStart;
   readonly targets: readonly string[];
   readonly targetGoal: number;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
@@ -523,6 +541,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     type: objective.type,
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
+    ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
     targets: [...objective.targets],
     targetGoal: objective.targetGoal ?? objective.targets.length,
     ...(objective.rewards ? { rewards: { ...objective.rewards } } : {}),
@@ -854,6 +873,22 @@ function normalizeSecondaryObjectiveConfigs(
       throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} needs at least one target`);
     }
 
+    // Hold ist binaer und besitzt keinen Hintergrundzustand: genau ein Ziel, ein authored Haltefenster
+    // statt eines Fokusfensters. Alle anderen Archetypen kennen kein holdUntil.
+    if (objective.type === 'hold') {
+      if (objective.holdUntil === undefined) {
+        throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs a holdUntil trigger`);
+      }
+      if (objective.focusUntil !== undefined) {
+        throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} must not declare focusUntil`);
+      }
+      if (objective.targets.length !== 1) {
+        throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs exactly one target`);
+      }
+    } else if (objective.holdUntil !== undefined) {
+      throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdUntil`);
+    }
+
     const targetIds = new Set<string>();
     const targets = objective.targets.map((targetId: string) => {
       if (typeof targetId !== 'string' || targetId.trim().length === 0) {
@@ -881,13 +916,16 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.focusUntil === undefined
         ? {}
         : { focusUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.focusUntil, 'focusUntil', context) }),
+      ...(objective.holdUntil === undefined
+        ? {}
+        : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
       targets,
       targetGoal: typeof objective.targetGoal === 'number' && Number.isFinite(objective.targetGoal)
         ? Math.max(1, Math.min(targets.length, Math.floor(objective.targetGoal)))
         : targets.length,
-      ...(objective.rewards === undefined
+      ...(objective.rewards === undefined && objective.type !== 'hold'
         ? {}
-        : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.rewards) }),
+        : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.type, objective.rewards ?? {}) }),
       ...normalizeSecondaryObjectiveLabel(mapId, id, 'displayName', objective.displayName),
       ...normalizeSecondaryObjectiveLabel(mapId, id, 'rewardHint', objective.rewardHint),
     };
@@ -899,7 +937,9 @@ function normalizeSecondaryObjectiveConfigs(
     const lastEncounterId = context.encounters[context.encounters.length - 1].id;
     for (const objective of normalizedObjectives) {
       if (objective.type !== 'hold') continue;
-      const isBoundToLastEncounter = [objective.start, objective.focusUntil]
+      // Der Reward haengt an holdUntil: Ein Halten, das erst mit dem rundenbeendenden Clear faellig
+      // waere, koennte nie ausgezahlt werden.
+      const isBoundToLastEncounter = [objective.start, objective.holdUntil]
         .some((trigger) => trigger?.type === 'after-encounter' && trigger.encounterId === lastEncounterId);
       if (isBoundToLastEncounter) {
         throw new Error(
@@ -958,7 +998,7 @@ function normalizeSecondaryObjectiveTrigger(
   mapId: string,
   objectiveId: string,
   trigger: CoopDefenseMapEncounterStart | undefined,
-  fieldName: 'start' | 'focusUntil',
+  fieldName: 'start' | 'focusUntil' | 'holdUntil',
   context: SecondaryObjectiveNormalizationContext,
 ): CoopDefenseMapEncounterStart {
   if (!trigger || typeof trigger.type !== 'string') {
@@ -1024,14 +1064,32 @@ function normalizeSecondaryObjectiveLabel(
 function normalizeSecondaryObjectiveRewards(
   mapId: string,
   objectiveId: string,
+  objectiveType: CoopDefenseSecondaryObjectiveType,
   rewards: CoopDefenseMapSecondaryObjectiveRewards,
 ): CoopDefenseMapSecondaryObjectiveRewards {
   if (typeof rewards !== 'object' || rewards === null || Array.isArray(rewards)) {
     throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has invalid rewards`);
   }
-  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) return {};
+  const hasRepairFlag = Object.prototype.hasOwnProperty.call(rewards, 'repairTargetOnComplete');
+  if (hasRepairFlag && objectiveType !== 'hold') {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} must not declare repairTargetOnComplete`,
+    );
+  }
+  if (hasRepairFlag && typeof rewards.repairTargetOnComplete !== 'boolean') {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has a non-boolean repairTargetOnComplete`,
+    );
+  }
+  // Die Wiederherstellung ist der Standardreward eines Holds; ein Hold mit anderem Reward schaltet
+  // sie ausdruecklich ab, statt sie durch eine fehlende Zeile zu verlieren.
+  const repair = objectiveType === 'hold'
+    ? { repairTargetOnComplete: hasRepairFlag ? rewards.repairTargetOnComplete === true : true }
+    : {};
+  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) return repair;
   const value = rewards.xpPerTarget;
   return {
+    ...repair,
     xpPerTarget: typeof value === 'number' && Number.isFinite(value)
       ? Math.max(0, Math.floor(value))
       : 0,
@@ -1049,16 +1107,27 @@ interface AuthoredSecondaryObjectiveEncounterWindow {
   readonly endEncounterIndex: number;
 }
 
+/**
+ * Ende des authored Aktivfensters. Hold besitzt kein `focusUntil`; sein `holdUntil` beendet
+ * Lebenszyklus und Fokus zugleich und ist damit dasselbe Fensterende.
+ */
+function getAuthoredSecondaryObjectiveWindowEnd(
+  objective: CoopDefenseMapSecondaryObjectiveConfig,
+): CoopDefenseMapEncounterStart | undefined {
+  return objective.focusUntil ?? objective.holdUntil;
+}
+
 function getAuthoredSecondaryObjectiveTimeWindow(
   objective: CoopDefenseMapSecondaryObjectiveConfig,
 ): AuthoredSecondaryObjectiveTimeWindow | null {
   if (objective.start.type !== 'time') return null;
+  const end = getAuthoredSecondaryObjectiveWindowEnd(objective);
   // Ein Encounter-Clear ist in authored Daten kein fester Zeitpunkt. Das Fenster darf deshalb
   // nicht fälschlich als unendlich lang behandelt und dadurch zu streng abgelehnt werden.
-  if (objective.focusUntil !== undefined && objective.focusUntil.type !== 'time') return null;
+  if (end !== undefined && end.type !== 'time') return null;
   return {
     startAtMs: objective.start.atMs,
-    endAtMs: objective.focusUntil?.atMs ?? Number.POSITIVE_INFINITY,
+    endAtMs: end?.atMs ?? Number.POSITIVE_INFINITY,
   };
 }
 
@@ -1070,15 +1139,17 @@ function getAuthoredSecondaryObjectiveEncounterWindow(
   const startEncounterIndex = encounterIndexById.get(objective.start.encounterId);
   if (startEncounterIndex === undefined) return null;
 
-  if (objective.focusUntil === undefined) {
+  const end = getAuthoredSecondaryObjectiveWindowEnd(objective);
+  if (end === undefined) {
     return { startEncounterIndex, endEncounterIndex: Number.POSITIVE_INFINITY };
   }
-  if (objective.focusUntil.type !== 'after-encounter') return null;
-  const endEncounterIndex = encounterIndexById.get(objective.focusUntil.encounterId);
+  if (end.type !== 'after-encounter') return null;
+  const endEncounterIndex = encounterIndexById.get(end.encounterId);
   if (endEncounterIndex === undefined) return null;
   if (endEncounterIndex <= startEncounterIndex) {
+    const fieldName = objective.focusUntil ? 'focusUntil' : 'holdUntil';
     throw new Error(
-      `[coopDefenseMaps] Secondary objective ${objective.id} has a focusUntil encounter before or equal to its start encounter`,
+      `[coopDefenseMaps] Secondary objective ${objective.id} has a ${fieldName} encounter before or equal to its start encounter`,
     );
   }
   return { startEncounterIndex, endEncounterIndex };
@@ -1090,11 +1161,13 @@ function validateSecondaryObjectiveWindows(
   encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
 ): void {
   for (const objective of objectives) {
+    const end = getAuthoredSecondaryObjectiveWindowEnd(objective);
     if (objective.start.type === 'time'
-      && objective.focusUntil?.type === 'time'
-      && objective.focusUntil.atMs <= objective.start.atMs) {
+      && end?.type === 'time'
+      && end.atMs <= objective.start.atMs) {
+      const fieldName = objective.focusUntil ? 'focusUntil' : 'holdUntil';
       throw new Error(
-        `[coopDefenseMaps] Secondary objective ${mapId}:${objective.id} has a focusUntil before its start`,
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objective.id} has a ${fieldName} before its start`,
       );
     }
   }
@@ -1505,6 +1578,21 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   if (baseConfig.dormant === true && role === 'main') {
     throw new Error(`[coopDefenseMaps] Dormant mission structure ${baseConfig.id} must not use role main`);
   }
+  if (baseConfig.startHpFactor !== undefined) {
+    if (typeof baseConfig.startHpFactor !== 'number'
+      || !Number.isFinite(baseConfig.startHpFactor)
+      || baseConfig.startHpFactor <= 0
+      || baseConfig.startHpFactor > 1) {
+      throw new Error(
+        `[coopDefenseMaps] Base ${baseConfig.id} has an invalid startHpFactor; expected a number in (0, 1]`,
+      );
+    }
+    // Eine angeschlagene Hauptbasis wuerde still das Verlustbudget der Runde veraendern
+    // (CoopDefenseRoundStateSystem summiert die HP aller friendly main bases).
+    if (role === 'main') {
+      throw new Error(`[coopDefenseMaps] Base ${baseConfig.id} must not use startHpFactor with role main`);
+    }
+  }
   // Podeste versorgen ausschliesslich Spieler und bleiben deshalb an Gegnerbasen verboten.
   // Basistuerme sind dagegen fraktionsfaehig und erhalten ihr Zielverhalten erst zur Laufzeit.
   if (faction === 'hostile' && powerUpPedestals.length > 0) {
@@ -1516,6 +1604,7 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   return {
     id: baseConfig.id,
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
+    ...(baseConfig.startHpFactor === undefined ? {} : { startHpFactor: baseConfig.startHpFactor }),
     playerScaling: normalizeBasePlayerScaling(baseConfig.playerScaling),
     faction,
     role,

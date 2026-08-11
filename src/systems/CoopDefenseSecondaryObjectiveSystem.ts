@@ -10,6 +10,11 @@ import type {
 export interface CoopDefenseSecondaryObjectiveSystemOptions {
   /** Liefert ausschließlich den semantischen Clear-Zustand des Encounter-Owners. */
   readonly isEncounterCleared?: (encounterId: string) => boolean;
+  /**
+   * Reward-Anforderung eines erfolgreich gehaltenen Ziels. Das System kennt die Wirkung nicht; der
+   * Aufrufer löst den authored Reward auf und stößt das zuständige System an.
+   */
+  readonly onHoldCompleted?: (objectiveId: string) => void;
 }
 
 interface SecondaryObjectiveRuntimeState {
@@ -24,13 +29,15 @@ interface SecondaryObjectiveRuntimeState {
  *
  * Lebenszyklus und HUD-Fokus sind getrennt: Ein Objective kann nach dem Fokusverlust als aktives
  * Hintergrund-Objective weiterlaufen und Ziele zählen, während ein anderes den Fokus übernimmt.
- * Das System kennt weder Basen noch den Encounter-Director; spätere Archetypen melden ihre
- * Weltauflösung über reportTargetResolved().
+ * Das System kennt weder Basen noch den Encounter-Director; die Welt meldet ausschließlich über
+ * reportTargetDestroyed(), was mit einem authored Ziel geschehen ist – die Wirkung bestimmt der
+ * Archetyp, nicht der Aufrufer.
  */
 export class CoopDefenseSecondaryObjectiveSystem {
   private elapsedMs = 0;
   private focusedObjectiveIndex: number | null = null;
   private readonly isEncounterCleared: ((encounterId: string) => boolean) | null;
+  private readonly onHoldCompleted: ((objectiveId: string) => void) | null;
   private readonly objectiveStates: SecondaryObjectiveRuntimeState[];
 
   constructor(
@@ -38,6 +45,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     options: CoopDefenseSecondaryObjectiveSystemOptions = {},
   ) {
     this.isEncounterCleared = options.isEncounterCleared ?? null;
+    this.onHoldCompleted = options.onHoldCompleted ?? null;
     this.objectiveStates = objectives.map((config) => ({
       config,
       resolvedTargetIds: new Set<string>(),
@@ -50,6 +58,10 @@ export class CoopDefenseSecondaryObjectiveSystem {
   hostUpdate(deltaMs: number, countdownActive: boolean): void {
     if (countdownActive) return;
     this.elapsedMs += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+
+    // Vor der Fokusprüfung: Ein Hold, der sein Fenster erreicht, gibt den Slot noch in diesem Tick
+    // frei, damit die Aktivierungsschleife unten ihn ohne Verzögerung weiterreichen kann.
+    this.updateHoldObjectives();
 
     // Nur ein belegter Fokus-Slot blockiert die nächste Aktivierung; aktive Hintergrund-Objectives
     // bleiben unabhängig davon zählbar und werden nicht erneut fokussiert.
@@ -98,27 +110,32 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   /**
-   * Meldet ein einmalig aufgelöstes authored Ziel. Die Meldung gilt für jedes aktive Objective,
-   * auch wenn es nach Fokusverlust als Hintergrund-Objective weiterläuft.
+   * Einzige Weltnaht für ein zerstörtes authored Missionsziel. Der Archetyp entscheidet die Wirkung:
+   * Für Destroy ist die Zerstörung der Fortschritt, für Hold ist sie der Fehlschlag. Rückgabe sind
+   * die dafür zu buchenden Team-XP – so kann ein authored `xpPerTarget` an einem Hold nicht
+   * versehentlich zu einer Belohnung für den Verlust des Ziels werden.
    */
-  reportTargetResolved(objectiveId: string, targetId: string): boolean {
+  reportTargetDestroyed(objectiveId: string, targetId: string): number {
     const state = this.findObjectiveState(objectiveId);
-    if (!state || state.state !== 'active') return false;
-    if (!state.config.targets.includes(targetId) || state.resolvedTargetIds.has(targetId)) return false;
+    if (!state || state.state !== 'active' || !state.config.targets.includes(targetId)) return 0;
 
-    state.resolvedTargetIds.add(targetId);
-    if (state.resolvedTargetIds.size >= state.config.targetGoal) this.completeObjective(state);
-    return true;
+    switch (state.config.type) {
+      case 'destroy':
+        return this.resolveTarget(state, targetId) ? this.getTargetResolutionXp(objectiveId) : 0;
+      case 'hold':
+        this.failObjective(state);
+        return 0;
+      default:
+        // Carry löst seine Objekte über Abgabe auf, nicht über Zerstörung.
+        return 0;
+    }
   }
 
-  /** Host-only Naht für spätere Archetypen mit einer echten Fail-Bedingung. */
+  /** Host-only Naht für Archetypen mit einer echten Fail-Bedingung. */
   reportObjectiveFailed(objectiveId: string): boolean {
     const state = this.findObjectiveState(objectiveId);
     if (!state || state.state !== 'active') return false;
-    state.state = 'failed';
-    state.stateChangedAtMs = this.elapsedMs;
-    const index = this.objectiveStates.indexOf(state);
-    if (this.focusedObjectiveIndex === index) this.focusedObjectiveIndex = null;
+    this.failObjective(state);
     return true;
   }
 
@@ -139,6 +156,32 @@ export class CoopDefenseSecondaryObjectiveSystem {
 
   private findObjectiveState(objectiveId: string): SecondaryObjectiveRuntimeState | null {
     return this.objectiveStates.find((state) => state.config.id === objectiveId) ?? null;
+  }
+
+  /**
+   * Zählt ein einmalig aufgelöstes authored Ziel. Die Meldung gilt für jedes aktive Objective,
+   * auch wenn es nach Fokusverlust als Hintergrund-Objective weiterläuft.
+   */
+  private resolveTarget(state: SecondaryObjectiveRuntimeState, targetId: string): boolean {
+    if (state.resolvedTargetIds.has(targetId)) return false;
+    state.resolvedTargetIds.add(targetId);
+    if (state.resolvedTargetIds.size >= state.config.targetGoal) this.completeObjective(state);
+    return true;
+  }
+
+  /**
+   * Hold kennt als einziger Archetyp einen zeitlichen Erfolg: Lebt das Ziel bei Erreichen von
+   * `holdUntil` noch, ist die Mission erfüllt. Ein zerstörtes Ziel hat das Objective vorher über
+   * {@link reportTargetDestroyed} auf `failed` gesetzt und wird hier nicht mehr erreicht.
+   */
+  private updateHoldObjectives(): void {
+    for (const state of this.objectiveStates) {
+      if (state.state !== 'active' || state.config.type !== 'hold') continue;
+      const holdUntil = state.config.holdUntil;
+      if (holdUntil === undefined || !this.isTriggerSatisfied(holdUntil)) continue;
+      this.completeObjective(state);
+      this.onHoldCompleted?.(state.config.id);
+    }
   }
 
   private activateObjective(index: number): void {
@@ -163,8 +206,19 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   private completeObjective(state: SecondaryObjectiveRuntimeState): void {
+    this.setTerminalState(state, 'completed');
+  }
+
+  private failObjective(state: SecondaryObjectiveRuntimeState): void {
+    this.setTerminalState(state, 'failed');
+  }
+
+  private setTerminalState(
+    state: SecondaryObjectiveRuntimeState,
+    terminalState: 'completed' | 'failed',
+  ): void {
     if (state.state !== 'active') return;
-    state.state = 'completed';
+    state.state = terminalState;
     state.stateChangedAtMs = this.elapsedMs;
     const index = this.objectiveStates.indexOf(state);
     if (this.focusedObjectiveIndex === index) this.focusedObjectiveIndex = null;

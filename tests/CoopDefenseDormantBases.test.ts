@@ -205,6 +205,73 @@ describe('Coop-Defense dormant mission structures', () => {
     }))).toThrow(/must not use role main/);
   });
 
+  it('resolves an authored damaged start state without touching the maximum', () => {
+    const damaged = resolveCoopDefenseBases(withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID
+        ? { ...base, startHpFactor: 0.25 }
+        : base),
+    })).find((base) => base.id === DORMANT_BASE_ID);
+    expect(damaged).toMatchObject({ hpMax: 1000, startHp: 250 });
+
+    // Untergrenze 1: Eine auf 0 aufgeloeste Struktur waere von Rundenbeginn an zerstoert und
+    // koennte nie aktiviert werden.
+    const barely = resolveCoopDefenseBases(withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID
+        ? { ...base, hpMax: 10, startHpFactor: 0.0001 }
+        : base),
+    })).find((base) => base.id === DORMANT_BASE_ID);
+    expect(barely?.startHp).toBe(1);
+  });
+
+  it('rejects an invalid startHpFactor and any damaged main base', () => {
+    const damagedBase = (changes: Record<string, unknown>) => withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID
+        ? { ...base, ...changes }
+        : base),
+    });
+
+    expect(() => normalizeCoopDefenseMapConfig(damagedBase({ startHpFactor: 0 })))
+      .toThrow(/invalid startHpFactor/);
+    expect(() => normalizeCoopDefenseMapConfig(damagedBase({ startHpFactor: 1.5 })))
+      .toThrow(/invalid startHpFactor/);
+    expect(() => normalizeCoopDefenseMapConfig(damagedBase({ startHpFactor: Number.NaN })))
+      .toThrow(/invalid startHpFactor/);
+    expect(() => normalizeCoopDefenseMapConfig(withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === 'test-friendly-main'
+        ? { ...base, startHpFactor: 0.25 }
+        : base),
+    }))).toThrow(/must not use startHpFactor with role main/);
+  });
+
+  it('starts a damaged structure below full hp and keeps it out of the client reset', () => {
+    const { scene } = makeScene();
+    const damaged: BaseSpec = { ...makeBaseSpec('damaged-outpost', {
+      dormant: true,
+      dormantObjectiveId: 'reveal-outpost',
+    }), startHp: 25 };
+    const manager = new BaseManager(scene, [damaged]);
+    const entity = manager.getBase(damaged.id)!;
+
+    expect(entity.getHp()).toBe(25);
+    expect(entity.getMaxHp()).toBe(100);
+    expect(entity.isDestroyed()).toBe(false);
+    // Dormanz-Garantie: kein HP-Delta im Basis-Snapshot, obwohl die Struktur beschaedigt ist.
+    expect(manager.getNetSnapshot()).toHaveLength(0);
+
+    // Der Client leitet den Startzustand aus derselben Map ab; die Delta-Konvention darf ihn
+    // waehrend der Dormanz nicht auf volle HP zuruecksetzen.
+    manager.applySnapshot([]);
+    expect(entity.getHp()).toBe(25);
+
+    manager.setSecondaryObjectiveStateProvider(() => 'active');
+    expect(entity.isDormant()).toBe(false);
+    expect(manager.getNetSnapshot()).toMatchObject([{ id: damaged.id, hp: 25, maxHp: 100 }]);
+
+    manager.heal(damaged.id, 500);
+    expect(entity.getHp()).toBe(100);
+    expect(manager.getNetSnapshot()).toHaveLength(0);
+  });
+
   it('keeps dormant structures out of world state until the objective activates', () => {
     const { scene } = makeScene();
     const active = makeBaseSpec('active-outpost', { turret: true });

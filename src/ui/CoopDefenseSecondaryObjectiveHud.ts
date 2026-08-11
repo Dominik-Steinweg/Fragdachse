@@ -323,7 +323,7 @@ export class CoopDefenseSecondaryObjectiveHud {
   ): void {
     const entries = focus ? [focus, ...chips] : [...chips];
     for (const entry of entries) {
-      if (entry.statusLine !== null) {
+      if (entry.terminal) {
         if (this.announcedTerminal.has(entry.objectiveId)) continue;
         this.announcedTerminal.add(entry.objectiveId);
         this.announcedActivation.add(entry.objectiveId);
@@ -345,7 +345,7 @@ export class CoopDefenseSecondaryObjectiveHud {
 
     this.panelProgress
       .setText(entry.statusLine ?? `${entry.progressCurrent} / ${entry.progressTotal}`)
-      .setColor(toCssColor(entry.statusLine ? style.accent : COLORS.GREY_1));
+      .setColor(toCssColor(entry.terminal ? style.accent : COLORS.GREY_1));
     fitTitle(
       this.panelTitle,
       entry.title,
@@ -427,7 +427,7 @@ export class CoopDefenseSecondaryObjectiveHud {
       chip.bg.setAlpha(style.panelAlpha);
       chip.progress
         .setText(entry.statusLine ?? `${entry.progressCurrent} / ${entry.progressTotal}`)
-        .setColor(toCssColor(entry.statusLine ? style.accent : COLORS.GREY_3));
+        .setColor(toCssColor(entry.terminal ? style.accent : COLORS.GREY_3));
       fitTitle(
         chip.title,
         entry.title,
@@ -509,14 +509,16 @@ export class CoopDefenseSecondaryObjectiveHud {
       ? 'positive'
       : entry.tone === 'failed' ? 'negative' : 'secondary';
     this.objectiveAnnouncements.enqueue({
-      id: `secondary:${objectiveId}:${entry.statusLine ?? 'active'}`,
+      id: `secondary:${objectiveId}:${entry.terminal ? entry.statusLine : 'active'}`,
       topic: `secondary:${objectiveId}`,
-      priority: entry.statusLine ? 50 : 0,
-      kicker: entry.statusLine ? `NEBENZIEL ${entry.statusLine}` : 'NEUES NEBENZIEL',
+      priority: entry.terminal ? 50 : 0,
+      kicker: entry.terminal ? `NEBENZIEL ${entry.statusLine}` : 'NEUES NEBENZIEL',
       title: entry.title,
-      detail: entry.statusLine
+      // Die Aktivierungsmeldung nennt Ausgangslage und Belohnung; ein binäres Ziel zeigt dort
+      // seinen Status statt einer nichtssagenden Null.
+      detail: entry.terminal
         ? undefined
-        : `${entry.progressCurrent} / ${entry.progressTotal}  ·  ${entry.rewardHint}`,
+        : `${entry.statusLine ?? `${entry.progressCurrent} / ${entry.progressTotal}`}  ·  ${entry.rewardHint}`,
       tone,
       ...(handsOverToPanel
         ? { target: { x: COLUMN_X, y: COLUMN_TOP_Y + PANEL_H / 2, scale: ANNOUNCE_TARGET_SCALE } }

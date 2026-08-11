@@ -103,6 +103,37 @@
         ]
       },
       "spawnCenter": { "gridX": 1, "gridY": 1 }
+    },
+    {
+      "id": "forward-outpost",
+      "hpMax": 1200,
+      "startHpFactor": 0.25,
+      "role": "outpost",
+      "dormant": true,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 46,
+        "gridY": 15
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 2,
+        "heightCells": 2
+      },
+      "turrets": [
+        {
+          "id": "rocket-north",
+          "cellOffset": { "gridX": 0, "gridY": 0 },
+          "mountSide": "front",
+          "weaponId": "TURRET_ROCKET"
+        },
+        {
+          "id": "rocket-south",
+          "cellOffset": { "gridX": 0, "gridY": 1 },
+          "mountSide": "front",
+          "weaponId": "TURRET_ROCKET"
+        }
+      ]
     }
   ],
   "powerUps": [],
@@ -131,10 +162,28 @@
       "start": {
         "type": "after-previous"
       },
+      "restAfterMs": 10000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
           "count": 5
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 1500
+        }
+      ]
+    },
+    {
+      "id": "a2-hold-encounter",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 6
         },
         {
           "enemyKind": "demon-badger",
@@ -190,6 +239,21 @@
         "destroy-brood-front-south"
       ],
       "rewards": { "xpPerTarget": 25 }
+    },
+    {
+      "id": "hold-forward-outpost",
+      "type": "hold",
+      "displayName": "AUSSENPOSTEN HALTEN",
+      "rewardHint": "RAKETENTÜRME WERDEN REPARIERT",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "a2-follow-up-encounter"
+      },
+      "holdUntil": {
+        "type": "after-encounter",
+        "encounterId": "a2-hold-encounter"
+      },
+      "targets": ["forward-outpost"]
     }
   ]
 }

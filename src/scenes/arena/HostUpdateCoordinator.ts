@@ -164,6 +164,8 @@ export class HostUpdateCoordinator {
     // The objective snapshot is now current; activate prebuilt mission structures before
     // flow-field refresh and enemy movement in this same host frame.
     this.ctx.baseManager?.syncDormantStates();
+    // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
+    this.ctx.coopDefenseObjectiveRepairSystem?.hostUpdate(delta, countdownActive);
     // Read active structure sources after the objective transition so pressure starts in the same
     // host frame in which its linked dormant base becomes active.
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);

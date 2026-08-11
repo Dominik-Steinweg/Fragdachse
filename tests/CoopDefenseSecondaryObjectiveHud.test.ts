@@ -144,6 +144,51 @@ describe('Coop defense secondary objective view model', () => {
     expect(model.focus?.progressTotal).toBe(3);
   });
 
+  it('shows a running Hold as a status instead of a meaningless zero', () => {
+    const holdConfig = makeConfig({ id: 'outpost', type: 'hold', targets: ['post'], targetGoal: 1 });
+    const running = buildSecondaryObjectiveViewModel(
+      [makeEntry({ objectiveId: 'outpost', type: 'hold', progressCurrent: 0, progressTotal: 1 })],
+      [holdConfig],
+      0,
+    );
+    expect(running.focus?.statusLine).toBe('HALTEN');
+    // Entscheidend fuer das HUD: Eine Statuszeile ist kein Abschluss – sonst kuendigte die
+    // laufende Mission sich selbst als erfuellt an.
+    expect(running.focus?.terminal).toBe(false);
+    expect(running.focus?.tone).toBe('focus');
+    expect(running.focus?.progressTotal).toBe(1);
+
+    const completed = buildSecondaryObjectiveViewModel(
+      [makeEntry({
+        objectiveId: 'outpost',
+        type: 'hold',
+        state: 'completed',
+        focused: false,
+        progressCurrent: 1,
+        progressTotal: 1,
+      })],
+      [holdConfig],
+      0,
+    );
+    expect(completed.focus?.statusLine).toBe('ERFÜLLT');
+    expect(completed.focus?.terminal).toBe(true);
+    expect(completed.signature).not.toBe(running.signature);
+
+    const lost = buildSecondaryObjectiveViewModel(
+      [makeEntry({ objectiveId: 'outpost', type: 'hold', state: 'failed', focused: false, progressTotal: 1 })],
+      [holdConfig],
+      0,
+    );
+    expect(lost.focus?.statusLine).toBe('GESCHEITERT');
+    expect(lost.focus?.terminal).toBe(true);
+  });
+
+  it('marks only terminal states as terminal', () => {
+    const active = buildSecondaryObjectiveViewModel([makeEntry()], [makeConfig()], 0);
+    expect(active.focus?.terminal).toBe(false);
+    expect(active.focus?.statusLine).toBeNull();
+  });
+
   it('resolves marker targets from the authored configuration', () => {
     expect(getSecondaryObjectiveTargets([makeConfig()], 'brood')).toEqual(['a', 'b', 'c']);
     expect(getSecondaryObjectiveTargets([makeConfig()], 'unknown')).toEqual([]);

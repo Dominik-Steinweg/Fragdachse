@@ -56,6 +56,7 @@ import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExe
 import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
+import type { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
 import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
@@ -168,6 +169,8 @@ export interface ArenaContext {
    * Zielreferenzen, statt sie über das Netzwerk zu beziehen.
    */
   coopDefenseSecondaryObjectiveConfigs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[];
+  /** Host-only: Wiederherstellung eines gehaltenen Missionsziels. */
+  coopDefenseObjectiveRepairSystem: CoopDefenseObjectiveRepairSystem | null;
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;

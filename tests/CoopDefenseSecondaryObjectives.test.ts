@@ -10,6 +10,43 @@ import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../src/conf
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 
+/** Eine Hauptbasis plus zwei dormante Missionsstrukturen; jede muss von genau einem Objective referenziert werden. */
+const TEST_BASES: CoopDefenseMapConfig['bases'] = [
+  {
+    id: 'friendly-main',
+    hpMax: 100,
+    anchor: { kind: 'right-center', edgeInsetCells: 0 },
+    shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+  },
+  {
+    id: 'friendly-outpost',
+    hpMax: 100,
+    role: 'outpost',
+    dormant: true,
+    anchor: { kind: 'left-center', edgeInsetCells: 0 },
+    shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+  },
+  {
+    id: 'friendly-outpost-b',
+    hpMax: 100,
+    role: 'outpost',
+    dormant: true,
+    anchor: { kind: 'center-offset', dxCells: -10, dyCells: 0 },
+    shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+  },
+];
+
+/** Karte für Hold-Fälle: genau eine dormante Struktur, weil ein Hold genau ein Ziel referenziert. */
+function makeSingleTargetMap(
+  secondaryObjectives: CoopDefenseMapConfig['secondaryObjectives'],
+  objective: CoopDefenseMapObjective = 'repel-assault',
+): CoopDefenseMapConfig {
+  return makeMap(secondaryObjectives, objective, undefined, {
+    bases: TEST_BASES.slice(0, 2),
+    ...(objective === 'survive' ? { surviveDurationSec: 60, surviveRespawnsPerPlayer: 1 } : {}),
+  });
+}
+
 function makeMap(
   secondaryObjectives: CoopDefenseMapConfig['secondaryObjectives'] = [],
   objective: CoopDefenseMapObjective = 'repel-assault',
@@ -31,30 +68,7 @@ function makeMap(
     mapId: 'secondary-objective-test',
     displayName: 'Secondary objective test',
     balanceReferenceDurationSec: 60,
-    bases: [
-      {
-        id: 'friendly-main',
-        hpMax: 100,
-        anchor: { kind: 'right-center', edgeInsetCells: 0 },
-        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
-      },
-      {
-        id: 'friendly-outpost',
-        hpMax: 100,
-        role: 'outpost',
-        dormant: true,
-        anchor: { kind: 'left-center', edgeInsetCells: 0 },
-        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
-      },
-      {
-        id: 'friendly-outpost-b',
-        hpMax: 100,
-        role: 'outpost',
-        dormant: true,
-        anchor: { kind: 'center-offset', dxCells: -10, dyCells: 0 },
-        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
-      },
-    ],
+    bases: TEST_BASES,
     powerUps: [],
     encounters,
     secondaryObjectives,
@@ -139,13 +153,111 @@ describe('Coop defense secondary objectives', () => {
       { id: 'second', type: 'carry', start: { type: 'time', atMs: 400 }, focusUntil: { type: 'time', atMs: 800 }, targets: ['friendly-outpost-b'] },
     ]))).toThrow('overlapping authored active windows');
 
-    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
       id: 'hold-final',
       type: 'hold',
       start: { type: 'time', atMs: 100 },
-      focusUntil: { type: 'after-encounter', encounterId: 'assault-final' },
-      targets: ['friendly-outpost', 'friendly-outpost-b'],
+      holdUntil: { type: 'after-encounter', encounterId: 'assault-final' },
+      targets: ['friendly-outpost'],
     }]))).toThrow('last repel-assault encounter');
+  });
+
+  it('rejects a Hold without its own window and a hold window on any other archetype', () => {
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'hold-open', type: 'hold', start: { type: 'time', atMs: 100 }, targets: ['friendly-outpost'],
+    }]))).toThrow('needs a holdUntil trigger');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'hold-focus',
+      type: 'hold',
+      start: { type: 'time', atMs: 100 },
+      focusUntil: { type: 'time', atMs: 200 },
+      holdUntil: { type: 'time', atMs: 300 },
+      targets: ['friendly-outpost'],
+    }]))).toThrow('must not declare focusUntil');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'hold-many',
+      type: 'hold',
+      start: { type: 'time', atMs: 100 },
+      holdUntil: { type: 'time', atMs: 300 },
+      targets: ['friendly-outpost', 'friendly-outpost-b'],
+    }]))).toThrow('needs exactly one target');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'destroy-hold',
+      type: 'destroy',
+      start: { type: 'time', atMs: 100 },
+      holdUntil: { type: 'time', atMs: 300 },
+      targets: ['friendly-outpost'],
+    }]))).toThrow('must not declare holdUntil');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'destroy-repair',
+      type: 'destroy',
+      start: { type: 'time', atMs: 100 },
+      targets: ['friendly-outpost'],
+      rewards: { repairTargetOnComplete: true },
+    }]))).toThrow('must not declare repairTargetOnComplete');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'hold-backwards',
+      type: 'hold',
+      start: { type: 'time', atMs: 300 },
+      holdUntil: { type: 'time', atMs: 300 },
+      targets: ['friendly-outpost'],
+    }]))).toThrow('has a holdUntil before its start');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'hold-backwards-encounter',
+      type: 'hold',
+      start: { type: 'after-encounter', encounterId: 'assault-final' },
+      holdUntil: { type: 'after-encounter', encounterId: 'assault-1' },
+      targets: ['friendly-outpost'],
+    }], 'survive')))
+      .toThrow('holdUntil encounter before or equal to its start encounter');
+  });
+
+  it('treats holdUntil as the authored window end and defaults the repair reward', () => {
+    const normalized = normalizeCoopDefenseMapConfig(makeSingleTargetMap([
+      {
+        id: 'hold-outpost',
+        type: 'hold',
+        start: { type: 'after-encounter', encounterId: 'assault-1' },
+        holdUntil: { type: 'after-encounter', encounterId: 'assault-final' },
+        targets: ['friendly-outpost'],
+      },
+    ], 'survive'));
+
+    expect(normalized.secondaryObjectives).toEqual([{
+      id: 'hold-outpost',
+      type: 'hold',
+      start: { type: 'after-encounter', encounterId: 'assault-1' },
+      holdUntil: { type: 'after-encounter', encounterId: 'assault-final' },
+      targets: ['friendly-outpost'],
+      targetGoal: 1,
+      rewards: { repairTargetOnComplete: true },
+    }]);
+    // Ohne Durchreichen bliebe der Laufzeit-Hold ohne Fenster und könnte nie erfüllt werden.
+    expect(resolveCoopDefenseMapSecondaryObjectives(normalized, 4)).toEqual(normalized.secondaryObjectives);
+
+    // Das Haltefenster [assault-1, assault-final) belegt den Fokus wie ein focusUntil.
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      {
+        id: 'hold-outpost',
+        type: 'hold',
+        start: { type: 'after-encounter', encounterId: 'assault-1' },
+        holdUntil: { type: 'after-encounter', encounterId: 'assault-final' },
+        targets: ['friendly-outpost'],
+      },
+      {
+        id: 'carry-later',
+        type: 'carry',
+        start: { type: 'after-encounter', encounterId: 'assault-1' },
+        targets: ['friendly-outpost-b'],
+      },
+    ], 'survive', undefined, { surviveDurationSec: 60, surviveRespawnsPerPlayer: 1 })))
+      .toThrow('same start encounter');
   });
 
   it('validates deterministic after-encounter conflicts without rejecting sequential handoffs', () => {
@@ -218,7 +330,11 @@ describe('Coop defense secondary objectives', () => {
 
   it('releases focus without completing the objective and lets the next objective take focus', () => {
     const system = new CoopDefenseSecondaryObjectiveSystem([
-      resolvedObjective({ id: 'first', focusUntil: { type: 'time', atMs: 100 } }),
+      resolvedObjective({
+        id: 'first',
+        focusUntil: { type: 'time', atMs: 100 },
+        rewards: { xpPerTarget: 5 },
+      }),
       resolvedObjective({ id: 'second', start: { type: 'time', atMs: 100 } }),
     ]);
 
@@ -234,9 +350,9 @@ describe('Coop defense secondary objectives', () => {
       expect.objectContaining({ objectiveId: 'second', state: 'active', focused: true }),
     ]);
 
-    expect(system.reportTargetResolved('first', 'target-a')).toBe(true);
-    expect(system.reportTargetResolved('first', 'target-b')).toBe(true);
-    expect(system.reportTargetResolved('first', 'target-c')).toBe(true);
+    expect(system.reportTargetDestroyed('first', 'target-a')).toBe(5);
+    expect(system.reportTargetDestroyed('first', 'target-b')).toBe(5);
+    expect(system.reportTargetDestroyed('first', 'target-c')).toBe(5);
     expect(system.getObjectiveState('first')).toBe('completed');
     expect(system.getFocusedObjectiveId()).toBe('second');
     expect(system.getPresentationState().find((entry) => entry.objectiveId === 'first'))
@@ -264,10 +380,10 @@ describe('Coop defense secondary objectives', () => {
     const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective()]);
 
     system.hostUpdate(0, false);
-    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
-    expect(system.reportTargetResolved('destroy-front', 'target-b')).toBe(true);
+    system.reportTargetDestroyed('destroy-front', 'target-a');
+    system.reportTargetDestroyed('destroy-front', 'target-b');
     expect(system.getObjectiveState('destroy-front')).toBe('active');
-    expect(system.reportTargetResolved('destroy-front', 'target-c')).toBe(true);
+    system.reportTargetDestroyed('destroy-front', 'target-c');
     expect(system.getObjectiveState('destroy-front')).toBe('completed');
 
     const expiring = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
@@ -275,14 +391,14 @@ describe('Coop defense secondary objectives', () => {
     })]);
 
     expiring.hostUpdate(0, false);
-    expect(expiring.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
+    expiring.reportTargetDestroyed('destroy-front', 'target-a');
     expiring.hostUpdate(50, false);
     expect(expiring.getPresentationState()).toMatchObject([
       { state: 'active', focused: false, progressCurrent: 1, progressTotal: 3, stateChangedAtMs: 0 },
     ]);
-    expect(expiring.reportTargetResolved('destroy-front', 'target-b')).toBe(true);
+    expiring.reportTargetDestroyed('destroy-front', 'target-b');
     expect(expiring.getPresentationState()).toMatchObject([{ state: 'active', progressCurrent: 2 }]);
-    expect(expiring.reportTargetResolved('destroy-front', 'target-c')).toBe(true);
+    expiring.reportTargetDestroyed('destroy-front', 'target-c');
     expect(expiring.getObjectiveState('destroy-front')).toBe('completed');
   });
 
@@ -290,15 +406,16 @@ describe('Coop defense secondary objectives', () => {
     const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({ targetGoal: 2 })]);
     system.hostUpdate(0, false);
 
-    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
-    expect(system.reportTargetResolved('destroy-front', 'target-b')).toBe(true);
+    system.reportTargetDestroyed('destroy-front', 'target-a');
+    system.reportTargetDestroyed('destroy-front', 'target-b');
     expect(system.getObjectiveState('destroy-front')).toBe('completed');
     expect(system.getPresentationState()).toMatchObject([{
       progressCurrent: 2,
       progressTotal: 2,
       state: 'completed',
     }]);
-    expect(system.reportTargetResolved('destroy-front', 'target-c')).toBe(false);
+    expect(system.reportTargetDestroyed('destroy-front', 'target-c')).toBe(0);
+    expect(system.getPresentationState()).toMatchObject([{ progressCurrent: 2 }]);
   });
 
   it('deduplicates target resolution and exposes only the normalized team reward', () => {
@@ -307,14 +424,102 @@ describe('Coop defense secondary objectives', () => {
     })]);
     system.hostUpdate(0, false);
 
-    expect(system.reportTargetResolved('destroy-front', 'unknown')).toBe(false);
-    expect(system.reportTargetResolved('other-objective', 'target-a')).toBe(false);
-    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
-    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(false);
-    expect(system.getTargetResolutionXp('destroy-front')).toBe(25);
+    expect(system.reportTargetDestroyed('destroy-front', 'unknown')).toBe(0);
+    expect(system.reportTargetDestroyed('other-objective', 'target-a')).toBe(0);
+    expect(system.reportTargetDestroyed('destroy-front', 'target-a')).toBe(25);
+    expect(system.reportTargetDestroyed('destroy-front', 'target-a')).toBe(0);
+    expect(system.getPresentationState()).toMatchObject([{ progressCurrent: 1 }]);
 
     const withoutReward = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective()]);
     expect(withoutReward.getTargetResolutionXp('destroy-front')).toBe(0);
+  });
+
+  it('completes a Hold at holdUntil, hands focus on in the same tick and requests its reward', () => {
+    const completedHolds: string[] = [];
+    let encounterCleared = false;
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({
+        id: 'hold-outpost',
+        type: 'hold',
+        targets: ['outpost'],
+        targetGoal: 1,
+        holdUntil: { type: 'after-encounter', encounterId: 'assault-2' },
+        rewards: { repairTargetOnComplete: true },
+      }),
+      resolvedObjective({ id: 'follow-up', start: { type: 'time', atMs: 1_000 } }),
+    ], {
+      isEncounterCleared: () => encounterCleared,
+      onHoldCompleted: (objectiveId) => completedHolds.push(objectiveId),
+    });
+
+    system.hostUpdate(500, false);
+    expect(system.getObjectiveState('hold-outpost')).toBe('active');
+    expect(system.getFocusedObjectiveId()).toBe('hold-outpost');
+    expect(completedHolds).toEqual([]);
+
+    // Haltefenster erreicht und Folgemission fällig: derselbe Tick schließt ab und übergibt.
+    encounterCleared = true;
+    system.hostUpdate(500, false);
+    expect(system.getObjectiveState('hold-outpost')).toBe('completed');
+    expect(system.getFocusedObjectiveId()).toBe('follow-up');
+    expect(completedHolds).toEqual(['hold-outpost']);
+
+    system.hostUpdate(500, false);
+    expect(completedHolds).toEqual(['hold-outpost']);
+
+    system.reset();
+    system.hostUpdate(500, false);
+    expect(completedHolds).toEqual(['hold-outpost']);
+  });
+
+  it('completes a Hold from a time window and never books XP for a lost hold target', () => {
+    const completedHolds: string[] = [];
+    const timed = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'hold-supply',
+      type: 'hold',
+      targets: ['outpost'],
+      targetGoal: 1,
+      holdUntil: { type: 'time', atMs: 5_000 },
+    })], { onHoldCompleted: (objectiveId) => completedHolds.push(objectiveId) });
+
+    timed.hostUpdate(4_999, false);
+    expect(timed.getObjectiveState('hold-supply')).toBe('active');
+    timed.hostUpdate(1, false);
+    expect(timed.getObjectiveState('hold-supply')).toBe('completed');
+    expect(completedHolds).toEqual(['hold-supply']);
+
+    const lost = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'hold-supply',
+      type: 'hold',
+      targets: ['outpost'],
+      targetGoal: 1,
+      holdUntil: { type: 'time', atMs: 5_000 },
+      // Ein authored XP-Wert darf den Verlust des Ziels niemals belohnen.
+      rewards: { xpPerTarget: 25 },
+    })], { onHoldCompleted: (objectiveId) => completedHolds.push(objectiveId) });
+
+    lost.hostUpdate(1_000, false);
+    expect(lost.reportTargetDestroyed('hold-supply', 'outpost')).toBe(0);
+    expect(lost.getObjectiveState('hold-supply')).toBe('failed');
+    expect(lost.getFocusedObjectiveId()).toBeNull();
+
+    // Ein gescheiterter Hold darf beim Erreichen seines Fensters nicht doch noch erfüllt werden.
+    lost.hostUpdate(5_000, false);
+    expect(lost.getObjectiveState('hold-supply')).toBe('failed');
+    expect(completedHolds).toEqual(['hold-supply']);
+  });
+
+  it('ignores a destroyed carry object instead of resolving it', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'carry-beer',
+      type: 'carry',
+      rewards: { xpPerTarget: 25 },
+    })]);
+    system.hostUpdate(0, false);
+
+    expect(system.reportTargetDestroyed('carry-beer', 'target-a')).toBe(0);
+    expect(system.getObjectiveState('carry-beer')).toBe('active');
+    expect(system.getPresentationState()).toMatchObject([{ progressCurrent: 0 }]);
   });
 
   it('leaves an incomplete Hold active at round end without implicit success', () => {
@@ -331,7 +536,7 @@ describe('Coop defense secondary objectives', () => {
     system.hostUpdate(0, false);
     expect(system.reportObjectiveFailed('destroy-front')).toBe(true);
     expect(system.getPresentationState()).toMatchObject([{ state: 'failed', focused: false }]);
-    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(false);
+    expect(system.reportTargetDestroyed('destroy-front', 'target-a')).toBe(0);
     system.hostUpdate(1_000, false);
     expect(system.getObjectiveState('destroy-front')).toBe('failed');
   });

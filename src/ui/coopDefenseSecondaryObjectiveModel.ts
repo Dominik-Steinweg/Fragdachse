@@ -35,8 +35,14 @@ export interface SecondaryObjectiveViewEntry {
   readonly rewardHint: string;
   readonly progressCurrent: number;
   readonly progressTotal: number;
-  /** Nur bei terminalem Zustand gesetzt: `ERFÜLLT` bzw. `GESCHEITERT`. */
+  /**
+   * Kurztext anstelle der Fortschrittszahl: `ERFÜLLT`/`GESCHEITERT` bei terminalem Zustand, `HALTEN`
+   * bei einem laufenden Hold. Ob eine Mission abgeschlossen ist, entscheidet allein {@link terminal} –
+   * ein binäres Ziel hat einen Status, aber keinen Abschluss.
+   */
   readonly statusLine: string | null;
+  /** True bei `completed` oder `failed`. Steuert Abschlussankündigung und Akzentfarbe. */
+  readonly terminal: boolean;
 }
 
 export interface SecondaryObjectiveViewModel {
@@ -104,10 +110,19 @@ function toViewEntry(
     rewardHint: getSecondaryObjectiveRewardHint(entry, config),
     progressCurrent: Math.max(0, Math.min(entry.progressCurrent, entry.progressTotal)),
     progressTotal: Math.max(1, entry.progressTotal),
-    statusLine: entry.state === 'completed'
-      ? 'ERFÜLLT'
-      : entry.state === 'failed' ? 'GESCHEITERT' : null,
+    statusLine: getStatusLine(entry),
+    terminal: isTerminal(entry.state),
   };
+}
+
+/**
+ * Hold ist binär: `0 / 1` wäre eine Zahl ohne Aussage. Die Restdauer bleibt bewusst weg – sie wäre
+ * bei einem an einen Encounter-Clear gebundenen `holdUntil` gar nicht bestimmbar.
+ */
+function getStatusLine(entry: CoopDefenseSecondaryObjectivePresentationEntry): string | null {
+  if (entry.state === 'completed') return 'ERFÜLLT';
+  if (entry.state === 'failed') return 'GESCHEITERT';
+  return entry.type === 'hold' ? 'HALTEN' : null;
 }
 
 function buildSignature(model: Omit<SecondaryObjectiveViewModel, 'signature'>): string {

@@ -357,6 +357,24 @@ describe('Coop defense map progression', () => {
     }
   });
 
+  it('keeps every authored Hold binary, bounded and aimed at a defensible outpost', () => {
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      for (const objective of map.secondaryObjectives ?? []) {
+        if (objective.type !== 'hold') continue;
+        expect(objective.holdUntil, `${map.mapId}:${objective.id} has no holdUntil`).toBeDefined();
+        expect(objective.focusUntil).toBeUndefined();
+        expect(objective.targets).toHaveLength(1);
+
+        // Nur ein bewaffneter friendly Outpost wird von Gegnern ueberhaupt angegriffen und kann
+        // deshalb ein glaubwuerdiges Halteziel sein; als main base wuerde sein Fall die Runde
+        // beenden.
+        const target = map.bases.find((base) => base.id === objective.targets[0]);
+        expect(target?.role).toBe('outpost');
+        expect(target?.faction ?? 'friendly').toBe('friendly');
+      }
+    }
+  });
+
   it('keeps power-up respawns valid and delays the first strong pedestal spawn', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
       const freePowerUps = map.powerUps;

@@ -41,6 +41,7 @@ import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor
 import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
+import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import {
   CoopDefenseAirstrikeDirector,
@@ -582,6 +583,7 @@ export class ArenaLifecycleCoordinator {
       ? resolveCoopDefenseMapSecondaryObjectives(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseObjectiveRepairSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
     if (bridge.isHost()) {
       if (coopDefenseMapConfig?.objective === 'survive') {
@@ -851,9 +853,25 @@ export class ArenaLifecycleCoordinator {
           );
         }
       }
+      this.ctx.coopDefenseObjectiveRepairSystem = bridge.isHost() && baseManager
+        ? new CoopDefenseObjectiveRepairSystem({
+          healBase: (baseId, amount) => baseManager.heal(baseId, amount),
+          getBaseHp: (baseId) => baseManager.getBase(baseId)?.getHp() ?? null,
+          getBaseMaxHp: (baseId) => baseManager.getBase(baseId)?.getMaxHp() ?? null,
+        })
+        : null;
       this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
         ? new CoopDefenseSecondaryObjectiveSystem(coopDefenseSecondaryObjectiveConfigs, {
           isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
+          // Das Objective-System fordert den Reward nur an; welcher es ist, steht in der Map.
+          onHoldCompleted: (objectiveId) => {
+            if (!bridge.isHost()) return;
+            const config = coopDefenseSecondaryObjectiveConfigs.find((entry) => entry.id === objectiveId);
+            if (config?.rewards?.repairTargetOnComplete !== true) return;
+            for (const targetId of config.targets) {
+              this.ctx.coopDefenseObjectiveRepairSystem?.start(targetId);
+            }
+          },
         })
         : null;
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
@@ -877,12 +895,13 @@ export class ArenaLifecycleCoordinator {
         this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
 
         if (bridge.isHost()) {
+          // Ob die Zerstörung Fortschritt (Destroy) oder Fehlschlag (Hold) bedeutet, entscheidet der
+          // Archetyp im Objective-System; hier wird nur die gemeldete Team-XP gebucht.
           const objectiveId = destroyedBase.dormantObjectiveId;
-          const objectiveSystem = this.ctx.coopDefenseSecondaryObjectiveSystem;
-          if (objectiveId && objectiveSystem?.reportTargetResolved(objectiveId, destroyedBase.id)) {
-            const xp = objectiveSystem.getTargetResolutionXp(objectiveId);
-            if (xp > 0) bridge.addCoopDefenseRoundXp(xp);
-          }
+          const xp = objectiveId
+            ? this.ctx.coopDefenseSecondaryObjectiveSystem?.reportTargetDestroyed(objectiveId, destroyedBase.id) ?? 0
+            : 0;
+          if (xp > 0) bridge.addCoopDefenseRoundXp(xp);
 
           const blast = getBaseDestructionBlast(destroyedBase);
           this.ctx.hostPhysics.applyRadialImpulse(
@@ -2216,6 +2235,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.energyShield.destroyAll();
     this.renderers.guardianSpirit.destroyAll();
     this.renderers.repairDrone.destroyAll();
+    this.renderers.objectiveRepairDrones.destroyAll();
     this.renderers.slimeTrail.clear();
     this.renderers.corpseMarker.clearAll();
     this.renderers.flamethrowerUpgrades.clear();
@@ -2363,6 +2383,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = [];
+    this.ctx.coopDefenseObjectiveRepairSystem?.reset();
+    this.ctx.coopDefenseObjectiveRepairSystem = null;
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     this.ctx.coopDefensePersistentPressureSystem?.reset();
     this.ctx.coopDefensePersistentPressureSystem = null;

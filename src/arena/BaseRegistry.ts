@@ -64,6 +64,11 @@ export interface BaseSpec {
   readonly region: ArenaGridRegion;
   readonly hpMax: number;
   /**
+   * Authored Start-HP (Standard: `hpMax`). Beide Peers loesen ihn deterministisch aus der Map auf,
+   * damit ein bewusst beschaedigtes Missionsziel keinen eigenen Netzwerkpfad braucht.
+   */
+  readonly startHp?: number;
+  /**
    * Bestimmt, wer die Basis angreift, wer sie repariert und ob ihr Fall die Runde gewinnt oder
    * verliert. Host und Client leiten sie identisch aus der replizierten Map-ID ab; sie ist
    * deshalb kein Teil des Netzwerk-Snapshots.
@@ -215,12 +220,19 @@ function resolveBaseSpec(
   const faction = config.faction ?? 'friendly';
   const hpFactor = config.playerScaling?.maxHpFactorPerAdditionalPlayer
     ?? (faction === 'hostile' ? DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER : 0);
+  const hpMax = resolveCoopDefensePositiveInteger(config.hpMax, hpFactor, humanPlayerCount);
+  // Untergrenze 1: Bei 0 waere die Struktur von Rundenbeginn an zerstoert und koennte nie mehr
+  // aktiviert werden (BaseEntity.activate() lehnt zerstoerte Basen ab).
+  const startHp = config.startHpFactor === undefined
+    ? hpMax
+    : Math.max(1, Math.min(hpMax, Math.round(hpMax * config.startHpFactor)));
 
   return {
     id: config.id,
     cells: absoluteCells,
     region,
-    hpMax: resolveCoopDefensePositiveInteger(config.hpMax, hpFactor, humanPlayerCount),
+    hpMax,
+    startHp,
     faction,
     role: config.role ?? 'main',
     dormant: config.dormant === true,

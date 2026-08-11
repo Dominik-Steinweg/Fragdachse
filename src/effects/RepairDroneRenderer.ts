@@ -1,11 +1,13 @@
 import * as Phaser from 'phaser';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, DEPTH } from '../config';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
 import type { SyncedPlaceableRock, SyncedRepairDrone } from '../types';
-import { ensureCanvasTexture } from './EffectUtils';
-
-const TEX_REPAIR_DRONE = '__repair_drone';
-const DRONE_DEPTH = DEPTH.PROJECTILES + 0.4;
-const SMOOTH_TIME_MS = 48;
+import {
+  REPAIR_DRONE_DEPTH as DRONE_DEPTH,
+  REPAIR_DRONE_SMOOTH_TIME_MS as SMOOTH_TIME_MS,
+  REPAIR_DRONE_TEXTURE_KEY as TEX_REPAIR_DRONE,
+  drawRepairBeam,
+  ensureRepairDroneTexture,
+} from './repairDroneVisuals';
 
 interface RepairDroneVisual {
   body: Phaser.GameObjects.Image;
@@ -25,39 +27,7 @@ export class RepairDroneRenderer {
   constructor(private readonly scene: Phaser.Scene) {}
 
   generateTextures(): void {
-    ensureCanvasTexture(this.scene.textures, TEX_REPAIR_DRONE, 32, 32, (ctx) => {
-      ctx.translate(16, 16);
-      ctx.fillStyle = '#26343c';
-      ctx.strokeStyle = '#bcebd4';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#7fffc1';
-      ctx.beginPath();
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#8297a1';
-      ctx.lineWidth = 3;
-      for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(angle) * 6, Math.sin(angle) * 6);
-        ctx.lineTo(Math.cos(angle) * 12, Math.sin(angle) * 12);
-        ctx.stroke();
-      }
-      ctx.strokeStyle = '#d5f5e6';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(-12, 0, 3, 0, Math.PI * 2);
-      ctx.moveTo(15, 0);
-      ctx.arc(12, 0, 3, 0, Math.PI * 2);
-      ctx.moveTo(3, -12);
-      ctx.arc(0, -12, 3, 0, Math.PI * 2);
-      ctx.moveTo(3, 12);
-      ctx.arc(0, 12, 3, 0, Math.PI * 2);
-      ctx.stroke();
-    });
+    ensureRepairDroneTexture(this.scene.textures);
   }
 
   syncVisuals(
@@ -110,11 +80,13 @@ export class RepairDroneRenderer {
         .setScale(0.9 + Math.sin(now * 0.01) * 0.08);
       visual.beam.clear();
       if (!visual.repairTarget) continue;
-      visual.beam
-        .lineStyle(7, 0x5dffac, 0.12)
-        .lineBetween(visual.currentX, visual.currentY + bob, visual.repairTarget.x, visual.repairTarget.y)
-        .lineStyle(2, 0xc8ffe4, 0.9)
-        .lineBetween(visual.currentX, visual.currentY + bob, visual.repairTarget.x, visual.repairTarget.y);
+      drawRepairBeam(
+        visual.beam,
+        visual.currentX,
+        visual.currentY + bob,
+        visual.repairTarget.x,
+        visual.repairTarget.y,
+      );
     }
   }
 

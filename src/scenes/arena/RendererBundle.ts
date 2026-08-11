@@ -40,6 +40,7 @@ import { PowerUpRenderer }     from '../../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../../effects/MeteorRenderer';
 import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
 import { CoopDefenseEncounterTelegraphRenderer } from '../../effects/CoopDefenseEncounterTelegraphRenderer';
+import { CoopDefenseObjectiveRepairDroneRenderer } from '../../effects/CoopDefenseObjectiveRepairDroneRenderer';
 import { CoopDefenseSecondaryObjectiveMarkerRenderer } from '../../effects/CoopDefenseSecondaryObjectiveMarkerRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
@@ -93,6 +94,7 @@ export interface RendererBundle {
   airstrike:           AirstrikeRenderer;
   encounterTelegraph:  CoopDefenseEncounterTelegraphRenderer;
   secondaryObjectiveMarkers: CoopDefenseSecondaryObjectiveMarkerRenderer;
+  objectiveRepairDrones: CoopDefenseObjectiveRepairDroneRenderer;
   meteor:              MeteorRenderer;
   rockDestruction:     RockDestructionRenderer;
   powerUp:             PowerUpRenderer;
@@ -218,6 +220,8 @@ export function createRendererBundle(
 
   const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
   secondaryObjectiveMarkers.build();
+  const objectiveRepairDrones = new CoopDefenseObjectiveRepairDroneRenderer(scene);
+  objectiveRepairDrones.build();
 
   const meteor = new MeteorRenderer(scene);
   meteor.generateTextures();
@@ -255,7 +259,7 @@ export function createRendererBundle(
   return {
     bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, meteor, rockDestruction, powerUp, shadow, lighting,
+    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     train: null,
     translocatorTeleport: null,

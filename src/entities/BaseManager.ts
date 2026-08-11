@@ -320,7 +320,10 @@ export class BaseManager {
   applySnapshot(snapshot: readonly SyncedBaseState[]): void {
     // Fehlende Einträge = volle HP und keine synchronisierten Turret-Winkel
     // (Delta-Convention). Erst auf Max setzen, dann gesendete Werte überschreiben.
+    // Inerte Basen bleiben ausgespart – symmetrisch zu getNetSnapshot(), das sie ebenfalls nicht
+    // sendet. Sonst verlöre eine dormante Missionsstruktur ihren authored Startzustand.
     for (const entity of this.entities) {
+      if (entity.isInert()) continue;
       entity.setHp(entity.getMaxHp());
     }
     for (const remote of snapshot) {

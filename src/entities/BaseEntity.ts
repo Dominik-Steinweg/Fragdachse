@@ -89,8 +89,10 @@ export class BaseEntity {
     this.spec = spec;
     this.faction = spec.faction;
     this.role = spec.role ?? 'main';
-    this.currentHp = spec.hpMax;
     this.maxHp = spec.hpMax;
+    // Ein authored beschaedigter Startzustand ist Teil der Map und damit auf beiden Peers identisch;
+    // repliziert wird erst die spaetere HP-Aenderung.
+    this.currentHp = Math.max(1, Math.min(this.maxHp, spec.startHp ?? spec.hpMax));
     this.dormant = spec.dormant === true;
     const hostile = spec.faction === 'hostile';
     this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;

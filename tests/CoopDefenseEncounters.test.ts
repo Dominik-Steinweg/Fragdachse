@@ -204,14 +204,14 @@ describe('Coop defense encounters', () => {
     expect(normalized.encounters?.[0].start).toEqual({ type: 'base-destroyed', baseId: 'base-a' });
   });
 
-  it('configures the Map 0 destroy side mission alongside its encounters', () => {
+  it('configures the Map 0 side missions alongside its encounters', () => {
     const map = getCoopDefenseMapConfig('0');
     expect(map.persistentSpawns).toHaveLength(3);
     expect(map.persistentSpawns?.every((spawn) => spawn.source.type === 'base')).toBe(true);
     expect(new Set(map.persistentSpawns?.map((spawn) => (
       spawn.source.type === 'base' ? spawn.source.baseId : 'map-source'
     )))).toEqual(new Set(map.secondaryObjectives?.[0]?.targets));
-    expect(map.encounters).toHaveLength(2);
+    expect(map.encounters).toHaveLength(3);
     const encounter = resolveCoopDefenseMapEncounterConfigs(map, 1)[0];
     expect(encounter?.id).toBe('a2-opening-encounter');
     expect(encounter?.start).toEqual({ type: 'time', atMs: 1_500 });
@@ -219,16 +219,42 @@ describe('Coop defense encounters', () => {
     expect(encounter?.groups.every((group) => group.front === 'west')).toBe(true);
     expect(encounter?.groups.every((group) => group.count > 0 && group.delayMs >= 0)).toBe(true);
     expect(map.encounters?.[1]?.start).toEqual({ type: 'after-previous' });
-    expect(map.secondaryObjectives).toEqual([expect.objectContaining({
-      id: 'destroy-brood-front',
-      start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
-      focusUntil: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
-      targets: expect.arrayContaining([
-        'destroy-brood-front-north',
-        'destroy-brood-front-center',
-        'destroy-brood-front-south',
-      ]),
-      rewards: { xpPerTarget: 25 },
-    })]);
+    expect(map.encounters?.[2]?.id).toBe('a2-hold-encounter');
+    // Der Hold braucht ein lesbares Fenster zwischen Reveal und Angriff.
+    expect(map.encounters?.[1]?.restAfterMs).toBeGreaterThan(0);
+    expect(map.secondaryObjectives).toEqual([
+      expect.objectContaining({
+        id: 'destroy-brood-front',
+        start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
+        focusUntil: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
+        targets: expect.arrayContaining([
+          'destroy-brood-front-north',
+          'destroy-brood-front-center',
+          'destroy-brood-front-south',
+        ]),
+        rewards: { xpPerTarget: 25 },
+      }),
+      // Die Fokusfenster stossen aneinander an, statt sich zu ueberschneiden: Der Destroy-Auftrag
+      // gibt den Slot mit dem Clear von a2-follow-up-encounter genau dann frei, wenn der Hold ihn
+      // uebernimmt.
+      expect.objectContaining({
+        id: 'hold-forward-outpost',
+        start: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
+        holdUntil: { type: 'after-encounter', encounterId: 'a2-hold-encounter' },
+        targets: ['forward-outpost'],
+        targetGoal: 1,
+        rewards: { repairTargetOnComplete: true },
+      }),
+    ]);
+    expect(map.secondaryObjectives?.[1]).not.toHaveProperty('focusUntil');
+
+    const outpost = map.bases.find((base) => base.id === 'forward-outpost');
+    expect(outpost).toMatchObject({
+      role: 'outpost',
+      faction: 'friendly',
+      dormant: true,
+      startHpFactor: 0.25,
+    });
+    expect(outpost?.turrets?.map((turret) => turret.weaponId)).toEqual(['TURRET_ROCKET', 'TURRET_ROCKET']);
   });
 });
