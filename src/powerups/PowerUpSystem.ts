@@ -123,6 +123,7 @@ export class PowerUpSystem {
   private worldItems  = new Map<number, WorldItem>();
   private readonly netSnapshotCache = new Map<number, SyncedPowerUp>();
   private readonly pendingRemovalUids = new Set<number>();
+  private readonly objectiveMarkerUids = new Map<string, number>();
   private readonly objectiveRewardUids = new Map<string, number>();
   private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId → Buffs
   private activeNukes = new Map<number, ActiveNukeStrike>();
@@ -169,6 +170,7 @@ export class PowerUpSystem {
     this.worldItems.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovalUids.clear();
+    this.objectiveMarkerUids.clear();
     this.objectiveRewardUids.clear();
     this.activeBuffs.clear();
     this.activeNukes.clear();
@@ -369,19 +371,19 @@ export class PowerUpSystem {
   spawnObjectiveRewardMarker(objectiveId: string, defId: string, x: number, y: number): number | null {
     const def = POWERUP_DEFS[defId];
     if (!def || !TIMED_POWERUP_PEDESTAL_CONFIGS[defId]) return null;
-    const existingUid = this.objectiveRewardUids.get(objectiveId);
+    const existingUid = this.objectiveMarkerUids.get(objectiveId);
     if (existingUid !== undefined && this.worldItems.has(existingUid)) return existingUid;
 
     const uid = this.spawnPowerUpDef(def, x, y, {
       pickupKind: 'objective-marker',
       objectiveId,
     });
-    this.objectiveRewardUids.set(objectiveId, uid);
+    this.objectiveMarkerUids.set(objectiveId, uid);
     return uid;
   }
 
   /**
-   * Replaces the mission marker with the visible team reward pickup. It is tagged separately
+   * Spawns the visible team reward above its persistent mission marker. It is tagged separately
    * from normal PowerUps so a client cannot interpret a Holy Hand Grenade reward as an instant HHG.
    */
   spawnObjectiveRewardPickup(objectiveId: string, defId: string, x: number, y: number): number | null {
@@ -390,7 +392,6 @@ export class PowerUpSystem {
     const existingUid = this.objectiveRewardUids.get(objectiveId);
     const existing = existingUid === undefined ? undefined : this.worldItems.get(existingUid);
     if (existing?.pickupKind === 'objective-placement') return existing.uid;
-    if (existingUid !== undefined) this.removeObjectiveRewardWorldItem(objectiveId, existingUid);
 
     const uid = this.spawnPowerUpDef(def, x, y, {
       pickupKind: 'objective-placement',
@@ -400,11 +401,15 @@ export class PowerUpSystem {
     return uid;
   }
 
-  /** Removes a mission marker or unclaimed mission reward when its objective becomes unavailable. */
+  /** Removes a mission marker and any unclaimed reward when its objective becomes unavailable. */
   clearObjectiveReward(objectiveId: string): boolean {
-    const uid = this.objectiveRewardUids.get(objectiveId);
-    if (uid === undefined) return false;
-    this.removeObjectiveRewardWorldItem(objectiveId, uid);
+    const markerUid = this.objectiveMarkerUids.get(objectiveId);
+    const rewardUid = this.objectiveRewardUids.get(objectiveId);
+    if (markerUid === undefined && rewardUid === undefined) return false;
+    if (markerUid !== undefined) this.removeObjectiveWorldItem(markerUid);
+    if (rewardUid !== undefined) this.removeObjectiveWorldItem(rewardUid);
+    this.objectiveMarkerUids.delete(objectiveId);
+    this.objectiveRewardUids.delete(objectiveId);
     return true;
   }
 
@@ -438,7 +443,7 @@ export class PowerUpSystem {
       }
       this.itemToPedestal.delete(uid);
     }
-    if (item.objectiveId) {
+    if (item.pickupKind === 'objective-placement' && item.objectiveId) {
       if (this.objectiveRewardUids.get(item.objectiveId) === uid) {
         this.objectiveRewardUids.delete(item.objectiveId);
       }
@@ -891,13 +896,10 @@ export class PowerUpSystem {
     return uid;
   }
 
-  private removeObjectiveRewardWorldItem(objectiveId: string, uid: number): void {
+  private removeObjectiveWorldItem(uid: number): void {
     if (this.worldItems.delete(uid)) {
       this.pendingRemovalUids.add(uid);
       this.netSnapshotCache.delete(uid);
-    }
-    if (this.objectiveRewardUids.get(objectiveId) === uid) {
-      this.objectiveRewardUids.delete(objectiveId);
     }
   }
 

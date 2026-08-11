@@ -148,12 +148,34 @@ describe('B6 objective placement rewards', () => {
     expect(powerUps.tryPickup('player-a', marker.uid, marker.x, marker.y)).toBe(false);
 
     expect(rewardSystem.activate(reward.objective.id)).toBe(true);
+    expect(powerUps.getWorldItemSnapshot()).toEqual([
+      {
+        uid: 1,
+        defId: 'HOLY_HAND_GRENADE',
+        x: 100,
+        y: 100,
+        pickupKind: 'objective-marker',
+        objectiveId: reward.objective.id,
+      },
+      {
+        uid: 2,
+        defId: 'HOLY_HAND_GRENADE',
+        x: 100,
+        y: 100,
+        pickupKind: 'objective-placement',
+        objectiveId: reward.objective.id,
+      },
+    ]);
+    const rewardPickup = powerUps.getWorldItemSnapshot().find((item) => item.pickupKind === 'objective-placement');
+    expect(rewardPickup).toBeDefined();
+    if (!rewardPickup) return;
+    expect(powerUps.tryPickup('player-a', rewardPickup.uid, rewardPickup.x, rewardPickup.y)).toBe(true);
     expect(powerUps.getWorldItemSnapshot()).toEqual([{
-      uid: 2,
+      uid: 1,
       defId: 'HOLY_HAND_GRENADE',
       x: 100,
       y: 100,
-      pickupKind: 'objective-placement',
+      pickupKind: 'objective-marker',
       objectiveId: reward.objective.id,
     }]);
   });

@@ -32,8 +32,8 @@ interface SecondaryObjectiveRuntimeState {
  * Lebenszyklus und HUD-Fokus sind getrennt: Ein Objective kann nach dem Fokusverlust als aktives
  * Hintergrund-Objective weiterlaufen und Ziele zählen, während ein anderes den Fokus übernimmt.
  * Das System kennt weder Basen noch den Encounter-Director; die Welt meldet ausschließlich über
- * reportTargetDestroyed(), was mit einem authored Ziel geschehen ist – die Wirkung bestimmt der
- * Archetyp, nicht der Aufrufer.
+ * reportTargetDestroyed() and reportCarryDelivered() are the two explicit world seams. The
+ * archetype owns which seam can advance it; Carry is never resolved through base destruction.
  */
 export class CoopDefenseSecondaryObjectiveSystem {
   private elapsedMs = 0;
@@ -135,6 +135,13 @@ export class CoopDefenseSecondaryObjectiveSystem {
         // Carry löst seine Objekte über Abgabe auf, nicht über Zerstörung.
         return 0;
     }
+  }
+
+  /** Host-only delivery seam for Carry. The item id is the deduplication key. */
+  reportCarryDelivered(objectiveId: string, itemId: string): boolean {
+    const state = this.findObjectiveState(objectiveId);
+    if (!state || state.state !== 'active' || state.config.type !== 'carry') return false;
+    return this.resolveTarget(state, itemId);
   }
 
   /** Host-only Naht für Archetypen mit einer echten Fail-Bedingung. */

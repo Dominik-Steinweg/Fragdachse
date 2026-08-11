@@ -67,7 +67,7 @@ export class RockVisualHelper {
     if (rock.kind === 'pedestal') {
       const staleProxy = this.ctx.arenaResult.rockObjects[rock.id];
       if (staleProxy) {
-        ArenaBuilder.destroyRock(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.rockGroup, rock.id);
+        ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
         this.markObstaclesDirty();
       }
       this.destroyTurretVisual(rock.id);
@@ -83,9 +83,7 @@ export class RockVisualHelper {
     if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'rock') {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
-        this.ctx.arenaResult.rockObjects,
-        this.ctx.arenaResult.rockGroup,
-        this.ctx.arenaResult.rockGrid,
+        this.ctx.arenaResult,
         this.ctx.currentLayout.rocks,
         rock.id,
         rock.ownerColor,
@@ -97,9 +95,7 @@ export class RockVisualHelper {
     } else if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'turret') {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
-        this.ctx.arenaResult.rockObjects,
-        this.ctx.arenaResult.rockGroup,
-        this.ctx.arenaResult.rockGrid,
+        this.ctx.arenaResult,
         this.ctx.currentLayout.rocks,
         rock.id,
         undefined,
@@ -152,7 +148,7 @@ export class RockVisualHelper {
     const currentVisual = this.ctx.arenaResult.rockObjects[rock.id];
     if (rock.kind === 'pedestal') {
       if (currentVisual) {
-        ArenaBuilder.destroyRock(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.rockGroup, rock.id);
+        ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
       }
       this.destroyTurretVisual(rock.id);
       this.markObstaclesDirty();
@@ -170,9 +166,7 @@ export class RockVisualHelper {
     }
     if (rock.kind === 'turret') {
       ArenaBuilder.destroyRockAndRetile(
-        this.ctx.arenaResult.rockObjects,
-        this.ctx.arenaResult.rockGroup,
-        this.ctx.arenaResult.rockGrid,
+        this.ctx.arenaResult,
         this.ctx.currentLayout.rocks,
         rock.id,
       );
@@ -181,9 +175,7 @@ export class RockVisualHelper {
       return;
     }
     ArenaBuilder.destroyRockAndRetile(
-      this.ctx.arenaResult.rockObjects,
-      this.ctx.arenaResult.rockGroup,
-      this.ctx.arenaResult.rockGrid,
+      this.ctx.arenaResult,
       this.ctx.currentLayout.rocks,
       rock.id,
     );
@@ -196,9 +188,7 @@ export class RockVisualHelper {
     if (runtimeRock?.kind === 'pedestal') return;
     if (runtimeRock && runtimeRock.kind !== 'rock') {
       ArenaBuilder.updateRockVisual(
-        this.ctx.arenaResult.rockObjects,
-        this.ctx.arenaResult.rockGroup,
-        this.ctx.arenaResult.rockGrid,
+        this.ctx.arenaResult,
         this.ctx.currentLayout.rocks,
         rockId,
         hp,
@@ -208,9 +198,7 @@ export class RockVisualHelper {
       return;
     }
     ArenaBuilder.updateRockVisual(
-      this.ctx.arenaResult.rockObjects,
-      this.ctx.arenaResult.rockGroup,
-      this.ctx.arenaResult.rockGrid,
+      this.ctx.arenaResult,
       this.ctx.currentLayout.rocks,
       rockId,
       hp,
@@ -303,9 +291,7 @@ export class RockVisualHelper {
 
     this.rockDestructionRenderer.playDestruction({ source: rockImage });
     ArenaBuilder.destroyRockAndRetile(
-      this.ctx.arenaResult.rockObjects,
-      this.ctx.arenaResult.rockGroup,
-      this.ctx.arenaResult.rockGrid,
+      this.ctx.arenaResult,
       this.ctx.currentLayout.rocks,
       rockId,
     );
@@ -565,7 +551,10 @@ export class RockVisualHelper {
 
   private refreshObstacleVisuals(): void {
     if (this.ctx.arenaResult && this.ctx.currentLayout) {
-      ArenaBuilder.rebuildRockDecals(this.scene, this.ctx.arenaResult, this.ctx.currentLayout);
+      ArenaBuilder.rebuildRockOverlays(this.scene, this.ctx.arenaResult, this.ctx.currentLayout);
+      // Das Kantenlicht eines Felsens haengt an der Belegung seiner Nachbarzellen; ein
+      // zerstoerter oder gesetzter Fels aendert es also auch bei den Nachbarn.
+      ArenaBuilder.refreshRockSurfaceTints(this.ctx.arenaResult, this.ctx.currentLayout);
     }
     this.shadowSystem?.rebuildArenaStaticShadows(
       this.ctx.currentLayout,

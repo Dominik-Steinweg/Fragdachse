@@ -2,11 +2,24 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import type { DecalKey, DecalTerrainLayer } from '../types';
 
+/**
+ * Wo ein Fels-Decal sitzen darf.
+ *
+ * - `edge`   – Zelle mit mindestens einer freiliegenden Kardinalkante. Bewuchs sammelt sich
+ *              an der Silhouette, deshalb liegt hier die hoehere Deckung. Nur kleine
+ *              Varianten, damit der Ueberhang auf den Boden gering bleibt.
+ * - `interior`– Zelle mit vier belegten Kardinalnachbarn: Risse, Abplatzungen, Mineraladern.
+ * - `core`   – Zelle mit vollstaendig belegter 8er-Nachbarschaft. Erst hier passen die
+ *              grossen Moos-/Flechtenmatten vollstaendig in die Felsmasse.
+ */
+export type DecalPlacement = 'edge' | 'interior' | 'core';
+
 export interface DecalVariantConfig {
   fileName: string;
   frequencyPercent: number;
   displaySize?: number;
   alpha?: number;
+  placement?: DecalPlacement;
 }
 
 export interface DecalLayerConfig {
@@ -14,6 +27,13 @@ export interface DecalLayerConfig {
   maxOffsetX: number;
   maxOffsetY: number;
   variants: readonly DecalVariantConfig[];
+}
+
+export interface RockDecalLayerConfig extends DecalLayerConfig {
+  /** Deckung auf Zellen mit freiliegender Kante. */
+  edgeCoveragePercent: number;
+  /** Deckung auf Zellen im Inneren des Verbunds. */
+  interiorCoveragePercent: number;
 }
 
 export const DECAL_SIZE = 16;
@@ -62,43 +82,59 @@ export const ARENA_DECAL_CONFIG = {
   },
 } satisfies Record<Exclude<DecalTerrainLayer, 'rock'>, DecalLayerConfig>;
 
-export const ROCK_DECAL_CONFIG: DecalLayerConfig = {
-  coveragePercent: 30,
+export const ROCK_DECAL_CONFIG: RockDecalLayerConfig = {
+  /** Mittelwert der beiden Deckungen; bleibt als Rueckfalloption fuer alte Aufrufer erhalten. */
+  coveragePercent: 34,
+  edgeCoveragePercent: 52,
+  interiorCoveragePercent: 24,
   maxOffsetX: ROCK_DECAL_MAX_OFFSET_PX,
   maxOffsetY: ROCK_DECAL_MAX_OFFSET_PX,
   variants: [
-    { fileName: 'rock_crack_hairline.png', frequencyPercent: 18, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_crack_branch.png', frequencyPercent: 14, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_crack_fracture.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_moss_fringe.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_lichen_patch.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_moss_crescent.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_sprout_pair.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_fern_cluster.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_pebbles.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_mineral_streak.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_crack_split.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_crack_branchlet.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_chip_angular.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_lichen_specks.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_moss_tuft.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_root_threads.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_sprout_single.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_pebble_crescent.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_mineral_vein.png', frequencyPercent: 1, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_fern_frond.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE },
-    { fileName: 'rock_moss_carpet.png', frequencyPercent: 7, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.78 },
-    { fileName: 'rock_moss_crescent_large.png', frequencyPercent: 7, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8 },
-    { fileName: 'rock_lichen_plate_large.png', frequencyPercent: 6, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.78 },
-    { fileName: 'rock_damp_island.png', frequencyPercent: 6, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.76 },
-    { fileName: 'rock_fern_moss_mat.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.82 },
-    { fileName: 'rock_moss_ribbon.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8 },
-    { fileName: 'rock_lichen_field_large.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.74 },
-    { fileName: 'rock_root_moss_tangle.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.82 },
-    { fileName: 'rock_moss_growth_blotch.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.72 },
-    { fileName: 'rock_moss_shelf.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8 },
+    { fileName: 'rock_crack_hairline.png', frequencyPercent: 18, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_crack_branch.png', frequencyPercent: 14, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_crack_fracture.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_moss_fringe.png', frequencyPercent: 14, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_lichen_patch.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_moss_crescent.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_sprout_pair.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_fern_cluster.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_pebbles.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_mineral_streak.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_crack_split.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_crack_branchlet.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_chip_angular.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_lichen_specks.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_moss_tuft.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_root_threads.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_sprout_single.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_pebble_crescent.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_mineral_vein.png', frequencyPercent: 1, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_fern_frond.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_moss_carpet.png', frequencyPercent: 7, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.78, placement: 'core' },
+    { fileName: 'rock_moss_crescent_large.png', frequencyPercent: 7, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8, placement: 'core' },
+    { fileName: 'rock_lichen_plate_large.png', frequencyPercent: 6, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.78, placement: 'core' },
+    { fileName: 'rock_damp_island.png', frequencyPercent: 6, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.76, placement: 'core' },
+    { fileName: 'rock_fern_moss_mat.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.82, placement: 'core' },
+    { fileName: 'rock_moss_ribbon.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8, placement: 'core' },
+    { fileName: 'rock_lichen_field_large.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.74, placement: 'core' },
+    { fileName: 'rock_root_moss_tangle.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.82, placement: 'core' },
+    { fileName: 'rock_moss_growth_blotch.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.72, placement: 'core' },
+    { fileName: 'rock_moss_shelf.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8, placement: 'core' },
   ],
 };
+
+/**
+ * Varianten, die auf einer Zelle der gegebenen Lage sitzen duerfen. Eine Kernzelle erbt die
+ * Innen-Varianten, weil Risse ueberall im Verbund vorkommen; die grossen Matten bleiben
+ * ausschliesslich dort, wo sie vollstaendig auf Fels liegen.
+ */
+export function getRockDecalVariantsForPlacement(placement: DecalPlacement): readonly DecalVariantConfig[] {
+  return ROCK_DECAL_CONFIG.variants.filter((variant) => {
+    const variantPlacement = variant.placement ?? 'interior';
+    if (placement === 'core') return variantPlacement === 'core' || variantPlacement === 'interior';
+    return variantPlacement === placement;
+  });
+}
 
 export function getDecalTextureKey(fileName: string): DecalKey {
   return fileName.replace(/\.[^.]+$/, '');

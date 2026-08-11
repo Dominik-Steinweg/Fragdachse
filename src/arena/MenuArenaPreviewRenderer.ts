@@ -8,6 +8,7 @@ import {
 import type { ArenaLayout } from '../types';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
+import { resolveRockSurfaceCornerTints } from './RockSurfaceShading';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -88,17 +89,13 @@ export class MenuArenaPreviewRenderer {
     // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
     this.bakeLayer(ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics), DEPTH.DIRT, view.dirt);
     this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals);
-    const rockImages = this.createRocks(layout);
-    const activeRockIds = new Set(layout.rocks.map((_, index) => index));
-    const rockVariationImages = ArenaVisualFactory.createRockVariationOverlays(
-      this.scene,
-      layout.rocks,
-      rockImages,
-      activeRockIds,
-    );
-    this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks);
+    // Flaechenwash und Kantenlicht der Felsen stecken im 4-Ecken-Tint (siehe
+    // `RockSurfaceShading`), die Vorschau erbt sie deshalb ueber `createRocks()`. Die
+    // Materialstoerung des Arena-Renderings bleibt der Vorschau bewusst erspart: sie
+    // braucht dafuer einen Scratch-Layer je Vorschau und liest bei dieser Groesse nicht.
+    this.bakeLayer(this.createRocks(layout), DEPTH.ROCKS, view.rocks);
     this.bakeLayer(
-      [...rockVariationImages, ...ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics)],
+      ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics),
       DEPTH.ROCK_DECALS,
       view.decals,
     );
@@ -217,7 +214,13 @@ export class MenuArenaPreviewRenderer {
       const worldY = this.config.view.bounds.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const frame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      result.push(ArenaVisualFactory.createRock(this.scene, worldX, worldY, frame));
+      result.push(ArenaVisualFactory.createRock(
+        this.scene,
+        worldX,
+        worldY,
+        frame,
+        resolveRockSurfaceCornerTints(gridX, gridY, isOccupied),
+      ));
     }
 
     return result;

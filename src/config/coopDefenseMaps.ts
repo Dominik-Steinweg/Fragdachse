@@ -9,6 +9,9 @@ import { POWERUP_DEFS, shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CON
 import {
   DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  ARENA_OFFSET_X,
+  ARENA_OFFSET_Y,
+  CELL_SIZE,
   normalizeCoopDefenseArenaHeightCells,
   normalizeCoopDefenseArenaWidthCells,
   ROCK_FILL_RATIO,
@@ -194,6 +197,40 @@ export interface ResolvedCoopDefenseMapEncounterConfig {
 
 export type CoopDefenseSecondaryObjectiveType = 'destroy' | 'hold' | 'carry';
 
+/** Authored rectangle for a world-space Carry objective zone. Coordinates are arena cells. */
+export interface CoopDefenseMapObjectiveZoneConfig {
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly widthCells: number;
+  readonly heightCells: number;
+}
+
+export interface CoopDefenseMapObjectiveZoneWorldRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export function getCoopDefenseMapObjectiveZoneWorldRect(
+  zone: CoopDefenseMapObjectiveZoneConfig,
+): CoopDefenseMapObjectiveZoneWorldRect {
+  return {
+    x: ARENA_OFFSET_X + zone.gridX * CELL_SIZE,
+    y: ARENA_OFFSET_Y + zone.gridY * CELL_SIZE,
+    width: zone.widthCells * CELL_SIZE,
+    height: zone.heightCells * CELL_SIZE,
+  };
+}
+
+/** Carry-specific data; unlike Destroy/Hold it contains no dormant base references. */
+export interface CoopDefenseMapCarryConfig {
+  readonly spawnZone: CoopDefenseMapObjectiveZoneConfig;
+  readonly deliveryZone: CoopDefenseMapObjectiveZoneConfig;
+  /** Number of independently transportable bottles spawned when the objective activates. */
+  readonly itemCount?: number;
+}
+
 export interface CoopDefenseMapSecondaryObjectiveRewards {
   /** Team-XP je aufgeloestem Ziel; gebucht beim Ziel, nicht beim Missionsabschluss. */
   readonly xpPerTarget?: number;
@@ -219,8 +256,10 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
    * Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  /** Base targets for Destroy/Hold. Carry uses its authored `carry` zones instead. */
   readonly targets: readonly string[];
   readonly targetGoal?: number;
+  readonly carry?: CoopDefenseMapCarryConfig;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
   /**
    * Missionsname im HUD, z. B. `BRUTNESTER ZERSTÖREN`. Rein darstellend und deshalb bewusst
@@ -240,6 +279,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly holdUntil?: CoopDefenseMapEncounterStart;
   readonly targets: readonly string[];
   readonly targetGoal: number;
+  readonly carry?: CoopDefenseMapCarryConfig;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
   readonly displayName?: string;
   readonly rewardHint?: string;
@@ -546,12 +586,23 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
-    targets: [...objective.targets],
-    targetGoal: objective.targetGoal ?? objective.targets.length,
+    targets: [...(objective.targets ?? [])],
+    targetGoal: objective.targetGoal ?? (objective.type === 'carry' && objective.carry
+      ? objective.carry.itemCount ?? 1
+      : objective.targets.length),
+    ...(objective.carry ? { carry: cloneCarryConfig(objective.carry) } : {}),
     ...(objective.rewards ? { rewards: { ...objective.rewards } } : {}),
     ...(objective.displayName ? { displayName: objective.displayName } : {}),
     ...(objective.rewardHint ? { rewardHint: objective.rewardHint } : {}),
   }));
+}
+
+function cloneCarryConfig(config: CoopDefenseMapCarryConfig): CoopDefenseMapCarryConfig {
+  return {
+    spawnZone: { ...config.spawnZone },
+    deliveryZone: { ...config.deliveryZone },
+    ...(config.itemCount === undefined ? {} : { itemCount: config.itemCount }),
+  };
 }
 
 /** Exakte XP-Untergrenze aus endlichem Map-Inhalt; persistenter Druck ist darin nicht enthalten. */
@@ -661,6 +712,12 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     bases,
     encounters,
     objective,
+    arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
+      mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+    ),
+    arenaHeightCells: normalizeCoopDefenseArenaHeightCells(
+      mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+    ),
   });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
 
@@ -844,6 +901,8 @@ interface SecondaryObjectiveNormalizationContext {
   readonly bases: readonly CoopBaseConfig[];
   readonly encounters: readonly CoopDefenseMapEncounterConfig[] | undefined;
   readonly objective: CoopDefenseMapObjective;
+  readonly arenaWidthCells: number;
+  readonly arenaHeightCells: number;
 }
 
 function normalizeSecondaryObjectiveConfigs(
@@ -873,8 +932,18 @@ function normalizeSecondaryObjectiveConfigs(
     if (!isSecondaryObjectiveType(objective.type)) {
       throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} has an unknown type: ${objective.type}`);
     }
-    if (!Array.isArray(objective.targets) || objective.targets.length === 0) {
+    const authoredTargets = Array.isArray(objective.targets) ? objective.targets : [];
+    const isCarry = objective.type === 'carry';
+    if (!isCarry && authoredTargets.length === 0) {
       throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} needs at least one target`);
+    }
+    if (isCarry && authoredTargets.length > 0 && objective.carry !== undefined) {
+      throw new Error(
+        `[coopDefenseMaps] Carry secondary objective ${mapId}:${id} must use carry zones, not base targets`,
+      );
+    }
+    if (isCarry && authoredTargets.length === 0 && objective.carry === undefined) {
+      throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${id} needs carry zones`);
     }
 
     // Hold ist binaer und besitzt keinen Hintergrundzustand: genau ein Ziel, ein authored Haltefenster
@@ -886,7 +955,7 @@ function normalizeSecondaryObjectiveConfigs(
       if (objective.focusUntil !== undefined) {
         throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} must not declare focusUntil`);
       }
-      if (objective.targets.length !== 1) {
+      if (authoredTargets.length !== 1) {
         throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs exactly one target`);
       }
     } else if (objective.holdUntil !== undefined) {
@@ -894,7 +963,7 @@ function normalizeSecondaryObjectiveConfigs(
     }
 
     const targetIds = new Set<string>();
-    const targets = objective.targets.map((targetId: string) => {
+    const targets = authoredTargets.map((targetId: string) => {
       if (typeof targetId !== 'string' || targetId.trim().length === 0) {
         throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} needs non-empty target ids`);
       }
@@ -913,6 +982,15 @@ function normalizeSecondaryObjectiveConfigs(
       return normalizedTargetId;
     });
 
+    const carry = isCarry && objective.carry
+      ? normalizeCarryConfig(mapId, id, objective.carry, objective.targetGoal, context)
+      : undefined;
+    const targetGoal = isCarry && carry
+      ? Math.floor(objective.targetGoal ?? carry?.itemCount ?? 1)
+      : typeof objective.targetGoal === 'number' && Number.isFinite(objective.targetGoal)
+        ? Math.max(1, Math.min(targets.length, Math.floor(objective.targetGoal)))
+        : targets.length;
+
     return {
       id,
       type: objective.type,
@@ -924,9 +1002,8 @@ function normalizeSecondaryObjectiveConfigs(
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
       targets,
-      targetGoal: typeof objective.targetGoal === 'number' && Number.isFinite(objective.targetGoal)
-        ? Math.max(1, Math.min(targets.length, Math.floor(objective.targetGoal)))
-        : targets.length,
+      targetGoal,
+      ...(carry ? { carry } : {}),
       ...(objective.rewards === undefined && objective.type !== 'hold'
         ? {}
         : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.type, objective.rewards ?? {}) }),
@@ -935,7 +1012,11 @@ function normalizeSecondaryObjectiveConfigs(
     };
   });
 
-  validateDormantMissionStructures(mapId, context.bases, normalizedObjectives);
+  validateDormantMissionStructures(
+    mapId,
+    context.bases,
+    normalizedObjectives.filter((objective) => objective.type !== 'carry' || objective.carry === undefined),
+  );
   validateSecondaryObjectiveWindows(mapId, normalizedObjectives, context.encounters);
   if (context.objective === 'repel-assault' && context.encounters && context.encounters.length > 0) {
     const lastEncounterId = context.encounters[context.encounters.length - 1].id;
@@ -953,6 +1034,80 @@ function normalizeSecondaryObjectiveConfigs(
     }
   }
   return normalizedObjectives;
+}
+
+function normalizeCarryConfig(
+  mapId: string,
+  objectiveId: string,
+  carry: CoopDefenseMapCarryConfig | undefined,
+  authoredTargetGoal: number | undefined,
+  context: SecondaryObjectiveNormalizationContext,
+): CoopDefenseMapCarryConfig {
+  if (!carry) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs carry zones`);
+  }
+
+  const spawnZone = normalizeCarryZone(mapId, objectiveId, 'spawnZone', carry.spawnZone, context);
+  const deliveryZone = normalizeCarryZone(mapId, objectiveId, 'deliveryZone', carry.deliveryZone, context);
+  if (zonesOverlap(spawnZone, deliveryZone)) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} zones must not overlap`);
+  }
+
+  const authoredItemCount = carry.itemCount ?? authoredTargetGoal ?? 1;
+  if (!Number.isInteger(authoredItemCount) || authoredItemCount < 1) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs a positive itemCount`);
+  }
+  if (authoredTargetGoal !== undefined && (!Number.isInteger(authoredTargetGoal) || authoredTargetGoal < 1)) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs a positive targetGoal`);
+  }
+  if (authoredTargetGoal !== undefined && authoredTargetGoal > authoredItemCount) {
+    throw new Error(
+      `[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} targetGoal cannot exceed itemCount`,
+    );
+  }
+
+  return {
+    spawnZone,
+    deliveryZone,
+    itemCount: authoredItemCount,
+  };
+}
+
+function normalizeCarryZone(
+  mapId: string,
+  objectiveId: string,
+  zoneName: 'spawnZone' | 'deliveryZone',
+  zone: CoopDefenseMapObjectiveZoneConfig | undefined,
+  context: SecondaryObjectiveNormalizationContext,
+): CoopDefenseMapObjectiveZoneConfig {
+  if (!zone || typeof zone !== 'object') {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs ${zoneName}`);
+  }
+  const values = [zone.gridX, zone.gridY, zone.widthCells, zone.heightCells];
+  if (values.some((value) => !Number.isInteger(value))) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} has invalid ${zoneName}`);
+  }
+  if (zone.gridX < 0 || zone.gridY < 0 || zone.widthCells < 1 || zone.heightCells < 1
+    || zone.gridX + zone.widthCells > context.arenaWidthCells
+    || zone.gridY + zone.heightCells > context.arenaHeightCells) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} has out-of-bounds ${zoneName}`);
+  }
+  return {
+    gridX: zone.gridX,
+    gridY: zone.gridY,
+    widthCells: zone.widthCells,
+    heightCells: zone.heightCells,
+  };
+}
+
+function zonesOverlap(
+  first: CoopDefenseMapObjectiveZoneConfig,
+  second: CoopDefenseMapObjectiveZoneConfig,
+): boolean {
+  return first.gridX < second.gridX + second.widthCells
+    && first.gridX + first.widthCells > second.gridX
+    && first.gridY < second.gridY + second.heightCells
+    && first.gridY + first.heightCells > second.gridY;
 }
 
 /**

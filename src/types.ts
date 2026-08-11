@@ -1798,3 +1798,17 @@ export interface SyncedCaptureTheBeerState {
   scores: Record<TeamId, number>;
   beers: SyncedCaptureTheBeerBeer[];
 }
+
+export type CoopDefenseCarryItemState = 'spawned' | 'carried' | 'dropped';
+
+/** Host snapshot of one independent Carry objective item. */
+export interface SyncedCoopDefenseCarryItem {
+  id: string;
+  objectiveId: string;
+  x: number;
+  y: number;
+  holderId: string | null;
+  state: CoopDefenseCarryItemState;
+}
+
+export type SyncedCoopDefenseCarryState = SyncedCoopDefenseCarryItem[];

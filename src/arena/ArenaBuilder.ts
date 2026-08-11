@@ -16,6 +16,9 @@ import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, GameMode, G
 import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
+import { multiplyTint, resolveRockSurfaceCornerTints } from './RockSurfaceShading';
+import type { RockCornerTints } from './RockSurfaceShading';
+import { createRockMottleImages } from './RockSurfaceMottle';
 import { RockGridIndex } from './RockGridIndex';
 import { ARENA_BACKGROUND_TEXTURE_KEY, resolveArenaBackgroundSpec } from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -27,6 +30,15 @@ export interface ArenaBuilderResult {
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
   /** Paralleles Array zu layout.rocks – null-Slots = bereits zerstört */
   rockObjects:  (Phaser.GameObjects.Image | null)[];
+  /**
+   * Zuletzt angewendeter Zustandstint je Fels (Schaden × Besitzerfarbe), parallel zu
+   * `rockObjects`. Der sichtbare Tint ist das Produkt aus diesem Wert und dem
+   * 4-Ecken-Flaechentint; ohne den gespeicherten Zustand liesse sich der Flaechenanteil
+   * nach einer Hindernisaenderung nicht neu berechnen, ohne den Schaden zu verlieren.
+   * Auf Clients ist das ausserdem die einzige verfuegbare Quelle: dort fuehrt die
+   * `RockRegistry` keine HP, die kommt aus dem Host-Snapshot.
+   */
+  rockStateTints: number[];
   /** Spatial Index für Grid-basierte Nachbar-Lookups (Autotiling) */
   rockGrid:     RockGridIndex;
   /** StaticGroup mit Baumstümpfen (Kreis-Körper, keine HP) */
@@ -59,8 +71,22 @@ export interface ArenaBuilderResult {
    * Terrain-Farb-Sampler braucht sie, weil die Live-Images nicht mehr existieren.
    */
   decalStamps: DirtStamp[];
-  /** Gebackener Fels-Overlay aus Farbvariation und Decals; wird bei Fels-Aenderungen neu aufgebaut. */
+  /** Gebackene Fels-Decals; wird bei Fels-Aenderungen neu aufgebaut. */
   rockDecalLayer: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Gebackene, nicht-periodische Materialstoerung der Felsflaeche (`RockSurfaceMottle`).
+   * MULTIPLY, damit der HP-Schadenstint der Felsen verhaeltnisgleich durchschlaegt.
+   */
+  rockMottleLayer: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Rundengebundene Stanzform: arenagross, ausserhalb der Felsen deckend. Sie beschneidet
+   * den Fleck-Layer exakt auf die Silhouette.
+   *
+   * Bewusst rundengebunden und nicht pro Aufbau neu erzeugt: der Layer wird bei *jeder*
+   * Hindernisaenderung neu gebacken, und eine arenagrosse Textur pro zerstoertem Fels neu
+   * zu allokieren waere auf den breiten Karten ein spuerbarer Ruckler.
+   */
+  rockSilhouetteCutout: Phaser.GameObjects.RenderTexture | null;
 }
 
 /** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
@@ -146,6 +172,7 @@ export class ArenaBuilder {
     const rockGroup    = this.scene.physics.add.staticGroup();
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockObjects:  (Phaser.GameObjects.Image | null)[] = [];
+    const rockStateTints: number[] = [];
     const trunkObjects: Phaser.GameObjects.Arc[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
 
@@ -171,10 +198,11 @@ export class ArenaBuilder {
       const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const frame  = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      const img    = this.createRockVisual(worldX, worldY, frame);
+      const img    = this.createRockVisual(worldX, worldY, frame, resolveRockSurfaceCornerTints(gridX, gridY, isOccupied));
       rockGroup.add(img);
       (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
       rockObjects.push(img);
+      rockStateTints.push(0xffffff);
     }
 
     // Bäume (Trunk + Canopy)
@@ -199,6 +227,7 @@ export class ArenaBuilder {
       baseZoneObjects,
       rockGroup,
       rockObjects,
+      rockStateTints,
       rockGrid,
       trunkGroup,
       trunkObjects,
@@ -209,11 +238,13 @@ export class ArenaBuilder {
       decalLayer,
       decalStamps,
       rockDecalLayer: null,
+      rockMottleLayer: null,
+      rockSilhouetteCutout: null,
     };
 
-    // Erst nach dem Erzeugen der Live-Felsen backen, damit der Layer exakt die aktiven
-    // Fels-IDs kennt. Zerstorungen bauen denselben Layer spaeter gesammelt neu.
-    ArenaBuilder.rebuildRockDecals(this.scene, result, layout);
+    // Erst nach dem Erzeugen der Live-Felsen backen, damit die Layer exakt die aktiven
+    // Fels-IDs kennen. Zerstorungen bauen dieselben Layer spaeter gesammelt neu.
+    ArenaBuilder.rebuildRockOverlays(this.scene, result, layout);
     return result;
   }
 
@@ -247,11 +278,13 @@ export class ArenaBuilder {
   /**
    * Aktualisiert Tint eines Felsens anhand seines HP-Wertes.
    * Bei hp <= 0 wird der Fels zerstört und Nachbar-Tiles aktualisiert.
+   *
+   * Der Zustandstint (Schaden, Besitzerfarbe) wird mit dem 4-Ecken-Flaechentint
+   * multipliziert, damit Wash und Kantenlicht erhalten bleiben und der Schaden trotzdem
+   * verhaeltnisgleich durchschlaegt.
    */
   static updateRockVisual(
-    rockObjects: (Phaser.GameObjects.Image | null)[],
-    rockGroup:   Phaser.Physics.Arcade.StaticGroup,
-    rockGrid:    RockGridIndex,
+    result:      ArenaBuilderResult,
     rocks:       readonly RockCell[],
     id:          number,
     hp:          number,
@@ -260,21 +293,73 @@ export class ArenaBuilder {
     ownerTintStrength = 0,
   ): void {
     if (hp <= 0) return;
-    const img = rockObjects[id];
+    const img = result.rockObjects[id];
     if (!img?.active) return;
 
     // Glatte Abstufung in ROCK_TINT_STEPS Schritten: 0xffffff (voll) → 0x666666 (fast zerstört)
     const ratio = Math.round((hp / Math.max(1, maxHp)) * ROCK_TINT_STEPS) / ROCK_TINT_STEPS;
     const gray  = Math.round(0x66 + (0xFF - 0x66) * ratio);
     const damageTint = (gray << 16) | (gray << 8) | gray;
-    img.setTint(ArenaBuilder.mixTint(damageTint, ownerColor, ownerTintStrength));
+    const stateTint = ArenaBuilder.mixTint(damageTint, ownerColor, ownerTintStrength);
+    result.rockStateTints[id] = stateTint;
+    ArenaBuilder.applyRockTint(img, stateTint, ArenaBuilder.resolveSurfaceTints(result.rockGrid, rocks, id));
+  }
+
+  /**
+   * Erneuert Flaechenwash und Kantenlicht aller lebenden Felsen.
+   *
+   * Nötig nach jeder Hindernisaenderung: das Kantenlicht leitet sich aus der Belegung der
+   * Nachbarzellen ab, ein zerstoerter oder gesetzter Fels aendert es also auch bei seinen
+   * Nachbarn. Der Aufruf gehört deshalb in denselben Trichter wie Retiling und statische
+   * Schatten (`RockVisualHelper.refreshObstacleVisuals()`) und nicht in die einzelnen
+   * Spawn-/Destroy-Pfade, die jeweils nur ihren eigenen Fels kennen.
+   */
+  static refreshRockSurfaceTints(result: ArenaBuilderResult, layout: ArenaLayout): void {
+    for (let id = 0; id < layout.rocks.length; id += 1) {
+      const img = result.rockObjects[id];
+      if (!img?.active) continue;
+      ArenaBuilder.applyRockTint(
+        img,
+        result.rockStateTints[id] ?? 0xffffff,
+        ArenaBuilder.resolveSurfaceTints(result.rockGrid, layout.rocks, id),
+      );
+    }
+  }
+
+  private static resolveSurfaceTints(
+    rockGrid: RockGridIndex,
+    rocks: readonly RockCell[],
+    id: number,
+  ): RockCornerTints | null {
+    const cell = rocks[id];
+    if (!cell) return null;
+    return resolveRockSurfaceCornerTints(
+      cell.gridX,
+      cell.gridY,
+      (gx, gy) => rockGrid.isOccupiedWithBorder(gx, gy),
+    );
+  }
+
+  private static applyRockTint(
+    img: Phaser.GameObjects.Image,
+    stateTint: number,
+    surfaceTints: RockCornerTints | null,
+  ): void {
+    if (!surfaceTints) {
+      img.setTint(stateTint);
+      return;
+    }
+    img.setTint(
+      multiplyTint(stateTint, surfaceTints[0]),
+      multiplyTint(stateTint, surfaceTints[1]),
+      multiplyTint(stateTint, surfaceTints[2]),
+      multiplyTint(stateTint, surfaceTints[3]),
+    );
   }
 
   static spawnRockAndRetile(
     scene: Phaser.Scene,
-    rockObjects: (Phaser.GameObjects.Image | null)[],
-    rockGroup: Phaser.Physics.Arcade.StaticGroup,
-    rockGrid: RockGridIndex,
+    result: ArenaBuilderResult,
     rocks: readonly RockCell[],
     id: number,
     ownerColor?: number,
@@ -282,12 +367,19 @@ export class ArenaBuilder {
     hp = ROCK_HP_MAX,
     maxHp = ROCK_HP_MAX,
   ): Phaser.GameObjects.Image {
+    const { rockObjects, rockGroup, rockGrid } = result;
     const { gridX, gridY } = rocks[id];
     const isOccupied = (gx: number, gy: number) => gx === gridX && gy === gridY
       ? true
       : rockGrid.isOccupiedWithBorder(gx, gy);
     const frame = AutoTiler.getFrame(AutoTiler.computeMask(gridX, gridY, isOccupied), ROCK_AUTOTILE);
-    const img = ArenaBuilder.createRockVisual(scene, ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2, ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2, frame);
+    const img = ArenaBuilder.createRockVisual(
+      scene,
+      ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2,
+      ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2,
+      frame,
+      resolveRockSurfaceCornerTints(gridX, gridY, isOccupied),
+    );
     rockObjects[id] = img;
     rockGroup.add(img);
     (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
@@ -303,7 +395,7 @@ export class ArenaBuilder {
       neighbor.setFrame(neighborFrame);
     }
 
-    ArenaBuilder.updateRockVisual(rockObjects, rockGroup, rockGrid, rocks, id, hp, maxHp, ownerColor, ownerTintStrength);
+    ArenaBuilder.updateRockVisual(result, rocks, id, hp, maxHp, ownerColor, ownerTintStrength);
     return img;
   }
 
@@ -311,15 +403,14 @@ export class ArenaBuilder {
    * Entfernt einen Fels und aktualisiert die Tile-Frames aller Nachbarn.
    */
   static destroyRockAndRetile(
-    rockObjects: (Phaser.GameObjects.Image | null)[],
-    rockGroup:   Phaser.Physics.Arcade.StaticGroup,
-    rockGrid:    RockGridIndex,
+    result:      ArenaBuilderResult,
     rocks:       readonly RockCell[],
     id:          number,
   ): void {
     if (!rocks[id]) return;
+    const { rockObjects, rockGrid } = result;
     const { gridX, gridY } = rocks[id];
-    ArenaBuilder.destroyRock(rockObjects, rockGroup, id);
+    ArenaBuilder.destroyRock(result, id);
     rockGrid.remove(gridX, gridY);
 
     // Nachbar-Tiles neu berechnen
@@ -340,55 +431,114 @@ export class ArenaBuilder {
    * Entfernt einen Fels physikalisch und visuell aus der Szene.
    * Sicher mehrfach aufzurufen (idempotent via null-Slot).
    */
-  static destroyRock(
-    rockObjects: (Phaser.GameObjects.Image | null)[],
-    rockGroup:   Phaser.Physics.Arcade.StaticGroup,
-    id:          number,
-  ): void {
-    const img = rockObjects[id];
+  static destroyRock(result: ArenaBuilderResult, id: number): void {
+    const img = result.rockObjects[id];
     if (!img) return;
-    rockGroup.remove(img, true, true);
-    rockGroup.refresh();
-    rockObjects[id] = null;
+    result.rockGroup.remove(img, true, true);
+    result.rockGroup.refresh();
+    result.rockObjects[id] = null;
+    result.rockStateTints[id] = 0xffffff;
   }
 
   /**
-   * Backt alle noch getragenen Fels-Decals in ein einziges Layer. Ein Decal, das mehrere
-   * Felsen beruehrt, bleibt nur sichtbar, solange alle seine Traeger aktiv sind. Das ist
-   * bewusst ein Rebuild bei Hindernisaenderungen und kein Live-Image pro Fels: dadurch
-   * bleiben die 30 Varianten und viele Instanzen im Renderwalk ein einziges Objekt.
+   * Backt die beiden Fels-Overlays neu: Materialstoerung (MULTIPLY) und Decals (NORMAL).
+   *
+   * Ein Decal, das mehrere Felsen beruehrt, bleibt nur sichtbar, solange alle seine Traeger
+   * aktiv sind. Das ist bewusst ein Rebuild bei Hindernisaenderungen und kein Live-Image pro
+   * Fels: dadurch bleiben die 30 Varianten und viele Instanzen im Renderwalk ein einziges
+   * Objekt.
    */
-  static rebuildRockDecals(
+  static rebuildRockOverlays(
     scene: Phaser.Scene,
     result: ArenaBuilderResult,
     layout: ArenaLayout,
   ): void {
-    if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
-    result.rockDecalLayer = null;
-
     const activeRockIds = new Set<number>();
+    const activeCells: RockCell[] = [];
+    const activeRocks: Phaser.GameObjects.Image[] = [];
     for (let id = 0; id < layout.rocks.length; id += 1) {
-      if (result.rockObjects[id]?.active) activeRockIds.add(id);
+      const img = result.rockObjects[id];
+      if (!img?.active || !layout.rocks[id]) continue;
+      activeRockIds.add(id);
+      activeCells.push(layout.rocks[id]);
+      activeRocks.push(img);
     }
 
-    const variationImages = ArenaVisualFactory.createRockVariationOverlays(
-      scene,
-      layout.rocks,
-      result.rockObjects,
-      activeRockIds,
-    );
-    const decalImages = ArenaVisualFactory.createRockDecals(scene, layout.decals ?? [], undefined, activeRockIds);
-    const images = [...variationImages, ...decalImages];
-    if (images.length === 0) return;
+    ArenaBuilder.bakeRockMottle(scene, result, activeCells, activeRocks);
 
+    const decalImages = ArenaVisualFactory.createRockDecals(scene, layout.decals ?? [], undefined, activeRockIds);
+    if (decalImages.length > 0) {
+      const layer = result.rockDecalLayer ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS);
+      layer.clear();
+      layer.draw(decalImages);
+      layer.render();
+      for (const image of decalImages) image.destroy();
+      result.rockDecalLayer = layer;
+    } else {
+      result.rockDecalLayer?.clear();
+    }
+  }
+
+  /**
+   * Backt die Materialstoerung und beschneidet sie exakt auf die Fels-Silhouette.
+   *
+   * Die Beschneidung laeuft ueber eine Stanzform: eine arenagrosse Flaeche, aus der die
+   * lebenden Fels-Sprites ausgestanzt werden. Sie ist damit ausserhalb der Felsen deckend
+   * und loescht dort alles aus dem Fleck-Layer. Weil `erase()` allein die Alpha der Quelle
+   * auswertet, dienen die Live-Felsen direkt als Stanzform – inklusive ihrer weichen
+   * Kantenpixel, wodurch die Silhouette pixelgenau erhalten bleibt und der Fleck-Layer die
+   * gestaltete Kante nicht ueberzeichnet.
+   *
+   * Beide Texturen werden ueber die Runde wiederverwendet und nur geleert. Ein
+   * Destroy/Create-Paar je Hindernisaenderung waere eine arenagrosse Allokation pro
+   * zerstoertem Fels.
+   */
+  private static bakeRockMottle(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    activeCells: readonly RockCell[],
+    activeRocks: Phaser.GameObjects.Image[],
+  ): void {
+    const mottleImages = activeCells.length === 0
+      ? []
+      : createRockMottleImages(scene, activeCells, { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y });
+    if (mottleImages.length === 0) {
+      result.rockMottleLayer?.clear();
+      return;
+    }
+
+    const cutout = result.rockSilhouetteCutout ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCKS);
+    // 'redraw': der Command-Buffer wird geleert, die Scratch-Textur selbst nie gezeichnet.
+    cutout.setRenderMode('redraw');
+    cutout.clear();
+    cutout.fill(0x000000, 1);
+    cutout.erase(activeRocks);
+    cutout.render();
+    result.rockSilhouetteCutout = cutout;
+
+    const cutoutImage = new Phaser.GameObjects.Image(scene, ARENA_OFFSET_X, ARENA_OFFSET_Y, cutout.texture.key)
+      .setOrigin(0, 0);
+
+    const layer = result.rockMottleLayer ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCKS + 0.05);
+    layer.setBlendMode(Phaser.BlendModes.MULTIPLY);
+    layer.clear();
+    layer.draw(mottleImages);
+    layer.render();
+    layer.erase([cutoutImage]);
+    layer.render();
+    result.rockMottleLayer = layer;
+
+    cutoutImage.destroy();
+    for (const image of mottleImages) image.destroy();
+  }
+
+  /** Arenagrosse RenderTexture in Weltkoordinaten – gemeinsame Grundlage aller gebackenen Layer. */
+  private static createArenaLayer(scene: Phaser.Scene, depth: number): Phaser.GameObjects.RenderTexture {
     const layer = scene.add.renderTexture(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
     layer.setOrigin(0, 0);
-    layer.setDepth(DEPTH.ROCK_DECALS);
+    layer.setDepth(depth);
     layer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
-    layer.draw(images);
-    layer.render();
-    for (const image of images) image.destroy();
-    result.rockDecalLayer = layer;
+    return layer;
   }
 
   // ── Teardown ────────────────────────────────────────────────────────────────
@@ -408,6 +558,7 @@ export class ArenaBuilder {
       if (img?.active) img.destroy();
     }
     result.rockObjects.length = 0;
+    result.rockStateTints.length = 0;
     result.rockGroup.destroy(true);
 
     // Trunks
@@ -441,6 +592,12 @@ export class ArenaBuilder {
 
     if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
     result.rockDecalLayer = null;
+
+    if (result.rockMottleLayer?.active) result.rockMottleLayer.destroy();
+    result.rockMottleLayer = null;
+
+    if (result.rockSilhouetteCutout?.active) result.rockSilhouetteCutout.destroy();
+    result.rockSilhouetteCutout = null;
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
@@ -448,12 +605,18 @@ export class ArenaBuilder {
   /**
    * Erstellt einen Felsen-Sprite aus dem Autotile-Spritesheet.
    */
-  private createRockVisual(worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
-    return ArenaVisualFactory.createRock(this.scene, worldX, worldY, frame);
+  private createRockVisual(worldX: number, worldY: number, frame: number, cornerTints?: RockCornerTints): Phaser.GameObjects.Image {
+    return ArenaVisualFactory.createRock(this.scene, worldX, worldY, frame, cornerTints);
   }
 
-  private static createRockVisual(scene: Phaser.Scene, worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
-    return ArenaVisualFactory.createRock(scene, worldX, worldY, frame);
+  private static createRockVisual(
+    scene: Phaser.Scene,
+    worldX: number,
+    worldY: number,
+    frame: number,
+    cornerTints?: RockCornerTints,
+  ): Phaser.GameObjects.Image {
+    return ArenaVisualFactory.createRock(scene, worldX, worldY, frame, cornerTints);
   }
 
   private static mixTint(baseColor: number, ownerColor?: number, strength = 0): number {

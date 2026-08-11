@@ -312,6 +312,7 @@ export function resolveCoopDefenseBases(
 ): readonly BaseSpec[] {
   const objectiveByBaseId = new Map<string, string>();
   for (const objective of mapConfig.secondaryObjectives ?? []) {
+    if (objective.type === 'carry' && objective.carry !== undefined) continue;
     for (const baseId of objective.targets) objectiveByBaseId.set(baseId, objective.id);
   }
   return mapConfig.bases.map((baseConfig) => resolveBaseSpec(

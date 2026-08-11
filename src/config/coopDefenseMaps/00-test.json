@@ -324,6 +324,32 @@
           "powerUpDefId": "HOLY_HAND_GRENADE"
         }
       }
+    },
+    {
+      "id": "carry-supply-beer",
+      "type": "carry",
+      "displayName": "BIER RETTEN",
+      "rewardHint": "BIER ABGEBEN · 3/3 ZIEL ERREICHT",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "a2-supply-defense-encounter"
+      },
+      "targetGoal": 3,
+      "carry": {
+        "spawnZone": {
+          "gridX": 59,
+          "gridY": 15,
+          "widthCells": 1,
+          "heightCells": 1
+        },
+        "deliveryZone": {
+          "gridX": 88,
+          "gridY": 16,
+          "widthCells": 1,
+          "heightCells": 1
+        },
+        "itemCount": 3
+      }
     }
   ]
 }

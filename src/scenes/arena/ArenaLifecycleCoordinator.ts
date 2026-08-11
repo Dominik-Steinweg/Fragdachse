@@ -44,6 +44,7 @@ import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
+import { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
 import {
   CoopDefenseAirstrikeDirector,
   isPointNearBaseRegion,
@@ -496,6 +497,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.energyInjectorSystem?.removeOwner(playerId);
     if (bridge.isHost()) {
       this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
+      this.ctx.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
       this.ctx.combatSystem.removePlayer(playerId);
       this.ctx.resourceSystem?.removePlayer(playerId);
       this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
@@ -585,6 +587,7 @@ export class ArenaLifecycleCoordinator {
       ? resolveCoopDefenseMapSecondaryObjectives(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseCarrySystem = null;
     this.ctx.coopDefenseObjectiveRepairSystem = null;
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
@@ -890,6 +893,7 @@ export class ArenaLifecycleCoordinator {
           isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
           onObjectiveActivated: (objectiveId) => {
             if (!bridge.isHost()) return;
+            this.ctx.coopDefenseCarrySystem?.activateObjective(objectiveId);
             const config = coopDefenseSecondaryObjectiveConfigs.find((entry) => entry.id === objectiveId);
             if (config?.rewards?.placeablePedestalOnComplete) {
               this.ctx.coopDefenseObjectivePlacementRewardSystem?.begin(objectiveId);
@@ -912,6 +916,18 @@ export class ArenaLifecycleCoordinator {
               this.ctx.coopDefenseObjectivePlacementRewardSystem?.activate(objectiveId);
             }
           },
+        })
+        : null;
+      this.ctx.coopDefenseCarrySystem = coopDefenseSecondaryObjectiveConfigs.some(
+        (config) => config.type === 'carry' && config.carry !== undefined,
+      )
+        ? new CoopDefenseCarrySystem(coopDefenseSecondaryObjectiveConfigs, this.ctx.playerManager, {
+          isPlayerEligible: (playerId) => bridge.canPlayerAct(playerId),
+          isPlayerAlive: (playerId) => this.ctx.combatSystem.isAlive(playerId),
+          isPlayerBurrowed: (playerId) => this.ctx.burrowSystem?.isBurrowed(playerId) ?? false,
+          onDelivered: (objectiveId, itemId) => (
+            this.ctx.coopDefenseSecondaryObjectiveSystem?.reportCarryDelivered(objectiveId, itemId) ?? false
+          ),
         })
         : null;
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
@@ -1373,6 +1389,7 @@ export class ArenaLifecycleCoordinator {
       }
       this.ctx.flamethrowerUpgradeSystem?.handlePlayerDeath(playerId, x, y);
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
+      this.ctx.coopDefenseCarrySystem?.dropForPlayer(playerId, x, y);
       this.ctx.gameAudioSystem.playSound('sfx_player_death', x, y);
     });
     this.ctx.projectileManager.setProjectileImpactCallback((proj, x, y) => {
@@ -2433,6 +2450,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseMapDirector = null;
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseCarrySystem?.reset();
+    this.ctx.coopDefenseCarrySystem = null;
+    this.renderers.beer.syncCoopDefenseCarry([]);
+    this.renderers.carryZones.clear();
     this.ctx.coopDefenseSecondaryObjectiveConfigs = [];
     this.ctx.coopDefenseObjectiveRepairSystem?.reset();
     this.ctx.coopDefenseObjectiveRepairSystem = null;

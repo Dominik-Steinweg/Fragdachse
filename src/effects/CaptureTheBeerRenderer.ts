@@ -12,7 +12,7 @@ import {
   TEAM_RED_COLOR,
   getBeamPaletteForPlayerColor,
 } from '../config';
-import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, TeamId } from '../types';
+import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, SyncedCoopDefenseCarryItem, TeamId } from '../types';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { impactMedium } from './camera/cameraFeedbackPresets';
 import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
@@ -58,7 +58,7 @@ interface BeerVisual {
 }
 
 export class CaptureTheBeerRenderer {
-  private readonly visuals = new Map<TeamId, BeerVisual>();
+  private readonly visuals = new Map<string, BeerVisual>();
   private arenaMask: Phaser.Display.Masks.GeometryMask | null;
   private cameraFeedback: CameraFeedbackController | null = null;
   private lighting: LightingSystem | null = null;
@@ -156,13 +156,14 @@ export class CaptureTheBeerRenderer {
     });
   }
 
-  sync(beers: SyncedCaptureTheBeerBeer[]): void {
-    const active = new Set<TeamId>();
+  sync(beers: readonly SyncedCaptureTheBeerBeer[]): void {
+    const active = new Set<string>();
 
     for (const beer of beers) {
-      active.add(beer.teamId);
+      const key = `ctb:${beer.teamId}`;
+      active.add(key);
       const clamped = this.clampBeerPoint(beer.x, beer.y);
-      const existing = this.visuals.get(beer.teamId);
+      const existing = this.visuals.get(key);
       if (existing) {
         existing.state = beer;
         existing.targetX = clamped.x;
@@ -175,14 +176,47 @@ export class CaptureTheBeerRenderer {
         x: clamped.x,
         y: clamped.y,
       });
-      this.visuals.set(beer.teamId, visual);
+      this.visuals.set(key, visual);
     }
 
-    for (const [teamId, visual] of this.visuals) {
-      if (active.has(teamId)) continue;
-      this.lighting?.releaseLight(lightKey(teamId));
+    for (const [key, visual] of this.visuals) {
+      if (!key.startsWith('ctb:') || active.has(key)) continue;
+      this.lighting?.releaseLight(lightKey(key));
       this.destroyVisual(visual);
-      this.visuals.delete(teamId);
+      this.visuals.delete(key);
+    }
+  }
+
+  /** Reuses the Capture The Beer bottle visual for Coop Carry items without importing CTB rules. */
+  syncCoopDefenseCarry(items: readonly SyncedCoopDefenseCarryItem[]): void {
+    const active = new Set<string>();
+    for (const item of items) {
+      const key = `coop:${item.id}`;
+      active.add(key);
+      const clamped = this.clampBeerPoint(item.x, item.y);
+      const state: SyncedCaptureTheBeerBeer = {
+        teamId: 'blue',
+        defaultX: clamped.x,
+        defaultY: clamped.y,
+        x: clamped.x,
+        y: clamped.y,
+        holderId: item.holderId,
+        state: item.state === 'spawned' ? 'home' : item.state,
+      };
+      const existing = this.visuals.get(key);
+      if (existing) {
+        existing.state = state;
+        existing.targetX = clamped.x;
+        existing.targetY = clamped.y;
+        continue;
+      }
+      this.visuals.set(key, this.createVisual(state));
+    }
+    for (const [key, visual] of this.visuals) {
+      if (!key.startsWith('coop:') || active.has(key)) continue;
+      this.lighting?.releaseLight(lightKey(key));
+      this.destroyVisual(visual);
+      this.visuals.delete(key);
     }
   }
 
@@ -191,7 +225,7 @@ export class CaptureTheBeerRenderer {
     const lerp = 1 - Math.exp(-delta / 52);
     const dtSec = Math.max(delta, 1) / 1000;
 
-    for (const [teamId, visual] of this.visuals) {
+    for (const [key, visual] of this.visuals) {
       visual.currentX = Phaser.Math.Linear(visual.currentX, visual.targetX, lerp);
       visual.currentY = Phaser.Math.Linear(visual.currentY, visual.targetY, lerp);
 
@@ -245,7 +279,7 @@ export class CaptureTheBeerRenderer {
       // Das Bier ist im Spielmodus das wichtigste Objekt auf dem Feld und darf nachts
       // nirgends verschwinden. `glowBoost` trägt bereits den Zustand (getragen, liegen
       // gelassen, am Sockel), das Licht folgt derselben Kurve.
-      this.lighting?.setLight(lightKey(teamId), 'pickupGlow', visual.currentX, visual.currentY, {
+      this.lighting?.setLight(lightKey(key), 'pickupGlow', visual.currentX, visual.currentY, {
         radiusPx: 120,
         color: mixColors(visual.palette.glow, 0xffffff, 0.5),
         intensity: Phaser.Math.Clamp(0.4 * glowBoost, 0, 0.7),
@@ -272,8 +306,8 @@ export class CaptureTheBeerRenderer {
   }
 
   clear(): void {
-    for (const [teamId, visual] of this.visuals) {
-      this.lighting?.releaseLight(lightKey(teamId));
+    for (const [key, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(key));
       this.destroyVisual(visual);
     }
     this.visuals.clear();
@@ -829,6 +863,6 @@ export class CaptureTheBeerRenderer {
   }
 }
 
-function lightKey(teamId: TeamId): string {
-  return `beer:${teamId}`;
+function lightKey(key: string): string {
+  return `beer:${key}`;
 }

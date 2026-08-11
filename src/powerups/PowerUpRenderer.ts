@@ -20,7 +20,7 @@ const TEX_POWERUP_PEDESTAL_PIXEL     = '__powerup_pedestal_pixel';
 const TEX_POWERUP_PEDESTAL_FLASH     = '__powerup_pedestal_flash';
 const MISSION_REWARD_COLOR           = 0x22d7e8;
 const MISSION_REWARD_PEDESTAL_SIZE   = 38;
-const MISSION_REWARD_PICKUP_SIZE     = 24;
+const MISSION_REWARD_PICKUP_SIZE     = 14;
 
 interface ItemVisual {
   container: Phaser.GameObjects.Container;
@@ -102,7 +102,7 @@ export class PowerUpRenderer {
           : def?.spriteKey
           ? this.scene.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
           : this.scene.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor);
-      if (isMissionVisual) {
+      if (isMissionMarker) {
         container.add(this.scene.add.image(0, 0, 'mission_reward_pedestal').setDisplaySize(
           MISSION_REWARD_PEDESTAL_SIZE,
           MISSION_REWARD_PEDESTAL_SIZE,
@@ -115,6 +115,10 @@ export class PowerUpRenderer {
         continue;
       }
       if (!graphic) continue;
+      if (isMissionReward) {
+        this.sprites.set(pu.uid, { container, graphic, color: glowColor, emitsLight: false });
+        continue;
+      }
 
       const itemAura = configureAdditiveImage(
         this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_FLASH),
@@ -122,7 +126,7 @@ export class PowerUpRenderer {
         0.18,
         glowColor,
       ).setScale(0.52);
-      container.addAt(itemAura, isMissionReward ? 1 : 0);
+      container.addAt(itemAura, 0);
 
       // ── preFX-Glow: Pixel-Aura, outerStrength pulsiert ───────────────────
       // Vorgebackene Aura statt eigenem Filter-Framebuffer pro Item.

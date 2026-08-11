@@ -1,6 +1,7 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
-import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalVariant } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
+import type { DecalPlacement } from './DecalConfig';
 import type { ArenaGroundFireZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
@@ -27,6 +28,17 @@ const CORRIDOR_RADIUS_STEP = 0.22;
 const CORRIDOR_TAPER_CELLS = 3;
 /** Harte Untergrenze des Aushubradius, damit nie eine unpassierbare Engstelle entsteht. */
 const MIN_CARVED_RADIUS_CELLS = 1.05;
+
+/**
+ * Wahrscheinlichkeit, mit der eine Diagonalzelle in den Dirt-Saum um ein Hindernis kommt.
+ *
+ * Ein deterministischer 8er-Saum laeuft exakt parallel zur Fels-Silhouette und wird selbst
+ * per 47-Blob gekachelt: das Bild bekommt dann zwei harte Konturen im Abstand einer Zelle
+ * und liest sich doppelt so blockig. Die Kardinalzellen bleiben deshalb sicher gesetzt
+ * (kein Loch an einer geraden Felswand), die Diagonalen brechen die Parallelitaet an jeder
+ * Ecke auf.
+ */
+const DIRT_MARGIN_DIAGONAL_CHANCE = 0.55;
 
 function clampToUnitRange(value: number): number {
   return Math.max(-1, Math.min(1, value));
@@ -184,10 +196,11 @@ export class ArenaGenerator {
           for (let dx = -1; dx <= 1; dx++) {
             const nx = gx + dx;
             const ny = gy + dy;
-            if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
-              if (isReservedBaseSurfaceCell(nx, ny)) continue;
-              dirtSet.add(ny * GRID_COLS + nx);
-            }
+            if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+            if (isReservedBaseSurfaceCell(nx, ny)) continue;
+            const isDiagonal = dx !== 0 && dy !== 0;
+            if (isDiagonal && rng() >= DIRT_MARGIN_DIAGONAL_CHANCE) continue;
+            dirtSet.add(ny * GRID_COLS + nx);
           }
         }
       };
@@ -711,9 +724,13 @@ export class ArenaGenerator {
     const rockMaxOffsetY = Math.min(ROCK_DECAL_CONFIG.maxOffsetX, ROCK_DECAL_CONFIG.maxOffsetY);
     for (let rockId = 0; rockId < rocks.length; rockId += 1) {
       const rock = rocks[rockId];
-      if (!ArenaGenerator.rollPercent(rng, ROCK_DECAL_CONFIG.coveragePercent)) continue;
+      const placement = ArenaGenerator.resolveRockDecalPlacement(rock, rockIndexByKey);
+      const coveragePercent = placement === 'edge'
+        ? ROCK_DECAL_CONFIG.edgeCoveragePercent
+        : ROCK_DECAL_CONFIG.interiorCoveragePercent;
+      if (!ArenaGenerator.rollPercent(rng, coveragePercent)) continue;
 
-      const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, ROCK_DECAL_CONFIG.variants);
+      const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, getRockDecalVariantsForPlacement(placement));
       if (!textureKey) continue;
       const variant = getRockDecalVariant(textureKey);
       const displaySize = variant?.displaySize ?? ROCK_DECAL_SIZE;
@@ -748,6 +765,28 @@ export class ArenaGenerator {
     }
 
     return decals;
+  }
+
+  /**
+   * Lage einer Felszelle im Verbund. Der Rand der Arena zaehlt bewusst **nicht** als Fels:
+   * dort liegt die Silhouette wirklich frei, und genau dort soll auch Bewuchs sitzen.
+   */
+  private static resolveRockDecalPlacement(
+    rock: RockCell,
+    rockIndexByKey: ReadonlyMap<number, number>,
+  ): DecalPlacement {
+    const isRock = (gridX: number, gridY: number) => rockIndexByKey.has(ArenaGenerator.cellKey(gridX, gridY));
+    const { gridX, gridY } = rock;
+
+    if (!isRock(gridX, gridY - 1) || !isRock(gridX, gridY + 1)
+      || !isRock(gridX - 1, gridY) || !isRock(gridX + 1, gridY)) {
+      return 'edge';
+    }
+    if (!isRock(gridX - 1, gridY - 1) || !isRock(gridX + 1, gridY - 1)
+      || !isRock(gridX - 1, gridY + 1) || !isRock(gridX + 1, gridY + 1)) {
+      return 'interior';
+    }
+    return 'core';
   }
 
   private static getRockIdsTouchedByDecal(

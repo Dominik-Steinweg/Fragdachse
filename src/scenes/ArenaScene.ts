@@ -376,6 +376,8 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
     this.load.image('mission_reward_pedestal', './assets/sprites/mission_reward_pedestal.png');
     this.load.image('mission_reward_pickup', './assets/sprites/mission_reward_pickup.png');
+    this.load.image('mission_carry_spawn_zone', './assets/sprites/objectives/mission_carry_spawn_zone.png');
+    this.load.image('mission_carry_delivery_zone', './assets/sprites/objectives/mission_carry_delivery_zone.png');
     this.load.image('badger',      './assets/sprites/32x32dachsweapon01.png');
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
@@ -726,7 +728,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseCarrySystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
@@ -1462,6 +1464,7 @@ export class ArenaScene extends Phaser.Scene {
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
           this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
+          this.renderers.beer.syncCoopDefenseCarry(state.coopDefenseCarry ?? []);
           this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
           this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
@@ -1580,6 +1583,11 @@ export class ArenaScene extends Phaser.Scene {
       secondaryObjectivePresentation,
       this.ctx.coopDefenseSecondaryObjectiveConfigs,
       this.ctx.baseManager,
+      secondaryObjectivesActive,
+    );
+    this.renderers.carryZones.sync(
+      secondaryObjectivePresentation,
+      this.ctx.coopDefenseSecondaryObjectiveConfigs,
       secondaryObjectivesActive,
     );
     this.renderers.objectiveRepairDrones.sync(
@@ -2577,6 +2585,7 @@ export class ArenaScene extends Phaser.Scene {
       this.objectiveAnnouncements?.destroy();
       this.objectiveAnnouncements = null;
       this.renderers?.secondaryObjectiveMarkers.destroy();
+      this.renderers?.carryZones.clear();
       this.renderers?.objectiveRepairDrones.destroy();
     });
   }

@@ -779,10 +779,12 @@ export class HostUpdateCoordinator {
     const meteors     = this.ctx.armageddonSystem?.getSnapshot()       ?? [];
     const train     = this.ctx.trainManager?.getNetSnapshot()        ?? null;
     const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
+    const coopDefenseCarry = this.ctx.coopDefenseCarrySystem?.hostUpdate(!countdownActive) ?? [];
     const syncedNow = bridge.getSynchronizedNow();
 
     this.renderers.train?.update(train);
     this.renderers.beer.sync(captureTheBeer?.beers ?? []);
+    this.renderers.beer.syncCoopDefenseCarry(coopDefenseCarry);
     this.renderers.powerUp.syncPedestals(pedestals);
     this.renderers.powerUp.sync(powerups);
     this.renderers.powerUp.updatePedestals(syncedNow);
@@ -1083,6 +1085,7 @@ export class HostUpdateCoordinator {
       train,
       bases: this.ctx.baseManager?.getNetSnapshot() ?? [],
       captureTheBeer,
+      coopDefenseCarry,
     }, fullSnapshotRequested);
 
     if (projectiles.some(p => p.style === 'bfg')) {

@@ -25,7 +25,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -219,6 +219,7 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   t: 'train',
   b: 'bases',
   cb: 'captureTheBeer',
+  cc: 'coopDefenseCarry',
 };
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
@@ -298,6 +299,7 @@ export interface GameState {
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   bases:        SyncedBaseState[];        // Coop-Basen: beschädigte Basen plus Zielwinkel aktiver Basistürme
   captureTheBeer: SyncedCaptureTheBeerState | null;
+  coopDefenseCarry: SyncedCoopDefenseCarryState;
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
@@ -333,6 +335,7 @@ interface OutboundGameState {
   train:        SyncedTrainState | null;
   bases:        SyncedBaseState[];
   captureTheBeer: SyncedCaptureTheBeerState | null;
+  coopDefenseCarry: SyncedCoopDefenseCarryState;
   stinkClouds:  SyncedStinkCloud[];
   timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
@@ -1753,6 +1756,9 @@ export class NetworkBridge {
     if (state.train)                   payload.t = state.train;
     if (state.bases.length > 0)        payload.b = state.bases;
     if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
+    // Unlike delta-friendly world slices, Carry must publish an empty array after delivery so
+    // a completed item cannot survive in a client's merge cache.
+    payload.cc = state.coopDefenseCarry;
     this.recordEnemySyncMetrics(payload, state.enemies);
     setState(KEY_GAME_STATE, payload, false);
   }
@@ -1793,6 +1799,7 @@ export class NetworkBridge {
       t: state.train,
       b: state.bases,
       cb: state.captureTheBeer,
+      cc: state.coopDefenseCarry,
     };
     this.recordEnemySyncMetrics(payload, state.enemies);
     // Die unreliable Kopie hält bereits verbundene Clients aktuell; der reliable Key ist der
@@ -1999,6 +2006,7 @@ export class NetworkBridge {
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,
       bases:         (raw.b as SyncedBaseState[]     | undefined) ?? [],
       captureTheBeer: (raw.cb as SyncedCaptureTheBeerState | undefined) ?? null,
+      coopDefenseCarry: (raw.cc as SyncedCoopDefenseCarryState | undefined) ?? [],
     };
     this.cachedGameState = state;
     this.gameStateVersion++;
