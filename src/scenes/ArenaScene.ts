@@ -374,6 +374,8 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');
     this.load.image('powerup_nuk', './assets/sprites/16x16nuke.png');
     this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
+    this.load.image('mission_reward_pedestal', './assets/sprites/mission_reward_pedestal.png');
+    this.load.image('mission_reward_pickup', './assets/sprites/mission_reward_pickup.png');
     this.load.image('badger',      './assets/sprites/32x32dachsweapon01.png');
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.

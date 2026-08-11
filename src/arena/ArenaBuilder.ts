@@ -59,7 +59,7 @@ export interface ArenaBuilderResult {
    * Terrain-Farb-Sampler braucht sie, weil die Live-Images nicht mehr existieren.
    */
   decalStamps: DirtStamp[];
-  /** Gebackene Fels-Decals. Wird bei einer Fels-Aenderung einmalig neu aufgebaut. */
+  /** Gebackener Fels-Overlay aus Farbvariation und Decals; wird bei Fels-Aenderungen neu aufgebaut. */
   rockDecalLayer: Phaser.GameObjects.RenderTexture | null;
 }
 
@@ -366,14 +366,19 @@ export class ArenaBuilder {
     if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
     result.rockDecalLayer = null;
 
-    if (!layout.decals?.some((decal) => decal.surface === 'rock')) return;
-
     const activeRockIds = new Set<number>();
     for (let id = 0; id < layout.rocks.length; id += 1) {
       if (result.rockObjects[id]?.active) activeRockIds.add(id);
     }
 
-    const images = ArenaVisualFactory.createRockDecals(scene, layout.decals, undefined, activeRockIds);
+    const variationImages = ArenaVisualFactory.createRockVariationOverlays(
+      scene,
+      layout.rocks,
+      result.rockObjects,
+      activeRockIds,
+    );
+    const decalImages = ArenaVisualFactory.createRockDecals(scene, layout.decals ?? [], undefined, activeRockIds);
+    const images = [...variationImages, ...decalImages];
     if (images.length === 0) return;
 
     const layer = scene.add.renderTexture(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);

@@ -874,6 +874,10 @@ export class ArenaLifecycleCoordinator {
               baseManager.getBases().map((entry) => entry.getSpec()),
             );
           },
+          spawnMarker: (objectiveId, powerUpDefId, x, y) => (
+            this.ctx.powerUpSystem?.spawnObjectiveRewardMarker(objectiveId, powerUpDefId, x, y) !== null
+          ),
+          removeMarker: (objectiveId) => this.ctx.powerUpSystem?.clearObjectiveReward(objectiveId),
           spawnPickup: (objectiveId, powerUpDefId, x, y) => (
             this.ctx.powerUpSystem?.spawnObjectiveRewardPickup(objectiveId, powerUpDefId, x, y) !== null
           ),
@@ -884,6 +888,17 @@ export class ArenaLifecycleCoordinator {
       this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
         ? new CoopDefenseSecondaryObjectiveSystem(coopDefenseSecondaryObjectiveConfigs, {
           isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
+          onObjectiveActivated: (objectiveId) => {
+            if (!bridge.isHost()) return;
+            const config = coopDefenseSecondaryObjectiveConfigs.find((entry) => entry.id === objectiveId);
+            if (config?.rewards?.placeablePedestalOnComplete) {
+              this.ctx.coopDefenseObjectivePlacementRewardSystem?.begin(objectiveId);
+            }
+          },
+          onHoldFailed: (objectiveId) => {
+            if (!bridge.isHost()) return;
+            this.ctx.coopDefenseObjectivePlacementRewardSystem?.cancel(objectiveId);
+          },
           // Das Objective-System fordert den Reward nur an; welcher es ist, steht in der Map.
           onHoldCompleted: (objectiveId) => {
             if (!bridge.isHost()) return;
@@ -2375,6 +2390,13 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setTunnelPlacementHandler(null);
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
     this.ctx.loadoutManager?.resetAllUltimateStates();
+    // Temporary utility state belongs to the round. Clear it centrally before the manager is
+    // detached so neither saved ammo nor the replicated descriptor can enter the next round.
+    if (bridge.isHost()) {
+      for (const profile of bridge.getConnectedPlayers()) {
+        this.ctx.loadoutManager?.releaseUtilityOverride(profile.id);
+      }
+    }
     this.ctx.loadoutManager = null;
     this.ctx.combatSystem.setBurrowSystem(null);
     this.ctx.combatSystem.setResourceSystem(null);

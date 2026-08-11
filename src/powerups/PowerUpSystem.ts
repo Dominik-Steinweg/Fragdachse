@@ -31,7 +31,7 @@ interface WorldItem {
   def:  PowerUpDef;
   x:    number; // Welt-Koordinate
   y:    number;
-  pickupKind?: 'objective-placement';
+  pickupKind?: 'objective-marker' | 'objective-placement';
   objectiveId?: string;
 }
 
@@ -365,15 +365,32 @@ export class PowerUpSystem {
    * Vom Host aufgerufen, wenn ein Client `pickup_powerup` sendet.
    * Validiert Existenz + Nähe, entfernt das Item und wendet den Effekt an.
    */
+  /** Marks a Hold target's future reward location without creating an interactable pickup. */
+  spawnObjectiveRewardMarker(objectiveId: string, defId: string, x: number, y: number): number | null {
+    const def = POWERUP_DEFS[defId];
+    if (!def || !TIMED_POWERUP_PEDESTAL_CONFIGS[defId]) return null;
+    const existingUid = this.objectiveRewardUids.get(objectiveId);
+    if (existingUid !== undefined && this.worldItems.has(existingUid)) return existingUid;
+
+    const uid = this.spawnPowerUpDef(def, x, y, {
+      pickupKind: 'objective-marker',
+      objectiveId,
+    });
+    this.objectiveRewardUids.set(objectiveId, uid);
+    return uid;
+  }
+
   /**
-   * Spawns the visible team reward pickup. It is tagged separately from normal PowerUps so a
-   * client cannot interpret a Holy Hand Grenade reward as an instant HHG.
+   * Replaces the mission marker with the visible team reward pickup. It is tagged separately
+   * from normal PowerUps so a client cannot interpret a Holy Hand Grenade reward as an instant HHG.
    */
   spawnObjectiveRewardPickup(objectiveId: string, defId: string, x: number, y: number): number | null {
     const def = POWERUP_DEFS[defId];
     if (!def || !TIMED_POWERUP_PEDESTAL_CONFIGS[defId]) return null;
     const existingUid = this.objectiveRewardUids.get(objectiveId);
-    if (existingUid !== undefined && this.worldItems.has(existingUid)) return existingUid;
+    const existing = existingUid === undefined ? undefined : this.worldItems.get(existingUid);
+    if (existing?.pickupKind === 'objective-placement') return existing.uid;
+    if (existingUid !== undefined) this.removeObjectiveRewardWorldItem(objectiveId, existingUid);
 
     const uid = this.spawnPowerUpDef(def, x, y, {
       pickupKind: 'objective-placement',
@@ -383,9 +400,18 @@ export class PowerUpSystem {
     return uid;
   }
 
+  /** Removes a mission marker or unclaimed mission reward when its objective becomes unavailable. */
+  clearObjectiveReward(objectiveId: string): boolean {
+    const uid = this.objectiveRewardUids.get(objectiveId);
+    if (uid === undefined) return false;
+    this.removeObjectiveRewardWorldItem(objectiveId, uid);
+    return true;
+  }
+
   tryPickup(playerId: string, uid: number, playerX: number, playerY: number): boolean {
     const item = this.worldItems.get(uid);
     if (!item) return false; // Existiert nicht (mehr)
+    if (item.pickupKind === 'objective-marker') return false;
     if (!this.combat.isAlive(playerId)) return false; // Toter Spieler darf nicht aufheben
     if (this.combat.isBurrowed(playerId)) return false; // Eingebuddelte Spieler dürfen nichts einsammeln
 
@@ -412,7 +438,7 @@ export class PowerUpSystem {
       }
       this.itemToPedestal.delete(uid);
     }
-    if (item.pickupKind === 'objective-placement' && item.objectiveId) {
+    if (item.objectiveId) {
       if (this.objectiveRewardUids.get(item.objectiveId) === uid) {
         this.objectiveRewardUids.delete(item.objectiveId);
       }
@@ -582,7 +608,7 @@ export class PowerUpSystem {
         defId: item.def.id,
         x: item.x,
         y: item.y,
-        ...(item.pickupKind === 'objective-placement' ? { pickupKind: item.pickupKind } : {}),
+        ...(item.pickupKind === undefined ? {} : { pickupKind: item.pickupKind }),
         ...(item.objectiveId === undefined ? {} : { objectiveId: item.objectiveId }),
       });
     }
@@ -863,6 +889,16 @@ export class PowerUpSystem {
     const uid = this.nextUid++;
     this.worldItems.set(uid, { uid, def, x, y, ...metadata });
     return uid;
+  }
+
+  private removeObjectiveRewardWorldItem(objectiveId: string, uid: number): void {
+    if (this.worldItems.delete(uid)) {
+      this.pendingRemovalUids.add(uid);
+      this.netSnapshotCache.delete(uid);
+    }
+    if (this.objectiveRewardUids.get(objectiveId) === uid) {
+      this.objectiveRewardUids.delete(objectiveId);
+    }
   }
 
   private spawnPedestalItem(pedestal: PedestalRuntime): void {

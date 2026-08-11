@@ -52,22 +52,28 @@ function makeObjective(overrides: Partial<Parameters<typeof CoopDefenseObjective
 function makeRewardSystem(options: {
   objective?: ReturnType<typeof makeObjective>;
   basePosition?: { x: number; y: number } | null;
+  spawnMarker?: (objectiveId: string, defId: string, x: number, y: number) => boolean;
+  removeMarker?: (objectiveId: string) => void;
   spawnPickup?: (objectiveId: string, defId: string, x: number, y: number) => boolean;
   overrideUtility?: (playerId: string, config: Parameters<NonNullable<ConstructorParameters<typeof CoopDefenseObjectivePlacementRewardSystem>[1]['overrideUtility']>>[1]) => boolean;
   releaseUtilityOverride?: (playerId: string) => void;
 } = {}) {
   const objective = options.objective ?? makeObjective();
+  const spawnMarker = options.spawnMarker ?? vi.fn(() => true);
+  const removeMarker = options.removeMarker ?? vi.fn();
   const spawnPickup = options.spawnPickup ?? vi.fn(() => true);
   const overrideUtility = options.overrideUtility ?? vi.fn(() => true);
   const releaseUtilityOverride = options.releaseUtilityOverride ?? vi.fn();
   const system = new CoopDefenseObjectivePlacementRewardSystem([objective], {
     isEligiblePlayer: () => true,
     getBasePosition: () => options.basePosition ?? { x: 100, y: 100 },
+    spawnMarker,
+    removeMarker,
     spawnPickup,
     overrideUtility,
     releaseUtilityOverride,
   });
-  return { system, objective, spawnPickup, overrideUtility, releaseUtilityOverride };
+  return { system, objective, spawnMarker, removeMarker, spawnPickup, overrideUtility, releaseUtilityOverride };
 }
 
 function makePowerUpSystem(options: ConstructorParameters<typeof PowerUpSystem>[3] = {}) {
@@ -104,6 +110,8 @@ describe('B6 objective placement rewards', () => {
     const rewardSystem = new CoopDefenseObjectivePlacementRewardSystem([objective], {
       isEligiblePlayer: () => true,
       getBasePosition: () => position,
+      spawnMarker: () => true,
+      removeMarker: () => undefined,
       spawnPickup: (objectiveId, defId, x, y) => {
         spawned.push({ objectiveId, defId, x, y });
         return true;
@@ -120,6 +128,42 @@ describe('B6 objective placement rewards', () => {
       x: position.x,
       y: position.y,
     }]);
+  });
+
+  it('shows the generic spawn marker from mission start and replaces it with the claimable reward', () => {
+    let rewardSystem: CoopDefenseObjectivePlacementRewardSystem;
+    const powerUps = makePowerUpSystem({
+      onObjectiveRewardPickup: (objectiveId, playerId) => rewardSystem.claim(objectiveId, playerId),
+    });
+    const reward = makeRewardSystem({
+      spawnMarker: (objectiveId, defId, x, y) => powerUps.spawnObjectiveRewardMarker(objectiveId, defId, x, y) !== null,
+      spawnPickup: (objectiveId, defId, x, y) => powerUps.spawnObjectiveRewardPickup(objectiveId, defId, x, y) !== null,
+    });
+    rewardSystem = reward.system;
+
+    expect(rewardSystem.begin(reward.objective.id)).toBe(true);
+    const marker = powerUps.getWorldItemSnapshot()[0];
+    expect(marker).toMatchObject({ pickupKind: 'objective-marker', objectiveId: reward.objective.id });
+    if (!marker) return;
+    expect(powerUps.tryPickup('player-a', marker.uid, marker.x, marker.y)).toBe(false);
+
+    expect(rewardSystem.activate(reward.objective.id)).toBe(true);
+    expect(powerUps.getWorldItemSnapshot()).toEqual([{
+      uid: 2,
+      defId: 'HOLY_HAND_GRENADE',
+      x: 100,
+      y: 100,
+      pickupKind: 'objective-placement',
+      objectiveId: reward.objective.id,
+    }]);
+  });
+
+  it('clears the announced spawn point when the Hold fails before completion', () => {
+    const { system, objective, removeMarker } = makeRewardSystem();
+    expect(system.begin(objective.id)).toBe(true);
+    expect(system.cancel(objective.id)).toBe(true);
+    expect(system.getState(objective.id)).toBe('cancelled');
+    expect(removeMarker).toHaveBeenCalledWith(objective.id);
   });
 
   it('allows exactly one carrier for competing claims', () => {
@@ -168,6 +212,24 @@ describe('B6 objective placement rewards', () => {
     expect(system.consume('other-objective', 'player-a')).toBe(false);
     expect(system.getState(objective.id)).toBe('carried');
     expect(system.getCarrierId(objective.id)).toBe('player-a');
+  });
+
+  it('accepts exactly one concurrent normal utility pickup', () => {
+    const acceptedPlayers: string[] = [];
+    const powerUps = makePowerUpSystem({
+      onBfgPickup: (playerId) => {
+        acceptedPlayers.push(playerId);
+        return true;
+      },
+    });
+    expect(powerUps.registerConstructionPedestal(42, 'BFG', 300, 300)).toBe(true);
+    const pickup = powerUps.getWorldItemSnapshot()[0];
+    expect(pickup).toBeDefined();
+    if (!pickup) return;
+
+    expect(powerUps.tryPickup('player-a', pickup.uid, pickup.x, pickup.y)).toBe(true);
+    expect(powerUps.tryPickup('player-b', pickup.uid, pickup.x, pickup.y)).toBe(false);
+    expect(acceptedPlayers).toEqual(['player-a']);
   });
 
   it('consumes after successful placement and gives the first Holy Hand Grenade immediately', () => {

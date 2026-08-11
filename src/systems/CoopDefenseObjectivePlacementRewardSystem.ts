@@ -2,11 +2,13 @@ import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/c
 import { createCoopDefensePlaceablePedestalUtility } from '../loadout/CoopDefenseMissionUtility';
 import type { PlaceablePedestalUtilityConfig } from '../loadout/LoadoutTypes';
 
-export type CoopDefenseObjectivePlacementRewardState = 'locked' | 'available' | 'carried' | 'consumed';
+export type CoopDefenseObjectivePlacementRewardState = 'locked' | 'available' | 'carried' | 'consumed' | 'cancelled';
 
 export interface CoopDefenseObjectivePlacementRewardDeps {
   readonly isEligiblePlayer: (playerId: string) => boolean;
   readonly getBasePosition: (baseId: string) => { x: number; y: number } | null;
+  readonly spawnMarker: (objectiveId: string, powerUpDefId: string, x: number, y: number) => boolean;
+  readonly removeMarker: (objectiveId: string) => void;
   readonly spawnPickup: (objectiveId: string, powerUpDefId: string, x: number, y: number) => boolean;
   readonly overrideUtility: (playerId: string, config: PlaceablePedestalUtilityConfig) => boolean;
   readonly releaseUtilityOverride: (playerId: string) => void;
@@ -47,7 +49,15 @@ export class CoopDefenseObjectivePlacementRewardSystem {
     }
   }
 
-  /** Activates a completed Hold exactly once and materializes its team pickup. */
+  /** Shows the future reward location as soon as its Hold objective becomes active. */
+  begin(objectiveId: string): boolean {
+    const runtime = this.rewards.get(objectiveId);
+    if (!runtime || runtime.state !== 'locked') return false;
+    const position = this.deps.getBasePosition(runtime.baseId);
+    return position !== null && this.deps.spawnMarker(objectiveId, runtime.powerUpDefId, position.x, position.y);
+  }
+
+  /** Completes a Hold exactly once and replaces its marker with a claimable team pickup. */
   activate(objectiveId: string): boolean {
     const runtime = this.rewards.get(objectiveId);
     if (!runtime || runtime.state !== 'locked') return false;
@@ -57,6 +67,15 @@ export class CoopDefenseObjectivePlacementRewardSystem {
     const spawned = this.deps.spawnPickup(objectiveId, runtime.powerUpDefId, position.x, position.y);
     if (!spawned) runtime.state = 'locked';
     return spawned;
+  }
+
+  /** Removes the pre-announced reward location if its Hold objective fails. */
+  cancel(objectiveId: string): boolean {
+    const runtime = this.rewards.get(objectiveId);
+    if (!runtime || runtime.state !== 'locked') return false;
+    this.deps.removeMarker(objectiveId);
+    runtime.state = 'cancelled';
+    return true;
   }
 
   /** Atomic claim: only one eligible active participant can transition to carried. */

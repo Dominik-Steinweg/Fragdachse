@@ -88,8 +88,20 @@ export class MenuArenaPreviewRenderer {
     // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
     this.bakeLayer(ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics), DEPTH.DIRT, view.dirt);
     this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals);
-    this.bakeLayer(this.createRocks(layout), DEPTH.ROCKS, view.rocks);
-    this.bakeLayer(ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics), DEPTH.ROCK_DECALS, view.decals);
+    const rockImages = this.createRocks(layout);
+    const activeRockIds = new Set(layout.rocks.map((_, index) => index));
+    const rockVariationImages = ArenaVisualFactory.createRockVariationOverlays(
+      this.scene,
+      layout.rocks,
+      rockImages,
+      activeRockIds,
+    );
+    this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks);
+    this.bakeLayer(
+      [...rockVariationImages, ...ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics)],
+      DEPTH.ROCK_DECALS,
+      view.decals,
+    );
 
     const trees = ArenaVisualFactory.createTrees(this.scene, layout.trees ?? [], metrics);
     this.trunkLayer = this.bakeLayer(trees.map((tree) => tree.trunk), DEPTH.CANOPY - 0.01, view.trunks);

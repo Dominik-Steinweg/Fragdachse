@@ -1698,17 +1698,24 @@ export interface SyncedPowerUp {
   defId: string;   // Schlüssel in POWERUP_DEFS
   x:     number;
   y:     number;
-  /** Mission reward pickups are placement grants, not direct power-up effects. */
-  pickupKind?: 'objective-placement';
+  /** Mission reward visuals are either a dormant spawn marker or a placement grant. */
+  pickupKind?: 'objective-marker' | 'objective-placement';
   objectiveId?: string;
 }
 
-/** Host-published metadata needed to reconstruct a temporary mission utility on clients. */
-export interface UtilityOverrideDescriptor {
+/** Host-published metadata needed to reconstruct a temporary utility on clients. */
+export interface UtilityOverrideDescriptorBase {
+  readonly kind: 'utility';
+  readonly utilityId: string;
+}
+
+export interface ObjectivePlacementUtilityOverrideDescriptor {
   readonly kind: 'objective-placement';
   readonly objectiveId: string;
   readonly powerUpDefId: string;
 }
+
+export type UtilityOverrideDescriptor = UtilityOverrideDescriptorBase | ObjectivePlacementUtilityOverrideDescriptor;
 
 /** Snapshot-Hülle für Boden-Power-Ups mit Spawn-/Pickup-Deltas. */
 export interface SyncedPowerUpSnapshot {

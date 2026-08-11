@@ -15,6 +15,25 @@ import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalC
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
 
+interface RockVariationWash {
+  centerX: number;
+  centerY: number;
+  radiusX: number;
+  radiusY: number;
+  color: number;
+  strength: number;
+}
+
+/** Grossraeumige, deterministische Farbregionen statt eines sichtbaren Per-Tile-Zufallsrasters. */
+const ROCK_VARIATION_WASHES: readonly RockVariationWash[] = [
+  { centerX: 0.16, centerY: 0.2, radiusX: 0.46, radiusY: 0.34, color: 0xd0a878, strength: 0.22 },
+  { centerX: 0.79, centerY: 0.25, radiusX: 0.42, radiusY: 0.31, color: 0x8ca9b2, strength: 0.2 },
+  { centerX: 0.42, centerY: 0.76, radiusX: 0.5, radiusY: 0.32, color: 0x93a56f, strength: 0.19 },
+  { centerX: 0.88, centerY: 0.78, radiusX: 0.31, radiusY: 0.28, color: 0xb28b91, strength: 0.16 },
+];
+
+const ROCK_VARIATION_ALPHA = 0.16;
+
 export interface ArenaTreeVisual {
   trunk: Phaser.GameObjects.Arc;
   canopy: Phaser.GameObjects.Image;
@@ -45,6 +64,41 @@ export class ArenaVisualFactory {
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
     img.setDepth(DEPTH.ROCKS);
     return img;
+  }
+
+  /**
+   * Erstellt die temporaeren, exakt auf die aktuellen Felsframes zugeschnittenen
+   * Farbkopien fuer den gemeinsamen gebackenen Fels-Overlay-Layer.
+   */
+  static createRockVariationOverlays(
+    scene: Phaser.Scene,
+    rocks: readonly { gridX: number; gridY: number }[],
+    rockObjects: readonly (Phaser.GameObjects.Image | null)[],
+    activeRockIds: ReadonlySet<number>,
+  ): Phaser.GameObjects.Image[] {
+    const result: Phaser.GameObjects.Image[] = [];
+    for (let id = 0; id < rocks.length; id += 1) {
+      if (!activeRockIds.has(id)) continue;
+      const source = rockObjects[id];
+      const rock = rocks[id];
+      if (!source?.active || !rock) continue;
+
+      const img = scene.add.image(source.x, source.y, source.texture.key, source.frame.name);
+      img
+        .setDisplaySize(source.displayWidth, source.displayHeight)
+        .setTint(
+          resolveRockVariationTint(rock.gridX, rock.gridY, 0, 0),
+          resolveRockVariationTint(rock.gridX, rock.gridY, 1, 0),
+          resolveRockVariationTint(rock.gridX, rock.gridY, 0, 1),
+          resolveRockVariationTint(rock.gridX, rock.gridY, 1, 1),
+        )
+        .setAlpha(ROCK_VARIATION_ALPHA)
+        .setBlendMode(Phaser.BlendModes.NORMAL)
+        .setDepth(DEPTH.ROCKS);
+      result.push(img);
+    }
+
+    return result;
   }
 
   static createTrunk(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Arc {
@@ -164,4 +218,35 @@ export class ArenaVisualFactory {
 
     return result;
   }
+}
+
+function resolveRockVariationTint(gridX: number, gridY: number, cornerX: number, cornerY: number): number {
+  const normalizedX = (gridX + cornerX) / Math.max(1, GRID_COLS);
+  const normalizedY = (gridY + cornerY) / Math.max(1, GRID_ROWS);
+  let tint = 0xffffff;
+
+  for (const wash of ROCK_VARIATION_WASHES) {
+    const dx = (normalizedX - wash.centerX) / wash.radiusX;
+    const dy = (normalizedY - wash.centerY) / wash.radiusY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const edge = Phaser.Math.Clamp(1 - distance, 0, 1);
+    const smoothInfluence = edge * edge * (3 - 2 * edge);
+    tint = mixRockColors(tint, wash.color, wash.strength * smoothInfluence);
+  }
+
+  return tint;
+}
+
+function mixRockColors(colorA: number, colorB: number, amount: number): number {
+  const t = Phaser.Math.Clamp(amount, 0, 1);
+  const ar = (colorA >> 16) & 0xff;
+  const ag = (colorA >> 8) & 0xff;
+  const ab = colorA & 0xff;
+  const br = (colorB >> 16) & 0xff;
+  const bg = (colorB >> 8) & 0xff;
+  const bb = colorB & 0xff;
+  const red = Math.round(Phaser.Math.Linear(ar, br, t));
+  const green = Math.round(Phaser.Math.Linear(ag, bg, t));
+  const blue = Math.round(Phaser.Math.Linear(ab, bb, t));
+  return (red << 16) | (green << 8) | blue;
 }

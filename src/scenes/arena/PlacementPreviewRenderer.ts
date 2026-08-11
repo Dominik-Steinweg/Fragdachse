@@ -8,6 +8,7 @@ import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec } from '../../config/turretVisuals';
+import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
 
 interface TunnelPreviewVisualState {
   keyBase: string;
@@ -33,6 +34,7 @@ export class PlacementPreviewRenderer {
 
   private readonly rangeGraphics:   Phaser.GameObjects.Graphics;
   private readonly invalidGraphics: Phaser.GameObjects.Graphics;
+  private readonly remoteMissionPedestalPreviewGraphics: Phaser.GameObjects.Graphics;
   private readonly errorText:       Phaser.GameObjects.Text;
   private readonly utilityTargetingHint:   Phaser.GameObjects.Container;
   private readonly placeableUtilityHint:   Phaser.GameObjects.Container;
@@ -46,6 +48,7 @@ export class PlacementPreviewRenderer {
   ) {
     this.rangeGraphics   = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
     this.invalidGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 1);
+    this.remoteMissionPedestalPreviewGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 3);
     this.localTunnelPreview = this.createTunnelPreviewState('local');
 
     this.errorText = scene.add.text(
@@ -104,17 +107,26 @@ export class PlacementPreviewRenderer {
       this.drawTunnelPreview(this.localTunnelPreview, preview, ownerColor, this.getPlacementPreviewAlpha(preview.kind), true);
     } else {
       this.hideTunnelPreview(this.localTunnelPreview);
-      const image = this.ensurePlacementPreviewImage(undefined, preview.kind, preview.constructionId, preview.powerUpDefId);
-      image
-        .setPosition(preview.targetX, preview.targetY)
-        .setTint(ownerColor)
-        .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
-        .setVisible(true);
-      if (preview.kind === 'rock') {
-        image.setFrame(preview.frame);
+      const missionPowerUpDefId = preview.kind === 'pedestal' ? preview.powerUpDefId : undefined;
+      if (missionPowerUpDefId !== undefined) {
+        this.localPlacementPreviewImage?.setVisible(false);
+        this.drawPowerUpPedestalPreview(
+          this.rangeGraphics,
+          preview.targetX,
+          preview.targetY,
+          missionPowerUpDefId,
+          preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25,
+        );
+      } else {
+        const image = this.ensurePlacementPreviewImage(undefined, preview.kind, preview.constructionId, preview.powerUpDefId);
+        image.setPosition(preview.targetX, preview.targetY);
+        image.setTint(ownerColor);
+        image
+          .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
+          .setVisible(true);
+        if (preview.kind === 'rock') image.setFrame(preview.frame);
       }
       if (preview.kind === 'turret') {
-        image.setFrame(preview.frame);
         this.ensureTurretPreviewImage(undefined, preview.constructionId)
           .setPosition(preview.targetX, preview.targetY)
           .setRotation(preview.angle + this.getTurretPreviewSpec(preview.constructionId).rotationOffset)
@@ -160,6 +172,7 @@ export class PlacementPreviewRenderer {
   }
 
   renderRemotePlacementPreviews(inArena: boolean): void {
+    this.remoteMissionPedestalPreviewGraphics.clear();
     if (!inArena) {
       for (const preview of this.remotePlacementPreviewImages.values()) {
         preview.setVisible(false);
@@ -201,19 +214,27 @@ export class PlacementPreviewRenderer {
           anchorGridY: preview.anchorGridY,
         }, ownerColor, 0.38, false);
       } else {
-        const image = this.ensurePlacementPreviewImage(
-          playerId,
-          preview.kind,
-          preview.constructionId,
-          preview.powerUpDefId,
-        );
-        image
-          .setPosition(preview.x, preview.y)
-          .setTint(ownerColor)
-          .setAlpha(preview.isValid ? 0.38 : 0.18)
-          .setVisible(true);
-        if (preview.kind === 'rock' || preview.kind === 'turret') {
-          image.setFrame(preview.frame);
+        const missionPowerUpDefId = preview.kind === 'pedestal' ? preview.powerUpDefId : undefined;
+        if (missionPowerUpDefId !== undefined) {
+          this.remotePlacementPreviewImages.get(playerId)?.setVisible(false);
+          this.drawPowerUpPedestalPreview(
+            this.remoteMissionPedestalPreviewGraphics,
+            preview.x,
+            preview.y,
+            missionPowerUpDefId,
+            preview.isValid ? 0.38 : 0.18,
+          );
+        } else {
+          const image = this.ensurePlacementPreviewImage(
+            playerId,
+            preview.kind,
+            preview.constructionId,
+            preview.powerUpDefId,
+          );
+          image.setPosition(preview.x, preview.y).setTint(ownerColor)
+            .setAlpha(preview.isValid ? 0.38 : 0.18)
+            .setVisible(true);
+          if (preview.kind === 'rock' || preview.kind === 'turret') image.setFrame(preview.frame);
         }
         if (preview.kind === 'turret') {
           const spec = this.getTurretPreviewSpec(preview.constructionId);
@@ -297,6 +318,7 @@ export class PlacementPreviewRenderer {
   clearForTeardown(): void {
     this.rangeGraphics.clear();
     this.invalidGraphics.clear();
+    this.remoteMissionPedestalPreviewGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);
     this.localTurretPreviewImage?.setVisible(false);
     this.destroyTunnelPreview(this.localTunnelPreview);
@@ -331,22 +353,25 @@ export class PlacementPreviewRenderer {
           .setDepth(DEPTH.OVERLAY - 2)
           .setVisible(false);
       }
-      this.localPlacementPreviewImage.setTexture(texture, 0);
-      return this.localPlacementPreviewImage;
+      return this.localPlacementPreviewImage
+        .setTexture(texture, 0)
+        .setDisplaySize(this.getPlacementPreviewDisplaySize(kind, powerUpDefId), this.getPlacementPreviewDisplaySize(kind, powerUpDefId));
     }
 
     const existing = this.remotePlacementPreviewImages.get(playerId);
     if (existing) {
-      existing.setTexture(texture, 0);
-      return existing;
+      return existing
+        .setTexture(texture, 0)
+        .setDisplaySize(this.getPlacementPreviewDisplaySize(kind, powerUpDefId), this.getPlacementPreviewDisplaySize(kind, powerUpDefId));
     }
     const created = this.scene.add.image(0, 0, texture, 0)
       .setDisplaySize(CELL_SIZE, CELL_SIZE)
       .setDepth(DEPTH.OVERLAY - 3)
       .setVisible(false);
     this.remotePlacementPreviewImages.set(playerId, created);
-    created.setTexture(texture, 0);
-    return created;
+    return created
+      .setTexture(texture, 0)
+      .setDisplaySize(this.getPlacementPreviewDisplaySize(kind, powerUpDefId), this.getPlacementPreviewDisplaySize(kind, powerUpDefId));
   }
 
   private getPlacementPreviewAlpha(kind: PlacementPreviewNetState['kind']): number {
@@ -363,11 +388,43 @@ export class PlacementPreviewRenderer {
     constructionId?: PlacementPreviewNetState['constructionId'],
     powerUpDefId?: string,
   ): string {
-    if (powerUpDefId === 'HOLY_HAND_GRENADE') return 'powerup_hhg';
     if (constructionId === 'medic_pedestal') return 'powerup_hp';
     if (constructionId === 'armor_pedestal') return 'powerup_arm';
     if (constructionId) return kind === 'turret' ? 'rocks' : `construction_${constructionId}`;
     return kind === 'turret' ? 'rocks' : kind === 'pedestal' ? 'placeable_turret' : 'rocks';
+  }
+
+  private getPlacementPreviewDisplaySize(kind: PlacementPreviewNetState['kind'], powerUpDefId?: string): number {
+    void kind;
+    void powerUpDefId;
+    return CELL_SIZE;
+  }
+
+  private drawPowerUpPedestalPreview(
+    graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    powerUpDefId: string,
+    alpha: number,
+  ): void {
+    const glowColor = POWERUP_DEFS[powerUpDefId]?.color ?? 0xffffff;
+    const { renderBaseRadius, renderInnerRadius, renderCoreRadius } = POWERUP_PEDESTAL_CONFIG;
+    graphics.fillStyle(0x04070c, alpha * 0.42);
+    graphics.fillCircle(x, y, renderBaseRadius + 6);
+    graphics.fillStyle(0x0c121c, alpha * 0.96);
+    graphics.fillCircle(x, y, renderBaseRadius);
+    graphics.lineStyle(2, 0x25313c, alpha * 0.95);
+    graphics.strokeCircle(x, y, renderBaseRadius);
+    graphics.fillStyle(0x121b27, alpha * 0.94);
+    graphics.fillCircle(x, y, renderInnerRadius);
+    graphics.lineStyle(2, glowColor, alpha * 0.42);
+    graphics.strokeCircle(x, y, renderInnerRadius);
+    graphics.fillStyle(glowColor, alpha * 0.2);
+    graphics.fillCircle(x, y, renderCoreRadius);
+    graphics.lineStyle(2, glowColor, alpha * 0.75);
+    graphics.strokeCircle(x, y, renderBaseRadius + 1);
+    graphics.lineStyle(2, 0xffffff, alpha * 0.18);
+    graphics.strokeCircle(x, y, renderInnerRadius - 2);
   }
 
   private getTurretPreviewSpec(constructionId?: PlacementPreviewNetState['constructionId']) {

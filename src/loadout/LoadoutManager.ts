@@ -216,6 +216,7 @@ export class LoadoutManager {
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
     this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
+    this.bridge.publishUtilityOverrideDescriptor(playerId, null);
     this.bridge.publishUtilityOverrideName(playerId, '');
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
@@ -258,6 +259,11 @@ export class LoadoutManager {
     this.aimNetStates.delete(playerId);
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
+    // Per-player network state survives a round reset while the player remains connected.
+    // Clear the temporary utility metadata before the next loadout is created.
+    this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
+    this.bridge.publishUtilityOverrideDescriptor(playerId, null);
+    this.bridge.publishUtilityOverrideName(playerId, '');
     this.heldFireSlots.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
@@ -666,7 +672,10 @@ export class LoadoutManager {
           objectiveId: config.rewardObjectiveId,
           powerUpDefId: config.powerUpDefId,
         }
-        : null,
+        : {
+          kind: 'utility',
+          utilityId: config.id,
+        },
     );
     this.bridge.publishUtilityCooldownUntil(playerId, 0, config.id); // sofort einsatzbereit
     this.bridge.publishUtilityOverrideName(playerId, effectiveConfig.displayName);
@@ -689,10 +698,21 @@ export class LoadoutManager {
    */
   private restoreUtility(playerId: string): void {
     const saved = this.savedUtilities.get(playerId);
-    if (!saved) return;
+    if (!saved) {
+      this.utilityAmmo.delete(playerId);
+      this.bridge.publishUtilityOverrideDescriptor(playerId, null);
+      this.bridge.publishUtilityOverrideName(playerId, '');
+      return;
+    }
 
     const loadout = this.loadouts.get(playerId);
-    if (!loadout) return;
+    if (!loadout) {
+      this.savedUtilities.delete(playerId);
+      this.utilityAmmo.delete(playerId);
+      this.bridge.publishUtilityOverrideDescriptor(playerId, null);
+      this.bridge.publishUtilityOverrideName(playerId, '');
+      return;
+    }
 
     const restored = new GenericUtility(saved.config);
     restored.setLastUsedAt(saved.lastUsedAt);

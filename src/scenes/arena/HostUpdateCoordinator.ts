@@ -1971,6 +1971,7 @@ export class HostUpdateCoordinator {
     const py = player.sprite.y;
 
     for (const pu of powerups) {
+      if (pu.pickupKind === 'objective-marker') continue;
       const dist = Phaser.Math.Distance.Between(px, py, pu.x, pu.y);
       if (dist <= PICKUP_RADIUS * 2) {
         this.ctx.powerUpSystem?.tryPickup(localId, pu.uid, px, py);

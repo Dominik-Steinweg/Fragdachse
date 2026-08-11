@@ -10,6 +10,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { createCoopDefensePlaceablePedestalUtility } from '../src/loadout/CoopDefenseMissionUtility';
+import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { bridge } from '../src/network/bridge';
 import { ClientUpdateCoordinator } from '../src/scenes/arena/ClientUpdateCoordinator';
 
@@ -25,18 +26,15 @@ const MISSION_PICKUP = {
 function makeCoordinator(): ClientUpdateCoordinator & {
   pickupCooldownUntil: number;
   pendingPickupUids: Set<number>;
-  confirmedPickupUids: Set<number>;
   ctx: any;
 } {
   const coordinator = Object.create(ClientUpdateCoordinator.prototype) as ClientUpdateCoordinator & {
     pickupCooldownUntil: number;
     pendingPickupUids: Set<number>;
-    confirmedPickupUids: Set<number>;
     ctx: any;
   };
   coordinator.pickupCooldownUntil = 0;
   coordinator.pendingPickupUids = new Set();
-  coordinator.confirmedPickupUids = new Set();
   coordinator.clientUtilityOverride = null;
   coordinator.ctx = {
     playerManager: {
@@ -46,6 +44,16 @@ function makeCoordinator(): ClientUpdateCoordinator & {
     leftPanel: { flashSlot: vi.fn() },
   };
   return coordinator;
+}
+
+function makePickup(defId: string, uid = 7) {
+  return { uid, defId, x: 0, y: 0 };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => { resolve = nextResolve; });
+  return { promise, resolve };
 }
 
 describe('B6 client mission reward reconciliation', () => {
@@ -62,7 +70,6 @@ describe('B6 client mission reward reconciliation', () => {
     await Promise.resolve();
 
     expect(coordinator.clientUtilityOverride).toBeNull();
-    expect(coordinator.confirmedPickupUids).toHaveLength(0);
   });
 
   it('reconstructs the mission utility only from the accepted host descriptor', async () => {
@@ -81,7 +88,7 @@ describe('B6 client mission reward reconciliation', () => {
       objectiveId: 'hold-supply-base',
       powerUpDefId: 'HOLY_HAND_GRENADE',
     });
-    (coordinator as any).reconcileClientMissionUtilityOverride();
+    (coordinator as any).reconcileClientUtilityOverride();
     expect(coordinator.clientUtilityOverride).toEqual(
       createCoopDefensePlaceablePedestalUtility('hold-supply-base', 'HOLY_HAND_GRENADE'),
     );
@@ -108,7 +115,108 @@ describe('B6 client mission reward reconciliation', () => {
 
     vi.spyOn(bridge, 'getPlayerUtilityOverrideName').mockReturnValue('');
     vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue(null);
-    (coordinator as any).reconcileClientMissionUtilityOverride();
+    (coordinator as any).reconcileClientUtilityOverride();
     expect(coordinator.clientUtilityOverride).toBeNull();
+  });
+
+  describe('generischer Pickup-Pfad', () => {
+    it.each(['HEALTH_PACK', 'ARMOR'])('sendet für %s genau einen Request ohne lokale Wirkung', async (defId) => {
+      vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
+      vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      const ack = deferred<boolean>();
+      const send = vi.spyOn(bridge, 'sendPickupPowerUp').mockReturnValue(ack.promise);
+      const coordinator = makeCoordinator();
+      const tryPickup = vi.fn();
+      coordinator.ctx.powerUpSystem = { tryPickup };
+
+      (coordinator as any).checkLocalPickup([makePickup(defId)]);
+
+      expect(send).toHaveBeenCalledOnce();
+      expect(tryPickup).not.toHaveBeenCalled();
+      expect(coordinator.clientUtilityOverride).toBeNull();
+
+      ack.resolve(true);
+      await Promise.resolve();
+    });
+
+    it('entfernt eine Ablehnung aus pending und erlaubt später einen neuen Request', async () => {
+      vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
+      vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      const send = vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(false);
+      const coordinator = makeCoordinator();
+
+      (coordinator as any).checkLocalPickup([makePickup('HEALTH_PACK')]);
+      await Promise.resolve();
+      expect(coordinator.pendingPickupUids).not.toContain(7);
+
+      coordinator.pickupCooldownUntil = 0;
+      (coordinator as any).checkLocalPickup([makePickup('HEALTH_PACK')]);
+      expect(send).toHaveBeenCalledTimes(2);
+    });
+
+    it('verhindert parallele Requests derselben UID', () => {
+      vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
+      vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      const ack = deferred<boolean>();
+      const send = vi.spyOn(bridge, 'sendPickupPowerUp').mockReturnValue(ack.promise);
+      const coordinator = makeCoordinator();
+
+      (coordinator as any).checkLocalPickup([makePickup('HEALTH_PACK')]);
+      coordinator.pickupCooldownUntil = 0;
+      (coordinator as any).checkLocalPickup([makePickup('HEALTH_PACK')]);
+
+      expect(send).toHaveBeenCalledOnce();
+      expect(coordinator.pendingPickupUids).toContain(7);
+      ack.resolve(false);
+    });
+  });
+
+  describe('temporäre Utility-Overrides', () => {
+    it.each(['BFG', 'HOLY_HAND_GRENADE'])('rekonstruiert %s erst aus dem Host-Descriptor', async (utilityId) => {
+      vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
+      vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      vi.spyOn(bridge, 'getGameMode').mockReturnValue('deathmatch');
+      const ack = deferred<boolean>();
+      vi.spyOn(bridge, 'sendPickupPowerUp').mockReturnValue(ack.promise);
+      const coordinator = makeCoordinator();
+
+      (coordinator as any).checkLocalPickup([makePickup(utilityId)]);
+      expect(coordinator.clientUtilityOverride).toBeNull();
+
+      ack.resolve(true);
+      await Promise.resolve();
+      expect(coordinator.clientUtilityOverride).toBeNull();
+
+      vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
+        kind: 'utility',
+        utilityId,
+      });
+      (coordinator as any).reconcileClientUtilityOverride();
+      expect(coordinator.clientUtilityOverride).toEqual(UTILITY_CONFIGS[utilityId]);
+    });
+
+    it('erzeugt bei abgelehntem Utility-Pickup keinen Override', async () => {
+      vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
+      vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(false);
+      vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue(null);
+      const coordinator = makeCoordinator();
+
+      (coordinator as any).checkLocalPickup([makePickup('BFG')]);
+      await Promise.resolve();
+      (coordinator as any).reconcileClientUtilityOverride();
+
+      expect(coordinator.clientUtilityOverride).toBeNull();
+    });
+
+    it('entfernt einen Utility-Override nicht lokal vor der Host-Bestätigung des Einsatzes', () => {
+      vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
+      const coordinator = makeCoordinator();
+      coordinator.clientUtilityOverride = UTILITY_CONFIGS.BFG;
+
+      coordinator.notifyUtilityFired();
+
+      expect(coordinator.clientUtilityOverride).toBe(UTILITY_CONFIGS.BFG);
+    });
   });
 });

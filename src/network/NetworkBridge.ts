@@ -2987,7 +2987,7 @@ export class NetworkBridge {
     return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_NAME) as string | undefined) ?? '';
   }
 
-  /** Host-only: Publishes the metadata required to reconstruct a mission placement override. */
+  /** Host-only: Publishes the metadata required to reconstruct a temporary utility override. */
   publishUtilityOverrideDescriptor(playerId: string, descriptor: UtilityOverrideDescriptor | null): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
@@ -2995,16 +2995,24 @@ export class NetworkBridge {
     ps.setState(KEY_UTILITY_OVERRIDE_DESCRIPTOR, descriptor, true);
   }
 
-  /** Reads the authoritative mission placement override, if one is active. */
+  /** Reads the authoritative temporary utility override, if one is active. */
   getPlayerUtilityOverrideDescriptor(playerId: string): UtilityOverrideDescriptor | null {
     const value = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_DESCRIPTOR);
-    if (!isRecord(value) || value.kind !== 'objective-placement') return null;
-    if (typeof value.objectiveId !== 'string' || typeof value.powerUpDefId !== 'string') return null;
-    return {
-      kind: 'objective-placement',
-      objectiveId: value.objectiveId,
-      powerUpDefId: value.powerUpDefId,
-    };
+    if (!isRecord(value) || typeof value.kind !== 'string') return null;
+    if (value.kind === 'utility') {
+      if (typeof value.utilityId !== 'string' || value.utilityId.length === 0) return null;
+      return { kind: 'utility', utilityId: value.utilityId };
+    }
+    if (value.kind === 'objective-placement') {
+      if (typeof value.objectiveId !== 'string' || value.objectiveId.length === 0
+        || typeof value.powerUpDefId !== 'string' || value.powerUpDefId.length === 0) return null;
+      return {
+        kind: 'objective-placement',
+        objectiveId: value.objectiveId,
+        powerUpDefId: value.powerUpDefId,
+      };
+    }
+    return null;
   }
 
   /** Host-only: Publiziert ob die Adrenalinspritze eines Spielers aktiv ist. */

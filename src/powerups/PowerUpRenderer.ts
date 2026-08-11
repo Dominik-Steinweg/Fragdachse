@@ -18,12 +18,16 @@ const TEX_POWERUP_PEDESTAL_GLOW      = '__powerup_pedestal_glow';
 const TEX_POWERUP_PEDESTAL_PARTICLE  = '__powerup_pedestal_particle';
 const TEX_POWERUP_PEDESTAL_PIXEL     = '__powerup_pedestal_pixel';
 const TEX_POWERUP_PEDESTAL_FLASH     = '__powerup_pedestal_flash';
+const MISSION_REWARD_COLOR           = 0x22d7e8;
+const MISSION_REWARD_PEDESTAL_SIZE   = 38;
+const MISSION_REWARD_PICKUP_SIZE     = 24;
 
 interface ItemVisual {
   container: Phaser.GameObjects.Container;
-  graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | null;
   /** Für das Dauerlicht: die Farbe wird pro Frame gebraucht, der Def-Lookup nicht. */
   color: number;
+  emitsLight: boolean;
 }
 
 interface PedestalVisual {
@@ -72,12 +76,15 @@ export class PowerUpRenderer {
       const known = this.sprites.get(pu.uid);
       if (known) {
         known.container.setPosition(pu.x, pu.y);
-        this.setItemLight(pu.uid, pu.x, pu.y, known.color);
+        if (known.emitsLight) this.setItemLight(pu.uid, pu.x, pu.y, known.color);
         continue;
       }
 
-      const def       = POWERUP_DEFS[pu.defId];
-      const glowColor = def?.color ?? 0xffffff;
+      const def = POWERUP_DEFS[pu.defId];
+      const isMissionMarker = pu.pickupKind === 'objective-marker';
+      const isMissionReward = pu.pickupKind === 'objective-placement';
+      const isMissionVisual = isMissionMarker || isMissionReward;
+      const glowColor = isMissionVisual ? MISSION_REWARD_COLOR : (def?.color ?? 0xffffff);
       // Deterministischer Phasen-Offset: Items pulsieren leicht gegeneinander versetzt
       const phaseMs   = (pu.uid * 137) % 1400;
 
@@ -86,11 +93,28 @@ export class PowerUpRenderer {
       container.setDepth(DEPTH.PLAYERS - 1);
 
       // ── Grafik: feste Größe, kein Scale-Tween ─────────────────────────────
-      const graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle =
-        def?.spriteKey
+      const graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | null =
+        isMissionMarker
+          ? null
+          :
+        isMissionReward
+          ? this.scene.add.image(0, 0, 'mission_reward_pickup').setDisplaySize(MISSION_REWARD_PICKUP_SIZE, MISSION_REWARD_PICKUP_SIZE)
+          : def?.spriteKey
           ? this.scene.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
           : this.scene.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor);
-      container.add(graphic);
+      if (isMissionVisual) {
+        container.add(this.scene.add.image(0, 0, 'mission_reward_pedestal').setDisplaySize(
+          MISSION_REWARD_PEDESTAL_SIZE,
+          MISSION_REWARD_PEDESTAL_SIZE,
+        ));
+      }
+      if (graphic) container.add(graphic);
+
+      if (isMissionMarker) {
+        this.sprites.set(pu.uid, { container, graphic, color: glowColor, emitsLight: false });
+        continue;
+      }
+      if (!graphic) continue;
 
       const itemAura = configureAdditiveImage(
         this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_FLASH),
@@ -98,7 +122,7 @@ export class PowerUpRenderer {
         0.18,
         glowColor,
       ).setScale(0.52);
-      container.addAt(itemAura, 0);
+      container.addAt(itemAura, isMissionReward ? 1 : 0);
 
       // ── preFX-Glow: Pixel-Aura, outerStrength pulsiert ───────────────────
       // Vorgebackene Aura statt eigenem Filter-Framebuffer pro Item.
@@ -115,7 +139,7 @@ export class PowerUpRenderer {
       });
       itemAura.once(Phaser.GameObjects.Events.DESTROY, () => auraTween.stop());
 
-      this.sprites.set(pu.uid, { container, graphic, color: glowColor });
+      this.sprites.set(pu.uid, { container, graphic, color: glowColor, emitsLight: true });
       this.setItemLight(pu.uid, pu.x, pu.y, glowColor);
       this.playMaterializeEffect(pu.x, pu.y, glowColor, container, graphic);
     }

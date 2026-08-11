@@ -8,6 +8,8 @@ import type {
 } from '../types';
 
 export interface CoopDefenseSecondaryObjectiveSystemOptions {
+  readonly onObjectiveActivated?: (objectiveId: string) => void;
+  readonly onHoldFailed?: (objectiveId: string) => void;
   /** Liefert ausschließlich den semantischen Clear-Zustand des Encounter-Owners. */
   readonly isEncounterCleared?: (encounterId: string) => boolean;
   /**
@@ -37,6 +39,8 @@ export class CoopDefenseSecondaryObjectiveSystem {
   private elapsedMs = 0;
   private focusedObjectiveIndex: number | null = null;
   private readonly isEncounterCleared: ((encounterId: string) => boolean) | null;
+  private readonly onObjectiveActivated: ((objectiveId: string) => void) | null;
+  private readonly onHoldFailed: ((objectiveId: string) => void) | null;
   private readonly onHoldCompleted: ((objectiveId: string) => void) | null;
   private readonly objectiveStates: SecondaryObjectiveRuntimeState[];
 
@@ -45,6 +49,8 @@ export class CoopDefenseSecondaryObjectiveSystem {
     options: CoopDefenseSecondaryObjectiveSystemOptions = {},
   ) {
     this.isEncounterCleared = options.isEncounterCleared ?? null;
+    this.onObjectiveActivated = options.onObjectiveActivated ?? null;
+    this.onHoldFailed = options.onHoldFailed ?? null;
     this.onHoldCompleted = options.onHoldCompleted ?? null;
     this.objectiveStates = objectives.map((config) => ({
       config,
@@ -190,6 +196,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     state.state = 'active';
     state.stateChangedAtMs = this.elapsedMs;
     this.focusedObjectiveIndex = index;
+    this.onObjectiveActivated?.(state.config.id);
   }
 
   private updateFocusedObjective(): void {
@@ -210,7 +217,9 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   private failObjective(state: SecondaryObjectiveRuntimeState): void {
+    if (state.state !== 'active') return;
     this.setTerminalState(state, 'failed');
+    if (state.config.type === 'hold') this.onHoldFailed?.(state.config.id);
   }
 
   private setTerminalState(
