@@ -131,12 +131,14 @@ describe('Coop defense map progression', () => {
     expect(getCoopDefenseMapScheduledXp(finiteEmptyMap)).toBe(0);
   });
 
-  it('keeps Map 1 as the simple west-only repel-assault campaign reference', () => {
+  it('keeps Map 1 as the simple west-only repel-assault campaign reference with readable rests', () => {
     const map = getCoopDefenseMapConfig('1');
     expect(map.objective).toBe('repel-assault');
     expect(map.persistentSpawns).toEqual([]);
     expect(map.encounters).toHaveLength(3);
-    expect(map.encounters?.slice(0, 2).map((encounter) => encounter.restAfterMs)).toEqual([5_000, 5_000]);
+    const openingRests = map.encounters?.slice(0, 2).map((encounter) => encounter.restAfterMs) ?? [];
+    expect(openingRests).toHaveLength(2);
+    expect(openingRests.every((restAfterMs) => restAfterMs >= 5_000)).toBe(true);
     expect(map.boss).toBeUndefined();
     expect(map.bases.some((base) => base.role === 'spawn-point')).toBe(false);
   });
@@ -382,6 +384,79 @@ describe('Coop defense map progression', () => {
         expect(target?.faction ?? 'friendly').toBe('friendly');
       }
     }
+  });
+
+  it('integrates Map 13 Destroy through dormant persistent spawn structures', () => {
+    const map = getCoopDefenseMapConfig('13');
+    const destroy = map.secondaryObjectives?.find((objective) => objective.type === 'destroy');
+
+    expect(map.objective).toBe('destroy-hostile-bases');
+    expect(destroy).toBeDefined();
+    expect(destroy?.start.type).toBe('after-encounter');
+    expect(destroy?.focusUntil?.type).toBe('after-encounter');
+    expect(destroy?.start.type === 'after-encounter' && destroy.focusUntil?.type === 'after-encounter'
+      ? destroy.start.encounterId
+      : null).not.toBe(destroy?.focusUntil?.type === 'after-encounter' ? destroy.focusUntil.encounterId : null);
+    expect(destroy?.rewards?.xpPerTarget).toBeGreaterThan(0);
+
+    const targets = destroy?.targets ?? [];
+    const targetBases = targets.map((targetId) => map.bases.find((base) => base.id === targetId));
+    const structureBoundSources = new Set(
+      (map.persistentSpawns ?? [])
+        .filter((spawn) => spawn.source.type === 'base')
+        .map((spawn) => spawn.source.type === 'base' ? spawn.source.baseId : ''),
+    );
+
+    expect(targets.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(targets).size).toBe(targets.length);
+    expect(targetBases.every((base) => (
+      base?.dormant === true
+      && base.role === 'spawn-point'
+      && base.faction === 'hostile'
+      && structureBoundSources.has(base.id)
+    ))).toBe(true);
+    expect(targetBases.some((base) => base?.role === 'main')).toBe(false);
+
+    const lastEncounterId = map.encounters?.at(-1)?.id;
+    expect(destroy?.focusUntil?.type === 'after-encounter'
+      ? destroy.focusUntil.encounterId
+      : null).not.toBe(lastEncounterId);
+  });
+
+  it('integrates Map 14 Hold as a mid-chain damaged two-rocket outpost', () => {
+    const map = getCoopDefenseMapConfig('14');
+    const hold = map.secondaryObjectives?.find((objective) => objective.type === 'hold');
+    const target = hold ? map.bases.find((base) => base.id === hold.targets[0]) : undefined;
+    const encounterIds = map.encounters?.map((encounter) => encounter.id) ?? [];
+
+    expect(hold).toBeDefined();
+    expect(hold?.start.type).toBe('after-encounter');
+    expect(hold?.holdUntil?.type).toBe('after-encounter');
+    expect(hold?.rewards?.repairTargetOnComplete).toBe(true);
+    expect(target?.role).toBe('outpost');
+    expect(target?.faction).toBe('friendly');
+    expect(target?.dormant).toBe(true);
+    expect(target?.startHpFactor).toBeGreaterThan(0);
+    expect(target?.startHpFactor).toBeLessThan(1);
+    expect(target?.turrets).toHaveLength(2);
+    expect(target?.turrets?.every((turret) => turret.weaponId === 'TURRET_ROCKET')).toBe(true);
+
+    const startIndex = hold?.start.type === 'after-encounter'
+      ? encounterIds.indexOf(hold.start.encounterId)
+      : -1;
+    const holdUntilIndex = hold?.holdUntil?.type === 'after-encounter'
+      ? encounterIds.indexOf(hold.holdUntil.encounterId)
+      : -1;
+    expect(startIndex).toBeGreaterThan(0);
+    expect(holdUntilIndex).toBeGreaterThan(startIndex);
+    expect(holdUntilIndex).toBeLessThan(encounterIds.length - 1);
+  });
+
+  it('keeps Carry confined to the B11 sandbox', () => {
+    const campaignObjectives = COOP_DEFENSE_MAP_CONFIGS
+      .filter((map) => map.mapId !== '0')
+      .flatMap((map) => map.secondaryObjectives ?? []);
+    expect(campaignObjectives.some((objective) => objective.type === 'carry')).toBe(false);
   });
 
   it('keeps power-up respawns valid and delays the first strong pedestal spawn', () => {

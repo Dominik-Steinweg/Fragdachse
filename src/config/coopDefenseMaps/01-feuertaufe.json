@@ -14,7 +14,7 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 40,
+  "balanceReferenceDurationSec": 45,
   "objective": "repel-assault",
   "bases": [
     {
@@ -39,7 +39,7 @@
         "type": "time",
         "atMs": 0
       },
-      "restAfterMs": 5000,
+      "restAfterMs": 6500,
       "groups": [
         {
           "enemyKind": "zombie-badger",
@@ -52,7 +52,7 @@
       "start": {
         "type": "after-previous"
       },
-      "restAfterMs": 5000,
+      "restAfterMs": 6500,
       "groups": [
         {
           "enemyKind": "zombie-badger",

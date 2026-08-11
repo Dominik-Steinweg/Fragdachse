@@ -11,12 +11,12 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 45,
+  "balanceReferenceDurationSec": 100,
   "objective": "defeat-boss",
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 5000,
+      "hpMax": 5200,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -107,7 +107,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 1000,
+      "hpMax": 1150,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -133,7 +133,7 @@
     {
       "id": "friendly-outpost-rocket",
       "role": "outpost",
-      "hpMax": 700,
+      "hpMax": 850,
       "anchor": {
         "kind": "grid",
         "gridX": 38,
@@ -179,7 +179,7 @@
   ],
   "boss": {
     "enemyKind": "inferno-colossus",
-    "spawnAtMs": 5000
+    "spawnAtMs": 8000
   },
   "itemDrop": {
     "itemLevel": 1
@@ -188,7 +188,7 @@
     {
       "id": "map-10-pressure-0",
       "enemyKind": "zombie-badger",
-      "intervalMs": 5000,
+      "intervalMs": 6500,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -198,7 +198,7 @@
     {
       "id": "map-10-pressure-1",
       "enemyKind": "demon-badger",
-      "intervalMs": 5000,
+      "intervalMs": 6500,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -208,9 +208,9 @@
     {
       "id": "map-10-pressure-2",
       "enemyKind": "spore-warden",
-      "intervalMs": 15000,
-      "countPerTick": 2,
-      "startAtMs": 0,
+      "intervalMs": 18000,
+      "countPerTick": 1,
+      "startAtMs": 10000,
       "source": {
         "type": "map"
       }

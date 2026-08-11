@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
-import { getTurretVisualSpec, TURRET_VISUALS } from '../src/config/turretVisuals';
+import { getTurretVisualSpec, getTurretVisualTransform, TURRET_VISUALS } from '../src/config/turretVisuals';
 import type { TurretWeaponId } from '../src/types';
 
 const ALL_TURRET_WEAPONS: readonly TurretWeaponId[] = [
@@ -27,9 +27,16 @@ describe('turret visual catalog', () => {
       textureKey: 'pilz01',
       assetPath: null,
       displaySize: 32,
+      centerCorrectionX: 7,
+      centerCorrectionY: -7,
     });
     expect(getTurretVisualSpec('BASE_SPOREN')).toBe(getTurretVisualSpec('SPOREN'));
     expect(getTurretVisualSpec('TURRET_SPORE')).toBe(getTurretVisualSpec('SPOREN'));
+  });
+
+  it('keeps the authored mushroom artwork centered while rotating', () => {
+    const transform = getTurretVisualTransform(getTurretVisualSpec('SPOREN'), 100, 200, 0);
+    expect(transform).toEqual({ x: 107, y: 193, rotation: 0 });
   });
 
   it('maps every weapon construction through the shared catalog', () => {

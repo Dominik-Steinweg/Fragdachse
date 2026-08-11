@@ -11,7 +11,7 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 70,
+  "balanceReferenceDurationSec": 90,
   "objective": "repel-assault",
   "bases": [
     {
@@ -127,7 +127,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 750,
+      "hpMax": 850,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -207,24 +207,24 @@
     {
       "id": "medic-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 6000,
+      "restAfterMs": 7500,
       "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
     },
     {
       "id": "medic-response",
       "start": { "type": "after-previous" },
-      "restAfterMs": 7000,
+      "restAfterMs": 8500,
       "groups": [
         { "enemyKind": "plague-medic", "count": 2, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 6, "delayMs": 900, "front": "north" }
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 900, "front": "north" }
       ]
     },
     {
       "id": "medic-pressure",
       "start": { "type": "after-previous" },
-      "restAfterMs": 7000,
+      "restAfterMs": 9000,
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 8, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
         { "enemyKind": "spore-warden", "count": 3, "delayMs": 1100, "front": "north" }
       ]
     },

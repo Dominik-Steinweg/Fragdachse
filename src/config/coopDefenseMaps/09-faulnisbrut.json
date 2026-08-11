@@ -11,14 +11,14 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "surviveDurationSec": 90,
-  "balanceReferenceDurationSec": 90,
+  "surviveDurationSec": 120,
+  "balanceReferenceDurationSec": 120,
   "objective": "survive",
   "surviveRespawnsPerPlayer": 2,
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 1000,
+      "hpMax": 1200,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -31,7 +31,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 1500,
+      "hpMax": 1700,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -144,7 +144,7 @@
     },
     {
       "id": "survival-escalation",
-      "start": { "type": "time", "atMs": 18000 },
+      "start": { "type": "time", "atMs": 24000 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 6, "front": "west" },
         { "enemyKind": "plague-medic", "count": 2, "delayMs": 1200, "front": "north" }
@@ -152,7 +152,7 @@
     },
     {
       "id": "survival-brood",
-      "start": { "type": "time", "atMs": 42000 },
+      "start": { "type": "time", "atMs": 56000 },
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
         { "enemyKind": "spore-warden", "count": 3, "delayMs": 1400, "front": "north" }
@@ -160,7 +160,7 @@
     },
     {
       "id": "survival-last-stand",
-      "start": { "type": "time", "atMs": 68000 },
+      "start": { "type": "time", "atMs": 86000 },
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
         { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "north" },
@@ -172,8 +172,8 @@
     {
       "id": "map-9-pressure-0",
       "enemyKind": "zombie-badger",
-      "intervalMs": 2000,
-      "countPerTick": 2,
+      "intervalMs": 2500,
+      "countPerTick": 1,
       "startAtMs": 0,
       "source": {
         "type": "map"
@@ -182,8 +182,8 @@
     {
       "id": "map-9-pressure-1",
       "enemyKind": "demon-badger",
-      "intervalMs": 8000,
-      "countPerTick": 2,
+      "intervalMs": 9500,
+      "countPerTick": 1,
       "startAtMs": 0,
       "source": {
         "type": "map"
@@ -192,7 +192,7 @@
     {
       "id": "map-9-pressure-2",
       "enemyKind": "spore-warden",
-      "intervalMs": 30000,
+      "intervalMs": 35000,
       "countPerTick": 1,
       "startAtMs": 30000,
       "source": {
@@ -202,7 +202,7 @@
     {
       "id": "map-9-pressure-3",
       "enemyKind": "plague-medic",
-      "intervalMs": 30000,
+      "intervalMs": 35000,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -212,7 +212,7 @@
     {
       "id": "map-9-pressure-4",
       "enemyKind": "stink-broodmother",
-      "intervalMs": 15000,
+      "intervalMs": 20000,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {

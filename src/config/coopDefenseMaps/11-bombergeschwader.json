@@ -19,12 +19,12 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 90,
+  "balanceReferenceDurationSec": 110,
   "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 2000,
+      "hpMax": 2200,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -83,7 +83,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 600,
+      "hpMax": 700,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -166,7 +166,7 @@
         "type": "time",
         "atMs": 0
       },
-      "restAfterMs": 4000,
+      "restAfterMs": 5000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
@@ -186,7 +186,7 @@
       "start": {
         "type": "opening-airstrike-complete"
       },
-      "restAfterMs": 4500,
+      "restAfterMs": 5500,
       "groups": [
         {
           "enemyKind": "spore-warden",
@@ -212,7 +212,7 @@
       "start": {
         "type": "after-previous"
       },
-      "restAfterMs": 4500,
+      "restAfterMs": 5500,
       "groups": [
         {
           "enemyKind": "zombie-badger",

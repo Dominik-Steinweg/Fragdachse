@@ -7,6 +7,15 @@ export interface TurretVisualSpec {
   readonly displaySize: number;
   /** Source sprites point east, matching Phaser's zero-radian aim direction. */
   readonly rotationOffset: number;
+  /** Pixel correction that moves the visible artwork onto the logical turret center. */
+  readonly centerCorrectionX: number;
+  readonly centerCorrectionY: number;
+}
+
+export interface TurretVisualTransform {
+  readonly x: number;
+  readonly y: number;
+  readonly rotation: number;
 }
 
 const SPORE_VISUAL: TurretVisualSpec = Object.freeze({
@@ -15,6 +24,10 @@ const SPORE_VISUAL: TurretVisualSpec = Object.freeze({
   assetPath: null,
   displaySize: 32,
   rotationOffset: 0,
+  // pilz01.png is a 16x16 ground decal whose visible pixels occupy x=1..7,
+  // y=8..14. At 32px display size the image pivot therefore needs +7/-7px.
+  centerCorrectionX: 7,
+  centerCorrectionY: -7,
 });
 
 function generated(textureKey: string, fileName: string): TurretVisualSpec {
@@ -23,6 +36,8 @@ function generated(textureKey: string, fileName: string): TurretVisualSpec {
     assetPath: `./assets/sprites/turrets/${fileName}`,
     displaySize: 40,
     rotationOffset: 0,
+    centerCorrectionX: 0,
+    centerCorrectionY: 0,
   });
 }
 
@@ -51,6 +66,23 @@ export const TURRET_VISUALS: Readonly<Record<TurretWeaponId, TurretVisualSpec>> 
 
 export function getTurretVisualSpec(weaponId: TurretWeaponId): TurretVisualSpec {
   return TURRET_VISUALS[weaponId];
+}
+
+/** Resolves a transform that keeps visible turret artwork on its logical point. */
+export function getTurretVisualTransform(
+  spec: TurretVisualSpec,
+  x: number,
+  y: number,
+  angle: number,
+): TurretVisualTransform {
+  const rotation = angle + spec.rotationOffset;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  return {
+    x: x + cos * spec.centerCorrectionX - sin * spec.centerCorrectionY,
+    y: y + sin * spec.centerCorrectionX + cos * spec.centerCorrectionY,
+    rotation,
+  };
 }
 
 export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin): void {

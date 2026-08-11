@@ -18,11 +18,11 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 90,
+  "balanceReferenceDurationSec": 130,
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 2500,
+      "hpMax": 2800,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -155,7 +155,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 900,
+      "hpMax": 1000,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -213,7 +213,7 @@
     {
       "id": "enemy-hive",
       "faction": "hostile",
-      "hpMax": 1000,
+      "hpMax": 1100,
       "anchor": {
         "kind": "left-center",
         "edgeInsetCells": 10
@@ -267,7 +267,7 @@
     {
       "id": "friendly-outpost-rocket",
       "role": "outpost",
-      "hpMax": 800,
+      "hpMax": 900,
       "anchor": {
         "kind": "grid",
         "gridX": 46,
@@ -324,7 +324,7 @@
     {
       "id": "map-12-pressure-0",
       "enemyKind": "zombie-badger",
-      "intervalMs": 9000,
+      "intervalMs": 11000,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -334,7 +334,7 @@
     {
       "id": "map-12-pressure-1",
       "enemyKind": "demon-badger",
-      "intervalMs": 9000,
+      "intervalMs": 11000,
       "countPerTick": 1,
       "startAtMs": 4000,
       "source": {
@@ -344,7 +344,7 @@
     {
       "id": "map-12-pressure-2",
       "enemyKind": "spore-warden",
-      "intervalMs": 20000,
+      "intervalMs": 24000,
       "countPerTick": 1,
       "startAtMs": 12000,
       "source": {
@@ -354,9 +354,9 @@
     {
       "id": "map-12-pressure-3",
       "enemyKind": "plague-medic",
-      "intervalMs": 30000,
+      "intervalMs": 36000,
       "countPerTick": 1,
-      "startAtMs": 20000,
+      "startAtMs": 24000,
       "source": {
         "type": "map"
       }
@@ -364,7 +364,7 @@
     {
       "id": "map-12-pressure-4",
       "enemyKind": "alien-badger",
-      "intervalMs": 9000,
+      "intervalMs": 11000,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {

@@ -15,12 +15,12 @@
     "weaponName": "Lila Leerenbrand"
   },
   "rockFillRatio": 0.08,
-  "balanceReferenceDurationSec": 45,
+  "balanceReferenceDurationSec": 110,
   "objective": "defeat-boss",
   "bases": [
     {
       "id": "coop-base-center",
-      "hpMax": 6000,
+      "hpMax": 6500,
       "anchor": {
         "kind": "center-offset",
         "dxCells": 0,
@@ -147,7 +147,7 @@
       "id": "void-hunter-opening-support",
       "start": {
         "type": "time",
-        "atMs": 5000
+        "atMs": 7000
       },
       "groups": [
         {
@@ -222,7 +222,7 @@
       "id": "void-hunter-final-support",
       "start": {
         "type": "time",
-        "atMs": 20000
+        "atMs": 30000
       },
       "groups": [
         {
@@ -274,7 +274,7 @@
   ],
   "boss": {
     "enemyKind": "void-hunter",
-    "spawnAtMs": 2000
+    "spawnAtMs": 2500
   },
   "itemDrop": {
     "itemLevel": 3

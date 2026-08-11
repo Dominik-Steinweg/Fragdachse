@@ -15,11 +15,11 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 90,
+  "balanceReferenceDurationSec": 150,
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 3000,
+      "hpMax": 3300,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -152,7 +152,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 1200,
+      "hpMax": 1400,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -5,
@@ -233,7 +233,7 @@
     {
       "id": "enemy-hive",
       "faction": "hostile",
-      "hpMax": 2000,
+      "hpMax": 2200,
       "anchor": {
         "kind": "left-center",
         "edgeInsetCells": 10
@@ -336,7 +336,8 @@
       "id": "spawn-point-zombie-badger",
       "role": "spawn-point",
       "faction": "hostile",
-      "hpMax": 250,
+      "hpMax": 220,
+      "dormant": true,
       "anchor": {
         "kind": "grid",
         "gridX": 1,
@@ -384,7 +385,8 @@
       "id": "spawn-point-demon-badger",
       "role": "spawn-point",
       "faction": "hostile",
-      "hpMax": 250,
+      "hpMax": 240,
+      "dormant": true,
       "anchor": {
         "kind": "grid",
         "gridX": 17,
@@ -432,7 +434,8 @@
       "id": "spawn-point-spore-warden",
       "role": "spawn-point",
       "faction": "hostile",
-      "hpMax": 250,
+      "hpMax": 260,
+      "dormant": true,
       "anchor": {
         "kind": "grid",
         "gridX": 3,
@@ -480,7 +483,8 @@
       "id": "spawn-point-alien-badger",
       "role": "spawn-point",
       "faction": "hostile",
-      "hpMax": 250,
+      "hpMax": 280,
+      "dormant": true,
       "anchor": {
         "kind": "grid",
         "gridX": 19,
@@ -528,7 +532,7 @@
       "id": "enemy-outpost-plasma",
       "role": "outpost",
       "faction": "hostile",
-      "hpMax": 450,
+      "hpMax": 500,
       "anchor": {
         "kind": "grid",
         "gridX": 28,
@@ -554,7 +558,7 @@
     {
       "id": "friendly-outpost-plasma",
       "role": "outpost",
-      "hpMax": 800,
+      "hpMax": 900,
       "anchor": {
         "kind": "grid",
         "gridX": 112,
@@ -617,9 +621,9 @@
     {
       "id": "map-13-pressure-0",
       "enemyKind": "thrower-badger",
-      "intervalMs": 11000,
+      "intervalMs": 13000,
       "countPerTick": 1,
-      "startAtMs": 0,
+      "startAtMs": 3000,
       "front": "north",
       "source": {
         "type": "map"
@@ -628,7 +632,7 @@
     {
       "id": "base-13-spawn-point-zombie-badger-pressure",
       "enemyKind": "zombie-badger",
-      "intervalMs": 8000,
+      "intervalMs": 9000,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -639,7 +643,7 @@
     {
       "id": "base-13-spawn-point-demon-badger-pressure",
       "enemyKind": "demon-badger",
-      "intervalMs": 8000,
+      "intervalMs": 10000,
       "countPerTick": 1,
       "startAtMs": 4000,
       "source": {
@@ -650,7 +654,7 @@
     {
       "id": "base-13-spawn-point-spore-warden-pressure",
       "enemyKind": "spore-warden",
-      "intervalMs": 22000,
+      "intervalMs": 26000,
       "countPerTick": 1,
       "startAtMs": 10000,
       "source": {
@@ -661,7 +665,7 @@
     {
       "id": "base-13-spawn-point-alien-badger-pressure",
       "enemyKind": "alien-badger",
-      "intervalMs": 25000,
+      "intervalMs": 30000,
       "countPerTick": 1,
       "startAtMs": 15000,
       "source": {
@@ -677,6 +681,7 @@
         "type": "time",
         "atMs": 10000
       },
+      "restAfterMs": 14000,
       "groups": [
         {
           "enemyKind": "demon-badger",
@@ -692,18 +697,61 @@
       ]
     },
     {
-      "id": "hive-collapse",
+      "id": "hive-counterattack",
       "start": {
-        "type": "base-destroyed",
-        "baseId": "enemy-hive"
+        "type": "after-previous"
       },
       "groups": [
         {
           "enemyKind": "rabid-badger",
-          "count": 2,
+          "count": 3,
           "front": "south"
+        },
+        {
+          "enemyKind": "alien-badger",
+          "count": 1,
+          "front": "east"
         }
       ]
+    },
+    {
+      "id": "hive-rear-guard",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 5000,
+      "groups": [
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "front": "east"
+        }
+      ]
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "destroy-brutbomben-front",
+      "type": "destroy",
+      "displayName": "BRUTNESTER ZERSTOEREN",
+      "rewardHint": "WENIGER ZUSATZDRUCK / BONUS-XP",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "hive-defense"
+      },
+      "focusUntil": {
+        "type": "after-encounter",
+        "encounterId": "hive-counterattack"
+      },
+      "targets": [
+        "spawn-point-zombie-badger",
+        "spawn-point-demon-badger",
+        "spawn-point-spore-warden",
+        "spawn-point-alien-badger"
+      ],
+      "rewards": {
+        "xpPerTarget": 20
+      }
     }
   ]
 }

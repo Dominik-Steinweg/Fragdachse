@@ -14,13 +14,13 @@
     "weaponName": "Morgenleerer Voidbrand"
   },
   "rockFillRatio": 0.12,
-  "balanceReferenceDurationSec": 90,
+  "balanceReferenceDurationSec": 160,
   "objective": "destroy-hostile-bases",
   "bases": [
     {
       "id": "enemy-timebomb-hive",
       "faction": "hostile",
-      "hpMax": 2800,
+      "hpMax": 3000,
       "anchor": {
         "kind": "left-center",
         "edgeInsetCells": 10
@@ -103,7 +103,7 @@
       "id": "enemy-flame-tower-top",
       "role": "outpost",
       "faction": "hostile",
-      "hpMax": 650,
+      "hpMax": 700,
       "anchor": {
         "kind": "grid",
         "gridX": 17,
@@ -130,7 +130,7 @@
       "id": "enemy-flame-tower-middle",
       "role": "outpost",
       "faction": "hostile",
-      "hpMax": 650,
+      "hpMax": 700,
       "anchor": {
         "kind": "grid",
         "gridX": 17,
@@ -157,7 +157,7 @@
       "id": "enemy-flame-tower-bottom",
       "role": "outpost",
       "faction": "hostile",
-      "hpMax": 650,
+      "hpMax": 700,
       "anchor": {
         "kind": "grid",
         "gridX": 17,
@@ -182,7 +182,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 1100,
+      "hpMax": 1200,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -197,7 +197,7 @@
     {
       "id": "friendly-middle-mushroom-top",
       "role": "outpost",
-      "hpMax": 850,
+      "hpMax": 900,
       "anchor": {
         "kind": "grid",
         "gridX": 44,
@@ -223,7 +223,7 @@
     {
       "id": "friendly-middle-mushroom-bottom",
       "role": "outpost",
-      "hpMax": 850,
+      "hpMax": 900,
       "anchor": {
         "kind": "grid",
         "gridX": 44,
@@ -248,7 +248,7 @@
     },
     {
       "id": "coop-base-rear",
-      "hpMax": 4200,
+      "hpMax": 4500,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -362,7 +362,7 @@
     {
       "id": "friendly-rear-mushroom-1",
       "role": "outpost",
-      "hpMax": 900,
+      "hpMax": 950,
       "anchor": {
         "kind": "grid",
         "gridX": 77,
@@ -388,7 +388,7 @@
     {
       "id": "friendly-rear-mushroom-2",
       "role": "outpost",
-      "hpMax": 900,
+      "hpMax": 950,
       "anchor": {
         "kind": "grid",
         "gridX": 77,
@@ -414,7 +414,7 @@
     {
       "id": "friendly-rear-mushroom-3",
       "role": "outpost",
-      "hpMax": 900,
+      "hpMax": 950,
       "anchor": {
         "kind": "grid",
         "gridX": 77,
@@ -440,7 +440,7 @@
     {
       "id": "friendly-rear-mushroom-4",
       "role": "outpost",
-      "hpMax": 900,
+      "hpMax": 950,
       "anchor": {
         "kind": "grid",
         "gridX": 77,
@@ -695,7 +695,7 @@
     {
       "id": "map-16-pressure-0",
       "enemyKind": "zombie-badger",
-      "intervalMs": 4500,
+      "intervalMs": 5500,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -705,7 +705,7 @@
     {
       "id": "map-16-pressure-1",
       "enemyKind": "demon-badger",
-      "intervalMs": 5000,
+      "intervalMs": 6500,
       "countPerTick": 1,
       "startAtMs": 1500,
       "source": {
@@ -715,9 +715,9 @@
     {
       "id": "map-16-pressure-2",
       "enemyKind": "rabid-badger",
-      "intervalMs": 6500,
+      "intervalMs": 8000,
       "countPerTick": 1,
-      "startAtMs": 2500,
+      "startAtMs": 4000,
       "source": {
         "type": "map"
       }
@@ -725,7 +725,7 @@
     {
       "id": "base-16-spawn-point-timebomb-top-pressure",
       "enemyKind": "timebomb-badger",
-      "intervalMs": 3000,
+      "intervalMs": 3500,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -736,7 +736,7 @@
     {
       "id": "base-16-spawn-point-timebomb-bottom-pressure",
       "enemyKind": "timebomb-badger",
-      "intervalMs": 3000,
+      "intervalMs": 3500,
       "countPerTick": 1,
       "startAtMs": 1000,
       "source": {
@@ -747,7 +747,7 @@
     {
       "id": "base-16-spawn-point-timebomb-rear-pressure",
       "enemyKind": "timebomb-badger",
-      "intervalMs": 3000,
+      "intervalMs": 3500,
       "countPerTick": 1,
       "startAtMs": 2000,
       "source": {
@@ -758,7 +758,7 @@
     {
       "id": "base-16-spawn-point-zombie-rear-pressure",
       "enemyKind": "timebomb-badger",
-      "intervalMs": 3000,
+      "intervalMs": 3500,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {

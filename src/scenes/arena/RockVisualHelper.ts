@@ -15,7 +15,7 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import { isCoopDefenseMode } from '../../gameModes';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
-import { getTurretVisualSpec } from '../../config/turretVisuals';
+import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
@@ -348,11 +348,12 @@ export class RockVisualHelper {
       : undefined;
     const indestructible = definition?.indestructible === true;
     const ratio = Phaser.Math.Clamp(rock.hp / Math.max(1, rock.maxHp), 0, 1);
+    const transform = getTurretVisualTransform(visualSpec, world.x, world.y, rock.angle);
     visual.image
       .setTexture(visualSpec.textureKey)
       .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
-      .setPosition(world.x, world.y)
-      .setRotation(rock.angle + visualSpec.rotationOffset);
+      .setPosition(transform.x, transform.y)
+      .setRotation(transform.rotation);
     visual.aura
       .setPosition(world.x, world.y)
       .setTint(rock.ownerColor)

@@ -12,12 +12,12 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 60,
+  "balanceReferenceDurationSec": 70,
   "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 1500,
+      "hpMax": 1700,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -50,7 +50,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 1000,
+      "hpMax": 1050,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -121,13 +121,13 @@
     {
       "id": "adrenaline-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 5000,
+      "restAfterMs": 6500,
       "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
     },
     {
       "id": "adrenaline-rush",
       "start": { "type": "after-previous" },
-      "restAfterMs": 6000,
+      "restAfterMs": 8000,
       "groups": [
         { "enemyKind": "demon-badger", "count": 6, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "north" }
@@ -137,8 +137,8 @@
       "id": "adrenaline-finale",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 14, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 7, "delayMs": 1000, "front": "north" },
+        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" },
         { "enemyKind": "rabid-badger", "count": 5, "delayMs": 1800, "front": "south" }
       ]
     }

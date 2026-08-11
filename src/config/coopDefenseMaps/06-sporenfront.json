@@ -11,7 +11,7 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 60,
+  "balanceReferenceDurationSec": 80,
   "objective": "repel-assault",
   "bases": [
     {
@@ -140,7 +140,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 750,
+      "hpMax": 850,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -215,13 +215,13 @@
     {
       "id": "spore-front-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 6000,
+      "restAfterMs": 7000,
       "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
     },
     {
       "id": "spore-front-wardens",
       "start": { "type": "after-previous" },
-      "restAfterMs": 7000,
+      "restAfterMs": 8500,
       "groups": [
         { "enemyKind": "spore-warden", "count": 4, "front": "west" },
         { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" }
@@ -230,9 +230,9 @@
     {
       "id": "spore-front-surge",
       "start": { "type": "after-previous" },
-      "restAfterMs": 7000,
+      "restAfterMs": 9000,
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 8, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
         { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
       ]
     },

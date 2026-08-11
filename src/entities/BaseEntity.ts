@@ -13,7 +13,7 @@ import {
   TEAM_RED_COLOR,
 } from '../config';
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
-import { getTurretVisualSpec } from '../config/turretVisuals';
+import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import { makeAdditive } from '../effects/EffectUtils';
@@ -62,7 +62,6 @@ export class BaseEntity {
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly turretAngles = new Map<string, number>();
-  private readonly turretRotationOffsets = new Map<string, number>();
   private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private readonly hpBarWidth: number;
@@ -140,13 +139,13 @@ export class BaseEntity {
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {
       const visual = getTurretVisualSpec(turret.weaponId);
-      const image = this.scene.add.image(turret.x, turret.y, visual.textureKey)
+      const transform = getTurretVisualTransform(visual, turret.x, turret.y, turret.initialAngle);
+      const image = this.scene.add.image(transform.x, transform.y, visual.textureKey)
         .setDisplaySize(visual.displaySize, visual.displaySize)
-        .setRotation(turret.initialAngle + visual.rotationOffset)
+        .setRotation(transform.rotation)
         .setDepth(DEPTH.BASES + 3);
       this.turretImages.set(turret.id, image);
       this.turretAngles.set(turret.id, turret.initialAngle);
-      this.turretRotationOffsets.set(turret.id, visual.rotationOffset);
     }
 
     if (this.spec.role === 'spawn-point' && this.spec.spawnCenter) {
@@ -334,7 +333,12 @@ export class BaseEntity {
   setTurretAngle(turretId: string, angle: number): void {
     if (this.isInert() || !Number.isFinite(angle) || !this.turretAngles.has(turretId)) return;
     this.turretAngles.set(turretId, angle);
-    this.turretImages.get(turretId)?.setRotation(angle + (this.turretRotationOffsets.get(turretId) ?? 0));
+    const turret = this.spec.turrets.find((candidate) => candidate.id === turretId);
+    const image = this.turretImages.get(turretId);
+    if (!turret || !image) return;
+    const visual = getTurretVisualSpec(turret.weaponId);
+    const transform = getTurretVisualTransform(visual, turret.x, turret.y, angle);
+    image.setPosition(transform.x, transform.y).setRotation(transform.rotation);
   }
 
   applyTurretSnapshot(turrets: readonly SyncedBaseTurretState[]): void {
@@ -407,7 +411,6 @@ export class BaseEntity {
       if (image.active) image.destroy();
     }
     this.turretImages.clear();
-    this.turretRotationOffsets.clear();
 
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
 
@@ -438,7 +441,6 @@ export class BaseEntity {
     }
     this.turretImages.clear();
     this.turretAngles.clear();
-    this.turretRotationOffsets.clear();
     this.spawnCenterTween?.stop();
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
     if (this.hpBarBg?.active) this.hpBarBg.destroy();

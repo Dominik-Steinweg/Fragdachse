@@ -7,7 +7,7 @@ import type { ArenaContext }             from './ArenaContext';
 import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
-import { getTurretVisualSpec } from '../../config/turretVisuals';
+import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
 
 interface TunnelPreviewVisualState {
@@ -127,9 +127,11 @@ export class PlacementPreviewRenderer {
         if (preview.kind === 'rock') image.setFrame(preview.frame);
       }
       if (preview.kind === 'turret') {
+        const spec = this.getTurretPreviewSpec(preview.constructionId);
+        const transform = getTurretVisualTransform(spec, preview.targetX, preview.targetY, preview.angle);
         this.ensureTurretPreviewImage(undefined, preview.constructionId)
-          .setPosition(preview.targetX, preview.targetY)
-          .setRotation(preview.angle + this.getTurretPreviewSpec(preview.constructionId).rotationOffset)
+          .setPosition(transform.x, transform.y)
+          .setRotation(transform.rotation)
           .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
           .setVisible(true);
       } else {
@@ -238,9 +240,10 @@ export class PlacementPreviewRenderer {
         }
         if (preview.kind === 'turret') {
           const spec = this.getTurretPreviewSpec(preview.constructionId);
+          const transform = getTurretVisualTransform(spec, preview.x, preview.y, 0);
           this.ensureTurretPreviewImage(playerId, preview.constructionId)
-            .setPosition(preview.x, preview.y)
-            .setRotation(spec.rotationOffset)
+            .setPosition(transform.x, transform.y)
+            .setRotation(transform.rotation)
             .setAlpha(preview.isValid ? 0.38 : 0.18)
             .setVisible(true);
         } else {

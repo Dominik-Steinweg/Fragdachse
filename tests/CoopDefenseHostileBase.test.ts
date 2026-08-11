@@ -53,7 +53,8 @@ describe('coop-defense hostile bases', () => {
     expect(map.encounters?.length).toBeGreaterThan(0);
     expect(map.persistentSpawns?.some((spawn) => spawn.source.type === 'map')).toBe(true);
     expect(map.persistentSpawns?.some((spawn) => spawn.source.type === 'base')).toBe(true);
-    expect(map.encounters?.some((encounter) => encounter.start.type === 'base-destroyed')).toBe(true);
+    expect(map.encounters?.some((encounter) => encounter.start.type === 'after-previous')).toBe(true);
+    expect(map.secondaryObjectives?.some((objective) => objective.type === 'destroy')).toBe(true);
   });
 
   it('keeps map 16 on the migrated map-pressure plus four structure-source model', () => {
@@ -178,9 +179,12 @@ describe('coop-defense hostile bases', () => {
     }
   });
 
-  it('does not add plasma outposts to map 14', () => {
+  it('keeps Map 14 outpost authoring focused on its rocket Hold mission', () => {
     const specs = resolveCoopDefenseBases(getCoopDefenseMapConfig('14'));
-    expect(specs.filter((spec) => spec.role === 'outpost')).toHaveLength(0);
+    const outposts = specs.filter((spec) => spec.role === 'outpost');
+    expect(outposts).toHaveLength(1);
+    expect(outposts[0].turrets).toHaveLength(2);
+    expect(outposts[0].turrets.every((turret) => turret.weaponId === 'TURRET_ROCKET')).toBe(true);
   });
 
   it('carries every configured base faction through to the resolved spec', () => {

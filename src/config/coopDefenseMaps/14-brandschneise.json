@@ -11,7 +11,7 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 90,
+  "balanceReferenceDurationSec": 130,
   "objective": "repel-assault",
   "rockField": {
     "corridorRadiusCells": 1.35,
@@ -158,7 +158,7 @@
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 3000,
+      "hpMax": 3200,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -285,7 +285,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 1200,
+      "hpMax": 1300,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -5,
@@ -342,6 +342,44 @@
           "spawnOnArenaStart": true
         }
       ]
+    },
+    {
+      "id": "hold-rocket-outpost",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 1100,
+      "startHpFactor": 0.3,
+      "dormant": true,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 32,
+        "gridY": 18
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 2,
+        "heightCells": 2
+      },
+      "turrets": [
+        {
+          "id": "rocket-north",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "TURRET_ROCKET"
+        },
+        {
+          "id": "rocket-south",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "mountSide": "front",
+          "weaponId": "TURRET_ROCKET"
+        }
+      ]
     }
   ],
   "powerUps": [],
@@ -352,31 +390,31 @@
     {
       "id": "three-front-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 7000,
+      "restAfterMs": 9000,
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 8, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 4, "delayMs": 900, "front": "north" },
+        { "enemyKind": "zombie-badger", "count": 7, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 3, "delayMs": 900, "front": "north" },
         { "enemyKind": "rabid-badger", "count": 4, "delayMs": 1300, "front": "south" }
       ]
     },
     {
       "id": "three-front-pyro",
       "start": { "type": "after-previous" },
-      "restAfterMs": 8000,
+      "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 3, "front": "north" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1000, "front": "south" },
-        { "enemyKind": "zombie-badger", "count": 6, "delayMs": 1500, "front": "west" }
+        { "enemyKind": "pyro-badger", "count": 2, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 4, "delayMs": 1000, "front": "south" },
+        { "enemyKind": "zombie-badger", "count": 5, "delayMs": 1500, "front": "west" }
       ]
     },
     {
       "id": "three-front-surge",
       "start": { "type": "after-previous" },
-      "restAfterMs": 8000,
+      "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
-        { "enemyKind": "pyro-badger", "count": 3, "delayMs": 1000, "front": "north" },
-        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1600, "front": "south" }
+        { "enemyKind": "rabid-badger", "count": 5, "front": "west" },
+        { "enemyKind": "pyro-badger", "count": 2, "delayMs": 1000, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1600, "front": "south" }
       ]
     },
     {
@@ -393,9 +431,9 @@
     {
       "id": "map-14-pressure-0",
       "enemyKind": "pyro-badger",
-      "intervalMs": 20000,
+      "intervalMs": 26000,
       "countPerTick": 1,
-      "startAtMs": 3000,
+      "startAtMs": 12000,
       "front": "north",
       "source": {
         "type": "map"
@@ -404,7 +442,7 @@
     {
       "id": "map-14-pressure-1",
       "enemyKind": "zombie-badger",
-      "intervalMs": 6000,
+      "intervalMs": 9000,
       "countPerTick": 1,
       "startAtMs": 0,
       "front": "west",
@@ -415,12 +453,32 @@
     {
       "id": "map-14-pressure-2",
       "enemyKind": "demon-badger",
-      "intervalMs": 6000,
+      "intervalMs": 9000,
       "countPerTick": 1,
-      "startAtMs": 0,
+      "startAtMs": 5000,
       "front": "south",
       "source": {
         "type": "map"
+      }
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "hold-brandschneise-outpost",
+      "type": "hold",
+      "displayName": "RAKETENPOSTEN HALTEN",
+      "rewardHint": "RAKETENTUERME WERDEN REPARIERT",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "three-front-pyro"
+      },
+      "holdUntil": {
+        "type": "after-encounter",
+        "encounterId": "three-front-surge"
+      },
+      "targets": ["hold-rocket-outpost"],
+      "rewards": {
+        "repairTargetOnComplete": true
       }
     }
   ]

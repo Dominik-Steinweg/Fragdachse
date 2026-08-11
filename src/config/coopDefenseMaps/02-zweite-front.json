@@ -13,12 +13,12 @@
     },
     "repeatAfterExitMs": 10000
   },
-  "balanceReferenceDurationSec": 60,
+  "balanceReferenceDurationSec": 55,
   "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 1500,
+      "hpMax": 1650,
       "anchor": {
         "kind": "right-center",
         "edgeInsetCells": 0
@@ -31,7 +31,7 @@
     },
     {
       "id": "coop-base-middle",
-      "hpMax": 750,
+      "hpMax": 850,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -60,16 +60,16 @@
     {
       "id": "west-introduction",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 5000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 8, "front": "west" }]
+      "restAfterMs": 6500,
+      "groups": [{ "enemyKind": "zombie-badger", "count": 7, "front": "west" }]
     },
     {
       "id": "north-arrival",
       "start": { "type": "after-previous" },
-      "restAfterMs": 6000,
+      "restAfterMs": 7500,
       "groups": [
         { "enemyKind": "demon-badger", "count": 5, "front": "north" },
-        { "enemyKind": "zombie-badger", "count": 6, "delayMs": 800, "front": "west" }
+        { "enemyKind": "zombie-badger", "count": 5, "delayMs": 800, "front": "west" }
       ]
     },
     {
@@ -77,7 +77,7 @@
       "start": { "type": "after-previous" },
       "groups": [
         { "enemyKind": "rabid-badger", "count": 5, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" }
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1000, "front": "north" }
       ]
     }
   ],
@@ -85,7 +85,7 @@
     {
       "id": "map-2-pressure-0",
       "enemyKind": "zombie-badger",
-      "intervalMs": 4000,
+      "intervalMs": 5500,
       "countPerTick": 1,
       "startAtMs": 0,
       "front": "west",
@@ -96,9 +96,9 @@
     {
       "id": "map-2-pressure-1",
       "enemyKind": "demon-badger",
-      "intervalMs": 3000,
-      "countPerTick": 2,
-      "startAtMs": 10000,
+      "intervalMs": 7000,
+      "countPerTick": 1,
+      "startAtMs": 12000,
       "front": "north",
       "source": {
         "type": "map"
