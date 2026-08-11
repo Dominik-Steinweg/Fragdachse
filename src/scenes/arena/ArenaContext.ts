@@ -60,6 +60,7 @@ import type { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefense
 import type { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import type { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
+import type { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
 import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
@@ -166,6 +167,8 @@ export interface ArenaContext {
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
   coopDefenseSecondaryObjectiveSystem: CoopDefenseSecondaryObjectiveSystem | null;
   coopDefenseCarrySystem: CoopDefenseCarrySystem | null;
+  /** Host-only: one shared, round-local team buff end timestamp. */
+  coopDefenseTeamBuffSystem: CoopDefenseTeamBuffSystem | null;
   /**
    * Authored Nebenmissionen der laufenden Runde. Host und Client lösen sie gleichermaßen aus
    * der Map-Konfiguration auf; HUD und Weltmarkierung lesen daraus Name, Reward-Hinweis und

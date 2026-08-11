@@ -1,6 +1,6 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
-import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import type { ArenaGroundFireZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
@@ -720,8 +720,6 @@ export class ArenaGenerator {
     // als schwebender Rest auf dem Nachbarfelsen zu bleiben.
     const rockIndexByKey = new Map<number, number>();
     rocks.forEach((rock, index) => rockIndexByKey.set(ArenaGenerator.cellKey(rock.gridX, rock.gridY), index));
-    const rockMaxOffsetX = Math.min(ROCK_DECAL_CONFIG.maxOffsetX, ROCK_DECAL_CONFIG.maxOffsetY);
-    const rockMaxOffsetY = Math.min(ROCK_DECAL_CONFIG.maxOffsetX, ROCK_DECAL_CONFIG.maxOffsetY);
     for (let rockId = 0; rockId < rocks.length; rockId += 1) {
       const rock = rocks[rockId];
       const placement = ArenaGenerator.resolveRockDecalPlacement(rock, rockIndexByKey);
@@ -734,9 +732,10 @@ export class ArenaGenerator {
       if (!textureKey) continue;
       const variant = getRockDecalVariant(textureKey);
       const displaySize = variant?.displaySize ?? ROCK_DECAL_SIZE;
+      const maxOffset = getRockDecalMaxOffsetPx(displaySize);
 
-      const offsetX = ArenaGenerator.randomOffset(rng, rockMaxOffsetX);
-      const offsetY = ArenaGenerator.randomOffset(rng, rockMaxOffsetY);
+      const offsetX = ArenaGenerator.randomOffset(rng, maxOffset);
+      const offsetY = ArenaGenerator.randomOffset(rng, maxOffset);
       const rotation = ArenaGenerator.randomRotation(rng);
       const centerX = rock.gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
       const centerY = rock.gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;

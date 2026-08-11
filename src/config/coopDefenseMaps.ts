@@ -231,9 +231,28 @@ export interface CoopDefenseMapCarryConfig {
   readonly itemCount?: number;
 }
 
+/** Authored immediate team reward; resolved values keep B11 balancing data-driven. */
+export interface CoopDefenseMapTeamBuffRewardConfig {
+  readonly defId: string;
+  readonly durationMs?: number;
+  readonly hpRegenPerSecond?: number;
+  readonly adrenalineRegenMultiplier?: number;
+}
+
+export const COOP_DEFENSE_TEAM_BUFF_DEFAULTS = {
+  defId: 'TEAM_REGENERATION_SURGE',
+  durationMs: 30_000,
+  hpRegenPerSecond: 10,
+  adrenalineRegenMultiplier: 1.5,
+} as const;
+
 export interface CoopDefenseMapSecondaryObjectiveRewards {
   /** Team-XP je aufgeloestem Ziel; gebucht beim Ziel, nicht beim Missionsabschluss. */
   readonly xpPerTarget?: number;
+  /** Nur fuer `carry`: jede abgelieferte Flasche erhoeht die Epic-Option-Garantie. */
+  readonly itemMetaRewardOnComplete?: boolean;
+  /** Nur fuer Carry: unmittelbarer, teamweiter Buff bei vollstaendigem Abschluss. */
+  readonly teamBuffOnComplete?: CoopDefenseMapTeamBuffRewardConfig;
   /**
    * Nur fuer `hold`: Missionsdrohnen stellen das ueberlebende Ziel wieder her. Ohne Angabe ist der
    * Wert fuer `hold` `true` – eine vergessene Zeile soll den Reward nicht still verschlucken. Ein
@@ -708,10 +727,12 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     airstrikes: enemyAirstrikes,
     boss,
   });
+  const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
     bases,
     encounters,
     objective,
+    itemDrop,
     arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
       mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
     ),
@@ -760,7 +781,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
       objective,
       mapConfig.surviveRespawnsPerPlayer,
     ),
-    itemDrop: normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop),
+    itemDrop,
   };
 }
 
@@ -901,6 +922,7 @@ interface SecondaryObjectiveNormalizationContext {
   readonly bases: readonly CoopBaseConfig[];
   readonly encounters: readonly CoopDefenseMapEncounterConfig[] | undefined;
   readonly objective: CoopDefenseMapObjective;
+  readonly itemDrop: CoopDefenseMapItemDropConfig | undefined;
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
 }
@@ -1006,7 +1028,15 @@ function normalizeSecondaryObjectiveConfigs(
       ...(carry ? { carry } : {}),
       ...(objective.rewards === undefined && objective.type !== 'hold'
         ? {}
-        : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.type, objective.rewards ?? {}) }),
+        : {
+          rewards: normalizeSecondaryObjectiveRewards(
+            mapId,
+            id,
+            objective.type,
+            objective.rewards ?? {},
+            context.itemDrop !== undefined,
+          ),
+        }),
       ...normalizeSecondaryObjectiveLabel(mapId, id, 'displayName', objective.displayName),
       ...normalizeSecondaryObjectiveLabel(mapId, id, 'rewardHint', objective.rewardHint),
     };
@@ -1225,6 +1255,7 @@ function normalizeSecondaryObjectiveRewards(
   objectiveId: string,
   objectiveType: CoopDefenseSecondaryObjectiveType,
   rewards: CoopDefenseMapSecondaryObjectiveRewards,
+  hasItemDrop: boolean,
 ): CoopDefenseMapSecondaryObjectiveRewards {
   if (typeof rewards !== 'object' || rewards === null || Array.isArray(rewards)) {
     throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has invalid rewards`);
@@ -1240,6 +1271,31 @@ function normalizeSecondaryObjectiveRewards(
       `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has a non-boolean repairTargetOnComplete`,
     );
   }
+  const hasItemMetaReward = Object.prototype.hasOwnProperty.call(rewards, 'itemMetaRewardOnComplete');
+  if (hasItemMetaReward && objectiveType !== 'carry') {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} must not declare itemMetaRewardOnComplete`,
+    );
+  }
+  if (hasItemMetaReward && typeof rewards.itemMetaRewardOnComplete !== 'boolean') {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has a non-boolean itemMetaRewardOnComplete`,
+    );
+  }
+  if (rewards.itemMetaRewardOnComplete === true && !hasItemDrop) {
+    throw new Error(
+      `[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} with an item meta reward needs itemDrop`,
+    );
+  }
+  const hasTeamBuffReward = Object.prototype.hasOwnProperty.call(rewards, 'teamBuffOnComplete');
+  if (hasTeamBuffReward && objectiveType !== 'carry') {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} must not declare teamBuffOnComplete`,
+    );
+  }
+  const teamBuffReward = hasTeamBuffReward
+    ? normalizeTeamBuffReward(mapId, objectiveId, rewards.teamBuffOnComplete)
+    : undefined;
   const hasPlaceablePedestalReward = Object.prototype.hasOwnProperty.call(rewards, 'placeablePedestalOnComplete');
   if (hasPlaceablePedestalReward && objectiveType !== 'hold') {
     throw new Error(
@@ -1282,15 +1338,83 @@ function normalizeSecondaryObjectiveRewards(
   const placement = normalizedPowerUpDefId === undefined
     ? {}
     : { placeablePedestalOnComplete: { powerUpDefId: normalizedPowerUpDefId } };
-  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) return { ...repair, ...placement };
+  const itemMetaReward = hasItemMetaReward
+    ? { itemMetaRewardOnComplete: rewards.itemMetaRewardOnComplete === true }
+    : {};
+  const teamBuff = teamBuffReward === undefined ? {} : { teamBuffOnComplete: teamBuffReward };
+  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) {
+    return { ...repair, ...itemMetaReward, ...teamBuff, ...placement };
+  }
   const value = rewards.xpPerTarget;
   return {
     ...repair,
+    ...itemMetaReward,
+    ...teamBuff,
     ...placement,
     xpPerTarget: typeof value === 'number' && Number.isFinite(value)
       ? Math.max(0, Math.floor(value))
       : 0,
   };
+}
+
+function normalizeTeamBuffReward(
+  mapId: string,
+  objectiveId: string,
+  reward: CoopDefenseMapTeamBuffRewardConfig | undefined,
+): CoopDefenseMapTeamBuffRewardConfig {
+  if (!reward || typeof reward !== 'object' || Array.isArray(reward)) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} has invalid teamBuffOnComplete`);
+  }
+  if (typeof reward.defId !== 'string' || reward.defId.trim().length === 0) {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs a team buff defId`);
+  }
+  const durationMs = normalizeTeamBuffNumber(
+    mapId,
+    objectiveId,
+    'durationMs',
+    reward.durationMs,
+    COOP_DEFENSE_TEAM_BUFF_DEFAULTS.durationMs,
+    (value) => value > 0,
+  );
+  const hpRegenPerSecond = normalizeTeamBuffNumber(
+    mapId,
+    objectiveId,
+    'hpRegenPerSecond',
+    reward.hpRegenPerSecond,
+    COOP_DEFENSE_TEAM_BUFF_DEFAULTS.hpRegenPerSecond,
+    (value) => value >= 0,
+  );
+  const adrenalineRegenMultiplier = normalizeTeamBuffNumber(
+    mapId,
+    objectiveId,
+    'adrenalineRegenMultiplier',
+    reward.adrenalineRegenMultiplier,
+    COOP_DEFENSE_TEAM_BUFF_DEFAULTS.adrenalineRegenMultiplier,
+    (value) => value > 0,
+  );
+  return {
+    defId: reward.defId.trim(),
+    durationMs,
+    hpRegenPerSecond,
+    adrenalineRegenMultiplier,
+  };
+}
+
+function normalizeTeamBuffNumber(
+  mapId: string,
+  objectiveId: string,
+  fieldName: string,
+  value: number | undefined,
+  fallback: number,
+  isValid: (value: number) => boolean,
+): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value) || !isValid(value)) {
+    throw new Error(
+      `[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} has invalid team buff ${fieldName}`,
+    );
+  }
+  return value;
 }
 
 interface AuthoredSecondaryObjectiveTimeWindow {

@@ -7,7 +7,7 @@ import {
   getCoopDefenseStashItems,
   getEquippedCoopDefenseItem,
   getFreeCoopDefenseStashSlots,
-  normalizeCoopDefenseRareGuaranteeCount,
+  normalizeCoopDefenseEpicGuaranteeCount,
   sortCoopDefenseItems,
   type CoopDefenseEquippedItemIds,
   type CoopDefenseItemComparisonRow,
@@ -48,8 +48,8 @@ export interface MatchItemRewardOption {
 
 export interface MatchItemRewardPresentation {
   readonly roundEndedAt: number;
-  /** Beim Würfeln angewandte Mindestanzahl seltener oder besserer Optionen. */
-  readonly rareGuaranteeCount: number;
+  /** Beim Würfeln angewandte Mindestanzahl epischer Optionen. */
+  readonly epicGuaranteeCount: number;
   readonly options: readonly MatchItemRewardOption[];
 }
 
@@ -110,13 +110,13 @@ export function resolvePersonalMatchOutcome(
 }
 
 /** Liest die B8-Garantie ausschließlich aus dem autoritativen Ergebnis eines gültigen Sieges. */
-export function resolveCoopDefenseRareGuaranteeCount(
-  results: readonly Pick<RoundResult, 'rareGuaranteeCount'>[],
+export function resolveCoopDefenseEpicGuaranteeCount(
+  results: readonly Pick<RoundResult, 'epicGuaranteeCount'>[],
   roundState: Pick<RoundState, 'status'> | null,
 ): number {
   if (roundState?.status !== 'victory') return 0;
-  return normalizeCoopDefenseRareGuaranteeCount(
-    results.find((result) => typeof result.rareGuaranteeCount === 'number')?.rareGuaranteeCount,
+  return normalizeCoopDefenseEpicGuaranteeCount(
+    results.find((result) => typeof result.epicGuaranteeCount === 'number')?.epicGuaranteeCount,
   );
 }
 
@@ -147,7 +147,7 @@ export function createMatchItemRewardPresentation(
   pending: {
     roundEndedAt: number;
     offers: readonly CoopDefenseItem[];
-    rareGuaranteeCount?: number;
+    epicGuaranteeCount?: number;
   } | null,
   ownedItems: readonly CoopDefenseItem[],
   equippedItemIds: CoopDefenseEquippedItemIds,
@@ -156,7 +156,7 @@ export function createMatchItemRewardPresentation(
 
   return {
     roundEndedAt: pending.roundEndedAt,
-    rareGuaranteeCount: normalizeCoopDefenseRareGuaranteeCount(pending.rareGuaranteeCount),
+    epicGuaranteeCount: normalizeCoopDefenseEpicGuaranteeCount(pending.epicGuaranteeCount),
     options: pending.offers.map((item) => {
       const equipped = getEquippedCoopDefenseItem(ownedItems, equippedItemIds, item.slot as CoopDefenseItemSlot);
       return {

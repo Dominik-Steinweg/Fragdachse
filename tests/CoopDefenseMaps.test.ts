@@ -63,6 +63,15 @@ describe('Coop defense map progression', () => {
     }
   });
 
+  it('keeps the B8 sandbox Carry reward observable without changing item unlock progression', () => {
+    const sandbox = getCoopDefenseMapConfig('0');
+    const carry = sandbox.secondaryObjectives?.find((objective) => objective.type === 'carry');
+
+    expect(sandbox.itemDrop).toEqual({ itemLevel: 1 });
+    expect(carry?.rewards?.itemMetaRewardOnComplete).toBe(true);
+    expect(carry?.rewardHint).toContain('EPISCHE OPTION');
+  });
+
   it('keeps map metadata usable after balancing and terminology changes', () => {
     const playableMaps = COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0');
     const displayNames = playableMaps.map((map) => map.displayName.trim());

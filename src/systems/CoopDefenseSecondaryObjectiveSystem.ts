@@ -9,6 +9,8 @@ import type {
 
 export interface CoopDefenseSecondaryObjectiveSystemOptions {
   readonly onObjectiveActivated?: (objectiveId: string) => void;
+  /** Einzige Completion-Naht fuer authored Vollabschluss-Rewards. */
+  readonly onObjectiveCompleted?: (objectiveId: string) => void;
   readonly onHoldFailed?: (objectiveId: string) => void;
   /** Liefert ausschließlich den semantischen Clear-Zustand des Encounter-Owners. */
   readonly isEncounterCleared?: (encounterId: string) => boolean;
@@ -21,7 +23,7 @@ export interface CoopDefenseSecondaryObjectiveSystemOptions {
 
 /** Autoritativer, nur rundenlanger Reward-Zustand des Objective-Systems. */
 export interface CoopDefenseSecondaryObjectiveRewardLedger {
-  readonly rareGuaranteeCount: number;
+  readonly epicGuaranteeCount: number;
 }
 
 interface SecondaryObjectiveRuntimeState {
@@ -43,9 +45,10 @@ interface SecondaryObjectiveRuntimeState {
 export class CoopDefenseSecondaryObjectiveSystem {
   private elapsedMs = 0;
   private focusedObjectiveIndex: number | null = null;
-  private rareGuaranteeCount = 0;
+  private epicGuaranteeCount = 0;
   private readonly isEncounterCleared: ((encounterId: string) => boolean) | null;
   private readonly onObjectiveActivated: ((objectiveId: string) => void) | null;
+  private readonly onObjectiveCompleted: ((objectiveId: string) => void) | null;
   private readonly onHoldFailed: ((objectiveId: string) => void) | null;
   private readonly onHoldCompleted: ((objectiveId: string) => void) | null;
   private readonly objectiveStates: SecondaryObjectiveRuntimeState[];
@@ -56,6 +59,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
   ) {
     this.isEncounterCleared = options.isEncounterCleared ?? null;
     this.onObjectiveActivated = options.onObjectiveActivated ?? null;
+    this.onObjectiveCompleted = options.onObjectiveCompleted ?? null;
     this.onHoldFailed = options.onHoldFailed ?? null;
     this.onHoldCompleted = options.onHoldCompleted ?? null;
     this.objectiveStates = objectives.map((config) => ({
@@ -95,7 +99,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
   reset(): void {
     this.elapsedMs = 0;
     this.focusedObjectiveIndex = null;
-    this.rareGuaranteeCount = 0;
+    this.epicGuaranteeCount = 0;
     for (const state of this.objectiveStates) {
       state.resolvedTargetIds.clear();
       state.state = 'dormant';
@@ -123,11 +127,11 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   getRewardLedger(): CoopDefenseSecondaryObjectiveRewardLedger {
-    return { rareGuaranteeCount: this.rareGuaranteeCount };
+    return { epicGuaranteeCount: this.epicGuaranteeCount };
   }
 
-  getRareGuaranteeCount(): number {
-    return this.rareGuaranteeCount;
+  getEpicGuaranteeCount(): number {
+    return this.epicGuaranteeCount;
   }
 
   /**
@@ -157,7 +161,9 @@ export class CoopDefenseSecondaryObjectiveSystem {
     const state = this.findObjectiveState(objectiveId);
     if (!state || state.state !== 'active' || state.config.type !== 'carry') return false;
     const accepted = this.resolveTarget(state, itemId);
-    if (accepted) this.rareGuaranteeCount = Math.min(3, this.rareGuaranteeCount + 1);
+    if (accepted && state.config.rewards?.itemMetaRewardOnComplete === true) {
+      this.epicGuaranteeCount = Math.min(3, this.epicGuaranteeCount + 1);
+    }
     return accepted;
   }
 
@@ -255,6 +261,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     state.stateChangedAtMs = this.elapsedMs;
     const index = this.objectiveStates.indexOf(state);
     if (this.focusedObjectiveIndex === index) this.focusedObjectiveIndex = null;
+    if (terminalState === 'completed') this.onObjectiveCompleted?.(state.config.id);
   }
 
   private isTriggerSatisfied(trigger: CoopDefenseMapEncounterStart): boolean {

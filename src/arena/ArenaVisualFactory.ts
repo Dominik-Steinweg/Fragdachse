@@ -14,7 +14,9 @@ import type { DecalCell, DirtCell, TrackCell, TreeCell } from '../types';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
-import type { RockCornerTints } from './RockSurfaceShading';
+import { DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
+import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
+import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 
 export interface ArenaTreeVisual {
   trunk: Phaser.GameObjects.Arc;
@@ -42,7 +44,7 @@ function getMetrics(metrics?: ArenaVisualGridMetrics): ArenaVisualGridMetrics {
 
 export class ArenaVisualFactory {
   /**
-   * `cornerTints` traegt Flaechenwash und Kantenlicht (siehe `RockSurfaceShading`). Der Tint
+   * `cornerTints` traegt Flaechenwash und Kantenlicht. Der Tint
    * folgt der Kachel-Alpha exakt, die 47-Blob-Silhouette bleibt also unangetastet.
    */
   static createRock(
@@ -50,7 +52,7 @@ export class ArenaVisualFactory {
     worldX: number,
     worldY: number,
     frame: number,
-    cornerTints?: RockCornerTints,
+    cornerTints?: BlobSurfaceCornerTints,
   ): Phaser.GameObjects.Image {
     const img = scene.add.image(worldX, worldY, 'rocks', frame);
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
@@ -105,6 +107,7 @@ export class ArenaVisualFactory {
       const img = scene.add.image(worldX, worldY, 'dirt', frame);
       img.setDisplaySize(CELL_SIZE, CELL_SIZE);
       img.setDepth(DEPTH.DIRT);
+      img.setTint(...resolveBlobSurfaceCornerTints(DIRT_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied));
       result.push(img);
     }
 

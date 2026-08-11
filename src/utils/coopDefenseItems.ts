@@ -102,7 +102,7 @@ function sanitizeItemLevel(itemLevel: number): number {
   return Math.max(1, Math.floor(itemLevel));
 }
 
-export function normalizeCoopDefenseRareGuaranteeCount(value: unknown): number {
+export function normalizeCoopDefenseEpicGuaranteeCount(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(COOP_DEFENSE_ITEM_OFFER_SIZE, Math.floor(value)));
 }
@@ -252,33 +252,33 @@ export function rollCoopDefenseItemOffer(
 }
 
 /**
- * Hebt die niedrigsten Angebote bis zur autoritativen Mindestanzahl auf mindestens selten an.
+ * Hebt die niedrigsten Angebote bis zur autoritativen Mindestanzahl auf mindestens episch an.
  * Die Anhebung ist bewusst in place: UID, Slot, Item-Level, Basiswert und bereits gezogene
  * Affixe bleiben unverändert. Nur die fehlenden Affixe werden nach denselben Slot-, Klassen- und
  * Gewichtsregeln ergänzt, die auch beim normalen Roll gelten.
  */
-export function applyCoopDefenseRareGuarantee(
+export function applyCoopDefenseEpicGuarantee(
   offers: readonly CoopDefenseItem[],
-  rareGuaranteeCount: number,
+  epicGuaranteeCount: number,
   classId: CoopDefenseClassId | null = null,
   random: () => number = Math.random,
 ): CoopDefenseItem[] {
-  const guaranteed = normalizeCoopDefenseRareGuaranteeCount(rareGuaranteeCount);
+  const guaranteed = normalizeCoopDefenseEpicGuaranteeCount(epicGuaranteeCount);
   if (guaranteed === 0 || offers.length === 0) return [...offers];
 
-  const rareCount = offers.filter((item) => RARITY_RANK[item.rarity] >= RARITY_RANK.blue).length;
-  let missingGuarantees = Math.max(0, guaranteed - rareCount);
+  const epicCount = offers.filter((item) => item.rarity === 'yellow').length;
+  let missingGuarantees = Math.max(0, guaranteed - epicCount);
   if (missingGuarantees === 0) return [...offers];
 
   const upgraded = [...offers];
   const candidates = offers
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.rarity === 'white')
-    .sort((left, right) => left.index - right.index);
+    .filter(({ item }) => item.rarity !== 'yellow')
+    .sort((left, right) => RARITY_RANK[left.item.rarity] - RARITY_RANK[right.item.rarity] || left.index - right.index);
 
   for (const candidate of candidates) {
     if (missingGuarantees <= 0) break;
-    const raised = raiseCoopDefenseItemToRare(candidate.item, classId, random);
+    const raised = raiseCoopDefenseItemToEpic(candidate.item, classId, random);
     if (!raised) continue;
     upgraded[candidate.index] = raised;
     missingGuarantees -= 1;
@@ -286,12 +286,12 @@ export function applyCoopDefenseRareGuarantee(
   return upgraded;
 }
 
-function raiseCoopDefenseItemToRare(
+function raiseCoopDefenseItemToEpic(
   item: CoopDefenseItem,
   classId: CoopDefenseClassId | null,
   random: () => number,
 ): CoopDefenseItem | null {
-  const requiredAffixes = getCoopDefenseItemRarityDefinition('blue').affixCount;
+  const requiredAffixes = getCoopDefenseItemRarityDefinition('yellow').affixCount;
   const missingAffixes = Math.max(0, requiredAffixes - item.affixes.length);
   const existingAffixIds = new Set(item.affixes.map((affix) => affix.affixId));
   const newAffixDefinitions = pickWeightedDistinct(
@@ -305,7 +305,7 @@ function raiseCoopDefenseItemToRare(
 
   return {
     ...item,
-    rarity: 'blue',
+    rarity: 'yellow',
     affixes: [
       ...item.affixes,
       ...newAffixDefinitions.map((definition) => ({
@@ -703,9 +703,9 @@ export function sanitizeCoopDefensePendingItemReward(raw: unknown): CoopDefenseP
       .slice(0, COOP_DEFENSE_ITEM_OFFER_SIZE)
     : [];
   if (offers.length === 0) return null;
-  const rareGuaranteeCount = normalizeCoopDefenseRareGuaranteeCount(raw.rareGuaranteeCount);
-  return rareGuaranteeCount > 0
-    ? { roundEndedAt, offers, rareGuaranteeCount }
+  const epicGuaranteeCount = normalizeCoopDefenseEpicGuaranteeCount(raw.epicGuaranteeCount);
+  return epicGuaranteeCount > 0
+    ? { roundEndedAt, offers, epicGuaranteeCount }
     : { roundEndedAt, offers };
 }
 

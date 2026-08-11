@@ -1,13 +1,31 @@
 import { ARENA_BACKGROUND_TEXTURE_KEY } from './ArenaBackground';
 import { ARENA_HEIGHT, ARENA_OFFSET_Y, CELL_SIZE, COLORS, FULL_ARENA_WIDTH, FULL_ARENA_WIDTH as MENU_PREVIEW_WIDTH, GAME_HEIGHT, GAME_WIDTH, GRID_ROWS } from '../config';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, TreeCell } from '../types';
-import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey, getRockDecalVariant } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
+import type { DecalPlacement } from './DecalConfig';
 
 interface GridRect {
   minX: number;
   maxX: number;
   minY: number;
   maxY: number;
+}
+
+function resolvePreviewRockDecalPlacement(
+  rock: RockCell,
+  rockIndexByKey: ReadonlyMap<number, number>,
+): DecalPlacement {
+  const isRock = (gridX: number, gridY: number) => rockIndexByKey.has(cellKey(gridX, gridY));
+  const { gridX, gridY } = rock;
+  if (!isRock(gridX, gridY - 1) || !isRock(gridX, gridY + 1)
+    || !isRock(gridX - 1, gridY) || !isRock(gridX + 1, gridY)) {
+    return 'edge';
+  }
+  if (!isRock(gridX - 1, gridY - 1) || !isRock(gridX + 1, gridY - 1)
+    || !isRock(gridX - 1, gridY + 1) || !isRock(gridX + 1, gridY + 1)) {
+    return 'interior';
+  }
+  return 'core';
 }
 
 const MENU_GRID_COLS = Math.floor(MENU_PREVIEW_WIDTH / CELL_SIZE);
@@ -441,21 +459,27 @@ function generatePreviewDecals(
   const rockIndexByKey = new Map<number, number>();
   rocks.forEach((rock, index) => rockIndexByKey.set(cellKey(rock.gridX, rock.gridY), index));
   for (const rock of rocks) {
-    if (!rollPercent(rng, ROCK_DECAL_CONFIG.coveragePercent)) continue;
-    const textureKey = pickWeightedDecalTextureKey(rng, ROCK_DECAL_CONFIG.variants);
+    const placement = resolvePreviewRockDecalPlacement(rock, rockIndexByKey);
+    const coveragePercent = placement === 'edge'
+      ? ROCK_DECAL_CONFIG.edgeCoveragePercent
+      : ROCK_DECAL_CONFIG.interiorCoveragePercent;
+    if (!rollPercent(rng, coveragePercent)) continue;
+    const textureKey = pickWeightedDecalTextureKey(rng, getRockDecalVariantsForPlacement(placement));
     if (!textureKey) continue;
     const variant = getRockDecalVariant(textureKey);
+    const displaySize = variant?.displaySize;
+    const maxOffset = getRockDecalMaxOffsetPx(displaySize);
     const rotation = rng() * Math.PI * 2;
     decals.push({
       gridX: rock.gridX,
       gridY: rock.gridY,
       textureKey,
-      offsetX: randomOffset(rng, ROCK_DECAL_CONFIG.maxOffsetX),
-      offsetY: randomOffset(rng, ROCK_DECAL_CONFIG.maxOffsetY),
+      offsetX: randomOffset(rng, maxOffset),
+      offsetY: randomOffset(rng, maxOffset),
       terrain: 'rock',
       surface: 'rock',
       rockIds: [rockIndexByKey.get(cellKey(rock.gridX, rock.gridY)) ?? -1],
-      displaySize: variant?.displaySize,
+      displaySize,
       alpha: variant?.alpha,
       rotation,
     });

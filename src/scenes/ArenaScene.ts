@@ -46,7 +46,7 @@ import {
 import {
   createMatchItemRewardPresentation,
   createMatchProgressDelta,
-  resolveCoopDefenseRareGuaranteeCount,
+  resolveCoopDefenseEpicGuaranteeCount,
   resolvePersonalMatchOutcome,
   sortMatchLeaderboard,
   type MatchItemRewardPresentation,
@@ -105,7 +105,7 @@ import {
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
 import {
-  applyCoopDefenseRareGuarantee,
+  applyCoopDefenseEpicGuarantee,
   getEquippedCoopDefenseItems,
   rollCoopDefenseItemOffer,
 } from '../utils/coopDefenseItems';
@@ -363,7 +363,9 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
     // Rote Variante fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
@@ -733,7 +735,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseCarrySystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
@@ -3634,12 +3636,12 @@ export class ArenaScene extends Phaser.Scene {
         // eingefroren, waehrend die Klassenauswahl im Speicher schon wieder wandern koennte.
         const playedClassId = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())
           ?.coopDefenseClassId ?? null;
-        const rareGuaranteeCount = resolveCoopDefenseRareGuaranteeCount(results, roundState);
+        const epicGuaranteeCount = resolveCoopDefenseEpicGuaranteeCount(results, roundState);
         const offers = rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel, playedClassId);
         setStoredPendingCoopDefenseItemReward({
           roundEndedAt: endedAt,
-          rareGuaranteeCount,
-          offers: applyCoopDefenseRareGuarantee(offers, rareGuaranteeCount, playedClassId),
+          epicGuaranteeCount,
+          offers: applyCoopDefenseEpicGuarantee(offers, epicGuaranteeCount, playedClassId),
         });
       }
     }

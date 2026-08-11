@@ -332,12 +332,18 @@
       "id": "carry-supply-beer",
       "type": "carry",
       "displayName": "BIER RETTEN",
-      "rewardHint": "BIER ABGEBEN · 3/3 ZIEL ERREICHT",
+      "rewardHint": "JEDE FLASCHE: EPISCHE OPTION · 3/3: TEAM-REGEN",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-supply-defense-encounter"
       },
       "targetGoal": 3,
+      "rewards": {
+        "itemMetaRewardOnComplete": true,
+        "teamBuffOnComplete": {
+          "defId": "TEAM_REGENERATION_SURGE"
+        }
+      },
       "carry": {
         "spawnZone": {
           "gridX": 59,

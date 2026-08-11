@@ -1471,15 +1471,15 @@ function describeRewards(
     });
   }
   if (itemReward && itemReward.options.length > 0) {
-    const guaranteeText = itemReward.rareGuaranteeCount > 0
-      ? ` · ${itemReward.rareGuaranteeCount}/3 SELTEN ODER BESSER GARANTIERT`
+    const guaranteeText = itemReward.epicGuaranteeCount > 0
+      ? ` · MINDESTENS ${itemReward.epicGuaranteeCount} VON ${itemReward.options.length} EPISCH GARANTIERT`
       : '';
     descriptors.push({
       glyph: '◈',
       label: `1 VON ${itemReward.options.length} ITEMS WÄHLEN${guaranteeText}`,
       color: COLORS.BLUE_2,
-      tooltip: itemReward.rareGuaranteeCount > 0
-        ? `${itemReward.rareGuaranteeCount} von ${itemReward.options.length} Optionen sind mindestens selten. `
+      tooltip: itemReward.epicGuaranteeCount > 0
+        ? `Mindestens ${itemReward.epicGuaranteeCount} von ${itemReward.options.length} Optionen sind episch garantiert. `
           + 'Die Anhebung wurde vor dem Speichern auf die bestehenden Rolls angewandt.'
         : 'Die Auswahl öffnet sich direkt nach diesem Bildschirm und bleibt bis zur Entscheidung offen.',
       itemOffer: true,

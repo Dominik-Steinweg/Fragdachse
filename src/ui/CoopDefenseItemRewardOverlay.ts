@@ -617,9 +617,9 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   private buildOfferSubtitle(instruction: string): string {
-    const count = this.presentation?.rareGuaranteeCount ?? 0;
+    const count = this.presentation?.epicGuaranteeCount ?? 0;
     return count > 0
-      ? `${count}/3 OPTIONEN: SELTEN ODER BESSER GARANTIERT · ${instruction}`
+      ? `MINDESTENS ${count} VON 3 EPISCH GARANTIERT · ${instruction}`
       : instruction;
   }
 

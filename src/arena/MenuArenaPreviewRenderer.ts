@@ -8,8 +8,9 @@ import {
 import type { ArenaLayout } from '../types';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
-import { bakeRockSurfaceMottle } from './RockSurfaceMottle';
-import { resolveRockSurfaceCornerTints } from './RockSurfaceShading';
+import { DIRT_BLOB_SURFACE_PROFILE, ROCK_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
+import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
+import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -29,7 +30,7 @@ export class MenuArenaPreviewRenderer {
   private bakedLayers: Array<{ layer: Phaser.GameObjects.RenderTexture; config: MenuArenaPreviewLayerConfig }> = [];
   private trunkLayer: Phaser.GameObjects.RenderTexture | null = null;
   private canopyLayer: Phaser.GameObjects.RenderTexture | null = null;
-  private rockMottleLayer: Phaser.GameObjects.RenderTexture | null = null;
+  private rockMottleLayers: Phaser.GameObjects.RenderTexture[] = [];
   private rockSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null;
   private shadows: ShadowSystem | null = null;
 
@@ -90,7 +91,7 @@ export class MenuArenaPreviewRenderer {
 
     // Reihenfolge der Tiefenbaender bleibt exakt erhalten: Boden < Decals < Fels-Schatten
     // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
-    this.bakeLayer(ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics), DEPTH.DIRT, view.dirt);
+    this.bakeDirtLayer(layout, metrics, view.dirt);
     this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals);
     // Flaechenwash und Kantenlicht stecken im 4-Ecken-Tint; die nicht-periodische
     // Materialstoerung wird wie in der Arena als MULTIPLY-Layer auf die Silhouette gestanzt.
@@ -157,7 +158,7 @@ export class MenuArenaPreviewRenderer {
     this.shadows = null;
     this.trunkLayer = null;
     this.canopyLayer = null;
-    this.rockMottleLayer = null;
+    this.rockMottleLayers = [];
     this.rockSilhouetteCutout = null;
     for (const obj of this.tracks) obj.destroy();
     for (const { layer } of this.bakedLayers) layer.destroy();
@@ -207,6 +208,48 @@ export class MenuArenaPreviewRenderer {
     return baked;
   }
 
+  /**
+   * Uses the same profile-backed bake as arena Dirt, then flattens the temporary MULTIPLY
+   * surface into the single persistent preview ground layer.
+   */
+  private bakeDirtLayer(
+    layout: ArenaLayout,
+    metrics: { offsetX: number; offsetY: number; gridCols: number; gridRows: number },
+    layerConfig: MenuArenaPreviewLayerConfig,
+  ): void {
+    const images = ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics);
+    if (images.length === 0) return;
+    if (!layerConfig.visible || layerConfig.alpha <= 0) {
+      for (const image of images) image.destroy();
+      return;
+    }
+    for (const image of images) image.setAlpha(layerConfig.alpha);
+    const { bounds } = this.config.view;
+    const baked = this.scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
+    baked.setOrigin(0, 0);
+    baked.setDepth(DEPTH.DIRT);
+    baked.camera.setScroll(bounds.offsetX, bounds.offsetY);
+    baked.draw(images);
+    baked.render();
+
+    const mottle = bakeBlobSurfaceMottle(
+      this.scene,
+      DIRT_BLOB_SURFACE_PROFILE,
+      layout.dirt ?? [],
+      images,
+      { offsetX: bounds.offsetX, offsetY: bounds.offsetY, width: bounds.width, height: bounds.height, layerDepth: DEPTH.DIRT },
+    );
+    for (const mottleLayer of mottle.layers) {
+      mottleLayer.setAlpha(layerConfig.alpha);
+      baked.draw(mottleLayer);
+      baked.render();
+      mottleLayer.destroy();
+    }
+    mottle.silhouetteCutout?.destroy();
+    for (const image of images) image.destroy();
+    this.bakedLayers.push({ layer: baked, config: layerConfig });
+  }
+
   private createRocks(layout: ArenaLayout): Phaser.GameObjects.Image[] {
     const result: Phaser.GameObjects.Image[] = [];
     const rockGrid = new RockGridIndex(layout.rocks, {
@@ -225,7 +268,7 @@ export class MenuArenaPreviewRenderer {
         worldX,
         worldY,
         frame,
-        resolveRockSurfaceCornerTints(gridX, gridY, isOccupied),
+        resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
       ));
     }
 
@@ -241,8 +284,9 @@ export class MenuArenaPreviewRenderer {
     if (!layerConfig.visible || layerConfig.alpha <= 0 || layout.rocks.length === 0) return;
 
     const { bounds } = this.config.view;
-    const mottle = bakeRockSurfaceMottle(
+    const mottle = bakeBlobSurfaceMottle(
       this.scene,
+      ROCK_BLOB_SURFACE_PROFILE,
       layout.rocks,
       rockImages,
       {
@@ -252,15 +296,15 @@ export class MenuArenaPreviewRenderer {
         height: bounds.height,
         layerDepth: DEPTH.ROCKS,
       },
-      this.rockMottleLayer,
+      this.rockMottleLayers,
       this.rockSilhouetteCutout,
     );
-    this.rockMottleLayer = mottle.layer;
+    this.rockMottleLayers = mottle.layers;
     this.rockSilhouetteCutout = mottle.silhouetteCutout;
-    if (!this.rockMottleLayer) return;
-
-    this.rockMottleLayer.setAlpha(layerConfig.alpha);
-    this.bakedLayers.push({ layer: this.rockMottleLayer, config: layerConfig });
+    for (const layer of this.rockMottleLayers) {
+      layer.setAlpha(layerConfig.alpha);
+      this.bakedLayers.push({ layer, config: layerConfig });
+    }
   }
 
   private applyLayerStyle<T extends Phaser.GameObjects.GameObject & { setAlpha(alpha: number): T; setVisible(visible: boolean): T }>(

@@ -45,6 +45,7 @@ import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjec
 import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
+import { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import {
   CoopDefenseAirstrikeDirector,
   isPointNearBaseRegion,
@@ -365,8 +366,8 @@ export class ArenaLifecycleCoordinator {
     const mapName = isCoopDefenseMode(gameMode)
       ? getCoopDefenseMapConfig(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()).displayName
       : 'Zufallsarena';
-    const rareGuaranteeCount = isCoopDefenseMode(gameMode) && roundState?.status === 'victory'
-      ? this.ctx.coopDefenseSecondaryObjectiveSystem?.getRareGuaranteeCount() ?? 0
+    const epicGuaranteeCount = isCoopDefenseMode(gameMode) && roundState?.status === 'victory'
+      ? this.ctx.coopDefenseSecondaryObjectiveSystem?.getEpicGuaranteeCount() ?? 0
       : 0;
     const eligibleIds = new Set(bridge.getRoundResultEligiblePlayerIds());
     const results: RoundResult[] = bridge.getConnectedPlayers()
@@ -386,7 +387,7 @@ export class ArenaLifecycleCoordinator {
             ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
             : undefined,
           sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
-          rareGuaranteeCount: isCoopDefenseMode(gameMode) ? rareGuaranteeCount : undefined,
+          epicGuaranteeCount: isCoopDefenseMode(gameMode) ? epicGuaranteeCount : undefined,
         };
       });
     bridge.publishRoundResults(results);
@@ -594,6 +595,10 @@ export class ArenaLifecycleCoordinator {
       : [];
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseCarrySystem = null;
+    this.ctx.coopDefenseTeamBuffSystem?.reset();
+    this.ctx.coopDefenseTeamBuffSystem = bridge.isHost() && coopDefenseMapConfig
+      ? new CoopDefenseTeamBuffSystem()
+      : null;
     this.ctx.coopDefenseObjectiveRepairSystem = null;
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
@@ -905,6 +910,13 @@ export class ArenaLifecycleCoordinator {
               this.ctx.coopDefenseObjectivePlacementRewardSystem?.begin(objectiveId);
             }
           },
+          onObjectiveCompleted: (objectiveId) => {
+            if (!bridge.isHost()) return;
+            const reward = coopDefenseSecondaryObjectiveConfigs
+              .find((entry) => entry.id === objectiveId)
+              ?.rewards?.teamBuffOnComplete;
+            if (reward) this.ctx.coopDefenseTeamBuffSystem?.activate(reward, Date.now());
+          },
           onHoldFailed: (objectiveId) => {
             if (!bridge.isHost()) return;
             this.ctx.coopDefenseObjectivePlacementRewardSystem?.cancel(objectiveId);
@@ -1156,7 +1168,12 @@ export class ArenaLifecycleCoordinator {
       return fromWeapon + fromItems + conditional + matrix;
     });
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver((playerId) => {
-      return this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
+      const base = this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
+      return base + (this.ctx.coopDefenseTeamBuffSystem?.getHpRegenBonus(
+        Date.now(),
+        bridge.canPlayerReceiveRoundRewards(playerId),
+        this.ctx.combatSystem.isAlive(playerId),
+      ) ?? 0);
     });
     this.ctx.combatSystem.setPlayerMaxArmorResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.maxArmor', 100) ?? 100;
@@ -1448,7 +1465,13 @@ export class ArenaLifecycleCoordinator {
         // Kampfaufladung laeuft ueber die Regenerationsrate, nicht ueber den Regen-Multiplikator
         // des PowerUpSystems: dessen Pfad wuerde zusaetzlich die Regenerationspause nach
         // Adrenalinverbrauch unterdruecken.
-        return base * (this.ctx.coopDefenseItemRuntimeSystem?.getAdrenalineRegenMultiplier(playerId) ?? 1);
+        const itemMultiplier = this.ctx.coopDefenseItemRuntimeSystem?.getAdrenalineRegenMultiplier(playerId) ?? 1;
+        const teamMultiplier = this.ctx.coopDefenseTeamBuffSystem?.getAdrenalineRegenMultiplier(
+          Date.now(),
+          bridge.canPlayerReceiveRoundRewards(playerId),
+          this.ctx.combatSystem.isAlive(playerId),
+        ) ?? 1;
+        return base * itemMultiplier * teamMultiplier;
       });
       this.ctx.resourceSystem.setRageMaxResolver((playerId) => {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'ultimate.maxRage', 600) ?? 600;
@@ -2398,6 +2421,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.teslaDomeSystem = null;
     this.ctx.turretSystem    = null;
     this.ctx.resourceSystem?.setPowerUpSystem(null);
+    this.ctx.resourceSystem?.setAdrenalineRegenRateResolver(null);
     this.ctx.resourceSystem  = null;
     this.ctx.burrowSystem?.setTunnelTransitEndedCallback(null);
     this.ctx.burrowSystem    = null;
@@ -2462,6 +2486,11 @@ export class ArenaLifecycleCoordinator {
     this.renderers.beer.syncCoopDefenseCarry([]);
     this.renderers.carryZones.clear();
     this.ctx.coopDefenseSecondaryObjectiveConfigs = [];
+    this.ctx.coopDefenseTeamBuffSystem?.reset();
+    this.ctx.coopDefenseTeamBuffSystem = null;
+    if (bridge.isHost()) {
+      for (const player of bridge.getConnectedPlayers()) bridge.publishActiveBuffs(player.id, []);
+    }
     this.ctx.coopDefenseObjectiveRepairSystem?.reset();
     this.ctx.coopDefenseObjectiveRepairSystem = null;
     this.ctx.coopDefenseObjectivePlacementRewardSystem?.reset();

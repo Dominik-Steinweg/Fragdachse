@@ -863,6 +863,7 @@ export class HostUpdateCoordinator {
         ...this.getGlutwandererHudBuffs(localId),
         ...this.getSurroundedHudBuffs(localId, now),
       ];
+      const teamBuff = this.getTeamBuffHudBuff(localId, now);
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
       const ultimateThresholds = this.ctx.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
@@ -885,7 +886,11 @@ export class HostUpdateCoordinator {
         utilityDisplayName:      utilDisplayName,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
-        activePowerUps:          stealthBuff ? [...activePowerUps, stealthBuff] : activePowerUps,
+        activePowerUps:          [
+          ...activePowerUps,
+          ...(teamBuff ? [teamBuff] : []),
+          ...(stealthBuff ? [stealthBuff] : []),
+        ],
         shieldBuff,
         weapon2AdrenalineCost:   this.ctx.loadoutManager?.isAk47FireSuperiorityActive(localId)
           ? 0
@@ -995,8 +1000,13 @@ export class HostUpdateCoordinator {
         ...this.getGlutwandererHudBuffs(player.id),
         ...this.getSurroundedHudBuffs(player.id, now),
       ];
+      const teamBuff = this.getTeamBuffHudBuff(player.id, now);
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
-      bridge.publishActiveBuffs(player.id, stealthBuff ? [...activeBuffs, stealthBuff] : activeBuffs);
+      bridge.publishActiveBuffs(player.id, [
+        ...activeBuffs,
+        ...(teamBuff ? [teamBuff] : []),
+        ...(stealthBuff ? [stealthBuff] : []),
+      ]);
       bridge.publishShieldBuffHud(player.id, this.ctx.loadoutManager?.getShieldBuffHudState(player.id, now) ?? {
         visible: false,
         defId: 'SHIELD_OVERCHARGE',
@@ -1908,6 +1918,14 @@ export class HostUpdateCoordinator {
       valueText: `+${Math.round(value * 100)} %`,
       intensity: 1,
     }];
+  }
+
+  private getTeamBuffHudBuff(playerId: string, now: number): SyncedActiveHudBuff | null {
+    return this.ctx.coopDefenseTeamBuffSystem?.getHudBuff(
+      now,
+      bridge.canPlayerReceiveRoundRewards(playerId),
+      this.ctx.combatSystem.isAlive(playerId),
+    ) ?? null;
   }
 
   private emitRegenerationEffect(x: number, y: number, color: number): void {

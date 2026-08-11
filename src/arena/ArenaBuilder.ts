@@ -16,9 +16,10 @@ import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, GameMode, G
 import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
-import { multiplyTint, resolveRockSurfaceCornerTints } from './RockSurfaceShading';
-import type { RockCornerTints } from './RockSurfaceShading';
-import { bakeRockSurfaceMottle } from './RockSurfaceMottle';
+import { ROCK_BLOB_SURFACE_PROFILE, DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
+import { multiplyTint, resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
+import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
+import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
 import { RockGridIndex } from './RockGridIndex';
 import { ARENA_BACKGROUND_TEXTURE_KEY, resolveArenaBackgroundSpec } from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -74,10 +75,10 @@ export interface ArenaBuilderResult {
   /** Gebackene Fels-Decals; wird bei Fels-Aenderungen neu aufgebaut. */
   rockDecalLayer: Phaser.GameObjects.RenderTexture | null;
   /**
-   * Gebackene, nicht-periodische Materialstoerung der Felsflaeche (`RockSurfaceMottle`).
-   * MULTIPLY, damit der HP-Schadenstint der Felsen verhaeltnisgleich durchschlaegt.
+   * Gebackene, nicht-periodische Materialstoerungen der Felsflaeche (`BlobSurfaceMottle`).
+   * Die geordnete NORMAL- und MULTIPLY-Kombination wird bei Hindernisaenderungen erhalten.
    */
-  rockMottleLayer: Phaser.GameObjects.RenderTexture | null;
+  rockMottleLayers: Phaser.GameObjects.RenderTexture[];
   /**
    * Rundengebundene Stanzform: arenagross, ausserhalb der Felsen deckend. Sie beschneidet
    * den Fleck-Layer exakt auf die Silhouette.
@@ -198,7 +199,7 @@ export class ArenaBuilder {
       const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const frame  = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      const img    = this.createRockVisual(worldX, worldY, frame, resolveRockSurfaceCornerTints(gridX, gridY, isOccupied));
+      const img    = this.createRockVisual(worldX, worldY, frame, resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied));
       rockGroup.add(img);
       (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
       rockObjects.push(img);
@@ -238,7 +239,7 @@ export class ArenaBuilder {
       decalLayer,
       decalStamps,
       rockDecalLayer: null,
-      rockMottleLayer: null,
+      rockMottleLayers: [],
       rockSilhouetteCutout: null,
     };
 
@@ -330,10 +331,11 @@ export class ArenaBuilder {
     rockGrid: RockGridIndex,
     rocks: readonly RockCell[],
     id: number,
-  ): RockCornerTints | null {
+  ): BlobSurfaceCornerTints | null {
     const cell = rocks[id];
     if (!cell) return null;
-    return resolveRockSurfaceCornerTints(
+    return resolveBlobSurfaceCornerTints(
+      ROCK_BLOB_SURFACE_PROFILE,
       cell.gridX,
       cell.gridY,
       (gx, gy) => rockGrid.isOccupiedWithBorder(gx, gy),
@@ -343,7 +345,7 @@ export class ArenaBuilder {
   private static applyRockTint(
     img: Phaser.GameObjects.Image,
     stateTint: number,
-    surfaceTints: RockCornerTints | null,
+    surfaceTints: BlobSurfaceCornerTints | null,
   ): void {
     if (!surfaceTints) {
       img.setTint(stateTint);
@@ -378,7 +380,7 @@ export class ArenaBuilder {
       ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2,
       ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2,
       frame,
-      resolveRockSurfaceCornerTints(gridX, gridY, isOccupied),
+      resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
     );
     rockObjects[id] = img;
     rockGroup.add(img);
@@ -441,7 +443,7 @@ export class ArenaBuilder {
   }
 
   /**
-   * Backt die beiden Fels-Overlays neu: Materialstoerung (MULTIPLY) und Decals (NORMAL).
+   * Backt die Fels-Overlays neu: geschichtete Materialstoerung (NORMAL + MULTIPLY) und Decals.
    *
    * Ein Decal, das mehrere Felsen beruehrt, bleibt nur sichtbar, solange alle seine Traeger
    * aktiv sind. Das ist bewusst ein Rebuild bei Hindernisaenderungen und kein Live-Image pro
@@ -464,8 +466,9 @@ export class ArenaBuilder {
       activeRocks.push(img);
     }
 
-    const mottle = bakeRockSurfaceMottle(
+    const mottle = bakeBlobSurfaceMottle(
       scene,
+      ROCK_BLOB_SURFACE_PROFILE,
       activeCells,
       activeRocks,
       {
@@ -475,10 +478,10 @@ export class ArenaBuilder {
         height: ARENA_HEIGHT,
         layerDepth: DEPTH.ROCKS,
       },
-      result.rockMottleLayer,
+      result.rockMottleLayers,
       result.rockSilhouetteCutout,
     );
-    result.rockMottleLayer = mottle.layer;
+    result.rockMottleLayers = mottle.layers;
     result.rockSilhouetteCutout = mottle.silhouetteCutout;
 
     const decalImages = ArenaVisualFactory.createRockDecals(scene, layout.decals ?? [], undefined, activeRockIds);
@@ -555,8 +558,10 @@ export class ArenaBuilder {
     if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
     result.rockDecalLayer = null;
 
-    if (result.rockMottleLayer?.active) result.rockMottleLayer.destroy();
-    result.rockMottleLayer = null;
+    for (const layer of result.rockMottleLayers) {
+      if (layer.active) layer.destroy();
+    }
+    result.rockMottleLayers = [];
 
     if (result.rockSilhouetteCutout?.active) result.rockSilhouetteCutout.destroy();
     result.rockSilhouetteCutout = null;
@@ -567,7 +572,7 @@ export class ArenaBuilder {
   /**
    * Erstellt einen Felsen-Sprite aus dem Autotile-Spritesheet.
    */
-  private createRockVisual(worldX: number, worldY: number, frame: number, cornerTints?: RockCornerTints): Phaser.GameObjects.Image {
+  private createRockVisual(worldX: number, worldY: number, frame: number, cornerTints?: BlobSurfaceCornerTints): Phaser.GameObjects.Image {
     return ArenaVisualFactory.createRock(this.scene, worldX, worldY, frame, cornerTints);
   }
 
@@ -576,7 +581,7 @@ export class ArenaBuilder {
     worldX: number,
     worldY: number,
     frame: number,
-    cornerTints?: RockCornerTints,
+    cornerTints?: BlobSurfaceCornerTints,
   ): Phaser.GameObjects.Image {
     return ArenaVisualFactory.createRock(scene, worldX, worldY, frame, cornerTints);
   }
@@ -689,6 +694,22 @@ export class ArenaBuilder {
     dirtLayer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
     dirtLayer.draw(images);
     dirtLayer.render();
+
+    // Dirt remains a single persistent object: ordered generic Normal + Multiply material
+    // layers and their shared silhouette cutout are flattened, then immediately freed.
+    const dirtMottle = bakeBlobSurfaceMottle(
+      this.scene,
+      DIRT_BLOB_SURFACE_PROFILE,
+      dirtCells,
+      images,
+      { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, width: ARENA_WIDTH, height: ARENA_HEIGHT, layerDepth: DEPTH.DIRT },
+    );
+    for (const layer of dirtMottle.layers) {
+      dirtLayer.draw(layer);
+      dirtLayer.render();
+      layer.destroy();
+    }
+    dirtMottle.silhouetteCutout?.destroy();
 
     for (const img of images) img.destroy();
 

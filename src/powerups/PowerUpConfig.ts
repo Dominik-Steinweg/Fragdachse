@@ -51,6 +51,13 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   // Item-Affixe ohne eigene Pickup-Quelle; diese Definitionen versorgen ausschliesslich die HUD-Zeile.
   GLUTWANDERER: { id: 'GLUTWANDERER', type: 'weapon_buff', displayName: 'Glutwanderer', color: 0xff8a3d },
   SURROUNDED: { id: 'SURROUNDED', type: 'buff_regen', displayName: 'Umzingelt', color: 0xf05a78 },
+  // Team-Buff-HUD-Definition. Die Wirkung laeuft bewusst nicht ueber PowerUpSystem.
+  TEAM_REGENERATION_SURGE: {
+    id: 'TEAM_REGENERATION_SURGE',
+    type: 'buff_regen',
+    displayName: 'Team-Regenerationsschub',
+    color: 0x63e6be,
+  },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
   BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_3,  spriteKey: 'powerup_bfg'  },

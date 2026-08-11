@@ -152,7 +152,10 @@ describe('Coop-Defense B7 Carry', () => {
 });
 
 describe('B7 Carry map validation', () => {
-  function makeMap(objective: CoopDefenseMapConfig['secondaryObjectives'][number]): CoopDefenseMapConfig {
+  function makeMap(
+    objective: CoopDefenseMapConfig['secondaryObjectives'][number],
+    itemDrop?: CoopDefenseMapConfig['itemDrop'],
+  ): CoopDefenseMapConfig {
     return {
       mapId: 'carry-validation',
       displayName: 'Carry validation',
@@ -169,6 +172,7 @@ describe('B7 Carry map validation', () => {
         shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
       }],
       powerUps: [],
+      itemDrop,
       secondaryObjectives: [objective],
     };
   }
@@ -204,5 +208,18 @@ describe('B7 Carry map validation', () => {
       ...valid,
       carry: undefined,
     }))).toThrow('needs carry zones');
+  });
+
+  it('requires itemDrop only for a Carry objective that grants the item meta reward', () => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      ...valid,
+      rewards: { itemMetaRewardOnComplete: true },
+    }))).toThrow('needs itemDrop');
+
+    const normalized = normalizeCoopDefenseMapConfig(makeMap({
+      ...valid,
+      rewards: { itemMetaRewardOnComplete: true },
+    }, { itemLevel: 1 }));
+    expect(normalized.secondaryObjectives?.[0].rewards).toEqual({ itemMetaRewardOnComplete: true });
   });
 });

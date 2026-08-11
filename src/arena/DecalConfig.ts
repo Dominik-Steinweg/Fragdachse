@@ -42,7 +42,11 @@ export const DECAL_MAX_SAFE_OFFSET_PX = Math.floor((CELL_SIZE - DECAL_SIZE) / 2)
 export const ROCK_DECAL_SIZE = 26;
 /** Breite der vollflaechigeren, aber weiterhin transparenten Moos-/Flechten-Decals. */
 export const ROCK_DECAL_LARGE_SIZE = 48;
+/** Breite der sehr grossen, perforierten Matten auf vollstaendig umschlossenen Felszellen. */
+export const ROCK_DECAL_VERY_LARGE_SIZE = 64;
 export const ROCK_DECAL_MAX_OFFSET_PX = 7;
+export const ROCK_DECAL_LARGE_MAX_OFFSET_PX = 4;
+export const ROCK_DECAL_VERY_LARGE_MAX_OFFSET_PX = 2;
 const DECAL_ASSET_PATH = './assets/sprites/decals';
 
 export const ARENA_DECAL_CONFIG = {
@@ -91,25 +95,62 @@ export const ROCK_DECAL_CONFIG: RockDecalLayerConfig = {
   maxOffsetY: ROCK_DECAL_MAX_OFFSET_PX,
   variants: [
     { fileName: 'rock_crack_hairline.png', frequencyPercent: 18, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
-    { fileName: 'rock_crack_branch.png', frequencyPercent: 14, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
-    { fileName: 'rock_crack_fracture.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
-    { fileName: 'rock_moss_fringe.png', frequencyPercent: 14, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
-    { fileName: 'rock_lichen_patch.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
-    { fileName: 'rock_moss_crescent.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_crack_branch.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_crack_fracture.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_moss_fringe.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_lichen_patch.png', frequencyPercent: 2, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_moss_crescent.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_sprout_pair.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_fern_cluster.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_pebbles.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_mineral_streak.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
-    { fileName: 'rock_crack_split.png', frequencyPercent: 12, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_crack_split.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
     { fileName: 'rock_crack_branchlet.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
     { fileName: 'rock_chip_angular.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
     { fileName: 'rock_lichen_specks.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_moss_tuft.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_root_threads.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
-    { fileName: 'rock_sprout_single.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
-    { fileName: 'rock_pebble_crescent.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_sprout_single.png', frequencyPercent: 2, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_pebble_crescent.png', frequencyPercent: 2, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_mineral_vein.png', frequencyPercent: 1, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
     { fileName: 'rock_fern_frond.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_crack_fine.png', frequencyPercent: 11, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_chip_pitted.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    { fileName: 'rock_lichen_dots.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_root_hairs.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_moss_crescent_small.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_pebble_scatter.png', frequencyPercent: 7, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_dry_sprig.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
+    { fileName: 'rock_moss_edge_fleck.png', frequencyPercent: 4, displaySize: ROCK_DECAL_SIZE, alpha: 0.66, placement: 'edge' },
+    { fileName: 'rock_moss_edge_hook.png', frequencyPercent: 4, displaySize: ROCK_DECAL_SIZE, alpha: 0.64, placement: 'edge' },
+    { fileName: 'rock_moss_edge_scallop.png', frequencyPercent: 4, displaySize: ROCK_DECAL_SIZE, alpha: 0.68, placement: 'edge' },
+    { fileName: 'rock_moss_edge_broken.png', frequencyPercent: 4, displaySize: ROCK_DECAL_SIZE, alpha: 0.64, placement: 'edge' },
+    { fileName: 'rock_lichen_edge_trace.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_lichen_edge_cluster.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.64, placement: 'edge' },
+    { fileName: 'rock_lichen_edge_rim.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_lichen_edge_speckle.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.6, placement: 'edge' },
+    { fileName: 'rock_root_edge_tendril.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.66, placement: 'edge' },
+    { fileName: 'rock_root_edge_split.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_root_edge_knot.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_root_edge_threads2.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.64, placement: 'edge' },
+    { fileName: 'rock_crack_edge_nick.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.7, placement: 'edge' },
+    { fileName: 'rock_crack_edge_spur.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.66, placement: 'edge' },
+    { fileName: 'rock_crack_edge_branch.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.64, placement: 'edge' },
+    { fileName: 'rock_chip_edge_nibble.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_chip_edge_cascade.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_chip_edge_scatter.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.58, placement: 'edge' },
+    { fileName: 'rock_pebble_edge_pair.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.64, placement: 'edge' },
+    { fileName: 'rock_pebble_edge_trio.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.6, placement: 'edge' },
+    { fileName: 'rock_pebble_edge_arc.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.58, placement: 'edge' },
+    { fileName: 'rock_sprig_edge_stem.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.58, placement: 'edge' },
+    { fileName: 'rock_sprig_edge_tuft.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.58, placement: 'edge' },
+    { fileName: 'rock_sprig_edge_leaflet.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.56, placement: 'edge' },
+    { fileName: 'rock_fern_edge_leaf.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.62, placement: 'edge' },
+    { fileName: 'rock_fern_edge_frill.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.6, placement: 'edge' },
+    { fileName: 'rock_fern_edge_stem.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.58, placement: 'edge' },
+    { fileName: 'rock_mineral_edge_dash.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.58, placement: 'edge' },
+    { fileName: 'rock_mineral_edge_thread.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.56, placement: 'edge' },
+    { fileName: 'rock_mineral_edge_bead.png', frequencyPercent: 3, displaySize: ROCK_DECAL_SIZE, alpha: 0.56, placement: 'edge' },
     { fileName: 'rock_moss_carpet.png', frequencyPercent: 7, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.78, placement: 'core' },
     { fileName: 'rock_moss_crescent_large.png', frequencyPercent: 7, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8, placement: 'core' },
     { fileName: 'rock_lichen_plate_large.png', frequencyPercent: 6, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.78, placement: 'core' },
@@ -120,6 +161,19 @@ export const ROCK_DECAL_CONFIG: RockDecalLayerConfig = {
     { fileName: 'rock_root_moss_tangle.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.82, placement: 'core' },
     { fileName: 'rock_moss_growth_blotch.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.72, placement: 'core' },
     { fileName: 'rock_moss_shelf.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.8, placement: 'core' },
+    { fileName: 'rock_lichen_streak.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.7, placement: 'core' },
+    { fileName: 'rock_moss_fan.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.68, placement: 'core' },
+    { fileName: 'rock_damp_patch_large.png', frequencyPercent: 5, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.64, placement: 'core' },
+    { fileName: 'rock_mineral_seam.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.66, placement: 'core' },
+    { fileName: 'rock_moss_cluster_large.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.7, placement: 'core' },
+    { fileName: 'rock_lichen_crescent_large2.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.65, placement: 'core' },
+    { fileName: 'rock_root_vein_braid.png', frequencyPercent: 4, displaySize: ROCK_DECAL_LARGE_SIZE, alpha: 0.66, placement: 'core' },
+    { fileName: 'rock_moss_pool_very_large.png', frequencyPercent: 4, displaySize: ROCK_DECAL_VERY_LARGE_SIZE, alpha: 0.56, placement: 'core' },
+    { fileName: 'rock_lichen_veil_very_large.png', frequencyPercent: 4, displaySize: ROCK_DECAL_VERY_LARGE_SIZE, alpha: 0.54, placement: 'core' },
+    { fileName: 'rock_moss_ring_very_large.png', frequencyPercent: 3, displaySize: ROCK_DECAL_VERY_LARGE_SIZE, alpha: 0.58, placement: 'core' },
+    { fileName: 'rock_damp_bloom_very_large.png', frequencyPercent: 3, displaySize: ROCK_DECAL_VERY_LARGE_SIZE, alpha: 0.52, placement: 'core' },
+    { fileName: 'rock_moss_band_very_large.png', frequencyPercent: 3, displaySize: ROCK_DECAL_VERY_LARGE_SIZE, alpha: 0.56, placement: 'core' },
+    { fileName: 'rock_lichen_mat_very_large.png', frequencyPercent: 3, displaySize: ROCK_DECAL_VERY_LARGE_SIZE, alpha: 0.54, placement: 'core' },
   ],
 };
 
@@ -142,6 +196,12 @@ export function getDecalTextureKey(fileName: string): DecalKey {
 
 export function getRockDecalVariant(textureKey: DecalKey): DecalVariantConfig | undefined {
   return ROCK_DECAL_CONFIG.variants.find((variant) => getDecalTextureKey(variant.fileName) === textureKey);
+}
+
+export function getRockDecalMaxOffsetPx(displaySize: number | undefined): number {
+  if (displaySize === ROCK_DECAL_VERY_LARGE_SIZE) return ROCK_DECAL_VERY_LARGE_MAX_OFFSET_PX;
+  if (displaySize === ROCK_DECAL_LARGE_SIZE) return ROCK_DECAL_LARGE_MAX_OFFSET_PX;
+  return ROCK_DECAL_MAX_OFFSET_PX;
 }
 
 export function preloadArenaDecalAssets(loader: Phaser.Loader.LoaderPlugin): void {
