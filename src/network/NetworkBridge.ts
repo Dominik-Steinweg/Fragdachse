@@ -49,6 +49,7 @@ import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades'
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
+import type { UtilityOverrideDescriptor } from '../types';
 import {
   canRoundPlayerReceiveRewards,
   canRoundPlayerSpawnOrRespawn,
@@ -124,6 +125,7 @@ const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
+const KEY_UTILITY_OVERRIDE_DESCRIPTOR = 'uod'; // per-player: mission override metadata or null
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
@@ -464,7 +466,7 @@ type ColorChangeHandler = (playerId: string, color: number) => void;
 type KillEventHandler = (event: KillEvent) => void;
 type CoopDefenseXpPopupHandler = (x: number, y: number, xp: number) => void;
 type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
-type PowerUpPickupHandler = (uid: number, playerId: string) => void;
+type PowerUpPickupHandler = (uid: number, playerId: string) => boolean;
 type DecoyStealthBreakHandler = (playerId: string) => void;
 type TrainDestroyedHandler = () => void;
 type TranslocatorFlashHandler = (
@@ -2190,16 +2192,16 @@ export class NetworkBridge {
 
   // ── Power-Up-Pickup-RPC: Client → Host ────────────────────────────────────
 
-  sendPickupPowerUp(uid: number): void {
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
+  async sendPickupPowerUp(uid: number): Promise<boolean> {
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return false;
     if (isHost()) {
-      this.powerUpPickupHandler?.(uid, myPlayer().id);
-      return;
+      return this.powerUpPickupHandler?.(uid, myPlayer().id) === true;
     }
-    this.sendHostRpc('pup', { uid });
+    const result = await this.callHostRpc('pup', { uid }, 1_200).catch(() => false);
+    return result === true;
   }
 
-  registerPickupPowerUpHandler(handler: (uid: number, playerId: string) => void): void {
+  registerPickupPowerUpHandler(handler: (uid: number, playerId: string) => boolean): void {
     this.powerUpPickupHandler = handler;
     this.registerHostRpcHandler('pup', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return undefined;
@@ -2208,8 +2210,7 @@ export class NetworkBridge {
       if (!isRecord(data)) return undefined;
       const { uid } = data as { uid: number };
       if (!Number.isSafeInteger(uid) || uid < 0) return undefined;
-      cb(uid, caller.id);
-      return undefined;
+      return cb(uid, caller.id);
     });
   }
 
@@ -2984,6 +2985,26 @@ export class NetworkBridge {
   /** Liest den aktuellen Utility-Override-Namen eines Spielers (leer = kein Override). */
   getPlayerUtilityOverrideName(playerId: string): string {
     return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_NAME) as string | undefined) ?? '';
+  }
+
+  /** Host-only: Publishes the metadata required to reconstruct a mission placement override. */
+  publishUtilityOverrideDescriptor(playerId: string, descriptor: UtilityOverrideDescriptor | null): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    ps.setState(KEY_UTILITY_OVERRIDE_DESCRIPTOR, descriptor, true);
+  }
+
+  /** Reads the authoritative mission placement override, if one is active. */
+  getPlayerUtilityOverrideDescriptor(playerId: string): UtilityOverrideDescriptor | null {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_DESCRIPTOR);
+    if (!isRecord(value) || value.kind !== 'objective-placement') return null;
+    if (typeof value.objectiveId !== 'string' || typeof value.powerUpDefId !== 'string') return null;
+    return {
+      kind: 'objective-placement',
+      objectiveId: value.objectiveId,
+      powerUpDefId: value.powerUpDefId,
+    };
   }
 
   /** Host-only: Publiziert ob die Adrenalinspritze eines Spielers aktiv ist. */

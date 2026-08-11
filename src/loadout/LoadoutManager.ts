@@ -658,6 +658,16 @@ export class LoadoutManager {
     const effectiveConfig = modifierSource ? applyCoopDefenseModifiersToUtilityConfig(config, modifierSource) : config;
     loadout.utility = new GenericUtility(effectiveConfig);
     this.utilityAmmo.set(playerId, ammo);
+    this.bridge.publishUtilityOverrideDescriptor(
+      playerId,
+      config.type === 'placeable_pedestal'
+        ? {
+          kind: 'objective-placement',
+          objectiveId: config.rewardObjectiveId,
+          powerUpDefId: config.powerUpDefId,
+        }
+        : null,
+    );
     this.bridge.publishUtilityCooldownUntil(playerId, 0, config.id); // sofort einsatzbereit
     this.bridge.publishUtilityOverrideName(playerId, effectiveConfig.displayName);
     return true;
@@ -697,6 +707,7 @@ export class LoadoutManager {
     const restoredConfig = inspectorUtility?.config ?? saved.config;
     const restoredLastUsedAt = inspectorUtility?.getLastUsedAt() ?? saved.lastUsedAt;
     const remaining = restoredConfig.cooldown - (now - restoredLastUsedAt);
+    this.bridge.publishUtilityOverrideDescriptor(playerId, null);
     this.bridge.publishUtilityCooldownUntil(playerId, remaining > 0 ? now + remaining : 0, saved.config.id);
     this.bridge.publishUtilityOverrideName(playerId, ''); // Override aufgehoben
   }

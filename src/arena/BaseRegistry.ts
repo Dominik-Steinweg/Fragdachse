@@ -341,6 +341,57 @@ export function getBaseWorldBounds(region: ArenaGridRegion): {
 }
 
 /**
+ * Deterministic pickup location for a mission reward. The pickup sits on the first available
+ * cell around the base bounds, never inside a colliding cell of this or another base.
+ */
+export function getBaseRewardPickupWorldPosition(
+  base: Pick<BaseSpec, 'cells' | 'region'>,
+  bases: readonly Pick<BaseSpec, 'cells' | 'region'>[] = [base],
+): { x: number; y: number } | null {
+  if (base.cells.length === 0) return null;
+
+  const occupied = new Set(
+    bases.flatMap((entry) => entry.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
+  );
+  const minGridX = base.region.minGridX;
+  const maxGridX = base.region.maxGridX;
+  const minGridY = base.region.minGridY;
+  const maxGridY = base.region.maxGridY;
+
+  const candidates: Array<{ gridX: number; gridY: number }> = [];
+  const addRing = (distance: number): void => {
+    const left = minGridX - distance;
+    const right = maxGridX + distance;
+    const top = minGridY - distance;
+    const bottom = maxGridY + distance;
+    for (let gridX = left; gridX <= right; gridX += 1) candidates.push({ gridX, gridY: top });
+    for (let gridY = top + 1; gridY <= bottom; gridY += 1) candidates.push({ gridX: right, gridY });
+    for (let gridX = right - 1; gridX >= left; gridX -= 1) candidates.push({ gridX, gridY: bottom });
+    for (let gridY = bottom - 1; gridY > top; gridY -= 1) candidates.push({ gridX: left, gridY });
+  };
+
+  // The immediate ring is the authored "at the base" position. Larger rings only handle maps
+  // where another structure occupies part of the first ring or the base touches the arena edge.
+  for (let distance = 1; distance <= Math.max(GRID_COLS, GRID_ROWS); distance += 1) {
+    addRing(distance);
+    for (const candidate of candidates) {
+      if (
+        candidate.gridX < 0 || candidate.gridX >= GRID_COLS
+        || candidate.gridY < 0 || candidate.gridY >= GRID_ROWS
+        || occupied.has(`${candidate.gridX}:${candidate.gridY}`)
+      ) continue;
+      return {
+        x: ARENA_OFFSET_X + candidate.gridX * CELL_SIZE + CELL_SIZE / 2,
+        y: ARENA_OFFSET_Y + candidate.gridY * CELL_SIZE + CELL_SIZE / 2,
+      };
+    }
+    candidates.length = 0;
+  }
+
+  return null;
+}
+
+/**
  * Räumlicher Schutz-Radius um eine Coop-Basis (Chebyshev-Distanz in Zellen
  * relativ zur Bounding-Box), innerhalb dessen KEINE bewegungs-blockierenden
  * Elemente platziert werden (Felsen, Bäume, Power-Up-Podeste).

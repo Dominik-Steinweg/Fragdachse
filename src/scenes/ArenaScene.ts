@@ -1557,6 +1557,9 @@ export class ArenaScene extends Phaser.Scene {
       : null;
     this.ctx.centerHUD.updateMainObjectivePresentation(mainObjective);
     this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
+    // Die rechte Missionsspalte steht in Coop-Maps über dem Spielfeld und weicht deshalb vor
+    // Figuren und Zielpunkt zurück.
+    this.ctx.centerHUD.updateMissionStackOcclusion(delta, this.ctx.playerManager, this.ctx.enemyManager);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
     // Pflichtziel und Nebenziel werden im selben Frameabschnitt aktualisiert; die Rundenzeit
     // ist dieselbe Bezugsgroesse, gegen die der Host seine Zustandswechsel datiert.
@@ -1565,6 +1568,11 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.coopDefenseSecondaryObjectiveConfigs,
       encounterElapsedMs,
       secondaryObjectivesActive,
+    );
+    this.secondaryObjectiveHud?.updateOcclusionFade(
+      delta,
+      this.ctx.playerManager,
+      this.ctx.enemyManager,
     );
     this.renderers.secondaryObjectiveMarkers.sync(
       secondaryObjectivePresentation,

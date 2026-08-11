@@ -1,6 +1,6 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
-import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalVariant } from './DecalConfig';
 import type { ArenaGroundFireZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
@@ -715,6 +715,8 @@ export class ArenaGenerator {
 
       const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, ROCK_DECAL_CONFIG.variants);
       if (!textureKey) continue;
+      const variant = getRockDecalVariant(textureKey);
+      const displaySize = variant?.displaySize ?? ROCK_DECAL_SIZE;
 
       const offsetX = ArenaGenerator.randomOffset(rng, rockMaxOffsetX);
       const offsetY = ArenaGenerator.randomOffset(rng, rockMaxOffsetY);
@@ -727,6 +729,7 @@ export class ArenaGenerator {
         centerX,
         centerY,
         rotation,
+        displaySize,
       );
 
       decals.push({
@@ -738,6 +741,8 @@ export class ArenaGenerator {
         terrain: 'rock',
         surface: 'rock',
         rockIds,
+        displaySize,
+        alpha: variant?.alpha,
         rotation,
       });
     }
@@ -751,9 +756,11 @@ export class ArenaGenerator {
     centerX: number,
     centerY: number,
     rotation: number,
+    displaySize: number,
   ): number[] {
-    const halfExtentX = Math.abs(Math.cos(rotation)) * 13 + Math.abs(Math.sin(rotation)) * 13;
-    const halfExtentY = Math.abs(Math.sin(rotation)) * 13 + Math.abs(Math.cos(rotation)) * 13;
+    const halfSize = displaySize * 0.5;
+    const halfExtentX = Math.abs(Math.cos(rotation)) * halfSize + Math.abs(Math.sin(rotation)) * halfSize;
+    const halfExtentY = Math.abs(Math.sin(rotation)) * halfSize + Math.abs(Math.cos(rotation)) * halfSize;
     const minGridX = Math.max(0, Math.floor((centerX - halfExtentX) / CELL_SIZE));
     const maxGridX = Math.min(GRID_COLS - 1, Math.floor((centerX + halfExtentX - 0.001) / CELL_SIZE));
     const minGridY = Math.max(0, Math.floor((centerY - halfExtentY) / CELL_SIZE));

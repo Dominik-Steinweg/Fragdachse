@@ -81,6 +81,8 @@ export class ClientUpdateCoordinator {
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
   private moveLoopHandle: string | null = null;
+  private readonly pendingPickupUids = new Set<number>();
+  private readonly confirmedPickupUids = new Set<number>();
   private lastPerformance: ClientUpdatePerformanceMetrics = {
     totalMs: 0, snapshotMs: 0, playersMs: 0, projectilesEffectsMs: 0,
     worldStateMs: 0, interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
@@ -111,6 +113,7 @@ export class ClientUpdateCoordinator {
 
   runClientUpdate(delta: number): void {
     const startedAt = performance.now();
+    this.reconcileClientMissionUtilityOverride();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.ctx.baseManager?.syncDormantStates();
@@ -478,7 +481,9 @@ export class ClientUpdateCoordinator {
 
   notifyUtilityFired(): void {
     if (bridge.getGamePhase() === 'ARENA' && !bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
-    if (this.clientUtilityOverride) this.clientUtilityOverride = null;
+    // Mission placement rewards stay visible until the host confirms successful placement and
+    // clears the authoritative override. A rejected placement must leave the charge usable.
+    if (this.clientUtilityOverride?.type !== 'placeable_pedestal') this.clientUtilityOverride = null;
     this.ctx.leftPanel.flashSlot('utility');
   }
 
@@ -779,6 +784,8 @@ export class ClientUpdateCoordinator {
     this.predictedLocalAdrenalineSnapshotVersion = -1;
     this.nextPredictedHitscanShotId = 1;
     this.pickupCooldownUntil = 0;
+    this.pendingPickupUids.clear();
+    this.confirmedPickupUids.clear();
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.clientUtilityOverride = null;
   }
@@ -839,6 +846,11 @@ export class ClientUpdateCoordinator {
     const px = player.sprite.x;
     const py = player.sprite.y;
 
+    const visibleUids = new Set(powerups.map((pu) => pu.uid));
+    for (const uid of this.confirmedPickupUids) {
+      if (!visibleUids.has(uid)) this.confirmedPickupUids.delete(uid);
+    }
+
     for (const pu of powerups) {
       const dist = Math.hypot(pu.x - px, pu.y - py);
       if (dist <= PICKUP_RADIUS * 2) {
@@ -853,20 +865,57 @@ export class ClientUpdateCoordinator {
         if (bridge.isHost()) {
           this.ctx.powerUpSystem?.tryPickup(localId, pu.uid, px, py);
         } else {
-          bridge.sendPickupPowerUp(pu.uid);
+          if (this.pendingPickupUids.has(pu.uid) || this.confirmedPickupUids.has(pu.uid)) continue;
+          this.pendingPickupUids.add(pu.uid);
+          const pickupResult = bridge.sendPickupPowerUp(pu.uid);
           if (pu.pickupKind === 'objective-placement' && pu.objectiveId) {
-            this.clientUtilityOverride = createCoopDefensePlaceablePedestalUtility(pu.objectiveId, pu.defId);
+            // The mission override is reconstructed from the host-published descriptor. The RPC
+            // result only records the accepted UID, so a rejected or stale claim never predicts it.
+            void pickupResult.then((accepted) => {
+              if (accepted) this.confirmedPickupUids.add(pu.uid);
+            }).finally(() => this.pendingPickupUids.delete(pu.uid));
           } else if (pu.defId === 'BFG') {
             this.clientUtilityOverride = UTILITY_CONFIGS.BFG;
+            void pickupResult.finally(() => this.pendingPickupUids.delete(pu.uid));
           } else if (pu.defId === 'NUKE') {
             this.clientUtilityOverride = UTILITY_CONFIGS.NUKE;
+            void pickupResult.finally(() => this.pendingPickupUids.delete(pu.uid));
           } else if (pu.defId === 'HOLY_HAND_GRENADE') {
             this.clientUtilityOverride = UTILITY_CONFIGS.HOLY_HAND_GRENADE;
+            void pickupResult.finally(() => this.pendingPickupUids.delete(pu.uid));
+          } else {
+            void pickupResult.finally(() => this.pendingPickupUids.delete(pu.uid));
           }
         }
         this.pickupCooldownUntil = now + 100;
         return;
       }
+    }
+  }
+
+  private reconcileClientMissionUtilityOverride(): void {
+    const localId = bridge.getLocalPlayerId();
+    const descriptor = bridge.getPlayerUtilityOverrideDescriptor(localId);
+    if (descriptor?.kind === 'objective-placement') {
+      const current = this.clientUtilityOverride;
+      if (
+        current?.type !== 'placeable_pedestal'
+        || current.rewardObjectiveId !== descriptor.objectiveId
+        || current.powerUpDefId !== descriptor.powerUpDefId
+      ) {
+        this.clientUtilityOverride = createCoopDefensePlaceablePedestalUtility(
+          descriptor.objectiveId,
+          descriptor.powerUpDefId,
+        );
+      }
+      return;
+    }
+
+    if (
+      bridge.getPlayerUtilityOverrideName(localId) === ''
+      && this.clientUtilityOverride?.type === 'placeable_pedestal'
+    ) {
+      this.clientUtilityOverride = null;
     }
   }
 

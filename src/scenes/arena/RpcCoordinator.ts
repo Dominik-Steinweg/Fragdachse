@@ -379,11 +379,12 @@ export class RpcCoordinator {
 
   private registerPickupPowerUpHandler(): void {
     bridge.registerPickupPowerUpHandler((uid, playerId) => {
-      if (!bridge.canPlayerAct(playerId)) return;
+      if (!bridge.canPlayerAct(playerId)) return false;
       const player = this.ctx.playerManager.getPlayer(playerId);
-      if (!player) return;
-      this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.sprite.x, player.sprite.y, playerId);
-      this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.sprite.x, player.sprite.y);
+      if (!player) return false;
+      const pickedUp = this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.sprite.x, player.sprite.y) ?? false;
+      if (pickedUp) this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.sprite.x, player.sprite.y, playerId);
+      return pickedUp;
     });
   }
 }

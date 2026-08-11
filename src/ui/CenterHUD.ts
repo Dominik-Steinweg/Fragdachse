@@ -38,6 +38,14 @@ import {
   COOP_DEFENSE_ENCOUNTER_LAYOUT,
   COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT,
 } from './CoopDefenseSecondaryObjectiveLayout';
+import {
+  advanceHudOcclusionFade,
+  createHudOcclusionFadeState,
+  resetHudOcclusionFade,
+} from './hudOcclusionFade';
+import { isHudRectOccluded } from './hudOcclusionProbe';
+import type { EnemyManager } from '../entities/EnemyManager';
+import type { PlayerManager } from '../entities/PlayerManager';
 
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
@@ -474,6 +482,9 @@ export class CenterHUD {
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
   private announcementTween: Phaser.Tweens.Tween | null = null;
+  /** Trägt Hauptziel- und Angriffsserien-Panel; weicht als Ganzes vor dem Spielfeld zurück. */
+  private missionStack!: Phaser.GameObjects.Container;
+  private readonly missionStackFade = createHudOcclusionFadeState();
   private mainObjectivePanel!: Phaser.GameObjects.Container;
   private mainObjectiveBg!: Phaser.GameObjects.Image;
   private mainObjectiveFrame!: Phaser.GameObjects.Graphics;
@@ -573,6 +584,11 @@ export class CenterHUD {
     }
 
     this.buildTimer();
+    // Eigene Zwischenebene für die beiden Missionspanels: Ihre Auftritts-Tweens schreiben ihr
+    // eigenes Alpha, das Ausweichen vor dem Spielfeld liegt deshalb eine Ebene darüber und
+    // multipliziert sich damit, statt es abzubrechen.
+    this.missionStack = this.scene.add.container(0, 0);
+    this.container.add(this.missionStack);
     this.buildMainObjectivePanel();
     this.buildEncounterPanel();
     this.buildTutorialPanel();
@@ -683,7 +699,7 @@ export class CenterHUD {
       this.mainObjectiveTitle,
       this.mainObjectiveProgress,
     ]).setScrollFactor(0).setVisible(false);
-    this.container.add(this.mainObjectivePanel);
+    this.missionStack.add(this.mainObjectivePanel);
   }
 
   private buildEncounterPanel(): void {
@@ -752,7 +768,7 @@ export class CenterHUD {
       this.encounterStatus,
       this.encounterCountdown,
     ]).setScrollFactor(0).setVisible(false).setAlpha(1);
-    this.container.add(this.encounterPanel);
+    this.missionStack.add(this.encounterPanel);
   }
 
   private buildTutorialPanel(): void {
@@ -1117,6 +1133,36 @@ export class CenterHUD {
     this.lastMainObjectiveSignature = null;
     this.lastMainObjectiveProgressWidth = -1;
     this.mainObjectiveAnnouncementPending = false;
+  }
+
+  /**
+   * Pro Frame: Hauptziel- und Angriffsserien-Panel weichen gemeinsam zurück, sobald unter der
+   * rechten Spalte gekämpft oder gezielt wird. Gemeinsam, weil eine halb durchsichtige Spalte
+   * über einer deckenden aussähe wie ein Darstellungsfehler.
+   */
+  updateMissionStackOcclusion(
+    deltaMs: number,
+    playerManager: PlayerManager | null,
+    enemyManager: EnemyManager | null,
+  ): void {
+    if (!this.missionStack) return;
+    const mainVisible = this.mainObjectivePanel?.visible === true;
+    const encounterVisible = this.encounterPanel?.visible === true;
+    if (!mainVisible && !encounterVisible) {
+      resetHudOcclusionFade(this.missionStackFade);
+      this.missionStack.setAlpha(1);
+      return;
+    }
+
+    const occluded = isHudRectOccluded(this.scene, {
+      left: MAIN_PANEL_X - MAIN_PANEL_W / 2,
+      right: MAIN_PANEL_X + MAIN_PANEL_W / 2,
+      top: mainVisible ? COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.topY : ENCOUNTER_PANEL_TOP_Y,
+      bottom: encounterVisible
+        ? ENCOUNTER_PANEL_TOP_Y + ENCOUNTER_PANEL_H
+        : COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.topY + MAIN_PANEL_H,
+    }, playerManager, enemyManager);
+    this.missionStack.setAlpha(advanceHudOcclusionFade(this.missionStackFade, occluded, deltaMs));
   }
 
   updateEncounterPresentation(

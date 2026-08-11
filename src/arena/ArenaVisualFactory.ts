@@ -118,8 +118,9 @@ export class ArenaVisualFactory {
       const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
       const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
       const img = scene.add.image(worldX, worldY, textureKey);
-      const displaySize = surface === 'rock' ? ROCK_DECAL_DISPLAY_SIZE : DECAL_SIZE;
+      const displaySize = surface === 'rock' ? decal.displaySize ?? ROCK_DECAL_DISPLAY_SIZE : DECAL_SIZE;
       img.setDisplaySize(displaySize, displaySize);
+      if (decal.alpha !== undefined) img.setAlpha(decal.alpha);
       // Decals are decorative and are baked immediately after creation. Keeping the
       // random transform on the temporary Image lets both the RenderTexture and the
       // terrain sampler consume the exact same placement.

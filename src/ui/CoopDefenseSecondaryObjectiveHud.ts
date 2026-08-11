@@ -26,7 +26,16 @@ import {
   type SecondaryObjectiveViewEntry,
 } from './coopDefenseSecondaryObjectiveModel';
 import { COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT } from './CoopDefenseSecondaryObjectiveLayout';
+import {
+  advanceHudOcclusionFade,
+  createHudOcclusionFadeState,
+  resetHudOcclusionFade,
+  type HudOcclusionRect,
+} from './hudOcclusionFade';
+import { isHudRectOccluded } from './hudOcclusionProbe';
 import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
+import type { EnemyManager } from '../entities/EnemyManager';
+import type { PlayerManager } from '../entities/PlayerManager';
 
 /** Gleiche Breite wie das Pflichtziel-Panel; die Spalte liest sich dadurch als dessen Fortsetzung. */
 const PANEL_W = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.panelWidth;
@@ -196,6 +205,9 @@ export class CoopDefenseSecondaryObjectiveHud {
   private lastSignature: string | null = null;
   private lastPanelObjectiveId: string | null = null;
   private wasActive = false;
+  /** Untere Kante der aktuell gezeigten Zeilen; Grundlage des Ausweich-Rechtecks. */
+  private stackBottomY = COLUMN_TOP_Y;
+  private readonly occlusionFade = createHudOcclusionFadeState();
   /** True, solange eine laufende Ankündigung ihren Platz an das Fokus-Panel übergibt. */
   private announceHandsOverToPanel = false;
 
@@ -307,6 +319,12 @@ export class CoopDefenseSecondaryObjectiveHud {
       return;
     }
 
+    // Vor dem Signatur-Kurzschluss: Das Ausweich-Rechteck folgt der Zeilenzahl, nicht der
+    // Frage, ob sich die Beschriftung geändert hat.
+    const stackHeight = (model.focus ? PANEL_H + ROW_GAP : 0)
+      + model.chips.length * (CHIP_H + ROW_GAP);
+    this.stackBottomY = COLUMN_TOP_Y + Math.max(0, stackHeight - ROW_GAP);
+
     this.root.setVisible(true);
     this.playPendingAnnouncements(model.focus, model.chips);
     if (model.signature === this.lastSignature) return;
@@ -315,6 +333,30 @@ export class CoopDefenseSecondaryObjectiveHud {
     if (model.focus) this.drawPanel(model.focus);
     else this.hidePanel();
     this.drawChips(model.chips, model.focus !== null);
+  }
+
+  /**
+   * Pro Frame nach {@link sync}. Die Spalte weicht zurück, sobald unter ihr gekämpft oder
+   * gezielt wird – die Deckkraft liegt am Wurzelcontainer und multipliziert sich mit den
+   * Auftritts- und Ton-Alphas der einzelnen Zeilen, statt sie zu überschreiben.
+   */
+  updateOcclusionFade(
+    deltaMs: number,
+    playerManager: PlayerManager | null,
+    enemyManager: EnemyManager | null,
+  ): void {
+    if (!this.root?.visible) return;
+    const occluded = isHudRectOccluded(this.scene, this.getOcclusionRect(), playerManager, enemyManager);
+    this.root.setAlpha(advanceHudOcclusionFade(this.occlusionFade, occluded, deltaMs));
+  }
+
+  private getOcclusionRect(): HudOcclusionRect {
+    return {
+      left: COLUMN_X + PANEL_LEFT,
+      right: COLUMN_X - PANEL_LEFT,
+      top: COLUMN_TOP_Y,
+      bottom: this.stackBottomY,
+    };
   }
 
   private playPendingAnnouncements(
@@ -564,6 +606,11 @@ export class CoopDefenseSecondaryObjectiveHud {
     this.announceHandsOverToPanel = false;
     this.root.setVisible(false);
     this.lastSignature = null;
+    // Eine wieder eingeblendete Spalte startet voll sichtbar; sonst erbte sie die Restdeckkraft
+    // eines Gefechts, das inzwischen vorbei ist.
+    resetHudOcclusionFade(this.occlusionFade);
+    this.root.setAlpha(1);
+    this.stackBottomY = COLUMN_TOP_Y;
   }
 
   /** Rundengebundener Zustand. Die Scene-Lifetime-Objekte bleiben bestehen. */

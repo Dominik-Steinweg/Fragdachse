@@ -383,19 +383,19 @@ export class PowerUpSystem {
     return uid;
   }
 
-  tryPickup(playerId: string, uid: number, playerX: number, playerY: number): void {
+  tryPickup(playerId: string, uid: number, playerX: number, playerY: number): boolean {
     const item = this.worldItems.get(uid);
-    if (!item) return; // Existiert nicht (mehr)
-    if (!this.combat.isAlive(playerId)) return; // Toter Spieler darf nicht aufheben
-    if (this.combat.isBurrowed(playerId)) return; // Eingebuddelte Spieler dürfen nichts einsammeln
+    if (!item) return false; // Existiert nicht (mehr)
+    if (!this.combat.isAlive(playerId)) return false; // Toter Spieler darf nicht aufheben
+    if (this.combat.isBurrowed(playerId)) return false; // Eingebuddelte Spieler dürfen nichts einsammeln
 
     const dist = Phaser.Math.Distance.Between(playerX, playerY, item.x, item.y);
-    if (dist > PICKUP_RADIUS * 2) return; // Zu weit weg → ignorieren (großzügiger Check)
+    if (dist > PICKUP_RADIUS * 2) return false; // Zu weit weg → ignorieren (großzügiger Check)
 
     const consumed = item.pickupKind === 'objective-placement'
       ? Boolean(item.objectiveId && this.options.onObjectiveRewardPickup?.(item.objectiveId, playerId))
       : this.applyEffect(playerId, item.def);
-    if (!consumed) return;
+    if (!consumed) return false;
 
     this.worldItems.delete(uid);
     this.pendingRemovalUids.add(uid);
@@ -417,6 +417,7 @@ export class PowerUpSystem {
         this.objectiveRewardUids.delete(item.objectiveId);
       }
     }
+    return true;
   }
 
   // ── Effekt-Anwendung ────────────────────────────────────────────────────

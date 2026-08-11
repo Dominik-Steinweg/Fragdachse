@@ -46,8 +46,18 @@ describe('turret visual catalog', () => {
       await access(file);
       const metadata = await sharp(file).metadata();
       expect(metadata).toMatchObject({ format: 'png', width: 48, height: 48, hasAlpha: true });
-      const corner = await sharp(file).ensureAlpha().extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer();
-      expect(corner[3]).toBe(0);
+      const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      let transparentPixels = 0;
+      for (let y = 0; y < info.height; y += 1) {
+        for (let x = 0; x < info.width; x += 1) {
+          const alpha = data[(y * info.width + x) * 4 + 3];
+          if (alpha === 0) transparentPixels += 1;
+          if (x < 4 || y < 4 || x >= info.width - 4 || y >= info.height - 4) {
+            expect(alpha).toBe(0);
+          }
+        }
+      }
+      expect(transparentPixels).toBeGreaterThan(info.width * info.height * 0.6);
     }
 
     expect(getTurretVisualSpec('TURRET_FLAME').textureKey)

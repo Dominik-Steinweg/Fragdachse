@@ -356,7 +356,7 @@ export class ArenaBuilder {
    * Backt alle noch getragenen Fels-Decals in ein einziges Layer. Ein Decal, das mehrere
    * Felsen beruehrt, bleibt nur sichtbar, solange alle seine Traeger aktiv sind. Das ist
    * bewusst ein Rebuild bei Hindernisaenderungen und kein Live-Image pro Fels: dadurch
-   * bleiben die rund 10 Varianten und viele Instanzen im Renderwalk ein einziges Objekt.
+   * bleiben die 30 Varianten und viele Instanzen im Renderwalk ein einziges Objekt.
    */
   static rebuildRockDecals(
     scene: Phaser.Scene,

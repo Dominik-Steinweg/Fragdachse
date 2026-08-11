@@ -206,12 +206,22 @@ describe('Coop defense encounters', () => {
 
   it('configures the Map 0 side missions alongside its encounters', () => {
     const map = getCoopDefenseMapConfig('0');
+    const destroyObjective = map.secondaryObjectives?.find((objective) => objective.id === 'destroy-brood-front');
+    const holdObjective = map.secondaryObjectives?.find((objective) => objective.id === 'hold-forward-outpost');
+
     expect(map.persistentSpawns).toHaveLength(3);
     expect(map.persistentSpawns?.every((spawn) => spawn.source.type === 'base')).toBe(true);
     expect(new Set(map.persistentSpawns?.map((spawn) => (
       spawn.source.type === 'base' ? spawn.source.baseId : 'map-source'
-    )))).toEqual(new Set(map.secondaryObjectives?.[0]?.targets));
-    expect(map.encounters).toHaveLength(3);
+    )))).toEqual(new Set(destroyObjective?.targets));
+
+    // Die Missions-Sandbox waechst mit jedem Archetyp; gepruefet wird deshalb die authored Kette
+    // am Anfang, nicht die Gesamtzahl der Encounter.
+    expect(map.encounters?.map((entry) => entry.id).slice(0, 3)).toEqual([
+      'a2-opening-encounter',
+      'a2-follow-up-encounter',
+      'a2-hold-encounter',
+    ]);
     const encounter = resolveCoopDefenseMapEncounterConfigs(map, 1)[0];
     expect(encounter?.id).toBe('a2-opening-encounter');
     expect(encounter?.start).toEqual({ type: 'time', atMs: 1_500 });
@@ -219,34 +229,32 @@ describe('Coop defense encounters', () => {
     expect(encounter?.groups.every((group) => group.front === 'west')).toBe(true);
     expect(encounter?.groups.every((group) => group.count > 0 && group.delayMs >= 0)).toBe(true);
     expect(map.encounters?.[1]?.start).toEqual({ type: 'after-previous' });
-    expect(map.encounters?.[2]?.id).toBe('a2-hold-encounter');
     // Der Hold braucht ein lesbares Fenster zwischen Reveal und Angriff.
     expect(map.encounters?.[1]?.restAfterMs).toBeGreaterThan(0);
-    expect(map.secondaryObjectives).toEqual([
-      expect.objectContaining({
-        id: 'destroy-brood-front',
-        start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
-        focusUntil: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
-        targets: expect.arrayContaining([
-          'destroy-brood-front-north',
-          'destroy-brood-front-center',
-          'destroy-brood-front-south',
-        ]),
-        rewards: { xpPerTarget: 25 },
-      }),
-      // Die Fokusfenster stossen aneinander an, statt sich zu ueberschneiden: Der Destroy-Auftrag
-      // gibt den Slot mit dem Clear von a2-follow-up-encounter genau dann frei, wenn der Hold ihn
-      // uebernimmt.
-      expect.objectContaining({
-        id: 'hold-forward-outpost',
-        start: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
-        holdUntil: { type: 'after-encounter', encounterId: 'a2-hold-encounter' },
-        targets: ['forward-outpost'],
-        targetGoal: 1,
-        rewards: { repairTargetOnComplete: true },
-      }),
-    ]);
-    expect(map.secondaryObjectives?.[1]).not.toHaveProperty('focusUntil');
+
+    expect(destroyObjective).toEqual(expect.objectContaining({
+      type: 'destroy',
+      start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
+      focusUntil: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
+      targets: expect.arrayContaining([
+        'destroy-brood-front-north',
+        'destroy-brood-front-center',
+        'destroy-brood-front-south',
+      ]),
+      rewards: { xpPerTarget: 25 },
+    }));
+    // Die Fokusfenster stossen aneinander an, statt sich zu ueberschneiden: Der Destroy-Auftrag
+    // gibt den Slot mit dem Clear von a2-follow-up-encounter genau dann frei, wenn der Hold ihn
+    // uebernimmt.
+    expect(holdObjective).toEqual(expect.objectContaining({
+      type: 'hold',
+      start: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
+      holdUntil: { type: 'after-encounter', encounterId: 'a2-hold-encounter' },
+      targets: ['forward-outpost'],
+      targetGoal: 1,
+      rewards: { repairTargetOnComplete: true },
+    }));
+    expect(holdObjective).not.toHaveProperty('focusUntil');
 
     const outpost = map.bases.find((base) => base.id === 'forward-outpost');
     expect(outpost).toMatchObject({

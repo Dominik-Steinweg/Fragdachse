@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
-import { ROCK_DECAL_CONFIG } from '../src/arena/DecalConfig';
+import { ROCK_DECAL_CONFIG, ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE } from '../src/arena/DecalConfig';
 import { applyArenaMetricsForMode } from '../src/config';
 
 describe('Arena rock decals', () => {
@@ -9,8 +9,10 @@ describe('Arena rock decals', () => {
     applyArenaMetricsForMode('deathmatch', 'ARENA');
   });
 
-  it('configures ten generated variants and keeps their layout deterministic', () => {
-    expect(ROCK_DECAL_CONFIG.variants).toHaveLength(10);
+  it('configures thirty generated variants in two sizes and keeps their layout deterministic', () => {
+    expect(ROCK_DECAL_CONFIG.variants).toHaveLength(30);
+    expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_SIZE)).toHaveLength(20);
+    expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_LARGE_SIZE)).toHaveLength(10);
 
     const first = ArenaGenerator.generate(91_777);
     const repeated = ArenaGenerator.generate(91_777);

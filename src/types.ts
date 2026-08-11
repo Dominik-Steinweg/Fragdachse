@@ -1328,6 +1328,10 @@ export interface DecalCell {
   surface?: DecalSurface;
   /** IDs aller Felsen, die dieses (ggf. uebergreifende) Decal beruehrt. */
   rockIds?: number[];
+  /** Optionale native Darstellungsbreite fuer grosse Felsflaechen. */
+  displaySize?: number;
+  /** Optionale globale Alpha-Daempfung zusaetzlich zur PNG-Alpha. */
+  alpha?: number;
   /** Seeded Rotation in Radiant; alte Layouts duerfen sie weglassen. */
   rotation?: number;
 }
@@ -1697,6 +1701,13 @@ export interface SyncedPowerUp {
   /** Mission reward pickups are placement grants, not direct power-up effects. */
   pickupKind?: 'objective-placement';
   objectiveId?: string;
+}
+
+/** Host-published metadata needed to reconstruct a temporary mission utility on clients. */
+export interface UtilityOverrideDescriptor {
+  readonly kind: 'objective-placement';
+  readonly objectiveId: string;
+  readonly powerUpDefId: string;
 }
 
 /** Snapshot-Hülle für Boden-Power-Ups mit Spawn-/Pickup-Deltas. */
