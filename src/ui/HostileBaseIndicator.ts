@@ -1,6 +1,8 @@
-import { DEPTH, TEAM_RED_COLOR } from '../config';
+import { COLORS, DEPTH } from '../config';
 import { getBaseWorldBounds } from '../arena/BaseRegistry';
 import type { BaseManager } from '../entities/BaseManager';
+import type { EnemyManager } from '../entities/EnemyManager';
+import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const HOSTILE_BASE_EDGE_INSET_PX = 20;
@@ -99,7 +101,7 @@ export function getArrowPointOnScreenViewEdge(
   };
 }
 
-/** Points at the living hostile main base while keeping the arrow in the current camera view. */
+/** Points at the spatial main objective while keeping the arrow in the current camera view. */
 export class HostileBaseIndicator {
   private readonly worldArrow: Phaser.GameObjects.Graphics;
   private readonly edgeArrow: Phaser.GameObjects.Graphics;
@@ -129,9 +131,39 @@ export class HostileBaseIndicator {
     });
   }
 
-  sync(baseManager: BaseManager | null, active: boolean): void {
-    const target = active ? baseManager?.getActiveMainBase('hostile') : undefined;
-    if (!target) {
+  sync(
+    baseManager: BaseManager | null,
+    enemyManager: EnemyManager | null,
+    mapConfig: CoopDefenseMapConfig | null,
+    active: boolean,
+  ): void {
+    let targetX: number | null = null;
+    let targetY: number | null = null;
+    let worldArrowY: number | null = null;
+
+    if (active && mapConfig?.objective === 'destroy-hostile-bases') {
+      const target = baseManager?.getActiveMainBase('hostile');
+      if (target) {
+        const bounds = getBaseWorldBounds(target.spec.region);
+        targetX = bounds.x + bounds.width * 0.5;
+        targetY = bounds.y + bounds.height * 0.5;
+        worldArrowY = bounds.y - 22;
+      }
+    } else if (active && mapConfig?.objective === 'defeat-boss' && mapConfig.boss) {
+      const boss = enemyManager?.getAllEnemies().find((enemy) => (
+        enemy.faction === 'hostile'
+        && enemy.kind === mapConfig.boss!.enemyKind
+        && enemy.sprite.active
+        && enemy.getHp() > 0
+      ));
+      if (boss) {
+        targetX = boss.sprite.x;
+        targetY = boss.sprite.y;
+        worldArrowY = boss.sprite.y - boss.sprite.displayHeight * 0.6 - 22;
+      }
+    }
+
+    if (targetX === null || targetY === null || worldArrowY === null) {
       this.worldArrow.setVisible(false);
       this.edgeArrow.setVisible(false);
       this.bounceTween.pause();
@@ -139,9 +171,6 @@ export class HostileBaseIndicator {
     }
 
     this.bounceTween.resume();
-    const bounds = getBaseWorldBounds(target.spec.region);
-    const targetX = bounds.x + bounds.width * 0.5;
-    const targetY = bounds.y + bounds.height * 0.5;
     const camera = this.scene.cameras.main;
     const view = getVisibleWorldView(camera);
     // Der Weltpfeil sitzt über der Basismitte. Er darf deshalb erst übernehmen, wenn genau
@@ -151,7 +180,7 @@ export class HostileBaseIndicator {
 
     if (targetVisible) {
       const arrowX = targetX;
-      const arrowY = bounds.y - 22 - this.bounceOffset;
+      const arrowY = worldArrowY - this.bounceOffset;
       this.worldArrow
         .setPosition(arrowX, arrowY)
         .setRotation(Math.atan2(targetY - arrowY, targetX - arrowX) - Math.PI / 2)
@@ -197,9 +226,9 @@ export class HostileBaseIndicator {
 
   private drawArrow(graphics: Phaser.GameObjects.Graphics): void {
     graphics.clear();
-    graphics.fillStyle(TEAM_RED_COLOR, 0.95);
+    graphics.fillStyle(COLORS.GOLD_2, 0.95);
     graphics.fillTriangle(0, 13, -11, -8, 11, -8);
-    graphics.lineStyle(2, 0xffe9df, 0.95);
+    graphics.lineStyle(2, COLORS.GOLD_1, 0.95);
     graphics.strokeTriangle(0, 13, -11, -8, 11, -8);
     graphics.fillStyle(0xffffff, 0.7);
     graphics.fillCircle(0, -2, 2);

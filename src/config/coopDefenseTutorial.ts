@@ -9,7 +9,23 @@ import {
 import { HELP_CONTROLS } from './helpControls';
 
 export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 20_000;
-export const COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y = 118;
+
+/**
+ * Gemeinsame vertikale Spur für Zielankündigungen und Tutorial. Der Abstand bezieht
+ * den unteren Startversatz der Einfahranimation mit ein, damit sich beide Flächen
+ * auch während des Tweens nicht überdecken.
+ */
+export const COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT = {
+  centerY: 166,
+  height: 96,
+  entryOffsetY: 12,
+  tutorialGap: 10,
+} as const;
+export const COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y =
+  COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.centerY
+  + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.entryOffsetY
+  + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.height / 2
+  + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.tutorialGap;
 export const COOP_DEFENSE_TUTORIAL_PANEL_WIDTH = 840;
 export const COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT = 168;
 export const COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS = 2;

@@ -66,7 +66,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -197,7 +197,7 @@ export class ArenaLifecycleCoordinator {
 
   // ── Phase detection ───────────────────────────────────────────────────────
 
-  detectPhaseChange(): void {
+  detectPhaseChange(deferArenaToLobby = false): void {
     const current = bridge.getGamePhase();
 
     if (this.matchTerminated) {
@@ -222,6 +222,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     const prev     = this.lastPhase;
+    if (deferArenaToLobby && prev === 'ARENA' && current === 'LOBBY') return;
     this.lastPhase = current;
     if (prev === 'LOBBY' && current === 'ARENA') {
       this.arenaEnteredAt = Date.now();
@@ -2494,10 +2495,7 @@ export class ArenaLifecycleCoordinator {
     this.resetLocalArenaHudState();
     this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
-    this.ctx.arenaCountdown?.syncTo(
-      bridge.getArenaStartTime(),
-      coopDefenseMapConfig ? getCoopDefenseMapObjectiveLabel(coopDefenseMapConfig.objective) : null,
-    );
+    this.ctx.arenaCountdown?.syncTo(bridge.getArenaStartTime());
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
     this.hostUpdate.setActive(true);

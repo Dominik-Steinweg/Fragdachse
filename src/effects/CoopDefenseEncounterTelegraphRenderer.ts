@@ -27,6 +27,7 @@ const CHEVRON_START_OFFSET = 16;
 const CHEVRON_HALF_H = 11;
 const CHEVRON_LENGTH = 15;
 const CHEVRON_THICKNESS = 5;
+const SPAWN_COMPLETE_FADE_MS = 4_200;
 
 interface TelegraphProfile {
   readonly color: number;
@@ -46,22 +47,31 @@ interface TelegraphFrontVisual {
 }
 
 const PROFILE_INCOMING: TelegraphProfile = {
-  color: COLORS.RED_1,
+  color: COLORS.PURPLE_1,
   bandWidth: 152,
   chevronSpeed: 118,
   chevronsPerRow: 2,
   intensity: 1,
   sparkFrequency: 55,
-  sparkTints: [0xffffff, COLORS.GOLD_1, COLORS.RED_1],
+  sparkTints: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
 };
 const PROFILE_ACTIVE: TelegraphProfile = {
-  color: COLORS.GOLD_1,
+  color: COLORS.PURPLE_2,
   bandWidth: 94,
   chevronSpeed: 62,
   chevronsPerRow: 1,
   intensity: 0.44,
   sparkFrequency: 150,
-  sparkTints: [0xffffff, COLORS.GOLD_1, COLORS.GOLD_3],
+  sparkTints: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
+};
+const PROFILE_REST: TelegraphProfile = {
+  color: COLORS.PURPLE_2,
+  bandWidth: 70,
+  chevronSpeed: 28,
+  chevronsPerRow: 1,
+  intensity: 0.22,
+  sparkFrequency: 320,
+  sparkTints: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
 };
 const PROFILE_CLEARED: TelegraphProfile = {
   color: COLORS.GREEN_2,
@@ -78,6 +88,8 @@ export class CoopDefenseEncounterTelegraphRenderer {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly visuals = new Map<SpawnFront, TelegraphFrontVisual>();
   private activeProfile: TelegraphProfile | null = null;
+  private lastEncounterId: string | null = null;
+  private spawnCompleteFadeStartedAtMs: number | null = null;
   private readonly chevronPoints: Phaser.Math.Vector2[] = Array.from(
     { length: 6 },
     () => new Phaser.Math.Vector2(0, 0),
@@ -95,8 +107,8 @@ export class CoopDefenseEncounterTelegraphRenderer {
       const center = 6;
       const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
       gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.35, 'rgba(255,208,112,0.85)');
-      gradient.addColorStop(1, 'rgba(255,90,24,0)');
+      gradient.addColorStop(0.35, 'rgba(232,210,255,0.85)');
+      gradient.addColorStop(1, 'rgba(174,88,220,0)');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 12, 12);
     });
@@ -147,7 +159,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
         speedY: this.getSparkSpeedY(front),
         scale: { start: 0.62, end: 0.08 },
         alpha: { start: 0.78, end: 0 },
-        tint: [0xffffff, COLORS.GOLD_1, COLORS.RED_1],
+        tint: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
       });
@@ -169,20 +181,26 @@ export class CoopDefenseEncounterTelegraphRenderer {
     elapsedMs: number,
     inArena: boolean,
   ): void {
-    if (
-      !state
-      || !inArena
-      || state.phase === 'rest'
-      || state.phase === 'complete'
-      || (state.phase === 'active' && state.spawnComplete === true)
-      || this.visuals.size === 0
-    ) {
+    if (!state || !inArena || state.phase === 'complete' || this.visuals.size === 0) {
+      if (!state || !inArena) {
+        this.lastEncounterId = null;
+        this.spawnCompleteFadeStartedAtMs = null;
+      }
       this.clear();
       return;
     }
 
     const fronts = state.fronts?.length > 0 ? state.fronts : ['west'] as const;
     const now = Number.isFinite(elapsedMs) ? elapsedMs : 0;
+    if (state.encounterId !== this.lastEncounterId) {
+      this.lastEncounterId = state.encounterId;
+      this.spawnCompleteFadeStartedAtMs = null;
+    }
+    if (state.phase === 'active' && state.spawnComplete === true) {
+      this.spawnCompleteFadeStartedAtMs ??= now;
+    } else {
+      this.spawnCompleteFadeStartedAtMs = null;
+    }
     const phaseProgress = state.phaseEndsAtMs === null
       ? 1
       : Phaser.Math.Clamp(
@@ -192,10 +210,21 @@ export class CoopDefenseEncounterTelegraphRenderer {
       );
     const isIncoming = state.phase === 'incoming';
     const isCleared = state.phase === 'cleared';
-    const profile = isIncoming ? PROFILE_INCOMING : isCleared ? PROFILE_CLEARED : PROFILE_ACTIVE;
-    const fade = isCleared ? 1 - phaseProgress : 1;
+    const isRest = state.phase === 'rest';
+    const profile = isIncoming
+      ? PROFILE_INCOMING
+      : isCleared
+        ? PROFILE_CLEARED
+        : isRest
+          ? PROFILE_REST
+          : PROFILE_ACTIVE;
+    const spawnCompleteFade = this.spawnCompleteFadeStartedAtMs === null
+      ? 1
+      : 1 - Phaser.Math.Clamp((now - this.spawnCompleteFadeStartedAtMs) / SPAWN_COMPLETE_FADE_MS, 0, 1);
+    const fade = isCleared ? 1 - phaseProgress : spawnCompleteFade;
+    const restRamp = isRest ? 0.7 + phaseProgress * 0.3 : 1;
     const pulse = 0.78 + Math.sin(now / (isIncoming ? 115 : 210)) * 0.16;
-    const intensity = Phaser.Math.Clamp(profile.intensity * fade * pulse, 0, 1);
+    const intensity = Phaser.Math.Clamp(profile.intensity * fade * restRamp * pulse, 0, 1);
     if (intensity <= 0.02) {
       this.clear();
       return;
@@ -265,6 +294,8 @@ export class CoopDefenseEncounterTelegraphRenderer {
     }
     this.visuals.clear();
     this.activeProfile = null;
+    this.lastEncounterId = null;
+    this.spawnCompleteFadeStartedAtMs = null;
     this.graphics.destroy();
   }
 

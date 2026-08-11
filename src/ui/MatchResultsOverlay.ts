@@ -151,7 +151,7 @@ interface OutcomeStyle {
 }
 
 const OUTCOME_STYLE: Record<MatchResultOutcome, OutcomeStyle> = {
-  victory: { label: 'SIEG', color: COLORS.GOLD_1, celebrate: true },
+  victory: { label: 'SIEG', color: COLORS.GREEN_2, celebrate: true },
   defeat: { label: 'NIEDERLAGE', color: COLORS.RED_2, celebrate: false },
   draw: { label: 'UNENTSCHIEDEN', color: COLORS.BLUE_2, celebrate: false },
   aborted: { label: 'MATCH BEENDET', color: COLORS.GOLD_2, celebrate: false },

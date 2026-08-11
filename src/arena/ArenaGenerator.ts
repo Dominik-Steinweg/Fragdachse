@@ -468,10 +468,7 @@ export class ArenaGenerator {
     tutorialShowControls: boolean,
   ): Set<string> {
     const tutorialRockCells = new Set<string>();
-    const panelRegion = getCoopDefenseTutorialRockRegion(tutorialShowControls);
-    // Bis zum oberen Arenarand auffüllen, damit oberhalb des HUD-Blocks keine
-    // kleinen, vom restlichen Spielfeld abgeschnittenen Bodentaschen entstehen.
-    const region = { ...panelRegion, minGridY: 0 };
+    const region = getCoopDefenseTutorialRockRegion(tutorialShowControls);
     const halo = COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS;
     for (let gy = Math.max(0, region.minGridY - halo); gy <= Math.min(GRID_ROWS - 1, region.maxGridY + halo); gy++) {
       for (let gx = Math.max(0, region.minGridX - halo); gx <= Math.min(GRID_COLS - 1, region.maxGridX + halo); gx++) {

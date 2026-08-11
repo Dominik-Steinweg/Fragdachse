@@ -36,6 +36,7 @@ import { setEmissiveScale } from '../effects/EmissiveScale';
 import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
+import { ArenaExitFadeOverlay } from '../ui/ArenaExitFadeOverlay';
 import { CoopDefenseItemRewardOverlay } from '../ui/CoopDefenseItemRewardOverlay';
 import {
   CoopDefenseItemsOverlay,
@@ -53,7 +54,9 @@ import {
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
+import { CoopDefenseObjectiveAnnouncement } from '../ui/CoopDefenseObjectiveAnnouncement';
 import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
+import { buildMainObjectiveViewModel } from '../ui/coopDefenseMainObjectiveModel';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
@@ -105,7 +108,6 @@ import { getRenderResolutionController, toDesignSpace } from '../graphics/Render
 import { installTextResolution } from '../graphics/TextResolution';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
-  COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
   buildDefaultCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
@@ -113,6 +115,7 @@ import {
   respecCoopDefenseUpgradeCategory,
   getCoopDefenseUpgradeLoadoutSelection,
   getCoopDefenseUpgradeTextureKey,
+  hasCoopDefenseDedicatedUpgradeIcon,
   getUnlockedCoopDefenseConstructionIds,
   getUnlockedLoadoutToolRefs,
   getCoopDefenseToolCapacity,
@@ -127,7 +130,7 @@ import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, Loadou
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
@@ -224,6 +227,7 @@ export class ArenaScene extends Phaser.Scene {
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private hostileBaseIndicator: HostileBaseIndicator | null = null;
+  private objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
@@ -284,6 +288,9 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private matchResultsOverlay: MatchResultsOverlay | null = null;
+  private arenaExitFadeOverlay: ArenaExitFadeOverlay | null = null;
+  private arenaExitFadeComplete = false;
+  private arenaExitOutcomeWaitStartedAt = 0;
   private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
   // Profil-Stand beim Oeffnen des Upgrade-Overlays – fuer "Abbruch" (Wiederherstellen).
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseProgressPreferences | null = null;
@@ -388,9 +395,9 @@ export class ArenaScene extends Phaser.Scene {
     // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
     const queuedUpgradeTextures = new Set<string>();
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
-      // Temporary recipe-generated icons also cover the three construction unlock nodes.
-      // Other unlocks keep their existing loadout handling and must not create 404 requests.
-      if (definition.kind !== 'upgrade' && !COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(definition.id)) continue;
+      // Dedicated upgrade-tree artwork also covers unlock nodes that should not fall back to
+      // the corresponding loadout-item icon.
+      if (definition.kind !== 'upgrade' && !hasCoopDefenseDedicatedUpgradeIcon(definition.id)) continue;
       const key = getCoopDefenseUpgradeTextureKey(definition.id);
       if (key === null) continue;
       if (queuedUpgradeTextures.has(key)) continue;
@@ -570,7 +577,9 @@ export class ArenaScene extends Phaser.Scene {
     leftPanel.build();
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
-    const centerHUD  = new CenterHUD(this);
+    this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(this);
+    this.objectiveAnnouncements.build();
+    const centerHUD  = new CenterHUD(this, this.objectiveAnnouncements);
     centerHUD.build();
     centerHUD.setPuContainer(leftPanel.getPuContainer());
 
@@ -680,8 +689,12 @@ export class ArenaScene extends Phaser.Scene {
       this.openItemRewardOverlay();
     });
     this.matchResultsOverlay.build();
+    this.arenaExitFadeOverlay = new ArenaExitFadeOverlay(this);
+    this.arenaExitFadeOverlay.build();
     rightPanel.setResultsReplayHandler(() => this.replayMatchResults());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.arenaExitFadeOverlay?.destroy();
+      this.arenaExitFadeOverlay = null;
       this.matchResultsOverlay?.destroy();
       this.itemRewardOverlay?.destroy();
       this.itemsOverlay?.destroy();
@@ -864,7 +877,7 @@ export class ArenaScene extends Phaser.Scene {
     this.localPlayerState = new LocalPlayerState();
     this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
     this.hostileBaseIndicator = new HostileBaseIndicator(this);
-    this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this);
+    this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this, this.objectiveAnnouncements!);
     this.secondaryObjectiveHud.build();
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.tunnelRenderer    = new TunnelRenderer(this);
@@ -1252,23 +1265,28 @@ export class ArenaScene extends Phaser.Scene {
     let arenaHudMs = 0;
     let leaderboardCanopyMs = 0;
     let arenaPanelMs = 0;
-    this.syncArenaMetrics();
-    this.lifecycle.detectPhaseChange();
     const networkUpdateStartMs = performance.now();
     const scenePreludeMs = networkUpdateStartMs - frameStartMs;
     bridge.updateNetwork();
     const networkUpdateMs = performance.now() - networkUpdateStartMs;
 
     const phase           = bridge.getGamePhase();
-    const enteredLobbyFromArena = this.lastObservedGamePhase === 'ARENA' && phase === 'LOBBY';
+    const deferArenaExit  = this.syncArenaExitFade(phase);
+    this.lifecycle.detectPhaseChange(deferArenaExit);
+    if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
+    this.syncArenaMetrics(deferArenaExit ? 'ARENA' : phase);
+    const enteredLobbyFromArena = !deferArenaExit
+      && this.lastObservedGamePhase === 'ARENA'
+      && phase === 'LOBBY';
     const inGame          = phase === 'ARENA';
+    const arenaVisible    = inGame || deferArenaExit;
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
 
-    if (phase === 'LOBBY') {
+    if (phase === 'LOBBY' && !deferArenaExit) {
       this.clearDebugModes();
       if (!isCoopDefenseMode(bridge.getGameMode())) {
         this.coopDefenseXpDebugOverlay?.hide();
@@ -1279,7 +1297,7 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay?.hide();
     }
 
-    this.syncMainCamera(delta, inGame && !terminated);
+    this.syncMainCamera(delta, arenaVisible && !terminated);
 
     this.arenaPanelsHeld = !!(inGame && !terminated && this.arenaPanelTabKey?.isDown);
 
@@ -1287,7 +1305,7 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPanelsHeld = false;
     }
 
-    this.menuArenaPreview?.setVisible(phase === 'LOBBY');
+    this.menuArenaPreview?.setVisible(phase === 'LOBBY' && !deferArenaExit);
 
     if (inGame) {
       // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.
@@ -1303,7 +1321,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
 
-    if (!terminated && phase === 'LOBBY') {
+    if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
       const lobbyUiStartedAt = performance.now();
       if (enteredLobbyFromArena) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
@@ -1368,7 +1386,7 @@ export class ArenaScene extends Phaser.Scene {
       this.lastLobbySidebarSignature = null;
     }
 
-    this.lastObservedGamePhase = phase;
+    if (!deferArenaExit) this.lastObservedGamePhase = phase;
     const sceneStateEndMs = performance.now();
     const sceneStateMs = sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs);
 
@@ -1378,11 +1396,10 @@ export class ArenaScene extends Phaser.Scene {
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
         ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
         : null;
-      // Auf Zielkarten ist die Restzeit bedeutungslos; der Slot zeigt stattdessen das Ziel.
-      const objectiveLabel = activeMapConfig && activeMapConfig.objective !== 'survive'
-        ? getCoopDefenseMapObjectiveLabel(activeMapConfig.objective)
-        : null;
-      this.ctx.centerHUD.updateTimer(secs, objectiveLabel);
+      this.ctx.centerHUD.updateTimer(
+        secs,
+        activeMapConfig === null || activeMapConfig.objective === 'survive',
+      );
       this.ctx.centerHUD.updateSurvivalStatus(
         activeMapConfig?.objective === 'survive'
           ? bridge.getLocalCoopDefenseSurvivalState()
@@ -1489,18 +1506,54 @@ export class ArenaScene extends Phaser.Scene {
     const postRoleMs = visualsStartMs - sceneStateEndMs - primaryStepMs;
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
-    const inArena = inGame && !terminated;
+    const inArena = arenaVisible && !terminated;
     // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
     // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
     this.syncMainCamera(spectator ? 0 : delta, inArena);
-    const encounterPresentation = inArena && isCoopDefenseMode(bridge.getGameMode())
+    const coopDefensePresentationActive = inArena && isCoopDefenseMode(bridge.getGameMode());
+    const presentationMapConfig = coopDefensePresentationActive
+      ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+      : null;
+    const encounterPresentation = coopDefensePresentationActive
       ? bridge.getCoopDefenseEncounterPresentationState()
       : null;
-    const secondaryObjectivesActive = inArena && isCoopDefenseMode(bridge.getGameMode());
+    const secondaryObjectivesActive = coopDefensePresentationActive;
     const secondaryObjectivePresentation = secondaryObjectivesActive
       ? bridge.getCoopDefenseSecondaryObjectivePresentationState()
       : null;
     const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
+    const hostileMainBases = presentationMapConfig?.objective === 'destroy-hostile-bases'
+      ? (this.ctx.baseManager?.getMainBasesByFaction('hostile') ?? [])
+      : [];
+    const bossEnemyKind = presentationMapConfig?.boss?.enemyKind;
+    const bossEnemy = bossEnemyKind
+      ? this.ctx.enemyManager?.getAllEnemies().find((enemy) => (
+        enemy.faction === 'hostile'
+        && enemy.kind === bossEnemyKind
+        && enemy.sprite.active
+        && enemy.getHp() > 0
+      ))
+      : undefined;
+    const mainObjective = presentationMapConfig
+      ? buildMainObjectiveViewModel({
+        mapId: presentationMapConfig.mapId,
+        objective: presentationMapConfig.objective,
+        elapsedMs: encounterElapsedMs,
+        surviveDurationSec: presentationMapConfig.surviveDurationSec,
+        encounterCount: presentationMapConfig.encounters?.length ?? 0,
+        encounter: encounterPresentation,
+        boss: bossEnemy ? { currentHp: bossEnemy.getHp(), maxHp: bossEnemy.getMaxHp() } : null,
+        hostileBases: hostileMainBases.length > 0
+          ? {
+            currentHp: hostileMainBases.reduce((sum, base) => sum + base.getHp(), 0),
+            maxHp: hostileMainBases.reduce((sum, base) => sum + base.getMaxHp(), 0),
+            remaining: hostileMainBases.filter((base) => !base.isDestroyed()).length,
+            total: hostileMainBases.length,
+          }
+          : null,
+      })
+      : null;
+    this.ctx.centerHUD.updateMainObjectivePresentation(mainObjective);
     this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
     // Pflichtziel und Nebenziel werden im selben Frameabschnitt aktualisiert; die Rundenzeit
@@ -1518,9 +1571,13 @@ export class ArenaScene extends Phaser.Scene {
       secondaryObjectivesActive,
     );
     this.syncSpectatorPlayerNames(inArena);
-    const hostileBaseIndicatorActive = inArena && isCoopDefenseMode(bridge.getGameMode());
-    if (hostileBaseIndicatorActive) {
-      this.hostileBaseIndicator?.sync(this.ctx.baseManager, true);
+    if (coopDefensePresentationActive) {
+      this.hostileBaseIndicator?.sync(
+        this.ctx.baseManager,
+        this.ctx.enemyManager,
+        presentationMapConfig,
+        true,
+      );
     } else {
       this.hostileBaseIndicator?.clear();
     }
@@ -2498,6 +2555,8 @@ export class ArenaScene extends Phaser.Scene {
       this.hostileBaseIndicator = null;
       this.secondaryObjectiveHud?.destroy();
       this.secondaryObjectiveHud = null;
+      this.objectiveAnnouncements?.destroy();
+      this.objectiveAnnouncements = null;
       this.renderers?.secondaryObjectiveMarkers.destroy();
     });
   }
@@ -2548,14 +2607,14 @@ export class ArenaScene extends Phaser.Scene {
     // No-op under Phaser 4 WebGL.
   }
 
-  private syncArenaMetrics(): void {
+  private syncArenaMetrics(phase = bridge.getGamePhase()): void {
     applyArenaMetricsForMode(
       bridge.getGameMode(),
-      bridge.getGamePhase(),
-      this.resolveCoopDefenseArenaWidthCells(),
-      this.resolveCoopDefenseArenaHeightCells(),
+      phase,
+      this.resolveCoopDefenseArenaWidthCells(phase),
+      this.resolveCoopDefenseArenaHeightCells(phase),
     );
-    this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), bridge.getGamePhase());
+    this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), phase);
     this.redrawArenaClipMask();
     this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
     this.syncMainCameraBounds();
@@ -2704,7 +2763,13 @@ export class ArenaScene extends Phaser.Scene {
    */
   private resolveWorldGradeInputs(): WorldGradeInputs {
     const minutes = this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES;
-    const inArena = bridge.getGamePhase() === 'ARENA';
+    const phase = bridge.getGamePhase();
+    const inArena = phase === 'ARENA'
+      || (
+        phase === 'LOBBY'
+        && this.lastObservedGamePhase === 'ARENA'
+        && !this.arenaExitFadeComplete
+      );
     const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
     const localId = bridge.getLocalPlayerId();
     const localPlayer = this.ctx?.playerManager.getPlayer(localId);
@@ -2731,17 +2796,17 @@ export class ArenaScene extends Phaser.Scene {
     this.visualFeedback?.applyToCamera(this.cameras.main, base.x, base.y, delta);
   }
 
-  private resolveCoopDefenseArenaWidthCells(): number | undefined {
+  private resolveCoopDefenseArenaWidthCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(bridge.getGameMode())) return undefined;
-    const mapId = bridge.getGamePhase() === 'ARENA'
+    const mapId = phase === 'ARENA'
       ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : bridge.getCoopDefenseMapId();
     return getCoopDefenseMapConfig(mapId).arenaWidthCells;
   }
 
-  private resolveCoopDefenseArenaHeightCells(): number | undefined {
+  private resolveCoopDefenseArenaHeightCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(bridge.getGameMode())) return undefined;
-    const mapId = bridge.getGamePhase() === 'ARENA'
+    const mapId = phase === 'ARENA'
       ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : bridge.getCoopDefenseMapId();
     return getCoopDefenseMapConfig(mapId).arenaHeightCells;
@@ -3291,6 +3356,69 @@ export class ArenaScene extends Phaser.Scene {
   private applyDefaultCoopDefenseMapSelection(): void {
     if (!bridge.isHost()) return;
     bridge.setCoopDefenseMapId(this.coopDefenseHighestUnlockedMapId);
+  }
+
+  /**
+   * Verzoegert nur den lokalen Arena-Abbau. Der Host hat Ergebnis und LOBBY-Phase bereits
+   * publiziert; Simulation und Eingabe bleiben deshalb aus, waehrend das letzte Bild ausfadet.
+   */
+  private syncArenaExitFade(phase: GamePhase): boolean {
+    if (phase === 'ARENA') {
+      this.arenaExitFadeComplete = false;
+      this.arenaExitOutcomeWaitStartedAt = 0;
+      this.arenaExitFadeOverlay?.hide();
+      return false;
+    }
+    if (
+      phase !== 'LOBBY'
+      || this.lastObservedGamePhase !== 'ARENA'
+      || this.lifecycle.isMatchTerminated()
+      || this.arenaExitFadeComplete
+    ) {
+      return false;
+    }
+    if (this.arenaExitFadeOverlay?.isActive()) return true;
+
+    const results = bridge.getRoundResults();
+    const roundState = bridge.getRoundState();
+    const eligibilityKnown = results !== null || roundState?.resultEligiblePlayerIds !== undefined;
+    if (eligibilityKnown && !bridge.isLocalRoundResultEligible(results)) {
+      this.arenaExitFadeComplete = true;
+      return false;
+    }
+
+    const outcome = resolvePersonalMatchOutcome(
+      bridge.getGameMode(),
+      bridge.getLocalPlayerId(),
+      results ?? [],
+      roundState,
+    );
+    if (outcome === 'victory' || outcome === 'defeat') {
+      const overlay = this.arenaExitFadeOverlay;
+      if (!overlay) {
+        this.arenaExitFadeComplete = true;
+        return false;
+      }
+      overlay.play(outcome, () => {
+        this.arenaExitFadeComplete = true;
+      });
+      return true;
+    }
+    if (outcome !== 'syncing') {
+      this.arenaExitFadeComplete = true;
+      return false;
+    }
+
+    // Selten kommen Phasenstatus und Ergebnis-Snapshot in getrennten Netzwerkticks an.
+    // Kurz auf den semantischen Ausgang warten, aber bei einem unvollstaendigen Snapshot
+    // niemals dauerhaft in der letzten Arenaansicht haengenbleiben.
+    if (this.arenaExitOutcomeWaitStartedAt === 0) {
+      this.arenaExitOutcomeWaitStartedAt = this.time.now;
+    }
+    if (this.time.now - this.arenaExitOutcomeWaitStartedAt < 1_200) return true;
+
+    this.arenaExitFadeComplete = true;
+    return false;
   }
 
   private beginMatchResults(): void {

@@ -49,6 +49,39 @@ describe('CoopDefenseMapDirector', () => {
     expect(largeDeltaSpawn).toHaveBeenCalledTimes(2);
   });
 
+  it('spawns a group one enemy at a time within its configured random window', () => {
+    let nextEnemyId = 0;
+    const spawnGroup = vi.fn((_kind: string, count: number) => [`staggered-${nextEnemyId++}`].slice(0, count));
+    const randomValues = [0.8, 0.2];
+    const director = new CoopDefenseMapDirector([{
+      id: 'staggered-wave',
+      start: { type: 'time', atMs: 0 },
+      groups: [{
+        enemyKind: 'zombie-badger',
+        count: 3,
+        delayMs: 0,
+        spawnStaggerMs: 1_500,
+      }],
+    }], spawnGroup, {
+      random: () => randomValues.shift() ?? 0,
+    });
+
+    director.hostUpdate(0, false);
+    expect(spawnGroup).toHaveBeenLastCalledWith('zombie-badger', 1, 'staggered-wave');
+    expect(director.isEncounterSpawnComplete('staggered-wave')).toBe(false);
+
+    director.hostUpdate(299, false);
+    expect(spawnGroup).toHaveBeenCalledTimes(1);
+    director.hostUpdate(1, false);
+    expect(spawnGroup).toHaveBeenCalledTimes(2);
+
+    director.hostUpdate(899, false);
+    expect(spawnGroup).toHaveBeenCalledTimes(2);
+    director.hostUpdate(1, false);
+    expect(spawnGroup).toHaveBeenCalledTimes(3);
+    expect(director.isEncounterSpawnComplete('staggered-wave')).toBe(true);
+  });
+
   it('resets all encounter execution state', () => {
     const spawnGroup = vi.fn();
     const director = new CoopDefenseMapDirector(encounters, spawnGroup);

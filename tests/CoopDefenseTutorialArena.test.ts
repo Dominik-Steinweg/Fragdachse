@@ -9,7 +9,9 @@ import {
 } from '../src/config';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import {
+  COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT,
   COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT,
+  COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
   getCoopDefenseTutorialPanelCenterX,
@@ -29,6 +31,15 @@ describe('Coop defense tutorial arena formation', () => {
     }
   });
 
+  it('keeps the tutorial below the complete announcement entry animation', () => {
+    const announcementEntryBottom = COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.centerY
+      + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.entryOffsetY
+      + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.height / 2;
+    expect(COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y - announcementEntryBottom)
+      .toBe(COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.tutorialGap);
+    expect(COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.tutorialGap).toBeGreaterThan(0);
+  });
+
   it('grows the footprint only for the map that shows the controls table', () => {
     const standard = getCoopDefenseTutorialRockRegion(false);
     const withControls = getCoopDefenseTutorialRockRegion(true);
@@ -41,10 +52,11 @@ describe('Coop defense tutorial arena formation', () => {
     }
   });
 
-  it('fills the tutorial footprint with rocks except for railway cells', () => {
+  it('fills the tutorial footprint and grows an irregular halo on all four sides', () => {
     const mapConfig = getCoopDefenseMapConfig('1');
     const layout = ArenaGenerator.generate(42_424, mapConfig);
     const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
+    const tutorialRocks = layout.rocks.filter((rock) => rock.armorDropMult !== undefined);
     const trackColumns = new Set<number>();
     for (const track of layout.tracks) {
       trackColumns.add(track.gridX);
@@ -57,17 +69,24 @@ describe('Coop defense tutorial arena formation', () => {
       }
     }
 
-    let haloRockCount = 0;
-    for (const rock of layout.rocks) {
+    const haloSides = { top: 0, right: 0, bottom: 0, left: 0 };
+    for (const rock of tutorialRocks) {
       const insideExpanded = rock.gridX >= region.minGridX - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
         && rock.gridX <= region.maxGridX + COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
         && rock.gridY >= region.minGridY - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
         && rock.gridY <= region.maxGridY + COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS;
-      const insideCore = rock.gridX >= region.minGridX && rock.gridX <= region.maxGridX
-        && rock.gridY >= region.minGridY && rock.gridY <= region.maxGridY;
-      if (insideExpanded && !insideCore) haloRockCount++;
+      expect(insideExpanded).toBe(true);
+      if (rock.gridY < region.minGridY) haloSides.top++;
+      if (rock.gridX > region.maxGridX) haloSides.right++;
+      if (rock.gridY > region.maxGridY) haloSides.bottom++;
+      if (rock.gridX < region.minGridX) haloSides.left++;
     }
-    expect(haloRockCount).toBeGreaterThan(0);
+    expect(haloSides.top).toBeGreaterThan(0);
+    expect(haloSides.right).toBeGreaterThan(0);
+    expect(haloSides.bottom).toBeGreaterThan(0);
+    expect(haloSides.left).toBeGreaterThan(0);
+    expect(Math.min(...tutorialRocks.map((rock) => rock.gridY)))
+      .toBeGreaterThanOrEqual(region.minGridY - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS);
   });
 
   it('keeps panel and rocks world-centered on 60- and 120-cell arenas while the camera moves', () => {

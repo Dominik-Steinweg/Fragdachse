@@ -25,6 +25,7 @@ import type { RoundResult, RoundState } from '../network/NetworkBridge';
 import { ensureFlatPanelTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
@@ -37,9 +38,8 @@ const ARENA_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_SIDEBAR_WIDTH + 8;
 const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
 
 /**
- * Linke Kante der Arena-Seitenspalte. Killfeed und Leaderboard beginnen hier direkt unter dem
- * Encounter-Panel; exportiert, damit weitere HUD-Elemente unterhalb des Panels davor enden
- * können, statt sie zu überdecken.
+ * Linke Kante der Arena-Seitenspalte. Exportiert, damit weitere HUD-Elemente davor enden
+ * können, statt die Seitenspalte horizontal zu überdecken.
  */
 export const ARENA_SIDEBAR_CONTENT_LEFT_X = ARENA_SIDEBAR_LEFT_X;
 const ARENA_PANEL_WIDTH      = Math.round((DEFAULT_ARENA_OFFSET_X - 40) * 1.5);
@@ -48,13 +48,14 @@ const RESULTS_EXTRA_OFFSET_Y = 32;
 
 // Killfeed: Namen links/rechts, Waffe zentriert
 const KILLFEED_MAX     = 5;
-const KILLFEED_TOP_Y   = 116;   // Y des ersten (neuesten) Eintrags (nach Train-Widget verschoben)
+// Unterhalb des maximalen Nebenpanel-Stacks, mit einem kleinen visuellen Abstand.
+const KILLFEED_TOP_Y   = COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y + 18;
 const KILLFEED_ENTRY_H = 28;
 const KILLFEED_FONT    = '17px';
 const KILLFEED_NAME_MAXLEN = 8; // Zeichen – wird mit … abgeschnitten
 
 // Leaderboard (Arena)
-const LB_SEP_Y      = KILLFEED_TOP_Y + KILLFEED_MAX * KILLFEED_ENTRY_H + 10; // 186
+const LB_SEP_Y      = KILLFEED_TOP_Y + KILLFEED_MAX * KILLFEED_ENTRY_H + 10;
 const LB_HEADER_Y   = LB_SEP_Y + 18;
 const LB_START_Y    = LB_HEADER_Y + 30;
 const LB_ENTRY_H    = 28;

@@ -47,7 +47,13 @@ describe('Coop defense encounters', () => {
         id: 'opening',
         start: { type: 'time', atMs: 0 },
         restAfterMs: 0,
-        groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0, front: 'west' }],
+        groups: [{
+          enemyKind: 'zombie-badger',
+          count: 3,
+          delayMs: 0,
+          spawnStaggerMs: 1_500,
+          front: 'west',
+        }],
       },
     ]);
     expect(resolveCoopDefenseMapEncounterConfigs(normalized, 4)).toEqual([
@@ -55,7 +61,13 @@ describe('Coop defense encounters', () => {
         id: 'opening',
         start: { type: 'time', atMs: 0 },
         restAfterMs: 0,
-        groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0, front: 'west' }],
+        groups: [{
+          enemyKind: 'zombie-badger',
+          count: 3,
+          delayMs: 0,
+          spawnStaggerMs: 1_500,
+          front: 'west',
+        }],
       },
     ]);
   });
@@ -77,6 +89,22 @@ describe('Coop defense encounters', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeMap([
       { id: 'boss-group', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'void-hunter', count: 1 }] },
     ]))).toThrow('unique boss slot');
+  });
+
+  it('allows a group to override or disable the default stagger window', () => {
+    const normalized = normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'configured-wave',
+      start: { type: 'time', atMs: 0 },
+      groups: [
+        { enemyKind: 'zombie-badger', count: 2, spawnStaggerMs: 275 },
+        { enemyKind: 'demon-badger', count: 2, spawnStaggerMs: 0 },
+      ],
+    }]));
+
+    expect(normalized.encounters?.[0]?.groups.map((group) => group.spawnStaggerMs)).toEqual([275, 0]);
+    expect(resolveCoopDefenseMapEncounterConfigs(normalized, 1)[0]?.groups.map(
+      (group) => group.spawnStaggerMs,
+    )).toEqual([275, 0]);
   });
 
   it('requires encounters for repel-assault maps while allowing parallel persistent pressure', () => {

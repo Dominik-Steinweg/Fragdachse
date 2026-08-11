@@ -4,18 +4,16 @@
  *
  * Gestaltungsgrundsatz: Das Pflichtziel-Panel (`CenterHUD`, Angriffsserie) bleibt der Anker
  * oben rechts. Die Nebenziele stehen als eigene Spalte **darunter** und teilen dessen Breite
- * und Formensprache, tragen aber eine eigene Leitfarbenfamilie (Violett), die in keiner
- * Encounter-Phase und in keiner Teamfarbe vorkommt. Die Spalte endet bewusst vor der
- * Arena-Seitenspalte, in der Killfeed und Leaderboard beginnen.
+ * und Formensprache, tragen aber eine eigene Leitfarbenfamilie (Blau), die in keiner
+ * Encounter-Phase und in keiner Teamfarbe vorkommt. Die Spalte steht bündig unter dem
+ * Pflichtziel; die Arena-Seitenspalte beginnt darunter, damit Killfeed und Leaderboard frei bleiben.
  *
  * Die Ankündigung erscheint klein im oberen Bilddrittel und fliegt danach sichtbar in ihren
  * Panelplatz – so entsteht die Verbindung zwischen Einblendung und Dauerzustand, ohne die
  * Sicht auf die eigene Figur zu verstellen.
  */
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH, GAME_WIDTH, toCssColor } from '../config';
-import { ENCOUNTER_PANEL_LAYOUT } from './CenterHUD';
-import { ARENA_SIDEBAR_CONTENT_LEFT_X } from './RightSidePanel';
+import { COLORS, DEPTH, toCssColor } from '../config';
 import { ensureFlatPanelTexture } from './uiTextures';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
@@ -27,20 +25,18 @@ import {
   type SecondaryObjectiveTone,
   type SecondaryObjectiveViewEntry,
 } from './coopDefenseSecondaryObjectiveModel';
+import { COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT } from './CoopDefenseSecondaryObjectiveLayout';
+import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
 
 /** Gleiche Breite wie das Pflichtziel-Panel; die Spalte liest sich dadurch als dessen Fortsetzung. */
-const PANEL_W = ENCOUNTER_PANEL_LAYOUT.width;
-const PANEL_H = 64;
-const CHIP_H = 34;
-const ROW_GAP = 6;
+const PANEL_W = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.panelWidth;
+const PANEL_H = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.panelHeight;
+const CHIP_H = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.chipHeight;
+const ROW_GAP = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.rowGap;
 const PANEL_RADIUS = 9;
-const COLUMN_TOP_Y = ENCOUNTER_PANEL_LAYOUT.topY + ENCOUNTER_PANEL_LAYOUT.height + 8;
-/**
- * Die Spalte endet vor Killfeed und Leaderboard. Rechtsbündig mit dem Pflichtziel-Panel wäre
- * sie zwar sauberer ausgerichtet, würde dort aber ab dem ersten Tod Einträge verdecken.
- */
-const COLUMN_RIGHT_EDGE = ARENA_SIDEBAR_CONTENT_LEFT_X - 16;
-const COLUMN_X = COLUMN_RIGHT_EDGE - PANEL_W / 2;
+const COLUMN_TOP_Y = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.columnTopY;
+/** Die Nebenpanel-Spalte setzt die rechte Kante des Pflichtziel-Panels exakt fort. */
+const COLUMN_X = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.columnCenterX;
 
 const PANEL_LEFT = -PANEL_W / 2;
 const PANEL_TOP = -PANEL_H / 2;
@@ -71,21 +67,14 @@ const GLYPH_GLOW_TEX = '_secondary_objective_glyph_glow';
 const ROW_MOVE_MS = 220;
 const ENTRY_MS = 190;
 
-const ANNOUNCE_X = GAME_WIDTH / 2;
 /**
  * Oberes Bilddrittel: hoch genug, dass die Einblendung weder die eigene Figur in der Bildmitte
  * noch die geteilte `CenterHUD`-Ankündigung bei `GAME_HEIGHT / 2` verdeckt, und tief genug, um
  * nicht mit der oberen HUD-Zeile zu kollidieren.
  */
-const ANNOUNCE_Y = 232;
 /** So breit, dass die zentrierte Einblendung gerade nicht in die Panelspalte rechts ragt. */
-const ANNOUNCE_W = 380;
-const ANNOUNCE_H = 96;
-const ANNOUNCE_IN_MS = 200;
-const ANNOUNCE_HOLD_MS = 1_750;
 /** Flug in den Panelplatz; er ersetzt das frühere reine Ausblenden. */
-const ANNOUNCE_FLIGHT_MS = 460;
-const ANNOUNCE_FLIGHT_SCALE = 0.42;
+const ANNOUNCE_TARGET_SCALE = 0.42;
 
 interface ToneStyle {
   /** Leitfarbe für Rahmen, Glyphe, Titel und gefüllte Marken. */
@@ -96,15 +85,15 @@ interface ToneStyle {
 }
 
 const TONE_STYLES: Readonly<Record<SecondaryObjectiveTone, ToneStyle>> = {
-  focus: { accent: COLORS.PURPLE_2, muted: COLORS.PURPLE_4, panelAlpha: 1 },
-  background: { accent: COLORS.PURPLE_3, muted: COLORS.GREY_5, panelAlpha: 0.8 },
+  focus: { accent: COLORS.BLUE_2, muted: COLORS.BLUE_4, panelAlpha: 1 },
+  background: { accent: COLORS.BLUE_3, muted: COLORS.GREY_5, panelAlpha: 0.8 },
   completed: { accent: COLORS.GREEN_2, muted: COLORS.GREEN_4, panelAlpha: 1 },
   failed: { accent: COLORS.RED_3, muted: COLORS.GREY_5, panelAlpha: 0.9 },
 };
 
 const KICKER_FONT = {
   fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold',
-  color: toCssColor(COLORS.PURPLE_4), letterSpacing: 2,
+  color: toCssColor(COLORS.BLUE_4), letterSpacing: 2,
 };
 const TITLE_FONT = {
   fontSize: '19px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
@@ -121,19 +110,6 @@ const CHIP_TITLE_FONT = {
 const CHIP_PROGRESS_FONT = {
   fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
 };
-const ANNOUNCE_KICKER_FONT = {
-  fontSize: '13px', fontFamily: 'monospace', fontStyle: 'bold',
-  color: toCssColor(COLORS.PURPLE_4), letterSpacing: 4,
-};
-const ANNOUNCE_TITLE_FONT = {
-  fontSize: '25px', fontFamily: 'monospace', fontStyle: 'bold',
-  color: toCssColor(COLORS.GREY_1), align: 'center' as const,
-};
-const ANNOUNCE_REWARD_FONT = {
-  fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
-  align: 'center' as const, letterSpacing: 1,
-};
-
 /**
  * Weicher Schein hinter der Rautenglyphe. Reines Weiß mit Alphaverlauf, zur Laufzeit auf die
  * Tonfarbe getintet – dieselbe Technik wie beim Leitschienen-Glow des Encounter-Panels.
@@ -217,13 +193,6 @@ export class CoopDefenseSecondaryObjectiveHud {
 
   private chips: RowVisual[] = [];
 
-  private announce!: Phaser.GameObjects.Container;
-  private announceFrame!: Phaser.GameObjects.Graphics;
-  private announceKicker!: Phaser.GameObjects.Text;
-  private announceTitle!: Phaser.GameObjects.Text;
-  private announceReward!: Phaser.GameObjects.Text;
-  private announceTween: Phaser.Tweens.TweenChain | null = null;
-
   private lastSignature: string | null = null;
   private lastPanelObjectiveId: string | null = null;
   private wasActive = false;
@@ -233,7 +202,10 @@ export class CoopDefenseSecondaryObjectiveHud {
   private readonly announcedActivation = new Set<string>();
   private readonly announcedTerminal = new Set<string>();
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly objectiveAnnouncements: CoopDefenseObjectiveAnnouncement,
+  ) {}
 
   build(): void {
     this.root = this.scene.add.container(0, 0);
@@ -254,7 +226,6 @@ export class CoopDefenseSecondaryObjectiveHud {
 
     this.buildPanel();
     this.buildChips();
-    this.buildAnnouncement();
   }
 
   private buildPanel(): void {
@@ -308,25 +279,6 @@ export class CoopDefenseSecondaryObjectiveHud {
       this.root.add(container);
       this.chips.push({ container, bg, frame, glyph, title, progress, moveTween: null, targetY: 0 });
     }
-  }
-
-  private buildAnnouncement(): void {
-    this.announceFrame = this.scene.add.graphics();
-    this.announceKicker = this.scene.add.text(0, -ANNOUNCE_H / 2 + 22, 'NEBENZIEL', ANNOUNCE_KICKER_FONT)
-      .setOrigin(0.5);
-    this.announceTitle = this.scene.add.text(0, -ANNOUNCE_H / 2 + 52, '', ANNOUNCE_TITLE_FONT)
-      .setOrigin(0.5);
-    this.announceReward = this.scene.add.text(0, -ANNOUNCE_H / 2 + 78, '', ANNOUNCE_REWARD_FONT)
-      .setOrigin(0.5);
-    // Container auf der Elementmitte mit lokal platzierten Kindern: Nur so wachsen Auftritt und
-    // Flug um die eigene Mitte statt Richtung Bildschirmecke.
-    this.announce = this.scene.add.container(ANNOUNCE_X, ANNOUNCE_Y, [
-      this.announceFrame,
-      this.announceKicker,
-      this.announceTitle,
-      this.announceReward,
-    ]).setScrollFactor(0).setVisible(false);
-    this.root.add(this.announce);
   }
 
   /**
@@ -552,73 +504,36 @@ export class CoopDefenseSecondaryObjectiveHud {
    * ist, und übernimmt ihre Größe.
    */
   private showAnnouncement(entry: SecondaryObjectiveViewEntry, handsOverToPanel: boolean): void {
-    const style = TONE_STYLES[entry.tone];
-    const decorative = getGraphicsQualityProfile(this.scene).level !== 'low';
-    this.announceTween?.destroy();
-    this.announceHandsOverToPanel = handsOverToPanel;
-
-    this.announceKicker
-      .setText(entry.statusLine ? `NEBENZIEL ${entry.statusLine}` : 'NEUES NEBENZIEL')
-      .setColor(toCssColor(style.muted));
-    fitTitle(this.announceTitle, entry.title, ANNOUNCE_W - 44);
-    this.announceTitle.setColor(toCssColor(style.accent));
-    this.announceReward
-      .setText(entry.statusLine ? '' : `${entry.progressCurrent} / ${entry.progressTotal}  ·  ${entry.rewardHint}`)
-      .setVisible(entry.statusLine === null);
-
-    const frame = this.announceFrame;
-    frame.clear();
-    frame.fillStyle(COLORS.GREY_9, 0.8);
-    frame.fillRoundedRect(-ANNOUNCE_W / 2, -ANNOUNCE_H / 2, ANNOUNCE_W, ANNOUNCE_H, 10);
-    frame.lineStyle(1.5, style.accent, 0.55);
-    frame.strokeRoundedRect(-ANNOUNCE_W / 2, -ANNOUNCE_H / 2, ANNOUNCE_W, ANNOUNCE_H, 10);
-    const kickerY = -ANNOUNCE_H / 2 + 22;
-    const halfText = this.announceKicker.width / 2 + 14;
-    frame.lineStyle(1.5, style.accent, 0.7);
-    frame.lineBetween(-halfText - 44, kickerY, -halfText, kickerY);
-    frame.lineBetween(halfText, kickerY, halfText + 44, kickerY);
-    if (decorative) {
-      frame.fillStyle(style.accent, 0.9);
-      frame.fillCircle(-halfText - 52, kickerY, 2.5);
-      frame.fillCircle(halfText + 52, kickerY, 2.5);
-    }
-
-    this.root.setVisible(true);
-    if (handsOverToPanel) this.panel.setVisible(false);
-    this.announce.setVisible(true).setAlpha(0).setScale(0.9).setPosition(ANNOUNCE_X, ANNOUNCE_Y + 12);
-    // Ohne Übergabe verklingt die Einblendung an Ort und Stelle, statt auf einen fremden
-    // Panelplatz zuzufliegen.
-    const exit = handsOverToPanel
-      ? {
-        x: COLUMN_X,
-        y: COLUMN_TOP_Y + PANEL_H / 2,
-        scaleX: ANNOUNCE_FLIGHT_SCALE,
-        scaleY: ANNOUNCE_FLIGHT_SCALE,
-        alpha: 0,
-        delay: ANNOUNCE_HOLD_MS,
-        duration: ANNOUNCE_FLIGHT_MS,
-        ease: 'Cubic.easeInOut',
-      }
-      : {
-        y: ANNOUNCE_Y - 14,
-        alpha: 0,
-        delay: ANNOUNCE_HOLD_MS,
-        duration: 280,
-        ease: 'Quad.easeIn',
-      };
-    this.announceTween = this.scene.tweens.chain({
-      targets: this.announce,
-      tweens: [
-        { alpha: 1, scaleX: 1, scaleY: 1, y: ANNOUNCE_Y, duration: ANNOUNCE_IN_MS, ease: 'Back.easeOut' },
-        exit,
-      ],
-      onComplete: () => {
-        this.announceTween = null;
-        this.announce.setVisible(false).setPosition(ANNOUNCE_X, ANNOUNCE_Y).setScale(1).setAlpha(1);
-        // Das Panel wächst genau dort weiter, wo die Einblendung angekommen ist.
-        if (this.announceHandsOverToPanel && this.lastPanelObjectiveId !== null) {
-          this.playPanelEntry(ANNOUNCE_FLIGHT_SCALE);
+    const objectiveId = entry.objectiveId;
+    const tone = entry.tone === 'completed'
+      ? 'positive'
+      : entry.tone === 'failed' ? 'negative' : 'secondary';
+    this.objectiveAnnouncements.enqueue({
+      id: `secondary:${objectiveId}:${entry.statusLine ?? 'active'}`,
+      topic: `secondary:${objectiveId}`,
+      priority: entry.statusLine ? 50 : 0,
+      kicker: entry.statusLine ? `NEBENZIEL ${entry.statusLine}` : 'NEUES NEBENZIEL',
+      title: entry.title,
+      detail: entry.statusLine
+        ? undefined
+        : `${entry.progressCurrent} / ${entry.progressTotal}  ·  ${entry.rewardHint}`,
+      tone,
+      ...(handsOverToPanel
+        ? { target: { x: COLUMN_X, y: COLUMN_TOP_Y + PANEL_H / 2, scale: ANNOUNCE_TARGET_SCALE } }
+        : {}),
+      onStart: () => {
+        this.announceHandsOverToPanel = handsOverToPanel;
+        if (handsOverToPanel && this.panel?.active) this.panel.setVisible(false);
+      },
+      onArrive: () => {
+        if (this.announceHandsOverToPanel
+          && this.panel?.active
+          && this.lastPanelObjectiveId === objectiveId) {
+          this.playPanelEntry(ANNOUNCE_TARGET_SCALE);
         }
+        this.announceHandsOverToPanel = false;
+      },
+      onCancel: () => {
         this.announceHandsOverToPanel = false;
       },
     });
@@ -644,10 +559,7 @@ export class CoopDefenseSecondaryObjectiveHud {
       chip.container.setVisible(false).setY(0);
       chip.targetY = 0;
     }
-    this.announceTween?.destroy();
-    this.announceTween = null;
     this.announceHandsOverToPanel = false;
-    this.announce?.setVisible(false).setAlpha(1).setScale(1).setPosition(ANNOUNCE_X, ANNOUNCE_Y);
     this.root.setVisible(false);
     this.lastSignature = null;
   }
@@ -662,11 +574,9 @@ export class CoopDefenseSecondaryObjectiveHud {
   destroy(): void {
     this.panelTween?.destroy();
     this.panelPulseTween?.destroy();
-    this.announceTween?.destroy();
     for (const chip of this.chips) chip.moveTween?.destroy();
     this.panelTween = null;
     this.panelPulseTween = null;
-    this.announceTween = null;
     this.chips.length = 0;
     this.root?.destroy(true);
   }

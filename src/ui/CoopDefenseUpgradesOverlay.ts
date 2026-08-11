@@ -22,8 +22,8 @@ import {
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import {
-  COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   getCoopDefenseUpgradeTextureKey,
+  hasCoopDefenseDedicatedUpgradeIcon,
   isCoopDefenseToolCategory,
   type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
@@ -2358,9 +2358,8 @@ export class CoopDefenseUpgradesOverlay {
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
     const upgradeTextureKey = getCoopDefenseUpgradeTextureKey(node.id);
     if (upgradeTextureKey === null) return null;
-    // Pending IDs deliberately use their temporary own icon, including construction unlocks;
-    // this keeps the generated replacement set visible until final art is supplied.
-    if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(node.id)) return upgradeTextureKey;
+    // Dedicated upgrade artwork takes precedence over the corresponding loadout-item icon.
+    if (hasCoopDefenseDedicatedUpgradeIcon(node.id)) return upgradeTextureKey;
     if (node.toolRef) return describeLoadoutTool(node.toolRef).textureKey;
     if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
     if (node.kind === 'upgrade') return upgradeTextureKey;

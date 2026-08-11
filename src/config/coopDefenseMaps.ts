@@ -33,6 +33,9 @@ const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 /** Standard-Abstand der Verfolgungs-Einzelschläge, wenn eine Map keinen eigenen Wert setzt. */
 const DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS = 10_000;
 
+/** Standardfenster, in dem die Gegner einer Encounter-Gruppe einzeln eintreffen. */
+export const DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS = 1_500;
+
 /**
  * Standard-Multiplikator auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (0…1).
  * Diese Felsen werden nur zugebaut, um den Bereich unter dem Tutorial-Hinweisfenster zu füllen,
@@ -144,6 +147,8 @@ export interface CoopDefenseMapEncounterGroupConfig {
   readonly count: number;
   /** Verzögerung relativ zum Start des Encounters; Standard 0. */
   readonly delayMs?: number;
+  /** Maximales Zeitfenster fuer zufaellig versetzte Einzelspawns; Standard 1,5 Sekunden. */
+  readonly spawnStaggerMs?: number;
   readonly front?: SpawnFront;
 }
 
@@ -169,6 +174,8 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly count: number;
   readonly delayMs: number;
+  /** Effektives Einzelspawn-Fenster; fehlt nur bei Legacy-Aufrufern ausserhalb der Map-Aufloesung. */
+  readonly spawnStaggerMs?: number;
   readonly front?: SpawnFront;
 }
 
@@ -500,6 +507,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
         enemyKind: group.enemyKind,
         count: resolvedGroup.countPerTick,
         delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
+        spawnStaggerMs: group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
         front: group.front ?? DEFAULT_SPAWN_FRONT,
       };
     }),
@@ -1246,6 +1254,9 @@ function normalizeEncounterGroup(
     enemyKind: group.enemyKind,
     count: Math.floor(group.count),
     delayMs: normalizeNonNegativeMilliseconds(group.delayMs),
+    spawnStaggerMs: normalizeNonNegativeMilliseconds(
+      group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
+    ),
     front: normalizeSpawnFront(mapId, encounterId, group.front),
   };
 }

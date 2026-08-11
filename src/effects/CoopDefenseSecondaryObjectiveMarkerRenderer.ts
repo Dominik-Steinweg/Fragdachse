@@ -8,7 +8,7 @@
  * Bildschirmrand und darf deshalb nicht nachgebaut werden.
  *
  * Zeichenform ist wie im HUD die Raute: Das Pflichtziel führt eine Leitschiene, der
- * Feindbasis-Indikator ein rotes Dreieck. Die violette Raute ist damit in Welt und HUD
+ * Hauptziel-Indikator ein goldenes Dreieck. Die blaue Raute ist damit in Welt und HUD
  * eindeutig dem freiwilligen Ziel zugeordnet.
  */
 import * as Phaser from 'phaser';
@@ -42,8 +42,10 @@ const MAX_EDGE_ARROWS = 6;
  */
 const EDGE_CLUSTER_PX = 74;
 
-const MARKER_COLOR = COLORS.PURPLE_2;
-const MARKER_CORE_COLOR = COLORS.PURPLE_1;
+// Die Marker bleiben unterhalb der Panel-Helligkeit: Außenkante/Glow nutzen das dunklere
+// Panel-Blau, während Kern, Randbeschriftung und Richtungsspitze den Panel-Akzent teilen.
+const MARKER_COLOR = COLORS.BLUE_3;
+const MARKER_CORE_COLOR = COLORS.BLUE_2;
 const MARKER_GLOW_TEX = '_secondary_objective_marker_glow';
 const MARKER_GLOW_SIZE = 96;
 const MARKER_RISE_PX = 26;
@@ -296,13 +298,15 @@ export class CoopDefenseSecondaryObjectiveMarkerRenderer {
 
   private drawEdgeArrow(graphics: Phaser.GameObjects.Graphics): void {
     graphics.clear();
-    graphics.fillStyle(MARKER_COLOR, 0.95);
+    // Randpfeil und Zielmarker teilen dieselbe Hierarchie: Panel-naher Kern innen,
+    // dunklere blaue Außenkante und Richtungsspitze außen.
+    graphics.fillStyle(MARKER_CORE_COLOR, 0.95);
     fillDiamond(graphics, 11);
-    graphics.lineStyle(2, MARKER_CORE_COLOR, 0.95);
+    graphics.lineStyle(2, MARKER_COLOR, 0.95);
     strokeDiamond(graphics, 11);
     // Kurze Spitze in Zielrichtung: Sie unterscheidet den Randpfeil von der ruhenden
     // Weltmarke und macht die Richtung auch bei kleiner Darstellung eindeutig.
-    graphics.fillStyle(MARKER_CORE_COLOR, 0.95);
+    graphics.fillStyle(MARKER_COLOR, 0.95);
     graphics.fillTriangle(0, 20, -6, 10, 6, 10);
   }
 

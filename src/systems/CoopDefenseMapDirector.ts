@@ -43,6 +43,8 @@ export interface CoopDefenseMapDirectorOptions {
   readonly isEnemyTechnicallyStuck?: (enemyId: string) => boolean;
   /** Removes a proven technical rest enemy without awarding a kill or creating follow-up spawns. */
   readonly removeEnemy?: (enemyId: string) => boolean;
+  /** Injectable random source for deterministic tests; production uses Math.random. */
+  readonly random?: () => number;
   /** Long grace period for repeated zero-progress encounter spawns. */
   readonly spawnBackstopAfterMs?: number;
   /** Long grace period for a proven stuck active enemy. */
@@ -55,6 +57,8 @@ interface EncounterExecutionState {
   readonly groupsExecuted: boolean[];
   readonly groupSpawnedCounts: number[];
   readonly groupNoProgressMs: number[];
+  /** Absolute host times for each individual spawn in a group, in execution order. */
+  readonly groupSpawnAtMs: number[][];
   readonly encounterEnemyIds: Set<string>;
   /**
    * Nur für die Fortschrittsanzeige. Bewusst getrennt von `encounterEnemyIds`: Hier landen
@@ -96,11 +100,11 @@ export class CoopDefenseMapDirector {
   private readonly getActiveEnemyIdsForOrigin: ((originId: string) => readonly string[]) | null;
   private readonly isEnemyTechnicallyStuck: ((enemyId: string) => boolean) | null;
   private readonly removeEnemy: ((enemyId: string) => boolean) | null;
+  private readonly random: () => number;
   private readonly spawnBackstopAfterMs: number;
   private readonly technicalStuckBackstopAfterMs: number;
   private repelEncounterIndex = 0;
   private repelPhase: RepelAssaultPhase = 'waiting';
-  private repelEncounterStartedAtMs = 0;
   private restUntilMs = 0;
   private assaultRepelled = false;
   private lastDeltaMs = 0;
@@ -118,6 +122,7 @@ export class CoopDefenseMapDirector {
     this.getActiveEnemyIdsForOrigin = options.getActiveEnemyIdsForOrigin ?? null;
     this.isEnemyTechnicallyStuck = options.isEnemyTechnicallyStuck ?? null;
     this.removeEnemy = options.removeEnemy ?? null;
+    this.random = options.random ?? Math.random;
     this.spawnBackstopAfterMs = normalizeBackstopMs(options.spawnBackstopAfterMs, DEFAULT_SPAWN_BACKSTOP_MS);
     this.technicalStuckBackstopAfterMs = normalizeBackstopMs(
       options.technicalStuckBackstopAfterMs,
@@ -129,6 +134,7 @@ export class CoopDefenseMapDirector {
       groupsExecuted: encounter.groups.map(() => false),
       groupSpawnedCounts: encounter.groups.map(() => 0),
       groupNoProgressMs: encounter.groups.map(() => 0),
+      groupSpawnAtMs: encounter.groups.map(() => []),
       encounterEnemyIds: new Set<string>(),
       progressEnemyIds: new Set<string>(),
       technicallyStuckSinceMs: new Map<string, number>(),
@@ -143,8 +149,8 @@ export class CoopDefenseMapDirector {
 
   /**
    * Fortschritt der aktiven Map-Zeit. Countdown-Zeit wird nicht angerechnet. Grosse Delta-Werte
-   * werden nicht in einzelne Timer zerlegt; alle faelligen Gruppen werden in diesem Aufruf genau
-   * einmal ausgefuehrt.
+   * werden nicht in einzelne Timer zerlegt; faellige Einzelspawns werden in diesem Aufruf
+   * hoechstens einmal je Gruppe ausgefuehrt.
    */
   hostUpdate(deltaMs: number, countdownActive: boolean): number {
     if (countdownActive) return 0;
@@ -160,7 +166,6 @@ export class CoopDefenseMapDirector {
     this.elapsedMs = 0;
     this.repelEncounterIndex = 0;
     this.repelPhase = 'waiting';
-    this.repelEncounterStartedAtMs = 0;
     this.restUntilMs = 0;
     this.assaultRepelled = false;
     this.lastDeltaMs = 0;
@@ -169,6 +174,7 @@ export class CoopDefenseMapDirector {
       state.groupsExecuted.fill(false);
       state.groupSpawnedCounts.fill(0);
       state.groupNoProgressMs.fill(0);
+      for (const spawnAtMs of state.groupSpawnAtMs) spawnAtMs.length = 0;
       state.encounterEnemyIds.clear();
       state.progressEnemyIds.clear();
       state.technicallyStuckSinceMs.clear();
@@ -241,6 +247,7 @@ export class CoopDefenseMapDirector {
         state.started = true;
         state.startedAtMs = this.getScheduledEncounterStartAtMs(encounterIndex);
         state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(encounterIndex);
+        this.initializeGroupSpawnSchedule(encounter, state);
       }
       if (!state.started) continue;
       if (!state.cleared) this.trackProgressEnemies(state);
@@ -248,8 +255,7 @@ export class CoopDefenseMapDirector {
       for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
         if (state.groupsExecuted[groupIndex]) continue;
         const group = encounter.groups[groupIndex];
-        const groupStartAtMs = state.startedAtMs + Math.max(0, Math.floor(group.delayMs));
-        if (this.elapsedMs < groupStartAtMs) continue;
+        if (this.elapsedMs < this.getNextGroupSpawnAtMs(group, groupIndex, state)) continue;
 
         // Vor dem Callback markieren: Auch ein re-entrantes Host-Update oder ein Callback-Fehler
         // kann diese Gruppe nicht versehentlich zu einer periodischen Welle machen.
@@ -293,7 +299,7 @@ export class CoopDefenseMapDirector {
       for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
         if (state.groupsExecuted[groupIndex]) continue;
         const group = encounter.groups[groupIndex];
-        if (this.elapsedMs < this.getRepelGroupStartAtMs(group)) continue;
+        if (this.elapsedMs < this.getNextGroupSpawnAtMs(group, groupIndex, state)) continue;
 
         this.spawnEncounterGroup(group, groupIndex, state);
         executedGroupCount += 1;
@@ -329,12 +335,8 @@ export class CoopDefenseMapDirector {
     state.started = true;
     state.startedAtMs = this.getRepelEncounterStartAtMs(this.encounters[index].start);
     state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(index);
-    this.repelEncounterStartedAtMs = state.startedAtMs;
+    this.initializeGroupSpawnSchedule(this.encounters[index], state);
     this.repelPhase = 'active';
-  }
-
-  private getRepelGroupStartAtMs(group: ResolvedCoopDefenseMapEncounterGroupConfig): number {
-    return this.repelEncounterStartedAtMs + Math.max(0, Math.floor(group.delayMs));
   }
 
   private canStartScheduledEncounter(index: number): boolean {
@@ -587,7 +589,7 @@ export class CoopDefenseMapDirector {
     const fronts: SpawnFront[] = [];
     for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
       const group = encounter.groups[groupIndex];
-      const groupStartAtMs = startAtMs + Math.max(0, Math.floor(group.delayMs));
+      const groupStartAtMs = startAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
       const groupHasSpawned = state?.groupSpawnedCounts[groupIndex] > 0;
       if (!groupHasSpawned && groupStartAtMs > this.elapsedMs + ENCOUNTER_INCOMING_TELEGRAPH_MS) continue;
       const front = group.front ?? DEFAULT_SPAWN_FRONT;
@@ -636,7 +638,7 @@ export class CoopDefenseMapDirector {
   private getFirstGroupDelayMs(index: number): number {
     const groups = this.encounters[index]?.groups ?? [];
     return groups.reduce(
-      (minimum, group) => Math.min(minimum, Math.max(0, Math.floor(group.delayMs))),
+      (minimum, group) => Math.min(minimum, Math.max(0, Math.floor(group.delayMs ?? 0))),
       Number.POSITIVE_INFINITY,
     );
   }
@@ -701,15 +703,21 @@ export class CoopDefenseMapDirector {
       return;
     }
 
+    const staggerMs = Math.max(0, Math.floor(group.spawnStaggerMs ?? 0));
+    // Legacy void-returning handlers still receive the complete remainder. The production
+    // EnemyManager path returns IDs and therefore uses the individual staggered calls below.
+    const spawnCount = staggerMs > 0 ? 1 : remainingCount;
     const front = group.front ?? DEFAULT_SPAWN_FRONT;
     const spawnResult = front === DEFAULT_SPAWN_FRONT
-      ? this.spawnGroup(group.enemyKind, remainingCount, state.encounterId)
-      : this.spawnGroup(group.enemyKind, remainingCount, state.encounterId, front);
+      ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId)
+      : this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front);
     // Older scheduled callbacks were void-returning. Preserve their once-only semantics while
     // treating an explicit [] as a real zero-spawn result that remains retryable.
     if (spawnResult === undefined) {
-      state.groupSpawnedCounts[groupIndex] = group.count;
-      state.groupsExecuted[groupIndex] = true;
+      state.groupSpawnedCounts[groupIndex] = staggerMs > 0
+        ? Math.min(group.count, state.groupSpawnedCounts[groupIndex] + spawnCount)
+        : group.count;
+      state.groupsExecuted[groupIndex] = state.groupSpawnedCounts[groupIndex] >= group.count;
       if (group.count > 0 && state.firstGroupSpawnedAtMs === null) {
         state.firstGroupSpawnedAtMs = this.elapsedMs;
       }
@@ -738,6 +746,44 @@ export class CoopDefenseMapDirector {
         state.spawnBackstopped = true;
       }
     }
+  }
+
+  private initializeGroupSpawnSchedule(
+    encounter: ResolvedCoopDefenseMapEncounterConfig,
+    state: EncounterExecutionState,
+  ): void {
+    for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
+      const group = encounter.groups[groupIndex];
+      const groupStartAtMs = state.startedAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
+      const staggerMs = Math.max(0, Math.floor(group.spawnStaggerMs ?? 0));
+      const offsets = [0];
+      for (let spawnIndex = 1; spawnIndex < group.count; spawnIndex += 1) {
+        offsets.push(this.getRandomSpawnOffsetMs(staggerMs));
+      }
+      offsets.sort((left, right) => left - right);
+      state.groupSpawnAtMs[groupIndex].push(
+        ...offsets.map((offsetMs) => groupStartAtMs + offsetMs),
+      );
+    }
+  }
+
+  private getNextGroupSpawnAtMs(
+    group: ResolvedCoopDefenseMapEncounterGroupConfig,
+    groupIndex: number,
+    state: EncounterExecutionState,
+  ): number {
+    const nextSpawnAtMs = state.groupSpawnAtMs[groupIndex]?.[state.groupSpawnedCounts[groupIndex]]
+      ?? state.startedAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
+    return nextSpawnAtMs;
+  }
+
+  private getRandomSpawnOffsetMs(staggerMs: number): number {
+    if (staggerMs <= 0) return 0;
+    const randomValue = this.random();
+    const normalizedRandom = Number.isFinite(randomValue)
+      ? Math.min(1, Math.max(0, randomValue))
+      : 0;
+    return Math.min(staggerMs, Math.floor(normalizedRandom * (staggerMs + 1)));
   }
 
   private isEncounterSpawnCompleteState(state: EncounterExecutionState): boolean {

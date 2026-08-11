@@ -32,6 +32,12 @@ import {
 import { HELP_CONTROLS } from '../config/helpControls';
 import { ensureFlatPanelTexture, roundRectPath } from './uiTextures';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import type { MainObjectiveViewModel } from './coopDefenseMainObjectiveModel';
+import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
+import {
+  COOP_DEFENSE_ENCOUNTER_LAYOUT,
+  COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT,
+} from './CoopDefenseSecondaryObjectiveLayout';
 
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
@@ -77,15 +83,22 @@ const TRAIN_BAR_BG_TEX = '_center_train_bg';
 const TRAIN_PAL: LivingBarPalette = { dark: 0x3d1812, mid: 0xcf573c, light: 0xff8060 };
 const TRAIN_PANEL_Y    = 78;
 const TRAIN_PANEL_H    = 54;
+const TOP_PANEL_FADE_TEX = '_center_top_panel_fade';
+const TIMER_PANEL_FADE_TEX = '_center_timer_panel_fade';
+const TOP_PANEL_W       = PANEL_WIDTH + 28;
+const TOP_PANEL_TOP     = TIMER_Y - TIMER_BG_H / 2;
+const TOP_PANEL_BOTTOM  = TRAIN_PANEL_Y + TRAIN_PANEL_H / 2;
+const TOP_PANEL_H       = TOP_PANEL_BOTTOM - TOP_PANEL_TOP;
+const TOP_PANEL_Y       = (TOP_PANEL_TOP + TOP_PANEL_BOTTOM) / 2;
 
 // ── Encounter-Panel ──────────────────────────────────────────────────────────
 // Anzeige der Coop-Defense-Angriffsserie. Die Wellenposition trägt die Pip-Leiste,
 // die Phase die Statuszeile, die Restzeit der eigene Countdown – jede Information
 // steht damit genau einmal im Panel.
-const ENCOUNTER_PANEL_W = 400;
-const ENCOUNTER_PANEL_H = 84;
-const ENCOUNTER_PANEL_X = GAME_WIDTH - ENCOUNTER_PANEL_W / 2 - 24;
-const ENCOUNTER_PANEL_TOP_Y = 22;
+const ENCOUNTER_PANEL_W = COOP_DEFENSE_ENCOUNTER_LAYOUT.width;
+const ENCOUNTER_PANEL_H = COOP_DEFENSE_ENCOUNTER_LAYOUT.height;
+const ENCOUNTER_PANEL_X = COOP_DEFENSE_ENCOUNTER_LAYOUT.centerX;
+const ENCOUNTER_PANEL_TOP_Y = COOP_DEFENSE_ENCOUNTER_LAYOUT.topY;
 const ENCOUNTER_PANEL_Y = ENCOUNTER_PANEL_TOP_Y + ENCOUNTER_PANEL_H / 2;
 
 /**
@@ -94,10 +107,7 @@ const ENCOUNTER_PANEL_Y = ENCOUNTER_PANEL_TOP_Y + ENCOUNTER_PANEL_H / 2;
  * gemeinsame Zeile am oberen Rand.
  */
 export const ENCOUNTER_PANEL_LAYOUT = {
-  centerX: ENCOUNTER_PANEL_X,
-  topY: ENCOUNTER_PANEL_TOP_Y,
-  width: ENCOUNTER_PANEL_W,
-  height: ENCOUNTER_PANEL_H,
+  ...COOP_DEFENSE_ENCOUNTER_LAYOUT,
 } as const;
 const ENCOUNTER_PANEL_LEFT = -ENCOUNTER_PANEL_W / 2;
 const ENCOUNTER_PANEL_TOP = -ENCOUNTER_PANEL_H / 2;
@@ -127,6 +137,30 @@ const ENCOUNTER_RAIL_GLOW_W = 34;
 const ENCOUNTER_RAIL_GLOW_ALPHA = 0.5;
 const ENCOUNTER_SCAN_PERIOD_MS = 1_800;
 const ENCOUNTER_SCAN_INSET_PX = 9;
+const ENCOUNTER_ANNOUNCEMENT_PRIORITY = 100;
+const ENCOUNTER_START_ANNOUNCEMENT_HOLD_MS = 900;
+const ENCOUNTER_RESULT_ANNOUNCEMENT_HOLD_MS = 1_200;
+
+// ── Hauptziel-Panel ─────────────────────────────────────────────────────────
+const MAIN_PANEL_W = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.width;
+const MAIN_PANEL_H = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.height;
+const MAIN_PANEL_X = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.centerX;
+const MAIN_PANEL_Y = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.topY + MAIN_PANEL_H / 2;
+const MAIN_PANEL_LEFT = -MAIN_PANEL_W / 2;
+const MAIN_PANEL_TOP = -MAIN_PANEL_H / 2;
+const MAIN_PANEL_RADIUS = 9;
+const MAIN_CONTENT_LEFT = MAIN_PANEL_LEFT + 20;
+const MAIN_CONTENT_RIGHT = -MAIN_PANEL_LEFT - 18;
+const MAIN_KICKER_Y = MAIN_PANEL_TOP + 15;
+const MAIN_TITLE_Y = MAIN_PANEL_TOP + 35;
+const MAIN_PROGRESS_Y = MAIN_PANEL_TOP + 53;
+const MAIN_PROGRESS_H = 6;
+const MAIN_PROGRESS_W = MAIN_CONTENT_RIGHT - MAIN_CONTENT_LEFT;
+const MAIN_FILL_H = MAIN_PROGRESS_H - 2;
+const MAIN_FILL_W = MAIN_PROGRESS_W - 2;
+const MAIN_BG_TEX = '_center_main_objective_bg';
+const MAIN_BAR_TEX = '_center_main_objective_bar';
+const MAIN_ENTRY_SCALE = 0.42;
 
 type EncounterStyleId = 'incoming' | 'active' | 'done' | 'rest';
 
@@ -141,15 +175,15 @@ interface EncounterStyle {
 
 const ENCOUNTER_STYLES: Record<EncounterStyleId, EncounterStyle> = {
   incoming: {
-    accent: COLORS.RED_1,
-    muted: COLORS.GOLD_3,
-    palette: { dark: 0x4a1c12, mid: COLORS.RED_2, light: COLORS.RED_1 },
+    accent: COLORS.PURPLE_2,
+    muted: COLORS.PURPLE_4,
+    palette: { dark: COLORS.PURPLE_6, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
     barTex: '_center_encounter_bar_incoming',
   },
   active: {
-    accent: COLORS.GOLD_1,
-    muted: COLORS.GOLD_3,
-    palette: { dark: 0x4d3210, mid: COLORS.GOLD_2, light: COLORS.GOLD_1 },
+    accent: COLORS.PURPLE_2,
+    muted: COLORS.PURPLE_4,
+    palette: { dark: COLORS.PURPLE_6, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
     barTex: '_center_encounter_bar_active',
   },
   done: {
@@ -159,9 +193,9 @@ const ENCOUNTER_STYLES: Record<EncounterStyleId, EncounterStyle> = {
     barTex: '_center_encounter_bar_done',
   },
   rest: {
-    accent: COLORS.BLUE_2,
-    muted: COLORS.BLUE_4,
-    palette: { dark: 0x16303f, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
+    accent: COLORS.PURPLE_3,
+    muted: COLORS.PURPLE_4,
+    palette: { dark: COLORS.PURPLE_6, mid: COLORS.PURPLE_4, light: COLORS.PURPLE_2 },
     barTex: '_center_encounter_bar_rest',
   },
 };
@@ -242,6 +276,16 @@ const ENCOUNTER_STATUS_FONT = {
 const ENCOUNTER_COUNTDOWN_FONT = {
   fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
 };
+const MAIN_KICKER_FONT = {
+  fontSize: '11px', fontFamily: 'monospace', fontStyle: 'bold',
+  color: toCssColor(COLORS.GOLD_3), letterSpacing: 2,
+};
+const MAIN_TITLE_FONT = {
+  fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
+};
+const MAIN_PROGRESS_FONT = {
+  fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_2),
+};
 
 function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
   if (scene.textures.exists(key)) return;
@@ -254,6 +298,56 @@ function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, hei
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(0, 0, width, 1);
+  ct.refresh();
+}
+
+/** Bildschirmfeste HUD-Fläche mit weichem Alpha-Auslauf an allen Außenkanten. */
+function ensureFadedPanelTexture(
+  scene: Phaser.Scene,
+  key: string,
+  width: number,
+  height: number,
+  fillAlpha: number,
+): void {
+  if (scene.textures.exists(key)) return;
+  const ct = scene.textures.createCanvas(key, width, height);
+  if (!ct) return;
+
+  const ctx = ct.context;
+  const edgeX = Math.min(14, width * 0.12);
+  const edgeY = Math.min(5, height * 0.16);
+  ctx.clearRect(0, 0, width, height);
+
+  const body = ctx.createLinearGradient(0, 0, 0, height);
+  body.addColorStop(0, `rgba(0,0,0,${fillAlpha * 0.88})`);
+  body.addColorStop(0.5, `rgba(0,0,0,${fillAlpha})`);
+  body.addColorStop(1, `rgba(0,0,0,${fillAlpha * 0.92})`);
+  ctx.fillStyle = body;
+  ctx.fillRect(0, 0, width, height);
+
+  // Maske zuerst horizontal, dann vertikal anwenden: dadurch entstehen keine harten
+  // Rechteckkanten und die gemeinsame Fläche bleibt zwischen Timer und Zug durchgehend.
+  ctx.globalCompositeOperation = 'destination-in';
+  const horizontal = ctx.createLinearGradient(0, 0, width, 0);
+  horizontal.addColorStop(0, 'rgba(0,0,0,0)');
+  horizontal.addColorStop(edgeX / width, 'rgba(0,0,0,0.78)');
+  horizontal.addColorStop(Math.min(0.2, (edgeX * 2) / width), 'rgba(0,0,0,1)');
+  horizontal.addColorStop(Math.max(0.8, 1 - (edgeX * 2) / width), 'rgba(0,0,0,1)');
+  horizontal.addColorStop(1 - edgeX / width, 'rgba(0,0,0,0.78)');
+  horizontal.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = horizontal;
+  ctx.fillRect(0, 0, width, height);
+
+  const vertical = ctx.createLinearGradient(0, 0, 0, height);
+  vertical.addColorStop(0, 'rgba(0,0,0,0)');
+  vertical.addColorStop(edgeY / height, 'rgba(0,0,0,0.82)');
+  vertical.addColorStop(Math.min(0.2, (edgeY * 2) / height), 'rgba(0,0,0,1)');
+  vertical.addColorStop(Math.max(0.8, 1 - (edgeY * 2) / height), 'rgba(0,0,0,1)');
+  vertical.addColorStop(1 - edgeY / height, 'rgba(0,0,0,0.82)');
+  vertical.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vertical;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over';
   ct.refresh();
 }
 
@@ -363,6 +457,8 @@ function ensureRadialTexture(
 export class CenterHUD {
   private container!: Phaser.GameObjects.Container;
 
+  private timerPanelBg!: Phaser.GameObjects.Image;
+  private topPanelBg!: Phaser.GameObjects.Image;
   private timerText!: Phaser.GameObjects.Text;
   private survivalText!: Phaser.GameObjects.Text;
   private tutorialContainer!: Phaser.GameObjects.Container;
@@ -378,6 +474,15 @@ export class CenterHUD {
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
   private announcementTween: Phaser.Tweens.Tween | null = null;
+  private mainObjectivePanel!: Phaser.GameObjects.Container;
+  private mainObjectiveBg!: Phaser.GameObjects.Image;
+  private mainObjectiveFrame!: Phaser.GameObjects.Graphics;
+  private mainObjectiveFill!: Phaser.GameObjects.Image;
+  private mainObjectiveHead!: Phaser.GameObjects.Image;
+  private mainObjectiveKicker!: Phaser.GameObjects.Text;
+  private mainObjectiveTitle!: Phaser.GameObjects.Text;
+  private mainObjectiveProgress!: Phaser.GameObjects.Text;
+  private mainObjectiveTween: Phaser.Tweens.Tween | null = null;
   private encounterPanel!: Phaser.GameObjects.Container;
   private encounterBg!: Phaser.GameObjects.Image;
   private encounterFrame!: Phaser.GameObjects.Graphics;
@@ -393,7 +498,6 @@ export class CenterHUD {
   private encounterPulseTween: Phaser.Tweens.Tween | null = null;
 
   private trainText!: Phaser.GameObjects.Text;
-  private trainPanelBg!: Phaser.GameObjects.Rectangle;
   private trainBarBg!: Phaser.GameObjects.Image;
   private trainBarFgImg!: Phaser.GameObjects.Image;
   private trainBarEffect!: LivingBarEffect;
@@ -407,6 +511,11 @@ export class CenterHUD {
   private lastTimerText: string | null = null;
   private lastTimerColor: string | null = null;
   private lastSurvivalText: string | null = null;
+  private lastMainObjectiveId: string | null = null;
+  private lastMainObjectiveSignature: string | null = null;
+  private lastMainObjectiveProgressWidth = -1;
+  private mainObjectiveAnnouncementPending = false;
+  private lastEncounterPresentationId: string | null = null;
   private lastEncounterPresentationSignature: string | null = null;
   private lastEncounterPresentationPhase: CoopDefenseEncounterPresentationState['phase'] | null = null;
   private lastEncounterStyleId: EncounterStyleId | null = null;
@@ -414,6 +523,11 @@ export class CenterHUD {
   private lastEncounterProgressWidth = -1;
   private lastEncounterCountdownText: string | null = null;
   private lastEncounterDeterminate: boolean | null = null;
+  private encounterAnnouncementHandsOver = false;
+  private currentEncounterAnnouncementId: string | null = null;
+  private currentEncounterAnnouncementPhase: CoopDefenseEncounterPresentationState['phase'] | null = null;
+  private readonly announcedEncounterStarts = new Set<string>();
+  private readonly announcedEncounterResults = new Set<string>();
   private lastTrainText: string | null = null;
   private lastTrainBarWidth = -1;
   private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
@@ -423,7 +537,10 @@ export class CenterHUD {
   private utilityAttentionActive = false;
   private ultimateReadyActive = false;
 
-  constructor(private scene: Phaser.Scene) {}
+  constructor(
+    private scene: Phaser.Scene,
+    private readonly objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null,
+  ) {}
 
   build(): void {
     this.container = this.scene.add.container(0, 0);
@@ -432,6 +549,8 @@ export class CenterHUD {
     promoteToClarityCamera(this.scene, this.container);
 
     ensureLivingBarTextures(this.scene);
+    ensureFadedPanelTexture(this.scene, TIMER_PANEL_FADE_TEX, TOP_PANEL_W, TIMER_BG_H, 0.35);
+    ensureFadedPanelTexture(this.scene, TOP_PANEL_FADE_TEX, TOP_PANEL_W, TOP_PANEL_H, 0.3);
     ensureBarBgTexture(this.scene, TRAIN_BAR_BG_TEX, TRAIN_BAR_W, TRAIN_BAR_H);
     ensureBarBgTexture(this.scene, STACK_BAR_BG_TEX, STACK_BAR_W, STACK_BAR_H);
     ensureRadialTexture(this.scene, STACK_CORE_TEX, 14, [
@@ -454,6 +573,7 @@ export class CenterHUD {
     }
 
     this.buildTimer();
+    this.buildMainObjectivePanel();
     this.buildEncounterPanel();
     this.buildTutorialPanel();
     this.buildAnnouncementOverlay();
@@ -462,15 +582,108 @@ export class CenterHUD {
   }
 
   private buildTimer(): void {
-    const timerBg = this.scene.add.rectangle(CENTER_X, TIMER_Y, PANEL_WIDTH, TIMER_BG_H, 0x000000, 0.35)
+    this.timerPanelBg = this.scene.add.image(CENTER_X, TIMER_Y, TIMER_PANEL_FADE_TEX)
       .setScrollFactor(0);
+    this.topPanelBg = this.scene.add.image(CENTER_X, TOP_PANEL_Y, TOP_PANEL_FADE_TEX)
+      .setScrollFactor(0)
+      .setVisible(false);
     this.timerText = this.scene.add.text(CENTER_X, TIMER_Y, '2:00', {
       fontSize: '32px', fontFamily: 'monospace', color: TIMER_COLOR_NORMAL, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.survivalText = this.scene.add.text(CENTER_X + PANEL_WIDTH / 2 + 18, TIMER_Y, '', {
       fontSize: '14px', fontFamily: 'monospace', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    this.container.add([timerBg, this.timerText, this.survivalText]);
+    this.container.add([this.timerPanelBg, this.topPanelBg, this.timerText, this.survivalText]);
+  }
+
+  private buildMainObjectivePanel(): void {
+    ensureFlatPanelTexture(
+      this.scene,
+      MAIN_BG_TEX,
+      MAIN_PANEL_W,
+      MAIN_PANEL_H,
+      COLORS.GREY_8,
+      COLORS.GREY_6,
+      { radius: MAIN_PANEL_RADIUS, fillAlpha: 0.88, strokeAlpha: 0.42 },
+    );
+    if (!this.scene.textures.exists(MAIN_BAR_TEX)) {
+      createGradientTexture(
+        this.scene,
+        MAIN_BAR_TEX,
+        { dark: 0x4d3210, mid: COLORS.GOLD_2, light: COLORS.GOLD_1 },
+        MAIN_FILL_W,
+        MAIN_FILL_H,
+      );
+    }
+
+    this.mainObjectiveBg = this.scene.add.image(0, 0, MAIN_BG_TEX).setOrigin(0.5);
+    this.mainObjectiveFrame = this.scene.add.graphics();
+    this.mainObjectiveFill = this.scene.add.image(
+      MAIN_CONTENT_LEFT + 1,
+      MAIN_PROGRESS_Y - MAIN_FILL_H / 2,
+      MAIN_BAR_TEX,
+    ).setOrigin(0, 0);
+    this.mainObjectiveFill.setCrop(0, 0, 0, MAIN_FILL_H);
+    this.mainObjectiveHead = this.scene.add.image(MAIN_CONTENT_LEFT, MAIN_PROGRESS_Y, STACK_CORE_TEX)
+      .setOrigin(0.5)
+      .setScale(1.45)
+      .setTint(COLORS.GOLD_1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    this.mainObjectiveKicker = this.scene.add.text(
+      MAIN_CONTENT_LEFT,
+      MAIN_KICKER_Y,
+      'HAUPTZIEL',
+      MAIN_KICKER_FONT,
+    ).setOrigin(0, 0.5);
+    this.mainObjectiveTitle = this.scene.add.text(
+      MAIN_CONTENT_LEFT,
+      MAIN_TITLE_Y,
+      '',
+      MAIN_TITLE_FONT,
+    ).setOrigin(0, 0.5);
+    this.mainObjectiveProgress = this.scene.add.text(
+      MAIN_CONTENT_RIGHT,
+      MAIN_TITLE_Y,
+      '',
+      MAIN_PROGRESS_FONT,
+    ).setOrigin(1, 0.5);
+
+    this.mainObjectiveFrame.lineStyle(1.5, COLORS.GOLD_2, 0.54);
+    this.mainObjectiveFrame.strokeRoundedRect(
+      MAIN_PANEL_LEFT + 1,
+      MAIN_PANEL_TOP + 1,
+      MAIN_PANEL_W - 2,
+      MAIN_PANEL_H - 2,
+      MAIN_PANEL_RADIUS,
+    );
+    this.mainObjectiveFrame.fillStyle(COLORS.GREY_9, 0.9);
+    this.mainObjectiveFrame.fillRoundedRect(
+      MAIN_CONTENT_LEFT,
+      MAIN_PROGRESS_Y - MAIN_PROGRESS_H / 2,
+      MAIN_PROGRESS_W,
+      MAIN_PROGRESS_H,
+      MAIN_PROGRESS_H / 2,
+    );
+    this.mainObjectiveFrame.lineStyle(1, COLORS.GOLD_2, 0.3);
+    this.mainObjectiveFrame.strokeRoundedRect(
+      MAIN_CONTENT_LEFT,
+      MAIN_PROGRESS_Y - MAIN_PROGRESS_H / 2,
+      MAIN_PROGRESS_W,
+      MAIN_PROGRESS_H,
+      MAIN_PROGRESS_H / 2,
+    );
+
+    this.mainObjectivePanel = this.scene.add.container(MAIN_PANEL_X, MAIN_PANEL_Y, [
+      this.mainObjectiveBg,
+      this.mainObjectiveFrame,
+      this.mainObjectiveFill,
+      this.mainObjectiveHead,
+      this.mainObjectiveKicker,
+      this.mainObjectiveTitle,
+      this.mainObjectiveProgress,
+    ]).setScrollFactor(0).setVisible(false);
+    this.container.add(this.mainObjectivePanel);
   }
 
   private buildEncounterPanel(): void {
@@ -604,14 +817,8 @@ export class CenterHUD {
   }
 
   private buildTrainWidget(): void {
-    this.trainPanelBg = this.scene.add.rectangle(CENTER_X, TRAIN_PANEL_Y, PANEL_WIDTH, TRAIN_PANEL_H, PANEL_BG_COL, PANEL_BG_ALPHA)
-      .setScrollFactor(0)
-      .setVisible(false);
-    this.container.add(this.trainPanelBg);
-
-
     this.trainText = this.scene.add.text(CENTER_X, TRAIN_TEXT_Y, '', {
-      fontSize: '16px', fontFamily: 'monospace', color: '#c0a060', align: 'center',
+      fontSize: '13px', fontFamily: 'monospace', color: '#c0a060', align: 'center',
       wordWrap: { width: PANEL_WIDTH - 8 },
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
     this.container.add(this.trainText);
@@ -748,7 +955,12 @@ export class CenterHUD {
 
   transitionToLobby(): void {
     this.container.setVisible(false);
+    this.objectiveAnnouncements?.reset();
+    this.announcedEncounterStarts.clear();
+    this.announcedEncounterResults.clear();
+    this.encounterAnnouncementHandsOver = false;
     this.hideAnnouncement();
+    this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
     this.hideTutorial(true);
     this.hideTrainWidget();
@@ -773,16 +985,15 @@ export class CenterHUD {
     this.puContainerRef = c;
   }
 
-  /**
-   * @param objectiveLabel Gesetzt: ersetzt die Restzeit durch das offene Rundenziel. Dieselbe
-   *   Darstellung wie beim wartenden Boss – kein zusaetzliches Widget.
-   */
-  updateTimer(secs: number, objectiveLabel: string | null = null): void {
+  updateTimer(secs: number, visible = true): void {
+    this.timerText.setVisible(visible);
+    this.timerPanelBg.setVisible(visible);
+    if (!visible) return;
     const mm = Math.floor(secs / 60);
     const ss = secs % 60;
-    const nextText = objectiveLabel ?? `${mm}:${ss.toString().padStart(2, '0')}`;
-    const nextColor = objectiveLabel ? '#ffd166' : secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
-    this.timerText.setFontSize(objectiveLabel ? 18 : 32);
+    const nextText = `${mm}:${ss.toString().padStart(2, '0')}`;
+    const nextColor = secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
+    this.timerText.setFontSize(32);
     if (nextText !== this.lastTimerText) {
       this.timerText.setText(nextText);
       this.lastTimerText = nextText;
@@ -815,14 +1026,113 @@ export class CenterHUD {
       .setVisible(true);
   }
 
+  updateMainObjectivePresentation(model: MainObjectiveViewModel | null): void {
+    if (!model) {
+      this.hideMainObjectivePresentation(false);
+      return;
+    }
+
+    const objectiveChanged = model.id !== this.lastMainObjectiveId;
+    const signature = `${model.id}|${model.title}|${model.progressLabel}|${model.progress.toFixed(4)}`;
+    if (signature !== this.lastMainObjectiveSignature) {
+      this.mainObjectiveProgress.setText(model.progressLabel);
+      const availableTitleWidth = Math.max(
+        80,
+        MAIN_CONTENT_RIGHT - MAIN_CONTENT_LEFT - this.mainObjectiveProgress.width - 14,
+      );
+      this.mainObjectiveTitle.setFontSize(18).setText(model.title);
+      if (this.mainObjectiveTitle.width > availableTitleWidth) this.mainObjectiveTitle.setFontSize(15);
+
+      const fillW = Math.round(MAIN_FILL_W * Phaser.Math.Clamp(model.progress, 0, 1));
+      if (fillW !== this.lastMainObjectiveProgressWidth) {
+        this.mainObjectiveFill.setCrop(0, 0, fillW, MAIN_FILL_H);
+        this.mainObjectiveHead
+          .setX(MAIN_CONTENT_LEFT + 1 + fillW)
+          .setVisible(fillW > 4 && fillW < MAIN_FILL_W);
+        this.lastMainObjectiveProgressWidth = fillW;
+      }
+      this.lastMainObjectiveSignature = signature;
+    }
+
+    if (objectiveChanged) {
+      this.lastMainObjectiveId = model.id;
+      this.mainObjectiveAnnouncementPending = this.objectiveAnnouncements !== null;
+      this.mainObjectivePanel.setVisible(false);
+      if (this.objectiveAnnouncements) {
+        this.objectiveAnnouncements.enqueue({
+          id: `main:${model.id}`,
+          kicker: 'HAUPTZIEL',
+          title: model.title,
+          detail: model.progressLabel,
+          tone: 'main',
+          target: { x: MAIN_PANEL_X, y: MAIN_PANEL_Y, scale: MAIN_ENTRY_SCALE },
+          onStart: () => {
+            this.mainObjectiveAnnouncementPending = true;
+            if (this.mainObjectivePanel?.active) this.mainObjectivePanel.setVisible(false);
+          },
+          onArrive: () => {
+            this.mainObjectiveAnnouncementPending = false;
+            if (this.mainObjectivePanel?.active && this.lastMainObjectiveId === model.id) {
+              this.playMainObjectiveEntry(MAIN_ENTRY_SCALE);
+            }
+          },
+        });
+      } else {
+        this.mainObjectiveAnnouncementPending = false;
+        this.playMainObjectiveEntry(1);
+      }
+      return;
+    }
+
+    if (!this.mainObjectiveAnnouncementPending && !this.mainObjectivePanel.visible) {
+      this.playMainObjectiveEntry(1);
+    }
+  }
+
+  private playMainObjectiveEntry(fromScale: number): void {
+    this.mainObjectiveTween?.destroy();
+    this.mainObjectivePanel
+      .setPosition(MAIN_PANEL_X, MAIN_PANEL_Y + (fromScale < 1 ? 0 : 7))
+      .setScale(fromScale < 1 ? fromScale : 0.97)
+      .setVisible(true)
+      .setAlpha(0);
+    this.mainObjectiveTween = this.scene.tweens.add({
+      targets: this.mainObjectivePanel,
+      alpha: 1,
+      y: MAIN_PANEL_Y,
+      scaleX: 1,
+      scaleY: 1,
+      duration: fromScale < 1 ? 260 : 180,
+      ease: 'Back.easeOut',
+      onComplete: () => { this.mainObjectiveTween = null; },
+    });
+  }
+
+  private hideMainObjectivePresentation(resetRound: boolean): void {
+    if (!resetRound && !this.lastMainObjectiveId && !this.mainObjectivePanel?.visible) return;
+    this.mainObjectiveTween?.destroy();
+    this.mainObjectiveTween = null;
+    this.mainObjectivePanel?.setVisible(false).setAlpha(1).setScale(1).setPosition(MAIN_PANEL_X, MAIN_PANEL_Y);
+    this.lastMainObjectiveId = null;
+    this.lastMainObjectiveSignature = null;
+    this.lastMainObjectiveProgressWidth = -1;
+    this.mainObjectiveAnnouncementPending = false;
+  }
+
   updateEncounterPresentation(
     state: CoopDefenseEncounterPresentationState | null,
     elapsedMs: number,
   ): void {
     if (!state) {
+      this.currentEncounterAnnouncementId = null;
+      this.currentEncounterAnnouncementPhase = null;
       this.hideEncounterPresentation();
       return;
     }
+
+    this.currentEncounterAnnouncementId = state.encounterId;
+    this.currentEncounterAnnouncementPhase = state.phase;
+    this.queueEncounterAnnouncements(state);
 
     const elapsed = Number.isFinite(elapsedMs) ? elapsedMs : 0;
     const remainingMs = state.phaseEndsAtMs === null
@@ -913,10 +1223,65 @@ export class CenterHUD {
       indeterminate || (determinate && fillW > 4 && fillW < ENCOUNTER_FILL_W),
     );
 
-    if (phaseChanged || !this.encounterPanel.visible) {
+    if (!this.encounterAnnouncementHandsOver && (phaseChanged || !this.encounterPanel.visible)) {
       this.playEncounterPhaseEntry(state.phase);
     }
+    this.lastEncounterPresentationId = state.encounterId;
     this.lastEncounterPresentationPhase = state.phase;
+  }
+
+  private queueEncounterAnnouncements(state: CoopDefenseEncounterPresentationState): void {
+    if (!this.objectiveAnnouncements) return;
+    const isStarting = state.phase === 'incoming' || state.phase === 'active';
+    if (isStarting && !this.announcedEncounterStarts.has(state.encounterId)) {
+      this.announcedEncounterStarts.add(state.encounterId);
+      const targetId = state.encounterId;
+      this.objectiveAnnouncements.enqueue({
+        id: `wave:start:${targetId}`,
+        topic: 'wave',
+        priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
+        kicker: `WELLE ${state.sequenceIndex} / ${state.sequenceCount}`,
+        title: `ANGRIFF AUS ${formatEncounterFronts(state.fronts)}`,
+        detail: 'BEREITMACHEN',
+        tone: 'wave',
+        holdMs: ENCOUNTER_START_ANNOUNCEMENT_HOLD_MS,
+        isRelevant: () => this.currentEncounterAnnouncementId === targetId
+          && (this.currentEncounterAnnouncementPhase === 'incoming'
+            || this.currentEncounterAnnouncementPhase === 'active'),
+        target: { x: ENCOUNTER_PANEL_X, y: ENCOUNTER_PANEL_Y, scale: 0.42 },
+        onStart: () => {
+          this.encounterAnnouncementHandsOver = true;
+          if (this.encounterPanel?.active) this.encounterPanel.setVisible(false);
+        },
+        onArrive: () => {
+          this.encounterAnnouncementHandsOver = false;
+          if (this.encounterPanel?.active && this.lastEncounterPresentationId === targetId) {
+            this.playEncounterPhaseEntry(this.lastEncounterPresentationPhase ?? state.phase);
+          }
+        },
+        onCancel: () => {
+          this.encounterAnnouncementHandsOver = false;
+        },
+      });
+    }
+
+    const isResult = state.phase === 'cleared' || state.phase === 'complete';
+    const resultKey = `${state.encounterId}:${state.phase}`;
+    if (isResult && !this.announcedEncounterResults.has(resultKey)) {
+      this.announcedEncounterResults.add(resultKey);
+      this.objectiveAnnouncements.enqueue({
+        id: `wave:result:${resultKey}`,
+        topic: 'wave',
+        priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
+        kicker: state.phase === 'complete' ? 'ANGRIFFSSERIE' : `WELLE ${state.sequenceIndex} / ${state.sequenceCount}`,
+        title: state.phase === 'complete' ? 'ALLE WELLEN ABGEWEHRT' : 'WELLE ABGEWEHRT',
+        tone: 'positive',
+        holdMs: ENCOUNTER_RESULT_ANNOUNCEMENT_HOLD_MS,
+        isRelevant: () => this.currentEncounterAnnouncementId === state.encounterId
+          && (this.currentEncounterAnnouncementPhase === 'cleared'
+            || this.currentEncounterAnnouncementPhase === 'complete'),
+      });
+    }
   }
 
   /** Farbführende Teile des Panels. Läuft nur beim Wechsel der Phasenfarbe. */
@@ -1051,7 +1416,11 @@ export class CenterHUD {
       .setScale(1)
       .setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y);
     this.encounterRailGlow?.setScale(1, 1).setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA);
+    this.encounterAnnouncementHandsOver = false;
+    this.currentEncounterAnnouncementId = null;
+    this.currentEncounterAnnouncementPhase = null;
     this.lastEncounterPresentationSignature = null;
+    this.lastEncounterPresentationId = null;
     this.lastEncounterPresentationPhase = null;
     this.lastEncounterStyleId = null;
     this.lastEncounterPipSignature = null;
@@ -1130,7 +1499,7 @@ export class CenterHUD {
       this.lastTrainText = nextText;
     }
     if (this.lastTrainMode !== 'arrival') {
-      this.trainPanelBg.setVisible(true);
+      this.showTrainPanelBackground();
       this.trainText.setVisible(true);
       this.hideTrainBar();
       this.lastTrainMode = 'arrival';
@@ -1146,7 +1515,7 @@ export class CenterHUD {
       this.lastTrainText = nextText;
     }
     if (this.lastTrainMode !== 'hp') {
-      this.trainPanelBg.setVisible(true);
+      this.showTrainPanelBackground();
       this.trainText.setVisible(true);
       this.trainBarBg.setVisible(true);
       this.trainBarFgImg.setVisible(true);
@@ -1169,7 +1538,7 @@ export class CenterHUD {
       this.lastTrainText = nextText;
     }
     if (this.lastTrainMode !== 'destroyed') {
-      this.trainPanelBg.setVisible(true);
+      this.showTrainPanelBackground();
       this.trainText.setVisible(true);
       this.hideTrainBar();
       this.lastTrainMode = 'destroyed';
@@ -1178,7 +1547,8 @@ export class CenterHUD {
   }
 
   hideTrainWidget(): void {
-    this.trainPanelBg.setVisible(false);
+    this.topPanelBg.setVisible(false);
+    this.timerPanelBg.setVisible(true);
     this.trainText.setVisible(false);
     this.hideTrainBar();
     this.lastTrainMode = 'hidden';
@@ -1286,20 +1656,21 @@ export class CenterHUD {
     });
   }
 
-  showFraggedBy(killerName: string, weapon: string, color: number): void {
-    this.showAnnouncement(`Fragged by ${killerName} (${weapon})`, color);
+  showFraggedBy(killerName: string, weapon: string, _color: number): void {
+    this.showAnnouncement(`Fragged by ${killerName} (${weapon})`, COLORS.RED_2);
   }
 
-  showYouFragged(victimName: string, color: number): void {
-    this.showAnnouncement(`You Fragged ${victimName}`, color);
+  showYouFragged(victimName: string, _color: number): void {
+    this.showAnnouncement(`You Fragged ${victimName}`, COLORS.GREEN_2);
   }
 
-  showBeerCaptured(playerName: string, color: number): void {
-    this.showAnnouncement(`${playerName} captured the Beer!`, color);
+  showBeerCaptured(playerName: string, _color: number): void {
+    this.showAnnouncement(`${playerName} captured the Beer!`, COLORS.GREEN_2);
   }
 
   destroy(): void {
     this.hideAnnouncement();
+    this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
     this.hideTutorial(true);
     this.trainBarEffect.destroy();
@@ -1315,6 +1686,7 @@ export class CenterHUD {
     this.utilitySection.outerEmitter.destroy();
     this.ultimateSection.coreEmitter.destroy();
     this.ultimateSection.outerEmitter.destroy();
+    this.mainObjectiveTween?.destroy();
     this.container.destroy(true);
   }
 
@@ -1468,6 +1840,11 @@ export class CenterHUD {
     this.trainBarFgImg.setVisible(false);
     this.trainBarBorder.setVisible(false);
     this.trainBarEffect.stop();
+  }
+
+  private showTrainPanelBackground(): void {
+    this.timerPanelBg.setVisible(false);
+    this.topPanelBg.setVisible(true);
   }
 
   private hideAnnouncement(): void {

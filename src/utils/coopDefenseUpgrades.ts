@@ -31,132 +31,41 @@ export type CoopDefenseUpgradeKind = 'upgrade' | 'unlock';
 export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_level';
 
 /**
- * Upgrade IDs currently backed by temporary recipe-generated PNGs.
+ * Upgrade IDs that may temporarily require an explicit asset-handoff entry.
  *
- * This remains the authoritative replacement list: when an individually authored icon replaces
- * one of these temporary files, remove the ID and its recipe as part of that asset handoff.
+ * Keep this registry available for future staged asset handoffs; it is empty while every
+ * currently registered upgrade resolves to final artwork or a deliberate shared alias.
  */
 export const COOP_DEFENSE_PENDING_UPGRADE_ICONS: ReadonlySet<string> = new Set([
-  'adrenaline_spawn_full',
-  'adrenaline_syringe_drops',
-  'adrenaline_syringe_drop_chance',
-  'adrenaline_syringe_duration',
-  'ultimate_armor_rage',
-  'ultimate_max_rage',
-  'dash_range',
-  'dash_fire_trail',
-  'dash_impact_damage',
-  'dash_overdrive',
-  'necromancy',
-  'necromancy_count',
-  'necromancy_hp',
-  'necromancy_vitality',
-  'necromancy_undying',
-  'necromancy_revive_radius',
-  'necromancy_dominance',
-  'guardian_spirit_trinity',
-  'honey_badger_pack_rage',
-  'slime_trail_bloom',
-  'stinkdruesen_aftercloud',
-  'armor_gain',
-  'flamethrower_fire_ring',
-  'flamethrower_fire_ring_projectiles',
-  'flamethrower_fire_ring_damage',
-  'flamethrower_fire_ring_radius',
-  'flamethrower_burning_ground',
-  'flamethrower_death_fire_burst',
-  'general_burning_projectiles',
-  'inspector_construction_slots',
-  'inspector_construction_hp',
-  'inspector_repair_drone',
-  'unlock_rocket_turret',
-  'unlock_machine_gun_turret',
-  'unlock_flame_turret',
-  'hydra_damage_split',
-  'overcharge_radius',
-  'overcharge_duration',
-  'overcharge_power',
-  'overcharge_cost',
-  'ak47_focus',
-  'ak47_focus_duration',
-  'ak47_focus_damage',
-  'ak47_fire_superiority',
-  'ak47_fire_superiority_shots',
-  'ak47_fire_superiority_damage',
-  'shotgun_brake_load',
-  'shotgun_lightning_blast',
-  'shotgun_lightning_slow',
-  'shotgun_round_shot',
-  'shotgun_proximity_damage',
-  'shotgun_thunder_avalanche',
-  'shotgun_lightning_damage',
-  'asmd_secondary_match_primary_range',
-  'asmd_secondary_dot_field_damage',
-  'asmd_secondary_combo_adrenaline',
-  'asmd_secondary_arc_lightning',
-  'asmd_secondary_arc_range',
-  'asmd_secondary_arc_damage',
-  'mini_rocket_thermobaric_charge',
-  'mini_rocket_long_range_drive',
-  'mini_rocket_launcher_explosion_damage',
-  'awp_moving_precision',
-  'flamethrower_expiry_ground',
-  'flamethrower_kamikaze',
-  'flamethrower_kamikaze_molotov_bonuses',
-  'flamethrower_fireball',
-  'flamethrower_fireball_trail',
-  'flamethrower_fireball_chunks',
-  'negev_adrenaline_cost',
-  'negev_burning_bullets',
-  'negev_rock_damage',
-  'negev_killstreak',
-  'negev_killstreak_recovery',
-  'negev_killstreak_explosion',
-  'rocket_launcher_burning_explosion',
-  'energy_shield_dome',
-  'energy_shield_mobility',
-  'energy_shield_dome_heal',
-  'energy_shield_overcharge',
-  'energy_shield_sustain',
-  'energy_shield_efficiency',
-  'energy_shield_autonomous',
-  'energy_shield_dome_size',
-  'mini_rocket_triple_detonation',
-  'mini_rocket_cascade_charge',
-  'mini_rocket_homecoming_protocol',
-  'mini_rocket_adrenaline_recovery',
-  'mini_rocket_armor_recovery',
-  'awp_charge_damage',
-  'awp_fire_trail',
-  'awp_destruction_corridor',
-  'awp_full_charge_time',
-  'awp_full_charge_damage',
-  'energy_shield_dome_reflect',
-  'felsbau_range',
-  'fliegenpilz_build_range',
-  'fliegenpilz_plasma_gun',
-  'armageddon_meteor_count',
-  'armageddon_rage_required',
-  'armageddon_fire_chunks',
 ]);
+
+/** Ultimate unlock nodes with their own upgrade-tree artwork instead of loadout-item icons. */
+export const COOP_DEFENSE_AUTHORED_UNLOCK_UPGRADE_ICONS: ReadonlySet<string> = new Set([
+  'unlock_armageddon',
+  'unlock_gauss_rifle',
+  'unlock_airstrike',
+  'unlock_honey_badger_rage',
+]);
+
+export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
+  return COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)
+    || COOP_DEFENSE_AUTHORED_UNLOCK_UPGRADE_ICONS.has(upgradeId);
+}
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   critical_chance: 'UPGRADE_AK47_ACCURACY',
   critical_damage: 'UPGRADE_AK47_FOCUS_DAMAGE',
-  glock_adrenaline_gain: 'UPGRADE_ADRENALINE_GAIN',
   glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
   shotgun_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
   shotgun_lightning_radius: 'UPGRADE_ASMD_SECONDARY_EXPLOSION_RADIUS',
   molotov_grenade_radius: 'UPGRADE_ASMD_PRIMARY_COOLDOWN',
   mini_rocket_launcher_homing_turn: 'UPGRADE_P90_HOMING_TURN',
-  flamethrower_adrenalin_efficiency: 'UPGRADE_AK47_ADRENALINE_COST',
   flamethrower_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
   armageddon_radius: 'UPGRADE_AIRSTRIKE_RADIUS',
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {
-  // Pending IDs now resolve to their temporary generated asset. Keep aliases above intact so
-  // the previous duplicate-icon cleanup remains authoritative for all existing upgrades.
+  // Keep aliases above intact so duplicate-icon cleanup remains authoritative.
   if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)) {
     return `UPGRADE_${upgradeId.toUpperCase()}`;
   }

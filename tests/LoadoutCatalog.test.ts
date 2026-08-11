@@ -8,7 +8,6 @@ import {
 } from '../src/loadout/LoadoutCatalog';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 import {
-  COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   buildDefaultCoopDefenseUpgradeProfile,
   getCoopDefenseUpgradeTextureKey,
   isCoopDefenseLoadoutItemSelectable,
@@ -99,10 +98,14 @@ describe('loadout catalog', () => {
     for (const weaponId of supportWeapons) expect(coopWeapon2Ids).toContain(weaponId);
   });
 
-  it('uses generated temporary upgrade icons without undoing existing aliases', () => {
-    expect(COOP_DEFENSE_PENDING_UPGRADE_ICONS.has('dash_fire_trail')).toBe(true);
+  it('uses final dedicated upgrade icons without undoing existing aliases', () => {
     expect(getCoopDefenseUpgradeTextureKey('dash_fire_trail')).toBe('UPGRADE_DASH_FIRE_TRAIL');
     expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_ASMD_PRIMARY_RANGE');
+    expect(getCoopDefenseUpgradeTextureKey('glock_adrenaline_gain')).toBe('UPGRADE_GLOCK_ADRENALINE_GAIN');
+    expect(getCoopDefenseUpgradeTextureKey('flamethrower_adrenalin_efficiency')).toBe(
+      'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',
+    );
+    expect(getCoopDefenseUpgradeTextureKey('unlock_armageddon')).toBe('UPGRADE_UNLOCK_ARMAGEDDON');
   });
 
   it('keeps internal Coop utility variants out of user-facing catalog lists', () => {

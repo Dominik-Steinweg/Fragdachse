@@ -14,11 +14,12 @@ import type {
 } from '../types';
 
 /**
- * Wie lange ein Abschluss oder Fehlschlag nach dem Zustandswechsel sichtbar bleibt.
+ * Wie lange ein Abschluss oder Fehlschlag nach dem Zustandswechsel im Zielbereich sichtbar bleibt.
  * Der Snapshot meldet den terminalen Eintrag bis zum Rundenende weiter; ohne dieses Fenster
- * bliebe eine erfüllte Mission dauerhaft im Bild stehen.
+ * bliebe eine erfüllte Mission dauerhaft im Bild stehen. Das Fenster enthält die kurze
+ * Mittenankündigung samt Übergabeflug und lässt danach rund sieben Sekunden Panel-Lesezeit.
  */
-export const SECONDARY_OBJECTIVE_TERMINAL_HOLD_MS = 4_200;
+export const SECONDARY_OBJECTIVE_TERMINAL_HOLD_MS = 9_000;
 
 /** Obergrenze gleichzeitig gezeigter Hintergrundzeilen. Darüber ist die Liste nicht mehr lesbar. */
 export const SECONDARY_OBJECTIVE_MAX_CHIPS = 3;
