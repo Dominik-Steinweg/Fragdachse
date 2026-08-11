@@ -54,7 +54,7 @@ export class PlacementSystem {
     for (const pedestal of layout.powerUpPedestals) {
       this.pedestalCells.add(this.key(pedestal.gridX, pedestal.gridY));
     }
-    for (const zone of layout.permanentGroundFireZones ?? []) {
+    for (const zone of layout.groundHazardZones ?? []) {
       for (const cell of zone.cells) this.hazardCells.add(this.key(cell.gridX, cell.gridY));
     }
   }

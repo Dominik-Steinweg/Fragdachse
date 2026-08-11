@@ -45,23 +45,25 @@ describe('Map 15 - Leerenjäger', () => {
     }
   });
 
-  it('replaces rails with deterministic collision-free permanent void fire', () => {
+  it('replaces rails with deterministic collision-free prebuilt void hazards', () => {
     const map = getCoopDefenseMapConfig('15');
     const first = ArenaGenerator.generate(71_515, map);
     const repeated = ArenaGenerator.generate(71_515, map);
+    const hazardEvents = map.mapEvents?.filter((event) => event.type === 'ground-hazard') ?? [];
     expect(first.tracks).toEqual([]);
-    expect(first.permanentGroundFireZones).toEqual(repeated.permanentGroundFireZones);
-    expect(first.permanentGroundFireZones?.length).toBeGreaterThan(0);
-    expect(map.permanentGroundFire?.baseClearanceCells).toBeGreaterThan(0);
+    expect(first.groundHazardZones).toEqual(repeated.groundHazardZones);
+    expect(first.groundHazardZones?.length).toBeGreaterThan(0);
+    expect(hazardEvents.every((event) => event.area.baseClearanceCells === 2)).toBe(true);
 
     const hazardCells = new Set(
-      first.permanentGroundFireZones!.flatMap((zone) => zone.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
+      first.groundHazardZones!.flatMap((zone) => zone.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
     );
     expect(hazardCells.size).toBeGreaterThan(0);
-    for (const zone of first.permanentGroundFireZones!) {
+    for (const zone of first.groundHazardZones!) {
+      const event = hazardEvents.find((candidate) => candidate.id === zone.eventId);
       expect(zone).toMatchObject({
-        burnDurationMs: map.permanentGroundFire?.burnDurationMs,
-        burnDamagePerTick: map.permanentGroundFire?.burnDamagePerTick,
+        burnDurationMs: event?.effect.burnDurationMs,
+        burnDamagePerTick: event?.effect.burnDamagePerTick,
         visualStyle: 'void',
         damageTarget: 'players',
       });
@@ -73,13 +75,13 @@ describe('Map 15 - Leerenjäger', () => {
     }
     for (const base of resolveCoopDefenseBases(map)) {
       for (const baseCell of base.cells) {
-        for (const zone of first.permanentGroundFireZones!) {
+        for (const zone of first.groundHazardZones!) {
           for (const hazardCell of zone.cells) {
             const chebyshevDistance = Math.max(
               Math.abs(hazardCell.gridX - baseCell.gridX),
               Math.abs(hazardCell.gridY - baseCell.gridY),
             );
-            expect(chebyshevDistance).toBeGreaterThan(map.permanentGroundFire!.baseClearanceCells);
+            expect(chebyshevDistance).toBeGreaterThan(2);
           }
         }
       }

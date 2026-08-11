@@ -263,6 +263,26 @@ export class FireSystem {
     }
   }
 
+  /** Entfernt ausschliesslich die Zellen einer logisch besitzenden Quelle. */
+  hostRemoveGroundSourcesBySourceKey(sourceKey: string): void {
+    const prefix = `cell:${sourceKey}:`;
+    for (const [sourceId, source] of this.sources) {
+      if (!sourceId.startsWith(prefix)) continue;
+      for (const cellKey of source.cells) {
+        const cell = this.cells.get(cellKey);
+        if (!cell) continue;
+        cell.sourceKeys.delete(sourceId);
+        if (cell.sourceKeys.size === 0) {
+          this.cells.delete(cellKey);
+          this.groundSnapshotDirty = true;
+        } else {
+          this.refreshCellAggregate(cell.gridX, cell.gridY);
+        }
+      }
+      this.sources.delete(sourceId);
+    }
+  }
+
   hostRefreshGroundCellsAlongSegment(
     fromX: number,
     fromY: number,

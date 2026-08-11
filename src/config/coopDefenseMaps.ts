@@ -18,7 +18,7 @@ import {
 } from '../config';
 import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '../effects/TimeOfDay';
 import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
-import type { SpawnFront } from '../types';
+import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
@@ -361,10 +361,12 @@ export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
  * `base-destroyed`) ergänzt werden können – ohne dafür jetzt eine allgemeine Trigger-Engine
  * zu bauen.
  */
-/** Kleine Triggerunion; C2 erweitert sie um den semantischen Event-Abschluss. */
+/** Kleine Triggerunion fuer alle C-Events. */
 export type CoopDefenseMapEventStart =
   | { readonly type: 'time'; readonly atMs: number }
-  | { readonly type: 'after-encounter'; readonly encounterId: string };
+  | { readonly type: 'after-encounter'; readonly encounterId: string }
+  | { readonly type: 'boss-phase'; readonly phase: number }
+  | { readonly type: 'base-destroyed'; readonly baseId: string };
 
 /** Gemeinsame Felder aller authored Map-Events. */
 export interface CoopDefenseMapEventBase {
@@ -407,10 +409,43 @@ export interface CoopDefenseMapAirstrikeEventConfig extends CoopDefenseMapEventB
 
 export type ResolvedCoopDefenseMapAirstrikeEventConfig = CoopDefenseMapAirstrikeEventConfig;
 
-/** Gemeinsame Typvorbereitung fuer C3; wird erst mit dem Ground-Hazard-Handler authoring-faehig. */
+export type CoopDefenseMapGroundHazardArea =
+  | {
+    readonly type: 'random-patches';
+    readonly randomPatchCount: number;
+    readonly minPatchRadiusCells: number;
+    readonly maxPatchRadiusCells: number;
+    readonly baseClearanceCells?: number;
+  }
+  | {
+    readonly type: 'rectangle';
+    readonly gridX: number;
+    readonly gridY: number;
+    readonly widthCells: number;
+    readonly heightCells: number;
+    readonly baseClearanceCells?: number;
+  }
+  | {
+    readonly type: 'cells';
+    readonly cells: readonly { readonly gridX: number; readonly gridY: number }[];
+    readonly baseClearanceCells?: number;
+  };
+
+export interface CoopDefenseMapGroundHazardEffectConfig {
+  readonly visualStyle: GroundFireVisualStyle;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerTick: number;
+  readonly weaponName: string;
+}
+
 export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEventBase {
   readonly type: 'ground-hazard';
+  readonly durationMs?: number;
+  readonly area: CoopDefenseMapGroundHazardArea;
+  readonly effect: CoopDefenseMapGroundHazardEffectConfig;
 }
+
+export type ResolvedCoopDefenseMapGroundHazardEventConfig = CoopDefenseMapGroundHazardEventConfig;
 
 export type CoopDefenseMapEventConfig =
   | CoopDefenseMapTrainEventConfig
@@ -418,17 +453,6 @@ export type CoopDefenseMapEventConfig =
   | CoopDefenseMapGroundHazardEventConfig;
 /** Nach der Normalisierung sind Werte runtime-seitig bereinigt; die Union bleibt authoring-kompatibel. */
 export type ResolvedCoopDefenseMapEventConfig = CoopDefenseMapEventConfig;
-
-export interface CoopDefenseMapPermanentGroundFireConfig {
-  readonly randomPatchCount: number;
-  readonly minPatchRadiusCells: number;
-  readonly maxPatchRadiusCells: number;
-  /** Freier Chebyshev-Abstand um jede Basiszelle, damit Dauerfeuer keine Basis einschliesst. */
-  readonly baseClearanceCells: number;
-  readonly burnDurationMs: number;
-  readonly burnDamagePerTick: number;
-  readonly weaponName: string;
-}
 
 export interface CoopDefenseMapCorridorPoint {
   readonly gridX: number;
@@ -510,7 +534,6 @@ export interface CoopDefenseMapConfig {
   readonly trackMode?: CoopDefenseMapTrackMode;
   /** Authored Map-Events; Gleise ohne Zug-Event bleiben erlaubt. */
   readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
-  readonly permanentGroundFire?: CoopDefenseMapPermanentGroundFireConfig;
   /**
    * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
    * Grundhelligkeit und Färbung der Arena, Länge und Deckkraft der statischen Schatten
@@ -764,6 +787,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     mapConfig.mapId,
     mapConfig.mapEvents,
     encounters ?? [],
+    bases,
+    boss,
     trackMode,
     arenaWidthCells,
     arenaHeightCells,
@@ -799,7 +824,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     trackMode,
     mapEvents,
-    permanentGroundFire: normalizePermanentGroundFire(mapConfig.permanentGroundFire),
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     surviveDurationSec,
@@ -1721,6 +1745,8 @@ function normalizeMapEvents(
   mapId: string,
   events: readonly CoopDefenseMapEventConfig[] | undefined,
   encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
+  bases: readonly CoopBaseConfig[],
+  boss: CoopDefenseMapBossConfig | undefined,
   trackMode: CoopDefenseMapTrackMode,
   arenaWidthCells: number,
   arenaHeightCells: number,
@@ -1742,7 +1768,7 @@ function normalizeMapEvents(
       throw new Error(`[coopDefenseMaps] Duplicate map event id in map ${mapId}: ${event.id}`);
     }
     eventIds.add(event.id);
-    const start = normalizeMapEventStart(mapId, event.id, event.start, encounters);
+    const start = normalizeMapEventStart(mapId, event.id, event.start, encounters, { bases, boss });
     const delayMs = normalizeMapEventMilliseconds(mapId, event.id, event.delayMs ?? 0, 'delayMs');
     if (event.type === 'train') {
       if (trackMode !== 'rails') {
@@ -1769,8 +1795,186 @@ function normalizeMapEvents(
         arenaHeightCells,
       );
     }
+    if (event.type === 'ground-hazard') {
+      return normalizeGroundHazardMapEvent(
+        mapId,
+        event,
+        start,
+        delayMs,
+        arenaWidthCells,
+        arenaHeightCells,
+      );
+    }
     throw new Error(`[coopDefenseMaps] Map ${mapId} has an unsupported map event type: ${event.type}`);
   });
+}
+
+function normalizeGroundHazardMapEvent(
+  mapId: string,
+  event: CoopDefenseMapGroundHazardEventConfig,
+  start: CoopDefenseMapEventStart,
+  delayMs: number,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): ResolvedCoopDefenseMapGroundHazardEventConfig {
+  const durationMs = event.durationMs === undefined
+    ? undefined
+    : normalizeMapEventMilliseconds(mapId, event.id, event.durationMs, 'durationMs', true);
+  const area = normalizeGroundHazardArea(
+    mapId,
+    event.id,
+    event.area,
+    arenaWidthCells,
+    arenaHeightCells,
+  );
+  const effect = event.effect;
+  if (!effect || typeof effect !== 'object' || Array.isArray(effect)) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs an effect`);
+  }
+  if (effect.visualStyle !== 'normal' && effect.visualStyle !== 'void') {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} has an unknown visualStyle`);
+  }
+  if (
+    typeof effect.burnDurationMs !== 'number'
+    || !Number.isFinite(effect.burnDurationMs)
+    || effect.burnDurationMs <= 0
+  ) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs a positive burnDurationMs`);
+  }
+  if (
+    typeof effect.burnDamagePerTick !== 'number'
+    || !Number.isFinite(effect.burnDamagePerTick)
+    || effect.burnDamagePerTick < 0
+  ) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs a non-negative burnDamagePerTick`);
+  }
+  if (typeof effect.weaponName !== 'string' || effect.weaponName.trim().length === 0) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs a weaponName`);
+  }
+  const burnDurationMs = Math.floor(effect.burnDurationMs);
+  if (burnDurationMs <= 0) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs a positive burnDurationMs`);
+  }
+  return {
+    id: event.id,
+    type: 'ground-hazard',
+    start,
+    delayMs,
+    ...(durationMs === undefined ? {} : { durationMs }),
+    area,
+    effect: {
+      visualStyle: effect.visualStyle,
+      burnDurationMs,
+      burnDamagePerTick: effect.burnDamagePerTick,
+      weaponName: effect.weaponName.trim(),
+    },
+  };
+}
+
+function normalizeGroundHazardArea(
+  mapId: string,
+  eventId: string,
+  area: CoopDefenseMapGroundHazardArea | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): CoopDefenseMapGroundHazardArea {
+  if (!area || typeof area !== 'object' || Array.isArray(area) || typeof area.type !== 'string') {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs a valid area`);
+  }
+  const baseClearanceCells = normalizeGroundHazardBaseClearance(mapId, eventId, area.baseClearanceCells);
+  if (area.type === 'random-patches') {
+    if (
+      typeof area.minPatchRadiusCells !== 'number'
+      || !Number.isFinite(area.minPatchRadiusCells)
+      || area.minPatchRadiusCells <= 0
+      || typeof area.maxPatchRadiusCells !== 'number'
+      || !Number.isFinite(area.maxPatchRadiusCells)
+      || area.maxPatchRadiusCells < area.minPatchRadiusCells
+    ) {
+      throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs valid patch radii`);
+    }
+    return {
+      type: 'random-patches',
+      randomPatchCount: normalizePositiveMapEventInteger(
+        mapId,
+        eventId,
+        area.randomPatchCount,
+        'randomPatchCount',
+      ),
+      minPatchRadiusCells: area.minPatchRadiusCells,
+      maxPatchRadiusCells: area.maxPatchRadiusCells,
+      ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
+    };
+  }
+  if (area.type === 'rectangle') {
+    const values = [area.gridX, area.gridY, area.widthCells, area.heightCells];
+    if (values.some((value) => typeof value !== 'number' || !Number.isInteger(value))) {
+      throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs integer rectangle coordinates`);
+    }
+    if (
+      area.gridX < 0
+      || area.gridY < 0
+      || area.widthCells <= 0
+      || area.heightCells <= 0
+      || area.gridX + area.widthCells > arenaWidthCells
+      || area.gridY + area.heightCells > arenaHeightCells
+    ) {
+      throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} rectangle is outside the arena`);
+    }
+    return {
+      type: 'rectangle',
+      gridX: area.gridX,
+      gridY: area.gridY,
+      widthCells: area.widthCells,
+      heightCells: area.heightCells,
+      ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
+    };
+  }
+  if (area.type === 'cells') {
+    if (!Array.isArray(area.cells) || area.cells.length === 0) {
+      throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs cells`);
+    }
+    const seen = new Set<string>();
+    const cells = area.cells.map((cell) => {
+      if (
+        !cell
+        || typeof cell.gridX !== 'number'
+        || typeof cell.gridY !== 'number'
+        || !Number.isInteger(cell.gridX)
+        || !Number.isInteger(cell.gridY)
+        || cell.gridX < 0
+        || cell.gridY < 0
+        || cell.gridX >= arenaWidthCells
+        || cell.gridY >= arenaHeightCells
+      ) {
+        throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} has an invalid cell`);
+      }
+      const key = `${cell.gridX}:${cell.gridY}`;
+      if (seen.has(key)) {
+        throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} has duplicate cells`);
+      }
+      seen.add(key);
+      return { gridX: cell.gridX, gridY: cell.gridY };
+    });
+    return {
+      type: 'cells',
+      cells,
+      ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
+    };
+  }
+  throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} has an unknown area type`);
+}
+
+function normalizeGroundHazardBaseClearance(
+  mapId: string,
+  eventId: string,
+  value: number | undefined,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs a non-negative baseClearanceCells`);
+  }
+  return value;
 }
 
 function normalizeAirstrikeMapEvent(
@@ -1878,6 +2082,7 @@ function normalizeMapEventStart(
   eventId: string,
   start: CoopDefenseMapEventStart | undefined,
   encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
+  context: EncounterTriggerNormalizationContext,
 ): CoopDefenseMapEventStart {
   if (!start || typeof start.type !== 'string') {
     throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a valid start trigger`);
@@ -1898,6 +2103,27 @@ function normalizeMapEventStart(
     }
     return { type: 'after-encounter', encounterId };
   }
+  if (start.type === 'boss-phase') {
+    if (!Number.isFinite(start.phase) || !Number.isInteger(start.phase) || start.phase !== 2) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} supports boss phase 2 only`);
+    }
+    if (!context.boss || context.boss.enemyKind !== 'void-hunter') {
+      throw new Error(
+        `[coopDefenseMaps] Map event ${mapId}:${eventId} needs a Void Hunter boss for phase 2`,
+      );
+    }
+    return { type: 'boss-phase', phase: 2 };
+  }
+  if (start.type === 'base-destroyed') {
+    if (typeof start.baseId !== 'string' || start.baseId.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a base id`);
+    }
+    const baseId = start.baseId.trim();
+    if (!context.bases.some((base) => base.id === baseId)) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} references unknown base: ${baseId}`);
+    }
+    return { type: 'base-destroyed', baseId };
+  }
   throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} has an unsupported start trigger`);
 }
 
@@ -1912,7 +2138,11 @@ function normalizeMapEventMilliseconds(
     const condition = requirePositive ? 'positive finite' : 'non-negative finite';
     throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a ${condition} ${fieldName}`);
   }
-  return Math.floor(value);
+  const normalized = Math.floor(value);
+  if (requirePositive && normalized <= 0) {
+    throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a positive finite ${fieldName}`);
+  }
+  return normalized;
 }
 
 function normalizePositiveMapEventInteger(
@@ -2009,23 +2239,7 @@ function validateMapEventDependencyGraph(
 function isFiniteMapEvent(event: ResolvedCoopDefenseMapEventConfig): boolean {
   if (event.type === 'train') return event.repeatAfterExitMs === undefined;
   if (event.type === 'airstrike') return event.pattern !== 'player-hunt';
-  return false;
-}
-
-function normalizePermanentGroundFire(
-  config: CoopDefenseMapPermanentGroundFireConfig | undefined,
-): CoopDefenseMapPermanentGroundFireConfig | undefined {
-  if (!config) return undefined;
-  const minPatchRadiusCells = Math.max(0.5, config.minPatchRadiusCells);
-  return {
-    randomPatchCount: Math.max(0, Math.floor(config.randomPatchCount)),
-    minPatchRadiusCells,
-    maxPatchRadiusCells: Math.max(minPatchRadiusCells, config.maxPatchRadiusCells),
-    baseClearanceCells: Math.max(1, Math.floor(config.baseClearanceCells ?? 2)),
-    burnDurationMs: Math.max(1, Math.floor(config.burnDurationMs)),
-    burnDamagePerTick: Math.max(0, config.burnDamagePerTick),
-    weaponName: config.weaponName || 'Leerenbrand',
-  };
+  return event.durationMs !== undefined;
 }
 
 /**

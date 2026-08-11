@@ -81,7 +81,8 @@ describe('Train as a standalone map event', () => {
     for (const mapId of ['15', '16']) {
       const map = getCoopDefenseMapConfig(mapId);
       expect(map.trackMode, mapId).toBe('void-fire');
-      expect(map.mapEvents, mapId).toEqual([]);
+      expect(map.mapEvents?.some((event) => event.type === 'train'), mapId).toBe(false);
+      expect(map.mapEvents?.some((event) => event.type === 'ground-hazard'), mapId).toBe(true);
     }
 
     expect(() => buildMap({
@@ -114,7 +115,8 @@ describe('Train as a standalone map event', () => {
     expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'after-encounter', encounterId: 'missing' } }] })).toThrow(/unknown encounter/);
     expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, delayMs: -1 }] })).toThrow(/delayMs/);
     expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 0 }] })).toThrow(/repeatAfterExitMs/);
-    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, type: 'ground-hazard' }] })).toThrow(/unsupported map event type/);
+    const unsupported = { ...event, start: { type: 'time', atMs: 0 }, type: 'unsupported' } as unknown as CoopDefenseMapConfig['mapEvents'][number];
+    expect(() => buildMap({ mapEvents: [unsupported] })).toThrow(/unsupported map event type/);
   });
 
   it('keeps the 00-test C1 slice one-shot with encounter clear and five seconds warning', () => {

@@ -107,12 +107,12 @@ describe('FireSystem visual styles and damage targets', () => {
     );
   });
 
-  it('keeps map fire alive beyond any gameplay timer until arena teardown', () => {
+  it('keeps persistent map fire alive beyond any gameplay timer until arena teardown', () => {
     const fireSystem = new FireSystem({} as Phaser.Scene);
     const now = 3_000;
 
     fireSystem.hostRefreshGroundCell(300, 300, {
-      sourceKey: 'map:permanent-hazard',
+      sourceKey: 'map-event:persistent-hazard:1',
       ownerId: 'map-hazard:15',
       durationMs: 1,
       permanent: true,
@@ -121,5 +121,29 @@ describe('FireSystem visual styles and damage targets', () => {
     expect(fireSystem.hostUpdate(now + 60_000).ground.cells).toHaveLength(1);
     fireSystem.destroyAll();
     expect(fireSystem.hostUpdate(now + 60_000).ground.cells).toEqual([]);
+  });
+
+  it('removes only the requested map-event source and preserves independent fire', () => {
+    const fireSystem = new FireSystem({} as Phaser.Scene);
+    const now = 4_000;
+    fireSystem.hostRefreshGroundCell(300, 300, {
+      sourceKey: 'map-event:hazard-a:1',
+      ownerId: 'map-hazard:hazard-a',
+      durationMs: 2_000,
+      permanent: true,
+      visualStyle: 'void',
+    }, now);
+    fireSystem.hostRefreshGroundCell(300, 300, {
+      sourceKey: 'player-fire',
+      ownerId: 'player-1',
+      durationMs: 2_000,
+      permanent: true,
+      visualStyle: 'normal',
+    }, now);
+
+    fireSystem.hostRemoveGroundSourcesBySourceKey('map-event:hazard-a:1');
+    const remaining = fireSystem.hostUpdate(now).ground.cells;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.visualStyle).toBe('normal');
   });
 });

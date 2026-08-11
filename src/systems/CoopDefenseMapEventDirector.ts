@@ -15,7 +15,7 @@ export interface CoopDefenseMapEventHandler {
     event: ResolvedCoopDefenseMapEventConfig,
     occurrence: number,
     actionAtMs: number,
-  ): void;
+  ): void | boolean;
   hostUpdate(deltaMs: number, countdownActive: boolean): void;
   reset(): void;
   setCycleFinishedCallback(
@@ -147,7 +147,7 @@ export class CoopDefenseMapEventDirector {
     // Fail-closed: ein Event ohne Fachhandler bleibt dormant und wirkt nicht.
     if (!handler) return;
 
-    handler.schedule(runtime.config, occurrence, actionAtMs);
+    if (handler.schedule(runtime.config, occurrence, actionAtMs) === false) return;
     runtime.occurrence = occurrence;
     runtime.state = occurrence === 1 ? 'scheduled' : 'waiting-repeat';
     runtime.stateChangedAtMs = this.elapsedMs;

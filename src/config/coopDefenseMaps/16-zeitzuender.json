@@ -4,15 +4,45 @@
   "arenaWidthCells": 104,
   "timeOfDay": "05:00",
   "trackMode": "void-fire",
-  "permanentGroundFire": {
-    "randomPatchCount": 6,
-    "minPatchRadiusCells": 2,
-    "maxPatchRadiusCells": 4,
-    "baseClearanceCells": 2,
-    "burnDurationMs": 2000,
-    "burnDamagePerTick": 0.5,
-    "weaponName": "Morgenleerer Voidbrand"
-  },
+  "mapEvents": [
+    {
+      "id": "void-track-corridor",
+      "type": "ground-hazard",
+      "start": { "type": "time", "atMs": 0 },
+      "area": {
+        "type": "rectangle",
+        "gridX": 51,
+        "gridY": 0,
+        "widthCells": 2,
+        "heightCells": 33,
+        "baseClearanceCells": 2
+      },
+      "effect": {
+        "visualStyle": "void",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Morgenleerer Voidbrand"
+      }
+    },
+    {
+      "id": "void-random-patches",
+      "type": "ground-hazard",
+      "start": { "type": "time", "atMs": 0 },
+      "area": {
+        "type": "random-patches",
+        "randomPatchCount": 6,
+        "minPatchRadiusCells": 2,
+        "maxPatchRadiusCells": 4,
+        "baseClearanceCells": 2
+      },
+      "effect": {
+        "visualStyle": "void",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Morgenleerer Voidbrand"
+      }
+    }
+  ],
   "rockFillRatio": 0.12,
   "balanceReferenceDurationSec": 160,
   "objective": "destroy-hostile-bases",

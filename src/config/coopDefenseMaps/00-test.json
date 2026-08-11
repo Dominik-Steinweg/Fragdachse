@@ -41,6 +41,47 @@
       },
       "pattern": "player-hunt",
       "intervalMs": 10000
+    },
+    {
+      "id": "c3-base-hazard",
+      "type": "ground-hazard",
+      "start": {
+        "type": "base-destroyed",
+        "baseId": "destroy-brood-front-north"
+      },
+      "delayMs": 1000,
+      "durationMs": 18000,
+      "area": {
+        "type": "rectangle",
+        "gridX": 46,
+        "gridY": 4,
+        "widthCells": 8,
+        "heightCells": 5
+      },
+      "effect": {
+        "visualStyle": "void",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "C3-Testbrand"
+      }
+    },
+    {
+      "id": "c3-persistent-hazard",
+      "type": "ground-hazard",
+      "start": { "type": "time", "atMs": 0 },
+      "area": {
+        "type": "rectangle",
+        "gridX": 4,
+        "gridY": 4,
+        "widthCells": 4,
+        "heightCells": 4
+      },
+      "effect": {
+        "visualStyle": "normal",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "C3-Persistentbrand"
+      }
     }
   ],
   "surviveDurationSec": 600,

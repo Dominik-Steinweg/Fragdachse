@@ -8,10 +8,33 @@ vi.mock('phaser', () => ({
   Geom: {
     Rectangle: class {
       x = 0; y = 0; width = 0; height = 0;
+      get left() { return this.x; }
+      get right() { return this.x + this.width; }
+      get top() { return this.y; }
+      get bottom() { return this.y + this.height; }
+      get centerX() { return this.x + this.width / 2; }
+      get centerY() { return this.y + this.height / 2; }
       setTo(x: number, y: number, width: number, height: number) {
         this.x = x; this.y = y; this.width = width; this.height = height;
         return this;
       }
+    },
+    Line: class {
+      constructor(
+        public x1: number,
+        public y1: number,
+        public x2: number,
+        public y2: number,
+      ) {}
+      static Length(line: { x1: number; y1: number; x2: number; y2: number }) {
+        return Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+      }
+    },
+    Intersects: {
+      GetLineToRectangle: (_line: unknown, _rect: unknown, scratch: Array<{ x: number; y: number }>) => {
+        scratch.push({ x: 4, y: 16 });
+        return scratch;
+      },
     },
   },
   Math: {
@@ -19,6 +42,9 @@ vi.mock('phaser', () => ({
       Quadratic: {
         Out: (value: number) => value,
       },
+    },
+    Distance: {
+      Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1),
     },
   },
 }));
@@ -186,6 +212,49 @@ describe('projectile performance paths', () => {
     expect(processCallbacks).toHaveLength(1);
     expect(processCallbacks[0]?.({}, ownRock)).toBe(false);
     expect(processCallbacks[0]?.({}, otherRock)).toBe(true);
+  });
+
+  it('skips only the supporting rock in continuous bullet collision', () => {
+    const ownRock = { active: true, getBounds: () => ({ left: 0, top: 0, right: 32, bottom: 32 }) };
+    const otherRock = { active: true, getBounds: () => ({ left: 0, top: 0, right: 32, bottom: 32 }) };
+    const manager = new ProjectileManager({} as Phaser.Scene);
+    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [ownRock, otherRock], null);
+
+    const body = {
+      velocity: { x: 100, y: 0 },
+      reset: vi.fn(),
+      setVelocity: vi.fn(),
+      enable: true,
+    } as unknown as Phaser.Physics.Arcade.Body;
+    const tracked = {
+      ignoreRockIndex: 0,
+      lastX: 1,
+      lastY: 16,
+      sprite: { x: 2, y: 16, displayWidth: 5 },
+      body,
+      bounceCount: 0,
+      maxBounces: 0,
+      damage: 7,
+      ownerId: 'turret-owner',
+      color: 0xffffff,
+      pendingDestroy: false,
+      bounceProcessedThisStep: false,
+      penetratesRocks: false,
+      projectileStyle: 'bullet',
+      isGrenade: false,
+      isFlame: false,
+      isBfg: false,
+      colliders: [],
+    } as unknown as TrackedProjectile;
+    const rockHits: number[] = [];
+    manager.setRockHitCallback((rockId) => rockHits.push(rockId));
+
+    (manager as unknown as { resolveContinuousRockCollision: (projectile: TrackedProjectile) => void })
+      .resolveContinuousRockCollision(tracked);
+
+    expect(rockHits).toEqual([1]);
+    expect(body.reset).toHaveBeenCalled();
+    expect(body.enable).toBe(false);
   });
 
   it('clears a flame obstacle-hit set during projectile cleanup', () => {

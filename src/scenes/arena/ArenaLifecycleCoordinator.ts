@@ -42,6 +42,7 @@ import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePe
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import { CoopDefenseMapEventDirector, type CoopDefenseMapEventHandler } from '../../systems/CoopDefenseMapEventDirector';
+import { CoopDefenseGroundHazardEventHandler } from '../../systems/CoopDefenseGroundHazardEventHandler';
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
@@ -1110,38 +1111,6 @@ export class ArenaLifecycleCoordinator {
         return true;
       },
     );
-    if (bridge.isHost()) {
-      const createdAt = Date.now();
-      for (const zone of layout.permanentGroundFireZones ?? []) {
-        for (const cell of zone.cells) {
-          const cellLeft = ARENA_OFFSET_X + cell.gridX * CELL_SIZE;
-          const cellTop = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE;
-          for (let subY = 0; subY < CELL_SIZE; subY += GROUND_FIRE_CELL_SIZE) {
-            for (let subX = 0; subX < CELL_SIZE; subX += GROUND_FIRE_CELL_SIZE) {
-              this.ctx.fireSystem.hostRefreshGroundCell(
-                cellLeft + subX + GROUND_FIRE_CELL_SIZE * 0.5,
-                cellTop + subY + GROUND_FIRE_CELL_SIZE * 0.5,
-                {
-                  sourceKey: `map:${zone.id}`,
-                  ownerId: `map-hazard:${coopDefenseMapConfig?.mapId ?? 'arena'}`,
-                  durationMs: 1,
-                  permanent: true,
-                  damagePerTick: 0,
-                  burn: {
-                    durationMs: zone.burnDurationMs,
-                    damagePerTick: zone.burnDamagePerTick,
-                  },
-                  weaponName: zone.weaponName,
-                  visualStyle: zone.visualStyle,
-                  damageTarget: zone.damageTarget,
-                },
-                createdAt,
-              );
-            }
-          }
-        }
-      }
-    }
     this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
@@ -2144,6 +2113,14 @@ export class ArenaLifecycleCoordinator {
           tutorialShowControls: coopDefenseMapConfig.tutorialShowControls,
         })
         : null;
+      const coopDefenseGroundHazardEventHandler = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig
+        ? new CoopDefenseGroundHazardEventHandler({
+          fireSystem: this.ctx.fireSystem,
+          prebuiltZones: layout.groundHazardZones ?? [],
+          getNowMs: () => Date.now(),
+          getActiveRoundTimeMs: () => Math.max(0, Date.now() - bridge.getArenaStartTime()),
+        })
+        : null;
       this.ctx.airstrikeSystem.setResolvedCallback((resolution) => {
         coopDefenseAirstrikeEventHandler?.handleStrikeResolved(resolution);
       });
@@ -2279,13 +2256,19 @@ export class ArenaLifecycleCoordinator {
           mapEventHandlers.push(trainHandler);
         }
         if (coopDefenseAirstrikeEventHandler) mapEventHandlers.push(coopDefenseAirstrikeEventHandler);
+        if (coopDefenseGroundHazardEventHandler) mapEventHandlers.push(coopDefenseGroundHazardEventHandler);
         if (coopDefenseMapEvents.length > 0) {
           this.ctx.coopDefenseMapEventDirector = new CoopDefenseMapEventDirector(
             coopDefenseMapEvents,
             mapEventHandlers,
             {
               isTriggerSatisfied: (start) => start.type === 'after-encounter'
-                && (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false),
+                ? (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false)
+                : start.type === 'boss-phase'
+                  ? (this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false)
+                  : start.type === 'base-destroyed'
+                    ? (this.ctx.baseManager?.getBase(start.baseId)?.isDestroyed() ?? false)
+                    : false,
             },
           );
         } else {

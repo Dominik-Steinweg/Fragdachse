@@ -1442,15 +1442,17 @@ export interface SyncedBurningGroundCell {
   visualStyle: GroundFireVisualStyle;
 }
 
-export interface ArenaGroundFireCell {
+export interface ArenaGroundHazardCell {
   gridX: number;
   gridY: number;
 }
 
-/** Permanente, map-definierte Brandfläche auf dem Arena-Raster. */
-export interface ArenaGroundFireZone {
+/** Seed-deterministische, authored-eventgebundene Hazard-Flaeche auf dem Arena-Raster. */
+export interface ArenaGroundHazardZone {
+  /** Authored map-event id; layout consumers must not infer a new event from geometry. */
+  eventId: string;
   id: string;
-  cells: ArenaGroundFireCell[];
+  cells: ArenaGroundHazardCell[];
   burnDurationMs: number;
   burnDamagePerTick: number;
   weaponName: string;
@@ -1477,7 +1479,8 @@ export interface ArenaLayout {
   dirt:   DirtCell[];
   decals?: DecalCell[];
   powerUpPedestals: PowerUpPedestalCell[];
-  permanentGroundFireZones?: ArenaGroundFireZone[];
+  /** Seed-deterministic, inactive cells for authored ground-hazard events. */
+  groundHazardZones?: ArenaGroundHazardZone[];
 }
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */

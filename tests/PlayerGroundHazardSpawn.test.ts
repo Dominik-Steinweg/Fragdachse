@@ -21,8 +21,8 @@ import { CELL_SIZE, GRID_COLS, GRID_ROWS } from '../src/config';
 import { PlayerManager } from '../src/entities/PlayerManager';
 import type { ArenaLayout } from '../src/types';
 
-describe('PlayerManager permanent ground fire spawns', () => {
-  it('keeps one full grid cell between an initial or respawn position and permanent fire', () => {
+describe('PlayerManager ground hazard spawns', () => {
+  it('keeps one full grid cell between an initial or respawn position and a ground hazard', () => {
     const fireCell = { gridX: 0, gridY: 0 };
     const safeCell = { gridX: 2, gridY: 0 };
     const rocks: ArenaLayout['rocks'] = [];
@@ -43,7 +43,8 @@ describe('PlayerManager permanent ground fire spawns', () => {
       tracks: [],
       dirt: [],
       powerUpPedestals: [],
-      permanentGroundFireZones: [{
+      groundHazardZones: [{
+        eventId: 'test-hazard-event',
         id: 'test-fire',
         cells: [fireCell],
         burnDurationMs: 2000,
@@ -56,8 +57,8 @@ describe('PlayerManager permanent ground fire spawns', () => {
     const manager = new PlayerManager({} as never);
     manager.setLayout(layout);
     const fireExclusion = (
-      manager as unknown as { getPermanentFireSpawnExclusionCells(): Set<string> }
-    ).getPermanentFireSpawnExclusionCells();
+      manager as unknown as { getGroundHazardSpawnExclusionCells(): Set<string> }
+    ).getGroundHazardSpawnExclusionCells();
     expect(fireExclusion).toEqual(new Set(['0_0', '1_0', '0_1', '1_1']));
     expect(fireExclusion.has(`${safeCell.gridX}_${safeCell.gridY}`)).toBe(false);
 
@@ -67,3 +68,4 @@ describe('PlayerManager permanent ground fire spawns', () => {
     });
   });
 });
+

@@ -777,10 +777,13 @@ export class ProjectileManager {
   }
 
   /** Placeable turret shots ignore only their own supporting runtime rock. */
+  private canCollideWithRockIndex(tracked: TrackedProjectile, rockIndex: number): boolean {
+    return tracked.ignoreRockIndex === undefined || rockIndex !== tracked.ignoreRockIndex;
+  }
+
   private canCollideWithRock(tracked: TrackedProjectile, rockGO: Phaser.GameObjects.GameObject): boolean {
-    if (tracked.ignoreRockIndex === undefined) return true;
     const rockIndex = this.rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
-    return rockIndex !== tracked.ignoreRockIndex;
+    return this.canCollideWithRockIndex(tracked, rockIndex);
   }
 
   /**
@@ -1439,6 +1442,7 @@ export class ProjectileManager {
     } = { rockIndex: -1, hit: null };
 
     const scanRock = (rockIndex: number, left: number, top: number, right: number, bottom: number): void => {
+      if (!this.canCollideWithRockIndex(proj, rockIndex)) return;
       const rect = this.scratchObstacleRect.setTo(left, top, right - left, bottom - top);
       const hit = this.findNearestRectangleHit(line, rect);
       if (!hit) return;
@@ -1462,6 +1466,7 @@ export class ProjectileManager {
       );
     } else {
       for (let i = 0; i < this.rockObjects.length; i++) {
+        if (!this.canCollideWithRockIndex(proj, i)) continue;
         const rock = this.rockObjects[i];
         if (!rock?.active) continue;
         const bounds = rock.getBounds();

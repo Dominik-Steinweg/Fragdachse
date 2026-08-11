@@ -42,23 +42,27 @@ describe('Map 16 - Zeitzünder', () => {
     expect(map.powerUps.length).toBeGreaterThan(0);
   });
 
-  it('generates seven deterministic void-fire fields and no train', () => {
+  it('generates deterministic prebuilt void-fire fields and no train', () => {
     const map = getCoopDefenseMapConfig('16');
     const first = ArenaGenerator.generate(71_516, map);
     const repeated = ArenaGenerator.generate(71_516, map);
+    const hazardEvents = map.mapEvents?.filter((event) => event.type === 'ground-hazard') ?? [];
 
     expect(first.tracks).toEqual([]);
-    expect(first.permanentGroundFireZones).toEqual(repeated.permanentGroundFireZones);
-    expect(first.permanentGroundFireZones?.length).toBeGreaterThan(0);
-    expect(first.permanentGroundFireZones?.every((zone) => (
+    expect(first.groundHazardZones).toEqual(repeated.groundHazardZones);
+    expect(first.groundHazardZones?.length).toBeGreaterThan(0);
+    expect(first.groundHazardZones?.every((zone) => {
+      const event = hazardEvents.find((candidate) => candidate.id === zone.eventId);
+      return (
       zone.visualStyle === 'void'
       && zone.damageTarget === 'players'
-      && zone.burnDurationMs === map.permanentGroundFire?.burnDurationMs
-      && zone.burnDamagePerTick === map.permanentGroundFire?.burnDamagePerTick
-    ))).toBe(true);
+      && zone.burnDurationMs === event?.effect.burnDurationMs
+      && zone.burnDamagePerTick === event?.effect.burnDamagePerTick
+      );
+    })).toBe(true);
 
     const hazardCells = new Set(
-      first.permanentGroundFireZones!.flatMap((zone) => zone.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
+      first.groundHazardZones!.flatMap((zone) => zone.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
     );
     expect(hazardCells.size).toBeGreaterThan(0);
     for (const base of resolveCoopDefenseBases(map)) {
