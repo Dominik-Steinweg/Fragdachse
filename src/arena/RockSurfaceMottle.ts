@@ -190,6 +190,17 @@ export interface RockMottleMetrics {
   offsetY: number;
 }
 
+export interface RockMottleBakeBounds extends RockMottleMetrics {
+  width: number;
+  height: number;
+  layerDepth: number;
+}
+
+export interface RockMottleBakeResult {
+  layer: Phaser.GameObjects.RenderTexture | null;
+  silhouetteCutout: Phaser.GameObjects.RenderTexture | null;
+}
+
 /**
  * Erzeugt die Fleck-Bilder in Weltkoordinaten. Die Aufrufseite backt sie in einen
  * MULTIPLY-Layer und beschneidet ihn danach exakt auf die Fels-Silhouette – die Flecken
@@ -228,4 +239,68 @@ export function createRockMottleImages(
   }
 
   return result;
+}
+
+/**
+ * Backt den Mottle-Layer und beschneidet ihn auf die echte Fels-Silhouette.
+ *
+ * Arena und Lobby verwenden dieselbe Routine; nur ihre Weltgrenzen und die bereits
+ * vorhandenen RenderTextures unterscheiden sich. `rockImages` muessen die sichtbaren
+ * Fels-Sprites derselben Zellen sein, damit `erase()` auch die weichen Blob-Kanten exakt
+ * uebernimmt.
+ */
+export function bakeRockSurfaceMottle(
+  scene: Phaser.Scene,
+  cells: readonly { gridX: number; gridY: number }[],
+  rockImages: readonly Phaser.GameObjects.Image[],
+  bounds: RockMottleBakeBounds,
+  existingLayer: Phaser.GameObjects.RenderTexture | null = null,
+  existingSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null,
+): RockMottleBakeResult {
+  const mottleImages = cells.length === 0
+    ? []
+    : createRockMottleImages(scene, cells, bounds);
+  if (mottleImages.length === 0) {
+    existingLayer?.clear();
+    return { layer: existingLayer, silhouetteCutout: existingSilhouetteCutout };
+  }
+
+  const cutout = existingSilhouetteCutout ?? scene.add.renderTexture(
+    bounds.offsetX,
+    bounds.offsetY,
+    bounds.width,
+    bounds.height,
+  );
+  cutout.setOrigin(0, 0);
+  cutout.setDepth(bounds.layerDepth);
+  cutout.camera.setScroll(bounds.offsetX, bounds.offsetY);
+  // 'redraw': der Command-Buffer wird geleert, die Scratch-Textur selbst nie gezeichnet.
+  cutout.setRenderMode('redraw');
+  cutout.clear();
+  cutout.fill(0x000000, 1);
+  cutout.erase(rockImages);
+  cutout.render();
+
+  const cutoutImage = new Phaser.GameObjects.Image(scene, bounds.offsetX, bounds.offsetY, cutout.texture.key)
+    .setOrigin(0, 0);
+  const layer = existingLayer ?? scene.add.renderTexture(
+    bounds.offsetX,
+    bounds.offsetY,
+    bounds.width,
+    bounds.height,
+  );
+  layer.setOrigin(0, 0);
+  layer.setDepth(bounds.layerDepth + 0.05);
+  layer.camera.setScroll(bounds.offsetX, bounds.offsetY);
+  layer.setBlendMode(Phaser.BlendModes.MULTIPLY);
+  layer.clear();
+  layer.draw(mottleImages);
+  layer.render();
+  layer.erase(cutoutImage);
+  layer.render();
+
+  cutoutImage.destroy();
+  for (const image of mottleImages) image.destroy();
+
+  return { layer, silhouetteCutout: cutout };
 }

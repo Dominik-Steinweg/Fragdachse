@@ -8,6 +8,7 @@ import {
 import type { ArenaLayout } from '../types';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
+import { bakeRockSurfaceMottle } from './RockSurfaceMottle';
 import { resolveRockSurfaceCornerTints } from './RockSurfaceShading';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
@@ -28,6 +29,8 @@ export class MenuArenaPreviewRenderer {
   private bakedLayers: Array<{ layer: Phaser.GameObjects.RenderTexture; config: MenuArenaPreviewLayerConfig }> = [];
   private trunkLayer: Phaser.GameObjects.RenderTexture | null = null;
   private canopyLayer: Phaser.GameObjects.RenderTexture | null = null;
+  private rockMottleLayer: Phaser.GameObjects.RenderTexture | null = null;
+  private rockSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null;
   private shadows: ShadowSystem | null = null;
 
   constructor(
@@ -89,11 +92,11 @@ export class MenuArenaPreviewRenderer {
     // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
     this.bakeLayer(ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics), DEPTH.DIRT, view.dirt);
     this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals);
-    // Flaechenwash und Kantenlicht der Felsen stecken im 4-Ecken-Tint (siehe
-    // `RockSurfaceShading`), die Vorschau erbt sie deshalb ueber `createRocks()`. Die
-    // Materialstoerung des Arena-Renderings bleibt der Vorschau bewusst erspart: sie
-    // braucht dafuer einen Scratch-Layer je Vorschau und liest bei dieser Groesse nicht.
-    this.bakeLayer(this.createRocks(layout), DEPTH.ROCKS, view.rocks);
+    // Flaechenwash und Kantenlicht stecken im 4-Ecken-Tint; die nicht-periodische
+    // Materialstoerung wird wie in der Arena als MULTIPLY-Layer auf die Silhouette gestanzt.
+    const rockImages = this.createRocks(layout);
+    this.bakeRockMottle(layout, rockImages, metrics, view.rocks);
+    this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks);
     this.bakeLayer(
       ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics),
       DEPTH.ROCK_DECALS,
@@ -145,6 +148,7 @@ export class MenuArenaPreviewRenderer {
     this.arenaShade?.destroy();
     this.screenShade?.destroy();
     this.shadows?.destroy();
+    this.rockSilhouetteCutout?.destroy();
     this.background = null;
     this.leftSidebar = null;
     this.rightSidebar = null;
@@ -153,6 +157,8 @@ export class MenuArenaPreviewRenderer {
     this.shadows = null;
     this.trunkLayer = null;
     this.canopyLayer = null;
+    this.rockMottleLayer = null;
+    this.rockSilhouetteCutout = null;
     for (const obj of this.tracks) obj.destroy();
     for (const { layer } of this.bakedLayers) layer.destroy();
     this.tracks = [];
@@ -224,6 +230,37 @@ export class MenuArenaPreviewRenderer {
     }
 
     return result;
+  }
+
+  private bakeRockMottle(
+    layout: ArenaLayout,
+    rockImages: Phaser.GameObjects.Image[],
+    metrics: { offsetX: number; offsetY: number },
+    layerConfig: MenuArenaPreviewLayerConfig,
+  ): void {
+    if (!layerConfig.visible || layerConfig.alpha <= 0 || layout.rocks.length === 0) return;
+
+    const { bounds } = this.config.view;
+    const mottle = bakeRockSurfaceMottle(
+      this.scene,
+      layout.rocks,
+      rockImages,
+      {
+        offsetX: metrics.offsetX,
+        offsetY: metrics.offsetY,
+        width: bounds.width,
+        height: bounds.height,
+        layerDepth: DEPTH.ROCKS,
+      },
+      this.rockMottleLayer,
+      this.rockSilhouetteCutout,
+    );
+    this.rockMottleLayer = mottle.layer;
+    this.rockSilhouetteCutout = mottle.silhouetteCutout;
+    if (!this.rockMottleLayer) return;
+
+    this.rockMottleLayer.setAlpha(layerConfig.alpha);
+    this.bakedLayers.push({ layer: this.rockMottleLayer, config: layerConfig });
   }
 
   private applyLayerStyle<T extends Phaser.GameObjects.GameObject & { setAlpha(alpha: number): T; setVisible(visible: boolean): T }>(

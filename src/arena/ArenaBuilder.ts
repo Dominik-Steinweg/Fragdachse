@@ -18,7 +18,7 @@ import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { multiplyTint, resolveRockSurfaceCornerTints } from './RockSurfaceShading';
 import type { RockCornerTints } from './RockSurfaceShading';
-import { createRockMottleImages } from './RockSurfaceMottle';
+import { bakeRockSurfaceMottle } from './RockSurfaceMottle';
 import { RockGridIndex } from './RockGridIndex';
 import { ARENA_BACKGROUND_TEXTURE_KEY, resolveArenaBackgroundSpec } from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -464,7 +464,22 @@ export class ArenaBuilder {
       activeRocks.push(img);
     }
 
-    ArenaBuilder.bakeRockMottle(scene, result, activeCells, activeRocks);
+    const mottle = bakeRockSurfaceMottle(
+      scene,
+      activeCells,
+      activeRocks,
+      {
+        offsetX: ARENA_OFFSET_X,
+        offsetY: ARENA_OFFSET_Y,
+        width: ARENA_WIDTH,
+        height: ARENA_HEIGHT,
+        layerDepth: DEPTH.ROCKS,
+      },
+      result.rockMottleLayer,
+      result.rockSilhouetteCutout,
+    );
+    result.rockMottleLayer = mottle.layer;
+    result.rockSilhouetteCutout = mottle.silhouetteCutout;
 
     const decalImages = ArenaVisualFactory.createRockDecals(scene, layout.decals ?? [], undefined, activeRockIds);
     if (decalImages.length > 0) {
@@ -477,59 +492,6 @@ export class ArenaBuilder {
     } else {
       result.rockDecalLayer?.clear();
     }
-  }
-
-  /**
-   * Backt die Materialstoerung und beschneidet sie exakt auf die Fels-Silhouette.
-   *
-   * Die Beschneidung laeuft ueber eine Stanzform: eine arenagrosse Flaeche, aus der die
-   * lebenden Fels-Sprites ausgestanzt werden. Sie ist damit ausserhalb der Felsen deckend
-   * und loescht dort alles aus dem Fleck-Layer. Weil `erase()` allein die Alpha der Quelle
-   * auswertet, dienen die Live-Felsen direkt als Stanzform – inklusive ihrer weichen
-   * Kantenpixel, wodurch die Silhouette pixelgenau erhalten bleibt und der Fleck-Layer die
-   * gestaltete Kante nicht ueberzeichnet.
-   *
-   * Beide Texturen werden ueber die Runde wiederverwendet und nur geleert. Ein
-   * Destroy/Create-Paar je Hindernisaenderung waere eine arenagrosse Allokation pro
-   * zerstoertem Fels.
-   */
-  private static bakeRockMottle(
-    scene: Phaser.Scene,
-    result: ArenaBuilderResult,
-    activeCells: readonly RockCell[],
-    activeRocks: Phaser.GameObjects.Image[],
-  ): void {
-    const mottleImages = activeCells.length === 0
-      ? []
-      : createRockMottleImages(scene, activeCells, { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y });
-    if (mottleImages.length === 0) {
-      result.rockMottleLayer?.clear();
-      return;
-    }
-
-    const cutout = result.rockSilhouetteCutout ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCKS);
-    // 'redraw': der Command-Buffer wird geleert, die Scratch-Textur selbst nie gezeichnet.
-    cutout.setRenderMode('redraw');
-    cutout.clear();
-    cutout.fill(0x000000, 1);
-    cutout.erase(activeRocks);
-    cutout.render();
-    result.rockSilhouetteCutout = cutout;
-
-    const cutoutImage = new Phaser.GameObjects.Image(scene, ARENA_OFFSET_X, ARENA_OFFSET_Y, cutout.texture.key)
-      .setOrigin(0, 0);
-
-    const layer = result.rockMottleLayer ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCKS + 0.05);
-    layer.setBlendMode(Phaser.BlendModes.MULTIPLY);
-    layer.clear();
-    layer.draw(mottleImages);
-    layer.render();
-    layer.erase([cutoutImage]);
-    layer.render();
-    result.rockMottleLayer = layer;
-
-    cutoutImage.destroy();
-    for (const image of mottleImages) image.destroy();
   }
 
   /** Arenagrosse RenderTexture in Weltkoordinaten – gemeinsame Grundlage aller gebackenen Layer. */
