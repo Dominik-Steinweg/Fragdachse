@@ -946,6 +946,10 @@ export class ArenaLifecycleCoordinator {
           onDelivered: (objectiveId, itemId) => (
             this.ctx.coopDefenseSecondaryObjectiveSystem?.reportCarryDelivered(objectiveId, itemId) ?? false
           ),
+          onDeliveredFx: (x, y) => {
+            if (!bridge.isHost()) return;
+            bridge.broadcastCoopDefenseCarryDeliveredFx(x, y);
+          },
         })
         : null;
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
@@ -1382,7 +1386,16 @@ export class ArenaLifecycleCoordinator {
         Math.random,
         conditionalBonus,
       ).amount ?? damage;
-      this.ctx.baseManager?.applyDamage(baseId, resolvedDamage);
+      const base = this.ctx.baseManager?.getBase(baseId);
+      // Vor dem Schaden anrechnen: Der tödliche Treffer löst den Destroy-Callback noch in
+      // applyDamage() aus, und der bucht die Bonus-XP bereits gegen diese Anrechnung. Der
+      // Bonus gehört dem Team der laufenden Runde – ein Ziel, das nur Schaden von Spectators
+      // oder Latejoinern erhält, bleibt Fortschritt, erzeugt aber keine XP.
+      const objectiveId = base?.spec.dormantObjectiveId;
+      if (objectiveId && bridge.canPlayerReceiveRoundRewards(attackerId)) {
+        this.ctx.coopDefenseSecondaryObjectiveSystem?.reportTargetContribution(objectiveId, baseId);
+      }
+      base?.applyDamage(resolvedDamage);
     });
     this.ctx.combatSystem.setTrainDamageCallback((damage, attackerId) => {
       const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
@@ -2483,6 +2496,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseCarrySystem?.reset();
     this.ctx.coopDefenseCarrySystem = null;
+    this.ctx.coopDefenseCarryItems = [];
     this.renderers.beer.syncCoopDefenseCarry([]);
     this.renderers.carryZones.clear();
     this.ctx.coopDefenseSecondaryObjectiveConfigs = [];

@@ -1,4 +1,4 @@
-import { ARENA_BACKGROUND_TEXTURE_KEY } from './ArenaBackground';
+import { ARENA_BACKGROUND_DETAIL_TEXTURE_KEY, ARENA_BACKGROUND_TEXTURE_KEY } from './ArenaBackground';
 import { ARENA_HEIGHT, ARENA_OFFSET_Y, CELL_SIZE, COLORS, FULL_ARENA_WIDTH, FULL_ARENA_WIDTH as MENU_PREVIEW_WIDTH, GAME_HEIGHT, GAME_WIDTH, GRID_ROWS } from '../config';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, TreeCell } from '../types';
 import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
@@ -55,6 +55,8 @@ export interface MenuArenaPreviewOverlayConfig {
 
 export interface MenuArenaPreviewViewConfig {
   backgroundTextureKey: typeof ARENA_BACKGROUND_TEXTURE_KEY;
+  /** Feinschicht des Bodens; die Vorschau spiegelt damit den Arena-Look (siehe ArenaBackground). */
+  backgroundDetailTextureKey: typeof ARENA_BACKGROUND_DETAIL_TEXTURE_KEY;
   bounds: {
     offsetX: number;
     offsetY: number;
@@ -625,6 +627,7 @@ const decals = generatePreviewDecals(finalRocks, finalTrees, tracks, finalDirt, 
 export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
   view: {
     backgroundTextureKey: ARENA_BACKGROUND_TEXTURE_KEY,
+    backgroundDetailTextureKey: ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
     bounds: {
       offsetX: 0,
       offsetY: ARENA_OFFSET_Y,

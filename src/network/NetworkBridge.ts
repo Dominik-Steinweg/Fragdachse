@@ -482,6 +482,7 @@ type TranslocatorFlashHandler = (
   subjectId?: string,
 ) => void;
 type CaptureTheBeerFxHandler = (event: CaptureTheBeerFxEvent) => void;
+type CoopDefenseCarryDeliveredFxHandler = (x: number, y: number) => void;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -536,6 +537,15 @@ export class NetworkBridge {
     raw: Partial<LoadoutCommitSnapshot> | null | undefined;
     value: LoadoutCommitSnapshot | null;
   }>();
+  /**
+   * Derselbe Referenz-Cache für {@link getCoopDefenseSecondaryObjectivePresentationState}. Der
+   * Zustand wird pro Frame mehrfach gelesen – HUD, Weltmarkierung und das Dormanz-Gate jeder
+   * noch schlafenden Basis –, ändert sich aber nur bei einem echten Host-Update.
+   */
+  private secondaryObjectivePresentationCache: {
+    raw: unknown;
+    value: CoopDefenseSecondaryObjectivePresentationState | null;
+  } | null = null;
   private connectedPlayers = new Map<string, PlayerProfile>();
   private cachedConnectedPlayers: PlayerProfile[] = [];
   private connectedPlayersCacheDirty = true;
@@ -583,6 +593,7 @@ export class NetworkBridge {
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
+  private coopDefenseCarryDeliveredFxHandler: CoopDefenseCarryDeliveredFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private diagnostics: TransportDiagnostics | null = null;
@@ -1534,6 +1545,17 @@ export class NetworkBridge {
 
   getCoopDefenseSecondaryObjectivePresentationState(): CoopDefenseSecondaryObjectivePresentationState | null {
     const raw = getState(KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION) as unknown;
+    const cached = this.secondaryObjectivePresentationCache;
+    if (cached && cached.raw === raw) return cached.value;
+    const value = this.sanitizeCoopDefenseSecondaryObjectivePresentationState(raw);
+    this.secondaryObjectivePresentationCache = { raw, value };
+    return value;
+  }
+
+  /** Fail-closed: Ein einziger unplausibler Eintrag verwirft den ganzen Snapshot. */
+  private sanitizeCoopDefenseSecondaryObjectivePresentationState(
+    raw: unknown,
+  ): CoopDefenseSecondaryObjectivePresentationState | null {
     if (!Array.isArray(raw) || raw.length > MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES) return null;
 
     const objectiveIds = new Set<string>();
@@ -2617,6 +2639,26 @@ export class NetworkBridge {
         x: payload.x ?? 0,
         y: payload.y ?? 0,
       });
+      return undefined;
+    });
+  }
+
+  /**
+   * Abgabe eines Coop-Defense-Carry-Objekts. Eigenes Ereignis statt `btfx`: Der Burst gehört
+   * hier zu einem Missionsschritt, nicht zu einem Team-Punktestand, und darf deshalb nicht an
+   * die Capture-The-Beer-Nutzlast (Team, Scorer-Name) gebunden werden.
+   */
+  broadcastCoopDefenseCarryDeliveredFx(x: number, y: number): void {
+    this.broadcastGameplayEvent('cdcfx', { x, y });
+  }
+
+  registerCoopDefenseCarryDeliveredFxHandler(handler: CoopDefenseCarryDeliveredFxHandler): void {
+    this.coopDefenseCarryDeliveredFxHandler = handler;
+    this.registerAllRpcHandler('cdcfx', async (data: unknown): Promise<unknown> => {
+      const coopDefenseCarryDeliveredFxHandler = this.coopDefenseCarryDeliveredFxHandler;
+      if (!coopDefenseCarryDeliveredFxHandler) return undefined;
+      const { x, y } = data as { x: number; y: number };
+      coopDefenseCarryDeliveredFxHandler(x, y);
       return undefined;
     });
   }

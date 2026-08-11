@@ -1,9 +1,15 @@
 /**
  * Zusammenfassung der Offscreen-Randpfeile für Nebenmissionsziele.
  *
- * Grundsatz: Jede offene Struktur bekommt ihren eigenen Pfeil. Erst wenn zwei Pfeile am
- * Bildschirmrand so dicht beieinander lägen, dass sie ineinander laufen, werden sie zu einem
- * Pfeil mit Anzahl zusammengefasst. Phaser-frei, damit die Regel ohne Szene testbar bleibt.
+ * Grundsatz: Jedes offene Ziel bekommt seinen eigenen Pfeil – auch das einer Mission im
+ * Hintergrund. Erst wenn zwei Pfeile am Bildschirmrand so dicht beieinander lägen, dass sie
+ * ineinander laufen, werden sie zu einem Pfeil mit Anzahl zusammengefasst. Phaser-frei, damit
+ * die Regel ohne Szene testbar bleibt.
+ *
+ * Weil damit mehrere Pfeile gleichzeitig am Rand stehen, trägt jeder Kandidat seine Kategorie:
+ * Sie bestimmt die Leitfarbe des Pfeils. **Nur Kandidaten derselben Kategorie dürfen
+ * zusammengefasst werden** – ein gemischter Pfeil hätte keine gültige Farbe mehr und würde
+ * seine Zugehörigkeit falsch behaupten.
  */
 
 export interface EdgeMarkerCandidate {
@@ -13,8 +19,8 @@ export interface EdgeMarkerCandidate {
   /** Weltwinkel zum Ziel; der Pfeil zeigt entlang dieser Richtung. */
   readonly angle: number;
   readonly distancePx: number;
-  /** True für Ziele der fokussierten Mission; steuert nur die Deckkraft. */
-  readonly focused: boolean;
+  /** Farbkategorie des Ziels; nur Gleiches wird zu einem Pfeil zusammengefasst. */
+  readonly category: string;
 }
 
 export interface EdgeMarkerCluster extends EdgeMarkerCandidate {
@@ -23,9 +29,9 @@ export interface EdgeMarkerCluster extends EdgeMarkerCandidate {
 }
 
 /**
- * Fasst Kandidaten zusammen, deren projizierte Punkte näher als `minSeparationPx` beieinander
- * liegen. Position, Winkel und Distanz stammen dabei immer vom **nächstgelegenen** Ziel der
- * Gruppe: Der Pfeil soll auf das zeigen, was das Team zuerst erreicht.
+ * Fasst Kandidaten derselben Kategorie zusammen, deren projizierte Punkte näher als
+ * `minSeparationPx` beieinander liegen. Position, Winkel und Distanz stammen dabei immer vom
+ * **nächstgelegenen** Ziel der Gruppe: Der Pfeil soll auf das zeigen, was das Team zuerst erreicht.
  */
 export function clusterEdgeMarkers(
   candidates: readonly EdgeMarkerCandidate[],
@@ -38,20 +44,20 @@ export function clusterEdgeMarkers(
   // die entferntesten Gruppen weg statt der relevantesten.
   const ordered = [...candidates].sort((left, right) => left.distancePx - right.distancePx);
 
-  const clusters: { entry: EdgeMarkerCandidate; count: number; focused: boolean }[] = [];
+  const clusters: { entry: EdgeMarkerCandidate; count: number }[] = [];
   for (const candidate of ordered) {
     const host = clusters.find((cluster) => {
+      if (cluster.entry.category !== candidate.category) return false;
       const dx = cluster.entry.screenX - candidate.screenX;
       const dy = cluster.entry.screenY - candidate.screenY;
       return dx * dx + dy * dy <= separationSq;
     });
     if (host) {
       host.count += 1;
-      host.focused = host.focused || candidate.focused;
       continue;
     }
     if (clusters.length >= maxClusters) continue;
-    clusters.push({ entry: candidate, count: 1, focused: candidate.focused });
+    clusters.push({ entry: candidate, count: 1 });
   }
 
   return clusters.map((cluster) => ({
@@ -59,7 +65,7 @@ export function clusterEdgeMarkers(
     screenY: cluster.entry.screenY,
     angle: cluster.entry.angle,
     distancePx: cluster.entry.distancePx,
-    focused: cluster.focused,
+    category: cluster.entry.category,
     count: cluster.count,
   }));
 }

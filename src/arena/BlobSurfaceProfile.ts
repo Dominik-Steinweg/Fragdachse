@@ -30,21 +30,57 @@ export interface BlobSurfaceProfile {
   readonly additionalMottleLayers?: readonly BlobSurfaceMottleConfig[];
 }
 
-export interface BlobSurfaceMottleConfig {
-    readonly textureSize: number;
-    /** `multiply` preserves state tints; `normal` is useful for static, colour-matched material replacement. */
-    readonly blend: BlobSurfaceMottleBlend;
-    /** `normalized` expands material contrast; `native` uses a compatible material without brightness remapping. */
-    readonly materialMode: BlobSurfaceMottleMaterialMode;
-    readonly materialGain: number;
-    /** Brightest channel after `materialEqualizeTint`; the neutral mottle point. */
-    readonly materialPeak: number;
-    readonly materialEqualizeTint: number;
-    readonly passes: readonly BlobSurfaceMottlePass[];
-    readonly falloff: readonly (readonly [number, string])[];
+interface BlobSurfaceMottleBaseConfig {
+  /**
+   * Edge length of the stamp texture. Deliberately `CELL_SIZE`: the game runs with
+   * `smoothPixelArt`, so a larger stamp would upscale the 32 px material and downscale it
+   * again while stamping – two resampling steps that wash out exactly the mid-frequency
+   * detail that makes the stamp work.
+   */
+  readonly textureSize: number;
+  /** `multiply` preserves state tints; `normal` is useful for static, colour-matched material replacement. */
+  readonly blend: BlobSurfaceMottleBlend;
+  readonly passes: readonly BlobSurfaceMottlePass[];
+  readonly falloff: readonly (readonly [number, string])[];
 }
 
+/** Uses a colour-compatible material as authored – no contrast expansion, no equalization. */
+export interface BlobSurfaceMottleNativeConfig extends BlobSurfaceMottleBaseConfig {
+  readonly materialMode: 'native';
+}
+
+/**
+ * Expands material contrast before stamping. In a MULTIPLY layer the amplitude is the
+ * *absolute* range of the source divided by 255, so an additive lift towards white only
+ * shifts that range – `materialGain` is what widens it by stacking the material on itself.
+ */
+export interface BlobSurfaceMottleNormalizedConfig extends BlobSurfaceMottleBaseConfig {
+  readonly materialMode: 'normalized';
+  /** How often the material is stacked additively. Fractional values run a partial last pass. */
+  readonly materialGain: number;
+  /**
+   * Brightest channel after `materialEqualizeTint`; the neutral mottle point. The lift towards
+   * white is derived from it so the brightest material value stays a multiplier of exactly 1
+   * at any gain, instead of clipping or darkening the whole mass.
+   */
+  readonly materialPeak: number;
+  /**
+   * Pulls all three channel maxima onto `materialPeak` before the gain. Without it the
+   * strongest channel clips first, loses its variation and tints the stamp.
+   */
+  readonly materialEqualizeTint: number;
+}
+
+export type BlobSurfaceMottleConfig = BlobSurfaceMottleNativeConfig | BlobSurfaceMottleNormalizedConfig;
+
+/**
+ * One scatter length. A profile normally needs two with a clear division of labour: stamps in
+ * the order of magnitude of the tile motif are what actually covers it, and a sparse large
+ * form ties several cells together. Large soft blotches alone add energy at a different
+ * spatial frequency and leave the 32 px grid visible next to them.
+ */
 export interface BlobSurfaceMottlePass {
+  /** Expected stamps per occupied cell; the fractional part is decided per cell. */
   readonly perCell: number;
   readonly minScale: number;
   readonly maxScale: number;
@@ -52,12 +88,19 @@ export interface BlobSurfaceMottlePass {
 }
 
 export type BlobSurfaceMottleBlend = 'multiply' | 'normal';
-export type BlobSurfaceMottleMaterialMode = 'normalized' | 'native';
 
-/** Collision-free DynamicTexture key for a profile's generated material stamp. */
-export function getBlobSurfaceMottleTextureKey(profile: BlobSurfaceProfile): string {
+/**
+ * Collision-free DynamicTexture key for one generated material stamp of a profile. The key
+ * names the layer it belongs to, so a profile whose layers use different material modes
+ * cannot end up with a key that describes the wrong one.
+ */
+export function getBlobSurfaceMottleTextureKey(
+  profile: BlobSurfaceProfile,
+  mottle: BlobSurfaceMottleConfig = profile.mottle,
+  layerIndex = 0,
+): string {
   const material = profile.materialTextureKey ?? profile.textureKey;
-  return `__blob_surface_${profile.id}_${material}_${profile.mottle.materialMode}_mottle`;
+  return `__blob_surface_${profile.id}_${material}_${mottle.materialMode}_mottle_${layerIndex}`;
 }
 
 /** Raised rock surface: a light authored replacement pass plus strong proportional material depth. */
@@ -86,11 +129,9 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   mottle: {
     textureSize: CELL_SIZE,
     blend: 'normal',
+    // `rocks47blob_alt.png`, frame 12, is a light blue-grey authored stone texture that is
+    // already value-compatible with the base sheet, so it is stamped exactly as authored.
     materialMode: 'native',
-    // `rocks47blob_alt.png`, frame 12, is a light blue-grey authored stone texture.
-    materialGain: 1,
-    materialPeak: 159,
-    materialEqualizeTint: 0xffffff,
     passes: [
       { perCell: 1.15, minScale: 0.6, maxScale: 1.85, alpha: 0.13 },
       { perCell: 0.18, minScale: 2.4, maxScale: 4.6, alpha: 0.15 },
@@ -138,7 +179,10 @@ export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   materialFrame: 12,
   seedSalt: 0x51d7,
   shading: {
-    baseLevel: 0.99,
+    // Dirt lag mit einer mittleren Helligkeit von 93 deutlich über dem Gras (58) und las sich
+    // dadurch als beleuchtete Ebene über einem dunklen Grund. Zusammen mit dem angehobenen
+    // Gras-Mittelton halbiert diese Absenkung den Abstand, ohne dass Dirt seine Wärme verliert.
+    baseLevel: 0.92,
     washValueAmount: 0.024,
     washValuePeriods: [13, 5.5],
     washHueAmount: 0.055,
@@ -149,12 +193,9 @@ export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
     textureSize: CELL_SIZE,
     // Weak phase break: preserve most of the authored base material.
     blend: 'normal',
+    // `dirt47blob_alt.png`, frame 12, has compatible earth colours but not the soft repeating
+    // wave of the base sheet, so it breaks phase without any brightness remapping.
     materialMode: 'native',
-    // `dirt47blob_alt.png`, frame 12: RGB maxima (143, 91, 72). The alternate has compatible
-    // earth colours but not the soft repeating wave of the base sheet.
-    materialGain: 1,
-    materialPeak: 72,
-    materialEqualizeTint: 0x80caff,
     passes: [
       { perCell: 1.25, minScale: 0.72, maxScale: 1.85, alpha: 0.35 },
       { perCell: 0.12, minScale: 2.6, maxScale: 4.8, alpha: 0.44 },

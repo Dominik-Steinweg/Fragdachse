@@ -60,9 +60,14 @@ function resolveCornerTint(profile: BlobSurfaceProfile, cornerX: number, cornerY
     + valueNoise(cornerX, cornerY, shortPeriod, profile.seedSalt + 2) * 0.28;
   const level = clamp(shading.baseLevel + directional + (valueField - 0.5) * 2 * shading.washValueAmount, 0.55, 1);
   const hueField = valueNoise(cornerX, cornerY, shading.washHuePeriod, profile.seedSalt + 3);
-  const hueIndex = Math.min(shading.washHues.length - 1, Math.floor(hueField * shading.washHues.length));
+  const hueBand = hueField * shading.washHues.length;
+  const hueIndex = Math.min(shading.washHues.length - 1, Math.floor(hueBand));
   const hue = shading.washHues[hueIndex];
-  const hueAmount = Math.abs(hueField * shading.washHues.length % 1 - 0.5) * 2 * shading.washHueAmount;
+  // Full strength in the middle of a band, neutral at its borders. The selected hue changes
+  // discontinuously at a border, so the mix has to vanish exactly there – otherwise the
+  // strongest tint sits on the jump and the wash reads as hard-edged colour patches instead
+  // of a soft field, which is the opposite of what it is here for.
+  const hueAmount = (1 - Math.abs(hueBand % 1 - 0.5) * 2) * shading.washHueAmount;
   const mixChannel = (from: number, to: number) => from + (to - from) * hueAmount;
   return (Math.round(mixChannel(255, (hue >> 16) & 0xff) * level) << 16)
     | (Math.round(mixChannel(255, (hue >> 8) & 0xff) * level) << 8)

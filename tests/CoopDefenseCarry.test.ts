@@ -50,6 +50,7 @@ function makeCarryConfig(overrides: Partial<ResolvedCoopDefenseMapSecondaryObjec
 }
 
 function makeRound() {
+  const deliveredFx: Array<{ x: number; y: number }> = [];
   const players = [makePlayer('p2'), makePlayer('p1')];
   const playerManager = {
     getAllPlayers: () => players,
@@ -66,9 +67,10 @@ function makeRound() {
     isPlayerAlive: (playerId) => playerManager.getPlayer(playerId)?.alive ?? false,
     isPlayerBurrowed: (playerId) => playerManager.getPlayer(playerId)?.burrowed ?? false,
     onDelivered: (objectiveId, itemId) => objectiveSystem.reportCarryDelivered(objectiveId, itemId),
+    onDeliveredFx: (x, y) => deliveredFx.push({ x, y }),
   });
   objectiveSystem.hostUpdate(0, false);
-  return { players, playerManager, config, objectiveSystem, carrySystem };
+  return { players, playerManager, config, objectiveSystem, carrySystem, deliveredFx };
 }
 
 describe('Coop-Defense B7 Carry', () => {
@@ -103,7 +105,7 @@ describe('Coop-Defense B7 Carry', () => {
   });
 
   it('replicates delivery progress, deduplicates delivery, and completes at targetGoal', () => {
-    const { players, carrySystem, objectiveSystem, config } = makeRound();
+    const { players, carrySystem, objectiveSystem, config, deliveredFx } = makeRound();
     const delivery = getCoopDefenseMapObjectiveZoneWorldRect(config.carry!.deliveryZone);
     const deliveryX = delivery.x + delivery.width * 0.5;
     const deliveryY = delivery.y + delivery.height * 0.5;
@@ -119,6 +121,16 @@ describe('Coop-Defense B7 Carry', () => {
     }
     expect(objectiveSystem.getObjectiveState('carry-beer')).toBe('completed');
     expect(carrySystem.getSnapshot()).toHaveLength(0);
+    // Genau ein Abgabe-Burst pro angenommener Abgabe, an der autoritativen Abgabeposition.
+    expect(deliveredFx).toEqual([
+      { x: deliveryX, y: deliveryY },
+      { x: deliveryX, y: deliveryY },
+      { x: deliveryX, y: deliveryY },
+    ]);
+
+    // Ein weiterer Tick im Abgabebereich ohne Objekt darf keinen zweiten Burst auslösen.
+    carrySystem.hostUpdate(true);
+    expect(deliveredFx).toHaveLength(3);
   });
 
   it('drops on death, survives disconnect/spectator removal, and can be reclaimed', () => {

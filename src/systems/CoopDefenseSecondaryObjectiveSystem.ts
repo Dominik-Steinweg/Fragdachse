@@ -29,6 +29,8 @@ export interface CoopDefenseSecondaryObjectiveRewardLedger {
 interface SecondaryObjectiveRuntimeState {
   readonly config: ResolvedCoopDefenseMapSecondaryObjectiveConfig;
   readonly resolvedTargetIds: Set<string>;
+  /** Ziele, an denen mindestens ein reward-berechtigter Teilnehmer mitgewirkt hat. */
+  readonly creditedTargetIds: Set<string>;
   state: CoopDefenseSecondaryObjectiveState;
   stateChangedAtMs: number;
 }
@@ -65,6 +67,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     this.objectiveStates = objectives.map((config) => ({
       config,
       resolvedTargetIds: new Set<string>(),
+      creditedTargetIds: new Set<string>(),
       state: 'dormant',
       stateChangedAtMs: 0,
     }));
@@ -102,6 +105,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     this.epicGuaranteeCount = 0;
     for (const state of this.objectiveStates) {
       state.resolvedTargetIds.clear();
+      state.creditedTargetIds.clear();
       state.state = 'dormant';
       state.stateChangedAtMs = 0;
     }
@@ -135,6 +139,20 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   /**
+   * Host-only: Ein reward-berechtigter Teilnehmer hat an einem authored Missionsziel mitgewirkt.
+   *
+   * Der Bonus-XP eines Destroy-Ziels gehört dem Team der laufenden Runde. Ein Ziel, das
+   * ausschließlich Schaden von Spectators oder Latejoinern erhält, bleibt Fortschritt – es bucht
+   * aber keine XP, weil sonst ein Zuschauer die Rundenbelohnung des Teams erzeugen könnte. Die
+   * Meldung ist bewusst idempotent und kennt weder Schadenshöhe noch Last-Hit.
+   */
+  reportTargetContribution(objectiveId: string, targetId: string): void {
+    const state = this.findObjectiveState(objectiveId);
+    if (!state || state.state !== 'active' || !state.config.targets.includes(targetId)) return;
+    state.creditedTargetIds.add(targetId);
+  }
+
+  /**
    * Einzige Weltnaht für ein zerstörtes authored Missionsziel. Der Archetyp entscheidet die Wirkung:
    * Für Destroy ist die Zerstörung der Fortschritt, für Hold ist sie der Fehlschlag. Rückgabe sind
    * die dafür zu buchenden Team-XP – so kann ein authored `xpPerTarget` an einem Hold nicht
@@ -145,8 +163,12 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (!state || state.state !== 'active' || !state.config.targets.includes(targetId)) return 0;
 
     switch (state.config.type) {
-      case 'destroy':
-        return this.resolveTarget(state, targetId) ? this.getTargetResolutionXp(objectiveId) : 0;
+      case 'destroy': {
+        // Reihenfolge zählt: Erst die einmalige Auflösung, dann die Anrechnung. Ein zweiter
+        // Zerstörungs-Callback für dasselbe Ziel bucht dadurch nie ein zweites Mal.
+        if (!this.resolveTarget(state, targetId)) return 0;
+        return state.creditedTargetIds.has(targetId) ? this.getTargetResolutionXp(objectiveId) : 0;
+      }
       case 'hold':
         this.failObjective(state);
         return 0;

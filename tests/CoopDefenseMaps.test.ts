@@ -69,7 +69,7 @@ describe('Coop defense map progression', () => {
 
     expect(sandbox.itemDrop).toEqual({ itemLevel: 1 });
     expect(carry?.rewards?.itemMetaRewardOnComplete).toBe(true);
-    expect(carry?.rewardHint).toContain('EPISCHE OPTION');
+    expect(carry?.rewardHint).toContain('EPISCHE GARANTIE BEI SIEG');
   });
 
   it('keeps map metadata usable after balancing and terminology changes', () => {

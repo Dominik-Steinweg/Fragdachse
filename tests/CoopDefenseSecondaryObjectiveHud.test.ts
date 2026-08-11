@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSecondaryObjectiveViewModel,
   getSecondaryObjectiveTargets,
+  isCarryDeliveryZoneMarked,
   SECONDARY_OBJECTIVE_MAX_CHIPS,
   SECONDARY_OBJECTIVE_TERMINAL_HOLD_MS,
 } from '../src/ui/coopDefenseSecondaryObjectiveModel';
 import { getCoopDefenseMapConfig, normalizeCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../src/config/coopDefenseMaps';
-import type { CoopDefenseSecondaryObjectivePresentationEntry } from '../src/types';
+import type {
+  CoopDefenseSecondaryObjectivePresentationEntry,
+  SyncedCoopDefenseCarryItem,
+} from '../src/types';
 
 function makeEntry(
   overrides: Partial<CoopDefenseSecondaryObjectivePresentationEntry> = {},
@@ -192,6 +196,37 @@ describe('Coop defense secondary objective view model', () => {
   it('resolves marker targets from the authored configuration', () => {
     expect(getSecondaryObjectiveTargets([makeConfig()], 'brood')).toEqual(['a', 'b', 'c']);
     expect(getSecondaryObjectiveTargets([makeConfig()], 'unknown')).toEqual([]);
+  });
+});
+
+describe('Coop defense carry world guidance', () => {
+  function makeItem(
+    overrides: Partial<SyncedCoopDefenseCarryItem> = {},
+  ): SyncedCoopDefenseCarryItem {
+    return {
+      id: 'beer:0', objectiveId: 'beer', x: 0, y: 0, holderId: null, state: 'spawned', ...overrides,
+    };
+  }
+
+  it('marks the delivery zone only while the team actually carries an object', () => {
+    expect(isCarryDeliveryZoneMarked([makeItem()], 'beer')).toBe(false);
+    expect(isCarryDeliveryZoneMarked([makeItem({ state: 'dropped' })], 'beer')).toBe(false);
+    expect(
+      isCarryDeliveryZoneMarked([makeItem({ state: 'carried', holderId: 'player-a' })], 'beer'),
+    ).toBe(true);
+  });
+
+  it('keeps the zones of two carry missions apart', () => {
+    const items = [
+      makeItem({ id: 'beer:0', state: 'carried', holderId: 'player-a' }),
+      makeItem({ id: 'crate:0', objectiveId: 'crate' }),
+    ];
+    expect(isCarryDeliveryZoneMarked(items, 'beer')).toBe(true);
+    expect(isCarryDeliveryZoneMarked(items, 'crate')).toBe(false);
+  });
+
+  it('stops marking the delivery zone once the last object was secured', () => {
+    expect(isCarryDeliveryZoneMarked([], 'beer')).toBe(false);
   });
 });
 

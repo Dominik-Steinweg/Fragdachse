@@ -1,3 +1,16 @@
+/**
+ * Non-periodic material disturbance ("mottle") of a 47-Blob surface.
+ *
+ * All 47 blob frames share one 32 px material area, so a blob field is that single motif
+ * stamped once per cell. A pure colour/value field (see `BlobSurfaceShading`) cannot resolve
+ * that, it has no detail structure; per-cell rotation cannot either, because the motif is
+ * only seamless with itself in the same orientation.
+ *
+ * The fix is to scatter softly masked, rotated, mirrored and scaled copies of a material area
+ * across the compound. The masks are soft and the stamps overlap, so no seams appear; their
+ * size and position have nothing to do with `CELL_SIZE`, so the grid disappears.
+ */
+
 import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import { fillRadialGradientTexture } from '../effects/EffectUtils';
@@ -20,10 +33,28 @@ export interface BlobSurfaceMottleBakeResult {
   silhouetteCutout: Phaser.GameObjects.RenderTexture | null;
 }
 
-function textureKey(profile: BlobSurfaceProfile, suffix: string): string {
-  return `__blob_surface_${profile.id}_${suffix}`;
+/**
+ * Falloff textures are keyed by their gradient, not by the profile: identical falloffs are
+ * common across layers and profiles, and a per-layer key would allocate the same 32 px canvas
+ * several times.
+ */
+function falloffTextureKey(size: number, falloff: readonly (readonly [number, string])[]): string {
+  let hash = 0x811c9dc5;
+  const stops = falloff.map(([offset, color]) => `${offset}:${color}`).join('|');
+  for (let index = 0; index < stops.length; index += 1) {
+    hash = Math.imul(hash ^ stops.charCodeAt(index), 0x01000193);
+  }
+  return `__blob_surface_falloff_${size}_${(hash >>> 0).toString(16)}`;
 }
 
+/**
+ * Deterministic hash of a cell.
+ *
+ * Placement depends only on grid coordinates, never on a position in a list and never on the
+ * number of living cells. That is the precondition for rebaking the layer on every obstacle
+ * change: a list-dependent random sequence would recolour the entire surface as soon as a
+ * single cell disappears – visible in game as all rocks flickering whenever one breaks.
+ */
 function hash01(gridX: number, gridY: number, salt: number): number {
   let h = Math.imul(gridX + 0x9e3779b1, 0x85ebca6b)
     ^ Math.imul(gridY + 0x7f4a7c15, 0xc2b2ae35)
@@ -37,15 +68,18 @@ function resolveLiftAlpha(gain: number, materialPeak: number): number {
   return Math.max(0, (255 - materialPeak * gain) / 255);
 }
 
-/** Creates a reusable, profile-scoped material mottle texture. */
+/** Creates a reusable, layer-scoped material mottle texture. */
 export function ensureBlobSurfaceMottleTexture(scene: Phaser.Scene, profile: BlobSurfaceProfile, mottle: BlobSurfaceMottleConfig, layerIndex = 0): string {
-  const key = `${getBlobSurfaceMottleTextureKey(profile)}_${layerIndex}`;
+  const key = getBlobSurfaceMottleTextureKey(profile, mottle, layerIndex);
   if (scene.textures.exists(key)) return key;
 
-  const falloffKey = textureKey(profile, `mottle_falloff_${layerIndex}`);
+  const falloffKey = falloffTextureKey(mottle.textureSize, mottle.falloff);
   fillRadialGradientTexture(scene.textures, falloffKey, mottle.textureSize, mottle.falloff);
   const texture = scene.textures.addDynamicTexture(key, mottle.textureSize, mottle.textureSize);
   if (!texture) return key;
+  // NEAREST although the game filters linearly via `smoothPixelArt`: the stamp is scaled to
+  // 0.6–4.8 cells, and linear filtering would smooth away exactly the mid-frequency detail it
+  // uses to cover the tile motif.
   texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
   const sources: Phaser.GameObjects.GameObject[] = [];
@@ -86,47 +120,60 @@ export function ensureBlobSurfaceMottleTexture(scene: Phaser.Scene, profile: Blo
     .setDisplaySize(mottle.textureSize, mottle.textureSize);
   texture.erase(falloff);
   texture.render();
+  falloff.destroy();
   for (const source of sources) source.destroy();
   return key;
 }
 
 /**
- * Creates deterministic, non-cell-aligned material stamps. Cell coordinates, rather than list
- * order, seed every stamp so dynamic rebuilds do not recolour unchanged regions.
+ * Queues the deterministic, non-cell-aligned material stamps of one layer.
+ *
+ * `stamp()` instead of drawing Image objects: it pushes plain values into the texture's
+ * command buffer, so a rebake of a large rock field costs no game objects at all. It also
+ * ignores the render texture's camera, which is why the stamps are placed in texture-local
+ * coordinates – for an arena-aligned layer that is simply grid position times `CELL_SIZE`.
  */
-export function createBlobSurfaceMottleImages(
+export function stampBlobSurfaceMottle(
   scene: Phaser.Scene,
+  layer: Phaser.GameObjects.RenderTexture,
   profile: BlobSurfaceProfile,
   mottle: BlobSurfaceMottleConfig,
   cells: readonly { gridX: number; gridY: number }[],
-  metrics: BlobSurfaceMottleMetrics,
   layerIndex = 0,
-): Phaser.GameObjects.Image[] {
-  if (cells.length === 0) return [];
+): void {
+  if (cells.length === 0) return;
   const key = ensureBlobSurfaceMottleTexture(scene, profile, mottle, layerIndex);
-  const result: Phaser.GameObjects.Image[] = [];
+  const baseScale = CELL_SIZE / mottle.textureSize;
+  const layerSalt = layerIndex * 7919;
   for (const { gridX, gridY } of cells) {
     for (let passIndex = 0; passIndex < mottle.passes.length; passIndex += 1) {
       const pass = mottle.passes[passIndex];
       const guaranteed = Math.floor(pass.perCell);
-      const layerSalt = layerIndex * 7919;
       const extra = hash01(gridX, gridY, profile.seedSalt + layerSalt + passIndex * 97 + 11) < pass.perCell - guaranteed ? 1 : 0;
       for (let index = 0; index < guaranteed + extra; index += 1) {
         const salt = profile.seedSalt + layerSalt + passIndex * 997 + index * 31;
-        const scale = pass.minScale + (pass.maxScale - pass.minScale) * hash01(gridX, gridY, salt + 1);
-        const worldX = metrics.offsetX + (gridX + hash01(gridX, gridY, salt + 2)) * CELL_SIZE;
-        const worldY = metrics.offsetY + (gridY + hash01(gridX, gridY, salt + 3)) * CELL_SIZE;
-        result.push(new Phaser.GameObjects.Image(scene, worldX, worldY, key)
-          .setDisplaySize(CELL_SIZE * scale, CELL_SIZE * scale)
-          .setRotation(hash01(gridX, gridY, salt + 4) * Math.PI * 2)
-          .setAlpha(pass.alpha));
+        const scale = baseScale * (pass.minScale + (pass.maxScale - pass.minScale) * hash01(gridX, gridY, salt + 1));
+        layer.stamp(
+          key,
+          undefined,
+          (gridX + hash01(gridX, gridY, salt + 2)) * CELL_SIZE,
+          (gridY + hash01(gridX, gridY, salt + 3)) * CELL_SIZE,
+          {
+            alpha: pass.alpha,
+            rotation: hash01(gridX, gridY, salt + 4) * Math.PI * 2,
+            // Mirroring quadruples the distinguishable appearances of the one shared material
+            // area at no texture cost. Free-floating soft-masked stamps have no seam
+            // constraint, unlike the tiles themselves.
+            scaleX: hash01(gridX, gridY, salt + 5) < 0.5 ? -scale : scale,
+            scaleY: hash01(gridX, gridY, salt + 6) < 0.5 ? -scale : scale,
+          },
+        );
       }
     }
   }
-  return result;
 }
 
-/** Bakes and silhouette-clips the profile-selected material layer for any 47-Blob surface. */
+/** Bakes and silhouette-clips the profile-selected material layers for any 47-Blob surface. */
 export function bakeBlobSurfaceMottle(
   scene: Phaser.Scene,
   profile: BlobSurfaceProfile,
@@ -145,6 +192,7 @@ export function bakeBlobSurfaceMottle(
   cutout.setOrigin(0, 0);
   cutout.setDepth(bounds.layerDepth);
   cutout.camera.setScroll(bounds.offsetX, bounds.offsetY);
+  // 'redraw': the command buffer is flushed, the scratch texture itself is never drawn.
   cutout.setRenderMode('redraw');
   cutout.clear();
   cutout.fill(0x000000, 1);
@@ -155,7 +203,6 @@ export function bakeBlobSurfaceMottle(
   const layers: Phaser.GameObjects.RenderTexture[] = [];
   for (let layerIndex = 0; layerIndex < configs.length; layerIndex += 1) {
     const mottle = configs[layerIndex];
-    const mottleImages = createBlobSurfaceMottleImages(scene, profile, mottle, cells, bounds, layerIndex);
     const layer = existingLayers[layerIndex]
       ? existingLayers[layerIndex]
       : scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
@@ -164,11 +211,10 @@ export function bakeBlobSurfaceMottle(
     layer.camera.setScroll(bounds.offsetX, bounds.offsetY);
     layer.setBlendMode(mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL);
     layer.clear();
-    layer.draw(mottleImages);
+    stampBlobSurfaceMottle(scene, layer, profile, mottle, cells, layerIndex);
     layer.render();
     layer.erase(cutoutImage);
     layer.render();
-    for (const image of mottleImages) image.destroy();
     layers.push(layer);
   }
   cutoutImage.destroy();

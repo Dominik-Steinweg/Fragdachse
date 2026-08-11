@@ -72,7 +72,7 @@ import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
 import type { TimeBubbleSystem }    from '../../systems/TimeBubbleSystem';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
-import type { ArenaLayout }         from '../../types';
+import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
 
 interface PlayerStatusRingLike {
   setActive(active: boolean): void;
@@ -175,6 +175,12 @@ export interface ArenaContext {
    * Zielreferenzen, statt sie über das Netzwerk zu beziehen.
    */
   coopDefenseSecondaryObjectiveConfigs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[];
+  /**
+   * Zuletzt bekannter Carry-Zustand der Runde: auf dem Host der eigene Snapshot, auf Clients der
+   * replizierte. Carry-Objekte sind die einzigen Missionsziele mit replizierter Position; die
+   * Weltmarkierung liest sie hier, statt sie erneut aus zwei Rollenpfaden zu beziehen.
+   */
+  coopDefenseCarryItems: readonly SyncedCoopDefenseCarryItem[];
   /** Host-only: Wiederherstellung eines gehaltenen Missionsziels. */
   coopDefenseObjectiveRepairSystem: CoopDefenseObjectiveRepairSystem | null;
   /** Host-only: one-shot placement rewards from completed Hold objectives. */

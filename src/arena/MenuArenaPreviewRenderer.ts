@@ -6,6 +6,7 @@ import {
   GAME_WIDTH,
 } from '../config';
 import type { ArenaLayout } from '../types';
+import { ARENA_BACKGROUND_DETAIL_ALPHA } from './ArenaBackground';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { DIRT_BLOB_SURFACE_PROFILE, ROCK_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
@@ -17,6 +18,7 @@ import { ShadowSystem } from '../effects/ShadowSystem';
 
 export class MenuArenaPreviewRenderer {
   private background: Phaser.GameObjects.TileSprite | null = null;
+  private backgroundDetail: Phaser.GameObjects.TileSprite | null = null;
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
   private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
   private arenaShade: Phaser.GameObjects.Rectangle | null = null;
@@ -50,6 +52,15 @@ export class MenuArenaPreviewRenderer {
       .setDepth(DEPTH.GRASS)
       .setTint(view.backgroundTint)
       .setAlpha(view.backgroundAlpha);
+
+    // Dieselbe Multiply-Feinschicht wie in der Arena, damit Vorschau und Spielfeld dieselbe
+    // Bodenstruktur zeigen. Der Basis-Tint bleibt darunter erhalten.
+    this.backgroundDetail = this.scene.add
+      .tileSprite(bounds.offsetX + bounds.width * 0.5, bounds.offsetY + bounds.height * 0.5, bounds.width, bounds.height, view.backgroundDetailTextureKey)
+      .setTilePosition(0, 0)
+      .setDepth(DEPTH.GRASS + 0.01)
+      .setAlpha(ARENA_BACKGROUND_DETAIL_ALPHA)
+      .setBlendMode(Phaser.BlendModes.MULTIPLY);
 
     this.leftSidebar = this.scene.add
       .rectangle(bounds.offsetX * 0.5, GAME_HEIGHT * 0.5, bounds.offsetX, GAME_HEIGHT, view.frame.leftSidebarColor)
@@ -144,6 +155,7 @@ export class MenuArenaPreviewRenderer {
 
   destroy(): void {
     this.background?.destroy();
+    this.backgroundDetail?.destroy();
     this.leftSidebar?.destroy();
     this.rightSidebar?.destroy();
     this.arenaShade?.destroy();
@@ -151,6 +163,7 @@ export class MenuArenaPreviewRenderer {
     this.shadows?.destroy();
     this.rockSilhouetteCutout?.destroy();
     this.background = null;
+    this.backgroundDetail = null;
     this.leftSidebar = null;
     this.rightSidebar = null;
     this.arenaShade = null;
@@ -217,18 +230,23 @@ export class MenuArenaPreviewRenderer {
     metrics: { offsetX: number; offsetY: number; gridCols: number; gridRows: number },
     layerConfig: MenuArenaPreviewLayerConfig,
   ): void {
-    const images = ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics);
+    const { fringe, surface: images } = ArenaVisualFactory.createDirtImages(this.scene, layout.dirt ?? [], metrics);
     if (images.length === 0) return;
     if (!layerConfig.visible || layerConfig.alpha <= 0) {
+      for (const image of fringe) image.destroy();
       for (const image of images) image.destroy();
       return;
     }
+    // Die Randfahne traegt bereits ihre eigene Verlaufsdeckkraft; die Ebenendeckkraft der
+    // Vorschau kommt multiplikativ dazu, sonst waere der Saum dort staerker als in der Arena.
+    for (const image of fringe) image.setAlpha(image.alpha * layerConfig.alpha);
     for (const image of images) image.setAlpha(layerConfig.alpha);
     const { bounds } = this.config.view;
     const baked = this.scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
     baked.setOrigin(0, 0);
     baked.setDepth(DEPTH.DIRT);
     baked.camera.setScroll(bounds.offsetX, bounds.offsetY);
+    baked.draw(fringe);
     baked.draw(images);
     baked.render();
 
@@ -246,6 +264,7 @@ export class MenuArenaPreviewRenderer {
       mottleLayer.destroy();
     }
     mottle.silhouetteCutout?.destroy();
+    for (const image of fringe) image.destroy();
     for (const image of images) image.destroy();
     this.bakedLayers.push({ layer: baked, config: layerConfig });
   }

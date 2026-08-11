@@ -350,6 +350,9 @@ describe('Coop defense secondary objectives', () => {
       expect.objectContaining({ objectiveId: 'second', state: 'active', focused: true }),
     ]);
 
+    for (const targetId of ['target-a', 'target-b', 'target-c']) {
+      system.reportTargetContribution('first', targetId);
+    }
     expect(system.reportTargetDestroyed('first', 'target-a')).toBe(5);
     expect(system.reportTargetDestroyed('first', 'target-b')).toBe(5);
     expect(system.reportTargetDestroyed('first', 'target-c')).toBe(5);
@@ -424,6 +427,7 @@ describe('Coop defense secondary objectives', () => {
     })]);
     system.hostUpdate(0, false);
 
+    system.reportTargetContribution('destroy-front', 'target-a');
     expect(system.reportTargetDestroyed('destroy-front', 'unknown')).toBe(0);
     expect(system.reportTargetDestroyed('other-objective', 'target-a')).toBe(0);
     expect(system.reportTargetDestroyed('destroy-front', 'target-a')).toBe(25);

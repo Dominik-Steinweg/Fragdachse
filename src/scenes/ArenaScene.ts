@@ -359,7 +359,10 @@ export class ArenaScene extends Phaser.Scene {
 
   preload(): void {
     preloadAllAudio(this.load);
+    // Beide Boden-Kacheln stammen aus scripts/generate-grass-tiles.mjs; die Detailkachel liegt
+    // als Multiply-Ebene darueber und bricht die Periode der Basiskachel (siehe ArenaBackground).
     this.load.image('gras_bg_tile', './assets/sprites/gras_bg_tile.png');
+    this.load.image('gras_detail_tile', './assets/sprites/gras_detail_tile.png');
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -735,7 +738,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
@@ -1471,7 +1474,8 @@ export class ArenaScene extends Phaser.Scene {
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
           this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
-          this.renderers.beer.syncCoopDefenseCarry(state.coopDefenseCarry ?? []);
+          this.ctx.coopDefenseCarryItems = state.coopDefenseCarry ?? [];
+          this.renderers.beer.syncCoopDefenseCarry(this.ctx.coopDefenseCarryItems);
           this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
           this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
@@ -1590,6 +1594,7 @@ export class ArenaScene extends Phaser.Scene {
       secondaryObjectivePresentation,
       this.ctx.coopDefenseSecondaryObjectiveConfigs,
       this.ctx.baseManager,
+      this.ctx.coopDefenseCarryItems,
       secondaryObjectivesActive,
     );
     this.renderers.carryZones.sync(

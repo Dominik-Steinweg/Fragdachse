@@ -40,6 +40,31 @@ export function createArenaTerrainColorSampler(
     );
   }
 
+  // Die Feinschicht liegt in der Szene als Multiply-TileSprite über dem Gras. Canvas' 'multiply'
+  // entspricht Phasers Multiply-Blend, der Sampler bildet die Grasfarbe damit exakt nach – sonst
+  // läge er um den mittleren Multiply-Verlust der Kachel zu hell.
+  const detailFrame = scene.textures.getFrame(background.detailTextureKey);
+  if (backgroundFrame && detailFrame) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = background.detailAlpha;
+    drawRepeatedImageFrameRegion(
+      scene,
+      ctx,
+      background.detailTextureKey,
+      undefined,
+      0,
+      0,
+      detailFrame.cutWidth,
+      detailFrame.cutHeight,
+      0,
+      0,
+      ARENA_WIDTH,
+      ARENA_HEIGHT,
+    );
+    ctx.restore();
+  }
+
   // Der Dirt-Layer ist als RenderTexture gebacken; der Sampler zeichnet stattdessen aus der
   // erhaltenen Kachel-Geometrie in seine eigene CPU-Canvas.
   for (const stamp of arenaResult.dirtStamps) {

@@ -88,8 +88,41 @@ export class ArenaVisualFactory {
     return result;
   }
 
+  /**
+   * Weiche Auslaufkante des Dirt-Bodens: vergroesserte, zunehmend transparentere Kopien
+   * derselben Autotile-Kachel.
+   *
+   * Warum gestapelte Kopien und kein Weichzeichner: Die Kante entsteht aus der 47-Blob-Alpha
+   * des Sheets, es gibt also keine separate Randgeometrie, die sich weichzeichnen liesse. Drei
+   * abgestufte Kopien ergeben bei 32 px Zellgroesse einen rund 3 px breiten Verlauf – genug,
+   * damit Dirt in das Gras einlaeuft, statt als ausgeschnittener Aufkleber darauf zu liegen.
+   *
+   * Die Werte sind bewusst klein: Ein breiterer Saum wandert sichtbar in die Nachbarzelle und
+   * verschiebt damit die wahrgenommene Begehbarkeitsgrenze.
+   */
+  private static readonly DIRT_FRINGE_STEPS: readonly { scale: number; alpha: number }[] = [
+    { scale: 1.05, alpha: 0.34 },
+    { scale: 1.11, alpha: 0.19 },
+    { scale: 1.18, alpha: 0.10 },
+  ];
+
   static createDirt(scene: Phaser.Scene, dirtCells: DirtCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.Image[] {
-    if (dirtCells.length === 0) return [];
+    return this.createDirtImages(scene, dirtCells, metrics).surface;
+  }
+
+  /**
+   * Erzeugt Randfahne und scharfe Flaeche in einem Durchgang, weil beide dieselbe Belegung,
+   * dieselbe Autotile-Maske und dieselben Ecktints brauchen.
+   *
+   * `fringe` gehoert beim Backen *unter* `surface`; die Reihenfolge der Rueckgabe entspricht
+   * bereits der Zeichenreihenfolge.
+   */
+  static createDirtImages(
+    scene: Phaser.Scene,
+    dirtCells: DirtCell[],
+    metrics?: ArenaVisualGridMetrics,
+  ): { fringe: Phaser.GameObjects.Image[]; surface: Phaser.GameObjects.Image[] } {
+    if (dirtCells.length === 0) return { fringe: [], surface: [] };
 
     const gridMetrics = getMetrics(metrics);
     const dirtGrid = new RockGridIndex(dirtCells, {
@@ -97,21 +130,41 @@ export class ArenaVisualFactory {
       rows: gridMetrics.gridRows ?? GRID_ROWS,
     });
     const isOccupied = (gx: number, gy: number) => dirtGrid.isOccupiedWithBorder(gx, gy);
-    const result: Phaser.GameObjects.Image[] = [];
+    const fringe: Phaser.GameObjects.Image[] = [];
+    const surface: Phaser.GameObjects.Image[] = [];
 
     for (const { gridX, gridY } of dirtCells) {
       const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const frame = AutoTiler.getFrame(mask, DIRT_AUTOTILE);
+      const tints = resolveBlobSurfaceCornerTints(DIRT_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied);
+
+      // Nur Zellen mit freiliegender Kardinalkante tragen zur Silhouette bei. Bei einer Zelle
+      // im Inneren faende die Vergroesserung ohnehin nur weiteren Dirt vor.
+      const exposed = !isOccupied(gridX - 1, gridY)
+        || !isOccupied(gridX + 1, gridY)
+        || !isOccupied(gridX, gridY - 1)
+        || !isOccupied(gridX, gridY + 1);
+      if (exposed) {
+        for (const step of this.DIRT_FRINGE_STEPS) {
+          const halo = scene.add.image(worldX, worldY, 'dirt', frame);
+          halo.setDisplaySize(CELL_SIZE * step.scale, CELL_SIZE * step.scale);
+          halo.setDepth(DEPTH.DIRT);
+          halo.setAlpha(step.alpha);
+          halo.setTint(...tints);
+          fringe.push(halo);
+        }
+      }
+
       const img = scene.add.image(worldX, worldY, 'dirt', frame);
       img.setDisplaySize(CELL_SIZE, CELL_SIZE);
       img.setDepth(DEPTH.DIRT);
-      img.setTint(...resolveBlobSurfaceCornerTints(DIRT_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied));
-      result.push(img);
+      img.setTint(...tints);
+      surface.push(img);
     }
 
-    return result;
+    return { fringe, surface };
   }
 
   static createDecals(

@@ -83,14 +83,48 @@ describe('47-Blob surface shading', () => {
     expect(Math.abs(luminance(top[0]) - luminance(bottom[2]))).toBeLessThan(20);
   });
 
-  it('keeps representative legacy rock output byte-identical', () => {
+  it('pins representative rock output byte-exactly', () => {
     expect(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, 3, 1, isOccupied))
-      .toEqual([0xffffff, 0xfbfcfd, 0xffffff, 0xfbfcfd]);
+      .toEqual([0xe5eff4, 0xeaf1f6, 0xe5eff4, 0xeaf1f6]);
+  });
+
+  it('fades the hue wash out where the selected hue changes', () => {
+    // Der Farbanteil waehlt je Rauschband einen anderen Farbton. Wuerde er an der Bandgrenze
+    // seine volle Staerke tragen, saesse der groesste Farbsprung genau auf dem Wechsel und die
+    // Flaeche zerfiele in hartkantige Farbfelder – das Gegenteil des Zwecks. Der Schrittwert
+    // zwischen benachbarten Ecken bleibt deshalb im Bereich des glatten Rauschgradienten
+    // (gemessen 13 statt 24 bei an der Grenze maximalem Farbanteil).
+    const solid = () => true;
+    const channels = (tint: number) => [(tint >> 16) & 0xff, (tint >> 8) & 0xff, tint & 0xff];
+    let maxStep = 0;
+    for (let gridY = -40; gridY < 40; gridY += 1) {
+      for (let gridX = -40; gridX < 40; gridX += 1) {
+        const here = channels(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, solid)[0]);
+        const east = channels(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX + 1, gridY, solid)[0]);
+        const south = channels(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY + 1, solid)[0]);
+        for (let channel = 0; channel < 3; channel += 1) {
+          maxStep = Math.max(maxStep, Math.abs(here[channel] - east[channel]), Math.abs(here[channel] - south[channel]));
+        }
+      }
+    }
+    expect(maxStep).toBeLessThan(20);
   });
 
   it('gives mottle dynamic textures collision-free profile keys', () => {
     expect(getBlobSurfaceMottleTextureKey(ROCK_BLOB_SURFACE_PROFILE))
       .not.toBe(getBlobSurfaceMottleTextureKey(DIRT_BLOB_SURFACE_PROFILE));
+  });
+
+  it('names each generated mottle texture after the layer it belongs to', () => {
+    // Ein Profil mischt Materialmodi ueber seine Layer; ein Schluessel, der pauschal den Modus
+    // des Basis-Layers traegt, benennt die Zusatz-Layer falsch.
+    const depthLayer = ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers?.[0];
+    expect(depthLayer).toBeDefined();
+    const base = getBlobSurfaceMottleTextureKey(ROCK_BLOB_SURFACE_PROFILE, ROCK_BLOB_SURFACE_PROFILE.mottle, 0);
+    const depth = getBlobSurfaceMottleTextureKey(ROCK_BLOB_SURFACE_PROFILE, depthLayer, 1);
+    expect(base).toContain('native');
+    expect(depth).toContain('normalized');
+    expect(base).not.toBe(depth);
   });
 
   it('uses independent alternate material sources for weak normal replacement passes', () => {

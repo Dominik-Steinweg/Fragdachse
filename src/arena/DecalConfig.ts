@@ -62,7 +62,21 @@ export const ARENA_DECAL_CONFIG = {
     ],
   },
   grass: {
-    coveragePercent: 18,
+    /**
+     * `coveragePercent` ist die Wahrscheinlichkeit pro Zelle, `frequencyPercent` nur das
+     * relative Gewicht innerhalb der gezogenen Zellen. Die Anhebung von 18 auf 30 erhoeht also
+     * die Gesamtdichte um Faktor 1,67.
+     *
+     * Grund: Decals sind mit 16 px punktfoermig und fuellen als duenne Streuung kein
+     * durchgehendes Band. Zusammen mit der Detailkachel (siehe ArenaBackground) schliessen sie
+     * damit den Bereich zwischen Halmkorn und grossflaechiger Variation.
+     *
+     * Bluehendes und Pilze sind bewusst gegengerechnet (Gewichte durch 1,67 geteilt): Ihre
+     * absolute Dichte bleibt unveraendert, weil sie als Farbakzente wirken und bei 1,67-facher
+     * Menge die Flaeche unruhig statt dichter machen wuerden. Die zusaetzliche Deckung faellt
+     * damit vollstaendig auf die kontrastarmen Gras-, Busch- und Kieselvarianten.
+     */
+    coveragePercent: 30,
     maxOffsetX: 6,
     maxOffsetY: 6,
     variants: [
@@ -73,15 +87,15 @@ export const ARENA_DECAL_CONFIG = {
       { fileName: 'decal07.png', frequencyPercent: 100 },
       { fileName: 'Kiesel4.png', frequencyPercent: 100 },
       { fileName: 'Kiesel5.png', frequencyPercent: 100 },
-      { fileName: 'flower01.png', frequencyPercent: 30 },
-      { fileName: 'flower02.png', frequencyPercent: 20 },
-      { fileName: 'flower03.png', frequencyPercent: 30 },
-      { fileName: 'flower04.png', frequencyPercent: 60 },
+      { fileName: 'flower01.png', frequencyPercent: 18 },
+      { fileName: 'flower02.png', frequencyPercent: 12 },
+      { fileName: 'flower03.png', frequencyPercent: 18 },
+      { fileName: 'flower04.png', frequencyPercent: 36 },
       { fileName: 'busch01.png', frequencyPercent: 100 },
       { fileName: 'busch02.png', frequencyPercent: 100 },
       { fileName: 'grass01.png', frequencyPercent: 100 },
       { fileName: 'grass02.png', frequencyPercent: 100 },
-      { fileName: 'pilz01.png', frequencyPercent: 30 },
+      { fileName: 'pilz01.png', frequencyPercent: 18 },
     ],
   },
 } satisfies Record<Exclude<DecalTerrainLayer, 'rock'>, DecalLayerConfig>;

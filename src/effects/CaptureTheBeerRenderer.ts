@@ -305,6 +305,15 @@ export class CaptureTheBeerRenderer {
     }
   }
 
+  /**
+   * Abgabe-Burst für Coop-Defense-Carry. Bewusst derselbe Score-Burst wie in Capture The Beer:
+   * das abgelieferte Objekt ist dasselbe Bier-Visual, deshalb auch dieselbe Palette wie in
+   * `syncCoopDefenseCarry()`. Coop kennt keine Teams, hier steht kein Regelwerk dahinter.
+   */
+  playCoopDefenseCarryDeliveredFx(x: number, y: number): void {
+    this.playScoreBurst(x, y, this.getPalette('blue'));
+  }
+
   clear(): void {
     for (const [key, visual] of this.visuals) {
       this.lighting?.releaseLight(lightKey(key));

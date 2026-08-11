@@ -21,7 +21,11 @@ import { multiplyTint, resolveBlobSurfaceCornerTints } from './BlobSurfaceShadin
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
 import { RockGridIndex } from './RockGridIndex';
-import { ARENA_BACKGROUND_TEXTURE_KEY, resolveArenaBackgroundSpec } from './ArenaBackground';
+import {
+  ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
+  ARENA_BACKGROUND_TEXTURE_KEY,
+  resolveArenaBackgroundSpec,
+} from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 export interface ArenaBuilderResult {
@@ -107,6 +111,8 @@ export class ArenaBuilder {
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
   private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
   private arenaBackground: Phaser.GameObjects.TileSprite | null = null;
+  /** Multiply-Feinschicht über dem Gras; bricht dessen Kachelperiode (siehe ArenaBackground). */
+  private arenaBackgroundDetail: Phaser.GameObjects.TileSprite | null = null;
   private lobbyBackground: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -150,6 +156,14 @@ export class ArenaBuilder {
         .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
         .setSize(ARENA_WIDTH, ARENA_HEIGHT)
         .setTilePosition(0, 0)
+        .setVisible(inArena);
+
+      this.arenaBackgroundDetail
+        ?.setTexture(background.detailTextureKey)
+        .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
+        .setSize(ARENA_WIDTH, ARENA_HEIGHT)
+        .setTilePosition(0, 0)
+        .setAlpha(background.detailAlpha)
         .setVisible(inArena);
     }
 
@@ -674,10 +688,12 @@ export class ArenaBuilder {
    * dieses synchronen Aufrufs, rendern also nie einzeln sichtbar.
    */
   private bakeDirt(dirtCells: DirtCell[]): { dirtLayer: Phaser.GameObjects.RenderTexture | null; dirtStamps: DirtStamp[] } {
-    const images = ArenaVisualFactory.createDirt(this.scene, dirtCells);
+    const { fringe, surface: images } = ArenaVisualFactory.createDirtImages(this.scene, dirtCells);
     if (images.length === 0) return { dirtLayer: null, dirtStamps: [] };
 
-    const dirtStamps: DirtStamp[] = images.map((img) => ({
+    // Die Randfahne steht vorn, weil der Sampler die Stamps in genau dieser Reihenfolge
+    // nachzeichnet und die scharfe Flaeche sie ueberdecken muss.
+    const dirtStamps: DirtStamp[] = [...fringe, ...images].map((img) => ({
       textureKey: img.texture.key,
       frameName: img.frame.name,
       x: img.x,
@@ -692,6 +708,7 @@ export class ArenaBuilder {
     dirtLayer.setOrigin(0, 0);
     dirtLayer.setDepth(DEPTH.DIRT);
     dirtLayer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
+    dirtLayer.draw(fringe);
     dirtLayer.draw(images);
     dirtLayer.render();
 
@@ -711,6 +728,7 @@ export class ArenaBuilder {
     }
     dirtMottle.silhouetteCutout?.destroy();
 
+    for (const img of fringe) img.destroy();
     for (const img of images) img.destroy();
 
     return { dirtLayer, dirtStamps };
@@ -819,6 +837,19 @@ export class ArenaBuilder {
         ARENA_BACKGROUND_TEXTURE_KEY,
       )
       .setDepth(DEPTH.GRASS);
+
+    // Knapp über dem Gras und deutlich unter DEPTH.DIRT: die Multiply-Ebene darf ausschließlich
+    // das Gras einfärben, nicht den Dirt-Boden oder die Decals darüber.
+    this.arenaBackgroundDetail = this.scene.add
+      .tileSprite(
+        ARENA_OFFSET_X + ARENA_WIDTH * 0.5,
+        ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5,
+        ARENA_WIDTH,
+        ARENA_HEIGHT,
+        ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
+      )
+      .setDepth(DEPTH.GRASS + 0.01)
+      .setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 
   private ensureLobbyBackground(): void {

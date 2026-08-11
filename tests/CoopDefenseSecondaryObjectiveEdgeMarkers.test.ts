@@ -6,7 +6,7 @@ import {
 } from '../src/effects/coopDefenseSecondaryObjectiveEdgeMarkers';
 
 function candidate(overrides: Partial<EdgeMarkerCandidate> = {}): EdgeMarkerCandidate {
-  return { screenX: 0, screenY: 0, angle: 0, distancePx: 100, focused: true, ...overrides };
+  return { screenX: 0, screenY: 0, angle: 0, distancePx: 100, category: 'focus', ...overrides };
 }
 
 describe('Coop defense secondary objective edge markers', () => {
@@ -42,13 +42,28 @@ describe('Coop defense secondary objective edge markers', () => {
     expect(clusters[0].screenX).toBe(0);
   });
 
-  it('marks a mixed group as focused and drops the farthest groups on overflow', () => {
-    const mixed = clusterEdgeMarkers([
-      candidate({ screenX: 0, screenY: 0, distancePx: 100, focused: false }),
-      candidate({ screenX: 10, screenY: 0, distancePx: 150, focused: true }),
+  it('never merges arrows of different categories, however close they sit', () => {
+    // Ein zusammengefasster Pfeil traegt genau eine Leitfarbe. Zwei Kategorien in einem Pfeil
+    // wuerden die Zugehoerigkeit einer der beiden Missionen falsch behaupten.
+    const clusters = clusterEdgeMarkers([
+      candidate({ screenX: 0, screenY: 0, distancePx: 100, category: 'focus' }),
+      candidate({ screenX: 4, screenY: 2, distancePx: 140, category: 'background' }),
     ], 74, 6);
-    expect(mixed[0].focused).toBe(true);
+    expect(clusters).toHaveLength(2);
+    expect(clusters.map((cluster) => cluster.category)).toEqual(['focus', 'background']);
+    expect(clusters.every((cluster) => cluster.count === 1)).toBe(true);
+  });
 
+  it('keeps the category of the group it merged', () => {
+    const clusters = clusterEdgeMarkers([
+      candidate({ screenX: 0, screenY: 0, distancePx: 100, category: 'background' }),
+      candidate({ screenX: 10, screenY: 0, distancePx: 150, category: 'background' }),
+    ], 74, 6);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]).toMatchObject({ category: 'background', count: 2 });
+  });
+
+  it('drops the farthest groups on overflow', () => {
     const overflow = clusterEdgeMarkers([
       candidate({ screenX: 0, screenY: 0, distancePx: 500 }),
       candidate({ screenX: 0, screenY: 300, distancePx: 100 }),

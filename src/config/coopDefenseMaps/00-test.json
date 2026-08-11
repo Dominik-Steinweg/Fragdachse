@@ -332,7 +332,7 @@
       "id": "carry-supply-beer",
       "type": "carry",
       "displayName": "BIER RETTEN",
-      "rewardHint": "JEDE FLASCHE: EPISCHE OPTION · 3/3: TEAM-REGEN",
+      "rewardHint": "JE FLASCHE: EPISCHE GARANTIE BEI SIEG · REGEN",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-supply-defense-encounter"

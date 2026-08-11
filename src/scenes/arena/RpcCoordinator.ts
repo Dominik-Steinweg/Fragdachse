@@ -64,6 +64,7 @@ export class RpcCoordinator {
     this.registerDecoyStealthBreakHandler();
     this.registerLoadoutUseHandler();
     this.registerCaptureTheBeerFxHandler();
+    this.registerCoopDefenseCarryDeliveredFxHandler();
     this.registerExplosionEffectHandler();
     this.registerSlimeBloomEffectHandler();
     this.registerCorpseMarkerHandler();
@@ -188,6 +189,13 @@ export class RpcCoordinator {
         this.ctx.centerHUD.showBeerCaptured(event.scorerName, event.scorerColor);
         this.ctx.gameAudioSystem.playLocalSound('sfx_ctb_score');
       }
+    });
+  }
+
+  private registerCoopDefenseCarryDeliveredFxHandler(): void {
+    bridge.registerCoopDefenseCarryDeliveredFxHandler((x, y) => {
+      this.renderers.beer.playCoopDefenseCarryDeliveredFx(x, y);
+      this.ctx.gameAudioSystem.playLocalSound('sfx_ctb_score');
     });
   }
 

@@ -780,6 +780,7 @@ export class HostUpdateCoordinator {
     const train     = this.ctx.trainManager?.getNetSnapshot()        ?? null;
     const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
     const coopDefenseCarry = this.ctx.coopDefenseCarrySystem?.hostUpdate(!countdownActive) ?? [];
+    this.ctx.coopDefenseCarryItems = coopDefenseCarry;
     const syncedNow = bridge.getSynchronizedNow();
 
     this.renderers.train?.update(train);

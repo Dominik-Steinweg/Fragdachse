@@ -40,6 +40,11 @@ export interface CoopDefenseCarrySystemOptions {
   readonly isPlayerBurrowed?: (playerId: string) => boolean;
   /** Returns true only when the objective system accepted this unique delivery. */
   readonly onDelivered: (objectiveId: string, itemId: string, playerId: string) => boolean;
+  /**
+   * Fires once per accepted delivery at the authoritative delivery position. Presentation-only:
+   * the host broadcasts it, so the burst never depends on the item snapshot that just lost the item.
+   */
+  readonly onDeliveredFx?: (x: number, y: number) => void;
 }
 
 interface LocalCarryItem extends SyncedCoopDefenseCarryItem {
@@ -62,6 +67,8 @@ export class CoopDefenseCarrySystem {
   private readonly scratchItemBounds: { x: number; y: number; width: number; height: number } = {
     x: 0, y: 0, width: 0, height: 0,
   };
+  private readonly scratchPlayers: CoopDefenseCarryPlayerLike[] = [];
+  private readonly scratchCarrierIds = new Set<string>();
 
   constructor(
     configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
@@ -187,19 +194,26 @@ export class CoopDefenseCarrySystem {
   }
 
   private resolveGroundInteractions(): void {
-    const players = [...this.playerManager.getAllPlayers()]
-      .filter((player) => (
-        player.body.enable
+    // Scratch-Sammlungen statt Kopien: Der Pfad läuft in jedem Host-Tick einer laufenden
+    // Carry-Mission, und die Reihenfolge ist der einzige Grund, überhaupt zu sammeln.
+    const players = this.scratchPlayers;
+    players.length = 0;
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (player.body.enable
         && this.canPlayerInteract(player.id)
         && !this.isPlayerBurrowed(player.id)
-        && this.isPlayerAlive(player.id)
-      ))
-      .sort((left, right) => left.id.localeCompare(right.id));
-    const carryingPlayers = new Set(
-      [...this.items.values()]
-        .filter((item) => item.state === 'carried' && item.holderId)
-        .map((item) => item.holderId as string),
-    );
+        && this.isPlayerAlive(player.id)) players.push(player);
+    }
+    if (players.length === 0) return;
+    // Stabile Reihenfolge: Berühren zwei Spieler dasselbe Objekt im selben Tick, darf nicht die
+    // Iterationsreihenfolge des PlayerManagers entscheiden, wer es bekommt.
+    players.sort((left, right) => left.id.localeCompare(right.id));
+
+    const carryingPlayers = this.scratchCarrierIds;
+    carryingPlayers.clear();
+    for (const item of this.items.values()) {
+      if (item.state === 'carried' && item.holderId) carryingPlayers.add(item.holderId);
+    }
 
     for (const item of this.items.values()) {
       if (item.state === 'carried') continue;
@@ -220,7 +234,9 @@ export class CoopDefenseCarrySystem {
   }
 
   private resolveDeliveries(): void {
-    for (const item of [...this.items.values()]) {
+    // Das Löschen des gerade besuchten Eintrags ist während einer Map-Iteration zulässig; eine
+    // Kopie der Werte wäre nur zusätzlicher Müll pro Tick.
+    for (const item of this.items.values()) {
       if (item.state !== 'carried' || !item.holderId) continue;
       const player = this.playerManager.getPlayer(item.holderId);
       const config = this.carryConfigs.get(item.objectiveId);
@@ -234,6 +250,7 @@ export class CoopDefenseCarrySystem {
       ) continue;
       if (!this.options.onDelivered(item.objectiveId, item.id, item.holderId)) continue;
       this.items.delete(item.id);
+      this.options.onDeliveredFx?.(player.sprite.x, player.sprite.y);
     }
   }
 

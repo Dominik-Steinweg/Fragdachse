@@ -115,7 +115,7 @@ describe('Coop Defense B8 in-place item guarantee', () => {
     expect(result.affixes.every((affix) => rollPool.some((definition) => definition.id === affix.affixId))).toBe(true);
   });
 
-  it('raises Rare to Epic before a later White candidate', () => {
+  it('raises the lowest rarities to Epic before leaving natural Epic rolls untouched', () => {
     const blue = item('blue-to-epic', 'blue', 'armor', [{ affixId: 'max_hp', value: 31 }]);
     const white = item('white-candidate');
     const result = applyCoopDefenseEpicGuarantee([blue, white, item('already-yellow', 'yellow')], 3, null, () => 0);

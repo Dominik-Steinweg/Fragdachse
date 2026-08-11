@@ -13,7 +13,7 @@
 > Drei wiederverwendbare Archetypen – **Destroy**, **Hold**, **Carry** – erzeugen durch Map-Authoring viele konkrete Missionen. Das Risiko entsteht aus Zeit, Raum und Positionierung, nicht aus zusätzlichen Pflichtgegnern.
 
 **Designstatus:** Zielkonzept / Implementierungsgrundlage
-**Umsetzungsstand:** Ausbaustufe A abgeschlossen. B1 (Objective-Grundlage) umgesetzt, B2 (dormante Strukturen) in Arbeit.
+**Umsetzungsstand:** Ausbaustufe A abgeschlossen. B1–B10 umgesetzt; offen bleibt B11 (Balancing und Kampagnenintegration).
 **Scope-Prinzip:** maximal ein **fokussiertes** Secondary Objective gleichzeitig (§4).
 
 ### Änderungen gegenüber Version 2
@@ -22,7 +22,7 @@
 - **§5.1** Trigger-Umfang für Objectives präzisiert.
 - **§7.2** Ein bei Rundenende unvollständiger Hold ist nicht erfolgreich.
 - **§7.4** Genau eine Verlustregel für die einmalige Podest-Ladung.
-- **§13** Die Rare-Garantie wird beim Würfeln angewandt, nicht nachträglich rekonstruiert.
+- **§13** Die Epic-Garantie wird beim Würfeln angewandt, nicht nachträglich rekonstruiert.
 - **§16.1** Validierung erkennt nur deterministisch entscheidbare Konflikte; der Rest ist ein Runtime-Guard.
 - **§18** Jeder Archetyp-Schritt liefert spielbare Map-Daten mit (§18.1). B10 in technische Stabilisierung und Balancing getrennt.
 
@@ -319,14 +319,14 @@ Die Flaschen bleiben nach Aktivierung bis Rundenende verfügbar; die Map erzeugt
 
 ## 8.4 Gestaffelte Meta-Belohnung
 
-Die Item-Auswahl bleibt bei **drei Optionen**. Jede gerettete Flasche garantiert eine Option mit Mindestseltenheit „selten".
+Die Item-Auswahl bleibt bei **drei Optionen**. Jede gerettete Flasche garantiert eine **epische** Option.
 
 | Gerettete Flaschen | Item-Reward bei Mapsieg |
 |---:|---|
 | 0 / 3 | normale Dreierauswahl |
-| 1 / 3 | mind. 1 von 3 selten oder besser |
-| 2 / 3 | mind. 2 von 3 selten oder besser |
-| 3 / 3 | alle 3 selten oder besser **+ Team-Buff sofort** |
+| 1 / 3 | mind. 1 von 3 episch |
+| 2 / 3 | mind. 2 von 3 episch |
+| 3 / 3 | alle 3 episch **+ Team-Buff sofort** |
 
 Die Garantie ist eine **Mindestseltenheit** – natürlich episch gerollte Optionen bleiben episch und zählen bereits an.
 
@@ -411,12 +411,12 @@ Clients dürfen den Fortschritt **nicht** aus lokalen Weltobjekten rekonstruiere
 | Reward | Weg |
 |---|---|
 | **Bonus-XP** | Fließt in den host-geführten Runden-XP-Zähler und wird wie normale Coop-XP im Rundenergebnis ausgeschüttet. |
-| **Rare-Garantie** | Das Item-Angebot wird pro Spieler lokal gewürfelt. Die garantierte Anzahl muss deshalb als autoritativer Wert **im Rundenergebnis** mitgeliefert werden. |
+| **Epic-Garantie** | Das Item-Angebot wird pro Spieler lokal gewürfelt. Die garantierte Anzahl muss deshalb als autoritativer Wert **im Rundenergebnis** mitgeliefert werden. |
 | **Run-Rewards** | Host löst sie unmittelbar aus und repliziert die Wirkung über die zuständigen Systeme. |
 
 ## 11.3 Reward-Ledger
 
-Der Host führt pro Runde einen kleinen autoritativen Reward-Zustand mit: verdiente Bonus-XP, vorgemerkte Meta-Verbesserungen (`rareGuaranteeCount`, 0–3), ausgelöste Run-Rewards.
+Der Host führt pro Runde einen kleinen autoritativen Reward-Zustand mit: verdiente Bonus-XP, vorgemerkte Meta-Verbesserungen (`epicGuaranteeCount`, 0–3), ausgelöste Run-Rewards.
 
 **Rewards werden pro Ziel gebucht, nicht beim Missionsabschluss.** Jedes zerstörte Nest, jede abgelieferte Flasche bucht genau einmal – die Buchung hängt am Ziel-Zustandswechsel, nicht am mehrfach feuernden Zerstörungs-Callback. Nur der Vollbonus (Team-Buff bei 3/3) hängt am Abschluss.
 
@@ -442,11 +442,11 @@ Meta-Rewards verwenden die bestehende eingefrorene Rundenteilnahme.
 |---|---|---|
 | **Systemischer Map-Vorteil** | Spawnquelle beseitigt, Außenposten bleibt aktiv | sofort, dauerhaft für die Runde |
 | **Sofortiger Run-Reward** | Reparatur, platzierbares Podest, Team-Buff | sofort bei Erreichen |
-| **Meta-Reward** | garantierte Rare-Optionen | **nur bei gültigem Mapsieg** |
+| **Meta-Reward** | garantierte Epic-Optionen | **nur bei gültigem Mapsieg** |
 | **Bonus-XP** | zerstörte Spawner | normale Coop-XP-Regel – auch bei Niederlage |
 
 ```text
-3 Bier gerettet → Team verliert die Map → keine Rare-Garantie
+3 Bier gerettet → Team verliert die Map → keine Epic-Garantie
 ```
 
 Ein vom Host abgebrochener Match zählt weder als Sieg noch als Niederlage: keine Meta-Rewards, Bonus-XP wie bisher im Rundenergebnis enthalten.
@@ -466,8 +466,8 @@ Damit gibt es später nichts zu rekonstruieren, und die Auswahl-Reihenfolge muss
 ## 13.2 Regeln
 
 - Angebotsgröße bleibt **3**, Kategorien bleiben verschieden.
-- `rareGuaranteeCount` liegt zwischen 0 und 3 und stammt aus dem autoritativen Rundenergebnis.
-- Bereits selten oder besser gerollte Optionen **zählen an**. Liegt das Angebot ohnehin über der Garantie, passiert nichts.
+- `epicGuaranteeCount` liegt zwischen 0 und 3 und stammt aus dem autoritativen Rundenergebnis.
+- Bereits episch gerollte Optionen **zählen an**. Liegt das Angebot ohnehin über der Garantie, passiert nichts.
 - Fehlen Optionen, werden die **niedrigsten Seltenheiten zuerst** angehoben. Da die drei Kategorien ohnehin gleichverteilt gezogen werden, entsteht dabei keine Kategoriebevorzugung.
 - **Anhebung erfolgt in place, nicht durch Neuwürfeln.** Slot, Item-Level, Basiswert und bereits gezogene Affixe bleiben erhalten; nur die fehlenden Affixe werden ergänzt, damit die Seltenheit zur Affix-Anzahl passt. Ein Neuwurf würde ein bereits gutes Angebot zufällig verschlechtern.
 - Die Garantie darf **nie** eine Option verschlechtern.
@@ -479,7 +479,7 @@ NEBENMISSION: BIER RETTEN
 3 / 3
 
 Belohnung:
-3 garantierte seltene oder bessere Items
+Mindestens 3 von 3 epische Items garantiert
 ```
 
 Der Spieler soll nicht raten müssen, ob die Nebenmission „irgendwie die Dropchance" erhöht hat.
@@ -508,7 +508,7 @@ Hintergrund-Objectives behalten eine reduzierte Weltmarkierung, aber keinen Offs
 
 ```text
 Jedes Brutnest:            Außenposten überlebt:        Bier:
-+ Bonus-XP                 Raketentürme werden          1 Flasche = 1 garantierte Rare-Option
++ Bonus-XP                 Raketentürme werden          1 Flasche = 1 garantierte Epic-Option
 + weniger Gegnerdruck      repariert                    3 / 3 = zusätzlich Regenerationsschub
 ```
 
@@ -586,7 +586,7 @@ Zwei Schutzschichten, weil nicht jeder Konflikt statisch entscheidbar ist:
 | Bedarf | Status |
 |---|---|
 | Objective-Lebenszyklus, Trigger, Snapshot | **umgesetzt (B1)** |
-| Dormanz-Gates und Aktivierung | **in Arbeit (B2)** |
+| Dormanz-Gates und Aktivierung | **umgesetzt (B2)** |
 | Trigger „Encounter gecleart" | MapDirector beantwortet Encounter-Clear autoritativ |
 | Spawnstruktur mit eigener Quelle | strukturgebundene persistente Spawnquellen, gekoppelt an die aktiven Basis-IDs |
 | Zerstörung beendet Quelle | vollständig vorhanden |
@@ -620,40 +620,40 @@ Ein Archetyp gilt erst als umgesetzt, wenn er **spielbar konfiguriert** ist. Jed
 ## B1 – Secondary-Objective-Grundlage ✔ umgesetzt
 Datengetriebene Konfiguration, host-autoritativer Lebenszyklus, Trigger, Fortschritts-Snapshot, Trennung von Hauptziel und MapDirector.
 
-## B2 – Dormante Missionsstrukturen · *in Arbeit*
+## B2 – Dormante Missionsstrukturen ✔ umgesetzt
 Dormanz-Gates für Kollision, Spawnquelle, Targeting, Darstellung und Snapshot; Aktivierung inkl. Hindernis-Invalidierung; Host-/Client-Konsistenz.
 **Map-Daten:** `00-test.json` erhält eine dormante Spawnstruktur samt strukturgebundener Quelle – die Grundlage für B3.
 
-## B3 – Destroy
+## B3 – Destroy ✔ umgesetzt
 Destroy-Archetyp, mehrere Zielstrukturen, Teilfortschritt, kleine Team-XP pro Ziel, Ziele bleiben bis Rundenende zerstörbar und zählen im Hintergrund weiter.
 **Map-Daten:** vollständige Destroy-Mission in `00-test.json` – drei Spawnstrukturen, Trigger nach dem ersten Encounter, `focusUntil` am zweiten.
 **Ergebnis:** erste im Spiel prüfbare Nebenmission.
 
-## B4 – Secondary-HUD und Welt-Telegraphing
+## B4 – Secondary-HUD und Welt-Telegraphing ✔ umgesetzt
 Ankündigung, Name, Fortschritt, Reward-Vorschau, World Marker, Offscreen-Indikator, Fokus-/Hintergrunddarstellung, Abschluss- und Fehlschlagsfeedback.
 **Ergebnis:** Die B3-Mission ist ohne Vorwissen spielbar.
 
-## B5 – Hold + Außenposten-Reparatur
+## B5 – Hold + Außenposten-Reparatur ✔ umgesetzt
 Hold-Archetyp mit explizitem `holdUntil`; beschädigter Startzustand; Fail bei Zerstörung; missionsgebundene Reparaturdrohnen; Posten bleibt danach aktiv.
 **Map-Daten:** `00-test.json` erhält einen beschädigten Außenposten mit zwei Raketentürmen und eine Hold-Mission am zweiten Encounter.
 
-## B6 – Einmalige platzierbare Missions-Rewards
+## B6 – Einmalige platzierbare Missions-Rewards ✔ umgesetzt
 Teamweite Reward-Ladung im Objective-System; Utility-Override als Projektion; genau eine Platzierung; Verlustregel §7.4; starkes Podest über die vorhandene Laufzeit-Registrierung.
 **Map-Daten:** zweite Hold-Mission (Versorgungsbasis) in `00-test.json` mit Heilige-Handgranaten-Podest als Reward.
 
-## B7 – Carry
+## B7 – Carry ✔ umgesetzt
 Eigener Coop-Carry-Zustand: mehrere unabhängige Objekte, Pickup, Trägerdarstellung, Drop bei Tod und Disconnect, ein Objekt pro Spieler, definierte Abgabezone.
 **Map-Daten:** drei Bierflaschen am Seitenposten, Abgabezone an der Hauptbasis, Trigger nach Encounter-Clear.
 
-## B8 – Meta-Reward-Ledger und Item-Garantie
-Teilfortschritt in den Reward-Zustand; `rareGuaranteeCount` im Rundenergebnis; Anhebung in place beim Würfeln; Reward nur bei Mapsieg; Ergebnis-UI erklärt den Bonus.
+## B8 – Meta-Reward-Ledger und Item-Garantie ✔ umgesetzt
+Teilfortschritt in den Reward-Zustand; `epicGuaranteeCount` im Rundenergebnis; Anhebung in place beim Würfeln; Reward nur bei Mapsieg; Ergebnis-UI erklärt den Bonus.
 **Map-Daten:** `00-test.json` erhält einen `itemDrop`, damit die Garantie überhaupt beobachtbar ist.
 
-## B9 – Team-Buffs
+## B9 – Team-Buffs ✔ umgesetzt
 Temporärer teamweiter Buff mit gemeinsamem Endzeitpunkt; HP-Regeneration additiv, Adrenalin-Regeneration multiplikativ; 30 s; HUD mit Restdauer.
 **Map-Daten:** Vollbonus an die Carry-Mission aus B7 gekoppelt.
 
-## B10 – Multiplayer und technische Stabilisierung
+## B10 – Multiplayer und technische Stabilisierung ✔ umgesetzt
 Latejoin und Spectator, Carry bei Disconnect, Reward-Eligibility, keine Doppelbuchung über Snapshot- oder Reconnect-Sonderfälle, Performance, Regressionen.
 **Ergebnis:** alle B-Systeme funktionieren konsistent im Coop.
 
@@ -679,7 +679,7 @@ XP pro Destroy-Ziel, Spawner-Druck, Hold-Start-HP und Angriffsstärke, Carry-Lau
 
 **Carry** – mehrere Objekte gleichzeitig, höchstens eines pro Spieler; Tod droppt, Disconnect verliert nicht; Abgabezone klar erkennbar; gesicherte Objekte verschwinden dauerhaft; 1/3, 2/3, 3/3 replizieren korrekt; Capture the Beer ist unverändert.
 
-**Meta-Rewards** – nur bei gültigem Mapsieg; Dreierauswahl bleibt; 1/2/3 Bier garantieren 1/2/3 Optionen selten oder besser; natürlich epische Rolls bleiben episch und zählen an; die Garantie wird vor dem Persistieren angewandt und verschlechtert nie ein Angebot; Bonus wird im Ergebnisbildschirm erklärt.
+**Meta-Rewards** – nur bei gültigem Mapsieg; Dreierauswahl bleibt; 1/2/3 Bier garantieren 1/2/3 epische Optionen; natürlich epische Rolls bleiben episch und zählen an; blaue Rolls zählen nicht als erfüllt; die Garantie wird vor dem Persistieren angewandt und verschlechtert nie ein Angebot; Bonus wird im Ergebnisbildschirm erklärt.
 
 **Team-Buff** – 3/3 löst den Referenzbuff aus; gemeinsamer Endzeitpunkt, 30 s; HP- und Adrenalin-Regeneration temporär erhöht; nie persistiert.
 
@@ -709,8 +709,8 @@ XP pro Destroy-Ziel, Spawner-Druck, Hold-Start-HP und Angriffsstärke, Carry-Lau
 | Reparaturdrohnen werden Inspector-Sonderlogik | Optik wiederverwenden, Fachlogik trennen. |
 | One-Shot-Reward stirbt mit dem Träger | Genau eine Verlustregel: Pickup erscheint an der Missionsbasis erneut, §7.4. |
 | Carry baut CTB nach oder bricht es um | eigener Coop-Zustand, PvP-System unverändert, §8.2. |
-| Client leitet Rewards aus Weltobjekten ab | Fortschritt genau einmal autoritativ; `rareGuaranteeCount` aus dem Rundenergebnis. |
-| Rare-Garantie verschlechtert ein Angebot | Anhebung in place, angewandt beim Würfeln, §13. |
+| Client leitet Rewards aus Weltobjekten ab | Fortschritt genau einmal autoritativ; `epicGuaranteeCount` aus dem Rundenergebnis. |
+| Epic-Garantie verschlechtert ein Angebot | Anhebung in place, angewandt beim Würfeln, §13. |
 | Meta-Reward durch Verlieren farmbar | Item-Rewards nur bei Mapsieg. |
 | Team-Buff überschreibt Builds | temporär additiv bzw. multiplikativ auf bestehende Stats. |
 | System ist gebaut, aber nie gespielt | Jeder Archetyp-Schritt liefert Map-Daten mit, §18.1. |
@@ -740,7 +740,7 @@ Außenposten entdeckt → Team hält ihn während der nächsten Welle
 → Reparaturdrohnen stellen die Raketentürme wieder her → Posten unterstützt das Finale
 
 3 Bier am Seitenposten → Transport über mehrere Ruhefenster → 3 / 3
-→ 30 s Regenerationsschub → Mapsieg → 3 garantierte seltene oder bessere Item-Optionen
+→ 30 s Regenerationsschub → Mapsieg → mindestens 3 von 3 epische Item-Optionen garantiert
 ```
 
 Längere Coop-Defense-Maps werden damit nicht einfach länger. Sie bekommen **mehr Entscheidungen, mehr räumliche Bewegung und stärkere Konsequenzen aus dem Verhalten des Teams**.
@@ -771,7 +771,7 @@ Map
 | **Destroy – Spawner** | pro zerstörtem Spawner | weniger zukünftiger Druck + kleine Team-XP | keiner erforderlich |
 | **Hold – Raketenposten** | binär | Reparatur + dauerhafte Turmunterstützung | keiner erforderlich |
 | **Hold – Versorgung** | binär | einmalige Utility für starkes Power-up-Podest | keiner erforderlich |
-| **Carry – Bier** | 1/3, 2/3, 3/3 | bei 3/3 Team-Regenerationsbuff | 1–3 garantierte Rare-Optionen bei Sieg |
+| **Carry – Bier** | 1/3, 2/3, 3/3 | bei 3/3 Team-Regenerationsbuff | 1–3 garantierte Epic-Optionen bei Sieg |
 
 ---
 
@@ -785,7 +785,7 @@ BaseManager / Spawn-Systeme  → Welt- und HP-Mechanik, Dormanz-Gates
 PowerUpSystem                → Power-up- und Pedestal-Lifecycle
 Coop-Carry-Zustand           → Aufnahme / Tragen / Drop / Abgabe
 Progression / Item-System    → XP-Ausschüttung und Item-Angebot
-NetworkBridge                → Objective-Snapshot, Runden-XP, rareGuaranteeCount im Rundenergebnis
+NetworkBridge                → Objective-Snapshot, Runden-XP, epicGuaranteeCount im Rundenergebnis
 ```
 
 Keines dieser Systeme übernimmt für B die Fachlogik eines anderen.

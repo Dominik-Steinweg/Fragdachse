@@ -11,6 +11,7 @@ import type {
   CoopDefenseSecondaryObjectivePresentationEntry,
   CoopDefenseSecondaryObjectivePresentationState,
   CoopDefenseSecondaryObjectiveType,
+  SyncedCoopDefenseCarryItem,
 } from '../types';
 
 /**
@@ -94,6 +95,20 @@ export function getSecondaryObjectiveTargets(
   objectiveId: string,
 ): readonly string[] {
   return configs.find((config) => config.id === objectiveId)?.targets ?? [];
+}
+
+/**
+ * Carry führt über zwei Schritte, und die Weltmarkierung zeigt immer nur den nächsten: Solange
+ * Objekte am Boden liegen, markieren sie sich selbst; sobald das Team eines trägt, kommt die
+ * Abgabezone dazu. Eine dauerhaft markierte Zone ohne aufgenommenes Objekt würde den ersten
+ * Schritt verdecken, und ein getragenes Objekt braucht keine eigene Marke – es sitzt sichtbar
+ * am Träger und zöge sonst eine zweite Marke durch die Arena.
+ */
+export function isCarryDeliveryZoneMarked(
+  carryItems: readonly SyncedCoopDefenseCarryItem[],
+  objectiveId: string,
+): boolean {
+  return carryItems.some((item) => item.objectiveId === objectiveId && item.holderId !== null);
 }
 
 function toViewEntry(
