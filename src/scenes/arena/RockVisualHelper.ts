@@ -378,6 +378,20 @@ export class RockVisualHelper {
       .setVisible(!indestructible && ratio < 1);
   }
 
+  updateTurretAngle(rockId: number, angle: number): void {
+    if (!Number.isFinite(angle)) return;
+    const rock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    const visual = this.turretVisuals.get(rockId);
+    if (!rock || rock.kind !== 'turret' || !visual) return;
+
+    const world = this.gridToWorld(rock.gridX, rock.gridY);
+    const visualSpec = getTurretVisualSpec(rock.turretWeaponId ?? 'SPOREN');
+    const transform = getTurretVisualTransform(visualSpec, world.x, world.y, angle);
+    visual.image
+      .setPosition(transform.x, transform.y)
+      .setRotation(transform.rotation);
+  }
+
   /**
    * Bestätigt die Dauerlichter aller sichtbaren Fliegenpilz-Türme pro Frame. Ein einmaliges
    * Setzen beim Materialisieren reicht nicht, weil `LightingSystem` verwaiste keyed-Lichter

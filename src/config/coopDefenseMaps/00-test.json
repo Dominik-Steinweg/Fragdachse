@@ -4,13 +4,17 @@
   "arenaWidthCells": 90,
   "timeOfDay": "12:00",
   "rockFillRatio": 0.3,
-  "train": {
-    "firstArrival": {
-      "type": "time",
-      "atMs": 10000
-    },
-    "repeatAfterExitMs": 10000
-  },
+  "mapEvents": [
+    {
+      "id": "c1-opening-train",
+      "type": "train",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "a2-opening-encounter"
+      },
+      "delayMs": 5000
+    }
+  ],
   "surviveDurationSec": 600,
   "balanceReferenceDurationSec": 600,
   "objective": "survive",

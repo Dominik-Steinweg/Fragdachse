@@ -16,6 +16,12 @@ export interface ProjectileWeaponFireConfig {
   readonly homing?: ProjectileHomingConfig;
 }
 
+/** Turm-spezifische Salve: weitere Projektile werden mit kurzem Abstand gestartet. */
+export interface TurretBurstConfig {
+  readonly count: number;
+  readonly intervalMs: number;
+}
+
 export interface HitscanWeaponFireConfig {
   readonly type: 'hitscan';
   readonly traceThickness: number;      // px - für spätere Ray-/Sweep-Checks
@@ -199,6 +205,8 @@ export interface WeaponConfigShape {
   readonly damage: number;              // HP-Schaden pro Direkttreffer
   readonly range: number;               // px – Lifetime = range/speed*1000 ms
   readonly fire: WeaponFireConfig;
+  /** Optionaler Burst für automatisierte Türme; normale Spielerwaffen ignorieren ihn. */
+  readonly turretBurst?: TurretBurstConfig;
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die diese Waffe eingesetzt werden darf
   /** Optionaler Modusfilter; fehlt er, ist die Waffe in allen Spielmodi erlaubt. */

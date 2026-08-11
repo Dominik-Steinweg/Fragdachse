@@ -143,6 +143,43 @@ describe('Inspector support construction registry', () => {
 });
 
 describe('Inspector automated support turrets', () => {
+  it('fires the rocket turret as a fast two-shot burst before its reload', () => {
+    const combat = {
+      isAlive: () => true,
+      isBurrowed: () => false,
+      canDamageTarget: () => true,
+    };
+    const fire = vi.fn();
+    const turrets = new TurretSystem(
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
+      combat as never,
+    );
+    turrets.setEnemyTargetProvider(() => [{ id: 'enemy', x: 100, y: 0 }]);
+    turrets.setTurretProvider(() => [{
+      id: 1,
+      x: 0,
+      y: 0,
+      ownerId: 'inspector',
+      ownerColor: 0xff8a3d,
+      weaponId: 'TURRET_ROCKET_BURST',
+      targetRange: 150,
+      muzzleOffset: 16,
+    }], null);
+    turrets.setFireHandler(fire);
+
+    turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(119, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    expect(fire).toHaveBeenCalledOnce();
+
+    turrets.hostUpdate(120, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    expect(fire).toHaveBeenCalledTimes(2);
+
+    turrets.hostUpdate(1919, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    expect(fire).toHaveBeenCalledTimes(2);
+    turrets.hostUpdate(1920, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    expect(fire).toHaveBeenCalledTimes(3);
+  });
+
   it('prioritizes the focused target without bypassing normal range or line of sight', () => {
     const combat = {
       isAlive: () => true,

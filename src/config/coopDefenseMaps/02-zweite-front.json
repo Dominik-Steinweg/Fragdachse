@@ -6,13 +6,12 @@
   "timeOfDay": "05:00",
   "tutorialText": "Die zweite Front kommt jetzt auch aus dem Norden. Die mittlere Basis hat einen Geschützturm; nutzt die unterschiedlichen Anmarschwege, bevor die Gegner die Basen erreichen. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
   "rockFillRatio": 0.15,
-  "train": {
-    "firstArrival": {
-      "type": "time",
-      "atMs": 10000
-    },
+  "mapEvents": [{
+    "id": "train-rhythm",
+    "type": "train",
+    "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
-  },
+  }],
   "balanceReferenceDurationSec": 55,
   "objective": "repel-assault",
   "bases": [

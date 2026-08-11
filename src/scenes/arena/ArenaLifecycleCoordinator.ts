@@ -41,6 +41,7 @@ import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor
 import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
+import { CoopDefenseMapEventDirector } from '../../systems/CoopDefenseMapEventDirector';
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
@@ -60,6 +61,7 @@ import { DetonationSystem }  from '../../systems/DetonationSystem';
 import { ArmageddonSystem }  from '../../systems/ArmageddonSystem';
 import { AirstrikeSystem }   from '../../systems/AirstrikeSystem';
 import { TrainManager }      from '../../train/TrainManager';
+import { CoopDefenseTrainEventHandler } from '../../train/CoopDefenseTrainEventHandler';
 import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
 import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
@@ -75,7 +77,7 @@ import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
-import { getNextTrainArrivalAt, resolveTrainEventPlan, type TrainEventPlan } from '../../train/TrainEvent';
+import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
@@ -260,6 +262,7 @@ export class ArenaLifecycleCoordinator {
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
@@ -397,6 +400,7 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
 
     if (roundConclusion) {
@@ -1561,8 +1565,12 @@ export class ArenaLifecycleCoordinator {
           return [...placeableTurrets, ...baseTurrets];
         },
         (id: AutomatedTurretId, angle) => {
-          if (typeof id === 'number') this.ctx.placementSystem?.updateAngle(id, angle);
-          else this.ctx.baseManager?.setTurretAngle(id, angle);
+          if (typeof id === 'number') {
+            this.ctx.placementSystem?.updateAngle(id, angle);
+            this.rockVisualHelper.updateTurretAngle(id, angle);
+          } else {
+            this.ctx.baseManager?.setTurretAngle(id, angle);
+          }
         },
       );
       this.ctx.turretSystem.setEnemyTargetProvider(
@@ -2252,12 +2260,27 @@ export class ArenaLifecycleCoordinator {
         this.hostUpdate.applySupportProjectileImpact(projectile, impact);
       });
 
-      // Gleise und Zug sind getrennt: nur wenn die Map ein Zug-Event konfiguriert (bzw. der
-      // Modus keine Map-Konfiguration hat), fährt überhaupt ein Zug über den Korridor.
+      // Gleise und Map-Events sind getrennt. Der Coop-Director besitzt Trigger, Lifecycle und
+      // Wiederholungsplanung; der bestehende Zug bleibt im typisierten Fachhandler.
       const trackCell = layout.tracks?.[0];
-      const trainEventPlan = resolveTrainEventPlan(coopDefenseMapConfig);
-      if (trackCell !== undefined && trainEventPlan) {
-        this.setupHostTrainEvent(trackCell.gridX, trainEventPlan);
+      const coopDefenseMapEvents = coopDefenseMapConfig?.mapEvents ?? [];
+      if (isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig) {
+        if (trackCell !== undefined && coopDefenseMapEvents.length > 0) {
+          const trainHandler = this.setupCoopTrainEventHandler(trackCell.gridX);
+          this.ctx.coopDefenseMapEventDirector = new CoopDefenseMapEventDirector(
+            coopDefenseMapEvents,
+            [trainHandler],
+            {
+              isTriggerSatisfied: (start) => start.type === 'after-encounter'
+                && (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false),
+            },
+          );
+        } else {
+          bridge.clearTrainEvent();
+        }
+      } else if (trackCell !== undefined) {
+        // Nicht-Coop-Modi behalten ihren klassischen, wiederholbaren Zugrhythmus.
+        this.setupTrainManager(trackCell.gridX, getClassicTrainEventPlan());
       } else {
         // Das Zug-Event ist reliable und überlebt den Rundenwechsel; ohne aktives Löschen
         // würde eine zuglose Map das HUD der Vorrunde weiterspielen.
@@ -2492,6 +2515,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.coopDefenseMapDirector?.reset();
     this.ctx.coopDefenseMapDirector = null;
+    this.ctx.coopDefenseMapEventDirector?.reset();
+    this.ctx.coopDefenseMapEventDirector = null;
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseCarrySystem?.reset();
@@ -2510,6 +2535,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseObjectivePlacementRewardSystem?.reset();
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
+    bridge.publishCoopDefenseMapEventPresentationState(null);
     this.ctx.coopDefensePersistentPressureSystem?.reset();
     this.ctx.coopDefensePersistentPressureSystem = null;
     this.ctx.coopDefenseBossSystem?.reset();
@@ -2728,18 +2754,21 @@ export class ArenaLifecycleCoordinator {
     return this.getEnemyNavigationFlowField()?.hasWalkableCircleLine(fromX, fromY, toX, toY, radius) ?? true;
   }
 
-  private setupHostTrainEvent(trackGridX: number, plan: TrainEventPlan): void {
+  private setupTrainManager(
+    trackGridX: number,
+    plan: TrainEventPlan | null,
+    direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1,
+  ): TrainManager {
     const trackX     = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE;
-    const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-    const spawnAt    = bridge.getArenaStartTime() + plan.firstArrivalDelayMs;
+    const spawnAt    = plan ? bridge.getArenaStartTime() + plan.firstArrivalDelayMs : null;
 
-    bridge.publishTrainEvent({ trackX, direction, spawnAt });
+    if (spawnAt !== null) bridge.publishTrainEvent({ trackX, direction, spawnAt });
 
     this.ctx.trainManager = new TrainManager(this.scene, this.ctx.playerManager, trackX, direction);
     this.ctx.trainManager.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
     this.ctx.trainManager.setEnemyManager(this.ctx.enemyManager);
     this.ctx.translocatorSystem?.setTrainManager(this.ctx.trainManager);
-    this.hostUpdate.setTrainSpawned(false);
+    if (plan) this.hostUpdate.setClassicTrainSpawned(false);
 
     this.ctx.projectileManager.setTrainGroup(this.ctx.trainManager.getGroup());
     this.ctx.projectileManager.setTrainHitCallback((damage, attackerId) => {
@@ -2831,21 +2860,27 @@ export class ArenaLifecycleCoordinator {
       bridge.broadcastTrainDestroyed();
     });
 
-    this.ctx.trainManager.setExitedCallback(() => {
+    if (plan) this.ctx.trainManager.setExitedCallback(() => {
       const currentEvent = bridge.getTrainEvent();
       if (!currentEvent) return;
-      const newSpawnAt = getNextTrainArrivalAt(Date.now(), plan);
-      if (newSpawnAt === null) {
-        // Einmalige Einfahrt: ohne Event bleibt der Zug draußen, das HUD blendet aus und die
-        // Gegner-KI weicht keinem Zug mehr aus, der nicht mehr kommt.
-        bridge.clearTrainEvent();
-        return;
-      }
+      const newSpawnAt = getNextClassicTrainArrivalAt(Date.now(), plan);
       const newDirection: 1 | -1 = currentEvent.direction === 1 ? -1 : 1;
       bridge.publishTrainEvent({ trackX: currentEvent.trackX, direction: newDirection, spawnAt: newSpawnAt });
       this.ctx.trainManager?.prepareReentry(newDirection);
-      this.hostUpdate.setTrainSpawned(false);
+      this.hostUpdate.setClassicTrainSpawned(false);
     });
+    return this.ctx.trainManager;
+  }
+
+  private setupCoopTrainEventHandler(trackGridX: number): CoopDefenseTrainEventHandler {
+    const initialDirection: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+    const trainManager = this.setupTrainManager(trackGridX, null, initialDirection);
+    return new CoopDefenseTrainEventHandler(
+      trainManager,
+      this.ctx.combatSystem,
+      initialDirection,
+      () => Math.max(0, Date.now() - bridge.getArenaStartTime()),
+    );
   }
 
   private scheduleTrainExplosion(x: number, y: number, radius: number, delayMs: number): void {

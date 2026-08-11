@@ -39,8 +39,21 @@ export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_le
 export const COOP_DEFENSE_PENDING_UPGRADE_ICONS: ReadonlySet<string> = new Set([
 ]);
 
-/** Ultimate unlock nodes with their own upgrade-tree artwork instead of loadout-item icons. */
+/** Unlock nodes with their own upgrade-tree artwork instead of loadout-item icons. */
 export const COOP_DEFENSE_AUTHORED_UNLOCK_UPGRADE_ICONS: ReadonlySet<string> = new Set([
+  'unlock_reparaturstrahl',
+  'unlock_overcharge_core',
+  'unlock_energieinjektor',
+  'unlock_tesla_turret',
+  'unlock_gravity_turret',
+  'unlock_slow_bubble_turret',
+  'unlock_medic_pedestal',
+  'unlock_armor_pedestal',
+  'unlock_felsbau',
+  'unlock_fliegenpilz',
+  'unlock_rocket_turret',
+  'unlock_machine_gun_turret',
+  'unlock_flame_turret',
   'unlock_armageddon',
   'unlock_gauss_rifle',
   'unlock_airstrike',

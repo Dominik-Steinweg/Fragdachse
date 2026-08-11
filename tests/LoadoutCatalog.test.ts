@@ -10,6 +10,7 @@ import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   getCoopDefenseUpgradeTextureKey,
+  hasCoopDefenseDedicatedUpgradeIcon,
   isCoopDefenseLoadoutItemSelectable,
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
@@ -82,9 +83,21 @@ describe('loadout catalog', () => {
     const construction = describeLoadoutTool({ kind: 'construction', id: 'rocket_turret' });
     const utility = describeLoadoutTool({ kind: 'utility', id: 'HE_GRENADE' });
     expect(construction.accentColor).toBe(utility.accentColor);
-    // Slot und Unlock-Knoten teilen bis zum individuellen Artwork dasselbe temporaere Icon.
+    // Slot und Unlock-Knoten teilen dasselbe dedizierte Artwork.
     expect(construction.textureKey).toBe('UPGRADE_UNLOCK_ROCKET_TURRET');
     expect(utility.textureKey).toBe('HE_GRENADE');
+  });
+
+  it('loads and uses dedicated artwork for every turret construction slot', () => {
+    for (const id of ['unlock_rocket_turret', 'unlock_machine_gun_turret', 'unlock_flame_turret']) {
+      expect(hasCoopDefenseDedicatedUpgradeIcon(id)).toBe(true);
+    }
+    expect(describeLoadoutTool({ kind: 'construction', id: 'rocket_turret' }).textureKey)
+      .toBe('UPGRADE_UNLOCK_ROCKET_TURRET');
+    expect(describeLoadoutTool({ kind: 'construction', id: 'machine_gun_turret' }).textureKey)
+      .toBe('UPGRADE_UNLOCK_MACHINE_GUN_TURRET');
+    expect(describeLoadoutTool({ kind: 'construction', id: 'flame_turret' }).textureKey)
+      .toBe('UPGRADE_UNLOCK_FLAME_TURRET');
   });
 
   it('keeps Inspector support weapons out of PvP loadout lists', () => {
@@ -105,6 +118,20 @@ describe('loadout catalog', () => {
     expect(getCoopDefenseUpgradeTextureKey('flamethrower_adrenalin_efficiency')).toBe(
       'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',
     );
+    for (const id of [
+      'unlock_reparaturstrahl',
+      'unlock_overcharge_core',
+      'unlock_energieinjektor',
+      'unlock_tesla_turret',
+      'unlock_gravity_turret',
+      'unlock_slow_bubble_turret',
+      'unlock_medic_pedestal',
+      'unlock_armor_pedestal',
+      'unlock_felsbau',
+      'unlock_fliegenpilz',
+    ]) {
+      expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
+    }
     expect(getCoopDefenseUpgradeTextureKey('unlock_armageddon')).toBe('UPGRADE_UNLOCK_ARMAGEDDON');
   });
 
@@ -122,5 +149,22 @@ describe('loadout catalog', () => {
     expect(describeLoadoutItem('weapon1', 'UNKNOWN_ITEM').displayName).toBe('UNKNOWN ITEM');
     expect(describeLoadoutItem('weapon1', 'LAUBBLAESER').displayName).toBe('Laubbläser');
     expect(describeLoadoutItem('weapon2', 'REPARATURSTRAHL').displayName).toBe('Plasmabrenner');
+  });
+
+  it('uses the dedicated upgrade artwork in the four Ultimate slots', () => {
+    expect(describeLoadoutItem('ultimate', 'ARMAGEDDON').textureKey).toBe('UPGRADE_UNLOCK_ARMAGEDDON');
+    expect(describeLoadoutItem('ultimate', 'GAUSS_RIFLE').textureKey).toBe('UPGRADE_UNLOCK_GAUSS_RIFLE');
+    expect(describeLoadoutItem('ultimate', 'AIRSTRIKE').textureKey).toBe('UPGRADE_UNLOCK_AIRSTRIKE');
+    expect(describeLoadoutItem('ultimate', 'HONEY_BADGER_RAGE').textureKey)
+      .toBe('UPGRADE_UNLOCK_HONEY_BADGER_RAGE');
+  });
+
+  it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {
+    expect(describeLoadoutItem('weapon2', 'REPARATURSTRAHL').textureKey)
+      .toBe('UPGRADE_UNLOCK_REPARATURSTRAHL');
+    expect(describeLoadoutItem('weapon2', 'OVERCHARGE_CORE').textureKey)
+      .toBe('UPGRADE_UNLOCK_OVERCHARGE_CORE');
+    expect(describeLoadoutItem('weapon2', 'ENERGIEINJEKTOR').textureKey)
+      .toBe('UPGRADE_UNLOCK_ENERGIEINJEKTOR');
   });
 });

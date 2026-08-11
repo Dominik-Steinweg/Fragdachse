@@ -56,6 +56,7 @@ import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExe
 import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
+import type { CoopDefenseMapEventDirector } from '../../systems/CoopDefenseMapEventDirector';
 import type { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import type { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
@@ -165,6 +166,7 @@ export interface ArenaContext {
   coopDefensePersistentPressureSystem: CoopDefensePersistentPressureSystem | null;
   coopDefenseBossSystem: CoopDefenseBossSystem | null;
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
+  coopDefenseMapEventDirector: CoopDefenseMapEventDirector | null;
   coopDefenseSecondaryObjectiveSystem: CoopDefenseSecondaryObjectiveSystem | null;
   coopDefenseCarrySystem: CoopDefenseCarrySystem | null;
   /** Host-only: one shared, round-local team buff end timestamp. */

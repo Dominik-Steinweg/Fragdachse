@@ -25,7 +25,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -137,7 +137,9 @@ const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktuell
 const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
 const KEY_COOP_SURVIVAL = 'csv'; // global reliable: CoopDefenseSurvivalState | null
 const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEncounterPresentationState | null
+const KEY_COOP_MAP_EVENT_PRESENTATION = 'cme'; // global reliable: CoopDefenseMapEventPresentationState | null
 const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Objective-Presentationseinträge | null
+const MAX_COOP_MAP_EVENT_PRESENTATION_ENTRIES = 64;
 const MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES = 32;
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
@@ -1536,6 +1538,55 @@ export class NetworkBridge {
   }
 
   /** Host-only: publiziert ausschließlich den kleinen Secondary-Objective-Präsentationszustand. */
+  /** Host-only: publiziert den kleinen, reliable Map-Event-Lifecycle-Snapshot. */
+  publishCoopDefenseMapEventPresentationState(state: CoopDefenseMapEventPresentationState | null): void {
+    if (!isHost()) return;
+    setState(KEY_COOP_MAP_EVENT_PRESENTATION, state, true);
+  }
+
+  getCoopDefenseMapEventPresentationState(): CoopDefenseMapEventPresentationState | null {
+    const raw = getState(KEY_COOP_MAP_EVENT_PRESENTATION) as unknown;
+    if (!Array.isArray(raw) || raw.length > MAX_COOP_MAP_EVENT_PRESENTATION_ENTRIES) return null;
+
+    const eventIds = new Set<string>();
+    const sanitized: CoopDefenseMapEventPresentationState[number][] = [];
+    for (const rawEntry of raw) {
+      if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) return null;
+      const entry = rawEntry as Partial<CoopDefenseMapEventPresentationState[number]>;
+      if (
+        typeof entry.eventId !== 'string'
+        || entry.eventId.length === 0
+        || entry.eventId.trim() !== entry.eventId
+        || eventIds.has(entry.eventId)
+        || !['train', 'airstrike', 'ground-hazard'].includes(entry.eventType ?? '')
+        || !['dormant', 'scheduled', 'active', 'waiting-repeat', 'completed'].includes(entry.state ?? '')
+        || typeof entry.occurrence !== 'number'
+        || !Number.isSafeInteger(entry.occurrence)
+        || entry.occurrence < 0
+        || typeof entry.stateChangedAtMs !== 'number'
+        || !Number.isFinite(entry.stateChangedAtMs)
+        || entry.stateChangedAtMs < 0
+      ) return null;
+      if (entry.state === 'dormant' && entry.occurrence !== 0) return null;
+      if (entry.state !== 'dormant' && entry.occurrence < 1) return null;
+      if (entry.nextActionAtMs !== undefined && (
+        typeof entry.nextActionAtMs !== 'number'
+        || !Number.isFinite(entry.nextActionAtMs)
+        || entry.nextActionAtMs < entry.stateChangedAtMs
+      )) return null;
+      eventIds.add(entry.eventId);
+      sanitized.push({
+        eventId: entry.eventId,
+        eventType: entry.eventType as CoopDefenseMapEventType,
+        state: entry.state as CoopDefenseMapEventLifecycleState,
+        occurrence: entry.occurrence,
+        stateChangedAtMs: entry.stateChangedAtMs,
+        ...(entry.nextActionAtMs === undefined ? {} : { nextActionAtMs: entry.nextActionAtMs }),
+      });
+    }
+    return sanitized;
+  }
+
   publishCoopDefenseSecondaryObjectivePresentationState(
     state: CoopDefenseSecondaryObjectivePresentationState | null,
   ): void {

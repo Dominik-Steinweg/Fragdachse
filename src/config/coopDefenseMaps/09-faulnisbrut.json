@@ -4,13 +4,12 @@
   "arenaWidthCells": 84,
   "timeOfDay": "04:30",
   "rockFillRatio": 0.4,
-  "train": {
-    "firstArrival": {
-      "type": "time",
-      "atMs": 10000
-    },
+  "mapEvents": [{
+    "id": "train-rhythm",
+    "type": "train",
+    "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
-  },
+  }],
   "surviveDurationSec": 120,
   "balanceReferenceDurationSec": 120,
   "objective": "survive",

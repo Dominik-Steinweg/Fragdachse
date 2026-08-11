@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
   getCoopDefenseMapConfig,
@@ -7,10 +7,11 @@ import {
 } from '../src/config/coopDefenseMaps';
 import {
   formatTrainArrivalLabel,
-  getNextTrainArrivalAt,
+  getClassicTrainEventPlan,
+  getNextClassicTrainArrivalAt,
   getTrainArrivalCountdownSecs,
-  resolveTrainEventPlan,
 } from '../src/train/TrainEvent';
+import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
 import { TRAIN } from '../src/train/TrainConfig';
 
 function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
@@ -32,16 +33,33 @@ function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfi
   } as CoopDefenseMapConfig);
 }
 
+function fakeTrainHandler() {
+  let onFinished: ((eventId: string, occurrence: number, exitedAtMs: number) => void) | null = null;
+  return {
+    type: 'train' as const,
+    schedule: vi.fn(),
+    hostUpdate: vi.fn(),
+    reset: vi.fn(),
+    setCycleFinishedCallback: vi.fn((callback: typeof onFinished) => { onFinished = callback; }),
+    finish(eventId: string, occurrence: number, exitedAtMs: number): void {
+      onFinished?.(eventId, occurrence, exitedAtMs);
+    },
+  };
+}
+
 describe('Train as a standalone map event', () => {
-  it('keeps the legacy rhythm on every rails map of the campaign', () => {
-    const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'rails');
+  it('migrates the train rhythm on every rails map of the campaign', () => {
+    const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'rails' && map.mapId !== '0');
     expect(railsMaps.length).toBeGreaterThan(0);
 
     for (const map of railsMaps) {
-      const plan = resolveTrainEventPlan(map);
-      expect(plan, `map ${map.mapId} lost its train`).not.toBeNull();
-      expect(plan!.firstArrivalDelayMs, map.mapId).toBe(10_000);
-      expect(plan!.repeatAfterExitMs, map.mapId).toBe(10_000);
+      expect(map.mapEvents, map.mapId).toHaveLength(1);
+      expect(map.mapEvents?.[0], map.mapId).toMatchObject({
+        id: 'train-rhythm',
+        type: 'train',
+        start: { type: 'time', atMs: 10_000 },
+        repeatAfterExitMs: 10_000,
+      });
     }
   });
 
@@ -50,25 +68,24 @@ describe('Train as a standalone map event', () => {
     const map = buildMap({ trackMode: 'rails' });
 
     expect(map.trackMode).toBe('rails');
-    expect(map.train).toBeUndefined();
-    expect(resolveTrainEventPlan(map)).toBeNull();
+    expect(map.mapEvents).toEqual([]);
   });
 
   it('keeps void-fire corridors free of trains', () => {
     for (const mapId of ['15', '16']) {
       const map = getCoopDefenseMapConfig(mapId);
       expect(map.trackMode, mapId).toBe('void-fire');
-      expect(resolveTrainEventPlan(map), mapId).toBeNull();
+      expect(map.mapEvents, mapId).toEqual([]);
     }
 
     expect(() => buildMap({
       trackMode: 'void-fire',
-      train: { firstArrival: { type: 'time', atMs: 10_000 } },
+      mapEvents: [{ id: 'blocked-train', type: 'train', start: { type: 'time', atMs: 10_000 } }],
     })).toThrow(/no rails/);
   });
 
   it('keeps the classic rhythm for modes without a map configuration', () => {
-    const plan = resolveTrainEventPlan(null);
+    const plan = getClassicTrainEventPlan();
 
     expect(plan).toEqual({
       firstArrivalDelayMs: TRAIN.DEFAULT_FIRST_ARRIVAL_MS,
@@ -76,23 +93,89 @@ describe('Train as a standalone map event', () => {
     });
   });
 
-  it('schedules repeated arrivals relative to leaving the arena', () => {
-    const map = buildMap({
-      train: { firstArrival: { type: 'time', atMs: 4_000 }, repeatAfterExitMs: 7_000 },
-    });
-    const plan = resolveTrainEventPlan(map)!;
+  it('validates map event ids, references, timing and repeat values fail-closed', () => {
+    const encounter = {
+      id: 'opening',
+      start: { type: 'time', atMs: 0 },
+      groups: [{ enemyKind: 'zombie-badger' as const, count: 1 }],
+    };
+    const event = {
+      id: 'train',
+      type: 'train' as const,
+      start: { type: 'after-encounter', encounterId: 'opening' },
+    };
+    expect(() => buildMap({ encounters: [encounter], mapEvents: [event, { ...event }] })).toThrow(/Duplicate map event id/);
+    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'after-encounter', encounterId: 'missing' } }] })).toThrow(/unknown encounter/);
+    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, delayMs: -1 }] })).toThrow(/delayMs/);
+    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 0 }] })).toThrow(/repeatAfterExitMs/);
+    expect(() => buildMap({ mapEvents: [{ ...event, start: { type: 'time', atMs: 0 }, type: 'airstrike' }] })).toThrow(/unsupported map event type/);
+  });
 
-    expect(plan.firstArrivalDelayMs).toBe(4_000);
+  it('keeps the 00-test C1 slice one-shot with encounter clear and five seconds warning', () => {
+    const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
+    expect(event).toMatchObject({
+      id: 'c1-opening-train',
+      type: 'train',
+      start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
+      delayMs: 5000,
+    });
+    expect(event?.repeatAfterExitMs).toBeUndefined();
+  });
+
+  it('runs the 00-test event through scheduled, active and completed', () => {
+    const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
+    if (!event) throw new Error('00-test C1 event missing');
+    let encounterCleared = false;
+    const handler = fakeTrainHandler();
+    const director = new CoopDefenseMapEventDirector([event], [handler], {
+      isTriggerSatisfied: (start) => start.type === 'after-encounter' && encounterCleared,
+    });
+
+    director.hostUpdate(10_000, false);
+    expect(director.getPresentationState()?.[0].state).toBe('dormant');
+    encounterCleared = true;
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.[0]).toMatchObject({
+      state: 'scheduled',
+      occurrence: 1,
+      nextActionAtMs: 15_000,
+    });
+    director.hostUpdate(5_000, false);
+    expect(director.getPresentationState()?.[0].state).toBe('active');
+    handler.finish(event.id, 1, 15_000);
+    expect(director.getPresentationState()?.[0].state).toBe('completed');
+  });
+
+  it('schedules repeated arrivals relative to leaving the arena', () => {
+    const handler = fakeTrainHandler();
+    const director = new CoopDefenseMapEventDirector([{
+      id: 'repeat-train',
+      type: 'train',
+      start: { type: 'time', atMs: 0 },
+      repeatAfterExitMs: 7_000,
+      delayMs: 0,
+    }], [handler]);
+    director.hostUpdate(0, false);
+    handler.finish('repeat-train', 1, 1_000);
     // Die Wiedereinfahrt hängt am Zeitpunkt des Verlassens, nicht am Rundenstart.
-    expect(getNextTrainArrivalAt(1_000_000, plan)).toBe(1_007_000);
+    expect(director.getPresentationState()?.[0]).toMatchObject({
+      state: 'waiting-repeat',
+      occurrence: 2,
+      nextActionAtMs: 8_000,
+    });
   });
 
   it('lets a train run exactly once when no repeat is configured', () => {
-    const map = buildMap({ train: { firstArrival: { type: 'time', atMs: 4_000 } } });
-    const plan = resolveTrainEventPlan(map)!;
-
-    expect(plan.repeatAfterExitMs).toBeNull();
-    expect(getNextTrainArrivalAt(1_000_000, plan)).toBeNull();
+    const handler = fakeTrainHandler();
+    const director = new CoopDefenseMapEventDirector([{
+      id: 'one-shot-train',
+      type: 'train',
+      start: { type: 'time', atMs: 4_000 },
+      delayMs: 0,
+    }], [handler]);
+    director.hostUpdate(4_000, false);
+    handler.finish('one-shot-train', 1, 4_000);
+    expect(director.getPresentationState()?.[0].state).toBe('completed');
   });
 
   it('announces the real remaining time until the next arrival', () => {

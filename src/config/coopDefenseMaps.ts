@@ -71,6 +71,7 @@ export type CoopBaseTurretWeaponId =
   | 'BASE_SPOREN'
   | 'FLIEGENPILZ_PLASMA'
   | 'TURRET_ROCKET'
+  | 'TURRET_ROCKET_BURST'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
   | 'TURRET_VOID_FLAME'
@@ -372,19 +373,42 @@ export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
  * `base-destroyed`) ergänzt werden können – ohne dafür jetzt eine allgemeine Trigger-Engine
  * zu bauen.
  */
-export type CoopDefenseMapTrainArrival =
-  | { readonly type: 'time'; readonly atMs: number };
+/** Kleine C1-Triggerunion; spaetere Eventtypen erweitern sie ohne eine Script-Engine. */
+export type CoopDefenseMapEventStart =
+  | { readonly type: 'time'; readonly atMs: number }
+  | { readonly type: 'after-encounter'; readonly encounterId: string };
 
-/**
- * Der Zug als eigenständiges Umgebungs-Event der Map – unabhängig von den Gleisen.
- * `trackMode` entscheidet nur, ob der Korridor Gleise bekommt; erst dieses Feld schickt
- * einen Zug darüber. Maps mit Gleisen, aber ohne `train`, sind damit möglich.
- */
-export interface CoopDefenseMapTrainConfig {
-  readonly firstArrival: CoopDefenseMapTrainArrival;
-  /** Pause zwischen Verlassen der Arena und nächster Einfahrt; fehlt = nur eine Einfahrt. */
+/** Gemeinsame Felder aller authored Map-Events. */
+export interface CoopDefenseMapEventBase {
+  readonly id: string;
+  readonly start: CoopDefenseMapEventStart;
+  /** Warnzeit zwischen erfülltem Trigger und Wirkung. */
+  readonly delayMs?: number;
+}
+
+/** C1-Eventkonfiguration fuer den bestehenden Zug-Fachhandler. */
+export interface CoopDefenseMapTrainEventConfig extends CoopDefenseMapEventBase {
+  readonly type: 'train';
+  /** Pause zwischen tatsächlichem Verlassen der Arena und nächster Einfahrt. */
   readonly repeatAfterExitMs?: number;
 }
+
+/** Gemeinsame Typvorbereitung fuer C2; wird erst mit dem Airstrike-Handler authoring-faehig. */
+export interface CoopDefenseMapAirstrikeEventConfig extends CoopDefenseMapEventBase {
+  readonly type: 'airstrike';
+}
+
+/** Gemeinsame Typvorbereitung fuer C3; wird erst mit dem Ground-Hazard-Handler authoring-faehig. */
+export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEventBase {
+  readonly type: 'ground-hazard';
+}
+
+export type CoopDefenseMapEventConfig =
+  | CoopDefenseMapTrainEventConfig
+  | CoopDefenseMapAirstrikeEventConfig
+  | CoopDefenseMapGroundHazardEventConfig;
+/** Nach der Normalisierung sind Werte runtime-seitig bereinigt; die Union bleibt authoring-kompatibel. */
+export type ResolvedCoopDefenseMapEventConfig = CoopDefenseMapEventConfig;
 
 export interface CoopDefenseMapPermanentGroundFireConfig {
   readonly randomPatchCount: number;
@@ -477,8 +501,8 @@ export interface CoopDefenseMapConfig {
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
   readonly trackMode?: CoopDefenseMapTrackMode;
-  /** Gesetzt: Auf dieser Map fährt der Zug RB 54. Ohne dieses Feld bleiben die Gleise leer. */
-  readonly train?: CoopDefenseMapTrainConfig;
+  /** Authored Map-Events; Gleise ohne Zug-Event bleiben erlaubt. */
+  readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
   readonly permanentGroundFire?: CoopDefenseMapPermanentGroundFireConfig;
   /**
    * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
@@ -727,6 +751,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     airstrikes: enemyAirstrikes,
     boss,
   });
+  const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
+  const mapEvents = normalizeMapEvents(mapConfig.mapId, mapConfig.mapEvents, encounters ?? [], trackMode);
   const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
     bases,
@@ -740,8 +766,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
       mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
     ),
   });
-  const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
-
   return {
     mapId: mapConfig.mapId,
     displayName: mapConfig.displayName,
@@ -763,7 +787,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     trackMode,
-    train: normalizeTrainConfig(mapConfig.mapId, mapConfig.train, trackMode),
+    mapEvents,
     permanentGroundFire: normalizePermanentGroundFire(mapConfig.permanentGroundFire),
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
@@ -892,7 +916,7 @@ function normalizeEncounterConfigs(
   mapId: string,
   encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
   context: EncounterTriggerNormalizationContext,
-): readonly CoopDefenseMapEncounterConfig[] | undefined {
+): readonly ResolvedCoopDefenseMapEncounterConfig[] | undefined {
   if (encounters === undefined) return undefined;
 
   const uniqueEncounterIds = new Set<string>();
@@ -1623,7 +1647,7 @@ function normalizeEncounterGroup(
   mapId: string,
   encounterId: string,
   group: CoopDefenseMapEncounterGroupConfig,
-): CoopDefenseMapEncounterGroupConfig {
+): ResolvedCoopDefenseMapEncounterGroupConfig {
   if (!hasCoopDefenseEnemyKind(group.enemyKind)) {
     throw new Error(
       `[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown enemy kind: ${group.enemyKind}`,
@@ -1683,33 +1707,92 @@ function normalizeItemDropConfig(
  * Prüft das Zug-Event der Map. Ein Zug ohne Gleise wäre kein Balancing-Detail, sondern eine
  * Lok, die über blanken Boden fährt – deshalb ein Konfigurationsfehler statt stiller Rückfall.
  */
-function normalizeTrainConfig(
+function normalizeMapEvents(
   mapId: string,
-  train: CoopDefenseMapTrainConfig | undefined,
+  events: readonly CoopDefenseMapEventConfig[] | undefined,
+  encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
   trackMode: CoopDefenseMapTrackMode,
-): CoopDefenseMapTrainConfig | undefined {
-  if (!train) return undefined;
-  if (trackMode !== 'rails') {
-    throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train but no rails (trackMode: ${trackMode})`);
+): readonly ResolvedCoopDefenseMapEventConfig[] {
+  if (events === undefined) return [];
+  if (!Array.isArray(events)) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} has invalid mapEvents`);
   }
 
-  const firstArrival = train.firstArrival;
-  if (!firstArrival || firstArrival.type !== 'time') {
-    throw new Error(`[coopDefenseMaps] Train on map ${mapId} needs a supported first-arrival trigger`);
-  }
-  if (typeof firstArrival.atMs !== 'number' || !Number.isFinite(firstArrival.atMs)) {
-    throw new Error(`[coopDefenseMaps] Train on map ${mapId} has an invalid first-arrival time`);
-  }
-  const repeatAfterExitMs = train.repeatAfterExitMs;
-  if (repeatAfterExitMs !== undefined
-    && (typeof repeatAfterExitMs !== 'number' || !Number.isFinite(repeatAfterExitMs) || repeatAfterExitMs < 0)) {
-    throw new Error(`[coopDefenseMaps] Train on map ${mapId} has an invalid repeatAfterExitMs`);
-  }
+  const eventIds = new Set<string>();
+  return events.map((event) => {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} has an invalid map event`);
+    }
+    if (typeof event.id !== 'string' || event.id.trim().length === 0 || event.id.trim() !== event.id) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} has a map event with an invalid id`);
+    }
+    if (eventIds.has(event.id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate map event id in map ${mapId}: ${event.id}`);
+    }
+    eventIds.add(event.id);
+    if (event.type !== 'train') {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} has an unsupported map event type: ${event.type}`);
+    }
+    if (trackMode !== 'rails') {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train event but no rails (trackMode: ${trackMode})`);
+    }
 
-  return {
-    firstArrival: { type: 'time', atMs: Math.max(0, Math.floor(firstArrival.atMs)) },
-    repeatAfterExitMs: repeatAfterExitMs === undefined ? undefined : Math.max(0, Math.floor(repeatAfterExitMs)),
-  };
+    const start = normalizeMapEventStart(mapId, event.id, event.start, encounters);
+    const delayMs = normalizeMapEventMilliseconds(mapId, event.id, event.delayMs ?? 0, 'delayMs');
+    const repeatAfterExitMs = event.repeatAfterExitMs === undefined
+      ? undefined
+      : normalizeMapEventMilliseconds(mapId, event.id, event.repeatAfterExitMs, 'repeatAfterExitMs', true);
+
+    return {
+      id: event.id,
+      type: 'train',
+      start,
+      delayMs,
+      ...(repeatAfterExitMs === undefined ? {} : { repeatAfterExitMs }),
+    };
+  });
+}
+
+function normalizeMapEventStart(
+  mapId: string,
+  eventId: string,
+  start: CoopDefenseMapEventStart | undefined,
+  encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
+): CoopDefenseMapEventStart {
+  if (!start || typeof start.type !== 'string') {
+    throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a valid start trigger`);
+  }
+  if (start.type === 'time') {
+    return {
+      type: 'time',
+      atMs: normalizeMapEventMilliseconds(mapId, eventId, start.atMs, 'time trigger'),
+    };
+  }
+  if (start.type === 'after-encounter') {
+    if (typeof start.encounterId !== 'string' || start.encounterId.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs an encounter id`);
+    }
+    const encounterId = start.encounterId.trim();
+    if (!encounters.some((encounter) => encounter.id === encounterId)) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} references unknown encounter: ${encounterId}`);
+    }
+    return { type: 'after-encounter', encounterId };
+  }
+  throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} has an unsupported start trigger`);
+}
+
+function normalizeMapEventMilliseconds(
+  mapId: string,
+  eventId: string,
+  value: number | undefined,
+  fieldName: string,
+  requirePositive = false,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (requirePositive && value <= 0)) {
+    const condition = requirePositive ? 'positive finite' : 'non-negative finite';
+    throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a ${condition} ${fieldName}`);
+  }
+  return Math.floor(value);
 }
 
 function normalizePermanentGroundFire(
@@ -1993,6 +2076,7 @@ function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig)
     && turret.weaponId !== 'BASE_SPOREN'
     && turret.weaponId !== 'FLIEGENPILZ_PLASMA'
     && turret.weaponId !== 'TURRET_ROCKET'
+    && turret.weaponId !== 'TURRET_ROCKET_BURST'
     && turret.weaponId !== 'TURRET_MG'
     && turret.weaponId !== 'TURRET_FLAME'
     && turret.weaponId !== 'TURRET_VOID_FLAME'

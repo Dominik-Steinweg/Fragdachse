@@ -186,6 +186,70 @@
         "failureKey": "shot_dry_trigger"
       }
     },
+    "TURRET_ROCKET_BURST": {
+      "id": "TURRET_ROCKET_BURST",
+      "displayName": "Doppelläufige Turmrakete",
+      "cooldown": 1800,
+      "damage": 8,
+      "range": 680,
+      "turretBurst": {
+        "count": 2,
+        "intervalMs": 120
+      },
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 720,
+        "projectileSize": 9,
+        "projectileMaxBounces": 0,
+        "impactExplosion": {
+          "radius": 95,
+          "maxDamage": 26,
+          "minDamage": 5,
+          "knockback": 900,
+          "selfDamageMult": 0,
+          "rockDamageMult": 0,
+          "trainDamageMult": 1,
+          "color": "#ff8a3d",
+          "visualStyle": "rocket",
+          "blackHoleDurationMs": 0,
+          "blackHolePullStrength": 0
+        },
+        "homing": {
+          "acquireDelayMs": 60,
+          "searchRadius": 360,
+          "retargetIntervalMs": 70,
+          "maxTurnDegreesPerStep": 7,
+          "targetTypes": [
+            "players",
+            "enemies"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "rocket",
+      "projectileColor": "#e8c170",
+      "rocketSmokeTrailColor": "#c7cfcc",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_rocketlauncher",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
     "TURRET_GRAVITY": {
       "id": "TURRET_GRAVITY",
       "displayName": "Gravitationsgeschoss",

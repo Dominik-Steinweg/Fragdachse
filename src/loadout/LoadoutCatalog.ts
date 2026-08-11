@@ -17,6 +17,7 @@ import type {
 } from '../types';
 import {
   getCoopDefenseUpgradeTextureKey,
+  hasCoopDefenseDedicatedUpgradeIcon,
   isCoopDefenseLoadoutItemSelectable,
 } from '../utils/coopDefenseUpgrades';
 import {
@@ -50,6 +51,21 @@ export const LOADOUT_SLOT_LABELS: Record<LoadoutSlot, string> = {
   utility: 'Utility',
   ultimate: 'Ultimate',
 };
+
+/** Die vier Coop-Ultimates haben im Upgrade-Baum eigene Symbole, die auch im Slot gelten. */
+const COOP_DEFENSE_ULTIMATE_UNLOCK_BY_ITEM_ID: Readonly<Record<string, string>> = Object.freeze({
+  ARMAGEDDON: 'unlock_armageddon',
+  GAUSS_RIFLE: 'unlock_gauss_rifle',
+  AIRSTRIKE: 'unlock_airstrike',
+  HONEY_BADGER_RAGE: 'unlock_honey_badger_rage',
+});
+
+/** Die drei Inspector-Supportwaffen verwenden im Waffe-2-Slot ebenfalls ihre Upgrade-Symbole. */
+const INSPECTOR_WEAPON2_UNLOCK_BY_ITEM_ID: Readonly<Record<string, string>> = Object.freeze({
+  REPARATURSTRAHL: 'unlock_reparaturstrahl',
+  OVERCHARGE_CORE: 'unlock_overcharge_core',
+  ENERGIEINJEKTOR: 'unlock_energieinjektor',
+});
 
 function buildStaticSlotItems(slot: Exclude<LoadoutSlot, 'ultimate'>): readonly LoadoutItemRef[] {
   const configs: LoadoutItemRef[] = [];
@@ -121,9 +137,17 @@ const SLOT_ACCENT_COLORS: Record<LoadoutSlot, number> = {
 
 export function describeLoadoutItem(slot: LoadoutSlot, itemId: string): LoadoutItemPresentation {
   const metadata = LOADOUT_CATALOG_ENTRIES.find((entry) => entry.slot === slot && entry.id === itemId);
+  const dedicatedUnlockId = slot === 'ultimate'
+    ? COOP_DEFENSE_ULTIMATE_UNLOCK_BY_ITEM_ID[itemId]
+    : slot === 'weapon2'
+      ? INSPECTOR_WEAPON2_UNLOCK_BY_ITEM_ID[itemId]
+      : undefined;
+  const dedicatedTextureKey = dedicatedUnlockId && hasCoopDefenseDedicatedUpgradeIcon(dedicatedUnlockId)
+    ? getCoopDefenseUpgradeTextureKey(dedicatedUnlockId)
+    : null;
   return {
     displayName: getLoadoutItemDisplayName(slot, itemId),
-    textureKey: metadata?.iconKey ?? null,
+    textureKey: dedicatedTextureKey ?? metadata?.iconKey ?? null,
     accentColor: SLOT_ACCENT_COLORS[slot],
   };
 }
@@ -137,8 +161,7 @@ export function describeLoadoutTool(tool: LoadoutToolRef): LoadoutItemPresentati
     const definition = getCoopDefenseConstructionDefinition(tool.id);
     return {
       displayName: definition.displayName,
-      // Bis individuelles Konstrukt-Artwork vorliegt, teilen Slot und Unlock-Knoten
-      // dasselbe temporaere, rezeptgenerierte Upgrade-Icon.
+      // Slot und Unlock-Knoten teilen das dedizierte, mechanikbasierte Upgrade-Icon.
       textureKey: definition.iconKey ?? getCoopDefenseUpgradeTextureKey(definition.unlockUpgradeId),
       accentColor: COLORS.GOLD_2,
     };

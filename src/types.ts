@@ -70,6 +70,30 @@ export interface CoopDefenseEncounterPresentationState {
   enemiesTotal?: number;
 }
 
+/** Host-autoritärer, kleiner Lebenszyklus-Snapshot der authored Map-Events. */
+export type CoopDefenseMapEventType = 'train' | 'airstrike' | 'ground-hazard';
+
+export type CoopDefenseMapEventLifecycleState =
+  | 'dormant'
+  | 'scheduled'
+  | 'active'
+  | 'waiting-repeat'
+  | 'completed';
+
+export interface CoopDefenseMapEventPresentationEntry {
+  eventId: string;
+  eventType: CoopDefenseMapEventType;
+  state: CoopDefenseMapEventLifecycleState;
+  /** 1-basierter Durchlauf; dormant verwendet 0. */
+  occurrence: number;
+  /** Host-Rundenzeit ohne Countdown, zu der der Zustand gewechselt hat. */
+  stateChangedAtMs: number;
+  /** Host-Rundenzeit der naechsten Wirkung, sofern geplant. */
+  nextActionAtMs?: number;
+}
+
+export type CoopDefenseMapEventPresentationState = readonly CoopDefenseMapEventPresentationEntry[];
+
 /** Host-autoritärer Lebenszyklus eines Secondary Objectives. */
 export type CoopDefenseSecondaryObjectiveState = 'dormant' | 'active' | 'completed' | 'failed';
 
@@ -1502,6 +1526,7 @@ export type TurretWeaponId =
   | 'BASE_SPOREN'
   | 'FLIEGENPILZ_PLASMA'
   | 'TURRET_ROCKET'
+  | 'TURRET_ROCKET_BURST'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
   | 'TURRET_TESLA'

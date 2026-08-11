@@ -36,6 +36,14 @@ type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type FocusTargetProvider = (ownerId: string) => { targetType: 'enemy' | 'base'; targetId: string } | null;
 type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number) => { id: string; x: number; y: number } | null;
+interface PendingTurretBurst {
+  shotsRemaining: number;
+  nextShotAt: number;
+  targetX: number;
+  targetY: number;
+  damageMultiplier: number;
+  rangeFactor: number;
+}
 type TurretFireHandler = (
   ownerId: string,
   color: number,
@@ -61,6 +69,7 @@ export class TurretSystem {
   private turretDamageBuffProvider: ((x: number, y: number) => TurretDamageBuff | null) | null = null;
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
   private nextFireAt = new Map<AutomatedTurretId, number>();
+  private pendingBursts = new Map<AutomatedTurretId, PendingTurretBurst>();
 
   constructor(
     private readonly playerManager: PlayerManager,
@@ -143,6 +152,42 @@ export class TurretSystem {
         ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
         : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
       const muzzleOffset = turret.muzzleOffset ?? config.placeable.muzzleOffset;
+
+      const pendingBurst = this.pendingBursts.get(turret.id);
+      if (pendingBurst) {
+        if (now < pendingBurst.nextShotAt) continue;
+        const burstAngle = Phaser.Math.Angle.Between(
+          turretX,
+          turretY,
+          pendingBurst.targetX,
+          pendingBurst.targetY,
+        );
+        this.turretAngleUpdater?.(turret.id, burstAngle);
+        const muzzleX = turretX + Math.cos(burstAngle) * muzzleOffset;
+        const muzzleY = turretY + Math.sin(burstAngle) * muzzleOffset;
+        this.fireHandler?.(
+          turret.ownerId,
+          turret.ownerColor,
+          turretWeaponId,
+          muzzleX,
+          muzzleY,
+          burstAngle,
+          pendingBurst.targetX,
+          pendingBurst.targetY,
+          pendingBurst.damageMultiplier,
+          pendingBurst.rangeFactor,
+          turret.id,
+        );
+        pendingBurst.shotsRemaining -= 1;
+        if (pendingBurst.shotsRemaining > 0) {
+          pendingBurst.nextShotAt = now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1);
+        } else {
+          this.pendingBursts.delete(turret.id);
+          this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
+        }
+        continue;
+      }
+
       const target = this.findNearestTarget(
         turret,
         turretX,
@@ -159,13 +204,27 @@ export class TurretSystem {
       const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * Math.max(0, this.turretDamageMultiplierProvider?.(turret, turrets) ?? 1);
-      this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
       this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, damageMultiplier, rangeFactor, turret.id);
-      if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
+      const burstCount = turretWeaponConfig.turretBurst
+        ? Math.max(1, Math.floor(turretWeaponConfig.turretBurst.count))
+        : 1;
+      if (burstCount > 1) {
+        this.pendingBursts.set(turret.id, {
+          shotsRemaining: burstCount - 1,
+          nextShotAt: now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1),
+          targetX: target.x,
+          targetY: target.y,
+          damageMultiplier,
+          rangeFactor,
+        });
+      } else {
+        this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
+      }
+      if (burstCount <= 1 && (turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = this.findNearestTarget(
           turret,
           turretX,
@@ -183,6 +242,9 @@ export class TurretSystem {
 
     for (const id of [...this.nextFireAt.keys()]) {
       if (!activeIds.has(id)) this.nextFireAt.delete(id);
+    }
+    for (const id of [...this.pendingBursts.keys()]) {
+      if (!activeIds.has(id)) this.pendingBursts.delete(id);
     }
   }
 

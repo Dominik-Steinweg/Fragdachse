@@ -92,8 +92,9 @@ export class HostUpdateCoordinator {
   private readonly prevStealthStates    = new Map<string, boolean>();
   private readonly prevAliveStates      = new Map<string, boolean>();
   private moveLoopHandle: string | null = null;
-  private trainSpawned = false;
+  private classicTrainSpawned = false;
   private lastEncounterPresentationSignature: string | null = null;
+  private lastMapEventPresentationSignature: string | null = null;
   private lastSecondaryObjectivePresentationSignature: string | null = null;
   private readonly blackHoleSystem: BlackHoleSystem;
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
@@ -120,8 +121,8 @@ export class HostUpdateCoordinator {
 
   setActive(v: boolean): void { this.active = v; }
 
-  setTrainSpawned(v: boolean): void { this.trainSpawned = v; }
-  getTrainSpawned(): boolean { return this.trainSpawned; }
+  setClassicTrainSpawned(v: boolean): void { this.classicTrainSpawned = v; }
+  getClassicTrainSpawned(): boolean { return this.classicTrainSpawned; }
 
   resetPerRound(): void {
     this.active = true;
@@ -137,8 +138,9 @@ export class HostUpdateCoordinator {
     this.prevStealthStates.clear();
     this.prevAliveStates.clear();
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
-    this.trainSpawned = false;
+    this.classicTrainSpawned = false;
     this.lastEncounterPresentationSignature = null;
+    this.lastMapEventPresentationSignature = null;
     this.lastSecondaryObjectivePresentationSignature = null;
     this.blackHoleSystem.clear();
     this.enemyDashVisuals.reset();
@@ -158,8 +160,10 @@ export class HostUpdateCoordinator {
 
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseMapEventDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);
     this.publishCoopDefenseEncounterPresentation();
+    this.publishCoopDefenseMapEventPresentation();
     this.publishCoopDefenseSecondaryObjectivePresentation();
     // The objective snapshot is now current; activate prebuilt mission structures before
     // flow-field refresh and enemy movement in this same host frame.
@@ -705,16 +709,16 @@ export class HostUpdateCoordinator {
     metrics.explosionEventCount += meteorImpacts.length;
     metrics.areaEffectsMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
-    if (!countdownActive && this.ctx.trainManager) {
-      if (!this.trainSpawned) {
+    if (!countdownActive && !isCoopDefenseMode(bridge.getGameMode()) && this.ctx.trainManager) {
+      if (!this.classicTrainSpawned) {
         const trainEvent = bridge.getTrainEvent();
         if (trainEvent && Date.now() >= trainEvent.spawnAt) {
           this.ctx.trainManager.spawn();
-          this.trainSpawned = true;
+          this.classicTrainSpawned = true;
           this.ctx.combatSystem.setTrainSegments(this.ctx.trainManager.getSegObjects());
         }
       }
-      if (this.trainSpawned) {
+      if (this.classicTrainSpawned) {
         this.ctx.trainManager.update(delta);
       }
     }
@@ -1127,6 +1131,14 @@ export class HostUpdateCoordinator {
     if (signature === this.lastEncounterPresentationSignature) return;
     this.lastEncounterPresentationSignature = signature;
     bridge.publishCoopDefenseEncounterPresentationState(state);
+  }
+
+  private publishCoopDefenseMapEventPresentation(): void {
+    const state = this.ctx.coopDefenseMapEventDirector?.getPresentationState() ?? null;
+    const signature = state ? JSON.stringify(state) : null;
+    if (signature === this.lastMapEventPresentationSignature) return;
+    this.lastMapEventPresentationSignature = signature;
+    bridge.publishCoopDefenseMapEventPresentationState(state);
   }
 
   private publishCoopDefenseSecondaryObjectivePresentation(): void {

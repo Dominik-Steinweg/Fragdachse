@@ -35,7 +35,7 @@ export const TRAIN = {
   /**
    * Erste Einfahrt in Modi ohne Map-Konfiguration (Deathmatch, Team-Deathmatch, Capture the Beer),
    * in ms nach Rundenstart. Coop-Defense-Maps konfigurieren das Zug-Event stattdessen selbst
-   * (siehe `CoopDefenseMapTrainConfig`).
+   * Coop-Defense-Maps steuern Zug-Events über `mapEvents`.
    */
   DEFAULT_FIRST_ARRIVAL_MS: 10_000,
 
