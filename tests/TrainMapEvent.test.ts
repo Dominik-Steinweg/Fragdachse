@@ -119,6 +119,14 @@ describe('Train as a standalone map event', () => {
     expect(() => buildMap({ mapEvents: [unsupported] })).toThrow(/unsupported map event type/);
   });
 
+  it('rejects a second train event because one map owns exactly one train', () => {
+    const first = { id: 'train-a', type: 'train' as const, start: { type: 'time' as const, atMs: 0 } };
+    const second = { ...first, id: 'train-b' };
+
+    expect(() => buildMap({ mapEvents: [first, second] })).toThrow(/more than one train event/);
+    expect(() => buildMap({ mapEvents: [first] })).not.toThrow();
+  });
+
   it('keeps the 00-test C1 slice one-shot with encounter clear and five seconds warning', () => {
     const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
     expect(event).toMatchObject({

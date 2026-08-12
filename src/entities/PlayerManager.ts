@@ -364,6 +364,13 @@ export class PlayerManager {
     return { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
   }
 
+  /**
+   * Spawn-Sperre ueber *alle* vorbereiteten Gefahrenzellen, unabhaengig vom Event-Lifecycle.
+   *
+   * Anders als die Bausperre kostet das nichts: Ein Spawnpunkt neben einer noch dormanten Flaeche
+   * ist beliebig ersetzbar, waehrend ein Spawn auf einer Flaeche, die Sekunden spaeter zuendet,
+   * einen Spieler ohne eigenes Zutun ins Feuer setzt.
+   */
   private getGroundHazardSpawnExclusionCells(): Set<string> {
     const excluded = new Set<string>();
     for (const zone of this.layout?.groundHazardZones ?? []) {

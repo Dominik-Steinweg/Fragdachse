@@ -94,7 +94,7 @@ export class HostUpdateCoordinator {
   private moveLoopHandle: string | null = null;
   private classicTrainSpawned = false;
   private lastEncounterPresentationSignature: string | null = null;
-  private lastMapEventPresentationSignature: string | null = null;
+  private lastMapEventPresentationState: ReturnType<NonNullable<ArenaContext['coopDefenseMapEventDirector']>['getPresentationState']> | null | undefined;
   private lastSecondaryObjectivePresentationSignature: string | null = null;
   private readonly blackHoleSystem: BlackHoleSystem;
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
@@ -140,7 +140,7 @@ export class HostUpdateCoordinator {
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.classicTrainSpawned = false;
     this.lastEncounterPresentationSignature = null;
-    this.lastMapEventPresentationSignature = null;
+    this.lastMapEventPresentationState = undefined;
     this.lastSecondaryObjectivePresentationSignature = null;
     this.blackHoleSystem.clear();
     this.enemyDashVisuals.reset();
@@ -1134,9 +1134,11 @@ export class HostUpdateCoordinator {
 
   private publishCoopDefenseMapEventPresentation(): void {
     const state = this.ctx.coopDefenseMapEventDirector?.getPresentationState() ?? null;
-    const signature = state ? JSON.stringify(state) : null;
-    if (signature === this.lastMapEventPresentationSignature) return;
-    this.lastMapEventPresentationSignature = signature;
+    // Der Director cached den immutable-looking Presentation-State bis zum echten
+    // Lifecycle-Wechsel. Referenzvergleich verhindert sowohl JSON-Serialisierung als auch
+    // eine neue reliable Publikation pro Renderframe.
+    if (state === this.lastMapEventPresentationState) return;
+    this.lastMapEventPresentationState = state;
     bridge.publishCoopDefenseMapEventPresentationState(state);
   }
 

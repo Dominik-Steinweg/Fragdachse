@@ -35,7 +35,9 @@ export class PlacementSystem {
   private readonly treeCells = new Set<string>();
   private readonly trackCells = new Set<string>();
   private readonly pedestalCells = new Set<string>();
-  private readonly hazardCells = new Set<string>();
+  /** Vorbereitete Gefahrenzellen je authored Event; gesperrt wird erst ab der Ankuendigung. */
+  private readonly hazardCellEventIds = new Map<string, string>();
+  private isHazardEventArmed: ((eventId: string) => boolean) | null = null;
   private nextRockId: number;
 
   constructor(layout: ArenaLayout, rockGrid: RockGridIndex, playerManager: PlayerManager) {
@@ -55,8 +57,30 @@ export class PlacementSystem {
       this.pedestalCells.add(this.key(pedestal.gridX, pedestal.gridY));
     }
     for (const zone of layout.groundHazardZones ?? []) {
-      for (const cell of zone.cells) this.hazardCells.add(this.key(cell.gridX, cell.gridY));
+      for (const cell of zone.cells) {
+        this.hazardCellEventIds.set(this.key(cell.gridX, cell.gridY), zone.eventId);
+      }
     }
+  }
+
+  /**
+   * Verdrahtet den host-autoritaeren Lifecycle der Ground-Hazard-Events.
+   *
+   * Eine vorbereitete Gefahrenflaeche ist bis zu ihrem Trigger nur Layout: Sie darf das Bauen nicht
+   * sperren, sonst sterilisiert ein Event, das vielleicht nie eintritt, die ganze Runde ueber ein
+   * Stueck Arena. Ab der Ankuendigung greift die Sperre auf Host und Client aus demselben
+   * replizierten Snapshot, damit Bauvorschau und Host-Pruefung dieselbe Antwort geben.
+   */
+  setHazardEventArmedResolver(resolver: ((eventId: string) => boolean) | null): void {
+    this.isHazardEventArmed = resolver;
+  }
+
+  private isHazardCellLocked(cellKey: string): boolean {
+    const eventId = this.hazardCellEventIds.get(cellKey);
+    if (eventId === undefined) return false;
+    // Ohne Resolver bleibt es bei der konservativen Sperre: Wer den Lifecycle nicht kennt, darf
+    // nicht versehentlich in eine bereits brennende Flaeche bauen lassen.
+    return this.isHazardEventArmed?.(eventId) ?? true;
   }
 
   getRuntimeRock(id: number): SyncedPlaceableRock | undefined {
@@ -493,7 +517,7 @@ export class PlacementSystem {
       if (this.treeCells.has(this.key(tx, ty))) return false;
       if (this.trackCells.has(this.key(tx, ty))) return false;
       if (this.pedestalCells.has(this.key(tx, ty))) return false;
-      if (this.hazardCells.has(this.key(tx, ty))) return false;
+      if (this.isHazardCellLocked(this.key(tx, ty))) return false;
       if (this.isPlayerOccupyingCell(tx, ty)) return false;
     }
 

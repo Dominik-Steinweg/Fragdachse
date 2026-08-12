@@ -10,6 +10,7 @@ import type { TrainManager } from './TrainManager';
 interface ScheduledTrainOccurrence {
   readonly eventId: string;
   readonly occurrence: number;
+  /** Wanduhr-Zeitpunkt der Einfahrt; identisch mit dem replizierten `TrainEventConfig.spawnAt`. */
   readonly spawnAt: number;
   readonly direction: 1 | -1;
   readonly repeatAfterExitMs?: number;
@@ -23,13 +24,13 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
   private trainSpawned = false;
   private readonly initialDirection: 1 | -1;
   private nextDirection: 1 | -1;
+  private roundTimeMs = 0;
   private onCycleFinished: ((completion: CoopDefenseMapEventCycleFinished) => void) | null = null;
 
   constructor(
     private readonly trainManager: TrainManager,
     private readonly combatSystem: CombatSystem,
     initialDirection: 1 | -1,
-    private readonly getActiveRoundTimeMs: () => number,
   ) {
     this.initialDirection = initialDirection;
     this.nextDirection = initialDirection;
@@ -42,7 +43,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
       bridge.clearTrainEvent();
       this.nextDirection = finished.direction === 1 ? -1 : 1;
       trainManager.prepareReentry(this.nextDirection);
-      const completedAtMs = this.getActiveRoundTimeMs();
+      const completedAtMs = this.roundTimeMs;
       this.onCycleFinished?.({
         eventId: finished.eventId,
         occurrence: finished.occurrence,
@@ -54,36 +55,39 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
     });
   }
 
-  schedule(event: ResolvedCoopDefenseMapEventConfig, occurrence: number, actionAtMs: number): void {
-    const direction = this.nextDirection;
-    const spawnAt = bridge.getArenaStartTime() + Math.max(0, Math.floor(actionAtMs));
-    if (
-      this.scheduled?.eventId === event.id
-      && this.scheduled.occurrence === occurrence
-      && this.scheduled.spawnAt === spawnAt
-    ) return;
+  schedule(
+    event: ResolvedCoopDefenseMapEventConfig,
+    occurrence: number,
+    actionAtMs: number,
+    roundTimeMs: number,
+  ): void {
+    if (event.type !== 'train') return;
+    this.roundTimeMs = roundTimeMs;
+    // `spawnAt` ist der eine autoritative Wanduhr-Zeitpunkt, den HUD-Countdown und Gegner-KI
+    // lesen. Er entsteht aus der *verbleibenden* Wartezeit der Rundenuhr, nicht aus einem
+    // absoluten Offset zum Rundenstart: So bleiben Countdown und tatsaechliche Einfahrt auch dann
+    // deckungsgleich, wenn die Rundenuhr zuvor hinter der Wanduhr zurueckgeblieben ist.
+    const spawnAt = Date.now() + Math.max(0, Math.floor(actionAtMs) - Math.floor(roundTimeMs));
 
     this.scheduled = {
       eventId: event.id,
       occurrence,
       spawnAt,
-      direction,
-      ...(event.type === 'train' && event.repeatAfterExitMs === undefined
-        ? {}
-        : event.type === 'train'
-          ? { repeatAfterExitMs: event.repeatAfterExitMs }
-          : {}),
+      direction: this.nextDirection,
+      ...(event.repeatAfterExitMs === undefined ? {} : { repeatAfterExitMs: event.repeatAfterExitMs }),
     };
     this.trainSpawned = false;
     bridge.publishTrainEvent({
       trackX: this.trainManager.getTrackX(),
-      direction,
+      direction: this.nextDirection,
       spawnAt,
     });
   }
 
-  hostUpdate(deltaMs: number, countdownActive: boolean): void {
-    if (countdownActive || !this.scheduled) return;
+  hostUpdate(deltaMs: number, countdownActive: boolean, roundTimeMs: number): void {
+    if (countdownActive) return;
+    this.roundTimeMs = roundTimeMs;
+    if (!this.scheduled) return;
     if (!this.trainSpawned && Date.now() >= this.scheduled.spawnAt) {
       this.trainManager.spawn();
       this.trainSpawned = true;
@@ -95,6 +99,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
   reset(): void {
     this.scheduled = null;
     this.trainSpawned = false;
+    this.roundTimeMs = 0;
     this.nextDirection = this.initialDirection;
     bridge.clearTrainEvent();
     this.trainManager.setExitedCallback(() => undefined);

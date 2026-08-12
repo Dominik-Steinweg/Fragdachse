@@ -1447,17 +1447,18 @@ export interface ArenaGroundHazardCell {
   gridY: number;
 }
 
-/** Seed-deterministische, authored-eventgebundene Hazard-Flaeche auf dem Arena-Raster. */
+/**
+ * Seed-deterministische, authored-eventgebundene Hazard-Flaeche auf dem Arena-Raster.
+ *
+ * Bewusst reine Geometrie: Brenndauer, Schaden, Waffenname und Look stehen ausschliesslich im
+ * `mapEvents`-Eintrag und werden beim Aktivieren von dort gelesen. Eine Kopie im Layout waere eine
+ * zweite Wahrheit, die bei jeder Balancing-Aenderung auseinanderlaufen kann.
+ */
 export interface ArenaGroundHazardZone {
   /** Authored map-event id; layout consumers must not infer a new event from geometry. */
   eventId: string;
   id: string;
   cells: ArenaGroundHazardCell[];
-  burnDurationMs: number;
-  burnDamagePerTick: number;
-  weaponName: string;
-  visualStyle: GroundFireVisualStyle;
-  damageTarget: GroundFireDamageTarget;
 }
 
 export interface SyncedBurningGroundSnapshot {

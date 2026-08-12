@@ -631,6 +631,14 @@ export class ArenaLifecycleCoordinator {
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
+    // Eine vorbereitete Gefahrenflaeche sperrt das Bauen erst ab ihrer Ankuendigung. Host und
+    // Client lesen dafuer denselben replizierten Event-Snapshot, damit Bauvorschau und
+    // Host-Pruefung nicht auseinanderlaufen.
+    this.ctx.placementSystem.setHazardEventArmedResolver((eventId) => {
+      const entry = bridge.getCoopDefenseMapEventPresentationState()
+        ?.find((candidate) => candidate.eventId === eventId);
+      return entry === undefined ? true : entry.state !== 'dormant';
+    });
     // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.
     this.ctx.reinforcementMatrixSystem = new ReinforcementMatrixSystem();
     this.ctx.energyInjectorSystem = new EnergyInjectorSystem();
@@ -2105,9 +2113,6 @@ export class ArenaLifecycleCoordinator {
           playStrikeAudio: (x, y) => {
             this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);
           },
-          getArenaStartTimeMs: () => bridge.getArenaStartTime(),
-          getNowMs: () => Date.now(),
-          getActiveRoundTimeMs: () => Math.max(0, Date.now() - bridge.getArenaStartTime()),
           arenaWidthCells: coopDefenseMapConfig.arenaWidthCells ?? GRID_COLS,
           arenaHeightCells: coopDefenseMapConfig.arenaHeightCells ?? GRID_ROWS,
           tutorialShowControls: coopDefenseMapConfig.tutorialShowControls,
@@ -2118,7 +2123,6 @@ export class ArenaLifecycleCoordinator {
           fireSystem: this.ctx.fireSystem,
           prebuiltZones: layout.groundHazardZones ?? [],
           getNowMs: () => Date.now(),
-          getActiveRoundTimeMs: () => Math.max(0, Date.now() - bridge.getArenaStartTime()),
         })
         : null;
       this.ctx.airstrikeSystem.setResolvedCallback((resolution) => {
@@ -2329,6 +2333,11 @@ export class ArenaLifecycleCoordinator {
 
   tearDownArena(): void {
     this.cancelTrainExplosionTimers();
+    // Event-Handler besitzen occurrence-/sourcebezogene Zustaende. Sie muessen vor dem
+    // Fachsystem-Cleanup laufen, damit Ground-Hazard-Quellen sauber aus dem FireSystem entfernt
+    // und Airstrike-/Train-Callbacks entkoppelt werden koennen.
+    this.ctx.coopDefenseMapEventDirector?.reset();
+    this.ctx.coopDefenseMapEventDirector = null;
     // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurücksetzen, damit die
     // Lobby nicht die Dämpfung der letzten Map erbt.
     setEmissiveScale(1);
@@ -2511,8 +2520,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.coopDefenseMapDirector?.reset();
     this.ctx.coopDefenseMapDirector = null;
-    this.ctx.coopDefenseMapEventDirector?.reset();
-    this.ctx.coopDefenseMapEventDirector = null;
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseCarrySystem?.reset();
@@ -2871,12 +2878,7 @@ export class ArenaLifecycleCoordinator {
   private setupCoopTrainEventHandler(trackGridX: number): CoopDefenseTrainEventHandler {
     const initialDirection: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
     const trainManager = this.setupTrainManager(trackGridX, null, initialDirection);
-    return new CoopDefenseTrainEventHandler(
-      trainManager,
-      this.ctx.combatSystem,
-      initialDirection,
-      () => Math.max(0, Date.now() - bridge.getArenaStartTime()),
-    );
+    return new CoopDefenseTrainEventHandler(trainManager, this.ctx.combatSystem, initialDirection);
   }
 
   private scheduleTrainExplosion(x: number, y: number, radius: number, delayMs: number): void {

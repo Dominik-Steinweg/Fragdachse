@@ -257,9 +257,10 @@ export class ArenaGenerator {
         powerUpPedestals,
         coopMapConfig,
       );
-      // Ein authored Hazard ohne eine einzige aufloesbare Zelle ist kein spaeteres No-op-Event.
-      // Der bestehende seed-/attempt-basierte Generator darf stattdessen einen neuen Versuch
-      // mit anderer prozeduraler Geometrie starten.
+      // Nur die prozeduralen Patch-Flaechen rechtfertigen einen neuen Seed-Versuch: Sie haengen
+      // an derselben Zufallsgeometrie wie Felsen und Podeste. Authored Rechtecke und Zellenlisten
+      // fallen dagegen ohne Layout-Retry aus (siehe generateGroundHazardZones) -- ein
+      // ungluecklich gesetztes Rechteck darf die Runde nicht am Start hindern.
       if (groundHazardZones === null) continue;
       const decals = ArenaGenerator.generateDecals(
         ArenaGenerator.makeDecalPrng(seed + attempt),
@@ -877,21 +878,16 @@ export class ArenaGenerator {
       event: CoopDefenseMapGroundHazardEventConfig,
       id: string,
       cells: ArenaGroundHazardZone['cells'],
-    ): ArenaGroundHazardZone => ({
-      eventId: event.id,
-      id,
-      cells,
-      burnDurationMs: event.effect.burnDurationMs,
-      burnDamagePerTick: event.effect.burnDamagePerTick,
-      weaponName: event.effect.weaponName,
-      visualStyle: event.effect.visualStyle,
-      damageTarget: 'players',
-    });
+    ): ArenaGroundHazardZone => ({ eventId: event.id, id, cells });
 
     const zones: ArenaGroundHazardZone[] = [];
     for (const event of events) {
       const area = event.area;
       const baseClearanceCells = area.baseClearanceCells ?? 0;
+      // Authored Geometrie: Ein Rechteck bzw. eine Zellenliste, die vollstaendig auf Felsen,
+      // Basiszellen oder Gleisen liegt, liefert schlicht keine Zone. Der Fachhandler laesst das
+      // Event dann dormant (fail-closed) -- ein Layout-Retry oder gar ein Abbruch der
+      // Arena-Erzeugung waere eine unverhaeltnismaessige Reaktion auf einen Authoring-Fehler.
       if (area.type === 'rectangle') {
         const cells: ArenaGroundHazardZone['cells'] = [];
         for (let gridY = area.gridY; gridY < area.gridY + area.heightCells; gridY += 1) {
@@ -899,15 +895,13 @@ export class ArenaGenerator {
             if (isValidCell(gridX, gridY, baseClearanceCells)) cells.push({ gridX, gridY });
           }
         }
-        if (cells.length === 0) return null;
-        zones.push(makeZone(event, event.id, cells));
+        if (cells.length > 0) zones.push(makeZone(event, event.id, cells));
         continue;
       }
 
       if (area.type === 'cells') {
         const cells = area.cells.filter((cell) => isValidCell(cell.gridX, cell.gridY, baseClearanceCells));
-        if (cells.length === 0) return null;
-        zones.push(makeZone(event, event.id, cells));
+        if (cells.length > 0) zones.push(makeZone(event, event.id, cells));
         continue;
       }
 

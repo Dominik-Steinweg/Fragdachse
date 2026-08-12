@@ -136,6 +136,17 @@ export class CoopDefenseObjectiveAnnouncement {
     this.playNext();
   }
 
+  /** Entfernt ausstehende bzw. laufende Meldungen eines Producers, ohne andere Topics zu stören. */
+  clearTopic(topic: string): void {
+    for (let index = this.queue.length - 1; index >= 0; index -= 1) {
+      if (this.queue[index].topic === topic) this.queue.splice(index, 1);
+    }
+    if (this.activeMessage?.topic === topic) {
+      this.cancelActiveMessage();
+      this.playNext();
+    }
+  }
+
   reset(): void {
     this.tween?.destroy();
     this.tween = null;

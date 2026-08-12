@@ -1757,6 +1757,7 @@ function normalizeMapEvents(
   }
 
   const eventIds = new Set<string>();
+  let trainEventCount = 0;
   return events.map((event) => {
     if (!event || typeof event !== 'object' || Array.isArray(event)) {
       throw new Error(`[coopDefenseMaps] Map ${mapId} has an invalid map event`);
@@ -1773,6 +1774,13 @@ function normalizeMapEvents(
     if (event.type === 'train') {
       if (trackMode !== 'rails') {
         throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train event but no rails (trackMode: ${trackMode})`);
+      }
+      trainEventCount += 1;
+      // Eine Map hat genau einen Gleiskorridor und genau einen Zug. Ein zweites Zug-Event waere
+      // konfigurierbar, aber nicht ausfuehrbar: Der Fachhandler haelt nur eine Einfahrt, das
+      // verdraengte Event erreichte nie `completed` und blockierte jede `after-event`-Kette.
+      if (trainEventCount > 1) {
+        throw new Error(`[coopDefenseMaps] Map ${mapId} declares more than one train event: ${event.id}`);
       }
       const repeatAfterExitMs = event.repeatAfterExitMs === undefined
         ? undefined

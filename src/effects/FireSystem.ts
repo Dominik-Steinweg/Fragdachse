@@ -211,10 +211,14 @@ export class FireSystem {
   /**
    * Frischt genau eine Rasterzelle auf. Wird fuer lokale Flammenwerfer-Patches
    * verwendet, ist aber absichtlich quellenneutral und fuer weitere Effekte offen.
+   *
+   * Gibt `false` zurueck, wenn die Zelle ausserhalb der Arena liegt oder von einem Hindernis
+   * belegt ist. Aufrufer, die ihre Flaeche vollstaendig besetzen wollen, koennen die abgelehnten
+   * Zellen damit vormerken und spaeter erneut versuchen.
    */
-  hostRefreshGroundCell(x: number, y: number, options: GroundFireCellOptions, now = Date.now()): void {
+  hostRefreshGroundCell(x: number, y: number, options: GroundFireCellOptions, now = Date.now()): boolean {
     const durationMs = Math.max(0, options.durationMs);
-    if (durationMs <= 0) return;
+    if (durationMs <= 0) return false;
     const expiresAt = options.permanent === true ? Number.MAX_SAFE_INTEGER : now + durationMs;
 
     const gridX = Math.floor(x / GROUND_FIRE_CELL_SIZE);
@@ -222,7 +226,7 @@ export class FireSystem {
     const bounds = this.cellBounds(gridX, gridY);
     const centerX = bounds.centerX;
     const centerY = bounds.centerY;
-    if (!isPointInsideArena(centerX, centerY) || this.isCellBlocked?.(bounds)) return;
+    if (!isPointInsideArena(centerX, centerY) || this.isCellBlocked?.(bounds)) return false;
 
     const key = `cell:${options.sourceKey}:${gridX}:${gridY}`;
     let source = this.sources.get(key);
@@ -261,6 +265,7 @@ export class FireSystem {
       source.damageTarget = options.damageTarget ?? source.damageTarget;
       this.refreshCellAggregate(gridX, gridY);
     }
+    return true;
   }
 
   /** Entfernt ausschliesslich die Zellen einer logisch besitzenden Quelle. */

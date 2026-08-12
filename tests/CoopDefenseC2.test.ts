@@ -248,9 +248,6 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
       })),
       isProtectedBasePoint: () => false,
       playStrikeAudio: () => undefined,
-      getArenaStartTimeMs: () => 0,
-      getNowMs: () => now,
-      getActiveRoundTimeMs: () => now,
       arenaWidthCells: 60,
       arenaHeightCells: 34,
       random: () => 0.5,
@@ -300,23 +297,47 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
     const harness = createHarness({
       id: 'hunt',
       pattern: 'player-hunt',
-      intervalMs: 1_000,
+      intervalMs: 5_000,
       strikeCount: undefined,
       area: undefined,
     });
     harness.director.hostUpdate(0, false);
     harness.setNow(2_000);
+    harness.director.hostUpdate(2_000, false);
     harness.system.update(2_000);
+    // Abwurf zu Abwurf: 0 ms + 5 s. Vom Einschlag (2 s) aus gerechnet waeren es 7 s -- die
+    // Vorwarnzeit des Airstrikes wuerde das authored Intervall sonst bei jedem Zyklus dehnen.
     expect(harness.director.getPresentationState()?.[0]).toMatchObject({
       state: 'waiting-repeat',
       occurrence: 2,
-      nextActionAtMs: 3_000,
+      nextActionAtMs: 5_000,
     });
 
-    harness.setNow(3_000);
+    harness.setNow(5_000);
     harness.director.hostUpdate(3_000, false);
     expect(harness.director.getPresentationState()?.[0].state).toBe('active');
     expect(harness.system.getSnapshot()).toHaveLength(1);
+  });
+
+  it('never schedules a hunt cycle into the past when the barrage outlasts the interval', () => {
+    const harness = createHarness({
+      id: 'hunt',
+      pattern: 'player-hunt',
+      intervalMs: 500,
+      strikeCount: undefined,
+      area: undefined,
+    });
+    harness.director.hostUpdate(0, false);
+    harness.setNow(2_000);
+    harness.director.hostUpdate(2_000, false);
+    harness.system.update(2_000);
+    // 0 ms + 500 ms liegt vor dem Einschlag; der Director klemmt auf die aktuelle Rundenzeit hoch,
+    // statt einen Zyklus mit `nextActionAtMs < stateChangedAtMs` zu veroeffentlichen.
+    expect(harness.director.getPresentationState()?.[0]).toMatchObject({
+      state: 'waiting-repeat',
+      occurrence: 2,
+      nextActionAtMs: 2_000,
+    });
   });
 
   it('clears in-flight handler state on reset', () => {

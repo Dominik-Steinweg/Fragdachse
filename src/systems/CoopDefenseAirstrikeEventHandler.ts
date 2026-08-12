@@ -71,9 +71,6 @@ export interface CoopDefenseAirstrikeEventHandlerDeps {
   getAlivePlayerPositions(): readonly { x: number; y: number }[];
   isProtectedBasePoint(x: number, y: number): boolean;
   playStrikeAudio(x: number, y: number): void;
-  getArenaStartTimeMs(): number;
-  getNowMs(): number;
-  getActiveRoundTimeMs(): number;
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
   readonly tutorialShowControls?: boolean;
@@ -83,7 +80,7 @@ export interface CoopDefenseAirstrikeEventHandlerDeps {
 interface ScheduledAirstrikeOccurrence {
   readonly event: CoopDefenseMapAirstrikeEventConfig;
   readonly occurrence: number;
-  readonly actionAtMs: number;
+  /** Rundenzeit des ersten Abwurfs; alle Plan-Offsets liegen relativ dazu. */
   readonly launchAtMs: number;
   plan: readonly PlannedAirstrikePoint[] | null;
   nextPlanIndex: number;
@@ -100,6 +97,11 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
   readonly type = 'airstrike' as const;
 
   private readonly occurrences = new Map<string, ScheduledAirstrikeOccurrence>();
+  /**
+   * Letzte vom Director gemeldete Rundenzeit. `handleStrikeResolved` laeuft im selben Host-Frame,
+   * aber ausserhalb des Director-Aufrufs und braucht dieselbe Uhr fuer den Completion-Zeitpunkt.
+   */
+  private roundTimeMs = 0;
   private onCycleFinished: ((completion: CoopDefenseMapEventCycleFinished) => void) | null = null;
 
   constructor(private readonly deps: CoopDefenseAirstrikeEventHandlerDeps) {}
@@ -111,8 +113,7 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
     this.occurrences.set(key, {
       event,
       occurrence,
-      actionAtMs: Math.max(0, Math.floor(actionAtMs)),
-      launchAtMs: this.deps.getArenaStartTimeMs() + Math.max(0, Math.floor(actionAtMs)),
+      launchAtMs: Math.max(0, Math.floor(actionAtMs)),
       plan: null,
       nextPlanIndex: 0,
       acceptedStrikeCount: 0,
@@ -121,11 +122,11 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
     });
   }
 
-  hostUpdate(_deltaMs: number, countdownActive: boolean): void {
+  hostUpdate(_deltaMs: number, countdownActive: boolean, roundTimeMs: number): void {
     if (countdownActive) return;
-    const now = this.deps.getNowMs();
+    this.roundTimeMs = roundTimeMs;
     for (const occurrence of [...this.occurrences.values()]) {
-      this.updateOccurrence(occurrence, now);
+      this.updateOccurrence(occurrence, roundTimeMs);
     }
   }
 
@@ -141,6 +142,7 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
 
   reset(): void {
     this.occurrences.clear();
+    this.roundTimeMs = 0;
   }
 
   setCycleFinishedCallback(
@@ -149,15 +151,15 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
     this.onCycleFinished = callback;
   }
 
-  private updateOccurrence(occurrence: ScheduledAirstrikeOccurrence, now: number): void {
+  private updateOccurrence(occurrence: ScheduledAirstrikeOccurrence, roundTimeMs: number): void {
     if (occurrence.plan === null) {
-      if (now < occurrence.launchAtMs) return;
+      if (roundTimeMs < occurrence.launchAtMs) return;
       occurrence.plan = this.buildPlan(occurrence.event);
     }
 
     while (occurrence.nextPlanIndex < occurrence.plan.length) {
       const point = occurrence.plan[occurrence.nextPlanIndex];
-      if (now < occurrence.launchAtMs + point.launchOffsetMs) break;
+      if (roundTimeMs < occurrence.launchAtMs + point.launchOffsetMs) break;
       occurrence.nextPlanIndex += 1;
       const accepted = this.deps.scheduleStrike(
         point.x,
@@ -182,9 +184,12 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
     const key = getOccurrenceKey(occurrence.event.id, occurrence.occurrence);
     if (!this.occurrences.delete(key)) return;
 
-    const completedAtMs = Math.max(0, Math.floor(this.deps.getActiveRoundTimeMs()));
+    const completedAtMs = Math.max(0, Math.floor(this.roundTimeMs));
+    // Der Jagdrhythmus misst Abwurf zu Abwurf, nicht Einschlag zu Abwurf: Sonst verlaengert die
+    // Vorwarnzeit des Airstrikes das authored Intervall bei jedem Durchlauf. Der Director klemmt
+    // einen bereits verstrichenen Zeitpunkt selbst auf den Abschluss hoch.
     const nextActionAtMs = occurrence.event.pattern === 'player-hunt'
-      ? completedAtMs + occurrence.event.intervalMs!
+      ? occurrence.launchAtMs + occurrence.event.intervalMs!
       : undefined;
     this.onCycleFinished?.({
       eventId: occurrence.event.id,

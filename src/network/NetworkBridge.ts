@@ -548,6 +548,15 @@ export class NetworkBridge {
     raw: unknown;
     value: CoopDefenseSecondaryObjectivePresentationState | null;
   } | null = null;
+  /**
+   * Reliable Map-Event-Snapshots werden vom HUD pro Frame gelesen. Der Transport behält bei
+   * unverändertem Zustand dieselbe Raw-Referenz; deshalb wird die Fail-Closed-Sanitization nur
+   * bei einem echten Snapshot-Wechsel erneut ausgeführt.
+   */
+  private mapEventPresentationCache: {
+    raw: unknown;
+    value: CoopDefenseMapEventPresentationState | null;
+  } | null = null;
   private connectedPlayers = new Map<string, PlayerProfile>();
   private cachedConnectedPlayers: PlayerProfile[] = [];
   private connectedPlayersCacheDirty = true;
@@ -794,8 +803,12 @@ export class NetworkBridge {
     this.networkFailureCbs.push(callback);
   }
 
-  onReconnectStatus(callback: (status: PeerReconnectStatus) => void): void {
+  onReconnectStatus(callback: (status: PeerReconnectStatus) => void): () => void {
     this.reconnectStatusCbs.push(callback);
+    return () => {
+      const index = this.reconnectStatusCbs.indexOf(callback);
+      if (index >= 0) this.reconnectStatusCbs.splice(index, 1);
+    };
   }
 
   onKicked(callback: () => void): void {
@@ -1546,6 +1559,17 @@ export class NetworkBridge {
 
   getCoopDefenseMapEventPresentationState(): CoopDefenseMapEventPresentationState | null {
     const raw = getState(KEY_COOP_MAP_EVENT_PRESENTATION) as unknown;
+    const cached = this.mapEventPresentationCache;
+    if (cached && cached.raw === raw) return cached.value;
+    const value = this.sanitizeCoopDefenseMapEventPresentationState(raw);
+    this.mapEventPresentationCache = { raw, value };
+    return value;
+  }
+
+  /** Fail-closed: Ein einziger unplausibler Eintrag verwirft den ganzen Snapshot. */
+  private sanitizeCoopDefenseMapEventPresentationState(
+    raw: unknown,
+  ): CoopDefenseMapEventPresentationState | null {
     if (!Array.isArray(raw) || raw.length > MAX_COOP_MAP_EVENT_PRESENTATION_ENTRIES) return null;
 
     const eventIds = new Set<string>();
@@ -1782,6 +1806,8 @@ export class NetworkBridge {
     this.lastSeenSeq = -1;
     this.burningGroundPublishTicks = 0;
     this.lastPublishedBurningGround.clear();
+    this.mapEventPresentationCache = null;
+    this.secondaryObjectivePresentationCache = null;
   }
 
   /**

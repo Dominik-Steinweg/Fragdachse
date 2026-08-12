@@ -6,8 +6,11 @@ vi.mock('../src/network/bridge', () => ({
 
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
-import { applyArenaMetricsForMode } from '../src/config';
-import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../src/config';
+import {
+  getCoopDefenseMapConfig,
+  type CoopDefenseMapGroundHazardEventConfig,
+} from '../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 
 describe('Map 15 - Leerenjäger', () => {
@@ -59,14 +62,11 @@ describe('Map 15 - Leerenjäger', () => {
       first.groundHazardZones!.flatMap((zone) => zone.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
     );
     expect(hazardCells.size).toBeGreaterThan(0);
+    // Die Zone traegt nur Geometrie: Brenndauer, Schaden und Look bleiben allein im Map-Event,
+    // damit Balancing nicht an zwei Stellen gepflegt werden muss.
     for (const zone of first.groundHazardZones!) {
-      const event = hazardEvents.find((candidate) => candidate.id === zone.eventId);
-      expect(zone).toMatchObject({
-        burnDurationMs: event?.effect.burnDurationMs,
-        burnDamagePerTick: event?.effect.burnDamagePerTick,
-        visualStyle: 'void',
-        damageTarget: 'players',
-      });
+      expect(hazardEvents.some((candidate) => candidate.id === zone.eventId)).toBe(true);
+      expect(Object.keys(zone).sort()).toEqual(['cells', 'eventId', 'id']);
       expect(zone.cells.length).toBeGreaterThan(0);
     }
     for (const rock of first.rocks) expect(hazardCells.has(`${rock.gridX}:${rock.gridY}`)).toBe(false);
@@ -85,6 +85,30 @@ describe('Map 15 - Leerenjäger', () => {
           }
         }
       }
+    }
+  });
+
+  /**
+   * Das Korridor-Rechteck ist authored, die Gleisspalten entstehen prozedural aus `GRID_COLS`.
+   * Ohne diese Kopplung wuerde eine geaenderte `arenaWidthCells` den Voidbrand still neben den
+   * Korridor schieben -- die Map-Validierung akzeptiert ein Rechteck an jeder Stelle der Arena.
+   */
+  it('keeps the authored corridor rectangle on the centered track columns', () => {
+    const map = getCoopDefenseMapConfig('15');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+    try {
+      const corridor = map.mapEvents
+        ?.find((event) => event.id === 'void-track-corridor') as CoopDefenseMapGroundHazardEventConfig;
+      expect(corridor?.type).toBe('ground-hazard');
+      expect(corridor.area).toMatchObject({
+        type: 'rectangle',
+        gridX: Math.floor((GRID_COLS - 2) / 2),
+        widthCells: 2,
+        gridY: 0,
+        heightCells: GRID_ROWS,
+      });
+    } finally {
+      applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA');
     }
   });
 });

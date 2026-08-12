@@ -57,6 +57,7 @@ import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../ui/CoopDefenseObjectiveAnnouncement';
+import { CoopDefenseMapEventAnnouncementPresenter } from '../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
 import { buildMainObjectiveViewModel } from '../ui/coopDefenseMainObjectiveModel';
 import { LobbyOverlay }          from './LobbyOverlay';
@@ -234,6 +235,8 @@ export class ArenaScene extends Phaser.Scene {
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private hostileBaseIndicator: HostileBaseIndicator | null = null;
   private objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null;
+  private mapEventAnnouncementPresenter: CoopDefenseMapEventAnnouncementPresenter | null = null;
+  private removeReconnectStatusListener: (() => void) | null = null;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
@@ -595,6 +598,7 @@ export class ArenaScene extends Phaser.Scene {
     rightPanel.build();
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(this);
     this.objectiveAnnouncements.build();
+    this.mapEventAnnouncementPresenter = new CoopDefenseMapEventAnnouncementPresenter(this.objectiveAnnouncements);
     const centerHUD  = new CenterHUD(this, this.objectiveAnnouncements);
     centerHUD.build();
     centerHUD.setPuContainer(leftPanel.getPuContainer());
@@ -1249,6 +1253,11 @@ export class ArenaScene extends Phaser.Scene {
     bridge.onKicked(() => {
       this.lobbyOverlay.showHostDisconnectedMessage('Du wurdest vom Host aus dem Raum entfernt.');
     });
+    this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
+      if (status.state === 'reconnecting' || status.state === 'resumed') {
+        this.mapEventAnnouncementPresenter?.resetForHydration();
+      }
+    });
     // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
     // endet mit der konkreten Ursache statt still weiterzulaufen.
     bridge.onNetworkFailure(message => {
@@ -1535,6 +1544,10 @@ export class ArenaScene extends Phaser.Scene {
     const encounterPresentation = coopDefensePresentationActive
       ? bridge.getCoopDefenseEncounterPresentationState()
       : null;
+    this.mapEventAnnouncementPresenter?.setMapEvents(presentationMapConfig?.mapEvents ?? []);
+    this.mapEventAnnouncementPresenter?.sync(
+      coopDefensePresentationActive ? bridge.getCoopDefenseMapEventPresentationState() : null,
+    );
     const secondaryObjectivesActive = coopDefensePresentationActive;
     const secondaryObjectivePresentation = secondaryObjectivesActive
       ? bridge.getCoopDefenseSecondaryObjectivePresentationState()
@@ -2594,8 +2607,12 @@ export class ArenaScene extends Phaser.Scene {
       this.hostileBaseIndicator = null;
       this.secondaryObjectiveHud?.destroy();
       this.secondaryObjectiveHud = null;
+      this.mapEventAnnouncementPresenter?.reset();
+      this.mapEventAnnouncementPresenter = null;
       this.objectiveAnnouncements?.destroy();
       this.objectiveAnnouncements = null;
+      this.removeReconnectStatusListener?.();
+      this.removeReconnectStatusListener = null;
       this.renderers?.secondaryObjectiveMarkers.destroy();
       this.renderers?.carryZones.clear();
       this.renderers?.objectiveRepairDrones.destroy();

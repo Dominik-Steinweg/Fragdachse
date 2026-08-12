@@ -17,25 +17,44 @@ import type {
   CoopDefenseMapEventHandler,
 } from './CoopDefenseMapEventDirector';
 
+/**
+ * Abstand zwischen zwei Nachzuendeversuchen fuer Zellen, die beim Aktivieren von einem Bauwerk
+ * belegt waren. Bewusst grob: Ein Bauwerk faellt selten, und der Versuch kostet je Zelle nur
+ * einen Rasterzugriff.
+ */
+const BLOCKED_CELL_RETRY_INTERVAL_MS = 500;
+
+interface PendingHazardCell {
+  readonly centerX: number;
+  readonly centerY: number;
+}
+
 interface ScheduledGroundHazardOccurrence {
   readonly event: CoopDefenseMapGroundHazardEventConfig;
   readonly occurrence: number;
   readonly actionAtMs: number;
   readonly sourceKey: string;
-  activatedAtMs: number | null;
+  activatedAtRoundMs: number | null;
+  /** Beim Aktivieren blockierte Zellen; sie zuenden nach, sobald der Platz wieder frei ist. */
+  pendingCells: PendingHazardCell[];
+  nextRetryAtRoundMs: number;
 }
 
 export interface CoopDefenseGroundHazardEventHandlerDeps {
   readonly fireSystem: Pick<FireSystem, 'hostRefreshGroundCell' | 'hostRemoveGroundSourcesBySourceKey'>;
   readonly prebuiltZones: readonly ArenaGroundHazardZone[];
+  /** Nur fuer die eigene, relative Brenndauer des FireSystems -- nie fuer Trigger oder Lifecycle. */
   readonly getNowMs: () => number;
-  readonly getActiveRoundTimeMs: () => number;
 }
 
 /**
  * Fachadapter fuer authored Ground Hazards. Geometrie und Trigger bleiben ausserhalb: Der
  * Handler aktiviert nur die beim Arena-Aufbau aufgeloesten 32px-Zellen im bestehenden 16px-
  * FireSystem und meldet dessen fachliche Dauer als generische Event-Completion zurueck.
+ *
+ * Zellen, auf denen beim Aktivieren ein Bauwerk steht, bleiben vorgemerkt und zuenden nach,
+ * sobald der Platz frei wird. So entsteht kein dauerhaftes Loch in der Gefahrenflaeche, und ein
+ * vor der Ankuendigung errichtetes Bauwerk haelt die Flammen genau so lange zurueck, wie es steht.
  */
 export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventHandler {
   readonly type = 'ground-hazard' as const;
@@ -61,31 +80,41 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
       occurrence,
       actionAtMs: Math.max(0, Math.floor(actionAtMs)),
       sourceKey,
-      activatedAtMs: null,
+      activatedAtRoundMs: null,
+      pendingCells: [],
+      nextRetryAtRoundMs: 0,
     });
     this.ownedSourceKeys.add(sourceKey);
     return true;
   }
 
-  hostUpdate(_deltaMs: number, countdownActive: boolean): void {
+  hostUpdate(_deltaMs: number, countdownActive: boolean, roundTimeMs: number): void {
     if (countdownActive) return;
-    const now = this.deps.getNowMs();
-    const roundNow = this.deps.getActiveRoundTimeMs();
     for (const occurrence of [...this.occurrences.values()]) {
-      if (occurrence.activatedAtMs === null) {
-        if (roundNow < occurrence.actionAtMs) continue;
-        this.activate(occurrence, now);
+      if (occurrence.activatedAtRoundMs === null) {
+        if (roundTimeMs < occurrence.actionAtMs) continue;
+        this.activate(occurrence, roundTimeMs);
       }
 
-      if (occurrence.event.durationMs === undefined || occurrence.activatedAtMs === null) continue;
-      if (now < occurrence.activatedAtMs + occurrence.event.durationMs) continue;
+      const activatedAtRoundMs = occurrence.activatedAtRoundMs;
+      if (activatedAtRoundMs === null) continue;
+
+      if (occurrence.pendingCells.length > 0 && roundTimeMs >= occurrence.nextRetryAtRoundMs) {
+        occurrence.nextRetryAtRoundMs = roundTimeMs + BLOCKED_CELL_RETRY_INTERVAL_MS;
+        occurrence.pendingCells = occurrence.pendingCells.filter(
+          (cell) => !this.igniteCell(occurrence, cell, activatedAtRoundMs, roundTimeMs),
+        );
+      }
+
+      if (occurrence.event.durationMs === undefined) continue;
+      if (roundTimeMs < activatedAtRoundMs + occurrence.event.durationMs) continue;
 
       this.deps.fireSystem.hostRemoveGroundSourcesBySourceKey(occurrence.sourceKey);
       this.occurrences.delete(getOccurrenceKey(occurrence.event.id, occurrence.occurrence));
       this.onCycleFinished?.({
         eventId: occurrence.event.id,
         occurrence: occurrence.occurrence,
-        completedAtMs: Math.max(0, Math.floor(roundNow)),
+        completedAtMs: Math.max(0, Math.floor(roundTimeMs)),
       });
     }
   }
@@ -104,40 +133,67 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
     this.onCycleFinished = callback;
   }
 
-  private activate(occurrence: ScheduledGroundHazardOccurrence, now: number): void {
+  private activate(occurrence: ScheduledGroundHazardOccurrence, roundTimeMs: number): void {
     const zones = this.getZonesForEvent(occurrence.event.id);
     if (zones.length === 0) return;
 
+    occurrence.activatedAtRoundMs = roundTimeMs;
+    occurrence.nextRetryAtRoundMs = roundTimeMs + BLOCKED_CELL_RETRY_INTERVAL_MS;
     for (const zone of zones) {
       for (const cell of zone.cells) {
         const cellLeft = ARENA_OFFSET_X + cell.gridX * CELL_SIZE;
         const cellTop = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE;
         for (let subY = 0; subY < CELL_SIZE; subY += GROUND_FIRE_CELL_SIZE) {
           for (let subX = 0; subX < CELL_SIZE; subX += GROUND_FIRE_CELL_SIZE) {
-            this.deps.fireSystem.hostRefreshGroundCell(
-              cellLeft + subX + GROUND_FIRE_CELL_SIZE * 0.5,
-              cellTop + subY + GROUND_FIRE_CELL_SIZE * 0.5,
-              {
-                sourceKey: occurrence.sourceKey,
-                ownerId: `map-hazard:${occurrence.event.id}`,
-                durationMs: occurrence.event.durationMs ?? 1,
-                permanent: occurrence.event.durationMs === undefined,
-                damagePerTick: 0,
-                burn: {
-                  durationMs: occurrence.event.effect.burnDurationMs,
-                  damagePerTick: occurrence.event.effect.burnDamagePerTick,
-                },
-                weaponName: occurrence.event.effect.weaponName,
-                visualStyle: occurrence.event.effect.visualStyle,
-                damageTarget: 'players',
-              },
-              now,
-            );
+            const pending: PendingHazardCell = {
+              centerX: cellLeft + subX + GROUND_FIRE_CELL_SIZE * 0.5,
+              centerY: cellTop + subY + GROUND_FIRE_CELL_SIZE * 0.5,
+            };
+            if (!this.igniteCell(occurrence, pending, roundTimeMs, roundTimeMs)) {
+              occurrence.pendingCells.push(pending);
+            }
           }
         }
       }
     }
-    occurrence.activatedAtMs = now;
+  }
+
+  /**
+   * Zuendet genau eine Rasterzelle. Eine endliche Gefahrenflaeche gibt dabei nur ihre
+   * Restlaufzeit weiter, damit eine spaet nachgezuendete Zelle das Event nicht ueberlebt.
+   */
+  private igniteCell(
+    occurrence: ScheduledGroundHazardOccurrence,
+    cell: PendingHazardCell,
+    activatedAtRoundMs: number,
+    roundTimeMs: number,
+  ): boolean {
+    const event = occurrence.event;
+    const permanent = event.durationMs === undefined;
+    const remainingMs = permanent
+      ? 1
+      : activatedAtRoundMs + event.durationMs - roundTimeMs;
+    if (remainingMs <= 0) return true;
+
+    return this.deps.fireSystem.hostRefreshGroundCell(
+      cell.centerX,
+      cell.centerY,
+      {
+        sourceKey: occurrence.sourceKey,
+        ownerId: `map-hazard:${event.id}`,
+        durationMs: remainingMs,
+        permanent,
+        damagePerTick: 0,
+        burn: {
+          durationMs: event.effect.burnDurationMs,
+          damagePerTick: event.effect.burnDamagePerTick,
+        },
+        weaponName: event.effect.weaponName,
+        visualStyle: event.effect.visualStyle,
+        damageTarget: 'players',
+      },
+      this.deps.getNowMs(),
+    );
   }
 
   private getZonesForEvent(eventId: string): readonly ArenaGroundHazardZone[] {

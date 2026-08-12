@@ -35,6 +35,15 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
   liefern dafür persistente State-Abfragen über die Arena-Verdrahtung. Der MapDirector fragt den
   semantischen Abschlusszustand des EventDirectors ab und importiert weder Airstrike-, Boss- noch
   Basislogik.
+- Die Coop-Round-Systeme führen ihre Rundenzeit als Summe der Frame-Deltas (`elapsedMs`), nicht als
+  Wanduhr. Beide Uhren driften dauerhaft auseinander, sobald Frames ausfallen: Phaser klemmt das
+  Delta bei Fokusverlust und holt die verlorene Zeit nie nach. Ein Map-Event-Handler bekommt seine
+  Zeitpunkte deshalb ausschließlich vom `CoopDefenseMapEventDirector` übergeben und darf sie nie
+  gegen `Date.now()` prüfen – sonst startet die Fachmechanik vor dem Lifecycle des Directors, dessen
+  Completion wird verworfen und jede `after-event`-Kette wartet für immer. `Date.now()` bleibt nur
+  dort richtig, wo ein Fachsystem eine eigene relative Dauer misst oder wo ein absoluter Zeitstempel
+  repliziert wird – etwa `TrainEventConfig.spawnAt`, das aus der *verbleibenden* Wartezeit der
+  Rundenuhr entsteht, damit HUD-Countdown und tatsächliche Einfahrt deckungsgleich bleiben.
 - `CoopDefenseSurvivalSystem` ist ein separates host-only Round-System für bewusst konfigurierte
   `survive`-Maps. Es hält pro Round-Participant Budget, Lebensstatus und Eliminierung, während
   `CoopDefenseRoundStateSystem` nur den Team-Wipe als booleschen Regelinput abfragt. Der Zustand

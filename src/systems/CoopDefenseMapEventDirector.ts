@@ -8,15 +8,26 @@ import type {
   CoopDefenseMapEventType,
 } from '../types';
 
-/** Kleine Adaptergrenze: Fachsysteme planen/aktualisieren ihre Mechanik selbst. */
+/**
+ * Kleine Adaptergrenze: Fachsysteme planen/aktualisieren ihre Mechanik selbst.
+ *
+ * `actionAtMs` und `roundTimeMs` stammen beide aus der Rundenuhr des Directors. Handler duerfen
+ * die beiden Werte niemals gegen `Date.now()` pruefen: Die Rundenuhr summiert Frame-Deltas und
+ * haelt waehrend Countdown, Tab-Wechsel oder Frame-Stalls an, waehrend die Wanduhr weiterlaeuft.
+ * Ein Vergleich ueber beide Uhren wuerde die authored Warnzeit still verkuerzen und den Fachablauf
+ * vor dem Lifecycle des Directors starten. Wanduhr-Zeitstempel bleiben nur dort erlaubt, wo ein
+ * Fachsystem seine eigene, relative Dauer misst (FireSystem-Ablauf, Airstrike-Vorwarnzeit) oder wo
+ * ein absoluter Zeitstempel repliziert wird.
+ */
 export interface CoopDefenseMapEventHandler {
   readonly type: CoopDefenseMapEventType;
   schedule(
     event: ResolvedCoopDefenseMapEventConfig,
     occurrence: number,
     actionAtMs: number,
+    roundTimeMs: number,
   ): void | boolean;
-  hostUpdate(deltaMs: number, countdownActive: boolean): void;
+  hostUpdate(deltaMs: number, countdownActive: boolean, roundTimeMs: number): void;
   reset(): void;
   setCycleFinishedCallback(
     callback: ((completion: CoopDefenseMapEventCycleFinished) => void) | null,
@@ -54,6 +65,8 @@ export interface CoopDefenseMapEventDirectorOptions {
  */
 export class CoopDefenseMapEventDirector {
   private elapsedMs = 0;
+  private presentationStateCache: CoopDefenseMapEventPresentationState | null = null;
+  private presentationStateDirty = true;
   private readonly runtimes: MapEventRuntimeState[];
   private readonly handlers = new Map<CoopDefenseMapEventType, CoopDefenseMapEventHandler>();
   private readonly isTriggerSatisfied: ((start: CoopDefenseMapEventStart) => boolean) | null;
@@ -96,11 +109,12 @@ export class CoopDefenseMapEventDirector {
           runtime.state = 'active';
           runtime.stateChangedAtMs = runtime.nextActionAtMs;
           runtime.nextActionAtMs = null;
+          this.presentationStateDirty = true;
         }
       }
     }
 
-    for (const handler of this.handlers.values()) handler.hostUpdate(deltaMs, false);
+    for (const handler of this.handlers.values()) handler.hostUpdate(deltaMs, false, this.elapsedMs);
   }
 
   reset(): void {
@@ -115,6 +129,7 @@ export class CoopDefenseMapEventDirector {
       runtime.stateChangedAtMs = 0;
       runtime.nextActionAtMs = null;
     }
+    this.presentationStateDirty = true;
   }
 
   getElapsedMs(): number {
@@ -128,7 +143,10 @@ export class CoopDefenseMapEventDirector {
 
   getPresentationState(): CoopDefenseMapEventPresentationState | null {
     if (this.runtimes.length === 0) return null;
-    return this.runtimes.map((runtime) => ({
+    if (!this.presentationStateDirty && this.presentationStateCache !== null) {
+      return this.presentationStateCache;
+    }
+    this.presentationStateCache = this.runtimes.map((runtime) => ({
       eventId: runtime.config.id,
       eventType: runtime.config.type,
       state: runtime.state,
@@ -136,6 +154,8 @@ export class CoopDefenseMapEventDirector {
       stateChangedAtMs: runtime.stateChangedAtMs,
       ...(runtime.nextActionAtMs === null ? {} : { nextActionAtMs: runtime.nextActionAtMs }),
     }));
+    this.presentationStateDirty = false;
+    return this.presentationStateCache;
   }
 
   private scheduleOccurrence(
@@ -147,21 +167,30 @@ export class CoopDefenseMapEventDirector {
     // Fail-closed: ein Event ohne Fachhandler bleibt dormant und wirkt nicht.
     if (!handler) return;
 
-    if (handler.schedule(runtime.config, occurrence, actionAtMs) === false) return;
+    if (handler.schedule(runtime.config, occurrence, actionAtMs, this.elapsedMs) === false) return;
     runtime.occurrence = occurrence;
     runtime.state = occurrence === 1 ? 'scheduled' : 'waiting-repeat';
     runtime.stateChangedAtMs = this.elapsedMs;
-    runtime.nextActionAtMs = actionAtMs;
+    // Ein Zyklus wird nie in die Vergangenheit geplant: `nextActionAtMs < stateChangedAtMs` waere
+    // fuer den replizierten Snapshot unplausibel und wuerde ihn clientseitig komplett verwerfen.
+    runtime.nextActionAtMs = Math.max(actionAtMs, this.elapsedMs);
+    this.presentationStateDirty = true;
   }
 
   private handleCycleFinished(completion: CoopDefenseMapEventCycleFinished): void {
     const runtime = this.runtimes.find((candidate) => candidate.config.id === completion.eventId);
-    if (!runtime || runtime.state !== 'active' || runtime.occurrence !== completion.occurrence) return;
+    if (!runtime || runtime.occurrence !== completion.occurrence) return;
+    // Regulaer meldet nur ein aktiver Zyklus seinen Abschluss. Ein noch angekuendigter Zyklus wird
+    // hier bewusst mitgenommen statt verworfen: Sonst bliebe das Event dauerhaft in `scheduled`
+    // haengen, obwohl der Fachhandler seinen Durchlauf bereits geloescht hat -- und jede
+    // `after-event`-Kette darauf wartete fuer immer.
+    if (runtime.state !== 'active' && runtime.state !== 'scheduled' && runtime.state !== 'waiting-repeat') return;
     const completedAtMs = Math.max(0, Math.floor(completion.completedAtMs));
     if (completion.nextActionAtMs === undefined) {
       runtime.state = 'completed';
       runtime.stateChangedAtMs = completedAtMs;
       runtime.nextActionAtMs = null;
+      this.presentationStateDirty = true;
       return;
     }
     const nextActionAtMs = Math.max(completedAtMs, Math.floor(completion.nextActionAtMs));
