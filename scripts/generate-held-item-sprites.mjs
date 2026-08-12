@@ -59,72 +59,89 @@ const PALETTE = {
 const ITEMS = [
   {
     file: 'GLOCK.png',
-    grip: { x: 1.5, y: 5.2 },
-    // Kompakte Pistole: schmaler Schlitten mit heller Mittellinie, hinten der Verschlussblock.
-    // Drei Pixel Breite sind die kleinste Form, die neben der Figur noch als Gegenstand liest.
-    // Die Randpixel liegen auf dem Wert der Figuren-Arme; ein dunklerer Rand liesse die Waffe
-    // gegen Gras und Figur auf die helle Mittellinie zusammenfallen.
+    grip: { x: 2.5, y: 8.5 },
+    // Kompakte Pistole: schmaler Schlitten mit heller Mittellinie, hinten der breitere
+    // Verschlussblock. Die Randpixel liegen auf dem Wert der Figuren-Arme; ein dunklerer Rand
+    // liesse die Waffe gegen Gras und Figur auf die helle Mittellinie zusammenfallen.
     pixels: [
-      'ddd',
-      'mlm',
-      'mlm',
-      'mlm',
-      'lwl',
-      'dmd',
+      '.kkk.',
+      '.mlm.',
+      '.mlm.',
+      '.mlm.',
+      '.mlm.',
+      '.mlm.',
+      'dmlmd',
+      'dmlmd',
+      'dmwmd',
+      '.ddd.',
     ],
   },
   {
     file: 'P90.png',
-    grip: { x: 2, y: 6.8 },
+    grip: { x: 3, y: 11 },
     // Bullpup-PDW: kurzer Lauf vorn, breite Schale, in der Mitte das helle Laengsmagazin. Von der
     // Glock unterscheidet sie in erster Linie die Groesse, erst danach das helle Feld.
     pixels: [
-      '.dd.',
-      '.mm.',
-      'mmmm',
-      'mllm',
-      'lwwl',
-      'mllm',
-      'mmmm',
-      'dmmd',
+      '..kk..',
+      '..dd..',
+      '..dd..',
+      '..dd..',
+      '.dmmd.',
+      'dmmmmd',
+      'dmllmd',
+      'dlwwld',
+      'dlwwld',
+      'dmllmd',
+      'dmmmmd',
+      'dmmmmd',
+      '.dddd.',
     ],
   },
   {
     file: 'HE_GRENADE.png',
-    grip: { x: 2, y: 3.6 },
+    grip: { x: 3, y: 6 },
     // Splittergranate: gedrungener Oliv-Koerper mit warmem Kennband. Das Band ist der einzige
     // farbige Akzent im Satz und macht die Granate sofort von jeder Waffe unterscheidbar.
     pixels: [
-      '.OO.',
-      'OooO',
-      'bbbb',
-      'OooO',
-      '.ee.',
+      '..ee..',
+      '.OOOO.',
+      'OOooOO',
+      'OooooO',
+      'bbbbbb',
+      'OooooO',
+      '.eooe.',
+      '..ee..',
     ],
   },
   {
     file: 'generic_gun.png',
-    grip: { x: 1.5, y: 5.2 },
+    grip: { x: 2.5, y: 8.5 },
     // Rueckfallform fuer jede Schusswaffe ohne eigenes Bild: bewusst merkmalsfrei, damit sie
     // keine bestimmte Waffe behauptet.
     pixels: [
-      'ddd',
-      'mmm',
-      'mmm',
-      'mmm',
-      'mlm',
-      'dmd',
+      '.kkk.',
+      '.mmm.',
+      '.mmm.',
+      '.mmm.',
+      '.mmm.',
+      'dmmmd',
+      'dmmmd',
+      'dmmmd',
+      'dmlmd',
+      '.ddd.',
     ],
   },
   {
     file: 'generic_throwable.png',
-    grip: { x: 2, y: 3.0 },
+    grip: { x: 2.5, y: 4.5 },
     // Rueckfallform fuer geworfene Utilities ohne eigenes Bild.
     pixels: [
-      '.ll.',
-      'mllm',
-      'mllm',
-      '.dd.',
+      '.lll.',
+      'lmmml',
+      'lmmml',
+      'lmmml',
+      'dmmmd',
+      '.ddd.',
     ],
   },
 ];

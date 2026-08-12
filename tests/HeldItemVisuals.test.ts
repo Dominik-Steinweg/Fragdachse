@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getHeldItemAnchor, HELD_ITEM_ANCHOR_Y, PLAYER_SIZE, PLAYER_TEXTURE_SIZE } from '../src/config';
+import { getHeldItemAnchor, HELD_ITEM_ANCHOR_Y, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE, PLAYER_TEXTURE_SIZE } from '../src/config';
 import { HELD_ITEM_SPRITES, getHeldItemSpriteSpec } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
@@ -39,6 +39,21 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       expect(spec.gripX, spec.textureKey).toBeLessThanOrEqual(width);
       expect(spec.gripY, spec.textureKey).toBeGreaterThanOrEqual(0);
       expect(spec.gripY, spec.textureKey).toBeLessThanOrEqual(height);
+    }
+  });
+
+  it('laesst keine Waffe ueber die Muendung hinausragen', () => {
+    // Projektile, Hitscan-Ursprung, Muendungsfeuer und Schuss-Audio starten alle bei
+    // MUZZLE_FORWARD_OFFSET vor der Figurenmitte. Ragt eine Waffe weiter nach vorn, entsteht der
+    // Schuss sichtbar *im* Lauf statt an seiner Spitze. Das ist die einzige harte Obergrenze fuer
+    // die Groesse getragener Items – nach hinten und zur Seite gibt es keine.
+    const scale = PLAYER_SIZE / PLAYER_TEXTURE_SIZE;
+    const maxForwardReach = MUZZLE_FORWARD_OFFSET / scale + HELD_ITEM_ANCHOR_Y;
+    expect(maxForwardReach).toBeGreaterThan(0);
+
+    for (const spec of [...Object.values(HELD_ITEM_SPRITES), getHeldItemSpriteSpec('AK47')!, getHeldItemSpriteSpec('SMOKE_GRENADE')!]) {
+      // Der Griffpunkt liegt auf dem Pfotenanker, alles davor ist die Reichweite nach vorn.
+      expect(spec.gripY, spec.textureKey).toBeLessThanOrEqual(maxForwardReach);
     }
   });
 

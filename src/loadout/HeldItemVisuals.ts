@@ -41,15 +41,15 @@ function sprite(fileName: string, gripX: number, gripY: number): HeldItemSpriteS
 }
 
 /** Neutrale Form fuer Schusswaffen ohne eigenes Bild. */
-const GENERIC_GUN = sprite('generic_gun', 1.5, 5.2);
+const GENERIC_GUN = sprite('generic_gun', 2.5, 8.5);
 /** Neutrale Form fuer geworfene Utilities ohne eigenes Bild. */
-const GENERIC_THROWABLE = sprite('generic_throwable', 2, 3);
+const GENERIC_THROWABLE = sprite('generic_throwable', 2.5, 4.5);
 
 /** Bilder mit eigener Gestaltung, geschluesselt auf die Loadout-Item-ID. */
 export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.freeze({
-  GLOCK: sprite('GLOCK', 1.5, 5.2),
-  P90: sprite('P90', 2, 6.8),
-  HE_GRENADE: sprite('HE_GRENADE', 2, 3.6),
+  GLOCK: sprite('GLOCK', 2.5, 8.5),
+  P90: sprite('P90', 3, 11),
+  HE_GRENADE: sprite('HE_GRENADE', 3, 6),
 });
 
 const FALLBACK_SPRITES: readonly HeldItemSpriteSpec[] = [GENERIC_GUN, GENERIC_THROWABLE];
