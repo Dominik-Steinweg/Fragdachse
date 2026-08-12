@@ -8,13 +8,13 @@ import { applyArenaMetricsForMode } from '../src/config';
 import { getCoopDefenseMapUnlockedByVictoryOn } from '../src/config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 
-const ATTACK_MAP_IDS = ['12', '13', '16'] as const;
+const ATTACK_MAP_IDS = ['12', '13', '17'] as const;
 
 describe('coop-defense hostile bases', () => {
-  it('uses maps 12, 13 and 16 as attack maps and ends on map 16', () => {
-    expect(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId)).toContain('16');
-    expect(COOP_DEFENSE_MAP_CONFIGS.at(-1)?.mapId).toBe('16');
-    expect(getCoopDefenseMapUnlockedByVictoryOn('16')).toBeNull();
+  it('uses maps 12, 13 and 17 as attack maps and ends on map 17', () => {
+    expect(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId)).toContain('17');
+    expect(COOP_DEFENSE_MAP_CONFIGS.at(-1)?.mapId).toBe('17');
+    expect(getCoopDefenseMapUnlockedByVictoryOn('17')).toBeNull();
     expect(COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.objective === 'destroy-hostile-bases')
       .map((map) => map.mapId)).toEqual(ATTACK_MAP_IDS);
@@ -57,11 +57,12 @@ describe('coop-defense hostile bases', () => {
     expect(map.secondaryObjectives?.some((objective) => objective.type === 'destroy')).toBe(true);
   });
 
-  it('keeps map 16 on the migrated map-pressure plus four structure-source model', () => {
+  it('keeps map 16 on the authored finite-assault plus structure-source model', () => {
     const map = getCoopDefenseMapConfig('16');
-    expect(map.encounters ?? []).toEqual([]);
-    expect(map.persistentSpawns?.some((spawn) => spawn.source.type === 'map')).toBe(true);
+    expect(map.objective).toBe('repel-assault');
+    expect(map.encounters?.length).toBeGreaterThan(0);
     expect(map.persistentSpawns?.some((spawn) => spawn.source.type === 'base')).toBe(true);
+    expect(map.secondaryObjectives?.some((objective) => objective.type === 'hold')).toBe(true);
   });
 
   it('places hostile bases outside the spawn band and before the defended bases', () => {
@@ -117,66 +118,20 @@ describe('coop-defense hostile bases', () => {
     }
   });
 
-  it('configures map 16 with four destructible hostile spawn sources', () => {
-    const map = getCoopDefenseMapConfig('16');
-    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells);
+  it('configures map 17 with the final offensive bases and three source-bound pressures', () => {
+    const map = getCoopDefenseMapConfig('17');
     const specs = resolveCoopDefenseBases(map);
     const hostileMain = specs.find((spec) => spec.faction === 'hostile' && spec.role === 'main');
-    const middleBase = specs.find((spec) => spec.id === 'coop-base-middle');
-    const middleOutposts = specs
-      .filter((spec) => spec.id.startsWith('friendly-middle-mushroom-'));
     const spawnPoints = specs.filter((spec) => spec.role === 'spawn-point');
-    const hostileTurrets = specs
-      .filter((spec) => spec.faction === 'hostile' && spec.role === 'outpost')
-      .flatMap((spec) => spec.turrets);
 
-    expect(map).toMatchObject({
-      timeOfDay: '05:00',
-      trackMode: 'void-fire',
-      objective: 'destroy-hostile-bases',
-    });
+    expect(map).toMatchObject({ objective: 'destroy-hostile-bases', itemDrop: { itemLevel: 4 } });
     expect(hostileMain?.hpMax).toBeGreaterThan(0);
-    expect(hostileMain?.cells).toHaveLength(17);
-    expect(middleBase?.region.minGridX).toBe(47);
-    expect(middleOutposts.map((spec) => [spec.region.minGridX, spec.region.minGridY])).toEqual([
-      [44, 11],
-      [44, 17],
-    ]);
-    expect(hostileTurrets.length).toBeGreaterThan(0);
-    expect(hostileTurrets.every((turret) => turret.weaponId === 'TURRET_VOID_FLAME')).toBe(true);
-    expect(spawnPoints).toHaveLength(4);
-    expect(spawnPoints.map((source) => [source.region.minGridX, source.region.minGridY])).toEqual([
-      [1, 4],
-      [2, 24],
-      [23, 4],
-      [31, 24],
-    ]);
-    expect(spawnPoints.map((source) => [source.spawnCenter?.gridX, source.spawnCenter?.gridY])).toEqual([
-      [2, 5],
-      [3, 25],
-      [24, 5],
-      [32, 25],
-    ]);
-    for (const source of spawnPoints.slice(2)) {
-      expect(middleBase!.region.minGridX - source.region.maxGridX).toBeGreaterThan(10);
-    }
-    for (const source of spawnPoints) {
-      expect(source.cells).toHaveLength(7);
-      expect(source.cells).not.toContainEqual(source.spawnCenter);
-      expect(source.hpMax).toBeGreaterThan(0);
-      const pressure = map.persistentSpawns?.find((spawn) => (
-        spawn.source.type === 'base' && spawn.source.baseId === source.id
-      ));
-      expect(pressure).toMatchObject({
-        enemyKind: expect.any(String),
-        intervalMs: expect.any(Number),
-        countPerTick: expect.any(Number),
-        startAtMs: expect.any(Number),
-      });
-      expect(pressure!.intervalMs).toBeGreaterThan(0);
-      expect(pressure!.countPerTick).toBeGreaterThan(0);
-      expect(pressure!.startAtMs).toBeGreaterThanOrEqual(0);
-    }
+    expect(spawnPoints).toHaveLength(2);
+    expect(spawnPoints.every((source) => source.spawnCenter !== undefined)).toBe(true);
+    expect(spawnPoints.every((source) => map.persistentSpawns?.some((spawn) => (
+      spawn.source.type === 'base' && spawn.source.baseId === source.id
+    )))).toBe(true);
+    expect(map.secondaryObjectives?.find((objective) => objective.type === 'carry')?.targetGoal).toBe(3);
   });
 
   it('keeps Map 14 outpost authoring focused on its rocket Hold mission', () => {

@@ -4,7 +4,6 @@ import {
   ARENA_HEIGHT,
   ARENA_MAX_Y,
   ARENA_OFFSET_Y,
-  DEFAULT_ARENA_WIDTH,
   DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
   FULL_ARENA_WIDTH,
@@ -84,12 +83,25 @@ describe('Arena metrics profiles', () => {
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'LOBBY');
   });
 
-  it('does not change lobby, regular arena or Capture the Beer profiles', () => {
-    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'LOBBY', 90)).toMatchObject({
-      arenaWidth: DEFAULT_ARENA_WIDTH,
-      usesDynamicCamera: false,
-      showStaticArenaFrames: true,
-    });
+  it('gives the lobby the same arena as deathmatch, regardless of mode or configured size', () => {
+    // Die Lobby-Inszenierung spielt auf der Flaeche, die die Vorschau zeigt: volle Breite,
+    // keine Seitenbalken, nur die schmalen Streifen oben und unten bleiben aussen vor.
+    for (const mode of [COOP_DEFENSE_MODE, CAPTURE_THE_BEER_MODE, 'deathmatch'] as const) {
+      expect(getArenaMetricsProfile(mode, 'LOBBY', 90, 52)).toMatchObject({
+        arenaWidth: FULL_ARENA_WIDTH,
+        arenaOffsetX: 0,
+        arenaViewportWidth: GAME_WIDTH,
+        arenaHeight: 1056,
+        arenaOffsetY: ARENA_OFFSET_Y,
+        usesDynamicCamera: false,
+        showStaticArenaFrames: false,
+      });
+    }
+    expect(getArenaMetricsProfile('deathmatch', 'LOBBY'))
+      .toEqual(getArenaMetricsProfile('deathmatch', 'ARENA'));
+  });
+
+  it('does not change regular arena or Capture the Beer profiles', () => {
     expect(getArenaMetricsProfile('deathmatch', 'ARENA', 90)).toMatchObject({
       arenaWidth: FULL_ARENA_WIDTH,
       usesDynamicCamera: false,

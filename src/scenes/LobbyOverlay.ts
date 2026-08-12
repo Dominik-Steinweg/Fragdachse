@@ -20,11 +20,11 @@ import {
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
 import {
-  getGameModeLabel, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode,
+  getGameModeLabel, hasTeamSelection, isCoopDefenseMode,
 } from '../gameModes';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
-  ensureModalPanelTexture,
+  ensureLobbyPanelTexture,
   ensureFlatPanelTexture,
   ensureIconTexture,
   ensureTintedSectionTexture,
@@ -44,11 +44,12 @@ import { UiContextMenu } from '../ui/UiContextMenu';
 import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
+import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from './arena/ClarityCameraRegistry';
+import { buildLobbyRosterSlots } from '../lobby/LobbyRosterLayout';
 
 // ── Panel ────────────────────────────────────────────────────────────────────
-const PANEL_W = 832;
+const PANEL_W = LOBBY_PANEL_WIDTH;
 /**
  * Das Panel ist so hoch wie sein Inhalt, zwischen diesen Grenzen. Eine feste Hoehe muesste sich
  * am groessten Fall orientieren (Coop-Fortschrittsband, volle Spielerliste) und liesse eine
@@ -60,7 +61,6 @@ const PANEL_W = 832;
  * Innenflaeche.
  */
 const PANEL_H_MAX = LOBBY_FRAME_BOUNDS.outerBottom - LOBBY_FRAME_BOUNDS.outerTop;
-const PANEL_H_MIN = 330;
 const PANEL_X = GAME_WIDTH / 2 - PANEL_W / 2;
 const PANEL_Y = LOBBY_FRAME_BOUNDS.outerTop;
 const PANEL_CX = GAME_WIDTH / 2;
@@ -85,17 +85,11 @@ const ROOM_CAPTION_X = ROOM_CHIP_X - ROOM_CHIP_W / 2 - SPACE.md;
 // ── Spielerliste ─────────────────────────────────────────────────────────────
 const LIST_LABEL_Y = PANEL_Y + 118;
 const LIST_Y = PANEL_Y + 142;
-const ROW_H = 44;
-const ROW_STEP = 48;
-/** Fallback, wenn mehr Spieler in der Lobby stehen, als in voller Zeilenhoehe passen. */
-const ROW_H_COMPACT = 30;
-const ROW_STEP_COMPACT = 34;
-const ROW_BADGE_X = CONTENT_L + 22;
-const ROW_NAME_X = CONTENT_L + 48;
-const ROW_LEVEL_X = CONTENT_R - 150;
-const ROW_PING_X = CONTENT_R - 16;
-const TEAM_HEADER_H = 26;
-const TEAM_SECTION_GAP = 10;
+const ROSTER_COLUMN_GAP = 12;
+const ROSTER_SLOT_W = (CONTENT_W - ROSTER_COLUMN_GAP) / 2;
+const ROSTER_SLOT_H = 36;
+const ROSTER_ROW_STEP = 40;
+const TEAM_HEADER_H = 28;
 
 // ── Coop-Fortschrittsband (innerhalb des Panels) ─────────────────────────────
 // Sichtbar nur im Coop; dann steht das Panel immer auf seiner vollen Hoehe.
@@ -149,16 +143,12 @@ const FULLSCREEN_HINT_MS = 2200;
  * Obergrenze der Liste. Ohne Fortschrittsband darf sie bis zum Fussblock des voll
  * ausgefahrenen Panels laufen – gebraucht wird davon nur, was die Liste wirklich fuellt.
  */
-function listBottomLimit(coopBandVisible: boolean): number {
-  return (coopBandVisible ? COOP_BAND_TOP : CTA_DIVIDER_Y_MAX) - CTA_GAP;
-}
-
 /**
- * Zeilenflaechen werden je Hoehe gebacken statt gestreckt: `setDisplaySize` auf einer
+ * Zeilenflaechen werden je Groesse gebacken statt gestreckt: `setDisplaySize` auf einer
  * abgerundeten Textur zoege die Eckradien mit in die Laenge.
  */
-function rowTextureKey(height: number, ghost: boolean): string {
-  return `_lobby_row${ghost ? '_ghost' : ''}_${Math.round(height)}`;
+function rowTextureKey(width: number, height: number, ghost: boolean): string {
+  return `_lobby_row${ghost ? '_ghost' : ''}_${Math.round(width)}x${Math.round(height)}`;
 }
 
 function formatBuildTimestamp(isoTimestamp: string): string {
@@ -193,8 +183,7 @@ type PlayerRow = {
 
 /** Platzhalterzeile fuer einen noch fehlenden Mitspieler. */
 type WaitingRow = {
-  bg:   Phaser.GameObjects.Image;
-  text: Phaser.GameObjects.Text;
+  bg: Phaser.GameObjects.Image;
 };
 
 export class LobbyOverlay {
@@ -205,7 +194,6 @@ export class LobbyOverlay {
   private teamHeaders:     Record<TeamId, Phaser.GameObjects.Text> | null = null;
   private panelBg!:       Phaser.GameObjects.Image;
   private ctaDivider!:    Phaser.GameObjects.Rectangle;
-  private panelHeight     = PANEL_H_MAX;
   private headerTitle!:   Phaser.GameObjects.Text;
   private statusText!:    Phaser.GameObjects.Text;
   private roomQualityText!: Phaser.GameObjects.Text;
@@ -229,6 +217,7 @@ export class LobbyOverlay {
   private coopItemsBtn: UiButton | null = null;
   private coopProgressPointsText: Phaser.GameObjects.Text | null = null;
   private upgradeBtnEffect: LivingBarEffect | null = null;
+  private itemsBtnEffect: LivingBarEffect | null = null;
   private itemsTooltip: UiTooltip | null = null;
   private coopItemsUnlocked = false;
   private coopItemsSignature: string | null = null;
@@ -270,7 +259,7 @@ export class LobbyOverlay {
 
     // ── Kopfzeile: was wird gespielt, und in welchem Raum ─────────────────
     this.headerTitle = this.scene.add.text(CONTENT_L, HEADER_Y, '', textStyle('subtitle', {
-      color: COLORS.GOLD_1,
+      color: COLORS.GREY_1,
     })).setOrigin(0, 0.5).setScrollFactor(0);
     objects.push(this.headerTitle);
 
@@ -330,20 +319,23 @@ export class LobbyOverlay {
     })).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(this.statusText);
 
-    const blueHeader = this.scene.add.text(ROW_NAME_X, LIST_Y, 'Team Blau', textStyle('caption', {
+    const blueHeader = this.scene.add.text(CONTENT_L, LIST_Y, 'TEAM BLAU', textStyle('caption', {
       color: TEAM_BLUE_COLOR,
     })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const redHeader = this.scene.add.text(ROW_NAME_X, LIST_Y, 'Team Rot', textStyle('caption', {
-      color: TEAM_RED_COLOR,
-    })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+    const redHeader = this.scene.add.text(
+      CONTENT_L + ROSTER_SLOT_W + ROSTER_COLUMN_GAP,
+      LIST_Y,
+      'TEAM ROT',
+      textStyle('caption', { color: TEAM_RED_COLOR }),
+    ).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     this.teamHeaders = { blue: blueHeader, red: redHeader };
     objects.push(blueHeader, redHeader);
 
     // Einladen-Zeile: beantwortet die eigentliche Frage einer wartenden Lobby und ersetzt den
     // frueheren, gleich lauten Kopieren-Button in der Fusszeile.
     this.inviteRow = new UiButton(this.scene, {
-      x: PANEL_CX, y: LIST_Y, w: CONTENT_W, h: ROW_H,
-      label: 'FREUND EINLADEN · LINK KOPIEREN',
+      x: PANEL_CX, y: LIST_Y, w: ROSTER_SLOT_W, h: ROSTER_SLOT_H,
+      label: 'EINLADEN · LINK',
       intent: 'ghost',
       icon: 'plus',
       iconSize: 18,
@@ -412,11 +404,11 @@ export class LobbyOverlay {
     const bandH = CTA_DIVIDER_Y_MAX - COOP_BAND_TOP - CTA_GAP;
     const bandBg = this.scene.add.image(
       PANEL_CX, COOP_BAND_TOP + bandH / 2,
-      ensureTintedSectionTexture(this.scene, '_lobby_coop_panel', CONTENT_W, bandH, COLORS.GOLD_3, COLORS.GREY_8),
+      ensureTintedSectionTexture(this.scene, '_lobby_coop_panel', CONTENT_W, bandH, COLORS.GREY_5, COLORS.GREY_8),
     ).setScrollFactor(0);
 
     const bandLabel = this.scene.add.text(CONTENT_L + SPACE.lg, COOP_LABEL_Y, 'FORTSCHRITT',
-      textStyle('section', { color: COLORS.GOLD_2 })).setOrigin(0, 0.5).setScrollFactor(0);
+      textStyle('section', { color: COLORS.GREY_3 })).setOrigin(0, 0.5).setScrollFactor(0);
 
     this.coopProgressLevelText = this.scene.add.text(CONTENT_L + SPACE.lg + 132, COOP_LABEL_Y, 'Level 1',
       textStyle('numL', { color: COLORS.GREY_1 })).setOrigin(0, 0.5).setScrollFactor(0);
@@ -486,6 +478,19 @@ export class LobbyOverlay {
     // Effektpartikel ueber der Flaeche, aber unter der Beschriftung halten.
     this.coopBand.bringToTop(this.coopUpgradesBtn.getRoot());
     this.upgradeBtnEffect.stop();
+
+    this.itemsBtnEffect = new LivingBarEffect(
+      this.scene,
+      this.coopBand,
+      COOP_ITEMS_BTN_X - COOP_BTN_W / 2,
+      COOP_BTN_Y - COOP_BTN_H / 2,
+      COOP_BTN_W,
+      COOP_BTN_H,
+      { dark: COLORS.GOLD_3, mid: COLORS.GOLD_1, light: COLORS.GOLD_1 },
+      { glowTarget: this.coopItemsBtn.getBackground(), scrollFactor: 0, intensity: 0.8 },
+    );
+    this.coopBand.bringToTop(this.coopItemsBtn.getRoot());
+    this.itemsBtnEffect.stop();
 
     this.coopBarEffect = new LivingBarEffect(
       this.scene,
@@ -559,6 +564,8 @@ export class LobbyOverlay {
     // Die Effekte haengen an Containern, die gleich zerstoert werden – vorher abbauen.
     this.upgradeBtnEffect?.destroy();
     this.upgradeBtnEffect = null;
+    this.itemsBtnEffect?.destroy();
+    this.itemsBtnEffect = null;
     this.coopBarEffect?.destroy();
     this.coopBarEffect = null;
     this.itemsTooltip?.destroy();
@@ -604,6 +611,7 @@ export class LobbyOverlay {
     this.stopReadyGlow();
     this.container?.setVisible(false);
     this.upgradeBtnEffect?.stop();
+    this.itemsBtnEffect?.stop();
     this.itemsTooltip?.hide();
     this.coopBarEffect?.stop();
   }
@@ -813,8 +821,8 @@ export class LobbyOverlay {
    * Zustand des Item-Buttons. Getrennt vom Fortschritts-Snapshot, weil Freischaltung, offene
    * Belohnung und ungesehene Teile nicht Teil der Upgrade-Progression sind.
    *
-   * `hasUnseenItems` meint neu erhaltene Teile, die der Spieler noch nicht angesehen hat; sie
-   * setzen einen Zaehler an den Button, statt seine Flaeche einzufaerben.
+   * `hasUnseenItems` meint neu erhaltene Teile, die der Spieler noch nicht angesehen hat.
+   * Wie freie Upgrade-Punkte aktiviert dieser Zustand dieselbe goldene Attention-Sprache.
    */
   setCoopDefenseItemsState(
     unlocked: boolean,
@@ -833,7 +841,15 @@ export class LobbyOverlay {
     this.coopItemsBtn.setEnabled(unlocked);
     // Das Schloss traegt die Sperre; freigeschaltet braucht der Button kein Symbol mehr.
     this.coopItemsBtn.setIcon(unlocked ? null : 'lock');
-    this.coopItemsBtn.setBadge(unlocked && (hasPendingReward || hasUnseenItems) ? 1 : null);
+    const needsAttention = unlocked && (hasPendingReward || hasUnseenItems);
+    this.coopItemsBtn.setBadge(null);
+    this.coopItemsBtn.setIntent(needsAttention ? 'accent' : 'neutral');
+    if (needsAttention && this.visible) {
+      this.itemsBtnEffect?.setFilledWidth(COOP_BTN_W);
+      this.itemsBtnEffect?.start();
+    } else {
+      this.itemsBtnEffect?.stop();
+    }
   }
 
   /** Button-Zustand nach isReady-Toggle anpassen. */
@@ -958,25 +974,25 @@ export class LobbyOverlay {
   }
 
   private addPlayerRow(profile: PlayerProfile): void {
-    const bg = this.scene.add.image(PANEL_CX, LIST_Y, this.rowTexture(ROW_H, false))
+    const bg = this.scene.add.image(PANEL_CX, LIST_Y, this.rowTexture(ROSTER_SLOT_W, ROSTER_SLOT_H, false))
       .setScrollFactor(0);
 
-    const name = this.scene.add.text(ROW_NAME_X, LIST_Y, profile.name, textStyle('body', {
+    const name = this.scene.add.text(CONTENT_L + 40, LIST_Y, profile.name, textStyle('body', {
       color: profile.colorHex,
     })).setOrigin(0, 0.5).setScrollFactor(0);
 
-    const badge = this.scene.add.circle(ROW_BADGE_X, LIST_Y, 11, COLORS.GREY_6)
+    const badge = this.scene.add.circle(CONTENT_L + 18, LIST_Y, 10, COLORS.GREY_6)
       .setStrokeStyle(1.5, COLORS.GREY_5)
       .setScrollFactor(0);
-    const mark = this.scene.add.image(ROW_BADGE_X, LIST_Y, this.readyMarkTexture(false))
+    const mark = this.scene.add.image(CONTENT_L + 18, LIST_Y, this.readyMarkTexture(false))
       .setDisplaySize(14, 14)
       .setScrollFactor(0);
 
-    const level = this.scene.add.text(ROW_LEVEL_X, LIST_Y, '-', textStyle('numS', {
+    const level = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 105, LIST_Y, '-', textStyle('numS', {
       color: COLORS.GOLD_1,
     })).setOrigin(0.5).setScrollFactor(0);
 
-    const ping = this.scene.add.text(ROW_PING_X, LIST_Y, '', textStyle('numS'))
+    const ping = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 10, LIST_Y, '', textStyle('numS'))
       .setOrigin(1, 0.5).setScrollFactor(0);
 
     bg.on('pointerup', (
@@ -1074,68 +1090,43 @@ export class LobbyOverlay {
 
     const mode = this.bridge.getGameMode();
     const teamMode = hasTeamSelection(mode);
-    const playerCount = this.playerRows.size;
-    const minPlayers = getMinPlayersForMode(mode);
-    const missing = Math.max(0, minPlayers - playerCount);
-    const bandVisible = this.coopBand?.visible ?? false;
-    const available = listBottomLimit(bandVisible) - LIST_Y;
+    const slots = buildLobbyRosterSlots(mode, [...this.playerRows.keys()].map((id) => ({
+      id,
+      teamId: this.bridge.getPlayerProfile(id)?.teamId ?? null,
+    })));
+    this.syncWaitingRows(slots.filter((slot) => slot.playerId === null).length);
 
-    const headerHeight = teamMode ? TEAM_HEADER_H * 2 + TEAM_SECTION_GAP : 0;
-    const entries = playerCount + missing;
-    const fitsFull = headerHeight + (entries + 1) * ROW_STEP <= available;
-    const step = fitsFull ? ROW_STEP : ROW_STEP_COMPACT;
-    const rowHeight = fitsFull ? ROW_H : ROW_H_COMPACT;
-    const showInvite = !this.connectionEnded
-      && headerHeight + (entries + 1) * step <= available;
+    this.teamHeaders?.blue.setVisible(teamMode).setPosition(CONTENT_L, LIST_Y);
+    this.teamHeaders?.red.setVisible(teamMode).setPosition(
+      CONTENT_L + ROSTER_SLOT_W + ROSTER_COLUMN_GAP,
+      LIST_Y,
+    );
 
-    this.syncWaitingRows(missing, rowHeight);
-
-    let y = LIST_Y + rowHeight / 2;
-    const place = (row: PlayerRow | WaitingRow, rowY: number): void => {
-      if ('name' in row) this.positionPlayerRow(row, rowY, rowHeight);
-      else this.positionWaitingRow(row, rowY, rowHeight);
-    };
-
-    if (!teamMode) {
-      this.teamHeaders?.blue.setVisible(false);
-      this.teamHeaders?.red.setVisible(false);
-      for (const row of this.playerRows.values()) {
-        place(row, y);
-        y += step;
+    let waitingIndex = 0;
+    let invitePlaced = false;
+    for (const slot of slots) {
+      const x = CONTENT_L + slot.column * (ROSTER_SLOT_W + ROSTER_COLUMN_GAP) + ROSTER_SLOT_W / 2;
+      const y = LIST_Y + (teamMode ? TEAM_HEADER_H : 0) + ROSTER_SLOT_H / 2 + slot.row * ROSTER_ROW_STEP;
+      if (slot.playerId) {
+        const row = this.playerRows.get(slot.playerId);
+        if (row) this.positionPlayerRow(row, x, y, ROSTER_SLOT_W, ROSTER_SLOT_H);
+      } else {
+        const row = this.waitingRows[waitingIndex++];
+        if (row) this.positionWaitingRow(row, x, y, ROSTER_SLOT_W, ROSTER_SLOT_H);
       }
-    } else {
-      const byTeam = (team: TeamId): PlayerRow[] => {
-        const ids = [...this.playerRows.keys()].filter(
-          (id) => this.bridge.getPlayerProfile(id)?.teamId === team,
-        );
-        return ids.map((id) => this.playerRows.get(id)!).filter(Boolean);
-      };
-      this.teamHeaders?.blue.setVisible(true).setPosition(ROW_NAME_X, y - rowHeight / 2 + 4);
-      y += TEAM_HEADER_H;
-      for (const row of byTeam('blue')) { place(row, y); y += step; }
-      y += TEAM_SECTION_GAP;
-      this.teamHeaders?.red.setVisible(true).setPosition(ROW_NAME_X, y - rowHeight / 2 + 4);
-      y += TEAM_HEADER_H;
-      for (const row of byTeam('red')) { place(row, y); y += step; }
+      if (slot.invite && !this.connectionEnded) {
+        this.inviteRow.setPosition(x, y);
+        invitePlaced = true;
+      }
     }
-
-    for (const row of this.waitingRows) {
-      place(row, y);
-      y += step;
-    }
-
-    this.inviteRow.setVisible(showInvite);
-    if (showInvite) {
-      this.inviteRow.setPosition(PANEL_CX, y);
-      y += step;
-    }
+    this.inviteRow.setVisible(invitePlaced);
+    if (invitePlaced) this.container.bringToTop(this.inviteRow.getRoot());
 
     // `y` steht jetzt unter dem letzten Eintrag – daraus folgt die Panelhoehe. Mit
     // Fortschrittsband gibt dessen Unterkante die Hoehe vor, nicht die Liste.
-    const contentBottom = bandVisible
-      ? CTA_DIVIDER_Y_MAX - CTA_GAP
-      : y - step + rowHeight / 2;
-    this.applyPanelHeight(contentBottom);
+    this.panelBg.setTexture(this.panelTexture(PANEL_H_MAX)).setY(PANEL_Y + PANEL_H_MAX / 2);
+    this.ctaDivider.setY(CTA_DIVIDER_Y_MAX);
+    this.readyBtn.setPosition(PANEL_CX, CTA_DIVIDER_Y_MAX + CTA_BLOCK_H - READY_BTN_DY);
   }
 
   /**
@@ -1144,18 +1135,6 @@ export class LobbyOverlay {
    * Die Oberkante bleibt fest – nur die Unterkante wandert, damit Kopfzeile und Liste nicht bei
    * jedem Beitritt springen.
    */
-  private applyPanelHeight(contentBottom: number): void {
-    const needed = Math.round(contentBottom + CTA_GAP + CTA_BLOCK_H - PANEL_Y);
-    const height = Phaser.Math.Clamp(needed, PANEL_H_MIN, PANEL_H_MAX);
-    if (height === this.panelHeight) return;
-    this.panelHeight = height;
-
-    this.panelBg.setTexture(this.panelTexture(height)).setY(PANEL_Y + height / 2);
-    const dividerY = PANEL_Y + height - CTA_BLOCK_H;
-    this.ctaDivider.setY(dividerY);
-    this.readyBtn.setPosition(PANEL_CX, dividerY + CTA_BLOCK_H - READY_BTN_DY);
-  }
-
   /**
    * Panelflaechen werden je Hoehe gebacken; es gibt nur eine Handvoll davon.
    *
@@ -1164,48 +1143,49 @@ export class LobbyOverlay {
    * beansprucht und dem Fortschrittsband seine Auszeichnung genommen.
    */
   private panelTexture(height: number): string {
-    return ensureModalPanelTexture(
+    return ensureLobbyPanelTexture(
       this.scene, `_lobby_panel_${Math.round(height)}`, PANEL_W, height, COLORS.GREY_8, BORDER.default,
     );
   }
 
   /** Haelt die Zahl der Platzhalterzeilen auf dem Sollwert. */
-  private syncWaitingRows(count: number, rowHeight: number): void {
+  private syncWaitingRows(count: number): void {
     while (this.waitingRows.length > count) {
       const row = this.waitingRows.pop()!;
       row.bg.destroy();
-      row.text.destroy();
     }
     while (this.waitingRows.length < count) {
-      const bg = this.scene.add.image(PANEL_CX, LIST_Y, this.rowTexture(rowHeight, true))
+      const bg = this.scene.add.image(
+        PANEL_CX,
+        LIST_Y,
+        this.rowTexture(ROSTER_SLOT_W, ROSTER_SLOT_H, true),
+      )
         .setScrollFactor(0);
-      const text = this.scene.add.text(ROW_NAME_X, LIST_Y, 'Wartet auf Mitspieler…',
-        textStyle('caption', { color: COLORS.GREY_5 })).setOrigin(0, 0.5).setScrollFactor(0);
-      this.container!.add([bg, text]);
-      this.waitingRows.push({ bg, text });
+      this.container!.add(bg);
+      this.waitingRows.push({ bg });
     }
   }
 
-  private positionPlayerRow(row: PlayerRow, y: number, rowHeight: number): void {
-    row.bg.setPosition(PANEL_CX, y).setOrigin(0.5).setTexture(this.rowTexture(rowHeight, false));
-    row.name.setPosition(ROW_NAME_X, y);
-    row.badge.setPosition(ROW_BADGE_X, y);
-    row.mark.setPosition(ROW_BADGE_X, y);
-    row.level.setPosition(ROW_LEVEL_X, y);
-    row.ping.setPosition(ROW_PING_X, y);
+  private positionPlayerRow(row: PlayerRow, x: number, y: number, width: number, height: number): void {
+    const left = x - width / 2;
+    row.bg.setPosition(x, y).setOrigin(0.5).setTexture(this.rowTexture(width, height, false));
+    row.name.setPosition(left + 40, y);
+    row.badge.setPosition(left + 18, y);
+    row.mark.setPosition(left + 18, y);
+    row.level.setPosition(x + width / 2 - 105, y);
+    row.ping.setPosition(x + width / 2 - 10, y);
   }
 
-  private positionWaitingRow(row: WaitingRow, y: number, rowHeight: number): void {
-    row.bg.setPosition(PANEL_CX, y).setOrigin(0.5).setTexture(this.rowTexture(rowHeight, true));
-    row.text.setPosition(ROW_NAME_X, y);
+  private positionWaitingRow(row: WaitingRow, x: number, y: number, width: number, height: number): void {
+    row.bg.setPosition(x, y).setOrigin(0.5).setTexture(this.rowTexture(width, height, true));
   }
 
   /** Gebackene Zeilenflaeche in der gewuenschten Hoehe; belegte und freie Plaetze unterscheiden sich. */
-  private rowTexture(height: number, ghost: boolean): string {
+  private rowTexture(width: number, height: number, ghost: boolean): string {
     return ensureFlatPanelTexture(
       this.scene,
-      rowTextureKey(height, ghost),
-      CONTENT_W,
+      rowTextureKey(width, height, ghost),
+      width,
       height,
       ghost ? COLORS.GREY_8 : COLORS.GREY_7,
       COLORS.GREY_6,
@@ -1271,16 +1251,10 @@ export class LobbyOverlay {
     // Nach einem Verbindungsabbruch bleibt die Fehlermeldung stehen, bis build() das Overlay neu aufbaut.
     if (this.connectionEnded) return;
 
-    const minPlayers = getMinPlayersForMode(this.bridge.getGameMode());
     const readyCount = [...this.playerRows.keys()]
       .filter(id => this.bridge.getPlayerReady(id)).length;
-    if (playerCount < minPlayers) {
-      this.statusText.setText(`${playerCount} / ${minPlayers} SPIELER`)
-        .setColor(toCssColor(COLORS.GREY_4));
-    } else {
-      this.statusText.setText(`${readyCount} / ${playerCount} BEREIT`)
-        .setColor(toCssColor(readyCount === playerCount ? COLORS.GREEN_2 : COLORS.GOLD_1));
-    }
+    this.statusText.setText(`${readyCount} / ${playerCount} BEREIT`)
+      .setColor(toCssColor(readyCount === playerCount ? COLORS.GREEN_2 : COLORS.GOLD_1));
 
     const transport = this.formatTransportText();
     if (transport) {
@@ -1321,14 +1295,12 @@ export class LobbyOverlay {
       return { text: 'Verbindung wird aufgebaut…', color: toCssColor(TEXT.muted) };
     }
 
-    const path = `${link.localCandidateType}/${link.remoteCandidateType ?? '?'}`;
     if (link.medianRttMs === null) {
-      return { text: `Direkte Verbindung (${path}) – Ping wird gemessen…`, color: toCssColor(COLORS.GREEN_2) };
+      return { text: '● Direkt · Ping wird gemessen…', color: toCssColor(COLORS.GREEN_2) };
     }
 
-    const jitter = link.jitterRttMs === null ? '' : `, Jitter ${Math.round(link.jitterRttMs)}ms`;
     return {
-      text: `Direkte Verbindung (${path}) – Ping ${Math.round(link.medianRttMs)}ms${jitter}`,
+      text: `● Direkt · ${Math.round(link.medianRttMs)} ms`,
       color: pingColor(link.medianRttMs),
     };
   }

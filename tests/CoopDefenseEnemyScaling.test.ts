@@ -25,6 +25,13 @@ describe('Coop defense multiplayer scaling', () => {
     expect(bossSizes.some((size) => size > MAX_REGULAR_ENEMY_SIZE_PX)).toBe(true);
   });
 
+  it('keeps the tested boss and medic tuning in the enemy registry', () => {
+    expect(COOP_DEFENSE_ENEMY_CONFIGS['grave-titan'].maxHp).toBe(Math.round(750 * 1.25));
+    expect(COOP_DEFENSE_ENEMY_CONFIGS['inferno-colossus'].moveSpeed).toBe(185);
+    expect(COOP_DEFENSE_ENEMY_CONFIGS['inferno-colossus'].moveSpeed).toBeLessThan(200);
+    expect(COOP_DEFENSE_ENEMY_CONFIGS['plague-medic'].maxHp).toBe(100);
+  });
+
   it('scales only enemy HP linearly with the human player count', () => {
     for (const playerCount of [1, 2, 3, 4]) {
       const resolved = resolveCoopDefenseEnemyConfigs(playerCount);

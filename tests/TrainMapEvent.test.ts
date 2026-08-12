@@ -64,7 +64,7 @@ describe('Train as a standalone map event', () => {
         id: 'train-rhythm',
         type: 'train',
         start: { type: 'time', atMs: 10_000 },
-        repeatAfterExitMs: 10_000,
+        repeatAfterExitMs: expect.any(Number),
       });
     }
   });

@@ -27,6 +27,8 @@ import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import type { HitscanSupportImpact } from '../../systems/CombatSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import type { EnemyStrategicTargetCandidate } from '../../systems/EnemyStrategicTargetService';
+import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
+import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -319,45 +321,9 @@ export class HostUpdateCoordinator {
     }
 
     const detonations = countdownActive ? [] : (this.ctx.detonationSystem?.flushDetonations() ?? []);
-    for (const det of detonations) {
-      const comboAdrenalineGain = Math.max(0, det.effect.comboAdrenalineGain ?? 0);
-      if (comboAdrenalineGain > 0) {
-        this.ctx.resourceSystem?.addAdrenaline(det.projectileOwnerId, comboAdrenalineGain);
-      }
-      this.ctx.combatSystem.applyAoeDamage(
-        det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
-        false,
-        {
-          category: 'explosion',
-          weaponName: 'Detonation',
-          damageFalloff: det.effect.damageFalloff,
-        },
-      );
-      if ((det.effect.knockback ?? 0) > 0) {
-        this.ctx.hostPhysics.applyRadialImpulse(
-          det.x, det.y, det.effect.aoeRadius,
-          det.effect.knockback ?? 0, det.detonatorOwnerId,
-          det.effect.selfKnockbackMult ?? 1,
-        );
-      }
-      this.applyAoeEnvironmentDamage(
-        det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage,
-        det.effect.rockDamageMult ?? 1, det.effect.trainDamageMult ?? 1, det.detonatorOwnerId,
-        det.effect.damageFalloff,
-      );
-      const detonatorColor = bridge.getPlayerColor(det.detonatorOwnerId);
-      bridge.broadcastExplosionEffect(
-        det.x, det.y, det.effect.aoeRadius,
-        det.effect.explosionColor ?? detonatorColor,
-        det.effect.explosionVisualStyle,
-      );
-
-      // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
-      this.spawnDotAreaFromExplosion(
-        det.effect.dotArea, det.x, det.y, det.effect.aoeRadius,
-        det.detonatorOwnerId, detonatorColor ?? 0xffffff,
-      );
-    }
+    // Ablauf und Verrechnung liegen im gemeinsamen Resolver; hier stehen nur die
+    // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo über denselben Weg.
+    resolveDetonations(this.detonationEffectSink, detonations);
 
     for (const explosion of explodedProjectiles) {
       const matrix = explosion.effect.reinforcementMatrix ?? explosion.effect.overchargeField;
@@ -1224,20 +1190,14 @@ export class HostUpdateCoordinator {
   ): void {
     const arenaResult = this.ctx.arenaResult;
 
-    if (rockMult !== 0 && arenaResult) {
-      const rockObjects = arenaResult.rockObjects;
-      for (let i = 0; i < rockObjects.length; i++) {
-        const rock = rockObjects[i];
-        if (!rock?.active) continue;
-        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
-        if (dist > radius) continue;
-        const scaledDamage = Math.round(computeRadialDamage(dist, radius, damage, damageFalloff) * rockMult);
-        if (scaledDamage <= 0) continue;
-        const resolvedDamage = this.resolveObstacleDamage(i, scaledDamage, attackerId);
-        if (resolvedDamage <= 0) continue;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, attackerId);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
-      }
+    if (arenaResult) {
+      // Der Fels-Anteil läuft über den gemeinsamen Kern; die Lobby benutzt denselben Resolver
+      // mit ihrem lokalen Bestand, damit Falloff und `rockDamageMult` identisch wirken.
+      applyRadialEnvironmentDamage(
+        this.environmentRockSink,
+        { x, y, radius, damage, rockDamageMult: rockMult, falloff: damageFalloff },
+        attackerId,
+      );
     }
 
     if (trainMult !== 0 && this.ctx.trainManager) {
@@ -1582,6 +1542,56 @@ export class HostUpdateCoordinator {
     const newHp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, ownerId);
     if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage');
   }
+
+  /**
+   * Gameplay-Seite der gemeinsamen Detonationsverarbeitung: autoritativer Schaden, Rückstoß,
+   * Umgebungsschaden und der replizierte Explosionskanal.
+   */
+  private readonly detonationEffectSink: DetonationEffectSink = {
+    addComboAdrenaline: (ownerId, amount) => {
+      this.ctx.resourceSystem?.addAdrenaline(ownerId, amount);
+    },
+    applyAoeDamage: (x, y, radius, damage, attackerId, falloff) => {
+      this.ctx.combatSystem.applyAoeDamage(x, y, radius, damage, attackerId, false, {
+        category: 'explosion',
+        weaponName: 'Detonation',
+        damageFalloff: falloff,
+      });
+    },
+    applyRadialImpulse: (x, y, radius, force, attackerId, selfMultiplier) => {
+      this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, force, attackerId, selfMultiplier);
+    },
+    applyEnvironmentDamage: (x, y, radius, damage, rockMult, trainMult, attackerId, falloff) => {
+      this.applyAoeEnvironmentDamage(x, y, radius, damage, rockMult, trainMult, attackerId, falloff);
+    },
+    playExplosion: (x, y, radius, color, visualStyle) => {
+      bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle);
+    },
+    // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
+    spawnDotArea: (dot, x, y, explosionRadius, ownerId, ownerColor) => {
+      this.spawnDotAreaFromExplosion(dot, x, y, explosionRadius, ownerId, ownerColor);
+    },
+    resolveOwnerColor: (ownerId) => bridge.getPlayerColor(ownerId),
+  };
+
+  /**
+   * Gameplay-Seite des gemeinsamen Umgebungsschaden-Kerns: runden-autoritativer Felsbestand,
+   * Zielstatus-Trichter und die replizierte Zerstörungsdarstellung.
+   */
+  private readonly environmentRockSink: EnvironmentRockSink = {
+    forEachActiveRock: (visit) => {
+      const rockObjects = this.ctx.arenaResult?.rockObjects;
+      if (!rockObjects) return;
+      for (let i = 0; i < rockObjects.length; i++) {
+        const rock = rockObjects[i];
+        if (!rock?.active) continue;
+        visit(i, rock.x, rock.y);
+      }
+    },
+    resolveRockDamage: (index, damage, attackerId) => this.resolveObstacleDamage(index, damage, attackerId),
+    applyRockDamage: (index, damage, attackerId) => this.rockVisualHelper.applyObstacleDamageById(index, damage, attackerId),
+    onRockDestroyed: (index) => this.rockVisualHelper.handleDestroyedRock(index, 'damage'),
+  };
 
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */
   private resolveObstacleDamage(index: number, damage: number, attackerId: string): number {

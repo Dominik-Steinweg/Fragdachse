@@ -572,6 +572,30 @@ export interface CoopDefenseMapConfig {
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
 }
 
+/** Maschinenlesbarer Kampagnen-Audit fuer das GDD-Review und Balancing-Tools. */
+export interface CoopDefenseCampaignAuditEntry {
+  readonly mapId: string;
+  readonly displayName: string;
+  readonly objective: CoopDefenseMapObjective;
+  readonly arena: { readonly widthCells: number; readonly heightCells: number };
+  readonly tutorial: boolean;
+  readonly targetDurationSec: number;
+  readonly encounterIds: readonly string[];
+  readonly triggers: readonly { readonly id: string; readonly kind: 'encounter' | 'event'; readonly type: string }[];
+  readonly finiteXp: number;
+  readonly persistentSpawns: readonly string[];
+  readonly secondaryObjectives: readonly string[];
+  readonly events: readonly { readonly id: string; readonly type: CoopDefenseMapEventConfig['type'] }[];
+  readonly boss: string | null;
+  readonly bases: readonly { readonly id: string; readonly role: CoopBaseRole; readonly faction: CoopBaseFaction }[];
+  readonly outposts: readonly string[];
+  readonly spawnStructures: readonly string[];
+  readonly itemLevel: number | null;
+  readonly rockField: boolean;
+  readonly train: boolean;
+  readonly hazards: readonly string[];
+}
+
 interface CoopDefenseMapRegistryFile {
   readonly defaultMapId: string;
   readonly maps: readonly CoopDefenseMapConfig[];
@@ -590,6 +614,53 @@ const MAPS_BY_ID = new Map<string, CoopDefenseMapConfig>(
 
 export function getCoopDefenseMapConfig(mapId: string): CoopDefenseMapConfig {
   return MAPS_BY_ID.get(mapId) ?? getDefaultCoopDefenseMapConfig();
+}
+
+export function getCoopDefenseCampaignAudit(): readonly CoopDefenseCampaignAuditEntry[] {
+  return COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => ({
+    mapId: mapConfig.mapId,
+    displayName: mapConfig.displayName,
+    objective: mapConfig.objective,
+    arena: {
+      widthCells: mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+      heightCells: mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+    },
+    tutorial: mapConfig.tutorialText !== undefined,
+    targetDurationSec: mapConfig.surviveDurationSec ?? mapConfig.balanceReferenceDurationSec,
+    encounterIds: (mapConfig.encounters ?? []).map((encounter) => encounter.id),
+    triggers: [
+      ...(mapConfig.encounters ?? []).map((encounter) => ({
+        id: encounter.id,
+        kind: 'encounter' as const,
+        type: encounter.start.type,
+      })),
+      ...(mapConfig.mapEvents ?? []).map((event) => ({
+        id: event.id,
+        kind: 'event' as const,
+        type: event.start.type,
+      })),
+    ],
+    finiteXp: getCoopDefenseMapScheduledXp(mapConfig),
+    persistentSpawns: (mapConfig.persistentSpawns ?? []).map((spawn) => spawn.id),
+    secondaryObjectives: (mapConfig.secondaryObjectives ?? []).map((objective) => `${objective.id}:${objective.type}`),
+    events: (mapConfig.mapEvents ?? []).map((event) => ({ id: event.id, type: event.type })),
+    boss: mapConfig.boss?.enemyKind ?? null,
+    bases: mapConfig.bases.map((base) => ({
+      id: base.id,
+      role: base.role ?? 'main',
+      faction: base.faction ?? 'friendly',
+    })),
+    outposts: mapConfig.bases.filter((base) => (base.role ?? 'main') === 'outpost').map((base) => base.id),
+    spawnStructures: mapConfig.bases
+      .filter((base) => (base.role ?? 'main') === 'spawn-point')
+      .map((base) => base.id),
+    itemLevel: mapConfig.itemDrop?.itemLevel ?? null,
+    rockField: mapConfig.rockField !== undefined,
+    train: (mapConfig.mapEvents ?? []).some((event) => event.type === 'train'),
+    hazards: (mapConfig.mapEvents ?? [])
+      .filter((event): event is CoopDefenseMapGroundHazardEventConfig => event.type === 'ground-hazard')
+      .map((event) => event.id),
+  }));
 }
 
 export function getDefaultCoopDefenseMapConfig(): CoopDefenseMapConfig {
@@ -751,6 +822,11 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefense
   if (!uniqueMapIds.has(registry.defaultMapId)) {
     throw new Error(`[coopDefenseMaps] Default map id is missing from maps: ${registry.defaultMapId}`);
   }
+  const campaignIds = maps.filter((mapConfig) => mapConfig.mapId !== '0').map((mapConfig) => mapConfig.mapId);
+  const expectedCampaignIds = campaignIds.map((_, index) => String(index + 1));
+  if (campaignIds.length !== 17 || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
+    throw new Error('[coopDefenseMaps] Campaign registry must contain exactly maps 1 through 17 in order');
+  }
   return {
     defaultMapId: registry.defaultMapId,
     maps,
@@ -770,7 +846,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, boss);
   const persistentSpawns = Array.isArray(mapConfig.persistentSpawns) ? mapConfig.persistentSpawns : [];
   validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters);
-  validateFriendlyMainBase(mapConfig.mapId, bases);
+  if (objective !== 'survive') validateFriendlyMainBase(mapConfig.mapId, bases);
   const surviveDurationSec = normalizeSurviveDurationSec(mapConfig.mapId, objective, mapConfig.surviveDurationSec);
   const balanceReferenceDurationSec = normalizeBalanceReferenceDurationSec(
     mapConfig.mapId,

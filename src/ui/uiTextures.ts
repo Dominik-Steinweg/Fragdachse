@@ -108,6 +108,30 @@ export function ensureModalPanelTexture(
   });
 }
 
+/**
+ * Panelflaeche der Lobby.
+ *
+ * Bewusst eine eigene Variante statt einer Aenderung an {@link ensureModalPanelTexture}:
+ * Hinter dem Lobby-Panel liegt eine Felslandschaft, die durchscheinen soll. Modale Dialoge
+ * ueberall sonst brauchen weiterhin ihre volle Deckung.
+ */
+export function ensureLobbyPanelTexture(
+  scene: Phaser.Scene, key: string, w: number, h: number,
+  baseColor: number, accentColor: number,
+): string {
+  return ensureRoundedTexture(scene, {
+    key, w, h,
+    radius: 22,
+    topColor: lerpColor(baseColor, 0xffffff, 0.07),
+    bottomColor: lerpColor(baseColor, 0x000000, 0.3),
+    fillAlpha: 0.86,
+    strokeColor: accentColor,
+    strokeAlpha: 0.5,
+    strokeWidth: 2,
+    highlightAlpha: 0.05,
+  });
+}
+
 /** Glaenzender, drueckbarer Button in der angegebenen Grundfarbe. */
 export function ensureGlossyButtonTexture(
   scene: Phaser.Scene, key: string, w: number, h: number,

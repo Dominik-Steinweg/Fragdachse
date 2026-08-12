@@ -3,6 +3,7 @@ import {
   COOP_DEFENSE_MAP_CONFIGS,
   DEFAULT_COOP_DEFENSE_MAP_ID,
   getCoopDefenseMapConfig,
+  getCoopDefenseCampaignAudit,
   getCoopDefenseMapScheduledXp,
   getCoopDefenseMapXpReference,
   getCoopDefenseMapObjectiveLabel,
@@ -36,7 +37,7 @@ describe('Coop defense map progression', () => {
     const mapIds = COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId);
     expect(mapIds).toEqual([
       '0', '1', '2', '3', '4', '5', '6', '7', '8',
-      '9', '10', '11', '12', '13', '14', '15', '16',
+      '9', '10', '11', '12', '13', '14', '15', '16', '17',
     ]);
     expect(DEFAULT_COOP_DEFENSE_MAP_ID).toBe('1');
     expect(mapIds.every((mapId) => mapId.trim().length > 0)).toBe(true);
@@ -85,6 +86,34 @@ describe('Coop defense map progression', () => {
         expect(map.tutorialText.trim().length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('exposes the complete Map 0-17 campaign audit and key GDD semantics', () => {
+    const audit = getCoopDefenseCampaignAudit();
+    expect(audit.map((entry) => entry.mapId)).toEqual([
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
+    ]);
+    expect(audit.find((entry) => entry.mapId === '9')).toMatchObject({
+      objective: 'survive',
+      tutorial: true,
+      targetDurationSec: 120,
+      bases: [],
+      secondaryObjectives: [],
+      train: true,
+    });
+    expect(audit.find((entry) => entry.mapId === '14')).toMatchObject({
+      objective: 'survive',
+      targetDurationSec: 180,
+      rockField: true,
+      train: false,
+    });
+    expect(audit.find((entry) => entry.mapId === '17')).toMatchObject({
+      objective: 'destroy-hostile-bases',
+      itemLevel: 4,
+      hazards: ['beer-void-corridor'],
+      secondaryObjectives: ['carry-beer-to-rear-base:carry'],
+      train: false,
+    });
   });
 
   it('assigns one valid victory objective to every map', () => {
@@ -167,10 +196,51 @@ describe('Coop defense map progression', () => {
     expect(map1.encounters?.flatMap((encounter) => encounter.groups).every((group) => group.front === 'west')).toBe(true);
 
     const map2 = getCoopDefenseMapConfig('2');
-    expect(map2.persistentSpawns?.map((source) => source.front)).toEqual(['west', 'north']);
+    expect(map2.persistentSpawns).toEqual([]);
+    expect(map2.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
+    expect(map2.encounters?.flatMap((encounter) => encounter.groups)
+      .every((group) => getCoopDefenseEnemyConfig(group.enemyKind).movementTarget === 'bases')).toBe(true);
+
+    const map3 = getCoopDefenseMapConfig('3');
+    expect(map3.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
+    expect(map3.encounters?.flatMap((encounter) => encounter.groups)
+      .every((group) => group.front === 'west' || group.front === 'east')).toBe(true);
+    expect(map3.encounters?.flatMap((encounter) => encounter.groups)
+      .some((group) => group.enemyKind === 'spore-warden')).toBe(false);
+
+    const map4 = getCoopDefenseMapConfig('4');
+    expect(map4.encounters?.flatMap((encounter) => encounter.groups)
+      .every((group) => group.front === 'west')).toBe(true);
+
+    const map5 = getCoopDefenseMapConfig('5');
+    expect(map5.encounters?.flatMap((encounter) => encounter.groups)
+      .every((group) => group.front === 'west')).toBe(true);
+
+    const map6 = getCoopDefenseMapConfig('6');
+    expect(map6.encounters?.flatMap((encounter) => encounter.groups)
+      .some((group) => group.enemyKind === 'void-stalker')).toBe(false);
+    expect(map6.encounters?.flatMap((encounter) => encounter.groups)
+      .filter((group) => group.enemyKind === 'spore-warden')
+      .reduce((sum, group) => sum + group.count, 0)).toBe(27);
+
+    const map7 = getCoopDefenseMapConfig('7');
+    expect(map7.encounters?.flatMap((encounter) => encounter.groups)
+      .every((group) => group.front === 'west')).toBe(true);
+    expect(map7.encounters?.flatMap((encounter) => encounter.groups)
+      .filter((group) => group.enemyKind === 'plague-medic')
+      .map((group) => group.count)).toEqual([2, 2, 3]);
 
     const map8 = getCoopDefenseMapConfig('8');
-    expect(new Set(map8.persistentSpawns?.map((source) => source.front))).toEqual(new Set(['west', 'north', 'south']));
+    expect(new Set(map8.persistentSpawns?.map((source) => source.front))).toEqual(new Set(['north']));
+    expect(map8.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
+    const map8Outpost = map8.bases.find((base) => base.id === 'friendly-outpost-spore-top');
+    expect(map8Outpost?.hpMax).toBe(650);
+    expect(map8Outpost?.turrets).toHaveLength(2);
+    expect(map8.secondaryObjectives?.[0]?.start).toEqual({ type: 'after-encounter', encounterId: 'dimension-west' });
+
+    const map10 = getCoopDefenseMapConfig('10');
+    expect(map10.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
+    expect(map10.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
 
     const map11 = getCoopDefenseMapConfig('11');
     expect(map11.encounters?.map((encounter) => new Set(encounter.groups.map((group) => group.front)))).toEqual([
@@ -187,7 +257,7 @@ describe('Coop defense map progression', () => {
 
   it('requires the bounded survival contract on every survival map', () => {
     const survivalMaps = COOP_DEFENSE_MAP_CONFIGS.filter(({ objective }) => objective === 'survive');
-    expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9']);
+    expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9', '14']);
     for (const map of survivalMaps) {
       expect(map.surviveDurationSec).toBeGreaterThan(0);
       expect(map.surviveRespawnsPerPlayer).toBeGreaterThanOrEqual(0);
@@ -202,6 +272,11 @@ describe('Coop defense map progression', () => {
       .flatMap((encounter) => encounter.groups);
     expect(singlePlayerXp).toBeGreaterThan(0);
     expect(multiplayerXp).toBe(resolvedMultiplayerGroups.reduce((sum, group) => sum + group.count, 0));
+  });
+
+  it('keeps Maps 1 to 4 at one level-up plus a small cumulative XP buffer', () => {
+    expect(['1', '2', '3', '4'].map((mapId) => getCoopDefenseMapScheduledXp(getCoopDefenseMapConfig(mapId), 1)))
+      .toEqual([20, 37, 58, 95]);
   });
 
   it('uses valid visual footprints for every base', () => {
@@ -423,40 +498,27 @@ describe('Coop defense map progression', () => {
       : null).not.toBe(lastEncounterId);
   });
 
-  it('integrates Map 14 Hold as a mid-chain damaged two-rocket outpost', () => {
+  it('uses Map 14 as a 180-second survival map with rock and Void-Fire lanes', () => {
     const map = getCoopDefenseMapConfig('14');
-    const hold = map.secondaryObjectives?.find((objective) => objective.type === 'hold');
-    const target = hold ? map.bases.find((base) => base.id === hold.targets[0]) : undefined;
-    const encounterIds = map.encounters?.map((encounter) => encounter.id) ?? [];
-
-    expect(hold).toBeDefined();
-    expect(hold?.start.type).toBe('after-encounter');
-    expect(hold?.holdUntil?.type).toBe('after-encounter');
-    expect(hold?.rewards?.repairTargetOnComplete).toBe(true);
-    expect(target?.role).toBe('outpost');
-    expect(target?.faction).toBe('friendly');
-    expect(target?.dormant).toBe(true);
-    expect(target?.startHpFactor).toBeGreaterThan(0);
-    expect(target?.startHpFactor).toBeLessThan(1);
-    expect(target?.turrets).toHaveLength(2);
-    expect(target?.turrets?.every((turret) => turret.weaponId === 'TURRET_ROCKET_BURST')).toBe(true);
-
-    const startIndex = hold?.start.type === 'after-encounter'
-      ? encounterIds.indexOf(hold.start.encounterId)
-      : -1;
-    const holdUntilIndex = hold?.holdUntil?.type === 'after-encounter'
-      ? encounterIds.indexOf(hold.holdUntil.encounterId)
-      : -1;
-    expect(startIndex).toBeGreaterThan(0);
-    expect(holdUntilIndex).toBeGreaterThan(startIndex);
-    expect(holdUntilIndex).toBeLessThan(encounterIds.length - 1);
+    expect(map.objective).toBe('survive');
+    expect(map.surviveDurationSec).toBe(180);
+    expect(map.surviveRespawnsPerPlayer).toBe(2);
+    expect(map.secondaryObjectives).toEqual([]);
+    expect(map.trackMode).toBe('void-fire');
+    expect(map.rockField).toBeDefined();
+    expect(map.mapEvents.some((event) => event.type === 'ground-hazard')).toBe(true);
   });
 
-  it('keeps Carry confined to the B11 sandbox', () => {
+  it('keeps the four campaign secondary objectives on their authored maps', () => {
     const campaignObjectives = COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.mapId !== '0')
       .flatMap((map) => map.secondaryObjectives ?? []);
-    expect(campaignObjectives.some((objective) => objective.type === 'carry')).toBe(false);
+    expect(campaignObjectives.map((objective) => `${objective.type}:${objective.id}`)).toEqual([
+      'hold:hold-dimension-spore-outpost',
+      'destroy:destroy-brutbomben-front',
+      'hold:hold-zeitzunder-middle-outpost',
+      'carry:carry-beer-to-rear-base',
+    ]);
   });
 
   it('keeps power-up respawns valid and delays the first strong pedestal spawn', () => {

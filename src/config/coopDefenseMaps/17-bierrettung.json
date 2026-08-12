@@ -1,0 +1,198 @@
+{
+  "mapId": "17",
+  "displayName": "Map 17 - Bierrettung",
+  "arenaWidthCells": 112,
+  "arenaHeightCells": 42,
+  "timeOfDay": "18:30",
+  "tutorialText": "Auf dem Weg zur Feindbasis liegt Bier. Tragt es einzeln zur markierten Abgabe zurück. Jede gerettete Flasche verbessert eure Belohnung – das Bier ist optional, die Feindbasis bleibt das Hauptziel.",
+  "trackMode": "void-fire",
+  "mapEvents": [
+    {
+      "id": "beer-void-corridor",
+      "type": "ground-hazard",
+      "start": { "type": "time", "atMs": 0 },
+      "area": {
+        "type": "rectangle",
+        "gridX": 56,
+        "gridY": 0,
+        "widthCells": 2,
+        "heightCells": 42,
+        "baseClearanceCells": 2
+      },
+      "effect": {
+        "visualStyle": "void",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Morgenleerer Voidbrand"
+      }
+    }
+  ],
+  "rockFillRatio": 0.16,
+  "balanceReferenceDurationSec": 230,
+  "objective": "destroy-hostile-bases",
+  "bases": [
+    {
+      "id": "coop-base-rear",
+      "hpMax": 4200,
+      "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+      "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 }
+    },
+    {
+      "id": "coop-base-middle",
+      "hpMax": 1900,
+      "anchor": { "kind": "center-offset", "dxCells": -5, "dyCells": -2 },
+      "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 }
+    },
+    {
+      "id": "enemy-beer-hive",
+      "faction": "hostile",
+      "hpMax": 3400,
+      "anchor": { "kind": "left-center", "edgeInsetCells": 8 },
+      "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 }
+    },
+    {
+      "id": "enemy-beer-outpost-north",
+      "role": "outpost",
+      "faction": "hostile",
+      "hpMax": 950,
+      "anchor": { "kind": "grid", "gridX": 28, "gridY": 8 },
+      "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+    },
+    {
+      "id": "enemy-beer-outpost-south",
+      "role": "outpost",
+      "faction": "hostile",
+      "hpMax": 950,
+      "anchor": { "kind": "grid", "gridX": 28, "gridY": 32 },
+      "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+    },
+    {
+      "id": "enemy-beer-spawn-north",
+      "role": "spawn-point",
+      "faction": "hostile",
+      "hpMax": 500,
+      "anchor": { "kind": "grid", "gridX": 12, "gridY": 5 },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 2, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 2, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 }
+        ]
+      },
+      "spawnCenter": { "gridX": 1, "gridY": 1 }
+    },
+    {
+      "id": "enemy-beer-spawn-south",
+      "role": "spawn-point",
+      "faction": "hostile",
+      "hpMax": 500,
+      "anchor": { "kind": "grid", "gridX": 12, "gridY": 35 },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 2, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 2, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 }
+        ]
+      },
+      "spawnCenter": { "gridX": 1, "gridY": 1 }
+    }
+  ],
+  "powerUps": [
+    { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+    { "defId": "ARMOR", "region": "middle", "respawnMs": 10000, "spawnOnArenaStart": true },
+    { "defId": "ADRENALINE", "region": "rear", "respawnMs": 10000, "spawnOnArenaStart": true }
+  ],
+  "encounters": [
+    {
+      "id": "beer-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 900, "front": "north" }
+      ]
+    },
+    {
+      "id": "beer-flank",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 8, "front": "south" },
+        { "enemyKind": "pyro-badger", "count": 4, "delayMs": 1100, "front": "east" }
+      ]
+    },
+    {
+      "id": "beer-counterpush",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "void-stalker", "count": 5, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "south" }
+      ]
+    },
+    {
+      "id": "beer-final-assault",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 12, "delayMs": 900, "front": "east" }
+      ]
+    }
+  ],
+  "persistentSpawns": [
+    {
+      "id": "base-17-enemy-beer-hive-pressure",
+      "enemyKind": "demon-badger",
+      "intervalMs": 7000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": { "type": "base", "baseId": "enemy-beer-spawn-north" }
+    },
+    {
+      "id": "base-17-enemy-beer-outpost-north-pressure",
+      "enemyKind": "pyro-badger",
+      "intervalMs": 9000,
+      "countPerTick": 1,
+      "startAtMs": 5000,
+      "source": { "type": "base", "baseId": "enemy-beer-spawn-south" }
+    },
+    {
+      "id": "base-17-enemy-beer-outpost-south-pressure",
+      "enemyKind": "rabid-badger",
+      "intervalMs": 9000,
+      "countPerTick": 1,
+      "startAtMs": 8000,
+      "source": { "type": "base", "baseId": "enemy-beer-spawn-north" }
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "carry-beer-to-rear-base",
+      "type": "carry",
+      "displayName": "BIER ZUR BASIS BRINGEN",
+      "rewardHint": "TEAMBUFF UND ITEM-CHANCE",
+      "start": { "type": "after-encounter", "encounterId": "beer-flank" },
+      "targets": [],
+      "targetGoal": 3,
+      "carry": {
+        "spawnZone": { "gridX": 22, "gridY": 18, "widthCells": 4, "heightCells": 6 },
+        "deliveryZone": { "gridX": 100, "gridY": 16, "widthCells": 7, "heightCells": 10 },
+        "itemCount": 3
+      },
+      "rewards": {
+        "itemMetaRewardOnComplete": true,
+        "teamBuffOnComplete": { "defId": "TEAM_REGENERATION_SURGE", "durationMs": 30000, "hpRegenPerSecond": 10, "adrenalineRegenMultiplier": 1.5 }
+      }
+    }
+  ],
+  "itemDrop": { "itemLevel": 4 }
+}

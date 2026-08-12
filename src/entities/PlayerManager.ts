@@ -10,6 +10,7 @@ import type {
   SyncedTeslaDome,
 } from '../types';
 import { PlayerEntity }       from './PlayerEntity';
+import type { OwnerVisualSource, OwnerVisualState } from './OwnerVisualSource';
 import type { LightingSystem } from '../effects/LightingSystem';
 import {
   ARENA_HEIGHT,
@@ -123,7 +124,7 @@ const EMPTY_SPAWN_CONTEXT: SpawnContextSnapshot = {
   projectiles: [],
 };
 
-export class PlayerManager {
+export class PlayerManager implements OwnerVisualSource {
   private scene:   Phaser.Scene;
   private players: Map<string, PlayerEntity> = new Map();
   private layout:  ArenaLayout | null = null;
@@ -207,6 +208,17 @@ export class PlayerManager {
 
   getAllPlayers(): PlayerEntity[] {
     return Array.from(this.players.values());
+  }
+
+  /**
+   * Besitzerzustand für Renderer und `ProjectileManager` ({@link OwnerVisualSource}). Der
+   * Gameplay-Zweig dieser Grenze; die Lobby liefert denselben Zustand aus ihrer
+   * Ambient-Actor-Registry.
+   */
+  getOwnerVisualState(ownerId: string): OwnerVisualState | null {
+    const player = this.players.get(ownerId);
+    if (!player) return null;
+    return { x: player.sprite.x, y: player.sprite.y, color: player.color, visible: player.sprite.visible };
   }
 
   /**

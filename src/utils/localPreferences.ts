@@ -1,9 +1,10 @@
 import { SOUND_MASTER_VOLUME, SOUND_MUSIC_VOLUME, SOUND_SFX_VOLUME } from '../config';
 import {
   COOP_DEFENSE_CLASS_IDS,
-  COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID,
   DEFAULT_COOP_DEFENSE_CLASS_ID,
+  getUnlockedCoopDefenseClassIds,
   sanitizeCoopDefenseClassId,
+  isCoopDefenseClassId,
 } from '../config/coopDefenseClasses';
 import type {
   CoopDefenseClassId,
@@ -65,6 +66,8 @@ export interface CoopDefenseProgressPreferences {
   highestUnlockedMapId: string;
   /** Bis Map 5 fuehrt die unsichtbare, bonuslose Default-Klasse den gemeinsamen Fortschritt. */
   classesUnlocked: boolean;
+  /** Klassen, die durch den Kampagnenfortschritt tatsaechlich ausgewaehlt werden duerfen. */
+  unlockedClassIds: CoopDefenseClassId[];
   defaultProfile: CoopDefenseUpgradeProfile;
   selectedClassId: CoopDefenseClassId;
   profilesByClass: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
@@ -141,6 +144,7 @@ export interface LocalProgressDocumentV2 {
     completedBossMapIds: string[];
     highestUnlockedMapId: string;
     classesUnlocked: boolean;
+    unlockedClassIds?: CoopDefenseClassId[];
     defaultProfile?: CompactUpgradeProfile;
     selectedClassId?: CoopDefenseClassId;
     profilesByClass?: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>>;
@@ -171,6 +175,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   completedBossMapIds: [],
   highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
   classesUnlocked: false,
+  unlockedClassIds: [],
   defaultProfile: buildDefaultCoopDefenseUpgradeProfile(DEFAULT_COOP_DEFENSE_CLASS_ID),
   selectedClassId: DEFAULT_COOP_DEFENSE_CLASS_ID,
   profilesByClass: {
@@ -339,6 +344,12 @@ function buildDefaultPreferences(): LocalPreferences {
   };
 }
 
+function sanitizeStoredUnlockedClassIds(value: unknown): CoopDefenseClassId[] | null {
+  if (!Array.isArray(value)) return null;
+  const classIds = value.filter(isCoopDefenseClassId);
+  return classIds.length === value.length ? [...new Set(classIds)] : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -494,11 +505,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.unseenItems !== 'boolean') return null;
 
   const loadout = sanitizeStoredLoadout(document.loadout);
-  const classesUnlocked = coop.classesUnlocked;
+  if (coop.unlockedClassIds !== undefined && sanitizeStoredUnlockedClassIds(coop.unlockedClassIds) === null) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
-  const selectedClassId = classesUnlocked
-    ? sanitizeCoopDefenseClassId(coop.selectedClassId)
-    : DEFAULT_COOP_DEFENSE_CLASS_ID;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
   const completedBossMapIds = sanitizeCompletedBossMapIds(coop.completedBossMapIds);
@@ -521,6 +529,16 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (isRecord(rawProfiles) && Object.keys(rawProfiles).some((key) => (
     !COOP_DEFENSE_CLASS_IDS.includes(key as CoopDefenseClassId)
   ))) return null;
+  const highestUnlockedMapId = sanitizeHighestUnlockedCoopDefenseMapId(coop.highestUnlockedMapId);
+  // D deliberately does not grandfather the old global class flag. A save without the new
+  // per-class list starts with no selectable specialization and can earn the unlocks again.
+  const unlockedClassIds = coop.unlockedClassIds === undefined
+    ? []
+    : sanitizeStoredUnlockedClassIds(coop.unlockedClassIds) ?? [];
+  const classesUnlocked = unlockedClassIds.length > 0;
+  const selectedClassId = classesUnlocked && unlockedClassIds.includes(sanitizeCoopDefenseClassId(coop.selectedClassId))
+    ? sanitizeCoopDefenseClassId(coop.selectedClassId)
+    : DEFAULT_COOP_DEFENSE_CLASS_ID;
   const profilesByClass = {} as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
   for (const classId of COOP_DEFENSE_CLASS_IDS) {
     const compact = sanitizeCompactProfile(isRecord(rawProfiles) ? rawProfiles[classId] : undefined);
@@ -548,7 +566,6 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   const pendingItemReward = coop.pendingItemReward === null
     ? null : sanitizeCoopDefensePendingItemReward(coop.pendingItemReward);
   if (coop.pendingItemReward !== null && !pendingItemReward) return null;
-  const highestUnlockedMapId = sanitizeHighestUnlockedCoopDefenseMapId(coop.highestUnlockedMapId);
   return {
     profile: {
       playerName: typeof document.profile.playerName === 'string'
@@ -563,10 +580,14 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         completedBossMapIds,
         highestUnlockedMapId,
         classesUnlocked,
+        unlockedClassIds: [...unlockedClassIds],
         defaultProfile,
         selectedClassId,
         profilesByClass,
-        itemsUnlocked: coop.itemsUnlocked || isCoopDefenseMapUnlocked('11', highestUnlockedMapId),
+        itemsUnlocked: coop.itemsUnlocked || isCoopDefenseMapUnlocked(
+          COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID,
+          highestUnlockedMapId,
+        ),
         items,
         equippedItemIds,
         pendingItemReward,
@@ -603,7 +624,7 @@ function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefense
 function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDocumentV2 {
   const progress = preferences.progression.coopDefense;
   const profilesByClass: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>> = {};
-  if (progress.classesUnlocked) {
+  if (progress.unlockedClassIds.length > 0) {
     for (const classId of COOP_DEFENSE_CLASS_IDS) {
       const compact = compactProfile(progress.profilesByClass[classId], classId);
       if (compact) profilesByClass[classId] = compact;
@@ -619,11 +640,12 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       completedBossMapIds: [...progress.completedBossMapIds],
       highestUnlockedMapId: progress.highestUnlockedMapId,
       classesUnlocked: progress.classesUnlocked,
+      unlockedClassIds: [...progress.unlockedClassIds],
       defaultProfile: compactProfile(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID),
-      selectedClassId: progress.classesUnlocked ? progress.selectedClassId : undefined,
-      profilesByClass: progress.classesUnlocked && Object.keys(profilesByClass).length > 0
+      selectedClassId: progress.unlockedClassIds.length > 0 ? progress.selectedClassId : undefined,
+      profilesByClass: progress.unlockedClassIds.length > 0 && Object.keys(profilesByClass).length > 0
         ? profilesByClass : undefined,
-      loadoutsByClass: progress.classesUnlocked && Object.keys(preferences.loadoutByClass).length > 0
+      loadoutsByClass: progress.unlockedClassIds.length > 0 && Object.keys(preferences.loadoutByClass).length > 0
         ? sanitizeStoredLoadoutsByClass(preferences.loadoutByClass) : undefined,
       itemsUnlocked: progress.itemsUnlocked,
       items: [...progress.items],
@@ -902,7 +924,7 @@ export function switchStoredCoopDefenseClassLoadout(
 ): void {
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
-    if (!storedProgress.classesUnlocked) return current;
+    if (storedProgress.unlockedClassIds.length === 0) return current;
 
     return {
       ...current,
@@ -954,6 +976,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     completedBossMapIds: [...progress.completedBossMapIds],
     highestUnlockedMapId: progress.highestUnlockedMapId,
     classesUnlocked: progress.classesUnlocked,
+    unlockedClassIds: [...progress.unlockedClassIds],
     defaultProfile: cloneCoopDefenseUpgradeProfile(
       progress.defaultProfile,
       DEFAULT_COOP_DEFENSE_CLASS_ID,
@@ -1021,6 +1044,8 @@ export function setStoredHighestUnlockedCoopDefenseMapId(mapId: string): void {
       coopDefense: {
         ...current.progression.coopDefense,
         highestUnlockedMapId: nextMapId,
+        unlockedClassIds: [...getUnlockedCoopDefenseClassIds(nextMapId)],
+        classesUnlocked: getUnlockedCoopDefenseClassIds(nextMapId).length > 0,
       },
     },
   }));
@@ -1046,6 +1071,8 @@ export function unlockStoredCoopDefenseMapAfterVictory(completedMapId: string): 
       coopDefense: {
         ...current.progression.coopDefense,
         highestUnlockedMapId: nextMapId,
+        unlockedClassIds: [...getUnlockedCoopDefenseClassIds(nextMapId)],
+        classesUnlocked: getUnlockedCoopDefenseClassIds(nextMapId).length > 0,
       },
     },
   });
@@ -1063,8 +1090,8 @@ export function setStoredCoopDefenseClassId(classId: CoopDefenseClassId): void {
       ...current.progression,
       coopDefense: {
         ...current.progression.coopDefense,
-        selectedClassId: current.progression.coopDefense.classesUnlocked
-          ? sanitizeCoopDefenseClassId(classId)
+        selectedClassId: current.progression.coopDefense.unlockedClassIds.includes(classId)
+          ? classId
           : DEFAULT_COOP_DEFENSE_CLASS_ID,
       },
     },
@@ -1072,7 +1099,11 @@ export function setStoredCoopDefenseClassId(classId: CoopDefenseClassId): void {
 }
 
 export function getStoredCoopDefenseClassesUnlocked(): boolean {
-  return readPreferences().progression.coopDefense.classesUnlocked;
+  return readPreferences().progression.coopDefense.unlockedClassIds.length > 0;
+}
+
+export function getStoredUnlockedCoopDefenseClassIds(): readonly CoopDefenseClassId[] {
+  return [...readPreferences().progression.coopDefense.unlockedClassIds];
 }
 
 /**
@@ -1108,6 +1139,9 @@ export function setStoredCoopDefenseClassesUnlocked(unlocked: boolean): boolean 
       coopDefense: {
         ...storedProgress,
         classesUnlocked: unlocked,
+        unlockedClassIds: unlocked
+          ? ['dachs_nukem', 'dachs_of_steel']
+          : [],
         defaultProfile,
         selectedClassId: DEFAULT_COOP_DEFENSE_CLASS_ID,
         profilesByClass: mirrorDefaultProfileToClasses(
@@ -1121,18 +1155,41 @@ export function setStoredCoopDefenseClassesUnlocked(unlocked: boolean): boolean 
 }
 
 export function unlockStoredCoopDefenseClassesAfterVictory(completedMapId: string): boolean {
-  return completedMapId.trim() === COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID
-    && setStoredCoopDefenseClassesUnlocked(true);
+  const targetClassIds = getUnlockedCoopDefenseClassIds(completedMapId.trim());
+  if (targetClassIds.length === 0) return false;
+  const current = readPreferences();
+  const storedProgress = current.progression.coopDefense;
+  const nextClassIds = [...new Set([...storedProgress.unlockedClassIds, ...targetClassIds])];
+  if (nextClassIds.length === storedProgress.unlockedClassIds.length) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...storedProgress,
+        classesUnlocked: true,
+        unlockedClassIds: nextClassIds,
+        profilesByClass: mirrorDefaultProfileToClasses(
+          storedProgress.defaultProfile,
+          storedProgress.completedBossMapIds.length,
+        ),
+      },
+    },
+  });
+  return true;
 }
 
 export function getStoredCoopDefenseUpgradeProfile(
   classId?: CoopDefenseClassId,
 ): CoopDefenseUpgradeProfile {
   const progress = readPreferences().progression.coopDefense;
-  if (!progress.classesUnlocked && classId === undefined) {
+  if (progress.unlockedClassIds.length === 0 && classId === undefined) {
     return cloneCoopDefenseUpgradeProfile(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID);
   }
   const resolvedClassId = classId ?? progress.selectedClassId;
+  if (!progress.unlockedClassIds.includes(resolvedClassId)) {
+    return cloneCoopDefenseUpgradeProfile(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID);
+  }
   return cloneCoopDefenseUpgradeProfile(progress.profilesByClass[resolvedClassId], resolvedClassId);
 }
 
@@ -1142,7 +1199,7 @@ export function setStoredCoopDefenseUpgradeProfile(
 ): void {
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
-    if (!storedProgress.classesUnlocked) {
+    if (storedProgress.unlockedClassIds.length === 0) {
       const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
         sanitizeCoopDefenseUpgradeProfile(profile, DEFAULT_COOP_DEFENSE_CLASS_ID),
         storedProgress.completedBossMapIds.length,
@@ -1165,6 +1222,7 @@ export function setStoredCoopDefenseUpgradeProfile(
     }
 
     const resolvedClassId = classId ?? storedProgress.selectedClassId;
+    if (!storedProgress.unlockedClassIds.includes(resolvedClassId)) return current;
     return {
       ...current,
       progression: {
@@ -1572,6 +1630,8 @@ export function setStoredCoopDefenseCheatProgress(
           totalXp: nextTotalXp,
           completedBossMapIds,
           highestUnlockedMapId: nextHighestUnlockedMapId,
+          unlockedClassIds: [...getUnlockedCoopDefenseClassIds(nextHighestUnlockedMapId)],
+          classesUnlocked: getUnlockedCoopDefenseClassIds(nextHighestUnlockedMapId).length > 0,
           defaultProfile,
           profilesByClass,
         },

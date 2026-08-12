@@ -4,14 +4,54 @@
   "arenaWidthCells": 92,
   "arenaHeightCells": 52,
   "timeOfDay": "20:45",
+  "tutorialText": "Felsen und Außenposten bilden Verteidigungslinien und lenken Gegner durch Engstellen. Wird ein HOLD-Ziel markiert, muss es bis zum angegebenen Angriff überleben.",
   "rockFillRatio": 0.15,
+  "rockField": {
+    "corridorRadiusCells": 1.45,
+    "corridorRadiusVarianceCells": 0.35,
+    "corridorWanderCells": 0.8,
+    "waypointJitterCells": 0.7,
+    "rockDensityScale": 1,
+    "corridors": [
+      {
+        "id": "dimension-top-line",
+        "points": [
+          { "gridX": 0, "gridY": 8 },
+          { "gridX": 18, "gridY": 10 },
+          { "gridX": 40, "gridY": 8 },
+          { "gridX": 65, "gridY": 12 },
+          { "gridX": 91, "gridY": 10 }
+        ]
+      },
+      {
+        "id": "dimension-middle-line",
+        "points": [
+          { "gridX": 0, "gridY": 25 },
+          { "gridX": 22, "gridY": 23 },
+          { "gridX": 46, "gridY": 27 },
+          { "gridX": 70, "gridY": 24 },
+          { "gridX": 91, "gridY": 26 }
+        ]
+      },
+      {
+        "id": "dimension-bottom-line",
+        "points": [
+          { "gridX": 0, "gridY": 43 },
+          { "gridX": 20, "gridY": 40 },
+          { "gridX": 44, "gridY": 44 },
+          { "gridX": 70, "gridY": 41 },
+          { "gridX": 91, "gridY": 44 }
+        ]
+      }
+    ]
+  },
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 105,
+  "balanceReferenceDurationSec": 140,
   "objective": "repel-assault",
   "bases": [
     {
@@ -148,55 +188,11 @@
       ]
     },
     {
-      "id": "coop-base-middle",
-      "hpMax": 850,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": -1
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          }
-        ]
-      },
-      "powerUpPedestals": [
-        {
-          "id": "double-damage-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "DOUBLE_DAMAGE",
-          "respawnMs": 20000,
-          "spawnOnArenaStart": false
-        }
-      ]
-    },
-    {
       "id": "friendly-outpost-spore-top",
       "role": "outpost",
-      "hpMax": 400,
+      "dormant": true,
+      "startHpFactor": 0.75,
+      "hpMax": 650,
       "anchor": {
         "kind": "grid",
         "gridX": 36,
@@ -216,13 +212,22 @@
           },
           "mountSide": "front",
           "weaponId": "TURRET_SPORE"
+        },
+        {
+          "id": "spore-rear",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "rear",
+          "weaponId": "TURRET_SPORE"
         }
       ]
     },
     {
       "id": "friendly-outpost-spore-bottom",
       "role": "outpost",
-      "hpMax": 400,
+      "hpMax": 600,
       "anchor": {
         "kind": "grid",
         "gridX": 36,
@@ -282,7 +287,7 @@
       "restAfterMs": 8500,
       "groups": [
         { "enemyKind": "demon-badger", "count": 7, "front": "north" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "west" }
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
       ]
     },
     {
@@ -311,7 +316,7 @@
       "intervalMs": 14000,
       "countPerTick": 1,
       "startAtMs": 0,
-      "front": "west",
+      "front": "north",
       "source": {
         "type": "map"
       }
@@ -333,10 +338,22 @@
       "intervalMs": 12000,
       "countPerTick": 1,
       "startAtMs": 10000,
-      "front": "south",
+      "front": "north",
       "source": {
         "type": "map"
       }
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "hold-dimension-spore-outpost",
+      "type": "hold",
+      "displayName": "SPORENPOSTEN HALTEN",
+      "rewardHint": "DER AUSSENPOSTEN WIRD REPARIERT",
+      "start": { "type": "after-encounter", "encounterId": "dimension-west" },
+      "holdUntil": { "type": "after-encounter", "encounterId": "dimension-north" },
+      "targets": ["friendly-outpost-spore-top"],
+      "rewards": { "repairTargetOnComplete": true }
     }
   ]
 }

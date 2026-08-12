@@ -3,6 +3,7 @@
   "displayName": "Map 7 - Medic!",
   "arenaWidthCells": 80,
   "timeOfDay": "17:00",
+  "tutorialText": "Seuchenheiler halten andere Gegner länger im Kampf. Schaltet Supportziele früh aus, bevor ihr die restliche Welle bekämpft.",
   "rockFillRatio": 0.3,
   "mapEvents": [{
     "id": "train-rhythm",
@@ -10,7 +11,7 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 90,
+  "balanceReferenceDurationSec": 125,
   "objective": "repel-assault",
   "bases": [
     {
@@ -215,7 +216,7 @@
       "restAfterMs": 8500,
       "groups": [
         { "enemyKind": "plague-medic", "count": 2, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 900, "front": "north" }
+        { "enemyKind": "demon-badger", "count": 9, "delayMs": 900, "front": "west" }
       ]
     },
     {
@@ -223,8 +224,8 @@
       "start": { "type": "after-previous" },
       "restAfterMs": 9000,
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1100, "front": "north" }
+        { "enemyKind": "plague-medic", "count": 2, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 9, "delayMs": 1100, "front": "west" }
       ]
     },
     {
@@ -232,7 +233,7 @@
       "start": { "type": "after-previous" },
       "groups": [
         { "enemyKind": "plague-medic", "count": 3, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "north" }
+        { "enemyKind": "demon-badger", "count": 12, "delayMs": 1000, "front": "west" }
       ]
     }
   ]

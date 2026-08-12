@@ -47,6 +47,7 @@ import {
   type LoadoutPickerEntry,
   type LoadoutPickerGroup,
 } from './LoadoutSlotPicker';
+import { createLoadoutSlotControl } from './LoadoutSlotControl';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
 
@@ -569,7 +570,7 @@ export class CoopDefenseUpgradesOverlay {
     }
     this.updateRespecButtons(progress);
 
-    this.renderClasses(progress.classId, progress.classesUnlocked);
+    this.renderClasses(progress.classId, progress.unlockedClassIds);
     this.renderLoadoutRow(progress);
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
@@ -807,7 +808,7 @@ export class CoopDefenseUpgradesOverlay {
    * Kartensatz gezeichnet: eigene Klassenfarbe, Rolle als zweite Zeile und ein atmender Glow
    * auf der gewaehlten Karte – dieselbe Formsprache wie Kategorie-Tabs und Loadout-Karten.
    */
-  private renderClasses(activeClassId: CoopDefenseClassId, classesUnlocked: boolean): void {
+  private renderClasses(activeClassId: CoopDefenseClassId, unlockedClassIds: readonly CoopDefenseClassId[]): void {
     if (!this.classContainer) return;
     this.clearClassDecorations();
     this.classContainer.removeAll(true);
@@ -818,21 +819,23 @@ export class CoopDefenseUpgradesOverlay {
 
     COOP_DEFENSE_CLASS_IDS.forEach((classId, index) => {
       const definition = COOP_DEFENSE_CLASS_DEFINITIONS[classId];
-      const accentColor = classesUnlocked ? CLASS_ACCENT_COLORS[classId] : COLORS.GREY_5;
-      const active = classesUnlocked && classId === activeClassId;
+      const classUnlocked = unlockedClassIds.includes(classId);
+      const classesUnlocked = classUnlocked;
+      const accentColor = classUnlocked ? CLASS_ACCENT_COLORS[classId] : COLORS.GREY_5;
+      const active = classUnlocked && classId === activeClassId;
       const centerX = startX + CLASS_BUTTON_W / 2 + index * (CLASS_BUTTON_W + CLASS_BUTTON_GAP);
 
       const background = this.scene.add.image(centerX, CLASS_ROW_Y, this.ensureClassButtonTexture(accentColor, active))
         .setScrollFactor(0)
-        .setAlpha(classesUnlocked ? (active ? 1 : 0.82) : 0.48)
-        .setInteractive({ useHandCursor: classesUnlocked });
+        .setAlpha(classUnlocked ? (active ? 1 : 0.82) : 0.48)
+        .setInteractive({ useHandCursor: classUnlocked });
 
       // Aktiv: dunkler Text auf lebendiger Klassenfarbe; passiv: heller Text auf gedimmtem Grund.
       const name = this.scene.add.text(0, -10, definition.displayName, {
         fontSize: '17px',
         fontFamily: FONT_MONO,
         fontStyle: 'bold',
-        color: toCssColor(active ? COLORS.GREY_10 : (classesUnlocked ? COLORS.GREY_1 : COLORS.GREY_4)),
+        color: toCssColor(active ? COLORS.GREY_10 : (classUnlocked ? COLORS.GREY_1 : COLORS.GREY_4)),
       }).setOrigin(0.5).setScrollFactor(0);
       const role = this.scene.add.text(0, 12, classesUnlocked ? definition.role.toUpperCase() : '🔒 GESPERRT', {
         fontSize: '11px',
@@ -859,9 +862,9 @@ export class CoopDefenseUpgradesOverlay {
         }
       }
 
-      if (classesUnlocked) attachHoverEffect(this.scene, background, labels);
+      if (classUnlocked) attachHoverEffect(this.scene, background, labels);
       background.on('pointerdown', () => {
-        if (!classesUnlocked) return;
+        if (!classUnlocked) return;
         if (classId === this.getProgress().classId) return;
         this.activeCategoryIndex = 0;
         // ArenaScene.refreshStoredCoopDefenseProgress() refreshes the visible overlay
@@ -871,9 +874,9 @@ export class CoopDefenseUpgradesOverlay {
       background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
         this.showTooltip(
           definition.displayName,
-          classesUnlocked
+          classUnlocked
             ? [definition.role, '', definition.description, ...definition.tooltipLines].join('\n')
-            : 'Freischaltung durch Abschluss von Map 5',
+            : `Freischaltung durch Abschluss von Map ${definition.unlockAfterMapId}`,
           pointer,
         );
       });
@@ -1040,55 +1043,24 @@ export class CoopDefenseUpgradesOverlay {
     if (!this.loadoutContainer) return;
 
     const { centerX, presentation } = params;
-    const group = this.scene.add.container(centerX, LOADOUT_ROW_Y).setScrollFactor(0);
-
-    const frame = this.scene.add.image(0, 0, this.ensureLoadoutSlotTexture(
-      params.accentColor,
-      presentation !== null,
-    )).setScrollFactor(0);
-    group.add(frame);
-
-    if (presentation?.textureKey && this.scene.textures.exists(presentation.textureKey)) {
-      group.add(this.scene.add.image(0, 0, presentation.textureKey)
-        .setDisplaySize(LOADOUT_SLOT_SIZE - 12, LOADOUT_SLOT_SIZE - 12)
-        .setScrollFactor(0));
-    } else if (presentation) {
-      // Ohne Icon bleibt der Slot sonst leer und wirkt unbelegt.
-      group.add(this.scene.add.text(0, 0, presentation.displayName, {
-        fontSize: '9px',
-        fontFamily: FONT_MONO,
-        fontStyle: 'bold',
-        color: toCssColor(COLORS.GREY_1),
-        align: 'center',
-        wordWrap: { width: LOADOUT_SLOT_SIZE - 6, useAdvancedWrap: true },
-      }).setOrigin(0.5).setScrollFactor(0));
-    } else {
-      group.add(this.scene.add.text(0, 0, '+', {
-        fontSize: '22px',
-        fontFamily: FONT_MONO,
-        fontStyle: 'bold',
-        color: toCssColor(lerpColor(params.accentColor, COLORS.GREY_5, 0.45)),
-      }).setOrigin(0.5).setScrollFactor(0).setAlpha(0.9));
-    }
-
-    const hitArea = this.scene.add.rectangle(0, 0, LOADOUT_SLOT_SIZE, LOADOUT_SLOT_SIZE, 0x000000, 0.001)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerover', (pointer: Phaser.Input.Pointer) => {
-        this.scene.tweens.add({ targets: group, scaleX: 1.08, scaleY: 1.08, duration: 90, ease: 'Sine.easeOut' });
+    const group = createLoadoutSlotControl(this.scene, {
+      x: centerX,
+      y: LOADOUT_ROW_Y,
+      width: LOADOUT_SLOT_SIZE,
+      height: LOADOUT_SLOT_SIZE,
+      accentColor: params.accentColor,
+      presentation,
+      compact: true,
+      onPointerOver: (pointer) => {
         this.showTooltip(params.tooltipTitle, params.tooltipBody(), pointer);
-      })
-      .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
-      .on('pointerout', () => {
-        this.scene.tweens.add({ targets: group, scaleX: 1, scaleY: 1, duration: 120, ease: 'Sine.easeOut' });
+      },
+      onPointerMove: (pointer) => this.updateTooltipPosition(pointer),
+      onPointerOut: () => this.hideTooltip(),
+      onClick: (anchorX) => {
         this.hideTooltip();
-      })
-      .on('pointerdown', (_pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
-        event.stopPropagation();
-        this.hideTooltip();
-        params.onOpenPicker(centerX);
-      });
-    group.add(hitArea);
+        params.onOpenPicker(anchorX);
+      },
+    });
 
     this.loadoutContainer.add(group);
   }
@@ -1227,23 +1199,6 @@ export class CoopDefenseUpgradesOverlay {
     this.loadoutHintTimer = this.scene.time.delayedCall(2200, () => {
       this.loadoutHintTimer = null;
       if (hint.active) hint.setText('');
-    });
-  }
-
-  private ensureLoadoutSlotTexture(accentColor: number, filled: boolean): string {
-    return this.ensureRoundedTexture({
-      key: `_ccdslot_${LOADOUT_SLOT_SIZE}_${accentColor.toString(16)}_${filled ? 'on' : 'off'}`,
-      w: LOADOUT_SLOT_SIZE,
-      h: LOADOUT_SLOT_SIZE,
-      radius: 12,
-      // Belegte Slots treten hervor, leere bleiben als gedaempfte Aussparung erkennbar.
-      topColor: lerpColor(COLORS.GREY_8, accentColor, filled ? 0.4 : 0.1),
-      bottomColor: lerpColor(COLORS.GREY_10, accentColor, filled ? 0.24 : 0.06),
-      fillAlpha: filled ? 0.97 : 0.8,
-      strokeColor: accentColor,
-      strokeAlpha: filled ? 1 : 0.4,
-      strokeWidth: filled ? 2 : 1.5,
-      highlightAlpha: filled ? 0.16 : 0.04,
     });
   }
 

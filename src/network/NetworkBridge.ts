@@ -40,7 +40,8 @@ import { countEnemyUpserts } from './enemySnapshotCodec';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import { sanitizePlayerName } from '../utils/playerName';
-import { COOP_DEFENSE_MODE, getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
+import { COOP_DEFENSE_MODE, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
+import { canJoinLobbyTeam, LOBBY_TEAM_CAPACITY, pickAutomaticTeam } from '../lobby/LobbyRosterLayout';
 import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
@@ -767,6 +768,7 @@ export class NetworkBridge {
     requireRoom().onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
+      if (isHost()) this.hostEnsureTeamAssignment(state.id);
 
       state.onQuit(() => {
         const hadColor = this.getPlayerColor(state.id) !== undefined;
@@ -985,9 +987,12 @@ export class NetworkBridge {
 
   setGameMode(mode: GameMode): void {
     if (!isHost()) return;
-    if (this.getGameMode() === mode) return;
+    const previousMode = this.getGameMode();
+    if (previousMode === mode) return;
     setState(KEY_GAME_MODE, mode, true);
-    if (isTeamGameMode(mode)) {
+    if (hasTeamSelection(mode) && !hasTeamSelection(previousMode)) {
+      this.hostRedistributeSelectableTeams();
+    } else if (isTeamGameMode(mode)) {
       this.hostAssignMissingTeams(mode);
     }
     this.hostReconcileLoadoutsForMode(mode);
@@ -1152,9 +1157,16 @@ export class NetworkBridge {
     return firstTeam !== secondTeam;
   }
 
-  canPlayerChangeTeam(playerId: string): boolean {
-    if (isCoopDefenseMode(this.getGameMode())) return false;
-    return !this.getPlayerReady(playerId);
+  canPlayerChangeTeam(playerId: string, targetTeamId?: TeamId): boolean {
+    if (!hasTeamSelection(this.getGameMode()) || this.getPlayerReady(playerId)) return false;
+    const currentTeam = this.getPlayerTeam(playerId);
+    const target = targetTeamId ?? (currentTeam === 'blue' ? 'red' : 'blue');
+    if (target === currentTeam) return true;
+    return canJoinLobbyTeam(
+      target,
+      this.getTeamPlayerCount('blue'),
+      this.getTeamPlayerCount('red'),
+    );
   }
 
   async requestTeamChange(teamId: TeamId): Promise<boolean> {
@@ -1170,7 +1182,8 @@ export class NetworkBridge {
   hostEnsureTeamAssignment(playerId: string): void {
     if (!isHost()) return;
     if (this.getPlayerTeam(playerId)) return;
-    const teamId: TeamId = isCoopDefenseMode(this.getGameMode()) ? 'blue' : this.pickBalancedTeam();
+    const teamId = isCoopDefenseMode(this.getGameMode()) ? 'blue' : this.pickBalancedTeam();
+    if (!teamId) return;
     this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, teamId, true);
     this.connectedPlayersCacheDirty = true;
   }
@@ -1191,11 +1204,19 @@ export class NetworkBridge {
       if (changed) this.connectedPlayersCacheDirty = true;
       return;
     }
+    if (hasTeamSelection(mode)
+      && (this.getTeamPlayerCount('blue') > LOBBY_TEAM_CAPACITY
+        || this.getTeamPlayerCount('red') > LOBBY_TEAM_CAPACITY)) {
+      this.hostRedistributeSelectableTeams();
+      return;
+    }
+
     const unassigned = playerIds.filter((playerId) => !this.getPlayerTeam(playerId));
     if (unassigned.length === 0) return;
-    unassigned.sort(() => Math.random() - 0.5);
     for (const playerId of unassigned) {
-      this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, this.pickBalancedTeam(), true);
+      const teamId = this.pickBalancedTeam();
+      if (!teamId) break;
+      this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, teamId, true);
     }
     this.connectedPlayersCacheDirty = true;
   }
@@ -3593,18 +3614,31 @@ export class NetworkBridge {
 
   private hostHandleTeamRequest(teamId: TeamId, requesterId: string): boolean {
     if (!isHost()) return false;
-    if (!this.canPlayerChangeTeam(requesterId)) return false;
+    if (!this.canPlayerChangeTeam(requesterId, teamId)) return false;
     this.playerStateMap.get(requesterId)?.setState(KEY_PLAYER_TEAM, teamId, true);
     this.connectedPlayersCacheDirty = true;
     return true;
   }
 
-  private pickBalancedTeam(): TeamId {
+  private pickBalancedTeam(): TeamId | null {
     const blueCount = this.getTeamPlayerCount('blue');
     const redCount = this.getTeamPlayerCount('red');
-    if (blueCount < redCount) return 'blue';
-    if (redCount < blueCount) return 'red';
-    return Math.random() < 0.5 ? 'blue' : 'red';
+    return pickAutomaticTeam(blueCount, redCount);
+  }
+
+  /** Beim Eintritt aus DM/Coop: stabile Reihenfolge, Gleichstand immer Blau, maximal sechs. */
+  private hostRedistributeSelectableTeams(): void {
+    if (!isHost()) return;
+    let blueCount = 0;
+    let redCount = 0;
+    for (const playerId of this.connectedPlayers.keys()) {
+      const teamId = pickAutomaticTeam(blueCount, redCount);
+      if (!teamId) break;
+      this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, teamId, true);
+      if (teamId === 'blue') blueCount += 1;
+      else redCount += 1;
+    }
+    this.connectedPlayersCacheDirty = true;
   }
 
   private getTeamPlayerCount(teamId: TeamId): number {

@@ -2,7 +2,7 @@ import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   ARENA_VIEWPORT_WIDTH,
-  ARENA_VIEWPORT_HEIGHT,
+  ARENA_HEIGHT,
 } from '../../config';
 
 export type RadialFocusQualityLevel = 'high' | 'medium' | 'low';
@@ -56,13 +56,13 @@ export function resolveRadialFocusFrame(
     radiusPx,
     alpha: Math.max(0, Math.min(1, alpha)),
     arenaRect: {
-      // The viewport is screen-fixed. Only the world focus moves with camera feedback;
-      // subtracting scroll from this rectangle would make the mask leave the visible arena
-      // as soon as a wide arena starts following the player.
+      // The mask is screen-fixed, but it must span the authored arena height as well. On
+      // vertically expanded coop maps the viewport height is only the camera window; clipping
+      // to it leaves the lower part of the radial veil unfiltered.
       x: ARENA_OFFSET_X,
       y: ARENA_OFFSET_Y,
       width: ARENA_VIEWPORT_WIDTH,
-      height: ARENA_VIEWPORT_HEIGHT,
+      height: ARENA_HEIGHT,
     },
   };
 }

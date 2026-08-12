@@ -17,7 +17,8 @@ export interface CoopDefenseRoundStateSystemOptions {
 /**
  * Entscheidet host-autoritativ ueber Sieg und Niederlage einer Coop-Defense-Runde.
  *
- * Verloren wird immer ueber die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
+ * Verloren wird bei Survival ausschliesslich ueber einen vollstaendigen Spielerwipe, sonst ueber
+ * die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
  * Abwehren des Assaults (`repel-assault`), das Zeitlimit (`survive`), den Boss (`defeat-boss`)
  * oder die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`).
  */
@@ -44,7 +45,7 @@ export class CoopDefenseRoundStateSystem {
 
     // Nur eigene Basen zaehlen: sonst waere mit gefallener Gegnerbasis auch die Niederlage
     // ausgeloest oder – schlimmer – gar nicht mehr moeglich.
-    if (this.getTotalMainBaseHp('friendly') <= 0) {
+    if (this.objective !== 'survive' && this.getTotalMainBaseHp('friendly') <= 0) {
       this.concluded = true;
       return 'defeat';
     }

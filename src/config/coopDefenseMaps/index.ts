@@ -7,7 +7,7 @@ import map05 from './05-grufttitan.json';
 import map06 from './06-sporenfront.json';
 import map07 from './07-medic.json';
 import map08 from './08-dimensionsbruch.json';
-import map09 from './09-faulnisbrut.json';
+import map09 from './09-ueberleben.json';
 import map10 from './10-flammenkoloss.json';
 import map11 from './11-bombergeschwader.json';
 import map12 from './12-gegenschlag.json';
@@ -15,6 +15,7 @@ import map13 from './13-brutbomben.json';
 import map14 from './14-brandschneise.json';
 import map15 from './15-leerenjaeger.json';
 import map16 from './16-zeitzuender.json';
+import map17 from './17-bierrettung.json';
 
 /** Statische Kampagnenregistry; die Reihenfolge ist fachlich relevant. */
 export const COOP_DEFENSE_MAP_REGISTRY = {
@@ -37,5 +38,6 @@ export const COOP_DEFENSE_MAP_REGISTRY = {
     map14,
     map15,
     map16,
+    map17,
   ],
 } as const;

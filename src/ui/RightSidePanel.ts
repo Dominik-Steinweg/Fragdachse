@@ -710,12 +710,12 @@ export class RightSidePanel {
     this.resultsEmptyIcon = this.scene.add.image(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 18,
       ensureIconTexture(this.scene, 'trophy', 96, COLORS.GREY_6),
-    ).setDisplaySize(48, 48).setAlpha(0.8).setScrollFactor(0).setVisible(true);
+    ).setDisplaySize(36, 36).setAlpha(0.45).setScrollFactor(0).setVisible(true);
 
     this.resultsEmptyState = this.scene.add.text(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 54,
-      'Noch keine Runde gespielt\n\nNach der ersten Runde steht hier der Endstand.',
-      textStyle('caption', { color: TEXT.disabled, align: 'center', wordWrapWidth: LOBBY_PANEL_WIDTH }),
+      'Noch keine Runde gespielt',
+      textStyle('caption', { color: TEXT.muted, align: 'center', wordWrapWidth: LOBBY_PANEL_WIDTH }),
     ).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
     this.lobbyContainer.add([

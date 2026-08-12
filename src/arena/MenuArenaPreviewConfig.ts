@@ -3,6 +3,7 @@ import { ARENA_HEIGHT, ARENA_OFFSET_Y, CELL_SIZE, COLORS, FULL_ARENA_WIDTH, FULL
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, TreeCell } from '../types';
 import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
+import { generateSolidRockFormation } from './SolidRockFormation';
 
 interface GridRect {
   minX: number;
@@ -511,6 +512,25 @@ const RIGHT_OVERLAY_INFO_MIN_X = RIGHT_OVERLAY_BORDER_X + 1;
  * - `outerTop`/`outerBottom` liegen an den Aussenkanten derselben Felszeilen. Das Mittelpanel
  *   fluchtet damit mit der gesamten Hoehe des Rahmens statt nur mit seiner Innenflaeche.
  */
+/**
+ * Breite des zentralen Lobby-Panels.
+ *
+ * Steht hier und nicht in der Oberflaeche, weil die Felslandschaft unter dem Panel exakt
+ * seinen Grundriss als Kernflaeche benutzt. Zwei getrennte Zahlen wuerden bei der naechsten
+ * Aenderung auseinanderlaufen und Felsen neben statt hinter dem Panel stehen lassen.
+ */
+export const LOBBY_PANEL_WIDTH = 832;
+
+/**
+ * Rolle eines Lobby-Felsens.
+ *
+ * `structural` traegt Layout und Felsschriftzug: echtes Hindernis, unzerstoerbar, loest nie
+ * Inspector-Arbeit aus. `ambient` sind normale Landschaftsfelsen einschliesslich der Felsen
+ * unter dem Mittelpanel: normale Landschaftsfels-HP, real beschaedigbar und zerstoerbar,
+ * danach vom Inspector wieder aufgebaut.
+ */
+export type LobbyRockRole = 'structural' | 'ambient';
+
 export const LOBBY_FRAME_BOUNDS = {
   top: ARENA_OFFSET_Y + (OVERLAY_BORDER_TOP_Y + 1) * CELL_SIZE,
   bottom: ARENA_OFFSET_Y + OVERLAY_BORDER_BOTTOM_Y * CELL_SIZE,
@@ -623,12 +643,56 @@ const rightOverlayBorderReserveZone: GridRect = {
   maxY: OVERLAY_BORDER_BOTTOM_Y,
 };
 
+/**
+ * Kernfläche der Felslandschaft unter dem Mittelpanel: exakt der Panelgrundriss.
+ *
+ * Das Panel steht mit fester Oberkante und veränderlicher Höhe; die unteren Reihen werden
+ * bei kurzer Panelhöhe also sichtbar. Genau dafür läuft der Rand organisch aus, statt an
+ * einer geraden Kante zu enden.
+ */
+const underPanelCoreRegion = {
+  minGridX: Math.ceil(( GAME_WIDTH / 2 - LOBBY_PANEL_WIDTH / 2) / CELL_SIZE),
+  maxGridX: Math.floor((GAME_WIDTH / 2 + LOBBY_PANEL_WIDTH / 2) / CELL_SIZE) - 1,
+  minGridY: OVERLAY_BORDER_TOP_Y,
+  maxGridY: OVERLAY_BORDER_BOTTOM_Y,
+} as const;
+
+/**
+ * Felslandschaft unter dem Mittelpanel. Nutzt denselben Generator wie die
+ * Tutorial-Felsformation der Coop-Defense-Karte – die Lobby bekommt keine zweite
+ * Felsalgorithmik.
+ *
+ * Nach oben wird der Rand hart abgeschnitten: dort steht der Felsschriftzug frei, und die
+ * Panel-Oberkante deckt die gerade Kante ohnehin ab. Seitlich und nach unten läuft er aus und
+ * lässt dabei die wenigen Öffnungen entstehen, durch die Ambient-Actors ziehen können.
+ */
+const underPanelRocks: RockCell[] = generateSolidRockFormation(
+  createPreviewRng(MENU_PREVIEW_SEED + 307),
+  {
+    region: underPanelCoreRegion,
+    haloCells: 3,
+    haloFillChance: [0.82, 0.48, 0.2],
+    outerHaloFillChance: 0.1,
+    gridCols: MENU_GRID_COLS,
+    gridRows: GRID_ROWS,
+    // Der Schriftzug und sein Freiraum bleiben unberührt.
+    isBlockedCell: (gridX, gridY) => gridY < OVERLAY_BORDER_TOP_Y
+      || gridX <= LEFT_OVERLAY_BORDER_X
+      || gridX >= RIGHT_OVERLAY_BORDER_X,
+  },
+).map(({ gridX, gridY }) => ({ gridX, gridY }));
+
 const tracks: TrackCell[] = [];
 const trackFootprint = expandTrackFootprint(tracks);
+/**
+ * Reihenfolge zählt: `mergeUnique` behält den ersten Treffer, und die strukturellen Gruppen
+ * stehen vorn. Die Rollenzuordnung unten leitet sich aus derselben Reihenfolge ab.
+ */
 const finalRocks = mergeUnique<RockCell>(
   titleRocks,
   leftOverlayBorderRocks,
   rightOverlayBorderRocks,
+  underPanelRocks,
   excludeRectCells(ambientRocks, [
     ...overlayClearZones,
     titleRockGapZone,
@@ -699,6 +763,28 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
     powerUpPedestals: [],
   },
 };
+
+/**
+ * Rolle je Fels, parallel zu `MENU_ARENA_PREVIEW_CONFIG.layout.rocks`.
+ *
+ * Strukturell sind der Felsschriftzug und die beiden Rahmenspalten – alles, was das Layout
+ * der Oberflaeche traegt. Alles andere ist Landschaft und damit fuer die Ambient-Inszenierung
+ * freigegeben.
+ */
+export const LOBBY_ROCK_ROLES: readonly LobbyRockRole[] = (() => {
+  const structuralKeys = new Set<number>();
+  for (const { gridX, gridY } of [...titleRocks, ...leftOverlayBorderRocks, ...rightOverlayBorderRocks]) {
+    structuralKeys.add(cellKey(gridX, gridY));
+  }
+  return finalRocks.map(({ gridX, gridY }) => (
+    structuralKeys.has(cellKey(gridX, gridY)) ? 'structural' : 'ambient'
+  ));
+})();
+
+/** Indizes aller Ambient-Felsen – die einzigen, die Schaden nehmen und neu gebaut werden. */
+export const LOBBY_AMBIENT_ROCK_IDS: readonly number[] = LOBBY_ROCK_ROLES
+  .map((role, index) => (role === 'ambient' ? index : -1))
+  .filter((index) => index >= 0);
 
 export const MENU_ARENA_PREVIEW_BOUNDS = {
   x: 0,

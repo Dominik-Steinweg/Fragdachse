@@ -120,12 +120,12 @@ function verifyLatejoinAndReconnect(
   if (!completed) throw new Error('completed map-event snapshot missing');
   presenter.sync(completed);
   presenter.sync(completed);
-  expect(messages).toHaveLength(1);
+  expect(messages).toHaveLength(event.type === 'train' ? 0 : 1);
 
   // Applying the same completed snapshot after reconnect remains idempotent.
   presenter.resetForHydration();
   presenter.sync(completed);
-  expect(messages).toHaveLength(1);
+  expect(messages).toHaveLength(event.type === 'train' ? 0 : 1);
   return { presenter, messages };
 }
 
@@ -133,13 +133,14 @@ function verifyNewRoundStartsHydrated(
   director: CoopDefenseMapEventDirector,
   presenter: CoopDefenseMapEventAnnouncementPresenter,
   messages: CoopDefenseAnnouncementMessage[],
+  expectedMessageCount: number,
 ): void {
   director.reset();
   const resetState = director.getPresentationState();
   expect(resetState?.[0]).toMatchObject({ state: 'dormant', occurrence: 0 });
   presenter.sync(null);
   presenter.sync(resetState);
-  expect(messages).toHaveLength(1);
+  expect(messages).toHaveLength(expectedMessageCount);
 }
 
 describe('Coop Defense C4 active map-event integration', () => {
@@ -182,7 +183,7 @@ describe('Coop Defense C4 active map-event integration', () => {
     expect(director.getPresentationState()?.[0].state).toBe('completed');
     expect(trainNetwork.current).toBeNull();
 
-    verifyNewRoundStartsHydrated(director, integration.presenter, integration.messages);
+    verifyNewRoundStartsHydrated(director, integration.presenter, integration.messages, 0);
     director.hostUpdate(0, false);
     expect(director.getPresentationState()?.[0]).toMatchObject({ state: 'active', occurrence: 1 });
   });
@@ -221,7 +222,7 @@ describe('Coop Defense C4 active map-event integration', () => {
     expect(director.getPresentationState()?.[0].state).toBe('completed');
     expect(system.getSnapshot()).toEqual([]);
 
-    verifyNewRoundStartsHydrated(director, integration.presenter, integration.messages);
+    verifyNewRoundStartsHydrated(director, integration.presenter, integration.messages, 1);
     expect(system.getSnapshot()).toEqual([]);
   });
 
@@ -250,7 +251,7 @@ describe('Coop Defense C4 active map-event integration', () => {
     expect(director.getPresentationState()?.[0].state).toBe('completed');
     expect(fireSystem.hostUpdate(now).ground.cells).toEqual([]);
 
-    verifyNewRoundStartsHydrated(director, integration.presenter, integration.messages);
+    verifyNewRoundStartsHydrated(director, integration.presenter, integration.messages, 1);
     expect(fireSystem.hostUpdate(now).ground.cells).toEqual([]);
   });
 });

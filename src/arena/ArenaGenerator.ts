@@ -2,6 +2,7 @@ import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CAN
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
+import { generateSolidRockFormation } from './SolidRockFormation';
 import type { ArenaGroundHazardZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
@@ -115,7 +116,8 @@ export class ArenaGenerator {
       let tutorialRockCells: Set<string> | null = null;
       if (coopMapConfig?.rockField) {
         ArenaGenerator.applyRockField(map, coopMapConfig.rockField, rng);
-      } else if (coopMapConfig?.tutorialText) {
+      }
+      if (coopMapConfig?.tutorialText) {
         tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(
           map, trackCols, rng, coopMapConfig.tutorialShowControls === true,
         );
@@ -488,19 +490,20 @@ export class ArenaGenerator {
     tutorialShowControls: boolean,
   ): Set<string> {
     const tutorialRockCells = new Set<string>();
-    const region = getCoopDefenseTutorialRockRegion(tutorialShowControls);
-    const halo = COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS;
-    for (let gy = Math.max(0, region.minGridY - halo); gy <= Math.min(GRID_ROWS - 1, region.maxGridY + halo); gy++) {
-      for (let gx = Math.max(0, region.minGridX - halo); gx <= Math.min(GRID_COLS - 1, region.maxGridX + halo); gx++) {
-        if (trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy)) continue;
-        const dx = gx < region.minGridX ? region.minGridX - gx : gx > region.maxGridX ? gx - region.maxGridX : 0;
-        const dy = gy < region.minGridY ? region.minGridY - gy : gy > region.maxGridY ? gy - region.maxGridY : 0;
-        const distance = Math.max(dx, dy);
-        if (distance === 0 || rng() < (distance === 1 ? 0.72 : 0.36)) {
-          map[gy][gx] = true;
-          tutorialRockCells.add(`${gx}_${gy}`);
-        }
-      }
+    // Gemeinsamer Generator; die Lobby-Felslandschaft unter dem Mittelpanel benutzt ihn mit
+    // eigener Region und eigenem Randverlauf.
+    const cells = generateSolidRockFormation(rng, {
+      region: getCoopDefenseTutorialRockRegion(tutorialShowControls),
+      haloCells: COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
+      haloFillChance: [0.72],
+      outerHaloFillChance: 0.36,
+      gridCols: GRID_COLS,
+      gridRows: GRID_ROWS,
+      isBlockedCell: (gx, gy) => trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy),
+    });
+    for (const { gridX, gridY } of cells) {
+      map[gridY][gridX] = true;
+      tutorialRockCells.add(`${gridX}_${gridY}`);
     }
     return tutorialRockCells;
   }

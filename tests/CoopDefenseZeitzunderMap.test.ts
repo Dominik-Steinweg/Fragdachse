@@ -26,7 +26,7 @@ describe('Map 16 - Zeitzünder', () => {
     expect(map).toMatchObject({
       timeOfDay: '05:00',
       trackMode: 'void-fire',
-      objective: 'destroy-hostile-bases',
+      objective: 'repel-assault',
     });
     expect(rearBase?.hpMax).toBeGreaterThan(0);
     expect(rearBase?.turrets).toHaveLength(0);

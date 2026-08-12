@@ -5,7 +5,7 @@ import {
   GAME_HEIGHT,
   GAME_WIDTH,
 } from '../config';
-import type { ArenaLayout } from '../types';
+import type { ArenaLayout, RockCell } from '../types';
 import { ARENA_BACKGROUND_DETAIL_ALPHA } from './ArenaBackground';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
@@ -15,6 +15,11 @@ import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
+
+interface BakedLayer {
+  layer: Phaser.GameObjects.RenderTexture;
+  config: MenuArenaPreviewLayerConfig;
+}
 
 export class MenuArenaPreviewRenderer {
   private background: Phaser.GameObjects.TileSprite | null = null;
@@ -29,12 +34,28 @@ export class MenuArenaPreviewRenderer {
    * statt mehrerer hundert Einzel-Images. Die Bänder bleiben getrennt, damit die
    * Schatten-Graphics des `ShadowSystem` weiterhin zwischen Boden, Felsen und Kronen liegen.
    */
-  private bakedLayers: Array<{ layer: Phaser.GameObjects.RenderTexture; config: MenuArenaPreviewLayerConfig }> = [];
+  private bakedLayers: BakedLayer[] = [];
+  /**
+   * Die felsabhängigen Bänder getrennt von den unveränderlichen: Boden, Decals und Kronen
+   * ändern sich nie, die Felsen dagegen bei jeder Zerstörung und jedem Neubau.
+   */
+  private rockBandLayers: BakedLayer[] = [];
   private trunkLayer: Phaser.GameObjects.RenderTexture | null = null;
   private canopyLayer: Phaser.GameObjects.RenderTexture | null = null;
   private rockMottleLayers: Phaser.GameObjects.RenderTexture[] = [];
+  private rockMottleConfig: MenuArenaPreviewLayerConfig | null = null;
   private rockSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null;
   private shadows: ShadowSystem | null = null;
+  private visible = true;
+
+  /**
+   * Belegung des Felsgitters. Bleibt über Zerstörung und Neubau hinweg dieselbe Instanz,
+   * damit die Fels-Indizes des Layouts stabil bleiben.
+   */
+  private rockGrid: RockGridIndex | null = null;
+  /** Indizes der aktuell stehenden Felsen; Grundlage jedes Neubaus der Fels-Bänder. */
+  private readonly aliveRockIds = new Set<number>();
+  private rockBandsDirty = false;
 
   constructor(
     private scene: Phaser.Scene,
@@ -46,6 +67,7 @@ export class MenuArenaPreviewRenderer {
 
     const { view, layout } = this.config;
     const { bounds } = view;
+    this.visible = true;
     this.background = this.scene.add
       .tileSprite(bounds.offsetX + bounds.width * 0.5, bounds.offsetY + bounds.height * 0.5, bounds.width, bounds.height, view.backgroundTextureKey)
       .setTilePosition(0, 0)
@@ -81,6 +103,14 @@ export class MenuArenaPreviewRenderer {
       gridCols: Math.floor(bounds.width / CELL_SIZE),
       gridRows: Math.floor(bounds.height / CELL_SIZE),
     };
+
+    this.aliveRockIds.clear();
+    for (let id = 0; id < layout.rocks.length; id += 1) this.aliveRockIds.add(id);
+    this.rockGrid = new RockGridIndex(layout.rocks, {
+      cols: metrics.gridCols,
+      rows: metrics.gridRows,
+    });
+
     this.shadows = new ShadowSystem(this.scene);
     this.shadows.setWorldBoundsOverride({
       minX: bounds.offsetX,
@@ -88,10 +118,7 @@ export class MenuArenaPreviewRenderer {
       maxX: bounds.offsetX + bounds.width,
       maxY: bounds.offsetY + bounds.height,
     });
-    this.shadows.rebuildStaticLayoutShadows(layout, {
-      offsetX: bounds.offsetX,
-      offsetY: bounds.offsetY,
-    });
+    this.rebuildShadows();
     // Unsichtbare Layer werden gar nicht erst erzeugt: Sie wuerden sonst als Objekte in der
     // Display-Liste liegen und jeden Frame durch Update- und Depth-Sort-Paesse laufen,
     // ohne je ein Pixel beizutragen.
@@ -103,21 +130,13 @@ export class MenuArenaPreviewRenderer {
     // Reihenfolge der Tiefenbaender bleibt exakt erhalten: Boden < Decals < Fels-Schatten
     // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
     this.bakeDirtLayer(layout, metrics, view.dirt);
-    this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals);
-    // Flaechenwash und Kantenlicht stecken im 4-Ecken-Tint; die nicht-periodische
-    // Materialstoerung wird wie in der Arena als MULTIPLY-Layer auf die Silhouette gestanzt.
-    const rockImages = this.createRocks(layout);
-    this.bakeRockMottle(layout, rockImages, metrics, view.rocks);
-    this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks);
-    this.bakeLayer(
-      ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics),
-      DEPTH.ROCK_DECALS,
-      view.decals,
-    );
+    this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals, this.bakedLayers);
+
+    this.bakeRockBands();
 
     const trees = ArenaVisualFactory.createTrees(this.scene, layout.trees ?? [], metrics);
-    this.trunkLayer = this.bakeLayer(trees.map((tree) => tree.trunk), DEPTH.CANOPY - 0.01, view.trunks);
-    this.canopyLayer = this.bakeLayer(trees.map((tree) => tree.canopy), DEPTH.CANOPY, view.canopies);
+    this.trunkLayer = this.bakeLayer(trees.map((tree) => tree.trunk), DEPTH.CANOPY - 0.01, view.trunks, this.bakedLayers);
+    this.canopyLayer = this.bakeLayer(trees.map((tree) => tree.canopy), DEPTH.CANOPY, view.canopies, this.bakedLayers);
 
     this.arenaShade = this.scene.add
       .rectangle(
@@ -136,7 +155,133 @@ export class MenuArenaPreviewRenderer {
       .setScrollFactor(0);
   }
 
+  // ── Dynamischer Felsbestand ────────────────────────────────────────────────
+
+  /** Steht an diesem Index noch ein Fels? */
+  isRockAlive(id: number): boolean {
+    return this.aliveRockIds.has(id);
+  }
+
+  /** Alle aktuell stehenden Felsen, in Layout-Reihenfolge. */
+  forEachAliveRock(visit: (id: number, worldX: number, worldY: number) => void): void {
+    const rocks = this.config.layout.rocks;
+    for (let id = 0; id < rocks.length; id += 1) {
+      if (!this.aliveRockIds.has(id)) continue;
+      const world = this.gridToWorld(rocks[id].gridX, rocks[id].gridY);
+      visit(id, world.x, world.y);
+    }
+  }
+
+  /** Weltmittelpunkt einer Gitterzelle im Rahmen der Vorschau. */
+  gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
+    const { bounds } = this.config.view;
+    return {
+      x: bounds.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
+      y: bounds.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
+    };
+  }
+
+  /**
+   * Nimmt einen Fels aus dem Bestand oder stellt ihn wieder her.
+   *
+   * Der sichtbare Neubau der Bänder passiert nicht sofort: eine Explosion trifft
+   * typischerweise mehrere Felsen, und jedes Backen einer bildschirmgroßen RenderTexture
+   * kostet. Die Änderungen sammeln sich und werden am Ende des Frames einmal ausgeführt.
+   */
+  setRockAlive(id: number, alive: boolean): boolean {
+    const rock = this.config.layout.rocks[id];
+    if (!rock) return false;
+    if (alive === this.aliveRockIds.has(id)) return false;
+
+    if (alive) {
+      this.aliveRockIds.add(id);
+      this.rockGrid?.set(rock.gridX, rock.gridY, id);
+    } else {
+      this.aliveRockIds.delete(id);
+      this.rockGrid?.remove(rock.gridX, rock.gridY);
+    }
+    this.markRockBandsDirty();
+    return true;
+  }
+
+  /**
+   * Sammelstelle statt Sofortaufruf. Bewusst ein Frame-Sammelpunkt und kein Zeit-Timer: eine
+   * Verzögerung würde den zerstörten Fels sichtbar länger stehen lassen als seine Trümmer.
+   */
+  private markRockBandsDirty(): void {
+    if (this.rockBandsDirty) return;
+    this.rockBandsDirty = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.rockBandsDirty = false;
+      this.rebuildRockBands();
+    });
+  }
+
+  /** Führt einen ausstehenden Neubau sofort aus (Teardown, Moduswechsel). */
+  flushRockBands(): void {
+    if (!this.rockBandsDirty) return;
+    this.rockBandsDirty = false;
+    this.rebuildRockBands();
+  }
+
+  private rebuildRockBands(): void {
+    if (!this.background) return; // nicht (mehr) aufgebaut
+    this.destroyRockBands();
+    this.bakeRockBands();
+    this.rebuildShadows();
+  }
+
+  /**
+   * Backt Fels-Basis samt AutoTile, die nicht-periodische Materialstörung und die
+   * Fels-Decals neu. Alles leitet sich aus {@link aliveRockIds} ab, deshalb stimmen die
+   * AutoTile-Kanten der Nachbarn nach jeder Zerstörung und jedem Neubau von selbst.
+   */
+  private bakeRockBands(): void {
+    const { view, layout } = this.config;
+    const { bounds } = view;
+    const metrics = {
+      offsetX: bounds.offsetX,
+      offsetY: bounds.offsetY,
+      gridCols: Math.floor(bounds.width / CELL_SIZE),
+      gridRows: Math.floor(bounds.height / CELL_SIZE),
+    };
+
+    const { images: rockImages, cells: aliveCells } = this.createRocks();
+    this.bakeRockMottle(aliveCells, rockImages, metrics, view.rocks);
+    this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks, this.rockBandLayers);
+    this.bakeLayer(
+      ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics, this.aliveRockIds),
+      DEPTH.ROCK_DECALS,
+      view.decals,
+      this.rockBandLayers,
+    );
+  }
+
+  /**
+   * Verwirft die neu zu backenden Fels-Bänder.
+   *
+   * Materialstörung und Silhouetten-Ausschnitt bleiben bewusst bestehen: beide sind
+   * bildschirmgroße RenderTextures, die {@link bakeBlobSurfaceMottle} an Ort und Stelle neu
+   * befüllt. Sie bei jeder Zerstörung neu zu allokieren wäre ein spürbarer Ruckler.
+   */
+  private destroyRockBands(): void {
+    for (const { layer } of this.rockBandLayers) layer.destroy();
+    this.rockBandLayers = [];
+  }
+
+  /** Statische Schatten aus dem aktuellen Felsbestand – zerstörte Felsen werfen keinen mehr. */
+  private rebuildShadows(): void {
+    const { bounds } = this.config.view;
+    const layout = this.config.layout;
+    this.shadows?.rebuildStaticLayoutShadows(
+      { ...layout, rocks: layout.rocks.filter((_, id) => this.aliveRockIds.has(id)) },
+      { offsetX: bounds.offsetX, offsetY: bounds.offsetY },
+    );
+    this.shadows?.setVisible(this.visible);
+  }
+
   setVisible(visible: boolean): void {
+    this.visible = visible;
     this.background?.setVisible(visible);
     this.shadows?.setVisible(visible);
     this.leftSidebar?.setVisible(visible && this.config.view.frame.showSidebars);
@@ -145,6 +290,10 @@ export class MenuArenaPreviewRenderer {
     this.screenShade?.setVisible(visible);
     for (const obj of this.tracks) obj.setVisible(visible && this.config.view.tracks.visible);
     for (const { layer, config } of this.bakedLayers) layer.setVisible(visible && config.visible);
+    for (const { layer, config } of this.rockBandLayers) layer.setVisible(visible && config.visible);
+    for (const layer of this.rockMottleLayers) {
+      layer.setVisible(visible && (this.rockMottleConfig?.visible ?? true));
+    }
   }
 
   /** Applies the same ambient tint used by live arena tree visuals to the baked lobby trees. */
@@ -154,6 +303,7 @@ export class MenuArenaPreviewRenderer {
   }
 
   destroy(): void {
+    this.rockBandsDirty = false;
     this.background?.destroy();
     this.backgroundDetail?.destroy();
     this.leftSidebar?.destroy();
@@ -161,6 +311,7 @@ export class MenuArenaPreviewRenderer {
     this.arenaShade?.destroy();
     this.screenShade?.destroy();
     this.shadows?.destroy();
+    for (const layer of this.rockMottleLayers) layer.destroy();
     this.rockSilhouetteCutout?.destroy();
     this.background = null;
     this.backgroundDetail = null;
@@ -172,11 +323,16 @@ export class MenuArenaPreviewRenderer {
     this.trunkLayer = null;
     this.canopyLayer = null;
     this.rockMottleLayers = [];
+    this.rockMottleConfig = null;
     this.rockSilhouetteCutout = null;
+    this.rockGrid = null;
+    this.aliveRockIds.clear();
     for (const obj of this.tracks) obj.destroy();
     for (const { layer } of this.bakedLayers) layer.destroy();
+    for (const { layer } of this.rockBandLayers) layer.destroy();
     this.tracks = [];
     this.bakedLayers = [];
+    this.rockBandLayers = [];
   }
 
   /**
@@ -196,6 +352,7 @@ export class MenuArenaPreviewRenderer {
     images: Array<Phaser.GameObjects.GameObject & { setAlpha(alpha: number): unknown; destroy(): void }>,
     depth: number,
     layer: MenuArenaPreviewLayerConfig,
+    target: BakedLayer[],
   ): Phaser.GameObjects.RenderTexture | null {
     if (images.length === 0) return null;
 
@@ -214,10 +371,11 @@ export class MenuArenaPreviewRenderer {
     baked.camera.setScroll(bounds.offsetX, bounds.offsetY);
     baked.draw(images);
     baked.render();
+    baked.setVisible(this.visible && layer.visible);
 
     for (const img of images) img.destroy();
 
-    this.bakedLayers.push({ layer: baked, config: layer });
+    target.push({ layer: baked, config: layer });
     return baked;
   }
 
@@ -269,44 +427,51 @@ export class MenuArenaPreviewRenderer {
     this.bakedLayers.push({ layer: baked, config: layerConfig });
   }
 
-  private createRocks(layout: ArenaLayout): Phaser.GameObjects.Image[] {
-    const result: Phaser.GameObjects.Image[] = [];
-    const rockGrid = new RockGridIndex(layout.rocks, {
-      cols: Math.floor(this.config.view.bounds.width / CELL_SIZE),
-      rows: Math.floor(this.config.view.bounds.height / CELL_SIZE),
-    });
+  /**
+   * Erzeugt die Bilder der aktuell stehenden Felsen. AutoTile-Maske und Eckentints leiten
+   * sich aus dem laufend gepflegten {@link rockGrid} ab – ein zerstörter Nachbar öffnet die
+   * Kante seiner Nachbarn also automatisch.
+   */
+  private createRocks(): { images: Phaser.GameObjects.Image[]; cells: RockCell[] } {
+    const images: Phaser.GameObjects.Image[] = [];
+    const cells: RockCell[] = [];
+    const rockGrid = this.rockGrid;
+    if (!rockGrid) return { images, cells };
     const isOccupied = (gridX: number, gridY: number) => rockGrid.isOccupiedWithBorder(gridX, gridY);
 
-    for (const { gridX, gridY } of layout.rocks) {
-      const worldX = this.config.view.bounds.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = this.config.view.bounds.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
+    const rocks = this.config.layout.rocks;
+    for (let id = 0; id < rocks.length; id += 1) {
+      if (!this.aliveRockIds.has(id)) continue;
+      const { gridX, gridY } = rocks[id];
+      const world = this.gridToWorld(gridX, gridY);
       const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const frame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      result.push(ArenaVisualFactory.createRock(
+      images.push(ArenaVisualFactory.createRock(
         this.scene,
-        worldX,
-        worldY,
+        world.x,
+        world.y,
         frame,
         resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
       ));
+      cells.push(rocks[id]);
     }
 
-    return result;
+    return { images, cells };
   }
 
   private bakeRockMottle(
-    layout: ArenaLayout,
+    rockCells: readonly RockCell[],
     rockImages: Phaser.GameObjects.Image[],
     metrics: { offsetX: number; offsetY: number },
     layerConfig: MenuArenaPreviewLayerConfig,
   ): void {
-    if (!layerConfig.visible || layerConfig.alpha <= 0 || layout.rocks.length === 0) return;
+    if (!layerConfig.visible || layerConfig.alpha <= 0 || rockCells.length === 0) return;
 
     const { bounds } = this.config.view;
     const mottle = bakeBlobSurfaceMottle(
       this.scene,
       ROCK_BLOB_SURFACE_PROFILE,
-      layout.rocks,
+      rockCells,
       rockImages,
       {
         offsetX: metrics.offsetX,
@@ -320,9 +485,10 @@ export class MenuArenaPreviewRenderer {
     );
     this.rockMottleLayers = mottle.layers;
     this.rockSilhouetteCutout = mottle.silhouetteCutout;
+    this.rockMottleConfig = layerConfig;
     for (const layer of this.rockMottleLayers) {
       layer.setAlpha(layerConfig.alpha);
-      this.bakedLayers.push({ layer, config: layerConfig });
+      layer.setVisible(this.visible && layerConfig.visible);
     }
   }
 

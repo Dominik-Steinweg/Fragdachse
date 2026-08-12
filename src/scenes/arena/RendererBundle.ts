@@ -48,7 +48,7 @@ import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { LightingSystem }      from '../../effects/LightingSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
-import type { PlayerManager }     from '../../entities/PlayerManager';
+import type { OwnerVisualSource } from '../../entities/OwnerVisualSource';
 import type { EffectSystem }      from '../../effects/EffectSystem';
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
 import type { LocalDistortionComposer } from '../../effects/distortion/LocalDistortionComposer';
@@ -110,7 +110,7 @@ export interface RendererBundle {
 /** Create and generate textures for all scene-lifetime renderers. */
 export function createRendererBundle(
   scene: Phaser.Scene,
-  playerManager: PlayerManager,
+  owners: OwnerVisualSource,
   arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
 ): RendererBundle {
   const bullet = new BulletRenderer(scene);
@@ -121,10 +121,7 @@ export function createRendererBundle(
 
   const plasmaBurner = new PlasmaBurnerRenderer(scene);
   plasmaBurner.generateTextures();
-  plasmaBurner.setOwnerVisualStateProvider((ownerId) => {
-    const player = playerManager.getPlayer(ownerId);
-    return player ? { x: player.sprite.x, y: player.sprite.y, color: player.color } : null;
-  });
+  plasmaBurner.setOwnerVisualStateProvider((ownerId) => owners.getOwnerVisualState(ownerId));
 
   const bite = new BiteRenderer(scene);
   bite.generateTextures();
@@ -169,7 +166,7 @@ export function createRendererBundle(
 
   const slimeTrail = new SlimeTrailRenderer(scene);
   const corpseMarker = new CorpseMarkerRenderer(scene);
-  const flamethrowerUpgrades = new FlamethrowerUpgradeRenderer(scene, playerManager);
+  const flamethrowerUpgrades = new FlamethrowerUpgradeRenderer(scene, owners);
   const projectileBurn = new ProjectileBurnRenderer(scene);
 
   const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
@@ -273,7 +270,7 @@ export function createRendererBundle(
 export function wireRenderersToProjManager(
   bundle: RendererBundle,
   pm: ProjectileManager,
-  playerManager: PlayerManager,
+  owners: OwnerVisualSource,
 ): void {
   pm.setBulletRenderer(bundle.bullet);
   pm.setProjectileBurnRenderer(bundle.projectileBurn);
@@ -291,14 +288,8 @@ export function wireRenderersToProjManager(
   pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);
   pm.setTracerRenderer(bundle.tracer);
   pm.setMuzzleFlashRenderer(bundle.muzzleFlash);
-  pm.setOwnerPositionProvider((ownerId) => {
-    const player = playerManager.getPlayer(ownerId);
-    return player ? { x: player.sprite.x, y: player.sprite.y } : null;
-  });
-  bundle.energyShield.setOwnerPositionProvider((ownerId) => {
-    const player = playerManager.getPlayer(ownerId);
-    return player ? { x: player.sprite.x, y: player.sprite.y } : null;
-  });
+  pm.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
+  bundle.energyShield.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
 }
 
 /** Wire the EffectSystem to renderers that need it (muzzle flash, nuke). */

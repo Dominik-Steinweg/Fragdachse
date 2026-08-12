@@ -678,7 +678,12 @@ export function getArenaMetricsProfile(
   coopDefenseArenaWidthCells?: number,
   coopDefenseArenaHeightCells?: number,
 ): ArenaMetricsProfile {
-  if (phase !== 'ARENA') return DEFAULT_ARENA_METRICS_PROFILE;
+  // Die Lobby benutzt bewusst dasselbe Arenamass wie das Deathmatch: volle Bildschirmbreite,
+  // keine Seitenbalken, und als einziger nicht nutzbarer Rand die schmalen Streifen oben und
+  // unten (`ARENA_OFFSET_Y`). Nur so decken sich Weltgrenzen, Kameragrenzen, Audio-Panning und
+  // das Beschneiden von Effekten mit der Flaeche, die die Lobby-Vorschau tatsaechlich zeigt –
+  // die Ambient-Inszenierung spielt sonst ausserhalb der Arena, die das Spiel annimmt.
+  if (phase !== 'ARENA') return FULL_WIDTH_ARENA_METRICS_PROFILE;
   if (mode === CAPTURE_THE_BEER_MODE) return CAPTURE_THE_BEER_ARENA_METRICS_PROFILE;
   if (mode === COOP_DEFENSE_MODE) {
     return getCoopDefenseArenaMetricsProfile(coopDefenseArenaWidthCells, coopDefenseArenaHeightCells);

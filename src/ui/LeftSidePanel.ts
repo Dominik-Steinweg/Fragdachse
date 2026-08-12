@@ -28,7 +28,10 @@ import { OptionsOverlay, type AbortMatchBinding, type SpectatorMatchBinding } fr
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import {
+  describeLoadoutItem,
+  describeLoadoutTool,
   getSelectableLoadoutItems,
+  loadoutToolKey,
   LOADOUT_SLOT_LABELS,
   type LoadoutItemRef,
 } from '../loadout/LoadoutCatalog';
@@ -54,6 +57,7 @@ import {
   getStoredPlayerName,
   importStoredGameProgressFile,
   setStoredCoopDefenseLoadoutSlot,
+  setStoredCoopDefenseUpgradeProfile,
   setStoredLoadoutSlot,
   setStoredPlayerName,
 } from '../utils/localPreferences';
@@ -63,6 +67,15 @@ import { UiContextMenu } from './UiContextMenu';
 import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { toDesignSpace } from '../graphics/RenderResolution';
+import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';
+import { createLoadoutSlotControl } from './LoadoutSlotControl';
+import {
+  getCoopDefenseToolCapacity,
+  getLoadoutToolSlots,
+  getUnlockedLoadoutToolRefs,
+  setLoadoutToolSlots,
+} from '../utils/coopDefenseUpgrades';
+import type { LoadoutToolRef } from '../types';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
@@ -80,8 +93,8 @@ const MAP_LABEL_Y  = 204 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 4;
 const MAP_ROW_Y    = 222 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 5;
 const DIVIDER1_Y   = 248 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 6;
 const BADGER_Y     = 294 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 7;
-const BADGER_SIZE        = 48;   // Anzeigegröße
-const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
+const BADGER_SIZE        = 68;
+const BADGER_CLICK_SIZE  = 76;
 const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 14;
 const CONTROL_BUTTON_DY  = 8;
 const NAME_COLOR_BUTTON_W = 128;
@@ -130,12 +143,13 @@ const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
 const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
-const CAROUSEL_ROW_STEP = 46;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
-const CAROUSEL_GROUP_DY = 28;    // Offset erste Karussell-Zeile unter "Loadout:"
-const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
+const CAROUSEL_ROW_STEP = 44;
+const CAROUSEL_GROUP_DY = 32;
+const LOADOUT_CONTROL_W = LOBBY_PANEL_W - 40;
+const LOADOUT_CONTROL_H = 38;
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 3 * CAROUSEL_ROW_STEP + CAROUSEL_LABEL_DY + 28;
+const DIVIDER3_Y  = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 3 * CAROUSEL_ROW_STEP + LOADOUT_CONTROL_H / 2 + 18;
 const MENU_BTN_Y  = DIVIDER3_Y + 30;
 const MENU_BTN_W  = 92;
 const MENU_BTN_H  = 34;
@@ -227,15 +241,15 @@ export class LeftSidePanel {
   private pickerDismissDelay: Phaser.Time.TimerEvent | null = null;
   private pickerDismissHandler: (() => void) | null = null;
 
-  // Loadout-Karussell
+  // Gemeinsame Loadout-Slots und Auswahl-Popup
   private loadoutIndices:   Record<LoadoutSlot, number> = { weapon1: 0, weapon2: 0, utility: 0, ultimate: 0 };
   /**
    * Slot, dessen Item die Lobby-Vorschau in den Pfoten zeigt: der zuletzt im Karussell geaenderte.
    * Das Ultimate zaehlt nicht mit – es ist keine Handwaffe und hat kein getragenes Bild.
    */
   private previewHeldSlot: HeldItemSlot = 'weapon1';
-  private loadoutNameTexts: Partial<Record<LoadoutSlot, Phaser.GameObjects.Text>> = {};
-  private loadoutArrowButtons: Partial<Record<LoadoutSlot, { left: CompactButton; right: CompactButton }>> = {};
+  private loadoutLayer: Phaser.GameObjects.Container | null = null;
+  private loadoutPicker: LoadoutSlotPicker | null = null;
   private loadoutEnabled    = true;
   private lobbyFieldsLocked = false;
   private helpOverlay:      HelpOverlay | null = null;
@@ -513,54 +527,8 @@ export class LeftSidePanel {
     );
 
     this.applyStoredPlayerNamePreference();
-
-    const slots: LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
-    slots.forEach((slot, i) => {
-      const arrowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + i * CAROUSEL_ROW_STEP;
-      const labelY = arrowY + CAROUSEL_LABEL_DY;
-
-      const leftBtn = this.createChevronButton(
-        ARROW_X_LEFT,
-        arrowY + CONTROL_BUTTON_DY,
-        'left',
-        () => this.stepCarousel(slot, -1),
-      );
-      objects.push(leftBtn.button, leftBtn.label);
-
-      const nameText = this.scene.add.text(ITEM_NAME_X, arrowY, '', VALUE_FONT)
-        .setOrigin(0.5, 0).setScrollFactor(0);
-      this.loadoutNameTexts[slot] = nameText;
-      objects.push(nameText);
-
-      const rightBtn = this.createChevronButton(
-        ARROW_X_RIGHT,
-        arrowY + CONTROL_BUTTON_DY,
-        'right',
-        () => this.stepCarousel(slot, +1),
-      );
-      objects.push(rightBtn.button, rightBtn.label);
-      this.loadoutArrowButtons[slot] = { left: leftBtn, right: rightBtn };
-
-      // Slot-Label zentriert UNTER den Pfeilen
-      objects.push(
-        this.scene.add.text(ITEM_NAME_X, labelY, SLOT_LABELS[slot],
-          textStyle('caption', { color: TEXT.disabled }))
-          .setOrigin(0.5, 0).setScrollFactor(0),
-      );
-
-      const initialItems = this.getSlotItems(slot);
-      const initialSelectionId = this.resolveInitialLoadoutId(slot);
-      if (initialSelectionId) {
-        const initialIndex = initialItems.findIndex((item) => item.id === initialSelectionId);
-        this.loadoutIndices[slot] = initialIndex >= 0 ? initialIndex : 0;
-      }
-
-      // Initialwert anzeigen und in Bridge/Preferences speichern
-      this.updateCarouselDisplay(slot);
-      if (initialItems.length > 0) {
-        this.applyLocalLoadoutSelection(slot, initialItems[this.loadoutIndices[slot]].id);
-      }
-    });
+    this.loadoutLayer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.loadoutLayer);
 
     // ── Trennlinie 3 (unter Loadout) ──
     const divider3 = this.scene.add.graphics();
@@ -596,6 +564,7 @@ export class LeftSidePanel {
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
     this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer);
+    this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2);
 
     // BadgerPreview (world-space, separate from container for preFX support)
     this.badgerPreview = new BadgerPreview(
@@ -666,13 +635,15 @@ export class LeftSidePanel {
   }
 
   isHotkeyInputBlocked(): boolean {
-    return this.nameEditOpen || this.pickerOpen || (this.saveMenu?.isOpen() ?? false);
+    return this.nameEditOpen || this.pickerOpen || (this.loadoutPicker?.isOpen() ?? false)
+      || (this.saveMenu?.isOpen() ?? false);
   }
 
   // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
     this.saveMenu?.close();
+    this.loadoutPicker?.close();
     this.closeColorPicker();
     this.closeNameEditPopup();
     this.helpOverlay?.hide();
@@ -701,6 +672,7 @@ export class LeftSidePanel {
   }
 
   transitionToLobby(): void {
+    this.loadoutPicker?.close();
     this.helpOverlay?.hide();
     this.optionsOverlay?.hide();
     this.scene.tweens.killTweensOf(this.lobbyContainer);
@@ -886,6 +858,8 @@ export class LeftSidePanel {
     this.saveStatusTimer = null;
     this.saveMenu?.destroy();
     this.saveMenu = null;
+    this.loadoutPicker?.close();
+    this.loadoutPicker = null;
     this.cleanupPickerDismissListener();
     this.badgerPreview?.destroy();
     // UiButtons melden eigene globale Pointer-Listener ab.
@@ -1040,18 +1014,6 @@ export class LeftSidePanel {
 
   // ── Loadout-Karussell ─────────────────────────────────────────────────────
 
-  private stepCarousel(slot: LoadoutSlot, delta: -1 | 1): void {
-    if (!this.loadoutEnabled) return;
-    const items = this.getSlotItems(slot);
-    if (items.length === 0) return;
-    this.syncLoadoutSelectionFromBridge(slot);
-    this.loadoutIndices[slot] = (this.loadoutIndices[slot] + delta + items.length) % items.length;
-    this.updateCarouselDisplay(slot);
-    this.applyLocalLoadoutSelection(slot, items[this.loadoutIndices[slot]].id);
-    if (slot !== 'ultimate') this.previewHeldSlot = slot;
-    this.refreshBadgerHeldItem();
-  }
-
   /**
    * Zeigt in der Vorschau das Item des zuletzt geaenderten Slots. Wird auch ohne Karussell-Klick
    * gerufen, weil ein Moduswechsel oder ein importierter Spielstand die Auswahl ersetzen kann.
@@ -1065,16 +1027,158 @@ export class LeftSidePanel {
   private updateCarouselDisplay(slot: LoadoutSlot): void {
     const items = this.getSlotItems(slot);
     if (items.length === 0) {
-      this.loadoutNameTexts[slot]?.setText('-');
       this.loadoutIndices[slot] = 0;
-      this.updateSlotArrowVisibility(slot);
+      this.renderLoadoutControls();
       return;
     }
     const nextIndex = Phaser.Math.Clamp(this.loadoutIndices[slot], 0, items.length - 1);
     this.loadoutIndices[slot] = nextIndex;
-    const item = items[nextIndex];
-    this.loadoutNameTexts[slot]?.setText(item.displayName ?? item.id);
-    this.updateSlotArrowVisibility(slot);
+    this.renderLoadoutControls();
+  }
+
+  private renderLoadoutControls(): void {
+    if (!this.loadoutLayer) return;
+    this.loadoutLayer.removeAll(true);
+    const inspector = this.isInspectorLoadout();
+    const rowSlots: readonly LoadoutSlot[] = inspector
+      ? ['weapon1', 'weapon2', 'ultimate']
+      : ['weapon1', 'weapon2', 'utility', 'ultimate'];
+
+    rowSlots.forEach((slot, visibleIndex) => {
+      const rowIndex = inspector && slot === 'ultimate' ? 3 : visibleIndex;
+      const items = this.getSlotItems(slot);
+      const item = items[this.loadoutIndices[slot]] ?? null;
+      this.loadoutLayer!.add(createLoadoutSlotControl(this.scene, {
+        x: CENTER_X,
+        y: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + rowIndex * CAROUSEL_ROW_STEP,
+        width: LOADOUT_CONTROL_W,
+        height: LOADOUT_CONTROL_H,
+        accentColor: item ? describeLoadoutItem(slot, item.id).accentColor : COLORS.GREY_5,
+        presentation: item ? describeLoadoutItem(slot, item.id) : null,
+        label: SLOT_LABELS[slot],
+        enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
+        onClick: (anchorX) => this.openLoadoutSlotPicker(slot, anchorX),
+      }));
+    });
+
+    if (inspector) this.renderInspectorToolSlots();
+  }
+
+  private openLoadoutSlotPicker(slot: LoadoutSlot, anchorX: number): void {
+    if (!this.loadoutEnabled || this.lobbyFieldsLocked) return;
+    const items = this.getSlotItems(slot);
+    const selectedId = items[this.loadoutIndices[slot]]?.id ?? null;
+    const entries: LoadoutPickerEntry[] = items.map((item) => {
+      const presentation = describeLoadoutItem(slot, item.id);
+      return {
+        key: item.id,
+        displayName: presentation.displayName,
+        textureKey: presentation.textureKey,
+        accentColor: presentation.accentColor,
+        selected: item.id === selectedId,
+        disabled: false,
+        onPick: () => {
+          const index = items.findIndex((candidate) => candidate.id === item.id);
+          this.loadoutIndices[slot] = Math.max(0, index);
+          this.applyLocalLoadoutSelection(slot, item.id);
+          if (slot !== 'ultimate') this.previewHeldSlot = slot;
+          this.refreshBadgerHeldItem();
+          this.renderLoadoutControls();
+        },
+      };
+    });
+    this.loadoutPicker?.open({
+      anchorX,
+      anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + LOADOUT_CONTROL_H / 2 + 6,
+      title: SLOT_LABELS[slot],
+      groups: [{ label: null, entries }],
+    });
+  }
+
+  private isInspectorLoadout(): boolean {
+    const progress = getStoredCoopDefenseProgress();
+    return isCoopDefenseMode(this.bridge.getGameMode())
+      && progress.unlockedClassIds.includes('inspector_gadachs')
+      && progress.selectedClassId === 'inspector_gadachs';
+  }
+
+  private renderInspectorToolSlots(): void {
+    if (!this.loadoutLayer) return;
+    const profile = getStoredCoopDefenseUpgradeProfile('inspector_gadachs');
+    const tools = getLoadoutToolSlots(profile);
+    const capacity = Math.max(1, getCoopDefenseToolCapacity(profile));
+    const rowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP;
+    this.loadoutLayer.add(this.scene.add.text(20, rowY, 'UTILITY-RAD', textStyle('caption', {
+      color: COLORS.GREY_3,
+    })).setOrigin(0, 0.5).setScrollFactor(0));
+    const availableW = LOBBY_PANEL_W - 126;
+    const gap = 4;
+    const size = Math.min(34, (availableW - gap * (capacity - 1)) / capacity);
+    const startX = 112 + size / 2;
+    for (let index = 0; index < capacity; index += 1) {
+      const tool = tools[index] ?? null;
+      this.loadoutLayer.add(createLoadoutSlotControl(this.scene, {
+        x: startX + index * (size + gap),
+        y: rowY,
+        width: size,
+        height: size,
+        accentColor: COLORS.GOLD_2,
+        presentation: tool ? describeLoadoutTool(tool) : null,
+        compact: true,
+        enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
+        onClick: (anchorX) => this.openInspectorToolPicker(index, anchorX),
+      }));
+    }
+  }
+
+  private openInspectorToolPicker(slotIndex: number, anchorX: number): void {
+    const profile = getStoredCoopDefenseUpgradeProfile('inspector_gadachs');
+    const tools = [...getLoadoutToolSlots(profile)];
+    const current = tools[slotIndex] ?? null;
+    const currentKey = loadoutToolKey(current);
+    const equippedKeys = new Set(tools.map((tool) => loadoutToolKey(tool)));
+    const entries = getUnlockedLoadoutToolRefs(profile).map((tool): LoadoutPickerEntry => {
+      const presentation = describeLoadoutTool(tool);
+      const key = loadoutToolKey(tool);
+      return {
+        key,
+        displayName: presentation.displayName,
+        textureKey: presentation.textureKey,
+        accentColor: presentation.accentColor,
+        selected: key === currentKey,
+        disabled: key !== currentKey && equippedKeys.has(key),
+        onPick: () => this.persistInspectorToolSlot(profile, tools, slotIndex, tool),
+      };
+    });
+    this.loadoutPicker?.open({
+      anchorX,
+      anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP + 24,
+      title: `Utility-Slot ${slotIndex + 1}`,
+      groups: [{ label: null, entries }],
+      clearLabel: current ? 'Slot leeren' : undefined,
+      onClear: current
+        ? () => this.persistInspectorToolSlot(profile, tools, slotIndex, null)
+        : undefined,
+    });
+  }
+
+  private persistInspectorToolSlot(
+    profile: ReturnType<typeof getStoredCoopDefenseUpgradeProfile>,
+    currentTools: readonly LoadoutToolRef[],
+    slotIndex: number,
+    tool: LoadoutToolRef | null,
+  ): void {
+    const next = [...currentTools];
+    if (tool) {
+      if (slotIndex < next.length) next[slotIndex] = tool;
+      else next.push(tool);
+    } else if (slotIndex < next.length) {
+      next.splice(slotIndex, 1);
+    }
+    const selected = tool ?? next[Math.min(slotIndex, next.length - 1)] ?? null;
+    setStoredCoopDefenseUpgradeProfile(setLoadoutToolSlots(profile, next, selected), 'inspector_gadachs');
+    this.onProgressImported?.();
+    this.renderLoadoutControls();
   }
 
   private getSlotItems(slot: LoadoutSlot): readonly LoadoutCarouselItem[] {
@@ -1082,15 +1186,16 @@ export class LeftSidePanel {
     if (!isCoopDefenseMode(mode)) return getSelectableLoadoutItems(slot, mode, null, 'dachs_nukem');
 
     const storedProgress = getStoredCoopDefenseProgress();
-    const classId = storedProgress.classesUnlocked
+    const classesUnlocked = storedProgress.unlockedClassIds.length > 0;
+    const classId = classesUnlocked
       ? storedProgress.selectedClassId
       : 'dachs_nukem';
-    const profile = storedProgress.classesUnlocked
+    const profile = classesUnlocked
       ? getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId)
       : storedProgress.defaultProfile;
     // Nur der Utility-Slot des Inspectors wird ueber seine geteilten Werkzeug-Slots belegt.
     // Waffe 2 bleibt ein regulaerer Slot und zeigt seine Klassenwaffe an.
-    if (storedProgress.classesUnlocked && classId === 'inspector_gadachs' && slot === 'utility') {
+    if (classesUnlocked && classId === 'inspector_gadachs' && slot === 'utility') {
       return [{
         id: DEFAULT_LOADOUT[slot].id,
         displayName: 'Utility-Rad (R)',
@@ -1115,7 +1220,7 @@ export class LeftSidePanel {
     const items = this.getSlotItems(slot);
     if (items.length === 0) {
       this.loadoutIndices[slot] = 0;
-      this.loadoutNameTexts[slot]?.setText('-');
+      this.renderLoadoutControls();
       return;
     }
 
@@ -1403,18 +1508,8 @@ export class LeftSidePanel {
   }
 
   private updateLoadoutArrowVisibility(): void {
-    for (const slot of Object.keys(this.loadoutArrowButtons) as LoadoutSlot[]) {
-      this.updateSlotArrowVisibility(slot);
-    }
-  }
-
-  /** Pfeile nur sichtbar/klickbar, wenn nicht gesperrt UND mehr als ein Item zur Auswahl steht. */
-  private updateSlotArrowVisibility(slot: LoadoutSlot): void {
-    const buttons = this.loadoutArrowButtons[slot];
-    if (!buttons) return;
-    const enabled = !this.lobbyFieldsLocked && this.getSlotItems(slot).length > 1;
-    this.setCompactButtonState(buttons.left, enabled, enabled);
-    this.setCompactButtonState(buttons.right, enabled, enabled);
+    this.loadoutPicker?.close();
+    this.renderLoadoutControls();
   }
 
   private stepGameMode(delta: -1 | 1): void {
@@ -1679,7 +1774,7 @@ export class LeftSidePanel {
   private getActiveCoopDefenseLoadoutClassId(): CoopDefenseClassId | null {
     if (!isCoopDefenseMode(this.bridge.getGameMode())) return null;
     const storedProgress = getStoredCoopDefenseProgress();
-    return storedProgress.classesUnlocked ? storedProgress.selectedClassId : null;
+    return storedProgress.unlockedClassIds.length > 0 ? storedProgress.selectedClassId : null;
   }
 
   private persistStoredLoadoutSlot(slot: LoadoutSlot, itemId: string): void {

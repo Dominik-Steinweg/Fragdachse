@@ -1,5 +1,5 @@
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
-import type { CoopDefenseItem, CoopDefenseItemSlot, GameMode, TeamId } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, GameMode, TeamId } from '../types';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
   compareCoopDefenseItems,
@@ -23,6 +23,7 @@ export interface MatchProgressDelta {
   newBossPoints: number;
   unlockedMapName: string | null;
   classesUnlocked: boolean;
+  newlyUnlockedClassIds: readonly CoopDefenseClassId[];
   /**
    * Der Freischaltstand der Items steckt nicht im Fortschritts-Schnappschuss und laesst sich
    * deshalb nicht wie `classesUnlocked` aus before/after ableiten – er kommt vom Sieg-Verbuchen.
@@ -134,7 +135,8 @@ export function createMatchProgressDelta(
     newSkillPoints: Math.max(0, after.availableUpgradePoints - before.availableUpgradePoints),
     newBossPoints: Math.max(0, after.availableBossPoints - before.availableBossPoints),
     unlockedMapName,
-    classesUnlocked: !before.classesUnlocked && after.classesUnlocked,
+    classesUnlocked: before.unlockedClassIds.length === 0 && after.unlockedClassIds.length > 0,
+    newlyUnlockedClassIds: after.unlockedClassIds.filter((classId) => !before.unlockedClassIds.includes(classId)),
     itemsUnlocked,
   };
 }

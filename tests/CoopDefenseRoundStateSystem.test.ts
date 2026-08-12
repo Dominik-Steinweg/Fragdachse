@@ -30,7 +30,7 @@ function friendly(...hpValues: number[]): FakeBase[] {
 }
 
 describe('CoopDefenseRoundStateSystem', () => {
-  it('loses only after all friendly bases are destroyed', () => {
+  it('does not lose a survival map when its optional base anchor is destroyed', () => {
     expect(new CoopDefenseRoundStateSystem({
       baseManager: createBaseManager(friendly(0, 500)),
       objective: 'survive',
@@ -41,7 +41,7 @@ describe('CoopDefenseRoundStateSystem', () => {
       baseManager: createBaseManager(friendly(0, 0)),
       objective: 'survive',
       getSecondsLeft: () => 10,
-    }).update()).toBe('defeat');
+    }).update()).toBeNull();
   });
 
   it('wins a survive map when the timer expires', () => {

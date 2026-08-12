@@ -1486,10 +1486,12 @@ function describeRewards(
       itemOffer: true,
     });
   }
-  if (progress.classesUnlocked) {
+  if (progress.newlyUnlockedClassIds.length > 0) {
     descriptors.push({
       glyph: '🔓',
-      label: 'NEUE FUNKTION FREIGESCHALTET: KLASSEN',
+      label: progress.newlyUnlockedClassIds.length === 1
+        ? 'NEUE KLASSE FREIGESCHALTET: INSPECTOR GADACHS'
+        : 'NEUE KLASSEN FREIGESCHALTET: DACHS NUKEM / DACHS OF STEEL',
       color: COLORS.GOLD_1,
       tooltip: 'Dachs Nukem, Dachs of Steel und Inspector Gadachs sind jetzt im Upgrade-Screen auswählbar.',
     });

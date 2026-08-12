@@ -3,7 +3,7 @@
   "displayName": "Map 4 - Adrenalinrausch",
   "arenaWidthCells": 82,
   "timeOfDay": "06:00",
-  "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
+  "tutorialText": "Diese Map hat zwei Basen. Solange eine davon steht, könnt ihr weiterkämpfen. Zweitbasen können Türme und Power-Up-Podeste tragen – verteidigt sie, wenn ihr ihre Unterstützung behalten wollt.",
   "rockFillRatio": 0.3,
   "mapEvents": [{
     "id": "train-rhythm",
@@ -11,7 +11,7 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 70,
+  "balanceReferenceDurationSec": 85,
   "objective": "repel-assault",
   "bases": [
     {
@@ -121,24 +121,24 @@
       "id": "adrenaline-opening",
       "start": { "type": "time", "atMs": 0 },
       "restAfterMs": 6500,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
+      "groups": [{ "enemyKind": "zombie-badger", "count": 15, "front": "west" }]
     },
     {
       "id": "adrenaline-rush",
       "start": { "type": "after-previous" },
       "restAfterMs": 8000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "north" }
+        { "enemyKind": "demon-badger", "count": 8, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "west" }
       ]
     },
     {
       "id": "adrenaline-finale",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" },
-        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 1800, "front": "south" }
+        { "enemyKind": "zombie-badger", "count": 15, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west" }
       ]
     }
   ]

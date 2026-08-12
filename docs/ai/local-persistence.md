@@ -15,6 +15,8 @@ Gespeichert werden stabile Eingaben und abgeleitete Progressionsdaten. Upgrade-P
 
 ## Cache und Import/Export
 
+Coop-Defense-Klassen werden als explizite `unlockedClassIds` persistiert. Ein leerer Satz bedeutet, dass keine Spezialisierung verfügbar ist; Unlocks werden nach dem Sieg der authorierten Map mit dem klassenweisen `unlockAfterMapId`-Vertrag vergeben.
+
 Die API hält den validierten Stand im Speicher. Getter lesen den Cache und geben für veränderbare Sammlungen Kopien aus; Setter aktualisieren den Cache synchron und behandeln Storage-/Quota-Fehler als nicht-fatal. Direkte externe Storage-Änderungen erfordern invalidateLocalStorageCache().
 
 Der Client lädt seinen Round-Fallback beim Scene-Aufbau, Import und resetPerRound(), niemals in einem Frame-Getter. Export/Import verwendet das versionierte Progress-Envelope ohne Audio-/Grafiksettings und ersetzt den vorhandenen Stand erst nach erfolgreicher Dekodierung.

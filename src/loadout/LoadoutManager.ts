@@ -41,6 +41,7 @@ import { COLORS, getTopDownMuzzleOrigin } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
+import { WeaponFireExecutor, type WeaponFireOptions } from './WeaponFireExecutor';
 
 export interface LoadoutSelection {
   weapon1?:  WeaponConfig;
@@ -49,17 +50,11 @@ export interface LoadoutSelection {
   ultimate?: UltimateConfig;
 }
 
-interface AutomatedWeaponFireOptions {
-  ignoreBaseCollisions?: boolean;
-  ignoreRockIndex?: number;
-  sourceSlot?: LoadoutSlot;
-  /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
-  sourceTurretId?: string;
-  /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
-  directDamageMultiplier?: number;
-  /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
-  payloadDamageMultiplier?: number;
-}
+/**
+ * Zusatzangaben automatischer Feuerquellen. Der Vertrag liegt beim gemeinsamen
+ * {@link WeaponFireExecutor}, damit Gameplay und Lobby dieselben Felder benutzen.
+ */
+type AutomatedWeaponFireOptions = WeaponFireOptions;
 import { HeldItemSlotTracker, type HeldItemSlot } from './HeldItemSlotTracker';
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
@@ -172,6 +167,69 @@ export class LoadoutManager {
   private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
   /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
+
+  private weaponFireExecutor: WeaponFireExecutor | null = null;
+
+  /**
+   * Gemeinsamer Fire-Dispatch für Projektil-, Hitscan- und Melee-Waffen. Der Manager liefert
+   * hier nur die Gameplay-Senken; die Übersetzung von {@link WeaponConfig} in einen Schuss
+   * liegt im Executor und wird von der Lobby unverändert mitbenutzt.
+   *
+   * Beim ersten Zugriff erzeugt statt im Feldinitialisierer: die Senken lesen `this` erst beim
+   * Schuss, und der Manager wird in Tests auch ohne Konstruktorlauf aufgebaut.
+   */
+  private get weaponFire(): WeaponFireExecutor {
+    return this.weaponFireExecutor ??= new WeaponFireExecutor({
+    spawnProjectile: (x, y, angle, ownerId, cfg) => {
+      this.projectileManager.spawnProjectile(x, y, angle, ownerId, cfg);
+    },
+    resolveHitscan: (request) => this.combatSystem?.resolveHitscanShot(
+      request.shooterId,
+      request.startX,
+      request.startY,
+      request.angle,
+      request.range,
+      request.damage,
+      request.traceThickness,
+      request.color,
+      request.adrenalinGain,
+      request.weaponName,
+      request.visualPreset,
+      request.shotAudioKey,
+      request.sourceSlot,
+      request.shotId,
+      request.detonator,
+      request.rockDamageMult,
+      request.trainDamageMult,
+      request.chainLightning,
+      request.burnOnHit,
+      request.supportEffect,
+    ) ?? false,
+    resolveMelee: (request) => this.combatSystem?.resolveMeleeSwing(
+      request.shooterId,
+      request.x,
+      request.y,
+      request.angle,
+      request.range,
+      request.arcDegrees,
+      request.damage,
+      request.adrenalinGain,
+      request.weaponName,
+      request.color,
+      request.sourceSlot,
+      request.rockDamageMult,
+      request.trainDamageMult,
+      request.visualPreset,
+      request.shotAudioKey,
+      request.burnOnHit,
+      undefined,
+      request.hitHeal,
+      request.hitAdrenaline,
+      request.bloodEffectMultiplier,
+      request.damageTargets,
+    ) ?? false,
+    });
+  }
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
@@ -2191,131 +2249,20 @@ export class LoadoutManager {
     sourceSlot?: LoadoutSlot,
     options?: AutomatedWeaponFireOptions,
   ): boolean {
-    const cursorRange = Math.hypot(targetX - x, targetY - y);
-    const effectiveRange = fireConfig.limitRangeToCursor
-      ? Math.min(config.range, cursorRange)
-      : config.range;
-    const lifetime = (effectiveRange / fireConfig.projectileSpeed) * 1000;
-    const isMiniRocket = config.id === 'MINI_ROCKET_LAUNCHER';
-    const hasExtendedMiniRocketFlight = isMiniRocket
-      && ((config.multiExplosionCount ?? 1) > 1 || (config.miniRocketReturnEnabled ?? 0) > 0);
-
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:           fireConfig.projectileSpeed,
-      ignoreBaseCollisions: options?.ignoreBaseCollisions,
-      ignoreRockIndex: options?.ignoreRockIndex,
-      sourceTurretId:     options?.sourceTurretId,
-      size:            fireConfig.projectileSize,
-      damage:          config.directDamageOverride ?? config.damage,
-      color:           config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
-      ownerColor:      playerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      smokeTrailColor: config.rocketSmokeTrailColor ?? playerColor,
-      lifetime: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : lifetime,
-      maxBounces:      fireConfig.projectileMaxBounces,
-      isGrenade:       false,
-      adrenalinGain:   config.adrenalinGain,
-      weaponName:      config.displayName,
-      splitCount:      config.splitCount,
-      splitSpread:     config.splitSpread,
-      splitFactor:     config.splitFactor,
-      splitHoming:     (config.splitHomingEnabled ?? 0) > 0 ? {
-        acquireDelayMs: 0,
-        searchRadius: 500,
-        // Wie die Basis-Waffen: Splitter treten in großer Zahl auf, und jede Zielsuche
-        // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
-        retargetIntervalMs: 100,
-        maxTurnDegreesPerStep: 20,
-        targetTypes: ['players', 'enemies'],
-        requireLineOfSight: true,
-        excludeOwner: true,
-        distanceWeight: 1,
-        forwardWeight: 0.5,
-      } : undefined,
-      remainingRangePx: effectiveRange,
-      explosion:       fireConfig.impactExplosion,
-      enemyHitExplosion: fireConfig.enemyHitExplosion,
-      impactCloud:     fireConfig.impactCloud,
-      homing:          config.homingEnabled === undefined || config.homingEnabled > 0
-        ? fireConfig.homing
-        : undefined,
-      projectileStyle: config.projectileStyle,
-      bulletVisualPreset: config.bulletVisualPreset,
-      grenadeVisualPreset: config.grenadeVisualPreset,
-      energyBallVariant: config.energyBallVariant,
-      tracerConfig:    config.tracerConfig,
-      detonable:       config.detonable,
-      detonator:       config.detonator,
-      rockDamageMult:  config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
-      burnDurationMs:     config.burnOnHit?.durationMs,
-      burnDamagePerTick:  config.burnOnHit?.damagePerTick,
-      projectileBurnVisualStyle: config.projectileBurnVisualStyle,
-      canReceiveFireImbue: sourceSlot === 'weapon1' || sourceSlot === 'weapon2',
+    void fireConfig;
+    return this.weaponFire.fire(config, {
+      x, y, angle, targetX, targetY,
+      ownerId: playerId,
+      ownerColor: playerColor,
       sourceSlot,
-      shotAudioKey:    config.shotAudio?.successKey,
-      penetrationCount: config.penetrationCount,
-      penetrationDamageRetention: config.penetrationDamageRetention,
-      penetratesRocks: (config.penetratesRocks ?? 0) > 0,
-      multiExplosionCount: config.multiExplosionCount,
-      multiExplosionCoastMs: isMiniRocket ? config.multiExplosionCoastMs : undefined,
-      miniRocketStageRangePx: hasExtendedMiniRocketFlight ? effectiveRange : undefined,
-      miniRocketReturnEnabled: isMiniRocket && (config.miniRocketReturnEnabled ?? 0) > 0,
-      miniRocketReturnRangeBuffer: isMiniRocket ? config.miniRocketReturnRangeBuffer : undefined,
-      miniRocketPickupRadius: isMiniRocket ? config.miniRocketPickupRadius : undefined,
-      miniRocketPickupAdrenalineRefundFraction: isMiniRocket ? config.miniRocketPickupAdrenalineRefundFraction : undefined,
-      miniRocketPickupArmor: isMiniRocket ? config.miniRocketPickupArmor : undefined,
-      miniRocketAdrenalineCostPaid: isMiniRocket
-        ? Math.min(
-            this.resourceSystem.getAdrenaline(playerId),
-            this.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost),
-          )
-        : undefined,
-      miniRocketSafetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
-      miniRocketCascadeDamageBonusPerExplosion: isMiniRocket ? config.miniRocketCascadeDamageBonusPerExplosion : undefined,
-      shotgunOriginX: (config.pelletCount ?? 1) > 1 ? x : undefined,
-      shotgunOriginY: (config.pelletCount ?? 1) > 1 ? y : undefined,
-      shotgunResolvedRange: (config.pelletCount ?? 1) > 1 ? effectiveRange : undefined,
-      shotgunProximityMaxDamageBonus: (config.pelletCount ?? 1) > 1 ? config.shotgunProximityMaxDamageBonus : undefined,
-      shotgunSlowFraction: (config.pelletCount ?? 1) > 1 ? config.shotgunSlowFraction : undefined,
-      shotgunSlowDurationMs: (config.pelletCount ?? 1) > 1 ? config.shotgunSlowDurationMs : undefined,
-      hitSlowFraction: config.hitSlowFraction,
-      hitSlowDurationMs: config.hitSlowDurationMs,
-      hitKnockback: config.hitKnockback,
-      hitKnockbackDurationMs: config.hitKnockbackDurationMs,
-      fireTrail: config.id === 'AWP' && (config.awpCharge?.fireTrailDurationMs ?? 0) > 0 ? {
-        durationMs: config.awpCharge?.fireTrailDurationMs ?? 0,
-        burnDurationMs: config.awpCharge?.fireTrailBurnDurationMs ?? 0,
-        burnDamagePerTick: config.awpCharge?.fireTrailBurnDamagePerTick ?? 0,
-        weaponName: 'AWP-Brandspur',
-      } : undefined,
-      fireTrailHalfWidthCells: config.id === 'AWP' ? config.awpCharge?.fireTrailHalfWidthCells : undefined,
-      awpCorridorHalfWidth: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
-        ? config.awpCharge?.corridorHalfWidth
-        : undefined,
-      awpCorridorDamage: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
-        ? config.awpCharge?.corridorDamage
-        : undefined,
-      awpCorridorDotDurationMs: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
-        ? config.awpCharge?.corridorDotDurationMs
-        : undefined,
-      awpCorridorDotTickIntervalMs: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
-        ? config.awpCharge?.corridorDotTickIntervalMs
-        : undefined,
-      awpCorridorKnockback: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
-        ? config.awpCharge?.corridorKnockback
-        : undefined,
-      awpCorridorKnockbackDurationMs: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
-        ? config.awpCharge?.corridorKnockbackDurationMs
-        : undefined,
-      proximityArc: config.proximityArc,
-      ak47ShotId: config.ak47ShotId,
-      ak47DamageMultiplier: config.ak47DamageMultiplier,
-      ak47FireSuperiorityShot: config.ak47FireSuperiorityShot,
+      options,
+      // Die gezahlten Adrenalinkosten kennt nur der Manager; der Executor fragt sie lediglich
+      // für die Mini-Rakete ab und bleibt damit frei von Ressourcenverwaltung.
+      resolvePaidAdrenalineCost: () => Math.min(
+        this.resourceSystem.getAdrenaline(playerId),
+        this.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost),
+      ),
     });
-
-    return true;
   }
 
   private fireHitscanWeapon(
@@ -2329,30 +2276,16 @@ export class LoadoutManager {
     sourceSlot:  WeaponSlot | undefined,
     shotId?:     number,
   ): boolean {
-    void playerColor;
-    const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
-    return this.combatSystem?.resolveHitscanShot(
-      playerId,
-      muzzleOrigin.x,
-      muzzleOrigin.y,
-      angle,
-      config.range,
-      config.damage,
-      fireConfig.traceThickness,
-      playerColor,
-      config.adrenalinGain,
-      config.displayName,
-      fireConfig.visualPreset,
-      config.shotAudio?.successKey,
+    void fireConfig;
+    return this.weaponFire.fire(config, {
+      x, y, angle,
+      targetX: x,
+      targetY: y,
+      ownerId: playerId,
+      ownerColor: playerColor,
       sourceSlot,
       shotId,
-      config.detonator,  // DetonatorConfig weitergeben (optional)
-      config.rockDamageMult  ?? 1,
-      config.trainDamageMult ?? 1,
-      config.chainLightning,  // ChainLightningConfig weitergeben (optional)
-      config.burnOnHit,       // BurnOnHitConfig weitergeben (optional)
-      fireConfig.supportEffect,
-    ) ?? false;
+    });
   }
 
   private fireMeleeWeapon(
@@ -2365,29 +2298,15 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: WeaponSlot,
   ): boolean {
-    return this.combatSystem?.resolveMeleeSwing(
-      playerId,
-      x,
-      y,
-      angle,
-      config.range,
-      fireConfig.hitArcDegrees,
-      config.damage,
-      config.adrenalinGain,
-      config.displayName,
-      playerColor,
+    void fireConfig;
+    return this.weaponFire.fire(config, {
+      x, y, angle,
+      targetX: x,
+      targetY: y,
+      ownerId: playerId,
+      ownerColor: playerColor,
       sourceSlot,
-      config.rockDamageMult  ?? 1,
-      config.trainDamageMult ?? 1,
-      fireConfig.visualPreset,
-      config.shotAudio?.successKey,
-      config.burnOnHit,       // BurnOnHitConfig weitergeben (optional)
-      undefined,
-      config.hitHeal ?? 0,
-      config.hitAdrenaline ?? 0,
-      config.bloodEffectMultiplier ?? 1,
-      fireConfig.damageTargets,
-    ) ?? false;
+    });
   }
 
   private fireFlamethrowerWeapon(

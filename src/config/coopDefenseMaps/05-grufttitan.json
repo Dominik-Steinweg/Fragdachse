@@ -3,7 +3,7 @@
   "displayName": "Map 5 - Grufttitan",
   "arenaWidthCells": 74,
   "timeOfDay": "22:30",
-  "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn der Boss fällt. Beim ersten Sieg gibt es einen Boss-Punkt für spezielle Upgrades. Nach Abschluss von Map 5 werden außerdem die Klassen freigeschaltet.",
+  "tutorialText": "Boss-Maps enden erst, wenn der Boss fällt. Der erste Sieg bringt einen Boss-Punkt. Nach dieser Map werden Dachs Nukem und Dachs of Steel freigeschaltet. Inspector bleibt gesperrt.",
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
   "mapEvents": [{
@@ -12,7 +12,7 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 80,
+  "balanceReferenceDurationSec": 105,
   "bases": [
     {
       "id": "coop-base-rear",
@@ -118,36 +118,23 @@
     "enemyKind": "grave-titan",
     "spawnAtMs": 18000
   },
-  "persistentSpawns": [
+  "encounters": [
     {
-      "id": "map-5-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 7500,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "grave-titan-opening-support",
+      "start": { "type": "time", "atMs": 0 },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 8, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 3, "delayMs": 1000, "front": "west" }
+      ]
     },
     {
-      "id": "map-5-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 7500,
-      "countPerTick": 1,
-      "startAtMs": 6000,
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-5-pressure-2",
-      "enemyKind": "rabid-badger",
-      "intervalMs": 6500,
-      "countPerTick": 1,
-      "startAtMs": 9000,
-      "source": {
-        "type": "map"
-      }
+      "id": "grave-titan-phase-support",
+      "start": { "type": "time", "atMs": 42000 },
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 6, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 2, "delayMs": 1200, "front": "west" }
+      ]
     }
-  ]
+  ],
+  "persistentSpawns": []
 }

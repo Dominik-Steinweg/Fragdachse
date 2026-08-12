@@ -4,7 +4,7 @@
   "arenaWidthCells": 135,
   "arenaHeightCells": 40,
   "timeOfDay": "18:45",
-  "tutorialText": "Wurf-Dachse schleudern Brutbomben, aus denen Tollwut-Dachse schlüpfen. Fangt sie früh ab. Der größere Brutbau wird von zwei Fliegenpilztürmen verteidigt, die auf euch schießen.",
+  "tutorialText": "Wurf-Dachse schleudern Brutbomben, aus denen neue Gegner schlüpfen. Optionale Brutnester erzeugen zusätzlichen Druck – zerstört ihr sie, wird der weitere Angriff leichter.",
   "tutorialDurationMs": 10000,
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
@@ -14,7 +14,7 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 150,
+  "balanceReferenceDurationSec": 200,
   "bases": [
     {
       "id": "coop-base-rear",

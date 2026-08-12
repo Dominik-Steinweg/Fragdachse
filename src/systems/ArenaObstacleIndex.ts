@@ -8,13 +8,33 @@ const BUCKET_SIZE = 128;
 export const OBSTACLE_ROCK = 1;
 export const OBSTACLE_BASE = 2;
 
+/**
+ * Was der Index von einem Rechteck-Hindernis braucht.
+ *
+ * Absichtlich das Minimum statt `Phaser.GameObjects.Image`: Die Arena reicht ihre echten
+ * Fels-Sprites herein, die Lobby leichte Hindernisproxies ohne Display-Objekt. Beide laufen
+ * damit durch denselben räumlichen Index – es gibt keinen zweiten Spatial Hash.
+ */
+export interface ObstacleRectBody {
+  readonly active: boolean;
+  getBounds(output?: Phaser.Geom.Rectangle): Phaser.Geom.Rectangle;
+}
+
+/** Gegenstück für Kreis-Hindernisse (Baumstämme). */
+export interface ObstacleCircleBody {
+  readonly active: boolean;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+}
+
 export interface ArenaObstacleSources {
   /** Paralleles Array zu `layout.rocks` – `null` bedeutet zerstört. */
-  readonly rocks: () => readonly (Phaser.GameObjects.Image | null)[] | null;
+  readonly rocks: () => readonly (ObstacleRectBody | null)[] | null;
   /** Baumstämme als Kreis-Hindernisse. */
-  readonly trunks: () => readonly Phaser.GameObjects.Arc[] | null;
+  readonly trunks: () => readonly ObstacleCircleBody[] | null;
   /** Zell-Rechtecke der Coop-Defense-Basen. */
-  readonly bases: () => readonly Phaser.GameObjects.Rectangle[] | null;
+  readonly bases: () => readonly ObstacleRectBody[] | null;
 }
 
 /**
@@ -101,14 +121,14 @@ export class ArenaObstacleIndex {
   /** Rechteck-Hindernisse als flaches [l,t,r,b]. */
   private rectData = new Float64Array(0);
   /** Live-Referenz je Rechteck, um `active` beim Query zu prüfen. */
-  private rectSource: (Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle)[] = [];
+  private rectSource: ObstacleRectBody[] = [];
   private rectKind = new Uint8Array(0);
   private rectRockIndex = new Int32Array(0);
   private rectCount = 0;
 
   /** Kreis-Hindernisse als flaches [cx,cy,r]. */
   private circleData = new Float64Array(0);
-  private circleSource: Phaser.GameObjects.Arc[] = [];
+  private circleSource: ObstacleCircleBody[] = [];
   private circleCount = 0;
 
   // Bucket-Grid im CSR-Layout: bucketStart[i]..bucketStart[i+1] indiziert `bucketEntries`.
@@ -127,9 +147,9 @@ export class ArenaObstacleIndex {
   private dirty = true;
   // Identität und Länge der Quell-Arrays beim letzten Bau. Fängt ausgetauschte Arrays
   // (Rundenwechsel) und nachträglich angehängte Felsen (Platzierbare) ohne Invalidierung ab.
-  private builtRocks: readonly (Phaser.GameObjects.Image | null)[] | null = null;
-  private builtTrunks: readonly Phaser.GameObjects.Arc[] | null = null;
-  private builtBases: readonly Phaser.GameObjects.Rectangle[] | null = null;
+  private builtRocks: readonly (ObstacleRectBody | null)[] | null = null;
+  private builtTrunks: readonly ObstacleCircleBody[] | null = null;
+  private builtBases: readonly ObstacleRectBody[] | null = null;
   private builtRockLength = -1;
   private builtTrunkLength = -1;
   private builtBaseLength = -1;
@@ -310,7 +330,7 @@ export class ArenaObstacleIndex {
 
   private writeRect(
     rectIndex: number,
-    source: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle,
+    source: ObstacleRectBody,
   ): void {
     // Beim ersten Aufruf legt Phaser das Rechteck an, danach wird es wiederbefüllt.
     const bounds = this.scratchBounds

@@ -15,19 +15,33 @@ import {
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
 } from '../config';
 
+/**
+ * Aufbauoptionen der Figur. Der Presentation-Modus liefert dieselbe Darstellung ohne die
+ * Aufbauten, die einen echten Matchzustand voraussetzen (Name, HP-/Rüstungsbalken). Er
+ * traegt die Ambient-Dachse der Lobby, die weder Spieleridentitaet noch HUD besitzen.
+ */
+export interface PlayerEntityOptions {
+  /** Ohne Namensschild und Welt-Balken; Sprite, Glow, Held Item und VFX bleiben identisch. */
+  presentation?: boolean;
+  /** Materialisierungs-Effekt beim Anlegen. Im Presentation-Modus standardmaessig aus. */
+  spawnEffect?: boolean;
+}
+
 export class PlayerEntity {
   readonly id:     string;
   readonly sprite: Phaser.GameObjects.Image;
 
   private readonly colorHex: number;
   private readonly isEnemy: boolean;
+  /** Reine Darstellung ohne Matchzustand; unterdrueckt Name und Welt-Balken dauerhaft. */
+  private readonly presentation: boolean;
   private displayName: string;
-  private readonly nameLabel: Phaser.GameObjects.Text;
+  private readonly nameLabel: Phaser.GameObjects.Text | null;
   private nameLabelVisible = false;
-  private hpBarBg:  Phaser.GameObjects.Rectangle;
-  private hpBarFg:  Phaser.GameObjects.Rectangle;
-  private armorBarBg: Phaser.GameObjects.Rectangle;
-  private armorBarFg: Phaser.GameObjects.Rectangle;
+  private hpBarBg:  Phaser.GameObjects.Rectangle | null;
+  private hpBarFg:  Phaser.GameObjects.Rectangle | null;
+  private armorBarBg: Phaser.GameObjects.Rectangle | null;
+  private armorBarFg: Phaser.GameObjects.Rectangle | null;
   private currentHp = HP_MAX;
   private maxHp = HP_MAX;
   private currentArmor = 0;
@@ -91,11 +105,13 @@ export class PlayerEntity {
     y: number,
     isEnemy = false,
     lighting: LightingSystem | null = null,
+    options: PlayerEntityOptions = {},
   ) {
     this.lighting = lighting;
     this.id       = profile.id;
     this.colorHex = profile.colorHex;
     this.isEnemy  = isEnemy;
+    this.presentation = options.presentation === true;
     this.displayName = profile.name;
     this.targetX  = x;
     this.targetY  = y;
@@ -125,7 +141,7 @@ export class PlayerEntity {
     this.spawnShine.setVisible(false);
 
     // Spawn-Animation beim ersten Erscheinen
-    this.playSpawnEffect();
+    if (options.spawnEffect ?? !this.presentation) this.playSpawnEffect();
 
     this.stealthShell = scene.add.image(x, y, 'badger');
     this.stealthShell.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
@@ -170,34 +186,46 @@ export class PlayerEntity {
     this.stealthTrailParticles.setDepth(DEPTH.PLAYERS);
     this.stealthTrailParticles.startFollow(this.sprite, 0, 0, false);
 
-    // HP-Balken Hintergrund (dunkelgrau, zentriert)
-    this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
-    this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
+    // Namensschild und Welt-Balken setzen einen echten Matchzustand voraus. Im
+    // Presentation-Modus entstehen sie deshalb gar nicht erst, statt dauerhaft unsichtbar in
+    // der Display-Liste zu liegen.
+    if (this.presentation) {
+      this.hpBarBg = null;
+      this.hpBarFg = null;
+      this.armorBarBg = null;
+      this.armorBarFg = null;
+      this.nameLabel = null;
+      this.worldBarsVisible = false;
+    } else {
+      // HP-Balken Hintergrund (dunkelgrau, zentriert)
+      this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
+      this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
 
-    // HP-Balken Vordergrund (farbig, links ausgerichtet)
-    this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
-    this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
-    this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+      // HP-Balken Vordergrund (farbig, links ausgerichtet)
+      this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
+      this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
+      this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
 
-    this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
-    this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
-    this.armorBarBg.setVisible(false);
+      this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
+      this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
+      this.armorBarBg.setVisible(false);
 
-    this.armorBarFg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
-    this.armorBarFg.setOrigin(0, 0.5);
-    this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
-    this.armorBarFg.setVisible(false);
+      this.armorBarFg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
+      this.armorBarFg.setOrigin(0, 0.5);
+      this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
+      this.armorBarFg.setVisible(false);
 
-    this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
-      fontSize: '12px',
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-      color: toCssColor(this.colorHex),
-      stroke: '#050709',
-      strokeThickness: 3,
-    }).setOrigin(0.5, 1)
-      .setDepth(DEPTH.PLAYERS + 3)
-      .setVisible(false);
+      this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
+        fontSize: '12px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(this.colorHex),
+        stroke: '#050709',
+        strokeThickness: 3,
+      }).setOrigin(0.5, 1)
+        .setDepth(DEPTH.PLAYERS + 3)
+        .setVisible(false);
+    }
 
     this.syncBar();
 
@@ -220,12 +248,12 @@ export class PlayerEntity {
   setDisplayName(name: string): void {
     if (this.displayName === name) return;
     this.displayName = name;
-    this.nameLabel.setText(name);
+    this.nameLabel?.setText(name);
   }
 
   setNameVisible(visible: boolean): void {
     this.nameLabelVisible = visible;
-    this.nameLabel.setVisible(visible && this.baseVisible);
+    this.nameLabel?.setVisible(visible && this.baseVisible);
   }
 
   isDecoyStealthedVisual(): boolean {
@@ -242,6 +270,7 @@ export class PlayerEntity {
   }
 
   setWorldBarsVisible(visible: boolean): void {
+    if (this.presentation) return;
     this.worldBarsVisible = visible;
     this.applyDisplayVisibility();
   }
@@ -313,11 +342,11 @@ export class PlayerEntity {
     const x = this.sprite.x;
     const hpY = this.sprite.y + HP_BAR_OFFSET_Y;
     const armorY = this.sprite.y + ARMOR_BAR_OFFSET_Y;
-    this.hpBarBg.setPosition(x, hpY);
-    this.hpBarFg.setPosition(x - HP_BAR_WIDTH / 2, hpY);
-    this.armorBarBg.setPosition(x, armorY);
-    this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
-    this.nameLabel.setPosition(x, this.sprite.y - PLAYER_SIZE * 0.72);
+    this.hpBarBg?.setPosition(x, hpY);
+    this.hpBarFg?.setPosition(x - HP_BAR_WIDTH / 2, hpY);
+    this.armorBarBg?.setPosition(x, armorY);
+    this.armorBarFg?.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
+    this.nameLabel?.setPosition(x, this.sprite.y - PLAYER_SIZE * 0.72);
     this.syncAttachedEffects();
     this.syncOverlays();
   }
@@ -326,6 +355,7 @@ export class PlayerEntity {
   updateHP(hp: number, maxHp: number = this.maxHp): void {
     this.maxHp = Math.max(1, maxHp);
     this.currentHp = Math.max(0, Math.min(this.maxHp, hp));
+    if (!this.hpBarFg) return;
     const ratio = this.currentHp / this.maxHp;
     this.hpBarFg.width = HP_BAR_WIDTH * ratio;
     const color = this.isEnemy
@@ -341,6 +371,7 @@ export class PlayerEntity {
 
   updateArmor(armor: number): void {
     this.currentArmor = Math.max(0, Math.min(ARMOR_MAX, armor));
+    if (!this.armorBarFg || !this.armorBarBg) return;
     const ratio = this.currentArmor / ARMOR_MAX;
     this.armorBarFg.width = ARMOR_BAR_WIDTH * ratio;
     this.armorBarFg.setFillStyle(ARMOR_COLOR);
@@ -774,15 +805,15 @@ export class PlayerEntity {
     const barsVisible = visible && this.worldBarsVisible && !this.isDecoyStealthed;
     const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     this.sprite.setVisible(visible);
-    this.nameLabel.setVisible(this.nameLabelVisible && visible);
-    this.hpBarBg.setVisible(barsVisible);
-    this.hpBarFg.setVisible(barsVisible);
-    this.armorBarBg.setVisible(barsVisible && this.currentArmor > 0);
-    this.armorBarFg.setVisible(barsVisible && this.currentArmor > 0);
-    this.hpBarBg.setAlpha(alpha * 0.92);
-    this.hpBarFg.setAlpha(alpha);
-    this.armorBarBg.setAlpha(alpha * 0.92);
-    this.armorBarFg.setAlpha(alpha);
+    this.nameLabel?.setVisible(this.nameLabelVisible && visible);
+    this.hpBarBg?.setVisible(barsVisible);
+    this.hpBarFg?.setVisible(barsVisible);
+    this.armorBarBg?.setVisible(barsVisible && this.currentArmor > 0);
+    this.armorBarFg?.setVisible(barsVisible && this.currentArmor > 0);
+    this.hpBarBg?.setAlpha(alpha * 0.92);
+    this.hpBarFg?.setAlpha(alpha);
+    this.armorBarBg?.setAlpha(alpha * 0.92);
+    this.armorBarFg?.setAlpha(alpha);
     this.stealthShell?.setVisible(visible && this.isDecoyStealthed);
     this.stealthScan?.setVisible(visible && this.isDecoyStealthed);
     this.syncAttachedEffects();
@@ -866,10 +897,10 @@ export class PlayerEntity {
     this.burnRenderer?.destroy();
     this.rageRenderer?.destroy();
     this.heldItem.destroy();
-    this.hpBarBg.destroy();
-    this.hpBarFg.destroy();
-    this.armorBarBg.destroy();
-    this.armorBarFg.destroy();
+    this.hpBarBg?.destroy();
+    this.hpBarFg?.destroy();
+    this.armorBarBg?.destroy();
+    this.armorBarFg?.destroy();
     removeInternalFx(this.sprite, this.glowFx);
     this.glowFx = null;
     this.sprite.destroy();
@@ -877,6 +908,6 @@ export class PlayerEntity {
     this.stealthShell?.destroy();
     this.stealthScan?.destroy();
     this.deathSprite?.destroy();
-    this.nameLabel.destroy();
+    this.nameLabel?.destroy();
   }
 }

@@ -32,6 +32,8 @@ export class CoopDefenseSpawnExecutor {
     private readonly enemyManager: EnemyManager,
     private readonly flowFieldService: EnemyFlowFieldService,
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
+    private readonly playerFlowFieldService?: EnemyFlowFieldService | null,
+    private readonly strategicFlowFieldService?: EnemyFlowFieldService | null,
   ) {}
 
   /** Spawn-Pfad fuer endliche Encounter; die Herkunft bleibt fuer Clear-Tracking erhalten. */
@@ -46,6 +48,7 @@ export class CoopDefenseSpawnExecutor {
       count,
       { ...(originId ? { originId } : {}), spawnFront: front },
       front,
+      this.resolveSpawnFlowField(kind),
     );
   }
 
@@ -55,7 +58,7 @@ export class CoopDefenseSpawnExecutor {
     count: number,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
   ): readonly string[] {
-    return this.spawnArenaGroup(kind, count, { spawnFront: front }, front);
+    return this.spawnArenaGroup(kind, count, { spawnFront: front }, front, this.resolveSpawnFlowField(kind));
   }
 
   /** Strukturgebundene Quelle mit unveraendertem Spawnzentrum und Burrow-Sonderbehandlung. */
@@ -74,7 +77,11 @@ export class CoopDefenseSpawnExecutor {
 
   /** Einmaliger Boss-Spawn; der bestehende Boss-Pfad bleibt auf der Westfront. */
   hostSpawnBoss(kind: CoopDefenseEnemyKind): boolean {
-    const candidates = this.collectCandidates(kind, DEFAULT_SPAWN_FRONT, this.bossFlowFieldService ?? undefined);
+    const candidates = this.collectCandidates(
+      kind,
+      DEFAULT_SPAWN_FRONT,
+      this.bossFlowFieldService ?? this.flowFieldService,
+    );
     if (candidates.length === 0) {
       this.warnExhausted();
       return false;
@@ -91,10 +98,11 @@ export class CoopDefenseSpawnExecutor {
     count: number,
     spawnOptions: EnemySpawnOptions,
     front: SpawnFront,
+    flowFieldService: EnemyFlowFieldService,
   ): string[] {
     const spawnedEnemyIds: string[] = [];
     if (count <= 0) return spawnedEnemyIds;
-    const candidatesAll = this.collectCandidates(kind, front);
+    const candidatesAll = this.collectCandidates(kind, front, flowFieldService);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
       return spawnedEnemyIds;
@@ -125,7 +133,7 @@ export class CoopDefenseSpawnExecutor {
   private collectCandidates(
     kind: CoopDefenseEnemyKind,
     front: SpawnFront,
-    flowFieldService = this.flowFieldService,
+    flowFieldService: EnemyFlowFieldService,
   ): SpawnCell[] {
     if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
       return this.collectEdgeBurrowCandidates(kind, front, flowFieldService);
@@ -135,10 +143,15 @@ export class CoopDefenseSpawnExecutor {
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
     const cells: SpawnCell[] = [];
     const edgeBand = this.getEdgeBand(front);
+    const allowPlayerTargetWithoutGoals = this.isPlayerTarget(kind)
+      && (flowFieldService.getGoalCells?.().length ?? 0) === 0;
     for (let gridX = edgeBand.minGridX; gridX <= edgeBand.maxGridX; gridX += 1) {
       for (let gridY = edgeBand.minGridY; gridY <= edgeBand.maxGridY; gridY += 1) {
         if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
-        if (flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
+        if (
+          !allowPlayerTargetWithoutGoals
+          && flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY
+        ) continue;
         const world = flowFieldService.gridToWorld(gridX, gridY);
         if (!world) continue;
         if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
@@ -146,6 +159,24 @@ export class CoopDefenseSpawnExecutor {
       }
     }
     return cells;
+  }
+
+  private resolveSpawnFlowField(kind: CoopDefenseEnemyKind): EnemyFlowFieldService {
+    const movementTarget = getCoopDefenseEnemyConfig(kind).movementTarget;
+    if (movementTarget === 'players-and-armed-constructs') {
+      return this.strategicFlowFieldService
+        ?? this.playerFlowFieldService
+        ?? this.flowFieldService;
+    }
+    if (movementTarget === 'players') {
+      return this.playerFlowFieldService ?? this.flowFieldService;
+    }
+    return this.flowFieldService;
+  }
+
+  private isPlayerTarget(kind: CoopDefenseEnemyKind): boolean {
+    const movementTarget = getCoopDefenseEnemyConfig(kind).movementTarget;
+    return movementTarget === 'players' || movementTarget === 'players-and-armed-constructs';
   }
 
   /** Edge-burrow candidates may start inside blocked border cells, but their tunnel must reach

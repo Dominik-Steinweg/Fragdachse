@@ -28,7 +28,7 @@
     {
       "id": "void-random-patches",
       "type": "ground-hazard",
-      "start": { "type": "time", "atMs": 0 },
+      "start": { "type": "boss-phase", "phase": 2 },
       "area": {
         "type": "random-patches",
         "randomPatchCount": 6,
@@ -45,7 +45,7 @@
     }
   ],
   "rockFillRatio": 0.08,
-  "balanceReferenceDurationSec": 110,
+  "balanceReferenceDurationSec": 210,
   "objective": "defeat-boss",
   "bases": [
     {

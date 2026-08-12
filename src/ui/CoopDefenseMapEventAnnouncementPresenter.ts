@@ -84,6 +84,9 @@ export class CoopDefenseMapEventAnnouncementPresenter {
     for (const entry of changedEntries) {
       const event = this.eventsById.get(entry.eventId);
       if (!event || event.type !== entry.eventType || entry.state === 'dormant') continue;
+      // Zugfahrten bleiben spielmechanisch aktiv, sind aber bewusst kein HUD-Ereignis:
+      // ihre Einblendungen waren im Verhältnis zur taktischen Relevanz zu störend.
+      if (event.type === 'train') continue;
       const message = createAnnouncementMessage(event, entry);
       if (message) this.announcements.enqueue({
         ...message,

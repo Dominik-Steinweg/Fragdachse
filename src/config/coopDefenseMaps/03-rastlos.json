@@ -3,7 +3,7 @@
   "displayName": "Map 3 - Rastlos",
   "arenaWidthCells": 76,
   "timeOfDay": "17:00",
-  "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
+  "tutorialText": "Nicht alle Gegner greifen die Basis an. Manche jagen gezielt euch – erkennt gefährliche Gegner früh und setzt Prioritäten.",
   "rockFillRatio": 0.4,
   "mapEvents": [{
     "id": "train-rhythm",
@@ -11,15 +11,16 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 65,
+  "balanceReferenceDurationSec": 75,
   "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
       "hpMax": 1500,
       "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
+        "kind": "center-offset",
+        "dxCells": 0,
+        "dyCells": 0
       },
       "shape": {
         "kind": "rectangle",
@@ -46,20 +47,6 @@
           "weaponId": "BASE_SPOREN"
         }
       ]
-    },
-    {
-      "id": "coop-base-middle",
-      "hpMax": 600,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": -1
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 2,
-        "heightCells": 2
-      }
     }
   ],
   "powerUps": [],
@@ -76,14 +63,13 @@
       "restAfterMs": 7500,
       "groups": [
         { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "north" }
+        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "east" }
       ]
     },
     {
       "id": "spore-breakthrough",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "spore-warden", "count": 3, "front": "north" },
         { "enemyKind": "rabid-badger", "count": 7, "delayMs": 1200, "front": "west" }
       ]
     }

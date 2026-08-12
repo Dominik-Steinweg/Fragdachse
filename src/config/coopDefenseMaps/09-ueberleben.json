@@ -1,0 +1,85 @@
+{
+  "mapId": "9",
+  "displayName": "Map 9 - Letzter Stand",
+  "arenaWidthCells": 84,
+  "arenaHeightCells": 38,
+  "timeOfDay": "04:30",
+  "tutorialText": "Keine Basis. Kein Rückzug. Überlebt 120 Sekunden. Die Gegner jagen ausschließlich euch; jeder Spieler hat nur zwei Respawns.",
+  "rockFillRatio": 0.4,
+  "mapEvents": [{
+    "id": "train-rhythm",
+    "type": "train",
+    "start": { "type": "time", "atMs": 10000 },
+    "repeatAfterExitMs": 10000
+  }],
+  "surviveDurationSec": 120,
+  "balanceReferenceDurationSec": 120,
+  "objective": "survive",
+  "surviveRespawnsPerPlayer": 2,
+  "bases": [],
+  "powerUps": [
+    { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+    { "defId": "ARMOR", "region": "rear", "respawnMs": 10000, "spawnOnArenaStart": true }
+  ],
+  "encounters": [
+    {
+      "id": "survival-opening",
+      "start": { "type": "time", "atMs": 0 },
+      "groups": [
+        { "enemyKind": "rabid-badger", "count": 10, "front": "west" },
+        { "enemyKind": "void-stalker", "count": 3, "delayMs": 700, "front": "east" }
+      ]
+    },
+    {
+      "id": "survival-escalation",
+      "start": { "type": "time", "atMs": 24000 },
+      "groups": [
+        { "enemyKind": "void-stalker", "count": 6, "front": "north" },
+        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 900, "front": "south" }
+      ]
+    },
+    {
+      "id": "survival-brood",
+      "start": { "type": "time", "atMs": 56000 },
+      "groups": [
+        { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
+        { "enemyKind": "void-stalker", "count": 5, "delayMs": 1200, "front": "east" }
+      ]
+    },
+    {
+      "id": "survival-last-stand",
+      "start": { "type": "time", "atMs": 86000 },
+      "groups": [
+        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 800, "front": "north" },
+        { "enemyKind": "void-stalker", "count": 8, "delayMs": 1400, "front": "south" }
+      ]
+    }
+  ],
+  "persistentSpawns": [
+    {
+      "id": "map-9-player-pressure-rabid",
+      "enemyKind": "rabid-badger",
+      "intervalMs": 2500,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": { "type": "map" }
+    },
+    {
+      "id": "map-9-player-pressure-void",
+      "enemyKind": "void-stalker",
+      "intervalMs": 9500,
+      "countPerTick": 1,
+      "startAtMs": 12000,
+      "source": { "type": "map" }
+    },
+    {
+      "id": "map-9-player-pressure-brood",
+      "enemyKind": "stink-broodmother",
+      "intervalMs": 20000,
+      "countPerTick": 1,
+      "startAtMs": 30000,
+      "source": { "type": "map" }
+    }
+  ]
+}

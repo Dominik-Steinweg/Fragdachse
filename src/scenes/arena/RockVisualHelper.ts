@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { ArenaBuilder }     from '../../arena/ArenaBuilder';
+import { RockPresentation, arenaWorldFrameSource } from '../../arena/RockPresentation';
 import { UTILITY_CONFIGS }  from '../../loadout/LoadoutConfig';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig, PlaceableRockUtilityConfig } from '../../loadout/LoadoutConfig';
 import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
@@ -37,6 +38,11 @@ const TEX_TURRET_AURA = '__placeable_turret_aura';
 export class RockVisualHelper {
   private readonly turretVisuals = new Map<number, TurretVisualState>();
   private obstaclesDirty = false;
+  /**
+   * Gemeinsame Fels-Darstellung. Die Lobby führt ihren Ambient-Bestand mit derselben Klasse
+   * und demselben Ablauf, nur mit ihrem eigenen Weltrahmen.
+   */
+  private readonly rockPresentation: RockPresentation;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -47,6 +53,15 @@ export class RockVisualHelper {
     private readonly lighting: LightingSystem | null = null,
   ) {
     this.ensureTurretTextures();
+    this.rockPresentation = new RockPresentation(
+      {
+        scene,
+        getResult: () => this.ctx.arenaResult,
+        getLayout: () => this.ctx.currentLayout,
+        getWorldFrame: arenaWorldFrameSource,
+      },
+      rockDestructionRenderer,
+    );
   }
 
   private ensureTurretTextures(): void {
@@ -285,16 +300,7 @@ export class RockVisualHelper {
       return;
     }
 
-    if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
-    const rockImage = this.ctx.arenaResult.rockObjects[rockId];
-    if (!rockImage?.active) return;
-
-    this.rockDestructionRenderer.playDestruction({ source: rockImage });
-    ArenaBuilder.destroyRockAndRetile(
-      this.ctx.arenaResult,
-      this.ctx.currentLayout.rocks,
-      rockId,
-    );
+    if (!this.rockPresentation.destroyRock(rockId)) return;
     this.ctx.rockRegistry?.remove(rockId);
     this.markObstaclesDirty();
     const dropsArmor = !isCoopDefenseMode(bridge.getGameMode())
@@ -303,7 +309,7 @@ export class RockVisualHelper {
         && this.ctx.coopDefensePlayerModifierSystem?.getClassId(attackerId ?? '') === 'dachs_of_steel'
       );
     if (dropsArmor) this.ctx.powerUpSystem?.onRockDestroyed(rockId);
-    const rockCell = this.ctx.currentLayout.rocks[rockId];
+    const rockCell = this.ctx.currentLayout?.rocks[rockId];
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'static_rock_destroyed',
       source: 'static_rock',
@@ -565,12 +571,7 @@ export class RockVisualHelper {
   }
 
   private refreshObstacleVisuals(): void {
-    if (this.ctx.arenaResult && this.ctx.currentLayout) {
-      ArenaBuilder.rebuildRockOverlays(this.scene, this.ctx.arenaResult, this.ctx.currentLayout);
-      // Das Kantenlicht eines Felsens haengt an der Belegung seiner Nachbarzellen; ein
-      // zerstoerter oder gesetzter Fels aendert es also auch bei den Nachbarn.
-      ArenaBuilder.refreshRockSurfaceTints(this.ctx.arenaResult, this.ctx.currentLayout);
-    }
+    this.rockPresentation.refreshOverlays();
     this.shadowSystem?.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,

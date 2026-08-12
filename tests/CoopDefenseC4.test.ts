@@ -70,15 +70,14 @@ describe('Coop Defense C4 map-event presentation', () => {
     expect(harness.messages).toHaveLength(0);
 
     harness.presenter.sync(state('train', 'train', 'completed'));
-    expect(harness.messages).toHaveLength(1);
-    expect(harness.messages[0].id).toBe('map-event:train:1:completed');
+    expect(harness.messages).toHaveLength(0);
 
     harness.presenter.sync(state('train', 'train', 'completed'));
-    expect(harness.messages).toHaveLength(1);
+    expect(harness.messages).toHaveLength(0);
 
     harness.presenter.resetForHydration();
     harness.presenter.sync(state('train', 'train', 'completed'));
-    expect(harness.messages).toHaveLength(1);
+    expect(harness.messages).toHaveLength(0);
     expect(harness.clearedTopics).toContain('map-event:train');
   });
 
@@ -119,22 +118,18 @@ describe('Coop Defense C4 map-event presentation', () => {
       ...state('hazard-event', 'ground-hazard', 'active'),
     ]);
 
-    expect(harness.messages).toHaveLength(3);
+    expect(harness.messages).toHaveLength(2);
     expect(new Set(harness.messages.map((message) => message.topic))).toEqual(new Set([
-      'map-event:train-event',
       'map-event:airstrike-event',
       'map-event:hazard-event',
     ]));
     expect(harness.messages.every((message) => message.id.includes(':1:'))).toBe(true);
-
-    const warning = harness.messages.find((message) => message.topic === 'map-event:train-event');
-    expect(warning?.isRelevant?.()).toBe(true);
     harness.presenter.sync([
       ...state('train-event', 'train', 'active'),
       ...state('airstrike-event', 'airstrike', 'active'),
       ...state('hazard-event', 'ground-hazard', 'active'),
     ]);
-    expect(warning?.isRelevant?.()).toBe(false);
+    expect(harness.messages.every((message) => message.isRelevant?.() === true)).toBe(true);
   });
 
   it('treats waiting-repeat as a new occurrence and resets cleanly for the next round', () => {
@@ -143,13 +138,12 @@ describe('Coop Defense C4 map-event presentation', () => {
     harness.presenter.setMapEvents([event]);
     harness.presenter.sync(state('repeat-train', 'train', 'dormant'));
     harness.presenter.sync(state('repeat-train', 'train', 'waiting-repeat', 2));
-    expect(harness.messages[0].id).toBe('map-event:repeat-train:2:waiting-repeat');
+    expect(harness.messages).toHaveLength(0);
 
     harness.presenter.sync(null);
     harness.presenter.sync(state('repeat-train', 'train', 'dormant'));
     harness.presenter.sync(state('repeat-train', 'train', 'scheduled', 1));
-    expect(harness.messages).toHaveLength(2);
-    expect(harness.messages[1].id).toBe('map-event:repeat-train:1:scheduled');
+    expect(harness.messages).toHaveLength(0);
   });
 });
 

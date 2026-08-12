@@ -833,6 +833,8 @@ export class ArenaLifecycleCoordinator {
           this.ctx.enemyManager,
           this.ctx.enemyFlowFieldService,
           this.ctx.enemyBossFlowFieldService,
+          this.ctx.enemyPlayerFlowFieldService,
+          this.ctx.enemyStrategicFlowFieldService,
         );
         this.ctx.coopDefensePersistentPressureSystem = coopDefensePersistentSpawnConfigs.length > 0
           ? new CoopDefensePersistentPressureSystem(

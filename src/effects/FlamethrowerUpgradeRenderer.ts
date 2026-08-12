@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import type { PlayerManager } from '../entities/PlayerManager';
+import type { OwnerVisualSource } from '../entities/OwnerVisualSource';
 import type { FireChunkTarget, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
 import {
   createEmitter,
@@ -187,7 +187,7 @@ export class FlamethrowerUpgradeRenderer {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly playerManager: PlayerManager,
+    private readonly owners: OwnerVisualSource,
   ) {
     ensureFlameTextures(scene);
     ensureVoidFlameTextures(scene);
@@ -551,23 +551,23 @@ export class FlamethrowerUpgradeRenderer {
 
   private updateRingVisuals(delta: number, now: number): void {
     for (const [playerId, radius] of this.ringRadii) {
-      const player = this.playerManager.getPlayer(playerId);
-      if (!player) continue;
+      const owner = this.owners.getOwnerVisualState(playerId);
+      if (!owner) continue;
 
       let visual = this.ringVisuals.get(playerId);
       if (!visual) {
-        visual = this.createRingVisual(playerId, radius, player.sprite.x, player.sprite.y);
+        visual = this.createRingVisual(playerId, radius, owner.x, owner.y);
         this.ringVisuals.set(playerId, visual);
       } else if (Math.abs(visual.radius - radius) > 0.01) {
         this.updateRingVisualRadius(visual, radius);
       }
 
-      const visible = player.sprite.visible;
+      const visible = owner.visible;
       visual.bandEmitter
-        .setPosition(player.sprite.x, player.sprite.y)
+        .setPosition(owner.x, owner.y)
         .setVisible(visible);
       visual.coreEmitter
-        .setPosition(player.sprite.x, player.sprite.y)
+        .setPosition(owner.x, owner.y)
         .setVisible(visible);
       visual.bandEmitter.emitting = visible;
       visual.coreEmitter.emitting = visible;
@@ -576,9 +576,9 @@ export class FlamethrowerUpgradeRenderer {
         continue;
       }
 
-      this.syncRingLights(playerId, player.sprite.x, player.sprite.y, radius, visual.phase);
+      this.syncRingLights(playerId, owner.x, owner.y, radius, visual.phase);
 
-      this.emitRingAccents(visual, player.sprite.x, player.sprite.y, delta, now);
+      this.emitRingAccents(visual, owner.x, owner.y, delta, now);
     }
   }
 

@@ -1,7 +1,10 @@
 import type { CoopDefenseClassId } from '../types';
+import { getCoopDefenseMapIdsInOrder } from './coopDefenseMapUnlocks';
 
 export interface CoopDefenseClassDefinition {
   readonly id: CoopDefenseClassId;
+  /** Map victory after which this class becomes selectable. */
+  readonly unlockAfterMapId: string;
   readonly displayName: string;
   readonly role: string;
   readonly description: string;
@@ -27,13 +30,14 @@ export const COOP_DEFENSE_CLASS_IDS: readonly CoopDefenseClassId[] = [
 
 export const DEFAULT_COOP_DEFENSE_CLASS_ID: CoopDefenseClassId = 'dachs_nukem';
 
-/** Ein Sieg auf dieser Map schaltet alle drei Spezialisierungen dauerhaft frei. */
+/** Legacy alias retained for older callers; Inspector Gadachs unlocks on Map 8. */
 export const COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID = '5';
 
 export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId, CoopDefenseClassDefinition>> =
   Object.freeze({
     dachs_nukem: {
       id: 'dachs_nukem',
+      unlockAfterMapId: '5',
       displayName: 'Dachs Nukem',
       role: 'Offensive',
       description: '+50% Schaden, 10% Krit-Chance, 200% Krit-Schaden und +20% Laufgeschwindigkeit.',
@@ -52,6 +56,7 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
     },
     dachs_of_steel: {
       id: 'dachs_of_steel',
+      unlockAfterMapId: '5',
       displayName: 'Dachs of Steel',
       role: 'Tank',
       description: 'Doppelte Lebenspunkte und Rüstung, +10 HP/s und Rüstung aus eigenen Felszerstörungen.',
@@ -70,6 +75,7 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
     },
     inspector_gadachs: {
       id: 'inspector_gadachs',
+      unlockAfterMapId: '8',
       displayName: 'Inspector Gadachs',
       role: 'Ingenieur',
       description: 'Baut dauerhafte Konstruktionen im Rahmen einer festen Baukapazität.',
@@ -106,4 +112,19 @@ export function sanitizeCoopDefenseClassId(
 
 export function getCoopDefenseClassDefinition(classId: CoopDefenseClassId): CoopDefenseClassDefinition {
   return COOP_DEFENSE_CLASS_DEFINITIONS[classId];
+}
+
+export function getCoopDefenseClassUnlockAfterMapId(classId: CoopDefenseClassId): string {
+  return getCoopDefenseClassDefinition(classId).unlockAfterMapId;
+}
+
+export function isCoopDefenseClassUnlocked(classId: CoopDefenseClassId, highestUnlockedMapId: string): boolean {
+  const mapOrder = getCoopDefenseMapIdsInOrder();
+  const highestIndex = mapOrder.indexOf(highestUnlockedMapId);
+  const unlockIndex = mapOrder.indexOf(getCoopDefenseClassUnlockAfterMapId(classId));
+  return highestIndex >= 0 && unlockIndex >= 0 && highestIndex >= unlockIndex;
+}
+
+export function getUnlockedCoopDefenseClassIds(highestUnlockedMapId: string): readonly CoopDefenseClassId[] {
+  return COOP_DEFENSE_CLASS_IDS.filter((classId) => isCoopDefenseClassUnlocked(classId, highestUnlockedMapId));
 }

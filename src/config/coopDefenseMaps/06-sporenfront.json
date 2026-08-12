@@ -1,8 +1,10 @@
 {
   "mapId": "6",
   "displayName": "Map 6 - Sporenfront",
-  "arenaWidthCells": 88,
+  "arenaWidthCells": 100,
+  "arenaHeightCells": 46,
   "timeOfDay": "08:00",
+  "tutorialText": "Große Arenen werden aus mehreren Richtungen angegriffen. Nutzt die Ruhefenster, um zwischen den Fronten zu wechseln – ihr müsst nicht überall gleichzeitig stehen.",
   "rockFillRatio": 0.1,
   "mapEvents": [{
     "id": "train-rhythm",
@@ -10,7 +12,7 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 80,
+  "balanceReferenceDurationSec": 115,
   "objective": "repel-assault",
   "bases": [
     {
@@ -215,15 +217,19 @@
       "id": "spore-front-opening",
       "start": { "type": "time", "atMs": 0 },
       "restAfterMs": 7000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 700, "front": "east" }
+      ]
     },
     {
       "id": "spore-front-wardens",
       "start": { "type": "after-previous" },
       "restAfterMs": 8500,
       "groups": [
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" }
+        { "enemyKind": "spore-warden", "count": 7, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" },
+        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 1400, "front": "south" }
       ]
     },
     {
@@ -232,15 +238,17 @@
       "restAfterMs": 9000,
       "groups": [
         { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
+        { "enemyKind": "spore-warden", "count": 7, "delayMs": 1200, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 5, "delayMs": 1600, "front": "east" }
       ]
     },
     {
       "id": "spore-front-finale",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "spore-warden", "count": 5, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 8, "delayMs": 900, "front": "north" }
+        { "enemyKind": "spore-warden", "count": 8, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 900, "front": "north" },
+        { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1300, "front": "south" }
       ]
     }
   ]

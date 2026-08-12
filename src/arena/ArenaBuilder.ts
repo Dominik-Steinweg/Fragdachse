@@ -28,6 +28,29 @@ import {
 } from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
+/**
+ * Weltausschnitt, in dem ein Felsbestand liegt.
+ *
+ * Die Arena benutzt die aktiven Arena-Metriken; die Lobby-Vorschau spannt einen eigenen,
+ * bildschirmbreiten Rahmen auf. Bau, Zerstörung und Overlay-Neubau der Felsen laufen deshalb
+ * über diesen Parameter statt über die globalen `ARENA_*`-Werte – nur so kann die Lobby
+ * denselben Darstellungspfad benutzen, statt einen zweiten zu bauen.
+ */
+export interface RockWorldFrame {
+  offsetX: number;
+  offsetY: number;
+  width:  number;
+  height: number;
+}
+
+/**
+ * Rahmen der laufenden Arena. Bewusst eine Funktion: `ARENA_*` sind zur Laufzeit
+ * veränderlich (breite Coop-Karten, Capture the Beer).
+ */
+export function getArenaRockWorldFrame(): RockWorldFrame {
+  return { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, width: ARENA_WIDTH, height: ARENA_HEIGHT };
+}
+
 export interface ArenaBuilderResult {
   /** CTB-Basis-Tintflächen (round-scoped). Coop-Defense-Basen leben in BaseManager. */
   baseZoneObjects: Phaser.GameObjects.Rectangle[];
@@ -382,6 +405,7 @@ export class ArenaBuilder {
     ownerTintStrength = 0,
     hp = ROCK_HP_MAX,
     maxHp = ROCK_HP_MAX,
+    worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
   ): Phaser.GameObjects.Image {
     const { rockObjects, rockGroup, rockGrid } = result;
     const { gridX, gridY } = rocks[id];
@@ -391,8 +415,8 @@ export class ArenaBuilder {
     const frame = AutoTiler.getFrame(AutoTiler.computeMask(gridX, gridY, isOccupied), ROCK_AUTOTILE);
     const img = ArenaBuilder.createRockVisual(
       scene,
-      ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2,
-      ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2,
+      worldFrame.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
+      worldFrame.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
       frame,
       resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
     );
@@ -468,6 +492,7 @@ export class ArenaBuilder {
     scene: Phaser.Scene,
     result: ArenaBuilderResult,
     layout: ArenaLayout,
+    worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
   ): void {
     const activeRockIds = new Set<number>();
     const activeCells: RockCell[] = [];
@@ -486,10 +511,10 @@ export class ArenaBuilder {
       activeCells,
       activeRocks,
       {
-        offsetX: ARENA_OFFSET_X,
-        offsetY: ARENA_OFFSET_Y,
-        width: ARENA_WIDTH,
-        height: ARENA_HEIGHT,
+        offsetX: worldFrame.offsetX,
+        offsetY: worldFrame.offsetY,
+        width: worldFrame.width,
+        height: worldFrame.height,
         layerDepth: DEPTH.ROCKS,
       },
       result.rockMottleLayers,
@@ -498,9 +523,14 @@ export class ArenaBuilder {
     result.rockMottleLayers = mottle.layers;
     result.rockSilhouetteCutout = mottle.silhouetteCutout;
 
-    const decalImages = ArenaVisualFactory.createRockDecals(scene, layout.decals ?? [], undefined, activeRockIds);
+    const decalImages = ArenaVisualFactory.createRockDecals(
+      scene,
+      layout.decals ?? [],
+      { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
+      activeRockIds,
+    );
     if (decalImages.length > 0) {
-      const layer = result.rockDecalLayer ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS);
+      const layer = result.rockDecalLayer ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
       layer.clear();
       layer.draw(decalImages);
       layer.render();
@@ -512,11 +542,15 @@ export class ArenaBuilder {
   }
 
   /** Arenagrosse RenderTexture in Weltkoordinaten – gemeinsame Grundlage aller gebackenen Layer. */
-  private static createArenaLayer(scene: Phaser.Scene, depth: number): Phaser.GameObjects.RenderTexture {
-    const layer = scene.add.renderTexture(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+  private static createArenaLayer(
+    scene: Phaser.Scene,
+    depth: number,
+    worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
+  ): Phaser.GameObjects.RenderTexture {
+    const layer = scene.add.renderTexture(worldFrame.offsetX, worldFrame.offsetY, worldFrame.width, worldFrame.height);
     layer.setOrigin(0, 0);
     layer.setDepth(depth);
-    layer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
+    layer.camera.setScroll(worldFrame.offsetX, worldFrame.offsetY);
     return layer;
   }
 

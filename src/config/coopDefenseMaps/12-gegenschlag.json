@@ -3,7 +3,7 @@
   "displayName": "Map 12 - Gegenschlag",
   "arenaWidthCells": 112,
   "timeOfDay": "00:30",
-  "tutorialText": "Erstmals steht der Brutbau der Zombies auf der Karte. Verteidigen allein reicht nicht mehr: Die Runde ist erst gewonnen, wenn die rote Feindbasis fällt. Ein Zeitlimit gibt es nicht.",
+  "tutorialText": "Verteidigen allein reicht nicht mehr. Die Map endet erst, wenn die rote Feindbasis zerstört ist. Nutzt die Pausen zwischen Gegenangriffen, um vorzurücken.",
   "tutorialDurationMs": 12000,
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
@@ -19,7 +19,7 @@
     "pattern": "player-hunt",
     "intervalMs": 25000
   }],
-  "balanceReferenceDurationSec": 130,
+  "balanceReferenceDurationSec": 180,
   "bases": [
     {
       "id": "coop-base-rear",

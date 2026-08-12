@@ -10,107 +10,16 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 100,
+  "balanceReferenceDurationSec": 145,
   "objective": "defeat-boss",
   "bases": [
-    {
-      "id": "coop-base-rear",
-      "hpMax": 5200,
-      "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 3,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 0,
-            "gridY": 3
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 3,
-            "gridY": 3
-          }
-        ]
-      },
-      "powerUpPedestals": [
-        {
-          "id": "health-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "armor-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
-          "defId": "ARMOR",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        }
-      ]
-    },
     {
       "id": "coop-base-middle",
       "hpMax": 1150,
       "anchor": {
         "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": -1
+        "dxCells": 0,
+        "dyCells": 0
       },
       "shape": {
         "kind": "rectangle",
@@ -123,32 +32,6 @@
           "cellOffset": {
             "gridX": 0,
             "gridY": 1
-          },
-          "mountSide": "front",
-          "weaponId": "TURRET_ROCKET_BURST"
-        }
-      ]
-    },
-    {
-      "id": "friendly-outpost-rocket",
-      "role": "outpost",
-      "hpMax": 850,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 38,
-        "gridY": 10
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "rocket",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
           },
           "mountSide": "front",
           "weaponId": "TURRET_ROCKET_BURST"
@@ -183,36 +66,23 @@
   "itemDrop": {
     "itemLevel": 1
   },
-  "persistentSpawns": [
+  "encounters": [
     {
-      "id": "map-10-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 6500,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "id": "inferno-opening-support",
+      "start": { "type": "time", "atMs": 0 },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 4, "delayMs": 1000, "front": "north" }
+      ]
     },
     {
-      "id": "map-10-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 6500,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-10-pressure-2",
-      "enemyKind": "spore-warden",
-      "intervalMs": 18000,
-      "countPerTick": 1,
-      "startAtMs": 10000,
-      "source": {
-        "type": "map"
-      }
+      "id": "inferno-phase-support",
+      "start": { "type": "time", "atMs": 50000 },
+      "groups": [
+        { "enemyKind": "pyro-badger", "count": 3, "front": "south" },
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1300, "front": "east" }
+      ]
     }
-  ]
+  ],
+  "persistentSpawns": []
 }

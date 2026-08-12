@@ -4,14 +4,33 @@
   "arenaWidthCells": 60,
   "arenaHeightCells": 40,
   "timeOfDay": "21:30",
-  "mapEvents": [{
-    "id": "train-rhythm",
-    "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
-  }],
-  "balanceReferenceDurationSec": 130,
-  "objective": "repel-assault",
+  "tutorialText": "Das Void-Feuer bleibt auf dem Boden gefährlich. Nutzt die Felskorridore und haltet die Stellung, bis der Survival-Timer abläuft.",
+  "mapEvents": [
+    {
+      "id": "brandschneise-void-corridor",
+      "type": "ground-hazard",
+      "start": { "type": "time", "atMs": 0 },
+      "area": {
+        "type": "rectangle",
+        "gridX": 28,
+        "gridY": 0,
+        "widthCells": 2,
+        "heightCells": 40,
+        "baseClearanceCells": 2
+      },
+      "effect": {
+        "visualStyle": "void",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Lila Leerenbrand"
+      }
+    }
+  ],
+  "surviveDurationSec": 180,
+  "surviveRespawnsPerPlayer": 2,
+  "balanceReferenceDurationSec": 180,
+  "objective": "survive",
+  "trackMode": "void-fire",
   "rockField": {
     "corridorRadiusCells": 1.35,
     "corridorRadiusVarianceCells": 0.4,
@@ -348,7 +367,6 @@
       "faction": "friendly",
       "hpMax": 1100,
       "startHpFactor": 0.3,
-      "dormant": true,
       "anchor": {
         "kind": "grid",
         "gridX": 32,
@@ -398,7 +416,7 @@
     },
     {
       "id": "three-front-pyro",
-      "start": { "type": "after-previous" },
+      "start": { "type": "time", "atMs": 45000 },
       "restAfterMs": 10000,
       "groups": [
         { "enemyKind": "pyro-badger", "count": 2, "front": "north" },
@@ -408,7 +426,7 @@
     },
     {
       "id": "three-front-surge",
-      "start": { "type": "after-previous" },
+      "start": { "type": "time", "atMs": 100000 },
       "restAfterMs": 10000,
       "groups": [
         { "enemyKind": "rabid-badger", "count": 5, "front": "west" },
@@ -418,7 +436,7 @@
     },
     {
       "id": "three-front-finale",
-      "start": { "type": "after-previous" },
+      "start": { "type": "time", "atMs": 145000 },
       "groups": [
         { "enemyKind": "pyro-badger", "count": 4, "front": "north" },
         { "enemyKind": "pyro-badger", "count": 4, "delayMs": 700, "front": "south" },
@@ -426,59 +444,6 @@
       ]
     }
   ],
-  "persistentSpawns": [
-    {
-      "id": "map-14-pressure-0",
-      "enemyKind": "pyro-badger",
-      "intervalMs": 26000,
-      "countPerTick": 1,
-      "startAtMs": 12000,
-      "front": "north",
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-14-pressure-1",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 9000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "front": "west",
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-14-pressure-2",
-      "enemyKind": "demon-badger",
-      "intervalMs": 9000,
-      "countPerTick": 1,
-      "startAtMs": 5000,
-      "front": "south",
-      "source": {
-        "type": "map"
-      }
-    }
-  ],
-  "secondaryObjectives": [
-    {
-      "id": "hold-brandschneise-outpost",
-      "type": "hold",
-      "displayName": "RAKETENPOSTEN HALTEN",
-      "rewardHint": "RAKETENTUERME WERDEN REPARIERT",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "three-front-pyro"
-      },
-      "holdUntil": {
-        "type": "after-encounter",
-        "encounterId": "three-front-surge"
-      },
-      "targets": ["hold-rocket-outpost"],
-      "rewards": {
-        "repairTargetOnComplete": true
-      }
-    }
-  ]
+  "persistentSpawns": [],
+  "secondaryObjectives": []
 }

@@ -25,6 +25,7 @@ function createExecutor(
   records: SpawnRecord[],
   isTraversableAt: (gridX: number, gridY: number) => boolean = () => true,
   getIntegrationValueAt: (gridX: number, gridY: number) => number = () => 0,
+  playerFlowFieldService?: EnemyFlowFieldService,
 ) {
   const enemyManager = {
     getAllEnemies: () => [],
@@ -45,9 +46,10 @@ function createExecutor(
   const flowField = {
     isTraversableAt,
     getIntegrationValueAt,
+    getGoalCells: () => [],
     gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
   } as unknown as EnemyFlowFieldService;
-  return new CoopDefenseSpawnExecutor(enemyManager, flowField);
+  return new CoopDefenseSpawnExecutor(enemyManager, flowField, undefined, playerFlowFieldService);
 }
 
 function expectOnFront(record: SpawnRecord, front: SpawnFront): void {
@@ -116,5 +118,43 @@ describe('CoopDefenseSpawnExecutor fronts', () => {
     } finally {
       applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'LOBBY');
     }
+  });
+
+  it('uses the player flow field for player-target enemies on a map without bases', () => {
+    const records: SpawnRecord[] = [];
+    const playerFlowField = {
+      isTraversableAt: () => true,
+      getIntegrationValueAt: () => 0,
+      getGoalCells: () => [{ gridX: 25, gridY: 15 }],
+      gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
+    } as unknown as EnemyFlowFieldService;
+    const executor = createExecutor(
+      records,
+      () => true,
+      () => EnemyFlowFieldService.INTEGRATION_INFINITY,
+      playerFlowField,
+    );
+
+    expect(executor.hostSpawnEncounterGroup('rabid-badger', 1, 'map-9-opening', 'west')).toHaveLength(1);
+    expect(records[0].options).toMatchObject({ originId: 'map-9-opening', spawnFront: 'west' });
+  });
+
+  it('allows the first player-target spawn before dynamic player goals are computed', () => {
+    const records: SpawnRecord[] = [];
+    const playerFlowField = {
+      isTraversableAt: () => true,
+      getIntegrationValueAt: () => EnemyFlowFieldService.INTEGRATION_INFINITY,
+      getGoalCells: () => [],
+      gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
+    } as unknown as EnemyFlowFieldService;
+    const executor = createExecutor(
+      records,
+      () => true,
+      () => EnemyFlowFieldService.INTEGRATION_INFINITY,
+      playerFlowField,
+    );
+
+    expect(executor.hostSpawnEncounterGroup('void-stalker', 1, 'map-9-opening', 'east')).toHaveLength(1);
+    expect(records[0].options).toMatchObject({ originId: 'map-9-opening', spawnFront: 'east' });
   });
 });

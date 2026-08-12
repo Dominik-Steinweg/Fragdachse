@@ -59,7 +59,7 @@
     },
     {
       "id": "grave-titan",
-      "maxHp": 750,
+      "maxHp": 938,
       "xp": 100,
       "size": 56,
       "moveSpeed": 48,
@@ -110,7 +110,7 @@
     },
     {
       "id": "plague-medic",
-      "maxHp": 120,
+      "maxHp": 100,
       "xp": 25,
       "size": 30,
       "moveSpeed": 70,
@@ -264,7 +264,7 @@
       "maxHp": 2500,
       "xp": 200,
       "size": 68,
-      "moveSpeed": 36,
+      "moveSpeed": 185,
       "knockbackFactor": 0.1,
       "movementTarget": "players",
       "weapons": [

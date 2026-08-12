@@ -4,7 +4,7 @@
   "arenaWidthCells": 60,
   "arenaHeightCells": 39,
   "timeOfDay": "10:30",
-  "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
+  "tutorialText": "Feindliche Luftangriffe werden vor dem Einschlag markiert. Bleibt in Bewegung und verlasst die Zielzonen rechtzeitig.",
   "tutorialDurationMs": 10000,
   "rockFillRatio": 0.4,
   "tutorialRockArmorDropMult": 0.02,
@@ -12,7 +12,7 @@
     "id": "train-rhythm",
     "type": "train",
     "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "repeatAfterExitMs": 120000
   }, {
     "id": "opening-barrage",
     "type": "airstrike",
@@ -26,7 +26,7 @@
     "pattern": "player-hunt",
     "intervalMs": 10000
   }],
-  "balanceReferenceDurationSec": 110,
+  "balanceReferenceDurationSec": 160,
   "objective": "repel-assault",
   "bases": [
     {

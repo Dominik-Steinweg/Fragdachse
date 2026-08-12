@@ -4,7 +4,7 @@
   "arenaWidthCells": 70,
   "arenaHeightCells": 38,
   "timeOfDay": "05:00",
-  "tutorialText": "Die zweite Front kommt jetzt auch aus dem Norden. Die mittlere Basis hat einen Geschützturm; nutzt die unterschiedlichen Anmarschwege, bevor die Gegner die Basen erreichen. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
+  "tutorialText": "Angriffe können aus verschiedenen Richtungen kommen. Achtet auf West- und Ostfront und wechselt rechtzeitig die Seite.",
   "rockFillRatio": 0.15,
   "mapEvents": [{
     "id": "train-rhythm",
@@ -12,46 +12,22 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 55,
+  "balanceReferenceDurationSec": 60,
   "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
       "hpMax": 1650,
       "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
+        "kind": "center-offset",
+        "dxCells": 0,
+        "dyCells": 0
       },
       "shape": {
         "kind": "rectangle",
         "widthCells": 3,
         "heightCells": 3
       }
-    },
-    {
-      "id": "coop-base-middle",
-      "hpMax": 850,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": -1
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 2,
-        "heightCells": 3
-      },
-      "turrets": [
-        {
-          "id": "front-middle",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
-        }
-      ]
     }
   ],
   "powerUps": [],
@@ -67,7 +43,7 @@
       "start": { "type": "after-previous" },
       "restAfterMs": 7500,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 5, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 5, "front": "east" },
         { "enemyKind": "zombie-badger", "count": 5, "delayMs": 800, "front": "west" }
       ]
     },
@@ -75,33 +51,9 @@
       "id": "two-front-crossfire",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 5, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1000, "front": "north" }
+        { "enemyKind": "zombie-badger", "count": 5, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1000, "front": "east" }
       ]
-    }
-  ],
-  "persistentSpawns": [
-    {
-      "id": "map-2-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 5500,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "front": "west",
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-2-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 7000,
-      "countPerTick": 1,
-      "startAtMs": 12000,
-      "front": "north",
-      "source": {
-        "type": "map"
-      }
     }
   ]
 }

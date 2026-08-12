@@ -1,83 +1,40 @@
-import { ROCK_HP_MAX, ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS } from '../config';
+import { ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS } from '../config';
 import type { ArenaLayout, RockNetState, SyncedRockSnapshot } from '../types';
+import { RockHpRegistry } from './RockHpRegistry';
 
 /**
  * RockRegistry – Host-seitiger HP-Zustand aller Felsen.
  * Nur auf dem Host instanziiert; Clients empfangen Snapshots via GameState.
+ *
+ * Der HP-Zustand selbst liegt in {@link RockHpRegistry} und ist netzfrei; diese Klasse
+ * ergänzt ausschließlich die Delta-Snapshot-Schicht. Wer Fels-HP ohne Netzwerk braucht –
+ * etwa die lokale Lobby-Inszenierung – benutzt die Basisklasse direkt statt eine zweite
+ * HP-Verwaltung zu bauen.
  */
-export class RockRegistry {
-  /** rockIndex → aktueller HP-Wert + max HP */
-  private hpMap = new Map<number, { hp: number; maxHp: number }>();
+export class RockRegistry extends RockHpRegistry {
   private readonly netSnapshotCache = new Map<number, RockNetState>();
   private readonly pendingRemovalIds = new Set<number>();
   private ticksSinceFullNetSnapshot = ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
   private forceFullNetSnapshot = false;
 
-  constructor(layout: ArenaLayout) {
-    this.reset(layout);
-  }
-
-  /** Initialisiert alle Felsen mit vollem HP. */
   reset(layout: ArenaLayout): void {
-    this.hpMap.clear();
+    super.reset(layout);
     this.netSnapshotCache.clear();
     this.pendingRemovalIds.clear();
     this.ticksSinceFullNetSnapshot = ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     this.forceFullNetSnapshot = false;
-    for (let i = 0; i < layout.rocks.length; i++) {
-      this.hpMap.set(i, { hp: ROCK_HP_MAX, maxHp: ROCK_HP_MAX });
-    }
   }
 
   register(id: number, maxHp: number): void {
-    this.hpMap.set(id, { hp: maxHp, maxHp });
+    super.register(id, maxHp);
     this.pendingRemovalIds.delete(id);
   }
 
-  /** Gibt den aktuellen HP-Wert für Felsen id zurück. */
-  getHP(id: number): number {
-    return this.hpMap.get(id)?.hp ?? ROCK_HP_MAX;
-  }
-
-  getMaxHP(id: number): number {
-    return this.hpMap.get(id)?.maxHp ?? ROCK_HP_MAX;
-  }
-
-  /**
-   * Zieht Schaden vom Felsen ab.
-   * Gibt den neuen HP-Wert zurück (mindestens 0).
-   */
-  applyDamage(id: number, damage: number): number {
-    const current = this.hpMap.get(id);
-    if (current === undefined) return 0; // Bereits zerstört
-    const newHp = Math.max(0, current.hp - damage);
-    this.hpMap.set(id, { hp: newHp, maxHp: current.maxHp });
-    return newHp;
-  }
-
-  /**
-   * Setzt den HP-Wert direkt. Gedacht fuer Reparaturen; zerstoerte Felsen (Tombstone mit
-   * HP 0) bleiben unangetastet, weil ihr Visual und ihr Grid-Eintrag bereits entfernt sind.
-   */
-  setHP(id: number, hp: number): void {
-    const current = this.hpMap.get(id);
-    if (!current || current.hp <= 0) return;
-    this.hpMap.set(id, { hp: Math.max(0, Math.min(current.maxHp, hp)), maxHp: current.maxHp });
-  }
-
-  /** Gibt true zurück wenn der Felsen 0 HP hat. */
-  isDestroyed(id: number): boolean {
-    const hp = this.hpMap.get(id);
-    return hp !== undefined && hp.hp <= 0;
-  }
-
-  /** Behält nach der Zerstörung einen HP-0-Tombstone für die Netzwerksynchronisierung. */
-  remove(id: number): void {
-    const current = this.hpMap.get(id);
-    if (!current) return;
-    this.hpMap.set(id, { hp: 0, maxHp: current.maxHp });
+  remove(id: number): boolean {
+    if (!super.remove(id)) return false;
     this.netSnapshotCache.delete(id);
     this.pendingRemovalIds.add(id);
+    return true;
   }
 
   /** Naechster Netzwerk-Snapshot enthaelt alle aktuellen Schadenswerte. */

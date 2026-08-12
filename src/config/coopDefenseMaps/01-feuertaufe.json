@@ -3,7 +3,7 @@
   "displayName": "Map 1 - Feuertaufe",
   "arenaWidthCells": 60,
   "timeOfDay": "12:00",
-  "tutorialText": "Schützt die Basis vor den angreifenden Wellen. Wenn alle Angriffe abgewehrt sind, ist die Map gewonnen. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
+  "tutorialText": "Schützt die Basis vor den Angriffen. Nach jeder abgewehrten Welle gibt es eine kurze Pause. Sind alle Angriffe besiegt, gewinnt ihr die Map. Abschüsse geben XP; Level-Ups bringen Skill-Punkte.",
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "rockFillRatio": 0.3,
@@ -42,7 +42,7 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 6
+          "count": 5
         }
       ]
     },
@@ -55,7 +55,7 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 12
+          "count": 7
         }
       ]
     },
@@ -67,7 +67,7 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 22
+          "count": 8
         }
       ]
     }

@@ -19,6 +19,8 @@ Die ICE-Konfiguration wird in src/network/peer/PeerSignaling.ts explizit gesetzt
 
 Der Host entscheidet Positionen, Treffer, Schaden, Ressourcen, Spawns, Gegner, Rundenzustand, Arena-Layout und Ergebnisse. Clients senden Input oder Aktionsanforderungen. Prediction ist nur Feedback und darf keine autoritative Folge erzeugen. Clients sprechen nie direkt miteinander.
 
+In Modi mit wählbaren gegnerischen Teams (`hasTeamSelection`) begrenzt `NetworkBridge` jedes Team auf sechs Spieler. Neue Spieler gehen deterministisch ins kleinere Team, bei Gleichstand nach Blau; Teamwechsel in ein volles Zielteam werden hostseitig abgelehnt. Beim Wechsel aus einem Nicht-Team-Modus werden alle Spieler stabil neu verteilt, während TDM und Capture the Beer gültige Zuweisungen untereinander behalten. `PeerRoom` kennt weiterhin nur die globale Raumgrenze von zwölf Spielern.
+
 Fachliche RPCs werden in RpcCoordinator registriert und über Methoden von NetworkBridge gesendet. Neue Nachrichten nicht am Peer-Substrat vorbeischleusen; dort würden Rollenprüfung, Absenderbindung und Relay-Semantik umgangen.
 
 ## Store- und Snapshot-Semantik

@@ -43,6 +43,9 @@ describe('Map 15 - Leerenjäger', () => {
     );
 
     expect(map.boss!.spawnAtMs).toBeGreaterThanOrEqual(0);
+    const phaseTwoHazard = map.mapEvents.find((event) => event.id === 'void-random-patches');
+    expect(phaseTwoHazard?.type).toBe('ground-hazard');
+    expect(phaseTwoHazard?.start).toEqual({ type: 'boss-phase', phase: 2 });
     for (const encounter of map.encounters ?? []) {
       for (const group of encounter.groups) expect(group.count).toBeGreaterThan(0);
     }

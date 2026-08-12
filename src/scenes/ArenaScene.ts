@@ -1446,17 +1446,21 @@ export class ArenaScene extends Phaser.Scene {
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
       // Gleisen ohne Zug und Runden ohne weitere Einfahrt haben schlicht kein Event.
-      const trainEvent = bridge.getTrainEvent();
-      if (!trainEvent) {
+      if (isCoopDefenseMode(bridge.getGameMode())) {
         this.ctx.centerHUD.hideTrainWidget();
-      } else if (!this.lifecycle.isTrainDestroyedShown()) {
-        const trainState = bridge.getLatestGameState()?.train ?? null;
-        if (trainState?.alive) {
-          this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
-        } else {
-          // Echte Restzeit bis zur Einfahrt; der Rundentimer spielt dabei keine Rolle.
-          const arrivalSecs = getTrainArrivalCountdownSecs(trainEvent.spawnAt, bridge.getSynchronizedNow());
-          if (arrivalSecs !== null) this.ctx.centerHUD.setTrainArrival(arrivalSecs);
+      } else {
+        const trainEvent = bridge.getTrainEvent();
+        if (!trainEvent) {
+          this.ctx.centerHUD.hideTrainWidget();
+        } else if (!this.lifecycle.isTrainDestroyedShown()) {
+          const trainState = bridge.getLatestGameState()?.train ?? null;
+          if (trainState?.alive) {
+            this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
+          } else {
+            // Echte Restzeit bis zur Einfahrt; der Rundentimer spielt dabei keine Rolle.
+            const arrivalSecs = getTrainArrivalCountdownSecs(trainEvent.spawnAt, bridge.getSynchronizedNow());
+            if (arrivalSecs !== null) this.ctx.centerHUD.setTrainArrival(arrivalSecs);
+          }
         }
       }
       arenaHudMs = performance.now() - arenaHudStartedAt;
@@ -2090,7 +2094,7 @@ export class ArenaScene extends Phaser.Scene {
   private selectCoopDefenseClass(classId: CoopDefenseClassId): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
     const stored = getStoredCoopDefenseProgress();
-    if (!stored.classesUnlocked) return;
+    if (!stored.unlockedClassIds.includes(classId)) return;
 
     // Der Bridge-Zustand ist nur das aktuell aktive Loadout. Vor dem Wechsel wird er
     // deshalb noch einmal explizit im Profil der bisherigen Klasse gesichert. Alle
@@ -2135,10 +2139,11 @@ export class ArenaScene extends Phaser.Scene {
 
   private levelUpCoopDefenseUpgrade(upgradeId: string): boolean {
     const stored = getStoredCoopDefenseProgress();
-    const activeClassId = stored.classesUnlocked
+    const classesUnlocked = stored.unlockedClassIds.length > 0;
+    const activeClassId = classesUnlocked
       ? stored.selectedClassId
       : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const activeProfile = stored.classesUnlocked
+    const activeProfile = classesUnlocked
       ? stored.profilesByClass[stored.selectedClassId]
       : stored.defaultProfile;
     const nextProfile = levelUpCoopDefenseUpgrade(
@@ -3347,10 +3352,11 @@ export class ArenaScene extends Phaser.Scene {
 
   private refreshStoredCoopDefenseProgress(): void {
     const stored = getStoredCoopDefenseProgress();
-    const activeClassId = stored.classesUnlocked
+    const classesUnlocked = stored.unlockedClassIds.length > 0;
+    const activeClassId = classesUnlocked
       ? stored.selectedClassId
       : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const activeProfile = stored.classesUnlocked
+    const activeProfile = classesUnlocked
       ? stored.profilesByClass[stored.selectedClassId]
       : stored.defaultProfile;
     this.coopDefenseProgress = getCoopDefenseProgressSnapshot(
@@ -3358,7 +3364,8 @@ export class ArenaScene extends Phaser.Scene {
       activeProfile,
       stored.completedBossMapIds.length,
       activeClassId,
-      stored.classesUnlocked,
+      classesUnlocked,
+      stored.unlockedClassIds,
     );
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;

@@ -2,7 +2,9 @@
   "mapId": "16",
   "displayName": "Map 16 - Zeitzünder",
   "arenaWidthCells": 104,
+  "arenaHeightCells": 33,
   "timeOfDay": "05:00",
+  "tutorialText": "Zeitzünder jagen Spieler und bewaffnete Konstrukte und sprengen sich in ihrer Nähe. Haltet Abstand und stoppt sie, bevor sie eure Verteidigungslinie erreichen.",
   "trackMode": "void-fire",
   "mapEvents": [
     {
@@ -44,11 +46,12 @@
     }
   ],
   "rockFillRatio": 0.12,
-  "balanceReferenceDurationSec": 160,
-  "objective": "destroy-hostile-bases",
+  "balanceReferenceDurationSec": 220,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "enemy-timebomb-hive",
+      "role": "outpost",
       "faction": "hostile",
       "hpMax": 3000,
       "anchor": {
@@ -227,6 +230,8 @@
     {
       "id": "friendly-middle-mushroom-top",
       "role": "outpost",
+      "dormant": true,
+      "startHpFactor": 0.65,
       "hpMax": 900,
       "anchor": {
         "kind": "grid",
@@ -721,37 +726,53 @@
   "itemDrop": {
     "itemLevel": 3
   },
+  "encounters": [
+    {
+      "id": "zeitzunder-opening-assault",
+      "start": { "type": "time", "atMs": 0 },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 4, "delayMs": 900, "front": "north" }
+      ]
+    },
+    {
+      "id": "zeitzunder-mid-assault",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "timebomb-badger", "count": 4, "front": "east" },
+        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1000, "front": "south" }
+      ]
+    },
+    {
+      "id": "zeitzunder-counterattack",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "pyro-badger", "count": 4, "front": "north" },
+        { "enemyKind": "timebomb-badger", "count": 6, "delayMs": 1200, "front": "west" }
+      ]
+    },
+    {
+      "id": "zeitzunder-final-assault",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 8, "front": "east" },
+        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 900, "front": "south" }
+      ]
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "hold-zeitzunder-middle-outpost",
+      "type": "hold",
+      "displayName": "ZEITZÜNDER-POSTEN HALTEN",
+      "rewardHint": "DER POSTEN WIRD REPARIERT",
+      "start": { "type": "after-encounter", "encounterId": "zeitzunder-mid-assault" },
+      "holdUntil": { "type": "after-encounter", "encounterId": "zeitzunder-counterattack" },
+      "targets": ["friendly-middle-mushroom-top"],
+      "rewards": { "repairTargetOnComplete": true }
+    }
+  ],
   "persistentSpawns": [
-    {
-      "id": "map-16-pressure-0",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 5500,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-16-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 6500,
-      "countPerTick": 1,
-      "startAtMs": 1500,
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-16-pressure-2",
-      "enemyKind": "rabid-badger",
-      "intervalMs": 8000,
-      "countPerTick": 1,
-      "startAtMs": 4000,
-      "source": {
-        "type": "map"
-      }
-    },
     {
       "id": "base-16-spawn-point-timebomb-top-pressure",
       "enemyKind": "timebomb-badger",

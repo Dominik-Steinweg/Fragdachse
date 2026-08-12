@@ -11,15 +11,13 @@ import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
 import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
-  findNearestRectangleHit as geomNearestRectangleHit,
-  findNearestCircleHit as geomNearestCircleHit,
 } from '../utils/geometry';
 import {
   ArenaObstacleIndex,
-  OBSTACLE_BASE,
   OBSTACLE_ROCK,
   type ObstacleCircleVisitor,
 } from './ArenaObstacleIndex';
+import { CombatGeometry } from './CombatGeometry';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -236,13 +234,8 @@ export class CombatSystem {
   private readonly hitscanLine       = new Phaser.Geom.Line();
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
-  private readonly losLine           = new Phaser.Geom.Line();  // Scratch-Linie für `hasLineOfSight`
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
-  private readonly scratchCircle     = new Phaser.Geom.Circle();
-  private readonly scratchPoints:    Phaser.Math.Vector2[] = [];
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
-  /** Ziel der aus dem Index gelieferten Hindernis-Bounds, damit kein Rechteck pro Kandidat entsteht. */
-  private readonly scratchObstacleRect = new Phaser.Geom.Rectangle();
   /**
    * Räumliche Vorauswahl für alle segmentbasierten Hindernisprüfungen (Sichtlinie,
    * Hitscan, Melee, Projektilpfad). Liest dieselben Arrays, die `setArenaObstacles` und
@@ -253,6 +246,11 @@ export class CombatSystem {
     trunks: () => this.trunkObjects,
     bases:  () => this.baseObstacles,
   });
+  /**
+   * Gemeinsamer mathematischer Kern aller Segmentprüfungen. Dieselbe Klasse trägt die lokale
+   * Lobby-Inszenierung, damit Sichtlinie, Hitscan und Melee-Bogen dort identisch rechnen.
+   */
+  private readonly geometry = new CombatGeometry(this.obstacleIndex);
   private meleeSwingIdCounter = 0;
   private effectSeedCounter = 1;
 
@@ -2383,10 +2381,7 @@ export class CombatSystem {
       if (dist > range + PLAYER_SIZE * 0.5) continue;
 
       // Winkelprüfung: liegt das Ziel innerhalb des Trefferbogens?
-      let angleDiff = Math.atan2(dy, dx) - angle;
-      while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
-      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-      if (Math.abs(angleDiff) > halfArcRad) continue;
+      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
 
       // Hindernischeck: liegt ein Fels/Stamm zwischen Schütze und Ziel?
       this.meleeLine.setTo(x, y, player.sprite.x, player.sprite.y);
@@ -2430,10 +2425,7 @@ export class CombatSystem {
 
       if (dist > range + enemyRadius) continue;
 
-      let angleDiff = Math.atan2(dy, dx) - angle;
-      while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
-      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-      if (Math.abs(angleDiff) > halfArcRad) continue;
+      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
 
       this.meleeLine.setTo(x, y, enemy.sprite.x, enemy.sprite.y);
       if (this.isMeleePathBlocked(dist - enemyRadius)) continue;
@@ -2473,10 +2465,7 @@ export class CombatSystem {
 
       if (dist > range + PLAYER_SIZE * 0.5) continue;
 
-      let angleDiff = Math.atan2(dy, dx) - angle;
-      while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
-      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-      if (Math.abs(angleDiff) > halfArcRad) continue;
+      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
 
       this.meleeLine.setTo(x, y, decoy.sprite.x, decoy.sprite.y);
       if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
@@ -2726,10 +2715,7 @@ export class CombatSystem {
 
       if (dist > range) continue;
 
-      let angleDiff = Math.atan2(dy, dx) - angle;
-      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-      if (Math.abs(angleDiff) > halfArcRad) continue;
+      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
 
       this.meleeLine.setTo(x, y, targetX, targetY);
       if (this.isMeleePathBlocked(Math.max(0, dist - 0.5))) continue;
@@ -2861,39 +2847,13 @@ export class CombatSystem {
     // Optional corridor radius for bodies such as the translocator puck.
     clearanceRadius = 0,
   ): boolean {
-    const line = this.losLine.setTo(startX, startY, endX, endY);
-    const blockDist = Phaser.Geom.Line.Length(line) - 2;
-    const clearance = Math.max(0, clearanceRadius);
-
     // Heißester Pfad des Host-Frames (zielsuchende Projektile prüfen pro Kandidat eine
     // Sichtlinie), deshalb über den Hindernis-Index statt über alle Felsen der Karte.
-    let blocked = false;
-    this.obstacleIndex.querySegment(
-      startX, startY, endX, endY,
-      (kind, rockIndex, left, top, right, bottom) => {
-        if (kind === OBSTACLE_ROCK && rockIndex === skipRockIndex) return false;
-        if (ignoreBaseObstacles && kind === OBSTACLE_BASE) return false;
-        const hit = this.findNearestRectangleHit(
-          line,
-          this.obstacleRect(
-            left - clearance,
-            top - clearance,
-            right + clearance,
-            bottom + clearance,
-          ),
-        );
-        if (hit && hit.distance < blockDist) { blocked = true; return true; }
-        return false;
-      },
-      (centerX, centerY, radius) => {
-        const hit = this.findNearestCircleHit(line, centerX, centerY, radius + clearance);
-        if (hit && hit.distance < blockDist) { blocked = true; return true; }
-        return false;
-      },
-      clearance,
-    );
-
-    return !blocked;
+    return this.geometry.hasLineOfSight(startX, startY, endX, endY, {
+      skipRockIndex,
+      ignoreBases: ignoreBaseObstacles,
+      clearanceRadius,
+    });
   }
 
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
@@ -2919,22 +2879,7 @@ export class CombatSystem {
    * da Ziele immer innerhalb der Arena stehen).
    */
   private isMeleePathBlocked(maxDist: number): boolean {
-    const line = this.meleeLine;
-    let blocked = false;
-    this.obstacleIndex.querySegment(
-      line.x1, line.y1, line.x2, line.y2,
-      (_kind, _rockIndex, left, top, right, bottom) => {
-        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
-        if (hit && hit.distance < maxDist) { blocked = true; return true; }
-        return false;
-      },
-      (centerX, centerY, radius) => {
-        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
-        if (hit && hit.distance < maxDist) { blocked = true; return true; }
-        return false;
-      },
-    );
-    return blocked;
+    return this.geometry.isPathBlocked(this.meleeLine, maxDist);
   }
 
   private isMeleeTargetCandidate(playerId: string, shooterId: string): boolean {
@@ -2978,30 +2923,15 @@ export class CombatSystem {
   private findNearestObstacleHit(
     line: Phaser.Geom.Line,
   ): (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null {
+    // Arena-Außenwand und Zug sind Gameplay-Sonderkörper und stehen deshalb nicht im
+    // gemeinsamen Hindernis-Kern; sie werden hier gegen dessen Ergebnis verglichen.
     const arenaHit = this.findNearestRectangleHit(line, this.arenaBounds);
     let bestHit: (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null = arenaHit
       ? { ...arenaHit, kind: 'arena' }
       : null;
 
-    this.obstacleIndex.querySegment(
-      line.x1, line.y1, line.x2, line.y2,
-      (kind, rockIndex, left, top, right, bottom) => {
-        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
-        if (hit && (!bestHit || hit.distance < bestHit.distance)) {
-          bestHit = {
-            ...hit,
-            kind: kind === OBSTACLE_ROCK ? 'rock' : 'base',
-            ...(kind === OBSTACLE_ROCK ? { index: rockIndex } : {}),
-          };
-        }
-        return false;
-      },
-      (centerX, centerY, radius) => {
-        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
-        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = { ...hit, kind: 'trunk' };
-        return false;
-      },
-    );
+    const obstacleHit = this.geometry.nearestObstacleHit(line);
+    if (obstacleHit && (!bestHit || obstacleHit.distance < bestHit.distance)) bestHit = obstacleHit;
 
     const trainBounds = this.computeTrainBounds();
     if (trainBounds) {
@@ -3018,30 +2948,15 @@ export class CombatSystem {
     traceThickness: number,
   ): number | null {
     const baseRadius = Math.max(target.sprite.displayWidth, target.sprite.displayHeight) * 0.5 + traceThickness * 0.5;
-    const currentHit = this.findNearestCircleHit(line, target.sprite.x, target.sprite.y, baseRadius);
-
     const velocity = target.body?.velocity ?? { x: 0, y: 0 };
-    const rewindX = target.sprite.x - velocity.x * (HITSCAN_FAVOR_THE_SHOOTER_MS / 1000);
-    const rewindY = target.sprite.y - velocity.y * (HITSCAN_FAVOR_THE_SHOOTER_MS / 1000);
-    const rewindHit = this.findNearestCircleHit(line, rewindX, rewindY, baseRadius);
-
-    const rewindOffset = Math.min(
-      HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET,
-      Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, rewindX, rewindY),
-    );
-    const sweepHit = this.findNearestCircleHit(
+    return this.geometry.sweptCircleHitDistance(
       line,
-      (target.sprite.x + rewindX) * 0.5,
-      (target.sprite.y + rewindY) * 0.5,
-      baseRadius + rewindOffset * 0.5,
+      target.sprite.x, target.sprite.y,
+      velocity.x, velocity.y,
+      baseRadius,
+      HITSCAN_FAVOR_THE_SHOOTER_MS,
+      HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET,
     );
-
-    return [currentHit, rewindHit, sweepHit]
-      .filter((hit): hit is { distance: number; x: number; y: number } => hit !== null)
-      .reduce<number | null>((best, hit) => {
-        if (best === null || hit.distance < best) return hit.distance;
-        return best;
-      }, null);
   }
 
   /**
@@ -3071,12 +2986,12 @@ export class CombatSystem {
     line: Phaser.Geom.Line,
     rect: Phaser.Geom.Rectangle,
   ): GeometryHit | null {
-    return geomNearestRectangleHit(line, rect, this.scratchPoints);
+    return this.geometry.nearestRectangleHit(line, rect);
   }
 
   /** Übernimmt die vom Hindernis-Index gelieferten Kanten in das Scratch-Rechteck. */
   private obstacleRect(left: number, top: number, right: number, bottom: number): Phaser.Geom.Rectangle {
-    return this.scratchObstacleRect.setTo(left, top, right - left, bottom - top);
+    return this.geometry.obstacleRect(left, top, right, bottom);
   }
 
   private findNearestCircleHit(
@@ -3085,7 +3000,7 @@ export class CombatSystem {
     centerY: number,
     radius: number,
   ): GeometryHit | null {
-    return geomNearestCircleHit(line, centerX, centerY, radius, this.scratchCircle, this.scratchPoints);
+    return this.geometry.nearestCircleHit(line, centerX, centerY, radius);
   }
 
   private nextEffectSeed(): number {

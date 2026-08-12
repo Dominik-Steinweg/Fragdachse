@@ -9,6 +9,10 @@ import {
   unlockStoredCoopDefenseClassesAfterVictory,
 } from '../src/utils/localPreferences';
 import {
+  getUnlockedCoopDefenseClassIds,
+  isCoopDefenseClassUnlocked,
+} from '../src/config/coopDefenseClasses';
+import {
   getSpentCoopDefenseUpgradePoints,
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
@@ -36,6 +40,7 @@ describe('coop-defense class unlock progression', () => {
   it('starts locked and mirrors common default skills without charging unavailable Inspector skills', () => {
     const fresh = getStoredCoopDefenseProgress();
     expect(fresh.classesUnlocked).toBe(false);
+    expect(fresh.unlockedClassIds).toEqual([]);
 
     const upgraded = levelUpCoopDefenseUpgrade(
       fresh.defaultProfile,
@@ -65,7 +70,15 @@ describe('coop-defense class unlock progression', () => {
 
     const unlocked = getStoredCoopDefenseProgress();
     expect(unlocked.classesUnlocked).toBe(true);
+    expect(unlocked.unlockedClassIds).toEqual(['dachs_nukem', 'dachs_of_steel']);
+    expect(isCoopDefenseClassUnlocked('inspector_gadachs', '5')).toBe(false);
+    expect(getUnlockedCoopDefenseClassIds('5')).toEqual(['dachs_nukem', 'dachs_of_steel']);
     expect(unlocked.selectedClassId).toBe('dachs_nukem');
+
+    expect(unlockStoredCoopDefenseClassesAfterVictory('8')).toBe(true);
+    expect(getStoredCoopDefenseProgress().unlockedClassIds).toEqual([
+      'dachs_nukem', 'dachs_of_steel', 'inspector_gadachs',
+    ]);
 
     const upgradedNukem = levelUpCoopDefenseUpgrade(
       unlocked.profilesByClass.dachs_nukem,
