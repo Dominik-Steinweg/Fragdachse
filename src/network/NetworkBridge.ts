@@ -43,6 +43,7 @@ import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
@@ -124,6 +125,7 @@ const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
+const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
 const KEY_UTILITY_OVERRIDE_DESCRIPTOR = 'uod'; // per-player: mission override metadata or null
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
@@ -3101,6 +3103,46 @@ export class NetworkBridge {
     if (typeof value === 'number') return utilityId === '__default__' ? value : 0;
     if (!value || typeof value !== 'object') return 0;
     return (value as Record<string, number>)[utilityId] ?? 0;
+  }
+
+  /**
+   * Host-only: Publiziert, welchen Slot die Figur eines Spielers sichtbar traegt.
+   *
+   * Bewusst reliable und nur bei einer Aenderung: Der Wert wechselt beim Waffenwechsel, also
+   * hoechstens ein paar Mal pro Sekunde – im Delta-Snapshot mitzulaufen waere dauerhafte Last fuer
+   * einen Zustand, der fast immer gleich bleibt. Repliziert wird der Slot, nicht die Item-ID: die
+   * Loadout-Auswahl steht ohnehin schon je Spieler im Netzzustand.
+   */
+  publishHeldItemSlot(playerId: string, slot: HeldItemSlot): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    if (ps.getState(KEY_HELD_SLOT) === slot) return;
+    ps.setState(KEY_HELD_SLOT, slot, true);
+  }
+
+  /** Slot, dessen Item die Figur eines Spielers sichtbar traegt. Vor dem ersten Einsatz: Waffe 1. */
+  getPlayerHeldItemSlot(playerId: string): HeldItemSlot {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_HELD_SLOT);
+    return value === 'weapon2' || value === 'utility' ? value : 'weapon1';
+  }
+
+  /**
+   * Loadout-Item-ID, die die Figur eines Spielers sichtbar traegt, oder `null`.
+   *
+   * Der verbindliche Ready-Snapshot hat Vorrang vor der laufenden Lobby-Auswahl: waehrend einer
+   * Runde zaehlt, womit der Spieler angetreten ist. Ein temporaeres Utility-Override (Heilige
+   * Handgranate, Missions-Item) ersetzt den Utility-Slot, weil genau dieses Item geworfen wird.
+   */
+  getPlayerHeldItemId(playerId: string): string | null {
+    const slot = this.getPlayerHeldItemSlot(playerId);
+    if (slot === 'utility') {
+      const override = this.getPlayerUtilityOverrideDescriptor(playerId);
+      if (override?.kind === 'utility') return override.utilityId;
+    }
+    return this.getPlayerCommittedLoadoutSlot(playerId, slot)
+      ?? this.getPlayerLoadoutSlot(playerId, slot)
+      ?? null;
   }
 
   /** Host-only: Publiziert den Display-Namen einer Utility-Override (z.B. BFG, Heilige Handgranate). Leerstring = kein Override. */

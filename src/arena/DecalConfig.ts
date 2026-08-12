@@ -59,6 +59,26 @@ export const ARENA_DECAL_CONFIG = {
       { fileName: 'decal06.png', frequencyPercent: 1 },
       { fileName: 'Kiesel2.png', frequencyPercent: 1 },
       { fileName: 'Kiesel3.png', frequencyPercent: 1 },
+      { fileName: 'dirt_brown_clod_a.png', frequencyPercent: 8 },
+      { fileName: 'dirt_brown_clod_b.png', frequencyPercent: 8 },
+      { fileName: 'dirt_brown_clod_c.png', frequencyPercent: 8 },
+      { fileName: 'dirt_brown_clod_d.png', frequencyPercent: 8 },
+      { fileName: 'dirt_brown_pebble_a.png', frequencyPercent: 7 },
+      { fileName: 'dirt_brown_pebble_b.png', frequencyPercent: 7 },
+      { fileName: 'dirt_brown_pebble_c.png', frequencyPercent: 7 },
+      { fileName: 'dirt_brown_pebble_d.png', frequencyPercent: 7 },
+      { fileName: 'dirt_brown_crumb_a.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_crumb_b.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_crumb_c.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_crumb_d.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_speck_a.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_speck_b.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_speck_c.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_speck_d.png', frequencyPercent: 6 },
+      { fileName: 'dirt_brown_mottle_a.png', frequencyPercent: 5 },
+      { fileName: 'dirt_brown_mottle_b.png', frequencyPercent: 5 },
+      { fileName: 'dirt_brown_mottle_c.png', frequencyPercent: 5 },
+      { fileName: 'dirt_brown_mottle_d.png', frequencyPercent: 5 },
     ],
   },
   grass: {
@@ -99,6 +119,28 @@ export const ARENA_DECAL_CONFIG = {
     ],
   },
 } satisfies Record<Exclude<DecalTerrainLayer, 'rock'>, DecalLayerConfig>;
+
+/**
+ * Dezente Dirt-Details, die exakt unter einer Felszelle liegen. Sie bleiben unter dem
+ * dynamischen Fels-Layer verborgen und werden erst nach seiner Zerstoerung sichtbar.
+ */
+export const DIRT_ROCK_UNDERLAY_DECAL_CONFIG: DecalLayerConfig = {
+  coveragePercent: 24,
+  maxOffsetX: 4,
+  maxOffsetY: 4,
+  variants: [
+    { fileName: 'dirt_rock_shadow_fleck_a.png', frequencyPercent: 8 },
+    { fileName: 'dirt_rock_shadow_fleck_b.png', frequencyPercent: 8 },
+    { fileName: 'dirt_rock_shadow_fleck_c.png', frequencyPercent: 7 },
+    { fileName: 'dirt_rock_shadow_fleck_d.png', frequencyPercent: 7 },
+    { fileName: 'dirt_rock_slate_speck_a.png', frequencyPercent: 7 },
+    { fileName: 'dirt_rock_slate_speck_b.png', frequencyPercent: 7 },
+    { fileName: 'dirt_rock_slate_speck_c.png', frequencyPercent: 6 },
+    { fileName: 'dirt_rock_earth_chip_a.png', frequencyPercent: 7 },
+    { fileName: 'dirt_rock_earth_chip_b.png', frequencyPercent: 6 },
+    { fileName: 'dirt_rock_earth_chip_c.png', frequencyPercent: 6 },
+  ],
+};
 
 export const ROCK_DECAL_CONFIG: RockDecalLayerConfig = {
   /** Mittelwert der beiden Deckungen; bleibt als Rueckfalloption fuer alte Aufrufer erhalten. */
@@ -220,7 +262,7 @@ export function getRockDecalMaxOffsetPx(displaySize: number | undefined): number
 
 export function preloadArenaDecalAssets(loader: Phaser.Loader.LoaderPlugin): void {
   const seen = new Set<string>();
-  for (const layerConfig of [...Object.values(ARENA_DECAL_CONFIG), ROCK_DECAL_CONFIG]) {
+  for (const layerConfig of [...Object.values(ARENA_DECAL_CONFIG), DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG]) {
     for (const variant of layerConfig.variants) {
       if (seen.has(variant.fileName)) continue;
       seen.add(variant.fileName);

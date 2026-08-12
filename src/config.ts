@@ -243,6 +243,18 @@ export const PLAYER_SIZE  = 32;
 export const PLAYER_SPEED = 200;
 export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
 export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
+/**
+ * Kantenlaenge der Spielerfigur-Textur. Getragene Items liegen im selben Pixelraster, ihre
+ * Anzeigegroesse folgt daher `PLAYER_SIZE / PLAYER_TEXTURE_SIZE` und nicht einer eigenen Zahl.
+ */
+export const PLAYER_TEXTURE_SIZE = 32;
+/**
+ * Pfotenanker in Texturpixeln relativ zur Bildmitte, `-y` ist Blickrichtung. Auf diesem Punkt
+ * sitzt der Griff des getragenen Items. Er entspricht der Stelle, an der `32x32dachsweapon01.png`
+ * die Waffe mit braunen Pixeln vormerkte: mittig auf der Laengsachse, knapp vor der Schnauze.
+ */
+export const HELD_ITEM_ANCHOR_X = 0;
+export const HELD_ITEM_ANCHOR_Y = -9;
 
 // ---- Combat ----
 export const HP_MAX           = 100;
@@ -768,6 +780,30 @@ export function getTopDownMuzzleOriginFromVector(originX: number, originY: numbe
   return {
     x: originX + (vx / len) * forwardOffset,
     y: originY + (vy / len) * forwardOffset,
+  };
+}
+
+/**
+ * Weltposition des Pfotenankers einer Figur, auf dem das getragene Item sitzt.
+ *
+ * `spriteRotation` ist die Rotation des Figuren-Sprites, also der Aimwinkel **inklusive** des
+ * Nordausrichtungs-Offsets `+PI/2`. Anders als bei der Muendung ist der Anker ein Punkt der
+ * Textur und nicht ein Vorwaertsversatz entlang der Schussrichtung; er wird deshalb bewusst mit
+ * derselben Rotation gedreht, mit der die Textur gezeichnet wird.
+ */
+export function getHeldItemAnchor(
+  originX: number,
+  originY: number,
+  spriteRotation: number,
+  textureScale: number,
+): MuzzleOrigin {
+  const cos = Math.cos(spriteRotation);
+  const sin = Math.sin(spriteRotation);
+  const dx = HELD_ITEM_ANCHOR_X * textureScale;
+  const dy = HELD_ITEM_ANCHOR_Y * textureScale;
+  return {
+    x: originX + dx * cos - dy * sin,
+    y: originY + dx * sin + dy * cos,
   };
 }
 

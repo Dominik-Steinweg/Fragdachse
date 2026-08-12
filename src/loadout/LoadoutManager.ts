@@ -60,6 +60,7 @@ interface AutomatedWeaponFireOptions {
   /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
   payloadDamageMultiplier?: number;
 }
+import { HeldItemSlotTracker, type HeldItemSlot } from './HeldItemSlotTracker';
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
@@ -169,6 +170,8 @@ export class LoadoutManager {
   private negevStates = new Map<string, NegevCombatState>();
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
   private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
+  /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
+  private readonly heldItemSlots = new HeldItemSlotTracker();
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
@@ -235,6 +238,17 @@ export class LoadoutManager {
     this.shieldBuffSystem?.resetPlayer(playerId);
     this.resetAk47State(playerId);
     this.negevStates.set(playerId, { kills: 0, lastShotAt: 0 });
+    // Ein frisches Loadout beginnt mit Waffe 1 in den Pfoten, sonst zeigte die Figur nach einem
+    // Waffenwechsel in der Lobby weiter den Slot der letzten Runde.
+    this.heldItemSlots.removePlayer(playerId);
+  }
+
+  /**
+   * Slot, dessen Item die Figur gerade sichtbar traegt. Host-autoritativ und rein visuell; der
+   * Wert wird als Slot repliziert, die Zuordnung zum Bild passiert lokal auf jeder Seite.
+   */
+  getHeldItemSlot(playerId: string, now = Date.now()): HeldItemSlot {
+    return this.heldItemSlots.resolve(playerId, now);
   }
 
   /**
@@ -284,6 +298,7 @@ export class LoadoutManager {
     this.decoySystem?.clearPlayer(playerId);
     this.ak47States.delete(playerId);
     this.negevStates.delete(playerId);
+    this.heldItemSlots.removePlayer(playerId);
     this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
   }
 
@@ -629,6 +644,7 @@ export class LoadoutManager {
     const y = player.sprite.y;
     const didUse = this.useUtility(utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
     if (!didUse) return { ok: false, reason: 'blocked' };
+    this.heldItemSlots.noteUtilityUsed(playerId, now);
     return this.okResult;
   }
 
@@ -775,15 +791,22 @@ export class LoadoutManager {
     }
 
     switch (slot) {
-      case 'weapon1':
-        return this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon1', shotId);
+      case 'weapon1': {
+        const result = this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon1', shotId);
+        if (result.ok) this.heldItemSlots.noteWeaponUsed(playerId, 'weapon1', now);
+        return result;
+      }
 
       case 'weapon2': {
         // Der Kreuzfeuer-Melder haengt bewusst hier und nicht in `fireWeapon`: nur ein Aufruf,
         // der tatsaechlich gefeuert hat, oeffnet das Fenster – Cooldown, fehlendes Adrenalin und
-        // blockierte Schuesse liefern `ok: false` und zaehlen nicht.
+        // blockierte Schuesse liefern `ok: false` und zaehlen nicht. Dasselbe gilt fuer das
+        // getragene Item: ein abgelehnter Schuss nimmt die Waffe nicht in die Pfoten.
         const result = this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId, params);
-        if (result.ok) this.itemRuntimeWeaponFiredHandler?.(playerId, 'weapon2');
+        if (result.ok) {
+          this.itemRuntimeWeaponFiredHandler?.(playerId, 'weapon2');
+          this.heldItemSlots.noteWeaponUsed(playerId, 'weapon2', now);
+        }
         return result;
       }
 
@@ -791,9 +814,9 @@ export class LoadoutManager {
         if (loadout.utility.config.type !== 'decoy') {
           this.decoySystem?.breakStealth(playerId, now);
         }
-        return this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params)
-          ? this.okResult
-          : { ok: false, reason: 'blocked' };
+        const didUse = this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
+        if (didUse) this.heldItemSlots.noteUtilityUsed(playerId, now);
+        return didUse ? this.okResult : { ok: false, reason: 'blocked' };
       }
 
       case 'ultimate': {

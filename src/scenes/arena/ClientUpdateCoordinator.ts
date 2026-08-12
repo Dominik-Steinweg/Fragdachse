@@ -195,6 +195,7 @@ export class ClientUpdateCoordinator {
         }
         player.setDecoyStealth(isStealthed);
         this.prevStealthStates.set(id, isStealthed);
+        player.setHeldItemId(bridge.getPlayerHeldItemId(id));
 
         const curPhase = ps.dashPhase ?? 0;
         if (curPhase === 1 && (this.prevDashPhases.get(id) ?? 0) === 0) {

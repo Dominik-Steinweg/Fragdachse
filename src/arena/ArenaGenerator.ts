@@ -1,6 +1,6 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
-import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import type { ArenaGroundHazardZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
@@ -718,6 +718,30 @@ export class ArenaGenerator {
           rotation: ArenaGenerator.randomRotation(rng),
         });
       }
+    }
+
+    // Diese zehn graubraunen Varianten liegen bewusst auf der Dirt-Zelle unter einem Fels.
+    // Der Fels wird spaeter separat und dynamisch darueber gezeichnet; nach seiner Zerstoerung
+    // bleibt der gebackene Dirt-Decal-Layer bestehen und wird dadurch sichtbar.
+    const underRockMaxOffsetX = clampDecalOffsetPx(DIRT_ROCK_UNDERLAY_DECAL_CONFIG.maxOffsetX);
+    const underRockMaxOffsetY = clampDecalOffsetPx(DIRT_ROCK_UNDERLAY_DECAL_CONFIG.maxOffsetY);
+    for (const { gridX, gridY } of rocks) {
+      const key = ArenaGenerator.cellKey(gridX, gridY);
+      if (!dirtSet.has(key) || isReservedBaseSurfaceCell(gridX, gridY)) continue;
+      if (!ArenaGenerator.rollPercent(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.coveragePercent)) continue;
+
+      const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.variants);
+      if (!textureKey) continue;
+      decals.push({
+        gridX,
+        gridY,
+        textureKey,
+        offsetX: ArenaGenerator.randomOffset(rng, underRockMaxOffsetX),
+        offsetY: ArenaGenerator.randomOffset(rng, underRockMaxOffsetY),
+        terrain: 'dirt',
+        surface: 'ground',
+        rotation: ArenaGenerator.randomRotation(rng),
+      });
     }
 
     // Fels-Decals werden getrennt vom Boden gebacken. Ein Eintrag kennt alle Felsen,

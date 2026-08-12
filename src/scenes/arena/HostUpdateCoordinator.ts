@@ -746,6 +746,11 @@ export class HostUpdateCoordinator {
       }
       player.setDecoyStealth(isStealthed);
       this.prevStealthStates.set(player.id, isStealthed);
+      // Erst publizieren, dann lesen: Host und Clients leiten das getragene Item damit aus
+      // derselben Quelle ab, statt der Host aus dem LoadoutManager und die Clients aus dem Netz.
+      const heldSlot = this.ctx.loadoutManager?.getHeldItemSlot(player.id, now);
+      if (heldSlot) bridge.publishHeldItemSlot(player.id, heldSlot);
+      player.setHeldItemId(bridge.getPlayerHeldItemId(player.id));
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
       const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;

@@ -7,6 +7,7 @@
  */
 import * as Phaser from 'phaser';
 import { PLAYER_SIZE } from '../config';
+import { HeldItemVisual } from '../entities/HeldItemVisual';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 
 const ROTATION_OFFSET = Math.PI / 2;
@@ -17,6 +18,8 @@ export class BadgerPreview {
   private glowFx: GlowHandle | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
   private colorHex: number;
+  private readonly heldItem: HeldItemVisual;
+  private heldItemVisible = true;
 
   constructor(
     private scene: Phaser.Scene,
@@ -24,11 +27,17 @@ export class BadgerPreview {
     y: number,
     color: number,
     private displaySize = PLAYER_SIZE,
+    /** Aufbaupfad-Arbeit fuer das erst spaet erzeugte Item-Bild, z.B. die Klarheitskamera. */
+    onHeldItemCreated?: (image: Phaser.GameObjects.Image) => void,
   ) {
     this.colorHex = color;
 
     this.sprite = scene.add.image(x, y, 'badger');
     this.sprite.setDisplaySize(displaySize, displaySize);
+
+    // Dieselbe Zuordnung wie in der Arena, nur mit der groesseren Vorschau-Kantenlaenge: die
+    // Waffe skaliert damit automatisch mit, statt eine zweite Groessenpflege zu brauchen.
+    this.heldItem = new HeldItemVisual(scene, 0, onHeldItemCreated);
 
     setInternalFxPadding(this.sprite, 20);
     this.glowFx = addInternalGlow(this.sprite, color, 4, 0, false, 0.1, 16);

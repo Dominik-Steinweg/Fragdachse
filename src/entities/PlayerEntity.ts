@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
+import { HeldItemVisual } from './HeldItemVisual';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
@@ -55,6 +56,8 @@ export class PlayerEntity {
   private stealthTrailParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private burnRenderer: EntityBurnRenderer | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
+  /** Getragenes Loadout-Item; liegt knapp ueber der Figur, aber unter Spawn- und Stealth-Ebenen. */
+  private readonly heldItem: HeldItemVisual;
   private burnStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
   /** Für die an dieser Entity hängenden Lichtquellen (Brand, Spawn-Blitz). */
@@ -111,6 +114,8 @@ export class PlayerEntity {
     setInternalFxPadding(this.sprite, 20);
     this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
     this.startDefaultGlowTween();
+
+    this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);
 
     this.spawnShine = scene.add.image(x, y, 'badger');
     this.spawnShine.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
@@ -227,6 +232,15 @@ export class PlayerEntity {
     return this.isDecoyStealthed;
   }
 
+  /**
+   * Loadout-Item, das die Figur sichtbar in den Pfoten haelt. `null` blendet es aus.
+   * Darf jeden Frame gerufen werden; ein unveraenderter Wert kostet nichts.
+   */
+  setHeldItemId(itemId: string | null): void {
+    this.heldItem.setItem(itemId);
+    this.syncHeldItem();
+  }
+
   setWorldBarsVisible(visible: boolean): void {
     this.worldBarsVisible = visible;
     this.applyDisplayVisibility();
@@ -239,7 +253,7 @@ export class PlayerEntity {
     this.sprite.setPosition(x, y);
     this.body.reset(x, y);
     this.syncBar();
-    this.syncSpawnShine();
+    this.syncOverlays();
   }
 
   /**
@@ -266,7 +280,7 @@ export class PlayerEntity {
   /** Sprite-Rotation direkt setzen (lokaler Spieler, jeden Frame). */
   setRotation(aimAngle: number): void {
     this.sprite.rotation = aimAngle + PlayerEntity.ROTATION_OFFSET;
-    this.syncSpawnShine();
+    this.syncOverlays();
   }
 
   /** Ziel-Rotation für client-seitige Interpolation (Remote-Spieler). */
@@ -288,7 +302,7 @@ export class PlayerEntity {
     const current = this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;
     const diff = Phaser.Math.Angle.Wrap(this.targetRotation - current);
     this.sprite.rotation = (current + diff * factor) + PlayerEntity.ROTATION_OFFSET;
-    this.syncSpawnShine();
+    this.syncOverlays();
   }
 
   /**
@@ -305,7 +319,7 @@ export class PlayerEntity {
     this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
     this.nameLabel.setPosition(x, this.sprite.y - PLAYER_SIZE * 0.72);
     this.syncAttachedEffects();
-    this.syncSpawnShine();
+    this.syncOverlays();
   }
 
   /** HP-Wert aktualisieren und Balken neu zeichnen. */
@@ -407,7 +421,7 @@ export class PlayerEntity {
     this.stopSpawnShine();
     this.spawnShineProgress = 0;
     this.spawnShineAlpha = 0.04;
-    this.syncSpawnShine();
+    this.syncOverlays();
     this.spawnShineTween = scene.tweens.add({
       targets:  this,
       spawnShineProgress: 1,
@@ -468,7 +482,7 @@ export class PlayerEntity {
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */
   setDashScale(scale: number): void {
     this.sprite.setScale(scale);
-    this.syncSpawnShine();
+    this.syncOverlays();
   }
 
   getBurrowPhase(): BurrowPhase {
@@ -628,9 +642,32 @@ export class PlayerEntity {
       this.glowFx.innerStrength = 0;
     }
     this.applyDisplayVisibility();
-    this.syncSpawnShine();
+    this.syncOverlays();
     this.syncStealthOverlay();
     this.syncAttachedEffects();
+  }
+
+  /**
+   * Alle Bilder, die der Figur ohne eigene Physik folgen. Sie haengen an Position, Rotation und
+   * Skalierung des Sprites und muessen deshalb ueberall dort nachgezogen werden, wo sich einer
+   * dieser Werte aendert – nicht nur einmal pro Frame.
+   */
+  private syncOverlays(): void {
+    this.syncSpawnShine();
+    this.syncHeldItem();
+  }
+
+  private syncHeldItem(): void {
+    // `displayWidth` statt `PLAYER_SIZE`: Spawn-, Dash- und Burrow-Tweens skalieren den Sprite,
+    // das getragene Item muss diese Skalierung mitmachen statt in voller Groesse stehenzubleiben.
+    this.heldItem.sync(
+      this.sprite.x,
+      this.sprite.y,
+      this.sprite.rotation,
+      this.sprite.displayWidth,
+      this.sprite.visible,
+      this.sprite.alpha,
+    );
   }
 
   private syncSpawnShine(): void {
@@ -828,6 +865,7 @@ export class PlayerEntity {
     this.stealthTrailParticles?.destroy();
     this.burnRenderer?.destroy();
     this.rageRenderer?.destroy();
+    this.heldItem.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();

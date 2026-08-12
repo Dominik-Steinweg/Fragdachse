@@ -71,6 +71,7 @@ import {
   applyArenaMetricsForMode,
 } from '../config';
 import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
@@ -391,7 +392,10 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('mission_reward_pickup', './assets/sprites/mission_reward_pickup.png');
     this.load.image('mission_carry_spawn_zone', './assets/sprites/objectives/mission_carry_spawn_zone.png');
     this.load.image('mission_carry_delivery_zone', './assets/sprites/objectives/mission_carry_delivery_zone.png');
-    this.load.image('badger',      './assets/sprites/32x32dachsweapon01.png');
+    // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes
+    // Bild; `32x32dachsweapon01.png` mit den braunen Platzhalterpixeln wird nicht mehr geladen.
+    this.load.image('badger',      './assets/sprites/32x32dachs.png');
+    preloadHeldItemAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
     const enemyImageKeys = new Set(
