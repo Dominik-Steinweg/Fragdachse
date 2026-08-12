@@ -495,6 +495,32 @@ const TITLE_GAP = 1;
 const TITLE_START_X = Math.floor((MENU_GRID_COLS - textWidth(TITLE_TEXT, TITLE_GAP)) * 0.5);
 const RIGHT_OVERLAY_BORDER_X = MENU_GRID_COLS - 11;
 const RIGHT_OVERLAY_INFO_MIN_X = RIGHT_OVERLAY_BORDER_X + 1;
+
+/**
+ * Weltkoordinaten der Flaeche, die der Felsrahmen fuer die Lobby-Oberflaeche freilaesst.
+ *
+ * Der Rahmen besteht aus Felszellen im 32-px-Raster, die Lobby rechnet in Pixeln. Frueher war
+ * diese Umrechnung in jeder UI-Datei von Hand nachgebildet, weshalb Glasflaechen und Panel
+ * nicht buendig am Rahmen sassen. Alle Lobby-Flaechen leiten ihre Kanten jetzt hieraus ab.
+ *
+ * Zwei Kantenpaare, je nachdem ob eine Flaeche **an** den Rahmen stossen oder **ueber** ihn
+ * hinweg fluchten soll:
+ *
+ * - `top`/`bottom` liegen an der Unterkante der oberen bzw. der Oberkante der unteren Felszeile.
+ *   Die Seitenspalten stossen so an den Rahmen, ohne ihn zu ueberdecken.
+ * - `outerTop`/`outerBottom` liegen an den Aussenkanten derselben Felszeilen. Das Mittelpanel
+ *   fluchtet damit mit der gesamten Hoehe des Rahmens statt nur mit seiner Innenflaeche.
+ */
+export const LOBBY_FRAME_BOUNDS = {
+  top: ARENA_OFFSET_Y + (OVERLAY_BORDER_TOP_Y + 1) * CELL_SIZE,
+  bottom: ARENA_OFFSET_Y + OVERLAY_BORDER_BOTTOM_Y * CELL_SIZE,
+  outerTop: ARENA_OFFSET_Y + OVERLAY_BORDER_TOP_Y * CELL_SIZE,
+  outerBottom: ARENA_OFFSET_Y + (OVERLAY_BORDER_BOTTOM_Y + 1) * CELL_SIZE,
+  /** Innenkante der linken Spalte: dort beginnt die senkrechte Felssaeule. */
+  leftColumnRight: LEFT_OVERLAY_BORDER_X * CELL_SIZE,
+  /** Innenkante der rechten Spalte: dort endet die senkrechte Felssaeule. */
+  rightColumnLeft: RIGHT_OVERLAY_INFO_MIN_X * CELL_SIZE,
+} as const;
 const titleRocks = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP);
 const leftOverlayBorderRocks = mergeUnique<RockCell>(
   rockRow(0, LEFT_OVERLAY_BORDER_X, OVERLAY_BORDER_TOP_Y),
@@ -530,9 +556,17 @@ const trees = points<TreeCell>([
   [1, 4],  [2, 29],  [12, 18], [15, 31], [57, 4], [47, 17], [46, 25], [51, 31], [57, 29],
 ]);
 
+/**
+ * Freiflaechen fuer die Lobby-Oberflaeche. Die mittlere Zone traegt das Lobby-Panel und reicht
+ * deshalb bis zur Aussenkante der unteren Rahmenzeile: Zeile 28 endet bei Welt-Y 940, genau der
+ * Unterkante des Panels bei voller Hoehe (`LOBBY_FRAME_BOUNDS.outerBottom`). Wer das Panel
+ * hoeher macht, muss diese Zone auf dem 32-px-Raster nachziehen, sonst stehen Felsen darunter.
+ *
+ * Nur die mittlere Zone geht so weit: links und rechts traegt Zeile 28 die Rahmenfelsen selbst.
+ */
 const overlayClearZones: readonly GridRect[] = [
   { minX: 0, maxX: LEFT_OVERLAY_BORDER_X - 1, minY: 9, maxY: OVERLAY_BORDER_BOTTOM_Y - 1 },
-  { minX: 16, maxX: 42, minY: 7, maxY: 26 },
+  { minX: 16, maxX: 42, minY: 7, maxY: OVERLAY_BORDER_BOTTOM_Y },
   { minX: RIGHT_OVERLAY_INFO_MIN_X, maxX: MENU_GRID_COLS - 1, minY: 9, maxY: OVERLAY_BORDER_BOTTOM_Y - 1 },
 ];
 

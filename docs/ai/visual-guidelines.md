@@ -139,6 +139,36 @@ Weltpositionen, Aimwinkel und visuelle Anhänge nicht mit Sprite-Frame-Offsets v
 - **Die rechte Missionsspalte weicht vor dem Spielfeld zurück, statt es dauerhaft zu verdecken.** In Coop-Maps ist die Arena breiter als der Bildschirm; unter den Panels liegt echtes Spielfeld. `hudOcclusionFade` senkt die Deckkraft nur, solange eine sichtbare Figur oder der Zielpunkt unter der Spalte liegt – schnell hinunter, mit Nachlaufzeit und langsam zurück, sonst flackert sie an jeder vorbeilaufenden Figur. Drei Punkte sind dabei nicht offensichtlich: Die Deckkraft gehört auf einen **Elterncontainer**, weil die Panels ihr eigenes Alpha für Auftritts-Tweens brauchen (`CenterHUD.missionStack`). Die Prüfung wandert das feste HUD-Rechteck einmal pro Frame in die Welt statt jede Figur ins HUD – scrollfeste HUD-Ebene und Welt unterscheiden sich hier nur um eine Verschiebung, und `getVisibleWorldView` liefert sie korrekt, Phasers `worldView` nicht. Und `sprite.active` allein genügt nicht: Tote und eingegrabene Figuren behalten ihn und würden die Spalte dauerhaft ausblenden.
 - **Zielankündigungen teilen einen serialisierten, themenbezogenen Kanal.** `CoopDefenseObjectiveAnnouncement` reiht Hauptziel, Wellen und Nebenmissionen im oberen Bilddrittel ein und übergibt sie mit derselben Fluganimation an ihre Dauerpanels. Eine neuere Meldung desselben Themas ersetzt wartende oder laufende Altstände; Wellen haben Vorrang, damit bei kurzen Phasenwechseln keine überholte Welle nachläuft. Die Mitte bestätigt Ergebnisse nur kurz, die lange terminale Lesedauer gehört ausschließlich dem Zielpanel. Keine parallelen Ziel-Ankündigungsflächen daneben aufbauen. Die Leitfarben sind semantisch: Hauptziel Gold, Wellen Violett, Nebenmissionen Blau, positive Abschlüsse Grün und Fehlschläge Rot; dieselbe Zuordnung gilt für Welt- und Randmarker. `CenterHUD.showAnnouncement()` bleibt davon getrennt der unterbrechbare Ein-Slot-Kanal in der Bildmitte für Frags und Beer-Captures.
 
+## Oberflächen-Tokens und Farbhierarchie
+
+`src/ui/uiTheme.ts` ist die einzige Stelle, die den Rohfarben aus `COLORS` eine Rolle gibt. Es ist Phaser-frei und deshalb unter vitest ladbar (`tests/UiTheme.test.ts`); Phaser nur als Typ importieren, sonst fällt diese Eigenschaft weg.
+
+- **Pro Bildschirm genau eine gesättigte Fläche.** Der Intent `primary` gehört dem einen Handlungsaufruf, `accent` (Gold) ausschließlich der Progression, `danger` (Rot) echten Fehlern und Zerstörendem. Alles Übrige ist `neutral` oder `ghost`. Ein zweiter `primary`-Button nimmt dem ersten seine Wirkung. Blau bleibt den Nebenmissionen im Spiel vorbehalten und kommt in keinem Intent vor.
+- **Farbe beschreibt die Handlung, nicht den Zustand.** Der Bereit-Button war rot, solange der Spieler nicht bereit war – Farbe und Beschriftung meinten damit Verschiedenes. Zustand gehört in eine eigene Anzeige (Haken in der Spielerzeile, Zähler über der Liste), die Buttonfarbe sagt nur, was ein Klick tut.
+- **Kontrast gegen den Verlauf prüfen, nicht gegen die Grundfarbe.** `ensureGlossyButtonTexture` füllt von `lerp(fill, weiß, 0.16)` nach `lerp(fill, schwarz, 0.30)`; eine mittig sitzende Beschriftung liegt auf dem Mittelton. `buttonMidTone()` liefert ihn, `contrastRatio()` prüft ihn – der Test hält alle interaktiven Intents auf ≥ 4.5.
+- **Texturschlüssel müssen jede Variante tragen, die das Aussehen bestimmt.** Gecachte Canvas-Texturen werden allein über den Schlüssel gefunden. Ein Schlüssel aus nur Größe (früher `_lsp_compact_btn_${w}x${h}`) zwingt alle gleich großen Buttons in dieselbe Farbe; ein Schlüssel ohne Konturfarbe lässt zwei verschieden umrandete Buttons still dieselbe Textur teilen. `UiButton` schlüsselt nach `intent`, `state` und Maßen.
+- **Symbole zeichnen, nicht als Emoji setzen.** `ensureIconTexture()` folgt der übergebenen Farbe und rastert überall gleich; Farbemoji bringen ihre eigene Farbigkeit mit und rendern je nach Betriebssystem anders.
+
+## Schriften
+
+Zwei self-hosted Familien unter `public/assets/fonts/` (SIL OFL, Lizenztexte daneben): Chakra Petch für Beschriftungen, JetBrains Mono für Zahlen, Codes und tabellarische Spalten. Beide Family-Strings behalten `monospace` als Fallback.
+
+- **Phaser-Text rastert seine Glyphen beim Anlegen einmalig.** Fehlt die Webfont in diesem Moment, bleibt der Text dauerhaft im Fallback – ein späteres Eintreffen löst von sich aus keine Neurasterung aus. `loadUiFonts()` wird deshalb in `main.ts` **vor** dem Verbindungsaufbau gestartet und danach abgewartet, läuft also parallel und kostet keine zusätzliche Startzeit. Das Warten ist auf 1,5 s begrenzt und schlägt nie fehl.
+- `installTextResolution()` hängt sich zusätzlich an `whenUiFontsReady()` und ruft `reRasterAllText()`. Nur nötig, wenn eine Schrift nach dem Zeitlimit eintrifft – Auflösung und Schrift sind zwei verschiedene Gründe, denselben Text neu zu rastern.
+- Nur geladene Schnitte anfordern (Chakra Petch 500/700, JetBrains Mono als variabler Schnitt). Andere Gewichte würde der Browser fälschen.
+
+## Lobby-Geometrie
+
+Der Felsrahmen der Menüvorschau liegt im 32-px-Raster, die Lobby rechnet in Pixeln. **`LOBBY_FRAME_BOUNDS` in `src/arena/MenuArenaPreviewConfig.ts` ist die einzige Stelle, die zwischen beiden umrechnet** — Glasflächen und Panel leiten ihre Kanten daraus ab, statt die Werte je Datei nachzubilden.
+
+Es gibt zwei Kantenpaare, weil die Flächen unterschiedlich am Rahmen anliegen: `top`/`bottom` (300/908) sind die Innenkanten der Felszeilen — die Seitenspalten stoßen dort an, ohne den Rahmen zu überdecken. `outerTop`/`outerBottom` (268/940) sind die Außenkanten; das Mittelpanel fluchtet damit über die gesamte Rahmenhöhe.
+
+Die Seitenspalten beginnen außen hart am Bildrand und laufen nach innen zur Felssäule hin aus (`ensureGlassColumnTexture`, `fadeRatio`). Kein eigener Rand: den Rahmen bilden die Felsen.
+
+Die Panelhöhe folgt dem Inhalt zwischen `PANEL_H_MIN` und `PANEL_H_MAX`; die Oberkante bleibt fest, damit Kopfzeile und Liste beim Beitritt nicht springen. `MenuArenaPreviewConfig.overlayClearZones` muss die **Maximalhöhe** abdecken — wer `PANEL_H_MAX` erhöht, zieht die mittlere Zone auf dem Raster nach, sonst stehen Felsen unter dem Panel.
+
+Der Fußblock trägt nur den Handlungsaufruf. Host-Werkzeuge gehören in die Kopfzeile zum Raum, sonst steht der BEREIT-Button bei Host und Gast an verschiedenen Stellen.
+
 ## Assets
 
 Neue Grafiken vor Verwendung mit realen Dateien unter `public/assets/sprites/` vergleichen:

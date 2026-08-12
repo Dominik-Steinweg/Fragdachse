@@ -380,7 +380,6 @@ export class ArenaScene extends Phaser.Scene {
     preloadArenaDecalAssets(this.load);
     preloadTurretVisualAssets(this.load);
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
-    this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
     this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');

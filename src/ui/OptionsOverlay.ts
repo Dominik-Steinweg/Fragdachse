@@ -12,6 +12,7 @@ import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
 import { ensureGlossyButtonTexture, ensureModalPanelTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
+import { FONT_MONO } from './uiTheme';
 import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
@@ -157,10 +158,12 @@ function ensureOptionsTextures(scene: Phaser.Scene): void {
   const fillTexture = scene.textures.createCanvas(TEX_VOLUME_FILL, TRACK_W, TRACK_H);
   if (fillTexture) {
     const ctx = fillTexture.context;
+    // Leise nach laut: Gruen ueber Gold nach Rot, aus der Palette statt als Literal
+    // ('#e8c170' war GOLD_1 abgetippt).
     const gradient = ctx.createLinearGradient(0, 0, TRACK_W, 0);
-    gradient.addColorStop(0, '#7ccf5b');
-    gradient.addColorStop(0.5, '#e8c170');
-    gradient.addColorStop(1, '#cf573c');
+    gradient.addColorStop(0, toCssColor(COLORS.GREEN_3));
+    gradient.addColorStop(0.5, toCssColor(COLORS.GOLD_1));
+    gradient.addColorStop(1, toCssColor(COLORS.RED_2));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, TRACK_W, TRACK_H);
     fillTexture.refresh();
@@ -277,7 +280,7 @@ export class OptionsOverlay {
 
     objects.push(
       this.scene.add.text(CX, TITLE_Y, 'OPTIONEN', {
-        fontSize: '28px', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '28px', fontFamily: FONT_MONO, fontStyle: 'bold',
         color: toCssColor(ACCENT),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -302,7 +305,7 @@ export class OptionsOverlay {
 
     objects.push(
       this.scene.add.text(CX, FOOTER_Y, '[ O / Klick zum Schließen ]', {
-        fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+        fontSize: '13px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -449,7 +452,7 @@ export class OptionsOverlay {
       label,
       {
         fontSize: '16px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(ACCENT),
       },
@@ -476,7 +479,7 @@ export class OptionsOverlay {
           this.syncQualityButtons();
         });
       const label = this.scene.add.text(x, QUALITY_BUTTON_Y, option.label, {
-        fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
+        fontSize: '17px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
       }).setOrigin(0.5).setScrollFactor(0);
       this.qualityButtons.set(option.level, { background, label });
       objects.push(background, label);
@@ -501,12 +504,12 @@ export class OptionsOverlay {
 
     objects.push(
       this.scene.add.text(TRACK_X, definition.labelY, definition.label, {
-        fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        fontSize: '18px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0, 0.5).setScrollFactor(0),
     );
 
     const valueText = this.scene.add.text(PERCENT_X, definition.labelY, '0%', {
-      fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(ACCENT),
+      fontSize: '18px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(ACCENT),
     }).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(valueText);
 
@@ -594,7 +597,7 @@ export class OptionsOverlay {
 
     this.musicLoadLabel = this.scene.add.text(CX, MUSIC_LOAD_LABEL_Y, '', {
       fontSize: '12px',
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontStyle: 'bold',
       color: toCssColor(COLORS.PURPLE_1),
     }).setOrigin(0.5)
@@ -626,11 +629,11 @@ export class OptionsOverlay {
       .on('pointerdown', () => this.onSpectatorButtonPressed());
 
     this.spectatorLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', {
-      fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+      fontSize: '15px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     this.spectatorHint = this.scene.add.text(CX, SPECTATOR_HINT_Y, '', {
-      fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+      fontSize: '12px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
     }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     this.abortButton = this.scene.add.image(
@@ -650,11 +653,11 @@ export class OptionsOverlay {
       .on('pointerdown', () => this.onAbortButtonPressed());
 
     this.abortLabel = this.scene.add.text(CX, ABORT_BUTTON_Y, '', {
-      fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+      fontSize: '17px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     this.abortHint = this.scene.add.text(CX, ABORT_HINT_Y, '', {
-      fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+      fontSize: '12px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
     }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     attachHoverEffect(this.scene, this.abortButton, this.abortLabel);

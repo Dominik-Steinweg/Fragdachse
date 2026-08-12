@@ -6,6 +6,7 @@
  * feuern keine Pointer-Events).
  */
 import * as Phaser from 'phaser';
+import { BUTTON_SCALE, MOTION } from './uiTheme';
 
 export function attachHoverEffect(
   scene: Phaser.Scene,
@@ -20,14 +21,16 @@ export function attachHoverEffect(
   button.on('pointerover', () => {
     if (opts?.isEnabled && !opts.isEnabled()) return;
     scene.tweens.add({
-      targets, scaleX: 1.06, scaleY: 1.06, duration: 90, ease: 'Sine.easeOut',
+      targets,
+      scaleX: BUTTON_SCALE.hover, scaleY: BUTTON_SCALE.hover,
+      duration: MOTION.fast, ease: MOTION.ease.hover,
     });
     button.setAlpha(Math.min(1, Math.max(restAlpha, 0.92)));
   });
   button.on('pointerout', () => {
     if (opts?.isEnabled && !opts.isEnabled()) return;
     scene.tweens.add({
-      targets, scaleX: 1, scaleY: 1, duration: 120, ease: 'Sine.easeOut',
+      targets, scaleX: 1, scaleY: 1, duration: MOTION.fast, ease: MOTION.ease.hover,
     });
     button.setAlpha(restAlpha);
   });

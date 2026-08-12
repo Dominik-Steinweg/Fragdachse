@@ -22,8 +22,10 @@ import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
-import { ensureFlatPanelTexture } from './uiTextures';
+import { ensureFlatPanelTexture, ensureGlassColumnTexture, ensureIconTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
+import { TEXT, textStyle } from './uiTheme';
+import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
 
@@ -90,11 +92,21 @@ const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X;
 const RESULTS_TEAM_PLAYERS_GAP = 20; // Abstand: Team-Header → erste Spielerzeile
 const RESULTS_SECTION_GAP      = 14; // Abstand: Ende einer Sektion → nächster Team-Header
 
-const COLOR_DIM       = '#607080';
+// Farbrollen statt eigener Blaugrau-Werte: die frueheren '#607080'/'#8fa8b8'/0x334455 lagen
+// dicht neben der Grau-Rampe, ohne zu ihr zu gehoeren.
+const COLOR_DIM       = toCssColor(TEXT.muted);
 const COLOR_KILLFEED_WEAPON = toCssColor(COLORS.GOLD_1);
 const COLOR_ARENA_FRAGS = toCssColor(COLORS.GREY_2);
-const COLOR_HEADER    = '#8fa8b8';
-const COLOR_SEPARATOR = 0x334455;
+const COLOR_HEADER    = toCssColor(COLORS.GREY_3);
+const COLOR_SEPARATOR = COLORS.GREY_6;
+
+// ── Glasflaeche hinter der Spalte (Gegenstueck zur linken Spalte) ────────────
+// Buendig am Felsrahmen: aussen am Bildrand, oben und unten an den Felszeilen, nach innen
+// zur Felssaeule hin auslaufend.
+const GLASS_X = LOBBY_FRAME_BOUNDS.rightColumnLeft;
+const GLASS_W = GAME_WIDTH - LOBBY_FRAME_BOUNDS.rightColumnLeft;
+const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
+const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
 
 function pingColor(ms: number): string {
   if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
@@ -177,7 +189,7 @@ export class RightSidePanel {
   private resultsHeader!: Phaser.GameObjects.Text;
   private resultsHeaderButton!: Phaser.GameObjects.Image;
   private resultsHeaderLabels!: Phaser.GameObjects.Container;
-  private resultsHeaderHint!: Phaser.GameObjects.Text;
+  private resultsHeaderHint!: Phaser.GameObjects.Image;
   private replayResultsHandler: (() => void) | null = null;
   private replayResultsAvailable = false;
   private resultsSep!:    Phaser.GameObjects.Rectangle;
@@ -186,6 +198,7 @@ export class RightSidePanel {
   private resultsXpLabel!: Phaser.GameObjects.Text;
   private resultsSharedXpValue!: Phaser.GameObjects.Text;
   private resultsEmptyState!: Phaser.GameObjects.Text;
+  private resultsEmptyIcon!: Phaser.GameObjects.Image;
   private resultsRows: {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
@@ -619,6 +632,13 @@ export class RightSidePanel {
 
   private buildLobbyContainer(): void {
     this.lobbyContainer = this.scene.add.container(0, 0);
+    // Zuerst eingehaengt: Glasflaeche hinter allem Uebrigen, Gegenstueck zur linken Spalte.
+    this.lobbyContainer.add(
+      this.scene.add.image(
+        GLASS_X + GLASS_W / 2, GLASS_Y + GLASS_H / 2,
+        ensureGlassColumnTexture(this.scene, '_lobby_glass_right', GLASS_W, GLASS_H, COLORS.GREY_9, 'left'),
+      ).setScrollFactor(0),
+    );
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
     promoteToClarityCamera(this.scene, this.lobbyContainer);
 
@@ -638,18 +658,14 @@ export class RightSidePanel {
       this.replayResultsHandler?.();
     });
 
-    this.resultsHeader = this.scene.add.text(-10, 0, 'LETZTE RUNDE', {
-      fontSize:   RESULTS_HEADER_FONT,
-      fontFamily: 'monospace',
-      color:      toCssColor(COLORS.GREY_2),
-      fontStyle:  'bold',
-    }).setOrigin(0.5, 0.5).setScrollFactor(0);
-    this.resultsHeaderHint = this.scene.add.text(RESULTS_HEADER_BTN_W / 2 - 16, 0, '▸', {
-      fontSize:   RESULTS_HEADER_FONT,
-      fontFamily: 'monospace',
-      color:      toCssColor(COLORS.GOLD_1),
-      fontStyle:  'bold',
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
+    this.resultsHeader = this.scene.add.text(-10, 0, 'LETZTE RUNDE', textStyle('label'))
+      .setOrigin(0.5, 0.5).setScrollFactor(0);
+    // Gezeichnetes Chevron statt des Zeichens '▸': Textglyphen dieser Art rendern je nach
+    // Schriftfallback unterschiedlich breit und sitzen selten auf der Grundlinie.
+    this.resultsHeaderHint = this.scene.add.image(
+      RESULTS_HEADER_BTN_W / 2 - 16, 0,
+      ensureIconTexture(this.scene, 'chevron-right', 36, COLORS.GOLD_1),
+    ).setDisplaySize(14, 14).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
     this.resultsHeaderLabels = this.scene.add.container(
       LOBBY_SIDEBAR_CENTER_X,
       RESULTS_HEADER_Y,
@@ -689,16 +705,23 @@ export class RightSidePanel {
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
-    this.resultsEmptyState = this.scene.add.text(LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y, 'Noch keine Daten', {
-      fontSize: RESULTS_FONT,
-      fontFamily: 'monospace',
-      color: COLOR_DIM,
-      align: 'center',
-    }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
+    // Leerzustand statt blossem "Noch keine Daten": ein gedaempftes Symbol und eine Zeile, die
+    // erklaert, wann hier etwas steht – sonst liest sich die leere Spalte wie ein Fehler.
+    this.resultsEmptyIcon = this.scene.add.image(
+      LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 18,
+      ensureIconTexture(this.scene, 'trophy', 96, COLORS.GREY_6),
+    ).setDisplaySize(48, 48).setAlpha(0.8).setScrollFactor(0).setVisible(true);
+
+    this.resultsEmptyState = this.scene.add.text(
+      LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 54,
+      'Noch keine Runde gespielt\n\nNach der ersten Runde steht hier der Endstand.',
+      textStyle('caption', { color: TEXT.disabled, align: 'center', wordWrapWidth: LOBBY_PANEL_WIDTH }),
+    ).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
     this.lobbyContainer.add([
       this.resultsHeaderButton,
       this.resultsHeaderLabels,
+      this.resultsEmptyIcon,
       this.resultsSep,
       this.resultsOutcome,
       this.resultsFragsLabel,

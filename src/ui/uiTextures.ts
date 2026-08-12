@@ -146,41 +146,213 @@ export function ensureFlatPanelTexture(
 }
 
 /**
- * Vier Eck-Klammern als Vollbild-Icon. `expand`: Klammern an den Aussenecken, Arme zeigen zur
- * Mitte (Vollbild betreten). `!expand`: Klammern nahe der Mitte, Arme zeigen zu den Ecken
- * (Vollbild verlassen) – das uebliche Symmetrie-Paar fuer einen Vollbild-Toggle-Button.
+ * Gezeichnete UI-Symbole.
+ *
+ * Bewusst Canvas statt Emoji: Farbemoji rastern je nach Betriebssystem unterschiedlich, bringen
+ * ihre eigene Farbigkeit mit und brechen damit die Farbhierarchie aus `uiTheme`. Diese Symbole
+ * folgen der uebergebenen Farbe.
+ *
+ * Wie beim Vollbild-Symbol gilt: in doppelter Groesse zeichnen und per `setDisplaySize` auf die
+ * Zielgroesse bringen, sonst franst die Kontur bei hoher Renderaufloesung aus.
  */
-export function ensureFullscreenIconTexture(
-  scene: Phaser.Scene, key: string, size: number, color: number, expand: boolean,
+export type UiIconName =
+  | 'check'
+  | 'cross'
+  | 'chevron-left'
+  | 'chevron-right'
+  | 'plus'
+  | 'info'
+  | 'lock'
+  | 'copy'
+  | 'trophy'
+  | 'fullscreen-enter'
+  | 'fullscreen-exit';
+
+export function ensureIconTexture(
+  scene: Phaser.Scene, name: UiIconName, size: number, color: number,
 ): string {
+  const s = Math.max(4, Math.round(size));
+  const key = `_icon_${name}_${s}_${color.toString(16)}`;
   if (scene.textures.exists(key)) return key;
 
-  const s = Math.max(1, Math.round(size));
   const ct = scene.textures.createCanvas(key, s, s);
   if (!ct) return key;
   const ctx = ct.context;
   ctx.clearRect(0, 0, s, s);
-  ctx.strokeStyle = rgbStr(color, 1);
-  ctx.lineWidth = Math.max(2, s * 0.1);
+
+  const stroke = rgbStr(color, 1);
+  ctx.strokeStyle = stroke;
+  ctx.fillStyle = stroke;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-
-  const arm = s * 0.24;
-  const outerPad = s * 0.16;
-  const innerPad = s * 0.38;
-  const drawCorner = (vx: number, vy: number, armX: number, armY: number) => {
+  const line = (width: number): void => { ctx.lineWidth = Math.max(1, s * width); };
+  const path = (points: readonly (readonly [number, number])[]): void => {
     ctx.beginPath();
-    ctx.moveTo(vx + armX * arm, vy);
-    ctx.lineTo(vx, vy);
-    ctx.lineTo(vx, vy + armY * arm);
+    points.forEach(([px, py], index) => {
+      if (index === 0) ctx.moveTo(px * s, py * s);
+      else ctx.lineTo(px * s, py * s);
+    });
     ctx.stroke();
   };
 
-  const pad = expand ? outerPad : innerPad;
-  drawCorner(pad, pad, expand ? 1 : -1, expand ? 1 : -1);
-  drawCorner(s - pad, pad, expand ? -1 : 1, expand ? 1 : -1);
-  drawCorner(pad, s - pad, expand ? 1 : -1, expand ? -1 : 1);
-  drawCorner(s - pad, s - pad, expand ? -1 : 1, expand ? -1 : 1);
+  switch (name) {
+    case 'check':
+      line(0.13);
+      path([[0.22, 0.52], [0.42, 0.72], [0.78, 0.29]]);
+      break;
+
+    case 'cross':
+      line(0.13);
+      path([[0.28, 0.28], [0.72, 0.72]]);
+      path([[0.72, 0.28], [0.28, 0.72]]);
+      break;
+
+    case 'chevron-left':
+      line(0.12);
+      path([[0.60, 0.24], [0.36, 0.50], [0.60, 0.76]]);
+      break;
+
+    case 'chevron-right':
+      line(0.12);
+      path([[0.40, 0.24], [0.64, 0.50], [0.40, 0.76]]);
+      break;
+
+    case 'plus':
+      line(0.13);
+      path([[0.26, 0.50], [0.74, 0.50]]);
+      path([[0.50, 0.26], [0.50, 0.74]]);
+      break;
+
+    case 'info':
+      line(0.10);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.5, s * 0.36, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.31, s * 0.055, 0, Math.PI * 2);
+      ctx.fill();
+      line(0.11);
+      path([[0.50, 0.45], [0.50, 0.70]]);
+      break;
+
+    case 'lock': {
+      // Buegel zuerst, damit der Koerper seine untere Haelfte verdeckt.
+      line(0.10);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.44, s * 0.17, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      roundRectPath(ctx, s * 0.26, s * 0.44, s * 0.48, s * 0.34, s * 0.07);
+      ctx.fill();
+      break;
+    }
+
+    case 'copy': {
+      line(0.09);
+      // Hinteres Blatt.
+      roundRectPath(ctx, s * 0.36, s * 0.16, s * 0.44, s * 0.44, s * 0.09);
+      ctx.stroke();
+      // Flaeche des vorderen Blatts freistellen, sonst kreuzen sich beide Konturen.
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      roundRectPath(ctx, s * 0.20, s * 0.40, s * 0.44, s * 0.44, s * 0.09);
+      ctx.fill();
+      ctx.restore();
+      roundRectPath(ctx, s * 0.20, s * 0.40, s * 0.44, s * 0.44, s * 0.09);
+      ctx.stroke();
+      break;
+    }
+
+    case 'trophy': {
+      line(0.09);
+      // Kelch.
+      ctx.beginPath();
+      ctx.moveTo(s * 0.30, s * 0.18);
+      ctx.lineTo(s * 0.70, s * 0.18);
+      ctx.lineTo(s * 0.64, s * 0.50);
+      ctx.quadraticCurveTo(s * 0.50, s * 0.60, s * 0.36, s * 0.50);
+      ctx.closePath();
+      ctx.stroke();
+      // Henkel.
+      ctx.beginPath();
+      ctx.arc(s * 0.30, s * 0.28, s * 0.11, Math.PI * 0.5, Math.PI * 1.5, true);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s * 0.70, s * 0.28, s * 0.11, Math.PI * 1.5, Math.PI * 0.5);
+      ctx.stroke();
+      // Fuss.
+      path([[0.50, 0.56], [0.50, 0.70]]);
+      path([[0.34, 0.82], [0.66, 0.82]]);
+      path([[0.40, 0.70], [0.60, 0.70]]);
+      break;
+    }
+
+    case 'fullscreen-enter':
+    case 'fullscreen-exit': {
+      // Vier Eckklammern. `enter`: aussen sitzend, Arme zur Mitte. `exit`: nahe der Mitte,
+      // Arme zu den Ecken – das uebliche Symmetriepaar eines Vollbild-Umschalters.
+      const expand = name === 'fullscreen-enter';
+      line(0.1);
+      const arm = 0.24;
+      const pad = expand ? 0.16 : 0.38;
+      const corner = (vx: number, vy: number, ax: number, ay: number): void => {
+        path([[vx + ax * arm, vy], [vx, vy], [vx, vy + ay * arm]]);
+      };
+      const dir = expand ? 1 : -1;
+      corner(pad, pad, dir, dir);
+      corner(1 - pad, pad, -dir, dir);
+      corner(pad, 1 - pad, dir, -dir);
+      corner(1 - pad, 1 - pad, -dir, -dir);
+      break;
+    }
+  }
+
+  ct.refresh();
+  return key;
+}
+
+/**
+ * Weiche Glasflaeche hinter den Lobby-Seitenspalten.
+ *
+ * Ohne sie steht der Text direkt auf dem Gras der Menuevorschau. Bewusst ohne Kontur: den
+ * Rahmen bilden die Felszeilen der Vorschau, ein zweiter Rand daneben wirkt doppelt. Die
+ * Kante zur Bildmitte laeuft aus, damit die Flaeche nicht als Kasten aufsetzt.
+ *
+ * `fadeEdge`: `right` blendet zur rechten Kante aus (linke Spalte), `left` umgekehrt.
+ */
+export function ensureGlassColumnTexture(
+  scene: Phaser.Scene, key: string, w: number, h: number,
+  color: number, fadeEdge: 'left' | 'right',
+  topAlpha = 0.62, bottomAlpha = 0.46,
+  /** Anteil der Breite, ueber den die Innenkante ausblendet. */
+  fadeRatio = 0.38,
+): string {
+  if (scene.textures.exists(key)) return key;
+
+  const iw = Math.max(1, Math.round(w));
+  const ih = Math.max(1, Math.round(h));
+  const ct = scene.textures.createCanvas(key, iw, ih);
+  if (!ct) return key;
+  const ctx = ct.context;
+  ctx.clearRect(0, 0, iw, ih);
+
+  const vertical = ctx.createLinearGradient(0, 0, 0, ih);
+  vertical.addColorStop(0, rgbStr(color, topAlpha));
+  vertical.addColorStop(1, rgbStr(color, bottomAlpha));
+  ctx.fillStyle = vertical;
+  ctx.fillRect(0, 0, iw, ih);
+
+  // Auslaufende Kante: nimmt der Flaeche zur Bildmitte hin die Deckkraft.
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  const fadeWidth = Math.max(1, iw * fadeRatio);
+  const fade = fadeEdge === 'right'
+    ? ctx.createLinearGradient(iw - fadeWidth, 0, iw, 0)
+    : ctx.createLinearGradient(fadeWidth, 0, 0, 0);
+  fade.addColorStop(0, 'rgba(0,0,0,0)');
+  fade.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, iw, ih);
+  ctx.restore();
 
   ct.refresh();
   return key;

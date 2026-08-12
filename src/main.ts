@@ -6,6 +6,7 @@ import { rejoinCurrentRoom, restartWithNewRoom }  from './utils/roomQuality';
 import { ArenaScene }     from './scenes/ArenaScene';
 import { initialRenderSize, installRenderResolution } from './graphics/RenderResolution';
 import { FULLSCREEN_TARGET_ID, installFullscreenSupport } from './ui/fullscreen';
+import { loadUiFonts } from './ui/uiFonts';
 import { validateGameContentReferences } from './loadout/content/GameContentValidation';
 
 /**
@@ -88,6 +89,11 @@ async function boot(): Promise<void> {
   // Ausgelieferter Content muss vollständig konsistent sein, bevor Netzwerk oder Phaser starten.
   validateGameContentReferences();
 
+  // Die UI-Schriften starten *vor* dem Verbindungsaufbau und werden erst danach abgewartet:
+  // beides laeuft dann nebeneinander, und der Start kostet keine zusaetzliche Zeit. Das
+  // Warten ist zeitlich begrenzt und schlaegt nie fehl (siehe `ui/uiFonts`).
+  const fontsReady = loadUiFonts();
+
   // 1. Raum eroeffnen oder dem Raum aus dem URL-Hash beitreten. Blockiert, bis die direkte
   //    WebRTC-Verbindung steht bzw. endgueltig gescheitert ist – es gibt keinen Fallback.
   await NetworkBridge.connect();
@@ -97,11 +103,16 @@ async function boot(): Promise<void> {
   installReconnectNotice();
   installPageLeave();
 
-  // 3. Phaser-Spiel starten – ERST nach stehender Verbindung
+  // 3. Phaser-Spiel starten – ERST nach stehender Verbindung und geladenen Schriften.
+  //
+  //    Phaser-Text rastert seine Glyphen beim Anlegen einmalig: was hier noch fehlt, bliebe
+  //    dauerhaft im Fallback stehen. `ui/uiFonts` rastert zwar auch spaeter noch nach, aber
+  //    ein Aufflackern beim Start laesst sich so ganz vermeiden.
   //
   //    Breite/Höhe sind die *Render*auflösung, nicht der Designraum: sie folgen der Fläche,
   //    die der Browser tatsächlich darstellt (siehe `graphics/RenderResolution`). Der
   //    Designraum bleibt GAME_WIDTH x GAME_HEIGHT und wird über den Kamera-Zoom hergestellt.
+  await fontsReady;
   const renderSize = initialRenderSize();
   const game = new Phaser.Game({
     type:            Phaser.AUTO,

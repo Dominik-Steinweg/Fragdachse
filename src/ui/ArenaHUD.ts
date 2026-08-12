@@ -29,6 +29,7 @@ import {
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { FONT_MONO } from './uiTheme';
 
 // ── Layout ──────────────────────────────────────────────────────────────────
 const DEFAULT_PANEL_W = 240;
@@ -69,9 +70,9 @@ const PU_SECTION_Y  = 410; // Y start for the power-up section
 const CONSTRUCTION_CAPACITY_HUD_ID = '__construction_capacity';
 
 // Fonts
-const LABEL_FONT  = { fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
-const NAME_FONT   = { fontSize: '32px', fontFamily: 'monospace', fontStyle: 'bold' as const, color: '#ffffff' };
-const VALUE_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1) };
+const LABEL_FONT  = { fontSize: '18px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_3) };
+const NAME_FONT   = { fontSize: '32px', fontFamily: FONT_MONO, fontStyle: 'bold' as const, color: '#ffffff' };
+const VALUE_FONT  = { fontSize: '14px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_1) };
 
 // ── Colour definitions per bar ──────────────────────────────────────────────
 interface BarPalette {

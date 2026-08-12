@@ -30,6 +30,7 @@ import {
 import { attachHoverEffect } from './uiHover';
 import { UiTooltip } from './UiTooltip';
 import { UiContextMenu, type UiContextMenuEntry } from './UiContextMenu';
+import { FONT_MONO } from './uiTheme';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
@@ -378,7 +379,7 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, 'ABBRUCH', {
-      fontSize: '20px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+      fontSize: '20px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0);
     cancelBtn.on('pointerdown', () => this.closeWithCancel());
     attachHoverEffect(this.scene, cancelBtn, cancelLabel);
@@ -389,7 +390,7 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, 'ÜBERNEHMEN', {
-      fontSize: '20px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+      fontSize: '20px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
     }).setOrigin(0.5).setScrollFactor(0);
     applyBtn.on('pointerdown', () => this.closeWithApply());
     attachHoverEffect(this.scene, applyBtn, applyLabel);
@@ -398,13 +399,13 @@ export class CoopDefenseUpgradesOverlay {
 
     objects.push(
       this.scene.add.text(CX, TITLE_Y, 'UPGRADES', {
-        fontSize: '28px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(ACCENT),
+        fontSize: '28px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(ACCENT),
       }).setOrigin(0.5).setScrollFactor(0),
     );
 
     // Level und XP-Balken tragen ihre Zahlen im Mouse-over, damit der Kopfbereich schmal bleibt.
     this.levelText = this.scene.add.text(CX, SUBTITLE_Y, 'Level 1', {
-      fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+      fontSize: '22px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0);
     this.attachInfoTooltip(
       this.levelText,
@@ -456,7 +457,7 @@ export class CoopDefenseUpgradesOverlay {
     objects.push(this.pointsChip);
 
     this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, '0 Upgrade-Punkte verfügbar', {
-      fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
+      fontSize: '17px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
 
@@ -471,7 +472,7 @@ export class CoopDefenseUpgradesOverlay {
     });
     objects.push(this.respecButton);
     this.respecLabel = this.scene.add.text(respecX, POINTS_Y, 'RESPEC', {
-      fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_5),
+      fontSize: '15px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.RED_5),
     })
       .setOrigin(0.5).setScrollFactor(0);
     objects.push(this.respecLabel);
@@ -504,7 +505,7 @@ export class CoopDefenseUpgradesOverlay {
 
     objects.push(
       this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurück | ✓ am Symbol oder Klick auf einen Loadout-Slot rüstet aus ]', {
-        fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+        fontSize: '13px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -829,13 +830,13 @@ export class CoopDefenseUpgradesOverlay {
       // Aktiv: dunkler Text auf lebendiger Klassenfarbe; passiv: heller Text auf gedimmtem Grund.
       const name = this.scene.add.text(0, -10, definition.displayName, {
         fontSize: '17px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(active ? COLORS.GREY_10 : (classesUnlocked ? COLORS.GREY_1 : COLORS.GREY_4)),
       }).setOrigin(0.5).setScrollFactor(0);
       const role = this.scene.add.text(0, 12, classesUnlocked ? definition.role.toUpperCase() : '🔒 GESPERRT', {
         fontSize: '11px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(active
           ? COLORS.GREY_9
@@ -928,7 +929,7 @@ export class CoopDefenseUpgradesOverlay {
 
     // Nur sichtbar, wenn eine Aktion abgelehnt wurde; sonst bleibt der Platz frei.
     this.loadoutHintText = this.scene.add.text(CX, LOADOUT_LABEL_Y, '', {
-      fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_2),
+      fontSize: '12px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.RED_2),
     }).setOrigin(0.5).setScrollFactor(0);
     this.loadoutContainer.add(this.loadoutHintText);
 
@@ -1055,7 +1056,7 @@ export class CoopDefenseUpgradesOverlay {
       // Ohne Icon bleibt der Slot sonst leer und wirkt unbelegt.
       group.add(this.scene.add.text(0, 0, presentation.displayName, {
         fontSize: '9px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(COLORS.GREY_1),
         align: 'center',
@@ -1064,7 +1065,7 @@ export class CoopDefenseUpgradesOverlay {
     } else {
       group.add(this.scene.add.text(0, 0, '+', {
         fontSize: '22px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(lerpColor(params.accentColor, COLORS.GREY_5, 0.45)),
       }).setOrigin(0.5).setScrollFactor(0).setAlpha(0.9));
@@ -1344,7 +1345,7 @@ export class CoopDefenseUpgradesOverlay {
 
       const label = this.scene.add.text(centerX, TAB_TOP + TAB_H / 2, category.label, {
         fontSize: '15px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         // Aktiv: dunkler Text auf lebendiger Farbe (hoher Kontrast); passiv: hell.
         color: toCssColor(isActive ? COLORS.GREY_10 : COLORS.GREY_2),
@@ -1883,7 +1884,7 @@ export class CoopDefenseUpgradesOverlay {
     } else {
       const fallback = this.scene.add.text(0, 0, node.label, {
         fontSize: `${NODE_LABEL_FONT_SIZE}px`,
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
         align: 'center',
@@ -1895,7 +1896,7 @@ export class CoopDefenseUpgradesOverlay {
     if (node.maxLevel > 1) {
       const levelText = this.scene.add.text(NODE_W / 2 - 2, NODE_H / 2 - 1, `${node.level}/${node.maxLevel}`, {
         fontSize: '11px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
       })
@@ -1956,7 +1957,7 @@ export class CoopDefenseUpgradesOverlay {
         .setStrokeStyle(1, equipped ? COLORS.GREEN_1 : COLORS.GREY_2)
         .setScrollFactor(0);
       const toggleLabel = this.scene.add.text(toggle.x, toggle.y, equipped ? '✓' : '+', {
-        fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '12px', fontFamily: FONT_MONO, fontStyle: 'bold',
         color: toCssColor(equipped ? COLORS.GREY_10 : COLORS.GREY_1),
       }).setOrigin(0.5).setScrollFactor(0);
       if (interactive) {

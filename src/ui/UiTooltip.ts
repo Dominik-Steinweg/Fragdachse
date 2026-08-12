@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { FONT_MONO } from './uiTheme';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { toDesignSpace } from '../graphics/RenderResolution';
 
@@ -50,7 +51,7 @@ export class UiTooltip {
       .setScrollFactor(0);
     this.titleText = this.scene.add.text(0, 0, '', {
       fontSize: '16px',
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontStyle: 'bold',
       color: toCssColor(this.accentColor),
       wordWrap: { width: this.maxWidth },
@@ -63,7 +64,7 @@ export class UiTooltip {
     for (let index = 0; index < MAX_LINES; index++) {
       const line = this.scene.add.text(0, 0, '', {
         fontSize: '14px',
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         color: toCssColor(COLORS.GREY_1),
         wordWrap: { width: this.maxWidth },
       }).setOrigin(0, 0).setVisible(false).setScrollFactor(0);

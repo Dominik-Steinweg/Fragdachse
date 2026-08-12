@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { getTextResolution } from './RenderResolution';
+import { whenUiFontsReady } from '../ui/uiFonts';
 
 /**
  * `Text` rastert seine Glyphen in eine eigene Canvas und zeigt sie als Textur. Die Rasterung
@@ -37,10 +38,27 @@ export function installTextResolution(scene: Phaser.Scene): () => void {
   const onResize = (): void => applyTextResolution(scene);
   scene.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
+  // Dieselbe Ursache aus anderer Richtung: trifft eine Webfont erst nach dem Aufbau ein, sind
+  // die bereits gerasterten Texte im Fallback erstarrt. Siehe `ui/uiFonts`.
+  const unsubscribeFonts = whenUiFontsReady(() => reRasterAllText(scene));
+
   return () => {
+    unsubscribeFonts();
     scene.scale.off(Phaser.Scale.Events.RESIZE, onResize);
     scene.add.text = factory as Phaser.GameObjects.GameObjectFactory['text'];
   };
+}
+
+/**
+ * Zwingt jeden vorhandenen Text zu einer Neurasterung – unabhaengig davon, ob sich seine
+ * Aufloesung geaendert hat. Noetig, wenn sich die *Schrift* geaendert hat: die Aufloesung ist
+ * dann unveraendert, das Ergebnis der Rasterung aber nicht.
+ */
+export function reRasterAllText(scene: Phaser.Scene): void {
+  if (!scene.sys.isActive() && !scene.sys.isSleeping()) return;
+  forEachText(scene.children.list, (text) => {
+    text.updateText();
+  });
 }
 
 function applyTextResolution(scene: Phaser.Scene): void {

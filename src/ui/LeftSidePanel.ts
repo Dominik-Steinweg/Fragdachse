@@ -33,8 +33,10 @@ import {
   type LoadoutItemRef,
 } from '../loadout/LoadoutCatalog';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
-import { ensureGlossyButtonTexture } from './uiTextures';
+import { ensureGlassColumnTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
+import { UiButton } from './UiButton';
+import { INTENT, RADIUS, TEXT, textStyle } from './uiTheme';
 import { getOverlayRoot } from './fullscreen';
 import { BadgerPreview } from './BadgerPreview';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
@@ -58,6 +60,7 @@ import {
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { UiContextMenu } from './UiContextMenu';
+import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { toDesignSpace } from '../graphics/RenderResolution';
 
@@ -66,9 +69,6 @@ const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
 const ARENA_PANEL_W = Math.round(DEFAULT_ARENA_OFFSET_X * 1.5);
 const CENTER_X     = LOBBY_PANEL_W / 2;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
-const LOBBY_CONTROL_COLOR = COLORS.GREY_7;
-const LOBBY_CONTROL_STROKE = COLORS.GREY_5;
-const LOBBY_CONTROL_TEXT = toCssColor(COLORS.GREY_2);
 const LOBBY_TOP_OFFSET_Y = 246;
 const UPPER_INFO_SPACING_STEP = LOBBY_SIDE_MENU_EXTRA_HEIGHT / 8;
 const NAME_LABEL_Y = 60 + LOBBY_TOP_OFFSET_Y;
@@ -112,8 +112,21 @@ const PICKER_COLS     = 4;
 const PICKER_GRID_Y   = 30;   // Y-Start des Gitters innerhalb des Popups
 const TEX_SWATCH_PREFIX = '__picker_swatch_';
 
-const LABEL_FONT = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2) };
-const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold' as const };
+/** Sektionsbeschriftung ueber einem Bedienfeld – gesperrt und gedaempft, damit der Wert traegt. */
+const LABEL_FONT = textStyle('section');
+const NAME_FONT = textStyle('title', { color: COLORS.GREY_1 });
+/** Ausgewaehlter Wert eines Karussells (Modus, Map, Loadout-Slot). */
+const VALUE_FONT = textStyle('body', { color: TEXT.primary });
+
+// ── Glasflaeche hinter der Spalte ────────────────────────────────────────────
+// Ohne sie steht der Text direkt auf dem Gras der Menuevorschau. Die Flaeche schliesst buendig
+// an den Felsrahmen an: aussen am Bildrand, oben unter der oberen Felszeile, unten an der
+// unteren, und nach innen laeuft sie zur Felssaeule hin aus. Kanten aus `LOBBY_FRAME_BOUNDS`,
+// damit sie dem Raster der Vorschau folgen statt eigener Schaetzwerte.
+const GLASS_X = 0;
+const GLASS_W = LOBBY_FRAME_BOUNDS.leftColumnRight;
+const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
+const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
 const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
@@ -191,6 +204,8 @@ export class LeftSidePanel {
   private timeSliderDragging = false;
   private timeSliderPointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private timeSliderPointerUpHandler: (() => void) | null = null;
+  private optionsBtn:      UiButton | null = null;
+  private helpBtn:         UiButton | null = null;
   private colorEditBtn:   Phaser.GameObjects.Image | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
   private teamArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
@@ -260,8 +275,16 @@ export class LeftSidePanel {
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────
     const objects: Phaser.GameObjects.GameObject[] = [];
 
+    // Zuerst eingehaengt: liegt hinter allem Uebrigen.
     objects.push(
-      this.scene.add.text(CENTER_X, NAME_LABEL_Y, 'Dein Name:', LABEL_FONT)
+      this.scene.add.image(
+        GLASS_X + GLASS_W / 2, GLASS_Y + GLASS_H / 2,
+        ensureGlassColumnTexture(this.scene, '_lobby_glass_left', GLASS_W, GLASS_H, COLORS.GREY_9, 'right'),
+      ).setScrollFactor(0),
+    );
+
+    objects.push(
+      this.scene.add.text(CENTER_X, NAME_LABEL_Y, 'SPIELER', LABEL_FONT)
         .setOrigin(0.5, 0)
         .setScrollFactor(0),
     );
@@ -273,9 +296,9 @@ export class LeftSidePanel {
       .on('pointerup', (pointer: Phaser.Input.Pointer) => this.openSaveMenu(pointer));
     objects.push(this.localNameText);
 
-    this.saveStatusText = this.scene.add.text(CENTER_X, NAME_VALUE_Y + 31, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: toCssColor(COLORS.GREEN_3),
-    }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
+    this.saveStatusText = this.scene.add.text(CENTER_X, NAME_VALUE_Y + 31, '',
+      textStyle('micro', { color: COLORS.GREEN_3 }))
+      .setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
     objects.push(this.saveStatusText);
 
     const editControl = this.createCompactButton(
@@ -308,7 +331,7 @@ export class LeftSidePanel {
     );
 
     objects.push(
-      this.scene.add.text(CENTER_X, MODE_LABEL_Y, 'Spielmodus:', LABEL_FONT)
+      this.scene.add.text(CENTER_X, MODE_LABEL_Y, 'SPIELMODUS', LABEL_FONT)
         .setOrigin(0.5, 0)
         .setScrollFactor(0),
     );
@@ -322,7 +345,7 @@ export class LeftSidePanel {
     objects.push(modeLeftBtn.button, modeLeftBtn.label);
 
     const modeNameText = this.scene.add.text(ITEM_NAME_X, MODE_ROW_Y, '', {
-      fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
+      ...VALUE_FONT,
     }).setOrigin(0.5, 0).setScrollFactor(0);
     this.modeNameText = modeNameText;
     objects.push(modeNameText);
@@ -336,7 +359,7 @@ export class LeftSidePanel {
     objects.push(modeRightBtn.button, modeRightBtn.label);
     this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
 
-    const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, 'Map:', LABEL_FONT)
+    const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, 'MAP', LABEL_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
     this.mapLabelText = mapLabelText;
@@ -351,7 +374,7 @@ export class LeftSidePanel {
     objects.push(mapLeftBtn.button, mapLeftBtn.label);
 
     const mapNameText = this.scene.add.text(ITEM_NAME_X, MAP_ROW_Y, '', {
-      fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
+      ...VALUE_FONT,
     }).setOrigin(0.5, 0).setScrollFactor(0);
     this.mapNameText = mapNameText;
     objects.push(mapNameText);
@@ -484,7 +507,7 @@ export class LeftSidePanel {
 
     // ── Loadout-Karussell ──
     objects.push(
-      this.scene.add.text(CENTER_X, CAROUSEL_START_Y, 'Loadout:', LABEL_FONT)
+      this.scene.add.text(CENTER_X, CAROUSEL_START_Y, 'AUSRÜSTUNG', LABEL_FONT)
         .setOrigin(0.5, 0)
         .setScrollFactor(0),
     );
@@ -504,9 +527,8 @@ export class LeftSidePanel {
       );
       objects.push(leftBtn.button, leftBtn.label);
 
-      const nameText = this.scene.add.text(ITEM_NAME_X, arrowY, '', {
-        fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
-      }).setOrigin(0.5, 0).setScrollFactor(0);
+      const nameText = this.scene.add.text(ITEM_NAME_X, arrowY, '', VALUE_FONT)
+        .setOrigin(0.5, 0).setScrollFactor(0);
       this.loadoutNameTexts[slot] = nameText;
       objects.push(nameText);
 
@@ -521,9 +543,9 @@ export class LeftSidePanel {
 
       // Slot-Label zentriert UNTER den Pfeilen
       objects.push(
-        this.scene.add.text(ITEM_NAME_X, labelY, SLOT_LABELS[slot], {
-          fontSize: '12px', fontFamily: 'monospace', color: '#888888',
-        }).setOrigin(0.5, 0).setScrollFactor(0),
+        this.scene.add.text(ITEM_NAME_X, labelY, SLOT_LABELS[slot],
+          textStyle('caption', { color: TEXT.disabled }))
+          .setOrigin(0.5, 0).setScrollFactor(0),
       );
 
       const initialItems = this.getSlotItems(slot);
@@ -550,33 +572,26 @@ export class LeftSidePanel {
     divider3.setScrollFactor(0);
     objects.push(divider3);
 
-    // ── Hilfe-Button ──
-    const menuBtnTex = ensureGlossyButtonTexture(
-      this.scene, `_lsp_menu_btn_${MENU_BTN_W}x${MENU_BTN_H}`, MENU_BTN_W, MENU_BTN_H, COLORS.GREY_6, COLORS.GOLD_1,
-    );
-    const optionsBtn = this.scene.add.image(OPTIONS_BTN_X, MENU_BTN_Y, menuBtnTex)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.optionsOverlay?.show())
-      .setScrollFactor(0);
-    objects.push(optionsBtn);
-    const optionsLabel = this.scene.add.text(OPTIONS_BTN_X, MENU_BTN_Y, 'OPTIONEN', {
-      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
-      color: toCssColor(COLORS.GOLD_1),
-    }).setOrigin(0.5).setScrollFactor(0);
-    objects.push(optionsLabel);
-    attachHoverEffect(this.scene, optionsBtn, optionsLabel);
+    // ── Optionen und Hilfe ──
+    // Nebenwege, keine Handlungsaufrufe: ghost statt der frueheren Grau-Gold-Flaeche, die neben
+    // dem BEREIT-Button um dieselbe Aufmerksamkeit warb.
+    this.optionsBtn = new UiButton(this.scene, {
+      x: OPTIONS_BTN_X, y: MENU_BTN_Y, w: MENU_BTN_W, h: MENU_BTN_H,
+      label: 'OPTIONEN',
+      labelRole: 'labelSm',
+      intent: 'ghost',
+      onClick: () => this.optionsOverlay?.show(),
+    });
+    objects.push(this.optionsBtn.getRoot());
 
-    const helpBtn = this.scene.add.image(HELP_BTN_X, MENU_BTN_Y, menuBtnTex)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.helpOverlay?.show())
-      .setScrollFactor(0);
-    objects.push(helpBtn);
-    const helpLabel = this.scene.add.text(HELP_BTN_X, MENU_BTN_Y, 'HILFE', {
-      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
-      color: toCssColor(COLORS.GOLD_1),
-    }).setOrigin(0.5).setScrollFactor(0);
-    objects.push(helpLabel);
-    attachHoverEffect(this.scene, helpBtn, helpLabel);
+    this.helpBtn = new UiButton(this.scene, {
+      x: HELP_BTN_X, y: MENU_BTN_Y, w: MENU_BTN_W, h: MENU_BTN_H,
+      label: 'HILFE',
+      labelRole: 'labelSm',
+      intent: 'ghost',
+      onClick: () => this.helpOverlay?.show(),
+    });
+    objects.push(this.helpBtn.getRoot());
 
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
@@ -873,6 +888,11 @@ export class LeftSidePanel {
     this.saveMenu = null;
     this.cleanupPickerDismissListener();
     this.badgerPreview?.destroy();
+    // UiButtons melden eigene globale Pointer-Listener ab.
+    this.optionsBtn?.destroy();
+    this.optionsBtn = null;
+    this.helpBtn?.destroy();
+    this.helpBtn = null;
     this.destroyPickerEffects();
     this.helpOverlay?.destroy();
     this.optionsOverlay?.destroy();
@@ -899,9 +919,7 @@ export class LeftSidePanel {
     // Titel
     objects.push(
       this.scene.add
-        .text(PICKER_PADDING, PICKER_PADDING, 'Farbe wählen', {
-          fontSize: '12px', fontFamily: 'monospace', color: '#c7cfcc',
-        }),
+        .text(PICKER_PADDING, PICKER_PADDING, 'FARBE WÄHLEN', textStyle('section')),
     );
 
     const container = this.scene.add.container(PICKER_WORLD_X, PICKER_WORLD_Y, objects);
@@ -938,7 +956,7 @@ export class LeftSidePanel {
 
       // Interactive zone on top
       bg.setInteractive({ useHandCursor: true })
-        .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, 0xffffff); })
+        .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, COLORS.GREY_1); })
         .on('pointerout',  () => bg.setStrokeStyle(0))
         .on('pointerdown', () => this.requestColor(color));
 
@@ -1265,30 +1283,36 @@ export class LeftSidePanel {
     labelOffsetY = CONTROL_LABEL_OFFSET_Y,
     iconDirection: 'left' | 'right' | null = null,
   ): CompactButton {
-    const textureKey = `_lsp_compact_btn_${width}x${height}`;
+    // Bedienelemente der Spalte sind Nebenwege: ghost, damit sie den Handlungsaufruf im
+    // Zentrum nicht ueberstimmen. Der Intent gehoert in den Schluessel – ohne ihn teilten sich
+    // alle gleich grossen Kompaktbuttons zwangslaeufig eine Textur.
+    const spec = INTENT.ghost;
+    const textureKey = `_lsp_compact_btn_ghost_${width}x${height}`;
     const button = this.scene.add.image(
       x,
       y,
-      ensureGlossyButtonTexture(
-        this.scene,
-        textureKey,
-        width,
-        height,
-        LOBBY_CONTROL_COLOR,
-        LOBBY_CONTROL_STROKE,
-      ),
+      ensureRoundedTexture(this.scene, {
+        key: textureKey,
+        w: width,
+        h: height,
+        radius: RADIUS.sm,
+        topColor: lerpColor(spec.fill, 0xffffff, 0.16),
+        bottomColor: lerpColor(spec.fill, 0x000000, 0.3),
+        fillAlpha: spec.fillAlpha,
+        strokeColor: spec.stroke,
+        strokeAlpha: spec.strokeAlpha,
+        strokeWidth: 1.5,
+        highlightAlpha: spec.gloss,
+      }),
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', onClick)
       .setScrollFactor(0);
     const label: CompactLabel = iconDirection
       ? this.createChevronIcon(x, y, iconDirection)
-      : this.scene.add.text(x, y + labelOffsetY, labelText, {
-        fontSize,
-        fontFamily: 'monospace',
-        color: LOBBY_CONTROL_TEXT,
-        fontStyle: 'bold',
-      }).setOrigin(0.5).setScrollFactor(0);
+      : this.scene.add.text(x, y + labelOffsetY, labelText, textStyle('labelSm', {
+        color: spec.label,
+      })).setOrigin(0.5).setScrollFactor(0);
     attachHoverEffect(this.scene, button, label);
     return { button, label, text: iconDirection ? undefined : label as Phaser.GameObjects.Text };
   }
@@ -1318,7 +1342,7 @@ export class LeftSidePanel {
     direction: 'left' | 'right',
   ): Phaser.GameObjects.Graphics {
     const icon = this.scene.add.graphics();
-    icon.lineStyle(1.8, COLORS.GREY_2, 1);
+    icon.lineStyle(1.8, INTENT.ghost.label, 1);
     icon.beginPath();
     if (direction === 'left') {
       icon.moveTo(3, -4);

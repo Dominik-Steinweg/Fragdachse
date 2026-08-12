@@ -9,6 +9,7 @@ import {
   DEPTH, COLORS, toCssColor,
 } from '../config';
 import { ensureModalPanelTexture } from './uiTextures';
+import { FONT_MONO } from './uiTheme';
 import { HELP_CONTROLS } from '../config/helpControls';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
@@ -35,14 +36,14 @@ const ACCENT      = COLORS.GOLD_1;
 
 const KEY_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontSize:   '18px',
-  fontFamily: 'monospace',
+  fontFamily: FONT_MONO,
   fontStyle:  'bold',
   color:      toCssColor(ACCENT),
 };
 
 const DESC_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontSize:   '16px',
-  fontFamily: 'monospace',
+  fontFamily: FONT_MONO,
   color:      toCssColor(COLORS.GREY_2),
 };
 
@@ -81,7 +82,7 @@ export class HelpOverlay {
     // ── Titel ─────────────────────────────────────────────────────────────
     objects.push(
       this.scene.add.text(CX, TITLE_Y, 'STEUERUNG', {
-        fontSize: '28px', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '28px', fontFamily: FONT_MONO, fontStyle: 'bold',
         color: toCssColor(ACCENT),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -117,7 +118,7 @@ export class HelpOverlay {
     // ── Footer-Hinweis ────────────────────────────────────────────────────
     objects.push(
       this.scene.add.text(CX, FOOTER_Y, '[ Klick oder Taste zum Schließen ]', {
-        fontSize: '13px', fontFamily: 'monospace',
+        fontSize: '13px', fontFamily: FONT_MONO,
         color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );

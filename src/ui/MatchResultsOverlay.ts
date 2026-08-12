@@ -38,6 +38,7 @@ import type {
   MatchResultsPresentation,
 } from './MatchResultsModel';
 import { getCoopDefenseItemCellColor } from './CoopDefenseItemsModel';
+import { FONT_MONO } from './uiTheme';
 import {
   ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemIconTexture,
@@ -533,7 +534,7 @@ export class MatchResultsOverlay {
       .setScrollFactor(0);
 
     this.outcomeText = this.scene.add.text(CX, BANNER_Y, 'AUSWERTUNG', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '58px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_1),
@@ -544,14 +545,14 @@ export class MatchResultsOverlay {
     // Zweite Kopie derselben Schrift: skaliert additiv nach aussen und erzeugt so den
     // Aufschlag-Moment, ohne die eigentliche Beschriftung zu verfremden.
     this.outcomeFlash = this.scene.add.text(CX, BANNER_Y, 'AUSWERTUNG', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '58px',
       fontStyle: 'bold',
       color: '#ffffff',
     }).setOrigin(0.5).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
 
     this.metaText = this.scene.add.text(CX, META_Y, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '18px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_4),
@@ -574,7 +575,7 @@ export class MatchResultsOverlay {
         this.scene, TEX_SECTION_LEFT, LEFT_W, SECTION_H, COLORS.BLUE_4, COLORS.GREY_9,
       )).setScrollFactor(0),
       this.scene.add.text(LEFT_X + 30, SECTION_TITLE_Y, 'MATCH-LEADERBOARD', {
-        fontFamily: 'monospace', fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        fontFamily: FONT_MONO, fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0, 0.5).setScrollFactor(0),
       this.columnLabel(MEDAL_X, HEADER_ROW_Y, 'RANG', 0.5),
       this.columnLabel(NAME_X, HEADER_ROW_Y, 'SPIELER', 0),
@@ -591,16 +592,16 @@ export class MatchResultsOverlay {
       const medal = this.scene.add.image(MEDAL_X, y, this.ensureMedalTexture(COLORS.GREY_5))
         .setScrollFactor(0);
       const rank = this.scene.add.text(MEDAL_X, y, '', {
-        fontFamily: 'monospace', fontSize: '17px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+        fontFamily: FONT_MONO, fontSize: '17px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
       }).setOrigin(0.5).setScrollFactor(0);
       const name = this.scene.add.text(NAME_X, y, '', {
-        fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: '#ffffff',
+        fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: '#ffffff',
       }).setOrigin(0, 0.5).setScrollFactor(0);
       const team = this.scene.add.text(TEAM_X, y, '', {
-        fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
+        fontFamily: FONT_MONO, fontSize: '15px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
       }).setOrigin(0, 0.5).setScrollFactor(0);
       const score = this.scene.add.text(SCORE_X, y, '', {
-        fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
+        fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
       }).setOrigin(1, 0.5).setScrollFactor(0);
       const container = this.scene.add.container(0, 0, [frame, medal, rank, name, team, score])
         .setScrollFactor(0);
@@ -619,15 +620,15 @@ export class MatchResultsOverlay {
         this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, COLORS.GOLD_3, COLORS.GREY_9,
       )).setScrollFactor(0),
       this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'FORTSCHRITT', {
-        fontFamily: 'monospace', fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        fontFamily: FONT_MONO, fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0, 0.5).setScrollFactor(0),
     );
 
     this.levelText = this.scene.add.text(CHIP_X, LEVEL_ROW_Y, 'LEVEL 1', {
-      fontFamily: 'monospace', fontSize: '32px', fontStyle: 'bold', color: toCssColor(COLORS.GREEN_1),
+      fontFamily: FONT_MONO, fontSize: '32px', fontStyle: 'bold', color: toCssColor(COLORS.GREEN_1),
     }).setOrigin(0, 0.5).setScrollFactor(0);
     this.xpGainText = this.scene.add.text(CHIP_X + CHIP_W, LEVEL_ROW_Y, '+0 XP', {
-      fontFamily: 'monospace', fontSize: '28px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
+      fontFamily: FONT_MONO, fontSize: '28px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
     }).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(this.levelText, this.xpGainText);
 
@@ -646,7 +647,7 @@ export class MatchResultsOverlay {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0);
     this.xpText = this.scene.add.text(CHIP_CX, XP_TEXT_Y, '', {
-      fontFamily: 'monospace', fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
+      fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.xpFill, this.xpFlash, this.xpText);
 
@@ -654,7 +655,7 @@ export class MatchResultsOverlay {
       this.scene.add.rectangle(CHIP_CX, PROGRESS_DIVIDER_Y, CHIP_W, 1, COLORS.GREY_5, 0.55)
         .setScrollFactor(0),
       this.scene.add.text(CHIP_X, REWARD_TITLE_Y, 'BELOHNUNGEN', {
-        fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
+        fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
       }).setOrigin(0, 0.5).setScrollFactor(0),
     );
 
@@ -699,10 +700,10 @@ export class MatchResultsOverlay {
     const badge = this.scene.add.image(badgeOffsetX, 0, this.ensureBadgeTexture(COLORS.GREY_5))
       .setScrollFactor(0);
     const glyph = this.scene.add.text(badgeOffsetX, 0, '', {
-      fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+      fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
     }).setOrigin(0.5).setScrollFactor(0);
     const label = this.scene.add.text(-CHIP_W / 2 + 22 + BADGE_SIZE + 18, 0, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '18px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_1),
@@ -738,7 +739,7 @@ export class MatchResultsOverlay {
         this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, COLORS.GOLD_3, COLORS.GREY_9,
       )).setScrollFactor(0),
       this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'MATCH-ÜBERSICHT', {
-        fontFamily: 'monospace', fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        fontFamily: FONT_MONO, fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0, 0.5).setScrollFactor(0),
     );
 
@@ -747,10 +748,10 @@ export class MatchResultsOverlay {
       const frame = this.scene.add.image(CHIP_CX, y, this.ensureChipTexture(COLORS.GREY_5))
         .setScrollFactor(0);
       const label = this.scene.add.text(CHIP_X + 24, y, '', {
-        fontFamily: 'monospace', fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
+        fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0, 0.5).setScrollFactor(0);
       const value = this.scene.add.text(CHIP_X + CHIP_W - 24, y, '', {
-        fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(1, 0.5).setScrollFactor(0);
       const container = this.scene.add.container(0, 0, [frame, label, value])
         .setScrollFactor(0)
@@ -769,7 +770,7 @@ export class MatchResultsOverlay {
       .setTint(COLORS.BLUE_2)
       .setAlpha(0.85);
     this.syncText = this.scene.add.text(CX, CY + 10, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '24px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.BLUE_1),
@@ -783,14 +784,14 @@ export class MatchResultsOverlay {
 
   private buildFooter(): Phaser.GameObjects.Container {
     this.hintText = this.scene.add.text(CONTENT_LEFT + 6, FOOTER_Y, 'Klick: Animationen überspringen', {
-      fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_5),
+      fontFamily: FONT_MONO, fontSize: '14px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_5),
     }).setOrigin(0, 0.5).setScrollFactor(0);
 
     this.continueButton = this.scene.add.image(CONTINUE_X, FOOTER_Y, ensureGlossyButtonTexture(
       this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, COLORS.GOLD_3,
     )).setScrollFactor(0).setInteractive({ useHandCursor: true });
     this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, 'WEITER ZUR LOBBY', {
-      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+      fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
     }).setOrigin(0.5).setScrollFactor(0);
     this.continueButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       // Das Overlay verschwindet sofort. Die Abbruchmarkierung verhindert, dass ein
@@ -806,7 +807,7 @@ export class MatchResultsOverlay {
 
   private columnLabel(x: number, y: number, text: string, originX: number): Phaser.GameObjects.Text {
     return this.scene.add.text(x, y, text, {
-      fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
+      fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
     }).setOrigin(originX, 0.5).setScrollFactor(0);
   }
 

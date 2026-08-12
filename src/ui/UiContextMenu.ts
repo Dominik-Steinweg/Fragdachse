@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { ensureFlatPanelTexture } from './uiTextures';
+import { FONT_MONO } from './uiTheme';
 
 /**
  * Kleines Aktionsmenue am Klickpunkt (Ausruesten, Ablegen, Zerlegen ...).
@@ -83,7 +84,7 @@ export class UiContextMenu {
       backdrop,
       background,
       this.scene.add.text(PADDING, PADDING, options.title, {
-        fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: toCssColor(options.titleColor),
+        fontFamily: FONT_MONO, fontSize: '14px', fontStyle: 'bold', color: toCssColor(options.titleColor),
       }).setOrigin(0, 0).setScrollFactor(0),
     ];
 
@@ -111,7 +112,7 @@ export class UiContextMenu {
       children.push(
         row,
         this.scene.add.text(PADDING + 12, rowY + ROW_H / 2, entry.label, {
-          fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: toCssColor(entryColor),
+          fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: toCssColor(entryColor),
         }).setOrigin(0, 0.5).setScrollFactor(0),
       );
     });
