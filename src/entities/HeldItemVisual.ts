@@ -27,9 +27,14 @@ export class HeldItemVisual {
    */
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly depth: number,
+    private depth: number,
     private readonly onImageCreated?: (image: Phaser.GameObjects.Image) => void,
   ) {}
+
+  setDepth(depth: number): void {
+    this.depth = depth;
+    this.image?.setDepth(depth);
+  }
 
   /**
    * Getragenes Item setzen. `null` oder eine ID ohne Bild (Nahkampf, Konstrukte) blendet aus.

@@ -8,6 +8,7 @@
     "audio:convert": "node scripts/convert-audio.mjs",
     "icons:generate": "node scripts/generate-upgrade-icons.mjs",
     "icons:generate-one": "node scripts/generate-upgrade-icons.mjs --id",
+    "sprites:held": "node scripts/generate-held-item-sprites.mjs",
     "dev": "vite",
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",

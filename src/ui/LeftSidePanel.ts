@@ -37,6 +37,7 @@ import { ensureGlossyButtonTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
 import { getOverlayRoot } from './fullscreen';
 import { BadgerPreview } from './BadgerPreview';
+import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import type { CoopDefenseClassId, GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
@@ -213,6 +214,11 @@ export class LeftSidePanel {
 
   // Loadout-Karussell
   private loadoutIndices:   Record<LoadoutSlot, number> = { weapon1: 0, weapon2: 0, utility: 0, ultimate: 0 };
+  /**
+   * Slot, dessen Item die Lobby-Vorschau in den Pfoten zeigt: der zuletzt im Karussell geaenderte.
+   * Das Ultimate zaehlt nicht mit – es ist keine Handwaffe und hat kein getragenes Bild.
+   */
+  private previewHeldSlot: HeldItemSlot = 'weapon1';
   private loadoutNameTexts: Partial<Record<LoadoutSlot, Phaser.GameObjects.Text>> = {};
   private loadoutArrowButtons: Partial<Record<LoadoutSlot, { left: CompactButton; right: CompactButton }>> = {};
   private loadoutEnabled    = true;
@@ -577,7 +583,16 @@ export class LeftSidePanel {
     this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer);
 
     // BadgerPreview (world-space, separate from container for preFX support)
-    this.badgerPreview = new BadgerPreview(this.scene, CENTER_X, BADGER_Y, 0x888888, BADGER_SIZE);
+    this.badgerPreview = new BadgerPreview(
+      this.scene,
+      CENTER_X,
+      BADGER_Y,
+      0x888888,
+      BADGER_SIZE,
+      // Das Bild der getragenen Waffe entsteht erst beim ersten Item und verpasst deshalb die
+      // Kamerazuordnung weiter unten im Aufbaupfad.
+      (image) => promoteToClarityCamera(this.scene, image),
+    );
     this.badgerPreview.setScrollFactor(0);
     this.badgerPreview.setDepth(DEPTH.OVERLAY);
 
@@ -776,6 +791,7 @@ export class LeftSidePanel {
       ? getCoopDefenseMapConfig(this.bridge.getCoopDefenseMapId()).displayName
       : '---');
     this.syncAllLoadoutSelections();
+    this.refreshBadgerHeldItem();
     this.updateModeSelectorState();
     this.updateMapSelectorState(mode);
     this.updateTeamSelectorState(mode, teamId);
@@ -1014,6 +1030,18 @@ export class LeftSidePanel {
     this.loadoutIndices[slot] = (this.loadoutIndices[slot] + delta + items.length) % items.length;
     this.updateCarouselDisplay(slot);
     this.applyLocalLoadoutSelection(slot, items[this.loadoutIndices[slot]].id);
+    if (slot !== 'ultimate') this.previewHeldSlot = slot;
+    this.refreshBadgerHeldItem();
+  }
+
+  /**
+   * Zeigt in der Vorschau das Item des zuletzt geaenderten Slots. Wird auch ohne Karussell-Klick
+   * gerufen, weil ein Moduswechsel oder ein importierter Spielstand die Auswahl ersetzen kann.
+   */
+  private refreshBadgerHeldItem(): void {
+    const localId = this.bridge.getLocalPlayerId();
+    const itemId = this.bridge.getPlayerLoadoutSlot(localId, this.previewHeldSlot) ?? null;
+    this.badgerPreview?.setHeldItemId(itemId);
   }
 
   private updateCarouselDisplay(slot: LoadoutSlot): void {

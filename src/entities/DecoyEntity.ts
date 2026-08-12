@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { HeldItemVisual } from './HeldItemVisual';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
@@ -28,6 +29,11 @@ export class DecoyEntity {
   private glowFx: GlowHandle | null = null;
   private anomalyTween: Phaser.Tweens.Tween | null = null;
   private anomalyState = { alpha: 0.92, outerStrength: 4.2 };
+  /**
+   * Der Koeder soll wie sein Besitzer aussehen. Ohne getragenes Item waere er allein daran
+   * zweifelsfrei zu erkennen und damit als Taeuschung wertlos.
+   */
+  private readonly heldItem: HeldItemVisual;
 
   private static readonly ROTATION_OFFSET = Math.PI / 2;
 
@@ -63,6 +69,8 @@ export class DecoyEntity {
 
     setInternalFxPadding(this.sprite, 20);
     this.glowFx = addInternalGlow(this.sprite, colorHex, 4, 0, false, 0.08, 16, 'critical');
+
+    this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS - 0.015);
 
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
@@ -100,6 +108,13 @@ export class DecoyEntity {
   setRotation(rotation: number): void {
     this.targetRotation = rotation;
     this.sprite.rotation = rotation + DecoyEntity.ROTATION_OFFSET;
+    this.syncHeldItem();
+  }
+
+  /** Getragenes Loadout-Item des Besitzers. `null` blendet es aus. */
+  setHeldItemId(itemId: string | null): void {
+    this.heldItem.setItem(itemId);
+    this.syncHeldItem();
   }
 
   setTargetRotation(rotation: number): void {
@@ -121,6 +136,18 @@ export class DecoyEntity {
     this.hpBarFg.setPosition(x - HP_BAR_WIDTH / 2, hpY);
     this.armorBarBg.setPosition(x, armorY);
     this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
+    this.syncHeldItem();
+  }
+
+  private syncHeldItem(): void {
+    this.heldItem.sync(
+      this.sprite.x,
+      this.sprite.y,
+      this.sprite.rotation,
+      this.sprite.displayWidth,
+      this.sprite.visible,
+      this.sprite.alpha,
+    );
   }
 
   updateVitals(hp: number, maxHp: number, armor: number, maxArmor: number): void {
@@ -165,6 +192,7 @@ export class DecoyEntity {
 
   private applyAnomalyVisual(): void {
     this.sprite.setAlpha(this.anomalyState.alpha);
+    this.syncHeldItem();
     this.hpBarBg.setAlpha(this.anomalyState.alpha * 0.92);
     this.hpBarFg.setAlpha(this.anomalyState.alpha);
     this.armorBarBg.setAlpha(this.anomalyState.alpha * 0.92);
@@ -177,6 +205,7 @@ export class DecoyEntity {
 
   destroy(): void {
     this.anomalyTween?.stop();
+    this.heldItem.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();

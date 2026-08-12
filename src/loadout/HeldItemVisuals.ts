@@ -21,7 +21,7 @@
  * Klauen sind die Waffe.
  */
 import type * as Phaser from 'phaser';
-import { findUtilityConfig, findWeaponConfig } from './LoadoutConfig';
+import { findUtilityConfig, findWeaponConfig, getUtilityBaseId } from './LoadoutConfig';
 
 export interface HeldItemSpriteSpec {
   readonly textureKey: string;
@@ -85,6 +85,13 @@ export function getHeldItemSpriteSpec(itemId: string | null | undefined): HeldIt
 
   const explicit = HELD_ITEM_SPRITES[itemId];
   if (explicit) return explicit;
+
+  // Modusvarianten (`..._COOP`) sind derselbe Gegenstand mit anderen Werten und erben deshalb das
+  // Bild ihrer Basis, statt auf die neutrale Rueckfallform zu fallen.
+  const utilityBaseId = getUtilityBaseId(itemId);
+  if (utilityBaseId && utilityBaseId !== itemId && HELD_ITEM_SPRITES[utilityBaseId]) {
+    return HELD_ITEM_SPRITES[utilityBaseId];
+  }
 
   const weapon = findWeaponConfig(itemId);
   if (weapon) return SLOTLESS_WEAPON_FIRE_TYPES.has(weapon.fire.type) ? null : GENERIC_GUN;

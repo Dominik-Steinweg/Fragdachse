@@ -60,21 +60,34 @@ export class BadgerPreview {
     if (this.glowFx) this.glowFx.color = color;
   }
 
+  /**
+   * Loadout-Item, das die Vorschau in den Pfoten haelt. `null` blendet es aus.
+   * In der Lobby zeigt das den zuletzt geaenderten Slot.
+   */
+  setHeldItemId(itemId: string | null): void {
+    this.heldItem.setItem(itemId);
+    this.syncHeldItem();
+  }
+
   /** Set rotation directly (radians, with offset applied). */
   setRotation(aimAngle: number): void {
     this.sprite.rotation = aimAngle + ROTATION_OFFSET;
+    this.syncHeldItem();
   }
 
   setScrollFactor(factor: number): void {
     this.sprite.setScrollFactor(factor);
+    this.heldItem.setScrollFactor(factor);
   }
 
   setDepth(depth: number): void {
     this.sprite.setDepth(depth);
+    this.heldItem.setDepth(depth);
   }
 
   setPosition(x: number, y: number): void {
     this.sprite.setPosition(x, y);
+    this.syncHeldItem();
   }
 
   /**
@@ -85,14 +98,27 @@ export class BadgerPreview {
    */
   setVisible(visible: boolean): void {
     this.sprite.setVisible(visible);
+    this.heldItemVisible = visible;
+    this.syncHeldItem();
     if (visible) this.glowTween?.resume();
     else this.glowTween?.pause();
   }
 
   destroy(): void {
     this.glowTween?.stop();
+    this.heldItem.destroy();
     removeInternalFx(this.sprite, this.glowFx);
     this.glowFx = null;
     this.sprite.destroy();
+  }
+
+  private syncHeldItem(): void {
+    this.heldItem.sync(
+      this.sprite.x,
+      this.sprite.y,
+      this.sprite.rotation,
+      this.displaySize,
+      this.heldItemVisible,
+    );
   }
 }
