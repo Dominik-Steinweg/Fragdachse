@@ -1,26 +1,20 @@
 # AI-Wissensbasis
 
-Diese Seiten sind ein kleiner Router für langlebiges Projektwissen. Der Quellcode ist immer die technische Wahrheit. Vor einer Aufgabe nur die fachlich relevanten Seiten lesen und Aussagen bei Änderungen gegen reale Codepfade verifizieren.
+Kompakter Router für langlebiges Projektwissen. Der Quellcode, die Typen und die authored Daten bleiben die technische Wahrheit. Vor Änderungen konkrete Aussagen gegen die betroffenen Codepfade und Tests prüfen.
 
-- [`architecture.md`](architecture.md): Systemgrenzen, Einstiegspunkte, Scene-/Round-Lifecycle und Testdesign für konfigurierbaren Content.
-- [`local-dev-environment.md`](local-dev-environment.md): Browserprüfung nur auf ausdrückliche Aufforderung, Portvertrag für parallel arbeitende Agenten und Menschen sowie Fehlerbilder bei Browserprüfungen.
-- [`gameplay.md`](gameplay.md): Spielidee, Modi sowie Trennung von Lobby und Arena.
-- [`networking.md`](networking.md): WebRTC-Transport, Host-Autorität, Kanalzuordnung, Replikation und Diagnose.
-- [`performance.md`](performance.md): Grafikqualitäts-Vertrag, visuelle Budgets und lokaler Messworkflow (Taste T).
-- [`local-persistence.md`](local-persistence.md): versionierte lokale Einstellungen und Spielstand, Cache-Vertrag sowie Import/Export.
-- [`visual-guidelines.md`](visual-guidelines.md): verbindliche Perspektive, Qualitätsmaßstab, Effekt- und Assetregeln.
-- [`held-item-sprites.md`](held-item-sprites.md): Kurzablauf für das Symbol einer neuen getragenen Waffe.
-- [`reference-implementations.md`](reference-implementations.md): wenige bewährte Code-Referenzen und ihre sinnvolle Verwendung.
+- [architecture.md](architecture.md): Boot, Systemgrenzen, Abhängigkeiten und Scene-/Round-Lifetime.
+- [networking.md](networking.md): Peer-Schichten, Kanalsemantik, Host-Autorität, Replikation und Resume.
+- [gameplay.md](gameplay.md): Phasen, Modi, Participation/Spectator und allgemeine Gameplay-Grenzen.
+- [coop-defense-authoring.md](coop-defense-authoring.md): Maps, Objectives, Encounters, Events, Fronts und Zeitbasis.
+- [content-and-config.md](content-and-config.md): JSON-Authoring, Registries, Validatoren, IDs und Referenzintegrität.
+- [rendering.md](rendering.md): Designraum, Kameras, Clarity Camera, Lightmap, Post-FX und Koordinatenfallen.
+- [visual-guidelines.md](visual-guidelines.md): Art Direction, Top-down-Perspektive und Lesbarkeit.
+- [performance.md](performance.md): Messmethodik, Qualitätsprofile und dauerhafte Hotpath-Regeln.
+- [reference-implementations.md](reference-implementations.md): wenige kanonische Codebeispiele.
+- [local-dev-environment.md](local-dev-environment.md): Agenten-Ports und opt-in Browserprüfung.
+- [local-persistence.md](local-persistence.md): lokale Settings, Fortschritt, Migration und Import/Export.
+- [held-item-sprites.md](held-item-sprites.md): Authoring-Pfad für getragene Item-Sprites.
 
-Neue Seiten nur anlegen, wenn ein bestätigtes eigenständiges Thema genug dauerhaftes Wissen besitzt. Vorzugsweise vorhandene Seiten aktualisieren und neue Seiten hier eintragen.
+## Gemeinsame Skills
 
-## Gemeinsame Skills pflegen
-
-Kanonisch und manuell bearbeitbar sind nur:
-
-- `.ai/skills/` für projektspezifische Skills.
-- `.ai/vendor/phaser-skills/` für den gepinnten, unveränderten offiziellen Phaser-Skill-Satz.
-
-`npm run ai:sync` spiegelt beide Quellen nach `.agents/skills/` (Codex) und `.claude/skills/` (Claude Code). Diese generierten Spiegel werden eingecheckt, damit beide Agenten ohne lokale Einrichtung dieselben Inhalte sehen. Die einfachere Alternative wären Verzeichnis-Symlinks; sie wird wegen Windows-Rechten, Git-Portabilität und unterschiedlicher Agentenumgebungen nicht verwendet.
-
-Ein Phaser-Update erfolgt bewusst manuell: exakte installierte Version prüfen, einen festen offiziellen Tag/Commit wählen, dessen vollständigen `skills/`-Inhalt und Lizenz in `.ai/vendor/phaser-skills/` ersetzen, [`VERSION.md`](../../.ai/vendor/phaser-skills/VERSION.md) aktualisieren, `npm run ai:sync` ausführen und Quellen gegen beide Spiegel vergleichen.
+Bearbeitbare Quellen sind .ai/skills/ und .ai/vendor/phaser-skills/. npm run ai:sync spiegelt sie nach .agents/skills/ und .claude/skills/; diese Spiegel nicht manuell auseinanderentwickeln.

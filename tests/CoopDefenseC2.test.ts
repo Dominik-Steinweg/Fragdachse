@@ -198,6 +198,66 @@ describe('Coop Defense C2 configuration', () => {
         },
       ],
     }))).toThrow(/cyclic/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [{
+        ...finiteZoneEvent,
+        id: 'after-missing',
+        start: { type: 'after-event', eventId: 'missing' },
+      }],
+    }))).toThrow(/unknown map event/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [
+        {
+          ...finiteZoneEvent,
+          id: 'hunt',
+          start: { type: 'time', atMs: 0 },
+          pattern: 'player-hunt',
+          intervalMs: 1_000,
+          strikeCount: undefined,
+          area: undefined,
+        },
+        {
+          ...finiteZoneEvent,
+          id: 'after-hunt',
+          start: { type: 'after-event', eventId: 'hunt' },
+        },
+      ],
+    }))).toThrow(/repeatable or persistent/);
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({
+      mapEvents: [
+        { ...finiteZoneEvent, id: 'event-a', start: { type: 'after-event', eventId: 'event-b' } },
+        { ...finiteZoneEvent, id: 'event-b', start: { type: 'after-event', eventId: 'event-a' } },
+      ],
+    }))).toThrow(/cyclic/);
+
+    const chained = normalizeCoopDefenseMapConfig(makeMap({
+      encounters: [{
+        id: 'after-first',
+        start: { type: 'after-event', eventId: 'event-a' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      }],
+      mapEvents: [
+        { ...finiteZoneEvent, id: 'event-a', start: { type: 'time', atMs: 0 } },
+        {
+          ...finiteZoneEvent,
+          id: 'event-b',
+          start: { type: 'after-event', eventId: 'event-a' },
+        },
+        {
+          ...finiteZoneEvent,
+          id: 'event-c',
+          start: { type: 'after-encounter', encounterId: 'after-first' },
+        },
+      ],
+    }));
+    expect(chained.mapEvents?.map((event) => event.start)).toEqual([
+      { type: 'time', atMs: 0 },
+      { type: 'after-event', eventId: 'event-a' },
+      { type: 'after-encounter', encounterId: 'after-first' },
+    ]);
   });
 
   it('migrates the authored Map 11 chain and keeps Map 11/12 hunts repeatable', () => {
@@ -351,3 +411,64 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
     expect(harness.system.getSnapshot()).toEqual([]);
   });
 });
+
+describe('Coop Defense map-event trigger chains', () => {
+  it('runs Event→Event→Event through the generic director lifecycle', () => {
+    const handlers = {
+      train: fakeHandler('train'),
+      airstrike: fakeHandler('airstrike'),
+      'ground-hazard': fakeHandler('ground-hazard'),
+    };
+    const events = [
+      {
+        id: 'event-a',
+        type: 'train' as const,
+        start: { type: 'time' as const, atMs: 0 },
+      },
+      {
+        ...finiteZoneEvent,
+        id: 'event-b',
+        start: { type: 'after-event' as const, eventId: 'event-a' },
+      },
+      {
+        id: 'event-c',
+        type: 'ground-hazard' as const,
+        start: { type: 'after-event' as const, eventId: 'event-b' },
+        area: { type: 'cells' as const, cells: [{ gridX: 4, gridY: 4 }] },
+        effect: {
+          visualStyle: 'void' as const,
+          burnDurationMs: 1_000,
+          burnDamagePerTick: 1,
+          weaponName: 'chain-test',
+        },
+      },
+    ];
+    let director: CoopDefenseMapEventDirector;
+    director = new CoopDefenseMapEventDirector(events, Object.values(handlers), {
+      isTriggerSatisfied: (start) => start.type === 'after-event' && director.isEventCompleted(start.eventId),
+    });
+
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.map((entry) => entry.state)).toEqual(['active', 'dormant', 'dormant']);
+    handlers.train.finish('event-a', 1, 0);
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.map((entry) => entry.state)).toEqual(['completed', 'active', 'dormant']);
+    handlers.airstrike.finish('event-b', 1, 0);
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.map((entry) => entry.state)).toEqual(['completed', 'completed', 'active']);
+  });
+});
+
+function fakeHandler(type: 'train' | 'airstrike' | 'ground-hazard') {
+  let onFinished: ((completion: { eventId: string; occurrence: number; completedAtMs: number }) => void) | null = null;
+  return {
+    type,
+    schedule: vi.fn(() => true),
+    hostUpdate: vi.fn(),
+    reset: vi.fn(),
+    setCycleFinishedCallback: vi.fn((callback: typeof onFinished) => { onFinished = callback; }),
+    finish(eventId: string, occurrence: number, completedAtMs: number): void {
+      onFinished?.({ eventId, occurrence, completedAtMs });
+    },
+  };
+}

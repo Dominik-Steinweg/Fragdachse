@@ -191,6 +191,7 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
         weaponName: event.effect.weaponName,
         visualStyle: event.effect.visualStyle,
         damageTarget: 'players',
+        static: permanent,
       },
       this.deps.getNowMs(),
     );

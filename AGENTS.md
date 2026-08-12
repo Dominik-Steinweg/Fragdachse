@@ -1,55 +1,41 @@
 # Fragdachse – Agenten-Router
 
-Fragdachse ist ein schneller browserbasierter 2D-PvP/PvE-Arena-Shooter mit Phaser 4 und direkten WebRTC-Verbindungen. Der Quellcode ist die technische Wahrheit; Dokumentation hält Absichten, Systemgrenzen und nicht offensichtliche Verträge fest.
+Fragdachse ist ein browserbasierter 2D-Arena-Shooter mit Phaser 4 und direkten WebRTC-Verbindungen. Der Quellcode ist die technische Wahrheit; diese Datei und [`docs/ai/index.md`](docs/ai/index.md) routen nur zu langlebigen Verträgen.
 
 ## Erst suchen, dann lesen
 
-- Zuerst mit `rg` nach Symbolen, Imports und passenden Tests suchen. Nur relevante Ausschnitte und aufgabenbezogene Dokumente laden, niemals pauschal die ganze Wissensbasis.
-- Einstieg: `src/main.ts` → `src/scenes/ArenaScene.ts`. Gameplay: `src/systems/`; Darstellung: `src/effects/`; Entities und Synchronisierung: `src/entities/`; Round-Orchestrierung: `src/scenes/arena/`; Netzwerkgrenze: `src/network/NetworkBridge.ts`; gemeinsame Verträge: `src/types.ts`, `src/config.ts`.
-- Wissensrouter: [`docs/ai/index.md`](docs/ai/index.md). Architektur, Gameplay, Netzwerk oder Visuals nur lesen, wenn die Aufgabe den Bereich berührt.
+- Mit `rg` nach Symbolen, Imports und Tests suchen und nur die betroffenen Ausschnitte lesen.
+- Einstiegspunkte: `src/main.ts` → `src/scenes/ArenaScene.ts`; Netzwerkgrenze `src/network/NetworkBridge.ts`; gemeinsame Verträge `src/types.ts` und `src/config.ts`.
+- Fachliche Wissensseiten stehen im [AI-Router](docs/ai/index.md). Nur die für die Aufgabe relevanten Seiten laden.
 
-## Dauerhafte Architekturregeln
+## Architekturregeln
 
-- Phaser ist exakt auf 4.2.1 gelockt. Als `import * as Phaser from 'phaser'` importieren und keine Phaser-3-Muster übernehmen.
-- Der Transport liegt in `src/network/peer/`; nur `PeerJsTransport.ts` importiert `peerjs`, und PeerJS dient ausschließlich als Signaling-Broker. Gameplay-Code spricht nur über `NetworkBridge`. Gameplay ist host-autoritativ; Clients senden Eingaben/Aktionen und rendern replizierten Zustand sowie Ereignisse.
-- `ArenaContext` trennt Scene-Lifetime von Round-Lifetime. Round-Systeme sind außerhalb einer aktiven Runde `null`, werden in `buildArena()` gesetzt und in `tearDownArena()` vollständig entkoppelt und bereinigt.
-- Scenes und Coordinator orchestrieren. Regeln gehören in Systems, Visuals in Effects/Renderer, Entity-Lifecycle in Manager. Bestehende Infrastruktur und Konstanten vor neuen Abstraktionen prüfen.
+- Phaser ist auf 4.2.1 festgelegt. `import * as Phaser from 'phaser'` verwenden und keine Phaser-3-Muster übernehmen.
+- `peerjs` darf nur in `src/network/peer/PeerJsTransport.ts` importiert werden. Gameplay spricht über `NetworkBridge`, nie über das Transportsubstrat. Der Host entscheidet Simulation, Treffer, Ressourcen, Spawns, Rundenzustand und Layout; Clients senden Eingaben/Aktionen und visualisieren replizierten Zustand.
+- `ArenaContext` trennt Scene- und Round-Lifetime. Round-Ressourcen werden in `ArenaLifecycleCoordinator.buildArena()` erzeugt, in `tearDownArena()` vollständig entkoppelt und außerhalb einer Runde als `null` behandelt.
+- Scenes und Coordinators orchestrieren. Regeln gehören in `src/systems/`, Entity-Lifecycle in `src/entities/` und Darstellung in `src/effects/`, `src/arena/` oder `src/ui/`. Bestehende Manager, Resolver, Registry- und Callback-Verträge vor neuen Abstraktionen prüfen.
+- Authored Content bleibt in JSON/Registries und wird durch die vorhandenen Loader/Validatoren aufgelöst. Wire- und Ready-Snapshots führen IDs bzw. vertraglich definierte Zustände, keine zufällig rekonstruierten Konfigurationen.
 
 ## Skills und visuelle Qualität
 
-- Für Phaser-Aufgaben zuerst den projektspezifischen Skill `fragdachse-phaser` und die passenden offiziellen Skills unter `.agents/skills/` konsultieren; nur relevante Skills laden, nicht den gesamten Satz. Kanonische Quellen: `.ai/skills/` und `.ai/vendor/phaser-skills/`.
-- Für Explosionen, Partikel, Projektile, Kamera-Feedback, Sprites, PNGs oder andere Gameplay-Grafiken zusätzlich den Skill `visual-production` verwenden und bestehende hochwertige Referenzen untersuchen.
-- Sichtbare Ergebnisse sind standardmäßig produktionsnah, nicht bloße Platzhalter. Gameplay-Grafiken verwenden eine orthografische 90°-Top-down-Ansicht: kein Isometric, keine Dreiviertelansicht, kein Horizont und keine sichtbaren Objektseiten. Details: [`docs/ai/visual-guidelines.md`](docs/ai/visual-guidelines.md).
-- Eigene Skills nur unter `.ai/skills/` bearbeiten. `.agents/skills/` und `.claude/skills/` sind generierte, eingecheckte Spiegel; nach Skill-Änderungen `npm run ai:sync` ausführen.
+- Bei Phaser-Aufgaben zuerst den projektspezifischen Skill `.ai/skills/fragdachse-phaser/SKILL.md` und danach nur die passenden offiziellen Skills unter `.ai/vendor/phaser-skills/` lesen.
+- `.ai/skills/` und `.ai/vendor/phaser-skills/` sind die bearbeitbaren Quellen. `.agents/skills/` und `.claude/skills/` sind generierte Spiegel; Änderungen danach mit `npm run ai:sync` synchronisieren.
+- Sichtbare Gameplay-Grafiken folgen [`docs/ai/visual-guidelines.md`](docs/ai/visual-guidelines.md): orthografische 90°-Top-down-Ansicht, klare Lesbarkeit, produktionsnaher Qualitätsmaßstab.
 
 ## Proportionale Prüfung
 
 | Änderung | Prüfung |
 |---|---|
-| Nur Markdown, Instruktionen oder Kommentare | Links/Pfade und betroffene Inhalte prüfen |
+| Markdown, Instruktionen oder Kommentare | Pfade, Links, Symbolnamen und `git diff --check` prüfen |
 | Kleine isolierte TypeScript-Änderung | `npm run typecheck` |
-| Getestetes Modul | passende Testdatei, z. B. `npm test -- tests/GameplayTransportChannel.test.ts` |
+| Getestetes Modul | passender existierender Test, z. B. `npm test -- tests/PeerRoom.test.ts` |
 | Mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | `npm run check` |
-| Sichtbare Phaser-/UI-Änderung | `npm run build`; **keine** Browserprüfung, solange sie nicht ausdrücklich verlangt wird |
+| Sichtbare Phaser-/UI-Änderung | `npm run build` |
 
-Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript. Es gibt derzeit kein Lint-Script. Keine Tests nur für Coverage und keine neue CI-/Lint-/Browser-Infrastruktur ohne ausdrücklichen Auftrag.
+Es gibt kein Lint-Script. Keine neue Test-, Browser- oder CI-Infrastruktur ohne Auftrag. Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript.
 
-## Browserprüfung ist opt-in, nicht Standard
+Browserprüfung ist opt-in: Ohne ausdrückliche Aufforderung keinen Dev-Server, Browser oder Screenshot starten. Falls ausdrücklich verlangt, `npm run dev:browser` verwenden, auf HTTP 200 von `http://127.0.0.1:8090/` warten und keinen fremden Prozess auf Port 8080 beenden. Scheitert ein Screenshot wegen eines verborgenen Browser-Panes, die Sichtprüfung als nicht verifiziert melden.
 
-Browser starten, Seite laden und Screenshots sind **standardmäßig kein Teil der Prüfung** — auch dann nicht, wenn die Änderung sichtbar ist. Grund: Der In-App-Browser-Pane rendert nur, solange er tatsächlich angezeigt wird. Ist er verborgen (der Mensch schaut auf Chat oder Editor), feuert `requestAnimationFrame` nicht, Phasers Game-Loop steht still und der Screenshot scheitert mit „Browser pane is not displayed / not compositing frames". Das ist ein Umgebungszustand, kein Anwendungsfehler, und der Versuch kostet regelmäßig Zeit ohne Erkenntnis.
+## Knowledge Writeback
 
-- Ohne ausdrückliche Aufforderung: keinen Dev-Server starten, keinen Browser öffnen, keinen Screenshot versuchen. Stattdessen mit Build, Tests und Codeargumentation abschließen und im Abschluss knapp vermerken, dass visuell nicht geprüft wurde.
-- Nur wenn der Prompt eine Browser-, Sicht- oder Screenshot-Prüfung ausdrücklich verlangt (oder der Mensch bestätigt, dass der Browser-Pane sichtbar bleibt), gilt der Ablauf im nächsten Abschnitt.
-- Auch dann gilt: Scheitert der Screenshot mit obiger Meldung, die Sichtprüfung **nicht als bestanden melden** und kein Ergebnis erfinden, sondern offen berichten und auf Konsole/Netzwerk/`read_page` ausweichen.
-
-### Ablauf, wenn eine Browserprüfung ausdrücklich verlangt wurde
-
-`npm run dev:browser`, dann erst nach HTTP 200 von `http://127.0.0.1:8090/` genau diese URL öffnen. Höchstens ein Verbindungs- und ein Seitenlade-Retry; bei blockiertem Verbindungsaufbau abbrechen und melden. Für Mehrspielerprüfungen einen zweiten Tab mit der `#r=`-URL des ersten öffnen. Bekannte Meldungen zu noch fehlenden Loadout-/Upgrade-/Gegner-Sprites ignorieren, wenn das Zielbild rendert. Server und Browser danach beenden.
-
-Port 8090 gehört exklusiv dem Agenten, Port 8080 exklusiv dem Menschen (`npm run dev`). Niemals einen fremden Prozess auf 8080 beenden und niemals `localhost` statt `127.0.0.1` verwenden. Details und Begründung: [`docs/ai/local-dev-environment.md`](docs/ai/local-dev-environment.md).
-
-## Definition of Done und Knowledge Writeback
-
-- Nach substanziellen Aufgaben prüfen, ob eine Erkenntnis projektspezifisch, nicht offensichtlich, verifiziert, wiederverwendbar und voraussichtlich langlebig ist. Nur dann das passendste vorhandene Dokument unter `docs/ai/` knapp ergänzen; neue Seiten nur für ein tragfähiges eigenständiges Thema und dann in `docs/ai/index.md` verlinken.
-- Keine Bug-Chronik, Tippfehler, Einmalfehler, Debugdaten, verworfenen Experimente oder aus einer einzelnen Codezeile offensichtlichen Fakten dokumentieren. Allgemeine Verträge statt Entstehungsgeschichte festhalten.
-- Im Abschluss größerer Aufgaben genau eine kurze Zeile angeben: `Knowledge writeback: No durable project knowledge discovered.` oder `Knowledge writeback: Updated <path> with <verified rule>.`
+Nach substanziellen Änderungen nur verifizierte, langlebige Verträge unter `docs/ai/` ergänzen; keine Bug-Chronik, Balancekopie oder Einmalbeobachtung. Im Abschluss größerer Aufgaben genau eine Zeile nennen: `Knowledge writeback: No durable project knowledge discovered.` oder `Knowledge writeback: Updated <path> with <verified rule>.`

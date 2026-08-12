@@ -1,0 +1,55 @@
+# Rendering
+
+Diese Seite dokumentiert technische Renderverträge. Art Direction steht in visual-guidelines.md; Phaser-API-Details zuerst im passenden offiziellen Skill prüfen.
+
+## Designraum, Canvas und Kamera
+
+Gameplay, HUD und Layout rechnen im Designraum GAME_WIDTH × GAME_HEIGHT aus src/config.ts. Die Canvas-/Backing-Store-Größe ist davon getrennt und wird durch graphics/RenderResolution.ts begrenzt und bei Resize, Vollbild und Zoom synchronisiert.
+
+ArenaScene.bindCameraToDesignSpace() bindet die Hauptkamera an den Designraum und setzt ihren Origin auf (0, 0). Diese Abweichung vom Phaser-Default ist Absicht: Weltobjekte und scrollFactor-0-HUD sollen bei Zoom dieselbe Designraum-Transformation erhalten. Kamera-Bounds müssen zur Origin-/Zoom-Kombination passen; nicht selbst erneut eine zweite Skalierung einführen.
+
+Rohes pointer.x/y ist in Renderpixeln. Für UI-Positionen zuerst toDesignSpace() aus RenderResolution.ts verwenden. camera.getWorldPoint() und Phaser-Input-Hit-Tests invertieren ihre Kameramatrix bereits; dort nicht zusätzlich umrechnen.
+
+Text wird in Designpixeln gerastert. Textobjekte über scene.add.text erzeugen, damit TextResolution.ts die Auflösung an die Renderauflösung und verspätet geladene UI-Schriften anpassen kann. Die Canvas verwendet bewusst kein image-rendering: pixelated; die bestehende smoothPixelArt-Strategie braucht gefilterte Skalierung.
+
+Bei Origin (0, 0) ist camera.worldView für die sichtbare Weltfläche nicht die verlässliche Quelle. Sichtbarkeitslogik verwendet die abgeleitete getVisibleWorldView()-Hilfe aus src/ui/HostileBaseIndicator.ts beziehungsweise den dort etablierten Vertrag. Ein HUD-Container mit absolut positionierten Kindern wird nicht skaliert; für Popups den Container auf die Elementmitte setzen und Kinder lokal platzieren.
+
+## Zwei Kameras und Clarity Camera
+
+cameras.main zeichnet die Welt und die Welt-Post-FX. Eine transparente Klarheitskamera zeichnet ausgewählte HUD-/Feedback-Objekte ohne Welt-Post-FX. cameraFilter ist eine Ausschlussmaske: Standardzuordnung und Promotion müssen über ClarityCameraRegistry erfolgen, nicht durch zufälliges scrollFactor- oder Sichtbarkeitsraten.
+
+promoteToClarityCamera() gehört in den Aufbaupfad des tatsächlichen Game Objects oder Root-Containers. Wird ein Container zerstört und neu aufgebaut, muss die neue Wurzel erneut promotet werden. Container- und Kindmasken nicht mit camera.ignore() ersetzen; das rekursive Verhalten ist bei später hinzugefügten Kindern nicht stabil.
+
+HUD-Overlays hängen an getOverlayRoot() aus src/ui/fullscreen.ts, nicht direkt an document.body. #game-container ist Parent und Fullscreen-Target, damit Browser-Vollbild den Canvas und DOM-Overlays gemeinsam erfasst.
+
+Die Fullscreen-Statusanzeige hört auf die Projektfunktion onFullscreenChange(), nicht nur auf Phaser-Scale-Events; diese decken Browser-F11 nicht zuverlässig ab. Overlay-Root, Canvas und Fullscreen-Target müssen gemeinsam bleiben.
+
+## Kamera-Feedback
+
+Direktes cameras.main.shake() ist verboten. VisualFeedbackDirector stellt die CameraFeedbackController-Regie bereit. Quellen werden nach Priorität/Gewichtung zusammengeführt, in Designpixeln ausgedrückt, gedämpft und weich begrenzt. Wiederkehrende Quellen verwenden stabile IDs und aktualisieren ihre Werte; sie starten keinen konkurrierenden Phaser-Shake-Tween.
+
+Kamera-Feedback darf keine Gameplay-Position oder Trefferprüfung verschieben. EntityJoltRegistry wendet rein visuelle Jolt-Werte nur im Renderfenster an und stellt sie danach wieder her; Host-Physik, Snapshots, HP-Balken und Geschwisterpositionen sehen die Jolt nicht. Globaler Hit-Stop oder eine Szene-Zeitskalierung ist im Mehrspielerpfad nicht zulässig.
+
+## Lighting und Schatten
+
+ShadowSystem, LightingSystem und Post-FX sind getrennte Verantwortlichkeiten. LightingSystem komponiert dynamisches Licht und Verdeckung in eine Lightmap, die als ein Overlay in der Tiefenordnung liegt. Phasers eingebautes per-Object-Lighting ist dafür nicht der Projektvertrag.
+
+Die Lightmap wird mit deckendem Ambient gefüllt und additiven Lichtquellen aufgebaut; das Composite verwendet MULTIPLY. Die Lichtberechnung ist über TimeOfDay parametrisiert, nicht über separate Tages-/Nachtpfade. Baumkronen liegen über dem Lightmap-Overlay und erhalten ihre eigene Tönung. Emissive Gameplay-FX und wichtige Telegraphen dürfen nicht versehentlich durch das Weltlicht unlesbar werden.
+
+DynamicTexture- und RenderTexture-Zeichenbefehle sind aufgeschoben. Wiederverwendete Graphics-/Image-Quellen dürfen nicht über mehrere Slots aliasen; Scratch-Ressourcen müssen vor dem Lightmap-Composite in der Display-Liste geleert sein. Eine Lightmap-/Occluder-Änderung über denselben Dirty-Trichter wie Combat-Hindernisse synchronisieren.
+
+Kamerabewegung läuft über Scroll-Offsets der Hauptkamera. Der Feedback-Versatz muss vor der World-Light-/Shadow-Synchronisierung im Frame gesetzt werden, damit Welt, Lightmap und Occluder deckungsgleich bleiben. Neue Occluder über die gemeinsame Arena-/Light-Occluder-Quelle anmelden und beim Round-Teardown entfernen.
+
+## Post-FX und Displacement
+
+CameraPostFxController/PostFxComposer bauen die Filterkette einmalig auf. Qualitätsprofile und Ereignisaktivität sind getrennt: ein erlaubter, aber gerade inaktiver Filter darf keinen neutralen Vollbildpass ausführen. Objektfilter und Kamera-Post-FX getrennt registrieren, damit Qualitätsdiagnose und Budgets korrekt bleiben.
+
+Lokale Zeitblasen-/Schwarzes-Loch-/Druckwellen-Verzerrung läuft über LocalDistortionComposer und eine gemeinsame Displacement-Karte mit genau einem Kamera-Pass. Quellen sind Frame-Anmeldungen; wer nicht mehr anmeldet, verschwindet. Die neutrale Kodierung der Karte ist 0x808080. Änderungen der Kartengröße erfordern eine neue DynamicTexture und eine neue Filterverbindung, nicht setSize() auf der bestehenden Karte. Nach dem Stempeln muss DynamicTexture.render() den Command-Buffer flushen.
+
+## Koordinaten und Cleanup
+
+Partikelkoordinaten sind emitterlokal. Entweder Emitter an der Weltposition plus explode(count) ohne Koordinaten, oder geteilter Emitter im Ursprung plus emitParticleAt()/explode() mit Weltkoordinaten. Nicht beide Ortsangaben kombinieren.
+
+Die Mündungsposition wird zentral über getTopDownMuzzleOrigin() beziehungsweise getTopDownMuzzleOriginFromVector() aus src/config.ts berechnet. MuzzleFlashRenderer erhält bereits diese Position; keinen zweiten Vorwärtsoffset addieren. Trails und Anhänge leiten lokale Offsets aus der normalisierten Flug-/Aimrichtung ab.
+
+Jeder Round-Teardown muss Emitter, Tweens, Timer, Filter, temporäre Texturen, RenderTextures und Game Objects der Round-Ressourcen freigeben. Häufige Effekte dürfen gepoolt werden, aber nur mit vollständigem Reset.

@@ -60,8 +60,11 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
     occurrence: number,
     actionAtMs: number,
     roundTimeMs: number,
-  ): void {
-    if (event.type !== 'train') return;
+  ): boolean {
+    if (event.type !== 'train') return false;
+    // Several train events may be authored over time, but the physical track owns one
+    // train slot. Never replace an already planned or active occurrence.
+    if (this.scheduled !== null || this.trainSpawned) return false;
     this.roundTimeMs = roundTimeMs;
     // `spawnAt` ist der eine autoritative Wanduhr-Zeitpunkt, den HUD-Countdown und Gegner-KI
     // lesen. Er entsteht aus der *verbleibenden* Wartezeit der Rundenuhr, nicht aus einem
@@ -82,6 +85,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
       direction: this.nextDirection,
       spawnAt,
     });
+    return true;
   }
 
   hostUpdate(deltaMs: number, countdownActive: boolean, roundTimeMs: number): void {

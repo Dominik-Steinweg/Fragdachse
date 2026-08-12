@@ -119,12 +119,28 @@ describe('Train as a standalone map event', () => {
     expect(() => buildMap({ mapEvents: [unsupported] })).toThrow(/unsupported map event type/);
   });
 
-  it('rejects a second train event because one map owns exactly one train', () => {
-    const first = { id: 'train-a', type: 'train' as const, start: { type: 'time' as const, atMs: 0 } };
-    const second = { ...first, id: 'train-b' };
+  it('allows sequential train events around another finite event', () => {
+    const map = buildMap({
+      mapEvents: [
+        { id: 'train-a', type: 'train', start: { type: 'time', atMs: 0 } },
+        {
+          id: 'barrage',
+          type: 'airstrike',
+          start: { type: 'after-event', eventId: 'train-a' },
+          pattern: 'zone-barrage',
+          strikeCount: 1,
+          area: { gridX: 4, gridY: 4, widthCells: 2, heightCells: 2 },
+        },
+        {
+          id: 'train-b',
+          type: 'train',
+          start: { type: 'after-event', eventId: 'barrage' },
+        },
+      ],
+    });
 
-    expect(() => buildMap({ mapEvents: [first, second] })).toThrow(/more than one train event/);
-    expect(() => buildMap({ mapEvents: [first] })).not.toThrow();
+    expect(map.mapEvents?.map((event) => event.id)).toEqual(['train-a', 'barrage', 'train-b']);
+    expect(map.mapEvents?.[1]?.start).toEqual({ type: 'after-event', eventId: 'train-a' });
   });
 
   it('keeps the 00-test C1 slice one-shot with encounter clear and five seconds warning', () => {

@@ -365,6 +365,7 @@ export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
 export type CoopDefenseMapEventStart =
   | { readonly type: 'time'; readonly atMs: number }
   | { readonly type: 'after-encounter'; readonly encounterId: string }
+  | { readonly type: 'after-event'; readonly eventId: string }
   | { readonly type: 'boss-phase'; readonly phase: number }
   | { readonly type: 'base-destroyed'; readonly baseId: string };
 
@@ -1757,7 +1758,6 @@ function normalizeMapEvents(
   }
 
   const eventIds = new Set<string>();
-  let trainEventCount = 0;
   return events.map((event) => {
     if (!event || typeof event !== 'object' || Array.isArray(event)) {
       throw new Error(`[coopDefenseMaps] Map ${mapId} has an invalid map event`);
@@ -1774,13 +1774,6 @@ function normalizeMapEvents(
     if (event.type === 'train') {
       if (trackMode !== 'rails') {
         throw new Error(`[coopDefenseMaps] Map ${mapId} declares a train event but no rails (trackMode: ${trackMode})`);
-      }
-      trainEventCount += 1;
-      // Eine Map hat genau einen Gleiskorridor und genau einen Zug. Ein zweites Zug-Event waere
-      // konfigurierbar, aber nicht ausfuehrbar: Der Fachhandler haelt nur eine Einfahrt, das
-      // verdraengte Event erreichte nie `completed` und blockierte jede `after-event`-Kette.
-      if (trainEventCount > 1) {
-        throw new Error(`[coopDefenseMaps] Map ${mapId} declares more than one train event: ${event.id}`);
       }
       const repeatAfterExitMs = event.repeatAfterExitMs === undefined
         ? undefined
@@ -2111,6 +2104,12 @@ function normalizeMapEventStart(
     }
     return { type: 'after-encounter', encounterId };
   }
+  if (start.type === 'after-event') {
+    if (typeof start.eventId !== 'string' || start.eventId.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs an event id`);
+    }
+    return { type: 'after-event', eventId: start.eventId.trim() };
+  }
   if (start.type === 'boss-phase') {
     if (!Number.isFinite(start.phase) || !Number.isInteger(start.phase) || start.phase !== 2) {
       throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} supports boss phase 2 only`);
@@ -2220,13 +2219,29 @@ function validateMapEventDependencyGraph(
   for (const event of events) {
     const dependent = `event:${event.id}` as const;
     addNode(dependent);
-    if (event.start.type !== 'after-encounter') continue;
-    if (!encounterIds.has(event.start.encounterId)) {
-      throw new Error(
-        `[coopDefenseMaps] Map event ${mapId}:${event.id} references unknown encounter: ${event.start.encounterId}`,
-      );
+    if (event.start.type === 'after-encounter') {
+      if (!encounterIds.has(event.start.encounterId)) {
+        throw new Error(
+          `[coopDefenseMaps] Map event ${mapId}:${event.id} references unknown encounter: ${event.start.encounterId}`,
+        );
+      }
+      addDependency(`encounter:${event.start.encounterId}`, dependent);
+      continue;
     }
-    addDependency(`encounter:${event.start.encounterId}`, dependent);
+    if (event.start.type === 'after-event') {
+      const source = eventById.get(event.start.eventId);
+      if (!source) {
+        throw new Error(
+          `[coopDefenseMaps] Map event ${mapId}:${event.id} references unknown map event: ${event.start.eventId}`,
+        );
+      }
+      if (!isFiniteMapEvent(source)) {
+        throw new Error(
+          `[coopDefenseMaps] Map event ${mapId}:${event.id} cannot wait for repeatable or persistent event: ${source.id}`,
+        );
+      }
+      addDependency(`event:${source.id}`, dependent);
+    }
   }
 
   const visiting = new Set<MapEventDependencyNode>();

@@ -146,4 +146,31 @@ describe('FireSystem visual styles and damage targets', () => {
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.visualStyle).toBe('normal');
   });
+
+  it('keeps permanent map-hazard cells out of per-frame dynamic source work', () => {
+    const fireSystem = new FireSystem({} as Phaser.Scene);
+    const now = 5_000;
+    for (let index = 0; index < 200; index += 1) {
+      fireSystem.hostRefreshGroundCell(300 + (index % 20) * 16, 300 + Math.floor(index / 20) * 16, {
+        sourceKey: 'map-event:permanent-hazard:1',
+        ownerId: 'map-hazard:15',
+        durationMs: 1,
+        permanent: true,
+        static: true,
+        visualStyle: 'void',
+      }, now);
+    }
+    fireSystem.hostRefreshGroundCell(300, 300, {
+      sourceKey: 'player-fire',
+      ownerId: 'p0',
+      durationMs: 2_000,
+      damagePerTick: 1,
+    }, now);
+
+    const update = fireSystem.hostUpdate(now);
+    expect(update.synced).toEqual([]);
+    expect(update.damageEvents).toHaveLength(1);
+    expect(update.damageEvents[0]?.sourceId).toContain('player-fire');
+    expect(update.ground.cells.length).toBeGreaterThan(0);
+  });
 });

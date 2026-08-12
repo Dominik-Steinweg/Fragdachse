@@ -2268,6 +2268,8 @@ export class ArenaLifecycleCoordinator {
             {
               isTriggerSatisfied: (start) => start.type === 'after-encounter'
                 ? (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false)
+                : start.type === 'after-event'
+                  ? (this.ctx.coopDefenseMapEventDirector?.isEventCompleted(start.eventId) ?? false)
                 : start.type === 'boss-phase'
                   ? (this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false)
                   : start.type === 'base-destroyed'

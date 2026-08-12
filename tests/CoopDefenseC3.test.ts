@@ -205,7 +205,7 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
   function createHarness(events: readonly CoopDefenseMapGroundHazardEventConfig[]) {
     let now = 0;
     let blockedCells = 0;
-    const refreshes: Array<{ sourceKey?: string; durationMs?: number; permanent?: boolean }> = [];
+    const refreshes: Array<{ sourceKey?: string; durationMs?: number; permanent?: boolean; static?: boolean }> = [];
     const removals: string[] = [];
     const handler = new CoopDefenseGroundHazardEventHandler({
       fireSystem: {
@@ -243,7 +243,9 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
     harness.setNow(1_000);
     harness.director.hostUpdate(1_000, false);
     expect(harness.refreshes).toHaveLength(4);
-    expect(harness.refreshes.every((entry) => entry.durationMs === 18_000 && entry.permanent === false)).toBe(true);
+    expect(harness.refreshes.every((entry) => (
+      entry.durationMs === 18_000 && entry.permanent === false && entry.static === false
+    ))).toBe(true);
     expect(harness.director.getPresentationState()?.[0].state).toBe('active');
 
     harness.setNow(19_000);
@@ -260,6 +262,8 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
     harness.director.hostUpdate(0, false);
     expect(harness.refreshes).toHaveLength(8);
     expect(harness.refreshes.filter((entry) => entry.permanent)).toHaveLength(4);
+    expect(harness.refreshes.filter((entry) => entry.static)).toHaveLength(4);
+    expect(harness.refreshes.filter((entry) => entry.static === false)).toHaveLength(4);
 
     harness.setNow(10_000);
     harness.director.hostUpdate(10_000, false);

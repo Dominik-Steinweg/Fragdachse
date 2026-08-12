@@ -78,6 +78,8 @@ export interface GroundFireCellOptions {
   weaponName?: string;
   visualStyle?: GroundFireVisualStyle;
   damageTarget?: GroundFireDamageTarget;
+  /** Statische Map-Hazard-Zelle ohne per-Frame Source-Verarbeitung. */
+  static?: boolean;
 }
 
 interface ActiveGroundSource {
@@ -98,6 +100,7 @@ interface ActiveGroundSource {
   weaponName: string;
   visualStyle: GroundFireVisualStyle;
   damageTarget: GroundFireDamageTarget;
+  staticSource: boolean;
   exposeAsZone: boolean;
   cells: Set<string>;
   wildfire?: FireGrenadeEffect['wildfire'];
@@ -144,6 +147,8 @@ export type GroundFireLineOfSightResolver = (
  */
 export class FireSystem {
   private readonly sources = new Map<string, ActiveGroundSource>();
+  /** Nur dynamische Quellen werden pro Host-Frame simuliert und sortiert. */
+  private readonly dynamicSources = new Map<string, ActiveGroundSource>();
   private readonly cells = new Map<string, ActiveGroundCell>();
   private nextSourceId = 1;
   private nextCellId = 1;
@@ -195,6 +200,7 @@ export class FireSystem {
       weaponName: config.weaponName ?? 'Molotov',
       visualStyle: 'normal',
       damageTarget: 'all',
+      staticSource: false,
       exposeAsZone: true,
       cells: new Set(),
       wildfire: config.wildfire ? { ...config.wildfire } : undefined,
@@ -204,7 +210,10 @@ export class FireSystem {
     this.sources.set(key, source);
     this.rasterizeCircle(source);
     if (source.cells.size === 0) this.sources.delete(key);
-    else if (source.wildfire) this.buildWildfireEscapeField(source);
+    else {
+      this.dynamicSources.set(key, source);
+      if (source.wildfire) this.buildWildfireEscapeField(source);
+    }
     this.lastCreationMs = performance.now() - creationStartedAt;
   }
 
@@ -249,11 +258,13 @@ export class FireSystem {
         weaponName: options.weaponName ?? 'Brennender Boden',
         visualStyle: options.visualStyle ?? 'normal',
         damageTarget: options.damageTarget ?? 'all',
+        staticSource: options.static === true && options.permanent === true,
         exposeAsZone: false,
         cells: new Set(),
         wildfireEscapeVectors: new Map(),
       };
       this.sources.set(key, source);
+      if (!source.staticSource) this.dynamicSources.set(key, source);
       this.attachSourceToCell(source, gridX, gridY);
     } else {
       source.expiresAt = expiresAt;
@@ -285,6 +296,7 @@ export class FireSystem {
         }
       }
       this.sources.delete(sourceId);
+      this.dynamicSources.delete(sourceId);
     }
   }
 
@@ -396,7 +408,7 @@ export class FireSystem {
     const damageTick = tick !== this.lastDamageTick;
     if (damageTick) this.lastDamageTick = tick;
 
-    const activeSources = [...this.sources.values()].sort((left, right) => left.id - right.id);
+    const activeSources = [...this.dynamicSources.values()].sort((left, right) => left.id - right.id);
     const synced = activeSources
       .filter(source => source.exposeAsZone)
       .map(source => ({
@@ -510,6 +522,7 @@ export class FireSystem {
 
   destroyAll(): void {
     this.sources.clear();
+    this.dynamicSources.clear();
     this.cells.clear();
     this.nextSourceId = 1;
     this.nextCellId = 1;
@@ -638,7 +651,7 @@ export class FireSystem {
   }
 
   private removeExpiredSources(now: number): void {
-    for (const [sourceKey, source] of this.sources) {
+    for (const [sourceKey, source] of this.dynamicSources) {
       if (source.expiresAt > now) continue;
       for (const cellKey of source.cells) {
         const cell = this.cells.get(cellKey);
@@ -652,6 +665,7 @@ export class FireSystem {
         }
       }
       this.sources.delete(sourceKey);
+      this.dynamicSources.delete(sourceKey);
     }
   }
 
