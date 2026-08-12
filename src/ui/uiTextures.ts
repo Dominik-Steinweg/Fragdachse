@@ -274,7 +274,7 @@ export function ensureIconTexture(
       ctx.stroke();
       // Henkel.
       ctx.beginPath();
-      ctx.arc(s * 0.30, s * 0.28, s * 0.11, Math.PI * 0.5, Math.PI * 1.5, true);
+      ctx.arc(s * 0.30, s * 0.28, s * 0.11, Math.PI * 0.5, Math.PI * 1.5);
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(s * 0.70, s * 0.28, s * 0.11, Math.PI * 1.5, Math.PI * 0.5);

@@ -78,7 +78,7 @@ const QUALITY_Y = PANEL_Y + 70;
 const HEADER_DIVIDER_Y = PANEL_Y + 96;
 const ROOM_CHIP_W = 176;
 const ROOM_CHIP_H = 38;
-/** Raum-Chip rechtsbuendig; der Raumwechsel darunter teilt sich diese rechte Kante. */
+/** Raum-Chip rechtsbuendig; der Raumwechsel darunter teilt sich diese rechte Kante und Breite. */
 const ROOM_CHIP_X = CONTENT_R - ROOM_CHIP_W / 2;
 const ROOM_CAPTION_X = ROOM_CHIP_X - ROOM_CHIP_W / 2 - SPACE.md;
 
@@ -126,7 +126,7 @@ const READY_BTN_DY = 46;
  * Host-Zeile der Kopfzeile: Raumwechsel buendig unter dem Raum-Chip, die Verbindungsdiagnose
  * als Symbol links daneben. Beide gehoeren zum Raum, nicht zum Handlungsaufruf.
  */
-const HOST_BTN_W = 150;
+const HOST_BTN_W = ROOM_CHIP_W;
 const HOST_BTN_H = 30;
 const HOST_BTN_X = CONTENT_R - HOST_BTN_W / 2;
 const INFO_BTN_SIZE = HOST_BTN_H;
@@ -1348,14 +1348,14 @@ export class LobbyOverlay {
   }
 
   private formatRoomQualityText(): string {
-    if (!this.roomQuality) return 'Ping-Check wird vorbereitet…';
+    if (!this.roomQuality) return '';
 
     if (this.roomQuality.status === 'sampling') {
       return `Raumtest sammelt Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
     }
 
     if (this.roomQuality.status === 'waiting') {
-      return 'Pingmessung startet, sobald ein Mitspieler verbunden ist.';
+      return '';
     }
 
     if (this.roomQuality.status === 'good' && this.roomQuality.worstPingMs !== null) {
