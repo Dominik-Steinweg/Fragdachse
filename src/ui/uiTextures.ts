@@ -43,6 +43,10 @@ export interface RoundedTextureParams {
   strokeAlpha: number;
   strokeWidth: number;
   highlightAlpha: number;
+  /** Optionaler, in die gerundete Flaeche geclippter Farbakzent an der linken Kante. */
+  leftAccentColor?: number;
+  leftAccentAlpha?: number;
+  leftAccentWidth?: number;
 }
 
 /** Erzeugt (oder liefert gecacht) eine abgerundete Rechteck-Textur mit Verlauf + Glanz. */
@@ -67,6 +71,15 @@ export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTexture
   ctx.fillStyle = grad;
   ctx.fill();
 
+  if (params.leftAccentColor !== undefined && (params.leftAccentAlpha ?? 0) > 0) {
+    ctx.save();
+    roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+    ctx.clip();
+    ctx.fillStyle = rgbStr(params.leftAccentColor, params.leftAccentAlpha ?? 1);
+    ctx.fillRect(0, 0, inset + Math.max(1, params.leftAccentWidth ?? 4), h);
+    ctx.restore();
+  }
+
   if (params.highlightAlpha > 0) {
     ctx.save();
     roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
@@ -88,6 +101,38 @@ export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTexture
 
   ct.refresh();
   return params.key;
+}
+
+/** Weicher, unten deckender Sockel fuer den primaeren Lobby-CTA ohne harte obere Kante. */
+export function ensureLobbyFooterTexture(
+  scene: Phaser.Scene,
+  key: string,
+  w: number,
+  h: number,
+  color: number,
+): string {
+  if (scene.textures.exists(key)) return key;
+
+  const iw = Math.max(1, Math.round(w));
+  const ih = Math.max(1, Math.round(h));
+  const ct = scene.textures.createCanvas(key, iw, ih);
+  if (!ct) return key;
+  const ctx = ct.context;
+  ctx.clearRect(0, 0, iw, ih);
+
+  ctx.save();
+  roundRectPath(ctx, 1, 0, iw - 2, ih - 2, 20);
+  ctx.clip();
+  const fade = ctx.createLinearGradient(0, 0, 0, ih);
+  fade.addColorStop(0, rgbStr(color, 0));
+  fade.addColorStop(0.42, rgbStr(color, 0.14));
+  fade.addColorStop(1, rgbStr(color, 0.58));
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, iw, ih);
+  ctx.restore();
+
+  ct.refresh();
+  return key;
 }
 
 /** Modale Hauptflaeche: dunkler Verlauf, dezenter Goldrand, leichter Glanz oben. */
@@ -122,9 +167,9 @@ export function ensureLobbyPanelTexture(
   return ensureRoundedTexture(scene, {
     key, w, h,
     radius: 22,
-    topColor: lerpColor(baseColor, 0xffffff, 0.07),
-    bottomColor: lerpColor(baseColor, 0x000000, 0.3),
-    fillAlpha: 0.86,
+    topColor: lerpColor(baseColor, 0xffffff, 0.12),
+    bottomColor: lerpColor(baseColor, 0x000000, 0.18),
+    fillAlpha: 0.81,
     strokeColor: accentColor,
     strokeAlpha: 0.5,
     strokeWidth: 2,

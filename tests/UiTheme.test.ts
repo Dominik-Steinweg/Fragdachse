@@ -99,6 +99,12 @@ describe('button intents', () => {
     expect(INTENT.ghost.fillAlpha).toBeLessThan(INTENT.neutral.fillAlpha);
     expect(INTENT.ghost.gloss).toBeLessThan(INTENT.neutral.gloss);
   });
+
+  it('marks attention with a gold edge instead of a gold fill', () => {
+    expect(INTENT.attention.fill).toBe(INTENT.neutral.fill);
+    expect(INTENT.attention.stroke).toBe(COLORS.GOLD_1);
+    expect(INTENT.attention.fill).not.toBe(INTENT.accent.fill);
+  });
 });
 
 describe('type scale', () => {

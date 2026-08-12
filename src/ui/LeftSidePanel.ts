@@ -64,7 +64,7 @@ import {
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { UiContextMenu } from './UiContextMenu';
-import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
+import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';
@@ -95,7 +95,7 @@ const DIVIDER1_Y   = 248 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 6;
 const BADGER_Y     = 294 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 7;
 const BADGER_SIZE        = 68;
 const BADGER_CLICK_SIZE  = 76;
-const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 14;
+const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 6;
 const CONTROL_BUTTON_DY  = 8;
 const NAME_COLOR_BUTTON_W = 128;
 const NAME_COLOR_BUTTON_H = 28;
@@ -142,11 +142,18 @@ const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
 const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
+const CAROUSEL_START_Y  = DIVIDER2_Y + 12;
 const CAROUSEL_ROW_STEP = 44;
-const CAROUSEL_GROUP_DY = 32;
+const CAROUSEL_GROUP_DY = 38;
 const LOADOUT_CONTROL_W = LOBBY_PANEL_W - 40;
 const LOADOUT_CONTROL_H = 38;
+const LOADOUT_POPUP_MARGIN = 12;
+const LOADOUT_POPUP_SAFE_AREA = {
+  left: LOADOUT_POPUP_MARGIN,
+  top: LOADOUT_POPUP_MARGIN,
+  right: GAME_WIDTH / 2 - LOBBY_PANEL_WIDTH / 2 - LOADOUT_POPUP_MARGIN,
+  bottom: GAME_HEIGHT - LOADOUT_POPUP_MARGIN,
+} as const;
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
 const DIVIDER3_Y  = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 3 * CAROUSEL_ROW_STEP + LOADOUT_CONTROL_H / 2 + 18;
@@ -1092,6 +1099,8 @@ export class LeftSidePanel {
       anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + LOADOUT_CONTROL_H / 2 + 6,
       title: SLOT_LABELS[slot],
       groups: [{ label: null, entries }],
+      maxColumns: 2,
+      safeArea: LOADOUT_POPUP_SAFE_AREA,
     });
   }
 
@@ -1155,6 +1164,8 @@ export class LeftSidePanel {
       anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP + 24,
       title: `Utility-Slot ${slotIndex + 1}`,
       groups: [{ label: null, entries }],
+      maxColumns: 2,
+      safeArea: LOADOUT_POPUP_SAFE_AREA,
       clearLabel: current ? 'Slot leeren' : undefined,
       onClear: current
         ? () => this.persistInspectorToolSlot(profile, tools, slotIndex, null)

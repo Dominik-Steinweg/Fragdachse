@@ -18,6 +18,35 @@ import {
   type HudOcclusionRect,
 } from './hudOcclusionFade';
 
+/** Schneidet zwei Screen-Space-Rechtecke; ein kleiner Rand verhindert Grenzflackern. */
+export function doHudRectsOverlap(
+  first: HudOcclusionRect,
+  second: HudOcclusionRect,
+  margin = 0,
+): boolean {
+  return first.left < second.right + margin
+    && first.right > second.left - margin
+    && first.top < second.bottom + margin
+    && first.bottom > second.top - margin;
+}
+
+/** Welt-Rechteck in die scroll-/zoom-korrigierten Design-Screen-Koordinaten der Kamera. */
+export function getWorldRectOnScreen(
+  worldRect: HudOcclusionRect,
+  camera: Phaser.Cameras.Scene2D.Camera,
+): HudOcclusionRect {
+  const view = getVisibleWorldView(camera);
+  const zoom = Math.max(0.001, camera.zoom);
+  const viewportOffsetX = (camera.x ?? 0) / zoom;
+  const viewportOffsetY = (camera.y ?? 0) / zoom;
+  return {
+    left: viewportOffsetX + worldRect.left - view.x,
+    right: viewportOffsetX + worldRect.right - view.x,
+    top: viewportOffsetY + worldRect.top - view.y,
+    bottom: viewportOffsetY + worldRect.bottom - view.y,
+  };
+}
+
 export function isHudRectOccluded(
   scene: Phaser.Scene,
   rect: HudOcclusionRect,

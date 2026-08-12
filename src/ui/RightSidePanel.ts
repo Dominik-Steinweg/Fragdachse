@@ -22,7 +22,12 @@ import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
-import { ensureFlatPanelTexture, ensureGlassColumnTexture, ensureIconTexture } from './uiTextures';
+import {
+  ensureFlatPanelTexture,
+  ensureGlassColumnTexture,
+  ensureIconTexture,
+  lerpColor,
+} from './uiTextures';
 import { attachHoverEffect } from './uiHover';
 import { TEXT, textStyle } from './uiTheme';
 import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
@@ -82,15 +87,16 @@ const RESULTS_HEADER_FONT      = '20px'; // "LETZTE RUNDE"
 // Die Ueberschrift ist zugleich der Knopf, der die Match-Auswertung erneut oeffnet.
 const RESULTS_HEADER_BTN_W     = LOBBY_PANEL_WIDTH;
 const RESULTS_HEADER_BTN_H     = 32;
-const TEX_RESULTS_HEADER_ON    = '_rsp_lastround_on';
-const TEX_RESULTS_HEADER_OFF   = '_rsp_lastround_off';
+const TEX_RESULTS_HEADER_ON    = '_rsp_lastround_neutral_on_v2';
+const TEX_RESULTS_HEADER_OFF   = '_rsp_lastround_neutral_off_v2';
 const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile – größer als Spielerzeilen
 const RESULTS_LABEL_FONT       = '14px';
 const RESULTS_OUTCOME_FONT     = '18px';
-const RESULTS_FRAGS_X          = LOBBY_SIDEBAR_RIGHT_X - 42; // Score-Spalte
-const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X;
-const RESULTS_TEAM_PLAYERS_GAP = 20; // Abstand: Team-Header → erste Spielerzeile
-const RESULTS_SECTION_GAP      = 14; // Abstand: Ende einer Sektion → nächster Team-Header
+const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X - 2;
+const RESULTS_FRAGS_X          = RESULTS_XP_X - 72;
+const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator → erste Spielerzeile
+const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion → naechste Team-Summary
+const RESULTS_SUMMARY_SEP_DY   = 14;
 
 // Farbrollen statt eigener Blaugrau-Werte: die frueheren '#607080'/'#8fa8b8'/0x334455 lagen
 // dicht neben der Grau-Rampe, ohne zu ihr zu gehoeren.
@@ -150,6 +156,10 @@ interface TeamHeaderRow {
   score: Phaser.GameObjects.Text;
 }
 
+interface ResultsTeamHeaderRow extends TeamHeaderRow {
+  separator: Phaser.GameObjects.Rectangle;
+}
+
 export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
@@ -194,6 +204,7 @@ export class RightSidePanel {
   private replayResultsAvailable = false;
   private resultsSep!:    Phaser.GameObjects.Rectangle;
   private resultsOutcome!: Phaser.GameObjects.Text;
+  private resultsOutcomeIcon!: Phaser.GameObjects.Image;
   private resultsFragsLabel!: Phaser.GameObjects.Text;
   private resultsXpLabel!: Phaser.GameObjects.Text;
   private resultsSharedXpValue!: Phaser.GameObjects.Text;
@@ -203,7 +214,7 @@ export class RightSidePanel {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
   }[] = [];
-  private resultsTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
+  private resultsTeamHeaders: Record<TeamId, ResultsTeamHeaderRow> | null = null;
   private roundResultsSignature: string | null = null;
 
   constructor(private scene: Phaser.Scene) {}
@@ -387,7 +398,7 @@ export class RightSidePanel {
     if (this.replayResultsAvailable === available) return;
     this.replayResultsAvailable = available;
     this.resultsHeaderButton.setTexture(this.ensureResultsHeaderTexture(available));
-    this.resultsHeader.setColor(toCssColor(available ? COLORS.GOLD_1 : COLORS.GREY_2));
+    this.resultsHeader.setColor(toCssColor(available ? COLORS.GREY_1 : COLORS.GREY_2));
     this.resultsHeaderHint.setVisible(available);
     if (available) {
       this.resultsHeaderButton.setInteractive({ useHandCursor: true });
@@ -432,15 +443,18 @@ export class RightSidePanel {
 
     this.resultsTeamHeaders?.blue.label.setVisible(false);
     this.resultsTeamHeaders?.blue.score.setVisible(false);
+    this.resultsTeamHeaders?.blue.separator.setVisible(false);
     this.resultsTeamHeaders?.red.label.setVisible(false);
     this.resultsTeamHeaders?.red.score.setVisible(false);
+    this.resultsTeamHeaders?.red.separator.setVisible(false);
 
     this.resultsHeaderButton.setVisible(true);
     this.resultsHeaderLabels.setVisible(true);
     this.resultsSep.setVisible(true);
-  this.renderRoundOutcome(hasData, roundState);
+    this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
+    this.resultsEmptyIcon.setVisible(!hasData);
 
     for (let i = 0; i < this.resultsRows.length; i++) {
       const row   = this.resultsRows[i];
@@ -625,8 +639,8 @@ export class RightSidePanel {
       RESULTS_HEADER_BTN_W,
       RESULTS_HEADER_BTN_H,
       COLORS.GREY_8,
-      enabled ? COLORS.GOLD_3 : COLORS.GREY_6,
-      { radius: 8, fillAlpha: enabled ? 0.9 : 0.55, strokeAlpha: enabled ? 0.8 : 0.4 },
+      enabled ? COLORS.GREY_5 : COLORS.GREY_6,
+      { radius: 8, fillAlpha: enabled ? 0.78 : 0.55, strokeAlpha: enabled ? 0.62 : 0.4 },
     );
   }
 
@@ -664,7 +678,7 @@ export class RightSidePanel {
     // Schriftfallback unterschiedlich breit und sitzen selten auf der Grundlinie.
     this.resultsHeaderHint = this.scene.add.image(
       RESULTS_HEADER_BTN_W / 2 - 16, 0,
-      ensureIconTexture(this.scene, 'chevron-right', 36, COLORS.GOLD_1),
+      ensureIconTexture(this.scene, 'chevron-right', 36, COLORS.GREY_2),
     ).setDisplaySize(14, 14).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
     this.resultsHeaderLabels = this.scene.add.container(
       LOBBY_SIDEBAR_CENTER_X,
@@ -686,20 +700,26 @@ export class RightSidePanel {
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
 
-    this.resultsFragsLabel = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_LABEL_Y, 'F R A G S', {
+    this.resultsOutcomeIcon = this.scene.add.image(
+      LOBBY_SIDEBAR_LEFT_X + 9,
+      RESULTS_OUTCOME_Y,
+      ensureIconTexture(this.scene, 'trophy', 48, COLORS.GREEN_2),
+    ).setDisplaySize(18, 18).setScrollFactor(0).setVisible(false);
+
+    this.resultsFragsLabel = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_LABEL_Y, 'FRAGS', {
       fontSize: RESULTS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
       fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y).setScrollFactor(0).setVisible(false);
-    this.resultsXpLabel = this.scene.add.text(RESULTS_XP_X, RESULTS_LABEL_Y, 'X P', {
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    this.resultsXpLabel = this.scene.add.text(RESULTS_XP_X, RESULTS_LABEL_Y, 'XP', {
       fontSize: RESULTS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
     this.resultsSharedXpValue = this.scene.add.text(RESULTS_XP_X, RESULTS_START_Y, '', {
-      fontSize: RESULTS_HEADER_FONT,
+      fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.GOLD_1),
       fontStyle: 'bold',
@@ -710,12 +730,16 @@ export class RightSidePanel {
     this.resultsEmptyIcon = this.scene.add.image(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 18,
       ensureIconTexture(this.scene, 'trophy', 96, COLORS.GREY_6),
-    ).setDisplaySize(36, 36).setAlpha(0.45).setScrollFactor(0).setVisible(true);
+    ).setDisplaySize(36, 36).setAlpha(0.52).setScrollFactor(0).setVisible(true);
 
     this.resultsEmptyState = this.scene.add.text(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 54,
       'Noch keine Runde gespielt',
-      textStyle('caption', { color: TEXT.muted, align: 'center', wordWrapWidth: LOBBY_PANEL_WIDTH }),
+      textStyle('caption', {
+        color: lerpColor(TEXT.muted, COLORS.GREY_3, 0.35),
+        align: 'center',
+        wordWrapWidth: LOBBY_PANEL_WIDTH,
+      }),
     ).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
     this.lobbyContainer.add([
@@ -724,6 +748,7 @@ export class RightSidePanel {
       this.resultsEmptyIcon,
       this.resultsSep,
       this.resultsOutcome,
+      this.resultsOutcomeIcon,
       this.resultsFragsLabel,
       this.resultsXpLabel,
       this.resultsSharedXpValue,
@@ -742,6 +767,14 @@ export class RightSidePanel {
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    const blueSeparator = this.scene.add.rectangle(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_START_Y + RESULTS_SUMMARY_SEP_DY,
+      LOBBY_PANEL_WIDTH,
+      1,
+      COLORS.GREY_6,
+      0.48,
+    ).setScrollFactor(0).setVisible(false);
     const redLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM ROT', {
       fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
@@ -754,11 +787,26 @@ export class RightSidePanel {
       color: toCssColor(COLORS.RED_2),
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    const redSeparator = this.scene.add.rectangle(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_START_Y + RESULTS_SUMMARY_SEP_DY,
+      LOBBY_PANEL_WIDTH,
+      1,
+      COLORS.GREY_6,
+      0.48,
+    ).setScrollFactor(0).setVisible(false);
     this.resultsTeamHeaders = {
-      blue: { label: blueLabel, score: blueScore },
-      red: { label: redLabel, score: redScore },
+      blue: { label: blueLabel, score: blueScore, separator: blueSeparator },
+      red: { label: redLabel, score: redScore, separator: redSeparator },
     };
-    this.lobbyContainer.add([blueLabel, blueScore, redLabel, redScore]);
+    this.lobbyContainer.add([
+      blueLabel,
+      blueScore,
+      blueSeparator,
+      redLabel,
+      redScore,
+      redSeparator,
+    ]);
 
     // ── Endstand-Einträge (Max. 12 Spieler) ──────────────────────────────────
     for (let i = 0; i < 12; i++) {
@@ -961,24 +1009,45 @@ export class RightSidePanel {
     this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
+    this.resultsEmptyIcon.setVisible(!hasData);
+
+    let nextHeaderY = RESULTS_START_Y;
+    const blueHeaderY = nextHeaderY;
+    const blueRowsStartY = blueHeaderY + RESULTS_TEAM_PLAYERS_GAP;
+    if (showBlueHeader) {
+      nextHeaderY = blueRowsStartY + blueEntries.length * RESULTS_ENTRY_H + RESULTS_SECTION_GAP;
+    }
+    const redHeaderY = showBlueHeader ? nextHeaderY : RESULTS_START_Y;
+    const redRowsStartY = redHeaderY + RESULTS_TEAM_PLAYERS_GAP;
+    const summaryXpY = showBlueHeader ? blueHeaderY : redHeaderY;
+
     this.resultsSharedXpValue
       .setVisible(this.isDefenseXpMode() && this.hasSharedXpData(results) && hasData)
       .setText(String(sharedXp))
-      .setPosition(RESULTS_XP_X, RESULTS_START_Y);
+      .setPosition(RESULTS_XP_X, summaryXpY);
     this.resultsTeamHeaders?.blue.label
       .setVisible(showBlueHeader)
       .setText(getTeamLabel('blue', mode).toUpperCase())
-      .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
-    this.resultsTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(RESULTS_FRAGS_X, RESULTS_START_Y);
-    const blueRowsStartY = RESULTS_START_Y + RESULTS_TEAM_PLAYERS_GAP;
-    const redHeaderY     = blueRowsStartY + blueEntries.length * RESULTS_ENTRY_H + RESULTS_SECTION_GAP;
-    const redRowsStartY  = redHeaderY + RESULTS_TEAM_PLAYERS_GAP;
+      .setPosition(LOBBY_SIDEBAR_LEFT_X, blueHeaderY);
+    this.resultsTeamHeaders?.blue.score
+      .setVisible(showBlueHeader)
+      .setText(String(blueScore))
+      .setPosition(RESULTS_FRAGS_X, blueHeaderY);
+    this.resultsTeamHeaders?.blue.separator
+      .setVisible(showBlueHeader)
+      .setPosition(LOBBY_SIDEBAR_CENTER_X, blueHeaderY + RESULTS_SUMMARY_SEP_DY);
 
     this.resultsTeamHeaders?.red.label
       .setVisible(showRedHeader)
       .setText(getTeamLabel('red', mode).toUpperCase())
       .setPosition(LOBBY_SIDEBAR_LEFT_X, redHeaderY);
-    this.resultsTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(RESULTS_FRAGS_X, redHeaderY);
+    this.resultsTeamHeaders?.red.score
+      .setVisible(showRedHeader)
+      .setText(String(redScore))
+      .setPosition(RESULTS_FRAGS_X, redHeaderY);
+    this.resultsTeamHeaders?.red.separator
+      .setVisible(showRedHeader)
+      .setPosition(LOBBY_SIDEBAR_CENTER_X, redHeaderY + RESULTS_SUMMARY_SEP_DY);
 
     let rowIndex = 0;
     rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, blueRowsStartY);
@@ -1025,7 +1094,7 @@ export class RightSidePanel {
   private syncLobbyLabels(results: RoundResult[] | null): void {
     const sharedXp = this.resolveSharedXp(results ?? []);
     const showDefenseXp = this.isDefenseXpMode() && this.hasSharedXpData(results ?? []);
-    this.resultsFragsLabel.setText('F R A G S').setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
+    this.resultsFragsLabel.setText('FRAGS').setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
     this.resultsXpLabel.setVisible(showDefenseXp);
     this.resultsSharedXpValue
       .setVisible(showDefenseXp && !!results?.length)
@@ -1060,22 +1129,27 @@ export class RightSidePanel {
   private renderRoundOutcome(hasData: boolean, roundState: RoundState | null): void {
     if (!hasData || !roundState || roundState.status === 'active') {
       this.resultsOutcome.setVisible(false);
+      this.resultsOutcomeIcon.setVisible(false);
       return;
     }
 
     // Ein Host-Abbruch ist kein Spielausgang – daher weder Sieg- noch Niederlagenfarbe.
     if (roundState.status === 'aborted') {
+      this.resultsOutcomeIcon.setVisible(false);
       this.resultsOutcome
         .setText('VOM HOST BEENDET')
-        .setColor(toCssColor(COLORS.GOLD_1))
+        .setColor(toCssColor(COLORS.GREY_3))
+        .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_OUTCOME_Y)
         .setVisible(true);
       return;
     }
 
     const isVictory = roundState.status === 'victory';
+    this.resultsOutcomeIcon.setVisible(isVictory);
     this.resultsOutcome
       .setText(isVictory ? 'SIEG' : 'NIEDERLAGE')
       .setColor(toCssColor(isVictory ? COLORS.GREEN_2 : COLORS.RED_2))
+      .setPosition(LOBBY_SIDEBAR_LEFT_X + (isVictory ? 24 : 0), RESULTS_OUTCOME_Y)
       .setVisible(true);
   }
 }

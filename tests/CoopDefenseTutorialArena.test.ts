@@ -3,20 +3,21 @@ import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import {
   ARENA_OFFSET_X,
+  ARENA_OFFSET_Y,
   ARENA_WIDTH,
   CELL_SIZE,
   applyArenaMetricsForMode,
 } from '../src/config';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import {
-  COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT,
   COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT,
-  COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
   getCoopDefenseTutorialPanelCenterX,
+  getCoopDefenseTutorialPanelTopY,
   getCoopDefenseTutorialRockRegion,
 } from '../src/config/coopDefenseTutorial';
+import { COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT } from '../src/ui/CoopDefenseSecondaryObjectiveLayout';
 
 describe('Coop defense tutorial arena formation', () => {
   afterEach(() => {
@@ -31,13 +32,12 @@ describe('Coop defense tutorial arena formation', () => {
     }
   });
 
-  it('keeps the tutorial below the complete announcement entry animation', () => {
+  it('keeps tutorial world positioning independent from the screen-space announcement layout', () => {
     const announcementEntryBottom = COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.centerY
       + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.entryOffsetY
       + COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.height / 2;
-    expect(COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y - announcementEntryBottom)
-      .toBe(COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.tutorialGap);
-    expect(COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.tutorialGap).toBeGreaterThan(0);
+    expect(getCoopDefenseTutorialPanelTopY()).toBe(ARENA_OFFSET_Y + 7 * CELL_SIZE);
+    expect(getCoopDefenseTutorialPanelTopY()).not.toBe(announcementEntryBottom);
   });
 
   it('grows the footprint only for the map that shows the controls table', () => {

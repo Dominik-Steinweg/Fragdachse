@@ -20,11 +20,24 @@ export interface LoadoutPickerGroup {
   readonly entries: readonly LoadoutPickerEntry[];
 }
 
+export interface LoadoutPickerSafeArea {
+  /** Linke bzw. obere Kante im Designraum. */
+  readonly left: number;
+  readonly top: number;
+  /** Rechte bzw. untere Aussenkante im Designraum. */
+  readonly right: number;
+  readonly bottom: number;
+}
+
 export interface LoadoutPickerOptions {
   readonly anchorX: number;
   readonly anchorY: number;
   readonly title: string;
   readonly groups: readonly LoadoutPickerGroup[];
+  /** Ueberschreibt die gemeinsame Spaltenobergrenze fuer spezielle Einbettungen. */
+  readonly maxColumns?: number;
+  /** Optionale sichere Overlay-Zone; das Popup bleibt mit seiner ganzen Flaeche darin. */
+  readonly safeArea?: LoadoutPickerSafeArea;
   /** Optionale "Slot leeren"-Aktion; nur fuer Slots, die leer bleiben duerfen. */
   readonly clearLabel?: string;
   readonly onClear?: () => void;
@@ -36,7 +49,8 @@ const GROUP_LABEL_H = 18;
 const ENTRY_W = 190;
 const ENTRY_H = 32;
 const ENTRY_GAP = 4;
-const MAX_COLUMNS = 3;
+const DEFAULT_MAX_COLUMNS = 3;
+const SCREEN_MARGIN = 12;
 const ICON_SIZE = 22;
 
 /**
@@ -68,7 +82,8 @@ export class LoadoutSlotPicker {
     const totalEntries = groups.reduce((sum, group) => sum + group.entries.length, 0);
     if (totalEntries === 0) return;
 
-    const columns = Math.min(MAX_COLUMNS, Math.max(1, Math.ceil(Math.sqrt(totalEntries))));
+    const maxColumns = Math.max(1, Math.floor(options.maxColumns ?? DEFAULT_MAX_COLUMNS));
+    const columns = Math.min(maxColumns, Math.max(1, Math.ceil(Math.sqrt(totalEntries))));
     const bodyW = columns * ENTRY_W + (columns - 1) * ENTRY_GAP;
     const width = bodyW + PADDING * 2;
 
@@ -103,8 +118,22 @@ export class LoadoutSlotPicker {
     }
 
     const height = cursorY - ENTRY_GAP + PADDING;
-    const x = Phaser.Math.Clamp(options.anchorX - width / 2, 12, GAME_WIDTH - width - 12);
-    const y = Phaser.Math.Clamp(options.anchorY, 12, GAME_HEIGHT - height - 12);
+    const safeArea = options.safeArea ?? {
+      left: SCREEN_MARGIN,
+      top: SCREEN_MARGIN,
+      right: GAME_WIDTH - SCREEN_MARGIN,
+      bottom: GAME_HEIGHT - SCREEN_MARGIN,
+    };
+    const x = Phaser.Math.Clamp(
+      options.anchorX - width / 2,
+      safeArea.left,
+      Math.max(safeArea.left, safeArea.right - width),
+    );
+    const y = Phaser.Math.Clamp(
+      options.anchorY,
+      safeArea.top,
+      Math.max(safeArea.top, safeArea.bottom - height),
+    );
 
     // Vollflaechiger Fangschirm: ein Klick daneben schliesst das Popup.
     const backdrop = this.scene.add.rectangle(GAME_WIDTH / 2 - x, GAME_HEIGHT / 2 - y, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.35)

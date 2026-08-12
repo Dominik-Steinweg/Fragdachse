@@ -1,8 +1,9 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, GAME_WIDTH, toCssColor } from '../config';
-import { COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT } from '../config/coopDefenseTutorial';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT } from './CoopDefenseSecondaryObjectiveLayout';
+import type { HudOcclusionRect } from './hudOcclusionFade';
 
 const ANNOUNCE_X = GAME_WIDTH / 2;
 const ANNOUNCE_Y = COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.centerY;
@@ -87,6 +88,20 @@ function fitTitle(text: Phaser.GameObjects.Text, full: string, maxWidth: number)
   text.setText(`${full.slice(0, low).trimEnd()}…`);
 }
 
+export function getCoopDefenseObjectiveAnnouncementHudRect(
+  centerX: number,
+  centerY: number,
+  scaleX = 1,
+  scaleY = 1,
+): HudOcclusionRect {
+  return {
+    left: centerX - ANNOUNCE_W * scaleX / 2,
+    right: centerX + ANNOUNCE_W * scaleX / 2,
+    top: centerY - ANNOUNCE_H * scaleY / 2,
+    bottom: centerY + ANNOUNCE_H * scaleY / 2,
+  };
+}
+
 /**
  * Ein gemeinsamer, serialisierter Kanal für Hauptziel, Wellen und Nebenmissionen. Dadurch
  * behalten alle drei dieselbe Choreografie, ohne bei zeitgleichen Triggern übereinanderzuliegen.
@@ -154,6 +169,17 @@ export class CoopDefenseObjectiveAnnouncement {
     this.acceptedIds.clear();
     this.activeMessage = null;
     this.root?.setVisible(false).setPosition(ANNOUNCE_X, ANNOUNCE_Y).setScale(1).setAlpha(1);
+  }
+
+  /** Aktuelle sichtbare Screen-Space-Fläche der laufenden Objective-Ankündigung. */
+  getReservedHudRect(): HudOcclusionRect | null {
+    if (!this.root?.visible || !this.activeMessage) return null;
+    return getCoopDefenseObjectiveAnnouncementHudRect(
+      this.root.x,
+      this.root.y,
+      this.root.scaleX,
+      this.root.scaleY,
+    );
   }
 
   destroy(): void {

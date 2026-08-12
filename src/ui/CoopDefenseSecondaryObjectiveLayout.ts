@@ -11,6 +11,13 @@ const PANEL_CENTER_X = GAME_WIDTH - PANEL_WIDTH / 2 - 24;
 const STACK_TOP_Y = 22;
 const STACK_GAP = 8;
 
+/** Screen-Space-Layout des serialisierten Coop-Objective-Ankündigungskanals. */
+export const COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT = {
+  centerY: 166,
+  height: 96,
+  entryOffsetY: 12,
+} as const;
+
 export const COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT = {
   centerX: PANEL_CENTER_X,
   topY: STACK_TOP_Y,

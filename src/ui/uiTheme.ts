@@ -60,7 +60,7 @@ export const TEXT = {
 
 // ── Button-Intents ───────────────────────────────────────────────────────────
 
-export type ButtonIntent = 'primary' | 'accent' | 'neutral' | 'ghost' | 'danger' | 'disabled';
+export type ButtonIntent = 'primary' | 'accent' | 'attention' | 'neutral' | 'ghost' | 'danger' | 'disabled';
 
 export interface ButtonIntentSpec {
   /** Grundfarbe; `ensureGlossyButtonTexture` leitet Verlauf und Glanz daraus ab. */
@@ -103,6 +103,18 @@ export const INTENT: Readonly<Record<ButtonIntent, ButtonIntentSpec>> = {
     strokeAlpha: 0.9,
     gloss: 0.26,
     restAlpha: 1,
+    interactive: true,
+  },
+  /** Wartende Progressionsaktion: neutrale Flaeche mit goldener Kontur statt Goldblock. */
+  attention: {
+    fill: COLORS.GREY_7,
+    stroke: COLORS.GOLD_1,
+    label: COLORS.GOLD_1,
+    fillAlpha: 0.95,
+    strokeAlpha: 0.9,
+    gloss: 0.12,
+    restAlpha: 1,
+    labelHover: COLORS.GREY_1,
     interactive: true,
   },
   /** Standard fuer alles, was weder Einstieg noch Nebensache ist. */

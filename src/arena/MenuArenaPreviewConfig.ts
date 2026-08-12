@@ -573,7 +573,7 @@ const ambientRockAnchors: readonly RockClusterAnchor[] = [
 const ambientRocks = createOrganicRockClusters(ambientRockAnchors, MENU_PREVIEW_SEED + 101);
 
 const trees = points<TreeCell>([
-  [1, 4],  [2, 29],  [12, 18], [15, 31], [57, 4], [47, 17], [46, 25], [51, 31], [57, 29],
+  [1, 4],  [12, 18], [15, 31], [57, 4], [47, 17], [46, 25], [51, 31],
 ]);
 
 /**

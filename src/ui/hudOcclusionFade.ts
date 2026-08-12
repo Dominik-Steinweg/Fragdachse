@@ -43,6 +43,13 @@ export const HUD_OCCLUSION_FADE_IN_MS = 380;
  */
 export const HUD_OCCLUSION_HOLD_MS = 300;
 
+export interface HudOcclusionFadeOptions {
+  readonly minAlpha?: number;
+  readonly fadeOutMs?: number;
+  readonly fadeInMs?: number;
+  readonly holdMs?: number;
+}
+
 export interface HudOcclusionFadeState {
   alpha: number;
   /** Zeit seit der letzten Verdeckung; speist die Nachlaufzeit. */
@@ -81,13 +88,18 @@ export function advanceHudOcclusionFade(
   state: HudOcclusionFadeState,
   occluded: boolean,
   deltaMs: number,
+  options: HudOcclusionFadeOptions = {},
 ): number {
   const delta = Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+  const minAlpha = Math.max(0, Math.min(1, options.minAlpha ?? HUD_OCCLUSION_MIN_ALPHA));
+  const fadeOutMs = Math.max(1, options.fadeOutMs ?? HUD_OCCLUSION_FADE_OUT_MS);
+  const fadeInMs = Math.max(1, options.fadeInMs ?? HUD_OCCLUSION_FADE_IN_MS);
+  const holdMs = Math.max(0, options.holdMs ?? HUD_OCCLUSION_HOLD_MS);
   state.clearedForMs = occluded ? 0 : state.clearedForMs + delta;
 
-  const holding = state.clearedForMs < HUD_OCCLUSION_HOLD_MS;
-  const target = occluded || holding ? HUD_OCCLUSION_MIN_ALPHA : 1;
-  const timeConstant = target < state.alpha ? HUD_OCCLUSION_FADE_OUT_MS : HUD_OCCLUSION_FADE_IN_MS;
+  const holding = state.clearedForMs < holdMs;
+  const target = occluded || holding ? minAlpha : 1;
+  const timeConstant = target < state.alpha ? fadeOutMs : fadeInMs;
 
   state.alpha += (target - state.alpha) * (1 - Math.exp(-delta / timeConstant));
   // Ohne Fangbereich läuft die Annäherung endlos mit unmerklichen Restwerten weiter.

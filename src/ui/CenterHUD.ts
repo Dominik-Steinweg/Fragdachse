@@ -23,11 +23,11 @@ import {
   COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H,
   COOP_DEFENSE_TUTORIAL_PAD_TOP,
   COOP_DEFENSE_TUTORIAL_PAD_X,
-  COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
   COOP_DEFENSE_TUTORIAL_TITLE_H,
   getCoopDefenseTutorialPanelCenterX,
   getCoopDefenseTutorialPanelHeight,
+  getCoopDefenseTutorialPanelTopY,
 } from '../config/coopDefenseTutorial';
 import { HELP_CONTROLS } from '../config/helpControls';
 import { ensureFlatPanelTexture, roundRectPath } from './uiTextures';
@@ -41,9 +41,10 @@ import {
 import {
   advanceHudOcclusionFade,
   createHudOcclusionFadeState,
+  type HudOcclusionRect,
   resetHudOcclusionFade,
 } from './hudOcclusionFade';
-import { isHudRectOccluded } from './hudOcclusionProbe';
+import { doHudRectsOverlap, getWorldRectOnScreen, isHudRectOccluded } from './hudOcclusionProbe';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 
@@ -61,6 +62,13 @@ const TUTORIAL_PAD_X      = COOP_DEFENSE_TUTORIAL_PAD_X;
 const TUTORIAL_PAD_TOP    = COOP_DEFENSE_TUTORIAL_PAD_TOP;
 const TUTORIAL_TITLE_H    = COOP_DEFENSE_TUTORIAL_TITLE_H;
 const TUTORIAL_FADE_MS    = 220;
+const TUTORIAL_OCCLUSION_MARGIN_PX = 6;
+const TUTORIAL_OCCLUSION_FADE = {
+  minAlpha: 0.02,
+  fadeOutMs: 90,
+  fadeInMs: 520,
+  holdMs: 260,
+} as const;
 const TUTORIAL_BG_COLOR   = 0x07131f;
 const TUTORIAL_ACCENT     = COLORS.GOLD_2;
 // Steuerungstabelle im Tutorial-Fenster – bewusst identisch formatiert zum Hilfe-Fenster.
@@ -470,12 +478,14 @@ export class CenterHUD {
   private timerText!: Phaser.GameObjects.Text;
   private survivalText!: Phaser.GameObjects.Text;
   private tutorialContainer!: Phaser.GameObjects.Container;
+  private tutorialLifecycleContainer!: Phaser.GameObjects.Container;
   private tutorialGraphics!: Phaser.GameObjects.Graphics;
   private tutorialTitle!: Phaser.GameObjects.Text;
   private tutorialBody!: Phaser.GameObjects.Text;
   private tutorialControlsHeading!: Phaser.GameObjects.Text;
   private tutorialControlsTexts: Phaser.GameObjects.Text[] = [];
   private tutorialTween: Phaser.Tweens.Tween | null = null;
+  private readonly tutorialOcclusionFade = createHudOcclusionFadeState();
   private tutorialValue: string | null = null;
   private tutorialControlsValue = false;
   private announcementContainer!: Phaser.GameObjects.Container;
@@ -798,16 +808,17 @@ export class CenterHUD {
       ];
     });
 
-    this.tutorialContainer = this.scene.add.container(
-      getCoopDefenseTutorialPanelCenterX(),
-      COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
-      [
+    this.tutorialLifecycleContainer = this.scene.add.container(0, 0, [
       this.tutorialGraphics,
       this.tutorialTitle,
       this.tutorialBody,
       this.tutorialControlsHeading,
       ...this.tutorialControlsTexts,
-      ],
+    ]).setScrollFactor(1).setAlpha(0);
+    this.tutorialContainer = this.scene.add.container(
+      getCoopDefenseTutorialPanelCenterX(),
+      getCoopDefenseTutorialPanelTopY(),
+      [this.tutorialLifecycleContainer],
     );
     // Der übrige CenterHUD liegt auf der scrollfreien Klarheitskamera. Das Tutorial muss
     // dagegen ein Weltobjekt bleiben, damit es beim horizontalen Kamera-Scroll über seiner
@@ -816,7 +827,7 @@ export class CenterHUD {
       .setDepth(DEPTH.OVERLAY - 1)
       .setScrollFactor(1)
       .setVisible(false)
-      .setAlpha(0);
+      .setAlpha(1);
   }
 
   private buildAnnouncementOverlay(): void {
@@ -1165,6 +1176,72 @@ export class CenterHUD {
     this.missionStack.setAlpha(advanceHudOcclusionFade(this.missionStackFade, occluded, deltaMs));
   }
 
+  /** Screen-Space-Flächen, die das World-Space-Tutorial nicht überdecken darf. */
+  getReservedHudRects(): readonly HudOcclusionRect[] {
+    const rects: HudOcclusionRect[] = [];
+    const announcementRect = this.objectiveAnnouncements?.getReservedHudRect();
+    if (announcementRect) rects.push(announcementRect);
+
+    const addPanelRect = (
+      panel: Phaser.GameObjects.Container | undefined,
+      width: number,
+      height: number,
+    ): void => {
+      if (!panel?.visible) return;
+      rects.push({
+        left: panel.x - width * panel.scaleX / 2,
+        right: panel.x + width * panel.scaleX / 2,
+        top: panel.y - height * panel.scaleY / 2,
+        bottom: panel.y + height * panel.scaleY / 2,
+      });
+    };
+
+    addPanelRect(this.mainObjectivePanel, MAIN_PANEL_W, MAIN_PANEL_H);
+    addPanelRect(this.encounterPanel, ENCOUNTER_PANEL_W, ENCOUNTER_PANEL_H);
+    return rects;
+  }
+
+  /**
+   * Aktualisiert die temporäre Verdeckung in einer eigenen Alpha-Ebene. Der Welt-Root bleibt
+   * an seiner Position; nur seine Sichtbarkeit wird gegen die aktuellen Screen-Flächen geprüft.
+   */
+  updateTutorialOcclusion(
+    deltaMs: number,
+    reservedHudRects: readonly HudOcclusionRect[],
+  ): void {
+    const tutorialRect = this.getTutorialScreenRect();
+    if (!tutorialRect) {
+      resetHudOcclusionFade(this.tutorialOcclusionFade);
+      if (this.tutorialContainer?.active) this.tutorialContainer.setAlpha(1);
+      return;
+    }
+
+    const occluded = reservedHudRects.some((reservedRect) => (
+      doHudRectsOverlap(tutorialRect, reservedRect, TUTORIAL_OCCLUSION_MARGIN_PX)
+    ));
+    this.tutorialContainer.setAlpha(advanceHudOcclusionFade(
+      this.tutorialOcclusionFade,
+      occluded,
+      deltaMs,
+      TUTORIAL_OCCLUSION_FADE,
+    ));
+  }
+
+  /** Aktuelle sichtbare Panel-Fläche des Tutorials in Design-Screen-Koordinaten. */
+  getTutorialScreenRect(): HudOcclusionRect | null {
+    if (!this.tutorialContainer?.visible) return null;
+    const camera = this.scene.cameras?.main;
+    if (!camera) return null;
+    const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
+    const height = getCoopDefenseTutorialPanelHeight(this.tutorialControlsValue);
+    return getWorldRectOnScreen({
+      left: this.tutorialContainer.x - width / 2,
+      right: this.tutorialContainer.x + width / 2,
+      top: this.tutorialContainer.y,
+      bottom: this.tutorialContainer.y + height,
+    }, camera);
+  }
+
   updateEncounterPresentation(
     state: CoopDefenseEncounterPresentationState | null,
     elapsedMs: number,
@@ -1482,7 +1559,7 @@ export class CenterHUD {
   updateTutorial(text: string | null, showControls = false): void {
     this.tutorialContainer.setPosition(
       getCoopDefenseTutorialPanelCenterX(),
-      COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
+      getCoopDefenseTutorialPanelTopY(),
     );
     const nextText = text?.trim() || null;
     if (nextText === this.tutorialValue && showControls === this.tutorialControlsValue) return;
@@ -1527,9 +1604,10 @@ export class CenterHUD {
       }
     }
 
-    this.tutorialContainer.setVisible(true).setAlpha(0);
+    this.tutorialContainer.setVisible(true).setAlpha(this.tutorialOcclusionFade.alpha);
+    this.tutorialLifecycleContainer.setAlpha(0);
     this.tutorialTween = this.scene.tweens.add({
-      targets: this.tutorialContainer,
+      targets: this.tutorialLifecycleContainer,
       alpha: 1,
       duration: TUTORIAL_FADE_MS,
       ease: 'Quad.easeOut',
@@ -1906,17 +1984,20 @@ export class CenterHUD {
     this.tutorialTween = null;
     this.tutorialValue = null;
     if (immediate || !this.tutorialContainer.visible) {
-      this.tutorialContainer.setVisible(false).setAlpha(0);
+      this.tutorialContainer.setVisible(false).setAlpha(1);
+      this.tutorialLifecycleContainer.setAlpha(0);
+      resetHudOcclusionFade(this.tutorialOcclusionFade);
       return;
     }
     this.tutorialTween = this.scene.tweens.add({
-      targets: this.tutorialContainer,
+      targets: this.tutorialLifecycleContainer,
       alpha: 0,
       duration: TUTORIAL_FADE_MS,
       ease: 'Quad.easeOut',
       onComplete: () => {
         this.tutorialTween = null;
-        this.tutorialContainer.setVisible(false).setAlpha(0);
+        this.tutorialContainer.setVisible(false).setAlpha(1);
+        resetHudOcclusionFade(this.tutorialOcclusionFade);
       },
     });
   }

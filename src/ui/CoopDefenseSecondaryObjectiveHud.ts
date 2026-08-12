@@ -350,6 +350,12 @@ export class CoopDefenseSecondaryObjectiveHud {
     this.root.setAlpha(advanceHudOcclusionFade(this.occlusionFade, occluded, deltaMs));
   }
 
+  /** Aktuelle Screen-Space-Reservierung der sichtbaren Nebenmissionsspalte. */
+  getReservedHudRects(): readonly HudOcclusionRect[] {
+    if (!this.root?.visible) return [];
+    return [this.getOcclusionRect()];
+  }
+
   private getOcclusionRect(): HudOcclusionRect {
     return {
       left: COLUMN_X + PANEL_LEFT,

@@ -1775,6 +1775,15 @@ export class ArenaScene extends Phaser.Scene {
     // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
     // unversetzten Kameraposition (siehe `applyCameraFeedback`).
     this.applyCameraFeedback(delta);
+    // Das Tutorial ist ein Weltobjekt: Seine Occlusion-Probe braucht deshalb den finalen
+    // Scroll-/Shake-Versatz, den auch der anschließende Render-Schritt verwendet.
+    this.ctx.centerHUD.updateTutorialOcclusion(
+      delta,
+      [
+        ...this.ctx.centerHUD.getReservedHudRects(),
+        ...(this.secondaryObjectiveHud?.getReservedHudRects() ?? []),
+      ],
+    );
     // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten
     // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
