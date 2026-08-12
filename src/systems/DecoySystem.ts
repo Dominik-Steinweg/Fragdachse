@@ -231,6 +231,9 @@ export class DecoySystem {
       } else {
         entity.lerpStep(lerpFactor);
       }
+      // Der Koeder haelt, was sein Besitzer gerade haelt. Bewusst pro Frame nachgezogen: der
+      // Besitzer kann waehrend der Lebensdauer des Koeders die Waffe wechseln.
+      entity.setHeldItemId(this.bridge.getPlayerHeldItemId(entity.ownerId));
     }
   }
 

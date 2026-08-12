@@ -10,6 +10,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { createCoopDefensePlaceablePedestalUtility } from '../src/loadout/CoopDefenseMissionUtility';
+import { HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 
@@ -34,6 +35,7 @@ function makeManager() {
   manager.heldFireSlots = new Map();
   manager.ak47States = new Map();
   manager.negevStates = new Map();
+  manager.heldItemSlots = new HeldItemSlotTracker();
   manager.shotgunLightningQueue = [];
   manager.createWeapon = vi.fn((config: unknown) => ({ config }));
   manager.resetAk47State = vi.fn();
