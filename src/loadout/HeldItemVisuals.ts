@@ -48,8 +48,29 @@ const GENERIC_THROWABLE = sprite('generic_throwable', 2.5, 4.5);
 /** Bilder mit eigener Gestaltung, geschluesselt auf die Loadout-Item-ID. */
 export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.freeze({
   GLOCK: sprite('GLOCK', 2.5, 8.5),
+  ASMD_PRIM: sprite('ASMD_PRIM', 3.5, 8.5),
+  PLASMA: sprite('PLASMA', 3.5, 10.5),
+  HYDRA: sprite('HYDRA', 3.5, 10.5),
+  XBOW: sprite('XBOW', 3.5, 10.5),
+  LAUBBLAESER: sprite('LAUBBLAESER', 3.5, 11.5),
+  REPARATURSTRAHL: sprite('REPARATURSTRAHL', 2.5, 9.5),
+  OVERCHARGE_CORE: sprite('OVERCHARGE_CORE', 3.5, 8.5),
+  ENERGIEINJEKTOR: sprite('ENERGIEINJEKTOR', 2.5, 8.5),
   P90: sprite('P90', 3, 11),
+  AK47: sprite('AK47', 3.5, 12),
+  SHOTGUN: sprite('SHOTGUN', 3.5, 10.5),
+  ASMD_SEC: sprite('ASMD_SEC', 3.5, 11),
+  ROCKET_LAUNCHER: sprite('ROCKET_LAUNCHER', 3.5, 11.5),
+  MINI_ROCKET_LAUNCHER: sprite('MINI_ROCKET_LAUNCHER', 3, 9.5),
+  AWP: sprite('AWP', 2.5, 12.5),
+  FLAMETHROWER: sprite('FLAMETHROWER', 3.5, 11),
+  NEGEV: sprite('NEGEV', 3.5, 13),
   HE_GRENADE: sprite('HE_GRENADE', 3, 6),
+  SMOKE_GRENADE: sprite('SMOKE_GRENADE', 3, 6.5),
+  MOLOTOV_GRENADE: sprite('MOLOTOV_GRENADE', 3, 7),
+  TIME_BUBBLE: sprite('TIME_BUBBLE', 3, 6.5),
+  STINKDRUESEN: sprite('STINKDRUESEN', 3.5, 6.5),
+  DECOY: sprite('DECOY', 3, 8),
 });
 
 const FALLBACK_SPRITES: readonly HeldItemSpriteSpec[] = [GENERIC_GUN, GENERIC_THROWABLE];

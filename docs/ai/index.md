@@ -9,6 +9,7 @@ Diese Seiten sind ein kleiner Router für langlebiges Projektwissen. Der Quellco
 - [`performance.md`](performance.md): Grafikqualitäts-Vertrag, visuelle Budgets und lokaler Messworkflow (Taste T).
 - [`local-persistence.md`](local-persistence.md): versionierte lokale Einstellungen und Spielstand, Cache-Vertrag sowie Import/Export.
 - [`visual-guidelines.md`](visual-guidelines.md): verbindliche Perspektive, Qualitätsmaßstab, Effekt- und Assetregeln.
+- [`held-item-sprites.md`](held-item-sprites.md): Kurzablauf für das Symbol einer neuen getragenen Waffe.
 - [`reference-implementations.md`](reference-implementations.md): wenige bewährte Code-Referenzen und ihre sinnvolle Verwendung.
 
 Neue Seiten nur anlegen, wenn ein bestätigtes eigenständiges Thema genug dauerhaftes Wissen besitzt. Vorzugsweise vorhandene Seiten aktualisieren und neue Seiten hier eintragen.

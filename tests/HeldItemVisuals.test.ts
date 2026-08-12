@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { getHeldItemAnchor, HELD_ITEM_ANCHOR_Y, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE, PLAYER_TEXTURE_SIZE } from '../src/config';
 import { HELD_ITEM_SPRITES, getHeldItemSpriteSpec } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
-import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
+import {
+  DEFAULT_LOADOUT,
+  LOADOUT_CATALOG_ENTRIES,
+  findUtilityConfig,
+  findWeaponConfig,
+} from '../src/loadout/LoadoutConfig';
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 
@@ -21,6 +26,32 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       const itemId = DEFAULT_LOADOUT[slot].id;
       expect(HELD_ITEM_SPRITES[itemId], `${slot} (${itemId})`).toBeDefined();
       expect(getHeldItemSpriteSpec(itemId)).toBe(HELD_ITEM_SPRITES[itemId]);
+    }
+  });
+
+  it('hat fuer jedes tragbare Katalog-Item ein eigenes Bild', () => {
+    const slotlessWeaponTypes = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
+    const slotlessUtilityTypes = new Set([
+      'placeable_rock',
+      'placeable_turret',
+      'placeable_pedestal',
+      'translocator',
+      'taser',
+    ]);
+
+    for (const entry of LOADOUT_CATALOG_ENTRIES.filter((candidate) => candidate.kind !== 'ultimate')) {
+      const weapon = findWeaponConfig(entry.id);
+      const utility = findUtilityConfig(entry.id);
+      const shouldHaveSprite = weapon
+        ? !slotlessWeaponTypes.has(weapon.fire.type)
+        : utility
+          ? !slotlessUtilityTypes.has(utility.type)
+          : false;
+
+      if (shouldHaveSprite) {
+        expect(HELD_ITEM_SPRITES[entry.id], entry.id).toBeDefined();
+        expect(getHeldItemSpriteSpec(entry.id), entry.id).toBe(HELD_ITEM_SPRITES[entry.id]);
+      }
     }
   });
 
@@ -65,8 +96,10 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
   });
 
   it('faellt fuer Schusswaffen und Wurf-Utilities ohne eigenes Bild auf die neutrale Form zurueck', () => {
-    const gun = getHeldItemSpriteSpec('AK47');
-    const throwable = getHeldItemSpriteSpec('SMOKE_GRENADE');
+    // Diese Varianten gehören zur Gegner-/Sonderausstattung und haben bewusst keinen eigenen
+    // Held-Sprite-Eintrag. Die spielbaren Katalog-Items werden oben vollständig abgedeckt.
+    const gun = getHeldItemSpriteSpec('VOID_HUNTER_SHOTGUN');
+    const throwable = getHeldItemSpriteSpec('HOLY_HAND_GRENADE');
     expect(gun?.textureKey).toBe('held_generic_gun');
     expect(throwable?.textureKey).toBe('held_generic_throwable');
   });
