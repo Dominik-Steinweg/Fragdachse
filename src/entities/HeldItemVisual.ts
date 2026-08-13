@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import { getHeldItemAnchor, PLAYER_TEXTURE_SIZE, type MuzzleOrigin } from '../config';
+import { getHeldItemAnchor, HELD_ITEM_TEXTURE_SIZE, type MuzzleOrigin } from '../config';
 import {
   getHeldItemPointWorld,
   getHeldItemSpriteSpec,
@@ -98,7 +98,7 @@ export class HeldItemVisual {
       return;
     }
 
-    const textureScale = displaySize / PLAYER_TEXTURE_SIZE;
+    const textureScale = displaySize / HELD_ITEM_TEXTURE_SIZE;
     const anchor = getHeldItemAnchor(x, y, spriteRotation, textureScale);
     const frame = this.image.frame;
 

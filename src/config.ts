@@ -244,10 +244,13 @@ export const PLAYER_SPEED = 200;
 export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
 export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 /**
- * Kantenlaenge der Spielerfigur-Textur. Getragene Items liegen im selben Pixelraster, ihre
- * Anzeigegroesse folgt daher `PLAYER_SIZE / PLAYER_TEXTURE_SIZE` und nicht einer eigenen Zahl.
+ * Authoring-/Referenzraster der getragenen Items. Dieses Raster ist unabhaengig von der
+ * Source-/Frame-Aufloesung animierter Charakter-Sprites.
  */
-export const PLAYER_TEXTURE_SIZE = 32;
+export const HELD_ITEM_TEXTURE_SIZE = 32;
+
+/** Backwards-compatible name for the held-item reference raster. */
+export const PLAYER_TEXTURE_SIZE = HELD_ITEM_TEXTURE_SIZE;
 /**
  * Pfotenanker in Texturpixeln relativ zur Bildmitte, `-y` ist Blickrichtung. Auf diesem Punkt
  * sitzt der Griff des getragenen Items. Er entspricht der Stelle, an der `32x32dachsweapon01.png`

@@ -1,5 +1,10 @@
 import * as Phaser from 'phaser';
 import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
+import {
+  BADGER_IDLE_FRAME,
+  BADGER_WALKING_TEXTURE_KEY,
+  syncBadgerWalkingAnimation,
+} from '../animations/BadgerAnimations';
 import { HeldItemVisual } from './HeldItemVisual';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
@@ -29,7 +34,7 @@ export interface PlayerEntityOptions {
 
 export class PlayerEntity {
   readonly id:     string;
-  readonly sprite: Phaser.GameObjects.Image;
+  readonly sprite: Phaser.GameObjects.Sprite;
 
   private readonly colorHex: number;
   private readonly isEnemy: boolean;
@@ -81,6 +86,7 @@ export class PlayerEntity {
   private deathSprite: Phaser.GameObjects.Sprite | null = null;
   private isAliveVisual = true; // verfolgt Übergang alive→dead für einmaligen Animationsstart
   private baseVisible = true;
+  private walkingRequested = false;
 
   // Visuelle Zustände – kombiniert in resolveVisual()
   private burrowPhase: BurrowPhase = 'idle';
@@ -116,8 +122,10 @@ export class PlayerEntity {
     this.targetX  = x;
     this.targetY  = y;
 
-    // Spieler-Sprite (Badger-Bild statt Rechteck)
-    this.sprite = scene.add.image(x, y, 'badger');
+    // Spieler-Sprite: der statische Frame 0 ist die wiederverwendbare Idle-Darstellung;
+    // die Laufzeit schaltet bei Bewegung auf die globale Phaser-Walking-Animation um.
+    this.sprite = scene.add.sprite(x, y, BADGER_WALKING_TEXTURE_KEY, BADGER_IDLE_FRAME);
+    this.sprite.setOrigin(0.5, 0.5);
     this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
     this.sprite.setDepth(DEPTH.PLAYERS);
     scene.physics.add.existing(this.sprite);
@@ -289,6 +297,13 @@ export class PlayerEntity {
     this.applyDisplayVisibility();
   }
 
+  /** Request locomotion playback; the visual resolver also gates it while hidden/burrowed. */
+  setWalking(walking: boolean): void {
+    if (this.walkingRequested === walking) return;
+    this.walkingRequested = walking;
+    this.syncWalkingAnimation();
+  }
+
   /** Sprite + Physik-Body + HP-Balken positionieren (Host: Respawn). */
   setPosition(x: number, y: number): void {
     this.targetX = x;
@@ -363,6 +378,7 @@ export class PlayerEntity {
     this.nameLabel?.setPosition(x, this.sprite.y - PLAYER_SIZE * 0.72);
     this.syncAttachedEffects();
     this.syncOverlays();
+    this.syncWalkingAnimation();
   }
 
   /** HP-Wert aktualisieren und Balken neu zeichnen. */
@@ -451,6 +467,8 @@ export class PlayerEntity {
     } else if (visible) {
       this.isAliveVisual = true;
     }
+
+    this.syncWalkingAnimation();
   }
 
   /** Spawn-/Respawn-Effekt: Sprite materialisiert sich, Welt-Effekte werden abgespielt.
@@ -830,7 +848,20 @@ export class PlayerEntity {
     this.armorBarFg?.setAlpha(alpha);
     this.stealthShell?.setVisible(visible && this.isDecoyStealthed);
     this.stealthScan?.setVisible(visible && this.isDecoyStealthed);
+    this.syncWalkingAnimation();
     this.syncAttachedEffects();
+  }
+
+  private syncWalkingAnimation(): void {
+    const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
+    syncBadgerWalkingAnimation(
+      this.sprite,
+      this.walkingRequested
+        && this.baseVisible
+        && this.sprite.visible
+        && this.isAliveVisual
+        && !hiddenByBurrow,
+    );
   }
 
   private syncStealthOverlay(): void {

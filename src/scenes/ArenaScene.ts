@@ -79,6 +79,10 @@ import {
 } from '../config';
 import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
+import {
+  preloadBadgerAnimationAssets,
+  registerBadgerAnimations,
+} from '../animations/BadgerAnimations';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
@@ -403,6 +407,7 @@ export class ArenaScene extends Phaser.Scene {
     // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes
     // Bild; `32x32dachsweapon01.png` mit den braunen Platzhalterpixeln wird nicht mehr geladen.
     this.load.image('badger',      './assets/sprites/32x32dachs.png');
+    preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
@@ -517,6 +522,7 @@ export class ArenaScene extends Phaser.Scene {
       frameRate: 60,
       repeat:    0,
     });
+    registerBadgerAnimations(this.anims);
 
     bridge.clearPlayerCallbacks();
     this.input.mouse?.disableContextMenu();

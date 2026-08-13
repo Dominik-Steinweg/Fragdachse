@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE, PLAYER_TEXTURE_SIZE } from '../src/config';
+import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, HELD_ITEM_TEXTURE_SIZE, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE } from '../src/config';
 import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
 import {
@@ -63,8 +63,8 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       const { width, height } = readPngSize(spec.assetPath);
       // Das Raster bleibt an die 32-px-Figur gebunden. Die Standardpalette bleibt kompakt;
       // nur das AWP darf als echte Langwaffen-Ausnahme deutlich laenger werden.
-      expect(width, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE);
-      expect(height, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE);
+      expect(width, spec.textureKey).toBeLessThanOrEqual(HELD_ITEM_TEXTURE_SIZE);
+      expect(height, spec.textureKey).toBeLessThanOrEqual(HELD_ITEM_TEXTURE_SIZE);
       const isExceptionalLongWeapon = spec.textureKey === 'held_AWP';
       expect(width, spec.textureKey).toBeLessThanOrEqual(isExceptionalLongWeapon ? 32 : 13);
       expect(height, spec.textureKey).toBeLessThanOrEqual(isExceptionalLongWeapon ? 32 : 24);
@@ -86,7 +86,7 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
     // vorderen Texturkante; die Groessenstaffelung wird separat ueber Standard- und Ausnahmegroesse
     // Standardwaffen bleiben kompakt; nur definierte Langwaffen duerfen diese Staffelung
     // ueberschreiten.
-    const scale = PLAYER_SIZE / PLAYER_TEXTURE_SIZE;
+    const scale = PLAYER_SIZE / HELD_ITEM_TEXTURE_SIZE;
     const maxForwardReach = MUZZLE_FORWARD_OFFSET / scale + HELD_ITEM_ANCHOR_Y;
     expect(maxForwardReach).toBeGreaterThan(0);
 
@@ -116,7 +116,7 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
 });
 
 describe('Getragene Loadout-Items: Pfotenanker', () => {
-  const scale = PLAYER_SIZE / PLAYER_TEXTURE_SIZE;
+  const scale = PLAYER_SIZE / HELD_ITEM_TEXTURE_SIZE;
 
   it('liegt bei Nordausrichtung genau vor der Figur', () => {
     // Aimwinkel -PI/2 (nach oben) plus Sprite-Offset PI/2 ergibt Rotation 0: unrotierte Textur.
@@ -132,8 +132,8 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
   });
 
   it('skaliert mit der Anzeigegroesse der Figur, etwa fuer die groessere Lobby-Vorschau', () => {
-    const preview = getHeldItemAnchor(0, 0, 0, 48 / PLAYER_TEXTURE_SIZE);
-    expect(preview.y).toBeCloseTo(HELD_ITEM_ANCHOR_Y * (48 / PLAYER_TEXTURE_SIZE), 6);
+    const preview = getHeldItemAnchor(0, 0, 0, 48 / HELD_ITEM_TEXTURE_SIZE);
+    expect(preview.y).toBeCloseTo(HELD_ITEM_ANCHOR_Y * (48 / HELD_ITEM_TEXTURE_SIZE), 6);
   });
 
   it('legt Griff und Muedung ueber dieselbe Transformation wie das Bild aus', () => {

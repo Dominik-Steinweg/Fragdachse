@@ -10,7 +10,7 @@ Nach Änderungen npm run sprites:held ausführen. Die Loadout-ID bleibt der geme
 ## Dauerhafte Regeln
 
 - Die Pixelkarte zeigt nach Norden; die Figur übernimmt Rotation und Physik.
-- Items verwenden das Pixelraster der 32-px-Figur und werden über den Griffpunkt am Figurenanker positioniert.
+- Items verwenden das 32-px-Referenzraster (`HELD_ITEM_TEXTURE_SIZE`) und werden über den Griffpunkt am Figurenanker positioniert. Dieses Raster bleibt unabhängig von der Source-/Frame-Auflösung animierter Charakter-Sprites, z. B. 64x64.
 - Der Griffpunkt muss in Generator und Registry identisch sein. Die kanonische Laufzeitberechnung bleibt in src/config.ts.
 - Die Mündung wird als `muzzleX`/`muzzleY` mit derselben Bildtransformation wie das Held-Item
   berechnet; Positionen für Projektil, Hitscan, Audio und Mündungsfeuer nicht separat erfinden.

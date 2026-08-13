@@ -38,7 +38,7 @@ const OUT_DIR = path.join('public', 'assets', 'sprites', 'held');
 const PREVIEW_DIR = path.join(OUT_DIR, 'previews');
 const PREVIEW_PATH = path.join(PREVIEW_DIR, 'held-weapon-pilots.png');
 const PLAYER_SPRITE_PATH = path.join('public', 'assets', 'sprites', '32x32dachs.png');
-const PLAYER_TEXTURE_SIZE = 32;
+const HELD_ITEM_TEXTURE_SIZE = 32;
 const HELD_ITEM_ANCHOR_X = 0;
 const HELD_ITEM_ANCHOR_Y = -9;
 const CATALOG_PATH = path.join('src', 'loadout', 'content', 'data', 'catalog.json');
@@ -690,7 +690,7 @@ async function writeWeaponPreview(items, outputPath, scale, tileSize, padding) {
   const weaponCanvasSize = 64 * scale;
   const weaponCanvasCenter = weaponCanvasSize / 2;
   const player = await sharp(PLAYER_SPRITE_PATH)
-    .resize({ width: PLAYER_TEXTURE_SIZE * scale, height: PLAYER_TEXTURE_SIZE * scale, kernel: 'nearest' })
+    .resize({ width: HELD_ITEM_TEXTURE_SIZE * scale, height: HELD_ITEM_TEXTURE_SIZE * scale, kernel: 'nearest' })
     .png()
     .toBuffer();
 
@@ -736,7 +736,7 @@ async function writeWeaponPreview(items, outputPath, scale, tileSize, padding) {
       );
       const tileLeft = padding + column * tileSize;
       const tileTop = padding + row * tileSize;
-      composites.push({ input: playerRotated, left: tileLeft + previewCenter - (PLAYER_TEXTURE_SIZE * scale) / 2, top: tileTop + previewCenter - (PLAYER_TEXTURE_SIZE * scale) / 2 });
+      composites.push({ input: playerRotated, left: tileLeft + previewCenter - (HELD_ITEM_TEXTURE_SIZE * scale) / 2, top: tileTop + previewCenter - (HELD_ITEM_TEXTURE_SIZE * scale) / 2 });
       composites.push({ input: weaponRotated, left: Math.round(tileLeft + previewCenter + anchor.x - weaponCanvasSize / 2), top: Math.round(tileTop + previewCenter + anchor.y - weaponCanvasSize / 2) });
     }
   }

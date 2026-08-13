@@ -698,6 +698,7 @@ export class HostUpdateCoordinator {
       const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
+      player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
       player.setRageTint(this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false);
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const wasStealthed = this.prevStealthStates.get(player.id) ?? false;

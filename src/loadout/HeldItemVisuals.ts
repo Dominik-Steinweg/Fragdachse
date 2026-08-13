@@ -8,7 +8,7 @@
  * Vertrag fuer neue Waffen – eine Zeile in `HELD_ITEM_SPRITES` und eine Pixelkarte in
  * `scripts/generate-held-item-sprites.mjs`:
  *
- * - Die Textur liegt im **Pixelraster der Figur** (`PLAYER_TEXTURE_SIZE`), also 1 Texturpixel je
+ * - Die Textur liegt im **32-px-Referenzraster der getragenen Items** (`HELD_ITEM_TEXTURE_SIZE`), also 1 Texturpixel je
  *   Figurenpixel. Die Anzeigegroesse ergibt sich daraus von selbst; Waffen duerfen und sollen
  *   unterschiedlich gross sein, ohne dass hier eine Groesse gepflegt wird.
  * - Die Textur zeigt nach **Norden**, wie Spieler- und Gegnersprites. Den Rotationsoffset traegt
@@ -23,7 +23,7 @@
  * Klauen sind die Waffe.
  */
 import type * as Phaser from 'phaser';
-import { PLAYER_TEXTURE_SIZE, transformHeldItemPoint, type MuzzleOrigin } from '../config';
+import { HELD_ITEM_TEXTURE_SIZE, transformHeldItemPoint, type MuzzleOrigin } from '../config';
 import { findUtilityConfig, findWeaponConfig, getUtilityBaseId } from './LoadoutConfig';
 
 export interface HeldItemSpriteSpec {
@@ -71,7 +71,7 @@ export function getHeldItemPointWorld(
     originX,
     originY,
     spriteRotation,
-    displaySize / PLAYER_TEXTURE_SIZE,
+    displaySize / HELD_ITEM_TEXTURE_SIZE,
     spec.gripX,
     spec.gripY,
     pointX,
