@@ -651,6 +651,23 @@ const PILOT_PREVIEW_ROTATIONS = [0, 90, 180, 270];
 const PILOT_PREVIEW_SCALE = 8;
 const PILOT_PREVIEW_TILE_SIZE = 448;
 const PILOT_PREVIEW_PADDING = 64;
+const ALL_WEAPON_PREVIEW_GROUPS = [
+  {
+    path: path.join(PREVIEW_DIR, 'held-weapons-all-01.png'),
+    items: ['GLOCK.png', 'ASMD_PRIM.png', 'PLASMA.png', 'HYDRA.png', 'XBOW.png', 'LAUBBLAESER.png'],
+  },
+  {
+    path: path.join(PREVIEW_DIR, 'held-weapons-all-02.png'),
+    items: ['REPARATURSTRAHL.png', 'OVERCHARGE_CORE.png', 'ENERGIEINJEKTOR.png', 'P90.png', 'AK47.png', 'SHOTGUN.png'],
+  },
+  {
+    path: path.join(PREVIEW_DIR, 'held-weapons-all-03.png'),
+    items: ['ASMD_SEC.png', 'ROCKET_LAUNCHER.png', 'MINI_ROCKET_LAUNCHER.png', 'AWP.png', 'FLAMETHROWER.png', 'NEGEV.png'],
+  },
+];
+const ALL_WEAPON_PREVIEW_SCALE = 6;
+const ALL_WEAPON_PREVIEW_TILE_SIZE = 416;
+const ALL_WEAPON_PREVIEW_PADDING = 48;
 
 function rotatePoint(x, y, degrees) {
   const angle = (degrees * Math.PI) / 180;
@@ -666,24 +683,24 @@ function rotatePoint(x, y, degrees) {
  * Erzeugt eine vergrösserte Rastertafel aus genau derselben Pixelkarte und demselben Grippunkt.
  * Reihenfolge: Glock, Negev, Rocket Launcher; Spalten: 0, 90, 180, 270 Grad.
  */
-async function writePilotPreview() {
-  const previewWidth = PILOT_PREVIEW_PADDING * 2 + PILOT_PREVIEW_TILE_SIZE * PILOT_PREVIEW_ROTATIONS.length;
-  const previewHeight = PILOT_PREVIEW_PADDING * 2 + PILOT_PREVIEW_TILE_SIZE * PILOT_PREVIEW_ITEMS.length;
-  const previewCenter = PILOT_PREVIEW_TILE_SIZE / 2;
-  const weaponCanvasSize = 64 * PILOT_PREVIEW_SCALE;
+async function writeWeaponPreview(items, outputPath, scale, tileSize, padding) {
+  const previewWidth = padding * 2 + tileSize * PILOT_PREVIEW_ROTATIONS.length;
+  const previewHeight = padding * 2 + tileSize * items.length;
+  const previewCenter = tileSize / 2;
+  const weaponCanvasSize = 64 * scale;
   const weaponCanvasCenter = weaponCanvasSize / 2;
   const player = await sharp(PLAYER_SPRITE_PATH)
-    .resize({ width: PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE, height: PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE, kernel: 'nearest' })
+    .resize({ width: PLAYER_TEXTURE_SIZE * scale, height: PLAYER_TEXTURE_SIZE * scale, kernel: 'nearest' })
     .png()
     .toBuffer();
 
   const composites = [];
-  for (let row = 0; row < PILOT_PREVIEW_ITEMS.length; row += 1) {
-    const item = ITEMS.find((candidate) => candidate.file === PILOT_PREVIEW_ITEMS[row]);
-    if (!item) throw new Error(`Pilot-Preview-Waffe fehlt im Generator: ${PILOT_PREVIEW_ITEMS[row]}`);
+  for (let row = 0; row < items.length; row += 1) {
+    const item = ITEMS.find((candidate) => candidate.file === items[row]);
+    if (!item) throw new Error(`Preview-Waffe fehlt im Generator: ${items[row]}`);
     const weaponPath = path.join(OUT_DIR, item.file);
     const weapon = await sharp(weaponPath)
-      .resize({ width: Math.max(...item.pixels.map((line) => line.length)) * PILOT_PREVIEW_SCALE, height: item.pixels.length * PILOT_PREVIEW_SCALE, kernel: 'nearest' })
+      .resize({ width: Math.max(...item.pixels.map((line) => line.length)) * scale, height: item.pixels.length * scale, kernel: 'nearest' })
       .png()
       .toBuffer();
     const weaponCanvas = await sharp({
@@ -696,8 +713,8 @@ async function writePilotPreview() {
     })
       .composite([{
         input: weapon,
-        left: Math.round(weaponCanvasCenter - item.grip.x * PILOT_PREVIEW_SCALE),
-        top: Math.round(weaponCanvasCenter - item.grip.y * PILOT_PREVIEW_SCALE),
+        left: Math.round(weaponCanvasCenter - item.grip.x * scale),
+        top: Math.round(weaponCanvasCenter - item.grip.y * scale),
       }])
       .png()
       .toBuffer();
@@ -713,13 +730,13 @@ async function writePilotPreview() {
         .png()
         .toBuffer();
       const anchor = rotatePoint(
-        HELD_ITEM_ANCHOR_X * PILOT_PREVIEW_SCALE,
-        HELD_ITEM_ANCHOR_Y * PILOT_PREVIEW_SCALE,
+        HELD_ITEM_ANCHOR_X * scale,
+        HELD_ITEM_ANCHOR_Y * scale,
         degrees,
       );
-      const tileLeft = PILOT_PREVIEW_PADDING + column * PILOT_PREVIEW_TILE_SIZE;
-      const tileTop = PILOT_PREVIEW_PADDING + row * PILOT_PREVIEW_TILE_SIZE;
-      composites.push({ input: playerRotated, left: tileLeft + previewCenter - (PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE) / 2, top: tileTop + previewCenter - (PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE) / 2 });
+      const tileLeft = padding + column * tileSize;
+      const tileTop = padding + row * tileSize;
+      composites.push({ input: playerRotated, left: tileLeft + previewCenter - (PLAYER_TEXTURE_SIZE * scale) / 2, top: tileTop + previewCenter - (PLAYER_TEXTURE_SIZE * scale) / 2 });
       composites.push({ input: weaponRotated, left: Math.round(tileLeft + previewCenter + anchor.x - weaponCanvasSize / 2), top: Math.round(tileTop + previewCenter + anchor.y - weaponCanvasSize / 2) });
     }
   }
@@ -734,8 +751,8 @@ async function writePilotPreview() {
   })
     .composite(composites)
     .png({ compressionLevel: 9 })
-    .toFile(PREVIEW_PATH);
-  console.log(`${PREVIEW_PATH}: ${previewWidth}x${previewHeight} px (3 Waffen x 4 Rotationen)`);
+    .toFile(outputPath);
+  console.log(`${outputPath}: ${previewWidth}x${previewHeight} px (${items.length} Waffen x 4 Rotationen)`);
 }
 
 async function writeItem(item) {
@@ -800,4 +817,7 @@ await mkdir(PREVIEW_DIR, { recursive: true });
 for (const item of ITEMS) {
   await writeItem(item);
 }
-await writePilotPreview();
+await writeWeaponPreview(PILOT_PREVIEW_ITEMS, PREVIEW_PATH, PILOT_PREVIEW_SCALE, PILOT_PREVIEW_TILE_SIZE, PILOT_PREVIEW_PADDING);
+for (const group of ALL_WEAPON_PREVIEW_GROUPS) {
+  await writeWeaponPreview(group.items, group.path, ALL_WEAPON_PREVIEW_SCALE, ALL_WEAPON_PREVIEW_TILE_SIZE, ALL_WEAPON_PREVIEW_PADDING);
+}

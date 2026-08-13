@@ -741,6 +741,11 @@ export class EnemyManager {
     return this.enemies.get(id);
   }
 
+  /** Allokationsfreie Iteration fuer Host-Systeme im engen Frame-Hotpath. */
+  forEachEnemy(visitor: (enemy: EnemyEntity) => void): void {
+    for (const enemy of this.enemies.values()) visitor(enemy);
+  }
+
   getAllEnemies(): EnemyEntity[] {
     return [...this.enemies.values()];
   }

@@ -285,6 +285,48 @@ describe('Neue Positions-Affixe', () => {
     expect(system.isSurrounded('p', 1_001 + COOP_DEFENSE_AFFIX_RULES.surroundedLingerMs)).toBe(false);
   });
 
+  it('ueberspringt den Gegner-Iterator, wenn kein Spieler Umzingelt traegt', () => {
+    const system = build();
+    let enemyVisits = 0;
+    system.updateSurroundedPlayers(
+      [{ id: 'p', sprite: { x: 0, y: 0 } }],
+      { forEachEnemy: () => { enemyVisits += 1; } },
+      () => true,
+      () => true,
+      1_000,
+    );
+    expect(enemyVisits).toBe(0);
+  });
+
+  it('verwendet fuer mehrere Traeger nur einen gemeinsamen Gegner-Scan', () => {
+    const system = build({ affixes: { surrounded: 0.12 } });
+    const enemies = Array.from({ length: COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount }, (_, index) => ({
+      id: `e${index}`,
+      sprite: { active: true, x: index * 8, y: 0 },
+    }));
+    let enemyVisits = 0;
+    system.updateSurroundedPlayers(
+      [
+        { id: 'p0', sprite: { x: 0, y: 0 } },
+        { id: 'p1', sprite: { x: 24, y: 0 } },
+      ],
+      {
+        forEachEnemy: (visit) => {
+          for (const enemy of enemies) {
+            enemyVisits += 1;
+            visit(enemy);
+          }
+        },
+      },
+      () => true,
+      () => true,
+      1_000,
+    );
+    expect(enemyVisits).toBe(COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount);
+    expect(system.isSurrounded('p0', 1_000)).toBe(true);
+    expect(system.isSurrounded('p1', 1_000)).toBe(true);
+  });
+
   it('waehlt bei Fernsteuerung das naechste eigene Konstrukt stabil nach ID', () => {
     const sources = [
       { id: 8, x: 10, y: 0, ownerId: 'p', ownerColor: 0xff00aa },

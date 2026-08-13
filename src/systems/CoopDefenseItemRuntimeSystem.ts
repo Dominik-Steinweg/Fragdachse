@@ -37,6 +37,20 @@ export interface RemoteControlSource {
   readonly ownerColor: number;
 }
 
+/** Minimale Sicht auf Gegner fuer den allokationsfreien Umzingelt-Scan. */
+export interface CoopDefenseSurroundedEnemy {
+  readonly id: string;
+  readonly sprite: {
+    readonly x: number;
+    readonly y: number;
+    readonly active?: boolean;
+  };
+}
+
+export interface CoopDefenseSurroundedEnemySource {
+  forEachEnemy(visitor: (enemy: CoopDefenseSurroundedEnemy) => void): void;
+}
+
 interface KillChargeState {
   stacks: number;
   expiresAt: number;
@@ -63,6 +77,9 @@ export class CoopDefenseItemRuntimeSystem {
   private readonly crossfireUntil = new Map<string, number>();
   private readonly lastRealDamageAt = new Map<string, number>();
   private readonly vulnerableUntil = new Map<string, number>();
+  /** Wiederverwendete Zaehler fuer den gemeinsamen Mehrspieler-Scan. */
+  private readonly surroundedCounts: number[] = [];
+  private readonly surroundedEligible: number[] = [];
   /** Live-Runden verwenden den gemeinsamen Statusspeicher; die Map bleibt nur als
    * rueckwaertskompatibler Fallback fuer isolierte Alt-Tests/alte Replay-Daten. */
   private targetStatusSystem: TargetStatusSystem | null = null;
@@ -118,6 +135,8 @@ export class CoopDefenseItemRuntimeSystem {
     this.crossfireUntil.clear();
     this.lastRealDamageAt.clear();
     this.vulnerableUntil.clear();
+    this.surroundedCounts.length = 0;
+    this.surroundedEligible.length = 0;
   }
 
   /** Verwirft abgelaufene Eintraege, damit die Maps nicht ueber eine lange Runde wachsen. */
@@ -406,8 +425,68 @@ export class CoopDefenseItemRuntimeSystem {
       const dx = enemy.x - playerX;
       const dy = enemy.y - playerY;
       if (dx * dx + dy * dy <= radiusSq) nearbyEnemyCount += 1;
+      if (nearbyEnemyCount >= COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount) break;
     }
 
+    this.applySurroundedCount(playerId, nearbyEnemyCount, now);
+  }
+
+  /**
+   * Aktualisiert alle Spieler in einem gemeinsamen Gegner-Scan.
+   *
+   * Der Aufrufer uebergibt die bereits vorhandene Spieler-Sicht und den EnemyManager selbst;
+   * dadurch entstehen weder Positionsobjekte noch ein per-Frame-Gegner-Array. Tragen keine
+   * Spieler das Affix, wird der Gegner-Iterator gar nicht aufgerufen.
+   */
+  updateSurroundedPlayers(
+    players: readonly { id: string; sprite: { x: number; y: number } }[],
+    enemies: CoopDefenseSurroundedEnemySource | null,
+    isPlayerAlive: (playerId: string) => boolean,
+    isEnemyAlive: (enemyId: string) => boolean,
+    now = Date.now(),
+  ): void {
+    const radiusSq = COOP_DEFENSE_AFFIX_RULES.surroundedRadiusPx ** 2;
+    const requiredCount = COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount;
+    let hasEligiblePlayer = false;
+
+    for (let index = 0; index < players.length; index += 1) {
+      const player = players[index];
+      this.surroundedCounts[index] = 0;
+      this.surroundedEligible[index] = 0;
+      const affixValue = this.deps.getAffixValue(player.id, 'surrounded');
+      if (affixValue <= 0) {
+        this.surroundedStates.delete(player.id);
+        continue;
+      }
+      if (!isPlayerAlive(player.id)) {
+        this.applySurroundedCount(player.id, 0, now);
+        continue;
+      }
+      this.surroundedEligible[index] = 1;
+      hasEligiblePlayer = true;
+    }
+
+    if (hasEligiblePlayer && enemies) {
+      enemies.forEachEnemy((enemy) => {
+        if (enemy.sprite.active === false || !isEnemyAlive(enemy.id)) return;
+        for (let index = 0; index < players.length; index += 1) {
+          if (this.surroundedEligible[index] === 0 || this.surroundedCounts[index] >= requiredCount) continue;
+          const player = players[index];
+          const dx = enemy.sprite.x - player.sprite.x;
+          const dy = enemy.sprite.y - player.sprite.y;
+          if (dx * dx + dy * dy <= radiusSq) this.surroundedCounts[index] += 1;
+        }
+      });
+    }
+
+    for (let index = 0; index < players.length; index += 1) {
+      if (this.surroundedEligible[index] === 1) {
+        this.applySurroundedCount(players[index].id, this.surroundedCounts[index], now);
+      }
+    }
+  }
+
+  private applySurroundedCount(playerId: string, nearbyEnemyCount: number, now: number): void {
     const current = this.surroundedStates.get(playerId);
     if (nearbyEnemyCount >= COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount) {
       this.surroundedStates.set(playerId, { lingerUntil: 0 });

@@ -209,25 +209,19 @@ export class HostUpdateCoordinator {
     if (!countdownActive && this.ctx.coopDefenseItemRuntimeSystem) {
       const runtime = this.ctx.coopDefenseItemRuntimeSystem;
       runtime.hostUpdate(now);
-      const activeEnemies = (this.ctx.enemyManager?.getAllEnemies() ?? [])
-        .map((enemy) => ({
-          x: enemy.sprite.x,
-          y: enemy.sprite.y,
-          active: enemy.sprite.active,
-          alive: this.ctx.combatSystem.isAlive(enemy.id),
-        }));
       // Beide Positions-Affixe werden aus echter Distanz gespeist. Teleports werden im
       // Runtime-System ueber die gemeinsame Schrittgrenze verworfen.
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
+      const players = this.ctx.playerManager.getAllPlayers();
+      runtime.updateSurroundedPlayers(
+        players,
+        this.ctx.enemyManager,
+        (playerId) => this.ctx.combatSystem.isAlive(playerId),
+        (enemyId) => this.ctx.combatSystem.isAlive(enemyId),
+        now,
+      );
+      for (const player of players) {
         const alive = this.ctx.combatSystem.isAlive(player.id);
         const glutwandererBursts = runtime.trackMovement(player.id, player.sprite.x, player.sprite.y);
-        runtime.updateSurrounded(
-          player.id,
-          player.sprite.x,
-          player.sprite.y,
-          alive ? activeEnemies : [],
-          now,
-        );
         if (glutwandererBursts <= 0 || !alive || !player.sprite.active) continue;
         for (let burstIndex = 0; burstIndex < glutwandererBursts; burstIndex += 1) {
           this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(

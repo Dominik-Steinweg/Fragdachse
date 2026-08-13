@@ -144,6 +144,12 @@ class FlowFieldMinHeap {
 
   get size(): number { return this.indexes.length; }
 
+  clear(): void {
+    this.indexes.length = 0;
+    this.priorities.length = 0;
+    this.sources.length = 0;
+  }
+
   push(index: number, priority: number, source: number): void {
     let cursor = this.indexes.length;
     this.indexes.push(index);
@@ -238,6 +244,13 @@ export class EnemyFlowFieldService {
   private readonly vectorField: Float32Array; // 2 floats (x, y) per cell
   /** Index der Zielzelle hinter der guenstigsten Route; -1 bedeutet nicht erreichbar. */
   private readonly goalSourceField: Int32Array;
+  /** Wiederverwendeter Workspace fuer seltene zielgebundene Sonderpfade. */
+  private readonly targetPathCosts: Float32Array;
+  private readonly targetPathParents: Int32Array;
+  private readonly targetPathGeneration: Uint32Array;
+  private readonly targetPathOpen = new FlowFieldMinHeap();
+  private targetPathGenerationId = 0;
+  private targetPathSequence = 0;
   private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
   private isTopologyDirty = false;
   private isGoalDirty = false;
@@ -285,6 +298,9 @@ export class EnemyFlowFieldService {
     this.integrationField = new Float32Array(totalCells);
     this.vectorField = new Float32Array(totalCells * 2);
     this.goalSourceField = new Int32Array(totalCells);
+    this.targetPathCosts = new Float32Array(totalCells);
+    this.targetPathParents = new Int32Array(totalCells);
+    this.targetPathGeneration = new Uint32Array(totalCells);
     this.goalCells = [];
     this.summary = {
       cols: this.metrics.cols,
@@ -571,48 +587,56 @@ export class EnemyFlowFieldService {
     const targetIndex = this.toIndex(target.gridX, target.gridY);
     if (startIndex === targetIndex) return this.gridToWorld(target.gridX, target.gridY);
 
-    const totalCells = this.metrics.cols * this.metrics.rows;
-    const costs = new Float32Array(totalCells);
-    costs.fill(EnemyFlowFieldService.INTEGRATION_INFINITY);
-    const parents = new Int32Array(totalCells);
-    parents.fill(-1);
-    const open: number[] = [startIndex];
-    costs[startIndex] = 0;
-
-    while (open.length > 0) {
-      let bestOpenIndex = 0;
-      let bestScore = Number.POSITIVE_INFINITY;
-      for (let index = 0; index < open.length; index += 1) {
-        const cellIndex = open[index];
-        const gx = cellIndex % this.metrics.cols;
-        const gy = Math.floor(cellIndex / this.metrics.cols);
-        const score = costs[cellIndex] + Math.hypot(target.gridX - gx, target.gridY - gy);
-        if (score < bestScore) {
-          bestScore = score;
-          bestOpenIndex = index;
-        }
-      }
-      const currentIndex = open.splice(bestOpenIndex, 1)[0];
-      if (currentIndex === targetIndex) break;
+    const generation = this.beginTargetPathSearch(startIndex);
+    while (this.targetPathOpen.size > 0) {
+      this.targetPathOpen.pop();
+      const currentIndex = this.targetPathOpen.poppedIndex;
+      const currentCost = this.targetPathCosts[currentIndex];
       const currentX = currentIndex % this.metrics.cols;
       const currentY = Math.floor(currentIndex / this.metrics.cols);
-      for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
-        const nextX = currentX + dx;
-        const nextY = currentY + dy;
-        if (!this.isReachableNeighbor(currentX, currentY, nextX, nextY)) continue;
-        const nextIndex = this.toIndex(nextX, nextY);
-        const stepCost = this.costs[nextIndex] * (Math.abs(dx) + Math.abs(dy) === 2 ? Math.SQRT2 : 1);
-        const candidate = costs[currentIndex] + stepCost;
-        if (candidate >= costs[nextIndex]) continue;
-        costs[nextIndex] = candidate;
-        parents[nextIndex] = currentIndex;
-        if (!open.includes(nextIndex)) open.push(nextIndex);
+      const currentScore = currentCost + Math.hypot(target.gridX - currentX, target.gridY - currentY);
+      // Der Heap erlaubt bewusst doppelte Eintraege: veraltete Prioritaeten werden hier billig
+      // verworfen, statt das Open Set linear nach dem Zellindex zu durchsuchen.
+      if (this.targetPathOpen.poppedPriority > currentScore) continue;
+      if (currentIndex === targetIndex) break;
+
+      const neighborBase = currentIndex * 8;
+      for (let direction = 0; direction < 8; direction += 1) {
+        if (!this.isReachableNeighborIndex(currentIndex, direction)) continue;
+        const nextIndex = this.neighborIndices[neighborBase + direction];
+        const previousCost = this.targetPathGeneration[nextIndex] === generation
+          ? this.targetPathCosts[nextIndex]
+          : EnemyFlowFieldService.INTEGRATION_INFINITY;
+        const candidate = currentCost + this.costs[nextIndex] * NEIGHBOR_MOVE_FACTORS[direction];
+        if (candidate >= previousCost) continue;
+        this.targetPathGeneration[nextIndex] = generation;
+        this.targetPathCosts[nextIndex] = candidate;
+        this.targetPathParents[nextIndex] = currentIndex;
+        const nextX = nextIndex % this.metrics.cols;
+        const nextY = Math.floor(nextIndex / this.metrics.cols);
+        this.targetPathOpen.push(
+          nextIndex,
+          candidate + Math.hypot(target.gridX - nextX, target.gridY - nextY),
+          this.targetPathSequence++,
+        );
       }
     }
 
-    if (parents[targetIndex] < 0) return null;
+    if (
+      this.targetPathGeneration[targetIndex] !== generation
+      || this.targetPathParents[targetIndex] < 0
+    ) {
+      this.targetPathOpen.clear();
+      return null;
+    }
     let stepIndex = targetIndex;
-    while (parents[stepIndex] >= 0 && parents[stepIndex] !== startIndex) stepIndex = parents[stepIndex];
+    while (
+      this.targetPathParents[stepIndex] >= 0
+      && this.targetPathParents[stepIndex] !== startIndex
+    ) {
+      stepIndex = this.targetPathParents[stepIndex];
+    }
+    this.targetPathOpen.clear();
     return this.gridToWorld(stepIndex % this.metrics.cols, Math.floor(stepIndex / this.metrics.cols));
   }
 
@@ -1188,30 +1212,20 @@ export class EnemyFlowFieldService {
     return this.kindCodes[this.toIndex(gridX, gridY)] !== CELL_DEFINITIONS.base.code;
   }
 
-  private isReachableNeighbor(
-    fromGridX: number,
-    fromGridY: number,
-    neighborGridX: number,
-    neighborGridY: number,
-  ): boolean {
-    if (!this.isInBounds(neighborGridX, neighborGridY)) return false;
-    if (!this.isFlowPassableAt(neighborGridX, neighborGridY)) return false;
-
-    const deltaX = neighborGridX - fromGridX;
-    const deltaY = neighborGridY - fromGridY;
-    const isDiagonalMove = Math.abs(deltaX) === 1 && Math.abs(deltaY) === 1;
-
-    if (!isDiagonalMove) {
-      return true;
+  private beginTargetPathSearch(startIndex: number): number {
+    this.targetPathOpen.clear();
+    let generation = (this.targetPathGenerationId + 1) >>> 0;
+    if (generation === 0) {
+      this.targetPathGeneration.fill(0);
+      generation = 1;
     }
-
-    const horizontalNeighborX = fromGridX + deltaX;
-    const horizontalNeighborY = fromGridY;
-    const verticalNeighborX = fromGridX;
-    const verticalNeighborY = fromGridY + deltaY;
-
-    return this.isTraversableAt(horizontalNeighborX, horizontalNeighborY)
-      && this.isTraversableAt(verticalNeighborX, verticalNeighborY);
+    this.targetPathGenerationId = generation;
+    this.targetPathSequence = 0;
+    this.targetPathGeneration[startIndex] = generation;
+    this.targetPathCosts[startIndex] = 0;
+    this.targetPathParents[startIndex] = -1;
+    this.targetPathOpen.push(startIndex, 0, this.targetPathSequence++);
+    return generation;
   }
 
   private computeIntegrationField(): void {

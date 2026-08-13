@@ -167,4 +167,19 @@ describe('Flow field around bases', () => {
     expect(waypoint!.x % CELL_SIZE).toBe(CELL_SIZE / 2);
     expect(waypoint!.y % CELL_SIZE).toBe(CELL_SIZE / 2);
   });
+
+  it('reuses the target-path workspace without leaking a previous route', () => {
+    const service = new EnemyFlowFieldService(
+      createLayout({ rocks: [{ gridX: 3, gridY: 5 }] as ArenaLayout['rocks'] }),
+      [],
+      METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 12, gridY: 5 }] },
+    );
+
+    const first = service.findNextWorldPositionTowards(2, 5, 12, 5);
+    const second = service.findNextWorldPositionTowards(2, 5, 12, 5);
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(service.worldToGrid(first!.x, first!.y)).not.toEqual({ gridX: 3, gridY: 5 });
+  });
 });

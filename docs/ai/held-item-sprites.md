@@ -20,6 +20,11 @@ Prüfung: npm run sprites:held und npm test -- tests/HeldItemVisuals.test.ts. De
 zusätzlich `public/assets/sprites/held/previews/held-weapon-pilots.png`; dort stehen Glock, Negev
 und Rocket Launcher zeilenweise in den Rotationen 0, 90, 180 und 270 Grad.
 
+Die Sichtpruefung nutzt ausserdem drei Vollpruefungstafeln unter
+`public/assets/sprites/held/previews/`: `held-weapons-all-01.png` bis
+`held-weapons-all-03.png`. Sie enthalten alle 18 Waffen zeilenweise in den Rotationen 0, 90,
+180 und 270 Grad.
+
 ## Groessenstaffelung und Farbzuordnung
 
 Standardwaffen bleiben bewusst kompakt: Pistolen und Geraete liegen typischerweise bei 5-9 px

@@ -67,7 +67,7 @@ import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreview
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';
-import { createLoadoutSlotControl } from './LoadoutSlotControl';
+import { createLoadoutSlotControl, createLoadoutToolRowControl } from './LoadoutSlotControl';
 import {
   getCoopDefenseToolCapacity,
   getLoadoutToolSlots,
@@ -1087,27 +1087,20 @@ export class LeftSidePanel {
     const tools = getLoadoutToolSlots(profile);
     const capacity = Math.max(1, getCoopDefenseToolCapacity(profile));
     const rowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP;
-    this.loadoutLayer.add(this.scene.add.text(20, rowY, 'UTILITY-RAD', textStyle('caption', {
-      color: COLORS.GREY_3,
-    })).setOrigin(0, 0.5).setScrollFactor(0));
-    const availableW = LOBBY_PANEL_W - 126;
-    const gap = 4;
-    const size = Math.min(34, (availableW - gap * (capacity - 1)) / capacity);
-    const startX = 112 + size / 2;
-    for (let index = 0; index < capacity; index += 1) {
-      const tool = tools[index] ?? null;
-      this.loadoutLayer.add(createLoadoutSlotControl(this.scene, {
-        x: startX + index * (size + gap),
-        y: rowY,
-        width: size,
-        height: size,
-        accentColor: COLORS.GOLD_2,
-        presentation: tool ? describeLoadoutTool(tool) : null,
-        compact: true,
-        enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
-        onClick: (anchorX) => this.openInspectorToolPicker(index, anchorX),
-      }));
-    }
+    this.loadoutLayer.add(createLoadoutToolRowControl(this.scene, {
+      x: CENTER_X,
+      y: rowY,
+      width: LOADOUT_CONTROL_W,
+      height: LOADOUT_CONTROL_H,
+      label: 'UTILITY-RAD',
+      sublabel: 'Utility',
+      presentations: Array.from({ length: capacity }, (_, index) => {
+        const tool = tools[index] ?? null;
+        return tool ? describeLoadoutTool(tool) : null;
+      }),
+      enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
+      onSlotClick: (index, anchorX) => this.openInspectorToolPicker(index, anchorX),
+    }));
   }
 
   private openInspectorToolPicker(slotIndex: number, anchorX: number): void {

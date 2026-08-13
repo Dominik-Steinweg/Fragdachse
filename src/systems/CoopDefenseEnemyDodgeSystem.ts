@@ -30,6 +30,12 @@ const DASH_DISTANCE_PER_SPEED =
 
 /** Sicherheitsaufschlag auf den Trefferradius bei der Landepunkt-Prüfung. */
 const LANDING_CLEARANCE_FACTOR = 1.25;
+const PROJECTILE_BUCKET_SIZE_PX = 256;
+const PROJECTILE_BUCKET_KEY_STRIDE = 4096;
+
+function projectileBucketKey(gridX: number, gridY: number): number {
+  return gridX * PROJECTILE_BUCKET_KEY_STRIDE + gridY;
+}
 
 /**
  * Host-seitige Entscheidung, wann ein Gegner mit `dodge`-Konfiguration ausweicht.
@@ -47,6 +53,39 @@ const LANDING_CLEARANCE_FACTOR = 1.25;
  */
 export class CoopDefenseEnemyDodgeSystem {
   private readonly readyAt = new Map<string, number>();
+  private readonly activeEnemyIds = new Set<string>();
+  private readonly projectileBuckets = new Map<number, TrackedProjectile[]>();
+  private readonly usedProjectileBucketKeys: number[] = [];
+  private projectilesPrepared = false;
+  private currentNow = 0;
+
+  private readonly processEnemy = (enemy: EnemyEntity): void => {
+    if (!enemy.sprite.active || enemy.getHp() <= 0) return;
+    this.activeEnemyIds.add(enemy.id);
+
+    const dodge = enemy.faction === 'hostile' ? getCoopDefenseEnemyConfig(enemy.kind).dodge : undefined;
+    if (!dodge) return;
+    if (
+      dodge.enabledBelowHpRatio !== undefined
+      && enemy.getHp() / enemy.getMaxHp() > dodge.enabledBelowHpRatio
+    ) return;
+    if (this.hostPhysics.isEnemyDashing(enemy.id)) return;
+    if (enemy.getSpecialAction() === 'gauss-charge') return;
+    if (enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)) return;
+    if (this.currentNow < (this.readyAt.get(enemy.id) ?? 0)) return;
+
+    if (!this.projectilesPrepared) {
+      this.rebuildProjectileBroadphase(this.projectileManager.getActiveProjectiles());
+      this.projectilesPrepared = true;
+    }
+    const direction = this.findEvadeDirection(enemy, dodge)
+      ?? this.findApproachDirection(enemy, dodge);
+    if (!direction) return;
+
+    if (this.hostPhysics.startEnemyDash(enemy.id, direction.x, direction.y)) {
+      this.readyAt.set(enemy.id, this.currentNow + DODGE_TOTAL_DURATION_MS + dodge.cooldownMs);
+    }
+  };
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -59,13 +98,20 @@ export class CoopDefenseEnemyDodgeSystem {
   ) {}
 
   hostUpdate(now: number): void {
-    const activeEnemyIds = new Set<string>();
-    // Einmal pro Tick abgefragt und als stabile, allokationsfreie Sicht weitergereicht.
-    let projectiles: ReadonlySet<TrackedProjectile> | null = null;
-
+    this.currentNow = now;
+    this.activeEnemyIds.clear();
+    this.projectilesPrepared = false;
+    const manager = this.enemyManager as EnemyManager & {
+      forEachEnemy?: (visitor: (enemy: EnemyEntity) => void) => void;
+    };
+    if (manager.forEachEnemy) {
+      manager.forEachEnemy(this.processEnemy);
+      this.pruneInactiveEnemies(this.activeEnemyIds);
+      return;
+    }
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
-      activeEnemyIds.add(enemy.id);
+      this.activeEnemyIds.add(enemy.id);
 
       const dodge = enemy.faction === 'hostile' ? getCoopDefenseEnemyConfig(enemy.kind).dodge : undefined;
       if (!dodge) continue;
@@ -82,21 +128,28 @@ export class CoopDefenseEnemyDodgeSystem {
       if (enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)) continue;
       if (now < (this.readyAt.get(enemy.id) ?? 0)) continue;
 
-      projectiles ??= this.projectileManager.getActiveProjectiles();
-      const direction = this.findEvadeDirection(enemy, dodge, projectiles)
+      if (!this.projectilesPrepared) {
+        this.rebuildProjectileBroadphase(this.projectileManager.getActiveProjectiles());
+        this.projectilesPrepared = true;
+      }
+      const direction = this.findEvadeDirection(enemy, dodge)
         ?? this.findApproachDirection(enemy, dodge);
       if (!direction) continue;
 
       if (this.hostPhysics.startEnemyDash(enemy.id, direction.x, direction.y)) {
-        this.readyAt.set(enemy.id, now + DODGE_TOTAL_DURATION_MS + dodge.cooldownMs);
+        this.readyAt.set(enemy.id, this.currentNow + DODGE_TOTAL_DURATION_MS + dodge.cooldownMs);
       }
     }
 
-    this.pruneInactiveEnemies(activeEnemyIds);
+    this.pruneInactiveEnemies(this.activeEnemyIds);
   }
 
   clear(): void {
     this.readyAt.clear();
+    this.activeEnemyIds.clear();
+    this.projectilesPrepared = false;
+    for (const key of this.usedProjectileBucketKeys) this.projectileBuckets.get(key)!.length = 0;
+    this.usedProjectileBucketKeys.length = 0;
   }
 
   /**
@@ -106,7 +159,6 @@ export class CoopDefenseEnemyDodgeSystem {
   private findEvadeDirection(
     enemy: EnemyEntity,
     dodge: CoopDefenseEnemyDodgeConfig,
-    projectiles: ReadonlySet<TrackedProjectile>,
   ): { x: number; y: number } | null {
     const hitRadius = enemy.getCollisionRadius() + dodge.evadeMissMarginPx;
     const leadTimeSeconds = dodge.evadeLeadTimeMs / 1000;
@@ -114,31 +166,42 @@ export class CoopDefenseEnemyDodgeSystem {
     let bestOffsetX = 0;
     let bestOffsetY = 0;
 
-    for (const projectile of projectiles) {
-      if (!this.isDodgeableProjectile(enemy, projectile, dodge)) continue;
+    const minBucketX = Math.floor((enemy.sprite.x - dodge.evadeScanRadiusPx) / PROJECTILE_BUCKET_SIZE_PX);
+    const maxBucketX = Math.floor((enemy.sprite.x + dodge.evadeScanRadiusPx) / PROJECTILE_BUCKET_SIZE_PX);
+    const minBucketY = Math.floor((enemy.sprite.y - dodge.evadeScanRadiusPx) / PROJECTILE_BUCKET_SIZE_PX);
+    const maxBucketY = Math.floor((enemy.sprite.y + dodge.evadeScanRadiusPx) / PROJECTILE_BUCKET_SIZE_PX);
 
-      const velocityX = projectile.body.velocity.x;
-      const velocityY = projectile.body.velocity.y;
-      const speedSq = velocityX * velocityX + velocityY * velocityY;
-      if (speedSq <= 1) continue;
+    for (let bucketX = minBucketX; bucketX <= maxBucketX; bucketX += 1) {
+      for (let bucketY = minBucketY; bucketY <= maxBucketY; bucketY += 1) {
+        const bucket = this.projectileBuckets.get(projectileBucketKey(bucketX, bucketY));
+        if (!bucket) continue;
+        for (const projectile of bucket) {
+          if (!this.isDodgeableProjectile(enemy, projectile, dodge)) continue;
 
-      const toEnemyX = enemy.sprite.x - projectile.sprite.x;
-      const toEnemyY = enemy.sprite.y - projectile.sprite.y;
-      const timeToClosest = (toEnemyX * velocityX + toEnemyY * velocityY) / speedSq;
-      if (timeToClosest <= 0 || timeToClosest > leadTimeSeconds || timeToClosest >= bestTime) continue;
+          const velocityX = projectile.body.velocity.x;
+          const velocityY = projectile.body.velocity.y;
+          const speedSq = velocityX * velocityX + velocityY * velocityY;
+          if (speedSq <= 1) continue;
+
+          const toEnemyX = enemy.sprite.x - projectile.sprite.x;
+          const toEnemyY = enemy.sprite.y - projectile.sprite.y;
+          const timeToClosest = (toEnemyX * velocityX + toEnemyY * velocityY) / speedSq;
+          if (timeToClosest <= 0 || timeToClosest > leadTimeSeconds || timeToClosest >= bestTime) continue;
 
       // Versatz zum Zeitpunkt der größten Annäherung – steht senkrecht auf der Flugbahn.
-      const offsetX = toEnemyX - velocityX * timeToClosest;
-      const offsetY = toEnemyY - velocityY * timeToClosest;
-      if (Math.hypot(offsetX, offsetY) > hitRadius) continue;
+          const offsetX = toEnemyX - velocityX * timeToClosest;
+          const offsetY = toEnemyY - velocityY * timeToClosest;
+          if (Math.hypot(offsetX, offsetY) > hitRadius) continue;
 
-      bestTime = timeToClosest;
-      bestOffsetX = offsetX;
-      bestOffsetY = offsetY;
+          bestTime = timeToClosest;
+          bestOffsetX = offsetX;
+          bestOffsetY = offsetY;
       // Fällt der Gegner exakt auf die Bahnachse, ist die Ausweichseite beliebig: senkrecht dazu.
-      if (Math.hypot(offsetX, offsetY) < 0.001) {
-        bestOffsetX = -velocityY;
-        bestOffsetY = velocityX;
+          if (Math.hypot(offsetX, offsetY) < 0.001) {
+            bestOffsetX = -velocityY;
+            bestOffsetY = velocityX;
+          }
+        }
       }
     }
 
@@ -210,12 +273,29 @@ export class CoopDefenseEnemyDodgeSystem {
     if (this.enemyManager.hasEnemy(projectile.ownerId)) return false;
     if (!this.combatSystem.canDamageTarget(projectile.ownerId, enemy.id, projectile.allowTeamDamage)) return false;
 
-    return Phaser.Math.Distance.Between(
-      enemy.sprite.x,
-      enemy.sprite.y,
-      projectile.sprite.x,
-      projectile.sprite.y,
-    ) <= dodge.evadeScanRadiusPx;
+    const dx = enemy.sprite.x - projectile.sprite.x;
+    const dy = enemy.sprite.y - projectile.sprite.y;
+    return dx * dx + dy * dy <= dodge.evadeScanRadiusPx * dodge.evadeScanRadiusPx;
+  }
+
+  private rebuildProjectileBroadphase(projectiles: ReadonlySet<TrackedProjectile>): void {
+    for (const key of this.usedProjectileBucketKeys) this.projectileBuckets.get(key)!.length = 0;
+    this.usedProjectileBucketKeys.length = 0;
+
+    for (const projectile of projectiles) {
+      if (!projectile.sprite.active || projectile.isGrenade || projectile.isFlame) continue;
+      if (this.enemyManager.hasEnemy(projectile.ownerId)) continue;
+      const bucketX = Math.floor(projectile.sprite.x / PROJECTILE_BUCKET_SIZE_PX);
+      const bucketY = Math.floor(projectile.sprite.y / PROJECTILE_BUCKET_SIZE_PX);
+      const key = projectileBucketKey(bucketX, bucketY);
+      let bucket = this.projectileBuckets.get(key);
+      if (!bucket) {
+        bucket = [];
+        this.projectileBuckets.set(key, bucket);
+      }
+      if (bucket.length === 0) this.usedProjectileBucketKeys.push(key);
+      bucket.push(projectile);
+    }
   }
 
   private getStepDistance(enemy: EnemyEntity): number {

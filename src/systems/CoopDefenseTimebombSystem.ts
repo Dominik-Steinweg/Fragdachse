@@ -132,7 +132,6 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
         && from.gridY === waypointCell.gridY,
       );
       if (now >= state.repathAt || !state.waypoint || enteredWaypointCell) {
-        const to = this.strategicFlowField.worldToGrid(targetX, targetY);
         state.waypoint = from && to
           ? this.strategicFlowField.findNextWorldPositionTowards(from.gridX, from.gridY, to.gridX, to.gridY)
           : null;
