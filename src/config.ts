@@ -789,6 +789,35 @@ export function getTopDownMuzzleOriginFromVector(originX: number, originY: numbe
 }
 
 /**
+ * Transformiert einen lokalen Punkt eines getragenen Items in den World Space.
+ *
+ * Die Texturkoordinaten bleiben pixelrasterbezogen (x rechts, y nach unten), der Grip liegt auf
+ * dem Pfotenanker und die Sprite-Rotation ist dieselbe Rotation, die HeldItemVisual verwendet.
+ * Der Helfer ist bewusst frei von Loadout-IDs: Die Geometrie kommt vollständig aus der Spec.
+ */
+export function transformHeldItemPoint(
+  originX: number,
+  originY: number,
+  spriteRotation: number,
+  textureScale: number,
+  gripX: number,
+  gripY: number,
+  pointX: number,
+  pointY: number,
+): MuzzleOrigin {
+  const cos = Math.cos(spriteRotation);
+  const sin = Math.sin(spriteRotation);
+  const localX = HELD_ITEM_ANCHOR_X + pointX - gripX;
+  const localY = HELD_ITEM_ANCHOR_Y + pointY - gripY;
+  const dx = localX * textureScale;
+  const dy = localY * textureScale;
+  return {
+    x: originX + dx * cos - dy * sin,
+    y: originY + dx * sin + dy * cos,
+  };
+}
+
+/**
  * Weltposition des Pfotenankers einer Figur, auf dem das getragene Item sitzt.
  *
  * `spriteRotation` ist die Rotation des Figuren-Sprites, also der Aimwinkel **inklusive** des
@@ -802,14 +831,16 @@ export function getHeldItemAnchor(
   spriteRotation: number,
   textureScale: number,
 ): MuzzleOrigin {
-  const cos = Math.cos(spriteRotation);
-  const sin = Math.sin(spriteRotation);
-  const dx = HELD_ITEM_ANCHOR_X * textureScale;
-  const dy = HELD_ITEM_ANCHOR_Y * textureScale;
-  return {
-    x: originX + dx * cos - dy * sin,
-    y: originY + dx * sin + dy * cos,
-  };
+  return transformHeldItemPoint(
+    originX,
+    originY,
+    spriteRotation,
+    textureScale,
+    0,
+    0,
+    0,
+    0,
+  );
 }
 
 export function isPointInsideArena(x: number, y: number): boolean {

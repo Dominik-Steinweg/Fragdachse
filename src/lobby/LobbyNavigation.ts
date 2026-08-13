@@ -1,3 +1,4 @@
+import { PLAYER_SIZE } from '../config';
 import type { LobbyObstacleWorld } from './LobbyObstacleWorld';
 
 export interface NavCell {
@@ -12,6 +13,8 @@ export interface NavWaypoint {
 
 /** Ein Actor gilt als eingeschlossen, wenn ihm weniger als so viele Zellen bleiben. */
 const TRAPPED_CELL_THRESHOLD = 10;
+/** Halbe Figurenbreite; nur so breite Korridore dürfen beim Straffziehen benutzt werden. */
+const PATH_CLEARANCE_PX = PLAYER_SIZE * 0.5;
 
 const DIRECTIONS: ReadonlyArray<{ dx: number; dy: number; cost: number }> = [
   { dx:  1, dy:  0, cost: 1 },
@@ -118,7 +121,9 @@ export class LobbyNavigation {
         }
       }
       if (current < 0) break;
-      if (current === goalKey) return this.reconstruct(cameFrom, current, cols);
+      if (current === goalKey) {
+        return this.smooth(fromX, fromY, this.reconstruct(cameFrom, current, cols));
+      }
 
       open.delete(current);
       closed[current] = 1;
@@ -206,6 +211,43 @@ export class LobbyNavigation {
     if (!free(fromX + dx, fromY + dy)) return false;
     if (dx === 0 || dy === 0) return true;
     return free(fromX + dx, fromY) && free(fromX, fromY + dy);
+  }
+
+  /**
+   * Zieht die Schnur straff: Wegpunkte, die sich überspringen lassen, fallen weg.
+   *
+   * Ein reiner A*-Pfad folgt dem Zellraster und liest sich als Zickzack „auf Schienen".
+   * Übersprungen wird nur, wo ein Korridor in Figurenbreite tatsächlich frei ist – die
+   * Prüfung läuft über dieselbe Sichtlinie mit Freiraum wie im Gameplay.
+   */
+  private smooth(fromX: number, fromY: number, path: NavWaypoint[]): NavWaypoint[] {
+    if (path.length <= 1) return path;
+
+    const result: NavWaypoint[] = [];
+    let anchorX = fromX;
+    let anchorY = fromY;
+    let index = 0;
+
+    while (index < path.length) {
+      // Den weitesten Punkt suchen, der vom Anker aus frei erreichbar ist.
+      let furthest = index;
+      for (let probe = path.length - 1; probe > index; probe -= 1) {
+        if (this.world.geometry.hasLineOfSight(
+          anchorX, anchorY, path[probe].x, path[probe].y,
+          { clearanceRadius: PATH_CLEARANCE_PX },
+        )) {
+          furthest = probe;
+          break;
+        }
+      }
+      const next = path[furthest];
+      result.push(next);
+      anchorX = next.x;
+      anchorY = next.y;
+      index = furthest + 1;
+    }
+
+    return result;
   }
 
   private reconstruct(cameFrom: Int32Array, goalKey: number, cols: number): NavWaypoint[] {

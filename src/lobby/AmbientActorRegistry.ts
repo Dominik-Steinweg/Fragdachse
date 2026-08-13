@@ -27,9 +27,16 @@ export class AmbientActorRegistry implements OwnerVisualSource {
     return this.actors.size;
   }
 
-  /** Alle lebenden Actors der Gegenseite – Zielauswahl von Sequenzen. */
+  /**
+   * Lebende, angreifbare Actors der Gegenseite.
+   *
+   * Wer sich gerade eingräbt, verlässt die Bühne und ist kein Ziel mehr – sonst schösse eine
+   * Figur noch auf einen Gegner, der bereits im Boden verschwindet.
+   */
   opponentsOf(actor: LobbyAmbientActor): LobbyAmbientActor[] {
-    return this.all().filter((other) => other.team !== actor.team && other.isAlive());
+    return this.all().filter((other) => other.team !== actor.team
+      && other.isAlive()
+      && !other.isBurrowing());
   }
 
   getOwnerVisualState(ownerId: string): OwnerVisualState | null {

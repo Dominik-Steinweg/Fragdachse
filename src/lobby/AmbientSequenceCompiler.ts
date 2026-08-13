@@ -13,6 +13,7 @@ import {
   type AmbientWeaponEntry,
 } from './AmbientWeaponPool';
 import { AMBIENT_ZONES, type AmbientZone } from './AmbientZones';
+import { isLobbyUiReservedCell } from '../arena/MenuArenaPreviewConfig';
 import type { LobbyNavigation, NavCell } from './LobbyNavigation';
 import type { LobbyObstacleWorld } from './LobbyObstacleWorld';
 import type { LobbyZoneRect } from './LobbyRockBodyPool';
@@ -63,6 +64,15 @@ export interface AmbientCompileContext {
 
 /** Mindestabstand zwischen den Startpositionen der beiden Seiten. */
 const MIN_ENGAGEMENT_DISTANCE_CELLS = 5;
+/** Verbündete starten weit auseinander, weil Figuren untereinander nicht kollidieren. */
+const MIN_ALLY_SEPARATION_CELLS = 12;
+/** Gegner dürfen näher stehen; sie sollen sich ja treffen. */
+const MIN_OPPONENT_SEPARATION_CELLS = 3;
+
+interface TakenSpawn {
+  cell: NavCell;
+  team: 'badger' | 'enemy';
+}
 /** So viele Versuche pro Zone, bevor der Compiler den Plan verwirft. */
 const PLACEMENT_ATTEMPTS = 24;
 /**
@@ -98,20 +108,20 @@ export class AmbientSequenceCompiler {
     if (badgerCount + enemyCount === 0) return null;
 
     const actors: CompiledActorPlan[] = [];
-    const taken: NavCell[] = [];
+    const taken: TakenSpawn[] = [];
 
     for (let index = 0; index < badgerCount; index += 1) {
       const plan = this.planActor('badger', template, zone, freeCells, taken, pool, context);
       if (!plan) return null;
       actors.push(plan);
-      taken.push(plan.spawn);
+      taken.push({ cell: plan.spawn, team: 'badger' });
     }
 
     for (let index = 0; index < enemyCount; index += 1) {
       const plan = this.planActor('enemy', template, zone, freeCells, taken, pool, context);
       if (!plan) return null;
       actors.push(plan);
-      taken.push(plan.spawn);
+      taken.push({ cell: plan.spawn, team: 'enemy' });
     }
 
     if (template.requiresLineOfSight && !this.hasEngagementLine(actors, context)) return null;
@@ -145,11 +155,19 @@ export class AmbientSequenceCompiler {
     return weighted[weighted.length - 1].zone;
   }
 
+  /**
+   * Freie Zellen einer Zone.
+   *
+   * Die Sperrflächen der Oberfläche werden hier ein zweites Mal geprüft, obwohl die Zonen sie
+   * bereits aussparen: Ein Gefecht hinter einem Menü ist der auffälligste Fehler, den diese
+   * Inszenierung machen kann, und ein verschobener Zonenrand darf ihn nicht zurückbringen.
+   */
   private collectFreeCells(zone: AmbientZone, world: LobbyObstacleWorld): NavCell[] {
     const cells: NavCell[] = [];
     for (let gridY = zone.minGridY; gridY <= zone.maxGridY; gridY += 1) {
       for (let gridX = zone.minGridX; gridX <= zone.maxGridX; gridX += 1) {
         if (world.isCellBlocked(gridX, gridY)) continue;
+        if (isLobbyUiReservedCell(gridX, gridY)) continue;
         cells.push({ gridX, gridY });
       }
     }
@@ -174,13 +192,18 @@ export class AmbientSequenceCompiler {
     template: AmbientTemplate,
     zone: AmbientZone,
     freeCells: readonly NavCell[],
-    taken: readonly NavCell[],
+    taken: readonly TakenSpawn[],
     pool: readonly AmbientWeaponEntry[],
     context: AmbientCompileContext,
   ): CompiledActorPlan | null {
     for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt += 1) {
       const spawn = freeCells[Math.floor(context.rng() * freeCells.length)];
-      if (!spawn || taken.some((cell) => cellDistance(cell, spawn) < 2)) continue;
+      if (!spawn) continue;
+      // Figuren kollidieren untereinander nicht. Zwei Verbündete dicht nebeneinander liefen
+      // deshalb sichtbar ineinander – sie starten weit auseinander oder gar nicht.
+      const tooClose = taken.some(({ cell, team: otherTeam }) => cellDistance(cell, spawn)
+        < (otherTeam === team ? MIN_ALLY_SEPARATION_CELLS : MIN_OPPONENT_SEPARATION_CELLS));
+      if (tooClose) continue;
 
       const moveTo = this.pickReachable(spawn, freeCells, context, 3);
       if (!moveTo) continue;

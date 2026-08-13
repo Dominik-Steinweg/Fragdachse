@@ -36,7 +36,7 @@ import {
   type LivingBarPalette,
 } from '../ui/LivingBarEffect';
 import { UiButton } from '../ui/UiButton';
-import { BORDER, MOTION, SPACE, TEXT, textStyle } from '../ui/uiTheme';
+import { BORDER, getPingColor, MOTION, SPACE, TEXT, textStyle } from '../ui/uiTheme';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { UiTooltip } from '../ui/UiTooltip';
@@ -90,6 +90,7 @@ const ROSTER_SLOT_W = (CONTENT_W - ROSTER_COLUMN_GAP) / 2;
 const ROSTER_SLOT_H = 36;
 const ROSTER_ROW_STEP = 40;
 const TEAM_HEADER_H = 28;
+const READY_STATUS_OFFSET_X = 23;
 
 // ── Coop-Fortschrittsband (innerhalb des Panels) ─────────────────────────────
 // Sichtbar nur im Coop; dann steht das Panel immer auf seiner vollen Hoehe.
@@ -133,11 +134,16 @@ const CTA_FADE_OVERLAP = 44;
 // ── Ausserhalb des Panels ────────────────────────────────────────────────────
 const BUILD_INFO_X = 16;
 const BUILD_INFO_Y = GAME_HEIGHT - 16;
+const SYSTEM_BAR_GAP = 8;
+const SYSTEM_BAR_H = 40;
+const SYSTEM_BAR_MARGIN = 28;
+const HELP_BTN_W = 112;
+const OPTIONS_BTN_W = 132;
 const FULLSCREEN_BTN_W = 168;
-const FULLSCREEN_BTN_H = 40;
-const FULLSCREEN_BTN_MARGIN = 28;
-const FULLSCREEN_BTN_X = GAME_WIDTH - FULLSCREEN_BTN_MARGIN - FULLSCREEN_BTN_W / 2;
-const FULLSCREEN_BTN_Y = GAME_HEIGHT - FULLSCREEN_BTN_MARGIN - FULLSCREEN_BTN_H / 2;
+const SYSTEM_BAR_Y = GAME_HEIGHT - SYSTEM_BAR_MARGIN - SYSTEM_BAR_H / 2;
+const FULLSCREEN_BTN_X = GAME_WIDTH - SYSTEM_BAR_MARGIN - FULLSCREEN_BTN_W / 2;
+const OPTIONS_BTN_X = FULLSCREEN_BTN_X - FULLSCREEN_BTN_W / 2 - SYSTEM_BAR_GAP - OPTIONS_BTN_W / 2;
+const HELP_BTN_X = OPTIONS_BTN_X - OPTIONS_BTN_W / 2 - SYSTEM_BAR_GAP - HELP_BTN_W / 2;
 const FULLSCREEN_LABEL = 'VOLLBILD';
 const FULLSCREEN_HINT_MS = 2200;
 
@@ -170,17 +176,6 @@ function formatBuildTimestamp(isoTimestamp: string): string {
   }).format(new Date(isoTimestamp));
 }
 
-/**
- * Schwellen fuer die Netzwerk-RTT, nicht fuer die Umlaufzeit durch die Spielschleifen:
- * im LAN einstellig, innerhalb DE/AT typisch 10-40 ms.
- */
-function pingColor(ms: number): string {
-  if (ms <= 20)  return toCssColor(COLORS.GREEN_2);
-  if (ms <= 50)  return toCssColor(COLORS.GOLD_1);
-  if (ms <= 100) return toCssColor(COLORS.RED_1);
-  return toCssColor(COLORS.RED_3);
-}
-
 type PlayerRow = {
   bg:    Phaser.GameObjects.Image;
   name:  Phaser.GameObjects.Text;
@@ -197,6 +192,7 @@ type WaitingRow = {
 
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
+  private systemBar:      Phaser.GameObjects.Container | null = null;
   private playerContextMenu: UiContextMenu | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
   private waitingRows:    WaitingRow[] = [];
@@ -213,6 +209,8 @@ export class LobbyOverlay {
   private retryBtn!:      UiButton;
   private inviteRow!:     UiButton;
   private inviteCopyIcon: Phaser.GameObjects.Image | null = null;
+  private helpBtn!:       UiButton;
+  private optionsBtn!:    UiButton;
   private fullscreenBtn!: UiButton;
   private fullscreenHintEvent: Phaser.Time.TimerEvent | null = null;
   private fullscreenUnsubscribe: (() => void) | null = null;
@@ -251,6 +249,8 @@ export class LobbyOverlay {
     private onRejoinRoom: () => void,
     private onRetryRoom: () => void,
     private onShowNetDiagnostics: () => void,
+    private onShowHelp: () => void,
+    private onShowOptions: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
     private onOpenCoopDefenseItems: () => void,
   ) {}
@@ -398,20 +398,37 @@ export class LobbyOverlay {
     ).setOrigin(0, 1).setAlpha(0.9).setScrollFactor(0);
     objects.push(buildInfo);
 
-    // ── Vollbild (unten rechts, unabhaengig vom Panel) ────────────────────
+    // ── Systemleiste (unten rechts, unabhaengig von den Panels) ───────────
     // Bleibt auf `pointerup`, damit die Browser-Geste auch auf Touch gueltig ist; UiButton
     // akzeptiert dieses Loslassen nur nach einem eigenen `pointerdown`.
+    this.helpBtn = new UiButton(this.scene, {
+      x: HELP_BTN_X, y: SYSTEM_BAR_Y, w: HELP_BTN_W, h: SYSTEM_BAR_H,
+      label: 'HILFE',
+      labelRole: 'labelSm',
+      intent: 'secondary',
+      icon: 'help',
+      iconSize: 20,
+      onClick: () => this.onShowHelp(),
+    });
+    this.optionsBtn = new UiButton(this.scene, {
+      x: OPTIONS_BTN_X, y: SYSTEM_BAR_Y, w: OPTIONS_BTN_W, h: SYSTEM_BAR_H,
+      label: 'OPTIONEN',
+      labelRole: 'labelSm',
+      intent: 'secondary',
+      icon: 'settings',
+      iconSize: 20,
+      onClick: () => this.onShowOptions(),
+    });
     this.fullscreenBtn = new UiButton(this.scene, {
-      x: FULLSCREEN_BTN_X, y: FULLSCREEN_BTN_Y, w: FULLSCREEN_BTN_W, h: FULLSCREEN_BTN_H,
+      x: FULLSCREEN_BTN_X, y: SYSTEM_BAR_Y, w: FULLSCREEN_BTN_W, h: SYSTEM_BAR_H,
       label: FULLSCREEN_LABEL,
       labelRole: 'labelSm',
-      intent: 'ghost',
+      intent: 'secondary',
       icon: isFullscreen() ? 'fullscreen-exit' : 'fullscreen-enter',
       iconSize: 18,
       activateOn: 'pointerup',
       onClick: () => this.onFullscreenClicked(),
     });
-    objects.push(this.fullscreenBtn.getRoot());
 
     // Nicht an ENTER/LEAVE_FULLSCREEN des ScaleManagers: die kennen nur das API-Vollbild und
     // schweigen bei F11-Vollbild. Siehe `ui/fullscreen`.
@@ -423,6 +440,14 @@ export class LobbyOverlay {
     promoteToClarityCamera(this.scene, this.container);
     this.playerContextMenu = new UiContextMenu(this.scene, this.container);
     this.container.setVisible(this.visible);
+
+    this.systemBar = this.scene.add.container(0, 0, [
+      this.helpBtn.getRoot(),
+      this.optionsBtn.getRoot(),
+      this.fullscreenBtn.getRoot(),
+    ]).setDepth(DEPTH.OVERLAY);
+    promoteToClarityCamera(this.scene, this.systemBar);
+    this.systemBar.setVisible(this.visible);
 
     this.refreshHeader();
     this.updateRoomActionButtons();
@@ -621,6 +646,8 @@ export class LobbyOverlay {
     this.inviteRow?.destroy();
     this.readyBtn?.destroy();
     this.retryBtn?.destroy();
+    this.helpBtn?.destroy();
+    this.optionsBtn?.destroy();
     this.fullscreenBtn?.destroy();
     this.coopUpgradesBtn?.destroy();
     this.coopItemsBtn?.destroy();
@@ -630,6 +657,10 @@ export class LobbyOverlay {
     if (this.container) {
       this.container.destroy(true);
       this.container = null;
+    }
+    if (this.systemBar) {
+      this.systemBar.destroy(true);
+      this.systemBar = null;
     }
     this.playerRows.clear();
     this.waitingRows = [];
@@ -644,6 +675,7 @@ export class LobbyOverlay {
     const wasVisible = this.visible;
     this.visible = true;
     this.container?.setVisible(true);
+    this.systemBar?.setVisible(true);
     if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
   }
@@ -655,6 +687,7 @@ export class LobbyOverlay {
     this.entranceTween = null;
     this.stopReadyGlow();
     this.container?.setVisible(false);
+    this.systemBar?.setVisible(false);
     this.upgradeBtnEffect?.stop();
     this.itemsBtnEffect?.stop();
     this.itemsTooltip?.hide();
@@ -1035,11 +1068,12 @@ export class LobbyOverlay {
       color: COLORS.GREY_1,
     })).setOrigin(0, 0.5).setScrollFactor(0);
 
-    const badge = this.scene.add.circle(CONTENT_L + 18, LIST_Y, 11, COLORS.GREY_7)
+    const badge = this.scene.add.circle(CONTENT_L + READY_STATUS_OFFSET_X, LIST_Y, 11, COLORS.GREY_7)
       .setStrokeStyle(2, COLORS.GREY_4)
       .setScrollFactor(0);
-    const mark = this.scene.add.image(CONTENT_L + 18, LIST_Y, this.readyMarkTexture(false))
+    const mark = this.scene.add.image(CONTENT_L + READY_STATUS_OFFSET_X, LIST_Y, this.readyMarkTexture())
       .setDisplaySize(14, 14)
+      .setVisible(false)
       .setScrollFactor(0);
 
     const level = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 105, LIST_Y, '-', textStyle('numS', {
@@ -1242,8 +1276,8 @@ export class LobbyOverlay {
       this.rowTexture(width, height, false, own, accentColor),
     );
     row.name.setPosition(left + 40, y);
-    row.badge.setPosition(left + 18, y);
-    row.mark.setPosition(left + 18, y);
+    row.badge.setPosition(left + READY_STATUS_OFFSET_X, y);
+    row.mark.setPosition(left + READY_STATUS_OFFSET_X, y);
     row.level.setPosition(x + width / 2 - 105, y);
     row.ping.setPosition(x + width / 2 - 10, y);
   }
@@ -1281,20 +1315,20 @@ export class LobbyOverlay {
   private refreshBadges(): void {
     for (const [id, row] of this.playerRows) {
       const ready = this.bridge.getPlayerReady(id);
-      row.badge.setFillStyle(ready ? COLORS.GREEN_5 : COLORS.GREY_8);
+      row.badge.setFillStyle(ready ? COLORS.GREEN_5 : COLORS.GREY_7);
       row.badge.setStrokeStyle(2, ready ? COLORS.GREEN_1 : COLORS.GREY_4);
-      row.mark.setTexture(this.readyMarkTexture(ready));
+      row.mark.setVisible(ready).setTexture(this.readyMarkTexture());
       row.mark.setDisplaySize(14, 14);
     }
   }
 
-  /** Haken bzw. Kreuz fuer die Bereitschaftsanzeige einer Spielerzeile. */
-  private readyMarkTexture(ready: boolean): string {
+  /** Gemeinsames Check-Icon fuer die Bereitschaftsanzeige einer Spielerzeile. */
+  private readyMarkTexture(): string {
     return ensureIconTexture(
       this.scene,
-      ready ? 'check' : 'cross',
+      'check',
       28,
-      ready ? COLORS.GREEN_1 : COLORS.GREY_4,
+      COLORS.GREEN_1,
     );
   }
 
@@ -1326,7 +1360,7 @@ export class LobbyOverlay {
         row.ping.setText('–').setColor(toCssColor(TEXT.muted));
         continue;
       }
-      row.ping.setText(`${ms}ms`).setColor(pingColor(ms));
+      row.ping.setText(`${ms}ms`).setColor(getPingColor(ms));
     }
   }
 
@@ -1385,7 +1419,7 @@ export class LobbyOverlay {
 
     return {
       text: `● Direkt · ${Math.round(link.medianRttMs)} ms`,
-      color: pingColor(link.medianRttMs),
+      color: getPingColor(link.medianRttMs),
     };
   }
 

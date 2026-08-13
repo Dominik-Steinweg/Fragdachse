@@ -135,7 +135,7 @@ export function ensureLobbyFooterTexture(
   return key;
 }
 
-/** Modale Hauptflaeche: dunkler Verlauf, dezenter Goldrand, leichter Glanz oben. */
+/** Modale Hauptflaeche: dunkler Verlauf, dezente Kontur, leichter Glanz oben. */
 export function ensureModalPanelTexture(
   scene: Phaser.Scene, key: string, w: number, h: number,
   baseColor: number, accentColor: number,
@@ -231,6 +231,8 @@ export type UiIconName =
   | 'chevron-right'
   | 'plus'
   | 'info'
+  | 'help'
+  | 'settings'
   | 'lock'
   | 'copy'
   | 'trophy'
@@ -303,6 +305,46 @@ export function ensureIconTexture(
       line(0.11);
       path([[0.50, 0.45], [0.50, 0.70]]);
       break;
+
+    case 'help':
+      line(0.12);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.5, s * 0.36, 0, Math.PI * 2);
+      ctx.stroke();
+      line(0.12);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.37, s * 0.38);
+      ctx.bezierCurveTo(s * 0.37, s * 0.27, s * 0.63, s * 0.27, s * 0.63, s * 0.40);
+      ctx.bezierCurveTo(s * 0.63, s * 0.50, s * 0.50, s * 0.50, s * 0.50, s * 0.59);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.71, s * 0.055, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'settings': {
+      const teeth = 8;
+      const outerRadius = 0.39;
+      const innerRadius = 0.29;
+      ctx.beginPath();
+      for (let index = 0; index < teeth * 2; index += 1) {
+        const angle = -Math.PI / 2 + (index * Math.PI) / teeth;
+        const radius = index % 2 === 0 ? outerRadius : innerRadius;
+        const px = 0.5 + Math.cos(angle) * radius;
+        const py = 0.5 + Math.sin(angle) * radius;
+        if (index === 0) ctx.moveTo(px * s, py * s);
+        else ctx.lineTo(px * s, py * s);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.5, s * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      break;
+    }
 
     case 'lock': {
       // Buegel zuerst, damit der Koerper seine untere Haelfte verdeckt.

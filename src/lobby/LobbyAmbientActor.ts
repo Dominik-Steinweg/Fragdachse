@@ -43,6 +43,8 @@ export type AmbientActorSpawn = AmbientBadgerSpawn | AmbientEnemySpawn;
 const WAYPOINT_ARRIVAL_PX = 4;
 /** Maximale Drehgeschwindigkeit des Zielwinkels in Radiant pro Sekunde. */
 const AIM_TURN_RATE = Math.PI * 2.6;
+/** Dauer der sichtbaren Grabbewegung, bevor die Figur unter der Erde ist. */
+const BURROW_WINDUP_MS = 260;
 
 /**
  * Ein Darsteller der Lobby-Inszenierung.
@@ -75,6 +77,9 @@ export class LobbyAmbientActor {
   private pathIndex = 0;
   /** Topologiestand, für den der aktuelle Pfad geplant wurde. */
   private pathTopologyVersion = -1;
+  private movementAngle: number | null = null;
+  private burrowPhase: 'idle' | 'digging' | 'underground' = 'idle';
+  private burrowTimerMs = 0;
 
   constructor(scene: Phaser.Scene, spawn: AmbientActorSpawn, lighting: LightingSystem | null) {
     this.id = spawn.id;
@@ -171,6 +176,19 @@ export class LobbyAmbientActor {
     this.badger?.setHeldItemId(weaponId);
   }
 
+  /**
+   * Blendet die Figur ein oder aus, ohne den Lebenszyklus zu berühren.
+   *
+   * Bewusst direkt am Sprite und nicht über `PlayerEntity.setVisible`: Dessen Übergang
+   * sichtbar → unsichtbar löst die Sterbeanimation aus. Hier geht es nur darum, dass ein
+   * Actor ausserhalb der Arena noch nicht zu sehen ist.
+   */
+  setStageVisible(visible: boolean): void {
+    this.badger?.sprite.setVisible(visible);
+    this.badger?.syncBar();
+    this.enemy?.sprite.setVisible(visible);
+  }
+
   setAimAngle(angle: number): void {
     this.targetAimAngle = angle;
   }
@@ -193,6 +211,17 @@ export class LobbyAmbientActor {
   /** Der Punkt, an dem Projektile und Strahlen entstehen. */
   getMuzzleOrigin(): NavWaypoint {
     return { x: this.x, y: this.y };
+  }
+
+  /** Visueller Mündungs-Punkt der getragenen Waffe; Gameplay bleibt am Actor-Zentrum. */
+  getVisualMuzzleOrigin(): NavWaypoint | null {
+    return this.badger?.getHeldItemMuzzleOrigin() ?? null;
+  }
+
+  /** Versetzt die Figur ohne Weg dorthin – für den Auftritt jenseits der Arenakante. */
+  teleportTo(x: number, y: number): void {
+    this.clearPath();
+    this.setPosition(x, y);
   }
 
   setPath(path: NavWaypoint[], topologyVersion: number): void {
@@ -236,9 +265,55 @@ export class LobbyAmbientActor {
     return this.hp;
   }
 
+  /**
+   * Gräbt die Figur ein.
+   *
+   * Bewusst für **alle** Ambient-Figuren, auch für Gegner, die sich im Gameplay nicht
+   * eingraben: In der Lobby ist das keine Kampffähigkeit, sondern der Abgang von der Bühne.
+   * Eine Figur, die weit vom Rand entfernt aufhören soll, verschwindet dadurch begründet
+   * statt sich aufzulösen. Die Darstellung kommt aus den bestehenden Entities.
+   */
+  beginBurrow(): void {
+    if (this.burrowPhase !== 'idle') return;
+    this.burrowPhase = 'digging';
+    this.burrowTimerMs = BURROW_WINDUP_MS;
+    this.clearPath();
+    this.badger?.setBurrowPhase('windup', true);
+  }
+
+  isBurrowing(): boolean {
+    return this.burrowPhase !== 'idle';
+  }
+
+  /** Vollständig unter der Erde – ab hier ist die Figur unsichtbar und darf abgeräumt werden. */
+  isUnderground(): boolean {
+    return this.burrowPhase === 'underground';
+  }
+
   update(deltaMs: number): void {
+    this.updateBurrow(deltaMs);
     this.advanceAlongPath(deltaMs);
     this.turnTowardsTargetAim(deltaMs);
+  }
+
+  private updateBurrow(deltaMs: number): void {
+    if (this.burrowPhase !== 'digging') return;
+    this.burrowTimerMs -= deltaMs;
+
+    if (this.burrowTimerMs > 0) {
+      // Der Dachs hat die Grabanimation der `PlayerEntity`. Gegner kennen sie nicht – sie
+      // sinken über dieselbe Zeit sichtbar zusammen, statt einfach zu verschwinden.
+      if (this.enemy) {
+        const progress = 1 - Math.max(0, this.burrowTimerMs) / BURROW_WINDUP_MS;
+        this.enemy.setDashScale(1 - progress * 0.7);
+      }
+      return;
+    }
+
+    this.burrowPhase = 'underground';
+    this.badger?.setBurrowPhase('underground', true);
+    this.enemy?.setDashScale(1);
+    this.enemy?.setBurrowed(true);
   }
 
   destroy(): void {
@@ -246,12 +321,27 @@ export class LobbyAmbientActor {
     this.enemy?.destroy();
   }
 
+  /**
+   * Blickrichtung der Bewegung, oder `null` im Stand.
+   *
+   * Ohne Gefechtsziel richtet sich eine Figur dorthin, wohin sie läuft – sonst schiebt sie
+   * sich sichtbar seitwärts oder rückwärts über die Fläche.
+   */
+  getMovementAngle(): number | null {
+    return this.movementAngle;
+  }
+
   private advanceAlongPath(deltaMs: number): void {
-    if (!this.hasPath() || this.hp <= 0) return;
+    if (!this.hasPath() || this.hp <= 0) {
+      this.movementAngle = null;
+      return;
+    }
 
     let remaining = (this.moveSpeed * deltaMs) / 1000;
     let x = this.x;
     let y = this.y;
+    const fromX = x;
+    const fromY = y;
 
     while (remaining > 0 && this.pathIndex < this.path.length) {
       const target = this.path[this.pathIndex];
@@ -272,6 +362,9 @@ export class LobbyAmbientActor {
       remaining = 0;
     }
 
+    const movedX = x - fromX;
+    const movedY = y - fromY;
+    this.movementAngle = Math.hypot(movedX, movedY) > 0.01 ? Math.atan2(movedY, movedX) : null;
     this.setPosition(x, y);
   }
 

@@ -36,10 +36,9 @@ import {
   type LoadoutItemRef,
 } from '../loadout/LoadoutCatalog';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
-import { ensureGlassColumnTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
+import { ensureFlatPanelTexture, ensureGlassColumnTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
-import { UiButton } from './UiButton';
-import { INTENT, RADIUS, TEXT, textStyle } from './uiTheme';
+import { BORDER, FONT_DISPLAY, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 import { getOverlayRoot } from './fullscreen';
 import { BadgerPreview } from './BadgerPreview';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
@@ -91,11 +90,11 @@ const MODE_LABEL_Y = 162 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 2;
 const MODE_ROW_Y   = 180 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 3;
 const MAP_LABEL_Y  = 204 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 4;
 const MAP_ROW_Y    = 222 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 5;
-const DIVIDER1_Y   = 248 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 6;
-const BADGER_Y     = 294 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 7;
+const DIVIDER1_Y   = MAP_ROW_Y + 42;
+const BADGER_Y     = DIVIDER1_Y + 58;
 const BADGER_SIZE        = 68;
 const BADGER_CLICK_SIZE  = 76;
-const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 6;
+const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 16;
 const CONTROL_BUTTON_DY  = 8;
 const NAME_COLOR_BUTTON_W = 128;
 const NAME_COLOR_BUTTON_H = 28;
@@ -142,9 +141,9 @@ const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
 const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = DIVIDER2_Y + 12;
-const CAROUSEL_ROW_STEP = 44;
-const CAROUSEL_GROUP_DY = 38;
+const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
+const CAROUSEL_ROW_STEP = 50;
+const CAROUSEL_GROUP_DY = 46;
 const LOADOUT_CONTROL_W = LOBBY_PANEL_W - 40;
 const LOADOUT_CONTROL_H = 38;
 const LOADOUT_POPUP_MARGIN = 12;
@@ -156,12 +155,6 @@ const LOADOUT_POPUP_SAFE_AREA = {
 } as const;
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 3 * CAROUSEL_ROW_STEP + LOADOUT_CONTROL_H / 2 + 18;
-const MENU_BTN_Y  = DIVIDER3_Y + 30;
-const MENU_BTN_W  = 92;
-const MENU_BTN_H  = 34;
-const OPTIONS_BTN_X = CENTER_X - 50;
-const HELP_BTN_X = CENTER_X + 50;
 const ARROW_X_LEFT      = 20;
 const ARROW_X_RIGHT     = LOBBY_PANEL_W - 20;
 const ITEM_NAME_X       = CENTER_X;
@@ -225,8 +218,6 @@ export class LeftSidePanel {
   private timeSliderDragging = false;
   private timeSliderPointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private timeSliderPointerUpHandler: (() => void) | null = null;
-  private optionsBtn:      UiButton | null = null;
-  private helpBtn:         UiButton | null = null;
   private colorEditBtn:   Phaser.GameObjects.Image | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
   private teamArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
@@ -537,37 +528,6 @@ export class LeftSidePanel {
     this.loadoutLayer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.loadoutLayer);
 
-    // ── Trennlinie 3 (unter Loadout) ──
-    const divider3 = this.scene.add.graphics();
-    divider3.lineStyle(1, COLORS.GREY_6, 0.5);
-    divider3.beginPath();
-    divider3.moveTo(20, DIVIDER3_Y);
-    divider3.lineTo(LOBBY_PANEL_W - 20, DIVIDER3_Y);
-    divider3.strokePath();
-    divider3.setScrollFactor(0);
-    objects.push(divider3);
-
-    // ── Optionen und Hilfe ──
-    // Nebenwege, keine Handlungsaufrufe: ghost statt der frueheren Grau-Gold-Flaeche, die neben
-    // dem BEREIT-Button um dieselbe Aufmerksamkeit warb.
-    this.optionsBtn = new UiButton(this.scene, {
-      x: OPTIONS_BTN_X, y: MENU_BTN_Y, w: MENU_BTN_W, h: MENU_BTN_H,
-      label: 'OPTIONEN',
-      labelRole: 'labelSm',
-      intent: 'ghost',
-      onClick: () => this.optionsOverlay?.show(),
-    });
-    objects.push(this.optionsBtn.getRoot());
-
-    this.helpBtn = new UiButton(this.scene, {
-      x: HELP_BTN_X, y: MENU_BTN_Y, w: MENU_BTN_W, h: MENU_BTN_H,
-      label: 'HILFE',
-      labelRole: 'labelSm',
-      intent: 'ghost',
-      onClick: () => this.helpOverlay?.show(),
-    });
-    objects.push(this.helpBtn.getRoot());
-
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
     this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer);
@@ -627,6 +587,14 @@ export class LeftSidePanel {
 
   toggleOptionsOverlay(): void {
     this.optionsOverlay?.toggle();
+  }
+
+  showOptionsOverlay(): void {
+    this.optionsOverlay?.show();
+  }
+
+  showHelpOverlay(): void {
+    this.helpOverlay?.show();
   }
 
   hideOptionsOverlay(): void {
@@ -869,11 +837,6 @@ export class LeftSidePanel {
     this.loadoutPicker = null;
     this.cleanupPickerDismissListener();
     this.badgerPreview?.destroy();
-    // UiButtons melden eigene globale Pointer-Listener ab.
-    this.optionsBtn?.destroy();
-    this.optionsBtn = null;
-    this.helpBtn?.destroy();
-    this.helpBtn = null;
     this.destroyPickerEffects();
     this.helpOverlay?.destroy();
     this.optionsOverlay?.destroy();
@@ -892,9 +855,11 @@ export class LeftSidePanel {
     // Hintergrund
     objects.push(
       this.scene.add
-        .rectangle(0, 0, PICKER_W, PICKER_H, COLORS.GREY_8, 0.97)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, COLORS.GREY_5),
+        .image(0, 0, ensureFlatPanelTexture(
+          this.scene, '__picker_panel', PICKER_W, PICKER_H, SURFACE.modal, BORDER.subtle,
+          { radius: RADIUS.md, fillAlpha: 0.98, strokeAlpha: 0.9 },
+        ))
+        .setOrigin(0, 0),
     );
 
     // Titel
@@ -937,8 +902,8 @@ export class LeftSidePanel {
 
       // Interactive zone on top
       bg.setInteractive({ useHandCursor: true })
-        .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, COLORS.GREY_1); })
-        .on('pointerout',  () => bg.setStrokeStyle(0))
+        .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, BORDER.default, 1); })
+        .on('pointerout',  () => this.refreshPickerSwatches())
         .on('pointerdown', () => this.requestColor(color));
 
       this.pickerSwatches.push({ bg, img, effect, color });
@@ -993,7 +958,11 @@ export class LeftSidePanel {
 
       bg.setAlpha(visible ? 1.0 : 0.07);
       img.setAlpha(visible ? 1.0 : 0.07);
-      bg.setStrokeStyle(isOwn ? 3 : 0, COLORS.GREY_1);
+      bg.setStrokeStyle(
+        isOwn ? 2 : 1,
+        isOwn ? TEXT.primary : BORDER.subtle,
+        isOwn ? 1 : (isClickable ? 0.85 : 0.35),
+      );
 
       if (visible) effect.start();
       else effect.stop();
@@ -1289,59 +1258,61 @@ export class LeftSidePanel {
       position:        'fixed',
       top:             `${popupTop}px`,
       left:            `${popupLeft}px`,
-      backgroundColor: toCssColor(COLORS.GREY_9),
-      border:          `1px solid ${toCssColor(COLORS.GREY_5)}`,
-      padding:         '10px',
+      backgroundColor: toCssColor(SURFACE.modal),
+      border:          `1px solid ${toCssColor(BORDER.default)}`,
+      borderRadius:    `${RADIUS.md}px`,
+      boxShadow:       '0 12px 28px rgba(0, 0, 0, 0.32)',
+      padding:         `${SPACE.md}px`,
       display:         'flex',
       flexDirection:   'row',
-      gap:             '6px',
+      gap:             `${SPACE.sm}px`,
       alignItems:      'center',
       zIndex:          '1000',
-      fontFamily:      'monospace',
+      fontFamily:      FONT_DISPLAY,
     });
-
-    const playerColor = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
-    const colorCss = playerColor !== undefined ? toCssColor(playerColor) : toCssColor(COLORS.GREY_1);
 
     const inputElement = document.createElement('input');
     inputElement.type  = 'text';
     inputElement.value = currentName;
     inputElement.maxLength = PLAYER_NAME_MAX_LENGTH;
     Object.assign(inputElement.style, {
-      fontSize:        '22px',
-      padding:         '4px 8px',
-      border:          `1px solid ${toCssColor(COLORS.GREY_5)}`,
-      backgroundColor: toCssColor(COLORS.GREY_8),
-      color:           colorCss,
+      fontSize:        '15px',
+      padding:         `${SPACE.sm}px ${SPACE.md}px`,
+      border:          `1px solid ${toCssColor(BORDER.subtle)}`,
+      borderRadius:    `${RADIUS.sm}px`,
+      backgroundColor: toCssColor(SURFACE.sunken),
+      color:           toCssColor(TEXT.primary),
       outline:         'none',
       width:           '160px',
-      fontFamily:      'monospace',
+      fontFamily:      FONT_DISPLAY,
       fontWeight:      'bold',
     });
 
     const confirmBtn     = document.createElement('button');
     confirmBtn.innerText = 'OK';
     Object.assign(confirmBtn.style, {
-      padding:         '4px 10px',
+      padding:         `${SPACE.sm}px ${SPACE.md}px`,
       fontSize:        '13px',
       cursor:          'pointer',
-      backgroundColor: toCssColor(COLORS.GREEN_4),
-      color:           toCssColor(COLORS.GREY_1),
-      border:          `1px solid ${toCssColor(COLORS.GREEN_3)}`,
-      fontFamily:      'monospace',
+      backgroundColor: toCssColor(INTENT.primary.fill),
+      color:           toCssColor(INTENT.primary.label),
+      border:          `1px solid ${toCssColor(INTENT.primary.stroke)}`,
+      borderRadius:    `${RADIUS.sm}px`,
+      fontFamily:      FONT_DISPLAY,
       fontWeight:      'bold',
     });
 
     const cancelBtn     = document.createElement('button');
     cancelBtn.innerText = 'X';
     Object.assign(cancelBtn.style, {
-      padding:         '4px 8px',
+      padding:         `${SPACE.sm}px ${SPACE.md}px`,
       fontSize:        '13px',
       cursor:          'pointer',
-      backgroundColor: toCssColor(COLORS.RED_4),
-      color:           toCssColor(COLORS.GREY_1),
-      border:          `1px solid ${toCssColor(COLORS.RED_3)}`,
-      fontFamily:      'monospace',
+      backgroundColor: toCssColor(INTENT.ghost.fill),
+      color:           toCssColor(INTENT.ghost.label),
+      border:          `1px solid ${toCssColor(INTENT.ghost.stroke)}`,
+      borderRadius:    `${RADIUS.sm}px`,
+      fontFamily:      FONT_DISPLAY,
       fontWeight:      'bold',
     });
 

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE, TRUNK_RADIUS } from '../config';
 import type { ArenaLayout } from '../types';
 import type { RockWorldFrame } from '../arena/ArenaBuilder';
+import { isLobbyUiReservedCell } from '../arena/MenuArenaPreviewConfig';
 import {
   ArenaObstacleIndex,
   type ObstacleCircleBody,
@@ -136,6 +137,17 @@ export class LobbyObstacleWorld {
     return true;
   }
 
+  /**
+   * Originalzelle eines Felsens – auch wenn er gerade zerstört ist.
+   *
+   * Der Inspector baut genau dort wieder auf, wo der Fels stand; die Zelle stammt deshalb aus
+   * dem Layout und nicht aus der aktuellen Belegung.
+   */
+  getWorkCell(rockId: number): { gridX: number; gridY: number } | null {
+    const cell = this.layout.rocks[rockId];
+    return cell ? { gridX: cell.gridX, gridY: cell.gridY } : null;
+  }
+
   /** Fels-Index an dieser Zelle oder -1. Zerstörte Felsen zählen als frei. */
   getRockIdAt(gridX: number, gridY: number): number {
     const cell = this.cellKey(gridX, gridY);
@@ -154,11 +166,61 @@ export class LobbyObstacleWorld {
     return this.rockCellIndex[cell] >= 0;
   }
 
-  /** Blockiert diese Zelle Bewegung? Außerhalb des Rahmens gilt als blockiert. */
+  /**
+   * Blockiert diese Zelle Bewegung? Außerhalb des Rahmens gilt als blockiert.
+   *
+   * Die Flächen der Lobby-Oberfläche zählen mit: Ein Actor darf auch mitten in einer Sequenz
+   * nicht unter ein Seitenmenü laufen, nicht nur nicht dort starten.
+   */
   isCellBlocked(gridX: number, gridY: number): boolean {
     const cell = this.cellKey(gridX, gridY);
     if (cell < 0) return true;
+    if (isLobbyUiReservedCell(gridX, gridY)) return true;
     return this.rockCellIndex[cell] >= 0 || this.trunkBlockedCells.has(cell);
+  }
+
+  /**
+   * Freie Randzelle der Arena, über die ein Actor die Bühne betritt oder verlässt.
+   *
+   * Gewählt wird die Seite, die dem Ziel am nächsten liegt; entlang dieser Kante die Zelle mit
+   * dem geringsten Abstand. Ohne freie Randzelle liefert die Methode `null` – dann bleibt nur
+   * der direkte Auftritt.
+   */
+  findStageEdgeCell(target: { gridX: number; gridY: number }): { gridX: number; gridY: number } | null {
+    const distances = [
+      { side: 'top' as const,    distance: target.gridY },
+      { side: 'bottom' as const, distance: this.gridRows - 1 - target.gridY },
+      { side: 'left' as const,   distance: target.gridX },
+      { side: 'right' as const,  distance: this.gridCols - 1 - target.gridX },
+    ].sort((left, right) => left.distance - right.distance);
+
+    for (const { side } of distances) {
+      const horizontal = side === 'top' || side === 'bottom';
+      const fixed = side === 'top' ? 0
+        : side === 'bottom' ? this.gridRows - 1
+        : side === 'left' ? 0
+        : this.gridCols - 1;
+      const span = horizontal ? this.gridCols : this.gridRows;
+      const anchor = horizontal ? target.gridX : target.gridY;
+
+      for (let offset = 0; offset < span; offset += 1) {
+        for (const candidate of [anchor - offset, anchor + offset]) {
+          if (candidate < 0 || candidate >= span) continue;
+          const gridX = horizontal ? candidate : fixed;
+          const gridY = horizontal ? fixed : candidate;
+          if (!this.isCellBlocked(gridX, gridY)) return { gridX, gridY };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Liegt der Weltpunkt innerhalb der bespielbaren Arenafläche? */
+  containsWorldPoint(x: number, y: number): boolean {
+    return x >= this.worldFrame.offsetX
+      && x <= this.worldFrame.offsetX + this.worldFrame.width
+      && y >= this.worldFrame.offsetY
+      && y <= this.worldFrame.offsetY + this.worldFrame.height;
   }
 
   cellToWorld(gridX: number, gridY: number): { x: number; y: number } {

@@ -1,5 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
+import { ensureFlatPanelTexture, lerpColor } from './uiTextures';
+import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 
 /** Ein waehlbarer Eintrag im Auswahl-Popup. */
 export interface LoadoutPickerEntry {
@@ -43,15 +45,24 @@ export interface LoadoutPickerOptions {
   readonly onClear?: () => void;
 }
 
-const PADDING = 12;
+const PADDING = SPACE.md;
 const TITLE_H = 22;
 const GROUP_LABEL_H = 18;
 const ENTRY_W = 190;
 const ENTRY_H = 32;
-const ENTRY_GAP = 4;
+const ENTRY_GAP = SPACE.xs;
 const DEFAULT_MAX_COLUMNS = 3;
 const SCREEN_MARGIN = 12;
 const ICON_SIZE = 22;
+
+interface RowVisualState {
+  readonly fillColor: number;
+  readonly fillAlpha: number;
+  readonly strokeColor: number;
+  readonly strokeWidth: number;
+  readonly strokeAlpha: number;
+  readonly labelColor?: number;
+}
 
 /**
  * Auswahl-Popup fuer einen Loadout-Slot. Zeigt ausschliesslich freigeschaltete Items;
@@ -94,9 +105,9 @@ export class LoadoutSlotPicker {
     for (const group of groups) {
       if (group.label) {
         const labelY = cursorY;
-        rows.push(() => children.push(this.scene.add.text(PADDING, labelY, group.label!, {
-          fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
-        }).setOrigin(0, 0).setScrollFactor(0)));
+        rows.push(() => children.push(this.scene.add.text(PADDING, labelY, group.label!, textStyle('section', {
+          color: TEXT.muted,
+        })).setOrigin(0, 0).setScrollFactor(0)));
         cursorY += GROUP_LABEL_H;
       }
       const groupRows = Math.ceil(group.entries.length / columns);
@@ -144,18 +155,20 @@ export class LoadoutSlotPicker {
       this.close();
     });
 
-    const background = this.scene.add.rectangle(0, 0, width, height, COLORS.GREY_9, 0.98)
+    const background = this.scene.add.image(0, 0, ensureFlatPanelTexture(
+      this.scene, `_loadout_picker_${width}x${height}`, width, height, SURFACE.modal, BORDER.subtle,
+      { radius: RADIUS.lg, fillAlpha: 0.98, strokeAlpha: 0.9 },
+    ))
       .setOrigin(0, 0)
-      .setStrokeStyle(2, COLORS.GOLD_1, 0.9)
       .setScrollFactor(0)
       .setInteractive();
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
     });
 
-    const title = this.scene.add.text(PADDING, PADDING, options.title, {
-      fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
-    }).setOrigin(0, 0).setScrollFactor(0);
+    const title = this.scene.add.text(PADDING, PADDING, options.title, textStyle('label', {
+      color: TEXT.primary,
+    })).setOrigin(0, 0).setScrollFactor(0);
 
     for (const build of rows) build();
 
@@ -171,10 +184,27 @@ export class LoadoutSlotPicker {
     x: number,
     y: number,
   ): void {
-    const fill = entry.selected ? entry.accentColor : COLORS.GREY_8;
-    const background = this.scene.add.rectangle(x, y, ENTRY_W, ENTRY_H, fill, entry.selected ? 0.35 : 0.9)
+    const restState: RowVisualState = {
+      fillColor: entry.selected ? entry.accentColor : COLORS.GREY_8,
+      fillAlpha: entry.selected ? 0.35 : 0.9,
+      strokeColor: entry.selected ? entry.accentColor : COLORS.GREY_5,
+      strokeWidth: entry.selected ? 2 : 1,
+      strokeAlpha: entry.disabled ? 0.4 : 0.9,
+      labelColor: entry.disabled ? COLORS.GREY_4 : COLORS.GREY_1,
+    };
+    const hoverState: RowVisualState = {
+      // Selected rows keep their saturated fill; active, unselected rows only get
+      // a restrained accent tint so hover stays visibly below selection.
+      fillColor: entry.selected ? entry.accentColor : lerpColor(COLORS.GREY_8, entry.accentColor, 0.1),
+      fillAlpha: entry.selected ? 0.6 : 0.92,
+      strokeColor: entry.accentColor,
+      strokeWidth: entry.selected ? 2 : 1,
+      strokeAlpha: entry.selected ? 0.9 : 0.78,
+      labelColor: entry.selected ? COLORS.GREY_1 : lerpColor(COLORS.GREY_1, 0xffffff, 0.08),
+    };
+    const background = this.scene.add.rectangle(x, y, ENTRY_W, ENTRY_H, restState.fillColor, restState.fillAlpha)
       .setOrigin(0, 0)
-      .setStrokeStyle(entry.selected ? 2 : 1, entry.selected ? entry.accentColor : COLORS.GREY_5, entry.disabled ? 0.4 : 0.9)
+      .setStrokeStyle(restState.strokeWidth, restState.strokeColor, restState.strokeAlpha)
       .setScrollFactor(0)
       .setAlpha(entry.disabled ? 0.45 : 1);
     children.push(background);
@@ -186,19 +216,16 @@ export class LoadoutSlotPicker {
         .setAlpha(entry.disabled ? 0.45 : 1));
     }
 
-    const label = this.scene.add.text(x + 12 + ICON_SIZE, y + ENTRY_H / 2, entry.displayName, {
-      fontSize: '12px',
-      fontFamily: 'monospace',
-      fontStyle: entry.selected ? 'bold' : 'normal',
-      color: toCssColor(entry.disabled ? COLORS.GREY_4 : COLORS.GREY_1),
-      wordWrap: { width: ENTRY_W - ICON_SIZE - 22 },
-    }).setOrigin(0, 0.5).setScrollFactor(0);
+    const label = this.scene.add.text(x + SPACE.md + ICON_SIZE, y + ENTRY_H / 2, entry.displayName, textStyle(
+      entry.selected ? 'labelSm' : 'caption',
+      { color: restState.labelColor!, wordWrapWidth: ENTRY_W - ICON_SIZE - SPACE.md - SPACE.sm },
+    )).setOrigin(0, 0.5).setScrollFactor(0);
     children.push(label);
 
     if (entry.disabled) return;
 
     background.setInteractive({ useHandCursor: true });
-    this.attachRowHover(background, entry.selected ? 0.35 : 0.9);
+    this.attachRowHover(background, restState, hoverState, label);
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       entry.onPick();
@@ -219,10 +246,22 @@ export class LoadoutSlotPicker {
       .setStrokeStyle(1, COLORS.RED_3, 0.85)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const label = this.scene.add.text(x + width / 2, y + ENTRY_H / 2, text, {
-      fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_2),
-    }).setOrigin(0.5).setScrollFactor(0);
-    this.attachRowHover(background, 0.9);
+    const label = this.scene.add.text(x + width / 2, y + ENTRY_H / 2, text, textStyle('labelSm', {
+      color: COLORS.RED_2,
+    })).setOrigin(0.5).setScrollFactor(0);
+    this.attachRowHover(background, {
+      fillColor: COLORS.GREY_8,
+      fillAlpha: 0.9,
+      strokeColor: COLORS.RED_3,
+      strokeWidth: 1,
+      strokeAlpha: 0.85,
+    }, {
+      fillColor: COLORS.GREY_8,
+      fillAlpha: 1,
+      strokeColor: COLORS.RED_3,
+      strokeWidth: 1,
+      strokeAlpha: 0.85,
+    });
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       onClear();
@@ -231,12 +270,24 @@ export class LoadoutSlotPicker {
     children.push(background, label);
   }
 
-  /**
-   * Zeilen sind links ausgerichtet; ein Scale-Hover wie bei Buttons wuerde sie verschieben.
-   * Deshalb nur die Fuellung aufhellen.
-   */
-  private attachRowHover(background: Phaser.GameObjects.Rectangle, restFillAlpha: number): void {
-    background.on('pointerover', () => background.setFillStyle(background.fillColor, Math.min(1, restFillAlpha + 0.25)));
-    background.on('pointerout', () => background.setFillStyle(background.fillColor, restFillAlpha));
+  /** Zeilen bleiben layout-stabil; Hover aendert nur die visuellen Zustandswerte. */
+  private attachRowHover(
+    background: Phaser.GameObjects.Rectangle,
+    restState: RowVisualState,
+    hoverState: RowVisualState,
+    label?: Phaser.GameObjects.Text,
+  ): void {
+    background.on('pointerover', () => {
+      background
+        .setFillStyle(hoverState.fillColor, hoverState.fillAlpha)
+        .setStrokeStyle(hoverState.strokeWidth, hoverState.strokeColor, hoverState.strokeAlpha);
+      if (label && hoverState.labelColor !== undefined) label.setColor(toCssColor(hoverState.labelColor));
+    });
+    background.on('pointerout', () => {
+      background
+        .setFillStyle(restState.fillColor, restState.fillAlpha)
+        .setStrokeStyle(restState.strokeWidth, restState.strokeColor, restState.strokeAlpha);
+      if (label && restState.labelColor !== undefined) label.setColor(toCssColor(restState.labelColor));
+    });
   }
 }

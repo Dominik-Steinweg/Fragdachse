@@ -269,6 +269,16 @@ export class PlayerEntity {
     this.syncHeldItem();
   }
 
+  /** Weltkoordinate des registrierten Waffen-Mündungs-Punkts, sofern das Item einen Sprite hat. */
+  getHeldItemMuzzleOrigin(): { x: number; y: number } | null {
+    return this.heldItem.getMuzzleOrigin(
+      this.sprite.x,
+      this.sprite.y,
+      this.sprite.rotation,
+      this.sprite.displayWidth,
+    );
+  }
+
   setWorldBarsVisible(visible: boolean): void {
     if (this.presentation) return;
     this.worldBarsVisible = visible;

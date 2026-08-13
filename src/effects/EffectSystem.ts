@@ -534,7 +534,7 @@ export class EffectSystem implements EnemyVisualSink {
       }
     });
 
-    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey) => {
+    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, visualStartX, visualStartY) => {
       this.playSyncedHitscanTracer({
         startX,
         startY,
@@ -547,6 +547,8 @@ export class EffectSystem implements EnemyVisualSink {
         shooterId,
         shotId,
         shotAudioKey,
+        visualStartX,
+        visualStartY,
       });
     });
 
@@ -556,6 +558,19 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   // ── Treffer-Effekt: gerichteter Blood-Splatter ───────────────────────────
+
+  /**
+   * Spielt einen Treffer rein lokal ab – Blutspritzer, Zielreaktion und Trefferton.
+   *
+   * Gedacht für Treffer ohne replizierte Quelle, etwa die Ambient-Inszenierung der Lobby.
+   * Ausgelassen wird ausschliesslich, was einen echten lokalen Spieler voraussetzt: die
+   * Schadensvignette und die Bestätigung des eigenen Treffers.
+   */
+  playLocalHitEffect(effect: SyncedHitEffect): void {
+    this.playHitEffect(effect);
+    this.hitFeedbackRenderer?.playHit(effect);
+    this.audioSystem?.queueDamageFeedback(effect.totalDamage, effect.x, effect.y);
+  }
 
   private playHitEffect(effect: SyncedHitEffect): void {
     this.ensureTextures();
@@ -1869,10 +1884,12 @@ export class EffectSystem implements EnemyVisualSink {
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
     const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
-    this.audioSystem?.playSound(shotAudioKey, startX, startY, shooterId);
+    const visualStartX = trace.visualStartX ?? startX;
+    const visualStartY = trace.visualStartY ?? startY;
+    this.audioSystem?.playSound(shotAudioKey, visualStartX, visualStartY, shooterId);
     this.playHitscanTracer(
-      startX,
-      startY,
+      visualStartX,
+      visualStartY,
       endX,
       endY,
       color,

@@ -1838,6 +1838,7 @@ export class CombatSystem {
     chainCfg?: ChainLightningConfig,
     burnOnHit?: BurnOnHitConfig,
     supportEffect?: HitscanSupportEffect,
+    visualMuzzleOrigin?: { x: number; y: number },
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -1864,6 +1865,8 @@ export class CombatSystem {
       shooterId,
       shotId,
       shotAudioKey,
+      visualStartX: visualMuzzleOrigin?.x,
+      visualStartY: visualMuzzleOrigin?.y,
     });
 
     // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
@@ -2863,6 +2866,7 @@ export class CombatSystem {
     this.bridge.broadcastHitscanTracer(
       trace.startX, trace.startY, trace.endX, trace.endY,
       trace.color, trace.thickness, trace.impactKind, trace.visualPreset, trace.shooterId, trace.shotId, trace.shotAudioKey,
+      trace.visualStartX, trace.visualStartY,
     );
     // Lokale Wiedergabe auf dem Host (EffectSystem bekommt das RPC auch)
   }

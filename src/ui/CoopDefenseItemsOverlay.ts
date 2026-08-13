@@ -28,12 +28,12 @@ import {
 import { attachHoverEffect } from './uiHover';
 import {
   ensureGlossyButtonTexture,
+  ensureFlatPanelTexture,
   ensureModalPanelTexture,
-  ensureTintedSectionTexture,
 } from './uiTextures';
 import { UiContextMenu } from './UiContextMenu';
 import { UiTooltip } from './UiTooltip';
-import { FONT_MONO } from './uiTheme';
+import { BORDER, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 /**
@@ -188,18 +188,17 @@ export class CoopDefenseItemsOverlay {
       this.scene.add.image(
         CX,
         CY,
-        ensureModalPanelTexture(this.scene, TEX_PANEL, PANEL_W, PANEL_H, COLORS.GREY_7, COLORS.GOLD_1),
+        ensureModalPanelTexture(this.scene, TEX_PANEL, PANEL_W, PANEL_H, SURFACE.modal, BORDER.default),
       ).setScrollFactor(0).setInteractive(),
     );
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'AUSRÜSTUNG', {
-        fontFamily: FONT_MONO, fontSize: '38px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, TITLE_Y, 'AUSRÜSTUNG', textStyle('display'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
-    this.rewardHint = this.scene.add.text(CX, REWARD_HINT_Y, '', {
-      fontFamily: FONT_MONO, fontSize: '17px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_2),
-    }).setOrigin(0.5).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.rewardHint = this.scene.add.text(CX, REWARD_HINT_Y, '', textStyle('label', {
+      color: TEXT.accent,
+    })).setOrigin(0.5).setScrollFactor(0).setInteractive({ useHandCursor: true });
     this.rewardHint.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       if (this.getState().hasPendingReward) this.onOpenPendingReward();
@@ -309,12 +308,12 @@ export class CoopDefenseItemsOverlay {
 
   private buildDollSection(objects: Phaser.GameObjects.GameObject[]): void {
     objects.push(
-      this.scene.add.image(DOLL_CX, SECTION_CY, ensureTintedSectionTexture(
-        this.scene, TEX_SECTION_DOLL, DOLL_W, SECTION_H, COLORS.GOLD_3, COLORS.GREY_9,
+      this.scene.add.image(DOLL_CX, SECTION_CY, ensureFlatPanelTexture(
+        this.scene, TEX_SECTION_DOLL, DOLL_W, SECTION_H, SURFACE.raised, BORDER.subtle,
+        { radius: RADIUS.lg, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(DOLL_CX, SECTION_TITLE_Y, 'AUSGERÜSTET', {
-        fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(DOLL_CX, SECTION_TITLE_Y, 'AUSGERÜSTET', textStyle('subtitle'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     for (const slot of COOP_DEFENSE_ITEM_SLOTS) {
@@ -324,32 +323,30 @@ export class CoopDefenseItemsOverlay {
       this.registerDropZone(cell.frame, { slot, kind: 'equipment' });
       objects.push(cell.container);
       objects.push(
-        this.scene.add.text(position.x, position.y + DOLL_CELL / 2 + 13, getCoopDefenseItemSlotDefinition(slot).label.toUpperCase(), {
-          fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
-        }).setOrigin(0.5).setScrollFactor(0),
+        this.scene.add.text(position.x, position.y + DOLL_CELL / 2 + SPACE.md, getCoopDefenseItemSlotDefinition(slot).label.toUpperCase(), textStyle('section'))
+          .setOrigin(0.5).setScrollFactor(0),
       );
     }
 
     objects.push(
       this.scene.add.rectangle(DOLL_CX, SUMMARY_TITLE_Y - 20, DOLL_W - 80, 1, COLORS.GREY_5, 0.55)
         .setScrollFactor(0),
-      this.scene.add.text(DOLL_CX, SUMMARY_TITLE_Y, 'GESAMTWERTE', {
-        fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(DOLL_CX, SUMMARY_TITLE_Y, 'GESAMTWERTE', textStyle('section'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
-    this.summaryEmpty = this.scene.add.text(DOLL_CX, SUMMARY_START_Y + 6, 'Nichts ausgerüstet.', {
-      fontFamily: FONT_MONO, fontSize: '15px', color: toCssColor(COLORS.GREY_5),
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.summaryEmpty = this.scene.add.text(DOLL_CX, SUMMARY_START_Y + SPACE.xs, 'Nichts ausgerüstet.', textStyle('body', {
+      color: TEXT.disabled,
+    })).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.summaryEmpty);
 
     for (let index = 0; index < MAX_SUMMARY_LINES; index++) {
       const y = SUMMARY_START_Y + index * SUMMARY_LINE_H;
-      const label = this.scene.add.text(DOLL_CX - DOLL_W / 2 + 46, y, '', {
-        fontFamily: FONT_MONO, fontSize: '15px', color: toCssColor(COLORS.GREY_3),
-      }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-      const value = this.scene.add.text(DOLL_CX + DOLL_W / 2 - 46, y, '', {
-        fontFamily: FONT_MONO, fontSize: '15px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+      const label = this.scene.add.text(DOLL_CX - DOLL_W / 2 + 46, y, '', textStyle('body', {
+        color: TEXT.muted,
+      })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+      const value = this.scene.add.text(DOLL_CX + DOLL_W / 2 - 46, y, '', textStyle('body', {
+        color: TEXT.primary,
+      })).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
       this.summaryLines.push(label, value);
       objects.push(label, value);
     }
@@ -357,15 +354,14 @@ export class CoopDefenseItemsOverlay {
 
   private buildGridSection(objects: Phaser.GameObjects.GameObject[]): void {
     objects.push(
-      this.scene.add.image(GRID_CX, SECTION_CY, ensureTintedSectionTexture(
-        this.scene, TEX_SECTION_GRID, GRID_W, SECTION_H, COLORS.BLUE_3, COLORS.GREY_9,
+      this.scene.add.image(GRID_CX, SECTION_CY, ensureFlatPanelTexture(
+        this.scene, TEX_SECTION_GRID, GRID_W, SECTION_H, SURFACE.raised, BORDER.subtle,
+        { radius: RADIUS.lg, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(GRID_CX, SECTION_TITLE_Y, 'INVENTAR', {
-        fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0.5).setScrollFactor(0),
-      this.scene.add.text(GRID_CX, GRID_HINT_Y, 'Mouse-Over zeigt die Werte · Klick öffnet das Menü · Ziehen rüstet aus und ab', {
-        fontFamily: FONT_MONO, fontSize: '14px', color: toCssColor(COLORS.GREY_4),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(GRID_CX, SECTION_TITLE_Y, 'INVENTAR', textStyle('subtitle'))
+        .setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(GRID_CX, GRID_HINT_Y, 'Mouse-Over zeigt die Werte · Klick öffnet das Menü · Ziehen rüstet aus und ab', textStyle('caption'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     const columnH = GRID_ROWS * (CELL + CELL_GAP) + 30;
@@ -390,9 +386,8 @@ export class CoopDefenseItemsOverlay {
       this.columnHighlights.set(slot, highlight);
       objects.push(highlight);
 
-      const title = this.scene.add.text(columnCx, COLUMN_TITLE_Y, '', {
-        fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
-      }).setOrigin(0.5).setScrollFactor(0);
+      const title = this.scene.add.text(columnCx, COLUMN_TITLE_Y, '', textStyle('section'))
+        .setOrigin(0.5).setScrollFactor(0);
       this.columnTitles.set(slot, title);
       objects.push(title);
 
@@ -416,11 +411,11 @@ export class CoopDefenseItemsOverlay {
     const sortX = PANEL_LEFT + CONTENT_PAD + SORT_BTN_W / 2;
     const sortButton = this.scene.add.image(
       sortX, FOOTER_Y,
-      ensureGlossyButtonTexture(this.scene, TEX_SORT, SORT_BTN_W, FOOTER_BTN_H, COLORS.GREY_6),
+      ensureGlossyButtonTexture(this.scene, TEX_SORT, SORT_BTN_W, FOOTER_BTN_H, INTENT.secondary.fill, INTENT.secondary.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.sortLabel = this.scene.add.text(sortX, FOOTER_Y, '', {
-      fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.sortLabel = this.scene.add.text(sortX, FOOTER_Y, '', textStyle('labelSm', {
+      color: INTENT.secondary.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     sortButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.sortMode = this.sortMode === 'rarity' ? 'itemLevel' : 'rarity';
@@ -433,11 +428,11 @@ export class CoopDefenseItemsOverlay {
     const closeX = PANEL_RIGHT - CONTENT_PAD - FOOTER_BTN_W / 2;
     const closeButton = this.scene.add.image(
       closeX, FOOTER_Y,
-      ensureGlossyButtonTexture(this.scene, TEX_FOOTER, FOOTER_BTN_W, FOOTER_BTN_H, COLORS.GOLD_3),
+      ensureGlossyButtonTexture(this.scene, TEX_FOOTER, FOOTER_BTN_W, FOOTER_BTN_H, INTENT.neutral.fill, INTENT.neutral.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const closeLabel = this.scene.add.text(closeX, FOOTER_Y, 'SCHLIESSEN', {
-      fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
-    }).setOrigin(0.5).setScrollFactor(0);
+    const closeLabel = this.scene.add.text(closeX, FOOTER_Y, 'SCHLIESSEN', textStyle('label', {
+      color: INTENT.neutral.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     closeButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.hide();
@@ -474,9 +469,9 @@ export class CoopDefenseItemsOverlay {
     const icon = this.scene.add.image(0, 0, resolveCoopDefenseItemIconTexture(this.scene, slot, size))
       .setDisplaySize(size * 0.68, size * 0.68)
       .setScrollFactor(0);
-    const level = this.scene.add.text(size / 2 - 8, size / 2 - 8, '', {
-      fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(1, 1).setScrollFactor(0);
+    const level = this.scene.add.text(size / 2 - SPACE.sm, size / 2 - SPACE.sm, '', textStyle('numS', {
+      color: TEXT.primary,
+    })).setOrigin(1, 1).setScrollFactor(0);
 
     const cell: ItemCell = {
       container: this.scene.add.container(x, y, [frame, icon, level]).setScrollFactor(0),

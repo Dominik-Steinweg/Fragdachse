@@ -15,12 +15,15 @@
  *   allein die Figur.
  * - `gripX`/`gripY` ist der Punkt der Waffentextur in Texturpixeln, der auf dem Pfotenanker der
  *   Figur (`HELD_ITEM_ANCHOR_X/Y`) sitzt.
+ * - `muzzleX`/`muzzleY` ist der sichtbare Lauf- oder Rohrmund. Er wird zentral mit derselben
+ *   Rotation und Skalierung in den World Space transformiert.
  *
  * Items ohne eigenen Eintrag fallen auf eine neutrale Form ihrer Gattung zurueck, damit ein neues
  * Loadout-Item nie mit leeren Pfoten dasteht. Nahkampfwaffen tragen bewusst nichts: Biss und
  * Klauen sind die Waffe.
  */
 import type * as Phaser from 'phaser';
+import { PLAYER_TEXTURE_SIZE, transformHeldItemPoint, type MuzzleOrigin } from '../config';
 import { findUtilityConfig, findWeaponConfig, getUtilityBaseId } from './LoadoutConfig';
 
 export interface HeldItemSpriteSpec {
@@ -29,15 +32,51 @@ export interface HeldItemSpriteSpec {
   /** Griffpunkt in Texturpixeln, Ursprung ist die linke obere Ecke der Waffentextur. */
   readonly gripX: number;
   readonly gripY: number;
+  /** Sichtbarer Mündungspunkt in Texturpixeln, Ursprung ist die linke obere Ecke. */
+  readonly muzzleX: number;
+  readonly muzzleY: number;
 }
 
-function sprite(fileName: string, gripX: number, gripY: number): HeldItemSpriteSpec {
+function sprite(
+  fileName: string,
+  gripX: number,
+  gripY: number,
+  muzzleX = gripX,
+  muzzleY = 0,
+): HeldItemSpriteSpec {
   return Object.freeze({
     textureKey: `held_${fileName}`,
     assetPath: `./assets/sprites/held/${fileName}.png`,
     gripX,
     gripY,
+    muzzleX,
+    muzzleY,
   });
+}
+
+/**
+ * Liefert einen lokalen Held-Item-Punkt im World Space. Grip und Muzzle verwenden damit exakt
+ * dieselbe Rotation, Skalierung und Pfotenanker-Transformation wie das sichtbare Image.
+ */
+export function getHeldItemPointWorld(
+  originX: number,
+  originY: number,
+  spriteRotation: number,
+  displaySize: number,
+  spec: HeldItemSpriteSpec,
+  pointX: number,
+  pointY: number,
+): MuzzleOrigin {
+  return transformHeldItemPoint(
+    originX,
+    originY,
+    spriteRotation,
+    displaySize / PLAYER_TEXTURE_SIZE,
+    spec.gripX,
+    spec.gripY,
+    pointX,
+    pointY,
+  );
 }
 
 /** Neutrale Form fuer Schusswaffen ohne eigenes Bild. */
@@ -47,7 +86,7 @@ const GENERIC_THROWABLE = sprite('generic_throwable', 2.5, 4.5);
 
 /** Bilder mit eigener Gestaltung, geschluesselt auf die Loadout-Item-ID. */
 export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.freeze({
-  GLOCK: sprite('GLOCK', 2.5, 8.5),
+  GLOCK: sprite('GLOCK', 2.5, 9.5, 2.5, 0),
   ASMD_PRIM: sprite('ASMD_PRIM', 3.5, 8.5),
   PLASMA: sprite('PLASMA', 3.5, 10.5),
   HYDRA: sprite('HYDRA', 3.5, 10.5),
@@ -56,15 +95,15 @@ export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = O
   REPARATURSTRAHL: sprite('REPARATURSTRAHL', 2.5, 9.5),
   OVERCHARGE_CORE: sprite('OVERCHARGE_CORE', 3.5, 8.5),
   ENERGIEINJEKTOR: sprite('ENERGIEINJEKTOR', 2.5, 8.5),
-  P90: sprite('P90', 3, 11),
-  AK47: sprite('AK47', 3.5, 12),
-  SHOTGUN: sprite('SHOTGUN', 3.5, 10.5),
+  P90: sprite('P90', 4.5, 14.5, 4.5, 0),
+  AK47: sprite('AK47', 4.5, 22, 4.5, 0),
+  SHOTGUN: sprite('SHOTGUN', 5.5, 19.5, 5.5, 0),
   ASMD_SEC: sprite('ASMD_SEC', 3.5, 11),
-  ROCKET_LAUNCHER: sprite('ROCKET_LAUNCHER', 3.5, 11.5),
+  ROCKET_LAUNCHER: sprite('ROCKET_LAUNCHER', 6.5, 22.5, 6.5, 0),
   MINI_ROCKET_LAUNCHER: sprite('MINI_ROCKET_LAUNCHER', 3, 9.5),
-  AWP: sprite('AWP', 2.5, 12.5),
+  AWP: sprite('AWP', 3.5, 29.5, 3.5, 0),
   FLAMETHROWER: sprite('FLAMETHROWER', 3.5, 11),
-  NEGEV: sprite('NEGEV', 3.5, 13),
+  NEGEV: sprite('NEGEV', 7.5, 25.5, 7.5, 0),
   HE_GRENADE: sprite('HE_GRENADE', 3, 6),
   SMOKE_GRENADE: sprite('SMOKE_GRENADE', 3, 6.5),
   MOLOTOV_GRENADE: sprite('MOLOTOV_GRENADE', 3, 7),
@@ -121,6 +160,23 @@ export function getHeldItemSpriteSpec(itemId: string | null | undefined): HeldIt
   if (utility) return SLOTLESS_UTILITY_TYPES.has(utility.type) ? null : GENERIC_THROWABLE;
 
   return null;
+}
+
+/**
+ * Kanonischer visueller Mündungsursprung eines getragenen Items. `null` bedeutet, dass die ID
+ * kein sichtbares Held-Item besitzt; Caller behalten dann ihren gameplaytauglichen Fallback.
+ */
+export function getHeldWeaponMuzzleOrigin(
+  itemId: string | null | undefined,
+  originX: number,
+  originY: number,
+  spriteRotation: number,
+  displaySize: number,
+): MuzzleOrigin | null {
+  const spec = getHeldItemSpriteSpec(itemId);
+  return spec
+    ? getHeldItemPointWorld(originX, originY, spriteRotation, displaySize, spec, spec.muzzleX, spec.muzzleY)
+    : null;
 }
 
 /** Stellt jede getragene Textur genau einmal in die Ladeschlange. */

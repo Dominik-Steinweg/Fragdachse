@@ -603,6 +603,7 @@ export class ProjectileManager {
       color:          cfg.color,
       allowTeamDamage: cfg.allowTeamDamage,
       ownerColor:     cfg.ownerColor,
+      visualMuzzleOrigin: cfg.visualMuzzleOrigin,
       boundsListener: () => {},
       colliders:      [],
       damage:         cfg.damage,
@@ -756,7 +757,7 @@ export class ProjectileManager {
     }
 
     if (!cfg.suppressSpawnFx) {
-      const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
+      const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(x, y, angle);
       this.muzzleFlashRenderer?.playProjectileFlash(
         muzzleOrigin.x,
         muzzleOrigin.y,
@@ -2752,6 +2753,7 @@ export class ProjectileManager {
         color:  p.color,
         allowTeamDamage: p.allowTeamDamage,
         ownerColor: p.ownerColor,
+        visualMuzzleOrigin: p.visualMuzzleOrigin,
         projectileVisualScale: p.projectileVisualScale,
         smokeTrailColor: p.smokeTrailColor,
         style:  p.projectileStyle,
@@ -2850,14 +2852,15 @@ export class ProjectileManager {
 
       if (!prev && !proj.suppressSpawnFx) {
         const ownerPos = this.ownerPositionProvider?.(proj.ownerId) ?? null;
-        const flashOrigin = ownerPos
+        const flashOrigin = proj.visualMuzzleOrigin
+          ?? (ownerPos
           ? getTopDownMuzzleOriginFromVector(ownerPos.x, ownerPos.y, proj.vx, proj.vy)
           : getTopDownMuzzleOriginFromVector(
               proj.x - (Math.hypot(proj.vx, proj.vy) > 0.0001 ? (proj.vx / Math.hypot(proj.vx, proj.vy)) * MUZZLE_PROJECTILE_FALLBACK_BACKTRACK : 0),
               proj.y - (Math.hypot(proj.vx, proj.vy) > 0.0001 ? (proj.vy / Math.hypot(proj.vx, proj.vy)) * MUZZLE_PROJECTILE_FALLBACK_BACKTRACK : 0),
               proj.vx,
               proj.vy,
-            );
+            ));
         this.muzzleFlashRenderer?.playProjectileFlash(
           flashOrigin.x,
           flashOrigin.y,

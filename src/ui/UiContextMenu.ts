@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
-import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
+import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { ensureFlatPanelTexture } from './uiTextures';
-import { FONT_MONO } from './uiTheme';
+import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 
 /**
  * Kleines Aktionsmenue am Klickpunkt (Ausruesten, Ablegen, Zerlegen ...).
@@ -32,11 +32,11 @@ export interface UiContextMenuOptions {
   readonly onClose?: () => void;
 }
 
-const PADDING = 10;
+const PADDING = SPACE.md;
 const TITLE_H = 22;
 const ROW_W = 210;
 const ROW_H = 32;
-const ROW_GAP = 4;
+const ROW_GAP = SPACE.xs;
 
 export class UiContextMenu {
   private container: Phaser.GameObjects.Container | null = null;
@@ -73,8 +73,8 @@ export class UiContextMenu {
     });
 
     const background = this.scene.add.image(0, 0, ensureFlatPanelTexture(
-      this.scene, `_uicm_panel_${width}x${height}`, width, height, COLORS.GREY_9, COLORS.GOLD_1,
-      { radius: 10, fillAlpha: 0.98, strokeAlpha: 0.9 },
+      this.scene, `_uicm_panel_${width}x${height}`, width, height, SURFACE.modal, BORDER.subtle,
+      { radius: RADIUS.md, fillAlpha: 0.98, strokeAlpha: 0.9 },
     )).setOrigin(0, 0).setScrollFactor(0).setInteractive();
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
@@ -83,16 +83,16 @@ export class UiContextMenu {
     const children: Phaser.GameObjects.GameObject[] = [
       backdrop,
       background,
-      this.scene.add.text(PADDING, PADDING, options.title, {
-        fontFamily: FONT_MONO, fontSize: '14px', fontStyle: 'bold', color: toCssColor(options.titleColor),
-      }).setOrigin(0, 0).setScrollFactor(0),
+      this.scene.add.text(PADDING, PADDING, options.title, textStyle('section', {
+        color: options.titleColor ?? TEXT.primary,
+      })).setOrigin(0, 0).setScrollFactor(0),
     ];
 
     options.entries.forEach((entry, index) => {
       const rowY = PADDING + TITLE_H + index * (ROW_H + ROW_GAP);
       const enabled = entry.enabled !== false;
       const entryColor = enabled ? entry.color : COLORS.GREY_5;
-      const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, COLORS.GREY_8, enabled ? 0.9 : 0.55)
+      const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, SURFACE.raised, enabled ? 0.9 : 0.55)
         .setOrigin(0, 0)
         .setStrokeStyle(1, entryColor, enabled ? 0.75 : 0.35)
         .setScrollFactor(0)
@@ -100,7 +100,7 @@ export class UiContextMenu {
       row.on('pointerover', () => {
         if (enabled) row.setFillStyle(COLORS.GREY_6, 1);
       });
-      row.on('pointerout', () => row.setFillStyle(COLORS.GREY_8, enabled ? 0.9 : 0.55));
+      row.on('pointerout', () => row.setFillStyle(SURFACE.raised, enabled ? 0.9 : 0.55));
       row.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
         event?.stopPropagation();
         if (!enabled) return;
@@ -111,9 +111,9 @@ export class UiContextMenu {
       });
       children.push(
         row,
-        this.scene.add.text(PADDING + 12, rowY + ROW_H / 2, entry.label, {
-          fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: toCssColor(entryColor),
-        }).setOrigin(0, 0.5).setScrollFactor(0),
+        this.scene.add.text(PADDING + SPACE.md, rowY + ROW_H / 2, entry.label, textStyle('labelSm', {
+          color: entryColor,
+        })).setOrigin(0, 0.5).setScrollFactor(0),
       );
     });
 

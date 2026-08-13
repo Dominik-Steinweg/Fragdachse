@@ -43,6 +43,18 @@ Alle übrigen Fire-Typen (flamethrower, leaf_blower, tesla_dome, healing_aura, e
 
 PlayerEntity kennt zusätzlich einen Presentation-Modus (PlayerEntityOptions.presentation): Sprite, Rotation, Glow, Held Item und VFX bleiben identisch, Namensschild und Welt-Balken entstehen gar nicht erst.
 
+## Lobby-Inszenierung (src/lobby/)
+
+Die Lobby zeigt lokale Ambient-Gefechte. Verbindliche Grenzen:
+
+- Rein lokal: keine RPCs, kein Raumzustand, keine Host-Autorität. Clients dürfen unterschiedliche Sequenzen sehen.
+- Die Lobby-Phase benutzt dasselbe Arenamass wie Deathmatch (getArenaMetricsProfile). Weltgrenzen, Kameragrenzen, Audio-Panning und das Beschneiden von Effekten decken sich damit mit der Vorschaufläche.
+- Fels-Rollen aus MenuArenaPreviewConfig: structural (Felsschriftzug, Rahmen) ist unzerstörbar und löst nie Inspector-Arbeit aus; ambient trägt normale Landschaftsfels-HP.
+- Die Vorschau bleibt gebacken. Fels-Änderungen laufen über MenuArenaPreviewRenderer.setRockAlive und werden zu einem gebündelten Rebuild im POST_UPDATE zusammengefasst.
+- Kollisionskörper für Felsen entstehen nur pro Sequenzzone (LobbyRockBodyPool); Sichtlinie und Hitscan laufen über den kartenweiten ArenaObstacleIndex.
+- Der Inspector erscheint ausschliesslich nach echter Zerstörung, repariert nur Felsen mit HP > 0 und baut zerstörte einzeln sichtbar als neutrale Landschaftsfelsen neu auf.
+- LobbyAmbientRuntime.setActive(false) räumt synchron und vollständig auf; ein Fehler schaltet die Inszenierung ab, ohne den Matchstart zu blockieren.
+
 ## Scene- und Round-Lifetime
 
 src/scenes/arena/ArenaContext.ts ist der Vertrag:

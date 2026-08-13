@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Die Lobby-Hindernisse brauchen von Phaser nur Geometrie-Container; der Renderer bleibt außen vor.
+/**
+ * Phaser-Ersatz mit echter Segmentgeometrie.
+ *
+ * Der Renderer bleibt aussen vor, die Schnitttests nicht: Die Wegglättung entscheidet über
+ * {@link CombatGeometry.hasLineOfSight}, ob sie einen Wegpunkt überspringen darf. Mit
+ * Attrappen, die immer „frei" melden, würde der Test genau den Fehler durchwinken, den er
+ * verhindern soll – eine Abkürzung quer durch einen Felsen.
+ */
 vi.mock('phaser', () => {
   class Rectangle {
     x = 0; y = 0; width = 0; height = 0;
@@ -8,14 +15,89 @@ vi.mock('phaser', () => {
       this.x = x; this.y = y; this.width = width; this.height = height;
       return this;
     }
+    get left() { return this.x; }
+    get right() { return this.x + this.width; }
+    get top() { return this.y; }
+    get bottom() { return this.y + this.height; }
   }
+  class Circle {
+    x = 0; y = 0; radius = 0;
+    setTo(x: number, y: number, radius: number) {
+      this.x = x; this.y = y; this.radius = radius;
+      return this;
+    }
+  }
+  class Line {
+    x1 = 0; y1 = 0; x2 = 0; y2 = 0;
+    setTo(x1: number, y1: number, x2: number, y2: number) {
+      this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2;
+      return this;
+    }
+    static Length(line: Line): number {
+      return Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+    }
+  }
+
+  /** Schnittpunkt zweier Strecken, oder `null`. */
+  function segmentIntersection(
+    ax: number, ay: number, bx: number, by: number,
+    cx: number, cy: number, dx: number, dy: number,
+  ): { x: number; y: number } | null {
+    const rx = bx - ax;
+    const ry = by - ay;
+    const sx = dx - cx;
+    const sy = dy - cy;
+    const denominator = rx * sy - ry * sx;
+    if (Math.abs(denominator) < 1e-9) return null;
+    const t = ((cx - ax) * sy - (cy - ay) * sx) / denominator;
+    const u = ((cx - ax) * ry - (cy - ay) * rx) / denominator;
+    if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+    return { x: ax + rx * t, y: ay + ry * t };
+  }
+
   return {
     Geom: {
       Rectangle,
-      Circle: class { setTo() { return this; } },
-      Line: class { setTo() { return this; } },
+      Circle,
+      Line,
+      Intersects: {
+        GetLineToRectangle(line: Line, rect: Rectangle, out: { x: number; y: number }[] = []) {
+          const edges: ReadonlyArray<readonly [number, number, number, number]> = [
+            [rect.left, rect.top, rect.right, rect.top],
+            [rect.right, rect.top, rect.right, rect.bottom],
+            [rect.right, rect.bottom, rect.left, rect.bottom],
+            [rect.left, rect.bottom, rect.left, rect.top],
+          ];
+          for (const [cx, cy, dx, dy] of edges) {
+            const point = segmentIntersection(line.x1, line.y1, line.x2, line.y2, cx, cy, dx, dy);
+            if (point) out.push(point);
+          }
+          return out;
+        },
+        GetLineToCircle(line: Line, circle: Circle, out: { x: number; y: number }[] = []) {
+          const dx = line.x2 - line.x1;
+          const dy = line.y2 - line.y1;
+          const fx = line.x1 - circle.x;
+          const fy = line.y1 - circle.y;
+          const a = dx * dx + dy * dy;
+          const b = 2 * (fx * dx + fy * dy);
+          const c = fx * fx + fy * fy - circle.radius * circle.radius;
+          const discriminant = b * b - 4 * a * c;
+          if (a === 0 || discriminant < 0) return out;
+          const root = Math.sqrt(discriminant);
+          for (const t of [(-b - root) / (2 * a), (-b + root) / (2 * a)]) {
+            if (t < 0 || t > 1) continue;
+            out.push({ x: line.x1 + dx * t, y: line.y1 + dy * t });
+          }
+          return out;
+        },
+      },
     },
-    Math: { Distance: { Between: () => 0 } },
+    Math: {
+      Distance: {
+        Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1),
+      },
+    },
   };
 });
 
@@ -76,9 +158,36 @@ describe('lobby navigation', () => {
 
     const path = nav.findPath(from.x, from.y, to.x, to.y);
     expect(path).not.toBeNull();
-    expect(path!.at(-1)).toEqual(centreOf(9, 5));
-    // Der Weg muss durch die geöffnete Zelle laufen – es gibt keinen anderen Durchlass.
-    expect(path!.some((point) => point.x === centreOf(5, 5).x && point.y === centreOf(5, 5).y)).toBe(true);
+    expect(path![path!.length - 1]).toEqual(centreOf(9, 5));
+    // Es gibt keinen anderen Durchlass: Ein Weg beweist, dass die geöffnete Zelle benutzt wird.
+    // Er läuft in Zellhöhe der Lücke, weil ein Ausweichen daneben durch die Wand ginge.
+    for (const point of path!) {
+      expect(Math.abs(point.y - centreOf(5, 5).y)).toBeLessThanOrEqual(CELL_SIZE);
+    }
+  });
+
+  it('pulls the path straight instead of following the cell grid', () => {
+    // Freies Feld: Der geglättete Weg braucht einen einzigen Wegpunkt, das Ziel.
+    build([]);
+    const from = centreOf(1, 1);
+    const to = centreOf(14, 8);
+
+    const path = nav.findPath(from.x, from.y, to.x, to.y);
+    expect(path).not.toBeNull();
+    expect(path).toEqual([centreOf(14, 8)]);
+  });
+
+  it('never smooths a shortcut through a rock', () => {
+    build(verticalWall(5, 5));
+    const from = centreOf(1, 1);
+    const to = centreOf(9, 1);
+
+    const path = nav.findPath(from.x, from.y, to.x, to.y);
+    expect(path).not.toBeNull();
+    // Zwischen Start und Ziel steht die Wand; ein direkter Sprung wäre ein Durchgehen.
+    expect(path).not.toEqual([centreOf(9, 1)]);
+    // Stattdessen führt der Weg über die Lücke nach unten und wieder hinauf.
+    expect(path!.some((point) => Math.abs(point.y - centreOf(5, 5).y) <= CELL_SIZE)).toBe(true);
   });
 
   it('counts every topology change so running paths know they are stale', () => {

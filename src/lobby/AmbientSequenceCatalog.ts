@@ -51,17 +51,17 @@ export interface AmbientTemplate {
  * der Compiler vor dem Start gegen die tatsächliche Felslandschaft auf.
  */
 export const AMBIENT_TEMPLATES: readonly AmbientTemplate[] = [
-  { id: 'quiet_transit',      intensity: 'calm',   badgers: [1, 2], enemies: [0, 0], rockHazard: 'none', weight: 1.4, requiresLineOfSight: false, durationMs: [2600, 4200] },
+  { id: 'quiet_transit',      intensity: 'calm',   badgers: [1, 1], enemies: [0, 0], rockHazard: 'none', weight: 1.4, requiresLineOfSight: false, durationMs: [2600, 4200] },
   { id: 'enemy_patrol',       intensity: 'calm',   badgers: [0, 0], enemies: [1, 2], rockHazard: 'none', weight: 1.2, requiresLineOfSight: false, durationMs: [2800, 4400] },
-  { id: 'chase',              intensity: 'normal', badgers: [1, 2], enemies: [1, 2], rockHazard: 'low',  weight: 1.0, requiresLineOfSight: true,  durationMs: [3200, 5200] },
+  { id: 'chase',              intensity: 'normal', badgers: [1, 1], enemies: [1, 2], rockHazard: 'low',  weight: 1.0, requiresLineOfSight: true,  durationMs: [3200, 5200] },
   { id: 'melee_chase',        intensity: 'normal', badgers: [1, 1], enemies: [1, 2], rockHazard: 'none', weight: 0.9, requiresLineOfSight: true,  weaponFamily: 'melee', durationMs: [3000, 4800] },
   { id: 'short_duel',         intensity: 'normal', badgers: [1, 1], enemies: [1, 1], rockHazard: 'low',  weight: 1.1, requiresLineOfSight: true,  durationMs: [3000, 4600] },
-  { id: 'cover_exchange',     intensity: 'normal', badgers: [1, 2], enemies: [1, 2], rockHazard: 'low',  weight: 1.0, requiresLineOfSight: true,  durationMs: [3600, 6000] },
-  { id: 'ambush',             intensity: 'normal', badgers: [1, 2], enemies: [1, 2], rockHazard: 'low',  weight: 0.9, requiresLineOfSight: true,  durationMs: [3000, 5000] },
+  { id: 'cover_exchange',     intensity: 'normal', badgers: [1, 1], enemies: [1, 2], rockHazard: 'low',  weight: 1.0, requiresLineOfSight: true,  durationMs: [3600, 6000] },
+  { id: 'ambush',             intensity: 'normal', badgers: [1, 1], enemies: [1, 2], rockHazard: 'low',  weight: 0.9, requiresLineOfSight: true,  durationMs: [3000, 5000] },
   { id: 'blocked_shot',       intensity: 'normal', badgers: [1, 1], enemies: [1, 1], rockHazard: 'low',  weight: 0.7, requiresLineOfSight: false, durationMs: [3000, 4400] },
-  { id: 'retreat_fire',       intensity: 'normal', badgers: [1, 2], enemies: [1, 2], rockHazard: 'low',  weight: 0.9, requiresLineOfSight: true,  durationMs: [3400, 5400] },
-  { id: 'rock_break',         intensity: 'strong', badgers: [1, 2], enemies: [0, 1], rockHazard: 'high', weight: 0.5, requiresLineOfSight: false, weaponFamily: 'projectile', durationMs: [3400, 5600] },
-  { id: 'crossfire',          intensity: 'strong', badgers: [2, 3], enemies: [1, 3], rockHazard: 'high', weight: 0.5, requiresLineOfSight: true,  durationMs: [4000, 6000] },
+  { id: 'retreat_fire',       intensity: 'normal', badgers: [1, 1], enemies: [1, 2], rockHazard: 'low',  weight: 0.9, requiresLineOfSight: true,  durationMs: [3400, 5400] },
+  { id: 'rock_break',         intensity: 'strong', badgers: [1, 1], enemies: [0, 1], rockHazard: 'high', weight: 0.5, requiresLineOfSight: false, weaponFamily: 'projectile', durationMs: [3400, 5600] },
+  { id: 'crossfire',          intensity: 'strong', badgers: [2, 2], enemies: [1, 3], rockHazard: 'high', weight: 0.5, requiresLineOfSight: true,  durationMs: [4000, 6000] },
   { id: 'rare_enemy_passage', intensity: 'strong', badgers: [0, 1], enemies: [2, 3], rockHazard: 'none', weight: 0.4, requiresLineOfSight: false, durationMs: [3600, 5600] },
   { id: 'asmd_combo',         intensity: 'strong', badgers: [1, 1], enemies: [0, 2], rockHazard: 'high', weight: 0.35, requiresLineOfSight: true, durationMs: [3600, 5400] },
 ];

@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getHeldItemAnchor, HELD_ITEM_ANCHOR_Y, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE, PLAYER_TEXTURE_SIZE } from '../src/config';
-import { HELD_ITEM_SPRITES, getHeldItemSpriteSpec } from '../src/loadout/HeldItemVisuals';
+import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE, PLAYER_TEXTURE_SIZE } from '../src/config';
+import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
 import {
   DEFAULT_LOADOUT,
@@ -61,19 +61,23 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       expect(existsSync(file), spec.assetPath).toBe(true);
 
       const { width, height } = readPngSize(spec.assetPath);
-      // Ein Texturpixel ist ein Figurenpixel: eine Waffe darf nie so gross werden, dass sie
-      // die Figur ueberdeckt statt vor ihr zu liegen.
-      expect(width, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE / 2);
-      expect(height, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE / 2);
+      // Das Raster bleibt an die 32-px-Figur gebunden, aber lange Waffen duerfen bewusst
+      // ueber die halbe Spielerhoehe hinausreichen.
+      expect(width, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE);
+      expect(height, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE);
 
       expect(spec.gripX, spec.textureKey).toBeGreaterThanOrEqual(0);
       expect(spec.gripX, spec.textureKey).toBeLessThanOrEqual(width);
       expect(spec.gripY, spec.textureKey).toBeGreaterThanOrEqual(0);
       expect(spec.gripY, spec.textureKey).toBeLessThanOrEqual(height);
+      expect(spec.muzzleX, spec.textureKey).toBeGreaterThanOrEqual(0);
+      expect(spec.muzzleX, spec.textureKey).toBeLessThanOrEqual(width);
+      expect(spec.muzzleY, spec.textureKey).toBeGreaterThanOrEqual(0);
+      expect(spec.muzzleY, spec.textureKey).toBeLessThanOrEqual(height);
     }
   });
 
-  it('laesst keine Waffe ueber die Muendung hinausragen', () => {
+  it('laesst jede registrierte Muedung in ihrer Textur liegen', () => {
     // Projektile, Hitscan-Ursprung, Muendungsfeuer und Schuss-Audio starten alle bei
     // MUZZLE_FORWARD_OFFSET vor der Figurenmitte. Ragt eine Waffe weiter nach vorn, entsteht der
     // Schuss sichtbar *im* Lauf statt an seiner Spitze. Das ist die einzige harte Obergrenze fuer
@@ -82,10 +86,12 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
     const maxForwardReach = MUZZLE_FORWARD_OFFSET / scale + HELD_ITEM_ANCHOR_Y;
     expect(maxForwardReach).toBeGreaterThan(0);
 
-    for (const spec of [...Object.values(HELD_ITEM_SPRITES), getHeldItemSpriteSpec('AK47')!, getHeldItemSpriteSpec('SMOKE_GRENADE')!]) {
-      // Der Griffpunkt liegt auf dem Pfotenanker, alles davor ist die Reichweite nach vorn.
-      expect(spec.gripY, spec.textureKey).toBeLessThanOrEqual(maxForwardReach);
+    for (const spec of Object.values(HELD_ITEM_SPRITES)) {
+      expect(spec.muzzleY, spec.textureKey).toBeLessThanOrEqual(spec.gripY);
+      expect(spec.muzzleY, spec.textureKey).toBeGreaterThanOrEqual(0);
+      expect(spec.muzzleY, spec.textureKey).toBeLessThanOrEqual(32);
     }
+    expect(HELD_ITEM_SPRITES.AWP.gripY).toBeGreaterThan(maxForwardReach);
   });
 
   it('gibt Nahkampfwaffen und Konstrukten nichts in die Pfoten', () => {
@@ -124,6 +130,36 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
   it('skaliert mit der Anzeigegroesse der Figur, etwa fuer die groessere Lobby-Vorschau', () => {
     const preview = getHeldItemAnchor(0, 0, 0, 48 / PLAYER_TEXTURE_SIZE);
     expect(preview.y).toBeCloseTo(HELD_ITEM_ANCHOR_Y * (48 / PLAYER_TEXTURE_SIZE), 6);
+  });
+
+  it('legt Griff und Muedung ueber dieselbe Transformation wie das Bild aus', () => {
+    const spec = HELD_ITEM_SPRITES.AWP;
+    const grip = getHeldItemPointWorld(100, 200, 0, PLAYER_SIZE, spec, spec.gripX, spec.gripY);
+    const anchor = getHeldItemAnchor(100, 200, 0, scale);
+    expect(grip.x).toBeCloseTo(anchor.x, 6);
+    expect(grip.y).toBeCloseTo(anchor.y, 6);
+
+    const localX = HELD_ITEM_ANCHOR_X + spec.muzzleX - spec.gripX;
+    const localY = HELD_ITEM_ANCHOR_Y + spec.muzzleY - spec.gripY;
+    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      const muzzle = getHeldWeaponMuzzleOrigin('AWP', 100, 200, angle, PLAYER_SIZE);
+      expect(muzzle?.x).toBeCloseTo(100 + (localX * Math.cos(angle) - localY * Math.sin(angle)) * scale, 6);
+      expect(muzzle?.y).toBeCloseTo(200 + (localX * Math.sin(angle) + localY * Math.cos(angle)) * scale, 6);
+    }
+  });
+
+  it('bewahrt die absichtlich unterschiedlichen Waffen-Silhouetten', () => {
+    const dimensions = (itemId: string): [number, number] => {
+      const spec = HELD_ITEM_SPRITES[itemId];
+      const size = readPngSize(spec.assetPath);
+      return [size.width, size.height];
+    };
+
+    expect(dimensions('GLOCK')).toEqual([5, 11]);
+    expect(dimensions('P90')).toEqual([9, 16]);
+    expect(dimensions('AK47')).toEqual([9, 25]);
+    expect(dimensions('AWP')).toEqual([7, 31]);
+    expect(dimensions('ROCKET_LAUNCHER')).toEqual([13, 25]);
   });
 });
 

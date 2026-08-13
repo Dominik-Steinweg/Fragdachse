@@ -6,10 +6,10 @@
 import * as Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
-  DEPTH, COLORS, toCssColor,
+  DEPTH, COLORS,
 } from '../config';
 import { ensureModalPanelTexture } from './uiTextures';
-import { FONT_MONO } from './uiTheme';
+import { BORDER, SURFACE, TEXT, textStyle } from './uiTheme';
 import { HELP_CONTROLS } from '../config/helpControls';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
@@ -30,22 +30,12 @@ const FOOTER_Y    = CY + PANEL_H / 2 - 28;
 // ── Farben ────────────────────────────────────────────────────────────────────
 const DIM_COLOR   = COLORS.GREY_10;
 const DIM_ALPHA   = 0.75;
-const PANEL_BG    = COLORS.GREY_7;
-const PANEL_ALPHA = 0.95;
-const ACCENT      = COLORS.GOLD_1;
+const PANEL_BG    = SURFACE.modal;
+const PANEL_BORDER = BORDER.default;
 
-const KEY_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontSize:   '18px',
-  fontFamily: FONT_MONO,
-  fontStyle:  'bold',
-  color:      toCssColor(ACCENT),
-};
+const KEY_STYLE = textStyle('label', { color: TEXT.secondary });
 
-const DESC_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontSize:   '16px',
-  fontFamily: FONT_MONO,
-  color:      toCssColor(COLORS.GREY_2),
-};
+const DESC_STYLE = textStyle('body', { color: TEXT.primary });
 
 export class HelpOverlay {
   private container: Phaser.GameObjects.Container | null = null;
@@ -75,21 +65,19 @@ export class HelpOverlay {
     // ── Panel ─────────────────────────────────────────────────────────────
     const panel = this.scene.add.image(
       CX, CY,
-      ensureModalPanelTexture(this.scene, '_help_panel', PANEL_W, PANEL_H, PANEL_BG, ACCENT),
+      ensureModalPanelTexture(this.scene, '_help_panel', PANEL_W, PANEL_H, PANEL_BG, PANEL_BORDER),
     ).setScrollFactor(0);
     objects.push(panel);
 
     // ── Titel ─────────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'STEUERUNG', {
-        fontSize: '28px', fontFamily: FONT_MONO, fontStyle: 'bold',
-        color: toCssColor(ACCENT),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, TITLE_Y, 'STEUERUNG', textStyle('display'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     // ── Trennlinie ────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(CX, SEP_Y, PANEL_W - 60, 2, ACCENT)
+      this.scene.add.rectangle(CX, SEP_Y, PANEL_W - 60, 1, BORDER.subtle, 0.9)
         .setScrollFactor(0),
     );
 
@@ -97,13 +85,11 @@ export class HelpOverlay {
     HELP_CONTROLS.forEach(([key, desc], i) => {
       const y = LIST_START_Y + i * ROW_H;
 
-      // Dezente Zeilen-Hintergrund-Alternierung
-      if (i % 2 === 0) {
-        objects.push(
-          this.scene.add.rectangle(CX, y, PANEL_W - 48, ROW_H - 4, COLORS.GREY_8, 0.35)
-            .setScrollFactor(0),
-        );
-      }
+      // Ruhige, gleichmaessige Zeilenflaechen statt eines starken Zebra-Musters.
+      objects.push(
+        this.scene.add.rectangle(CX, y, PANEL_W - 48, ROW_H - 4, SURFACE.raised, i % 2 === 0 ? 0.28 : 0.16)
+          .setScrollFactor(0),
+      );
 
       objects.push(
         this.scene.add.text(KEY_X, y, key, KEY_STYLE)
@@ -117,10 +103,8 @@ export class HelpOverlay {
 
     // ── Footer-Hinweis ────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ Klick oder Taste zum Schließen ]', {
-        fontSize: '13px', fontFamily: FONT_MONO,
-        color: toCssColor(COLORS.GREY_4),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, FOOTER_Y, '[ Klick oder Taste zum Schließen ]', textStyle('caption'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     // ── Container ─────────────────────────────────────────────────────────

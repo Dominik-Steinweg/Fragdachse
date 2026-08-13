@@ -17,7 +17,7 @@ import type {
 } from '../loadout/WeaponFireExecutor';
 import type { EffectSystem } from '../effects/EffectSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
-import type { RendererBundle } from '../scenes/arena/RendererBundle';
+import { wireProjectileRenderers, type RendererBundle } from '../scenes/arena/RendererBundle';
 import type { AmbientActorRegistry } from './AmbientActorRegistry';
 import type { LobbyAmbientActor } from './LobbyAmbientActor';
 import type { LobbyObstacleWorld } from './LobbyObstacleWorld';
@@ -68,6 +68,8 @@ export class AmbientCombatWorld implements WeaponFireSink {
 
   private readonly geometry: CombatGeometry;
   private readonly damagedRocks = new Map<number, AmbientRockDamageRecord>();
+  /** Streuwert der Blutspritzer; dieselbe Rolle wie der replizierte Seed im Gameplay. */
+  private hitEffectSeed = 1;
   private readonly scratchLine = new Phaser.Geom.Line();
 
   constructor(private readonly deps: AmbientCombatDeps) {
@@ -76,8 +78,11 @@ export class AmbientCombatWorld implements WeaponFireSink {
     this.projectiles = new ProjectileManager(deps.scene);
     this.detonations = new DetonationSystem(this.projectiles);
 
+    // Dieselben Projektil-Renderer wie die Arena. Ohne diese Verdrahtung fiele der Manager
+    // auf seine nackten Ersatzformen zurück – Kugeln wären Kreise ohne Spur und Mündungsfeuer.
+    wireProjectileRenderers(deps.renderers, this.projectiles, deps.actors);
+
     this.projectiles.setObstacleIndex(deps.world.obstacleIndex);
-    this.projectiles.setOwnerPositionProvider((ownerId) => deps.actors.getOwnerVisualState(ownerId));
     this.projectiles.setRockHitCallback((rockId, damage) => this.damageRock(rockId, damage));
     this.projectiles.setAudioSystem(deps.audio);
     this.projectiles.setHomingLineOfSightChecker((sx, sy, ex, ey) => this.geometry.hasLineOfSight(sx, sy, ex, ey));
@@ -98,8 +103,16 @@ export class AmbientCombatWorld implements WeaponFireSink {
     );
   }
 
-  /** Gibt die Zonenkörper frei; danach existiert kein Ambient-Kollisionskörper mehr. */
+  /**
+   * Gibt die Zonenkörper frei; danach existiert kein Ambient-Kollisionskörper mehr.
+   *
+   * Die Reihenfolge ist zwingend: Jedes Projektil hält Arcade-Kollider auf die Fels-Gruppe.
+   * Wird die Gruppe zerstört, während noch ein Projektil fliegt, greift der nächste
+   * Physikschritt auf ihre abgeräumte Kinderliste zu und der Frame bricht ab. Erst die
+   * Projektile abräumen, dann die Gruppe lösen, dann freigeben.
+   */
   leaveZone(): void {
+    this.projectiles.destroyAll();
     this.projectiles.setRockGroup(null, null, null);
     this.deps.bodyPool.release();
   }
@@ -128,6 +141,7 @@ export class AmbientCombatWorld implements WeaponFireSink {
 
     for (const target of this.deps.actors.all()) {
       if (!target.isAlive() || target.id === request.shooterId) continue;
+      if (target.isBurrowing()) continue;
       if (shooter && target.team === shooter.team) continue;
       const hit = this.geometry.nearestCircleHit(
         line,
@@ -150,21 +164,22 @@ export class AmbientCombatWorld implements WeaponFireSink {
     }
 
     if (hitActor) {
-      hitActor.applyDamage(request.damage);
+      this.damageActor(hitActor, request.damage, dirX, dirY, request.shooterId);
     } else if (obstacleHit?.kind === 'rock' && obstacleHit.index !== undefined) {
       this.damageRock(obstacleHit.index, Math.round(request.damage * request.rockDamageMult));
     }
 
+    const visualStart = request.visualMuzzleOrigin ?? { x: request.startX, y: request.startY };
     this.deps.effects.playHitscanTracer(
-      request.startX, request.startY, impactX, impactY,
+      visualStart.x, visualStart.y, impactX, impactY,
       request.color, request.traceThickness,
       hitActor ? 'player' : obstacleHit ? 'environment' : 'none',
       request.visualPreset,
     );
     this.deps.renderers.muzzleFlash.playHitscanFlash(
-      request.startX, request.startY, dirX, dirY, request.visualPreset, request.color,
+      visualStart.x, visualStart.y, dirX, dirY, request.visualPreset, request.color,
     );
-    this.playAmbientSound(request.shotAudioKey, request.startX, request.startY);
+    this.playAmbientSound(request.shotAudioKey, visualStart.x, visualStart.y);
     return true;
   }
 
@@ -175,6 +190,7 @@ export class AmbientCombatWorld implements WeaponFireSink {
 
     for (const target of this.deps.actors.all()) {
       if (!target.isAlive() || target.id === request.shooterId) continue;
+      if (target.isBurrowing()) continue;
       if (shooter && target.team === shooter.team) continue;
 
       const dx = target.x - request.x;
@@ -186,7 +202,7 @@ export class AmbientCombatWorld implements WeaponFireSink {
       this.scratchLine.setTo(request.x, request.y, target.x, target.y);
       if (this.geometry.isPathBlocked(this.scratchLine, distance - target.collisionRadius)) continue;
 
-      target.applyDamage(request.damage);
+      this.damageActor(target, request.damage, dx / distance, dy / distance, request.shooterId);
     }
 
     // Felsen im Bogen nehmen ebenfalls Schaden – dieselbe Regel wie in der Arena.
@@ -206,6 +222,8 @@ export class AmbientCombatWorld implements WeaponFireSink {
   update(deltaMs: number): void {
     this.detonations.checkProjectileDetonations();
     const { explodedProjectiles, explodedGrenades } = this.projectiles.hostUpdate(deltaMs);
+    // Nach dem Flugschritt, damit die überstrichene Strecke dieses Frames geprüft wird.
+    this.resolveProjectileActorHits();
 
     for (const explosion of explodedProjectiles) {
       this.applyExplosion(
@@ -257,15 +275,135 @@ export class AmbientCombatWorld implements WeaponFireSink {
       attackerId,
     );
 
-    for (const actor of this.deps.actors.all()) {
-      if (!actor.isAlive()) continue;
-      const distance = Math.hypot(actor.x - x, actor.y - y);
-      if (distance > radius) continue;
-      const share = falloff ? Math.max(falloff.minDamage, damage * (1 - distance / Math.max(1, radius))) : damage;
-      actor.applyDamage(Math.round(share));
-    }
-
+    this.damageActorsInRadius(x, y, radius, damage, falloff, attackerId);
     this.deps.effects.playExplosionEffect(x, y, radius, color, visualStyle ?? 'default');
+  }
+
+  /**
+   * Einziger Weg, auf dem ein Ambient-Actor Schaden nimmt.
+   *
+   * Er erzeugt dabei denselben Trefferabdruck wie das Gameplay – Blutspritzer, Zielreaktion
+   * und Trefferton laufen über `EffectSystem` und `HitFeedbackRenderer`, nicht über eine
+   * lobbyeigene Darstellung.
+   */
+  private damageActor(
+    target: LobbyAmbientActor,
+    damage: number,
+    dirX: number,
+    dirY: number,
+    shooterId: string,
+  ): void {
+    if (damage <= 0 || !target.isAlive()) return;
+    const before = target.getHp();
+    const remaining = target.applyDamage(damage);
+    const dealt = before - remaining;
+    if (dealt <= 0) return;
+
+    this.deps.effects.playLocalHitEffect({
+      type: 'hit',
+      x: target.x,
+      y: target.y,
+      targetId: target.id,
+      shooterId,
+      targetColor: target.color,
+      totalDamage: dealt,
+      hpLost: dealt,
+      armorLost: 0,
+      isKill: remaining <= 0,
+      dirX,
+      dirY,
+      seed: (this.hitEffectSeed = (this.hitEffectSeed + 0x9e3779b1) >>> 0),
+    });
+  }
+
+  private damageActorsInRadius(
+    x: number, y: number, radius: number, damage: number,
+    falloff: { minDamage: number } | undefined,
+    attackerId: string,
+  ): void {
+    for (const actor of this.deps.actors.all()) {
+      if (!actor.isAlive() || actor.isBurrowing()) continue;
+      const dx = actor.x - x;
+      const dy = actor.y - y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > radius) continue;
+      const share = falloff
+        ? Math.max(falloff.minDamage, damage * (1 - distance / Math.max(1, radius)))
+        : damage;
+      const length = Math.max(0.001, distance);
+      this.damageActor(actor, Math.round(share), dx / length, dy / length, attackerId);
+    }
+  }
+
+  /**
+   * Projektiltreffer auf Ambient-Actors.
+   *
+   * Der geteilte Projektilmanager kennt nur Felsen, Basen und den Zug – Figuren prüft im
+   * Gameplay das `CombatSystem`. Die Lobby braucht denselben Schritt, und zwar überstrichen:
+   * Ein schnelles Geschoss legt pro Frame mehr zurück als ein Dachs breit ist und würde bei
+   * einer reinen Punktprüfung durch ihn hindurchfliegen.
+   */
+  private resolveProjectileActorHits(): void {
+    for (const projectile of [...this.projectiles.getActiveProjectiles()]) {
+      if (projectile.pendingDestroy) continue;
+      const owner = this.deps.actors.get(projectile.ownerId);
+      const line = this.scratchLine.setTo(
+        projectile.lastX, projectile.lastY, projectile.sprite.x, projectile.sprite.y,
+      );
+
+      let hit: LobbyAmbientActor | null = null;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const target of this.deps.actors.all()) {
+        if (!target.isAlive() || target.id === projectile.ownerId) continue;
+        if (target.isBurrowing()) continue;
+        if (owner && target.team === owner.team) continue;
+
+        const radius = target.collisionRadius + projectile.sprite.displayWidth * 0.5;
+        // Der Startpunkt kann bereits im Ziel liegen; dann zählt der Abstand selbst.
+        const inside = Math.hypot(target.x - line.x1, target.y - line.y1) <= radius;
+        const swept = inside ? 0 : this.geometry.nearestCircleHit(line, target.x, target.y, radius)?.distance;
+        if (swept === undefined || swept >= bestDistance) continue;
+        bestDistance = swept;
+        hit = target;
+      }
+      if (!hit) continue;
+
+      const velocity = projectile.body?.velocity;
+      const speed = velocity ? Math.hypot(velocity.x, velocity.y) : 0;
+      const dirX = speed > 0 ? velocity!.x / speed : 1;
+      const dirY = speed > 0 ? velocity!.y / speed : 0;
+      this.damageActor(hit, projectile.damage, dirX, dirY, projectile.ownerId);
+
+      // Sprenggeschosse wirken auch auf die Umgebung – derselbe Weg wie beim Einschlag am Fels.
+      if (projectile.explosion) {
+        this.applyExplosion(
+          hit.x, hit.y,
+          projectile.explosion.radius, projectile.explosion.maxDamage,
+          projectile.explosion.rockDamageMult ?? 1,
+          projectile.ownerId,
+          projectile.explosion.minDamage === undefined ? undefined : { minDamage: projectile.explosion.minDamage },
+          projectile.explosion.visualStyle,
+          projectile.color,
+        );
+      }
+      this.projectiles.destroyProjectile(projectile.id);
+    }
+  }
+
+  /**
+   * Eigenes fliegendes, detonierbares Projektil eines Actors – der ASMD-Ball.
+   *
+   * Der Actor richtet seine Primärwaffe darauf aus, statt blind in Zielrichtung zu schiessen.
+   * Gezündet wird danach über die echte Detonationsmechanik; es gibt keine lobbyeigene
+   * ASMD-Explosion.
+   */
+  findOwnDetonable(ownerId: string, tag: string): { x: number; y: number } | null {
+    for (const projectile of this.projectiles.getActiveProjectiles()) {
+      if (projectile.ownerId !== ownerId) continue;
+      if (projectile.detonable?.tag !== tag) continue;
+      return { x: projectile.sprite.x, y: projectile.sprite.y };
+    }
+    return null;
   }
 
   /** Felsen, die in dieser Sequenz beschädigt oder zerstört wurden – Auftrag für den Inspector. */
@@ -294,8 +432,9 @@ export class AmbientCombatWorld implements WeaponFireSink {
   }
 
   destroy(): void {
-    this.projectiles.setRockGroup(null, null, null);
+    // Gleiche Reihenfolge wie in {@link leaveZone}: erst die Projektile mit ihren Kollidern.
     this.projectiles.destroyAll();
+    this.projectiles.setRockGroup(null, null, null);
     this.detonations.reset();
     this.damagedRocks.clear();
     this.deps.bodyPool.release();

@@ -266,6 +266,38 @@ export function createRendererBundle(
   };
 }
 
+/**
+ * Verbindet einen ProjectileManager mit allen Projektil-Renderern.
+ *
+ * Bewusst getrennt von {@link wireRenderersToProjManager}: Diese Funktion berührt
+ * ausschliesslich den übergebenen Manager. Der lokale Ambient-Manager der Lobby benutzt
+ * dieselben Renderer, darf aber die *bundle-weiten* Provider des Gameplays nicht
+ * überschreiben – sonst zeigte das Energieschild der Arena auf Lobby-Actors.
+ */
+export function wireProjectileRenderers(
+  bundle: RendererBundle,
+  pm: ProjectileManager,
+  owners: OwnerVisualSource,
+): void {
+  pm.setBulletRenderer(bundle.bullet);
+  pm.setProjectileBurnRenderer(bundle.projectileBurn);
+  pm.setFlameRenderer(bundle.flame);
+  pm.setLeafBlowerRenderer(bundle.leafBlower);
+  pm.setBfgRenderer(bundle.bfg);
+  pm.setEnergyBallRenderer(bundle.energyBall);
+  pm.setHydraRenderer(bundle.hydra);
+  pm.setGaussRenderer(bundle.gauss);
+  pm.setHolyGrenadeRenderer(bundle.holyGrenade);
+  pm.setRocketRenderer(bundle.rocket);
+  pm.setFireballRenderer(bundle.fireball);
+  pm.setSporeRenderer(bundle.spore);
+  pm.setGrenadeRenderer(bundle.grenade);
+  pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);
+  pm.setTracerRenderer(bundle.tracer);
+  pm.setMuzzleFlashRenderer(bundle.muzzleFlash);
+  pm.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
+}
+
 /** Wire all renderers to the ProjectileManager and register the owner-position provider. */
 export function wireRenderersToProjManager(
   bundle: RendererBundle,

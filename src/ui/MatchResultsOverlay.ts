@@ -28,7 +28,6 @@ import {
   ensureGlossyButtonTexture,
   ensureModalPanelTexture,
   ensureRoundedTexture,
-  ensureTintedSectionTexture,
   lerpColor,
 } from './uiTextures';
 import type {
@@ -38,7 +37,7 @@ import type {
   MatchResultsPresentation,
 } from './MatchResultsModel';
 import { getCoopDefenseItemCellColor } from './CoopDefenseItemsModel';
-import { FONT_MONO } from './uiTheme';
+import { BORDER, INTENT, SURFACE, textStyle, FONT_MONO } from './uiTheme';
 import {
   ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemIconTexture,
@@ -129,8 +128,8 @@ const CONTINUE_W = 270;
 const CONTINUE_H = 56;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
 
-const PANEL_BG = COLORS.GREY_7;
-const PANEL_ACCENT = COLORS.GOLD_1;
+const PANEL_BG = SURFACE.modal;
+const PANEL_ACCENT = BORDER.default;
 const LOCAL_ROW_ACCENT = COLORS.BLUE_2;
 
 const TEX_PANEL = '_mro_panel';
@@ -571,12 +570,12 @@ export class MatchResultsOverlay {
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      this.scene.add.image(LEFT_CX, SECTION_CY, ensureTintedSectionTexture(
-        this.scene, TEX_SECTION_LEFT, LEFT_W, SECTION_H, COLORS.BLUE_4, COLORS.GREY_9,
+      this.scene.add.image(LEFT_CX, SECTION_CY, ensureFlatPanelTexture(
+        this.scene, TEX_SECTION_LEFT, LEFT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
+        { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(LEFT_X + 30, SECTION_TITLE_Y, 'MATCH-LEADERBOARD', {
-        fontFamily: FONT_MONO, fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0, 0.5).setScrollFactor(0),
+      this.scene.add.text(LEFT_X + 30, SECTION_TITLE_Y, 'MATCH-LEADERBOARD', textStyle('subtitle'))
+        .setOrigin(0, 0.5).setScrollFactor(0),
       this.columnLabel(MEDAL_X, HEADER_ROW_Y, 'RANG', 0.5),
       this.columnLabel(NAME_X, HEADER_ROW_Y, 'SPIELER', 0),
       this.columnLabel(TEAM_X, HEADER_ROW_Y, 'TEAM', 0),
@@ -616,12 +615,12 @@ export class MatchResultsOverlay {
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      this.scene.add.image(RIGHT_CX, SECTION_CY, ensureTintedSectionTexture(
-        this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, COLORS.GOLD_3, COLORS.GREY_9,
+      this.scene.add.image(RIGHT_CX, SECTION_CY, ensureFlatPanelTexture(
+        this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
+        { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'FORTSCHRITT', {
-        fontFamily: FONT_MONO, fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0, 0.5).setScrollFactor(0),
+      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'FORTSCHRITT', textStyle('subtitle'))
+        .setOrigin(0, 0.5).setScrollFactor(0),
     );
 
     this.levelText = this.scene.add.text(CHIP_X, LEVEL_ROW_Y, 'LEVEL 1', {
@@ -735,12 +734,12 @@ export class MatchResultsOverlay {
   private buildSummaryPanel(): Phaser.GameObjects.Container {
     const objects: Phaser.GameObjects.GameObject[] = [];
     objects.push(
-      this.scene.add.image(RIGHT_CX, SECTION_CY, ensureTintedSectionTexture(
-        this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, COLORS.GOLD_3, COLORS.GREY_9,
+      this.scene.add.image(RIGHT_CX, SECTION_CY, ensureFlatPanelTexture(
+        this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
+        { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'MATCH-ÜBERSICHT', {
-        fontFamily: FONT_MONO, fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0, 0.5).setScrollFactor(0),
+      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'MATCH-ÜBERSICHT', textStyle('subtitle'))
+        .setOrigin(0, 0.5).setScrollFactor(0),
     );
 
     for (let index = 0; index < MAX_SUMMARY_CHIPS; index++) {
@@ -788,11 +787,11 @@ export class MatchResultsOverlay {
     }).setOrigin(0, 0.5).setScrollFactor(0);
 
     this.continueButton = this.scene.add.image(CONTINUE_X, FOOTER_Y, ensureGlossyButtonTexture(
-      this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, COLORS.GOLD_3,
+      this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, INTENT.primary.fill, INTENT.primary.stroke,
     )).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, 'WEITER ZUR LOBBY', {
-      fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, 'WEITER ZUR LOBBY', textStyle('label', {
+      color: INTENT.primary.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     this.continueButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       // Das Overlay verschwindet sofort. Die Abbruchmarkierung verhindert, dass ein
       // darunterliegendes Lobby-Objekt denselben Pointerdown ebenfalls verarbeitet.
@@ -1214,7 +1213,7 @@ export class MatchResultsOverlay {
     if (!this.continueButton) return;
     // Erst nach der Auswertung atmet der Weiter-Button — vorher würde er die Aufmerksamkeit
     // von Leaderboard und Belohnungen wegziehen.
-    this.continueGlow = addExternalGlow(this.continueButton, COLORS.GOLD_1, 0.6, 0, false, 0.1, 8);
+    this.continueGlow = addExternalGlow(this.continueButton, COLORS.GREEN_2, 0.6, 0, false, 0.1, 8);
     if (!this.continueGlow) return;
     this.idleTweens.push(this.scene.tweens.add({
       targets: this.continueGlow,

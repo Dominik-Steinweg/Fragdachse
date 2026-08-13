@@ -37,11 +37,12 @@ import type {
   WeaponConfig,
 } from './LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
-import { COLORS, getTopDownMuzzleOrigin } from '../config';
+import { COLORS, type MuzzleOrigin } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 import { WeaponFireExecutor, type WeaponFireOptions } from './WeaponFireExecutor';
+import { getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
   weapon1?:  WeaponConfig;
@@ -204,6 +205,7 @@ export class LoadoutManager {
       request.chainLightning,
       request.burnOnHit,
       request.supportEffect,
+      request.visualMuzzleOrigin,
     ) ?? false,
     resolveMelee: (request) => this.combatSystem?.resolveMeleeSwing(
       request.shooterId,
@@ -2045,21 +2047,22 @@ export class LoadoutManager {
     shotId?:     number,
     options?: AutomatedWeaponFireOptions,
   ): boolean {
+    const visualMuzzleOrigin = this.getVisualMuzzleOrigin(playerId, config.id);
     switch (config.fire.type) {
       case 'projectile':
-        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options);
+        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin);
 
       case 'hitscan':
-        return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId);
+        return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin);
 
       case 'melee':
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
 
       case 'flamethrower':
-        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options);
+        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin);
 
       case 'leaf_blower':
-        return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options);
+        return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin);
 
       case 'reinforcement_matrix':
         return this.fireReinforcementMatrixWeapon(
@@ -2073,10 +2076,11 @@ export class LoadoutManager {
           playerId,
           playerColor,
           sourceSlot,
+          visualMuzzleOrigin,
         );
 
       case 'energy_injector':
-        return this.fireEnergyInjectorWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+        return this.fireEnergyInjectorWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, visualMuzzleOrigin);
 
       case 'tesla_dome':
       case 'healing_aura':
@@ -2086,6 +2090,18 @@ export class LoadoutManager {
       default:
         return false;
     }
+  }
+
+  private getVisualMuzzleOrigin(playerId: string, itemId: string): MuzzleOrigin | undefined {
+    const player = this.playerManager?.getPlayer(playerId);
+    if (!player) return undefined;
+    return getHeldWeaponMuzzleOrigin(
+      itemId,
+      player.sprite.x,
+      player.sprite.y,
+      player.sprite.rotation,
+      player.sprite.displayWidth,
+    ) ?? undefined;
   }
 
   /**
@@ -2104,6 +2120,7 @@ export class LoadoutManager {
     playerId: string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
+    visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     const dx = targetX - x;
     const dy = targetY - y;
@@ -2143,6 +2160,7 @@ export class LoadoutManager {
       },
       projectileStyle: config.projectileStyle,
       sourceSlot: sourceSlot ?? 'weapon2',
+      visualMuzzleOrigin,
       shotAudioKey: config.shotAudio?.successKey,
     });
     return true;
@@ -2161,6 +2179,7 @@ export class LoadoutManager {
     playerId: string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
+    visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed: fireConfig.projectileSpeed,
@@ -2186,6 +2205,7 @@ export class LoadoutManager {
       projectileStyle: config.projectileStyle,
       energyBallVariant: config.energyBallVariant,
       sourceSlot: sourceSlot ?? 'weapon2',
+      visualMuzzleOrigin,
       shotAudioKey: config.shotAudio?.successKey,
     });
     return true;
@@ -2248,6 +2268,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     options?: AutomatedWeaponFireOptions,
+    visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     void fireConfig;
     return this.weaponFire.fire(config, {
@@ -2256,6 +2277,7 @@ export class LoadoutManager {
       ownerColor: playerColor,
       sourceSlot,
       options,
+      visualMuzzleOrigin,
       // Die gezahlten Adrenalinkosten kennt nur der Manager; der Executor fragt sie lediglich
       // für die Mini-Rakete ab und bleibt damit frei von Ressourcenverwaltung.
       resolvePaidAdrenalineCost: () => Math.min(
@@ -2275,6 +2297,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot:  WeaponSlot | undefined,
     shotId?:     number,
+    visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     void fireConfig;
     return this.weaponFire.fire(config, {
@@ -2285,6 +2308,7 @@ export class LoadoutManager {
       ownerColor: playerColor,
       sourceSlot,
       shotId,
+      visualMuzzleOrigin,
     });
   }
 
@@ -2319,6 +2343,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     options?: AutomatedWeaponFireOptions,
+    visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     const fireball = fireConfig.fireball;
     if ((fireball?.enabled ?? 0) > 0) {
@@ -2368,6 +2393,7 @@ export class LoadoutManager {
         fireTrail: (fireball?.trailEnabled ?? 0) > 0 ? groundEffect : undefined,
         sourceSlot,
         sourceTurretId: options?.sourceTurretId,
+        visualMuzzleOrigin,
         shotAudioKey: config.shotAudio?.successKey,
       });
       return true;
@@ -2401,6 +2427,7 @@ export class LoadoutManager {
       flamePiercing:     (fireConfig.piercingCount ?? 0) > 0,
       sourceSlot,
       sourceTurretId:    options?.sourceTurretId,
+      visualMuzzleOrigin,
       shotAudioKey:    config.shotAudio?.successKey,
     });
 
@@ -2417,6 +2444,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     options?: AutomatedWeaponFireOptions,
+    visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
 
@@ -2444,6 +2472,7 @@ export class LoadoutManager {
       leafBlowerSelfPush: fireConfig.selfPush,
       sourceSlot,
       sourceTurretId:    options?.sourceTurretId,
+      visualMuzzleOrigin,
       shotAudioKey:    config.shotAudio?.successKey,
     });
 

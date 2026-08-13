@@ -5,6 +5,7 @@ import {
   FONT_DISPLAY,
   FONT_MONO,
   FONT_WEIGHT,
+  getPingColor,
   INTENT,
   MOTION,
   RADIUS,
@@ -23,6 +24,17 @@ const TYPE_ROLES = Object.keys(TYPE) as TypeRole[];
 
 /** WCAG 2.1 AA fuer normalen Text. Gilt hier auch fuer die kleinen Buttonbeschriftungen. */
 const MIN_CONTRAST = 4.5;
+
+describe('ping colors', () => {
+  it('uses the shared inclusive thresholds', () => {
+    expect(getPingColor(20)).toBe('#a8ca58');
+    expect(getPingColor(21)).toBe('#e8c170');
+    expect(getPingColor(50)).toBe('#e8c170');
+    expect(getPingColor(51)).toBe('#da863e');
+    expect(getPingColor(100)).toBe('#da863e');
+    expect(getPingColor(101)).toBe('#a53030');
+  });
+});
 
 describe('contrast helpers', () => {
   it('matches the WCAG reference points', () => {

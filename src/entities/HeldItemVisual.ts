@@ -1,6 +1,9 @@
 import type * as Phaser from 'phaser';
-import { getHeldItemAnchor, PLAYER_TEXTURE_SIZE } from '../config';
-import { getHeldItemSpriteSpec } from '../loadout/HeldItemVisuals';
+import { getHeldItemAnchor, PLAYER_TEXTURE_SIZE, type MuzzleOrigin } from '../config';
+import {
+  getHeldItemPointWorld,
+  getHeldItemSpriteSpec,
+} from '../loadout/HeldItemVisuals';
 
 /**
  * Das in den Pfoten getragene Loadout-Item einer Figur.
@@ -116,6 +119,26 @@ export class HeldItemVisual {
   /** Das erzeugte Image, solange eines existiert – etwa zum Zuordnen der Klarheitskamera. */
   getImage(): Phaser.GameObjects.Image | null {
     return this.image;
+  }
+
+  /** Liefert den registrierten Mündungs-Punkt in Weltkoordinaten für Effekte und Audio. */
+  getMuzzleOrigin(
+    x: number,
+    y: number,
+    spriteRotation: number,
+    displaySize: number,
+  ): MuzzleOrigin | null {
+    const spec = getHeldItemSpriteSpec(this.itemId);
+    if (!spec) return null;
+    return getHeldItemPointWorld(
+      x,
+      y,
+      spriteRotation,
+      displaySize,
+      spec,
+      spec.muzzleX,
+      spec.muzzleY,
+    );
   }
 
   destroy(): void {

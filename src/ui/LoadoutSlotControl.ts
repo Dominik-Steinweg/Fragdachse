@@ -1,8 +1,8 @@
 import * as Phaser from 'phaser';
-import { COLORS, toCssColor } from '../config';
+import { COLORS } from '../config';
 import type { LoadoutItemPresentation } from '../loadout/LoadoutCatalog';
 import { ensureRoundedTexture, lerpColor } from './uiTextures';
-import { FONT_MONO } from './uiTheme';
+import { TEXT, textStyle } from './uiTheme';
 
 export interface LoadoutSlotControlOptions {
   readonly x: number;
@@ -64,31 +64,26 @@ export function createLoadoutSlotControl(
       .setDisplaySize(iconSize, iconSize)
       .setScrollFactor(0));
   } else if (options.compact) {
-    root.add(scene.add.text(0, 0, presentation?.displayName ?? '+', {
-      fontSize: presentation ? '9px' : '22px',
-      fontFamily: FONT_MONO,
-      fontStyle: 'bold',
-      color: toCssColor(presentation ? COLORS.GREY_1 : COLORS.GREY_4),
-      align: 'center',
-      wordWrap: { width: options.width - 8, useAdvancedWrap: true },
-    }).setOrigin(0.5).setScrollFactor(0));
+    root.add(scene.add.text(0, 0, presentation?.displayName ?? '+', textStyle(
+      presentation ? 'micro' : 'title',
+      { color: presentation ? TEXT.primary : TEXT.muted, align: 'center', wordWrapWidth: options.width - 8 },
+    )).setOrigin(0.5).setScrollFactor(0));
   } else {
-    root.add(scene.add.text(iconX, 0, presentation?.displayName.slice(0, 2).toUpperCase() ?? '+', {
-      fontSize: '11px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
-    }).setOrigin(0.5).setScrollFactor(0));
+    root.add(scene.add.text(iconX, 0, presentation?.displayName.slice(0, 2).toUpperCase() ?? '+', textStyle('labelSm', {
+      color: TEXT.secondary,
+    })).setOrigin(0.5).setScrollFactor(0));
   }
 
   if (!options.compact) {
     const textX = -options.width / 2 + 12 + iconSize + 10;
-    root.add(scene.add.text(textX, -8, presentation?.displayName ?? 'Leer', {
-      fontSize: '13px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0, 0.5).setScrollFactor(0));
-    root.add(scene.add.text(textX, 10, options.label ?? '', {
-      fontSize: '10px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0, 0.5).setScrollFactor(0));
-    root.add(scene.add.text(options.width / 2 - 14, 0, '›', {
-      fontSize: '22px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_3),
-    }).setOrigin(0.5).setScrollFactor(0));
+    root.add(scene.add.text(textX, -8, presentation?.displayName ?? 'Leer', textStyle('labelSm', {
+      color: TEXT.primary,
+    })).setOrigin(0, 0.5).setScrollFactor(0));
+    root.add(scene.add.text(textX, 10, options.label ?? '', textStyle('micro'))
+      .setOrigin(0, 0.5).setScrollFactor(0));
+    root.add(scene.add.text(options.width / 2 - 14, 0, '›', textStyle('title', {
+      color: TEXT.muted,
+    })).setOrigin(0.5).setScrollFactor(0));
   }
 
   const hitArea = scene.add.rectangle(0, 0, options.width, options.height, 0x000000, 0.001)

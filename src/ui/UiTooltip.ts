@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
-import { FONT_MONO } from './uiTheme';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { toDesignSpace } from '../graphics/RenderResolution';
+import { ensureFlatPanelTexture } from './uiTextures';
+import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 
 /**
  * Geteilter Hover-Tooltip fuer Overlays: dunkle Flaeche, farbiger Titel, Trennlinie und darunter
@@ -15,13 +16,13 @@ export interface UiTooltipLine {
   readonly bold?: boolean;
 }
 
-const OFFSET_X = 18;
-const OFFSET_Y = 18;
-const PADDING = 12;
-const TITLE_GAP = 6;
-const DIVIDER_GAP = 7;
+const OFFSET_X = SPACE.lg;
+const OFFSET_Y = SPACE.lg;
+const PADDING = SPACE.md;
+const TITLE_GAP = SPACE.xs;
+const DIVIDER_GAP = SPACE.sm;
 /** Leerzeilen (`text: ''`) dienen als Abschnittstrenner und brauchen keine volle Zeilenhoehe. */
-const SPACER_H = 8;
+const SPACER_H = SPACE.sm;
 /**
  * Zeilen darueber werden still verworfen. Ein gelbes Item mit zwei Laufzeit-Affixen belegt
  * Grundwert, zwei Affixnamen samt Erklaerung, Vergleichsblock und Fussnoten – 16 reichten dafuer
@@ -31,7 +32,7 @@ const MAX_LINES = 22;
 
 export class UiTooltip {
   private container: Phaser.GameObjects.Container | null = null;
-  private background: Phaser.GameObjects.Rectangle | null = null;
+  private background: Phaser.GameObjects.Image | null = null;
   private titleText: Phaser.GameObjects.Text | null = null;
   private divider: Phaser.GameObjects.Rectangle | null = null;
   private lineTexts: Phaser.GameObjects.Text[] = [];
@@ -39,35 +40,32 @@ export class UiTooltip {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly maxWidth = 320,
-    private readonly accentColor: number = COLORS.GOLD_1,
+    private readonly accentColor: number = TEXT.primary,
   ) {}
 
   build(): Phaser.GameObjects.Container {
     this.destroy();
 
-    this.background = this.scene.add.rectangle(0, 0, 10, 10, COLORS.GREY_9, 0.97)
+    this.background = this.scene.add.image(0, 0, ensureFlatPanelTexture(
+      this.scene, '_uitooltip_initial', 10, 10, SURFACE.sunken, BORDER.subtle,
+      { radius: RADIUS.md, fillAlpha: 0.98, strokeAlpha: 0.9 },
+    ))
       .setOrigin(0, 0)
-      .setStrokeStyle(1, this.accentColor)
       .setScrollFactor(0);
-    this.titleText = this.scene.add.text(0, 0, '', {
-      fontSize: '16px',
-      fontFamily: FONT_MONO,
-      fontStyle: 'bold',
-      color: toCssColor(this.accentColor),
-      wordWrap: { width: this.maxWidth },
-    }).setOrigin(0, 0).setScrollFactor(0);
-    this.divider = this.scene.add.rectangle(0, 0, 10, 1, COLORS.GREY_4, 0.9)
+    this.titleText = this.scene.add.text(0, 0, '', textStyle('label', {
+      color: this.accentColor,
+      wordWrapWidth: this.maxWidth,
+    })).setOrigin(0, 0).setScrollFactor(0);
+    this.divider = this.scene.add.rectangle(0, 0, 10, 1, BORDER.subtle, 0.9)
       .setOrigin(0, 0)
       .setScrollFactor(0);
 
     const objects: Phaser.GameObjects.GameObject[] = [this.background, this.titleText, this.divider];
     for (let index = 0; index < MAX_LINES; index++) {
-      const line = this.scene.add.text(0, 0, '', {
-        fontSize: '14px',
-        fontFamily: FONT_MONO,
-        color: toCssColor(COLORS.GREY_1),
-        wordWrap: { width: this.maxWidth },
-      }).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
+      const line = this.scene.add.text(0, 0, '', textStyle('body', {
+        color: TEXT.primary,
+        wordWrapWidth: this.maxWidth,
+      })).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
       this.lineTexts.push(line);
       objects.push(line);
     }
@@ -111,7 +109,17 @@ export class UiTooltip {
       cursorY += text.height;
     });
 
-    this.background.setSize(contentWidth + PADDING * 2, cursorY + PADDING);
+    const width = contentWidth + PADDING * 2;
+    const height = cursorY + PADDING;
+    this.background.setTexture(ensureFlatPanelTexture(
+      this.scene,
+      `_uitooltip_${Math.ceil(width)}x${Math.ceil(height)}`,
+      width,
+      height,
+      SURFACE.sunken,
+      BORDER.subtle,
+      { radius: RADIUS.md, fillAlpha: 0.98, strokeAlpha: 0.9 },
+    )).setDisplaySize(width, height);
     this.titleText.setPosition(PADDING, PADDING);
     this.divider.setPosition(PADDING, dividerY).setSize(contentWidth, 1);
 

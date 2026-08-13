@@ -12,7 +12,7 @@ import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
 import { ensureGlossyButtonTexture, ensureModalPanelTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
-import { FONT_MONO } from './uiTheme';
+import { BORDER, INTENT, SURFACE, TEXT, textStyle } from './uiTheme';
 import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
@@ -40,13 +40,12 @@ const QUALITY_BUTTON_GAP = 12;
 
 const DIM_COLOR = COLORS.GREY_10;
 const DIM_ALPHA = 0.78;
-const PANEL_BG = COLORS.GREY_7;
-const PANEL_ALPHA = 0.95;
-const ACCENT = COLORS.GOLD_1;
-const TRACK_BG = COLORS.GREY_9;
-const TRACK_BORDER = COLORS.GREY_4;
-const KNOB_FILL = COLORS.GREY_1;
-const KNOB_BORDER = COLORS.GOLD_1;
+const PANEL_BG = SURFACE.modal;
+const PANEL_BORDER = BORDER.default;
+const TRACK_BG = SURFACE.sunken;
+const TRACK_BORDER = BORDER.subtle;
+const KNOB_FILL = TEXT.primary;
+const KNOB_BORDER = BORDER.default;
 
 const TEX_VOLUME_FILL = '__options_volume_fill';
 const TEX_VOLUME_GLOSS = '__options_volume_gloss';
@@ -274,15 +273,13 @@ export class OptionsOverlay {
 
     const panel = this.scene.add.image(
       CX, CY,
-      ensureModalPanelTexture(this.scene, '_options_panel', PANEL_W, PANEL_H, PANEL_BG, ACCENT),
+      ensureModalPanelTexture(this.scene, '_options_panel', PANEL_W, PANEL_H, PANEL_BG, PANEL_BORDER),
     ).setScrollFactor(0);
     objects.push(panel);
 
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'OPTIONEN', {
-        fontSize: '28px', fontFamily: FONT_MONO, fontStyle: 'bold',
-        color: toCssColor(ACCENT),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, TITLE_Y, 'OPTIONEN', textStyle('display'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     this.buildSectionBlock(
@@ -304,9 +301,8 @@ export class OptionsOverlay {
     this.buildAbortSection(objects);
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ O / Klick zum Schließen ]', {
-        fontSize: '13px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, FOOTER_Y, '[ O / Klick zum Schließen ]', textStyle('caption'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     this.container.add(objects);
@@ -443,19 +439,14 @@ export class OptionsOverlay {
       (top + bottom) / 2,
       SECTION_BLOCK_W,
       bottom - top,
-      COLORS.GREY_8,
-      0.28,
-    ).setStrokeStyle(1, COLORS.GREY_5, 0.9).setScrollFactor(0);
+      SURFACE.raised,
+      0.34,
+    ).setStrokeStyle(1, BORDER.subtle, 0.9).setScrollFactor(0);
     const heading = this.scene.add.text(
       CX,
       headingY,
       label,
-      {
-        fontSize: '16px',
-        fontFamily: FONT_MONO,
-        fontStyle: 'bold',
-        color: toCssColor(ACCENT),
-      },
+      textStyle('section', { color: TEXT.secondary }),
     ).setOrigin(0.5).setScrollFactor(0);
 
     objects.push(background, heading);
@@ -470,7 +461,7 @@ export class OptionsOverlay {
       const x = startX + index * (QUALITY_BUTTON_W + QUALITY_BUTTON_GAP);
       const background = this.scene.add.rectangle(
         x, QUALITY_BUTTON_Y, QUALITY_BUTTON_W, QUALITY_BUTTON_H, TRACK_BG, 0.96,
-      ).setStrokeStyle(2, TRACK_BORDER)
+      ).setStrokeStyle(1, TRACK_BORDER)
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -478,9 +469,9 @@ export class OptionsOverlay {
           setStoredGraphicsQuality(option.level);
           this.syncQualityButtons();
         });
-      const label = this.scene.add.text(x, QUALITY_BUTTON_Y, option.label, {
-        fontSize: '17px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
-      }).setOrigin(0.5).setScrollFactor(0);
+      const label = this.scene.add.text(x, QUALITY_BUTTON_Y, option.label, textStyle('labelSm', {
+        color: TEXT.secondary,
+      })).setOrigin(0.5).setScrollFactor(0);
       this.qualityButtons.set(option.level, { background, label });
       objects.push(background, label);
     });
@@ -492,9 +483,9 @@ export class OptionsOverlay {
     for (const [level, state] of this.qualityButtons) {
       const active = level === selected;
       state.background
-        .setFillStyle(active ? COLORS.GREY_5 : TRACK_BG, active ? 1 : 0.96)
-        .setStrokeStyle(active ? 3 : 2, active ? ACCENT : TRACK_BORDER);
-      state.label.setColor(toCssColor(active ? ACCENT : COLORS.GREY_2));
+        .setFillStyle(active ? SURFACE.raised : TRACK_BG, active ? 1 : 0.96)
+        .setStrokeStyle(active ? 2 : 1, active ? BORDER.default : TRACK_BORDER);
+      state.label.setColor(toCssColor(active ? TEXT.primary : TEXT.secondary));
     }
   }
 
@@ -503,14 +494,14 @@ export class OptionsOverlay {
     if (!container) return;
 
     objects.push(
-      this.scene.add.text(TRACK_X, definition.labelY, definition.label, {
-        fontSize: '18px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0, 0.5).setScrollFactor(0),
+      this.scene.add.text(TRACK_X, definition.labelY, definition.label, textStyle('label', {
+        color: TEXT.primary,
+      })).setOrigin(0, 0.5).setScrollFactor(0),
     );
 
-    const valueText = this.scene.add.text(PERCENT_X, definition.labelY, '0%', {
-      fontSize: '18px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(ACCENT),
-    }).setOrigin(1, 0.5).setScrollFactor(0);
+    const valueText = this.scene.add.text(PERCENT_X, definition.labelY, '0%', textStyle('numM', {
+      color: TEXT.secondary,
+    })).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(valueText);
 
     const trackShadow = this.scene.add.rectangle(CX, definition.trackY + 2, TRACK_W + 20, TRACK_H + 24, 0x000000, 0.2)
@@ -595,12 +586,9 @@ export class OptionsOverlay {
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.musicLoadLabel = this.scene.add.text(CX, MUSIC_LOAD_LABEL_Y, '', {
-      fontSize: '12px',
-      fontFamily: FONT_MONO,
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.PURPLE_1),
-    }).setOrigin(0.5)
+    this.musicLoadLabel = this.scene.add.text(CX, MUSIC_LOAD_LABEL_Y, '', textStyle('micro', {
+      color: COLORS.PURPLE_1,
+    })).setOrigin(0.5)
       .setScrollFactor(0)
       .setVisible(false);
 
@@ -608,7 +596,7 @@ export class OptionsOverlay {
   }
 
   private buildAbortSection(objects: Phaser.GameObjects.GameObject[]): void {
-    this.abortDivider = this.scene.add.rectangle(CX, ABORT_DIVIDER_Y, PANEL_W - 60, 2, ACCENT)
+    this.abortDivider = this.scene.add.rectangle(CX, ABORT_DIVIDER_Y, PANEL_W - 60, 1, BORDER.subtle, 0.9)
       .setScrollFactor(0)
       .setVisible(false);
 
@@ -620,21 +608,20 @@ export class OptionsOverlay {
         `_options_spectator_btn_${ABORT_BUTTON_W}x${ABORT_BUTTON_H}`,
         ABORT_BUTTON_W,
         ABORT_BUTTON_H,
-        COLORS.BLUE_5,
-        COLORS.BLUE_1,
+        INTENT.secondary.fill,
+        INTENT.secondary.stroke,
       ),
     ).setScrollFactor(0)
       .setVisible(false)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.onSpectatorButtonPressed());
 
-    this.spectatorLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', {
-      fontSize: '15px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.spectatorLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', textStyle('label', {
+      color: INTENT.secondary.label,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
-    this.spectatorHint = this.scene.add.text(CX, SPECTATOR_HINT_Y, '', {
-      fontSize: '12px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.spectatorHint = this.scene.add.text(CX, SPECTATOR_HINT_Y, '', textStyle('caption'))
+      .setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     this.abortButton = this.scene.add.image(
       CX,
@@ -644,21 +631,20 @@ export class OptionsOverlay {
         `_options_abort_btn_${ABORT_BUTTON_W}x${ABORT_BUTTON_H}`,
         ABORT_BUTTON_W,
         ABORT_BUTTON_H,
-        COLORS.RED_4,
-        COLORS.RED_1,
+        INTENT.danger.fill,
+        INTENT.danger.stroke,
       ),
     ).setScrollFactor(0)
       .setVisible(false)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.onAbortButtonPressed());
 
-    this.abortLabel = this.scene.add.text(CX, ABORT_BUTTON_Y, '', {
-      fontSize: '17px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.abortLabel = this.scene.add.text(CX, ABORT_BUTTON_Y, '', textStyle('label', {
+      color: INTENT.danger.label,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
-    this.abortHint = this.scene.add.text(CX, ABORT_HINT_Y, '', {
-      fontSize: '12px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.abortHint = this.scene.add.text(CX, ABORT_HINT_Y, '', textStyle('caption'))
+      .setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     attachHoverEffect(this.scene, this.abortButton, this.abortLabel);
     attachHoverEffect(this.scene, this.spectatorButton, this.spectatorLabel);

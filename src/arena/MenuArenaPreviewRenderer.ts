@@ -213,7 +213,13 @@ export class MenuArenaPreviewRenderer {
     this.rockBandsDirty = true;
     this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
       this.rockBandsDirty = false;
-      this.rebuildRockBands();
+      // Der Rückruf läuft ausserhalb jedes Aufrufer-Kontexts; ein Fehler hier würde sonst
+      // ungefangen den Frame abbrechen und die Lobby mitreissen.
+      try {
+        this.rebuildRockBands();
+      } catch (error) {
+        console.error('[MenuArenaPreviewRenderer] Fels-Bänder konnten nicht neu gebacken werden', error);
+      }
     });
   }
 

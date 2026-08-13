@@ -28,6 +28,7 @@ import {
   COOP_DEFENSE_ITEM_REWARD_BACK_LABEL,
   COOP_DEFENSE_ITEM_REWARD_LATER_LABEL,
 } from './coopDefenseRewardLabels';
+import { BORDER, INTENT, SURFACE, TEXT, textStyle } from './uiTheme';
 
 /**
  * Auswahl der Item-Belohnung nach einem Sieg.
@@ -87,8 +88,8 @@ const SALVAGE_ROW_GAP = 8;
 const SALVAGE_TOP = PANEL_TOP + 210;
 const MAX_SALVAGE_ROWS = 11;
 
-const PANEL_BG = COLORS.GREY_7;
-const PANEL_ACCENT = COLORS.GOLD_1;
+const PANEL_BG = SURFACE.modal;
+const PANEL_ACCENT = BORDER.default;
 
 const TEX_PANEL = '_cdir_panel';
 const TEX_FOOTER_BUTTON = '_cdir_footer';
@@ -175,18 +176,12 @@ export class CoopDefenseItemRewardOverlay {
     ).setScrollFactor(0).setInteractive();
     objects.push(panel);
 
-    this.title = this.scene.add.text(CX, TITLE_Y, 'BELOHNUNG', {
-      fontFamily: 'monospace',
-      fontSize: '42px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GOLD_1),
-    }).setOrigin(0.5).setScrollFactor(0);
-    this.subtitle = this.scene.add.text(CX, SUBTITLE_Y, '', {
-      fontFamily: 'monospace',
-      fontSize: '18px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.title = this.scene.add.text(CX, TITLE_Y, 'BELOHNUNG', textStyle('display', {
+      color: TEXT.accent,
+    })).setOrigin(0.5).setScrollFactor(0);
+    this.subtitle = this.scene.add.text(CX, SUBTITLE_Y, '', textStyle('body', {
+      color: TEXT.muted,
+    })).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.title, this.subtitle);
 
     for (let index = 0; index < 3; index++) {
@@ -195,12 +190,9 @@ export class CoopDefenseItemRewardOverlay {
       objects.push(card.container);
     }
 
-    this.salvageTitle = this.scene.add.text(CX, SALVAGE_TOP - 46, '', {
-      fontFamily: 'monospace',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GREY_2),
-    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.salvageTitle = this.scene.add.text(CX, SALVAGE_TOP - 46, '', textStyle('subtitle', {
+      color: TEXT.secondary,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
     objects.push(this.salvageTitle);
 
     for (let index = 0; index < MAX_SALVAGE_ROWS; index++) {
@@ -212,14 +204,11 @@ export class CoopDefenseItemRewardOverlay {
     this.backButton = this.scene.add.image(
       CX - PANEL_W / 2 + 40 + FOOTER_BUTTON_W / 2,
       FOOTER_Y,
-      ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, COLORS.GREY_6),
+      ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, INTENT.ghost.fill, INTENT.ghost.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.backLabel = this.scene.add.text(this.backButton.x, FOOTER_Y, COOP_DEFENSE_ITEM_REWARD_BACK_LABEL, {
-      fontFamily: 'monospace',
-      fontSize: '18px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.backLabel = this.scene.add.text(this.backButton.x, FOOTER_Y, COOP_DEFENSE_ITEM_REWARD_BACK_LABEL, textStyle('label', {
+      color: INTENT.ghost.label,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
     this.backButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.showOffers();
@@ -230,14 +219,11 @@ export class CoopDefenseItemRewardOverlay {
     this.footerButton = this.scene.add.image(
       CX + PANEL_W / 2 - 40 - FOOTER_BUTTON_W / 2,
       FOOTER_Y,
-      ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, COLORS.GREY_6),
+      ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, INTENT.ghost.fill, INTENT.ghost.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.footerLabel = this.scene.add.text(this.footerButton.x, FOOTER_Y, COOP_DEFENSE_ITEM_REWARD_LATER_LABEL, {
-      fontFamily: 'monospace',
-      fontSize: '17px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.footerLabel = this.scene.add.text(this.footerButton.x, FOOTER_Y, COOP_DEFENSE_ITEM_REWARD_LATER_LABEL, textStyle('label', {
+      color: INTENT.ghost.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     this.footerButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.hide();
@@ -305,26 +291,25 @@ export class CoopDefenseItemRewardOverlay {
       this.scene, 'armor', CARD_ICON,
     )).setDisplaySize(CARD_ICON * 0.7, CARD_ICON * 0.7).setScrollFactor(0);
 
-    const title = this.scene.add.text(0, CARD_TITLE_DY, '', {
-      fontFamily: 'monospace', fontSize: '24px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0);
-    const meta = this.scene.add.text(0, CARD_META_DY, '', {
-      fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0.5).setScrollFactor(0);
+    const title = this.scene.add.text(0, CARD_TITLE_DY, '', textStyle('subtitle', {
+      color: TEXT.primary,
+    })).setOrigin(0.5).setScrollFactor(0);
+    const meta = this.scene.add.text(0, CARD_META_DY, '', textStyle('caption', {
+      color: TEXT.muted,
+    })).setOrigin(0.5).setScrollFactor(0);
     const divider = this.scene.add.rectangle(0, CARD_DIVIDER_DY, CARD_W - CARD_PAD * 2, 1, COLORS.GREY_5, 0.55)
       .setScrollFactor(0);
 
     const statLines: Phaser.GameObjects.Text[] = [];
     for (let line = 0; line < MAX_STAT_LINES; line++) {
-      statLines.push(this.scene.add.text(-CARD_W / 2 + CARD_PAD, CARD_STATS_DY + line * CARD_LINE_H, '', {
-        fontFamily: 'monospace', fontSize: '17px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
-        wordWrap: { width: CARD_W - CARD_PAD * 2 },
-      }).setOrigin(0, 0.5).setScrollFactor(0));
+      statLines.push(this.scene.add.text(-CARD_W / 2 + CARD_PAD, CARD_STATS_DY + line * CARD_LINE_H, '', textStyle('body', {
+        color: TEXT.secondary,
+        wordWrapWidth: CARD_W - CARD_PAD * 2,
+      })).setOrigin(0, 0.5).setScrollFactor(0));
     }
 
-    const compareTitle = this.scene.add.text(-CARD_W / 2 + CARD_PAD, CARD_COMPARE_DY, '', {
-      fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0, 0.5).setScrollFactor(0);
+    const compareTitle = this.scene.add.text(-CARD_W / 2 + CARD_PAD, CARD_COMPARE_DY, '', textStyle('section'))
+      .setOrigin(0, 0.5).setScrollFactor(0);
 
     const compareLines: Phaser.GameObjects.Text[] = [];
     for (let line = 0; line < MAX_COMPARE_LINES; line++) {
@@ -332,26 +317,24 @@ export class CoopDefenseItemRewardOverlay {
         -CARD_W / 2 + CARD_PAD,
         CARD_COMPARE_DY + 24 + line * 24,
         '',
-        { fontFamily: 'monospace', fontSize: '15px', color: toCssColor(COLORS.GREY_3) },
+        textStyle('caption', { color: TEXT.muted }),
       ).setOrigin(0, 0.5).setScrollFactor(0));
     }
 
-    const hint = this.scene.add.text(0, CARD_HINT_DY, '', {
-      fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_2),
-    }).setOrigin(0.5).setScrollFactor(0);
+    const hint = this.scene.add.text(0, CARD_HINT_DY, '', textStyle('caption', {
+      color: TEXT.accent,
+    })).setOrigin(0.5).setScrollFactor(0);
 
     const takeButton = this.scene.add.image(
       -(CARD_ACTION_W + CARD_BUTTON_GAP) / 2,
       CARD_BUTTON_DY,
-      ensureGlossyButtonTexture(this.scene, TEX_TAKE_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, COLORS.BLUE_3),
+      ensureGlossyButtonTexture(this.scene, TEX_TAKE_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, INTENT.secondary.fill, INTENT.secondary.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
     const takeLabel = this.scene.add.text(
       takeButton.x,
       CARD_BUTTON_DY,
       'NEHMEN',
-      {
-        fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
-      },
+      textStyle('labelSm', { color: INTENT.secondary.label }),
     ).setOrigin(0.5).setScrollFactor(0);
     takeButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       // Ohne stopPropagation faengt die darunterliegende Ergebnis-Flaeche den Klick ab.
@@ -363,11 +346,11 @@ export class CoopDefenseItemRewardOverlay {
     const equipButton = this.scene.add.image(
       (CARD_ACTION_W + CARD_BUTTON_GAP) / 2,
       CARD_BUTTON_DY,
-      ensureGlossyButtonTexture(this.scene, TEX_EQUIP_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, COLORS.GOLD_3),
+      ensureGlossyButtonTexture(this.scene, TEX_EQUIP_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, INTENT.primary.fill, INTENT.primary.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, 'AUSRÜSTEN', {
-      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
-    }).setOrigin(0.5).setScrollFactor(0);
+    const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, 'AUSRÜSTEN', textStyle('labelSm', {
+      color: INTENT.primary.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     equipButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.handleEquip(index);
@@ -396,15 +379,15 @@ export class CoopDefenseItemRewardOverlay {
     const icon = this.scene.add.image(-SALVAGE_ROW_W / 2 + 18 + SALVAGE_ICON / 2, 0, resolveCoopDefenseItemIconTexture(
       this.scene, 'armor', SALVAGE_ICON,
     )).setDisplaySize(SALVAGE_ICON, SALVAGE_ICON).setScrollFactor(0);
-    const label = this.scene.add.text(-SALVAGE_ROW_W / 2 + 26 + SALVAGE_ICON, 0, '', {
-      fontFamily: 'monospace', fontSize: '17px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
-    }).setOrigin(0, 0.5).setScrollFactor(0);
-    const detail = this.scene.add.text(-SALVAGE_ROW_W / 2 + 260, 0, '', {
-      fontFamily: 'monospace', fontSize: '15px', color: toCssColor(COLORS.GREY_3),
-    }).setOrigin(0, 0.5).setScrollFactor(0);
-    const reward = this.scene.add.text(SALVAGE_ROW_W / 2 - 18, 0, '', {
-      fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_2),
-    }).setOrigin(1, 0.5).setScrollFactor(0);
+    const label = this.scene.add.text(-SALVAGE_ROW_W / 2 + 26 + SALVAGE_ICON, 0, '', textStyle('body', {
+      color: TEXT.secondary,
+    })).setOrigin(0, 0.5).setScrollFactor(0);
+    const detail = this.scene.add.text(-SALVAGE_ROW_W / 2 + 260, 0, '', textStyle('caption', {
+      color: TEXT.muted,
+    })).setOrigin(0, 0.5).setScrollFactor(0);
+    const reward = this.scene.add.text(SALVAGE_ROW_W / 2 - 18, 0, '', textStyle('numM', {
+      color: TEXT.accent,
+    })).setOrigin(1, 0.5).setScrollFactor(0);
 
     // Linksbuendige Zeilen skalieren beim Hover unschoen; stattdessen die Fuellung aufhellen.
     frame.on('pointerover', () => frame.setTexture(ensureFlatPanelTexture(

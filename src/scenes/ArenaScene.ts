@@ -5,6 +5,7 @@ import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
 import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
+import { LobbyAmbientRuntime } from '../lobby/LobbyAmbientRuntime';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { ProjectileManager }     from '../entities/ProjectileManager';
 import { InputSystem }           from '../systems/InputSystem';
@@ -241,6 +242,8 @@ export class ArenaScene extends Phaser.Scene {
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
+  /** Lokale Lobby-Inszenierung. Kein Netzwerkzustand, kein Einfluss auf den Matchstart. */
+  private lobbyAmbient: LobbyAmbientRuntime | null = null;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
   private visualFeedback: VisualFeedbackDirector | null = null;
   /**
@@ -838,6 +841,25 @@ export class ArenaScene extends Phaser.Scene {
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
     smokeSystem.setLightingSystem(this.renderers.lighting);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
+    // Die Lobby-Inszenierung braucht die fertige Renderkette und entsteht deshalb hier,
+    // nicht schon beim Aufbau der Vorschau.
+    if (this.menuArenaPreview) {
+      this.lobbyAmbient = new LobbyAmbientRuntime({
+        scene: this,
+        preview: this.menuArenaPreview,
+        renderers: this.renderers,
+        effects: effectSystem,
+        audio: gameAudioSystem,
+        getSelectedWeaponIds: () => {
+          const selection = this.getLocalLoadoutSelection();
+          return [selection.weapon1, selection.weapon2];
+        },
+      });
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.lobbyAmbient?.destroy();
+        this.lobbyAmbient = null;
+      });
+    }
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
     wireRenderersToCameraFeedback(this.renderers, this.visualFeedback.camera);
@@ -1217,6 +1239,8 @@ export class ArenaScene extends Phaser.Scene {
       () => rejoinCurrentRoom(),
       () => this.onRetryRoom(),
       () => this.netDebugOverlay?.toggle(),
+      () => leftPanel.showHelpOverlay(),
+      () => leftPanel.showOptionsOverlay(),
       () => this.openCoopDefenseUpgradesOverlay(),
       () => this.openCoopDefenseItemsOverlay(),
     );
@@ -1333,7 +1357,12 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPanelsHeld = false;
     }
 
-    this.menuArenaPreview?.setVisible(phase === 'LOBBY' && !deferArenaExit);
+    const lobbyVisible = phase === 'LOBBY' && !deferArenaExit;
+    this.menuArenaPreview?.setVisible(lobbyVisible);
+    // Muss vor allem Arena-Aufbau laufen: `setActive(false)` räumt synchron und vollständig
+    // auf, damit kein Ambient-Zustand in eine Runde hinüberlebt.
+    this.lobbyAmbient?.setActive(lobbyVisible);
+    if (lobbyVisible) this.lobbyAmbient?.update(delta);
 
     if (inGame) {
       // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.

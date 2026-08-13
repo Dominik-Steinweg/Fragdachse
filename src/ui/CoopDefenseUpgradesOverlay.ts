@@ -30,7 +30,7 @@ import {
 import { attachHoverEffect } from './uiHover';
 import { UiTooltip } from './UiTooltip';
 import { UiContextMenu, type UiContextMenuEntry } from './UiContextMenu';
-import { FONT_MONO } from './uiTheme';
+import { BORDER, INTENT, SURFACE, TEXT, textStyle, FONT_MONO } from './uiTheme';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
@@ -150,9 +150,9 @@ const BASE_UNLOCK_NODE_ACTIVE = COLORS.GREY_1;
 
 const DIM_COLOR = COLORS.GREY_10;
 const DIM_ALPHA = 0.78;
-const PANEL_BG = COLORS.GREY_7;
+const PANEL_BG = SURFACE.modal;
 const PANEL_ALPHA = 0.96;
-const ACCENT = COLORS.GOLD_1;
+const PANEL_BORDER = BORDER.default;
 
 type CategoryVisuals = {
   laneFill: number;
@@ -379,9 +379,9 @@ export class CoopDefenseUpgradesOverlay {
     const cancelBtn = this.scene.add.image(cancelX, ACTION_BTN_Y, this.ensureActionButtonTexture('cancel'))
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, 'ABBRUCH', {
-      fontSize: '20px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-    }).setOrigin(0.5).setScrollFactor(0);
+    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, 'ABBRUCH', textStyle('label', {
+      color: INTENT.neutral.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     cancelBtn.on('pointerdown', () => this.closeWithCancel());
     attachHoverEffect(this.scene, cancelBtn, cancelLabel);
     objects.push(cancelBtn);
@@ -390,18 +390,17 @@ export class CoopDefenseUpgradesOverlay {
     const applyBtn = this.scene.add.image(applyX, ACTION_BTN_Y, this.ensureActionButtonTexture('apply'))
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, 'ÜBERNEHMEN', {
-      fontSize: '20px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
-    }).setOrigin(0.5).setScrollFactor(0);
+    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, 'ÜBERNEHMEN', textStyle('label', {
+      color: INTENT.primary.label,
+    })).setOrigin(0.5).setScrollFactor(0);
     applyBtn.on('pointerdown', () => this.closeWithApply());
     attachHoverEffect(this.scene, applyBtn, applyLabel);
     objects.push(applyBtn);
     objects.push(applyLabel);
 
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'UPGRADES', {
-        fontSize: '28px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(ACCENT),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, TITLE_Y, 'UPGRADES', textStyle('display'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     // Level und XP-Balken tragen ihre Zahlen im Mouse-over, damit der Kopfbereich schmal bleibt.
@@ -497,7 +496,7 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
 
-    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, ACCENT);
+    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, TEXT.primary);
     objects.push(
       this.tooltip.build()
         // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
@@ -505,9 +504,8 @@ export class CoopDefenseUpgradesOverlay {
     );
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurück | ✓ am Symbol oder Klick auf einen Loadout-Slot rüstet aus ]', {
-        fontSize: '13px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_4),
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurück | ✓ am Symbol oder Klick auf einen Loadout-Slot rüstet aus ]', textStyle('caption'))
+        .setOrigin(0.5).setScrollFactor(0),
     );
 
     this.container = this.scene.add.container(0, 0, objects)
@@ -755,7 +753,7 @@ export class CoopDefenseUpgradesOverlay {
       x,
       y,
       title: activeCategory ? `RESPEC · ${activeCategory.label}` : 'RESPEC',
-      titleColor: ACCENT,
+      titleColor: TEXT.primary,
       entries,
       onClose: () => {
         this.pendingRespecAction = null;
@@ -2158,7 +2156,7 @@ export class CoopDefenseUpgradesOverlay {
       topColor: lerpColor(PANEL_BG, 0xffffff, 0.07),
       bottomColor: lerpColor(PANEL_BG, 0x000000, 0.3),
       fillAlpha: PANEL_ALPHA,
-      strokeColor: ACCENT,
+      strokeColor: PANEL_BORDER,
       strokeAlpha: 0.5,
       strokeWidth: 2,
       highlightAlpha: 0.05,
@@ -2172,13 +2170,13 @@ export class CoopDefenseUpgradesOverlay {
         w: ACTION_BTN_W,
         h: ACTION_BTN_H,
         radius: 12,
-        topColor: lerpColor(COLORS.RED_3, 0xffffff, 0.16),
-        bottomColor: lerpColor(COLORS.RED_4, 0x000000, 0.30),
-        fillAlpha: 0.97,
-        strokeColor: lerpColor(COLORS.RED_2, 0xffffff, 0.14),
-        strokeAlpha: 0.92,
+        topColor: lerpColor(INTENT.neutral.fill, 0xffffff, 0.16),
+        bottomColor: lerpColor(INTENT.neutral.fill, 0x000000, 0.30),
+        fillAlpha: INTENT.neutral.fillAlpha,
+        strokeColor: INTENT.neutral.stroke,
+        strokeAlpha: INTENT.neutral.strokeAlpha,
         strokeWidth: 2,
-        highlightAlpha: 0.24,
+        highlightAlpha: INTENT.neutral.gloss,
       });
     }
     return this.ensureRoundedTexture({
@@ -2186,13 +2184,13 @@ export class CoopDefenseUpgradesOverlay {
       w: ACTION_BTN_W,
       h: ACTION_BTN_H,
       radius: 12,
-      topColor: lerpColor(COLORS.GREEN_3, 0xffffff, 0.18),
-      bottomColor: lerpColor(COLORS.GREEN_4, 0x000000, 0.30),
-      fillAlpha: 0.97,
-      strokeColor: lerpColor(COLORS.GREEN_2, 0xffffff, 0.14),
-      strokeAlpha: 0.92,
+      topColor: lerpColor(INTENT.primary.fill, 0xffffff, 0.18),
+      bottomColor: lerpColor(INTENT.primary.fill, 0x000000, 0.30),
+      fillAlpha: INTENT.primary.fillAlpha,
+      strokeColor: INTENT.primary.stroke,
+      strokeAlpha: INTENT.primary.strokeAlpha,
       strokeWidth: 2,
-      highlightAlpha: 0.26,
+      highlightAlpha: INTENT.primary.gloss,
     });
   }
 
@@ -2234,13 +2232,13 @@ export class CoopDefenseUpgradesOverlay {
       w: RESPEC_W,
       h: RESPEC_H,
       radius: 11,
-      topColor: lerpColor(COLORS.RED_3, 0xffffff, 0.16),
-      bottomColor: lerpColor(COLORS.RED_4, 0x000000, 0.30),
-      fillAlpha: 0.97,
-      strokeColor: lerpColor(COLORS.RED_2, 0xffffff, 0.12),
-      strokeAlpha: 0.9,
+      topColor: lerpColor(INTENT.danger.fill, 0xffffff, 0.16),
+      bottomColor: lerpColor(INTENT.danger.fill, 0x000000, 0.30),
+      fillAlpha: INTENT.danger.fillAlpha,
+      strokeColor: INTENT.danger.stroke,
+      strokeAlpha: INTENT.danger.strokeAlpha,
       strokeWidth: 2,
-      highlightAlpha: 0.24,
+      highlightAlpha: INTENT.danger.gloss,
     });
   }
 

@@ -473,6 +473,8 @@ export interface SyncedProjectile {
   color:   number;  // hex
   allowTeamDamage?: boolean;
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  /** Reiner VFX-Ursprung; der autoritative Projektilpunkt bleibt x/y. */
+  visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
@@ -510,6 +512,9 @@ export interface SyncedHitscanTrace {
   shooterId?: string;
   shotId?:    number;
   shotAudioKey?: ShotAudioKey;
+  /** Reiner VFX-Anfang; startX/startY bleiben der Gameplay-Trace-Ursprung. */
+  visualStartX?: number;
+  visualStartY?: number;
 }
 
 export interface SyncedHitEffect {
@@ -832,6 +837,8 @@ export interface ProjectileSpawnConfig {
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
   color:           number;        // hex
+  /** Reiner VFX-Ursprung; der Gameplay-Spawn bleibt der x/y-Parameter von spawnProjectile. */
+  visualMuzzleOrigin?: { x: number; y: number };
   allowTeamDamage?: boolean;
   ownerColor?:     number;        // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
@@ -1170,6 +1177,8 @@ export interface TrackedProjectile {
   sourceTurretId?: string;
   /** Nutzlast bereits an einem Hindernis abgegeben; verhindert Mehrfachwirkung vor dem Cleanup. */
   supportConsumed?: boolean;
+  /** Reiner Spawn-VFX-Ursprung; Physik und Kollisionen verwenden weiterhin sprite.x/y. */
+  visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number;
   smokeTrailColor?: number;
   lockedTargetId?: string | null;

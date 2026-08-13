@@ -531,6 +531,25 @@ export const LOBBY_PANEL_WIDTH = 832;
  */
 export type LobbyRockRole = 'structural' | 'ambient';
 
+/**
+ * Gitterbezugspunkte der Lobby-Oberfläche.
+ *
+ * Die Ambient-Inszenierung leitet ihre Spielflächen hieraus ab, statt dieselben Spaltenzahlen
+ * ein zweites Mal zu pflegen. Wer den Rahmen verschiebt, verschiebt damit automatisch auch die
+ * erlaubten Kampfzonen.
+ */
+export const LOBBY_LAYOUT_GRID = {
+  cols: MENU_GRID_COLS,
+  rows: GRID_ROWS,
+  /** Senkrechte Felssäule links bzw. rechts. */
+  leftFrameColumn:  LEFT_OVERLAY_BORDER_X,
+  rightFrameColumn: RIGHT_OVERLAY_BORDER_X,
+  /** Waagerechte Rahmenzeilen. */
+  frameTopRow:    OVERLAY_BORDER_TOP_Y,
+  frameBottomRow: OVERLAY_BORDER_BOTTOM_Y,
+} as const;
+
+
 export const LOBBY_FRAME_BOUNDS = {
   top: ARENA_OFFSET_Y + (OVERLAY_BORDER_TOP_Y + 1) * CELL_SIZE,
   bottom: ARENA_OFFSET_Y + OVERLAY_BORDER_BOTTOM_Y * CELL_SIZE,
@@ -623,6 +642,32 @@ const decalQuietZones: readonly GridRect[] = [
   rightOverlayInfoQuietZone,
   overlayClearZones[1],
 ];
+
+/**
+ * Flächen, die von der Lobby-Oberfläche belegt sind: die beiden Seitenmenüs und das
+ * Mittelpanel.
+ *
+ * Dort darf **kein** Ambient-Gefecht stattfinden – es läge hinter dem Text und wäre reine
+ * Unruhe. Das Mittelpanel ist zusätzlich mit Fels gefüllt; die Seitenmenüs sind offener
+ * Boden und müssen deshalb ausdrücklich gesperrt werden.
+ */
+export const LOBBY_UI_RESERVED_ZONES: readonly GridRect[] = decalQuietZones;
+
+/**
+ * Spaltenbereich des Mittelpanels.
+ *
+ * Seine Freizone reicht eine Zeile über die obere Rahmenzeile hinaus; die Kampfzonen im
+ * oberen Band müssen deshalb seitlich daran vorbei und dürfen nicht bis zur Bildmitte gehen.
+ */
+export const LOBBY_CENTER_PANEL_COLUMNS = {
+  min: overlayClearZones[1].minX,
+  max: overlayClearZones[1].maxX,
+} as const;
+
+/** Liegt die Zelle unter einer Oberflächenfläche? */
+export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
+  return LOBBY_UI_RESERVED_ZONES.some((rect) => isInsideRect(gridX, gridY, rect));
+}
 
 const dirtQuietZones: readonly GridRect[] = [
   rightOverlayInfoQuietZone,

@@ -7,6 +7,7 @@ import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONF
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { createCoopDefensePlaceablePedestalUtility } from '../../loadout/CoopDefenseMissionUtility';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
+import { getHeldWeaponMuzzleOrigin } from '../../loadout/HeldItemVisuals';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -905,11 +906,18 @@ export class ClientUpdateCoordinator {
     if (!localPlayer) return undefined;
 
     const shotId = this.nextPredictedHitscanShotId++;
-    const muzzleOrigin = getTopDownMuzzleOrigin(localPlayer.sprite.x, localPlayer.sprite.y, angle);
+    const gameplayMuzzleOrigin = getTopDownMuzzleOrigin(localPlayer.sprite.x, localPlayer.sprite.y, angle);
+    const visualMuzzleOrigin = getHeldWeaponMuzzleOrigin(
+      config.id,
+      localPlayer.sprite.x,
+      localPlayer.sprite.y,
+      localPlayer.sprite.rotation,
+      localPlayer.sprite.displayWidth,
+    ) ?? gameplayMuzzleOrigin;
     const trace  = this.ctx.combatSystem.traceHitscan({
       shooterId:  bridge.getLocalPlayerId(),
-      startX:     muzzleOrigin.x,
-      startY:     muzzleOrigin.y,
+      startX:     gameplayMuzzleOrigin.x,
+      startY:     gameplayMuzzleOrigin.y,
       angle,
       range:      config.range,
       traceThickness: config.fire.traceThickness,
@@ -918,8 +926,8 @@ export class ClientUpdateCoordinator {
     });
 
     this.ctx.effectSystem.playPredictedHitscanTracer(
-      muzzleOrigin.x,
-      muzzleOrigin.y,
+      visualMuzzleOrigin.x,
+      visualMuzzleOrigin.y,
       trace.endX,
       trace.endY,
       config.fire.supportEffect?.beamColor ?? localPlayer.color,

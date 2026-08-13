@@ -7,6 +7,8 @@ import {
   LOBBY_ROCK_ROLES,
   MENU_ARENA_PREVIEW_CONFIG,
 } from '../src/arena/MenuArenaPreviewConfig';
+import { isLobbyUiReservedCell } from '../src/arena/MenuArenaPreviewConfig';
+import { AMBIENT_ZONES } from '../src/lobby/AmbientZones';
 import { ARENA_OFFSET_Y, CELL_SIZE, GAME_WIDTH } from '../src/config';
 
 const rocks = MENU_ARENA_PREVIEW_CONFIG.layout.rocks;
@@ -19,6 +21,28 @@ const panelCore = {
   minGridY: (LOBBY_FRAME_BOUNDS.outerTop - ARENA_OFFSET_Y) / CELL_SIZE,
   maxGridY: (LOBBY_FRAME_BOUNDS.outerBottom - ARENA_OFFSET_Y) / CELL_SIZE - 1,
 };
+
+describe('lobby ambient zones', () => {
+  it('never places a combat zone under a side menu or the centre panel', () => {
+    for (const zone of AMBIENT_ZONES) {
+      for (let gridY = zone.minGridY; gridY <= zone.maxGridY; gridY += 1) {
+        for (let gridX = zone.minGridX; gridX <= zone.maxGridX; gridX += 1) {
+          expect(
+            isLobbyUiReservedCell(gridX, gridY),
+            `Zone ${zone.id} greift auf die Oberflächenfläche bei ${gridX},${gridY}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('keeps at least one zone on each side of the frame', () => {
+    const ids = AMBIENT_ZONES.map((zone) => zone.id);
+    expect(ids).toContain('left_gap');
+    expect(ids).toContain('right_gap');
+    expect(ids).toContain('bottom_band');
+  });
+});
 
 describe('lobby rock landscape', () => {
   it('fills the area under the centre panel completely instead of leaving it bare', () => {

@@ -58,9 +58,23 @@ export const TEXT = {
   danger: COLORS.RED_2,
 } as const;
 
+/** Einheitliche Farblogik fuer angezeigte Netzwerk-Pings. */
+export const PING_THRESHOLDS = {
+  greenMaxMs: 20,
+  goldMaxMs: 50,
+  redMaxMs: 100,
+} as const;
+
+export function getPingColor(ms: number): string {
+  if (ms <= PING_THRESHOLDS.greenMaxMs) return toCssColor(COLORS.GREEN_2);
+  if (ms <= PING_THRESHOLDS.goldMaxMs) return toCssColor(COLORS.GOLD_1);
+  if (ms <= PING_THRESHOLDS.redMaxMs) return toCssColor(COLORS.RED_1);
+  return toCssColor(COLORS.RED_3);
+}
+
 // ── Button-Intents ───────────────────────────────────────────────────────────
 
-export type ButtonIntent = 'primary' | 'accent' | 'attention' | 'neutral' | 'ghost' | 'danger' | 'disabled';
+export type ButtonIntent = 'primary' | 'accent' | 'attention' | 'neutral' | 'secondary' | 'ghost' | 'danger' | 'disabled';
 
 export interface ButtonIntentSpec {
   /** Grundfarbe; `ensureGlossyButtonTexture` leitet Verlauf und Glanz daraus ab. */
@@ -125,6 +139,18 @@ export const INTENT: Readonly<Record<ButtonIntent, ButtonIntentSpec>> = {
     fillAlpha: 0.95,
     strokeAlpha: 0.8,
     gloss: 0.16,
+    restAlpha: 1,
+    labelHover: COLORS.GREY_1,
+    interactive: true,
+  },
+  /** Erreichbare Systemleiste: sichtbar, aber mit genug Transparenz fuer den Hintergrund. */
+  secondary: {
+    fill: COLORS.GREY_8,
+    stroke: COLORS.GREY_5,
+    label: COLORS.GREY_2,
+    fillAlpha: 0.62,
+    strokeAlpha: 0.82,
+    gloss: 0.1,
     restAlpha: 1,
     labelHover: COLORS.GREY_1,
     interactive: true,

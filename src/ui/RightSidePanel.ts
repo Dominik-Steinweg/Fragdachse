@@ -29,7 +29,7 @@ import {
   lerpColor,
 } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
-import { TEXT, textStyle } from './uiTheme';
+import { getPingColor, TEXT, textStyle } from './uiTheme';
 import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
@@ -113,13 +113,6 @@ const GLASS_X = LOBBY_FRAME_BOUNDS.rightColumnLeft;
 const GLASS_W = GAME_WIDTH - LOBBY_FRAME_BOUNDS.rightColumnLeft;
 const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
 const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
-
-function pingColor(ms: number): string {
-  if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
-  if (ms <= 100) return toCssColor(COLORS.GOLD_1);
-  if (ms <= 200) return toCssColor(COLORS.RED_1);
-  return toCssColor(COLORS.RED_3);
-}
 
 interface KillFeedEntryView {
   killerText: string;
@@ -355,7 +348,7 @@ export class RightSidePanel {
           nameColor: this.toCachedCssColor(entry.colorHex),
           fragsText: String(this.resolveLeaderboardEntryFrags(entry)),
           pingText: `${entry.ping}ms`,
-          pingColor: pingColor(entry.ping),
+          pingColor: getPingColor(entry.ping),
         };
         const prevView = this.leaderboardCache[i];
         if (!prevView || !prevView.visible) {
@@ -979,14 +972,14 @@ export class RightSidePanel {
       const y = startY + i * LB_ENTRY_H;
       row.name.setPosition(ARENA_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
       row.frags.setPosition(LB_FRAGS_X, y).setText(String(this.resolveLeaderboardEntryFrags(entry))).setVisible(true);
-      pingText.setPosition(LB_PING_X, y).setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
+      pingText.setPosition(LB_PING_X, y).setText(`${entry.ping}ms`).setColor(getPingColor(entry.ping)).setVisible(true);
       this.leaderboardCache[rowIndex] = {
         visible: true,
         nameText: entry.name,
         nameColor: this.toCachedCssColor(entry.colorHex),
         fragsText: String(this.resolveLeaderboardEntryFrags(entry)),
         pingText: `${entry.ping}ms`,
-        pingColor: pingColor(entry.ping),
+        pingColor: getPingColor(entry.ping),
       };
     }
     return rowIndex;

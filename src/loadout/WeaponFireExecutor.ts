@@ -17,7 +17,7 @@ import type {
   ProjectileWeaponFireConfig,
   WeaponConfig,
 } from './LoadoutConfig';
-import { getTopDownMuzzleOrigin } from '../config';
+import { getTopDownMuzzleOrigin, type MuzzleOrigin } from '../config';
 
 /**
  * Fire-Typen, die über einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch außerhalb
@@ -58,6 +58,8 @@ export interface HitscanShotRequest {
   chainLightning?: ChainLightningConfig;
   burnOnHit?:      BurnOnHitConfig;
   supportEffect?:  HitscanSupportEffect;
+  /** Reiner Renderursprung; Gameplay-Hitscan bleibt bei startX/startY. */
+  visualMuzzleOrigin?: MuzzleOrigin;
 }
 
 /** Normalisierter Nahkampfschlag. */
@@ -120,6 +122,8 @@ export interface WeaponFireParams {
   targetY:     number;
   ownerId:     string;
   ownerColor:  number;
+  /** Visueller Mündungsursprung; verschiebt niemals den Gameplay-Spawn. */
+  visualMuzzleOrigin?: MuzzleOrigin;
   sourceSlot?: LoadoutSlot;
   shotId?:     number;
   options?:    WeaponFireOptions;
@@ -163,7 +167,7 @@ export class WeaponFireExecutor {
     fireConfig: ProjectileWeaponFireConfig,
     params: WeaponFireParams,
   ): boolean {
-    const { x, y, angle, targetX, targetY, ownerId, ownerColor, sourceSlot, options } = params;
+    const { x, y, angle, targetX, targetY, ownerId, ownerColor, sourceSlot, options, visualMuzzleOrigin } = params;
     const cursorRange = Math.hypot(targetX - x, targetY - y);
     const effectiveRange = fireConfig.limitRangeToCursor
       ? Math.min(config.range, cursorRange)
@@ -184,6 +188,7 @@ export class WeaponFireExecutor {
       damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? ownerColor,  // Waffen-eigene Farbe hat Vorrang
       ownerColor,
+      visualMuzzleOrigin,
       projectileVisualScale: config.projectileVisualScale,
       smokeTrailColor: config.rocketSmokeTrailColor ?? ownerColor,
       lifetime: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : lifetime,
@@ -283,11 +288,11 @@ export class WeaponFireExecutor {
     fireConfig: HitscanWeaponFireConfig,
     params: WeaponFireParams,
   ): boolean {
-    const muzzleOrigin = getTopDownMuzzleOrigin(params.x, params.y, params.angle);
+    const gameplayMuzzleOrigin = getTopDownMuzzleOrigin(params.x, params.y, params.angle);
     return this.sink.resolveHitscan({
       shooterId:       params.ownerId,
-      startX:          muzzleOrigin.x,
-      startY:          muzzleOrigin.y,
+      startX:          gameplayMuzzleOrigin.x,
+      startY:          gameplayMuzzleOrigin.y,
       angle:           params.angle,
       range:           config.range,
       damage:          config.damage,
@@ -305,6 +310,7 @@ export class WeaponFireExecutor {
       chainLightning:  config.chainLightning,
       burnOnHit:       config.burnOnHit,
       supportEffect:   fireConfig.supportEffect,
+      visualMuzzleOrigin: params.visualMuzzleOrigin,
     });
   }
 
