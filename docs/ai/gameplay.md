@@ -42,11 +42,12 @@ Nebenmissionen sind optionale, nicht siegrelevante Ziele mit den Archetypen dest
 - Trefferherkunft wird über typisierte Damage-/Slot-Felder geführt, nicht über Anzeigenamen oder Rendererzustand.
 - Loadout- und Upgrade-Regeln gehören in Resolver und Systems. Neue Stats müssen über den gemeinsamen Host-/Client-Resolver laufen, damit Anzeige und Gate identisch bleiben.
 - Strategische Ziele und Navigation verwenden die vorhandenen Flowfield-/Obstacle-Services. Keine zweite Sichtlinien- oder Zielquellenliste neben den zentralen Services einführen.
+- Sichtlinie und Schusslinie sind getrennte Fragen: `CombatSystem.hasLineOfSight` prüft nur die statischen Hindernisse des `ArenaObstacleIndex` (Sehen, Spawn-Bewertung, Wegewahl), `CombatSystem.hasClearLineOfFire` zusätzlich die beweglichen physischen Blocker – zurzeit den Zug. Jede Entscheidung, die einen Schuss, Wurf oder Homing-Lock auslöst, fragt die Schusslinie; nur wer den beweglichen Blocker selbst angreift, bleibt bei der Sichtlinie, weil er sich sonst selbst verdeckt.
 - Visuelle Effekte reagieren auf entschiedene Zustände und besitzen keinen eigenen Gameplay-Authority-Pfad.
 
 ## Strukturen, Schaden und Modifikatoren
 
-Basen tragen Faction und Role aus der Map-Konfiguration. Dormante Strukturen verwenden BaseEntity.isInert() als gemeinsames Gate für Darstellung, Kollision, Licht, Türme, Spawns und Zielquellen. Räumliche Verbraucher müssen weiterhin alle Basen als Hindernisse kennen; nur Wirkungs- und Zielmengen filtern nach Faction oder Role.
+Basen tragen Faction und Role aus der Map-Konfiguration. Dormante Strukturen verwenden BaseEntity.isInert() als gemeinsames Gate für Darstellung, Kollision, Licht, Türme, Spawns und Zielquellen. Räumliche Verbraucher müssen weiterhin alle Basen als Hindernisse kennen; nur Wirkungs- und Zielmengen filtern nach Faction oder Role. Zielmenge des Basis-Flowfields sind alle aktiven freundlichen Basen mit Role main sowie objective-gebundene Vorposten; dekorative Vorposten und Spawn-Points bleiben ausgenommen. Weil das Feld ein Mehrziel-Dijkstra ist, ergibt sich die Wahl der pfadnächsten Struktur ohne eigene Zielzuweisung je Gegner.
 
 Strukturschaden läuft durch die zentralen CombatSystem-Callbacks. Direkttreffer, Hitscan, Nahkampf und Explosionen dürfen nicht je einen parallelen Basis-/Fels-Schadenspfad eröffnen. Die Herkunft eines Treffers wird über DamageApplicationOptions und sourceSlot geführt, nicht über weaponName oder Visuals. Besitzerwerte platzierter Konstrukte bleiben erhalten; ihre Schadensermittlung verwendet den gemeinsamen Resolver.
 

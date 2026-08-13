@@ -40,23 +40,24 @@ describe('Coop Defense B9 team buff state', () => {
     const system = new CoopDefenseTeamBuffSystem();
 
     expect(system.activate(TEAM_BUFF, 1_000)).toBe(true);
-    expect(system.getBuffEndsAt()).toBe(31_000);
+    expect(system.getBuffEndsAt()).toBe(1_000 + TEAM_BUFF.durationMs);
     expect(system.activate(TEAM_BUFF, 10_000)).toBe(false);
-    expect(system.getBuffEndsAt()).toBe(31_000);
+    expect(system.getBuffEndsAt()).toBe(1_000 + TEAM_BUFF.durationMs);
   });
 
   it('expires at the shared end and is fully reset between rounds', () => {
     const system = new CoopDefenseTeamBuffSystem();
     system.activate(TEAM_BUFF, 1_000);
 
-    expect(system.isActive(30_999)).toBe(true);
-    expect(system.isActive(31_000)).toBe(false);
-    expect(system.getHudBuff(31_000, true, true)).toBeNull();
+    const expiresAt = 1_000 + TEAM_BUFF.durationMs;
+    expect(system.isActive(expiresAt - 1)).toBe(true);
+    expect(system.isActive(expiresAt)).toBe(false);
+    expect(system.getHudBuff(expiresAt, true, true)).toBeNull();
 
     system.reset();
     expect(system.getBuffEndsAt()).toBeNull();
     expect(system.activate(TEAM_BUFF, 5_000)).toBe(true);
-    expect(system.getBuffEndsAt()).toBe(35_000);
+    expect(system.getBuffEndsAt()).toBe(5_000 + TEAM_BUFF.durationMs);
   });
 
   it('adds HP regeneration and multiplies the effective adrenaline rate without replacing modifiers', () => {
@@ -64,14 +65,18 @@ describe('Coop Defense B9 team buff state', () => {
     system.activate(TEAM_BUFF, 1_000);
 
     const existingHpRegen = 7;
-    expect(existingHpRegen + system.getHpRegenBonus(2_000, true, true)).toBe(17);
+    expect(existingHpRegen + system.getHpRegenBonus(2_000, true, true))
+      .toBe(existingHpRegen + TEAM_BUFF.hpRegenPerSecond);
 
     const classAndUpgradeRate = 12;
     const itemRuntimeMultiplier = 1.2;
     const effectiveRate = classAndUpgradeRate
       * itemRuntimeMultiplier
       * system.getAdrenalineRegenMultiplier(2_000, true, true);
-    expect(effectiveRate).toBeCloseTo(21.6, 10);
+    expect(effectiveRate).toBeCloseTo(
+      classAndUpgradeRate * itemRuntimeMultiplier * TEAM_BUFF.adrenalineRegenMultiplier,
+      10,
+    );
     expect(system.getAdrenalineRegenMultiplier(2_000, true, false)).toBe(1);
   });
 
@@ -88,7 +93,10 @@ describe('Coop Defense B9 team buff state', () => {
     expect(system.getHudBuff(10_000, eligible, false)).toBeNull();
 
     // Respawn at 10 s has no player-owned timer: it sees the shared 21 s remainder.
-    expect(system.getHudBuff(10_000, eligible, true)?.remainingFrac).toBeCloseTo(21 / 30, 10);
+    expect(system.getHudBuff(10_000, eligible, true)?.remainingFrac).toBeCloseTo(
+      (TEAM_BUFF.durationMs - 9_000) / TEAM_BUFF.durationMs,
+      10,
+    );
   });
 });
 
@@ -112,9 +120,9 @@ describe('Coop Defense B9 objective completion reward', () => {
 
     expect(objectiveSystem.reportCarryDelivered('carry-beer', 'carry-beer:3')).toBe(true);
     expect(objectiveSystem.getObjectiveState('carry-beer')).toBe('completed');
-    expect(buff.getBuffEndsAt()).toBe(31_000);
+    expect(buff.getBuffEndsAt()).toBe(1_000 + TEAM_BUFF.durationMs);
     expect(objectiveSystem.reportCarryDelivered('carry-beer', 'carry-beer:3')).toBe(false);
-    expect(buff.getBuffEndsAt()).toBe(31_000);
+    expect(buff.getBuffEndsAt()).toBe(1_000 + TEAM_BUFF.durationMs);
   });
 
   it('configures the B9 reward on the existing sandbox Carry mission', () => {

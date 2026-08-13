@@ -401,6 +401,8 @@ export function getBaseRewardPickupWorldPosition(
  * dürfen weiterhin im Schutz-Radius erscheinen (siehe `isReservedBaseSurfaceCell`).
  */
 export const COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS = 5;
+/** Zwischen einer Coop-Basis und dem zweizelligen Gleis-Fußabdruck bleibt eine freie Zelle. */
+export const COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS = 1;
 
 function isCoopDefenseBaseWithinBoundingBoxDistance(
   gx: number,

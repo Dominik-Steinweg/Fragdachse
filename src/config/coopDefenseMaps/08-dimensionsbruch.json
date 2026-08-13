@@ -4,47 +4,9 @@
   "arenaWidthCells": 92,
   "arenaHeightCells": 52,
   "timeOfDay": "20:45",
-  "tutorialText": "Felsen und Außenposten bilden Verteidigungslinien und lenken Gegner durch Engstellen. Wird ein HOLD-Ziel markiert, muss es bis zum angegebenen Angriff überleben.",
-  "rockFillRatio": 0.15,
-  "rockField": {
-    "corridorRadiusCells": 1.45,
-    "corridorRadiusVarianceCells": 0.35,
-    "corridorWanderCells": 0.8,
-    "waypointJitterCells": 0.7,
-    "rockDensityScale": 1,
-    "corridors": [
-      {
-        "id": "dimension-top-line",
-        "points": [
-          { "gridX": 0, "gridY": 8 },
-          { "gridX": 18, "gridY": 10 },
-          { "gridX": 40, "gridY": 8 },
-          { "gridX": 65, "gridY": 12 },
-          { "gridX": 91, "gridY": 10 }
-        ]
-      },
-      {
-        "id": "dimension-middle-line",
-        "points": [
-          { "gridX": 0, "gridY": 25 },
-          { "gridX": 22, "gridY": 23 },
-          { "gridX": 46, "gridY": 27 },
-          { "gridX": 70, "gridY": 24 },
-          { "gridX": 91, "gridY": 26 }
-        ]
-      },
-      {
-        "id": "dimension-bottom-line",
-        "points": [
-          { "gridX": 0, "gridY": 43 },
-          { "gridX": 20, "gridY": 40 },
-          { "gridX": 44, "gridY": 44 },
-          { "gridX": 70, "gridY": 41 },
-          { "gridX": 91, "gridY": 44 }
-        ]
-      }
-    ]
-  },
+  "tutorialText": "Weites offenes Gelände: Vor der Hauptbasis steht nur noch eine zerfallene Bastion mit vier Türmen. Wird sie als HOLD-Ziel markiert, muss die Mauerlinie bis zum angegebenen Angriff überleben - danach wird sie repariert.",
+  "rockFillRatio": 0.18,
+  "trackPosition": "left",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -134,26 +96,6 @@
           }
         ]
       },
-      "turrets": [
-        {
-          "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
-        },
-        {
-          "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 4
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
-        }
-      ],
       "powerUpPedestals": [
         {
           "id": "health-station-top",
@@ -188,62 +130,87 @@
       ]
     },
     {
-      "id": "friendly-outpost-spore-top",
+      "id": "friendly-outpost-bastion",
       "role": "outpost",
       "dormant": true,
-      "startHpFactor": 0.75,
-      "hpMax": 650,
+      "startHpFactor": 0.35,
+      "hpMax": 1600,
       "anchor": {
         "kind": "grid",
-        "gridX": 36,
-        "gridY": 10
+        "gridX": 78,
+        "gridY": 16
       },
       "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
+        "kind": "cells",
+        "cells": [
+          { "gridX": 2, "gridY": 0 },
+          { "gridX": 2, "gridY": 1 },
+          { "gridX": 1, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 },
+          { "gridX": 1, "gridY": 3 },
+          { "gridX": 2, "gridY": 3 },
+          { "gridX": 2, "gridY": 4 },
+          { "gridX": 2, "gridY": 6 },
+          { "gridX": 1, "gridY": 6 },
+          { "gridX": 0, "gridY": 7 },
+          { "gridX": 1, "gridY": 7 },
+          { "gridX": 2, "gridY": 7 },
+          { "gridX": 1, "gridY": 8 },
+          { "gridX": 2, "gridY": 8 },
+          { "gridX": 2, "gridY": 9 },
+          { "gridX": 1, "gridY": 10 },
+          { "gridX": 2, "gridY": 10 },
+          { "gridX": 0, "gridY": 11 },
+          { "gridX": 1, "gridY": 11 },
+          { "gridX": 2, "gridY": 11 },
+          { "gridX": 1, "gridY": 12 },
+          { "gridX": 2, "gridY": 12 },
+          { "gridX": 2, "gridY": 13 },
+          { "gridX": 2, "gridY": 15 },
+          { "gridX": 1, "gridY": 15 },
+          { "gridX": 0, "gridY": 16 },
+          { "gridX": 1, "gridY": 16 },
+          { "gridX": 2, "gridY": 16 },
+          { "gridX": 1, "gridY": 17 },
+          { "gridX": 2, "gridY": 17 },
+          { "gridX": 2, "gridY": 18 }
+        ]
       },
       "turrets": [
         {
-          "id": "spore",
+          "id": "bastion-rocket",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 0
+            "gridY": 2
+          },
+          "mountSide": "front",
+          "weaponId": "TURRET_ROCKET_BURST"
+        },
+        {
+          "id": "bastion-spore-north",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 7
           },
           "mountSide": "front",
           "weaponId": "TURRET_SPORE"
         },
         {
-          "id": "spore-rear",
+          "id": "bastion-plasma",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 0
+            "gridY": 11
           },
-          "mountSide": "rear",
-          "weaponId": "TURRET_SPORE"
-        }
-      ]
-    },
-    {
-      "id": "friendly-outpost-spore-bottom",
-      "role": "outpost",
-      "hpMax": 600,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 36,
-        "gridY": 42
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
+          "mountSide": "front",
+          "weaponId": "FLIEGENPILZ_PLASMA"
+        },
         {
-          "id": "spore",
+          "id": "bastion-spore-south",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 0
+            "gridY": 16
           },
           "mountSide": "front",
           "weaponId": "TURRET_SPORE"
@@ -274,18 +241,22 @@
   "encounters": [
     {
       "id": "dimension-west",
-      "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 7500,
+      "start": { "type": "time", "atMs": 2000 },
+      "restAfterMs": 5000,
       "groups": [
+        { "enemyKind": "void-stalker", "count": 1, "front": "west" },
         { "enemyKind": "spore-warden", "count": 4, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 8, "delayMs": 1000, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 12, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 12, "front": "north" },
+        { "enemyKind": "demon-badger", "count": 12, "front": "south" }
       ]
     },
     {
       "id": "dimension-north",
       "start": { "type": "after-previous" },
-      "restAfterMs": 8500,
+      "restAfterMs": 5000,
       "groups": [
+        { "enemyKind": "void-stalker", "count": 2, "front": "west" },
         { "enemyKind": "demon-badger", "count": 7, "front": "north" },
         { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
       ]
@@ -293,10 +264,11 @@
     {
       "id": "dimension-south",
       "start": { "type": "after-previous" },
-      "restAfterMs": 9500,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "void-stalker", "count": 4, "front": "south" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1100, "front": "north" }
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1100, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
       ]
     },
     {
@@ -309,50 +281,15 @@
       ]
     }
   ],
-  "persistentSpawns": [
-    {
-      "id": "map-8-pressure-0",
-      "enemyKind": "spore-warden",
-      "intervalMs": 14000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "front": "north",
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-8-pressure-1",
-      "enemyKind": "demon-badger",
-      "intervalMs": 7000,
-      "countPerTick": 1,
-      "startAtMs": 5000,
-      "front": "north",
-      "source": {
-        "type": "map"
-      }
-    },
-    {
-      "id": "map-8-pressure-2",
-      "enemyKind": "void-stalker",
-      "intervalMs": 12000,
-      "countPerTick": 1,
-      "startAtMs": 10000,
-      "front": "north",
-      "source": {
-        "type": "map"
-      }
-    }
-  ],
   "secondaryObjectives": [
     {
-      "id": "hold-dimension-spore-outpost",
+      "id": "hold-dimension-bastion",
       "type": "hold",
-      "displayName": "SPORENPOSTEN HALTEN",
-      "rewardHint": "DER AUSSENPOSTEN WIRD REPARIERT",
-      "start": { "type": "after-encounter", "encounterId": "dimension-west" },
-      "holdUntil": { "type": "after-encounter", "encounterId": "dimension-north" },
-      "targets": ["friendly-outpost-spore-top"],
+      "displayName": "BASTION HALTEN",
+      "rewardHint": "DIE BASTION WIRD REPARIERT",
+      "start": { "type": "time", "atMs": 0 },
+      "holdUntil": { "type": "after-encounter", "encounterId": "dimension-west" },
+      "targets": ["friendly-outpost-bastion"],
       "rewards": { "repairTargetOnComplete": true }
     }
   ]

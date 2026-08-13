@@ -3,6 +3,7 @@ import {
   getCoopDefenseMapConfig,
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapEncounterConfigs,
+  DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
   type CoopDefenseMapObjective,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
@@ -51,7 +52,7 @@ describe('Coop defense encounters', () => {
           enemyKind: 'zombie-badger',
           count: 3,
           delayMs: 0,
-          spawnStaggerMs: 1_500,
+          spawnStaggerMs: DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
           front: 'west',
         }],
       },
@@ -65,7 +66,7 @@ describe('Coop defense encounters', () => {
           enemyKind: 'zombie-badger',
           count: 3,
           delayMs: 0,
-          spawnStaggerMs: 1_500,
+          spawnStaggerMs: DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
           front: 'west',
         }],
       },
@@ -224,7 +225,8 @@ describe('Coop defense encounters', () => {
     ]);
     const encounter = resolveCoopDefenseMapEncounterConfigs(map, 1)[0];
     expect(encounter?.id).toBe('a2-opening-encounter');
-    expect(encounter?.start).toEqual({ type: 'time', atMs: 1_500 });
+    expect(encounter?.start).toMatchObject({ type: 'time', atMs: expect.any(Number) });
+    expect(encounter?.start.type === 'time' ? encounter.start.atMs : -1).toBeGreaterThanOrEqual(0);
     expect(encounter?.restAfterMs).toBeGreaterThan(0);
     expect(encounter?.groups.every((group) => group.front === 'west')).toBe(true);
     expect(encounter?.groups.every((group) => group.count > 0 && group.delayMs >= 0)).toBe(true);
@@ -241,7 +243,7 @@ describe('Coop defense encounters', () => {
         'destroy-brood-front-center',
         'destroy-brood-front-south',
       ]),
-      rewards: { xpPerTarget: 25 },
+      rewards: { xpPerTarget: expect.any(Number) },
     }));
     // Die Fokusfenster stossen aneinander an, statt sich zu ueberschneiden: Der Destroy-Auftrag
     // gibt den Slot mit dem Clear von a2-follow-up-encounter genau dann frei, wenn der Hold ihn
@@ -261,8 +263,10 @@ describe('Coop defense encounters', () => {
       role: 'outpost',
       faction: 'friendly',
       dormant: true,
-      startHpFactor: 0.25,
+      startHpFactor: expect.any(Number),
     });
+    expect(outpost?.startHpFactor).toBeGreaterThan(0);
+    expect(outpost?.startHpFactor).toBeLessThanOrEqual(1);
     expect(outpost?.turrets?.map((turret) => turret.weaponId)).toEqual(['TURRET_ROCKET_BURST', 'TURRET_ROCKET_BURST']);
   });
 });

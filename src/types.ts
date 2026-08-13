@@ -57,7 +57,9 @@ export interface CoopDefenseEncounterPresentationState {
   phaseStartedAtMs: number;
   /** Host-Rundenzeit des nächsten Phasenwechsels; null für offene Phasen. */
   phaseEndsAtMs: number | null;
-  /** Fronts currently arriving or still relevant for the presented encounter. */
+  /** All authored fronts of this encounter, independent of per-group spawn delays. */
+  encounterFronts: readonly SpawnFront[];
+  /** Fronts currently arriving or still relevant for the live world telegraph. */
   fronts: readonly SpawnFront[];
   /** True, sobald alle Gruppen dieses Encounters autoritativ ausgespielt wurden. */
   spawnComplete?: boolean;

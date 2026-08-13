@@ -414,7 +414,7 @@ export class CoopDefenseEnemyAttackSystem {
       const targetY = surface.y;
       const distance = surface.distance;
       if (distance > range) continue;
-      if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, targetX, targetY)) continue;
+      if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, targetX, targetY)) continue;
 
       const candidate: EnemyAttackCandidate = {
         kind: 'base',
@@ -441,12 +441,12 @@ export class CoopDefenseEnemyAttackSystem {
       if (!obstacle?.active) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
       if (distance > range) continue;
-      if (!this.combatSystem.hasLineOfSight(
+      if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
         obstacle.x,
         obstacle.y,
-        construction.id,
+        { skipRockIndex: construction.id },
       )) continue;
       const candidate: EnemyAttackCandidate = {
         kind: 'obstacle',
@@ -506,7 +506,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
     if (distance > range) return null;
-    if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y, index)) return null;
+    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y, { skipRockIndex: index })) return null;
 
     return {
       kind: 'obstacle',
@@ -604,7 +604,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (!this.combatSystem.canDamageTarget(enemy.id, ally.id)) return null;
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y);
-    if (distance > range || !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y)) {
+    if (distance > range || !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y)) {
       return null;
     }
 
@@ -627,12 +627,14 @@ export class CoopDefenseEnemyAttackSystem {
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
     if (distance > range + PLAYER_SIZE * 0.5) return false;
-    return this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+    return this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
   }
 
   private findTrainTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
     const target = this.trainAwarenessSystem?.getTrainAttackTarget(enemy);
     if (!target || target.distance > range) return null;
+    // Bewusst die Sichtlinie: der Zug ist hier das Ziel und würde sich in der Schusslinie
+    // selbst verdecken.
     if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.x, target.y)) return null;
     return {
       kind: 'train',

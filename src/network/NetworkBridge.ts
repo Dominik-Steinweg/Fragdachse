@@ -1547,8 +1547,16 @@ export class NetworkBridge {
         || phaseEndsAtMs < phaseStartedAtMs)) return null;
     const spawnComplete = raw.spawnComplete;
     if (spawnComplete !== undefined && typeof spawnComplete !== 'boolean') return null;
+    const rawEncounterFronts = raw.encounterFronts ?? raw.fronts;
     const rawFronts = raw.fronts;
+    if (rawEncounterFronts !== undefined && !Array.isArray(rawEncounterFronts)) return null;
     if (rawFronts !== undefined && !Array.isArray(rawFronts)) return null;
+    const encounterFronts: SpawnFront[] = [];
+    for (const front of rawEncounterFronts ?? [DEFAULT_SPAWN_FRONT]) {
+      if (!isSpawnFront(front) || encounterFronts.includes(front)) return null;
+      encounterFronts.push(front);
+    }
+    if (encounterFronts.length === 0) encounterFronts.push(DEFAULT_SPAWN_FRONT);
     const fronts: SpawnFront[] = [];
     for (const front of rawFronts ?? [DEFAULT_SPAWN_FRONT]) {
       if (!isSpawnFront(front) || fronts.includes(front)) return null;
@@ -1569,6 +1577,7 @@ export class NetworkBridge {
       phase: phase as CoopDefenseEncounterPresentationState['phase'],
       phaseStartedAtMs,
       phaseEndsAtMs,
+      encounterFronts,
       fronts,
       ...(spawnComplete === undefined ? {} : { spawnComplete }),
       ...(hasEnemyProgress ? { enemiesDefeated, enemiesTotal } : {}),

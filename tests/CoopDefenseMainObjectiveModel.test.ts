@@ -14,6 +14,7 @@ function encounter(
     phase,
     phaseStartedAtMs: 0,
     phaseEndsAtMs: null,
+    encounterFronts: ['west'],
     fronts: ['west'],
   };
 }

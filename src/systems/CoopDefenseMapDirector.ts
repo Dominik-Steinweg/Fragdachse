@@ -567,12 +567,29 @@ export class CoopDefenseMapDirector {
       phase,
       phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
       phaseEndsAtMs: phaseEndsAtMs === null ? null : Math.max(0, phaseEndsAtMs),
+      encounterFronts: this.getEncounterFronts(index),
       fronts: this.getPresentationFronts(index, encounterStartAtMs),
       ...(spawnComplete === undefined ? {} : { spawnComplete }),
       ...(enemyProgress === null
         ? {}
         : { enemiesDefeated: enemyProgress.defeated, enemiesTotal: enemyProgress.total }),
     };
+  }
+
+  /**
+   * Stable identity of an encounter: every authored group contributes its front immediately,
+   * regardless of delayMs or the live telegraph window. The authored group order is preserved.
+   */
+  private getEncounterFronts(index: number): SpawnFront[] {
+    const encounter = this.encounters[index];
+    if (!encounter) return [DEFAULT_SPAWN_FRONT];
+
+    const fronts: SpawnFront[] = [];
+    for (const group of encounter.groups) {
+      const front = group.front ?? DEFAULT_SPAWN_FRONT;
+      if (!fronts.includes(front)) fronts.push(front);
+    }
+    return fronts.length > 0 ? fronts : [DEFAULT_SPAWN_FRONT];
   }
 
   /**

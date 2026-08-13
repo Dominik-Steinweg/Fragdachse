@@ -1044,8 +1044,6 @@ export function setStoredHighestUnlockedCoopDefenseMapId(mapId: string): void {
       coopDefense: {
         ...current.progression.coopDefense,
         highestUnlockedMapId: nextMapId,
-        unlockedClassIds: [...getUnlockedCoopDefenseClassIds(nextMapId)],
-        classesUnlocked: getUnlockedCoopDefenseClassIds(nextMapId).length > 0,
       },
     },
   }));
@@ -1071,8 +1069,6 @@ export function unlockStoredCoopDefenseMapAfterVictory(completedMapId: string): 
       coopDefense: {
         ...current.progression.coopDefense,
         highestUnlockedMapId: nextMapId,
-        unlockedClassIds: [...getUnlockedCoopDefenseClassIds(nextMapId)],
-        classesUnlocked: getUnlockedCoopDefenseClassIds(nextMapId).length > 0,
       },
     },
   });

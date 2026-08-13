@@ -119,6 +119,21 @@ export class RockPresentation {
     // zerstoerter oder gesetzter Fels aendert es also auch bei den Nachbarn.
     ArenaBuilder.refreshRockSurfaceTints(result, layout);
   }
+
+  /** Aktualisiert nur die Chunks und Nachbartints einer bekannten Fels-Aenderungswelle. */
+  refreshOverlayRegions(dirtyRockIds: ReadonlySet<number>): void {
+    const result = this.sources.getResult();
+    const layout = this.sources.getLayout();
+    if (!result || !layout || dirtyRockIds.size === 0) return;
+    ArenaBuilder.rebuildRockOverlayRegions(
+      this.sources.scene,
+      result,
+      layout,
+      dirtyRockIds,
+      this.sources.getWorldFrame(),
+    );
+    ArenaBuilder.refreshRockSurfaceTints(result, layout, dirtyRockIds);
+  }
 }
 
 /** Rahmen-Getter für einen Bestand, der in der laufenden Arena liegt. */

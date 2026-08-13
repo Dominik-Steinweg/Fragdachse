@@ -933,8 +933,8 @@ export class ArenaScene extends Phaser.Scene {
         emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
       }
     });
-    projectileManager.setHomingLineOfSightChecker((sx, sy, ex, ey) => {
-      return combatSystem.hasLineOfSight(sx, sy, ex, ey);
+    projectileManager.setHomingLineOfFireChecker((sx, sy, ex, ey) => {
+      return combatSystem.hasClearLineOfFire(sx, sy, ex, ey);
     });
 
     effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });

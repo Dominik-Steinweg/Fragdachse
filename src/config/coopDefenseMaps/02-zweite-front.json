@@ -6,11 +6,11 @@
   "timeOfDay": "05:00",
   "tutorialText": "Angriffe können aus verschiedenen Richtungen kommen. Achtet auf West- und Ostfront und wechselt rechtzeitig die Seite.",
   "rockFillRatio": 0.15,
+  "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "start": { "type": "after-encounter", "encounterId": "west-introduction" }
   }],
   "balanceReferenceDurationSec": 60,
   "objective": "repel-assault",
@@ -41,10 +41,10 @@
     {
       "id": "north-arrival",
       "start": { "type": "after-previous" },
-      "restAfterMs": 7500,
+      "restAfterMs": 6500,
       "groups": [
         { "enemyKind": "demon-badger", "count": 5, "front": "east" },
-        { "enemyKind": "zombie-badger", "count": 5, "delayMs": 800, "front": "west" }
+        { "enemyKind": "zombie-badger", "count": 5, "delayMs": 800, "front": "east" }
       ]
     },
     {

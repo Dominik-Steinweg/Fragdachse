@@ -13,6 +13,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { CoopDefenseEnemyAttackSystem } from '../src/systems/CoopDefenseEnemyAttackSystem';
+import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { GenericWeapon } from '../src/loadout/GenericWeapon';
 import type { BaseManager } from '../src/entities/BaseManager';
@@ -23,9 +24,10 @@ import type { LoadoutManager } from '../src/loadout/LoadoutManager';
 import type { CombatSystem } from '../src/systems/CombatSystem';
 
 // Kennwerte des Pyro-Dachses aus der Gegner-Registry.
-const OBSTACLE_ATTACK_DELAY_MS = 500;
-const ATTACK_SCAN_INTERVAL_MS = 140;
-const ATTACK_STOP_DURATION_MS = 120;
+const PYRO_BADGER_CONFIG = getCoopDefenseEnemyConfig('pyro-badger');
+const OBSTACLE_ATTACK_DELAY_MS = PYRO_BADGER_CONFIG.obstacleAttackDelayMs;
+const ATTACK_SCAN_INTERVAL_MS = PYRO_BADGER_CONFIG.attackScanIntervalMs;
+const ATTACK_STOP_DURATION_MS = PYRO_BADGER_CONFIG.attackStopDurationMs;
 
 interface TestPlayer {
   id: string;
@@ -106,6 +108,7 @@ function createSystem(
       isBurrowed: () => false,
       canDamageTarget: () => true,
       hasLineOfSight: () => true,
+      hasClearLineOfFire: () => true,
     } as unknown as CombatSystem,
     {
       fireAutomatedWeapon: (

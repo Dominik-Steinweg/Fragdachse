@@ -196,6 +196,23 @@ export interface HitscanTraceOptions {
 
 export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'trunk' | 'train';
 
+/**
+ * Optionen der Schusslinienprüfung.
+ *
+ * Dieselben drei Freiheitsgrade wie bei {@link CombatSystem.hasLineOfSight}, nur gebündelt:
+ * `hasClearLineOfFire` reicht sie an den statischen Hinderniskern **und** an die beweglichen
+ * Blocker weiter, deshalb wären drei optionale Positionsparameter an der Aufrufstelle nicht
+ * mehr lesbar.
+ */
+export interface LineOfFireOptions {
+  /** Dieser Fels blockiert nicht (z. B. der Fels, in dem das Geschütz steht). */
+  readonly skipRockIndex?: number;
+  /** Coop-Defense-Basen ignorieren (Quellen oberhalb der eigenen Basisfläche). */
+  readonly ignoreBaseObstacles?: boolean;
+  /** Korridorbreite für Körper, die breiter als die Linie sind (Wurfgeschosse, Translocator-Puck). */
+  readonly clearanceRadius?: number;
+}
+
 export interface HitscanSupportImpact {
   readonly targetType: 'player' | 'rock' | 'base';
   readonly targetId: string;
@@ -234,8 +251,11 @@ export class CombatSystem {
   private readonly hitscanLine       = new Phaser.Geom.Line();
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
+  private readonly lineOfFireLine    = new Phaser.Geom.Line();  // Scratch-Linie für die Blockerprüfung der Schusslinie
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
+  /** Aufgeblasene Kopie der Zug-Bounds; die Quelle darf für den Korridor nicht verändert werden. */
+  private readonly scratchLineOfFireRect = new Phaser.Geom.Rectangle();
   /**
    * Räumliche Vorauswahl für alle segmentbasierten Hindernisprüfungen (Sichtlinie,
    * Hitscan, Melee, Projektilpfad). Liest dieselben Arrays, die `setArenaObstacles` und
@@ -2859,6 +2879,60 @@ export class CombatSystem {
     });
   }
 
+  /**
+   * Freie **Schusslinie** zwischen zwei Punkten: die statische Sichtlinie plus alle beweglichen
+   * physischen Blocker – zurzeit ausschließlich der Zug.
+   *
+   * Abgrenzung zu {@link hasLineOfSight}: dort geht es um echtes Sehen (Zielerfassung aus der
+   * Ferne, Spawn-Bewertung, Wegewahl), hier um die Frage, ob ein Schuss oder Wurf das Ziel
+   * tatsächlich erreichen kann. Jede Entscheidung, die ein Projektil oder einen Hitscan auslöst,
+   * gehört deshalb hierher; ein Ziel hinter dem Zug ist sichtbar, aber nicht beschießbar.
+   *
+   * Der Zug selbst wird über diese Prüfung nicht anvisiert: wer ihn angreifen will, fragt weiter
+   * die Sichtlinie ab, sonst würde er sich selbst verdecken.
+   */
+  hasClearLineOfFire(
+    startX: number, startY: number,
+    endX: number, endY: number,
+    options: LineOfFireOptions = {},
+  ): boolean {
+    const { skipRockIndex, ignoreBaseObstacles = false, clearanceRadius = 0 } = options;
+    if (!this.hasLineOfSight(startX, startY, endX, endY, skipRockIndex, ignoreBaseObstacles, clearanceRadius)) {
+      return false;
+    }
+    return !this.isDynamicBlockerOnPath(startX, startY, endX, endY, clearanceRadius);
+  }
+
+  /**
+   * Liegt ein beweglicher physischer Blocker auf dem Segment? Der Zug ist der einzige solche
+   * Körper und wird über dieselben Bounds gelesen wie beim Hitscan – es gibt keine zweite
+   * Zug-Geometrie.
+   */
+  private isDynamicBlockerOnPath(
+    startX: number, startY: number,
+    endX: number, endY: number,
+    clearanceRadius: number,
+  ): boolean {
+    const trainBounds = this.computeTrainBounds();
+    if (!trainBounds) return false;
+
+    const line = this.lineOfFireLine.setTo(startX, startY, endX, endY);
+    // Dieselbe 2-px-Toleranz wie in CombatGeometry.hasLineOfSight: ein Körper direkt hinter dem
+    // Ziel sperrt die Linie nicht.
+    const blockDistance = Phaser.Geom.Line.Length(line) - 2;
+    if (blockDistance <= 0) return false;
+
+    const clearance = Math.max(0, clearanceRadius);
+    const rect = this.scratchLineOfFireRect.setTo(
+      trainBounds.x - clearance,
+      trainBounds.y - clearance,
+      trainBounds.width + clearance * 2,
+      trainBounds.height + clearance * 2,
+    );
+    const hit = this.findNearestRectangleHit(line, rect);
+    return hit !== null && hit.distance < blockDistance;
+  }
+
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
 
   private queueHitscanTrace(trace: SyncedHitscanTrace): void {
@@ -2967,6 +3041,14 @@ export class CombatSystem {
    * Berechnet die kombinierte Bounding-Box aller aktiven Zug-Segmente.
    * Behandelt den gesamten Zug (inkl. Lücken) als ein zusammenhängendes Hindernis.
    * Gibt null zurück wenn kein aktives Segment vorhanden.
+   *
+   * Maßgeblich ist der Static-Body: der `TrainManager` schaltet ihn beim Verlassen der Arena und
+   * bei der Zerstörung ab, während die Rechtecke selbst bis zum Rundenende bestehen bleiben. Ohne
+   * diese Prüfung bliebe ein zerstörter Zug als unsichtbarer Blocker auf dem Gleis stehen.
+   *
+   * Die Kanten werden wie im `TrainManager` direkt aus Position und Anzeigemaß gerechnet statt über
+   * `getBounds()`: die Schusslinienprüfung läuft in den Ziel-Schleifen des Host-Frames, und
+   * `getBounds()` legt pro Segment ein neues Rechteck an.
    */
   private computeTrainBounds(): Phaser.Geom.Rectangle | null {
     if (!this.trainSegObjects || this.trainSegObjects.length === 0) return this.clientTrainBounds;
@@ -2975,12 +3057,15 @@ export class CombatSystem {
     let anyActive = false;
     for (const seg of this.trainSegObjects) {
       if (!seg.active) continue;
+      const body = seg.body as Phaser.Physics.Arcade.StaticBody | null;
+      if (body && !body.enable) continue;
       anyActive = true;
-      const b = seg.getBounds();
-      if (b.top    < minY) minY = b.top;
-      if (b.bottom > maxY) maxY = b.bottom;
-      trainX = b.x;
-      trainW = b.width;
+      const halfWidth = seg.displayWidth * 0.5;
+      const halfHeight = seg.displayHeight * 0.5;
+      if (seg.y - halfHeight < minY) minY = seg.y - halfHeight;
+      if (seg.y + halfHeight > maxY) maxY = seg.y + halfHeight;
+      trainX = seg.x - halfWidth;
+      trainW = seg.displayWidth;
     }
     if (!anyActive) return null;
     return this.scratchTrainRect.setTo(trainX, minY, trainW, maxY - minY);

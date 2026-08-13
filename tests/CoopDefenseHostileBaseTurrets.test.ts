@@ -114,7 +114,7 @@ describe('hostile base turrets', () => {
     expect(fire.mock.calls[0][7]).toBe(0);
   });
 
-  it('marks base-mounted turrets as exempt from base line-of-sight blockers', () => {
+  it('marks base-mounted turrets as exempt from base line-of-fire blockers', () => {
     const playerManager = {
       getAllPlayers: () => [{
         id: 'player-a',
@@ -126,9 +126,9 @@ describe('hostile base turrets', () => {
       isBurrowed: () => false,
       canDamageTarget: () => true,
     } as unknown as CombatSystem;
-    const lineOfSight = vi.fn(() => true);
+    const lineOfFire = vi.fn(() => true);
     const turrets = new TurretSystem(playerManager, combatSystem);
-    turrets.setLineOfSightChecker(lineOfSight);
+    turrets.setLineOfFireChecker(lineOfFire);
     turrets.setTurretProvider(() => [{
       id: 'hostile-base:rear-top',
       x: 0,
@@ -146,8 +146,8 @@ describe('hostile base turrets', () => {
       WEAPON_CONFIGS.BASE_SPOREN,
     );
 
-    expect(lineOfSight).toHaveBeenCalledOnce();
-    expect(lineOfSight.mock.calls[0][5]).toBe(true);
+    expect(lineOfFire).toHaveBeenCalledOnce();
+    expect(lineOfFire.mock.calls[0][5]).toBe(true);
   });
 
   it('treats hostile base spores as zombie-faction damage', () => {

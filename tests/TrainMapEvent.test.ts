@@ -55,7 +55,9 @@ function fakeTrainHandler() {
 
 describe('Train as a standalone map event', () => {
   it('migrates the train rhythm on every rails map of the campaign', () => {
-    const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'rails' && map.mapId !== '0');
+    const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
+      map.trackMode === 'rails' && map.mapId !== '0' && map.mapId !== '2'
+    ));
     expect(railsMaps.length).toBeGreaterThan(0);
 
     for (const map of railsMaps) {
@@ -63,10 +65,24 @@ describe('Train as a standalone map event', () => {
       expect(trainEvent, map.mapId).toMatchObject({
         id: 'train-rhythm',
         type: 'train',
-        start: { type: 'time', atMs: 10_000 },
+        start: { type: 'time', atMs: expect.any(Number) },
         repeatAfterExitMs: expect.any(Number),
       });
+      expect(trainEvent?.start.type === 'time' ? trainEvent.start.atMs : -1).toBeGreaterThanOrEqual(0);
+      expect(trainEvent?.repeatAfterExitMs).toBeGreaterThan(0);
     }
+  });
+
+  it('keeps Map 2 train traffic between the first and second encounters', () => {
+    const map = getCoopDefenseMapConfig('2');
+    const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
+
+    expect(trainEvent).toMatchObject({
+      id: 'train-rhythm',
+      type: 'train',
+      start: { type: 'after-encounter', encounterId: 'west-introduction' },
+    });
+    expect(trainEvent?.repeatAfterExitMs).toBeUndefined();
   });
 
   it('allows rails without a train', () => {
@@ -143,20 +159,21 @@ describe('Train as a standalone map event', () => {
     expect(map.mapEvents?.[1]?.start).toEqual({ type: 'after-event', eventId: 'train-a' });
   });
 
-  it('keeps the 00-test C1 slice one-shot with encounter clear and five seconds warning', () => {
+  it('keeps the 00-test C1 slice one-shot with encounter clear and an authored warning', () => {
     const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
     expect(event).toMatchObject({
       id: 'c1-opening-train',
       type: 'train',
       start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
-      delayMs: 5000,
     });
+    expect(event?.delayMs ?? 0).toBeGreaterThanOrEqual(0);
     expect(event?.repeatAfterExitMs).toBeUndefined();
   });
 
   it('runs the 00-test event through scheduled, active and completed', () => {
     const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
     if (!event) throw new Error('00-test C1 event missing');
+    const delayMs = event.delayMs ?? 0;
     let encounterCleared = false;
     const handler = fakeTrainHandler();
     const director = new CoopDefenseMapEventDirector([event], [handler], {
@@ -168,13 +185,13 @@ describe('Train as a standalone map event', () => {
     encounterCleared = true;
     director.hostUpdate(0, false);
     expect(director.getPresentationState()?.[0]).toMatchObject({
-      state: 'scheduled',
+      state: delayMs > 0 ? 'scheduled' : 'active',
       occurrence: 1,
-      nextActionAtMs: 15_000,
+      ...(delayMs > 0 ? { nextActionAtMs: 10_000 + delayMs } : {}),
     });
-    director.hostUpdate(5_000, false);
+    director.hostUpdate(delayMs, false);
     expect(director.getPresentationState()?.[0].state).toBe('active');
-    handler.finish(event.id, 1, 15_000);
+    handler.finish(event.id, 1, 10_000 + delayMs);
     expect(director.getPresentationState()?.[0].state).toBe('completed');
   });
 

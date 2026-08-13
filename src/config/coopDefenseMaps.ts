@@ -355,6 +355,13 @@ export interface CoopDefenseMapPowerUpConfig {
 
 export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
 
+/** Authoring-Position der zweispaltigen vertikalen Gleise. */
+export type CoopDefenseMapTrackPosition =
+  | 'left'
+  | 'center'
+  | 'right'
+  | { readonly kind: 'grid'; readonly gridX: number };
+
 /**
  * Startbedingung der ersten Zugeinfahrt. Bewusst als getaggte Union wie
  * {@link CoopDefenseMapEncounterStart}, damit später semantische Auslöser (`boss-phase`,
@@ -533,6 +540,8 @@ export interface CoopDefenseMapConfig {
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
   readonly trackMode?: CoopDefenseMapTrackMode;
+  /** Position der zweispaltigen Gleise; Standard `center`. `gridX` bezeichnet die linke Spalte. */
+  readonly trackPosition?: CoopDefenseMapTrackPosition;
   /** Authored Map-Events; Gleise ohne Zug-Event bleiben erlaubt. */
   readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
   /**
@@ -860,6 +869,11 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   );
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, { bases, boss });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
+  const trackPosition = normalizeTrackPosition(
+    mapConfig.mapId,
+    mapConfig.trackPosition,
+    arenaWidthCells,
+  );
   const mapEvents = normalizeMapEvents(
     mapConfig.mapId,
     mapConfig.mapEvents,
@@ -900,6 +914,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     trackMode,
+    trackPosition,
     mapEvents,
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
@@ -2354,6 +2369,32 @@ function normalizeTimeOfDayValue(mapId: string, timeOfDay: string | undefined): 
     throw new Error(`[coopDefenseMaps] Invalid timeOfDay in map ${mapId}: ${timeOfDay} (expected "HH:MM")`);
   }
   return formatTimeOfDay(minutes);
+}
+
+function normalizeTrackPosition(
+  mapId: string,
+  trackPosition: CoopDefenseMapTrackPosition | undefined,
+  arenaWidthCells: number,
+): CoopDefenseMapTrackPosition {
+  if (trackPosition === undefined) return 'center';
+  if (trackPosition === 'left' || trackPosition === 'center' || trackPosition === 'right') {
+    return trackPosition;
+  }
+  if (
+    trackPosition?.kind !== 'grid'
+    || !Number.isFinite(trackPosition.gridX)
+    || !Number.isInteger(trackPosition.gridX)
+    || trackPosition.gridX < 0
+    || trackPosition.gridX >= arenaWidthCells - 1
+  ) {
+    throw new Error(
+      `[coopDefenseMaps] Invalid trackPosition on map ${mapId}; expected left, center, right or a gridX within the two-column arena footprint`,
+    );
+  }
+  return {
+    kind: 'grid',
+    gridX: trackPosition.gridX,
+  };
 }
 
 function normalizeRockFieldConfig(

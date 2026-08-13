@@ -8,7 +8,7 @@ vi.mock('phaser', () => ({
 import { ShadowSystem } from '../src/effects/ShadowSystem';
 import type { ArenaLayout } from '../src/types';
 
-interface BakeEvent { depth: number; fills: number; draws: number; visible: boolean }
+interface BakeEvent { depth: number; fills: number; draws: number; visible: boolean; width: number; height: number }
 
 function makeScene() {
   const bakes: BakeEvent[] = [];
@@ -28,13 +28,13 @@ function makeScene() {
     return g;
   };
 
-  const makeRenderTexture = () => {
-    const event: BakeEvent = { depth: 0, fills: 0, draws: 0, visible: true };
+  const makeRenderTexture = (_x: number, _y: number, width: number, height: number) => {
+    const event: BakeEvent = { depth: 0, fills: 0, draws: 0, visible: true, width, height };
     bakes.push(event);
     const rt: Record<string, unknown> = {
       camera: { setScroll: () => undefined },
     };
-    for (const name of ['setOrigin', 'setBlendMode', 'setMask', 'clearMask',
+    for (const name of ['setOrigin', 'setPosition', 'setBlendMode', 'setMask', 'clearMask',
       'render', 'clear', 'destroy']) {
       rt[name] = () => rt;
     }
@@ -99,6 +99,22 @@ describe('static shadow baking', () => {
     const treeDepths = changed.map((bake) => bake.depth);
     // Kronen liegen deutlich hoeher (nahe DEPTH.CANOPY) als Fels-/Stamm-Schatten.
     for (const depth of treeDepths) expect(depth).toBeLessThan(15);
+  });
+
+  it('rebuilds a known rock change through bounded scratch chunks', () => {
+    const { scene, bakes } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaLayout = layout(20, 2);
+    const rockObjects = Array.from({ length: 20 }, () => ({ active: true }));
+    const arenaResult = { rockObjects } as never;
+
+    shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
+    const treeDraws = bakes.filter((bake) => bake.depth >= 15).map((bake) => bake.draws);
+    rockObjects[4].active = false;
+    shadows.rebuildArenaStaticShadowRegions(arenaLayout, arenaResult, new Set([4]));
+
+    expect(bakes.some((bake) => bake.width === 128 && bake.height === 128)).toBe(true);
+    expect(bakes.filter((bake) => bake.depth >= 15).map((bake) => bake.draws)).toEqual(treeDraws);
   });
 
   it('blanks and hides baked layers on teardown so no shadows survive into the lobby', () => {

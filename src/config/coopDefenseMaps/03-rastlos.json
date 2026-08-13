@@ -5,6 +5,7 @@
   "timeOfDay": "17:00",
   "tutorialText": "Nicht alle Gegner greifen die Basis an. Manche jagen gezielt euch – erkennt gefährliche Gegner früh und setzt Prioritäten.",
   "rockFillRatio": 0.4,
+  "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -54,13 +55,13 @@
     {
       "id": "restless-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 6500,
+      "restAfterMs": 5000,
       "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
     },
     {
       "id": "restless-mix",
       "start": { "type": "after-previous" },
-      "restAfterMs": 7500,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "demon-badger", "count": 6, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "east" }

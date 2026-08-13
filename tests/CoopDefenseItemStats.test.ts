@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
+import { HP_MAX } from '../src/config';
+import { getCoopDefenseClassDefinition } from '../src/config/coopDefenseClasses';
 import { getCoopDefenseCommittedEffectTotals } from '../src/utils/coopDefenseItemEffects';
 import { resolveCoopDefenseStat } from '../src/utils/coopDefenseStats';
 import {
@@ -54,7 +56,7 @@ describe('equipped items in the runtime stat pipeline', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('p', commit({ equippedItems: [item({ baseValue: 30 })] }));
 
-    expect(system.getMaxHp('p')).toBe(130);
+    expect(system.getMaxHp('p')).toBe(HP_MAX + 30);
   });
 
   it('adds item affixes to the same buckets the upgrade tree uses', () => {
@@ -109,9 +111,10 @@ describe('equipped items in the runtime stat pipeline', () => {
       coopDefenseProfile: buildDefaultCoopDefenseUpgradeProfile('dachs_nukem'),
       equippedItems: [gloves],
     }));
-    // Nukem: 1.5 Klassenschaden * 1.15 aus der Ausruestung.
+    const nukem = getCoopDefenseClassDefinition('dachs_nukem');
+    const itemDamageMultiplier = 1 + gloves.baseValue + (gloves.affixes[0]?.value ?? 0);
     expect(withClass.resolveOutgoingDamage('p', 'enemy', 100, false, () => 0.5).amount)
-      .toBeCloseTo(172.5, 10);
+      .toBeCloseTo(100 * nukem.outgoingDamageMultiplier * itemDamageMultiplier, 10);
   });
 
   it('passes a full set of the same stat through without a ceiling', () => {
@@ -133,10 +136,10 @@ describe('equipped items in the runtime stat pipeline', () => {
   it('keeps modifiers when only items are committed and drops them when nothing is', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('p', commit({ coopDefenseProfile: null, equippedItems: [item({ baseValue: 30 })] }));
-    expect(system.getMaxHp('p')).toBe(130);
+    expect(system.getMaxHp('p')).toBe(HP_MAX + 30);
 
     system.syncPlayer('p', commit({ coopDefenseProfile: null, equippedItems: [] }));
-    expect(system.getMaxHp('p')).toBe(100);
+    expect(system.getMaxHp('p')).toBe(HP_MAX);
   });
 
   it('resolves identically on the host and on the client path', () => {
@@ -201,7 +204,7 @@ describe('equipped items at the network boundary', () => {
     expect(sanitizeCoopDefenseEquippedItems(undefined)).toEqual([]);
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('p', commit());
-    expect(system.getMaxHp('p')).toBe(100);
+    expect(system.getMaxHp('p')).toBe(HP_MAX);
   });
 
   it('still loads items that were stored before the affix pool grew', () => {

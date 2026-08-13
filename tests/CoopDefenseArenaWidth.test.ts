@@ -21,8 +21,8 @@ describe('Coop defense arena width', () => {
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'LOBBY');
   });
 
-  it('generates the enlarged test map inside a 90-column grid', () => {
-    expect(GRID_COLS).toBe(90);
+  it('generates the configured test map inside its column grid', () => {
+    expect(GRID_COLS).toBe(TEST_MAP.arenaWidthCells);
     const layout = ArenaGenerator.generate(47_110, TEST_MAP);
     const cells = [
       ...layout.rocks,

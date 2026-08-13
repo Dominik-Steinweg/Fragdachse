@@ -12,6 +12,7 @@ import {
   getArenaMetricsProfile,
   MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  CELL_SIZE,
   normalizeCoopDefenseArenaHeightCells,
   normalizeCoopDefenseArenaWidthCells,
   applyArenaMetricsForMode,
@@ -24,25 +25,27 @@ describe('Arena metrics profiles', () => {
       arenaWidth: FULL_ARENA_WIDTH,
       arenaOffsetX: 0,
       arenaViewportWidth: GAME_WIDTH,
-      arenaHeight: 1056,
+      arenaHeight: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS * CELL_SIZE,
       arenaOffsetY: ARENA_OFFSET_Y,
       usesDynamicCamera: false,
       showStaticArenaFrames: false,
     });
-    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', 90)).toMatchObject({
-      arenaWidth: 2_880,
-      arenaHeight: 1_056,
+    const intermediateWidthCells = 90;
+    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', intermediateWidthCells)).toMatchObject({
+      arenaWidth: intermediateWidthCells * CELL_SIZE,
+      arenaHeight: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS * CELL_SIZE,
       usesDynamicCamera: true,
     });
-    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', undefined, 52)).toMatchObject({
+    const expandedHeightCells = 52;
+    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', undefined, expandedHeightCells)).toMatchObject({
       arenaWidth: FULL_ARENA_WIDTH,
-      arenaHeight: 1_664,
-      arenaViewportHeight: 1_056,
+      arenaHeight: expandedHeightCells * CELL_SIZE,
+      arenaViewportHeight: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS * CELL_SIZE,
       usesDynamicCamera: true,
     });
-    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', 90, 52)).toMatchObject({
-      arenaWidth: 2_880,
-      arenaHeight: 1_664,
+    expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', intermediateWidthCells, expandedHeightCells)).toMatchObject({
+      arenaWidth: intermediateWidthCells * CELL_SIZE,
+      arenaHeight: expandedHeightCells * CELL_SIZE,
       usesDynamicCamera: true,
     });
     expect(getArenaMetricsProfile(
@@ -76,9 +79,11 @@ describe('Arena metrics profiles', () => {
   });
 
   it('propagates runtime height into world bounds and grid rows', () => {
-    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', 90, 52);
-    expect(ARENA_HEIGHT).toBe(1_664);
-    expect(GRID_ROWS).toBe(52);
+    const widthCells = 90;
+    const heightCells = 52;
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', widthCells, heightCells);
+    expect(ARENA_HEIGHT).toBe(heightCells * CELL_SIZE);
+    expect(GRID_ROWS).toBe(heightCells);
     expect(ARENA_MAX_Y).toBe(ARENA_OFFSET_Y + ARENA_HEIGHT);
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'LOBBY');
   });
@@ -91,7 +96,7 @@ describe('Arena metrics profiles', () => {
         arenaWidth: FULL_ARENA_WIDTH,
         arenaOffsetX: 0,
         arenaViewportWidth: GAME_WIDTH,
-        arenaHeight: 1056,
+        arenaHeight: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS * CELL_SIZE,
         arenaOffsetY: ARENA_OFFSET_Y,
         usesDynamicCamera: false,
         showStaticArenaFrames: false,

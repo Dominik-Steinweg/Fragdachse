@@ -4,6 +4,7 @@
   "arenaWidthCells": 96,
   "timeOfDay": "22:45",
   "rockFillRatio": 0.1,
+  "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",

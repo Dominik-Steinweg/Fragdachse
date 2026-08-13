@@ -400,9 +400,9 @@ export class ProjectileManager {
     this.homingController.setTargetProvider(cb);
   }
 
-  /** Registriert die Host-seitige Line-of-Sight-Prüfung für Homing-Projektile. */
-  setHomingLineOfSightChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
-    this.homingController.setLineOfSightChecker(cb);
+  /** Registriert die Host-seitige Line-of-Fire-Prüfung für Homing-Projektile. */
+  setHomingLineOfFireChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
+    this.homingController.setLineOfFireChecker(cb);
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────

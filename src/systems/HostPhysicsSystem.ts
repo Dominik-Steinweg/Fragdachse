@@ -10,6 +10,7 @@ import {
   DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START, DASH_HOLD_MAX_DURATION_FACTOR,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
+import { isVelocityMoving } from '../loadout/SpreadMath';
 import { getDashBurstTiming } from '../utils/dashTiming';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
@@ -614,9 +615,10 @@ export class HostPhysicsSystem {
           const easeOut = 1 - (1 - t) * (1 - t);
           speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
 
-          // Hitbox sofort auf 50 % Radius (25 % Fläche)
-          player.body.setCircle(PLAYER_SIZE * 0.25);
-          player.sprite.setScale(0.5);
+          // Hitbox sofort auf 50 % Radius (25 % Fläche). setCollisionRadius arbeitet in
+          // Display-Pixeln und kompensiert die Quelltextur-Skalierung des Spieler-Sprites.
+          player.setDashScale(0.5);
+          player.setCollisionRadius(PLAYER_SIZE * 0.25);
           const groundFireDurationMs = this.dashGroundFireDurationResolver?.(player.id) ?? 0;
           if (groundFireDurationMs > 0) {
             this.dashGroundFireHandler?.(
@@ -657,14 +659,14 @@ export class HostPhysicsSystem {
           const easeIn = t * t;
           speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
           const scale = 0.5 + 0.5 * easeIn;
-          player.body.setCircle(PLAYER_SIZE * scale / 2);
-          player.sprite.setScale(scale);
+          player.setDashScale(scale);
+          player.setCollisionRadius(PLAYER_SIZE * scale / 2);
 
           if (elapsed >= recoveryDuration) {
             done = true;
             this.dashStates.delete(player.id);
-            player.body.setCircle(PLAYER_SIZE / 2);
-            player.sprite.setScale(1.0);
+            player.setDashScale(1.0);
+            player.setCollisionRadius(PLAYER_SIZE / 2);
           }
         }
 
@@ -766,6 +768,7 @@ export class HostPhysicsSystem {
       );
       const enemyMovementFactor = Phaser.Math.Clamp(this.enemyMovementFactorResolver?.(enemy.id, now) ?? 1, 0, 1);
       enemyBody.setVelocity(slowed.vx * enemyMovementFactor, slowed.vy * enemyMovementFactor);
+      enemy.setWalking(isVelocityMoving(enemyBody.velocity.x, enemyBody.velocity.y));
       enemy.syncBar();
     }
 

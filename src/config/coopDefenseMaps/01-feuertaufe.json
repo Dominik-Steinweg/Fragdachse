@@ -7,6 +7,7 @@
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "rockFillRatio": 0.3,
+  "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",

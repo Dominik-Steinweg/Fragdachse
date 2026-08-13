@@ -3,6 +3,7 @@ import { CoopDefenseEnemyBurrowSystem } from '../src/systems/CoopDefenseEnemyBur
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { SpawnFront } from '../src/types';
+import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 
 interface FakeEnemy {
   id: string;
@@ -135,19 +136,21 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
 
   it('keeps digging after the tunnel timeout when no safe ground exists', () => {
     const enemy = createEnemy('alien-badger', 0);
+    const tunnelTimeoutMs = getCoopDefenseEnemyConfig('alien-badger').burrow!.spawnTunnelTimeoutMs;
     const { system } = createSystem(enemy, () => false);
     system.notifyEnemySpawned(enemy as unknown as EnemyEntity, 0);
 
     enemy.sprite.x = 900;
-    system.hostUpdate(4999);
+    system.hostUpdate(Math.max(0, tunnelTimeoutMs - 1));
     expect(system.isBurrowed(enemy.id)).toBe(true);
 
-    system.hostUpdate(5000);
+    system.hostUpdate(tunnelTimeoutMs);
     expect(system.isBurrowed(enemy.id)).toBe(true);
   });
 
   it('moves to a bounded safe position before resurfacing after a timeout', () => {
     const enemy = createEnemy('alien-badger', 0);
+    const tunnelTimeoutMs = getCoopDefenseEnemyConfig('alien-badger').burrow!.spawnTunnelTimeoutMs;
     const { system, collisionCalls } = createSystem(
       enemy,
       () => false,
@@ -156,7 +159,7 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     system.notifyEnemySpawned(enemy as unknown as EnemyEntity, 0);
 
     enemy.sprite.x = 900;
-    system.hostUpdate(5000);
+    system.hostUpdate(tunnelTimeoutMs);
 
     expect(enemy.sprite.x).toBe(880);
     expect(enemy.sprite.y).toBe(100);
@@ -166,6 +169,7 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
 
   it('dives under the tracks for at most the configured 2 seconds and keeps normal pathing', () => {
     const enemy = createEnemy('alien-badger', 400);
+    const maxDurationMs = getCoopDefenseEnemyConfig('alien-badger').burrow!.maxDurationMs;
     const { system } = createSystem(enemy, () => true);
 
     expect(system.requestTrainCrossingBurrow(enemy.id, 1000)).toBe(true);
@@ -173,10 +177,10 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     // Beim Gleis-Queren graebt der Gegner nicht stur geradeaus, sondern folgt der Wegfindung.
     expect(system.getForcedDirection(enemy.id)).toBeNull();
 
-    system.hostUpdate(2999);
+    system.hostUpdate(1000 + maxDurationMs - 1);
     expect(system.isBurrowed(enemy.id)).toBe(true);
 
-    system.hostUpdate(3000);
+    system.hostUpdate(1000 + maxDurationMs);
     expect(system.isBurrowed(enemy.id)).toBe(false);
   });
 

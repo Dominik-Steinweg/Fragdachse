@@ -12,9 +12,13 @@ describe('general target vulnerability', () => {
     system.applyVulnerability({ targetType: 'enemy', targetId: 'boss-1' }, 1_000, 1_200);
     system.applyVulnerability({ targetType: 'base', targetId: 'base-red' }, 1_000, 1_200);
 
-    expect(VULNERABILITY_INCOMING_DAMAGE_BONUS).toBe(0.2);
-    expect(system.getIncomingDamageMultiplier({ targetType: 'enemy', targetId: 'boss-1' }, 1_500)).toBe(1.2);
-    expect(system.getIncomingDamageMultiplier({ targetType: 'base', targetId: 'base-red' }, 1_500)).toBe(1.2);
+    expect(VULNERABILITY_INCOMING_DAMAGE_BONUS).toBeGreaterThanOrEqual(0);
+    expect(system.getIncomingDamageMultiplier({ targetType: 'enemy', targetId: 'boss-1' }, 1_500)).toBe(
+      1 + VULNERABILITY_INCOMING_DAMAGE_BONUS,
+    );
+    expect(system.getIncomingDamageMultiplier({ targetType: 'base', targetId: 'base-red' }, 1_500)).toBe(
+      1 + VULNERABILITY_INCOMING_DAMAGE_BONUS,
+    );
     expect(system.getSnapshot(1_500)).toHaveLength(2);
   });
 
@@ -41,7 +45,9 @@ describe('general target vulnerability', () => {
     const client = new TargetStatusSystem();
     client.syncFromSnapshot(host.getSnapshot(12_000));
 
-    expect(client.getIncomingDamageMultiplier({ targetType: 'base', targetId: 'base-red' }, 16_999)).toBe(1.2);
+    expect(client.getIncomingDamageMultiplier({ targetType: 'base', targetId: 'base-red' }, 16_999)).toBe(
+      1 + VULNERABILITY_INCOMING_DAMAGE_BONUS,
+    );
     expect(client.getIncomingDamageMultiplier({ targetType: 'construction', targetId: '42' }, 16_000)).toBe(1);
     expect(client.getSnapshot(17_000)).toEqual([]);
   });

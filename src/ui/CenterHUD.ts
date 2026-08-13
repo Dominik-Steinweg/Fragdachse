@@ -233,6 +233,16 @@ function formatEncounterFronts(fronts: readonly string[] | undefined): string {
   return labels.length > 1 ? labels.join(' + ') : labels[0] ?? 'WEST';
 }
 
+function formatEncounterLabel(
+  sequenceIndex: number,
+  sequenceCount: number,
+  fronts: readonly string[] | undefined,
+): string {
+  const count = Math.max(1, Math.floor(sequenceCount));
+  const index = Math.min(count, Math.max(1, Math.floor(sequenceIndex)));
+  return `WELLE ${index} / ${count}: ${formatEncounterFronts(fronts)}`;
+}
+
 const STACK_BAR_W      = 212;
 const STACK_BAR_H      = 14;
 const STACK_LABEL_H    = 20;
@@ -1364,7 +1374,7 @@ export class CenterHUD {
         topic: 'wave',
         priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
         kicker: `WELLE ${state.sequenceIndex} / ${state.sequenceCount}`,
-        title: `ANGRIFF AUS ${formatEncounterFronts(state.fronts)}`,
+        title: `ANGRIFF AUS ${formatEncounterFronts(state.encounterFronts)}`,
         detail: 'BEREITMACHEN',
         tone: 'wave',
         holdMs: ENCOUNTER_START_ANNOUNCEMENT_HOLD_MS,
@@ -1459,17 +1469,17 @@ export class CenterHUD {
         ? state.sequenceIndex
         : state.sequenceIndex - 1;
     const currentIndex = isDone ? -1 : state.sequenceIndex - 1;
-    const signature = `${count}|${clearedCount}|${currentIndex}|${style.accent}`;
+    const signature = `${count}|${clearedCount}|${currentIndex}|${style.accent}|${state.encounterFronts.join(',')}`;
     if (signature === this.lastEncounterPipSignature) return;
     this.lastEncounterPipSignature = signature;
 
     this.encounterPips.clear();
     if (count > ENCOUNTER_PIP_MAX) {
       // Zu viele Wellen für eine zählbare Leiste – die Position wandert dann in den Kicker.
-      this.encounterKicker.setText(`ANGRIFF ${Math.min(state.sequenceIndex, count)} / ${count}`);
+      this.encounterKicker.setText(formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
       return;
     }
-    this.encounterKicker.setText(formatEncounterFronts(state.fronts));
+    this.encounterKicker.setText(formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
 
     const totalW = count * ENCOUNTER_PIP_W + (count - 1) * ENCOUNTER_PIP_GAP;
     const startX = ENCOUNTER_CONTENT_RIGHT - totalW;

@@ -23,8 +23,21 @@ import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
 import { TimebombFuseRenderer } from '../effects/TimebombFuseRenderer';
+import {
+  getWalkingSheetForStaticTexture,
+  syncBadgerWalkingAnimation,
+  WALKING_IDLE_FRAME,
+  type WalkingSheet,
+} from '../animations/BadgerAnimations';
 
 const TEX_ENEMY_GLOW = '_enemy_glow';
+/**
+ * Restabstand der Client-Interpolation, ab dem ein Gegner als laufend gilt. Clients erhalten
+ * keine Bewegungsflagge; der offene Weg zur Zielposition ist ihr einziges Bewegungssignal. Bei
+ * 20 Hz Snapshots und `NET_SMOOTH_TIME_MS` liegt der Abstand einer laufenden Figur um
+ * Groessenordnungen darueber, waehrend er im Stand gegen null faellt.
+ */
+const WALKING_INTERPOLATION_EPSILON_PX = 0.5;
 /** Kuehles Violett – klar unterscheidbar von Brand (orange) und Void-Brand (lila-rot). */
 const VULNERABLE_MARKER_COLOR = 0xc86bff;
 
@@ -42,7 +55,7 @@ export class EnemyEntity {
   private static readonly ROTATION_OFFSET = Math.PI / 2;
 
   readonly id: string;
-  readonly sprite: Phaser.GameObjects.Image;
+  readonly sprite: Phaser.GameObjects.Sprite;
   readonly kind: CoopDefenseEnemyKind;
   readonly faction: EnemyFaction;
   readonly ownerId?: string;
@@ -86,6 +99,9 @@ export class EnemyEntity {
   private specialActionEndsAt = 0;
   private gaussChargeProgress = 0;
   private gaussAimAngle = 0;
+  /** Walking-Sheet dieser Gegnerart, oder `null` fuer eine statische Darstellung. */
+  private readonly walkingSheet: WalkingSheet | null;
+  private walkingRequested = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -114,7 +130,12 @@ export class EnemyEntity {
     this.targetX = x;
     this.targetY = y;
 
-    this.sprite = scene.add.image(x, y, this.config.imageKey);
+    // Animierte Gegnerarten zeigen im Stand Frame 0 ihres Walking-Sheets; er ist deckungsgleich
+    // mit der statischen Einzeltextur, die Darstellung aendert sich dadurch nicht.
+    this.walkingSheet = getWalkingSheetForStaticTexture(this.config.imageKey);
+    this.sprite = this.walkingSheet
+      ? scene.add.sprite(x, y, this.walkingSheet.textureKey, WALKING_IDLE_FRAME)
+      : scene.add.sprite(x, y, this.config.imageKey);
     this.sprite.setDisplaySize(this.config.size, this.config.size);
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
     if (faction === 'allied') {
@@ -200,6 +221,34 @@ export class EnemyEntity {
     }
   }
 
+  /**
+   * Laufanimation anfordern. Die Darstellung wird zusaetzlich gesperrt, solange der Gegner
+   * eingebuddelt, unsichtbar oder tot ist; statische Gegnerarten ignorieren den Aufruf.
+   */
+  setWalking(walking: boolean): void {
+    if (this.walkingRequested === walking) return;
+    this.walkingRequested = walking;
+    this.syncWalkingAnimation();
+  }
+
+  /**
+   * Client-Ableitung der Laufanimation: Der Gegner laeuft, solange die Interpolation noch
+   * spuerbar hinter der replizierten Zielposition liegt. Der Host setzt stattdessen direkt
+   * `setWalking()` aus der Koerpergeschwindigkeit.
+   */
+  syncWalkingFromInterpolation(): void {
+    const gap = Math.hypot(this.targetX - this.sprite.x, this.targetY - this.sprite.y);
+    this.setWalking(gap > WALKING_INTERPOLATION_EPSILON_PX);
+  }
+
+  private syncWalkingAnimation(): void {
+    if (!this.walkingSheet) return;
+    syncBadgerWalkingAnimation(
+      this.sprite,
+      this.walkingRequested && !this.burrowed && this.sprite.visible && this.currentHp > 0,
+    );
+  }
+
   lerpStep(factor: number): void {
     if (this.authoritative) return;
     this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
@@ -231,6 +280,7 @@ export class EnemyEntity {
     if (((this.faction === 'allied' || !this.config.isBoss) && this.currentHp >= this.maxHp) || this.currentHp <= 0) {
       this.destroyHpBars();
     }
+    if (this.currentHp <= 0) this.syncWalkingAnimation();
   }
 
   getHp(): number {
@@ -396,6 +446,7 @@ export class EnemyEntity {
     this.bossRing?.setVisible(!burrowed);
     this.bossLabel?.setVisible(!burrowed);
     if (burrowed) this.destroyHpBars();
+    this.syncWalkingAnimation();
     this.syncBar();
     return true;
   }

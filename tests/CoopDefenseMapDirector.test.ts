@@ -242,9 +242,11 @@ describe('CoopDefenseMapDirector', () => {
 
     director.hostUpdate(0, false);
     expect(director.getPresentationState()?.fronts).toEqual(['west']);
+    expect(director.getPresentationState()?.encounterFronts).toEqual(['west', 'north']);
 
     director.hostUpdate(600, false);
     expect(director.getPresentationState()?.fronts).toEqual(['west', 'north']);
+    expect(director.getPresentationState()?.encounterFronts).toEqual(['west', 'north']);
 
     director.hostUpdate(900, false);
     expect(director.getPresentationState()?.fronts).toEqual(['west', 'north']);

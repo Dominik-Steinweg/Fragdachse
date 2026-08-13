@@ -58,7 +58,16 @@ interface ShadowLayerBucket {
    * Vollflaechen-Blendpass pro Frame kostet.
    */
   bakedHasContent: boolean;
+  /** Wiederverwendetes lokales Renderziel fuer Dirty-Chunk-Rebakes. */
+  scratch: Phaser.GameObjects.RenderTexture | null;
 }
+
+interface ShadowDirtyChunk {
+  readonly x: number;
+  readonly y: number;
+}
+
+const SHADOW_DIRTY_CHUNK_SIZE = 128;
 
 // ---------------------------------------------------------------------------
 // Pre-computed stadium arc tables.
@@ -279,6 +288,162 @@ export class ShadowSystem {
     this.rebuildStaticTreeShadows(layout, options);
   }
 
+  /**
+   * Rekonstruiert nach bekannten Fels-Aenderungen nur die betroffenen Schatten-Chunks.
+   * Ein weisser Scratch-Chunk ersetzt den entsprechenden Bereich des persistenten Bakes;
+   * dadurch bleiben ueberlappende Nachbarschatten korrekt, ohne alle Felsen neu zu zeichnen.
+   */
+  rebuildArenaStaticShadowRegions(
+    layout: ArenaLayout | null,
+    arenaResult: ArenaBuilderResult | null,
+    dirtyRockIds: ReadonlySet<number>,
+    runtimeRocks: readonly SyncedPlaceableRock[] = [],
+  ): void {
+    if (!layout || !arenaResult || dirtyRockIds.size === 0) return;
+    if (this.lastStaticLayout !== layout) {
+      this.rebuildArenaStaticShadows(layout, arenaResult, runtimeRocks);
+      return;
+    }
+    const requiredDepths = new Set<number>([SHADOW_CASTERS.rock.layerDepth]);
+    if (runtimeRocks.some((rock) => rock.kind === 'turret')) {
+      requiredDepths.add(SHADOW_CASTERS.turret.layerDepth);
+    }
+    for (const depth of requiredDepths) {
+      const bucket = this.layers.get(depth.toFixed(3));
+      if (!bucket?.baked || bucket.group !== 'rocks') {
+        this.rebuildArenaStaticShadows(layout, arenaResult, runtimeRocks);
+        return;
+      }
+    }
+
+    const options: StaticShadowLayoutBuildOptions = {
+      offsetX: ARENA_OFFSET_X,
+      offsetY: ARENA_OFFSET_Y,
+      runtimeRocks,
+      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockObjects[index]?.active),
+    };
+    this.lastStaticOptions = options;
+    const runtimeById = new Map<number, SyncedPlaceableRock>();
+    for (const rock of runtimeRocks) runtimeById.set(rock.id, rock);
+    const chunks = this.collectDirtyShadowChunks(layout, dirtyRockIds);
+    if (chunks.length === 0) return;
+
+    for (const [key, bucket] of this.layers) {
+      if (bucket.group !== 'rocks' || !bucket.baked) continue;
+      const depth = Number(key);
+      for (const chunk of chunks) {
+        bucket.staticGraphics.clear();
+        for (let id = 0; id < layout.rocks.length; id += 1) {
+          if (!arenaResult.rockObjects[id]?.active) continue;
+          const cell = layout.rocks[id];
+          if (!cell) continue;
+          const worldX = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+          const worldY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+          const rockPreset = SHADOW_CASTERS.rock;
+          if (rockPreset.layerDepth === depth
+            && this.shadowBoundsIntersectChunk(worldX, worldY, rockPreset, chunk)) {
+            this.drawFootprint(bucket.staticGraphics, worldX, worldY, rockPreset);
+          }
+          const runtime = runtimeById.get(id);
+          const turretPreset = SHADOW_CASTERS.turret;
+          if (runtime?.kind === 'turret' && turretPreset.layerDepth === depth
+            && this.shadowBoundsIntersectChunk(worldX, worldY, turretPreset, chunk)) {
+            this.drawFootprint(bucket.staticGraphics, worldX, worldY, turretPreset);
+          }
+        }
+        this.bakeShadowChunk(bucket, chunk);
+      }
+    }
+  }
+
+  private collectDirtyShadowChunks(
+    layout: ArenaLayout,
+    dirtyRockIds: ReadonlySet<number>,
+  ): ShadowDirtyChunk[] {
+    const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
+    const chunks = new Map<string, ShadowDirtyChunk>();
+    for (const id of dirtyRockIds) {
+      const cell = layout.rocks[id];
+      if (!cell) continue;
+      const x = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const y = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+      for (const preset of [SHADOW_CASTERS.rock, SHADOW_CASTERS.turret]) {
+        const casterBounds = this.getShadowBounds(x, y, preset);
+        const minChunkX = Math.floor((Math.max(bounds.minX, casterBounds.minX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
+        const minChunkY = Math.floor((Math.max(bounds.minY, casterBounds.minY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
+        const maxChunkX = Math.floor((Math.min(bounds.maxX - 1, casterBounds.maxX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
+        const maxChunkY = Math.floor((Math.min(bounds.maxY - 1, casterBounds.maxY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
+        for (let cy = minChunkY; cy <= maxChunkY; cy += 1) {
+          for (let cx = minChunkX; cx <= maxChunkX; cx += 1) {
+            const chunkX = bounds.minX + cx * SHADOW_DIRTY_CHUNK_SIZE;
+            const chunkY = bounds.minY + cy * SHADOW_DIRTY_CHUNK_SIZE;
+            chunks.set(`${chunkX}:${chunkY}`, { x: chunkX, y: chunkY });
+          }
+        }
+      }
+    }
+    return [...chunks.values()];
+  }
+
+  private getShadowBounds(x: number, y: number, preset: ShadowCasterConfig): ShadowWorldBounds {
+    const castLength = preset.castHeightPx * preset.stretch * this.profile.lengthMult;
+    const softness = preset.softnessPx * this.profile.softnessMult;
+    const inflate = preset.inflatePx + softness;
+    const radius = Math.max(
+      preset.footprintWidthPx + inflate * 2,
+      preset.footprintHeightPx + inflate * 2,
+    ) * 0.5;
+    const offset = (preset.airborneHeightPx ?? 0) + castLength;
+    const dx = WORLD_SHADOW_CONFIG.lightDirection.x * offset;
+    const dy = WORLD_SHADOW_CONFIG.lightDirection.y * offset;
+    return {
+      minX: Math.min(x, x + dx) - radius,
+      minY: Math.min(y, y + dy) - radius,
+      maxX: Math.max(x, x + dx) + radius,
+      maxY: Math.max(y, y + dy) + radius,
+    };
+  }
+
+  private shadowBoundsIntersectChunk(
+    x: number,
+    y: number,
+    preset: ShadowCasterConfig,
+    chunk: ShadowDirtyChunk,
+  ): boolean {
+    const bounds = this.getShadowBounds(x, y, preset);
+    return bounds.maxX > chunk.x
+      && bounds.minX < chunk.x + SHADOW_DIRTY_CHUNK_SIZE
+      && bounds.maxY > chunk.y
+      && bounds.minY < chunk.y + SHADOW_DIRTY_CHUNK_SIZE;
+  }
+
+  private bakeShadowChunk(bucket: ShadowLayerBucket, chunk: ShadowDirtyChunk): void {
+    const worldBounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
+    let scratch = bucket.scratch;
+    if (!scratch) {
+      scratch = this.scene.add.renderTexture(0, 0, SHADOW_DIRTY_CHUNK_SIZE, SHADOW_DIRTY_CHUNK_SIZE);
+      scratch.setOrigin(0, 0);
+      scratch.setVisible(false);
+      bucket.scratch = scratch;
+    }
+    scratch.setPosition(chunk.x, chunk.y);
+    scratch.camera.setScroll(chunk.x, chunk.y);
+    scratch.clear();
+    scratch.fill(0xffffff, 1);
+    bucket.staticGraphics.setVisible(true);
+    scratch.draw(bucket.staticGraphics);
+    scratch.render();
+    bucket.staticGraphics.setVisible(false);
+
+    const localX = chunk.x - worldBounds.minX;
+    const localY = chunk.y - worldBounds.minY;
+    bucket.baked?.clear(localX, localY, SHADOW_DIRTY_CHUNK_SIZE, SHADOW_DIRTY_CHUNK_SIZE);
+    scratch.setVisible(true);
+    bucket.baked?.draw(scratch);
+    bucket.baked?.render();
+    scratch.setVisible(false);
+  }
+
   syncDynamicShadows(
     players: readonly PlayerEntity[],
     projectiles: readonly ShadowProjectileSample[],
@@ -341,6 +506,7 @@ export class ShadowSystem {
       bucket.staticGraphics.destroy();
       bucket.dynamicGraphics.destroy();
       bucket.baked?.destroy();
+      bucket.scratch?.destroy();
     }
     this.layers.clear();
     this.unsubscribeQuality?.();
@@ -591,7 +757,14 @@ export class ShadowSystem {
     dynamicGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.applyMask(dynamicGraphics);
 
-    const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, baked: null, group, bakedHasContent: false };
+    const bucket: ShadowLayerBucket = {
+      staticGraphics,
+      dynamicGraphics,
+      baked: null,
+      group,
+      bakedHasContent: false,
+      scratch: null,
+    };
     this.layers.set(key, bucket);
     return bucket;
   }

@@ -9,6 +9,7 @@ import {
   ARENA_HEIGHT,
   ARENA_MAX_Y,
   ARENA_OFFSET_Y,
+  CELL_SIZE,
   GRID_ROWS,
   applyArenaMetricsForMode,
 } from '../src/config';
@@ -33,8 +34,8 @@ describe('Coop defense arena height', () => {
   });
 
   it('uses the configured Map 8 height for grid, world bounds and generated cells', () => {
-    expect(GRID_ROWS).toBe(52);
-    expect(ARENA_HEIGHT).toBe(52 * 32);
+    expect(GRID_ROWS).toBe(MAP_8.arenaHeightCells);
+    expect(ARENA_HEIGHT).toBe(MAP_8.arenaHeightCells * CELL_SIZE);
     expect(ARENA_MAX_Y).toBe(ARENA_OFFSET_Y + ARENA_HEIGHT);
 
     const layout = ArenaGenerator.generate(81_008, MAP_8);
@@ -65,7 +66,7 @@ describe('Coop defense arena height', () => {
       STANDARD_MAP.arenaWidthCells,
       STANDARD_MAP.arenaHeightCells,
     );
-    expect(GRID_ROWS).toBe(33);
-    expect(ARENA_HEIGHT).toBe(1_056);
+    expect(GRID_ROWS).toBe(STANDARD_MAP.arenaHeightCells);
+    expect(ARENA_HEIGHT).toBe(STANDARD_MAP.arenaHeightCells * CELL_SIZE);
   });
 });

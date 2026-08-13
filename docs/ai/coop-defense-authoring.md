@@ -7,6 +7,8 @@ Coop-Maps sind authored Daten. Die JSON-Dateien unter src/config/coopDefenseMaps
 CoopDefenseMapConfig bündelt Layout und Round-Inhalt:
 
 - Arena-Größe, Zeit-of-day, Tutorial/Layout und optionales Rock-Field;
+- ein authored `rockField` ersetzt die prozedurale CA-Verteilung vollständig: Die Arena wird zugebaut, nur die Korridore werden freigefräst, und es wachsen keine Bäume. Ohne `rockField` steuert `rockFillRatio` die Ausgangsdichte vor dem Smoothing, das die effektive Felsfläche deutlich darunter drückt;
+- sichtbare vertikale Gleise werden über `trackPosition` authored: `left`, `center`, `right` oder `{ kind: "grid", gridX }`; `gridX` bezeichnet die linke Spalte des zweispaltigen Gleis-Fußabdrucks. Der Standard ist `center`, und jede Position muss den bestehenden Basisabstand einhalten;
 - bases, powerUps, persistentSpawns und endliche encounters;
 - optionale secondaryObjectives, boss und mapEvents;
 - genau ein Objective: repel-assault, survive, defeat-boss oder destroy-hostile-bases.
@@ -28,7 +30,7 @@ CoopDefensePersistentPressureSystem taktet dauerhafte Quellen. Eine mapgebundene
 
 CoopDefenseMapEventDirector besitzt den Lifecycle der authored Events train, airstrike und ground-hazard: Trigger, Warnverzögerung, Wiederholung und Presentation-Snapshot. Fachhandler delegieren Bewegung, Schaden und Visuals an die bestehenden Systeme (CoopDefenseTrainEventHandler, CoopDefenseAirstrikeEventHandler, CoopDefenseGroundHazardEventHandler). Ein Event-Handler darf keine eigene Completion- oder Wanduhrlogik neben dem Director führen. Zugmechanik und Zug-UI sind getrennt; Coop-Defense-Züge bleiben aktiv, erzeugen aber keine HUD-Ankündigungen.
 
-Secondary Objectives sind destroy, hold oder carry. Destroy/Hold referenzieren Basen; Carry verwendet authored Spawn-/Delivery-Zonen. Dormante Missionsbasen werden mit genau einem Objective verknüpft und erst durch dessen Lifecycle aktiv. focusUntil steuert HUD-Fokus, nicht automatisch den Abschluss; Hold verwendet holdUntil als Lebens- und Fokusfenster. Objective-Rewards werden über die vorhandenen Objective-/Reward-Systeme verbucht, nicht aus dem HUD.
+Secondary Objectives sind destroy, hold oder carry. Destroy/Hold referenzieren Basen; Carry verwendet authored Spawn-/Delivery-Zonen. Jede so referenzierte Basis muss `dormant` sein, und dormante Missionsbasen werden mit genau einem Objective verknüpft und erst durch dessen Lifecycle aktiv. focusUntil steuert HUD-Fokus, nicht automatisch den Abschluss; Hold verwendet holdUntil als Lebens- und Fokusfenster. Objective-Rewards werden über die vorhandenen Objective-/Reward-Systeme verbucht, nicht aus dem HUD.
 
 ## Zeitbasis
 

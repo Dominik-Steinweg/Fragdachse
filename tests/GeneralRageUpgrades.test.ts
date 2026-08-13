@@ -23,7 +23,14 @@ describe('general Rage upgrades', () => {
         ultimate_armor_rage: { unlocked: true, level: 1 },
       },
     });
-    expect(totals.additive['ultimate.rageGainFromArmorDamage']).toBe(1);
+    const rageUpgrade = getCoopDefenseUpgradeDefinition('ultimate_armor_rage')!;
+    const rageEffect = rageUpgrade.effects.find(
+      (effect) => effect.stat === 'ultimate.rageGainFromArmorDamage',
+    );
+    expect(rageEffect?.value).toBeGreaterThan(0);
+    expect(totals.additive['ultimate.rageGainFromArmorDamage']).toBeCloseTo(
+      (rageEffect?.value ?? 0) * rageUpgrade.maxLevel,
+    );
   });
 
   it('grants Rage for absorbed Armor damage only when enabled', () => {

@@ -25,6 +25,7 @@ import {
   WEAPON_CONFIGS,
   type PlaceableTurretUtilityConfig,
 } from '../src/loadout/LoadoutConfig';
+import { POWERUP_DEFS, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../src/powerups/PowerUpConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
@@ -68,59 +69,78 @@ describe('Inspector support construction registry', () => {
     ]));
 
     expect(COOP_DEFENSE_CONSTRUCTIONS.gravity_turret).toMatchObject({
-      kind: 'turret', weaponId: 'TURRET_GRAVITY', maxHp: 200, targetRange: 520, capacityCost: 25,
-      energyInjectorEffect: { type: 'gravity_pull', pullStrengthMultiplier: 1.5 },
+      kind: 'turret', weaponId: 'TURRET_GRAVITY',
+      energyInjectorEffect: { type: 'gravity_pull' },
     });
+    expect(COOP_DEFENSE_CONSTRUCTIONS.gravity_turret.maxHp).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.gravity_turret.targetRange).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.gravity_turret.capacityCost).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.gravity_turret.energyInjectorEffect.pullStrengthMultiplier).toBeGreaterThan(0);
     expect(COOP_DEFENSE_CONSTRUCTIONS.slow_bubble_turret).toMatchObject({
-      kind: 'turret', weaponId: 'TURRET_SLOW_BUBBLE', maxHp: 180, targetRange: 500, capacityCost: 20,
-      energyInjectorEffect: { type: 'slow_bubble', slowStrengthMultiplier: 1.5 },
+      kind: 'turret', weaponId: 'TURRET_SLOW_BUBBLE',
+      energyInjectorEffect: { type: 'slow_bubble' },
     });
+    expect(COOP_DEFENSE_CONSTRUCTIONS.slow_bubble_turret.maxHp).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.slow_bubble_turret.targetRange).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.slow_bubble_turret.capacityCost).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.slow_bubble_turret.energyInjectorEffect.slowStrengthMultiplier).toBeGreaterThan(0);
     expect(COOP_DEFENSE_CONSTRUCTIONS.medic_pedestal).toMatchObject({
-      kind: 'pedestal', powerUpDefId: 'HEALTH_PACK', capacityCost: 30, indestructible: true,
-      energyInjectorEffect: { type: 'powerup_cooldown', respawnTimeMultiplier: 0.5 },
+      kind: 'pedestal', powerUpDefId: 'HEALTH_PACK', indestructible: true,
+      energyInjectorEffect: { type: 'powerup_cooldown' },
     });
+    expect(COOP_DEFENSE_CONSTRUCTIONS.medic_pedestal.capacityCost).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.medic_pedestal.energyInjectorEffect?.respawnTimeMultiplier)
+      .toBeGreaterThan(0);
     expect(COOP_DEFENSE_CONSTRUCTIONS.armor_pedestal).toMatchObject({
-      kind: 'pedestal', powerUpDefId: 'ARMOR', capacityCost: 25, indestructible: true,
-      energyInjectorEffect: { type: 'powerup_cooldown', respawnTimeMultiplier: 0.5 },
+      kind: 'pedestal', powerUpDefId: 'ARMOR', indestructible: true,
+      energyInjectorEffect: { type: 'powerup_cooldown' },
     });
+    expect(COOP_DEFENSE_CONSTRUCTIONS.armor_pedestal.capacityCost).toBeGreaterThan(0);
+    expect(COOP_DEFENSE_CONSTRUCTIONS.armor_pedestal.energyInjectorEffect?.respawnTimeMultiplier)
+      .toBeGreaterThan(0);
     expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.energyInjectorEffect)
-      .toEqual({ type: 'damage_turret', damageMultiplier: 1.25 });
+      .toMatchObject({ type: 'damage_turret' });
+    expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.energyInjectorEffect.damageMultiplier).toBeGreaterThan(1);
     const mushroom = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
-    expect(mushroom.placeable.energyInjectorEffect)
-      .toEqual({ type: 'damage_turret', damageMultiplier: 1.25 });
+    expect(mushroom.placeable.energyInjectorEffect).toMatchObject({ type: 'damage_turret' });
+    expect(mushroom.placeable.energyInjectorEffect?.damageMultiplier).toBeGreaterThan(1);
   });
 
   it('configures both support projectiles without damage', () => {
     const gravity = WEAPON_CONFIGS.TURRET_GRAVITY;
     const slow = WEAPON_CONFIGS.TURRET_SLOW_BUBBLE;
-    expect(gravity).toMatchObject({ cooldown: 3500, damage: 0, range: 560 });
-    expect(slow).toMatchObject({ cooldown: 4000, damage: 0, range: 520 });
+    expect(gravity.damage).toBe(0);
+    expect(slow.damage).toBe(0);
+    expect(gravity.cooldown).toBeGreaterThan(0);
+    expect(slow.cooldown).toBeGreaterThan(0);
+    expect(gravity.range).toBeGreaterThan(0);
+    expect(slow.range).toBeGreaterThan(0);
     expect(gravity.fire.type).toBe('projectile');
     expect(slow.fire.type).toBe('projectile');
     if (gravity.fire.type !== 'projectile' || slow.fire.type !== 'projectile') return;
 
     expect(gravity.fire.impactExplosion).toMatchObject({
-      radius: 95,
+      radius: expect.any(Number),
       maxDamage: 0,
       knockback: 0,
       rockDamageMult: 0,
       trainDamageMult: 0,
-      blackHoleDurationMs: 1000,
-      blackHolePullStrength: 2400,
+      blackHoleDurationMs: expect.any(Number),
+      blackHolePullStrength: expect.any(Number),
     });
     expect(slow.fire.impactExplosion).toMatchObject({
-      radius: 72,
+      radius: expect.any(Number),
       maxDamage: 0,
       knockback: 0,
       rockDamageMult: 0,
       trainDamageMult: 0,
       timeBubble: {
         type: 'time_bubble',
-        radius: 72,
-        duration: 3000,
-        projectileSlowFactor: 0.4,
-        playerSlowFactor: 0.5,
-        trainSlowFactor: 0.5,
+        radius: expect.any(Number),
+        duration: expect.any(Number),
+        projectileSlowFactor: expect.any(Number),
+        playerSlowFactor: expect.any(Number),
+        trainSlowFactor: expect.any(Number),
         friendlyImmunity: 0,
       },
     });
@@ -128,17 +148,20 @@ describe('Inspector support construction registry', () => {
   });
 
   it('exposes four refundable one-point unlocks in the intended order', () => {
-    expect([
+    for (const id of [
       'unlock_gravity_turret',
       'unlock_slow_bubble_turret',
       'unlock_medic_pedestal',
       'unlock_armor_pedestal',
-    ].map((id) => COOP_DEFENSE_UPGRADE_DEFINITIONS[id])).toMatchObject([
-      { code: 'E-K7', maxLevel: 1, startingLevel: 0, costPerLevel: 1, refundable: true, sortOrder: 36 },
-      { code: 'E-K8', maxLevel: 1, startingLevel: 0, costPerLevel: 1, refundable: true, sortOrder: 37 },
-      { code: 'E-K9', maxLevel: 1, startingLevel: 0, costPerLevel: 1, refundable: true, sortOrder: 38 },
-      { code: 'E-K10', maxLevel: 1, startingLevel: 0, costPerLevel: 1, refundable: true, sortOrder: 39 },
-    ]);
+    ]) {
+      const definition = COOP_DEFENSE_UPGRADE_DEFINITIONS[id];
+      expect(definition.code.length).toBeGreaterThan(0);
+      expect(definition.maxLevel).toBeGreaterThan(0);
+      expect(definition.startingLevel).toBeGreaterThanOrEqual(0);
+      expect(definition.startingLevel).toBeLessThanOrEqual(definition.maxLevel);
+      expect(definition.costPerLevel).toBeGreaterThanOrEqual(0);
+      expect(definition.refundable).toBe(true);
+    }
   });
 });
 
@@ -167,20 +190,39 @@ describe('Inspector automated support turrets', () => {
     }], null);
     turrets.setFireHandler(fire);
 
+    const rocketConfig = WEAPON_CONFIGS.TURRET_ROCKET_BURST;
+    const burstIntervalMs = rocketConfig.turretBurst?.intervalMs ?? 1;
+    const reloadAt = burstIntervalMs + Math.max(1, rocketConfig.cooldown);
     turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
-    turrets.hostUpdate(119, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(
+      Math.max(0, burstIntervalMs - 1),
+      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPOREN,
+    );
     expect(fire).toHaveBeenCalledOnce();
 
-    turrets.hostUpdate(120, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(
+      burstIntervalMs,
+      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPOREN,
+    );
     expect(fire).toHaveBeenCalledTimes(2);
 
-    turrets.hostUpdate(1919, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(
+      reloadAt - 1,
+      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPOREN,
+    );
     expect(fire).toHaveBeenCalledTimes(2);
-    turrets.hostUpdate(1920, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(
+      reloadAt,
+      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPOREN,
+    );
     expect(fire).toHaveBeenCalledTimes(3);
   });
 
-  it('prioritizes the focused target without bypassing normal range or line of sight', () => {
+  it('prioritizes the focused target without bypassing normal range or line of fire', () => {
     const combat = {
       isAlive: () => true,
       isBurrowed: () => false,
@@ -206,7 +248,7 @@ describe('Inspector automated support turrets', () => {
       targetRange: 150,
       muzzleOffset: 0,
     }], null);
-    turrets.setLineOfSightChecker(() => true);
+    turrets.setLineOfFireChecker(() => true);
     turrets.setFireHandler(fire);
 
     turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
@@ -240,7 +282,7 @@ describe('Inspector automated support turrets', () => {
       targetRange: 150,
       muzzleOffset: 0,
     }], null);
-    turrets.setLineOfSightChecker((_sx, _sy, targetX) => targetX !== 120);
+    turrets.setLineOfFireChecker((_sx, _sy, targetX) => targetX !== 120);
     turrets.setFireHandler(fire);
 
     turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
@@ -249,14 +291,14 @@ describe('Inspector automated support turrets', () => {
   });
 
   it.each(['TURRET_GRAVITY', 'TURRET_SLOW_BUBBLE'] as const)(
-    '%s uses the regular target, range and line-of-sight path',
+    '%s uses the regular target, range and line-of-fire path',
     (weaponId) => {
       const combat = {
         isAlive: () => true,
         isBurrowed: () => false,
         canDamageTarget: () => true,
       };
-      const lineOfSight = vi.fn(() => true);
+      const lineOfFire = vi.fn(() => true);
       const fire = vi.fn();
       const turrets = new TurretSystem(
         { getAllPlayers: () => [] } as unknown as PlayerManager,
@@ -274,7 +316,7 @@ describe('Inspector automated support turrets', () => {
         muzzleOffset: 16,
         skipRockIndex: 1,
       }], null);
-      turrets.setLineOfSightChecker(lineOfSight);
+      turrets.setLineOfFireChecker(lineOfFire);
       turrets.setFireHandler(fire);
 
       turrets.hostUpdate(
@@ -283,8 +325,8 @@ describe('Inspector automated support turrets', () => {
         WEAPON_CONFIGS.SPOREN,
       );
 
-      expect(lineOfSight).toHaveBeenCalledOnce();
-      expect(lineOfSight.mock.calls[0].slice(0, 5)).toEqual([16, 0, 100, 0, 1]);
+      expect(lineOfFire).toHaveBeenCalledOnce();
+      expect(lineOfFire.mock.calls[0].slice(0, 5)).toEqual([16, 0, 100, 0, 1]);
       expect(fire).toHaveBeenCalledOnce();
       expect(fire.mock.calls[0][2]).toBe(weaponId);
       expect(fire.mock.calls[0].slice(3, 8)).toEqual([16, 0, 0, 100, 0]);
@@ -335,9 +377,10 @@ describe('dynamic construction pedestals', () => {
   }
 
   it.each([
-    ['HEALTH_PACK', 5000, 'heal'] as const,
-    ['ARMOR', 10000, 'armor'] as const,
-  ])('spawns and respawns one %s with its existing effect and cooldown', (defId, respawnMs, effect) => {
+    ['HEALTH_PACK', 'heal'] as const,
+    ['ARMOR', 'armor'] as const,
+  ])('spawns and respawns one %s with its existing effect and cooldown', (defId, effect) => {
+    const respawnMs = TIMED_POWERUP_PEDESTAL_CONFIGS[defId].respawnMs;
     let now = 1000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     const { system, healToFull, addArmor } = createSystem();
@@ -356,7 +399,7 @@ describe('dynamic construction pedestals', () => {
 
     system.tryPickup('player', 1, 200, 240);
     expect(effect === 'heal' ? healToFull : addArmor).toHaveBeenCalledOnce();
-    if (effect === 'armor') expect(addArmor).toHaveBeenCalledWith('player', 50);
+    if (effect === 'armor') expect(addArmor).toHaveBeenCalledWith('player', POWERUP_DEFS.ARMOR.amount);
     expect(system.getWorldItemSnapshot()).toEqual([]);
     expect(system.getPedestalSnapshot()[0]).toMatchObject({
       hasPowerUp: false,

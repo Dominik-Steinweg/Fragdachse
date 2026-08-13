@@ -144,7 +144,7 @@
       "id": "TURRET_ROCKET_BURST",
       "displayName": "Doppelläufige Turmrakete",
       "cooldown": 1800,
-      "damage": 8,
+      "damage": 3,
       "range": 680,
       "turretBurst": {
         "count": 2,
@@ -157,9 +157,9 @@
         "projectileMaxBounces": 0,
         "impactExplosion": {
           "radius": 95,
-          "maxDamage": 26,
-          "minDamage": 5,
-          "knockback": 900,
+          "maxDamage": 14,
+          "minDamage": 2,
+          "knockback": 200,
           "selfDamageMult": 0,
           "rockDamageMult": 0,
           "trainDamageMult": 1,

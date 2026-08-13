@@ -1,5 +1,6 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
+import { COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
+import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import { generateSolidRockFormation } from './SolidRockFormation';
@@ -12,6 +13,7 @@ import type {
   CoopDefenseMapPowerUpConfig,
   CoopDefenseMapRockFieldConfig,
   CoopDefensePowerUpRegion,
+  CoopDefenseMapTrackPosition,
 } from '../config/coopDefenseMaps';
 import {
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
@@ -65,7 +67,15 @@ export class ArenaGenerator {
       );
 
       // --- Gleise zuerst generieren (vor Felsen) ---
-      const generatedTrackLayout = ArenaGenerator.generateTracks(rng);
+      const generatedTrackLayout = ArenaGenerator.generateTracks(
+        rng,
+        // Void-fire keeps its authored centered hazard corridor even though no train track is
+        // rendered. All other Coop maps keep a free cell between the railway and every base.
+        coopMapConfig?.trackMode === 'void-fire' || coopMapConfig === undefined
+          ? []
+          : resolveCoopDefenseBases(coopMapConfig),
+        coopMapConfig?.trackPosition,
+      );
       const trackCols = generatedTrackLayout.trackCols;
       const tracks = coopMapConfig?.trackMode === 'void-fire' ? [] : generatedTrackLayout.tracks;
 
@@ -324,36 +334,86 @@ export class ArenaGenerator {
    * Gibt die Set der gewählten Spalten zurück (für Felsen/Baum-Filter)
    * sowie alle TrackCells (jede Zelle einer Gleis-Spalte).
    */
-  private static generateTracks(rng: () => number): { trackCols: Set<number>; tracks: TrackCell[] } {
-    const trackCols = new Set<number>();
-    const tracks: TrackCell[] = [];
+  private static generateTracks(
+    rng: () => number,
+    bases: readonly BaseSpec[] = [],
+    trackPosition?: CoopDefenseMapTrackPosition,
+  ): { trackCols: Set<number>; tracks: TrackCell[] } {
+    const candidateColumns = Array.from({ length: Math.max(0, GRID_COLS - 1) }, (_, col) => col)
+      .filter((col) => ArenaGenerator.isTrackColumnClearOfBases(col, bases));
 
-    if (usesCenteredTrackSpawn()) {
-      // CTB & Coop-Defense: Gleise exakt in die Mitte der Arena setzen (2 Spalten zentriert)
-      const col = Math.floor((GRID_COLS - 2) / 2);
-      trackCols.add(col);
-      trackCols.add(col + 1);
-      for (let gy = 0; gy < GRID_ROWS; gy++) {
-        tracks.push({ gridX: col, gridY: gy });
+    if (candidateColumns.length === 0) {
+      throw new Error('[ArenaGenerator] Keine Gleisspalte mit ausreichendem Abstand zu den Basen verfügbar');
+    }
+
+    const authoredPosition = trackPosition ?? (usesCenteredTrackSpawn() ? 'center' : undefined);
+    if (typeof authoredPosition === 'object' && authoredPosition.kind === 'grid') {
+      const col = authoredPosition.gridX;
+      if (!candidateColumns.includes(col)) {
+        throw new Error(
+          `[ArenaGenerator] Authored trackPosition gridX ${col} overlaps a base or its clearance on the current map`,
+        );
       }
-      return { trackCols, tracks };
+      return ArenaGenerator.buildTrackLayout(col);
     }
 
-    const available: number[] = [];
-    for (let c = TRACK_SPAWN_MIN_COL; c <= TRACK_SPAWN_MAX_COL; c++) {
-      available.push(c);
+    if (authoredPosition === 'left' || authoredPosition === 'right') {
+      const available = ArenaGenerator.getMiddleTrackColumns(candidateColumns);
+      if (available.length === 0) {
+        throw new Error(
+          `[ArenaGenerator] No safe ${authoredPosition} track position is available within the authored middle zone`,
+        );
+      }
+      const col = authoredPosition === 'left'
+        ? available[0]
+        : available[available.length - 1];
+      return ArenaGenerator.buildTrackLayout(col);
     }
+
+    if (authoredPosition === 'center') {
+      // CTB & Coop-Defense: Gleise bevorzugt in die Mitte der Arena setzen (2 Spalten zentriert).
+      // Wenn dort eine Basis liegt, wird die nächstgelegene sichere Spalte verwendet.
+      const centeredCol = Math.floor((GRID_COLS - 2) / 2);
+      const col = candidateColumns.reduce((best, candidate) => (
+        Math.abs(candidate - centeredCol) < Math.abs(best - centeredCol) ? candidate : best
+      ), candidateColumns[0]);
+      return ArenaGenerator.buildTrackLayout(col);
+    }
+
+    const available = ArenaGenerator.getAvailableTrackColumns(candidateColumns);
     ArenaGenerator.shuffle(available, rng);
 
-    for (let i = 0; i < Math.min(TRACK_COUNT, available.length); i++) {
-      const col = available[i];
-      trackCols.add(col);
-      trackCols.add(col + 1);
-      for (let gy = 0; gy < GRID_ROWS; gy++) {
-        tracks.push({ gridX: col, gridY: gy });
-      }
+    return ArenaGenerator.buildTrackLayout(available[0]);
+  }
+
+  private static getAvailableTrackColumns(candidateColumns: readonly number[]): number[] {
+    const available = ArenaGenerator.getMiddleTrackColumns(candidateColumns);
+    return available.length > 0 ? available : [...candidateColumns];
+  }
+
+  private static getMiddleTrackColumns(candidateColumns: readonly number[]): number[] {
+    return candidateColumns.filter((col) => (
+      col >= TRACK_SPAWN_MIN_COL && col <= TRACK_SPAWN_MAX_COL
+    ));
+  }
+
+  private static buildTrackLayout(col: number): { trackCols: Set<number>; tracks: TrackCell[] } {
+    const trackCols = new Set([col, col + 1]);
+    const tracks: TrackCell[] = [];
+    for (let gy = 0; gy < GRID_ROWS; gy++) {
+      tracks.push({ gridX: col, gridY: gy });
     }
     return { trackCols, tracks };
+  }
+
+  /** Der Gleis-Fußabdruck umfasst zwei Rasterspalten; dazwischen bleibt eine freie Zelle. */
+  private static isTrackColumnClearOfBases(col: number, bases: readonly BaseSpec[]): boolean {
+    const trackMinX = col;
+    const trackMaxX = col + 1;
+    return bases.every((base) => (
+      trackMaxX < base.region.minGridX - COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS
+      || trackMinX > base.region.maxGridX + COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS
+    ));
   }
 
   /**

@@ -140,6 +140,8 @@ export function stampBlobSurfaceMottle(
   mottle: BlobSurfaceMottleConfig,
   cells: readonly { gridX: number; gridY: number }[],
   layerIndex = 0,
+  drawOffsetX = 0,
+  drawOffsetY = 0,
 ): void {
   if (cells.length === 0) return;
   const key = ensureBlobSurfaceMottleTexture(scene, profile, mottle, layerIndex);
@@ -156,8 +158,8 @@ export function stampBlobSurfaceMottle(
         layer.stamp(
           key,
           undefined,
-          (gridX + hash01(gridX, gridY, salt + 2)) * CELL_SIZE,
-          (gridY + hash01(gridX, gridY, salt + 3)) * CELL_SIZE,
+          (gridX + hash01(gridX, gridY, salt + 2)) * CELL_SIZE + drawOffsetX,
+          (gridY + hash01(gridX, gridY, salt + 3)) * CELL_SIZE + drawOffsetY,
           {
             alpha: pass.alpha,
             rotation: hash01(gridX, gridY, salt + 4) * Math.PI * 2,
@@ -171,6 +173,21 @@ export function stampBlobSurfaceMottle(
       }
     }
   }
+}
+
+/**
+ * Maximaler Ueberstand eines Mottle-Stamps ueber seine Quellzelle hinaus.
+ *
+ * Dirty-Region-Bakes koennen damit Quellzellen konservativ vorfiltern, ohne wieder alle
+ * Felsen der Arena zu stempeln. Die Stamp-Mitte liegt innerhalb der Zelle; der Radius ergibt
+ * sich aus `maxScale * CELL_SIZE / 2` und ist unabhaengig von der Texturaufloesung.
+ */
+export function getBlobSurfaceMottleReachPx(profile: BlobSurfaceProfile): number {
+  let maxScale = 0;
+  for (const mottle of [profile.mottle, ...(profile.additionalMottleLayers ?? [])]) {
+    for (const pass of mottle.passes) maxScale = Math.max(maxScale, pass.maxScale);
+  }
+  return maxScale * CELL_SIZE * 0.5;
 }
 
 /** Bakes and silhouette-clips the profile-selected material layers for any 47-Blob surface. */

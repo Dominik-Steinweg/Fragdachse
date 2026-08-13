@@ -19,7 +19,11 @@ import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { ROCK_BLOB_SURFACE_PROFILE, DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { multiplyTint, resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
-import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
+import {
+  bakeBlobSurfaceMottle,
+  getBlobSurfaceMottleReachPx,
+  stampBlobSurfaceMottle,
+} from './BlobSurfaceMottle';
 import { RockGridIndex } from './RockGridIndex';
 import {
   ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
@@ -115,7 +119,23 @@ export interface ArenaBuilderResult {
    * zu allokieren waere auf den breiten Karten ein spuerbarer Ruckler.
    */
   rockSilhouetteCutout: Phaser.GameObjects.RenderTexture | null;
+  /** Wiederverwendete, kleine Renderziele fuer lokale Fels-Overlay-Updates. */
+  rockOverlayScratch: RockOverlayScratch | null;
 }
+
+interface RockOverlayScratch {
+  cutout: Phaser.GameObjects.RenderTexture;
+  cutoutImage: Phaser.GameObjects.Image;
+  mottleLayers: Phaser.GameObjects.RenderTexture[];
+  decal: Phaser.GameObjects.RenderTexture;
+}
+
+interface RockOverlayChunk {
+  localX: number;
+  localY: number;
+}
+
+const ROCK_OVERLAY_CHUNK_SIZE = 128;
 
 /** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
 export interface DirtStamp {
@@ -278,6 +298,7 @@ export class ArenaBuilder {
       rockDecalLayer: null,
       rockMottleLayers: [],
       rockSilhouetteCutout: null,
+      rockOverlayScratch: null,
     };
 
     // Erst nach dem Erzeugen der Live-Felsen backen, damit die Layer exakt die aktiven
@@ -352,8 +373,30 @@ export class ArenaBuilder {
    * Schatten (`RockVisualHelper.refreshObstacleVisuals()`) und nicht in die einzelnen
    * Spawn-/Destroy-Pfade, die jeweils nur ihren eigenen Fels kennen.
    */
-  static refreshRockSurfaceTints(result: ArenaBuilderResult, layout: ArenaLayout): void {
-    for (let id = 0; id < layout.rocks.length; id += 1) {
+  static refreshRockSurfaceTints(
+    result: ArenaBuilderResult,
+    layout: ArenaLayout,
+    dirtyRockIds?: ReadonlySet<number>,
+  ): void {
+    let ids: Iterable<number>;
+    if (dirtyRockIds) {
+      const affected = new Set<number>();
+      for (const dirtyId of dirtyRockIds) {
+        const cell = layout.rocks[dirtyId];
+        if (!cell) continue;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const id = result.rockGrid.getIndex(cell.gridX + dx, cell.gridY + dy);
+            if (id >= 0) affected.add(id);
+          }
+        }
+      }
+      ids = affected;
+    } else {
+      ids = layout.rocks.keys();
+    }
+
+    for (const id of ids) {
       const img = result.rockObjects[id];
       if (!img?.active) continue;
       ArenaBuilder.applyRockTint(
@@ -541,6 +584,211 @@ export class ArenaBuilder {
     }
   }
 
+  /**
+   * Backt nur die Chunks neu, deren Felszellen oder Autotile-Nachbarn sich geaendert haben.
+   * Die persistenten Arena-Layer bleiben bestehen; kleine Scratch-RenderTextures schneiden
+   * Mottle und Decals exakt auf den Chunk zu und verhindern damit Doppel-Blending ausserhalb
+   * der Dirty-Region.
+   */
+  static rebuildRockOverlayRegions(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    layout: ArenaLayout,
+    dirtyRockIds: ReadonlySet<number>,
+    worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
+  ): void {
+    if (dirtyRockIds.size === 0 || result.rockMottleLayers.length === 0) return;
+    const chunks = ArenaBuilder.collectRockOverlayChunks(layout, dirtyRockIds, worldFrame);
+    if (chunks.length === 0) return;
+
+    const scratch = ArenaBuilder.ensureRockOverlayScratch(scene, result);
+    const configs = [ROCK_BLOB_SURFACE_PROFILE.mottle, ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? [])];
+    const reach = getBlobSurfaceMottleReachPx(ROCK_BLOB_SURFACE_PROFILE);
+    const activeRockIds = new Set<number>();
+    for (let id = 0; id < layout.rocks.length; id += 1) {
+      if (result.rockObjects[id]?.active) activeRockIds.add(id);
+    }
+
+    for (const chunk of chunks) {
+      const worldX = worldFrame.offsetX + chunk.localX;
+      const worldY = worldFrame.offsetY + chunk.localY;
+      const chunkMaxX = chunk.localX + ROCK_OVERLAY_CHUNK_SIZE;
+      const chunkMaxY = chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
+      const silhouetteImages: Phaser.GameObjects.Image[] = [];
+      const sourceCells: RockCell[] = [];
+
+      for (const id of activeRockIds) {
+        const cell = layout.rocks[id];
+        const image = result.rockObjects[id];
+        if (!cell || !image) continue;
+        const cellMinX = cell.gridX * CELL_SIZE;
+        const cellMinY = cell.gridY * CELL_SIZE;
+        const cellMaxX = cellMinX + CELL_SIZE;
+        const cellMaxY = cellMinY + CELL_SIZE;
+        if (cellMaxX > chunk.localX && cellMinX < chunkMaxX
+          && cellMaxY > chunk.localY && cellMinY < chunkMaxY) {
+          silhouetteImages.push(image);
+        }
+        if (cellMaxX + reach > chunk.localX && cellMinX - reach < chunkMaxX
+          && cellMaxY + reach > chunk.localY && cellMinY - reach < chunkMaxY) {
+          sourceCells.push(cell);
+        }
+      }
+
+      scratch.cutout.setPosition(worldX, worldY);
+      scratch.cutout.camera.setScroll(worldX, worldY);
+      scratch.cutout.clear();
+      scratch.cutout.fill(0x000000, 1);
+      if (silhouetteImages.length > 0) scratch.cutout.erase(silhouetteImages);
+      scratch.cutout.render();
+
+      for (let layerIndex = 0; layerIndex < configs.length; layerIndex += 1) {
+        const layer = result.rockMottleLayers[layerIndex];
+        const scratchLayer = scratch.mottleLayers[layerIndex];
+        if (!layer || !scratchLayer) continue;
+        scratchLayer.setPosition(worldX, worldY);
+        scratchLayer.clear();
+        stampBlobSurfaceMottle(
+          scene,
+          scratchLayer,
+          ROCK_BLOB_SURFACE_PROFILE,
+          configs[layerIndex],
+          sourceCells,
+          layerIndex,
+          -chunk.localX,
+          -chunk.localY,
+        );
+        scratchLayer.render();
+        scratchLayer.erase(scratch.cutoutImage);
+        scratchLayer.render();
+
+        layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+        scratchLayer.setVisible(true);
+        layer.draw(scratchLayer);
+        layer.render();
+        scratchLayer.setVisible(false);
+      }
+    }
+
+    ArenaBuilder.rebuildRockDecalRegions(scene, result, layout, dirtyRockIds, activeRockIds, worldFrame, scratch);
+  }
+
+  private static collectRockOverlayChunks(
+    layout: ArenaLayout,
+    dirtyRockIds: ReadonlySet<number>,
+    worldFrame: RockWorldFrame,
+  ): RockOverlayChunk[] {
+    const chunks = new Map<string, RockOverlayChunk>();
+    for (const id of dirtyRockIds) {
+      const cell = layout.rocks[id];
+      if (!cell) continue;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const localX = (cell.gridX + dx) * CELL_SIZE;
+          const localY = (cell.gridY + dy) * CELL_SIZE;
+          if (localX < 0 || localY < 0 || localX >= worldFrame.width || localY >= worldFrame.height) continue;
+          const chunkX = Math.floor(localX / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
+          const chunkY = Math.floor(localY / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
+          chunks.set(`${chunkX}:${chunkY}`, { localX: chunkX, localY: chunkY });
+        }
+      }
+    }
+    return [...chunks.values()];
+  }
+
+  private static ensureRockOverlayScratch(scene: Phaser.Scene, result: ArenaBuilderResult): RockOverlayScratch {
+    if (result.rockOverlayScratch) return result.rockOverlayScratch;
+    const makeScratch = (): Phaser.GameObjects.RenderTexture => {
+      const target = scene.add.renderTexture(0, 0, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+      target.setOrigin(0, 0);
+      target.setVisible(false);
+      return target;
+    };
+    const cutout = makeScratch();
+    const cutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, cutout.texture.key).setOrigin(0, 0);
+    const mottleLayers = [ROCK_BLOB_SURFACE_PROFILE.mottle, ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? [])]
+      .map(() => makeScratch());
+    result.rockOverlayScratch = { cutout, cutoutImage, mottleLayers, decal: makeScratch() };
+    return result.rockOverlayScratch;
+  }
+
+  private static rebuildRockDecalRegions(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    layout: ArenaLayout,
+    dirtyRockIds: ReadonlySet<number>,
+    activeRockIds: ReadonlySet<number>,
+    worldFrame: RockWorldFrame,
+    scratch: RockOverlayScratch,
+  ): void {
+    const affected = (layout.decals ?? []).filter((decal) =>
+      (decal.surface ?? 'ground') === 'rock'
+      && decal.rockIds?.some((id) => dirtyRockIds.has(id)),
+    );
+    if (affected.length === 0) return;
+
+    const chunks = new Map<string, RockOverlayChunk>();
+    for (const decal of affected) {
+      const size = decal.displaySize ?? CELL_SIZE;
+      const radius = size * Math.SQRT1_2;
+      const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
+      const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
+      const minChunkX = Math.floor(Math.max(0, centerX - radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
+      const minChunkY = Math.floor(Math.max(0, centerY - radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
+      const maxChunkX = Math.floor(Math.min(worldFrame.width - 1, centerX + radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
+      const maxChunkY = Math.floor(Math.min(worldFrame.height - 1, centerY + radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
+      for (let y = minChunkY; y <= maxChunkY; y += ROCK_OVERLAY_CHUNK_SIZE) {
+        for (let x = minChunkX; x <= maxChunkX; x += ROCK_OVERLAY_CHUNK_SIZE) {
+          chunks.set(`${x}:${y}`, { localX: x, localY: y });
+        }
+      }
+    }
+
+    for (const chunk of chunks.values()) {
+      const candidates = (layout.decals ?? []).filter((decal) => {
+        if ((decal.surface ?? 'ground') !== 'rock') return false;
+        if (decal.rockIds?.some((id) => !activeRockIds.has(id))) return false;
+        const size = decal.displaySize ?? CELL_SIZE;
+        const radius = size * Math.SQRT1_2;
+        const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
+        const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
+        return centerX + radius > chunk.localX
+          && centerX - radius < chunk.localX + ROCK_OVERLAY_CHUNK_SIZE
+          && centerY + radius > chunk.localY
+          && centerY - radius < chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
+      });
+      const images = ArenaVisualFactory.createRockDecals(
+        scene,
+        candidates,
+        { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
+        activeRockIds,
+      );
+      if (!result.rockDecalLayer && images.length > 0) {
+        result.rockDecalLayer = ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
+      }
+      const layer = result.rockDecalLayer;
+      if (!layer) {
+        for (const image of images) image.destroy();
+        continue;
+      }
+
+      const worldX = worldFrame.offsetX + chunk.localX;
+      const worldY = worldFrame.offsetY + chunk.localY;
+      scratch.decal.setPosition(worldX, worldY);
+      scratch.decal.camera.setScroll(worldX, worldY);
+      scratch.decal.clear();
+      if (images.length > 0) scratch.decal.draw(images);
+      scratch.decal.render();
+      for (const image of images) image.destroy();
+
+      layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+      scratch.decal.setVisible(true);
+      layer.draw(scratch.decal);
+      layer.render();
+      scratch.decal.setVisible(false);
+    }
+  }
+
   /** Arenagrosse RenderTexture in Weltkoordinaten – gemeinsame Grundlage aller gebackenen Layer. */
   private static createArenaLayer(
     scene: Phaser.Scene,
@@ -613,6 +861,14 @@ export class ArenaBuilder {
 
     if (result.rockSilhouetteCutout?.active) result.rockSilhouetteCutout.destroy();
     result.rockSilhouetteCutout = null;
+
+    if (result.rockOverlayScratch) {
+      result.rockOverlayScratch.cutout.destroy();
+      result.rockOverlayScratch.cutoutImage.destroy();
+      for (const layer of result.rockOverlayScratch.mottleLayers) layer.destroy();
+      result.rockOverlayScratch.decal.destroy();
+      result.rockOverlayScratch = null;
+    }
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────

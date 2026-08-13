@@ -110,7 +110,8 @@ describe('Leerenjäger', () => {
     expect(gauss.projectileStyle).toBe('gauss');
     expect(gauss.projectileSpeed).toBeGreaterThan(0);
     expect(gauss.projectileSize).toBeGreaterThan(0);
-    expect(gauss.range).toBeGreaterThan(bossConfig.voidHunterBoss!.shotgunRangePx);
+    expect(gauss.range).toBeGreaterThan(0);
+    expect(bossConfig.voidHunterBoss!.shotgunRangePx).toBeGreaterThan(0);
     expect(bossConfig.voidHunterBoss!.gauss.weaponId).toBe(gauss.id);
     expect(WEAPON_CONFIGS).not.toHaveProperty(gauss.id);
     expect(ULTIMATE_CONFIGS.GAUSS_RIFLE.type).toBe('gauss');

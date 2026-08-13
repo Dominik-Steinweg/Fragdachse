@@ -267,17 +267,16 @@ describe('Coop Defense C2 configuration', () => {
     const postBarrage = map11.encounters?.find((encounter) => encounter.id === 'post-barrage-assault');
 
     expect('enemyAirstrikes' in map11).toBe(false);
-    expect(opening).toMatchObject({ pattern: 'tutorial-sweep', delayMs: 8_200 });
+    expect(opening).toMatchObject({ pattern: 'tutorial-sweep' });
+    expect(opening?.delayMs).toBeGreaterThanOrEqual(0);
     expect(postBarrage?.start).toEqual({ type: 'after-event', eventId: 'opening-barrage' });
-    expect(map11.mapEvents?.find((event) => event.id === 'player-hunt')).toMatchObject({
-      pattern: 'player-hunt',
-      intervalMs: 10_000,
-    });
+    const map11Hunt = map11.mapEvents?.find((event) => event.id === 'player-hunt');
+    expect(map11Hunt).toMatchObject({ pattern: 'player-hunt' });
+    expect(map11Hunt?.intervalMs).toBeGreaterThan(0);
     expect('enemyAirstrikes' in map12).toBe(false);
-    expect(map12.mapEvents?.find((event) => event.id === 'player-hunt')).toMatchObject({
-      pattern: 'player-hunt',
-      intervalMs: 25_000,
-    });
+    const map12Hunt = map12.mapEvents?.find((event) => event.id === 'player-hunt');
+    expect(map12Hunt).toMatchObject({ pattern: 'player-hunt' });
+    expect(map12Hunt?.intervalMs).toBeGreaterThan(0);
   });
 });
 

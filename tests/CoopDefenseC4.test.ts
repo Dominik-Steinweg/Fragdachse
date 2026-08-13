@@ -195,7 +195,14 @@ describe('Coop Defense C4 event integration guards', () => {
 
 describe('Coop Defense C4 campaign validation', () => {
   it('prebuilds every shipped ground-hazard event for a real arena seed', () => {
-    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+    // Maps without ground hazards do not contribute anything to this invariant. Avoiding their
+    // full arena generation keeps this authoring guard focused and prevents it from re-running
+    // unrelated connectivity work for the entire campaign.
+    const mapsWithGroundHazards = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
+      map.mapEvents?.some((event) => event.type === 'ground-hazard') === true
+    ));
+
+    for (const map of mapsWithGroundHazards) {
       testNetwork.mapId = map.mapId;
       applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells);
       const seed = map.mapId === '14'

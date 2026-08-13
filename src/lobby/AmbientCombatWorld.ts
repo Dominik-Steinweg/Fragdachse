@@ -85,7 +85,8 @@ export class AmbientCombatWorld implements WeaponFireSink {
     this.projectiles.setObstacleIndex(deps.world.obstacleIndex);
     this.projectiles.setRockHitCallback((rockId, damage) => this.damageRock(rockId, damage));
     this.projectiles.setAudioSystem(deps.audio);
-    this.projectiles.setHomingLineOfSightChecker((sx, sy, ex, ey) => this.geometry.hasLineOfSight(sx, sy, ex, ey));
+    // In der Lobby gibt es keine beweglichen Blocker; die Schusslinie ist dort die Sichtlinie.
+    this.projectiles.setHomingLineOfFireChecker((sx, sy, ex, ey) => this.geometry.hasLineOfSight(sx, sy, ex, ey));
   }
 
   // ── Zonenwechsel ───────────────────────────────────────────────────────────

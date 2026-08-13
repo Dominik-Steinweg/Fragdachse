@@ -72,31 +72,31 @@ describe('AWP coop-defense upgrades', () => {
     expect(resolved.scopeConfig?.fullScopeViewRadius).toBeCloseTo(
       scaled(totals, 'weapon.AWP.scopeViewRadius', base.scopeConfig?.fullScopeViewRadius ?? 0),
     );
-    expect(resolved.penetrationCount).toBe(
+    expect(resolved.penetrationCount).toBeCloseTo(
       scaled(totals, 'weapon.AWP.penetrationCount', base.penetrationCount ?? 0),
     );
-    expect(resolved.penetrationDamageRetention).toBe(
+    expect(resolved.penetrationDamageRetention).toBeCloseTo(
       scaled(totals, 'weapon.AWP.penetrationDamageRetention', base.penetrationDamageRetention ?? 0),
     );
-    expect(resolved.penetratesRocks).toBe(
+    expect(resolved.penetratesRocks).toBeCloseTo(
       scaled(totals, 'weapon.AWP.penetratesRocks', base.penetratesRocks ?? 0),
     );
-    expect(resolved.awpCharge?.maxDamageBonus).toBe(
+    expect(resolved.awpCharge?.maxDamageBonus).toBeCloseTo(
       scaled(totals, 'weapon.AWP.awpCharge.maxDamageBonus', base.awpCharge?.maxDamageBonus ?? 0),
     );
-    expect(resolved.awpCharge?.fireTrailDurationMs).toBe(
+    expect(resolved.awpCharge?.fireTrailDurationMs).toBeCloseTo(
       scaled(totals, 'weapon.AWP.awpCharge.fireTrailDurationMs', base.awpCharge?.fireTrailDurationMs ?? 0),
     );
-    expect(resolved.awpCharge?.fireTrailHalfWidthCells).toBe(
+    expect(resolved.awpCharge?.fireTrailHalfWidthCells).toBeCloseTo(
       scaled(totals, 'weapon.AWP.awpCharge.fireTrailHalfWidthCells', base.awpCharge?.fireTrailHalfWidthCells ?? 0),
     );
-    expect(resolved.awpCharge?.corridorEnabled).toBe(
+    expect(resolved.awpCharge?.corridorEnabled).toBeCloseTo(
       scaled(totals, 'weapon.AWP.awpCharge.corridorEnabled', base.awpCharge?.corridorEnabled ?? 0),
     );
     expect(resolved.awpCharge?.durationMs).toBeCloseTo(
       scaled(totals, 'weapon.AWP.awpCharge.durationMs', base.awpCharge?.durationMs ?? 0),
     );
-    expect(resolved.awpCharge?.fullChargeDamageBonus).toBe(
+    expect(resolved.awpCharge?.fullChargeDamageBonus).toBeCloseTo(
       scaled(totals, 'weapon.AWP.awpCharge.fullChargeDamageBonus', base.awpCharge?.fullChargeDamageBonus ?? 0),
     );
   });
@@ -133,36 +133,36 @@ describe('Negev coop-defense upgrades', () => {
     expect(resolved.range).toBeCloseTo(scaled(totals, 'weapon.NEGEV.range', base.range));
     expect(resolved.adrenalinCost).toBeCloseTo(scaled(totals, 'weapon.NEGEV.adrenalinCost', base.adrenalinCost));
     expect(resolved.rockDamageMult).toBeCloseTo(scaled(totals, 'weapon.NEGEV.rockDamageMult', base.rockDamageMult));
-    expect(resolved.holdSpeedFactor).toBe(
+    expect(resolved.holdSpeedFactor).toBeCloseTo(
       base.holdSpeedFactor + (totals.additive['weapon.NEGEV.holdSpeedBonus'] ?? 0),
     );
-    expect(resolved.hitSlowFraction).toBe(
+    expect(resolved.hitSlowFraction).toBeCloseTo(
       base.hitSlowFraction + (totals.additive['weapon.NEGEV.hitSlowFraction'] ?? 0),
     );
-    expect(resolved.hitSlowDurationMs).toBe(
+    expect(resolved.hitSlowDurationMs).toBeCloseTo(
       base.hitSlowDurationMs + (totals.additive['weapon.NEGEV.hitSlowDurationMs'] ?? 0),
     );
     expect(resolved.warmupSpeedMultiplier).toBeCloseTo(
       inverseScaled(totals, 'weapon.NEGEV.warmupDuration', base.warmupSpeedMultiplier),
     );
-    expect(resolved.warmupBurnThreshold).toBe(
+    expect(resolved.warmupBurnThreshold).toBeCloseTo(
       base.warmupBurnThreshold + (totals.additive['weapon.NEGEV.warmupBurnThreshold'] ?? 0),
     );
-    expect(resolved.burnOnHit?.durationMs).toBe(
+    expect(resolved.burnOnHit?.durationMs).toBeCloseTo(
       (base.burnOnHit?.durationMs ?? 0) + (totals.additive['weapon.NEGEV.burnOnHit.durationMs'] ?? 0),
     );
     expect(resolved.burnOnHit?.damagePerTick).toBeCloseTo(
       scaled(totals, 'weapon.NEGEV.burnOnHit.damagePerTick', base.burnOnHit?.damagePerTick ?? 0),
     );
-    expect(resolved.negevKillstreak?.damageBonusPerKill).toBe(
+    expect(resolved.negevKillstreak?.damageBonusPerKill).toBeCloseTo(
       (base.negevKillstreak?.damageBonusPerKill ?? 0)
       + (totals.additive['weapon.NEGEV.negevKillstreak.damageBonusPerKill'] ?? 0),
     );
-    expect(resolved.negevKillstreak?.healPerKill).toBe(
+    expect(resolved.negevKillstreak?.healPerKill).toBeCloseTo(
       (base.negevKillstreak?.healPerKill ?? 0)
       + (totals.additive['weapon.NEGEV.negevKillstreak.healPerKill'] ?? 0),
     );
-    expect(resolved.negevKillstreak?.armorPerKill).toBe(
+    expect(resolved.negevKillstreak?.armorPerKill).toBeCloseTo(
       (base.negevKillstreak?.armorPerKill ?? 0)
       + (totals.additive['weapon.NEGEV.negevKillstreak.armorPerKill'] ?? 0),
     );

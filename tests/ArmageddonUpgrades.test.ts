@@ -70,7 +70,7 @@ describe('Armageddon coop-defense upgrades', () => {
     expect(resolved.armageddon.meteorDamageRadius).toBeCloseTo(
       scaled('ultimate.ARMAGEDDON.radius', base.armageddon.meteorDamageRadius),
     );
-    expect(resolved.armageddon.fireChunkBurst.count).toBe(
+    expect(resolved.armageddon.fireChunkBurst.count).toBeCloseTo(
       scaled('ultimate.ARMAGEDDON.fireChunks', base.armageddon.fireChunkBurst.count),
     );
     expect(resolved.armageddon.meteorsPerSecond).toBeCloseTo(

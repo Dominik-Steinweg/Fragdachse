@@ -293,7 +293,9 @@ export class LobbyAmbientActor {
   update(deltaMs: number): void {
     this.updateBurrow(deltaMs);
     this.advanceAlongPath(deltaMs);
-    this.badger?.setWalking(this.movementAngle !== null && this.hp > 0 && this.burrowPhase === 'idle');
+    const walking = this.movementAngle !== null && this.hp > 0 && this.burrowPhase === 'idle';
+    this.badger?.setWalking(walking);
+    this.enemy?.setWalking(walking);
     this.turnTowardsTargetAim(deltaMs);
   }
 

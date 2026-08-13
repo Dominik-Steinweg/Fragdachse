@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../src/config/coopDefenseMaps';
+import { COOP_DEFENSE_TEAM_BUFF_DEFAULTS } from '../src/config/coopDefenseMaps';
 import { CoopDefenseCarrySystem, type CoopDefenseCarryPlayerLike } from '../src/systems/CoopDefenseCarrySystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../src/systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../src/systems/CoopDefenseSecondaryObjectiveSystem';
@@ -210,7 +211,7 @@ describe('Coop Defense B10 – keine Doppelbuchung', () => {
     const reward = { defId: 'TEAM_REGENERATION_SURGE' };
     expect(teamBuff.activate(reward, 1_000)).toBe(true);
     expect(teamBuff.activate(reward, 1_500)).toBe(false);
-    expect(teamBuff.getBuffEndsAt()).toBe(1_000 + 30_000);
+    expect(teamBuff.getBuffEndsAt()).toBe(1_000 + COOP_DEFENSE_TEAM_BUFF_DEFAULTS.durationMs);
   });
 });
 

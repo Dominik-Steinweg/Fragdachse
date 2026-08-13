@@ -4,7 +4,11 @@ import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } 
 import type { CombatSystem } from './CombatSystem';
 import type { TurretDamageBuff } from '../types';
 
-type LineOfSightChecker = (
+/**
+ * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
+ * dessen Projektil im Zug einschlägt, darf das Ziel gar nicht erst wählen.
+ */
+type LineOfFireChecker = (
   sx: number,
   sy: number,
   ex: number,
@@ -60,7 +64,7 @@ type TurretFireHandler = (
 ) => void;
 
 export class TurretSystem {
-  private lineOfSightChecker: LineOfSightChecker | null = null;
+  private lineOfFireChecker: LineOfFireChecker | null = null;
   private turretProvider: TurretProvider | null = null;
   private turretAngleUpdater: TurretAngleUpdater | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
@@ -77,8 +81,8 @@ export class TurretSystem {
     private readonly combatSystem: CombatSystem,
   ) {}
 
-  setLineOfSightChecker(checker: LineOfSightChecker | null): void {
-    this.lineOfSightChecker = checker;
+  setLineOfFireChecker(checker: LineOfFireChecker | null): void {
+    this.lineOfFireChecker = checker;
   }
 
   setTurretProvider(provider: TurretProvider | null, angleUpdater: TurretAngleUpdater | null): void {
@@ -281,7 +285,7 @@ export class TurretSystem {
     turretX: number,
     turretY: number,
     range: number,
-    lineOfSightStartOffset: number,
+    lineOfFireStartOffset: number,
     excluded?: { x: number; y: number },
   ): { x: number; y: number } | null {
     let bestTarget: { x: number; y: number } | null = null;
@@ -292,7 +296,7 @@ export class TurretSystem {
     const consider = (candidate: { x: number; y: number }, priority: number): void => {
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
       if (distance > range) return;
-      if (!this.hasLineOfSightFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfSightStartOffset)) return;
+      if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return;
       if (priority > bestPriority || (priority === bestPriority && distance >= bestDistance)) return;
       bestPriority = priority;
       bestDistance = distance;
@@ -333,7 +337,7 @@ export class TurretSystem {
     return bestTarget;
   }
 
-  private hasLineOfSightFromMuzzle(
+  private hasLineOfFireFromMuzzle(
     turret: AutomatedTurret,
     turretX: number,
     turretY: number,
@@ -341,11 +345,11 @@ export class TurretSystem {
     targetY: number,
     muzzleOffset: number,
   ): boolean {
-    if (!this.lineOfSightChecker) return true;
+    if (!this.lineOfFireChecker) return true;
     const angle = Phaser.Math.Angle.Between(turretX, turretY, targetX, targetY);
     const startX = turretX + Math.cos(angle) * muzzleOffset;
     const startY = turretY + Math.sin(angle) * muzzleOffset;
-    return this.lineOfSightChecker(
+    return this.lineOfFireChecker(
       startX,
       startY,
       targetX,

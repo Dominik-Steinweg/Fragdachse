@@ -365,7 +365,7 @@ export class NecromancySystem {
       const weapon = attackWeapon.weapon;
       if (weapon.config.fire.type === 'healing_aura' || weapon.config.fire.type === 'tesla_dome') continue;
       const distance = Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, destination.target.sprite.x, destination.target.sprite.y);
-      if (distance > weapon.config.range || !this.combatSystem.hasLineOfSight(ally.sprite.x, ally.sprite.y, destination.target.sprite.x, destination.target.sprite.y)) continue;
+      if (distance > weapon.config.range || !this.combatSystem.hasClearLineOfFire(ally.sprite.x, ally.sprite.y, destination.target.sprite.x, destination.target.sprite.y)) continue;
       if (!ally.isWeaponReady(weapon, now)) return;
       const angle = Phaser.Math.Angle.Between(ally.sprite.x, ally.sprite.y, destination.target.sprite.x, destination.target.sprite.y);
       if (!this.loadoutManager.fireAutomatedWeapon(

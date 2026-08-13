@@ -38,6 +38,8 @@ const TEX_TURRET_AURA = '__placeable_turret_aura';
 export class RockVisualHelper {
   private readonly turretVisuals = new Map<number, TurretVisualState>();
   private obstaclesDirty = false;
+  private obstacleVisualsRequireFullRefresh = false;
+  private readonly dirtyRockIds = new Set<number>();
   /**
    * Gemeinsame Fels-Darstellung. Die Lobby führt ihren Ambient-Bestand mit derselben Klasse
    * und demselben Ablauf, nur mit ihrem eigenen Weltrahmen.
@@ -83,7 +85,7 @@ export class RockVisualHelper {
       const staleProxy = this.ctx.arenaResult.rockObjects[rock.id];
       if (staleProxy) {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
-        this.markObstaclesDirty();
+        this.markObstaclesDirty(rock.id, false);
       }
       this.destroyTurretVisual(rock.id);
       if (playSpawnFx) {
@@ -125,7 +127,7 @@ export class RockVisualHelper {
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
-    if (refreshStaticShadows) this.markObstaclesDirty();
+    if (refreshStaticShadows) this.markObstaclesDirty(rock.id);
 
     if (playSpawnFx) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
@@ -166,7 +168,7 @@ export class RockVisualHelper {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
       }
       this.destroyTurretVisual(rock.id);
-      this.markObstaclesDirty();
+      this.markObstaclesDirty(rock.id, false);
       return;
     }
     if (playDust) {
@@ -186,7 +188,7 @@ export class RockVisualHelper {
         rock.id,
       );
       this.destroyTurretVisual(rock.id);
-      this.markObstaclesDirty();
+      this.markObstaclesDirty(rock.id, false);
       return;
     }
     ArenaBuilder.destroyRockAndRetile(
@@ -194,7 +196,7 @@ export class RockVisualHelper {
       this.ctx.currentLayout.rocks,
       rock.id,
     );
-    this.markObstaclesDirty();
+    this.markObstaclesDirty(rock.id, false);
   }
 
   updateRockVisualById(rockId: number, hp: number): void {
@@ -302,7 +304,7 @@ export class RockVisualHelper {
 
     if (!this.rockPresentation.destroyRock(rockId)) return;
     this.ctx.rockRegistry?.remove(rockId);
-    this.markObstaclesDirty();
+    this.markObstaclesDirty(rockId, false);
     const dropsArmor = !isCoopDefenseMode(bridge.getGameMode())
       || (
         reason === 'damage'
@@ -557,26 +559,49 @@ export class RockVisualHelper {
    * Bewusst ein Frame-Sammelpunkt und kein Zeit-Timer: Eine Verzoegerung von z.B. 200 ms
    * wuerde den Schatten sichtbar laenger stehen lassen als den zerstoerten Fels.
    */
-  private markObstaclesDirty(): void {
-    // Der Kollisions-Index darf nicht auf den Frame-Sammelpunkt warten: ein neu gesetzter
-    // Fels muss noch im selben Frame blockieren, sonst schoessen Projektile hindurch.
-    // Der Aufruf ist nur ein Dirty-Flag, der Neubau passiert erst bei der naechsten Abfrage.
-    this.ctx.combatSystem.invalidateObstacleIndex();
+  private markObstaclesDirty(rockId?: number, requiresIndexRebuild = true): void {
+    // Ein neu gesetzter Fels muss noch im selben Frame blockieren. Entfernte Felsen brauchen
+    // dagegen keinen Rebuild: ArenaObstacleIndex liest `active` live und ueberspringt das
+    // zerstoerte Quellobjekt sofort. Das vermeidet einen Vollaufbau zwischen Shotgun-Pellets.
+    if (requiresIndexRebuild) this.ctx.combatSystem.invalidateObstacleIndex();
+    if (rockId === undefined) {
+      this.obstacleVisualsRequireFullRefresh = true;
+      this.dirtyRockIds.clear();
+    } else if (!this.obstacleVisualsRequireFullRefresh) {
+      this.dirtyRockIds.add(rockId);
+    }
     if (this.obstaclesDirty) return;
     this.obstaclesDirty = true;
     this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
       this.obstaclesDirty = false;
-      this.refreshObstacleVisuals();
+      const requireFullRefresh = this.obstacleVisualsRequireFullRefresh;
+      const dirtyRockIds = new Set(this.dirtyRockIds);
+      this.obstacleVisualsRequireFullRefresh = false;
+      this.dirtyRockIds.clear();
+      this.refreshObstacleVisuals(requireFullRefresh, dirtyRockIds);
     });
   }
 
-  private refreshObstacleVisuals(): void {
-    this.rockPresentation.refreshOverlays();
-    this.shadowSystem?.rebuildArenaStaticShadows(
-      this.ctx.currentLayout,
-      this.ctx.arenaResult,
-      this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
-    );
+  private refreshObstacleVisuals(requireFullRefresh: boolean, dirtyRockIds: ReadonlySet<number>): void {
+    const canRefreshRegions = !requireFullRefresh
+      && dirtyRockIds.size > 0
+      && (this.ctx.arenaResult?.rockMottleLayers.length ?? 0) > 0;
+    if (canRefreshRegions) {
+      this.rockPresentation.refreshOverlayRegions(dirtyRockIds);
+      this.shadowSystem?.rebuildArenaStaticShadowRegions(
+        this.ctx.currentLayout,
+        this.ctx.arenaResult,
+        dirtyRockIds,
+        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+      );
+    } else {
+      this.rockPresentation.refreshOverlays();
+      this.shadowSystem?.rebuildArenaStaticShadows(
+        this.ctx.currentLayout,
+        this.ctx.arenaResult,
+        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+      );
+    }
     this.ctx.lightOccluderIndex?.markDirty();
   }
 }

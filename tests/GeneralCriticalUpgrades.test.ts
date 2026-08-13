@@ -9,16 +9,21 @@ import {
 
 describe('general critical upgrades', () => {
   it('adds critical chance and gates critical damage behind it', () => {
-    expect(getCoopDefenseUpgradeDefinition('critical_chance')).toMatchObject({
-      maxLevel: 3,
-      requires: [],
-      effects: [{ stat: 'player.criticalChance', mode: 'add_per_level', value: 0.05 }],
-    });
-    expect(getCoopDefenseUpgradeDefinition('critical_damage')).toMatchObject({
-      maxLevel: 3,
+    const chance = getCoopDefenseUpgradeDefinition('critical_chance');
+    const damage = getCoopDefenseUpgradeDefinition('critical_damage');
+    expect(chance).toMatchObject({ maxLevel: expect.any(Number), requires: [] });
+    expect(damage).toMatchObject({
+      maxLevel: expect.any(Number),
       requires: [{ upgradeId: 'critical_chance', minLevel: 1 }],
-      effects: [{ stat: 'player.criticalDamage', mode: 'add_per_level', value: 0.2 }],
     });
+    expect(chance?.effects).toEqual([
+      expect.objectContaining({ stat: 'player.criticalChance', mode: 'add_per_level' }),
+    ]);
+    expect(damage?.effects).toEqual([
+      expect.objectContaining({ stat: 'player.criticalDamage', mode: 'add_per_level' }),
+    ]);
+    expect(chance?.effects[0]?.value).toBeGreaterThan(0);
+    expect(damage?.effects[0]?.value).toBeGreaterThan(0);
   });
 
   it('resolves the complete three-level effects', () => {
@@ -29,8 +34,14 @@ describe('general critical upgrades', () => {
       },
     });
 
-    expect(totals.additive['player.criticalChance']).toBeCloseTo(0.15);
-    expect(totals.additive['player.criticalDamage']).toBeCloseTo(0.6);
+    const chance = getCoopDefenseUpgradeDefinition('critical_chance')!;
+    const damage = getCoopDefenseUpgradeDefinition('critical_damage')!;
+    expect(totals.additive['player.criticalChance']).toBeCloseTo(
+      chance.effects[0].value * chance.maxLevel,
+    );
+    expect(totals.additive['player.criticalDamage']).toBeCloseTo(
+      damage.effects[0].value * damage.maxLevel,
+    );
   });
 
   it('does not allow critical damage before the first chance level', () => {

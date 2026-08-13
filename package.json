@@ -12,7 +12,7 @@
     "dev": "vite",
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --pool=threads",
     "build": "tsc && vite build",
     "check": "npm test && npm run build",
     "preview": "vite preview",

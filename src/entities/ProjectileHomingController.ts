@@ -31,24 +31,32 @@ export type HomingTargetProvider = (
   emit: HomingTargetSink,
 ) => void;
 
-export type HomingLineOfSightChecker = (sx: number, sy: number, ex: number, ey: number) => boolean;
+/**
+ * Prüft, ob ein Kandidat vom Projektil aus tatsächlich erreichbar ist.
+ *
+ * Bewusst die Schuss- und nicht die Sichtlinie: ein Ziel hinter einem beweglichen Blocker (Zug)
+ * ist sichtbar, das Projektil würde aber im Blocker einschlagen. Weil dieselbe Prüfung auch für
+ * das bereits gelockte Ziel läuft, verliert ein Projektil seinen Lock, sobald der Zug dazwischen
+ * fährt.
+ */
+export type HomingLineOfFireChecker = (sx: number, sy: number, ex: number, ey: number) => boolean;
 
 const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 
 /**
  * Host-seitige Zielsuche und Lenkung für zielsuchende Projektile.
- * Hält die von der Szene injizierten Provider (Zielkandidaten + Line-of-Sight) und
+ * Hält die von der Szene injizierten Provider (Zielkandidaten + Line-of-Fire) und
  * dreht die Projektil-Velocity pro Schritt Richtung des gewählten Ziels.
  */
 export class ProjectileHomingController {
   private targetProvider: HomingTargetProvider | null = null;
-  private lineOfSightChecker: HomingLineOfSightChecker | null = null;
+  private lineOfFireChecker: HomingLineOfFireChecker | null = null;
 
   // Kandidaten-Pool: bei vielen zielsuchenden Projektilen läuft die Zielsuche mehrfach
   // pro Frame, ein frisches Array mit einem Objekt je Gegner wäre reiner GC-Druck.
   private readonly candidatePool: HomingTargetCandidate[] = [];
   private candidateCount = 0;
-  /** Kandidaten, deren Sichtlinie in dieser Suche bereits durchgefallen ist. */
+  /** Kandidaten, deren Schusslinie in dieser Suche bereits durchgefallen ist. */
   private rejected = new Uint8Array(0);
 
   private readonly emitCandidate: HomingTargetSink = (id, type, x, y) => {
@@ -68,8 +76,8 @@ export class ProjectileHomingController {
     this.targetProvider = provider;
   }
 
-  setLineOfSightChecker(checker: HomingLineOfSightChecker | null): void {
-    this.lineOfSightChecker = checker;
+  setLineOfFireChecker(checker: HomingLineOfFireChecker | null): void {
+    this.lineOfFireChecker = checker;
   }
 
   /** Lenkt ein zielsuchendes Projektil pro Host-Schritt Richtung seines (ggf. neu gewählten) Ziels. */
@@ -111,9 +119,9 @@ export class ProjectileHomingController {
   }
 
   /**
-   * Wählt das Ziel mit der besten Bewertung, das eine freie Sichtlinie hat.
+   * Wählt das Ziel mit der besten Bewertung, das eine freie Schusslinie hat.
    *
-   * Die Sichtlinienprüfung ist der mit Abstand teuerste Teil des Host-Frames, deshalb wird
+   * Die Schusslinienprüfung ist der mit Abstand teuerste Teil des Host-Frames, deshalb wird
    * sie so selten wie möglich ausgeführt: zuerst nur für das bereits gelockte Ziel, und
    * danach entlang der Bewertungsreihenfolge, bis das erste Ziel besteht. Das Ergebnis ist
    * dasselbe wie "alle Kandidaten filtern, dann den besten nehmen" – nur ohne die Prüfungen
@@ -123,7 +131,7 @@ export class ProjectileHomingController {
     if (!this.targetProvider) return null;
 
     const targetTypes = homing.targetTypes ?? DEFAULT_HOMING_TARGET_TYPES;
-    const requireLineOfSight = homing.requireLineOfSight === true && this.lineOfSightChecker !== null;
+    const requireLineOfFire = homing.requireLineOfSight === true && this.lineOfFireChecker !== null;
     const excludeOwner = homing.excludeOwner !== false;
     const searchRadius = Math.max(1, homing.searchRadius);
     const searchRadiusSq = searchRadius * searchRadius;
@@ -158,13 +166,13 @@ export class ProjectileHomingController {
     }
     if (eligible === 0) return null;
 
-    // Gelocktes Ziel zuerst: bleibt es gültig, kostet die Suche genau eine Sichtlinie.
+    // Gelocktes Ziel zuerst: bleibt es gültig, kostet die Suche genau eine Schusslinienprüfung.
     if (proj.lockedTargetId) {
       for (let i = 0; i < count; i += 1) {
         if (this.rejected[i]) continue;
         const candidate = this.candidatePool[i];
         if (candidate.id !== proj.lockedTargetId || candidate.type !== proj.lockedTargetType) continue;
-        if (!requireLineOfSight || this.lineOfSightChecker!(originX, originY, candidate.x, candidate.y)) {
+        if (!requireLineOfFire || this.lineOfFireChecker!(originX, originY, candidate.x, candidate.y)) {
           return candidate;
         }
         this.rejected[i] = 1;
@@ -173,7 +181,7 @@ export class ProjectileHomingController {
       }
     }
 
-    // Immer den bestbewerteten verbleibenden Kandidaten prüfen; fällt er an der Sichtlinie
+    // Immer den bestbewerteten verbleibenden Kandidaten prüfen; fällt er an der Schusslinie
     // durch, rückt der nächstbeste nach.
     while (eligible > 0) {
       let bestIndex = -1;
@@ -201,7 +209,7 @@ export class ProjectileHomingController {
 
       if (bestIndex < 0) return null;
       const best = this.candidatePool[bestIndex];
-      if (!requireLineOfSight || this.lineOfSightChecker!(originX, originY, best.x, best.y)) return best;
+      if (!requireLineOfFire || this.lineOfFireChecker!(originX, originY, best.x, best.y)) return best;
       this.rejected[bestIndex] = 1;
       eligible -= 1;
     }

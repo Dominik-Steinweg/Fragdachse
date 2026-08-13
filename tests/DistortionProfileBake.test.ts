@@ -120,13 +120,14 @@ describe('writeDistortionProfilePixels', () => {
   });
 
   it('haelt jeden Kanal innerhalb des Byte-Bereichs', () => {
+    const invalidValues: number[] = [];
     for (const profile of DISTORTION_PROFILE_KEYS) {
       const pixels = writeDistortionProfilePixels(profile, SIZE);
       for (const value of pixels) {
-        expect(value).toBeGreaterThanOrEqual(0);
-        expect(value).toBeLessThanOrEqual(255);
+        if (value < 0 || value > 255) invalidValues.push(value);
       }
     }
+    expect(invalidValues).toEqual([]);
   });
 });
 

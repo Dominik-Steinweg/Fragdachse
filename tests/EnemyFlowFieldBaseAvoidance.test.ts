@@ -35,6 +35,7 @@ function createBase(
   minGridY: number,
   width: number,
   height: number,
+  overrides: Partial<Pick<BaseSpec, 'role' | 'dormantObjectiveId'>> = {},
 ): BaseSpec {
   const cells: { gridX: number; gridY: number }[] = [];
   for (let gridY = minGridY; gridY < minGridY + height; gridY += 1) {
@@ -56,6 +57,7 @@ function createBase(
     role: 'main',
     turrets: [],
     powerUpPedestals: [],
+    ...overrides,
   } as unknown as BaseSpec;
 }
 
@@ -88,6 +90,43 @@ describe('Flow field around bases', () => {
 
     expect(service.getReachedGoalCellAt(3, 5)).toBeNull();
     expect(service.getIntegrationValueAt(3, 5)).toBe(EnemyFlowFieldService.INTEGRATION_INFINITY);
+  });
+
+  it('routes base seekers to an active mission outpost when it is the nearer structure', () => {
+    const missionOutpost = createBase('mission-outpost', 2, 5, 1, 1, {
+      role: 'outpost',
+      dormantObjectiveId: 'hold-outpost',
+    });
+    const service = new EnemyFlowFieldService(
+      createLayout(),
+      [createBase('main', 12, 4, 2, 2), missionOutpost],
+      METRICS,
+    );
+
+    // Solange das Objective die Struktur dormant haelt, existiert sie als Ziel noch nicht.
+    service.setActiveBaseIds(new Set(['main']));
+    service.update(Date.now() + 1_000);
+    expect(service.isGoalCell(3, 5)).toBe(false);
+    expect(service.getReachedGoalCellAt(4, 5)?.gridX).toBe(11);
+
+    // Nach der Aktivierung laeuft der pfadnaehere Gegner an den Vorposten statt an der Hauptbasis.
+    service.setActiveBaseIds(new Set(['main', 'mission-outpost']));
+    service.update(Date.now() + 2_000);
+    expect(service.isGoalCell(3, 5)).toBe(true);
+    expect(service.getReachedGoalCellAt(4, 5)).toEqual({ gridX: 3, gridY: 5 });
+    // Weiter rechts bleibt die Hauptbasis das billigere Ziel; das Mehrzielfeld teilt sich auf.
+    expect(service.getReachedGoalCellAt(10, 5)).toEqual({ gridX: 11, gridY: 5 });
+  });
+
+  it('keeps a decorative outpost without a secondary objective out of the goal set', () => {
+    const service = new EnemyFlowFieldService(
+      createLayout(),
+      [createBase('main', 12, 4, 2, 2), createBase('decor-outpost', 2, 5, 1, 1, { role: 'outpost' })],
+      METRICS,
+    );
+
+    expect(service.isGoalCell(3, 5)).toBe(false);
+    expect(service.getReachedGoalCellAt(4, 5)?.gridX).toBe(11);
   });
 
   it('charges a surcharge on cells that touch a base, so open routes bow away from the wall', () => {

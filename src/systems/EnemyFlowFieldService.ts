@@ -991,7 +991,13 @@ export class EnemyFlowFieldService {
       if (!this.activeBaseIds.has(baseSpec.id)) continue;
       // Nur die Ziele werden gefiltert: feindliche Basiszellen bleiben Hindernisse und muessen
       // deshalb weiterhin im Kostenfeld (`buildBaseLookup`) stehen.
-      if (baseSpec.faction === 'hostile' || baseSpec.role === 'outpost' || baseSpec.role === 'spawn-point') continue;
+      if (baseSpec.faction === 'hostile' || baseSpec.role === 'spawn-point') continue;
+      // Ein objective-gebundener Vorposten (Hold-Missionsziel) ist ein vollwertiges Belagerungsziel:
+      // Das Mehrzielfeld startet an allen Zielzellen gleichzeitig, deshalb laeuft jeder Gegner
+      // automatisch zur pfadnaechsten Struktur statt am naeher liegenden Missionsziel vorbei zur
+      // Hauptbasis. Dekorative Vorposten ohne Objective bleiben ausgenommen, damit sie den Zug der
+      // Angriffswellen auf die Hauptbasis nicht verwaessern.
+      if (baseSpec.role === 'outpost' && baseSpec.dormantObjectiveId === undefined) continue;
       for (const cell of baseSpec.cells) {
         for (const [dx, dy] of directions) {
           const neighborX = cell.gridX + dx * goalDistance;

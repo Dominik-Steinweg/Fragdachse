@@ -1505,8 +1505,8 @@ export class ArenaLifecycleCoordinator {
       this.ctx.teslaDomeSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => {
         return this.ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
       });
-      this.ctx.turretSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex, ignoreBaseObstacles) => {
-        return this.ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, ignoreBaseObstacles);
+      this.ctx.turretSystem.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, ignoreBaseObstacles) => {
+        return this.ctx.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, ignoreBaseObstacles });
       });
       this.ctx.turretSystem.setTurretProvider(
         () => {

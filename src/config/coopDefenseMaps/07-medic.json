@@ -5,6 +5,7 @@
   "timeOfDay": "17:00",
   "tutorialText": "Seuchenheiler halten andere Gegner länger im Kampf. Schaltet Supportziele früh aus, bevor ihr die restliche Welle bekämpft.",
   "rockFillRatio": 0.3,
+  "trackPosition": "right",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -207,25 +208,27 @@
     {
       "id": "medic-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 7500,
+      "restAfterMs": 5000,
       "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
     },
     {
       "id": "medic-response",
       "start": { "type": "after-previous" },
-      "restAfterMs": 8500,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "plague-medic", "count": 2, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 9, "delayMs": 900, "front": "west" }
+        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 4, "front": "west" }
       ]
     },
     {
       "id": "medic-pressure",
       "start": { "type": "after-previous" },
-      "restAfterMs": 9000,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "plague-medic", "count": 2, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 9, "delayMs": 1100, "front": "west" }
+        { "enemyKind": "rabid-badger", "count": 14, "delayMs": 1000, "front": "west" },
+        { "enemyKind": "zombie-badger", "count": 12, "front": "west" }
       ]
     },
     {
@@ -233,7 +236,8 @@
       "start": { "type": "after-previous" },
       "groups": [
         { "enemyKind": "plague-medic", "count": 3, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 12, "delayMs": 1000, "front": "west" }
+        { "enemyKind": "rabid-badger", "count": 12, "delayMs": 1000, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 6, "front": "west" }
       ]
     }
   ]

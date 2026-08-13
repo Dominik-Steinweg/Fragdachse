@@ -182,7 +182,7 @@ export class CoopDefenseEnemyAbilitySystem {
         if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
         if (!this.combatSystem.canDamageTarget(enemy.id, target.id)) continue;
         if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y) > fire.radius) continue;
-        if (fire.requireLineOfSight && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
+        if (fire.requireLineOfSight && !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
         this.combatSystem.applyDamage(target.id, damage, false, enemy.id, weapon.displayName, {
           sourceX: enemy.sprite.x,
           sourceY: enemy.sprite.y,
@@ -197,7 +197,7 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y) > fire.radius) continue;
       if (fire.requireLineOfSight
-        && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)) continue;
+        && !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)) continue;
       if (this.energyShieldSystem?.tryBlockDamage({
         targetId: player.id,
         category: 'tesla',
@@ -417,14 +417,12 @@ export class CoopDefenseEnemyAbilitySystem {
         if (!this.combatSystem.canDamageTarget(enemy.id, target.id)) continue;
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
         if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) continue;
-        if (!this.combatSystem.hasLineOfSight(
+        if (!this.combatSystem.hasClearLineOfFire(
           enemy.sprite.x,
           enemy.sprite.y,
           target.sprite.x,
           target.sprite.y,
-          undefined,
-          false,
-          pathClearance,
+          { clearanceRadius: pathClearance },
         )) continue;
         best = { x: target.sprite.x, y: target.sprite.y, distance };
       }
@@ -436,14 +434,12 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
       if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) continue;
-      if (!this.combatSystem.hasLineOfSight(
+      if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
         player.sprite.x,
         player.sprite.y,
-        undefined,
-        false,
-        pathClearance,
+        { clearanceRadius: pathClearance },
       )) continue;
       best = { x: player.sprite.x, y: player.sprite.y, distance };
     }
@@ -463,14 +459,12 @@ export class CoopDefenseEnemyAbilitySystem {
         if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
         if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
-        if (!this.combatSystem.hasLineOfSight(
+        if (!this.combatSystem.hasClearLineOfFire(
           enemy.sprite.x,
           enemy.sprite.y,
           target.sprite.x,
           target.sprite.y,
-          undefined,
-          false,
-          pathClearance,
+          { clearanceRadius: pathClearance },
         )) continue;
         best = { x: target.sprite.x, y: target.sprite.y, distance };
       }
@@ -482,14 +476,12 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
       if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
-      if (!this.combatSystem.hasLineOfSight(
+      if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
         player.sprite.x,
         player.sprite.y,
-        undefined,
-        false,
-        pathClearance,
+        { clearanceRadius: pathClearance },
       )) continue;
       best = { x: player.sprite.x, y: player.sprite.y, distance };
     }

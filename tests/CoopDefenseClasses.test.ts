@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
-import { COOP_DEFENSE_CLASS_DEFINITIONS } from '../src/config/coopDefenseClasses';
+import { COOP_DEFENSE_CLASS_DEFINITIONS, getCoopDefenseClassDefinition } from '../src/config/coopDefenseClasses';
+import { HP_MAX } from '../src/config';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   canLevelDownCoopDefenseUpgrade,
   getCoopDefenseConstructionSlotCapacity,
   getCoopDefenseUpgradeCategories,
+  getCoopDefenseUpgradeDefinition,
   getUnlockedCoopDefenseConstructionIds,
   levelDownCoopDefenseUpgrade,
   levelUpCoopDefenseUpgrade,
@@ -14,6 +16,9 @@ import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, LoadoutCommitSnapsh
 import { isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds } from '../src/loadout/LoadoutRules';
 import { RepairDroneSystem } from '../src/systems/RepairDroneSystem';
 import type { SyncedPlaceableRock } from '../src/types';
+import {
+  COOP_DEFENSE_REPAIR_DRONE_CONFIG,
+} from '../src/config/coopDefenseConstructions';
 
 function commit(
   classId: CoopDefenseClassId,
@@ -63,7 +68,7 @@ describe('coop-defense classes', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('default', snapshot);
     expect(system.getClassId('default')).toBeNull();
-    expect(system.getMaxHp('default')).toBe(120);
+    expect(system.getMaxHp('default')).toBeGreaterThan(HP_MAX);
     expect(system.resolveOutgoingDamage('default', 'enemy', 100, true, () => 0)).toEqual({
       amount: 100,
       isCritical: false,
@@ -88,24 +93,28 @@ describe('coop-defense classes', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('nukem', commit('dachs_nukem'));
 
+    const nukem = getCoopDefenseClassDefinition('dachs_nukem');
     expect(system.resolveOutgoingDamage('nukem', 'enemy', 100, true, () => 0.5)).toEqual({
-      amount: 150,
+      amount: 100 * nukem.outgoingDamageMultiplier,
       isCritical: false,
     });
     expect(system.resolveOutgoingDamage('nukem', 'enemy', 100, true, () => 0.05)).toEqual({
-      amount: 300,
+      amount: 100 * nukem.outgoingDamageMultiplier * nukem.criticalDamageMultiplier,
       isCritical: true,
     });
-    expect(system.getResolvedStat('nukem', 'player.runSpeed', 200)).toBe(240);
+    expect(system.getResolvedStat('nukem', 'player.runSpeed', 200))
+      .toBeCloseTo(200 * nukem.runSpeedMultiplier);
   });
 
   it('applies Steel durability and regeneration bonuses', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('steel', commit('dachs_of_steel'));
 
-    expect(system.getMaxHp('steel')).toBe(200);
-    expect(system.getHpRegenPerSecond('steel')).toBe(10);
-    expect(system.getResolvedStat('steel', 'player.maxArmor', 100)).toBe(200);
+    const steel = getCoopDefenseClassDefinition('dachs_of_steel');
+    expect(system.getMaxHp('steel')).toBeCloseTo(HP_MAX * steel.maxHpMultiplier);
+    expect(system.getHpRegenPerSecond('steel')).toBe(steel.hpRegenBonusPerSecond);
+    expect(system.getResolvedStat('steel', 'player.maxArmor', 100))
+      .toBeCloseTo(100 * steel.maxArmorMultiplier);
   });
 
   it('uses the standard adrenaline baseline and the class-specific upgrade tree', () => {
@@ -162,7 +171,8 @@ describe('coop-defense classes', () => {
 describe('Inspector construction slots', () => {
   it('starts with the rocket turret, separates unlocks from slots and validates slot refunds', () => {
     let profile: CoopDefenseUpgradeProfile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
-    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(3);
+    const initialCapacity = getCoopDefenseConstructionSlotCapacity(profile);
+    expect(initialCapacity).toBeGreaterThan(0);
     expect(getUnlockedCoopDefenseConstructionIds(profile)).toEqual(['rocket_turret']);
 
     profile = levelUpCoopDefenseUpgrade(
@@ -203,7 +213,11 @@ describe('Inspector construction slots', () => {
       0,
       'inspector_gadachs',
     )!;
-    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(4);
+    const slotUpgrade = getCoopDefenseUpgradeDefinition('inspector_construction_slots')!;
+    const slotEffect = slotUpgrade.effects.find((effect) => effect.stat === 'construction.slots');
+    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(
+      initialCapacity + (slotEffect?.value ?? 0),
+    );
     expect(canLevelDownCoopDefenseUpgrade(
       profile,
       'inspector_construction_slots',
@@ -256,7 +270,7 @@ describe('Inspector repair drone', () => {
     );
 
     system.update(1000);
-    expect(construction.hp).toBe(60);
+    expect(construction.hp).toBe(50 + COOP_DEFENSE_REPAIR_DRONE_CONFIG.repairPerSecond);
     expect(system.getSnapshot()[0]).toMatchObject({
       ownerId: 'inspector',
       phase: 'repairing',

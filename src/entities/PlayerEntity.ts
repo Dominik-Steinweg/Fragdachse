@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
 import {
   BADGER_IDLE_FRAME,
+  BADGER_WALKING_FRAME_HEIGHT,
+  BADGER_WALKING_FRAME_WIDTH,
   BADGER_WALKING_TEXTURE_KEY,
   syncBadgerWalkingAnimation,
 } from '../animations/BadgerAnimations';
@@ -88,6 +90,16 @@ export class PlayerEntity {
   private baseVisible = true;
   private walkingRequested = false;
 
+  /**
+   * Grundskalierung des Spielersprites: Die Walking-Textur ist in 64-px-Zellen authored, die
+   * Figur bleibt aber `PLAYER_SIZE` gross. Spawn-, Dash- und Burrow-Feedback sind Faktoren
+   * *relativ* zu dieser Grundgroesse und laufen deshalb ueber `applySpriteScale()`. Ein direktes
+   * `setScale(1)` waere kein neutraler Wert mehr, sondern wuerde den Dachs auf Texturgroesse
+   * aufblasen.
+   */
+  private readonly spriteBaseScaleX = PLAYER_SIZE / BADGER_WALKING_FRAME_WIDTH;
+  private readonly spriteBaseScaleY = PLAYER_SIZE / BADGER_WALKING_FRAME_HEIGHT;
+
   // Visuelle Zustände – kombiniert in resolveVisual()
   private burrowPhase: BurrowPhase = 'idle';
   private isRagingVisual   = false;
@@ -129,7 +141,11 @@ export class PlayerEntity {
     this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
     this.sprite.setDepth(DEPTH.PLAYERS);
     scene.physics.add.existing(this.sprite);
-    this.body.setCircle(PLAYER_SIZE / 2);
+    // Arcade interprets the radius in source-texture pixels and applies the Sprite scale
+    // afterwards. The walking sheet uses 64-px frames while the gameplay figure is 32 px wide,
+    // so passing the display radius directly would make the physical body half as large as the
+    // visible player.
+    this.setCollisionRadius(PLAYER_SIZE / 2);
     // Eine Match-Figur bleibt im Spielfeld. Eine Presentation-Figur nicht: Sie betritt die
     // Bühne von ausserhalb der Arenakante und verlässt sie ebenso. Die Weltgrenze würde sie
     // dabei am Rand festklemmen. Ihre Eingrenzung leistet die Navigation, nicht die Physik –
@@ -251,6 +267,13 @@ export class PlayerEntity {
 
   get body(): Phaser.Physics.Arcade.Body {
     return this.sprite.body as Phaser.Physics.Arcade.Body;
+  }
+
+  /** Sets the body's radius in display/world pixels, compensating for the source-texture scale. */
+  setCollisionRadius(displayRadius: number): void {
+    const displayScale = Math.abs(this.sprite.scaleX);
+    if (displayScale <= Number.EPSILON) return;
+    this.body.setCircle(displayRadius / displayScale);
   }
 
   get color(): number {
@@ -478,7 +501,7 @@ export class PlayerEntity {
 
     // Sprite kurz auf Scale/Alpha 0 setzen und dann animiert einblenden
     this.sprite.scene.tweens.killTweensOf(this.sprite);
-    this.sprite.setScale(0);
+    this.applySpriteScale(0);
     this.sprite.setAlpha(0);
 
     this.stopSpawnShine();
@@ -517,19 +540,19 @@ export class PlayerEntity {
       this.startDefaultGlowTween();
     }
 
-    // Sprite: Scale 0 → 1.15 (Überschwingen) → 1, Alpha 0 → 1
+    // Sprite: Scale 0 → 1.15 (Überschwingen) → 1, Alpha 0 → 1 – jeweils relativ zur Grundgroesse
     scene.tweens.add({
       targets:  this.sprite,
-      scaleX:   { from: 0, to: 1.15 },
-      scaleY:   { from: 0, to: 1.15 },
+      scaleX:   { from: 0, to: this.spriteBaseScaleX * 1.15 },
+      scaleY:   { from: 0, to: this.spriteBaseScaleY * 1.15 },
       alpha:    { from: 0, to: 1 },
       duration: 300,
       ease:     'Back.easeOut',
       onComplete: () => {
         scene.tweens.add({
           targets:  this.sprite,
-          scaleX:   1,
-          scaleY:   1,
+          scaleX:   this.spriteBaseScaleX,
+          scaleY:   this.spriteBaseScaleY,
           duration: 130,
           ease:     'Quad.easeInOut',
         });
@@ -542,9 +565,9 @@ export class PlayerEntity {
     spawnEffect.play(this.sprite.x, this.sprite.y, this.colorHex);
   }
 
-  /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */
+  /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite), 1 = normale Spielergroesse. */
   setDashScale(scale: number): void {
-    this.sprite.setScale(scale);
+    this.applySpriteScale(scale);
     this.syncOverlays();
   }
 
@@ -561,7 +584,7 @@ export class PlayerEntity {
 
     if (changed && (phase === 'underground' || phase === 'trapped')) {
       this.stopBurrowTween(true);
-      this.sprite.setScale(1, 1);
+      this.applySpriteScale(1, 1);
       this.burrowTweenAlpha = 1;
     }
 
@@ -571,7 +594,7 @@ export class PlayerEntity {
       this.playPopOutTween();
     } else if (changed && phase === 'idle') {
       this.stopBurrowTween(true);
-      this.sprite.setScale(1, 1);
+      this.applySpriteScale(1, 1);
       this.burrowTweenAlpha = 1;
     }
 
@@ -760,7 +783,7 @@ export class PlayerEntity {
       .setVisible(true)
       .setPosition(this.sprite.x, this.sprite.y)
       .setRotation(this.sprite.rotation)
-      .setScale((this.sprite.scaleX || 1) * 1.04, (this.sprite.scaleY || 1) * 1.02)
+      .setScale(this.spriteScaleFactorX * 1.04, this.spriteScaleFactorY * 1.02)
       .setAlpha(this.spawnShineAlpha)
       .setCrop(cropX, 0, visibleWidth, frameHeight);
   }
@@ -777,7 +800,7 @@ export class PlayerEntity {
   private playWindUpTween(): void {
     this.stopBurrowTween(false);
     this.sprite.setVisible(this.baseVisible);
-    this.sprite.setScale(1, 1);
+    this.applySpriteScale(1, 1);
     this.burrowTweenAlpha = 1;
     const state = { scaleX: 1, scaleY: 1, alpha: 1 };
     this.burrowTween = this.sprite.scene.tweens.add({
@@ -788,7 +811,7 @@ export class PlayerEntity {
       duration: 150,
       ease: 'Cubic.easeIn',
       onUpdate: () => {
-        this.sprite.setScale(state.scaleX, state.scaleY);
+        this.applySpriteScale(state.scaleX, state.scaleY);
         this.burrowTweenAlpha = state.alpha;
         this.resolveVisual();
       },
@@ -803,7 +826,7 @@ export class PlayerEntity {
     this.stopBurrowTween(false);
     this.sprite.setVisible(this.baseVisible);
     const state = { scaleX: 0.72, scaleY: 1.28, alpha: 0.55 };
-    this.sprite.setScale(state.scaleX, state.scaleY);
+    this.applySpriteScale(state.scaleX, state.scaleY);
     this.burrowTweenAlpha = state.alpha;
     this.resolveVisual();
     this.burrowTween = this.sprite.scene.tweens.add({
@@ -814,7 +837,7 @@ export class PlayerEntity {
       duration: 180,
       ease: 'Back.easeOut',
       onUpdate: () => {
-        this.sprite.setScale(state.scaleX, state.scaleY);
+        this.applySpriteScale(state.scaleX, state.scaleY);
         this.burrowTweenAlpha = state.alpha;
         this.resolveVisual();
       },
@@ -852,6 +875,26 @@ export class PlayerEntity {
     this.syncAttachedEffects();
   }
 
+  /**
+   * Skalierungsfaktor relativ zur Spielergroesse anwenden: 1 ist die normale Figur, unabhaengig
+   * davon, in welcher Aufloesung die Charaktertextur authored ist.
+   */
+  private applySpriteScale(factorX: number, factorY: number = factorX): void {
+    this.sprite.setScale(this.spriteBaseScaleX * factorX, this.spriteBaseScaleY * factorY);
+  }
+
+  /**
+   * Aktuelle Sprite-Skalierung als Faktor relativ zur Spielergroesse. Die Overlays liegen im
+   * 32-px-Raster und muessen den Feedback-Faktor uebernehmen, nicht die rohe Texturskalierung.
+   */
+  private get spriteScaleFactorX(): number {
+    return (this.sprite.scaleX || this.spriteBaseScaleX) / this.spriteBaseScaleX;
+  }
+
+  private get spriteScaleFactorY(): number {
+    return (this.sprite.scaleY || this.spriteBaseScaleY) / this.spriteBaseScaleY;
+  }
+
   private syncWalkingAnimation(): void {
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
     syncBadgerWalkingAnimation(
@@ -872,8 +915,8 @@ export class PlayerEntity {
     this.stealthScan.setVisible(visible);
     if (!visible) return;
 
-    const spriteScaleX = this.sprite.scaleX || 1;
-    const spriteScaleY = this.sprite.scaleY || 1;
+    const spriteScaleX = this.spriteScaleFactorX;
+    const spriteScaleY = this.spriteScaleFactorY;
     const spriteRotation = this.sprite.rotation;
 
     this.stealthShell

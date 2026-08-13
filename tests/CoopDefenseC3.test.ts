@@ -305,7 +305,7 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
     harness.director.hostUpdate(400, false);
     expect(harness.refreshes).toHaveLength(4);
     // Die nachgezuendete Zelle erbt nur die Restlaufzeit und ueberlebt das Event nicht.
-    expect(harness.refreshes[3].durationMs).toBe(17_400);
+    expect(harness.refreshes[3].durationMs).toBe((makeEvent().durationMs ?? 0) - 600);
 
     harness.setNow(18_000);
     harness.director.hostUpdate(17_400, false);

@@ -17,6 +17,13 @@ Neue Emitter und Filter über die bestehende Qualitätsinfrastruktur registriere
 - Häufige homogene Visuals poolen. Physik-/Gameplay-Objekte nur poolen, wenn der Reset vollständig und messbar günstiger ist.
 - Frame-Getter auf dem Client dürfen nicht jedes Mal localStorage lesen, JSON parsen oder Upgrade-Profile neu auflösen; bestehende Referenz-/Round-Caches verwenden und explizit invalidieren.
 - Dirty-Flags und einmal-pro-Frame-Rebuilds für große UI-/Overlay-Bäume nutzen; keine komplette Baumzerstörung pro Klick.
+- Fels-Änderungswellen sammeln IDs bis `POST_UPDATE` und backen Mottle, Decals und statische
+  Schatten nur in lokalen Dirty-Chunks neu. Layout-/Profilwechsel behalten den vollständigen
+  Rebuild als Fallback; Scratch-RenderTextures werden vom jeweiligen Arena-/Renderer-Eigentümer
+  wiederverwendet und in dessen Teardown zerstört.
+- Entfernte Felsen invalidieren `ArenaObstacleIndex` nicht: Queries lesen `active` live und
+  überspringen zerstörte Quellen sofort. Nur neue bzw. geometrisch veränderte Hindernisse
+  fordern einen Index-Neubau an, damit Pelletserien nicht zwischen Treffern voll neu indizieren.
 
 ## Messworkflow
 

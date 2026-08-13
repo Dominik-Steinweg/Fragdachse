@@ -30,6 +30,16 @@ Direktes cameras.main.shake() ist verboten. VisualFeedbackDirector stellt die Ca
 
 Kamera-Feedback darf keine Gameplay-Position oder Trefferprüfung verschieben. EntityJoltRegistry wendet rein visuelle Jolt-Werte nur im Renderfenster an und stellt sie danach wieder her; Host-Physik, Snapshots, HP-Balken und Geschwisterpositionen sehen die Jolt nicht. Globaler Hit-Stop oder eine Szene-Zeitskalierung ist im Mehrspielerpfad nicht zulässig.
 
+## Zustandsgetriebene Welt-Telegraphen
+
+Replizierte Präsentationszustände wechseln ihre Phase hart. Ein Welt-Telegraph hält deshalb einen eigenen Ist-Look (Farbe, Breiten, Dichten, Emissionsrate, Intensität) und gleicht ihn framerateunabhängig exponentiell an das Zielprofil an; Aufbau kurz, Ausklang lang. Reine Präsentationszeit wie ein nachhallender Ankunftslook liegt im Renderer und verschiebt weder Host-Phase noch Spawnzeit. Ausblenden erfolgt über denselben Ausklang bis unter eine Sichtbarkeitsschwelle, nicht durch sofortiges Verstecken beim Phasenende.
+
+Eine additiv gestreckte Verlaufsfläche endet über dunklem Boden als sichtbare gerade Kante: ihr flacher Ausläufer unterschreitet eine 8-Bit-Stufe je mehreren Pixeln, und die äußerste Texelspalte wird von der linearen Filterung geklemmt statt weiter gegen null zu laufen. Volumen einer Lichtwand trägt deshalb eine Wolke überlappender Partikel, deren Dichte über Flugbahn und Lebensdauer nach innen ausläuft; die harte Lesbarkeit trägt allein die Kantenlinie auf der Front selbst.
+
+Ein Kantenelement, das je Front rotiert wird, misst seine Größe in lokalen Achsen: die lokale Breite ist die Tiefe nach innen, die lokale Höhe die Spanne entlang der Kante. Für Nord und Süd ist die Spanne die Arenabreite, nicht die Arenahöhe. Vertauschte Achsen fallen an der West-/Ostfront nicht auf und erscheinen an der Nord-/Südfront als gerade Linie quer durch die Arena. Zonen von Partikelemittern sind emitterlokal und werden aus demselben Layout pro Frame gesetzt, damit sie nach einem Arenawechsel nicht auf alten Metriken stehen bleiben.
+
+Fortlaufende Animationsphasen werden pro Frame integriert (`phase += dt * speed`) und nicht aus absoluter Rundenzeit mal Geschwindigkeit berechnet. Sonst springt jede Marke bei einem Geschwindigkeits- oder Periodenwechsel um einen von der Laufzeit abhängigen Betrag. Der Zeitschritt stammt aus derselben replizierten Rundenzeit und wird gegen Rücksprünge und Frame-Hänger begrenzt.
+
 ## Lighting und Schatten
 
 ShadowSystem, LightingSystem und Post-FX sind getrennte Verantwortlichkeiten. LightingSystem komponiert dynamisches Licht und Verdeckung in eine Lightmap, die als ein Overlay in der Tiefenordnung liegt. Phasers eingebautes per-Object-Lighting ist dafür nicht der Projektvertrag.
@@ -45,6 +55,16 @@ Kamerabewegung läuft über Scroll-Offsets der Hauptkamera. Der Feedback-Versatz
 CameraPostFxController/PostFxComposer bauen die Filterkette einmalig auf. Qualitätsprofile und Ereignisaktivität sind getrennt: ein erlaubter, aber gerade inaktiver Filter darf keinen neutralen Vollbildpass ausführen. Objektfilter und Kamera-Post-FX getrennt registrieren, damit Qualitätsdiagnose und Budgets korrekt bleiben.
 
 Lokale Zeitblasen-/Schwarzes-Loch-/Druckwellen-Verzerrung läuft über LocalDistortionComposer und eine gemeinsame Displacement-Karte mit genau einem Kamera-Pass. Quellen sind Frame-Anmeldungen; wer nicht mehr anmeldet, verschwindet. Die neutrale Kodierung der Karte ist 0x808080. Änderungen der Kartengröße erfordern eine neue DynamicTexture und eine neue Filterverbindung, nicht setSize() auf der bestehenden Karte. Nach dem Stempeln muss DynamicTexture.render() den Command-Buffer flushen.
+
+## Charaktersprite-Skalierung
+
+Die Anzeigegröße einer Figur ist PLAYER_SIZE und ist von der Authoring-Auflösung ihrer Textur entkoppelt: Das Badger-Walking-Sheet liegt in 64-px-Zellen, die Figur bleibt 32 px. Daraus folgt eine Grundskalierung ungleich 1. Spawn-, Dash- und Burrow-Feedback sind deshalb Faktoren *relativ* zu dieser Grundskalierung und laufen über PlayerEntity.applySpriteScale() beziehungsweise die öffentliche setDashScale()-API; ein direktes sprite.setScale(1) von außen ist kein neutraler Wert mehr, sondern bläht die Figur auf Texturgröße auf. Overlays im 32-px-Raster (Spawn-Shine, Stealth-Shell/-Scan) übernehmen den Feedback-Faktor, nicht die rohe Texturskalierung.
+
+## Laufanimationen
+
+src/animations/BadgerAnimations.ts ist die einzige Registry für Walking-Sheets: eine Zeile 64×64-Zellen mit nordgerichteten Frames, wie die statischen Einzeltexturen. Eine neue animierte Figur ist genau ein Eintrag in WALKING_SHEETS; Preload, Animationsregistrierung und syncBadgerWalkingAnimation() leiten sich daraus ab. Gegner lösen ihre animierte Variante über staticTextureKey aus ihrem authored imageKey auf, deshalb bleibt coopDefenseEnemies.json unverändert; die statische Textur wird weiter geladen und von Trail-Geistern verwendet.
+
+Der Laufzustand kommt aus genau einer Quelle je Kontext: Host aus der Körpergeschwindigkeit, Client aus dem offenen Interpolationsabstand zur replizierten Zielposition (EnemyEntity.syncWalkingFromInterpolation(), kein Wire-Feld), Lobby-Ambient explizit aus dem Bewegungswinkel. Die Entity sperrt die Wiedergabe zusätzlich bei eingebuddelt, unsichtbar oder tot. Kopien eines animierten Sprites müssen den aktuellen Frame mitgeben; ein Texturschlüssel ohne Frame liefert bei Spritesheets den kompletten Streifen.
 
 ## Koordinaten und Cleanup
 

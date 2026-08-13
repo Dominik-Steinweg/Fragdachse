@@ -4,6 +4,7 @@
   "arenaWidthCells": 90,
   "timeOfDay": "12:00",
   "rockFillRatio": 0.3,
+  "trackPosition": "center",
   "mapEvents": [
     {
       "id": "c1-opening-train",

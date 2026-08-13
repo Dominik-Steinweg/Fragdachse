@@ -6,6 +6,7 @@
   "timeOfDay": "08:00",
   "tutorialText": "Große Arenen werden aus mehreren Richtungen angegriffen. Nutzt die Ruhefenster, um zwischen den Fronten zu wechseln – ihr müsst nicht überall gleichzeitig stehen.",
   "rockFillRatio": 0.1,
+  "trackPosition": "left",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -17,101 +18,82 @@
   "bases": [
     {
       "id": "coop-base-rear",
-      "hpMax": 2000,
+      "hpMax": 3500,
       "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
+        "kind": "center-offset",
+        "dxCells": 0,
+        "dyCells": 0
       },
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 3,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 3,
-            "gridY": 3
-          },
-          {
-            "gridX": 0,
-            "gridY": 4
-          },
-          {
-            "gridX": 1,
-            "gridY": 4
-          },
-          {
-            "gridX": 2,
-            "gridY": 4
-          },
-          {
-            "gridX": 3,
-            "gridY": 4
-          }
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 3, "gridY": 0 },
+          { "gridX": 4, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 1, "gridY": 1 },
+          { "gridX": 2, "gridY": 1 },
+          { "gridX": 3, "gridY": 1 },
+          { "gridX": 4, "gridY": 1 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 },
+          { "gridX": 3, "gridY": 2 },
+          { "gridX": 0, "gridY": 3 },
+          { "gridX": 1, "gridY": 3 },
+          { "gridX": 2, "gridY": 3 },
+          { "gridX": 3, "gridY": 3 },
+          { "gridX": 4, "gridY": 3 },
+          { "gridX": 0, "gridY": 4 },
+          { "gridX": 1, "gridY": 4 },
+          { "gridX": 3, "gridY": 4 },
+          { "gridX": 4, "gridY": 4 }
         ]
       },
       "turrets": [
         {
-          "id": "front-middle",
+          "id": "rocket-northwest",
           "cellOffset": {
-            "gridX": 1,
-            "gridY": 2
+            "gridX": 0,
+            "gridY": 0
           },
-          "mountSide": "front",
+          "mountSide": "top",
+          "weaponId": "TURRET_ROCKET_BURST"
+        },
+        {
+          "id": "spore-northeast",
+          "cellOffset": {
+            "gridX": 4,
+            "gridY": 0
+          },
+          "mountSide": "top",
           "weaponId": "BASE_SPOREN"
+        },
+        {
+          "id": "spore-southwest",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 4
+          },
+          "mountSide": "bottom",
+          "weaponId": "BASE_SPOREN"
+        },
+        {
+          "id": "rocket-southeast",
+          "cellOffset": {
+            "gridX": 4,
+            "gridY": 4
+          },
+          "mountSide": "bottom",
+          "weaponId": "TURRET_ROCKET_BURST"
         }
       ],
       "powerUpPedestals": [
         {
           "id": "health-station-top",
           "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
+            "gridX": 2,
+            "gridY": 0
           },
           "defId": "HEALTH_PACK",
           "respawnMs": 5000,
@@ -130,54 +112,18 @@
         {
           "id": "armor-station",
           "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
+            "gridX": 2,
+            "gridY": 4
           },
           "defId": "ARMOR",
           "respawnMs": 10000,
           "spawnOnArenaStart": true
-        }
-      ]
-    },
-    {
-      "id": "coop-base-middle",
-      "hpMax": 850,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": -1
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          }
-        ]
-      },
-      "powerUpPedestals": [
+        },
         {
           "id": "double-damage-station",
           "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
+            "gridX": 4,
+            "gridY": 2
           },
           "defId": "DOUBLE_DAMAGE",
           "respawnMs": 20000,
@@ -216,7 +162,7 @@
     {
       "id": "spore-front-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 7000,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 4, "delayMs": 700, "front": "east" }
@@ -225,7 +171,7 @@
     {
       "id": "spore-front-wardens",
       "start": { "type": "after-previous" },
-      "restAfterMs": 8500,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "spore-warden", "count": 7, "front": "west" },
         { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" },
@@ -235,18 +181,18 @@
     {
       "id": "spore-front-surge",
       "start": { "type": "after-previous" },
-      "restAfterMs": 9000,
+      "restAfterMs": 5000,
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 7, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 7, "delayMs": 1200, "front": "north" },
-        { "enemyKind": "spore-warden", "count": 5, "delayMs": 1600, "front": "east" }
+        { "enemyKind": "rabid-badger", "count": 12, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 4, "delayMs": 1200, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 4, "delayMs": 1600, "front": "east" }
       ]
     },
     {
       "id": "spore-front-finale",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "spore-warden", "count": 8, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 10, "front": "west" },
         { "enemyKind": "demon-badger", "count": 8, "delayMs": 900, "front": "north" },
         { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1300, "front": "south" }
       ]

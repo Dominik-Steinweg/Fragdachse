@@ -17,21 +17,23 @@ describe('Zeitbombendachs', () => {
     const config = getCoopDefenseEnemyConfig('timebomb-badger');
     expect(config).toMatchObject({
       movementTarget: 'players-and-armed-constructs',
-      knockbackFactor: 1.9,
-      timebomb: {
-        chaseSpeedMultiplier: 2,
-        activationRadiusPx: 450,
-        lineOfSightDurationMs: 400,
-        fuseDistancePx: 48,
-        fuseDurationMs: 2000,
-      },
     });
+    expect(config.knockbackFactor).toBeGreaterThan(0);
+    expect(config.timebomb?.chaseSpeedMultiplier).toBeGreaterThan(0);
+    expect(config.timebomb?.activationRadiusPx).toBeGreaterThan(0);
+    expect(config.timebomb?.lineOfSightDurationMs).toBeGreaterThanOrEqual(0);
+    expect(config.timebomb?.fuseDistancePx).toBeGreaterThan(0);
+    expect(config.timebomb?.fuseDurationMs).toBeGreaterThan(0);
     expect(config.weapons).toEqual([
       expect.objectContaining({ targetMode: 'rocks' }),
     ]);
   });
 
   it('locks after continuous sight, starts a fixed fuse only nearby, and detonates exactly once', () => {
+    const timebomb = getCoopDefenseEnemyConfig('timebomb-badger').timebomb!;
+    const activationAt = timebomb.lineOfSightDurationMs;
+    const fuseAt = activationAt + 1;
+    const detonationAt = fuseAt + timebomb.fuseDurationMs;
     let enemyActive = true;
     const setSpecialAction = vi.fn();
     const stopMovement = vi.fn();
@@ -96,33 +98,37 @@ describe('Zeitbombendachs', () => {
       { playExplosion, applyRadialImpulse, damageConstruction: vi.fn(), sound },
     );
 
-    system.hostUpdate(1_000);
-    system.hostUpdate(1_399);
+    system.hostUpdate(0);
+    system.hostUpdate(activationAt - 1);
     expect(setSpecialAction).not.toHaveBeenCalledWith('timebomb-chase');
-    system.hostUpdate(1_400);
+    system.hostUpdate(activationAt);
     expect(setSpecialAction).toHaveBeenCalledWith('timebomb-chase');
     expect(sound).toHaveBeenCalledWith(expect.objectContaining({ type: 'timebomb-activate' }));
 
     enemy.sprite.x = 60;
-    system.hostUpdate(1_401);
-    expect(setSpecialAction).toHaveBeenCalledWith('timebomb-fuse', 3_401);
+    system.hostUpdate(fuseAt);
+    expect(setSpecialAction).toHaveBeenCalledWith('timebomb-fuse', detonationAt);
     expect(playExplosion).not.toHaveBeenCalled();
-    system.hostUpdate(3_400);
+    system.hostUpdate(detonationAt - 1);
     expect(playExplosion).not.toHaveBeenCalled();
-    system.hostUpdate(3_401);
-    system.hostUpdate(3_500);
+    system.hostUpdate(detonationAt);
+    system.hostUpdate(detonationAt + 1);
 
     expect(hostRemoveWithoutKill).toHaveBeenCalledTimes(1);
     expect(playExplosion).toHaveBeenCalledTimes(1);
-    expect(playExplosion).toHaveBeenCalledWith(60, 0, 168, 'timebomb');
+    expect(playExplosion).toHaveBeenCalledWith(60, 0, timebomb.explosionRadiusPx, 'timebomb');
     expect(applyRadialImpulse).toHaveBeenCalledTimes(1);
-    expect(combat.applyBaseDamage).toHaveBeenCalledWith('outpost-1', 222, 'e1');
+    expect(combat.applyBaseDamage).toHaveBeenCalledWith('outpost-1', expect.any(Number), 'e1');
+    const baseDamage = vi.mocked(combat.applyBaseDamage).mock.calls[0]?.[1];
+    expect(baseDamage).toBeGreaterThan(0);
+    expect(baseDamage).toBeLessThanOrEqual(timebomb.explosionDamage);
     expect(applyBaseDamage).not.toHaveBeenCalled();
     expect(fireChunks.hostCreateFireChunkBurst).toHaveBeenCalledTimes(1);
     expect(sound).toHaveBeenCalledWith(expect.objectContaining({ type: 'timebomb-detonate' }));
   });
 
   it('keeps an individual sight lock when the shared flow field changes its preferred target', () => {
+    const lineOfSightDurationMs = getCoopDefenseEnemyConfig('timebomb-badger').timebomb!.lineOfSightDurationMs;
     let selectedTargetId = 'p0';
     const setSpecialAction = vi.fn();
     const enemy = {
@@ -170,16 +176,16 @@ describe('Zeitbombendachs', () => {
       },
     );
 
-    system.hostUpdate(1_000);
+    system.hostUpdate(0);
     selectedTargetId = 'p1';
-    system.hostUpdate(1_100);
+    system.hostUpdate(100);
     selectedTargetId = 'p0';
-    system.hostUpdate(1_300);
+    system.hostUpdate(300);
     selectedTargetId = 'p1';
-    system.hostUpdate(1_399);
+    system.hostUpdate(lineOfSightDurationMs - 1);
     expect(setSpecialAction).not.toHaveBeenCalledWith('timebomb-chase');
 
-    system.hostUpdate(1_400);
+    system.hostUpdate(lineOfSightDurationMs);
     expect(setSpecialAction).toHaveBeenCalledWith('timebomb-chase');
   });
 

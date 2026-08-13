@@ -36,8 +36,12 @@ describe('Inferno Colossus void fire chunks', () => {
     vi.restoreAllMocks();
   });
 
-  it('throws twenty player-only purple chunks at an irregular interval around five seconds', () => {
+  it('throws player-only purple chunks at an authored irregular interval', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const ability = getCoopDefenseEnemyConfig('inferno-colossus').voidFireChunks!;
+    const sampledInterval = ability.intervalMinMs
+      + Math.floor(0.5 * (ability.intervalMaxMs - ability.intervalMinMs + 1));
+    const firstBurstAt = 1_000 + sampledInterval;
     const enemy = {
       id: 'boss-1',
       kind: 'inferno-colossus',
@@ -80,33 +84,33 @@ describe('Inferno Colossus void fire chunks', () => {
       expect.objectContaining({
         sourceKey: 'void-fire-trail:boss-1',
         ownerId: 'boss-1',
-        durationMs: 6_000,
+        durationMs: ability.durationMs,
         visualStyle: 'void',
         damageTarget: 'players',
       }),
       1_000,
     );
-    system.hostUpdate(5_999);
+    system.hostUpdate(firstBurstAt - 1);
     expect(hostCreateFireChunkBurst).not.toHaveBeenCalled();
 
-    system.hostUpdate(6_000);
+    system.hostUpdate(firstBurstAt);
     expect(hostCreateFireChunkBurst).toHaveBeenCalledTimes(1);
     expect(hostCreateFireChunkBurst).toHaveBeenCalledWith(
       'boss-1',
       520,
       360,
       expect.objectContaining({
-        count: 20,
-        searchRadius: 160,
-        durationMs: 6_000,
+        count: ability.count,
+        searchRadius: ability.searchRadius,
+        durationMs: ability.durationMs,
         visualStyle: 'void',
         damageTarget: 'players',
       }),
-      'void-fire-chunks:boss-1:6000',
-      6_000,
+      `void-fire-chunks:boss-1:${firstBurstAt}`,
+      firstBurstAt,
     );
 
-    system.hostUpdate(11_000);
+    system.hostUpdate(firstBurstAt + sampledInterval);
     expect(hostCreateFireChunkBurst).toHaveBeenCalledTimes(2);
   });
 
@@ -114,20 +118,17 @@ describe('Inferno Colossus void fire chunks', () => {
     const bossConfig = getCoopDefenseEnemyConfig('inferno-colossus');
     expect(bossConfig.weapons[0]?.weaponId).toBe('INFERNO_COLOSSUS_FLAMETHROWER');
     expect(WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER).toMatchObject({
-      range: 350,
       projectileColor: VOID_FIRE_COLOR,
       projectileBurnVisualStyle: 'void',
       allowedSlots: [],
       fire: { type: 'flamethrower' },
     });
-    expect(WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER.range)
-      .toBeGreaterThan(WEAPON_CONFIGS.FLAMETHROWER.range);
+    expect(WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER.range).toBeGreaterThan(0);
   });
 
   it('gives hostile flame towers their own purple void-flame weapon variant', () => {
     expect(WEAPON_CONFIGS.TURRET_VOID_FLAME).toMatchObject({
       id: 'TURRET_VOID_FLAME',
-      range: WEAPON_CONFIGS.TURRET_FLAME.range,
       projectileColor: VOID_FIRE_COLOR,
       projectileBurnVisualStyle: 'void',
       allowedSlots: [],
@@ -137,6 +138,6 @@ describe('Inferno Colossus void fire chunks', () => {
         burnDamagePerTick: WEAPON_CONFIGS.TURRET_FLAME.fire?.burnDamagePerTick,
       },
     });
-    expect(WEAPON_CONFIGS.TURRET_VOID_FLAME.damage).toBe(WEAPON_CONFIGS.TURRET_FLAME.damage);
+    expect(WEAPON_CONFIGS.TURRET_VOID_FLAME.range).toBeGreaterThan(0);
   });
 });

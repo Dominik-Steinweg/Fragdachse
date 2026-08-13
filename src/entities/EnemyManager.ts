@@ -920,6 +920,9 @@ export class EnemyManager {
 
   updateClientInterpolation(factor: number): void {
     for (const enemy of this.enemies.values()) {
+      // Vor dem Interpolationsschritt: der noch offene Weg zur Zielposition ist auf dem Client
+      // das Bewegungssignal fuer die Laufanimation.
+      enemy.syncWalkingFromInterpolation();
       enemy.lerpStep(factor);
     }
   }

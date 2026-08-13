@@ -6,6 +6,7 @@
   "tutorialText": "Boss-Maps enden erst, wenn der Boss fällt. Der erste Sieg bringt einen Boss-Punkt. Nach dieser Map werden Dachs Nukem und Dachs of Steel freigeschaltet. Inspector bleibt gesperrt.",
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
+  "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -116,7 +117,7 @@
   ],
   "boss": {
     "enemyKind": "grave-titan",
-    "spawnAtMs": 18000
+    "spawnAtMs": 10000
   },
   "encounters": [
     {
@@ -129,10 +130,10 @@
     },
     {
       "id": "grave-titan-phase-support",
-      "start": { "type": "time", "atMs": 42000 },
+      "start": { "type": "time", "atMs": 22000 },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 6, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 2, "delayMs": 1200, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
       ]
     }
   ],

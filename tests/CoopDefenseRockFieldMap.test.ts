@@ -16,12 +16,17 @@ const MAP_14 = '14';
 
 /** Mehrere Seeds, weil die Gänge pro Runde neu ausgewürfelt werden. */
 const SEEDS = [4_711, 20_260_721, 1, 987_654, 31_337];
+const blockedGridBySeed = new Map<number, boolean[][]>();
 
 function buildBlockedGrid(seed: number): boolean[][] {
+  const cached = blockedGridBySeed.get(seed);
+  if (cached) return cached;
+
   const layout = ArenaGenerator.generate(seed, getCoopDefenseMapConfig(MAP_14));
   const blocked = Array.from({ length: GRID_ROWS }, () => new Array<boolean>(GRID_COLS).fill(false));
   for (const rock of layout.rocks) blocked[rock.gridY][rock.gridX] = true;
   for (const tree of layout.trees) blocked[tree.gridY][tree.gridX] = true;
+  blockedGridBySeed.set(seed, blocked);
   return blocked;
 }
 
