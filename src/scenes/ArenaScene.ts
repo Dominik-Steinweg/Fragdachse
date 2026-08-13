@@ -41,6 +41,12 @@ import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
 import { ArenaExitFadeOverlay } from '../ui/ArenaExitFadeOverlay';
 import { CoopDefenseItemRewardOverlay } from '../ui/CoopDefenseItemRewardOverlay';
 import {
+  COOP_DEFENSE_ITEM_ART_LEVELS,
+  COOP_DEFENSE_ITEM_ART_SLOTS,
+  getCoopDefenseItemArtKey,
+  getCoopDefenseItemEmptyArtKey,
+} from '../ui/coopDefenseItemIcons';
+import {
   CoopDefenseItemsOverlay,
   type CoopDefenseItemsOverlayState,
 } from '../ui/CoopDefenseItemsOverlay';
@@ -428,6 +434,15 @@ export class ArenaScene extends Phaser.Scene {
       if (queuedUpgradeTextures.has(key)) continue;
       queuedUpgradeTextures.add(key);
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    }
+
+    for (const slot of COOP_DEFENSE_ITEM_ART_SLOTS) {
+      const emptyKey = getCoopDefenseItemEmptyArtKey(slot);
+      this.load.image(emptyKey, `./assets/sprites/coop-defense/${emptyKey}.png`);
+      for (const itemLevel of COOP_DEFENSE_ITEM_ART_LEVELS) {
+        const key = getCoopDefenseItemArtKey(slot, itemLevel);
+        this.load.image(key, `./assets/sprites/coop-defense/${key}.png`);
+      }
     }
   }
 

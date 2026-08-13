@@ -7,6 +7,7 @@ import {
 import {
   buildCoopDefenseInventoryGrid,
   buildCoopDefenseItemTooltip,
+  listEquippedCoopDefenseSpecialEffects,
   resolveCoopDefenseItemDrop,
   summariseEquippedCoopDefenseItems,
 } from '../src/ui/CoopDefenseItemsModel';
@@ -132,6 +133,25 @@ describe('coop-defense item tooltip', () => {
   it('always states the salvage reward', () => {
     const texts = tooltipTexts(buildCoopDefenseItemTooltip(item({ rarity: 'yellow' }), null, false));
     expect(texts.some((text) => /^Zerlegen bringt \+\d+ XP$/.test(text))).toBe(true);
+  });
+
+  it('shows a statless surrounded affix in the tooltip and equipment special effects', () => {
+    const surrounded = item({
+      uid: 'surrounded-rare',
+      rarity: 'blue',
+      baseValue: 30,
+      affixes: [{ affixId: 'surrounded', value: 0.12 }],
+    });
+
+    const texts = tooltipTexts(buildCoopDefenseItemTooltip(surrounded, null, false));
+    expect(texts).toContain('+30 Maximale HP');
+    expect(texts).toContain('Umzingelt');
+    expect(texts).toContain('Bei mindestens 5 Gegnern in 160 Reichweite: +12 % Adrenalinregeneration');
+
+    expect(listEquippedCoopDefenseSpecialEffects([surrounded])).toEqual([{
+      label: 'Umzingelt',
+      text: '+12 % Umzingelt',
+    }]);
   });
 });
 

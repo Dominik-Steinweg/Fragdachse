@@ -19,7 +19,9 @@ import { mkdir } from 'node:fs/promises';
  *   Am Ziel bleiben ohnehin nur drei bis vier sichtbare Pixel Breite – dort traegt ausschliesslich
  *   Wertkontrast, kein Detail.
  * - **Norden ist vorne.** Wie Spieler- und Gegnersprites zeigt jede Waffentextur nach oben
- *   (-y = Blickrichtung); die Rotation kommt komplett von der Figur.
+ *   (-y = Blickrichtung); die Rotation kommt komplett von der Figur. Die Pixelkarten duerfen
+ *   fuer Lesbarkeit leicht asymmetrisch und um wenige Pixel seitlich versetzt sein, bleiben aber
+ *   klar in der Draufsicht ausgerichtet.
  * - **Griffpunkt und Mündung liegen in Texturpixeln vor** und werden zur Laufzeit gemeinsam mit
  *   dem Bild transformiert. Der Griff sitzt bewusst etwas vor dem hinteren Ende, damit der
  *   Waffenruecken in der Kopfpartie steckt statt davor zu schweben.
@@ -33,6 +35,12 @@ import { mkdir } from 'node:fs/promises';
  */
 
 const OUT_DIR = path.join('public', 'assets', 'sprites', 'held');
+const PREVIEW_DIR = path.join(OUT_DIR, 'previews');
+const PREVIEW_PATH = path.join(PREVIEW_DIR, 'held-weapon-pilots.png');
+const PLAYER_SPRITE_PATH = path.join('public', 'assets', 'sprites', '32x32dachs.png');
+const PLAYER_TEXTURE_SIZE = 32;
+const HELD_ITEM_ANCHOR_X = 0;
+const HELD_ITEM_ANCHOR_Y = -9;
 const CATALOG_PATH = path.join('src', 'loadout', 'content', 'data', 'catalog.json');
 const catalog = JSON.parse(readFileSync(CATALOG_PATH, 'utf8'));
 const catalogById = new Map(catalog.catalog.map((entry) => [entry.id, entry]));
@@ -74,44 +82,48 @@ const PALETTE = {
  *
  * `grip` ist der Punkt in Texturpixeln, der auf dem Pfotenanker der Figur sitzt. Halbe Pixel sind
  * ausdruecklich erlaubt und bei ungerader Breite noetig, um die Waffe auf der Laengsachse zu
- * zentrieren.
+ * zentrieren. Bei Pilot-Sprites duerfen alle Zeilen auch vollstaendig ausgeschrieben und bewusst
+ * asymmetrisch sein; die Textur wird nicht mehr auf eine Spiegelachse gezwungen.
  */
 const ITEMS = [
   {
     file: 'GLOCK.png',
-    grip: { x: 2.5, y: 8.5 },
+    grip: { x: 4.5, y: 9.5 },
+    muzzle: { x: 3.5, y: 0 },
     // Ikonreferenz: blaugrauer Schlitten, dunkler Lauf und ein kurzer blauer Akzent.
+    // Die leicht nach rechts versetzte Griffpartie ist ein lokales Anbauteil, keine Seitenansicht.
     pixels: [
-      '..k..',
-      '.mmm.',
-      '.mcm.',
-      '.mcm.',
-      '.mcm.',
-      'dmmmd',
-      'dmuud',
-      '.dmm.',
-      '.ddd.',
-      '..d..',
+      '...k...',
+      '...d...',
+      '..ndd..',
+      '..nmm..',
+      '..nmmu.',
+      '.nnmmu.',
+      '.nnmmuu',
+      '..nmmuu',
+      '...dmm.',
+      '....dmm',
+      '....dd.',
     ],
   },
   {
     file: 'P90.png',
-    grip: { x: 4.5, y: 12.5 },
+    grip: { x: 4.5, y: 11.5 },
     // Ikonreferenz: breite, kompakte PDW mit blauem Magazin-/Energieakzent.
     pixels: [
       '....k....',
       '....d....',
       '...dmd...',
-      '..dmmmd..',
+      '..dmmmdd.',
       '.dmmmmmd.',
-      'dmmcCCmmd',
-      'dmmcCCmmd',
-      '.dmmccmd.',
-      '.dmmmmmd.',
-      '..dmmmd..',
-      '..dmmmd..',
+      'dmmnmmmdd',
+      'dmmnmmmdd',
+      '.dmmnmmu.',
+      '.dmmnmmu.',
+      '..dmmmu..',
+      '..dmmmu..',
+      '...dmm...',
       '...ddd...',
-      '....d....',
     ],
   },
   {
@@ -142,7 +154,8 @@ const ITEMS = [
       'dppPCPPpd',
       'dppPPPPpd',
       '.dppPPpd.',
-      '.dppPPpd.',
+      'dppPPPPpd',
+      '.dppPppd.',
       '..dpppd..',
       '..dpppd..',
       '...ddd...',
@@ -159,8 +172,8 @@ const ITEMS = [
       '..dmd..',
       '.dmcmd.',
       'dmcCcmd',
-      'dmmCmmd',
-      '.dmcmd.',
+      'dmcCCmd',
+      '.dmCmu.',
       'dmmCmmd',
       '.dmcmd.',
       '..dmd..',
@@ -174,18 +187,18 @@ const ITEMS = [
     grip: { x: 4.5, y: 13.5 },
     // Breiter Mehrfach-Emitter: die lange, schwere Silhouette trennt ihn vom Plasma.
     pixels: [
-      '...k.k...',
-      '..dmmmd..',
-      '.dmmmmmd.',
+      '..k.k.k..',
+      '.dmmmmd..',
+      'dmmcCcmmd',
       'dmmFcFmmd',
+      '.dmmcCmm.',
+      '.dmmFcmm.',
       'dmmcCcmmd',
-      'dmmcFcmmd',
       '.dmmmmmd.',
       '..dmmmd..',
       '.dmmmmmd.',
       'dmmcCcmmd',
-      'dmmcFcmmd',
-      '..dmmmd..',
+      'dmmFcFmmd',
       '..dmmmd..',
       '...ddd...',
       '....d....',
@@ -193,16 +206,16 @@ const ITEMS = [
   },
   {
     file: 'XBOW.png',
-    grip: { x: 4.5, y: 12.5 },
+    grip: { x: 4.5, y: 13.5 },
     // Armbrust: breites Bogenhaupt an der Mündung und schmaler Schaft nach hinten.
     pixels: [
-      '...k.k...',
-      '..nmmmn..',
-      '.nmmummn.',
+      '..k...k..',
+      '.nmmmnmm.',
       'nmmcCcmmn',
       'nmmcCcmmn',
-      '.nmmummn.',
+      '.nmmumnm.',
       '..nmmmn..',
+      '...ncn...',
       '...nmn...',
       '...nmn...',
       '...nmn...',
@@ -210,46 +223,50 @@ const ITEMS = [
       '...nnn...',
       '...nnn...',
       '....n....',
+      '....n....',
     ],
   },
   {
     file: 'LAUBBLAESER.png',
-    grip: { x: 3.5, y: 12.5 },
+    grip: { x: 5.5, y: 13.5 },
     // Laubbläser: große Düse vorne, danach ein langer, schlanker Griffkörper.
     pixels: [
-      '...k...',
-      '..dmd..',
-      '.dmmmd.',
-      'dmmGmmd',
-      'dmgGgmd',
-      'dmuGumd',
-      'dmmGmmd',
-      '.dmmmd.',
-      '..dmd..',
-      '..dmd..',
-      '..dmd..',
-      '...d...',
-      '..ddd..',
-      '..ddd..',
-      '...d...',
+      '...k.....',
+      '..dGd....',
+      '.dGGGd...',
+      'dGGGGGd..',
+      'dGgGGu...',
+      '.dGGGuu..',
+      '.dGGGuu..',
+      '..dGGuu..',
+      '..dGGuu..',
+      '..dGGuu..',
+      '..dGGuu..',
+      '...dGuu..',
+      '...dGuu..',
+      '...ddd...',
+      '....d....',
+      '....d....',
     ],
   },
   {
     file: 'REPARATURSTRAHL.png',
-    grip: { x: 2.5, y: 9.5 },
+    grip: { x: 4.5, y: 10.5 },
+    muzzle: { x: 3.5, y: 0 },
     // Schmaler Reparaturstrahler mit heller, ruhiger Mittellinie.
     pixels: [
-      '..k..',
-      '.mCm.',
-      '.mcm.',
-      '.mGm.',
-      '.mGm.',
-      '.mCm.',
-      '.mcm.',
-      'dmgmd',
-      'dmgmd',
-      '.ddd.',
-      '..d..',
+      '...k...',
+      '..mCm..',
+      '..mcm..',
+      '.mGgm..',
+      '.mGGm..',
+      '.mCGm..',
+      '.mGmmu.',
+      '.mGmmu.',
+      '..dmmu.',
+      '..dmmu.',
+      '...ddd.',
+      '....d..',
     ],
   },
   {
@@ -262,8 +279,7 @@ const ITEMS = [
       '.dZyZd.',
       '.dZyZd.',
       'dZyyyZd',
-      '.dZyZd.',
-      '.dZyZd.',
+      '.dZyydd',
       '..dmd..',
       '..dmd..',
       '...d...',
@@ -272,18 +288,19 @@ const ITEMS = [
   },
   {
     file: 'ENERGIEINJEKTOR.png',
-    grip: { x: 2.5, y: 8.5 },
+    grip: { x: 2.5, y: 9.5 },
     // Injektor: schmaler Stab mit hellem Energiesegment statt Waffenlauf.
     pixels: [
       '..k..',
+      '..C..',
       '.mCm.',
       '.mcm.',
       '.mCm.',
       '.mcm.',
       '.mCm.',
-      '.mcm.',
       'dmCmd',
-      '.ddd.',
+      'dmCmu',
+      '.ddmu',
       '..d..',
     ],
   },
@@ -298,19 +315,19 @@ const ITEMS = [
       '...dmd...',
       '..dmmmd..',
       '.dmmmmmd.',
-      'dmmmHmmmd',
-      'dmmmHmmmd',
-      'dmmHmHmmd',
-      'dmmHmHmmd',
-      'dmmhmhmmd',
-      'dmmhmhmmd',
-      '.dmmHmmd.',
+      'dmmHmmmd.',
+      '.dmmHmmmd',
+      '.dmmHmmmd',
+      '.dmmHmmmd',
+      '.dmmHmmmd',
       '..dmmmd..',
       '..dmmmd..',
-      '...dmd...',
-      '...dmd...',
-      '...dmd...',
-      '...dmd...',
+      '..dmmhd..',
+      '..dmmhd..',
+      '...dmm...',
+      '...dmm...',
+      '...dmm...',
+      '...dmm...',
       '...ddd...',
       '...ddd...',
       '....d....',
@@ -318,27 +335,29 @@ const ITEMS = [
   },
   {
     file: 'SHOTGUN.png',
-    grip: { x: 4.5, y: 16.5 },
+    grip: { x: 5.5, y: 17.5 },
+    muzzle: { x: 4.5, y: 0 },
     // Doppelläufige Schrotflinte: zwei getrennte Konturpunkte an der Mündung.
     pixels: [
-      '..k...k..',
-      '..m...m..',
-      '..m...m..',
-      '..d...d..',
-      '..dmmmd..',
-      '.dmmHmmd.',
-      'dmmHmHmmd',
-      'dmmhmhmmd',
-      '.dmmhmmd.',
-      '..dmmmd..',
-      '..dmmmd..',
-      '..dmmmd..',
-      '..dmmmd..',
-      '...dmd...',
-      '...dmd...',
-      '...ddd...',
-      '...ddd...',
-      '....d....',
+      '...k...k...',
+      '...d...d...',
+      '...d...d...',
+      '...d...d...',
+      '...d...d...',
+      '...dmmmd...',
+      '..dmmHmmmd.',
+      '..dmmHmmmd.',
+      '..dmmhmmd..',
+      '...dmmmd...',
+      '...dmmmd...',
+      '...dmmmH...',
+      '...dmmmH...',
+      '...dmmmH...',
+      '....dmmH...',
+      '....dmmH...',
+      '....dmmH...',
+      '.....dd....',
+      '.....d.....',
     ],
   },
   {
@@ -350,10 +369,10 @@ const ITEMS = [
       '..dmmmd..',
       'dmmcFcmmd',
       'dmmcCcmmd',
-      'dmmcFcmmd',
+      '.dmmcFmmd',
       'dmmcCcmmd',
-      'dmmcFcmmd',
-      '..dmmmd..',
+      '.dmmcFmmd',
+      '.dmmcCmm.',
       '..dmmmd..',
       '..dmmmd..',
       '...dmd...',
@@ -366,137 +385,145 @@ const ITEMS = [
   },
   {
     file: 'ROCKET_LAUNCHER.png',
-    grip: { x: 5.5, y: 19.5 },
+    grip: { x: 6.5, y: 19.5 },
+    muzzle: { x: 5.5, y: 0 },
     // Schweres Raketenrohr: breite Mündung, dicker Körper, kurzes Heck.
     pixels: [
-      '.....k.....',
-      '....ddd....',
-      '...dmmmm...',
-      '..dmmmmmd..',
-      '.dmmmmmmmd.',
-      'dmmmOyOmmmd',
-      'dmmmmmmmmmd',
-      '..dmmymmd..',
-      'dmmmmmmmmmd',
-      'dmmmOyOmmmd',
-      'dmmmmmmmmmd',
-      '..dmmymmd..',
-      'dmmmmmmmmmd',
-      'dmmmOyOmmmd',
-      'dmmmmmmmmmd',
-      'dmmmmmmmmmd',
-      'dmmmOyOmmmd',
-      'dmmmmmmmmmd',
-      'dmmmmmmmmmd',
-      '..dmmmmmd..',
-      '...ddddd...',
-      '....ddd....',
+      '...kOOOk.....',
+      '..kOmmmOkk...',
+      '.kOmmmmOkk...',
+      '.kOmmmmOkk...',
+      '..kOmmmOkk...',
+      '..dOmmmOkk...',
+      '...dmmmmOkk..',
+      '...dmmmOOO...',
+      '...dmmmOOO...',
+      '...dmmOyyO...',
+      '...dmmOyyO...',
+      '....dmmOO....',
+      '....dmmOO....',
+      '....dmmOO....',
+      '....dmmOO....',
+      '....dmmOO....',
+      '.....dmOO....',
+      '.....dmOO....',
+      '.....dmmm....',
+      '.....dmmm....',
+      '.....ddd.....',
+      '......dd.....',
     ],
   },
   {
     file: 'MINI_ROCKET_LAUNCHER.png',
-    grip: { x: 3.5, y: 11.5 },
+    grip: { x: 4.5, y: 12.5 },
+    muzzle: { x: 4.5, y: 0 },
     // Kürzere Raketenvariante, mit hellem Kern zur schnellen Unterscheidung.
     pixels: [
-      '...k...',
-      '..dmd..',
-      '.dmmmd.',
-      'dmcCcmd',
-      '.dmmmd.',
-      '.dmcmd.',
-      '.dmmmd.',
-      '..dmd..',
-      '..dmd..',
-      '..dmd..',
-      '..ddd..',
-      '..ddd..',
-      '...d...',
-    ],
-  },
-  {
-    file: 'AWP.png',
-    grip: { x: 3.5, y: 27.5 },
-    // Präzisionsgewehr: die längste, bewusst sehr schmale Silhouette im Satz.
-    pixels: [
-      '...k...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '...o...',
-      '..eoe..',
-      '..eoe..',
-      '..oOo..',
-      '..oOo..',
-      '..oOo..',
-      '..oOo..',
-      '..oOo..',
-      '..oOo..',
-      '..oOo..',
-      '..ooo..',
-      '..ddd..',
-      '..ddd..',
-      '...d...',
-    ],
-  },
-  {
-    file: 'FLAMETHROWER.png',
-    grip: { x: 4.5, y: 13.5 },
-    // Flammenwerfer: schwere Düse und kurzer, kompakter Tankkörper.
-    pixels: [
-      '...k.k...',
-      '..dmmmd..',
-      '.dmmmmmd.',
-      'dmmhHhmmd',
-      'dmmZyZmmd',
-      'dmmhHhmmd',
-      '.dmmmmmd.',
-      '..dmmmd..',
-      '..dmmmd..',
-      '..dmmmd..',
-      '..dmmmd..',
-      '..dmmmd..',
+      '..k.k.k..',
+      '.nmmnmmn.',
+      'nmmcCcmmn',
+      'nmmcCcmmn',
+      '.nmmnmmu.',
+      '.nmmnmmu.',
+      '..nmmmu..',
+      '..nmmmu..',
+      '..nmmmu..',
+      '...nmmu..',
+      '...nmmu..',
       '...ddd...',
       '...ddd...',
       '....d....',
     ],
   },
   {
+    file: 'AWP.png',
+    grip: { x: 4.5, y: 26.5 },
+    muzzle: { x: 4.5, y: 0 },
+    // Präzisionsgewehr: die längste, bewusst sehr schmale Silhouette im Satz.
+    pixels: [
+      '....k....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '....o....',
+      '...eoe...',
+      '...eoe...',
+      '..oOooO..',
+      '..oOoOO..',
+      '..oOoOO..',
+      '..oooOO..',
+      '..ooooo..',
+      '...oooO..',
+      '...oooO..',
+      '...oooO..',
+      '...oooO..',
+      '...oooO..',
+      '...oooO..',
+      '...ddd...',
+      '....d....',
+    ],
+  },
+  {
+    file: 'FLAMETHROWER.png',
+    grip: { x: 5.5, y: 15.5 },
+    muzzle: { x: 4.5, y: 0 },
+    // Flammenwerfer: schwere Düse und kurzer, kompakter Tankkörper.
+    pixels: [
+      '....k......',
+      '...dmmmm...',
+      '..dmmmmm...',
+      '.dmmhHhmmd.',
+      'dmmZyZmmmd.',
+      '.dmmhHhmmd.',
+      '.dmmmmmmmd.',
+      '..dmmmmd...',
+      '..dmmZmd...',
+      '..dmmZmd...',
+      '..dmmmmd...',
+      '..dmmmmd...',
+      '...dmmmm...',
+      '...dmmmZ...',
+      '...dmmmZ...',
+      '....ddd....',
+      '.....d.....',
+    ],
+  },
+  {
     file: 'NEGEV.png',
-    grip: { x: 5.5, y: 20.5 },
+    grip: { x: 6.5, y: 20.5 },
+    muzzle: { x: 5.5, y: 0 },
     // Ikonreferenz: breites dunkles MG mit olivgrünen Markierungen und schwerem Gehäuse.
     pixels: [
-      '.....k.....',
-      '....dmd....',
-      '...dmmmm...',
-      '..dmmmmmd..',
-      '.dmmmmmmmd.',
-      'dmmmGGGmmmd',
-      'dmmmGyGmmmd',
-      'dmmmmmmmmmd',
-      'dmmmGGGmmmd',
-      'dmmmGyGmmmd',
-      'dmmmmmmmmmd',
-      'dmmmGGGmmmd',
-      'dmmmGyGmmmd',
-      'dmmmmmmmmmd',
-      'dmmmGGGmmmd',
-      'dmmmGyGmmmd',
-      'dmmmmmmmmmd',
-      'dmmmmmmmmmd',
-      'dmmmmmmmmmd',
-      '..dmmmmmd..',
-      '...ddddd...',
-      '....ddd....',
+      '.....k.......',
+      '.....d.......',
+      '....dmd......',
+      '....dmm......',
+      '...dmmmdd....',
+      '..dmmmmdd....',
+      '..dmmmGGdd...',
+      '..dmmmGGddd..',
+      '..dmmmGGddd..',
+      '..dmmmGGddd..',
+      '...dmmmGGdd..',
+      '...dmmmGGdd..',
+      '...dmmmGGdd..',
+      '...dmmmGGdd..',
+      '...dmmmGGdd..',
+      '...dmmmmdd...',
+      '...dmmmmdd...',
+      '...dmmmmdd...',
+      '...dmmmmdd...',
+      '...dmmmmdd...',
+      '....dmmmm....',
+      '.....ddd.....',
     ],
   },
   {
@@ -619,26 +646,110 @@ const STANDARD_HELD_ITEM_MAX_WIDTH = 13;
 const STANDARD_HELD_ITEM_MAX_HEIGHT = 24;
 const ABSOLUTE_HELD_ITEM_MAX_SIZE = 32;
 
+const PILOT_PREVIEW_ITEMS = ['GLOCK.png', 'NEGEV.png', 'ROCKET_LAUNCHER.png'];
+const PILOT_PREVIEW_ROTATIONS = [0, 90, 180, 270];
+const PILOT_PREVIEW_SCALE = 8;
+const PILOT_PREVIEW_TILE_SIZE = 448;
+const PILOT_PREVIEW_PADDING = 64;
+
+function rotatePoint(x, y, degrees) {
+  const angle = (degrees * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: x * cos - y * sin,
+    y: x * sin + y * cos,
+  };
+}
+
+/**
+ * Erzeugt eine vergrösserte Rastertafel aus genau derselben Pixelkarte und demselben Grippunkt.
+ * Reihenfolge: Glock, Negev, Rocket Launcher; Spalten: 0, 90, 180, 270 Grad.
+ */
+async function writePilotPreview() {
+  const previewWidth = PILOT_PREVIEW_PADDING * 2 + PILOT_PREVIEW_TILE_SIZE * PILOT_PREVIEW_ROTATIONS.length;
+  const previewHeight = PILOT_PREVIEW_PADDING * 2 + PILOT_PREVIEW_TILE_SIZE * PILOT_PREVIEW_ITEMS.length;
+  const previewCenter = PILOT_PREVIEW_TILE_SIZE / 2;
+  const weaponCanvasSize = 64 * PILOT_PREVIEW_SCALE;
+  const weaponCanvasCenter = weaponCanvasSize / 2;
+  const player = await sharp(PLAYER_SPRITE_PATH)
+    .resize({ width: PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE, height: PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE, kernel: 'nearest' })
+    .png()
+    .toBuffer();
+
+  const composites = [];
+  for (let row = 0; row < PILOT_PREVIEW_ITEMS.length; row += 1) {
+    const item = ITEMS.find((candidate) => candidate.file === PILOT_PREVIEW_ITEMS[row]);
+    if (!item) throw new Error(`Pilot-Preview-Waffe fehlt im Generator: ${PILOT_PREVIEW_ITEMS[row]}`);
+    const weaponPath = path.join(OUT_DIR, item.file);
+    const weapon = await sharp(weaponPath)
+      .resize({ width: Math.max(...item.pixels.map((line) => line.length)) * PILOT_PREVIEW_SCALE, height: item.pixels.length * PILOT_PREVIEW_SCALE, kernel: 'nearest' })
+      .png()
+      .toBuffer();
+    const weaponCanvas = await sharp({
+      create: {
+        width: weaponCanvasSize,
+        height: weaponCanvasSize,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .composite([{
+        input: weapon,
+        left: Math.round(weaponCanvasCenter - item.grip.x * PILOT_PREVIEW_SCALE),
+        top: Math.round(weaponCanvasCenter - item.grip.y * PILOT_PREVIEW_SCALE),
+      }])
+      .png()
+      .toBuffer();
+
+    for (let column = 0; column < PILOT_PREVIEW_ROTATIONS.length; column += 1) {
+      const degrees = PILOT_PREVIEW_ROTATIONS[column];
+      const playerRotated = await sharp(player)
+        .rotate(degrees, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      const weaponRotated = await sharp(weaponCanvas)
+        .rotate(degrees, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      const anchor = rotatePoint(
+        HELD_ITEM_ANCHOR_X * PILOT_PREVIEW_SCALE,
+        HELD_ITEM_ANCHOR_Y * PILOT_PREVIEW_SCALE,
+        degrees,
+      );
+      const tileLeft = PILOT_PREVIEW_PADDING + column * PILOT_PREVIEW_TILE_SIZE;
+      const tileTop = PILOT_PREVIEW_PADDING + row * PILOT_PREVIEW_TILE_SIZE;
+      composites.push({ input: playerRotated, left: tileLeft + previewCenter - (PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE) / 2, top: tileTop + previewCenter - (PLAYER_TEXTURE_SIZE * PILOT_PREVIEW_SCALE) / 2 });
+      composites.push({ input: weaponRotated, left: Math.round(tileLeft + previewCenter + anchor.x - weaponCanvasSize / 2), top: Math.round(tileTop + previewCenter + anchor.y - weaponCanvasSize / 2) });
+    }
+  }
+
+  await sharp({
+    create: {
+      width: previewWidth,
+      height: previewHeight,
+      channels: 4,
+      background: { r: 22, g: 26, b: 34, alpha: 255 },
+    },
+  })
+    .composite(composites)
+    .png({ compressionLevel: 9 })
+    .toFile(PREVIEW_PATH);
+  console.log(`${PREVIEW_PATH}: ${previewWidth}x${previewHeight} px (3 Waffen x 4 Rotationen)`);
+}
+
 async function writeItem(item) {
   const height = item.pixels.length;
   const width = Math.max(...item.pixels.map((row) => row.length));
   const pixels = item.pixels.map((row) => {
     const missing = width - row.length;
-    if (missing < 0 || missing % 2 !== 0) {
-      throw new Error(`${item.file}: Pixelzeilen muessen gleich breit oder symmetrisch kuerzer sein.`);
+    if (missing < 0) {
+      throw new Error(`${item.file}: Pixelzeilen duerfen nicht breiter als die Textur sein.`);
     }
-    const side = '.'.repeat(missing / 2);
-    return `${side}${row}${side}`;
+    const leftPadding = Math.floor(missing / 2);
+    const rightPadding = missing - leftPadding;
+    return `${'.'.repeat(leftPadding)}${row}${'.'.repeat(rightPadding)}`;
   });
-  for (const row of pixels) {
-    for (let x = 0; x < width / 2; x += 1) {
-      const leftOccupied = row[x] !== '.';
-      const rightOccupied = row[width - 1 - x] !== '.';
-      if (leftOccupied !== rightOccupied) {
-        throw new Error(`${item.file}: Silhouette muss im 90-Grad-Top-Down symmetrisch sein.`);
-      }
-    }
-  }
   const isExceptionalSize = EXCEPTIONAL_SIZE_ITEMS.has(item.file);
   const maxWidth = isExceptionalSize ? ABSOLUTE_HELD_ITEM_MAX_SIZE : STANDARD_HELD_ITEM_MAX_WIDTH;
   const maxHeight = isExceptionalSize ? ABSOLUTE_HELD_ITEM_MAX_SIZE : STANDARD_HELD_ITEM_MAX_HEIGHT;
@@ -685,6 +796,8 @@ async function writeItem(item) {
 }
 
 await mkdir(OUT_DIR, { recursive: true });
+await mkdir(PREVIEW_DIR, { recursive: true });
 for (const item of ITEMS) {
   await writeItem(item);
 }
+await writePilotPreview();

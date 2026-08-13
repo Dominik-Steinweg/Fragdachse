@@ -122,7 +122,11 @@ export class PlayerEntity {
     this.sprite.setDepth(DEPTH.PLAYERS);
     scene.physics.add.existing(this.sprite);
     this.body.setCircle(PLAYER_SIZE / 2);
-    this.body.setCollideWorldBounds(true);
+    // Eine Match-Figur bleibt im Spielfeld. Eine Presentation-Figur nicht: Sie betritt die
+    // Bühne von ausserhalb der Arenakante und verlässt sie ebenso. Die Weltgrenze würde sie
+    // dabei am Rand festklemmen. Ihre Eingrenzung leistet die Navigation, nicht die Physik –
+    // für Projektile und alles andere bleibt die Weltgrenze unverändert bestehen.
+    this.body.setCollideWorldBounds(!this.presentation);
 
     // Dieselbe bewährte Internal-Glow-Kette wie in BadgerPreview verwenden. Der Filter
     // expandiert den Sprite korrekt über die Padding-Grenze hinaus und bleibt an der

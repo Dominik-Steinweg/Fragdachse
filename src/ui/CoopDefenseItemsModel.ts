@@ -11,7 +11,6 @@ import {
   describeCoopDefenseItem,
   formatCoopDefenseItemValue,
   getCoopDefenseItemSalvageXp,
-  getCoopDefenseItemStatLines,
   getCoopDefenseStashItems,
   getEquippedCoopDefenseItem,
   isCoopDefenseItemImprovement,
@@ -50,6 +49,11 @@ export interface CoopDefenseInventoryColumn {
 }
 
 export interface CoopDefenseEquippedStatLine {
+  readonly label: string;
+  readonly text: string;
+}
+
+export interface CoopDefenseEquippedSpecialEffectLine {
   readonly label: string;
   readonly text: string;
 }
@@ -174,7 +178,7 @@ export function summariseEquippedCoopDefenseItems(
 ): CoopDefenseEquippedStatLine[] {
   const totals = new Map<string, { label: string; value: number; displayAsPercent: boolean }>();
   for (const item of equippedItems) {
-    for (const line of getCoopDefenseItemStatLines(item)) {
+    for (const line of describeCoopDefenseItem(item).lines) {
       const existing = totals.get(line.stat);
       totals.set(line.stat, {
         // Derselbe Stat traegt je nach Herkunft unterschiedliche Beschriftungen
@@ -189,6 +193,16 @@ export function summariseEquippedCoopDefenseItems(
     label: entry.label,
     text: formatCoopDefenseItemValue(entry.value, entry.displayAsPercent),
   }));
+}
+
+/** Laufzeit-Affixe der getragenen Teile fuer den separaten Sondereffekt-Bereich. */
+export function listEquippedCoopDefenseSpecialEffects(
+  equippedItems: readonly CoopDefenseItem[],
+): CoopDefenseEquippedSpecialEffectLine[] {
+  return equippedItems.flatMap((item) => describeCoopDefenseItem(item).affixLines.map((affix) => ({
+    label: affix.label,
+    text: `${formatCoopDefenseItemValue(affix.value, affix.displayAsPercent)} ${affix.label}`,
+  })));
 }
 
 /** Nur die eigene Kategorie nimmt ein Teil an; alles andere ist ein ungueltiger Ablageort. */

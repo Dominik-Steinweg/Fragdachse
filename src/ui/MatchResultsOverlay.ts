@@ -681,7 +681,7 @@ export class MatchResultsOverlay {
         this.scene, OFFER_PREVIEW_SIZE, OFFER_PREVIEW_SIZE, COLORS.GREY_6, 'rest',
       )).setScrollFactor(0);
       const icon = this.scene.add.image(x, 0, resolveCoopDefenseItemIconTexture(
-        this.scene, 'armor', OFFER_PREVIEW_SIZE,
+        this.scene, 'armor', 1, OFFER_PREVIEW_SIZE,
       )).setDisplaySize(OFFER_PREVIEW_SIZE * 0.7, OFFER_PREVIEW_SIZE * 0.7).setScrollFactor(0);
       this.offerPreviews.push({ frame, icon });
       objects.push(frame, icon);
@@ -914,7 +914,7 @@ export class MatchResultsOverlay {
         this.scene, OFFER_PREVIEW_SIZE, OFFER_PREVIEW_SIZE, getCoopDefenseItemCellColor(option.item), 'rest',
       ));
       preview.icon.setTexture(resolveCoopDefenseItemIconTexture(
-        this.scene, option.item.slot, OFFER_PREVIEW_SIZE,
+        this.scene, option.item.slot, option.item.itemLevel, OFFER_PREVIEW_SIZE,
       )).setDisplaySize(OFFER_PREVIEW_SIZE * 0.7, OFFER_PREVIEW_SIZE * 0.7);
     });
     this.offerPreviewGroup

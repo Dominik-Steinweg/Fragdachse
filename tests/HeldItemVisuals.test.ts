@@ -159,11 +159,18 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
       return [size.width, size.height];
     };
 
-    expect(dimensions('GLOCK')).toEqual([5, 10]);
+    expect(dimensions('GLOCK')).toEqual([7, 11]);
     expect(dimensions('P90')).toEqual([9, 13]);
     expect(dimensions('AK47')).toEqual([9, 22]);
-    expect(dimensions('AWP')).toEqual([7, 28]);
-    expect(dimensions('ROCKET_LAUNCHER')).toEqual([11, 22]);
+    expect(dimensions('AWP')).toEqual([9, 28]);
+    expect(dimensions('ROCKET_LAUNCHER')).toEqual([13, 22]);
+    expect(dimensions('NEGEV')).toEqual([13, 22]);
+    expect(dimensions('SHOTGUN')).toEqual([11, 19]);
+    expect(dimensions('MINI_ROCKET_LAUNCHER')).toEqual([9, 14]);
+    expect(HELD_ITEM_SPRITES.GLOCK.muzzleX).toBe(3.5);
+    expect(HELD_ITEM_SPRITES.GLOCK.gripX).toBe(4.5);
+    expect(HELD_ITEM_SPRITES.NEGEV.gripX).toBe(6.5);
+    expect(HELD_ITEM_SPRITES.ROCKET_LAUNCHER.muzzleX).toBe(5.5);
   });
 });
 

@@ -17,12 +17,14 @@ import {
   buildCoopDefenseInventoryGrid,
   buildCoopDefenseItemTooltip,
   getCoopDefenseItemCellColor,
+  listEquippedCoopDefenseSpecialEffects,
   resolveCoopDefenseItemDrop,
   summariseEquippedCoopDefenseItems,
   type CoopDefenseItemDropTarget,
 } from './CoopDefenseItemsModel';
 import {
   ensureCoopDefenseItemCellTexture,
+  resolveCoopDefenseItemEmptyIconTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
 import { attachHoverEffect } from './uiHover';
@@ -93,8 +95,15 @@ const DOLL_POSITIONS: Readonly<Record<CoopDefenseItemSlot, { x: number; y: numbe
 
 const SUMMARY_TITLE_Y = DOLL_TOP_Y + DOLL_ROW_STRIDE * 2 + 104;
 const SUMMARY_START_Y = SUMMARY_TITLE_Y + 34;
-const SUMMARY_LINE_H = 26;
-const MAX_SUMMARY_LINES = 8;
+const SUMMARY_LINE_H = 18;
+const SUMMARY_COLUMN_GAP = 24;
+const SUMMARY_COLUMN_W = (DOLL_W - 92 - SUMMARY_COLUMN_GAP) / 2;
+const MAX_SUMMARY_LINES = 12;
+const SPECIAL_TITLE_Y = SUMMARY_START_Y + Math.ceil(MAX_SUMMARY_LINES / 2) * SUMMARY_LINE_H + 20;
+const SPECIAL_START_Y = SPECIAL_TITLE_Y + 24;
+const SPECIAL_LINE_H = 18;
+const MAX_SPECIAL_EFFECT_LINES = 8;
+const EMPTY_SLOT_ICON_ALPHA = 0.1;
 
 // ── Inventarraster ───────────────────────────────────────────────────────────
 const GRID_LEFT = DOLL_LEFT + DOLL_W + 28;
@@ -144,6 +153,8 @@ export class CoopDefenseItemsOverlay {
   private columnTitles = new Map<CoopDefenseItemSlot, Phaser.GameObjects.Text>();
   private columnHighlights = new Map<CoopDefenseItemSlot, Phaser.GameObjects.Rectangle>();
   private summaryLines: Phaser.GameObjects.Text[] = [];
+  private specialEffectLines: Phaser.GameObjects.Text[] = [];
+  private specialEffectsTitle: Phaser.GameObjects.Text | null = null;
   private summaryEmpty: Phaser.GameObjects.Text | null = null;
   private sortLabel: Phaser.GameObjects.Text | null = null;
   private rewardHint: Phaser.GameObjects.Text | null = null;
@@ -290,6 +301,8 @@ export class CoopDefenseItemsOverlay {
     this.columnHighlights = new Map();
     this.dropTargets = new Map();
     this.summaryLines = [];
+    this.specialEffectLines = [];
+    this.specialEffectsTitle = null;
     this.summaryEmpty = null;
     this.sortLabel = null;
     this.rewardHint = null;
@@ -340,15 +353,32 @@ export class CoopDefenseItemsOverlay {
     objects.push(this.summaryEmpty);
 
     for (let index = 0; index < MAX_SUMMARY_LINES; index++) {
-      const y = SUMMARY_START_Y + index * SUMMARY_LINE_H;
-      const label = this.scene.add.text(DOLL_CX - DOLL_W / 2 + 46, y, '', textStyle('body', {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      const columnLeft = DOLL_CX - DOLL_W / 2 + 46 + column * (SUMMARY_COLUMN_W + SUMMARY_COLUMN_GAP);
+      const y = SUMMARY_START_Y + row * SUMMARY_LINE_H;
+      const label = this.scene.add.text(columnLeft, y, '', textStyle('caption', {
         color: TEXT.muted,
-      })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-      const value = this.scene.add.text(DOLL_CX + DOLL_W / 2 - 46, y, '', textStyle('body', {
+      })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false).setWordWrapWidth(SUMMARY_COLUMN_W - 64);
+      const value = this.scene.add.text(columnLeft + SUMMARY_COLUMN_W, y, '', textStyle('caption', {
         color: TEXT.primary,
       })).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
       this.summaryLines.push(label, value);
       objects.push(label, value);
+    }
+
+    this.specialEffectsTitle = this.scene.add.text(DOLL_CX, SPECIAL_TITLE_Y, 'SONDEREFFEKTE', textStyle('section'))
+      .setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    objects.push(this.specialEffectsTitle);
+    for (let index = 0; index < MAX_SPECIAL_EFFECT_LINES; index++) {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      const columnLeft = DOLL_CX - DOLL_W / 2 + 46 + column * (SUMMARY_COLUMN_W + SUMMARY_COLUMN_GAP);
+      const line = this.scene.add.text(columnLeft, SPECIAL_START_Y + row * SPECIAL_LINE_H, '', textStyle('caption', {
+        color: TEXT.accent,
+      })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+      this.specialEffectLines.push(line);
+      objects.push(line);
     }
   }
 
@@ -446,7 +476,7 @@ export class CoopDefenseItemsOverlay {
     this.ghostFrame = this.scene.add.image(0, 0, ensureCoopDefenseItemCellTexture(
       this.scene, CELL, CELL, COLORS.GOLD_2, 'hot',
     )).setScrollFactor(0);
-    this.ghostIcon = this.scene.add.image(0, 0, resolveCoopDefenseItemIconTexture(this.scene, 'armor', CELL))
+    this.ghostIcon = this.scene.add.image(0, 0, resolveCoopDefenseItemIconTexture(this.scene, 'armor', 1, CELL))
       .setDisplaySize(CELL * 0.68, CELL * 0.68)
       .setScrollFactor(0);
     this.ghost = this.scene.add.container(0, 0, [this.ghostFrame, this.ghostIcon])
@@ -466,7 +496,7 @@ export class CoopDefenseItemsOverlay {
     const frame = this.scene.add.image(0, 0, ensureCoopDefenseItemCellTexture(
       this.scene, size, size, COLORS.GREY_6, 'empty',
     )).setScrollFactor(0).setInteractive();
-    const icon = this.scene.add.image(0, 0, resolveCoopDefenseItemIconTexture(this.scene, slot, size))
+    const icon = this.scene.add.image(0, 0, resolveCoopDefenseItemEmptyIconTexture(this.scene, slot, size))
       .setDisplaySize(size * 0.68, size * 0.68)
       .setScrollFactor(0);
     const level = this.scene.add.text(size / 2 - SPACE.sm, size / 2 - SPACE.sm, '', textStyle('numS', {
@@ -553,7 +583,15 @@ export class CoopDefenseItemsOverlay {
   private renderCell(cell: ItemCell | undefined, item: CoopDefenseItem | null): void {
     if (!cell) return;
     cell.item = item;
-    cell.icon.setAlpha(item ? 1 : 0.28);
+    const iconTexture = item
+      ? resolveCoopDefenseItemIconTexture(this.scene, cell.slot, item.itemLevel, cell.size)
+      : resolveCoopDefenseItemEmptyIconTexture(this.scene, cell.slot, cell.size);
+    cell.icon
+      .setTexture(iconTexture)
+      .setDisplaySize(cell.size * 0.68, cell.size * 0.68)
+      // Die Empty-Assets tragen bereits ihre bewusst starke Alpha-Transparenz.
+      // Nur der generische Fallback wird wie bisher zusaetzlich abgeschwaecht.
+      .setAlpha(item ? 1 : EMPTY_SLOT_ICON_ALPHA);
     cell.level.setText(item ? `L${item.itemLevel}` : '');
     this.applyCellTexture(cell);
     this.scene.input.setDraggable(cell.frame, !!item);
@@ -567,8 +605,9 @@ export class CoopDefenseItemsOverlay {
   }
 
   private renderSummary(equippedItems: readonly CoopDefenseItem[]): void {
-    const lines = summariseEquippedCoopDefenseItems(equippedItems).slice(0, MAX_SUMMARY_LINES);
-    this.summaryEmpty?.setVisible(lines.length === 0);
+    const lines = summariseEquippedCoopDefenseItems(equippedItems);
+    const specialEffects = listEquippedCoopDefenseSpecialEffects(equippedItems);
+    this.summaryEmpty?.setVisible(lines.length === 0 && specialEffects.length === 0);
     for (let index = 0; index < MAX_SUMMARY_LINES; index++) {
       const label = this.summaryLines[index * 2];
       const value = this.summaryLines[index * 2 + 1];
@@ -576,6 +615,11 @@ export class CoopDefenseItemsOverlay {
       label.setVisible(!!line).setText(line?.label ?? '');
       value.setVisible(!!line).setText(line?.text ?? '');
     }
+    this.specialEffectsTitle?.setVisible(specialEffects.length > 0);
+    this.specialEffectLines.forEach((line, index) => {
+      const effect = specialEffects[index];
+      line.setVisible(!!effect).setText(effect?.text ?? '');
+    });
   }
 
   private showCellTooltip(cell: ItemCell, pointer: Phaser.Input.Pointer): void {
@@ -657,7 +701,7 @@ export class CoopDefenseItemsOverlay {
     this.ghostFrame?.setTexture(ensureCoopDefenseItemCellTexture(
       this.scene, CELL, CELL, getCoopDefenseItemCellColor(cell.item), 'hot',
     ));
-    this.ghostIcon?.setTexture(resolveCoopDefenseItemIconTexture(this.scene, cell.slot, CELL))
+    this.ghostIcon?.setTexture(resolveCoopDefenseItemIconTexture(this.scene, cell.slot, cell.item.itemLevel, CELL))
       .setDisplaySize(CELL * 0.68, CELL * 0.68);
     this.ghost?.setPosition(cell.container.x, cell.container.y).setVisible(true);
     cell.container.setAlpha(0.35);

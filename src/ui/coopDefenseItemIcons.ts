@@ -7,26 +7,48 @@ import { ensureRoundedTexture, lerpColor, roundRectPath } from './uiTextures';
 /**
  * Item-Symbole und Seltenheits-Rahmen fuer Inventar und Belohnungsauswahl.
  *
- * Die Symbole sind **Platzhalter**: flache, orthografische Top-down-Silhouetten aus Canvas-Pfaden,
- * bewusst ohne Perspektive oder sichtbare Objektseiten. Sobald echte Grafiken existieren, reicht es,
- * eine Textur `coop_item_<slot>` zu laden – `resolveCoopDefenseItemIconTexture()` nimmt sie dann
- * automatisch statt des Platzhalters. Das ist der einzige Austauschpunkt.
+ * Die echten Itemgrafiken werden nach Slot und Itemlevel geladen. Fehlt ein Level-Asset,
+ * bleibt der bisherige generische Canvas-Renderer der Fallback.
  */
 
 const ICON_KEY_PREFIX = '_cdi_icon';
 const CELL_KEY_PREFIX = '_cdi_cell';
+export const COOP_DEFENSE_ITEM_ART_LEVELS = [1, 2, 3, 4, 5] as const;
+export const COOP_DEFENSE_ITEM_ART_SLOTS: readonly CoopDefenseItemSlot[] = [
+  'helmet',
+  'gloves',
+  'armor',
+  'boots',
+];
 
-/** Texturname einer spaeteren echten Item-Grafik – gleiche Konvention wie bei Loadout-Icons. */
-export function getCoopDefenseItemArtKey(slot: CoopDefenseItemSlot): string {
-  return `coop_item_${slot}`;
+/** Einheitlicher Asset-Key fuer Itemgrafik und Phaser-Texture-Cache. */
+export function getCoopDefenseItemArtKey(slot: CoopDefenseItemSlot, itemLevel: number): string {
+  const level = Number.isFinite(itemLevel) ? Math.max(1, Math.floor(itemLevel)) : 1;
+  return `coop_item_${slot}_ilvl_${level}`;
+}
+
+/** Texture-Key fuer das slot-spezifische Geisterbild eines leeren Platzes. */
+export function getCoopDefenseItemEmptyArtKey(slot: CoopDefenseItemSlot): string {
+  return `coop_item_empty_${slot}`;
 }
 
 export function resolveCoopDefenseItemIconTexture(
   scene: Phaser.Scene,
   slot: CoopDefenseItemSlot,
+  itemLevel: number,
   size: number,
 ): string {
-  const artKey = getCoopDefenseItemArtKey(slot);
+  const artKey = getCoopDefenseItemArtKey(slot, itemLevel);
+  if (scene.textures.exists(artKey)) return artKey;
+  return ensureCoopDefenseItemIconTexture(scene, slot, size);
+}
+
+export function resolveCoopDefenseItemEmptyIconTexture(
+  scene: Phaser.Scene,
+  slot: CoopDefenseItemSlot,
+  size: number,
+): string {
+  const artKey = getCoopDefenseItemEmptyArtKey(slot);
   if (scene.textures.exists(artKey)) return artKey;
   return ensureCoopDefenseItemIconTexture(scene, slot, size);
 }

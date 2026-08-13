@@ -16,19 +16,24 @@ Nach Änderungen npm run sprites:held ausführen. Die Loadout-ID bleibt der geme
   berechnet; Positionen für Projektil, Hitscan, Audio und Mündungsfeuer nicht separat erfinden.
 - Ein fehlender Eintrag nutzt die vorhandenen generischen Gun-/Throwable-Fallbacks, sofern das Item nicht ausdrücklich slotless ist.
 
-Prüfung: npm run sprites:held und npm test -- tests/HeldItemVisuals.test.ts.
+Prüfung: npm run sprites:held und npm test -- tests/HeldItemVisuals.test.ts. Der Generator schreibt
+zusätzlich `public/assets/sprites/held/previews/held-weapon-pilots.png`; dort stehen Glock, Negev
+und Rocket Launcher zeilenweise in den Rotationen 0, 90, 180 und 270 Grad.
 
 ## Groessenstaffelung und Farbzuordnung
 
 Standardwaffen bleiben bewusst kompakt: Pistolen und Geraete liegen typischerweise bei 5-9 px
-Breite und 10-16 px Hoehe, Gewehre und schwere Waffen bei 7-11 px Breite und maximal 24 px Hoehe.
+Breite und 10-16 px Hoehe, Gewehre und schwere Waffen bei 7-13 px Breite und maximal 24 px Hoehe.
 Eine einzelne echte Langwaffe darf als Ausnahme bis 32 px in das 32-px-Raster hineinreichen;
 die AWP ist aktuell diese Ausnahme. Die Maximalgroesse ist kein Standardmass fuer neue Waffen.
 
-Jede Silhouette bleibt strikt symmetrisch und nach Norden ausgerichtet, damit die Rotation erst an
-der Spielfigur entsteht. Die Farbakzente folgen dem zugeordneten Loadout-Icon; wo kein Icon
-vorliegt, nutzt die Waffe ihre semantische Materialfarbe. So unterscheiden sich Waffen zuerst
-ueber Form und Farbgruppe und nicht nur ueber ihre Laenge.
+Die Darstellung bleibt strikt orthografisch in 90-Grad-Top-Down-Ausrichtung nach Norden; die
+Rotation entsteht weiterhin erst an der Spielfigur. Silhouetten duerfen asymmetrisch sein, aber
+nur durch charakteristische Anbauteile wie Griff, Magazin, Munitionskasten, Visier oder Technikmodul.
+Es bleiben reine Rasterdarstellungen ohne Horizont, sichtbare Seitenflaechen, seitlich gehaltene
+Waffen oder 3/4-Perspektive.
+Die Farbakzente folgen dem zugeordneten Loadout-Icon; wo kein Icon vorliegt, nutzt die Waffe ihre
+semantische Materialfarbe. Form und Farbgruppe bilden gemeinsam die Waffenidentitaet.
 
 ## Verbindlicher Mündungs-Vertrag
 
