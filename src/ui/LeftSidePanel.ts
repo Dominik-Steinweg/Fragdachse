@@ -113,14 +113,15 @@ const TIME_SLIDER_TRACK_Y = MAP_ROW_Y + 8;
 const TIME_SLIDER_STEP_MINUTES = 15;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
-const PICKER_W        = 188;
-const PICKER_H        = 148;
-const PICKER_WORLD_X  = (LOBBY_PANEL_W - PICKER_W) / 2;
-const PICKER_WORLD_Y  = NAME_COLOR_ROW_Y + NAME_COLOR_BUTTON_H / 2 + 10;
 const PICKER_PADDING  = 10;
 const SWATCH_SIZE     = 32;
 const SWATCH_GAP      = 4;
 const PICKER_COLS     = 4;
+const PICKER_GRID_W    = PICKER_COLS * SWATCH_SIZE + (PICKER_COLS - 1) * SWATCH_GAP;
+const PICKER_W        = PICKER_PADDING * 2 + PICKER_GRID_W;
+const PICKER_H        = 148;
+const PICKER_WORLD_X  = (LOBBY_PANEL_W - PICKER_W) / 2;
+const PICKER_WORLD_Y  = NAME_COLOR_ROW_Y + NAME_COLOR_BUTTON_H / 2 + 10;
 const PICKER_GRID_Y   = 30;   // Y-Start des Gitters innerhalb des Popups
 const TEX_SWATCH_PREFIX = '__picker_swatch_';
 

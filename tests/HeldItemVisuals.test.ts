@@ -61,10 +61,13 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       expect(existsSync(file), spec.assetPath).toBe(true);
 
       const { width, height } = readPngSize(spec.assetPath);
-      // Das Raster bleibt an die 32-px-Figur gebunden, aber lange Waffen duerfen bewusst
-      // ueber die halbe Spielerhoehe hinausreichen.
+      // Das Raster bleibt an die 32-px-Figur gebunden. Die Standardpalette bleibt kompakt;
+      // nur das AWP darf als echte Langwaffen-Ausnahme deutlich laenger werden.
       expect(width, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE);
       expect(height, spec.textureKey).toBeLessThanOrEqual(PLAYER_TEXTURE_SIZE);
+      const isExceptionalLongWeapon = spec.textureKey === 'held_AWP';
+      expect(width, spec.textureKey).toBeLessThanOrEqual(isExceptionalLongWeapon ? 32 : 13);
+      expect(height, spec.textureKey).toBeLessThanOrEqual(isExceptionalLongWeapon ? 32 : 24);
 
       expect(spec.gripX, spec.textureKey).toBeGreaterThanOrEqual(0);
       expect(spec.gripX, spec.textureKey).toBeLessThanOrEqual(width);
@@ -79,9 +82,10 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
 
   it('laesst jede registrierte Muedung in ihrer Textur liegen', () => {
     // Projektile, Hitscan-Ursprung, Muendungsfeuer und Schuss-Audio starten alle bei
-    // MUZZLE_FORWARD_OFFSET vor der Figurenmitte. Ragt eine Waffe weiter nach vorn, entsteht der
-    // Schuss sichtbar *im* Lauf statt an seiner Spitze. Das ist die einzige harte Obergrenze fuer
-    // die Groesse getragener Items – nach hinten und zur Seite gibt es keine.
+    // MUZZLE_FORWARD_OFFSET vor der Figurenmitte. Die sichtbare Muedung bleibt deshalb an der
+    // vorderen Texturkante; die Groessenstaffelung wird separat ueber Standard- und Ausnahmegroesse
+    // Standardwaffen bleiben kompakt; nur definierte Langwaffen duerfen diese Staffelung
+    // ueberschreiten.
     const scale = PLAYER_SIZE / PLAYER_TEXTURE_SIZE;
     const maxForwardReach = MUZZLE_FORWARD_OFFSET / scale + HELD_ITEM_ANCHOR_Y;
     expect(maxForwardReach).toBeGreaterThan(0);
@@ -155,11 +159,11 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
       return [size.width, size.height];
     };
 
-    expect(dimensions('GLOCK')).toEqual([5, 11]);
-    expect(dimensions('P90')).toEqual([9, 16]);
-    expect(dimensions('AK47')).toEqual([9, 25]);
-    expect(dimensions('AWP')).toEqual([7, 31]);
-    expect(dimensions('ROCKET_LAUNCHER')).toEqual([13, 25]);
+    expect(dimensions('GLOCK')).toEqual([5, 10]);
+    expect(dimensions('P90')).toEqual([9, 13]);
+    expect(dimensions('AK47')).toEqual([9, 22]);
+    expect(dimensions('AWP')).toEqual([7, 28]);
+    expect(dimensions('ROCKET_LAUNCHER')).toEqual([11, 22]);
   });
 });
 
