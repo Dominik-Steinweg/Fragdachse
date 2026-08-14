@@ -54,7 +54,7 @@ import {
 import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from './arena/ClarityCameraRegistry';
 import { buildLobbyRosterSlots } from '../lobby/LobbyRosterLayout';
-import { createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
+import { createLoadoutHoverGroup, createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
 import { PLAYER_NAME_MAX_LENGTH } from '../utils/playerName';
 
 // ── Panel ────────────────────────────────────────────────────────────────────
@@ -96,8 +96,8 @@ const LIST_LABEL_Y = PANEL_Y + 118;
 const LIST_Y = PANEL_Y + 142;
 const ROSTER_COLUMN_GAP = 12;
 const ROSTER_SLOT_W = (CONTENT_W - ROSTER_COLUMN_GAP) / 2;
-const ROSTER_SLOT_H = 36;
-const ROSTER_ROW_STEP = 40;
+const ROSTER_SLOT_H = 44;
+const ROSTER_ROW_STEP = 48;
 const TEAM_HEADER_H = 28;
 const READY_STATUS_OFFSET_X = 23;
 const LOADOUT_ICON_SIZE = 28;
@@ -108,12 +108,8 @@ const LOADOUT_FRAME_PADDING_X = 3;
 const LOADOUT_FRAME_PADDING_Y = 3;
 const LOADOUT_FRAME_W = LOADOUT_CONTENT_W + LOADOUT_FRAME_PADDING_X * 2;
 const LOADOUT_FRAME_H = LOADOUT_ICON_SIZE + LOADOUT_FRAME_PADDING_Y * 2;
-const LEVEL_COLUMN_LEFT_OFFSET = 154;
-const LEVEL_COLUMN_W = 48;
-/** Das optionale Level sitzt in der Spalte unmittelbar vor dem festen Loadout-Tray. */
-const LEVEL_LEFT_OFFSET = LEVEL_COLUMN_LEFT_OFFSET + LEVEL_COLUMN_W / 2;
-/** Fester Anker des Loadout-Trays direkt vor der Ping-Spalte. */
-const LOADOUT_LEFT_OFFSET = LEVEL_COLUMN_LEFT_OFFSET + LEVEL_COLUMN_W;
+/** Fester Anker des Loadout-Trays mit etwas Luft zur Ping-/HOST-Spalte. */
+const LOADOUT_LEFT_OFFSET = 190;
 
 // ── Coop-Fortschrittsband (innerhalb des Panels) ─────────────────────────────
 // Sichtbar nur im Coop; dann steht das Panel immer auf seiner vollen Hoehe.
@@ -204,7 +200,6 @@ type PlayerRow = {
   name:  Phaser.GameObjects.Text;
   badge: Phaser.GameObjects.Arc;
   mark:  Phaser.GameObjects.Image;
-  level: Phaser.GameObjects.Text;
   ping:  Phaser.GameObjects.Text;
   loadoutFrame: Phaser.GameObjects.Image;
   loadout: Phaser.GameObjects.Container;
@@ -222,6 +217,8 @@ export class LobbyOverlay {
   private playerContextMenu: UiContextMenu | null = null;
   private loadoutTooltip: UiTooltip | null = null;
   private loadoutTooltipRoot: Phaser.GameObjects.Container | null = null;
+  private playerNameTooltip: UiTooltip | null = null;
+  private playerNameTooltipRoot: Phaser.GameObjects.Container | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
   private waitingRows:    WaitingRow[] = [];
   private teamHeaders:     Record<TeamId, Phaser.GameObjects.Text> | null = null;
@@ -470,6 +467,9 @@ export class LobbyOverlay {
     this.loadoutTooltip = new UiTooltip(this.scene, 280);
     this.loadoutTooltipRoot = this.loadoutTooltip.build();
     this.container.add(this.loadoutTooltipRoot);
+    this.playerNameTooltip = new UiTooltip(this.scene, 180);
+    this.playerNameTooltipRoot = this.playerNameTooltip.build();
+    this.container.add(this.playerNameTooltipRoot);
     this.container.setVisible(this.visible);
 
     this.systemBar = this.scene.add.container(0, 0, [
@@ -663,6 +663,9 @@ export class LobbyOverlay {
     this.loadoutTooltip?.destroy();
     this.loadoutTooltip = null;
     this.loadoutTooltipRoot = null;
+    this.playerNameTooltip?.destroy();
+    this.playerNameTooltip = null;
+    this.playerNameTooltipRoot = null;
 
     // Die Effekte haengen an Containern, die gleich zerstoert werden – vorher abbauen.
     this.upgradeBtnEffect?.destroy();
@@ -718,6 +721,7 @@ export class LobbyOverlay {
     this.visible = false;
     this.playerContextMenu?.close();
     this.loadoutTooltip?.hide();
+    this.playerNameTooltip?.hide();
     this.entranceTween?.remove();
     this.entranceTween = null;
     this.stopReadyGlow();
@@ -777,7 +781,6 @@ export class LobbyOverlay {
         profile.colorHex,
         profile.teamId ?? null,
         this.bridge.getPlayerReady(profile.id),
-        isCoopDefenseMode(mode) ? this.bridge.getPlayerCoopDefenseLevel(profile.id) : null,
         profile.id === hostId ? 'host' : this.bridge.getPlayerPing(profile.id),
       ]),
     ]);
@@ -790,8 +793,9 @@ export class LobbyOverlay {
       if (!currentIds.has(id)) {
         this.playerContextMenu?.close();
         this.loadoutTooltip?.hide();
+        this.playerNameTooltip?.hide();
         row.bg.destroy(); row.name.destroy(); row.badge.destroy();
-        row.mark.destroy(); row.level.destroy(); row.ping.destroy();
+        row.mark.destroy(); row.ping.destroy();
         row.loadoutFrame.destroy(); row.loadout.destroy(true);
         this.playerRows.delete(id);
       }
@@ -807,14 +811,14 @@ export class LobbyOverlay {
         this.refreshPlayerLoadout(profile.id, row);
       }
       this.setPlayerRowInteractive(profile.id, this.playerRows.get(profile.id)!.bg);
+      this.setPlayerNameTooltipInteractive(this.playerRows.get(profile.id)!.name);
     }
 
     this.refreshHeader();
     this.layoutList();
     this.refreshBadges();
-    this.refreshCoopDefenseLevels();
     this.refreshPings();
-    this.updateCoopDefenseLevelVisibility();
+    this.updatePlayerNameTooltipVisibility();
     this.updateStatus(connectedPlayers.length);
     this.updateRoomActionButtons();
   }
@@ -1122,6 +1126,10 @@ export class LobbyOverlay {
       color: COLORS.GREY_1,
     })).setOrigin(0, 0.5).setScrollFactor(0);
     name.setText(profile.name.slice(0, PLAYER_NAME_MAX_LENGTH));
+    name
+      .on('pointerover', (pointer: Phaser.Input.Pointer) => this.showCoopLevelTooltip(profile.id, pointer))
+      .on('pointermove', (pointer: Phaser.Input.Pointer) => this.playerNameTooltip?.move(pointer))
+      .on('pointerout', () => this.playerNameTooltip?.hide());
 
     const badge = this.scene.add.circle(CONTENT_L + READY_STATUS_OFFSET_X, LIST_Y, 11, COLORS.GREY_7)
       .setStrokeStyle(2, COLORS.GREY_4)
@@ -1130,10 +1138,6 @@ export class LobbyOverlay {
       .setDisplaySize(14, 14)
       .setVisible(false)
       .setScrollFactor(0);
-
-    const level = this.scene.add.text(CONTENT_L + LEVEL_LEFT_OFFSET, LIST_Y, '-', textStyle('numS', {
-      color: COLORS.GREY_3,
-    })).setOrigin(0.5).setScrollFactor(0);
 
     const ping = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 10, LIST_Y, '', textStyle('numS'))
       .setOrigin(1, 0.5).setScrollFactor(0);
@@ -1145,29 +1149,33 @@ export class LobbyOverlay {
     const loadout = this.scene.add.container(CONTENT_L + LOADOUT_LEFT_OFFSET, LIST_Y)
       .setScrollFactor(0);
 
-    bg.on('pointerup', (
+    const handlePlayerPointerUp = (
       pointer: Phaser.Input.Pointer,
       _localX: number,
       _localY: number,
       event: Phaser.Types.Input.EventData,
-    ) => {
+    ): void => {
       event?.stopPropagation();
       const currentProfile = this.bridge.getPlayerProfile(profile.id) ?? profile;
       if (this.canKickPlayer(currentProfile.id)) {
         this.openPlayerActionMenu(currentProfile, pointer.x, pointer.y);
       }
-    });
+    };
+    bg.on('pointerup', handlePlayerPointerUp);
+    // Der Name ist fuer den Coop-Level-Tooltip interaktiv und liegt damit bei `topOnly` ueber
+    // dem Zeilenhintergrund. Der bestehende Kick-Pfad bleibt deshalb auch dort identisch.
+    name.on('pointerup', handlePlayerPointerUp);
 
-    this.container!.add([bg, name, badge, mark, level, loadoutFrame, loadout, ping]);
+    this.container!.add([bg, name, badge, mark, loadoutFrame, loadout, ping]);
     // Neue Zeilen gleiten herein, statt aufzuploppen.
-    for (const object of [bg, name, badge, mark, level, loadoutFrame, loadout, ping]) {
+    for (const object of [bg, name, badge, mark, loadoutFrame, loadout, ping]) {
       object.setAlpha(0);
       this.scene.tweens.add({
         targets: object, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out,
       });
     }
     const row: PlayerRow = {
-      bg, name, badge, mark, level, ping, loadoutFrame, loadout, loadoutSignature: null,
+      bg, name, badge, mark, ping, loadoutFrame, loadout, loadoutSignature: null,
     };
     this.playerRows.set(profile.id, row);
     this.refreshPlayerLoadout(profile.id, row);
@@ -1226,6 +1234,10 @@ export class LobbyOverlay {
     this.loadoutTooltip?.hide();
     row.loadout.removeAll(true);
     const slotStep = LOADOUT_ICON_SIZE + LOADOUT_ICON_GAP;
+    const hoverGroup = createLoadoutHoverGroup((pointer) => {
+      const bounds = row.loadout.getBounds();
+      return Phaser.Geom.Rectangle.Contains(bounds, pointer.worldX, pointer.worldY);
+    });
     LOADOUT_SLOTS.forEach((slot, index) => {
       const presentation = presentations[index];
       if (!presentation) return;
@@ -1237,11 +1249,20 @@ export class LobbyOverlay {
         accentColor: presentation.accentColor,
         presentation,
         compact: true,
-        accentMode: 'subtle',
+        accentMode: 'lobby',
+        hoverGroup,
+        hoverKey: String(index),
         onClick: () => undefined,
-        onPointerOver: (pointer) => this.showLoadoutTooltip(slot, presentation, pointer, inspector ? tools : []),
+        onPointerOver: (pointer) => {
+          this.playerNameTooltip?.hide();
+          this.showLoadoutTooltip(slot, presentation, pointer, inspector ? tools : []);
+        },
         onPointerMove: (pointer) => this.loadoutTooltip?.move(pointer),
-        onPointerOut: () => this.loadoutTooltip?.hide(),
+        onPointerOut: (pointer) => {
+          if (!hoverGroup.isPointerInsideItem(pointer)) {
+            this.loadoutTooltip?.hide();
+          }
+        },
       });
       row.loadout.add(control);
     });
@@ -1453,7 +1474,6 @@ export class LobbyOverlay {
     row.name.setPosition(left + 40, y);
     row.badge.setPosition(left + READY_STATUS_OFFSET_X, y);
     row.mark.setPosition(left + READY_STATUS_OFFSET_X, y);
-    row.level.setPosition(left + LEVEL_LEFT_OFFSET, y);
     row.ping.setPosition(x + width / 2 - 10, y);
     row.loadoutFrame.setPosition(left + LOADOUT_LEFT_OFFSET + LOADOUT_FRAME_W / 2, y);
     row.loadout.setPosition(left + LOADOUT_LEFT_OFFSET, y);
@@ -1478,11 +1498,11 @@ export class LobbyOverlay {
       radius: 10,
       topColor: ghost ? COLORS.GREY_7 : COLORS.GREY_6,
       bottomColor: COLORS.GREY_8,
-      fillAlpha: ghost ? 0.25 : own ? 0.76 : 0.66,
+      fillAlpha: ghost ? 0.18 : own ? 0.76 : 0.66,
       strokeColor: ghost ? COLORS.GREY_5 : COLORS.GREY_4,
-      strokeAlpha: ghost ? 0.14 : own ? 0.72 : 0.46,
+      strokeAlpha: ghost ? 0.1 : own ? 0.72 : 0.46,
       strokeWidth: own ? 2 : 1,
-      highlightAlpha: ghost ? 0.015 : 0.04,
+      highlightAlpha: ghost ? 0.01 : 0.04,
       leftAccentColor: ghost ? undefined : accentColor,
       leftAccentAlpha: ghost ? 0 : own ? 1 : 0.9,
       leftAccentWidth: own ? 7 : 6,
@@ -1496,13 +1516,13 @@ export class LobbyOverlay {
       w: LOADOUT_FRAME_W,
       h: LOADOUT_FRAME_H,
       radius: 7,
-      topColor: COLORS.GREY_7,
+      topColor: COLORS.GREY_8,
       bottomColor: COLORS.GREY_9,
-      fillAlpha: 0.28,
-      strokeColor: BORDER.default,
-      strokeAlpha: 0.88,
-      strokeWidth: 2,
-      highlightAlpha: 0.04,
+      fillAlpha: 0.18,
+      strokeColor: BORDER.subtle,
+      strokeAlpha: 0.38,
+      strokeWidth: 1,
+      highlightAlpha: 0.015,
     });
   }
 
@@ -1526,18 +1546,30 @@ export class LobbyOverlay {
     );
   }
 
-  private refreshCoopDefenseLevels(): void {
+  private updatePlayerNameTooltipVisibility(): void {
     const showLevels = isCoopDefenseMode(this.bridge.getGameMode());
-    for (const [id, row] of this.playerRows) {
-      row.level.setText(showLevels ? `LVL ${this.bridge.getPlayerCoopDefenseLevel(id)}` : '-');
+    if (!showLevels) this.playerNameTooltip?.hide();
+    for (const row of this.playerRows.values()) {
+      if (showLevels) row.name.setInteractive({ useHandCursor: false });
+      else row.name.disableInteractive();
     }
   }
 
-  private updateCoopDefenseLevelVisibility(): void {
-    const showLevels = isCoopDefenseMode(this.bridge.getGameMode());
-    for (const row of this.playerRows.values()) {
-      row.level.setVisible(showLevels);
-    }
+  private setPlayerNameTooltipInteractive(name: Phaser.GameObjects.Text): void {
+    if (isCoopDefenseMode(this.bridge.getGameMode())) name.setInteractive({ useHandCursor: false });
+    else name.disableInteractive();
+  }
+
+  private showCoopLevelTooltip(playerId: string, pointer: Phaser.Input.Pointer): void {
+    if (!this.playerNameTooltip || !isCoopDefenseMode(this.bridge.getGameMode())) return;
+    if (this.container && this.playerNameTooltipRoot) this.container.bringToTop(this.playerNameTooltipRoot);
+    this.loadoutTooltip?.hide();
+    this.playerNameTooltip.show(
+      `Coop-Level ${this.bridge.getPlayerCoopDefenseLevel(playerId)}`,
+      TEXT.accent,
+      [],
+      pointer,
+    );
   }
 
   private refreshPings(): void {
