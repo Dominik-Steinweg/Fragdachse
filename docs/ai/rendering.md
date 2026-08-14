@@ -44,6 +44,10 @@ Fortlaufende Animationsphasen werden pro Frame integriert (`phase += dt * speed`
 
 Der Boden ist eine feste Reihenfolge gebackener Bänder: Gras (`DEPTH.GRASS`) < Dirt samt eingebackenem `BlobSurfaceMottle` (`DEPTH.DIRT`) < Ground Cover (`DEPTH.GROUND_COVER`) < Gleise (`DEPTH.TRACKS`) < Basiszonen (`DEPTH.BASES`) < Decals (`DEPTH.DECALS`). Jedes neue Bodenband muss der `ArenaTerrainColorSampler` in genau derselben Reihenfolge auf seine CPU-Canvas nachziehen, sonst weichen gelesene und sichtbare Bodenfarbe voneinander ab. Der Sampler zeichnet nicht aus Live-Objekten, sondern aus erhaltener Stempel-Geometrie; jede Transformation eines Bandes – auch Spiegelung – braucht dort ihr Gegenstück, weil `drawImage` sie nicht mitführt.
 
+Der Felsbestand hat dieselbe Staffelung: Fels (`DEPTH.ROCKS`) < Materialstörung (`DEPTH.ROCKS + 0.05` aufwärts) < großflächiges Moos (`DEPTH.ROCK_MOSS`) < kleine Fels-Decals (`DEPTH.ROCK_DECALS`). Alles, was sich auf die Felssilhouette bezieht, wird nur in den betroffenen 128-px-Chunks neu gebacken und darf seine Platzierung dabei nicht neu auswürfeln — sie hängt ausschließlich an Gitterkoordinaten und dem Seed, nie am Bestand der lebenden Felsen. Was von einer solchen Schicht sichtbar ist, entscheidet die Stanzform aus der aktuellen Silhouette, nicht die Platzierung.
+
+Ein weicher Rand an der Felssilhouette entsteht über ein zweites 47-Blob-Sheet als Verlaufsmaske, nicht durch Erodieren der Silhouette zur Laufzeit: Erosion ist nicht distributiv über die Vereinigung, jede Kachel einzeln zu schrumpfen ergäbe an jeder inneren Kachelgrenze einen Verlauf. Die Autotile-Frames tragen die Information über offene Kanten bereits, und weil die Maske am selben Frame-Index hängt wie der Fels, folgt sie jedem Retiling von selbst.
+
 ## Lighting und Schatten
 
 ShadowSystem, LightingSystem und Post-FX sind getrennte Verantwortlichkeiten. LightingSystem komponiert dynamisches Licht und Verdeckung in eine Lightmap, die als ein Overlay in der Tiefenordnung liegt. Phasers eingebautes per-Object-Lighting ist dafür nicht der Projektvertrag.

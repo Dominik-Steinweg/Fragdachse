@@ -73,6 +73,7 @@ export interface MenuArenaPreviewViewConfig {
   tracks: MenuArenaPreviewLayerConfig;
   decals: MenuArenaPreviewLayerConfig;
   rocks: MenuArenaPreviewLayerConfig;
+  rockMoss: MenuArenaPreviewLayerConfig;
   trunks: MenuArenaPreviewLayerConfig;
   canopies: MenuArenaPreviewLayerConfig;
 }
@@ -798,6 +799,8 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
     tracks: { visible: false, alpha: 0 },
     decals: { visible: true, alpha: 0.9 },
     rocks: { visible: true, alpha: 1 },
+    // Etwas zurueckgenommen: Der Fels-Schriftzug der Lobby muss als Form lesbar bleiben.
+    rockMoss: { visible: true, alpha: 0.8 },
     trunks: { visible: false, alpha: 0 },
     canopies: { visible: true, alpha: 1 },
   },

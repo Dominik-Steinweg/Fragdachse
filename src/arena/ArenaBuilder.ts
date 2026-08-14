@@ -27,6 +27,9 @@ import {
 } from './BlobSurfaceMottle';
 import { generateGroundCoverPlacements } from './GroundCoverField';
 import { bakeGroundCoverLayer } from './GroundCoverLayer';
+import { generateRockMossPlacements, getRockMossPlacementRadiusPx } from './RockMossField';
+import type { RockMossPlacement } from './RockMossField';
+import { bakeRockMossLayer, fillRockMossCutout, stampRockMoss } from './RockMossLayer';
 import { RockGridIndex } from './RockGridIndex';
 import {
   ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
@@ -118,6 +121,20 @@ export interface ArenaBuilderResult {
   /** Gebackene Fels-Decals; wird bei Fels-Aenderungen neu aufgebaut. */
   rockDecalLayer: Phaser.GameObjects.RenderTexture | null;
   /**
+   * Grossflaechiges Moos auf dem Felsbestand samt seiner Stanzform. Beide sind arenagross und
+   * rundengebunden; sie werden bei Hindernisaenderungen an Ort und Stelle neu befuellt, nie neu
+   * allokiert.
+   */
+  rockMossLayer: Phaser.GameObjects.RenderTexture | null;
+  rockMossCutout: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Die Moosflecken der Runde. Einmalig aus `layout.seed` und dem **vollstaendigen** Felsbestand
+   * erzeugt und danach unveraendert: Eine Zerstoerung darf die Platzierung nicht neu auswuerfeln,
+   * sonst spraenge das Moos auf allen unbeteiligten Felsen. Sichtbar ist davon immer nur, was die
+   * Stanzform des aktuellen Bestands durchlaesst.
+   */
+  rockMossPlacements: RockMossPlacement[];
+  /**
    * Gebackene, nicht-periodische Materialstoerungen der Felsflaeche (`BlobSurfaceMottle`).
    * Die geordnete NORMAL- und MULTIPLY-Kombination wird bei Hindernisaenderungen erhalten.
    */
@@ -140,6 +157,13 @@ interface RockOverlayScratch {
   cutoutImage: Phaser.GameObjects.Image;
   mottleLayers: Phaser.GameObjects.RenderTexture[];
   decal: Phaser.GameObjects.RenderTexture;
+  /**
+   * Eigene Stanzform fuer das Moos. Sie kann nicht mit `cutout` geteilt werden: Der Mottle
+   * schneidet hart an der Silhouette, das Moos weich an der Verlaufsmaske.
+   */
+  moss: Phaser.GameObjects.RenderTexture;
+  mossCutout: Phaser.GameObjects.RenderTexture;
+  mossCutoutImage: Phaser.GameObjects.Image;
 }
 
 interface RockOverlayChunk {
@@ -317,6 +341,14 @@ export class ArenaBuilder {
       decalLayer,
       decalStamps,
       rockDecalLayer: null,
+      rockMossLayer: null,
+      rockMossCutout: null,
+      // Einmalig hier erzeugt und nie wieder: siehe `rockMossPlacements`.
+      rockMossPlacements: generateRockMossPlacements({
+        seed: layout.seed,
+        rocks: layout.rocks,
+        metrics: { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, gridCols: GRID_COLS, gridRows: GRID_ROWS },
+      }),
       rockMottleLayers: [],
       rockSilhouetteCutout: null,
       rockOverlayScratch: null,
@@ -587,6 +619,21 @@ export class ArenaBuilder {
     result.rockMottleLayers = mottle.layers;
     result.rockSilhouetteCutout = mottle.silhouetteCutout;
 
+    // Das Moos liegt zwischen Materialstoerung und Decals. Die Platzierung bleibt unberuehrt;
+    // neu gebacken wird nur der Schnitt auf den aktuellen Bestand.
+    const mossMasks = ArenaVisualFactory.createRockMossMasks(scene, activeRocks);
+    const moss = bakeRockMossLayer(
+      scene,
+      result.rockMossPlacements,
+      mossMasks,
+      worldFrame,
+      DEPTH.ROCK_MOSS,
+      { layer: result.rockMossLayer, cutout: result.rockMossCutout },
+    );
+    result.rockMossLayer = moss.layer;
+    result.rockMossCutout = moss.cutout;
+    for (const mask of mossMasks) mask.destroy();
+
     const decalImages = ArenaVisualFactory.createRockDecals(
       scene,
       layout.decals ?? [],
@@ -689,9 +736,65 @@ export class ArenaBuilder {
         layer.render();
         scratchLayer.setVisible(false);
       }
+
+      // Die Verlaufsmasken entstehen aus denselben Fels-Images, die schon die harte Stanzform
+      // getragen haben: Eine Fels-Kachel liegt bei 128er-Chunks und 32er-Zellen immer vollstaendig
+      // in genau einem Chunk, der Satz ist also vollstaendig.
+      const maskImages = ArenaVisualFactory.createRockMossMasks(scene, silhouetteImages);
+      ArenaBuilder.rebuildRockMossRegion(scene, result, chunk, worldX, worldY, maskImages, scratch);
+      for (const mask of maskImages) mask.destroy();
     }
 
     ArenaBuilder.rebuildRockDecalRegions(scene, result, layout, dirtyRockIds, activeRockIds, worldFrame, scratch);
+  }
+
+  /**
+   * Backt die Moosschicht eines einzelnen Chunks neu.
+   *
+   * Die Platzierung wird dabei nie angefasst – gefiltert wird nur, welche der unveraenderlichen
+   * Flecken in den Chunk hineinreichen. Neu ist ausschliesslich die Stanzform, die sich aus der
+   * inzwischen geaenderten Felssilhouette ergibt.
+   */
+  private static rebuildRockMossRegion(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    chunk: RockOverlayChunk,
+    worldX: number,
+    worldY: number,
+    maskImages: readonly Phaser.GameObjects.Image[],
+    scratch: RockOverlayScratch,
+  ): void {
+    const layer = result.rockMossLayer;
+    if (!layer) return;
+
+    const chunkMaxX = chunk.localX + ROCK_OVERLAY_CHUNK_SIZE;
+    const chunkMaxY = chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
+    const localPlacements = result.rockMossPlacements.filter((placement) => {
+      const radius = getRockMossPlacementRadiusPx(placement);
+      const localX = placement.worldX - (worldX - chunk.localX);
+      const localY = placement.worldY - (worldY - chunk.localY);
+      return localX + radius > chunk.localX && localX - radius < chunkMaxX
+        && localY + radius > chunk.localY && localY - radius < chunkMaxY;
+    });
+
+    scratch.mossCutout.setPosition(worldX, worldY);
+    scratch.mossCutout.camera.setScroll(worldX, worldY);
+    fillRockMossCutout(scratch.mossCutout, maskImages);
+
+    scratch.moss.setPosition(worldX, worldY);
+    scratch.moss.clear();
+    if (localPlacements.length > 0) {
+      stampRockMoss(scene, scratch.moss, localPlacements, -worldX, -worldY);
+      scratch.moss.render();
+      scratch.moss.erase(scratch.mossCutoutImage);
+      scratch.moss.render();
+    }
+
+    layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+    scratch.moss.setVisible(true);
+    layer.draw(scratch.moss);
+    layer.render();
+    scratch.moss.setVisible(false);
   }
 
   private static collectRockOverlayChunks(
@@ -729,7 +832,18 @@ export class ArenaBuilder {
     const cutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, cutout.texture.key).setOrigin(0, 0);
     const mottleLayers = [ROCK_BLOB_SURFACE_PROFILE.mottle, ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? [])]
       .map(() => makeScratch());
-    result.rockOverlayScratch = { cutout, cutoutImage, mottleLayers, decal: makeScratch() };
+    const mossCutout = makeScratch();
+    mossCutout.setRenderMode('redraw');
+    const mossCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, mossCutout.texture.key).setOrigin(0, 0);
+    result.rockOverlayScratch = {
+      cutout,
+      cutoutImage,
+      mottleLayers,
+      decal: makeScratch(),
+      moss: makeScratch(),
+      mossCutout,
+      mossCutoutImage,
+    };
     return result.rockOverlayScratch;
   }
 
@@ -880,6 +994,12 @@ export class ArenaBuilder {
     if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
     result.rockDecalLayer = null;
 
+    if (result.rockMossLayer?.active) result.rockMossLayer.destroy();
+    result.rockMossLayer = null;
+    if (result.rockMossCutout?.active) result.rockMossCutout.destroy();
+    result.rockMossCutout = null;
+    result.rockMossPlacements.length = 0;
+
     for (const layer of result.rockMottleLayers) {
       if (layer.active) layer.destroy();
     }
@@ -893,6 +1013,9 @@ export class ArenaBuilder {
       result.rockOverlayScratch.cutoutImage.destroy();
       for (const layer of result.rockOverlayScratch.mottleLayers) layer.destroy();
       result.rockOverlayScratch.decal.destroy();
+      result.rockOverlayScratch.moss.destroy();
+      result.rockOverlayScratch.mossCutout.destroy();
+      result.rockOverlayScratch.mossCutoutImage.destroy();
       result.rockOverlayScratch = null;
     }
   }

@@ -14,6 +14,9 @@ import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { generateGroundCoverPlacements } from './GroundCoverField';
 import { bakeGroundCoverLayer } from './GroundCoverLayer';
+import { generateRockMossPlacements } from './RockMossField';
+import type { RockMossPlacement } from './RockMossField';
+import { bakeRockMossLayer } from './RockMossLayer';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -47,6 +50,15 @@ export class MenuArenaPreviewRenderer {
   private rockMottleLayers: Phaser.GameObjects.RenderTexture[] = [];
   private rockMottleConfig: MenuArenaPreviewLayerConfig | null = null;
   private rockSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null;
+  /**
+   * Fels-Moos samt Stanzform und Platzierung. Alle drei ueberdauern das Neubacken der
+   * Fels-Baender: Die beiden RenderTextures sind bildschirmgross, und die Platzierung darf sich
+   * bei einer Zerstoerung ohnehin nicht aendern.
+   */
+  private rockMossLayer: Phaser.GameObjects.RenderTexture | null = null;
+  private rockMossCutout: Phaser.GameObjects.RenderTexture | null = null;
+  private rockMossPlacements: RockMossPlacement[] | null = null;
+  private rockMossConfig: MenuArenaPreviewLayerConfig | null = null;
   private shadows: ShadowSystem | null = null;
   private visible = true;
 
@@ -257,6 +269,7 @@ export class MenuArenaPreviewRenderer {
 
     const { images: rockImages, cells: aliveCells } = this.createRocks();
     this.bakeRockMottle(aliveCells, rockImages, metrics, view.rocks);
+    this.bakeRockMossLayer(rockImages, view.rockMoss);
     this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks, this.rockBandLayers);
     this.bakeLayer(
       ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics, this.aliveRockIds),
@@ -303,6 +316,7 @@ export class MenuArenaPreviewRenderer {
     for (const layer of this.rockMottleLayers) {
       layer.setVisible(visible && (this.rockMottleConfig?.visible ?? true));
     }
+    this.rockMossLayer?.setVisible(visible && (this.rockMossConfig?.visible ?? true));
   }
 
   /** Applies the same ambient tint used by live arena tree visuals to the baked lobby trees. */
@@ -322,6 +336,8 @@ export class MenuArenaPreviewRenderer {
     this.shadows?.destroy();
     for (const layer of this.rockMottleLayers) layer.destroy();
     this.rockSilhouetteCutout?.destroy();
+    this.rockMossLayer?.destroy();
+    this.rockMossCutout?.destroy();
     this.background = null;
     this.backgroundDetail = null;
     this.leftSidebar = null;
@@ -334,6 +350,10 @@ export class MenuArenaPreviewRenderer {
     this.rockMottleLayers = [];
     this.rockMottleConfig = null;
     this.rockSilhouetteCutout = null;
+    this.rockMossLayer = null;
+    this.rockMossCutout = null;
+    this.rockMossConfig = null;
+    this.rockMossPlacements = null;
     this.rockGrid = null;
     this.aliveRockIds.clear();
     for (const obj of this.tracks) obj.destroy();
@@ -530,6 +550,50 @@ export class MenuArenaPreviewRenderer {
       layer.setAlpha(layerConfig.alpha);
       layer.setVisible(this.visible && layerConfig.visible);
     }
+  }
+
+  /**
+   * Backt das Fels-Moos ueber denselben Helfer wie die Arena.
+   *
+   * Die Platzierung entsteht genau einmal je Vorschau und wird danach nur noch neu beschnitten –
+   * dieselbe Regel wie in der Arena: Ein zerstoerter Fels darf das Moos der uebrigen nicht
+   * verruecken. Anders als dort laeuft hier kein Chunk-Pfad; die Vorschau backt ihre Fels-Baender
+   * ohnehin vollstaendig neu, und ihr Rahmen ist nur bildschirmgross.
+   */
+  private bakeRockMossLayer(
+    rockImages: readonly Phaser.GameObjects.Image[],
+    layerConfig: MenuArenaPreviewLayerConfig,
+  ): void {
+    if (!layerConfig.visible || layerConfig.alpha <= 0) return;
+    const { bounds } = this.config.view;
+    if (!this.rockMossPlacements) {
+      this.rockMossPlacements = generateRockMossPlacements({
+        seed: this.config.layout.seed,
+        rocks: this.config.layout.rocks,
+        metrics: {
+          offsetX: bounds.offsetX,
+          offsetY: bounds.offsetY,
+          gridCols: Math.floor(bounds.width / CELL_SIZE),
+          gridRows: Math.floor(bounds.height / CELL_SIZE),
+        },
+      });
+    }
+
+    const masks = ArenaVisualFactory.createRockMossMasks(this.scene, rockImages);
+    const baked = bakeRockMossLayer(
+      this.scene,
+      this.rockMossPlacements,
+      masks,
+      bounds,
+      DEPTH.ROCK_MOSS,
+      { layer: this.rockMossLayer, cutout: this.rockMossCutout },
+      layerConfig.alpha,
+    );
+    for (const mask of masks) mask.destroy();
+    this.rockMossLayer = baked.layer;
+    this.rockMossCutout = baked.cutout;
+    this.rockMossConfig = layerConfig;
+    this.rockMossLayer?.setVisible(this.visible && layerConfig.visible);
   }
 
   private applyLayerStyle<T extends Phaser.GameObjects.GameObject & { setAlpha(alpha: number): T; setVisible(visible: boolean): T }>(

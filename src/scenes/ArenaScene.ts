@@ -4,6 +4,7 @@ import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
+import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
 import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
@@ -403,6 +404,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
     preloadGroundCoverAssets(this.load);
+    preloadRockMossAssets(this.load);
     preloadTurretVisualAssets(this.load);
     preloadCanopyAssets(this.load);
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');

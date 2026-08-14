@@ -99,6 +99,12 @@ export const DEPTH = {
   BASES: 4,
   DECALS: 5,
   ROCKS: 9,
+  /**
+   * Grossflaechiges Moos auf dem Felsbestand. Liegt ueber der Materialstoerung des Felsens
+   * (`DEPTH.ROCKS + 0.05` aufwaerts) und unter den kleinen Fels-Decals – dieselbe Staffelung wie
+   * am Boden, wo Ground Cover unter den kleinen Decals liegt.
+   */
+  ROCK_MOSS: 9.08,
   /** Gebackene Riss-/Moos-Decals liegen knapp ueber den live-zerstoerbaren Felsen. */
   ROCK_DECALS: 9.1,
   PLAYERS: 10,

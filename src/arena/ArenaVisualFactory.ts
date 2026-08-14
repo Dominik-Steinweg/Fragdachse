@@ -15,6 +15,7 @@ import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
+import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
 import { DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
@@ -60,6 +61,31 @@ export class ArenaVisualFactory {
     img.setDepth(DEPTH.ROCKS);
     if (cornerTints) img.setTint(...cornerTints);
     return img;
+  }
+
+  /**
+   * Verlaufsmasken zu einem Satz lebender Felsen – je Fels ein Bild desselben Autotile-Frames aus
+   * dem Maskensheet, an derselben Stelle und in derselben Groesse.
+   *
+   * Der Frame wird bewusst vom Fels-Image uebernommen statt neu berechnet: Beide Sheets teilen
+   * das 47-Blob-Raster, und so kann die Maske gar nicht von der Silhouette abweichen, auf die sie
+   * sich bezieht – auch nicht nach einem Retiling.
+   *
+   * Die Bilder werden nur als Alphaquelle fuer `erase()` erzeugt und vom Aufrufer sofort wieder
+   * zerstoert; sie erreichen nie einen Renderdurchlauf.
+   */
+  static createRockMossMasks(
+    scene: Phaser.Scene,
+    rocks: readonly Phaser.GameObjects.Image[],
+  ): Phaser.GameObjects.Image[] {
+    const masks: Phaser.GameObjects.Image[] = [];
+    for (const rock of rocks) {
+      if (!rock.active) continue;
+      const mask = scene.add.image(rock.x, rock.y, ROCK_MOSS_MASK_TEXTURE_KEY, rock.frame.name);
+      mask.setDisplaySize(CELL_SIZE, CELL_SIZE);
+      masks.push(mask);
+    }
+    return masks;
   }
 
   static createTrunk(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Arc {
