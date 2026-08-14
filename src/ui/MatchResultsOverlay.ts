@@ -127,6 +127,8 @@ const FOOTER_Y = 1012;
 const CONTINUE_W = 270;
 const CONTINUE_H = 56;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
+const FEEDBACK_W = 250;
+const FEEDBACK_X = CONTENT_RIGHT - CONTINUE_W - 16 - FEEDBACK_W / 2;
 
 const PANEL_BG = SURFACE.modal;
 const PANEL_ACCENT = BORDER.default;
@@ -244,6 +246,8 @@ export class MatchResultsOverlay {
 
   private continueButton: Phaser.GameObjects.Image | null = null;
   private continueLabel: Phaser.GameObjects.Text | null = null;
+  private balanceFeedbackButton: Phaser.GameObjects.Image | null = null;
+  private balanceFeedbackLabel: Phaser.GameObjects.Text | null = null;
   private hintText: Phaser.GameObjects.Text | null = null;
 
   private sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -253,6 +257,7 @@ export class MatchResultsOverlay {
   private syncing = false;
   private sequenceComplete = true;
   private presentation: MatchResultsPresentation | null = null;
+  private balanceFeedbackAvailable = false;
   /**
    * Nachtraeglich geoeffnete Ansicht derselben Runde. Sie animiert und zeigt alles wie der
    * Original-Durchlauf, loest beim Schliessen aber `onContinue` nicht aus: Der dortige
@@ -271,6 +276,7 @@ export class MatchResultsOverlay {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly onContinue: () => void,
+    private readonly onBalanceFeedback: () => void = () => undefined,
   ) {}
 
   build(): void {
@@ -375,6 +381,8 @@ export class MatchResultsOverlay {
     this.syncGroup?.setVisible(true).setAlpha(1);
     this.syncText?.setText('Belohnungen werden synchronisiert …');
     this.syncSpinner?.setVisible(true);
+    this.balanceFeedbackButton?.setVisible(false);
+    this.balanceFeedbackLabel?.setVisible(false);
     this.startIdleAnimations(OUTCOME_STYLE.syncing.color, true);
   }
 
@@ -431,6 +439,8 @@ export class MatchResultsOverlay {
 
     // Der Weiter-Button fuehrt bei offener Belohnung nicht in die Lobby, sondern in die Auswahl.
     this.continueLabel?.setText(presentation.itemReward ? 'ITEM AUSWÄHLEN' : 'WEITER ZUR LOBBY');
+    this.balanceFeedbackButton?.setVisible(this.balanceFeedbackAvailable && !this.syncing);
+    this.balanceFeedbackLabel?.setVisible(this.balanceFeedbackAvailable && !this.syncing);
 
     this.populateLeaderboard(presentation);
     this.populateProgress(presentation.progress, presentation.itemReward);
@@ -445,6 +455,13 @@ export class MatchResultsOverlay {
 
   isSyncing(): boolean {
     return this.visible && this.syncing;
+  }
+
+  /** Optionaler Sichtbarkeitshook: die Balance-Logik bleibt ausserhalb dieses Ergebnislayers. */
+  setBalanceFeedbackVisible(visible: boolean): void {
+    this.balanceFeedbackAvailable = visible;
+    this.balanceFeedbackButton?.setVisible(this.visible && !this.syncing && visible);
+    this.balanceFeedbackLabel?.setVisible(this.visible && !this.syncing && visible);
   }
 
   hide(): void {
@@ -492,8 +509,11 @@ export class MatchResultsOverlay {
     this.syncSpinner = null;
     this.continueButton = null;
     this.continueLabel = null;
+    this.balanceFeedbackButton = null;
+    this.balanceFeedbackLabel = null;
     this.hintText = null;
     this.visible = false;
+    this.balanceFeedbackAvailable = false;
   }
 
   // ── Aufbau ─────────────────────────────────────────────────────────────────
@@ -800,7 +820,19 @@ export class MatchResultsOverlay {
     });
     attachHoverEffect(this.scene, this.continueButton, this.continueLabel);
 
-    return this.scene.add.container(0, 0, [this.hintText, this.continueButton, this.continueLabel])
+    this.balanceFeedbackButton = this.scene.add.image(FEEDBACK_X, FOOTER_Y, ensureGlossyButtonTexture(
+      this.scene, '_mro_balance_feedback', FEEDBACK_W, CONTINUE_H, INTENT.secondary.fill, INTENT.secondary.stroke,
+    )).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
+    this.balanceFeedbackLabel = this.scene.add.text(FEEDBACK_X, FOOTER_Y, 'BALANCE-FEEDBACK', textStyle('label', {
+      color: INTENT.secondary.label,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.balanceFeedbackButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      event?.stopPropagation();
+      this.onBalanceFeedback();
+    });
+    attachHoverEffect(this.scene, this.balanceFeedbackButton, this.balanceFeedbackLabel);
+
+    return this.scene.add.container(0, 0, [this.hintText, this.balanceFeedbackButton, this.balanceFeedbackLabel, this.continueButton, this.continueLabel])
       .setScrollFactor(0);
   }
 

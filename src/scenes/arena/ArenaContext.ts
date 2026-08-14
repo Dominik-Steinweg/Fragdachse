@@ -50,6 +50,7 @@ import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import type { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
 import type { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
 import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
+import type { Ak47StrategicTargetSystem } from '../../systems/Ak47StrategicTargetSystem';
 import type { NecromancySystem } from '../../systems/NecromancySystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
@@ -150,6 +151,7 @@ export interface ArenaContext {
   slimeTrailSystem: SlimeTrailSystem | null;
   flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
   weaponUpgradeSystem: WeaponUpgradeSystem | null;
+  ak47StrategicTargetSystem: Ak47StrategicTargetSystem | null;
   necromancySystem: NecromancySystem | null;
   coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
   coopDefenseEnemyAbilitySystem: CoopDefenseEnemyAbilitySystem | null;

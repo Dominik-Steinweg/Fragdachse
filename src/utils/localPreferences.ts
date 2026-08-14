@@ -47,6 +47,19 @@ import {
 } from '../config/coopDefenseMapUnlocks';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
+import type {
+  BalanceBuildSnapshot,
+  BalanceItemSnapshot,
+  BalanceRoundFeedback,
+  BalanceRoundRecord,
+  CoopDefenseBalanceLabDocument,
+} from '../debug/coopDefenseBalance/types';
+import {
+  COOP_DEFENSE_BALANCE_MAX_COMMENT_LENGTH,
+  COOP_DEFENSE_BALANCE_MAX_ROUNDS,
+  COOP_DEFENSE_BALANCE_STORAGE_KEY,
+  COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION,
+} from '../debug/coopDefenseBalance/types';
 
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
@@ -56,6 +69,8 @@ export const LOCAL_SETTINGS_SCHEMA_VERSION = 1;
 export const LOCAL_PROGRESS_SCHEMA_VERSION = 2;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
 export const LOCAL_PROGRESS_EXPORT_VERSION = 1;
+export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
+export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 export interface CoopDefenseProgressPreferences {
@@ -381,6 +396,199 @@ function safeRemove(storage: Storage | null, key: string): void {
   try { storage?.removeItem(key); } catch { /* Storage bleibt optional. */ }
 }
 
+function sanitizeBalanceNullableNumber(value: unknown, allowNegative = false): number | null {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return allowNegative ? value : Math.max(0, value);
+}
+
+function sanitizeBalanceString(value: unknown, maxLength = 128): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) return null;
+  return value;
+}
+
+function sanitizeBalanceItem(value: unknown): BalanceItemSnapshot | null {
+  if (!isRecord(value)) return null;
+  const slots = ['helmet', 'gloves', 'armor', 'boots'] as const;
+  const rarities = ['white', 'blue', 'yellow'] as const;
+  if (!slots.includes(value.slot as typeof slots[number])
+    || !rarities.includes(value.rarity as typeof rarities[number])) return null;
+  if (typeof value.itemLevel !== 'number' || !Number.isInteger(value.itemLevel) || value.itemLevel < 0
+    || typeof value.baseValue !== 'number' || !Number.isFinite(value.baseValue)
+    || !Array.isArray(value.affixes) || value.affixes.length > 32) return null;
+  const affixes = value.affixes.map((raw) => {
+    if (!isRecord(raw)) return null;
+    const affixId = sanitizeBalanceString(raw.affixId);
+    return affixId && typeof raw.value === 'number' && Number.isFinite(raw.value)
+      ? { affixId, value: raw.value } : null;
+  });
+  if (affixes.some((affix) => affix === null)) return null;
+  return {
+    slot: value.slot as BalanceItemSnapshot['slot'],
+    rarity: value.rarity as BalanceItemSnapshot['rarity'],
+    itemLevel: value.itemLevel,
+    baseValue: value.baseValue,
+    affixes: affixes as BalanceItemSnapshot['affixes'],
+  };
+}
+
+function sanitizeBalanceBuild(value: unknown): BalanceBuildSnapshot | null {
+  if (!isRecord(value)) return null;
+  const classId = value.classId === null ? null : (isCoopDefenseClassId(value.classId) ? value.classId : undefined);
+  if (classId === undefined) return null;
+  const upgradeProfile = value.upgradeProfile === null
+    ? null
+    : isRecord(value.upgradeProfile)
+      ? (() => {
+        const levels: Record<string, number> = {};
+        for (const [id, level] of Object.entries(value.upgradeProfile)) {
+          if (typeof level !== 'number' || !Number.isInteger(level) || level < 0 || level > 100) continue;
+          levels[id] = level;
+        }
+        return levels;
+      })()
+      : undefined;
+  if (upgradeProfile === undefined) return null;
+  let items: BalanceItemSnapshot[] | null = null;
+  if (value.items !== null) {
+    if (!Array.isArray(value.items) || value.items.length > 16) return null;
+    items = value.items.map(sanitizeBalanceItem).filter((item): item is BalanceItemSnapshot => item !== null);
+    if (items.length !== value.items.length) return null;
+  }
+  const stringField = (key: string): string | null => value[key] === null ? null : sanitizeBalanceString(value[key]);
+  for (const key of ['weapon1', 'weapon2', 'utility', 'ultimate']) {
+    if (value[key] !== null && stringField(key) === null) return null;
+  }
+  const numericField = (key: string): number | null => sanitizeBalanceNullableNumber(value[key]);
+  for (const key of ['coopXpBefore', 'levelBefore']) {
+    if (value[key] !== null && numericField(key) === null) return null;
+  }
+  return {
+    coopXpBefore: numericField('coopXpBefore'),
+    levelBefore: numericField('levelBefore'),
+    classId,
+    weapon1: stringField('weapon1'),
+    weapon2: stringField('weapon2'),
+    utility: stringField('utility'),
+    ultimate: stringField('ultimate'),
+    upgradeProfile,
+    items,
+  };
+}
+
+function sanitizeBalanceFeedback(value: unknown): BalanceRoundFeedback | null {
+  if (value === null) return null;
+  if (!isRecord(value)
+    || typeof value.difficulty !== 'number' || !Number.isInteger(value.difficulty) || value.difficulty < 1 || value.difficulty > 5
+    || typeof value.pacing !== 'number' || !Number.isInteger(value.pacing) || value.pacing < 1 || value.pacing > 5
+    || typeof value.comment !== 'string') return null;
+  return {
+    difficulty: value.difficulty as BalanceRoundFeedback['difficulty'],
+    pacing: value.pacing as BalanceRoundFeedback['pacing'],
+    comment: value.comment.slice(0, COOP_DEFENSE_BALANCE_MAX_COMMENT_LENGTH),
+  };
+}
+
+function sanitizeBalanceRound(value: unknown): BalanceRoundRecord | null {
+  if (!isRecord(value)
+    || typeof value.roundEndedAt !== 'number' || !Number.isFinite(value.roundEndedAt) || value.roundEndedAt <= 0
+    || typeof value.mapId !== 'string' || value.mapId.length === 0 || value.mapId.length > 64
+    || (value.outcome !== 'victory' && value.outcome !== 'defeat')
+    || typeof value.mapBalanceSignature !== 'string' || value.mapBalanceSignature.length === 0
+    || typeof value.rulesetVersion !== 'number' || !Number.isInteger(value.rulesetVersion) || value.rulesetVersion < 0
+    || !isRecord(value.build)) return null;
+  const build = sanitizeBalanceBuild(value.build);
+  if (!build) return null;
+  const numericKeys = [
+    'durationMs', 'sharedXp', 'frags', 'playerHp', 'playerMaxHp', 'playerHpPercent', 'armor',
+    'ownMainBaseHp', 'ownMainBaseMaxHp', 'ownMainBaseHpPercent', 'hostileMainBaseHp',
+    'hostileMainBaseMaxHp', 'hostileMainBaseHpPercent', 'survivalRemainingRespawns',
+  ] as const;
+  const numbers: Record<string, number | null> = {};
+  for (const key of numericKeys) {
+    if (value[key] !== null && sanitizeBalanceNullableNumber(value[key]) === null) return null;
+    numbers[key] = sanitizeBalanceNullableNumber(value[key]);
+  }
+  const feedback = sanitizeBalanceFeedback(value.feedback);
+  if (value.feedback !== null && feedback === null) return null;
+  return {
+    roundEndedAt: Math.floor(value.roundEndedAt),
+    mapId: value.mapId,
+    outcome: value.outcome,
+    durationMs: numbers.durationMs,
+    sharedXp: numbers.sharedXp,
+    frags: numbers.frags,
+    playerHp: numbers.playerHp,
+    playerMaxHp: numbers.playerMaxHp,
+    playerHpPercent: numbers.playerHpPercent,
+    armor: numbers.armor,
+    ownMainBaseHp: numbers.ownMainBaseHp,
+    ownMainBaseMaxHp: numbers.ownMainBaseMaxHp,
+    ownMainBaseHpPercent: numbers.ownMainBaseHpPercent,
+    hostileMainBaseHp: numbers.hostileMainBaseHp,
+    hostileMainBaseMaxHp: numbers.hostileMainBaseMaxHp,
+    hostileMainBaseHpPercent: numbers.hostileMainBaseHpPercent,
+    survivalRemainingRespawns: numbers.survivalRemainingRespawns,
+    build,
+    mapBalanceSignature: value.mapBalanceSignature,
+    rulesetVersion: value.rulesetVersion,
+    feedback,
+  };
+}
+
+function sanitizeBalanceLabDocument(raw: unknown): CoopDefenseBalanceLabDocument | null {
+  if (!isRecord(raw) || raw.schemaVersion !== COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION
+    || typeof raw.recordingEnabled !== 'boolean' || !Array.isArray(raw.rounds)) return null;
+  const rounds: BalanceRoundRecord[] = [];
+  const seen = new Set<number>();
+  for (const value of raw.rounds.slice(0, COOP_DEFENSE_BALANCE_MAX_ROUNDS * 2)) {
+    const round = sanitizeBalanceRound(value);
+    if (!round || seen.has(round.roundEndedAt)) continue;
+    seen.add(round.roundEndedAt);
+    rounds.push(round);
+  }
+  rounds.sort((a, b) => a.roundEndedAt - b.roundEndedAt);
+  return {
+    schemaVersion: COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION,
+    recordingEnabled: raw.recordingEnabled,
+    rounds: rounds.slice(-COOP_DEFENSE_BALANCE_MAX_ROUNDS),
+  };
+}
+
+function cloneBalanceLabDocument(document: CoopDefenseBalanceLabDocument): CoopDefenseBalanceLabDocument {
+  return sanitizeBalanceLabDocument(JSON.parse(JSON.stringify(document))) ?? {
+    schemaVersion: COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION,
+    recordingEnabled: false,
+    rounds: [],
+  };
+}
+
+function readBalanceLabDocument(): CoopDefenseBalanceLabDocument {
+  const storage = getLocalStorage();
+  if (balanceLabCache && balanceLabCachedStorage === storage) return cloneBalanceLabDocument(balanceLabCache);
+  let document: CoopDefenseBalanceLabDocument | null = null;
+  const raw = safeRead(storage, COOP_DEFENSE_BALANCE_STORAGE_KEY);
+  if (raw) {
+    try { document = sanitizeBalanceLabDocument(JSON.parse(raw)); } catch { document = null; }
+  }
+  balanceLabCache = document ?? {
+    schemaVersion: COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION,
+    recordingEnabled: false,
+    rounds: [],
+  };
+  balanceLabCachedStorage = storage;
+  return cloneBalanceLabDocument(balanceLabCache);
+}
+
+function writeBalanceLabDocument(document: CoopDefenseBalanceLabDocument): void {
+  const sanitized = sanitizeBalanceLabDocument(document);
+  if (!sanitized) return;
+  const storage = getLocalStorage();
+  safeWrite(storage, COOP_DEFENSE_BALANCE_STORAGE_KEY, sanitized);
+  balanceLabCache = cloneBalanceLabDocument(sanitized);
+  balanceLabCachedStorage = storage;
+}
+
 function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV1 | null {
   if (!isRecord(raw) || raw.schemaVersion !== LOCAL_SETTINGS_SCHEMA_VERSION) return null;
   if (!isRecord(raw.audio) || !isRecord(raw.graphics)) return null;
@@ -659,6 +867,8 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
 
 let preferencesCache: LocalPreferences | null = null;
 let cachedStorage: Storage | null = null;
+let balanceLabCache: CoopDefenseBalanceLabDocument | null = null;
+let balanceLabCachedStorage: Storage | null = null;
 
 function readPreferences(): LocalPreferences {
   const storage = getLocalStorage();
@@ -721,6 +931,61 @@ function updatePreferences(mutator: (current: LocalPreferences) => LocalPreferen
 export function invalidateLocalStorageCache(): void {
   preferencesCache = null;
   cachedStorage = null;
+  balanceLabCache = null;
+  balanceLabCachedStorage = null;
+}
+
+/** Separater, versionierter Debug-Speicher; nicht Teil des normalen Progress-Exports. */
+export function getStoredCoopDefenseBalanceLab(): CoopDefenseBalanceLabDocument {
+  return readBalanceLabDocument();
+}
+
+export function setStoredCoopDefenseBalanceRecordingEnabled(enabled: boolean): void {
+  const current = readBalanceLabDocument();
+  writeBalanceLabDocument({ ...current, recordingEnabled: enabled === true });
+}
+
+export function upsertStoredCoopDefenseBalanceRound(
+  round: BalanceRoundRecord,
+  staleRoundEndedAt: readonly number[] = [],
+): void {
+  const current = readBalanceLabDocument();
+  const candidates = [...current.rounds.filter((entry) => entry.roundEndedAt !== round.roundEndedAt), round]
+    .sort((a, b) => a.roundEndedAt - b.roundEndedAt)
+  const staleIds = new Set(staleRoundEndedAt);
+  while (candidates.length > COOP_DEFENSE_BALANCE_MAX_ROUNDS) {
+    const staleIndex = candidates.findIndex((entry) => staleIds.has(entry.roundEndedAt));
+    candidates.splice(staleIndex >= 0 ? staleIndex : 0, 1);
+  }
+  const rounds = candidates;
+  writeBalanceLabDocument({ ...current, rounds });
+}
+
+export function updateStoredCoopDefenseBalanceFeedback(
+  roundEndedAt: number,
+  feedback: BalanceRoundFeedback | null,
+): boolean {
+  const current = readBalanceLabDocument();
+  const index = current.rounds.findIndex((round) => round.roundEndedAt === roundEndedAt);
+  if (index < 0) return false;
+  const rounds = [...current.rounds];
+  rounds[index] = { ...rounds[index], feedback };
+  writeBalanceLabDocument({ ...current, rounds });
+  return true;
+}
+
+export function deleteStoredCoopDefenseBalanceStaleRounds(roundEndedAt: readonly number[]): number {
+  const ids = new Set(roundEndedAt);
+  const current = readBalanceLabDocument();
+  const next = current.rounds.filter((round) => !ids.has(round.roundEndedAt));
+  if (next.length === current.rounds.length) return 0;
+  writeBalanceLabDocument({ ...current, rounds: next });
+  return current.rounds.length - next.length;
+}
+
+export function deleteAllStoredCoopDefenseBalanceRounds(): void {
+  const current = readBalanceLabDocument();
+  writeBalanceLabDocument({ ...current, rounds: [] });
 }
 
 export function exportStoredGameProgressJson(): string {

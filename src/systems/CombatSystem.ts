@@ -39,6 +39,20 @@ import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 import { getRageGeneratingDamage } from '../utils/rageDamage';
 import { mergeEnemySlow, type EnemySlowState } from '../utils/enemySlow';
+import {
+  canTriggerPlasmaSwarm,
+  PLASMA_SWARM_BASE_EXPLOSION_DAMAGE,
+  PLASMA_SWARM_BASE_EXPLOSION_RADIUS,
+  PLASMA_SWARM_BASE_PROJECTILE_COUNT,
+  PLASMA_SWARM_EXPLOSION_DURATION_MS,
+  PLASMA_SWARM_CHANCE_PER_STACK_PERCENT,
+  PlasmaChargeTracker,
+  resolvePlasmaSwarmProjectileCount,
+  resolvePlasmaSwarmProjectileProfile,
+  resolvePlasmaSwarmRadialAngles,
+  resolvePlasmaSwarmHoming,
+  shouldIgnorePlasmaSwarmOriginHit,
+} from './PlasmaCharge';
 import type { TargetStatusTarget } from './TargetStatusSystem';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
@@ -63,11 +77,22 @@ interface AoeDamageOptions {
   weaponName?: string;
   sourceSlot?: LoadoutSlot;
   damageFalloff?: RadialDamageFalloffConfig;
+  baseDamageMult?: number;
   selfDamageMult?: number;
   enemySlowFraction?: number;
   enemySlowDurationMs?: number;
   skipEnemies?: boolean;
+  /** Explosionen können ihr direkt getroffenes Primärziel ausdrücklich ausnehmen. */
+  excludeTargetId?: string;
+  /** The supplied damage already contains the originating direct-hit multipliers. */
+  damageAlreadyScaled?: boolean;
   killSource?: KillSourceContext;
+}
+
+export interface Ak47DirectEnemyHitImpact {
+  readonly damageMultiplier: number;
+  readonly explosionRadius?: number;
+  readonly explosionDamageFraction?: number;
 }
 
 /**
@@ -250,6 +275,7 @@ export class CombatSystem {
   private burnStates:    Map<string, Map<string, BurnSourceState>>      = new Map();
   private nextBurnTickAt = 0;
   private enemySlowStates: Map<string, EnemySlowState> = new Map();
+  private readonly plasmaChargeTracker = new PlasmaChargeTracker();
   private readonly hitscanLine       = new Phaser.Geom.Line();
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
@@ -290,6 +316,7 @@ export class CombatSystem {
   private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null = null;
+  private onAk47DirectEnemyHit: ((projectile: TrackedProjectile, enemyId: string) => Ak47DirectEnemyHitImpact | null) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
@@ -379,6 +406,8 @@ export class CombatSystem {
     damage: number,
     damageKind: CombatDamageKind,
   ) => void) | null = null;
+  private onHealingReceived: ((playerId: string, amount: number) => void) | null = null;
+  private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -400,7 +429,10 @@ export class CombatSystem {
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
-  setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
+  setEnemyManager(manager: EnemyManager | null): void {
+    this.enemyManager = manager;
+    if (!manager) this.plasmaChargeTracker.clearAll();
+  }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   /**
    * Einziger Trichter fuer Basisschaden. Wie `setRockDamageCallback` verdrahtet, damit der
@@ -468,6 +500,12 @@ export class CombatSystem {
   /** Meldet nach der Zielverteilung nur tatsächlich verlorene HP/Rüstung bzw. Gegner-HP. */
   setDamageDealtHandler(handler: ((targetType: CombatDamageTargetType, targetId: string, attackerId: string | undefined, damage: number, damageKind: CombatDamageKind) => void) | null): void {
     this.onDamageDealt = handler;
+  }
+  setHealingReceivedHandler(handler: ((playerId: string, amount: number) => void) | null): void {
+    this.onHealingReceived = handler;
+  }
+  setArmorReceivedHandler(handler: ((playerId: string, amount: number) => void) | null): void {
+    this.onArmorReceived = handler;
   }
   /**
    * `sourceSlot` reicht die Herkunft des Treffers durch, damit slot-gebundene Angreifer-Boni
@@ -571,6 +609,10 @@ export class CombatSystem {
 
   setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null): void {
     this.onEnemyDeathCb = cb;
+  }
+
+  setAk47DirectEnemyHitHandler(handler: ((projectile: TrackedProjectile, enemyId: string) => Ak47DirectEnemyHitImpact | null) | null): void {
+    this.onAk47DirectEnemyHit = handler;
   }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
@@ -1005,14 +1047,18 @@ export class CombatSystem {
     includeSelf = false,
     options?: AoeDamageOptions,
   ): void {
+    const runtimeDamage = options?.damageAlreadyScaled
+      ? damage
+      : damage * this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
     for (const player of this.playerManager.getAllPlayers()) {
+      if (options?.excludeTargetId === player.id) continue;
       if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
       if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist > radius) continue;
 
-      let appliedDamage = computeRadialDamage(dist, radius, damage, options?.damageFalloff);
+      let appliedDamage = computeRadialDamage(dist, radius, runtimeDamage, options?.damageFalloff);
       if (player.id === ownerId) {
         appliedDamage *= options?.selfDamageMult ?? 1;
       }
@@ -1029,17 +1075,21 @@ export class CombatSystem {
       }, toDamageOptions(options, 'explosion'));
     }
 
-    this.applyRadialHostileBaseDamage(x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot);
+    this.applyRadialHostileBaseDamage(
+      x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot,
+      options?.baseDamageMult,
+    );
 
     if (options?.skipEnemies) return;
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (options?.excludeTargetId === enemy.id) continue;
       if (!includeSelf && enemy.id === ownerId) continue;
       if (!this.canDamageTarget(ownerId, enemy.id, options?.allowTeamDamage)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > radius) continue;
 
-      const roundedDamage = Math.round(computeRadialDamage(dist, radius, damage, options?.damageFalloff));
+      const roundedDamage = Math.round(computeRadialDamage(dist, radius, runtimeDamage, options?.damageFalloff));
       if (roundedDamage <= 0) continue;
       if ((options?.enemySlowFraction ?? 0) > 0 && (options?.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, options?.enemySlowFraction ?? 0, options?.enemySlowDurationMs ?? 0);
@@ -1054,12 +1104,27 @@ export class CombatSystem {
 
   getEnemyMovementFactor(enemyId: string, now = Date.now()): number {
     const state = this.enemySlowStates.get(enemyId);
-    if (!state) return 1;
-    if (now >= state.expiresAt) {
-      this.enemySlowStates.delete(enemyId);
-      return 1;
+    let movementFactor = 1;
+    if (state) {
+      if (now >= state.expiresAt) {
+        this.enemySlowStates.delete(enemyId);
+      } else {
+        movementFactor = state.movementFactor;
+      }
     }
-    return state.movementFactor;
+
+    const enemy = this.enemyManager?.getEnemy(enemyId);
+    if (!enemy) {
+      this.plasmaChargeTracker.clear(enemyId);
+      return movementFactor;
+    }
+
+    const plasmaState = this.plasmaChargeTracker.getState(enemyId, now);
+    const plasmaStacks = plasmaState?.stacks ?? 0;
+    if (enemy.getPlasmaChargeStacks() !== plasmaStacks) {
+      enemy.updatePlasmaChargeStacks(plasmaStacks);
+    }
+    return movementFactor;
   }
 
   /**
@@ -1102,7 +1167,8 @@ export class CombatSystem {
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist > effect.radius) continue;
 
-      let damage = computeProjectileExplosionDamage(dist, effect);
+      let damage = computeProjectileExplosionDamage(dist, effect)
+        * this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
       if (player.id === ownerId) {
         damage *= effect.selfDamageMult;
       }
@@ -1125,8 +1191,14 @@ export class CombatSystem {
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > effect.radius) continue;
 
-      const roundedDamage = Math.round(computeProjectileExplosionDamage(dist, effect));
+      const roundedDamage = Math.round(
+        computeProjectileExplosionDamage(dist, effect)
+        * this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot),
+      );
       if (roundedDamage <= 0) continue;
+      if ((effect.enemySlowFraction ?? 0) > 0 && (effect.enemySlowDurationMs ?? 0) > 0) {
+        this.applyEnemySlow(enemy.id, effect.enemySlowFraction ?? 0, effect.enemySlowDurationMs ?? 0);
+      }
       this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, weaponName, effect.burnOrigin);
       this.applyDamage(enemy.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
@@ -1145,7 +1217,7 @@ export class CombatSystem {
       if (this.enemyManager?.hasEnemy(ownerId)) continue;
       const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
       if (damage <= 0) continue;
-      this.applyBaseDamage(base.id, damage, ownerId, sourceSlot);
+      this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult);
       damagedTargetKeys.push(`bases:${base.id}`);
     }
     return damagedTargetKeys;
@@ -1285,6 +1357,7 @@ export class CombatSystem {
       detonator:            proj.detonator,
       rockDamageMult:       proj.rockDamageMult,
       trainDamageMult:      proj.trainDamageMult,
+      baseDamageMult:       proj.baseDamageMult,
       hitSlowFraction:      proj.hitSlowFraction,
       hitSlowDurationMs:    proj.hitSlowDurationMs,
       hitKnockback:         proj.hitKnockback,
@@ -1362,11 +1435,7 @@ export class CombatSystem {
   }
 
   /** Schützen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
-  private computeProjectileDamage(proj: TrackedProjectile): number {
-    const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
-      ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
-      : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
-    const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
+  private computeProjectileWeaponDamage(proj: TrackedProjectile): number {
     let projectileMultiplier = proj.ak47DamageMultiplier ?? 1;
     if (
       (proj.shotgunProximityMaxDamageBonus ?? 0) > 0
@@ -1383,7 +1452,20 @@ export class CombatSystem {
       const closeness = Phaser.Math.Clamp(1 - distance / (proj.shotgunResolvedRange ?? 1), 0, 1);
       projectileMultiplier *= 1 + closeness * (proj.shotgunProximityMaxDamageBonus ?? 0);
     }
-    return proj.damage * loadoutMult * powerUpMult * projectileMultiplier;
+    return proj.damage * projectileMultiplier;
+  }
+
+  getPlayerRuntimeDamageMultiplier(playerId: string, sourceSlot?: LoadoutSlot): number {
+    const loadoutMult = sourceSlot === 'weapon1' || sourceSlot === 'weapon2'
+      ? (this.loadoutManager?.getWeaponDamageMultiplier(playerId, sourceSlot, Date.now()) ?? 1)
+      : (this.loadoutManager?.getDamageMultiplier(playerId) ?? 1);
+    const powerUpMult = this.powerUpSystem?.getDamageMultiplier(playerId) ?? 1;
+    return loadoutMult * powerUpMult;
+  }
+
+  private computeProjectileDamage(proj: TrackedProjectile): number {
+    return this.computeProjectileWeaponDamage(proj)
+      * this.getPlayerRuntimeDamageMultiplier(proj.ownerId, proj.sourceSlot);
   }
 
   /**
@@ -1392,12 +1474,52 @@ export class CombatSystem {
    * strukturspezifischen Coop-Modifikatoren.
    */
   applyProjectileBaseDamage(baseId: string, projectile: TrackedProjectile): void {
-    this.applyBaseDamage(baseId, this.computeProjectileDamage(projectile), projectile.ownerId, projectile.sourceSlot);
+    this.applyBaseDamage(
+      baseId,
+      this.computeProjectileWeaponDamage(projectile),
+      projectile.ownerId,
+      projectile.sourceSlot,
+      projectile.baseDamageMult,
+    );
   }
 
   private registerAk47Hit(proj: TrackedProjectile): void {
     if (proj.ak47ShotId === undefined || proj.ak47HitConfirmed) return;
     this.loadoutManager?.registerAk47ProjectileHit(proj, Date.now());
+  }
+
+  private resolveAk47DirectEnemyHit(proj: TrackedProjectile, enemyId: string): Ak47DirectEnemyHitImpact {
+    if (proj.ak47ShotId === undefined || proj.sourceSlot !== 'weapon2') {
+      return { damageMultiplier: 1 };
+    }
+    return this.onAk47DirectEnemyHit?.(proj, enemyId) ?? { damageMultiplier: 1 };
+  }
+
+  private applyAk47TargetExplosion(
+    proj: TrackedProjectile,
+    enemyId: string,
+    directDamage: number,
+    impact: Ak47DirectEnemyHitImpact,
+  ): void {
+    const radius = impact.explosionRadius ?? 0;
+    const fraction = impact.explosionDamageFraction ?? 0;
+    if (radius <= 0 || fraction <= 0 || directDamage <= 0) return;
+    this.applyAoeDamage(
+      proj.sprite.x,
+      proj.sprite.y,
+      radius,
+      directDamage * fraction,
+      proj.ownerId,
+      false,
+      {
+        category: 'explosion',
+        allowTeamDamage: false,
+        weaponName: 'Explosive Zielerfassung',
+        sourceSlot: 'weapon2',
+        excludeTargetId: enemyId,
+        damageAlreadyScaled: true,
+      },
+    );
   }
 
   /** AABB-Treffer gegen Spieler (Shield/Piercing/Flammen-Burn/Standard). Liefert true, wenn das Projektil verbraucht ist. */
@@ -1522,9 +1644,24 @@ export class CombatSystem {
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (proj.ownerId === enemy.id) continue;
       if (proj.multiExplosionExcludedTargetKeys?.has(`enemies:${enemy.id}`)) continue;
+
+      const enemyBounds = enemy.sprite.getBounds();
+      if (proj.plasmaSwarmOriginEnemyId === enemy.id) {
+        const stillInsideOrigin = Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemyBounds);
+        if (shouldIgnorePlasmaSwarmOriginHit(
+          proj,
+          proj.plasmaSwarmOriginEnemyId,
+          enemy.id,
+          !stillInsideOrigin,
+        )) {
+          continue;
+        }
+        if (!stillInsideOrigin) proj.plasmaSwarmOriginEnemyId = undefined;
+      }
+
       if (!this.canDamageTarget(proj.ownerId, enemy.id, proj.allowTeamDamage)) continue;
 
-      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemy.sprite.getBounds())) {
+      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemyBounds)) {
         if (proj.energyInjectorPayload) {
           this.onEnergyInjectorTargetHit?.('enemy', enemy.id, enemy.sprite.x, enemy.sprite.y, proj);
           this.projectileManager.destroyProjectile(proj.id);
@@ -1532,13 +1669,16 @@ export class CombatSystem {
         }
         const actualDamage = this.computeProjectileDamage(proj);
         const enemyKey = `enemy_${enemy.id}`;
-        this.registerAk47Hit(proj);
 
         if (proj.penetrationHitIds) {
           if (proj.penetrationHitIds.has(enemyKey)) continue;
           proj.penetrationHitIds.add(enemyKey);
+          const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id);
+          const impactDamage = actualDamage * impact.damageMultiplier;
+          this.registerAk47Hit(proj);
           this.applyProjectileBurn(enemy.id, proj);
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
+          this.applyDamage(enemy.id, impactDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
+          this.applyAk47TargetExplosion(proj, enemy.id, impactDamage, impact);
           if ((proj.penetrationRemaining ?? 0) > 0) {
             proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
             proj.damage *= proj.penetrationDamageRetention ?? 1;
@@ -1549,6 +1689,7 @@ export class CombatSystem {
         }
 
         if (proj.isBfg || proj.projectileStyle === 'gauss') {
+          this.registerAk47Hit(proj);
           if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
           if (proj.projectileStyle === 'gauss') {
             if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
@@ -1573,6 +1714,7 @@ export class CombatSystem {
         }
 
         if (proj.isFlame && proj.flamePierceHitIds !== undefined) {
+          this.registerAk47Hit(proj);
           const enemyKey = `enemy_${enemy.id}`;
           if (proj.flamePierceHitIds.has(enemyKey)) continue;
           proj.flamePierceHitIds.add(enemyKey);
@@ -1590,7 +1732,9 @@ export class CombatSystem {
         }
 
         // Brennende Treffer werden zentral in handleEnemyHit angewendet.
-        this.handleEnemyHit(proj.id, enemy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+        const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id);
+        this.registerAk47Hit(proj);
+        this.handleEnemyHit(proj.id, enemy.id, actualDamage * impact.damageMultiplier, proj.ownerId, proj.adrenalinGain, proj.weaponName, impact);
         return true;
       }
     }
@@ -1788,11 +1932,16 @@ export class CombatSystem {
     }
 
     if (bestHit.kind === 'enemy') {
-      this.registerAk47Hit(proj);
       if (proj.penetrationHitIds) {
-        proj.penetrationHitIds.add(`enemy_${bestHit.enemyId}`);
-        this.applyDamage(bestHit.enemyId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
+        const enemyKey = `enemy_${bestHit.enemyId}`;
+        if (proj.penetrationHitIds.has(enemyKey)) return true;
+        proj.penetrationHitIds.add(enemyKey);
+        const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId);
+        const impactDamage = actualDamage * impact.damageMultiplier;
+        this.registerAk47Hit(proj);
+        this.applyDamage(bestHit.enemyId, impactDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
         this.applyProjectileBurn(bestHit.enemyId, proj);
+        this.applyAk47TargetExplosion(proj, bestHit.enemyId, impactDamage, impact);
         if ((proj.penetrationRemaining ?? 0) > 0) {
           proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
           proj.damage *= proj.penetrationDamageRetention ?? 1;
@@ -1801,7 +1950,9 @@ export class CombatSystem {
         this.projectileManager.destroyProjectile(proj.id);
         return true;
       }
-      this.handleEnemyHit(proj.id, bestHit.enemyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+      const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId);
+      this.registerAk47Hit(proj);
+      this.handleEnemyHit(proj.id, bestHit.enemyId, actualDamage * impact.damageMultiplier, proj.ownerId, proj.adrenalinGain, proj.weaponName, impact);
       return true;
     }
 
@@ -1879,6 +2030,7 @@ export class CombatSystem {
     burnOnHit?: BurnOnHitConfig,
     supportEffect?: HitscanSupportEffect,
     visualMuzzleOrigin?: { x: number; y: number },
+    baseDamageMult = 1,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -1913,6 +2065,7 @@ export class CombatSystem {
     if (detonatorCfg) {
       this.detonationSystem?.checkHitscanDetonations(
         startX, startY, trace.endX, trace.endY, shooterId, detonatorCfg,
+        sourceSlot,
       );
     }
 
@@ -1989,7 +2142,7 @@ export class CombatSystem {
       // Kein Spieler getroffen → prüfen ob Fels oder Zug getroffen wurde
       this.applyHitscanObjectDamage(
         startX, startY, trace.endX, trace.endY,
-        damage, rockDamageMult, trainDamageMult, shooterId, sourceSlot,
+        damage, rockDamageMult, trainDamageMult, shooterId, sourceSlot, baseDamageMult,
       );
     }
 
@@ -2314,6 +2467,7 @@ export class CombatSystem {
     startX: number, startY: number, endX: number, endY: number,
     damage: number, rockMult: number, trainMult: number, shooterId: string,
     sourceSlot?: WeaponSlot,
+    baseDamageMult = 1,
   ): void {
     const hitLine = new Phaser.Geom.Line(startX, startY, endX, endY);
     const endDist = Phaser.Geom.Line.Length(hitLine);
@@ -2348,11 +2502,7 @@ export class CombatSystem {
       const baseId = this.baseManager.getBaseIdAtWorldPoint(endX, endY);
       const base = baseId ? this.baseManager.getBase(baseId) : undefined;
       if (base && base.faction === 'hostile' && !(base.isInert?.() ?? false) && base.getHp() > 0) {
-        const loadoutMult = sourceSlot
-          ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-          : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
-        const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-        this.applyBaseDamage(base.id, damage * loadoutMult * powerUpMult, shooterId, sourceSlot);
+        this.applyBaseDamage(base.id, damage, shooterId, sourceSlot, baseDamageMult);
         return;
       }
     }
@@ -2401,6 +2551,7 @@ export class CombatSystem {
     hitAdrenaline = 0,
     bloodEffectMultiplier = 1,
     damageTargets?: readonly MeleeDamageTarget[],
+    baseDamageMult = 1,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -2587,6 +2738,7 @@ export class CombatSystem {
         shooterId,
         weaponName,
         sourceSlot,
+        baseDamageMult,
       );
       if (baseHit.hit && baseHit.distance < nearestHitDistance) {
         nearestHitDistance = baseHit.distance;
@@ -2668,9 +2820,25 @@ export class CombatSystem {
    * Host-only: Basisschaden ueber den gemeinsamen Trichter. Ohne verdrahteten Callback faellt es
    * auf den direkten Weg zurueck, damit ein fehlendes Setup keinen Schaden verschluckt.
    */
-  applyBaseDamage(baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot): void {
-    if (damage <= 0) return;
-    const resolvedDamage = damage * this.getTargetIncomingDamageMultiplier({ targetType: 'base', targetId: baseId });
+  applyBaseDamage(
+    baseId: string,
+    damage: number,
+    attackerId: string,
+    sourceSlot?: LoadoutSlot,
+    baseDamageMult = 1,
+  ): void {
+    if (damage <= 0 || baseDamageMult <= 0) return;
+    const runtimeDamage = damage * baseDamageMult
+      * this.getPlayerRuntimeDamageMultiplier(attackerId, sourceSlot);
+    const outgoing = this.playerOutgoingDamageResolver?.(
+      attackerId,
+      `base:${baseId}`,
+      runtimeDamage,
+      true,
+      sourceSlot,
+    ) ?? { amount: runtimeDamage, isCritical: false };
+    const resolvedDamage = Math.max(0, outgoing.amount)
+      * this.getTargetIncomingDamageMultiplier({ targetType: 'base', targetId: baseId });
     if (resolvedDamage <= 0) return;
     if (this.baseDamageCallback) this.baseDamageCallback(baseId, resolvedDamage, attackerId, sourceSlot);
     else this.baseManager?.applyDamage(baseId, resolvedDamage);
@@ -2710,6 +2878,7 @@ export class CombatSystem {
     attackerId: string | undefined,
     falloff?: RadialDamageFalloffConfig,
     sourceSlot?: LoadoutSlot,
+    baseDamageMult = 1,
   ): void {
     if (!attackerId || radius <= 0 || maxDamage <= 0) return;
     if (this.enemyManager?.hasEnemy(attackerId)) return;
@@ -2719,7 +2888,7 @@ export class CombatSystem {
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = computeRadialDamage(surface.distance, radius, maxDamage, falloff);
-      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot);
+      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot, baseDamageMult);
     }
   }
 
@@ -2733,6 +2902,7 @@ export class CombatSystem {
     shooterId: string,
     weaponName: string,
     sourceSlot?: WeaponSlot,
+    baseDamageMult = 1,
   ): { hit: boolean; distance: number; impactX?: number; impactY?: number } {
     let hit = false;
     let nearestDistance = Number.POSITIVE_INFINITY;
@@ -2763,11 +2933,7 @@ export class CombatSystem {
       this.meleeLine.setTo(x, y, targetX, targetY);
       if (this.isMeleePathBlocked(Math.max(0, dist - 0.5))) continue;
 
-      const loadoutMult = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
-      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-      const actualDamage = damage * loadoutMult * powerUpMult;
+      const actualDamage = damage * baseDamageMult;
       // Energie-Kuppel: schützt die getroffene Basisstelle, wenn sie in einer Kuppel liegt.
       // Nur eigene Basen – eine Spielerkuppel darf die Gegnerbasis nicht abschirmen.
       if (
@@ -2777,7 +2943,7 @@ export class CombatSystem {
         hit = true;
         continue;
       }
-      this.applyBaseDamage(base.id, actualDamage, shooterId, sourceSlot);
+      this.applyBaseDamage(base.id, damage, shooterId, sourceSlot, baseDamageMult);
       hit = true;
 
       if (dist < nearestDistance) {
@@ -3266,6 +3432,7 @@ export class CombatSystem {
     shooterId: string,
     adrenalinGain: number,
     weaponName: string,
+    ak47Impact?: Ak47DirectEnemyHitImpact,
   ): void {
     const projectile = this.projectileManager.getProjectileById(projectileId);
     const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, enemyId) : null;
@@ -3281,6 +3448,11 @@ export class CombatSystem {
       : undefined;
     if (projectile?.impactCloud) {
       this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
+    }
+    // Plasma-Aufladung und Schwarm werden vor dem Cleanup des Primärprojektils aufgelöst,
+    // damit die aktuell aufgelösten Visual-/Homing-/Projektilwerte noch live verfügbar sind.
+    if (projectile && canTriggerPlasmaSwarm(projectile)) {
+      this.applyPlasmaChargeAndSpawnSwarm(projectile, enemyId);
     }
     if (this.hasEnemyHitExplosion(projectile)) {
       // Explosion nur bei Gegner-Treffer (z.B. XXX-BOW Explosivbolzen).
@@ -3301,6 +3473,9 @@ export class CombatSystem {
       sourceSlot: projectile?.sourceSlot,
       damageKind: 'direct',
     });
+    if (projectile && ak47Impact) {
+      this.applyAk47TargetExplosion(projectile, enemyId, damage, ak47Impact);
+    }
     if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
       this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
     }
@@ -3310,6 +3485,99 @@ export class CombatSystem {
 
     if (adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    }
+  }
+
+  private applyPlasmaChargeAndSpawnSwarm(projectile: TrackedProjectile, enemyId: string): void {
+    const enemy = this.enemyManager?.getEnemy(enemyId);
+    if (!enemy) return;
+
+    const charge = this.plasmaChargeTracker.addHit(enemyId, Date.now());
+    enemy.updatePlasmaChargeStacks(charge.stacks);
+
+    const procCount = resolvePlasmaSwarmProjectileCount(
+      charge.stacks * PLASMA_SWARM_CHANCE_PER_STACK_PERCENT,
+    );
+    if (procCount <= 0) return;
+
+    const normalSpeed = Math.max(1, projectile.initialSpeed ?? projectile.body.velocity.length());
+    const normalSize = Math.max(1, projectile.sprite.displayWidth);
+    const normalDamage = Math.max(0, projectile.damage);
+    const normalRange = Math.max(1, (projectile.lifetime * normalSpeed) / 1000);
+    const explosionRadius = Math.max(
+      1,
+      projectile.plasmaSwarmExplosionRadius ?? PLASMA_SWARM_BASE_EXPLOSION_RADIUS,
+    );
+    const explosionDamage = Math.max(
+      0,
+      projectile.plasmaSwarmExplosionDamage ?? PLASMA_SWARM_BASE_EXPLOSION_DAMAGE,
+    );
+    const explosionSlowFraction = Math.max(0, projectile.plasmaSwarmExplosionSlowFraction ?? 0);
+
+    this.projectileManager.queueStandaloneExplosion(
+      enemy.sprite.x,
+      enemy.sprite.y,
+      projectile.ownerId,
+      {
+        radius: explosionRadius,
+        maxDamage: explosionDamage,
+        minDamage: explosionDamage,
+        knockback: 0,
+        selfDamageMult: 0,
+        damageTarget: 'enemies',
+        enemySlowFraction: explosionSlowFraction,
+        enemySlowDurationMs: PLASMA_SWARM_EXPLOSION_DURATION_MS,
+        baseDamageMult: 1,
+        rockDamageMult: 1,
+        trainDamageMult: 0,
+        color: projectile.color,
+        visualStyle: 'energy',
+      },
+      projectile.sourceSlot ?? 'weapon1',
+      `${projectile.weaponName}-Schwarm-Explosion`,
+    );
+
+    const projectileCount = Math.max(
+      PLASMA_SWARM_BASE_PROJECTILE_COUNT,
+      Math.floor(projectile.plasmaSwarmProjectileCount ?? PLASMA_SWARM_BASE_PROJECTILE_COUNT),
+    );
+    const swarmProfile = resolvePlasmaSwarmProjectileProfile({
+      damage: normalDamage,
+      size: normalSize,
+      speed: normalSpeed,
+      range: normalRange,
+    });
+    const swarmSpeed = Math.max(1, swarmProfile.speed);
+    const swarmSize = Math.max(1, swarmProfile.size);
+    const swarmDamage = swarmProfile.damage;
+    const swarmLifetime = Math.max(1, (swarmProfile.range / swarmSpeed) * 1000);
+    const angles = resolvePlasmaSwarmRadialAngles(projectileCount);
+
+    for (const angle of angles) {
+      this.projectileManager.spawnProjectile(enemy.sprite.x, enemy.sprite.y, angle, projectile.ownerId, {
+        speed: swarmSpeed,
+        size: swarmSize,
+        damage: swarmDamage,
+        color: projectile.color,
+        ownerColor: projectile.ownerColor,
+        projectileVisualScale: projectile.projectileVisualScale,
+        lifetime: swarmLifetime,
+        remainingRangePx: swarmProfile.range,
+        maxBounces: 0,
+        isGrenade: false,
+        adrenalinGain: 0,
+        weaponName: `${projectile.weaponName}-Schwarm`,
+        homing: resolvePlasmaSwarmHoming(projectile.homing),
+        projectileStyle: projectile.projectileStyle,
+        energyBallVariant: projectile.energyBallVariant,
+        tracerConfig: projectile.tracerConfig,
+        allowTeamDamage: projectile.allowTeamDamage,
+        baseDamageMult: projectile.baseDamageMult,
+        suppressSpawnFx: true,
+        plasmaSwarmProjectile: true,
+        plasmaSwarmOriginEnemyId: enemyId,
+        sourceSlot: projectile.sourceSlot ?? 'weapon1',
+      });
     }
   }
 
@@ -3504,6 +3772,7 @@ export class CombatSystem {
 
     if (result.died) {
       this.enemySlowStates.delete(targetId);
+      this.plasmaChargeTracker.clear(targetId);
       const suppressStandardDeathEffect = this.onEnemyDeathCb?.(
         targetId,
         x,
@@ -3595,15 +3864,19 @@ export class CombatSystem {
   }
 
   /** Heilt den Spieler vollständig auf HP_MAX (nur wenn lebendig). */
-  healToFull(playerId: string): void {
-    if (!this.isAlive(playerId)) return;
-    this.hp.set(playerId, this.getMaxHp(playerId));
+  healToFull(playerId: string): number {
+    if (!this.isAlive(playerId)) return 0;
+    const current = this.getHP(playerId);
+    this.heal(playerId, this.getMaxHp(playerId) - current);
+    return this.getHP(playerId) - current;
   }
 
   heal(playerId: string, amount: number): number {
     if (!this.isAlive(playerId) || amount <= 0) return this.getHP(playerId);
+    const current = this.getHP(playerId);
     const next = Math.min(this.getMaxHp(playerId), this.getHP(playerId) + amount);
     this.hp.set(playerId, next);
+    if (next > current) this.onHealingReceived?.(playerId, next - current);
     return next;
   }
 
@@ -3642,8 +3915,10 @@ export class CombatSystem {
       ? amount * Math.max(0, this.playerArmorGainMultiplierResolver?.(playerId) ?? 1)
       : amount;
     const maxArmor = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);
-    const newArmor = Phaser.Math.Clamp(this.getArmor(playerId) + adjustedAmount, 0, maxArmor);
+    const currentArmor = this.getArmor(playerId);
+    const newArmor = Phaser.Math.Clamp(currentArmor + adjustedAmount, 0, maxArmor);
     this.armor.set(playerId, newArmor);
+    if (newArmor > currentArmor) this.onArmorReceived?.(playerId, newArmor - currentArmor);
     return newArmor;
   }
 
@@ -3677,7 +3952,9 @@ export class CombatSystem {
     const current = this.hp.get(playerId) ?? 0;
     const max = this.getMaxHp(playerId);
     if (current >= max) return;
-    this.hp.set(playerId, Math.min(max, current + regenPerSecond * deltaMs / 1000));
+    const next = Math.min(max, current + regenPerSecond * deltaMs / 1000);
+    this.hp.set(playerId, next);
+    if (next > current) this.onHealingReceived?.(playerId, next - current);
   }
 
   armorRegenTick(playerId: string, deltaMs: number): void {
@@ -3691,7 +3968,9 @@ export class CombatSystem {
     const max = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);
     if (current >= max) return;
     // Exakt der konfigurierte Regenerationswert; player.armorGain skaliert andere Ruestungsquellen.
-    this.armor.set(playerId, Math.min(max, current + regenPerSecond * deltaMs / 1000));
+    const next = Math.min(max, current + regenPerSecond * deltaMs / 1000);
+    this.armor.set(playerId, next);
+    if (next > current) this.onArmorReceived?.(playerId, next - current);
   }
 
   private resolvePlayerMaxHp(playerId: string): number {

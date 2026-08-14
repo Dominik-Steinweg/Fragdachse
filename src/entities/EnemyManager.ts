@@ -1024,6 +1024,9 @@ export class EnemyManager {
       delta.burnStacks = current.burnStacks;
       delta.burnVisualStyle = current.burnVisualStyle;
     }
+    if ((current.plasmaChargeStacks ?? 0) !== (previous.plasmaChargeStacks ?? 0)) {
+      delta.plasmaChargeStacks = current.plasmaChargeStacks ?? 0;
+    }
     if (current.faction !== previous.faction || current.ownerId !== previous.ownerId || current.ownerColor !== previous.ownerColor) {
       delta.faction = current.faction;
       delta.ownerId = current.ownerId;
@@ -1074,6 +1077,7 @@ export class EnemyManager {
       enemy.setTargetRotation(rotation);
       enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
       enemy.updateBurnStacks(remote.burnStacks ?? 0, remote.burnVisualStyle ?? 'normal');
+      enemy.updatePlasmaChargeStacks(remote.plasmaChargeStacks ?? 0);
       enemy.setDashPhase(remote.dashPhase ?? 0);
       enemy.setSpecialAction(
         remote.specialAction ?? 'none',
@@ -1099,6 +1103,9 @@ export class EnemyManager {
         remote.burnStacks ?? currentBurn.burnStacks,
         remote.burnVisualStyle ?? currentBurn.burnVisualStyle ?? 'normal',
       );
+    }
+    if (remote.plasmaChargeStacks !== undefined) {
+      enemy.updatePlasmaChargeStacks(remote.plasmaChargeStacks);
     }
     if (remote.dashPhase !== undefined) enemy.setDashPhase(remote.dashPhase);
     if (remote.specialAction !== undefined) {

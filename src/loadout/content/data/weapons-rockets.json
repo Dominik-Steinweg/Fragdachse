@@ -95,7 +95,8 @@
           "maxTurnDegreesPerStep": 18,
           "targetTypes": [
             "players",
-            "enemies"
+            "enemies",
+            "bases"
           ],
           "requireLineOfSight": true,
           "excludeOwner": true,

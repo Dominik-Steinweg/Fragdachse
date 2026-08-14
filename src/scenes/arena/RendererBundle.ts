@@ -43,6 +43,7 @@ import { CoopDefenseEncounterTelegraphRenderer } from '../../effects/CoopDefense
 import { CoopDefenseObjectiveRepairDroneRenderer } from '../../effects/CoopDefenseObjectiveRepairDroneRenderer';
 import { CoopDefenseSecondaryObjectiveMarkerRenderer } from '../../effects/CoopDefenseSecondaryObjectiveMarkerRenderer';
 import { CoopDefenseCarryZoneRenderer } from '../../effects/CoopDefenseCarryZoneRenderer';
+import { Ak47StrategicTargetRenderer } from '../../effects/Ak47StrategicTargetRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { LightingSystem }      from '../../effects/LightingSystem';
@@ -96,6 +97,7 @@ export interface RendererBundle {
   encounterTelegraph:  CoopDefenseEncounterTelegraphRenderer;
   secondaryObjectiveMarkers: CoopDefenseSecondaryObjectiveMarkerRenderer;
   carryZones:          CoopDefenseCarryZoneRenderer;
+  ak47StrategicTargets: Ak47StrategicTargetRenderer;
   objectiveRepairDrones: CoopDefenseObjectiveRepairDroneRenderer;
   meteor:              MeteorRenderer;
   rockDestruction:     RockDestructionRenderer;
@@ -220,6 +222,8 @@ export function createRendererBundle(
   const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
   secondaryObjectiveMarkers.build();
   const carryZones = new CoopDefenseCarryZoneRenderer(scene, arenaMask);
+  const ak47StrategicTargets = new Ak47StrategicTargetRenderer(scene);
+  ak47StrategicTargets.build();
   const objectiveRepairDrones = new CoopDefenseObjectiveRepairDroneRenderer(scene);
   objectiveRepairDrones.build();
 
@@ -259,7 +263,7 @@ export function createRendererBundle(
   return {
     bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, carryZones, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
+    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     train: null,
     translocatorTeleport: null,

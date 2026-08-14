@@ -30,13 +30,13 @@ const TUTORIAL_SWEEP_STRIKE_CONFIG: AirstrikeUltimateConfig = {
   minDamage: 150,
   rockDamageMult: 3,
   trainDamageMult: 0,
-  baseDamageMult: 1,
+  friendlyBaseDamageMult: 1,
   skipEnemyDamage: true,
 };
 
 const MAP_AIRSTRIKE_STRIKE_CONFIG: AirstrikeUltimateConfig = {
   ...PLAYER_AIRSTRIKE,
-  baseDamageMult: 1,
+  friendlyBaseDamageMult: 1,
   skipEnemyDamage: true,
 };
 

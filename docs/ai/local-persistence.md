@@ -20,3 +20,10 @@ Coop-Defense-Klassen werden als explizite `unlockedClassIds` persistiert. Ein le
 Die API hält den validierten Stand im Speicher. Getter lesen den Cache und geben für veränderbare Sammlungen Kopien aus; Setter aktualisieren den Cache synchron und behandeln Storage-/Quota-Fehler als nicht-fatal. Direkte externe Storage-Änderungen erfordern invalidateLocalStorageCache().
 
 Der Client lädt seinen Round-Fallback beim Scene-Aufbau, Import und resetPerRound(), niemals in einem Frame-Getter. Export/Import verwendet das versionierte Progress-Envelope ohne Audio-/Grafiksettings und ersetzt den vorhandenen Stand erst nach erfolgreicher Dekodierung.
+
+Das Balance-Lab-Dokument ist ein eigener Storage-Vertrag mit eigener Schema-Version und einer
+Obergrenze von 500 technischen Runden. Es speichert nur kompakte Zahlen, IDs, Build-Kontext und
+optional zwei Bewertungen; Storage-/Quota-Fehler bleiben non-fatal. Die Balance-Ruleset-Version
+ist davon getrennt und invalidiert alte Messungen global, während die Map-Balance-Signatur nur
+betroffene Maps veraltet macht. Der Key `fragdachse_balance_lab_v1` ist weder Bestandteil des
+Progress-Exports noch wird er durch `resetStoredCoopDefenseCharacter()` gelöscht.

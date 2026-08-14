@@ -373,8 +373,10 @@ export class ClientUpdateCoordinator {
         : baseUtilityDisplayName;
       const activePowerUps = bridge.getPlayerActiveBuffs(localId2);
       const localWeapon2Config = this.getLocalWeaponConfig('weapon2');
-      const fireSuperiorityActive = localWeapon2Config.id === 'AK47'
-        && activePowerUps.some((buff) => buff.defId === 'AK47_FIRE_SUPERIORITY');
+      const fireSuperiorityAvailable = localWeapon2Config.id === 'AK47'
+        && activePowerUps.some((buff) => (
+          buff.defId === 'AK47_FIRE_SUPERIORITY' && !buff.valueText?.startsWith('0 ')
+        ));
       const hudData = buildLocalArenaHudData({
         hp:                      localState.hp,
         maxHp:                   localState.maxHp,
@@ -396,7 +398,7 @@ export class ClientUpdateCoordinator {
         isUtilityOverridden:     overrideName !== '' || this.clientUtilityOverride !== null,
         activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
-        weapon2AdrenalineCost:   fireSuperiorityActive ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
+        weapon2AdrenalineCost:   fireSuperiorityAvailable ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
         constructionCapacityMax:  bridge.getPlayerCommittedLoadout(localId2)?.coopDefenseClassId === 'inspector_gadachs'
           ? this.getLocalConstructionCapacity()

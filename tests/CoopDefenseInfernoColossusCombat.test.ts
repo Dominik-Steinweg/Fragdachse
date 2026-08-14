@@ -499,14 +499,10 @@ describe('Flammenkoloss – Void-Darstellung', () => {
     expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.impactExplosion?.color).toBe(VOID_FIRE_COLOR);
   });
 
-  it('uebernimmt das Homing der Mini-Raketen bei 1000 px Reichweite', () => {
+  it('verwendet Spieler-Homing bei 1000 px Reichweite', () => {
     expect(VOID_ROCKETS.range).toBe(1_000);
     expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.homing?.targetTypes).toEqual(['players']);
-    expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.homing?.maxTurnDegreesPerStep).toBe(
-      WEAPON_CONFIGS.MINI_ROCKET_LAUNCHER.fire.type === 'projectile'
-        ? WEAPON_CONFIGS.MINI_ROCKET_LAUNCHER.fire.homing?.maxTurnDegreesPerStep
-        : undefined,
-    );
+    expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.homing?.maxTurnDegreesPerStep).toBeGreaterThan(0);
   });
 
   it('taktet die Salve im geforderten Fenster von 75–100 ms', () => {

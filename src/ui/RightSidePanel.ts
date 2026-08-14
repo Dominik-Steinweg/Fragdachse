@@ -167,7 +167,7 @@ interface ResultsTeamHeaderRow extends TeamHeaderRow {
 interface RoomStatsRow {
   name: Phaser.GameObjects.Text;
   damage: Phaser.GameObjects.Text;
-  deaths: Phaser.GameObjects.Text;
+  taken: Phaser.GameObjects.Text;
 }
 
 export class RightSidePanel {
@@ -441,15 +441,15 @@ export class RightSidePanel {
       entry.name,
       entry.colorHex,
       entry.teamId,
-      entry.damage,
-      entry.deaths,
+      entry.damageDealt,
+      entry.damageTaken,
     ]));
     if (signature === this.roomStatsInputSignature) return;
     this.roomStatsInputSignature = signature;
 
     const sorted = [...statistics].sort((left, right) => (
-      right.damage - left.damage
-      || right.deaths - left.deaths
+      right.damageDealt - left.damageDealt
+      || right.damageTaken - left.damageTaken
       || left.name.localeCompare(right.name)
     ));
     const hasData = sorted.length > 0;
@@ -463,15 +463,15 @@ export class RightSidePanel {
       if (!entry) {
         row.name.setVisible(false);
         row.damage.setVisible(false);
-        row.deaths.setVisible(false);
+        row.taken.setVisible(false);
         continue;
       }
       row.name
         .setText(`${index + 1}. ${entry.name}`)
         .setColor(this.toCachedCssColor(entry.colorHex))
         .setVisible(true);
-      row.damage.setText(this.formatRoomDamage(entry.damage)).setVisible(true);
-      row.deaths.setText(String(Math.max(0, Math.floor(entry.deaths)))).setVisible(true);
+      row.damage.setText(this.formatRoomDamage(entry.damageDealt)).setVisible(true);
+      row.taken.setText(this.formatRoomDamage(entry.damageTaken)).setVisible(true);
     }
   }
 
@@ -764,7 +764,7 @@ export class RightSidePanel {
       color: COLOR_HEADER,
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0);
-    const deathsLabel = this.scene.add.text(ROOM_STATS_DEATHS_X, RESULTS_LABEL_Y, 'TODE', {
+    const takenLabel = this.scene.add.text(ROOM_STATS_DEATHS_X, RESULTS_LABEL_Y, 'ERLITTEN', {
       fontSize: ROOM_STATS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
@@ -786,7 +786,7 @@ export class RightSidePanel {
       this.roomStatsHeaderLabels,
       separator,
       damageLabel,
-      deathsLabel,
+      takenLabel,
       this.roomStatsEmptyState,
     ]);
 
@@ -802,13 +802,13 @@ export class RightSidePanel {
         fontFamily: 'monospace',
         color: COLOR_DIM,
       }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-      const deaths = this.scene.add.text(ROOM_STATS_DEATHS_X, y, '', {
+      const taken = this.scene.add.text(ROOM_STATS_DEATHS_X, y, '', {
         fontSize: RESULTS_FONT,
         fontFamily: 'monospace',
         color: COLOR_DIM,
       }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-      this.roomStatsViewContainer.add([name, damage, deaths]);
-      this.roomStatsRows.push({ name, damage, deaths });
+      this.roomStatsViewContainer.add([name, damage, taken]);
+      this.roomStatsRows.push({ name, damage, taken });
     }
   }
 

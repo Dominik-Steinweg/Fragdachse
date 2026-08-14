@@ -88,8 +88,9 @@ interface UltimateState {
 
 interface Ak47CombatState {
   stacks: number;
-  fireSuperiorityShotsRemaining: number;
+  fireSuperiorityShotsAvailable: number;
   fireSuperiorityTotalShots: number;
+  pendingFireSuperiorityShotIds: Set<number>;
   nextShotId: number;
   confirmedShotIds: Set<number>;
 }
@@ -154,6 +155,8 @@ export class LoadoutManager {
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
+  private utilityUsedObserver: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
+  private ultimateUsedObserver: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   /**
    * Verbraucht eine gespeicherte kinetische Ladung und liefert den Schadensbonus als Anteil.
@@ -163,6 +166,7 @@ export class LoadoutManager {
   private itemRuntimeWeaponFiredHandler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null = null;
   private shotCounters = new Map<string, number>();
   private ak47States = new Map<string, Ak47CombatState>();
+  private ak47StrategicTargetHitResolver: ((playerId: string, enemyId: string) => boolean) | null = null;
   private negevStates = new Map<string, NegevCombatState>();
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
   private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
@@ -209,6 +213,7 @@ export class LoadoutManager {
       request.burnOnHit,
       request.supportEffect,
       request.visualMuzzleOrigin,
+      request.baseDamageMult,
     ) ?? false,
     resolveMelee: (request) => this.combatSystem?.resolveMeleeSwing(
       request.shooterId,
@@ -232,6 +237,7 @@ export class LoadoutManager {
       request.hitAdrenaline,
       request.bloodEffectMultiplier,
       request.damageTargets,
+      request.baseDamageMult,
     ) ?? false,
     });
   }
@@ -370,11 +376,30 @@ export class LoadoutManager {
   resetAk47State(playerId: string): void {
     this.ak47States.set(playerId, {
       stacks: 0,
-      fireSuperiorityShotsRemaining: 0,
+      fireSuperiorityShotsAvailable: 0,
       fireSuperiorityTotalShots: 0,
+      pendingFireSuperiorityShotIds: new Set<number>(),
       nextShotId: 1,
       confirmedShotIds: new Set<number>(),
     });
+  }
+
+  setAk47StrategicTargetHitResolver(resolver: ((playerId: string, enemyId: string) => boolean) | null): void {
+    this.ak47StrategicTargetHitResolver = resolver;
+  }
+
+  /** Refunds a specific penetrative shot at most once. */
+  registerAk47StrategicTargetHit(projectile: TrackedProjectile, enemyId: string): boolean {
+    const shotId = projectile.ak47ShotId;
+    if (!projectile.ak47FireSuperiorityShot || shotId === undefined || projectile.ak47StrategicRefunded) return false;
+    if (!this.ak47StrategicTargetHitResolver?.(projectile.ownerId, enemyId)) return false;
+    const state = this.ak47States.get(projectile.ownerId);
+    if (!state || !state.pendingFireSuperiorityShotIds.has(shotId)) return false;
+
+    state.pendingFireSuperiorityShotIds.delete(shotId);
+    state.fireSuperiorityShotsAvailable += 1;
+    projectile.ak47StrategicRefunded = true;
+    return true;
   }
 
   registerAk47ProjectileHit(projectile: TrackedProjectile, now = Date.now()): void {
@@ -384,7 +409,7 @@ export class LoadoutManager {
 
     const config = this.getAk47Config(projectile.ownerId);
     const focus = config?.ak47Focus;
-    if (!focus || focus.maxStacks <= 0) return;
+    if (!focus || this.getAk47MaxStacks(focus) <= 0) return;
 
     const state = this.getOrCreateAk47State(projectile.ownerId);
     state.confirmedShotIds.add(shotId);
@@ -394,17 +419,18 @@ export class LoadoutManager {
     // Belohnungsschleife auf. Nach dem Magazin beginnt die Praezisionsserie neu.
     if (projectile.ak47FireSuperiorityShot) return;
 
-    state.stacks = Math.min(focus.maxStacks, state.stacks + 1);
+    const maxStacks = this.getAk47MaxStacks(focus);
+    state.stacks = Math.min(maxStacks, state.stacks + 1);
 
     if (
-      state.stacks >= focus.maxStacks
+      state.stacks >= maxStacks
       && focus.fireSuperiorityShots > 0
-      && state.fireSuperiorityShotsRemaining <= 0
+      && !this.isAk47FireSuperiorityPhaseActive(state)
     ) {
       const shotCount = Math.max(1, Math.round(focus.fireSuperiorityShots));
-      state.fireSuperiorityShotsRemaining = shotCount;
+      state.fireSuperiorityShotsAvailable = shotCount;
       state.fireSuperiorityTotalShots = shotCount;
-      state.stacks = focus.maxStacks;
+      state.stacks = maxStacks;
     }
   }
 
@@ -416,8 +442,12 @@ export class LoadoutManager {
 
     const didHit = projectile.ak47HitConfirmed || state.confirmedShotIds.has(shotId);
     state.confirmedShotIds.delete(shotId);
+    state.pendingFireSuperiorityShotIds.delete(shotId);
     void now;
-    if (!didHit && state.fireSuperiorityShotsRemaining <= 0) {
+    if (projectile.ak47FireSuperiorityShot && !this.isAk47FireSuperiorityPhaseActive(state)) {
+      state.fireSuperiorityTotalShots = 0;
+      state.stacks = 0;
+    } else if (!didHit) {
       state.stacks = 0;
     }
   }
@@ -430,19 +460,21 @@ export class LoadoutManager {
 
     void now;
     const result: SyncedActiveHudBuff[] = [];
-    if (state.stacks > 0) {
+    const maxStacks = this.getAk47MaxStacks(focus);
+    if (state.stacks > 0 && maxStacks > 0) {
       const damagePct = Math.round(state.stacks * focus.damagePerStack * 100);
       result.push({
         defId: 'AK47_FOCUS',
-        remainingFrac: state.stacks / Math.max(1, Math.round(focus.maxStacks)),
-        valueText: `${state.stacks}/${Math.max(1, Math.round(focus.maxStacks))} · +${damagePct}%`,
+        remainingFrac: state.stacks / maxStacks,
+        valueText: `${state.stacks}/${maxStacks} · +${damagePct}%`,
       });
     }
-    if (state.fireSuperiorityShotsRemaining > 0) {
+    const pending = state.pendingFireSuperiorityShotIds.size;
+    if (state.fireSuperiorityShotsAvailable > 0 || pending > 0) {
       result.push({
         defId: 'AK47_FIRE_SUPERIORITY',
-        remainingFrac: state.fireSuperiorityShotsRemaining / Math.max(1, state.fireSuperiorityTotalShots),
-        valueText: `${state.fireSuperiorityShotsRemaining} Schuss`,
+        remainingFrac: (state.fireSuperiorityShotsAvailable + pending) / Math.max(1, state.fireSuperiorityTotalShots),
+        valueText: `${state.fireSuperiorityShotsAvailable} verfügbar${pending > 0 ? ` · ${pending} unterwegs` : ''}`,
       });
     }
     return result;
@@ -466,7 +498,13 @@ export class LoadoutManager {
 
   isAk47FireSuperiorityActive(playerId: string): boolean {
     return this.getAk47Config(playerId) !== null
-      && (this.ak47States.get(playerId)?.fireSuperiorityShotsRemaining ?? 0) > 0;
+      && this.isAk47FireSuperiorityPhaseActive(this.ak47States.get(playerId));
+  }
+
+  /** True only while at least one breakthrough shot can be fired immediately. */
+  isAk47FireSuperiorityAvailable(playerId: string): boolean {
+    return this.getAk47Config(playerId) !== null
+      && (this.ak47States.get(playerId)?.fireSuperiorityShotsAvailable ?? 0) > 0;
   }
 
   beginUtilityCooldown(playerId: string, utilityId: string, now: number): void {
@@ -524,6 +562,14 @@ export class LoadoutManager {
 
   setUtilityUsedCallback(cb: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null): void {
     this.utilityUsedCallback = cb;
+  }
+
+  setUtilityUsedObserver(observer: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null): void {
+    this.utilityUsedObserver = observer;
+  }
+
+  setUltimateUsedObserver(observer: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null): void {
+    this.ultimateUsedObserver = observer;
   }
 
   setUtilityConfigModifierSource(source: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null): void {
@@ -917,6 +963,7 @@ export class LoadoutManager {
               return p ? { x: p.sprite.x, y: p.sprite.y } : null;
             });
           }
+          this.ultimateUsedObserver?.(playerId, cfg.type);
           return this.okResult;
         }
 
@@ -926,6 +973,7 @@ export class LoadoutManager {
           const ok = this.airstrikeHandler?.(playerId, targetX, targetY, cfg) ?? false;
           if (!ok) return { ok: false, reason: 'blocked' };
           this.resourceSystem.addRage(playerId, -cfg.rageCost);
+          this.ultimateUsedObserver?.(playerId, cfg.type);
           return this.okResult;
         }
 
@@ -936,6 +984,7 @@ export class LoadoutManager {
           const ok = this.tunnelPlacementHandler?.(cfg, playerId, x, y, targetX, targetY, player.color, params) ?? false;
           if (!ok) return { ok: false, reason: 'blocked' };
           this.resourceSystem.addRage(playerId, -cfg.rageCost);
+          this.ultimateUsedObserver?.(playerId, cfg.type);
           return this.okResult;
         }
 
@@ -1024,6 +1073,7 @@ export class LoadoutManager {
                 category: 'damage_over_time',
                 weaponName: state.config.displayName,
                 sourceSlot: 'ultimate',
+                baseDamageMult: aura.baseDamageMult,
               },
             );
           }
@@ -1257,6 +1307,7 @@ export class LoadoutManager {
       if ((params?.ultimateChargeFraction ?? 0) < 1) return { ok: false, reason: 'blocked' };
       this.fireGaussUltimate(cfg, x, y, angle, playerId, playerColor);
       this.resourceSystem.addRage(playerId, -cfg.rageCost);
+      this.ultimateUsedObserver?.(playerId, cfg.type);
       return this.okResult;
     }
 
@@ -1309,6 +1360,7 @@ export class LoadoutManager {
       tracerConfig:      cfg.tracerConfig,
       rockDamageMult:    cfg.rockDamageMult,
       trainDamageMult:   cfg.trainDamageMult,
+      baseDamageMult:    cfg.baseDamageMult,
       shotAudioKey:      cfg.shotAudio?.successKey,
       gaussChainRadius:  cfg.chainRadius,
       gaussChainDamageFactor: cfg.chainDamageFactor,
@@ -1391,34 +1443,6 @@ export class LoadoutManager {
       if (cfg.displayName !== weaponName) continue;
       if ((cfg.killHeal ?? 0) > 0) this.combatSystem?.heal(killerId, cfg.killHeal ?? 0);
       if ((cfg.killAdrenaline ?? 0) > 0) this.resourceSystem.addAdrenaline(killerId, cfg.killAdrenaline ?? 0);
-      if ((cfg.killSplitCount ?? 0) > 0 && cfg.fire.type === 'projectile') {
-        const count = Math.max(0, Math.floor(cfg.killSplitCount ?? 0));
-        const baseAngle = source?.dirX !== undefined && source?.dirY !== undefined
-          ? Math.atan2(source.dirY, source.dirX)
-          : 0;
-        const splitAngle = Phaser.Math.DegToRad(cfg.killSplitAngleDegrees ?? 30);
-        for (let index = 0; index < count; index += 1) {
-          const offset = count === 1
-            ? 0
-            : Phaser.Math.Linear(-splitAngle, splitAngle, index / (count - 1));
-          const angle = baseAngle + offset;
-          this.projectileManager.spawnProjectile(x, y, angle, killerId, {
-            speed: cfg.fire.projectileSpeed,
-            size: cfg.fire.projectileSize,
-            damage: cfg.damage * (cfg.killSplitDamageFactor ?? 0),
-            color: source?.projectileColor ?? cfg.projectileColor ?? 0xffffff,
-            lifetime: (cfg.range / cfg.fire.projectileSpeed) * 1000,
-            maxBounces: 0,
-            isGrenade: false,
-            adrenalinGain: 0,
-            weaponName: `${cfg.displayName}-Splitter`,
-            homing: cfg.fire.homing,
-            projectileStyle: cfg.projectileStyle,
-            suppressSpawnFx: true,
-            sourceSlot: 'weapon1',
-          });
-        }
-      }
       return;
     }
   }
@@ -1550,6 +1574,18 @@ export class LoadoutManager {
     return this.ak47States.get(playerId)!;
   }
 
+  private getAk47MaxStacks(focus: NonNullable<WeaponConfig['ak47Focus']>): number {
+    // Firepower and fire control share one hard cap. Fire control does not add another +5.
+    return focus.maxStacks > 0 || focus.fireControlEnabled > 0 ? 5 : 0;
+  }
+
+  private isAk47FireSuperiorityPhaseActive(state: Ak47CombatState | undefined): boolean {
+    return !!state && (
+      state.fireSuperiorityShotsAvailable > 0
+      || state.pendingFireSuperiorityShotIds.size > 0
+    );
+  }
+
   // ── Interne Helfer ────────────────────────────────────────────────────────
 
   /**
@@ -1585,12 +1621,11 @@ export class LoadoutManager {
 
     const cfg = weapon.config;
     const ak47State = cfg.id === 'AK47' ? this.getOrCreateAk47State(playerId) : null;
-    const ak47Focus = this.getAk47Config(playerId)?.ak47Focus;
-    const primaryWeaponFocusState = sourceSlot === 'weapon1' ? this.ak47States.get(playerId) : null;
-    const fireSuperiorityActive = (ak47State?.fireSuperiorityShotsRemaining ?? 0) > 0;
+    const ak47Focus = cfg.id === 'AK47' ? cfg.ak47Focus : null;
+    const fireSuperiorityCanFire = (ak47State?.fireSuperiorityShotsAvailable ?? 0) > 0;
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
-    if (!fireSuperiorityActive && cfg.adrenalinCost > 0) {
+    if (!fireSuperiorityCanFire && cfg.adrenalinCost > 0) {
       if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) {
         // Zu wenig Adrenalin fuer den naechsten Schuss = Dauerfeuer vorbei.
         // Sofort beenden, damit nachtropfendes Adrenalin den Streak nicht am Leben haelt.
@@ -1617,7 +1652,10 @@ export class LoadoutManager {
     } else {
       baseSpread = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
     }
-    const totalSpreadDeg = Math.max(0, baseSpread + weapon.getDynamicSpread());
+    const fireControlSpreadMultiplier = cfg.id === 'AK47' && ak47Focus && ak47Focus.fireControlEnabled > 0
+      ? Math.max(0, 1 - ak47State!.stacks * ak47Focus.fireControlSpreadPerStack)
+      : 1;
+    const totalSpreadDeg = Math.max(0, (baseSpread + weapon.getDynamicSpread()) * fireControlSpreadMultiplier);
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
 
     // 4. Typ-spezifische Waffenlogik ausführen.
@@ -1672,27 +1710,24 @@ export class LoadoutManager {
     }
     if (ak47State && cfg.ak47Focus) {
       const focusDamageMultiplier = 1 + ak47State.stacks * cfg.ak47Focus.damagePerStack;
-      const superiorityDamageMultiplier = fireSuperiorityActive
-        ? 1 + cfg.ak47Focus.fireSuperiorityDamageBonus
+      const fireControlRangeMultiplier = cfg.ak47Focus.fireControlEnabled > 0
+        ? Math.max(0, 1 + ak47State.stacks * cfg.ak47Focus.fireControlRangePerStack)
+        : 1;
+      const fireControlProjectileSpeedMultiplier = cfg.ak47Focus.fireControlEnabled > 0
+        ? Math.max(0, 1 + ak47State.stacks * cfg.ak47Focus.fireControlProjectileSpeedPerStack)
         : 1;
       shotCfg = {
         ...shotCfg,
-        penetrationCount: fireSuperiorityActive ? 1_000_000 : shotCfg.penetrationCount,
-        penetrationDamageRetention: fireSuperiorityActive ? 1 : shotCfg.penetrationDamageRetention,
+        range: shotCfg.range * fireControlRangeMultiplier,
+        fire: shotCfg.fire.type === 'projectile'
+          ? { ...shotCfg.fire, projectileSpeed: shotCfg.fire.projectileSpeed * fireControlProjectileSpeedMultiplier }
+          : shotCfg.fire,
+        penetrationCount: fireSuperiorityCanFire ? 1_000_000 : shotCfg.penetrationCount,
+        penetrationDamageRetention: fireSuperiorityCanFire ? 1 : shotCfg.penetrationDamageRetention,
+        penetratesRocks: fireSuperiorityCanFire && (shotCfg.rockDamageMult ?? 0) > 0 ? 1 : 0,
         ak47ShotId: ak47State.nextShotId++,
-        ak47DamageMultiplier: focusDamageMultiplier * superiorityDamageMultiplier,
-        ak47FireSuperiorityShot: fireSuperiorityActive,
-      };
-    } else if (
-      primaryWeaponFocusState
-      && (ak47Focus?.applyDamageToPrimaryWeapon ?? 0) > 0
-      && primaryWeaponFocusState.stacks > 0
-    ) {
-      // Einschiessen überträgt ausschließlich den Stack-Schaden auf Waffe 1.
-      // Durchbruchmunition bleibt weiterhin ein exklusiver AK-47-Bonus.
-      shotCfg = {
-        ...shotCfg,
-        damage: shotCfg.damage * (1 + primaryWeaponFocusState.stacks * (ak47Focus?.damagePerStack ?? 0)),
+        ak47DamageMultiplier: focusDamageMultiplier,
+        ak47FireSuperiorityShot: fireSuperiorityCanFire,
       };
     }
     // Kinetische Ladung: der Bonus wird in `shotCfg.damage` gebacken, **bevor** sich der Schuss in
@@ -1726,12 +1761,9 @@ export class LoadoutManager {
     }
     if (!didFire) return { ok: false, reason: 'blocked' };
 
-    if (fireSuperiorityActive && ak47State) {
-      ak47State.fireSuperiorityShotsRemaining = Math.max(0, ak47State.fireSuperiorityShotsRemaining - 1);
-      if (ak47State.fireSuperiorityShotsRemaining <= 0) {
-        ak47State.fireSuperiorityTotalShots = 0;
-        ak47State.stacks = 0;
-      }
+    if (fireSuperiorityCanFire && ak47State && shotCfg.ak47ShotId !== undefined) {
+      ak47State.fireSuperiorityShotsAvailable = Math.max(0, ak47State.fireSuperiorityShotsAvailable - 1);
+      ak47State.pendingFireSuperiorityShotIds.add(shotCfg.ak47ShotId);
     }
 
     if ((shotCfg.sideBurstEveryShots ?? 0) > 0 && (shotCfg.sideBurstCount ?? 0) >= 2) {
@@ -1752,7 +1784,7 @@ export class LoadoutManager {
     }
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
-    if (!fireSuperiorityActive && cfg.adrenalinCost > 0) {
+    if (!fireSuperiorityCanFire && cfg.adrenalinCost > 0) {
       this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
     }
 
@@ -1849,6 +1881,11 @@ export class LoadoutManager {
             taserCfg.shotAudio?.successKey,
             undefined,
             (taserCfg.chainCount ?? 0) > 0 ? { count: taserCfg.chainCount ?? 0, radius: taserCfg.chainRadius ?? 0, damageFactor: taserCfg.chainDamageFactor ?? 0 } : undefined,
+            undefined,
+            undefined,
+            1,
+            undefined,
+            taserCfg.baseDamageMult ?? 1,
           ) ?? false;
         } else if (cfg.type === 'decoy') {
           didUse = this.decoySystem?.activate(cfg as DecoyUtilityConfig, playerId, angle, playerColor, now) ?? false;
@@ -1858,6 +1895,7 @@ export class LoadoutManager {
 
     if (didUse) {
       this.utilityUsedCallback?.(playerId, cfg.type);
+      this.utilityUsedObserver?.(playerId, cfg.type);
 
       // skipCooldownPublish: kein recordUse/publishCooldown für Ammo-basierte Einmal-Items,
       // damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird.
@@ -1966,6 +2004,7 @@ export class LoadoutManager {
       cfg.cloudTickInterval,
       cfg.rockDamageMult ?? 1,
       cfg.trainDamageMult ?? 1,
+      cfg.baseDamageMult ?? 1,
       cfg.afterCloudDurationMs ?? 0,
       cfg.afterCloudRadiusFactor ?? 0,
       cfg.afterCloudDamageFactor ?? 0,
@@ -1984,6 +2023,7 @@ export class LoadoutManager {
         allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
+        baseDamageMult:  cfg.baseDamageMult,
         visualStyle:     cfg.explosionVisualStyle,
         clusterCount:    cfg.clusterCount,
         clusterRadiusFactor: cfg.clusterRadiusFactor,
@@ -2000,6 +2040,7 @@ export class LoadoutManager {
         allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
+        baseDamageMult:  cfg.baseDamageMult,
         burnDurationMs:     cfg.fireBurnDurationMs,
         burnDamagePerTick:  cfg.fireBurnDamagePerTick,
         wildfire: (cfg.wildfireEnabled ?? 0) > 0 ? {
@@ -2392,6 +2433,7 @@ export class LoadoutManager {
         burnDurationMs: fireConfig.burnDurationMs,
         burnDamagePerTick: fireball?.groundBurnDamagePerTick ?? 0.5,
         weaponName: 'Feuerball-Brand',
+        baseDamageMult: config.baseDamageMult ?? 1,
       };
       const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
       this.projectileManager.spawnProjectile(x, y, angle, playerId, {
@@ -2418,6 +2460,7 @@ export class LoadoutManager {
           selfDamageMult: fireball?.selfDamageMult ?? 0.25,
           rockDamageMult: 1,
           trainDamageMult: 1.15,
+          baseDamageMult: config.baseDamageMult ?? 1,
           color: 0xff6a14,
           visualStyle: 'rocket',
           burnOnHit: { durationMs: fireConfig.burnDurationMs, damagePerTick: fireConfig.burnDamagePerTick },

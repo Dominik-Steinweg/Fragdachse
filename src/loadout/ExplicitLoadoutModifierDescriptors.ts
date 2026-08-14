@@ -202,20 +202,35 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "ZEUS_TASER",
     targets: [{ path: ["chainRadius"], formula: "add", createIfMissing: true }],
   },
-  "weapon.AK47.ak47Focus.applyDamageToPrimaryWeapon": {
-    kind: "weapon",
-    itemId: "AK47",
-    targets: [{ path: ["ak47Focus","applyDamageToPrimaryWeapon"], formula: "add" }],
-  },
   "weapon.AK47.ak47Focus.damagePerStack": {
     kind: "weapon",
     itemId: "AK47",
     targets: [{ path: ["ak47Focus","damagePerStack"], formula: "add" }],
   },
-  "weapon.AK47.ak47Focus.fireSuperiorityDamageBonus": {
+  "weapon.AK47.ak47Focus.explosiveTargetAcquisitionLevel": {
     kind: "weapon",
     itemId: "AK47",
-    targets: [{ path: ["ak47Focus","fireSuperiorityDamageBonus"], formula: "add" }],
+    targets: [{ path: ["ak47Focus","explosiveTargetAcquisitionLevel"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.fireControlEnabled": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","fireControlEnabled"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.fireControlProjectileSpeedPerStack": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","fireControlProjectileSpeedPerStack"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.fireControlRangePerStack": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","fireControlRangePerStack"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.fireControlSpreadPerStack": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","fireControlSpreadPerStack"], formula: "add" }],
   },
   "weapon.AK47.ak47Focus.fireSuperiorityShots": {
     kind: "weapon",
@@ -226,6 +241,26 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     kind: "weapon",
     itemId: "AK47",
     targets: [{ path: ["ak47Focus","maxStacks"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.strategicTargetDamageBonus": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","strategicTargetDamageBonus"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.strategicTargetEnabled": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","strategicTargetEnabled"], formula: "add" }],
+  },
+  "weapon.AK47.ak47Focus.targetPrioritizationEnabled": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["ak47Focus","targetPrioritizationEnabled"], formula: "add" }],
+  },
+  "weapon.AK47.rockDamageMult": {
+    kind: "weapon",
+    itemId: "AK47",
+    targets: [{ path: ["rockDamageMult"], formula: "add" }],
   },
   "weapon.ASMD_SEC.detonable.comboAdrenalineGain": {
     kind: "weapon",
@@ -452,20 +487,30 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "OVERCHARGE_CORE",
     targets: [{ path: ["fire","radius"], formula: "scale" }],
   },
-  "weapon.PLASMA.killSplitAngleDegrees": {
+  "weapon.PLASMA.plasmaSwarmEnabled": {
     kind: "weapon",
     itemId: "PLASMA",
-    targets: [{ path: ["killSplitAngleDegrees"], formula: "add", createIfMissing: true }],
+    targets: [{ path: ["plasmaSwarmEnabled"], formula: "add", createIfMissing: true }],
   },
-  "weapon.PLASMA.killSplitCount": {
+  "weapon.PLASMA.plasmaSwarmProjectileCount": {
     kind: "weapon",
     itemId: "PLASMA",
-    targets: [{ path: ["killSplitCount"], formula: "add", createIfMissing: true }],
+    targets: [{ path: ["plasmaSwarmProjectileCount"], formula: "add", createIfMissing: true }],
   },
-  "weapon.PLASMA.killSplitDamageFactor": {
+  "weapon.PLASMA.plasmaSwarmExplosionRadius": {
     kind: "weapon",
     itemId: "PLASMA",
-    targets: [{ path: ["killSplitDamageFactor"], formula: "add", createIfMissing: true }],
+    targets: [{ path: ["plasmaSwarmExplosionRadius"], formula: "add", createIfMissing: true }],
+  },
+  "weapon.PLASMA.plasmaSwarmExplosionDamage": {
+    kind: "weapon",
+    itemId: "PLASMA",
+    targets: [{ path: ["plasmaSwarmExplosionDamage"], formula: "add", createIfMissing: true }],
+  },
+  "weapon.PLASMA.plasmaSwarmExplosionSlowFraction": {
+    kind: "weapon",
+    itemId: "PLASMA",
+    targets: [{ path: ["plasmaSwarmExplosionSlowFraction"], formula: "add", createIfMissing: true }],
   },
   "weapon.ROCKET_LAUNCHER.fire.impactExplosion.groundFire.burnDamagePerTick": {
     kind: "weapon",

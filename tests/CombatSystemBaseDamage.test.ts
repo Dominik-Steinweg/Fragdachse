@@ -152,7 +152,7 @@ describe('CombatSystem base damage routing', () => {
     combat.applyBaseDamage('hostile-base', 10, 'player-1', 'weapon2');
 
     expect(baseDamage.mock.calls[0]?.[0]).toBe('hostile-base');
-    expect(baseDamage.mock.calls[0]?.[1]).toBe(12);
+    expect(baseDamage.mock.calls[0]?.[1]).toBe(72);
     expect(baseDamage.mock.calls[0]?.[2]).toBe('player-1');
   });
 
@@ -233,8 +233,100 @@ describe('CombatSystem base damage routing', () => {
       ['hostile-base', 60, 'player-1', 'weapon1'],
       ['hostile-base', 42, 'player-1', 'weapon1'],
       ['hostile-base', 30, 'player-1', 'weapon1'],
-      ['hostile-base', 11, 'player-1', 'utility'],
+      ['hostile-base', 66, 'player-1', 'utility'],
     ]);
+  });
+
+  it('applies runtime multipliers once and enables critical hits against hostile bases', () => {
+    const { combat, baseDamage } = makeCombatHarness();
+    const outgoing = vi.fn((_attacker: string | undefined, target: string, amount: number, allowCritical: boolean) => ({
+      amount: allowCritical ? amount * 2 : amount,
+      isCritical: allowCritical,
+    }));
+    combat.setPlayerOutgoingDamageResolver(outgoing);
+
+    combat.applyProjectileBaseDamage('hostile-base', {
+      damage: 10,
+      ownerId: 'player-1',
+      sourceSlot: 'weapon1',
+    } as TrackedProjectile);
+    const explosion: ProjectileExplosionConfig = {
+      radius: 200,
+      maxDamage: 10,
+      minDamage: 10,
+      knockback: 0,
+      selfDamageMult: 0,
+      color: 0xffffff,
+    };
+    combat.applyExplosionDamage(0, 0, explosion, 'player-1', 'utility', 'Explosion');
+
+    expect(outgoing).toHaveBeenNthCalledWith(1, 'player-1', 'base:hostile-base', 60, true, 'weapon1');
+    expect(outgoing).toHaveBeenNthCalledWith(2, 'player-1', 'base:hostile-base', 60, true, 'utility');
+    expect(baseDamage.mock.calls[0]?.[1]).toBe(120);
+    expect(baseDamage.mock.calls[1]?.[1]).toBe(120);
+  });
+
+  it('keeps a baseDamageMult isolated to base damage', () => {
+    const { combat, baseDamage } = makeCombatHarness();
+    const explosion: ProjectileExplosionConfig = {
+      radius: 200,
+      maxDamage: 10,
+      minDamage: 10,
+      baseDamageMult: 2,
+      knockback: 0,
+      selfDamageMult: 0,
+      color: 0xffffff,
+    };
+
+    combat.applyExplosionDamage(0, 0, explosion, 'player-1', 'utility', 'HE');
+
+    expect(baseDamage).toHaveBeenCalledWith('hostile-base', 120, 'player-1', 'utility');
+  });
+
+  it('keeps baseDamageMult out of ordinary enemy damage while preserving it for clusters', () => {
+    const enemyDamage = vi.fn((_id: string, amount: number) => ({ died: false, remainingHp: 100 - amount }));
+    const enemy = {
+      id: 'enemy',
+      faction: 'hostile' as const,
+      sprite: { x: 100, y: 0 },
+      isBurrowed: () => false,
+      getHp: () => 100,
+      getMaxHp: () => 100,
+      isBoss: () => false,
+    };
+    const bridge = {
+      isHost: vi.fn(() => true),
+      getPlayerProfile: vi.fn(() => undefined),
+      areTeammates: vi.fn(() => false),
+      broadcastEffect: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      bridge,
+    );
+    combat.setEnemyManager({
+      getAllEnemies: () => [enemy],
+      hasEnemy: (id: string) => id === enemy.id,
+      getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
+      applyDamage: enemyDamage,
+    } as unknown as import('../src/entities/EnemyManager').EnemyManager);
+    const baseDamage = vi.fn();
+    combat.setBaseManager({
+      getBasesByFaction: (faction: 'friendly' | 'hostile') => faction === 'hostile' ? [{
+        id: 'hostile-base',
+        faction: 'hostile' as const,
+        getHp: () => 100,
+        getNearestSurfacePoint: () => ({ x: 100, y: 0, distance: 100 }),
+      }] : [],
+    } as unknown as BaseManager);
+    combat.setBaseDamageCallback(baseDamage);
+
+    combat.applyAoeDamage(0, 0, 200, 10, 'player-1', false, { baseDamageMult: 1 });
+    combat.applyAoeDamage(0, 0, 200, 10, 'player-1', false, { baseDamageMult: 2 });
+
+    expect(enemyDamage.mock.calls.map(([, amount]) => amount)).toEqual([10, 10]);
+    expect(baseDamage.mock.calls.map(([, amount]) => amount)).toEqual([10, 20]);
   });
 });
 
@@ -297,15 +389,64 @@ describe('CombatSystem actual damage callbacks', () => {
     combat.initPlayer(victim.id);
     combat.addArmor(victim.id, 5);
     const damage = vi.fn();
+    const damageTaken = vi.fn();
     const death = vi.fn();
     combat.setDamageDealtHandler(damage);
+    combat.setPlayerDamageTakenHandler(damageTaken);
     combat.setDeathCallback(death);
 
     combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
     combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
 
     expect(damage).toHaveBeenCalledWith('player', victim.id, 'attacker', 105, 'direct');
+    expect(damageTaken).toHaveBeenCalledWith(victim.id, 'attacker', 100, 5, 'direct');
     expect(death).toHaveBeenCalledOnce();
+  });
+
+  it('reports only effective healing and armor gains, including capped regen', () => {
+    const player = { id: 'player', body: { enable: true }, sprite: { x: 10, y: 20 } };
+    const bridge = {
+      isHost: vi.fn(() => true),
+      areTeammates: vi.fn(() => false),
+      broadcastEffect: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      {
+        getAllPlayers: () => [player],
+        getPlayer: (id: string) => id === player.id ? player : undefined,
+      } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      bridge,
+    );
+    combat.initPlayer(player.id);
+    const healing = vi.fn();
+    const armor = vi.fn();
+    combat.setHealingReceivedHandler(healing);
+    combat.setArmorReceivedHandler(armor);
+    combat.setPlayerMaxArmorResolver(() => 10);
+    combat.setPlayerArmorGainMultiplierResolver(() => 2);
+
+    combat.applyDamage(player.id, 20, false, 'attacker', 'test');
+    combat.healToFull(player.id);
+    combat.healToFull(player.id);
+    combat.addArmor(player.id, 4);
+    combat.addArmor(player.id, 4);
+
+    expect(healing).toHaveBeenCalledOnce();
+    expect(healing).toHaveBeenCalledWith(player.id, 20);
+    expect(armor.mock.calls.map(([id, amount]) => [id, amount])).toEqual([
+      [player.id, 8],
+      [player.id, 2],
+    ]);
+
+    combat.setPlayerHpRegenPerSecondResolver(() => 10);
+    combat.setPlayerArmorRegenPerSecondResolver(() => 4);
+    combat.applyDamage(player.id, 13, false, 'attacker', 'test');
+    combat.hpRegenTick(player.id, 500);
+    combat.armorRegenTick(player.id, 500);
+    expect(healing).toHaveBeenCalledTimes(2);
+    expect(healing).toHaveBeenLastCalledWith(player.id, 3);
+    expect(armor).toHaveBeenLastCalledWith(player.id, 2);
   });
 });
 

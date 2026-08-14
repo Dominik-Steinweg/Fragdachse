@@ -184,6 +184,7 @@ describe('Enemy snapshot codec', () => {
       maxHp: 150,
       burnStacks: 2,
       burnVisualStyle: 'void',
+      plasmaChargeStacks: 7,
       faction: 'hostile',
       burrowed: true,
       dashPhase: 1,

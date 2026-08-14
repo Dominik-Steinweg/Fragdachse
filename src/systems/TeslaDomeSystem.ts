@@ -406,6 +406,10 @@ export class TeslaDomeSystem {
     const damage = dome.config.fire.damagePerTick
       * (1 + dome.chargeStacks * (dome.config.fire.damageBonusPerCharge ?? 0));
     const resolvedDamage = damage * dome.damageMultiplier;
+    const usesPrecomputedRuntimeMultiplier = 'sourceId' in dome;
+    const targetDamage = usesPrecomputedRuntimeMultiplier
+      ? resolvedDamage
+      : resolvedDamage * (this.combatSystem.getPlayerRuntimeDamageMultiplier?.(dome.ownerId, dome.sourceSlot) ?? 1);
     const playerTargets = targets.filter(target => target.type === 'players');
     const enemyTargets = targets.filter(target => target.type === 'enemies');
     const rockTargets = targets.filter(target => target.type === 'rocks');
@@ -421,14 +425,14 @@ export class TeslaDomeSystem {
         if (this.energyShieldSystem?.tryBlockDamage({
           targetId: player.id,
           category: 'tesla',
-          damage: resolvedDamage,
+          damage: targetDamage,
           sourceX: dome.x,
           sourceY: dome.y,
           now: Date.now(),
         })) {
           continue;
         }
-        this.combatSystem.applyDamage(player.id, resolvedDamage, false, dome.ownerId, dome.config.displayName, {
+        this.combatSystem.applyDamage(player.id, targetDamage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
         }, { damageKind: 'chain', sourceSlot: dome.sourceSlot, allowCritical: true });
@@ -438,7 +442,7 @@ export class TeslaDomeSystem {
     if (enemyTargets.length > 0 && this.enemyTargetProvider) {
       for (const enemy of this.enemyTargetProvider()) {
         if (!enemyTargets.some(target => target.x === enemy.x && target.y === enemy.y)) continue;
-        this.combatSystem.applyDamage(enemy.id, resolvedDamage, false, dome.ownerId, dome.config.displayName, {
+        this.combatSystem.applyDamage(enemy.id, targetDamage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
         }, { damageKind: 'chain', sourceSlot: dome.sourceSlot, allowCritical: true });

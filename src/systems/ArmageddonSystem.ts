@@ -14,6 +14,7 @@ export interface MeteorImpactEvent {
   damageFalloff?: RadialDamageFalloffConfig;
   ownerId:        string;
   selfDamageMult: number;
+  baseDamageMult: number;
   rockDamageMult: number;
   trainDamageMult: number;
   fireChunkBurst: FireChunkBurstConfig;
@@ -31,6 +32,7 @@ interface ActiveMeteor {
   damage:    number;
   damageFalloff?: RadialDamageFalloffConfig;
   selfDamageMult: number;
+  baseDamageMult: number;
   rockDamageMult: number;
   trainDamageMult: number;
   fireChunkBurst: FireChunkBurstConfig;
@@ -118,6 +120,7 @@ export class ArmageddonSystem {
           damageFalloff:   m.damageFalloff,
           ownerId:         m.ownerId,
           selfDamageMult:  m.selfDamageMult,
+          baseDamageMult:  m.baseDamageMult,
           rockDamageMult:  m.rockDamageMult,
           trainDamageMult: m.trainDamageMult,
           fireChunkBurst:  m.fireChunkBurst,
@@ -248,6 +251,7 @@ export class ArmageddonSystem {
       damage:          cfg.meteorDamage * damageFactor,
       damageFalloff,
       selfDamageMult:  cfg.selfDamageMult,
+      baseDamageMult:  cfg.baseDamageMult ?? 1,
       rockDamageMult:  cfg.rockDamageMult ?? 1,
       trainDamageMult: cfg.trainDamageMult ?? 1,
       fireChunkBurst: {

@@ -274,6 +274,8 @@ export interface HitscanSupportEffect {
   readonly type: 'plasma_burner';
   readonly healPerHit: number;
   readonly damagePerHit: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  readonly baseDamageMult?: number;
   readonly beamColor: number;
 }
 
@@ -338,6 +340,7 @@ export interface GroundFireCellEffect {
   readonly weaponName: string;
   readonly visualStyle?: GroundFireVisualStyle;
   readonly damageTarget?: GroundFireDamageTarget;
+  readonly baseDamageMult?: number;
 }
 
 export interface FireChunkBurstConfig extends GroundFireCellEffect {
@@ -376,7 +379,12 @@ export interface ProjectileExplosionConfig {
   readonly selfDamageMult: number;
   readonly allowTeamDamage?: boolean;
   readonly damageTarget?: ExplosionDamageTarget;
+  /** Optionaler zentraler Enemy-Slow einer Explosion; wird mit der normalen Merge-Logik angewandt. */
+  readonly enemySlowFraction?: number;
+  readonly enemySlowDurationMs?: number;
   readonly selfKnockbackMult?: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  readonly baseDamageMult?: number;
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
   readonly color?: number;
@@ -401,6 +409,8 @@ export interface ImpactCloudConfig {
   readonly tickInterval: number;
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  readonly baseDamageMult?: number;
   readonly visualVariant?: DamageZoneVisualStyle;
 }
 
@@ -422,9 +432,11 @@ export interface DamageOverTimeAreaConfig {
   readonly style: DamageZoneVisualStyle;  // Darstellungsstil je Waffe
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  readonly baseDamageMult?: number;
 }
 
-export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles' | 'turrets';
+export type HomingTargetType = 'players' | 'enemies' | 'bases' | 'train' | 'projectiles' | 'turrets';
 export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 
 /**
@@ -857,6 +869,16 @@ export interface ProjectileSpawnConfig {
   isGrenade:       boolean;
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName?:     string;        // Waffenname für Killfeed
+  /** Marker für das Coop-Defense-Bossupgrade der Plasma Gun. */
+  plasmaSwarmEnabled?: boolean;
+  /** Schwarmprojektile dürfen weder Aufladungen noch weitere Schwärme erzeugen. */
+  plasmaSwarmProjectile?: boolean;
+  /** Host-only: Ursprungziel, das beim Start verlassen werden muss, bevor es wieder getroffen wird. */
+  plasmaSwarmOriginEnemyId?: string;
+  plasmaSwarmProjectileCount?: number;
+  plasmaSwarmExplosionRadius?: number;
+  plasmaSwarmExplosionDamage?: number;
+  plasmaSwarmExplosionSlowFraction?: number;
   explosion?:      ProjectileExplosionConfig;
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
@@ -879,6 +901,8 @@ export interface ProjectileSpawnConfig {
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   rockDamageMult?:  number;     // Schadensfaktor gegen Felsen
   trainDamageMult?: number;     // Schadensfaktor gegen den Zug
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  baseDamageMult?: number;
 
   // Flammenwerfer (optional)
   isFlame?:         boolean;    // true = Flammen-Hitbox (wächst, verlangsamt sich, kein Bounce)
@@ -968,6 +992,8 @@ export interface DamageGrenadeEffect {
   allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  baseDamageMult?: number;
   visualStyle?:     ExplosionVisualStyle;
   clusterCount?: number;
   clusterRadiusFactor?: number;
@@ -996,6 +1022,8 @@ export interface FireGrenadeEffect {
   allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  baseDamageMult?: number;
   burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
   weaponName?: string;
@@ -1061,6 +1089,7 @@ export interface DetonableConfig {
   readonly explosionVisualStyle?: ExplosionVisualStyle;
   readonly rockDamageMult?:  number; // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number; // Schadensfaktor gegen den Zug (Default 1.0)
+  readonly baseDamageMult?: number;   // Schadensfaktor ausschliesslich gegen feindliche Coop-Basen
   readonly dotArea?: DamageOverTimeAreaConfig;  // optionale Schaden-über-Zeit-Fläche am Detonationsort
 }
 
@@ -1185,6 +1214,14 @@ export interface TrackedProjectile {
   isGrenade:       boolean;
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName:      string;        // Waffenname für Killfeed
+  plasmaSwarmEnabled?: boolean;
+  plasmaSwarmProjectile?: boolean;
+  /** Host-only: Ursprungziel des Schwarmprojektils für den initialen Hitbox-Schutz. */
+  plasmaSwarmOriginEnemyId?: string;
+  plasmaSwarmProjectileCount?: number;
+  plasmaSwarmExplosionRadius?: number;
+  plasmaSwarmExplosionDamage?: number;
+  plasmaSwarmExplosionSlowFraction?: number;
   explosion?:      ProjectileExplosionConfig;
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
@@ -1215,6 +1252,8 @@ export interface TrackedProjectile {
   // Objekt-Schadens-Multiplikatoren
   rockDamageMult?:  number;
   trainDamageMult?: number;
+  /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
+  baseDamageMult?: number;
 
   // Flammenwerfer (optional)
   isFlame?:         boolean;
@@ -1314,6 +1353,8 @@ export interface TrackedProjectile {
   ak47HitConfirmed?: boolean;
   ak47DamageMultiplier?: number;
   ak47FireSuperiorityShot?: boolean;
+  /** Refund guard for a strategic-target hit; one penetrative projectile may refund once. */
+  ak47StrategicRefunded?: boolean;
   shotgunOriginX?: number;
   shotgunOriginY?: number;
   shotgunResolvedRange?: number;
@@ -1456,6 +1497,14 @@ export interface SyncedTargetVulnerability {
   targetType: 'player' | 'enemy' | 'base' | 'construction' | 'rock' | 'wall' | 'outpost' | 'structure';
   targetId: string;
   expiresAt: number;
+}
+
+/** Host-authoritative AK strategic target marker and its active-phase timing. */
+export interface SyncedAk47StrategicTarget {
+  ownerId: string;
+  enemyId: string;
+  phaseEndsAt: number;
+  confirmationUntil: number;
 }
 
 export interface SyncedBurningGroundCell {
@@ -1685,6 +1734,8 @@ export interface SyncedEnemyState {
   burnStacks: number;
   /** Optische Familie des aktiven Entitaetsbrands. */
   burnVisualStyle?: GroundFireVisualStyle;
+  /** Kurzlebige Plasma-Aufladung des Boss-Upgrades (0/undefined = inaktiv). */
+  plasmaChargeStacks?: number;
   faction: 'hostile' | 'allied';
   /** True: Gegner ist eingebuddelt (unverwundbar, ohne Kollisionen, unsichtbar bis auf Buddel-Partikel). */
   burrowed: boolean;
@@ -1710,6 +1761,7 @@ export interface SyncedEnemyDeltaState {
   maxHp?: number;
   burnStacks?: number;
   burnVisualStyle?: GroundFireVisualStyle;
+  plasmaChargeStacks?: number;
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
   dashPhase?: 0 | 1 | 2;

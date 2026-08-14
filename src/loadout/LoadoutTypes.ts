@@ -261,9 +261,12 @@ export interface WeaponConfigShape {
   readonly hitHeal?: number;
   readonly hitAdrenaline?: number;
   readonly bloodEffectMultiplier?: number;
-  readonly killSplitCount?: number;
-  readonly killSplitDamageFactor?: number;
-  readonly killSplitAngleDegrees?: number;
+  /** Boss upgrade marker; the hit path resolves stacks and swarm projectiles. */
+  readonly plasmaSwarmEnabled?: number;
+  readonly plasmaSwarmProjectileCount?: number;
+  readonly plasmaSwarmExplosionRadius?: number;
+  readonly plasmaSwarmExplosionDamage?: number;
+  readonly plasmaSwarmExplosionSlowFraction?: number;
   readonly sideBurstEveryShots?: number;
   readonly sideBurstCount?: number;
   readonly sideBurstAngleDegrees?: number;
@@ -287,9 +290,15 @@ export interface WeaponConfigShape {
   readonly ak47Focus?: {
     readonly maxStacks: number;
     readonly damagePerStack: number;
-    readonly applyDamageToPrimaryWeapon: number;
     readonly fireSuperiorityShots: number;
-    readonly fireSuperiorityDamageBonus: number;
+    readonly fireControlEnabled: number;
+    readonly fireControlSpreadPerStack: number;
+    readonly fireControlRangePerStack: number;
+    readonly fireControlProjectileSpeedPerStack: number;
+    readonly strategicTargetEnabled: number;
+    readonly strategicTargetDamageBonus: number;
+    readonly targetPrioritizationEnabled: number;
+    readonly explosiveTargetAcquisitionLevel: number;
   };
   /** Host-interner Snapshot fuer einen einzelnen AK-47-Schuss. */
   readonly ak47ShotId?: number;
@@ -321,6 +330,7 @@ export interface WeaponConfigShape {
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
+  readonly baseDamageMult?: number;   // Schadensfaktor ausschliesslich gegen feindliche Coop-Basen
 
   // Shot-Feedback-Mechaniken (optional, data-driven)
   readonly holdSpeedFactor?:        number;  // Geschwindigkeits-Multiplikator während Feuerknopf gehalten (z.B. 0.5 = halbiert)
@@ -493,6 +503,7 @@ export interface BaseUtilityConfig {
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
+  readonly baseDamageMult?: number;   // Schadensfaktor ausschliesslich gegen feindliche Coop-Basen
 
   // Spezial-Flags (optional)
   /** Eigenes Projektil-Visual fuer geworfene Utilitys. */
@@ -656,6 +667,7 @@ export interface ArmageddonMeteorConfig {
   readonly meteorsPerSecond: number;    // Spawn-Rate (leicht zufällig verteilt)
   readonly meteorRadiusJitter: number;   // 0–1 – prozentuale Zufallsabweichung des Radius (0.1 = ±10%)
   readonly selfDamageMult: number;      // Selbstschadens-Multiplikator (0 = immun)
+  readonly baseDamageMult?: number;     // Schadensfaktor ausschliesslich gegen feindliche Coop-Basen
   readonly rockDamageMult?: number;     // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
   readonly fireChunkBurst: FireChunkBurstConfig;
@@ -671,6 +683,8 @@ export interface BuffAuraConfig {
   readonly radius: number;
   readonly damagePerTick: number;
   readonly tickIntervalMs: number;
+  /** Schadensfaktor ausschließlich gegen feindliche Coop-Basen. */
+  readonly baseDamageMult?: number;
   readonly allySpeedMultiplier?: number;
   readonly allyDamageMultiplier?: number;
   readonly allyArmorPerTick?: number;
@@ -716,6 +730,7 @@ export interface GaussUltimateConfig extends BaseUltimateConfig {
   readonly range: number;
   readonly rockDamageMult: number;
   readonly trainDamageMult?: number;
+  readonly baseDamageMult?: number;
   readonly shotRecoilForce: number;
   readonly shotRecoilDuration: number;
   readonly shotAudio?: LoadoutShotAudioConfig;
@@ -734,7 +749,10 @@ export interface AirstrikeUltimateConfig extends BaseUltimateConfig {
   readonly selfDamageMult: number;    // 0 = Auslöser immun
   readonly rockDamageMult: number;
   readonly trainDamageMult: number;
-  readonly baseDamageMult?: number;   // >0: Coop-Basen im Radius erhalten Schaden (Zombie-Luftangriffe)
+  /** Allgemeiner Schadensfaktor fuer feindliche Coop-Basen; Default 1.0. */
+  readonly baseDamageMult?: number;
+  /** Legacy-/NPC-Semantik: Schaden ausschliesslich an eigenen Friendly-Basen. */
+  readonly friendlyBaseDamageMult?: number;
   readonly skipEnemyDamage?: boolean; // true: Coop-Gegner werden verschont (Zombie-Luftangriffe)
   readonly carpetStrikeCount?: number;
   readonly carpetOffset?: number;

@@ -18,7 +18,7 @@ export const LOADOUT_ALLOWED_KEYS_BY_PATH: Readonly<Record<string, ReadonlySet<s
   "utility.shotAudio": new Set(["failureKey","successKey"]),
   "weapon": new Set(["adrenalinCost","adrenalinGain","ak47Focus","allowedModes","allowedSlots","awpCharge","bloodEffectMultiplier","bulletVisualPreset","burnOnHit","chainLightning","cooldown","damage","detonable","detonator","directDamageOverride","displayName","energyBallVariant","fire","grenadeVisualPreset","hitAdrenaline","hitHeal","hitKnockback","hitKnockbackDurationMs","hitSlowDurationMs","hitSlowFraction","holdSpeedFactor","homingEnabled","id","matchPrimaryRange","maxDynamicSpread","miniRocketCascadeDamageBonusPerExplosion","miniRocketPickupAdrenalineRefundFraction","miniRocketPickupArmor","miniRocketPickupRadius","miniRocketReturnEnabled","miniRocketReturnRangeBuffer","miniRocketSafetyLifetimeMs","multiExplosionCoastMs","multiExplosionCount","negevKillstreak","pelletCount","pelletCountMultiplier","pelletSpreadAngle","penetratesRocks","projectileBurnVisualStyle","projectileColor","projectileStyle","projectileVisualScale","proximityArc","range","rockDamageMult","rocketSmokeTrailColor","scopeConfig","shotAudio","shotRecoilDuration","shotRecoilForce","shotScreenShake","shotgunChainDamageRetention","shotgunChainEnabled","shotgunChainRadiusRetention","shotgunLightningAppliesSlow","shotgunLightningDamage","shotgunLightningRadius","shotgunProximityMaxDamageBonus","shotgunSlowDurationMs","shotgunSlowFraction","showCrosshair","splitCount","splitFactor","splitSpread","spreadMoving","spreadPerShot","spreadRecoveryDelay","spreadRecoveryRate","spreadRecoverySpeed","spreadStanding","tracerConfig","trainDamageMult","turretBurst","warmupBurnThreshold","warmupSpeedMultiplier"]),
   "weapon.turretBurst": new Set(["count","intervalMs"]),
-  "weapon.ak47Focus": new Set(["applyDamageToPrimaryWeapon","damagePerStack","fireSuperiorityDamageBonus","fireSuperiorityShots","maxStacks"]),
+  "weapon.ak47Focus": new Set(["damagePerStack","explosiveTargetAcquisitionLevel","fireControlEnabled","fireControlProjectileSpeedPerStack","fireControlRangePerStack","fireControlSpreadPerStack","fireSuperiorityShots","maxStacks","strategicTargetDamageBonus","strategicTargetEnabled","targetPrioritizationEnabled"]),
   "weapon.awpCharge": new Set(["corridorDamage","corridorDotDurationMs","corridorDotTickIntervalMs","corridorEnabled","corridorHalfWidth","corridorKnockback","corridorKnockbackDurationMs","durationMs","fireTrailBurnDamagePerTick","fireTrailBurnDurationMs","fireTrailDurationMs","fireTrailHalfWidthCells","fullChargeDamageBonus","maxDamageBonus"]),
   "weapon.burnOnHit": new Set(["damagePerTick","durationMs"]),
   "weapon.chainLightning": new Set(["damageFalloffPerJump","detonableTags","maxJumps","searchRadius","targetEnemies","thicknessFalloffPerJump"]),
@@ -45,3 +45,33 @@ export const LOADOUT_ALLOWED_KEYS_BY_PATH: Readonly<Record<string, ReadonlySet<s
   "weapon.shotScreenShake": new Set(["duration","intensity"]),
   "weapon.tracerConfig": new Set(["alphaCore","alphaGlow","colorCore","colorGlow","fadeMs","maxLength","segments","widthCore","widthGlow"]),
 };
+
+// Schadensfaktor gegen feindliche Coop-Basen. Diese Sets werden aus dem Content-Router
+// erzeugt; die Erweiterung bleibt hier bewusst zentral, damit verschachtelte Payloads
+// denselben Vertrag teilen.
+const mutableAllowedKeysByPath = LOADOUT_ALLOWED_KEYS_BY_PATH as Readonly<Record<string, Set<string>>>;
+for (const key of [
+  'plasmaSwarmEnabled',
+  'plasmaSwarmProjectileCount',
+  'plasmaSwarmExplosionRadius',
+  'plasmaSwarmExplosionDamage',
+  'plasmaSwarmExplosionSlowFraction',
+]) mutableAllowedKeysByPath.weapon.add(key);
+for (const path of [
+  'ultimate',
+  'ultimate.armageddon',
+  'ultimate.armageddon.fireChunkBurst',
+  'ultimate.aura',
+  'utility',
+  'weapon',
+  'weapon.detonable',
+  'weapon.detonable.dotArea',
+  'weapon.fire.enemyHitExplosion',
+  'weapon.fire.impactCloud',
+  'weapon.fire.impactExplosion',
+  'weapon.fire.impactExplosion.groundFire',
+]) {
+  mutableAllowedKeysByPath[path]?.add('baseDamageMult');
+}
+mutableAllowedKeysByPath['weapon.fire.supportEffect']?.add('baseDamageMult');
+mutableAllowedKeysByPath.ultimate?.add('friendlyBaseDamageMult');

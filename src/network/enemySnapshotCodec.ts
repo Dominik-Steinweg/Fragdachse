@@ -8,7 +8,7 @@
  * Update-Frequenz oder Interpolation (Direktheit bleibt unverändert).
  *
  * Stromformat von `u` (Einträge hintereinander, variable Länge):
- *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?
+ *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?
  * Reihenfolge der optionalen Felder ist fix; `mask` gibt an, welche vorhanden sind.
  */
 import {
@@ -27,6 +27,7 @@ const FIELD_FACTION = 32; // Fraktion und optionale Besitzerdarstellung
 const FIELD_BURROW = 64;  // Einbuddel-Zustand
 const FIELD_DASH = 128;   // Ausweichschritt-Phase (0/1/2)
 const FIELD_SPECIAL = 256; // Spezialaktion + Endzeit + Gauss-Fortschritt/Zielwinkel
+const FIELD_PLASMA_CHARGE = 512; // Stackzahl der Plasma-Aufladung
 
 /** Rotation wird als Integer (2 Nachkommastellen) übertragen, um den Dezimalpunkt zu sparen. */
 const ROT_QUANT = 100;
@@ -53,6 +54,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (entry.burrowed !== undefined) mask |= FIELD_BURROW;
   if (entry.dashPhase !== undefined) mask |= FIELD_DASH;
   if (entry.specialAction !== undefined) mask |= FIELD_SPECIAL;
+  if (entry.plasmaChargeStacks !== undefined) mask |= FIELD_PLASMA_CHARGE;
 
   out.push(enemyIdToNum(entry.id), mask);
   if (mask & FIELD_POS) out.push(entry.x as number, entry.y as number);
@@ -88,6 +90,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
       Math.round((entry.gaussAimAngle ?? 0) * ROT_QUANT),
     );
   }
+  if (mask & FIELD_PLASMA_CHARGE) out.push(entry.plasmaChargeStacks as number);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -134,6 +137,7 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       entry.gaussChargeProgress = (stream[i++] as number) / 1000;
       entry.gaussAimAngle = (stream[i++] as number) / ROT_QUANT;
     }
+    if (mask & FIELD_PLASMA_CHARGE) entry.plasmaChargeStacks = stream[i++] as number;
     result.push(entry);
   }
   return result;
@@ -155,6 +159,7 @@ export function countEnemyUpserts(stream: readonly (number | string)[]): number 
     if (mask & FIELD_BURROW) i += 1;
     if (mask & FIELD_DASH) i += 1;
     if (mask & FIELD_SPECIAL) i += 4;
+    if (mask & FIELD_PLASMA_CHARGE) i += 1;
     count += 1;
   }
   return count;

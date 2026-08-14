@@ -27,9 +27,11 @@ Fachliche RPCs werden in RpcCoordinator registriert und über Methoden von Netwo
 
 Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, Layout, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen Input, Ping und KEY_GAME_STATE.
 
-Kumulative Raumstatistiken liegen als reliable per-player States im Raum: Der Host initialisiert sie nur
-beim erstmaligen Anlegen eines Spieler-Slots. Runden- und Moduswechsel setzen sie nicht zurück; ein
-Resume behält die Spieler-ID und damit die Werte, während ein neuer Raum einen neuen Store erhält.
+Kumulative Raumstatistiken liegen als ein kompakter reliable globaler Snapshot (`rst`) im Raum. Nur
+der Host ändert das In-Memory-Ledger und publiziert es beim Rundenende, beim Lobby-Bootstrap und bei
+Roster-Reconnects; Treffer, Heilung und andere Zähler erzeugen keine Einzel-Replikation. Runden- und
+Moduswechsel setzen die Werte nicht zurück. Ein Resume behält die hostvergebene Spieler-ID und damit
+den bestehenden Eintrag; ein neuer Raum erhält ein neues Ledger.
 
 Die Lobby-Auswahl der Spieler-Loadouts liegt weiterhin in den per-player Slot-States. Für die
 Inspector-Anzeige gibt es zusätzlich den kleinen reliable Lobby-Preview-State `llp` mit Klasse

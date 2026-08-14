@@ -193,6 +193,7 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.cloudTickInterval,
       utility.rockDamageMult ?? 0,
       utility.trainDamageMult ?? 0,
+      utility.baseDamageMult ?? 1,
       utility.afterCloudDurationMs ?? 0,
       utility.afterCloudRadiusFactor ?? 0,
       utility.afterCloudDamageFactor ?? 0,

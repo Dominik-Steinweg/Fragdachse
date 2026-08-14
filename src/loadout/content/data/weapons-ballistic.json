@@ -217,7 +217,8 @@
           "maxTurnDegreesPerStep": 12,
           "targetTypes": [
             "players",
-            "enemies"
+            "enemies",
+            "bases"
           ],
           "requireLineOfSight": true,
           "excludeOwner": true,
@@ -281,10 +282,17 @@
       "ak47Focus": {
         "maxStacks": 0,
         "damagePerStack": 0,
-        "applyDamageToPrimaryWeapon": 0,
         "fireSuperiorityShots": 0,
-        "fireSuperiorityDamageBonus": 0
+        "fireControlEnabled": 0,
+        "fireControlSpreadPerStack": 0,
+        "fireControlRangePerStack": 0,
+        "fireControlProjectileSpeedPerStack": 0,
+        "strategicTargetEnabled": 0,
+        "strategicTargetDamageBonus": 0,
+        "targetPrioritizationEnabled": 0,
+        "explosiveTargetAcquisitionLevel": 0
       },
+      "rockDamageMult": 0,
       "spreadRecoveryDelay": 400,
       "spreadRecoveryRate": 2,
       "spreadRecoverySpeed": 100,

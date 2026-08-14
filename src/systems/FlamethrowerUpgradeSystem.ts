@@ -18,6 +18,7 @@ interface ResolvedFlameOwner {
   playerId: string;
   fire: FlamethrowerWeaponFireConfig;
   burn: BurnOnHitConfig;
+  baseDamageMult: number;
 }
 
 interface RingRuntime {
@@ -221,6 +222,7 @@ export class FlamethrowerUpgradeSystem {
     return {
       playerId,
       fire: weapon.fire,
+      baseDamageMult: weapon.baseDamageMult ?? 1,
       burn: {
         durationMs: weapon.fire.burnDurationMs,
         damagePerTick: weapon.fire.burnDamagePerTick,
@@ -261,6 +263,7 @@ export class FlamethrowerUpgradeSystem {
       burn: owner.burn,
       igniteProjectiles: (owner.fire.burningGround?.igniteProjectiles ?? 0) > 0,
       weaponName: 'Brennender Boden',
+      baseDamageMult: owner.baseDamageMult,
     }, now);
   }
 
@@ -291,6 +294,7 @@ export class FlamethrowerUpgradeSystem {
       weaponName: burst.weaponName,
       visualStyle: burst.visualStyle,
       damageTarget: burst.damageTarget,
+      baseDamageMult: burst.baseDamageMult,
     };
     if (burst.igniteCenter) this.refreshGenericGround(ownerId, x, y, effect, now, `${sourceKey}:center`);
     const count = Math.max(0, Math.floor(burst.count));
@@ -336,6 +340,7 @@ export class FlamethrowerUpgradeSystem {
       weaponName: effect.weaponName,
       visualStyle: effect.visualStyle,
       damageTarget: effect.damageTarget,
+      baseDamageMult: effect.baseDamageMult,
     }, now);
   }
 

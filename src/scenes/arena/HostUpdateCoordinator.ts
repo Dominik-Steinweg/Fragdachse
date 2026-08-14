@@ -29,6 +29,7 @@ import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import type { EnemyStrategicTargetCandidate } from '../../systems/EnemyStrategicTargetService';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
+import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -290,6 +291,7 @@ export class HostUpdateCoordinator {
     const { explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
       ? { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
       : this.ctx.projectileManager.hostUpdate(delta);
+    if (!countdownActive) this.ctx.ak47StrategicTargetSystem?.hostUpdate(now);
     const guardianSpirits = countdownActive
       ? []
       : (this.ctx.guardianSpiritSystem?.hostUpdate(now, delta) ?? []);
@@ -431,6 +433,7 @@ export class HostUpdateCoordinator {
           weaponName: 'Granate',
           sourceSlot: 'utility',
           damageFalloff: g.effect.damageFalloff,
+          baseDamageMult: g.effect.baseDamageMult,
         });
         this.applyAoeEnvironmentDamage(
           g.x, g.y, g.effect.radius, g.effect.damage,
@@ -447,6 +450,7 @@ export class HostUpdateCoordinator {
           const cy = g.y + Math.sin(angle) * g.effect.radius * 0.45;
           this.ctx.combatSystem.applyAoeDamage(cx, cy, radius, damage, g.ownerId, false, {
             category: 'explosion', allowTeamDamage: g.effect.allowTeamDamage, weaponName: 'Clusterladung', sourceSlot: 'utility',
+            baseDamageMult: g.effect.baseDamageMult,
           });
           this.applyAoeEnvironmentDamage(cx, cy, radius, damage, g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId);
           bridge.broadcastExplosionEffect(cx, cy, radius, undefined, g.effect.visualStyle);
@@ -592,6 +596,9 @@ export class HostUpdateCoordinator {
     }
 
     for (const ev of fireDamageEvents) {
+      this.ctx.combatSystem.applyRadialHostileBaseDamage(
+        ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, undefined, undefined, ev.baseDamageMult,
+      );
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
@@ -603,6 +610,7 @@ export class HostUpdateCoordinator {
         category: 'damage_over_time',
         weaponName: 'Gas',
         sourceSlot: 'utility',
+        baseDamageMult: ev.baseDamageMult,
       });
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
@@ -646,6 +654,7 @@ export class HostUpdateCoordinator {
             sourceSlot: 'ultimate',
             damageFalloff: mi.damageFalloff,
             selfDamageMult: mi.selfDamageMult,
+            baseDamageMult: mi.baseDamageMult,
           },
         );
         this.applyAoeEnvironmentDamage(
@@ -862,7 +871,7 @@ export class HostUpdateCoordinator {
           ...(stealthBuff ? [stealthBuff] : []),
         ],
         shieldBuff,
-        weapon2AdrenalineCost:   this.ctx.loadoutManager?.isAk47FireSuperiorityActive(localId)
+        weapon2AdrenalineCost:   this.ctx.loadoutManager?.isAk47FireSuperiorityAvailable(localId)
           ? 0
           : (weapon2Cfg?.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
@@ -1054,6 +1063,7 @@ export class HostUpdateCoordinator {
       slimeTrail,
       burningGround,
       targetVulnerabilities: this.ctx.targetStatusSystem?.getSnapshot(now) ?? [],
+      ak47StrategicTargets: this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(now) ?? [],
       // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
       // dient nur der host-lokalen Darstellung und dem eigenen Aufsammel-Check.
       powerups: this.ctx.powerUpSystem?.getNetSnapshot() ?? null,
@@ -1235,6 +1245,7 @@ export class HostUpdateCoordinator {
       explosionRadius * (dot.radiusScale ?? 1),
       dot.durationMs, dot.damagePerTick, dot.tickIntervalMs,
       dot.rockDamageMult ?? 1, dot.trainDamageMult ?? 1,
+      dot.baseDamageMult ?? 1,
       dot.style,
     );
   }
@@ -1368,6 +1379,7 @@ export class HostUpdateCoordinator {
   ): void {
     const arenaResult = this.ctx.arenaResult;
     const falloff = { minDamage: cfg.minDamage };
+    const isEnemyAirstrike = triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID;
 
     // Spieler-Schaden
     this.ctx.combatSystem.applyAoeDamage(x, y, radius, cfg.maxDamage, triggeredBy, cfg.selfDamageMult > 0, {
@@ -1378,10 +1390,11 @@ export class HostUpdateCoordinator {
       selfDamageMult:  cfg.selfDamageMult,
       damageFalloff:   falloff,
       skipEnemies:     cfg.skipEnemyDamage,
+      baseDamageMult:  isEnemyAirstrike ? 0 : (cfg.baseDamageMult ?? 1),
     });
 
-    // Basis-Schaden (nur Zombie-Luftangriffe konfigurieren baseDamageMult > 0)
-    if ((cfg.baseDamageMult ?? 0) > 0 && this.ctx.baseManager) {
+    // Legacy-Semantik: Zombie-/Map-Luftangriffe treffen nur die eigenen Basen.
+    if ((cfg.friendlyBaseDamageMult ?? 0) > 0 && this.ctx.baseManager) {
       // Zombie-Luftangriffe treffen nur eigene Basen.
       for (const base of this.ctx.baseManager.getBasesByFaction('friendly')) {
         if (base.isInert?.() === true) continue;
@@ -1395,8 +1408,11 @@ export class HostUpdateCoordinator {
         }
         if (minDist > radius) continue;
         const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
-        const damage = Math.round(baseDmg * (cfg.baseDamageMult ?? 0));
-        if (damage > 0) this.ctx.combatSystem.applyBaseDamage(base.id, damage, triggeredBy);
+        if (baseDmg > 0) {
+          this.ctx.combatSystem.applyBaseDamage(
+            base.id, baseDmg, triggeredBy, undefined, cfg.friendlyBaseDamageMult,
+          );
+        }
       }
     }
 
@@ -1547,11 +1563,13 @@ export class HostUpdateCoordinator {
     addComboAdrenaline: (ownerId, amount) => {
       this.ctx.resourceSystem?.addAdrenaline(ownerId, amount);
     },
-    applyAoeDamage: (x, y, radius, damage, attackerId, falloff) => {
+    applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot) => {
       this.ctx.combatSystem.applyAoeDamage(x, y, radius, damage, attackerId, false, {
         category: 'explosion',
         weaponName: 'Detonation',
         damageFalloff: falloff,
+        baseDamageMult,
+        sourceSlot,
       });
     },
     applyRadialImpulse: (x, y, radius, force, attackerId, selfMultiplier) => {
@@ -1678,7 +1696,13 @@ export class HostUpdateCoordinator {
     } else if (effect.damagePerHit > 0) {
       // Basisschaden geht ausschliesslich ueber den zentralen Basistrichter, damit
       // Verwundbarkeit, Matrixschutz und ausgehende Modifikatoren gleich greifen.
-      this.ctx.combatSystem.applyBaseDamage(base.id, effect.damagePerHit, attackerId, sourceSlot);
+      this.ctx.combatSystem.applyBaseDamage(
+        base.id,
+        effect.damagePerHit,
+        attackerId,
+        sourceSlot,
+        effect.baseDamageMult ?? 1,
+      );
     }
   }
 

@@ -27,6 +27,7 @@ import {
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
 import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
+import type { SyncedAk47StrategicTarget } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -62,6 +63,14 @@ import {
   getRoundResultEligibleIds,
   markRoundLateJoiner,
 } from '../scenes/arena/RoundParticipationPolicy';
+import {
+  RoomStatisticsLedger,
+  ROOM_STATISTICS_COUNTERS,
+  type RoomPlayerStatistics,
+  type RoomStatisticsCounter,
+} from './RoomStatistics';
+
+export type { RoomPlayerStatistics } from './RoomStatistics';
 
 /**
  * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`
@@ -135,8 +144,7 @@ const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
-const KEY_ROOM_DAMAGE  = 'rmd';   // per-player: number (raumweite, kumulierte Schadenssumme)
-const KEY_ROOM_DEATHS  = 'rde';   // per-player: number (raumweite, kumulierte Tode)
+const KEY_ROOM_STATS   = 'rst';   // global reliable: kompakter, kumulierter Raum-Statistik-Snapshot
 const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
@@ -217,6 +225,7 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   rd: 'repairDrones',
   sl: 'slimeTrail',
   vu: 'targetVulnerabilities',
+  st: 'ak47StrategicTargets',
   fg: 'burningGround',
   rc: 'remoteControlTurrets',
   u: 'powerups',
@@ -259,16 +268,6 @@ export interface RoundResult {
   sharedXp?: number;
   /** Gemeinsame, autoritative B8-Epic-Garantie; pro berechtigter Zeile wiederholt. */
   epicGuaranteeCount?: number;
-}
-
-/** Raumweite Statistik eines aktuell verbundenen Spielers. */
-export interface RoomPlayerStatistics {
-  id: string;
-  name: string;
-  colorHex: number;
-  teamId: TeamId | null;
-  damage: number;
-  deaths: number;
 }
 
 export type RoundOutcome = 'victory' | 'defeat';
@@ -329,6 +328,7 @@ export interface GameState {
   repairDrones: SyncedRepairDrone[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   targetVulnerabilities: SyncedTargetVulnerability[];
+  ak47StrategicTargets: SyncedAk47StrategicTarget[];
   burningGround: SyncedBurningGroundSnapshot;
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
@@ -365,6 +365,7 @@ interface OutboundGameState {
   repairDrones: SyncedRepairDrone[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   targetVulnerabilities: SyncedTargetVulnerability[];
+  ak47StrategicTargets: SyncedAk47StrategicTarget[];
   burningGround: SyncedBurningGroundSnapshot;
 }
 
@@ -549,6 +550,8 @@ const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
 
 export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
+  /** Host-only: lebt laenger als eine Runde und wird nur mit KEY_ROOM_STATS veroeffentlicht. */
+  private readonly roomStatistics = new RoomStatisticsLedger();
   /**
    * Cache fuer {@link getPlayerCommittedLoadout}, geschluesselt auf die Referenz des rohen
    * Netzwerk-Zustands. Ein neuer Snapshot bringt ein neues Rohobjekt und invalidiert den
@@ -802,6 +805,10 @@ export class NetworkBridge {
 
       const profile = this.extractProfile(state);
       this.connectedPlayers.set(state.id, profile);
+      if (isHost()) {
+        this.hostInitializeRoomStatistics(state.id);
+        this.hostPublishRoomStatistics();
+      }
       if (isHost() && this.getGamePhase() === 'ARENA') {
         // Der Rosterbeitritt ist bereits bekannt, die Runde bleibt aber unveraendert: Der neue
         // Spieler bekommt nur die Spectator-Rolle und einen verlaesslichen Full-Snapshot.
@@ -1897,6 +1904,7 @@ export class NetworkBridge {
     if (state.targetVulnerabilities.length > 0) {
       payload.vu = encodeTargetVulnerabilities(state.targetVulnerabilities);
     }
+    if (state.ak47StrategicTargets.length > 0) payload.st = state.ak47StrategicTargets;
     const burningGroundDelta = this.buildBurningGroundDelta(state.burningGround);
     if (burningGroundDelta) payload.fg = burningGroundDelta;
     if (state.powerups)                payload.u = state.powerups;
@@ -1941,6 +1949,7 @@ export class NetworkBridge {
       rd: state.repairDrones,
       sl: encodeSlimeTrailSnapshot(state.slimeTrail),
       vu: encodeTargetVulnerabilities(state.targetVulnerabilities),
+      st: state.ak47StrategicTargets,
       fg: this.buildFullBurningGroundDelta(state.burningGround),
       u: state.powerups ?? { full: true, count: 0, upserts: [], removals: [] } satisfies SyncedPowerUpSnapshot,
       pd: state.pedestals ?? { full: true, upserts: [], removals: [] } satisfies SyncedPowerUpPedestalSnapshot,
@@ -2148,6 +2157,7 @@ export class NetworkBridge {
       repairDrones: (raw.rd as SyncedRepairDrone[] | undefined) ?? [],
       slimeTrail: decodeSlimeTrailSnapshot(raw.sl),
       targetVulnerabilities: decodeTargetVulnerabilities(raw.vu),
+      ak47StrategicTargets: (raw.st as SyncedAk47StrategicTarget[] | undefined) ?? [],
       burningGround: nextBurningGround,
       powerups:      nextPowerUps,
       pedestals:     nextPedestals,
@@ -3370,40 +3380,91 @@ export class NetworkBridge {
 
   /** Liest den kumulierten, tatsächlich verursachten Schaden eines Spielers. */
   getPlayerRoomDamage(playerId: string): number {
-    return this.readNonNegativePlayerNumber(playerId, KEY_ROOM_DAMAGE);
+    const entry = isHost()
+      ? this.roomStatistics.get(playerId)
+      : this.getRoomPlayerStatistics().find((candidate) => candidate.id === playerId);
+    return entry?.damageDealt ?? 0;
   }
 
   /** Liest die kumulierten tatsächlichen Spielertode eines Spielers. */
   getPlayerRoomDeaths(playerId: string): number {
-    return this.readNonNegativePlayerNumber(playerId, KEY_ROOM_DEATHS);
+    const entry = isHost()
+      ? this.roomStatistics.get(playerId)
+      : this.getRoomPlayerStatistics().find((candidate) => candidate.id === playerId);
+    return (entry?.pvpDeaths ?? 0) + (entry?.pveDeaths ?? 0);
   }
 
   /** Host-only: addiert tatsächlich verursachten Schaden ohne Rundungs-/Overkill-Verlust. */
+  addRoomStatistic(playerId: string, counter: RoomStatisticsCounter, amount = 1): void {
+    if (!isHost() || !this.canPlayerReceiveRoundRewards(playerId)) return;
+    this.roomStatistics.add(playerId, counter, amount);
+  }
+
   addPlayerRoomDamage(playerId: string, amount: number): void {
-    if (!isHost() || !Number.isFinite(amount) || amount <= 0) return;
-    const state = this.playerStateMap.get(playerId);
-    if (!state) return;
-    state.setState(KEY_ROOM_DAMAGE, this.getPlayerRoomDamage(playerId) + amount, true);
+    this.addRoomStatistic(playerId, 'damageDealt', amount);
+  }
+
+  recordPlayerDamageTaken(playerId: string, hpLost: number, armorLost: number): void {
+    this.addRoomStatistic(playerId, 'damageTaken', Math.max(0, hpLost) + Math.max(0, armorLost));
+  }
+
+  recordPlayerDeath(playerId: string): void {
+    this.addRoomStatistic(playerId, isCoopDefenseMode(this.getGameMode()) ? 'pveDeaths' : 'pvpDeaths');
+  }
+
+  recordPlayerKill(playerId: string, kind: 'pvp' | 'pve'): void {
+    this.addRoomStatistic(playerId, kind === 'pvp' ? 'pvpKills' : 'pveKills');
+  }
+
+  recordHealingReceived(playerId: string, amount: number): void {
+    this.addRoomStatistic(playerId, 'healingReceived', amount);
+  }
+
+  recordArmorReceived(playerId: string, amount: number): void {
+    this.addRoomStatistic(playerId, 'armorReceived', amount);
+  }
+
+  recordPowerUpCollected(playerId: string): void {
+    this.addRoomStatistic(playerId, 'powerUpsCollected');
+  }
+
+  recordUtilityUsed(playerId: string): void {
+    this.addRoomStatistic(playerId, 'utilitiesUsed');
+  }
+
+  recordConstructionBuilt(playerId: string): void {
+    this.addRoomStatistic(playerId, 'constructionsBuilt');
+  }
+
+  recordUltimateUsed(playerId: string): void {
+    this.addRoomStatistic(playerId, 'ultimatesUsed');
+  }
+
+  recordCompletedPvpMatch(eligiblePlayerIds: readonly string[], winnerIds: ReadonlySet<string>): void {
+    if (!isHost()) return;
+    this.roomStatistics.recordCompletedPvpMatch(eligiblePlayerIds, winnerIds);
   }
 
   /** Host-only: erhöht den Raum-Todeszähler für einen bestätigten Spielertod. */
   incrementPlayerRoomDeaths(playerId: string): void {
-    if (!isHost()) return;
-    const state = this.playerStateMap.get(playerId);
-    if (!state) return;
-    state.setState(KEY_ROOM_DEATHS, this.getPlayerRoomDeaths(playerId) + 1, true);
+    this.recordPlayerDeath(playerId);
   }
 
   /** Liefert die Raumstatistik für alle aktuell verbundenen Spieler. */
   getRoomPlayerStatistics(): RoomPlayerStatistics[] {
-    return this.getConnectedPlayers().map((profile) => ({
-      id: profile.id,
-      name: profile.name,
-      colorHex: profile.colorHex,
-      teamId: profile.teamId ?? null,
-      damage: this.getPlayerRoomDamage(profile.id),
-      deaths: this.getPlayerRoomDeaths(profile.id),
-    }));
+    if (isHost()) {
+      for (const profile of this.getConnectedPlayers()) this.roomStatistics.ensurePlayer(profile);
+      return this.roomStatistics.snapshot();
+    }
+    const raw = getState(KEY_ROOM_STATS);
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((entry): entry is RoomPlayerStatistics => this.isValidRoomStatisticsEntry(entry))
+      .map((entry) => ({ ...entry }));
+  }
+
+  hostPublishRoomStatistics(): void {
+    if (!isHost()) return;
+    setState(KEY_ROOM_STATS, this.roomStatistics.snapshot(), true);
   }
 
   /** Neue Spieler erhalten Defaults; Resume und Rundenwechsel behalten ihre Werte. */
@@ -3411,13 +3472,19 @@ export class NetworkBridge {
     if (!isHost()) return;
     const state = this.playerStateMap.get(playerId);
     if (!state) return;
-    if (state.getState(KEY_ROOM_DAMAGE) === undefined) state.setState(KEY_ROOM_DAMAGE, 0, true);
-    if (state.getState(KEY_ROOM_DEATHS) === undefined) state.setState(KEY_ROOM_DEATHS, 0, true);
+    this.roomStatistics.ensurePlayer(this.extractProfile(state));
   }
 
-  private readNonNegativePlayerNumber(playerId: string, key: string): number {
-    const value = this.playerStateMap.get(playerId)?.getState(key);
-    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+  private isValidRoomStatisticsEntry(value: unknown): value is RoomPlayerStatistics {
+    if (!value || typeof value !== 'object') return false;
+    const entry = value as Partial<RoomPlayerStatistics>;
+    if (typeof entry.id !== 'string' || typeof entry.name !== 'string'
+      || typeof entry.colorHex !== 'number'
+      || (entry.teamId !== null && entry.teamId !== 'blue' && entry.teamId !== 'red')) return false;
+    return ROOM_STATISTICS_COUNTERS.every((key) => {
+      const counter = entry[key];
+      return typeof counter === 'number' && Number.isFinite(counter) && counter >= 0;
+    });
   }
 
   getCoopDefenseRoundXp(): number {

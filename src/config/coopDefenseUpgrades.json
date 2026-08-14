@@ -234,8 +234,8 @@
         {
           "id": "plasma_homing_turn",
           "code": "B-W2-1",
-          "label": "Upgrade Plasma: Homing",
-          "description": "+25% maxTurnDegreesPerStep für Plasma je Stufe.",
+          "label": "Plasma-Leitsystem",
+          "description": "Plasma-Projektile lenken +25% stärker zum Ziel und fliegen +10% schneller sowie +10% weiter je Stufe. Gilt auch für den Plasmaschwarm.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -253,29 +253,14 @@
               "stat": "weapon.PLASMA.homing.maxTurnDegreesPerStep",
               "mode": "add_percent_per_level",
               "value": 0.25
-            }
-          ]
-        },
-        {
-          "id": "plasma_projectile_speed",
-          "code": "B-W2-2",
-          "label": "Upgrade Plasma: Geschossgeschwindigkeit",
-          "description": "+10% Projektilgeschwindigkeit für Plasma je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 150,
-          "requires": [
-            {
-              "upgradeId": "unlock_plasma",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
+            },
             {
               "stat": "weapon.PLASMA.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            },
+            {
+              "stat": "weapon.PLASMA.range",
               "mode": "add_percent_per_level",
               "value": 0.1
             }
@@ -294,7 +279,7 @@
           "sortOrder": 155,
           "requires": [
             {
-              "upgradeId": "plasma_projectile_speed",
+              "upgradeId": "plasma_homing_turn",
               "minLevel": 1
             }
           ],
@@ -803,7 +788,8 @@
             }
           ]
         },
-        { "id": "plasma_swarm", "code": "B-W2-C", "label": "Plasmaschwarm", "description": "Tödliche Treffer erzeugen zwei nicht weiter teilbare Homing-Splitter bei -30 und +30 Grad mit vollem Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 165, "requires": [{ "upgradeId": "plasma_homing_turn", "minLevel": 1 }], "effects": [{ "stat": "weapon.PLASMA.killSplitCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.PLASMA.killSplitDamageFactor", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.PLASMA.killSplitAngleDegrees", "mode": "add_per_level", "value": 30 }] },
+        { "id": "plasma_swarm", "code": "B-W2-C", "label": "Plasmaschwarm", "description": "Direkte Plasma-Treffer laden das Ziel bis zu 10-mal auf. Pro Stack: +2 Prozentpunkte Schwarmchance; die Aufladung hält 2 Sekunden. Ein erfolgreicher Proc erzeugt eine Plasma-Explosion und vier Schwarmprojektile.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 165, "requires": [{ "upgradeId": "unlock_plasma", "minLevel": 1 }], "effects": [{ "stat": "weapon.PLASMA.plasmaSwarmEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.PLASMA.plasmaSwarmProjectileCount", "mode": "add_per_level", "value": 4 }, { "stat": "weapon.PLASMA.plasmaSwarmExplosionRadius", "mode": "add_per_level", "value": 30 }, { "stat": "weapon.PLASMA.plasmaSwarmExplosionDamage", "mode": "add_per_level", "value": 10 }] },
+        { "id": "plasma_swarm_discharge", "code": "B-W2-D", "label": "Schwarmentladung", "description": "Verbessert die Plasma-Schwarm-Explosion: +2 Projektile, +10 px Radius und +20 Prozentpunkte Slow je Stufe. Der Explosionsschaden bleibt unverändert.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 170, "requires": [{ "upgradeId": "plasma_swarm", "minLevel": 1 }], "effects": [{ "stat": "weapon.PLASMA.plasmaSwarmProjectileCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.PLASMA.plasmaSwarmExplosionRadius", "mode": "add_per_level", "value": 10 }, { "stat": "weapon.PLASMA.plasmaSwarmExplosionSlowFraction", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "bite_blood_bite", "code": "B-W4-C", "label": "Blutbiss", "description": "Jeder Biss-Treffer heilt 20 HP und gibt 10 Adrenalin. Der Bluteffekt ist 50% stärker.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "bite_damage_reduction", "minLevel": 1 }], "effects": [{ "stat": "weapon.BITE.hitHeal", "mode": "add_per_level", "value": 20 }, { "stat": "weapon.BITE.hitAdrenaline", "mode": "add_per_level", "value": 10 }, { "stat": "weapon.BITE.bloodEffectMultiplier", "mode": "add_percent_per_level", "value": 0.5 }] },
         { "id": "hydra_hunting_instinct", "code": "B-W5-C", "label": "Jagdinstinkt", "description": "Hydra-Splitter verfolgen während ihrer Restflugzeit das nächste Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "hydra_split_count", "minLevel": 1 }], "effects": [{ "stat": "weapon.HYDRA.splitHomingEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "laubblaeser_pressure_damage", "code": "B-W7-C", "label": "Druckluftschaden", "description": "Erhöht den Direktschaden pro Treffer von 1 auf 10.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 305, "requires": [{ "upgradeId": "laubblaeser_knockback", "minLevel": 1 }], "effects": [{ "stat": "weapon.LAUBBLAESER.directDamageOverride", "mode": "add_per_level", "value": 9 }] }
@@ -1173,8 +1159,8 @@
         {
           "id": "rocket_launcher_direct_damage",
           "code": "C-W2-5",
-          "label": "Upgrade Rocket Launcher: Direktschaden",
-          "description": "+20% Direktschaden für den Rocket Launcher je Stufe.",
+          "label": "Upgrade Rocket Launcher: Schaden",
+          "description": "+20% Schaden fuer den Rocket Launcher je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1190,6 +1176,11 @@
           "effects": [
             {
               "stat": "weapon.ROCKET_LAUNCHER.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            },
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.impactExplosion.damage",
               "mode": "add_percent_per_level",
               "value": 0.2
             }
@@ -1288,166 +1279,78 @@
           }
         },
         {
-          "id": "ak47_accuracy",
+          "id": "ak47_firepower",
           "code": "C-W3-1",
-          "label": "Upgrade AK-47: Genauigkeit",
-          "description": "-20% Spread für die AK-47 je Stufe.",
+          "label": "Einschießen: Feuerkraft",
+          "description": "Aktiviert die gemeinsame Einschießen-Serie mit bis zu 5 Stacks. Jeder Stack erhöht den AK-Direktschaden um 10%; ein Fehlschuss setzt die Serie zurück.",
           "kind": "upgrade",
-          "maxLevel": 3,
+          "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 180,
-          "requires": [
-            {
-              "upgradeId": "unlock_ak47",
-              "minLevel": 1
-            }
-          ],
+          "requires": [{ "upgradeId": "unlock_ak47", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.spread",
-              "mode": "add_percent_per_level",
-              "value": -0.2
-            }
+            { "stat": "weapon.AK47.ak47Focus.maxStacks", "mode": "add_per_level", "value": 5 },
+            { "stat": "weapon.AK47.ak47Focus.damagePerStack", "mode": "add_per_level", "value": 0.1 }
           ]
         },
         {
-          "id": "ak47_range",
+          "id": "ak47_rhythm",
           "code": "C-W3-2",
-          "label": "Upgrade AK-47: Reichweite",
-          "description": "+10% Reichweite für die AK-47 je Stufe.",
+          "label": "Tödlicher Rhythmus",
+          "description": "+5 Prozentpunkte AK-Schaden je Einschießen-Stack und Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 185,
-          "requires": [
-            {
-              "upgradeId": "ak47_accuracy",
-              "minLevel": 1
-            }
-          ],
+          "requires": [{ "upgradeId": "ak47_firepower", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.range",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
+            { "stat": "weapon.AK47.ak47Focus.damagePerStack", "mode": "add_per_level", "value": 0.05 }
           ]
         },
         {
-          "id": "ak47_adrenaline_cost",
-          "code": "C-W3-4",
-          "label": "Upgrade AK-47: Adrenalin-Verbrauch",
-          "description": "-10% Adrenalin-Verbrauch für die AK-47 je Stufe.",
+          "id": "ak47_rock_destruction",
+          "code": "C-W3-3",
+          "label": "Felszerstörung",
+          "description": "Erhöht den AK-Schaden an echten Felsen um 100% je Stufe und erlaubt Durchbruchsmagazin-Schüssen, mehrere Felsen zu durchdringen.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 190,
-          "requires": [
-            {
-              "upgradeId": "ak47_range",
-              "minLevel": 1
-            }
-          ],
+          "requires": [{ "upgradeId": "ak47_rhythm", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.adrenalinCost",
-              "mode": "add_percent_per_level",
-              "value": -0.1
-            }
+            { "stat": "weapon.AK47.rockDamageMult", "mode": "add_per_level", "value": 1 }
           ]
         },
         {
-          "id": "ak47_focus",
-          "code": "C-W3-C1",
-          "label": "Einschießen",
-          "description": "Aufeinanderfolgende Treffer bauen bis zu 5 Stacks auf. Jeder Stack erhöht den Schaden um 10%. Ein Fehlschuss entfernt alle Stacks.",
-          "kind": "upgrade",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 0,
-          "bossPointCostPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 181,
-          "requires": [
-            {
-              "upgradeId": "unlock_ak47",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.AK47.ak47Focus.maxStacks",
-              "mode": "add_per_level",
-              "value": 5
-            },
-            {
-              "stat": "weapon.AK47.ak47Focus.damagePerStack",
-              "mode": "add_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
-          "id": "ak47_focus_duration",
-          "code": "C-W3-C1-1",
-          "label": "Gekoppeltes Feuer",
-          "description": "Der zusätzliche Schaden durch Einschießen wirkt auch auf Waffe 1.",
+          "id": "ak47_fire_control",
+          "code": "C-W3-4",
+          "label": "Einschießen: Feuerkontrolle",
+          "description": "Aktiviert dieselbe gemeinsame 5-Stack-Serie. Jeder Stack reduziert den Spread um 8%, erhöht Reichweite um 3% und Projektilgeschwindigkeit um 5%.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 186,
-          "requires": [
-            {
-              "upgradeId": "ak47_focus",
-              "minLevel": 1
-            }
-          ],
+          "sortOrder": 182,
+          "requires": [{ "upgradeId": "unlock_ak47", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.ak47Focus.applyDamageToPrimaryWeapon",
-              "mode": "add_per_level",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "id": "ak47_focus_damage",
-          "code": "C-W3-C1-2",
-          "label": "Tödlicher Rhythmus",
-          "description": "+5 Prozentpunkte Schaden je Einschießen-Stack und Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 191,
-          "requires": [
-            {
-              "upgradeId": "ak47_focus_duration",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.AK47.ak47Focus.damagePerStack",
-              "mode": "add_per_level",
-              "value": 0.05
-            }
+            { "stat": "weapon.AK47.ak47Focus.fireControlEnabled", "mode": "add_per_level", "value": 1 },
+            { "stat": "weapon.AK47.ak47Focus.fireControlSpreadPerStack", "mode": "add_per_level", "value": 0.08 },
+            { "stat": "weapon.AK47.ak47Focus.fireControlRangePerStack", "mode": "add_per_level", "value": 0.03 },
+            { "stat": "weapon.AK47.ak47Focus.fireControlProjectileSpeedPerStack", "mode": "add_per_level", "value": 0.05 }
           ]
         },
         {
           "id": "ak47_fire_superiority",
-          "code": "C-W3-C2",
+          "code": "C-W3-C1",
           "label": "Feuerüberlegenheit",
-          "description": "Beim Erreichen der maximalen Einschießen-Stacks werden die nächsten 3 Schüsse zu Durchbruchmunition. Sie durchschlagen alle Gegner ohne Schadensverlust und verbrauchen kein Adrenalin.",
+          "description": "Beim Erreichen von 5 Einschießen-Stacks werden die nächsten 3 Schüsse zu Durchbruchmunition. Sie durchdringen Gegner ohne Schadensverlust und verbrauchen kein Adrenalin.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -1455,72 +1358,78 @@
           "bossPointCostPerLevel": 1,
           "refundable": true,
           "sortOrder": 196,
-          "requires": [
-            {
-              "upgradeId": "ak47_adrenaline_cost",
-              "minLevel": 1
-            },
-            {
-              "upgradeId": "ak47_focus_damage",
-              "minLevel": 1
-            }
-          ],
+          "requires": [{ "upgradeId": "ak47_fire_control", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.ak47Focus.fireSuperiorityShots",
-              "mode": "add_per_level",
-              "value": 3
-            }
+            { "stat": "weapon.AK47.ak47Focus.fireSuperiorityShots", "mode": "add_per_level", "value": 3 }
           ]
         },
         {
-          "id": "ak47_fire_superiority_shots",
-          "code": "C-W3-C2-1",
-          "label": "Größeres Durchbruchsmagazin",
-          "description": "+3 Schüsse Feuerüberlegenheit je Stufe.",
+          "id": "ak47_breakthrough_magazine",
+          "code": "C-W3-C1-1",
+          "label": "Durchbruchsmagazin",
+          "description": "+3 Durchbruchsschüsse je Stufe: 3, 6, 9, dann 12 Schüsse.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 201,
-          "requires": [
-            {
-              "upgradeId": "ak47_fire_superiority",
-              "minLevel": 1
-            }
-          ],
+          "requires": [{ "upgradeId": "ak47_fire_superiority", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.ak47Focus.fireSuperiorityShots",
-              "mode": "add_per_level",
-              "value": 3
-            }
+            { "stat": "weapon.AK47.ak47Focus.fireSuperiorityShots", "mode": "add_per_level", "value": 3 }
           ]
         },
         {
-          "id": "ak47_fire_superiority_damage",
-          "code": "C-W3-C2-2",
-          "label": "Verstärkte Durchbruchskugeln",
-          "description": "+30% Schaden während Feuerüberlegenheit je Stufe.",
+          "id": "ak47_strategic_targets",
+          "code": "C-W3-B2",
+          "label": "Strategische Ziele",
+          "description": "Alle 4 Sekunden wird 4 Sekunden lang ein lebender Gegner markiert. AK-Treffer auf ihn verursachen +25% Direktschaden; ein dort treffender Durchbruchsschuss wird einmalig erstattet.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 204,
+          "requires": [
+            { "upgradeId": "ak47_rock_destruction", "minLevel": 1 },
+            { "upgradeId": "ak47_breakthrough_magazine", "minLevel": 1 }
+          ],
+          "effects": [
+            { "stat": "weapon.AK47.ak47Focus.strategicTargetEnabled", "mode": "add_per_level", "value": 1 },
+            { "stat": "weapon.AK47.ak47Focus.strategicTargetDamageBonus", "mode": "add_per_level", "value": 0.25 }
+          ]
+        },
+        {
+          "id": "ak47_target_prioritization",
+          "code": "C-W3-B2-1",
+          "label": "Zielpriorisierung",
+          "description": "Strategische Ziele werden vor allem nach Cursor-Nähe, danach grober Gegnerstärke und Sichtlinie ausgewählt.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 206,
+          "requires": [{ "upgradeId": "ak47_strategic_targets", "minLevel": 1 }],
+          "effects": [
+            { "stat": "weapon.AK47.ak47Focus.targetPrioritizationEnabled", "mode": "add_per_level", "value": 1 }
+          ]
+        },
+        {
+          "id": "ak47_explosive_target_acquisition",
+          "code": "C-W3-B2-2",
+          "label": "Explosive Zielerfassung",
+          "description": "Jeder direkte AK-Treffer auf das strategische Ziel erzeugt eine kleine Explosion: 35/50/65 px Radius und 20/30/40% des direkten Schadens.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 202,
-          "requires": [
-            {
-              "upgradeId": "ak47_fire_superiority",
-              "minLevel": 1
-            }
-          ],
+          "sortOrder": 207,
+          "requires": [{ "upgradeId": "ak47_strategic_targets", "minLevel": 1 }],
           "effects": [
-            {
-              "stat": "weapon.AK47.ak47Focus.fireSuperiorityDamageBonus",
-              "mode": "add_per_level",
-              "value": 0.3
-            }
+            { "stat": "weapon.AK47.ak47Focus.explosiveTargetAcquisitionLevel", "mode": "add_per_level", "value": 1 }
           ]
         },
         {

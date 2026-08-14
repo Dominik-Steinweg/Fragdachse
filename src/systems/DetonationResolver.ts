@@ -1,4 +1,4 @@
-import type { DamageOverTimeAreaConfig, ExplosionVisualStyle, RadialDamageFalloffConfig } from '../types';
+import type { DamageOverTimeAreaConfig, ExplosionVisualStyle, LoadoutSlot, RadialDamageFalloffConfig } from '../types';
 import type { DetonationEvent } from './DetonationSystem';
 
 /**
@@ -18,6 +18,8 @@ export interface DetonationEffectSink {
     x: number, y: number, radius: number, damage: number,
     attackerId: string,
     falloff: RadialDamageFalloffConfig | undefined,
+    baseDamageMult: number,
+    sourceSlot: LoadoutSlot | undefined,
   ): void;
   /** Radialer Rückstoß auf bewegliche Körper. */
   applyRadialImpulse(
@@ -69,6 +71,8 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     event.x, event.y, effect.aoeRadius, effect.aoeDamage,
     event.detonatorOwnerId,
     effect.damageFalloff,
+    effect.baseDamageMult ?? 1,
+    event.sourceSlot,
   );
 
   if ((effect.knockback ?? 0) > 0) {

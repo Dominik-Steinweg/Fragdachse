@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { ProjectileManager } from '../entities/ProjectileManager';
-import type { DetonableConfig, DetonatorConfig } from '../types';
+import type { DetonableConfig, DetonatorConfig, LoadoutSlot } from '../types';
 
 /**
  * Detonations-Ereignis: entsteht wenn ein Projektion mit DetonableConfig
@@ -15,6 +15,7 @@ export interface DetonationEvent {
   detonatorOwnerId:   string;
   effect:             DetonableConfig;
   weaponName:         string;
+  sourceSlot?:        LoadoutSlot;
 }
 
 /**
@@ -59,6 +60,7 @@ export class DetonationSystem {
     endY:         number,
     shooterId:    string,
     detonatorCfg: DetonatorConfig,
+    sourceSlot?:  LoadoutSlot,
   ): void {
     this.scratchLine.setTo(startX, startY, endX, endY);
 
@@ -76,6 +78,7 @@ export class DetonationSystem {
           detonatorOwnerId:  shooterId,
           effect:            proj.detonable,
           weaponName:        proj.weaponName,
+          sourceSlot:        sourceSlot ?? proj.sourceSlot,
         });
         this.projectileManager.destroyProjectile(proj.id);
       }
@@ -101,6 +104,7 @@ export class DetonationSystem {
       detonatorOwnerId,
       effect:            proj.detonable,
       weaponName:        proj.weaponName,
+      sourceSlot:        proj.sourceSlot,
     });
     this.projectileManager.destroyProjectile(proj.id);
     return true;
@@ -136,6 +140,7 @@ export class DetonationSystem {
             detonatorOwnerId:  det.ownerId,
             effect:            target.detonable,
             weaponName:        target.weaponName,
+            sourceSlot:        target.sourceSlot,
           });
           this.projectileManager.destroyProjectile(target.id);
         }

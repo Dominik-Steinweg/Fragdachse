@@ -102,11 +102,18 @@ const TEAM_HEADER_H = 28;
 const READY_STATUS_OFFSET_X = 23;
 const LOADOUT_ICON_SIZE = 28;
 const LOADOUT_ICON_GAP = 2;
-// Ein kleiner Puffer zum dynamischen LVL-Text verhindert, dass das vierte Icon in dessen
-// Zeichenraum ragt; die vorhandene Icon-Groesse und die HOST-/Ping-Spalte bleiben unveraendert.
-const LOADOUT_LEFT_OFFSET = 154;
-const LEVEL_RIGHT_INSET = 82;
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
+const LOADOUT_CONTENT_W = LOADOUT_ICON_SIZE * LOADOUT_SLOTS.length + LOADOUT_ICON_GAP * (LOADOUT_SLOTS.length - 1);
+const LOADOUT_FRAME_PADDING_X = 3;
+const LOADOUT_FRAME_PADDING_Y = 3;
+const LOADOUT_FRAME_W = LOADOUT_CONTENT_W + LOADOUT_FRAME_PADDING_X * 2;
+const LOADOUT_FRAME_H = LOADOUT_ICON_SIZE + LOADOUT_FRAME_PADDING_Y * 2;
+const LEVEL_COLUMN_LEFT_OFFSET = 154;
+const LEVEL_COLUMN_W = 48;
+/** Das optionale Level sitzt in der Spalte unmittelbar vor dem festen Loadout-Tray. */
+const LEVEL_LEFT_OFFSET = LEVEL_COLUMN_LEFT_OFFSET + LEVEL_COLUMN_W / 2;
+/** Fester Anker des Loadout-Trays direkt vor der Ping-Spalte. */
+const LOADOUT_LEFT_OFFSET = LEVEL_COLUMN_LEFT_OFFSET + LEVEL_COLUMN_W;
 
 // ── Coop-Fortschrittsband (innerhalb des Panels) ─────────────────────────────
 // Sichtbar nur im Coop; dann steht das Panel immer auf seiner vollen Hoehe.
@@ -199,6 +206,7 @@ type PlayerRow = {
   mark:  Phaser.GameObjects.Image;
   level: Phaser.GameObjects.Text;
   ping:  Phaser.GameObjects.Text;
+  loadoutFrame: Phaser.GameObjects.Image;
   loadout: Phaser.GameObjects.Container;
   loadoutSignature: string | null;
 };
@@ -783,7 +791,8 @@ export class LobbyOverlay {
         this.playerContextMenu?.close();
         this.loadoutTooltip?.hide();
         row.bg.destroy(); row.name.destroy(); row.badge.destroy();
-        row.mark.destroy(); row.level.destroy(); row.ping.destroy(); row.loadout.destroy(true);
+        row.mark.destroy(); row.level.destroy(); row.ping.destroy();
+        row.loadoutFrame.destroy(); row.loadout.destroy(true);
         this.playerRows.delete(id);
       }
     }
@@ -1122,12 +1131,17 @@ export class LobbyOverlay {
       .setVisible(false)
       .setScrollFactor(0);
 
-    const level = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - LEVEL_RIGHT_INSET, LIST_Y, '-', textStyle('numS', {
+    const level = this.scene.add.text(CONTENT_L + LEVEL_LEFT_OFFSET, LIST_Y, '-', textStyle('numS', {
       color: COLORS.GREY_3,
     })).setOrigin(0.5).setScrollFactor(0);
 
     const ping = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 10, LIST_Y, '', textStyle('numS'))
       .setOrigin(1, 0.5).setScrollFactor(0);
+    const loadoutFrame = this.scene.add.image(
+      CONTENT_L + LOADOUT_LEFT_OFFSET + LOADOUT_FRAME_W / 2,
+      LIST_Y,
+      this.loadoutFrameTexture(),
+    ).setScrollFactor(0);
     const loadout = this.scene.add.container(CONTENT_L + LOADOUT_LEFT_OFFSET, LIST_Y)
       .setScrollFactor(0);
 
@@ -1144,15 +1158,17 @@ export class LobbyOverlay {
       }
     });
 
-    this.container!.add([bg, name, badge, mark, level, ping, loadout]);
+    this.container!.add([bg, name, badge, mark, level, loadoutFrame, loadout, ping]);
     // Neue Zeilen gleiten herein, statt aufzuploppen.
-    for (const object of [bg, name, badge, mark, level, ping, loadout]) {
+    for (const object of [bg, name, badge, mark, level, loadoutFrame, loadout, ping]) {
       object.setAlpha(0);
       this.scene.tweens.add({
         targets: object, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out,
       });
     }
-    const row: PlayerRow = { bg, name, badge, mark, level, ping, loadout, loadoutSignature: null };
+    const row: PlayerRow = {
+      bg, name, badge, mark, level, ping, loadoutFrame, loadout, loadoutSignature: null,
+    };
     this.playerRows.set(profile.id, row);
     this.refreshPlayerLoadout(profile.id, row);
     this.setPlayerRowInteractive(profile.id, bg);
@@ -1214,7 +1230,7 @@ export class LobbyOverlay {
       const presentation = presentations[index];
       if (!presentation) return;
       const control = createLoadoutSlotControl(this.scene, {
-        x: LOADOUT_ICON_SIZE / 2 + index * slotStep,
+        x: LOADOUT_FRAME_PADDING_X + LOADOUT_ICON_SIZE / 2 + index * slotStep,
         y: 0,
         width: LOADOUT_ICON_SIZE,
         height: LOADOUT_ICON_SIZE,
@@ -1437,8 +1453,9 @@ export class LobbyOverlay {
     row.name.setPosition(left + 40, y);
     row.badge.setPosition(left + READY_STATUS_OFFSET_X, y);
     row.mark.setPosition(left + READY_STATUS_OFFSET_X, y);
-    row.level.setPosition(x + width / 2 - LEVEL_RIGHT_INSET, y);
+    row.level.setPosition(left + LEVEL_LEFT_OFFSET, y);
     row.ping.setPosition(x + width / 2 - 10, y);
+    row.loadoutFrame.setPosition(left + LOADOUT_LEFT_OFFSET + LOADOUT_FRAME_W / 2, y);
     row.loadout.setPosition(left + LOADOUT_LEFT_OFFSET, y);
   }
 
@@ -1469,6 +1486,23 @@ export class LobbyOverlay {
       leftAccentColor: ghost ? undefined : accentColor,
       leftAccentAlpha: ghost ? 0 : own ? 1 : 0.9,
       leftAccentWidth: own ? 7 : 6,
+    });
+  }
+
+  /** Ruhige Tray-Flaeche, die die vier zusammengehoerenden Loadout-Slots klar gruppiert. */
+  private loadoutFrameTexture(): string {
+    return ensureRoundedTexture(this.scene, {
+      key: `_lobby_loadout_tray_${LOADOUT_FRAME_W}x${LOADOUT_FRAME_H}`,
+      w: LOADOUT_FRAME_W,
+      h: LOADOUT_FRAME_H,
+      radius: 7,
+      topColor: COLORS.GREY_7,
+      bottomColor: COLORS.GREY_9,
+      fillAlpha: 0.28,
+      strokeColor: BORDER.default,
+      strokeAlpha: 0.88,
+      strokeWidth: 2,
+      highlightAlpha: 0.04,
     });
   }
 

@@ -28,6 +28,7 @@ export interface FireDamageEvent {
   ownerId: string;
   rockDamageMult: number;
   trainDamageMult: number;
+  baseDamageMult: number;
   weaponName: string;
 }
 
@@ -75,6 +76,7 @@ export interface GroundFireCellOptions {
   allowTeamDamage?: boolean;
   burn?: BurnOnHitConfig;
   igniteProjectiles?: boolean;
+  baseDamageMult?: number;
   weaponName?: string;
   visualStyle?: GroundFireVisualStyle;
   damageTarget?: GroundFireDamageTarget;
@@ -97,6 +99,7 @@ interface ActiveGroundSource {
   igniteProjectiles: boolean;
   rockDamageMult: number;
   trainDamageMult: number;
+  baseDamageMult: number;
   weaponName: string;
   visualStyle: GroundFireVisualStyle;
   damageTarget: GroundFireDamageTarget;
@@ -197,6 +200,7 @@ export class FireSystem {
       igniteProjectiles: false,
       rockDamageMult: config.rockDamageMult ?? 1,
       trainDamageMult: config.trainDamageMult ?? 1,
+      baseDamageMult: config.baseDamageMult ?? 1,
       weaponName: config.weaponName ?? 'Molotov',
       visualStyle: config.visualStyle ?? 'normal',
       damageTarget: config.damageTarget ?? 'all',
@@ -255,6 +259,7 @@ export class FireSystem {
         igniteProjectiles: options.igniteProjectiles === true,
         rockDamageMult: 0,
         trainDamageMult: 0,
+        baseDamageMult: options.baseDamageMult ?? 1,
         weaponName: options.weaponName ?? 'Brennender Boden',
         visualStyle: options.visualStyle ?? 'normal',
         damageTarget: options.damageTarget ?? 'all',
@@ -271,6 +276,7 @@ export class FireSystem {
       source.damagePerTick = Math.max(0, options.damagePerTick ?? 0);
       source.burn = options.burn ? { ...options.burn } : undefined;
       source.igniteProjectiles = options.igniteProjectiles === true;
+      source.baseDamageMult = options.baseDamageMult ?? source.baseDamageMult;
       source.weaponName = options.weaponName ?? source.weaponName;
       source.visualStyle = options.visualStyle ?? source.visualStyle;
       source.damageTarget = options.damageTarget ?? source.damageTarget;
@@ -430,6 +436,7 @@ export class FireSystem {
           ownerId: source.ownerId,
           rockDamageMult: source.rockDamageMult,
           trainDamageMult: source.trainDamageMult,
+          baseDamageMult: source.baseDamageMult,
           weaponName: source.weaponName,
         }))
       : [];

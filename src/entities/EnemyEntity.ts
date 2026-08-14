@@ -21,6 +21,7 @@ import {
 } from '../config/coopDefenseEnemies';
 import type { GroundFireVisualStyle, SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
+import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/PlasmaChargeRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
@@ -95,9 +96,11 @@ export class EnemyEntity {
   private targetAimAngle = 0;
   private hpBarVisibleUntilMs = 0;
   private burnRenderer: EntityBurnRenderer | null = null;
+  private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
   private vulnerableRing: Phaser.GameObjects.Arc | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
+  private plasmaChargeStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
   /** Für die an dieser Entity hängenden Lichtquellen (aktuell: Brand). */
   private lighting: LightingSystem | null = null;
@@ -315,6 +318,21 @@ export class EnemyEntity {
       this.burnRenderer.setLightingSystem(this.lighting, this.burnLightKey());
     }
     this.syncBurnEffect();
+  }
+
+  updatePlasmaChargeStacks(stacks: number): void {
+    this.plasmaChargeStacks = Phaser.Math.Clamp(Math.floor(stacks), 0, MAX_PLASMA_CHARGE_STACKS);
+    if (this.plasmaChargeStacks <= 0) {
+      this.plasmaChargeRenderer?.destroy();
+      this.plasmaChargeRenderer = null;
+      return;
+    }
+    this.plasmaChargeRenderer ??= new PlasmaChargeRenderer(this.sprite.scene);
+    this.syncPlasmaChargeEffect();
+  }
+
+  getPlasmaChargeStacks(): number {
+    return this.plasmaChargeStacks;
   }
 
   /**
@@ -593,6 +611,7 @@ export class EnemyEntity {
     this.syncTimebombFuseVisuals();
     this.syncVoidMolotovWindupVisuals();
     this.syncBurnEffect();
+    this.syncPlasmaChargeEffect();
     this.syncVulnerableMarker();
     if (!this.shouldShowHpBars()) {
       this.destroyHpBars();
@@ -619,6 +638,7 @@ export class EnemyEntity {
       maxHp: this.getMaxHp(),
       burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
       burnVisualStyle: this.burnVisualStyle,
+      plasmaChargeStacks: this.plasmaChargeStacks > 0 ? this.plasmaChargeStacks : undefined,
       faction: this.faction,
       burrowed: this.burrowed,
       dashPhase: this.dashPhase,
@@ -635,6 +655,8 @@ export class EnemyEntity {
     this.destroyHpBars();
     this.burnRenderer?.destroy();
     this.burnRenderer = null;
+    this.plasmaChargeRenderer?.destroy();
+    this.plasmaChargeRenderer = null;
     this.vulnerableRing?.destroy();
     this.vulnerableRing = null;
     this.ownerRing?.destroy();
@@ -661,6 +683,16 @@ export class EnemyEntity {
       this.burnStacks,
       this.sprite.visible && this.currentHp > 0,
       this.burnVisualStyle,
+    );
+  }
+
+  private syncPlasmaChargeEffect(): void {
+    this.plasmaChargeRenderer?.sync(
+      this.sprite.x,
+      this.sprite.y,
+      this.config.size,
+      this.plasmaChargeStacks,
+      this.sprite.visible && this.currentHp > 0 && !this.burrowed,
     );
   }
 

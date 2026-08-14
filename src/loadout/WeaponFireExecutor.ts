@@ -55,6 +55,7 @@ export interface HitscanShotRequest {
   detonator?:      DetonatorConfig;
   rockDamageMult:  number;
   trainDamageMult: number;
+  baseDamageMult:  number;
   chainLightning?: ChainLightningConfig;
   burnOnHit?:      BurnOnHitConfig;
   supportEffect?:  HitscanSupportEffect;
@@ -77,6 +78,7 @@ export interface MeleeSwingRequest {
   sourceSlot?:           WeaponSlot;
   rockDamageMult:        number;
   trainDamageMult:       number;
+  baseDamageMult:        number;
   visualPreset:          MeleeVisualPreset;
   shotAudioKey?:         ShotAudioKey;
   burnOnHit?:            BurnOnHitConfig;
@@ -178,6 +180,9 @@ export class WeaponFireExecutor {
       && ((config.multiExplosionCount ?? 1) > 1 || (config.miniRocketReturnEnabled ?? 0) > 0);
     const isShotgun = (config.pelletCount ?? 1) > 1;
     const hasAwpCorridor = config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0;
+    const plasmaSwarmEnabled = config.id === 'PLASMA'
+      && sourceSlot === 'weapon1'
+      && (config.plasmaSwarmEnabled ?? 0) > 0;
 
     this.sink.spawnProjectile(x, y, angle, ownerId, {
       speed:           fireConfig.projectileSpeed,
@@ -196,6 +201,11 @@ export class WeaponFireExecutor {
       isGrenade:       false,
       adrenalinGain:   config.adrenalinGain,
       weaponName:      config.displayName,
+      plasmaSwarmEnabled,
+      plasmaSwarmProjectileCount: plasmaSwarmEnabled ? config.plasmaSwarmProjectileCount : undefined,
+      plasmaSwarmExplosionRadius: plasmaSwarmEnabled ? config.plasmaSwarmExplosionRadius : undefined,
+      plasmaSwarmExplosionDamage: plasmaSwarmEnabled ? config.plasmaSwarmExplosionDamage : undefined,
+      plasmaSwarmExplosionSlowFraction: plasmaSwarmEnabled ? config.plasmaSwarmExplosionSlowFraction : undefined,
       splitCount:      config.splitCount,
       splitSpread:     config.splitSpread,
       splitFactor:     config.splitFactor,
@@ -206,7 +216,7 @@ export class WeaponFireExecutor {
         // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
         retargetIntervalMs: 100,
         maxTurnDegreesPerStep: 20,
-        targetTypes: ['players', 'enemies'],
+        targetTypes: ['players', 'enemies', 'bases'],
         requireLineOfSight: true,
         excludeOwner: true,
         distanceWeight: 1,
@@ -231,6 +241,7 @@ export class WeaponFireExecutor {
       detonator:       config.detonator,
       rockDamageMult:  config.rockDamageMult,
       trainDamageMult: config.trainDamageMult,
+      baseDamageMult:  config.baseDamageMult ?? 1,
       // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
       burnDurationMs:     config.burnOnHit?.durationMs,
       burnDamagePerTick:  config.burnOnHit?.damagePerTick,
@@ -269,6 +280,7 @@ export class WeaponFireExecutor {
         burnDurationMs: config.awpCharge?.fireTrailBurnDurationMs ?? 0,
         burnDamagePerTick: config.awpCharge?.fireTrailBurnDamagePerTick ?? 0,
         weaponName: 'AWP-Brandspur',
+        baseDamageMult: config.baseDamageMult ?? 1,
       } : undefined,
       fireTrailHalfWidthCells: config.id === 'AWP' ? config.awpCharge?.fireTrailHalfWidthCells : undefined,
       awpCorridorHalfWidth: hasAwpCorridor ? config.awpCharge?.corridorHalfWidth : undefined,
@@ -310,6 +322,7 @@ export class WeaponFireExecutor {
       detonator:       config.detonator,
       rockDamageMult:  config.rockDamageMult  ?? 1,
       trainDamageMult: config.trainDamageMult ?? 1,
+      baseDamageMult:  config.baseDamageMult  ?? 1,
       chainLightning:  config.chainLightning,
       burnOnHit:       config.burnOnHit,
       supportEffect:   fireConfig.supportEffect,
@@ -336,6 +349,7 @@ export class WeaponFireExecutor {
       sourceSlot:            params.sourceSlot as WeaponSlot | undefined,
       rockDamageMult:        config.rockDamageMult  ?? 1,
       trainDamageMult:       config.trainDamageMult ?? 1,
+      baseDamageMult:        config.baseDamageMult  ?? 1,
       visualPreset:          fireConfig.visualPreset ?? 'default',
       shotAudioKey:          config.shotAudio?.successKey,
       burnOnHit:             config.burnOnHit,

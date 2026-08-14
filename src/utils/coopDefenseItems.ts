@@ -402,9 +402,20 @@ function collectStatTotals(item: CoopDefenseItem | null): Map<string, CoopDefens
   return totals;
 }
 
+function collectSpecialEffectTotals(item: CoopDefenseItem | null): Map<string, CoopDefenseItemAffixLine> {
+  const totals = new Map<string, CoopDefenseItemAffixLine>();
+  if (!item) return totals;
+  for (const line of getCoopDefenseItemAffixLines(item)) {
+    // Affix-IDs sind die stabile Identitaet eines besonderen Effekts. Der Text selbst kann
+    // sich durch den gewuerfelten Wert unterscheiden und eignet sich deshalb nicht als Key.
+    totals.set(line.affixId, line);
+  }
+  return totals;
+}
+
 /**
- * Zeilenweiser Vergleich mit dem aktuell ausgeruesteten Item derselben Kategorie. Stats, die nur
- * auf einer Seite vorkommen, erscheinen mit `0` auf der anderen.
+ * Zeilenweiser Vergleich mit dem aktuell ausgeruesteten Item derselben Kategorie. Stats und
+ * besondere Effekte, die nur auf einer Seite vorkommen, erscheinen mit `0` auf der anderen.
  */
 export function compareCoopDefenseItems(
   candidate: CoopDefenseItem,
@@ -427,6 +438,25 @@ export function compareCoopDefenseItems(
       delta: quantizeItemValue(candidateValue - equippedValue),
     });
   }
+
+  const candidateEffects = collectSpecialEffectTotals(candidate);
+  const equippedEffects = collectSpecialEffectTotals(equipped);
+  for (const affixId of new Set([...candidateEffects.keys(), ...equippedEffects.keys()])) {
+    const effect = candidateEffects.get(affixId) ?? equippedEffects.get(affixId)!;
+    const candidateValue = candidateEffects.get(affixId)?.value ?? 0;
+    const equippedValue = equippedEffects.get(affixId)?.value ?? 0;
+    rows.push({
+      // Der Namespace verhindert, dass ein besonderer Effekt mit einem gleichnamigen Stat
+      // kollidiert, und macht die Art der Zeile fuer kuenftige Verbraucher eindeutig.
+      stat: `affix.${affixId}`,
+      label: effect.label,
+      displayAsPercent: effect.displayAsPercent,
+      candidateValue,
+      equippedValue,
+      delta: quantizeItemValue(candidateValue - equippedValue),
+    });
+  }
+
   return rows;
 }
 

@@ -79,6 +79,7 @@ export interface ConfiguredNukeStrike {
 }
 
 interface PowerUpSystemOptions {
+  onPickupCollected?: (playerId: string) => void;
   onNukePickup?: (playerId: string) => boolean | void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
   onConfiguredNukeExploded?: (strike: SyncedNukeStrike) => void;
@@ -448,6 +449,7 @@ export class PowerUpSystem {
         this.objectiveRewardUids.delete(item.objectiveId);
       }
     }
+    this.options.onPickupCollected?.(playerId);
     return true;
   }
 

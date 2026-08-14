@@ -385,6 +385,35 @@ describe('coop-defense item presentation', () => {
     expect(rows[0].equippedValue).toBe(0);
   });
 
+  it('includes special effects that are gained or lost in the comparison', () => {
+    const candidate = item({
+      uid: 'new',
+      slot: 'gloves',
+      baseValue: 0.09,
+      affixes: [{ affixId: 'critical_damage', value: 0.16 }],
+    });
+    const equipped = item({
+      uid: 'old',
+      slot: 'gloves',
+      baseValue: 0.081,
+      affixes: [{ affixId: 'crossfire', value: 0.16 }],
+    });
+
+    const rows = compareCoopDefenseItems(candidate, equipped);
+
+    expect(rows.find((row) => row.stat === 'affix.crossfire')).toMatchObject({
+      label: 'Kreuzfeuer',
+      candidateValue: 0,
+      equippedValue: 0.16,
+      delta: -0.16,
+    });
+    expect(rows.find((row) => row.stat === 'player.criticalDamage')).toMatchObject({
+      candidateValue: 0.16,
+      equippedValue: 0,
+      delta: 0.16,
+    });
+  });
+
   it('rates a falling cost stat as an improvement', () => {
     expect(isCoopDefenseItemImprovement('player.adrenalineCost', -0.05)).toBe(true);
     expect(isCoopDefenseItemImprovement('player.adrenalineCost', 0.05)).toBe(false);

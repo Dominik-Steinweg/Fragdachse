@@ -16,6 +16,7 @@
       "maxBounces": 3,
       "aoeRadius": 120,
       "aoeDamage": 60,
+      "baseDamageMult": 2.0,
       "damageFalloff": {
         "minDamage": 10
       },

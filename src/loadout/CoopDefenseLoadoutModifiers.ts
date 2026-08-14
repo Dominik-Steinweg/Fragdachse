@@ -90,6 +90,11 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'PLASMA',
     targets: [{ path: ['fire', 'projectileSpeed'], formula: 'scale' }],
   },
+  'weapon.PLASMA.range': {
+    kind: 'weapon',
+    itemId: 'PLASMA',
+    targets: [{ path: ['range'], formula: 'scale' }],
+  },
   'weapon.PLASMA.adrenalinGain': {
     kind: 'weapon',
     itemId: 'PLASMA',
@@ -280,6 +285,14 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'ROCKET_LAUNCHER',
     targets: [{ path: ['damage'], formula: 'scale' }],
   },
+  'weapon.ROCKET_LAUNCHER.impactExplosion.damage': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [
+      { path: ['fire', 'impactExplosion', 'maxDamage'], formula: 'scale' },
+      { path: ['fire', 'impactExplosion', 'minDamage'], formula: 'scale' },
+    ],
+  },
   'weapon.ROCKET_LAUNCHER.blackHoleDurationMs': {
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
@@ -289,31 +302,6 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
     targets: [{ path: ['fire', 'impactExplosion', 'blackHolePullStrength'], formula: 'scale' }],
-  },
-  'weapon.AK47.range': {
-    kind: 'weapon',
-    itemId: 'AK47',
-    targets: [{ path: ['range'], formula: 'scale' }],
-  },
-  'weapon.AK47.spread': {
-    kind: 'weapon',
-    itemId: 'AK47',
-    targets: [
-      { path: ['spreadStanding'], formula: 'scale' },
-      { path: ['spreadMoving'], formula: 'scale' },
-      { path: ['spreadPerShot'], formula: 'scale' },
-      { path: ['maxDynamicSpread'], formula: 'scale' },
-    ],
-  },
-  'weapon.AK47.damage': {
-    kind: 'weapon',
-    itemId: 'AK47',
-    targets: [{ path: ['damage'], formula: 'scale' }],
-  },
-  'weapon.AK47.adrenalinCost': {
-    kind: 'weapon',
-    itemId: 'AK47',
-    targets: [{ path: ['adrenalinCost'], formula: 'scale' }],
   },
   'weapon.SHOTGUN.pelletCount': {
     kind: 'weapon',

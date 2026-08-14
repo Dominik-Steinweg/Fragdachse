@@ -134,6 +134,7 @@ export interface StinkCloudDamageEvent {
   ownerId:        string;
   rockDamageMult: number;
   trainDamageMult: number;
+  baseDamageMult: number;
   visualVariant?: DamageZoneVisualStyle;
 }
 
@@ -148,6 +149,7 @@ interface ActiveStinkCloud {
   tickInterval:   number;       // ms
   rockDamageMult: number;
   trainDamageMult: number;
+  baseDamageMult: number;
   visualVariant:  DamageZoneVisualStyle;
   followOwner:    boolean;
   x:              number;
@@ -253,6 +255,7 @@ export class StinkCloudSystem {
     tickInterval: number,
     rockDamageMult: number,
     trainDamageMult: number,
+    baseDamageMult = 1,
     afterCloudDurationMs = 0,
     afterCloudRadiusFactor = 0,
     afterCloudDamageFactor = 0,
@@ -269,6 +272,7 @@ export class StinkCloudSystem {
       tickInterval,
       rockDamageMult,
       trainDamageMult,
+      baseDamageMult,
       visualVariant,
       followOwner: true,
       x: 0,
@@ -292,6 +296,7 @@ export class StinkCloudSystem {
     tickInterval: number,
     rockDamageMult: number,
     trainDamageMult: number,
+    baseDamageMult = 1,
     visualVariant: DamageZoneVisualStyle = 'spore',
   ): void {
     const now = Date.now();
@@ -305,6 +310,7 @@ export class StinkCloudSystem {
       tickInterval,
       rockDamageMult,
       trainDamageMult,
+      baseDamageMult,
       visualVariant,
       followOwner: false,
       x,
@@ -362,6 +368,7 @@ export class StinkCloudSystem {
           ownerId:         zone.ownerId,
           rockDamageMult:  zone.rockDamageMult,
           trainDamageMult: zone.trainDamageMult,
+          baseDamageMult:  zone.baseDamageMult,
           visualVariant:   zone.visualVariant,
         });
       }
@@ -460,6 +467,7 @@ export class StinkCloudSystem {
       zone.tickInterval,
       zone.rockDamageMult,
       zone.trainDamageMult,
+      zone.baseDamageMult,
       'stink',
     );
   }

@@ -103,6 +103,27 @@ describe('coop-defense item tooltip', () => {
     expect(loss.color).toBe(COLORS.RED_2);
   });
 
+  it('shows a lost special effect in red during the item comparison', () => {
+    const content = buildCoopDefenseItemTooltip(
+      item({
+        uid: 'new',
+        slot: 'gloves',
+        baseValue: 0.09,
+        affixes: [{ affixId: 'critical_damage', value: 0.16 }],
+      }),
+      item({
+        uid: 'old',
+        slot: 'gloves',
+        baseValue: 0.081,
+        affixes: [{ affixId: 'crossfire', value: 0.16 }],
+      }),
+      false,
+    );
+    const lostEffect = content.lines.find((line) => line.text === '-16 % Kreuzfeuer');
+
+    expect(lostEffect?.color).toBe(COLORS.RED_2);
+  });
+
   it('reads a lower cost as an improvement, not as a loss', () => {
     const helmet = (cost: number, uid: string): CoopDefenseItem => item({
       uid, slot: 'helmet', rarity: 'blue', baseValue: 0.06,

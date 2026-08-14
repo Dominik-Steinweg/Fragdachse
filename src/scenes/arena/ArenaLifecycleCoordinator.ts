@@ -34,6 +34,7 @@ import { RepairDroneSystem } from '../../systems/RepairDroneSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
 import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
+import { Ak47StrategicTargetSystem } from '../../systems/Ak47StrategicTargetSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseSurvivalSystem } from '../../systems/CoopDefenseSurvivalSystem';
@@ -89,6 +90,7 @@ import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
 import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
+import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
@@ -363,7 +365,7 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  hostSaveRoundResults(roundEndedAt = Date.now()): void {
+  hostSaveRoundResults(roundEndedAt = Date.now(), countPvpMatch = false): void {
     if (!bridge.isHost()) return;
     const gameMode = bridge.getGameMode();
     const roundState = bridge.getRoundState();
@@ -395,6 +397,11 @@ export class ArenaLifecycleCoordinator {
         };
       });
     bridge.publishRoundResults(results);
+    if (countPvpMatch && !isCoopDefenseMode(gameMode)) {
+      const winnerIds = resolvePvpWinnerIds(gameMode, results);
+      bridge.recordCompletedPvpMatch([...eligibleIds], winnerIds);
+    }
+    bridge.hostPublishRoomStatistics();
   }
 
   hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
@@ -419,7 +426,7 @@ export class ArenaLifecycleCoordinator {
       bridge.publishRoundState(null);
     }
 
-    this.hostSaveRoundResults(roundEndedAt);
+    this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
     bridge.publishCoopDefenseSurvivalState(null);
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
@@ -1257,6 +1264,7 @@ export class ArenaLifecycleCoordinator {
       }
     });
     this.ctx.combatSystem.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind) => {
+      bridge.recordPlayerDamageTaken(playerId, hpLost, armorLost);
       const runtime = this.ctx.coopDefenseItemRuntimeSystem;
       if (!runtime) return;
       const result = runtime.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind);
@@ -1288,6 +1296,12 @@ export class ArenaLifecycleCoordinator {
       }
 
       bridge.addPlayerRoomDamage(attackerId, damage);
+    });
+    this.ctx.combatSystem.setHealingReceivedHandler((playerId, amount) => {
+      bridge.recordHealingReceived(playerId, amount);
+    });
+    this.ctx.combatSystem.setArmorReceivedHandler((playerId, amount) => {
+      bridge.recordArmorReceived(playerId, amount);
     });
     this.ctx.guardianSpiritSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
       ? new GuardianSpiritSystem(
@@ -1372,18 +1386,7 @@ export class ArenaLifecycleCoordinator {
     });
     // Ein Trichter fuer allen Basisschaden – dieselbe Verdrahtung wie bei Felsen und Zug, damit
     // Klassen- und Item-Multiplikatoren auch hier greifen.
-    this.ctx.combatSystem.setBaseDamageCallback((baseId, damage, attackerId, sourceSlot) => {
-      const conditionalBonus = sourceSlot
-        ? (this.ctx.coopDefenseItemRuntimeSystem?.getConditionalOutgoingDamageBonus(attackerId, sourceSlot) ?? 0)
-        : 0;
-      const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
-        attackerId,
-        `base:${baseId}`,
-        damage,
-        false,
-        Math.random,
-        conditionalBonus,
-      ).amount ?? damage;
+    this.ctx.combatSystem.setBaseDamageCallback((baseId, damage, attackerId) => {
       const base = this.ctx.baseManager?.getBase(baseId);
       // Vor dem Schaden anrechnen: Der tödliche Treffer löst den Destroy-Callback noch in
       // applyDamage() aus, und der bucht die Bonus-XP bereits gegen diese Anrechnung. Der
@@ -1393,7 +1396,7 @@ export class ArenaLifecycleCoordinator {
       if (objectiveId && bridge.canPlayerReceiveRoundRewards(attackerId)) {
         this.ctx.coopDefenseSecondaryObjectiveSystem?.reportTargetContribution(objectiveId, baseId);
       }
-      base?.applyDamage(resolvedDamage);
+      base?.applyDamage(damage);
     });
     this.ctx.combatSystem.setTrainDamageCallback((damage, attackerId) => {
       const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
@@ -1416,7 +1419,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
-      bridge.incrementPlayerRoomDeaths(playerId);
+      bridge.recordPlayerDeath(playerId);
       this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
       this.ctx.coopDefenseSurvivalSystem?.handlePlayerDeath(playerId);
       if (this.ctx.coopDefenseSurvivalSystem) {
@@ -1730,6 +1733,20 @@ export class ArenaLifecycleCoordinator {
           this.ctx.fireSystem,
         )
         : null;
+      this.ctx.ak47StrategicTargetSystem = this.ctx.enemyManager
+        ? new Ak47StrategicTargetSystem(
+          this.ctx.playerManager,
+          this.ctx.enemyManager,
+          this.ctx.combatSystem,
+          this.ctx.loadoutManager,
+        )
+        : null;
+      this.ctx.loadoutManager.setAk47StrategicTargetHitResolver((playerId, enemyId) => (
+        this.ctx.ak47StrategicTargetSystem?.isCurrentTarget(playerId, enemyId) ?? false
+      ));
+      this.ctx.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId) => (
+        this.ctx.ak47StrategicTargetSystem?.handleDirectAk47EnemyHit(projectile, enemyId) ?? null
+      ));
       this.ctx.loadoutManager.setNegevKillstreakExplosionHandler((event) => {
         bridge.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
         this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
@@ -1840,6 +1857,15 @@ export class ArenaLifecycleCoordinator {
           const player = this.ctx.playerManager.getPlayer(playerId);
           if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
+      });
+      this.ctx.loadoutManager.setUtilityUsedObserver((playerId, utilityType) => {
+        bridge.recordUtilityUsed(playerId);
+        if (utilityType === 'placeable_rock' || utilityType === 'placeable_turret' || utilityType === 'placeable_pedestal') {
+          bridge.recordConstructionBuilt(playerId);
+        }
+      });
+      this.ctx.loadoutManager.setUltimateUsedObserver((playerId) => {
+        bridge.recordUltimateUsed(playerId);
       });
       this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
@@ -1992,6 +2018,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.combatSystem.setDecoySystem(this.ctx.decoySystem);
 
       this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
+        onPickupCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
         onNukePickup: (playerId) => {
           return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1) ?? false;
         },
@@ -2174,6 +2201,13 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
 
       this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y, source) => {
+        if (bridge.getPlayerProfile(killerId)) {
+          if (bridge.getPlayerProfile(victimId) && bridge.isEnemyPair(killerId, victimId)) {
+            bridge.recordPlayerKill(killerId, 'pvp');
+          } else if (this.ctx.enemyManager?.getEnemy(victimId)?.faction === 'hostile') {
+            bridge.recordPlayerKill(killerId, 'pve');
+          }
+        }
         this.ctx.loadoutManager?.handleKill(killerId, weapon, x, y, source);
         if (isCoopDefenseMode(bridge.getGameMode()) && (source?.enemyXp ?? 0) > 0) {
           this.hostHandleCoopDefenseItemKill(killerId, victimId, x, y);
@@ -2459,6 +2493,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setDirectPrimaryHitHandler(null);
     this.ctx.combatSystem.setPlayerDamageTakenHandler(null);
     this.ctx.combatSystem.setDamageDealtHandler(null);
+    this.ctx.combatSystem.setHealingReceivedHandler(null);
+    this.ctx.combatSystem.setArmorReceivedHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
@@ -2492,6 +2528,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.detonationSystem?.reset();
     this.ctx.detonationSystem = null;
     this.ctx.loadoutManager?.setCombatSystem(null);
+    this.ctx.loadoutManager?.setAk47StrategicTargetHitResolver(null);
     this.ctx.loadoutManager?.setTeslaDomeSystem(null);
     this.ctx.loadoutManager?.setEnergyShieldSystem(null);
     this.ctx.loadoutManager?.setShieldBuffSystem(null);
@@ -2499,6 +2536,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setDecoySystem(null);
     this.ctx.loadoutManager?.setPlaceableRockHandler(null);
     this.ctx.loadoutManager?.setTunnelPlacementHandler(null);
+    this.ctx.loadoutManager?.setUtilityUsedObserver(null);
+    this.ctx.loadoutManager?.setUltimateUsedObserver(null);
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
     this.ctx.loadoutManager?.resetAllUltimateStates();
     // Temporary utility state belongs to the round. Clear it centrally before the manager is
@@ -2509,9 +2548,12 @@ export class ArenaLifecycleCoordinator {
       }
     }
     this.ctx.loadoutManager = null;
+    this.ctx.ak47StrategicTargetSystem?.clear();
+    this.ctx.ak47StrategicTargetSystem = null;
     this.ctx.combatSystem.setBurrowSystem(null);
     this.ctx.combatSystem.setResourceSystem(null);
     this.ctx.combatSystem.setLoadoutManager(null);
+    this.ctx.combatSystem.setAk47DirectEnemyHitHandler(null);
     this.ctx.combatSystem.setEnergyShieldSystem(null);
     this.ctx.combatSystem.setDecoySystem(null);
     this.ctx.combatSystem.setPowerUpSystem(null);
@@ -3066,6 +3108,7 @@ export class ArenaLifecycleCoordinator {
       gridX: construction.gridX,
       gridY: construction.gridY,
     });
+    bridge.recordConstructionBuilt(playerId);
     return { ok: true };
   }
 
@@ -3242,6 +3285,7 @@ export class ArenaLifecycleCoordinator {
       proj.impactCloud.tickInterval,
       proj.impactCloud.rockDamageMult ?? 1,
       proj.impactCloud.trainDamageMult ?? 1,
+      proj.impactCloud.baseDamageMult ?? 1,
       proj.impactCloud.visualVariant,
     );
   }

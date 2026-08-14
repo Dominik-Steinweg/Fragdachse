@@ -613,6 +613,13 @@ export class ProjectileManager {
       isGrenade:      cfg.isGrenade,
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
+      plasmaSwarmEnabled: cfg.plasmaSwarmEnabled,
+      plasmaSwarmProjectile: cfg.plasmaSwarmProjectile,
+      plasmaSwarmOriginEnemyId: cfg.plasmaSwarmOriginEnemyId,
+      plasmaSwarmProjectileCount: cfg.plasmaSwarmProjectileCount,
+      plasmaSwarmExplosionRadius: cfg.plasmaSwarmExplosionRadius,
+      plasmaSwarmExplosionDamage: cfg.plasmaSwarmExplosionDamage,
+      plasmaSwarmExplosionSlowFraction: cfg.plasmaSwarmExplosionSlowFraction,
       explosion:      cfg.explosion,
       enemyHitExplosion: cfg.enemyHitExplosion,
       impactCloud:    cfg.impactCloud,
@@ -634,6 +641,7 @@ export class ProjectileManager {
       detonator:       cfg.detonator,
       rockDamageMult:  cfg.rockDamageMult,
       trainDamageMult: cfg.trainDamageMult,
+      baseDamageMult:   cfg.baseDamageMult,
       sourceSlot:      cfg.sourceSlot,
       shotAudioKey:    cfg.shotAudioKey,
       splitCount:      cfg.splitCount,
@@ -1697,6 +1705,7 @@ export class ProjectileManager {
         detonator: proj.detonator,
         rockDamageMult: proj.rockDamageMult,
         trainDamageMult: proj.trainDamageMult,
+        baseDamageMult: proj.baseDamageMult,
         isFlame: proj.isFlame,
         hitboxGrowRate: proj.hitboxGrowRate,
         hitboxMaxSize: proj.hitboxMaxSize,
@@ -2081,6 +2090,18 @@ export class ProjectileManager {
     if (impactTargetKey) proj.multiExplosionExcludedTargetKeys?.add(impactTargetKey);
     this.queueProjectileExplosion(proj, true);
     return true;
+  }
+
+  /** Host: queue an explosion that is not attached to a projectile (e.g. Plasma Swarm). */
+  queueStandaloneExplosion(
+    x: number,
+    y: number,
+    ownerId: string,
+    effect: import('../types').ProjectileExplosionConfig,
+    sourceSlot?: import('../types').LoadoutSlot,
+    weaponName?: string,
+  ): void {
+    this.pendingProjectileExplosions.push({ x, y, ownerId, effect, sourceSlot, weaponName });
   }
 
   resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {

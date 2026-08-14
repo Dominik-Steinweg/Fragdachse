@@ -29,6 +29,9 @@ export class CoopDefenseXpDebugOverlay {
       classesUnlocked: boolean,
     ) => void,
     private readonly onResetCharacter: () => void,
+    private readonly getBalanceRecordingEnabled: () => boolean = () => false,
+    private readonly onBalanceRecordingChanged: (enabled: boolean) => void = () => undefined,
+    private readonly onOpenBalanceReport: () => void = () => undefined,
   ) {}
 
   show(): void {
@@ -76,6 +79,62 @@ export class CoopDefenseXpDebugOverlay {
       lineHeight: '1.4',
       textAlign: 'center',
     });
+
+    const balanceSection = document.createElement('div');
+    Object.assign(balanceSection.style, {
+      borderTop: `1px solid ${toCssColor(COLORS.GREY_6)}`,
+      borderBottom: `1px solid ${toCssColor(COLORS.GREY_6)}`,
+      padding: '10px 0',
+      marginBottom: '14px',
+    });
+    const balanceTitle = document.createElement('div');
+    balanceTitle.innerText = 'BALANCE LAB · 1P';
+    Object.assign(balanceTitle.style, {
+      fontSize: '13px',
+      fontWeight: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+      textAlign: 'center',
+      marginBottom: '7px',
+    });
+    const balanceControls = document.createElement('div');
+    Object.assign(balanceControls.style, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '8px',
+    });
+    const balanceToggle = document.createElement('label');
+    Object.assign(balanceToggle.style, {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '7px',
+      color: toCssColor(COLORS.GREY_2),
+      fontSize: '12px',
+      cursor: 'pointer',
+    });
+    const balanceCheckbox = document.createElement('input');
+    balanceCheckbox.type = 'checkbox';
+    balanceCheckbox.checked = this.getBalanceRecordingEnabled();
+    balanceCheckbox.addEventListener('change', () => this.onBalanceRecordingChanged(balanceCheckbox.checked));
+    Object.assign(balanceCheckbox.style, { width: '16px', height: '16px', accentColor: toCssColor(COLORS.GOLD_1) });
+    const balanceLabel = document.createElement('span');
+    balanceLabel.innerText = 'Runden aufzeichnen';
+    balanceToggle.append(balanceCheckbox, balanceLabel);
+    const balanceReportButton = document.createElement('button');
+    balanceReportButton.type = 'button';
+    balanceReportButton.innerText = 'Auswertung öffnen';
+    Object.assign(balanceReportButton.style, {
+      padding: '6px 8px',
+      border: `1px solid ${toCssColor(COLORS.GREY_5)}`,
+      backgroundColor: toCssColor(COLORS.GREY_8),
+      color: toCssColor(COLORS.GREY_1),
+      cursor: 'pointer',
+      fontFamily: 'monospace',
+      fontSize: '11px',
+    });
+    balanceReportButton.onclick = () => this.onOpenBalanceReport();
+    balanceControls.append(balanceToggle, balanceReportButton);
+    balanceSection.append(balanceTitle, balanceControls);
 
     const setNumberInputValue = (input: HTMLInputElement, value: number): void => {
       const serializedValue = String(sanitizeNumberInput(String(value)));
@@ -315,6 +374,7 @@ export class CoopDefenseXpDebugOverlay {
     popup.append(
       title,
       subtitle,
+      balanceSection,
       xpLabel,
       xpInput,
       bossPointsLabel,
