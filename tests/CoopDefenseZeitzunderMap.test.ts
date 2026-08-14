@@ -41,7 +41,7 @@ describe('Map 16 - Zeitzünder', () => {
       .flatMap((base) => base.turrets ?? [])
       .map((turret) => turret.weaponId);
     expect(friendlyOutpostTurrets.length).toBeGreaterThan(0);
-    expect(friendlyOutpostTurrets.every((weaponId) => weaponId === 'FLIEGENPILZ_PLASMA')).toBe(true);
+    expect(friendlyOutpostTurrets.every((weaponId) => weaponId === 'SPORE_TURRET_PLASMA')).toBe(true);
     expect(map.powerUps.length).toBeGreaterThan(0);
   });
 

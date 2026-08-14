@@ -308,7 +308,7 @@ export class PlacementSystem {
       secondProjectileDamageFactor: cfg.placeable.kind === 'turret' ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
       targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
       turretWeaponId: cfg.placeable.kind === 'turret' && (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
-        ? 'FLIEGENPILZ_PLASMA'
+        ? 'SPORE_TURRET_PLASMA'
         : undefined,
       energyInjectorEffect: cfg.placeable.kind === 'turret'
         ? cfg.placeable.energyInjectorEffect

@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+﻿import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
@@ -25,13 +25,13 @@ import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
 
-/** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
+/** Minimale Body-LÃ¤nge (px) entlang der Flugrichtung â€“ Anti-Tunneling. */
 const MIN_BODY_LEN = 10;
 
-/** Leaf-Blower-Hinderniskörper kleiner als die Treffer-/Visualfläche halten. */
+/** Leaf-Blower-HinderniskÃ¶rper kleiner als die Treffer-/VisualflÃ¤che halten. */
 const LEAF_BLOWER_OBSTACLE_BODY_SCALE = 0.6;
 
-/** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
+/** Client-seitiger Projektil-State fÃ¼r Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
   serverX: number;
   serverY: number;
@@ -73,84 +73,84 @@ export class ProjectileManager {
   private nextId        = 0;
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
 
-  // ── Client-Extrapolation ──────────────────────────────────────────────────
+  // â”€â”€ Client-Extrapolation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private clientProjStates = new Map<number, ClientProjectileState>();
 
-  // ── Bullet-Renderer (Enhanced Bullet Visuals) ─────────────────────────────
+  // â”€â”€ Bullet-Renderer (Enhanced Bullet Visuals) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private bulletRenderer: BulletRenderer | null = null;
 
-  // ── Flame-Renderer (Flammenwerfer-Partikel) ───────────────────────────────
+  // â”€â”€ Flame-Renderer (Flammenwerfer-Partikel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private flameRenderer: FlameRenderer | null = null;
   private projectileBurnRenderer: ProjectileBurnRenderer | null = null;
 
-  // ── Leaf-Blower-Renderer (Luftstrom + Blätter) ────────────────────────────
+  // â”€â”€ Leaf-Blower-Renderer (Luftstrom + BlÃ¤tter) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private leafBlowerRenderer: LeafBlowerRenderer | null = null;
 
-  // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
+  // â”€â”€ BFG-Renderer (BFG-Partikel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private bfgRenderer: BfgRenderer | null = null;
 
-  // ── Energy-Ball-Renderer (ASMD Secondary) ───────────────────────────────
+  // â”€â”€ Energy-Ball-Renderer (ASMD Secondary) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private energyBallRenderer: EnergyBallRenderer | null = null;
 
-  // ── Hydra-Renderer (split-bounce energy projectile) ─────────────────────
+  // â”€â”€ Hydra-Renderer (split-bounce energy projectile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private hydraRenderer: HydraRenderer | null = null;
 
-  // ── Gauss-Renderer (elektrische Overlay-Visuals) ───────────────────────
+  // â”€â”€ Gauss-Renderer (elektrische Overlay-Visuals) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private gaussRenderer: GaussRenderer | null = null;
 
-  // ── Grenade-Renderer (HE/Smoke/Molotov) ────────────────────────────────
+  // â”€â”€ Grenade-Renderer (HE/Smoke/Molotov) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private grenadeRenderer: GrenadeRenderer | null = null;
 
-  // ── Holy-Grenade-Renderer (goldene Granate mit Kreuzstift) ─────────────
+  // â”€â”€ Holy-Grenade-Renderer (goldene Granate mit Kreuzstift) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private holyGrenadeRenderer: HolyGrenadeRenderer | null = null;
 
-  // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
+  // â”€â”€ Rocket-Renderer (RaketenkÃ¶rper + Rauchspur) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private rocketRenderer: RocketRenderer | null = null;
   private fireballRenderer: FireballRenderer | null = null;
 
-  // ── Spore-Renderer (organische Cluster + toxische Spur) ────────────────
+  // â”€â”€ Spore-Renderer (organische Cluster + toxische Spur) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private sporeRenderer: SporeRenderer | null = null;
 
-  // ── Translocator-Puck-Renderer ──────────────────────────────────────────
+  // â”€â”€ Translocator-Puck-Renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private translocatorPuckRenderer: import('../effects/TranslocatorPuckRenderer').TranslocatorPuckRenderer | null = null;
 
 
-  // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
+  // â”€â”€ Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) â”€â”€â”€â”€â”€â”€â”€
   private tracerRenderer: TracerRenderer | null = null;
 
-  // ── MuzzleFlash-Renderer (lokales Schuss-Feedback, kein Netzstate) ───────
+  // â”€â”€ MuzzleFlash-Renderer (lokales Schuss-Feedback, kein Netzstate) â”€â”€â”€â”€â”€â”€â”€
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
   private timeBubbleFactorProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
 
-  // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
+  // â”€â”€ BFG Laser-Callback (Host-only, injiziert von ArenaScene) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
   private proximityArcCallback: ((proj: TrackedProjectile) => void) | null = null;
   private naturalFlameExpiryCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
-  // ── Homing-Zielsuche (Host-only, injiziert von ArenaScene) ──────────────
+  // â”€â”€ Homing-Zielsuche (Host-only, injiziert von ArenaScene) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private readonly homingController = new ProjectileHomingController();
 
-  // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
+  // â”€â”€ Host: gepufferte Explosionen explosiver Projektile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private pendingProjectileExplosions: ExplodedProjectile[] = [];
   private projectileImpactCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private projectileResolvedCallback: ((proj: TrackedProjectile) => void) | null = null;
   private miniRocketCollectedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private miniRocketDestroyedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
-  // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
+  // â”€â”€ Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private rockObjects: (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
-  /** Geteilte räumliche Vorauswahl aus dem `CombatSystem` (siehe `setObstacleIndex`). */
+  /** Geteilte rÃ¤umliche Vorauswahl aus dem `CombatSystem` (siehe `setObstacleIndex`). */
   private obstacleIndex: ArenaObstacleIndex | null = null;
   /** Ziel der Kandidaten-Bounds bzw. des bislang besten Treffers (keine Allokation pro Fels). */
   private readonly scratchObstacleRect = new Phaser.Geom.Rectangle();
   private readonly bestRockRect        = new Phaser.Geom.Rectangle();
   /**
    * Coop-Defense-Basis-Gruppe. Wird vom ProjectileManager wie trunkGroup
-   * behandelt: physische Kollision/Impact; direkter Schaden wird über den
+   * behandelt: physische Kollision/Impact; direkter Schaden wird Ã¼ber den
    * zentralen Basistreffer-Callback weitergeleitet.
    */
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -159,7 +159,7 @@ export class ProjectileManager {
   private onBaseHit:   ((baseId: string, damage: number, attackerId: string, projectile?: TrackedProjectile) => void) | null = null;
   private onSupportImpact: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null = null;
 
-  // ── Zug-Kollision ─────────────────────────────────────────────────────────
+  // â”€â”€ Zug-Kollision â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private onTrainHit:  ((damage: number, attackerId: string) => void) | null = null;
 
@@ -167,10 +167,10 @@ export class ProjectileManager {
     this.scene = scene;
   }
 
-  // ── Gruppen injizieren (nach buildDynamic) ─────────────────────────────────
+  // â”€â”€ Gruppen injizieren (nach buildDynamic) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Setzt die Kollisions-Gruppen für Felsen und Trunks.
+   * Setzt die Kollisions-Gruppen fÃ¼r Felsen und Trunks.
    * Wird nach Arena-Aufbau aufgerufen; bei null (Lobby-Teardown) alles leeren.
    */
   setRockGroup(
@@ -184,8 +184,8 @@ export class ProjectileManager {
   }
 
   /**
-   * Übernimmt den Hindernis-Index des `CombatSystem` für die kontinuierliche
-   * Fels-Kollision. Ohne Index fällt die Prüfung auf den vollständigen Scan zurück.
+   * Ãœbernimmt den Hindernis-Index des `CombatSystem` fÃ¼r die kontinuierliche
+   * Fels-Kollision. Ohne Index fÃ¤llt die PrÃ¼fung auf den vollstÃ¤ndigen Scan zurÃ¼ck.
    */
   setObstacleIndex(index: ArenaObstacleIndex | null): void {
     this.obstacleIndex = index;
@@ -214,7 +214,7 @@ export class ProjectileManager {
    * Meldet einen Basistreffer genau einmal je Projektil und Basis.
    *
    * Die Entprellung ist Pflicht: Overlap-Waffen wie BFG und Gauss beruehren jede Zelle einer
-   * Basis einzeln und wuerden eine 17-Zellen-Basis sonst pro Schuss 17-mal treffen – dasselbe
+   * Basis einzeln und wuerden eine 17-Zellen-Basis sonst pro Schuss 17-mal treffen â€“ dasselbe
    * Problem, das fuer Felsen bereits ueber `bfgHitRocks` geloest ist.
    */
   private applyBaseHit(tracked: TrackedProjectile, baseObject: Phaser.GameObjects.GameObject): void {
@@ -254,7 +254,7 @@ export class ProjectileManager {
   }
 
   /**
-   * Setzt die StaticGroup des Zugs für Projektil-Kollision (Host-only).
+   * Setzt die StaticGroup des Zugs fÃ¼r Projektil-Kollision (Host-only).
    * null = kein Zug aktiv (deaktiviert die Kollision).
    */
   setTrainGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void {
@@ -270,7 +270,7 @@ export class ProjectileManager {
   }
 
   /**
-   * Injiziert den BulletRenderer für verbesserte Bullet-Darstellung.
+   * Injiziert den BulletRenderer fÃ¼r verbesserte Bullet-Darstellung.
    * null = deaktiviert (Fallback auf einfache Shapes).
    */
   setBulletRenderer(renderer: BulletRenderer | null): void {
@@ -278,7 +278,7 @@ export class ProjectileManager {
   }
 
   /**
-   * Injiziert den FlameRenderer für Flammenwerfer-Darstellung.
+   * Injiziert den FlameRenderer fÃ¼r Flammenwerfer-Darstellung.
    * null = deaktiviert.
    */
   setFlameRenderer(renderer: FlameRenderer | null): void {
@@ -300,7 +300,7 @@ export class ProjectileManager {
     this.leafBlowerRenderer = renderer;
   }
 
-  /** Injiziert den BfgRenderer für BFG-Projektil-Darstellung. */
+  /** Injiziert den BfgRenderer fÃ¼r BFG-Projektil-Darstellung. */
   setBfgRenderer(renderer: BfgRenderer | null): void {
     this.bfgRenderer = renderer;
   }
@@ -349,7 +349,7 @@ export class ProjectileManager {
     this.translocatorPuckRenderer = renderer;
   }
 
-  /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
+  /** Injiziert den TracerRenderer fÃ¼r data-driven Leuchtlinien. */
   setTracerRenderer(renderer: TracerRenderer | null): void {
     this.tracerRenderer = renderer;
   }
@@ -371,7 +371,7 @@ export class ProjectileManager {
     this.timeBubbleFactorProvider = provider;
   }
 
-  /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
+  /** Registriert den Callback fÃ¼r BFG-Laser-Salven (Host-only). */
   setBfgLaserCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
     this.bfgLaserCallback = cb;
   }
@@ -396,26 +396,26 @@ export class ProjectileManager {
     this.miniRocketDestroyedCallback = cb;
   }
 
-  /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
+  /** Registriert die Host-seitige Zielquelle fÃ¼r Homing-Projektile. */
   setHomingTargetProvider(cb: HomingTargetProvider | null): void {
     this.homingController.setTargetProvider(cb);
   }
 
-  /** Registriert die Host-seitige Line-of-Fire-Prüfung für Homing-Projektile. */
+  /** Registriert die Host-seitige Line-of-Fire-PrÃ¼fung fÃ¼r Homing-Projektile. */
   setHomingLineOfFireChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
     this.homingController.setLineOfFireChecker(cb);
   }
 
-  // ── Host ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Host â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Spawnt ein Projektil mit der übergebenen Konfiguration.
+   * Spawnt ein Projektil mit der Ã¼bergebenen Konfiguration.
    * Granaten (isGrenade=true) haben keine Welt-/Hindernis-Kollision
    * und explodieren nach fuseTime ms.
    */
   /**
-   * Erstellt – abhängig vom Projektilstil – das spezialisierte Renderer-Visual und blendet
-   * den reinen Kollisions-Sprite aus (Rendering übernimmt der jeweilige Renderer auf Client/Host).
+   * Erstellt â€“ abhÃ¤ngig vom Projektilstil â€“ das spezialisierte Renderer-Visual und blendet
+   * den reinen Kollisions-Sprite aus (Rendering Ã¼bernimmt der jeweilige Renderer auf Client/Host).
    * Stile ohne Renderer (z. B. 'ball') behalten den sichtbaren Sprite.
    */
   private createSpawnRendererVisuals(
@@ -441,7 +441,7 @@ export class ProjectileManager {
       );
     }
 
-    // AWP-Projektile sind unsichtbar (Rendering übernimmt BulletRenderer mit AWP-Stil)
+    // AWP-Projektile sind unsichtbar (Rendering Ã¼bernimmt BulletRenderer mit AWP-Stil)
     if ((style === 'awp' || style === 'gauss') && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
@@ -517,13 +517,13 @@ export class ProjectileManager {
       this.translocatorPuckRenderer.createVisual(id, x, y, cfg.ownerColor ?? cfg.color);
     }
 
-    // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
+    // Flame-Hitboxen sind unsichtbar (Rendering Ã¼bernimmt FlameRenderer auf Client)
     if (style === 'flame' || style === 'leaf_blower') {
       sprite.setVisible(false);
       sprite.setAlpha(0);
     }
 
-    // BFG-Projektile sind unsichtbar (Rendering übernimmt BfgRenderer)
+    // BFG-Projektile sind unsichtbar (Rendering Ã¼bernimmt BfgRenderer)
     if (style === 'bfg') {
       sprite.setVisible(false);
       sprite.setAlpha(0);
@@ -539,7 +539,7 @@ export class ProjectileManager {
   ): number {
     const id = this.nextId++;
 
-    // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-Größe) gebraucht werden.
+    // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-GrÃ¶ÃŸe) gebraucht werden.
     // Die renderer- und collider-spezifische Style-Auswertung passiert in den jeweiligen Helfern.
     const isBall   = cfg.projectileStyle === 'ball';
     const isEnergyBall = cfg.projectileStyle === 'energy_ball';
@@ -550,7 +550,7 @@ export class ProjectileManager {
     const isBfg    = cfg.projectileStyle === 'bfg';
     const isGauss  = cfg.projectileStyle === 'gauss';
 
-    // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
+    // Physik-Shape: fÃ¼r 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isHydra || isSpore)
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
@@ -572,9 +572,9 @@ export class ProjectileManager {
       body.setVelocity(body.velocity.x * initialTimeBubbleFactor, body.velocity.y * initialTimeBubbleFactor);
     }
 
-    // Anti-Tunneling: Body in Flugrichtung verlängern (proportional zur
+    // Anti-Tunneling: Body in Flugrichtung verlÃ¤ngern (proportional zur
     // Geschwindigkeitskomponente je Achse). Verhindert, dass kleine Projektile
-    // an Nahtstellen zwischen benachbarten 32×32-Fels-Bodies durchrutschen.
+    // an Nahtstellen zwischen benachbarten 32Ã—32-Fels-Bodies durchrutschen.
     if (!isFlame && !isLeafBlower && !isBfg && !cfg.isGrenade && cfg.size < MIN_BODY_LEN) {
       const vx = Math.abs(Math.cos(angle));
       const vy = Math.abs(Math.sin(angle));
@@ -612,7 +612,7 @@ export class ProjectileManager {
       maxBounces:     cfg.maxBounces,
       isGrenade:      cfg.isGrenade,
       adrenalinGain:  cfg.adrenalinGain,
-      weaponName:     cfg.weaponName ?? 'Waffe',
+      sourceId:     cfg.sourceId ?? 'weapon.unknown',
       plasmaSwarmEnabled: cfg.plasmaSwarmEnabled,
       plasmaSwarmProjectile: cfg.plasmaSwarmProjectile,
       plasmaSwarmOriginEnemyId: cfg.plasmaSwarmOriginEnemyId,
@@ -745,7 +745,7 @@ export class ProjectileManager {
       timeBubbleFactor: initialTimeBubbleFactor,
     };
 
-    // Phaser-Damping für Air-Friction vorbereiten
+    // Phaser-Damping fÃ¼r Air-Friction vorbereiten
     if (cfg.airFrictionDecayPerSec !== undefined) {
       body.useDamping = true;
       // Drag erst nach frictionDelayMs aktivieren; bis dahin kein Luftwiderstand (Faktor 1)
@@ -799,7 +799,7 @@ export class ProjectileManager {
 
   /**
    * Richtet je nach Projektiltyp die Welt-Bounds-/Hindernis-Collider ein:
-   * BFG/Gauss durchdringen (Overlap-Schaden), Impact-Cloud/Explosion zerstören bei Kontakt,
+   * BFG/Gauss durchdringen (Overlap-Schaden), Impact-Cloud/Explosion zerstÃ¶ren bei Kontakt,
    * Flamme/Leaf-Blower stoppen, normale Projektile abprallen, Granaten ohne Bounce bleiben liegen.
    */
   private setupProjectileColliders(
@@ -817,7 +817,7 @@ export class ProjectileManager {
     const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
 
     if (isBfg || isGauss) {
-      // BFG: Welt-Bounds zerstören das Projektil; Felsen/Zug werden per Overlap beschädigt,
+      // BFG: Welt-Bounds zerstÃ¶ren das Projektil; Felsen/Zug werden per Overlap beschÃ¤digt,
       // das Projektil fliegt aber durch alles durch (kein physischer Stopp).
       body.setCollideWorldBounds(true);
       body.onWorldBounds = true;
@@ -828,7 +828,7 @@ export class ProjectileManager {
       tracked.boundsListener = bfgBoundsListener;
       this.scene.physics.world.on('worldbounds', bfgBoundsListener);
 
-      // Felsen: Overlap → beschädigt Fels, Projektil fliegt weiter
+      // Felsen: Overlap â†’ beschÃ¤digt Fels, Projektil fliegt weiter
       if (this.rockGroup) {
         const rockObjects = this.rockObjects;
         const onHit       = this.onRockHit;
@@ -847,7 +847,7 @@ export class ProjectileManager {
         tracked.colliders.push(c);
       }
 
-      // Zug: Overlap → beschädigt Zug, Projektil fliegt weiter
+      // Zug: Overlap â†’ beschÃ¤digt Zug, Projektil fliegt weiter
       if (this.trainGroup) {
         const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
@@ -859,7 +859,7 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
-      // Trunks: kein Collider/Overlap – Projektil fliegt einfach durch
+      // Trunks: kein Collider/Overlap â€“ Projektil fliegt einfach durch
 
       // BfgRenderer-Visual erstellen (Host rendert ebenfalls)
       if (isBfg && this.bfgRenderer) {
@@ -955,12 +955,12 @@ export class ProjectileManager {
       }
     } else if (isFlame) {
       // Flammen: kein Bounce, Arena-Bounds und Hindernisse stoppen die Hitbox;
-      // sie verweilt dann für die restliche Lifetime an der Aufprallstelle.
+      // sie verweilt dann fÃ¼r die restliche Lifetime an der Aufprallstelle.
       body.setCollideWorldBounds(true);
       body.onWorldBounds = true;
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        // Flamme an Wand → anhalten (Lifetime bestimmt weiterlaufend die Lebensdauer)
+        // Flamme an Wand â†’ anhalten (Lifetime bestimmt weiterlaufend die Lebensdauer)
         body.setVelocity(0, 0);
       };
       tracked.boundsListener = boundsListener;
@@ -979,7 +979,7 @@ export class ProjectileManager {
 
       this.setupLeafBlowerColliders(sprite, body, tracked);
     } else if (!cfg.isGrenade || cfg.maxBounces > 0) {
-      // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
+      // Bounce-Physik: fÃ¼r normale Projektile immer; fÃ¼r Granaten nur wenn maxBounces > 0
       this.setupBouncePhysics(sprite, body, tracked, !cfg.isGrenade);
     } else if (cfg.isGrenade && cfg.maxBounces === 0) {
       // Granate ohne Bounces (z.B. Heilige Handgranate): Wand-Kollision, aber kein Abprallen.
@@ -1026,11 +1026,11 @@ export class ProjectileManager {
   }
 
   /**
-   * Richtet Fels-/Trunk-/Basis-/Zug-Kollision für Flammen-Hitboxen ein.
+   * Richtet Fels-/Trunk-/Basis-/Zug-Kollision fÃ¼r Flammen-Hitboxen ein.
    * Felsen, Trunks und Basen stoppen die Flamme physisch (collider, kein Bounce);
-   * Basen erhalten dabei direkten Schaden, die Flamme verweilt dann für ihre restliche Lifetime
+   * Basen erhalten dabei direkten Schaden, die Flamme verweilt dann fÃ¼r ihre restliche Lifetime
    * an der Aufprallstelle.
-   * Der Zug zerstört die Flamme sofort und erhält Schaden.
+   * Der Zug zerstÃ¶rt die Flamme sofort und erhÃ¤lt Schaden.
    */
   private setupFlameColliders(
     sprite:  Phaser.GameObjects.Shape,
@@ -1043,7 +1043,7 @@ export class ProjectileManager {
     if (this.rockGroup) {
       // collider statt overlap: Phaser stoppt den Body physisch am Felsen. Der
       // Callback meldet den Treffer nur einmal pro Flamme; Lebensdauer und
-      // Zerstörung der Flamme bleiben vom Hindernis unabhängig.
+      // ZerstÃ¶rung der Flamme bleiben vom Hindernis unabhÃ¤ngig.
       const rockObjects = this.rockObjects;
       const onHit = this.onRockHit;
       const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
@@ -1131,8 +1131,8 @@ export class ProjectileManager {
    * Richtet Welt- und Hindernis-Kollision mit physikalischem Abprallen ein.
    * Wird von normalen Projektilen und bouncenden Granaten (maxBounces > 0) genutzt.
    *
-   * @param applyRockDamage – true für normale Projektile (Felstreffer-Schaden);
-   *                          false für Granaten (kein Felstrefferschaden beim Abprallen)
+   * @param applyRockDamage â€“ true fÃ¼r normale Projektile (Felstreffer-Schaden);
+   *                          false fÃ¼r Granaten (kein Felstrefferschaden beim Abprallen)
    */
   private setupBouncePhysics(
     sprite:          Phaser.GameObjects.Shape,
@@ -1143,7 +1143,7 @@ export class ProjectileManager {
     body.setCollideWorldBounds(true);
     body.onWorldBounds = true;
     // Elastischer Bounce (Richtungsumkehr durch Phaser); Geschwindigkeitsreduktion
-    // erfolgt manuell über applyBounceFriction, damit die GESAMTE Geschwindigkeit
+    // erfolgt manuell Ã¼ber applyBounceFriction, damit die GESAMTE Geschwindigkeit
     // (nicht nur die Normalkomponente) mit dem Multiplikator reduziert wird.
     body.setBounce(1, 1);
 
@@ -1220,7 +1220,7 @@ export class ProjectileManager {
         const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
         if (this.tryResolveSupportImpact(tracked, rockGO as Phaser.GameObjects.GameObject, idx)) return;
         if (tracked.bounceProcessedThisStep) {
-          // Phasers zweite Velocity-Spiegelung rückgängig machen, damit keine Doppelumkehr entsteht
+          // Phasers zweite Velocity-Spiegelung rÃ¼ckgÃ¤ngig machen, damit keine Doppelumkehr entsteht
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;
             body.velocity.y = tracked.velocityAfterFirstBounce.y;
@@ -1307,8 +1307,8 @@ export class ProjectileManager {
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
         if (this.tryResolveSupportImpact(tracked, baseGO as Phaser.GameObjects.GameObject, -1)) return;
-        // Explosionsprojektile melden Basisschaden ausschließlich über ihre Explosion;
-        // ein direkter Treffer würde bei bouncenden Varianten doppelt zählen.
+        // Explosionsprojektile melden Basisschaden ausschlieÃŸlich Ã¼ber ihre Explosion;
+        // ein direkter Treffer wÃ¼rde bei bouncenden Varianten doppelt zÃ¤hlen.
         if (!tracked.explosion) {
           // Vor dem Bounce-Early-Return: sonst zaehlte ein Treffer im selben Schritt nicht.
           this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
@@ -1396,23 +1396,23 @@ export class ProjectileManager {
 
   /**
    * Host: Flammen-Hitbox pro Frame wachsen lassen und verlangsamen.
-   * Wird nur für Projektile mit `isFlame === true` aufgerufen.
+   * Wird nur fÃ¼r Projektile mit `isFlame === true` aufgerufen.
    */
   private updateFlameHitbox(proj: TrackedProjectile, deltaS: number): void {
     const growRate = proj.hitboxGrowRate ?? 0;
     const maxSize  = proj.hitboxMaxSize ?? proj.sprite.width;
     const decay    = proj.velocityDecay ?? 1;
 
-    // 1. Wachstum: Nur die visuelle Sprite-Größe vergrößern – der Physik-Body bleibt
-    // bei seiner Startgröße (hitboxStartSize). Würde der Body mitgewachsen, würde sein
-    // seitlich wachsender Rand benachbarte Felsen/Trunks und Arena-Wände treffen,
-    // obwohl der Flugpfad der Flamme frei ist → vorzeitiger Tod und positionsabhängige
-    // Reichweite. CombatSystem nutzt sprite.getBounds() für Spielertreffer, das mit
-    // displayWidth wächst → die wachsende Trefferzone funktioniert korrekt.
+    // 1. Wachstum: Nur die visuelle Sprite-GrÃ¶ÃŸe vergrÃ¶ÃŸern â€“ der Physik-Body bleibt
+    // bei seiner StartgrÃ¶ÃŸe (hitboxStartSize). WÃ¼rde der Body mitgewachsen, wÃ¼rde sein
+    // seitlich wachsender Rand benachbarte Felsen/Trunks und Arena-WÃ¤nde treffen,
+    // obwohl der Flugpfad der Flamme frei ist â†’ vorzeitiger Tod und positionsabhÃ¤ngige
+    // Reichweite. CombatSystem nutzt sprite.getBounds() fÃ¼r Spielertreffer, das mit
+    // displayWidth wÃ¤chst â†’ die wachsende Trefferzone funktioniert korrekt.
     const curSize = proj.sprite.displayWidth;
     if (curSize < maxSize) {
       const newSize = Math.min(maxSize, curSize + growRate * deltaS);
-      // Shape-Dimension aktualisieren (für SyncedProjectile.size und CombatSystem-Bounds)
+      // Shape-Dimension aktualisieren (fÃ¼r SyncedProjectile.size und CombatSystem-Bounds)
       proj.sprite.setDisplaySize(newSize, newSize);
     }
 
@@ -1445,8 +1445,8 @@ export class ProjectileManager {
     if (segmentLength <= 0.5) return;
 
     // Als Objekt statt als lokale Variablen: der Besucher unten ist eine Closure, und
-    // TypeScript verfolgt Zuweisungen aus einer Closure heraus nicht für die Narrowing-
-    // Analyse – über Objektfelder bleiben die Typen nach der Abfrage erhalten.
+    // TypeScript verfolgt Zuweisungen aus einer Closure heraus nicht fÃ¼r die Narrowing-
+    // Analyse â€“ Ã¼ber Objektfelder bleiben die Typen nach der Abfrage erhalten.
     const best: {
       rockIndex: number;
       hit: GeometryHit | null;
@@ -1460,8 +1460,8 @@ export class ProjectileManager {
       if (!best.hit || hit.distance < best.hit.distance) {
         best.hit = hit;
         best.rockIndex = rockIndex;
-        // Das Scratch-Rechteck wird beim nächsten Kandidaten überschrieben, der
-        // Aufprallwinkel braucht die Kanten aber noch – deshalb eine eigene Kopie.
+        // Das Scratch-Rechteck wird beim nÃ¤chsten Kandidaten Ã¼berschrieben, der
+        // Aufprallwinkel braucht die Kanten aber noch â€“ deshalb eine eigene Kopie.
         this.bestRockRect.setTo(left, top, right - left, bottom - top);
       }
     };
@@ -1687,7 +1687,7 @@ export class ProjectileManager {
         maxBounces: proj.maxBounces,
         isGrenade: proj.isGrenade,
         adrenalinGain: childAdrenalinGain,
-        weaponName: proj.weaponName,
+        sourceId: proj.sourceId,
         explosion: proj.explosion,
         impactCloud: proj.impactCloud,
         sporeVisualVariant: proj.sporeVisualVariant,
@@ -1768,7 +1768,7 @@ export class ProjectileManager {
 
   /**
    * Markiert ein Projektil zur sofortigen Entfernung aus Host-Logik und Phaser-Kollision.
-   * Das eigentliche Cleanup erfolgt gesammelt im nächsten hostUpdate().
+   * Das eigentliche Cleanup erfolgt gesammelt im nÃ¤chsten hostUpdate().
    */
   private queueDestroyProjectile(proj: TrackedProjectile): void {
     if (proj.pendingDestroy) return;
@@ -1919,7 +1919,7 @@ export class ProjectileManager {
       effect: resolvedEffect,
       sourceSlot: proj.sourceSlot,
       sourceTurretId: proj.sourceTurretId,
-      weaponName: proj.weaponName,
+      sourceId: proj.sourceId,
       projectileId: proj.id,
       continuesAfterExplosion: resumesAfterExplosion,
     });
@@ -1968,7 +1968,7 @@ export class ProjectileManager {
     this.syncTimeBubbleDrag(proj);
   }
 
-  /** Host: stabile, allokationsfreie Sicht für Kollisionen und Host-Systeme. */
+  /** Host: stabile, allokationsfreie Sicht fÃ¼r Kollisionen und Host-Systeme. */
   getActiveProjectiles(): ReadonlySet<TrackedProjectile> {
     return this.activeProjectiles;
   }
@@ -1982,7 +1982,7 @@ export class ProjectileManager {
   }
 
   /**
-   * Host: Gibt ein aktives Projektil anhand seiner ID zurück.
+   * Host: Gibt ein aktives Projektil anhand seiner ID zurÃ¼ck.
    */
   getProjectileById(id: number): TrackedProjectile | undefined {
     const projectile = this.projectilesById.get(id);
@@ -2022,7 +2022,7 @@ export class ProjectileManager {
   }
 
   /**
-   * Projektile, die selbst leuchten könnten – die Auswahl trifft der Aufrufer über
+   * Projektile, die selbst leuchten kÃ¶nnten â€“ die Auswahl trifft der Aufrufer Ã¼ber
    * `getProjectileLightSpec()`.
    *
    * Aufbau bewusst identisch zu `getShadowSamples()`: auf dem Host stammen die Werte aus
@@ -2068,7 +2068,7 @@ export class ProjectileManager {
   }
 
   /**
-   * Host: Einzelnes Projektil sofort zerstören (z.B. nach Spielertreffer).
+   * Host: Einzelnes Projektil sofort zerstÃ¶ren (z.B. nach Spielertreffer).
    */
   destroyProjectile(id: number): void {
     const projectile = this.projectilesById.get(id);
@@ -2099,9 +2099,9 @@ export class ProjectileManager {
     ownerId: string,
     effect: import('../types').ProjectileExplosionConfig,
     sourceSlot?: import('../types').LoadoutSlot,
-    weaponName?: string,
+    sourceId?: string,
   ): void {
-    this.pendingProjectileExplosions.push({ x, y, ownerId, effect, sourceSlot, weaponName });
+    this.pendingProjectileExplosions.push({ x, y, ownerId, effect, sourceSlot, sourceId });
   }
 
   resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {
@@ -2144,8 +2144,8 @@ export class ProjectileManager {
   }
 
   /**
-   * Löst die "nur bei Gegner-Treffern"-Explosion eines Projektils aus (z.B. XXX-BOW
-   * Explosivbolzen). Nutzt denselben Explosions-Pfad wie reguläre Projektil-Explosionen.
+   * LÃ¶st die "nur bei Gegner-Treffern"-Explosion eines Projektils aus (z.B. XXX-BOW
+   * Explosivbolzen). Nutzt denselben Explosions-Pfad wie regulÃ¤re Projektil-Explosionen.
    */
   triggerEnemyImpactExplosion(id: number): boolean {
     const proj = this.getProjectileById(id);
@@ -2158,14 +2158,14 @@ export class ProjectileManager {
       effect: proj.enemyHitExplosion,
       sourceSlot: proj.sourceSlot,
       sourceTurretId: proj.sourceTurretId,
-      weaponName: proj.weaponName,
+      sourceId: proj.sourceId,
     });
     this.queueDestroyProjectile(proj);
     return true;
   }
 
   /**
-   * Zerstört alle aktiven Projektile und ihre Collider.
+   * ZerstÃ¶rt alle aktiven Projektile und ihre Collider.
    * Muss vor ArenaBuilder.destroyDynamic() aufgerufen werden.
    */
   destroyAll(): void {
@@ -2200,8 +2200,8 @@ export class ProjectileManager {
   }
 
   /**
-   * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurückgeben.
-   * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
+   * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurÃ¼ckgeben.
+   * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurÃ¼ckgegeben.
    */
   hostUpdate(deltaMs = 16.67): {
     explodedProjectiles: ExplodedProjectile[];
@@ -2270,7 +2270,7 @@ export class ProjectileManager {
           return false;
         }
 
-        // Countdown-Emission für Granaten mit langer Zündzeit (≥ 1500ms)
+        // Countdown-Emission fÃ¼r Granaten mit langer ZÃ¼ndzeit (â‰¥ 1500ms)
         const fuseTime = proj.fuseTime ?? 0;
         if (fuseTime >= 1500) {
           const remainingSeconds = Math.max(0, Math.ceil((fuseTime - realAge) / 1000));
@@ -2280,7 +2280,7 @@ export class ProjectileManager {
           }
         }
 
-        // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
+        // Erweiterte Flugphysik (Air Friction) â€“ Phaser-Damping nach Delay aktivieren
         if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
           if (proj.frictionDelayMs === undefined || simulatedAge >= proj.frictionDelayMs) {
             const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
@@ -2355,7 +2355,7 @@ export class ProjectileManager {
             effect: proj.explosion,
             sourceSlot: proj.sourceSlot,
             sourceTurretId: proj.sourceTurretId,
-            weaponName: proj.weaponName,
+            sourceId: proj.sourceId,
           });
           this.destroyTrackedProjectile(proj);
           return false;
@@ -2397,7 +2397,7 @@ export class ProjectileManager {
         } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {
           this.updateFlameHitbox(proj, simulatedDeltaMs / 1000);
         } else if (proj.isBfg) {
-          // BFG: Laser-Salven in regelmäßigen Intervallen abfeuern
+          // BFG: Laser-Salven in regelmÃ¤ÃŸigen Intervallen abfeuern
           const interval = proj.bfgLaserInterval ?? 100;
           if (!proj.lastBfgLaserAt || simulatedAge - proj.lastBfgLaserAt >= interval) {
             proj.lastBfgLaserAt = simulatedAge;
@@ -2423,7 +2423,7 @@ export class ProjectileManager {
           }
         }
 
-        // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
+        // Erweiterte Flugphysik (Air Friction) â€“ Phaser-Damping nach Delay aktivieren
         if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
           if (proj.frictionDelayMs === undefined || simulatedAge >= proj.frictionDelayMs) {
             const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
@@ -2633,10 +2633,10 @@ export class ProjectileManager {
   /**
    * Host: alle aktiven Projektil-Renderer an die Physik-Bodies synchronisieren.
    *
-   * Ein einziger Durchlauf über die Projektilliste statt eines Durchlaufs pro Renderer-Typ:
+   * Ein einziger Durchlauf Ã¼ber die Projektilliste statt eines Durchlaufs pro Renderer-Typ:
    * Jedes Projektil hat genau einen `projectileStyle`, daher wird pro Projektil nur der
-   * passende Renderer angesprochen. Style-unabhängige Renderer (Burn, Tracer) und der
-   * Bullet-Body-Sync für die kugelartigen Stile laufen im selben Durchlauf mit. `gauss` wird
+   * passende Renderer angesprochen. Style-unabhÃ¤ngige Renderer (Burn, Tracer) und der
+   * Bullet-Body-Sync fÃ¼r die kugelartigen Stile laufen im selben Durchlauf mit. `gauss` wird
    * bewusst weiterhin sowohl vom BulletRenderer (Body-Sync) als auch vom GaussRenderer bedient.
    */
   private syncHostRenderers(): void {
@@ -2668,15 +2668,15 @@ export class ProjectileManager {
       const vy = proj.body.velocity.y;
       const style = proj.projectileStyle;
 
-      // Burn läuft style-unabhängig für jedes Projektil.
+      // Burn lÃ¤uft style-unabhÃ¤ngig fÃ¼r jedes Projektil.
       const burning = this.hasVisibleProjectileBurn(proj);
       burnR?.sync(id, x, y, w, burning, true, proj.projectileBurnVisualStyle);
       if (burning) burningProjectiles.add(id);
 
-      // Tracer hängt an der tracerConfig, nicht am Style.
+      // Tracer hÃ¤ngt an der tracerConfig, nicht am Style.
       if (proj.tracerConfig) tracerR?.updateTracer(id, x, y, vx, vy);
 
-      // Kugelartige Stile werden zusätzlich per Body-Sync bewegt (inkl. gauss).
+      // Kugelartige Stile werden zusÃ¤tzlich per Body-Sync bewegt (inkl. gauss).
       if (style === 'bullet' || style === 'awp' || style === 'gauss') {
         bulletR?.syncToBody(id, x, y, vx, vy);
       }
@@ -2768,7 +2768,7 @@ export class ProjectileManager {
     burnR?.retain(burningProjectiles);
   }
 
-  /** Host: Netzwerk-Snapshot nur bei einem tatsächlichen Network-Tick bauen. */
+  /** Host: Netzwerk-Snapshot nur bei einem tatsÃ¤chlichen Network-Tick bauen. */
   getHostSyncSnapshot(): SyncedProjectile[] {
     const snapshot: SyncedProjectile[] = [];
     for (const p of this.activeProjectiles) {
@@ -2806,10 +2806,10 @@ export class ProjectileManager {
     return snapshot;
   }
 
-  // ── Client ────────────────────────────────────────────────────────────────
+  // â”€â”€ Client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Client: Empfängt neue Server-Snapshots und speichert den State für Extrapolation.
+   * Client: EmpfÃ¤ngt neue Server-Snapshots und speichert den State fÃ¼r Extrapolation.
    * Erstellt/entfernt visuelle Sprites. Positionsupdate passiert in clientExtrapolate().
    */
   clientSyncVisuals(data: SyncedProjectile[], localPlayerId?: string): void {
@@ -2853,7 +2853,7 @@ export class ProjectileManager {
       const prev = this.clientProjStates.get(proj.id);
       const velocityFlipped = prev && (isBullet || isAwpP || isGaussP) &&
         (prev.vx * proj.vx < -1 || prev.vy * proj.vy < -1);
-      // Tracer-Spawn nach Abpraller zurücksetzen (vor dem Tracer-Update weiter unten)
+      // Tracer-Spawn nach Abpraller zurÃ¼cksetzen (vor dem Tracer-Update weiter unten)
       if (velocityFlipped && tracerRc && tracerRc.has(proj.id)) {
         tracerRc.notifyBounce(proj.id, proj.x, proj.y);
       }
@@ -2903,9 +2903,9 @@ export class ProjectileManager {
           proj.energyBallVariant,
           proj.ownerColor ?? proj.color,
         );
-        // Kein Audio für eigene Waffen-Projektile – Prediction in ClientUpdateCoordinator hat es schon abgespielt.
+        // Kein Audio fÃ¼r eigene Waffen-Projektile â€“ Prediction in ClientUpdateCoordinator hat es schon abgespielt.
         // Granaten haben keine Prediction, daher hier immer abspielen.
-        // Utility-Projektile haben keine Prediction → Audio immer abspielen.
+        // Utility-Projektile haben keine Prediction â†’ Audio immer abspielen.
         const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) {
           this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
@@ -3013,7 +3013,7 @@ export class ProjectileManager {
         }
       }
 
-      // Tracer (unabhängig vom Renderer-Typ, data-driven via proj.tracer)
+      // Tracer (unabhÃ¤ngig vom Renderer-Typ, data-driven via proj.tracer)
       if (proj.tracer && tracerRc) {
         if (!tracerRc.has(proj.id)) {
           tracerRc.createTracer(proj.id, proj.x, proj.y, proj.tracer, proj.ownerColor ?? proj.color);
@@ -3036,9 +3036,9 @@ export class ProjectileManager {
   }
 
   /**
-   * Client: entfernt Visuals + Extrapolations-States für Projektile, die im neuen Server-Snapshot
-   * nicht mehr enthalten sind. Spielt dabei (wo vorhanden) Impact-Effekte ab – für Hydra inkl.
-   * Split-Erkennung anhand neu eingetroffener, unterdrückter Kind-Projektile gleicher Farbe/Nähe.
+   * Client: entfernt Visuals + Extrapolations-States fÃ¼r Projektile, die im neuen Server-Snapshot
+   * nicht mehr enthalten sind. Spielt dabei (wo vorhanden) Impact-Effekte ab â€“ fÃ¼r Hydra inkl.
+   * Split-Erkennung anhand neu eingetroffener, unterdrÃ¼ckter Kind-Projektile gleicher Farbe/NÃ¤he.
    */
   private cleanupOrphanedClientVisuals(data: SyncedProjectile[], activeIds: Set<number>): void {
     const renderer  = this.bulletRenderer;
@@ -3194,7 +3194,7 @@ export class ProjectileManager {
 
   /**
    * Client: Extrapoliert Projektil-Positionen zwischen Netzwerk-Ticks.
-   * Wird jeden Render-Frame aufgerufen (unabhängig von der Netzwerk-Tick-Rate).
+   * Wird jeden Render-Frame aufgerufen (unabhÃ¤ngig von der Netzwerk-Tick-Rate).
    *
    * Bullets/Balls: Lineare Extrapolation (konstante Velocity).
    * Flames: Exponentielle Velocity-Decay (gleiche Formel wie Host).
@@ -3263,7 +3263,7 @@ export class ProjectileManager {
         if (sprite) sprite.setPosition(ex, ey);
       }
 
-      // Tracer: unabhängig vom Renderer, wenn vorhanden
+      // Tracer: unabhÃ¤ngig vom Renderer, wenn vorhanden
       const tracerRe = this.tracerRenderer;
       if (tracerRe && tracerRe.has(id)) {
         tracerRe.updateTracer(id, ex, ey, velocityX, velocityY);

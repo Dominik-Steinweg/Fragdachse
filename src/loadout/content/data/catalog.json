@@ -44,14 +44,14 @@
     },
     {
       "kind": "weapon",
-      "id": "LAUBBLAESER",
+      "id": "LEAF_BLOWER",
       "slot": "weapon1",
       "order": 6,
       "iconKey": "LAUBBLAESER"
     },
     {
       "kind": "weapon",
-      "id": "REPARATURSTRAHL",
+      "id": "PLASMA_BURNER",
       "slot": "weapon2",
       "order": 0,
       "iconKey": null
@@ -65,7 +65,7 @@
     },
     {
       "kind": "weapon",
-      "id": "ENERGIEINJEKTOR",
+      "id": "ENERGY_INJECTOR",
       "slot": "weapon2",
       "order": 2,
       "iconKey": null
@@ -177,7 +177,7 @@
     },
     {
       "kind": "utility",
-      "id": "STINKDRUESEN",
+      "id": "STINK_CLOUD",
       "slot": "utility",
       "order": 4,
       "iconKey": "STINKDRUESEN"
@@ -191,14 +191,14 @@
     },
     {
       "kind": "utility",
-      "id": "FELSBAU",
+      "id": "ROCK_BARRIER",
       "slot": "utility",
       "order": 6,
       "iconKey": "FELSBAU"
     },
     {
       "kind": "utility",
-      "id": "FLIEGENPILZ",
+      "id": "SPORE_TURRET",
       "slot": "utility",
       "order": 7,
       "iconKey": "FLIEGENPILZ"

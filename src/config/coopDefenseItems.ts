@@ -38,10 +38,8 @@ export const COOP_DEFENSE_ITEM_RARITIES: readonly CoopDefenseItemRarity[] = [
 
 export interface CoopDefenseItemSlotDefinition {
   readonly id: CoopDefenseItemSlot;
-  readonly label: string;
   /** Kategorietypischer Grundwert – auf jedem Item dieses Slots vorhanden. */
   readonly baseStat: string;
-  readonly baseLabel: string;
   readonly baseMode: CoopDefenseUpgradeEffectMode;
   /** Sollwert auf Item-Level 1. */
   readonly baseValueAtLevel1: number;
@@ -58,9 +56,7 @@ export const COOP_DEFENSE_ITEM_SLOT_DEFINITIONS:
 Readonly<Record<CoopDefenseItemSlot, CoopDefenseItemSlotDefinition>> = Object.freeze({
   helmet: {
     id: 'helmet',
-    label: 'Helm',
     baseStat: 'player.adrenalineRegenRate',
-    baseLabel: 'Adrenalinregeneration',
     baseMode: 'add_percent_per_level',
     baseValueAtLevel1: 0.06,
     baseValuePerLevel: 0.03,
@@ -68,9 +64,7 @@ Readonly<Record<CoopDefenseItemSlot, CoopDefenseItemSlotDefinition>> = Object.fr
   },
   gloves: {
     id: 'gloves',
-    label: 'Handschuhe',
     baseStat: 'player.outgoingDamage',
-    baseLabel: 'Schaden',
     baseMode: 'add_percent_per_level',
     baseValueAtLevel1: 0.08,
     baseValuePerLevel: 0.04,
@@ -78,9 +72,7 @@ Readonly<Record<CoopDefenseItemSlot, CoopDefenseItemSlotDefinition>> = Object.fr
   },
   armor: {
     id: 'armor',
-    label: 'Rüstung',
     baseStat: 'player.maxHp',
-    baseLabel: 'Maximale HP',
     baseMode: 'add_per_level',
     baseValueAtLevel1: 25,
     baseValuePerLevel: 12,
@@ -88,9 +80,7 @@ Readonly<Record<CoopDefenseItemSlot, CoopDefenseItemSlotDefinition>> = Object.fr
   },
   boots: {
     id: 'boots',
-    label: 'Stiefel',
     baseStat: 'player.runSpeed',
-    baseLabel: 'Bewegungsgeschwindigkeit',
     baseMode: 'add_percent_per_level',
     baseValueAtLevel1: 0.05,
     baseValuePerLevel: 0.02,
@@ -100,7 +90,6 @@ Readonly<Record<CoopDefenseItemSlot, CoopDefenseItemSlotDefinition>> = Object.fr
 
 export interface CoopDefenseItemRarityDefinition {
   readonly id: CoopDefenseItemRarity;
-  readonly label: string;
   /** Seltenheit bestimmt ausschliesslich die Anzahl der Zusatzeigenschaften. */
   readonly affixCount: number;
   /** Relatives Gewicht der gewichteten Ziehung. */
@@ -114,7 +103,6 @@ export const COOP_DEFENSE_ITEM_RARITY_DEFINITIONS:
 Readonly<Record<CoopDefenseItemRarity, CoopDefenseItemRarityDefinition>> = Object.freeze({
   white: {
     id: 'white',
-    label: 'Gewöhnlich',
     affixCount: 0,
     weight: 55,
     color: COLORS.GREY_2,
@@ -122,7 +110,6 @@ Readonly<Record<CoopDefenseItemRarity, CoopDefenseItemRarityDefinition>> = Objec
   },
   blue: {
     id: 'blue',
-    label: 'Selten',
     affixCount: 1,
     weight: 33,
     color: COLORS.BLUE_3,
@@ -130,7 +117,6 @@ Readonly<Record<CoopDefenseItemRarity, CoopDefenseItemRarityDefinition>> = Objec
   },
   yellow: {
     id: 'yellow',
-    label: 'Episch',
     affixCount: 2,
     weight: 12,
     color: COLORS.GOLD_2,
@@ -143,7 +129,6 @@ export const COOP_DEFENSE_ITEM_SALVAGE_XP_PER_LEVEL = 0.15;
 
 export interface CoopDefenseItemAffixDefinition {
   readonly id: string;
-  readonly label: string;
   /**
    * Stat im gemeinsamen Upgrade-/Item-Bucket. Fehlt er, traegt das Affix seinen Wert
    * ausschliesslich ueber einen Laufzeit-Handler und schreibt in keinen Bucket.
@@ -184,7 +169,6 @@ export interface CoopDefenseItemAffixDefinition {
    * bereits vollstaendig. Die festen Parameter kommen aus {@link COOP_DEFENSE_AFFIX_RULES},
    * damit Text und Laufzeitverhalten nicht auseinanderlaufen koennen.
    */
-  readonly shortText?: (value: number) => string;
 }
 
 /**
@@ -235,17 +219,6 @@ export const COOP_DEFENSE_AFFIX_RULES = Object.freeze({
   surroundedLingerMs: 500,
 });
 
-/** `3,2` statt `3.2000000000000004` – Prozentwerte im Tooltip bleiben lesbar. */
-function percentText(fraction: number): string {
-  const rounded = Math.round(fraction * 1000) / 10;
-  return `${rounded}`.replace('.', ',');
-}
-
-/** `2` statt `2.0` – Sekunden aus Millisekunden, ohne unnoetige Nachkommastelle. */
-function secondsText(durationMs: number): string {
-  return `${Math.round(durationMs / 100) / 10}`.replace('.', ',');
-}
-
 /**
  * Ein gemeinsamer Pool fuer alle Seltenheiten. Die Seltenheit bestimmt ausschliesslich die
  * Anzahl der Affixe (0/1/2), nicht ihre Qualitaet; seltene Effekte entstehen allein ueber ein
@@ -259,7 +232,6 @@ export const COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS: readonly CoopDefenseItemAffixD
 Object.freeze([
   {
     id: 'max_hp',
-    label: 'Leben',
     stat: 'player.maxHp',
     mode: 'add_per_level',
     weight: 100,
@@ -271,7 +243,6 @@ Object.freeze([
   },
   {
     id: 'hp_regen',
-    label: 'Lebensregeneration',
     stat: 'player.hpRegenPerSecond',
     mode: 'add_per_level',
     weight: 75,
@@ -283,7 +254,6 @@ Object.freeze([
   },
   {
     id: 'max_armor',
-    label: 'Rüstungsmaximum',
     stat: 'player.maxArmor',
     mode: 'add_per_level',
     weight: 100,
@@ -295,7 +265,6 @@ Object.freeze([
   },
   {
     id: 'armor_regen',
-    label: 'Rüstungsregeneration',
     stat: 'player.armorRegenPerSecond',
     mode: 'add_per_level',
     weight: 75,
@@ -307,7 +276,6 @@ Object.freeze([
   },
   {
     id: 'armor_gain',
-    label: 'Rüstungsgewinn',
     stat: 'player.armorGain',
     mode: 'add_percent_per_level',
     weight: 70,
@@ -322,7 +290,6 @@ Object.freeze([
     // Die Summe bleibt ungedeckelt; nur der fertige Schaden wird bei null abgefangen, damit
     // sehr hohe Reduktion den Spieler nicht durch negativen Schaden heilt.
     id: 'damage_reduction',
-    label: 'Schadensreduktion',
     stat: 'player.damageReduction',
     mode: 'add_percent_per_level',
     weight: 70,
@@ -334,55 +301,42 @@ Object.freeze([
   },
   {
     id: 'low_hp_damage_reduction',
-    label: 'Letzte Bastion',
     weight: 35,
     minAtLevel1: 0.05,
     maxAtLevel1: 0.1,
     perLevel: 0.015,
     slots: ['armor'],
     displayAsPercent: true,
-    shortText: (value) => `Unter ${percentText(COOP_DEFENSE_AFFIX_RULES.lowHpThreshold)} % HP:`
-      + ` ${percentText(value)} % Schadensreduktion`,
   },
   {
     id: 'surrounded',
-    label: 'Umzingelt',
     weight: 24,
     minAtLevel1: 0.1,
     maxAtLevel1: 0.18,
     perLevel: 0.03,
     slots: ['armor'],
     displayAsPercent: true,
-    shortText: (value) => `Bei mindestens ${COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount}`
-      + ` Gegnern in ${COOP_DEFENSE_AFFIX_RULES.surroundedRadiusPx} Reichweite:`
-      + ` +${percentText(value)} % Adrenalinregeneration`,
   },
   {
     id: 'out_of_combat_armor_repair',
-    label: 'Notfallreparatur',
     weight: 45,
     minAtLevel1: 4,
     maxAtLevel1: 8,
     perLevel: 1.5,
     slots: ['armor'],
     displayAsPercent: false,
-    shortText: (value) => `${secondsText(COOP_DEFENSE_AFFIX_RULES.emergencyRepairDelayMs)} s ohne Schaden:`
-      + ` +${Math.round(value * 10) / 10} Rüstung/s`,
   },
   {
     id: 'damage_reflection',
-    label: 'Dornenplatten',
     weight: 25,
     minAtLevel1: 0.05,
     maxAtLevel1: 0.1,
     perLevel: 0.015,
     slots: ['armor'],
     displayAsPercent: true,
-    shortText: (value) => `Wirft ${percentText(value)} % des erlittenen Schadens auf den Verursacher zurück`,
   },
   {
     id: 'life_leech',
-    label: 'Lifeleech',
     stat: 'player.lifeLeechFraction',
     mode: 'add_per_level',
     weight: 55,
@@ -394,7 +348,6 @@ Object.freeze([
   },
   {
     id: 'outgoing_damage',
-    label: 'Schaden',
     stat: 'player.outgoingDamage',
     mode: 'add_percent_per_level',
     weight: 80,
@@ -410,7 +363,6 @@ Object.freeze([
     // auch ganz ohne Klasse wirkt. Dachs Nukem bringt Grundchance und hoeheren Klassenwert mit
     // und profitiert dadurch am staerksten.
     id: 'critical_chance',
-    label: 'Kritische Präzision',
     stat: 'player.criticalChance',
     mode: 'add_per_level',
     weight: 55,
@@ -424,7 +376,6 @@ Object.freeze([
     // Addiert sich auf den Krit-Multiplikator, nicht auf den Schaden: ohne Krit-Chance aus
     // Klasse oder Items bleibt das Affix wirkungslos.
     id: 'critical_damage',
-    label: 'Kritischer Schaden',
     stat: 'player.criticalDamage',
     mode: 'add_per_level',
     weight: 55,
@@ -436,22 +387,17 @@ Object.freeze([
   },
   {
     id: 'crossfire',
-    label: 'Kreuzfeuer',
     weight: 30,
     minAtLevel1: 0.1,
     maxAtLevel1: 0.2,
     perLevel: 0.03,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `Nach dem Einsatz von Waffe 2:`
-      + ` Waffe 1 macht ${secondsText(COOP_DEFENSE_AFFIX_RULES.crossfireDurationMs)} s lang`
-      + ` +${percentText(value)} % Schaden`,
   },
   {
     // Erhoeht ausschliesslich das persoenliche Maximum. Die Kapazitaetskosten der einzelnen
     // Konstrukte bleiben bewusst spielerunabhaengig.
     id: 'construction_capacity',
-    label: 'Baukapazität',
     stat: 'construction.capacity',
     mode: 'add_per_level',
     weight: 35,
@@ -464,7 +410,6 @@ Object.freeze([
   },
   {
     id: 'remote_control',
-    label: 'Fernsteuerung',
     weight: 18,
     minAtLevel1: 0.1,
     maxAtLevel1: 0.18,
@@ -472,87 +417,64 @@ Object.freeze([
     slots: ['gloves'],
     classIds: ['inspector_gadachs'],
     displayAsPercent: true,
-    shortText: (value) => `Das nächste eigene Konstrukt verursacht +${percentText(value)} % Schaden`,
   },
   {
     id: 'primary_vulnerability',
-    label: 'Fokusfeuer',
     weight: 15,
     minAtLevel1: 0.015,
     maxAtLevel1: 0.035,
     perLevel: 0.0025,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance bei Primärwaffentreffern:`
-      + ` Ziel erleidet ${secondsText(COOP_DEFENSE_AFFIX_RULES.vulnerabilityDurationMs)} s lang`
-      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.vulnerabilityBonus)} % mehr Schaden aus allen Quellen`,
   },
   {
     id: 'primary_culling',
-    label: 'Hinrichtung',
     weight: 10,
     minAtLevel1: 0.01,
     maxAtLevel1: 0.025,
     perLevel: 0.0025,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance, einen Gegner unter`
-      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.cullingHpThreshold)} % HP sofort zu töten (nicht bei Bossen)`,
   },
   {
     id: 'primary_slow',
-    label: 'Unterdrückungsmunition',
     weight: 40,
     minAtLevel1: 0.06,
     maxAtLevel1: 0.12,
     perLevel: 0.01,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance bei Primärwaffentreffern:`
-      + ` Ziel ${secondsText(COOP_DEFENSE_AFFIX_RULES.suppressionSlowDurationMs)} s lang`
-      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.suppressionSlowFraction)} % langsamer`,
   },
   {
     id: 'primary_kill_fire_chunks',
-    label: 'Brandzerfall',
     weight: 15,
     minAtLevel1: 0.04,
     maxAtLevel1: 0.08,
     perLevel: 0.01,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance bei einem Primärwaffen-Kill:`
-      + ` schleudert ${COOP_DEFENSE_AFFIX_RULES.fireChunkCount} brennende Brocken auf nahe Bodenstellen`,
   },
   {
     id: 'low_hp_blood_rage',
-    label: 'Blutrausch',
     weight: 25,
     minAtLevel1: 0.08,
     maxAtLevel1: 0.14,
     perLevel: 0.015,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `Unter ${percentText(COOP_DEFENSE_AFFIX_RULES.lowHpThreshold)} % HP:`
-      + ` +${percentText(value)} % Schaden und`
-      + ` +${percentText(COOP_DEFENSE_AFFIX_RULES.bloodRageLifeLeechBonus)} % Lifeleech`,
   },
   {
     // Bewusst der Gegenpol zu Blutrausch: beide koennen nie gleichzeitig aktiv sein.
     id: 'high_hp_damage',
-    label: 'Unversehrt',
     weight: 45,
     minAtLevel1: 0.06,
     maxAtLevel1: 0.12,
     perLevel: 0.02,
     slots: ['gloves', 'armor'],
     displayAsPercent: true,
-    shortText: (value) => `Ab ${percentText(COOP_DEFENSE_AFFIX_RULES.highHpThreshold)} % HP:`
-      + ` +${percentText(value)} % Schaden`,
   },
   {
     id: 'run_speed',
-    label: 'Bewegungsgeschwindigkeit',
     stat: 'player.runSpeed',
     mode: 'add_percent_per_level',
     weight: 75,
@@ -566,7 +488,6 @@ Object.freeze([
     // Derselbe Bucket wie das Upgrade "Einbuddeltempo": beide skalieren den Tempofaktor unter
     // der Erde, nicht die Laufgeschwindigkeit an der Oberflaeche.
     id: 'burrow_speed',
-    label: 'Grabtempo',
     stat: 'player.burrowSpeed',
     mode: 'add_percent_per_level',
     weight: 60,
@@ -580,7 +501,6 @@ Object.freeze([
     // Weniger Adrenalin je Verbrauchstick unter der Erde – man bleibt laenger unten. Negativ ist
     // hier wie bei `adrenaline_cost` der Vorteil; `minAtLevel1` bleibt die kleinere Grenze.
     id: 'burrow_cost',
-    label: 'Grabverbrauch',
     stat: 'player.burrowCost',
     mode: 'add_percent_per_level',
     weight: 55,
@@ -593,7 +513,6 @@ Object.freeze([
   },
   {
     id: 'max_adrenaline',
-    label: 'Maximales Adrenalin',
     stat: 'player.maxAdrenaline',
     mode: 'add_per_level',
     weight: 90,
@@ -605,7 +524,6 @@ Object.freeze([
   },
   {
     id: 'adrenaline_regen',
-    label: 'Adrenalinregeneration',
     stat: 'player.adrenalineRegenRate',
     mode: 'add_percent_per_level',
     weight: 85,
@@ -617,7 +535,6 @@ Object.freeze([
   },
   {
     id: 'adrenaline_gain',
-    label: 'Adrenalingewinn',
     stat: 'player.adrenalineGain',
     mode: 'add_percent_per_level',
     weight: 75,
@@ -631,7 +548,6 @@ Object.freeze([
     // Negativ ist hier der Vorteil: weniger Adrenalinverbrauch. `minAtLevel1` bleibt trotzdem
     // die numerisch kleinere Grenze, damit der Wurf ein normales Intervall bleibt.
     id: 'adrenaline_cost',
-    label: 'Adrenalinverbrauch',
     stat: 'player.adrenalineCost',
     mode: 'add_percent_per_level',
     weight: 65,
@@ -646,7 +562,6 @@ Object.freeze([
     // Derselbe prozentuale Bucket wie das Upgrade "Rage-Gewinn". Welche Schadensarten ueberhaupt
     // Wut erzeugen, bleibt unberuehrt – die Synergie mit "Gepanzerte Wut" gilt damit weiter.
     id: 'rage_gain',
-    label: 'Wutgewinn',
     stat: 'ultimate.rageGainPerDamage',
     mode: 'add_percent_per_level',
     weight: 75,
@@ -658,7 +573,6 @@ Object.freeze([
   },
   {
     id: 'max_rage',
-    label: 'Maximale Wut',
     stat: 'ultimate.maxRage',
     mode: 'add_percent_per_level',
     weight: 85,
@@ -672,7 +586,6 @@ Object.freeze([
     // Skaliert das `cooldown`-Feld des ausgeruesteten Utility-Configs. Waffen-, Ultimate-,
     // Dash- und per Item konfigurierten Konstruktions-Cooldowns bleiben unberuehrt.
     id: 'utility_cooldown',
-    label: 'Utility-Cooldown',
     stat: 'utility.cooldown',
     mode: 'add_percent_per_level',
     weight: 55,
@@ -685,31 +598,24 @@ Object.freeze([
   },
   {
     id: 'adrenaline_kill_charge',
-    label: 'Kampfaufladung',
     weight: 45,
     minAtLevel1: 0.02,
     maxAtLevel1: 0.04,
     perLevel: 0.005,
     slots: ['helmet'],
     displayAsPercent: true,
-    shortText: (value) => `Eigene Kills geben ${secondsText(COOP_DEFENSE_AFFIX_RULES.killChargeDurationMs)} s lang`
-      + ` +${percentText(value)} % Adrenalinregeneration je Stapel`
-      + ` (max. ${COOP_DEFENSE_AFFIX_RULES.killChargeMaxStacks})`,
   },
   {
     id: 'adrenaline_from_damage',
-    label: 'Schockreaktion',
     weight: 40,
     minAtLevel1: 0.04,
     maxAtLevel1: 0.08,
     perLevel: 0.01,
     slots: ['helmet', 'armor'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % des tatsächlich erlittenen Schadens werden als Adrenalin gutgeschrieben`,
   },
   {
     id: 'dash_range',
-    label: 'Dash-Reichweite',
     stat: 'player.dashRange',
     mode: 'add_percent_per_level',
     weight: 75,
@@ -721,51 +627,39 @@ Object.freeze([
   },
   {
     id: 'dash_speed',
-    label: 'Nachbrenner',
     weight: 45,
     minAtLevel1: 0.1,
     maxAtLevel1: 0.18,
     perLevel: 0.02,
     slots: ['boots'],
     displayAsPercent: true,
-    shortText: (value) => `Nach einem Dash ${secondsText(COOP_DEFENSE_AFFIX_RULES.afterburnerDurationMs)} s lang`
-      + ` +${percentText(value)} % Bewegungsgeschwindigkeit`,
   },
   {
     id: 'low_hp_speed',
-    label: 'Unter Druck',
     weight: 45,
     minAtLevel1: 0.1,
     maxAtLevel1: 0.18,
     perLevel: 0.02,
     slots: ['armor', 'boots'],
     displayAsPercent: true,
-    shortText: (value) => `Unter ${percentText(COOP_DEFENSE_AFFIX_RULES.lowHpThreshold)} % HP:`
-      + ` +${percentText(value)} % Bewegungsgeschwindigkeit`,
   },
   {
     id: 'movement_charge_damage',
-    label: 'Kinetische Ladung',
     weight: 28,
     minAtLevel1: 0.15,
     maxAtLevel1: 0.3,
     perLevel: 0.03,
     slots: ['boots'],
     displayAsPercent: true,
-    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.movementChargeDistancePx} zurückgelegte Pixel:`
-      + ` nächster Primärangriff +${percentText(value)} % Schaden`,
   },
   {
     id: 'glutwanderer',
-    label: 'Glutwanderer',
     weight: 24,
     minAtLevel1: 2,
     maxAtLevel1: 4,
     perLevel: 1,
     slots: ['boots'],
     displayAsPercent: false,
-    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.glutwandererDistancePx} zurückgelegte Pixel:`
-      + ` ${Math.max(1, Math.floor(value))} brennende Brocken`,
   },
 ]);
 

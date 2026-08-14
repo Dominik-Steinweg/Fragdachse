@@ -190,19 +190,19 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'XBOW',
     targets: [{ path: ['fire', 'enemyHitExplosion', 'maxDamage'], formula: 'add' }],
   },
-  'weapon.LAUBBLAESER.maxKnockback': {
+  'weapon.LEAF_BLOWER.maxKnockback': {
     kind: 'weapon',
-    itemId: 'LAUBBLAESER',
+    itemId: 'LEAF_BLOWER',
     targets: [{ path: ['fire', 'maxKnockback'], formula: 'scale' }],
   },
-  'weapon.LAUBBLAESER.hitboxEndSize': {
+  'weapon.LEAF_BLOWER.hitboxEndSize': {
     kind: 'weapon',
-    itemId: 'LAUBBLAESER',
+    itemId: 'LEAF_BLOWER',
     targets: [{ path: ['fire', 'hitboxEndSize'], formula: 'scale' }],
   },
-  'weapon.LAUBBLAESER.adrenalinGain': {
+  'weapon.LEAF_BLOWER.adrenalinGain': {
     kind: 'weapon',
-    itemId: 'LAUBBLAESER',
+    itemId: 'LEAF_BLOWER',
     targets: [{ path: ['adrenalinGain'], formula: 'scale' }],
   },
   'weapon.P90.range': {
@@ -655,14 +655,14 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'MOLOTOV_GRENADE',
     targets: [{ path: ['wildfireTrailDamagePerTick'], formula: 'add' }],
   },
-  'utility.STINKDRUESEN.cloudRadius': {
+  'utility.STINK_CLOUD.cloudRadius': {
     kind: 'utility',
-    itemId: 'STINKDRUESEN',
+    itemId: 'STINK_CLOUD',
     targets: [{ path: ['cloudRadius'], formula: 'scale' }],
   },
-  'utility.STINKDRUESEN.cloudDamagePerTick': {
+  'utility.STINK_CLOUD.cloudDamagePerTick': {
     kind: 'utility',
-    itemId: 'STINKDRUESEN',
+    itemId: 'STINK_CLOUD',
     targets: [{ path: ['cloudDamagePerTick'], formula: 'scale' }],
   },
   'utility.TRANSLOCATOR.projectileSpeed': {
@@ -675,29 +675,29 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'TRANSLOCATOR',
     targets: [{ path: ['maxBounces'], formula: 'add' }],
   },
-  'utility.FELSBAU.placeable.maxHp': {
+  'utility.ROCK_BARRIER.placeable.maxHp': {
     kind: 'utility',
-    itemId: 'FELSBAU',
+    itemId: 'ROCK_BARRIER',
     targets: [{ path: ['placeable', 'maxHp'], formula: 'scale' }],
   },
-  'utility.FELSBAU.placeable.lifetimeMs': {
+  'utility.ROCK_BARRIER.placeable.lifetimeMs': {
     kind: 'utility',
-    itemId: 'FELSBAU',
+    itemId: 'ROCK_BARRIER',
     targets: [{ path: ['placeable', 'lifetimeMs'], formula: 'scale' }],
   },
-  'utility.FLIEGENPILZ.placeable.maxHp': {
+  'utility.SPORE_TURRET.placeable.maxHp': {
     kind: 'utility',
-    itemId: 'FLIEGENPILZ',
+    itemId: 'SPORE_TURRET',
     targets: [{ path: ['placeable', 'maxHp'], formula: 'scale' }],
   },
-  'utility.FLIEGENPILZ.cooldown': {
+  'utility.SPORE_TURRET.cooldown': {
     kind: 'utility',
-    itemId: 'FLIEGENPILZ',
+    itemId: 'SPORE_TURRET',
     targets: [{ path: ['cooldown'], formula: 'scale' }],
   },
-  'utility.FLIEGENPILZ.placeable.targetRange': {
+  'utility.SPORE_TURRET.placeable.targetRange': {
     kind: 'utility',
-    itemId: 'FLIEGENPILZ',
+    itemId: 'SPORE_TURRET',
     targets: [{ path: ['placeable', 'targetRange'], formula: 'scale' }],
   },
   'utility.ZEUS_TASER.range': {

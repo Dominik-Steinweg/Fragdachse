@@ -1,6 +1,5 @@
 {
   "mapId": "0",
-  "displayName": "Map 0 - Testmap",
   "arenaWidthCells": 90,
   "timeOfDay": "12:00",
   "rockFillRatio": 0.3,
@@ -63,7 +62,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "C3-Testbrand"
+        "sourceId": "ground_fire.test_c3"
       }
     },
     {
@@ -81,7 +80,7 @@
         "visualStyle": "normal",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "C3-Persistentbrand"
+        "sourceId": "ground_fire.test_c3_persistent"
       }
     }
   ],
@@ -362,8 +361,6 @@
     {
       "id": "destroy-brood-front",
       "type": "destroy",
-      "displayName": "BRUTNESTER ZERSTÖREN",
-      "rewardHint": "WENIGER GEGNERDRUCK · BONUS-XP",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-opening-encounter"
@@ -382,8 +379,6 @@
     {
       "id": "hold-forward-outpost",
       "type": "hold",
-      "displayName": "AUSSENPOSTEN HALTEN",
-      "rewardHint": "RAKETENTÜRME WERDEN REPARIERT",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-follow-up-encounter"
@@ -397,8 +392,6 @@
     {
       "id": "hold-supply-base",
       "type": "hold",
-      "displayName": "VERSORGUNGSBASIS HALTEN",
-      "rewardHint": "MISSIONS-PODEST: HEILIGE HANDGRANATE",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-hold-encounter"
@@ -418,8 +411,6 @@
     {
       "id": "carry-supply-beer",
       "type": "carry",
-      "displayName": "BIER RETTEN",
-      "rewardHint": "JE FLASCHE: EPISCHE GARANTIE BEI SIEG · REGEN",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-supply-defense-encounter"

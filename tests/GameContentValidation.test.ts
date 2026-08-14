@@ -14,6 +14,7 @@ import {
   WEAPON_CONFIGS,
 } from '../src/loadout/content/LoadoutRegistry';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
+import { getUpgradeName } from '../src/i18n/upgradePresentation';
 
 function isConfigStat(stat: string): boolean {
   return stat.startsWith('weapon1.')
@@ -70,8 +71,8 @@ describe('game-wide loadout content validation', () => {
   });
 
   it('keeps representative German upgrade labels intact', () => {
-    expect(COOP_DEFENSE_UPGRADE_DEFINITIONS.hp.label).toBe('Vitalität');
-    expect(COOP_DEFENSE_UPGRADE_DEFINITIONS.max_armor.label).toBe('Rüstungsmaximum');
+    expect(getUpgradeName('hp', 'de')).toBe('Vitalität');
+    expect(getUpgradeName('max_armor', 'de')).toBe('Rüstungsmaximum');
   });
 
   it('publishes finite, bounded contracts for every modifier target', () => {

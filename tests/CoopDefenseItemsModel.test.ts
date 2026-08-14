@@ -13,6 +13,8 @@ import {
 } from '../src/ui/CoopDefenseItemsModel';
 import type { CoopDefenseItem } from '../src/types';
 import { compareCoopDefenseItems } from '../src/utils/coopDefenseItems';
+import { getLocale } from '../src/i18n';
+import { getItemAffixText, getItemRarityName } from '../src/i18n/itemPresentation';
 
 function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
   return {
@@ -155,7 +157,7 @@ describe('coop-defense item tooltip', () => {
       comparison: {
         title: 'WECHSEL ZU NEUEM ITEM',
         rows: compareCoopDefenseItems(newItem, equipped),
-        identicalText: 'identisch zum neuen Item',
+        identicalText: 'identisch zum ausgerüsteten Teil',
       },
       showInventoryHints: false,
     });
@@ -169,7 +171,7 @@ describe('coop-defense item tooltip', () => {
   });
 
   it('uses the German rarity label in the item presentation', () => {
-    expect(getCoopDefenseItemRarityDefinition('white').label).toBe('Gewöhnlich');
+    expect(getItemRarityName('white', getLocale())).toBe(getLocale() === 'de' ? 'Gewöhnlich' : 'Common');
   });
 
   it('always states the salvage reward', () => {
@@ -188,7 +190,7 @@ describe('coop-defense item tooltip', () => {
     const texts = tooltipTexts(buildCoopDefenseItemTooltip(surrounded, null, false));
     expect(texts).toContain('+30 Maximale HP');
     expect(texts).toContain('Umzingelt');
-    expect(texts).toContain('Bei mindestens 5 Gegnern in 160 Reichweite: +12 % Adrenalinregeneration');
+    expect(texts).toContain(getItemAffixText('surrounded', 0.12, getLocale()));
 
     expect(listEquippedCoopDefenseSpecialEffects([surrounded])).toEqual([{
       label: 'Umzingelt',

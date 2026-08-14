@@ -13,6 +13,11 @@ import type {
   CoopDefenseSecondaryObjectiveType,
   SyncedCoopDefenseCarryItem,
 } from '../types';
+import { getLocale, t } from '../i18n';
+import {
+  getSecondaryObjectiveReward as resolveSecondaryObjectiveReward,
+  getSecondaryObjectiveTitle as resolveSecondaryObjectiveTitle,
+} from '../i18n/contentPresentation';
 
 /**
  * Wie lange ein Abschluss oder Fehlschlag nach dem Zustandswechsel im Zielbereich sichtbar bleibt.
@@ -57,18 +62,6 @@ export interface SecondaryObjectiveViewModel {
 
 const EMPTY_MODEL: SecondaryObjectiveViewModel = { focus: null, chips: [], signature: '' };
 
-const TITLE_FALLBACK: Readonly<Record<CoopDefenseSecondaryObjectiveType, string>> = {
-  destroy: 'ZIELE ZERSTÖREN',
-  hold: 'STELLUNG HALTEN',
-  carry: 'FRACHT BERGEN',
-};
-
-const REWARD_FALLBACK: Readonly<Record<CoopDefenseSecondaryObjectiveType, string>> = {
-  destroy: 'WENIGER GEGNERDRUCK · BONUS-XP',
-  hold: 'VERSTÄRKUNG FÜR DEN REST DER MAP',
-  carry: 'BESSERE BELOHNUNG BEI SIEG',
-};
-
 function isTerminal(state: CoopDefenseSecondaryObjectivePresentationEntry['state']): boolean {
   return state === 'completed' || state === 'failed';
 }
@@ -77,16 +70,18 @@ export function getSecondaryObjectiveTitle(
   entry: CoopDefenseSecondaryObjectivePresentationEntry,
   config: ResolvedCoopDefenseMapSecondaryObjectiveConfig | undefined,
 ): string {
-  const authored = config?.displayName?.trim();
-  return authored && authored.length > 0 ? authored : TITLE_FALLBACK[entry.type];
+  return resolveSecondaryObjectiveTitle(entry.objectiveId, getLocale())
+    ?? (entry.type === 'destroy' ? t('objective.fallback.destroy')
+      : entry.type === 'hold' ? t('objective.fallback.hold') : t('objective.fallback.carry'));
 }
 
 export function getSecondaryObjectiveRewardHint(
   entry: CoopDefenseSecondaryObjectivePresentationEntry,
   config: ResolvedCoopDefenseMapSecondaryObjectiveConfig | undefined,
 ): string {
-  const authored = config?.rewardHint?.trim();
-  return authored && authored.length > 0 ? authored : REWARD_FALLBACK[entry.type];
+  return resolveSecondaryObjectiveReward(entry.objectiveId, getLocale())
+    ?? (entry.type === 'destroy' ? t('objective.reward.destroy')
+      : entry.type === 'hold' ? t('objective.reward.hold') : t('objective.reward.carry'));
 }
 
 /** Zielreferenzen einer Mission; die Weltmarkierung löst sie lokal gegen den BaseManager auf. */
@@ -135,9 +130,9 @@ function toViewEntry(
  * bei einem an einen Encounter-Clear gebundenen `holdUntil` gar nicht bestimmbar.
  */
 function getStatusLine(entry: CoopDefenseSecondaryObjectivePresentationEntry): string | null {
-  if (entry.state === 'completed') return 'ERFÜLLT';
-  if (entry.state === 'failed') return 'GESCHEITERT';
-  return entry.type === 'hold' ? 'HALTEN' : null;
+  if (entry.state === 'completed') return t('objective.status.completed');
+  if (entry.state === 'failed') return t('objective.status.failed');
+  return entry.type === 'hold' ? t('objective.status.hold') : null;
 }
 
 function buildSignature(model: Omit<SecondaryObjectiveViewModel, 'signature'>): string {

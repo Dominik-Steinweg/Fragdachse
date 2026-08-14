@@ -6,6 +6,7 @@ import { ensureFlatPanelTexture, ensureModalPanelTexture } from './uiTextures';
 import { BORDER, FONT_MONO, SURFACE, textStyle } from './uiTheme';
 import type { RoomPlayerStatistics } from '../network/RoomStatistics';
 import { formatRoomStatValue, formatRoomWinRate, sortRoomStatistics } from './RoomStatisticsModel';
+import { getLocale, t } from '../i18n';
 
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
@@ -56,41 +57,41 @@ type RoomTableColumnKey =
 
 interface RoomTableColumn {
   readonly key: RoomTableColumnKey;
-  readonly label: string;
+  readonly labelKey: string;
   readonly width: number;
 }
 
 interface RoomTableGroup {
-  readonly label: string;
+  readonly labelKey: string;
   readonly start: number;
   readonly count: number;
 }
 
 const TABLE_COLUMNS: readonly RoomTableColumn[] = [
-  { key: 'name', label: 'SPIELER', width: 245 },
-  { key: 'damageDealt', label: 'SCHADEN', width: 105 },
-  { key: 'damageTaken', label: 'ERLITTEN', width: 105 },
-  { key: 'pvpKills', label: 'PvP-KILLS', width: 92 },
-  { key: 'pvpDeaths', label: 'PvP-TOTE', width: 92 },
-  { key: 'pvpMatchesPlayed', label: 'MATCHES', width: 92 },
-  { key: 'pvpWins', label: 'SIEGE', width: 80 },
-  { key: 'winRate', label: 'WINRATE', width: 98 },
-  { key: 'pveKills', label: 'PvE-KILLS', width: 92 },
-  { key: 'pveDeaths', label: 'PvE-TOTE', width: 92 },
-  { key: 'healingReceived', label: 'HEILUNG', width: 100 },
-  { key: 'armorReceived', label: 'RÜSTUNG', width: 100 },
-  { key: 'powerUpsCollected', label: 'POWER-UPS', width: 108 },
-  { key: 'utilitiesUsed', label: 'UTILITIES', width: 100 },
-  { key: 'constructionsBuilt', label: 'BAUTEN', width: 88 },
-  { key: 'ultimatesUsed', label: 'ULTIMATES', width: 105 },
+  { key: 'name', labelKey: 'ui.roomStats.player', width: 245 },
+  { key: 'damageDealt', labelKey: 'ui.roomStats.damage', width: 105 },
+  { key: 'damageTaken', labelKey: 'ui.roomStats.taken', width: 105 },
+  { key: 'pvpKills', labelKey: 'ui.roomStats.pvpKills', width: 92 },
+  { key: 'pvpDeaths', labelKey: 'ui.roomStats.pvpDeaths', width: 92 },
+  { key: 'pvpMatchesPlayed', labelKey: 'ui.roomStats.matches', width: 92 },
+  { key: 'pvpWins', labelKey: 'ui.roomStats.wins', width: 80 },
+  { key: 'winRate', labelKey: 'ui.roomStats.winRate', width: 98 },
+  { key: 'pveKills', labelKey: 'ui.roomStats.pveKills', width: 92 },
+  { key: 'pveDeaths', labelKey: 'ui.roomStats.pveDeaths', width: 92 },
+  { key: 'healingReceived', labelKey: 'ui.roomStats.healing', width: 100 },
+  { key: 'armorReceived', labelKey: 'ui.roomStats.armor', width: 100 },
+  { key: 'powerUpsCollected', labelKey: 'ui.roomStats.powerUps', width: 108 },
+  { key: 'utilitiesUsed', labelKey: 'ui.roomStats.utilities', width: 100 },
+  { key: 'constructionsBuilt', labelKey: 'ui.roomStats.builds', width: 88 },
+  { key: 'ultimatesUsed', labelKey: 'ui.roomStats.ultimates', width: 105 },
 ];
 
 const TABLE_GROUPS: readonly RoomTableGroup[] = [
-  { label: 'SPIELER', start: 0, count: 1 },
-  { label: 'KAMPF', start: 1, count: 2 },
-  { label: 'PvP', start: 3, count: 5 },
-  { label: 'PvE', start: 8, count: 2 },
-  { label: 'WEITERE', start: 10, count: 6 },
+  { labelKey: 'ui.roomStats.player', start: 0, count: 1 },
+  { labelKey: 'ui.roomStats.combat', start: 1, count: 2 },
+  { labelKey: 'ui.roomStats.pvp', start: 3, count: 5 },
+  { labelKey: 'ui.roomStats.pve', start: 8, count: 2 },
+  { labelKey: 'ui.roomStats.other', start: 10, count: 6 },
 ];
 
 /** Eigenständige, kumulierte Raumansicht; RoundResult bleibt ausschließlich Rundenmodell. */
@@ -112,6 +113,7 @@ export class RoomStatisticsOverlay {
   private pointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private pointerUpHandler: (() => void) | null = null;
   private visible = false;
+  private lastStatistics: readonly RoomPlayerStatistics[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -126,11 +128,11 @@ export class RoomStatisticsOverlay {
       CY,
       ensureModalPanelTexture(this.scene, TEX_PANEL, PANEL_W, PANEL_H, SURFACE.modal, BORDER.default),
     ).setScrollFactor(0).setInteractive();
-    const title = this.scene.add.text(CX, PANEL_TOP + 43, 'RAUM-STATISTIK', textStyle('title', {
+    const title = this.scene.add.text(CX, PANEL_TOP + 43, t('ui.results.roomStats'), textStyle('title', {
       color: COLORS.GREY_1,
       align: 'center',
     })).setOrigin(0.5).setScrollFactor(0);
-    const subtitle = this.scene.add.text(CX, PANEL_TOP + 83, 'KUMULIERT ÜBER ALLE RUNDEN UND SPIELMODI', textStyle('caption', {
+    const subtitle = this.scene.add.text(CX, PANEL_TOP + 83, t('ui.roomStats.subtitle'), textStyle('caption', {
       color: COLORS.GREY_4,
       align: 'center',
     })).setOrigin(0.5).setScrollFactor(0);
@@ -222,7 +224,7 @@ export class RoomStatisticsOverlay {
         strokeAlpha: 0.8,
       }),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const closeLabel = this.scene.add.text(CX, CLOSE_Y, 'SCHLIESSEN', textStyle('label', {
+    const closeLabel = this.scene.add.text(CX, CLOSE_Y, t('ui.common.close').toUpperCase(), textStyle('label', {
       color: COLORS.GREY_1,
       align: 'center',
     })).setOrigin(0.5).setScrollFactor(0);
@@ -254,6 +256,7 @@ export class RoomStatisticsOverlay {
   }
 
   show(statistics: readonly RoomPlayerStatistics[]): void {
+    this.lastStatistics = statistics;
     if (!this.container || !this.content) this.build();
     if (!this.container || !this.content) return;
 
@@ -267,7 +270,7 @@ export class RoomStatisticsOverlay {
       this.content.add(this.scene.add.text(
         TABLE_LEFT + TABLE_W / 2,
         VIEWPORT_TOP + this.viewportHeight / 2,
-        'NOCH KEINE SPIELERSTATISTIK',
+        t('ui.roomStats.empty'),
         textStyle('caption', { color: COLORS.GREY_4, align: 'center' }),
       ).setOrigin(0.5).setScrollFactor(0));
     }
@@ -284,6 +287,12 @@ export class RoomStatisticsOverlay {
 
   isVisible(): boolean {
     return this.visible;
+  }
+
+  refreshLocale(): void {
+    const wasVisible = this.visible;
+    this.build();
+    if (wasVisible) this.show(this.lastStatistics);
   }
 
   destroy(): void {
@@ -329,9 +338,9 @@ export class RoomStatisticsOverlay {
       header.add(this.scene.add.text(
         left + width / 2,
         TABLE_TOP + TABLE_GROUP_H / 2,
-        group.label,
+        t(group.labelKey),
         textStyle('caption', {
-          color: group.label === 'PvP' ? COLORS.GOLD_1 : COLORS.GREY_3,
+          color: group.labelKey === 'ui.roomStats.pvp' ? COLORS.GOLD_1 : COLORS.GREY_3,
           align: 'center',
         }),
       ).setOrigin(0.5).setScrollFactor(0));
@@ -350,7 +359,7 @@ export class RoomStatisticsOverlay {
       header.add(this.scene.add.text(
         left + column.width / 2,
         TABLE_TOP + TABLE_GROUP_H + TABLE_HEADER_H / 2,
-        column.label,
+        t(column.labelKey),
         {
           fontFamily: FONT_MONO,
           fontSize: '11px',
@@ -402,17 +411,17 @@ export class RoomStatisticsOverlay {
   private getColumnValue(entry: RoomPlayerStatistics, key: RoomTableColumnKey): string {
     switch (key) {
       case 'name': return entry.name;
-      case 'damageDealt': return formatRoomStatValue(entry.damageDealt);
-      case 'damageTaken': return formatRoomStatValue(entry.damageTaken);
+      case 'damageDealt': return formatRoomStatValue(entry.damageDealt, getLocale());
+      case 'damageTaken': return formatRoomStatValue(entry.damageTaken, getLocale());
       case 'pvpKills': return String(entry.pvpKills);
       case 'pveKills': return String(entry.pveKills);
       case 'pvpDeaths': return String(entry.pvpDeaths);
       case 'pveDeaths': return String(entry.pveDeaths);
       case 'pvpWins': return String(entry.pvpWins);
       case 'pvpMatchesPlayed': return String(entry.pvpMatchesPlayed);
-      case 'winRate': return formatRoomWinRate(entry);
-      case 'healingReceived': return formatRoomStatValue(entry.healingReceived);
-      case 'armorReceived': return formatRoomStatValue(entry.armorReceived);
+      case 'winRate': return formatRoomWinRate(entry, getLocale());
+      case 'healingReceived': return formatRoomStatValue(entry.healingReceived, getLocale());
+      case 'armorReceived': return formatRoomStatValue(entry.armorReceived, getLocale());
       case 'powerUpsCollected': return String(entry.powerUpsCollected);
       case 'utilitiesUsed': return String(entry.utilitiesUsed);
       case 'constructionsBuilt': return String(entry.constructionsBuilt);

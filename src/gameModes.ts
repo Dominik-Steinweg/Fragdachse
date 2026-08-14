@@ -1,4 +1,4 @@
-import type { GameMode, TeamId } from './types';
+import type { GameMode } from './types';
 
 export const CAPTURE_THE_BEER_MODE: GameMode = 'capture_the_beer';
 export const COOP_DEFENSE_MODE: GameMode = 'coop_defense';
@@ -38,17 +38,4 @@ export function usesDynamicCamera(mode: GameMode): boolean {
 
 export function getMinPlayersForMode(mode: GameMode): number {
   return MIN_PLAYERS_BY_MODE[mode];
-}
-
-export function getGameModeLabel(mode: GameMode): string {
-  if (mode === 'team_deathmatch') return 'Team Deathmatch';
-  if (mode === CAPTURE_THE_BEER_MODE) return 'Capture the Beer';
-  if (mode === COOP_DEFENSE_MODE) return 'Dachs vs. Zombies';
-  return 'Deathmatch';
-}
-
-/** Modusbewusstes Team-Label. Im Coop heißt das einzige Team "Team Fragdachse". */
-export function getTeamLabel(teamId: TeamId, mode: GameMode): string {
-  if (isCoopDefenseMode(mode) && teamId === 'blue') return 'Team Fragdachse';
-  return teamId === 'blue' ? 'Team Blau' : 'Team Rot';
 }

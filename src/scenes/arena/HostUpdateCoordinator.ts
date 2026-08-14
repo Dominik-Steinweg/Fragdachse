@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+﻿import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
@@ -171,16 +171,16 @@ export class HostUpdateCoordinator {
     // The objective snapshot is now current; activate prebuilt mission structures before
     // flow-field refresh and enemy movement in this same host frame.
     this.ctx.baseManager?.syncDormantStates();
-    // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
+    // Reward-AusfÃ¼hrung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
     this.ctx.coopDefenseObjectiveRepairSystem?.hostUpdate(delta, countdownActive);
     // Read active structure sources after the objective transition so pressure starts in the same
     // host frame in which its linked dormant base becomes active.
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
-    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
+    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschÃ¶pft?
     if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
-    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
+    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt fÃ¼r FernkÃ¤mpfer die
     // Wegfindung im selben Frame.
     if (!countdownActive) this.ctx.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
     this.ctx.enemyManager?.hostUpdateMovement(
@@ -237,7 +237,7 @@ export class HostUpdateCoordinator {
               durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
               burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
               burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
-              weaponName: 'Glutwanderer',
+              sourceId: 'powerup.GLUTWANDERER',
             },
             `glutwanderer:${player.id}:${now}:${burstIndex}`,
             now,
@@ -267,7 +267,7 @@ export class HostUpdateCoordinator {
     metrics.playerSystemsMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = performance.now();
-    // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
+    // Letzter Schritt vor der Physik: ein laufender Ausweichschritt Ã¼berschreibt die
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
     if (!countdownActive) this.ctx.coopDefenseEnemyDodgeSystem?.hostUpdate(now);
     this.ctx.hostPhysics.update(countdownActive);
@@ -318,7 +318,7 @@ export class HostUpdateCoordinator {
 
     const detonations = countdownActive ? [] : (this.ctx.detonationSystem?.flushDetonations() ?? []);
     // Ablauf und Verrechnung liegen im gemeinsamen Resolver; hier stehen nur die
-    // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo über denselben Weg.
+    // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo Ã¼ber denselben Weg.
     resolveDetonations(this.detonationEffectSink, detonations);
 
     for (const explosion of explodedProjectiles) {
@@ -337,7 +337,7 @@ export class HostUpdateCoordinator {
         );
         if (field) {
           this.ctx.gameAudioSystem.playSound(
-            'sfx_place_fliegenpilz',
+            'sfx_place_spore_turret',
             field.x,
             field.y,
             explosion.ownerId,
@@ -378,7 +378,7 @@ export class HostUpdateCoordinator {
         explosion.effect,
         explosion.ownerId,
         explosion.sourceSlot,
-        explosion.weaponName ?? 'Explosion',
+        explosion.sourceId ?? 'environment.explosion',
       );
       this.ctx.hostPhysics.applyRadialImpulse(
         explosion.x, explosion.y, explosion.effect.radius,
@@ -430,7 +430,7 @@ export class HostUpdateCoordinator {
         this.ctx.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId, false, {
           category: 'explosion',
           allowTeamDamage: g.effect.allowTeamDamage,
-          weaponName: 'Granate',
+          sourceId: 'weapon.grenade',
           sourceSlot: 'utility',
           damageFalloff: g.effect.damageFalloff,
           baseDamageMult: g.effect.baseDamageMult,
@@ -449,7 +449,7 @@ export class HostUpdateCoordinator {
           const cx = g.x + Math.cos(angle) * g.effect.radius * 0.45;
           const cy = g.y + Math.sin(angle) * g.effect.radius * 0.45;
           this.ctx.combatSystem.applyAoeDamage(cx, cy, radius, damage, g.ownerId, false, {
-            category: 'explosion', allowTeamDamage: g.effect.allowTeamDamage, weaponName: 'Clusterladung', sourceSlot: 'utility',
+            category: 'explosion', allowTeamDamage: g.effect.allowTeamDamage, sourceId: 'weapon.cluster_charge', sourceSlot: 'utility',
             baseDamageMult: g.effect.baseDamageMult,
           });
           this.applyAoeEnvironmentDamage(cx, cy, radius, damage, g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId);
@@ -510,7 +510,7 @@ export class HostUpdateCoordinator {
     const timeBubbles = countdownActive ? [] : (this.ctx.timeBubbleSystem?.hostUpdate(Date.now()) ?? []);
 
     if (!countdownActive) {
-      const turretCfg    = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+      const turretCfg    = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const turretWeapon = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
       this.ctx.turretSystem?.hostUpdate(Date.now(), turretCfg, turretWeapon);
     }
@@ -533,7 +533,7 @@ export class HostUpdateCoordinator {
               Math.round(contact.damagePerTick),
               false,
               contact.ownerId,
-              contact.weaponName,
+              contact.sourceId,
               { sourceX: contact.x, sourceY: contact.y },
               { allowTeamDamage: contact.allowTeamDamage, damageKind: 'ground' },
             );
@@ -550,8 +550,8 @@ export class HostUpdateCoordinator {
               contact.ownerId,
               contact.burn.durationMs,
               contact.burn.damagePerTick,
+              contact.sourceKey,
               contact.sourceId,
-              contact.weaponName,
               'ground_fire',
               contact.visualStyle,
             );
@@ -574,7 +574,7 @@ export class HostUpdateCoordinator {
               Math.round(contact.damagePerTick),
               false,
               contact.ownerId,
-              contact.weaponName,
+              contact.sourceId,
               { sourceX: contact.x, sourceY: contact.y },
               { allowTeamDamage: contact.allowTeamDamage, damageKind: 'ground' },
             );
@@ -585,8 +585,8 @@ export class HostUpdateCoordinator {
               contact.ownerId,
               contact.burn.durationMs,
               contact.burn.damagePerTick,
+              contact.sourceKey,
               contact.sourceId,
-              contact.weaponName,
               'ground_fire',
               contact.visualStyle,
             );
@@ -608,7 +608,7 @@ export class HostUpdateCoordinator {
     for (const ev of stinkDmg) {
       this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
-        weaponName: 'Gas',
+        sourceId: 'weapon.stink_cloud',
         sourceSlot: 'utility',
         baseDamageMult: ev.baseDamageMult,
       });
@@ -621,7 +621,7 @@ export class HostUpdateCoordinator {
     for (const ev of smokeDmg) {
       this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
-        weaponName: 'Gewittersturm',
+        sourceId: 'ultimate.thunderstorm',
         sourceSlot: 'utility',
       });
     }
@@ -642,7 +642,7 @@ export class HostUpdateCoordinator {
           selfDamageMult: 0,
           allowTeamDamage: true,
           damageTarget: 'player-side',
-        }, `void-armageddon:${mi.ownerId}`, 'ultimate', 'Leeren-Meteor');
+        }, `void-armageddon:${mi.ownerId}`, 'ultimate', 'environment.void_meteor');
         bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xa631ff, 'energy');
       } else {
         this.ctx.combatSystem.applyAoeDamage(
@@ -650,7 +650,7 @@ export class HostUpdateCoordinator {
           mi.selfDamageMult > 0,
           {
             category: 'explosion',
-            weaponName: 'Meteor',
+            sourceId: 'environment.meteor',
             sourceSlot: 'ultimate',
             damageFalloff: mi.damageFalloff,
             selfDamageMult: mi.selfDamageMult,
@@ -727,8 +727,8 @@ export class HostUpdateCoordinator {
       if (dashPhase === 1 && prevDashPhase === 0) {
         this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
       }
-      // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
-      // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
+      // Flanke Erholung â†’ kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
+      // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet â€“ ein eigener Callback dort
       // waere fuer diese eine Flanke unnoetig.
       if (dashPhase === 0 && prevDashPhase === 2) {
         this.ctx.coopDefenseItemRuntimeSystem?.registerDashCompleted(player.id, now);
@@ -812,7 +812,7 @@ export class HostUpdateCoordinator {
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const now = Date.now();
       const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
-      const hasUtilityOverride = bridge.getPlayerUtilityOverrideName(localId) !== '';
+      const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
       const selectedInspectorTool = hasUtilityOverride ? undefined
         : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? committedLoadout?.coopDefenseProfile?.selectedTool);
       const selectedInspectorUtilityBase = selectedInspectorTool?.kind === 'utility'
@@ -828,10 +828,9 @@ export class HostUpdateCoordinator {
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
       const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
-      const inspectorDisplayName = selectedInspectorConstruction?.displayName ?? utilCfg?.displayName;
-      const utilDisplayName = inspectorCapacityCost > 0
-        ? `${inspectorDisplayName ?? 'Utility'} · ${inspectorCapacityCost} BK`
-        : inspectorDisplayName;
+      const utilityId = selectedInspectorConstruction
+        ? `construction.${selectedInspectorConstruction.id}`
+        : utilCfg?.id;
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = [
@@ -858,13 +857,14 @@ export class HostUpdateCoordinator {
         isUltimateActive:        this.ctx.loadoutManager?.isUltimateActive(localId) ?? false,
         ultimateRequiredRage:    ultCfg?.rageRequired ?? 300,
         ultimateThresholds,
-        ultimateDisplayName:     ultCfg?.displayName,
+        ultimateId:              ultCfg?.id,
         weapon1CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon1', now) ?? 0,
         weapon2CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
-        utilityDisplayName:      utilDisplayName,
+        utilityId,
+        utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
-        isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
+        isUtilityOverridden:     bridge.getPlayerUtilityOverrideId(localId) !== '',
         activePowerUps:          [
           ...activePowerUps,
           ...(teamBuff ? [teamBuff] : []),
@@ -899,11 +899,11 @@ export class HostUpdateCoordinator {
 
     phaseStartedAt = performance.now();
     // Gesammelte Treffer-/Todes-Effekte dieses Frames als ein einziges Batch-RPC senden, statt pro
-    // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flächigem Massen-Schaden).
+    // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flÃ¤chigem Massen-Schaden).
     bridge.flushEffects();
     metrics.effectFlushMs = performance.now() - phaseStartedAt;
 
-    // ── Network tick throttle ─────────────────────────────────────────────
+    // â”€â”€ Network tick throttle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     this.netTickAccumulator += delta;
     if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) {
       metrics.totalMs = performance.now() - startedAt;
@@ -1043,7 +1043,7 @@ export class HostUpdateCoordinator {
       projectiles,
       enemies: this.ctx.enemyManager?.getNetSnapshot() ?? null,
       // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle): der Aufruf VERBRAUCHT
-      // die gesammelten Removals und HP-Änderungen. Weiter oben im Frame aufgerufen, würden
+      // die gesammelten Removals und HP-Ã„nderungen. Weiter oben im Frame aufgerufen, wÃ¼rden
       // sie auf den ~2 von 3 Frames ohne Net-Tick ersatzlos verfallen.
       rocks: this.ctx.rockRegistry?.getNetSnapshot() ?? null,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
@@ -1064,7 +1064,7 @@ export class HostUpdateCoordinator {
       burningGround,
       targetVulnerabilities: this.ctx.targetStatusSystem?.getSnapshot(now) ?? [],
       ak47StrategicTargets: this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(now) ?? [],
-      // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
+      // Ebenfalls verbrauchend â€“ siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
       // dient nur der host-lokalen Darstellung und dem eigenen Aufsammel-Check.
       powerups: this.ctx.powerUpSystem?.getNetSnapshot() ?? null,
       pedestals: this.ctx.powerUpSystem?.getPedestalNetSnapshot() ?? null,
@@ -1187,7 +1187,7 @@ export class HostUpdateCoordinator {
     return undefined;
   }
 
-  // ── AoE helpers ──────────────────────────────────────────────────────────
+  // â”€â”€ AoE helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   applyAoeEnvironmentDamage(
     x: number, y: number, radius: number, damage: number,
@@ -1197,7 +1197,7 @@ export class HostUpdateCoordinator {
     const arenaResult = this.ctx.arenaResult;
 
     if (arenaResult) {
-      // Der Fels-Anteil läuft über den gemeinsamen Kern; die Lobby benutzt denselben Resolver
+      // Der Fels-Anteil lÃ¤uft Ã¼ber den gemeinsamen Kern; die Lobby benutzt denselben Resolver
       // mit ihrem lokalen Bestand, damit Falloff und `rockDamageMult` identisch wirken.
       applyRadialEnvironmentDamage(
         this.environmentRockSink,
@@ -1227,10 +1227,10 @@ export class HostUpdateCoordinator {
   }
 
   /**
-   * Erzeugt am Explosions-/Detonationsort eine Schaden-über-Zeit-Fläche, sofern
-   * konfiguriert und aktiv. Generisch nutzbar für Detonationen (ASMD-Ball) und
-   * spätere Explosions-Upgrades (Rakete, HE-/Smoke-Granate, …). Der Flächenradius
-   * basiert auf dem übergebenen Explosionsradius.
+   * Erzeugt am Explosions-/Detonationsort eine Schaden-Ã¼ber-Zeit-FlÃ¤che, sofern
+   * konfiguriert und aktiv. Generisch nutzbar fÃ¼r Detonationen (ASMD-Ball) und
+   * spÃ¤tere Explosions-Upgrades (Rakete, HE-/Smoke-Granate, â€¦). Der FlÃ¤chenradius
+   * basiert auf dem Ã¼bergebenen Explosionsradius.
    */
   private spawnDotAreaFromExplosion(
     dot: import('../../types').DamageOverTimeAreaConfig | undefined,
@@ -1254,8 +1254,8 @@ export class HostUpdateCoordinator {
    * Brutbombe des Wurf-Dachses: statt einer Explosion entstehen am Einschlagsort neue Gegner,
    * die sofort ihrem eigenen Bewegungsziel (Spieler) folgen.
    *
-   * Hat ein Spieler die Bombe an seiner Reflexkuppel abgefangen, gehört sie ihm – die Brut
-   * schlüpft dann als sein Verbündeter und verhält sich wie ein per Nekromantie wiederbelebter
+   * Hat ein Spieler die Bombe an seiner Reflexkuppel abgefangen, gehÃ¶rt sie ihm â€“ die Brut
+   * schlÃ¼pft dann als sein VerbÃ¼ndeter und verhÃ¤lt sich wie ein per Nekromantie wiederbelebter
    * Dachs (siehe NecromancySystem.captureAlly).
    */
   private spawnEnemiesFromGrenade(
@@ -1273,7 +1273,7 @@ export class HostUpdateCoordinator {
       const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, effect.count));
       const spawnX = x + Math.cos(angle) * effect.offsetPx;
       const spawnY = y + Math.sin(angle) * effect.offsetPx;
-      // Scheitert die Übernahme (Abfänger inzwischen tot), schlüpft die Brut regulär feindlich –
+      // Scheitert die Ãœbernahme (AbfÃ¤nger inzwischen tot), schlÃ¼pft die Brut regulÃ¤r feindlich â€“
       // die Bombe soll nicht stillschweigend verpuffen.
       const captured = capturedByPlayer
         ? this.ctx.necromancySystem?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
@@ -1384,7 +1384,7 @@ export class HostUpdateCoordinator {
     // Spieler-Schaden
     this.ctx.combatSystem.applyAoeDamage(x, y, radius, cfg.maxDamage, triggeredBy, cfg.selfDamageMult > 0, {
       category:       'explosion',
-      weaponName:     'Luftangriff',
+      sourceId:     'environment.airstrike',
       sourceSlot:     'ultimate',
       allowTeamDamage: cfg.allowTeamDamage,
       selfDamageMult:  cfg.selfDamageMult,
@@ -1556,7 +1556,7 @@ export class HostUpdateCoordinator {
   }
 
   /**
-   * Gameplay-Seite der gemeinsamen Detonationsverarbeitung: autoritativer Schaden, Rückstoß,
+   * Gameplay-Seite der gemeinsamen Detonationsverarbeitung: autoritativer Schaden, RÃ¼ckstoÃŸ,
    * Umgebungsschaden und der replizierte Explosionskanal.
    */
   private readonly detonationEffectSink: DetonationEffectSink = {
@@ -1566,7 +1566,7 @@ export class HostUpdateCoordinator {
     applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot) => {
       this.ctx.combatSystem.applyAoeDamage(x, y, radius, damage, attackerId, false, {
         category: 'explosion',
-        weaponName: 'Detonation',
+        sourceId: 'environment.detonation',
         damageFalloff: falloff,
         baseDamageMult,
         sourceSlot,
@@ -1581,7 +1581,7 @@ export class HostUpdateCoordinator {
     playExplosion: (x, y, radius, color, visualStyle) => {
       bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle);
     },
-    // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
+    // Optionale Schaden-Ã¼ber-Zeit-FlÃ¤che am Detonationsort (z.B. ASMD-SekundÃ¤r-Upgrade).
     spawnDotArea: (dot, x, y, explosionRadius, ownerId, ownerColor) => {
       this.spawnDotAreaFromExplosion(dot, x, y, explosionRadius, ownerId, ownerColor);
     },
@@ -1590,7 +1590,7 @@ export class HostUpdateCoordinator {
 
   /**
    * Gameplay-Seite des gemeinsamen Umgebungsschaden-Kerns: runden-autoritativer Felsbestand,
-   * Zielstatus-Trichter und die replizierte Zerstörungsdarstellung.
+   * Zielstatus-Trichter und die replizierte ZerstÃ¶rungsdarstellung.
    */
   private readonly environmentRockSink: EnvironmentRockSink = {
     forEachActiveRock: (visit) => {
@@ -1940,7 +1940,8 @@ export class HostUpdateCoordinator {
     return [{
       defId: 'MOVEMENT_CHARGE',
       remainingFrac: runtime.getMovementChargeProgress(playerId),
-      valueText: charged ? `+${Math.round(bonus * 100)} %` : 'lädt',
+      value: bonus,
+      charged,
       intensity: charged ? 1 : 0.35,
     }];
   }
@@ -1952,7 +1953,7 @@ export class HostUpdateCoordinator {
     return [{
       defId: 'GLUTWANDERER',
       remainingFrac: runtime.getGlutwandererProgress(playerId),
-      valueText: `${runtime.getGlutwandererChunkCount(playerId)} Brocken`,
+      count: runtime.getGlutwandererChunkCount(playerId),
       intensity: 0.35 + runtime.getGlutwandererProgress(playerId) * 0.65,
     }];
   }
@@ -1964,7 +1965,7 @@ export class HostUpdateCoordinator {
     return [{
       defId: 'SURROUNDED',
       remainingFrac: 1,
-      valueText: `+${Math.round(value * 100)} %`,
+      value,
       intensity: 1,
     }];
   }
@@ -1981,7 +1982,7 @@ export class HostUpdateCoordinator {
     bridge.broadcastExplosionEffect(x, y, SUPPORT_REGENERATION_EFFECT_RADIUS, color, 'regeneration');
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────────
+  // â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private applyDashVisual(player: PlayerEntity, id: string, curPhase: number, setScale = true): void {
     if (curPhase === 1) {
@@ -2150,7 +2151,7 @@ export class HostUpdateCoordinator {
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId);
-    const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '';
+    const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
     const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()
       ?? committed?.coopDefenseProfile?.selectedTool);
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
@@ -2174,7 +2175,7 @@ export class HostUpdateCoordinator {
   }
 
   private getFallbackUltimateConfig() {
-    return { displayName: 'Ultimate', rageRequired: 300 };
+    return { id: 'HONEY_BADGER_RAGE', rageRequired: 300 };
   }
 
   private getDefaultAimState(isMoving: boolean): PlayerAimNetState {

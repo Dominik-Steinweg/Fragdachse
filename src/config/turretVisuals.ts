@@ -51,10 +51,10 @@ const SLOW_BUBBLE_VISUAL = generated('turret_weapon_slow_bubble', 'slow_bubble.p
 const PLASMA_VISUAL = generated('turret_weapon_plasma', 'plasma.png');
 
 export const TURRET_VISUALS: Readonly<Record<TurretWeaponId, TurretVisualSpec>> = Object.freeze({
-  SPOREN: SPORE_VISUAL,
-  BASE_SPOREN: SPORE_VISUAL,
-  TURRET_SPORE: SPORE_VISUAL,
-  FLIEGENPILZ_PLASMA: PLASMA_VISUAL,
+  SPORES: SPORE_VISUAL,
+  BASE_SPORES: SPORE_VISUAL,
+  TURRET_SPORES: SPORE_VISUAL,
+  SPORE_TURRET_PLASMA: PLASMA_VISUAL,
   TURRET_ROCKET_BURST: ROCKET_VISUAL,
   TURRET_MG: MACHINE_GUN_VISUAL,
   TURRET_FLAME: FLAME_VISUAL,

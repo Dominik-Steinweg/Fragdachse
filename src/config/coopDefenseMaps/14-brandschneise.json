@@ -1,10 +1,8 @@
 {
   "mapId": "14",
-  "displayName": "Map 14 - Brandschneise",
   "arenaWidthCells": 60,
   "arenaHeightCells": 40,
   "timeOfDay": "21:30",
-  "tutorialText": "Das Void-Feuer bleibt auf dem Boden gefährlich. Nutzt die Felskorridore und haltet die Stellung, bis der Survival-Timer abläuft.",
   "mapEvents": [
     {
       "id": "brandschneise-void-corridor",
@@ -22,7 +20,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Lila Leerenbrand"
+        "sourceId": "ground_fire.void_hunter"
       }
     }
   ],
@@ -266,7 +264,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -275,7 +273,7 @@
             "gridY": 4
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ],
       "powerUpPedestals": [

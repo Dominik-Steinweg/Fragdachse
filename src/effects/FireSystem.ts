@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+﻿import * as Phaser from 'phaser';
 import { BURN_TICK_INTERVAL_MS, isPointInsideArena } from '../config';
 import type {
   BurnOnHitConfig,
@@ -20,7 +20,7 @@ const FLOW_DIRECTIONS: readonly (readonly [number, number])[] = [
 ];
 
 export interface FireDamageEvent {
-  sourceId: string;
+  sourceKey: string;
   x: number;
   y: number;
   radius: number;
@@ -29,18 +29,18 @@ export interface FireDamageEvent {
   rockDamageMult: number;
   trainDamageMult: number;
   baseDamageMult: number;
-  weaponName: string;
+  sourceId: string;
 }
 
 export interface GroundFireContact {
-  sourceId: string;
+  sourceKey: string;
   x: number;
   y: number;
   ownerId: string;
   damagePerTick: number;
   allowTeamDamage: boolean;
   burn?: BurnOnHitConfig;
-  weaponName: string;
+  sourceId: string;
   visualStyle: GroundFireVisualStyle;
   damageTarget: GroundFireDamageTarget;
 }
@@ -77,7 +77,7 @@ export interface GroundFireCellOptions {
   burn?: BurnOnHitConfig;
   igniteProjectiles?: boolean;
   baseDamageMult?: number;
-  weaponName?: string;
+  sourceId?: string;
   visualStyle?: GroundFireVisualStyle;
   damageTarget?: GroundFireDamageTarget;
   /** Statische Map-Hazard-Zelle ohne per-Frame Source-Verarbeitung. */
@@ -100,7 +100,7 @@ interface ActiveGroundSource {
   rockDamageMult: number;
   trainDamageMult: number;
   baseDamageMult: number;
-  weaponName: string;
+  sourceId: string;
   visualStyle: GroundFireVisualStyle;
   damageTarget: GroundFireDamageTarget;
   staticSource: boolean;
@@ -201,7 +201,7 @@ export class FireSystem {
       rockDamageMult: config.rockDamageMult ?? 1,
       trainDamageMult: config.trainDamageMult ?? 1,
       baseDamageMult: config.baseDamageMult ?? 1,
-      weaponName: config.weaponName ?? 'Molotov',
+      sourceId: config.sourceId ?? 'ground_fire.molotov',
       visualStyle: config.visualStyle ?? 'normal',
       damageTarget: config.damageTarget ?? 'all',
       staticSource: false,
@@ -260,7 +260,7 @@ export class FireSystem {
         rockDamageMult: 0,
         trainDamageMult: 0,
         baseDamageMult: options.baseDamageMult ?? 1,
-        weaponName: options.weaponName ?? 'Brennender Boden',
+        sourceId: options.sourceId ?? 'ground_fire.player_fire',
         visualStyle: options.visualStyle ?? 'normal',
         damageTarget: options.damageTarget ?? 'all',
         staticSource: options.static === true && options.permanent === true,
@@ -277,7 +277,7 @@ export class FireSystem {
       source.burn = options.burn ? { ...options.burn } : undefined;
       source.igniteProjectiles = options.igniteProjectiles === true;
       source.baseDamageMult = options.baseDamageMult ?? source.baseDamageMult;
-      source.weaponName = options.weaponName ?? source.weaponName;
+      source.sourceId = options.sourceId ?? source.sourceId;
       source.visualStyle = options.visualStyle ?? source.visualStyle;
       source.damageTarget = options.damageTarget ?? source.damageTarget;
       this.refreshCellAggregate(gridX, gridY);
@@ -428,7 +428,7 @@ export class FireSystem {
       ? activeSources
         .filter(source => source.damagePerTick > 0)
         .map(source => ({
-          sourceId: source.key,
+          sourceKey: source.key,
           x: source.x,
           y: source.y,
           radius: source.radius,
@@ -437,7 +437,7 @@ export class FireSystem {
           rockDamageMult: source.rockDamageMult,
           trainDamageMult: source.trainDamageMult,
           baseDamageMult: source.baseDamageMult,
-          weaponName: source.weaponName,
+          sourceId: source.sourceId,
         }))
       : [];
 
@@ -461,20 +461,20 @@ export class FireSystem {
         const source = this.sources.get(sourceKey);
         if (!source || source.expiresAt <= now) continue;
         contacts.set(sourceKey, {
-          sourceId: source.key,
+          sourceKey: source.key,
           x: source.x,
           y: source.y,
           ownerId: source.ownerId,
           damagePerTick: source.damagePerTick,
           allowTeamDamage: source.allowTeamDamage,
           burn: source.burn ? { ...source.burn } : undefined,
-          weaponName: source.weaponName,
+          sourceId: source.sourceId,
           visualStyle: source.visualStyle,
           damageTarget: source.damageTarget,
         });
       }
     });
-    return [...contacts.values()].sort((left, right) => left.sourceId.localeCompare(right.sourceId));
+    return [...contacts.values()].sort((left, right) => left.sourceKey.localeCompare(right.sourceKey));
   }
 
   collectProjectileIgnitersAlongSegment(

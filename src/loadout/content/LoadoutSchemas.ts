@@ -199,7 +199,6 @@ function validateNumericContracts(value: unknown, path: string, issues: string[]
 
 function validateCommonConfig(record: Record<string, unknown>, issues: string[]): void {
   if (typeof record.id !== 'string' || record.id.length === 0) issues.push('id: nichtleere ID erforderlich');
-  if (typeof record.displayName !== 'string' || record.displayName.length === 0) issues.push('displayName: nichtleerer Name erforderlich');
   validateFiniteNumbers(record, '$', issues);
   validateNumericContracts(record, '$', issues, typeof record.id === 'string' ? record.id : '');
 }

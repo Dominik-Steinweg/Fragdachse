@@ -62,7 +62,7 @@ describe('B6 client mission reward reconciliation', () => {
   it('does not create a local override when the host rejects the claim', async () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
     vi.spyOn(bridge, 'isHost').mockReturnValue(false);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideName').mockReturnValue('');
+    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('');
     vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(false);
     const coordinator = makeCoordinator();
 
@@ -75,7 +75,7 @@ describe('B6 client mission reward reconciliation', () => {
   it('reconstructs the mission utility only from the accepted host descriptor', async () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
     vi.spyOn(bridge, 'isHost').mockReturnValue(false);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideName').mockReturnValue('');
+    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('');
     vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(true);
     const coordinator = makeCoordinator();
 
@@ -98,7 +98,7 @@ describe('B6 client mission reward reconciliation', () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
     vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
     vi.spyOn(bridge, 'canPlayerAct').mockReturnValue(true);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideName').mockReturnValue('MISSIONS-PODEST PLATZIEREN');
+    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('COOP_DEFENSE_MISSION_PEDESTAL:hold-supply-base');
     vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
       kind: 'objective-placement',
       objectiveId: 'hold-supply-base',
@@ -113,7 +113,7 @@ describe('B6 client mission reward reconciliation', () => {
     coordinator.notifyUtilityFired();
     expect(coordinator.clientUtilityOverride?.type).toBe('placeable_pedestal');
 
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideName').mockReturnValue('');
+    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('');
     vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue(null);
     (coordinator as any).reconcileClientUtilityOverride();
     expect(coordinator.clientUtilityOverride).toBeNull();

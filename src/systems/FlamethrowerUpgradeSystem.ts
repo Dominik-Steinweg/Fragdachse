@@ -142,7 +142,7 @@ export class FlamethrowerUpgradeSystem {
         durationMs,
         burnDurationMs: Math.max(0, this.resolvePlayerStat(ownerId, 'player.fire.deathGround.burnDurationMs', 0)),
         burnDamagePerTick: Math.max(0, this.resolvePlayerStat(ownerId, 'player.fire.deathGround.burnDamagePerTick', 0)),
-        weaponName: 'Brennender Boden',
+        sourceId: 'ground_fire.player_death',
       };
       this.refreshGenericGround(ownerId, x, y, effect, now, `death-ground:${ownerId}`);
       const count = Math.max(0, Math.floor(this.resolvePlayerStat(ownerId, 'player.fire.deathGround.burstCount', 0)));
@@ -154,7 +154,7 @@ export class FlamethrowerUpgradeSystem {
           flightMs: 320,
           igniteCenter: false,
           ...effect,
-          weaponName: 'Brandexplosion',
+          sourceId: 'ground_fire.player_death_burst',
         }, now, `death-fire-burst:${ownerId}`);
       }
     }
@@ -196,7 +196,7 @@ export class FlamethrowerUpgradeSystem {
       allowTeamDamage: molotov.allowTeamDamage,
       rockDamageMult: molotov.rockDamageMult,
       trainDamageMult: molotov.trainDamageMult,
-      weaponName: 'Kamikaze-Napalm',
+      sourceId: 'ground_fire.kamikaze_napalm',
       wildfire: inherit && (molotov.wildfireEnabled ?? 0) > 0 ? {
         speedMultiplier: molotov.wildfirePanicSpeedMultiplier ?? 1.5,
         trailDurationMs: molotov.wildfireTrailDurationMs ?? 2000,
@@ -262,7 +262,7 @@ export class FlamethrowerUpgradeSystem {
       durationMs,
       burn: owner.burn,
       igniteProjectiles: (owner.fire.burningGround?.igniteProjectiles ?? 0) > 0,
-      weaponName: 'Brennender Boden',
+      sourceId: 'ground_fire.flamethrower',
       baseDamageMult: owner.baseDamageMult,
     }, now);
   }
@@ -291,7 +291,7 @@ export class FlamethrowerUpgradeSystem {
       durationMs: burst.durationMs,
       burnDurationMs: burst.burnDurationMs,
       burnDamagePerTick: burst.burnDamagePerTick,
-      weaponName: burst.weaponName,
+      sourceId: burst.sourceId,
       visualStyle: burst.visualStyle,
       damageTarget: burst.damageTarget,
       baseDamageMult: burst.baseDamageMult,
@@ -337,7 +337,7 @@ export class FlamethrowerUpgradeSystem {
       ownerId,
       durationMs: effect.durationMs,
       burn: { durationMs: effect.burnDurationMs, damagePerTick: effect.burnDamagePerTick },
-      weaponName: effect.weaponName,
+      sourceId: effect.sourceId,
       visualStyle: effect.visualStyle,
       damageTarget: effect.damageTarget,
       baseDamageMult: effect.baseDamageMult,

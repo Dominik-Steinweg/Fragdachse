@@ -21,7 +21,7 @@ function makeManager() {
     getGameMode: vi.fn(() => 'deathmatch' as const),
     publishUtilityCooldownUntil: vi.fn(),
     publishUtilityOverrideDescriptor: vi.fn(),
-    publishUtilityOverrideName: vi.fn(),
+    publishUtilityOverrideId: vi.fn(),
   };
   const manager = Object.create(LoadoutManager.prototype) as any;
   manager.bridge = bridge;
@@ -64,7 +64,7 @@ describe('temporäre Utility-Override-Lifecycle', () => {
     manager.assignDefaultLoadout('player-a');
 
     expect(bridge.publishUtilityOverrideDescriptor).toHaveBeenLastCalledWith('player-a', null);
-    expect(bridge.publishUtilityOverrideName).toHaveBeenLastCalledWith('player-a', '');
+    expect(bridge.publishUtilityOverrideId).toHaveBeenLastCalledWith('player-a', '');
     expect(bridge.publishUtilityCooldownUntil).toHaveBeenLastCalledWith('player-a', 0, '__clear__');
     expect(manager.savedUtilities.has('player-a')).toBe(false);
     expect(manager.utilityAmmo.has('player-a')).toBe(false);
@@ -97,7 +97,7 @@ describe('temporäre Utility-Override-Lifecycle', () => {
     manager.removePlayer('player-a');
 
     expect(bridge.publishUtilityOverrideDescriptor).toHaveBeenLastCalledWith('player-a', null);
-    expect(bridge.publishUtilityOverrideName).toHaveBeenLastCalledWith('player-a', '');
+    expect(bridge.publishUtilityOverrideId).toHaveBeenLastCalledWith('player-a', '');
     expect(manager.savedUtilities.has('player-a')).toBe(false);
     expect(manager.utilityAmmo.has('player-a')).toBe(false);
   });

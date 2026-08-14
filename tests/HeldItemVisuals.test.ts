@@ -100,7 +100,7 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
 
   it('gibt Nahkampfwaffen und Konstrukten nichts in die Pfoten', () => {
     expect(getHeldItemSpriteSpec('BITE')).toBeNull();
-    expect(getHeldItemSpriteSpec('FELSBAU')).toBeNull();
+    expect(getHeldItemSpriteSpec('ROCK_BARRIER')).toBeNull();
     expect(getHeldItemSpriteSpec(null)).toBeNull();
     expect(getHeldItemSpriteSpec('KEIN_ITEM')).toBeNull();
   });

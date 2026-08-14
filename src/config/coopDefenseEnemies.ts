@@ -1,4 +1,4 @@
-import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
+﻿import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
 import type { ArmageddonMeteorConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
 import {
@@ -29,7 +29,7 @@ export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players' | 'rocks' | 'st
 /**
  * Salve statt Einzelschuss: `count` Schuesse im Abstand von `intervalMs`, danach ist die Waffe
  * fuer `cooldownMs` gesperrt. Der Salventakt laeuft bewusst neben dem Zielscan-Raster des
- * Gegners – sonst wuerde er auf dessen `attackScanIntervalMs` einrasten (analog `turretBurst`).
+ * Gegners â€“ sonst wuerde er auf dessen `attackScanIntervalMs` einrasten (analog `turretBurst`).
  */
 export interface CoopDefenseEnemyWeaponSalvoConfig {
   readonly count: number;
@@ -74,17 +74,17 @@ export interface CoopDefenseEnemyTrainCollisionConfig {
 
 /**
  * Eigenleuchten eines Gegners: ein additiver Halo um das Sprite plus eine Lichtquelle gleicher
- * Farbe. Der Halo trägt die Wirkung bei Tag (die Lightmap ist dann fast wirkungslos), das Licht
- * bei Nacht – deshalb immer beides.
+ * Farbe. Der Halo trÃ¤gt die Wirkung bei Tag (die Lightmap ist dann fast wirkungslos), das Licht
+ * bei Nacht â€“ deshalb immer beides.
  *
- * Gedacht als Lesbarkeitswerkzeug für Gegner, die im Getümmel sofort erkennbar sein müssen
- * (Bosse, besonders gefährliche Einheiten), nicht als allgemeine Dekoration.
+ * Gedacht als Lesbarkeitswerkzeug fÃ¼r Gegner, die im GetÃ¼mmel sofort erkennbar sein mÃ¼ssen
+ * (Bosse, besonders gefÃ¤hrliche Einheiten), nicht als allgemeine Dekoration.
  */
 export interface CoopDefenseEnemyGlowConfig {
   readonly color: number;
-  /** Durchmesser des Halos als Vielfaches der Gegnergröße. */
+  /** Durchmesser des Halos als Vielfaches der GegnergrÃ¶ÃŸe. */
   readonly sizeFactor: number;
-  /** Deckkraft des Halos (0…1) vor der Emissive-Dämpfung. */
+  /** Deckkraft des Halos (0â€¦1) vor der Emissive-DÃ¤mpfung. */
   readonly alpha: number;
   readonly lightRadiusPx: number;
   readonly lightIntensity: number;
@@ -120,7 +120,7 @@ export interface CoopDefenseEnemyBurrowConfig {
 /**
  * Bevorzugter Gefechtsabstand eines Fernkaempfers. Der Gegner laeuft weiterhin grundsaetzlich auf
  * die Spieler zu (`movementTarget: 'players'`), haelt aber ab dieser Distanz an und weicht zurueck,
- * wenn ein Spieler zu nah herankommt – statt in den Nahkampf zu rennen.
+ * wenn ein Spieler zu nah herankommt â€“ statt in den Nahkampf zu rennen.
  *
  * Bewusst allgemein gehalten: jede Gegner-Art mit diesem Block bekommt das Verhalten, ohne dass
  * dafuer Code angefasst werden muss.
@@ -149,7 +149,7 @@ export interface CoopDefenseEnemyCombatPositioningConfig {
  * konfigurierbar. Konfiguriert wird nur, *wann* der Gegner ausweicht.
  */
 export interface CoopDefenseEnemyDodgeConfig {
-  /** Optionaler HP-Schwellwert; oberhalb davon bleibt der Dodge vollständig deaktiviert. */
+  /** Optionaler HP-Schwellwert; oberhalb davon bleibt der Dodge vollstÃ¤ndig deaktiviert. */
   readonly enabledBelowHpRatio?: number;
   /** Wartezeit nach dem Ende eines Ausweichschritts, bevor der naechste starten darf. */
   readonly cooldownMs: number;
@@ -159,7 +159,7 @@ export interface CoopDefenseEnemyDodgeConfig {
   readonly evadeLeadTimeMs: number;
   /** Sicherheitsaufschlag auf den Trefferradius bei der Einschlagsprognose. */
   readonly evadeMissMarginPx: number;
-  /** Naeher als das wird nicht nachgesetzt – der Gegner steht bereits im Nahbereich. */
+  /** Naeher als das wird nicht nachgesetzt â€“ der Gegner steht bereits im Nahbereich. */
   readonly approachMinDistancePx: number;
   /** Weiter als das lohnt der Sprung nicht; der Gegner laeuft dann normal weiter. */
   readonly approachMaxDistancePx: number;
@@ -171,7 +171,6 @@ export interface CoopDefenseEnemyDodgeConfig {
  * geplanter Flugzeit), da sich diese Ballistik bereits bewaehrt hat.
  */
 export interface CoopDefenseEnemySpawnThrowConfig {
-  readonly displayName: string;
   /** Gegnerart, die beim Ausloesen entsteht. */
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly count: number;
@@ -191,13 +190,12 @@ export interface CoopDefenseEnemySpawnThrowConfig {
 
 /**
  * Gegnerischer Brandsatz auf Basis des Spieler-Molotovs. Radius, Schaden, Zuendzeit und
- * Flugphysik stammen aus der referenzierten Utility; hier stehen nur die KI-Werte – Einsatzband,
+ * Flugphysik stammen aus der referenzierten Utility; hier stehen nur die KI-Werte â€“ Einsatzband,
  * Cooldown und die lesbare Wurf-Standzeit. Die entstehende Flaeche uebernimmt die lila
  * Void-Brandfamilie und trifft ausschliesslich Spieler.
  */
 export interface CoopDefenseEnemyVoidMolotovConfig {
   readonly utilityId: 'MOLOTOV_GRENADE';
-  readonly displayName: string;
   readonly minRange: number;
   readonly maxRange: number;
   readonly cooldownMs: number;
@@ -270,7 +268,7 @@ export interface CoopDefenseEnemyConfig {
   readonly size: number;
   readonly moveSpeed: number;
   /**
-   * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen …).
+   * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen â€¦).
    * 1 = normales Wegstoessen, >1 = leichter Gegner fliegt weiter, <1 = schwerer Gegner haelt dagegen,
    * 0 = komplett immun. Fehlt der Wert, gilt 1.
    */
@@ -284,7 +282,6 @@ export interface CoopDefenseEnemyConfig {
   /** Rein visuelle Zusatzdrehung des Sprites; Bewegung, Zielen und Netzwerkrotation bleiben unveraendert. */
   readonly spriteRotationOffsetDegrees?: number;
   readonly isBoss?: boolean;
-  readonly displayName?: string;
   readonly color?: number;
   readonly glow?: CoopDefenseEnemyGlowConfig;
   readonly phaseTwoGlow?: CoopDefenseEnemyGlowConfig;
@@ -324,8 +321,8 @@ export const COOP_DEFENSE_ENEMY_CONFIGS: Record<CoopDefenseEnemyKind, CoopDefens
 
 /**
  * Stabile, geordnete Liste aller Gegner-Arten. Reihenfolge folgt der Insertion-Order der
- * gebündelten JSON-Registry und ist daher auf Host und Client identisch – nur deshalb darf der
- * Index als kompakter Wire-Wert für `kind` verwendet werden (siehe enemySnapshotCodec.ts).
+ * gebÃ¼ndelten JSON-Registry und ist daher auf Host und Client identisch â€“ nur deshalb darf der
+ * Index als kompakter Wire-Wert fÃ¼r `kind` verwendet werden (siehe enemySnapshotCodec.ts).
  */
 export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.keys(COOP_DEFENSE_ENEMY_REGISTRY);
 
@@ -381,7 +378,6 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         imageKey: config.imageKey,
         spriteRotationOffsetDegrees: config.spriteRotationOffsetDegrees,
         isBoss: config.isBoss,
-        displayName: config.displayName,
         color: config.color,
         glow: config.glow,
         phaseTwoGlow: config.phaseTwoGlow,
@@ -480,9 +476,6 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       ? enemy.spriteRotationOffsetDegrees
       : undefined,
     isBoss,
-    displayName: typeof enemy.displayName === 'string' && enemy.displayName.trim().length > 0
-      ? enemy.displayName.trim()
-      : undefined,
     color: typeof enemy.color === 'number' && Number.isFinite(enemy.color)
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
@@ -611,7 +604,6 @@ function normalizeSpawnThrowConfig(
   }
   const minRange = Math.max(0, config.minRange);
   return {
-    displayName: config.displayName,
     enemyKind: config.enemyKind,
     count: Math.max(1, Math.floor(config.count)),
     spawnOffsetPx: Math.max(0, config.spawnOffsetPx),
@@ -640,7 +632,7 @@ function normalizeVoidFireChunkConfig(
     durationMs: Math.max(0, Math.floor(config.durationMs)),
     burnDurationMs: Math.max(0, Math.floor(config.burnDurationMs)),
     burnDamagePerTick: Math.max(0, config.burnDamagePerTick),
-    weaponName: config.weaponName,
+    sourceId: config.sourceId,
     visualStyle: 'void',
     damageTarget: 'players',
     intervalMinMs,
@@ -659,7 +651,6 @@ function normalizeVoidMolotovConfig(
   const minRange = Math.max(0, config.minRange);
   return {
     utilityId: 'MOLOTOV_GRENADE',
-    displayName: config.displayName,
     minRange,
     maxRange: Math.max(minRange, config.maxRange),
     cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
@@ -728,7 +719,7 @@ function normalizeVoidFireTrailConfig(
     durationMs: Math.max(0, Math.floor(config.durationMs)),
     burnDurationMs: Math.max(0, Math.floor(config.burnDurationMs)),
     burnDamagePerTick: Math.max(0, config.burnDamagePerTick),
-    weaponName: config.weaponName,
+    sourceId: config.sourceId,
     visualStyle: 'void',
     damageTarget: 'players',
   };
@@ -739,7 +730,7 @@ function normalizeStinkAuraConfig(
   enemyId: string,
 ): CoopDefenseEnemyStinkAuraConfig | undefined {
   if (!config) return undefined;
-  if (config.utilityId !== 'ENEMY_STINKDRUESEN') {
+  if (config.utilityId !== 'ENEMY_STINK_CLOUD') {
     throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} references unsupported stink aura utility`);
   }
   return { utilityId: config.utilityId };

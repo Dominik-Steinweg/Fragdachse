@@ -6,16 +6,19 @@
  * Diagnose-Tasten) gehören bewusst nicht in diese Liste, weil sie in beiden Fenstern
  * sichtbar wären.
  */
-export type HelpControlEntry = readonly [key: string, description: string];
+export interface HelpControlEntry {
+  readonly keyId: string;
+  readonly descriptionKey: string;
+}
 
 export const HELP_CONTROLS: readonly HelpControlEntry[] = [
-  ['W A S D',       'Bewegen'],
-  ['LEERTASTE',     'Dash'],
-  ['LINKE MAUST.',  'Weapon 1  (Treffer → Adrenalin)'],
-  ['RECHTE MAUST.', 'Weapon 2  (kostet Adrenalin)'],
-  ['E  (halten)',   'Utility einsetzen'],
-  ['R  (halten)',   'Utility-Rad  (nur Ingenieur)'],
-  ['Q',             'Ultimate  (füllt sich durch Schaden)'],
-  ['SHIFT',         'Einbuddeln  (kostet Adrenalin)'],
-  ['O',             'Optionen'],
+  { keyId: 'ui.help.wasd', descriptionKey: 'ui.help.move' },
+  { keyId: 'ui.help.space', descriptionKey: 'ui.help.dash' },
+  { keyId: 'ui.help.leftMouse', descriptionKey: 'ui.help.weapon1' },
+  { keyId: 'ui.help.rightMouse', descriptionKey: 'ui.help.weapon2' },
+  { keyId: 'ui.help.holdE', descriptionKey: 'ui.help.utility' },
+  { keyId: 'ui.help.holdR', descriptionKey: 'ui.help.utilityWheel' },
+  { keyId: 'ui.help.q', descriptionKey: 'ui.help.ultimate' },
+  { keyId: 'ui.help.shift', descriptionKey: 'ui.help.burrow' },
+  { keyId: 'ui.help.o', descriptionKey: 'ui.help.options' },
 ];

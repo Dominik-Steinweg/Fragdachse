@@ -2,7 +2,6 @@
   "utilities": {
     "HE_GRENADE": {
       "id": "HE_GRENADE",
-      "displayName": "HE Granate",
       "type": "explosive",
       "cooldown": 3000,
       "activation": {
@@ -37,7 +36,6 @@
     },
     "SMOKE_GRENADE": {
       "id": "SMOKE_GRENADE",
-      "displayName": "Smoke Granate",
       "type": "smoke",
       "cooldown": 6000,
       "activation": {
@@ -73,7 +71,6 @@
     },
     "MOLOTOV_GRENADE": {
       "id": "MOLOTOV_GRENADE",
-      "displayName": "Molotov",
       "type": "molotov",
       "cooldown": 5000,
       "activation": {
@@ -112,7 +109,6 @@
     },
     "HOLY_HAND_GRENADE": {
       "id": "HOLY_HAND_GRENADE",
-      "displayName": "Heilige Handgranate",
       "type": "explosive",
       "allowTeamDamage": true,
       "cooldown": 0,

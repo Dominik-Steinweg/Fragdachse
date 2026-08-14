@@ -7,8 +7,6 @@ interface RawCoopDefenseConstructionCooldownDefinition {
 
 interface CoopDefenseConstructionBaseDefinition {
   readonly id: ConstructionId;
-  readonly displayName: string;
-  readonly description: string;
   readonly buildCooldownMs: number;
   /**
    * Optionales individuelles Loadout-Icon des Konstrukts. Solange es `null` ist, verwenden
@@ -93,8 +91,8 @@ export const COOP_DEFENSE_DISMANTLE_RANGE = 320;
  * damit die Kapazitaetsaufloesung ohne Import der Loadout-Configs auskommt.
  */
 export const COOP_DEFENSE_UTILITY_CAPACITY_COSTS: Readonly<Record<string, number>> = Object.freeze({
-  FELSBAU: 1,
-  FLIEGENPILZ: 15,
+  ROCK_BARRIER: 1,
+  SPORE_TURRET: 15,
 });
 
 export const COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS = 3;
@@ -140,8 +138,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'turret',
       id: 'rocket_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.rocket_turret,
-      displayName: 'Raketenturm',
-      description: 'Verschießt zwei schnell lenkende Raketen und lädt danach länger nach.',
       weaponId: 'TURRET_ROCKET_BURST',
       iconKey: null,
       unlockUpgradeId: 'unlock_rocket_turret',
@@ -157,8 +153,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'turret',
       id: 'machine_gun_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.machine_gun_turret,
-      displayName: 'Maschinengewehrturm',
-      description: 'Bekämpft einzelne Ziele mit hoher Feuerrate.',
       weaponId: 'TURRET_MG',
       iconKey: null,
       unlockUpgradeId: 'unlock_machine_gun_turret',
@@ -174,8 +168,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'turret',
       id: 'flame_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.flame_turret,
-      displayName: 'Flammenwerferturm',
-      description: 'Entzündet Gegner in kurzer Reichweite kontinuierlich.',
       weaponId: 'TURRET_FLAME',
       iconKey: null,
       unlockUpgradeId: 'unlock_flame_turret',
@@ -191,8 +183,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'turret',
       id: 'tesla_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.tesla_turret,
-      displayName: 'Tesla-Turm',
-      description: 'Erzeugt bei nahen Gegnern eine kleine Teslakuppel mit kontinuierlichem Schaden.',
       weaponId: 'TURRET_TESLA',
       iconKey: null,
       unlockUpgradeId: 'unlock_tesla_turret',
@@ -208,8 +198,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'turret',
       id: 'gravity_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.gravity_turret,
-      displayName: 'Gravitationsturm',
-      description: 'Erzeugt am Einschlag ein schwarzes Loch, das Gegner anzieht.',
       weaponId: 'TURRET_GRAVITY',
       iconKey: null,
       unlockUpgradeId: 'unlock_gravity_turret',
@@ -225,8 +213,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'turret',
       id: 'slow_bubble_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.slow_bubble_turret,
-      displayName: 'Slow-Bubble-Turm',
-      description: 'Erzeugt am Einschlag eine kleine Zeitblase, die alle Einheiten verlangsamt.',
       weaponId: 'TURRET_SLOW_BUBBLE',
       iconKey: null,
       unlockUpgradeId: 'unlock_slow_bubble_turret',
@@ -242,8 +228,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'pedestal',
       id: 'medic_pedestal',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.medic_pedestal,
-      displayName: 'Medic-Podest',
-      description: 'Stellt regelmaessig ein Medipack bereit.',
       powerUpDefId: 'HEALTH_PACK',
       iconKey: null,
       unlockUpgradeId: 'unlock_medic_pedestal',
@@ -258,8 +242,6 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       kind: 'pedestal',
       id: 'armor_pedestal',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.armor_pedestal,
-      displayName: 'Armor-Podest',
-      description: 'Stellt regelmaessig ein Armor-Power-up bereit.',
       powerUpDefId: 'ARMOR',
       iconKey: null,
       unlockUpgradeId: 'unlock_armor_pedestal',
@@ -293,8 +275,8 @@ export function getPlaceableCapacityCost(
   rock: { readonly kind: PlaceableKind; readonly constructionId?: ConstructionId },
 ): number {
   if (rock.constructionId) return COOP_DEFENSE_CONSTRUCTIONS[rock.constructionId]?.capacityCost ?? 0;
-  if (rock.kind === 'rock') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.FELSBAU;
-  if (rock.kind === 'turret') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.FLIEGENPILZ;
+  if (rock.kind === 'rock') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.ROCK_BARRIER;
+  if (rock.kind === 'turret') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.SPORE_TURRET;
   return 0;
 }
 

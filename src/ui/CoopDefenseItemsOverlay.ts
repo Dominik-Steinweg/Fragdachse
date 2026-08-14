@@ -37,6 +37,8 @@ import { UiContextMenu } from './UiContextMenu';
 import { UiTooltip } from './UiTooltip';
 import { BORDER, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { getLocale, t } from '../i18n';
+import { getItemSlotName } from '../i18n/itemPresentation';
 
 /**
  * Item-Menue der Lobby im Stil klassischer Action-Rollenspiele: links eine Ausruestungspuppe
@@ -203,7 +205,7 @@ export class CoopDefenseItemsOverlay {
       ).setScrollFactor(0).setInteractive(),
     );
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'AUSRÜSTUNG', textStyle('display'))
+      this.scene.add.text(CX, TITLE_Y, t('ui.items.title'), textStyle('display'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -267,8 +269,8 @@ export class CoopDefenseItemsOverlay {
     if (!this.visible) return;
     const state = this.getState();
 
-    this.rewardHint?.setText(state.hasPendingReward ? '● Offene Belohnung – hier auswählen' : '');
-    this.sortLabel?.setText(this.sortMode === 'rarity' ? 'SORTIERUNG: SELTENHEIT' : 'SORTIERUNG: STUFE');
+    this.rewardHint?.setText(state.hasPendingReward ? t('ui.items.openReward') : '');
+    this.sortLabel?.setText(this.sortMode === 'rarity' ? t('ui.items.sortRarity') : t('ui.items.sortLevel'));
 
     const columns = buildCoopDefenseInventoryGrid(state.items, state.equippedItemIds, this.sortMode);
     columns.forEach((column, columnIndex) => {
@@ -276,7 +278,7 @@ export class CoopDefenseItemsOverlay {
       if (dollCell) this.renderCell(dollCell, column.equipped);
 
       this.columnTitles.get(column.slot)?.setText(
-        `${getCoopDefenseItemSlotDefinition(column.slot).label.toUpperCase()}  ${column.used}/${column.capacity}`,
+        `${getItemSlotName(column.slot, getLocale()).toUpperCase()}  ${column.used}/${column.capacity}`,
       );
 
       column.cells.forEach((item, cellIndex) => {
@@ -325,7 +327,7 @@ export class CoopDefenseItemsOverlay {
         this.scene, TEX_SECTION_DOLL, DOLL_W, SECTION_H, SURFACE.raised, BORDER.subtle,
         { radius: RADIUS.lg, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(DOLL_CX, SECTION_TITLE_Y, 'AUSGERÜSTET', textStyle('subtitle'))
+      this.scene.add.text(DOLL_CX, SECTION_TITLE_Y, t('ui.items.equipped'), textStyle('subtitle'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -336,7 +338,7 @@ export class CoopDefenseItemsOverlay {
       this.registerDropZone(cell.frame, { slot, kind: 'equipment' });
       objects.push(cell.container);
       objects.push(
-        this.scene.add.text(position.x, position.y + DOLL_CELL / 2 + SPACE.md, getCoopDefenseItemSlotDefinition(slot).label.toUpperCase(), textStyle('section'))
+        this.scene.add.text(position.x, position.y + DOLL_CELL / 2 + SPACE.md, getItemSlotName(slot, getLocale()).toUpperCase(), textStyle('section'))
           .setOrigin(0.5).setScrollFactor(0),
       );
     }
@@ -344,10 +346,10 @@ export class CoopDefenseItemsOverlay {
     objects.push(
       this.scene.add.rectangle(DOLL_CX, SUMMARY_TITLE_Y - 20, DOLL_W - 80, 1, COLORS.GREY_5, 0.55)
         .setScrollFactor(0),
-      this.scene.add.text(DOLL_CX, SUMMARY_TITLE_Y, 'GESAMTWERTE', textStyle('section'))
+      this.scene.add.text(DOLL_CX, SUMMARY_TITLE_Y, t('ui.items.totalStats'), textStyle('section'))
         .setOrigin(0.5).setScrollFactor(0),
     );
-    this.summaryEmpty = this.scene.add.text(DOLL_CX, SUMMARY_START_Y + SPACE.xs, 'Nichts ausgerüstet.', textStyle('body', {
+    this.summaryEmpty = this.scene.add.text(DOLL_CX, SUMMARY_START_Y + SPACE.xs, t('ui.items.emptyEquipped'), textStyle('body', {
       color: TEXT.disabled,
     })).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.summaryEmpty);
@@ -367,7 +369,7 @@ export class CoopDefenseItemsOverlay {
       objects.push(label, value);
     }
 
-    this.specialEffectsTitle = this.scene.add.text(DOLL_CX, SPECIAL_TITLE_Y, 'SONDEREFFEKTE', textStyle('section'))
+    this.specialEffectsTitle = this.scene.add.text(DOLL_CX, SPECIAL_TITLE_Y, t('ui.items.specialEffects'), textStyle('section'))
       .setOrigin(0.5).setScrollFactor(0).setVisible(false);
     objects.push(this.specialEffectsTitle);
     for (let index = 0; index < MAX_SPECIAL_EFFECT_LINES; index++) {
@@ -388,9 +390,9 @@ export class CoopDefenseItemsOverlay {
         this.scene, TEX_SECTION_GRID, GRID_W, SECTION_H, SURFACE.raised, BORDER.subtle,
         { radius: RADIUS.lg, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(GRID_CX, SECTION_TITLE_Y, 'INVENTAR', textStyle('subtitle'))
+      this.scene.add.text(GRID_CX, SECTION_TITLE_Y, t('ui.items.inventory'), textStyle('subtitle'))
         .setOrigin(0.5).setScrollFactor(0),
-      this.scene.add.text(GRID_CX, GRID_HINT_Y, 'Mouse-Over zeigt die Werte · Klick öffnet das Menü · Ziehen rüstet aus und ab', textStyle('caption'))
+      this.scene.add.text(GRID_CX, GRID_HINT_Y, t('ui.items.instructions'), textStyle('caption'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -460,7 +462,7 @@ export class CoopDefenseItemsOverlay {
       closeX, FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER, FOOTER_BTN_W, FOOTER_BTN_H, INTENT.neutral.fill, INTENT.neutral.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const closeLabel = this.scene.add.text(closeX, FOOTER_Y, 'SCHLIESSEN', textStyle('label', {
+    const closeLabel = this.scene.add.text(closeX, FOOTER_Y, t('ui.items.close'), textStyle('label', {
       color: INTENT.neutral.label,
     })).setOrigin(0.5).setScrollFactor(0);
     closeButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
@@ -645,7 +647,7 @@ export class CoopDefenseItemsOverlay {
     this.contextMenu.open({
       x,
       y,
-      title: `${getCoopDefenseItemSlotDefinition(cell.slot).label} · Stufe ${item.itemLevel}`,
+      title: `${getItemSlotName(cell.slot, getLocale())} · ${t('ui.items.level')} ${item.itemLevel}`,
       titleColor: rarity.color,
       onClose: () => {
         this.pendingSalvageUid = null;
@@ -653,7 +655,7 @@ export class CoopDefenseItemsOverlay {
       entries: [
         cell.equipmentSlot
           ? {
-            label: 'ABLEGEN',
+            label: t('ui.items.drop'),
             color: COLORS.GREY_1,
             onPick: () => {
               this.onUnequip(cell.slot);
@@ -661,7 +663,7 @@ export class CoopDefenseItemsOverlay {
             },
           }
           : {
-            label: 'AUSRÜSTEN',
+            label: t('ui.items.equip'),
             color: COLORS.GREEN_2,
             onPick: () => {
               this.onEquip(item.uid);
@@ -669,7 +671,9 @@ export class CoopDefenseItemsOverlay {
             },
           },
         {
-          label: confirming ? `WIRKLICH? +${salvageXp} XP` : `ZERLEGEN +${salvageXp} XP`,
+          label: confirming
+            ? `${t('ui.items.confirmSalvage')} +${salvageXp} XP`
+            : `${t('ui.items.salvage')} +${salvageXp} XP`,
           color: confirming ? COLORS.RED_1 : COLORS.GREY_2,
           keepOpen: !confirming,
           onPick: () => {

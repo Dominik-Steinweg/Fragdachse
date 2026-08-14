@@ -7,9 +7,9 @@ import { getTurretVisualSpec, getTurretVisualTransform, TURRET_VISUALS } from '.
 import type { TurretWeaponId } from '../src/types';
 
 const ALL_TURRET_WEAPONS: readonly TurretWeaponId[] = [
-  'SPOREN',
-  'BASE_SPOREN',
-  'FLIEGENPILZ_PLASMA',
+  'SPORES',
+  'BASE_SPORES',
+  'SPORE_TURRET_PLASMA',
   'TURRET_ROCKET_BURST',
   'TURRET_MG',
   'TURRET_FLAME',
@@ -17,25 +17,25 @@ const ALL_TURRET_WEAPONS: readonly TurretWeaponId[] = [
   'TURRET_GRAVITY',
   'TURRET_SLOW_BUBBLE',
   'TURRET_VOID_FLAME',
-  'TURRET_SPORE',
+  'TURRET_SPORES',
 ];
 
 describe('turret visual catalog', () => {
   it('covers every turret weapon and keeps the authored mushroom PNG', () => {
     expect(Object.keys(TURRET_VISUALS).sort()).toEqual([...ALL_TURRET_WEAPONS].sort());
-    expect(getTurretVisualSpec('SPOREN')).toMatchObject({
+    expect(getTurretVisualSpec('SPORES')).toMatchObject({
       textureKey: 'pilz01',
       assetPath: null,
       displaySize: 32,
       centerCorrectionX: 7,
       centerCorrectionY: -7,
     });
-    expect(getTurretVisualSpec('BASE_SPOREN')).toBe(getTurretVisualSpec('SPOREN'));
-    expect(getTurretVisualSpec('TURRET_SPORE')).toBe(getTurretVisualSpec('SPOREN'));
+    expect(getTurretVisualSpec('BASE_SPORES')).toBe(getTurretVisualSpec('SPORES'));
+    expect(getTurretVisualSpec('TURRET_SPORES')).toBe(getTurretVisualSpec('SPORES'));
   });
 
   it('keeps the authored mushroom artwork centered while rotating', () => {
-    const transform = getTurretVisualTransform(getTurretVisualSpec('SPOREN'), 100, 200, 0);
+    const transform = getTurretVisualTransform(getTurretVisualSpec('SPORES'), 100, 200, 0);
     expect(transform).toEqual({ x: 107, y: 193, rotation: 0 });
   });
 

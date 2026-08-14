@@ -1,10 +1,8 @@
 {
   "mapId": "13",
-  "displayName": "Map 13 - Brutbomben",
   "arenaWidthCells": 135,
   "arenaHeightCells": 40,
   "timeOfDay": "18:45",
-  "tutorialText": "Wurf-Dachse schleudern Brutbomben, aus denen neue Gegner schlüpfen. Optionale Brutnester erzeugen zusätzlichen Druck – zerstört ihr sie, wird der weitere Angriff leichter.",
   "tutorialDurationMs": 10000,
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
@@ -105,7 +103,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -114,7 +112,7 @@
             "gridY": 4
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ],
       "powerUpPedestals": [
@@ -195,7 +193,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -204,7 +202,7 @@
             "gridY": 3
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ],
       "powerUpPedestals": [
@@ -319,7 +317,7 @@
             "gridY": 0
           },
           "mountSide": "rear",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "rear-bottom",
@@ -328,7 +326,7 @@
             "gridY": 4
           },
           "mountSide": "rear",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ]
     },
@@ -551,7 +549,7 @@
             "gridY": 0
           },
           "mountSide": "rear",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -577,7 +575,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     }
@@ -733,8 +731,6 @@
     {
       "id": "destroy-brutbomben-front",
       "type": "destroy",
-      "displayName": "BRUTNESTER ZERSTOEREN",
-      "rewardHint": "WENIGER ZUSATZDRUCK / BONUS-XP",
       "start": {
         "type": "after-encounter",
         "encounterId": "hive-defense"

@@ -102,39 +102,39 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "DECOY",
     targets: [{ path: ["explosionRadius"], formula: "add", createIfMissing: true }],
   },
-  "utility.FELSBAU.placeable.enemyDestroyedExplosionDamage": {
+  "utility.ROCK_BARRIER.placeable.enemyDestroyedExplosionDamage": {
     kind: "utility",
-    itemId: "FELSBAU",
+    itemId: "ROCK_BARRIER",
     targets: [{ path: ["placeable","enemyDestroyedExplosionDamage"], formula: "add", createIfMissing: true }],
   },
-  "utility.FELSBAU.placeable.enemyDestroyedExplosionKnockback": {
+  "utility.ROCK_BARRIER.placeable.enemyDestroyedExplosionKnockback": {
     kind: "utility",
-    itemId: "FELSBAU",
+    itemId: "ROCK_BARRIER",
     targets: [{ path: ["placeable","enemyDestroyedExplosionKnockback"], formula: "add", createIfMissing: true }],
   },
-  "utility.FELSBAU.placeable.enemyDestroyedExplosionRadius": {
+  "utility.ROCK_BARRIER.placeable.enemyDestroyedExplosionRadius": {
     kind: "utility",
-    itemId: "FELSBAU",
+    itemId: "ROCK_BARRIER",
     targets: [{ path: ["placeable","enemyDestroyedExplosionRadius"], formula: "add", createIfMissing: true }],
   },
-  "utility.FELSBAU.placeable.range": {
+  "utility.ROCK_BARRIER.placeable.range": {
     kind: "utility",
-    itemId: "FELSBAU",
+    itemId: "ROCK_BARRIER",
     targets: [{ path: ["placeable","range"], formula: "scale" }],
   },
-  "utility.FLIEGENPILZ.placeable.plasmaWeaponEnabled": {
+  "utility.SPORE_TURRET.placeable.plasmaWeaponEnabled": {
     kind: "utility",
-    itemId: "FLIEGENPILZ",
+    itemId: "SPORE_TURRET",
     targets: [{ path: ["placeable","plasmaWeaponEnabled"], formula: "add", createIfMissing: true }],
   },
-  "utility.FLIEGENPILZ.placeable.range": {
+  "utility.SPORE_TURRET.placeable.range": {
     kind: "utility",
-    itemId: "FLIEGENPILZ",
+    itemId: "SPORE_TURRET",
     targets: [{ path: ["placeable","range"], formula: "scale" }],
   },
-  "utility.FLIEGENPILZ.placeable.secondProjectileDamageFactor": {
+  "utility.SPORE_TURRET.placeable.secondProjectileDamageFactor": {
     kind: "utility",
-    itemId: "FLIEGENPILZ",
+    itemId: "SPORE_TURRET",
     targets: [{ path: ["placeable","secondProjectileDamageFactor"], formula: "add", createIfMissing: true }],
   },
   "utility.HE_GRENADE.clusterCount": {
@@ -152,19 +152,19 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "HE_GRENADE",
     targets: [{ path: ["clusterRadiusFactor"], formula: "add", createIfMissing: true }],
   },
-  "utility.STINKDRUESEN.afterCloudDamageFactor": {
+  "utility.STINK_CLOUD.afterCloudDamageFactor": {
     kind: "utility",
-    itemId: "STINKDRUESEN",
+    itemId: "STINK_CLOUD",
     targets: [{ path: ["afterCloudDamageFactor"], formula: "add", createIfMissing: true }],
   },
-  "utility.STINKDRUESEN.afterCloudDurationMs": {
+  "utility.STINK_CLOUD.afterCloudDurationMs": {
     kind: "utility",
-    itemId: "STINKDRUESEN",
+    itemId: "STINK_CLOUD",
     targets: [{ path: ["afterCloudDurationMs"], formula: "add", createIfMissing: true }],
   },
-  "utility.STINKDRUESEN.afterCloudRadiusFactor": {
+  "utility.STINK_CLOUD.afterCloudRadiusFactor": {
     kind: "utility",
-    itemId: "STINKDRUESEN",
+    itemId: "STINK_CLOUD",
     targets: [{ path: ["afterCloudRadiusFactor"], formula: "add", createIfMissing: true }],
   },
   "utility.TIME_BUBBLE.friendlyImmunity": {
@@ -432,9 +432,9 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "HYDRA",
     targets: [{ path: ["splitHomingEnabled"], formula: "add", createIfMissing: true }],
   },
-  "weapon.LAUBBLAESER.directDamageOverride": {
+  "weapon.LEAF_BLOWER.directDamageOverride": {
     kind: "weapon",
-    itemId: "LAUBBLAESER",
+    itemId: "LEAF_BLOWER",
     targets: [{ path: ["directDamageOverride"], formula: "add" }],
   },
   "weapon.NEGEV.hitSlowFraction": {

@@ -23,6 +23,13 @@ import {
   type CoopDefenseUpgradeKind,
   type CoopDefenseUpgradeRequirementDefinition,
 } from './coopDefenseUpgrades';
+import { getLocale } from '../i18n';
+import {
+  getUpgradeCategoryDescription,
+  getUpgradeCategoryName,
+  getUpgradeDescription,
+  getUpgradeName,
+} from '../i18n/upgradePresentation';
 
 const FIRST_LEVEL_UP_XP = 10;
 const XP_INCREASE_PER_LEVEL = 25;
@@ -186,8 +193,8 @@ function buildUpgradeCategorySnapshots(
 ): readonly CoopDefenseUpgradeCategorySnapshot[] {
   return getCoopDefenseUpgradeCategories(classId).map((category) => ({
     id: category.id,
-    label: category.label,
-    description: category.description,
+    label: getUpgradeCategoryName(category.id, getLocale()),
+    description: getUpgradeCategoryDescription(category.id, getLocale()),
     upgrades: category.upgrades.map((definition) => (
       buildUpgradeNodeSnapshot(profile, playerLevel, earnedBossPoints, classId, category, definition)
     )),
@@ -208,8 +215,8 @@ function buildUpgradeNodeSnapshot(
   return {
     id: definition.id,
     code: definition.code ?? null,
-    label: definition.label,
-    description: definition.description,
+    label: getUpgradeName(definition.id, getLocale()),
+    description: getUpgradeDescription(definition.id, getLocale()),
     categoryId: category.id,
     kind: definition.kind,
     unlocked: state.unlocked,
@@ -240,7 +247,7 @@ function buildRequirementSnapshot(
 
   return {
     upgradeId: requirement.upgradeId,
-    label: definition?.label ?? requirement.upgradeId,
+    label: definition ? getUpgradeName(definition.id, getLocale()) : requirement.upgradeId,
     minLevel: requirement.minLevel,
     currentLevel: state.level,
     satisfied: state.level >= requirement.minLevel,

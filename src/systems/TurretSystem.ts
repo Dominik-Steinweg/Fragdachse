@@ -148,7 +148,7 @@ export class TurretSystem {
       // gleiche Faktor streckt die Waffenreichweite mit, sonst sterben Projektile vor dem Ziel.
       const baseTargetRange = config.placeable.targetRange;
       const targetRange = turret.targetRange ?? baseTargetRange;
-      const turretWeaponId = turret.weaponId ?? 'SPOREN';
+      const turretWeaponId = turret.weaponId ?? 'SPORES';
       const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
       // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
       // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.

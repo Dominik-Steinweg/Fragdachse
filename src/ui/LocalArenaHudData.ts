@@ -17,11 +17,12 @@ interface BuildLocalArenaHudDataParams {
   isUltimateActive: boolean;
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
-  ultimateDisplayName?: string;
+  ultimateId?: string;
   weapon1CooldownFrac: number;
   weapon2CooldownFrac: number;
   utilityCooldownFrac: number;
-  utilityDisplayName?: string;
+  utilityId?: string;
+  utilityCapacityCost?: number;
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?: boolean;
   activePowerUps?: ArenaHUDData['activePowerUps'];
@@ -37,8 +38,9 @@ interface BuildInitialLocalArenaHudDataParams {
   maxRage?: number;
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
-  ultimateDisplayName?: string;
-  utilityDisplayName?: string;
+  ultimateId?: string;
+  utilityId?: string;
+  utilityCapacityCost?: number;
   weapon2AdrenalineCost?: number;
 }
 
@@ -55,11 +57,12 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     isUltimateActive: params.isUltimateActive,
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,
-    ultimateDisplayName: params.ultimateDisplayName,
+    ultimateId: params.ultimateId,
     weapon1CooldownFrac: params.weapon1CooldownFrac,
     weapon2CooldownFrac: params.weapon2CooldownFrac,
     utilityCooldownFrac: params.utilityCooldownFrac,
-    utilityDisplayName: params.utilityDisplayName,
+    utilityId: params.utilityId,
+    utilityCapacityCost: params.utilityCapacityCost ?? 0,
     adrenalineSyringeActive: params.adrenalineSyringeActive ?? false,
     isUtilityOverridden: params.isUtilityOverridden ?? false,
     activePowerUps: params.activePowerUps ?? [],
@@ -85,11 +88,12 @@ export function buildInitialLocalArenaHudData(
     isUltimateActive: false,
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,
-    ultimateDisplayName: params.ultimateDisplayName,
+    ultimateId: params.ultimateId,
     weapon1CooldownFrac: 0,
     weapon2CooldownFrac: 0,
     utilityCooldownFrac: 0,
-    utilityDisplayName: params.utilityDisplayName,
+    utilityId: params.utilityId,
+    utilityCapacityCost: params.utilityCapacityCost ?? 0,
     adrenalineSyringeActive: false,
     isUtilityOverridden: false,
     activePowerUps: [],

@@ -32,7 +32,6 @@ describe('RoomQualityMonitor', () => {
 
     expect(snapshot?.status).toBe('waiting');
     expect(snapshot?.worstPingMs).toBeNull();
-    expect(snapshot?.summary).toContain('Mitspieler');
   });
 
   it('samples until it has enough data, then rates the room', () => {

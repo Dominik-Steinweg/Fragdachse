@@ -19,6 +19,7 @@ import type { SyncedPlaceableRock } from '../src/types';
 import {
   COOP_DEFENSE_REPAIR_DRONE_CONFIG,
 } from '../src/config/coopDefenseConstructions';
+import { getClassTooltipLines } from '../src/i18n/contentPresentation';
 
 function commit(
   classId: CoopDefenseClassId,
@@ -26,7 +27,7 @@ function commit(
 ): LoadoutCommitSnapshot {
   return {
     weapon1: 'GLOCK',
-    weapon2: classId === 'inspector_gadachs' ? 'REPARATURSTRAHL' : 'P90',
+    weapon2: classId === 'inspector_gadachs' ? 'PLASMA_BURNER' : 'P90',
     utility: 'FELSEN',
     ultimate: 'GAUSS',
     coopDefenseClassId: classId,
@@ -36,7 +37,7 @@ function commit(
 
 describe('coop-defense classes', () => {
   it('keeps German class tooltip text readable', () => {
-    expect(COOP_DEFENSE_CLASS_DEFINITIONS.dachs_of_steel.tooltipLines).toContain(
+    expect(getClassTooltipLines('dachs_of_steel', 'de')).toContain(
       'Stärke: hält Gegnerwellen direkt an der Basis auf.',
     );
   });
@@ -83,7 +84,7 @@ describe('coop-defense classes', () => {
       'inspector_gadachs',
     );
 
-    expect(snapshot.weapon2).toBe('REPARATURSTRAHL');
+    expect(snapshot.weapon2).toBe('PLASMA_BURNER');
     expect(isCoopDefenseReadyLoadoutComplete(snapshot)).toBe(true);
     expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: 'P90' })).toBe(false);
     expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: null })).toBe(false);
@@ -141,17 +142,17 @@ describe('coop-defense classes', () => {
     // Waffe 2 traegt nur noch die Adrenalinfaehigkeiten, die Konstrukte stehen in ihrer
     // eigenen Kategorie.
     expect(weapon2Ids).toEqual([
-      'unlock_reparaturstrahl',
+      'unlock_plasma_burner',
       'unlock_overcharge_core',
       'overcharge_radius',
       'overcharge_duration',
       'overcharge_power',
       'overcharge_cost',
-      'unlock_energieinjektor',
+      'unlock_energy_injector',
     ]);
     expect(constructionIds).toContain('unlock_rocket_turret');
-    expect(constructionIds).toContain('unlock_felsbau');
-    expect(constructionIds).toContain('unlock_fliegenpilz');
+    expect(constructionIds).toContain('unlock_rock_barrier');
+    expect(constructionIds).toContain('unlock_spore_turret');
     expect(constructionIds).toContain('unlock_tesla_turret');
   });
 
@@ -161,8 +162,8 @@ describe('coop-defense classes', () => {
       expect(categories.find(category => category.id === 'construction')).toBeUndefined();
       const weapon2Ids = categories.find(category => category.id === 'weapon2')!.upgrades.map(upgrade => upgrade.id);
       expect(weapon2Ids).not.toContain('unlock_overcharge_core');
-      expect(weapon2Ids).not.toContain('unlock_reparaturstrahl');
-      expect(weapon2Ids).not.toContain('unlock_energieinjektor');
+      expect(weapon2Ids).not.toContain('unlock_plasma_burner');
+      expect(weapon2Ids).not.toContain('unlock_energy_injector');
       expect(weapon2Ids).toContain('unlock_p90');
     }
   });

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
-import { getTeamLabel } from '../gameModes';
+import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
 import {
   getCoopDefenseLevelForXp,
   getCoopDefenseXpThresholdForLevel,
@@ -42,6 +42,7 @@ import {
   ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
+import { formatNumber, getLocale, t } from '../i18n';
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 // Der Ergebnis-Layer nutzt dieselbe Formsprache wie Upgrade-, Options- und Help-Overlay:
@@ -146,18 +147,18 @@ const RING_SIZE = 128;
 
 /** Ausgangsfarbe und Feierlaune je Ergebnis. */
 interface OutcomeStyle {
-  label: string;
+  labelKey: string;
   color: number;
   /** Sieg und Aufstieg feiern mit Konfetti, Niederlage nur mit einer Druckwelle. */
   celebrate: boolean;
 }
 
 const OUTCOME_STYLE: Record<MatchResultOutcome, OutcomeStyle> = {
-  victory: { label: 'SIEG', color: COLORS.GREEN_2, celebrate: true },
-  defeat: { label: 'NIEDERLAGE', color: COLORS.RED_2, celebrate: false },
-  draw: { label: 'UNENTSCHIEDEN', color: COLORS.BLUE_2, celebrate: false },
-  aborted: { label: 'MATCH BEENDET', color: COLORS.GOLD_2, celebrate: false },
-  syncing: { label: 'AUSWERTUNG', color: COLORS.BLUE_2, celebrate: false },
+  victory: { labelKey: 'ui.results.victory', color: COLORS.GREEN_2, celebrate: true },
+  defeat: { labelKey: 'ui.results.defeat', color: COLORS.RED_2, celebrate: false },
+  draw: { labelKey: 'ui.results.draw', color: COLORS.BLUE_2, celebrate: false },
+  aborted: { labelKey: 'ui.results.aborted', color: COLORS.GOLD_2, celebrate: false },
+  syncing: { labelKey: 'ui.results.syncing', color: COLORS.BLUE_2, celebrate: false },
 };
 
 /** Rang 1–3 bekommen Medaillenfarben, alles darunter ein neutrales Plaettchen. */
@@ -369,7 +370,7 @@ export class MatchResultsOverlay {
     this.applyAccent(OUTCOME_STYLE.syncing.color);
     this.container!.setVisible(true).setAlpha(1);
     this.panel?.setScale(1);
-    this.outcomeText?.setText(OUTCOME_STYLE.syncing.label).setScale(1).setAlpha(1);
+    this.outcomeText?.setText(t(OUTCOME_STYLE.syncing.labelKey)).setScale(1).setAlpha(1);
     this.outcomeFlash?.setVisible(false);
     this.metaText?.setText(`${modeLabel.toUpperCase()}  •  ${mapLabel.toUpperCase()}`).setAlpha(1);
 
@@ -379,7 +380,7 @@ export class MatchResultsOverlay {
     // Waehrend der Synchronisierung laeuft keine Sequenz, es gibt also nichts zu ueberspringen.
     this.hintText?.setVisible(false);
     this.syncGroup?.setVisible(true).setAlpha(1);
-    this.syncText?.setText('Belohnungen werden synchronisiert …');
+    this.syncText?.setText(t('ui.results.syncingRewards'));
     this.syncSpinner?.setVisible(true);
     this.balanceFeedbackButton?.setVisible(false);
     this.balanceFeedbackLabel?.setVisible(false);
@@ -387,12 +388,12 @@ export class MatchResultsOverlay {
   }
 
   showTechnicalAbort(message: string): void {
-    this.showSyncing('Match', 'Technischer Abbruch');
+    this.showSyncing(t('ui.results.match'), t('ui.results.technicalAbort'));
     this.syncing = false;
     const style = OUTCOME_STYLE.aborted;
     this.applyAccent(style.color);
-    this.outcomeText?.setText('MATCH ABGEBROCHEN');
-    this.syncText?.setText(message || 'Die Verbindung zum Match wurde beendet.');
+    this.outcomeText?.setText(t('ui.results.aborted'));
+    this.syncText?.setText(message || t('ui.results.connectionEnded'));
     // Ohne laufende Synchronisierung gibt es nichts zu drehen.
     this.syncSpinner?.setVisible(false);
     this.stopIdleAnimations();
@@ -428,8 +429,8 @@ export class MatchResultsOverlay {
 
     this.container!.setVisible(true).setAlpha(0);
     this.panel?.setScale(0.96);
-    this.outcomeText?.setText(style.label).setAlpha(0).setScale(0.7);
-    this.outcomeFlash?.setText(style.label).setAlpha(0).setScale(1).setVisible(false);
+    this.outcomeText?.setText(t(style.labelKey)).setAlpha(0).setScale(0.7);
+    this.outcomeFlash?.setText(t(style.labelKey)).setAlpha(0).setScale(1).setVisible(false);
     this.metaText
       ?.setText(`${presentation.modeLabel.toUpperCase()}  •  ${presentation.mapLabel.toUpperCase()}`)
       .setAlpha(0);
@@ -438,7 +439,7 @@ export class MatchResultsOverlay {
     this.hintText?.setVisible(true).setAlpha(1);
 
     // Der Weiter-Button fuehrt bei offener Belohnung nicht in die Lobby, sondern in die Auswahl.
-    this.continueLabel?.setText(presentation.itemReward ? 'ITEM AUSWÄHLEN' : 'WEITER ZUR LOBBY');
+    this.continueLabel?.setText(t(presentation.itemReward ? 'ui.results.chooseItem' : 'ui.results.continueLobby'));
     this.balanceFeedbackButton?.setVisible(this.balanceFeedbackAvailable && !this.syncing);
     this.balanceFeedbackLabel?.setVisible(this.balanceFeedbackAvailable && !this.syncing);
 
@@ -552,7 +553,7 @@ export class MatchResultsOverlay {
     this.banner = this.scene.add.image(CX, BANNER_Y, this.ensureBannerTexture(OUTCOME_STYLE.syncing.color))
       .setScrollFactor(0);
 
-    this.outcomeText = this.scene.add.text(CX, BANNER_Y, 'AUSWERTUNG', {
+    this.outcomeText = this.scene.add.text(CX, BANNER_Y, t('ui.results.syncing'), {
       fontFamily: FONT_MONO,
       fontSize: '58px',
       fontStyle: 'bold',
@@ -563,7 +564,7 @@ export class MatchResultsOverlay {
 
     // Zweite Kopie derselben Schrift: skaliert additiv nach aussen und erzeugt so den
     // Aufschlag-Moment, ohne die eigentliche Beschriftung zu verfremden.
-    this.outcomeFlash = this.scene.add.text(CX, BANNER_Y, 'AUSWERTUNG', {
+    this.outcomeFlash = this.scene.add.text(CX, BANNER_Y, t('ui.results.syncing'), {
       fontFamily: FONT_MONO,
       fontSize: '58px',
       fontStyle: 'bold',
@@ -594,12 +595,12 @@ export class MatchResultsOverlay {
         this.scene, TEX_SECTION_LEFT, LEFT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
         { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(LEFT_X + 30, SECTION_TITLE_Y, 'MATCH-LEADERBOARD', textStyle('subtitle'))
+      this.scene.add.text(LEFT_X + 30, SECTION_TITLE_Y, t('ui.results.leaderboard'), textStyle('subtitle'))
         .setOrigin(0, 0.5).setScrollFactor(0),
-      this.columnLabel(MEDAL_X, HEADER_ROW_Y, 'RANG', 0.5),
-      this.columnLabel(NAME_X, HEADER_ROW_Y, 'SPIELER', 0),
-      this.columnLabel(TEAM_X, HEADER_ROW_Y, 'TEAM', 0),
-      this.columnLabel(SCORE_X, HEADER_ROW_Y, 'FRAGS', 1),
+      this.columnLabel(MEDAL_X, HEADER_ROW_Y, t('ui.results.rank'), 0.5),
+      this.columnLabel(NAME_X, HEADER_ROW_Y, t('ui.results.player'), 0),
+      this.columnLabel(TEAM_X, HEADER_ROW_Y, t('ui.results.team'), 0),
+      this.columnLabel(SCORE_X, HEADER_ROW_Y, t('ui.score.frags'), 1),
       this.scene.add.rectangle(LEFT_CX, HEADER_DIVIDER_Y, ROW_W, 1, COLORS.GREY_5, 0.55)
         .setScrollFactor(0),
     );
@@ -639,14 +640,14 @@ export class MatchResultsOverlay {
         this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
         { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'FORTSCHRITT', textStyle('subtitle'))
+      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, t('ui.results.progress'), textStyle('subtitle'))
         .setOrigin(0, 0.5).setScrollFactor(0),
     );
 
-    this.levelText = this.scene.add.text(CHIP_X, LEVEL_ROW_Y, 'LEVEL 1', {
+    this.levelText = this.scene.add.text(CHIP_X, LEVEL_ROW_Y, t('ui.results.level', { level: 1 }), {
       fontFamily: FONT_MONO, fontSize: '32px', fontStyle: 'bold', color: toCssColor(COLORS.GREEN_1),
     }).setOrigin(0, 0.5).setScrollFactor(0);
-    this.xpGainText = this.scene.add.text(CHIP_X + CHIP_W, LEVEL_ROW_Y, '+0 XP', {
+    this.xpGainText = this.scene.add.text(CHIP_X + CHIP_W, LEVEL_ROW_Y, t('ui.results.xpGain', { xp: 0 }), {
       fontFamily: FONT_MONO, fontSize: '28px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
     }).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(this.levelText, this.xpGainText);
@@ -673,7 +674,7 @@ export class MatchResultsOverlay {
     objects.push(
       this.scene.add.rectangle(CHIP_CX, PROGRESS_DIVIDER_Y, CHIP_W, 1, COLORS.GREY_5, 0.55)
         .setScrollFactor(0),
-      this.scene.add.text(CHIP_X, REWARD_TITLE_Y, 'BELOHNUNGEN', {
+      this.scene.add.text(CHIP_X, REWARD_TITLE_Y, t('ui.results.rewards'), {
         fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
       }).setOrigin(0, 0.5).setScrollFactor(0),
     );
@@ -758,7 +759,7 @@ export class MatchResultsOverlay {
         this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
         { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
       )).setScrollFactor(0),
-      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, 'MATCH-ÜBERSICHT', textStyle('subtitle'))
+      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, t('ui.results.summary'), textStyle('subtitle'))
         .setOrigin(0, 0.5).setScrollFactor(0),
     );
 
@@ -802,14 +803,14 @@ export class MatchResultsOverlay {
   }
 
   private buildFooter(): Phaser.GameObjects.Container {
-    this.hintText = this.scene.add.text(CONTENT_LEFT + 6, FOOTER_Y, 'Klick: Animationen überspringen', {
+    this.hintText = this.scene.add.text(CONTENT_LEFT + 6, FOOTER_Y, t('ui.results.skipHint'), {
       fontFamily: FONT_MONO, fontSize: '14px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_5),
     }).setOrigin(0, 0.5).setScrollFactor(0);
 
     this.continueButton = this.scene.add.image(CONTINUE_X, FOOTER_Y, ensureGlossyButtonTexture(
       this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, INTENT.primary.fill, INTENT.primary.stroke,
     )).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, 'WEITER ZUR LOBBY', textStyle('label', {
+    this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, t('ui.results.continueLobby'), textStyle('label', {
       color: INTENT.primary.label,
     })).setOrigin(0.5).setScrollFactor(0);
     this.continueButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
@@ -823,7 +824,7 @@ export class MatchResultsOverlay {
     this.balanceFeedbackButton = this.scene.add.image(FEEDBACK_X, FOOTER_Y, ensureGlossyButtonTexture(
       this.scene, '_mro_balance_feedback', FEEDBACK_W, CONTINUE_H, INTENT.secondary.fill, INTENT.secondary.stroke,
     )).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.balanceFeedbackLabel = this.scene.add.text(FEEDBACK_X, FOOTER_Y, 'BALANCE-FEEDBACK', textStyle('label', {
+    this.balanceFeedbackLabel = this.scene.add.text(FEEDBACK_X, FOOTER_Y, t('ui.results.balanceFeedback'), textStyle('label', {
       color: INTENT.secondary.label,
     })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
     this.balanceFeedbackButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
@@ -882,10 +883,10 @@ export class MatchResultsOverlay {
       row.frame.setTexture(this.ensureRowTexture(isLocal ? 'local' : (index % 2 ? 'odd' : 'even')));
       row.medal.setTexture(this.ensureMedalTexture(medalColor));
       row.rank.setText(String(index + 1));
-      row.name.setText(isLocal ? `${entry.name}  (DU)` : entry.name).setColor(toCssColor(entry.colorHex));
+      row.name.setText(isLocal ? `${entry.name}  (${t('ui.results.you')})` : entry.name).setColor(toCssColor(entry.colorHex));
       row.team.setText(entry.teamId && isTeamMode
-        ? getTeamLabel(entry.teamId, presentation.mode).toUpperCase()
-        : '—');
+        ? getLocalizedTeamLabel(entry.teamId, presentation.mode).toUpperCase()
+        : t('ui.common.dash'));
       // Zaehlt in der Sequenz hoch; der Endwert steht in `row.frags`.
       row.score.setText('0').setColor(toCssColor(index === 0 ? COLORS.GOLD_1 : COLORS.GREY_1));
       row.container.setVisible(true).setAlpha(0).setX(-52);
@@ -902,7 +903,7 @@ export class MatchResultsOverlay {
       this.xpBarEffect?.stop();
       return;
     }
-    this.xpGainText?.setText(`+${progress.xpGained} XP`);
+    this.xpGainText?.setText(t('ui.results.xpGain', { xp: progress.xpGained }));
     this.applyXpValue(progress.before.totalXp);
     this.xpFlash?.setAlpha(0);
 
@@ -967,20 +968,20 @@ export class MatchResultsOverlay {
     const totalFrags = entries.reduce((sum, entry) => sum + Math.max(0, Math.floor(entry.frags)), 0);
 
     const stats: readonly { label: string; value: string; color: number }[] = [
-      { label: 'MODUS', value: presentation.modeLabel.toUpperCase(), color: COLORS.GREY_1 },
-      { label: 'ARENA', value: presentation.mapLabel.toUpperCase(), color: COLORS.GREY_1 },
+      { label: t('ui.results.mode'), value: presentation.modeLabel.toUpperCase(), color: COLORS.GREY_1 },
+      { label: t('ui.results.arena'), value: presentation.mapLabel.toUpperCase(), color: COLORS.GREY_1 },
       {
-        label: 'BESTER SPIELER',
-        value: entries[0] ? entries[0].name.toUpperCase() : '—',
+        label: t('ui.results.bestPlayer'),
+        value: entries[0] ? entries[0].name.toUpperCase() : t('ui.common.dash'),
         color: COLORS.GOLD_1,
       },
       {
-        label: 'DEIN RANG',
-        value: localRank > 0 ? `${localRank} / ${entries.length}` : '—',
+        label: t('ui.results.yourRank'),
+        value: localRank > 0 ? `${localRank} / ${entries.length}` : t('ui.common.dash'),
         color: COLORS.BLUE_1,
       },
       {
-        label: 'DEINE FRAGS  •  GESAMT',
+        label: t('ui.results.yourFragsTotal'),
         value: `${local ? Math.max(0, Math.floor(local.frags)) : 0}  /  ${totalFrags}`,
         color: COLORS.GREEN_1,
       },
@@ -1176,8 +1177,12 @@ export class MatchResultsOverlay {
     const span = Math.max(1, levelEnd - levelStart);
     const fraction = Phaser.Math.Clamp((totalXp - levelStart) / span, 0, 1);
     const fillW = Math.max(0.001, BAR_W * fraction);
-    this.levelText?.setText(`LEVEL ${level}`);
-    this.xpText?.setText(`${Math.max(0, totalXp - levelStart)} / ${span} XP  •  ${totalXp} GESAMT`);
+    this.levelText?.setText(t('ui.results.level', { level }));
+    this.xpText?.setText(t('ui.results.xpProgress', {
+      current: formatNumber(Math.max(0, totalXp - levelStart), getLocale()),
+      span: formatNumber(span, getLocale()),
+      total: formatNumber(totalXp, getLocale()),
+    }));
     this.xpFill?.setCrop(0, 0, fillW, BAR_H);
     this.xpBarEffect?.setFilledWidth(fillW);
   }
@@ -1269,7 +1274,7 @@ export class MatchResultsOverlay {
   private hideRewardTooltip(): void {
     if (!this.hintText) return;
     this.hintText
-      .setText('Klick: Animationen überspringen')
+      .setText(t('ui.results.skipHint'))
       .setColor(toCssColor(COLORS.GREY_5));
     if (this.sequenceComplete) this.hintText.setVisible(false);
   }
@@ -1497,23 +1502,25 @@ function describeRewards(
   if (progress.itemsUnlocked) {
     descriptors.push({
       glyph: '🔓',
-      label: 'NEUE FUNKTION FREIGESCHALTET: ITEMS',
+      label: t('ui.reward.itemsUnlocked'),
       color: COLORS.GOLD_1,
-      tooltip: 'Siege lassen ab jetzt dauerhafte Ausrüstung fallen. Verwalten kannst du sie in der Lobby über den Items-Button.',
+      tooltip: t('ui.reward.itemsUnlockedHint'),
     });
   }
   if (itemReward && itemReward.options.length > 0) {
-    const guaranteeText = itemReward.epicGuaranteeCount > 0
-      ? ` · MINDESTENS ${itemReward.epicGuaranteeCount} VON ${itemReward.options.length} EPISCH GARANTIERT`
-      : '';
     descriptors.push({
       glyph: '◈',
-      label: `1 VON ${itemReward.options.length} ITEMS WÄHLEN${guaranteeText}`,
+      label: t(itemReward.epicGuaranteeCount > 0 ? 'ui.reward.itemChoice' : 'ui.reward.itemChoiceNoGuarantee', {
+        count: itemReward.options.length,
+        guarantee: itemReward.epicGuaranteeCount,
+      }),
       color: COLORS.BLUE_2,
       tooltip: itemReward.epicGuaranteeCount > 0
-        ? `Mindestens ${itemReward.epicGuaranteeCount} von ${itemReward.options.length} Optionen sind episch garantiert. `
-          + 'Die Anhebung wurde vor dem Speichern auf die bestehenden Rolls angewandt.'
-        : 'Die Auswahl öffnet sich direkt nach diesem Bildschirm und bleibt bis zur Entscheidung offen.',
+        ? t('ui.reward.itemChoiceHintGuaranteed', {
+          guarantee: itemReward.epicGuaranteeCount,
+          count: itemReward.options.length,
+        })
+        : t('ui.reward.itemChoiceHint'),
       itemOffer: true,
     });
   }
@@ -1521,32 +1528,34 @@ function describeRewards(
     descriptors.push({
       glyph: '🔓',
       label: progress.newlyUnlockedClassIds.length === 1
-        ? 'NEUE KLASSE FREIGESCHALTET: INSPECTOR GADACHS'
-        : 'NEUE KLASSEN FREIGESCHALTET: DACHS NUKEM / DACHS OF STEEL',
+        ? t('ui.reward.classUnlockedSingle')
+        : t('ui.reward.classesUnlocked'),
       color: COLORS.GOLD_1,
-      tooltip: 'Dachs Nukem, Dachs of Steel und Inspector Gadachs sind jetzt im Upgrade-Screen auswählbar.',
+      tooltip: t('ui.reward.classUnlockedHint'),
     });
   }
   // Der Levelaufstieg selbst zeigt sich bereits am XP-Balken; hier zaehlt nur sein Ertrag.
   if (progress.newSkillPoints > 0) {
     descriptors.push({
       glyph: '◆',
-      label: `${progress.newSkillPoints} NEUE SKILL-${progress.newSkillPoints === 1 ? 'PUNKT' : 'PUNKTE'}`,
+      label: t(progress.newSkillPoints === 1 ? 'ui.reward.skillPoint' : 'ui.reward.skillPoints', {
+        count: progress.newSkillPoints,
+      }),
       color: COLORS.BLUE_2,
     });
   }
   if (progress.newBossPoints > 0) {
-    descriptors.push({ glyph: '★', label: 'BOSS-UPGRADE VERFÜGBAR', color: COLORS.GOLD_1 });
+    descriptors.push({ glyph: '★', label: t('ui.reward.bossUpgrade'), color: COLORS.GOLD_1 });
   }
   if (progress.unlockedMapName) {
     descriptors.push({
       glyph: '▣',
-      label: `FREIGESCHALTET: ${progress.unlockedMapName.toUpperCase()}`,
+      label: t('ui.reward.mapUnlocked', { map: progress.unlockedMapName.toUpperCase() }),
       color: COLORS.BROWN_2,
     });
   }
   if (descriptors.length === 0) {
-    descriptors.push({ glyph: '—', label: 'KEINE NEUEN FREISCHALTUNGEN', color: COLORS.GREY_5 });
+    descriptors.push({ glyph: '—', label: t('ui.reward.noNewUnlocks'), color: COLORS.GREY_5 });
   }
   return descriptors;
 }

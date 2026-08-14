@@ -452,7 +452,7 @@ describe('Coop Defense map-event trigger chains', () => {
           visualStyle: 'void' as const,
           burnDurationMs: 1_000,
           burnDamagePerTick: 1,
-          weaponName: 'chain-test',
+          sourceId: 'test.chain',
         },
       },
     ];

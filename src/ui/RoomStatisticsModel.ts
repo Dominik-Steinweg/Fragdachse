@@ -1,4 +1,6 @@
 import type { RoomPlayerStatistics } from '../network/RoomStatistics';
+import { formatNumber, formatPercent } from '../i18n';
+import type { Locale } from '../i18n/types';
 
 export function sortRoomStatistics(entries: readonly RoomPlayerStatistics[]): RoomPlayerStatistics[] {
   return [...entries].sort((left, right) => (
@@ -12,12 +14,12 @@ export function getRoomWinRate(entry: Pick<RoomPlayerStatistics, 'pvpWins' | 'pv
   return entry.pvpMatchesPlayed > 0 ? entry.pvpWins / entry.pvpMatchesPlayed : null;
 }
 
-export function formatRoomStatValue(value: number): string {
+export function formatRoomStatValue(value: number, locale: Locale = 'de'): string {
   if (!Number.isFinite(value) || value <= 0) return '0';
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return formatNumber(value, locale, { maximumFractionDigits: 1 });
 }
 
-export function formatRoomWinRate(entry: Pick<RoomPlayerStatistics, 'pvpWins' | 'pvpMatchesPlayed'>): string {
+export function formatRoomWinRate(entry: Pick<RoomPlayerStatistics, 'pvpWins' | 'pvpMatchesPlayed'>, locale: Locale = 'de'): string {
   const rate = getRoomWinRate(entry);
-  return rate === null ? '—' : `${(rate * 100).toFixed(1)} %`;
+  return rate === null ? '—' : formatPercent(rate, locale, 1);
 }

@@ -1,6 +1,5 @@
 {
   "mapId": "15",
-  "displayName": "Map 15 - Leerenjäger",
   "arenaWidthCells": 100,
   "arenaHeightCells": 44,
   "timeOfDay": "22:00",
@@ -22,7 +21,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Lila Leerenbrand"
+        "sourceId": "ground_fire.void_hunter"
       }
     },
     {
@@ -40,7 +39,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Lila Leerenbrand"
+        "sourceId": "ground_fire.void_hunter"
       }
     }
   ],

@@ -2,7 +2,6 @@
   "weapons": {
     "OVERCHARGE_CORE": {
       "id": "OVERCHARGE_CORE",
-      "displayName": "Verstärkungsmatrix",
       "cooldown": 6000,
       "damage": 0,
       "range": 420,
@@ -40,9 +39,8 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "REPARATURSTRAHL": {
-      "id": "REPARATURSTRAHL",
-      "displayName": "Plasmabrenner",
+    "PLASMA_BURNER": {
+      "id": "PLASMA_BURNER",
       "cooldown": 100,
       "damage": 0,
       "range": 600,
@@ -76,9 +74,8 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "ENERGIEINJEKTOR": {
-      "id": "ENERGIEINJEKTOR",
-      "displayName": "Energieinjektor",
+    "ENERGY_INJECTOR": {
+      "id": "ENERGY_INJECTOR",
       "cooldown": 600,
       "damage": 0,
       "range": 460,
@@ -118,7 +115,6 @@
     },
     "HEALING_AURA": {
       "id": "HEALING_AURA",
-      "displayName": "Heil-Aura",
       "cooldown": 0,
       "damage": 0,
       "range": 0,

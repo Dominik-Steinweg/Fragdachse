@@ -1,10 +1,8 @@
 {
   "mapId": "17",
-  "displayName": "Map 17 - Bierrettung",
   "arenaWidthCells": 112,
   "arenaHeightCells": 42,
   "timeOfDay": "18:30",
-  "tutorialText": "Auf dem Weg zur Feindbasis liegt Bier. Tragt es einzeln zur markierten Abgabe zurück. Jede gerettete Flasche verbessert eure Belohnung – das Bier ist optional, die Feindbasis bleibt das Hauptziel.",
   "trackMode": "void-fire",
   "mapEvents": [
     {
@@ -23,7 +21,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Morgenleerer Voidbrand"
+        "sourceId": "ground_fire.timebomb_void"
       }
     }
   ],
@@ -178,8 +176,6 @@
     {
       "id": "carry-beer-to-rear-base",
       "type": "carry",
-      "displayName": "BIER ZUR BASIS BRINGEN",
-      "rewardHint": "TEAMBUFF UND ITEM-CHANCE",
       "start": { "type": "after-encounter", "encounterId": "beer-flank" },
       "targets": [],
       "targetGoal": 3,

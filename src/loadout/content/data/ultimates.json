@@ -3,7 +3,6 @@
     "ARMAGEDDON": {
       "type": "buff",
       "id": "ARMAGEDDON",
-      "displayName": "Armageddon",
       "cooldown": 0,
       "rageRequired": 300,
       "duration": 7000,
@@ -33,7 +32,7 @@
           "durationMs": 2000,
           "burnDurationMs": 2000,
           "burnDamagePerTick": 0.5,
-          "weaponName": "Armageddon-Brand"
+          "sourceId": "ground_fire.armageddon"
         },
         "cometStormEnabled": 0,
         "cometSpawnRateDivisor": 1,
@@ -46,7 +45,6 @@
     "GAUSS_RIFLE": {
       "type": "gauss",
       "id": "GAUSS_RIFLE",
-      "displayName": "Gauss-Gewehr",
       "cooldown": 0,
       "rageRequired": 200,
       "rageCost": 200,
@@ -81,7 +79,6 @@
     },
     "VOID_HUNTER_GAUSS": {
       "id": "VOID_HUNTER_GAUSS",
-      "displayName": "Leeren-Gauss",
       "baseId": "GAUSS_RIFLE",
       "_notes": "NPC-Variante des Gauss-Gewehrs; behält die bisherigen Leerenjäger-Projektilwerte und ändert nur die Projektil-Semantik auf Gauss.",
       "catalogVisible": false,
@@ -107,7 +104,6 @@
     "AIRSTRIKE": {
       "type": "airstrike",
       "id": "AIRSTRIKE",
-      "displayName": "Luftangriff",
       "cooldown": 0,
       "rageRequired": 200,
       "rageCost": 200,
@@ -123,7 +119,6 @@
     "HONEY_BADGER_RAGE": {
       "type": "buff",
       "id": "HONEY_BADGER_RAGE",
-      "displayName": "Honigdachs-Wut",
       "cooldown": 0,
       "rageRequired": 300,
       "duration": 6000,
@@ -141,7 +136,6 @@
     "DACHS_TUNNEL": {
       "type": "tunnel",
       "id": "DACHS_TUNNEL",
-      "displayName": "Dachstunnel",
       "cooldown": 0,
       "rageRequired": 200,
       "rageCost": 200,

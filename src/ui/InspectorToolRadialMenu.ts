@@ -7,6 +7,7 @@ import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
 import type { LoadoutToolRef } from '../types';
 import { getInspectorToolRadialSegmentIndex } from './InspectorToolRadialGeometry';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { formatNumber, getLocale, t } from '../i18n';
 
 const INNER_RADIUS = 34;
 const OUTER_RADIUS = 112;
@@ -162,13 +163,15 @@ export class InspectorToolRadialMenu {
         color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0.5).setAlpha(contentAlpha));
       if (entry.capacityCost > 0) {
-        this.container.add(this.scene.add.text(labelX, labelY + 30, `${entry.capacityCost} BK`, {
+        this.container.add(this.scene.add.text(labelX, labelY + 30, t('ui.radial.capacity', { cost: entry.capacityCost }), {
           fontSize: '8px', fontFamily: 'monospace',
           color: toCssColor(entry.affordable ? COLORS.GOLD_2 : COLORS.RED_2),
         }).setOrigin(0.5).setAlpha(entry.affordable ? (active ? 1 : 0.75) : 0.9));
       }
       if (entry.cooldownMs > 0) {
-        this.container.add(this.scene.add.text(labelX, labelY + 40, `CD ${(entry.cooldownMs / 1000).toFixed(1)}s`, {
+        this.container.add(this.scene.add.text(labelX, labelY + 40, t('ui.radial.cooldown', {
+          seconds: formatNumber(entry.cooldownMs / 1000, getLocale(), { maximumFractionDigits: 1, useGrouping: false }),
+        }), {
           fontSize: '7px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
         }).setOrigin(0.5).setAlpha(active ? 1 : 0.65));
       }
@@ -177,7 +180,7 @@ export class InspectorToolRadialMenu {
     this.graphics.fillCircle(0, 0, INNER_RADIUS - 2);
     this.graphics.lineStyle(2, COLORS.GREY_3, 0.9);
     this.graphics.strokeCircle(0, 0, INNER_RADIUS - 2);
-    this.container.add(this.scene.add.text(0, 0, 'E', {
+    this.container.add(this.scene.add.text(0, 0, t('ui.radial.closeKey'), {
       fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5));
   }
@@ -211,7 +214,7 @@ function buildEntries(
   if (entries.length === 0) return entries;
   entries.push({
     selection: { kind: 'dismantle' },
-    displayName: 'Rückbau',
+    displayName: t('ui.radial.dismantle'),
     textureKey: null,
     accentColor: COLORS.GREY_3,
     capacityCost: 0,

@@ -14,6 +14,7 @@ import {
 } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS } from '../src/config/coopDefenseConstructions';
+import { getUpgradeCategoryName } from '../src/i18n/upgradePresentation';
 
 describe('shared tool slots', () => {
   it('migrates the standard rocket and HE tools and auto-equips unlocks until full', () => {
@@ -65,8 +66,8 @@ describe('shared tool slots', () => {
     const utility = progress.upgradeCategories.find((category) => category.id === 'utility');
     expect(construction?.upgrades.find((node) => node.id === 'unlock_rocket_turret')?.toolRef)
       .toEqual({ kind: 'construction', id: 'rocket_turret' });
-    expect(construction?.upgrades.find((node) => node.id === 'unlock_felsbau')?.toolRef)
-      .toEqual({ kind: 'utility', id: 'FELSBAU' });
+    expect(construction?.upgrades.find((node) => node.id === 'unlock_rock_barrier')?.toolRef)
+      .toEqual({ kind: 'utility', id: 'ROCK_BARRIER' });
     expect(utility?.upgrades.find((node) => node.id === 'unlock_he_grenade')?.toolRef)
       .toEqual({ kind: 'utility', id: 'HE_GRENADE' });
   });
@@ -139,13 +140,13 @@ describe('shared tool slots', () => {
 describe('category naming per class', () => {
   it('keeps weapon 2 named consistently and shows construction only for the Inspector', () => {
     const inspector = getCoopDefenseUpgradeCategories('inspector_gadachs');
-    expect(inspector.find((category) => category.id === 'weapon2')?.label).toBe('Waffe 2');
-    expect(inspector.find((category) => category.id === 'construction')?.label).toBe('Konstruktion');
-    expect(inspector.find((category) => category.id === 'utility')?.label).toBe('Utility');
+    expect(getUpgradeCategoryName('weapon2', 'de')).toBe('Waffe 2');
+    expect(getUpgradeCategoryName('construction', 'de')).toBe('Konstruktionen');
+    expect(getUpgradeCategoryName('utility', 'de')).toBe('Utility');
 
     const nukem = getCoopDefenseUpgradeCategories('dachs_nukem');
-    expect(nukem.find((category) => category.id === 'weapon2')?.label).toBe('Waffe 2');
-    expect(nukem.find((category) => category.id === 'utility')?.label).toBe('Utility');
+    expect(getUpgradeCategoryName('weapon2', 'de')).toBe('Waffe 2');
+    expect(getUpgradeCategoryName('utility', 'de')).toBe('Utility');
     expect(nukem.find((category) => category.id === 'construction')).toBeUndefined();
   });
 });

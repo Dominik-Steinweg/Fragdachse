@@ -2,7 +2,6 @@
   "weapons": {
     "GLOCK": {
       "id": "GLOCK",
-      "displayName": "Glock",
       "cooldown": 150,
       "damage": 6,
       "range": 400,
@@ -48,7 +47,6 @@
     },
     "VOID_HUNTER_SHOTGUN": {
       "id": "VOID_HUNTER_SHOTGUN",
-      "displayName": "Leeren-Schrotflinte",
       "cooldown": 850,
       "damage": 12,
       "range": 350,
@@ -97,7 +95,6 @@
     },
     "PYRO_BADGER_GLOCK": {
       "id": "PYRO_BADGER_GLOCK",
-      "displayName": "Brand-Glock",
       "cooldown": 380,
       "damage": 5,
       "range": 470,
@@ -147,7 +144,6 @@
     },
     "XBOW": {
       "id": "XBOW",
-      "displayName": "XXX-BOW",
       "cooldown": 700,
       "damage": 5,
       "range": 700,
@@ -201,7 +197,6 @@
     },
     "P90": {
       "id": "P90",
-      "displayName": "P90",
       "cooldown": 80,
       "damage": 6,
       "range": 500,
@@ -260,7 +255,6 @@
     },
     "AK47": {
       "id": "AK47",
-      "displayName": "AK-47",
       "cooldown": 140,
       "damage": 10,
       "range": 1000,
@@ -315,7 +309,6 @@
     },
     "SHOTGUN": {
       "id": "SHOTGUN",
-      "displayName": "Schrotflinte",
       "cooldown": 700,
       "damage": 10,
       "range": 230,
@@ -368,7 +361,6 @@
     },
     "TURRET_MG": {
       "id": "TURRET_MG",
-      "displayName": "Turm-MG",
       "cooldown": 260,
       "damage": 7,
       "range": 600,
@@ -410,7 +402,6 @@
     },
     "AWP": {
       "id": "AWP",
-      "displayName": "AWP",
       "cooldown": 800,
       "damage": 100,
       "range": 1800,
@@ -482,7 +473,6 @@
     },
     "NEGEV": {
       "id": "NEGEV",
-      "displayName": "Negev",
       "cooldown": 60,
       "damage": 5,
       "range": 850,

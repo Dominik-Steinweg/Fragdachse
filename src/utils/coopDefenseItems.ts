@@ -23,6 +23,15 @@ import type {
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
 } from '../types';
+import type { Locale } from '../i18n/types';
+import { formatNumber } from '../i18n/format';
+import {
+  getItemAffixName,
+  getItemAffixText,
+  getItemRarityName,
+  getItemSlotName,
+  getItemStatName,
+} from '../i18n/itemPresentation';
 
 /**
  * Reine Logik des Item-Systems: Wuerfeln, Beschreiben, Vergleichen, Inventarpflege und
@@ -318,11 +327,11 @@ function raiseCoopDefenseItemToEpic(
 
 // ── Beschreiben und Vergleichen ─────────────────────────────────────────────
 
-export function getCoopDefenseItemStatLines(item: CoopDefenseItem): CoopDefenseItemStatLine[] {
+export function getCoopDefenseItemStatLines(item: CoopDefenseItem, locale: Locale = 'de'): CoopDefenseItemStatLine[] {
   const slotDefinition = getCoopDefenseItemSlotDefinition(item.slot);
   const lines: CoopDefenseItemStatLine[] = [{
     stat: slotDefinition.baseStat,
-    label: slotDefinition.baseLabel,
+    label: getItemStatName(slotDefinition.baseStat, locale),
     value: item.baseValue,
     displayAsPercent: slotDefinition.baseMode === 'add_percent_per_level',
     isBaseStat: true,
@@ -335,7 +344,7 @@ export function getCoopDefenseItemStatLines(item: CoopDefenseItem): CoopDefenseI
     if (!definition?.stat) continue;
     lines.push({
       stat: definition.stat,
-      label: definition.label,
+      label: getItemAffixName(definition.id, locale),
       value: affix.value,
       displayAsPercent: definition.displayAsPercent,
       isBaseStat: false,
@@ -350,50 +359,50 @@ export function getCoopDefenseItemStatLines(item: CoopDefenseItem): CoopDefenseI
  * Das Gegenstueck zu {@link getCoopDefenseItemStatLines}: zusammen decken beide Listen jedes
  * Affix eines Items genau einmal ab.
  */
-export function getCoopDefenseItemAffixLines(item: CoopDefenseItem): CoopDefenseItemAffixLine[] {
+export function getCoopDefenseItemAffixLines(item: CoopDefenseItem, locale: Locale = 'de'): CoopDefenseItemAffixLine[] {
   const lines: CoopDefenseItemAffixLine[] = [];
   for (const affix of item.affixes) {
     const definition = getCoopDefenseItemAffixDefinition(affix.affixId);
     if (!definition || definition.stat) continue;
     lines.push({
       affixId: definition.id,
-      label: definition.label,
+      label: getItemAffixName(definition.id, locale),
       value: affix.value,
       displayAsPercent: definition.displayAsPercent,
-      text: definition.shortText?.(affix.value) ?? definition.label,
+      text: getItemAffixText(definition.id, affix.value, locale),
     });
   }
   return lines;
 }
 
-export function describeCoopDefenseItem(item: CoopDefenseItem): CoopDefenseItemDescription {
+export function describeCoopDefenseItem(item: CoopDefenseItem, locale: Locale = 'de'): CoopDefenseItemDescription {
   const slotDefinition = getCoopDefenseItemSlotDefinition(item.slot);
   const rarityDefinition = getCoopDefenseItemRarityDefinition(item.rarity);
   return {
     slot: item.slot,
-    slotLabel: slotDefinition.label,
+    slotLabel: getItemSlotName(item.slot, locale),
     rarity: item.rarity,
-    rarityLabel: rarityDefinition.label,
+    rarityLabel: getItemRarityName(item.rarity, locale),
     rarityColor: rarityDefinition.color,
     itemLevel: item.itemLevel,
-    lines: getCoopDefenseItemStatLines(item),
-    affixLines: getCoopDefenseItemAffixLines(item),
+    lines: getCoopDefenseItemStatLines(item, locale),
+    affixLines: getCoopDefenseItemAffixLines(item, locale),
   };
 }
 
 /** `+12`, `+8.5 %`, `-5 %` – vorzeichenbehaftet, damit Vergleiche lesbar bleiben. */
-export function formatCoopDefenseItemValue(value: number, displayAsPercent: boolean): string {
+export function formatCoopDefenseItemValue(value: number, displayAsPercent: boolean, locale: Locale = 'de'): string {
   const shown = displayAsPercent ? value * 100 : value;
   const rounded = Math.round(shown * 10) / 10;
-  const text = Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+  const text = formatNumber(rounded, locale, { maximumFractionDigits: 1, useGrouping: false });
   const sign = rounded > 0 ? '+' : '';
   return displayAsPercent ? `${sign}${text} %` : `${sign}${text}`;
 }
 
-function collectStatTotals(item: CoopDefenseItem | null): Map<string, CoopDefenseItemStatLine> {
+function collectStatTotals(item: CoopDefenseItem | null, locale: Locale): Map<string, CoopDefenseItemStatLine> {
   const totals = new Map<string, CoopDefenseItemStatLine>();
   if (!item) return totals;
-  for (const line of getCoopDefenseItemStatLines(item)) {
+  for (const line of getCoopDefenseItemStatLines(item, locale)) {
     const existing = totals.get(line.stat);
     totals.set(line.stat, existing
       ? { ...existing, value: existing.value + line.value }
@@ -402,10 +411,10 @@ function collectStatTotals(item: CoopDefenseItem | null): Map<string, CoopDefens
   return totals;
 }
 
-function collectSpecialEffectTotals(item: CoopDefenseItem | null): Map<string, CoopDefenseItemAffixLine> {
+function collectSpecialEffectTotals(item: CoopDefenseItem | null, locale: Locale): Map<string, CoopDefenseItemAffixLine> {
   const totals = new Map<string, CoopDefenseItemAffixLine>();
   if (!item) return totals;
-  for (const line of getCoopDefenseItemAffixLines(item)) {
+  for (const line of getCoopDefenseItemAffixLines(item, locale)) {
     // Affix-IDs sind die stabile Identitaet eines besonderen Effekts. Der Text selbst kann
     // sich durch den gewuerfelten Wert unterscheiden und eignet sich deshalb nicht als Key.
     totals.set(line.affixId, line);
@@ -420,9 +429,10 @@ function collectSpecialEffectTotals(item: CoopDefenseItem | null): Map<string, C
 export function compareCoopDefenseItems(
   candidate: CoopDefenseItem,
   equipped: CoopDefenseItem | null,
+  locale: Locale = 'de',
 ): CoopDefenseItemComparisonRow[] {
-  const candidateTotals = collectStatTotals(candidate);
-  const equippedTotals = collectStatTotals(equipped);
+  const candidateTotals = collectStatTotals(candidate, locale);
+  const equippedTotals = collectStatTotals(equipped, locale);
   const rows: CoopDefenseItemComparisonRow[] = [];
 
   for (const stat of new Set([...candidateTotals.keys(), ...equippedTotals.keys()])) {
@@ -439,8 +449,8 @@ export function compareCoopDefenseItems(
     });
   }
 
-  const candidateEffects = collectSpecialEffectTotals(candidate);
-  const equippedEffects = collectSpecialEffectTotals(equipped);
+  const candidateEffects = collectSpecialEffectTotals(candidate, locale);
+  const equippedEffects = collectSpecialEffectTotals(equipped, locale);
   for (const affixId of new Set([...candidateEffects.keys(), ...equippedEffects.keys()])) {
     const effect = candidateEffects.get(affixId) ?? equippedEffects.get(affixId)!;
     const candidateValue = candidateEffects.get(affixId)?.value ?? 0;

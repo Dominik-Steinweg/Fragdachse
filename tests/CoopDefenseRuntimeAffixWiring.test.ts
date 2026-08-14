@@ -13,6 +13,8 @@ import {
 } from '../src/utils/coopDefenseStats';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 import type { CoopDefenseItem, LoadoutCommitSnapshot } from '../src/types';
+import { getItemAffixText } from '../src/i18n/itemPresentation';
+import { formatPercent } from '../src/i18n/format';
 
 function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
   return {
@@ -230,8 +232,7 @@ describe('Definitionen der Laufzeit-Affixe', () => {
       expect(definition?.stat, affixId).toBeUndefined();
       expect(definition?.mode, affixId).toBeUndefined();
       expect(definition?.weight, affixId).toBeGreaterThan(0);
-      expect(definition?.shortText, affixId).toBeTypeOf('function');
-      expect(definition?.shortText?.(definition.maxAtLevel1).length, affixId).toBeGreaterThan(10);
+      expect(getItemAffixText(affixId, definition?.maxAtLevel1 ?? 0, 'de').length, affixId).toBeGreaterThan(10);
     }
   });
 
@@ -253,14 +254,14 @@ describe('Definitionen der Laufzeit-Affixe', () => {
     const affixLines = getCoopDefenseItemAffixLines(gloves);
     expect(affixLines).toHaveLength(1);
     expect(affixLines[0].affixId).toBe('primary_vulnerability');
-    expect(affixLines[0].text).toContain('3,2 %');
-    expect(affixLines[0].text).toContain('20 %');
+    expect(affixLines[0].text).toContain(formatPercent(0.032, 'de', 1));
+    expect(affixLines[0].text).toContain(formatPercent(COOP_DEFENSE_AFFIX_RULES.vulnerabilityBonus, 'de', 0));
   });
 
   it('liest feste Parameter aus derselben Quelle wie das Laufzeitsystem', () => {
     // Sonst koennten Tooltip-Text und tatsaechliches Verhalten auseinanderlaufen.
-    const text = getCoopDefenseItemAffixDefinition('primary_slow')?.shortText?.(0.1) ?? '';
-    expect(text).toContain(`${COOP_DEFENSE_AFFIX_RULES.suppressionSlowFraction * 100} %`);
+    const text = getItemAffixText('primary_slow', 0.1, 'de');
+    expect(text).toContain(formatPercent(COOP_DEFENSE_AFFIX_RULES.suppressionSlowFraction, 'de', 0));
     expect(text).toContain(`${COOP_DEFENSE_AFFIX_RULES.suppressionSlowDurationMs / 1000} s`);
   });
 

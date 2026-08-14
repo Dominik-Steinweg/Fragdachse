@@ -74,14 +74,14 @@ describe('automated projectile weapons', () => {
 
     dispatchWeaponFire.mockClear();
     manager.fireAutomatedWeapon(
-      WEAPON_CONFIGS.SPOREN,
+      WEAPON_CONFIGS.SPORES,
       0, 0, 0, 100, 0, 'owner', 0xffffff,
       { directDamageMultiplier: 1.25, payloadDamageMultiplier: 2.5, sourceSlot: 'utility' },
     );
     const spores = dispatchWeaponFire.mock.calls[0][0];
     expect(spores.fire.impactCloud.damagePerTick).toBeCloseTo(
-      WEAPON_CONFIGS.SPOREN.fire.type === 'projectile'
-        ? (WEAPON_CONFIGS.SPOREN.fire.impactCloud?.damagePerTick ?? 0) * 2.5
+      WEAPON_CONFIGS.SPORES.fire.type === 'projectile'
+        ? (WEAPON_CONFIGS.SPORES.fire.impactCloud?.damagePerTick ?? 0) * 2.5
         : 0,
       10,
     );

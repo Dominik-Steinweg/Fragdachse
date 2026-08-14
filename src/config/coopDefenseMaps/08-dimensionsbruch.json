@@ -1,10 +1,8 @@
 {
   "mapId": "8",
-  "displayName": "Map 8 - Dimensionsbruch",
   "arenaWidthCells": 92,
   "arenaHeightCells": 52,
   "timeOfDay": "20:45",
-  "tutorialText": "Weites offenes Gelände: Vor der Hauptbasis steht nur noch eine zerfallene Bastion mit vier Türmen. Wird sie als HOLD-Ziel markiert, muss die Mauerlinie bis zum angegebenen Angriff überleben - danach wird sie repariert.",
   "rockFillRatio": 0.18,
   "trackPosition": "left",
   "mapEvents": [{
@@ -195,7 +193,7 @@
             "gridY": 7
           },
           "mountSide": "front",
-          "weaponId": "TURRET_SPORE"
+          "weaponId": "TURRET_SPORES"
         },
         {
           "id": "bastion-plasma",
@@ -204,7 +202,7 @@
             "gridY": 11
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         },
         {
           "id": "bastion-spore-south",
@@ -213,7 +211,7 @@
             "gridY": 16
           },
           "mountSide": "front",
-          "weaponId": "TURRET_SPORE"
+          "weaponId": "TURRET_SPORES"
         }
       ]
     }
@@ -285,8 +283,6 @@
     {
       "id": "hold-dimension-bastion",
       "type": "hold",
-      "displayName": "BASTION HALTEN",
-      "rewardHint": "DIE BASTION WIRD REPARIERT",
       "start": { "type": "time", "atMs": 0 },
       "holdUntil": { "type": "after-encounter", "encounterId": "dimension-west" },
       "targets": ["friendly-outpost-bastion"],

@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+﻿import * as Phaser from 'phaser';
 import {
   ENEMY_NET_REFRESH_CYCLE_TICKS,
   ARENA_OFFSET_X,
@@ -40,34 +40,34 @@ export interface EnemyDeathInfo {
   readonly kind: CoopDefenseEnemyKind;
   readonly x: number;
   readonly y: number;
-  /** Volle Kantenlänge des gestorbenen Gegners – Maßstab für Leichen-Visuals. */
+  /** Volle KantenlÃ¤nge des gestorbenen Gegners â€“ MaÃŸstab fÃ¼r Leichen-Visuals. */
   readonly size: number;
   readonly faction: EnemyFaction;
   readonly ownerId?: string;
 }
 
 /**
- * Letzte Instanz vor dem Tod eines Gegners. Gibt der Wächter `true` zurück, hat er den Gegner
- * bereits wieder mit HP versorgt und der Tod entfällt – genutzt von der Nekromantie, damit die
- * stärksten Wiederbelebten einen tödlichen Treffer überstehen.
+ * Letzte Instanz vor dem Tod eines Gegners. Gibt der WÃ¤chter `true` zurÃ¼ck, hat er den Gegner
+ * bereits wieder mit HP versorgt und der Tod entfÃ¤llt â€“ genutzt von der Nekromantie, damit die
+ * stÃ¤rksten Wiederbelebten einen tÃ¶dlichen Treffer Ã¼berstehen.
  */
 export type EnemyLethalDamageGuard = (enemy: EnemyEntity) => boolean;
 
 /**
- * Minimal-Schnittstelle des Gegner-Einbuddel-Systems für die Bewegung – als lokaler Typ gehalten,
- * damit der EnemyManager nicht auf das System zurück-importieren muss.
+ * Minimal-Schnittstelle des Gegner-Einbuddel-Systems fÃ¼r die Bewegung â€“ als lokaler Typ gehalten,
+ * damit der EnemyManager nicht auf das System zurÃ¼ck-importieren muss.
  */
 export interface EnemyBurrowMovementSource {
   isBurrowed(enemyId: string): boolean;
-  /** Erzwungene Grabrichtung während der Einbuddel-Anfahrt; null = normale Wegfindung. */
+  /** Erzwungene Grabrichtung wÃ¤hrend der Einbuddel-Anfahrt; null = normale Wegfindung. */
   getForcedDirection(enemyId: string): { x: number; y: number } | null;
   getSpeedFactor(enemyId: string): number;
 }
 
 /**
- * Minimal-Schnittstelle des Gefechtsabstand-Systems – strukturell erfüllt vom
- * CoopDefenseEnemyCombatPositioningSystem. Liefert für Fernkämpfer eine Wunschgeschwindigkeit,
- * die die Wegfindung ersetzt (Rückzug oder Stehenbleiben auf dem gewünschten Abstand).
+ * Minimal-Schnittstelle des Gefechtsabstand-Systems â€“ strukturell erfÃ¼llt vom
+ * CoopDefenseEnemyCombatPositioningSystem. Liefert fÃ¼r FernkÃ¤mpfer eine Wunschgeschwindigkeit,
+ * die die Wegfindung ersetzt (RÃ¼ckzug oder Stehenbleiben auf dem gewÃ¼nschten Abstand).
  */
 export interface EnemyCombatPositioningSource {
   getMovementOverride(enemyId: string): { vx: number; vy: number } | null;
@@ -79,8 +79,8 @@ export interface EnemySpecialMovementSource {
 }
 
 /**
- * Gegner-Visuals, die nicht an der Entity selbst hängen: Buddel-Partikel und der Spawn-Effekt.
- * Strukturell erfüllt vom EffectSystem, das dieselben Effekte für Spieler zeichnet – als lokaler
+ * Gegner-Visuals, die nicht an der Entity selbst hÃ¤ngen: Buddel-Partikel und der Spawn-Effekt.
+ * Strukturell erfÃ¼llt vom EffectSystem, das dieselben Effekte fÃ¼r Spieler zeichnet â€“ als lokaler
  * Typ gehalten, damit der EnemyManager nicht auf die Effekt-Schicht importieren muss.
  */
 export interface EnemyVisualSink {
@@ -127,8 +127,8 @@ export class EnemyManager {
   private lighting: LightingSystem | null = null;
   /**
    * True, sobald der erste Snapshot verarbeitet wurde. Die Gegner daraus existieren beim Host
-   * bereits seit Längerem – ein Client, der mitten in die Runde kommt, würde sonst für das
-   * gesamte laufende Feld gleichzeitig Spawn-Effekte zünden.
+   * bereits seit LÃ¤ngerem â€“ ein Client, der mitten in die Runde kommt, wÃ¼rde sonst fÃ¼r das
+   * gesamte laufende Feld gleichzeitig Spawn-Effekte zÃ¼nden.
    */
   private remoteSnapshotSeen = false;
 
@@ -144,25 +144,25 @@ export class EnemyManager {
   }
 
   /**
-   * Host-Callback fuer jeden neu erzeugten Gegner – unabhaengig davon, ob er aus einer Welle,
+   * Host-Callback fuer jeden neu erzeugten Gegner â€“ unabhaengig davon, ob er aus einer Welle,
    * einem Death-Spawn oder einer Gegner-Faehigkeit stammt.
    */
   setEnemySpawnedCallback(callback: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null): void {
     this.onEnemySpawned = callback;
   }
 
-  /** Host-seitiger Wächter, der einen tödlichen Treffer abfangen darf. */
+  /** Host-seitiger WÃ¤chter, der einen tÃ¶dlichen Treffer abfangen darf. */
   setLethalDamageGuard(guard: EnemyLethalDamageGuard | null): void {
     this.lethalDamageGuard = guard;
   }
 
-  /** Registriert die Effekt-Schicht für Buddel- und Spawn-Visuals (Host wie Client). */
+  /** Registriert die Effekt-Schicht fÃ¼r Buddel- und Spawn-Visuals (Host wie Client). */
   setVisualSink(sink: EnemyVisualSink | null): void {
     this.visualSink = sink;
   }
 
   /**
-   * Einziger Weg, den Einbuddel-Zustand eines Gegners zu setzen – hier hängen die Buddel-Visuals
+   * Einziger Weg, den Einbuddel-Zustand eines Gegners zu setzen â€“ hier hÃ¤ngen die Buddel-Visuals
    * dran. Der Host ruft das aus dem Burrow-System, der Client beim Anwenden des Snapshots, so dass
    * beide Seiten dieselbe Darstellung wie bei eingebuddelten Spielern zeigen.
    */
@@ -243,11 +243,11 @@ export class EnemyManager {
   }
 
   /**
-   * Spawn-Effekt am Erscheinungsort. Host und Client zünden ihn jeweils lokal beim Anlegen der
-   * Entity – derselbe Weg wie bei den Buddel-Visuals, also ohne eigenen Netzwerkpfad.
+   * Spawn-Effekt am Erscheinungsort. Host und Client zÃ¼nden ihn jeweils lokal beim Anlegen der
+   * Entity â€“ derselbe Weg wie bei den Buddel-Visuals, also ohne eigenen Netzwerkpfad.
    *
    * Gegner, die eingebuddelt am Spielfeldrand starten, bleiben aussen vor: sie sind beim Spawn
-   * unsichtbar, und ihr Auftauchen hat mit dem Buddel-Effekt bereits seine eigene Ankündigung.
+   * unsichtbar, und ihr Auftauchen hat mit dem Buddel-Effekt bereits seine eigene AnkÃ¼ndigung.
    */
   private playSpawnEffect(enemy: EnemyEntity, options: EnemySpawnOptions): void {
     if (options.spawnBurrowed || this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtEdge) return;
@@ -275,13 +275,13 @@ export class EnemyManager {
     for (const enemy of this.enemies.values()) {
       if (enemy.faction === 'allied') continue;
       // Standardfall: der Gegner hat eine Route. Nur die Zweige, die ihn wirklich ohne Weg
-      // stehen lassen, setzen die Markierung – daran erkennt das Angriffssystem, dass ein
-      // reglos stehender Gegner festhängt und einen Felsen wegbeißen darf.
+      // stehen lassen, setzen die Markierung â€“ daran erkennt das Angriffssystem, dass ein
+      // reglos stehender Gegner festhÃ¤ngt und einen Felsen wegbeiÃŸen darf.
       enemy.setPathBlocked(false);
       const config = this.resolvedConfigs[enemy.kind];
       const isBurrowed = burrowSystem?.isBurrowed(enemy.id) ?? false;
       const burrowSpeedFactor = isBurrowed ? (burrowSystem?.getSpeedFactor(enemy.id) ?? 1) : 1;
-      // Unter der Erde ist der Zug keine Gefahr – die Gleis-KI bleibt dann komplett aussen vor.
+      // Unter der Erde ist der Zug keine Gefahr â€“ die Gleis-KI bleibt dann komplett aussen vor.
       const activeTrainAwareness = isBurrowed ? null : trainAwarenessSystem;
       const primaryFlowFieldService = config.movementTarget === 'players-and-armed-constructs'
         ? strategicFlowFieldService ?? playerFlowFieldService ?? baseFlowFieldService
@@ -339,7 +339,7 @@ export class EnemyManager {
       }
 
       // Angriffspause: Waffen ohne eigenen Bewegungsfaktor halten den Gegner wie bisher komplett
-      // an. Waffen mit Faktor > 0 lassen ihn dagegen gebremst weiterlaufen – die Blickrichtung
+      // an. Waffen mit Faktor > 0 lassen ihn dagegen gebremst weiterlaufen â€“ die Blickrichtung
       // bleibt dabei am Ziel, weil die Pause weiterhin aktiv ist.
       const attackMovementFactor = enemy.getAttackMovementSpeedFactor(now);
       if (attackMovementFactor <= 0 && enemy.isAttackMovementPaused(now)) {
@@ -353,9 +353,9 @@ export class EnemyManager {
         continue;
       }
 
-      // Gefechtsabstand: Fernkämpfer halten ihren Wunschabstand, statt der Wegfindung bis in den
+      // Gefechtsabstand: FernkÃ¤mpfer halten ihren Wunschabstand, statt der Wegfindung bis in den
       // Nahkampf zu folgen. Die Vorgabe greift erst hinter der Angriffspause, damit ein Gegner
-      // während seines Schusses stehen bleibt.
+      // wÃ¤hrend seines Schusses stehen bleibt.
       const positioningOverride = combatPositioningSystem?.getMovementOverride(enemy.id) ?? null;
       if (positioningOverride) {
         const decision = activeTrainAwareness?.resolveMovement(
@@ -390,10 +390,10 @@ export class EnemyManager {
         integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
       }
 
-      // Steht ein Gegner auf einer Zelle ohne Route – etwa weil ihn Kollisionsauflösung,
-      // Rückstoß oder ein Ausweichschritt mit dem Mittelpunkt in eine Felszelle geschoben hat –,
-      // steuert er zur nächsten erreichbaren Zelle zurück. Ohne diese Rückholung bliebe er dort
-      // für immer stehen: keine Bewegung heißt auch keine neue Zelle.
+      // Steht ein Gegner auf einer Zelle ohne Route â€“ etwa weil ihn KollisionsauflÃ¶sung,
+      // RÃ¼ckstoÃŸ oder ein Ausweichschritt mit dem Mittelpunkt in eine Felszelle geschoben hat â€“,
+      // steuert er zur nÃ¤chsten erreichbaren Zelle zurÃ¼ck. Ohne diese RÃ¼ckholung bliebe er dort
+      // fÃ¼r immer stehen: keine Bewegung heiÃŸt auch keine neue Zelle.
       if (integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
         const recoveryTarget = flowFieldService.findNearestReachableWorldPosition(gridCell.gridX, gridCell.gridY);
         if (!recoveryTarget) {
@@ -431,7 +431,7 @@ export class EnemyManager {
       // steht durch Kollisionsaufloesung und Separation meist am Zellrand, und ein achsenparalleler
       // Vektor druckt ihn von dort in die Wand statt an ihr vorbei. Zusaetzlich springt die
       // Vektorrichtung beim Wechsel zwischen zwei Randzellen, was ihn an Ort und Stelle zappeln
-      // laesst. In Wandnaehe wird deshalb – wie beim Boss – der Mittelpunkt der naechsten Zelle
+      // laesst. In Wandnaehe wird deshalb â€“ wie beim Boss â€“ der Mittelpunkt der naechsten Zelle
       // angesteuert; der liegt garantiert eine halbe Zelle von jedem Hindernis entfernt.
       const useWaypointSteering = config.isBoss
         || flowFieldService.isWallAdjacentAt(gridCell.gridX, gridCell.gridY);
@@ -551,7 +551,7 @@ export class EnemyManager {
           durationMs: state.trailDurationMs,
           damagePerTick: state.trailDamagePerTick,
           burn: state.burn,
-          weaponName: 'Lauffeuer',
+          sourceId: 'ground_fire.wildfire',
         },
         now,
       );
@@ -607,9 +607,9 @@ export class EnemyManager {
   }
 
   /**
-   * Baut ein Spatial-Hash-Grid mit Zellengröße = Separations-Radius.
-   * Dadurch wird die Nachbarsuche in {@link computeSeparation} von O(N²) auf ~O(N) reduziert:
-   * Nur die 3×3 umliegenden Zellen können Gegner innerhalb des Radius enthalten.
+   * Baut ein Spatial-Hash-Grid mit ZellengrÃ¶ÃŸe = Separations-Radius.
+   * Dadurch wird die Nachbarsuche in {@link computeSeparation} von O(NÂ²) auf ~O(N) reduziert:
+   * Nur die 3Ã—3 umliegenden Zellen kÃ¶nnen Gegner innerhalb des Radius enthalten.
    */
   private buildSeparationGrid(): Map<number, EnemyEntity[]> {
     const grid = new Map<number, EnemyEntity[]>();
@@ -666,9 +666,9 @@ export class EnemyManager {
   }
 
   getNetSnapshot(): SyncedEnemySnapshot {
-    // Kein schwerer Full-Snapshot mehr: Neue/geänderte Gegner gehen als Delta, unveränderte Gegner
-    // werden rollierend (Refresh-Zyklus) binnen ~2 s einmal voll nachgesendet. Periodisch trägt der
-    // Snapshot zusätzlich die vollständige aktive ID-Liste zur Phantom-Reconciliation.
+    // Kein schwerer Full-Snapshot mehr: Neue/geÃ¤nderte Gegner gehen als Delta, unverÃ¤nderte Gegner
+    // werden rollierend (Refresh-Zyklus) binnen ~2 s einmal voll nachgesendet. Periodisch trÃ¤gt der
+    // Snapshot zusÃ¤tzlich die vollstÃ¤ndige aktive ID-Liste zur Phantom-Reconciliation.
     const sendActiveList = this.forceFullNetSnapshot
       || this.ticksSinceActiveList >= ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
     const currentIds = new Set<string>();
@@ -711,8 +711,8 @@ export class EnemyManager {
       this.netSnapshotCache.set(current.id, current);
     }
 
-    // Removals werden über mehrere Delta-Snapshots wiederholt (siehe ENEMY_NET_REMOVAL_RESEND_TICKS),
-    // damit ein verlorenes unreliable-Paket nicht zu dauerhaft sichtbaren toten Gegnern führt.
+    // Removals werden Ã¼ber mehrere Delta-Snapshots wiederholt (siehe ENEMY_NET_REMOVAL_RESEND_TICKS),
+    // damit ein verlorenes unreliable-Paket nicht zu dauerhaft sichtbaren toten Gegnern fÃ¼hrt.
     const removals = [...this.pendingRemovals.keys()].sort();
     for (const id of removals) {
       const remaining = (this.pendingRemovals.get(id) ?? 1) - 1;
@@ -735,8 +735,8 @@ export class EnemyManager {
     };
 
     if (sendActiveList) {
-      // Cache-Einträge entfernter Gegner aufräumen und die aktive ID-Liste als Reconciliation-Backstop
-      // anhängen. Der Client löscht lokal jeden Gegner, dessen ID hier fehlt (Phantom-Bereinigung).
+      // Cache-EintrÃ¤ge entfernter Gegner aufrÃ¤umen und die aktive ID-Liste als Reconciliation-Backstop
+      // anhÃ¤ngen. Der Client lÃ¶scht lokal jeden Gegner, dessen ID hier fehlt (Phantom-Bereinigung).
       for (const id of [...this.netSnapshotCache.keys()]) {
         if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
       }
@@ -769,7 +769,7 @@ export class EnemyManager {
   }
 
   /**
-   * Höchste aktive Bossphase im Feld. Ohne Allokation, weil das pro Frame für die
+   * HÃ¶chste aktive Bossphase im Feld. Ohne Allokation, weil das pro Frame fÃ¼r die
    * Bildkomposition abgefragt wird.
    */
   getMaxBossPhase(): number {
@@ -840,9 +840,9 @@ export class EnemyManager {
       return { died: false, remainingHp };
     }
 
-    // Der Wächter setzt die HP selbst neu. Zurückgemeldet wird trotzdem der tatsächlich
-    // zugefügte Schaden (`remainingHp` 0), denn die Rettung ist eine eigene Heilung – sonst
-    // fiele der Treffer für Trefferfeedback und Lifeleech ersatzlos aus.
+    // Der WÃ¤chter setzt die HP selbst neu. ZurÃ¼ckgemeldet wird trotzdem der tatsÃ¤chlich
+    // zugefÃ¼gte Schaden (`remainingHp` 0), denn die Rettung ist eine eigene Heilung â€“ sonst
+    // fiele der Treffer fÃ¼r Trefferfeedback und Lifeleech ersatzlos aus.
     if (this.lethalDamageGuard?.(enemy)) {
       return { died: false, remainingHp: 0 };
     }
@@ -889,7 +889,7 @@ export class EnemyManager {
 
   /**
    * Entfernt einen Gegner samt seiner Buddel-Partikel. Die Emitter folgen dem Sprite, deshalb
-   * müssen sie vor dessen Zerstörung abgeräumt werden.
+   * mÃ¼ssen sie vor dessen ZerstÃ¶rung abgerÃ¤umt werden.
    */
   private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
     this.visualSink?.clearBurrowState(id);
@@ -908,7 +908,7 @@ export class EnemyManager {
 
     const upserts = decodeEnemyUpserts(snapshot.u);
 
-    // Periodische Reconciliation: liegt die vollständige aktive ID-Liste vor, lösche jeden lokalen
+    // Periodische Reconciliation: liegt die vollstÃ¤ndige aktive ID-Liste vor, lÃ¶sche jeden lokalen
     // Gegner, dessen ID darin fehlt (Backstop gegen verpasste Removals = "Phantom"-Gegner).
     if (snapshot.a) {
       const activeIds = new Set(snapshot.a);

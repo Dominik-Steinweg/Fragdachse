@@ -1,10 +1,8 @@
 {
   "mapId": "9",
-  "displayName": "Map 9 - Letzter Stand",
   "arenaWidthCells": 84,
   "arenaHeightCells": 38,
   "timeOfDay": "04:30",
-  "tutorialText": "Keine Basis. Kein Rückzug. Überlebt 120 Sekunden. Die Gegner jagen ausschließlich euch; jeder Spieler hat nur zwei Respawns.",
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "mapEvents": [{

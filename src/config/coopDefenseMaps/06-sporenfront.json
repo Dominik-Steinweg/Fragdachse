@@ -1,10 +1,8 @@
 {
   "mapId": "6",
-  "displayName": "Map 6 - Sporenfront",
   "arenaWidthCells": 100,
   "arenaHeightCells": 46,
   "timeOfDay": "08:00",
-  "tutorialText": "Große Arenen werden aus mehreren Richtungen angegriffen. Nutzt die Ruhefenster, um zwischen den Fronten zu wechseln – ihr müsst nicht überall gleichzeitig stehen.",
   "rockFillRatio": 0.1,
   "trackPosition": "left",
   "mapEvents": [{
@@ -67,7 +65,7 @@
             "gridY": 0
           },
           "mountSide": "top",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "spore-southwest",
@@ -76,7 +74,7 @@
             "gridY": 4
           },
           "mountSide": "bottom",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "rocket-southeast",

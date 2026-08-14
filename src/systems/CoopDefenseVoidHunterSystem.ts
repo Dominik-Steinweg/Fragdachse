@@ -235,7 +235,7 @@ export class CoopDefenseVoidHunterSystem {
       allowTeamDamage: true,
       damageTarget: 'player-side',
       damageOwnerId: `void-nuke:${enemy.id}`,
-      weaponName: 'Leeren-Atombombe',
+      sourceId: 'enemy.void_hunter.nuke',
       variant: 'void',
     }, now);
   }

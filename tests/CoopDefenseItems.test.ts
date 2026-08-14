@@ -422,8 +422,8 @@ describe('coop-defense item presentation', () => {
   });
 
   it('formats percent and flat values with a sign', () => {
-    expect(formatCoopDefenseItemValue(0.085, true)).toBe('+8.5 %');
-    expect(formatCoopDefenseItemValue(-0.05, true)).toBe('-5 %');
+    expect(formatCoopDefenseItemValue(0.085, true, 'de')).toBe('+8,5 %');
+    expect(formatCoopDefenseItemValue(-0.05, true, 'de')).toBe('-5 %');
     expect(formatCoopDefenseItemValue(25, false)).toBe('+25');
   });
 });

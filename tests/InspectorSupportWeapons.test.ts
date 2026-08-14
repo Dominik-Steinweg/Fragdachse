@@ -10,6 +10,7 @@ import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { ENERGY_INJECTOR_COLOR, PLASMA_BURNER_COLOR } from '../src/config';
 import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
+import { getLoadoutItemName } from '../src/i18n/contentPresentation';
 
 function createManagerWithSpawnSpy() {
   const spawnProjectile = vi.fn(() => 42);
@@ -23,9 +24,9 @@ function createManagerWithSpawnSpy() {
 describe('inspector support weapons', () => {
   it('fires the Plasmabrenner as a continuous, context-sensitive hitscan', () => {
     const { manager, spawnProjectile, resolveHitscanShot } = createManagerWithSpawnSpy();
-    const productionConfig = WEAPON_CONFIGS.REPARATURSTRAHL;
+    const productionConfig = WEAPON_CONFIGS.PLASMA_BURNER;
 
-    expect(productionConfig.displayName).toBe('Plasmabrenner');
+    expect(getLoadoutItemName(productionConfig.id, 'de')).toBe('Plasmabrenner');
     expect(productionConfig.shotAudio).toMatchObject({ failureKey: 'shot_dry_trigger' });
     expect(productionConfig.fire).toMatchObject({
       type: 'hitscan',
@@ -74,7 +75,7 @@ describe('inspector support weapons', () => {
     expect(call?.[5]).toBe(testConfig.damage);
     expect(call?.[6]).toBe(testConfig.fire.traceThickness);
     expect(call?.[8]).toBe(testConfig.adrenalinGain);
-    expect(call?.[9]).toBe(testConfig.displayName);
+    expect(call?.[9]).toBe(testConfig.id);
     expect(call?.[10]).toBe(testConfig.fire.visualPreset);
     expect(call?.[19]).toEqual(supportEffect);
   });
@@ -83,7 +84,7 @@ describe('inspector support weapons', () => {
     const { manager, spawnProjectile } = createManagerWithSpawnSpy();
 
     manager.fireAutomatedWeapon(
-      WEAPON_CONFIGS.ENERGIEINJEKTOR,
+      WEAPON_CONFIGS.ENERGY_INJECTOR,
       0,
       0,
       0,

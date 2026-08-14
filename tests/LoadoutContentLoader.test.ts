@@ -62,17 +62,17 @@ describe('loadout content loader', () => {
     expect(Object.isFrozen(built.weapons.ROCKET_LAUNCHER.fire)).toBe(true);
     expect(Object.isFrozen(built.catalog)).toBe(true);
     expect(Object.isFrozen(built.lineages.utility)).toBe(true);
-    expect(built.lineages.utility.FELSBAU_COOP).toEqual(['FELSBAU_COOP', 'FELSBAU']);
-    expect(built.lineages.utility.FLIEGENPILZ_COOP).toEqual(['FLIEGENPILZ_COOP', 'FLIEGENPILZ']);
+    expect(built.lineages.utility.ROCK_BARRIER_COOP).toEqual(['ROCK_BARRIER_COOP', 'ROCK_BARRIER']);
+    expect(built.lineages.utility.SPORE_TURRET_COOP).toEqual(['SPORE_TURRET_COOP', 'SPORE_TURRET']);
     expect(typeof built.weapons.GLOCK.projectileColor).toBe('number');
   });
 
   it('keeps placeable Coop variants limited to their explicit mode overrides', () => {
     const built = buildLoadoutRegistries(clonedSources());
-    const normalRock = built.utilities.FELSBAU as Record<string, unknown>;
-    const coopRock = built.utilities.FELSBAU_COOP as Record<string, unknown>;
-    const normalTurret = built.utilities.FLIEGENPILZ as Record<string, unknown>;
-    const coopTurret = built.utilities.FLIEGENPILZ_COOP as Record<string, unknown>;
+    const normalRock = built.utilities.ROCK_BARRIER as Record<string, unknown>;
+    const coopRock = built.utilities.ROCK_BARRIER_COOP as Record<string, unknown>;
+    const normalTurret = built.utilities.SPORE_TURRET as Record<string, unknown>;
+    const coopTurret = built.utilities.SPORE_TURRET_COOP as Record<string, unknown>;
     const coopRockPlaceable = coopRock.placeable as Record<string, unknown>;
     const coopTurretPlaceable = coopTurret.placeable as Record<string, unknown>;
 
@@ -82,7 +82,7 @@ describe('loadout content loader', () => {
     expect(coopRockPlaceable.lifetimeMs).toBe(coopTurretPlaceable.lifetimeMs);
     expect(coopRock).toEqual({
       ...normalRock,
-      id: 'FELSBAU_COOP',
+      id: 'ROCK_BARRIER_COOP',
       cooldown: coopRock.cooldown,
       placeable: {
         ...(normalRock.placeable as Record<string, unknown>),
@@ -91,7 +91,7 @@ describe('loadout content loader', () => {
     });
     expect(coopTurret).toEqual({
       ...normalTurret,
-      id: 'FLIEGENPILZ_COOP',
+      id: 'SPORE_TURRET_COOP',
       cooldown: coopTurret.cooldown,
       placeable: {
         ...(normalTurret.placeable as Record<string, unknown>),
@@ -201,8 +201,8 @@ describe('loadout content loader', () => {
     expectContentError(() => buildLoadoutRegistries(activationSources), 'Discriminator darf nicht');
 
     const placeableSources = clonedSources();
-    documentWith(placeableSources, 'utilities', 'FELSBAU').utilities!.FELSBAU_TURRET_TEST = {
-      id: 'FELSBAU_TURRET_TEST', baseId: 'FELSBAU', _notes: 'invalid test', placeable: { kind: 'turret' },
+      documentWith(placeableSources, 'utilities', 'ROCK_BARRIER').utilities!.ROCK_BARRIER_TURRET_TEST = {
+      id: 'ROCK_BARRIER_TURRET_TEST', baseId: 'ROCK_BARRIER', _notes: 'invalid test', placeable: { kind: 'turret' },
     };
     expectContentError(() => buildLoadoutRegistries(placeableSources), 'Discriminator darf nicht');
 

@@ -1,10 +1,8 @@
 {
   "mapId": "11",
-  "displayName": "Map 11 - Bombergeschwader",
   "arenaWidthCells": 60,
   "arenaHeightCells": 39,
   "timeOfDay": "10:30",
-  "tutorialText": "Feindliche Luftangriffe werden vor dem Einschlag markiert. Bleibt in Bewegung und verlasst die Zielzonen rechtzeitig.",
   "tutorialDurationMs": 10000,
   "rockFillRatio": 0.4,
   "trackPosition": "center",
@@ -69,7 +67,7 @@
             "gridY": 3
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -78,7 +76,7 @@
             "gridY": 4
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ],
       "powerUpPedestals": [

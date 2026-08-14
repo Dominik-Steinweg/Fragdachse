@@ -1,10 +1,8 @@
 {
   "mapId": "2",
-  "displayName": "Map 2 - Zweite Front",
   "arenaWidthCells": 70,
   "arenaHeightCells": 38,
   "timeOfDay": "05:00",
-  "tutorialText": "Angriffe können aus verschiedenen Richtungen kommen. Achtet auf West- und Ostfront und wechselt rechtzeitig die Seite.",
   "rockFillRatio": 0.15,
   "trackPosition": "center",
   "mapEvents": [{

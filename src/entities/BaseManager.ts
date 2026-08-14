@@ -140,7 +140,7 @@ export class BaseManager {
       }
       for (const turret of entity.getTurrets()) {
         const key = baseTurretLightKey(turret.id);
-        lighting.setLight(key, 'fliegenpilz', turret.x, turret.y, {
+        lighting.setLight(key, 'spore_turret', turret.x, turret.y, {
           color: hostile ? HOSTILE_BASE_TURRET_LIGHT_COLOR : BASE_TURRET_LIGHT_COLOR,
         });
         seen.add(key);

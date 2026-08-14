@@ -1,4 +1,4 @@
-{
+﻿{
   "enemies": [
     {
       "id": "zombie-badger",
@@ -73,7 +73,6 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_grave_titan",
       "isBoss": true,
-      "displayName": "Grufttitan",
       "glow": { "color": 8191882, "sizeFactor": 1.55, "alpha": 0.9, "lightRadiusPx": 240, "lightIntensity": 0.95 },
       "trainAwareness": {
         "safetyDistancePx": 48,
@@ -97,13 +96,12 @@
       "movementTarget": "bases",
       "weapons": [
         { "weaponId": "SPORE_WARDEN_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
-        { "weaponId": "WARDEN_SPOREN", "targetMode": "players" }
+        { "weaponId": "WARDEN_SPORES", "targetMode": "players" }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_spore_warden",
-      "displayName": "Sporenpanzer",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
@@ -124,7 +122,6 @@
       "attackStopDurationMs": 220,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_plague_medic",
-      "displayName": "Seuchenheiler",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
@@ -145,7 +142,6 @@
       "attackStopDurationMs": 200,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_void_stalker",
-      "displayName": "Leerenpirscher",
       "translocator": {
         "utilityId": "TRANSLOCATOR",
         "flightTimeMs": 1500,
@@ -172,9 +168,8 @@
       "attackStopDurationMs": 240,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_stink_broodmother",
-      "displayName": "Faulnisbrüter",
       "stinkAura": {
-        "utilityId": "ENEMY_STINKDRUESEN"
+        "utilityId": "ENEMY_STINK_CLOUD"
       },
       "deathSpawns": [
         { "enemyKind": "rabid-badger", "count": 4, "offsetPx": 9 }
@@ -199,7 +194,6 @@
       "attackStopDurationMs": 180,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_alien_badger",
-      "displayName": "Alien-Dachs",
       "color": 8188576,
       "burrow": {
         "maxDurationMs": 2000,
@@ -238,10 +232,8 @@
       "attackStopDurationMs": 220,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_thrower_badger",
-      "displayName": "Wurf-Dachs",
       "color": 11566322,
       "spawnThrow": {
-        "displayName": "Brutbombe",
         "enemyKind": "rabid-badger",
         "count": 1,
         "spawnOffsetPx": 12,
@@ -288,7 +280,6 @@
       "obstacleAttackDelayMs": 250,
       "imageKey": "enemy_inferno_colossus",
       "isBoss": true,
-      "displayName": "Flammenkoloss",
       "glow": { "color": 12799231, "sizeFactor": 1.65, "alpha": 1, "lightRadiusPx": 265, "lightIntensity": 1 },
       "voidFireChunks": {
         "count": 20,
@@ -298,7 +289,7 @@
         "durationMs": 6000,
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Lila Höllenbrand",
+        "sourceId": "enemy.inferno_colossus.void_fire",
         "intervalMinMs": 4000,
         "intervalMaxMs": 6000
       },
@@ -306,11 +297,10 @@
         "durationMs": 6000,
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Lila Höllenspur"
+        "sourceId": "enemy.inferno_colossus.void_trail"
       },
       "voidMolotov": {
         "utilityId": "MOLOTOV_GRENADE",
-        "displayName": "Lila Brandsatz",
         "minRange": 350,
         "maxRange": 600,
         "cooldownMs": 8000,
@@ -344,7 +334,6 @@
       "attackStopDurationMs": 120,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_pyro_badger",
-      "displayName": "Pyro-Dachs",
       "color": 11749375,
       "glow": { "color": 12799231, "sizeFactor": 1.7, "alpha": 0.85, "lightRadiusPx": 85, "lightIntensity": 1 },
       "burrow": {
@@ -417,7 +406,7 @@
           "durationMs": 2000,
           "burnDurationMs": 2000,
           "burnDamagePerTick": 1,
-          "weaponName": "Zeitbomben-Brand"
+          "sourceId": "enemy.timebomb.fire"
         },
         "killedPopRadiusPx": 42,
         "killedPopDamage": 2
@@ -444,7 +433,6 @@
       "imageKey": "enemy_void_hunter",
       "spriteRotationOffsetDegrees": 180,
       "isBoss": true,
-      "displayName": "Leerenjäger",
       "glow": {
         "color": 11219711,
         "sizeFactor": 1.7,
@@ -508,7 +496,7 @@
             "durationMs": 6000,
             "burnDurationMs": 2000,
             "burnDamagePerTick": 0.5,
-            "weaponName": "Leeren-Nuklearbrand"
+            "sourceId": "enemy.void_hunter.nuke"
           }
         },
         "armageddonDurationMs": 7500,
@@ -532,7 +520,7 @@
             "durationMs": 2000,
             "burnDurationMs": 2000,
             "burnDamagePerTick": 0.5,
-            "weaponName": "Leeren-Armageddon"
+            "sourceId": "enemy.void_hunter.armageddon"
           },
           "cometStormEnabled": 0,
           "cometSpawnRateDivisor": 1,

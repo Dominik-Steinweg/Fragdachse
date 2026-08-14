@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+﻿import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import type { ArenaContext }        from './ArenaContext';
 import type { RendererBundle }      from './RendererBundle';
@@ -11,9 +11,9 @@ import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/
 // SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
 // distance 0.  Explosions are world events, not remote-player gunshots, so we compensate
 // with a per-type scale so they can reach full volume when close to the listener.
-// scale = 1 / SHOT_AUDIO_REMOTE_CLOSE_VOLUME ≈ 1.72 lets a close explosion hit 1.0
+// scale = 1 / SHOT_AUDIO_REMOTE_CLOSE_VOLUME â‰ˆ 1.72 lets a close explosion hit 1.0
 // (Phaser clamps finalVolume to [0, 1] anyway, so there is no clipping risk).
-const EXPLOSION_CLOSE_BOOST = 1 / 0.58; // ≈ 1.72
+const EXPLOSION_CLOSE_BOOST = 1 / 0.58; // â‰ˆ 1.72
 
 function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: string; scale: number } | undefined {
   switch (visualStyle) {
@@ -28,7 +28,7 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
     case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };
     case 'mini_rocket_cascade': return { key: 'sfx_explosion_mini_rocket', scale: EXPLOSION_CLOSE_BOOST };
     case 'train':       return undefined; // sound handled separately via playLocalSound('sfx_train_explode')
-    // Aus der Brutbombe schluepft ein Dachs, es explodiert nichts – deshalb der Wurfgeraeusch-Sound
+    // Aus der Brutbombe schluepft ein Dachs, es explodiert nichts â€“ deshalb der Wurfgeraeusch-Sound
     // statt eines Explosionsknalls. Kein EXPLOSION_CLOSE_BOOST: er soll genauso klingen wie eine
     // geworfene Granate, nicht wie ein Welt-Ereignis.
     case 'brood_hatch': return { key: 'shot_throw', scale: 1 };
@@ -135,7 +135,7 @@ export class RpcCoordinator {
         // A regular utility packet is only valid for a temporary special-pickup
         // override; normal Inspector utilities must carry their typed ref.
         if (slot === 'utility' && !params?.toolRef
-          && bridge.getPlayerUtilityOverrideName(senderId) === '') {
+          && bridge.getPlayerUtilityOverrideId(senderId) === '') {
           return { ok: false, reason: 'blocked' };
         }
       } else if (params?.dismantle) {
@@ -312,8 +312,8 @@ export class RpcCoordinator {
   private registerShotFxHandler(): void {
     bridge.registerShotFxHandler((shooterId, duration, intensity) => {
       if (shooterId !== bridge.getLocalPlayerId()) return;
-      // Rückstoß bleibt ungerichtet: die RPC trägt nur Dauer und Stärke, keine Schussrichtung.
-      // `legacyShakeAmplitudePx` hält die aus der Waffenkonfiguration stammenden Werte gültig.
+      // RÃ¼ckstoÃŸ bleibt ungerichtet: die RPC trÃ¤gt nur Dauer und StÃ¤rke, keine Schussrichtung.
+      // `legacyShakeAmplitudePx` hÃ¤lt die aus der Waffenkonfiguration stammenden Werte gÃ¼ltig.
       this.ctx.visualFeedback.camera.request({
         channel: 'impact',
         amplitudePx: legacyShakeAmplitudePx(intensity),
@@ -329,8 +329,8 @@ export class RpcCoordinator {
       this.renderers.translocatorTeleport?.playFlash(x, y, color, type);
       if (type === 'end') {
         this.ctx.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);
-        // Globale Bildreaktion nur beim eigenen Sprung – ein fremder Teleport am anderen
-        // Arenaende darf das eigene Bild nicht umfärben.
+        // Globale Bildreaktion nur beim eigenen Sprung â€“ ein fremder Teleport am anderen
+        // Arenaende darf das eigene Bild nicht umfÃ¤rben.
         if (subjectId === bridge.getLocalPlayerId()) {
           this.ctx.visualFeedback.pulsePostFx('teleport');
         }
@@ -362,13 +362,13 @@ export class RpcCoordinator {
     bridge.registerKillEventHandler(event => {
       this.ctx.rightPanel.addKillFeedEntry(
         event.killerName, event.killerColor,
-        event.weapon,
+        event.sourceId,
         event.victimName, event.victimColor,
       );
 
       const localId = bridge.getLocalPlayerId();
       if (event.victimId === localId) {
-        this.ctx.centerHUD.showFraggedBy(event.killerName, event.weapon, event.killerColor);
+        this.ctx.centerHUD.showFraggedBy(event.killerName, event.sourceId, event.killerColor);
         return;
       }
       if (event.killerId === localId) {

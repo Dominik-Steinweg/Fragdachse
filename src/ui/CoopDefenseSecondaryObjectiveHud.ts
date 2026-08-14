@@ -36,6 +36,7 @@ import { isHudRectOccluded } from './hudOcclusionProbe';
 import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
+import { t } from '../i18n';
 
 /** Gleiche Breite wie das Pflichtziel-Panel; die Spalte liest sich dadurch als dessen Fortsetzung. */
 const PANEL_W = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.panelWidth;
@@ -251,7 +252,7 @@ export class CoopDefenseSecondaryObjectiveHud {
     this.panelGlyph = this.scene.add.graphics();
     this.panelPips = this.scene.add.graphics();
     this.panelKicker = this.scene.add
-      .text(PANEL_CONTENT_LEFT, PANEL_KICKER_Y, 'NEBENZIEL', KICKER_FONT)
+      .text(PANEL_CONTENT_LEFT, PANEL_KICKER_Y, t('ui.objective.secondary'), KICKER_FONT)
       .setOrigin(0, 0.5);
     this.panelTitle = this.scene.add
       .text(PANEL_CONTENT_LEFT, PANEL_TITLE_Y, '', TITLE_FONT)
@@ -560,13 +561,18 @@ export class CoopDefenseSecondaryObjectiveHud {
       id: `secondary:${objectiveId}:${entry.terminal ? entry.statusLine : 'active'}`,
       topic: `secondary:${objectiveId}`,
       priority: entry.terminal ? 50 : 0,
-      kicker: entry.terminal ? `NEBENZIEL ${entry.statusLine}` : 'NEUES NEBENZIEL',
+      kicker: entry.terminal
+        ? t('ui.objective.secondaryStatus', { status: entry.statusLine ?? '' })
+        : t('ui.objective.secondaryNew'),
       title: entry.title,
       // Die Aktivierungsmeldung nennt Ausgangslage und Belohnung; ein binäres Ziel zeigt dort
       // seinen Status statt einer nichtssagenden Null.
       detail: entry.terminal
         ? undefined
-        : `${entry.statusLine ?? `${entry.progressCurrent} / ${entry.progressTotal}`}  ·  ${entry.rewardHint}`,
+        : t('ui.objective.secondaryDetail', {
+          status: entry.statusLine ?? `${entry.progressCurrent} / ${entry.progressTotal}`,
+          reward: entry.rewardHint,
+        }),
       tone,
       ...(handsOverToPanel
         ? { target: { x: COLUMN_X, y: COLUMN_TOP_Y + PANEL_H / 2, scale: ANNOUNCE_TARGET_SCALE } }

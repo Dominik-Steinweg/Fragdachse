@@ -7,6 +7,7 @@ import type {
   CoopDefenseAnnouncementMessage,
   CoopDefenseObjectiveAnnouncement,
 } from './CoopDefenseObjectiveAnnouncement';
+import { t } from '../i18n';
 
 interface EventStateKey {
   readonly occurrence: number;
@@ -141,41 +142,41 @@ function createAnnouncementMessage(
       id,
       topic,
       priority: active || repeating ? 90 : 80,
-      kicker: repeating ? 'RB 54' : entry.state === 'completed' ? 'RB 54' : 'MAP-EVENT · RB 54',
-      title: active ? 'RB 54 FÄHRT EIN' : entry.state === 'completed' ? 'RB 54 ABGEFAHREN' : 'RB 54 ANGEKÜNDIGT',
-      detail: repeating ? 'NÄCHSTE DURCHFAHRT' : entry.state === 'completed' ? 'GLEISE WIEDER FREI' : 'GLEISE · AUSWEICHEN',
+      kicker: repeating ? 'RB 54' : entry.state === 'completed' ? 'RB 54' : t('ui.mapEvent.train.kicker'),
+      title: active ? t('ui.mapEvent.train.active') : entry.state === 'completed' ? t('ui.mapEvent.train.completed') : t('ui.mapEvent.train.announced'),
+      detail: repeating ? t('ui.mapEvent.train.next') : entry.state === 'completed' ? t('ui.mapEvent.train.clear') : t('ui.mapEvent.train.avoid'),
       tone: entry.state === 'completed' ? 'positive' : 'wave',
     };
   }
 
   if (event.type === 'airstrike') {
     const label = event.pattern === 'player-hunt'
-      ? 'ZIELVERFOLGUNG'
+      ? t('ui.mapEvent.airstrike.playerHunt')
       : event.pattern === 'tutorial-sweep'
-        ? 'BOMBARDEMENT'
-        : 'ZONEN-BARRAGE';
+        ? t('ui.mapEvent.airstrike.tutorialSweep')
+        : t('ui.mapEvent.airstrike.zoneBarrage');
     return {
       id,
       topic,
       priority: active ? 95 : repeating ? 85 : 90,
-      kicker: active ? 'LUFTANGRIFF' : entry.state === 'completed' ? 'LUFTANGRIFF' : 'WARNUNG · BOMBERANFLUG',
-      title: active ? `${label} AKTIV` : entry.state === 'completed' ? `${label} BEENDET` : `${label} ANGEKÜNDIGT`,
+      kicker: active ? t('ui.mapEvent.airstrike.kicker') : entry.state === 'completed' ? t('ui.mapEvent.airstrike.kicker') : t('ui.mapEvent.airstrike.warning'),
+      title: active ? t('ui.mapEvent.active', { label }) : entry.state === 'completed' ? t('ui.mapEvent.completed', { label }) : t('ui.mapEvent.announced', { label }),
       detail: entry.state === 'completed'
-        ? 'EINSCHLÄGE ABGESCHLOSSEN'
-        : event.pattern === 'player-hunt' ? 'IN BEWEGUNG BLEIBEN' : 'EINSCHLAGSBEREICH MEIDEN',
+        ? t('ui.mapEvent.airstrike.completedDetail')
+        : event.pattern === 'player-hunt' ? t('ui.mapEvent.airstrike.move') : t('ui.mapEvent.airstrike.avoid'),
       tone: entry.state === 'completed' ? 'positive' : 'negative',
     };
   }
 
   const isVoid = event.effect.visualStyle === 'void';
-  const label = isVoid ? 'LEERENBRAND' : 'BODENBRAND';
+  const label = isVoid ? t('ui.mapEvent.ground.voidfire') : t('ui.mapEvent.ground.fire');
   return {
     id,
     topic,
     priority: active ? 95 : 90,
-    kicker: active ? 'GEFAHRENFLÄCHE' : 'WARNUNG · BODENGEFAHR',
-    title: active ? `${label} AKTIVIERT` : entry.state === 'completed' ? `${label} BEENDET` : `${label} ANGEKÜNDIGT`,
-    detail: entry.state === 'completed' ? 'BEREICH WIEDER SICHER' : 'BEREICH VERMEIDEN',
+    kicker: active ? t('ui.mapEvent.ground.kicker') : t('ui.mapEvent.ground.warning'),
+    title: active ? t('ui.mapEvent.activated', { label }) : entry.state === 'completed' ? t('ui.mapEvent.completed', { label }) : t('ui.mapEvent.announced', { label }),
+    detail: entry.state === 'completed' ? t('ui.mapEvent.ground.safe') : t('ui.mapEvent.ground.avoid'),
     tone: active ? 'negative' : entry.state === 'completed' ? 'positive' : 'negative',
   };
 }

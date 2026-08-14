@@ -210,7 +210,7 @@ export class CoopDefenseXpDebugOverlay {
     for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
       const option = document.createElement('option');
       option.value = mapConfig.mapId;
-      option.innerText = mapConfig.displayName;
+      option.innerText = `Map ${mapConfig.mapId}`;
       unlockSelect.appendChild(option);
     }
     unlockSelect.value = currentValues.highestUnlockedMapId;
@@ -302,7 +302,7 @@ export class CoopDefenseXpDebugOverlay {
       if (String(bossPoints) !== bossPointsInput.value) bossPointsInput.value = String(bossPoints);
       const progress = getCoopDefenseProgressSnapshot(totalXp);
       const unlockedMapName = COOP_DEFENSE_MAP_CONFIGS
-        .find((mapConfig) => mapConfig.mapId === unlockSelect.value)?.displayName ?? unlockSelect.value;
+        .find((mapConfig) => mapConfig.mapId === unlockSelect.value)?.mapId ?? unlockSelect.value;
       preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}  |  ★ ${bossPoints} Bosspunkte\nFreigeschaltet bis: ${unlockedMapName}\nKlassen: ${classesCheckbox.checked ? 'freigeschaltet' : 'gesperrt'}`;
     };
 

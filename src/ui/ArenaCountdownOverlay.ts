@@ -13,6 +13,7 @@ import {
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import type { CameraPostFxController } from '../effects/postfx/CameraPostFxController';
+import { t } from '../i18n';
 import {
   RADIAL_FOCUS_SOFTNESS_PX,
   resolveRadialFocusFrame,
@@ -309,7 +310,7 @@ export class ArenaCountdownOverlay {
         strokeThickness: 18,
       });
       this.text
-        .setText('GO!')
+        .setText(t('ui.match.go'))
         .setPosition(this.baseX, this.baseY + 8)
         .setAlpha(1)
         .setScale(0.82)

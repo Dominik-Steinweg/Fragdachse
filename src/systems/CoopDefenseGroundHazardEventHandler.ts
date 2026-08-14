@@ -1,4 +1,4 @@
-import {
+﻿import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   CELL_SIZE,
@@ -188,7 +188,7 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
           durationMs: event.effect.burnDurationMs,
           damagePerTick: event.effect.burnDamagePerTick,
         },
-        weaponName: event.effect.weaponName,
+        sourceId: event.effect.sourceId,
         visualStyle: event.effect.visualStyle,
         damageTarget: 'players',
         static: permanent,

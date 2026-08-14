@@ -16,6 +16,8 @@
  *  8. Utility cooldown (gold) – wobble on special override
  */
 import * as Phaser from 'phaser';
+import { getContentDisplayName } from '../i18n/contentPresentation';
+import { getLocale, t } from '../i18n';
 import {
   ARMOR_COLOR, ARMOR_MAX,
   COLORS, toCssColor, GAME_HEIGHT,
@@ -197,11 +199,12 @@ export interface ArenaHUDData {
   isUltimateActive:         boolean;
   ultimateRequiredRage:     number;
   ultimateThresholds:       number[];
-  ultimateDisplayName?:     string;
+  ultimateId?:              string;
   weapon1CooldownFrac:      number;
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
-  utilityDisplayName?:      string;
+  utilityId?:               string;
+  utilityCapacityCost?:     number;
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?:     boolean;
   activePowerUps?:          ActivePowerUpInfo[];
@@ -223,6 +226,7 @@ export class ArenaHUD {
   private w2!:      BarBundle;
   private util!:    BarBundle;
   private presentationActive = true;
+  private loadoutNames = { weapon1: '', weapon2: '', utility: '', ultimate: '' };
 
   // Name
   private nameText!:        Phaser.GameObjects.Text;
@@ -331,13 +335,13 @@ export class ArenaHUD {
     c.add(this.divider(DIV2_Y));
 
     // Bars
-    this.hp   = this.createBar(HP_LBL_Y,  HP_BAR_Y,  'HP',        PAL_HP,   '_hud_hp',   { trail: true, value: true });
-    this.armor = this.createBar(ARM_LBL_Y, ARM_BAR_Y, 'Armor',    PAL_ARM,  '_hud_arm',  { trail: true, value: true, trailColor: ARMOR_COLOR });
-    this.adr  = this.createBar(ADR_LBL_Y, ADR_BAR_Y, 'Adrenalin', PAL_ADR,  '_hud_adr');
-    this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, 'Ultimate',  PAL_ULT,  '_hud_ult');
-    this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  'Waffe 1',   PAL_WPN,  '_hud_wpn',  { highlight: true });
-    this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  'Waffe 2',   PAL_WPN,  '_hud_wpn',  { highlight: true });
-    this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  'Utility',   PAL_UTIL, '_hud_util', { highlight: true });
+    this.hp   = this.createBar(HP_LBL_Y,  HP_BAR_Y,  t('ui.hud.hp'),        PAL_HP,   '_hud_hp',   { trail: true, value: true });
+    this.armor = this.createBar(ARM_LBL_Y, ARM_BAR_Y, t('ui.hud.armor'), PAL_ARM,  '_hud_arm',  { trail: true, value: true, trailColor: ARMOR_COLOR });
+    this.adr  = this.createBar(ADR_LBL_Y, ADR_BAR_Y, t('ui.hud.adrenaline'), PAL_ADR,  '_hud_adr');
+    this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, t('ui.loadout.ultimate'), PAL_ULT,  '_hud_ult');
+    this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  t('ui.loadout.weapon1'), PAL_WPN,  '_hud_wpn',  { highlight: true });
+    this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  t('ui.loadout.weapon2'), PAL_WPN,  '_hud_wpn',  { highlight: true });
+    this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  t('ui.loadout.utility'), PAL_UTIL, '_hud_util', { highlight: true });
     this.syncUltimateThresholdMarks([]);
 
     // Red overlay on weapon 2 bar — shown when adrenaline is insufficient
@@ -525,11 +529,22 @@ export class ArenaHUD {
   }
 
   setLoadoutNames(weapon1: string, weapon2: string, utility: string, ultimate: string): void {
-    this.w1.label.setText(`Waffe 1: ${weapon1}`);
-    this.w2.label.setText(`Waffe 2: ${weapon2}`);
-    this.util.label.setText(`Utility: ${utility}`);
-    this.ult.label.setText(`Ultimate: ${ultimate}`);
+    this.loadoutNames = { weapon1, weapon2, utility, ultimate };
+    this.w1.label.setText(`${t('ui.loadout.weapon1')}: ${weapon1}`);
+    this.w2.label.setText(`${t('ui.loadout.weapon2')}: ${weapon2}`);
+    this.util.label.setText(`${t('ui.loadout.utility')}: ${utility}`);
+    this.ult.label.setText(`${t('ui.loadout.ultimate')}: ${ultimate}`);
     this.currentUtilityName = utility;
+  }
+
+  refreshLocale(): void {
+    this.hp.label.setText(t('ui.hud.hp'));
+    this.armor.label.setText(t('ui.hud.armor'));
+    this.adr.label.setText(t('ui.hud.adrenaline'));
+    this.ult.label.setText(`${t('ui.loadout.ultimate')}: ${this.loadoutNames.ultimate}`);
+    this.w1.label.setText(`${t('ui.loadout.weapon1')}: ${this.loadoutNames.weapon1}`);
+    this.w2.label.setText(`${t('ui.loadout.weapon2')}: ${this.loadoutNames.weapon2}`);
+    this.util.label.setText(`${t('ui.loadout.utility')}: ${this.loadoutNames.utility}`);
   }
 
   update(data: ArenaHUDData): void {
@@ -552,8 +567,13 @@ export class ArenaHUD {
       this.setAdrenalinTickCost(data.weapon2AdrenalineCost ?? 0);
     }
 
-    if (data.utilityDisplayName && data.utilityDisplayName !== this.currentUtilityName) {
-      this.onUtilityNameChanged(data.utilityDisplayName);
+    if (data.utilityId) {
+      const utilityName = getContentDisplayName(data.utilityId, getLocale());
+      const capacitySuffix = (data.utilityCapacityCost ?? 0) > 0
+        ? ` · ${t('ui.hud.capacityCost', { cost: data.utilityCapacityCost ?? 0 })}`
+        : '';
+      const displayName = `${utilityName}${capacitySuffix}`;
+      if (displayName !== this.currentUtilityName) this.onUtilityNameChanged(displayName);
     }
     this.updateUtilityOverrideVisual(data.isUtilityOverridden ?? false);
     this.updatePersistentPowerUps(data);
@@ -967,7 +987,7 @@ export class ArenaHUD {
 
   private onUtilityNameChanged(newName: string): void {
     this.currentUtilityName = newName;
-    this.util.label.setText(`Utility: ${newName}`);
+    this.util.label.setText(`${t('ui.loadout.utility')}: ${newName}`);
     this.scene.tweens.killTweensOf(this.util.label);
     this.util.label.setScale(1);
     this.scene.tweens.add({
@@ -1058,7 +1078,9 @@ export class ArenaHUD {
       const bundle = this.createBar(
         labelY,
         barY,
-        isConstructionCapacity ? 'Baukapazität' : `Power-Up: ${def.displayName}`,
+        isConstructionCapacity
+          ? t('ui.hud.constructionCapacity')
+          : t('ui.hud.powerUp', { name: getContentDisplayName(pu.defId, getLocale()) }),
         palette,
         texKey,
         isConstructionCapacity || pu.defId === 'SHIELD_OVERCHARGE' || pu.defId === 'NEGEV_KILLSTREAK'

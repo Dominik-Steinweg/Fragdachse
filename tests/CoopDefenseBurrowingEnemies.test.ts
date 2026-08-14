@@ -161,14 +161,14 @@ describe('Pyro-Dachs', () => {
 
 describe('Purple enemy weapon VFX', () => {
   it('uses the purple spore projectile and impact cloud for the Warden', () => {
-    const warden = WEAPON_CONFIGS.WARDEN_SPOREN;
+    const warden = WEAPON_CONFIGS.WARDEN_SPORES;
     expect(warden.projectileColor).toBe(VOID_FIRE_COLOR);
     if (warden.fire.type !== 'projectile') throw new Error('Warden-Sporen muessen eine Projektilwaffe sein');
     expect(warden.fire.impactCloud?.visualVariant).toBe('spore_void');
   });
 
   it('uses the purple void cloud for the enemy stink aura', () => {
-    expect(UTILITY_CONFIGS.ENEMY_STINKDRUESEN.visualVariant).toBe('spore_void');
+    expect(UTILITY_CONFIGS.ENEMY_STINK_CLOUD.visualVariant).toBe('spore_void');
   });
 });
 

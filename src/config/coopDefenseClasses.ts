@@ -5,11 +5,6 @@ export interface CoopDefenseClassDefinition {
   readonly id: CoopDefenseClassId;
   /** Map victory after which this class becomes selectable. */
   readonly unlockAfterMapId: string;
-  readonly displayName: string;
-  readonly role: string;
-  readonly description: string;
-  /** Kurze Besonderheiten fuer das Mouse-over im Upgrade-Overlay. */
-  readonly tooltipLines: readonly string[];
   readonly outgoingDamageMultiplier: number;
   readonly criticalChance: number;
   readonly criticalDamageMultiplier: number;
@@ -38,13 +33,6 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
     dachs_nukem: {
       id: 'dachs_nukem',
       unlockAfterMapId: '5',
-      displayName: 'Dachs Nukem',
-      role: 'Offensive',
-      description: '+50% Schaden, 10% Krit-Chance, 200% Krit-Schaden und +20% Laufgeschwindigkeit.',
-      tooltipLines: [
-        'Loadout: Waffe 1, Waffe 2, Utility, Ultimate.',
-        'Stärke: schnelles Töten auf Distanz und hohe Mobilität.',
-      ],
       outgoingDamageMultiplier: 1.5,
       criticalChance: 0.1,
       criticalDamageMultiplier: 2,
@@ -57,13 +45,6 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
     dachs_of_steel: {
       id: 'dachs_of_steel',
       unlockAfterMapId: '5',
-      displayName: 'Dachs of Steel',
-      role: 'Tank',
-      description: 'Doppelte Lebenspunkte und Rüstung, +10 HP/s und Rüstung aus eigenen Felszerstörungen.',
-      tooltipLines: [
-        'Loadout: Waffe 1, Waffe 2, Utility, Ultimate.',
-        'Stärke: hält Gegnerwellen direkt an der Basis auf.',
-      ],
       outgoingDamageMultiplier: 1,
       criticalChance: 0,
       criticalDamageMultiplier: 1,
@@ -76,15 +57,6 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
     inspector_gadachs: {
       id: 'inspector_gadachs',
       unlockAfterMapId: '8',
-      displayName: 'Inspector Gadachs',
-      role: 'Ingenieur',
-      description: 'Baut dauerhafte Konstruktionen im Rahmen einer festen Baukapazität.',
-      tooltipLines: [
-        'Loadout: Waffe 1, Plasmabrenner auf RMB, mehrere Utility-Slots, Ultimate.',
-        'Konstrukte belegen Baukapazität (100 Punkte) statt Adrenalin.',
-        'R hält das Utility-Rad offen, E setzt die Auswahl ein.',
-        'Stärke: stellt bleibende Verteidigung auf und verstärkt sie im Ernstfall.',
-      ],
       outgoingDamageMultiplier: 1,
       criticalChance: 0,
       criticalDamageMultiplier: 1,

@@ -66,7 +66,7 @@ describe('room-statistics gameplay hooks', () => {
 
   it('observes construction-mode utility only after its placement handler succeeds', () => {
     const manager = makeLoadoutHookHarness();
-    const utility = fakeUtility(UTILITY_CONFIGS.FLIEGENPILZ);
+    const utility = fakeUtility(UTILITY_CONFIGS.SPORE_TURRET);
 
     expect((manager as any).useUtility(utility, 0, 0, 0, 10, 10, 'p1', 100, 0xffffff)).toBe(true);
     expect(manager.utilityUsedObserver).toHaveBeenCalledWith('p1', 'placeable_turret');

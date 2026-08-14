@@ -40,7 +40,7 @@ interface InspectorTask {
  *
  * Keine Sonderfarbe, keine Namensplakette, keine Aura, keine Spezialtextur – ihn
  * identifizieren seine Handlungen. Er benutzt den echten Plasmabrenner und den echten
- * FELSBAU-Weg; zerstörte Felsen lassen sich nicht per Strahl wiederbeleben, sie brauchen
+ * ROCK_BARRIER-Weg; zerstörte Felsen lassen sich nicht per Strahl wiederbeleben, sie brauchen
  * einen sichtbaren Neubau.
  */
 export class LobbyInspector {
@@ -51,8 +51,8 @@ export class LobbyInspector {
   private taskElapsedMs = 0;
   private nextPulseInMs = 0;
 
-  private readonly repairWeapon = WEAPON_CONFIGS.REPARATURSTRAHL as WeaponConfig;
-  private readonly buildConfig = UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig;
+  private readonly repairWeapon = WEAPON_CONFIGS.PLASMA_BURNER as WeaponConfig;
+  private readonly buildConfig = UTILITY_CONFIGS.ROCK_BARRIER as PlaceableRockUtilityConfig;
   private readonly fire: WeaponFireExecutor;
 
   constructor(

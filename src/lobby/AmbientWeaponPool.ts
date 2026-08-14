@@ -44,7 +44,7 @@ function resolveFamily(config: WeaponConfig): AmbientWeaponFamily {
  * Er ist zwar ein Hitscan und damit technisch Ambient-kompatibel, aber seine Wirkung ist
  * Reparatur – als Gefechtswaffe eines normalen Ambient-Dachses wäre er sinnlos.
  */
-const INSPECTOR_ONLY_WEAPON_IDS: ReadonlySet<string> = new Set(['REPARATURSTRAHL']);
+const INSPECTOR_ONLY_WEAPON_IDS: ReadonlySet<string> = new Set(['PLASMA_BURNER']);
 
 /**
  * Waffen, die generische Ambient-Dachse tragen können.

@@ -124,7 +124,7 @@ describe('Coop Defense C4 map-event presentation', () => {
           visualStyle: 'void',
           burnDurationMs: 1000,
           burnDamagePerTick: 1,
-          weaponName: 'C4-Testbrand',
+          sourceId: 'test.c4-fire',
         },
       },
     ];

@@ -12,6 +12,7 @@ import { ensureModalPanelTexture } from './uiTextures';
 import { BORDER, SURFACE, TEXT, textStyle } from './uiTheme';
 import { HELP_CONTROLS } from '../config/helpControls';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { t } from '../i18n';
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const PANEL_W = 660;
@@ -71,7 +72,7 @@ export class HelpOverlay {
 
     // ── Titel ─────────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'STEUERUNG', textStyle('display'))
+      this.scene.add.text(CX, TITLE_Y, t('ui.help.heading'), textStyle('display'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -82,7 +83,7 @@ export class HelpOverlay {
     );
 
     // ── Steuerungs-Einträge ───────────────────────────────────────────────
-    HELP_CONTROLS.forEach(([key, desc], i) => {
+    HELP_CONTROLS.forEach((entry, i) => {
       const y = LIST_START_Y + i * ROW_H;
 
       // Ruhige, gleichmaessige Zeilenflaechen statt eines starken Zebra-Musters.
@@ -92,18 +93,18 @@ export class HelpOverlay {
       );
 
       objects.push(
-        this.scene.add.text(KEY_X, y, key, KEY_STYLE)
+        this.scene.add.text(KEY_X, y, t(entry.keyId), KEY_STYLE)
           .setOrigin(0, 0.5).setScrollFactor(0),
       );
       objects.push(
-        this.scene.add.text(DESC_X, y, desc, DESC_STYLE)
+        this.scene.add.text(DESC_X, y, t(entry.descriptionKey), DESC_STYLE)
           .setOrigin(0, 0.5).setScrollFactor(0),
       );
     });
 
     // ── Footer-Hinweis ────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ Klick oder Taste zum Schließen ]', textStyle('caption'))
+      this.scene.add.text(CX, FOOTER_Y, t('ui.help.closeHint'), textStyle('caption'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 

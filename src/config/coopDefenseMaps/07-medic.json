@@ -1,9 +1,7 @@
 {
   "mapId": "7",
-  "displayName": "Map 7 - Medic!",
   "arenaWidthCells": 80,
   "timeOfDay": "17:00",
-  "tutorialText": "Seuchenheiler halten andere Gegner länger im Kampf. Schaltet Supportziele früh aus, bevor ihr die restliche Welle bekämpft.",
   "rockFillRatio": 0.3,
   "trackPosition": "right",
   "mapEvents": [{
@@ -91,7 +89,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -100,7 +98,7 @@
             "gridY": 3
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ],
       "powerUpPedestals": [
@@ -167,7 +165,7 @@
             "gridY": 1
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ],
       "powerUpPedestals": [

@@ -43,7 +43,7 @@ describe('coop-defense hostile bases', () => {
     expect(hostile?.shape.kind).toBe('cells');
     expect(hostile?.shape.kind === 'cells' ? hostile.shape.cells.length : 0).toBeGreaterThan(0);
     expect(hostile?.turrets?.length).toBeGreaterThan(0);
-    expect(hostile?.turrets?.every((turret) => turret.weaponId === 'BASE_SPOREN')).toBe(true);
+    expect(hostile?.turrets?.every((turret) => turret.weaponId === 'BASE_SPORES')).toBe(true);
     expect(hostile?.turrets?.every((turret) => turret.mountSide === 'rear')).toBe(true);
   });
 

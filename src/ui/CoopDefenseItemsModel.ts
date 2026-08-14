@@ -19,6 +19,8 @@ import {
   type CoopDefenseItemComparisonRow,
   type CoopDefenseItemSortMode,
 } from '../utils/coopDefenseItems';
+import { getLocale, t } from '../i18n';
+import { getItemSlotName } from '../i18n/itemPresentation';
 
 /**
  * View-Model des Item-Menues: Rasteraufteilung, Tooltip-Inhalte, Gesamtwerte und die Regeln fuer
@@ -105,7 +107,7 @@ export function buildCoopDefenseInventoryGrid(
     }
     return {
       slot,
-      label: getCoopDefenseItemSlotDefinition(slot).label,
+      label: getItemSlotName(slot, getLocale()),
       equipped: getEquippedCoopDefenseItem(items, equippedItemIds, slot),
       cells,
       used: stash.length,
@@ -124,15 +126,16 @@ export function buildCoopDefenseItemTooltip(
   isEquipped: boolean,
   options: CoopDefenseItemTooltipOptions = {},
 ): CoopDefenseItemTooltipContent {
-  const description = describeCoopDefenseItem(item);
+  const locale = getLocale();
+  const description = describeCoopDefenseItem(item, locale);
   const lines: CoopDefenseItemTooltipLine[] = [
-    { text: `${description.rarityLabel} · Stufe ${description.itemLevel}`, color: description.rarityColor, bold: true },
+    { text: `${description.rarityLabel} · ${t('ui.items.level')} ${description.itemLevel}`, color: description.rarityColor, bold: true },
     { text: '', color: COLORS.GREY_5 },
   ];
 
   for (const line of description.lines) {
     lines.push({
-      text: `${formatCoopDefenseItemValue(line.value, line.displayAsPercent)} ${line.label}`,
+      text: `${formatCoopDefenseItemValue(line.value, line.displayAsPercent, locale)} ${line.label}`,
       color: line.isBaseStat ? COLORS.GREY_1 : description.rarityColor,
     });
   }
@@ -149,21 +152,21 @@ export function buildCoopDefenseItemTooltip(
   if (comparison || !isEquipped) {
     lines.push({ text: '', color: COLORS.GREY_5 });
     lines.push({
-      text: comparison?.title ?? (equipped ? 'GEGENÜBER AUSGERÜSTET' : 'SLOT IST LEER'),
+      text: comparison?.title ?? (equipped ? t('ui.items.compareEquipped') : t('ui.items.slotEmptyComparison')),
       color: COLORS.GREY_4,
       bold: true,
     });
-    const changes = (comparison?.rows ?? compareCoopDefenseItems(item, equipped))
+    const changes = (comparison?.rows ?? compareCoopDefenseItems(item, equipped, locale))
       .filter((change) => change.delta !== 0);
     if (changes.length === 0) {
       lines.push({
-        text: comparison?.identicalText ?? 'identisch zum ausgerüsteten Teil',
+        text: comparison?.identicalText ?? t('ui.items.identical'),
         color: COLORS.GREY_4,
       });
     } else {
       for (const change of changes) {
         lines.push({
-          text: `${formatCoopDefenseItemValue(change.delta, change.displayAsPercent)} ${change.label}`,
+          text: `${formatCoopDefenseItemValue(change.delta, change.displayAsPercent, locale)} ${change.label}`,
           color: isCoopDefenseItemImprovement(change.stat, change.delta) ? COLORS.GREEN_2 : COLORS.RED_2,
         });
       }
@@ -172,15 +175,18 @@ export function buildCoopDefenseItemTooltip(
 
   if (options.showInventoryHints !== false) {
     lines.push({ text: '', color: COLORS.GREY_5 });
-    lines.push({ text: `Zerlegen bringt +${getCoopDefenseItemSalvageXp(item)} XP`, color: COLORS.GREY_4 });
     lines.push({
-      text: isEquipped ? 'Klick: Menü · Ziehen: Ablegen' : 'Klick: Menü · Ziehen: Ausrüsten',
+      text: t('ui.items.salvageHint', { xp: getCoopDefenseItemSalvageXp(item) }),
+      color: COLORS.GREY_4,
+    });
+    lines.push({
+      text: `${t('ui.items.clickMenu')} · ${isEquipped ? t('ui.items.dragRemove') : t('ui.items.dragEquip')}`,
       color: COLORS.GREY_5,
     });
   }
 
   return {
-    title: `${description.slotLabel} · Stufe ${description.itemLevel}`,
+    title: `${description.slotLabel} · ${t('ui.items.level')} ${description.itemLevel}`,
     titleColor: description.rarityColor,
     lines,
   };
@@ -188,8 +194,8 @@ export function buildCoopDefenseItemTooltip(
 
 /** Kurzform fuer die Belohnungsvorschau: eine Zeile je Item. */
 export function describeCoopDefenseItemShort(item: CoopDefenseItem): string {
-  const description = describeCoopDefenseItem(item);
-  return `${description.slotLabel} · ${description.rarityLabel} · Stufe ${description.itemLevel}`;
+  const description = describeCoopDefenseItem(item, getLocale());
+  return `${description.slotLabel} · ${description.rarityLabel} · ${t('ui.items.level')} ${description.itemLevel}`;
 }
 
 /**
@@ -201,7 +207,7 @@ export function summariseEquippedCoopDefenseItems(
 ): CoopDefenseEquippedStatLine[] {
   const totals = new Map<string, { label: string; value: number; displayAsPercent: boolean }>();
   for (const item of equippedItems) {
-    for (const line of describeCoopDefenseItem(item).lines) {
+    for (const line of describeCoopDefenseItem(item, getLocale()).lines) {
       const existing = totals.get(line.stat);
       totals.set(line.stat, {
         // Derselbe Stat traegt je nach Herkunft unterschiedliche Beschriftungen
@@ -214,7 +220,7 @@ export function summariseEquippedCoopDefenseItems(
   }
   return [...totals.values()].map((entry) => ({
     label: entry.label,
-    text: formatCoopDefenseItemValue(entry.value, entry.displayAsPercent),
+    text: formatCoopDefenseItemValue(entry.value, entry.displayAsPercent, getLocale()),
   }));
 }
 
@@ -222,9 +228,9 @@ export function summariseEquippedCoopDefenseItems(
 export function listEquippedCoopDefenseSpecialEffects(
   equippedItems: readonly CoopDefenseItem[],
 ): CoopDefenseEquippedSpecialEffectLine[] {
-  return equippedItems.flatMap((item) => describeCoopDefenseItem(item).affixLines.map((affix) => ({
+  return equippedItems.flatMap((item) => describeCoopDefenseItem(item, getLocale()).affixLines.map((affix) => ({
     label: affix.label,
-    text: `${formatCoopDefenseItemValue(affix.value, affix.displayAsPercent)} ${affix.label}`,
+    text: `${formatCoopDefenseItemValue(affix.value, affix.displayAsPercent, getLocale())} ${affix.label}`,
   })));
 }
 

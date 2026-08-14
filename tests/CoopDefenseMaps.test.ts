@@ -6,7 +6,6 @@ import {
   getCoopDefenseCampaignAudit,
   getCoopDefenseMapScheduledXp,
   getCoopDefenseMapXpReference,
-  getCoopDefenseMapObjectiveLabel,
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapEncounterConfigs,
   type CoopBaseShape,
@@ -24,6 +23,8 @@ import {
 } from '../src/config';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { formatTimeOfDay, parseTimeOfDay, resolveSkyState } from '../src/effects/TimeOfDay';
+import { getMapName, getMapTutorial, getSecondaryObjectiveReward } from '../src/i18n/contentPresentation';
+import { getLocalizedMapObjectiveLabel } from '../src/i18n/gameModePresentation';
 
 function getShapeBounds(shape: CoopBaseShape): { width: number; height: number } {
   if (shape.kind === 'rectangle') return { width: shape.widthCells, height: shape.heightCells };
@@ -103,20 +104,21 @@ describe('Coop defense map progression', () => {
     expect(sandbox.itemDrop).toEqual(expect.objectContaining({ itemLevel: expect.any(Number) }));
     expect(sandbox.itemDrop?.itemLevel).toBeGreaterThan(0);
     expect(carry?.rewards?.itemMetaRewardOnComplete).toBe(true);
-    expect(carry?.rewardHint).toContain('EPISCHE GARANTIE BEI SIEG');
+    expect(getSecondaryObjectiveReward(carry?.id ?? '', 'de')).toContain('EPISCHE GARANTIE BEI SIEG');
   });
 
   it('keeps map metadata usable after balancing and terminology changes', () => {
     const playableMaps = COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0');
-    const displayNames = playableMaps.map((map) => map.displayName.trim());
+    const displayNames = playableMaps.map((map) => getMapName(map.mapId, 'de').trim());
 
     expect(displayNames.every((name) => name.length > 0)).toBe(true);
     expect(new Set(displayNames).size).toBe(displayNames.length);
     for (const map of playableMaps) {
       expect(map.balanceReferenceDurationSec).toBeGreaterThan(0);
       if (map.objective === 'survive') expect(map.surviveDurationSec).toBeGreaterThan(0);
-      if (map.tutorialText !== undefined) {
-        expect(map.tutorialText.trim().length).toBeGreaterThan(0);
+      const tutorial = getMapTutorial(map.mapId, 'de');
+      if (tutorial !== undefined) {
+        expect(tutorial.trim().length).toBeGreaterThan(0);
       }
     }
   });
@@ -128,7 +130,7 @@ describe('Coop defense map progression', () => {
     ]);
     expect(audit.find((entry) => entry.mapId === '9')).toMatchObject({
       objective: 'survive',
-      tutorial: true,
+      tutorial: false,
       bases: [],
       secondaryObjectives: [],
       train: true,
@@ -161,7 +163,7 @@ describe('Coop defense map progression', () => {
       || objective === 'destroy-hostile-bases'
     ))).toBe(true);
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
-      expect(getCoopDefenseMapObjectiveLabel(map.objective).trim().length).toBeGreaterThan(0);
+      expect(getLocalizedMapObjectiveLabel(map.objective, 'de').trim().length).toBeGreaterThan(0);
       if (map.boss) expect(map.objective).toBe('defeat-boss');
       if (map.objective === 'destroy-hostile-bases') {
         expect(map.bases.some((base) => base.faction === 'hostile' && (base.role ?? 'main') === 'main')).toBe(true);
@@ -171,9 +173,9 @@ describe('Coop defense map progression', () => {
   });
 
   it('keeps the German labels for representative map objectives', () => {
-    expect(getCoopDefenseMapObjectiveLabel('repel-assault')).toBe('ANGRIFF ABWEHREN');
-    expect(getCoopDefenseMapObjectiveLabel('destroy-hostile-bases')).toBe('FEINDBASIS ZERSTÖREN');
-    expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT ÜBERLEBEN');
+    expect(getLocalizedMapObjectiveLabel('repel-assault', 'de')).toBe('ANGRIFF ABWEHREN');
+    expect(getLocalizedMapObjectiveLabel('destroy-hostile-bases', 'de')).toBe('FEINDBASIS ZERSTÖREN');
+    expect(getLocalizedMapObjectiveLabel('survive', 'de')).toBe('ÜBERLEBEN');
   });
 
   it('calculates non-negative exact finite XP for every playable map', () => {
@@ -217,8 +219,8 @@ describe('Coop defense map progression', () => {
       weaponId: turret.weaponId,
       cellOffset: turret.cellOffset,
     }))).toEqual([
-      { weaponId: 'BASE_SPOREN', cellOffset: { gridX: 0, gridY: 3 } },
-      { weaponId: 'BASE_SPOREN', cellOffset: { gridX: 0, gridY: 4 } },
+      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 0, gridY: 3 } },
+      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 0, gridY: 4 } },
     ]);
     expect(bomberMap.bases[0]?.powerUpPedestals?.map((pedestal) => ({
       defId: pedestal.defId,
@@ -424,7 +426,7 @@ describe('Coop defense map progression', () => {
     const plasmaTurrets = COOP_DEFENSE_MAP_CONFIGS
       .flatMap((map) => map.bases)
       .flatMap((base) => base.turrets ?? [])
-      .filter((turret) => turret.weaponId === 'FLIEGENPILZ_PLASMA');
+      .filter((turret) => turret.weaponId === 'SPORE_TURRET_PLASMA');
     expect(plasmaTurrets.length).toBeGreaterThan(0);
   });
 
@@ -496,8 +498,8 @@ describe('Coop defense map progression', () => {
       weaponId: turret.weaponId,
     }))).toEqual([
       { id: 'rocket-northwest', cellOffset: { gridX: 0, gridY: 0 }, weaponId: 'TURRET_ROCKET_BURST' },
-      { id: 'spore-northeast', cellOffset: { gridX: 4, gridY: 0 }, weaponId: 'BASE_SPOREN' },
-      { id: 'spore-southwest', cellOffset: { gridX: 0, gridY: 4 }, weaponId: 'BASE_SPOREN' },
+      { id: 'spore-northeast', cellOffset: { gridX: 4, gridY: 0 }, weaponId: 'BASE_SPORES' },
+      { id: 'spore-southwest', cellOffset: { gridX: 0, gridY: 4 }, weaponId: 'BASE_SPORES' },
       { id: 'rocket-southeast', cellOffset: { gridX: 4, gridY: 4 }, weaponId: 'TURRET_ROCKET_BURST' },
     ]);
     expect(map6.bases[0]?.powerUpPedestals?.map((pedestal) => ({

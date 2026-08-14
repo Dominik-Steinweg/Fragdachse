@@ -22,6 +22,8 @@ import {
 import type { GraphicsQuality, GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { toDesignSpace } from '../graphics/RenderResolution';
+import { formatPercent, getLocale, setLocale, t } from '../i18n';
+import type { Locale } from '../i18n/types';
 
 const PANEL_W = 680;
 const PANEL_H = 760;
@@ -64,6 +66,12 @@ const GRAPHICS_BLOCK_TOP = GRAPHICS_HEADER_Y - 20;
 const GRAPHICS_BLOCK_BOTTOM = QUALITY_BUTTON_Y + QUALITY_BUTTON_H + 10;
 const AUDIO_BLOCK_TOP = GRAPHICS_BLOCK_BOTTOM + 8;
 const AUDIO_BLOCK_BOTTOM = MUSIC_LOAD_BAR_Y + 16;
+const LOCALE_HEADING_Y = CY - 312;
+const LOCALE_BUTTON_Y = CY - 282;
+const LOCALE_HINT_Y = CY - 252;
+const LOCALE_BUTTON_W = 140;
+const LOCALE_BUTTON_H = 38;
+const LOCALE_BUTTON_GAP = 12;
 
 // Partie-Abbruch (nur Host, nur waehrend einer laufenden Runde sichtbar)
 const ABORT_DIVIDER_Y = CY + 224;
@@ -103,6 +111,11 @@ interface QualityButtonState {
   readonly label: Phaser.GameObjects.Text;
 }
 
+interface LocaleButtonState {
+  readonly background: Phaser.GameObjects.Rectangle;
+  readonly label: Phaser.GameObjects.Text;
+}
+
 /**
  * Host-Abbruch der laufenden Partie. Die Sichtbarkeit wird ueber {@link canAbort} bei jedem
  * Oeffnen neu erfragt, damit das Overlay selbst nichts ueber Phase oder Hostrolle wissen muss.
@@ -118,16 +131,21 @@ export interface SpectatorMatchBinding {
   spectate: () => void;
 }
 
+export interface LocaleSelectionBinding {
+  canChange: () => boolean;
+  onChanged: (locale: Locale) => void;
+}
+
 const QUALITY_OPTIONS: readonly { level: GraphicsQuality; label: string }[] = [
-  { level: 'low', label: 'NIEDRIG' },
-  { level: 'medium', label: 'MITTEL' },
-  { level: 'high', label: 'HOCH' },
+  { level: 'low', label: 'ui.options.low' },
+  { level: 'medium', label: 'ui.options.medium' },
+  { level: 'high', label: 'ui.options.high' },
 ] as const;
 
 const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   {
     key: 'master',
-    label: 'Gesamt-Lautstärke',
+    label: 'ui.options.masterVolume',
     labelY: CY - 84,
     trackY: CY - 34,
     palette: { dark: COLORS.GREEN_4, mid: COLORS.GOLD_2, light: COLORS.RED_1 },
@@ -135,7 +153,7 @@ const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   },
   {
     key: 'effects',
-    label: 'Effekte',
+    label: 'ui.options.effectsVolume',
     labelY: CY + 12,
     trackY: CY + 62,
     palette: { dark: COLORS.BLUE_5, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
@@ -143,7 +161,7 @@ const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   },
   {
     key: 'music',
-    label: 'Musik',
+    label: 'ui.options.musicVolume',
     labelY: CY + 108,
     trackY: CY + 158,
     palette: { dark: COLORS.PURPLE_5, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
@@ -188,6 +206,7 @@ export class OptionsOverlay {
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
   private readonly sliders = new Map<VolumeSliderKey, SliderState>();
   private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
+  private readonly localeButtons = new Map<Locale, LocaleButtonState>();
   private visible = false;
   private draggingSliderKey: VolumeSliderKey | null = null;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
@@ -212,6 +231,8 @@ export class OptionsOverlay {
   private abortHint: Phaser.GameObjects.Text | null = null;
   private abortConfirmPending = false;
   private abortConfirmTimer: Phaser.Time.TimerEvent | null = null;
+  private localeHint: Phaser.GameObjects.Text | null = null;
+  private localeBinding: LocaleSelectionBinding | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -230,6 +251,11 @@ export class OptionsOverlay {
     this.syncAbortSection();
   }
 
+  setLocaleSelectionBinding(binding: LocaleSelectionBinding | null): void {
+    this.localeBinding = binding;
+    this.syncLocaleButtons();
+  }
+
   build(): void {
     this.unsubscribeMusicLoadState?.();
     this.unsubscribeMusicLoadState = null;
@@ -246,6 +272,7 @@ export class OptionsOverlay {
     }
     this.sliders.clear();
     this.qualityButtons.clear();
+    this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
@@ -259,6 +286,7 @@ export class OptionsOverlay {
     this.abortButton = null;
     this.abortLabel = null;
     this.abortHint = null;
+    this.localeHint = null;
 
     ensureOptionsTextures(this.scene);
 
@@ -279,12 +307,14 @@ export class OptionsOverlay {
     objects.push(panel);
 
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'OPTIONEN', textStyle('display'))
+      this.scene.add.text(CX, TITLE_Y, t('ui.options.title'), textStyle('display'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
+    this.buildLocaleSelector(objects);
+
     this.buildSectionBlock(
-      'Grafikqualität',
+      t('ui.options.graphics'),
       GRAPHICS_BLOCK_TOP,
       GRAPHICS_BLOCK_BOTTOM,
       GRAPHICS_HEADER_Y,
@@ -293,7 +323,7 @@ export class OptionsOverlay {
 
     this.buildQualitySelector(objects);
 
-    this.buildSectionBlock('Audio', AUDIO_BLOCK_TOP, AUDIO_BLOCK_BOTTOM, AUDIO_HEADER_Y, objects);
+    this.buildSectionBlock(t('ui.options.audio'), AUDIO_BLOCK_TOP, AUDIO_BLOCK_BOTTOM, AUDIO_HEADER_Y, objects);
 
     for (const definition of SLIDER_DEFINITIONS) {
       this.buildSlider(definition, objects);
@@ -302,7 +332,7 @@ export class OptionsOverlay {
     this.buildAbortSection(objects);
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ O / Klick zum Schließen ]', textStyle('caption'))
+      this.scene.add.text(CX, FOOTER_Y, t('ui.options.closeHint'), textStyle('caption'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -313,6 +343,7 @@ export class OptionsOverlay {
 
     this.syncFromAudioSystem();
     this.syncQualityButtons();
+    this.syncLocaleButtons();
     this.syncAbortSection();
   }
 
@@ -414,12 +445,14 @@ export class OptionsOverlay {
     }
     this.sliders.clear();
     this.qualityButtons.clear();
+    this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
     this.musicLoadTrack = null;
     this.musicLoadFill = null;
     this.musicLoadLabel = null;
+    this.localeHint = null;
   }
 
   private syncFromAudioSystem(): void {
@@ -470,7 +503,7 @@ export class OptionsOverlay {
           setStoredGraphicsQuality(option.level);
           this.syncQualityButtons();
         });
-      const label = this.scene.add.text(x, QUALITY_BUTTON_Y, option.label, textStyle('labelSm', {
+      const label = this.scene.add.text(x, QUALITY_BUTTON_Y, t(option.label), textStyle('labelSm', {
         color: TEXT.secondary,
       })).setOrigin(0.5).setScrollFactor(0);
       this.qualityButtons.set(option.level, { background, label });
@@ -490,17 +523,78 @@ export class OptionsOverlay {
     }
   }
 
+  private buildLocaleSelector(objects: Phaser.GameObjects.GameObject[]): void {
+    objects.push(
+      this.scene.add.text(CX, LOCALE_HEADING_Y, t('ui.options.language'), textStyle('section', { color: TEXT.secondary }))
+        .setOrigin(0.5).setScrollFactor(0),
+    );
+    const locales: readonly { locale: Locale; label: string }[] = [
+      { locale: 'de', label: t('ui.options.german') },
+      { locale: 'en', label: t('ui.options.english') },
+    ];
+    const totalWidth = locales.length * LOCALE_BUTTON_W + (locales.length - 1) * LOCALE_BUTTON_GAP;
+    const startX = CX - totalWidth / 2 + LOCALE_BUTTON_W / 2;
+    for (const [index, option] of locales.entries()) {
+      const x = startX + index * (LOCALE_BUTTON_W + LOCALE_BUTTON_GAP);
+      const background = this.scene.add.rectangle(
+        x, LOCALE_BUTTON_Y, LOCALE_BUTTON_W, LOCALE_BUTTON_H, TRACK_BG, 0.96,
+      ).setStrokeStyle(1, TRACK_BORDER).setScrollFactor(0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.onLocaleSelected(option.locale))
+        .on('pointerover', () => {
+          if (!this.localeBinding?.canChange()) this.localeHint?.setText(t('ui.options.languageLobbyOnly'));
+        })
+        .on('pointerout', () => this.syncLocaleButtons());
+      const label = this.scene.add.text(x, LOCALE_BUTTON_Y, option.label, textStyle('labelSm', {
+        color: TEXT.secondary,
+      })).setOrigin(0.5).setScrollFactor(0);
+      this.localeButtons.set(option.locale, { background, label });
+      objects.push(background, label);
+    }
+    this.localeHint = this.scene.add.text(CX, LOCALE_HINT_Y, '', textStyle('caption', { color: TEXT.muted }))
+      .setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.localeHint);
+  }
+
+  private onLocaleSelected(locale: Locale): void {
+    if (!this.localeBinding?.canChange() || locale === getLocale()) {
+      this.syncLocaleButtons();
+      return;
+    }
+    const wasVisible = this.visible;
+    this.visible = false;
+    setLocale(locale);
+    this.build();
+    if (wasVisible) this.show();
+    this.localeBinding?.onChanged(locale);
+  }
+
+  private syncLocaleButtons(): void {
+    const canChange = this.localeBinding?.canChange() === true;
+    const selected = getLocale();
+    for (const [locale, state] of this.localeButtons) {
+      const active = locale === selected;
+      state.background
+        .setFillStyle(active ? SURFACE.raised : TRACK_BG, canChange ? 1 : 0.55)
+        .setStrokeStyle(active ? 2 : 1, active ? BORDER.default : TRACK_BORDER)
+        .setAlpha(canChange ? 1 : 0.55)
+        .setInteractive({ useHandCursor: canChange });
+      state.label.setColor(toCssColor(canChange && active ? TEXT.primary : TEXT.secondary)).setAlpha(canChange ? 1 : 0.55);
+    }
+    this.localeHint?.setText(canChange ? '' : t('ui.options.languageLobbyOnly'));
+  }
+
   private buildSlider(definition: SliderDefinition, objects: Phaser.GameObjects.GameObject[]): void {
     const container = this.container;
     if (!container) return;
 
     objects.push(
-      this.scene.add.text(TRACK_X, definition.labelY, definition.label, textStyle('label', {
+      this.scene.add.text(TRACK_X, definition.labelY, t(definition.label), textStyle('label', {
         color: TEXT.primary,
       })).setOrigin(0, 0.5).setScrollFactor(0),
     );
 
-    const valueText = this.scene.add.text(PERCENT_X, definition.labelY, '0%', textStyle('numM', {
+    const valueText = this.scene.add.text(PERCENT_X, definition.labelY, formatPercent(0, getLocale(), 0), textStyle('numM', {
       color: TEXT.secondary,
     })).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(valueText);
@@ -689,12 +783,12 @@ export class OptionsOverlay {
     } else {
       this.spectatorButton?.setInteractive({ useHandCursor: true });
       this.spectatorLabel
-        ?.setText(this.spectatorConfirmPending ? 'WIRKLICH ZUSCHAUEN?' : 'RUNDE VERLASSEN & ZUSCHAUEN')
+        ?.setText(this.spectatorConfirmPending ? t('ui.match.spectateConfirm') : t('ui.match.spectate'))
         .setColor(toCssColor(this.spectatorConfirmPending ? COLORS.BLUE_1 : COLORS.GREY_1));
       this.spectatorHint
         ?.setText(this.spectatorConfirmPending
-          ? 'Erneut klicken zum Bestaetigen'
-          : 'Du bleibst bis zur naechsten Lobby Zuschauer')
+          ? t('ui.match.confirmHint')
+          : t('ui.match.spectateHint'))
         .setColor(toCssColor(this.spectatorConfirmPending ? COLORS.BLUE_1 : COLORS.GREY_4));
     }
     if (!abortAvailable) {
@@ -704,12 +798,12 @@ export class OptionsOverlay {
 
     this.abortButton?.setInteractive({ useHandCursor: true });
     this.abortLabel
-      ?.setText(this.abortConfirmPending ? 'WIRKLICH BEENDEN?' : 'PARTIE BEENDEN')
+      ?.setText(this.abortConfirmPending ? t('ui.match.abortConfirm') : t('ui.match.abort'))
       .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_1));
     this.abortHint
       ?.setText(this.abortConfirmPending
-        ? 'Erneut klicken zum Bestätigen'
-        : 'Beendet die laufende Runde für alle Spieler')
+        ? t('ui.match.confirmHint')
+        : t('ui.match.abortHint'))
       .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_4));
   }
 
@@ -801,7 +895,7 @@ export class OptionsOverlay {
       fill.setFillStyle(COLORS.PURPLE_2, 1);
       label
         .setColor(toCssColor(COLORS.PURPLE_1))
-        .setText(`LOBBY-MUSIK WIRD GELADEN · ${Math.round(progress * 100)}%`);
+        .setText(t('ui.options.musicLoading', { percent: Math.round(progress * 100) }));
       return;
     }
 
@@ -809,7 +903,7 @@ export class OptionsOverlay {
       fill.setDisplaySize(TRACK_W, MUSIC_LOAD_BAR_H - 2);
       label
         .setColor(toCssColor(COLORS.PURPLE_1))
-        .setText('LOBBY-MUSIK BEREIT');
+        .setText(t('ui.options.musicReady'));
       this.scheduleMusicLoadingIndicatorHide(550);
       return;
     }
@@ -818,7 +912,7 @@ export class OptionsOverlay {
     fill.setFillStyle(COLORS.RED_2, 1);
     label
       .setColor(toCssColor(COLORS.RED_1))
-      .setText('LOBBY-MUSIK KONNTE NICHT GELADEN WERDEN');
+      .setText(t('ui.options.musicFailed'));
     this.scheduleMusicLoadingIndicatorHide(1800);
   }
 
@@ -849,7 +943,7 @@ export class OptionsOverlay {
     slider.fill.setCrop(0, 0, width, TRACK_H);
     slider.gloss.setCrop(0, 0, width, TRACK_H);
     slider.knob.setX(TRACK_X + width);
-    slider.valueText.setText(`${Math.round(nextValue * 100)}%`);
+    slider.valueText.setText(formatPercent(nextValue, getLocale(), 0));
     slider.fillEffect.setFilledWidth(width);
 
     switch (key) {

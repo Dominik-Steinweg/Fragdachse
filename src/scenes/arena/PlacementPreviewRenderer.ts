@@ -9,6 +9,7 @@ import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from 
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
+import { t } from '../../i18n';
 
 interface TunnelPreviewVisualState {
   keyBase: string;
@@ -289,17 +290,17 @@ export class PlacementPreviewRenderer {
     this.placeableUtilityHint.setVisible(visible);
     if (!visible) return;
     if (preview?.mode === 'dismantle') {
-      this.placeableUtilityHintTitle.setText('RÜCKBAU');
-      this.placeableUtilityHintSubtitle.setText('E oder Linksklick: abbauen   Rechtsklick: abbrechen');
+      this.placeableUtilityHintTitle.setText(t('ui.placement.dismantleTitle'));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.dismantleHint'));
     } else if (preview?.kind === 'tunnel') {
-      this.placeableUtilityHintTitle.setText(`DACHS-TUNNEL ${preview.stage ?? 1}/2`);
-      this.placeableUtilityHintSubtitle.setText('E oder Linksklick: setzen   Rechtsklick oder Q: abbrechen');
+      this.placeableUtilityHintTitle.setText(t('ui.placement.tunnelTitle', { stage: preview.stage ?? 1 }));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.tunnelHint'));
     } else if (preview?.kind === 'pedestal') {
-      this.placeableUtilityHintTitle.setText('MISSIONS-PODEST');
-      this.placeableUtilityHintSubtitle.setText('E oder Linksklick: setzen   Rechtsklick: abbrechen');
+      this.placeableUtilityHintTitle.setText(t('ui.placement.missionTitle'));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.missionHint'));
     } else {
-      this.placeableUtilityHintTitle.setText('BAUMODUS');
-      this.placeableUtilityHintSubtitle.setText('E oder Linksklick: bauen   Rechtsklick: abbrechen');
+      this.placeableUtilityHintTitle.setText(t('ui.placement.buildTitle'));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.buildHint'));
     }
     this.placeableUtilityHint.alpha = 0.9 + 0.1 * Math.sin(this.scene.time.now / 160);
   }
@@ -382,8 +383,8 @@ export class PlacementPreviewRenderer {
       return (ULTIMATE_CONFIGS.DACHS_TUNNEL as TunnelUltimateConfig).placement.previewAlpha;
     }
     return kind === 'turret' || kind === 'pedestal'
-      ? (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.previewAlpha
-      : (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable.previewAlpha;
+      ? (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.previewAlpha
+      : (UTILITY_CONFIGS.ROCK_BARRIER as PlaceableRockUtilityConfig).placeable.previewAlpha;
   }
 
   private getPlaceableTextureKey(
@@ -435,7 +436,7 @@ export class PlacementPreviewRenderer {
       const definition = getCoopDefenseConstructionDefinition(constructionId);
       if (definition.kind === 'turret') return getTurretVisualSpec(definition.weaponId);
     }
-    return getTurretVisualSpec('SPOREN');
+    return getTurretVisualSpec('SPORES');
   }
 
   private ensureTurretPreviewImage(
@@ -586,7 +587,7 @@ export class PlacementPreviewRenderer {
     const y = ARENA_OFFSET_Y + 136;
     const panel = this.scene.add.rectangle(0, 0, 500, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, COLORS.RED_2, 0.9);
-    const title = this.scene.add.text(0, -11, 'ATOMBOMBE: ZIELMODUS', {
+    const title = this.scene.add.text(0, -11, t('ui.placement.nukeTargetTitle'), {
       fontFamily: 'monospace',
       fontSize: '22px',
       fontStyle: 'bold',
@@ -594,7 +595,7 @@ export class PlacementPreviewRenderer {
       stroke: '#241527',
       strokeThickness: 5,
     }).setOrigin(0.5);
-    const subtitle = this.scene.add.text(0, 15, 'Linksklick: platzieren   Rechtsklick oder E: abbrechen', {
+    const subtitle = this.scene.add.text(0, 15, t('ui.placement.nukeTargetHint'), {
       fontFamily: 'monospace',
       fontSize: '15px',
       color: '#ebede9',
@@ -614,7 +615,7 @@ export class PlacementPreviewRenderer {
     const y = ARENA_OFFSET_Y + 136;
     const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, 0xff6600, 0.9);
-    const title = this.scene.add.text(0, -11, 'LUFTANGRIFF: ZIELMODUS', {
+    const title = this.scene.add.text(0, -11, t('ui.placement.airstrikeTargetTitle'), {
       fontFamily: 'monospace',
       fontSize: '22px',
       fontStyle: 'bold',
@@ -622,7 +623,7 @@ export class PlacementPreviewRenderer {
       stroke: '#241527',
       strokeThickness: 5,
     }).setOrigin(0.5);
-    const subtitle = this.scene.add.text(0, 15, 'Linksklick: Ziel markieren   Rechtsklick oder Q: abbrechen', {
+    const subtitle = this.scene.add.text(0, 15, t('ui.placement.airstrikeTargetHint'), {
       fontFamily: 'monospace',
       fontSize: '15px',
       color: '#ebede9',
@@ -642,7 +643,7 @@ export class PlacementPreviewRenderer {
     const y = ARENA_OFFSET_Y + 54;
     const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, COLORS.BROWN_2, 0.9);
-    const title = this.scene.add.text(0, -11, 'BAUMODUS', {
+    const title = this.scene.add.text(0, -11, t('ui.placement.buildTitle'), {
       fontFamily: 'monospace',
       fontSize: '22px',
       fontStyle: 'bold',
@@ -650,7 +651,7 @@ export class PlacementPreviewRenderer {
       stroke: '#241527',
       strokeThickness: 5,
     }).setOrigin(0.5);
-    const subtitle = this.scene.add.text(0, 15, 'E oder Linksklick: bauen   Rechtsklick: abbrechen', {
+    const subtitle = this.scene.add.text(0, 15, t('ui.placement.buildHint'), {
       fontFamily: 'monospace',
       fontSize: '15px',
       color: '#ebede9',

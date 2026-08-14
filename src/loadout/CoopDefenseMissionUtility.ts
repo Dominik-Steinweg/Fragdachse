@@ -11,7 +11,6 @@ export function createCoopDefensePlaceablePedestalUtility(
 ): PlaceablePedestalUtilityConfig {
   return {
     id: `COOP_DEFENSE_MISSION_PEDESTAL:${objectiveId}`,
-    displayName: 'MISSIONS-PODEST PLATZIEREN',
     type: 'placeable_pedestal',
     cooldown: 0,
     activation: { type: 'placement_mode' },

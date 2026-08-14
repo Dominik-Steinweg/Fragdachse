@@ -7,7 +7,6 @@ export type PowerUpType = 'instant_heal' | 'instant_armor' | 'buff_regen' | 'buf
 export interface PowerUpDef {
   readonly id:          string;
   readonly type:        PowerUpType;
-  readonly displayName: string;
   readonly amount?: number;       // nur instant_* (999 = Full HP)
   readonly durationMs?: number;   // nur buff_*
   readonly multiplier?: number;   // nur buff_*
@@ -36,31 +35,30 @@ export function shouldDelayFirstPedestalSpawn(defId: string): boolean {
 }
 
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
-  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  displayName: 'Medipack',            amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
-  ARMOR:         { id: 'ARMOR',         type: 'instant_armor', displayName: 'Armor',               amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
-  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    displayName: 'Adrenalin Spritze',  durationMs: 3_000, multiplier: 3.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
-  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
-  DECOY_STEALTH: { id: 'DECOY_STEALTH', type: 'decoy_stealth', displayName: 'Unsichtbarkeit', color: COLORS.GREY_2 },
-  SHIELD_OVERCHARGE: { id: 'SHIELD_OVERCHARGE', type: 'shield_overcharge', displayName: 'Schildladung', color: 0x78f0ff },
-  AK47_FOCUS: { id: 'AK47_FOCUS', type: 'weapon_buff', displayName: 'Einschießen', color: 0xffa33a },
-  AK47_FIRE_SUPERIORITY: { id: 'AK47_FIRE_SUPERIORITY', type: 'weapon_buff', displayName: 'Feuerüberlegenheit', color: 0xffd166 },
-  NEGEV_KILLSTREAK: { id: 'NEGEV_KILLSTREAK', type: 'weapon_buff', displayName: 'Negev-Killstreak', color: 0xff8a2d },
+  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
+  ARMOR:         { id: 'ARMOR',         type: 'instant_armor', amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
+  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    durationMs: 3_000, multiplier: 3.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
+  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
+  DECOY_STEALTH: { id: 'DECOY_STEALTH', type: 'decoy_stealth', color: COLORS.GREY_2 },
+  SHIELD_OVERCHARGE: { id: 'SHIELD_OVERCHARGE', type: 'shield_overcharge', color: 0x78f0ff },
+  AK47_FOCUS: { id: 'AK47_FOCUS', type: 'weapon_buff', color: 0xffa33a },
+  AK47_FIRE_SUPERIORITY: { id: 'AK47_FIRE_SUPERIORITY', type: 'weapon_buff', color: 0xffd166 },
+  NEGEV_KILLSTREAK: { id: 'NEGEV_KILLSTREAK', type: 'weapon_buff', color: 0xff8a2d },
   // Item-Affix "Kinetische Ladung". Kein einsammelbares Power-Up, sondern nur ein HUD-Eintrag –
   // dieselbe Rolle wie die AK-47- und Negev-Buffs darueber.
-  MOVEMENT_CHARGE: { id: 'MOVEMENT_CHARGE', type: 'weapon_buff', displayName: 'Kinetische Ladung', color: 0x7fd4ff },
+  MOVEMENT_CHARGE: { id: 'MOVEMENT_CHARGE', type: 'weapon_buff', color: 0x7fd4ff },
   // Item-Affixe ohne eigene Pickup-Quelle; diese Definitionen versorgen ausschliesslich die HUD-Zeile.
-  GLUTWANDERER: { id: 'GLUTWANDERER', type: 'weapon_buff', displayName: 'Glutwanderer', color: 0xff8a3d },
-  SURROUNDED: { id: 'SURROUNDED', type: 'buff_regen', displayName: 'Umzingelt', color: 0xf05a78 },
+  GLUTWANDERER: { id: 'GLUTWANDERER', type: 'weapon_buff', color: 0xff8a3d },
+  SURROUNDED: { id: 'SURROUNDED', type: 'buff_regen', color: 0xf05a78 },
   // Team-Buff-HUD-Definition. Die Wirkung laeuft bewusst nicht ueber PowerUpSystem.
   TEAM_REGENERATION_SURGE: {
     id: 'TEAM_REGENERATION_SURGE',
     type: 'buff_regen',
-    displayName: 'Team-Regenerationsschub',
     color: 0x63e6be,
   },
-  NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
-  HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
-  BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_3,  spriteKey: 'powerup_bfg'  },
+  NUKE:                { id: 'NUKE',                type: 'global_nuke',         color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
+  HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
+  BFG:                 { id: 'BFG',                type: 'bfg',                  color: COLORS.GREEN_3,  spriteKey: 'powerup_bfg'  },
 };
 
 export const TIMED_POWERUP_PEDESTAL_COUNT = 4;

@@ -70,7 +70,7 @@ function makeEvent(
       visualStyle: 'void',
       burnDurationMs: 2_000,
       burnDamagePerTick: 0.5,
-      weaponName: 'C3-Testbrand',
+      sourceId: 'test.c3-fire',
     },
     ...overrides,
   };

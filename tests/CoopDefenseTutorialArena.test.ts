@@ -18,6 +18,7 @@ import {
   getCoopDefenseTutorialRockRegion,
 } from '../src/config/coopDefenseTutorial';
 import { COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT } from '../src/ui/CoopDefenseSecondaryObjectiveLayout';
+import { getMapTutorial } from '../src/i18n/contentPresentation';
 
 describe('Coop defense tutorial arena formation', () => {
   afterEach(() => {
@@ -28,7 +29,7 @@ describe('Coop defense tutorial arena formation', () => {
     expect(COOP_DEFENSE_TUTORIAL_PANEL_WIDTH).toBe(840);
     expect(COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT).toBe(168);
     for (let mapId = 1; mapId <= 5; mapId++) {
-      expect(getCoopDefenseMapConfig(String(mapId)).tutorialText).toBeTruthy();
+      expect(getMapTutorial(String(mapId), 'de')).toBeTruthy();
     }
   });
 

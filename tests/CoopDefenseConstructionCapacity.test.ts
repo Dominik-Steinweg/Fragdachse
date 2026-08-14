@@ -30,8 +30,8 @@ describe('construction capacity costs', () => {
       expect(Number.isFinite(construction.capacityCost), construction.id).toBe(true);
       expect(construction.capacityCost, construction.id).toBeGreaterThanOrEqual(0);
     }
-    expect(getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' })).toBeGreaterThan(0);
-    expect(getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })).toBeGreaterThan(0);
+    expect(getToolCapacityCost({ kind: 'utility', id: 'SPORE_TURRET' })).toBeGreaterThan(0);
+    expect(getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' })).toBeGreaterThan(0);
   });
 
   it('costs nothing for utilities that are not constructs', () => {
@@ -46,9 +46,9 @@ describe('construction capacity costs', () => {
     expect(getPlaceableCapacityCost({ kind: 'turret', constructionId: 'rocket_turret' }))
       .toBe(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost);
     expect(getPlaceableCapacityCost({ kind: 'turret' }))
-      .toBe(getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' }));
+      .toBe(getToolCapacityCost({ kind: 'utility', id: 'SPORE_TURRET' }));
     expect(getPlaceableCapacityCost({ kind: 'rock' }))
-      .toBe(getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' }));
+      .toBe(getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' }));
     expect(getPlaceableCapacityCost({ kind: 'tunnel' })).toBe(0);
   });
 
@@ -56,19 +56,19 @@ describe('construction capacity costs', () => {
     for (const construction of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
       expect(construction.buildCooldownMs, construction.id).toBeGreaterThanOrEqual(0);
     }
-    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).cooldown)
+    expect((UTILITY_CONFIGS.ROCK_BARRIER as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.SPORE_TURRET as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.ROCK_BARRIER_COOP as PlaceableUtilityConfig).cooldown)
       .toBeGreaterThanOrEqual(0);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).cooldown)
+    expect((UTILITY_CONFIGS.SPORE_TURRET_COOP as PlaceableUtilityConfig).cooldown)
       .toBeGreaterThanOrEqual(0);
   });
 
   it('keeps normal placeables finite and Coop placeables permanent', () => {
-    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+    expect((UTILITY_CONFIGS.ROCK_BARRIER as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.SPORE_TURRET as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.ROCK_BARRIER_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+    expect((UTILITY_CONFIGS.SPORE_TURRET_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
   });
 
   it('no longer charges adrenaline for any utility', () => {
@@ -93,12 +93,12 @@ describe('used construction capacity', () => {
       COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost
       + COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.capacityCost
       + COOP_DEFENSE_CONSTRUCTIONS.flame_turret.capacityCost
-      + getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' })
-      + 3 * getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })
+      + getToolCapacityCost({ kind: 'utility', id: 'SPORE_TURRET' })
+      + 3 * getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' })
     );
     const expectedOtherCapacity = (
       COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost
-      + getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })
+      + getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' })
     );
     expect(sumPlaceableCapacity(placed, OWNER)).toBe(expectedOwnerCapacity);
     expect(sumPlaceableCapacity(placed, OTHER_OWNER)).toBe(expectedOtherCapacity);
@@ -108,7 +108,7 @@ describe('used construction capacity', () => {
   it('frees capacity again when a construct is removed', () => {
     const placed: PlacedStub[] = [turret('rocket_turret'), turret('rocket_turret'), wall()];
     const rocketCost = COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost;
-    const wallCost = getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' });
+    const wallCost = getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' });
     expect(sumPlaceableCapacity(placed, OWNER)).toBe(2 * rocketCost + wallCost);
     placed.splice(0, 1);
     expect(sumPlaceableCapacity(placed, OWNER)).toBe(rocketCost + wallCost);
@@ -123,7 +123,7 @@ describe('used construction capacity', () => {
     ];
     const expected = (
       3 * COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost
-      + 10 * getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })
+      + 10 * getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' })
     );
     expect(sumPlaceableCapacity(placed, OWNER)).toBe(expected);
     expect(expected).toBeGreaterThan(0);

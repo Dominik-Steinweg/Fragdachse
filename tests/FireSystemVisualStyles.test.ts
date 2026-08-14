@@ -42,14 +42,14 @@ describe('FireSystem visual styles and damage targets', () => {
       ownerId: 'p0',
       durationMs: 2_000,
       burn: { durationMs: 2_000, damagePerTick: 1 },
-      weaponName: 'Brennender Boden',
+      sourceId: 'test.burning-ground',
     }, now);
     fireSystem.hostRefreshGroundCell(300, 300, {
       sourceKey: 'boss-void-fire',
       ownerId: 'boss-1',
       durationMs: 2_000,
       burn: { durationMs: 2_000, damagePerTick: 0.5 },
-      weaponName: 'Lila Höllenbrand',
+      sourceId: 'test.purple-hellfire',
       visualStyle: 'void',
       damageTarget: 'players',
     }, now);
@@ -84,7 +84,7 @@ describe('FireSystem visual styles and damage targets', () => {
         ownerId: 'boss-1',
         durationMs: 6_000,
         burn: { durationMs: 2_000, damagePerTick: 0.5 },
-        weaponName: 'Lila Höllenspur',
+      sourceId: 'test.purple-trail',
         visualStyle: 'void',
         damageTarget: 'players',
       },
@@ -170,7 +170,7 @@ describe('FireSystem visual styles and damage targets', () => {
     const update = fireSystem.hostUpdate(now);
     expect(update.synced).toEqual([]);
     expect(update.damageEvents).toHaveLength(1);
-    expect(update.damageEvents[0]?.sourceId).toContain('player-fire');
+    expect(update.damageEvents[0]?.sourceId).toBe('ground_fire.player_fire');
     expect(update.ground.cells.length).toBeGreaterThan(0);
   });
 });

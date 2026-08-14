@@ -1,8 +1,7 @@
 {
   "weapons": {
-    "SPOREN": {
-      "id": "SPOREN",
-      "displayName": "Sporen",
+    "SPORES": {
+      "id": "SPORES",
       "cooldown": 1250,
       "damage": 3,
       "range": 350,
@@ -55,9 +54,8 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "BASE_SPOREN": {
-      "id": "BASE_SPOREN",
-      "displayName": "Sporen",
+    "BASE_SPORES": {
+      "id": "BASE_SPORES",
       "cooldown": 2500,
       "damage": 3,
       "range": 350,
@@ -110,9 +108,8 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "WARDEN_SPOREN": {
-      "id": "WARDEN_SPOREN",
-      "displayName": "Sporen",
+    "WARDEN_SPORES": {
+      "id": "WARDEN_SPORES",
       "cooldown": 3000,
       "damage": 3,
       "range": 350,
@@ -165,9 +162,8 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "TURRET_SPORE": {
-      "id": "TURRET_SPORE",
-      "displayName": "Turmsporen",
+    "TURRET_SPORES": {
+      "id": "TURRET_SPORES",
       "cooldown": 1400,
       "damage": 3,
       "range": 340,

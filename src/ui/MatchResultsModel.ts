@@ -1,6 +1,7 @@
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, GameMode, TeamId } from '../types';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
+import { getLocale } from '../i18n';
 import {
   compareCoopDefenseItems,
   getCoopDefenseItemSalvageXp,
@@ -165,7 +166,7 @@ export function createMatchItemRewardPresentation(
         item,
         equipped,
         directEquip: equipped === null,
-        comparison: compareCoopDefenseItems(item, equipped),
+        comparison: compareCoopDefenseItems(item, equipped, getLocale()),
         freeStashSlots: getFreeCoopDefenseStashSlots(ownedItems, equippedItemIds, item.slot),
         salvageXp: getCoopDefenseItemSalvageXp(item),
         stash: sortCoopDefenseItems(

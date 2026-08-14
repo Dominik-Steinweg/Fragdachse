@@ -192,9 +192,9 @@ export function validateGameContentReferences(): void {
   for (const config of Object.values(UTILITY_CONFIGS)) validateShotAudio(config, issues);
   for (const config of Object.values(ULTIMATE_CONFIGS)) validateShotAudio(config, issues);
 
-  const requiredWeapons = ['SPOREN', 'BASE_SPOREN', 'TURRET_SPORE'];
+  const requiredWeapons = ['SPORES', 'BASE_SPORES', 'TURRET_SPORES'];
   const requiredUtilities = [
-    'HE_GRENADE', 'FLIEGENPILZ', 'FLIEGENPILZ_COOP', 'FELSBAU', 'FELSBAU_COOP',
+    'HE_GRENADE', 'SPORE_TURRET', 'SPORE_TURRET_COOP', 'ROCK_BARRIER', 'ROCK_BARRIER_COOP',
     'BFG', 'NUKE', 'HOLY_HAND_GRENADE',
   ];
   const requiredUltimates = ['ARMAGEDDON', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL', 'VOID_HUNTER_GAUSS'];

@@ -101,7 +101,7 @@ describe('Inspector support construction registry', () => {
     expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.energyInjectorEffect)
       .toMatchObject({ type: 'damage_turret' });
     expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.energyInjectorEffect.damageMultiplier).toBeGreaterThan(1);
-    const mushroom = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+    const mushroom = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
     expect(mushroom.placeable.energyInjectorEffect).toMatchObject({ type: 'damage_turret' });
     expect(mushroom.placeable.energyInjectorEffect?.damageMultiplier).toBeGreaterThan(1);
   });
@@ -193,31 +193,31 @@ describe('Inspector automated support turrets', () => {
     const rocketConfig = WEAPON_CONFIGS.TURRET_ROCKET_BURST;
     const burstIntervalMs = rocketConfig.turretBurst?.intervalMs ?? 1;
     const reloadAt = burstIntervalMs + Math.max(1, rocketConfig.cooldown);
-    turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
     turrets.hostUpdate(
       Math.max(0, burstIntervalMs - 1),
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPORES,
     );
     expect(fire).toHaveBeenCalledOnce();
 
     turrets.hostUpdate(
       burstIntervalMs,
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPORES,
     );
     expect(fire).toHaveBeenCalledTimes(2);
 
     turrets.hostUpdate(
       reloadAt - 1,
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPORES,
     );
     expect(fire).toHaveBeenCalledTimes(2);
     turrets.hostUpdate(
       reloadAt,
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPORES,
     );
     expect(fire).toHaveBeenCalledTimes(3);
   });
@@ -251,7 +251,7 @@ describe('Inspector automated support turrets', () => {
     turrets.setLineOfFireChecker(() => true);
     turrets.setFireHandler(fire);
 
-    turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
 
     expect(fire.mock.calls[0]?.slice(6, 8)).toEqual([120, 0]);
   });
@@ -285,7 +285,7 @@ describe('Inspector automated support turrets', () => {
     turrets.setLineOfFireChecker((_sx, _sy, targetX) => targetX !== 120);
     turrets.setFireHandler(fire);
 
-    turrets.hostUpdate(0, UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPOREN);
+    turrets.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
 
     expect(fire.mock.calls[0]?.slice(6, 8)).toEqual([20, 0]);
   });
@@ -321,8 +321,8 @@ describe('Inspector automated support turrets', () => {
 
       turrets.hostUpdate(
         0,
-        UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-        WEAPON_CONFIGS.SPOREN,
+        UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+        WEAPON_CONFIGS.SPORES,
       );
 
       expect(lineOfFire).toHaveBeenCalledOnce();

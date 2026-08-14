@@ -573,7 +573,7 @@ export const LIGHT_PRESETS = {
    * Der Fliegenpilz-Turret glüht mit seiner roten Kappe. Warmes, ruhiges Dauerlicht mit
    * leichtem Pulsieren – ein platziertes Gefahrenobjekt, das nachts sichtbar bleibt.
    */
-  fliegenpilz: {
+  spore_turret: {
     enabled: true,
     shape: 'radial',
     radiusPx: 150,

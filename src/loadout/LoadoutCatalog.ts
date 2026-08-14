@@ -6,6 +6,8 @@
  * Dieses Modul ist die eine Quelle dafuer; UI-Code fragt nur noch hier.
  */
 import { COLORS } from '../config';
+import { getLocale } from '../i18n';
+import { getConstructionName, getLoadoutItemName } from '../i18n/contentPresentation';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import { isCoopDefenseMode } from '../gameModes';
 import type {
@@ -62,9 +64,9 @@ const COOP_DEFENSE_ULTIMATE_UNLOCK_BY_ITEM_ID: Readonly<Record<string, string>> 
 
 /** Die drei Inspector-Supportwaffen verwenden im Waffe-2-Slot ebenfalls ihre Upgrade-Symbole. */
 const INSPECTOR_WEAPON2_UNLOCK_BY_ITEM_ID: Readonly<Record<string, string>> = Object.freeze({
-  REPARATURSTRAHL: 'unlock_reparaturstrahl',
+  PLASMA_BURNER: 'unlock_plasma_burner',
   OVERCHARGE_CORE: 'unlock_overcharge_core',
-  ENERGIEINJEKTOR: 'unlock_energieinjektor',
+  ENERGY_INJECTOR: 'unlock_energy_injector',
 });
 
 function buildStaticSlotItems(slot: Exclude<LoadoutSlot, 'ultimate'>): readonly LoadoutItemRef[] {
@@ -73,11 +75,11 @@ function buildStaticSlotItems(slot: Exclude<LoadoutSlot, 'ultimate'>): readonly 
     if (entry.slot !== slot) continue;
     if (entry.kind === 'utility') {
       const config = UTILITY_CONFIGS[entry.id];
-      if (config) configs.push(config);
+      if (config) configs.push({ id: config.id, displayName: getLoadoutItemName(config.id, getLocale()) });
       continue;
     }
     const config = WEAPON_CONFIGS[entry.id];
-    if (config) configs.push(config);
+    if (config) configs.push({ id: config.id, displayName: getLoadoutItemName(config.id, getLocale()) });
   }
   return configs;
 }
@@ -90,7 +92,12 @@ const STATIC_SLOT_ITEMS: Record<Exclude<LoadoutSlot, 'ultimate'>, readonly Loado
 
 /** Alle im Modus grundsaetzlich waehlbaren Items eines Slots, ohne Freischaltungsfilter. */
 export function getLoadoutSlotItems(slot: LoadoutSlot, mode: GameMode): readonly LoadoutItemRef[] {
-  if (slot === 'ultimate') return getAvailableUltimateConfigs(mode);
+  if (slot === 'ultimate') {
+    return getAvailableUltimateConfigs(mode).map((config) => ({
+      id: config.id,
+      displayName: getLoadoutItemName(config.id, getLocale()),
+    }));
+  }
   return STATIC_SLOT_ITEMS[slot].filter((item) => {
     if (slot === 'utility') return true;
     const config = WEAPON_CONFIGS[item.id as keyof typeof WEAPON_CONFIGS];
@@ -115,7 +122,7 @@ export function getSelectableLoadoutItems(
   if (filtered.length > 0) return filtered;
 
   const fallback = DEFAULT_LOADOUT[slot];
-  return [{ id: fallback.id, displayName: fallback.displayName }];
+  return [{ id: fallback.id, displayName: getLoadoutItemName(fallback.id, getLocale()) }];
 }
 
 /** Anzeigename eines Items, unabhaengig davon, in welcher Config es steht. */
@@ -125,7 +132,7 @@ export function getLoadoutItemDisplayName(slot: LoadoutSlot, itemId: string): st
     : slot === 'utility'
       ? UTILITY_CONFIGS[itemId as keyof typeof UTILITY_CONFIGS]
       : WEAPON_CONFIGS[itemId as keyof typeof WEAPON_CONFIGS];
-  return config?.displayName ?? itemId.replace(/_/g, ' ');
+  return config ? getLoadoutItemName(config.id, getLocale()) : getLoadoutItemName(itemId, getLocale());
 }
 
 const SLOT_ACCENT_COLORS: Record<LoadoutSlot, number> = {
@@ -160,7 +167,7 @@ export function describeLoadoutTool(tool: LoadoutToolRef): LoadoutItemPresentati
   if (tool.kind === 'construction') {
     const definition = getCoopDefenseConstructionDefinition(tool.id);
     return {
-      displayName: definition.displayName,
+      displayName: getConstructionName(definition.id, getLocale()),
       // Slot und Unlock-Knoten teilen das dedizierte, mechanikbasierte Upgrade-Icon.
       textureKey: definition.iconKey ?? getCoopDefenseUpgradeTextureKey(definition.unlockUpgradeId),
       accentColor: COLORS.GOLD_2,

@@ -91,10 +91,10 @@ export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = O
   PLASMA: sprite('PLASMA', 3.5, 11.5),
   HYDRA: sprite('HYDRA', 4.5, 13.5),
   XBOW: sprite('XBOW', 4.5, 13.5),
-  LAUBBLAESER: sprite('LAUBBLAESER', 5.5, 13.5),
-  REPARATURSTRAHL: sprite('REPARATURSTRAHL', 4.5, 10.5, 3.5, 0),
+  LEAF_BLOWER: sprite('LAUBBLAESER', 5.5, 13.5),
+  PLASMA_BURNER: sprite('REPARATURSTRAHL', 4.5, 10.5, 3.5, 0),
   OVERCHARGE_CORE: sprite('OVERCHARGE_CORE', 3.5, 9.5),
-  ENERGIEINJEKTOR: sprite('ENERGIEINJEKTOR', 2.5, 9.5),
+  ENERGY_INJECTOR: sprite('ENERGIEINJEKTOR', 2.5, 9.5),
   P90: sprite('P90', 4.5, 11.5, 4.5, 0),
   AK47: sprite('AK47', 4.5, 20.5, 4.5, 0),
   SHOTGUN: sprite('SHOTGUN', 5.5, 17.5, 4.5, 0),
@@ -108,7 +108,7 @@ export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = O
   SMOKE_GRENADE: sprite('SMOKE_GRENADE', 3, 6.5),
   MOLOTOV_GRENADE: sprite('MOLOTOV_GRENADE', 3, 7),
   TIME_BUBBLE: sprite('TIME_BUBBLE', 3, 6.5),
-  STINKDRUESEN: sprite('STINKDRUESEN', 3.5, 6.5),
+  STINK_CLOUD: sprite('STINKDRUESEN', 3.5, 6.5),
   DECOY: sprite('DECOY', 3, 8),
 });
 

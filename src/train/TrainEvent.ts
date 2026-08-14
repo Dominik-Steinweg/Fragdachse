@@ -1,4 +1,6 @@
 import { TRAIN } from './TrainConfig';
+import { translate } from '../i18n';
+import type { Locale } from '../i18n/types';
 
 /**
  * Aufgelöster Rhythmus des Zug-Events einer Runde.
@@ -35,10 +37,10 @@ export function getTrainArrivalCountdownSecs(spawnAt: number, synchronizedNow: n
 }
 
 /** HUD-Ankündigung der nächsten Einfahrt; unter einer Minute bewusst als reine Sekundenzahl. */
-export function formatTrainArrivalLabel(arrivalSecs: number): string {
+export function formatTrainArrivalLabel(arrivalSecs: number, locale: Locale = 'de'): string {
   const secs = Math.max(0, Math.ceil(arrivalSecs));
-  if (secs < 60) return `RB 54 · ANKUNFT in ${secs}s`;
-  const minutes = Math.floor(secs / 60);
-  const seconds = secs % 60;
-  return `RB 54 · ANKUNFT in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const time = secs < 60
+    ? `${secs}s`
+    : `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
+  return translate(locale, 'ui.train.arrival', { time });
 }

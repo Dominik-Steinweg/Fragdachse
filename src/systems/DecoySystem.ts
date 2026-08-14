@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+﻿import * as Phaser from 'phaser';
 import type { DecoyUtilityConfig } from '../loadout/LoadoutConfig';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedDeathEffect, SyncedHitEffect } from '../types';
@@ -321,7 +321,7 @@ export class DecoySystem {
     decoyId: number,
     amount: number,
     attackerId?: string,
-    weaponName?: string,
+    sourceId?: string,
     visualContext?: { sourceX?: number; sourceY?: number; dirX?: number; dirY?: number },
   ): boolean {
     const decoy = this.hostDecoys.get(decoyId);
@@ -346,7 +346,7 @@ export class DecoySystem {
       this.destroyDecoy(decoyId, true);
     }
 
-    void weaponName;
+    void sourceId;
     return totalDamage > 0;
   }
 

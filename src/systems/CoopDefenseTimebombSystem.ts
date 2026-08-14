@@ -377,7 +377,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     y: number,
     radius: number,
     maxDamage: number,
-    weaponName: string,
+    sourceId: string,
   ): void {
     if (maxDamage <= 0) return;
     for (const player of this.playerManager.getAllPlayers()) {
@@ -385,7 +385,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       const distance = Math.hypot(player.sprite.x - x, player.sprite.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
-      this.combatSystem.applyDamage(player.id, damage, false, attackerId, weaponName, { sourceX: x, sourceY: y });
+      this.combatSystem.applyDamage(player.id, damage, false, attackerId, sourceId, { sourceX: x, sourceY: y });
     }
   }
 

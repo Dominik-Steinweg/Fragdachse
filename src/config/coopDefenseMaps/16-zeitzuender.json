@@ -1,10 +1,8 @@
 {
   "mapId": "16",
-  "displayName": "Map 16 - Zeitzünder",
   "arenaWidthCells": 104,
   "arenaHeightCells": 33,
   "timeOfDay": "05:00",
-  "tutorialText": "Zeitzünder jagen Spieler und bewaffnete Konstrukte und sprengen sich in ihrer Nähe. Haltet Abstand und stoppt sie, bevor sie eure Verteidigungslinie erreichen.",
   "trackMode": "void-fire",
   "mapEvents": [
     {
@@ -23,7 +21,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Morgenleerer Voidbrand"
+        "sourceId": "ground_fire.timebomb_void"
       }
     },
     {
@@ -41,7 +39,7 @@
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "weaponName": "Morgenleerer Voidbrand"
+        "sourceId": "ground_fire.timebomb_void"
       }
     }
   ],
@@ -251,7 +249,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -277,7 +275,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -416,7 +414,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -442,7 +440,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -468,7 +466,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -494,7 +492,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ]
     },
@@ -764,8 +762,6 @@
     {
       "id": "hold-zeitzunder-middle-outpost",
       "type": "hold",
-      "displayName": "ZEITZÜNDER-POSTEN HALTEN",
-      "rewardHint": "DER POSTEN WIRD REPARIERT",
       "start": { "type": "after-encounter", "encounterId": "zeitzunder-mid-assault" },
       "holdUntil": { "type": "after-encounter", "encounterId": "zeitzunder-counterattack" },
       "targets": ["friendly-middle-mushroom-top"],

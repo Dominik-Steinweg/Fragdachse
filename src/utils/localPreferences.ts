@@ -47,6 +47,7 @@ import {
 } from '../config/coopDefenseMapUnlocks';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
+import { isLocale, resolveBrowserLocale, type Locale } from '../i18n/types';
 import type {
   BalanceBuildSnapshot,
   BalanceItemSnapshot,
@@ -65,7 +66,7 @@ import {
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
 export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v1';
-export const LOCAL_SETTINGS_SCHEMA_VERSION = 1;
+export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
 export const LOCAL_PROGRESS_SCHEMA_VERSION = 2;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
 export const LOCAL_PROGRESS_EXPORT_VERSION = 1;
@@ -109,6 +110,7 @@ export interface CoopDefenseProgressPreferences {
 }
 
 interface LocalPreferences {
+  locale: Locale;
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -136,6 +138,13 @@ interface CompactUpgradeProfile {
 
 interface LocalSettingsDocumentV1 {
   schemaVersion: 1;
+  audio: LocalPreferences['audio'];
+  graphics: LocalPreferences['graphics'];
+}
+
+interface LocalSettingsDocumentV2 {
+  schemaVersion: 2;
+  locale: Locale;
   audio: LocalPreferences['audio'];
   graphics: LocalPreferences['graphics'];
 }
@@ -181,8 +190,20 @@ interface LocalProgressExportEnvelope {
 
 export interface LocalProgressTransferResult {
   readonly ok: boolean;
-  readonly message: string;
+  readonly messageKey: LocalProgressTransferMessageKey;
 }
+
+export type LocalProgressTransferMessageKey =
+  | 'ui.lobby.saveInvalidJson'
+  | 'ui.lobby.saveIncompatible'
+  | 'ui.lobby.saveInvalid'
+  | 'ui.lobby.saveImported'
+  | 'ui.lobby.saveExported'
+  | 'ui.lobby.saveExportFailed'
+  | 'ui.lobby.saveNoFile'
+  | 'ui.lobby.saveTooLarge'
+  | 'ui.lobby.saveReadFailed'
+  | 'ui.lobby.saveUnavailable';
 
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   totalXp: 0,
@@ -224,6 +245,7 @@ function cloneCoopDefenseItemState(progress: CoopDefenseProgressPreferences): {
 }
 
 const DEFAULT_PREFERENCES: LocalPreferences = {
+  locale: resolveBrowserLocale(),
   audio: {
     masterVolume: SOUND_MASTER_VOLUME,
     effectsVolume: SOUND_SFX_VOLUME,
@@ -589,8 +611,8 @@ function writeBalanceLabDocument(document: CoopDefenseBalanceLabDocument): void 
   balanceLabCachedStorage = storage;
 }
 
-function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV1 | null {
-  if (!isRecord(raw) || raw.schemaVersion !== LOCAL_SETTINGS_SCHEMA_VERSION) return null;
+function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV2 | null {
+  if (!isRecord(raw) || (raw.schemaVersion !== 1 && raw.schemaVersion !== LOCAL_SETTINGS_SCHEMA_VERSION)) return null;
   if (!isRecord(raw.audio) || !isRecord(raw.graphics)) return null;
   const { masterVolume, effectsVolume, musicVolume } = raw.audio;
   if (![masterVolume, effectsVolume, musicVolume].every((value) => (
@@ -599,6 +621,7 @@ function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV1 | null 
   if (!isGraphicsQuality(raw.graphics.quality)) return null;
   return {
     schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+    locale: isLocale(raw.locale) ? raw.locale : resolveBrowserLocale(),
     audio: {
       masterVolume: clampAudioVolume(masterVolume as number),
       effectsVolume: clampAudioVolume(effectsVolume as number),
@@ -609,7 +632,7 @@ function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV1 | null 
 }
 
 /** Der Alpha-Schnitt behaelt ausschliesslich geraetenahe Audio-/Grafikeinstellungen. */
-function readLegacySettings(raw: string | null): LocalSettingsDocumentV1 | null {
+function readLegacySettings(raw: string | null): LocalSettingsDocumentV2 | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -618,6 +641,7 @@ function readLegacySettings(raw: string | null): LocalSettingsDocumentV1 | null 
     const graphics = isRecord(parsed.graphics) ? parsed.graphics : {};
     return {
       schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+      locale: isLocale(parsed.locale) ? parsed.locale : resolveBrowserLocale(),
       audio: {
         masterVolume: typeof audio.masterVolume === 'number' && Number.isFinite(audio.masterVolume)
           ? clampAudioVolume(audio.masterVolume) : SOUND_MASTER_VOLUME,
@@ -875,13 +899,14 @@ function readPreferences(): LocalPreferences {
   if (preferencesCache && cachedStorage === storage) return preferencesCache;
   const defaults = buildDefaultPreferences();
   const rawSettings = safeRead(storage, LOCAL_SETTINGS_STORAGE_KEY);
-  let settings: LocalSettingsDocumentV1 | null = null;
+  let settings: LocalSettingsDocumentV2 | null = null;
   if (rawSettings) {
     try { settings = sanitizeSettingsDocument(JSON.parse(rawSettings)); } catch { settings = null; }
   }
   settings ??= readLegacySettings(safeRead(storage, LEGACY_LOCAL_PREFERENCES_KEY));
   settings ??= {
     schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+    locale: resolveBrowserLocale(),
     audio: { ...defaults.audio },
     graphics: { ...defaults.graphics },
   };
@@ -893,6 +918,7 @@ function readPreferences(): LocalPreferences {
   }
   preferencesCache = {
     ...defaults,
+    locale: settings.locale,
     audio: { ...settings.audio },
     graphics: { ...settings.graphics },
     ...(progress ?? {}),
@@ -909,12 +935,13 @@ function writePreferences(next: LocalPreferences): void {
   const previous = preferencesCache;
   const storage = getLocalStorage();
   cachedStorage = storage;
-  if (!previous || previous.audio !== next.audio || previous.graphics !== next.graphics) {
+  if (!previous || previous.locale !== next.locale || previous.audio !== next.audio || previous.graphics !== next.graphics) {
     safeWrite(storage, LOCAL_SETTINGS_STORAGE_KEY, {
       schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+      locale: next.locale,
       audio: next.audio,
       graphics: next.graphics,
-    } satisfies LocalSettingsDocumentV1);
+    } satisfies LocalSettingsDocumentV2);
   }
   if (!previous || previous.profile !== next.profile || previous.loadout !== next.loadout
     || previous.loadoutByClass !== next.loadoutByClass || previous.progression !== next.progression) {
@@ -1001,21 +1028,21 @@ export function exportStoredGameProgressJson(): string {
 export function importStoredGameProgressJson(json: string): LocalProgressTransferResult {
   let parsed: unknown;
   try { parsed = JSON.parse(json); } catch {
-    return { ok: false, message: 'Die Datei enthält kein gültiges JSON.' };
+    return { ok: false, messageKey: 'ui.lobby.saveInvalidJson' };
   }
   if (!isRecord(parsed) || parsed.format !== LOCAL_PROGRESS_EXPORT_FORMAT
     || parsed.formatVersion !== LOCAL_PROGRESS_EXPORT_VERSION
     || typeof parsed.exportedAt !== 'string' || !Number.isFinite(Date.parse(parsed.exportedAt))
     || !('progress' in parsed)) {
-    return { ok: false, message: 'Die Datei ist kein kompatibler Fragdachse-Spielstand.' };
+    return { ok: false, messageKey: 'ui.lobby.saveIncompatible' };
   }
   const decoded = decodeProgressDocument(parsed.progress);
   if (!decoded) {
-    return { ok: false, message: 'Der Spielstand ist ungültig oder verwendet ein inkompatibles Schema.' };
+    return { ok: false, messageKey: 'ui.lobby.saveInvalid' };
   }
   const current = readPreferences();
   writePreferences({ ...current, ...decoded });
-  return { ok: true, message: 'Spielstand erfolgreich importiert.' };
+  return { ok: true, messageKey: 'ui.lobby.saveImported' };
 }
 
 export function downloadStoredGameProgress(): LocalProgressTransferResult {
@@ -1028,9 +1055,9 @@ export function downloadStoredGameProgress(): LocalProgressTransferResult {
     anchor.download = `fragdachse-spielstand-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    return { ok: true, message: 'Spielstand wurde exportiert.' };
+    return { ok: true, messageKey: 'ui.lobby.saveExported' };
   } catch {
-    return { ok: false, message: 'Spielstand konnte nicht exportiert werden.' };
+    return { ok: false, messageKey: 'ui.lobby.saveExportFailed' };
   }
 }
 
@@ -1044,22 +1071,33 @@ export function importStoredGameProgressFile(): Promise<LocalProgressTransferRes
       input.onchange = async () => {
         try {
           const file = input.files?.[0];
-          if (!file) return resolve({ ok: false, message: 'Keine Datei ausgewählt.' });
-          if (file.size > 5_000_000) return resolve({ ok: false, message: 'Die Spielstanddatei ist zu groß.' });
+          if (!file) return resolve({ ok: false, messageKey: 'ui.lobby.saveNoFile' });
+          if (file.size > 5_000_000) return resolve({ ok: false, messageKey: 'ui.lobby.saveTooLarge' });
           resolve(importStoredGameProgressJson(await file.text()));
         } catch {
-          resolve({ ok: false, message: 'Die Spielstanddatei konnte nicht gelesen werden.' });
+          resolve({ ok: false, messageKey: 'ui.lobby.saveReadFailed' });
         }
       };
       input.click();
     } catch {
-      resolve({ ok: false, message: 'Der Dateiimport ist in diesem Browser nicht verfügbar.' });
+      resolve({ ok: false, messageKey: 'ui.lobby.saveUnavailable' });
     }
   });
 }
 
 export function getStoredMasterVolume(): number {
   return readPreferences().audio.masterVolume;
+}
+
+/** The player language lives in the device settings document, never in campaign progress. */
+export function getStoredLocale(): Locale | null {
+  const preferences = readPreferences();
+  return isLocale(preferences.locale) ? preferences.locale : null;
+}
+
+export function setStoredLocale(locale: Locale): void {
+  if (!isLocale(locale)) return;
+  updatePreferences((current) => ({ ...current, locale }));
 }
 
 export function setStoredMasterVolume(volume: number): void {

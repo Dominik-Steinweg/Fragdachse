@@ -20,7 +20,7 @@ import {
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
 import {
-  getGameModeLabel, hasTeamSelection, isCoopDefenseMode,
+  hasTeamSelection, isCoopDefenseMode,
 } from '../gameModes';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
@@ -43,12 +43,10 @@ import { UiTooltip } from '../ui/UiTooltip';
 import { UiContextMenu } from '../ui/UiContextMenu';
 import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
-import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import {
   describeLoadoutItem,
   describeLoadoutTool,
-  LOADOUT_SLOT_LABELS,
   type LoadoutItemPresentation,
 } from '../loadout/LoadoutCatalog';
 import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
@@ -56,6 +54,10 @@ import { promoteToClarityCamera } from './arena/ClarityCameraRegistry';
 import { buildLobbyRosterSlots } from '../lobby/LobbyRosterLayout';
 import { createLoadoutHoverGroup, createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
 import { PLAYER_NAME_MAX_LENGTH } from '../utils/playerName';
+import { getLocale, t } from '../i18n';
+import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
+import { formatDate } from '../i18n/format';
+import { getMapName } from '../i18n/contentPresentation';
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 const PANEL_W = LOBBY_PANEL_WIDTH;
@@ -163,7 +165,6 @@ const SYSTEM_BAR_Y = GAME_HEIGHT - SYSTEM_BAR_MARGIN - SYSTEM_BAR_H / 2;
 const FULLSCREEN_BTN_X = GAME_WIDTH - SYSTEM_BAR_MARGIN - FULLSCREEN_BTN_W / 2;
 const OPTIONS_BTN_X = FULLSCREEN_BTN_X - FULLSCREEN_BTN_W / 2 - SYSTEM_BAR_GAP - OPTIONS_BTN_W / 2;
 const HELP_BTN_X = OPTIONS_BTN_X - OPTIONS_BTN_W / 2 - SYSTEM_BAR_GAP - HELP_BTN_W / 2;
-const FULLSCREEN_LABEL = 'VOLLBILD';
 const FULLSCREEN_HINT_MS = 2200;
 
 /**
@@ -186,13 +187,13 @@ function rowTextureKey(
 }
 
 function formatBuildTimestamp(isoTimestamp: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
+  return formatDate(new Date(isoTimestamp), getLocale(), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(isoTimestamp));
+  });
 }
 
 type PlayerRow = {
@@ -313,7 +314,7 @@ export class LobbyOverlay {
     })).setOrigin(0, 0.5).setScrollFactor(0);
     objects.push(this.headerTitle);
 
-    this.roomCaption = this.scene.add.text(ROOM_CAPTION_X, HEADER_Y, 'RAUM', textStyle('micro'))
+    this.roomCaption = this.scene.add.text(ROOM_CAPTION_X, HEADER_Y, t('ui.lobby.room'), textStyle('micro'))
       .setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(this.roomCaption);
 
@@ -341,13 +342,13 @@ export class LobbyOverlay {
     });
     objects.push(this.infoBtn.getRoot());
 
-    this.roomQualityText = this.scene.add.text(CONTENT_L, QUALITY_Y, 'Ping-Check wird vorbereitet…',
+    this.roomQualityText = this.scene.add.text(CONTENT_L, QUALITY_Y, t('ui.lobby.pingPreparing'),
       textStyle('caption')).setOrigin(0, 0.5).setScrollFactor(0);
     objects.push(this.roomQualityText);
 
     this.retryBtn = new UiButton(this.scene, {
       x: HOST_BTN_X, y: QUALITY_Y, w: HOST_BTN_W, h: HOST_BTN_H,
-      label: 'NEUER RAUM',
+      label: t('ui.lobby.newRoom'),
       labelRole: 'labelSm',
       intent: 'ghost',
       onClick: () => { if (this.connectionEnded || !this.btnLocked) this.onRetryRoom(); },
@@ -361,7 +362,7 @@ export class LobbyOverlay {
 
     // ── Listenkopf ────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CONTENT_L, LIST_LABEL_Y, 'SPIELER', textStyle('section'))
+      this.scene.add.text(CONTENT_L, LIST_LABEL_Y, t('ui.lobby.players'), textStyle('section'))
         .setOrigin(0, 0.5).setScrollFactor(0),
     );
     this.statusText = this.scene.add.text(CONTENT_R, LIST_LABEL_Y, '', textStyle('section', {
@@ -369,13 +370,13 @@ export class LobbyOverlay {
     })).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(this.statusText);
 
-    const blueHeader = this.scene.add.text(CONTENT_L, LIST_Y, 'TEAM BLAU', textStyle('caption', {
+    const blueHeader = this.scene.add.text(CONTENT_L, LIST_Y, t('ui.lobby.teamBlue'), textStyle('caption', {
       color: TEAM_BLUE_COLOR,
     })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     const redHeader = this.scene.add.text(
       CONTENT_L + ROSTER_SLOT_W + ROSTER_COLUMN_GAP,
       LIST_Y,
-      'TEAM ROT',
+      t('ui.lobby.teamRed'),
       textStyle('caption', { color: TEAM_RED_COLOR }),
     ).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     this.teamHeaders = { blue: blueHeader, red: redHeader };
@@ -385,7 +386,7 @@ export class LobbyOverlay {
     // frueheren, gleich lauten Kopieren-Button in der Fusszeile.
     this.inviteRow = new UiButton(this.scene, {
       x: PANEL_CX, y: LIST_Y, w: ROSTER_SLOT_W, h: ROSTER_SLOT_H,
-      label: 'FREUND EINLADEN',
+      label: t('ui.lobby.inviteFriend'),
       intent: 'ghost',
       icon: 'plus',
       iconSize: 18,
@@ -408,7 +409,7 @@ export class LobbyOverlay {
 
     this.readyBtn = new UiButton(this.scene, {
       x: PANEL_CX, y: CTA_DIVIDER_Y_MAX + CTA_BLOCK_H - READY_BTN_DY, w: READY_BTN_W, h: READY_BTN_H,
-      label: 'BEREIT',
+      label: t('ui.lobby.ready'),
       labelRole: 'subtitle',
       intent: 'primary',
       onClick: () => { if (!this.btnLocked) this.onReadyToggled(); },
@@ -428,7 +429,7 @@ export class LobbyOverlay {
     // akzeptiert dieses Loslassen nur nach einem eigenen `pointerdown`.
     this.helpBtn = new UiButton(this.scene, {
       x: HELP_BTN_X, y: SYSTEM_BAR_Y, w: HELP_BTN_W, h: SYSTEM_BAR_H,
-      label: 'HILFE',
+      label: t('ui.lobby.help'),
       labelRole: 'labelSm',
       intent: 'secondary',
       icon: 'help',
@@ -437,7 +438,7 @@ export class LobbyOverlay {
     });
     this.optionsBtn = new UiButton(this.scene, {
       x: OPTIONS_BTN_X, y: SYSTEM_BAR_Y, w: OPTIONS_BTN_W, h: SYSTEM_BAR_H,
-      label: 'OPTIONEN',
+      label: t('ui.lobby.options'),
       labelRole: 'labelSm',
       intent: 'secondary',
       icon: 'settings',
@@ -446,7 +447,7 @@ export class LobbyOverlay {
     });
     this.fullscreenBtn = new UiButton(this.scene, {
       x: FULLSCREEN_BTN_X, y: SYSTEM_BAR_Y, w: FULLSCREEN_BTN_W, h: SYSTEM_BAR_H,
-      label: FULLSCREEN_LABEL,
+      label: t('ui.lobby.fullscreen'),
       labelRole: 'labelSm',
       intent: 'secondary',
       icon: isFullscreen() ? 'fullscreen-exit' : 'fullscreen-enter',
@@ -507,10 +508,10 @@ export class LobbyOverlay {
       }),
     ).setScrollFactor(0);
 
-    const bandLabel = this.scene.add.text(CONTENT_L + SPACE.lg, COOP_LABEL_Y, 'FORTSCHRITT',
+    const bandLabel = this.scene.add.text(CONTENT_L + SPACE.lg, COOP_LABEL_Y, t('ui.lobby.progress'),
       textStyle('section', { color: COLORS.GREY_3 })).setOrigin(0, 0.5).setScrollFactor(0);
 
-    this.coopProgressLevelText = this.scene.add.text(CONTENT_L + SPACE.lg + 132, COOP_LABEL_Y, 'Level 1',
+    this.coopProgressLevelText = this.scene.add.text(CONTENT_L + SPACE.lg + 132, COOP_LABEL_Y, t('ui.lobby.level', { level: 1 }),
       textStyle('numL', { color: COLORS.GREY_1 })).setOrigin(0, 0.5).setScrollFactor(0);
 
     this.coopProgressPointsText = this.scene.add.text(CONTENT_R - SPACE.lg, COOP_LABEL_Y, '',
@@ -532,7 +533,7 @@ export class LobbyOverlay {
 
     this.coopUpgradesBtn = new UiButton(this.scene, {
       x: COOP_UPGRADE_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
-      label: 'UPGRADES',
+      label: t('ui.lobby.upgrades'),
       intent: 'neutral',
       onClick: () => this.onOpenCoopDefenseUpgrades(),
     });
@@ -540,7 +541,7 @@ export class LobbyOverlay {
     // Items bleiben bis zum Sieg auf Map 10 gesperrt: `disabled` statt einer eigenen Farbe.
     this.coopItemsBtn = new UiButton(this.scene, {
       x: COOP_ITEMS_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
-      label: 'ITEMS',
+      label: t('ui.lobby.items'),
       intent: 'neutral',
       icon: 'lock',
       iconSize: 16,
@@ -622,16 +623,16 @@ export class LobbyOverlay {
         'ITEMS',
         COLORS.GOLD_1,
         [
-          { text: 'Noch gesperrt.', color: COLORS.GREY_1 },
+          { text: t('ui.items.locked'), color: COLORS.GREY_1 },
           { text: '', color: COLORS.GREY_5 },
-          { text: 'Freischaltung durch einen Sieg auf:', color: COLORS.GREY_3 },
+          { text: t('ui.items.unlockByVictory'), color: COLORS.GREY_3 },
           {
-            text: getCoopDefenseMapConfig(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID).displayName,
+            text: getMapName(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID, getLocale()),
             color: COLORS.GOLD_2,
             bold: true,
           },
           { text: '', color: COLORS.GREY_5 },
-          { text: 'Danach lassen Siege dauerhafte Ausrüstung fallen.', color: COLORS.GREY_3 },
+          { text: t('ui.items.victoryDrops'), color: COLORS.GREY_3 },
         ],
         pointer,
       );
@@ -827,7 +828,6 @@ export class LobbyOverlay {
     const signature = JSON.stringify([
       localIsHost,
       snapshot?.status ?? null,
-      snapshot?.summary ?? null,
       snapshot?.thresholdMs ?? null,
       snapshot?.worstPingMs ?? null,
       snapshot?.measuredPlayers ?? null,
@@ -868,12 +868,12 @@ export class LobbyOverlay {
   /** Bestaetigt den Kopiervorgang am Raum-Chip und direkt in der Einladen-Zeile. */
   showCopySuccess(): void {
     this.roomChip.setIcon('check');
-    this.inviteRow.setIcon('check').setLabel('LINK KOPIERT');
+    this.inviteRow.setIcon('check').setLabel(t('ui.lobby.linkCopied'));
     this.inviteCopyIcon?.setVisible(false);
     this.scene.time.delayedCall(1200, () => {
       if (!this.container) return;
       this.roomChip.setIcon('copy');
-      this.inviteRow.setIcon('plus').setLabel('FREUND EINLADEN');
+      this.inviteRow.setIcon('plus').setLabel(t('ui.lobby.inviteFriend'));
       this.inviteCopyIcon?.setVisible(true);
     });
   }
@@ -884,10 +884,10 @@ export class LobbyOverlay {
    */
   showReadySyncNotice(): void {
     if (this.btnLocked) return;
-    this.readyBtn.setLabel('SYNC…');
+    this.readyBtn.setLabel(t('ui.lobby.sync'));
     this.scene.time.delayedCall(1200, () => {
       if (!this.container || this.btnLocked) return;
-      this.readyBtn.setLabel(this.isReady ? 'NICHT BEREIT' : 'BEREIT');
+      this.readyBtn.setLabel(this.isReady ? t('ui.lobby.notReady') : t('ui.lobby.ready'));
     });
   }
 
@@ -920,7 +920,7 @@ export class LobbyOverlay {
 
     this.coopBand.setVisible(this.visible);
     if (bandVisibilityChanged) this.layoutList();
-    this.coopProgressLevelText.setText(`Level ${progress.level}`);
+    this.coopProgressLevelText.setText(`${t('ui.lobby.level')} ${progress.level}`);
 
     const barW = CONTENT_W - SPACE.lg * 2;
     const fillW = Math.max(0.001, barW * progress.levelProgressFraction);
@@ -990,7 +990,7 @@ export class LobbyOverlay {
     this.updateCoopDefenseMenuButtons();
     if (this.connectionEnded) {
       this.btnLocked = true;
-      this.readyBtn.setEnabled(false).setLabel('BEENDET');
+      this.readyBtn.setEnabled(false).setLabel(t('ui.lobby.ended'));
       this.updateRoomActionButtons();
       return;
     }
@@ -1001,7 +1001,7 @@ export class LobbyOverlay {
     this.readyBtn
       .setEnabled(true)
       .setIntent(isReady ? 'neutral' : 'primary')
-      .setLabel(isReady ? 'NICHT BEREIT' : 'BEREIT');
+      .setLabel(isReady ? t('ui.lobby.notReady') : t('ui.lobby.ready'));
     this.updateReadyGlow();
     this.updateRoomActionButtons();
   }
@@ -1065,15 +1065,15 @@ export class LobbyOverlay {
    * Host weg, Verbindung verloren, kein direkter Weg. Deaktiviert den BEREIT-Button,
    * bis das Overlay neu gebaut wird (build()).
    */
-  showHostDisconnectedMessage(message = 'Host hat das Spiel verlassen.'): void {
+  showHostDisconnectedMessage(message?: string): void {
     this.playerContextMenu?.close();
     this.connectionEnded = true;
-    this.statusText.setText('BEENDET').setColor(toCssColor(COLORS.RED_2));
+    this.statusText.setText(t('ui.lobby.ended')).setColor(toCssColor(COLORS.RED_2));
     this.roomQualityText
-      .setText(`${message} Seite neu laden für einen neuen Raum.`)
+      .setText(`${message ?? t('ui.lobby.hostLeft')} ${t('ui.lobby.reloadForNewRoom')}`)
       .setColor(toCssColor(COLORS.RED_2));
     this.btnLocked = true;
-    this.readyBtn.setEnabled(false).setLabel('BEENDET');
+    this.readyBtn.setEnabled(false).setLabel(t('ui.lobby.ended'));
     this.stopReadyGlow();
     this.updateRoomActionButtons();
   }
@@ -1084,8 +1084,8 @@ export class LobbyOverlay {
   private refreshHeader(): void {
     const mode = this.bridge.getGameMode();
     const title = isCoopDefenseMode(mode)
-      ? `${getGameModeLabel(mode)}  ·  ${getCoopDefenseMapConfig(this.bridge.getCoopDefenseMapId()).displayName}`
-      : getGameModeLabel(mode);
+      ? `${getLocalizedGameModeLabel(mode)}  ·  ${getMapName(this.bridge.getCoopDefenseMapId(), getLocale())}`
+      : getLocalizedGameModeLabel(mode);
     if (this.headerTitle.text !== title) this.headerTitle.setText(title);
     const code = this.bridge.getRoomCode();
     this.roomChip.setLabel(code);
@@ -1101,7 +1101,9 @@ export class LobbyOverlay {
 
     // Vom Browser selbst hergestelltes Vollbild (Browsermenue oder ein F11, das der Browser
     // nicht durchreicht) kann nur der Browser wieder beenden – dann bleibt nur der Hinweis.
-    this.showFullscreenHint(result === 'browser-locked' ? 'MIT F11 RAUS' : 'NICHT MÖGLICH');
+    this.showFullscreenHint(result === 'browser-locked'
+      ? t('ui.lobby.fullscreenBrowserLocked')
+      : t('ui.lobby.fullscreenUnavailable'));
   }
 
   private showFullscreenHint(text: string): void {
@@ -1109,7 +1111,7 @@ export class LobbyOverlay {
     this.fullscreenBtn.setLabel(text);
     this.fullscreenHintEvent = this.scene.time.delayedCall(FULLSCREEN_HINT_MS, () => {
       this.fullscreenHintEvent = null;
-      this.fullscreenBtn.setLabel(FULLSCREEN_LABEL);
+      this.fullscreenBtn.setLabel(t('ui.lobby.fullscreen'));
     });
   }
 
@@ -1204,7 +1206,7 @@ export class LobbyOverlay {
   ): LoadoutItemPresentation | null {
     if (slot === 'utility' && this.isInspectorLobbyPreview(playerId)) {
       return {
-        displayName: 'Utility-Rad',
+        displayName: t('ui.loadout.utilityWheel'),
         textureKey: ensureIconTexture(this.scene, 'utility-rad', 56, COLORS.GOLD_2),
         accentColor: COLORS.GOLD_2,
       };
@@ -1277,7 +1279,8 @@ export class LobbyOverlay {
     if (!this.loadoutTooltip) return;
     if (this.container && this.loadoutTooltipRoot) this.container.bringToTop(this.loadoutTooltipRoot);
 
-    const isInspectorRadial = slot === 'utility' && presentation.displayName === 'Utility-Rad';
+    const isInspectorRadial = slot === 'utility'
+      && presentation.displayName === t('ui.loadout.utilityWheel');
     const lines = isInspectorRadial
       ? tools.length > 0
         ? tools.map((tool) => {
@@ -1289,7 +1292,7 @@ export class LobbyOverlay {
             textureKey: toolPresentation.textureKey,
           };
         })
-        : [{ text: 'Keine Tools ausgerüstet.', color: TEXT.muted }]
+        : [{ text: t('ui.loadout.noTools'), color: TEXT.muted }]
       : [{
         text: presentation.displayName,
         color: TEXT.primary,
@@ -1297,7 +1300,7 @@ export class LobbyOverlay {
         textureKey: presentation.textureKey,
       }];
     this.loadoutTooltip.show(
-      isInspectorRadial ? 'Utility-Rad' : LOADOUT_SLOT_LABELS[slot],
+      isInspectorRadial ? t('ui.loadout.utilityWheel') : t(`ui.loadout.${slot}`),
       presentation.accentColor,
       lines,
       pointer,
@@ -1324,7 +1327,7 @@ export class LobbyOverlay {
       title: profile.name,
       titleColor: COLORS.GOLD_1,
       entries: [{
-        label: 'Spieler kicken',
+        label: t('ui.lobby.kickPlayer'),
         color: COLORS.RED_2,
         onPick: () => this.openKickConfirmation(profile, x, y),
       }],
@@ -1337,16 +1340,16 @@ export class LobbyOverlay {
     this.playerContextMenu.open({
       x,
       y,
-      title: 'Spieler kicken?',
+      title: t('ui.lobby.kickPlayerConfirm'),
       titleColor: COLORS.RED_1,
       entries: [
         {
-          label: `JA: ${currentName}`,
+          label: `${t('ui.common.yes')}: ${currentName}`,
           color: COLORS.RED_2,
           onPick: () => { void this.confirmKick(profile.id); },
         },
         {
-          label: 'ABBRECHEN',
+          label: t('ui.common.cancel').toUpperCase(),
           color: COLORS.GREY_2,
           onPick: () => undefined,
         },
@@ -1358,7 +1361,7 @@ export class LobbyOverlay {
     if (!this.canKickPlayer(playerId)) return;
     const result = await this.bridge.kickPlayer(playerId);
     if (!result.ok && this.visible && this.roomQualityText.scene) {
-      this.roomQualityText.setText('Spieler konnte nicht gekickt werden.')
+      this.roomQualityText.setText(t('ui.lobby.kickFailed'))
         .setColor(toCssColor(COLORS.RED_2));
     }
   }
@@ -1578,7 +1581,7 @@ export class LobbyOverlay {
       // Der Host misst sich nicht selbst. Statt einer nichtssagenden Null steht dort, wer den
       // Raum haelt – das beantwortet fuer die Mitspieler gleich die wichtigere Frage.
       if (id === hostId) {
-        row.ping.setText('HOST').setColor(toCssColor(COLORS.GREEN_2));
+        row.ping.setText(t('ui.lobby.host')).setColor(toCssColor(COLORS.GREEN_2));
         continue;
       }
       const ms = this.bridge.getPlayerPing(id);
@@ -1597,7 +1600,7 @@ export class LobbyOverlay {
     const readyCount = [...this.playerRows.keys()]
       .filter(id => this.bridge.getPlayerReady(id)).length;
     const allReady = playerCount > 0 && readyCount === playerCount;
-    this.statusText.setText(`${readyCount} / ${playerCount} BEREIT`)
+    this.statusText.setText(`${readyCount} / ${playerCount} ${t('ui.lobby.ready')}`)
       .setColor(toCssColor(allReady ? COLORS.GREEN_2 : TEXT.secondary));
 
     const transport = this.formatTransportText();
@@ -1623,24 +1626,24 @@ export class LobbyOverlay {
 
     if (link.usesRelay) {
       return {
-        text: 'Verbindung läuft über einen Relay-Server – abgelehnt (Konfigurationsfehler).',
+        text: t('ui.lobby.relayRejected'),
         color: toCssColor(COLORS.RED_2),
       };
     }
 
     if (link.connectionState === 'failed' || link.iceConnectionState === 'failed') {
       return {
-        text: 'Direkte Verbindung nicht möglich. Netzwerk oder Firewall blockiert WebRTC.',
+        text: t('ui.lobby.directConnectionFailed'),
         color: toCssColor(COLORS.RED_2),
       };
     }
 
     if (link.localCandidateType === null || link.fastChannelState !== 'open') {
-      return { text: 'Verbindung wird aufgebaut…', color: toCssColor(TEXT.muted) };
+      return { text: t('ui.lobby.connectionBuilding'), color: toCssColor(TEXT.muted) };
     }
 
     if (link.medianRttMs === null) {
-      return { text: '● Direkt · Ping wird gemessen…', color: toCssColor(COLORS.GREEN_2) };
+      return { text: t('ui.lobby.directPing'), color: toCssColor(COLORS.GREEN_2) };
     }
 
     return {
@@ -1657,7 +1660,7 @@ export class LobbyOverlay {
     // einladen darf auch ein Gast – der Link zeigt auf denselben Raum. Gedimmt wird nur, was
     // wirklich nicht mehr geht (laufender Rundenstart).
     this.roomChip.setVisible(true).setEnabled(!this.btnLocked || this.connectionEnded);
-    this.roomCaption.setText(this.connectionEnded ? 'BEENDET' : 'RAUM');
+    this.roomCaption.setText(this.connectionEnded ? t('ui.lobby.ended') : t('ui.lobby.room'));
     this.infoBtn.setVisible(this.localIsHost && !this.connectionEnded);
     this.retryBtn.setVisible(showRetry).setEnabled(showRetry && !retryDisabled);
     this.inviteRow.setEnabled(!this.btnLocked && !this.connectionEnded);
@@ -1667,7 +1670,10 @@ export class LobbyOverlay {
     if (!this.roomQuality) return '';
 
     if (this.roomQuality.status === 'sampling') {
-      return `Raumtest sammelt Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
+      return t('ui.lobby.roomSampling', {
+        current: this.roomQuality.minSamplesCollected,
+        required: this.roomQuality.requiredSamples,
+      });
     }
 
     if (this.roomQuality.status === 'waiting') {
@@ -1676,14 +1682,20 @@ export class LobbyOverlay {
 
     if (this.roomQuality.status === 'good' && this.roomQuality.worstPingMs !== null) {
       if (!this.localIsHost) return '';
-      return `Raumtest ok: ${this.roomQuality.worstPingMs}ms bei Ziel ${this.roomQuality.thresholdMs}ms.`;
+      return t('ui.lobby.roomGood', {
+        worst: this.roomQuality.worstPingMs,
+        target: this.roomQuality.thresholdMs,
+      });
     }
 
     if (this.roomQuality.status === 'bad' && this.roomQuality.worstPingMs !== null) {
-      return `Raumtest zu hoch: ${this.roomQuality.worstPingMs}ms bei Ziel ${this.roomQuality.thresholdMs}ms. Neuer Raum empfohlen.`;
+      return t('ui.lobby.roomBad', {
+        worst: this.roomQuality.worstPingMs,
+        target: this.roomQuality.thresholdMs,
+      });
     }
 
-    return this.roomQuality.summary;
+    return '';
   }
 
   private getRoomQualityColor(status: RoomQualitySnapshot['status']): string {

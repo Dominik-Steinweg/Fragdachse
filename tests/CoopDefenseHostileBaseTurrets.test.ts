@@ -56,7 +56,7 @@ describe('hostile base turrets', () => {
       y: 0,
       ownerId: 'owner',
       ownerColor: 0xffffff,
-      weaponId: 'SPOREN' as const,
+      weaponId: 'SPORES' as const,
       secondProjectileDamageFactor: 0.5,
     };
     turrets.setTurretProvider(() => [source], null);
@@ -65,8 +65,8 @@ describe('hostile base turrets', () => {
 
     turrets.hostUpdate(
       0,
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPORES,
     );
 
     expect(fire).toHaveBeenCalledTimes(2);
@@ -74,7 +74,7 @@ describe('hostile base turrets', () => {
     expect(fire.mock.calls[1][8]).toBeCloseTo(0.625, 10);
   });
 
-  it('targets a living player instead of a closer zombie and fires BASE_SPOREN', () => {
+    it('targets a living player instead of a closer zombie and fires BASE_SPORES', () => {
     const playerManager = {
       getAllPlayers: () => [{
         id: 'player-a',
@@ -95,21 +95,21 @@ describe('hostile base turrets', () => {
       y: 0,
       ownerId: COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
       ownerColor: TEAM_RED_COLOR,
-      weaponId: 'BASE_SPOREN',
+      weaponId: 'BASE_SPORES',
       targetMode: 'players',
     }], null);
     turrets.setFireHandler(fire);
 
     turrets.hostUpdate(
       0,
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.BASE_SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.BASE_SPORES,
     );
 
     expect(fire).toHaveBeenCalledOnce();
     expect(fire.mock.calls[0][0]).toBe(COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID);
     expect(fire.mock.calls[0][1]).toBe(TEAM_RED_COLOR);
-    expect(fire.mock.calls[0][2]).toBe('BASE_SPOREN');
+    expect(fire.mock.calls[0][2]).toBe('BASE_SPORES');
     expect(fire.mock.calls[0][6]).toBe(100);
     expect(fire.mock.calls[0][7]).toBe(0);
   });
@@ -135,15 +135,15 @@ describe('hostile base turrets', () => {
       y: 0,
       ownerId: COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
       ownerColor: TEAM_RED_COLOR,
-      weaponId: 'BASE_SPOREN',
+      weaponId: 'BASE_SPORES',
       targetMode: 'players',
       ignoreBaseObstacles: true,
     }], null);
 
     turrets.hostUpdate(
       0,
-      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
-      WEAPON_CONFIGS.BASE_SPOREN,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.BASE_SPORES,
     );
 
     expect(lineOfFire).toHaveBeenCalledOnce();

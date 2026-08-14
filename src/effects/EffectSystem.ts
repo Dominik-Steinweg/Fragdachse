@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
@@ -604,7 +605,7 @@ export class EffectSystem implements EnemyVisualSink {
         .setStrokeStyle(2.5, 0xfff3b0, 0.95)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(DEPTH_FX + 0.35);
-      const criticalLabel = this.scene.add.text(effect.x, effect.y - 18, 'KRIT!', {
+      const criticalLabel = this.scene.add.text(effect.x, effect.y - 18, t('ui.combat.critical'), {
         fontFamily: 'Arial Black, Arial, sans-serif',
         fontSize: '12px',
         color: '#fff3b0',

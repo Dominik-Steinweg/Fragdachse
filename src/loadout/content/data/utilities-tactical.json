@@ -2,7 +2,6 @@
   "utilities": {
     "TIME_BUBBLE": {
       "id": "TIME_BUBBLE",
-      "displayName": "Time-Bubble",
       "type": "time_bubble",
       "cooldown": 5000,
       "activation": {
@@ -38,7 +37,6 @@
     },
     "BFG": {
       "id": "BFG",
-      "displayName": "BFG",
       "type": "bfg",
       "allowTeamDamage": true,
       "cooldown": 0,
@@ -63,7 +61,6 @@
     },
     "NUKE": {
       "id": "NUKE",
-      "displayName": "Atombombe",
       "type": "nuke",
       "allowTeamDamage": true,
       "cooldown": 0,
@@ -77,9 +74,8 @@
       "allowedSlots": [],
       "skipCooldownPublish": true
     },
-    "STINKDRUESEN": {
-      "id": "STINKDRUESEN",
-      "displayName": "Stinkdrüsen",
+    "STINK_CLOUD": {
+      "id": "STINK_CLOUD",
       "type": "stinkcloud",
       "cooldown": 8000,
       "activation": {
@@ -99,10 +95,9 @@
         "utility"
       ]
     },
-    "ENEMY_STINKDRUESEN": {
+    "ENEMY_STINK_CLOUD": {
       "visualVariant": "spore_void",
-      "id": "ENEMY_STINKDRUESEN",
-      "displayName": "Kleine Stinkdrüsen",
+      "id": "ENEMY_STINK_CLOUD",
       "type": "stinkcloud",
       "cooldown": 0,
       "activation": {
@@ -123,7 +118,6 @@
     },
     "TRANSLOCATOR": {
       "id": "TRANSLOCATOR",
-      "displayName": "Translocator",
       "type": "translocator",
       "cooldown": 3000,
       "activation": {
@@ -152,7 +146,6 @@
     },
     "ZEUS_TASER": {
       "id": "ZEUS_TASER",
-      "displayName": "Zeus",
       "type": "taser",
       "cooldown": 4000,
       "activation": {
@@ -178,7 +171,6 @@
     },
     "DECOY": {
       "id": "DECOY",
-      "displayName": "Decoy",
       "type": "decoy",
       "cooldown": 12000,
       "activation": {

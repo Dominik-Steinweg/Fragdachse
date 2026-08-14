@@ -1,5 +1,6 @@
 import type { CoopDefenseMapObjective } from '../config/coopDefenseMaps';
 import type { CoopDefenseEncounterPresentationState } from '../types';
+import { formatDuration, formatNumber, getLocale, t } from '../i18n';
 
 export interface MainObjectiveBossProgress {
   readonly currentHp: number;
@@ -36,13 +37,6 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }
 
-function formatDuration(seconds: number): string {
-  const safe = Math.max(0, Math.ceil(seconds));
-  const minutes = Math.floor(safe / 60);
-  const remainder = safe % 60;
-  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
-}
-
 function getClearedEncounterCount(state: CoopDefenseEncounterPresentationState | null): number {
   if (!state) return 0;
   if (state.phase === 'complete') return state.sequenceCount;
@@ -58,8 +52,8 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
     const elapsedMs = Math.max(0, Math.min(totalMs, input.elapsedMs));
     return {
       id,
-      title: 'BIS ZUM ENDE ÜBERLEBEN',
-      progressLabel: `${formatDuration(elapsedMs / 1000)} / ${formatDuration(totalMs / 1000)}`,
+      title: t('ui.mainObjective.survive'),
+      progressLabel: `${formatDuration(elapsedMs / 1000, getLocale())} / ${formatDuration(totalMs / 1000, getLocale())}`,
       progress: clamp01(elapsedMs / totalMs),
     };
   }
@@ -68,10 +62,10 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
     const boss = input.boss;
     return {
       id,
-      title: 'BOSS BESIEGEN',
+      title: t('ui.mainObjective.boss'),
       progressLabel: boss
-        ? `${Math.ceil(Math.max(0, boss.currentHp))} / ${Math.ceil(Math.max(1, boss.maxHp))} HP`
-        : 'BOSS ERSCHEINT',
+        ? `${formatNumber(Math.ceil(Math.max(0, boss.currentHp)), getLocale(), { useGrouping: false })} / ${formatNumber(Math.ceil(Math.max(1, boss.maxHp)), getLocale(), { useGrouping: false })} HP`
+        : t('ui.mainObjective.bossAppears'),
       progress: boss ? clamp01(boss.currentHp / Math.max(1, boss.maxHp)) : 0,
     };
   }
@@ -79,15 +73,15 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
   if (input.objective === 'destroy-hostile-bases') {
     const bases = input.hostileBases;
     if (!bases) {
-      return { id, title: 'GEGNER-BASIS ZERSTÖREN', progressLabel: 'ZIEL WIRD ERFASST', progress: 0 };
+      return { id, title: t('ui.mainObjective.enemyBase'), progressLabel: t('ui.mainObjective.targetScanning'), progress: 0 };
     }
     const plural = bases.total !== 1;
     return {
       id,
-      title: plural ? 'GEGNER-BASEN ZERSTÖREN' : 'GEGNER-BASIS ZERSTÖREN',
+      title: plural ? t('ui.mainObjective.enemyBases') : t('ui.mainObjective.enemyBase'),
       progressLabel: plural
-        ? `${Math.max(0, bases.total - bases.remaining)} / ${bases.total}`
-        : `${Math.ceil(Math.max(0, bases.currentHp))} / ${Math.ceil(Math.max(1, bases.maxHp))} HP`,
+        ? `${formatNumber(Math.max(0, bases.total - bases.remaining), getLocale())} / ${formatNumber(bases.total, getLocale())}`
+        : `${formatNumber(Math.ceil(Math.max(0, bases.currentHp)), getLocale(), { useGrouping: false })} / ${formatNumber(Math.ceil(Math.max(1, bases.maxHp)), getLocale(), { useGrouping: false })} HP`,
       progress: plural
         ? clamp01((bases.total - bases.remaining) / Math.max(1, bases.total))
         : clamp01(bases.currentHp / Math.max(1, bases.maxHp)),
@@ -98,8 +92,8 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
   const cleared = Math.min(total, getClearedEncounterCount(input.encounter));
   return {
     id,
-    title: 'ALLE WELLEN ÜBERSTEHEN',
-    progressLabel: `${cleared} / ${total}`,
+    title: t('ui.mainObjective.waves'),
+    progressLabel: `${formatNumber(cleared, getLocale())} / ${formatNumber(total, getLocale())}`,
     progress: clamp01(cleared / total),
   };
 }

@@ -48,6 +48,9 @@ import {
   type LoadoutPickerGroup,
 } from './LoadoutSlotPicker';
 import { createLoadoutSlotControl } from './LoadoutSlotControl';
+import { getClassDescription, getClassName, getClassRole, getClassTooltipLines } from '../i18n/contentPresentation';
+import { getLocale, t } from '../i18n';
+import { getUpgradeCategoryName } from '../i18n/upgradePresentation';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
 
@@ -379,7 +382,7 @@ export class CoopDefenseUpgradesOverlay {
     const cancelBtn = this.scene.add.image(cancelX, ACTION_BTN_Y, this.ensureActionButtonTexture('cancel'))
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, 'ABBRUCH', textStyle('label', {
+    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, t('ui.upgrades.cancel'), textStyle('label', {
       color: INTENT.neutral.label,
     })).setOrigin(0.5).setScrollFactor(0);
     cancelBtn.on('pointerdown', () => this.closeWithCancel());
@@ -390,7 +393,7 @@ export class CoopDefenseUpgradesOverlay {
     const applyBtn = this.scene.add.image(applyX, ACTION_BTN_Y, this.ensureActionButtonTexture('apply'))
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, 'ÜBERNEHMEN', textStyle('label', {
+    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, t('ui.upgrades.apply'), textStyle('label', {
       color: INTENT.primary.label,
     })).setOrigin(0.5).setScrollFactor(0);
     applyBtn.on('pointerdown', () => this.closeWithApply());
@@ -399,18 +402,18 @@ export class CoopDefenseUpgradesOverlay {
     objects.push(applyLabel);
 
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'UPGRADES', textStyle('display'))
+      this.scene.add.text(CX, TITLE_Y, t('ui.upgrades.title'), textStyle('display'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
     // Level und XP-Balken tragen ihre Zahlen im Mouse-over, damit der Kopfbereich schmal bleibt.
-    this.levelText = this.scene.add.text(CX, SUBTITLE_Y, 'Level 1', {
+    this.levelText = this.scene.add.text(CX, SUBTITLE_Y, t('ui.upgrades.levelTitle', { level: 1 }), {
       fontSize: '22px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0);
     this.attachInfoTooltip(
       this.levelText,
       () => `Level ${this.getProgress().level}`,
-      () => `${this.getProgress().totalXp} XP gesamt gesammelt.`,
+      () => t('ui.upgrades.xpTotal', { xp: this.getProgress().totalXp }),
     );
     objects.push(this.levelText);
 
@@ -419,11 +422,11 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0);
     this.attachInfoTooltip(
       barBackground,
-      () => 'Level-Fortschritt',
+      () => t('ui.upgrades.levelProgress'),
       () => {
         const progress = this.getProgress();
         const remaining = Math.max(0, progress.nextLevelXp - progress.totalXp);
-        return `${remaining} XP bis Level ${progress.level + 1}.`;
+        return t('ui.upgrades.xpToNext', { xp: remaining, level: progress.level + 1 });
       },
     );
     objects.push(barBackground);
@@ -456,7 +459,7 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0);
     objects.push(this.pointsChip);
 
-    this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, '0 Upgrade-Punkte verfügbar', {
+    this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, t('ui.upgrades.points', { points: 0 }), {
       fontSize: '17px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
@@ -471,7 +474,7 @@ export class CoopDefenseUpgradesOverlay {
       this.openRespecMenu(respecX - 230, POINTS_Y + RESPEC_H / 2 + 8);
     });
     objects.push(this.respecButton);
-    this.respecLabel = this.scene.add.text(respecX, POINTS_Y, 'RESPEC', {
+    this.respecLabel = this.scene.add.text(respecX, POINTS_Y, t('ui.upgrades.respec'), {
       fontSize: '15px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.RED_5),
     })
       .setOrigin(0.5).setScrollFactor(0);
@@ -504,7 +507,7 @@ export class CoopDefenseUpgradesOverlay {
     );
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurück | ✓ am Symbol oder Klick auf einen Loadout-Slot rüstet aus ]', textStyle('caption'))
+      this.scene.add.text(CX, FOOTER_Y, t('ui.upgrades.controlsHint'), textStyle('caption'))
         .setOrigin(0.5).setScrollFactor(0),
     );
 
@@ -549,11 +552,15 @@ export class CoopDefenseUpgradesOverlay {
 
     const progress = this.getProgress();
 
-    this.levelText.setText(`Level ${progress.level}`);
+    this.levelText.setText(t('ui.upgrades.levelTitle', { level: progress.level }));
 
     const hasPoints = progress.availableUpgradePoints > 0 || progress.availableBossPoints > 0;
     this.pointsText.setText(
-      `${progress.availableUpgradePoints} Upgrade-Punkte  |  ★ ${progress.availableBossPoints}/${progress.earnedBossPoints} Boss-Punkte`,
+      t('ui.upgrades.pointsSummary', {
+        upgradePoints: progress.availableUpgradePoints,
+        bossPoints: progress.availableBossPoints,
+        earnedBossPoints: progress.earnedBossPoints,
+      }),
     );
     this.pointsText.setColor(toCssColor(hasPoints ? COLORS.BLUE_1 : COLORS.GREY_4));
     this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints));
@@ -708,7 +715,7 @@ export class CoopDefenseUpgradesOverlay {
     }> = [
       {
         action: 'category',
-        label: 'CATEGORY RESPEC',
+        label: t('ui.upgrades.categoryRespec').toUpperCase(),
         color: COLORS.RED_2,
         enabled: this.categoryRespecEnabled,
       },
@@ -716,14 +723,14 @@ export class CoopDefenseUpgradesOverlay {
     if (progress.classesUnlocked) {
       actions.push({
         action: 'class',
-        label: 'CLASS RESPEC',
+        label: t('ui.upgrades.classRespec').toUpperCase(),
         color: COLORS.RED_2,
         enabled: this.classRespecEnabled,
       });
     }
     actions.push({
       action: 'full',
-      label: 'FULL RESPEC',
+      label: t('ui.upgrades.fullRespec').toUpperCase(),
       color: COLORS.RED_1,
       enabled: this.fullRespecEnabled,
     });
@@ -731,7 +738,7 @@ export class CoopDefenseUpgradesOverlay {
     const entries: UiContextMenuEntry[] = actions.map((entry) => {
       const confirming = this.pendingRespecAction === entry.action;
       return {
-        label: confirming ? `WIRKLICH? ${entry.label}` : entry.label,
+        label: confirming ? t('ui.upgrades.confirm', { action: entry.label }) : entry.label,
         color: confirming ? COLORS.RED_1 : entry.color,
         enabled: entry.enabled,
         keepOpen: entry.enabled && !confirming,
@@ -752,7 +759,9 @@ export class CoopDefenseUpgradesOverlay {
     this.respecMenu.open({
       x,
       y,
-      title: activeCategory ? `RESPEC · ${activeCategory.label}` : 'RESPEC',
+      title: activeCategory
+        ? t('ui.upgrades.respecTitle', { category: activeCategory.label })
+        : t('ui.upgrades.respec'),
       titleColor: TEXT.primary,
       entries,
       onClose: () => {
@@ -817,6 +826,11 @@ export class CoopDefenseUpgradesOverlay {
 
     COOP_DEFENSE_CLASS_IDS.forEach((classId, index) => {
       const definition = COOP_DEFENSE_CLASS_DEFINITIONS[classId];
+      const locale = getLocale();
+      const className = getClassName(classId, locale);
+      const classRole = getClassRole(classId, locale);
+      const classDescription = getClassDescription(classId, locale);
+      const classTooltipLines = getClassTooltipLines(classId, locale);
       const classUnlocked = unlockedClassIds.includes(classId);
       const classesUnlocked = classUnlocked;
       const accentColor = classUnlocked ? CLASS_ACCENT_COLORS[classId] : COLORS.GREY_5;
@@ -829,13 +843,13 @@ export class CoopDefenseUpgradesOverlay {
         .setInteractive({ useHandCursor: classUnlocked });
 
       // Aktiv: dunkler Text auf lebendiger Klassenfarbe; passiv: heller Text auf gedimmtem Grund.
-      const name = this.scene.add.text(0, -10, definition.displayName, {
+      const name = this.scene.add.text(0, -10, className, {
         fontSize: '17px',
         fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(active ? COLORS.GREY_10 : (classUnlocked ? COLORS.GREY_1 : COLORS.GREY_4)),
       }).setOrigin(0.5).setScrollFactor(0);
-      const role = this.scene.add.text(0, 12, classesUnlocked ? definition.role.toUpperCase() : '🔒 GESPERRT', {
+      const role = this.scene.add.text(0, 12, classesUnlocked ? classRole.toUpperCase() : `🔒 ${t('ui.common.locked')}`, {
         fontSize: '11px',
         fontFamily: FONT_MONO,
         fontStyle: 'bold',
@@ -871,10 +885,10 @@ export class CoopDefenseUpgradesOverlay {
       });
       background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
         this.showTooltip(
-          definition.displayName,
+          className,
           classUnlocked
-            ? [definition.role, '', definition.description, ...definition.tooltipLines].join('\n')
-            : `Freischaltung durch Abschluss von Map ${definition.unlockAfterMapId}`,
+            ? [classRole, '', classDescription, ...classTooltipLines].join('\n')
+            : t('ui.upgrades.unlockAfterMap', { map: definition.unlockAfterMapId }),
           pointer,
         );
       });
@@ -974,9 +988,9 @@ export class CoopDefenseUpgradesOverlay {
           centerX,
           accentColor,
           presentation: itemId ? describeLoadoutItem(slot, itemId) : null,
-          tooltipTitle: category.label,
-          tooltipBody: () => this.buildSlotTooltipBody(category.label, itemId ? describeLoadoutItem(slot, itemId) : null),
-          onOpenPicker: (anchorX) => this.openSlotPicker(progress, category.label, slot, anchorX),
+          tooltipTitle: getUpgradeCategoryName(category.id, getLocale()),
+          tooltipBody: () => this.buildSlotTooltipBody(getUpgradeCategoryName(category.id, getLocale()), itemId ? describeLoadoutItem(slot, itemId) : null),
+          onOpenPicker: (anchorX) => this.openSlotPicker(progress, getUpgradeCategoryName(category.id, getLocale()), slot, anchorX),
         }],
       });
     });
@@ -1009,7 +1023,7 @@ export class CoopDefenseUpgradesOverlay {
         centerX: startX + index * (LOADOUT_SLOT_SIZE + LOADOUT_SLOT_GAP),
         accentColor,
         presentation: tool ? describeLoadoutTool(tool) : null,
-        tooltipTitle: `Utility-Slot ${index + 1}`,
+        tooltipTitle: t('ui.lobby.utilitySlot', { slot: index + 1 }),
         tooltipBody: () => this.buildUtilitySlotTooltipBody(progress, tool),
         onOpenPicker: (anchorX) => this.openUtilitySlotPicker(progress, index, anchorX),
       });
@@ -1065,10 +1079,10 @@ export class CoopDefenseUpgradesOverlay {
 
   private buildSlotTooltipBody(categoryLabel: string, presentation: LoadoutItemPresentation | null): string {
     return [
-      presentation ? `Ausgerüstet: ${presentation.displayName}` : 'Leer',
-      `Items aus der Kategorie "${categoryLabel}".`,
+      presentation ? t('ui.upgrades.equippedItem', { name: presentation.displayName }) : t('ui.upgrades.empty'),
+      t('ui.upgrades.categoryItems', { category: categoryLabel }),
       '',
-      'Klick öffnet die Auswahl der freigeschalteten Items.',
+      t('ui.upgrades.openSelection'),
     ].join('\n');
   }
 
@@ -1077,11 +1091,14 @@ export class CoopDefenseUpgradesOverlay {
     tool: LoadoutToolRef | null,
   ): string {
     return [
-      tool ? `Ausgerüstet: ${describeLoadoutTool(tool).displayName}` : 'Leer',
-      `${progress.toolLoadout.length}/${Math.max(1, progress.toolSlotCapacity)} Utility-Slots belegt.`,
-      'Utilities aus Utility 1 und Utility 2 sind gleichwertig und teilen sich diese Slots.',
+      tool ? t('ui.upgrades.equippedItem', { name: describeLoadoutTool(tool).displayName }) : t('ui.upgrades.empty'),
+      t('ui.upgrades.utilitySlotsFilled', {
+        current: progress.toolLoadout.length,
+        capacity: Math.max(1, progress.toolSlotCapacity),
+      }),
+      t('ui.upgrades.utilityCategories'),
       '',
-      'Klick öffnet die Auswahl der freigeschalteten Utilities.',
+      t('ui.upgrades.openUtilitySelection'),
     ].join('\n');
   }
 
@@ -1148,9 +1165,9 @@ export class CoopDefenseUpgradesOverlay {
     this.picker?.open({
       anchorX,
       anchorY: LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 8,
-      title: `Utility-Slot ${slotIndex + 1}`,
+      title: t('ui.lobby.utilitySlot', { slot: slotIndex + 1 }),
       groups,
-      clearLabel: currentTool ? 'Slot leeren' : undefined,
+      clearLabel: currentTool ? t('ui.lobby.clearSlot') : undefined,
       onClear: currentTool
         ? () => this.applyToolSlots(progress.toolLoadout.filter((_, index) => index !== slotIndex))
         : undefined,
@@ -1177,7 +1194,7 @@ export class CoopDefenseUpgradesOverlay {
       this.requestRefresh();
       return;
     }
-    this.showLoadoutHint('Utility konnte nicht ausgerüstet werden.');
+    this.showLoadoutHint(t('ui.upgrades.utilityEquipFailed'));
   }
 
   private toggleTool(tool: LoadoutToolRef): void {
@@ -1185,7 +1202,7 @@ export class CoopDefenseUpgradesOverlay {
       this.requestRefresh();
       return;
     }
-    this.showLoadoutHint('Keine freien Utility-Slots — erst eine Utility abwählen.');
+    this.showLoadoutHint(t('ui.upgrades.noUtilitySlots'));
   }
 
   /** Ein abgelehntes Ausruesten blieb bisher unkommentiert; der Hinweis steht ueber dem Block. */
@@ -2333,20 +2350,23 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private buildNodeTooltipBody(node: CoopDefenseUpgradeNodeSnapshot): string {
-    const lines = [`Stufe ${node.level}/${node.maxLevel}`];
+    const lines = [t('ui.upgrades.level', { current: node.level, max: node.maxLevel })];
 
     if (node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable) {
-      lines.push('Basis-Freischaltung');
+      lines.push(t('ui.upgrades.baseUnlock'));
     } else if (!node.refundable) {
-      lines.push('Nicht ruecknehmbar');
+      lines.push(t('ui.upgrades.notRefundable'));
     }
 
-    if (node.bossPointCostPerLevel > 0) lines.push('★ Besonderes Upgrade');
+    if (node.bossPointCostPerLevel > 0) lines.push(t('ui.upgrades.special'));
     lines.push(node.description);
     if (node.bossPointCostPerLevel > 0) {
-      lines.push(`★ Boss-Kosten: ${node.bossPointCostPerLevel} Punkt`);
+      lines.push(t('ui.upgrades.bossCost', {
+        points: node.bossPointCostPerLevel,
+        plural: node.bossPointCostPerLevel === 1 ? '' : 'e',
+      }));
       if (!node.bossPointRequirementMet && node.level < node.maxLevel) {
-        lines.push('Boss-Punkt fehlt: Boss-Level erfolgreich abschließen.');
+        lines.push(t('ui.upgrades.bossPointMissing'));
       }
     }
     return lines.join('\n');

@@ -1,9 +1,7 @@
 {
   "mapId": "5",
-  "displayName": "Map 5 - Grufttitan",
   "arenaWidthCells": 74,
   "timeOfDay": "22:30",
-  "tutorialText": "Boss-Maps enden erst, wenn der Boss fällt. Der erste Sieg bringt einen Boss-Punkt. Nach dieser Map werden Dachs Nukem und Dachs of Steel freigeschaltet. Inspector bleibt gesperrt.",
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
   "trackPosition": "center",
@@ -35,7 +33,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -44,7 +42,7 @@
             "gridY": 3
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ]
     },

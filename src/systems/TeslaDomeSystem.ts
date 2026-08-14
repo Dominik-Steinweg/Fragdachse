@@ -432,7 +432,7 @@ export class TeslaDomeSystem {
         })) {
           continue;
         }
-        this.combatSystem.applyDamage(player.id, targetDamage, false, dome.ownerId, dome.config.displayName, {
+        this.combatSystem.applyDamage(player.id, targetDamage, false, dome.ownerId, dome.config.id, {
           sourceX: dome.x,
           sourceY: dome.y,
         }, { damageKind: 'chain', sourceSlot: dome.sourceSlot, allowCritical: true });
@@ -442,7 +442,7 @@ export class TeslaDomeSystem {
     if (enemyTargets.length > 0 && this.enemyTargetProvider) {
       for (const enemy of this.enemyTargetProvider()) {
         if (!enemyTargets.some(target => target.x === enemy.x && target.y === enemy.y)) continue;
-        this.combatSystem.applyDamage(enemy.id, targetDamage, false, dome.ownerId, dome.config.displayName, {
+        this.combatSystem.applyDamage(enemy.id, targetDamage, false, dome.ownerId, dome.config.id, {
           sourceX: dome.x,
           sourceY: dome.y,
         }, { damageKind: 'chain', sourceSlot: dome.sourceSlot, allowCritical: true });

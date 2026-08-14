@@ -138,7 +138,7 @@ const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitS
 const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufende Lobby-Vorschau {c: classId, t: tool refs}
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
-const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
+const KEY_UTILITY_OVERRIDE_ID = 'uon'; // per-player: string (stable utility ID, empty = no override)
 const KEY_UTILITY_OVERRIDE_DESCRIPTOR = 'uod'; // per-player: mission override metadata or null
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
@@ -247,7 +247,7 @@ export interface KillEvent {
   killerId:    string;
   killerName:  string;
   killerColor: number;
-  weapon:      string;
+  sourceId:    string;
   victimId:    string;
   victimName:  string;
   victimColor: number;
@@ -3259,17 +3259,17 @@ export class NetworkBridge {
       ?? null;
   }
 
-  /** Host-only: Publiziert den Display-Namen einer Utility-Override (z.B. BFG, Heilige Handgranate). Leerstring = kein Override. */
-  publishUtilityOverrideName(playerId: string, name: string): void {
+  /** Host-only: Publishes the stable ID of a temporary utility override. */
+  publishUtilityOverrideId(playerId: string, utilityId: string): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
-    ps.setState(KEY_UTILITY_OVERRIDE_NAME, name, true);
+    ps.setState(KEY_UTILITY_OVERRIDE_ID, utilityId, true);
   }
 
-  /** Liest den aktuellen Utility-Override-Namen eines Spielers (leer = kein Override). */
-  getPlayerUtilityOverrideName(playerId: string): string {
-    return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_NAME) as string | undefined) ?? '';
+  /** Reads the current stable utility override ID (empty = no override). */
+  getPlayerUtilityOverrideId(playerId: string): string {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_ID) as string | undefined) ?? '';
   }
 
   /** Host-only: Publishes the metadata required to reconstruct a temporary utility override. */

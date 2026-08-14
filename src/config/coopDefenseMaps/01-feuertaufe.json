@@ -1,9 +1,7 @@
 {
   "mapId": "1",
-  "displayName": "Map 1 - Feuertaufe",
   "arenaWidthCells": 60,
   "timeOfDay": "12:00",
-  "tutorialText": "Schützt die Basis vor den Angriffen. Nach jeder abgewehrten Welle gibt es eine kurze Pause. Sind alle Angriffe besiegt, gewinnt ihr die Map. Abschüsse geben XP; Level-Ups bringen Skill-Punkte.",
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "rockFillRatio": 0.3,

@@ -7,6 +7,7 @@ import {
   getCoopDefenseUpgradeDefinition,
 } from '../src/utils/coopDefenseUpgrades';
 import { getMiniRocketCascadeMultiplier } from '../src/utils/miniRocketCascade';
+import { getUpgradeDescription } from '../src/i18n/upgradePresentation';
 
 function maxProfile(upgradeIds: readonly string[]): CoopDefenseUpgradeProfile {
   return {
@@ -26,7 +27,7 @@ describe('mini-rocket cascade charge', () => {
 
   it('wires the upgrade into the per-explosion cascade stat instead of static radius', () => {
     const definition = getCoopDefenseUpgradeDefinition('mini_rocket_cascade_charge');
-    expect(definition?.description).toContain('erste Explosion erhält keinen Bonus');
+    expect(getUpgradeDescription('mini_rocket_cascade_charge', 'de')).toContain('erste Explosion erhält keinen Bonus');
     expect(definition?.effects.map(({ stat, mode }) => ({ stat, mode }))).toEqual([{
       stat: 'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeDamageBonusPerExplosion',
       mode: 'add_per_level',

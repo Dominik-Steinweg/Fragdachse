@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+﻿import * as Phaser from 'phaser';
 import { ArenaBuilder }     from '../../arena/ArenaBuilder';
 import { RockPresentation, arenaWorldFrameSource } from '../../arena/RockPresentation';
 import { UTILITY_CONFIGS }  from '../../loadout/LoadoutConfig';
@@ -41,7 +41,7 @@ export class RockVisualHelper {
   private obstacleVisualsRequireFullRefresh = false;
   private readonly dirtyRockIds = new Set<number>();
   /**
-   * Gemeinsame Fels-Darstellung. Die Lobby führt ihren Ambient-Bestand mit derselben Klasse
+   * Gemeinsame Fels-Darstellung. Die Lobby fÃ¼hrt ihren Ambient-Bestand mit derselben Klasse
    * und demselben Ablauf, nur mit ihrem eigenen Weltrahmen.
    */
   private readonly rockPresentation: RockPresentation;
@@ -78,9 +78,9 @@ export class RockVisualHelper {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
     this.ensureRuntimeRockSlot(rock);
 
-    // Power-up-Podeste werden vollständig vom PowerUpRenderer visualisiert und sind wie
+    // Power-up-Podeste werden vollstÃ¤ndig vom PowerUpRenderer visualisiert und sind wie
     // feste Arena-Podeste begehbar. Der Runtime-Rock bleibt trotzdem im PlacementSystem,
-    // damit Ownership, Grid-Belegung und Rückbau erhalten bleiben.
+    // damit Ownership, Grid-Belegung und RÃ¼ckbau erhalten bleiben.
     if (rock.kind === 'pedestal') {
       const staleProxy = this.ctx.arenaResult.rockObjects[rock.id];
       if (staleProxy) {
@@ -134,7 +134,7 @@ export class RockVisualHelper {
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
         this.ctx.gameAudioSystem.playSound(
-          rock.constructionId ? 'sfx_place_rock' : 'sfx_place_fliegenpilz',
+          rock.constructionId ? 'sfx_place_rock' : 'sfx_place_spore_turret',
           world.x,
           world.y,
           rock.ownerId,
@@ -284,7 +284,7 @@ export class RockVisualHelper {
       }
       if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
         const world = { x: ARENA_OFFSET_X + runtimeRock.gridX * CELL_SIZE + CELL_SIZE / 2, y: ARENA_OFFSET_Y + runtimeRock.gridY * CELL_SIZE + CELL_SIZE / 2 };
-        this.ctx.combatSystem.applyAoeDamage(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionDamage ?? 0, runtimeRock.ownerId, false, { category: 'explosion', allowTeamDamage: false, weaponName: 'Explosiver Einsturz', sourceSlot: 'utility' });
+        this.ctx.combatSystem.applyAoeDamage(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionDamage ?? 0, runtimeRock.ownerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.rock_collapse', sourceSlot: 'utility' });
         this.ctx.hostPhysics.applyRadialImpulse(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionKnockback ?? 0, runtimeRock.ownerId, 0);
         bridge.broadcastExplosionEffect(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0);
       }
@@ -323,7 +323,7 @@ export class RockVisualHelper {
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {
     const world = this.gridToWorld(rock.gridX, rock.gridY);
-    const weaponId = rock.turretWeaponId ?? 'SPOREN';
+    const weaponId = rock.turretWeaponId ?? 'SPORES';
     const visualSpec = getTurretVisualSpec(weaponId);
     let visual = this.turretVisuals.get(rock.id);
     if (!visual) {
@@ -393,7 +393,7 @@ export class RockVisualHelper {
     if (!rock || rock.kind !== 'turret' || !visual) return;
 
     const world = this.gridToWorld(rock.gridX, rock.gridY);
-    const visualSpec = getTurretVisualSpec(rock.turretWeaponId ?? 'SPOREN');
+    const visualSpec = getTurretVisualSpec(rock.turretWeaponId ?? 'SPORES');
     const transform = getTurretVisualTransform(visualSpec, world.x, world.y, angle);
     visual.image
       .setPosition(transform.x, transform.y)
@@ -401,7 +401,7 @@ export class RockVisualHelper {
   }
 
   /**
-   * Bestätigt die Dauerlichter aller sichtbaren Fliegenpilz-Türme pro Frame. Ein einmaliges
+   * BestÃ¤tigt die Dauerlichter aller sichtbaren Fliegenpilz-TÃ¼rme pro Frame. Ein einmaliges
    * Setzen beim Materialisieren reicht nicht, weil `LightingSystem` verwaiste keyed-Lichter
    * nach kurzer Zeit absichtlich entfernt.
    */
@@ -416,7 +416,7 @@ export class RockVisualHelper {
       if (visual.constructionId) {
         this.lighting.releaseLight(key);
       } else {
-        this.lighting.setLight(key, 'fliegenpilz', visual.image.x, visual.image.y);
+        this.lighting.setLight(key, 'spore_turret', visual.image.x, visual.image.y);
       }
     }
   }
@@ -470,7 +470,7 @@ export class RockVisualHelper {
       ? UTILITY_CONFIGS[rock.toolRef.id]
       : undefined;
     if (configured?.type === 'placeable_rock') return configured;
-    return UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig;
+    return UTILITY_CONFIGS.ROCK_BARRIER as PlaceableRockUtilityConfig;
   }
 
   private getPlaceableTurretConfig(rock: SyncedPlaceableRock): PlaceableTurretUtilityConfig {
@@ -478,7 +478,7 @@ export class RockVisualHelper {
       ? UTILITY_CONFIGS[rock.toolRef.id]
       : undefined;
     if (configured?.type === 'placeable_turret') return configured;
-    return UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+    return UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
   }
 
   gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
@@ -543,13 +543,13 @@ export class RockVisualHelper {
   }
 
   /**
-   * Einziger Trichter für "die Hindernisse haben sich geändert".
+   * Einziger Trichter fÃ¼r "die Hindernisse haben sich geÃ¤ndert".
    *
-   * Statischer Sonnenschatten und dynamische Lichtverdeckung hängen hier gemeinsam
-   * dran, damit ein zerstörter Fels nicht seinen Schatten verlieren, aber weiter Licht
+   * Statischer Sonnenschatten und dynamische Lichtverdeckung hÃ¤ngen hier gemeinsam
+   * dran, damit ein zerstÃ¶rter Fels nicht seinen Schatten verlieren, aber weiter Licht
    * blockieren kann. Beide leiten sich aus denselben Referenzen ab
    * (`arenaResult.rockObjects`, `placementSystem.getAllRuntimeRocks()`), es gibt keine
-   * zweite Liste zerstörbarer Felsen.
+   * zweite Liste zerstÃ¶rbarer Felsen.
    */
   /**
    * Sammelstelle statt Sofortaufruf: Eine Explosion zerstoert typischerweise mehrere Felsen
@@ -607,5 +607,5 @@ export class RockVisualHelper {
 }
 
 function turretLightKey(id: number): string {
-  return `fliegenpilz:${id}`;
+  return `spore_turret:${id}`;
 }

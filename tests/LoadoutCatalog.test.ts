@@ -15,6 +15,8 @@ import {
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
+import { getLocale } from '../src/i18n';
+import { getLoadoutItemName } from '../src/i18n/contentPresentation';
 
 const COOP_DEFENSE: GameMode = 'coop_defense' as GameMode;
 const SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
@@ -42,8 +44,8 @@ describe('loadout catalog', () => {
     const progress = getCoopDefenseProgressSnapshot(0, profile, 0, 'inspector_gadachs');
     const weapon2Category = progress.upgradeCategories.find((category) => category.id === 'weapon2');
 
-    expect(weapon2.map((item) => item.id)).toEqual(['REPARATURSTRAHL']);
-    expect(weapon2Category?.upgrades[0]?.id).toBe('unlock_reparaturstrahl');
+    expect(weapon2.map((item) => item.id)).toEqual(['PLASMA_BURNER']);
+    expect(weapon2Category?.upgrades[0]?.id).toBe('unlock_plasma_burner');
 
     const withMatrix = levelUpCoopDefenseUpgrade(
       profile,
@@ -54,7 +56,7 @@ describe('loadout catalog', () => {
     )!;
     expect(getSelectableLoadoutItems('weapon2', COOP_DEFENSE, withMatrix, 'inspector_gadachs')
       .map((item) => item.id))
-      .toEqual(['REPARATURSTRAHL', 'OVERCHARGE_CORE']);
+      .toEqual(['PLASMA_BURNER', 'OVERCHARGE_CORE']);
   });
 
   it('grows the selectable list when the matching unlock is skilled', () => {
@@ -101,7 +103,7 @@ describe('loadout catalog', () => {
   });
 
   it('keeps Inspector support weapons out of PvP loadout lists', () => {
-    const supportWeapons = ['OVERCHARGE_CORE', 'REPARATURSTRAHL', 'ENERGIEINJEKTOR'];
+    const supportWeapons = ['OVERCHARGE_CORE', 'PLASMA_BURNER', 'ENERGY_INJECTOR'];
     for (const mode of ['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const) {
       const weapon2Ids = getLoadoutSlotItems('weapon2', mode).map((item) => item.id);
       for (const weaponId of supportWeapons) expect(weapon2Ids).not.toContain(weaponId);
@@ -119,16 +121,16 @@ describe('loadout catalog', () => {
       'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',
     );
     for (const id of [
-      'unlock_reparaturstrahl',
+      'unlock_plasma_burner',
       'unlock_overcharge_core',
-      'unlock_energieinjektor',
+      'unlock_energy_injector',
       'unlock_tesla_turret',
       'unlock_gravity_turret',
       'unlock_slow_bubble_turret',
       'unlock_medic_pedestal',
       'unlock_armor_pedestal',
-      'unlock_felsbau',
-      'unlock_fliegenpilz',
+      'unlock_rock_barrier',
+      'unlock_spore_turret',
     ]) {
       expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
     }
@@ -137,18 +139,18 @@ describe('loadout catalog', () => {
 
   it('keeps internal Coop utility variants out of user-facing catalog lists', () => {
     const utilityIds = getLoadoutSlotItems('utility', COOP_DEFENSE).map((item) => item.id);
-    expect(utilityIds).not.toContain('FELSBAU_COOP');
-    expect(utilityIds).not.toContain('FLIEGENPILZ_COOP');
-    expect(utilityIds).toContain('FELSBAU');
-    expect(utilityIds).toContain('FLIEGENPILZ');
+    expect(utilityIds).not.toContain('ROCK_BARRIER_COOP');
+    expect(utilityIds).not.toContain('SPORE_TURRET_COOP');
+    expect(utilityIds).toContain('ROCK_BARRIER');
+    expect(utilityIds).toContain('SPORE_TURRET');
   });
 
   it('resolves display names from the config a slot actually uses', () => {
     expect(describeLoadoutItem('weapon1', 'GLOCK').displayName).toBe('Glock');
-    expect(describeLoadoutItem('utility', 'HE_GRENADE').displayName).toBe('HE Granate');
+    expect(describeLoadoutItem('utility', 'HE_GRENADE').displayName).toBe(getLoadoutItemName('HE_GRENADE', getLocale()));
     expect(describeLoadoutItem('weapon1', 'UNKNOWN_ITEM').displayName).toBe('UNKNOWN ITEM');
-    expect(describeLoadoutItem('weapon1', 'LAUBBLAESER').displayName).toBe('Laubbläser');
-    expect(describeLoadoutItem('weapon2', 'REPARATURSTRAHL').displayName).toBe('Plasmabrenner');
+    expect(describeLoadoutItem('weapon1', 'LEAF_BLOWER').displayName).toBe('Laubbläser');
+    expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').displayName).toBe('Plasmabrenner');
   });
 
   it('uses the dedicated upgrade artwork in the four Ultimate slots', () => {
@@ -160,11 +162,11 @@ describe('loadout catalog', () => {
   });
 
   it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {
-    expect(describeLoadoutItem('weapon2', 'REPARATURSTRAHL').textureKey)
-      .toBe('UPGRADE_UNLOCK_REPARATURSTRAHL');
+    expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').textureKey)
+      .toBe('UPGRADE_UNLOCK_PLASMA_BURNER');
     expect(describeLoadoutItem('weapon2', 'OVERCHARGE_CORE').textureKey)
       .toBe('UPGRADE_UNLOCK_OVERCHARGE_CORE');
-    expect(describeLoadoutItem('weapon2', 'ENERGIEINJEKTOR').textureKey)
-      .toBe('UPGRADE_UNLOCK_ENERGIEINJEKTOR');
+    expect(describeLoadoutItem('weapon2', 'ENERGY_INJECTOR').textureKey)
+      .toBe('UPGRADE_UNLOCK_ENERGY_INJECTOR');
   });
 });

@@ -9,6 +9,7 @@ import {
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
+  getStoredLocale,
   importStoredGameProgressJson,
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
@@ -18,7 +19,9 @@ import {
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
   setStoredMasterVolume,
+  setStoredLocale,
 } from '../src/utils/localPreferences';
+import { resolveBrowserLocale } from '../src/i18n/types';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 
 class MemoryStorage implements Storage {
@@ -125,6 +128,42 @@ describe('local progress generation', () => {
     resetStoredCoopDefenseCharacter();
     expect(getStoredMasterVolume()).toBe(0.31);
     expect(getStoredGraphicsQuality()).toBe('medium');
+  });
+
+  it('selects locale from the browser only until a valid device setting exists', () => {
+    vi.stubGlobal('navigator', { language: 'de-AT' });
+    expect(resolveBrowserLocale()).toBe('de');
+    expect(getStoredLocale()).toBe('de');
+
+    vi.stubGlobal('navigator', { language: 'fr-FR' });
+    storage.removeItem(LOCAL_SETTINGS_STORAGE_KEY);
+    invalidateLocalStorageCache();
+    expect(resolveBrowserLocale()).toBe('en');
+    expect(getStoredLocale()).toBe('en');
+
+    setStoredLocale('de');
+    vi.stubGlobal('navigator', { language: 'en-US' });
+    invalidateLocalStorageCache();
+    expect(getStoredLocale()).toBe('de');
+  });
+
+  it('sanitizes invalid stored locales and keeps locale out of progress', () => {
+    vi.stubGlobal('navigator', { language: 'en-US' });
+    storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify({
+      schemaVersion: 2,
+      locale: 'xx',
+      audio: { masterVolume: 0.2, effectsVolume: 0.3, musicVolume: 0.4 },
+      graphics: { quality: 'low' },
+    }));
+    invalidateLocalStorageCache();
+    expect(getStoredLocale()).toBe('en');
+
+    setStoredLocale('de');
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredLocale()).toBe('de');
+    const progress = JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!);
+    expect(progress.locale).toBeUndefined();
+    expect(exportStoredGameProgressJson()).not.toContain('locale');
   });
 
   it('exports and imports the complete progress without device settings', () => {

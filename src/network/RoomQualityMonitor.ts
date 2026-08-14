@@ -31,7 +31,7 @@ export class RoomQualityMonitor {
       this.roomQualitySnapshot = this.bridge.getRoomQuality();
       return;
     }
-    this.publish(this.buildSnapshot('waiting', 'Pingmessung startet, sobald ein Mitspieler verbunden ist.', null, 0, 0, 0));
+    this.publish(this.buildSnapshot('waiting', null, 0, 0, 0));
   }
 
   update(now: number, players: PlayerProfile[]): RoomQualitySnapshot | null {
@@ -50,7 +50,7 @@ export class RoomQualityMonitor {
     }
 
     if (remotePlayers.length === 0) {
-      this.publish(this.buildSnapshot('waiting', 'Pingmessung startet, sobald ein Mitspieler verbunden ist.', null, 0, players.length, 0));
+      this.publish(this.buildSnapshot('waiting', null, players.length, 0, 0));
       return this.roomQualitySnapshot;
     }
 
@@ -79,7 +79,6 @@ export class RoomQualityMonitor {
     if (minSamplesCollected < ROOM_QUALITY_REQUIRED_SAMPLES) {
       this.publish(this.buildSnapshot(
         'sampling',
-        `Raumtest misst ${measuredPlayers}/${remotePlayers.length} Spieler (${minSamplesCollected}/${ROOM_QUALITY_REQUIRED_SAMPLES} Samples).`,
         null,
         measuredPlayers,
         players.length,
@@ -93,10 +92,8 @@ export class RoomQualityMonitor {
       return samples.reduce((sum, value) => sum + value, 0) / samples.length;
     })));
     const status: RoomQualityStatus = worstPingMs <= ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS ? 'good' : 'bad';
-    const relation = status === 'good' ? '<=' : '>';
     this.publish(this.buildSnapshot(
       status,
-      `Raumtest ${status === 'good' ? 'ok' : 'zu hoch'} (${worstPingMs}ms ${relation} ${ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS}ms).`,
       worstPingMs,
       remotePlayers.length,
       players.length,
@@ -115,7 +112,6 @@ export class RoomQualityMonitor {
 
   private buildSnapshot(
     status: RoomQualityStatus,
-    summary: string,
     worstPingMs: number | null,
     measuredPlayers: number,
     totalPlayers: number,
@@ -123,7 +119,6 @@ export class RoomQualityMonitor {
   ): RoomQualitySnapshot {
     return {
       status,
-      summary,
       source: 'webrtc',
       thresholdMs: ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS,
       worstPingMs,

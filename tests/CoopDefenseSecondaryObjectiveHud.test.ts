@@ -50,14 +50,14 @@ describe('Coop defense secondary objective view model', () => {
     expect(dormant.chips).toEqual([]);
   });
 
-  it('uses the authored display name and reward hint, and falls back per archetype', () => {
+  it('resolves semantic objective IDs and falls back per archetype', () => {
     const authored = buildSecondaryObjectiveViewModel(
-      [makeEntry()],
-      [makeConfig({ displayName: 'BRUTNESTER ZERSTÖREN', rewardHint: 'WENIGER DRUCK' })],
+      [makeEntry({ objectiveId: 'destroy-brood-front' })],
+      [makeConfig({ id: 'destroy-brood-front' })],
       0,
     );
     expect(authored.focus?.title).toBe('BRUTNESTER ZERSTÖREN');
-    expect(authored.focus?.rewardHint).toBe('WENIGER DRUCK');
+    expect(authored.focus?.rewardHint).toBe('WENIGER GEGNERDRUCK · BONUS-XP');
 
     const fallback = buildSecondaryObjectiveViewModel([makeEntry({ type: 'carry' })], [], 0);
     expect(fallback.focus?.title).toBe('FRACHT BERGEN');
@@ -66,11 +66,11 @@ describe('Coop defense secondary objective view model', () => {
 
   it('hands the full title to the HUD, which shortens it pixel-exact', () => {
     const model = buildSecondaryObjectiveViewModel(
-      [makeEntry()],
-      [makeConfig({ displayName: 'BRUTNESTER AN DER NORDFRONT' })],
+      [makeEntry({ objectiveId: 'destroy-brood-front' })],
+      [makeConfig({ id: 'destroy-brood-front' })],
       0,
     );
-    expect(model.focus?.title).toBe('BRUTNESTER AN DER NORDFRONT');
+    expect(model.focus?.title).toBe('BRUTNESTER ZERSTÖREN');
   });
 
   it('keeps an unfocused objective visible as a background entry with countable progress', () => {
@@ -231,19 +231,19 @@ describe('Coop defense carry world guidance', () => {
 });
 
 describe('Coop defense secondary objective labels', () => {
-  it('carries the authored labels of the test map into the resolved config', () => {
+  it('keeps presentation labels out of the resolved map config', () => {
     const objective = getCoopDefenseMapConfig('0').secondaryObjectives?.[0];
-    expect(objective?.displayName).toBe('BRUTNESTER ZERSTÖREN');
-    expect(objective?.rewardHint?.length).toBeGreaterThan(0);
+    expect(objective).not.toHaveProperty('displayName');
+    expect(objective).not.toHaveProperty('rewardHint');
   });
 
-  it('rejects empty and overlong labels', () => {
+  it('ignores legacy presentation fields during normalization', () => {
     const base = getCoopDefenseMapConfig('0');
     const withObjective = (displayName: string) => ({
       ...base,
       secondaryObjectives: (base.secondaryObjectives ?? []).map((objective) => ({ ...objective, displayName })),
     });
-    expect(() => normalizeCoopDefenseMapConfig(withObjective('   '))).toThrow(/empty displayName/);
-    expect(() => normalizeCoopDefenseMapConfig(withObjective('X'.repeat(40)))).toThrow(/longer than/);
+    expect(normalizeCoopDefenseMapConfig(withObjective('   ')).secondaryObjectives?.[0]).not.toHaveProperty('displayName');
+    expect(normalizeCoopDefenseMapConfig(withObjective('X'.repeat(40))).secondaryObjectives?.[0]).not.toHaveProperty('displayName');
   });
 });

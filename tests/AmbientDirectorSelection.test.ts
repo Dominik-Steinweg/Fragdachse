@@ -115,14 +115,14 @@ describe('ambient director selection', () => {
 describe('ambient weapon pool', () => {
   it('only offers weapons whose fire type runs through the shared executor', () => {
     // Flammenwerfer, Laubbläser, Tesla-Kuppel und Co. werden nicht vereinfacht nachgebaut.
-    for (const excluded of ['FLAMETHROWER', 'LAUBBLAESER', 'TESLA_DOME', 'ENERGY_SHIELD', 'HEALING_AURA', 'ENERGIEINJEKTOR', 'OVERCHARGE_CORE']) {
+    for (const excluded of ['FLAMETHROWER', 'LEAF_BLOWER', 'TESLA_DOME', 'ENERGY_SHIELD', 'HEALING_AURA', 'ENERGY_INJECTOR', 'OVERCHARGE_CORE']) {
       expect(AMBIENT_WEAPON_IDS).not.toContain(excluded);
     }
     expect(AMBIENT_WEAPON_IDS).toContain('AK47');
     expect(AMBIENT_WEAPON_IDS).toContain('ASMD_PRIM');
     expect(AMBIENT_WEAPON_IDS).toContain('BITE');
     // Der Reparaturstrahl bleibt dem Inspector vorbehalten.
-    expect(AMBIENT_WEAPON_IDS).not.toContain('REPARATURSTRAHL');
+    expect(AMBIENT_WEAPON_IDS).not.toContain('PLASMA_BURNER');
   });
 
   it('boosts the selected loadout only when the weapon is ambient compatible', () => {

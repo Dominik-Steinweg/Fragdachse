@@ -200,7 +200,6 @@ export type WeaponFireConfig =
 
 export interface WeaponConfigShape {
   readonly id: string;
-  readonly displayName: string;
   readonly cooldown: number;            // ms zwischen zwei Schüssen
   readonly damage: number;              // HP-Schaden pro Direkttreffer
   readonly range: number;               // px – Lifetime = range/speed*1000 ms
@@ -467,7 +466,7 @@ export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig
   /** Typisierte Verstaerkung des Energieinjektors fuer dieses Geschuetz. */
   readonly energyInjectorEffect?: EnergyInjectorConstructionEffect;
   readonly secondProjectileDamageFactor?: number;
-  /** > 0 ersetzt die Sporen-Waffe des Turrets durch `FLIEGENPILZ_PLASMA` (Boss-Upgrade). */
+  /** > 0 replaces the turret's spore weapon with the plasma variant (boss upgrade). */
   readonly plasmaWeaponEnabled?: number;
 }
 
@@ -481,7 +480,6 @@ export interface PlaceableTunnelPlacementConfig {
 
 export interface BaseUtilityConfig {
   readonly id: string;
-  readonly displayName: string;
   readonly type: UtilityType;
   readonly cooldown: number;        // ms
   readonly activation: UtilityActivationConfig;
@@ -693,7 +691,6 @@ export interface BuffAuraConfig {
 
 interface BaseUltimateConfig {
   readonly id: string;
-  readonly displayName: string;
   readonly cooldown: number;          // ms (0 = rage-gated, kein Zeitcooldown)
   readonly rageRequired: number;      // Mindest-Rage zum Aktivieren
   readonly allowedModes?: readonly GameMode[];

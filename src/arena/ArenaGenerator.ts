@@ -19,6 +19,7 @@ import {
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
   getCoopDefenseTutorialRockRegion,
 } from '../config/coopDefenseTutorial';
+import { getMapTutorial } from '../i18n/contentPresentation';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
 /** Abtastschritt entlang eines Gangs in Zellen; kleiner = glattere Wand, mehr Rechenaufwand. */
@@ -127,7 +128,7 @@ export class ArenaGenerator {
       if (coopMapConfig?.rockField) {
         ArenaGenerator.applyRockField(map, coopMapConfig.rockField, rng);
       }
-      if (coopMapConfig?.tutorialText) {
+      if (coopMapConfig && getMapTutorial(coopMapConfig.mapId, 'de')) {
         tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(
           map, trackCols, rng, coopMapConfig.tutorialShowControls === true,
         );

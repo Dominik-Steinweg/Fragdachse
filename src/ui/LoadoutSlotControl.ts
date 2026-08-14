@@ -3,6 +3,7 @@ import { COLORS } from '../config';
 import type { LoadoutItemPresentation } from '../loadout/LoadoutCatalog';
 import { ensureRoundedTexture, lerpColor } from './uiTextures';
 import { MOTION, TEXT, textStyle } from './uiTheme';
+import { t } from '../i18n';
 
 export interface LoadoutSlotControlOptions {
   readonly x: number;
@@ -246,7 +247,7 @@ export function createLoadoutSlotControl(
 
   if (!options.compact) {
     const textX = -options.width / 2 + 12 + iconSize + 10;
-    root.add(scene.add.text(textX, -8, presentation?.displayName ?? 'Leer', textStyle('labelSm', {
+    root.add(scene.add.text(textX, -8, presentation?.displayName ?? t('ui.common.empty'), textStyle('labelSm', {
       color: TEXT.primary,
     })).setOrigin(0, 0.5).setScrollFactor(0));
     root.add(scene.add.text(textX, 10, options.label ?? '', textStyle('micro'))

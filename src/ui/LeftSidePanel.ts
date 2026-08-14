@@ -24,7 +24,7 @@ import {
   toCssColor,
 } from '../config';
 import { HelpOverlay } from './HelpOverlay';
-import { OptionsOverlay, type AbortMatchBinding, type SpectatorMatchBinding } from './OptionsOverlay';
+import { OptionsOverlay, type AbortMatchBinding, type LocaleSelectionBinding, type SpectatorMatchBinding } from './OptionsOverlay';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import {
@@ -32,7 +32,6 @@ import {
   describeLoadoutTool,
   getSelectableLoadoutItems,
   loadoutToolKey,
-  LOADOUT_SLOT_LABELS,
   type LoadoutItemRef,
 } from '../loadout/LoadoutCatalog';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
@@ -43,8 +42,10 @@ import { getOverlayRoot } from './fullscreen';
 import { BadgerPreview } from './BadgerPreview';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import type { CoopDefenseClassId, GameMode, LoadoutSlot, TeamId } from '../types';
-import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
+import { hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getLocale, t } from '../i18n';
+import { getMapName } from '../i18n/contentPresentation';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 import {
   downloadStoredGameProgress,
@@ -55,6 +56,7 @@ import {
   getStoredLoadoutSlot,
   getStoredPlayerName,
   importStoredGameProgressFile,
+  type LocalProgressTransferResult,
   setStoredCoopDefenseLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
   setStoredLoadoutSlot,
@@ -75,6 +77,8 @@ import {
   setLoadoutToolSlots,
 } from '../utils/coopDefenseUpgrades';
 import type { LoadoutToolRef } from '../types';
+import { getLoadoutItemName } from '../i18n/contentPresentation';
+import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
@@ -164,9 +168,9 @@ const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'cap
 const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
 
 function getTeamLabel(teamId: TeamId | null): string {
-  if (teamId === 'blue') return 'Team Blau';
-  if (teamId === 'red') return 'Team Rot';
-  return 'Team wählen';
+  if (teamId === 'blue') return t('ui.lobby.teamBlue');
+  if (teamId === 'red') return t('ui.lobby.teamRed');
+  return t('ui.lobby.chooseTeam');
 }
 
 type LoadoutCarouselItem = LoadoutItemRef;
@@ -179,7 +183,9 @@ type CompactButton = {
   text?: Phaser.GameObjects.Text;
 };
 
-const SLOT_LABELS = LOADOUT_SLOT_LABELS;
+function getSlotLabel(slot: LoadoutSlot): string {
+  return t(`ui.loadout.${slot}`);
+}
 
 // ── Swatch-Eintrag im Picker ──────────────────────────────────────────────────
 interface SwatchEntry {
@@ -201,6 +207,9 @@ export class LeftSidePanel {
   private arenaHUD!:       ArenaHUD;
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
+  private playerLabelText!: Phaser.GameObjects.Text;
+  private gameModeLabelText!: Phaser.GameObjects.Text;
+  private loadoutLabelText!: Phaser.GameObjects.Text;
   private saveMenu: UiContextMenu | null = null;
   private saveStatusText: Phaser.GameObjects.Text | null = null;
   private saveStatusTimer: Phaser.Time.TimerEvent | null = null;
@@ -256,6 +265,7 @@ export class LeftSidePanel {
   // Wird vor dem Bau gesetzt, wenn der Lifecycle-Koordinator frueher fertig ist als das Panel.
   private abortMatchBinding: AbortMatchBinding | null = null;
   private spectatorMatchBinding: SpectatorMatchBinding | null = null;
+  private localeSelectionBinding: LocaleSelectionBinding | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -296,11 +306,10 @@ export class LeftSidePanel {
       ).setScrollFactor(0),
     );
 
-    objects.push(
-      this.scene.add.text(CENTER_X, NAME_LABEL_Y, 'SPIELER', LABEL_FONT)
-        .setOrigin(0.5, 0)
-        .setScrollFactor(0),
-    );
+    this.playerLabelText = this.scene.add.text(CENTER_X, NAME_LABEL_Y, t('ui.lobby.player').toUpperCase(), LABEL_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    objects.push(this.playerLabelText);
 
     this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
       .setOrigin(0.5, 0)
@@ -317,7 +326,7 @@ export class LeftSidePanel {
     const editControl = this.createCompactButton(
       NAME_BUTTON_X,
       NAME_COLOR_ROW_Y,
-      'NAME ÄNDERN',
+      t('ui.lobby.editName'),
       NAME_COLOR_BUTTON_W,
       NAME_COLOR_BUTTON_H,
       () => this.openNameEdit(),
@@ -329,7 +338,7 @@ export class LeftSidePanel {
     const colorEditBtn = this.createCompactButton(
       COLOR_BUTTON_X,
       NAME_COLOR_ROW_Y,
-      'FARBE ÄNDERN',
+      t('ui.lobby.editColor'),
       NAME_COLOR_BUTTON_W,
       NAME_COLOR_BUTTON_H,
       () => this.toggleColorPicker(),
@@ -343,11 +352,10 @@ export class LeftSidePanel {
         .setScrollFactor(0),
     );
 
-    objects.push(
-      this.scene.add.text(CENTER_X, MODE_LABEL_Y, 'SPIELMODUS', LABEL_FONT)
-        .setOrigin(0.5, 0)
-        .setScrollFactor(0),
-    );
+    this.gameModeLabelText = this.scene.add.text(CENTER_X, MODE_LABEL_Y, t('ui.lobby.gameMode'), LABEL_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    objects.push(this.gameModeLabelText);
 
     const modeLeftBtn = this.createChevronButton(
       ARROW_X_LEFT,
@@ -372,7 +380,7 @@ export class LeftSidePanel {
     objects.push(modeRightBtn.button, modeRightBtn.label);
     this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
 
-    const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, 'MAP', LABEL_FONT)
+    const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, t('ui.lobby.map'), LABEL_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
     this.mapLabelText = mapLabelText;
@@ -404,7 +412,7 @@ export class LeftSidePanel {
     const timeSliderLabel = this.scene.add.text(
       CENTER_X,
       MAP_LABEL_Y,
-      `Uhrzeit: ${formatTimeOfDay(this.bridge.getLobbyTimeOfDayMinutes())}`,
+      t('ui.lobby.time', { time: formatTimeOfDay(this.bridge.getLobbyTimeOfDayMinutes()) }),
       LABEL_FONT,
     )
       .setOrigin(0.5, 0)
@@ -519,11 +527,10 @@ export class LeftSidePanel {
     objects.push(divider2);
 
     // ── Loadout-Karussell ──
-    objects.push(
-      this.scene.add.text(CENTER_X, CAROUSEL_START_Y, 'AUSRÜSTUNG', LABEL_FONT)
-        .setOrigin(0.5, 0)
-        .setScrollFactor(0),
-    );
+    this.loadoutLabelText = this.scene.add.text(CENTER_X, CAROUSEL_START_Y, t('ui.lobby.loadout').toUpperCase(), LABEL_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    objects.push(this.loadoutLabelText);
 
     this.applyStoredPlayerNamePreference();
     this.loadoutLayer = this.scene.add.container(0, 0).setScrollFactor(0);
@@ -568,6 +575,7 @@ export class LeftSidePanel {
     this.optionsOverlay.build();
     this.optionsOverlay.setAbortMatchBinding(this.abortMatchBinding);
     this.optionsOverlay.setSpectatorMatchBinding(this.spectatorMatchBinding);
+    this.optionsOverlay.setLocaleSelectionBinding(this.localeSelectionBinding);
     this.setLobbyFieldsLocked(false);
     this.refreshColorIndicator();
   }
@@ -588,6 +596,26 @@ export class LeftSidePanel {
 
   toggleOptionsOverlay(): void {
     this.optionsOverlay?.toggle();
+  }
+
+  setLocaleSelectionBinding(binding: LocaleSelectionBinding | null): void {
+    this.localeSelectionBinding = binding;
+    this.optionsOverlay?.setLocaleSelectionBinding(binding);
+  }
+
+  refreshLocale(): void {
+    this.arenaHUD?.refreshLocale();
+    this.playerLabelText?.setText(t('ui.lobby.player').toUpperCase());
+    this.gameModeLabelText?.setText(t('ui.lobby.gameMode'));
+    this.loadoutLabelText?.setText(t('ui.lobby.loadout').toUpperCase());
+    this.editBtnLabel?.setText(t('ui.lobby.editName'));
+    this.colorEditText?.setText(t('ui.lobby.editColor'));
+    this.mapLabelText?.setText(t('ui.lobby.map'));
+    this.timeSliderLabel?.setText(t('ui.lobby.time', { time: formatTimeOfDay(this.bridge.getLobbyTimeOfDayMinutes()) }));
+    this.helpOverlay?.build();
+    this.optionsOverlay?.setLocaleSelectionBinding(this.localeSelectionBinding);
+    this.renderLoadoutControls();
+    this.refreshColorIndicator();
   }
 
   showOptionsOverlay(): void {
@@ -749,9 +777,9 @@ export class LeftSidePanel {
       this.badgerPreview?.setColor(color);
       this.localNameText?.setColor(toCssColor(color));
     }
-    this.modeNameText?.setText(getGameModeLabel(mode));
+    this.modeNameText?.setText(getLocalizedGameModeLabel(mode));
     this.mapNameText?.setText(isCoopDefenseMode(mode)
-      ? getCoopDefenseMapConfig(this.bridge.getCoopDefenseMapId()).displayName
+      ? getMapName(this.bridge.getCoopDefenseMapId(), getLocale())
       : '---');
     this.syncAllLoadoutSelections();
     this.refreshBadgerHeldItem();
@@ -1032,7 +1060,7 @@ export class LeftSidePanel {
         height: LOADOUT_CONTROL_H,
         accentColor: item ? describeLoadoutItem(slot, item.id).accentColor : COLORS.GREY_5,
         presentation: item ? describeLoadoutItem(slot, item.id) : null,
-        label: SLOT_LABELS[slot],
+        label: getSlotLabel(slot),
         enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
         onClick: (anchorX) => this.openLoadoutSlotPicker(slot, anchorX),
       }));
@@ -1067,7 +1095,7 @@ export class LeftSidePanel {
     this.loadoutPicker?.open({
       anchorX,
       anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + LOADOUT_CONTROL_H / 2 + 6,
-      title: SLOT_LABELS[slot],
+      title: getSlotLabel(slot),
       groups: [{ label: null, entries }],
       maxColumns: 2,
       safeArea: LOADOUT_POPUP_SAFE_AREA,
@@ -1092,8 +1120,8 @@ export class LeftSidePanel {
       y: rowY,
       width: LOADOUT_CONTROL_W,
       height: LOADOUT_CONTROL_H,
-      label: 'UTILITY-RAD',
-      sublabel: 'Utility',
+      label: t('ui.lobby.utilityRad'),
+      sublabel: t('ui.loadout.utility'),
       presentations: Array.from({ length: capacity }, (_, index) => {
         const tool = tools[index] ?? null;
         return tool ? describeLoadoutTool(tool) : null;
@@ -1125,11 +1153,11 @@ export class LeftSidePanel {
     this.loadoutPicker?.open({
       anchorX,
       anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP + 24,
-      title: `Utility-Slot ${slotIndex + 1}`,
+      title: t('ui.lobby.utilitySlot', { slot: slotIndex + 1 }),
       groups: [{ label: null, entries }],
       maxColumns: 2,
       safeArea: LOADOUT_POPUP_SAFE_AREA,
-      clearLabel: current ? 'Slot leeren' : undefined,
+      clearLabel: current ? t('ui.lobby.clearSlot') : undefined,
       onClear: current
         ? () => this.persistInspectorToolSlot(profile, tools, slotIndex, null)
         : undefined,
@@ -1172,7 +1200,7 @@ export class LeftSidePanel {
     if (classesUnlocked && classId === 'inspector_gadachs' && slot === 'utility') {
       return [{
         id: DEFAULT_LOADOUT[slot].id,
-        displayName: 'Utility-Rad (R)',
+        displayName: `${t('ui.loadout.utilityWheel')} (R)`,
       }];
     }
     return getSelectableLoadoutItems(
@@ -1478,7 +1506,7 @@ export class LeftSidePanel {
       ?.setPosition(COLOR_BUTTON_X, NAME_COLOR_ROW_Y + CONTROL_LABEL_OFFSET_Y)
       .setVisible(visible)
       .setAlpha(visible ? 1 : 0)
-      .setText('FARBE ÄNDERN');
+      .setText(t('ui.lobby.editColor'));
     if (enabled) this.colorEditBtn?.setInteractive({ useHandCursor: true });
     else this.colorEditBtn?.disableInteractive();
   }
@@ -1571,7 +1599,7 @@ export class LeftSidePanel {
   private refreshTimeSlider(): void {
     const minutes = this.bridge.getLobbyTimeOfDayMinutes();
     const fraction = minutes / MINUTES_PER_DAY;
-    this.timeSliderLabel?.setText(`Uhrzeit: ${formatTimeOfDay(minutes)}`);
+    this.timeSliderLabel?.setText(t('ui.lobby.time', { time: formatTimeOfDay(minutes) }));
     this.timeSliderFill?.setDisplaySize(Math.max(1, TIME_SLIDER_TRACK_W * fraction), 5);
     this.timeSliderThumb?.setPosition(
       TIME_SLIDER_TRACK_X + TIME_SLIDER_TRACK_W * fraction,
@@ -1662,10 +1690,11 @@ export class LeftSidePanel {
     const utId  = this.bridge.getPlayerCommittedLoadoutSlot(localId, 'utility') ?? this.bridge.getPlayerLoadoutSlot(localId, 'utility');
     const ulId  = this.bridge.getPlayerCommittedLoadoutSlot(localId, 'ultimate') ?? this.bridge.getPlayerLoadoutSlot(localId, 'ultimate');
 
-    const w1Name  = (w1Id && WEAPON_CONFIGS[w1Id as keyof typeof WEAPON_CONFIGS]?.displayName) ?? 'Glock';
-    const w2Name  = (w2Id && WEAPON_CONFIGS[w2Id as keyof typeof WEAPON_CONFIGS]?.displayName) ?? 'P90';
-    const utName  = (utId && UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]?.displayName) ?? 'Granate';
-    const ulName  = (ulId && ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]?.displayName) ?? 'Honigdachs-Wut';
+    const locale = getLocale();
+    const w1Name  = getLoadoutItemName(w1Id ?? 'GLOCK', locale);
+    const w2Name  = getLoadoutItemName(w2Id ?? 'P90', locale);
+    const utName  = getLoadoutItemName(utId ?? 'HE_GRENADE', locale);
+    const ulName  = getLoadoutItemName(ulId ?? 'HONEY_BADGER_RAGE', locale);
 
     this.arenaHUD.setLoadoutNames(w1Name, w2Name, utName, ulName);
 
@@ -1702,16 +1731,16 @@ export class LeftSidePanel {
     this.saveMenu?.open({
       x: pointer.x,
       y: pointer.y,
-      title: 'Lokaler Spielstand',
+      title: t('ui.lobby.localSave'),
       titleColor: COLORS.GOLD_1,
       entries: [
         {
-          label: 'Spielstand exportieren',
+          label: t('ui.lobby.exportSave'),
           color: COLORS.GREEN_3,
           onPick: () => this.showSaveStatus(downloadStoredGameProgress()),
         },
         {
-          label: 'Spielstand importieren',
+          label: t('ui.lobby.importSave'),
           color: COLORS.BLUE_2,
           onPick: () => { void this.importSaveFile(); },
         },
@@ -1730,10 +1759,10 @@ export class LeftSidePanel {
     this.showSaveStatus(result);
   }
 
-  private showSaveStatus(result: { ok: boolean; message: string }): void {
+  private showSaveStatus(result: LocalProgressTransferResult): void {
     this.saveStatusTimer?.remove();
     this.saveStatusText
-      ?.setText(result.message)
+      ?.setText(t(result.messageKey))
       .setColor(toCssColor(result.ok ? COLORS.GREEN_3 : COLORS.RED_3))
       .setVisible(true);
     this.saveStatusTimer = this.scene.time.delayedCall(4_000, () => {

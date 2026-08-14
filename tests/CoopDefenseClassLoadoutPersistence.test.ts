@@ -59,7 +59,7 @@ describe('coop-defense class loadout persistence', () => {
       'dachs_nukem',
       'inspector_gadachs',
       { weapon1: 'AK47', utility: 'FELSEN' },
-      { weapon1: 'GLOCK', weapon2: 'ENERGIEINJEKTOR' },
+      { weapon1: 'GLOCK', weapon2: 'ENERGY_INJECTOR' },
     );
 
     expect(storage.writeCount).toBe(writesBeforeSwitch + 1);
@@ -70,7 +70,7 @@ describe('coop-defense class loadout persistence', () => {
     });
     expect(getStoredCoopDefenseLoadout('inspector_gadachs')).toMatchObject({
       weapon1: 'GLOCK',
-      weapon2: 'ENERGIEINJEKTOR',
+      weapon2: 'ENERGY_INJECTOR',
     });
   });
 

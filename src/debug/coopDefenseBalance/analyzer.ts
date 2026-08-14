@@ -326,7 +326,7 @@ export function buildCoopDefenseBalanceMapSnapshot(mapConfig: CoopDefenseMapConf
 
   return {
     mapId: mapConfig.mapId,
-    displayName: mapConfig.displayName,
+    displayName: `Map ${mapConfig.mapId}`,
     objective: mapConfig.objective,
     balanceReferenceDurationSec: mapConfig.balanceReferenceDurationSec,
     survivalDurationSec: mapConfig.surviveDurationSec ?? null,

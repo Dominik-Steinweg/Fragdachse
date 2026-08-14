@@ -1,9 +1,7 @@
 {
   "mapId": "3",
-  "displayName": "Map 3 - Rastlos",
   "arenaWidthCells": 76,
   "timeOfDay": "17:00",
-  "tutorialText": "Nicht alle Gegner greifen die Basis an. Manche jagen gezielt euch – erkennt gefährliche Gegner früh und setzt Prioritäten.",
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "mapEvents": [{
@@ -36,7 +34,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -45,7 +43,7 @@
             "gridY": 3
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ]
     }

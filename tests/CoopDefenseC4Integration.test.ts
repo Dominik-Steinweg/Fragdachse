@@ -85,7 +85,7 @@ const HAZARD_EVENT: CoopDefenseMapGroundHazardEventConfig = {
     visualStyle: 'void',
     burnDurationMs: 2_000,
     burnDamagePerTick: 0.5,
-    weaponName: 'C4-Integrationsbrand',
+      sourceId: 'test.c4-integration-fire',
   },
 };
 

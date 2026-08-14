@@ -59,7 +59,8 @@ export class CoopDefenseTeamBuffSystem {
     return {
       defId: this.buff.defId,
       remainingFrac: clamp01((this.buffEndsAt - now) / this.buff.durationMs),
-      valueText: `+${formatNumber(this.buff.hpRegenPerSecond)} HP/s · +${formatPercent(this.buff.adrenalineRegenMultiplier - 1)} ADR`,
+      value: this.buff.hpRegenPerSecond,
+      secondaryValue: this.buff.adrenalineRegenMultiplier - 1,
       intensity: 1,
     };
   }
@@ -88,12 +89,4 @@ function resolveNonNegativeNumber(value: number | undefined, fallback: number): 
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
-}
-
-function formatNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value * 100)}%`;
 }

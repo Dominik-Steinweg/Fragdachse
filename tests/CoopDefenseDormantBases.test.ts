@@ -85,7 +85,7 @@ function makeBaseSpec(id: string, options: {
       x: 336,
       y: 336,
       initialAngle: 0,
-      weaponId: 'BASE_SPOREN',
+      weaponId: 'BASE_SPORES',
     }] : [],
     powerUpPedestals: [],
   };

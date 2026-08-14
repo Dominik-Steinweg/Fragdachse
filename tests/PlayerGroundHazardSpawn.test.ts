@@ -49,7 +49,7 @@ describe('PlayerManager ground hazard spawns', () => {
         cells: [fireCell],
         burnDurationMs: 2000,
         burnDamagePerTick: 0.5,
-        weaponName: 'Test',
+        sourceId: 'test.ground-hazard',
         visualStyle: 'void',
         damageTarget: 'players',
       }],
@@ -68,4 +68,3 @@ describe('PlayerManager ground hazard spawns', () => {
     });
   });
 });
-

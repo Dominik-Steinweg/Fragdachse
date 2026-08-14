@@ -15,6 +15,8 @@ import {
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { formatTrainArrivalLabel } from '../train/TrainEvent';
+import { formatNumber, getLocale, t } from '../i18n';
+import { getContentDisplayName, getSourceName } from '../i18n/contentPresentation';
 import {
   COOP_DEFENSE_TUTORIAL_CONTROLS_BODY_H,
   COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X,
@@ -225,12 +227,12 @@ function resolveEncounterStyleId(phase: CoopDefenseEncounterPresentationState['p
 
 function formatEncounterFronts(fronts: readonly string[] | undefined): string {
   const labels = (fronts ?? ['west']).map((front) => ({
-    west: 'WEST',
-    north: 'NORD',
-    east: 'OST',
-    south: 'SÜD',
-  } as Record<string, string>)[front] ?? 'WEST');
-  return labels.length > 1 ? labels.join(' + ') : labels[0] ?? 'WEST';
+    west: t('ui.direction.west'),
+    north: t('ui.direction.north'),
+    east: t('ui.direction.east'),
+    south: t('ui.direction.south'),
+  } as Record<string, string>)[front] ?? t('ui.direction.west'));
+  return labels.length > 1 ? labels.join(' + ') : labels[0] ?? t('ui.direction.west');
 }
 
 function formatEncounterLabel(
@@ -240,7 +242,7 @@ function formatEncounterLabel(
 ): string {
   const count = Math.max(1, Math.floor(sequenceCount));
   const index = Math.min(count, Math.max(1, Math.floor(sequenceIndex)));
-  return `WELLE ${index} / ${count}: ${formatEncounterFronts(fronts)}`;
+  return t('ui.encounter.waveLabel', { index, count, fronts: formatEncounterFronts(fronts) });
 }
 
 const STACK_BAR_W      = 212;
@@ -754,7 +756,7 @@ export class CenterHUD {
     this.encounterPips = this.scene.add.graphics();
 
     this.encounterKicker = this.scene.add
-      .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_KICKER_Y, 'ANGRIFFSSERIE', ENCOUNTER_KICKER_FONT)
+      .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_KICKER_Y, t('ui.encounter.series'), ENCOUNTER_KICKER_FONT)
       .setOrigin(0, 0.5);
     this.encounterStatus = this.scene.add
       .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_STATUS_Y, '', ENCOUNTER_STATUS_FONT)
@@ -793,7 +795,7 @@ export class CenterHUD {
 
   private buildTutorialPanel(): void {
     this.tutorialGraphics = this.scene.add.graphics();
-    this.tutorialTitle = this.scene.add.text(0, TUTORIAL_PAD_TOP, 'TUTORIAL', TUTORIAL_TITLE_FONT)
+    this.tutorialTitle = this.scene.add.text(0, TUTORIAL_PAD_TOP, t('ui.help.title'), TUTORIAL_TITLE_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(1);
     this.tutorialBody = this.scene.add.text(0, TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H, '', TUTORIAL_BODY_FONT)
@@ -804,16 +806,16 @@ export class CenterHUD {
     // Pro Zeile zwei Text-Objekte statt eines mehrzeiligen Textes, weil Tasten- und
     // Beschreibungsspalte unterschiedliche Schriftgrößen und damit Zeilenhöhen haben.
     const left = -COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
-    this.tutorialControlsHeading = this.scene.add.text(0, TUTORIAL_CONTROLS_TOP, 'STEUERUNG', TUTORIAL_TITLE_FONT)
+    this.tutorialControlsHeading = this.scene.add.text(0, TUTORIAL_CONTROLS_TOP, t('ui.help.heading'), TUTORIAL_TITLE_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(1);
-    this.tutorialControlsTexts = HELP_CONTROLS.flatMap(([key, desc], i) => {
+    this.tutorialControlsTexts = HELP_CONTROLS.flatMap((entry, i) => {
       const y = TUTORIAL_CONTROLS_ROWS_Y + i * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H
         + COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H / 2;
       return [
-        this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X, y, key, TUTORIAL_CONTROLS_KEY_FONT)
+        this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X, y, t(entry.keyId), TUTORIAL_CONTROLS_KEY_FONT)
           .setOrigin(0, 0.5).setScrollFactor(1),
-        this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X, y, desc, TUTORIAL_CONTROLS_DESC_FONT)
+        this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X, y, t(entry.descriptionKey), TUTORIAL_CONTROLS_DESC_FONT)
           .setOrigin(0, 0.5).setScrollFactor(1),
       ];
     });
@@ -1286,17 +1288,19 @@ export class CenterHUD {
       : !hasCountdown
         ? ''
         : remainingMs >= 10_000
-          ? `${Math.ceil(remainingMs / 1000)}s`
-          : `${(remainingMs / 1000).toFixed(1)}s`;
-    const statusText = state.phase === 'incoming'
-      ? 'ANGRIFF ROLLT AN'
-      : state.phase === 'active'
-        ? 'ANGRIFF LÄUFT'
-        : state.phase === 'cleared'
-          ? 'ANGRIFF ABGEWEHRT'
-          : state.phase === 'rest'
-            ? 'NÄCHSTER ANGRIFF'
-            : 'SERIE ABGEWEHRT';
+          ? t('ui.encounter.countdownSeconds', { seconds: formatNumber(Math.ceil(remainingMs / 1000), getLocale(), { useGrouping: false }) })
+          : t('ui.encounter.countdownSeconds', { seconds: formatNumber(remainingMs / 1000, getLocale(), { maximumFractionDigits: 1, useGrouping: false }) });
+    const statusText = t(
+      state.phase === 'incoming'
+        ? 'ui.encounter.status.incoming'
+        : state.phase === 'active'
+          ? 'ui.encounter.status.active'
+          : state.phase === 'cleared'
+            ? 'ui.encounter.status.cleared'
+            : state.phase === 'rest'
+              ? 'ui.encounter.status.rest'
+              : 'ui.encounter.status.complete',
+    );
     const styleId = resolveEncounterStyleId(state.phase);
     const style = ENCOUNTER_STYLES[styleId];
     const textSignature = [state.encounterId, state.phase, statusText].join('|');
@@ -1373,9 +1377,9 @@ export class CenterHUD {
         id: `wave:start:${targetId}`,
         topic: 'wave',
         priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
-        kicker: `WELLE ${state.sequenceIndex} / ${state.sequenceCount}`,
-        title: `ANGRIFF AUS ${formatEncounterFronts(state.encounterFronts)}`,
-        detail: 'BEREITMACHEN',
+        kicker: t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
+        title: t('ui.encounter.attackFrom', { fronts: formatEncounterFronts(state.encounterFronts) }),
+        detail: t('ui.encounter.prepare'),
         tone: 'wave',
         holdMs: ENCOUNTER_START_ANNOUNCEMENT_HOLD_MS,
         isRelevant: () => this.currentEncounterAnnouncementId === targetId
@@ -1406,8 +1410,10 @@ export class CenterHUD {
         id: `wave:result:${resultKey}`,
         topic: 'wave',
         priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
-        kicker: state.phase === 'complete' ? 'ANGRIFFSSERIE' : `WELLE ${state.sequenceIndex} / ${state.sequenceCount}`,
-        title: state.phase === 'complete' ? 'ALLE WELLEN ABGEWEHRT' : 'WELLE ABGEWEHRT',
+        kicker: state.phase === 'complete'
+          ? t('ui.encounter.series')
+          : t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
+        title: state.phase === 'complete' ? t('ui.encounter.allWavesCleared') : t('ui.encounter.waveCleared'),
         tone: 'positive',
         holdMs: ENCOUNTER_RESULT_ANNOUNCEMENT_HOLD_MS,
         isRelevant: () => this.currentEncounterAnnouncementId === state.encounterId
@@ -1627,7 +1633,7 @@ export class CenterHUD {
 
   /** @param arrivalTimerSecs Verbleibende Sekunden bis zur nächsten Einfahrt. */
   setTrainArrival(arrivalTimerSecs: number): void {
-    const nextText = formatTrainArrivalLabel(arrivalTimerSecs);
+    const nextText = formatTrainArrivalLabel(arrivalTimerSecs, getLocale());
     if (this.lastTrainText !== nextText) {
       this.trainText.setText(nextText);
       this.lastTrainText = nextText;
@@ -1712,7 +1718,7 @@ export class CenterHUD {
     if (showUltimate) {
       this.showLowerSection(
         this.ultimateSection,
-        `Ultimate: ${data.ultimateDisplayName ?? 'Ultimate'}`,
+        t('ui.hud.ultimate', { name: data.ultimateId ? getContentDisplayName(data.ultimateId, getLocale()) : t('ui.common.unknown') }),
         Phaser.Math.Clamp(data.rage / Math.max(1, data.maxRage), 0, 1),
         CENTER_X,
         nextBottom - STACK_TOTAL_H,
@@ -1727,7 +1733,7 @@ export class CenterHUD {
     if (showUtility) {
       this.showLowerSection(
         this.utilitySection,
-        `Utility: ${data.utilityDisplayName ?? 'Utility'}`,
+        t('ui.hud.utility', { name: data.utilityId ? getContentDisplayName(data.utilityId, getLocale()) : t('ui.common.unknown') }),
         Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
         CENTER_X,
         nextBottom - STACK_TOTAL_H,
@@ -1790,16 +1796,19 @@ export class CenterHUD {
     });
   }
 
-  showFraggedBy(killerName: string, weapon: string, _color: number): void {
-    this.showAnnouncement(`Fragged by ${killerName} (${weapon})`, COLORS.RED_2);
+  showFraggedBy(killerName: string, sourceId: string, _color: number): void {
+    this.showAnnouncement(t('ui.announcement.fraggedBy', {
+      player: killerName,
+      source: getSourceName(sourceId, getLocale()),
+    }), COLORS.RED_2);
   }
 
   showYouFragged(victimName: string, _color: number): void {
-    this.showAnnouncement(`You Fragged ${victimName}`, COLORS.GREEN_2);
+    this.showAnnouncement(t('ui.announcement.youFragged', { player: victimName }), COLORS.GREEN_2);
   }
 
   showBeerCaptured(playerName: string, _color: number): void {
-    this.showAnnouncement(`${playerName} captured the Beer!`, COLORS.GREEN_2);
+    this.showAnnouncement(t('ui.announcement.beerCaptured', { player: playerName }), COLORS.GREEN_2);
   }
 
   destroy(): void {

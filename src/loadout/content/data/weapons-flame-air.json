@@ -2,7 +2,6 @@
   "weapons": {
     "FLAMETHROWER": {
       "id": "FLAMETHROWER",
-      "displayName": "Flammenwerfer",
       "cooldown": 70,
       "damage": 2,
       "range": 250,
@@ -71,7 +70,6 @@
     },
     "INFERNO_COLOSSUS_FLAMETHROWER": {
       "id": "INFERNO_COLOSSUS_FLAMETHROWER",
-      "displayName": "Lila Höllenwerfer",
       "cooldown": 70,
       "damage": 2,
       "range": 350,
@@ -106,9 +104,8 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "LAUBBLAESER": {
-      "id": "LAUBBLAESER",
-      "displayName": "Laubbläser",
+    "LEAF_BLOWER": {
+      "id": "LEAF_BLOWER",
       "cooldown": 90,
       "damage": 1,
       "directDamageOverride": 1,
@@ -148,7 +145,6 @@
     },
     "TURRET_FLAME": {
       "id": "TURRET_FLAME",
-      "displayName": "Turmflamme",
       "cooldown": 110,
       "damage": 1.5,
       "range": 230,
@@ -216,7 +212,6 @@
     },
     "TURRET_VOID_FLAME": {
       "id": "TURRET_VOID_FLAME",
-      "displayName": "Leeren-Turmflamme",
       "cooldown": 110,
       "damage": 1.5,
       "range": 230,

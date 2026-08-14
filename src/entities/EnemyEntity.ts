@@ -26,6 +26,8 @@ import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
 import { TimebombFuseRenderer } from '../effects/TimebombFuseRenderer';
+import { getEnemyName } from '../i18n/contentPresentation';
+import { getLocale } from '../i18n';
 import {
   getWalkingSheetForStaticTexture,
   syncBadgerWalkingAnimation,
@@ -906,7 +908,7 @@ export class EnemyEntity {
     this.bossLabel = scene.add.text(
       this.sprite.x,
       this.sprite.y - this.config.size * 0.5 - 11,
-      `BOSS · ${(this.config.displayName ?? 'Boss').toUpperCase()}`,
+      `BOSS · ${getEnemyName(this.kind, getLocale()).toUpperCase()}`,
       {
         fontSize: '13px',
         fontFamily: 'monospace',

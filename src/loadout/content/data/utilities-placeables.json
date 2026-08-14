@@ -1,8 +1,7 @@
 {
   "utilities": {
-    "FELSBAU": {
-      "id": "FELSBAU",
-      "displayName": "Felsbau",
+    "ROCK_BARRIER": {
+      "id": "ROCK_BARRIER",
       "type": "placeable_rock",
       "cooldown": 100,
       "activation": {
@@ -33,9 +32,8 @@
         "spawnShakeIntensity": 0.0025
       }
     },
-    "FLIEGENPILZ": {
-      "id": "FLIEGENPILZ",
-      "displayName": "Fliegenpilz",
+    "SPORE_TURRET": {
+      "id": "SPORE_TURRET",
       "type": "placeable_turret",
       "cooldown": 10000,
       "activation": {
@@ -48,7 +46,7 @@
       "allowedSlots": [
         "utility"
       ],
-      "weaponId": "TURRET_SPORE",
+      "weaponId": "TURRET_SPORES",
       "placeable": {
         "kind": "turret",
         "range": 240,
@@ -74,18 +72,18 @@
         }
       }
     },
-    "FELSBAU_COOP": {
-      "id": "FELSBAU_COOP",
-      "baseId": "FELSBAU",
+    "ROCK_BARRIER_COOP": {
+      "id": "ROCK_BARRIER_COOP",
+      "baseId": "ROCK_BARRIER",
       "_notes": "Coop-Defense variant keeps a permanent runtime lifetime; its cooldown is configured here per item.",
       "cooldown": 100,
       "placeable": {
         "lifetimeMs": 0
       }
     },
-    "FLIEGENPILZ_COOP": {
-      "id": "FLIEGENPILZ_COOP",
-      "baseId": "FLIEGENPILZ",
+    "SPORE_TURRET_COOP": {
+      "id": "SPORE_TURRET_COOP",
+      "baseId": "SPORE_TURRET",
       "_notes": "Coop-Defense variant keeps a permanent runtime lifetime; its cooldown is configured here per item.",
       "cooldown": 100,
       "placeable": {

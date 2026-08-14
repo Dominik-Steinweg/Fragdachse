@@ -1,9 +1,7 @@
 {
   "mapId": "12",
-  "displayName": "Map 12 - Gegenschlag",
   "arenaWidthCells": 112,
   "timeOfDay": "00:30",
-  "tutorialText": "Verteidigen allein reicht nicht mehr. Die Map endet erst, wenn die rote Feindbasis zerstört ist. Nutzt die Pausen zwischen Gegenangriffen, um vorzurücken.",
   "tutorialDurationMs": 12000,
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
@@ -110,7 +108,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         },
         {
           "id": "front-bottom",
@@ -119,7 +117,7 @@
             "gridY": 4
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ],
       "powerUpPedestals": [
@@ -196,7 +194,7 @@
             "gridY": 1
           },
           "mountSide": "front",
-          "weaponId": "FLIEGENPILZ_PLASMA"
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ],
       "powerUpPedestals": [

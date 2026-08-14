@@ -22,8 +22,8 @@ export const UTILITY_CONFIG_LINEAGES: RegistryLineage = built.lineages.utility;
 
 /** Mode mapping only selects an inherited config; it does not contain balance values. */
 export const COOP_DEFENSE_UTILITY_VARIANTS: Readonly<Record<string, string>> = Object.freeze({
-  FELSBAU: 'FELSBAU_COOP',
-  FLIEGENPILZ: 'FLIEGENPILZ_COOP',
+  ROCK_BARRIER: 'ROCK_BARRIER_COOP',
+  SPORE_TURRET: 'SPORE_TURRET_COOP',
 });
 
 export function findWeaponConfig(id: string | null | undefined): WeaponConfig | undefined {

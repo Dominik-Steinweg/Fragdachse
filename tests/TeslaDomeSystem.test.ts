@@ -159,7 +159,7 @@ describe('Tesla turret construction', () => {
       config.fire.damagePerTick * 1.5,
       false,
       'player-1',
-      config.displayName,
+      'TESLA_DOME',
       { sourceX: 100, sourceY: 100 },
       { damageKind: 'chain', sourceSlot: 'utility', allowCritical: true },
     );

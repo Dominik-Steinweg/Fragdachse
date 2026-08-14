@@ -1,9 +1,9 @@
-import type Phaser from 'phaser';
+﻿import type Phaser from 'phaser';
 
 /** Authored edge from which a Coop-Defense attack enters the arena. */
 export type SpawnFront = 'west' | 'north' | 'east' | 'south';
 
-/** Spielerprofil – spiellogik-seitig, kein Transporttyp */
+/** Spielerprofil â€“ spiellogik-seitig, kein Transporttyp */
 export interface PlayerProfile {
   id:       string;
   name:     string;
@@ -16,7 +16,7 @@ export interface PlayerProfile {
  *
  * `participantIds` bleibt waehrend der Runde unveraendert: Die Liste beschreibt exakt den
  * Teilnehmer-Snapshot beim Rundenstart. Ein Spieler kann daraus in `spectatorIds` wechseln,
- * verliert dadurch aber nicht seine historische Zugehoerigkeit – seine Spawn-/Belohnungsrechte
+ * verliert dadurch aber nicht seine historische Zugehoerigkeit â€“ seine Spawn-/Belohnungsrechte
  * werden immer ueber die effektive Rolle aufgeloest.
  */
 export type RoundPlayerRole = 'participant' | 'spectator';
@@ -27,7 +27,7 @@ export interface RoundParticipationState {
   spectatorIds: string[];
 }
 
-/** Host-autoritärer, replizierter Lebenszustand einer aktivierten Survival-Runde. */
+/** Host-autoritÃ¤rer, replizierter Lebenszustand einer aktivierten Survival-Runde. */
 export interface CoopDefenseSurvivalPlayerState {
   remainingRespawns: number;
   alive: boolean;
@@ -39,7 +39,7 @@ export interface CoopDefenseSurvivalState {
   players: Record<string, CoopDefenseSurvivalPlayerState>;
 }
 
-/** Host-autoritärer, zuverlässiger Präsentationszustand eines endlichen Coop-Encounter. */
+/** Host-autoritÃ¤rer, zuverlÃ¤ssiger PrÃ¤sentationszustand eines endlichen Coop-Encounter. */
 export type CoopDefenseEncounterPresentationPhase =
   | 'incoming'
   | 'active'
@@ -55,7 +55,7 @@ export interface CoopDefenseEncounterPresentationState {
   phase: CoopDefenseEncounterPresentationPhase;
   /** Host-Rundenzeit, ab der die aktuelle Phase begonnen hat. */
   phaseStartedAtMs: number;
-  /** Host-Rundenzeit des nächsten Phasenwechsels; null für offene Phasen. */
+  /** Host-Rundenzeit des nÃ¤chsten Phasenwechsels; null fÃ¼r offene Phasen. */
   phaseEndsAtMs: number | null;
   /** All authored fronts of this encounter, independent of per-group spawn delays. */
   encounterFronts: readonly SpawnFront[];
@@ -72,7 +72,7 @@ export interface CoopDefenseEncounterPresentationState {
   enemiesTotal?: number;
 }
 
-/** Host-autoritärer, kleiner Lebenszyklus-Snapshot der authored Map-Events. */
+/** Host-autoritÃ¤rer, kleiner Lebenszyklus-Snapshot der authored Map-Events. */
 export type CoopDefenseMapEventType = 'train' | 'airstrike' | 'ground-hazard';
 
 export type CoopDefenseMapEventLifecycleState =
@@ -96,17 +96,17 @@ export interface CoopDefenseMapEventPresentationEntry {
 
 export type CoopDefenseMapEventPresentationState = readonly CoopDefenseMapEventPresentationEntry[];
 
-/** Host-autoritärer Lebenszyklus eines Secondary Objectives. */
+/** Host-autoritÃ¤rer Lebenszyklus eines Secondary Objectives. */
 export type CoopDefenseSecondaryObjectiveState = 'dormant' | 'active' | 'completed' | 'failed';
 
 export type CoopDefenseSecondaryObjectiveType = 'destroy' | 'hold' | 'carry';
 
-/** Ein Eintrag im host-autoritär replizierten Secondary-Objective-Snapshot. */
+/** Ein Eintrag im host-autoritÃ¤r replizierten Secondary-Objective-Snapshot. */
 export interface CoopDefenseSecondaryObjectivePresentationEntry {
   objectiveId: string;
   type: CoopDefenseSecondaryObjectiveType;
   state: CoopDefenseSecondaryObjectiveState;
-  /** True genau für das Objective mit dem prominenten HUD-Fokus. */
+  /** True genau fÃ¼r das Objective mit dem prominenten HUD-Fokus. */
   focused: boolean;
   progressCurrent: number;
   progressTotal: number;
@@ -121,7 +121,7 @@ export type CoopDefenseSecondaryObjectivePresentationState = readonly CoopDefens
 export interface PlayerInput {
   dx: number;  // -1 | 0 | 1
   dy: number;  // -1 | 0 | 1
-  aim: number; // Aim-Winkel quantisiert als uint8 (0-255 → 0-2π)
+  aim: number; // Aim-Winkel quantisiert als uint8 (0-255 â†’ 0-2Ï€)
   dashHeld?: boolean;
   placementPreview?: PlacementPreviewNetState | null;
 }
@@ -150,7 +150,7 @@ export interface PlacementPreviewNetState {
 /** Waffen-Slots mit Spread/Crosshair-Relevanz. */
 export type WeaponSlot = 'weapon1' | 'weapon2';
 
-/** Autoritativer Aim-State für Crosshair-Reconciliation. */
+/** Autoritativer Aim-State fÃ¼r Crosshair-Reconciliation. */
 export interface PlayerAimNetState {
   revision:             number;
   isMoving:             boolean;
@@ -163,8 +163,16 @@ export type BurrowPhase = 'idle' | 'windup' | 'underground' | 'trapped' | 'recov
 export interface SyncedActiveHudBuff {
   defId: string;
   remainingFrac: number;
-  valueText?: string;
-  /** 0..1 – Staerke des Buffs; skaliert die Partikel-Intensitaet im HUD. */
+  value?: number;
+  secondaryValue?: number;
+  count?: number;
+  secondaryCount?: number;
+  stacks?: number;
+  maxStacks?: number;
+  availableCount?: number;
+  pendingCount?: number;
+  charged?: boolean;
+  /** 0..1 â€“ Staerke des Buffs; skaliert die Partikel-Intensitaet im HUD. */
   intensity?: number;
 }
 
@@ -172,13 +180,13 @@ export interface SyncedActiveHudBuff {
 export interface PlayerNetState {
   x:          number;
   y:          number;
-  rot:        number;   // Blickrichtung quantisiert als uint8 (0-255 → 0-2π)
+  rot:        number;   // Blickrichtung quantisiert als uint8 (0-255 â†’ 0-2Ï€)
   hp:         number;
   maxHp:      number;
   armor:      number;
   alive:      boolean;
-  adrenaline: number;   // 0–ADRENALINE_MAX
-  rage:       number;   // 0–RAGE_MAX
+  adrenaline: number;   // 0â€“ADRENALINE_MAX
+  rage:       number;   // 0â€“RAGE_MAX
   isBurrowed: boolean;
   isStunned:  boolean;
   burrowPhase: BurrowPhase;
@@ -258,7 +266,7 @@ export interface SyncedDecoy {
 /** Visueller Stil eines Projektils */
 export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
-/** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
+/** Feineres data-driven Preset fÃ¼r kugelartige Projektil-Renderer. */
 // 'awp_charged'  = voll aufgeladener Schuss (Geduldiger Tod) ohne Schneisen-Upgrade
 // 'awp_corridor' = voll aufgeladener Schuss mit "Schneise der Zerstoerung" (inkl. Sturm-VFX)
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev';
@@ -295,26 +303,26 @@ export interface RadialDamageFalloffConfig {
 }
 
 /**
- * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
+ * Konfiguration fÃ¼r die Tracer-Leuchtlinie eines Projektils (data-driven).
  * Alle Felder ohne `?` sind Pflichtangaben.
  */
 export interface TracerConfig {
   readonly widthCore:  number;   // Breite der inneren hellen Linie (px)
-  readonly widthGlow:  number;   // Breite des äußeren Leucht-Halos (px)
-  readonly alphaCore:  number;   // Max-Opazität der inneren Linie am Bullet-Kopf (0–1)
-  readonly alphaGlow:  number;   // Max-Opazität des äußeren Halos am Bullet-Kopf (0–1)
+  readonly widthGlow:  number;   // Breite des Ã¤uÃŸeren Leucht-Halos (px)
+  readonly alphaCore:  number;   // Max-OpazitÃ¤t der inneren Linie am Bullet-Kopf (0â€“1)
+  readonly alphaGlow:  number;   // Max-OpazitÃ¤t des Ã¤uÃŸeren Halos am Bullet-Kopf (0â€“1)
   readonly segments:   number;   // Anzahl Gradient-Abschnitte (mehr = weicherer Fade)
   readonly fadeMs:     number;   // Fadeout-Dauer nach Einschlag (ms)
-  readonly maxLength?: number;   // Max. sichtbare Trail-Länge in px (undefined = voller Pfad ab Spawn)
+  readonly maxLength?: number;   // Max. sichtbare Trail-LÃ¤nge in px (undefined = voller Pfad ab Spawn)
   readonly colorCore?: number;   // Farb-Override innere Linie (undefined = Projektil-/Spielerfarbe)
-  readonly colorGlow?: number;   // Farb-Override äußerer Halo (undefined = Projektil-/Spielerfarbe)
+  readonly colorGlow?: number;   // Farb-Override Ã¤uÃŸerer Halo (undefined = Projektil-/Spielerfarbe)
 }
 
 /**
- * Vereinheitlichte Burn-Konfiguration für „brennende Treffer". Wird an Waffen
- * (Projektil/Hitscan/Melee) oder an Explosionen geheftet und löst exakt dieselbe
+ * Vereinheitlichte Burn-Konfiguration fÃ¼r â€žbrennende Treffer". Wird an Waffen
+ * (Projektil/Hitscan/Melee) oder an Explosionen geheftet und lÃ¶st exakt dieselbe
  * Burn-Stack-Logik aus wie Flammenwerfer und Molotov. damagePerTick = 0 oder
- * durationMs = 0 deaktiviert den Effekt (Default für Waffen ohne Upgrade).
+ * durationMs = 0 deaktiviert den Effekt (Default fÃ¼r Waffen ohne Upgrade).
  */
 export interface BurnOnHitConfig {
   readonly durationMs: number;      // Dauer eines Burn-Stacks
@@ -330,14 +338,14 @@ export type GroundFireVisualStyle = 'normal' | 'void';
 /** Entitaetsgruppe, die eine Brandquelle beschaedigen und entzuenden darf. */
 export type GroundFireDamageTarget = 'all' | 'players' | 'enemies';
 
-/** Zielseite einer Explosion; `player-side` umfasst Spieler und wiederbelebte Verbündete. */
+/** Zielseite einer Explosion; `player-side` umfasst Spieler und wiederbelebte VerbÃ¼ndete. */
 export type ExplosionDamageTarget = GroundFireDamageTarget | 'player-side';
 
 export interface GroundFireCellEffect {
   readonly durationMs: number;
   readonly burnDurationMs: number;
   readonly burnDamagePerTick: number;
-  readonly weaponName: string;
+  readonly sourceId: string;
   readonly visualStyle?: GroundFireVisualStyle;
   readonly damageTarget?: GroundFireDamageTarget;
   readonly baseDamageMult?: number;
@@ -356,7 +364,7 @@ export interface FireChunkTarget {
 }
 
 /**
- * Nutzlast der Verstärkungsmatrix. Sie laeuft ueber den normalen Projektil-
+ * Nutzlast der VerstÃ¤rkungsmatrix. Sie laeuft ueber den normalen Projektil-
  * Explosionspfad, erzeugt am Einschlag aber ausschliesslich ein Schutz-/Verwundbarkeitsfeld.
  */
 export interface ReinforcementMatrixEffect {
@@ -366,10 +374,10 @@ export interface ReinforcementMatrixEffect {
   readonly color: number;
 }
 
-/** @deprecated Nur fuer alte gespeicherte Projektile; fachlich gilt Verstärkungsmatrix. */
+/** @deprecated Nur fuer alte gespeicherte Projektile; fachlich gilt VerstÃ¤rkungsmatrix. */
 export type OverchargeFieldEffect = ReinforcementMatrixEffect;
 
-/** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
+/** Data-driven Explosion fÃ¼r Projektilwaffen (Rakete, spÃ¤tere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
   readonly radius: number;
   readonly maxDamage: number;
@@ -391,7 +399,7 @@ export interface ProjectileExplosionConfig {
   readonly visualStyle?: ExplosionVisualStyle;
   readonly burnOnHit?: BurnOnHitConfig;  // setzt Ziele im gesamten Radius in Brand
   readonly burnOrigin?: BurnOrigin;
-  readonly groundFire?: FireGrenadeEffect; // persistente Feuerfläche am Einschlagsort
+  readonly groundFire?: FireGrenadeEffect; // persistente FeuerflÃ¤che am Einschlagsort
   readonly fireChunkBurst?: FireChunkBurstConfig;
   readonly blackHoleDurationMs?: number;
   readonly blackHolePullStrength?: number;
@@ -414,21 +422,21 @@ export interface ImpactCloudConfig {
   readonly visualVariant?: DamageZoneVisualStyle;
 }
 
-/** Visueller Stil einer Schaden-über-Zeit-Fläche (DoT-Zone). */
+/** Visueller Stil einer Schaden-Ã¼ber-Zeit-FlÃ¤che (DoT-Zone). */
 export type DamageZoneVisualStyle = 'stink' | 'spore' | 'spore_void' | 'electric';
 
 /**
- * Generische Konfiguration für eine Schaden-über-Zeit-Fläche, die am Explosions-
+ * Generische Konfiguration fÃ¼r eine Schaden-Ã¼ber-Zeit-FlÃ¤che, die am Explosions-
  * bzw. Detonationsort entsteht (analog zu den Impact-Clouds der Sporen). Wird an
- * Explosionen/Detonablen geheftet, damit spätere Upgrades (HE-Granate, Smoke,
- * Mini-Rakete, …) ebenfalls eine DoT-Fläche erzeugen können.
+ * Explosionen/Detonablen geheftet, damit spÃ¤tere Upgrades (HE-Granate, Smoke,
+ * Mini-Rakete, â€¦) ebenfalls eine DoT-FlÃ¤che erzeugen kÃ¶nnen.
  * damagePerTick = 0 oder durationMs = 0 deaktiviert den Effekt.
  */
 export interface DamageOverTimeAreaConfig {
-  readonly durationMs: number;       // Lebensdauer der Fläche
+  readonly durationMs: number;       // Lebensdauer der FlÃ¤che
   readonly damagePerTick: number;    // HP-Schaden pro Tick (0 = deaktiviert)
   readonly tickIntervalMs: number;   // ms zwischen Ticks
-  readonly radiusScale?: number;     // Flächenradius = Explosionsradius × radiusScale (Default 1)
+  readonly radiusScale?: number;     // FlÃ¤chenradius = Explosionsradius Ã— radiusScale (Default 1)
   readonly style: DamageZoneVisualStyle;  // Darstellungsstil je Waffe
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
@@ -462,7 +470,7 @@ export type SupportProjectileImpact =
   | { readonly kind: 'rock'; readonly rockId: number; readonly x: number; readonly y: number }
   | { readonly kind: 'base'; readonly x: number; readonly y: number };
 
-/** Data-driven Zielsuche/Lenkung für Projektilwaffen. */
+/** Data-driven Zielsuche/Lenkung fÃ¼r Projektilwaffen. */
 export interface ProjectileHomingConfig {
   readonly acquireDelayMs: number;
   readonly searchRadius: number;
@@ -475,24 +483,24 @@ export interface ProjectileHomingConfig {
   readonly forwardWeight?: number;
 }
 
-/** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
+/** Projektil-Snapshot fÃ¼r Netzwerk-Synchronisation (Host â†’ Clients) */
 export interface SyncedProjectile {
   id:      number;
   ownerId: string;
   x:       number;
   y:       number;
-  vx:      number;  // Geschwindigkeit X (px/s) – für Client-seitige Trail-Orientierung
+  vx:      number;  // Geschwindigkeit X (px/s) â€“ fÃ¼r Client-seitige Trail-Orientierung
   vy:      number;  // Geschwindigkeit Y (px/s)
-  size:    number;  // px – für korrekte Client-Darstellung
+  size:    number;  // px â€“ fÃ¼r korrekte Client-Darstellung
   color:   number;  // hex
   allowTeamDamage?: boolean;
-  ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  ownerColor?: number; // Spielerfarbe des SchÃ¼tzen fÃ¼r projektilspezifische Akzente/VFX
   /** Reiner VFX-Ursprung; der autoritative Projektilpunkt bleibt x/y. */
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
-  smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
-  style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
-  /** Explizite Sporenpalette; verhindert, dass Void-Spore-VFX vom Farbwert abhängen. */
+  smokeTrailColor?: number; // optionales Farb-Override fÃ¼r Raketenrauch, sonst Spielerfarbe
+  style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (RÃ¼ckwÃ¤rtskompatibilitÃ¤t)
+  /** Explizite Sporenpalette; verhindert, dass Void-Spore-VFX vom Farbwert abhÃ¤ngen. */
   sporeVisualVariant?: 'spore' | 'spore_void';
   bulletVisualPreset?: BulletVisualPreset;
   grenadeVisualPreset?: GrenadeVisualPreset;
@@ -513,7 +521,7 @@ export interface SyncedProjectile {
   burning?: boolean;
 }
 
-/** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
+/** Kurzlebiger Hitscan-Trace fÃ¼r VFX-Replikation (Host â†’ Clients, unreliable). */
 export type HitscanImpactKind = 'none' | 'player' | 'environment';
 
 export interface SyncedHitscanTrace {
@@ -562,9 +570,9 @@ export interface SyncedDeathEffect {
 
 export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
 
-/** Kurzlebiger Melee-Swing für VFX-Replikation (Host → Clients, unreliable). */
+/** Kurzlebiger Melee-Swing fÃ¼r VFX-Replikation (Host â†’ Clients, unreliable). */
 export interface SyncedMeleeSwing {
-  swingId:    number;   // pro Session eindeutig, für Client-Deduplizierung
+  swingId:    number;   // pro Session eindeutig, fÃ¼r Client-Deduplizierung
   x:          number;
   y:          number;
   angle:      number;   // Angriffs-Richtung in Radiant (Mittellinie des Bogens)
@@ -580,7 +588,7 @@ export interface SyncedMeleeSwing {
   shotAudioKey?: ShotAudioKey;
 }
 
-/** RPC Payload Interface für Teleport-Effekte (Host → Clients). */
+/** RPC Payload Interface fÃ¼r Teleport-Effekte (Host â†’ Clients). */
 export interface SyncedTranslocatorFlash {
   x: number;
   y: number;
@@ -588,7 +596,7 @@ export interface SyncedTranslocatorFlash {
   type: 'start' | 'end';
 }
 
-/** Globale Spielphase – nur vom Host per setState gesetzt */
+/** Globale Spielphase â€“ nur vom Host per setState gesetzt */
 export type GamePhase = 'LOBBY' | 'ARENA';
 
 export type GameMode = 'deathmatch' | 'team_deathmatch' | 'capture_the_beer' | 'coop_defense';
@@ -636,7 +644,6 @@ export type RoomQualityStartPolicy = 'warn' | 'block';
 
 export interface RoomQualitySnapshot {
   status: RoomQualityStatus;
-  summary: string;
   source: 'webrtc';
   thresholdMs: number;
   worstPingMs: number | null;
@@ -709,7 +716,7 @@ export interface CoopDefenseItem {
 export interface CoopDefensePendingItemReward {
   readonly roundEndedAt: number;
   readonly offers: readonly CoopDefenseItem[];
-  /** Bereits beim Würfeln angewandte autoritative B8-Epic-Garantie; 0/undefined = keine. */
+  /** Bereits beim WÃ¼rfeln angewandte autoritative B8-Epic-Garantie; 0/undefined = keine. */
   readonly epicGuaranteeCount?: number;
 }
 
@@ -764,14 +771,14 @@ export interface LoadoutCommitSnapshot {
   equippedItems?: readonly CoopDefenseItem[];
 }
 
-/** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
+/** ZusÃ¤tzliche Parameter fÃ¼r eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
   utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf
   ultimateAction?: 'press' | 'release';
   ultimateChargeFraction?: number;
   inputStarted?: boolean;
-  scopeProgress?: number;  // 0–1, für fire-on-release Scope-Waffen (beim Loslassen gesetzt)
-  scopeChargeProgress?: number; // 0–1, separater Schadens-Ladefortschritt einer Scope-Waffe
+  scopeProgress?: number;  // 0â€“1, fÃ¼r fire-on-release Scope-Waffen (beim Loslassen gesetzt)
+  scopeChargeProgress?: number; // 0â€“1, separater Schadens-Ladefortschritt einer Scope-Waffe
   scopeHolding?: boolean;  // true = RMB gehalten aber noch kein Schuss (nur holdSpeedFactor aktiv)
   tunnelAction?: 'commit';
   tunnelStartX?: number;
@@ -793,7 +800,7 @@ export interface LoadoutUseResult {
   resourceKind?: LoadoutUseResourceKind;
 }
 
-/** Lokaler Preview-State für aufladbare Utility-Aktionen. */
+/** Lokaler Preview-State fÃ¼r aufladbare Utility-Aktionen. */
 export interface UtilityChargePreviewState {
   angle: number;
   chargeFraction: number;
@@ -818,7 +825,7 @@ export interface UltimateChargePreviewState {
   reticleStyle?: 'gauss';
 }
 
-/** Lokaler Preview-State für zielbasierte Utility-Aktionen. */
+/** Lokaler Preview-State fÃ¼r zielbasierte Utility-Aktionen. */
 export interface UtilityTargetingPreviewState {
   angle: number;
   targetX: number;
@@ -848,7 +855,7 @@ export interface UtilityPlacementPreviewState {
   mode?: 'place' | 'dismantle';
 }
 
-/** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
+/** Konfiguration fÃ¼r ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager Ã¼bergeben) */
 export interface ProjectileSpawnConfig {
   proximityArc?: ProjectileProximityArcConfig;
   /** Base-mounted turret projectiles pass through their own base footprint. */
@@ -862,16 +869,16 @@ export interface ProjectileSpawnConfig {
   /** Reiner VFX-Ursprung; der Gameplay-Spawn bleibt der x/y-Parameter von spawnProjectile. */
   visualMuzzleOrigin?: { x: number; y: number };
   allowTeamDamage?: boolean;
-  ownerColor?:     number;        // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  ownerColor?:     number;        // Spielerfarbe des SchÃ¼tzen fÃ¼r projektilspezifische Akzente/VFX
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
-  lifetime:        number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
-  maxBounces:      number;        // 0 für Granaten
+  lifetime:        number;        // ms (fÃ¼r Bullets Lebensdauer, fÃ¼r Granaten = fuseTime)
+  maxBounces:      number;        // 0 fÃ¼r Granaten
   isGrenade:       boolean;
-  adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
-  weaponName?:     string;        // Waffenname für Killfeed
-  /** Marker für das Coop-Defense-Bossupgrade der Plasma Gun. */
+  adrenalinGain:   number;        // Adrenalin-Gewinn fÃ¼r den SchÃ¼tzen bei Treffer
+  sourceId?:     string;        // Waffenname fÃ¼r Killfeed
+  /** Marker fÃ¼r das Coop-Defense-Bossupgrade der Plasma Gun. */
   plasmaSwarmEnabled?: boolean;
-  /** Schwarmprojektile dürfen weder Aufladungen noch weitere Schwärme erzeugen. */
+  /** Schwarmprojektile dÃ¼rfen weder Aufladungen noch weitere SchwÃ¤rme erzeugen. */
   plasmaSwarmProjectile?: boolean;
   /** Host-only: Ursprungziel, das beim Start verlassen werden muss, bevor es wieder getroffen wird. */
   plasmaSwarmOriginEnemyId?: string;
@@ -880,7 +887,7 @@ export interface ProjectileSpawnConfig {
   plasmaSwarmExplosionDamage?: number;
   plasmaSwarmExplosionSlowFraction?: number;
   explosion?:      ProjectileExplosionConfig;
-  enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
+  enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht WÃ¤nde/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   /** Sporen-Projektilpalette, aus der Impact-Cloud-Variante abgeleitet. */
   sporeVisualVariant?: 'spore' | 'spore_void';
@@ -896,8 +903,8 @@ export interface ProjectileSpawnConfig {
   energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional, data-driven)
   // Detonations-System (optional)
-  detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezündet werden
-  detonator?: DetonatorConfig;  // Projektil löst passende Detonables aus (z.B. Selbst-Detonation)
+  detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezÃ¼ndet werden
+  detonator?: DetonatorConfig;  // Projektil lÃ¶st passende Detonables aus (z.B. Selbst-Detonation)
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   rockDamageMult?:  number;     // Schadensfaktor gegen Felsen
   trainDamageMult?: number;     // Schadensfaktor gegen den Zug
@@ -905,15 +912,15 @@ export interface ProjectileSpawnConfig {
   baseDamageMult?: number;
 
   // Flammenwerfer (optional)
-  isFlame?:         boolean;    // true = Flammen-Hitbox (wächst, verlangsamt sich, kein Bounce)
+  isFlame?:         boolean;    // true = Flammen-Hitbox (wÃ¤chst, verlangsamt sich, kein Bounce)
   hitboxGrowRate?:  number;     // Hitbox-Wachstum in px/s
-  hitboxMaxSize?:   number;     // maximale Hitbox-Größe in px
+  hitboxMaxSize?:   number;     // maximale Hitbox-GrÃ¶ÃŸe in px
   velocityDecay?:   number;     // Geschwindigkeits-Multiplikator pro Sekunde (0-1, kleiner = schnellerer Abbau)
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
   /** Visuelle Brandfamilie des Projektilschweifs; ohne Wert = normale orange Flamme. */
   projectileBurnVisualStyle?: GroundFireVisualStyle;
-  flamePiercing?:     boolean;   // true = Projektil zerstört sich nicht bei Treffern (piercing)
+  flamePiercing?:     boolean;   // true = Projektil zerstÃ¶rt sich nicht bei Treffern (piercing)
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
   fireTrail?: GroundFireCellEffect;
@@ -1007,8 +1014,8 @@ export interface SmokeGrenadeEffect {
   lingerDuration: number;
   dissipateDuration: number;
   maxAlpha: number;
-  // Optionale Schaden-über-Zeit-Komponente ("Gewittersturm"). Radius und Dauer
-  // werden vom Rauch übernommen; nur diese Werte steuern den Schaden.
+  // Optionale Schaden-Ã¼ber-Zeit-Komponente ("Gewittersturm"). Radius und Dauer
+  // werden vom Rauch Ã¼bernommen; nur diese Werte steuern den Schaden.
   // damagePerTick = 0 (oder fehlend) = deaktiviert.
   dotDamagePerTick?: number;
   dotTickIntervalMs?: number;
@@ -1024,9 +1031,9 @@ export interface FireGrenadeEffect {
   trainDamageMult?: number;
   /** Schadensfaktor ausschliesslich gegen feindliche Coop-Basen. */
   baseDamageMult?: number;
-  burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
+  burnDurationMs?:     number;  // ms â€“ Dauer eines Burn-Stacks pro Tick
   burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
-  weaponName?: string;
+  sourceId?: string;
   /** Optische Brandfamilie der entstehenden Flaeche; ohne Wert normales oranges Feuer. */
   visualStyle?: GroundFireVisualStyle;
   /** Entitaetsgruppe, die die Flaeche verletzen darf; ohne Wert trifft sie alle. */
@@ -1073,8 +1080,8 @@ export type GrenadeEffectConfig =
   | SpawnEnemyGrenadeEffect;
 
 /**
- * Markiert ein Projektil als detonierbar durch spezifische Auslöser-Tags.
- * Data-driven: konfigurierbar pro Waffe, flexibel erweiterbar (ASMD Ball, Rakete, …).
+ * Markiert ein Projektil als detonierbar durch spezifische AuslÃ¶ser-Tags.
+ * Data-driven: konfigurierbar pro Waffe, flexibel erweiterbar (ASMD Ball, Rakete, â€¦).
  */
 export interface DetonableConfig {
   readonly comboAdrenalineGain?: number;
@@ -1084,18 +1091,18 @@ export interface DetonableConfig {
   readonly damageFalloff?: RadialDamageFalloffConfig;
   readonly knockback?: number;       // Radialer Impuls analog Projektil-Explosionen
   readonly selfKnockbackMult?: number;
-  readonly allowCrossTeam: boolean;  // true = Gegner-Detonator kann es ebenfalls zünden
+  readonly allowCrossTeam: boolean;  // true = Gegner-Detonator kann es ebenfalls zÃ¼nden
   readonly explosionColor?: number;  // optionales VFX-Farb-Override
   readonly explosionVisualStyle?: ExplosionVisualStyle;
   readonly rockDamageMult?:  number; // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number; // Schadensfaktor gegen den Zug (Default 1.0)
   readonly baseDamageMult?: number;   // Schadensfaktor ausschliesslich gegen feindliche Coop-Basen
-  readonly dotArea?: DamageOverTimeAreaConfig;  // optionale Schaden-über-Zeit-Fläche am Detonationsort
+  readonly dotArea?: DamageOverTimeAreaConfig;  // optionale Schaden-Ã¼ber-Zeit-FlÃ¤che am Detonationsort
 }
 
 /**
- * Markiert einen Schuss/Treffer als Detonator für passende DetonableConfig-Tags.
- * Wird an WeaponConfig geheftet; gilt sowohl für Hitscan- als auch Projektil-Waffen.
+ * Markiert einen Schuss/Treffer als Detonator fÃ¼r passende DetonableConfig-Tags.
+ * Wird an WeaponConfig geheftet; gilt sowohl fÃ¼r Hitscan- als auch Projektil-Waffen.
  */
 export interface ProjectileProximityArcConfig {
   readonly radius: number;
@@ -1104,29 +1111,29 @@ export interface ProjectileProximityArcConfig {
 }
 
 export interface DetonatorConfig {
-  readonly triggerTags: readonly string[];  // Tags der Projektile, die gezündet werden können
+  readonly triggerTags: readonly string[];  // Tags der Projektile, die gezÃ¼ndet werden kÃ¶nnen
 }
 
 /**
- * Kettenblitz-Konfiguration für Hitscan-Waffen. Nach dem Primärtreffer springt
- * der Strahl vom Einschlagspunkt auf das nächstgelegene weitere Ziel über und
+ * Kettenblitz-Konfiguration fÃ¼r Hitscan-Waffen. Nach dem PrimÃ¤rtreffer springt
+ * der Strahl vom Einschlagspunkt auf das nÃ¤chstgelegene weitere Ziel Ã¼ber und
  * von dort wieder weiter (bis maxJumps). Bereits getroffene Ziele werden nie
- * erneut getroffen; jeder Sprung respektiert die Sichtlinie (keine Wände) und
+ * erneut getroffen; jeder Sprung respektiert die Sichtlinie (keine WÃ¤nde) und
  * verliert konfigurierbar an Schaden. maxJumps = 0 deaktiviert den Kettenblitz
- * (Default für Waffen ohne entsprechendes Upgrade).
+ * (Default fÃ¼r Waffen ohne entsprechendes Upgrade).
  */
 export interface ChainLightningConfig {
-  readonly maxJumps: number;                  // Anzahl Sprünge (0 = deaktiviert)
+  readonly maxJumps: number;                  // Anzahl SprÃ¼nge (0 = deaktiviert)
   readonly searchRadius: number;              // Suchradius (px) ab dem letzten Einschlag
-  readonly damageFalloffPerJump: number;      // Schadensreduktion je Sprung (0.1 = -10% beim 1. Sprung, -20% beim 2. …)
-  readonly targetEnemies?: boolean;           // Gegner sind gültige Ziele
-  readonly targetPlayers?: boolean;           // Spieler sind gültige Ziele
-  readonly targetDecoys?: boolean;            // Decoys sind gültige Ziele
-  readonly detonableTags?: readonly string[]; // detonierbare Projektile als Ziele (z.B. ['asmd_ball']) → lösen ihre Detonation aus
-  readonly thicknessFalloffPerJump?: number;  // visuelle Verschmälerung des Strahls je Sprung (Default 0.2)
+  readonly damageFalloffPerJump: number;      // Schadensreduktion je Sprung (0.1 = -10% beim 1. Sprung, -20% beim 2. â€¦)
+  readonly targetEnemies?: boolean;           // Gegner sind gÃ¼ltige Ziele
+  readonly targetPlayers?: boolean;           // Spieler sind gÃ¼ltige Ziele
+  readonly targetDecoys?: boolean;            // Decoys sind gÃ¼ltige Ziele
+  readonly detonableTags?: readonly string[]; // detonierbare Projektile als Ziele (z.B. ['asmd_ball']) â†’ lÃ¶sen ihre Detonation aus
+  readonly thicknessFalloffPerJump?: number;  // visuelle VerschmÃ¤lerung des Strahls je Sprung (Default 0.2)
 }
 
-/** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */
+/** Explodierte Granate â€“ von ProjectileManager.hostUpdate() zurÃ¼ckgegeben */
 export interface ExplodedGrenade {
   x:      number;
   y:      number;
@@ -1140,7 +1147,7 @@ export interface ExplodedProjectile {
   ownerId: string;
   effect: ProjectileExplosionConfig;
   sourceSlot?: LoadoutSlot;
-  weaponName?: string;
+  sourceId?: string;
   projectileId?: number;
   sourceTurretId?: string;
   continuesAfterExplosion?: boolean;
@@ -1153,7 +1160,7 @@ export interface SyncedSmokeCloud {
   radius:  number;
   alpha:   number;
   density: number;
-  storm?:  boolean;  // true = elektrisierter Rauch (DoT-Upgrade aktiv) → Blitze rendern
+  storm?:  boolean;  // true = elektrisierter Rauch (DoT-Upgrade aktiv) â†’ Blitze rendern
   stormTickMs?: number;  // Intervall der Blitze = Intervall des DoT-Schadens (nur bei storm)
 }
 
@@ -1162,7 +1169,7 @@ export interface SyncedFireZone {
   x:      number;
   y:      number;
   radius: number;
-  alpha:  number; // 0-1, für visuelles Fade-in/-out
+  alpha:  number; // 0-1, fÃ¼r visuelles Fade-in/-out
 }
 
 export interface SyncedStinkCloud {
@@ -1172,7 +1179,7 @@ export interface SyncedStinkCloud {
   y:          number;
   radius:     number;
   alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
-  ownerColor: number; // Spielerfarbe für Fairness-Kreis
+  ownerColor: number; // Spielerfarbe fÃ¼r Fairness-Kreis
   visualVariant?: DamageZoneVisualStyle;
 }
 
@@ -1203,27 +1210,27 @@ export interface TrackedProjectile {
   ownerId:         string;
   ignoreBaseCollisions?: boolean;
   ignoreRockIndex?: number;
-  color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape
+  color:           number;  // hex â€“ gespeichert bei Spawn, entkoppelt von Shape
   allowTeamDamage?: boolean;
   ownerColor?:     number;
   boundsListener:  (hitBody: Phaser.Physics.Arcade.Body) => void;
-  colliders:       Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden
+  colliders:       Phaser.Physics.Arcade.Collider[];  // mÃ¼ssen beim Destroy explizit entfernt werden
   damage:          number;        // Schadenswert pro Direkttreffer
   lifetime:        number;        // ms Lebensdauer (Bullets) / fuseTime (Granaten)
   maxBounces:      number;        // maximale Abpraller
   isGrenade:       boolean;
-  adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
-  weaponName:      string;        // Waffenname für Killfeed
+  adrenalinGain:   number;        // Adrenalin-Gewinn fÃ¼r den SchÃ¼tzen bei Treffer
+  sourceId:      string;        // Waffenname fÃ¼r Killfeed
   plasmaSwarmEnabled?: boolean;
   plasmaSwarmProjectile?: boolean;
-  /** Host-only: Ursprungziel des Schwarmprojektils für den initialen Hitbox-Schutz. */
+  /** Host-only: Ursprungziel des Schwarmprojektils fÃ¼r den initialen Hitbox-Schutz. */
   plasmaSwarmOriginEnemyId?: string;
   plasmaSwarmProjectileCount?: number;
   plasmaSwarmExplosionRadius?: number;
   plasmaSwarmExplosionDamage?: number;
   plasmaSwarmExplosionSlowFraction?: number;
   explosion?:      ProjectileExplosionConfig;
-  enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
+  enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht WÃ¤nde/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
@@ -1240,15 +1247,15 @@ export interface TrackedProjectile {
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
-  /** Explizite Sporenpalette für Host- und Client-Renderer. */
+  /** Explizite Sporenpalette fÃ¼r Host- und Client-Renderer. */
   sporeVisualVariant?: 'spore' | 'spore_void';
   bulletVisualPreset?: BulletVisualPreset;
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional)
   // Detonations-System (optional)
-  detonable?: DetonableConfig;  // dieses Projektil kann gezündet werden
-  detonator?: DetonatorConfig;  // dieses Projektil kann andere Detonables zünden
+  detonable?: DetonableConfig;  // dieses Projektil kann gezÃ¼ndet werden
+  detonator?: DetonatorConfig;  // dieses Projektil kann andere Detonables zÃ¼nden
   // Objekt-Schadens-Multiplikatoren
   rockDamageMult?:  number;
   trainDamageMult?: number;
@@ -1260,7 +1267,7 @@ export interface TrackedProjectile {
   hitboxGrowRate?:  number;     // px/s Wachstum
   hitboxMaxSize?:   number;     // px Maximum
   velocityDecay?:   number;     // Speed-Multiplikator pro Sekunde
-  initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
+  initialSpeed?:    number;     // Geschwindigkeit bei Spawn (fÃ¼r Decay-Berechnung)
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
   projectileBurnVisualStyle?: GroundFireVisualStyle;
@@ -1286,8 +1293,8 @@ export interface TrackedProjectile {
   bfgLaserInterval?: number;
   lastBfgLaserAt?:   number;          // Zeitstempel der letzten Laser-Salve
   bfgHitPlayers?:    Set<string>;     // Debounce: jeden Spieler nur 1x direkt treffen
-  bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstören
-  bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschädigen
+  bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstÃ¶ren
+  bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschÃ¤digen
   gaussHitPlayers?:  Set<string>;     // Debounce: jeden Spieler nur 1x pro Schuss treffen
   gaussHitRocks?:    Set<number>;     // Debounce: jeden Fels nur 1x pro Schuss treffen
   gaussHitTrain?:    boolean;         // Debounce: Zug nur 1x pro Schuss treffen
@@ -1374,7 +1381,7 @@ export interface TrackedProjectile {
   awpCorridorKnockbackDurationMs?: number;
   awpCorridorHitIds?: Set<string>;
 
-  // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
+  // Anti-Tunneling: Original-GrÃ¶ÃŸe fÃ¼r geschwindigkeitsproportionale Body-VerlÃ¤ngerung
   originalBodySize?: number;
 
   // Multi-Rock-Kollisions-Schutz: verhindert Doppel-Velocity-Flip wenn zwei Felsen im selben Step getroffen werden
@@ -1388,7 +1395,7 @@ export interface TrackedProjectile {
 export interface RockCell {
   gridX: number;
   gridY: number;
-  /** Multiplikator (0…1) auf die Armor-Drop-Chance bei Zerstörung; fehlt = normale Chance. */
+  /** Multiplikator (0â€¦1) auf die Armor-Drop-Chance bei ZerstÃ¶rung; fehlt = normale Chance. */
   armorDropMult?: number;
 }
 
@@ -1400,7 +1407,7 @@ export interface PlaceableFootprintCell {
 /** Ein Baum-Gitterzelle (Trunk + Canopy, relativ zur Arena) */
 export interface TreeCell { gridX: number; gridY: number; }
 
-/** Eine Gleis-Gitterzelle (begehbar, Grundlage für spätere Zuglogik) */
+/** Eine Gleis-Gitterzelle (begehbar, Grundlage fÃ¼r spÃ¤tere Zuglogik) */
 export interface TrackCell { gridX: number; gridY: number; }
 
 /** Eine Dirt-Gitterzelle (rein visuell, keine Kollision) */
@@ -1413,7 +1420,7 @@ export type DecalSurface = 'ground' | 'rock';
 
 export type DecalKey = string;
 
-/** Eine Decal-Gitterzelle mit bereits deterministisch ausgewählter Variante und Offset. */
+/** Eine Decal-Gitterzelle mit bereits deterministisch ausgewÃ¤hlter Variante und Offset. */
 export interface DecalCell {
   gridX: number;
   gridY: number;
@@ -1443,7 +1450,7 @@ export interface PowerUpPedestalCell {
   respawnMs?: number;
   /** Optionaler Map-Override; fehlt bei den global generierten PvP-Podesten. */
   spawnOnArenaStart?: boolean;
-  /** Ist gesetzt, wenn das Podest zusammen mit dieser Coop-Basis zerstört wird. */
+  /** Ist gesetzt, wenn das Podest zusammen mit dieser Coop-Basis zerstÃ¶rt wird. */
   linkedBaseId?: string;
 }
 
@@ -1483,7 +1490,7 @@ export interface SyncedSlimeTrailSnapshot {
 /**
  * Ein durch Fokusfeuer verwundbarer Gegner.
  *
- * Repliziert wird ausschliesslich die Darstellung – die Schadensrechnung bleibt host-only.
+ * Repliziert wird ausschliesslich die Darstellung â€“ die Schadensrechnung bleibt host-only.
  * `expiresAt` ist ein absoluter Zeitpunkt statt einer Restdauer, damit der Client zwischen zwei
  * Snapshots selbst herunterzaehlen kann.
  */
@@ -1547,7 +1554,7 @@ export interface SlimeBloomTarget {
   y: number;
 }
 
-/** Vollständiger Arena-Layout-Deskriptor – visuelle Decals können im Netzwerkpayload ausgelassen und lokal rekonstruiert werden. */
+/** VollstÃ¤ndiger Arena-Layout-Deskriptor â€“ visuelle Decals kÃ¶nnen im Netzwerkpayload ausgelassen und lokal rekonstruiert werden. */
 export interface ArenaLayout {
   seed:   number;
   rocks:  RockCell[];
@@ -1560,10 +1567,10 @@ export interface ArenaLayout {
   groundHazardZones?: ArenaGroundHazardZone[];
 }
 
-/** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
+/** Pro-Felsen Netzwerkzustand (nur beschÃ¤digte Felsen, Delta-Kompression) */
 export interface RockNetState { id: number; hp: number; }
 
-/** Snapshot-Hülle für statische Rock-HP-Änderungen und Zerstörungen. */
+/** Snapshot-HÃ¼lle fÃ¼r statische Rock-HP-Ã„nderungen und ZerstÃ¶rungen. */
 export interface SyncedRockSnapshot {
   full: boolean;
   count: number;
@@ -1605,9 +1612,9 @@ export interface SyncedPlaceableRock {
 
 /** Waffen, die ein platzierbares Turret fuehren kann. */
 export type TurretWeaponId =
-  | 'SPOREN'
-  | 'BASE_SPOREN'
-  | 'FLIEGENPILZ_PLASMA'
+  | 'SPORES'
+  | 'BASE_SPORES'
+  | 'SPORE_TURRET_PLASMA'
   | 'TURRET_ROCKET_BURST'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
@@ -1615,9 +1622,9 @@ export type TurretWeaponId =
   | 'TURRET_GRAVITY'
   | 'TURRET_SLOW_BUBBLE'
   | 'TURRET_VOID_FLAME'
-  | 'TURRET_SPORE';
+  | 'TURRET_SPORES';
 
-/** Aktive Verstärkungsmatrix (host-autoritativ, per GameState repliziert). */
+/** Aktive VerstÃ¤rkungsmatrix (host-autoritativ, per GameState repliziert). */
 export interface SyncedReinforcementMatrix {
   id: number;
   ownerId: string;
@@ -1694,26 +1701,26 @@ export interface SyncedTunnel {
 }
 
 /**
- * Nächste Einfahrt des Zug-Events – vom Host veröffentlicht (reliable) und bei jeder
- * Wiedereinfahrt erneuert. Fehlt der Wert, fährt auf dieser Map kein Zug (mehr).
+ * NÃ¤chste Einfahrt des Zug-Events â€“ vom Host verÃ¶ffentlicht (reliable) und bei jeder
+ * Wiedereinfahrt erneuert. Fehlt der Wert, fÃ¤hrt auf dieser Map kein Zug (mehr).
  */
 export interface TrainEventConfig {
   trackX:    number;   // Welt-X der Gleisspalte (Mitte)
-  direction: 1 | -1;  // 1 = oben→unten, -1 = unten→oben
-  spawnAt:   number;   // absoluter Zeitstempel (ms) der nächsten Einfahrt
+  direction: 1 | -1;  // 1 = obenâ†’unten, -1 = untenâ†’oben
+  spawnAt:   number;   // absoluter Zeitstempel (ms) der nÃ¤chsten Einfahrt
 }
 
 /**
- * Per-Frame Zustand einer Coop-Defense-Basis (Host → Clients, unreliable).
- * Delta-Kompression über GameState: Nicht-dormante Basen mit reduzierten HP
- * (einschließlich HP 0) sowie Basen mit aktiven Geschütztürmen werden gesendet;
- * sonst gilt für eine lebende Basis fehlend = volle HP.
+ * Per-Frame Zustand einer Coop-Defense-Basis (Host â†’ Clients, unreliable).
+ * Delta-Kompression Ã¼ber GameState: Nicht-dormante Basen mit reduzierten HP
+ * (einschlieÃŸlich HP 0) sowie Basen mit aktiven GeschÃ¼tztÃ¼rmen werden gesendet;
+ * sonst gilt fÃ¼r eine lebende Basis fehlend = volle HP.
  */
 export interface SyncedBaseState {
   id:     string;
   hp:     number;
   maxHp:  number;
-  /** Zielwinkel der an diese Basis gekoppelten Geschütztürme. */
+  /** Zielwinkel der an diese Basis gekoppelten GeschÃ¼tztÃ¼rme. */
   turrets?: SyncedBaseTurretState[];
 }
 
@@ -1722,7 +1729,7 @@ export interface SyncedBaseTurretState {
   angle: number;
 }
 
-/** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
+/** Per-Frame Zustand eines Coop-Defense-Gegners (Host â†’ Clients, unreliable). */
 export interface SyncedEnemyState {
   id:     string;
   kind:   import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;
@@ -1741,7 +1748,7 @@ export interface SyncedEnemyState {
   burrowed: boolean;
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
-  /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
+  /** Replizierte Boss-Spezialaktion; `none` lÃ¶scht einen zuvor sichtbaren Zustand. */
   specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup';
   specialActionEndsAt: number;
   gaussChargeProgress: number;
@@ -1750,7 +1757,7 @@ export interface SyncedEnemyState {
   ownerColor?: number;
 }
 
-/** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
+/** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverÃ¤ndert. */
 export interface SyncedEnemyDeltaState {
   id:     string;
   kind?:  import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;
@@ -1774,40 +1781,40 @@ export interface SyncedEnemyDeltaState {
 }
 
 /**
- * Kompakt kodierter Snapshot-Wrapper für Coop-Defense-Gegner (Host → Clients, unreliable).
+ * Kompakt kodierter Snapshot-Wrapper fÃ¼r Coop-Defense-Gegner (Host â†’ Clients, unreliable).
  *
  * Upserts werden als flacher Zahlenstrom mit Per-Eintrag-Bitmaske serialisiert, statt als Array
- * von JSON-Objekten mit wiederholten Keys – das halbiert die Payload bei vielen Gegnern und
+ * von JSON-Objekten mit wiederholten Keys â€“ das halbiert die Payload bei vielen Gegnern und
  * verkleinert vor allem den Full-Snapshot-Spike (siehe enemySnapshotCodec.ts). Gegner-IDs werden
- * numerisch übertragen (die interne String-ID `e<base36>` wird verlustfrei rekonstruiert).
+ * numerisch Ã¼bertragen (die interne String-ID `e<base36>` wird verlustfrei rekonstruiert).
  *
- * Feldnamen sind absichtlich einbuchstabig, da der Schlüssel pro Tick mitserialisiert wird.
+ * Feldnamen sind absichtlich einbuchstabig, da der SchlÃ¼ssel pro Tick mitserialisiert wird.
  *
- * Es gibt keinen schweren Full-Snapshot mehr: State-Korrektur übernimmt der rollierende Refresh-Zyklus
- * (jeder Gegner wird binnen ~2 s einmal voll nachgesendet), Removals laufen über `r` (Sticky). `a` trägt
- * periodisch die vollständige Liste aktiver IDs zur Phantom-Reconciliation – kompakt statt 4-KB-Burst.
+ * Es gibt keinen schweren Full-Snapshot mehr: State-Korrektur Ã¼bernimmt der rollierende Refresh-Zyklus
+ * (jeder Gegner wird binnen ~2 s einmal voll nachgesendet), Removals laufen Ã¼ber `r` (Sticky). `a` trÃ¤gt
+ * periodisch die vollstÃ¤ndige Liste aktiver IDs zur Phantom-Reconciliation â€“ kompakt statt 4-KB-Burst.
  */
 export interface SyncedEnemySnapshot {
   c: number;    // Gesamtzahl aktiver Gegner (nur Telemetrie)
   u: Array<number | string>;  // flacher Upsert-Strom (siehe encodeEnemyUpsert)
   r: number[];  // entfernte Gegner-IDs (numerisch, Sticky-Removals)
-  a?: number[]; // optional: vollständige Liste aktiver IDs (periodische Reconciliation)
+  a?: number[]; // optional: vollstÃ¤ndige Liste aktiver IDs (periodische Reconciliation)
 }
 
-/** Per-Frame Zug-Zustand (Host → Clients, unreliable) */
+/** Per-Frame Zug-Zustand (Host â†’ Clients, unreliable) */
 export interface SyncedTrainState {
-  alive:    boolean;  // false = zerstört oder noch nicht gespawnt
+  alive:    boolean;  // false = zerstÃ¶rt oder noch nicht gespawnt
   x:        number;   // Welt-X (Gleismitte)
   y:        number;   // Welt-Y der Lokomotive (Mittelpunkt)
   dir:      1 | -1;   // Fahrtrichtung
-  hp:       number;   // aktuell verbleibende HP (0 = zerstört)
-  maxHp:    number;   // maximale HP (für HP-Bar-Berechnung)
+  hp:       number;   // aktuell verbleibende HP (0 = zerstÃ¶rt)
+  maxHp:    number;   // maximale HP (fÃ¼r HP-Bar-Berechnung)
 }
 
-/** Synchronisiertes Power-Up auf dem Boden (Host → Clients via GameState) */
+/** Synchronisiertes Power-Up auf dem Boden (Host â†’ Clients via GameState) */
 export interface SyncedPowerUp {
   uid:   number;   // Eindeutige ID dieses World-Items
-  defId: string;   // Schlüssel in POWERUP_DEFS
+  defId: string;   // SchlÃ¼ssel in POWERUP_DEFS
   x:     number;
   y:     number;
   /** Mission reward visuals are either a dormant spawn marker or a placement grant. */
@@ -1829,7 +1836,7 @@ export interface ObjectivePlacementUtilityOverrideDescriptor {
 
 export type UtilityOverrideDescriptor = UtilityOverrideDescriptorBase | ObjectivePlacementUtilityOverrideDescriptor;
 
-/** Snapshot-Hülle für Boden-Power-Ups mit Spawn-/Pickup-Deltas. */
+/** Snapshot-HÃ¼lle fÃ¼r Boden-Power-Ups mit Spawn-/Pickup-Deltas. */
 export interface SyncedPowerUpSnapshot {
   full: boolean;
   count: number;
@@ -1850,9 +1857,9 @@ export interface SyncedPowerUpPedestal {
 }
 
 /**
- * Delta-Snapshot der Power-Up-Podeste. Podeste sind statisch (Position/Typ ändern sich nie) und
+ * Delta-Snapshot der Power-Up-Podeste. Podeste sind statisch (Position/Typ Ã¤ndern sich nie) und
  * wechseln nur selten ihren Zustand (`hasPowerUp`/`nextRespawnAt`). Statt das volle Array jeden Tick
- * zu senden (~335 B), wird nur bei Änderung ein Upsert übertragen; ein periodischer Full-Resync
+ * zu senden (~335 B), wird nur bei Ã„nderung ein Upsert Ã¼bertragen; ein periodischer Full-Resync
  * korrigiert verlorene Frames. `removals` bleibt im Normalfall leer (Membership ist rundenstabil).
  */
 export interface SyncedPowerUpPedestalSnapshot {
@@ -1861,7 +1868,7 @@ export interface SyncedPowerUpPedestalSnapshot {
   removals: number[];
 }
 
-/** Aktiver Nuke-Strike (Host → Clients via GameState) */
+/** Aktiver Nuke-Strike (Host â†’ Clients via GameState) */
 export interface SyncedNukeStrike {
   id:          number;
   x:           number;
@@ -1873,7 +1880,7 @@ export interface SyncedNukeStrike {
   variant: 'normal' | 'void';
 }
 
-/** Aktiver Luftangriff-Strike (Host → Clients via GameState) */
+/** Aktiver Luftangriff-Strike (Host â†’ Clients via GameState) */
 export interface SyncedAirstrikeStrike {
   id:          number;
   x:           number;
@@ -1884,7 +1891,7 @@ export interface SyncedAirstrikeStrike {
   triggeredBy: string;
 }
 
-/** Aktiver Armageddon-Meteor (Host → Clients via GameState) */
+/** Aktiver Armageddon-Meteor (Host â†’ Clients via GameState) */
 export interface SyncedMeteorStrike {
   id:        number;   // Eindeutige Meteor-ID
   x:         number;   // Einschlagsort Welt-X

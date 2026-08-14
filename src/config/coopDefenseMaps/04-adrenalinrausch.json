@@ -1,9 +1,7 @@
 {
   "mapId": "4",
-  "displayName": "Map 4 - Adrenalinrausch",
   "arenaWidthCells": 82,
   "timeOfDay": "06:00",
-  "tutorialText": "Diese Map hat zwei Basen. Solange eine davon steht, könnt ihr weiterkämpfen. Zweitbasen können Türme und Power-Up-Podeste tragen – verteidigt sie, wenn ihr ihre Unterstützung behalten wollt.",
   "rockFillRatio": 0.3,
   "trackPosition": "center",
   "mapEvents": [{
@@ -35,7 +33,7 @@
             "gridY": 0
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
@@ -44,7 +42,7 @@
             "gridY": 3
           },
           "mountSide": "front",
-          "weaponId": "BASE_SPOREN"
+          "weaponId": "BASE_SPORES"
         }
       ]
     },

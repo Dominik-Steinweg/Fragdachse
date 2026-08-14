@@ -1,7 +1,7 @@
-/**
- * RightSidePanel – verwaltet den rechten Seitenbereich für beide Spielphasen.
+﻿/**
+ * RightSidePanel â€“ verwaltet den rechten Seitenbereich fÃ¼r beide Spielphasen.
  *
- * Zwei Phaser-Container werden überlagert und via Y-Tween animiert:
+ * Zwei Phaser-Container werden Ã¼berlagert und via Y-Tween animiert:
  *  - lobbyContainer: Endstand der letzten Runde (Lobby-Phase), startet bei y=0
  *  - gameContainer:  Timer + Killfeed + Leaderboard (Arena-Phase), startet bei y=-GAME_HEIGHT
  *
@@ -18,7 +18,7 @@ import {
   COLORS,
   toCssColor,
 } from '../config';
-import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
+import { isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoomPlayerStatistics, RoundResult, RoundState } from '../network/NetworkBridge';
@@ -33,8 +33,11 @@ import { getPingColor, TEXT, textStyle } from './uiTheme';
 import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
+import { formatNumber, getLocale, t } from '../i18n';
+import { getSourceName } from '../i18n/contentPresentation';
+import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
 
-// ── Layout-Konstanten ─────────────────────────────────────────────────────────
+// â”€â”€ Layout-Konstanten â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
 const LOBBY_SIDEBAR_LEFT_X   = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH + 8;
 const LOBBY_SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;
@@ -46,7 +49,7 @@ const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
 
 /**
  * Linke Kante der Arena-Seitenspalte. Exportiert, damit weitere HUD-Elemente davor enden
- * können, statt die Seitenspalte horizontal zu überdecken.
+ * kÃ¶nnen, statt die Seitenspalte horizontal zu Ã¼berdecken.
  */
 export const ARENA_SIDEBAR_CONTENT_LEFT_X = ARENA_SIDEBAR_LEFT_X;
 const ARENA_PANEL_WIDTH      = Math.round((DEFAULT_ARENA_OFFSET_X - 40) * 1.5);
@@ -59,7 +62,7 @@ const KILLFEED_MAX     = 5;
 const KILLFEED_TOP_Y   = COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y + 18;
 const KILLFEED_ENTRY_H = 28;
 const KILLFEED_FONT    = '17px';
-const KILLFEED_NAME_MAXLEN = 8; // Zeichen – wird mit … abgeschnitten
+const KILLFEED_NAME_MAXLEN = 8; // Zeichen â€“ wird mit â€¦ abgeschnitten
 
 // Leaderboard (Arena)
 const LB_SEP_Y      = KILLFEED_TOP_Y + KILLFEED_MAX * KILLFEED_ENTRY_H + 10;
@@ -89,13 +92,13 @@ const RESULTS_HEADER_BTN_W     = LOBBY_PANEL_WIDTH;
 const RESULTS_HEADER_BTN_H     = 32;
 const TEX_RESULTS_HEADER_ON    = '_rsp_lastround_neutral_on_v2';
 const TEX_RESULTS_HEADER_OFF   = '_rsp_lastround_neutral_off_v2';
-const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile – größer als Spielerzeilen
+const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile â€“ grÃ¶ÃŸer als Spielerzeilen
 const RESULTS_LABEL_FONT       = '14px';
 const RESULTS_OUTCOME_FONT     = '18px';
 const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X - 2;
 const RESULTS_FRAGS_X          = RESULTS_XP_X - 72;
-const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator → erste Spielerzeile
-const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion → naechste Team-Summary
+const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator â†’ erste Spielerzeile
+const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion â†’ naechste Team-Summary
 const RESULTS_SUMMARY_SEP_DY   = 14;
 const ROOM_STATS_DAMAGE_X      = RESULTS_XP_X - 58;
 const ROOM_STATS_DEATHS_X      = RESULTS_XP_X;
@@ -117,7 +120,7 @@ const COLOR_ARENA_FRAGS = toCssColor(COLORS.GREY_2);
 const COLOR_HEADER    = toCssColor(COLORS.GREY_3);
 const COLOR_SEPARATOR = COLORS.GREY_6;
 
-// ── Glasflaeche hinter der Spalte (Gegenstueck zur linken Spalte) ────────────
+// â”€â”€ Glasflaeche hinter der Spalte (Gegenstueck zur linken Spalte) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Buendig am Felsrahmen: aussen am Bildrand, oben und unten an den Felszeilen, nach innen
 // zur Felssaeule hin auslaufend.
 const GLASS_X = LOBBY_FRAME_BOUNDS.rightColumnLeft;
@@ -178,10 +181,10 @@ export class RightSidePanel {
   private arenaOverlayVisible = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
-  // ── Killfeed ──────────────────────────────────────────────────────────────
+  // â”€â”€ Killfeed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private killFeedData: {
     killerName: string; killerColor: number;
-    weapon:     string;
+    sourceId:   string;
     victimName: string; victimColor: number;
   }[] = [];
 
@@ -192,7 +195,7 @@ export class RightSidePanel {
     victim: Phaser.GameObjects.Text;
   }[] = [];
 
-  // ── Leaderboard (Arena) ───────────────────────────────────────────────────
+  // â”€â”€ Leaderboard (Arena) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private lbRows: {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
@@ -207,7 +210,7 @@ export class RightSidePanel {
   private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
   private readonly cssColorCache = new Map<number, string>();
 
-  // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
+  // â”€â”€ Ergebnisse (Lobby) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private resultsHeader!: Phaser.GameObjects.Text;
   private resultsHeaderButton!: Phaser.GameObjects.Image;
   private resultsHeaderLabels!: Phaser.GameObjects.Container;
@@ -237,20 +240,46 @@ export class RightSidePanel {
   private roomStatsSwitchButton!: Phaser.GameObjects.Image;
   private roomStatsSwitchLabels!: Phaser.GameObjects.Container;
   private roomStatsRows: RoomStatsRow[] = [];
+  private roomStatsDamageLabel!: Phaser.GameObjects.Text;
+  private roomStatsTakenLabel!: Phaser.GameObjects.Text;
   private roomStatsEmptyState!: Phaser.GameObjects.Text;
   private roomStatsInputSignature: string | null = null;
   private lobbyView: 'results' | 'roomStats' = 'results';
+  private lastRoundResults: RoundResult[] | null = null;
+  private lastRoundState: RoundState | null = null;
+  private lastRoundHasData = false;
 
   constructor(private scene: Phaser.Scene) {}
 
-  // ── Einmalig aufzurufen ───────────────────────────────────────────────────
+  // â”€â”€ Einmalig aufzurufen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   build(): void {
     this.buildGameContainer();
     this.buildLobbyContainer();
   }
 
-  // ── Transitions ────────────────────────────────────────────────────────────
+  refreshLocale(): void {
+    this.leaderboardScoreLabel.setText(t('ui.score.frags'));
+    this.leaderboardXpLabel.setText(t('ui.score.xp'));
+    this.lbTeamHeaders?.blue.label.setText(t('ui.score.teamBlue'));
+    this.lbTeamHeaders?.red.label.setText(t('ui.score.teamRed'));
+    this.resultsHeader.setText(t('ui.results.lastRound'));
+    this.roomStatsHeader.setText(t('ui.results.roomStats'));
+    this.resultsFragsLabel.setText(t('ui.score.frags'));
+    this.resultsXpLabel.setText(t('ui.score.xp'));
+    this.resultsEmptyState.setText(t('ui.results.noRound'));
+    this.roomStatsEmptyState.setText(t('ui.results.noPlayers'));
+    this.roomStatsDamageLabel.setText(t('ui.results.damage'));
+    this.roomStatsTakenLabel.setText(t('ui.results.taken'));
+    this.renderKillFeed();
+    this.syncArenaLabels(this.leaderboardInputCache);
+    this.syncLobbyLabels(this.lastRoundResults);
+    this.renderRoundOutcome(this.lastRoundHasData, this.lastRoundState);
+    this.roomStatsInputSignature = null;
+    if (this.lobbyView === 'roomStats') this.showRoomStatistics(bridge.getRoomPlayerStatistics());
+  }
+
+  // â”€â”€ Transitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   transitionToGame(): void {
     this.scene.tweens.killTweensOf(this.lobbyContainer);
@@ -331,21 +360,21 @@ export class RightSidePanel {
     return this.arenaOverlayVisible;
   }
 
-  // ── Daten-Updates ──────────────────────────────────────────────────────────
+  // â”€â”€ Daten-Updates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** @deprecated Timer wird jetzt vom CenterHUD verwaltet. */
   updateTimer(_secs: number): void { /* no-op */ }
 
   /**
-   * Fügt einen Kill oben in den Killfeed ein.
-   * Ältere Einträge rutschen nach unten; überschüssige fallen weg.
+   * FÃ¼gt einen Kill oben in den Killfeed ein.
+   * Ã„ltere EintrÃ¤ge rutschen nach unten; Ã¼berschÃ¼ssige fallen weg.
    */
   addKillFeedEntry(
     killerName: string, killerColor: number,
-    weapon:     string,
+    sourceId:   string,
     victimName: string, victimColor: number,
   ): void {
-    this.killFeedData.unshift({ killerName, killerColor, weapon, victimName, victimColor });
+    this.killFeedData.unshift({ killerName, killerColor, sourceId, victimName, victimColor });
     if (this.killFeedData.length > KILLFEED_MAX) this.killFeedData.length = KILLFEED_MAX;
     if (this.arenaOverlayVisible) this.renderKillFeed();
   }
@@ -413,7 +442,7 @@ export class RightSidePanel {
     this.replayResultsHandler = handler;
   }
 
-  /** Bereitet die spätere Detailansicht für die Raumstatistik vor. */
+  /** Bereitet die spÃ¤tere Detailansicht fÃ¼r die Raumstatistik vor. */
   setRoomStatisticsDetailHandler(handler: (() => void) | null): void {
     this.roomStatsDetailHandler = handler;
   }
@@ -498,7 +527,7 @@ export class RightSidePanel {
       return;
     }
     this.resultsHeaderButton.disableInteractive();
-    // Wird der Knopf unter dem Zeiger deaktiviert, laeuft kein pointerout mehr —
+    // Wird der Knopf unter dem Zeiger deaktiviert, laeuft kein pointerout mehr â€”
     // der vergroesserte Hover-Zustand muss deshalb hier zurueckgesetzt werden.
     this.resultsHeaderButton.setScale(1);
     this.resultsHeaderLabels.setScale(1);
@@ -509,6 +538,9 @@ export class RightSidePanel {
     * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
   showRoundResults(results: RoundResult[] | null, roundState: RoundState | null = null): void {
+    this.lastRoundResults = results;
+    this.lastRoundState = roundState;
+    this.lastRoundHasData = !!results && results.length > 0;
     const signature = JSON.stringify([
       bridge.getGameMode(),
       roundState?.status ?? null,
@@ -533,6 +565,7 @@ export class RightSidePanel {
 
     const sorted  = results ? this.sortRoundResultsForDisplay(results) : null;
     const hasData = !!sorted && sorted.length > 0;
+    this.lastRoundHasData = hasData;
 
     this.resultsTeamHeaders?.blue.label.setVisible(false);
     this.resultsTeamHeaders?.blue.score.setVisible(false);
@@ -562,7 +595,7 @@ export class RightSidePanel {
     }
   }
 
-  // ── Zug-Widget-Updates (no-op – jetzt im CenterHUD) ────────────────────────
+  // â”€â”€ Zug-Widget-Updates (no-op â€“ jetzt im CenterHUD) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
   setTrainArrival(_arrivalTimerSecs: number): void { /* no-op */ }
@@ -578,7 +611,7 @@ export class RightSidePanel {
     this.gameContainer.destroy(true);
   }
 
-  // ── Interne Build-Helfer ──────────────────────────────────────────────────
+  // â”€â”€ Interne Build-Helfer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
@@ -589,19 +622,19 @@ export class RightSidePanel {
         .setScrollFactor(0),
     );
 
-    // ── Trennlinie vor Killfeed ───────────────────────────────────────────────
+    // â”€â”€ Trennlinie vor Killfeed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, KILLFEED_TOP_Y - 10, ARENA_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
         .setScrollFactor(0),
     );
 
-    // ── Killfeed-Einträge ─────────────────────────────────────────────────────
-    // Layout: [KillerName (links)] [→ weapon → (mitte)] [VictimName (rechts)]
+    // â”€â”€ Killfeed-EintrÃ¤ge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Layout: [KillerName (links)] [â†’ weapon â†’ (mitte)] [VictimName (rechts)]
     // Killer und Victim nutzen die vollen Seitenbreiten; Waffe ist dazwischen.
     for (let i = 0; i < KILLFEED_MAX; i++) {
       const y = KILLFEED_TOP_Y + i * KILLFEED_ENTRY_H;
 
-      // Spielername links-bündig
+      // Spielername links-bÃ¼ndig
       const killer = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
@@ -615,7 +648,7 @@ export class RightSidePanel {
         color:      COLOR_KILLFEED_WEAPON,
       }).setOrigin(0.5, 0.5).setScrollFactor(0);
 
-      // Spielername rechts-bündig
+      // Spielername rechts-bÃ¼ndig
       const victim = this.scene.add.text(ARENA_SIDEBAR_RIGHT_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
@@ -626,21 +659,21 @@ export class RightSidePanel {
       this.killFeedRows.push({ killer, weapon, victim });
     }
 
-    // ── Trennlinie vor Leaderboard ────────────────────────────────────────────
+    // â”€â”€ Trennlinie vor Leaderboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, LB_SEP_Y, ARENA_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
         .setScrollFactor(0),
     );
 
-    // ── Leaderboard-Header ────────────────────────────────────────────────────
-    this.leaderboardScoreLabel = this.scene.add.text(LB_FRAGS_X, LB_HEADER_Y, 'F R A G S', {
+    // â”€â”€ Leaderboard-Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    this.leaderboardScoreLabel = this.scene.add.text(LB_FRAGS_X, LB_HEADER_Y, t('ui.score.frags'), {
       fontSize:   LB_HEADER_FONT,
       fontFamily: 'monospace',
       color:      COLOR_HEADER,
       fontStyle:  'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0);
     this.gameContainer.add(this.leaderboardScoreLabel);
-    this.leaderboardXpLabel = this.scene.add.text(LB_XP_X, LB_HEADER_Y, 'X P', {
+    this.leaderboardXpLabel = this.scene.add.text(LB_XP_X, LB_HEADER_Y, t('ui.score.xp'), {
       fontSize:   LB_HEADER_FONT,
       fontFamily: 'monospace',
       color:      COLOR_HEADER,
@@ -663,7 +696,7 @@ export class RightSidePanel {
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
     this.gameContainer.add(this.leaderboardSharedXpValue);
 
-    const blueLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, 'TEAM BLAU', {
+    const blueLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, t('ui.score.teamBlue'), {
       fontSize: LB_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
@@ -675,7 +708,7 @@ export class RightSidePanel {
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    const redLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, 'TEAM ROT', {
+    const redLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, t('ui.score.teamRed'), {
       fontSize: LB_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
@@ -693,7 +726,7 @@ export class RightSidePanel {
     };
     this.gameContainer.add([blueLabel, blueScore, redLabel, redScore]);
 
-    // ── Leaderboard-Einträge (Max. 12 Spieler) ────────────────────────────────
+    // â”€â”€ Leaderboard-EintrÃ¤ge (Max. 12 Spieler) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for (let i = 0; i < 12; i++) {
       const y = LB_START_Y + i * LB_ENTRY_H;
 
@@ -758,13 +791,13 @@ export class RightSidePanel {
       COLOR_SEPARATOR,
       0.8,
     ).setScrollFactor(0);
-    const damageLabel = this.scene.add.text(ROOM_STATS_DAMAGE_X, RESULTS_LABEL_Y, 'SCHADEN', {
+    const damageLabel = this.roomStatsDamageLabel = this.scene.add.text(ROOM_STATS_DAMAGE_X, RESULTS_LABEL_Y, t('ui.results.damage'), {
       fontSize: ROOM_STATS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0);
-    const takenLabel = this.scene.add.text(ROOM_STATS_DEATHS_X, RESULTS_LABEL_Y, 'ERLITTEN', {
+    const takenLabel = this.roomStatsTakenLabel = this.scene.add.text(ROOM_STATS_DEATHS_X, RESULTS_LABEL_Y, t('ui.results.taken'), {
       fontSize: ROOM_STATS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
@@ -773,7 +806,7 @@ export class RightSidePanel {
     this.roomStatsEmptyState = this.scene.add.text(
       LOBBY_SIDEBAR_CENTER_X,
       RESULTS_START_Y + 26,
-      'Noch keine Spieler im Raum',
+      t('ui.results.noPlayers'),
       textStyle('caption', {
         color: lerpColor(TEXT.muted, COLORS.GREY_3, 0.35),
         align: 'center',
@@ -826,7 +859,7 @@ export class RightSidePanel {
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
     promoteToClarityCamera(this.scene, this.lobbyContainer);
 
-    // ── Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) ──────────
+    // â”€â”€ Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Beschriftung und Pfeil liegen in einem Container auf der Knopfmitte, damit der
     // Hover-Effekt sie um ihre eigene Mitte skaliert statt Richtung Bildschirmursprung.
     this.resultsHeaderButton = this.scene.add.image(
@@ -834,7 +867,7 @@ export class RightSidePanel {
       RESULTS_HEADER_Y,
       this.ensureResultsHeaderTexture(false),
     ).setScrollFactor(0);
-    // Ohne abrufbare Auswertung bleibt der Knopf stumm — sonst verspraeche schon der
+    // Ohne abrufbare Auswertung bleibt der Knopf stumm â€” sonst verspraeche schon der
     // Zeigerwechsel eine Aktion, die es nicht gibt. Scharf schaltet ihn erst
     // `setResultsReplayAvailable()`.
     this.resultsHeaderButton.on('pointerdown', () => {
@@ -842,9 +875,9 @@ export class RightSidePanel {
       this.replayResultsHandler?.();
     });
 
-    this.resultsHeader = this.scene.add.text(-10, 0, 'LETZTE RUNDE', textStyle('label'))
+    this.resultsHeader = this.scene.add.text(-10, 0, t('ui.results.lastRound'), textStyle('label'))
       .setOrigin(0.5, 0.5).setScrollFactor(0);
-    // Gezeichnetes Chevron statt des Zeichens '▸': Textglyphen dieser Art rendern je nach
+    // Gezeichnetes Chevron statt des Zeichens 'â–¸': Textglyphen dieser Art rendern je nach
     // Schriftfallback unterschiedlich breit und sitzen selten auf der Grundlinie.
     this.resultsHeaderHint = this.scene.add.image(
       RESULTS_HEADER_BTN_W / 2 - 16, 0,
@@ -869,7 +902,7 @@ export class RightSidePanel {
       if (!this.roomStatsDetailAvailable) return;
       this.roomStatsDetailHandler?.();
     });
-    this.roomStatsHeader = this.scene.add.text(-10, 0, 'RAUM-STATISTIK', textStyle('label'))
+    this.roomStatsHeader = this.scene.add.text(-10, 0, t('ui.results.roomStats'), textStyle('label'))
       .setOrigin(0.5, 0.5).setScrollFactor(0);
     this.roomStatsHeaderHint = this.scene.add.image(
       RESULTS_HEADER_BTN_W / 2 - 16, 0,
@@ -931,13 +964,13 @@ export class RightSidePanel {
       ensureIconTexture(this.scene, 'trophy', 48, COLORS.GREEN_2),
     ).setDisplaySize(18, 18).setScrollFactor(0).setVisible(false);
 
-    this.resultsFragsLabel = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_LABEL_Y, 'FRAGS', {
+    this.resultsFragsLabel = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_LABEL_Y, t('ui.score.frags'), {
       fontSize: RESULTS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    this.resultsXpLabel = this.scene.add.text(RESULTS_XP_X, RESULTS_LABEL_Y, 'XP', {
+    this.resultsXpLabel = this.scene.add.text(RESULTS_XP_X, RESULTS_LABEL_Y, t('ui.score.xp'), {
       fontSize: RESULTS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
@@ -951,7 +984,7 @@ export class RightSidePanel {
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
     // Leerzustand statt blossem "Noch keine Daten": ein gedaempftes Symbol und eine Zeile, die
-    // erklaert, wann hier etwas steht – sonst liest sich die leere Spalte wie ein Fehler.
+    // erklaert, wann hier etwas steht â€“ sonst liest sich die leere Spalte wie ein Fehler.
     this.resultsEmptyIcon = this.scene.add.image(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 18,
       ensureIconTexture(this.scene, 'trophy', 96, COLORS.GREY_6),
@@ -959,7 +992,7 @@ export class RightSidePanel {
 
     this.resultsEmptyState = this.scene.add.text(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 54,
-      'Noch keine Runde gespielt',
+      t('ui.results.noRound'),
       textStyle('caption', {
         color: lerpColor(TEXT.muted, COLORS.GREY_3, 0.35),
         align: 'center',
@@ -980,7 +1013,7 @@ export class RightSidePanel {
       this.resultsEmptyState,
     ]);
 
-    const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
+    const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, t('ui.score.teamBlue'), {
       fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
@@ -1000,7 +1033,7 @@ export class RightSidePanel {
       COLORS.GREY_6,
       0.48,
     ).setScrollFactor(0).setVisible(false);
-    const redLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM ROT', {
+    const redLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, t('ui.score.teamRed'), {
       fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
@@ -1033,7 +1066,7 @@ export class RightSidePanel {
       redSeparator,
     ]);
 
-    // ── Endstand-Einträge (Max. 12 Spieler) ──────────────────────────────────
+    // â”€â”€ Endstand-EintrÃ¤ge (Max. 12 Spieler) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for (let i = 0; i < 12; i++) {
       const y = RESULTS_START_Y + i * RESULTS_ENTRY_H;
 
@@ -1062,7 +1095,7 @@ export class RightSidePanel {
     ]);
   }
 
-  // ── Killfeed-Render ───────────────────────────────────────────────────────
+  // â”€â”€ Killfeed-Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private renderKillFeed(): void {
     for (let i = 0; i < KILLFEED_MAX; i++) {
@@ -1070,13 +1103,13 @@ export class RightSidePanel {
       const entry = this.killFeedData[i];
 
       if (entry) {
-        // Neuere Einträge sind opaker als ältere
+        // Neuere EintrÃ¤ge sind opaker als Ã¤ltere
         const alpha = 1 - i * 0.14;
         const nextView: KillFeedEntryView = {
           killerText: this.truncate(entry.killerName, KILLFEED_NAME_MAXLEN),
           killerColor: this.toCachedCssColor(entry.killerColor),
           killerAlpha: alpha,
-          weaponText: `→ ${this.truncate(entry.weapon, 10)} →`,
+          weaponText: `→ ${this.truncate(getSourceName(entry.sourceId, getLocale()), 10)} →`,
           weaponAlpha: alpha * 0.55,
           victimText: this.truncate(entry.victimName, KILLFEED_NAME_MAXLEN),
           victimColor: this.toCachedCssColor(entry.victimColor),
@@ -1123,13 +1156,13 @@ export class RightSidePanel {
     return cssColor;
   }
 
-  /** Kürzt einen String auf maxLen Zeichen (hängt … an wenn nötig). */
+  /** KÃ¼rzt einen String auf maxLen Zeichen (hÃ¤ngt â€¦ an wenn nÃ¶tig). */
   private truncate(s: string, maxLen: number): string {
     return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}…`;
   }
 
   private formatRoomDamage(damage: number): string {
-    return String(Math.max(0, Math.round(damage)));
+    return formatNumber(Math.max(0, Math.round(damage)), getLocale());
   }
 
   private renderGroupedLeaderboard(entries: LeaderboardEntry[]): void {
@@ -1147,7 +1180,7 @@ export class RightSidePanel {
 
     this.lbTeamHeaders?.blue.label
       .setVisible(showBlueHeader)
-      .setText(getTeamLabel('blue', mode).toUpperCase())
+      .setText(getLocalizedTeamLabel('blue', mode).toUpperCase())
       .setPosition(ARENA_SIDEBAR_LEFT_X, LB_START_Y);
     this.lbTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
     this.leaderboardSharedXpValue
@@ -1160,7 +1193,7 @@ export class RightSidePanel {
 
     this.lbTeamHeaders?.red.label
       .setVisible(showRedHeader)
-      .setText(getTeamLabel('red', mode).toUpperCase())
+      .setText(getLocalizedTeamLabel('red', mode).toUpperCase())
       .setPosition(ARENA_SIDEBAR_LEFT_X, redHeaderY);
     this.lbTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(LB_FRAGS_X, redHeaderY);
     rowIndex = this.renderGroupedLeaderboardTeamRows(redEntries, rowIndex, redRowsStartY);
@@ -1264,7 +1297,7 @@ export class RightSidePanel {
       .setPosition(RESULTS_XP_X, summaryXpY);
     this.resultsTeamHeaders?.blue.label
       .setVisible(showBlueHeader)
-      .setText(getTeamLabel('blue', mode).toUpperCase())
+      .setText(getLocalizedTeamLabel('blue', mode).toUpperCase())
       .setPosition(LOBBY_SIDEBAR_LEFT_X, blueHeaderY);
     this.resultsTeamHeaders?.blue.score
       .setVisible(showBlueHeader)
@@ -1276,7 +1309,7 @@ export class RightSidePanel {
 
     this.resultsTeamHeaders?.red.label
       .setVisible(showRedHeader)
-      .setText(getTeamLabel('red', mode).toUpperCase())
+      .setText(getLocalizedTeamLabel('red', mode).toUpperCase())
       .setPosition(LOBBY_SIDEBAR_LEFT_X, redHeaderY);
     this.resultsTeamHeaders?.red.score
       .setVisible(showRedHeader)
@@ -1320,7 +1353,8 @@ export class RightSidePanel {
   private syncArenaLabels(entries: LeaderboardEntry[]): void {
     const sharedXp = this.resolveSharedXp(entries);
     const showDefenseXp = this.isDefenseXpMode() && this.hasSharedXpData(entries);
-    this.leaderboardScoreLabel.setText('F R A G S').setPosition(LB_FRAGS_X, LB_HEADER_Y);
+    this.leaderboardScoreLabel.setText(t('ui.score.frags')).setPosition(LB_FRAGS_X, LB_HEADER_Y);
+    this.leaderboardXpLabel.setText(t('ui.score.xp'));
     this.leaderboardXpLabel.setVisible(showDefenseXp);
     this.leaderboardSharedXpValue
       .setVisible(showDefenseXp && entries.length > 0)
@@ -1331,7 +1365,8 @@ export class RightSidePanel {
   private syncLobbyLabels(results: RoundResult[] | null): void {
     const sharedXp = this.resolveSharedXp(results ?? []);
     const showDefenseXp = this.isDefenseXpMode() && this.hasSharedXpData(results ?? []);
-    this.resultsFragsLabel.setText('FRAGS').setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
+    this.resultsFragsLabel.setText(t('ui.score.frags')).setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
+    this.resultsXpLabel.setText(t('ui.score.xp'));
     this.resultsXpLabel.setVisible(showDefenseXp);
     this.resultsSharedXpValue
       .setVisible(showDefenseXp && !!results?.length)
@@ -1370,11 +1405,11 @@ export class RightSidePanel {
       return;
     }
 
-    // Ein Host-Abbruch ist kein Spielausgang – daher weder Sieg- noch Niederlagenfarbe.
+    // Ein Host-Abbruch ist kein Spielausgang â€“ daher weder Sieg- noch Niederlagenfarbe.
     if (roundState.status === 'aborted') {
       this.resultsOutcomeIcon.setVisible(false);
       this.resultsOutcome
-        .setText('VOM HOST BEENDET')
+        .setText(t('ui.results.hostEnded'))
         .setColor(toCssColor(COLORS.GREY_3))
         .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_OUTCOME_Y)
         .setVisible(true);
@@ -1384,7 +1419,7 @@ export class RightSidePanel {
     const isVictory = roundState.status === 'victory';
     this.resultsOutcomeIcon.setVisible(isVictory);
     this.resultsOutcome
-      .setText(isVictory ? 'SIEG' : 'NIEDERLAGE')
+      .setText(t(isVictory ? 'ui.results.victory' : 'ui.results.defeat'))
       .setColor(toCssColor(isVictory ? COLORS.GREEN_2 : COLORS.RED_2))
       .setPosition(LOBBY_SIDEBAR_LEFT_X + (isVictory ? 24 : 0), RESULTS_OUTCOME_Y)
       .setVisible(true);

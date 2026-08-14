@@ -41,16 +41,16 @@ export const COOP_DEFENSE_PENDING_UPGRADE_ICONS: ReadonlySet<string> = new Set([
 
 /** Unlock nodes with their own upgrade-tree artwork instead of loadout-item icons. */
 export const COOP_DEFENSE_AUTHORED_UNLOCK_UPGRADE_ICONS: ReadonlySet<string> = new Set([
-  'unlock_reparaturstrahl',
+  'unlock_plasma_burner',
   'unlock_overcharge_core',
-  'unlock_energieinjektor',
+  'unlock_energy_injector',
   'unlock_tesla_turret',
   'unlock_gravity_turret',
   'unlock_slow_bubble_turret',
   'unlock_medic_pedestal',
   'unlock_armor_pedestal',
-  'unlock_felsbau',
-  'unlock_fliegenpilz',
+  'unlock_rock_barrier',
+  'unlock_spore_turret',
   'unlock_rocket_turret',
   'unlock_machine_gun_turret',
   'unlock_flame_turret',
@@ -68,7 +68,7 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   critical_chance: 'UPGRADE_CRITICAL_CHANCE',
   critical_damage: 'UPGRADE_CRITICAL_DAMAGE',
-  glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
+  glock_stopping_power: 'UPGRADE_LEAF_BLOWER_KNOCKBACK',
   shotgun_range: 'UPGRADE_SHOTGUN_RANGE',
   shotgun_lightning_radius: 'UPGRADE_SHOTGUN_LIGHTNING_RADIUS',
   molotov_grenade_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
@@ -106,8 +106,6 @@ export type CoopDefenseUpgradeLoadoutSelection = CoopDefenseLoadoutUnlockDefinit
 export interface CoopDefenseUpgradeDefinition {
   id: string;
   code?: string;
-  label: string;
-  description: string;
   categoryId: CoopDefenseUpgradeCategoryId;
   kind: CoopDefenseUpgradeKind;
   maxLevel: number;
@@ -123,8 +121,6 @@ export interface CoopDefenseUpgradeDefinition {
 
 export interface CoopDefenseUpgradeCategoryDefinition {
   id: CoopDefenseUpgradeCategoryId;
-  label: string;
-  description: string;
   sortOrder: number;
   upgrades: readonly CoopDefenseUpgradeDefinition[];
 }
@@ -137,8 +133,6 @@ export interface CoopDefenseResolvedEffectTotals {
 interface RawCoopDefenseUpgradeDefinition {
   id?: unknown;
   code?: unknown;
-  label?: unknown;
-  description?: unknown;
   kind?: unknown;
   maxLevel?: unknown;
   startingLevel?: unknown;
@@ -153,8 +147,6 @@ interface RawCoopDefenseUpgradeDefinition {
 
 interface RawCoopDefenseUpgradeCategoryDefinition {
   id?: unknown;
-  label?: unknown;
-  description?: unknown;
   sortOrder?: unknown;
   upgrades?: readonly unknown[];
 }
@@ -206,8 +198,8 @@ const INSPECTOR_UPGRADE_ROOT_IDS: readonly string[] = [
   'inspector_construction_hp',
   'inspector_repair_drone',
   'unlock_overcharge_core',
-  'unlock_reparaturstrahl',
-  'unlock_energieinjektor',
+  'unlock_plasma_burner',
+  'unlock_energy_injector',
 ];
 
 for (const definition of COOP_DEFENSE_UPGRADE_REGISTRY.upgrades) {
@@ -1062,18 +1054,11 @@ function normalizeCategoryDefinition(
   index: number,
 ): CoopDefenseUpgradeCategoryDefinition {
   const id = requireCategoryId(rawCategory.id, '[coopDefenseUpgrades] Category id is missing or invalid');
-  const label = requireString(rawCategory.label, `[coopDefenseUpgrades] Missing label for category ${id}`);
-  const description = requireString(
-    rawCategory.description,
-    `[coopDefenseUpgrades] Missing description for category ${id}`,
-  );
   const sortOrder = sanitizeInteger(rawCategory.sortOrder, index, 0);
   const rawUpgrades = Array.isArray(rawCategory.upgrades) ? rawCategory.upgrades : [];
 
   return {
     id,
-    label,
-    description,
     sortOrder,
     upgrades: rawUpgrades.map((upgrade, upgradeIndex) => (
       normalizeUpgradeDefinition(upgrade as RawCoopDefenseUpgradeDefinition, id, upgradeIndex)
@@ -1095,8 +1080,6 @@ function normalizeUpgradeDefinition(
   index: number,
 ): CoopDefenseUpgradeDefinition {
   const id = requireString(rawDefinition.id, `[coopDefenseUpgrades] Missing upgrade id in category ${categoryId}`);
-  const label = requireString(rawDefinition.label, `[coopDefenseUpgrades] Missing label for upgrade ${id}`);
-  const description = requireString(rawDefinition.description, `[coopDefenseUpgrades] Missing description for upgrade ${id}`);
   const kind = rawDefinition.kind === 'unlock' ? 'unlock' : 'upgrade';
   const maxLevel = Math.max(1, sanitizeInteger(rawDefinition.maxLevel, 1, 1));
   const startingLevel = Math.min(maxLevel, sanitizeInteger(rawDefinition.startingLevel, 0, 0));
@@ -1111,8 +1094,6 @@ function normalizeUpgradeDefinition(
   return {
     id,
     code: sanitizeOptionalString(rawDefinition.code),
-    label,
-    description,
     categoryId,
     kind,
     maxLevel,
@@ -1324,7 +1305,7 @@ function buildTopologicalUpgradeOrder(
       return CATEGORY_IDS.indexOf(left.categoryId) - CATEGORY_IDS.indexOf(right.categoryId);
     }
     if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder;
-    return left.label.localeCompare(right.label);
+    return left.id.localeCompare(right.id);
   });
 
   for (const definition of sorted) {
