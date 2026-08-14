@@ -69,6 +69,7 @@ export interface MenuArenaPreviewViewConfig {
   frame: MenuArenaPreviewFrameConfig;
   overlay: MenuArenaPreviewOverlayConfig;
   dirt: MenuArenaPreviewLayerConfig;
+  groundCover: MenuArenaPreviewLayerConfig;
   tracks: MenuArenaPreviewLayerConfig;
   decals: MenuArenaPreviewLayerConfig;
   rocks: MenuArenaPreviewLayerConfig;
@@ -669,6 +670,21 @@ export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
   return LOBBY_UI_RESERVED_ZONES.some((rect) => isInsideRect(gridX, gridY, rect));
 }
 
+/**
+ * Zusätzlich zu den Oberflächenflächen bleibt das obere Band moosfrei. Dort steht der Schriftzug
+ * aus Felsen, und weil jeder Fels von Dirt umgeben ist, ist der Dirt/Gras-Saum – der Schwerpunkt
+ * der Moosschicht – ausgerechnet über dem Titel am dichtesten.
+ */
+const groundCoverQuietZones: readonly GridRect[] = [
+  ...decalQuietZones,
+  titleRockGapZone,
+];
+
+/** Liegt die Zelle in einer Fläche, die von der Moosschicht ausgespart bleibt? */
+export function isGroundCoverQuietCell(gridX: number, gridY: number): boolean {
+  return groundCoverQuietZones.some((rect) => isInsideRect(gridX, gridY, rect));
+}
+
 const dirtQuietZones: readonly GridRect[] = [
   rightOverlayInfoQuietZone,
   overlayClearZones[1],
@@ -792,6 +808,8 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
       screenShadeAlpha: 0.08,
     },
     dirt: { visible: true, alpha: 0.92 },
+    // Bewusst unter der Arena-Deckkraft: in der Lobby liegt Menütext über dem Boden.
+    groundCover: { visible: true, alpha: 0.62 },
     tracks: { visible: false, alpha: 0 },
     decals: { visible: true, alpha: 0.9 },
     rocks: { visible: true, alpha: 1 },

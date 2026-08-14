@@ -9,6 +9,7 @@
     "icons:generate": "node scripts/generate-upgrade-icons.mjs",
     "icons:generate-one": "node scripts/generate-upgrade-icons.mjs --id",
     "sprites:held": "node scripts/generate-held-item-sprites.mjs",
+    "sprites:groundcover": "node scripts/generate-ground-cover-textures.mjs",
     "dev": "vite",
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",

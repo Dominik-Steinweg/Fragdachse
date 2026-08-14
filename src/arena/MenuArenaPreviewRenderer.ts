@@ -12,6 +12,9 @@ import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { DIRT_BLOB_SURFACE_PROFILE, ROCK_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
+import { generateGroundCoverPlacements } from './GroundCoverField';
+import { bakeGroundCoverLayer } from './GroundCoverLayer';
+import { isGroundCoverQuietCell } from './MenuArenaPreviewConfig';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -127,9 +130,10 @@ export class MenuArenaPreviewRenderer {
       : [];
     this.applyLayerStyle(this.tracks, view.tracks);
 
-    // Reihenfolge der Tiefenbaender bleibt exakt erhalten: Boden < Decals < Fels-Schatten
+    // Reihenfolge der Tiefenbaender bleibt exakt erhalten: Boden < Moos < Decals < Fels-Schatten
     // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
     this.bakeDirtLayer(layout, metrics, view.dirt);
+    this.bakeGroundCoverLayer(layout, metrics, view.groundCover);
     this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals, this.bakedLayers);
 
     this.bakeRockBands();
@@ -431,6 +435,38 @@ export class MenuArenaPreviewRenderer {
     for (const image of fringe) image.destroy();
     for (const image of images) image.destroy();
     this.bakedLayers.push({ layer: baked, config: layerConfig });
+  }
+
+  /**
+   * Backt die Moosschicht über denselben Helfer wie die Arena. Die Vorschau braucht keine
+   * Stempel-Geometrie zurück – einen Terrain-Farb-Sampler gibt es dort nicht.
+   *
+   * Der Layer landet in `bakedLayers` und nicht in `rockBandLayers`: Er leitet sich allein aus
+   * dem Dirt ab, der zur Laufzeit unverändert bleibt, und übersteht damit jede Fels-Zerstörung
+   * ohne Neubau.
+   */
+  private bakeGroundCoverLayer(
+    layout: ArenaLayout,
+    metrics: { offsetX: number; offsetY: number; gridCols: number; gridRows: number },
+    layerConfig: MenuArenaPreviewLayerConfig,
+  ): void {
+    if (!layerConfig.visible || layerConfig.alpha <= 0) return;
+    const { bounds } = this.config.view;
+    const { layer } = bakeGroundCoverLayer(
+      this.scene,
+      generateGroundCoverPlacements({
+        seed: layout.seed,
+        dirt: layout.dirt ?? [],
+        metrics,
+        excludeCell: isGroundCoverQuietCell,
+      }),
+      bounds,
+      DEPTH.GROUND_COVER,
+      layerConfig.alpha,
+    );
+    if (!layer) return;
+    layer.setVisible(this.visible && layerConfig.visible);
+    this.bakedLayers.push({ layer, config: layerConfig });
   }
 
   /**

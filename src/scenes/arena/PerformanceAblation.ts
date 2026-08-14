@@ -184,6 +184,7 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
     case 'staticDecor':
       return STATIC_DECOR_TEXTURE_HINTS.some((hint) => key.includes(hint))
         || depth === DEPTH.DIRT
+        || depth === DEPTH.GROUND_COVER
         || depth === DEPTH.DECALS;
     case 'train':
       // Lok, Waggons und ihre Schatten liegen im schmalen Band um DEPTH.TRAIN.

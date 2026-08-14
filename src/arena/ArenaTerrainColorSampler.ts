@@ -71,6 +71,13 @@ export function createArenaTerrainColorSampler(
     drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
   }
 
+  // Die Moosschicht liegt zwischen Dirt und Gleisen (DEPTH.GROUND_COVER) und wird hier in genau
+  // dieser Reihenfolge nachgezogen. Ohne sie meldete der Sampler unter jedem Fleck weiterhin die
+  // reine Dirt- bzw. Grasfarbe.
+  for (const stamp of arenaResult.groundCoverStamps) {
+    drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
+  }
+
   for (const track of arenaResult.trackObjects) {
     drawTileSprite(scene, ctx, track);
   }
@@ -120,12 +127,19 @@ function drawDisplayObjectFrame(
     displayHeight: number;
     rotation: number;
     alpha: number;
+    mirrorX?: boolean;
+    mirrorY?: boolean;
   },
 ): void {
   ctx.save();
   ctx.globalAlpha = displayObject.alpha;
   ctx.translate(displayObject.x - ARENA_OFFSET_X, displayObject.y - ARENA_OFFSET_Y);
   ctx.rotate(displayObject.rotation);
+  // Skalieren nach dem Drehen: das ist die Reihenfolge der Phaser-Transformation (T·R·S). Ohne
+  // die Spiegelung laese der Sampler die Farbe des ungespiegelten Flecks.
+  if (displayObject.mirrorX || displayObject.mirrorY) {
+    ctx.scale(displayObject.mirrorX ? -1 : 1, displayObject.mirrorY ? -1 : 1);
+  }
   drawImageFrame(
     scene,
     ctx,

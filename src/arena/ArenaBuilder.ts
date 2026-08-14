@@ -4,6 +4,7 @@ import {
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_STATIC_FRAMES_VISIBLE,
   DEPTH, COLORS,
+  GRID_COLS, GRID_ROWS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
   CAPTURE_THE_BEER_BASE_TINT_ALPHA,
   CAPTURE_THE_BEER_BLUE_BASE_TINT,
@@ -24,6 +25,8 @@ import {
   getBlobSurfaceMottleReachPx,
   stampBlobSurfaceMottle,
 } from './BlobSurfaceMottle';
+import { generateGroundCoverPlacements } from './GroundCoverField';
+import { bakeGroundCoverLayer } from './GroundCoverLayer';
 import { RockGridIndex } from './RockGridIndex';
 import {
   ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
@@ -93,6 +96,15 @@ export interface ArenaBuilderResult {
    */
   dirtStamps: DirtStamp[];
   /**
+   * Die prozedurale Moosschicht ueber der Dirt/Gras-Grenze, ebenfalls einmalig gebacken. Sie
+   * entsteht aus `layout.seed` und `layout.dirt` und liegt auf `DEPTH.GROUND_COVER`, also ueber
+   * dem Dirt samt Mottle und unter Gleisen, Basiszonen und Decals. `null`, wenn keine Platzierung
+   * zustande kommt.
+   */
+  groundCoverLayer: Phaser.GameObjects.RenderTexture | null;
+  /** Stempel-Geometrie der Moosschicht – aus demselben Grund erhalten wie `dirtStamps`. */
+  groundCoverStamps: DirtStamp[];
+  /**
    * Die statischen Decals, ebenfalls einmalig in eine RenderTexture gebacken. Decals sind rein
    * visuell und zur Laufzeit unveränderlich (keine Kollision, keine HP), deshalb gilt für sie
    * dieselbe Backregel wie für den Dirt-Boden. `null`, wenn die Map keine Decals hat.
@@ -147,6 +159,9 @@ export interface DirtStamp {
   displayHeight: number;
   rotation: number;
   alpha: number;
+  /** Nur die Ground-Cover-Schicht spiegelt ihre Stempel; sonst undefiniert. */
+  mirrorX?: boolean;
+  mirrorY?: boolean;
 }
 
 export class ArenaBuilder {
@@ -245,6 +260,10 @@ export class ArenaBuilder {
     // Einzel-Images verwerfen, damit sie nicht jeden Frame durch die Display-Liste laufen.
     const { dirtLayer, dirtStamps } = this.bakeDirt(layout.dirt ?? []);
 
+    // Moosschicht ueber der Dirt/Gras-Grenze – zwischen Dirt und Decals, weil sie den Saum
+    // ueberdecken soll, die kleinen Decals aber weiterhin darauf liegen.
+    const { groundCoverLayer, groundCoverStamps } = this.bakeGroundCover(layout);
+
     // Decals (rein visuell, oberhalb von Gleisen/Dirt, unter Felsen) – zur Laufzeit
     // unveraenderlich und deshalb wie der Dirt-Boden gebacken.
     const { decalLayer, decalStamps } = this.bakeDecals(layout.decals ?? []);
@@ -293,6 +312,8 @@ export class ArenaBuilder {
       trackObjects,
       dirtLayer,
       dirtStamps,
+      groundCoverLayer,
+      groundCoverStamps,
       decalLayer,
       decalStamps,
       rockDecalLayer: null,
@@ -846,6 +867,11 @@ export class ArenaBuilder {
     result.dirtLayer = null;
     result.dirtStamps.length = 0;
 
+    // Moosschicht (gebackene RenderTexture + Stamp-Geometrie)
+    if (result.groundCoverLayer?.active) result.groundCoverLayer.destroy();
+    result.groundCoverLayer = null;
+    result.groundCoverStamps.length = 0;
+
     // Decals (gebackene RenderTexture + Stamp-Geometrie)
     if (result.decalLayer?.active) result.decalLayer.destroy();
     result.decalLayer = null;
@@ -1060,6 +1086,37 @@ export class ArenaBuilder {
 
   private buildDecals(decals: DecalCell[]): Phaser.GameObjects.Image[] {
     return ArenaVisualFactory.createDecals(this.scene, decals);
+  }
+
+  /**
+   * Backt die prozedurale Moosschicht. Die Platzierung leitet sich allein aus `layout.seed` und
+   * `layout.dirt` ab, ist also auf Host und Clients identisch, ohne dass etwas zusaetzlich
+   * uebertragen werden muesste.
+   *
+   * Die Arena-Metriken werden hier gelesen und nicht zwischengespeichert: `ARENA_*` und `GRID_*`
+   * sind zur Laufzeit veraenderlich (breite Coop-Karten, Capture the Beer).
+   */
+  private bakeGroundCover(layout: ArenaLayout): {
+    groundCoverLayer: Phaser.GameObjects.RenderTexture | null;
+    groundCoverStamps: DirtStamp[];
+  } {
+    const placements = generateGroundCoverPlacements({
+      seed: layout.seed,
+      dirt: layout.dirt ?? [],
+      metrics: {
+        offsetX: ARENA_OFFSET_X,
+        offsetY: ARENA_OFFSET_Y,
+        gridCols: GRID_COLS,
+        gridRows: GRID_ROWS,
+      },
+    });
+    const { layer, stamps } = bakeGroundCoverLayer(
+      this.scene,
+      placements,
+      getArenaRockWorldFrame(),
+      DEPTH.GROUND_COVER,
+    );
+    return { groundCoverLayer: layer, groundCoverStamps: stamps };
   }
 
   // ── Gleise ────────────────────────────────────────────────────────────────

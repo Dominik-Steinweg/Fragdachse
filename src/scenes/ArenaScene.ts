@@ -2,6 +2,7 @@
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
+import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
 import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
@@ -400,6 +401,7 @@ export class ArenaScene extends Phaser.Scene {
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
+    preloadGroundCoverAssets(this.load);
     preloadTurretVisualAssets(this.load);
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');

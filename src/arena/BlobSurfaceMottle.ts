@@ -14,6 +14,7 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import { fillRadialGradientTexture } from '../effects/EffectUtils';
+import { hashCell01 as hash01 } from './CellHash';
 import { getBlobSurfaceMottleTextureKey } from './BlobSurfaceProfile';
 import type { BlobSurfaceMottleConfig, BlobSurfaceProfile } from './BlobSurfaceProfile';
 
@@ -45,23 +46,6 @@ function falloffTextureKey(size: number, falloff: readonly (readonly [number, st
     hash = Math.imul(hash ^ stops.charCodeAt(index), 0x01000193);
   }
   return `__blob_surface_falloff_${size}_${(hash >>> 0).toString(16)}`;
-}
-
-/**
- * Deterministic hash of a cell.
- *
- * Placement depends only on grid coordinates, never on a position in a list and never on the
- * number of living cells. That is the precondition for rebaking the layer on every obstacle
- * change: a list-dependent random sequence would recolour the entire surface as soon as a
- * single cell disappears – visible in game as all rocks flickering whenever one breaks.
- */
-function hash01(gridX: number, gridY: number, salt: number): number {
-  let h = Math.imul(gridX + 0x9e3779b1, 0x85ebca6b)
-    ^ Math.imul(gridY + 0x7f4a7c15, 0xc2b2ae35)
-    ^ Math.imul(salt + 0x165667b1, 0x27d4eb2d);
-  h = Math.imul(h ^ (h >>> 16), 0x2545f491);
-  h ^= h >>> 15;
-  return (h >>> 0) / 4294967296;
 }
 
 function resolveLiftAlpha(gain: number, materialPeak: number): number {

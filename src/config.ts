@@ -89,6 +89,12 @@ export const SHOT_AUDIO_REMOTE_DISTANCE_EXPONENT = 0.45;
 export const DEPTH = {
   GRASS: 1,
   DIRT: 2,
+  /**
+   * Grosse Moosflaechen, die bewusst ueber die Dirt-Silhouette hinaus auf das Gras laufen und
+   * umgekehrt. Sie liegen ueber Dirt samt eingebackenem Mottle, aber unter Gleisen, Basiszonen
+   * und den kleinen Decals – Gameplay-Markierungen bleiben damit unverdeckt.
+   */
+  GROUND_COVER: 2.5,
   TRACKS: 3,
   BASES: 4,
   DECALS: 5,

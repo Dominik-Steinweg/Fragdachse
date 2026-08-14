@@ -40,6 +40,10 @@ Ein Kantenelement, das je Front rotiert wird, misst seine Größe in lokalen Ach
 
 Fortlaufende Animationsphasen werden pro Frame integriert (`phase += dt * speed`) und nicht aus absoluter Rundenzeit mal Geschwindigkeit berechnet. Sonst springt jede Marke bei einem Geschwindigkeits- oder Periodenwechsel um einen von der Laufzeit abhängigen Betrag. Der Zeitschritt stammt aus derselben replizierten Rundenzeit und wird gegen Rücksprünge und Frame-Hänger begrenzt.
 
+## Bodenbänder
+
+Der Boden ist eine feste Reihenfolge gebackener Bänder: Gras (`DEPTH.GRASS`) < Dirt samt eingebackenem `BlobSurfaceMottle` (`DEPTH.DIRT`) < Ground Cover (`DEPTH.GROUND_COVER`) < Gleise (`DEPTH.TRACKS`) < Basiszonen (`DEPTH.BASES`) < Decals (`DEPTH.DECALS`). Jedes neue Bodenband muss der `ArenaTerrainColorSampler` in genau derselben Reihenfolge auf seine CPU-Canvas nachziehen, sonst weichen gelesene und sichtbare Bodenfarbe voneinander ab. Der Sampler zeichnet nicht aus Live-Objekten, sondern aus erhaltener Stempel-Geometrie; jede Transformation eines Bandes – auch Spiegelung – braucht dort ihr Gegenstück, weil `drawImage` sie nicht mitführt.
+
 ## Lighting und Schatten
 
 ShadowSystem, LightingSystem und Post-FX sind getrennte Verantwortlichkeiten. LightingSystem komponiert dynamisches Licht und Verdeckung in eine Lightmap, die als ein Overlay in der Tiefenordnung liegt. Phasers eingebautes per-Object-Lighting ist dafür nicht der Projektvertrag.
