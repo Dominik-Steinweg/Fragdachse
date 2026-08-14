@@ -87,6 +87,10 @@ export class CoopDefenseMapEventAnnouncementPresenter {
       // Zugfahrten bleiben spielmechanisch aktiv, sind aber bewusst kein HUD-Ereignis:
       // ihre Einblendungen waren im Verhältnis zur taktischen Relevanz zu störend.
       if (event.type === 'train') continue;
+      // Einzelne Zielverfolgungs-Luftangriffe telegraphieren ihre Position bereits ueber
+      // die sichtbaren Airstrike-Warnkreise. Die wiederholten Map-Event-Pop-ups wuerden
+      // diese taktische Information nur doppelt und bei jedem Zyklus anzeigen.
+      if (event.type === 'airstrike' && event.pattern === 'player-hunt') continue;
       const message = createAnnouncementMessage(event, entry);
       if (message) this.announcements.enqueue({
         ...message,

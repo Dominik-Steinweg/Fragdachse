@@ -44,6 +44,7 @@ interface ClientProjectileState {
   bulletVisualPreset?: BulletVisualPreset;
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
+  sporeVisualVariant?: 'spore' | 'spore_void';
   ownerColor?: number;
   projectileVisualScale?: number;
   isDecaying: boolean;
@@ -483,7 +484,7 @@ export class ProjectileManager {
     if (style === 'spore' && this.sporeRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.sporeRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+      this.sporeRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.sporeVisualVariant);
     }
 
     if (style === 'energy_ball' && this.energyBallRenderer) {
@@ -615,6 +616,7 @@ export class ProjectileManager {
       explosion:      cfg.explosion,
       enemyHitExplosion: cfg.enemyHitExplosion,
       impactCloud:    cfg.impactCloud,
+      sporeVisualVariant: cfg.sporeVisualVariant,
       homing:         cfg.homing,
       energyInjectorPayload: cfg.energyInjectorPayload,
       sourceTurretId: cfg.sourceTurretId,
@@ -1680,6 +1682,7 @@ export class ProjectileManager {
         weaponName: proj.weaponName,
         explosion: proj.explosion,
         impactCloud: proj.impactCloud,
+        sporeVisualVariant: proj.sporeVisualVariant,
         homing: proj.splitHoming ?? proj.homing,
         projectileVisualScale: proj.projectileVisualScale,
         smokeTrailColor: proj.smokeTrailColor,
@@ -1796,7 +1799,13 @@ export class ProjectileManager {
       }
     }
     if (proj.projectileStyle === 'spore') {
-      this.sporeRenderer?.playImpact(destroyX, destroyY, proj.color, Math.max(destroyScale, 0.9));
+      this.sporeRenderer?.playImpact(
+        destroyX,
+        destroyY,
+        proj.color,
+        Math.max(destroyScale, 0.9),
+        proj.sporeVisualVariant,
+      );
     }
     this.hydraRenderer?.destroyVisual(proj.id);
     this.energyBallRenderer?.destroyVisual(proj.id);
@@ -2714,8 +2723,8 @@ export class ProjectileManager {
           break;
         case 'spore':
           if (sporeR) {
-            if (!sporeR.has(id)) sporeR.createVisual(id, x, y, w, proj.color);
-            sporeR.updateVisual(id, x, y, w, vx, vy, proj.color);
+            if (!sporeR.has(id)) sporeR.createVisual(id, x, y, w, proj.color, proj.sporeVisualVariant);
+            sporeR.updateVisual(id, x, y, w, vx, vy, proj.color, proj.sporeVisualVariant);
           }
           break;
         case 'grenade':
@@ -2760,6 +2769,7 @@ export class ProjectileManager {
         bulletVisualPreset: p.bulletVisualPreset,
         grenadeVisualPreset: p.grenadeVisualPreset,
         energyBallVariant: p.energyBallVariant,
+        sporeVisualVariant: p.sporeVisualVariant,
         velocityDecay: p.velocityDecay,
         miniRocketPhase: p.miniRocketPhase,
         miniRocketCascadeStage: (p.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
@@ -2840,6 +2850,7 @@ export class ProjectileManager {
         bulletVisualPreset: proj.bulletVisualPreset,
         grenadeVisualPreset: proj.grenadeVisualPreset,
         energyBallVariant: proj.energyBallVariant,
+        sporeVisualVariant: proj.sporeVisualVariant,
         ownerColor: proj.ownerColor,
         projectileVisualScale: proj.projectileVisualScale,
         isDecaying: isFlame || isLeafBlower,
@@ -2902,9 +2913,9 @@ export class ProjectileManager {
         hydras.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
       } else if (isSporeP && spores) {
         if (!spores.has(proj.id)) {
-          spores.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+          spores.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.sporeVisualVariant);
         }
-        spores.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
+        spores.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.sporeVisualVariant);
       } else if (isGrenadeP && grenades) {
         if (!grenades.has(proj.id)) {
           grenades.createVisual(proj.id, proj.x, proj.y, proj.size, proj.grenadeVisualPreset ?? 'he', proj.ownerColor ?? proj.color);
@@ -3193,7 +3204,16 @@ export class ProjectileManager {
       } else if (state.style === 'hydra' && this.hydraRenderer?.has(id)) {
         this.hydraRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
       } else if (state.style === 'spore' && this.sporeRenderer?.has(id)) {
-        this.sporeRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
+        this.sporeRenderer.updateVisual(
+          id,
+          ex,
+          ey,
+          state.size,
+          velocityX,
+          velocityY,
+          state.color,
+          state.sporeVisualVariant,
+        );
       } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {
         this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {

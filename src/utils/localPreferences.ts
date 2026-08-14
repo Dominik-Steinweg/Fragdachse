@@ -1157,6 +1157,24 @@ export function unlockStoredCoopDefenseClassesAfterVictory(completedMapId: strin
   const storedProgress = current.progression.coopDefense;
   const nextClassIds = [...new Set([...storedProgress.unlockedClassIds, ...targetClassIds])];
   if (nextClassIds.length === storedProgress.unlockedClassIds.length) return false;
+
+  const profilesByClass = storedProgress.unlockedClassIds.length === 0
+    ? mirrorDefaultProfileToClasses(
+      storedProgress.defaultProfile,
+      storedProgress.completedBossMapIds.length,
+    )
+    : { ...storedProgress.profilesByClass };
+  if (storedProgress.unlockedClassIds.length > 0) {
+    for (const classId of targetClassIds) {
+      if (storedProgress.unlockedClassIds.includes(classId)) continue;
+      profilesByClass[classId] = constrainCoopDefenseUpgradeProfileToBossPoints(
+        buildDefaultCoopDefenseUpgradeProfile(classId),
+        storedProgress.completedBossMapIds.length,
+        classId,
+      );
+    }
+  }
+
   writePreferences({
     ...current,
     progression: {
@@ -1165,10 +1183,7 @@ export function unlockStoredCoopDefenseClassesAfterVictory(completedMapId: strin
         ...storedProgress,
         classesUnlocked: true,
         unlockedClassIds: nextClassIds,
-        profilesByClass: mirrorDefaultProfileToClasses(
-          storedProgress.defaultProfile,
-          storedProgress.completedBossMapIds.length,
-        ),
+        profilesByClass,
       },
     },
   });

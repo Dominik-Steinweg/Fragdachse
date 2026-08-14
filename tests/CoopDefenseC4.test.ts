@@ -8,6 +8,7 @@ vi.mock('../src/network/bridge', () => ({
 
 import {
   COOP_DEFENSE_MAP_CONFIGS,
+  type CoopDefenseMapAirstrikeEventConfig,
   type CoopDefenseMapTrainEventConfig,
   type ResolvedCoopDefenseMapEventConfig,
 } from '../src/config/coopDefenseMaps';
@@ -25,6 +26,17 @@ function makeTrainEvent(overrides: Partial<CoopDefenseMapTrainEventConfig> = {})
     id: 'train',
     type: 'train',
     start: { type: 'time', atMs: 0 },
+    ...overrides,
+  };
+}
+
+function makePlayerHuntEvent(overrides: Partial<CoopDefenseMapAirstrikeEventConfig> = {}): CoopDefenseMapAirstrikeEventConfig {
+  return {
+    id: 'player-hunt',
+    type: 'airstrike',
+    start: { type: 'time', atMs: 0 },
+    pattern: 'player-hunt',
+    intervalMs: 10_000,
     ...overrides,
   };
 }
@@ -79,6 +91,17 @@ describe('Coop Defense C4 map-event presentation', () => {
     harness.presenter.sync(state('train', 'train', 'completed'));
     expect(harness.messages).toHaveLength(0);
     expect(harness.clearedTopics).toContain('map-event:train');
+  });
+
+  it('does not announce repeating player-hunt airstrikes', () => {
+    const harness = createAnnouncementHarness();
+    harness.presenter.setMapEvents([makePlayerHuntEvent()]);
+    harness.presenter.sync(state('player-hunt', 'airstrike', 'dormant'));
+
+    harness.presenter.sync(state('player-hunt', 'airstrike', 'active'));
+    harness.presenter.sync(state('player-hunt', 'airstrike', 'waiting-repeat', 2));
+    harness.presenter.sync(state('player-hunt', 'airstrike', 'active', 2));
+    expect(harness.messages).toHaveLength(0);
   });
 
   it('announces each event family through separate queue topics and keeps stale messages irrelevant', () => {

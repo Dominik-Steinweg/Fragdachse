@@ -65,7 +65,7 @@ describe('Inferno Colossus void fire chunks', () => {
 
     const system = new CoopDefenseEnemyAbilitySystem(
       enemyManager,
-      {} as PlayerManager,
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
       {} as ProjectileManager,
       {} as CombatSystem,
       null as EnergyShieldSystem | null,

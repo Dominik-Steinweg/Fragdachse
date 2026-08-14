@@ -27,6 +27,15 @@ Fachliche RPCs werden in RpcCoordinator registriert und über Methoden von Netwo
 
 Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, Layout, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen Input, Ping und KEY_GAME_STATE.
 
+Kumulative Raumstatistiken liegen als reliable per-player States im Raum: Der Host initialisiert sie nur
+beim erstmaligen Anlegen eines Spieler-Slots. Runden- und Moduswechsel setzen sie nicht zurück; ein
+Resume behält die Spieler-ID und damit die Werte, während ein neuer Raum einen neuen Store erhält.
+
+Die Lobby-Auswahl der Spieler-Loadouts liegt weiterhin in den per-player Slot-States. Für die
+Inspector-Anzeige gibt es zusätzlich den kleinen reliable Lobby-Preview-State `llp` mit Klasse
+und Tool-Referenzen; er ist nur für die laufende Vorschau bestimmt. `LoadoutCommitSnapshot`
+bleibt ausschließlich der beim Ready-Klick eingefrorene Commit-/Round-Snapshot.
+
 Bei Delta-Slices bedeutet ein fehlendes Feld „unverändert“, nicht „leer“. Der Client merged gegen den letzten Stand. NetworkBridge.resetGameStateCache() muss bei jedem Arena-/Rundenwechsel laufen. Ein Latejoiner darf keinen Delta-Payload als neue Baseline akzeptieren; FullGameStateBootstrap verlangt _full und alle definierten Slices für die aktuelle Runde.
 
 Spielerzustände werden vollständig pro Tick durch playerStateCodec.ts kompakt kodiert. Gegner nutzen enemySnapshotCodec.ts mit Full-/Delta-Upserts und Removals. Weitere Slices dürfen eigene Delta-/Full-Regeln haben; neue Daten zuerst auf Häufigkeit und Lebenszyklus prüfen, statt automatisch den heißen Enemy-Codec zu erweitern.

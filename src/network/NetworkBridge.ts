@@ -25,7 +25,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -46,6 +46,7 @@ import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoad
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId } from '../config/coopDefenseConstructions';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
@@ -125,6 +126,7 @@ const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
+const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufende Lobby-Vorschau {c: classId, t: tool refs}
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
@@ -133,6 +135,8 @@ const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
+const KEY_ROOM_DAMAGE  = 'rmd';   // per-player: number (raumweite, kumulierte Schadenssumme)
+const KEY_ROOM_DEATHS  = 'rde';   // per-player: number (raumweite, kumulierte Tode)
 const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
@@ -255,6 +259,16 @@ export interface RoundResult {
   sharedXp?: number;
   /** Gemeinsame, autoritative B8-Epic-Garantie; pro berechtigter Zeile wiederholt. */
   epicGuaranteeCount?: number;
+}
+
+/** Raumweite Statistik eines aktuell verbundenen Spielers. */
+export interface RoomPlayerStatistics {
+  id: string;
+  name: string;
+  colorHex: number;
+  teamId: TeamId | null;
+  damage: number;
+  deaths: number;
 }
 
 export type RoundOutcome = 'victory' | 'defeat';
@@ -770,7 +784,10 @@ export class NetworkBridge {
     requireRoom().onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
-      if (isHost()) this.hostEnsureTeamAssignment(state.id);
+      if (isHost()) {
+        this.hostEnsureTeamAssignment(state.id);
+        this.hostInitializeRoomStatistics(state.id);
+      }
 
       state.onQuit(() => {
         const hadColor = this.getPlayerColor(state.id) !== undefined;
@@ -3116,6 +3133,57 @@ export class NetworkBridge {
     return this.playerStateMap.get(playerId)?.getState(key) as string | undefined;
   }
 
+  /**
+   * Publiziert die laufende Lobby-Auswahl des lokalen Spielers. Dieser Zustand ist bewusst
+   * getrennt vom Ready-Commit: Die Lobby darf Inspector-Tools zeigen, ohne den verbindlichen
+   * LoadoutCommitSnapshot vorzeitig zu verwenden.
+   */
+  setLocalLobbyLoadoutPreview(preview: LobbyLoadoutPreviewState): void {
+    const classId = isCoopDefenseClassId(preview.coopDefenseClassId)
+      ? preview.coopDefenseClassId
+      : null;
+    const tools = classId === 'inspector_gadachs'
+      ? preview.tools
+        .filter((tool) => tool.kind === 'construction'
+          ? isConstructionId(tool.id)
+          : typeof tool.id === 'string' && UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] !== undefined)
+        .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS)
+        .map((tool) => ({ kind: tool.kind, id: tool.id }))
+      : [];
+    const next = { c: classId, t: tools };
+    const current = myPlayer().getState(KEY_LOBBY_LOADOUT_PREVIEW);
+    if (JSON.stringify(current) === JSON.stringify(next)) return;
+    myPlayer().setState(KEY_LOBBY_LOADOUT_PREVIEW, next, true);
+  }
+
+  /** Liest die laufende Lobby-Auswahl; der Ready-Commit bleibt dafuer absichtlich unberuehrt. */
+  getPlayerLobbyLoadoutPreview(playerId: string): LobbyLoadoutPreviewState | null {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_LOBBY_LOADOUT_PREVIEW);
+    if (!raw || typeof raw !== 'object') return null;
+    const value = raw as { c?: unknown; t?: unknown };
+    const classId = isCoopDefenseClassId(value.c) ? value.c : null;
+    if (classId === null) return { coopDefenseClassId: null, tools: [] };
+    if (classId !== 'inspector_gadachs' || !Array.isArray(value.t)) {
+      return { coopDefenseClassId: classId, tools: [] };
+    }
+    const tools = value.t
+      .filter((tool): tool is { kind: 'construction' | 'utility'; id: string } => (
+        !!tool
+        && typeof tool === 'object'
+        && ((tool as { kind?: unknown }).kind === 'construction'
+          || (tool as { kind?: unknown }).kind === 'utility')
+        && typeof (tool as { id?: unknown }).id === 'string'
+      ))
+      .filter((tool) => tool.kind === 'construction'
+        ? isConstructionId(tool.id)
+        : UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] !== undefined)
+      .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS)
+      .map((tool): LoadoutToolRef => tool.kind === 'construction' && isConstructionId(tool.id)
+        ? { kind: 'construction', id: tool.id }
+        : { kind: 'utility', id: tool.id });
+    return { coopDefenseClassId: classId, tools };
+  }
+
   /** Host-only: Publiziert bis wann die Utility eines Spielers im Cooldown ist. */
   publishUtilityCooldownUntil(playerId: string, cooldownUntil: number, utilityId = '__default__'): void {
     if (!isHost()) return;
@@ -3296,6 +3364,60 @@ export class NetworkBridge {
     for (const ps of this.playerStateMap.values()) {
       ps.setState(KEY_FRAGS, 0);
     }
+  }
+
+  // ── Raum-Statistik: pro Spieler, bewusst nicht rundengebunden ──────────
+
+  /** Liest den kumulierten, tatsächlich verursachten Schaden eines Spielers. */
+  getPlayerRoomDamage(playerId: string): number {
+    return this.readNonNegativePlayerNumber(playerId, KEY_ROOM_DAMAGE);
+  }
+
+  /** Liest die kumulierten tatsächlichen Spielertode eines Spielers. */
+  getPlayerRoomDeaths(playerId: string): number {
+    return this.readNonNegativePlayerNumber(playerId, KEY_ROOM_DEATHS);
+  }
+
+  /** Host-only: addiert tatsächlich verursachten Schaden ohne Rundungs-/Overkill-Verlust. */
+  addPlayerRoomDamage(playerId: string, amount: number): void {
+    if (!isHost() || !Number.isFinite(amount) || amount <= 0) return;
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    state.setState(KEY_ROOM_DAMAGE, this.getPlayerRoomDamage(playerId) + amount, true);
+  }
+
+  /** Host-only: erhöht den Raum-Todeszähler für einen bestätigten Spielertod. */
+  incrementPlayerRoomDeaths(playerId: string): void {
+    if (!isHost()) return;
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    state.setState(KEY_ROOM_DEATHS, this.getPlayerRoomDeaths(playerId) + 1, true);
+  }
+
+  /** Liefert die Raumstatistik für alle aktuell verbundenen Spieler. */
+  getRoomPlayerStatistics(): RoomPlayerStatistics[] {
+    return this.getConnectedPlayers().map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      colorHex: profile.colorHex,
+      teamId: profile.teamId ?? null,
+      damage: this.getPlayerRoomDamage(profile.id),
+      deaths: this.getPlayerRoomDeaths(profile.id),
+    }));
+  }
+
+  /** Neue Spieler erhalten Defaults; Resume und Rundenwechsel behalten ihre Werte. */
+  private hostInitializeRoomStatistics(playerId: string): void {
+    if (!isHost()) return;
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    if (state.getState(KEY_ROOM_DAMAGE) === undefined) state.setState(KEY_ROOM_DAMAGE, 0, true);
+    if (state.getState(KEY_ROOM_DEATHS) === undefined) state.setState(KEY_ROOM_DEATHS, 0, true);
+  }
+
+  private readNonNegativePlayerNumber(playerId: string, key: string): number {
+    const value = this.playerStateMap.get(playerId)?.getState(key);
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
   }
 
   getCoopDefenseRoundXp(): number {

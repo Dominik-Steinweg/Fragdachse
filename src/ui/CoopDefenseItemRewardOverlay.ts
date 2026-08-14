@@ -9,15 +9,17 @@ import {
   describeCoopDefenseItem,
   formatCoopDefenseItemValue,
   getCoopDefenseItemSalvageXp,
-  isCoopDefenseItemImprovement,
 } from '../utils/coopDefenseItems';
 import type { MatchItemRewardOption, MatchItemRewardPresentation } from './MatchResultsModel';
+import { buildCoopDefenseItemTooltip } from './CoopDefenseItemsModel';
 import {
   ensureCoopDefenseItemCellTexture,
+  resolveCoopDefenseItemEmptyIconTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { attachHoverEffect } from './uiHover';
+import { UiTooltip } from './UiTooltip';
 import {
   ensureFlatPanelTexture,
   ensureGlossyButtonTexture,
@@ -44,7 +46,7 @@ const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
 const PANEL_W = 1520;
-const PANEL_H = 880;
+const PANEL_H = 960;
 const PANEL_TOP = CY - PANEL_H / 2;
 const PANEL_BOTTOM = CY + PANEL_H / 2;
 
@@ -72,7 +74,9 @@ const CARD_AFFIX_LINE_DY = CARD_AFFIX_TITLE_DY + 24;
 const CARD_AFFIX_LINE_H = 32;
 const MAX_AFFIX_LINES = 2;
 const CARD_COMPARE_DY = CARD_AFFIX_TITLE_DY + 24 + MAX_AFFIX_LINES * CARD_AFFIX_LINE_H + 16;
-const MAX_COMPARE_LINES = 6;
+const CARD_EQUIPPED_ICON = 72;
+const CARD_EQUIPPED_DY = CARD_COMPARE_DY + 72;
+const CARD_EQUIPPED_META_X = -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON + 18;
 const CARD_HINT_DY = CARD_H / 2 - 96;
 const CARD_BUTTON_DY = CARD_H / 2 - 46;
 
@@ -116,7 +120,9 @@ interface RewardCard {
   readonly affixTitle: Phaser.GameObjects.Text;
   readonly affixLines: Phaser.GameObjects.Text[];
   readonly compareTitle: Phaser.GameObjects.Text;
-  readonly compareLines: Phaser.GameObjects.Text[];
+  readonly equippedFrame: Phaser.GameObjects.Image;
+  readonly equippedIcon: Phaser.GameObjects.Image;
+  readonly equippedMeta: Phaser.GameObjects.Text;
   readonly hint: Phaser.GameObjects.Text;
   readonly takeButton: Phaser.GameObjects.Image;
   readonly takeLabel: Phaser.GameObjects.Text;
@@ -139,6 +145,7 @@ export class CoopDefenseItemRewardOverlay {
   private subtitle: Phaser.GameObjects.Text | null = null;
   private cards: RewardCard[] = [];
   private salvageRows: SalvageRow[] = [];
+  private tooltip: UiTooltip | null = null;
   private salvageTitle: Phaser.GameObjects.Text | null = null;
   private backButton: Phaser.GameObjects.Image | null = null;
   private backLabel: Phaser.GameObjects.Text | null = null;
@@ -238,6 +245,9 @@ export class CoopDefenseItemRewardOverlay {
     attachHoverEffect(this.scene, this.footerButton, this.footerLabel);
     objects.push(this.footerButton, this.footerLabel);
 
+    this.tooltip = new UiTooltip(this.scene, 340);
+    objects.push(this.tooltip.build());
+
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 5)
       .setVisible(false);
@@ -261,10 +271,13 @@ export class CoopDefenseItemRewardOverlay {
     this.presentation = null;
     this.salvageOption = null;
     this.salvageAction = 'take';
+    this.tooltip?.hide();
     this.container?.setVisible(false);
   }
 
   destroy(): void {
+    this.tooltip?.destroy();
+    this.tooltip = null;
     this.container?.destroy(true);
     this.container = null;
     this.title = null;
@@ -332,15 +345,27 @@ export class CoopDefenseItemRewardOverlay {
     const compareTitle = this.scene.add.text(-CARD_W / 2 + CARD_PAD, CARD_COMPARE_DY, '', textStyle('section'))
       .setOrigin(0, 0.5).setScrollFactor(0);
 
-    const compareLines: Phaser.GameObjects.Text[] = [];
-    for (let line = 0; line < MAX_COMPARE_LINES; line++) {
-      compareLines.push(this.scene.add.text(
-        -CARD_W / 2 + CARD_PAD,
-        CARD_COMPARE_DY + 24 + line * 24,
-        '',
-        textStyle('caption', { color: TEXT.muted }),
-      ).setOrigin(0, 0.5).setScrollFactor(0));
-    }
+    const equippedFrame = this.scene.add.image(
+      -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON / 2,
+      CARD_EQUIPPED_DY,
+      ensureCoopDefenseItemCellTexture(this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, COLORS.GREY_6, 'empty'),
+    ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
+    const equippedIcon = this.scene.add.image(
+      -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON / 2,
+      CARD_EQUIPPED_DY,
+      resolveCoopDefenseItemEmptyIconTexture(this.scene, 'armor', CARD_EQUIPPED_ICON),
+    ).setDisplaySize(CARD_EQUIPPED_ICON * 0.68, CARD_EQUIPPED_ICON * 0.68)
+      .setAlpha(0.15).setScrollFactor(0).setVisible(false);
+    const equippedMeta = this.scene.add.text(CARD_EQUIPPED_META_X, CARD_EQUIPPED_DY, '', textStyle('caption', {
+      color: TEXT.muted,
+      wordWrapWidth: CARD_W - CARD_PAD * 2 - CARD_EQUIPPED_ICON - 18,
+    })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+
+    equippedFrame.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      this.showEquippedTooltip(index, pointer);
+    });
+    equippedFrame.on('pointermove', (pointer: Phaser.Input.Pointer) => this.tooltip?.move(pointer));
+    equippedFrame.on('pointerout', () => this.tooltip?.hide());
 
     const hint = this.scene.add.text(0, CARD_HINT_DY, '', textStyle('caption', {
       color: TEXT.accent,
@@ -380,13 +405,15 @@ export class CoopDefenseItemRewardOverlay {
 
     const container = this.scene.add.container(centerX, CARD_CY, [
       frame, iconFrame, icon, title, meta, divider,
-      ...statLines, affixTitle, ...affixLines, compareTitle, ...compareLines, hint,
+      ...statLines, affixTitle, ...affixLines, compareTitle,
+      equippedFrame, equippedIcon, equippedMeta, hint,
       takeButton, takeLabel, equipButton, equipLabel,
     ]).setScrollFactor(0);
 
     return {
       container, frame, iconFrame, icon, title, meta, divider,
-      statLines, affixTitle, affixLines, compareTitle, compareLines, hint,
+      statLines, affixTitle, affixLines, compareTitle,
+      equippedFrame, equippedIcon, equippedMeta, hint,
       takeButton, takeLabel, equipButton, equipLabel,
     };
   }
@@ -432,6 +459,7 @@ export class CoopDefenseItemRewardOverlay {
 
   private showOffers(): void {
     this.view = 'offers';
+    this.tooltip?.hide();
     this.salvageOption = null;
     this.salvageAction = 'take';
     const options = this.presentation?.options ?? [];
@@ -491,17 +519,41 @@ export class CoopDefenseItemRewardOverlay {
       text.setText(`${line.label}: ${line.text}`).setColor(toCssColor(rarity.color));
     });
 
-    card.compareTitle.setText(option.equipped ? 'GEGENÜBER AUSGERÜSTET' : 'SLOT IST LEER');
-    const changes = option.comparison.filter((row) => row.delta !== 0);
-    card.compareLines.forEach((text, index) => {
-      const row = changes[index];
-      text.setVisible(!!row);
-      if (!row) return;
-      text.setText(`${formatCoopDefenseItemValue(row.delta, row.displayAsPercent)}  ${row.label}`);
-      text.setColor(toCssColor(
-        isCoopDefenseItemImprovement(row.stat, row.delta) ? COLORS.GREEN_2 : COLORS.RED_2,
-      ));
-    });
+    card.compareTitle.setText('AKTUELL AUSGERÜSTET').setVisible(true);
+    if (option.equipped) {
+      const equippedRarity = getCoopDefenseItemRarityDefinition(option.equipped.rarity);
+      card.equippedFrame
+        .setTexture(ensureCoopDefenseItemCellTexture(
+          this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, equippedRarity.color, 'rest',
+        ))
+        .setVisible(true);
+      card.equippedIcon
+        .setTexture(resolveCoopDefenseItemIconTexture(
+          this.scene, option.equipped.slot, option.equipped.itemLevel, CARD_EQUIPPED_ICON,
+        ))
+        .setDisplaySize(CARD_EQUIPPED_ICON * 0.68, CARD_EQUIPPED_ICON * 0.68)
+        .setAlpha(1)
+        .setVisible(true);
+      card.equippedMeta
+        .setText(`${this.describeSlot(option.equipped)}\n${equippedRarity.label}  ·  Stufe ${option.equipped.itemLevel}`)
+        .setColor(toCssColor(equippedRarity.color))
+        .setVisible(true);
+    } else {
+      card.equippedFrame
+        .setTexture(ensureCoopDefenseItemCellTexture(
+          this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, COLORS.GREY_6, 'empty',
+        ))
+        .setVisible(true);
+      card.equippedIcon
+        .setTexture(resolveCoopDefenseItemEmptyIconTexture(this.scene, option.item.slot, CARD_EQUIPPED_ICON))
+        .setDisplaySize(CARD_EQUIPPED_ICON * 0.68, CARD_EQUIPPED_ICON * 0.68)
+        .setAlpha(0.15)
+        .setVisible(true);
+      card.equippedMeta
+        .setText('SLOT LEER\nWIRD DIREKT AUSGERÜSTET')
+        .setColor(toCssColor(COLORS.GREY_4))
+        .setVisible(true);
+    }
 
     const full = !option.directEquip && option.freeStashSlots <= 0;
     card.hint.setText(full
@@ -532,6 +584,7 @@ export class CoopDefenseItemRewardOverlay {
 
   private showSalvage(option: MatchItemRewardOption, action: CoopDefenseItemRewardAction): void {
     this.view = 'salvage';
+    this.tooltip?.hide();
     this.salvageOption = option;
     this.salvageAction = action;
 
@@ -645,5 +698,20 @@ export class CoopDefenseItemRewardOverlay {
       ...description.lines.map((line) => `${formatCoopDefenseItemValue(line.value, line.displayAsPercent)} ${line.label}`),
       ...description.affixLines.map((line) => `${line.label}: ${line.text}`),
     ].join(', ');
+  }
+
+  private showEquippedTooltip(cardIndex: number, pointer: Phaser.Input.Pointer): void {
+    const option = this.presentation?.options[cardIndex];
+    if (!option?.equipped) return;
+
+    const content = buildCoopDefenseItemTooltip(option.equipped, null, true, {
+      comparison: {
+        title: 'WECHSEL ZU NEUEM ITEM',
+        rows: option.comparison,
+        identicalText: 'identisch zum neuen Item',
+      },
+      showInventoryHints: false,
+    });
+    this.tooltip?.show(content.title, content.titleColor, content.lines, pointer);
   }
 }

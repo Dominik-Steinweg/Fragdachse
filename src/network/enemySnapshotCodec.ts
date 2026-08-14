@@ -78,6 +78,8 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
             ? 4
             : entry.specialAction === 'timebomb-fuse'
               ? 5
+              : entry.specialAction === 'void-molotov-windup'
+                ? 6
           : 0;
     out.push(
       actionCode,
@@ -125,6 +127,8 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
               ? 'timebomb-chase'
               : actionCode === 5
                 ? 'timebomb-fuse'
+                : actionCode === 6
+                  ? 'void-molotov-windup'
             : 'none';
       entry.specialActionEndsAt = stream[i++] as number;
       entry.gaussChargeProgress = (stream[i++] as number) / 1000;

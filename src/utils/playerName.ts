@@ -1,4 +1,4 @@
-export const PLAYER_NAME_MAX_LENGTH = 15;
+export const PLAYER_NAME_MAX_LENGTH = 12;
 
 export function clampPlayerNameInput(value: string): string {
   return value.slice(0, PLAYER_NAME_MAX_LENGTH);

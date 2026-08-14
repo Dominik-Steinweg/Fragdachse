@@ -1274,6 +1274,21 @@ export class ArenaLifecycleCoordinator {
         );
       }
     });
+    this.ctx.combatSystem.setDamageDealtHandler((targetType, targetId, attackerId, damage) => {
+      if (!bridge.isHost() || !attackerId || attackerId === targetId || damage <= 0) return;
+      if (!bridge.getPlayerProfile(attackerId)) return;
+
+      if (targetType === 'enemy') {
+        if (this.ctx.enemyManager?.getEnemy(targetId)?.faction !== 'hostile') return;
+      } else if (
+        isCoopDefenseMode(bridge.getGameMode())
+        || !bridge.isEnemyPair(attackerId, targetId)
+      ) {
+        return;
+      }
+
+      bridge.addPlayerRoomDamage(attackerId, damage);
+    });
     this.ctx.guardianSpiritSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
       ? new GuardianSpiritSystem(
         this.ctx.playerManager,
@@ -1401,6 +1416,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
+      bridge.incrementPlayerRoomDeaths(playerId);
       this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
       this.ctx.coopDefenseSurvivalSystem?.handlePlayerDeath(playerId);
       if (this.ctx.coopDefenseSurvivalSystem) {
@@ -2088,6 +2104,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
         (this.ctx.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
         || (this.ctx.coopDefenseTimebombSystem?.blocksRegularBehavior(enemyId) ?? false)
+        || (this.ctx.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
       ));
 
       this.ctx.airstrikeSystem = new AirstrikeSystem();
@@ -2441,6 +2458,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setHitscanSupportImpactCallback(null);
     this.ctx.combatSystem.setDirectPrimaryHitHandler(null);
     this.ctx.combatSystem.setPlayerDamageTakenHandler(null);
+    this.ctx.combatSystem.setDamageDealtHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
@@ -2715,6 +2733,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.rightPanel.transitionToLobby();
     this.ctx.centerHUD.transitionToLobby();
     const roundResults = bridge.getRoundResults();
+    this.ctx.rightPanel.showRoomStatistics(bridge.getRoomPlayerStatistics());
     this.ctx.rightPanel.showRoundResults(
       bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
       bridge.getRoundState(),

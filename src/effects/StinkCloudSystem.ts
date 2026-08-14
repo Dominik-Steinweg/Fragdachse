@@ -199,6 +199,7 @@ interface StinkCloudVisual {
   innerEmitter:   Phaser.GameObjects.Particles.ParticleEmitter;
   fairnessCircle: Phaser.GameObjects.Graphics;
   zoneRadius:     number;
+  visualVariant:  DamageZoneVisualStyle;
   birthTime:      number;
   /** Interpolated display position (lerped toward target each frame) */
   displayX:       number;
@@ -212,8 +213,8 @@ interface StinkCloudVisual {
 
 /**
  * Beleuchtung je Wolkenvariante. Die Farben sind gegenüber den Partikeln aufgehellt: als
- * Licht muss die Farbe alle drei Kanäle anheben. Stink und Sporen wabern leicht grün
- * (das Flackern steckt im Preset), das Elektrofeld pulst kalt blau.
+ * Licht muss die Farbe alle drei Kanäle anheben. Normale Sporen wabern leicht grün,
+ * Void-Sporen lila (das Flackern steckt im Preset), das Elektrofeld pulst kalt blau.
  */
 const CLOUD_LIGHT: Record<DamageZoneVisualStyle, {
   preset: LightPresetKey;
@@ -255,6 +256,7 @@ export class StinkCloudSystem {
     afterCloudDurationMs = 0,
     afterCloudRadiusFactor = 0,
     afterCloudDamageFactor = 0,
+    visualVariant: DamageZoneVisualStyle = 'stink',
   ): void {
     const now = Date.now();
     this.activeZones.push({
@@ -267,7 +269,7 @@ export class StinkCloudSystem {
       tickInterval,
       rockDamageMult,
       trainDamageMult,
-      visualVariant: 'stink',
+      visualVariant,
       followOwner: true,
       x: 0,
       y: 0,
@@ -405,6 +407,12 @@ export class StinkCloudSystem {
 
     for (const cloud of clouds) {
       let visual = this.visuals.get(cloud.id);
+      const visualVariant = cloud.visualVariant ?? 'stink';
+      if (visual && visual.visualVariant !== visualVariant) {
+        this.destroyVisual(visual);
+        this.visuals.delete(cloud.id);
+        visual = undefined;
+      }
       if (!visual) {
         visual = this.createVisual(cloud);
         this.visuals.set(cloud.id, visual);
@@ -622,6 +630,7 @@ export class StinkCloudSystem {
       innerEmitter,
       fairnessCircle,
       zoneRadius:  r,
+      visualVariant: cloud.visualVariant ?? 'stink',
       birthTime:   this.scene.time.now,
       displayX:    cloud.x,
       displayY:    cloud.y,

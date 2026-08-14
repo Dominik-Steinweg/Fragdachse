@@ -16,6 +16,7 @@ import {
   isCoopDefenseItemImprovement,
   sortCoopDefenseItems,
   type CoopDefenseEquippedItemIds,
+  type CoopDefenseItemComparisonRow,
   type CoopDefenseItemSortMode,
 } from '../utils/coopDefenseItems';
 
@@ -36,6 +37,19 @@ export interface CoopDefenseItemTooltipContent {
   readonly title: string;
   readonly titleColor: number;
   readonly lines: readonly CoopDefenseItemTooltipLine[];
+}
+
+export interface CoopDefenseItemTooltipComparison {
+  readonly title: string;
+  readonly rows: readonly CoopDefenseItemComparisonRow[];
+  readonly identicalText?: string;
+}
+
+export interface CoopDefenseItemTooltipOptions {
+  /** Bereits berechnete Vergleichszeilen, wenn der Vergleich nicht aus `item` gegen `equipped` besteht. */
+  readonly comparison?: CoopDefenseItemTooltipComparison;
+  /** Inventar-Aktions- und Zerlegehinweise ausblenden, z. B. im Belohnungsbildschirm. */
+  readonly showInventoryHints?: boolean;
 }
 
 export interface CoopDefenseInventoryColumn {
@@ -108,6 +122,7 @@ export function buildCoopDefenseItemTooltip(
   item: CoopDefenseItem,
   equipped: CoopDefenseItem | null,
   isEquipped: boolean,
+  options: CoopDefenseItemTooltipOptions = {},
 ): CoopDefenseItemTooltipContent {
   const description = describeCoopDefenseItem(item);
   const lines: CoopDefenseItemTooltipLine[] = [
@@ -128,17 +143,23 @@ export function buildCoopDefenseItemTooltip(
     lines.push({ text: affix.text, color: COLORS.GREY_2 });
   }
 
-  // Der Vergleich hilft nur bei einem Teil, das noch nicht getragen wird.
-  if (!isEquipped) {
+  // Im Inventar wird der Vergleich aus dem Kandidaten berechnet. Andere Ansichten, z. B. die
+  // Belohnung, können bereits autoritativ berechnete Zeilen mit eigener Blickrichtung liefern.
+  const comparison = options.comparison;
+  if (comparison || !isEquipped) {
     lines.push({ text: '', color: COLORS.GREY_5 });
     lines.push({
-      text: equipped ? 'GEGENÜBER AUSGERÜSTET' : 'SLOT IST LEER',
+      text: comparison?.title ?? (equipped ? 'GEGENÜBER AUSGERÜSTET' : 'SLOT IST LEER'),
       color: COLORS.GREY_4,
       bold: true,
     });
-    const changes = compareCoopDefenseItems(item, equipped).filter((change) => change.delta !== 0);
+    const changes = (comparison?.rows ?? compareCoopDefenseItems(item, equipped))
+      .filter((change) => change.delta !== 0);
     if (changes.length === 0) {
-      lines.push({ text: 'identisch zum ausgerüsteten Teil', color: COLORS.GREY_4 });
+      lines.push({
+        text: comparison?.identicalText ?? 'identisch zum ausgerüsteten Teil',
+        color: COLORS.GREY_4,
+      });
     } else {
       for (const change of changes) {
         lines.push({
@@ -149,12 +170,14 @@ export function buildCoopDefenseItemTooltip(
     }
   }
 
-  lines.push({ text: '', color: COLORS.GREY_5 });
-  lines.push({ text: `Zerlegen bringt +${getCoopDefenseItemSalvageXp(item)} XP`, color: COLORS.GREY_4 });
-  lines.push({
-    text: isEquipped ? 'Klick: Menü · Ziehen: Ablegen' : 'Klick: Menü · Ziehen: Ausrüsten',
-    color: COLORS.GREY_5,
-  });
+  if (options.showInventoryHints !== false) {
+    lines.push({ text: '', color: COLORS.GREY_5 });
+    lines.push({ text: `Zerlegen bringt +${getCoopDefenseItemSalvageXp(item)} XP`, color: COLORS.GREY_4 });
+    lines.push({
+      text: isEquipped ? 'Klick: Menü · Ziehen: Ablegen' : 'Klick: Menü · Ziehen: Ausrüsten',
+      color: COLORS.GREY_5,
+    });
+  }
 
   return {
     title: `${description.slotLabel} · Stufe ${description.itemLevel}`,

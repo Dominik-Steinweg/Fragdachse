@@ -10,10 +10,12 @@ import {
   HP_BAR_HEIGHT,
   HP_BAR_OFFSET_Y,
   HP_BAR_WIDTH,
+  VOID_FIRE_COLOR,
 } from '../config';
 import {
   DEFAULT_ENEMY_KNOCKBACK_FACTOR,
   type CoopDefenseEnemyKind,
+  type CoopDefenseEnemyWeaponSalvoConfig,
   type CoopDefenseEnemyWeaponTargetMode,
   type ResolvedCoopDefenseEnemyConfig,
 } from '../config/coopDefenseEnemies';
@@ -48,6 +50,10 @@ export interface EnemyAttackWeapon {
   readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
   readonly minimumFireDurationMs: number;
   readonly playerMeleeWindupMs: number;
+  /** 0 = Gegner bleibt waehrend der Angriffspause stehen, 1 = er laeuft ungebremst weiter. */
+  readonly attackMovementSpeedFactor: number;
+  readonly minTargetDistancePx: number;
+  readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
 }
 
 export class EnemyEntity {
@@ -70,6 +76,7 @@ export class EnemyEntity {
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private glowHalo: Phaser.GameObjects.Image | null = null;
   private timebombFuseRenderer: TimebombFuseRenderer | null = null;
+  private voidMolotovWindupRing: Phaser.GameObjects.Arc | null = null;
   private bossAura: Phaser.GameObjects.Ellipse | null = null;
   private bossRing: Phaser.GameObjects.Ellipse | null = null;
   private bossLabel: Phaser.GameObjects.Text | null = null;
@@ -80,6 +87,9 @@ export class EnemyEntity {
   private desiredVelocityX = 0;
   private desiredVelocityY = 0;
   private attackPauseUntil = 0;
+  private attackPauseSpeedFactor = 0;
+  /** Waffen-ID → Zeitpunkt, ab dem die Waffe zusaetzlich zu ihrem Cooldown wieder frei ist. */
+  private readonly weaponLockouts = new Map<string, number>();
   private nextAttackScanAt = 0;
   private currentAimAngle = 0;
   private targetAimAngle = 0;
@@ -464,7 +474,16 @@ export class EnemyEntity {
   }
 
   isWeaponReady(weapon: BaseWeapon, now: number): boolean {
-    return !weapon.isOnCooldown(now);
+    if (weapon.isOnCooldown(now)) return false;
+    return now >= (this.weaponLockouts.get(weapon.config.id) ?? 0);
+  }
+
+  /**
+   * Zusaetzliche Sperre oberhalb des Waffen-Cooldowns. Damit koennen Angriffsmuster wie eine
+   * Salve ihren eigenen, laengeren Takt vorgeben, ohne den Schusstakt der Waffe zu veraendern.
+   */
+  lockWeaponUntil(weapon: BaseWeapon, readyAt: number): void {
+    this.weaponLockouts.set(weapon.config.id, Math.max(this.weaponLockouts.get(weapon.config.id) ?? 0, readyAt));
   }
 
   recordWeaponUse(weapon: BaseWeapon, now: number): void {
@@ -506,13 +525,35 @@ export class EnemyEntity {
     this.nextAttackScanAt = now + this.config.attackScanIntervalMs;
   }
 
-  pauseAttackMovement(now: number): void {
-    this.attackPauseUntil = Math.max(this.attackPauseUntil, now + this.config.attackStopDurationMs);
-    this.stopMovement();
+  /**
+   * Angriffspause nach einer Aktion. `movementSpeedFactor` = 0 haelt den Gegner an (Standard und
+   * bisheriges Verhalten); ein Wert darueber laesst ihn mit diesem Anteil seiner Laufgeschwindigkeit
+   * weiterlaufen, ohne seine Blickrichtung vom Ziel zu loesen. `durationMs` erlaubt Aktionen mit
+   * eigener Standzeit (Wurf-Windup) statt der Gegner-Pauschale.
+   */
+  pauseAttackMovement(
+    now: number,
+    movementSpeedFactor = 0,
+    durationMs = this.config.attackStopDurationMs,
+  ): void {
+    this.attackPauseUntil = Math.max(this.attackPauseUntil, now + Math.max(0, durationMs));
+    // Der zuletzt ausgeloeste Angriff bestimmt das Tempo: Waffen wechseln haeufiger als die
+    // kurze Pause laeuft, und die juengste Aktion beschreibt den aktuellen Zustand am besten.
+    this.attackPauseSpeedFactor = Phaser.Math.Clamp(movementSpeedFactor, 0, 1);
+    if (this.attackPauseSpeedFactor <= 0) this.stopMovement();
   }
 
+  /** True, solange eine Angriffspause laeuft – auch wenn der Gegner dabei weiterlaufen darf. */
   isAttackMovementPaused(now: number): boolean {
     return this.authoritative && now < this.attackPauseUntil;
+  }
+
+  /**
+   * Anteil der Laufgeschwindigkeit fuer diesen Frame: 1 ausserhalb einer Angriffspause, sonst der
+   * von der ausloesenden Aktion vorgegebene Faktor (0 = vollstaendiger Halt).
+   */
+  getAttackMovementSpeedFactor(now: number): number {
+    return this.isAttackMovementPaused(now) ? this.attackPauseSpeedFactor : 1;
   }
 
   faceAngle(angle: number): void {
@@ -550,6 +591,7 @@ export class EnemyEntity {
     this.syncBossDecorations();
     this.syncGlow();
     this.syncTimebombFuseVisuals();
+    this.syncVoidMolotovWindupVisuals();
     this.syncBurnEffect();
     this.syncVulnerableMarker();
     if (!this.shouldShowHpBars()) {
@@ -603,6 +645,7 @@ export class EnemyEntity {
       this.glowHalo = null;
     }
     this.destroyTimebombFuseVisuals();
+    this.destroyVoidMolotovWindupVisuals();
     this.lighting?.releaseLight(this.glowLightKey());
     this.bossAura?.destroy();
     this.bossRing?.destroy();
@@ -780,6 +823,35 @@ export class EnemyEntity {
     this.timebombFuseRenderer = null;
   }
 
+  /**
+   * Telegraph des Void-Brandsatzes: ein lila Ring, der ueber die Ausholzeit auf den Koerper
+   * zusammenlaeuft. Bewusst ein einzelnes, additiv gezeichnetes Element ohne Partikel – es soll
+   * die eine Sekunde Standzeit lesbar machen, nicht mit dem Bosseigenleuchten konkurrieren.
+   * Der Fortschritt kommt aus dem replizierten Ladekanal und gilt deshalb auf Host und Clients.
+   */
+  private syncVoidMolotovWindupVisuals(): void {
+    if (this.specialAction !== 'void-molotov-windup' || this.burrowed || this.currentHp <= 0 || !this.sprite.visible) {
+      this.destroyVoidMolotovWindupVisuals();
+      return;
+    }
+
+    if (!this.voidMolotovWindupRing) {
+      this.voidMolotovWindupRing = this.sprite.scene.add.circle(this.sprite.x, this.sprite.y, this.config.size * 0.5);
+      this.voidMolotovWindupRing.setStrokeStyle(3, VOID_FIRE_COLOR, 0.95);
+      this.voidMolotovWindupRing.setDepth(DEPTH.PLAYERS - 0.06);
+      makeAdditive(this.voidMolotovWindupRing);
+    }
+    const progress = this.gaussChargeProgress;
+    this.voidMolotovWindupRing.setPosition(this.sprite.x, this.sprite.y);
+    this.voidMolotovWindupRing.setScale(Phaser.Math.Linear(2.4, 1, progress));
+    this.voidMolotovWindupRing.setAlpha(emissiveAlpha(0.35 + progress * 0.6));
+  }
+
+  private destroyVoidMolotovWindupVisuals(): void {
+    this.voidMolotovWindupRing?.destroy();
+    this.voidMolotovWindupRing = null;
+  }
+
   private createBossDecorations(scene: Phaser.Scene): void {
     if (!this.config.isBoss) return;
 
@@ -855,6 +927,9 @@ export class EnemyEntity {
         targetMode: configuredWeapon.targetMode,
         minimumFireDurationMs: configuredWeapon.minimumFireDurationMs ?? 0,
         playerMeleeWindupMs: configuredWeapon.playerMeleeWindupMs ?? 0,
+        attackMovementSpeedFactor: configuredWeapon.attackMovementSpeedFactor ?? 0,
+        minTargetDistancePx: configuredWeapon.minTargetDistancePx ?? 0,
+        salvo: configuredWeapon.salvo,
       };
     });
   }

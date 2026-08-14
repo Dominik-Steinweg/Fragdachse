@@ -216,6 +216,9 @@ export class WeaponFireExecutor {
       explosion:       fireConfig.impactExplosion,
       enemyHitExplosion: fireConfig.enemyHitExplosion,
       impactCloud:     fireConfig.impactCloud,
+      sporeVisualVariant: config.projectileStyle === 'spore'
+        ? fireConfig.impactCloud?.visualVariant === 'spore_void' ? 'spore_void' : 'spore'
+        : undefined,
       homing:          config.homingEnabled === undefined || config.homingEnabled > 0
         ? fireConfig.homing
         : undefined,

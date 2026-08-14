@@ -1,4 +1,4 @@
-import type { EnergyInjectorConstructionEffect, GroundFireVisualStyle } from '../types';
+import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
@@ -567,6 +567,7 @@ export interface NukeUtilityConfig extends BaseUtilityConfig {
 
 export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
   readonly type: 'stinkcloud';
+  readonly visualVariant?: DamageZoneVisualStyle;
   readonly cloudRadius: number;          // px – Schadensradius der Gaswolke
   readonly cloudDuration: number;        // ms – Gesamtdauer der Wolke
   readonly cloudDamagePerTick: number;   // HP Schaden pro Tick

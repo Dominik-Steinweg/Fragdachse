@@ -13,7 +13,7 @@
  */
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
+import type { LoadoutSlot, LoadoutToolRef, PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import type { LinkDiagnostics } from '../network/peer';
 import {
   GAME_WIDTH, GAME_HEIGHT,
@@ -44,9 +44,18 @@ import { UiContextMenu } from '../ui/UiContextMenu';
 import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
+import {
+  describeLoadoutItem,
+  describeLoadoutTool,
+  LOADOUT_SLOT_LABELS,
+  type LoadoutItemPresentation,
+} from '../loadout/LoadoutCatalog';
 import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
 import { promoteToClarityCamera } from './arena/ClarityCameraRegistry';
 import { buildLobbyRosterSlots } from '../lobby/LobbyRosterLayout';
+import { createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
+import { PLAYER_NAME_MAX_LENGTH } from '../utils/playerName';
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 const PANEL_W = LOBBY_PANEL_WIDTH;
@@ -91,6 +100,13 @@ const ROSTER_SLOT_H = 36;
 const ROSTER_ROW_STEP = 40;
 const TEAM_HEADER_H = 28;
 const READY_STATUS_OFFSET_X = 23;
+const LOADOUT_ICON_SIZE = 28;
+const LOADOUT_ICON_GAP = 2;
+// Ein kleiner Puffer zum dynamischen LVL-Text verhindert, dass das vierte Icon in dessen
+// Zeichenraum ragt; die vorhandene Icon-Groesse und die HOST-/Ping-Spalte bleiben unveraendert.
+const LOADOUT_LEFT_OFFSET = 154;
+const LEVEL_RIGHT_INSET = 82;
+const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
 
 // ── Coop-Fortschrittsband (innerhalb des Panels) ─────────────────────────────
 // Sichtbar nur im Coop; dann steht das Panel immer auf seiner vollen Hoehe.
@@ -183,6 +199,8 @@ type PlayerRow = {
   mark:  Phaser.GameObjects.Image;
   level: Phaser.GameObjects.Text;
   ping:  Phaser.GameObjects.Text;
+  loadout: Phaser.GameObjects.Container;
+  loadoutSignature: string | null;
 };
 
 /** Platzhalterzeile fuer einen noch fehlenden Mitspieler. */
@@ -194,6 +212,8 @@ export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
   private systemBar:      Phaser.GameObjects.Container | null = null;
   private playerContextMenu: UiContextMenu | null = null;
+  private loadoutTooltip: UiTooltip | null = null;
+  private loadoutTooltipRoot: Phaser.GameObjects.Container | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
   private waitingRows:    WaitingRow[] = [];
   private teamHeaders:     Record<TeamId, Phaser.GameObjects.Text> | null = null;
@@ -439,6 +459,9 @@ export class LobbyOverlay {
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.container);
     this.playerContextMenu = new UiContextMenu(this.scene, this.container);
+    this.loadoutTooltip = new UiTooltip(this.scene, 280);
+    this.loadoutTooltipRoot = this.loadoutTooltip.build();
+    this.container.add(this.loadoutTooltipRoot);
     this.container.setVisible(this.visible);
 
     this.systemBar = this.scene.add.container(0, 0, [
@@ -629,6 +652,9 @@ export class LobbyOverlay {
     this.coopItemsSignature = null;
     this.playerContextMenu?.destroy();
     this.playerContextMenu = null;
+    this.loadoutTooltip?.destroy();
+    this.loadoutTooltip = null;
+    this.loadoutTooltipRoot = null;
 
     // Die Effekte haengen an Containern, die gleich zerstoert werden – vorher abbauen.
     this.upgradeBtnEffect?.destroy();
@@ -683,6 +709,7 @@ export class LobbyOverlay {
   hide(): void {
     this.visible = false;
     this.playerContextMenu?.close();
+    this.loadoutTooltip?.hide();
     this.entranceTween?.remove();
     this.entranceTween = null;
     this.stopReadyGlow();
@@ -729,6 +756,14 @@ export class LobbyOverlay {
       this.bridge.getRoomCode(),
       isCoopDefenseMode(mode) ? this.bridge.getCoopDefenseMapId() : null,
       connectedPlayers.map(profile => [
+        (() => {
+          const preview = this.bridge.getPlayerLobbyLoadoutPreview(profile.id);
+          return [
+            ...LOADOUT_SLOTS.map((slot) => this.getLobbyLoadoutItemId(profile.id, slot)),
+            preview?.coopDefenseClassId ?? null,
+            ...(preview?.tools ?? []).map((tool) => `${tool.kind}:${tool.id}`),
+          ];
+        })(),
         profile.id,
         profile.name,
         profile.colorHex,
@@ -746,8 +781,9 @@ export class LobbyOverlay {
     for (const [id, row] of this.playerRows) {
       if (!currentIds.has(id)) {
         this.playerContextMenu?.close();
+        this.loadoutTooltip?.hide();
         row.bg.destroy(); row.name.destroy(); row.badge.destroy();
-        row.mark.destroy(); row.level.destroy(); row.ping.destroy();
+        row.mark.destroy(); row.level.destroy(); row.ping.destroy(); row.loadout.destroy(true);
         this.playerRows.delete(id);
       }
     }
@@ -757,8 +793,9 @@ export class LobbyOverlay {
         this.addPlayerRow(profile);
       } else {
         const row = this.playerRows.get(profile.id)!;
-        row.name.setText(profile.name);
+        row.name.setText(profile.name.slice(0, PLAYER_NAME_MAX_LENGTH));
         row.name.setColor(toCssColor(COLORS.GREY_1));
+        this.refreshPlayerLoadout(profile.id, row);
       }
       this.setPlayerRowInteractive(profile.id, this.playerRows.get(profile.id)!.bg);
     }
@@ -920,7 +957,7 @@ export class LobbyOverlay {
     // Ein offener Sperr-Hinweis waere nach dem Freischalten falsch.
     this.itemsTooltip?.hide();
 
-    this.coopItemsBtn.setEnabled(unlocked);
+    this.updateCoopDefenseMenuButtons();
     // Das Schloss traegt die Sperre; freigeschaltet braucht der Button kein Symbol mehr.
     this.coopItemsBtn.setIcon(unlocked ? null : 'lock');
     const needsAttention = unlocked && (hasPendingReward || hasUnseenItems);
@@ -937,6 +974,7 @@ export class LobbyOverlay {
   /** Button-Zustand nach isReady-Toggle anpassen. */
   setReadyButtonState(isReady: boolean): void {
     this.isReady = isReady;
+    this.updateCoopDefenseMenuButtons();
     if (this.connectionEnded) {
       this.btnLocked = true;
       this.readyBtn.setEnabled(false).setLabel('BEENDET');
@@ -953,6 +991,13 @@ export class LobbyOverlay {
       .setLabel(isReady ? 'NICHT BEREIT' : 'BEREIT');
     this.updateReadyGlow();
     this.updateRoomActionButtons();
+  }
+
+  /** Upgrade- und Item-Menues bleiben geschlossen, solange der lokale Spieler bereit ist. */
+  private updateCoopDefenseMenuButtons(): void {
+    const enabled = !this.isReady && !this.connectionEnded;
+    this.coopUpgradesBtn?.setEnabled(enabled);
+    this.coopItemsBtn?.setEnabled(enabled && this.coopItemsUnlocked);
   }
 
   /**
@@ -1067,6 +1112,7 @@ export class LobbyOverlay {
     const name = this.scene.add.text(CONTENT_L + 40, LIST_Y, profile.name, textStyle('body', {
       color: COLORS.GREY_1,
     })).setOrigin(0, 0.5).setScrollFactor(0);
+    name.setText(profile.name.slice(0, PLAYER_NAME_MAX_LENGTH));
 
     const badge = this.scene.add.circle(CONTENT_L + READY_STATUS_OFFSET_X, LIST_Y, 11, COLORS.GREY_7)
       .setStrokeStyle(2, COLORS.GREY_4)
@@ -1076,12 +1122,14 @@ export class LobbyOverlay {
       .setVisible(false)
       .setScrollFactor(0);
 
-    const level = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 105, LIST_Y, '-', textStyle('numS', {
+    const level = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - LEVEL_RIGHT_INSET, LIST_Y, '-', textStyle('numS', {
       color: COLORS.GREY_3,
     })).setOrigin(0.5).setScrollFactor(0);
 
     const ping = this.scene.add.text(CONTENT_L + ROSTER_SLOT_W - 10, LIST_Y, '', textStyle('numS'))
       .setOrigin(1, 0.5).setScrollFactor(0);
+    const loadout = this.scene.add.container(CONTENT_L + LOADOUT_LEFT_OFFSET, LIST_Y)
+      .setScrollFactor(0);
 
     bg.on('pointerup', (
       pointer: Phaser.Input.Pointer,
@@ -1096,16 +1144,127 @@ export class LobbyOverlay {
       }
     });
 
-    this.container!.add([bg, name, badge, mark, level, ping]);
+    this.container!.add([bg, name, badge, mark, level, ping, loadout]);
     // Neue Zeilen gleiten herein, statt aufzuploppen.
-    for (const object of [bg, name, badge, mark, level, ping]) {
+    for (const object of [bg, name, badge, mark, level, ping, loadout]) {
       object.setAlpha(0);
       this.scene.tweens.add({
         targets: object, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out,
       });
     }
-    this.playerRows.set(profile.id, { bg, name, badge, mark, level, ping });
+    const row: PlayerRow = { bg, name, badge, mark, level, ping, loadout, loadoutSignature: null };
+    this.playerRows.set(profile.id, row);
+    this.refreshPlayerLoadout(profile.id, row);
     this.setPlayerRowInteractive(profile.id, bg);
+  }
+
+  /** Loadout-IDs bleiben die vorhandenen per-Spieler-States; fehlende Legacy-States fallen auf Defaults. */
+  private getLobbyLoadoutItemId(playerId: string, slot: LoadoutSlot): string | null {
+    return this.bridge.getPlayerLoadoutSlot(playerId, slot) ?? DEFAULT_LOADOUT[slot]?.id ?? null;
+  }
+
+  private getInspectorLobbyTools(playerId: string): readonly LoadoutToolRef[] {
+    return this.isInspectorLobbyPreview(playerId)
+      ? this.bridge.getPlayerLobbyLoadoutPreview(playerId)?.tools ?? []
+      : [];
+  }
+
+  private isInspectorLobbyPreview(playerId: string): boolean {
+    return isCoopDefenseMode(this.bridge.getGameMode())
+      && this.bridge.getPlayerLobbyLoadoutPreview(playerId)?.coopDefenseClassId === 'inspector_gadachs';
+  }
+
+  private getLobbyLoadoutPresentation(
+    playerId: string,
+    slot: LoadoutSlot,
+  ): LoadoutItemPresentation | null {
+    if (slot === 'utility' && this.isInspectorLobbyPreview(playerId)) {
+      return {
+        displayName: 'Utility-Rad',
+        textureKey: ensureIconTexture(this.scene, 'utility-rad', 56, COLORS.GOLD_2),
+        accentColor: COLORS.GOLD_2,
+      };
+    }
+    const itemId = this.getLobbyLoadoutItemId(playerId, slot);
+    return itemId ? describeLoadoutItem(slot, itemId) : null;
+  }
+
+  /** Baut nur die vier kompakten Slot-Controls neu, nicht die Rosterzeile selbst. */
+  private refreshPlayerLoadout(playerId: string, row: PlayerRow): void {
+    const inspector = this.isInspectorLobbyPreview(playerId);
+    const tools = inspector ? this.getInspectorLobbyTools(playerId) : [];
+    const presentations = LOADOUT_SLOTS.map((slot) => this.getLobbyLoadoutPresentation(playerId, slot));
+    const signature = JSON.stringify([
+      inspector,
+      ...LOADOUT_SLOTS.map((slot, index) => [
+        slot,
+        this.getLobbyLoadoutItemId(playerId, slot),
+        presentations[index]?.textureKey ?? null,
+        presentations[index]?.displayName ?? null,
+      ]),
+      ...tools.map((tool) => `${tool.kind}:${tool.id}`),
+    ]);
+    if (signature === row.loadoutSignature) return;
+
+    row.loadoutSignature = signature;
+    this.loadoutTooltip?.hide();
+    row.loadout.removeAll(true);
+    const slotStep = LOADOUT_ICON_SIZE + LOADOUT_ICON_GAP;
+    LOADOUT_SLOTS.forEach((slot, index) => {
+      const presentation = presentations[index];
+      if (!presentation) return;
+      const control = createLoadoutSlotControl(this.scene, {
+        x: LOADOUT_ICON_SIZE / 2 + index * slotStep,
+        y: 0,
+        width: LOADOUT_ICON_SIZE,
+        height: LOADOUT_ICON_SIZE,
+        accentColor: presentation.accentColor,
+        presentation,
+        compact: true,
+        accentMode: 'subtle',
+        onClick: () => undefined,
+        onPointerOver: (pointer) => this.showLoadoutTooltip(slot, presentation, pointer, inspector ? tools : []),
+        onPointerMove: (pointer) => this.loadoutTooltip?.move(pointer),
+        onPointerOut: () => this.loadoutTooltip?.hide(),
+      });
+      row.loadout.add(control);
+    });
+  }
+
+  private showLoadoutTooltip(
+    slot: LoadoutSlot,
+    presentation: LoadoutItemPresentation,
+    pointer: Phaser.Input.Pointer,
+    tools: readonly LoadoutToolRef[],
+  ): void {
+    if (!this.loadoutTooltip) return;
+    if (this.container && this.loadoutTooltipRoot) this.container.bringToTop(this.loadoutTooltipRoot);
+
+    const isInspectorRadial = slot === 'utility' && presentation.displayName === 'Utility-Rad';
+    const lines = isInspectorRadial
+      ? tools.length > 0
+        ? tools.map((tool) => {
+          const toolPresentation = describeLoadoutTool(tool);
+          return {
+            text: toolPresentation.displayName,
+            color: toolPresentation.accentColor,
+            bold: true,
+            textureKey: toolPresentation.textureKey,
+          };
+        })
+        : [{ text: 'Keine Tools ausgerüstet.', color: TEXT.muted }]
+      : [{
+        text: presentation.displayName,
+        color: TEXT.primary,
+        bold: true,
+        textureKey: presentation.textureKey,
+      }];
+    this.loadoutTooltip.show(
+      isInspectorRadial ? 'Utility-Rad' : LOADOUT_SLOT_LABELS[slot],
+      presentation.accentColor,
+      lines,
+      pointer,
+    );
   }
 
   private canKickPlayer(playerId: string): boolean {
@@ -1278,8 +1437,9 @@ export class LobbyOverlay {
     row.name.setPosition(left + 40, y);
     row.badge.setPosition(left + READY_STATUS_OFFSET_X, y);
     row.mark.setPosition(left + READY_STATUS_OFFSET_X, y);
-    row.level.setPosition(x + width / 2 - 105, y);
+    row.level.setPosition(x + width / 2 - LEVEL_RIGHT_INSET, y);
     row.ping.setPosition(x + width / 2 - 10, y);
+    row.loadout.setPosition(left + LOADOUT_LEFT_OFFSET, y);
   }
 
   private positionWaitingRow(row: WaitingRow, x: number, y: number, width: number, height: number): void {

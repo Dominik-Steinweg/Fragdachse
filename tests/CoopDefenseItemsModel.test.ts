@@ -12,6 +12,7 @@ import {
   summariseEquippedCoopDefenseItems,
 } from '../src/ui/CoopDefenseItemsModel';
 import type { CoopDefenseItem } from '../src/types';
+import { compareCoopDefenseItems } from '../src/utils/coopDefenseItems';
 
 function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
   return {
@@ -124,6 +125,26 @@ describe('coop-defense item tooltip', () => {
     expect(texts).not.toContain('GEGENÜBER AUSGERÜSTET');
     expect(texts).toContain('+25 Maximale HP');
     expect(texts.some((text) => text.includes('Ablegen'))).toBe(true);
+  });
+
+  it('reuses reward comparison rows from the new item perspective without inventory hints', () => {
+    const equipped = item({ uid: 'old', rarity: 'blue', baseValue: 22 });
+    const newItem = item({ uid: 'new', baseValue: 30 });
+    const content = buildCoopDefenseItemTooltip(equipped, null, true, {
+      comparison: {
+        title: 'WECHSEL ZU NEUEM ITEM',
+        rows: compareCoopDefenseItems(newItem, equipped),
+        identicalText: 'identisch zum neuen Item',
+      },
+      showInventoryHints: false,
+    });
+    const texts = tooltipTexts(content);
+
+    expect(texts).toContain('+22 Maximale HP');
+    expect(texts).toContain('WECHSEL ZU NEUEM ITEM');
+    expect(texts).toContain('+8 Maximale HP');
+    expect(texts.some((text) => /Klick|Ziehen|Zerlegen/.test(text))).toBe(false);
+    expect(content.lines.find((line) => line.text === '+8 Maximale HP')?.color).toBe(COLORS.GREEN_2);
   });
 
   it('uses the German rarity label in the item presentation', () => {

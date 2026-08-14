@@ -238,6 +238,77 @@ describe('CombatSystem base damage routing', () => {
   });
 });
 
+describe('CombatSystem actual damage callbacks', () => {
+  it('reports clamped hostile-enemy damage without overkill', () => {
+    const enemy = {
+      id: 'zombie',
+      kind: 'zombie-badger',
+      faction: 'hostile' as const,
+      sprite: { x: 10, y: 20 },
+      isBurrowed: () => false,
+      getHp: () => 10,
+      getMaxHp: () => 10,
+    };
+    let hp = 10;
+    const bridge = {
+      isHost: vi.fn(() => true),
+      getPlayerProfile: vi.fn((id: string) => id === 'player' ? { id } : undefined),
+      incrementPlayerFrags: vi.fn(),
+      canPlayerReceiveRoundRewards: vi.fn(() => true),
+      getGameMode: vi.fn(() => 'deathmatch'),
+      broadcastEffect: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      bridge,
+    );
+    combat.setEnemyManager({
+      hasEnemy: (id: string) => id === enemy.id,
+      getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
+      applyDamage: (_id: string, amount: number) => {
+        hp = Math.max(0, hp - amount);
+        return { died: hp === 0, remainingHp: hp };
+      },
+    } as unknown as import('../src/entities/EnemyManager').EnemyManager);
+    const damage = vi.fn();
+    combat.setDamageDealtHandler(damage);
+
+    combat.applyDamage(enemy.id, 25, false, 'player', 'test');
+
+    expect(damage).toHaveBeenCalledWith('enemy', enemy.id, 'player', 10, 'direct');
+  });
+
+  it('reports player damage after armor/HP clamping and only one death', () => {
+    const victim = { id: 'victim', body: { enable: true }, sprite: { x: 10, y: 20 } };
+    const bridge = {
+      isHost: vi.fn(() => true),
+      areTeammates: vi.fn(() => false),
+      broadcastEffect: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      {
+        getAllPlayers: () => [victim],
+        getPlayer: (id: string) => id === victim.id ? victim : undefined,
+      } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      bridge,
+    );
+    combat.initPlayer(victim.id);
+    combat.addArmor(victim.id, 5);
+    const damage = vi.fn();
+    const death = vi.fn();
+    combat.setDamageDealtHandler(damage);
+    combat.setDeathCallback(death);
+
+    combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
+    combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
+
+    expect(damage).toHaveBeenCalledWith('player', victim.id, 'attacker', 105, 'direct');
+    expect(death).toHaveBeenCalledOnce();
+  });
+});
+
 describe('Plasmabrenner hitscan support impact', () => {
   const effect: HitscanSupportEffect = {
     type: 'plasma_burner',

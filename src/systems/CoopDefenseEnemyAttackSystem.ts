@@ -61,13 +61,36 @@ interface EnemyObstacleContactState {
   readonly lastContactAt: number;
 }
 
+/** Laufende Salve eines Gegners; pro Gegner kann nur eine Waffe gleichzeitig salvieren. */
+interface EnemySalvoState {
+  readonly weaponId: string;
+  shotsFired: number;
+  nextShotAt: number;
+  /** Verfaellt die Salve ohne Nachschuss (Ziel weg, keine Sichtlinie), gilt sie als abgefeuert. */
+  expiresAt: number;
+}
+
 export class CoopDefenseEnemyAttackSystem {
   private static readonly MOVEMENT_PROGRESS_DISTANCE_PX = 4;
   private static readonly OBSTACLE_CONTACT_FRESHNESS_MS = 150;
+  /**
+   * Hysterese der Mindest-Zieldistanz: eine bereits laufende Salve darf bis zu dieser Strecke
+   * unterhalb ihrer Untergrenze weiterfeuern. Ohne den Puffer bricht ein Gegner seine Salve ab,
+   * sobald sein Ziel einen Schritt zu nah kommt, und wechselt hektisch die Waffe.
+   */
+  private static readonly SALVO_MIN_DISTANCE_HYSTERESIS_PX = 60;
+  /**
+   * Verliert ein Gegner mitten in der Salve sein Ziel, laeuft sie nach diesem Vielfachen ihres
+   * Schusstakts aus und startet ihre Pause – sonst bliebe ein halb verbrauchter Zaehler beliebig
+   * lange stehen und die naechste Salve waere zu kurz.
+   */
+  private static readonly SALVO_GAP_TOLERANCE_FACTOR = 5;
+  private static readonly MIN_SALVO_GAP_TOLERANCE_MS = 1_000;
   /** Prevents near-equal player distances from causing visible target oscillation. */
   private static readonly PLAYER_TARGET_LOCK_DURATION_MS = 2_000;
 
   private readonly sustainedAttacks = new Map<string, SustainedEnemyAttackState>();
+  private readonly salvoStates = new Map<string, EnemySalvoState>();
   private readonly playerTargetLocks = new Map<string, PlayerTargetLockState>();
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
   private readonly movementProgress = new Map<string, EnemyMovementProgressState>();
@@ -101,13 +124,10 @@ export class CoopDefenseEnemyAttackSystem {
       if (enemy.faction !== 'hostile') continue;
       activeEnemyIds.add(enemy.id);
       enemy.decayWeaponSpread(delta, now);
+      this.expireStaleSalvo(enemy, now);
 
       if (this.actionBlockedChecker?.(enemy.id)) {
-        this.sustainedAttacks.delete(enemy.id);
-        this.playerTargetLocks.delete(enemy.id);
-        this.meleeWindups.delete(enemy.id);
-        this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy);
+        this.abortCombat(enemy, now);
         // Die Sperre gehoert ausschliesslich dem Angriffssystem. Exklusive Spezialbewegungen
         // (etwa die Jagd des Zeitbombendachses) wurden bereits vom EnemyManager gesetzt und
         // duerfen hier im spaeteren Host-Update nicht wieder auf null geschrieben werden.
@@ -116,29 +136,17 @@ export class CoopDefenseEnemyAttackSystem {
 
       // Eingebuddelt gilt dieselbe Waffensperre wie beim Spieler.
       if (enemy.isBurrowed()) {
-        this.sustainedAttacks.delete(enemy.id);
-        this.playerTargetLocks.delete(enemy.id);
-        this.meleeWindups.delete(enemy.id);
-        this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy);
+        this.abortCombat(enemy, now);
         continue;
       }
 
       if (this.enemyManager.isEnemyPanicking(enemy.id)) {
-        this.sustainedAttacks.delete(enemy.id);
-        this.playerTargetLocks.delete(enemy.id);
-        this.meleeWindups.delete(enemy.id);
-        this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy);
+        this.abortCombat(enemy, now);
         continue;
       }
 
       if (this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) {
-        this.sustainedAttacks.delete(enemy.id);
-        this.playerTargetLocks.delete(enemy.id);
-        this.meleeWindups.delete(enemy.id);
-        this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy);
+        this.abortCombat(enemy, now);
         continue;
       }
 
@@ -149,6 +157,10 @@ export class CoopDefenseEnemyAttackSystem {
       }
 
       this.updateMovementProgress(enemy, delta, now);
+
+      // Eine laufende Salve haelt ihren eigenen Takt. Ohne diesen Vorrang wuerde sie auf das
+      // Zielscan-Raster des Gegners einrasten und langsamer feuern als konfiguriert.
+      if (this.continueSalvo(enemy, now)) continue;
 
       if (!enemy.canScanForAttack(now)) continue;
 
@@ -166,6 +178,64 @@ export class CoopDefenseEnemyAttackSystem {
     }
 
     this.cleanupInactiveEnemies(activeEnemyIds);
+  }
+
+  /**
+   * Setzt den Gefechtszustand eines Gegners zurueck, der in diesem Frame nicht angreifen darf.
+   * Eine unterbrochene Salve zaehlt dabei als verbraucht: ihre Pause wird sofort gestartet,
+   * damit ein wiederholt blockierter Gegner nicht beliebig viele Salven ohne Cooldown feuert.
+   */
+  private abortCombat(enemy: EnemyEntity, now: number): void {
+    this.finishSalvo(enemy, now);
+    this.sustainedAttacks.delete(enemy.id);
+    this.playerTargetLocks.delete(enemy.id);
+    this.meleeWindups.delete(enemy.id);
+    this.obstacleContacts.delete(enemy.id);
+    this.resetMovementProgress(enemy);
+  }
+
+  /** Beendet eine laufende Salve und sperrt ihre Waffe fuer die konfigurierte Pause. */
+  private finishSalvo(enemy: EnemyEntity, now: number): void {
+    const state = this.salvoStates.get(enemy.id);
+    if (!state) return;
+    this.salvoStates.delete(enemy.id);
+    const attackWeapon = enemy.getAttackWeapons().find(candidate => candidate.weapon.config.id === state.weaponId);
+    if (attackWeapon?.salvo) enemy.lockWeaponUntil(attackWeapon.weapon, now + attackWeapon.salvo.cooldownMs);
+  }
+
+  /**
+   * Feuert den naechsten Schuss einer laufenden Salve, sobald ihr Takt es zulaesst. Der Rueckgabe-
+   * wert meldet, dass die Salve den Gegner in diesem Frame beansprucht – waehrenddessen waehlt er
+   * keine andere Waffe. Verliert er sein Ziel, laeuft die Salve ueber ihre Verfallszeit aus.
+   */
+  private continueSalvo(enemy: EnemyEntity, now: number): boolean {
+    const state = this.salvoStates.get(enemy.id);
+    if (!state) return false;
+
+    const attackWeapon = enemy.getAttackWeapons().find(candidate => candidate.weapon.config.id === state.weaponId);
+    if (!attackWeapon?.salvo) {
+      this.salvoStates.delete(enemy.id);
+      return false;
+    }
+    if (now < state.nextShotAt || !enemy.isWeaponReady(attackWeapon.weapon, now)) return true;
+
+    // Ohne gueltiges Ziel gibt die Salve den Gegner frei, statt ihn zu blockieren: kommt ihm ein
+    // Spieler unter die Mindestdistanz, soll er sofort auf den Hoellenwerfer wechseln duerfen.
+    // Der Zaehler bleibt bis zur Verfallszeit stehen, damit sie nach kurzem Sichtverlust weiterlaeuft.
+    const target = this.resolveWeaponTarget(enemy, attackWeapon, now);
+    if (!target) return false;
+
+    this.fireAttack(enemy, { attackWeapon, target }, now);
+    return true;
+  }
+
+  private expireStaleSalvo(enemy: EnemyEntity, now: number): void {
+    const state = this.salvoStates.get(enemy.id);
+    if (state && now >= state.expiresAt) this.finishSalvo(enemy, now);
+  }
+
+  private isSalvoInProgress(enemyId: string, weaponId: string): boolean {
+    return this.salvoStates.get(enemyId)?.weaponId === weaponId;
   }
 
   private shouldStartMeleeWindup(attack: SelectedEnemyAttack): boolean {
@@ -265,8 +335,9 @@ export class CoopDefenseEnemyAttackSystem {
     );
     if (!didFire) return;
 
-    enemy.pauseAttackMovement(now);
+    enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);
     enemy.recordWeaponUse(weapon, now);
+    this.advanceSalvo(enemy, attackWeapon, now);
     this.updateObstacleClearingState(enemy, target);
 
     const existingSustainedAttack = this.sustainedAttacks.get(enemy.id);
@@ -285,6 +356,29 @@ export class CoopDefenseEnemyAttackSystem {
   }
 
   /**
+   * Zaehlt einen Salvenschuss. Der Waffen-Cooldown taktet die Einzelschuesse; erst nach dem
+   * letzten Schuss uebernimmt die Salvenpause.
+   */
+  private advanceSalvo(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, now: number): void {
+    const salvo = attackWeapon.salvo;
+    if (!salvo) return;
+
+    const weaponId = attackWeapon.weapon.config.id;
+    const current = this.salvoStates.get(enemy.id);
+    const shotsFired = (current?.weaponId === weaponId ? current.shotsFired : 0) + 1;
+    this.salvoStates.set(enemy.id, {
+      weaponId,
+      shotsFired,
+      nextShotAt: now + salvo.intervalMs,
+      expiresAt: now + Math.max(
+        CoopDefenseEnemyAttackSystem.MIN_SALVO_GAP_TOLERANCE_MS,
+        salvo.intervalMs * CoopDefenseEnemyAttackSystem.SALVO_GAP_TOLERANCE_FACTOR,
+      ),
+    });
+    if (shotsFired >= salvo.count) this.finishSalvo(enemy, now);
+  }
+
+  /**
    * Merkt sich den Felsen, an dem der Gegner gerade arbeitet. Bewusst ohne Reset des
    * Blockier-Zählers: ein festhängender Fernkämpfer schießt weiter auf Spieler und würde sich
    * sonst mit jedem Schuss selbst wieder als „nicht blockiert" einstufen.
@@ -296,31 +390,66 @@ export class CoopDefenseEnemyAttackSystem {
       : null;
   }
 
+  /** Bestes Ziel einer einzelnen Waffe nach ihrem Zielmodus, inklusive Zug und Mindestdistanz. */
+  private resolveWeaponTarget(
+    enemy: EnemyEntity,
+    attackWeapon: EnemyAttackWeapon,
+    now: number,
+  ): EnemyAttackCandidate | null {
+    const weapon = attackWeapon.weapon;
+    let target = attackWeapon.targetMode === 'players'
+      ? this.findLivingTargetWithLock(enemy, weapon.config.range, now)
+      : attackWeapon.targetMode === 'rocks'
+        ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
+        : attackWeapon.targetMode === 'structures'
+          ? this.selectStructureTarget(enemy, weapon.config.range, now)
+          : this.selectTarget(enemy, weapon.config.range, now);
+    const trainTarget = (weapon.config.trainDamageMult ?? 1) > 0
+      ? this.findTrainTarget(enemy, weapon.config.range)
+      : null;
+    if (this.isBetterCandidate(trainTarget, target)) target = trainTarget;
+    if (!target || !this.isWithinWeaponMinDistance(enemy, attackWeapon, target)) return null;
+    return target;
+  }
+
   private selectAttack(enemy: EnemyEntity, now: number): SelectedEnemyAttack | null {
     // Die Konfigurationsreihenfolge ist zugleich die Waffenpriorität:
     // Die erste Waffe mit einem gültigen Ziel gewinnt.
+    let higherPriorityWeaponBusy = false;
     for (const attackWeapon of enemy.getAttackWeapons()) {
       const weapon = attackWeapon.weapon;
       if (weapon.config.fire.type === 'healing_aura' || weapon.config.fire.type === 'tesla_dome') continue;
-      let target = attackWeapon.targetMode === 'players'
-        ? this.findLivingTargetWithLock(enemy, weapon.config.range, now)
-        : attackWeapon.targetMode === 'rocks'
-          ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
-          : attackWeapon.targetMode === 'structures'
-            ? this.selectStructureTarget(enemy, weapon.config.range, now)
-            : this.selectTarget(enemy, weapon.config.range, now);
-      const trainTarget = (weapon.config.trainDamageMult ?? 1) > 0
-        ? this.findTrainTarget(enemy, weapon.config.range)
-        : null;
-      if (this.isBetterCandidate(trainTarget, target)) target = trainTarget;
+      const target = this.resolveWeaponTarget(enemy, attackWeapon, now);
       if (!target) continue;
       // Existiert ein Ziel fuer eine hoeher priorisierte Waffe, wartet der
       // Gegner deren Cooldown ab, statt im Nahkampf auf Fernkampf zu wechseln.
-      if (!enemy.isWeaponReady(weapon, now)) return null;
+      if (!enemy.isWeaponReady(weapon, now)) {
+        higherPriorityWeaponBusy = true;
+        continue;
+      }
+      // Ausnahme: Felsen freibeissen. Ein blockierter Gegner muss sich immer befreien duerfen,
+      // sonst haengt er waehrend des Cooldowns seiner Fernwaffe dauerhaft fest.
+      if (higherPriorityWeaponBusy && target.kind !== 'obstacle') return null;
       return { attackWeapon, target };
     }
 
     return null;
+  }
+
+  /**
+   * Mindest-Zieldistanz einer Waffe. Eine laufende Salve darf mit Hysterese unter die Grenze
+   * feuern, damit ein herankommendes Ziel sie nicht mitten im Takt abbricht.
+   */
+  private isWithinWeaponMinDistance(
+    enemy: EnemyEntity,
+    attackWeapon: EnemyAttackWeapon,
+    target: EnemyAttackCandidate,
+  ): boolean {
+    if (attackWeapon.minTargetDistancePx <= 0) return true;
+    const hysteresis = this.isSalvoInProgress(enemy.id, attackWeapon.weapon.config.id)
+      ? CoopDefenseEnemyAttackSystem.SALVO_MIN_DISTANCE_HYSTERESIS_PX
+      : 0;
+    return target.distance >= attackWeapon.minTargetDistancePx - hysteresis;
   }
 
   private getSustainedAttack(
@@ -703,6 +832,7 @@ export class CoopDefenseEnemyAttackSystem {
 
   private cleanupInactiveEnemies(activeEnemyIds: ReadonlySet<string>): void {
     this.deleteInactiveEntries(this.sustainedAttacks, activeEnemyIds);
+    this.deleteInactiveEntries(this.salvoStates, activeEnemyIds);
     this.deleteInactiveEntries(this.playerTargetLocks, activeEnemyIds);
     this.deleteInactiveEntries(this.meleeWindups, activeEnemyIds);
     this.deleteInactiveEntries(this.movementProgress, activeEnemyIds);

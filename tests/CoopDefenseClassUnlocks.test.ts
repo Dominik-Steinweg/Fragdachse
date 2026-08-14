@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getStoredCoopDefenseLoadout,
   getStoredCoopDefenseProgress,
+  markStoredCoopDefenseBossMapCompleted,
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseClassesUnlocked,
+  setStoredCoopDefenseLoadoutSlot,
   setStoredCoopDefenseTotalXp,
   setStoredCoopDefenseUpgradeProfile,
   setStoredHighestUnlockedCoopDefenseMapId,
@@ -14,9 +17,13 @@ import {
   isCoopDefenseClassUnlocked,
 } from '../src/config/coopDefenseClasses';
 import {
+  buildDefaultCoopDefenseUpgradeProfile,
+  getAvailableCoopDefenseBossPoints,
+  getAvailableCoopDefenseUpgradePoints,
   getSpentCoopDefenseUpgradePoints,
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseLevelForXp } from '../src/utils/coopDefenseProgression';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -112,6 +119,67 @@ describe('coop-defense class unlock progression', () => {
     expect(getStoredCoopDefenseProgress().unlockedClassIds).toEqual([
       'dachs_nukem', 'dachs_of_steel', 'inspector_gadachs',
     ]);
+  });
+
+  it('keeps existing class profiles and loadouts unchanged when Inspector unlocks on Map 8', () => {
+    setStoredCoopDefenseTotalXp(5_000);
+    markStoredCoopDefenseBossMapCompleted('5');
+    expect(unlockStoredCoopDefenseClassesAfterVictory('5')).toBe(true);
+
+    const afterMap5 = getStoredCoopDefenseProgress();
+    const playerLevel = getCoopDefenseLevelForXp(afterMap5.totalXp);
+    const nukem = levelUpCoopDefenseUpgrade(
+      afterMap5.profilesByClass.dachs_nukem,
+      'hp',
+      playerLevel,
+      afterMap5.completedBossMapIds.length,
+      'dachs_nukem',
+    );
+    const steel = levelUpCoopDefenseUpgrade(
+      afterMap5.profilesByClass.dachs_of_steel,
+      'run_speed',
+      playerLevel,
+      afterMap5.completedBossMapIds.length,
+      'dachs_of_steel',
+    );
+    expect(nukem).not.toBeNull();
+    expect(steel).not.toBeNull();
+    setStoredCoopDefenseUpgradeProfile(nukem!, 'dachs_nukem');
+    setStoredCoopDefenseUpgradeProfile(steel!, 'dachs_of_steel');
+    setStoredCoopDefenseLoadoutSlot('dachs_nukem', 'weapon1', 'AK47');
+    setStoredCoopDefenseLoadoutSlot('dachs_of_steel', 'weapon1', 'P90');
+    setStoredCoopDefenseLoadoutSlot('dachs_of_steel', 'utility', 'HE_GRENADE');
+
+    const beforeMap8 = getStoredCoopDefenseProgress();
+    const beforeNukemLoadout = getStoredCoopDefenseLoadout('dachs_nukem');
+    const beforeSteelLoadout = getStoredCoopDefenseLoadout('dachs_of_steel');
+
+    markStoredCoopDefenseBossMapCompleted('8');
+    expect(unlockStoredCoopDefenseClassesAfterVictory('8')).toBe(true);
+
+    const afterMap8 = getStoredCoopDefenseProgress();
+    expect(afterMap8.profilesByClass.dachs_nukem).toEqual(
+      beforeMap8.profilesByClass.dachs_nukem,
+    );
+    expect(afterMap8.profilesByClass.dachs_of_steel).toEqual(
+      beforeMap8.profilesByClass.dachs_of_steel,
+    );
+    expect(getStoredCoopDefenseLoadout('dachs_nukem')).toEqual(beforeNukemLoadout);
+    expect(getStoredCoopDefenseLoadout('dachs_of_steel')).toEqual(beforeSteelLoadout);
+
+    const inspector = afterMap8.profilesByClass.inspector_gadachs;
+    expect(inspector).toEqual(buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'));
+    const inspectorLevel = getCoopDefenseLevelForXp(afterMap8.totalXp);
+    expect(getAvailableCoopDefenseUpgradePoints(
+      inspectorLevel,
+      inspector,
+      'inspector_gadachs',
+    )).toBe(inspectorLevel - 1);
+    expect(getAvailableCoopDefenseBossPoints(
+      afterMap8.completedBossMapIds.length,
+      inspector,
+      'inspector_gadachs',
+    )).toBe(afterMap8.completedBossMapIds.length);
   });
 
   it('can be relocked for debugging and fully reset to a fresh character', () => {

@@ -39,6 +39,8 @@ Nebenmissionen sind optionale, nicht siegrelevante Ziele mit den Archetypen dest
 ## Gameplay-Grenzen
 
 - Der Host ist die einzige Instanz für Schaden, Spawn, Ressourcenverbrauch und Sieg/Niederlage.
+- Raumweite Schadensstatistiken werden im zentralen CombatSystem nur aus tatsächlich verlorenen HP/Rüstung beziehungsweise Gegner-HP gespeist; Overkill, Selbst-, Freund-, Umwelt-, Fels- und Zugschaden bleiben ausgeschlossen. Spielerbesitz von Folgeeffekten wird vor der hostseitigen Anrechnung aufgelöst.
+- Waffenaktionen beanspruchen hostseitig exklusiv ihren Slot, bevor Cooldown oder Ressource geprüft werden; der Wechsel beendet den nicht-autonomen gehaltenen/kanalisierten Effekt des anderen Slots sofort. Explizit autonome Toggle-Upgrades bleiben davon ausgenommen.
 - Trefferherkunft wird über typisierte Damage-/Slot-Felder geführt, nicht über Anzeigenamen oder Rendererzustand.
 - Loadout- und Upgrade-Regeln gehören in Resolver und Systems. Neue Stats müssen über den gemeinsamen Host-/Client-Resolver laufen, damit Anzeige und Gate identisch bleiben.
 - Strategische Ziele und Navigation verwenden die vorhandenen Flowfield-/Obstacle-Services. Keine zweite Sichtlinien- oder Zielquellenliste neben den zentralen Services einführen.

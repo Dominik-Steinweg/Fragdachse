@@ -480,6 +480,8 @@ export interface SyncedProjectile {
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
+  /** Explizite Sporenpalette; verhindert, dass Void-Spore-VFX vom Farbwert abhängen. */
+  sporeVisualVariant?: 'spore' | 'spore_void';
   bulletVisualPreset?: BulletVisualPreset;
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
@@ -721,6 +723,12 @@ export type LoadoutToolRef =
   | { kind: 'construction'; id: ConstructionId }
   | { kind: 'utility'; id: string };
 
+/** Kleine, laufend aktualisierte Lobby-Vorschau fuer die sichtbare Inspector-Auswahl. */
+export interface LobbyLoadoutPreviewState {
+  coopDefenseClassId: CoopDefenseClassId | null;
+  tools: LoadoutToolRef[];
+}
+
 /** Audio-Metadaten fuer schussbezogene Loadout-Aktionen. */
 export interface LoadoutShotAudioConfig {
   readonly successKey: ShotAudioKey;
@@ -852,6 +860,8 @@ export interface ProjectileSpawnConfig {
   explosion?:      ProjectileExplosionConfig;
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
+  /** Sporen-Projektilpalette, aus der Impact-Cloud-Variante abgeleitet. */
+  sporeVisualVariant?: 'spore' | 'spore_void';
   homing?:         ProjectileHomingConfig;
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
@@ -989,6 +999,10 @@ export interface FireGrenadeEffect {
   burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
   weaponName?: string;
+  /** Optische Brandfamilie der entstehenden Flaeche; ohne Wert normales oranges Feuer. */
+  visualStyle?: GroundFireVisualStyle;
+  /** Entitaetsgruppe, die die Flaeche verletzen darf; ohne Wert trifft sie alle. */
+  damageTarget?: GroundFireDamageTarget;
   wildfire?: {
     speedMultiplier: number;
     trailDurationMs: number;
@@ -1189,6 +1203,8 @@ export interface TrackedProjectile {
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
+  /** Explizite Sporenpalette für Host- und Client-Renderer. */
+  sporeVisualVariant?: 'spore' | 'spore_void';
   bulletVisualPreset?: BulletVisualPreset;
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
@@ -1675,7 +1691,7 @@ export interface SyncedEnemyState {
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
   /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
-  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse';
+  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup';
   specialActionEndsAt: number;
   gaussChargeProgress: number;
   gaussAimAngle: number;
@@ -1697,7 +1713,7 @@ export interface SyncedEnemyDeltaState {
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
   dashPhase?: 0 | 1 | 2;
-  specialAction?: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse';
+  specialAction?: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup';
   specialActionEndsAt?: number;
   gaussChargeProgress?: number;
   gaussAimAngle?: number;

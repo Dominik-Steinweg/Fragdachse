@@ -4,8 +4,13 @@ import {
   normalizeCoopDefenseMapConfig,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
+import { ARENA_OFFSET_Y, CELL_SIZE } from '../src/config';
+import { getCoopDefenseTutorialRockRegion } from '../src/config/coopDefenseTutorial';
 import { AirstrikeSystem } from '../src/systems/AirstrikeSystem';
-import { CoopDefenseAirstrikeEventHandler } from '../src/systems/CoopDefenseAirstrikeEventHandler';
+import {
+  CoopDefenseAirstrikeEventHandler,
+  planTutorialSweep,
+} from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
 
 function makeMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
@@ -324,6 +329,15 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
       setNow(value: number): void { now = value; },
     };
   }
+
+  it('starts the Map 11 tutorial sweep three cells above the rock region', () => {
+    const region = getCoopDefenseTutorialRockRegion(false);
+    const [point] = planTutorialSweep(60, 39, false, 1, () => 0);
+
+    expect(point?.y).toBe(
+      ARENA_OFFSET_Y + (region.minGridY - 3 + 0.2) * CELL_SIZE,
+    );
+  });
 
   it('completes a barrage only after the actual last impact', () => {
     const harness = createHarness();

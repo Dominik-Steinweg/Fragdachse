@@ -44,7 +44,7 @@
       "start": { "type": "time", "atMs": 56000 },
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
-        { "enemyKind": "void-stalker", "count": 4, "delayMs": 1200, "front": "east" }
+        { "enemyKind": "void-stalker", "count": 3, "delayMs": 1200, "front": "east" }
       ]
     },
     {
@@ -53,7 +53,7 @@
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 20, "delayMs": 800, "front": "north" },
-        { "enemyKind": "void-stalker", "count": 4, "delayMs": 1400, "front": "south" }
+        { "enemyKind": "void-stalker", "count": 3, "delayMs": 1400, "front": "south" }
       ]
     }
   ],
@@ -69,7 +69,7 @@
     {
       "id": "map-9-player-pressure-void",
       "enemyKind": "void-stalker",
-      "intervalMs": 9500,
+      "intervalMs": 12500,
       "countPerTick": 1,
       "startAtMs": 12000,
       "source": { "type": "map" }
@@ -77,7 +77,7 @@
     {
       "id": "map-9-player-pressure-brood",
       "enemyKind": "stink-broodmother",
-      "intervalMs": 10000,
+      "intervalMs": 15000,
       "countPerTick": 1,
       "startAtMs": 30000,
       "source": { "type": "map" }

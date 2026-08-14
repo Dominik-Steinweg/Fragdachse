@@ -209,6 +209,25 @@ describe('Coop defense map progression', () => {
     const bomberMap = getCoopDefenseMapConfig('11');
     expect(bomberMap.objective).toBe('repel-assault');
     expect(bomberMap.persistentSpawns).toEqual([]);
+    expect(bomberMap.bases).toHaveLength(1);
+    expect(bomberMap.bases[0]?.id).toBe('coop-base-middle');
+    expect(bomberMap.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: -4, dyCells: 2 });
+    expect(getShapeBounds(bomberMap.bases[0]!.shape)).toEqual({ width: 5, height: 5 });
+    expect(bomberMap.bases[0]?.turrets?.map((turret) => ({
+      weaponId: turret.weaponId,
+      cellOffset: turret.cellOffset,
+    }))).toEqual([
+      { weaponId: 'BASE_SPOREN', cellOffset: { gridX: 0, gridY: 3 } },
+      { weaponId: 'BASE_SPOREN', cellOffset: { gridX: 0, gridY: 4 } },
+    ]);
+    expect(bomberMap.bases[0]?.powerUpPedestals?.map((pedestal) => ({
+      defId: pedestal.defId,
+      cellOffset: pedestal.cellOffset,
+    }))).toEqual([
+      { defId: 'HEALTH_PACK', cellOffset: { gridX: 0, gridY: 2 } },
+      { defId: 'ADRENALINE', cellOffset: { gridX: 4, gridY: 2 } },
+    ]);
+    expect(bomberMap.mapEvents?.some((event) => event.type === 'train')).toBe(false);
     expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',
       'after-event',

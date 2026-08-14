@@ -56,7 +56,7 @@ function fakeTrainHandler() {
 describe('Train as a standalone map event', () => {
   it('migrates the train rhythm on every rails map of the campaign', () => {
     const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
-      map.trackMode === 'rails' && map.mapId !== '0' && map.mapId !== '2'
+      map.trackMode === 'rails' && !['0', '2', '11'].includes(map.mapId)
     ));
     expect(railsMaps.length).toBeGreaterThan(0);
 

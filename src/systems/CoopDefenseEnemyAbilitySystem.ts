@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
-import { PLAYER_SIZE } from '../config';
+import { PLAYER_SIZE, VOID_FIRE_COLOR } from '../config';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemySpawnThrowConfig,
   type CoopDefenseEnemyTranslocatorConfig,
   type CoopDefenseEnemyVoidFireChunkConfig,
   type CoopDefenseEnemyVoidFireTrailConfig,
+  type CoopDefenseEnemyVoidMolotovConfig,
 } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
@@ -17,6 +18,7 @@ import {
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
   type HealingAuraWeaponFireConfig,
+  type MolotovUtilityConfig,
   type StinkCloudUtilityConfig,
   type TeslaDomeWeaponFireConfig,
   type TranslocatorUtilityConfig,
@@ -38,6 +40,17 @@ interface EnemyVoidFireTrailState {
   y: number;
 }
 
+/**
+ * Wurfzustand des Void-Brandsatzes. `throwAt = 0` bedeutet "kein Wurf angesetzt"; solange ein
+ * Wurf laeuft, haelt der Gegner an und behaelt seinen zuletzt gesehenen Zielpunkt.
+ */
+interface EnemyVoidMolotovState {
+  readyAt: number;
+  throwAt: number;
+  targetX: number;
+  targetY: number;
+}
+
 const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
 /** Extra clearance around rocks so thrown projectiles are checked as bodies, not as zero-width lines. */
 const ENEMY_THROW_PATH_SAFETY_MARGIN = 4;
@@ -56,6 +69,27 @@ const ENEMY_THROW_FLIGHT_PHYSICS = {
   stopSpeedThreshold: 15,
 } as const;
 
+/**
+ * Wurfgeschwindigkeit, mit der ein Projektil nach `flightMs` genau seinen Zielpunkt erreicht.
+ *
+ * Der pauschale Reibungsaufschlag der aelteren Wuerfe passt nur, solange der Zielzeitpunkt frei
+ * gewaehlt werden kann – der Translocator teleportiert schlicht dann, wenn der Puck angekommen
+ * ist. Ein Brandsatz zuendet dagegen nach fester Zuendzeit dort, wo er gerade ist; er muss also
+ * exakt zu diesem Zeitpunkt ankommen, sonst fliegt er weit ueber sein Ziel hinaus.
+ *
+ * {@link ENEMY_THROW_FLIGHT_PHYSICS} daempft die Geschwindigkeit ab `frictionDelayMs` mit
+ * `v(t) = v0 * decay^t`. Die Strecke je Einheit Startgeschwindigkeit ist damit der ungebremste
+ * Vorlauf plus das Integral der Daempfung – invertiert ergibt das die noetige Wurfgeschwindigkeit.
+ */
+function resolveEnemyThrowSpeed(distance: number, flightMs: number): number {
+  const flightSeconds = Math.max(0.1, flightMs / 1000);
+  const undampedSeconds = Math.min(flightSeconds, ENEMY_THROW_FLIGHT_PHYSICS.frictionDelayMs / 1000);
+  const decay = ENEMY_THROW_FLIGHT_PHYSICS.airFrictionDecayPerSec;
+  const travelPerUnitSpeed = undampedSeconds
+    + (1 - Math.pow(decay, flightSeconds - undampedSeconds)) / Math.log(1 / decay);
+  return distance / Math.max(0.0001, travelPerUnitSpeed);
+}
+
 /** Host-seitige, dauerhaft aktive Spezialfaehigkeiten der Coop-Gegner. */
 export class CoopDefenseEnemyAbilitySystem {
   private readonly lastHealingTickAt = new Map<string, number>();
@@ -64,6 +98,7 @@ export class CoopDefenseEnemyAbilitySystem {
   private readonly spawnThrowReadyAt = new Map<string, number>();
   private readonly voidFireChunkReadyAt = new Map<string, number>();
   private readonly voidFireTrailStates = new Map<string, EnemyVoidFireTrailState>();
+  private readonly voidMolotovStates = new Map<string, EnemyVoidMolotovState>();
   private readonly activeStinkAuraEnemyIds = new Set<string>();
 
   constructor(
@@ -86,6 +121,7 @@ export class CoopDefenseEnemyAbilitySystem {
       // Eingebuddelte Gegner setzen – wie eingebuddelte Spieler – keine Faehigkeiten ein.
       if (enemy.isBurrowed()) {
         this.voidFireTrailStates.delete(enemy.id);
+        this.cancelVoidMolotovWindup(enemy);
         continue;
       }
 
@@ -115,14 +151,25 @@ export class CoopDefenseEnemyAbilitySystem {
 
       const voidFireTrail = getCoopDefenseEnemyConfig(enemy.kind).voidFireTrail;
       if (voidFireTrail) this.updateVoidFireTrail(enemy, voidFireTrail, now);
+
+      const voidMolotov = getCoopDefenseEnemyConfig(enemy.kind).voidMolotov;
+      if (voidMolotov) this.updateVoidMolotov(enemy, voidMolotov, now);
     }
 
     this.pruneInactiveEnemies(activeEnemyIds);
   }
 
+  /** True, solange der Gegner fuer seinen Void-Brandsatz ausholt und deshalb nicht schiessen darf. */
+  blocksRegularAttacks(enemyId: string): boolean {
+    return (this.voidMolotovStates.get(enemyId)?.throwAt ?? 0) > 0;
+  }
+
   clear(): void {
     for (const state of this.teleportStates.values()) {
       if (state.puckId !== undefined) this.projectileManager.destroyProjectile(state.puckId);
+    }
+    for (const enemyId of this.voidMolotovStates.keys()) {
+      this.enemyManager.getEnemy(enemyId)?.setSpecialAction('none');
     }
     this.lastHealingTickAt.clear();
     this.lastMiniDomeTickAt.clear();
@@ -130,6 +177,7 @@ export class CoopDefenseEnemyAbilitySystem {
     this.spawnThrowReadyAt.clear();
     this.voidFireChunkReadyAt.clear();
     this.voidFireTrailStates.clear();
+    this.voidMolotovStates.clear();
     this.activeStinkAuraEnemyIds.clear();
   }
 
@@ -148,6 +196,7 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.afterCloudDurationMs ?? 0,
       utility.afterCloudRadiusFactor ?? 0,
       utility.afterCloudDamageFactor ?? 0,
+      utility.visualVariant ?? 'stink',
     );
     this.activeStinkAuraEnemyIds.add(enemy.id);
   }
@@ -402,6 +451,153 @@ export class CoopDefenseEnemyAbilitySystem {
     });
   }
 
+  /**
+   * Void-Brandsatz: derselbe Molotov wie beim Spieler, nur mit lila Brandflaeche und einer
+   * lesbaren Standzeit vor dem Wurf. Ballistik und Zuendzeit stammen aus der Utility, der Wurf
+   * selbst folgt der bewaehrten gegnerischen Wurfmechanik (Sichtlinie mit Wurfkorridor,
+   * Wurfgeschwindigkeit aus Distanz und geplanter Flugzeit).
+   */
+  private updateVoidMolotov(
+    enemy: EnemyEntity,
+    ability: CoopDefenseEnemyVoidMolotovConfig,
+    now: number,
+  ): void {
+    const state = this.voidMolotovStates.get(enemy.id);
+    if (!state) {
+      // Wie bei den uebrigen Wurffaehigkeiten startet der Gegner in der Pause, damit er nicht
+      // im selben Moment wirft, in dem er die Arena betritt.
+      this.voidMolotovStates.set(enemy.id, {
+        readyAt: now + ability.cooldownMs,
+        throwAt: 0,
+        targetX: enemy.sprite.x,
+        targetY: enemy.sprite.y,
+      });
+      return;
+    }
+
+    if (state.throwAt > 0) {
+      this.updateVoidMolotovWindup(enemy, ability, state, now);
+      return;
+    }
+
+    if (now < state.readyAt) return;
+
+    const utility = UTILITY_CONFIGS[ability.utilityId] as MolotovUtilityConfig;
+    const target = this.findThrowTarget(
+      enemy,
+      ability.minRange,
+      ability.maxRange,
+      (utility.projectileSize ?? 10) * 0.5 + ENEMY_THROW_PATH_SAFETY_MARGIN,
+    );
+    if (!target) return;
+
+    state.throwAt = now + ability.windupMs;
+    state.targetX = target.x;
+    state.targetY = target.y;
+    this.updateVoidMolotovWindup(enemy, ability, state, now);
+  }
+
+  private updateVoidMolotovWindup(
+    enemy: EnemyEntity,
+    ability: CoopDefenseEnemyVoidMolotovConfig,
+    state: EnemyVoidMolotovState,
+    now: number,
+  ): void {
+    // Ein einmal angesetzter Wurf bleibt auf seinem Zielpunkt: Der Gegner holt sichtbar aus, das
+    // Ziel kann ausweichen. Ein noch erreichbarer Spieler frischt den Punkt aber nach.
+    const refreshed = this.findThrowTarget(enemy, 0, ability.maxRange, 0);
+    if (refreshed) {
+      state.targetX = refreshed.x;
+      state.targetY = refreshed.y;
+    }
+
+    const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, state.targetX, state.targetY);
+    enemy.faceAngle(angle);
+    const remainingMs = Math.max(0, state.throwAt - now);
+    // Die Standzeit laeuft ueber dieselbe Angriffspause wie jeder andere Angriff; nur ihre Dauer
+    // stammt hier aus der Faehigkeit statt aus der Gegner-Pauschale.
+    enemy.pauseAttackMovement(now, 0, remainingMs);
+    const progress = ability.windupMs > 0
+      ? Phaser.Math.Clamp(1 - remainingMs / ability.windupMs, 0, 1)
+      : 1;
+    enemy.setSpecialAction('void-molotov-windup', state.throwAt, progress, angle);
+
+    if (now < state.throwAt) return;
+
+    this.throwVoidMolotov(enemy, ability, state, angle);
+    state.throwAt = 0;
+    state.readyAt = now + ability.cooldownMs;
+    enemy.setSpecialAction('none');
+  }
+
+  private throwVoidMolotov(
+    enemy: EnemyEntity,
+    ability: CoopDefenseEnemyVoidMolotovConfig,
+    state: EnemyVoidMolotovState,
+    angle: number,
+  ): void {
+    const utility = UTILITY_CONFIGS[ability.utilityId] as MolotovUtilityConfig;
+    const projectileSize = utility.projectileSize ?? 10;
+    const spawnDistance = enemy.getCollisionRadius() + projectileSize * 0.5;
+    const spawnX = enemy.sprite.x + Math.cos(angle) * spawnDistance;
+    const spawnY = enemy.sprite.y + Math.sin(angle) * spawnDistance;
+    // Gemessen wird ab der Muendung, nicht ab der Bossmitte: Bei einem 68 px breiten Gegner
+    // liegen dazwischen rund 39 px, die der Brandsatz sonst zusaetzlich ueberfliegt.
+    const throwSpeed = Phaser.Math.Clamp(
+      resolveEnemyThrowSpeed(
+        Phaser.Math.Distance.Between(spawnX, spawnY, state.targetX, state.targetY),
+        utility.fuseTime,
+      ),
+      16,
+      utility.projectileSpeed * ENEMY_THROW_SPEED_MULTIPLIER,
+    );
+
+    this.projectileManager.spawnProjectile(
+      spawnX,
+      spawnY,
+      angle,
+      enemy.id,
+      {
+        speed: throwSpeed,
+        size: projectileSize,
+        damage: 0,
+        color: VOID_FIRE_COLOR,
+        ownerColor: VOID_FIRE_COLOR,
+        lifetime: utility.fuseTime,
+        maxBounces: utility.maxBounces,
+        isGrenade: true,
+        fuseTime: utility.fuseTime,
+        adrenalinGain: 0,
+        weaponName: ability.displayName,
+        projectileStyle: utility.projectileStyle,
+        grenadeVisualPreset: utility.grenadeVisualPreset,
+        rockDamageMult: 0,
+        trainDamageMult: 0,
+        grenadeEffect: {
+          type: 'fire',
+          radius: utility.fireRadius,
+          damagePerTick: utility.fireDamagePerTick,
+          lingerDuration: utility.fireLingerDuration,
+          burnDurationMs: utility.fireBurnDurationMs,
+          burnDamagePerTick: utility.fireBurnDamagePerTick,
+          rockDamageMult: 0,
+          trainDamageMult: 0,
+          weaponName: ability.displayName,
+          visualStyle: 'void',
+          damageTarget: 'players',
+        },
+        ...ENEMY_THROW_FLIGHT_PHYSICS,
+      },
+    );
+  }
+
+  private cancelVoidMolotovWindup(enemy: EnemyEntity): void {
+    const state = this.voidMolotovStates.get(enemy.id);
+    if (!state || state.throwAt <= 0) return;
+    state.throwAt = 0;
+    enemy.setSpecialAction('none');
+  }
+
   /** Naechstes gueltiges Wurfziel innerhalb der Reichweite (Spieler bzw. gegnerische Fraktion). */
   private findThrowTarget(
     enemy: EnemyEntity,
@@ -570,6 +766,9 @@ export class CoopDefenseEnemyAbilitySystem {
     }
     for (const enemyId of this.voidFireTrailStates.keys()) {
       if (!activeEnemyIds.has(enemyId)) this.voidFireTrailStates.delete(enemyId);
+    }
+    for (const enemyId of this.voidMolotovStates.keys()) {
+      if (!activeEnemyIds.has(enemyId)) this.voidMolotovStates.delete(enemyId);
     }
     for (const [enemyId, state] of this.teleportStates) {
       if (activeEnemyIds.has(enemyId)) continue;

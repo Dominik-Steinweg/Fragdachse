@@ -233,6 +233,7 @@ export type UiIconName =
   | 'info'
   | 'help'
   | 'settings'
+  | 'utility-rad'
   | 'lock'
   | 'copy'
   | 'trophy'
@@ -343,6 +344,32 @@ export function ensureIconTexture(
       ctx.arc(s * 0.5, s * 0.5, s * 0.12, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+      break;
+    }
+
+    case 'utility-rad': {
+      line(0.08);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.5, s * 0.16, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let index = 0; index < 6; index += 1) {
+        const angle = -Math.PI / 2 + index * Math.PI / 3;
+        const inner = 0.23;
+        const outer = 0.39;
+        path([
+          [0.5 + Math.cos(angle) * inner, 0.5 + Math.sin(angle) * inner],
+          [0.5 + Math.cos(angle) * outer, 0.5 + Math.sin(angle) * outer],
+        ]);
+        ctx.beginPath();
+        ctx.arc(
+          s * (0.5 + Math.cos(angle) * outer),
+          s * (0.5 + Math.sin(angle) * outer),
+          s * 0.055,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+      }
       break;
     }
 

@@ -21,6 +21,7 @@ import {
 } from '../utils/localPreferences';
 import type { GraphicsQuality, GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { toDesignSpace } from '../graphics/RenderResolution';
 
 const PANEL_W = 680;
 const PANEL_H = 760;
@@ -831,7 +832,8 @@ export class OptionsOverlay {
   }
 
   private applyPointerValue(key: VolumeSliderKey, pointerX: number, playPreview: boolean): void {
-    const normalized = Phaser.Math.Clamp((pointerX - TRACK_X) / TRACK_W, 0, 1);
+    const designPointerX = toDesignSpace(this.scene.scale, pointerX);
+    const normalized = Phaser.Math.Clamp((designPointerX - TRACK_X) / TRACK_W, 0, 1);
     this.setSliderValue(key, normalized, true, playPreview);
   }
 

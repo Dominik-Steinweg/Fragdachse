@@ -84,6 +84,8 @@ export class InputSystem {
   private tunnelPlacementAnchor: { x: number; y: number; gridX: number; gridY: number } | null = null;
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
+  /** RMB pressed while LMB had priority; consume it only once Waffe 2 gets the turn. */
+  private pendingRightInputStarted = false;
   private suppressWeapon1UntilLeftRelease = false;
   private selectedConstructionId: ConstructionId = 'rocket_turret';
   private getAvailableConstructionIds: (() => readonly ConstructionId[]) | null = null;
@@ -474,6 +476,7 @@ export class InputSystem {
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
+      this.pendingRightInputStarted = false;
     }
   }
 
@@ -754,8 +757,16 @@ export class InputSystem {
     const rightInputStarted = rightPointerDown && !this.prevRightPointerDown;
     this.prevLeftPointerDown = leftPointerDown;
     this.prevRightPointerDown = rightPointerDown;
+    if (rightInputStarted && leftPointerDown) this.pendingRightInputStarted = true;
+    if (!rightPointerDown) this.pendingRightInputStarted = false;
+    const rightInputStartedForUse = rightInputStarted || this.pendingRightInputStarted;
     if (!leftPointerDown) {
       this.suppressWeapon1UntilLeftRelease = false;
+    }
+    // LMB is the deliberate switch to weapon 1. A scope started by an earlier RMB press must
+    // not survive until a later RMB release and fire after weapon 1 has already been used.
+    if (leftInputStarted && this.scopeStartedAt !== null) {
+      this.cancelScopeAim();
     }
     // Zielpunkt und Winkel stammen aus Schritt 1 und sind bereits auf die Arena geclampt.
     const clampedTarget = aimTarget;
@@ -969,6 +980,7 @@ export class InputSystem {
     if (!weaponsBlocked && !primaryWeaponSuppressed && leftPointerDown) {
       this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y, { inputStarted: leftInputStarted });
     } else if (!weaponsBlocked) {
+      if (rightInputStartedForUse) this.pendingRightInputStarted = false;
       // RMB → weapon2: Scope-Waffen (z.B. AWP) nutzen fire-on-release Mechanik,
       // andere Waffen feuern weiterhin per Dauerfeuer.
       // Auch beim Inspector gehoert RMB der Waffe 2 (Adrenalinfaehigkeit); ein laufender
@@ -977,7 +989,7 @@ export class InputSystem {
       if (scopeCfg) {
         if (rightPointerDown) {
           // Scope-In: Fortschritt berechnen, nur holdSpeedFactor aktiv halten (kein Schuss)
-          if (rightInputStarted) {
+          if (rightInputStartedForUse) {
             // Neuen Scope nur starten wenn Cooldown und Adrenalin es erlauben
             if (this.canStartScope && !this.canStartScope()) return;
             this.scopeStartedAt = now;
@@ -1003,7 +1015,7 @@ export class InputSystem {
         }
       } else if (rightPointerDown) {
         // Normales Dauerfeuer für Nicht-Scope-Waffen
-        this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { inputStarted: rightInputStarted });
+        this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { inputStarted: rightInputStartedForUse });
       }
     }
 
@@ -1328,6 +1340,12 @@ export class InputSystem {
       this.audioSystem?.stopLoop(this.chargeLoopHandle);
       this.chargeLoopHandle = null;
     }
+  }
+
+  private cancelScopeAim(): void {
+    this.scopeStartedAt = null;
+    this.scopeProgress = 0;
+    this.scopeChargeProgress = 0;
   }
 
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {

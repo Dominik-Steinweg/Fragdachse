@@ -14,6 +14,8 @@ export interface UiTooltipLine {
   readonly text: string;
   readonly color: number;
   readonly bold?: boolean;
+  /** Optionales, bereits aufgeloestes UI-Icon links neben der Zeile. */
+  readonly textureKey?: string | null;
 }
 
 const OFFSET_X = SPACE.lg;
@@ -21,6 +23,8 @@ const OFFSET_Y = SPACE.lg;
 const PADDING = SPACE.md;
 const TITLE_GAP = SPACE.xs;
 const DIVIDER_GAP = SPACE.sm;
+const ICON_SIZE = 16;
+const ICON_GAP = SPACE.sm;
 /** Leerzeilen (`text: ''`) dienen als Abschnittstrenner und brauchen keine volle Zeilenhoehe. */
 const SPACER_H = SPACE.sm;
 /**
@@ -36,6 +40,7 @@ export class UiTooltip {
   private titleText: Phaser.GameObjects.Text | null = null;
   private divider: Phaser.GameObjects.Rectangle | null = null;
   private lineTexts: Phaser.GameObjects.Text[] = [];
+  private lineIcons: Phaser.GameObjects.Image[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -66,8 +71,13 @@ export class UiTooltip {
         color: TEXT.primary,
         wordWrapWidth: this.maxWidth,
       })).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
+      const icon = this.scene.add.image(0, 0, '_uitooltip_initial')
+        .setDisplaySize(ICON_SIZE, ICON_SIZE)
+        .setVisible(false)
+        .setScrollFactor(0);
       this.lineTexts.push(line);
-      objects.push(line);
+      this.lineIcons.push(icon);
+      objects.push(icon, line);
     }
 
     this.container = this.scene.add.container(0, 0, objects).setVisible(false);
@@ -92,20 +102,36 @@ export class UiTooltip {
       const line = lines[index];
       if (!line) {
         text.setVisible(false);
+        this.lineIcons[index]?.setVisible(false);
         return;
       }
       if (line.text.length === 0) {
         text.setVisible(false);
+        this.lineIcons[index]?.setVisible(false);
         cursorY += SPACER_H;
         return;
       }
+      const icon = line.textureKey && this.scene.textures.exists(line.textureKey)
+        ? this.lineIcons[index]
+        : null;
+      const textX = PADDING + (icon ? ICON_SIZE + ICON_GAP : 0);
       text
         .setText(line.text)
         .setColor(toCssColor(line.color))
         .setFontStyle(line.bold ? 'bold' : '')
-        .setPosition(PADDING, cursorY)
+        .setWordWrapWidth(this.maxWidth - (icon ? ICON_SIZE + ICON_GAP : 0))
+        .setPosition(textX, cursorY)
         .setVisible(true);
-      contentWidth = Math.max(contentWidth, text.width);
+      if (icon) {
+        icon
+          .setTexture(line.textureKey!)
+          .setDisplaySize(ICON_SIZE, ICON_SIZE)
+          .setPosition(PADDING + ICON_SIZE / 2, cursorY + text.height / 2)
+          .setVisible(true);
+      } else {
+        this.lineIcons[index]?.setVisible(false);
+      }
+      contentWidth = Math.max(contentWidth, textX + text.width - PADDING);
       cursorY += text.height;
     });
 
@@ -165,5 +191,6 @@ export class UiTooltip {
     this.titleText = null;
     this.divider = null;
     this.lineTexts = [];
+    this.lineIcons = [];
   }
 }

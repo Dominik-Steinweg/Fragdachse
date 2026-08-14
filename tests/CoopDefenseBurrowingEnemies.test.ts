@@ -4,7 +4,7 @@ import {
   getCoopDefenseEnemyConfig,
   getCoopDefenseEnemyKindIndex,
 } from '../src/config/coopDefenseEnemies';
-import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { VOID_FIRE_COLOR } from '../src/config';
 import { decodeEnemyUpserts, encodeEnemyUpsert } from '../src/network/enemySnapshotCodec';
 import type { SyncedEnemyDeltaState } from '../src/types';
@@ -165,6 +165,10 @@ describe('Purple enemy weapon VFX', () => {
     expect(warden.projectileColor).toBe(VOID_FIRE_COLOR);
     if (warden.fire.type !== 'projectile') throw new Error('Warden-Sporen muessen eine Projektilwaffe sein');
     expect(warden.fire.impactCloud?.visualVariant).toBe('spore_void');
+  });
+
+  it('uses the purple void cloud for the enemy stink aura', () => {
+    expect(UTILITY_CONFIGS.ENEMY_STINKDRUESEN.visualVariant).toBe('spore_void');
   });
 });
 

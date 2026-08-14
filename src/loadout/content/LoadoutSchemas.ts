@@ -262,6 +262,9 @@ export function validateResolvedUtility(value: unknown): string[] {
   if (value.type === 'placeable_pedestal' && isRecord(value.placeable) && value.placeable.kind !== 'pedestal') {
     issues.push('$.placeable.kind: placeable_pedestal verlangt kind=pedestal');
   }
+  if (value.visualVariant !== undefined && !['stink', 'spore', 'spore_void', 'electric'].includes(String(value.visualVariant))) {
+    issues.push('$.visualVariant: unbekannte Stinkwolken-Variante');
+  }
   for (const field of ['cooldown', 'projectileSpeed', 'projectileSize', 'fuseTime', 'maxBounces']) {
     if (typeof value[field] !== 'number' || value[field] < 0) issues.push(`$.${field}: endliche nichtnegative Zahl erforderlich`);
   }

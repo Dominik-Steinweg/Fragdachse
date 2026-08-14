@@ -45,6 +45,8 @@ const DEFAULT_TUTORIAL_STRIKE_COUNT_MAX = 9;
 const TUTORIAL_FIRST_STRIKE_OFFSET_MS = 0;
 const TUTORIAL_MIN_GAP_MS = 280;
 const TUTORIAL_MAX_GAP_MS = 540;
+/** Map 11 soll beim Eröffnungs-Sweep auch den oberen Felsrand erreichen. */
+const TUTORIAL_SWEEP_TOP_EXTENSION_CELLS = 3;
 const ZONE_ORDERED_STRIKE_GAP_MS = 300;
 const PLAYER_HUNT_MIN_OFFSET_PX = 60;
 const PLAYER_HUNT_MAX_OFFSET_PX = 220;
@@ -240,7 +242,10 @@ export function planTutorialSweep(
   const region = getCoopDefenseTutorialRockRegion(showControls);
   const minGridX = Math.max(0, Math.min(arenaWidthCells - 1, region.minGridX - 1));
   const maxGridX = Math.max(minGridX, Math.min(arenaWidthCells - 1, region.maxGridX + 1));
-  const minGridY = Math.max(0, Math.min(arenaHeightCells - 1, region.minGridY));
+  const minGridY = Math.max(
+    0,
+    Math.min(arenaHeightCells - 1, region.minGridY - TUTORIAL_SWEEP_TOP_EXTENSION_CELLS),
+  );
   const maxGridY = Math.max(minGridY, Math.min(arenaHeightCells - 1, region.maxGridY + 1));
   const strikeCount = authoredStrikeCount ?? randomInteger(
     DEFAULT_TUTORIAL_STRIKE_COUNT_MIN,

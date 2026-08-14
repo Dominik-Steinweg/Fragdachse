@@ -169,6 +169,9 @@ export class LoadoutManager {
   /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
 
+  /** Host-authoritative weapon intent. A weapon request claims its slot immediately. */
+  private activeWeaponSlots = new Map<string, WeaponSlot>();
+
   private weaponFireExecutor: WeaponFireExecutor | null = null;
 
   /**
@@ -295,6 +298,7 @@ export class LoadoutManager {
     this.bridge.publishUtilityOverrideName(playerId, '');
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
+    this.getActiveWeaponSlots().set(playerId, 'weapon1');
     this.shieldBuffSystem?.resetPlayer(playerId);
     this.resetAk47State(playerId);
     this.negevStates.set(playerId, { kills: 0, lastShotAt: 0 });
@@ -351,6 +355,7 @@ export class LoadoutManager {
     this.bridge.publishUtilityOverrideDescriptor(playerId, null);
     this.bridge.publishUtilityOverrideName(playerId, '');
     this.heldFireSlots.delete(playerId);
+    this.activeWeaponSlots?.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
@@ -841,6 +846,7 @@ export class LoadoutManager {
 
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
     if (slot === 'weapon1' || slot === 'weapon2') {
+      this.claimWeaponSlot(playerId, slot);
       this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
       this.decoySystem?.breakStealth(playerId, now);
     }
@@ -1963,6 +1969,7 @@ export class LoadoutManager {
       cfg.afterCloudDurationMs ?? 0,
       cfg.afterCloudRadiusFactor ?? 0,
       cfg.afterCloudDamageFactor ?? 0,
+      cfg.visualVariant ?? 'stink',
     );
     return true;
   }
@@ -2256,6 +2263,39 @@ export class LoadoutManager {
     this.energyShieldSystem.hostRefresh(playerId, now, cfg, cfg.projectileColor ?? playerColor, pressed);
   }
 
+  /**
+   * Claims a weapon slot on the host before cooldown/resource resolution. A deliberate switch
+   * must stop the previous non-autonomous channel immediately, even when the newly requested
+   * weapon is currently on cooldown or lacks a resource.
+   */
+  private claimWeaponSlot(playerId: string, slot: WeaponSlot): void {
+    const activeWeaponSlots = this.getActiveWeaponSlots();
+    const previous = activeWeaponSlots.get(playerId);
+    if (previous === slot) return;
+
+    activeWeaponSlots.set(playerId, slot);
+    this.deactivateNonAutonomousWeaponEffect(playerId, slot === 'weapon1' ? 'weapon2' : 'weapon1');
+  }
+
+  private getActiveWeaponSlots(): Map<string, WeaponSlot> {
+    return this.activeWeaponSlots ??= new Map<string, WeaponSlot>();
+  }
+
+  /**
+   * Ends the persistent effect owned by the other weapon slot. Explicit autonomous toggles are
+   * not channels and therefore survive a weapon switch by design.
+   */
+  private deactivateNonAutonomousWeaponEffect(playerId: string, slot: WeaponSlot): void {
+    const config = this.loadouts.get(playerId)?.[slot].config;
+    if (!config || isAutonomousWeaponToggle(config)) return;
+
+    if (config.fire.type === 'tesla_dome') {
+      this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
+    } else if (config.fire.type === 'energy_shield') {
+      this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
+    }
+  }
+
   private fireProjectileWeapon(
     config:      WeaponConfig,
     fireConfig:  ProjectileWeaponFireConfig,
@@ -2499,6 +2539,12 @@ export class LoadoutManager {
     if (!weapon || weapon.fire.type !== 'energy_shield') return null;
     return weapon.fire as EnergyShieldWeaponFireConfig;
   }
+}
+
+function isAutonomousWeaponToggle(config: WeaponConfig): boolean {
+  return config.fire.type === 'energy_shield'
+    && config.fire.domeEnabled > 0
+    && config.fire.domeToggleEnabled > 0;
 }
 
 /**

@@ -58,8 +58,22 @@ function createStuckEnemy(
     wantsToMove: () => movement.wantsToMove,
     isPathBlocked: () => movement.pathBlocked,
     getAttackWeapons: () => [
-      { weapon: bite, targetMode: 'structures', minimumFireDurationMs: 0, playerMeleeWindupMs: 0 },
-      { weapon: glock, targetMode: playerWeaponTargetMode, minimumFireDurationMs: 0, playerMeleeWindupMs: 0 },
+      {
+        weapon: bite,
+        targetMode: 'structures',
+        minimumFireDurationMs: 0,
+        playerMeleeWindupMs: 0,
+        attackMovementSpeedFactor: 0,
+        minTargetDistancePx: 0,
+      },
+      {
+        weapon: glock,
+        targetMode: playerWeaponTargetMode,
+        minimumFireDurationMs: 0,
+        playerMeleeWindupMs: 0,
+        attackMovementSpeedFactor: 0,
+        minTargetDistancePx: 0,
+      },
     ],
     getObstacleAttackDelayMs: () => OBSTACLE_ATTACK_DELAY_MS,
     isBurrowed: () => false,
@@ -76,6 +90,7 @@ function createStuckEnemy(
     recordWeaponUse: (weapon: GenericWeapon, now: number) => { weapon.recordUse(now); weapon.addSpread(); },
     isAttackMovementPaused(now: number) { return now < this.attackPauseUntil; },
     pauseAttackMovement(now: number) { this.attackPauseUntil = now + ATTACK_STOP_DURATION_MS; },
+    lockWeaponUntil: () => {},
   } as unknown as EnemyEntity & { attackPauseUntil: number };
 }
 

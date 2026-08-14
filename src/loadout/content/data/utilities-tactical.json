@@ -100,6 +100,7 @@
       ]
     },
     "ENEMY_STINKDRUESEN": {
+      "visualVariant": "spore_void",
       "id": "ENEMY_STINKDRUESEN",
       "displayName": "Kleine Stinkdrüsen",
       "type": "stinkcloud",

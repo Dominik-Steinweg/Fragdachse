@@ -338,7 +338,11 @@ export class EnemyManager {
         continue;
       }
 
-      if (enemy.isAttackMovementPaused(now)) {
+      // Angriffspause: Waffen ohne eigenen Bewegungsfaktor halten den Gegner wie bisher komplett
+      // an. Waffen mit Faktor > 0 lassen ihn dagegen gebremst weiterlaufen – die Blickrichtung
+      // bleibt dabei am Ziel, weil die Pause weiterhin aktiv ist.
+      const attackMovementFactor = enemy.getAttackMovementSpeedFactor(now);
+      if (attackMovementFactor <= 0 && enemy.isAttackMovementPaused(now)) {
         const current = enemy.getDesiredVelocity();
         const trainDecision = activeTrainAwareness?.resolveMovement(enemy, current.vx, current.vy, now);
         if (trainDecision?.override && activeTrainAwareness?.blocksRegularAttacks(enemy.id)) {
@@ -361,8 +365,8 @@ export class EnemyManager {
           now,
         );
         enemy.setDesiredVelocity(
-          decision?.override ? decision.vx : positioningOverride.vx,
-          decision?.override ? decision.vy : positioningOverride.vy,
+          decision?.override ? decision.vx : positioningOverride.vx * attackMovementFactor,
+          decision?.override ? decision.vy : positioningOverride.vy * attackMovementFactor,
         );
         continue;
       }
@@ -398,7 +402,15 @@ export class EnemyManager {
           continue;
         }
 
-        this.steerEnemyTowards(enemy, recoveryTarget.x, recoveryTarget.y, lerpT, now, activeTrainAwareness);
+        this.steerEnemyTowards(
+          enemy,
+          recoveryTarget.x,
+          recoveryTarget.y,
+          lerpT,
+          now,
+          activeTrainAwareness,
+          attackMovementFactor,
+        );
         continue;
       }
 
@@ -414,7 +426,7 @@ export class EnemyManager {
         continue;
       }
 
-      const speed = enemy.getMoveSpeed() * burrowSpeedFactor;
+      const speed = enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor;
       // Der grobe Zellvektor reicht auf freier Flaeche. Direkt an einer Basiswand nicht: Der Gegner
       // steht durch Kollisionsaufloesung und Separation meist am Zellrand, und ein achsenparalleler
       // Vektor druckt ihn von dort in die Wand statt an ihr vorbei. Zusaetzlich springt die
@@ -557,9 +569,10 @@ export class EnemyManager {
     lerpT: number,
     now: number,
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
+    speedFactor = 1,
   ): void {
     const direction = this.normalizeDirection(targetX - enemy.sprite.x, targetY - enemy.sprite.y);
-    const speed = enemy.getMoveSpeed();
+    const speed = enemy.getMoveSpeed() * speedFactor;
     const targetVx = direction.x * speed;
     const targetVy = direction.y * speed;
     const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);

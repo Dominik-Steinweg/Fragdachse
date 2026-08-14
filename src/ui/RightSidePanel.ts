@@ -21,7 +21,7 @@ import {
 import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
-import type { RoundResult, RoundState } from '../network/NetworkBridge';
+import type { RoomPlayerStatistics, RoundResult, RoundState } from '../network/NetworkBridge';
 import {
   ensureFlatPanelTexture,
   ensureGlassColumnTexture,
@@ -97,6 +97,17 @@ const RESULTS_FRAGS_X          = RESULTS_XP_X - 72;
 const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator → erste Spielerzeile
 const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion → naechste Team-Summary
 const RESULTS_SUMMARY_SEP_DY   = 14;
+const ROOM_STATS_DAMAGE_X      = RESULTS_XP_X - 58;
+const ROOM_STATS_DEATHS_X      = RESULTS_XP_X;
+const ROOM_STATS_LABEL_FONT    = '12px';
+const ROOM_STATS_EMPTY_FONT    = '14px';
+const ROOM_STATS_SWITCH_W      = 34;
+const ROOM_STATS_SWITCH_H      = 28;
+const ROOM_STATS_SWITCH_X      = LOBBY_SIDEBAR_LEFT_X + ROOM_STATS_SWITCH_W / 2 + 2;
+const ROOM_STATS_SWITCH_Y      = RESULTS_HEADER_Y;
+const TEX_ROOM_STATS_HEADER_ON  = '_rsp_roomstats_neutral_on_v1';
+const TEX_ROOM_STATS_HEADER_OFF = '_rsp_roomstats_neutral_off_v1';
+const TEX_ROOM_STATS_SWITCH     = '_rsp_lobby_view_switch_v1';
 
 // Farbrollen statt eigener Blaugrau-Werte: die frueheren '#607080'/'#8fa8b8'/0x334455 lagen
 // dicht neben der Grau-Rampe, ohne zu ihr zu gehoeren.
@@ -153,8 +164,16 @@ interface ResultsTeamHeaderRow extends TeamHeaderRow {
   separator: Phaser.GameObjects.Rectangle;
 }
 
+interface RoomStatsRow {
+  name: Phaser.GameObjects.Text;
+  damage: Phaser.GameObjects.Text;
+  deaths: Phaser.GameObjects.Text;
+}
+
 export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
+  private resultsViewContainer!: Phaser.GameObjects.Container;
+  private roomStatsViewContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
   private arenaOverlayVisible = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
@@ -209,6 +228,18 @@ export class RightSidePanel {
   }[] = [];
   private resultsTeamHeaders: Record<TeamId, ResultsTeamHeaderRow> | null = null;
   private roundResultsSignature: string | null = null;
+  private roomStatsHeader!: Phaser.GameObjects.Text;
+  private roomStatsHeaderButton!: Phaser.GameObjects.Image;
+  private roomStatsHeaderLabels!: Phaser.GameObjects.Container;
+  private roomStatsHeaderHint!: Phaser.GameObjects.Image;
+  private roomStatsDetailHandler: (() => void) | null = null;
+  private roomStatsDetailAvailable = false;
+  private roomStatsSwitchButton!: Phaser.GameObjects.Image;
+  private roomStatsSwitchLabels!: Phaser.GameObjects.Container;
+  private roomStatsRows: RoomStatsRow[] = [];
+  private roomStatsEmptyState!: Phaser.GameObjects.Text;
+  private roomStatsInputSignature: string | null = null;
+  private lobbyView: 'results' | 'roomStats' = 'results';
 
   constructor(private scene: Phaser.Scene) {}
 
@@ -380,6 +411,75 @@ export class RightSidePanel {
    */
   setResultsReplayHandler(handler: (() => void) | null): void {
     this.replayResultsHandler = handler;
+  }
+
+  /** Bereitet die spätere Detailansicht für die Raumstatistik vor. */
+  setRoomStatisticsDetailHandler(handler: (() => void) | null): void {
+    this.roomStatsDetailHandler = handler;
+  }
+
+  /** Schaltet den noch nicht verwendeten Detailknopf der Raumstatistik scharf. */
+  setRoomStatisticsDetailAvailable(available: boolean): void {
+    if (this.roomStatsDetailAvailable === available) return;
+    this.roomStatsDetailAvailable = available;
+    this.roomStatsHeaderButton.setTexture(this.ensureRoomStatsHeaderTexture(available));
+    this.roomStatsHeader.setColor(toCssColor(available ? COLORS.GREY_1 : COLORS.GREY_2));
+    this.roomStatsHeaderHint.setVisible(available);
+    if (available) {
+      this.roomStatsHeaderButton.setInteractive({ useHandCursor: true });
+      return;
+    }
+    this.roomStatsHeaderButton.disableInteractive();
+    this.roomStatsHeaderButton.setScale(1);
+    this.roomStatsHeaderLabels.setScale(1);
+  }
+
+  /** Aktualisiert die raumweite Statistik; die Darstellung bleibt im Lobby-Platz der Ergebnisse. */
+  showRoomStatistics(statistics: RoomPlayerStatistics[]): void {
+    const signature = JSON.stringify(statistics.map((entry) => [
+      entry.id,
+      entry.name,
+      entry.colorHex,
+      entry.teamId,
+      entry.damage,
+      entry.deaths,
+    ]));
+    if (signature === this.roomStatsInputSignature) return;
+    this.roomStatsInputSignature = signature;
+
+    const sorted = [...statistics].sort((left, right) => (
+      right.damage - left.damage
+      || right.deaths - left.deaths
+      || left.name.localeCompare(right.name)
+    ));
+    const hasData = sorted.length > 0;
+    this.roomStatsHeaderButton.setVisible(true);
+    this.roomStatsHeaderLabels.setVisible(true);
+    this.roomStatsEmptyState.setVisible(!hasData);
+
+    for (let index = 0; index < this.roomStatsRows.length; index += 1) {
+      const row = this.roomStatsRows[index];
+      const entry = sorted[index];
+      if (!entry) {
+        row.name.setVisible(false);
+        row.damage.setVisible(false);
+        row.deaths.setVisible(false);
+        continue;
+      }
+      row.name
+        .setText(`${index + 1}. ${entry.name}`)
+        .setColor(this.toCachedCssColor(entry.colorHex))
+        .setVisible(true);
+      row.damage.setText(this.formatRoomDamage(entry.damage)).setVisible(true);
+      row.deaths.setText(String(Math.max(0, Math.floor(entry.deaths)))).setVisible(true);
+    }
+  }
+
+  private setLobbyView(view: 'results' | 'roomStats'): void {
+    this.lobbyView = view;
+    this.resultsViewContainer.setVisible(view === 'results');
+    this.roomStatsViewContainer.setVisible(view === 'roomStats');
+    if (view === 'roomStats') this.showRoomStatistics(bridge.getRoomPlayerStatistics());
   }
 
   /**
@@ -637,8 +737,85 @@ export class RightSidePanel {
     );
   }
 
+  private ensureRoomStatsHeaderTexture(enabled: boolean): string {
+    return ensureFlatPanelTexture(
+      this.scene,
+      enabled ? TEX_ROOM_STATS_HEADER_ON : TEX_ROOM_STATS_HEADER_OFF,
+      RESULTS_HEADER_BTN_W,
+      RESULTS_HEADER_BTN_H,
+      COLORS.GREY_8,
+      enabled ? COLORS.GREY_5 : COLORS.GREY_6,
+      { radius: 8, fillAlpha: enabled ? 0.78 : 0.55, strokeAlpha: enabled ? 0.62 : 0.4 },
+    );
+  }
+
+  private buildRoomStatsView(): void {
+    const separator = this.scene.add.rectangle(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_SEP_Y,
+      LOBBY_PANEL_WIDTH,
+      1,
+      COLOR_SEPARATOR,
+      0.8,
+    ).setScrollFactor(0);
+    const damageLabel = this.scene.add.text(ROOM_STATS_DAMAGE_X, RESULTS_LABEL_Y, 'SCHADEN', {
+      fontSize: ROOM_STATS_LABEL_FONT,
+      fontFamily: 'monospace',
+      color: COLOR_HEADER,
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0);
+    const deathsLabel = this.scene.add.text(ROOM_STATS_DEATHS_X, RESULTS_LABEL_Y, 'TODE', {
+      fontSize: ROOM_STATS_LABEL_FONT,
+      fontFamily: 'monospace',
+      color: COLOR_HEADER,
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0);
+    this.roomStatsEmptyState = this.scene.add.text(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_START_Y + 26,
+      'Noch keine Spieler im Raum',
+      textStyle('caption', {
+        color: lerpColor(TEXT.muted, COLORS.GREY_3, 0.35),
+        align: 'center',
+        wordWrapWidth: LOBBY_PANEL_WIDTH,
+      }),
+    ).setFontSize(ROOM_STATS_EMPTY_FONT).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
+
+    this.roomStatsViewContainer.add([
+      this.roomStatsHeaderButton,
+      this.roomStatsHeaderLabels,
+      separator,
+      damageLabel,
+      deathsLabel,
+      this.roomStatsEmptyState,
+    ]);
+
+    for (let index = 0; index < 12; index += 1) {
+      const y = RESULTS_START_Y + index * RESULTS_ENTRY_H;
+      const name = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, y, '', {
+        fontSize: RESULTS_FONT,
+        fontFamily: 'monospace',
+        color: '#ffffff',
+      }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+      const damage = this.scene.add.text(ROOM_STATS_DAMAGE_X, y, '', {
+        fontSize: RESULTS_FONT,
+        fontFamily: 'monospace',
+        color: COLOR_DIM,
+      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+      const deaths = this.scene.add.text(ROOM_STATS_DEATHS_X, y, '', {
+        fontSize: RESULTS_FONT,
+        fontFamily: 'monospace',
+        color: COLOR_DIM,
+      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+      this.roomStatsViewContainer.add([name, damage, deaths]);
+      this.roomStatsRows.push({ name, damage, deaths });
+    }
+  }
+
   private buildLobbyContainer(): void {
     this.lobbyContainer = this.scene.add.container(0, 0);
+    this.resultsViewContainer = this.scene.add.container(0, 0).setScrollFactor(0);
+    this.roomStatsViewContainer = this.scene.add.container(0, 0).setScrollFactor(0).setVisible(false);
     // Zuerst eingehaengt: Glasflaeche hinter allem Uebrigen, Gegenstueck zur linken Spalte.
     this.lobbyContainer.add(
       this.scene.add.image(
@@ -682,6 +859,61 @@ export class RightSidePanel {
     attachHoverEffect(this.scene, this.resultsHeaderButton, this.resultsHeaderLabels, {
       isEnabled: () => this.replayResultsAvailable,
     });
+
+    this.roomStatsHeaderButton = this.scene.add.image(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_HEADER_Y,
+      this.ensureRoomStatsHeaderTexture(false),
+    ).setScrollFactor(0);
+    this.roomStatsHeaderButton.on('pointerdown', () => {
+      if (!this.roomStatsDetailAvailable) return;
+      this.roomStatsDetailHandler?.();
+    });
+    this.roomStatsHeader = this.scene.add.text(-10, 0, 'RAUM-STATISTIK', textStyle('label'))
+      .setOrigin(0.5, 0.5).setScrollFactor(0);
+    this.roomStatsHeaderHint = this.scene.add.image(
+      RESULTS_HEADER_BTN_W / 2 - 16, 0,
+      ensureIconTexture(this.scene, 'chevron-right', 36, COLORS.GREY_2),
+    ).setDisplaySize(14, 14).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
+    this.roomStatsHeaderLabels = this.scene.add.container(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_HEADER_Y,
+      [this.roomStatsHeader, this.roomStatsHeaderHint],
+    ).setScrollFactor(0).setVisible(false);
+    attachHoverEffect(this.scene, this.roomStatsHeaderButton, this.roomStatsHeaderLabels, {
+      isEnabled: () => this.roomStatsDetailAvailable,
+    });
+
+    this.roomStatsSwitchButton = this.scene.add.image(
+      ROOM_STATS_SWITCH_X,
+      ROOM_STATS_SWITCH_Y,
+      ensureFlatPanelTexture(
+        this.scene,
+        TEX_ROOM_STATS_SWITCH,
+        ROOM_STATS_SWITCH_W,
+        ROOM_STATS_SWITCH_H,
+        COLORS.GREY_8,
+        COLORS.GREY_5,
+        { radius: 6, fillAlpha: 0.9, strokeAlpha: 0.72 },
+      ),
+    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.roomStatsSwitchButton.on('pointerdown', () => {
+      this.setLobbyView(this.lobbyView === 'results' ? 'roomStats' : 'results');
+    });
+    const switchLeft = this.scene.add.image(
+      -7, 0,
+      ensureIconTexture(this.scene, 'chevron-left', 32, COLORS.GREY_2),
+    ).setDisplaySize(10, 10).setOrigin(0.5, 0.5).setScrollFactor(0);
+    const switchRight = this.scene.add.image(
+      7, 0,
+      ensureIconTexture(this.scene, 'chevron-right', 32, COLORS.GREY_2),
+    ).setDisplaySize(10, 10).setOrigin(0.5, 0.5).setScrollFactor(0);
+    this.roomStatsSwitchLabels = this.scene.add.container(
+      ROOM_STATS_SWITCH_X,
+      ROOM_STATS_SWITCH_Y,
+      [switchLeft, switchRight],
+    ).setScrollFactor(0);
+    attachHoverEffect(this.scene, this.roomStatsSwitchButton, this.roomStatsSwitchLabels);
 
     this.resultsSep = this.scene.add.rectangle(LOBBY_SIDEBAR_CENTER_X, RESULTS_SEP_Y, LOBBY_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
     ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
@@ -735,7 +967,7 @@ export class RightSidePanel {
       }),
     ).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
-    this.lobbyContainer.add([
+    this.resultsViewContainer.add([
       this.resultsHeaderButton,
       this.resultsHeaderLabels,
       this.resultsEmptyIcon,
@@ -792,7 +1024,7 @@ export class RightSidePanel {
       blue: { label: blueLabel, score: blueScore, separator: blueSeparator },
       red: { label: redLabel, score: redScore, separator: redSeparator },
     };
-    this.lobbyContainer.add([
+    this.resultsViewContainer.add([
       blueLabel,
       blueScore,
       blueSeparator,
@@ -817,9 +1049,17 @@ export class RightSidePanel {
         color:      COLOR_DIM,
       }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
-      this.lobbyContainer.add([nameText, fragsText]);
+      this.resultsViewContainer.add([nameText, fragsText]);
       this.resultsRows.push({ name: nameText, frags: fragsText });
     }
+
+    this.buildRoomStatsView();
+    this.lobbyContainer.add([
+      this.resultsViewContainer,
+      this.roomStatsViewContainer,
+      this.roomStatsSwitchButton,
+      this.roomStatsSwitchLabels,
+    ]);
   }
 
   // ── Killfeed-Render ───────────────────────────────────────────────────────
@@ -886,6 +1126,10 @@ export class RightSidePanel {
   /** Kürzt einen String auf maxLen Zeichen (hängt … an wenn nötig). */
   private truncate(s: string, maxLen: number): string {
     return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}…`;
+  }
+
+  private formatRoomDamage(damage: number): string {
+    return String(Math.max(0, Math.round(damage)));
   }
 
   private renderGroupedLeaderboard(entries: LeaderboardEntry[]): void {

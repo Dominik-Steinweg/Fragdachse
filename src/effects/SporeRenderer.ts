@@ -107,16 +107,24 @@ export class SporeRenderer {
     });
   }
 
-  createVisual(id: number, x: number, y: number, size: number, color: number): void {
+  createVisual(
+    id: number,
+    x: number,
+    y: number,
+    size: number,
+    color: number,
+    visualVariant: 'spore' | 'spore_void' = 'spore',
+  ): void {
     if (this.visuals.has(id)) return;
-    const isVoid = color === VOID_FIRE_COLOR;
+    const isVoid = visualVariant === 'spore_void' || color === VOID_FIRE_COLOR;
+    const visualColor = isVoid ? VOID_FIRE_COLOR : color;
 
     const glow = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_SPORE_GLOW),
       DEPTH.PROJECTILES - 0.2,
       0.62,
       Phaser.Display.Color.Interpolate.ColorWithColor(
-        Phaser.Display.Color.ValueToColor(color),
+        Phaser.Display.Color.ValueToColor(visualColor),
         Phaser.Display.Color.ValueToColor(isVoid ? 0xffffff : 0x95d85b),
         100,
         isVoid ? 34 : 42,
@@ -127,7 +135,7 @@ export class SporeRenderer {
       this.scene.add.image(x, y, TEX_SPORE_CLUSTER),
       DEPTH.PROJECTILES + 0.5,
       0.96,
-      color,
+      visualColor,
     );
 
     const coreEmitter = createEmitter(this.scene, x, y, TEX_SPORE_CORE, {
@@ -165,13 +173,23 @@ export class SporeRenderer {
       lastTrailY: y,
       lastTrailAt: this.scene.time.now,
     });
-    this.updateVisual(id, x, y, size, 0, 0, color);
+    this.updateVisual(id, x, y, size, 0, 0, color, visualVariant);
   }
 
-  updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number, color: number): void {
+  updateVisual(
+    id: number,
+    x: number,
+    y: number,
+    size: number,
+    vx: number,
+    vy: number,
+    color: number,
+    visualVariant: 'spore' | 'spore_void' = 'spore',
+  ): void {
     const visual = this.visuals.get(id);
     if (!visual) return;
-    const isVoid = color === VOID_FIRE_COLOR;
+    const isVoid = visualVariant === 'spore_void' || color === VOID_FIRE_COLOR;
+    const visualColor = isVoid ? VOID_FIRE_COLOR : color;
 
     const speed = Math.max(1, Math.hypot(vx, vy));
     const nx = vx / speed;
@@ -186,7 +204,7 @@ export class SporeRenderer {
     visual.glow.setScale(Math.max(size / 13, 0.78) * (1.02 + pulse * 0.08));
     visual.glow.setAlpha(0.52 + pulse * 0.08);
     visual.glow.setTint(Phaser.Display.Color.Interpolate.ColorWithColor(
-      Phaser.Display.Color.ValueToColor(color),
+      Phaser.Display.Color.ValueToColor(visualColor),
       Phaser.Display.Color.ValueToColor(isVoid ? 0xffffff : 0x83cc4a),
       100,
       isVoid ? 30 : 40,
@@ -195,7 +213,7 @@ export class SporeRenderer {
     visual.cluster.setPosition(x, y);
     visual.cluster.setRotation(rotation + pulse * 0.16);
     visual.cluster.setScale(Math.max(size / 15, 0.72), Math.max(size / 16, 0.68));
-    visual.cluster.setTint(color);
+    visual.cluster.setTint(visualColor);
 
     visual.coreEmitter.setPosition(x, y);
     setCircleEmitZone(visual.coreEmitter, spread * 0.38, 2, true);
@@ -243,22 +261,29 @@ export class SporeRenderer {
     this.trailPuffs.clear();
   }
 
-  playImpact(x: number, y: number, color: number, scale = 1): void {
+  playImpact(
+    x: number,
+    y: number,
+    color: number,
+    scale = 1,
+    visualVariant: 'spore' | 'spore_void' = 'spore',
+  ): void {
     if (!isPointInsideArena(x, y)) return;
-    const isVoid = color === VOID_FIRE_COLOR;
+    const isVoid = visualVariant === 'spore_void' || color === VOID_FIRE_COLOR;
+    const visualColor = isVoid ? VOID_FIRE_COLOR : color;
 
     const glow = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_SPORE_GLOW),
       DEPTH.PROJECTILES + 1.3,
       0.72,
-      color,
+      visualColor,
     ).setScale(Math.max(1, scale * 1.8));
 
     const cluster = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_SPORE_CLUSTER),
       DEPTH.PROJECTILES + 1.5,
       0.92,
-      color,
+      visualColor,
     ).setScale(Math.max(0.9, scale * 1.05));
 
     const burst = createEmitter(this.scene, x, y, TEX_SPORE_MOTE, {

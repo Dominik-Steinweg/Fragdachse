@@ -85,6 +85,8 @@ export type CombatDamageKind =
   | 'ground'
   | 'reflect';
 
+export type CombatDamageTargetType = 'player' | 'enemy';
+
 /**
  * Begleitdaten eines Schadensereignisses.
  *
@@ -370,6 +372,13 @@ export class CombatSystem {
     armorLost: number,
     damageKind: CombatDamageKind,
   ) => void) | null = null;
+  private onDamageDealt: ((
+    targetType: CombatDamageTargetType,
+    targetId: string,
+    attackerId: string | undefined,
+    damage: number,
+    damageKind: CombatDamageKind,
+  ) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -455,6 +464,10 @@ export class CombatSystem {
   /** Meldung ueber tatsaechlich verlorene HP/Ruestung eines Spielers, nach der Verteilung. */
   setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind) => void) | null): void {
     this.onPlayerDamageTaken = handler;
+  }
+  /** Meldet nach der Zielverteilung nur tatsächlich verlorene HP/Rüstung bzw. Gegner-HP. */
+  setDamageDealtHandler(handler: ((targetType: CombatDamageTargetType, targetId: string, attackerId: string | undefined, damage: number, damageKind: CombatDamageKind) => void) | null): void {
+    this.onDamageDealt = handler;
   }
   /**
    * `sourceSlot` reicht die Herkunft des Treffers durch, damit slot-gebundene Angreifer-Boni
@@ -765,6 +778,13 @@ export class CombatSystem {
         attackerId,
         hpLost,
         armorLost,
+        options?.damageKind ?? 'direct',
+      );
+      this.onDamageDealt?.(
+        'player',
+        targetId,
+        this.resolveDamageOwner(attackerId),
+        totalDamage,
         options?.damageKind ?? 'direct',
       );
       this.applyLifeLeech(attackerId, targetId, totalDamage);
@@ -3442,6 +3462,13 @@ export class CombatSystem {
 
     const hpLost = previousHp - result.remainingHp;
     if (hpLost <= 0) return;
+    this.onDamageDealt?.(
+      'enemy',
+      targetId,
+      this.resolveDamageOwner(attackerId),
+      hpLost,
+      options?.damageKind ?? 'direct',
+    );
     if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
 
     // Trefferabhaengige Primaerwaffen-Affixe. Erst hier, damit sie nur bei einem Treffer
@@ -3559,6 +3586,12 @@ export class CombatSystem {
     if (this.respawnAllowedResolver && !this.respawnAllowedResolver(playerId)) return;
     const timer = setTimeout(() => this.respawn(playerId), RESPAWN_DELAY_MS);
     this.respawnTimers.set(playerId, timer);
+  }
+
+  private resolveDamageOwner(attackerId: string | undefined): string | undefined {
+    if (!attackerId) return undefined;
+    const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
+    return attackerEnemy?.faction === 'allied' ? attackerEnemy.ownerId : attackerId;
   }
 
   /** Heilt den Spieler vollständig auf HP_MAX (nur wenn lebendig). */

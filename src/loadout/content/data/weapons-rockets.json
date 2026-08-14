@@ -140,6 +140,71 @@
         "failureKey": "shot_dry_trigger"
       }
     },
+    "INFERNO_COLOSSUS_VOID_ROCKETS": {
+      "id": "INFERNO_COLOSSUS_VOID_ROCKETS",
+      "displayName": "Lila Leeren-Raketen",
+      "cooldown": 90,
+      "damage": 2,
+      "range": 1000,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 500,
+        "projectileSize": 8,
+        "projectileMaxBounces": 0,
+        "limitRangeToCursor": false,
+        "impactExplosion": {
+          "radius": 65,
+          "maxDamage": 6,
+          "minDamage": 2,
+          "falloffReduction": 0,
+          "knockback": 320,
+          "selfDamageMult": 0,
+          "rockDamageMult": 0,
+          "trainDamageMult": 0,
+          "color": "#b347ff",
+          "visualStyle": "mini_rocket"
+        },
+        "homing": {
+          "acquireDelayMs": 100,
+          "searchRadius": 400,
+          "retargetIntervalMs": 50,
+          "maxTurnDegreesPerStep": 14,
+          "targetTypes": [
+            "players"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1
+        }
+      },
+      "burnOnHit": {
+        "durationMs": 2000,
+        "damagePerTick": 0.5
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 5,
+      "spreadMoving": 9,
+      "spreadPerShot": 0.6,
+      "maxDynamicSpread": 8,
+      "spreadRecoveryDelay": 180,
+      "spreadRecoveryRate": 3,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "rocket",
+      "projectileVisualScale": 0.5,
+      "projectileColor": "#d98cff",
+      "projectileBurnVisualStyle": "void",
+      "rocketSmokeTrailColor": "#a755ff",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 0,
+      "shotAudio": {
+        "successKey": "shot_minirocketlauncher",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
     "TURRET_ROCKET_BURST": {
       "id": "TURRET_ROCKET_BURST",
       "displayName": "Doppelläufige Turmrakete",

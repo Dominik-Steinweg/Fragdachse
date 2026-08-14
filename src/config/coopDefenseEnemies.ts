@@ -26,11 +26,30 @@ export const DEFAULT_ENEMY_KNOCKBACK_FACTOR = 1;
  */
 export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players' | 'rocks' | 'structures';
 
+/**
+ * Salve statt Einzelschuss: `count` Schuesse im Abstand von `intervalMs`, danach ist die Waffe
+ * fuer `cooldownMs` gesperrt. Der Salventakt laeuft bewusst neben dem Zielscan-Raster des
+ * Gegners – sonst wuerde er auf dessen `attackScanIntervalMs` einrasten (analog `turretBurst`).
+ */
+export interface CoopDefenseEnemyWeaponSalvoConfig {
+  readonly count: number;
+  readonly intervalMs: number;
+  readonly cooldownMs: number;
+}
+
 export interface CoopDefenseEnemyWeaponConfig {
   readonly weaponId: WeaponConfig['id'];
   readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
   readonly minimumFireDurationMs?: number;
   readonly playerMeleeWindupMs?: number;
+  /**
+   * Anteil der Laufgeschwindigkeit waehrend der Angriffspause dieser Waffe. Fehlt der Wert,
+   * bleibt der Gegner wie bisher stehen (0). 1 bedeutet ungebremstes Weiterlaufen.
+   */
+  readonly attackMovementSpeedFactor?: number;
+  /** Mindest-Zieldistanz; naeher gilt die Waffe als unpassend und eine andere uebernimmt. */
+  readonly minTargetDistancePx?: number;
+  readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
 }
 
 export interface CoopDefenseEnemyStinkAuraConfig {
@@ -170,6 +189,22 @@ export interface CoopDefenseEnemySpawnThrowConfig {
   readonly color: number;
 }
 
+/**
+ * Gegnerischer Brandsatz auf Basis des Spieler-Molotovs. Radius, Schaden, Zuendzeit und
+ * Flugphysik stammen aus der referenzierten Utility; hier stehen nur die KI-Werte – Einsatzband,
+ * Cooldown und die lesbare Wurf-Standzeit. Die entstehende Flaeche uebernimmt die lila
+ * Void-Brandfamilie und trifft ausschliesslich Spieler.
+ */
+export interface CoopDefenseEnemyVoidMolotovConfig {
+  readonly utilityId: 'MOLOTOV_GRENADE';
+  readonly displayName: string;
+  readonly minRange: number;
+  readonly maxRange: number;
+  readonly cooldownMs: number;
+  /** Standzeit vor dem Wurf; macht die Aktion lesbar und bindet den Gegner sichtbar. */
+  readonly windupMs: number;
+}
+
 export interface CoopDefenseVoidHunterBossConfig {
   readonly phaseTwoHpRatio: number;
   readonly phaseTwoSpeedMultiplier: number;
@@ -261,6 +296,7 @@ export interface CoopDefenseEnemyConfig {
   readonly spawnThrow?: CoopDefenseEnemySpawnThrowConfig;
   readonly voidFireChunks?: CoopDefenseEnemyVoidFireChunkConfig;
   readonly voidFireTrail?: CoopDefenseEnemyVoidFireTrailConfig;
+  readonly voidMolotov?: CoopDefenseEnemyVoidMolotovConfig;
   readonly timebomb?: CoopDefenseEnemyTimebombConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
@@ -357,6 +393,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         spawnThrow: config.spawnThrow,
         voidFireChunks: config.voidFireChunks,
         voidFireTrail: config.voidFireTrail,
+        voidMolotov: config.voidMolotov,
         timebomb: config.timebomb,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -459,6 +496,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     spawnThrow: normalizeSpawnThrowConfig(enemy.spawnThrow, enemy.id),
     voidFireChunks: normalizeVoidFireChunkConfig(enemy.voidFireChunks),
     voidFireTrail: normalizeVoidFireTrailConfig(enemy.voidFireTrail),
+    voidMolotov: normalizeVoidMolotovConfig(enemy.voidMolotov, enemy.id),
     timebomb: normalizeTimebombConfig(enemy.timebomb),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -610,6 +648,25 @@ function normalizeVoidFireChunkConfig(
   };
 }
 
+function normalizeVoidMolotovConfig(
+  config: CoopDefenseEnemyVoidMolotovConfig | undefined,
+  enemyId: string,
+): CoopDefenseEnemyVoidMolotovConfig | undefined {
+  if (!config) return undefined;
+  if (config.utilityId !== 'MOLOTOV_GRENADE') {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} references unsupported void molotov utility`);
+  }
+  const minRange = Math.max(0, config.minRange);
+  return {
+    utilityId: 'MOLOTOV_GRENADE',
+    displayName: config.displayName,
+    minRange,
+    maxRange: Math.max(minRange, config.maxRange),
+    cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
+    windupMs: Math.max(0, Math.floor(config.windupMs)),
+  };
+}
+
 function normalizeVoidHunterBossConfig(
   config: CoopDefenseVoidHunterBossConfig | undefined,
   enemyId: string,
@@ -731,8 +788,26 @@ function normalizeWeapons(
       playerMeleeWindupMs: weapon.playerMeleeWindupMs === undefined
         ? undefined
         : Math.max(0, Math.floor(weapon.playerMeleeWindupMs)),
+      attackMovementSpeedFactor: weapon.attackMovementSpeedFactor === undefined
+        ? undefined
+        : Math.max(0, Math.min(1, weapon.attackMovementSpeedFactor)),
+      minTargetDistancePx: weapon.minTargetDistancePx === undefined
+        ? undefined
+        : Math.max(0, weapon.minTargetDistancePx),
+      salvo: normalizeWeaponSalvoConfig(weapon.salvo),
     };
   });
+}
+
+function normalizeWeaponSalvoConfig(
+  config: CoopDefenseEnemyWeaponSalvoConfig | undefined,
+): CoopDefenseEnemyWeaponSalvoConfig | undefined {
+  if (!config) return undefined;
+  return {
+    count: Math.max(1, Math.floor(config.count)),
+    intervalMs: Math.max(1, Math.floor(config.intervalMs)),
+    cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
+  };
 }
 
 function normalizeWeaponTargetMode(

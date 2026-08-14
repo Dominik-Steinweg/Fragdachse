@@ -268,7 +268,19 @@
       "knockbackFactor": 0.1,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "INFERNO_COLOSSUS_FLAMETHROWER", "targetMode": "players", "minimumFireDurationMs": 1000 },
+        {
+          "weaponId": "INFERNO_COLOSSUS_FLAMETHROWER",
+          "targetMode": "players",
+          "minimumFireDurationMs": 1000,
+          "attackMovementSpeedFactor": 0.75
+        },
+        {
+          "weaponId": "INFERNO_COLOSSUS_VOID_ROCKETS",
+          "targetMode": "players",
+          "attackMovementSpeedFactor": 1,
+          "minTargetDistancePx": 450,
+          "salvo": { "count": 10, "intervalMs": 90, "cooldownMs": 8000 }
+        },
         { "weaponId": "INFERNO_COLOSSUS_BITE", "targetMode": "rocks" }
       ],
       "attackScanIntervalMs": 70,
@@ -295,6 +307,14 @@
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
         "weaponName": "Lila Höllenspur"
+      },
+      "voidMolotov": {
+        "utilityId": "MOLOTOV_GRENADE",
+        "displayName": "Lila Brandsatz",
+        "minRange": 350,
+        "maxRange": 600,
+        "cooldownMs": 8000,
+        "windupMs": 1000
       },
       "trainAwareness": {
         "safetyDistancePx": 48,

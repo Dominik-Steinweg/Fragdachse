@@ -26,6 +26,20 @@ Im scheduled-Modus können authored Encounters unabhängig geplant werden. repel
 
 CoopDefensePersistentPressureSystem taktet dauerhafte Quellen. Eine mapgebundene Quelle kann eine Front verwenden, eine basisgebundene Quelle bleibt an baseId/spawnCenter gebunden. CoopDefenseSpawnExecutor ist die gemeinsame Spawn-Grenze; neue Spawnarten dort anschließen, nicht parallel in Director, Scene und Renderer implementieren. Das Spawn-Flowfield folgt dem `movementTarget` des Gegners: Spielerziele verwenden das Spieler-Flowfield und dürfen auf basislosen Maps auch vor dem ersten dynamischen Ziel-Refresh aus einer begehbaren Randzelle starten.
 
+## Gegnerwaffen und Waffenwahl
+
+Gegnerwerte stehen in `coopDefenseEnemies.json`; die Waffe selbst bleibt eine normale `WeaponConfig`. Der Eintrag in `weapons` authoriert nur, wie der Gegner sie führt, und die Reihenfolge des Arrays ist die Waffenpriorität: Die erste Waffe mit gültigem Ziel gewinnt, und ist eine höher priorisierte Waffe im Cooldown, wartet der Gegner statt auf eine schwächere zu wechseln. Ausgenommen bleibt das Freibeißen von Felsen – ein blockierter Gegner muss sich immer befreien dürfen.
+
+Verhaltensunterschiede zwischen Gegnern gehören als Waffen-Eigenschaft in die Registry, nicht als Fallunterscheidung nach Gegner-ID in ein System:
+
+- `attackMovementSpeedFactor` ersetzt den pauschalen Halt der Angriffspause durch einen Geschwindigkeitsanteil. Fehlt der Wert, bleibt der Gegner wie bisher stehen; bei Werten über 0 läuft er gebremst weiter und behält dabei die Blickrichtung auf sein Ziel.
+- `minTargetDistancePx` grenzt Fernwaffen nach unten ab. Zusammen mit der Waffenreichweite entstehen so Distanzbänder ohne eigene Entscheidungslogik; eine Lücke zwischen zwei Bändern lässt den Gegner weiter auf sein Ziel zulaufen, statt passiv zu stehen.
+- `salvo` gibt einer Waffe `count` Schuss im Abstand `intervalMs` und danach `cooldownMs` Pause. Der Salventakt läuft bewusst neben `attackScanIntervalMs` – über den Zielscan getaktet würde er auf dessen Raster einrasten. Eine abgebrochene Salve startet ihre Pause sofort, damit ein wiederholt blockierter Gegner nicht beliebig viele Salven ohne Cooldown feuert.
+
+Utilities eines Gegners (Wurfwaffen, Translocator, Brandsätze) gehören dagegen ins `CoopDefenseEnemyAbilitySystem`. Es läuft im Host-Frame vor dem Angriffssystem und meldet über `blocksRegularAttacks()` an den `ActionBlockedChecker`, dass eine laufende Utility die regulären Waffen sperrt – darüber und nicht über eine eigene Prioritätsliste gewinnt eine bereite Utility gegen die Waffe im selben Distanzband.
+
+Geworfene Gegner-Projektile teilen sich die Flugphysik des Translocator-Pucks: gedämpft mit `v(t) = v0 * decay^t` ab `frictionDelayMs`. Der pauschale Reibungsaufschlag darauf trägt nur, solange der Ankunftszeitpunkt frei wählbar ist – der Translocator teleportiert einfach dann, wenn der Puck angekommen ist. Ein Projektil mit fester Zündzeit explodiert dagegen dort, wo es zu diesem Zeitpunkt gerade ist: Seine Wurfgeschwindigkeit wird aus der Dämpfung zurückgerechnet, damit es zur Zündung auf dem Ziel liegt, und die Zieldistanz zählt ab der Mündung, nicht ab der Gegnermitte.
+
 ## Events und Objectives
 
 CoopDefenseMapEventDirector besitzt den Lifecycle der authored Events train, airstrike und ground-hazard: Trigger, Warnverzögerung, Wiederholung und Presentation-Snapshot. Fachhandler delegieren Bewegung, Schaden und Visuals an die bestehenden Systeme (CoopDefenseTrainEventHandler, CoopDefenseAirstrikeEventHandler, CoopDefenseGroundHazardEventHandler). Ein Event-Handler darf keine eigene Completion- oder Wanduhrlogik neben dem Director führen. Zugmechanik und Zug-UI sind getrennt; Coop-Defense-Züge bleiben aktiv, erzeugen aber keine HUD-Ankündigungen.

@@ -145,7 +145,7 @@ import {
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
@@ -1418,8 +1418,10 @@ export class ArenaScene extends Phaser.Scene {
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
+      bridge.setLocalLobbyLoadoutPreview(this.buildLocalLobbyLoadoutPreview());
       this.lobbyOverlay.refreshPlayerList(players);
       const roundResults = bridge.getRoundResults();
+      this.ctx.rightPanel.showRoomStatistics(bridge.getRoomPlayerStatistics());
       this.ctx.rightPanel.showRoundResults(
         bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
         bridge.getRoundState(),
@@ -1517,7 +1519,10 @@ export class ArenaScene extends Phaser.Scene {
 
       if (bridge.isHost()) {
         const hostStepStartMs = performance.now();
-        if (isCoopDefenseMode(bridge.getGameMode()) && this.coopDefenseDebugDamageKey && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)) {
+        if (isCoopDefenseMode(bridge.getGameMode())
+          && this.coopDefenseDebugDamageKey
+          && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
+          && !this.ctx.leftPanel.isHotkeyInputBlocked()) {
           this.ctx.coopDefenseRoundStateSystem?.applyDebugBaseDamage(50);
         }
         this.lifecycle.spawnReadyPlayers();
@@ -2079,27 +2084,25 @@ export class ArenaScene extends Phaser.Scene {
 
   private openCoopDefenseUpgradesOverlay(): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) return;
 
     this.coopDefenseXpDebugOverlay?.hide();
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
     this.refreshStoredCoopDefenseProgress();
     this.coopDefenseUpgradeProfileSnapshot = getStoredCoopDefenseProgress();
     this.coopDefenseUpgradesOverlay?.show();
   }
 
   /**
-   * Items sind nur ausserhalb eines Matches wechselbar; das Oeffnen nimmt deshalb – wie beim
-   * Upgrade-Menue – die Bereit-Meldung zurueck.
+   * Items sind nur ausserhalb eines Matches wechselbar. Ein bereiter Spieler muss zuerst
+   * „NICHT BEREIT“ waehlen, bevor er dieses Menue oeffnen kann.
    */
   private openCoopDefenseItemsOverlay(): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) return;
     // Zweite Verteidigungslinie neben der Button-Sperre.
     if (!getStoredCoopDefenseItemsUnlocked()) return;
 
     this.coopDefenseXpDebugOverlay?.hide();
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
     // Ab hier hat der Spieler seine Teile gesehen; der Hinweis am Button erlischt.
     markStoredCoopDefenseItemsSeen();
     this.refreshCoopDefenseItemsButton();
@@ -2495,6 +2498,20 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private buildLocalLobbyLoadoutPreview(): LobbyLoadoutPreviewState {
+    const storedProgress = getStoredCoopDefenseProgress();
+    const classId = isCoopDefenseMode(bridge.getGameMode()) && storedProgress.classesUnlocked
+      ? storedProgress.selectedClassId
+      : null;
+    const profile = classId ? storedProgress.profilesByClass[classId] : null;
+    return {
+      coopDefenseClassId: classId,
+      tools: classId === 'inspector_gadachs'
+        ? (profile?.toolLoadout ?? []).map((tool) => ({ ...tool }))
+        : [],
+    };
+  }
+
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
     const localId = bridge.getLocalPlayerId();
     const storedProgress = getStoredCoopDefenseProgress();
@@ -2566,7 +2583,9 @@ export class ArenaScene extends Phaser.Scene {
     if (!keyboard) return;
 
     this.arenaPanelTabKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
-    this.coopDefenseDebugDamageKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K, true);
+    // K bleibt fuer den optionalen Debug-Schaden abfragbar, darf aber kein DOM-Textfeld
+    // blockieren, weil der Buchstabe auch in Spielernamen verwendet wird.
+    this.coopDefenseDebugDamageKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K, false);
     if (this.optionsHotkeyHandler) {
       keyboard.off('keydown-O', this.optionsHotkeyHandler);
       this.optionsHotkeyHandler = null;
