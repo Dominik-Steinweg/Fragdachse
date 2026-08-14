@@ -1273,7 +1273,7 @@
                                                 "id":  "ak47_rock_destruction",
                                                 "de":  {
                                                            "name":  "Felszerstörung",
-                                                           "description":  "Erhöht den AK-Schaden an echten Felsen um 100% je Stufe und erlaubt Durchbruchsmagazin-Schüssen, mehrere Felsen zu durchdringen."
+                                                           "description":  "Erhöht den AK-Schaden an echten Felsen um 800% und erlaubt Durchbruchsmagazin-Schüssen, mehrere Felsen zu durchdringen."
                                                        },
                                                 "en":  {
                                                            "name":  "AK-47 Rock Destruction",
@@ -1294,12 +1294,12 @@
                                             {
                                                 "id":  "ak47_fire_superiority",
                                                 "de":  {
-                                                           "name":  "Feuerüberlegenheit",
-                                                           "description":  "Beim Erreichen von 5 Einschießen-Stacks werden die nächsten 3 Schüsse zu Durchbruchmunition. Sie durchdringen Gegner ohne Schadensverlust und verbrauchen kein Adrenalin."
+                                                           "name":  "Durchbruchmunition",
+                                                           "description":  "Beim Erreichen von 5 Einschießen-Stacks werden 3 Schüsse zu Durchbruchmunition. Sie durchdringen Gegner ohne Schadensverlust, verbrauchen kein Adrenalin und bleiben bis zur Auflösung aller Schüsse aktiv."
                                                        },
                                                 "en":  {
-                                                           "name":  "AK-47 Fire Superiority",
-                                                           "description":  "Enhances ak-47 fire superiority."
+                                                           "name":  "AK-47 Breakthrough Ammunition",
+                                                           "description":  "At 5 focus stacks, grants breakthrough shots that pierce enemies without damage loss or adrenaline cost."
                                                        }
                                             },
                                             {
@@ -1317,7 +1317,7 @@
                                                 "id":  "ak47_strategic_targets",
                                                 "de":  {
                                                            "name":  "Strategische Ziele",
-                                                           "description":  "Alle 4 Sekunden wird 4 Sekunden lang ein lebender Gegner markiert. AK-Treffer auf ihn verursachen +25% Direktschaden; ein dort treffender Durchbruchsschuss wird einmalig erstattet."
+                                                           "description":  "Solange 5 Einschießen-Stacks aktiv sind, bleibt ein lebender Gegner markiert. AK-Treffer verursachen an ihm +25% Direktschaden; nach seinem Tod wird nach 200 ms das nächste Ziel markiert. Ein dort treffender Durchbruchsschuss wird einmalig erstattet."
                                                        },
                                                 "en":  {
                                                            "name":  "AK-47 Strategic Targets",

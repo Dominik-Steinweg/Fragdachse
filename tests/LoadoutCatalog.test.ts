@@ -117,9 +117,35 @@ describe('loadout catalog', () => {
     expect(getCoopDefenseUpgradeTextureKey('dash_fire_trail')).toBe('UPGRADE_DASH_FIRE_TRAIL');
     expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_SHOTGUN_RANGE');
     expect(getCoopDefenseUpgradeTextureKey('glock_adrenaline_gain')).toBe('UPGRADE_GLOCK_ADRENALINE_GAIN');
+    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_adrenalin_gain'))
+      .toBe('UPGRADE_LAUBBLAESER_ADRENALIN_GAIN');
+    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_knockback'))
+      .toBe('UPGRADE_LAUBBLAESER_KNOCKBACK');
+    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_hitbox_size'))
+      .toBe('UPGRADE_LAUBBLAESER_HITBOX_SIZE');
+    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_pressure_damage'))
+      .toBe('UPGRADE_LAUBBLAESER_PRESSURE_DAMAGE');
+    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_radius')).toBe('UPGRADE_STINKDRUESEN_RADIUS');
+    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_damage')).toBe('UPGRADE_STINKDRUESEN_DAMAGE');
+    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_aftercloud')).toBe('UPGRADE_STINKDRUESEN_AFTERCLOUD');
     expect(getCoopDefenseUpgradeTextureKey('flamethrower_adrenalin_efficiency')).toBe(
       'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',
     );
+    expect(getCoopDefenseUpgradeTextureKey('ak47_fire_control')).toBe('UPGRADE_AK47_FOCUS');
+    expect(getCoopDefenseUpgradeTextureKey('ak47_rhythm')).toBe('UPGRADE_AK47_FOCUS_DAMAGE');
+    expect(getCoopDefenseUpgradeTextureKey('ak47_breakthrough_magazine')).toBe(
+      'UPGRADE_AK47_FIRE_SUPERIORITY_SHOTS',
+    );
+    expect(getCoopDefenseUpgradeTextureKey('ak47_fire_superiority')).toBe('UPGRADE_AK47_FIRE_SUPERIORITY');
+    expect(getCoopDefenseUpgradeTextureKey('ak47_rock_destruction')).toBe('UPGRADE_AK47_ROCK_DESTRUCTION');
+    for (const id of [
+      'ak47_firepower',
+      'ak47_strategic_targets',
+      'ak47_target_prioritization',
+      'ak47_explosive_target_acquisition',
+    ]) {
+      expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
+    }
     for (const id of [
       'unlock_plasma_burner',
       'unlock_overcharge_core',
@@ -150,6 +176,8 @@ describe('loadout catalog', () => {
     expect(describeLoadoutItem('utility', 'HE_GRENADE').displayName).toBe(getLoadoutItemName('HE_GRENADE', getLocale()));
     expect(describeLoadoutItem('weapon1', 'UNKNOWN_ITEM').displayName).toBe('UNKNOWN ITEM');
     expect(describeLoadoutItem('weapon1', 'LEAF_BLOWER').displayName).toBe('Laubbläser');
+    expect(describeLoadoutItem('weapon1', 'LEAF_BLOWER').textureKey).toBe('LAUBBLAESER');
+    expect(describeLoadoutItem('utility', 'STINK_CLOUD').textureKey).toBe('STINKDRUESEN');
     expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').displayName).toBe('Plasmabrenner');
   });
 

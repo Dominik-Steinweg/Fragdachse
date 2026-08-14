@@ -6,12 +6,10 @@ import type { CombatSystem, Ak47DirectEnemyHitImpact } from './CombatSystem';
 import type { LoadoutManager } from '../loadout/LoadoutManager';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 
-const ACTIVE_PHASE_MS = 4_000;
-const COOLDOWN_MS = 4_000;
-const TARGET_RESELECT_DEBOUNCE_MS = 100;
-const TARGET_DEATH_EXTENSION_MS = 1_000;
+const TARGET_RESELECT_DEBOUNCE_MS = 200;
 const TARGET_HIT_CONFIRMATION_MS = 150;
 const CURSOR_DISTANCE_PX = 1_000;
+const STRATEGIC_TARGET_PERMANENT_END = Number.MAX_SAFE_INTEGER;
 
 const EXPLOSION_BY_LEVEL = [
   { radius: 0, fraction: 0 },
@@ -21,8 +19,6 @@ const EXPLOSION_BY_LEVEL = [
 ] as const;
 
 interface StrategicTargetState {
-  activeUntil: number;
-  cooldownUntil: number;
   targetId: string | null;
   noTargetUntil: number;
   deathHandledTargetId: string | null;
@@ -36,7 +32,7 @@ interface Candidate {
   strength: number;
 }
 
-/** Host-authoritative AK target phases; the renderer only consumes its compact snapshot. */
+/** Host-authoritative AK target state; the renderer only consumes its compact snapshot. */
 export class Ak47StrategicTargetSystem {
   private readonly states = new Map<string, StrategicTargetState>();
 
@@ -50,7 +46,11 @@ export class Ak47StrategicTargetSystem {
   hostUpdate(now: number): void {
     for (const player of this.playerManager.getAllPlayers()) {
       const focus = this.loadoutManager.getEquippedWeaponConfig(player.id, 'weapon2')?.ak47Focus;
-      if (!focus || focus.strategicTargetEnabled <= 0) {
+      if (
+        !focus
+        || focus.strategicTargetEnabled <= 0
+        || !this.loadoutManager.isAk47FocusAtMaxStacks(player.id)
+      ) {
         this.states.delete(player.id);
         continue;
       }
@@ -58,47 +58,27 @@ export class Ak47StrategicTargetSystem {
       const state = this.states.get(player.id) ?? this.createState(now);
       this.states.set(player.id, state);
 
-      if (state.activeUntil <= 0 && state.cooldownUntil <= 0) {
-        this.startPhase(state, now);
-      } else if (state.activeUntil <= 0 && now >= state.cooldownUntil) {
-        this.startPhase(state, now);
-      }
-
-      if (state.activeUntil <= 0) continue;
-
       if (state.targetId && !this.isLivingEnemy(state.targetId)) {
         this.handleMarkedTargetDeath(state, now);
       }
 
-      // Keep the marked target through the combat step. If it dies in that step, the next
-      // hostUpdate observes the death and grants the exact one-second extension first.
-      if (state.targetId !== null && now >= state.activeUntil) {
-        state.activeUntil = 0;
-        state.cooldownUntil = now + COOLDOWN_MS;
-        state.targetId = null;
-        state.confirmationUntil = 0;
-      }
-
-      if (state.targetId === null && now >= state.noTargetUntil && now < state.activeUntil) {
+      if (state.targetId === null && now >= state.noTargetUntil) {
         state.targetId = this.chooseTarget(player.id, focus.targetPrioritizationEnabled > 0);
         state.deathHandledTargetId = null;
-      }
-
-      if (now >= state.activeUntil && state.targetId === null) {
-        state.activeUntil = 0;
-        state.cooldownUntil = now + COOLDOWN_MS;
-        state.noTargetUntil = 0;
-        state.confirmationUntil = 0;
       }
     }
   }
 
   handleDirectAk47EnemyHit(projectile: TrackedProjectile, enemyId: string, now = Date.now()): Ak47DirectEnemyHitImpact | null {
     const state = this.states.get(projectile.ownerId);
-    if (!state || state.activeUntil <= now || state.targetId !== enemyId) return null;
-
     const focus = this.loadoutManager.getEquippedWeaponConfig(projectile.ownerId, 'weapon2')?.ak47Focus;
-    if (!focus || focus.strategicTargetEnabled <= 0) return null;
+    if (
+      !state
+      || !focus
+      || focus.strategicTargetEnabled <= 0
+      || !this.loadoutManager.isAk47FocusAtMaxStacks(projectile.ownerId)
+      || state.targetId !== enemyId
+    ) return null;
 
     state.confirmationUntil = now + TARGET_HIT_CONFIRMATION_MS;
     this.loadoutManager.registerAk47StrategicTargetHit(projectile, enemyId);
@@ -115,20 +95,24 @@ export class Ak47StrategicTargetSystem {
 
   isCurrentTarget(playerId: string, enemyId: string, now = Date.now()): boolean {
     const state = this.states.get(playerId);
-    return !!state && state.activeUntil > now && state.targetId === enemyId;
+    void now;
+    return !!state
+      && this.loadoutManager.isAk47FocusAtMaxStacks(playerId)
+      && state.targetId === enemyId;
   }
 
   getNetSnapshot(now = Date.now()): SyncedAk47StrategicTarget[] {
     const result: SyncedAk47StrategicTarget[] = [];
     for (const [ownerId, state] of this.states) {
-      if (state.targetId === null || state.activeUntil <= now) continue;
+      if (state.targetId === null || !this.loadoutManager.isAk47FocusAtMaxStacks(ownerId)) continue;
       result.push({
         ownerId,
         enemyId: state.targetId,
-        phaseEndsAt: state.activeUntil,
+        phaseEndsAt: STRATEGIC_TARGET_PERMANENT_END,
         confirmationUntil: state.confirmationUntil,
       });
     }
+    void now;
     return result;
   }
 
@@ -137,9 +121,8 @@ export class Ak47StrategicTargetSystem {
   }
 
   private createState(now: number): StrategicTargetState {
+    void now;
     return {
-      activeUntil: now + ACTIVE_PHASE_MS,
-      cooldownUntil: 0,
       targetId: null,
       noTargetUntil: 0,
       deathHandledTargetId: null,
@@ -147,20 +130,10 @@ export class Ak47StrategicTargetSystem {
     };
   }
 
-  private startPhase(state: StrategicTargetState, now: number): void {
-    state.activeUntil = now + ACTIVE_PHASE_MS;
-    state.cooldownUntil = 0;
-    state.targetId = null;
-    state.noTargetUntil = 0;
-    state.deathHandledTargetId = null;
-    state.confirmationUntil = 0;
-  }
-
   private handleMarkedTargetDeath(state: StrategicTargetState, now: number): void {
     if (state.targetId === null || state.deathHandledTargetId === state.targetId) return;
     state.deathHandledTargetId = state.targetId;
     state.targetId = null;
-    state.activeUntil += TARGET_DEATH_EXTENSION_MS;
     state.noTargetUntil = now + TARGET_RESELECT_DEBOUNCE_MS;
     state.confirmationUntil = 0;
   }

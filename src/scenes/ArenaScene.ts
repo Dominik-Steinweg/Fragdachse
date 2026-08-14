@@ -1,6 +1,7 @@
 ﻿import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
+import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
@@ -403,7 +404,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadArenaDecalAssets(this.load);
     preloadGroundCoverAssets(this.load);
     preloadTurretVisualAssets(this.load);
-    this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
+    preloadCanopyAssets(this.load);
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
     this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');

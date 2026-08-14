@@ -1924,8 +1924,7 @@
                                                 "code":  "B-W2-D",
                                                 "kind":  "upgrade",
                                                 "maxLevel":  3,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
+                                                "costPerLevel":  1,
                                                 "sortOrder":  170,
                                                 "requires":  [
                                                                  {
@@ -2523,7 +2522,7 @@
                                                 "id":  "ak47_rock_destruction",
                                                 "code":  "C-W3-3",
                                                 "kind":  "upgrade",
-                                                "maxLevel":  3,
+                                                "maxLevel":  1,
                                                 "startingLevel":  0,
                                                 "costPerLevel":  1,
                                                 "refundable":  true,
@@ -2538,7 +2537,7 @@
                                                                 {
                                                                     "stat":  "weapon.AK47.rockDamageMult",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  1
+                                                                    "value":  8
                                                                 }
                                                             ]
                                             },

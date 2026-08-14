@@ -14,7 +14,6 @@ import { bakeBlobSurfaceMottle } from './BlobSurfaceMottle';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { generateGroundCoverPlacements } from './GroundCoverField';
 import { bakeGroundCoverLayer } from './GroundCoverLayer';
-import { isGroundCoverQuietCell } from './MenuArenaPreviewConfig';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -458,7 +457,6 @@ export class MenuArenaPreviewRenderer {
         seed: layout.seed,
         dirt: layout.dirt ?? [],
         metrics,
-        excludeCell: isGroundCoverQuietCell,
       }),
       bounds,
       DEPTH.GROUND_COVER,

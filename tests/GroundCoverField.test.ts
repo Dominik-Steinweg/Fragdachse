@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
@@ -30,10 +32,22 @@ describe('Ground cover field', () => {
   it('sums the variant weights to a hundred and names every file by convention', () => {
     const total = GROUND_COVER_CONFIG.variants.reduce((sum, variant) => sum + variant.frequencyPercent, 0);
     expect(total).toBe(100);
-    expect(GROUND_COVER_CONFIG.variants).toHaveLength(8);
+    expect(GROUND_COVER_CONFIG.variants).toHaveLength(16);
     for (const variant of GROUND_COVER_CONFIG.variants) {
       expect(variant.fileName).toMatch(/^ground_cover_\d\d\.png$/);
     }
+  });
+
+  it('ships every variant listed in the config', () => {
+    // Die Liste wird von Hand gepflegt, die Dateien entstehen im Generatorskript. Ein Tippfehler
+    // faellt sonst erst im Spiel auf, wo Phaser die fehlende Textur still durch ihren
+    // Platzhalter ersetzt.
+    const assetDir = path.join(__dirname, '..', 'public', 'assets', 'sprites', 'groundcover');
+    const shipped = new Set(fs.readdirSync(assetDir).filter((name) => name.endsWith('.png')));
+    for (const variant of GROUND_COVER_CONFIG.variants) {
+      expect(shipped.has(variant.fileName)).toBe(true);
+    }
+    expect(shipped.size).toBe(GROUND_COVER_CONFIG.variants.length);
   });
 
   it('is deterministic for a seed and varies between seeds', () => {

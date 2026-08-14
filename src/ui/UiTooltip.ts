@@ -46,6 +46,8 @@ export class UiTooltip {
     private readonly scene: Phaser.Scene,
     private readonly maxWidth = 320,
     private readonly accentColor: number = TEXT.primary,
+    /** Untere Designraumgrenze fuer Overlays mit einer festen Fusszeile. */
+    private readonly bottomLimit = GAME_HEIGHT - 12,
   ) {}
 
   build(): Phaser.GameObjects.Container {
@@ -171,7 +173,7 @@ export class UiTooltip {
     // waere der Clamp-Bereich sonst invertiert und Phaser lieferte ein negatives y – der Tooltip
     // verschwaende oben aus dem Bild, statt am oberen Rand zu kleben.
     const x = Phaser.Math.Clamp(pointerX + OFFSET_X, 12, Math.max(12, GAME_WIDTH - width - 12));
-    const y = Phaser.Math.Clamp(pointerY + OFFSET_Y, 12, Math.max(12, GAME_HEIGHT - height - 12));
+    const y = Phaser.Math.Clamp(pointerY + OFFSET_Y, 12, Math.max(12, this.bottomLimit - height));
 
     this.container.setPosition(x, y);
   }

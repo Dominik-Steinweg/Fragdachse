@@ -163,4 +163,11 @@ describe('Plasma Gun Plasma-Aufladung', () => {
     expect(getCoopDefenseUpgradeDefinition('plasma_projectile_speed')).toBeNull();
   });
 
+  it('treats Plasma Swarm Discharge as a regular upgrade', () => {
+    const discharge = getCoopDefenseUpgradeDefinition('plasma_swarm_discharge');
+
+    expect(discharge?.costPerLevel).toBe(1);
+    expect(discharge?.bossPointCostPerLevel).toBe(0);
+  });
+
 });

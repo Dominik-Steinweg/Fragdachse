@@ -96,12 +96,11 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
   it('resolves rhythm, rock levels, and 3/6/9/12 breakthrough ammunition', () => {
     expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1 }).ak47Focus?.damagePerStack)
       .toBeCloseTo(0.15);
+    expect(getCoopDefenseUpgradeDefinition('ak47_rock_destruction')?.maxLevel).toBe(1);
     expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1, ak47_rock_destruction: 1 }).rockDamageMult)
-      .toBe(1);
+      .toBe(8);
     expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1, ak47_rock_destruction: 2 }).rockDamageMult)
-      .toBe(2);
-    expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1, ak47_rock_destruction: 3 }).rockDamageMult)
-      .toBe(3);
+      .toBe(8);
     for (const level of [0, 1, 2, 3]) {
       expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_fire_control: 1, ak47_fire_superiority: 1, ak47_breakthrough_magazine: level }).ak47Focus?.fireSuperiorityShots)
         .toBe(3 + level * 3);
@@ -109,7 +108,7 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
     expect(akConfig({ unlock_ak47: 1 }).rockDamageMult).toBe(0);
   });
 
-  it('builds one shared hit chain, resets on a miss, and does not retrigger while pending', () => {
+  it('builds one shared hit chain, protects full stacks during breakthrough, and does not retrigger while pending', () => {
     const config = akConfig({
       unlock_ak47: 1,
       ak47_firepower: 1,
@@ -125,7 +124,7 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
 
     const miss = projectile(6);
     manager.resolveAk47Projectile(miss);
-    expect(manager.ak47States.get('p1').stacks).toBe(0);
+    expect(manager.ak47States.get('p1').stacks).toBe(5);
 
     const state = manager.ak47States.get('p1');
     state.stacks = 5;
@@ -134,6 +133,9 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
     manager.registerAk47ProjectileHit(projectile(7));
     expect(state.fireSuperiorityShotsAvailable).toBe(0);
     expect(state.pendingFireSuperiorityShotIds.has(99)).toBe(true);
+
+    manager.resolveAk47Projectile(projectile(99, { ak47FireSuperiorityShot: true }));
+    expect(state.stacks).toBe(0);
   });
 
   it('refunds the concrete strategic penetrator once and ends only after pending resolves', () => {
@@ -163,6 +165,7 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
 });
 
 function makeTargetFixture(focus: any) {
+  let fullStacks = true;
   const enemies = [
     { id: 'near', kind: 'zombie-badger', faction: 'hostile', sprite: { x: 1000, y: 0, rotation: 0, active: true }, getHp: () => 100, isBurrowed: () => false },
     { id: 'far', kind: 'inferno-colossus', faction: 'hostile', sprite: { x: 300, y: 300, rotation: 0, active: true }, getHp: () => 100, isBurrowed: () => false },
@@ -182,13 +185,19 @@ function makeTargetFixture(focus: any) {
   } as any;
   const loadout = {
     getEquippedWeaponConfig: () => ({ id: 'AK47', ak47Focus: focus }),
+    isAk47FocusAtMaxStacks: () => fullStacks,
     registerAk47StrategicTargetHit: vi.fn(),
   } as any;
-  return { enemies, player, system: new Ak47StrategicTargetSystem(playerManager, enemyManager, combat, loadout) };
+  return {
+    enemies,
+    player,
+    setFullStacks: (value: boolean) => { fullStacks = value; },
+    system: new Ak47StrategicTargetSystem(playerManager, enemyManager, combat, loadout),
+  };
 }
 
 describe('AK-47 Strategische Ziele', () => {
-  it('runs 4s active / 4s cooldown and debounces a kill for exactly 100ms with +1s', () => {
+  it('stays active at full stacks and debounces a replacement target for exactly 200ms', () => {
     const { enemies, system } = makeTargetFixture({
       strategicTargetEnabled: 1,
       strategicTargetDamageBonus: 0.25,
@@ -203,15 +212,37 @@ describe('AK-47 Strategische Ziele', () => {
 
     system.hostUpdate(1000);
     expect(system.getNetSnapshot(1000)).toHaveLength(0);
-    system.hostUpdate(1099);
-    expect(system.getNetSnapshot(1099)).toHaveLength(0);
-    system.hostUpdate(1100);
-    expect(system.getNetSnapshot(1100)[0]?.phaseEndsAt).toBe(5000);
-
-    system.hostUpdate(5000);
-    expect(system.getNetSnapshot(5000)).toHaveLength(0);
+    system.hostUpdate(1199);
+    expect(system.getNetSnapshot(1199)).toHaveLength(0);
+    system.hostUpdate(1200);
+    expect(system.getNetSnapshot(1200)).toHaveLength(1);
+    expect(system.getNetSnapshot(1200)[0]?.phaseEndsAt).toBe(Number.MAX_SAFE_INTEGER);
     system.hostUpdate(9000);
     expect(system.getNetSnapshot(9000)).toHaveLength(1);
+  });
+
+  it('removes the target when stacks are lost and does not cascade replacements on multi-kills', () => {
+    const fixture = makeTargetFixture({
+      strategicTargetEnabled: 1,
+      strategicTargetDamageBonus: 0.25,
+      targetPrioritizationEnabled: 0,
+      explosiveTargetAcquisitionLevel: 0,
+    });
+    fixture.system.hostUpdate(0);
+    const marked = fixture.system.getNetSnapshot(0)[0]?.enemyId;
+    fixture.setFullStacks(false);
+    fixture.system.hostUpdate(1);
+    expect(fixture.system.getNetSnapshot(1)).toHaveLength(0);
+    fixture.setFullStacks(true);
+    fixture.system.hostUpdate(2);
+    expect(fixture.system.getNetSnapshot(2)).toHaveLength(1);
+    fixture.enemies.forEach(enemy => { enemy.getHp = () => 0; });
+    fixture.system.hostUpdate(3);
+    fixture.system.hostUpdate(201);
+    expect(fixture.system.getNetSnapshot(201)).toHaveLength(0);
+    fixture.system.hostUpdate(202);
+    expect(fixture.system.getNetSnapshot(202)).toHaveLength(0);
+    expect(marked).toBeTruthy();
   });
 
   it('uses random visible targets normally and cursor-first selection with the follow-up', () => {

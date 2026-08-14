@@ -670,21 +670,6 @@ export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
   return LOBBY_UI_RESERVED_ZONES.some((rect) => isInsideRect(gridX, gridY, rect));
 }
 
-/**
- * Zusätzlich zu den Oberflächenflächen bleibt das obere Band moosfrei. Dort steht der Schriftzug
- * aus Felsen, und weil jeder Fels von Dirt umgeben ist, ist der Dirt/Gras-Saum – der Schwerpunkt
- * der Moosschicht – ausgerechnet über dem Titel am dichtesten.
- */
-const groundCoverQuietZones: readonly GridRect[] = [
-  ...decalQuietZones,
-  titleRockGapZone,
-];
-
-/** Liegt die Zelle in einer Fläche, die von der Moosschicht ausgespart bleibt? */
-export function isGroundCoverQuietCell(gridX: number, gridY: number): boolean {
-  return groundCoverQuietZones.some((rect) => isInsideRect(gridX, gridY, rect));
-}
-
 const dirtQuietZones: readonly GridRect[] = [
   rightOverlayInfoQuietZone,
   overlayClearZones[1],

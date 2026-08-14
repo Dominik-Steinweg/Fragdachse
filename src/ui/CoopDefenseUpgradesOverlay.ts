@@ -103,6 +103,8 @@ const ACTION_BTN_H = 50;
 const ACTION_BTN_GAP = 40;
 const ACTION_BTN_Y = CY + PANEL_H / 2 - 60;
 const FOOTER_Y = CY + PANEL_H / 2 - 22;
+// Die feste Steuerungshinweiszeile bleibt unter jedem Upgrade-Tooltip lesbar.
+const TOOLTIP_BOTTOM = FOOTER_Y - 16;
 
 const CLASS_ROW_Y = POINTS_Y + 62;
 const CLASS_BUTTON_W = 250;
@@ -499,7 +501,7 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
 
-    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, TEXT.primary);
+    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, TEXT.primary, TOOLTIP_BOTTOM);
     objects.push(
       this.tooltip.build()
         // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
@@ -2332,7 +2334,11 @@ export class CoopDefenseUpgradesOverlay {
     // Dedicated upgrade artwork takes precedence over the corresponding loadout-item icon.
     if (hasCoopDefenseDedicatedUpgradeIcon(node.id)) return upgradeTextureKey;
     if (node.toolRef) return describeLoadoutTool(node.toolRef).textureKey;
-    if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
+    if (node.loadoutUnlock) {
+      // Loadout IDs are semantic IDs; their authored icon key may retain the
+      // historical German asset name (e.g. LEAF_BLOWER -> LAUBBLAESER).
+      return describeLoadoutItem(node.loadoutUnlock.slot, node.loadoutUnlock.itemId).textureKey;
+    }
     if (node.kind === 'upgrade') return upgradeTextureKey;
     return null;
   }

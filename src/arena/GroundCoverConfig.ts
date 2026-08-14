@@ -65,29 +65,49 @@ export const GROUND_COVER_CONFIG: GroundCoverLayerConfig = {
   blockCells: 5,
   maxPerBlock: 2,
   /**
-   * Reine Schutzgrenze gegen kuenftig noch breitere Karten. Auf der breitesten aktuellen Karte
-   * (Capture the Beer, 135x33 Zellen) liegt die erwartete Zahl bei rund 85.
+   * Reine Schutzgrenze gegen kuenftig noch groessere Karten.
+   *
+   * Sie muss ueber `Bloecke * maxPerBlock` liegen, sonst bricht der Generator mitten in seinem
+   * zeilenweisen Lauf ab und die Karte bliebe unten rechts unbemoost – ein Abschnitt, den man
+   * im Spiel sieht, aber an keiner Zahl ablesen kann. Groesste Karte ist derzeit
+   * `13-brutbomben` mit 135x40 Zellen, also 27x8 = 216 Bloecke; 512 traegt damit auch
+   * `perBlock`-Werte ueber 1, bei denen beide Slots je Block feuern.
    */
-  maxPlacements: 384,
+  maxPlacements: 512,
   /** Volle Blockbreite: der Anker landet an jeder Stelle, nie auf einem Zellmittelpunkt. */
   jitterCells: 2.5,
 
-  seam: { perBlock: 0.85, minSizeCells: 5, maxSizeCells: 11, sizeBias: 1.6, minAlpha: 0.50, maxAlpha: 0.78 },
-  dirt: { perBlock: 0.50, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1.8, minAlpha: 0.42, maxAlpha: 0.66 },
-  grass: { perBlock: 0.54, minSizeCells: 3, maxSizeCells: 7, sizeBias: 2.0, minAlpha: 0.34, maxAlpha: 0.56 },
+  seam: { perBlock: 0.95, minSizeCells: 5, maxSizeCells: 11, sizeBias: 1.6, minAlpha: 0.70, maxAlpha: 0.90 },
+  dirt: { perBlock: 0.80, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1.8, minAlpha: 0.62, maxAlpha: 0.86 },
+  grass: { perBlock: 0.74, minSizeCells: 3, maxSizeCells: 7, sizeBias: 2.0, minAlpha: 0.44, maxAlpha: 0.86 },
 
+  /**
+   * Die Gewichte sind bewusst flach: Bei 16 Vorlagen faellt eine Wiederholung nur dann auf, wenn
+   * eine einzelne Form haeufig genug ist, um als Muster gelesen zu werden. Ausnahmen sind unten
+   * einzeln begruendet. Die Summe ist 100; innerhalb einer Ankerklasse normiert der Generator die
+   * dort zugelassenen Gewichte selbst nach.
+   */
   variants: [
-    { fileName: 'ground_cover_01.png', frequencyPercent: 17 },
-    { fileName: 'ground_cover_02.png', frequencyPercent: 16 },
-    { fileName: 'ground_cover_03.png', frequencyPercent: 15 },
-    { fileName: 'ground_cover_04.png', frequencyPercent: 14 },
+    { fileName: 'ground_cover_01.png', frequencyPercent: 8 },
+    { fileName: 'ground_cover_02.png', frequencyPercent: 8 },
+    { fileName: 'ground_cover_03.png', frequencyPercent: 7 },
+    { fileName: 'ground_cover_04.png', frequencyPercent: 7 },
     // Groesster geschlossener Klumpen – bewusst selten, sonst dominiert eine einzelne Form.
-    { fileName: 'ground_cover_05.png', frequencyPercent: 10 },
-    { fileName: 'ground_cover_06.png', frequencyPercent: 13 },
-    // Die beiden braunsten, duennsten Vorlagen. Auf Gras laegen sie als Fremdkoerper; am Saum und
-    // auf Dirt sind sie genau das Bindeglied zwischen den Materialien.
-    { fileName: 'ground_cover_07.png', frequencyPercent: 7, anchors: ['seam', 'dirt'] },
-    { fileName: 'ground_cover_08.png', frequencyPercent: 8, anchors: ['seam', 'dirt'] },
+    { fileName: 'ground_cover_05.png', frequencyPercent: 5 },
+    { fileName: 'ground_cover_06.png', frequencyPercent: 6 },
+    // Die beiden braunsten Vorlagen (gemessen 31 % bzw. 50 % Pixel mit R >= G, gegen 6-22 % bei
+    // allen anderen). Auf Gras laegen sie als Fremdkoerper; am Saum und auf Dirt sind sie genau
+    // das Bindeglied zwischen den Materialien.
+    { fileName: 'ground_cover_07.png', frequencyPercent: 4, anchors: ['seam', 'dirt'] },
+    { fileName: 'ground_cover_08.png', frequencyPercent: 4, anchors: ['seam', 'dirt'] },
+    { fileName: 'ground_cover_09.png', frequencyPercent: 7 },
+    { fileName: 'ground_cover_10.png', frequencyPercent: 6 },
+    { fileName: 'ground_cover_11.png', frequencyPercent: 7 },
+    { fileName: 'ground_cover_12.png', frequencyPercent: 6 },
+    { fileName: 'ground_cover_13.png', frequencyPercent: 7 },
+    { fileName: 'ground_cover_14.png', frequencyPercent: 6 },
+    { fileName: 'ground_cover_15.png', frequencyPercent: 6 },
+    { fileName: 'ground_cover_16.png', frequencyPercent: 6 },
   ],
 };
 

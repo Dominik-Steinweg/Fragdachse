@@ -38,7 +38,22 @@ const OUT_DIR = path.join('public', 'assets', 'sprites', 'groundcover');
 const GRASS_TILE = path.join('public', 'assets', 'sprites', 'gras_bg_tile.png');
 const CONTACT_SHEET = path.join(SOURCE_DIR, '_preview.png');
 
-const SOURCE_FILES = ['01.png', '02.png', '03.png', '04.png', '05.png', '06.png', '07.png', '08.png'];
+/**
+ * Quelldateien sind alle rein numerisch benannten PNGs des Quellordners, aufsteigend sortiert.
+ * Die Nummer ist der Vertrag: Aus `07.png` wird immer `ground_cover_07.png`, unabhaengig davon,
+ * wie viele Dateien daneben liegen. Nur so bleibt die Variantentabelle in `GroundCoverConfig.ts`
+ * gueltig, wenn spaeter weitere Vorlagen dazukommen. `_preview.png` faellt durch das Raster.
+ */
+async function listSourceFiles() {
+  const entries = await fs.readdir(SOURCE_DIR);
+  const numbered = entries
+    .map((name) => ({ name, index: /^(\d+)\.png$/i.exec(name) }))
+    .filter((entry) => entry.index !== null)
+    .map((entry) => ({ name: entry.name, index: Number(entry.index[1]) }))
+    .sort((a, b) => a.index - b.index);
+  if (numbered.length === 0) throw new Error(`Keine nummerierten Quelldateien in ${SOURCE_DIR}`);
+  return numbered;
+}
 
 /**
  * Laengere Ausgabekante. Das Spiel laeuft mit `smoothPixelArt: true`, was global lineare Filterung
@@ -348,7 +363,7 @@ async function readGrassMean() {
   return [stats.channels[0].mean, stats.channels[1].mean, stats.channels[2].mean];
 }
 
-async function processSource(fileName, index, grassMean) {
+async function processSource(fileName, outputIndex, grassMean) {
   const source = path.join(SOURCE_DIR, fileName);
   const { data: original, info } = await sharp(source)
     .ensureAlpha()
@@ -375,7 +390,11 @@ async function processSource(fileName, index, grassMean) {
   const thickness = positivePercentile(distance, FEATHER_SCALE_PERCENTILE);
 
   const longSide = Math.max(cw, ch);
-  const rng = mulberry32(SEED + index * 7919);
+  // Rauschsaat an der Ausgabenummer festgemacht, nicht an der Position in der Dateiliste: Eine
+  // bereits erzeugte und abgenommene Textur darf sich nicht aendern, nur weil daneben eine
+  // weitere Vorlage dazugekommen ist. Der Versatz um 1 haelt die Saaten der ersten acht
+  // Texturen auf den Werten, mit denen sie ausgeliefert wurden.
+  const rng = mulberry32(SEED + (outputIndex - 1) * 7919);
   const edgeNoise = valueNoiseField(cw, ch, EDGE_NOISE_WAVELENGTH_FRACTION * longSide, rng);
   const holeNoise = fbmField(cw, ch, HOLE_OCTAVES, longSide, rng);
 
@@ -412,7 +431,7 @@ async function processSource(fileName, index, grassMean) {
   const rebuilt = alphaBounds(cropped, cw, ch, TRIM_THRESHOLD);
   const finalData = cropRgba(cropped, cw, rebuilt);
 
-  const outName = `ground_cover_${String(index + 1).padStart(2, '0')}.png`;
+  const outName = `ground_cover_${String(outputIndex).padStart(2, '0')}.png`;
   const target = path.join(OUT_DIR, outName);
   await sharp(finalData, { raw: { width: rebuilt.width, height: rebuilt.height, channels: 4 } })
     .resize({
@@ -468,9 +487,10 @@ async function main() {
   const grassMean = await readGrassMean();
   console.log(`Grasmittelfarbe: ${grassMean.map((v) => v.toFixed(1)).join(', ')}`);
 
+  const sources = await listSourceFiles();
   const targets = [];
-  for (let index = 0; index < SOURCE_FILES.length; index += 1) {
-    targets.push(await processSource(SOURCE_FILES[index], index, grassMean));
+  for (const { name, index } of sources) {
+    targets.push(await processSource(name, index, grassMean));
   }
 
   if (process.argv.includes('--contact-sheet')) {

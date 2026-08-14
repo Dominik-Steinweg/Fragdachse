@@ -11,6 +11,7 @@ import {
   TRUNK_RADIUS,
 } from '../config';
 import type { DecalCell, DirtCell, TrackCell, TreeCell } from '../types';
+import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
@@ -68,7 +69,7 @@ export class ArenaVisualFactory {
   }
 
   static createCanopy(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Image {
-    const canopy = scene.add.image(worldX, worldY, 'bg_canopy');
+    const canopy = scene.add.image(worldX, worldY, Phaser.Math.RND.pick(CANOPY_TEXTURE_KEYS));
     canopy.setDisplaySize(CANOPY_RADIUS * 2, CANOPY_RADIUS * 2);
     canopy.setAngle(Phaser.Math.Between(0, 359));
     canopy.setDepth(DEPTH.CANOPY);

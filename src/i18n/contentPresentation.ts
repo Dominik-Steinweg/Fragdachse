@@ -119,7 +119,7 @@ const POWERUP_NAMES: Readonly<Record<string, LocalizedText>> = Object.freeze({
   DECOY_STEALTH: { de: 'Unsichtbarkeit', en: 'Invisibility' },
   SHIELD_OVERCHARGE: { de: 'Schildladung', en: 'Shield Overcharge' },
   AK47_FOCUS: { de: 'Einschießen', en: 'AK-47 Focus' },
-  AK47_FIRE_SUPERIORITY: { de: 'Feuerüberlegenheit', en: 'Fire Superiority' },
+  AK47_FIRE_SUPERIORITY: { de: 'Durchbruchmunition', en: 'Breakthrough Ammunition' },
   NEGEV_KILLSTREAK: { de: 'Negev-Killstreak', en: 'Negev Killstreak' },
   MOVEMENT_CHARGE: { de: 'Kinetische Ladung', en: 'Kinetic Charge' },
   GLUTWANDERER: { de: 'Glutwanderer', en: 'Ember Walker' },

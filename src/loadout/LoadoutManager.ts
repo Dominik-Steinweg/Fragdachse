@@ -447,7 +447,7 @@ export class LoadoutManager {
     if (projectile.ak47FireSuperiorityShot && !this.isAk47FireSuperiorityPhaseActive(state)) {
       state.fireSuperiorityTotalShots = 0;
       state.stacks = 0;
-    } else if (!didHit) {
+    } else if (!didHit && !this.isAk47FireSuperiorityPhaseActive(state)) {
       state.stacks = 0;
     }
   }
@@ -509,6 +509,14 @@ export class LoadoutManager {
   isAk47FireSuperiorityAvailable(playerId: string): boolean {
     return this.getAk47Config(playerId) !== null
       && (this.ak47States.get(playerId)?.fireSuperiorityShotsAvailable ?? 0) > 0;
+  }
+
+  /** True when the shared Einschießen series has reached its hard five-stack cap. */
+  isAk47FocusAtMaxStacks(playerId: string): boolean {
+    const focus = this.getAk47Config(playerId)?.ak47Focus;
+    if (!focus) return false;
+    const maxStacks = this.getAk47MaxStacks(focus);
+    return maxStacks > 0 && (this.ak47States.get(playerId)?.stacks ?? 0) >= maxStacks;
   }
 
   beginUtilityCooldown(playerId: string, utilityId: string, now: number): void {

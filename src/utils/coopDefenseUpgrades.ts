@@ -68,13 +68,23 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   critical_chance: 'UPGRADE_CRITICAL_CHANCE',
   critical_damage: 'UPGRADE_CRITICAL_DAMAGE',
-  glock_stopping_power: 'UPGRADE_LEAF_BLOWER_KNOCKBACK',
+  glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
+  leaf_blower_adrenalin_gain: 'UPGRADE_LAUBBLAESER_ADRENALIN_GAIN',
+  leaf_blower_knockback: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
+  leaf_blower_hitbox_size: 'UPGRADE_LAUBBLAESER_HITBOX_SIZE',
+  leaf_blower_pressure_damage: 'UPGRADE_LAUBBLAESER_PRESSURE_DAMAGE',
+  stink_cloud_radius: 'UPGRADE_STINKDRUESEN_RADIUS',
+  stink_cloud_damage: 'UPGRADE_STINKDRUESEN_DAMAGE',
+  stink_cloud_aftercloud: 'UPGRADE_STINKDRUESEN_AFTERCLOUD',
   shotgun_range: 'UPGRADE_SHOTGUN_RANGE',
   shotgun_lightning_radius: 'UPGRADE_SHOTGUN_LIGHTNING_RADIUS',
   molotov_grenade_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
   mini_rocket_launcher_homing_turn: 'UPGRADE_MINI_ROCKET_LAUNCHER_HOMING_TURN',
   flamethrower_range: 'UPGRADE_FLAMETHROWER_RANGE',
   armageddon_radius: 'UPGRADE_ARMAGEDDON_RADIUS',
+  ak47_fire_control: 'UPGRADE_AK47_FOCUS',
+  ak47_rhythm: 'UPGRADE_AK47_FOCUS_DAMAGE',
+  ak47_breakthrough_magazine: 'UPGRADE_AK47_FIRE_SUPERIORITY_SHOTS',
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {
