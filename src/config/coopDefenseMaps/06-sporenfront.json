@@ -160,7 +160,7 @@
     {
       "id": "spore-front-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 4, "delayMs": 700, "front": "east" }
@@ -169,7 +169,7 @@
     {
       "id": "spore-front-wardens",
       "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "spore-warden", "count": 7, "front": "west" },
         { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" },
@@ -179,10 +179,10 @@
     {
       "id": "spore-front-surge",
       "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "rabid-badger", "count": 12, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 4, "delayMs": 1200, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 4, "delayMs": 1200, "front": "west" },
         { "enemyKind": "spore-warden", "count": 4, "delayMs": 1600, "front": "east" }
       ]
     },
@@ -190,7 +190,8 @@
       "id": "spore-front-finale",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "spore-warden", "count": 10, "front": "west" },
+        { "enemyKind": "spore-warden", "count": 5, "front": "east" },
+        { "enemyKind": "spore-warden", "count": 5, "front": "west" },
         { "enemyKind": "demon-badger", "count": 8, "delayMs": 900, "front": "north" },
         { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1300, "front": "south" }
       ]

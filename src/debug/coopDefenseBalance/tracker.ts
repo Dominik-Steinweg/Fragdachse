@@ -1,6 +1,6 @@
 import type { RoundState } from '../../network/NetworkBridge';
 import type { GameMode, CoopDefenseItem, LoadoutCommitSnapshot } from '../../types';
-import { getCoopDefenseMapBalanceSignature } from './analyzer';
+import { getCoopDefenseMapBalanceSignature, getCoopDefenseMapBalanceSignatureCandidates } from './analyzer';
 import type {
   BalanceBuildSnapshot,
   BalanceItemSnapshot,
@@ -144,12 +144,12 @@ export class CoopDefenseBalanceTracker {
       feedback: null,
     };
     const currentSignatures = new Map(
-      COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, getCoopDefenseMapBalanceSignature(mapConfig)]),
+      COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, getCoopDefenseMapBalanceSignatureCandidates(mapConfig)]),
     );
     const staleRoundEndedAt = getStoredCoopDefenseBalanceLab().rounds
       .filter((entry) => (
         entry.rulesetVersion !== COOP_DEFENSE_BALANCE_RULESET_VERSION
-        || currentSignatures.get(entry.mapId) !== entry.mapBalanceSignature
+        || !currentSignatures.get(entry.mapId)?.includes(entry.mapBalanceSignature)
       ))
       .map((entry) => entry.roundEndedAt);
     upsertStoredCoopDefenseBalanceRound(record, staleRoundEndedAt);

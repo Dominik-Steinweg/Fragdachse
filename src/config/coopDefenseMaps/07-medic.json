@@ -1,6 +1,7 @@
 {
   "mapId": "7",
   "arenaWidthCells": 80,
+  "arenaHeightCells": 37,
   "timeOfDay": "17:00",
   "rockFillRatio": 0.3,
   "trackPosition": "right",
@@ -130,7 +131,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
-        "dyCells": -1
+        "dyCells": 1
       },
       "shape": {
         "kind": "cells",
@@ -206,13 +207,13 @@
     {
       "id": "medic-opening",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
     },
     {
       "id": "medic-response",
       "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "plague-medic", "count": 2, "front": "west" },
         { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
@@ -222,7 +223,7 @@
     {
       "id": "medic-pressure",
       "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "plague-medic", "count": 2, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 14, "delayMs": 1000, "front": "west" },

@@ -1,10 +1,10 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
+import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
+import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import { generateSolidRockFormation } from './SolidRockFormation';
-import type { ArenaGroundHazardZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
+import type { ArenaGroundHazardZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, SpawnFront, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
   CoopDefenseMapConfig,
@@ -21,6 +21,7 @@ import {
 } from '../config/coopDefenseTutorial';
 import { getMapTutorial } from '../i18n/contentPresentation';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
+import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
 /** Abtastschritt entlang eines Gangs in Zellen; kleiner = glattere Wand, mehr Rechenaufwand. */
@@ -60,13 +61,14 @@ export class ArenaGenerator {
       );
 
       // --- Gleise zuerst generieren (vor Felsen) ---
+      const coopBaseSpecs = coopMapConfig ? resolveCoopDefenseBases(coopMapConfig) : [];
       const generatedTrackLayout = ArenaGenerator.generateTracks(
         rng,
         // Void-fire keeps its authored centered hazard corridor even though no train track is
         // rendered. All other Coop maps keep a free cell between the railway and every base.
         coopMapConfig?.trackMode === 'void-fire' || coopMapConfig === undefined
           ? []
-          : resolveCoopDefenseBases(coopMapConfig),
+          : coopBaseSpecs,
         coopMapConfig?.trackPosition,
       );
       const trackCols = generatedTrackLayout.trackCols;
@@ -193,6 +195,29 @@ export class ArenaGenerator {
           continue;
         }
         trees.push({ gridX: gx, gridY: gy });
+      }
+
+      // Regelmaessige, zweizellige Querungsstreifen halten Felsen nicht nur punktuell von den
+      // Gleisen fern: Links und rechts bleibt genug Raum, um die Gleise zu verlassen oder zu
+      // queren. Das Entfernen ist gezielt und betrifft nur die ohnehin reservierte Gleisnaehe.
+      if (tracks.length > 0) {
+        ArenaGenerator.ensureTrackCrossingOptions(
+          blocked,
+          rocks,
+          trees,
+          trackCols,
+          coopBaseSpecs,
+          tutorialRockCells,
+        );
+      }
+      if (
+        coopMapConfig
+        && tracks.length > 0
+        && !ArenaGenerator.hasAcceptableSpawnToBaseRoutes(blocked, tracks, coopMapConfig, coopBaseSpecs)
+      ) {
+        // Ein selten unguenstiges Fels-/Baum-Layout wird vollstaendig verworfen. So gelangen
+        // keine authored Spawn-Ziele in eine lange notwendige Gleisfahrt.
+        continue;
       }
 
       // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
@@ -381,6 +406,222 @@ export class ArenaGenerator {
     return candidateColumns.filter((col) => (
       col >= TRACK_SPAWN_MIN_COL && col <= TRACK_SPAWN_MAX_COL
     ));
+  }
+
+  /**
+   * Raeumt in regelmaessigen Abstaenden einen breiten Querungsstreifen frei. Die Strecke wird
+   * erst nach der Baumplatzierung gesichert, damit auch Baumkronen-/Stammzellen nicht als
+   * scheinbare Ausweichroute uebrig bleiben.
+   */
+  private static ensureTrackCrossingOptions(
+    blocked: boolean[][],
+    rocks: RockCell[],
+    trees: TreeCell[],
+    trackCols: ReadonlySet<number>,
+    bases: readonly BaseSpec[],
+    protectedCells: ReadonlySet<string> | null = null,
+  ): void {
+    if (trackCols.size === 0) return;
+    const trackMinX = Math.min(...trackCols);
+    const trackMaxX = Math.max(...trackCols);
+    const removed = new Set<number>();
+
+    for (
+      let startY = 1;
+      startY < GRID_ROWS;
+      startY += COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS
+    ) {
+      for (
+        let offsetY = 0;
+        offsetY < COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS && startY + offsetY < GRID_ROWS;
+        offsetY += 1
+      ) {
+        const gridY = startY + offsetY;
+        for (
+          let gridX = trackMinX - COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS;
+          gridX <= trackMaxX + COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS;
+          gridX += 1
+        ) {
+          if (
+            gridX < 0
+            || gridX >= GRID_COLS
+            || ArenaGenerator.isTrackCrossingProtectedCell(gridX, gridY, bases)
+            || protectedCells?.has(`${gridX}_${gridY}`)
+          ) continue;
+          if (!blocked[gridY][gridX]) continue;
+          blocked[gridY][gridX] = false;
+          removed.add(ArenaGenerator.cellKey(gridX, gridY));
+        }
+      }
+    }
+
+    if (removed.size === 0) return;
+    rocks.splice(0, rocks.length, ...rocks.filter((rock) => !removed.has(ArenaGenerator.cellKey(rock.gridX, rock.gridY))));
+    trees.splice(0, trees.length, ...trees.filter((tree) => !removed.has(ArenaGenerator.cellKey(tree.gridX, tree.gridY))));
+  }
+
+  private static isTrackCrossingProtectedCell(
+    gridX: number,
+    gridY: number,
+    bases: readonly BaseSpec[],
+  ): boolean {
+    if (bases.length === 0) return isReservedBaseObstacleCell(gridX, gridY);
+    return bases.some((base) => (
+      gridX >= base.region.minGridX - COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+      && gridX <= base.region.maxGridX + COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+      && gridY >= base.region.minGridY - COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+      && gridY <= base.region.maxGridY + COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+    ));
+  }
+
+  /**
+   * Prueft nur die tatsaechlich authored Spawnfronts und strukturgebundenen Quellen. Eine
+   * zulassige Route ist 4er-verbunden und darf den zentral konfigurierten Gleislauf-Grenzwert
+   * nicht ueberschreiten. Damit wird nicht jede theoretische Randzelle zur Map-Regel, sondern
+   * nur ein realer Spawn muss die freundlichen Zielbasen sinnvoll erreichen koennen.
+   */
+  private static hasAcceptableSpawnToBaseRoutes(
+    blocked: boolean[][],
+    tracks: readonly TrackCell[],
+    mapConfig: CoopDefenseMapConfig,
+    bases: readonly BaseSpec[],
+  ): boolean {
+    const targetCells = ArenaGenerator.getFriendlyBaseGoalCells(blocked, bases);
+    if (targetCells.size === 0) return true;
+
+    const trackCells = new Set<number>();
+    for (const track of tracks) {
+      trackCells.add(ArenaGenerator.cellKey(track.gridX, track.gridY));
+      if (track.gridX + 1 < GRID_COLS) {
+        trackCells.add(ArenaGenerator.cellKey(track.gridX + 1, track.gridY));
+      }
+    }
+
+    const baseCells = new Set<number>(bases.flatMap((base) => (
+      base.cells.map((cell) => ArenaGenerator.cellKey(cell.gridX, cell.gridY))
+    )));
+    const sourceGroups: Array<Array<{ gridX: number; gridY: number }>> = [];
+    const fronts = new Set<SpawnFront>();
+    for (const encounter of mapConfig.encounters ?? []) {
+      for (const group of encounter.groups) fronts.add(group.front ?? DEFAULT_SPAWN_FRONT);
+    }
+    for (const spawn of mapConfig.persistentSpawns ?? []) {
+      const sourceConfig = spawn.source;
+      if (sourceConfig.type === 'map') fronts.add(spawn.front ?? DEFAULT_SPAWN_FRONT);
+      else {
+        const source = bases.find((base) => base.id === sourceConfig.baseId);
+        if (source?.spawnCenter) sourceGroups.push([source.spawnCenter]);
+      }
+    }
+    if (mapConfig.boss) fronts.add(DEFAULT_SPAWN_FRONT);
+    for (const front of fronts) {
+      sourceGroups.push(ArenaGenerator.getSpawnFrontCells(front, blocked, baseCells));
+    }
+
+    for (const sources of sourceGroups) {
+      if (sources.length === 0) return false;
+      if (!ArenaGenerator.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells)) return false;
+    }
+    return true;
+  }
+
+  private static getFriendlyBaseGoalCells(
+    blocked: boolean[][],
+    bases: readonly BaseSpec[],
+  ): Set<number> {
+    const targetCells = new Set<number>();
+    const baseCells = new Set<number>(bases.flatMap((base) => (
+      base.cells.map((cell) => ArenaGenerator.cellKey(cell.gridX, cell.gridY))
+    )));
+    for (const base of bases) {
+      if (base.faction === 'hostile' || base.role === 'spawn-point') continue;
+      if (base.role === 'outpost' && base.dormantObjectiveId === undefined) continue;
+      for (const cell of base.cells) {
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const gridX = cell.gridX + dx;
+          const gridY = cell.gridY + dy;
+          if (
+            gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS
+            || blocked[gridY][gridX]
+            || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))
+          ) continue;
+          targetCells.add(ArenaGenerator.cellKey(gridX, gridY));
+        }
+      }
+    }
+    return targetCells;
+  }
+
+  private static getSpawnFrontCells(
+    front: SpawnFront,
+    blocked: boolean[][],
+    baseCells: ReadonlySet<number>,
+  ): Array<{ gridX: number; gridY: number }> {
+    const depthX = Math.min(Math.max(2, Math.floor(GRID_COLS * 0.15)), GRID_COLS - 1);
+    const depthY = Math.min(Math.max(2, Math.floor(GRID_ROWS * 0.15)), GRID_ROWS - 1);
+    const minGridX = front === 'east' ? GRID_COLS - depthX - 1 : 0;
+    const maxGridX = front === 'west' ? depthX : GRID_COLS - 1;
+    const minGridY = front === 'south' ? GRID_ROWS - depthY - 1 : 0;
+    const maxGridY = front === 'north' ? depthY : GRID_ROWS - 1;
+    const cells: Array<{ gridX: number; gridY: number }> = [];
+    for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
+      for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
+        const onFrontBand = front === 'west' || front === 'east'
+          ? (front === 'west' ? gridX <= depthX : gridX >= GRID_COLS - depthX - 1)
+          : (front === 'north' ? gridY <= depthY : gridY >= GRID_ROWS - depthY - 1);
+        if (!onFrontBand || blocked[gridY][gridX] || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))) continue;
+        cells.push({ gridX, gridY });
+      }
+    }
+    return cells;
+  }
+
+  private static canReachTrackSafeGoal(
+    sources: readonly { gridX: number; gridY: number }[],
+    targets: ReadonlySet<number>,
+    blocked: boolean[][],
+    trackCells: ReadonlySet<number>,
+  ): boolean {
+    const runWidth = COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS + 1;
+    const totalCells = GRID_COLS * GRID_ROWS;
+    const visited = new Uint8Array(totalCells * runWidth);
+    const queue = new Int32Array(totalCells * runWidth);
+    let queueEnd = 0;
+    for (const source of sources) {
+      const index = ArenaGenerator.cellKey(source.gridX, source.gridY);
+      const run = trackCells.has(index) ? 1 : 0;
+      const state = index * runWidth + run;
+      if (visited[state] === 1) continue;
+      visited[state] = 1;
+      queue[queueEnd] = state;
+      queueEnd += 1;
+    }
+
+    for (let queueIndex = 0; queueIndex < queueEnd; queueIndex += 1) {
+      const state = queue[queueIndex];
+      const index = Math.floor(state / runWidth);
+      const currentRun = state % runWidth;
+      if (targets.has(index)) return true;
+      const gridX = index % GRID_COLS;
+      const gridY = Math.floor(index / GRID_COLS);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nextX = gridX + dx;
+        const nextY = gridY + dy;
+        if (
+          nextX < 0 || nextX >= GRID_COLS || nextY < 0 || nextY >= GRID_ROWS
+          || blocked[nextY][nextX]
+        ) continue;
+        const nextIndex = ArenaGenerator.cellKey(nextX, nextY);
+        const nextRun = trackCells.has(nextIndex) ? currentRun + 1 : 0;
+        if (nextRun > COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS) continue;
+        const nextState = nextIndex * runWidth + nextRun;
+        if (visited[nextState] === 1) continue;
+        visited[nextState] = 1;
+        queue[queueEnd] = nextState;
+        queueEnd += 1;
+      }
+    }
+    return false;
   }
 
   private static buildTrackLayout(col: number): { trackCols: Set<number>; tracks: TrackCell[] } {

@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
-import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   ARENA_WIDTH,
   CELL_SIZE,
+  GRID_COLS,
+  GRID_ROWS,
   applyArenaMetricsForMode,
 } from '../src/config';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
@@ -107,6 +110,55 @@ describe('Coop defense tutorial arena formation', () => {
       for (const scrollX of cameraScrolls) {
         expect(panelWorldCenterX - scrollX).toBe(rockWorldCenterX - scrollX);
       }
+    }
+  });
+
+  it('keeps the tutorial panel rock region outside the five-cell clearance on every tutorial map', () => {
+    const tutorialMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => getMapTutorial(map.mapId, 'de') !== undefined);
+
+    for (const map of tutorialMaps) {
+      applyArenaMetricsForMode(
+        COOP_DEFENSE_MODE,
+        'ARENA',
+        map.arenaWidthCells,
+        map.arenaHeightCells,
+      );
+
+      const region = getCoopDefenseTutorialRockRegion(map.tutorialShowControls);
+      const bases = resolveCoopDefenseBases(map);
+      for (const base of bases) {
+        expect(
+          base.cells.every((cell) => (
+            cell.gridX >= 0 && cell.gridX < GRID_COLS
+            && cell.gridY >= 0 && cell.gridY < GRID_ROWS
+          )),
+          `Map ${map.mapId} base ${base.id} has a cell outside the arena`,
+        ).toBe(true);
+
+        const clearanceOverlap: string[] = [];
+        for (let gridY = region.minGridY; gridY <= region.maxGridY; gridY += 1) {
+          for (let gridX = region.minGridX; gridX <= region.maxGridX; gridX += 1) {
+            if (
+              gridX >= base.region.minGridX - COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+              && gridX <= base.region.maxGridX + COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+              && gridY >= base.region.minGridY - COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+              && gridY <= base.region.maxGridY + COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
+            ) {
+              clearanceOverlap.push(`${gridX}:${gridY}`);
+            }
+          }
+        }
+        expect(
+          clearanceOverlap,
+          `Map ${map.mapId} base ${base.id} overlaps the tutorial panel rock region`,
+        ).toEqual([]);
+      }
+
+      const mainBases = bases.filter((base) => base.role === 'main');
+      expect(
+        mainBases.every((base) => GRID_ROWS - 1 - base.region.maxGridY >= 15),
+        `Map ${map.mapId} moves a main base too close to the lower arena edge`,
+      ).toBe(true);
     }
   });
 });

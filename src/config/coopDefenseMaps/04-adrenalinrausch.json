@@ -1,7 +1,9 @@
 {
   "mapId": "4",
   "arenaWidthCells": 82,
+  "arenaHeightCells": 38,
   "timeOfDay": "06:00",
+    "tutorialPersistent": true,
   "rockFillRatio": 0.3,
   "trackPosition": "center",
   "mapEvents": [{
@@ -52,7 +54,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
-        "dyCells": -1
+        "dyCells": 1
       },
       "shape": {
         "kind": "cells",
@@ -83,6 +85,26 @@
           }
         ]
       },
+      "turrets": [
+        {
+          "id": "front-top",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPORES"
+        },
+        {
+          "id": "front-bottom",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 3
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPORES"
+        }
+      ],
       "powerUpPedestals": [
         {
           "id": "health-station",
@@ -120,14 +142,15 @@
       "id": "adrenaline-opening",
       "start": { "type": "time", "atMs": 0 },
       "restAfterMs": 5000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 15, "front": "west" }]
+      "groups": [{ "enemyKind": "zombie-badger", "count": 15, "front": "west" },
+                 { "enemyKind": "demon-badger", "count": 4, "delayMs": 1000, "front": "west" }]
     },
     {
       "id": "adrenaline-rush",
       "start": { "type": "after-previous" },
       "restAfterMs": 5000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 8, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 10, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "west" }
       ]
     },
@@ -136,7 +159,7 @@
       "start": { "type": "after-previous" },
       "groups": [
         { "enemyKind": "zombie-badger", "count": 15, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west" }
       ]
     }

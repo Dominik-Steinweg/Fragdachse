@@ -90,6 +90,17 @@ describe('loadout catalog', () => {
     expect(utility.textureKey).toBe('HE_GRENADE');
   });
 
+  it('resolves translated utility IDs through their authored catalog icons', () => {
+    const expectedIcons = {
+      ROCK_BARRIER: 'FELSBAU',
+      SPORE_TURRET: 'FLIEGENPILZ',
+      STINK_CLOUD: 'STINKDRUESEN',
+    } as const;
+    for (const [id, textureKey] of Object.entries(expectedIcons)) {
+      expect(describeLoadoutTool({ kind: 'utility', id }).textureKey).toBe(textureKey);
+    }
+  });
+
   it('loads and uses dedicated artwork for every turret construction slot', () => {
     for (const id of ['unlock_rocket_turret', 'unlock_machine_gun_turret', 'unlock_flame_turret']) {
       expect(hasCoopDefenseDedicatedUpgradeIcon(id)).toBe(true);
@@ -125,6 +136,24 @@ describe('loadout catalog', () => {
       .toBe('UPGRADE_LAUBBLAESER_HITBOX_SIZE');
     expect(getCoopDefenseUpgradeTextureKey('leaf_blower_pressure_damage'))
       .toBe('UPGRADE_LAUBBLAESER_PRESSURE_DAMAGE');
+    expect(getCoopDefenseUpgradeTextureKey('unlock_plasma_burner'))
+      .toBe('UPGRADE_UNLOCK_REPARATURSTRAHL');
+    expect(getCoopDefenseUpgradeTextureKey('unlock_energy_injector'))
+      .toBe('UPGRADE_UNLOCK_ENERGIEINJEKTOR');
+    expect(getCoopDefenseUpgradeTextureKey('unlock_rock_barrier')).toBe('UPGRADE_UNLOCK_FELSBAU');
+    expect(getCoopDefenseUpgradeTextureKey('rock_barrier_hp')).toBe('UPGRADE_FELSBAU_HP');
+    expect(getCoopDefenseUpgradeTextureKey('rock_barrier_range')).toBe('UPGRADE_FELSBAU_RANGE');
+    expect(getCoopDefenseUpgradeTextureKey('rock_barrier_explosive_collapse'))
+      .toBe('UPGRADE_FELSBAU_EXPLOSIVE_COLLAPSE');
+    expect(getCoopDefenseUpgradeTextureKey('unlock_spore_turret')).toBe('UPGRADE_UNLOCK_FLIEGENPILZ');
+    expect(getCoopDefenseUpgradeTextureKey('spore_turret_build_range'))
+      .toBe('UPGRADE_FLIEGENPILZ_BUILD_RANGE');
+    expect(getCoopDefenseUpgradeTextureKey('spore_turret_hp')).toBe('UPGRADE_FLIEGENPILZ_HP');
+    expect(getCoopDefenseUpgradeTextureKey('spore_turret_range')).toBe('UPGRADE_FLIEGENPILZ_RANGE');
+    expect(getCoopDefenseUpgradeTextureKey('spore_turret_double_spore'))
+      .toBe('UPGRADE_FLIEGENPILZ_DOUBLE_SPORE');
+    expect(getCoopDefenseUpgradeTextureKey('spore_turret_plasma_gun'))
+      .toBe('UPGRADE_FLIEGENPILZ_PLASMA_GUN');
     expect(getCoopDefenseUpgradeTextureKey('stink_cloud_radius')).toBe('UPGRADE_STINKDRUESEN_RADIUS');
     expect(getCoopDefenseUpgradeTextureKey('stink_cloud_damage')).toBe('UPGRADE_STINKDRUESEN_DAMAGE');
     expect(getCoopDefenseUpgradeTextureKey('stink_cloud_aftercloud')).toBe('UPGRADE_STINKDRUESEN_AFTERCLOUD');
@@ -147,16 +176,12 @@ describe('loadout catalog', () => {
       expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
     }
     for (const id of [
-      'unlock_plasma_burner',
       'unlock_overcharge_core',
-      'unlock_energy_injector',
       'unlock_tesla_turret',
       'unlock_gravity_turret',
       'unlock_slow_bubble_turret',
       'unlock_medic_pedestal',
       'unlock_armor_pedestal',
-      'unlock_rock_barrier',
-      'unlock_spore_turret',
     ]) {
       expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
     }
@@ -191,10 +216,10 @@ describe('loadout catalog', () => {
 
   it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {
     expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').textureKey)
-      .toBe('UPGRADE_UNLOCK_PLASMA_BURNER');
+      .toBe('UPGRADE_UNLOCK_REPARATURSTRAHL');
     expect(describeLoadoutItem('weapon2', 'OVERCHARGE_CORE').textureKey)
       .toBe('UPGRADE_UNLOCK_OVERCHARGE_CORE');
     expect(describeLoadoutItem('weapon2', 'ENERGY_INJECTOR').textureKey)
-      .toBe('UPGRADE_UNLOCK_ENERGY_INJECTOR');
+      .toBe('UPGRADE_UNLOCK_ENERGIEINJEKTOR');
   });
 });

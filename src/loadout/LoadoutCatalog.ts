@@ -173,9 +173,11 @@ export function describeLoadoutTool(tool: LoadoutToolRef): LoadoutItemPresentati
       accentColor: COLORS.GOLD_2,
     };
   }
+  const presentation = describeLoadoutItem('utility', tool.id);
   return {
-    displayName: getLoadoutItemDisplayName('utility', tool.id),
-    textureKey: tool.id,
+    displayName: presentation.displayName,
+    // Utility IDs are semantic IDs; the catalog owns the authored asset key.
+    textureKey: presentation.textureKey ?? tool.id,
     accentColor: COLORS.GOLD_2,
   };
 }

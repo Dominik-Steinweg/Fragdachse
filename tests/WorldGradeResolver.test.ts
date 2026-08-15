@@ -6,6 +6,7 @@ import {
   resolveBaseGrade,
   resolveDarkness,
   buildTintMatrix,
+  smoothstep01,
   type WorldGrade,
   type WorldGradeInputs,
   WORLD_GRADE_CLAMPS,
@@ -125,6 +126,43 @@ describe('resolveBaseGrade', () => {
   it('verstaerkt die Toenung mit steigender Bossphase', () => {
     expect(resolveBaseGrade(inputs({ bossPhase: 2 })).tintStrength)
       .toBeGreaterThan(resolveBaseGrade(inputs({ bossPhase: 1 })).tintStrength);
+  });
+
+  it('blendet den Boss-Look aus dem Nacht-Look ein statt ihn hart zu ersetzen', () => {
+    const normal = resolveBaseGrade(inputs({ skyState: MIDNIGHT }));
+    const start = resolveBaseGrade(inputs({
+      skyState: MIDNIGHT,
+      bossPhase: 1,
+      bossVisualIntensity: 0,
+    }));
+    const middle = resolveBaseGrade(inputs({
+      skyState: MIDNIGHT,
+      bossPhase: 1,
+      bossVisualIntensity: 0.5,
+    }));
+    const full = resolveBaseGrade(inputs({
+      skyState: MIDNIGHT,
+      bossPhase: 1,
+      bossVisualIntensity: 1,
+    }));
+
+    expect(start).toEqual(normal);
+    expect(middle.tint).not.toBe(normal.tint);
+    expect(middle.tint).not.toBe(full.tint);
+    expect(middle.contrast).toBeGreaterThan(normal.contrast);
+    expect(middle.contrast).toBeLessThan(full.contrast);
+    expect(middle.temperature).toBeGreaterThan(normal.temperature);
+    expect(middle.temperature).toBeLessThan(full.temperature);
+    expect(middle.tintStrength).toBeGreaterThan(normal.tintStrength);
+    expect(middle.tintStrength).toBeLessThan(full.tintStrength);
+  });
+
+  it('verwendet fuer den visuellen Faktor eine Smoothstep-Ease-in-out-Kurve', () => {
+    expect(smoothstep01(0)).toBe(0);
+    expect(smoothstep01(1)).toBe(1);
+    expect(smoothstep01(0.25)).toBeLessThan(0.25);
+    expect(smoothstep01(0.5)).toBeCloseTo(0.5, 6);
+    expect(smoothstep01(0.75)).toBeGreaterThan(0.75);
   });
 });
 

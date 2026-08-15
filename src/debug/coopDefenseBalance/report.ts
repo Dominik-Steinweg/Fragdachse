@@ -6,6 +6,7 @@ import type {
   CoopDefenseBalanceReport,
 } from './types';
 import { COOP_DEFENSE_BALANCE_RULESET_VERSION } from './types';
+import { isCoopDefenseMapBalanceSignatureCompatible } from './analyzer';
 
 function finiteValues(values: readonly (number | null)[]): number[] {
   return values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
@@ -37,7 +38,7 @@ export function classifyBalanceRound(
       staleReason: `Regelwerk-Version ${record.rulesetVersion} statt ${rulesetVersion}.`,
     };
   }
-  if (record.mapBalanceSignature !== snapshot.balanceSignature) {
+  if (!isCoopDefenseMapBalanceSignatureCompatible(record.mapId, record.mapBalanceSignature, snapshot.balanceSignature)) {
     return { record, status: 'STALE', staleReason: 'Die Map-Balance wurde seit dem Test geaendert.' };
   }
   return { record, status: 'CURRENT', staleReason: null };

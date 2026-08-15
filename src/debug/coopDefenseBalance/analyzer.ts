@@ -24,8 +24,51 @@ import type {
 const PRESENTATION_ONLY_KEYS = new Set([
   'displayName', 'tutorialText', 'imageKey', 'color', 'glow', 'phaseTwoGlow',
   'spriteRotationOffsetDegrees', 'timeOfDay', 'visualStyle', 'assetKey', 'textureKey',
-  'iconKey', 'image', 'imageUrl',
+  'iconKey', 'image', 'imageUrl', 'sourceId', 'weaponName', 'rewardHint', '_notes',
+  'projectileColor', 'projectileStyle', 'bulletVisualPreset', 'visualPreset', 'visualVariant',
+  'spriteKey', 'shotAudio', 'audioKey', 'successKey', 'failureKey',
 ]);
+
+/** Historische Namen, die bei der Übersetzung umbenannt wurden, ohne Balancewerte zu ändern. */
+const BALANCE_IDENTIFIER_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  SPOREN: 'SPORES',
+  BASE_SPOREN: 'BASE_SPORES',
+  WARDEN_SPOREN: 'WARDEN_SPORES',
+  TURRET_SPORE: 'TURRET_SPORES',
+  FLIEGENPILZ_PLASMA: 'SPORE_TURRET_PLASMA',
+  ENEMY_STINKDRUESEN: 'ENEMY_STINK_CLOUD',
+  STINKDRUESEN: 'STINK_CLOUD',
+  FLIEGENPILZ: 'SPORE_TURRET',
+  FELSBAU: 'ROCK_BARRIER',
+  LAUBBLAESER: 'LEAF_BLOWER',
+  REPARATURSTRAHL: 'PLASMA_BURNER',
+  ENERGIEINJEKTOR: 'ENERGY_INJECTOR',
+});
+
+/**
+ * Signaturen aus dem Balance-Lab-Release vor der Übersetzungsbereinigung. Diese Hashes bleiben
+ * als Lesekompatibilität erhalten; neue Runden verwenden die kanonische Signatur darunter.
+ */
+const LEGACY_BALANCE_SIGNATURES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  '0': ['f9a82cd2', '7e8cf427'],
+  '1': ['ca36de38'],
+  '2': ['7a5a5b61'],
+  '3': ['8e0f9d1a', 'ef9c2ad8'],
+  '4': ['ea1c00a0', 'fd02442c'],
+  '5': ['febb7c44', '7ed65c78'],
+  '6': ['079c7a1f', '93596f31'],
+  '7': ['58a90c29', 'd24fdce5'],
+  '8': ['fabdfcde', 'cc82e8ce'],
+  '9': ['30d9b44f', '2a6d211d'],
+  '10': ['252def97', '3a9e0e5e'],
+  '11': ['8f8f9212', 'f3cd18e2'],
+  '12': ['19c0f539', '5ea9fccf'],
+  '13': ['9ea4a42b', 'fe9e81d9'],
+  '14': ['1254fff1', 'feecc405'],
+  '15': ['785cfa9b', 'cc8dd5d1'],
+  '16': ['e503d093', 'c9f18b1a'],
+  '17': ['0bb836f0', 'e84850c4'],
+});
 
 /** Kleine deterministische JSON-Darstellung fuer Signaturen und Tests. */
 export function stableStringify(value: unknown): string {
@@ -56,6 +99,20 @@ function stripPresentationOnly(value: unknown): unknown {
     result[key] = stripPresentationOnly(entry);
   }
   return result;
+}
+
+function canonicalizeBalanceIdentifiers(value: unknown, key = ''): unknown {
+  if (typeof value === 'string' && (key === 'id' || key === 'baseId' || key === 'weaponId' || key === 'utilityId' || key === 'defId')) {
+    return BALANCE_IDENTIFIER_ALIASES[value] ?? value;
+  }
+  if (Array.isArray(value)) return value.map((entry) => canonicalizeBalanceIdentifiers(entry, key));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .map(([entryKey, entry]) => [entryKey, canonicalizeBalanceIdentifiers(entry, entryKey)]));
+}
+
+function balanceSignatureInput(value: unknown): unknown {
+  return canonicalizeBalanceIdentifiers(stripPresentationOnly(value));
 }
 
 interface EnemyLifecycleTotals extends BalanceEnemyTotals {
@@ -225,7 +282,7 @@ function buildMapSignature(mapConfig: CoopDefenseMapConfig): string {
     boss: mapConfig.boss,
     mapEvents: mapConfig.mapEvents,
   };
-  return hashStableString(stableStringify(stripPresentationOnly({
+  return hashStableString(stableStringify(balanceSignatureInput({
     map: relevantMap,
     resolvedBases: bases,
     resolvedEncounters: encounters,
@@ -236,6 +293,22 @@ function buildMapSignature(mapConfig: CoopDefenseMapConfig): string {
 
 export function getCoopDefenseMapBalanceSignature(mapConfig: CoopDefenseMapConfig): string {
   return buildMapSignature(mapConfig);
+}
+
+export function getCoopDefenseMapBalanceSignatureCandidates(
+  mapConfig: CoopDefenseMapConfig,
+): readonly string[] {
+  const current = getCoopDefenseMapBalanceSignature(mapConfig);
+  return [current, ...(LEGACY_BALANCE_SIGNATURES[mapConfig.mapId] ?? [])]
+    .filter((signature, index, signatures) => signatures.indexOf(signature) === index);
+}
+
+export function isCoopDefenseMapBalanceSignatureCompatible(
+  mapId: string,
+  storedSignature: string,
+  currentSignature: string,
+): boolean {
+  return storedSignature === currentSignature || LEGACY_BALANCE_SIGNATURES[mapId]?.includes(storedSignature) === true;
 }
 
 function strongestEncounter(

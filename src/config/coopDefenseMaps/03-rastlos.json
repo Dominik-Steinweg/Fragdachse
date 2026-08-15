@@ -1,7 +1,9 @@
 {
   "mapId": "3",
   "arenaWidthCells": 76,
+  "arenaHeightCells": 37,
   "timeOfDay": "17:00",
+    "tutorialPersistent": true,
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "mapEvents": [{
@@ -19,7 +21,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": 0,
-        "dyCells": 0
+        "dyCells": 2
       },
       "shape": {
         "kind": "rectangle",
@@ -54,7 +56,7 @@
       "id": "restless-opening",
       "start": { "type": "time", "atMs": 0 },
       "restAfterMs": 5000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 10, "front": "west" }]
+      "groups": [{ "enemyKind": "zombie-badger", "count": 14, "front": "west" }]
     },
     {
       "id": "restless-mix",
@@ -69,7 +71,8 @@
       "id": "spore-breakthrough",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 7, "delayMs": 1200, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
       ]
     }
   ]

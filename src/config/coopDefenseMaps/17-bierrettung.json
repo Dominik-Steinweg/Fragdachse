@@ -1,7 +1,7 @@
 {
   "mapId": "17",
   "arenaWidthCells": 112,
-  "arenaHeightCells": 42,
+  "arenaHeightCells": 43,
   "timeOfDay": "18:30",
   "trackMode": "void-fire",
   "mapEvents": [
@@ -14,7 +14,7 @@
         "gridX": 56,
         "gridY": 0,
         "widthCells": 2,
-        "heightCells": 42,
+        "heightCells": 43,
         "baseClearanceCells": 2
       },
       "effect": {

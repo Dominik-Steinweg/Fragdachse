@@ -88,6 +88,48 @@
         "failureKey": "shot_dry_trigger"
       }
     },
+    "GRAVE_TITAN_VOID_PLASMA": {
+      "id": "GRAVE_TITAN_VOID_PLASMA",
+      "baseId": "PLASMA",
+      "_notes": "Map-5-Bossvariante der Spieler-Plasma: langsamere Void-Salve mit grosser Reichweite und verteilter Zielwahl.",
+      "cooldown": 90,
+      "damage": 8,
+      "range": 900,
+      "fire": {
+        "projectileSpeed": 400,
+        "homing": {
+          "acquireDelayMs": 200,
+          "searchRadius": 600,
+          "retargetIntervalMs": 100,
+          "maxTurnDegreesPerStep": 14,
+          "targetTypes": [
+            "players"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileColor": "#b347ff",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 0,
+      "shotAudio": {
+        "successKey": "shot_plasma",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
     "ALIEN_BADGER_PLASMA": {
       "id": "ALIEN_BADGER_PLASMA",
       "cooldown": 480,

@@ -222,7 +222,7 @@ export class CoopDefenseEnemyAttackSystem {
     // Ohne gueltiges Ziel gibt die Salve den Gegner frei, statt ihn zu blockieren: kommt ihm ein
     // Spieler unter die Mindestdistanz, soll er sofort auf den Hoellenwerfer wechseln duerfen.
     // Der Zaehler bleibt bis zur Verfallszeit stehen, damit sie nach kurzem Sichtverlust weiterlaeuft.
-    const target = this.resolveWeaponTarget(enemy, attackWeapon, now);
+    const target = this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
     if (!target) return false;
 
     this.fireAttack(enemy, { attackWeapon, target }, now);
@@ -395,10 +395,20 @@ export class CoopDefenseEnemyAttackSystem {
     enemy: EnemyEntity,
     attackWeapon: EnemyAttackWeapon,
     now: number,
+    salvoShotIndex?: number,
   ): EnemyAttackCandidate | null {
     const weapon = attackWeapon.weapon;
-    let target = attackWeapon.targetMode === 'players'
-      ? this.findLivingTargetWithLock(enemy, weapon.config.range, now)
+    const distributesTargets = attackWeapon.targetMode === 'players'
+      && attackWeapon.salvo?.targetDistribution === 'round_robin';
+    let target = distributesTargets
+      ? this.findDistributedPlayerTarget(
+        enemy,
+        weapon.config.range,
+        attackWeapon.minTargetDistancePx,
+        salvoShotIndex ?? 0,
+      )
+      : attackWeapon.targetMode === 'players'
+        ? this.findLivingTargetWithLock(enemy, weapon.config.range, now)
       : attackWeapon.targetMode === 'rocks'
         ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
         : attackWeapon.targetMode === 'structures'
@@ -446,10 +456,33 @@ export class CoopDefenseEnemyAttackSystem {
     target: EnemyAttackCandidate,
   ): boolean {
     if (attackWeapon.minTargetDistancePx <= 0) return true;
-    const hysteresis = this.isSalvoInProgress(enemy.id, attackWeapon.weapon.config.id)
+    const hysteresis = attackWeapon.salvo?.targetDistribution === 'round_robin'
+      ? 0
+      : this.isSalvoInProgress(enemy.id, attackWeapon.weapon.config.id)
       ? CoopDefenseEnemyAttackSystem.SALVO_MIN_DISTANCE_HYSTERESIS_PX
       : 0;
     return target.distance >= attackWeapon.minTargetDistancePx - hysteresis;
+  }
+
+  /**
+   * Zielauswahl fuer breit gestreute Salven. Die Kandidaten werden nach Distanz und ID sortiert,
+   * damit Host-Wiederholungen stabil bleiben; der Schussindex rotiert anschliessend ueber die
+   * verbleibenden, ausserhalb der Mindestdistanz liegenden Spieler.
+   */
+  private findDistributedPlayerTarget(
+    enemy: EnemyEntity,
+    range: number,
+    minTargetDistancePx: number,
+    salvoShotIndex: number,
+  ): EnemyAttackCandidate | null {
+    const candidates: EnemyAttackCandidate[] = [];
+    for (const player of this.playerManager.getAllPlayers()) {
+      const candidate = this.buildPlayerTargetCandidate(enemy, player.id, range);
+      if (!candidate || candidate.distance < minTargetDistancePx) continue;
+      candidates.push(candidate);
+    }
+    candidates.sort((left, right) => left.distance - right.distance || (left.targetId ?? '').localeCompare(right.targetId ?? ''));
+    return candidates.length > 0 ? candidates[salvoShotIndex % candidates.length] : null;
   }
 
   private getSustainedAttack(

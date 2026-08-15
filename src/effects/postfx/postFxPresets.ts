@@ -53,8 +53,9 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
   bossPhaseChange: {
     priority: POST_FX_PRIORITY.bossPhase,
     durationMs: 1200,
-    ease: 'expo',
-    grade: { saturation: -0.16, contrast: 0.12, tintStrength: 0.26, vignetteStrength: 0.18 },
+    ease: 'bossPhase',
+    // Der kurze Akzent bleibt lesbar, übernimmt aber nicht mehr den dauerhaften Boss-Look.
+    grade: { saturation: -0.1, contrast: 0.08, tintStrength: 0.13, vignetteStrength: 0.12 },
   },
 
   /** Normale Nuke: warmer Belichtungsstoß mit kurzer Bloom-Spitze. */

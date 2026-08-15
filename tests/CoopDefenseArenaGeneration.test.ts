@@ -9,7 +9,7 @@ import {
   COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS,
   resolveCoopDefenseBases,
 } from '../src/arena/BaseRegistry';
-import { applyArenaMetricsForMode } from '../src/config';
+import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, applyArenaMetricsForMode, GRID_COLS, GRID_ROWS } from '../src/config';
 import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 
@@ -65,5 +65,80 @@ describe('Coop defense arena generation', () => {
     const overlappingGridX = baseSpecs[0]?.region.minGridX ?? safeGridX;
     const overlappingMap = { ...map, trackPosition: { kind: 'grid' as const, gridX: overlappingGridX } };
     expect(() => ArenaGenerator.generate(2_004, overlappingMap)).toThrow(/overlaps a base or its clearance/);
+  });
+
+  it('keeps Map 5 west-spawn routes from requiring a long longitudinal rail run', () => {
+    const map5 = getCoopDefenseMapConfig('5');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map5.arenaWidthCells, map5.arenaHeightCells);
+    const baseSpecs = resolveCoopDefenseBases(map5);
+
+    for (const seed of [5_001, 5_002, 5_003, 5_004]) {
+      const layout = ArenaGenerator.generate(seed, map5);
+      const blocked = new Set([
+        ...layout.rocks.map((cell) => `${cell.gridX}:${cell.gridY}`),
+        ...layout.trees.map((cell) => `${cell.gridX}:${cell.gridY}`),
+      ]);
+      const tracks = new Set<string>();
+      for (const track of layout.tracks) {
+        tracks.add(`${track.gridX}:${track.gridY}`);
+        tracks.add(`${track.gridX + 1}:${track.gridY}`);
+      }
+      const baseCells = new Set(baseSpecs.flatMap((base) => (
+        base.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)
+      )));
+      const targets = new Set<string>();
+      for (const base of baseSpecs.filter((entry) => entry.faction !== 'hostile' && entry.role !== 'spawn-point')) {
+        for (const cell of base.cells) {
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            const gridX = cell.gridX + dx;
+            const gridY = cell.gridY + dy;
+            const key = `${gridX}:${gridY}`;
+            if (
+              gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS
+              && !blocked.has(key) && !baseCells.has(key)
+            ) targets.add(key);
+          }
+        }
+      }
+
+      const westDepth = Math.min(Math.max(2, Math.floor(GRID_COLS * 0.15)), GRID_COLS - 1);
+      const queue: Array<{ gridX: number; gridY: number; trackRun: number }> = [];
+      const visited = new Set<string>();
+      for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+        for (let gridX = 0; gridX <= westDepth; gridX += 1) {
+          const key = `${gridX}:${gridY}`;
+          if (blocked.has(key) || baseCells.has(key)) continue;
+          const trackRun = tracks.has(key) ? 1 : 0;
+          queue.push({ gridX, gridY, trackRun });
+          visited.add(`${key}:${trackRun}`);
+        }
+      }
+
+      let reached = false;
+      for (let cursor = 0; cursor < queue.length && !reached; cursor += 1) {
+        const current = queue[cursor];
+        if (targets.has(`${current.gridX}:${current.gridY}`)) {
+          reached = true;
+          break;
+        }
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const gridX = current.gridX + dx;
+          const gridY = current.gridY + dy;
+          if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) continue;
+          const key = `${gridX}:${gridY}`;
+          if (blocked.has(key)) continue;
+          const trackRun = tracks.has(key) ? current.trackRun + 1 : 0;
+          if (trackRun > COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS) continue;
+          const stateKey = `${key}:${trackRun}`;
+          if (visited.has(stateKey)) continue;
+          visited.add(stateKey);
+          queue.push({ gridX, gridY, trackRun });
+        }
+      }
+
+      expect(reached, `Map 5 seed ${seed} has no short west-spawn route`).toBe(true);
+    }
+
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
   });
 });

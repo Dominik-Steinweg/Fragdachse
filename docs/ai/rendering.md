@@ -88,6 +88,12 @@ CameraPostFxController/PostFxComposer bauen die Filterkette einmalig auf. Qualit
 
 Lokale Zeitblasen-/Schwarzes-Loch-/Druckwellen-Verzerrung läuft über LocalDistortionComposer und eine gemeinsame Displacement-Karte mit genau einem Kamera-Pass. Quellen sind Frame-Anmeldungen; wer nicht mehr anmeldet, verschwindet. Die neutrale Kodierung der Karte ist 0x808080. Änderungen der Kartengröße erfordern eine neue DynamicTexture und eine neue Filterverbindung, nicht setSize() auf der bestehenden Karte. Nach dem Stempeln muss DynamicTexture.render() den Command-Buffer flushen.
 
+Der dauerhafte Boss-Look ist ein reiner Praesentationszustand: `VisualFeedbackDirector` fuehrt den
+visuellen Faktor von 0 auf 1 ueber 1800 ms mit Smoothstep, waehrend `worldGrade` den aktuellen
+Nacht-/Normal-/Void-Ton, Kontrast, Temperatur und Tint-Staerke interpoliert. Der replizierte
+Boss-Phasenwechsel bleibt hart fuer die Logik, loest aber nur einen kurzen, weich anlaufenden
+`bossPhaseChange`-Akzent aus.
+
 ## Charaktersprite-Skalierung
 
 Die Anzeigegröße einer Figur ist PLAYER_SIZE und ist von der Authoring-Auflösung ihrer Textur entkoppelt: Das Badger-Walking-Sheet liegt in 64-px-Zellen, die Figur bleibt 32 px. Daraus folgt eine Grundskalierung ungleich 1. Spawn-, Dash- und Burrow-Feedback sind deshalb Faktoren *relativ* zu dieser Grundskalierung und laufen über PlayerEntity.applySpriteScale() beziehungsweise die öffentliche setDashScale()-API; ein direktes sprite.setScale(1) von außen ist kein neutraler Wert mehr, sondern bläht die Figur auf Texturgröße auf. Overlays im 32-px-Raster (Spawn-Shine, Stealth-Shell/-Scan) übernehmen den Feedback-Faktor, nicht die rohe Texturskalierung.

@@ -6,9 +6,14 @@
  * niemals einen dauerhaften Rest an Sättigung, Kontrast, Vignette oder Verzerrung hinterlassen.
  */
 
-import { NEUTRAL_WORLD_GRADE, POST_FX_PULSE_CLAMPS, type WorldGrade } from './worldGrade';
+import {
+  NEUTRAL_WORLD_GRADE,
+  POST_FX_PULSE_CLAMPS,
+  smoothstep01,
+  type WorldGrade,
+} from './worldGrade';
 
-export type PostFxEase = 'impulse' | 'linear' | 'expo';
+export type PostFxEase = 'impulse' | 'linear' | 'expo' | 'bossPhase';
 
 export interface PostFxPulse {
   /** Stabile Kennung: erneutes Anfordern aktualisiert den Puls, statt ihn zu stapeln. */
@@ -58,10 +63,17 @@ const OVERRIDE_FIELDS = ['tint', 'vignetteRadius', 'bloomThreshold'] as const;
 type OverrideField = (typeof OVERRIDE_FIELDS)[number];
 
 export function postFxEnvelope(ease: PostFxEase, t: number): number {
-  if (t <= 0) return ease === 'impulse' ? 0 : 1;
+  if (t <= 0) return ease === 'impulse' || ease === 'bossPhase' ? 0 : 1;
   if (t >= 1) return 0;
   if (ease === 'linear') return 1 - t;
   if (ease === 'expo') return (Math.exp(-3 * t) - Math.exp(-3)) / (1 - Math.exp(-3));
+  if (ease === 'bossPhase') {
+    // Bei 1200 ms sind das 192 ms Attack und rund 1 s weiches Abklingen.
+    const attack = 0.16;
+    if (t < attack) return smoothstep01(t / attack);
+    const u = (t - attack) / (1 - attack);
+    return (Math.exp(-4 * u) - Math.exp(-4)) / (1 - Math.exp(-4));
+  }
   // impulse: sehr kurzer Anstieg, dann zügiger Abfall – der Belichtungsstoß eines Ereignisses.
   const attack = 0.08;
   if (t < attack) return t / attack;

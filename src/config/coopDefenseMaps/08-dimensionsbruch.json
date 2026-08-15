@@ -239,20 +239,20 @@
   "encounters": [
     {
       "id": "dimension-west",
-      "start": { "type": "time", "atMs": 2000 },
-      "restAfterMs": 5000,
+      "start": { "type": "time", "atMs": 3000 },
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "void-stalker", "count": 1, "front": "west" },
         { "enemyKind": "spore-warden", "count": 4, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 12, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 12, "front": "north" },
-        { "enemyKind": "demon-badger", "count": 12, "front": "south" }
+        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
+        { "enemyKind": "zombie-badger", "count": 12, "front": "north" },
+        { "enemyKind": "zombie-badger", "count": 12, "front": "south" }
       ]
     },
     {
       "id": "dimension-north",
       "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "void-stalker", "count": 2, "front": "west" },
         { "enemyKind": "demon-badger", "count": 7, "front": "north" },
@@ -262,7 +262,7 @@
     {
       "id": "dimension-south",
       "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "void-stalker", "count": 4, "front": "south" },
         { "enemyKind": "demon-badger", "count": 5, "delayMs": 1100, "front": "north" },

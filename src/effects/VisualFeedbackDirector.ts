@@ -17,7 +17,12 @@ interface NukeSequenceEntry {
   readonly onFinished?: () => void;
 }
 import type { PostFxEvent } from './postfx/postFxPresets';
-import { resolveBaseGrade, type WorldGradeInputs } from './postfx/worldGrade';
+import {
+  BOSS_VISUAL_BLEND_DURATION_MS,
+  resolveBaseGrade,
+  smoothstep01,
+  type WorldGradeInputs,
+} from './postfx/worldGrade';
 import { EntityJoltRegistry } from './EntityJoltRegistry';
 import { LowHealthBloodOverlay } from './LowHealthBloodOverlay';
 import {
@@ -49,6 +54,7 @@ export class VisualFeedbackDirector {
   readonly distortion: LocalDistortionComposer;
   readonly lowHealthBlood: LowHealthBloodOverlay;
   private lastBossPhase = 0;
+  private bossVisualProgress = 0;
   private nextNukeSequenceId = 1;
   private readonly nukeSequences: NukeSequenceEntry[] = [];
 
@@ -155,11 +161,13 @@ export class VisualFeedbackDirector {
     const inputs = this.deps.getGradeInputs();
     // Der Bossphasenwechsel ist ein Ereignis, die Basis kennt nur einen Zustand. Die Flanke
     // wird deshalb hier erkannt – so braucht das Gegnersystem keine eigene Meldung.
-    if (inputs.bossPhase > this.lastBossPhase) this.pulsePostFx('bossPhaseChange');
+    const bossPhaseIncreased = inputs.bossPhase > this.lastBossPhase;
+    if (bossPhaseIncreased) this.pulsePostFx('bossPhaseChange');
+    const bossVisualIntensity = this.stepBossVisualTransition(inputs.bossPhase, deltaMs, bossPhaseIncreased);
     this.lastBossPhase = inputs.bossPhase;
 
     this.stepNukeSequences(deltaMs);
-    this.postFx.setBaseGrade(resolveBaseGrade(inputs));
+    this.postFx.setBaseGrade(resolveBaseGrade({ ...inputs, bossVisualIntensity }));
     this.postFx.update(deltaMs);
     // Niedrige Gesundheit spricht am Bildrand über Blut, nicht über zunehmende Dunkelheit.
     this.lowHealthBlood.update(inputs.localHpFraction, deltaMs);
@@ -175,6 +183,30 @@ export class VisualFeedbackDirector {
         entry.onFinished?.();
       }
     }
+  }
+
+  /**
+   * Führt nur die Darstellung in den Boss-Look. Der erste Frame einer neuen Bossphase bleibt
+   * absichtlich beim alten Grade; dadurch entsteht trotz des replizierten harten Zustandswechsels
+   * kein Ein-Frame-Farbsprung. Die Ease-in-out-Kurve sitzt im visuellen Faktor, nicht in der
+   * Bosslogik.
+   */
+  private stepBossVisualTransition(bossPhase: number, deltaMs: number, phaseIncreased: boolean): number {
+    if (bossPhase <= 0) {
+      this.bossVisualProgress = 0;
+      return 0;
+    }
+
+    if (phaseIncreased && this.lastBossPhase <= 0) {
+      this.bossVisualProgress = 0;
+      return 0;
+    }
+
+    this.bossVisualProgress = Math.min(
+      1,
+      this.bossVisualProgress + Math.max(0, deltaMs) / BOSS_VISUAL_BLEND_DURATION_MS,
+    );
+    return smoothstep01(this.bossVisualProgress);
   }
 
   private consumeNukeFrame(frame: NukeChoreographyFrame, entry: NukeSequenceEntry): void {
@@ -211,6 +243,7 @@ export class VisualFeedbackDirector {
     for (const entry of this.nukeSequences) entry.onFinished?.();
     this.nukeSequences.length = 0;
     this.lastBossPhase = 0;
+    this.bossVisualProgress = 0;
   }
 
   destroy(): void {

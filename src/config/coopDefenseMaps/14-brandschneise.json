@@ -1,7 +1,7 @@
 {
   "mapId": "14",
   "arenaWidthCells": 60,
-  "arenaHeightCells": 40,
+  "arenaHeightCells": 42,
   "timeOfDay": "21:30",
   "mapEvents": [
     {
@@ -13,7 +13,7 @@
         "gridX": 28,
         "gridY": 0,
         "widthCells": 2,
-        "heightCells": 40,
+        "heightCells": 42,
         "baseClearanceCells": 2
       },
       "effect": {
@@ -305,7 +305,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": -5,
-        "dyCells": -2
+        "dyCells": -1
       },
       "shape": {
         "kind": "cells",

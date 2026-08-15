@@ -25,6 +25,10 @@ function createLayout(overrides: Partial<ArenaLayout> = {}): ArenaLayout {
   } as ArenaLayout;
 }
 
+function createVerticalTracks(gridX: number): ArenaLayout['tracks'] {
+  return Array.from({ length: METRICS.rows }, (_, gridY) => ({ gridX, gridY }));
+}
+
 function createBase(
   id: string,
   minGridX: number,
@@ -189,5 +193,37 @@ describe('Enemy navigation geometry', () => {
     expect(dependent.getKindAt(3, 3)).toBe('rock');
     expect(source.getReachedGoalCellAt(4, 5)).toEqual({ gridX: 2, gridY: 5 });
     expect(dependent.getReachedGoalCellAt(12, 5)).toEqual({ gridX: 13, gridY: 5 });
+  });
+
+  it('keeps tracks passable and exits a vertical rail run before following it longitudinally', () => {
+    const service = new EnemyFlowFieldService(
+      createLayout({ tracks: createVerticalTracks(6) }),
+      [],
+      METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 12, gridY: 0 }] },
+    );
+
+    expect(service.getKindAt(6, 5)).toBe('track');
+    expect(service.isTraversableAt(6, 5)).toBe(true);
+    expect(service.getIntegrationValueAt(6, 5)).toBeLessThan(EnemyFlowFieldService.INTEGRATION_INFINITY);
+
+    const vector = service.getVectorAt(6, 5);
+    expect(vector.x).toBeGreaterThan(0);
+    expect(Math.abs(vector.y)).toBeLessThanOrEqual(Math.abs(vector.x));
+
+    const forcedRailRoute = new EnemyFlowFieldService(
+      createLayout({
+        tracks: createVerticalTracks(6),
+        rocks: Array.from({ length: METRICS.rows }, (_, gridY) => [
+          { gridX: 5, gridY },
+          { gridX: 8, gridY },
+        ]).flat() as ArenaLayout['rocks'],
+      }),
+      [],
+      METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 6, gridY: 0 }] },
+    );
+    expect(forcedRailRoute.getIntegrationValueAt(6, 5))
+      .toBeLessThan(EnemyFlowFieldService.INTEGRATION_INFINITY);
   });
 });

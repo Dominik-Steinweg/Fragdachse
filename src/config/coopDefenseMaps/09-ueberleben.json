@@ -18,6 +18,8 @@
   "bases": [],
   "powerUps": [
     { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+    { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true },
+    { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
     { "defId": "ARMOR", "region": "rear", "respawnMs": 10000, "spawnOnArenaStart": true }
   ],
   "encounters": [
@@ -25,7 +27,7 @@
       "id": "survival-opening",
       "start": { "type": "time", "atMs": 0 },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 16, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 12, "front": "west" },
         { "enemyKind": "void-stalker", "count": 2, "delayMs": 700, "front": "east" }
       ]
     },
@@ -34,7 +36,7 @@
       "start": { "type": "time", "atMs": 24000 },
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 2, "front": "north" },
-        { "enemyKind": "rabid-badger", "count": 14, "delayMs": 900, "front": "south" }
+        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 900, "front": "south" }
       ]
     },
     {
@@ -42,16 +44,16 @@
       "start": { "type": "time", "atMs": 56000 },
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
-        { "enemyKind": "void-stalker", "count": 3, "delayMs": 1200, "front": "east" }
+        { "enemyKind": "void-stalker", "count": 2, "delayMs": 1200, "front": "east" }
       ]
     },
     {
       "id": "survival-last-stand",
       "start": { "type": "time", "atMs": 86000 },
       "groups": [
-        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
+        { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 20, "delayMs": 800, "front": "north" },
-        { "enemyKind": "void-stalker", "count": 3, "delayMs": 1400, "front": "south" }
+        { "enemyKind": "void-stalker", "count": 2, "delayMs": 1400, "front": "south" }
       ]
     }
   ],
@@ -67,7 +69,7 @@
     {
       "id": "map-9-player-pressure-void",
       "enemyKind": "void-stalker",
-      "intervalMs": 12500,
+      "intervalMs": 20000,
       "countPerTick": 1,
       "startAtMs": 12000,
       "source": { "type": "map" }
@@ -75,7 +77,7 @@
     {
       "id": "map-9-player-pressure-brood",
       "enemyKind": "stink-broodmother",
-      "intervalMs": 15000,
+      "intervalMs": 12500,
       "countPerTick": 1,
       "startAtMs": 30000,
       "source": { "type": "map" }

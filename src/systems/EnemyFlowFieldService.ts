@@ -7,6 +7,7 @@ import {
   COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS,
   COOP_DEFENSE_FLOW_FIELD_ROCK_COST,
   COOP_DEFENSE_FLOW_FIELD_TRACK_COST,
+  COOP_DEFENSE_FLOW_FIELD_TRACK_LONGITUDINAL_COST,
   COOP_DEFENSE_FLOW_FIELD_TRUNK_COST,
   COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST,
 } from '../config';
@@ -607,7 +608,8 @@ export class EnemyFlowFieldService {
         const previousCost = this.targetPathGeneration[nextIndex] === generation
           ? this.targetPathCosts[nextIndex]
           : EnemyFlowFieldService.INTEGRATION_INFINITY;
-        const candidate = currentCost + this.costs[nextIndex] * NEIGHBOR_MOVE_FACTORS[direction];
+        const candidate = currentCost + this.getTransitionCost(currentIndex, nextIndex, direction)
+          * NEIGHBOR_MOVE_FACTORS[direction];
         if (candidate >= previousCost) continue;
         this.targetPathGeneration[nextIndex] = generation;
         this.targetPathCosts[nextIndex] = candidate;
@@ -1213,6 +1215,25 @@ export class EnemyFlowFieldService {
     return false;
   }
 
+  /**
+   * Gleise bleiben begehbar. Nur ein Uebergang von einer Gleiszelle in die naechste wird fuer
+   * laengs gerichtete Bewegung verteuert; ein seitliches Ueberqueren bezahlt weiterhin nur die
+   * normale moderate Gleiskostenklasse. Der Check sitzt hier zentral, damit Flow Field und seltene
+   * zielgebundene A*-Pfade dieselbe Gewichtung verwenden.
+   */
+  private getTransitionCost(currentIndex: number, nextIndex: number, direction: number): number {
+    const nextCost = this.costs[nextIndex];
+    if (
+      COOP_DEFENSE_FLOW_FIELD_TRACK_LONGITUDINAL_COST <= 0
+      || this.kindCodes[currentIndex] !== CELL_DEFINITIONS.track.code
+      || this.kindCodes[nextIndex] !== CELL_DEFINITIONS.track.code
+      || EnemyFlowFieldService.NEIGHBOR_DIRECTIONS[direction][1] === 0
+    ) {
+      return nextCost;
+    }
+    return nextCost + COOP_DEFENSE_FLOW_FIELD_TRACK_LONGITUDINAL_COST;
+  }
+
   private isGoalCandidateAt(gridX: number, gridY: number): boolean {
     if (!this.isFlowPassableAt(gridX, gridY)) return false;
     return this.kindCodes[this.toIndex(gridX, gridY)] !== CELL_DEFINITIONS.base.code;
@@ -1261,7 +1282,7 @@ export class EnemyFlowFieldService {
       for (let direction = 0; direction < 8; direction += 1) {
         if (!this.isReachableNeighborIndex(currentIndex, direction)) continue;
         const neighborIndex = this.neighborIndices[neighborBase + direction];
-        const neighborCost = this.costs[neighborIndex];
+        const neighborCost = this.getTransitionCost(currentIndex, neighborIndex, direction);
         const newValue = Math.fround(currentValue + neighborCost * NEIGHBOR_MOVE_FACTORS[direction]);
 
         if (

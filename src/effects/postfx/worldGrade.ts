@@ -30,10 +30,15 @@ export interface WorldGradeInputs {
   readonly isVoidMap: boolean;
   /** 0 = keine Bossphase. */
   readonly bossPhase: number;
+  /** 0 … 1, rein visuell weich eingeblendet; fehlt bei direkter Auflösung = voll aktiv. */
+  readonly bossVisualIntensity?: number;
   /** 1 … 0 */
   readonly localHpFraction: number;
   readonly gamePhase: 'LOBBY' | 'ARENA';
 }
+
+/** Dauer des visuellen Übergangs in den dauerhaften Boss-Look. */
+export const BOSS_VISUAL_BLEND_DURATION_MS = 1800;
 
 /**
  * Harte Grenzen. Sie werden in {@link resolveBaseGrade} erzwungen und im Test geprüft, damit
@@ -101,6 +106,26 @@ function clamp(value: number, range: readonly [number, number]): number {
   return value < range[0] ? range[0] : value > range[1] ? range[1] : value;
 }
 
+/** Framerate-unabhängige Ease-in-out-Kurve für rein visuelle Zustandswechsel. */
+export function smoothstep01(value: number): number {
+  const t = clamp(value, [0, 1]);
+  return t * t * (3 - 2 * t);
+}
+
+function interpolateTint(from: number, to: number, amount: number): number {
+  const t = clamp(amount, [0, 1]);
+  const fromR = (from >> 16) & 0xff;
+  const fromG = (from >> 8) & 0xff;
+  const fromB = from & 0xff;
+  const toR = (to >> 16) & 0xff;
+  const toG = (to >> 8) & 0xff;
+  const toB = to & 0xff;
+  const r = Math.round(fromR + (toR - fromR) * t);
+  const g = Math.round(fromG + (toG - fromG) * t);
+  const b = Math.round(fromB + (toB - fromB) * t);
+  return (r << 16) | (g << 8) | b;
+}
+
 /** Wie dunkel es gerade ist: 0 am hellen Mittag, 1 in voller Nacht. */
 export function resolveDarkness(sky: SkyState): number {
   const ambient = sky.ambientColor;
@@ -126,6 +151,9 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   const darkness = resolveDarkness(inputs.skyState);
   const hurt = 1 - Math.min(1, Math.max(0, inputs.localHpFraction));
   const bossActive = inputs.bossPhase > 0;
+  const bossVisualIntensity = bossActive
+    ? clamp(inputs.bossVisualIntensity ?? 1, [0, 1])
+    : 0;
 
   // Nachts entsättigen und die Kontraste anziehen – das ist der Effekt, den das Auge bei
   // wenig Licht ohnehin erwartet, und er trennt Silhouetten besser vom Boden.
@@ -145,10 +173,14 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   }
 
   if (bossActive) {
-    tint = BOSS_TINT;
-    tintStrength = Math.max(tintStrength, 0.22 + Math.min(0.14, inputs.bossPhase * 0.07));
-    contrast += 0.06;
-    temperature += 0.45;
+    const bossTintStrength = Math.max(tintStrength, 0.22 + Math.min(0.14, inputs.bossPhase * 0.07));
+    // Der Boss-Look ersetzt den Nacht-/Normal-/Void-Look nicht mehr auf der Zustandsflanke.
+    // Alle dauerhaften Boss-Anteile folgen demselben visuellen Faktor, damit Spawn und
+    // Farbtemperatur nicht in einem Frame auseinanderlaufen.
+    tint = interpolateTint(tint, BOSS_TINT, bossVisualIntensity);
+    tintStrength += (bossTintStrength - tintStrength) * bossVisualIntensity;
+    contrast += 0.06 * bossVisualIntensity;
+    temperature += 0.45 * bossVisualIntensity;
   }
 
   // Niedrige Gesundheit ausschliesslich über Entsättigung – kein Farbtonwechsel, sonst

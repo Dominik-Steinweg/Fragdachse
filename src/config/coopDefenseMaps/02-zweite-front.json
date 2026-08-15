@@ -1,8 +1,9 @@
 {
   "mapId": "2",
   "arenaWidthCells": 70,
-  "arenaHeightCells": 38,
+  "arenaHeightCells": 39,
   "timeOfDay": "05:00",
+    "tutorialPersistent": true,
   "rockFillRatio": 0.15,
   "trackPosition": "center",
   "mapEvents": [{
@@ -33,13 +34,13 @@
     {
       "id": "west-introduction",
       "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 6500,
+      "restAfterMs": 5000,
       "groups": [{ "enemyKind": "zombie-badger", "count": 7, "front": "west" }]
     },
     {
       "id": "north-arrival",
       "start": { "type": "after-previous" },
-      "restAfterMs": 6500,
+      "restAfterMs": 5000,
       "groups": [
         { "enemyKind": "demon-badger", "count": 5, "front": "east" },
         { "enemyKind": "zombie-badger", "count": 5, "delayMs": 800, "front": "east" }

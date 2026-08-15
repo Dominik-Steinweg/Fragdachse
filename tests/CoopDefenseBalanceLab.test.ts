@@ -3,6 +3,7 @@ import {
   buildAllCoopDefenseBalanceMapSnapshots,
   buildCoopDefenseBalanceMapSnapshot,
   getCoopDefenseMapBalanceSignature,
+  isCoopDefenseMapBalanceSignatureCompatible,
   resolveEnemyLifecycleTotals,
 } from '../src/debug/coopDefenseBalance/analyzer';
 import { buildCoopDefenseBalanceReport, classifyBalanceRound } from '../src/debug/coopDefenseBalance/report';
@@ -136,6 +137,22 @@ describe('Coop Defense Balance Lab', () => {
     const balanceChanged = { ...map, balanceReferenceDurationSec: map.balanceReferenceDurationSec + 1 };
     expect(getCoopDefenseMapBalanceSignature(displayOnly)).toBe(getCoopDefenseMapBalanceSignature(map));
     expect(getCoopDefenseMapBalanceSignature(balanceChanged)).not.toBe(getCoopDefenseMapBalanceSignature(map));
+  });
+
+  it('kanonisiert historische Übersetzungsnamen und akzeptiert die alte Signaturmigration', () => {
+    const map = COOP_DEFENSE_MAP_CONFIGS.find((entry) => entry.mapId === '3')!;
+    const renamed = {
+      ...map,
+      bases: map.bases.map((base) => ({
+        ...base,
+        turrets: base.turrets?.map((turret) => ({
+          ...turret,
+          weaponId: turret.weaponId === 'BASE_SPORES' ? 'BASE_SPOREN' as typeof turret.weaponId : turret.weaponId,
+        })),
+      })),
+    };
+    expect(getCoopDefenseMapBalanceSignature(renamed)).toBe(getCoopDefenseMapBalanceSignature(map));
+    expect(isCoopDefenseMapBalanceSignatureCompatible('3', '8e0f9d1a', getCoopDefenseMapBalanceSignature(map))).toBe(true);
   });
 
   it('schliesst veraltete Runden aus Aggregaten aus und berechnet Median/Mittelwerte', () => {

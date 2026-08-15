@@ -7,36 +7,65 @@
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "start": { "type": "time", "atMs": 20000 },
+    "repeatAfterExitMs": 20000
   }],
   "balanceReferenceDurationSec": 145,
   "objective": "defeat-boss",
   "bases": [
     {
       "id": "coop-base-middle",
-      "hpMax": 1150,
+      "hpMax": 4000,
       "anchor": {
         "kind": "center-offset",
-        "dxCells": 0,
+        "dxCells": -6,
         "dyCells": 0
       },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 2,
-        "heightCells": 3
-      },
-      "turrets": [
-        {
-          "id": "front-middle",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "mountSide": "front",
-          "weaponId": "TURRET_ROCKET_BURST"
-        }
-      ]
+"shape": {
+  "kind": "cells",
+  "cells": [
+    { "gridX": 1, "gridY": 0 },
+    { "gridX": 1, "gridY": 4 },
+    { "gridX": 0, "gridY": 0 },
+    { "gridX": 0, "gridY": 1 },
+    { "gridX": 0, "gridY": 2 },
+    { "gridX": 0, "gridY": 3 },
+    { "gridX": 0, "gridY": 4 }
+  ]
+},
+"turrets": [
+  {
+    "id": "front-middle",
+    "cellOffset": {
+      "gridX": 0,
+      "gridY": 2
+    },
+    "mountSide": "front",
+    "weaponId": "TURRET_ROCKET_BURST"
+  }
+],
+"powerUpPedestals": [
+  {
+    "id": "health-station-top",
+    "cellOffset": {
+      "gridX": 1,
+      "gridY": 3
+    },
+    "defId": "HEALTH_PACK",
+    "respawnMs": 5000,
+    "spawnOnArenaStart": true
+  },
+  {
+    "id": "adrenaline-station",
+    "cellOffset": {
+      "gridX": 1,
+      "gridY": 1
+    },
+    "defId": "ADRENALINE",
+    "respawnMs": 10000,
+    "spawnOnArenaStart": true
+  }
+]
     }
   ],
   "powerUps": [
@@ -61,7 +90,7 @@
   ],
   "boss": {
     "enemyKind": "inferno-colossus",
-    "spawnAtMs": 8000
+    "spawnAtMs": 6000
   },
   "itemDrop": {
     "itemLevel": 1
@@ -71,15 +100,25 @@
       "id": "inferno-opening-support",
       "start": { "type": "time", "atMs": 0 },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 4, "delayMs": 1000, "front": "north" }
+        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 4, "delayMs": 4000, "front": "east" },
+        { "enemyKind": "spore-warden", "count": 2, "delayMs": 1300, "front": "west" }
+      ]
+    },
+        {
+      "id": "inferno-phase-support",
+      "start": { "type": "time", "atMs": 30000 },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 20, "front": "north" },
+        { "enemyKind": "spore-warden", "count": 1, "delayMs": 1300, "front": "east" },
+        { "enemyKind": "demon-badger", "count": 14, "front": "south" }
       ]
     },
     {
-      "id": "inferno-phase-support",
+      "id": "inferno-phase-support2",
       "start": { "type": "time", "atMs": 50000 },
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 3, "front": "south" },
+        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
         { "enemyKind": "spore-warden", "count": 3, "delayMs": 1300, "front": "east" }
       ]
     }

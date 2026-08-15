@@ -27,3 +27,7 @@ optional zwei Bewertungen; Storage-/Quota-Fehler bleiben non-fatal. Die Balance-
 ist davon getrennt und invalidiert alte Messungen global, während die Map-Balance-Signatur nur
 betroffene Maps veraltet macht. Der Key `fragdachse_balance_lab_v1` ist weder Bestandteil des
 Progress-Exports noch wird er durch `resetStoredCoopDefenseCharacter()` gelöscht.
+
+Balance-Signaturen kanonisieren reine Übersetzungs-/Identifier-Migrationen und akzeptieren bekannte
+Legacy-Hashes weiter; neue Balancewerte oder globale Ruleset-Änderungen bleiben dadurch weiterhin
+invalidierungswirksam.

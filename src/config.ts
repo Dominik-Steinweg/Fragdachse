@@ -551,6 +551,16 @@ export const COOP_DEFENSE_FLOW_FIELD_GROUND_COST = 1;
 export const COOP_DEFENSE_FLOW_FIELD_DIRT_COST = 2;
 /** Gleise bleiben passierbar, sollen aber deutlicher gemieden werden als Gras oder Dirt. */
 export const COOP_DEFENSE_FLOW_FIELD_TRACK_COST = 4;
+/** Zusatzkosten nur fuer einen Schritt laengs von einer Gleiszelle zur naechsten. */
+export const COOP_DEFENSE_FLOW_FIELD_TRACK_LONGITUDINAL_COST = 24;
+/** Eine notwendige Route darf hoechstens so viele Gleiszellen am Stueck benoetigen. */
+export const COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS = 4;
+/** Breite der prozedural freigehaltenen Querungsstreifen in Rasterzellen. */
+export const COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS = 2;
+/** Seitlicher Freiraum links und rechts eines Querungsstreifens. */
+export const COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS = 2;
+/** Querungsstreifen liegen regelmaessig dichter als der zentrale Gleislauf-Grenzwert. */
+export const COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS = COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS + 1;
 /** Zerstoerbare Hindernisse bleiben semantisch separat, sind aber aktuell blockiert. */
 export const COOP_DEFENSE_FLOW_FIELD_ROCK_COST = 100;
 /** Unzerstoerbare, unpassierbare Hindernisse. */

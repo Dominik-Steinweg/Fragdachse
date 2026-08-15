@@ -1,6 +1,7 @@
 {
   "mapId": "5",
   "arenaWidthCells": 74,
+  "arenaHeightCells": 37,
   "timeOfDay": "22:30",
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
@@ -52,7 +53,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": -5,
-        "dyCells": -1
+        "dyCells": 1
       },
       "shape": {
         "kind": "cells",
@@ -115,7 +116,7 @@
   ],
   "boss": {
     "enemyKind": "grave-titan",
-    "spawnAtMs": 10000
+    "spawnAtMs": 7500
   },
   "encounters": [
     {
@@ -128,10 +129,34 @@
     },
     {
       "id": "grave-titan-phase-support",
-      "start": { "type": "time", "atMs": 22000 },
+      "start": { "type": "time", "atMs": 15000 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 6, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
+      ]
+    },    
+    {
+      "id": "grave-titan-phase-support2",
+      "start": { "type": "time", "atMs": 25000 },
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "west" }
+      ]
+    },
+    {
+      "id": "grave-titan-phase-support3",
+      "start": { "type": "time", "atMs": 35000 },
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
+      ]
+    },
+    {
+      "id": "grave-titan-phase-support4",
+      "start": { "type": "time", "atMs": 45000 },
+      "groups": [
+        { "enemyKind": "demon-badger", "count": 6, "front": "south" },
+        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "south" }
       ]
     }
   ],

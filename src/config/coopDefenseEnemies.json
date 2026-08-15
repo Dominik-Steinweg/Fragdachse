@@ -66,6 +66,18 @@
       "knockbackFactor": 0.15,
       "movementTarget": "bases",
       "weapons": [
+        {
+          "weaponId": "GRAVE_TITAN_VOID_PLASMA",
+          "targetMode": "players",
+          "attackMovementSpeedFactor": 0.5,
+          "minTargetDistancePx": 200,
+          "salvo": {
+            "count": 15,
+            "intervalMs": 90,
+            "cooldownMs": 4000,
+            "targetDistribution": "round_robin"
+          }
+        },
         { "weaponId": "GRAVE_TITAN_BITE", "targetMode": "all", "playerMeleeWindupMs": 450 }
       ],
       "attackScanIntervalMs": 180,
@@ -254,7 +266,7 @@
     {
       "id": "inferno-colossus",
       "maxHp": 2500,
-      "xp": 200,
+      "xp": 500,
       "size": 68,
       "moveSpeed": 185,
       "knockbackFactor": 0.1,
@@ -418,7 +430,7 @@
     {
       "id": "void-hunter",
       "maxHp": 4000,
-      "xp": 400,
+      "xp": 750,
       "size": 52,
       "moveSpeed": 120,
       "knockbackFactor": 0.25,

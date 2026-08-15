@@ -35,6 +35,11 @@ export interface CoopDefenseEnemyWeaponSalvoConfig {
   readonly count: number;
   readonly intervalMs: number;
   readonly cooldownMs: number;
+  /**
+   * Optionales Zielmuster fuer Salven. `round_robin` prueft pro Geschoss alle gueltigen
+   * Spielerziele neu und verteilt die Salve deterministisch auf sie.
+   */
+  readonly targetDistribution?: 'locked' | 'round_robin';
 }
 
 export interface CoopDefenseEnemyWeaponConfig {
@@ -794,10 +799,16 @@ function normalizeWeaponSalvoConfig(
   config: CoopDefenseEnemyWeaponSalvoConfig | undefined,
 ): CoopDefenseEnemyWeaponSalvoConfig | undefined {
   if (!config) return undefined;
+  if (config.targetDistribution !== undefined
+    && config.targetDistribution !== 'locked'
+    && config.targetDistribution !== 'round_robin') {
+    throw new Error(`[coopDefenseEnemies] Unsupported salvo target distribution: ${String(config.targetDistribution)}`);
+  }
   return {
     count: Math.max(1, Math.floor(config.count)),
     intervalMs: Math.max(1, Math.floor(config.intervalMs)),
     cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
+    targetDistribution: config.targetDistribution ?? 'locked',
   };
 }
 

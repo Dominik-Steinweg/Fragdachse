@@ -55,7 +55,8 @@ describe('Map 14 rock field', () => {
   beforeAll(() => {
     // Der Generator liest die globalen Arena-Metriken; ohne Coop-Profil fehlen Spaltenzahl
     // und Basis-Schutzradien, und die Gang-Koordinaten der Map lägen daneben.
-    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA');
+    const map = getCoopDefenseMapConfig(MAP_14);
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
   });
 
   it('walls in everything except the corridors, the bases and the railway', () => {
@@ -112,9 +113,9 @@ describe('Map 14 rock field', () => {
       // Spalte 15 liegt zwischen Spawnrand und mittlerer Basis, Spalte 48 zwischen den Basen.
       // Die Gleisspalten liegen in beiden Fällen nicht dazwischen.
       // Tutorial rocks are intentionally merged with the authored field on Map 14. The
-      // organic corridor shape may expose an additional run at this probe column.
+      // The taller authored arena can expose one additional run at this probe column.
       expect(countOpenRuns(blocked, 15)).toBeGreaterThanOrEqual(3);
-      expect(countOpenRuns(blocked, 15)).toBeLessThanOrEqual(4);
+      expect(countOpenRuns(blocked, 15)).toBeLessThanOrEqual(5);
       expect(countOpenRuns(blocked, 48)).toBe(2);
     }
   });

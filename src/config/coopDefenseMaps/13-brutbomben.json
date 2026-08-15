@@ -1,7 +1,7 @@
 {
   "mapId": "13",
   "arenaWidthCells": 135,
-  "arenaHeightCells": 40,
+  "arenaHeightCells": 42,
   "timeOfDay": "18:45",
   "tutorialDurationMs": 10000,
   "objective": "destroy-hostile-bases",
@@ -154,7 +154,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": -5,
-        "dyCells": -2
+        "dyCells": -1
       },
       "shape": {
         "kind": "cells",

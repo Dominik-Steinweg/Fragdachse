@@ -35,6 +35,13 @@ describe('postFxEnvelope', () => {
       expect(postFxEnvelope(ease, 2)).toBe(0);
     }
   });
+
+  it('gibt dem Bossphasen-Puls eine kurze Attack und ein weiches Abklingen', () => {
+    expect(postFxEnvelope('bossPhase', 0)).toBe(0);
+    expect(postFxEnvelope('bossPhase', 0.08)).toBeCloseTo(0.5, 6);
+    expect(postFxEnvelope('bossPhase', 0.16)).toBeCloseTo(1, 6);
+    expect(postFxEnvelope('bossPhase', 0.5)).toBeLessThan(0.4);
+  });
 });
 
 describe('composePostFx', () => {
@@ -60,6 +67,20 @@ describe('composePostFx', () => {
     const state = compose(set, 0);
     expect(state.vignetteStrength).toBeGreaterThan(BASE.vignetteStrength);
     expect(state.activePulses).toBe(1);
+  });
+
+  it('startet den Bossphasen-Puls ohne Ein-Frame-Sprung und lässt ihn danach ausklingen', () => {
+    const set = new PostFxPulseSet();
+    const preset = getPostFxPreset('bossPhaseChange');
+    set.request(preset, 0);
+
+    const start = compose(set, 0);
+    const peak = compose(set, 200);
+    const faded = compose(set, 1100);
+
+    expect(start.contrast).toBe(BASE.contrast);
+    expect(peak.contrast).toBeGreaterThan(start.contrast);
+    expect(faded.contrast).toBeLessThan(peak.contrast);
   });
 
   /** Der zentrale Vertrag: ein Ereignis darf nie einen Rest hinterlassen. */
@@ -185,6 +206,13 @@ describe('postFxPresets', () => {
     for (const event of POST_FX_EVENTS) {
       expect(getPostFxPreset(event).durationMs).toBeLessThanOrEqual(1500);
     }
+  });
+
+  it('hält den Bossphasen-Puls kurz und deutlich unter dem dauerhaften Farbwechsel', () => {
+    const preset = getPostFxPreset('bossPhaseChange');
+    expect(preset.durationMs).toBe(1200);
+    expect(preset.ease).toBe('bossPhase');
+    expect(preset.grade?.tintStrength).toBeLessThan(0.26);
   });
 
   it('gibt der Nuke die hoechste Prioritaet aller Ereignisse', () => {

@@ -37,7 +37,7 @@
         "type": "time",
         "atMs": 0
       },
-      "restAfterMs": 6500,
+      "restAfterMs": 5000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
@@ -50,7 +50,7 @@
       "start": {
         "type": "after-previous"
       },
-      "restAfterMs": 6500,
+      "restAfterMs": 5000,
       "groups": [
         {
           "enemyKind": "zombie-badger",

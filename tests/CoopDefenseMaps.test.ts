@@ -256,7 +256,7 @@ describe('Coop defense map progression', () => {
       .every((group) => getCoopDefenseEnemyConfig(group.enemyKind).movementTarget === 'bases')).toBe(true);
 
     const map3 = getCoopDefenseMapConfig('3');
-    expect(map3.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
+    expect(map3.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 2 });
     expect(map3.encounters?.flatMap((encounter) => encounter.groups)
       .every((group) => group.front === 'west' || group.front === 'east')).toBe(true);
     expect(map3.encounters?.flatMap((encounter) => encounter.groups)

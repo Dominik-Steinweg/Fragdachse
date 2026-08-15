@@ -28,6 +28,8 @@ CoopDefensePersistentPressureSystem taktet dauerhafte Quellen. Eine mapgebundene
 
 ## Gegnerwaffen und Waffenwahl
 
+Der optionale Salvenwert `targetDistribution: "round_robin"` prueft fuer Spieler-Salven pro Geschoss alle gueltigen Spielerziele neu, verteilt deterministisch und verwendet keine Mindestdistanz-Hysterese.
+
 Gegnerwerte stehen in `coopDefenseEnemies.json`; die Waffe selbst bleibt eine normale `WeaponConfig`. Der Eintrag in `weapons` authoriert nur, wie der Gegner sie führt, und die Reihenfolge des Arrays ist die Waffenpriorität: Die erste Waffe mit gültigem Ziel gewinnt, und ist eine höher priorisierte Waffe im Cooldown, wartet der Gegner statt auf eine schwächere zu wechseln. Ausgenommen bleibt das Freibeißen von Felsen – ein blockierter Gegner muss sich immer befreien dürfen.
 
 Verhaltensunterschiede zwischen Gegnern gehören als Waffen-Eigenschaft in die Registry, nicht als Fallunterscheidung nach Gegner-ID in ein System:

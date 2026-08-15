@@ -15,7 +15,8 @@ import { COOP_DEFENSE_MODE } from '../src/gameModes';
 
 describe('Map 16 - Zeitzünder', () => {
   beforeAll(() => {
-    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', getCoopDefenseMapConfig('16').arenaWidthCells);
+    const map = getCoopDefenseMapConfig('16');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
   });
 
   it('keeps the rear base fortified with linked and free power-ups', () => {
