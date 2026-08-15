@@ -15,6 +15,7 @@ vi.mock('phaser', () => ({
 
 import { ArenaBuilder } from '../src/arena/ArenaBuilder';
 import type { ArenaBuilderResult } from '../src/arena/ArenaBuilder';
+import { createRockOverlaySource, syncRockOverlaySource } from '../src/arena/RockOverlayRegions';
 
 /**
  * Aufraeumen der rundengebundenen Fels-Overlays.
@@ -57,7 +58,13 @@ function buildResult() {
     scratchVegetationCutout: disposable(),
     scratchVegetationCutoutImage: disposable(),
     scratchMoss: disposable(),
+    rockDecalCutout: disposable(),
+    scratchDecalCutout: disposable(),
+    scratchDecalCutoutImage: disposable(),
   };
+
+  const rockOverlaySource = createRockOverlaySource();
+  syncRockOverlaySource(rockOverlaySource, [{ gridX: 1, gridY: 1 }]);
 
   const result = {
     baseZoneObjects: [],
@@ -75,6 +82,8 @@ function buildResult() {
     decalLayer: null,
     decalStamps: [],
     rockDecalLayer: null,
+    rockDecalCutout: parts.rockDecalCutout,
+    rockOverlaySource,
     rockMossLayer: parts.rockMossLayer,
     rockMossCutout: parts.rockMossCutout,
     rockMossPlacements: [{ textureKey: 'rock_moss_01' }],
@@ -88,6 +97,8 @@ function buildResult() {
       cutoutImage: disposable(),
       mottleLayers: [],
       decal: disposable(),
+      decalCutout: parts.scratchDecalCutout,
+      decalCutoutImage: parts.scratchDecalCutoutImage,
       moss: parts.scratchMoss,
       mossCutout: disposable(),
       mossCutoutImage: disposable(),
@@ -122,6 +133,15 @@ describe('Rock vegetation teardown', () => {
     expect(parts.rockMossCutout.destroyed).toBe(1);
     expect(parts.scratchMoss.destroyed).toBe(1);
     expect(result.rockMossPlacements).toHaveLength(0);
+
+    // Die Decal-Stanzformen haengen an denselben Lebensdauern; die Materialquelle wuerde sonst
+    // ueber die Rundengrenze hinweg Zellen der Vorrunde weiterstempeln.
+    expect(parts.rockDecalCutout.destroyed).toBe(1);
+    expect(parts.scratchDecalCutout.destroyed).toBe(1);
+    expect(parts.scratchDecalCutoutImage.destroyed).toBe(1);
+    expect(result.rockDecalCutout).toBeNull();
+    expect(result.rockOverlaySource.cells).toHaveLength(0);
+    expect(result.rockOverlaySource.keys.size).toBe(0);
   });
 
   it('is safe to run twice', () => {

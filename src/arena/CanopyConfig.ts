@@ -7,6 +7,7 @@ export const CANOPY_VARIANTS = [
   { textureKey: 'bg_canopy_02', fileName: 'canopy02.png' },
   { textureKey: 'bg_canopy_03', fileName: 'canopy03.png' },
   { textureKey: 'bg_canopy_04', fileName: 'canopy04.png' },
+  { textureKey: 'bg_canopy_05', fileName: 'canopy05.png' },
 ] as const;
 
 export const CANOPY_TEXTURE_KEYS = CANOPY_VARIANTS.map(({ textureKey }) => textureKey);

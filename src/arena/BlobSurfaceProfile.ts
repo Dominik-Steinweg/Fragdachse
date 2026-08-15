@@ -103,6 +103,26 @@ export function getBlobSurfaceMottleTextureKey(
   return `__blob_surface_${profile.id}_${material}_${mottle.materialMode}_mottle_${layerIndex}`;
 }
 
+/**
+ * Maximaler Ueberstand eines Mottle-Stamps ueber seine Quellzelle hinaus.
+ *
+ * Dirty-Region-Bakes koennen damit Quellzellen konservativ vorfiltern, ohne wieder alle
+ * Felsen der Arena zu stempeln. Die Stamp-Mitte liegt innerhalb der Zelle; der Radius ergibt
+ * sich aus `maxScale * CELL_SIZE / 2` und ist unabhaengig von der Texturaufloesung. Die Ecken des
+ * gedrehten Quadrats zaehlen nicht mit: Die Falloff-Maske radiert den Stempel bereits auf seinem
+ * Innkreis vollstaendig weg.
+ *
+ * Bewusst hier und nicht in `BlobSurfaceMottle`: Die Zahl folgt allein aus dem Profil, und die
+ * Chunk-Geometrie braucht sie ohne Phaser-Abhaengigkeit.
+ */
+export function getBlobSurfaceMottleReachPx(profile: BlobSurfaceProfile): number {
+  let maxScale = 0;
+  for (const mottle of [profile.mottle, ...(profile.additionalMottleLayers ?? [])]) {
+    for (const pass of mottle.passes) maxScale = Math.max(maxScale, pass.maxScale);
+  }
+  return maxScale * CELL_SIZE * 0.5;
+}
+
 /** Raised rock surface: a light authored replacement pass plus strong proportional material depth. */
 export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   id: 'rock',

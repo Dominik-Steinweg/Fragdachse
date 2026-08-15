@@ -275,8 +275,11 @@ export class MenuArenaPreviewRenderer {
       gridRows: Math.floor(bounds.height / CELL_SIZE),
     };
 
-    const { images: rockImages, cells: aliveCells } = this.createRocks();
-    this.bakeRockMottle(aliveCells, rockImages, metrics, view.rocks);
+    const rockImages = this.createRocks();
+    // Materialquelle ist der vollstaendige Bestand, Maske der lebende – dieselbe Regel wie in der
+    // Arena (siehe `ArenaBuilder.rebuildRockOverlays`). Waere die Quelle der lebende Bestand,
+    // wuerfelte jede Zerstoerung die Flecken auf allen uebrigen Felsen neu aus.
+    this.bakeRockMottle(layout.rocks, rockImages, metrics, view.rocks);
     this.bakeRockMossLayer(rockImages, view.rockMoss);
     this.bakeRockVegetationLayer(rockImages, view.rockVegetation);
     this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks, this.rockBandLayers);
@@ -508,11 +511,10 @@ export class MenuArenaPreviewRenderer {
    * sich aus dem laufend gepflegten {@link rockGrid} ab – ein zerstörter Nachbar öffnet die
    * Kante seiner Nachbarn also automatisch.
    */
-  private createRocks(): { images: Phaser.GameObjects.Image[]; cells: RockCell[] } {
+  private createRocks(): Phaser.GameObjects.Image[] {
     const images: Phaser.GameObjects.Image[] = [];
-    const cells: RockCell[] = [];
     const rockGrid = this.rockGrid;
-    if (!rockGrid) return { images, cells };
+    if (!rockGrid) return images;
     const isOccupied = (gridX: number, gridY: number) => rockGrid.isOccupiedWithBorder(gridX, gridY);
 
     const rocks = this.config.layout.rocks;
@@ -529,10 +531,9 @@ export class MenuArenaPreviewRenderer {
         frame,
         resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
       ));
-      cells.push(rocks[id]);
     }
 
-    return { images, cells };
+    return images;
   }
 
   private bakeRockMottle(

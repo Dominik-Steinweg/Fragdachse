@@ -160,21 +160,13 @@ export function stampBlobSurfaceMottle(
 }
 
 /**
- * Maximaler Ueberstand eines Mottle-Stamps ueber seine Quellzelle hinaus.
+ * Bakes and silhouette-clips the profile-selected material layers for any 47-Blob surface.
  *
- * Dirty-Region-Bakes koennen damit Quellzellen konservativ vorfiltern, ohne wieder alle
- * Felsen der Arena zu stempeln. Die Stamp-Mitte liegt innerhalb der Zelle; der Radius ergibt
- * sich aus `maxScale * CELL_SIZE / 2` und ist unabhaengig von der Texturaufloesung.
+ * `cells` is the **material source** and `silhouetteImages` the **current outline**; the two are
+ * deliberately separate parameters. For a destructible rock field the source must stay the full
+ * inventory of the round while the outline shrinks – otherwise every destruction re-scatters the
+ * stamps of untouched neighbours (see `RockOverlayRegions`).
  */
-export function getBlobSurfaceMottleReachPx(profile: BlobSurfaceProfile): number {
-  let maxScale = 0;
-  for (const mottle of [profile.mottle, ...(profile.additionalMottleLayers ?? [])]) {
-    for (const pass of mottle.passes) maxScale = Math.max(maxScale, pass.maxScale);
-  }
-  return maxScale * CELL_SIZE * 0.5;
-}
-
-/** Bakes and silhouette-clips the profile-selected material layers for any 47-Blob surface. */
 export function bakeBlobSurfaceMottle(
   scene: Phaser.Scene,
   profile: BlobSurfaceProfile,
@@ -185,7 +177,8 @@ export function bakeBlobSurfaceMottle(
   existingSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null,
 ): BlobSurfaceMottleBakeResult {
   const configs = [profile.mottle, ...(profile.additionalMottleLayers ?? [])];
-  if (cells.length === 0) {
+  // Ohne Quelle gibt es nichts zu stempeln, ohne Silhouette bliebe alles Gestempelte weggeschnitten.
+  if (cells.length === 0 || silhouetteImages.length === 0) {
     for (const layer of existingLayers) layer.clear();
     return { layers: [...existingLayers], silhouetteCutout: existingSilhouetteCutout };
   }

@@ -20,11 +20,19 @@ import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { ROCK_BLOB_SURFACE_PROFILE, DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { multiplyTint, resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
+import { bakeBlobSurfaceMottle, stampBlobSurfaceMottle } from './BlobSurfaceMottle';
+import { getBlobSurfaceMottleReachPx } from './BlobSurfaceProfile';
+import { fillRockDecalCutout } from './RockDecalLayer';
 import {
-  bakeBlobSurfaceMottle,
-  getBlobSurfaceMottleReachPx,
-  stampBlobSurfaceMottle,
-} from './BlobSurfaceMottle';
+  ROCK_OVERLAY_CHUNK_SIZE,
+  collectRockCellKeys,
+  collectRockOverlayChunks,
+  createRockOverlaySource,
+  hasFallenRockCells,
+  rockCellKey,
+  syncRockOverlaySource,
+} from './RockOverlayRegions';
+import type { RockOverlayChunk, RockOverlaySource } from './RockOverlayRegions';
 import { generateGroundCoverPlacements } from './GroundCoverField';
 import { bakeGroundCoverLayer } from './GroundCoverLayer';
 import { generateRockMossPlacements, getRockMossPlacementRadiusPx } from './RockMossField';
@@ -125,6 +133,19 @@ export interface ArenaBuilderResult {
   /** Gebackene Fels-Decals; wird bei Fels-Aenderungen neu aufgebaut. */
   rockDecalLayer: Phaser.GameObjects.RenderTexture | null;
   /**
+   * Stanzform der Fels-Decals: deckend genau dort, wo einmal Fels stand und jetzt keiner mehr
+   * steht (siehe {@link ./RockDecalLayer}). Rundengebunden und an Ort und Stelle neu befuellt –
+   * aus demselben Grund wie `rockSilhouetteCutout`.
+   */
+  rockDecalCutout: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Materialquelle aller felsgebundenen Overlays: jede Zelle, auf der in dieser Runde je ein Fels
+   * stand. Sie waechst mit gebauten Felsen und schrumpft nie – nur so bleiben Materialflecken,
+   * Moos und Kantenmatten auf unbeteiligten Felsen nach einer Zerstoerung Pixel fuer Pixel stehen
+   * (siehe {@link ./RockOverlayRegions}).
+   */
+  rockOverlaySource: RockOverlaySource;
+  /**
    * Grossflaechiges Moos auf dem Felsbestand samt seiner Stanzform. Beide sind arenagross und
    * rundengebunden; sie werden bei Hindernisaenderungen an Ort und Stelle neu befuellt, nie neu
    * allokiert.
@@ -179,6 +200,12 @@ interface RockOverlayScratch {
    * Eigene Stanzform fuer das Moos. Sie kann nicht mit `cutout` geteilt werden: Der Mottle
    * schneidet hart an der Silhouette, das Moos weich an der Verlaufsmaske.
    */
+  /**
+   * Und noch eine eigene Stanzform: Decals duerfen die Felskante ueberragen, ihr Schnitt trifft
+   * deshalb nur die Flaeche gefallener Felsen statt der Silhouette.
+   */
+  decalCutout: Phaser.GameObjects.RenderTexture;
+  decalCutoutImage: Phaser.GameObjects.Image;
   moss: Phaser.GameObjects.RenderTexture;
   mossCutout: Phaser.GameObjects.RenderTexture;
   mossCutoutImage: Phaser.GameObjects.Image;
@@ -187,13 +214,6 @@ interface RockOverlayScratch {
   vegetationCutout: Phaser.GameObjects.RenderTexture;
   vegetationCutoutImage: Phaser.GameObjects.Image;
 }
-
-interface RockOverlayChunk {
-  localX: number;
-  localY: number;
-}
-
-const ROCK_OVERLAY_CHUNK_SIZE = 128;
 
 /** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
 export interface DirtStamp {
@@ -363,6 +383,8 @@ export class ArenaBuilder {
       decalLayer,
       decalStamps,
       rockDecalLayer: null,
+      rockDecalCutout: null,
+      rockOverlaySource: createRockOverlaySource(),
       rockMossLayer: null,
       rockMossCutout: null,
       // Einmalig hier erzeugt und nie wieder: siehe `rockMossPlacements`.
@@ -607,12 +629,16 @@ export class ArenaBuilder {
   }
 
   /**
-   * Backt die Fels-Overlays neu: geschichtete Materialstoerung (NORMAL + MULTIPLY) und Decals.
+   * Backt die Fels-Overlays neu: geschichtete Materialstoerung (NORMAL + MULTIPLY), Moos,
+   * Kantenmatten und Decals.
    *
-   * Ein Decal, das mehrere Felsen beruehrt, bleibt nur sichtbar, solange alle seine Traeger
-   * aktiv sind. Das ist bewusst ein Rebuild bei Hindernisaenderungen und kein Live-Image pro
-   * Fels: dadurch bleiben die 30 Varianten und viele Instanzen im Renderwalk ein einziges
-   * Objekt.
+   * Alle vier Schichten folgen derselben Regel: Ihre Platzierung entsteht aus dem **vollstaendigen**
+   * Felsbestand der Runde und wird nie neu ausgewuerfelt; neu gebacken wird ausschliesslich der
+   * Schnitt auf den aktuellen Bestand. Ein zerstoerter Fels nimmt damit genau seinen eigenen Anteil
+   * mit und laesst die uebrigen Flaechen Pixel fuer Pixel stehen.
+   *
+   * Bewusst ein Rebuild gebackener Layer und kein Live-Image pro Fels: dadurch bleiben die vielen
+   * Varianten und Instanzen im Renderwalk je ein einziges Objekt.
    */
   static rebuildRockOverlays(
     scene: Phaser.Scene,
@@ -620,13 +646,12 @@ export class ArenaBuilder {
     layout: ArenaLayout,
     worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
   ): void {
-    const activeRockIds = new Set<number>();
+    syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
     const activeCells: RockCell[] = [];
     const activeRocks: Phaser.GameObjects.Image[] = [];
     for (let id = 0; id < layout.rocks.length; id += 1) {
       const img = result.rockObjects[id];
       if (!img?.active || !layout.rocks[id]) continue;
-      activeRockIds.add(id);
       activeCells.push(layout.rocks[id]);
       activeRocks.push(img);
     }
@@ -634,7 +659,8 @@ export class ArenaBuilder {
     const mottle = bakeBlobSurfaceMottle(
       scene,
       ROCK_BLOB_SURFACE_PROFILE,
-      activeCells,
+      // Quelle ist der vollstaendige Bestand, Maske der lebende – nicht umgekehrt.
+      result.rockOverlaySource.cells,
       activeRocks,
       {
         offsetX: worldFrame.offsetX,
@@ -679,11 +705,11 @@ export class ArenaBuilder {
     result.rockVegetationCutout = vegetation.cutout;
     for (const mask of vegetationMasks) mask.destroy();
 
+    const activeCellKeys = collectRockCellKeys(activeCells);
     const decalImages = ArenaVisualFactory.createRockDecals(
       scene,
-      layout.decals ?? [],
+      ArenaBuilder.selectAnchoredRockDecals(layout.decals ?? [], activeCellKeys),
       { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
-      activeRockIds,
     );
     if (decalImages.length > 0) {
       const layer = result.rockDecalLayer ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
@@ -691,6 +717,7 @@ export class ArenaBuilder {
       layer.draw(decalImages);
       layer.render();
       for (const image of decalImages) image.destroy();
+      ArenaBuilder.eraseFallenRockDecals(scene, result, activeCellKeys, activeRocks, worldFrame, layer);
       result.rockDecalLayer = layer;
     } else {
       result.rockDecalLayer?.clear();
@@ -698,10 +725,67 @@ export class ArenaBuilder {
   }
 
   /**
-   * Backt nur die Chunks neu, deren Felszellen oder Autotile-Nachbarn sich geaendert haben.
+   * Die Fels-Decals, deren **Ankerzelle** noch einen Fels traegt.
+   *
+   * Ein Decal gehoert zu genau einer Felszelle und darf deren Kante ueberragen. Faellt diese Zelle,
+   * verschwindet das Decal mitsamt seinem Ueberhang – sonst bliebe ein Moosbogen auf dem freien
+   * Boden liegen. Faellt dagegen nur ein *beruehrter* Nachbar, bleibt das Decal bestehen und
+   * verliert allein den Teil, der ueber der gefallenen Zelle lag (siehe
+   * {@link ./RockDecalLayer}). Genau das trennt die geometrisch noetige Aenderung von der alten
+   * Alles-oder-nichts-Regel ueber `decal.rockIds`, die auch grosse Moos- und Flechtenmatten auf
+   * unveraenderten Felsflaechen verschwinden liess.
+   */
+  private static hasLivingRockDecalAnchor(decal: DecalCell, activeCellKeys: ReadonlySet<number>): boolean {
+    return (decal.surface ?? 'ground') === 'rock' && activeCellKeys.has(rockCellKey(decal));
+  }
+
+  private static selectAnchoredRockDecals(
+    decals: readonly DecalCell[],
+    activeCellKeys: ReadonlySet<number>,
+  ): DecalCell[] {
+    return decals.filter((decal) => ArenaBuilder.hasLivingRockDecalAnchor(decal, activeCellKeys));
+  }
+
+  /**
+   * Schneidet aus dem gebackenen Fels-Decal-Layer die Flaeche gefallener Felsen heraus.
+   *
+   * Solange noch jede je belegte Zelle einen Fels traegt – der Normalfall beim Rundenaufbau –
+   * entfaellt der Schnitt vollstaendig und die arenagrosse Stanzform wird gar nicht erst angelegt.
+   */
+  private static eraseFallenRockDecals(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    activeCellKeys: ReadonlySet<number>,
+    activeRocks: readonly Phaser.GameObjects.Image[],
+    worldFrame: RockWorldFrame,
+    layer: Phaser.GameObjects.RenderTexture,
+  ): void {
+    if (!hasFallenRockCells(result.rockOverlaySource, activeCellKeys)) return;
+
+    const cutout = result.rockDecalCutout
+      ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
+    // 'redraw': Der Kommandopuffer wird geleert, die Stanzform selbst nie gezeichnet.
+    cutout.setRenderMode('redraw');
+    result.rockDecalCutout = cutout;
+    fillRockDecalCutout(cutout, result.rockOverlaySource.cells, activeRocks);
+
+    const cutoutImage = new Phaser.GameObjects.Image(scene, worldFrame.offsetX, worldFrame.offsetY, cutout.texture.key)
+      .setOrigin(0, 0);
+    layer.erase(cutoutImage);
+    layer.render();
+    cutoutImage.destroy();
+  }
+
+  /**
+   * Backt nur die Chunks neu, deren sichtbares Ergebnis sich tatsaechlich aendern kann.
    * Die persistenten Arena-Layer bleiben bestehen; kleine Scratch-RenderTextures schneiden
    * Mottle und Decals exakt auf den Chunk zu und verhindern damit Doppel-Blending ausserhalb
    * der Dirty-Region.
+   *
+   * Der Chunk-Neubau ist nur deshalb ununterscheidbar vom Vollbake, weil die Platzierung aller
+   * vier Schichten aus dem vollstaendigen Bestand entsteht: Ein Chunk zieht seine Quellzellen und
+   * Platzierungen mitsamt Reichweite aus derselben unveraenderlichen Menge, aus der auch die
+   * unberuehrten Nachbarchunks gebacken wurden.
    */
   static rebuildRockOverlayRegions(
     scene: Phaser.Scene,
@@ -711,15 +795,26 @@ export class ArenaBuilder {
     worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
   ): void {
     if (dirtyRockIds.size === 0 || result.rockMottleLayers.length === 0) return;
-    const chunks = ArenaBuilder.collectRockOverlayChunks(layout, dirtyRockIds, worldFrame);
+
+    const addedSourceCells = syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
+    const dirtyCells: RockCell[] = [];
+    for (const id of dirtyRockIds) {
+      const cell = layout.rocks[id];
+      if (cell) dirtyCells.push(cell);
+    }
+    const chunks = collectRockOverlayChunks(dirtyCells, addedSourceCells, worldFrame);
     if (chunks.length === 0) return;
 
     const scratch = ArenaBuilder.ensureRockOverlayScratch(scene, result);
     const configs = [ROCK_BLOB_SURFACE_PROFILE.mottle, ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? [])];
     const reach = getBlobSurfaceMottleReachPx(ROCK_BLOB_SURFACE_PROFILE);
     const activeRockIds = new Set<number>();
+    const activeCellKeys = new Set<number>();
     for (let id = 0; id < layout.rocks.length; id += 1) {
-      if (result.rockObjects[id]?.active) activeRockIds.add(id);
+      const cell = layout.rocks[id];
+      if (!cell || !result.rockObjects[id]?.active) continue;
+      activeRockIds.add(id);
+      activeCellKeys.add(rockCellKey(cell));
     }
 
     for (const chunk of chunks) {
@@ -729,7 +824,6 @@ export class ArenaBuilder {
       const chunkMaxY = chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
       const silhouetteImages: Phaser.GameObjects.Image[] = [];
       const vegetationMaskImages: Phaser.GameObjects.Image[] = [];
-      const sourceCells: RockCell[] = [];
 
       for (const id of activeRockIds) {
         const cell = layout.rocks[id];
@@ -751,9 +845,25 @@ export class ArenaBuilder {
           && cellMinY - ROCK_VEGETATION_MASK_MARGIN_PX < chunkMaxY) {
           vegetationMaskImages.push(image);
         }
+      }
+
+      // Materialquelle und Decal-Stanzform kommen aus dem vollstaendigen Bestand, nicht aus den
+      // lebenden Felsen: Die Flecken eines gefallenen Felsens reichen bis zu `reach` weit auf
+      // seine Nachbarn, und wuerden sie mit ihm verschwinden, spraenge dort das Material um.
+      const sourceCells: RockCell[] = [];
+      const decalCutoutCells: RockCell[] = [];
+      for (const cell of result.rockOverlaySource.cells) {
+        const cellMinX = cell.gridX * CELL_SIZE;
+        const cellMinY = cell.gridY * CELL_SIZE;
+        const cellMaxX = cellMinX + CELL_SIZE;
+        const cellMaxY = cellMinY + CELL_SIZE;
         if (cellMaxX + reach > chunk.localX && cellMinX - reach < chunkMaxX
           && cellMaxY + reach > chunk.localY && cellMinY - reach < chunkMaxY) {
           sourceCells.push(cell);
+        }
+        if (cellMaxX > chunk.localX && cellMinX < chunkMaxX
+          && cellMaxY > chunk.localY && cellMinY < chunkMaxY) {
+          decalCutoutCells.push(cell);
         }
       }
 
@@ -801,9 +911,21 @@ export class ArenaBuilder {
       const vegetationMasks = ArenaVisualFactory.createRockVegetationMasks(scene, vegetationMaskImages);
       ArenaBuilder.rebuildRockVegetationRegion(scene, result, chunk, worldX, worldY, vegetationMasks, scratch);
       for (const mask of vegetationMasks) mask.destroy();
-    }
 
-    ArenaBuilder.rebuildRockDecalRegions(scene, result, layout, dirtyRockIds, activeRockIds, worldFrame, scratch);
+      ArenaBuilder.rebuildRockDecalRegion(
+        scene,
+        result,
+        layout,
+        chunk,
+        worldX,
+        worldY,
+        decalCutoutCells,
+        silhouetteImages,
+        activeCellKeys,
+        scratch,
+        worldFrame,
+      );
+    }
   }
 
   /**
@@ -845,8 +967,11 @@ export class ArenaBuilder {
       stampRockMoss(scene, scratch.moss, localPlacements, -worldX, -worldY);
       scratch.moss.render();
       scratch.moss.erase(scratch.mossCutoutImage);
-      scratch.moss.render();
     }
+    // Muss auch ohne Platzierungen laufen: `clear()` ist ein gepufferter Befehl, der erst hier
+    // ausgefuehrt wird. Ohne diesen Aufruf traegt das Scratch-Ziel beim naechsten `draw` noch den
+    // Inhalt des zuvor bearbeiteten Chunks – sichtbar als Moos auf leerem Boden.
+    scratch.moss.render();
 
     layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
     scratch.moss.setVisible(true);
@@ -893,37 +1018,16 @@ export class ArenaBuilder {
       stampRockVegetation(scene, scratch.vegetation, localPlacements, -worldX, -worldY);
       scratch.vegetation.render();
       scratch.vegetation.erase(scratch.vegetationCutoutImage);
-      scratch.vegetation.render();
     }
+    // Wie beim Moos: Der Leerbefehl wird erst hier ausgefuehrt, und ohne ihn landet der Inhalt des
+    // vorigen Chunks in diesem.
+    scratch.vegetation.render();
 
     layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
     scratch.vegetation.setVisible(true);
     layer.draw(scratch.vegetation);
     layer.render();
     scratch.vegetation.setVisible(false);
-  }
-
-  private static collectRockOverlayChunks(
-    layout: ArenaLayout,
-    dirtyRockIds: ReadonlySet<number>,
-    worldFrame: RockWorldFrame,
-  ): RockOverlayChunk[] {
-    const chunks = new Map<string, RockOverlayChunk>();
-    for (const id of dirtyRockIds) {
-      const cell = layout.rocks[id];
-      if (!cell) continue;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const localX = (cell.gridX + dx) * CELL_SIZE;
-          const localY = (cell.gridY + dy) * CELL_SIZE;
-          if (localX < 0 || localY < 0 || localX >= worldFrame.width || localY >= worldFrame.height) continue;
-          const chunkX = Math.floor(localX / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
-          const chunkY = Math.floor(localY / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
-          chunks.set(`${chunkX}:${chunkY}`, { localX: chunkX, localY: chunkY });
-        }
-      }
-    }
-    return [...chunks.values()];
   }
 
   private static ensureRockOverlayScratch(scene: Phaser.Scene, result: ArenaBuilderResult): RockOverlayScratch {
@@ -944,11 +1048,16 @@ export class ArenaBuilder {
     const vegetationCutout = makeScratch();
     vegetationCutout.setRenderMode('redraw');
     const vegetationCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, vegetationCutout.texture.key).setOrigin(0, 0);
+    const decalCutout = makeScratch();
+    decalCutout.setRenderMode('redraw');
+    const decalCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, decalCutout.texture.key).setOrigin(0, 0);
     result.rockOverlayScratch = {
       cutout,
       cutoutImage,
       mottleLayers,
       decal: makeScratch(),
+      decalCutout,
+      decalCutoutImage,
       moss: makeScratch(),
       mossCutout,
       mossCutoutImage,
@@ -959,81 +1068,72 @@ export class ArenaBuilder {
     return result.rockOverlayScratch;
   }
 
-  private static rebuildRockDecalRegions(
+  /**
+   * Backt die Fels-Decals eines einzelnen Chunks neu.
+   *
+   * Gezeichnet werden **alle** Fels-Decals, die in den Chunk hineinreichen – auch solche, deren
+   * Traegerfelsen teilweise gefallen sind. Den Unterschied macht anschliessend die Stanzform aus
+   * {@link ./RockDecalLayer}: Sie nimmt genau die Flaeche gefallener Felsen weg und laesst den
+   * Anteil auf stehendem Fels wie auch den Ueberhang auf nie belegtem Boden unberuehrt.
+   */
+  private static rebuildRockDecalRegion(
     scene: Phaser.Scene,
     result: ArenaBuilderResult,
     layout: ArenaLayout,
-    dirtyRockIds: ReadonlySet<number>,
-    activeRockIds: ReadonlySet<number>,
-    worldFrame: RockWorldFrame,
+    chunk: RockOverlayChunk,
+    worldX: number,
+    worldY: number,
+    decalCutoutCells: readonly RockCell[],
+    activeRocks: readonly Phaser.GameObjects.Image[],
+    activeCellKeys: ReadonlySet<number>,
     scratch: RockOverlayScratch,
+    worldFrame: RockWorldFrame,
   ): void {
-    const affected = (layout.decals ?? []).filter((decal) =>
-      (decal.surface ?? 'ground') === 'rock'
-      && decal.rockIds?.some((id) => dirtyRockIds.has(id)),
-    );
-    if (affected.length === 0) return;
-
-    const chunks = new Map<string, RockOverlayChunk>();
-    for (const decal of affected) {
-      const size = decal.displaySize ?? CELL_SIZE;
-      const radius = size * Math.SQRT1_2;
+    const candidates = (layout.decals ?? []).filter((decal) => {
+      if (!ArenaBuilder.hasLivingRockDecalAnchor(decal, activeCellKeys)) return false;
+      const radius = (decal.displaySize ?? CELL_SIZE) * Math.SQRT1_2;
       const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
       const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
-      const minChunkX = Math.floor(Math.max(0, centerX - radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
-      const minChunkY = Math.floor(Math.max(0, centerY - radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
-      const maxChunkX = Math.floor(Math.min(worldFrame.width - 1, centerX + radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
-      const maxChunkY = Math.floor(Math.min(worldFrame.height - 1, centerY + radius) / ROCK_OVERLAY_CHUNK_SIZE) * ROCK_OVERLAY_CHUNK_SIZE;
-      for (let y = minChunkY; y <= maxChunkY; y += ROCK_OVERLAY_CHUNK_SIZE) {
-        for (let x = minChunkX; x <= maxChunkX; x += ROCK_OVERLAY_CHUNK_SIZE) {
-          chunks.set(`${x}:${y}`, { localX: x, localY: y });
-        }
-      }
-    }
+      return centerX + radius > chunk.localX
+        && centerX - radius < chunk.localX + ROCK_OVERLAY_CHUNK_SIZE
+        && centerY + radius > chunk.localY
+        && centerY - radius < chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
+    });
+    if (candidates.length === 0 && !result.rockDecalLayer) return;
 
-    for (const chunk of chunks.values()) {
-      const candidates = (layout.decals ?? []).filter((decal) => {
-        if ((decal.surface ?? 'ground') !== 'rock') return false;
-        if (decal.rockIds?.some((id) => !activeRockIds.has(id))) return false;
-        const size = decal.displaySize ?? CELL_SIZE;
-        const radius = size * Math.SQRT1_2;
-        const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
-        const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
-        return centerX + radius > chunk.localX
-          && centerX - radius < chunk.localX + ROCK_OVERLAY_CHUNK_SIZE
-          && centerY + radius > chunk.localY
-          && centerY - radius < chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
-      });
-      const images = ArenaVisualFactory.createRockDecals(
-        scene,
-        candidates,
-        { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
-        activeRockIds,
-      );
-      if (!result.rockDecalLayer && images.length > 0) {
-        result.rockDecalLayer = ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
-      }
-      const layer = result.rockDecalLayer;
-      if (!layer) {
-        for (const image of images) image.destroy();
-        continue;
-      }
+    const layer = result.rockDecalLayer
+      ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
+    result.rockDecalLayer = layer;
 
-      const worldX = worldFrame.offsetX + chunk.localX;
-      const worldY = worldFrame.offsetY + chunk.localY;
-      scratch.decal.setPosition(worldX, worldY);
-      scratch.decal.camera.setScroll(worldX, worldY);
-      scratch.decal.clear();
-      if (images.length > 0) scratch.decal.draw(images);
+    const images = ArenaVisualFactory.createRockDecals(
+      scene,
+      candidates,
+      { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
+    );
+    scratch.decal.setPosition(worldX, worldY);
+    scratch.decal.camera.setScroll(worldX, worldY);
+    scratch.decal.clear();
+    if (images.length > 0) {
+      scratch.decal.draw(images);
       scratch.decal.render();
-      for (const image of images) image.destroy();
 
-      layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-      scratch.decal.setVisible(true);
-      layer.draw(scratch.decal);
-      layer.render();
-      scratch.decal.setVisible(false);
+      scratch.decalCutout.setPosition(worldX, worldY);
+      scratch.decalCutout.camera.setScroll(worldX, worldY);
+      fillRockDecalCutout(scratch.decalCutout, decalCutoutCells, activeRocks, -chunk.localX, -chunk.localY);
+      // Anders als bei Moos und Vegetation ist die Kamera dieses Scratch-Ziels gescrollt, weil es
+      // weltpositionierte Decal-Images zeichnet. Die Stanzform muss deshalb an der Chunk-Weltecke
+      // sitzen, damit sie nach der Kameratransformation deckungsgleich bei (0,0) landet.
+      scratch.decalCutoutImage.setPosition(worldX, worldY);
+      scratch.decal.erase(scratch.decalCutoutImage);
     }
+    scratch.decal.render();
+    for (const image of images) image.destroy();
+
+    layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+    scratch.decal.setVisible(true);
+    layer.draw(scratch.decal);
+    layer.render();
+    scratch.decal.setVisible(false);
   }
 
   /** Arenagrosse RenderTexture in Weltkoordinaten – gemeinsame Grundlage aller gebackenen Layer. */
@@ -1105,6 +1205,10 @@ export class ArenaBuilder {
 
     if (result.rockDecalLayer?.active) result.rockDecalLayer.destroy();
     result.rockDecalLayer = null;
+    if (result.rockDecalCutout?.active) result.rockDecalCutout.destroy();
+    result.rockDecalCutout = null;
+    result.rockOverlaySource.cells.length = 0;
+    result.rockOverlaySource.keys.clear();
 
     if (result.rockMossLayer?.active) result.rockMossLayer.destroy();
     result.rockMossLayer = null;
@@ -1131,6 +1235,8 @@ export class ArenaBuilder {
       result.rockOverlayScratch.cutoutImage.destroy();
       for (const layer of result.rockOverlayScratch.mottleLayers) layer.destroy();
       result.rockOverlayScratch.decal.destroy();
+      result.rockOverlayScratch.decalCutout.destroy();
+      result.rockOverlayScratch.decalCutoutImage.destroy();
       result.rockOverlayScratch.moss.destroy();
       result.rockOverlayScratch.mossCutout.destroy();
       result.rockOverlayScratch.mossCutoutImage.destroy();
