@@ -20,6 +20,7 @@ import {
   getCoopDefenseTutorialRockRegion,
 } from '../config/coopDefenseTutorial';
 import { getMapTutorial } from '../i18n/contentPresentation';
+import { createOrganicDirtMargin } from './OrganicDirtMargin';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
 /** Abtastschritt entlang eines Gangs in Zellen; kleiner = glattere Wand, mehr Rechenaufwand. */
@@ -34,17 +35,8 @@ const CORRIDOR_TAPER_CELLS = 3;
 /** Harte Untergrenze des Aushubradius, damit nie eine unpassierbare Engstelle entsteht. */
 const MIN_CARVED_RADIUS_CELLS = 1.05;
 
-/**
- * Wahrscheinlichkeit, mit der eine Diagonalzelle in den Dirt-Saum um ein Hindernis kommt.
- *
- * Ein deterministischer 8er-Saum laeuft exakt parallel zur Fels-Silhouette und wird selbst
- * per 47-Blob gekachelt: das Bild bekommt dann zwei harte Konturen im Abstand einer Zelle
- * und liest sich doppelt so blockig. Die Kardinalzellen bleiben deshalb sicher gesetzt
- * (kein Loch an einer geraden Felswand), die Diagonalen brechen die Parallelitaet an jeder
- * Ecke auf.
- */
-const DIRT_MARGIN_DIAGONAL_CHANCE = 0.55;
-
+// Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin und wird auch von der Lobby-Vorschau
+// verwendet; die Arena behält hier nur ihre eigene Reserveflaechen- und Wachstumslogik.
 function clampToUnitRange(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
@@ -205,25 +197,18 @@ export class ArenaGenerator {
 
       // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
       const dirtSet = new Set<number>(); // gy * GRID_COLS + gx
-      const addWithMargin = (gx: number, gy: number) => {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = gx + dx;
-            const ny = gy + dy;
-            if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-            if (isReservedBaseSurfaceCell(nx, ny)) continue;
-            const isDiagonal = dx !== 0 && dy !== 0;
-            if (isDiagonal && rng() >= DIRT_MARGIN_DIAGONAL_CHANCE) continue;
-            dirtSet.add(ny * GRID_COLS + nx);
-          }
-        }
-      };
-      // 1. Felsen-Positionen + 1-Zellen-Rand drumherum
-      for (const { gridX, gridY } of rocks) addWithMargin(gridX, gridY);
-      // 2. Gleis-Positionen + 1-Zellen-Rand drumherum (beide Gleisspalten: col und col+1)
+      const marginSources: Array<{ gridX: number; gridY: number }> = [...rocks];
+      // Felsen- und Gleis-Positionen + 1-Zellen-Rand drumherum. Gleise belegen zwei Spalten.
       for (const { gridX, gridY } of tracks) {
-        addWithMargin(gridX, gridY);
-        addWithMargin(gridX + 1, gridY);
+        marginSources.push({ gridX, gridY }, { gridX: gridX + 1, gridY });
+      }
+      for (const cell of createOrganicDirtMargin(marginSources, {
+        maxCols: GRID_COLS,
+        maxRows: GRID_ROWS,
+        rng,
+        isReservedCell: isReservedBaseSurfaceCell,
+      })) {
+        dirtSet.add(cell.gridY * GRID_COLS + cell.gridX);
       }
       // 3. Zufällige Flecken – nur an Nachbarzellen von bestehendem Dirt (zusammenhängend)
       //    Mehrere Passes, damit das Netz organisch wächst.

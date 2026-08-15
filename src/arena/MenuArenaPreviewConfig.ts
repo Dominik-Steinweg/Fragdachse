@@ -4,6 +4,7 @@ import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, TreeCell } 
 import { ARENA_DECAL_CONFIG, ROCK_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import { generateSolidRockFormation } from './SolidRockFormation';
+import { createOrganicDirtMargin } from './OrganicDirtMargin';
 
 interface GridRect {
   minX: number;
@@ -261,24 +262,6 @@ function excludeRectCells<T extends RockCell | TreeCell | DirtCell | TrackCell>(
   return cells.filter((cell) => rects.every((rect) => !isInsideRect(cell.gridX, cell.gridY, rect)));
 }
 
-function surround(cells: ReadonlyArray<RockCell | TrackCell>, margin = 1, maxCols = MENU_GRID_COLS, maxRows = GRID_ROWS): DirtCell[] {
-  const keys = new Set<string>();
-  for (const { gridX, gridY } of cells) {
-    for (let dy = -margin; dy <= margin; dy += 1) {
-      for (let dx = -margin; dx <= margin; dx += 1) {
-        const nextX = gridX + dx;
-        const nextY = gridY + dy;
-        if (nextX < 0 || nextY < 0 || nextX >= maxCols || nextY >= maxRows) continue;
-        keys.add(`${nextX}:${nextY}`);
-      }
-    }
-  }
-  return Array.from(keys, (key) => {
-    const [gridX, gridY] = key.split(':').map(Number);
-    return { gridX, gridY };
-  });
-}
-
 function ellipseCells(centerX: number, centerY: number, radiusX: number, radiusY: number): RockCell[] {
   const result: RockCell[] = [];
   const minX = Math.max(0, Math.floor(centerX - radiusX - 1));
@@ -337,11 +320,10 @@ function createOrganicRockClusters(anchors: readonly RockClusterAnchor[], seed: 
   );
 }
 
-function createOrganicTopDirtBand(seed: number, titleStartX: number, titleWidth: number): DirtCell[] {
+function createOrganicTopDirtBand(seed: number): DirtCell[] {
   const rng = createPreviewRng(seed);
   const result: DirtCell[] = [];
   let depth = 5;
-  const titleCenterX = titleStartX + titleWidth * 0.5;
 
   for (let gridX = 0; gridX < MENU_GRID_COLS; gridX += 1) {
     const drift = rng();
@@ -349,13 +331,8 @@ function createOrganicTopDirtBand(seed: number, titleStartX: number, titleWidth:
     else if (drift > 0.72) depth += 1;
     depth = clampInt(depth, 4, 7);
 
-    const distanceToTitle = Math.abs(gridX - titleCenterX);
-    const withinTitleBand = gridX >= titleStartX - 3 && gridX <= titleStartX + titleWidth + 2;
-    const titleSag = withinTitleBand
-      ? clampInt(2.8 - distanceToTitle / 5 + (rng() - 0.5) * 1.2, 0, 3)
-      : 0;
     const edgeWeight = gridX < 5 || gridX > MENU_GRID_COLS - 6 ? 1 : 0;
-    const columnDepth = clampInt(depth + titleSag + edgeWeight, 4, 9);
+    const columnDepth = clampInt(depth + edgeWeight, 4, 7);
 
     for (let gridY = 0; gridY <= columnDepth; gridY += 1) {
       result.push({ gridX, gridY });
@@ -749,18 +726,30 @@ const finalRocks = mergeUnique<RockCell>(
   ]),
 ).filter((cell) => !trackFootprint.some((trackCell) => trackCell.gridX === cell.gridX && trackCell.gridY === cell.gridY));
 const finalTrees = excludeRectCells(trees, [...overlayClearZones, titleTreeClearZone]);
-const titleFrameBlendDirt = points<DirtCell>([
-  [8, 7], [9, 7], [10, 7],
-  [9, 8], [10, 8], [11, 8],
-  [10, 9], [11, 9],
-  [11, 10],
-]);
-const topDirtBand = createOrganicTopDirtBand(MENU_PREVIEW_SEED + 211, TITLE_START_X, textWidth(TITLE_TEXT, TITLE_GAP));
-const rockBorderDirt = surround([...finalRocks, ...trackFootprint], 1, MENU_GRID_COLS, GRID_ROWS);
+const titleDirtClearZone: GridRect = {
+  minX: Math.max(0, TITLE_START_X - 1),
+  maxX: Math.min(MENU_GRID_COLS - 1, TITLE_START_X + textWidth(TITLE_TEXT, TITLE_GAP)),
+  minY: 0,
+  maxY: 9,
+};
+// Der obere Streifen bleibt nur als schmale, organische Lobby-Rahmung ausserhalb des
+// Schriftzuges. Um die Buchstaben entsteht der Dirt-Saum ausschliesslich aus der gemeinsamen
+// Arena-Margenregel (Kardinalen sicher, Diagonalen unregelmaessig).
+const topDirtBand = excludeRectCells(
+  createOrganicTopDirtBand(MENU_PREVIEW_SEED + 211),
+  [titleDirtClearZone],
+);
+const rockBorderDirt = createOrganicDirtMargin(
+  [...finalRocks, ...trackFootprint],
+  {
+    maxCols: MENU_GRID_COLS,
+    maxRows: GRID_ROWS,
+    rng: createPreviewRng(MENU_PREVIEW_SEED + 223),
+  },
+);
 const dirt = excludeRectCells(
   mergeUnique<DirtCell>(
     topDirtBand,
-    titleFrameBlendDirt,
     line(44, 59, 30),
     line(43, 59, 31),
     line(46, 59, 32),
@@ -781,7 +770,9 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
       height: ARENA_HEIGHT,
     },
     backgroundAlpha: 1,
-    backgroundTint: 0xb8d49a,
+    // Arena-Hintergrundtexturen werden im Spiel neutral gezeichnet; die Lobby fuegt keinen
+    // eigenen Gras-Wash mehr hinzu.
+    backgroundTint: 0xffffff,
     frame: {
       showSidebars: false,
       sidebarAlpha: 1,
@@ -790,24 +781,20 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
     },
     overlay: {
       arenaShadeColor: 0x102018,
-      arenaShadeAlpha: 0.14,
+      // Die UI-Panels tragen die Lobby-Lesbarkeit; globales Abdunkeln verfremdet Terrain.
+      arenaShadeAlpha: 0,
       screenShadeColor: 0x050709,
-      screenShadeAlpha: 0.08,
+      screenShadeAlpha: 0,
     },
-    dirt: { visible: true, alpha: 0.92 },
-    // Bewusst unter der Arena-Deckkraft: in der Lobby liegt Menütext über dem Boden.
-    groundCover: { visible: true, alpha: 0.62 },
+    dirt: { visible: true, alpha: 1 },
+    // Ground cover bleibt bewusst vollstaendig sichtbar wie in der Arena.
+    groundCover: { visible: true, alpha: 1 },
     tracks: { visible: false, alpha: 0 },
-    decals: { visible: true, alpha: 0.9 },
+    decals: { visible: true, alpha: 1 },
     rocks: { visible: true, alpha: 1 },
-    // Etwas zurueckgenommen: Der Fels-Schriftzug der Lobby muss als Form lesbar bleiben.
-    rockMoss: { visible: true, alpha: 0.8 },
-    /**
-     * Aus demselben Grund staerker zurueckgenommen als in der Arena: Die Kantenmatten sitzen genau
-     * dort, wo die Buchstabenformen entstehen, und ragen ueber sie hinaus. Wird der Schriftzug
-     * unleserlich, ist dieser Eintrag die Stellschraube – bis hin zu `visible: false`.
-     */
-    rockVegetation: { visible: true, alpha: 0.7 },
+    // Moos und Fels-Vegetation folgen bewusst vollstaendig dem Arena-Profil.
+    rockMoss: { visible: true, alpha: 1 },
+    rockVegetation: { visible: true, alpha: 1 },
     trunks: { visible: false, alpha: 0 },
     canopies: { visible: true, alpha: 1 },
   },

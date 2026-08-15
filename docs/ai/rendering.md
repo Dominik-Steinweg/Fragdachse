@@ -62,6 +62,16 @@ Beim Rock-Overlay-Regional-Rebuild gilt eine feste Koordinatengrenze: Der komple
 
 Dieselbe Grenze gilt fuer regionale statische Schatten: `ShadowSystem.bakeShadowChunk()` liest weltpositionierte Graphics ueber die Scratch-Kamera ein, ersetzt den arenaweiten Bake danach aber ausschliesslich per Texture-Stamp an `chunk - worldBounds.min`. Ein weltpositioniertes Scratch-RenderTexture darf auch dort nicht als GameObject in den bereits gescrollten Arena-Layer gezeichnet werden; die Zielkamera bleibt waehrend `clear`/`stamp`/`render` ebenfalls neutral und wird erst danach auf den Arena-Offset zurueckgesetzt.
 
+## Lobby-Terrainparitaet
+
+Die Lobby-Vorschau verwendet fuer Gras, Dirt, Ground Cover, Decals, Felsen, Fels-Moos und
+Fels-Vegetation dieselben Texturpfade, `ArenaVisualFactory`, Blob-Surface-Profile und Bake-
+Helper wie die Arena. Die absichtlichen Unterschiede bleiben auf das authored Lobby-Layout
+beschraenkt: Felsschriftzug, Rahmen, UI-Reserveflaechen und die Ambient-Freiflaechen; Gleise und
+Baumstaemme sind in diesem Layout nicht belegt. Ambient-Felszerstoerung aktualisiert weiterhin
+den stabilen Felsbestand ueber `setRockAlive()` und backt die abhaengigen Baender gesammelt neu;
+der Teardown stellt den kanonischen Bestand wieder her und leert ihn vor dem Arena-Uebergang.
+
 ## Lighting und Schatten
 
 ShadowSystem, LightingSystem und Post-FX sind getrennte Verantwortlichkeiten. LightingSystem komponiert dynamisches Licht und Verdeckung in eine Lightmap, die als ein Overlay in der Tiefenordnung liegt. Phasers eingebautes per-Object-Lighting ist dafür nicht der Projektvertrag.
