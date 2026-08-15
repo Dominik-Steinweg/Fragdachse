@@ -30,6 +30,10 @@ import { bakeGroundCoverLayer } from './GroundCoverLayer';
 import { generateRockMossPlacements, getRockMossPlacementRadiusPx } from './RockMossField';
 import type { RockMossPlacement } from './RockMossField';
 import { bakeRockMossLayer, fillRockMossCutout, stampRockMoss } from './RockMossLayer';
+import { generateRockVegetationPlacements, getRockVegetationPlacementRadiusPx } from './RockVegetationField';
+import type { RockVegetationPlacement } from './RockVegetationField';
+import { bakeRockVegetationLayer, fillRockVegetationCutout, stampRockVegetation } from './RockVegetationLayer';
+import { ROCK_VEGETATION_MASK_MARGIN_PX } from './RockVegetationConfig';
 import { RockGridIndex } from './RockGridIndex';
 import {
   ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
@@ -135,6 +139,20 @@ export interface ArenaBuilderResult {
    */
   rockMossPlacements: RockMossPlacement[];
   /**
+   * Kantenmatten aus Moos, Flechten und Efeu samt ihrer Stanzform. Aufbau und Lebensdauer wie beim
+   * Fels-Moos; der Unterschied liegt allein in der Maske, die hier ueber die Felskante hinaus
+   * reicht statt innerhalb der Kachel auszulaufen.
+   */
+  rockVegetationLayer: Phaser.GameObjects.RenderTexture | null;
+  rockVegetationCutout: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Die Kantenmatten der Runde. Einmalig aus `layout.seed` und dem **vollstaendigen** Felsbestand
+   * erzeugt und danach unveraendert – dieselbe Regel wie bei `rockMossPlacements`, hier zusaetzlich
+   * die Voraussetzung dafuer, dass eine Zerstoerung nur den Anteil des gefallenen Felsens entfernt
+   * und die uebrige Matte Pixel fuer Pixel stehen laesst.
+   */
+  rockVegetationPlacements: RockVegetationPlacement[];
+  /**
    * Gebackene, nicht-periodische Materialstoerungen der Felsflaeche (`BlobSurfaceMottle`).
    * Die geordnete NORMAL- und MULTIPLY-Kombination wird bei Hindernisaenderungen erhalten.
    */
@@ -164,6 +182,10 @@ interface RockOverlayScratch {
   moss: Phaser.GameObjects.RenderTexture;
   mossCutout: Phaser.GameObjects.RenderTexture;
   mossCutoutImage: Phaser.GameObjects.Image;
+  /** Wieder eine eigene Stanzform: Die Vegetation schneidet an der Reichweiten-, nicht an der Verlaufsmaske. */
+  vegetation: Phaser.GameObjects.RenderTexture;
+  vegetationCutout: Phaser.GameObjects.RenderTexture;
+  vegetationCutoutImage: Phaser.GameObjects.Image;
 }
 
 interface RockOverlayChunk {
@@ -345,6 +367,14 @@ export class ArenaBuilder {
       rockMossCutout: null,
       // Einmalig hier erzeugt und nie wieder: siehe `rockMossPlacements`.
       rockMossPlacements: generateRockMossPlacements({
+        seed: layout.seed,
+        rocks: layout.rocks,
+        metrics: { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, gridCols: GRID_COLS, gridRows: GRID_ROWS },
+      }),
+      rockVegetationLayer: null,
+      rockVegetationCutout: null,
+      // Ebenfalls einmalig hier erzeugt und nie wieder: siehe `rockVegetationPlacements`.
+      rockVegetationPlacements: generateRockVegetationPlacements({
         seed: layout.seed,
         rocks: layout.rocks,
         metrics: { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, gridCols: GRID_COLS, gridRows: GRID_ROWS },
@@ -634,6 +664,21 @@ export class ArenaBuilder {
     result.rockMossCutout = moss.cutout;
     for (const mask of mossMasks) mask.destroy();
 
+    // Die Kantenmatten liegen ueber allem Felsgebundenen. Auch hier bleibt die Platzierung
+    // unberuehrt; neu gebacken wird nur der Schnitt auf den aktuellen Bestand.
+    const vegetationMasks = ArenaVisualFactory.createRockVegetationMasks(scene, activeRocks);
+    const vegetation = bakeRockVegetationLayer(
+      scene,
+      result.rockVegetationPlacements,
+      vegetationMasks,
+      worldFrame,
+      DEPTH.ROCK_VEGETATION,
+      { layer: result.rockVegetationLayer, cutout: result.rockVegetationCutout },
+    );
+    result.rockVegetationLayer = vegetation.layer;
+    result.rockVegetationCutout = vegetation.cutout;
+    for (const mask of vegetationMasks) mask.destroy();
+
     const decalImages = ArenaVisualFactory.createRockDecals(
       scene,
       layout.decals ?? [],
@@ -683,6 +728,7 @@ export class ArenaBuilder {
       const chunkMaxX = chunk.localX + ROCK_OVERLAY_CHUNK_SIZE;
       const chunkMaxY = chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
       const silhouetteImages: Phaser.GameObjects.Image[] = [];
+      const vegetationMaskImages: Phaser.GameObjects.Image[] = [];
       const sourceCells: RockCell[] = [];
 
       for (const id of activeRockIds) {
@@ -696,6 +742,14 @@ export class ArenaBuilder {
         if (cellMaxX > chunk.localX && cellMinX < chunkMaxX
           && cellMaxY > chunk.localY && cellMinY < chunkMaxY) {
           silhouetteImages.push(image);
+        }
+        // Die Reichweitenmaske ragt ueber ihre Zelle hinaus. Ein Fels im Nachbarchunk deckt
+        // deshalb noch in diesen hinein; ohne den Rand fehlte an jeder Chunkgrenze ein Streifen.
+        if (cellMaxX + ROCK_VEGETATION_MASK_MARGIN_PX > chunk.localX
+          && cellMinX - ROCK_VEGETATION_MASK_MARGIN_PX < chunkMaxX
+          && cellMaxY + ROCK_VEGETATION_MASK_MARGIN_PX > chunk.localY
+          && cellMinY - ROCK_VEGETATION_MASK_MARGIN_PX < chunkMaxY) {
+          vegetationMaskImages.push(image);
         }
         if (cellMaxX + reach > chunk.localX && cellMinX - reach < chunkMaxX
           && cellMaxY + reach > chunk.localY && cellMinY - reach < chunkMaxY) {
@@ -743,6 +797,10 @@ export class ArenaBuilder {
       const maskImages = ArenaVisualFactory.createRockMossMasks(scene, silhouetteImages);
       ArenaBuilder.rebuildRockMossRegion(scene, result, chunk, worldX, worldY, maskImages, scratch);
       for (const mask of maskImages) mask.destroy();
+
+      const vegetationMasks = ArenaVisualFactory.createRockVegetationMasks(scene, vegetationMaskImages);
+      ArenaBuilder.rebuildRockVegetationRegion(scene, result, chunk, worldX, worldY, vegetationMasks, scratch);
+      for (const mask of vegetationMasks) mask.destroy();
     }
 
     ArenaBuilder.rebuildRockDecalRegions(scene, result, layout, dirtyRockIds, activeRockIds, worldFrame, scratch);
@@ -797,6 +855,54 @@ export class ArenaBuilder {
     scratch.moss.setVisible(false);
   }
 
+  /**
+   * Backt die Vegetationsschicht eines einzelnen Chunks neu – Gegenstueck zu
+   * {@link rebuildRockMossRegion} mit derselben Regel: Die Matten selbst werden nie angefasst,
+   * gefiltert wird nur, welche der unveraenderlichen Platzierungen in den Chunk hineinreichen.
+   * Neu ist ausschliesslich die Stanzform aus der inzwischen geaenderten Felssilhouette.
+   */
+  private static rebuildRockVegetationRegion(
+    scene: Phaser.Scene,
+    result: ArenaBuilderResult,
+    chunk: RockOverlayChunk,
+    worldX: number,
+    worldY: number,
+    maskImages: readonly Phaser.GameObjects.Image[],
+    scratch: RockOverlayScratch,
+  ): void {
+    const layer = result.rockVegetationLayer;
+    if (!layer) return;
+
+    const chunkMaxX = chunk.localX + ROCK_OVERLAY_CHUNK_SIZE;
+    const chunkMaxY = chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
+    const localPlacements = result.rockVegetationPlacements.filter((placement) => {
+      const radius = getRockVegetationPlacementRadiusPx(placement);
+      const localX = placement.worldX - (worldX - chunk.localX);
+      const localY = placement.worldY - (worldY - chunk.localY);
+      return localX + radius > chunk.localX && localX - radius < chunkMaxX
+        && localY + radius > chunk.localY && localY - radius < chunkMaxY;
+    });
+
+    scratch.vegetationCutout.setPosition(worldX, worldY);
+    scratch.vegetationCutout.camera.setScroll(worldX, worldY);
+    fillRockVegetationCutout(scratch.vegetationCutout, maskImages);
+
+    scratch.vegetation.setPosition(worldX, worldY);
+    scratch.vegetation.clear();
+    if (localPlacements.length > 0) {
+      stampRockVegetation(scene, scratch.vegetation, localPlacements, -worldX, -worldY);
+      scratch.vegetation.render();
+      scratch.vegetation.erase(scratch.vegetationCutoutImage);
+      scratch.vegetation.render();
+    }
+
+    layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+    scratch.vegetation.setVisible(true);
+    layer.draw(scratch.vegetation);
+    layer.render();
+    scratch.vegetation.setVisible(false);
+  }
+
   private static collectRockOverlayChunks(
     layout: ArenaLayout,
     dirtyRockIds: ReadonlySet<number>,
@@ -835,6 +941,9 @@ export class ArenaBuilder {
     const mossCutout = makeScratch();
     mossCutout.setRenderMode('redraw');
     const mossCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, mossCutout.texture.key).setOrigin(0, 0);
+    const vegetationCutout = makeScratch();
+    vegetationCutout.setRenderMode('redraw');
+    const vegetationCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, vegetationCutout.texture.key).setOrigin(0, 0);
     result.rockOverlayScratch = {
       cutout,
       cutoutImage,
@@ -843,6 +952,9 @@ export class ArenaBuilder {
       moss: makeScratch(),
       mossCutout,
       mossCutoutImage,
+      vegetation: makeScratch(),
+      vegetationCutout,
+      vegetationCutoutImage,
     };
     return result.rockOverlayScratch;
   }
@@ -1000,6 +1112,12 @@ export class ArenaBuilder {
     result.rockMossCutout = null;
     result.rockMossPlacements.length = 0;
 
+    if (result.rockVegetationLayer?.active) result.rockVegetationLayer.destroy();
+    result.rockVegetationLayer = null;
+    if (result.rockVegetationCutout?.active) result.rockVegetationCutout.destroy();
+    result.rockVegetationCutout = null;
+    result.rockVegetationPlacements.length = 0;
+
     for (const layer of result.rockMottleLayers) {
       if (layer.active) layer.destroy();
     }
@@ -1016,6 +1134,9 @@ export class ArenaBuilder {
       result.rockOverlayScratch.moss.destroy();
       result.rockOverlayScratch.mossCutout.destroy();
       result.rockOverlayScratch.mossCutoutImage.destroy();
+      result.rockOverlayScratch.vegetation.destroy();
+      result.rockOverlayScratch.vegetationCutout.destroy();
+      result.rockOverlayScratch.vegetationCutoutImage.destroy();
       result.rockOverlayScratch = null;
     }
   }

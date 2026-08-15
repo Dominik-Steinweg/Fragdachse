@@ -17,6 +17,9 @@ import { bakeGroundCoverLayer } from './GroundCoverLayer';
 import { generateRockMossPlacements } from './RockMossField';
 import type { RockMossPlacement } from './RockMossField';
 import { bakeRockMossLayer } from './RockMossLayer';
+import { generateRockVegetationPlacements } from './RockVegetationField';
+import type { RockVegetationPlacement } from './RockVegetationField';
+import { bakeRockVegetationLayer } from './RockVegetationLayer';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -59,6 +62,11 @@ export class MenuArenaPreviewRenderer {
   private rockMossCutout: Phaser.GameObjects.RenderTexture | null = null;
   private rockMossPlacements: RockMossPlacement[] | null = null;
   private rockMossConfig: MenuArenaPreviewLayerConfig | null = null;
+  /** Fels-Vegetation, in Aufbau und Lebensdauer wie das Fels-Moos darueber. */
+  private rockVegetationLayer: Phaser.GameObjects.RenderTexture | null = null;
+  private rockVegetationCutout: Phaser.GameObjects.RenderTexture | null = null;
+  private rockVegetationPlacements: RockVegetationPlacement[] | null = null;
+  private rockVegetationConfig: MenuArenaPreviewLayerConfig | null = null;
   private shadows: ShadowSystem | null = null;
   private visible = true;
 
@@ -270,6 +278,7 @@ export class MenuArenaPreviewRenderer {
     const { images: rockImages, cells: aliveCells } = this.createRocks();
     this.bakeRockMottle(aliveCells, rockImages, metrics, view.rocks);
     this.bakeRockMossLayer(rockImages, view.rockMoss);
+    this.bakeRockVegetationLayer(rockImages, view.rockVegetation);
     this.bakeLayer(rockImages, DEPTH.ROCKS, view.rocks, this.rockBandLayers);
     this.bakeLayer(
       ArenaVisualFactory.createRockDecals(this.scene, layout.decals ?? [], metrics, this.aliveRockIds),
@@ -317,6 +326,7 @@ export class MenuArenaPreviewRenderer {
       layer.setVisible(visible && (this.rockMottleConfig?.visible ?? true));
     }
     this.rockMossLayer?.setVisible(visible && (this.rockMossConfig?.visible ?? true));
+    this.rockVegetationLayer?.setVisible(visible && (this.rockVegetationConfig?.visible ?? true));
   }
 
   /** Applies the same ambient tint used by live arena tree visuals to the baked lobby trees. */
@@ -338,6 +348,8 @@ export class MenuArenaPreviewRenderer {
     this.rockSilhouetteCutout?.destroy();
     this.rockMossLayer?.destroy();
     this.rockMossCutout?.destroy();
+    this.rockVegetationLayer?.destroy();
+    this.rockVegetationCutout?.destroy();
     this.background = null;
     this.backgroundDetail = null;
     this.leftSidebar = null;
@@ -354,6 +366,10 @@ export class MenuArenaPreviewRenderer {
     this.rockMossCutout = null;
     this.rockMossConfig = null;
     this.rockMossPlacements = null;
+    this.rockVegetationLayer = null;
+    this.rockVegetationCutout = null;
+    this.rockVegetationConfig = null;
+    this.rockVegetationPlacements = null;
     this.rockGrid = null;
     this.aliveRockIds.clear();
     for (const obj of this.tracks) obj.destroy();
@@ -594,6 +610,46 @@ export class MenuArenaPreviewRenderer {
     this.rockMossCutout = baked.cutout;
     this.rockMossConfig = layerConfig;
     this.rockMossLayer?.setVisible(this.visible && layerConfig.visible);
+  }
+
+  /**
+   * Backt die Fels-Vegetation ueber denselben Helfer wie die Arena – Aufbau und Begruendung
+   * wie bei {@link bakeRockMossLayer}, nur mit der Reichweitenmaske und einer Ebene darueber.
+   */
+  private bakeRockVegetationLayer(
+    rockImages: readonly Phaser.GameObjects.Image[],
+    layerConfig: MenuArenaPreviewLayerConfig,
+  ): void {
+    if (!layerConfig.visible || layerConfig.alpha <= 0) return;
+    const { bounds } = this.config.view;
+    if (!this.rockVegetationPlacements) {
+      this.rockVegetationPlacements = generateRockVegetationPlacements({
+        seed: this.config.layout.seed,
+        rocks: this.config.layout.rocks,
+        metrics: {
+          offsetX: bounds.offsetX,
+          offsetY: bounds.offsetY,
+          gridCols: Math.floor(bounds.width / CELL_SIZE),
+          gridRows: Math.floor(bounds.height / CELL_SIZE),
+        },
+      });
+    }
+
+    const masks = ArenaVisualFactory.createRockVegetationMasks(this.scene, rockImages);
+    const baked = bakeRockVegetationLayer(
+      this.scene,
+      this.rockVegetationPlacements,
+      masks,
+      bounds,
+      DEPTH.ROCK_VEGETATION,
+      { layer: this.rockVegetationLayer, cutout: this.rockVegetationCutout },
+      layerConfig.alpha,
+    );
+    for (const mask of masks) mask.destroy();
+    this.rockVegetationLayer = baked.layer;
+    this.rockVegetationCutout = baked.cutout;
+    this.rockVegetationConfig = layerConfig;
+    this.rockVegetationLayer?.setVisible(this.visible && layerConfig.visible);
   }
 
   private applyLayerStyle<T extends Phaser.GameObjects.GameObject & { setAlpha(alpha: number): T; setVisible(visible: boolean): T }>(

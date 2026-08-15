@@ -74,6 +74,7 @@ export interface MenuArenaPreviewViewConfig {
   decals: MenuArenaPreviewLayerConfig;
   rocks: MenuArenaPreviewLayerConfig;
   rockMoss: MenuArenaPreviewLayerConfig;
+  rockVegetation: MenuArenaPreviewLayerConfig;
   trunks: MenuArenaPreviewLayerConfig;
   canopies: MenuArenaPreviewLayerConfig;
 }
@@ -801,6 +802,12 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
     rocks: { visible: true, alpha: 1 },
     // Etwas zurueckgenommen: Der Fels-Schriftzug der Lobby muss als Form lesbar bleiben.
     rockMoss: { visible: true, alpha: 0.8 },
+    /**
+     * Aus demselben Grund staerker zurueckgenommen als in der Arena: Die Kantenmatten sitzen genau
+     * dort, wo die Buchstabenformen entstehen, und ragen ueber sie hinaus. Wird der Schriftzug
+     * unleserlich, ist dieser Eintrag die Stellschraube – bis hin zu `visible: false`.
+     */
+    rockVegetation: { visible: true, alpha: 0.7 },
     trunks: { visible: false, alpha: 0 },
     canopies: { visible: true, alpha: 1 },
   },

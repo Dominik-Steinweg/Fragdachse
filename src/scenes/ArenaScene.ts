@@ -5,6 +5,7 @@ import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
+import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
 import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
@@ -405,6 +406,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadArenaDecalAssets(this.load);
     preloadGroundCoverAssets(this.load);
     preloadRockMossAssets(this.load);
+    preloadRockVegetationAssets(this.load);
     preloadTurretVisualAssets(this.load);
     preloadCanopyAssets(this.load);
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');

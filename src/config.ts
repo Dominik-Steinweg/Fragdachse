@@ -107,6 +107,13 @@ export const DEPTH = {
   ROCK_MOSS: 9.08,
   /** Gebackene Riss-/Moos-Decals liegen knapp ueber den live-zerstoerbaren Felsen. */
   ROCK_DECALS: 9.1,
+  /**
+   * Matten aus Moos, Flechten und Efeu auf den freien Aussenkanten des Felsbestands. Oberste der
+   * felsgebundenen Schichten: Bewuchs waechst ueber Materialstoerung, Moos und Risse hinweg. Weil
+   * die Schicht ueber `DEPTH.ROCKS` liegt, darf sie ausserdem ein Stueck ueber die Felskante auf
+   * Dirt und Gras hinausragen, ohne dass der Fels sie dort beschneidet.
+   */
+  ROCK_VEGETATION: 9.12,
   PLAYERS: 10,
   TRAIN: 11,  
   PROJECTILES: 15,

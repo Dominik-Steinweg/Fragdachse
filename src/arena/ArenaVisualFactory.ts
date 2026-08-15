@@ -16,6 +16,7 @@ import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalC
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
 import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
+import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } from './RockVegetationConfig';
 import { DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
@@ -83,6 +84,26 @@ export class ArenaVisualFactory {
       if (!rock.active) continue;
       const mask = scene.add.image(rock.x, rock.y, ROCK_MOSS_MASK_TEXTURE_KEY, rock.frame.name);
       mask.setDisplaySize(CELL_SIZE, CELL_SIZE);
+      masks.push(mask);
+    }
+    return masks;
+  }
+
+  /**
+   * Reichweitenmasken zu einem Satz lebender Felsen – dieselbe Konstruktion wie bei
+   * {@link createRockMossMasks}, nur aus dem Vegetationssheet und mit doppelt so grossem, ueber der
+   * Zelle zentriertem Frame. Der Ueberstand ist gewollt: Er traegt den Ueberhang der Matten ueber
+   * die Felskante hinaus.
+   */
+  static createRockVegetationMasks(
+    scene: Phaser.Scene,
+    rocks: readonly Phaser.GameObjects.Image[],
+  ): Phaser.GameObjects.Image[] {
+    const masks: Phaser.GameObjects.Image[] = [];
+    for (const rock of rocks) {
+      if (!rock.active) continue;
+      const mask = scene.add.image(rock.x, rock.y, ROCK_VEGETATION_MASK_TEXTURE_KEY, rock.frame.name);
+      mask.setDisplaySize(ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_FRAME_SIZE);
       masks.push(mask);
     }
     return masks;
