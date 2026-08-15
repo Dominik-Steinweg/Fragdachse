@@ -2,9 +2,9 @@
   "weapons": {
     "ASMD_PRIM": {
       "id": "ASMD_PRIM",
-      "cooldown": 700,
-      "damage": 7,
-      "range": 650,
+      "cooldown": 600,
+      "damage": 10,
+      "range": 700,
       "fire": {
         "type": "hitscan",
         "traceThickness": 3,
@@ -14,7 +14,7 @@
         "weapon1"
       ],
       "adrenalinCost": 0,
-      "adrenalinGain": 5,
+      "adrenalinGain": 8,
       "spreadStanding": 0,
       "spreadMoving": 0,
       "spreadPerShot": 0,
@@ -96,12 +96,12 @@
       "damage": 8,
       "range": 900,
       "fire": {
-        "projectileSpeed": 400,
+        "projectileSpeed": 370,
         "homing": {
           "acquireDelayMs": 200,
           "searchRadius": 600,
           "retargetIntervalMs": 100,
-          "maxTurnDegreesPerStep": 14,
+          "maxTurnDegreesPerStep": 12,
           "targetTypes": [
             "players"
           ],

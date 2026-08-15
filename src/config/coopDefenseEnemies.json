@@ -72,9 +72,9 @@
           "attackMovementSpeedFactor": 0.5,
           "minTargetDistancePx": 200,
           "salvo": {
-            "count": 15,
+            "count": 12,
             "intervalMs": 90,
-            "cooldownMs": 4000,
+            "cooldownMs": 5000,
             "targetDistribution": "round_robin"
           }
         },

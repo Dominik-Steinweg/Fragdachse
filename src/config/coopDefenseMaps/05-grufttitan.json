@@ -123,40 +123,40 @@
       "id": "grave-titan-opening-support",
       "start": { "type": "time", "atMs": 0 },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 8, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 3, "delayMs": 1000, "front": "west" }
+        { "enemyKind": "zombie-badger", "count": 6, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 2, "delayMs": 1000, "front": "west" }
       ]
     },
     {
       "id": "grave-titan-phase-support",
       "start": { "type": "time", "atMs": 15000 },
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 4, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "west" }
       ]
     },    
     {
       "id": "grave-titan-phase-support2",
       "start": { "type": "time", "atMs": 25000 },
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 4, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 1, "delayMs": 1200, "front": "west" }
       ]
     },
     {
       "id": "grave-titan-phase-support3",
       "start": { "type": "time", "atMs": 35000 },
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 4, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "west" }
       ]
     },
     {
       "id": "grave-titan-phase-support4",
       "start": { "type": "time", "atMs": 45000 },
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "south" },
-        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "south" }
+        { "enemyKind": "demon-badger", "count": 4, "front": "south" },
+        { "enemyKind": "rabid-badger", "count": 1, "delayMs": 1200, "front": "south" }
       ]
     }
   ],
