@@ -22,6 +22,8 @@ export interface FakeFill {
 export interface FakeBlit {
   localX: number;
   localY: number;
+  drawX?: number;
+  drawY?: number;
   content: string[];
 }
 
@@ -58,8 +60,8 @@ export class FakeImage {
   }
 
   /** Alles, was die Darstellung bestimmt – Grundlage jedes Paritaetsvergleichs. */
-  describe(): string {
-    return `${this.key}@${Math.round(this.x)},${Math.round(this.y)}`
+  describe(x = this.x, y = this.y): string {
+    return `${this.key}@${Math.round(x)},${Math.round(y)}`
       + `|size=${this.displaySize}|rot=${this.rotation.toFixed(4)}|alpha=${this.alpha}`;
   }
 }
@@ -72,7 +74,14 @@ export class FakeRenderTexture {
   content: string[] = [];
   fills: FakeFill[] = [];
   blits: FakeBlit[] = [];
-  camera = { setScroll: () => {} };
+  camera = {
+    scrollX: 0,
+    scrollY: 0,
+    setScroll: (x: number, y: number) => {
+      this.camera.scrollX = x;
+      this.camera.scrollY = y;
+    },
+  };
   texture: { key: string };
   private pending: Array<() => void> = [];
 
@@ -119,16 +128,25 @@ export class FakeRenderTexture {
     return this;
   }
 
-  draw(entries: unknown): this {
+  draw(entries: unknown, x?: number, y?: number): this {
     const list = Array.isArray(entries) ? entries : [entries];
     this.pending.push(() => {
       const drawn: string[] = [];
       for (const entry of list) {
         if (entry instanceof FakeRenderTexture) drawn.push(...entry.content);
-        else if (entry instanceof FakeImage) drawn.push(entry.describe());
+        else if (entry instanceof FakeImage) {
+          drawn.push(entry.describe(
+            (x ?? entry.x) - this.camera.scrollX,
+            (y ?? entry.y) - this.camera.scrollY,
+          ));
+        }
       }
       const blit = this.blits[this.blits.length - 1];
-      if (blit) blit.content = [...blit.content, ...drawn];
+      if (blit) {
+        blit.drawX = x ?? (list[0] instanceof FakeRenderTexture ? list[0].x : undefined);
+        blit.drawY = y ?? (list[0] instanceof FakeRenderTexture ? list[0].y : undefined);
+        blit.content = [...blit.content, ...drawn];
+      }
       this.content.push(...drawn);
     });
     return this;
@@ -161,11 +179,11 @@ export function createFakeArenaScene() {
 }
 
 /** Ein lebender Fels, so wie ihn die Overlay-Pfade lesen: Position, Autotile-Frame, `active`. */
-export function fakeRockImage(gridX: number, gridY: number, cellSize: number) {
+export function fakeRockImage(gridX: number, gridY: number, cellSize: number, offsetX = 0, offsetY = 0) {
   return {
     active: true,
-    x: gridX * cellSize + cellSize / 2,
-    y: gridY * cellSize + cellSize / 2,
+    x: offsetX + gridX * cellSize + cellSize / 2,
+    y: offsetY + gridY * cellSize + cellSize / 2,
     frame: { name: 0 },
     destroy(): void { this.active = false; },
   };

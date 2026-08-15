@@ -42,7 +42,7 @@ import { createFakeArenaScene, fakeRockImage, FakeRenderTexture } from './fakeAr
  * ersten zerstoerten Fels sichtbar umspringt und danach stabil bleibt.
  */
 
-const FRAME = { offsetX: 0, offsetY: 0, width: 256, height: 256 };
+const FRAME = { offsetX: 37, offsetY: 12, width: 256, height: 256 };
 
 /** Alle Felsen und Decals liegen in Chunk 0:0 (0..127 px), damit der Vergleich vollstaendig ist. */
 const ROCKS = [
@@ -80,7 +80,7 @@ function buildFixture() {
   const layout = { seed: 7, rocks: ROCKS, trees: [], decals } as unknown as ArenaLayout;
 
   const rockObjects: Array<ReturnType<typeof fakeRockImage> | null> =
-    ROCKS.map((cell) => fakeRockImage(cell.gridX, cell.gridY, CELL_SIZE));
+    ROCKS.map((cell) => fakeRockImage(cell.gridX, cell.gridY, CELL_SIZE, FRAME.offsetX, FRAME.offsetY));
 
   const result = {
     rockObjects,
@@ -90,10 +90,28 @@ function buildFixture() {
     rockOverlaySource: createRockOverlaySource(),
     rockMossLayer: null,
     rockMossCutout: null,
-    rockMossPlacements: [],
+    rockMossPlacements: [{
+      textureKey: 'rock_moss_01',
+      worldX: FRAME.offsetX + 48,
+      worldY: FRAME.offsetY + 48,
+      sizePx: 32,
+      rotation: 0.25,
+      alpha: 0.8,
+      mirrorX: false,
+      mirrorY: true,
+    }],
     rockVegetationLayer: null,
     rockVegetationCutout: null,
-    rockVegetationPlacements: [],
+    rockVegetationPlacements: [{
+      textureKey: 'rock_vegetation_01_small',
+      worldX: FRAME.offsetX + 64,
+      worldY: FRAME.offsetY + 32,
+      lengthPx: 48,
+      bandPx: 24,
+      rotation: 0,
+      alpha: 0.9,
+      mirrorX: true,
+    }],
     rockMottleLayers: [],
     rockSilhouetteCutout: null,
     rockOverlayScratch: null,
@@ -132,6 +150,34 @@ describe('rock decal bake parity', () => {
     const blit = decalLayer.blits.at(-1);
     expect(blit?.localX).toBe(0);
     expect(blit?.content).toEqual(fullBake);
+  });
+
+  it('keeps every unchanged overlay pixel- and coordinate-equal with non-null arena offsets', () => {
+    const { scene, layout, result } = buildFixture();
+    const layers = [
+      ...result.rockMottleLayers,
+      result.rockMossLayer,
+      result.rockVegetationLayer,
+      result.rockDecalLayer,
+    ].filter((layer) => layer !== null);
+    const fullBake = layers.map((layer) => [...(layer as unknown as FakeRenderTexture).content]);
+
+    ArenaBuilder.rebuildRockOverlayRegions(
+      scene as never,
+      result,
+      layout,
+      new Set([CENTER_ROCK_ID]),
+      FRAME,
+    );
+
+    expect(FRAME.offsetX).toBeGreaterThan(0);
+    expect(FRAME.offsetY).toBe(12);
+    expect(layers).toHaveLength(5);
+    layers.forEach((layer, index) => {
+      const blit = (layer as unknown as FakeRenderTexture).blits.at(-1);
+      expect(blit).toMatchObject({ localX: 0, localY: 0, drawX: 0, drawY: 0 });
+      expect(blit?.content).toEqual(fullBake[index]);
+    });
   });
 
   it('cuts nothing while every source cell still carries a rock', () => {

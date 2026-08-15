@@ -877,7 +877,6 @@ export class ArenaBuilder {
         }
       }
 
-      scratch.cutout.setPosition(worldX, worldY);
       scratch.cutout.camera.setScroll(worldX, worldY);
       scratch.cutout.clear();
       scratch.cutout.fill(0x000000, 1);
@@ -888,7 +887,6 @@ export class ArenaBuilder {
         const layer = result.rockMottleLayers[layerIndex];
         const scratchLayer = scratch.mottleLayers[layerIndex];
         if (!layer || !scratchLayer) continue;
-        scratchLayer.setPosition(worldX, worldY);
         scratchLayer.clear();
         stampBlobSurfaceMottle(
           scene,
@@ -904,11 +902,7 @@ export class ArenaBuilder {
         scratchLayer.erase(scratch.cutoutImage);
         scratchLayer.render();
 
-        layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-        scratchLayer.setVisible(true);
-        layer.draw(scratchLayer);
-        layer.render();
-        scratchLayer.setVisible(false);
+        ArenaBuilder.blitRockOverlayChunk(layer, scratchLayer, chunk);
       }
 
       // Die Verlaufsmasken entstehen aus denselben Fels-Images, die schon die harte Stanzform
@@ -966,11 +960,9 @@ export class ArenaBuilder {
         && localY + radius > chunk.localY && localY - radius < chunkMaxY;
     });
 
-    scratch.mossCutout.setPosition(worldX, worldY);
     scratch.mossCutout.camera.setScroll(worldX, worldY);
     fillRockMossCutout(scratch.mossCutout, maskImages);
 
-    scratch.moss.setPosition(worldX, worldY);
     scratch.moss.clear();
     if (localPlacements.length > 0) {
       stampRockMoss(scene, scratch.moss, localPlacements, -worldX, -worldY);
@@ -982,11 +974,7 @@ export class ArenaBuilder {
     // Inhalt des zuvor bearbeiteten Chunks – sichtbar als Moos auf leerem Boden.
     scratch.moss.render();
 
-    layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-    scratch.moss.setVisible(true);
-    layer.draw(scratch.moss);
-    layer.render();
-    scratch.moss.setVisible(false);
+    ArenaBuilder.blitRockOverlayChunk(layer, scratch.moss, chunk);
   }
 
   /**
@@ -1017,11 +1005,9 @@ export class ArenaBuilder {
         && localY + radius > chunk.localY && localY - radius < chunkMaxY;
     });
 
-    scratch.vegetationCutout.setPosition(worldX, worldY);
     scratch.vegetationCutout.camera.setScroll(worldX, worldY);
     fillRockVegetationCutout(scratch.vegetationCutout, maskImages);
 
-    scratch.vegetation.setPosition(worldX, worldY);
     scratch.vegetation.clear();
     if (localPlacements.length > 0) {
       stampRockVegetation(scene, scratch.vegetation, localPlacements, -worldX, -worldY);
@@ -1032,11 +1018,20 @@ export class ArenaBuilder {
     // vorigen Chunks in diesem.
     scratch.vegetation.render();
 
+    ArenaBuilder.blitRockOverlayChunk(layer, scratch.vegetation, chunk);
+  }
+
+  /** Schreibt ein rein chunklokales Scratch-Ziel ohne Arena-Offset in den arenaweiten Layer. */
+  private static blitRockOverlayChunk(
+    layer: Phaser.GameObjects.RenderTexture,
+    scratch: Phaser.GameObjects.RenderTexture,
+    chunk: RockOverlayChunk,
+  ): void {
     layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-    scratch.vegetation.setVisible(true);
-    layer.draw(scratch.vegetation);
+    scratch.setVisible(true);
+    layer.draw(scratch, chunk.localX, chunk.localY);
     layer.render();
-    scratch.vegetation.setVisible(false);
+    scratch.setVisible(false);
   }
 
   private static ensureRockOverlayScratch(scene: Phaser.Scene, result: ArenaBuilderResult): RockOverlayScratch {
@@ -1123,7 +1118,6 @@ export class ArenaBuilder {
       candidates,
       { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
     );
-    scratch.decal.setPosition(worldX, worldY);
     scratch.decal.camera.setScroll(worldX, worldY);
     scratch.decal.clear();
     if (images.length > 0) {
@@ -1131,7 +1125,6 @@ export class ArenaBuilder {
       scratch.decal.render();
 
       if (decalCutoutCells.length > 0) {
-        scratch.decalCutout.setPosition(worldX, worldY);
         fillRockDecalCutout(scratch.decalCutout, decalCutoutCells, -chunk.localX, -chunk.localY);
         // Anders als bei Moos und Vegetation ist die Kamera dieses Scratch-Ziels gescrollt, weil es
         // weltpositionierte Decal-Images zeichnet. Die Stanzform muss deshalb an der Chunk-Weltecke
@@ -1143,11 +1136,7 @@ export class ArenaBuilder {
     scratch.decal.render();
     for (const image of images) image.destroy();
 
-    layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-    scratch.decal.setVisible(true);
-    layer.draw(scratch.decal);
-    layer.render();
-    scratch.decal.setVisible(false);
+    ArenaBuilder.blitRockOverlayChunk(layer, scratch.decal, chunk);
   }
 
   /** Arenagrosse RenderTexture in Weltkoordinaten – gemeinsame Grundlage aller gebackenen Layer. */
