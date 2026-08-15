@@ -158,6 +158,7 @@ function rockImage(gridX: number, gridY: number) {
     active: true,
     x: gridX * CELL_SIZE + CELL_SIZE / 2,
     y: gridY * CELL_SIZE + CELL_SIZE / 2,
+    texture: { key: 'rocks' },
     frame: { name: 0 },
     destroy() { this.active = false; },
   };

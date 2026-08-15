@@ -426,7 +426,6 @@ export class ShadowSystem {
       scratch.setVisible(false);
       bucket.scratch = scratch;
     }
-    scratch.setPosition(chunk.x, chunk.y);
     scratch.camera.setScroll(chunk.x, chunk.y);
     scratch.clear();
     scratch.fill(0xffffff, 1);
@@ -437,11 +436,24 @@ export class ShadowSystem {
 
     const localX = chunk.x - worldBounds.minX;
     const localY = chunk.y - worldBounds.minY;
-    bucket.baked?.clear(localX, localY, SHADOW_DIRTY_CHUNK_SIZE, SHADOW_DIRTY_CHUNK_SIZE);
-    scratch.setVisible(true);
-    bucket.baked?.draw(scratch);
-    bucket.baked?.render();
-    scratch.setVisible(false);
+    const baked = bucket.baked;
+    if (!baked) return;
+    const scrollX = baked.camera.scrollX;
+    const scrollY = baked.camera.scrollY;
+    // Wie beim Rock-Overlay-Blit muss die Zielkamera waehrend des gesamten gepufferten
+    // clear/stamp/render-Zyklus neutral sein. Sonst verschiebt derselbe Arena-Offset auch den
+    // direkten Fels-Schatten nach oben.
+    baked.camera.setScroll(0, 0);
+    try {
+      baked.clear(localX, localY, SHADOW_DIRTY_CHUNK_SIZE, SHADOW_DIRTY_CHUNK_SIZE);
+      baked.stamp(scratch.texture.key, undefined, localX, localY, {
+        originX: 0,
+        originY: 0,
+      });
+      baked.render();
+    } finally {
+      baked.camera.setScroll(scrollX, scrollY);
+    }
   }
 
   syncDynamicShadows(

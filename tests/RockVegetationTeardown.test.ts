@@ -21,7 +21,7 @@ import { createRockOverlaySource, syncRockOverlaySource } from '../src/arena/Roc
  * Aufraeumen der rundengebundenen Fels-Overlays.
  *
  * Die Vegetationsschicht haelt vier langlebige RenderTextures (Layer, Stanzform und die beiden
- * Chunk-Scratches) plus ein Image auf der Stanzform. Alle fuenf sind arenagross oder haengen an
+ * Chunk-Scratches). Alle vier sind arenagross oder haengen an
  * einer Textur und ueberleben jede Zerstoerungswelle – genau deshalb muessen sie am Rundenende
  * fallen. Ein vergessener Layer waere kein sichtbarer Fehler, sondern eine wachsende Zahl toter
  * Texturen ueber die Rundengrenzen hinweg.
@@ -56,11 +56,9 @@ function buildResult() {
     rockMossCutout: disposable(),
     scratchVegetation: disposable(),
     scratchVegetationCutout: disposable(),
-    scratchVegetationCutoutImage: disposable(),
     scratchMoss: disposable(),
     rockDecalCutout: disposable(),
     scratchDecalCutout: disposable(),
-    scratchDecalCutoutImage: disposable(),
   };
 
   const rockOverlaySource = createRockOverlaySource();
@@ -94,17 +92,13 @@ function buildResult() {
     rockSilhouetteCutout: null,
     rockOverlayScratch: {
       cutout: disposable(),
-      cutoutImage: disposable(),
       mottleLayers: [],
       decal: disposable(),
       decalCutout: parts.scratchDecalCutout,
-      decalCutoutImage: parts.scratchDecalCutoutImage,
       moss: parts.scratchMoss,
       mossCutout: disposable(),
-      mossCutoutImage: disposable(),
       vegetation: parts.scratchVegetation,
       vegetationCutout: parts.scratchVegetationCutout,
-      vegetationCutoutImage: parts.scratchVegetationCutoutImage,
     },
   } as unknown as ArenaBuilderResult;
 
@@ -121,7 +115,6 @@ describe('Rock vegetation teardown', () => {
     expect(parts.rockVegetationCutout.destroyed).toBe(1);
     expect(parts.scratchVegetation.destroyed).toBe(1);
     expect(parts.scratchVegetationCutout.destroyed).toBe(1);
-    expect(parts.scratchVegetationCutoutImage.destroyed).toBe(1);
 
     expect(result.rockVegetationLayer).toBeNull();
     expect(result.rockVegetationCutout).toBeNull();
@@ -138,7 +131,6 @@ describe('Rock vegetation teardown', () => {
     // ueber die Rundengrenze hinweg Zellen der Vorrunde weiterstempeln.
     expect(parts.rockDecalCutout.destroyed).toBe(1);
     expect(parts.scratchDecalCutout.destroyed).toBe(1);
-    expect(parts.scratchDecalCutoutImage.destroyed).toBe(1);
     expect(result.rockDecalCutout).toBeNull();
     expect(result.rockOverlaySource.cells).toHaveLength(0);
     expect(result.rockOverlaySource.keys.size).toBe(0);

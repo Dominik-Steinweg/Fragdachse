@@ -8,7 +8,24 @@ vi.mock('phaser', () => ({
 import { ShadowSystem } from '../src/effects/ShadowSystem';
 import type { ArenaLayout } from '../src/types';
 
-interface BakeEvent { depth: number; fills: number; draws: number; visible: boolean; width: number; height: number }
+interface StampEvent {
+  x: number;
+  y: number;
+  originX?: number;
+  originY?: number;
+}
+
+interface BakeEvent {
+  depth: number;
+  fills: number;
+  draws: number;
+  visible: boolean;
+  width: number;
+  height: number;
+  stamps: StampEvent[];
+  renderScrollYs: number[];
+  cameraScrollY: number;
+}
 
 function makeScene() {
   const bakes: BakeEvent[] = [];
@@ -28,20 +45,55 @@ function makeScene() {
     return g;
   };
 
+  let textureId = 0;
   const makeRenderTexture = (_x: number, _y: number, width: number, height: number) => {
-    const event: BakeEvent = { depth: 0, fills: 0, draws: 0, visible: true, width, height };
+    const event: BakeEvent = {
+      depth: 0,
+      fills: 0,
+      draws: 0,
+      visible: true,
+      width,
+      height,
+      stamps: [],
+      renderScrollYs: [],
+      cameraScrollY: 0,
+    };
     bakes.push(event);
+    const camera = {
+      scrollX: 0,
+      scrollY: 0,
+      setScroll(x: number, y: number) {
+        this.scrollX = x;
+        this.scrollY = y;
+        event.cameraScrollY = y;
+      },
+    };
     const rt: Record<string, unknown> = {
-      camera: { setScroll: () => undefined },
+      camera,
+      texture: { key: `shadow_rt_${textureId++}` },
     };
     for (const name of ['setOrigin', 'setPosition', 'setBlendMode', 'setMask', 'clearMask',
-      'render', 'clear', 'destroy']) {
+      'clear', 'destroy']) {
       rt[name] = () => rt;
     }
+    rt.render = () => {
+      event.renderScrollYs.push(camera.scrollY);
+      return rt;
+    };
     rt.setVisible = (visible: boolean) => { event.visible = visible; return rt; };
     rt.setDepth = (d: number) => { event.depth = d; return rt; };
     rt.fill = () => { event.fills += 1; return rt; };
     rt.draw = () => { event.draws += 1; return rt; };
+    rt.stamp = (
+      _key: string,
+      _frame: unknown,
+      x: number,
+      y: number,
+      config?: { originX?: number; originY?: number },
+    ) => {
+      event.stamps.push({ x, y, originX: config?.originX, originY: config?.originY });
+      return rt;
+    };
     return rt;
   };
 
@@ -115,6 +167,37 @@ describe('static shadow baking', () => {
 
     expect(bakes.some((bake) => bake.width === 128 && bake.height === 128)).toBe(true);
     expect(bakes.filter((bake) => bake.depth >= 15).map((bake) => bake.draws)).toEqual(treeDraws);
+  });
+
+  it('blits a dirty shadow chunk in texture-local coordinates with the 12 px arena offset', () => {
+    const { scene, bakes } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaLayout = layout(20, 0);
+    const rockObjects = Array.from({ length: 20 }, () => ({ active: true }));
+    const arenaResult = { rockObjects } as never;
+
+    shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
+    rockObjects[4].active = false;
+    shadows.rebuildArenaStaticShadowRegions(arenaLayout, arenaResult, new Set([4]));
+
+    const regionalStamps = bakes
+      .filter((bake) => bake.width > 128 || bake.height > 128)
+      .flatMap((bake) => bake.stamps);
+    expect(regionalStamps.length).toBeGreaterThan(0);
+    expect(regionalStamps).toContainEqual({
+      x: 128,
+      y: 0,
+      originX: 0,
+      originY: 0,
+    });
+    const regionalTargets = bakes.filter(
+      (bake) => (bake.width > 128 || bake.height > 128) && bake.stamps.length > 0,
+    );
+    expect(regionalTargets.length).toBeGreaterThan(0);
+    for (const target of regionalTargets) {
+      expect(target.renderScrollYs.at(-1)).toBe(0);
+      expect(target.cameraScrollY).toBe(12);
+    }
   });
 
   it('blanks and hides baked layers on teardown so no shadows survive into the lobby', () => {

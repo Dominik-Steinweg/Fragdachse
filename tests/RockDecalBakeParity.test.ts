@@ -13,8 +13,14 @@ vi.mock('phaser', () => ({
   Geom: { Rectangle: class {} },
   GameObjects: {
     Image: class {
+      originX = 0.5;
+      originY = 0.5;
       constructor(public scene: unknown, public x: number, public y: number, public key: string) {}
-      setOrigin(): this { return this; }
+      setOrigin(x = 0.5, y = x): this {
+        this.originX = x;
+        this.originY = y;
+        return this;
+      }
       setPosition(x: number, y: number): this {
         this.x = x;
         this.y = y;
@@ -154,6 +160,18 @@ describe('rock decal bake parity', () => {
 
   it('keeps every unchanged overlay pixel- and coordinate-equal with non-null arena offsets', () => {
     const { scene, layout, result } = buildFixture();
+    const mottleLayers = result.rockMottleLayers as unknown as FakeRenderTexture[];
+    for (const layer of mottleLayers) {
+      expect(layer.camera.scrollY).toBe(0);
+      expect(layer.renderCameraScrollYs.every((scrollY) => scrollY === 0)).toBe(true);
+    }
+    const surfaceLayers = [result.rockMossLayer, result.rockVegetationLayer]
+      .filter((layer) => layer !== null) as unknown as FakeRenderTexture[];
+    expect(surfaceLayers).toHaveLength(2);
+    for (const layer of surfaceLayers) {
+      expect(layer.camera.scrollY).toBe(0);
+      expect(layer.renderCameraScrollYs.every((scrollY) => scrollY === 0)).toBe(true);
+    }
     const layers = [
       ...result.rockMottleLayers,
       result.rockMossLayer,
@@ -161,6 +179,8 @@ describe('rock decal bake parity', () => {
       result.rockDecalLayer,
     ].filter((layer) => layer !== null);
     const fullBake = layers.map((layer) => [...(layer as unknown as FakeRenderTexture).content]);
+    const fullBakePixels = layers.map((layer) =>
+      (layer as unknown as FakeRenderTexture).snapshotPixels());
 
     ArenaBuilder.rebuildRockOverlayRegions(
       scene as never,
@@ -185,7 +205,61 @@ describe('rock decal bake parity', () => {
         originY: 0,
       });
       expect(blit?.content).toEqual(fullBake[index]);
+      expect((layer as unknown as FakeRenderTexture).snapshotPixels()).toEqual(fullBakePixels[index]);
     });
+
+    const scratch = result.rockOverlayScratch as unknown as {
+      cutout: FakeRenderTexture;
+      decal: FakeRenderTexture;
+      mossCutout: FakeRenderTexture;
+      vegetationCutout: FakeRenderTexture;
+    };
+    expect(scratch.cutout.camera.scrollY).toBe(0);
+    expect(scratch.decal.camera.scrollY).toBe(0);
+    expect(scratch.mossCutout.camera.scrollY).toBe(0);
+    expect(scratch.vegetationCutout.camera.scrollY).toBe(0);
+  });
+
+  it('changes pixels only inside the destroyed rock geometry on the first regional rebuild', () => {
+    const { scene, layout, result, rockObjects } = buildFixture();
+    const layers = [
+      ...result.rockMottleLayers,
+      result.rockMossLayer,
+      result.rockVegetationLayer,
+      result.rockDecalLayer,
+    ].filter((layer) => layer !== null) as unknown as FakeRenderTexture[];
+    const before = layers.map((layer) => layer.snapshotPixels());
+    const textureLocalLayerCount = result.rockMottleLayers.length + 2;
+
+    rockObjects[CENTER_ROCK_ID] = null;
+    ArenaBuilder.rebuildRockOverlayRegions(
+      scene as never,
+      result,
+      layout,
+      new Set([CENTER_ROCK_ID]),
+      FRAME,
+    );
+
+    let changedPixels = 0;
+    layers.forEach((layer, layerIndex) => {
+      expect(layer.renderCameraScrollYs.at(-1)).toBe(0);
+      expect(layer.camera.scrollY).toBe(
+        layerIndex < textureLocalLayerCount ? 0 : FRAME.offsetY,
+      );
+      const after = layer.snapshotPixels();
+      const margin = layerIndex === 3 ? CELL_SIZE / 2 : 0;
+      for (let index = 0; index < after.length; index += 1) {
+        if (after[index] === before[layerIndex][index]) continue;
+        changedPixels += 1;
+        const x = index % FRAME.width;
+        const y = Math.floor(index / FRAME.width);
+        expect(x).toBeGreaterThanOrEqual(CELL_SIZE - margin);
+        expect(x).toBeLessThan(CELL_SIZE * 2 + margin);
+        expect(y).toBeGreaterThanOrEqual(CELL_SIZE - margin);
+        expect(y).toBeLessThan(CELL_SIZE * 2 + margin);
+      }
+    });
+    expect(changedPixels).toBeGreaterThan(0);
   });
 
   it('models RenderTexture GameObject draws through the target camera', () => {

@@ -111,15 +111,15 @@ export function bakeRockVegetationLayer(
   const layer = existing.layer ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
   layer.setOrigin(0, 0);
   layer.setDepth(depth);
-  layer.camera.setScroll(bounds.offsetX, bounds.offsetY);
+  // Dieselbe Koordinatengrenze wie bei Moos: GameObject-Position traegt den Arena-Offset,
+  // Texturinhalt und Regional-Rebuild bleiben dauerhaft lokal.
+  layer.camera.setScroll(0, 0);
   layer.clear();
   stampRockVegetation(scene, layer, placements, -bounds.offsetX, -bounds.offsetY, layerAlpha);
   layer.render();
 
-  const cutoutImage = new Phaser.GameObjects.Image(scene, bounds.offsetX, bounds.offsetY, cutout.texture.key).setOrigin(0, 0);
-  layer.erase(cutoutImage);
+  layer.erase(cutout.texture.key, bounds.width * 0.5, bounds.height * 0.5);
   layer.render();
-  cutoutImage.destroy();
 
   return { layer, cutout };
 }

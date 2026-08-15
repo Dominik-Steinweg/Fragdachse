@@ -193,7 +193,6 @@ export function bakeBlobSurfaceMottle(
   cutout.erase(silhouetteImages);
   cutout.render();
 
-  const cutoutImage = new Phaser.GameObjects.Image(scene, bounds.offsetX, bounds.offsetY, cutout.texture.key).setOrigin(0, 0);
   const layers: Phaser.GameObjects.RenderTexture[] = [];
   for (let layerIndex = 0; layerIndex < configs.length; layerIndex += 1) {
     const mottle = configs[layerIndex];
@@ -202,15 +201,20 @@ export function bakeBlobSurfaceMottle(
       : scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
     layer.setOrigin(0, 0);
     layer.setDepth(bounds.layerDepth + 0.05 + layerIndex * 0.01);
-    layer.camera.setScroll(bounds.offsetX, bounds.offsetY);
+    // Die sichtbare RenderTexture steht bereits an `bounds.offset`. Ihr Inhalt bleibt dagegen
+    // dauerhaft texturlokal. Der Regional-Rebuild arbeitet ebenfalls in diesem Raum; eine hier
+    // gescrollte interne Kamera verschiebt im WebGL-Vollbake die Mottle-Struktur um den Arena-
+    // Offset und laesst sie beim ersten Chunk-Neubau sichtbar springen.
+    layer.camera.setScroll(0, 0);
     layer.setBlendMode(mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL);
     layer.clear();
     stampBlobSurfaceMottle(scene, layer, profile, mottle, cells, layerIndex);
     layer.render();
-    layer.erase(cutoutImage);
+    // Auch der Schnitt liest nur die Cutout-Textur. So gelangt das weltpositionierte Hilfs-Image
+    // nicht wieder durch eine zweite, von `bounds.offset` abhaengige Kameratransformation.
+    layer.erase(cutout.texture.key, bounds.width * 0.5, bounds.height * 0.5);
     layer.render();
     layers.push(layer);
   }
-  cutoutImage.destroy();
   return { layers, silhouetteCutout: cutout };
 }

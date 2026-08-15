@@ -193,7 +193,6 @@ export interface ArenaBuilderResult {
 
 interface RockOverlayScratch {
   cutout: Phaser.GameObjects.RenderTexture;
-  cutoutImage: Phaser.GameObjects.Image;
   mottleLayers: Phaser.GameObjects.RenderTexture[];
   decal: Phaser.GameObjects.RenderTexture;
   /**
@@ -205,14 +204,11 @@ interface RockOverlayScratch {
    * deshalb nur die Flaeche gefallener Felsen statt der Silhouette.
    */
   decalCutout: Phaser.GameObjects.RenderTexture;
-  decalCutoutImage: Phaser.GameObjects.Image;
   moss: Phaser.GameObjects.RenderTexture;
   mossCutout: Phaser.GameObjects.RenderTexture;
-  mossCutoutImage: Phaser.GameObjects.Image;
   /** Wieder eine eigene Stanzform: Die Vegetation schneidet an der Reichweiten-, nicht an der Verlaufsmaske. */
   vegetation: Phaser.GameObjects.RenderTexture;
   vegetationCutout: Phaser.GameObjects.RenderTexture;
-  vegetationCutoutImage: Phaser.GameObjects.Image;
 }
 
 /** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
@@ -831,6 +827,7 @@ export class ArenaBuilder {
       const chunkMaxY = chunk.localY + ROCK_OVERLAY_CHUNK_SIZE;
       const silhouetteImages: Phaser.GameObjects.Image[] = [];
       const vegetationMaskImages: Phaser.GameObjects.Image[] = [];
+      const scratchRockImages: Phaser.GameObjects.Image[] = [];
 
       for (const id of activeRockIds) {
         const cell = layout.rocks[id];
@@ -840,18 +837,29 @@ export class ArenaBuilder {
         const cellMinY = cell.gridY * CELL_SIZE;
         const cellMaxX = cellMinX + CELL_SIZE;
         const cellMaxY = cellMinY + CELL_SIZE;
-        if (cellMaxX > chunk.localX && cellMinX < chunkMaxX
-          && cellMaxY > chunk.localY && cellMinY < chunkMaxY) {
-          silhouetteImages.push(image);
-        }
+        const intersectsSilhouette = cellMaxX > chunk.localX && cellMinX < chunkMaxX
+          && cellMaxY > chunk.localY && cellMinY < chunkMaxY;
         // Die Reichweitenmaske ragt ueber ihre Zelle hinaus. Ein Fels im Nachbarchunk deckt
         // deshalb noch in diesen hinein; ohne den Rand fehlte an jeder Chunkgrenze ein Streifen.
-        if (cellMaxX + ROCK_VEGETATION_MASK_MARGIN_PX > chunk.localX
+        const intersectsVegetation = cellMaxX + ROCK_VEGETATION_MASK_MARGIN_PX > chunk.localX
           && cellMinX - ROCK_VEGETATION_MASK_MARGIN_PX < chunkMaxX
           && cellMaxY + ROCK_VEGETATION_MASK_MARGIN_PX > chunk.localY
-          && cellMinY - ROCK_VEGETATION_MASK_MARGIN_PX < chunkMaxY) {
-          vegetationMaskImages.push(image);
-        }
+          && cellMinY - ROCK_VEGETATION_MASK_MARGIN_PX < chunkMaxY;
+        if (!intersectsSilhouette && !intersectsVegetation) continue;
+
+        // Ab hier ist der Regional-Rebuild strikt chunklokal. Weltpositionierte Live-Felsen ueber
+        // eine RenderTexture-Kamera einzulesen hat den Arena-Offset beim realen Phaser-Renderer
+        // gegenueber dem Vollbake verschoben. Die kurzlebige Kopie traegt nur Alpha und Frame und
+        // kann deshalb ohne Kamera exakt in 0..127 gezeichnet werden.
+        const scratchRock = scene.add.image(
+          cellMinX + CELL_SIZE * 0.5 - chunk.localX,
+          cellMinY + CELL_SIZE * 0.5 - chunk.localY,
+          image.texture.key,
+          image.frame.name,
+        ).setDisplaySize(CELL_SIZE, CELL_SIZE);
+        scratchRockImages.push(scratchRock);
+        if (intersectsSilhouette) silhouetteImages.push(scratchRock);
+        if (intersectsVegetation) vegetationMaskImages.push(scratchRock);
       }
 
       // Die Materialquelle kommt aus dem vollstaendigen Bestand, nicht aus den lebenden Felsen: Die
@@ -877,7 +885,7 @@ export class ArenaBuilder {
         }
       }
 
-      scratch.cutout.camera.setScroll(worldX, worldY);
+      scratch.cutout.camera.setScroll(0, 0);
       scratch.cutout.clear();
       scratch.cutout.fill(0x000000, 1);
       if (silhouetteImages.length > 0) scratch.cutout.erase(silhouetteImages);
@@ -899,7 +907,7 @@ export class ArenaBuilder {
           -chunk.localY,
         );
         scratchLayer.render();
-        scratchLayer.erase(scratch.cutoutImage);
+        ArenaBuilder.eraseRockOverlayScratch(scratchLayer, scratch.cutout);
         scratchLayer.render();
 
         ArenaBuilder.blitRockOverlayChunk(layer, scratchLayer, chunk);
@@ -921,13 +929,12 @@ export class ArenaBuilder {
         result,
         layout,
         chunk,
-        worldX,
-        worldY,
         decalCutoutCells,
         activeCellKeys,
         scratch,
         worldFrame,
       );
+      for (const image of scratchRockImages) image.destroy();
     }
   }
 
@@ -960,14 +967,14 @@ export class ArenaBuilder {
         && localY + radius > chunk.localY && localY - radius < chunkMaxY;
     });
 
-    scratch.mossCutout.camera.setScroll(worldX, worldY);
+    scratch.mossCutout.camera.setScroll(0, 0);
     fillRockMossCutout(scratch.mossCutout, maskImages);
 
     scratch.moss.clear();
     if (localPlacements.length > 0) {
       stampRockMoss(scene, scratch.moss, localPlacements, -worldX, -worldY);
       scratch.moss.render();
-      scratch.moss.erase(scratch.mossCutoutImage);
+      ArenaBuilder.eraseRockOverlayScratch(scratch.moss, scratch.mossCutout);
     }
     // Muss auch ohne Platzierungen laufen: `clear()` ist ein gepufferter Befehl, der erst hier
     // ausgefuehrt wird. Ohne diesen Aufruf traegt das Scratch-Ziel beim naechsten `draw` noch den
@@ -1005,14 +1012,14 @@ export class ArenaBuilder {
         && localY + radius > chunk.localY && localY - radius < chunkMaxY;
     });
 
-    scratch.vegetationCutout.camera.setScroll(worldX, worldY);
+    scratch.vegetationCutout.camera.setScroll(0, 0);
     fillRockVegetationCutout(scratch.vegetationCutout, maskImages);
 
     scratch.vegetation.clear();
     if (localPlacements.length > 0) {
       stampRockVegetation(scene, scratch.vegetation, localPlacements, -worldX, -worldY);
       scratch.vegetation.render();
-      scratch.vegetation.erase(scratch.vegetationCutoutImage);
+      ArenaBuilder.eraseRockOverlayScratch(scratch.vegetation, scratch.vegetationCutout);
     }
     // Wie beim Moos: Der Leerbefehl wird erst hier ausgefuehrt, und ohne ihn landet der Inhalt des
     // vorigen Chunks in diesem.
@@ -1027,15 +1034,34 @@ export class ArenaBuilder {
     scratch: Phaser.GameObjects.RenderTexture,
     chunk: RockOverlayChunk,
   ): void {
-    layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-    // `draw(scratch)` behandelt das RenderTexture als GameObject und wendet deshalb die interne
-    // Kamera des Arena-Layers an. `stamp()` liest nur die Textur und bleibt damit im selben lokalen
-    // Koordinatenraum wie `clear()`; Ursprung (0, 0) ist die linke obere Chunk-Ecke.
-    layer.stamp(scratch.texture.key, undefined, chunk.localX, chunk.localY, {
-      originX: 0,
-      originY: 0,
-    });
-    layer.render();
+    const scrollX = layer.camera.scrollX;
+    const scrollY = layer.camera.scrollY;
+    // Der WebGL-Pfad hat den Texture-Stamp entgegen dem abstrakten Phaser-Vertrag mit der
+    // RenderTexture-Kamera ausgefuehrt. Deshalb muss nicht nur der Scratch-Inhalt lokal sein,
+    // sondern auch die Zielkamera waehrend des gepufferten clear/stamp/render-Zyklus neutral.
+    layer.camera.setScroll(0, 0);
+    try {
+      layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+      layer.stamp(scratch.texture.key, undefined, chunk.localX, chunk.localY, {
+        originX: 0,
+        originY: 0,
+      });
+      layer.render();
+    } finally {
+      layer.camera.setScroll(scrollX, scrollY);
+    }
+  }
+
+  /** Schneidet ein chunklokales Scratch-Ziel mit einer chunklokalen, kameraunabhaengigen Textur. */
+  private static eraseRockOverlayScratch(
+    target: Phaser.GameObjects.RenderTexture,
+    cutout: Phaser.GameObjects.RenderTexture,
+  ): void {
+    const center = ROCK_OVERLAY_CHUNK_SIZE * 0.5;
+    // `erase()` delegiert Strings an `stamp()`: anders als ein Image-GameObject ignoriert die
+    // Textur damit `target.camera`. Der Default-Origin 0.5 legt die 128er Cutout-Textur bei
+    // (64, 64) exakt auf die chunklokale Flaeche 0..127.
+    target.erase(cutout.texture.key, center, center);
   }
 
   private static ensureRockOverlayScratch(scene: Phaser.Scene, result: ArenaBuilderResult): RockOverlayScratch {
@@ -1047,31 +1073,23 @@ export class ArenaBuilder {
       return target;
     };
     const cutout = makeScratch();
-    const cutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, cutout.texture.key).setOrigin(0, 0);
     const mottleLayers = [ROCK_BLOB_SURFACE_PROFILE.mottle, ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? [])]
       .map(() => makeScratch());
     const mossCutout = makeScratch();
     mossCutout.setRenderMode('redraw');
-    const mossCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, mossCutout.texture.key).setOrigin(0, 0);
     const vegetationCutout = makeScratch();
     vegetationCutout.setRenderMode('redraw');
-    const vegetationCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, vegetationCutout.texture.key).setOrigin(0, 0);
     const decalCutout = makeScratch();
     decalCutout.setRenderMode('redraw');
-    const decalCutoutImage = new Phaser.GameObjects.Image(scene, 0, 0, decalCutout.texture.key).setOrigin(0, 0);
     result.rockOverlayScratch = {
       cutout,
-      cutoutImage,
       mottleLayers,
       decal: makeScratch(),
       decalCutout,
-      decalCutoutImage,
       moss: makeScratch(),
       mossCutout,
-      mossCutoutImage,
       vegetation: makeScratch(),
       vegetationCutout,
-      vegetationCutoutImage,
     };
     return result.rockOverlayScratch;
   }
@@ -1094,8 +1112,6 @@ export class ArenaBuilder {
     result: ArenaBuilderResult,
     layout: ArenaLayout,
     chunk: RockOverlayChunk,
-    worldX: number,
-    worldY: number,
     decalCutoutCells: readonly RockCell[],
     activeCellKeys: ReadonlySet<number>,
     scratch: RockOverlayScratch,
@@ -1120,9 +1136,9 @@ export class ArenaBuilder {
     const images = ArenaVisualFactory.createRockDecals(
       scene,
       candidates,
-      { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
+      { offsetX: -chunk.localX, offsetY: -chunk.localY },
     );
-    scratch.decal.camera.setScroll(worldX, worldY);
+    scratch.decal.camera.setScroll(0, 0);
     scratch.decal.clear();
     if (images.length > 0) {
       scratch.decal.draw(images);
@@ -1130,11 +1146,7 @@ export class ArenaBuilder {
 
       if (decalCutoutCells.length > 0) {
         fillRockDecalCutout(scratch.decalCutout, decalCutoutCells, -chunk.localX, -chunk.localY);
-        // Anders als bei Moos und Vegetation ist die Kamera dieses Scratch-Ziels gescrollt, weil es
-        // weltpositionierte Decal-Images zeichnet. Die Stanzform muss deshalb an der Chunk-Weltecke
-        // sitzen, damit sie nach der Kameratransformation deckungsgleich bei (0,0) landet.
-        scratch.decalCutoutImage.setPosition(worldX, worldY);
-        scratch.decal.erase(scratch.decalCutoutImage);
+        ArenaBuilder.eraseRockOverlayScratch(scratch.decal, scratch.decalCutout);
       }
     }
     scratch.decal.render();
@@ -1239,17 +1251,13 @@ export class ArenaBuilder {
 
     if (result.rockOverlayScratch) {
       result.rockOverlayScratch.cutout.destroy();
-      result.rockOverlayScratch.cutoutImage.destroy();
       for (const layer of result.rockOverlayScratch.mottleLayers) layer.destroy();
       result.rockOverlayScratch.decal.destroy();
       result.rockOverlayScratch.decalCutout.destroy();
-      result.rockOverlayScratch.decalCutoutImage.destroy();
       result.rockOverlayScratch.moss.destroy();
       result.rockOverlayScratch.mossCutout.destroy();
-      result.rockOverlayScratch.mossCutoutImage.destroy();
       result.rockOverlayScratch.vegetation.destroy();
       result.rockOverlayScratch.vegetationCutout.destroy();
-      result.rockOverlayScratch.vegetationCutoutImage.destroy();
       result.rockOverlayScratch = null;
     }
   }

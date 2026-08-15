@@ -105,15 +105,16 @@ export function bakeRockMossLayer(
   const layer = existing.layer ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
   layer.setOrigin(0, 0);
   layer.setDepth(depth);
-  layer.camera.setScroll(bounds.offsetX, bounds.offsetY);
+  // Die sichtbare RenderTexture steht bereits am Arena-Offset; ihr Inhalt bleibt wie beim
+  // regionalen Scratch-Rebuild texturlokal. Andernfalls springt die Moosstruktur beim ersten
+  // Chunk-Neubau um denselben vertikalen Offset.
+  layer.camera.setScroll(0, 0);
   layer.clear();
   stampRockMoss(scene, layer, placements, -bounds.offsetX, -bounds.offsetY, layerAlpha);
   layer.render();
 
-  const cutoutImage = new Phaser.GameObjects.Image(scene, bounds.offsetX, bounds.offsetY, cutout.texture.key).setOrigin(0, 0);
-  layer.erase(cutoutImage);
+  layer.erase(cutout.texture.key, bounds.width * 0.5, bounds.height * 0.5);
   layer.render();
-  cutoutImage.destroy();
 
   return { layer, cutout };
 }
