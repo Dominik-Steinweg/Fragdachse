@@ -1028,10 +1028,14 @@ export class ArenaBuilder {
     chunk: RockOverlayChunk,
   ): void {
     layer.clear(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
-    scratch.setVisible(true);
-    layer.draw(scratch, chunk.localX, chunk.localY);
+    // `draw(scratch)` behandelt das RenderTexture als GameObject und wendet deshalb die interne
+    // Kamera des Arena-Layers an. `stamp()` liest nur die Textur und bleibt damit im selben lokalen
+    // Koordinatenraum wie `clear()`; Ursprung (0, 0) ist die linke obere Chunk-Ecke.
+    layer.stamp(scratch.texture.key, undefined, chunk.localX, chunk.localY, {
+      originX: 0,
+      originY: 0,
+    });
     layer.render();
-    scratch.setVisible(false);
   }
 
   private static ensureRockOverlayScratch(scene: Phaser.Scene, result: ArenaBuilderResult): RockOverlayScratch {

@@ -175,8 +175,34 @@ describe('rock decal bake parity', () => {
     expect(layers).toHaveLength(5);
     layers.forEach((layer, index) => {
       const blit = (layer as unknown as FakeRenderTexture).blits.at(-1);
-      expect(blit).toMatchObject({ localX: 0, localY: 0, drawX: 0, drawY: 0 });
+      expect(blit).toMatchObject({
+        localX: 0,
+        localY: 0,
+        drawX: 0,
+        drawY: 0,
+        method: 'stamp',
+        originX: 0,
+        originY: 0,
+      });
       expect(blit?.content).toEqual(fullBake[index]);
+    });
+  });
+
+  it('models RenderTexture GameObject draws through the target camera', () => {
+    const source = new FakeRenderTexture('camera_regression_source');
+    source.stamp('pixel', undefined, 0, 0).render();
+    const target = new FakeRenderTexture('camera_regression_target');
+    target.camera.setScroll(FRAME.offsetX, FRAME.offsetY);
+
+    target.clear(0, 0);
+    target.draw(source, 0, 0);
+    target.render();
+
+    expect(target.blits.at(-1)).toMatchObject({
+      drawX: -FRAME.offsetX,
+      drawY: -FRAME.offsetY,
+      method: 'draw',
+      content: [`pixel@${-FRAME.offsetX},${-FRAME.offsetY}`],
     });
   });
 

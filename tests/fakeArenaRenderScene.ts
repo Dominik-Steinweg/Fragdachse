@@ -24,7 +24,17 @@ export interface FakeBlit {
   localY: number;
   drawX?: number;
   drawY?: number;
+  method?: 'draw' | 'stamp';
+  originX?: number;
+  originY?: number;
   content: string[];
+}
+
+function translateContent(content: readonly string[], offsetX: number, offsetY: number): string[] {
+  return content.map((entry) => entry.replace(
+    /@(-?\d+),(-?\d+)/,
+    (_match, x: string, y: string) => `@${Number(x) + offsetX},${Number(y) + offsetY}`,
+  ));
 }
 
 export class FakeImage {
@@ -67,6 +77,8 @@ export class FakeImage {
 }
 
 export class FakeRenderTexture {
+  private static readonly textures = new Map<string, FakeRenderTexture>();
+
   active = true;
   visible = false;
   x = 0;
@@ -87,6 +99,7 @@ export class FakeRenderTexture {
 
   constructor(key: string) {
     this.texture = { key };
+    FakeRenderTexture.textures.set(key, this);
   }
 
   setOrigin(): this { return this; }
@@ -123,8 +136,32 @@ export class FakeRenderTexture {
 
   erase(): this { return this; }
 
-  stamp(key: string, _frame: unknown, x: number, y: number): this {
-    this.pending.push(() => this.content.push(`${key}@${Math.round(x)},${Math.round(y)}`));
+  stamp(
+    key: string,
+    _frame: unknown,
+    x: number,
+    y: number,
+    config?: { originX?: number; originY?: number },
+  ): this {
+    this.pending.push(() => {
+      const source = FakeRenderTexture.textures.get(key);
+      if (!source || source === this) {
+        this.content.push(`${key}@${Math.round(x)},${Math.round(y)}`);
+        return;
+      }
+
+      const drawn = translateContent(source.content, x, y);
+      const blit = this.blits[this.blits.length - 1];
+      if (blit) {
+        blit.drawX = x;
+        blit.drawY = y;
+        blit.method = 'stamp';
+        blit.originX = config?.originX;
+        blit.originY = config?.originY;
+        blit.content = [...blit.content, ...drawn];
+      }
+      this.content.push(...drawn);
+    });
     return this;
   }
 
@@ -133,7 +170,13 @@ export class FakeRenderTexture {
     this.pending.push(() => {
       const drawn: string[] = [];
       for (const entry of list) {
-        if (entry instanceof FakeRenderTexture) drawn.push(...entry.content);
+        if (entry instanceof FakeRenderTexture) {
+          drawn.push(...translateContent(
+            entry.content,
+            (x ?? entry.x) - this.camera.scrollX,
+            (y ?? entry.y) - this.camera.scrollY,
+          ));
+        }
         else if (entry instanceof FakeImage) {
           drawn.push(entry.describe(
             (x ?? entry.x) - this.camera.scrollX,
@@ -143,8 +186,9 @@ export class FakeRenderTexture {
       }
       const blit = this.blits[this.blits.length - 1];
       if (blit) {
-        blit.drawX = x ?? (list[0] instanceof FakeRenderTexture ? list[0].x : undefined);
-        blit.drawY = y ?? (list[0] instanceof FakeRenderTexture ? list[0].y : undefined);
+        blit.drawX = (x ?? (list[0] instanceof FakeRenderTexture ? list[0].x : 0)) - this.camera.scrollX;
+        blit.drawY = (y ?? (list[0] instanceof FakeRenderTexture ? list[0].y : 0)) - this.camera.scrollY;
+        blit.method = 'draw';
         blit.content = [...blit.content, ...drawn];
       }
       this.content.push(...drawn);
@@ -160,6 +204,9 @@ export class FakeRenderTexture {
 
   destroy(): void {
     this.active = false;
+    if (FakeRenderTexture.textures.get(this.texture.key) === this) {
+      FakeRenderTexture.textures.delete(this.texture.key);
+    }
   }
 }
 

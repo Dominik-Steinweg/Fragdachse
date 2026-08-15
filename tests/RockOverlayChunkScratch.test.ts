@@ -41,6 +41,8 @@ import { createRockOverlaySource, syncRockOverlaySource } from '../src/arena/Roc
  * Fehler prinzipiell nicht zeigen.
  */
 class FakeRenderTexture {
+  private static readonly textures = new Map<string, FakeRenderTexture>();
+
   active = true;
   visible = false;
   x = 0;
@@ -54,6 +56,7 @@ class FakeRenderTexture {
 
   constructor(key: string) {
     this.texture = { key };
+    FakeRenderTexture.textures.set(key, this);
   }
 
   setOrigin(): this { return this; }
@@ -86,7 +89,20 @@ class FakeRenderTexture {
   erase(): this { return this; }
 
   stamp(key: string, _frame: unknown, x: number, y: number): this {
-    this.pending.push(() => this.content.push(`${key}@${Math.round(x)},${Math.round(y)}`));
+    this.pending.push(() => {
+      const source = FakeRenderTexture.textures.get(key);
+      if (!source || source === this) {
+        this.content.push(`${key}@${Math.round(x)},${Math.round(y)}`);
+        return;
+      }
+      const drawn = source.content.map((entry) => entry.replace(
+        /@(-?\d+),(-?\d+)/,
+        (_match, sourceX: string, sourceY: string) => `@${Number(sourceX) + x},${Number(sourceY) + y}`,
+      ));
+      const target = this.blits[this.blits.length - 1];
+      if (target) target.content = [...drawn];
+      this.content.push(...drawn);
+    });
     return this;
   }
 
@@ -113,6 +129,9 @@ class FakeRenderTexture {
 
   destroy(): void {
     this.active = false;
+    if (FakeRenderTexture.textures.get(this.texture.key) === this) {
+      FakeRenderTexture.textures.delete(this.texture.key);
+    }
   }
 }
 
