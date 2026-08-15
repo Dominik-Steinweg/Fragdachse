@@ -1515,7 +1515,7 @@
                                                 "id":  "asmd_secondary_dot_field_damage",
                                                 "de":  {
                                                            "name":  "Upgrade ASMD Sekundär: Elektrofeld-Schaden",
-                                                           "description":  "+50% Schaden des Elektrofelds je Stufe."
+                                                           "description":  "+20% Schaden des Elektrofelds je Stufe."
                                                        },
                                                 "en":  {
                                                            "name":  "Asmd Secondary Dot Field Damage",
@@ -1537,7 +1537,7 @@
                                                 "id":  "asmd_secondary_arc_lightning",
                                                 "de":  {
                                                            "name":  "Kugelgewitter",
-                                                           "description":  "Der ASMD-Ball schockt alle 500 ms nahe Gegner innerhalb von 160 px für 10 Schaden. Ziele können von späteren Salven erneut getroffen werden."
+                                                           "description":  "Der ASMD-Ball schockt nahe Gegner."
                                                        },
                                                 "en":  {
                                                            "name":  "Asmd Secondary Arc Lightning",

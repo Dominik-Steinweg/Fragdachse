@@ -3,15 +3,14 @@
   "arenaWidthCells": 135,
   "arenaHeightCells": 42,
   "timeOfDay": "18:45",
-  "tutorialDurationMs": 10000,
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
   "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "start": { "type": "time", "atMs": 20000 },
+    "repeatAfterExitMs": 20000
   }],
   "balanceReferenceDurationSec": 200,
   "bases": [
@@ -618,19 +617,19 @@
   "persistentSpawns": [
     {
       "id": "map-13-pressure-0",
-      "enemyKind": "thrower-badger",
-      "intervalMs": 13000,
-      "countPerTick": 1,
-      "startAtMs": 3000,
-      "front": "north",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 8000,
+      "countPerTick": 4,
+      "startAtMs": 16000,
+      "front": "west",
       "source": {
         "type": "map"
       }
     },
     {
       "id": "base-13-spawn-point-zombie-badger-pressure",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 9000,
+      "enemyKind": "thrower-badger",
+      "intervalMs": 16000,
       "countPerTick": 1,
       "startAtMs": 0,
       "source": {
@@ -641,9 +640,9 @@
     {
       "id": "base-13-spawn-point-demon-badger-pressure",
       "enemyKind": "demon-badger",
-      "intervalMs": 10000,
+      "intervalMs": 16000,
       "countPerTick": 1,
-      "startAtMs": 4000,
+      "startAtMs": 0,
       "source": {
         "type": "base",
         "baseId": "spawn-point-demon-badger"
@@ -652,9 +651,9 @@
     {
       "id": "base-13-spawn-point-spore-warden-pressure",
       "enemyKind": "spore-warden",
-      "intervalMs": 26000,
+      "intervalMs": 16000,
       "countPerTick": 1,
-      "startAtMs": 10000,
+      "startAtMs": 0,
       "source": {
         "type": "base",
         "baseId": "spawn-point-spore-warden"
@@ -663,82 +662,20 @@
     {
       "id": "base-13-spawn-point-alien-badger-pressure",
       "enemyKind": "alien-badger",
-      "intervalMs": 30000,
+      "intervalMs": 8000,
       "countPerTick": 1,
-      "startAtMs": 15000,
+      "startAtMs": 0,
       "source": {
         "type": "base",
         "baseId": "spawn-point-alien-badger"
       }
     }
   ],
-  "encounters": [
-    {
-      "id": "hive-defense",
-      "start": {
-        "type": "time",
-        "atMs": 10000
-      },
-      "restAfterMs": 14000,
-      "groups": [
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "front": "west"
-        },
-        {
-          "enemyKind": "spore-warden",
-          "count": 1,
-          "delayMs": 2500,
-          "front": "west"
-        }
-      ]
-    },
-    {
-      "id": "hive-counterattack",
-      "start": {
-        "type": "after-previous"
-      },
-      "groups": [
-        {
-          "enemyKind": "rabid-badger",
-          "count": 3,
-          "front": "south"
-        },
-        {
-          "enemyKind": "alien-badger",
-          "count": 1,
-          "front": "east"
-        }
-      ]
-    },
-    {
-      "id": "hive-rear-guard",
-      "start": {
-        "type": "after-previous"
-      },
-      "restAfterMs": 5000,
-      "groups": [
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "front": "east"
-        }
-      ]
-    }
-  ],
   "secondaryObjectives": [
     {
       "id": "destroy-brutbomben-front",
       "type": "destroy",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "hive-defense"
-      },
-      "focusUntil": {
-        "type": "after-encounter",
-        "encounterId": "hive-counterattack"
-      },
+      "start": { "type": "time", "atMs": 0 },
       "targets": [
         "spawn-point-zombie-badger",
         "spawn-point-demon-badger",
@@ -746,7 +683,7 @@
         "spawn-point-alien-badger"
       ],
       "rewards": {
-        "xpPerTarget": 20
+        "xpPerTarget": 50
       }
     }
   ]

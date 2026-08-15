@@ -66,6 +66,21 @@ describe('buildMainObjectiveViewModel', () => {
     expect(model.progress).toBeCloseTo(1 / 3);
   });
 
+  it('fills toward destruction as a single hostile base loses health', () => {
+    const model = buildMainObjectiveViewModel({
+      mapId: 'base',
+      objective: 'destroy-hostile-bases',
+      elapsedMs: 0,
+      encounterCount: 0,
+      encounter: null,
+      boss: null,
+      hostileBases: { currentHp: 250, maxHp: 1_000, remaining: 1, total: 1 },
+    });
+
+    expect(model.progressLabel).toBe('250 / 1000 HP');
+    expect(model.progress).toBe(0.75);
+  });
+
   it('counts only cleared waves and completes after the full sequence', () => {
     const active = buildMainObjectiveViewModel({
       mapId: 'assault',

@@ -78,7 +78,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -2188,11 +2188,14 @@ export class ArenaLifecycleCoordinator {
       this.ctx.combatSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.burrowSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
 
-      this.ctx.projectileManager.setBfgLaserCallback((proj) => {
-        this.hostUpdate.resolveBfgLasers(proj);
-      });
-      this.ctx.projectileManager.setProximityArcCallback((proj) => {
-        this.hostUpdate.resolveProjectileProximityArcs(proj);
+      this.ctx.projectileManager.setProximityPulseCallback((proj) => {
+        const pulse = this.hostUpdate.resolveProjectileProximityPulse(proj);
+        const playerLines = proj.isBfg ? this.hostUpdate.resolveBfgPlayerProximityPulse(proj) : [];
+        bridge.broadcastBfgLaserBatch(
+          [...playerLines, ...pulse.lines],
+          proj.isBfg ? COLORS.GREEN_2 : proj.color,
+          proj.isBfg ? undefined : 'asmd_primary',
+        );
       });
       this.ctx.projectileManager.setTimeBubbleFactorProvider((x, y, now, ownerId) => {
         return this.ctx.timeBubbleSystem?.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1;
@@ -2625,8 +2628,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setProjectileResolvedCallback(null);
     this.ctx.projectileManager.setMiniRocketCollectedCallback(null);
     this.ctx.projectileManager.setMiniRocketDestroyedCallback(null);
-    this.ctx.projectileManager.setBfgLaserCallback(null);
-    this.ctx.projectileManager.setProximityArcCallback(null);
+    this.ctx.projectileManager.setProximityPulseCallback(null);
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.ctx.hostPhysics.setBaseGroup(null);

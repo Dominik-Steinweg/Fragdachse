@@ -1988,9 +1988,7 @@ export class LoadoutManager {
       sourceId:       cfg.id,
       projectileStyle:  'bfg',
       isBfg:            true,
-      bfgLaserRadius:   cfg.laserRadius,
-      bfgLaserDamage:   cfg.laserDamage,
-      bfgLaserInterval: cfg.laserInterval,
+      proximityPulse:   cfg.proximityPulse,
       shotAudioKey:     cfg.shotAudio?.successKey,
     });
 

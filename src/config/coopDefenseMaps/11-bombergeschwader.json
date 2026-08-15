@@ -25,7 +25,7 @@
   "bases": [
     {
       "id": "coop-base-middle",
-      "hpMax": 3500,
+      "hpMax": 4000,
       "anchor": {
         "kind": "center-offset",
         "dxCells": -4,
@@ -64,7 +64,7 @@
           "id": "front-top",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 3
+            "gridY": 4
           },
           "mountSide": "front",
           "weaponId": "BASE_SPORES"
@@ -72,7 +72,7 @@
         {
           "id": "front-bottom",
           "cellOffset": {
-            "gridX": 0,
+            "gridX": 4,
             "gridY": 4
           },
           "mountSide": "front",
@@ -203,6 +203,31 @@
         }
       ]
     },
+    {
+      "id": "bomber-pressure-mass",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 5500,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 40,
+          "front": "north"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 30,
+          "delayMs": 700,
+          "front": "north"
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 3,
+          "front": "north"
+        }
+      ]
+    },    
     {
       "id": "final-bombing-run",
       "start": {

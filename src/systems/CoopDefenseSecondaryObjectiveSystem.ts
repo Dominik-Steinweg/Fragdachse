@@ -29,6 +29,8 @@ export interface CoopDefenseSecondaryObjectiveRewardLedger {
 interface SecondaryObjectiveRuntimeState {
   readonly config: ResolvedCoopDefenseMapSecondaryObjectiveConfig;
   readonly resolvedTargetIds: Set<string>;
+  /** Hold-Ziele, die waehrend des Haltefensters zerstoert wurden. */
+  readonly destroyedTargetIds: Set<string>;
   /** Ziele, an denen mindestens ein reward-berechtigter Teilnehmer mitgewirkt hat. */
   readonly creditedTargetIds: Set<string>;
   state: CoopDefenseSecondaryObjectiveState;
@@ -67,6 +69,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     this.objectiveStates = objectives.map((config) => ({
       config,
       resolvedTargetIds: new Set<string>(),
+      destroyedTargetIds: new Set<string>(),
       creditedTargetIds: new Set<string>(),
       state: 'dormant',
       stateChangedAtMs: 0,
@@ -105,6 +108,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     this.epicGuaranteeCount = 0;
     for (const state of this.objectiveStates) {
       state.resolvedTargetIds.clear();
+      state.destroyedTargetIds.clear();
       state.creditedTargetIds.clear();
       state.state = 'dormant';
       state.stateChangedAtMs = 0;
@@ -154,9 +158,9 @@ export class CoopDefenseSecondaryObjectiveSystem {
 
   /**
    * Einzige Weltnaht für ein zerstörtes authored Missionsziel. Der Archetyp entscheidet die Wirkung:
-   * Für Destroy ist die Zerstörung der Fortschritt, für Hold ist sie der Fehlschlag. Rückgabe sind
-   * die dafür zu buchenden Team-XP – so kann ein authored `xpPerTarget` an einem Hold nicht
-   * versehentlich zu einer Belohnung für den Verlust des Ziels werden.
+   * Für Destroy ist die Zerstörung der Fortschritt, für Hold sinkt damit die Zahl der Überlebenden.
+   * Rückgabe sind die dafür zu buchenden Team-XP – so kann ein authored `xpPerTarget` an einem Hold
+   * nicht versehentlich zu einer Belohnung für den Verlust des Ziels werden.
    */
   reportTargetDestroyed(objectiveId: string, targetId: string): number {
     const state = this.findObjectiveState(objectiveId);
@@ -170,7 +174,11 @@ export class CoopDefenseSecondaryObjectiveSystem {
         return state.creditedTargetIds.has(targetId) ? this.getTargetResolutionXp(objectiveId) : 0;
       }
       case 'hold':
-        this.failObjective(state);
+        if (state.destroyedTargetIds.has(targetId)) return 0;
+        state.destroyedTargetIds.add(targetId);
+        if (this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
+          this.failObjective(state);
+        }
         return 0;
       default:
         // Carry löst seine Objekte über Abgabe auf, nicht über Zerstörung.
@@ -228,18 +236,30 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   /**
-   * Hold kennt als einziger Archetyp einen zeitlichen Erfolg: Lebt das Ziel bei Erreichen von
-   * `holdUntil` noch, ist die Mission erfüllt. Ein zerstörtes Ziel hat das Objective vorher über
-   * {@link reportTargetDestroyed} auf `failed` gesetzt und wird hier nicht mehr erreicht.
+   * Hold kennt als einziger Archetyp einen zeitlichen Erfolg: Bei Erreichen von `holdUntil` müssen
+   * mindestens `requiredSurvivors` Ziele noch leben. Sinkt die Zahl vorher darunter, scheitert die
+   * Mission sofort; ohne authored Wert entspricht sie der Zahl aller Targets.
    */
   private updateHoldObjectives(): void {
     for (const state of this.objectiveStates) {
       if (state.state !== 'active' || state.config.type !== 'hold') continue;
       const holdUntil = state.config.holdUntil;
       if (holdUntil === undefined || !this.isTriggerSatisfied(holdUntil)) continue;
-      this.completeObjective(state);
-      this.onHoldCompleted?.(state.config.id);
+      if (this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
+        this.failObjective(state);
+      } else {
+        this.completeObjective(state);
+        this.onHoldCompleted?.(state.config.id);
+      }
     }
+  }
+
+  private getRequiredSurvivors(state: SecondaryObjectiveRuntimeState): number {
+    return state.config.requiredSurvivors ?? state.config.targets.length;
+  }
+
+  private getHoldSurvivorCount(state: SecondaryObjectiveRuntimeState): number {
+    return state.config.targets.length - state.destroyedTargetIds.size;
   }
 
   private activateObjective(index: number): void {

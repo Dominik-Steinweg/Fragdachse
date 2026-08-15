@@ -99,7 +99,7 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   ],
   molotov: ['fireRadius', 'fireDamagePerTick', 'fireLingerDuration'],
   time_bubble: ['bubbleRadius', 'bubbleDuration', 'projectileSlowFactor', 'playerSlowFactor', 'trainSlowFactor'],
-  bfg: ['directDamage', 'laserDamage', 'laserRadius', 'laserInterval'],
+  bfg: ['directDamage', 'proximityPulse'],
   nuke: [],
   stinkcloud: ['cloudRadius', 'cloudDuration', 'cloudDamagePerTick', 'cloudTickInterval'],
   taser: ['damage', 'range', 'hitArcDegrees', 'visualPreset'],
@@ -225,6 +225,13 @@ export function validateResolvedWeapon(value: unknown): string[] {
   } else {
     requireFields(value.fire, FIRE_REQUIRED[value.fire.type], issues, '$.fire');
   }
+  if (value.proximityPulse !== undefined) {
+    if (!isRecord(value.proximityPulse)) {
+      issues.push('$.proximityPulse: Objekt erforderlich');
+    } else {
+      requireFields(value.proximityPulse, ['radius', 'damage', 'scanIntervalMs'], issues, '$.proximityPulse');
+    }
+  }
   for (const field of ['cooldown', 'damage', 'range', 'adrenalinCost', 'adrenalinGain']) {
     if (typeof value[field] !== 'number' || value[field] < 0) issues.push(`$.${field}: endliche nichtnegative Zahl erforderlich`);
   }
@@ -260,6 +267,13 @@ export function validateResolvedUtility(value: unknown): string[] {
   }
   if (value.type === 'placeable_pedestal' && isRecord(value.placeable) && value.placeable.kind !== 'pedestal') {
     issues.push('$.placeable.kind: placeable_pedestal verlangt kind=pedestal');
+  }
+  if (value.proximityPulse !== undefined) {
+    if (!isRecord(value.proximityPulse)) {
+      issues.push('$.proximityPulse: Objekt erforderlich');
+    } else {
+      requireFields(value.proximityPulse, ['radius', 'damage', 'scanIntervalMs'], issues, '$.proximityPulse');
+    }
   }
   if (value.visualVariant !== undefined && !['stink', 'spore', 'spore_void', 'electric'].includes(String(value.visualVariant))) {
     issues.push('$.visualVariant: unbekannte Stinkwolken-Variante');

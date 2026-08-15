@@ -35,10 +35,19 @@
 },
 "turrets": [
   {
-    "id": "front-middle",
+    "id": "front-top",
     "cellOffset": {
       "gridX": 0,
-      "gridY": 2
+      "gridY": 0
+    },
+    "mountSide": "front",
+    "weaponId": "TURRET_ROCKET_BURST"
+  },
+  {
+    "id": "front-bottom",
+    "cellOffset": {
+      "gridX": 0,
+      "gridY": 4
     },
     "mountSide": "front",
     "weaponId": "TURRET_ROCKET_BURST"

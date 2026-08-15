@@ -272,20 +272,20 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "ASMD_SEC",
     targets: [{ path: ["matchPrimaryRange"], formula: "add" }],
   },
-  "weapon.ASMD_SEC.proximityArc.damage": {
+  "weapon.ASMD_SEC.proximityPulse.damage": {
     kind: "weapon",
     itemId: "ASMD_SEC",
-    targets: [{ path: ["proximityArc","damage"], formula: "scale" }],
+    targets: [{ path: ["proximityPulse","damage"], formula: "scale" }],
   },
-  "weapon.ASMD_SEC.proximityArc.radius": {
+  "weapon.ASMD_SEC.proximityPulse.radius": {
     kind: "weapon",
     itemId: "ASMD_SEC",
-    targets: [{ path: ["proximityArc","radius"], formula: "scale" }],
+    targets: [{ path: ["proximityPulse","radius"], formula: "scale" }],
   },
-  "weapon.ASMD_SEC.proximityArc.scanIntervalMs": {
+  "weapon.ASMD_SEC.proximityPulse.scanIntervalMs": {
     kind: "weapon",
     itemId: "ASMD_SEC",
-    targets: [{ path: ["proximityArc","scanIntervalMs"], formula: "add" }],
+    targets: [{ path: ["proximityPulse","scanIntervalMs"], formula: "add" }],
   },
   "weapon.AWP.awpCharge.corridorEnabled": {
     kind: "weapon",

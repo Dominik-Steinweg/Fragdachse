@@ -29,7 +29,7 @@ export interface MainObjectiveViewModel {
   readonly id: string;
   readonly title: string;
   readonly progressLabel: string;
-  /** 0..1; bei HP-Zielen beschreibt der Wert die verbleibende Gesundheit. */
+  /** 0..1; beschreibt den Fortschritt zur Erfüllung des jeweiligen Hauptziels. */
   readonly progress: number;
 }
 
@@ -84,7 +84,7 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
         : `${formatNumber(Math.ceil(Math.max(0, bases.currentHp)), getLocale(), { useGrouping: false })} / ${formatNumber(Math.ceil(Math.max(1, bases.maxHp)), getLocale(), { useGrouping: false })} HP`,
       progress: plural
         ? clamp01((bases.total - bases.remaining) / Math.max(1, bases.total))
-        : clamp01(bases.currentHp / Math.max(1, bases.maxHp)),
+        : clamp01((Math.max(1, bases.maxHp) - Math.max(0, bases.currentHp)) / Math.max(1, bases.maxHp)),
     };
   }
 

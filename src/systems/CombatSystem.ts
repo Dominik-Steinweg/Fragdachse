@@ -1355,6 +1355,7 @@ export class CombatSystem {
       fireTrail:            proj.fireTrail,
       detonable:            proj.detonable,
       detonator:            proj.detonator,
+      proximityPulse:       proj.proximityPulse,
       rockDamageMult:       proj.rockDamageMult,
       trainDamageMult:      proj.trainDamageMult,
       baseDamageMult:       proj.baseDamageMult,
@@ -1686,6 +1687,28 @@ export class CombatSystem {
           }
           this.projectileManager.destroyProjectile(proj.id);
           return true;
+        }
+
+        const asmdProximityPiercing = proj.projectileStyle === 'energy_ball'
+          && (proj.proximityPulse?.radius ?? 0) > 0
+          && (proj.proximityPulse?.damage ?? 0) > 0;
+        if (asmdProximityPiercing) {
+          // Das Kugelgewitter macht ASMD_SEC nur gegen feindliche Coop-Gegner
+          // durchschlagend. Felsen und Zug bleiben in ProjectileManager normale
+          // Hindernisse und verbrauchen den Ball dort weiterhin.
+          if (!proj.piercingHitIds) proj.piercingHitIds = new Set();
+          if (proj.piercingHitIds.has(enemy.id)) continue;
+          proj.piercingHitIds.add(enemy.id);
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.sourceId, {
+            sourceX: proj.sprite.x,
+            sourceY: proj.sprite.y,
+            dirX: proj.body.velocity.x,
+            dirY: proj.body.velocity.y,
+          }, {
+            sourceSlot: proj.sourceSlot,
+            damageKind: 'direct',
+          });
+          continue;
         }
 
         if (proj.isBfg || proj.projectileStyle === 'gauss') {

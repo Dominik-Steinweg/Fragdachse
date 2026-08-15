@@ -297,7 +297,7 @@
         },
         "comboAdrenalineGain": 0
       },
-      "proximityArc": {
+      "proximityPulse": {
         "radius": 0,
         "damage": 0,
         "scanIntervalMs": 0

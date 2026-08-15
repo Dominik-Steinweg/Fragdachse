@@ -857,7 +857,7 @@ export interface UtilityPlacementPreviewState {
 
 /** Konfiguration fÃ¼r ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager Ã¼bergeben) */
 export interface ProjectileSpawnConfig {
-  proximityArc?: ProjectileProximityArcConfig;
+  proximityPulse?: ProjectileProximityPulseConfig;
   /** Base-mounted turret projectiles pass through their own base footprint. */
   ignoreBaseCollisions?: boolean;
   /** Placeable turret projectiles pass through the runtime rock they are mounted on. */
@@ -931,10 +931,7 @@ export interface ProjectileSpawnConfig {
   leafBlowerSelfPush?:     number;
 
   // BFG (optional)
-  isBfg?:            boolean;   // true = BFG-Projektil (durchschlagend, Laser-Sub-Attacke)
-  bfgLaserRadius?:   number;    // Laser-Reichweite in px
-  bfgLaserDamage?:   number;    // Schaden pro Laser-Treffer
-  bfgLaserInterval?: number;    // ms zwischen Laser-Salven
+  isBfg?:            boolean;   // true = BFG-Projektil (durchschlagend, Puls-Sub-Attacke)
 
   // Erweiterte Flugphysik (Granaten/Translocator)
   frictionDelayMs?: number;           // ms Flugzeit bevor der Speed reduziert wird
@@ -1104,7 +1101,7 @@ export interface DetonableConfig {
  * Markiert einen Schuss/Treffer als Detonator fÃ¼r passende DetonableConfig-Tags.
  * Wird an WeaponConfig geheftet; gilt sowohl fÃ¼r Hitscan- als auch Projektil-Waffen.
  */
-export interface ProjectileProximityArcConfig {
+export interface ProjectileProximityPulseConfig {
   readonly radius: number;
   readonly damage: number;
   readonly scanIntervalMs: number;
@@ -1196,8 +1193,8 @@ export interface SyncedTimeBubble {
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
 export interface TrackedProjectile {
-  proximityArc?: ProjectileProximityArcConfig;
-  lastProximityArcAt?: number;
+  proximityPulse?: ProjectileProximityPulseConfig;
+  lastProximityPulseAt?: number;
   id:              number;
   sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
   body:            Phaser.Physics.Arcade.Body;
@@ -1288,10 +1285,6 @@ export interface TrackedProjectile {
 
   // BFG (optional)
   isBfg?:            boolean;
-  bfgLaserRadius?:   number;
-  bfgLaserDamage?:   number;
-  bfgLaserInterval?: number;
-  lastBfgLaserAt?:   number;          // Zeitstempel der letzten Laser-Salve
   bfgHitPlayers?:    Set<string>;     // Debounce: jeden Spieler nur 1x direkt treffen
   bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstÃ¶ren
   bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschÃ¤digen
@@ -1327,6 +1320,8 @@ export interface TrackedProjectile {
   penetrationRemaining?: number;
   penetrationDamageRetention?: number;
   penetrationHitIds?: Set<string>;
+  /** Direkttreffer bereits getroffener Ziele für infinite Piercing-Projektile. */
+  piercingHitIds?: Set<string>;
   penetratesRocks?: boolean;
   penetratedRockIds?: Set<number>;
   reflected?: boolean;

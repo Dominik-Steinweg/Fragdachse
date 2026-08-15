@@ -268,10 +268,12 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   /**
-   * Nur fuer `hold` und dort Pflicht: Zeitpunkt, bis zu dem das Ziel leben muss. Hold besitzt keinen
-   * Hintergrundzustand â€“ dieses Fenster ist zugleich sein Fokusfenster.
+   * Nur fuer `hold` und dort Pflicht: Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
+   * keinen Hintergrundzustand â€“ dieses Fenster ist zugleich sein Fokusfenster.
    */
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  /** Nur fuer `hold`: Mindestanzahl der Zielbasen, die das Haltefenster ueberleben muessen. */
+  readonly requiredSurvivors?: number;
   /** Base targets for Destroy/Hold. Carry uses its authored `carry` zones instead. */
   readonly targets: readonly string[];
   readonly targetGoal?: number;
@@ -290,6 +292,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  readonly requiredSurvivors?: number;
   readonly targets: readonly string[];
   readonly targetGoal: number;
   readonly carry?: CoopDefenseMapCarryConfig;
@@ -718,6 +721,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
+    ...(objective.requiredSurvivors === undefined ? {} : { requiredSurvivors: objective.requiredSurvivors }),
     targets: [...(objective.targets ?? [])],
     targetGoal: objective.targetGoal ?? (objective.type === 'carry' && objective.carry
       ? objective.carry.itemCount ?? 1
@@ -1091,8 +1095,8 @@ function normalizeSecondaryObjectiveConfigs(
       throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${id} needs carry zones`);
     }
 
-    // Hold ist binaer und besitzt keinen Hintergrundzustand: genau ein Ziel, ein authored Haltefenster
-    // statt eines Fokusfensters. Alle anderen Archetypen kennen kein holdUntil.
+    // Hold ist binaer und besitzt keinen Hintergrundzustand: mindestens ein authored Ziel und ein
+    // Haltefenster statt eines Fokusfensters. Ohne requiredSurvivors muessen alle Targets leben.
     if (objective.type === 'hold') {
       if (objective.holdUntil === undefined) {
         throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs a holdUntil trigger`);
@@ -1100,11 +1104,23 @@ function normalizeSecondaryObjectiveConfigs(
       if (objective.focusUntil !== undefined) {
         throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} must not declare focusUntil`);
       }
-      if (authoredTargets.length !== 1) {
-        throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs exactly one target`);
+      if (objective.requiredSurvivors !== undefined
+        && (!Number.isInteger(objective.requiredSurvivors)
+          || objective.requiredSurvivors < 1
+          || objective.requiredSurvivors > authoredTargets.length)) {
+        throw new Error(
+          `[coopDefenseMaps] Hold secondary objective ${mapId}:${id} has invalid requiredSurvivors`,
+        );
       }
-    } else if (objective.holdUntil !== undefined) {
-      throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdUntil`);
+    } else {
+      if (objective.holdUntil !== undefined) {
+        throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdUntil`);
+      }
+      if (objective.requiredSurvivors !== undefined) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare requiredSurvivors`,
+        );
+      }
     }
 
     const targetIds = new Set<string>();
@@ -1146,6 +1162,9 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.holdUntil === undefined
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
+      ...(objective.requiredSurvivors === undefined
+        ? {}
+        : { requiredSurvivors: objective.requiredSurvivors }),
       targets,
       targetGoal,
       ...(carry ? { carry } : {}),

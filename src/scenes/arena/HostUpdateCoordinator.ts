@@ -1448,38 +1448,36 @@ export class HostUpdateCoordinator {
     }
   }
 
-  resolveBfgLasers(proj: TrackedProjectile): void {
-    const radius = proj.bfgLaserRadius ?? 256;
-    const damage = proj.bfgLaserDamage ?? 10;
-    const px = proj.sprite.x;
-    const py = proj.sprite.y;
-    const laserLines: { sx: number; sy: number; ex: number; ey: number }[] = [];
+  /**
+   * Gemeinsamer Gameplay-Resolver für alle radialen Projektil-Pulse.
+   * BFG-Spielerziele bleiben bewusst außerhalb dieses Coop-Pfades.
+   */
+  resolveProjectileProximityPulse(proj: TrackedProjectile): { lines: { sx: number; sy: number; ex: number; ey: number }[] } {
+    const config = proj.proximityPulse;
+    const lines: { sx: number; sy: number; ex: number; ey: number }[] = [];
+    if (!config || config.radius <= 0 || config.damage <= 0) return { lines };
 
-    for (const player of this.ctx.playerManager.getAllPlayers()) {
-      if (player.id === proj.ownerId) continue;
-      if (!this.ctx.combatSystem.isAlive(player.id)) continue;
-      if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
-      const dist = Phaser.Math.Distance.Between(px, py, player.sprite.x, player.sprite.y);
-      if (dist > radius) continue;
-      if (!this.ctx.combatSystem.hasLineOfSight(px, py, player.sprite.x, player.sprite.y)) continue;
-      if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
-      if (this.ctx.energyShieldSystem?.tryBlockDamage({
-        targetId: player.id,
-        category: 'hitscan',
-        damage,
-        sourceX: px,
-        sourceY: py,
-        now: Date.now(),
-      })) {
-        continue;
-      }
-      this.ctx.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG', {
-        sourceX: px,
-        sourceY: py,
+    const originX = proj.sprite.x;
+    const originY = proj.sprite.y;
+    const radiusSquared = config.radius * config.radius;
+    const lineTo = (x: number, y: number) => ({ sx: originX, sy: originY, ex: x, ey: y });
+
+    // Nur feindliche Coop-Gegner sind gemeinsame Pulsziele. Die Faction-Regel
+    // bleibt im CombatSystem; insbesondere allied/captured Enemies werden hier
+    // nicht über getAllEnemies() blind beschädigt.
+    for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+      if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
+      if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, enemy.id)) continue;
+      if (Phaser.Math.Distance.Squared(originX, originY, enemy.sprite.x, enemy.sprite.y) > radiusSquared) continue;
+      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y)) continue;
+
+      this.ctx.combatSystem.applyDamage(enemy.id, config.damage, false, proj.ownerId, proj.isBfg ? 'BFG' : 'ASMD Kugelgewitter', {
+        sourceX: originX,
+        sourceY: originY,
       }, {
-        allowTeamDamage: proj.allowTeamDamage,
+        damageKind: 'direct',
       });
-      laserLines.push({ sx: px, sy: py, ex: player.sprite.x, ey: player.sprite.y });
+      lines.push(lineTo(enemy.sprite.x, enemy.sprite.y));
     }
 
     const arenaResult = this.ctx.arenaResult;
@@ -1487,57 +1485,72 @@ export class HostUpdateCoordinator {
       for (let i = 0; i < arenaResult.rockObjects.length; i++) {
         const rock = arenaResult.rockObjects[i];
         if (!rock?.active) continue;
-        const dist = Phaser.Math.Distance.Between(px, py, rock.x, rock.y);
-        if (dist > radius) continue;
-        if (!this.ctx.combatSystem.hasLineOfSight(px, py, rock.x, rock.y, i)) continue;
-        const resolvedDamage = this.resolveObstacleDamage(i, damage, proj.ownerId);
+        if (Phaser.Math.Distance.Squared(originX, originY, rock.x, rock.y) > radiusSquared) continue;
+        if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, rock.x, rock.y, i)) continue;
+        const resolvedDamage = this.resolveObstacleDamage(
+          i,
+          config.damage * (proj.rockDamageMult ?? 1),
+          proj.ownerId,
+        );
         if (resolvedDamage <= 0) continue;
         const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, proj.ownerId);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
-        laserLines.push({ sx: px, sy: py, ex: rock.x, ey: rock.y });
+        lines.push(lineTo(rock.x, rock.y));
       }
     }
 
-    if (this.ctx.trainManager) {
+    const trainMult = proj.trainDamageMult ?? 1;
+    if (trainMult !== 0 && this.ctx.trainManager) {
       const trainState = this.ctx.trainManager.getNetSnapshot();
       if (trainState?.alive) {
-        const segments = this.ctx.trainManager.getSegmentPositions();
-        for (const seg of segments) {
-          const dist = Phaser.Math.Distance.Between(px, py, seg.x, seg.y);
-          if (dist > radius) continue;
-          if (!this.ctx.combatSystem.hasLineOfSight(px, py, seg.x, seg.y)) continue;
-          this.ctx.trainManager.applyDamage(damage, proj.ownerId);
-          laserLines.push({ sx: px, sy: py, ex: seg.x, ey: seg.y });
+        for (const seg of this.ctx.trainManager.getSegmentPositions()) {
+          if (Phaser.Math.Distance.Squared(originX, originY, seg.x, seg.y) > radiusSquared) continue;
+          if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, seg.x, seg.y)) continue;
+          this.ctx.trainManager.applyDamage(config.damage * trainMult, proj.ownerId);
+          lines.push(lineTo(seg.x, seg.y));
           break;
         }
       }
     }
 
-    bridge.broadcastBfgLaserBatch(laserLines, COLORS.GREEN_2);
+    return { lines };
   }
 
-  resolveProjectileProximityArcs(proj: TrackedProjectile): void {
-    const config = proj.proximityArc;
-    if (!config || config.radius <= 0 || config.damage <= 0 || !this.ctx.enemyManager) return;
-
+  /** BFG-only extension: preserve its existing player/friendly-fire pulse. */
+  resolveBfgPlayerProximityPulse(proj: TrackedProjectile): { sx: number; sy: number; ex: number; ey: number }[] {
+    const config = proj.proximityPulse;
+    if (!config || config.radius <= 0 || config.damage <= 0) return [];
     const originX = proj.sprite.x;
     const originY = proj.sprite.y;
     const radiusSquared = config.radius * config.radius;
     const lines: { sx: number; sy: number; ex: number; ey: number }[] = [];
 
-    for (const enemy of this.ctx.enemyManager.getAllEnemies()) {
-      if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
-      if (Phaser.Math.Distance.Squared(originX, originY, enemy.sprite.x, enemy.sprite.y) > radiusSquared) continue;
-      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y)) continue;
-
-      this.ctx.combatSystem.applyDamage(enemy.id, config.damage, false, proj.ownerId, 'ASMD Kugelgewitter', {
+    for (const player of this.ctx.playerManager.getAllPlayers()) {
+      if (player.id === proj.ownerId) continue;
+      if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+      if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+      if (Phaser.Math.Distance.Squared(originX, originY, player.sprite.x, player.sprite.y) > radiusSquared) continue;
+      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, player.sprite.x, player.sprite.y)) continue;
+      if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
+      if (this.ctx.energyShieldSystem?.tryBlockDamage({
+        targetId: player.id,
+        category: 'hitscan',
+        damage: config.damage,
         sourceX: originX,
         sourceY: originY,
-      });
-      lines.push({ sx: originX, sy: originY, ex: enemy.sprite.x, ey: enemy.sprite.y });
-    }
+        now: Date.now(),
+      })) continue;
 
-    bridge.broadcastBfgLaserBatch(lines, proj.color, 'asmd_primary');
+      this.ctx.combatSystem.applyDamage(player.id, config.damage, false, proj.ownerId, 'BFG', {
+        sourceX: originX,
+        sourceY: originY,
+      }, {
+        allowTeamDamage: proj.allowTeamDamage,
+        damageKind: 'direct',
+      });
+      lines.push({ sx: originX, sy: originY, ex: player.sprite.x, ey: player.sprite.y });
+    }
+    return lines;
   }
 
   applyTeslaRockDamage(index: number, damage: number, ownerId: string): void {

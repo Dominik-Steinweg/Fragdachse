@@ -124,9 +124,8 @@ export class ProjectileManager {
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
   private timeBubbleFactorProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
 
-  // â”€â”€ BFG Laser-Callback (Host-only, injiziert von ArenaScene) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
-  private proximityArcCallback: ((proj: TrackedProjectile) => void) | null = null;
+  // â”€â”€ Radialer Projektil-Puls (Host-only, injiziert von ArenaScene) â”€â”€â”€â”€â”€â”€â”€â”€
+  private proximityPulseCallback: ((proj: TrackedProjectile) => void) | null = null;
   private naturalFlameExpiryCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
   // â”€â”€ Homing-Zielsuche (Host-only, injiziert von ArenaScene) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -371,13 +370,9 @@ export class ProjectileManager {
     this.timeBubbleFactorProvider = provider;
   }
 
-  /** Registriert den Callback fÃ¼r BFG-Laser-Salven (Host-only). */
-  setBfgLaserCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
-    this.bfgLaserCallback = cb;
-  }
-
-  setProximityArcCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
-    this.proximityArcCallback = cb;
+  /** Registriert den gemeinsamen radialen Projektil-Puls (Host-only). */
+  setProximityPulseCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
+    this.proximityPulseCallback = cb;
   }
 
   setProjectileImpactCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
@@ -653,6 +648,9 @@ export class ProjectileManager {
       penetrationRemaining: cfg.penetrationCount,
       penetrationDamageRetention: cfg.penetrationDamageRetention,
       penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
+      piercingHitIds: (cfg.isBfg || (cfg.projectileStyle === 'energy_ball'
+        && (cfg.proximityPulse?.radius ?? 0) > 0
+        && (cfg.proximityPulse?.damage ?? 0) > 0)) ? new Set<string>() : undefined,
       penetratesRocks: cfg.penetratesRocks,
       penetratedRockIds: cfg.penetratesRocks ? new Set<number>() : undefined,
       reflected: cfg.reflected,
@@ -726,10 +724,7 @@ export class ProjectileManager {
       lastCountdownEmitted: null,
       // BFG-Felder
       isBfg:            cfg.isBfg,
-      bfgLaserRadius:   cfg.bfgLaserRadius,
-      bfgLaserDamage:   cfg.bfgLaserDamage,
-      bfgLaserInterval: cfg.bfgLaserInterval,
-      proximityArc: cfg.proximityArc,
+      proximityPulse: cfg.proximityPulse,
       // Anti-Tunneling
       originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isLeafBlower && !isBfg && !isGauss && !cfg.isGrenade
         ? cfg.size : undefined,
@@ -1717,10 +1712,7 @@ export class ProjectileManager {
         leafBlowerMaxKnockback: proj.leafBlowerMaxKnockback,
         leafBlowerSelfPush: proj.leafBlowerSelfPush,
         isBfg: proj.isBfg,
-        bfgLaserRadius: proj.bfgLaserRadius,
-        bfgLaserDamage: proj.bfgLaserDamage,
-        bfgLaserInterval: proj.bfgLaserInterval,
-        proximityArc: proj.proximityArc,
+        proximityPulse: proj.proximityPulse,
         frictionDelayMs: proj.frictionDelayMs,
         airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
         bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
@@ -2396,13 +2388,6 @@ export class ProjectileManager {
           this.destroyTrackedProjectile(proj);
         } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {
           this.updateFlameHitbox(proj, simulatedDeltaMs / 1000);
-        } else if (proj.isBfg) {
-          // BFG: Laser-Salven in regelmÃ¤ÃŸigen Intervallen abfeuern
-          const interval = proj.bfgLaserInterval ?? 100;
-          if (!proj.lastBfgLaserAt || simulatedAge - proj.lastBfgLaserAt >= interval) {
-            proj.lastBfgLaserAt = simulatedAge;
-            this.bfgLaserCallback?.(proj);
-          }
         } else if (proj.homing) {
           if (proj.miniRocketStageRangePx !== undefined) {
             if (this.updateMiniRocketFlight(proj, simulatedAge)) {
@@ -2414,12 +2399,12 @@ export class ProjectileManager {
           }
         }
 
-        const proximityArc = proj.proximityArc;
-        if (proximityArc && proximityArc.radius > 0 && proximityArc.damage > 0) {
-          const interval = Math.max(50, proximityArc.scanIntervalMs);
-          if (proj.lastProximityArcAt === undefined || simulatedAge - proj.lastProximityArcAt >= interval) {
-            proj.lastProximityArcAt = simulatedAge;
-            this.proximityArcCallback?.(proj);
+        const proximityPulse = proj.proximityPulse;
+        if (proximityPulse && proximityPulse.radius > 0 && proximityPulse.damage > 0) {
+          const interval = Math.max(50, proximityPulse.scanIntervalMs);
+          if (proj.lastProximityPulseAt === undefined || simulatedAge - proj.lastProximityPulseAt >= interval) {
+            proj.lastProximityPulseAt = simulatedAge;
+            this.proximityPulseCallback?.(proj);
           }
         }
 

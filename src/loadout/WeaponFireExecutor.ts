@@ -289,7 +289,7 @@ export class WeaponFireExecutor {
       awpCorridorDotTickIntervalMs: hasAwpCorridor ? config.awpCharge?.corridorDotTickIntervalMs : undefined,
       awpCorridorKnockback: hasAwpCorridor ? config.awpCharge?.corridorKnockback : undefined,
       awpCorridorKnockbackDurationMs: hasAwpCorridor ? config.awpCharge?.corridorKnockbackDurationMs : undefined,
-      proximityArc: config.proximityArc,
+      proximityPulse: config.proximityPulse,
       ak47ShotId: config.ak47ShotId,
       ak47DamageMultiplier: config.ak47DamageMultiplier,
       ak47FireSuperiorityShot: config.ak47FireSuperiorityShot,

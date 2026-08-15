@@ -8,7 +8,7 @@ import {
 } from '../config';
 import { HELP_CONTROLS } from './helpControls';
 
-export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 20_000;
+export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 60_000;
 
 /** Feste Weltposition des Tutorials, unabhängig vom Screen-Space-HUD. */
 const COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y = 7 * CELL_SIZE;

@@ -128,11 +128,11 @@
       ]
     },
     {
-      "id": "friendly-outpost-bastion",
+      "id": "friendly-outpost-bastion-north",
       "role": "outpost",
       "dormant": true,
-      "startHpFactor": 0.35,
-      "hpMax": 1600,
+      "startHpFactor": 0.25,
+      "hpMax": 1200,
       "anchor": {
         "kind": "grid",
         "gridX": 78,
@@ -141,44 +141,54 @@
       "shape": {
         "kind": "cells",
         "cells": [
-          { "gridX": 2, "gridY": 0 },
-          { "gridX": 2, "gridY": 1 },
+          { "gridX": 0, "gridY": 1 },
           { "gridX": 1, "gridY": 1 },
+          { "gridX": 2, "gridY": 1 },
+          { "gridX": 3, "gridY": 1 },
           { "gridX": 0, "gridY": 2 },
-          { "gridX": 1, "gridY": 2 },
-          { "gridX": 2, "gridY": 2 },
-          { "gridX": 1, "gridY": 3 },
-          { "gridX": 2, "gridY": 3 },
-          { "gridX": 2, "gridY": 4 },
-          { "gridX": 2, "gridY": 6 },
-          { "gridX": 1, "gridY": 6 },
-          { "gridX": 0, "gridY": 7 },
-          { "gridX": 1, "gridY": 7 },
-          { "gridX": 2, "gridY": 7 },
-          { "gridX": 1, "gridY": 8 },
-          { "gridX": 2, "gridY": 8 },
-          { "gridX": 2, "gridY": 9 },
-          { "gridX": 1, "gridY": 10 },
-          { "gridX": 2, "gridY": 10 },
-          { "gridX": 0, "gridY": 11 },
-          { "gridX": 1, "gridY": 11 },
-          { "gridX": 2, "gridY": 11 },
-          { "gridX": 1, "gridY": 12 },
-          { "gridX": 2, "gridY": 12 },
-          { "gridX": 2, "gridY": 13 },
-          { "gridX": 2, "gridY": 15 },
-          { "gridX": 1, "gridY": 15 },
-          { "gridX": 0, "gridY": 16 },
-          { "gridX": 1, "gridY": 16 },
-          { "gridX": 2, "gridY": 16 },
-          { "gridX": 1, "gridY": 17 },
-          { "gridX": 2, "gridY": 17 },
-          { "gridX": 2, "gridY": 18 }
+          { "gridX": 0, "gridY": 3 },
+          { "gridX": 0, "gridY": 4 }
         ]
       },
       "turrets": [
         {
-          "id": "bastion-rocket",
+          "id": "bastion-plasma-north",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-bastion-center",
+      "role": "outpost",
+      "dormant": true,
+      "startHpFactor": 0.25,
+      "hpMax": 2000,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 78,
+        "gridY": 23
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 0, "gridY": 3 },
+          { "gridX": 0, "gridY": 4 },
+          { "gridX": 0, "gridY": 5 },
+          { "gridX": 0, "gridY": 6 }
+
+        ]
+      },
+      "turrets": [
+        {
+          "id": "bastion-rocket-center-north",
           "cellOffset": {
             "gridX": 0,
             "gridY": 2
@@ -187,31 +197,47 @@
           "weaponId": "TURRET_ROCKET_BURST"
         },
         {
-          "id": "bastion-spore-north",
+          "id": "bastion-rocket-center-south",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 7
+            "gridY": 5
           },
           "mountSide": "front",
-          "weaponId": "TURRET_SPORES"
-        },
+          "weaponId": "TURRET_ROCKET_BURST"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-bastion-south",
+      "role": "outpost",
+      "dormant": true,
+      "startHpFactor": 0.25,
+      "hpMax": 1200,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 78,
+        "gridY": 31
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 0, "gridY": 3 },
+          { "gridX": 1, "gridY": 3 },
+          { "gridX": 2, "gridY": 3 },
+          { "gridX": 3, "gridY": 3 }
+        ]
+      },
+      "turrets": [
         {
-          "id": "bastion-plasma",
+          "id": "bastion-plasma-south",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 11
+            "gridY": 3
           },
           "mountSide": "front",
           "weaponId": "SPORE_TURRET_PLASMA"
-        },
-        {
-          "id": "bastion-spore-south",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 16
-          },
-          "mountSide": "front",
-          "weaponId": "TURRET_SPORES"
         }
       ]
     }
@@ -243,10 +269,10 @@
       "restAfterMs": 3000,
       "groups": [
         { "enemyKind": "void-stalker", "count": 1, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 12, "front": "north" },
-        { "enemyKind": "zombie-badger", "count": 12, "front": "south" }
+        { "enemyKind": "spore-warden", "count": 6, "front": "west" },
+        { "enemyKind": "zombie-badger", "count": 16, "front": "west" },
+        { "enemyKind": "zombie-badger", "count": 16, "front": "north" },
+        { "enemyKind": "zombie-badger", "count": 16, "front": "south" }
       ]
     },
     {
@@ -285,7 +311,12 @@
       "type": "hold",
       "start": { "type": "time", "atMs": 0 },
       "holdUntil": { "type": "after-encounter", "encounterId": "dimension-west" },
-      "targets": ["friendly-outpost-bastion"],
+      "requiredSurvivors": 1,
+      "targets": [
+        "friendly-outpost-bastion-north",
+        "friendly-outpost-bastion-center",
+        "friendly-outpost-bastion-south"
+      ],
       "rewards": { "repairTargetOnComplete": true }
     }
   ]

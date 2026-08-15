@@ -49,9 +49,11 @@
       "fuseTime": 0,
       "maxBounces": 0,
       "directDamage": 300,
-      "laserDamage": 20,
-      "laserRadius": 184,
-      "laserInterval": 100,
+      "proximityPulse": {
+        "damage": 20,
+        "radius": 184,
+        "scanIntervalMs": 100
+      },
       "allowedSlots": [],
       "skipCooldownPublish": true,
       "shotAudio": {

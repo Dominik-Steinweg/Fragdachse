@@ -176,13 +176,32 @@ describe('Coop defense secondary objectives', () => {
       targets: ['friendly-outpost'],
     }]))).toThrow('must not declare focusUntil');
 
-    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+    expect(normalizeCoopDefenseMapConfig(makeMap([{
       id: 'hold-many',
       type: 'hold',
       start: { type: 'time', atMs: 100 },
       holdUntil: { type: 'time', atMs: 300 },
       targets: ['friendly-outpost', 'friendly-outpost-b'],
-    }]))).toThrow('needs exactly one target');
+    }]))).toMatchObject({
+      secondaryObjectives: [{ targets: ['friendly-outpost', 'friendly-outpost-b'], targetGoal: 2 }],
+    });
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'hold-invalid-survivors',
+      type: 'hold',
+      start: { type: 'time', atMs: 100 },
+      holdUntil: { type: 'time', atMs: 300 },
+      requiredSurvivors: 3,
+      targets: ['friendly-outpost', 'friendly-outpost-b'],
+    }]))).toThrow('has invalid requiredSurvivors');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'destroy-survivors',
+      type: 'destroy',
+      start: { type: 'time', atMs: 100 },
+      requiredSurvivors: 1,
+      targets: ['friendly-outpost', 'friendly-outpost-b'],
+    }]))).toThrow('must not declare requiredSurvivors');
 
     expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
       id: 'destroy-hold',
@@ -511,6 +530,45 @@ describe('Coop defense secondary objectives', () => {
     lost.hostUpdate(5_000, false);
     expect(lost.getObjectiveState('hold-supply')).toBe('failed');
     expect(completedHolds).toEqual(['hold-supply']);
+  });
+
+  it('supports a minimum survivor count and fails only when it becomes unreachable', () => {
+    const completedHolds: string[] = [];
+    const failedHolds: string[] = [];
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'hold-bastion',
+      type: 'hold',
+      targets: ['north', 'center', 'south'],
+      requiredSurvivors: 1,
+      targetGoal: 3,
+      holdUntil: { type: 'time', atMs: 100 },
+    })], {
+      onHoldCompleted: (objectiveId) => completedHolds.push(objectiveId),
+      onHoldFailed: (objectiveId) => failedHolds.push(objectiveId),
+    });
+
+    system.hostUpdate(0, false);
+    system.reportTargetDestroyed('hold-bastion', 'north');
+    system.reportTargetDestroyed('hold-bastion', 'center');
+    expect(system.getObjectiveState('hold-bastion')).toBe('active');
+
+    system.hostUpdate(100, false);
+    expect(system.getObjectiveState('hold-bastion')).toBe('completed');
+    expect(completedHolds).toEqual(['hold-bastion']);
+    expect(failedHolds).toEqual([]);
+
+    const allLost = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'hold-bastion',
+      type: 'hold',
+      targets: ['north', 'center', 'south'],
+      requiredSurvivors: 1,
+      holdUntil: { type: 'time', atMs: 100 },
+    })]);
+    allLost.hostUpdate(0, false);
+    allLost.reportTargetDestroyed('hold-bastion', 'north');
+    allLost.reportTargetDestroyed('hold-bastion', 'center');
+    allLost.reportTargetDestroyed('hold-bastion', 'south');
+    expect(allLost.getObjectiveState('hold-bastion')).toBe('failed');
   });
 
   it('ignores a destroyed carry object instead of resolving it', () => {

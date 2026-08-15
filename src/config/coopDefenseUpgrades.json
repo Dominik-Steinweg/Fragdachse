@@ -3083,7 +3083,7 @@
                                                                 {
                                                                     "stat":  "weapon.ASMD_SEC.dotArea.damagePerTick",
                                                                     "mode":  "add_percent_per_level",
-                                                                    "value":  0.5
+                                                                    "value":  0.2
                                                                 }
                                                             ]
                                             },
@@ -3132,17 +3132,17 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.ASMD_SEC.proximityArc.radius",
+                                                                    "stat":  "weapon.ASMD_SEC.proximityPulse.radius",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  160
+                                                                    "value":  130
                                                                 },
                                                                 {
-                                                                    "stat":  "weapon.ASMD_SEC.proximityArc.damage",
+                                                                    "stat":  "weapon.ASMD_SEC.proximityPulse.damage",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  10
+                                                                    "value":  5
                                                                 },
                                                                 {
-                                                                    "stat":  "weapon.ASMD_SEC.proximityArc.scanIntervalMs",
+                                                                    "stat":  "weapon.ASMD_SEC.proximityPulse.scanIntervalMs",
                                                                     "mode":  "add_per_level",
                                                                     "value":  500
                                                                 }
@@ -3165,7 +3165,7 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.ASMD_SEC.proximityArc.radius",
+                                                                    "stat":  "weapon.ASMD_SEC.proximityPulse.radius",
                                                                     "mode":  "add_percent_per_level",
                                                                     "value":  0.2
                                                                 }
@@ -3188,7 +3188,7 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.ASMD_SEC.proximityArc.damage",
+                                                                    "stat":  "weapon.ASMD_SEC.proximityPulse.damage",
                                                                     "mode":  "add_percent_per_level",
                                                                     "value":  0.2
                                                                 }

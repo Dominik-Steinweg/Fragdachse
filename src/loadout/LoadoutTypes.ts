@@ -1,5 +1,5 @@
 import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle } from '../types';
-import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityPulseConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -320,7 +320,7 @@ export interface WeaponConfigShape {
 
   // Kettenblitz (nur Hitscan-Waffen): Strahl springt nach dem Treffer weiter
   readonly chainLightning?: ChainLightningConfig;
-  readonly proximityArc?: ProjectileProximityArcConfig;
+  readonly proximityPulse?: ProjectileProximityPulseConfig;
 
   // Brennende Treffer: setzt getroffene Ziele in Brand (Projektil/Hitscan/Melee).
   // Für Explosions-Brand siehe ProjectileExplosionConfig.burnOnHit.
@@ -565,9 +565,7 @@ export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
 export interface BfgUtilityConfig extends BaseUtilityConfig {
   readonly type: 'bfg';
   readonly directDamage: number;    // HP-Schaden bei Direkttreffer
-  readonly laserDamage: number;     // Schaden pro Laser-Treffer
-  readonly laserRadius: number;     // Laser-Reichweite in px
-  readonly laserInterval: number;   // ms zwischen Laser-Salven
+  readonly proximityPulse: ProjectileProximityPulseConfig;
 }
 
 export interface NukeUtilityConfig extends BaseUtilityConfig {

@@ -265,7 +265,7 @@
     },
     {
       "id": "inferno-colossus",
-      "maxHp": 2500,
+      "maxHp": 3200,
       "xp": 500,
       "size": 68,
       "moveSpeed": 185,

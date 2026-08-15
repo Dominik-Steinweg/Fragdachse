@@ -286,18 +286,6 @@ describe('Coop defense map progression', () => {
     expect(map7MedicGroups.length).toBeGreaterThan(0);
     expect(map7MedicGroups.every((group) => group.count > 0)).toBe(true);
 
-    const map8 = getCoopDefenseMapConfig('8');
-    expect(map8.encounters?.flatMap((encounter) => encounter.groups)
-      .some((group) => group.front === 'north')).toBe(true);
-    expect(map8.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
-    // Die Bastion traegt die komplette Turmverteidigung der Map; die Hauptbasis hat keine Tuerme mehr.
-    const map8Outpost = map8.bases.find((base) => base.id === 'friendly-outpost-bastion');
-    expect(map8Outpost?.hpMax).toBeGreaterThan(0);
-    expect(map8Outpost?.turrets?.length).toBe(4);
-    expect(map8.bases.find((base) => base.id === 'coop-base-rear')?.turrets).toEqual([]);
-    expect(map8.secondaryObjectives?.[0]?.start).toEqual({ type: 'time', atMs: 0 });
-    expect(map8.secondaryObjectives?.[0]?.holdUntil).toEqual({ type: 'after-encounter', encounterId: 'dimension-west' });
-
     const map10 = getCoopDefenseMapConfig('10');
     expect(map10.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
     expect(map10.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
@@ -309,6 +297,36 @@ describe('Coop defense map progression', () => {
     const map14 = getCoopDefenseMapConfig('14');
     expect(new Set(map14.encounters?.flatMap((encounter) => encounter.groups.map((group) => group.front))))
       .toEqual(new Set(['west', 'north', 'south']));
+  });
+
+  it('keeps the Map 8 bastion compact, separated and independently authored', () => {
+    const map8 = getCoopDefenseMapConfig('8');
+    expect(map8.encounters?.flatMap((encounter) => encounter.groups)
+      .some((group) => group.front === 'north')).toBe(true);
+    expect(map8.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
+    // Die Bastion traegt die komplette Turmverteidigung der Map; die Hauptbasis hat keine Tuerme mehr.
+    const map8Outposts = map8.bases.filter((base) => base.id.startsWith('friendly-outpost-bastion-'));
+    expect(map8Outposts.map((base) => base.id)).toEqual([
+      'friendly-outpost-bastion-north',
+      'friendly-outpost-bastion-center',
+      'friendly-outpost-bastion-south',
+    ]);
+    expect(map8Outposts.every((base) => base.role === 'outpost' && base.dormant === true)).toBe(true);
+    expect(map8Outposts.map((base) => base.hpMax)).toEqual([800, 1200, 800]);
+    expect(map8Outposts.map((base) => base.startHpFactor)).toEqual([0.25, 0.25, 0.25]);
+    expect(map8Outposts.flatMap((base) => base.turrets ?? []).map((turret) => turret.weaponId)).toEqual([
+      'SPORE_TURRET_PLASMA',
+      'TURRET_ROCKET_BURST',
+      'TURRET_ROCKET_BURST',
+      'SPORE_TURRET_PLASMA',
+    ]);
+    expect(map8Outposts.map((base) => base.anchor.kind === 'grid' ? base.anchor.gridY : null))
+      .toEqual([16, 23, 31]);
+    expect(map8.bases.find((base) => base.id === 'coop-base-rear')?.turrets).toEqual([]);
+    expect(map8.secondaryObjectives?.[0]?.start).toEqual({ type: 'time', atMs: 0 });
+    expect(map8.secondaryObjectives?.[0]?.holdUntil).toEqual({ type: 'after-encounter', encounterId: 'dimension-west' });
+    expect(map8.secondaryObjectives?.[0]?.requiredSurvivors).toBe(1);
+    expect(map8.secondaryObjectives?.[0]?.targets).toEqual(map8Outposts.map((base) => base.id));
   });
 
   it('requires the bounded survival contract on every survival map', () => {
@@ -539,14 +557,18 @@ describe('Coop defense map progression', () => {
         if (objective.type !== 'hold') continue;
         expect(objective.holdUntil, `${map.mapId}:${objective.id} has no holdUntil`).toBeDefined();
         expect(objective.focusUntil).toBeUndefined();
-        expect(objective.targets).toHaveLength(1);
+        expect(objective.targets.length).toBeGreaterThan(0);
+        expect(objective.requiredSurvivors ?? objective.targets.length)
+          .toBeGreaterThanOrEqual(1);
+        expect(objective.requiredSurvivors ?? objective.targets.length)
+          .toBeLessThanOrEqual(objective.targets.length);
 
         // Nur ein bewaffneter friendly Outpost wird von Gegnern ueberhaupt angegriffen und kann
         // deshalb ein glaubwuerdiges Halteziel sein; als main base wuerde sein Fall die Runde
         // beenden.
-        const target = map.bases.find((base) => base.id === objective.targets[0]);
-        expect(target?.role).toBe('outpost');
-        expect(target?.faction ?? 'friendly').toBe('friendly');
+        const targets = objective.targets.map((targetId) => map.bases.find((base) => base.id === targetId));
+        expect(targets.every((target) => target?.role === 'outpost')).toBe(true);
+        expect(targets.every((target) => (target?.faction ?? 'friendly') === 'friendly')).toBe(true);
       }
     }
   });

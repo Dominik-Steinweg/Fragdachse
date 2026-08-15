@@ -2,22 +2,21 @@
   "mapId": "12",
   "arenaWidthCells": 112,
   "arenaHeightCells": 41,
-  "timeOfDay": "00:30",
-  "tutorialDurationMs": 12000,
+  "timeOfDay": "19:30",
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
   "trackPosition": "center",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "start": { "type": "time", "atMs": 20000 },
+    "repeatAfterExitMs": 20000
   }, {
     "id": "player-hunt",
     "type": "airstrike",
-    "start": { "type": "time", "atMs": 20000 },
+    "start": { "type": "time", "atMs": 35000 },
     "pattern": "player-hunt",
-    "intervalMs": 25000
+    "intervalMs": 35000
   }],
   "balanceReferenceDurationSec": 180,
   "bases": [
@@ -214,7 +213,7 @@
     {
       "id": "enemy-hive",
       "faction": "hostile",
-      "hpMax": 1100,
+      "hpMax": 1000,
       "anchor": {
         "kind": "left-center",
         "edgeInsetCells": 10
@@ -325,8 +324,8 @@
     {
       "id": "map-12-pressure-0",
       "enemyKind": "zombie-badger",
-      "intervalMs": 11000,
-      "countPerTick": 1,
+      "intervalMs": 15000,
+      "countPerTick": 7,
       "startAtMs": 0,
       "source": {
         "type": "map"
@@ -335,9 +334,9 @@
     {
       "id": "map-12-pressure-1",
       "enemyKind": "demon-badger",
-      "intervalMs": 11000,
-      "countPerTick": 1,
-      "startAtMs": 4000,
+      "intervalMs": 15000,
+      "countPerTick": 7,
+      "startAtMs": 15000,
       "source": {
         "type": "map"
       }
@@ -345,9 +344,9 @@
     {
       "id": "map-12-pressure-2",
       "enemyKind": "spore-warden",
-      "intervalMs": 24000,
-      "countPerTick": 1,
-      "startAtMs": 12000,
+      "intervalMs": 30000,
+      "countPerTick": 2,
+      "startAtMs": 15000,
       "source": {
         "type": "map"
       }
@@ -355,9 +354,9 @@
     {
       "id": "map-12-pressure-3",
       "enemyKind": "plague-medic",
-      "intervalMs": 36000,
+      "intervalMs": 30000,
       "countPerTick": 1,
-      "startAtMs": 24000,
+      "startAtMs": 30000,
       "source": {
         "type": "map"
       }
@@ -365,9 +364,19 @@
     {
       "id": "map-12-pressure-4",
       "enemyKind": "alien-badger",
-      "intervalMs": 11000,
-      "countPerTick": 1,
+      "intervalMs": 30000,
+      "countPerTick": 2,
       "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-12-pressure-5",
+      "enemyKind": "alien-badger",
+      "intervalMs": 30000,
+      "countPerTick": 4,
+      "startAtMs": 15000,
       "source": {
         "type": "map"
       }
