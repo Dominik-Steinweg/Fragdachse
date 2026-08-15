@@ -7,12 +7,12 @@ import { ROCK_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleReachPx } from '../src/a
 import { ROCK_VEGETATION_MASK_MARGIN_PX } from '../src/arena/RockVegetationConfig';
 import {
   ROCK_OVERLAY_CHUNK_SIZE,
+  collectFallenRockCells,
   collectRockCellKeys,
   collectRockOverlayChunks,
   createRockOverlaySource,
   getRockOverlaySilhouetteReachPx,
   getRockOverlaySourceReachPx,
-  hasFallenRockCells,
   syncRockOverlaySource,
 } from '../src/arena/RockOverlayRegions';
 
@@ -56,12 +56,18 @@ describe('rock overlay material source', () => {
     expect(source.cells).toHaveLength(1);
   });
 
-  it('detects fallen cells for the decal cutout', () => {
+  it('reduces the decal cutout to the cells that actually lost their rock', () => {
     const source = createRockOverlaySource();
-    syncRockOverlaySource(source, [cell(1, 1), cell(2, 1)]);
+    syncRockOverlaySource(source, [cell(1, 1), cell(2, 1), cell(3, 1)]);
 
-    expect(hasFallenRockCells(source, collectRockCellKeys([cell(1, 1), cell(2, 1)]))).toBe(false);
-    expect(hasFallenRockCells(source, collectRockCellKeys([cell(1, 1)]))).toBe(true);
+    // Solange alles steht, gibt es nichts auszuschneiden – der Zustand direkt nach dem Rundenaufbau.
+    expect(collectFallenRockCells(source, collectRockCellKeys([cell(1, 1), cell(2, 1), cell(3, 1)])))
+      .toEqual([]);
+
+    // Und nach einer Zerstoerung ausschliesslich deren Zelle. Jede weitere Zelle in der Stanzform
+    // wuerde Decal-Pixel auf einem unveraenderten Fels loeschen.
+    expect(collectFallenRockCells(source, collectRockCellKeys([cell(1, 1), cell(3, 1)])))
+      .toEqual([cell(2, 1)]);
   });
 });
 

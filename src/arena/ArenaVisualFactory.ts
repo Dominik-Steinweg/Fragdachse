@@ -14,12 +14,16 @@ import type { DecalCell, DirtCell, TrackCell, TreeCell } from '../types';
 import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
 import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
+import { hashCell01 } from './CellHash';
 import { RockGridIndex } from './RockGridIndex';
 import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
 import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } from './RockVegetationConfig';
 import { DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
+
+/** Eigener Salt gegen die uebrigen zellbasierten Felder; siehe {@link ./CellHash}. */
+const ROCK_DECAL_ROTATION_SALT = 0x2c91;
 
 export interface ArenaTreeVisual {
   trunk: Phaser.GameObjects.Arc;
@@ -240,7 +244,16 @@ export class ArenaVisualFactory {
       // Decals are decorative and are baked immediately after creation. Keeping the
       // random transform on the temporary Image lets both the RenderTexture and the
       // terrain sampler consume the exact same placement.
-      img.setRotation(decal.rotation ?? Phaser.Math.FloatBetween(0, Math.PI * 2));
+      //
+      // Der Rueckfall unterscheidet sich nach Untergrund: Ein Bodenband wird genau einmal je Runde
+      // gebacken, ein Fels-Decal dagegen bei jeder Hindernisaenderung neu. Wuerfelte es dabei seine
+      // Drehung neu aus, saehe schon der erste lokale Neubau anders aus als der Vollbake – deshalb
+      // haengt sie dort an der Zelle statt am Zufallsgenerator. Erzeugte Layouts fuehren `rotation`
+      // ohnehin mit; das hier greift nur fuer Altbestand.
+      img.setRotation(decal.rotation
+        ?? (surface === 'rock'
+          ? hashCell01(gridX, gridY, ROCK_DECAL_ROTATION_SALT) * Math.PI * 2
+          : Phaser.Math.FloatBetween(0, Math.PI * 2)));
       img.setDepth(surface === 'rock' ? DEPTH.ROCK_DECALS : DEPTH.DECALS);
       result.push(img);
     }

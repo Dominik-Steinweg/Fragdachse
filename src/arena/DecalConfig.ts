@@ -254,6 +254,32 @@ export function getRockDecalVariant(textureKey: DecalKey): DecalVariantConfig | 
   return ROCK_DECAL_CONFIG.variants.find((variant) => getDecalTextureKey(variant.fileName) === textureKey);
 }
 
+/**
+ * Die Texturschluessel der `core`-Varianten. Einmal aufgebaut statt je Decal gesucht: Der
+ * Fels-Decal-Bake fragt das fuer jedes Decal jeder Kachel ab.
+ */
+const ENCLOSED_ROCK_DECAL_KEYS: ReadonlySet<DecalKey> = new Set(
+  ROCK_DECAL_CONFIG.variants
+    .filter((variant) => variant.placement === 'core')
+    .map((variant) => getDecalTextureKey(variant.fileName)),
+);
+
+/**
+ * Liegt dieses Decal per Konstruktion vollstaendig auf Fels?
+ *
+ * `core` heisst: vollstaendig belegte 8er-Nachbarschaft. Die grossen 48- und 64-px-Matten sitzen
+ * nur dort, ihre Flaeche endet also selbst am aeussersten Rand noch auf Fels und haengt nie ueber
+ * freien Boden. Fuer sie – und nur fuer sie – ist der rein geometrische Schnitt an der
+ * weggefallenen Felsflaeche vollstaendig: Faellt ihre Ankerzelle, bleibt ihr Anteil auf den
+ * Nachbarfelsen unveraendert stehen, statt dass die ganze Matte verschwindet.
+ *
+ * Kleine Kanten-Decals koennen das nicht: Ihr Ueberhang liegt ueber nie belegtem Boden, den keine
+ * Stanzform trifft. Sie muessen deshalb mit ihrer Ankerzelle verschwinden.
+ */
+export function isEnclosedRockDecal(textureKey: DecalKey): boolean {
+  return ENCLOSED_ROCK_DECAL_KEYS.has(textureKey);
+}
+
 export function getRockDecalMaxOffsetPx(displaySize: number | undefined): number {
   if (displaySize === ROCK_DECAL_VERY_LARGE_SIZE) return ROCK_DECAL_VERY_LARGE_MAX_OFFSET_PX;
   if (displaySize === ROCK_DECAL_LARGE_SIZE) return ROCK_DECAL_LARGE_MAX_OFFSET_PX;

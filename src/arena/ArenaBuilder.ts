@@ -14,7 +14,7 @@ import {
 } from '../config';
 import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, GameMode, GamePhase } from '../types';
-import { DECAL_SIZE } from './DecalConfig';
+import { DECAL_SIZE, ROCK_DECAL_SIZE, isEnclosedRockDecal } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { ROCK_BLOB_SURFACE_PROFILE, DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
@@ -25,10 +25,10 @@ import { getBlobSurfaceMottleReachPx } from './BlobSurfaceProfile';
 import { fillRockDecalCutout } from './RockDecalLayer';
 import {
   ROCK_OVERLAY_CHUNK_SIZE,
+  collectFallenRockCells,
   collectRockCellKeys,
   collectRockOverlayChunks,
   createRockOverlaySource,
-  hasFallenRockCells,
   rockCellKey,
   syncRockOverlaySource,
 } from './RockOverlayRegions';
@@ -706,9 +706,10 @@ export class ArenaBuilder {
     for (const mask of vegetationMasks) mask.destroy();
 
     const activeCellKeys = collectRockCellKeys(activeCells);
+    const fallenCells = collectFallenRockCells(result.rockOverlaySource, activeCellKeys);
     const decalImages = ArenaVisualFactory.createRockDecals(
       scene,
-      ArenaBuilder.selectAnchoredRockDecals(layout.decals ?? [], activeCellKeys),
+      ArenaBuilder.selectVisibleRockDecals(layout.decals ?? [], activeCellKeys),
       { offsetX: worldFrame.offsetX, offsetY: worldFrame.offsetY },
     );
     if (decalImages.length > 0) {
@@ -717,7 +718,7 @@ export class ArenaBuilder {
       layer.draw(decalImages);
       layer.render();
       for (const image of decalImages) image.destroy();
-      ArenaBuilder.eraseFallenRockDecals(scene, result, activeCellKeys, activeRocks, worldFrame, layer);
+      ArenaBuilder.eraseFallenRockDecals(scene, result, fallenCells, worldFrame, layer);
       result.rockDecalLayer = layer;
     } else {
       result.rockDecalLayer?.clear();
@@ -725,25 +726,30 @@ export class ArenaBuilder {
   }
 
   /**
-   * Die Fels-Decals, deren **Ankerzelle** noch einen Fels traegt.
+   * Welche Fels-Decals ueberhaupt gezeichnet werden – die **einzige** Auswahlregel, die Vollbake
+   * und Chunk-Neubau gemeinsam benutzen. Zwei Regeln nebeneinander waeren genau der Riss, an dem
+   * der erste lokale Neubau eine bis dahin anders gebackene Flaeche umspringen liesse.
    *
-   * Ein Decal gehoert zu genau einer Felszelle und darf deren Kante ueberragen. Faellt diese Zelle,
-   * verschwindet das Decal mitsamt seinem Ueberhang – sonst bliebe ein Moosbogen auf dem freien
-   * Boden liegen. Faellt dagegen nur ein *beruehrter* Nachbar, bleibt das Decal bestehen und
-   * verliert allein den Teil, der ueber der gefallenen Zelle lag (siehe
-   * {@link ./RockDecalLayer}). Genau das trennt die geometrisch noetige Aenderung von der alten
-   * Alles-oder-nichts-Regel ueber `decal.rockIds`, die auch grosse Moos- und Flechtenmatten auf
-   * unveraenderten Felsflaechen verschwinden liess.
+   * Eine `core`-Matte liegt per Konstruktion vollstaendig auf Fels (siehe
+   * {@link ./DecalConfig.isEnclosedRockDecal}), fuer sie ist der geometrische Schnitt an der
+   * weggefallenen Felsflaeche vollstaendig – sie bleibt also auch dann stehen, wenn ihre Ankerzelle
+   * faellt, und verliert nur den Teil ueber der gefallenen Zelle.
+   *
+   * Jedes andere Fels-Decal darf die Kante seiner Ankerzelle ueberragen. Dieser Ueberhang liegt
+   * ueber nie belegtem Boden, den keine Stanzform trifft; faellt die Ankerzelle, muss das Decal
+   * deshalb ganz verschwinden, sonst bliebe ein Moosbogen frei auf dem Boden liegen.
    */
-  private static hasLivingRockDecalAnchor(decal: DecalCell, activeCellKeys: ReadonlySet<number>): boolean {
-    return (decal.surface ?? 'ground') === 'rock' && activeCellKeys.has(rockCellKey(decal));
+  private static isRockDecalVisible(decal: DecalCell, activeCellKeys: ReadonlySet<number>): boolean {
+    if ((decal.surface ?? 'ground') !== 'rock') return false;
+    if (isEnclosedRockDecal(decal.textureKey)) return true;
+    return activeCellKeys.has(rockCellKey(decal));
   }
 
-  private static selectAnchoredRockDecals(
+  private static selectVisibleRockDecals(
     decals: readonly DecalCell[],
     activeCellKeys: ReadonlySet<number>,
   ): DecalCell[] {
-    return decals.filter((decal) => ArenaBuilder.hasLivingRockDecalAnchor(decal, activeCellKeys));
+    return decals.filter((decal) => ArenaBuilder.isRockDecalVisible(decal, activeCellKeys));
   }
 
   /**
@@ -751,23 +757,24 @@ export class ArenaBuilder {
    *
    * Solange noch jede je belegte Zelle einen Fels traegt – der Normalfall beim Rundenaufbau –
    * entfaellt der Schnitt vollstaendig und die arenagrosse Stanzform wird gar nicht erst angelegt.
+   * Genau deshalb ist der Vollbake ohne Zerstoerung mit dem Chunk-Neubau ohne Zerstoerung
+   * pixelgleich: Beide zeichnen dieselbe Decal-Auswahl und radieren nichts.
    */
   private static eraseFallenRockDecals(
     scene: Phaser.Scene,
     result: ArenaBuilderResult,
-    activeCellKeys: ReadonlySet<number>,
-    activeRocks: readonly Phaser.GameObjects.Image[],
+    fallenCells: readonly RockCell[],
     worldFrame: RockWorldFrame,
     layer: Phaser.GameObjects.RenderTexture,
   ): void {
-    if (!hasFallenRockCells(result.rockOverlaySource, activeCellKeys)) return;
+    if (fallenCells.length === 0) return;
 
     const cutout = result.rockDecalCutout
       ?? ArenaBuilder.createArenaLayer(scene, DEPTH.ROCK_DECALS, worldFrame);
     // 'redraw': Der Kommandopuffer wird geleert, die Stanzform selbst nie gezeichnet.
     cutout.setRenderMode('redraw');
     result.rockDecalCutout = cutout;
-    fillRockDecalCutout(cutout, result.rockOverlaySource.cells, activeRocks);
+    fillRockDecalCutout(cutout, fallenCells);
 
     const cutoutImage = new Phaser.GameObjects.Image(scene, worldFrame.offsetX, worldFrame.offsetY, cutout.texture.key)
       .setOrigin(0, 0);
@@ -847,9 +854,11 @@ export class ArenaBuilder {
         }
       }
 
-      // Materialquelle und Decal-Stanzform kommen aus dem vollstaendigen Bestand, nicht aus den
-      // lebenden Felsen: Die Flecken eines gefallenen Felsens reichen bis zu `reach` weit auf
-      // seine Nachbarn, und wuerden sie mit ihm verschwinden, spraenge dort das Material um.
+      // Die Materialquelle kommt aus dem vollstaendigen Bestand, nicht aus den lebenden Felsen: Die
+      // Flecken eines gefallenen Felsens reichen bis zu `reach` weit auf seine Nachbarn, und wuerden
+      // sie mit ihm verschwinden, spraenge dort das Material um. Die Decal-Stanzform dagegen traegt
+      // ausschliesslich weggefallene Zellen – jede weitere Zelle wuerde Decal-Pixel auf einem
+      // unveraenderten Fels loeschen.
       const sourceCells: RockCell[] = [];
       const decalCutoutCells: RockCell[] = [];
       for (const cell of result.rockOverlaySource.cells) {
@@ -862,7 +871,8 @@ export class ArenaBuilder {
           sourceCells.push(cell);
         }
         if (cellMaxX > chunk.localX && cellMinX < chunkMaxX
-          && cellMaxY > chunk.localY && cellMinY < chunkMaxY) {
+          && cellMaxY > chunk.localY && cellMinY < chunkMaxY
+          && !activeCellKeys.has(rockCellKey(cell))) {
           decalCutoutCells.push(cell);
         }
       }
@@ -920,7 +930,6 @@ export class ArenaBuilder {
         worldX,
         worldY,
         decalCutoutCells,
-        silhouetteImages,
         activeCellKeys,
         scratch,
         worldFrame,
@@ -1071,10 +1080,15 @@ export class ArenaBuilder {
   /**
    * Backt die Fels-Decals eines einzelnen Chunks neu.
    *
-   * Gezeichnet werden **alle** Fels-Decals, die in den Chunk hineinreichen – auch solche, deren
-   * Traegerfelsen teilweise gefallen sind. Den Unterschied macht anschliessend die Stanzform aus
-   * {@link ./RockDecalLayer}: Sie nimmt genau die Flaeche gefallener Felsen weg und laesst den
-   * Anteil auf stehendem Fels wie auch den Ueberhang auf nie belegtem Boden unberuehrt.
+   * Die Darstellungslogik ist bis auf den Ausschnitt dieselbe wie beim Vollbake: dieselbe Auswahl
+   * ueber {@link isRockDecalVisible}, dieselben Bilder aus {@link ArenaVisualFactory.createRockDecals}
+   * in derselben Layout-Reihenfolge, danach derselbe Schnitt an der weggefallenen Felsflaeche aus
+   * {@link ./RockDecalLayer}. Ohne Zerstoerung im Chunk ist das Ergebnis damit Pixel fuer Pixel
+   * das, was schon dort stand; mit Zerstoerung unterscheidet es sich genau um deren Zellquadrate.
+   *
+   * Die zusaetzliche Filterung gilt allein der Chunk-Ueberschneidung. Sie benutzt dieselbe
+   * Ersatzgroesse wie die Bildfabrik, sonst faellt ein Decal aus dem Neubau, das der Vollbake
+   * gezeichnet hatte.
    */
   private static rebuildRockDecalRegion(
     scene: Phaser.Scene,
@@ -1084,14 +1098,13 @@ export class ArenaBuilder {
     worldX: number,
     worldY: number,
     decalCutoutCells: readonly RockCell[],
-    activeRocks: readonly Phaser.GameObjects.Image[],
     activeCellKeys: ReadonlySet<number>,
     scratch: RockOverlayScratch,
     worldFrame: RockWorldFrame,
   ): void {
     const candidates = (layout.decals ?? []).filter((decal) => {
-      if (!ArenaBuilder.hasLivingRockDecalAnchor(decal, activeCellKeys)) return false;
-      const radius = (decal.displaySize ?? CELL_SIZE) * Math.SQRT1_2;
+      if (!ArenaBuilder.isRockDecalVisible(decal, activeCellKeys)) return false;
+      const radius = (decal.displaySize ?? ROCK_DECAL_SIZE) * Math.SQRT1_2;
       const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
       const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
       return centerX + radius > chunk.localX
@@ -1117,14 +1130,15 @@ export class ArenaBuilder {
       scratch.decal.draw(images);
       scratch.decal.render();
 
-      scratch.decalCutout.setPosition(worldX, worldY);
-      scratch.decalCutout.camera.setScroll(worldX, worldY);
-      fillRockDecalCutout(scratch.decalCutout, decalCutoutCells, activeRocks, -chunk.localX, -chunk.localY);
-      // Anders als bei Moos und Vegetation ist die Kamera dieses Scratch-Ziels gescrollt, weil es
-      // weltpositionierte Decal-Images zeichnet. Die Stanzform muss deshalb an der Chunk-Weltecke
-      // sitzen, damit sie nach der Kameratransformation deckungsgleich bei (0,0) landet.
-      scratch.decalCutoutImage.setPosition(worldX, worldY);
-      scratch.decal.erase(scratch.decalCutoutImage);
+      if (decalCutoutCells.length > 0) {
+        scratch.decalCutout.setPosition(worldX, worldY);
+        fillRockDecalCutout(scratch.decalCutout, decalCutoutCells, -chunk.localX, -chunk.localY);
+        // Anders als bei Moos und Vegetation ist die Kamera dieses Scratch-Ziels gescrollt, weil es
+        // weltpositionierte Decal-Images zeichnet. Die Stanzform muss deshalb an der Chunk-Weltecke
+        // sitzen, damit sie nach der Kameratransformation deckungsgleich bei (0,0) landet.
+        scratch.decalCutoutImage.setPosition(worldX, worldY);
+        scratch.decal.erase(scratch.decalCutoutImage);
+      }
     }
     scratch.decal.render();
     for (const image of images) image.destroy();

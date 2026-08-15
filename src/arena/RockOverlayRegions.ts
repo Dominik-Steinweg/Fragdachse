@@ -89,17 +89,17 @@ export function syncRockOverlaySource(
 }
 
 /**
- * Steht auf jeder je belegten Felszelle noch ein Fels? Solange das gilt, ist die Stanzform der
- * Fels-Decals leer und der ganze Schnitt kann entfallen – der Normalfall beim Rundenaufbau.
+ * Die Zellen, auf denen einmal ein Fels stand und jetzt keiner mehr steht.
+ *
+ * Genau diese Menge – und nichts darueber hinaus – ist die Stanzform der Fels-Decals (siehe
+ * {@link ./RockDecalLayer}). Eine leere Rueckgabe heisst: nichts auszuschneiden, der Normalfall
+ * beim Rundenaufbau.
  */
-export function hasFallenRockCells(
+export function collectFallenRockCells(
   source: RockOverlaySource,
   activeCellKeys: ReadonlySet<number>,
-): boolean {
-  for (const cell of source.cells) {
-    if (!activeCellKeys.has(rockCellKey(cell))) return true;
-  }
-  return false;
+): RockCell[] {
+  return source.cells.filter((cell) => !activeCellKeys.has(rockCellKey(cell)));
 }
 
 /**

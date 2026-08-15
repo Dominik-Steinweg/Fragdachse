@@ -86,6 +86,7 @@ import {
 } from '../config';
 import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
+import { preloadTrainMaterialAssets } from '../train/TrainRenderer';
 import {
   preloadBadgerAnimationAssets,
   registerBadgerAnimations,
@@ -409,6 +410,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadRockVegetationAssets(this.load);
     preloadTurretVisualAssets(this.load);
     preloadCanopyAssets(this.load);
+    preloadTrainMaterialAssets(this.load);
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
     this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
