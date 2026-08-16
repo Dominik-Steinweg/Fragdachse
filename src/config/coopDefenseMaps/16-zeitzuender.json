@@ -727,25 +727,26 @@
   "encounters": [
     {
       "id": "zeitzunder-opening-assault",
-      "start": { "type": "time", "atMs": 0 },
+      "start": { "type": "time", "atMs": 3000 },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 4, "delayMs": 900, "front": "north" }
+        { "enemyKind": "zombie-badger", "count": 20, "front": "west" },
+        { "enemyKind": "demon-badger", "count": 20, "delayMs": 1000, "front": "west" },
+        { "enemyKind": "timebomb-badger", "count": 12, "delayMs": 2000,"front": "west" }
       ]
     },
     {
       "id": "zeitzunder-mid-assault",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "timebomb-badger", "count": 4, "front": "east" },
-        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1000, "front": "south" }
+        { "enemyKind": "timebomb-badger", "count": 4, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1000, "front": "west" }
       ]
     },
     {
       "id": "zeitzunder-counterattack",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 4, "front": "north" },
+        { "enemyKind": "pyro-badger", "count": 4, "front": "west" },
         { "enemyKind": "timebomb-badger", "count": 6, "delayMs": 1200, "front": "west" }
       ]
     },
@@ -753,8 +754,9 @@
       "id": "zeitzunder-final-assault",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "demon-badger", "count": 8, "front": "east" },
-        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 900, "front": "south" }
+        { "enemyKind": "demon-badger", "count": 8, "front": "west" },
+        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 900, "front": "west" },
+        { "enemyKind": "timebomb-badger", "count": 12, "delayMs": 2000,"front": "west" }
       ]
     }
   ],
@@ -762,8 +764,8 @@
     {
       "id": "hold-zeitzunder-middle-outpost",
       "type": "hold",
-      "start": { "type": "after-encounter", "encounterId": "zeitzunder-mid-assault" },
-      "holdUntil": { "type": "after-encounter", "encounterId": "zeitzunder-counterattack" },
+      "start": { "type": "time", "atMs": 0 },
+      "holdUntil": { "type": "after-encounter", "encounterId": "zeitzunder-opening-assault" },
       "targets": ["friendly-middle-mushroom-top"],
       "rewards": { "repairTargetOnComplete": true }
     }
@@ -774,7 +776,7 @@
       "enemyKind": "timebomb-badger",
       "intervalMs": 3500,
       "countPerTick": 1,
-      "startAtMs": 0,
+      "startAtMs": 15000,
       "source": {
         "type": "base",
         "baseId": "spawn-point-timebomb-top"

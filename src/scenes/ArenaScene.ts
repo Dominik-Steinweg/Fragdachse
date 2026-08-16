@@ -3001,6 +3001,7 @@ export class ArenaScene extends Phaser.Scene {
     return {
       skyState: resolveSkyState(minutes),
       isVoidMap: inArena && getCoopDefenseMapConfig(mapId).trackMode === 'void-fire',
+      bossVisualProfile: inArena && mapId === '15' ? 'void-hunter' : undefined,
       bossPhase: inArena ? (this.ctx?.enemyManager?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,
       gamePhase: inArena ? 'ARENA' : 'LOBBY',

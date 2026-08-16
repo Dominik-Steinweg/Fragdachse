@@ -128,6 +128,61 @@ describe('resolveBaseGrade', () => {
       .toBeGreaterThan(resolveBaseGrade(inputs({ bossPhase: 1 })).tintStrength);
   });
 
+  it('verwendet fuer Map 15 einen kalten Void-Boss-Look und eskaliert in Phase 2', () => {
+    const normal = resolveBaseGrade(inputs({
+      skyState: NOON,
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+    }));
+    const phaseOne = resolveBaseGrade(inputs({
+      skyState: NOON,
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+      bossPhase: 1,
+      bossVisualIntensity: 1,
+    }));
+    const phaseTwo = resolveBaseGrade(inputs({
+      skyState: NOON,
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+      bossPhase: 2,
+      bossVisualIntensity: 1,
+    }));
+
+    expect(phaseOne.tint).not.toBe(normal.tint);
+    expect(phaseOne.temperature).toBeLessThan(normal.temperature);
+    expect(phaseOne.brightness).toBeLessThan(normal.brightness);
+    expect(phaseOne.contrast).toBeGreaterThan(normal.contrast);
+    expect(phaseOne.tintStrength).toBeGreaterThan(normal.tintStrength);
+    expect(phaseOne.bloomAmount).toBeGreaterThan(normal.bloomAmount);
+    expect(phaseOne.tintStrength).toBeGreaterThan(0.45);
+    expect(phaseOne.brightness).toBeLessThan(0.94);
+    expect(phaseTwo.tint).not.toBe(phaseOne.tint);
+    expect(phaseTwo.temperature).toBeLessThan(phaseOne.temperature);
+    expect(phaseTwo.brightness).toBeLessThan(phaseOne.brightness);
+    expect(phaseTwo.contrast).toBeGreaterThan(phaseOne.contrast);
+    expect(phaseTwo.tintStrength).toBeGreaterThan(phaseOne.tintStrength);
+    expect(phaseTwo.bloomAmount).toBeGreaterThan(phaseOne.bloomAmount);
+    expect(phaseTwo.tintStrength).toBeGreaterThan(0.55);
+    expect(phaseTwo.brightness).toBeLessThan(0.90);
+    expect(phaseTwo.vignetteStrength).toBeGreaterThan(phaseOne.vignetteStrength);
+    expectWithinClamps(phaseOne);
+    expectWithinClamps(phaseTwo);
+  });
+
+  it('laesst den generischen Boss-Tint ausserhalb von Map 15 unveraendert', () => {
+    const genericBoss = resolveBaseGrade(inputs({ bossPhase: 1, bossVisualIntensity: 1 }));
+    const voidBoss = resolveBaseGrade(inputs({
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+      bossPhase: 1,
+      bossVisualIntensity: 1,
+    }));
+
+    expect(genericBoss.tint).toBe(0xff6a4a);
+    expect(voidBoss.tint).not.toBe(genericBoss.tint);
+  });
+
   it('blendet den Boss-Look aus dem Nacht-Look ein statt ihn hart zu ersetzen', () => {
     const normal = resolveBaseGrade(inputs({ skyState: MIDNIGHT }));
     const start = resolveBaseGrade(inputs({
@@ -155,6 +210,36 @@ describe('resolveBaseGrade', () => {
     expect(middle.temperature).toBeLessThan(full.temperature);
     expect(middle.tintStrength).toBeGreaterThan(normal.tintStrength);
     expect(middle.tintStrength).toBeLessThan(full.tintStrength);
+  });
+
+  it('blendet den Map-15-Look mit demselben visuellen Faktor weich ein', () => {
+    const normal = resolveBaseGrade(inputs({ isVoidMap: true, bossVisualProfile: 'void-hunter' }));
+    const start = resolveBaseGrade(inputs({
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+      bossPhase: 1,
+      bossVisualIntensity: 0,
+    }));
+    const middle = resolveBaseGrade(inputs({
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+      bossPhase: 1,
+      bossVisualIntensity: 0.5,
+    }));
+    const full = resolveBaseGrade(inputs({
+      isVoidMap: true,
+      bossVisualProfile: 'void-hunter',
+      bossPhase: 1,
+      bossVisualIntensity: 1,
+    }));
+
+    expect(start).toEqual(normal);
+    expect(middle.tint).not.toBe(normal.tint);
+    expect(middle.tint).not.toBe(full.tint);
+    expect(middle.temperature).toBeLessThan(normal.temperature);
+    expect(middle.temperature).toBeGreaterThan(full.temperature);
+    expect(middle.bloomAmount).toBeGreaterThan(normal.bloomAmount);
+    expect(middle.bloomAmount).toBeLessThan(full.bloomAmount);
   });
 
   it('verwendet fuer den visuellen Faktor eine Smoothstep-Ease-in-out-Kurve', () => {

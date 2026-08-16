@@ -725,6 +725,11 @@ export class ProjectileManager {
       // BFG-Felder
       isBfg:            cfg.isBfg,
       proximityPulse: cfg.proximityPulse,
+      // Die Pulsphase beginnt pro Projektil beim Spawn. Dadurch wartet der
+      // erste Puls das konfigurierte Intervall ab, statt bei jedem neuen
+      // Projektil sofort auf dem gemeinsamen Host-Frame auszulösen.
+      lastProximityPulseAt: (cfg.proximityPulse?.radius ?? 0) > 0
+        && (cfg.proximityPulse?.damage ?? 0) > 0 ? 0 : undefined,
       // Anti-Tunneling
       originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isLeafBlower && !isBfg && !isGauss && !cfg.isGrenade
         ? cfg.size : undefined,

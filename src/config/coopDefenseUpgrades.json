@@ -3139,12 +3139,12 @@
                                                                 {
                                                                     "stat":  "weapon.ASMD_SEC.proximityPulse.damage",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  5
+                                                                    "value":  4
                                                                 },
                                                                 {
                                                                     "stat":  "weapon.ASMD_SEC.proximityPulse.scanIntervalMs",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  500
+                                                                    "value":  400
                                                                 }
                                                             ]
                                             },

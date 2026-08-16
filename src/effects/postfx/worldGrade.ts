@@ -28,6 +28,8 @@ export interface WorldGrade {
 export interface WorldGradeInputs {
   readonly skyState: SkyState;
   readonly isVoidMap: boolean;
+  /** Optional authored boss presentation profile; currently only Map 15 uses one. */
+  readonly bossVisualProfile?: WorldGradeBossVisualProfile;
   /** 0 = keine Bossphase. */
   readonly bossPhase: number;
   /** 0 … 1, rein visuell weich eingeblendet; fehlt bei direkter Auflösung = voll aktiv. */
@@ -46,10 +48,10 @@ export const BOSS_VISUAL_BLEND_DURATION_MS = 1800;
  */
 export const WORLD_GRADE_CLAMPS = {
   saturation: [0.80, 1.12],
-  contrast: [0.92, 1.18],
-  brightness: [0.94, 1.08],
+  contrast: [0.92, 1.30],
+  brightness: [0.86, 1.08],
   temperature: [-1, 1],
-  tintStrength: [0, 0.40],
+  tintStrength: [0, 0.60],
   /**
    * Untergrenze ist **kein** Geschmackswert. Phasers Vignette mischt außerhalb des Radius
    * **voll** zur Vignettenfarbe (`vignette = 1.0` als Mix-Faktor), innerhalb dagegen weich über
@@ -64,7 +66,7 @@ export const WORLD_GRADE_CLAMPS = {
   bloomThreshold: [0.30, 0.95],
   // Dauer-Bloom bleibt bewusst unter dem Ereignisbereich; Ereignispulse verwenden die
   // weiteren POST_FX_PULSE_CLAMPS und dürfen kurzzeitig deutlich stärker werden.
-  bloomAmount: [0, 0.32],
+  bloomAmount: [0, 0.50],
 } as const;
 
 /**
@@ -75,13 +77,42 @@ export const WORLD_GRADE_CLAMPS = {
 export const POST_FX_PULSE_CLAMPS = {
   saturation: [0.45, 1.35],
   contrast: [0.85, 1.45],
-  brightness: [0.88, 1.30],
+  brightness: [0.82, 1.30],
   temperature: [-1, 1],
   tintStrength: [0, 0.65],
   vignetteRadius: [0.75, 1.2],
   vignetteStrength: [0, 0.80],
   bloomThreshold: [0.20, 0.95],
   bloomAmount: [0, 1.2],
+} as const;
+
+export type WorldGradeBossVisualProfile = 'void-hunter';
+
+/**
+ * Map-15-spezifischer Boss-Look. Die Zielwerte ziehen die Welt deutlich in ein dunkles,
+ * gesaettigtes Void-Lila; die WorldGrade-Clamps halten Telegraphen und Welt-Silhouetten lesbar.
+ */
+export const VOID_HUNTER_BOSS_VISUAL_PROFILE = {
+  phaseOne: {
+    tint: 0x6220dc,
+    tintStrength: 0.70,
+    contrastBoost: 0.12,
+    brightnessDelta: -0.18,
+    temperature: -0.92,
+    saturationDelta: 0.03,
+    bloomBoost: 0.24,
+    vignetteBoost: 0.04,
+  },
+  phaseTwo: {
+    tint: 0x4b0bc9,
+    tintStrength: 0.90,
+    contrastBoost: 0.20,
+    brightnessDelta: -0.24,
+    temperature: -1,
+    saturationDelta: 0.05,
+    bloomBoost: 0.38,
+    vignetteBoost: 0.08,
+  },
 } as const;
 
 export const NEUTRAL_WORLD_GRADE: WorldGrade = {
@@ -164,6 +195,8 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   let tint = darkness > 0.05 ? NIGHT_TINT : 0xffffff;
   let tintStrength = darkness * 0.28;
   let temperature = -darkness * 0.6;
+  let bloomAmount = 0.14 + darkness * 0.08;
+  let vignetteStrength = 0.18 + darkness * 0.05;
 
   if (inputs.isVoidMap) {
     tint = VOID_TINT;
@@ -172,7 +205,19 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
     contrast += 0.04;
   }
 
-  if (bossActive) {
+  if (bossActive && inputs.bossVisualProfile === 'void-hunter') {
+    const profile = inputs.bossPhase >= 2
+      ? VOID_HUNTER_BOSS_VISUAL_PROFILE.phaseTwo
+      : VOID_HUNTER_BOSS_VISUAL_PROFILE.phaseOne;
+    tint = interpolateTint(tint, profile.tint, bossVisualIntensity);
+    tintStrength += (profile.tintStrength - tintStrength) * bossVisualIntensity;
+    contrast += profile.contrastBoost * bossVisualIntensity;
+    brightness += profile.brightnessDelta * bossVisualIntensity;
+    temperature += (profile.temperature - temperature) * bossVisualIntensity;
+    saturation += profile.saturationDelta * bossVisualIntensity;
+    bloomAmount += profile.bloomBoost * bossVisualIntensity;
+    vignetteStrength += profile.vignetteBoost * bossVisualIntensity;
+  } else if (bossActive) {
     const bossTintStrength = Math.max(tintStrength, 0.22 + Math.min(0.14, inputs.bossPhase * 0.07));
     // Der Boss-Look ersetzt den Nacht-/Normal-/Void-Look nicht mehr auf der Zustandsflanke.
     // Alle dauerhaften Boss-Anteile folgen demselben visuellen Faktor, damit Spawn und
@@ -192,7 +237,6 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   // Lightmap ohnehin dunkel ist, Gegner am Bildrand. Den Zustand trägt stattdessen die
   // Blutdarstellung auf der Klarheitskamera (`LowHealthBloodOverlay`) – sie ist rot, sie ist
   // großflächig, und sie kann die Bildmitte nicht abdunkeln.
-  const vignetteStrength = 0.18 + darkness * 0.05;
   const vignetteRadius = 1.05;
   saturation -= hurt * 0.2;
 
@@ -206,7 +250,7 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
     vignetteRadius: clamp(vignetteRadius, WORLD_GRADE_CLAMPS.vignetteRadius),
     vignetteStrength: clamp(vignetteStrength, WORLD_GRADE_CLAMPS.vignetteStrength),
     bloomThreshold: resolveBloomThreshold(darkness),
-    bloomAmount: clamp(0.14 + darkness * 0.08, WORLD_GRADE_CLAMPS.bloomAmount),
+    bloomAmount: clamp(bloomAmount, WORLD_GRADE_CLAMPS.bloomAmount),
   };
 }
 

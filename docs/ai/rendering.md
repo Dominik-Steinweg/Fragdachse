@@ -94,6 +94,10 @@ Nacht-/Normal-/Void-Ton, Kontrast, Temperatur und Tint-Staerke interpoliert. Der
 Boss-Phasenwechsel bleibt hart fuer die Logik, loest aber nur einen kurzen, weich anlaufenden
 `bossPhaseChange`-Akzent aus.
 
+Map 15 liefert dafuer das Profil `void-hunter`: Der Leerenjaeger blendet in Phase 1 in denselben
+1.8-Sekunden-Faktor ein, waehrend Phase 2 den Void-Tint, Kontrast und Bloom weiter verstaerkt.
+Andere Boss-Maps bleiben beim generischen `BOSS_TINT`.
+
 ## Charaktersprite-Skalierung
 
 Die Anzeigegröße einer Figur ist PLAYER_SIZE und ist von der Authoring-Auflösung ihrer Textur entkoppelt: Das Badger-Walking-Sheet liegt in 64-px-Zellen, die Figur bleibt 32 px. Daraus folgt eine Grundskalierung ungleich 1. Spawn-, Dash- und Burrow-Feedback sind deshalb Faktoren *relativ* zu dieser Grundskalierung und laufen über PlayerEntity.applySpriteScale() beziehungsweise die öffentliche setDashScale()-API; ein direktes sprite.setScale(1) von außen ist kein neutraler Wert mehr, sondern bläht die Figur auf Texturgröße auf. Overlays im 32-px-Raster (Spawn-Shine, Stealth-Shell/-Scan) übernehmen den Feedback-Faktor, nicht die rohe Texturskalierung.

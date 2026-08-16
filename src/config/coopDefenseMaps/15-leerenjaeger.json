@@ -2,7 +2,7 @@
   "mapId": "15",
   "arenaWidthCells": 100,
   "arenaHeightCells": 44,
-  "timeOfDay": "22:00",
+  "timeOfDay": "19:00",
   "trackMode": "void-fire",
   "mapEvents": [
     {
@@ -52,7 +52,7 @@
       "hpMax": 6500,
       "anchor": {
         "kind": "center-offset",
-        "dxCells": 0,
+        "dxCells": -5,
         "dyCells": -2
       },
       "shape": {
@@ -118,13 +118,40 @@
       },
       "turrets": [
         {
-          "id": "front-center",
+          "id": "plasma-northwest",
           "cellOffset": {
             "gridX": 0,
-            "gridY": 2
+            "gridY": 0
           },
-          "mountSide": "front",
-          "weaponId": "TURRET_FLAME"
+          "mountSide": "top",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        },
+        {
+          "id": "plasma-northeast",
+          "cellOffset": {
+            "gridX": 3,
+            "gridY": 0
+          },
+          "mountSide": "top",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        },
+        {
+          "id": "plasma-southwest",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 3
+          },
+          "mountSide": "bottom",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        },
+        {
+          "id": "plasma-southeast",
+          "cellOffset": {
+            "gridX": 3,
+            "gridY": 3
+          },
+          "mountSide": "bottom",
+          "weaponId": "SPORE_TURRET_PLASMA"
         }
       ],
       "powerUpPedestals": [
@@ -211,6 +238,16 @@
       },
       "restAfterMs": 1000,
       "groups": [
+       {
+          "enemyKind": "demon-badger",
+          "count": 10,
+          "front": "west"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 10,
+          "front": "east"
+        },
         {
           "enemyKind": "alien-badger",
           "count": 1,

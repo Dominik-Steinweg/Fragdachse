@@ -21,7 +21,7 @@ describe('Map 15 - Leerenjäger', () => {
   it('defines its structural encounter content and schedules it within the round', () => {
     const map = getCoopDefenseMapConfig('15');
     expect(map).toMatchObject({
-      timeOfDay: '22:00',
+      timeOfDay: '19:00',
       trackMode: 'void-fire',
       boss: { enemyKind: 'void-hunter' },
     });
@@ -37,7 +37,11 @@ describe('Map 15 - Leerenjäger', () => {
       'time',
     ]);
     expect(map.encounters?.[1].start).toEqual({ type: 'boss-phase', phase: 2 });
-    expect(map.encounters?.[1].groups.every((group) => group.front === 'north' || group.front === 'south')).toBe(true);
+    expect(map.encounters?.[1].groups.every((group) =>
+      group.front === 'north'
+      || group.front === 'south'
+      || group.front === 'west'
+      || group.front === 'east')).toBe(true);
     expect(new Set(map.encounters?.[2].groups.map((group) => group.front))).toEqual(
       new Set(['west', 'north', 'east', 'south']),
     );
