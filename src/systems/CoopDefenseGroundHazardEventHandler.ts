@@ -1,4 +1,4 @@
-﻿import {
+import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   CELL_SIZE,

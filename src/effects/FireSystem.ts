@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { BURN_TICK_INTERVAL_MS, isPointInsideArena } from '../config';
 import type {
   BurnOnHitConfig,

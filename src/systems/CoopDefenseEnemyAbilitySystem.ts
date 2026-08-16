@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { PLAYER_SIZE, VOID_FIRE_COLOR } from '../config';
 import {
   getCoopDefenseEnemyConfig,
@@ -61,7 +61,7 @@ const ENEMY_THROW_PATH_SAFETY_MARGIN = 4;
  */
 const ENEMY_THROW_SPEED_MULTIPLIER = 2;
 
-/** Flugphysik geworfener Gegner-Projektile â€“ uebernommen vom bewaehrten Translocator-Puck. */
+/** Flugphysik geworfener Gegner-Projektile – uebernommen vom bewaehrten Translocator-Puck. */
 const ENEMY_THROW_FLIGHT_PHYSICS = {
   frictionDelayMs: 300,
   airFrictionDecayPerSec: 0.15,
@@ -73,13 +73,13 @@ const ENEMY_THROW_FLIGHT_PHYSICS = {
  * Wurfgeschwindigkeit, mit der ein Projektil nach `flightMs` genau seinen Zielpunkt erreicht.
  *
  * Der pauschale Reibungsaufschlag der aelteren Wuerfe passt nur, solange der Zielzeitpunkt frei
- * gewaehlt werden kann â€“ der Translocator teleportiert schlicht dann, wenn der Puck angekommen
+ * gewaehlt werden kann – der Translocator teleportiert schlicht dann, wenn der Puck angekommen
  * ist. Ein Brandsatz zuendet dagegen nach fester Zuendzeit dort, wo er gerade ist; er muss also
  * exakt zu diesem Zeitpunkt ankommen, sonst fliegt er weit ueber sein Ziel hinaus.
  *
  * {@link ENEMY_THROW_FLIGHT_PHYSICS} daempft die Geschwindigkeit ab `frictionDelayMs` mit
  * `v(t) = v0 * decay^t`. Die Strecke je Einheit Startgeschwindigkeit ist damit der ungebremste
- * Vorlauf plus das Integral der Daempfung â€“ invertiert ergibt das die noetige Wurfgeschwindigkeit.
+ * Vorlauf plus das Integral der Daempfung – invertiert ergibt das die noetige Wurfgeschwindigkeit.
  */
 function resolveEnemyThrowSpeed(distance: number, flightMs: number): number {
   const flightSeconds = Math.max(0.1, flightMs / 1000);
@@ -118,7 +118,7 @@ export class CoopDefenseEnemyAbilitySystem {
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       activeEnemyIds.add(enemy.id);
-      // Eingebuddelte Gegner setzen â€“ wie eingebuddelte Spieler â€“ keine Faehigkeiten ein.
+      // Eingebuddelte Gegner setzen – wie eingebuddelte Spieler – keine Faehigkeiten ein.
       if (enemy.isBurrowed()) {
         this.voidFireTrailStates.delete(enemy.id);
         this.cancelVoidMolotovWindup(enemy);
@@ -297,8 +297,8 @@ export class CoopDefenseEnemyAbilitySystem {
     const spawnY = enemy.sprite.y + Math.sin(angle) * spawnDistance;
     const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
     const plannedFlightSeconds = Math.max(0.1, ability.flightTimeMs / 1000);
-    // Die Puck-Physik verliert wÃ¤hrend des Fluges viel Geschwindigkeit durch Luftreibung.
-    // Gegner dÃ¼rfen deshalb stÃ¤rker werfen, damit der Puck den anvisierten Spieler erreicht.
+    // Die Puck-Physik verliert während des Fluges viel Geschwindigkeit durch Luftreibung.
+    // Gegner dürfen deshalb stärker werfen, damit der Puck den anvisierten Spieler erreicht.
     const throwSpeed = Phaser.Math.Clamp(
       (target.distance / plannedFlightSeconds) * ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER,
       16,
@@ -328,7 +328,7 @@ export class CoopDefenseEnemyAbilitySystem {
   /**
    * Brutbombe: geworfenes Projektil mit Granaten-Flugphysik, das nach der Zuendzeit keine Explosion
    * ausloest, sondern neue Gegner absetzt. Die Wurfballistik entspricht bewusst dem gegnerischen
-   * Translocator â€“ Wurfgeschwindigkeit aus Zieldistanz und geplanter Flugzeit, kompensiert um die
+   * Translocator – Wurfgeschwindigkeit aus Zieldistanz und geplanter Flugzeit, kompensiert um die
    * Luftreibung, die das Geschoss unterwegs abbremst.
    */
   private updateSpawnThrow(

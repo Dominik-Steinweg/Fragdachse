@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
@@ -127,9 +127,9 @@ type PhysicsSystemType  = {
 };
 
 /**
- * LoadoutManager â€“ Host-autoritÃ¤r.
+ * LoadoutManager – Host-autoritär.
  * Verwaltet pro Spieler 4 Slots (weapon1, weapon2, utility, ultimate),
- * prÃ¼ft Cooldowns/Adrenalin, dispatcht Aktionen, tracked Spread-Bloom und Ultimate-Zustand.
+ * prüft Cooldowns/Adrenalin, dispatcht Aktionen, tracked Spread-Bloom und Ultimate-Zustand.
  */
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
@@ -170,7 +170,7 @@ export class LoadoutManager {
   private negevStates = new Map<string, NegevCombatState>();
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
   private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
-  /** Welches Item die Figur gerade in den Pfoten haelt â€“ rein visuell, aber host-autoritativ. */
+  /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
 
   /** Host-authoritative weapon intent. A weapon request claims its slot immediately. */
@@ -179,9 +179,9 @@ export class LoadoutManager {
   private weaponFireExecutor: WeaponFireExecutor | null = null;
 
   /**
-   * Gemeinsamer Fire-Dispatch fÃ¼r Projektil-, Hitscan- und Melee-Waffen. Der Manager liefert
-   * hier nur die Gameplay-Senken; die Ãœbersetzung von {@link WeaponConfig} in einen Schuss
-   * liegt im Executor und wird von der Lobby unverÃ¤ndert mitbenutzt.
+   * Gemeinsamer Fire-Dispatch für Projektil-, Hitscan- und Melee-Waffen. Der Manager liefert
+   * hier nur die Gameplay-Senken; die Übersetzung von {@link WeaponConfig} in einen Schuss
+   * liegt im Executor und wird von der Lobby unverändert mitbenutzt.
    *
    * Beim ersten Zugriff erzeugt statt im Feldinitialisierer: die Senken lesen `this` erst beim
    * Schuss, und der Manager wird in Tests auch ohne Konstruktorlauf aufgebaut.
@@ -256,9 +256,9 @@ export class LoadoutManager {
 
   private readonly okResult: LoadoutUseResult = { ok: true };
 
-  // â”€â”€ Utility-Override (Heilige Handgranate etc.) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Utility-Override (Heilige Handgranate etc.) ─────────────────────────
   private savedUtilities    = new Map<string, { config: UtilityConfig; lastUsedAt: number }>();
-  private utilityAmmo       = new Map<string, number>(); // playerId â†’ verbleibende EinsÃ¤tze (-1/absent = unbegrenzt)
+  private utilityAmmo       = new Map<string, number>(); // playerId → verbleibende Einsätze (-1/absent = unbegrenzt)
 
   constructor(
     private playerManager:     PlayerManager,
@@ -267,7 +267,7 @@ export class LoadoutManager {
     private bridge:            NetworkBridge,
   ) {}
 
-  // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   assignDefaultLoadout(playerId: string, selection?: LoadoutSelection): void {
     this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
@@ -296,7 +296,7 @@ export class LoadoutManager {
       auraLingerUntil: 0,
       gaussChargeStartedAt: null,
     });
-    // Eventuell gespeichertes Utility-Override aufrÃ¤umen (z.B. Tod wÃ¤hrend HHG)
+    // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
     this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
@@ -495,7 +495,7 @@ export class LoadoutManager {
       remainingFrac: 1,
       count: state.kills,
       value: state.kills * damagePerKill,
-      // Der Streak ist unbegrenzt â€“ ab dieser Kill-Zahl laeuft die Anzeige auf Vollgas.
+      // Der Streak ist unbegrenzt – ab dieser Kill-Zahl laeuft die Anzeige auf Vollgas.
       intensity: Math.min(1, state.kills / LoadoutManager.NEGEV_STREAK_FULL_INTENSITY_KILLS),
     }];
   }
@@ -554,12 +554,12 @@ export class LoadoutManager {
     this.combatSystem = combatSystem;
   }
 
-  /** Injiziert einen Checker, der wÃ¤hrend Dash-Phase 1 das SchieÃŸen blockiert. */
+  /** Injiziert einen Checker, der während Dash-Phase 1 das Schießen blockiert. */
   setDashBurstChecker(fn: (id: string) => boolean): void {
     this.dashBurstChecker = fn;
   }
 
-  /** Injiziert das HostPhysicsSystem fÃ¼r RÃ¼ckstoÃŸ-Impulse. */
+  /** Injiziert das HostPhysicsSystem für Rückstoß-Impulse. */
   setPhysicsSystem(ps: PhysicsSystemType | null): void {
     this.physicsSystem = ps;
   }
@@ -603,27 +603,27 @@ export class LoadoutManager {
     this.itemRuntimeWeaponFiredHandler = handler;
   }
 
-  /** Injiziert das ArmageddonSystem fÃ¼r Meteor-Ultimates. */
+  /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
   setArmageddonSystem(sys: ArmageddonSystem | null): void {
     this.armageddonSystem = sys;
   }
 
-  /** Injiziert die Host-Logik fÃ¼r zielbasierte Nuke-Strikes. */
+  /** Injiziert die Host-Logik für zielbasierte Nuke-Strikes. */
   setNukeStrikeHandler(handler: ((playerId: string, targetX: number, targetY: number) => boolean) | null): void {
     this.nukeStrikeHandler = handler;
   }
 
-  /** Injiziert die Host-Logik fÃ¼r Luftangriff-Strikes. */
+  /** Injiziert die Host-Logik für Luftangriff-Strikes. */
   setAirstrikeHandler(handler: ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null): void {
     this.airstrikeHandler = handler;
   }
 
-  /** Injiziert das StinkCloudSystem fÃ¼r StinkdrÃ¼sen-Utilities. */
+  /** Injiziert das StinkCloudSystem für Stinkdrüsen-Utilities. */
   setStinkCloudSystem(sys: StinkCloudSystem | null): void {
     this.stinkCloudSystem = sys;
   }
 
-  /** Injiziert das TeslaDomeSystem fÃ¼r kontinuierliche Tesla-Kuppeln. */
+  /** Injiziert das TeslaDomeSystem für kontinuierliche Tesla-Kuppeln. */
   setTeslaDomeSystem(sys: TeslaDomeSystem | null): void {
     this.teslaDomeSystem = sys;
   }
@@ -642,7 +642,7 @@ export class LoadoutManager {
     this.negevKillstreakExplosionHandler = handler;
   }
 
-  /** Injiziert einen Host-seitigen Blocker fÃ¼r Aktionen (z.B. tot, verbuddelt, stunned). */
+  /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
   setActionBlockedChecker(checker: ((playerId: string, slot: LoadoutSlot) => boolean) | null): void {
     this.actionBlockedChecker = checker;
   }
@@ -715,7 +715,7 @@ export class LoadoutManager {
     return didFire;
   }
 
-  /** Host-authoritativer NPC-Fire-Pfad fÃ¼r Gauss-Ultimate-Varianten. */
+  /** Host-authoritativer NPC-Fire-Pfad für Gauss-Ultimate-Varianten. */
   fireAutomatedGaussWeapon(
     config: GaussUltimateConfig,
     x: number,
@@ -771,7 +771,7 @@ export class LoadoutManager {
     return this.okResult;
   }
 
-  // â”€â”€ Bau-Cooldowns der Konstruktionen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Bau-Cooldowns der Konstruktionen ──────────────────────────────────────
   // Konstruktionen laufen nicht ueber `GenericUtility`; ihr Bau-Cooldown kommt aus
   // der jeweiligen Konstruktsdefinition.
 
@@ -786,10 +786,10 @@ export class LoadoutManager {
     perPlayer.set(constructionId, now + getCoopDefenseConstructionDefinition(constructionId).buildCooldownMs);
   }
 
-  // â”€â”€ Utility-Override (temporÃ¤rer Slot-Tausch, z.B. Heilige Handgranate) â”€â”€
+  // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
 
   /**
-   * Ãœberschreibt den Utility-Slot eines Spielers temporÃ¤r.
+   * Überschreibt den Utility-Slot eines Spielers temporär.
    * Der aktuelle Zustand (Config + Cooldown) wird zwischengespeichert.
    */
   overrideUtility(playerId: string, config: UtilityConfig, ammo: number): boolean {
@@ -874,7 +874,7 @@ export class LoadoutManager {
     this.bridge.publishUtilityOverrideId(playerId, ''); // Override aufgehoben
   }
 
-  // â”€â”€ Haupt-Dispatch (vom Host-RPC-Handler) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
 
   use(
     slot:      LoadoutSlot,
@@ -899,7 +899,7 @@ export class LoadoutManager {
     const x = clientX ?? player.sprite.x;
     const y = clientY ?? player.sprite.y;
 
-    // SchieÃŸen wÃ¤hrend Dash-Phase 1 (Burst) blockiert
+    // Schießen während Dash-Phase 1 (Burst) blockiert
     if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return { ok: false, reason: 'blocked' };
 
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
@@ -909,7 +909,7 @@ export class LoadoutManager {
       this.decoySystem?.breakStealth(playerId, now);
     }
 
-    // scopeHolding: Scope-Waffe wird gehalten, aber noch kein Schuss â€“ nur holdSpeedFactor aktiv
+    // scopeHolding: Scope-Waffe wird gehalten, aber noch kein Schuss – nur holdSpeedFactor aktiv
     if (params?.scopeHolding && (slot === 'weapon1' || slot === 'weapon2')) {
       return this.okResult;
     }
@@ -923,7 +923,7 @@ export class LoadoutManager {
 
       case 'weapon2': {
         // Der Kreuzfeuer-Melder haengt bewusst hier und nicht in `fireWeapon`: nur ein Aufruf,
-        // der tatsaechlich gefeuert hat, oeffnet das Fenster â€“ Cooldown, fehlendes Adrenalin und
+        // der tatsaechlich gefeuert hat, oeffnet das Fenster – Cooldown, fehlendes Adrenalin und
         // blockierte Schuesse liefern `ok: false` und zaehlen nicht. Dasselbe gilt fuer das
         // getragene Item: ein abgelehnter Schuss nimmt die Waffe nicht in die Pfoten.
         const result = this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId, params);
@@ -1017,12 +1017,12 @@ export class LoadoutManager {
     return { ok: false, reason: 'invalid' };
   }
 
-  // â”€â”€ Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
 
   update(delta: number): void {
     const now = Date.now();
 
-    // Spread-Decay fÃ¼r alle ausgerÃ¼steten Waffen
+    // Spread-Decay für alle ausgerüsteten Waffen
     for (const loadout of this.loadouts.values()) {
       loadout.weapon1.decaySpread(delta, now);
       loadout.weapon2.decaySpread(delta, now);
@@ -1111,7 +1111,7 @@ export class LoadoutManager {
     this.processShotgunLightningQueue();
   }
 
-  // â”€â”€ Multiplier-Getter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Multiplier-Getter ─────────────────────────────────────────────────────
 
   getSpeedMultiplier(playerId: string): number {
     const state        = this.ultimateStates.get(playerId);
@@ -1121,7 +1121,7 @@ export class LoadoutManager {
       ? state.config.movementSlowFactor
       : 1;
 
-    // Energie-Schild/Kuppel verlangsamt, solange er aktiv ist â€“ auch im Toggle-Modus ohne Halten.
+    // Energie-Schild/Kuppel verlangsamt, solange er aktiv ist – auch im Toggle-Modus ohne Halten.
     if (this.energyShieldSystem?.isActive(playerId)) {
       const shieldCfg = this.loadouts.get(playerId)?.weapon2.config;
       if (shieldCfg?.fire.type === 'energy_shield') {
@@ -1380,18 +1380,18 @@ export class LoadoutManager {
     });
   }
 
-  // â”€â”€ Waffen-Getter (fÃ¼r AimSystem) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────
 
   /**
-   * Gibt die WeaponConfig der tatsÃ¤chlich ausgerÃ¼steten Waffe zurÃ¼ck.
-   * ErmÃ¶glicht dem AimSystem die echten Waffenwerte (Range, Spread-Parameter)
-   * zu nutzen, unabhÃ¤ngig davon welches Loadout der Spieler ausgewÃ¤hlt hat.
+   * Gibt die WeaponConfig der tatsächlich ausgerüsteten Waffe zurück.
+   * Ermöglicht dem AimSystem die echten Waffenwerte (Range, Spread-Parameter)
+   * zu nutzen, unabhängig davon welches Loadout der Spieler ausgewählt hat.
    */
   getEquippedWeaponConfig(playerId: string, slot: 'weapon1' | 'weapon2'): WeaponConfig | undefined {
     return this.loadouts.get(playerId)?.[slot].config;
   }
 
-  /** Gibt die Config der tatsÃ¤chlich ausgerÃ¼steten Utility zurÃ¼ck (inkl. Override). */
+  /** Gibt die Config der tatsächlich ausgerüsteten Utility zurück (inkl. Override). */
   getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined {
     return this.loadouts.get(playerId)?.utility.config;
   }
@@ -1403,9 +1403,9 @@ export class LoadoutManager {
   }
 
   /**
-   * Gibt den aktuellen dynamischen Spread (Bloom) der Waffe zurÃ¼ck.
-   * Direkt aus dem BaseWeapon-Objekt â€“ das AimSystem braucht auf dem Host
-   * keine eigene Simulation und nutzt stattdessen den autoritÃ¤ren Wert.
+   * Gibt den aktuellen dynamischen Spread (Bloom) der Waffe zurück.
+   * Direkt aus dem BaseWeapon-Objekt – das AimSystem braucht auf dem Host
+   * keine eigene Simulation und nutzt stattdessen den autoritären Wert.
    */
   getDynamicSpread(playerId: string, slot: 'weapon1' | 'weapon2'): number {
     return this.loadouts.get(playerId)?.[slot].getDynamicSpread() ?? 0;
@@ -1598,10 +1598,10 @@ export class LoadoutManager {
     );
   }
 
-  // â”€â”€ Interne Helfer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Interne Helfer ────────────────────────────────────────────────────────
 
   /**
-   * Feuert eine Waffe ab: prÃ¼ft Cooldown + Adrenalin, berechnet den
+   * Feuert eine Waffe ab: prüft Cooldown + Adrenalin, berechnet den
    * gestreuten Winkel (Basis + dynamischer Bloom) und dispatcht dann
    * auf die typ-spezifische Waffenlogik.
    */
@@ -1650,7 +1650,7 @@ export class LoadoutManager {
     }
 
     // 3. Spread-Parameter berechnen
-    // Bewegungsstatus direkt vom Physics-Body lesen â€“ der Host besitzt die Simulation,
+    // Bewegungsstatus direkt vom Physics-Body lesen – der Host besitzt die Simulation,
     // daher ist velocity immer aktuell (kein Netzwerk-Lag wie bei getPlayerInput).
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
     const isMoving    = isVelocityMoving(shooterBody?.velocity.x ?? 0, shooterBody?.velocity.y ?? 0);
@@ -1670,9 +1670,9 @@ export class LoadoutManager {
     const totalSpreadDeg = Math.max(0, (baseSpread + weapon.getDynamicSpread()) * fireControlSpreadMultiplier);
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
 
-    // 4. Typ-spezifische Waffenlogik ausfÃ¼hren.
+    // 4. Typ-spezifische Waffenlogik ausführen.
     //    Multi-Pellet-Waffen (z.B. Shotgun) feuern alle Projektile gleichzeitig ab.
-    //    Jedes Pellet erhÃ¤lt seinen eigenen zufÃ¤lligen Spread-Offset zusÃ¤tzlich zum Pellet-Winkel.
+    //    Jedes Pellet erhält seinen eigenen zufälligen Spread-Offset zusätzlich zum Pellet-Winkel.
     const warmupFraction = cfg.maxDynamicSpread < 0
       ? Math.min(1, Math.abs(weapon.getDynamicSpread()) / Math.max(0.0001, Math.abs(cfg.maxDynamicSpread)))
       : 0;
@@ -1694,7 +1694,7 @@ export class LoadoutManager {
         awpCharge: {
           ...cfg.awpCharge,
           fireTrailBurnDamagePerTick: cfg.awpCharge.fireTrailBurnDamagePerTick * fullChargeMultiplier,
-          // Saemtliche Schneisen-Boni â€“ inklusive der breiteren Feuerspur â€“ gelten
+          // Saemtliche Schneisen-Boni – inklusive der breiteren Feuerspur – gelten
           // ausschliesslich fuer voll aufgeladene Schuesse (Geduldiger Tod).
           corridorEnabled: corridorActive ? cfg.awpCharge.corridorEnabled : 0,
           corridorDamage: cfg.awpCharge.corridorDamage * fullChargeMultiplier,
@@ -1745,7 +1745,7 @@ export class LoadoutManager {
     // Kinetische Ladung: der Bonus wird in `shotCfg.damage` gebacken, **bevor** sich der Schuss in
     // Pellets aufteilt. Dadurch gilt er fuer die vollstaendige Salve statt je Projektil erneut,
     // greift ohne Sonderfall auch bei Hitscan-Waffen, und Sekundaerschaden erbt ihn nicht.
-    // Verbraucht wird beim Feuern, nicht beim Treffen â€“ ein verfehlter Schuss zaehlt ebenfalls.
+    // Verbraucht wird beim Feuern, nicht beim Treffen – ein verfehlter Schuss zaehlt ebenfalls.
     if (sourceSlot === 'weapon1') {
       const kineticBonus = this.itemRuntimeChargeConsumer?.(playerId) ?? 0;
       if (kineticBonus > 0) shotCfg = { ...shotCfg, damage: shotCfg.damage * (1 + kineticBonus) };
@@ -1759,8 +1759,8 @@ export class LoadoutManager {
         const offset = pelletOffsets[pelletIndex];
         const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
         // Eine Salve ist ein einzelner Schuss: Nur das erste Projektil darf den
-        // Waffensound auf Host und Remote-Clients replizieren. MÃ¼ndungsfeuer und
-        // Projektilvisuals bleiben fÃ¼r jedes Pellet aktiv.
+        // Waffensound auf Host und Remote-Clients replizieren. Mündungsfeuer und
+        // Projektilvisuals bleiben für jedes Pellet aktiv.
         const pelletConfig = pelletIndex === 0
           ? shotCfg
           : { ...shotCfg, shotAudio: undefined };
@@ -1800,18 +1800,18 @@ export class LoadoutManager {
       this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
     }
 
-    // 6. Bloom erhÃ¶hen, dann Cooldown-Timestamp setzen
+    // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen
     weapon.addSpread();
     weapon.recordUse(now);
 
-    // 7. RÃ¼ckstoÃŸ-Impuls (host-autoritativ, Quad-Ease-Out Ã¼ber shotRecoilDuration)
+    // 7. Rückstoß-Impuls (host-autoritativ, Quad-Ease-Out über shotRecoilDuration)
     if (cfg.shotRecoilForce) {
       const oppVx = -Math.cos(angle) * cfg.shotRecoilForce;
       const oppVy = -Math.sin(angle) * cfg.shotRecoilForce;
       this.physicsSystem?.addRecoil(playerId, oppVx, oppVy, cfg.shotRecoilDuration ?? 180);
     }
 
-    // 8. Screenshake beim SchÃ¼tzen (via RPC an alle, gefiltert auf lokalen Spieler)
+    // 8. Screenshake beim Schützen (via RPC an alle, gefiltert auf lokalen Spieler)
     if (cfg.shotScreenShake) {
       this.bridge.broadcastShotFx(playerId, cfg.shotScreenShake.duration, cfg.shotScreenShake.intensity);
     }
@@ -1858,7 +1858,7 @@ export class LoadoutManager {
         break;
 
       case 'charged_gate':
-        if ((params?.utilityChargeFraction ?? 0) < 1.0) return false; // nicht voll geladen â†’ abbrechen
+        if ((params?.utilityChargeFraction ?? 0) < 1.0) return false; // nicht voll geladen → abbrechen
         if (cfg.type === 'bfg') {
           didUse = this.fireBfgUtility(cfg as BfgUtilityConfig, x, y, angle, playerId);
         }
@@ -1909,8 +1909,8 @@ export class LoadoutManager {
       this.utilityUsedCallback?.(playerId, cfg.type);
       this.utilityUsedObserver?.(playerId, cfg.type);
 
-      // skipCooldownPublish: kein recordUse/publishCooldown fÃ¼r Ammo-basierte Einmal-Items,
-      // damit der Cooldown der wiederhergestellten Utility nicht Ã¼berschrieben wird.
+      // skipCooldownPublish: kein recordUse/publishCooldown für Ammo-basierte Einmal-Items,
+      // damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird.
       if (!cfg.skipCooldownPublish) {
         utility.recordUse(now);
         this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown, cfg.id);
@@ -1981,7 +1981,7 @@ export class LoadoutManager {
       damage:           cfg.directDamage,
       color:            COLORS.GREEN_2,
       allowTeamDamage:  cfg.allowTeamDamage,
-      lifetime:         5000,      // groÃŸzÃ¼gig â€“ endet durch Arena-Wand
+      lifetime:         5000,      // großzügig – endet durch Arena-Wand
       maxBounces:       0,
       isGrenade:        false,
       adrenalinGain:    0,
@@ -2163,7 +2163,7 @@ export class LoadoutManager {
   }
 
   /**
-   * Feuert die VerstÃ¤rkungsmatrix wie eine langsame Rakete bis zum Cursor oder zur
+   * Feuert die Verstärkungsmatrix wie eine langsame Rakete bis zum Cursor oder zur
    * maximalen Reichweite. Die spezielle Explosionsnutzlast wird erst am Einschlag
    * vom HostUpdateCoordinator in ein Feld umgewandelt.
    */
@@ -2370,7 +2370,7 @@ export class LoadoutManager {
       options,
       visualMuzzleOrigin,
       // Die gezahlten Adrenalinkosten kennt nur der Manager; der Executor fragt sie lediglich
-      // fÃ¼r die Mini-Rakete ab und bleibt damit frei von Ressourcenverwaltung.
+      // für die Mini-Rakete ab und bleibt damit frei von Ressourcenverwaltung.
       resolvePaidAdrenalineCost: () => Math.min(
         this.resourceSystem.getAdrenaline(playerId),
         this.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost),

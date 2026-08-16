@@ -1,7 +1,7 @@
-﻿/**
- * RightSidePanel â€“ verwaltet den rechten Seitenbereich fÃ¼r beide Spielphasen.
+/**
+ * RightSidePanel – verwaltet den rechten Seitenbereich für beide Spielphasen.
  *
- * Zwei Phaser-Container werden Ã¼berlagert und via Y-Tween animiert:
+ * Zwei Phaser-Container werden überlagert und via Y-Tween animiert:
  *  - lobbyContainer: Endstand der letzten Runde (Lobby-Phase), startet bei y=0
  *  - gameContainer:  Timer + Killfeed + Leaderboard (Arena-Phase), startet bei y=-GAME_HEIGHT
  *
@@ -37,7 +37,7 @@ import { formatNumber, getLocale, t } from '../i18n';
 import { getSourceName } from '../i18n/contentPresentation';
 import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
 
-// â”€â”€ Layout-Konstanten â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
 const LOBBY_SIDEBAR_LEFT_X   = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH + 8;
 const LOBBY_SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;
@@ -49,7 +49,7 @@ const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
 
 /**
  * Linke Kante der Arena-Seitenspalte. Exportiert, damit weitere HUD-Elemente davor enden
- * kÃ¶nnen, statt die Seitenspalte horizontal zu Ã¼berdecken.
+ * können, statt die Seitenspalte horizontal zu überdecken.
  */
 export const ARENA_SIDEBAR_CONTENT_LEFT_X = ARENA_SIDEBAR_LEFT_X;
 const ARENA_PANEL_WIDTH      = Math.round((DEFAULT_ARENA_OFFSET_X - 40) * 1.5);
@@ -62,7 +62,7 @@ const KILLFEED_MAX     = 5;
 const KILLFEED_TOP_Y   = COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y + 18;
 const KILLFEED_ENTRY_H = 28;
 const KILLFEED_FONT    = '17px';
-const KILLFEED_NAME_MAXLEN = 8; // Zeichen â€“ wird mit â€¦ abgeschnitten
+const KILLFEED_NAME_MAXLEN = 8; // Zeichen – wird mit … abgeschnitten
 
 // Leaderboard (Arena)
 const LB_SEP_Y      = KILLFEED_TOP_Y + KILLFEED_MAX * KILLFEED_ENTRY_H + 10;
@@ -92,13 +92,13 @@ const RESULTS_HEADER_BTN_W     = LOBBY_PANEL_WIDTH;
 const RESULTS_HEADER_BTN_H     = 32;
 const TEX_RESULTS_HEADER_ON    = '_rsp_lastround_neutral_on_v2';
 const TEX_RESULTS_HEADER_OFF   = '_rsp_lastround_neutral_off_v2';
-const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile â€“ grÃ¶ÃŸer als Spielerzeilen
+const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile – größer als Spielerzeilen
 const RESULTS_LABEL_FONT       = '14px';
 const RESULTS_OUTCOME_FONT     = '18px';
 const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X - 2;
 const RESULTS_FRAGS_X          = RESULTS_XP_X - 72;
-const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator â†’ erste Spielerzeile
-const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion â†’ naechste Team-Summary
+const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator → erste Spielerzeile
+const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion → naechste Team-Summary
 const RESULTS_SUMMARY_SEP_DY   = 14;
 const ROOM_STATS_DAMAGE_X      = RESULTS_XP_X - 58;
 const ROOM_STATS_DEATHS_X      = RESULTS_XP_X;
@@ -120,7 +120,7 @@ const COLOR_ARENA_FRAGS = toCssColor(COLORS.GREY_2);
 const COLOR_HEADER    = toCssColor(COLORS.GREY_3);
 const COLOR_SEPARATOR = COLORS.GREY_6;
 
-// â”€â”€ Glasflaeche hinter der Spalte (Gegenstueck zur linken Spalte) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Glasflaeche hinter der Spalte (Gegenstueck zur linken Spalte) ────────────
 // Buendig am Felsrahmen: aussen am Bildrand, oben und unten an den Felszeilen, nach innen
 // zur Felssaeule hin auslaufend.
 const GLASS_X = LOBBY_FRAME_BOUNDS.rightColumnLeft;
@@ -181,7 +181,7 @@ export class RightSidePanel {
   private arenaOverlayVisible = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
-  // â”€â”€ Killfeed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Killfeed ──────────────────────────────────────────────────────────────
   private killFeedData: {
     killerName: string; killerColor: number;
     sourceId:   string;
@@ -195,7 +195,7 @@ export class RightSidePanel {
     victim: Phaser.GameObjects.Text;
   }[] = [];
 
-  // â”€â”€ Leaderboard (Arena) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Leaderboard (Arena) ───────────────────────────────────────────────────
   private lbRows: {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
@@ -210,7 +210,7 @@ export class RightSidePanel {
   private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
   private readonly cssColorCache = new Map<number, string>();
 
-  // â”€â”€ Ergebnisse (Lobby) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
   private resultsHeader!: Phaser.GameObjects.Text;
   private resultsHeaderButton!: Phaser.GameObjects.Image;
   private resultsHeaderLabels!: Phaser.GameObjects.Container;
@@ -251,7 +251,7 @@ export class RightSidePanel {
 
   constructor(private scene: Phaser.Scene) {}
 
-  // â”€â”€ Einmalig aufzurufen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Einmalig aufzurufen ───────────────────────────────────────────────────
 
   build(): void {
     this.buildGameContainer();
@@ -279,7 +279,7 @@ export class RightSidePanel {
     if (this.lobbyView === 'roomStats') this.showRoomStatistics(bridge.getRoomPlayerStatistics());
   }
 
-  // â”€â”€ Transitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
     this.scene.tweens.killTweensOf(this.lobbyContainer);
@@ -360,14 +360,14 @@ export class RightSidePanel {
     return this.arenaOverlayVisible;
   }
 
-  // â”€â”€ Daten-Updates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Daten-Updates ──────────────────────────────────────────────────────────
 
   /** @deprecated Timer wird jetzt vom CenterHUD verwaltet. */
   updateTimer(_secs: number): void { /* no-op */ }
 
   /**
-   * FÃ¼gt einen Kill oben in den Killfeed ein.
-   * Ã„ltere EintrÃ¤ge rutschen nach unten; Ã¼berschÃ¼ssige fallen weg.
+   * Fügt einen Kill oben in den Killfeed ein.
+   * Ältere Einträge rutschen nach unten; überschüssige fallen weg.
    */
   addKillFeedEntry(
     killerName: string, killerColor: number,
@@ -442,7 +442,7 @@ export class RightSidePanel {
     this.replayResultsHandler = handler;
   }
 
-  /** Bereitet die spÃ¤tere Detailansicht fÃ¼r die Raumstatistik vor. */
+  /** Bereitet die spätere Detailansicht für die Raumstatistik vor. */
   setRoomStatisticsDetailHandler(handler: (() => void) | null): void {
     this.roomStatsDetailHandler = handler;
   }
@@ -527,7 +527,7 @@ export class RightSidePanel {
       return;
     }
     this.resultsHeaderButton.disableInteractive();
-    // Wird der Knopf unter dem Zeiger deaktiviert, laeuft kein pointerout mehr â€”
+    // Wird der Knopf unter dem Zeiger deaktiviert, laeuft kein pointerout mehr —
     // der vergroesserte Hover-Zustand muss deshalb hier zurueckgesetzt werden.
     this.resultsHeaderButton.setScale(1);
     this.resultsHeaderLabels.setScale(1);
@@ -595,7 +595,7 @@ export class RightSidePanel {
     }
   }
 
-  // â”€â”€ Zug-Widget-Updates (no-op â€“ jetzt im CenterHUD) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Zug-Widget-Updates (no-op – jetzt im CenterHUD) ────────────────────────
 
   /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
   setTrainArrival(_arrivalTimerSecs: number): void { /* no-op */ }
@@ -611,7 +611,7 @@ export class RightSidePanel {
     this.gameContainer.destroy(true);
   }
 
-  // â”€â”€ Interne Build-Helfer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Interne Build-Helfer ──────────────────────────────────────────────────
 
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
@@ -622,19 +622,19 @@ export class RightSidePanel {
         .setScrollFactor(0),
     );
 
-    // â”€â”€ Trennlinie vor Killfeed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Trennlinie vor Killfeed ───────────────────────────────────────────────
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, KILLFEED_TOP_Y - 10, ARENA_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
         .setScrollFactor(0),
     );
 
-    // â”€â”€ Killfeed-EintrÃ¤ge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Layout: [KillerName (links)] [â†’ weapon â†’ (mitte)] [VictimName (rechts)]
+    // ── Killfeed-Einträge ─────────────────────────────────────────────────────
+    // Layout: [KillerName (links)] [→ weapon → (mitte)] [VictimName (rechts)]
     // Killer und Victim nutzen die vollen Seitenbreiten; Waffe ist dazwischen.
     for (let i = 0; i < KILLFEED_MAX; i++) {
       const y = KILLFEED_TOP_Y + i * KILLFEED_ENTRY_H;
 
-      // Spielername links-bÃ¼ndig
+      // Spielername links-bündig
       const killer = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
@@ -648,7 +648,7 @@ export class RightSidePanel {
         color:      COLOR_KILLFEED_WEAPON,
       }).setOrigin(0.5, 0.5).setScrollFactor(0);
 
-      // Spielername rechts-bÃ¼ndig
+      // Spielername rechts-bündig
       const victim = this.scene.add.text(ARENA_SIDEBAR_RIGHT_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
@@ -659,13 +659,13 @@ export class RightSidePanel {
       this.killFeedRows.push({ killer, weapon, victim });
     }
 
-    // â”€â”€ Trennlinie vor Leaderboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Trennlinie vor Leaderboard ────────────────────────────────────────────
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, LB_SEP_Y, ARENA_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
         .setScrollFactor(0),
     );
 
-    // â”€â”€ Leaderboard-Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Leaderboard-Header ────────────────────────────────────────────────────
     this.leaderboardScoreLabel = this.scene.add.text(LB_FRAGS_X, LB_HEADER_Y, t('ui.score.frags'), {
       fontSize:   LB_HEADER_FONT,
       fontFamily: 'monospace',
@@ -726,7 +726,7 @@ export class RightSidePanel {
     };
     this.gameContainer.add([blueLabel, blueScore, redLabel, redScore]);
 
-    // â”€â”€ Leaderboard-EintrÃ¤ge (Max. 12 Spieler) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Leaderboard-Einträge (Max. 12 Spieler) ────────────────────────────────
     for (let i = 0; i < 12; i++) {
       const y = LB_START_Y + i * LB_ENTRY_H;
 
@@ -859,7 +859,7 @@ export class RightSidePanel {
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
     promoteToClarityCamera(this.scene, this.lobbyContainer);
 
-    // â”€â”€ Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) ──────────
     // Beschriftung und Pfeil liegen in einem Container auf der Knopfmitte, damit der
     // Hover-Effekt sie um ihre eigene Mitte skaliert statt Richtung Bildschirmursprung.
     this.resultsHeaderButton = this.scene.add.image(
@@ -867,7 +867,7 @@ export class RightSidePanel {
       RESULTS_HEADER_Y,
       this.ensureResultsHeaderTexture(false),
     ).setScrollFactor(0);
-    // Ohne abrufbare Auswertung bleibt der Knopf stumm â€” sonst verspraeche schon der
+    // Ohne abrufbare Auswertung bleibt der Knopf stumm — sonst verspraeche schon der
     // Zeigerwechsel eine Aktion, die es nicht gibt. Scharf schaltet ihn erst
     // `setResultsReplayAvailable()`.
     this.resultsHeaderButton.on('pointerdown', () => {
@@ -877,7 +877,7 @@ export class RightSidePanel {
 
     this.resultsHeader = this.scene.add.text(-10, 0, t('ui.results.lastRound'), textStyle('label'))
       .setOrigin(0.5, 0.5).setScrollFactor(0);
-    // Gezeichnetes Chevron statt des Zeichens 'â–¸': Textglyphen dieser Art rendern je nach
+    // Gezeichnetes Chevron statt des Zeichens '▸': Textglyphen dieser Art rendern je nach
     // Schriftfallback unterschiedlich breit und sitzen selten auf der Grundlinie.
     this.resultsHeaderHint = this.scene.add.image(
       RESULTS_HEADER_BTN_W / 2 - 16, 0,
@@ -984,7 +984,7 @@ export class RightSidePanel {
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
     // Leerzustand statt blossem "Noch keine Daten": ein gedaempftes Symbol und eine Zeile, die
-    // erklaert, wann hier etwas steht â€“ sonst liest sich die leere Spalte wie ein Fehler.
+    // erklaert, wann hier etwas steht – sonst liest sich die leere Spalte wie ein Fehler.
     this.resultsEmptyIcon = this.scene.add.image(
       LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 18,
       ensureIconTexture(this.scene, 'trophy', 96, COLORS.GREY_6),
@@ -1066,7 +1066,7 @@ export class RightSidePanel {
       redSeparator,
     ]);
 
-    // â”€â”€ Endstand-EintrÃ¤ge (Max. 12 Spieler) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Endstand-Einträge (Max. 12 Spieler) ──────────────────────────────────
     for (let i = 0; i < 12; i++) {
       const y = RESULTS_START_Y + i * RESULTS_ENTRY_H;
 
@@ -1095,7 +1095,7 @@ export class RightSidePanel {
     ]);
   }
 
-  // â”€â”€ Killfeed-Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Killfeed-Render ───────────────────────────────────────────────────────
 
   private renderKillFeed(): void {
     for (let i = 0; i < KILLFEED_MAX; i++) {
@@ -1103,7 +1103,7 @@ export class RightSidePanel {
       const entry = this.killFeedData[i];
 
       if (entry) {
-        // Neuere EintrÃ¤ge sind opaker als Ã¤ltere
+        // Neuere Einträge sind opaker als ältere
         const alpha = 1 - i * 0.14;
         const nextView: KillFeedEntryView = {
           killerText: this.truncate(entry.killerName, KILLFEED_NAME_MAXLEN),
@@ -1156,7 +1156,7 @@ export class RightSidePanel {
     return cssColor;
   }
 
-  /** KÃ¼rzt einen String auf maxLen Zeichen (hÃ¤ngt â€¦ an wenn nÃ¶tig). */
+  /** Kürzt einen String auf maxLen Zeichen (hängt … an wenn nötig). */
   private truncate(s: string, maxLen: number): string {
     return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}…`;
   }
@@ -1405,7 +1405,7 @@ export class RightSidePanel {
       return;
     }
 
-    // Ein Host-Abbruch ist kein Spielausgang â€“ daher weder Sieg- noch Niederlagenfarbe.
+    // Ein Host-Abbruch ist kein Spielausgang – daher weder Sieg- noch Niederlagenfarbe.
     if (roundState.status === 'aborted') {
       this.resultsOutcomeIcon.setVisible(false);
       this.resultsOutcome

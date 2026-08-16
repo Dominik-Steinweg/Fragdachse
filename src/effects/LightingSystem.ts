@@ -5,6 +5,7 @@ import {
   GAME_WIDTH,
 } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import type { DynamicLightOccluderSource } from './DynamicLightOccluders';
 import type { LightOccluderIndex } from './LightOccluderIndex';
 import {
   GLOBAL_LIGHT_INTENSITY_MULT,
@@ -121,6 +122,8 @@ export interface LightingPerformanceMetrics {
   coneLights: number;
   shadowQuads: number;
   falloffQuads: number;
+  dynamicOccluderTests: number;
+  dynamicOccluderHits: number;
   commandCount: number;
   lightMapPixels: number;
   scratchPixels: number;
@@ -132,7 +135,8 @@ function emptyPerformanceMetrics(): LightingPerformanceMetrics {
     totalMs: 0, expireMs: 0, queueMs: 0, commandBuildMs: 0, directMs: 0, occlusionMs: 0,
     shadowGeometryMs: 0, activeLights: 0, renderedLights: 0, directLights: 0,
     occludingLights: 0, fallbackOccludingLights: 0, radialLights: 0, coneLights: 0,
-    shadowQuads: 0, falloffQuads: 0, commandCount: 0, lightMapPixels: 0, scratchPixels: 0,
+    shadowQuads: 0, falloffQuads: 0, dynamicOccluderTests: 0, dynamicOccluderHits: 0,
+    commandCount: 0, lightMapPixels: 0, scratchPixels: 0,
     presetCounts: {},
   };
 }
@@ -172,8 +176,11 @@ export class LightingSystem {
   private readonly renderQueue: ActiveLight[] = [];
 
   private occluders: LightOccluderIndex | null = null;
+  private dynamicOccluders: DynamicLightOccluderSource | null = null;
   private readonly shadowQuads = new ShadowQuadBuffer();
   private readonly falloffQuads = new ShadowQuadBuffer();
+  private lastDynamicOccluderTests = 0;
+  private lastDynamicOccluderHits = 0;
   private readonly coneTextureKeys = new Map<number, string>();
 
   private enabled = false;
@@ -210,6 +217,11 @@ export class LightingSystem {
 
   setOccluderIndex(index: LightOccluderIndex | null): void {
     this.occluders = index;
+  }
+
+  /** Bewegliche Occluder bleiben ausserhalb des statischen Arena-Indexes. */
+  setDynamicOccluderSource(source: DynamicLightOccluderSource | null): void {
+    this.dynamicOccluders = source;
   }
 
   /**
@@ -499,6 +511,8 @@ export class LightingSystem {
     let shadowGeometryMs = 0;
     let shadowQuads = 0;
     let falloffQuads = 0;
+    let dynamicOccluderTests = 0;
+    let dynamicOccluderHits = 0;
     let commandCount = 1;
     let radialLights = 0;
     let coneLights = 0;
@@ -508,9 +522,9 @@ export class LightingSystem {
       if (light.shape === 'radial') radialLights += 1;
       else coneLights += 1;
       const useOcclusion = light.occludes
-        && this.occluders !== null
         && occludingUsed < this.quality.maxOccludingLightsPerFrame
-        && occludingUsed < this.slots.length;
+        && occludingUsed < this.slots.length
+        && (this.occluders !== null || this.dynamicOccluders?.hasOccluders() === true);
 
       if (useOcclusion) {
         const occlusionStartedAt = performance.now();
@@ -519,6 +533,8 @@ export class LightingSystem {
         shadowGeometryMs += geometry.durationMs;
         shadowQuads += geometry.shadowQuads;
         falloffQuads += geometry.falloffQuads;
+        dynamicOccluderTests += geometry.dynamicOccluderTests;
+        dynamicOccluderHits += geometry.dynamicOccluderHits;
         commandCount += 4 + geometry.graphicsCommands;
         occludingUsed += 1;
       } else {
@@ -557,6 +573,8 @@ export class LightingSystem {
       coneLights,
       shadowQuads,
       falloffQuads,
+      dynamicOccluderTests,
+      dynamicOccluderHits,
       commandCount,
       lightMapPixels: Math.ceil((GAME_WIDTH + overscanX * 2) * this.quality.lightMapScale)
         * Math.ceil((GAME_HEIGHT + overscanY * 2) * this.quality.lightMapScale),
@@ -740,7 +758,14 @@ export class LightingSystem {
     slot: OccluderSlot,
     scrollX: number,
     scrollY: number,
-  ): { durationMs: number; shadowQuads: number; falloffQuads: number; graphicsCommands: number } {
+  ): {
+    durationMs: number;
+    shadowQuads: number;
+    falloffQuads: number;
+    dynamicOccluderTests: number;
+    dynamicOccluderHits: number;
+    graphicsCommands: number;
+  } {
     const center = OCCLUDER_SCRATCH_SIZE * 0.5;
 
     slot.renderTexture.clear();
@@ -762,6 +787,8 @@ export class LightingSystem {
       durationMs,
       shadowQuads,
       falloffQuads,
+      dynamicOccluderTests: this.lastDynamicOccluderTests,
+      dynamicOccluderHits: this.lastDynamicOccluderHits,
       graphicsCommands: slot.graphics.commandBuffer.length,
     };
   }
@@ -784,8 +811,10 @@ export class LightingSystem {
     center: number,
   ): void {
     graphics.clear();
+    this.lastDynamicOccluderTests = 0;
+    this.lastDynamicOccluderHits = 0;
     const index = this.occluders;
-    if (!index) return;
+    const dynamic = this.dynamicOccluders;
 
     const core = this.shadowQuads;
     const falloff = this.falloffQuads;
@@ -794,19 +823,59 @@ export class LightingSystem {
     const extendPx = light.radiusPx * SHADOW_EXTEND_FACTOR;
     const falloffPx = OCCLUDER_SHADE_FALLOFF_PX;
 
-    index.queryCircle(
+    const projectRect = (
+      left: number,
+      top: number,
+      right: number,
+      bottom: number,
+      exposedEdges: number,
+    ): void => {
+      projectRectShadowQuads(
+        falloff,
+        light.x,
+        light.y,
+        left,
+        top,
+        right,
+        bottom,
+        0,
+        falloffPx,
+        exposedEdges,
+      );
+      projectRectShadowQuads(
+        core,
+        light.x,
+        light.y,
+        left,
+        top,
+        right,
+        bottom,
+        falloffPx,
+        extendPx,
+        exposedEdges,
+      );
+    };
+
+    index?.queryCircle(
       light.x,
       light.y,
       light.radiusPx,
-      (left, top, right, bottom, exposedEdges) => {
-        projectRectShadowQuads(falloff, light.x, light.y, left, top, right, bottom, 0, falloffPx, exposedEdges);
-        projectRectShadowQuads(core, light.x, light.y, left, top, right, bottom, falloffPx, extendPx, exposedEdges);
-      },
+      projectRect,
       (centerX, centerY, radius) => {
         projectCircleShadowQuad(falloff, light.x, light.y, centerX, centerY, radius, 0, falloffPx);
         projectCircleShadowQuad(core, light.x, light.y, centerX, centerY, radius, falloffPx, extendPx);
       },
     );
+
+    this.lastDynamicOccluderTests = dynamic?.queryCircle(
+      light.x,
+      light.y,
+      light.radiusPx,
+      (left, top, right, bottom, exposedEdges) => {
+        this.lastDynamicOccluderHits += 1;
+        projectRect(left, top, right, bottom, exposedEdges);
+      },
+    ) ?? 0;
 
     if (core.length === 0 && falloff.length === 0) return;
 

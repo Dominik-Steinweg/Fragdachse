@@ -80,7 +80,7 @@ Die Lightmap wird mit deckendem Ambient gefüllt und additiven Lichtquellen aufg
 
 DynamicTexture- und RenderTexture-Zeichenbefehle sind aufgeschoben. Wiederverwendete Graphics-/Image-Quellen dürfen nicht über mehrere Slots aliasen; Scratch-Ressourcen müssen vor dem Lightmap-Composite in der Display-Liste geleert sein. Eine Lightmap-/Occluder-Änderung über denselben Dirty-Trichter wie Combat-Hindernisse synchronisieren.
 
-Kamerabewegung läuft über Scroll-Offsets der Hauptkamera. Der Feedback-Versatz muss vor der World-Light-/Shadow-Synchronisierung im Frame gesetzt werden, damit Welt, Lightmap und Occluder deckungsgleich bleiben. Neue Occluder über die gemeinsame Arena-/Light-Occluder-Quelle anmelden und beim Round-Teardown entfernen.
+Kamerabewegung läuft über Scroll-Offsets der Hauptkamera. Der Feedback-Versatz muss vor der World-Light-/Shadow-Synchronisierung im Frame gesetzt werden, damit Welt, Lightmap und Occluder deckungsgleich bleiben. Statische Occluder über die gemeinsame Arena-/Light-Occluder-Quelle anmelden und beim Round-Teardown entfernen. Bewegliche Occluder bleiben außerhalb dieses Indexes: `LightingSystem` fragt sie über `DynamicLightOccluderSource` nur für budgetierte verdeckende Lichter ab; die Quelle filtert dabei exakt gegen den jeweiligen Lichtradius. `low` hat keine Occlusion-Slots und führt deshalb auch keine dynamischen Occluder-Abfragen aus.
 
 ## Post-FX und Displacement
 

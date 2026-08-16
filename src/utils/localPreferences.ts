@@ -65,11 +65,11 @@ import {
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
-export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v1';
+export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v2';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
 export const LOCAL_PROGRESS_SCHEMA_VERSION = 2;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 1;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 2;
 export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
 export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
@@ -149,16 +149,7 @@ interface LocalSettingsDocumentV2 {
   graphics: LocalPreferences['graphics'];
 }
 
-interface LocalProgressDocumentV1 {
-  schemaVersion: 1;
-  profile: LocalPreferences['profile'];
-  loadout: LocalPreferences['loadout'];
-  coopDefense: Omit<LocalProgressDocumentV2['coopDefense'], 'loadoutsByClass'> & {
-    classLoadouts?: LocalPreferences['loadoutByClass'];
-  };
-}
-
-export interface LocalProgressDocumentV2 {
+export interface LocalProgressDocument {
   schemaVersion: 2;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
@@ -168,7 +159,7 @@ export interface LocalProgressDocumentV2 {
     completedBossMapIds: string[];
     highestUnlockedMapId: string;
     classesUnlocked: boolean;
-    unlockedClassIds?: CoopDefenseClassId[];
+    unlockedClassIds: CoopDefenseClassId[];
     defaultProfile?: CompactUpgradeProfile;
     selectedClassId?: CoopDefenseClassId;
     profilesByClass?: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>>;
@@ -185,7 +176,7 @@ interface LocalProgressExportEnvelope {
   format: typeof LOCAL_PROGRESS_EXPORT_FORMAT;
   formatVersion: typeof LOCAL_PROGRESS_EXPORT_VERSION;
   exportedAt: string;
-  progress: LocalProgressDocumentV1 | LocalProgressDocumentV2;
+  progress: LocalProgressDocument;
 }
 
 export interface LocalProgressTransferResult {
@@ -694,31 +685,9 @@ function sanitizeCompactProfile(raw: unknown): CompactUpgradeProfile | null {
   return result;
 }
 
-function migrateProgressDocument(raw: unknown): LocalProgressDocumentV2 | null {
-  if (!isRecord(raw) || !Number.isInteger(raw.schemaVersion)) return null;
-  let migrated: Record<string, unknown> = raw;
-  while ((migrated.schemaVersion as number) < LOCAL_PROGRESS_SCHEMA_VERSION) {
-    switch (migrated.schemaVersion) {
-      case 1: {
-        if (!isRecord(migrated.coopDefense)) return null;
-        const { classLoadouts, ...coopDefense } = migrated.coopDefense;
-        migrated = {
-          ...migrated,
-          schemaVersion: 2,
-          coopDefense: { ...coopDefense, loadoutsByClass: classLoadouts },
-        };
-        break;
-      }
-      default: return null;
-    }
-  }
-  return migrated.schemaVersion === LOCAL_PROGRESS_SCHEMA_VERSION
-    ? migrated as unknown as LocalProgressDocumentV2
-    : null;
-}
-
 function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' | 'loadout' | 'loadoutByClass' | 'progression'> | null {
-  const document = migrateProgressDocument(raw);
+  if (!isRecord(raw) || raw.schemaVersion !== LOCAL_PROGRESS_SCHEMA_VERSION) return null;
+  const document = raw as unknown as LocalProgressDocument;
   if (!document || !isRecord(document.profile) || !isValidLoadoutRecord(document.loadout)
     || !isRecord(document.coopDefense)) return null;
   const coop = document.coopDefense as unknown as Record<string, unknown>;
@@ -737,7 +706,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.unseenItems !== 'boolean') return null;
 
   const loadout = sanitizeStoredLoadout(document.loadout);
-  if (coop.unlockedClassIds !== undefined && sanitizeStoredUnlockedClassIds(coop.unlockedClassIds) === null) return null;
+  const unlockedClassIds = sanitizeStoredUnlockedClassIds(coop.unlockedClassIds);
+  if (unlockedClassIds === null) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
@@ -762,11 +732,6 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     !COOP_DEFENSE_CLASS_IDS.includes(key as CoopDefenseClassId)
   ))) return null;
   const highestUnlockedMapId = sanitizeHighestUnlockedCoopDefenseMapId(coop.highestUnlockedMapId);
-  // D deliberately does not grandfather the old global class flag. A save without the new
-  // per-class list starts with no selectable specialization and can earn the unlocks again.
-  const unlockedClassIds = coop.unlockedClassIds === undefined
-    ? []
-    : sanitizeStoredUnlockedClassIds(coop.unlockedClassIds) ?? [];
   const classesUnlocked = unlockedClassIds.length > 0;
   const selectedClassId = classesUnlocked && unlockedClassIds.includes(sanitizeCoopDefenseClassId(coop.selectedClassId))
     ? sanitizeCoopDefenseClassId(coop.selectedClassId)
@@ -853,7 +818,7 @@ function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefense
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDocumentV2 {
+function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDocument {
   const progress = preferences.progression.coopDefense;
   const profilesByClass: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>> = {};
   if (progress.unlockedClassIds.length > 0) {

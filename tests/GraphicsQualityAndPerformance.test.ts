@@ -557,7 +557,12 @@ describe('ArenaRuntimeProfiler', () => {
       context,
       details: {
         timings: { scopeUploadMs: 1.5, lightingShadowGeometryMs: 0.75 },
-        counts: { scopeRefreshCount: 1, lightShadowQuadCount: 12 },
+        counts: {
+          scopeRefreshCount: 1,
+          lightShadowQuadCount: 12,
+          dynamicLightOccluderTestCount: 13,
+          dynamicLightOccluderHitCount: 2,
+        },
       },
       lightPresetCounts: { muzzleFlash: 2 },
       filterBreakdown: 'GlowFilter:2',
@@ -574,6 +579,8 @@ describe('ArenaRuntimeProfiler', () => {
     expect(report?.windows.map((window) => window.phase)).toEqual(['lobby', 'arena']);
     expect(report?.windows[0].detailTimings.scopeUploadMs.avg).toBe(1.5);
     expect(report?.windows[0].detailCounts.lightShadowQuadCount.peak).toBe(12);
+    expect(report?.windows[0].detailCounts.dynamicLightOccluderTestCount.peak).toBe(13);
+    expect(report?.windows[0].detailCounts.dynamicLightOccluderHitCount.peak).toBe(2);
     expect(report?.windows[0].lightingPresets.muzzleFlash.peak).toBe(2);
     expect(report?.windows[0].filterBreakdown).toBe('GlowFilter:2');
     expect(report?.contextChanges).toHaveLength(2);

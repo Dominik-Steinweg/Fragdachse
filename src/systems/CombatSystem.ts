@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager }     from '../entities/PlayerManager';
@@ -57,10 +57,10 @@ import type { TargetStatusTarget } from './TargetStatusSystem';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
-/** FÃ¼r Abfragen, die nur Rechteck-Hindernisse auswerten (BaumstÃ¤mme nehmen keinen Schaden). */
+/** Für Abfragen, die nur Rechteck-Hindernisse auswerten (Baumstämme nehmen keinen Schaden). */
 const IGNORE_CIRCLE_OBSTACLES: ObstacleCircleVisitor = () => false;
 
-// ZirkulÃ¤re AbhÃ¤ngigkeiten vermeiden: nur Typ-Imports
+// Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = {
   getDamageMultiplier(id: string): number;
@@ -82,7 +82,7 @@ interface AoeDamageOptions {
   enemySlowFraction?: number;
   enemySlowDurationMs?: number;
   skipEnemies?: boolean;
-  /** Explosionen kÃ¶nnen ihr direkt getroffenes PrimÃ¤rziel ausdrÃ¼cklich ausnehmen. */
+  /** Explosionen können ihr direkt getroffenes Primärziel ausdrücklich ausnehmen. */
   excludeTargetId?: string;
   /** The supplied damage already contains the originating direct-hit multipliers. */
   damageAlreadyScaled?: boolean;
@@ -98,7 +98,7 @@ export interface Ak47DirectEnemyHitImpact {
 /**
  * Herkunft eines Schadensereignisses.
  *
- * `direct` ist der unmittelbare Treffer einer Waffe â€“ Projektil, Hitscan oder Nahkampf. Alles
+ * `direct` ist der unmittelbare Treffer einer Waffe – Projektil, Hitscan oder Nahkampf. Alles
  * andere ist Folgeschaden und darf trefferabhaengige Effekte nicht erneut ausloesen. Die
  * Unterscheidung ist nicht aus `sourceId` ableitbar: das ist ein Anzeigetext.
  */
@@ -116,12 +116,12 @@ export type CombatDamageTargetType = 'player' | 'enemy';
  * Begleitdaten eines Schadensereignisses.
  *
  * `sourceSlot` und `damageKind` beschreiben die Quelle. Fehlen sie, gilt ein direkter Treffer
- * ohne bekannten Slot â€“ damit bleiben Aufrufer gueltig, die nur Schaden zufuegen wollen.
+ * ohne bekannten Slot – damit bleiben Aufrufer gueltig, die nur Schaden zufuegen wollen.
  *
  * Wer "direkter Primaerwaffentreffer" pruefen will, muss deshalb **beides** pruefen
  * (`damageKind === 'direct' && sourceSlot === 'weapon1'`). Der Slot allein reicht nicht, weil
  * auch Explosionen ihn tragen; `damageKind` allein reicht nicht, weil Quellen ohne Waffenbezug
- * â€“ Gegnerfaehigkeiten, Dash-Aufprall, Umgebungsschaden â€“ auf dem Default stehen bleiben.
+ * – Gegnerfaehigkeiten, Dash-Aufprall, Umgebungsschaden – auf dem Default stehen bleiben.
  */
 interface DamageApplicationOptions {
   allowTeamDamage?: boolean;
@@ -224,19 +224,19 @@ export interface HitscanTraceOptions {
 export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'trunk' | 'train';
 
 /**
- * Optionen der SchusslinienprÃ¼fung.
+ * Optionen der Schusslinienprüfung.
  *
- * Dieselben drei Freiheitsgrade wie bei {@link CombatSystem.hasLineOfSight}, nur gebÃ¼ndelt:
+ * Dieselben drei Freiheitsgrade wie bei {@link CombatSystem.hasLineOfSight}, nur gebündelt:
  * `hasClearLineOfFire` reicht sie an den statischen Hinderniskern **und** an die beweglichen
- * Blocker weiter, deshalb wÃ¤ren drei optionale Positionsparameter an der Aufrufstelle nicht
+ * Blocker weiter, deshalb wären drei optionale Positionsparameter an der Aufrufstelle nicht
  * mehr lesbar.
  */
 export interface LineOfFireOptions {
-  /** Dieser Fels blockiert nicht (z. B. der Fels, in dem das GeschÃ¼tz steht). */
+  /** Dieser Fels blockiert nicht (z. B. der Fels, in dem das Geschütz steht). */
   readonly skipRockIndex?: number;
-  /** Coop-Defense-Basen ignorieren (Quellen oberhalb der eigenen BasisflÃ¤che). */
+  /** Coop-Defense-Basen ignorieren (Quellen oberhalb der eigenen Basisfläche). */
   readonly ignoreBaseObstacles?: boolean;
-  /** Korridorbreite fÃ¼r KÃ¶rper, die breiter als die Linie sind (Wurfgeschosse, Translocator-Puck). */
+  /** Korridorbreite für Körper, die breiter als die Linie sind (Wurfgeschosse, Translocator-Puck). */
   readonly clearanceRadius?: number;
 }
 
@@ -271,23 +271,23 @@ export class CombatSystem {
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
   // Burn-Stacks pro Ziel, gruppiert nach Quelle (Angreifer + Waffe), damit
   // unterschiedliche Quellen (z.B. Flammenwerfer + Molotov) sauber stacken und
-  // ihren Schaden addieren statt sich gegenseitig zu Ã¼berschreiben.
+  // ihren Schaden addieren statt sich gegenseitig zu überschreiben.
   private burnStates:    Map<string, Map<string, BurnSourceState>>      = new Map();
   private nextBurnTickAt = 0;
   private enemySlowStates: Map<string, EnemySlowState> = new Map();
   private readonly plasmaChargeTracker = new PlasmaChargeTracker();
   private readonly hitscanLine       = new Phaser.Geom.Line();
-  private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie fÃ¼r Kettenblitz-SichtlinienprÃ¼fung
-  private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie fÃ¼r Melee-HindernisprÃ¼fung
-  private readonly lineOfFireLine    = new Phaser.Geom.Line();  // Scratch-Linie fÃ¼r die BlockerprÃ¼fung der Schusslinie
+  private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
+  private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
+  private readonly lineOfFireLine    = new Phaser.Geom.Line();  // Scratch-Linie für die Blockerprüfung der Schusslinie
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
-  /** Aufgeblasene Kopie der Zug-Bounds; die Quelle darf fÃ¼r den Korridor nicht verÃ¤ndert werden. */
+  /** Aufgeblasene Kopie der Zug-Bounds; die Quelle darf für den Korridor nicht verändert werden. */
   private readonly scratchLineOfFireRect = new Phaser.Geom.Rectangle();
   /**
-   * RÃ¤umliche Vorauswahl fÃ¼r alle segmentbasierten HindernisprÃ¼fungen (Sichtlinie,
+   * Räumliche Vorauswahl für alle segmentbasierten Hindernisprüfungen (Sichtlinie,
    * Hitscan, Melee, Projektilpfad). Liest dieselben Arrays, die `setArenaObstacles` und
-   * `setBaseObstacles` setzen â€“ es gibt keinen zweiten Bestand.
+   * `setBaseObstacles` setzen – es gibt keinen zweiten Bestand.
    */
   private readonly obstacleIndex = new ArenaObstacleIndex({
     rocks:  () => this.rockObjects,
@@ -295,30 +295,30 @@ export class CombatSystem {
     bases:  () => this.baseObstacles,
   });
   /**
-   * Gemeinsamer mathematischer Kern aller SegmentprÃ¼fungen. Dieselbe Klasse trÃ¤gt die lokale
+   * Gemeinsamer mathematischer Kern aller Segmentprüfungen. Dieselbe Klasse trägt die lokale
    * Lobby-Inszenierung, damit Sichtlinie, Hitscan und Melee-Bogen dort identisch rechnen.
    */
   private readonly geometry = new CombatGeometry(this.obstacleIndex);
   private meleeSwingIdCounter = 0;
   private effectSeedCounter = 1;
 
-  // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (fÃ¼r Frag-Vergabe)
-  private lastAttacker: Map<string, string> = new Map();  // victimId â†’ attackerId
-  private lastWeapon:   Map<string, string> = new Map();  // victimId â†’ sourceId
+  // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
+  private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
+  private lastWeapon:   Map<string, string> = new Map();  // victimId → sourceId
   private lastKillSource: Map<string, KillSourceContext> = new Map();
   /**
    * Herkunft des toedlichen Treffers. Getrennt von {@link lastKillSource}, weil dieser Kontext
-   * an die Clients repliziert wird und rein visuell ist â€“ die Quelle ist reine Host-Regel.
+   * an die Clients repliziert wird und rein visuell ist – die Quelle ist reine Host-Regel.
    */
   private lastDamageOrigin: Map<string, { kind: CombatDamageKind; slot?: LoadoutSlot }> = new Map();
 
-  // Callback: (killerId, victimId, sourceId) â€“ Host-only
+  // Callback: (killerId, victimId, sourceId) – Host-only
   private onKillCb: ((killerId: string, victimId: string, sourceId: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null = null;
   private onAk47DirectEnemyHit: ((projectile: TrackedProjectile, enemyId: string) => Ak47DirectEnemyHitImpact | null) | null = null;
 
-  // Optionale Referenzen â€“ werden nach Konstruktion gesetzt
+  // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
   private resourceSystem:   ResourceSystem      | null  = null;
   private loadoutManager:   LoadoutManagerType  | null  = null;
@@ -332,15 +332,15 @@ export class CombatSystem {
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
-   * Direkter Schaden lÃ¤uft Ã¼ber den zentralen Basisschadenspfad; die Rechtecke wirken
-   * auÃŸerdem als physische WÃ¤nde, hinter denen Spieler nicht getroffen werden.
+   * Direkter Schaden läuft über den zentralen Basisschadenspfad; die Rechtecke wirken
+   * außerdem als physische Wände, hinter denen Spieler nicht getroffen werden.
    */
   private baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
   /** Client-seitiger Fallback: vorberechnete Zug-Bounds aus SyncedTrainState */
   private clientTrainBounds: Phaser.Geom.Rectangle | null = null;
 
-  // Callbacks fÃ¼r Objekt-Schaden (gesetzt von ArenaScene)
+  // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
   private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
@@ -363,7 +363,7 @@ export class CombatSystem {
   ) => { amount: number; isCritical: boolean }) | null = null;
   private playerBonusArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
-  /** Gemeinsamer zielseitiger Multiplikator fuer Gegner und hostautoritÃ¤re Strukturen. */
+  /** Gemeinsamer zielseitiger Multiplikator fuer Gegner und hostautoritäre Strukturen. */
   private targetIncomingDamageMultiplierResolver: ((target: TargetStatusTarget) => number) | null = null;
   private onEnergyInjectorTargetHit: ((
     targetType: 'player' | 'enemy',
@@ -419,7 +419,7 @@ export class CombatSystem {
     this.arenaBounds.setTo(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   }
 
-  // â”€â”€ Referenz-Injection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Referenz-Injection ────────────────────────────────────────────────────
 
   setBurrowSystem(bs: BurrowSystemType | null): void     { this.burrowSystem   = bs; }
   setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
@@ -497,7 +497,7 @@ export class CombatSystem {
   setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind) => void) | null): void {
     this.onPlayerDamageTaken = handler;
   }
-  /** Meldet nach der Zielverteilung nur tatsÃ¤chlich verlorene HP/RÃ¼stung bzw. Gegner-HP. */
+  /** Meldet nach der Zielverteilung nur tatsächlich verlorene HP/Rüstung bzw. Gegner-HP. */
   setDamageDealtHandler(handler: ((targetType: CombatDamageTargetType, targetId: string, attackerId: string | undefined, damage: number, damageKind: CombatDamageKind) => void) | null): void {
     this.onDamageDealt = handler;
   }
@@ -532,7 +532,7 @@ export class CombatSystem {
   }
 
   /**
-   * Nach jeder Ã„nderung der Hindernis-*Geometrie* aufrufen â€“ also wenn ein Fels gesetzt
+   * Nach jeder Änderung der Hindernis-*Geometrie* aufrufen – also wenn ein Fels gesetzt
    * oder entfernt wurde. Der `active`-Zustand allein braucht das nicht: den liest der
    * Index bei jeder Abfrage direkt am Objekt.
    */
@@ -542,8 +542,8 @@ export class CombatSystem {
 
   /**
    * Gibt den Hindernis-Index zur Mitbenutzung frei. Bewusst dieselbe Instanz statt eines
-   * zweiten Index: sie hÃ¤ngt an denselben Arrays und an derselben Invalidierung, damit
-   * Sichtlinie und Projektil-Kollision nie auseinanderlaufen kÃ¶nnen.
+   * zweiten Index: sie hängt an denselben Arrays und an derselben Invalidierung, damit
+   * Sichtlinie und Projektil-Kollision nie auseinanderlaufen können.
    */
   getObstacleIndex(): ArenaObstacleIndex {
     return this.obstacleIndex;
@@ -615,7 +615,7 @@ export class CombatSystem {
     this.onAk47DirectEnemyHit = handler;
   }
 
-  // â”€â”€ Spieler-Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
     if (this.initialSpawnAllowedResolver && !this.initialSpawnAllowedResolver(id)) return;
@@ -669,7 +669,7 @@ export class CombatSystem {
     if (t) { clearTimeout(t); this.respawnTimers.delete(id); }
   }
 
-  // â”€â”€ Abfragen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Abfragen ───────────────────────────────────────────────────────────────
 
   getHP(id: string):    number  { return this.hp.get(id)    ?? this.getMaxHp(id); }
   getMaxHp(id: string): number  { return this.maxHp.get(id) ?? this.resolvePlayerMaxHp(id); }
@@ -730,12 +730,12 @@ export class CombatSystem {
     return result;
   }
 
-  // â”€â”€ Ã–ffentliche Schadens-Methode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Öffentliche Schadens-Methode ───────────────────────────────────────────
 
   /**
-   * FÃ¼gt einem Spieler Schaden zu. Burrowed-Spieler sind unverwundbar
-   * (Ausnahme: Stuck-Schaden Ã¼ber skipBurrowCheck=true).
-   * attackerId/sourceId werden fÃ¼r die Kill-Zuordnung getrackt.
+   * Fügt einem Spieler Schaden zu. Burrowed-Spieler sind unverwundbar
+   * (Ausnahme: Stuck-Schaden über skipBurrowCheck=true).
+   * attackerId/sourceId werden für die Kill-Zuordnung getrackt.
    */
   applyDamage(
     targetId:        string,
@@ -784,8 +784,8 @@ export class CombatSystem {
     const x = player?.sprite.x ?? 0;
     const y = player?.sprite.y ?? 0;
 
-    // Energie-Kuppel: Liegt der Schadenspunkt in einer verbÃ¼ndeten Kuppel, wird der Schaden
-    // vollstÃ¤ndig abgewehrt (jeder abdeckende Kuppel-Besitzer erhÃ¤lt den Schadensbonus).
+    // Energie-Kuppel: Liegt der Schadenspunkt in einer verbündeten Kuppel, wird der Schaden
+    // vollständig abgewehrt (jeder abdeckende Kuppel-Besitzer erhält den Schadensbonus).
     if (this.energyShieldSystem?.tryDomeProtect(x, y, targetId, amount, Date.now())) return;
 
     const damageReduction = Phaser.Math.Clamp(this.playerDamageReductionResolver?.(targetId) ?? 0, 0, 1);
@@ -871,7 +871,7 @@ export class CombatSystem {
     }
 
     // Einheitliche Regel: Jeder Brandtreffer erzeugt genau einen Stack.
-    // sourceId trennt physisch eigenstÃ¤ndige Quellen fÃ¼r Attribution und Overlap.
+    // sourceId trennt physisch eigenständige Quellen für Attribution und Overlap.
     const keyedSource = `${attackerId}\u001f${sourceKey}`;
     let sourceState = targetState.get(keyedSource);
     if (!sourceState) {
@@ -888,7 +888,7 @@ export class CombatSystem {
       sourceState.visualStyle = visualStyle;
     }
 
-    // Ablaufzeiten werden auf den globalen Brandtick gebÃ¼ndelt. Treffer desselben
+    // Ablaufzeiten werden auf den globalen Brandtick gebündelt. Treffer desselben
     // Zeitfensters teilen so einen kompakten Bucket, bleiben spielerisch aber Stacks.
     const expiresAt = Math.ceil((now + durationMs) / BURN_TICK_INTERVAL_MS) * BURN_TICK_INTERVAL_MS;
     const bucket = sourceState.stacks.find(entry => (
@@ -996,8 +996,8 @@ export class CombatSystem {
         if (damage > 0) contributions.push({ state, damage });
       }
 
-      // Der stÃ¤rkste Beitrag wird zuerst verarbeitet. Das macht die Attribution
-      // bei gleichzeitig fÃ¤lligen Brandquellen deterministisch und nachvollziehbar.
+      // Der stärkste Beitrag wird zuerst verarbeitet. Das macht die Attribution
+      // bei gleichzeitig fälligen Brandquellen deterministisch und nachvollziehbar.
       contributions.sort((left, right) => (
         right.damage - left.damage
         || left.state.attackerId.localeCompare(right.state.attackerId)
@@ -1035,7 +1035,7 @@ export class CombatSystem {
   }
 
   /**
-   * FlÃ¤chenschaden um einen Punkt (z.B. Granaten-Explosion).
+   * Flächenschaden um einen Punkt (z.B. Granaten-Explosion).
    * Burrowed-Spieler sind immun (skipBurrowCheck=false).
    */
   applyAoeDamage(
@@ -1132,7 +1132,7 @@ export class CombatSystem {
    * Quelle: der staerkere Faktor und der spaetere Ablauf gewinnen.
    *
    * Die Dauer wird **nicht** mehr bedingungslos ueberschrieben. Sonst koennte eine schwache
-   * spaete Anwendung â€“ etwa Unterdrueckungsmunition neben einer ausgebauten Bremsladung â€“ einen
+   * spaete Anwendung – etwa Unterdrueckungsmunition neben einer ausgebauten Bremsladung – einen
    * starken laufenden Slow verkuerzen.
    */
   applyEnemySlow(enemyId: string, slowFraction: number, durationMs: number, now = Date.now()): void {
@@ -1209,7 +1209,7 @@ export class CombatSystem {
     }
 
     // Basen erhalten denselben zentralen Schadenstrichter wie direkte Treffer; die
-    // OberflÃ¤chenprÃ¼fung berÃ¼cksichtigt dabei auch groÃŸe oder konkave Formen.
+    // Oberflächenprüfung berücksichtigt dabei auch große oder konkave Formen.
     for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
       if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
@@ -1235,7 +1235,7 @@ export class CombatSystem {
       return targetEnemy ? targetEnemy.faction !== 'hostile' : true;
     }
     if (allowTeamDamage) return true;
-    // Eingebuddelte Gegner sind â€“ wie eingebuddelte Spieler â€“ weder Ziel noch Angreifer.
+    // Eingebuddelte Gegner sind – wie eingebuddelte Spieler – weder Ziel noch Angreifer.
     if (targetEnemy?.isBurrowed() || attackerEnemy?.isBurrowed()) return false;
     if (attackerEnemy && targetEnemy) return attackerEnemy.faction !== targetEnemy.faction;
     if (attackerEnemy) return attackerEnemy.faction === 'hostile';
@@ -1261,11 +1261,11 @@ export class CombatSystem {
     });
   }
 
-  // â”€â”€ Host-Update: Projektil-Spieler-Kollisionserkennung â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Host-Update: Projektil-Spieler-Kollisionserkennung ────────────────────
 
   /**
    * Jeden Frame auf dem Host aufrufen.
-   * PrÃ¼ft Ãœberschneidungen zwischen Projektilen und Spielern.
+   * Prüft Überschneidungen zwischen Projektilen und Spielern.
    * Selbst-Treffer, Granaten und burrowed Spieler werden ignoriert.
    */
   update(): void {
@@ -1295,8 +1295,8 @@ export class CombatSystem {
 
   /**
    * Energie-Kuppel-Projektilbarriere: Gegnerische Projektile innerhalb einer Kuppel werden
-   * absorbiert (a1) oder nach auÃŸen abgeprallt (d2). Abgeprallte Projektile gelten danach als
-   * Projektile des Kuppel-Besitzers und treffen Gegner. In beiden FÃ¤llen lÃ¤dt der Schadensbonus.
+   * absorbiert (a1) oder nach außen abgeprallt (d2). Abgeprallte Projektile gelten danach als
+   * Projektile des Kuppel-Besitzers und treffen Gegner. In beiden Fällen lädt der Schadensbonus.
    */
   private applyDomeProjectileBarrier(): void {
     const domes = this.energyShieldSystem?.getReflectDomes();
@@ -1312,7 +1312,7 @@ export class CombatSystem {
 
       for (const dome of domes) {
         if (proj.ownerId === dome.ownerId) continue;
-        // Nur feindliche Projektile abwehren â€“ eigene/verbÃ¼ndete Geschosse passieren die Kuppel.
+        // Nur feindliche Projektile abwehren – eigene/verbündete Geschosse passieren die Kuppel.
         if (!this.canDamageTarget(proj.ownerId, dome.ownerId, proj.allowTeamDamage)) continue;
 
         const dx = proj.sprite.x - dome.x;
@@ -1337,9 +1337,9 @@ export class CombatSystem {
   }
 
   /**
-   * TrÃ¤gt die Trefferwirkungen eines Projektils (Boden-DoT-Wolken, Explosionen, Brand, Debuffs)
+   * Trägt die Trefferwirkungen eines Projektils (Boden-DoT-Wolken, Explosionen, Brand, Debuffs)
    * in ein neu gespawntes Projektil weiter, damit sie nach einem Abprall/einer Reflexion
-   * weiterhin ausgelÃ¶st werden, statt beim Reflect stillschweigend verloren zu gehen.
+   * weiterhin ausgelöst werden, statt beim Reflect stillschweigend verloren zu gehen.
    */
   private inheritedProjectileEffects(proj: TrackedProjectile): Partial<ProjectileSpawnConfig> {
     return {
@@ -1366,7 +1366,7 @@ export class CombatSystem {
     };
   }
 
-  /** Schleudert ein gegnerisches Projektil radial aus der Kuppel und Ã¼bergibt es an den Besitzer. */
+  /** Schleudert ein gegnerisches Projektil radial aus der Kuppel und übergibt es an den Besitzer. */
   private reflectProjectileFromDome(proj: TrackedProjectile, dome: ReflectDomeInfo, now: number): void {
     const dirX = proj.sprite.x - dome.x;
     const dirY = proj.sprite.y - dome.y;
@@ -1397,9 +1397,9 @@ export class CombatSystem {
   }
 
   /**
-   * Ãœbernimmt ein Brut-Wurfgeschoss an der Kuppelgrenze: Es bleibt eine Granate mit RestzÃ¼ndzeit,
-   * prallt nach auÃŸen ab und gehÃ¶rt danach dem Kuppel-Besitzer. Die schlÃ¼pfende Brut spawnt
-   * dadurch als sein VerbÃ¼ndeter (siehe HostUpdateCoordinator.spawnEnemiesFromGrenade).
+   * Übernimmt ein Brut-Wurfgeschoss an der Kuppelgrenze: Es bleibt eine Granate mit Restzündzeit,
+   * prallt nach außen ab und gehört danach dem Kuppel-Besitzer. Die schlüpfende Brut spawnt
+   * dadurch als sein Verbündeter (siehe HostUpdateCoordinator.spawnEnemiesFromGrenade).
    */
   private captureSpawnGrenadeFromDome(proj: TrackedProjectile, dome: ReflectDomeInfo, now: number): void {
     const dirX = proj.sprite.x - dome.x;
@@ -1435,7 +1435,7 @@ export class CombatSystem {
     this.projectileManager.destroyProjectile(proj.id);
   }
 
-  /** SchÃ¼tzen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
+  /** Schützen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
   private computeProjectileWeaponDamage(proj: TrackedProjectile): number {
     let projectileMultiplier = proj.ak47DamageMultiplier ?? 1;
     if (
@@ -1471,7 +1471,7 @@ export class CombatSystem {
 
   /**
    * Wendet einen Projektiltreffer auf eine Basis an. Die Berechnung bleibt identisch zum
-   * Projektiltreffer gegen Spieler/Gegner; der anschlieÃŸende Basistrichter ergÃ¤nzt die
+   * Projektiltreffer gegen Spieler/Gegner; der anschließende Basistrichter ergänzt die
    * strukturspezifischen Coop-Modifikatoren.
    */
   applyProjectileBaseDamage(baseId: string, projectile: TrackedProjectile): void {
@@ -1631,7 +1631,7 @@ export class CombatSystem {
           continue;
         }
 
-        // Brennende Treffer (Flammenwerfer-Hitbox, brennende Kugeln, â€¦) werden
+        // Brennende Treffer (Flammenwerfer-Hitbox, brennende Kugeln, …) werden
         // zentral in handleHit aus den Burn-Feldern des Projektils angewendet.
         this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId, canDealDamage);
         return true;  // Projektil trifft maximal einen Spieler pro Frame
@@ -2084,7 +2084,7 @@ export class CombatSystem {
       visualStartY: visualMuzzleOrigin?.y,
     });
 
-    // Hitscan-Detonation prÃ¼fen (z.B. ASMD Primary zÃ¼ndet ASMD Secondary-Ball)
+    // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
     if (detonatorCfg) {
       this.detonationSystem?.checkHitscanDetonations(
         startX, startY, trace.endX, trace.endY, shooterId, detonatorCfg,
@@ -2162,14 +2162,14 @@ export class CombatSystem {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     } else {
-      // Kein Spieler getroffen â†’ prÃ¼fen ob Fels oder Zug getroffen wurde
+      // Kein Spieler getroffen → prüfen ob Fels oder Zug getroffen wurde
       this.applyHitscanObjectDamage(
         startX, startY, trace.endX, trace.endY,
         damage, rockDamageMult, trainDamageMult, shooterId, sourceSlot, baseDamageMult,
       );
     }
 
-    // Kettenblitz: vom Einschlagspunkt aus auf weitere Ziele Ã¼berspringen.
+    // Kettenblitz: vom Einschlagspunkt aus auf weitere Ziele überspringen.
     if (chainCfg && chainCfg.maxJumps > 0) {
       const loadoutMult = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
@@ -2323,20 +2323,20 @@ export class CombatSystem {
     return undefined;
   }
 
-  // â”€â”€ Kettenblitz â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Kettenblitz ────────────────────────────────────────────────────────────
 
   /**
-   * LÃ¤sst einen Hitscan-Treffer als Kettenblitz von Ziel zu Ziel Ã¼berspringen.
+   * Lässt einen Hitscan-Treffer als Kettenblitz von Ziel zu Ziel überspringen.
    * Ausgangspunkt jedes Sprungs ist der letzte Einschlag; pro Sprung wird das
-   * nÃ¤chstgelegene noch nicht getroffene Ziel mit freier Sichtlinie gewÃ¤hlt.
-   * Detonierbare Ziele (z.B. ASMD-BÃ¤lle) lÃ¶sen ihre Detonation aus statt
+   * nächstgelegene noch nicht getroffene Ziel mit freier Sichtlinie gewählt.
+   * Detonierbare Ziele (z.B. ASMD-Bälle) lösen ihre Detonation aus statt
    * direkten Schaden zu nehmen.
    */
   private resolveChainLightning(opts: {
     shooterId:      string;
     originX:        number;
     originY:        number;
-    baseDamage:     number;   // PrimÃ¤rschaden inkl. Multiplikatoren
+    baseDamage:     number;   // Primärschaden inkl. Multiplikatoren
     chainCfg:       ChainLightningConfig;
     sourceId:     string;
     adrenalinGain:  number;
@@ -2395,7 +2395,7 @@ export class CombatSystem {
         this.decoySystem?.applyDamage(target.decoyId, jumpDamage, opts.shooterId, opts.sourceId, visualContext);
         if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
       } else {
-        // Detonierbares Ziel (z.B. ASMD-Ball) â†’ Detonation auslÃ¶sen; Projektil wird zerstÃ¶rt.
+        // Detonierbares Ziel (z.B. ASMD-Ball) → Detonation auslösen; Projektil wird zerstört.
         this.detonationSystem?.detonateProjectile(target.projectileId, opts.shooterId);
       }
 
@@ -2405,9 +2405,9 @@ export class CombatSystem {
   }
 
   /**
-   * Sucht das nÃ¤chstgelegene gÃ¼ltige Kettenblitz-Ziel innerhalb des Suchradius
+   * Sucht das nächstgelegene gültige Kettenblitz-Ziel innerhalb des Suchradius
    * mit freier Sichtlinie zum Ausgangspunkt. Bereits getroffene Ziele werden
-   * Ã¼bersprungen. PrioritÃ¤t: geringste Distanz.
+   * übersprungen. Priorität: geringste Distanz.
    */
   private findNearestChainTarget(
     originX:        number,
@@ -2472,8 +2472,8 @@ export class CombatSystem {
   }
 
   /**
-   * Sichtlinie fÃ¼r Kettenblitz-SprÃ¼nge: blockiert durch Felsen, BaumstÃ¤mme,
-   * Basen und den Zug â€“ analog zur normalen Hitscan-/Projektil-Hindernislogik.
+   * Sichtlinie für Kettenblitz-Sprünge: blockiert durch Felsen, Baumstämme,
+   * Basen und den Zug – analog zur normalen Hitscan-/Projektil-Hindernislogik.
    */
   private hasChainLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
     this.chainScanLine.setTo(x1, y1, x2, y2);
@@ -2484,7 +2484,7 @@ export class CombatSystem {
   }
 
   /**
-   * PrÃ¼ft, ob der Hitscan-Endpunkt einen Fels oder Zug trifft, und wendet Schaden an.
+   * Prüft, ob der Hitscan-Endpunkt einen Fels oder Zug trifft, und wendet Schaden an.
    */
   private applyHitscanObjectDamage(
     startX: number, startY: number, endX: number, endY: number,
@@ -2496,7 +2496,7 @@ export class CombatSystem {
     const endDist = Phaser.Geom.Line.Length(hitLine);
     const EPSILON = 2; // Toleranz in px
 
-    // NÃ¤chsten Fels am Endpunkt suchen
+    // Nächsten Fels am Endpunkt suchen
     if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
       let bestRockIdx = -1;
       let bestRockDist = Infinity;
@@ -2515,7 +2515,7 @@ export class CombatSystem {
       );
       if (bestRockIdx >= 0) {
         this.onRockDamage(bestRockIdx, damage * rockMult, shooterId);
-        return; // Fels blockiert â€“ kein Zug dahinter
+        return; // Fels blockiert – kein Zug dahinter
       }
     }
 
@@ -2530,7 +2530,7 @@ export class CombatSystem {
       }
     }
 
-    // Zug-Bounding-Box am Endpunkt suchen (gesamter Zug als ein Block, keine LÃ¼cken)
+    // Zug-Bounding-Box am Endpunkt suchen (gesamter Zug als ein Block, keine Lücken)
     if (trainMult !== 0 && this.trainSegObjects && this.onTrainDamage) {
       const trainBounds = this.computeTrainBounds();
       if (trainBounds) {
@@ -2542,15 +2542,15 @@ export class CombatSystem {
     }
   }
 
-  // collectReplicatedHitscanTraces entfernt â€“ Traces werden per RPC gesendet
+  // collectReplicatedHitscanTraces entfernt – Traces werden per RPC gesendet
 
-  // â”€â”€ Melee-Angriff â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Melee-Angriff ─────────────────────────────────────────────────────────
 
   /**
-   * LÃ¶st einen Melee-Angriff aus.
-   * Trifft ALLE Gegner, die sich im Trefferbereich befinden (FÃ¤cherform).
-   * Hindernisse (Felsen, BaumstÃ¤mme) blockieren den Angriff auf dahinter stehende Ziele.
-   * Gibt true zurÃ¼ck wenn der Angriff verarbeitet wurde (Host-only).
+   * Löst einen Melee-Angriff aus.
+   * Trifft ALLE Gegner, die sich im Trefferbereich befinden (Fächerform).
+   * Hindernisse (Felsen, Baumstämme) blockieren den Angriff auf dahinter stehende Ziele.
+   * Gibt true zurück wenn der Angriff verarbeitet wurde (Host-only).
    */
   resolveMeleeSwing(
     shooterId:     string,
@@ -2594,13 +2594,13 @@ export class CombatSystem {
       const dy   = player.sprite.y - y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Reichweite â€“ Spieler-Radius als Toleranz hinzurechnen
+      // Reichweite – Spieler-Radius als Toleranz hinzurechnen
       if (dist > range + PLAYER_SIZE * 0.5) continue;
 
-      // WinkelprÃ¼fung: liegt das Ziel innerhalb des Trefferbogens?
+      // Winkelprüfung: liegt das Ziel innerhalb des Trefferbogens?
       if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
 
-      // Hindernischeck: liegt ein Fels/Stamm zwischen SchÃ¼tze und Ziel?
+      // Hindernischeck: liegt ein Fels/Stamm zwischen Schütze und Ziel?
       this.meleeLine.setTo(x, y, player.sprite.x, player.sprite.y);
       if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
 
@@ -2770,7 +2770,7 @@ export class CombatSystem {
       }
     }
 
-    // Melee-Objektschaden: Felsen und Zug im Trefferbogen prÃ¼fen
+    // Melee-Objektschaden: Felsen und Zug im Trefferbogen prüfen
     this.applyMeleeObjectDamage(
       x,
       y,
@@ -2783,12 +2783,12 @@ export class CombatSystem {
       shooterId,
     );
 
-    // Swing-VFX fÃ¼r alle Clients in die Replikations-Queue einreihen
+    // Swing-VFX für alle Clients in die Replikations-Queue einreihen
     this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, bloodEffectMultiplier, shotAudioKey });
     return true;
   }
 
-  // collectReplicatedMeleeSwings entfernt â€“ Swings werden per RPC gesendet
+  // collectReplicatedMeleeSwings entfernt – Swings werden per RPC gesendet
 
   private applyMeleeHitRewards(shooterId: string, hitHeal: number, hitAdrenaline: number): void {
     if (hitHeal > 0) this.heal(shooterId, hitHeal);
@@ -2796,7 +2796,7 @@ export class CombatSystem {
   }
 
   /**
-   * PrÃ¼ft, ob Felsen oder Zug-Segmente im Melee-Trefferbogen liegen, und wendet Schaden an.
+   * Prüft, ob Felsen oder Zug-Segmente im Melee-Trefferbogen liegen, und wendet Schaden an.
    */
   private applyMeleeObjectDamage(
     x: number, y: number, angle: number, range: number, halfArcRad: number,
@@ -2868,7 +2868,7 @@ export class CombatSystem {
   }
 
   /**
-   * Wendet ausgehenden und zielseitigen Schaden auf eine hostautoritÃ¤re Struktur an, ohne
+   * Wendet ausgehenden und zielseitigen Schaden auf eine hostautoritäre Struktur an, ohne
    * den konkreten Lifecycle des Objekts in den CombatSystem zu ziehen. Der Aufrufer entscheidet
    * anschliessend, ob es ein Fels, Konstrukt, Aussenposten oder eine andere Struktur war.
    */
@@ -2957,8 +2957,8 @@ export class CombatSystem {
       if (this.isMeleePathBlocked(Math.max(0, dist - 0.5))) continue;
 
       const actualDamage = damage * baseDamageMult;
-      // Energie-Kuppel: schÃ¼tzt die getroffene Basisstelle, wenn sie in einer Kuppel liegt.
-      // Nur eigene Basen â€“ eine Spielerkuppel darf die Gegnerbasis nicht abschirmen.
+      // Energie-Kuppel: schützt die getroffene Basisstelle, wenn sie in einer Kuppel liegt.
+      // Nur eigene Basen – eine Spielerkuppel darf die Gegnerbasis nicht abschirmen.
       if (
         base.faction === 'friendly'
         && this.energyShieldSystem?.tryDomeProtect(targetX, targetY, null, actualDamage, Date.now())
@@ -3064,12 +3064,12 @@ export class CombatSystem {
     };
   }
 
-  // â”€â”€ LoS-Check (fÃ¼r BFG-Laser) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── LoS-Check (für BFG-Laser) ──────────────────────────────────────────────
 
   /**
-   * PrÃ¼ft, ob eine direkte Sichtlinie zwischen zwei Punkten besteht.
-   * Felsen, BaumstÃ¤mme und Basen blockieren die Sichtlinie; Basen kÃ¶nnen fÃ¼r Quellen
-   * oberhalb ihrer eigenen FlÃ¤che gezielt ausgenommen werden.
+   * Prüft, ob eine direkte Sichtlinie zwischen zwei Punkten besteht.
+   * Felsen, Baumstämme und Basen blockieren die Sichtlinie; Basen können für Quellen
+   * oberhalb ihrer eigenen Fläche gezielt ausgenommen werden.
    */
   hasLineOfSight(
     startX: number, startY: number,
@@ -3079,8 +3079,8 @@ export class CombatSystem {
     // Optional corridor radius for bodies such as the translocator puck.
     clearanceRadius = 0,
   ): boolean {
-    // HeiÃŸester Pfad des Host-Frames (zielsuchende Projektile prÃ¼fen pro Kandidat eine
-    // Sichtlinie), deshalb Ã¼ber den Hindernis-Index statt Ã¼ber alle Felsen der Karte.
+    // Heißester Pfad des Host-Frames (zielsuchende Projektile prüfen pro Kandidat eine
+    // Sichtlinie), deshalb über den Hindernis-Index statt über alle Felsen der Karte.
     return this.geometry.hasLineOfSight(startX, startY, endX, endY, {
       skipRockIndex,
       ignoreBases: ignoreBaseObstacles,
@@ -3090,15 +3090,15 @@ export class CombatSystem {
 
   /**
    * Freie **Schusslinie** zwischen zwei Punkten: die statische Sichtlinie plus alle beweglichen
-   * physischen Blocker â€“ zurzeit ausschlieÃŸlich der Zug.
+   * physischen Blocker – zurzeit ausschließlich der Zug.
    *
    * Abgrenzung zu {@link hasLineOfSight}: dort geht es um echtes Sehen (Zielerfassung aus der
    * Ferne, Spawn-Bewertung, Wegewahl), hier um die Frage, ob ein Schuss oder Wurf das Ziel
-   * tatsÃ¤chlich erreichen kann. Jede Entscheidung, die ein Projektil oder einen Hitscan auslÃ¶st,
-   * gehÃ¶rt deshalb hierher; ein Ziel hinter dem Zug ist sichtbar, aber nicht beschieÃŸbar.
+   * tatsächlich erreichen kann. Jede Entscheidung, die ein Projektil oder einen Hitscan auslöst,
+   * gehört deshalb hierher; ein Ziel hinter dem Zug ist sichtbar, aber nicht beschießbar.
    *
-   * Der Zug selbst wird Ã¼ber diese PrÃ¼fung nicht anvisiert: wer ihn angreifen will, fragt weiter
-   * die Sichtlinie ab, sonst wÃ¼rde er sich selbst verdecken.
+   * Der Zug selbst wird über diese Prüfung nicht anvisiert: wer ihn angreifen will, fragt weiter
+   * die Sichtlinie ab, sonst würde er sich selbst verdecken.
    */
   hasClearLineOfFire(
     startX: number, startY: number,
@@ -3114,7 +3114,7 @@ export class CombatSystem {
 
   /**
    * Liegt ein beweglicher physischer Blocker auf dem Segment? Der Zug ist der einzige solche
-   * KÃ¶rper und wird Ã¼ber dieselben Bounds gelesen wie beim Hitscan â€“ es gibt keine zweite
+   * Körper und wird über dieselben Bounds gelesen wie beim Hitscan – es gibt keine zweite
    * Zug-Geometrie.
    */
   private isDynamicBlockerOnPath(
@@ -3126,7 +3126,7 @@ export class CombatSystem {
     if (!trainBounds) return false;
 
     const line = this.lineOfFireLine.setTo(startX, startY, endX, endY);
-    // Dieselbe 2-px-Toleranz wie in CombatGeometry.hasLineOfSight: ein KÃ¶rper direkt hinter dem
+    // Dieselbe 2-px-Toleranz wie in CombatGeometry.hasLineOfSight: ein Körper direkt hinter dem
     // Ziel sperrt die Linie nicht.
     const blockDistance = Phaser.Geom.Line.Length(line) - 2;
     if (blockDistance <= 0) return false;
@@ -3142,7 +3142,7 @@ export class CombatSystem {
     return hit !== null && hit.distance < blockDistance;
   }
 
-  // â”€â”€ Privat: Treffer, Tod, Respawn â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
 
   private queueHitscanTrace(trace: SyncedHitscanTrace): void {
     // Direkt per RPC an alle Clients senden (einmalig, statt per-frame in GameState)
@@ -3161,8 +3161,8 @@ export class CombatSystem {
   }
 
   /**
-   * PrÃ¼ft, ob ein Hindernis (Fels oder Baumstamm) die aktuelle meleeLine
-   * vor der angegebenen Distanz blockiert (Arena-AuÃŸenwÃ¤nde werden ignoriert,
+   * Prüft, ob ein Hindernis (Fels oder Baumstamm) die aktuelle meleeLine
+   * vor der angegebenen Distanz blockiert (Arena-Außenwände werden ignoriert,
    * da Ziele immer innerhalb der Arena stehen).
    */
   private isMeleePathBlocked(maxDist: number): boolean {
@@ -3210,7 +3210,7 @@ export class CombatSystem {
   private findNearestObstacleHit(
     line: Phaser.Geom.Line,
   ): (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null {
-    // Arena-AuÃŸenwand und Zug sind Gameplay-SonderkÃ¶rper und stehen deshalb nicht im
+    // Arena-Außenwand und Zug sind Gameplay-Sonderkörper und stehen deshalb nicht im
     // gemeinsamen Hindernis-Kern; sie werden hier gegen dessen Ergebnis verglichen.
     const arenaHit = this.findNearestRectangleHit(line, this.arenaBounds);
     let bestHit: (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null = arenaHit
@@ -3248,15 +3248,15 @@ export class CombatSystem {
 
   /**
    * Berechnet die kombinierte Bounding-Box aller aktiven Zug-Segmente.
-   * Behandelt den gesamten Zug (inkl. LÃ¼cken) als ein zusammenhÃ¤ngendes Hindernis.
-   * Gibt null zurÃ¼ck wenn kein aktives Segment vorhanden.
+   * Behandelt den gesamten Zug (inkl. Lücken) als ein zusammenhängendes Hindernis.
+   * Gibt null zurück wenn kein aktives Segment vorhanden.
    *
-   * MaÃŸgeblich ist der Static-Body: der `TrainManager` schaltet ihn beim Verlassen der Arena und
-   * bei der ZerstÃ¶rung ab, wÃ¤hrend die Rechtecke selbst bis zum Rundenende bestehen bleiben. Ohne
-   * diese PrÃ¼fung bliebe ein zerstÃ¶rter Zug als unsichtbarer Blocker auf dem Gleis stehen.
+   * Maßgeblich ist der Static-Body: der `TrainManager` schaltet ihn beim Verlassen der Arena und
+   * bei der Zerstörung ab, während die Rechtecke selbst bis zum Rundenende bestehen bleiben. Ohne
+   * diese Prüfung bliebe ein zerstörter Zug als unsichtbarer Blocker auf dem Gleis stehen.
    *
-   * Die Kanten werden wie im `TrainManager` direkt aus Position und AnzeigemaÃŸ gerechnet statt Ã¼ber
-   * `getBounds()`: die SchusslinienprÃ¼fung lÃ¤uft in den Ziel-Schleifen des Host-Frames, und
+   * Die Kanten werden wie im `TrainManager` direkt aus Position und Anzeigemaß gerechnet statt über
+   * `getBounds()`: die Schusslinienprüfung läuft in den Ziel-Schleifen des Host-Frames, und
    * `getBounds()` legt pro Segment ein neues Rechteck an.
    */
   private computeTrainBounds(): Phaser.Geom.Rectangle | null {
@@ -3287,7 +3287,7 @@ export class CombatSystem {
     return this.geometry.nearestRectangleHit(line, rect);
   }
 
-  /** Ãœbernimmt die vom Hindernis-Index gelieferten Kanten in das Scratch-Rechteck. */
+  /** Übernimmt die vom Hindernis-Index gelieferten Kanten in das Scratch-Rechteck. */
   private obstacleRect(left: number, top: number, right: number, bottom: number): Phaser.Geom.Rectangle {
     return this.geometry.obstacleRect(left, top, right, bottom);
   }
@@ -3424,7 +3424,7 @@ export class CombatSystem {
       this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
     }
     if (allowDamage && this.hasEnemyHitExplosion(projectile)) {
-      // Explosion nur bei tatsÃ¤chlichem Treffer auf einen gÃ¼ltigen Gegner (z.B. XXX-BOW Explosivbolzen).
+      // Explosion nur bei tatsächlichem Treffer auf einen gültigen Gegner (z.B. XXX-BOW Explosivbolzen).
       this.projectileManager.triggerEnemyImpactExplosion(projectileId);
     } else if (projectile?.explosion) {
       this.projectileManager.triggerProjectileExplosion(projectileId, `players:${playerId}`);
@@ -3442,7 +3442,7 @@ export class CombatSystem {
       }
     }
 
-    // Adrenalin-Belohnung fÃ¼r den SchÃ¼tzen
+    // Adrenalin-Belohnung für den Schützen
     if (allowDamage && adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
     }
@@ -3472,8 +3472,8 @@ export class CombatSystem {
     if (projectile?.impactCloud) {
       this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
     }
-    // Plasma-Aufladung und Schwarm werden vor dem Cleanup des PrimÃ¤rprojektils aufgelÃ¶st,
-    // damit die aktuell aufgelÃ¶sten Visual-/Homing-/Projektilwerte noch live verfÃ¼gbar sind.
+    // Plasma-Aufladung und Schwarm werden vor dem Cleanup des Primärprojektils aufgelöst,
+    // damit die aktuell aufgelösten Visual-/Homing-/Projektilwerte noch live verfügbar sind.
     if (projectile && canTriggerPlasmaSwarm(projectile)) {
       this.applyPlasmaChargeAndSpawnSwarm(projectile, enemyId);
     }
@@ -3744,7 +3744,7 @@ export class CombatSystem {
     const x = enemy.sprite.x;
     const y = enemy.sprite.y;
 
-    // Energie-Kuppel schÃ¼tzt auch verbÃ¼ndete Gegner (Nekromantie), wenn sie in der Kuppel stehen.
+    // Energie-Kuppel schützt auch verbündete Gegner (Nekromantie), wenn sie in der Kuppel stehen.
     if (enemy.faction === 'allied' && this.energyShieldSystem?.tryDomeProtect(x, y, null, amount, Date.now())) return;
 
     const previousHp = enemy.getHp();
@@ -3763,7 +3763,7 @@ export class CombatSystem {
     if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
 
     // Trefferabhaengige Primaerwaffen-Affixe. Erst hier, damit sie nur bei einem Treffer
-    // ausloesen, der tatsaechlich Schaden gemacht hat â€“ und nach dem Schaden, damit ein
+    // ausloesen, der tatsaechlich Schaden gemacht hat – und nach dem Schaden, damit ein
     // Debuff nicht rueckwirkend auf den ausloesenden Treffer wirkt.
     if (
       attackerId
@@ -3868,7 +3868,7 @@ export class CombatSystem {
 
     this.bridge.broadcastEffect(this.buildDeathEffect(playerId, x, y, seed));
 
-    // Kill-Callback auslÃ¶sen (Host-only, kein Selbstkill)
+    // Kill-Callback auslösen (Host-only, kein Selbstkill)
     const killerId = this.lastAttacker.get(playerId);
     if (killerId && killerId !== playerId) {
       const weapon = this.lastWeapon.get(playerId) ?? 'Waffe';
@@ -3886,7 +3886,7 @@ export class CombatSystem {
     return attackerEnemy?.faction === 'allied' ? attackerEnemy.ownerId : attackerId;
   }
 
-  /** Heilt den Spieler vollstÃ¤ndig auf HP_MAX (nur wenn lebendig). */
+  /** Heilt den Spieler vollständig auf HP_MAX (nur wenn lebendig). */
   healToFull(playerId: string): number {
     if (!this.isAlive(playerId)) return 0;
     const current = this.getHP(playerId);
@@ -3905,7 +3905,7 @@ export class CombatSystem {
 
   /**
    * Merkt sich, woher der letzte Treffer auf dieses Ziel kam. Ohne Angabe gilt ein direkter
-   * Treffer ohne bekannten Slot â€“ dieselbe Vorgabe wie beim Lesen der Optionen.
+   * Treffer ohne bekannten Slot – dieselbe Vorgabe wie beim Lesen der Optionen.
    */
   private rememberDamageOrigin(targetId: string, options?: DamageApplicationOptions): void {
     this.lastDamageOrigin.set(targetId, {

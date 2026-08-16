@@ -61,7 +61,7 @@ function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] 
     `Netz Update ${ms(timings.networkUpdateMs.avg)} · Flush ${ms(timings.networkFlushMs.avg)}`,
     `Schatten ${ms(timings.shadowStepMs.avg)} · Licht ${ms(timings.lightingStepMs.avg)}`,
     `  Licht: Queue ${ms(detailTimings.lightingQueueMs.avg)} · Befehle ${ms(detailTimings.lightingCommandBuildMs.avg)} · Occlusion ${ms(detailTimings.lightingOcclusionMs.avg)} · Geometrie ${ms(detailTimings.lightingShadowGeometryMs.avg)}`,
-    `  Direkt/verdeckt/fallback ${count(detailCounts.directLightCount.avg)}/${count(detailCounts.occludingLightCount.avg)}/${count(detailCounts.fallbackOccludingLightCount.avg)} · Schattenquads ${count(detailCounts.lightShadowQuadCount.avg)}`,
+    `  Direkt/verdeckt/fallback ${count(detailCounts.directLightCount.avg)}/${count(detailCounts.occludingLightCount.avg)}/${count(detailCounts.fallbackOccludingLightCount.avg)} · Schattenquads ${count(detailCounts.lightShadowQuadCount.avg)} · Dyn-Occluder ${count(detailCounts.dynamicLightOccluderHitCount.avg)}/${count(detailCounts.dynamicLightOccluderTestCount.avg)}`,
     `Feuer Sim ${ms(timings.fireSimulationMs.avg)} · Erzeugung ${ms(timings.fireCreationMs.avg)} · Visuals ${ms(timings.fireVisualMs.avg)}`,
     `Objekte ${count(counts.displayObjectCount.avg)} · sichtbar ${count(counts.visibleObjectCount.avg)} · Filter ${count(counts.activeFilterCount.avg)}`,
     `Draw-Calls ${count(counts.drawCallCount.avg)} · Spitze ${counts.drawCallCount.peak} · ${count(counts.visibleObjectCount.avg / Math.max(1, counts.drawCallCount.avg))} Objekte/Call`,

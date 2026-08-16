@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
@@ -156,6 +156,7 @@ import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config
 import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
+import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getLocale, t } from '../i18n';
@@ -220,9 +221,9 @@ interface TrainLamp {
   /** Index in `TrainRenderer.computeSegYs()`: 0 = Lok, danach die Waggons. */
   readonly segment: number;
   /**
-   * `offsetY` relativ zur Fahrtrichtung statt absolut. FÃ¼r Lampen, die immer vorne am
+   * `offsetY` relativ zur Fahrtrichtung statt absolut. Für Lampen, die immer vorne am
    * Segment sitzen (Lok-Kabinenfenster): + zeigt zur Nase, egal ob der Zug nach Norden
-   * oder SÃ¼den fÃ¤hrt.
+   * oder Süden fährt.
    */
   readonly frontRelative?: boolean;
 }
@@ -246,7 +247,7 @@ interface TransportPerformanceCounts {
 }
 
 export class ArenaScene extends Phaser.Scene {
-  // â”€â”€ Phaser-scoped objects (must stay in scene) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
   private arenaClipMaskShape: Phaser.GameObjects.Graphics | null = null;
   private arenaClipMask: Phaser.Display.Masks.GeometryMask | null = null;
@@ -265,24 +266,25 @@ export class ArenaScene extends Phaser.Scene {
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
   /** Lokale Lobby-Inszenierung. Kein Netzwerkzustand, kein Einfluss auf den Matchstart. */
   private lobbyAmbient: LobbyAmbientRuntime | null = null;
-  /** Zentrale Regie fÃ¼r Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
+  /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
   private visualFeedback: VisualFeedbackDirector | null = null;
   /**
-   * Zweite, filterfreie Kamera Ã¼ber der Weltkamera. TrÃ¤gt HUD und Overlays, damit die
+   * Zweite, filterfreie Kamera über der Weltkamera. Trägt HUD und Overlays, damit die
    * Bildkomposition der Welt sie nicht erfasst.
    */
   private clarityCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private clarityRegistry: ClarityCameraRegistry | null = null;
 
-  // â”€â”€ Coordinators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Coordinators ──────────────────────────────────────────────────────────
   private ctx!: ArenaContext;
   private renderers!: RendererBundle;
   private localPlayerState!: LocalPlayerState;
   private rockVisualHelper!: RockVisualHelper;
-  /** Links/rechts am Zug â€“ als Konstante, damit die Licht-Keys stabil bleiben. */
+  /** Links/rechts am Zug – als Konstante, damit die Licht-Keys stabil bleiben. */
   private static readonly TRAIN_LIGHT_SIDES = [-1, 1] as const;
   private trainLightPlan: TrainLightPlan | null = null;
   private trainLightsActive = false;
+  private readonly trainLightOccluders = new TrainLightOccluderSource();
   private flashlightsActive = false;
   /** Zwei getauschte Sets statt Neuallokation pro Frame: Projektile wechseln schnell. */
   private activeProjectileLightIds = new Set<number>();
@@ -295,7 +297,7 @@ export class ArenaScene extends Phaser.Scene {
   private rpcCoordinator!: RpcCoordinator;
   private lifecycle!: ArenaLifecycleCoordinator;
 
-  // â”€â”€ Lobby / Room-quality (not round-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
@@ -329,7 +331,7 @@ export class ArenaScene extends Phaser.Scene {
   private arenaExitFadeComplete = false;
   private arenaExitOutcomeWaitStartedAt = 0;
   private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
-  // Profil-Stand beim Oeffnen des Upgrade-Overlays â€“ fuer "Abbruch" (Wiederherstellen).
+  // Profil-Stand beim Oeffnen des Upgrade-Overlays – fuer "Abbruch" (Wiederherstellen).
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseProgressPreferences | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private coopDefenseHighestUnlockedMapId: string = INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
@@ -476,11 +478,11 @@ export class ArenaScene extends Phaser.Scene {
       this.resolveCoopDefenseArenaWidthCells(),
     );
 
-    // Muss vor allem anderen laufen: ab hier gilt der 1920x1080-Designraum unabhÃ¤ngig davon,
-    // wie viele Pixel die Canvas tatsÃ¤chlich hat. Alles Folgende platziert Objekte darin.
+    // Muss vor allem anderen laufen: ab hier gilt der 1920x1080-Designraum unabhängig davon,
+    // wie viele Pixel die Canvas tatsächlich hat. Alles Folgende platziert Objekte darin.
     //
-    // Die Klarheitskamera entsteht direkt mit, und ihre Registry hÃ¤ngt sich noch vor dem ersten
-    // `add.*` ein: ein Objekt ohne Zuordnung wÃ¼rde von beiden Kameras gezeichnet.
+    // Die Klarheitskamera entsteht direkt mit, und ihre Registry hängt sich noch vor dem ersten
+    // `add.*` ein: ein Objekt ohne Zuordnung würde von beiden Kameras gezeichnet.
     this.clarityCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'clarity');
     this.clarityRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarityCamera);
     this.clarityRegistry.install();
@@ -545,7 +547,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.clearPlayerCallbacks();
     this.input.mouse?.disableContextMenu();
 
-    // â”€â”€ Static arena (never destroyed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Static arena (never destroyed) ────────────────────────────────────
     this.arenaBuilder = new ArenaBuilder(this);
     this.arenaBuilder.buildStatic(bridge.getGameMode(), bridge.getGamePhase());
     this.menuArenaPreview = new MenuArenaPreviewRenderer(this, MENU_ARENA_PREVIEW_CONFIG);
@@ -558,7 +560,7 @@ export class ArenaScene extends Phaser.Scene {
     this.ensureArenaClipMask();
 
 
-    // â”€â”€ Scene-lifetime systems â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Scene-lifetime systems ─────────────────────────────────────────────
     const playerManager    = new PlayerManager(this);
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
     playerManager.setRelationshipResolver((localPlayerId, otherPlayerId) => bridge.isEnemyPair(localPlayerId, otherPlayerId));
@@ -630,7 +632,7 @@ export class ArenaScene extends Phaser.Scene {
       this.visualFeedback = null;
     });
 
-    // â”€â”€ UI (scene-lifetime) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── UI (scene-lifetime) ────────────────────────────────────────────────
     const leftPanel  = new LeftSidePanel(
       this,
       bridge,
@@ -791,7 +793,7 @@ export class ArenaScene extends Phaser.Scene {
     );
     arenaCountdown.setAudioSystem(gameAudioSystem);
 
-    // â”€â”€ Assemble ArenaContext â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Assemble ArenaContext ──────────────────────────────────────────────
     this.ctx = {
       playerManager, projectileManager, combatSystem, effectSystem,
       visualFeedback: this.visualFeedback,
@@ -847,7 +849,7 @@ export class ArenaScene extends Phaser.Scene {
             radius: resolveSpawnProjectileDangerRadius(projectile),
           })),
         // Coop-Defense: Lebende Gegner mit ihrer effektiven Angriffsreichweite
-        // verÃ¶ffentlichen, damit der Spawn nicht in deren Wirkungskreis fÃ¤llt.
+        // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
         enemyThreats: (() => {
           // Nur eigene Basen: der Zombie-Druck wird gegen die Basen gemessen, die sie angreifen.
           const livingBases = this.ctx.baseManager?.getBasesByFaction('friendly')
@@ -888,13 +890,14 @@ export class ArenaScene extends Phaser.Scene {
       };
     });
 
-    // â”€â”€ Renderers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager, this.arenaClipMask);
+    this.renderers.lighting.setDynamicOccluderSource(this.trainLightOccluders);
     this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
       ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null
     ));
-    // Spawn-Blitz und Brand hÃ¤ngen an der jeweiligen Entity, nicht an einem zentralen
-    // Renderer â€“ der Manager reicht die Beleuchtung deshalb an seine Entities durch.
+    // Spawn-Blitz und Brand hängen an der jeweiligen Entity, nicht an einem zentralen
+    // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
     smokeSystem.setLightingSystem(this.renderers.lighting);
@@ -931,10 +934,10 @@ export class ArenaScene extends Phaser.Scene {
     );
     inputSystem.setCameraFeedback(this.visualFeedback.camera);
 
-    // Homing providers (closed over ctx, read at call-time â†’ safe after teardown)
-    // Der Suchradius wird hier bereits ausgewertet: bei vielen Splitter-Projektilen lÃ¤uft
-    // dieser Provider mehrfach pro Frame, und die Gegner auÃŸerhalb des Radius sind der
-    // GroÃŸteil der Liste. Die Kandidaten gehen per `emit` in den Pool des Controllers,
+    // Homing providers (closed over ctx, read at call-time → safe after teardown)
+    // Der Suchradius wird hier bereits ausgewertet: bei vielen Splitter-Projektilen läuft
+    // dieser Provider mehrfach pro Frame, und die Gegner außerhalb des Radius sind der
+    // Großteil der Liste. Die Kandidaten gehen per `emit` in den Pool des Controllers,
     // es entsteht also kein Array und kein Objekt pro Aufruf.
     projectileManager.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
       if (!bridge.isHost()) return;
@@ -945,7 +948,7 @@ export class ArenaScene extends Phaser.Scene {
         return dx * dx + dy * dy <= radiusSq;
       };
       // Tuerme sind ein reiner Unterstuetzungs-Zieltyp (Energieinjektor) und werden nur
-      // aufgezaehlt, wenn die Waffe sie ausdruecklich anfragt â€“ der Bestand kostet sonst
+      // aufgezaehlt, wenn die Waffe sie ausdruecklich anfragt – der Bestand kostet sonst
       // in jedem Homing-Frame jeder Kampfwaffe.
       if (config.targetTypes?.includes('turrets')) {
         for (const turret of this.ctx.turretSystem?.getTurrets() ?? []) {
@@ -984,7 +987,7 @@ export class ArenaScene extends Phaser.Scene {
 
     effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });
 
-    // â”€â”€ Shared state & helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
     this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
     this.hostileBaseIndicator = new HostileBaseIndicator(this);
@@ -997,11 +1000,11 @@ export class ArenaScene extends Phaser.Scene {
       () => this.ctx.enemyManager?.getAllEnemies() ?? [],
     );
 
-    // â”€â”€ Coordinators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
     this.clientUpdate = new ClientUpdateCoordinator(this, this.ctx, this.localPlayerState, this.rockVisualHelper);
 
-    // â”€â”€ Input setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Input setup ───────────────────────────────────────────────────────
     inputSystem.setup();
     inputSystem.setAudioSystem(gameAudioSystem);
     inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
@@ -1044,7 +1047,7 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
 
-    // â”€â”€ Debug Hotkeys â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Debug Hotkeys ─────────────────────────────────────────────────────
     inputSystem.setupDebugHotkeys((type) => {
       if (!bridge.isHost()) return;
 
@@ -1214,7 +1217,7 @@ export class ArenaScene extends Phaser.Scene {
 
       if ((slot === 'weapon1' || slot === 'weapon2') && !params?.constructionId) {
         // scopeHolding: kein Schuss, nur holdSpeedFactor auf Host-Seite aktiv halten.
-        // Weder Cooldown-Check noch notifyLoadoutFired â€“ sonst wÃ¼rde der echte Schuss blockiert.
+        // Weder Cooldown-Check noch notifyLoadoutFired – sonst würde der echte Schuss blockiert.
         if (params?.scopeHolding) {
           bridge.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
           return;
@@ -1299,7 +1302,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     });
 
-    // â”€â”€ Lobby overlay & room-quality â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Lobby overlay & room-quality ───────────────────────────────────────
     this.lobbyOverlay = new LobbyOverlay(
       this, bridge,
       () => this.onReadyToggled(),
@@ -1328,7 +1331,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
-    // â”€â”€ RPC + Lifecycle coordinators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── RPC + Lifecycle coordinators ──────────────────────────────────────
     this.rpcCoordinator = new RpcCoordinator(this, this.ctx, this.renderers, this.clientUpdate, leftPanel);
     this.lifecycle      = new ArenaLifecycleCoordinator(
       this, this.ctx, this.renderers,
@@ -1437,13 +1440,13 @@ export class ArenaScene extends Phaser.Scene {
 
     const lobbyVisible = phase === 'LOBBY' && !deferArenaExit;
     this.menuArenaPreview?.setVisible(lobbyVisible);
-    // Muss vor allem Arena-Aufbau laufen: `setActive(false)` rÃ¤umt synchron und vollstÃ¤ndig
-    // auf, damit kein Ambient-Zustand in eine Runde hinÃ¼berlebt.
+    // Muss vor allem Arena-Aufbau laufen: `setActive(false)` räumt synchron und vollständig
+    // auf, damit kein Ambient-Zustand in eine Runde hinüberlebt.
     this.lobbyAmbient?.setActive(lobbyVisible);
     if (lobbyVisible) this.lobbyAmbient?.update(delta);
 
     if (inGame) {
-      // Drehen ist wÃ¤hrend des Countdowns erlaubt, alles andere bleibt gesperrt.
+      // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.
       this.ctx.inputSystem.setAimEnabled(!optionsOpen && !spectator);
       this.ctx.inputSystem.setInputEnabled(
         !countdownActive && !optionsOpen && !spectator,
@@ -1467,7 +1470,7 @@ export class ArenaScene extends Phaser.Scene {
       const players = bridge.getConnectedPlayers();
       // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim
       // Rundenwechsel (oder bei Modus-/Map-Wechsel) den Spieler auf "nicht bereit", folgt hier sowohl
-      // das interne Flag als auch der Button â€“ so ist der Client-Zustandsspeicher garantiert konsistent.
+      // das interne Flag als auch der Button – so ist der Client-Zustandsspeicher garantiert konsistent.
       const localReady = bridge.getPlayerReady(bridge.getLocalPlayerId());
       if (localReady !== this.lifecycle.getIsLocalReady()) {
         this.lifecycle.setIsLocalReady(localReady);
@@ -1547,7 +1550,7 @@ export class ArenaScene extends Phaser.Scene {
       );
       const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
       const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
-      // `tutorialPersistent` blendet das Fenster Ã¼ber die gesamte Rundendauer ein.
+      // `tutorialPersistent` blendet das Fenster über die gesamte Rundendauer ein.
       const tutorialText = activeMapConfig
         ? getMapTutorial(activeMapConfig.mapId, getLocale())
         : undefined;
@@ -1559,7 +1562,7 @@ export class ArenaScene extends Phaser.Scene {
         activeMapConfig?.tutorialShowControls === true,
       );
 
-      // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist â€“ Maps mit
+      // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
       // Gleisen ohne Zug und Runden ohne weitere Einfahrt haben schlicht kein Event.
       if (isCoopDefenseMode(bridge.getGameMode())) {
         this.ctx.centerHUD.hideTrainWidget();
@@ -1658,7 +1661,7 @@ export class ArenaScene extends Phaser.Scene {
     const visualsStartMs = performance.now();
     const postRoleMs = visualsStartMs - sceneStateEndMs - primaryStepMs;
 
-    // â”€â”€ Per-frame visuals (always) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = arenaVisible && !terminated;
     const strategicTargets = bridge.isHost()
       ? (this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
@@ -1721,8 +1724,8 @@ export class ArenaScene extends Phaser.Scene {
       : null;
     this.ctx.centerHUD.updateMainObjectivePresentation(mainObjective);
     this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
-    // Die rechte Missionsspalte steht in Coop-Maps Ã¼ber dem Spielfeld und weicht deshalb vor
-    // Figuren und Zielpunkt zurÃ¼ck.
+    // Die rechte Missionsspalte steht in Coop-Maps über dem Spielfeld und weicht deshalb vor
+    // Figuren und Zielpunkt zurück.
     this.ctx.centerHUD.updateMissionStackOcclusion(delta, this.ctx.playerManager, this.ctx.enemyManager);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
     // Pflichtziel und Nebenziel werden im selben Frameabschnitt aktualisiert; die Rundenzeit
@@ -1782,7 +1785,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.timeBubble.update(delta);
     this.renderers.blackHole.update(delta);
     this.renderers.plasmaBurner.update(delta);
-    // Nach dem Positionsabgleich der Entities: die Trefferkopien fÃ¼hren ihre Ziele nach.
+    // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
     this.visualFeedback?.update(delta);
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
     this.renderers.reinforcementMatrix.syncVisuals(
@@ -1858,7 +1861,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.scopeOverlay) {
       const scopeCfg = inArena && !spectator ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
       if (scopeCfg) {
-        // `pointer.x/y` zÃ¤hlen Renderpixel; das Overlay rechnet im Designraum.
+        // `pointer.x/y` zählen Renderpixel; das Overlay rechnet im Designraum.
         const pointer = this.input.activePointer;
         this.scopeOverlay.update(
           scopeProgress,
@@ -1868,7 +1871,7 @@ export class ArenaScene extends Phaser.Scene {
           scopeCfg,
         );
       } else {
-        // Keine Scope-Waffe ausgerÃ¼stet â€“ Overlay ausblenden
+        // Keine Scope-Waffe ausgerüstet – Overlay ausblenden
         this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
       }
     }
@@ -1900,11 +1903,11 @@ export class ArenaScene extends Phaser.Scene {
     const visualAimMs = visualAimEndMs - visualEffectsEndMs;
     const visualHudMs = visualsEndMs - visualAimEndMs;
 
-    // Letzter Schritt vor Schatten, Licht und Rendering â€“ alles davor rechnet mit der
+    // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
     // unversetzten Kameraposition (siehe `applyCameraFeedback`).
     this.applyCameraFeedback(delta);
     // Das Tutorial ist ein Weltobjekt: Seine Occlusion-Probe braucht deshalb den finalen
-    // Scroll-/Shake-Versatz, den auch der anschlieÃŸende Render-Schritt verwendet.
+    // Scroll-/Shake-Versatz, den auch der anschließende Render-Schritt verwendet.
     this.ctx.centerHUD.updateTutorialOcclusion(
       delta,
       [
@@ -1913,13 +1916,14 @@ export class ArenaScene extends Phaser.Scene {
       ],
     );
     // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten
-    // Ã¼bersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
+    // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
 
     const shadowStepStartMs = visualsEndMs;
-    this.syncWorldShadows(inArena);
+    const trainState = inArena ? this.resolveTrainState() : null;
+    this.syncWorldShadows(inArena, trainState);
     const shadowStepMs = performance.now() - shadowStepStartMs;
-    this.syncWorldLighting(inArena);
+    this.syncWorldLighting(inArena, trainState);
     const lightingStepMs = this.renderers.lighting.getLastUpdateCostMs();
 
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
@@ -2030,6 +2034,8 @@ export class ArenaScene extends Phaser.Scene {
       coneLightCount: lightingPerformance.coneLights,
       lightShadowQuadCount: lightingPerformance.shadowQuads,
       lightFalloffQuadCount: lightingPerformance.falloffQuads,
+      dynamicLightOccluderTestCount: lightingPerformance.dynamicOccluderTests,
+      dynamicLightOccluderHitCount: lightingPerformance.dynamicOccluderHits,
       lightingCommandCount: lightingPerformance.commandCount,
       lightMapPixelCount: lightingPerformance.lightMapPixels,
       lightingScratchPixelCount: lightingPerformance.scratchPixels,
@@ -2109,7 +2115,7 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  // â”€â”€ Network events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Network events ────────────────────────────────────────────────────────
 
   private onPlayerJoined(profile: PlayerProfile): void {
     if (bridge.isHost()) {
@@ -2130,19 +2136,19 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  // â”€â”€ Lobby callbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Lobby callbacks ───────────────────────────────────────────────────────
 
   private onReadyToggled(): void {
     const nowReady = !this.lifecycle.getIsLocalReady();
     if (nowReady) {
-      // FrÃ¼hwarnung gegen Lobby-Desync (Bug A/B): Nur bereit machen, wenn dieser Client mit dem
+      // Frühwarnung gegen Lobby-Desync (Bug A/B): Nur bereit machen, wenn dieser Client mit dem
       // host-autoritativen Lobby-Stand aufgeschlossen ist (Spieler-Roster, Modus, Coop-Map). Sonst
-      // kÃ¶nnte er einen Mitspieler nicht rendern oder ein fÃ¼r den Modus ungÃ¼ltiges Loadout committen.
-      // Weiches Blockieren (kein Dauerblock) + Logging; lÃ¶st sich, sobald der Stand konvergiert.
+      // könnte er einen Mitspieler nicht rendern oder ein für den Modus ungültiges Loadout committen.
+      // Weiches Blockieren (kein Dauerblock) + Logging; löst sich, sobald der Stand konvergiert.
       const lobbySync = bridge.getLobbySyncConsistency();
       if (!lobbySync.consistent) {
         console.warn(
-          `[LobbySync] BEREIT blockiert â€“ lokaler Stand weicht vom Host ab: ${lobbySync.issues.join(' | ')}. `
+          `[LobbySync] BEREIT blockiert – lokaler Stand weicht vom Host ab: ${lobbySync.issues.join(' | ')}. `
           + `Lokal bekannt: [${bridge.getConnectedPlayerIds().join(', ')}].`,
         );
         this.lobbyOverlay.showReadySyncNotice();
@@ -2167,7 +2173,7 @@ export class ArenaScene extends Phaser.Scene {
 
   /**
    * Items sind nur ausserhalb eines Matches wechselbar. Ein bereiter Spieler muss zuerst
-   * â€žNICHT BEREITâ€œ waehlen, bevor er dieses Menue oeffnen kann.
+   * „NICHT BEREIT“ waehlen, bevor er dieses Menue oeffnen kann.
    */
   private openCoopDefenseItemsOverlay(): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
@@ -2233,7 +2239,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // Der Bridge-Zustand ist nur das aktuell aktive Loadout. Vor dem Wechsel wird er
     // deshalb noch einmal explizit im Profil der bisherigen Klasse gesichert. Alle
-    // persistenten Ã„nderungen werden anschlieÃŸend in einem Schreibvorgang gebÃ¼ndelt.
+    // persistenten Änderungen werden anschließend in einem Schreibvorgang gebündelt.
     const previousLoadout: Partial<Record<LoadoutSlot, string>> = {};
     const localId = bridge.getLocalPlayerId();
     for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
@@ -2499,7 +2505,7 @@ export class ArenaScene extends Phaser.Scene {
     restartWithNewRoom();
   }
 
-  // â”€â”€ Visual helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Visual helpers ────────────────────────────────────────────────────────
 
   private syncArenaFogOverlay(now: number, inArena: boolean, countdownActive: boolean): void {
     if (!this.ctx.arenaCountdown) return;
@@ -2703,7 +2709,7 @@ export class ArenaScene extends Phaser.Scene {
       keyboard.off('keydown-P', this.netDebugHotkeyHandler);
       this.netDebugHotkeyHandler = null;
     }
-    // Transportdiagnose ist in jeder Phase erreichbar â€“ gerade wenn etwas klemmt.
+    // Transportdiagnose ist in jeder Phase erreichbar – gerade wenn etwas klemmt.
     this.netDebugHotkeyHandler = (event: KeyboardEvent) => {
       if (event.repeat || !this.ctx) return;
       if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
@@ -2717,7 +2723,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.performanceHotkeyHandler = (event: KeyboardEvent) => {
       if (event.repeat) return;
-      // T ist ein Schreibzeichen: nicht auslÃ¶sen, wÃ¤hrend ein Textfeld den Fokus hat.
+      // T ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
       if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
       this.performanceDiagnosticsOverlay?.toggle();
     };
@@ -2729,7 +2735,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.timeOfDayHotkeyHandler = (event: KeyboardEvent) => {
       if (event.repeat) return;
-      // M ist ein Schreibzeichen: nicht auslÃ¶sen, wÃ¤hrend ein Textfeld den Fokus hat.
+      // M ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
       if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
       this.timeOfDayDebugOverlay?.toggle();
     };
@@ -2779,13 +2785,13 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * Ãœbernimmt eine per Debug-Regler gewÃ¤hlte Uhrzeit.
+   * Übernimmt eine per Debug-Regler gewählte Uhrzeit.
    *
-   * Rein lokal â€“ die Runde leitet ihre Uhrzeit auf jedem Client aus der replizierten
+   * Rein lokal – die Runde leitet ihre Uhrzeit auf jedem Client aus der replizierten
    * Map-ID ab, hier wird also nur die eigene Ansicht verstellt.
    *
    * Reihenfolge wie beim Rundenaufbau: Schattenprofil setzen, *dann* die statischen Layer
-   * neu backen. Kurzlebige Effekte Ã¼bernehmen den Emissive-Faktor von selbst, langlebige
+   * neu backen. Kurzlebige Effekte übernehmen den Emissive-Faktor von selbst, langlebige
    * additive Grafiken erst bei ihrer Neuerzeugung.
    */
   private applyDebugTimeOfDay(minutes: number): void {
@@ -2839,20 +2845,20 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * Koppelt die Hauptkamera an den 1920x1080-Designraum, egal wie groÃŸ der Backing-Store der
-   * Canvas gerade ist (siehe `graphics/RenderResolution`). Der Zoom stellt die VergrÃ¶ÃŸerung
-   * her, `origin = (0, 0)` sorgt dafÃ¼r, dass sie Welt und bildschirmfestes HUD gleich
-   * behandelt. Bei RenderauflÃ¶sung 1:1 ist beides ein No-op.
+   * Koppelt die Hauptkamera an den 1920x1080-Designraum, egal wie groß der Backing-Store der
+   * Canvas gerade ist (siehe `graphics/RenderResolution`). Der Zoom stellt die Vergrößerung
+   * her, `origin = (0, 0)` sorgt dafür, dass sie Welt und bildschirmfestes HUD gleich
+   * behandelt. Bei Renderauflösung 1:1 ist beides ein No-op.
    *
-   * LÃ¤uft bei jedem RESIZE erneut: Vollbild und FenstergrÃ¶ÃŸe verÃ¤ndern die AuflÃ¶sung mitten
-   * im Spiel, und der CameraManager setzt die Kamera dabei auf die neue Canvas-GrÃ¶ÃŸe.
+   * Läuft bei jedem RESIZE erneut: Vollbild und Fenstergröße verändern die Auflösung mitten
+   * im Spiel, und der CameraManager setzt die Kamera dabei auf die neue Canvas-Größe.
    */
   private bindCameraToDesignSpace(): void {
     const camera = this.cameras.main;
     if (!camera) return;
     camera.setOrigin(0, 0);
     // Nicht auf den Viewport verlassen, den der CameraManager beim RESIZE gesetzt hat: die
-    // Kamera soll den gesamten Backing-Store abdecken, damit Zoom und FlÃ¤che zusammenpassen.
+    // Kamera soll den gesamten Backing-Store abdecken, damit Zoom und Fläche zusammenpassen.
     camera.setSize(this.scale.width, this.scale.height);
     camera.setZoom(this.scale.width / GAME_WIDTH, this.scale.height / GAME_HEIGHT);
     this.syncMainCameraBounds();
@@ -2869,17 +2875,17 @@ export class ArenaScene extends Phaser.Scene {
 
   /**
    * Kamera-Grenzen in Designkoordinaten. Phasers `clampX`/`clampY` gehen von einer mittig
-   * verankerten Kamera aus und verrechnen die Differenz zwischen Viewport- und SichtfeldgrÃ¶ÃŸe
+   * verankerten Kamera aus und verrechnen die Differenz zwischen Viewport- und Sichtfeldgröße
    * (`width` gegen `displayWidth = width / zoom`) selbst. Bei `origin = (0, 0)` ist diese
-   * Differenz falsch, deshalb wird sie hier vorweg herausgerechnet â€“ ohne das wÃ¼rde die
-   * Kamera bei RenderauflÃ¶sungen Ã¼ber 1 dauerhaft nach links versetzt festklemmen.
+   * Differenz falsch, deshalb wird sie hier vorweg herausgerechnet – ohne das würde die
+   * Kamera bei Renderauflösungen über 1 dauerhaft nach links versetzt festklemmen.
    */
   private syncMainCameraBounds(): void {
     const camera = this.cameras.main;
     if (!camera) return;
     // Um das Feedback-Budget erweitert: Phaser klemmt `scrollX/scrollY` in `preRender` gegen die
-    // Grenzen. Bei fixer Kamera fallen Sichtfeld und Grenzen exakt zusammen, der zulÃ¤ssige
-    // Bereich kollabiert dann auf einen einzigen Wert â€“ der Kamera-Versatz wÃ¼rde stillschweigend
+    // Grenzen. Bei fixer Kamera fallen Sichtfeld und Grenzen exakt zusammen, der zulässige
+    // Bereich kollabiert dann auf einen einzigen Wert – der Kamera-Versatz würde stillschweigend
     // verschluckt. Die Verfolgung selbst hat ihre eigene Klemmung, die Grenzen sind nur Netz.
     const pad = CAMERA_FEEDBACK_LIMITS.maxOffsetPx;
     camera.setBounds(
@@ -2892,11 +2898,11 @@ export class ArenaScene extends Phaser.Scene {
 
   /**
    * Setzt die Kamera auf ihre **unversetzte** Basisposition. Der visuelle Versatz des
-   * Kamera-Feedbacks kommt erst am Frame-Ende Ã¼ber `applyCameraFeedback()` dazu.
+   * Kamera-Feedbacks kommt erst am Frame-Ende über `applyCameraFeedback()` dazu.
    *
    * Die Verfolgung lerpt bewusst aus `lastCameraScrollX` und nicht aus `camera.scrollX`: Zu
-   * Beginn eines Frames trÃ¤gt die Kamera noch den Versatz des Vorframes, und ein RÃ¼cklesen
-   * wÃ¼rde das Rumpeln in die Verfolgung zurÃ¼ckkoppeln und die Kamera abdriften lassen.
+   * Beginn eines Frames trägt die Kamera noch den Versatz des Vorframes, und ein Rücklesen
+   * würde das Rumpeln in die Verfolgung zurückkoppeln und die Kamera abdriften lassen.
    */
   private syncMainCamera(delta: number, inArena: boolean): void {
     const camera = this.cameras.main;
@@ -2966,7 +2972,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * TrÃ¤gt den Kamera-Versatz auf. Bewusst der letzte Schritt vor Schatten, Licht und Rendering:
+   * Trägt den Kamera-Versatz auf. Bewusst der letzte Schritt vor Schatten, Licht und Rendering:
    *
    * - Alles davor (Eingabe, Zielerfassung, Snapshots, Platzierungsvorschauen) rechnet mit der
    *   Basisposition und bleibt vom Rumpeln unbeeinflusst.
@@ -2976,7 +2982,7 @@ export class ArenaScene extends Phaser.Scene {
    */
   /**
    * Eingaben der Basis-Bildkomposition. Die Uhrzeit kommt aus dem Lichtsystem, damit Grading
-   * und Beleuchtung dieselbe Quelle haben und nicht auseinanderlaufen kÃ¶nnen.
+   * und Beleuchtung dieselbe Quelle haben und nicht auseinanderlaufen können.
    */
   private resolveWorldGradeInputs(): WorldGradeInputs {
     const minutes = this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES;
@@ -2990,9 +2996,9 @@ export class ArenaScene extends Phaser.Scene {
     const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
     const localId = bridge.getLocalPlayerId();
     const localPlayer = this.ctx?.playerManager.getPlayer(localId);
-    // Tot oder zuschauend gilt als unverletzt: die Gesundheitsdarstellung gehÃ¶rt zum eigenen
-    // KÃ¶rper. Ohne diesen Vorbehalt bliebe der Bildschirm nach dem Tod bis zum Respawn â€“ in
-    // Coop-Defense bis zum Wellenende â€“ dauerhaft entsÃ¤ttigt und blutig.
+    // Tot oder zuschauend gilt als unverletzt: die Gesundheitsdarstellung gehört zum eigenen
+    // Körper. Ohne diesen Vorbehalt bliebe der Bildschirm nach dem Tod bis zum Respawn – in
+    // Coop-Defense bis zum Wellenende – dauerhaft entsättigt und blutig.
     const localWounded = inArena
       && !this.localPlayerState.spectator
       && !bridge.isLocalSpectator()
@@ -3036,7 +3042,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * Aktueller Zugzustand fÃ¼r Schatten und Licht. Bevorzugt den interpolierten Stand des
+   * Aktueller Zugzustand für Schatten und Licht. Bevorzugt den interpolierten Stand des
    * Renderers, damit beide nicht am Netz-Tick kleben.
    */
   private resolveTrainState(): SyncedTrainState | null {
@@ -3046,7 +3052,7 @@ export class ArenaScene extends Phaser.Scene {
         : (bridge.getLatestGameState()?.train ?? null));
   }
 
-  private syncWorldShadows(inArena: boolean): void {
+  private syncWorldShadows(inArena: boolean, trainState: SyncedTrainState | null): void {
     if (!inArena || !this.ctx.currentLayout || !this.ctx.arenaResult) {
       this.renderers.shadow.clear();
       return;
@@ -3055,22 +3061,26 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.shadow.syncDynamicShadows(
       this.ctx.playerManager.getAllPlayers(),
       this.ctx.projectileManager.getShadowSamples(),
-      this.resolveTrainState(),
+      trainState,
     );
   }
 
   /**
    * Dynamische Beleuchtung. Die Lichtquellen selbst melden sich in ihren eigenen
-   * Renderern an (MÃ¼ndungsfeuer, Explosionen, Feuer); hier hÃ¤ngen nur die Lichter, die
-   * an einem bewegten TrÃ¤ger sitzen â€“ Taschenlampen und Zugscheinwerfer â€“ sowie die
+   * Renderern an (Mündungsfeuer, Explosionen, Feuer); hier hängen nur die Lichter, die
+   * an einem bewegten Träger sitzen – Taschenlampen und Zugscheinwerfer – sowie die
    * Komposition der Lightmap.
    */
-  private syncWorldLighting(inArena: boolean): void {
+  private syncWorldLighting(inArena: boolean, trainState: SyncedTrainState | null): void {
     const lighting = this.renderers.lighting;
     const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
     const artificialLights = artificialFactor > 0;
+    const liveTrainSegments = trainState?.alive && bridge.isHost() && this.ctx.trainManager?.isActive()
+      ? this.ctx.trainManager.getSegObjects()
+      : null;
+    this.trainLightOccluders.setTrain(liveTrainSegments, trainState);
 
-    this.syncTrainLights(artificialLights, artificialFactor);
+    this.syncTrainLights(artificialLights, artificialFactor, trainState);
 
     if (artificialLights) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -3081,9 +3091,9 @@ export class ArenaScene extends Phaser.Scene {
         // nicht sichtbar auf dem Feld steht, leuchtet auch nicht.
         //
         // Bewusst kein `combatSystem.isAlive()`: dessen Zustand entsteht in
-        // `initPlayer()` und das lÃ¤uft nur auf dem Host, auf Clients wÃ¤re also jeder
+        // `initPlayer()` und das läuft nur auf dem Host, auf Clients wäre also jeder
         // Spieler tot und keine Taschenlampe sichtbar. Der Lebendzustand steckt ohnehin
-        // schon in `sprite.visible` â€“ beide Seiten setzen ihn beim Tod (siehe
+        // schon in `sprite.visible` – beide Seiten setzen ihn beim Tod (siehe
         // HostUpdateCoordinator und ClientUpdateCoordinator).
         const visible = sprite.active
           && sprite.visible
@@ -3108,8 +3118,8 @@ export class ArenaScene extends Phaser.Scene {
       }
       this.flashlightsActive = true;
     } else if (this.flashlightsActive) {
-      // AusdrÃ¼ckliche Freigabe statt Verlass auf das Stale-Notnetz: das blendet Ã¼ber
-      // `RELEASE_FADE_MS` aus, wÃ¤hrend der Stale-Pfad die Lampen 400 ms stehen lÃ¤sst und
+      // Ausdrückliche Freigabe statt Verlass auf das Stale-Notnetz: das blendet über
+      // `RELEASE_FADE_MS` aus, während der Stale-Pfad die Lampen 400 ms stehen lässt und
       // dann hart abschaltet. Wird sichtbar, sobald der Debug-Regler in den Tag zieht.
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         lighting.releaseLight(`flashlight:${player.id}`);
@@ -3130,13 +3140,13 @@ export class ArenaScene extends Phaser.Scene {
   /**
    * Eigenleuchten der Projektile.
    *
-   * Bewusst ein zentraler Pass statt einer Anmeldung in jedem der zwÃ¶lf
+   * Bewusst ein zentraler Pass statt einer Anmeldung in jedem der zwölf
    * Projektil-Renderer: `ProjectileManager.getLightSamples()` deckt Host und Client aus
-   * einer Methode ab â€“ genau wie `getShadowSamples()` beim dynamischen Schatten â€“ und die
-   * Zuordnung Stil â†’ Licht bleibt an einer Stelle steuerbar.
+   * einer Methode ab – genau wie `getShadowSamples()` beim dynamischen Schatten – und die
+   * Zuordnung Stil → Licht bleibt an einer Stelle steuerbar.
    *
-   * Der Brand eines Projektils ist davon unabhÃ¤ngig: `ProjectileBurnRenderer` meldet ihn
-   * unter einem eigenen Key an, ein brennendes Geschoss trÃ¤gt also beide Lichter.
+   * Der Brand eines Projektils ist davon unabhängig: `ProjectileBurnRenderer` meldet ihn
+   * unter einem eigenen Key an, ein brennendes Geschoss trägt also beide Lichter.
    */
   private syncProjectileLights(inArena: boolean): void {
     const lighting = this.renderers.lighting;
@@ -3170,7 +3180,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     // Freigabe statt Verlass auf das Stale-Notnetz: das blendet sauber aus, statt das
-    // Licht eines lÃ¤ngst zerstÃ¶rten Projektils noch 400 ms stehen zu lassen.
+    // Licht eines längst zerstörten Projektils noch 400 ms stehen zu lassen.
     for (const id of active) {
       if (!seen.has(id)) lighting.releaseLight(`proj:${id}`);
     }
@@ -3183,16 +3193,20 @@ export class ArenaScene extends Phaser.Scene {
    * Zugbeleuchtung: zwei Frontscheinwerfer an der Lok, dazu Fensterlichter an beiden
    * Seiten jedes Waggons.
    *
-   * Der Zug fÃ¤hrt entlang Y: `dir = 1` bedeutet nach SÃ¼den, `dir = -1` nach Norden
+   * Der Zug fährt entlang Y: `dir = 1` bedeutet nach Süden, `dir = -1` nach Norden
    * (`TrainManager` addiert `direction * SPEED` auf `locoY`). Die Lok ist dabei immer
-   * das fÃ¼hrende Segment, die Nase liegt also eine halbe LoklÃ¤nge in Fahrtrichtung vor
-   * ihrem Mittelpunkt. Die Segmentmitten kommen aus `TrainRenderer.computeSegYs()` â€“
+   * das führende Segment, die Nase liegt also eine halbe Loklänge in Fahrtrichtung vor
+   * ihrem Mittelpunkt. Die Segmentmitten kommen aus `TrainRenderer.computeSegYs()` –
    * dieselbe Rechnung, aus der auch die Zuggrafik entsteht.
    */
-  private syncTrainLights(artificialLights: boolean, artificialFactor: number): void {
+  private syncTrainLights(
+    artificialLights: boolean,
+    artificialFactor: number,
+    trainState: SyncedTrainState | null,
+  ): void {
     const lighting = this.renderers.lighting;
     const trainRenderer = this.renderers.train;
-    const train = artificialLights ? this.resolveTrainState() : null;
+    const train = artificialLights ? trainState : null;
 
     if (!train?.alive || !trainRenderer) {
       if (this.trainLightsActive) {
@@ -3233,7 +3247,7 @@ export class ArenaScene extends Phaser.Scene {
 
   /**
    * Feste Lampenanordnung des Zugs, einmalig aufgebaut. Die Menge ist konstant, die
-   * Keys dÃ¼rfen deshalb nicht pro Frame neu zusammengesetzt werden.
+   * Keys dürfen deshalb nicht pro Frame neu zusammengesetzt werden.
    */
   private getTrainLightPlan(): TrainLightPlan {
     if (this.trainLightPlan) return this.trainLightPlan;
@@ -3248,8 +3262,8 @@ export class ArenaScene extends Phaser.Scene {
         offsetY: 0,
         segment: 0,
       });
-      // Zwei Kabinenfenster an den Seiten der Lok, vorne wie beim Vorbild â€“ leuchten wie
-      // die Waggonfenster (dasselbe `trainWindow`-Preset), sitzen aber am fÃ¼hrenden Ende.
+      // Zwei Kabinenfenster an den Seiten der Lok, vorne wie beim Vorbild – leuchten wie
+      // die Waggonfenster (dasselbe `trainWindow`-Preset), sitzen aber am führenden Ende.
       windows.push({
         key: `trainlocowindow:${side}`,
         offsetX: side * TRAIN.LOCO_WINDOW_LIGHT_OFFSET_X,

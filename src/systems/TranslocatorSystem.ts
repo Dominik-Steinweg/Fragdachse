@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge } from '../network/bridge';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { PlayerManager } from '../entities/PlayerManager';
@@ -51,7 +51,7 @@ export class TranslocatorSystem {
       if (puck) {
         return this.teleportToPuck(playerId, puck, now, cfg);
       } else {
-        // Puck wurde mittlerweile zerstÃ¶rt (Arena-Grenze, etc.), Referenz entfernen und Werfen erlauben
+        // Puck wurde mittlerweile zerstört (Arena-Grenze, etc.), Referenz entfernen und Werfen erlauben
         this.activePucks.delete(playerId);
       }
     }
@@ -87,7 +87,7 @@ export class TranslocatorSystem {
       ownerColor: bridge.getPlayerColor(playerId),
       lifetime: 9999999, // Bleibt (nahezu) unendlich liegen bis zum Teleport
       maxBounces: cfg.maxBounces ?? 1,
-      isGrenade: true,   // Bounced auf dem Boden/an WÃ¤nden wie eine Granate
+      isGrenade: true,   // Bounced auf dem Boden/an Wänden wie eine Granate
       adrenalinGain: 0,
       projectileStyle: cfg.projectileStyle,
       frictionDelayMs: cfg.frictionDelayMs,
@@ -108,7 +108,7 @@ export class TranslocatorSystem {
 
     this.onUseCb?.(playerId);
 
-    // 1. Puck Koordinaten lesen und Puck zerstÃ¶ren
+    // 1. Puck Koordinaten lesen und Puck zerstören
     const targetX = puck.sprite.x;
     const targetY = puck.sprite.y;
     this.projectileManager.destroyProjectile(puck.id);
@@ -119,7 +119,7 @@ export class TranslocatorSystem {
     // 2. Start-VFX RPC senden 
     bridge.broadcastTranslocatorFlash(player.sprite.x, player.sprite.y, playerColor, 'start', playerId);
 
-    // 3. Teleport durchfÃ¼hren
+    // 3. Teleport durchführen
     player.sprite.x = targetX;
     player.sprite.y = targetY;
     player.body.reset(targetX, targetY);
@@ -150,7 +150,7 @@ export class TranslocatorSystem {
     for (const otherPlayer of this.playerManager.getAllPlayers()) {
       if (otherPlayer.id === playerId) continue;
       if (!this.combatSystem.isAlive(otherPlayer.id)) continue;
-      // Burrowed Spieler kÃ¶nnen auch getelefragged werden? Ja, Translocator Ã¼berschreibt alles.
+      // Burrowed Spieler können auch getelefragged werden? Ja, Translocator überschreibt alles.
 
       const otherBounds = otherPlayer.sprite.getBounds();
       if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, otherBounds)) {

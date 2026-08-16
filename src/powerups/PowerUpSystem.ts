@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   CELL_SIZE, GRID_COLS, GRID_ROWS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -15,7 +15,7 @@ import {
 } from './PowerUpConfig';
 import { getAdrenalineSyringeDropChance } from '../utils/adrenalineDrops';
 
-// â”€â”€ Internes Tracking eines aktiven Buffs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Internes Tracking eines aktiven Buffs ──────────────────────────────────
 
 interface ActiveBuff {
   defId:      string;
@@ -24,7 +24,7 @@ interface ActiveBuff {
   durationMs: number;
 }
 
-// â”€â”€ Internes Tracking eines World-Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Internes Tracking eines World-Items ────────────────────────────────────
 
 interface WorldItem {
   uid:  number;
@@ -96,7 +96,7 @@ interface PowerUpSystemOptions {
   isLinkedBaseActive?: (baseId: string) => boolean;
 }
 
-// â”€â”€ Helper: Gewichtungsbasierte Zufallsauswahl â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
 
 function weightedRandom(weights: Record<string, number>): string | null {
   const entries = Object.entries(weights).filter(([, w]) => w > 0);
@@ -110,15 +110,15 @@ function weightedRandom(weights: Record<string, number>): string | null {
   return entries[entries.length - 1][0]; // Sicherheits-Fallback
 }
 
-// â”€â”€ PowerUpSystem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PowerUpSystem ──────────────────────────────────────────────────────────
 
 type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'isBurrowed' | 'applyDamage' | 'applyExplosionDamage'>;
 
 /**
- * Host-autoritÃ¤res System fÃ¼r Power-Ups auf dem Boden und aktive Buffs.
+ * Host-autoritäres System für Power-Ups auf dem Boden und aktive Buffs.
  *
  * Clients rendern nur: {@link getNetSnapshot} liefert SyncedPowerUp[].
- * Pickup-Validierung, Buff-Vergabe und -Ablauf laufen ausschlieÃŸlich auf dem Host.
+ * Pickup-Validierung, Buff-Vergabe und -Ablauf laufen ausschließlich auf dem Host.
  */
 export class PowerUpSystem {
   private worldItems  = new Map<number, WorldItem>();
@@ -126,7 +126,7 @@ export class PowerUpSystem {
   private readonly pendingRemovalUids = new Set<number>();
   private readonly objectiveMarkerUids = new Map<string, number>();
   private readonly objectiveRewardUids = new Map<string, number>();
-  private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId â†’ Buffs
+  private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId → Buffs
   private activeNukes = new Map<number, ActiveNukeStrike>();
   private pedestals   = new Map<number, PedestalRuntime>();
   private itemToPedestal = new Map<number, number>();
@@ -135,7 +135,7 @@ export class PowerUpSystem {
   private nextUid     = 1;
   private nextNukeId  = 1;
   private ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
-  // Delta-Cache der Podeste: id â†’ Signatur des zuletzt gesendeten Zustands (hasPowerUp|nextRespawnAt).
+  // Delta-Cache der Podeste: id → Signatur des zuletzt gesendeten Zustands (hasPowerUp|nextRespawnAt).
   private readonly pedestalNetCache = new Map<number, string>();
   private readonly pendingPedestalRemovalIds = new Set<number>();
   private ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
@@ -154,9 +154,9 @@ export class PowerUpSystem {
     this.buildPedestals();
   }
 
-  // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Lifecycle ────────────────────────────────────────────────────────────
 
-  /** Aufrufen bei Rundenstart, um die host-autoritÃ¤ren Podest-Timer zu starten. */
+  /** Aufrufen bei Rundenstart, um die host-autoritären Podest-Timer zu starten. */
   setArenaStartTime(ts: number): void {
     this.arenaStartTime = ts;
     this.pedestalsActivated = false;
@@ -166,7 +166,7 @@ export class PowerUpSystem {
     }
   }
 
-  /** Komplett zurÃ¼cksetzen (Rundenende / Teardown). */
+  /** Komplett zurücksetzen (Rundenende / Teardown). */
   reset(): void {
     this.worldItems.clear();
     this.netSnapshotCache.clear();
@@ -196,12 +196,12 @@ export class PowerUpSystem {
     }
   }
 
-  /** Buffs eines abgehenden Spielers aufrÃ¤umen. */
+  /** Buffs eines abgehenden Spielers aufräumen. */
   removePlayer(id: string): void {
     this.activeBuffs.delete(id);
   }
 
-  /** Entfernt alle Podeste und eventuell darauf liegenden Power-Ups einer zerstÃ¶rten Basis. */
+  /** Entfernt alle Podeste und eventuell darauf liegenden Power-Ups einer zerstörten Basis. */
   destroyPedestalsLinkedToBase(baseId: string): void {
     for (const [pedestalId, pedestal] of [...this.pedestals]) {
       if (pedestal.linkedBaseId !== baseId) continue;
@@ -260,7 +260,7 @@ export class PowerUpSystem {
     return this.removePedestal(pedestalId);
   }
 
-  // â”€â”€ Host-Update (jeden Frame) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Host-Update (jeden Frame) ───────────────────────────────────────────
 
   update(_delta: number): void {
     const now = Date.now();
@@ -294,7 +294,7 @@ export class PowerUpSystem {
       }
     }
 
-    // 3) FÃ¤llige Nukes detonieren lassen
+    // 3) Fällige Nukes detonieren lassen
     for (const [id, strike] of this.activeNukes) {
       if (now < strike.explodeAt) continue;
       this.explodeNuke(strike);
@@ -302,18 +302,18 @@ export class PowerUpSystem {
     }
   }
 
-  // â”€â”€ Spawning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Spawning ────────────────────────────────────────────────────────────
 
   /**
-   * WÃ¼rfelt anhand der Drop-Table und erzeugt ggf. ein World-Item.
+   * Würfelt anhand der Drop-Table und erzeugt ggf. ein World-Item.
    * `fixedX / fixedY` = Welt-Koordinaten (z.B. Todesposition, Fels-Mitte).
-   * Wenn nicht angegeben, wird eine zufÃ¤llige freie Zelle gewÃ¤hlt.
+   * Wenn nicht angegeben, wird eine zufällige freie Zelle gewählt.
    */
   spawnFromTable(tableName: string, fixedX?: number, fixedY?: number, chanceMultiplier = 1): void {
     const table: DropTable | undefined = DROP_TABLES[tableName];
     if (!table) return;
 
-    // Chance prÃ¼fen
+    // Chance prüfen
     const chance = (table.chanceToDrop ?? 1.0) * chanceMultiplier;
     if (Math.random() > chance) return;
 
@@ -336,7 +336,7 @@ export class PowerUpSystem {
     this.spawnPowerUpDef(def, x, y);
   }
 
-  /** Callback: Ein Spieler wurde getÃ¶tet â†’ Drop an Todesposition. */
+  /** Callback: Ein Spieler wurde getötet → Drop an Todesposition. */
   onPlayerKilled(x: number, y: number): void {
     this.spawnFromTable('ENEMY_KILL', x, y);
   }
@@ -353,7 +353,7 @@ export class PowerUpSystem {
     this.spawnPowerUpDef(POWERUP_DEFS.ADRENALINE, x, y);
   }
 
-  /** Callback: Ein Fels wurde zerstÃ¶rt â†’ Drop an Fels-Mitte. */
+  /** Callback: Ein Fels wurde zerstört → Drop an Fels-Mitte. */
   onRockDestroyed(rockId: number): void {
     const rock = this.layout.rocks[rockId];
     if (!rock) return;
@@ -362,11 +362,11 @@ export class PowerUpSystem {
     this.spawnFromTable('ROCK_DESTROY', wx, wy, rock.armorDropMult ?? 1);
   }
 
-  // â”€â”€ Pickup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Pickup ──────────────────────────────────────────────────────────────
 
   /**
    * Vom Host aufgerufen, wenn ein Client `pickup_powerup` sendet.
-   * Validiert Existenz + NÃ¤he, entfernt das Item und wendet den Effekt an.
+   * Validiert Existenz + Nähe, entfernt das Item und wendet den Effekt an.
    */
   /** Marks a Hold target's future reward location without creating an interactable pickup. */
   spawnObjectiveRewardMarker(objectiveId: string, defId: string, x: number, y: number): number | null {
@@ -419,10 +419,10 @@ export class PowerUpSystem {
     if (!item) return false; // Existiert nicht (mehr)
     if (item.pickupKind === 'objective-marker') return false;
     if (!this.combat.isAlive(playerId)) return false; // Toter Spieler darf nicht aufheben
-    if (this.combat.isBurrowed(playerId)) return false; // Eingebuddelte Spieler dÃ¼rfen nichts einsammeln
+    if (this.combat.isBurrowed(playerId)) return false; // Eingebuddelte Spieler dürfen nichts einsammeln
 
     const dist = Phaser.Math.Distance.Between(playerX, playerY, item.x, item.y);
-    if (dist > PICKUP_RADIUS * 2) return false; // Zu weit weg â†’ ignorieren (groÃŸzÃ¼giger Check)
+    if (dist > PICKUP_RADIUS * 2) return false; // Zu weit weg → ignorieren (großzügiger Check)
 
     const consumed = item.pickupKind === 'objective-placement'
       ? Boolean(item.objectiveId && this.options.onObjectiveRewardPickup?.(item.objectiveId, playerId))
@@ -453,7 +453,7 @@ export class PowerUpSystem {
     return true;
   }
 
-  // â”€â”€ Effekt-Anwendung â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Effekt-Anwendung ────────────────────────────────────────────────────
 
   private applyEffect(playerId: string, def: PowerUpDef): boolean {
     switch (def.type) {
@@ -565,19 +565,19 @@ export class PowerUpSystem {
     });
   }
 
-  // â”€â”€ Buff-Abfragen (von anderen Systemen aufgerufen) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Buff-Abfragen (von anderen Systemen aufgerufen) ─────────────────────
 
-  /** Multiplikator fÃ¼r Adrenalin-Regeneration (1 = kein Buff). */
+  /** Multiplikator für Adrenalin-Regeneration (1 = kein Buff). */
   getRegenMultiplier(playerId: string): number {
     return this.getMultiplierForType(playerId, 'buff_regen');
   }
 
-  /** Multiplikator fÃ¼r Waffen-Schaden (1 = kein Buff). */
+  /** Multiplikator für Waffen-Schaden (1 = kein Buff). */
   getDamageMultiplier(playerId: string): number {
     return this.getMultiplierForType(playerId, 'buff_damage');
   }
 
-  /** Aktive Buffs mit Restdauer-Anteil fÃ¼r die HUD-Anzeige. */
+  /** Aktive Buffs mit Restdauer-Anteil für die HUD-Anzeige. */
   getActiveBuffsForHUD(playerId: string): { defId: string; remainingFrac: number }[] {
     const buffs = this.activeBuffs.get(playerId);
     if (!buffs) return [];
@@ -605,7 +605,7 @@ export class PowerUpSystem {
     return 1;
   }
 
-  // â”€â”€ Netzwerk-Snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Netzwerk-Snapshot ───────────────────────────────────────────────────
 
   getWorldItemSnapshot(): SyncedPowerUp[] {
     const result: SyncedPowerUp[] = [];
@@ -669,7 +669,7 @@ export class PowerUpSystem {
     };
   }
 
-  /** Voller Podest-Zustand fÃ¼r die host-lokale Darstellung (jeden Frame, kein Netzwerk). */
+  /** Voller Podest-Zustand für die host-lokale Darstellung (jeden Frame, kein Netzwerk). */
   getPedestalSnapshot(): SyncedPowerUpPedestal[] {
     const result: SyncedPowerUpPedestal[] = [];
     for (const pedestal of this.pedestals.values()) {
@@ -687,8 +687,8 @@ export class PowerUpSystem {
   }
 
   /**
-   * Delta-Snapshot der Podeste fÃ¼r die Ãœbertragung. Sendet nur geÃ¤nderte Podeste (plus periodischer
-   * Full-Resync), statt das volle Array jeden Tick. Gibt null zurÃ¼ck, wenn nichts zu senden ist.
+   * Delta-Snapshot der Podeste für die Übertragung. Sendet nur geänderte Podeste (plus periodischer
+   * Full-Resync), statt das volle Array jeden Tick. Gibt null zurück, wenn nichts zu senden ist.
    */
   getPedestalNetSnapshot(): SyncedPowerUpPedestalSnapshot | null {
     const full = this.forceFullNetSnapshot
@@ -698,7 +698,7 @@ export class PowerUpSystem {
 
     for (const entry of this.getPedestalSnapshot()) {
       currentIds.add(entry.id);
-      // Position/Typ sind statisch â€“ nur der verÃ¤nderliche Zustand bestimmt die Delta-Signatur.
+      // Position/Typ sind statisch – nur der veränderliche Zustand bestimmt die Delta-Signatur.
       const signature = `${entry.ownerColor ?? ''}:${entry.hasPowerUp ? 1 : 0}:${entry.nextRespawnAt}`;
       if (full || this.pedestalNetCache.get(entry.id) !== signature) {
         upserts.push(entry);
@@ -746,7 +746,7 @@ export class PowerUpSystem {
     return result;
   }
 
-  // â”€â”€ Freie Zelle finden (analog PlayerManager.getSpawnPoint) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Freie Zelle finden (analog PlayerManager.getSpawnPoint) ─────────────
 
   private getRandomFreeCell(): { gx: number; gy: number } {
     const free = this.collectFreeCells(0);

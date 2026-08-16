@@ -1,15 +1,15 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { DetonableConfig, DetonatorConfig, LoadoutSlot } from '../types';
 
 /**
  * Detonations-Ereignis: entsteht wenn ein Projektion mit DetonableConfig
- * durch einen passenden Detonator ausgelÃ¶st wird.
+ * durch einen passenden Detonator ausgelöst wird.
  */
 export interface DetonationEvent {
   x:                  number;
   y:                  number;
-  /** Owner des gezÃ¼ndeten Projektils (fÃ¼r Kill-Attribution) */
+  /** Owner des gezündeten Projektils (für Kill-Attribution) */
   projectileOwnerId:  string;
   /** Spieler, der den Detonator abgefeuert hat */
   detonatorOwnerId:   string;
@@ -19,18 +19,18 @@ export interface DetonationEvent {
 }
 
 /**
- * DetonationSystem â€“ Host-only.
+ * DetonationSystem – Host-only.
  *
  * Verwaltet das Data-driven Detonations-Framework:
- *  - Hitscan-Detonationen (z.B. ASMD Primary zÃ¼ndet ASMD Secondary-Ball)
- *  - Projektil-Projektil-Detonationen (z.B. Raketenwerfer-Rakete zÃ¼ndet andere Rakete)
+ *  - Hitscan-Detonationen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
+ *  - Projektil-Projektil-Detonationen (z.B. Raketenwerfer-Rakete zündet andere Rakete)
  *
- * Flexible Tags erlauben spÃ¤tere Erweiterungen ohne Code-Ã„nderungen:
- *  - Tag 'asmd_ball' â†’ ASMD Secondary-Ball, zÃ¼ndbar durch ASMD Primary
- *  - Tag 'rocket'    â†’ Rakete, zÃ¼ndbar durch beliebige dafÃ¼r konfigurierte Waffen
+ * Flexible Tags erlauben spätere Erweiterungen ohne Code-Änderungen:
+ *  - Tag 'asmd_ball' → ASMD Secondary-Ball, zündbar durch ASMD Primary
+ *  - Tag 'rocket'    → Rakete, zündbar durch beliebige dafür konfigurierte Waffen
  *
  * Design-Prinzipien:
- *  - Authoritative auf dem Host; Clients erhalten das Ergebnis indirekt Ã¼ber
+ *  - Authoritative auf dem Host; Clients erhalten das Ergebnis indirekt über
  *    den bereits vorhandenen broadcastExplosionEffect-RPC-Kanal.
  *  - Ereignisse werden in einer Queue gesammelt und einmalig pro Frame via
  *    flushDetonations() abgerufen und dann von der ArenaScene verarbeitet.
@@ -38,20 +38,20 @@ export interface DetonationEvent {
 export class DetonationSystem {
   private pendingDetonations: DetonationEvent[] = [];
 
-  // Scratch-Objekte fÃ¼r Intersection-Checks (Garbage-Vermeidung)
+  // Scratch-Objekte für Intersection-Checks (Garbage-Vermeidung)
   private readonly scratchLine = new Phaser.Geom.Line();
 
   constructor(private projectileManager: ProjectileManager) {}
 
   /**
-   * PrÃ¼ft ob eine Hitscan-Linie detonierbare Projektile schneidet.
+   * Prüft ob eine Hitscan-Linie detonierbare Projektile schneidet.
    * Wird von CombatSystem.resolveHitscanShot aufgerufen, wenn die
    * feuernde Waffe eine DetonatorConfig besitzt.
    *
    * @param startX / startY  Startpunkt des Hitscan-Strahls
    * @param endX   / endY    Endpunkt (bereits auf Hindernisse/Spieler geclampt)
-   * @param shooterId        Spieler-ID des SchÃ¼tzen
-   * @param detonatorCfg     welche Tags dieser SchÃ¼tze auslÃ¶sen kann
+   * @param shooterId        Spieler-ID des Schützen
+   * @param detonatorCfg     welche Tags dieser Schütze auslösen kann
    */
   checkHitscanDetonations(
     startX:       number,
@@ -86,8 +86,8 @@ export class DetonationSystem {
   }
 
   /**
-   * Detoniert ein konkret ausgewÃ¤hltes detonierbares Projektil (z.B. wenn ein
-   * Kettenblitz-Sprung gezielt auf einen ASMD-Ball Ã¼berspringt). Liefert true,
+   * Detoniert ein konkret ausgewähltes detonierbares Projektil (z.B. wenn ein
+   * Kettenblitz-Sprung gezielt auf einen ASMD-Ball überspringt). Liefert true,
    * wenn das Projektil existierte, detonierbar war und detoniert wurde.
    *
    * @param projectileId      ID des zu detonierenden Projektils
@@ -111,9 +111,9 @@ export class DetonationSystem {
   }
 
   /**
-   * PrÃ¼ft jeden Frame ob Detonator-Projektile auf detonierbare Projektile treffen.
-   * ErmÃ¶glicht z.B. Raketenwerfer-Raketen, die durch SchÃ¼sse detoniert werden kÃ¶nnen.
-   * Aufrufen BEVOR combatSystem.update(), damit zerstÃ¶rte Objekte nicht doppelt verarbeitet werden.
+   * Prüft jeden Frame ob Detonator-Projektile auf detonierbare Projektile treffen.
+   * Ermöglicht z.B. Raketenwerfer-Raketen, die durch Schüsse detoniert werden können.
+   * Aufrufen BEVOR combatSystem.update(), damit zerstörte Objekte nicht doppelt verarbeitet werden.
    */
   checkProjectileDetonations(): void {
     const active       = this.projectileManager.getActiveProjectiles();
@@ -149,7 +149,7 @@ export class DetonationSystem {
   }
 
   /**
-   * Gibt alle gesammelten Detonations-Ereignisse zurÃ¼ck und leert die interne Queue.
+   * Gibt alle gesammelten Detonations-Ereignisse zurück und leert die interne Queue.
    * Einmalig pro Host-Frame aufzurufen; Ergebnisse in ArenaScene verarbeiten.
    */
   flushDetonations(): DetonationEvent[] {
@@ -159,7 +159,7 @@ export class DetonationSystem {
     return events;
   }
 
-  /** AufrÃ¤umen beim Arena-Teardown */
+  /** Aufräumen beim Arena-Teardown */
   reset(): void {
     this.pendingDetonations = [];
   }

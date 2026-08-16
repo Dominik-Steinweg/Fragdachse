@@ -1,4 +1,4 @@
-﻿import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
+import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
 import type { ArmageddonMeteorConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
 import {
@@ -29,7 +29,7 @@ export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players' | 'rocks' | 'st
 /**
  * Salve statt Einzelschuss: `count` Schuesse im Abstand von `intervalMs`, danach ist die Waffe
  * fuer `cooldownMs` gesperrt. Der Salventakt laeuft bewusst neben dem Zielscan-Raster des
- * Gegners â€“ sonst wuerde er auf dessen `attackScanIntervalMs` einrasten (analog `turretBurst`).
+ * Gegners – sonst wuerde er auf dessen `attackScanIntervalMs` einrasten (analog `turretBurst`).
  */
 export interface CoopDefenseEnemyWeaponSalvoConfig {
   readonly count: number;
@@ -79,17 +79,17 @@ export interface CoopDefenseEnemyTrainCollisionConfig {
 
 /**
  * Eigenleuchten eines Gegners: ein additiver Halo um das Sprite plus eine Lichtquelle gleicher
- * Farbe. Der Halo trÃ¤gt die Wirkung bei Tag (die Lightmap ist dann fast wirkungslos), das Licht
- * bei Nacht â€“ deshalb immer beides.
+ * Farbe. Der Halo trägt die Wirkung bei Tag (die Lightmap ist dann fast wirkungslos), das Licht
+ * bei Nacht – deshalb immer beides.
  *
- * Gedacht als Lesbarkeitswerkzeug fÃ¼r Gegner, die im GetÃ¼mmel sofort erkennbar sein mÃ¼ssen
- * (Bosse, besonders gefÃ¤hrliche Einheiten), nicht als allgemeine Dekoration.
+ * Gedacht als Lesbarkeitswerkzeug für Gegner, die im Getümmel sofort erkennbar sein müssen
+ * (Bosse, besonders gefährliche Einheiten), nicht als allgemeine Dekoration.
  */
 export interface CoopDefenseEnemyGlowConfig {
   readonly color: number;
-  /** Durchmesser des Halos als Vielfaches der GegnergrÃ¶ÃŸe. */
+  /** Durchmesser des Halos als Vielfaches der Gegnergröße. */
   readonly sizeFactor: number;
-  /** Deckkraft des Halos (0â€¦1) vor der Emissive-DÃ¤mpfung. */
+  /** Deckkraft des Halos (0…1) vor der Emissive-Dämpfung. */
   readonly alpha: number;
   readonly lightRadiusPx: number;
   readonly lightIntensity: number;
@@ -125,7 +125,7 @@ export interface CoopDefenseEnemyBurrowConfig {
 /**
  * Bevorzugter Gefechtsabstand eines Fernkaempfers. Der Gegner laeuft weiterhin grundsaetzlich auf
  * die Spieler zu (`movementTarget: 'players'`), haelt aber ab dieser Distanz an und weicht zurueck,
- * wenn ein Spieler zu nah herankommt â€“ statt in den Nahkampf zu rennen.
+ * wenn ein Spieler zu nah herankommt – statt in den Nahkampf zu rennen.
  *
  * Bewusst allgemein gehalten: jede Gegner-Art mit diesem Block bekommt das Verhalten, ohne dass
  * dafuer Code angefasst werden muss.
@@ -154,7 +154,7 @@ export interface CoopDefenseEnemyCombatPositioningConfig {
  * konfigurierbar. Konfiguriert wird nur, *wann* der Gegner ausweicht.
  */
 export interface CoopDefenseEnemyDodgeConfig {
-  /** Optionaler HP-Schwellwert; oberhalb davon bleibt der Dodge vollstÃ¤ndig deaktiviert. */
+  /** Optionaler HP-Schwellwert; oberhalb davon bleibt der Dodge vollständig deaktiviert. */
   readonly enabledBelowHpRatio?: number;
   /** Wartezeit nach dem Ende eines Ausweichschritts, bevor der naechste starten darf. */
   readonly cooldownMs: number;
@@ -164,7 +164,7 @@ export interface CoopDefenseEnemyDodgeConfig {
   readonly evadeLeadTimeMs: number;
   /** Sicherheitsaufschlag auf den Trefferradius bei der Einschlagsprognose. */
   readonly evadeMissMarginPx: number;
-  /** Naeher als das wird nicht nachgesetzt â€“ der Gegner steht bereits im Nahbereich. */
+  /** Naeher als das wird nicht nachgesetzt – der Gegner steht bereits im Nahbereich. */
   readonly approachMinDistancePx: number;
   /** Weiter als das lohnt der Sprung nicht; der Gegner laeuft dann normal weiter. */
   readonly approachMaxDistancePx: number;
@@ -195,7 +195,7 @@ export interface CoopDefenseEnemySpawnThrowConfig {
 
 /**
  * Gegnerischer Brandsatz auf Basis des Spieler-Molotovs. Radius, Schaden, Zuendzeit und
- * Flugphysik stammen aus der referenzierten Utility; hier stehen nur die KI-Werte â€“ Einsatzband,
+ * Flugphysik stammen aus der referenzierten Utility; hier stehen nur die KI-Werte – Einsatzband,
  * Cooldown und die lesbare Wurf-Standzeit. Die entstehende Flaeche uebernimmt die lila
  * Void-Brandfamilie und trifft ausschliesslich Spieler.
  */
@@ -273,7 +273,7 @@ export interface CoopDefenseEnemyConfig {
   readonly size: number;
   readonly moveSpeed: number;
   /**
-   * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen â€¦).
+   * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen …).
    * 1 = normales Wegstoessen, >1 = leichter Gegner fliegt weiter, <1 = schwerer Gegner haelt dagegen,
    * 0 = komplett immun. Fehlt der Wert, gilt 1.
    */
@@ -326,8 +326,8 @@ export const COOP_DEFENSE_ENEMY_CONFIGS: Record<CoopDefenseEnemyKind, CoopDefens
 
 /**
  * Stabile, geordnete Liste aller Gegner-Arten. Reihenfolge folgt der Insertion-Order der
- * gebÃ¼ndelten JSON-Registry und ist daher auf Host und Client identisch â€“ nur deshalb darf der
- * Index als kompakter Wire-Wert fÃ¼r `kind` verwendet werden (siehe enemySnapshotCodec.ts).
+ * gebündelten JSON-Registry und ist daher auf Host und Client identisch – nur deshalb darf der
+ * Index als kompakter Wire-Wert für `kind` verwendet werden (siehe enemySnapshotCodec.ts).
  */
 export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.keys(COOP_DEFENSE_ENEMY_REGISTRY);
 

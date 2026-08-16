@@ -1,4 +1,4 @@
-﻿import type { EnemyManager } from '../entities/EnemyManager';
+import type { EnemyManager } from '../entities/EnemyManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { FireSystem } from '../effects/FireSystem';
 import type { CombatSystem } from './CombatSystem';
@@ -22,7 +22,7 @@ interface CorridorDotState {
   ticksRemaining: number;
   nextTickAt: number;
   tickIntervalMs: number;
-  /** Stossrichtung des Treffers â€“ haelt Blut-/Treffer-FX in der Wegstoss-Richtung. */
+  /** Stossrichtung des Treffers – haelt Blut-/Treffer-FX in der Wegstoss-Richtung. */
   dirX: number;
   dirY: number;
 }

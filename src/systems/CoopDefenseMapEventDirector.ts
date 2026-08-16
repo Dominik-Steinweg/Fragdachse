@@ -34,13 +34,13 @@ export interface CoopDefenseMapEventHandler {
   ): void;
 }
 
-/** Ergebnis eines fachlich abgeschlossenen Event-Zyklus. Der Handler entscheidet nicht Ã¼ber Map-Trigger. */
+/** Ergebnis eines fachlich abgeschlossenen Event-Zyklus. Der Handler entscheidet nicht über Map-Trigger. */
 export interface CoopDefenseMapEventCycleFinished {
   readonly eventId: string;
   readonly occurrence: number;
-  /** Autoritative Rundenzeit des tatsÃ¤chlichen Fachabschlusses. */
+  /** Autoritative Rundenzeit des tatsächlichen Fachabschlusses. */
   readonly completedAtMs: number;
-  /** Gesetzt: nÃ¤chster authored Zyklus; fehlt: endgÃ¼ltig completed. */
+  /** Gesetzt: nächster authored Zyklus; fehlt: endgültig completed. */
   readonly nextActionAtMs?: number;
 }
 
@@ -136,7 +136,7 @@ export class CoopDefenseMapEventDirector {
     return this.elapsedMs;
   }
 
-  /** Semantischer Completion-Zustand fÃ¼r `after-event`; keine Fachsystem-SonderfÃ¤lle. */
+  /** Semantischer Completion-Zustand für `after-event`; keine Fachsystem-Sonderfälle. */
   isEventCompleted(eventId: string): boolean {
     return this.runtimes.some((runtime) => runtime.config.id === eventId && runtime.state === 'completed');
   }

@@ -1,4 +1,4 @@
-﻿import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
+import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import {
   getCoopDefenseEnemyConfig,
   hasCoopDefenseEnemyKind,
@@ -21,15 +21,15 @@ import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 
-/** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch fÃ¼r alle Nicht-Coop-Modi. */
+/** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
 
-/** Obergrenze fÃ¼r `rockFillRatio` â€“ darÃ¼ber lÃ¤sst die KonnektivitÃ¤tsprÃ¼fung kaum noch GÃ¤nge Ã¼brig. */
+/** Obergrenze für `rockFillRatio` – darüber lässt die Konnektivitätsprüfung kaum noch Gänge übrig. */
 const MAX_ROCK_FILL_RATIO = 0.85;
 
 /**
- * Unterhalb dieses Radius wÃ¼rde ein Gang stellenweise nur noch eine Zelle breit werden â€“ zu eng
- * fÃ¼r Dachse und die perfekte Falle fÃ¼r steckenbleibende Gegner.
+ * Unterhalb dieses Radius würde ein Gang stellenweise nur noch eine Zelle breit werden – zu eng
+ * für Dachse und die perfekte Falle für steckenbleibende Gegner.
  */
 const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 
@@ -37,9 +37,9 @@ const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 export const DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS = 1_500;
 
 /**
- * Standard-Multiplikator auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (0â€¦1).
- * Diese Felsen werden nur zugebaut, um den Bereich unter dem Tutorial-Hinweisfenster zu fÃ¼llen,
- * und anschliessend vom ErÃ¶ffnungs-Luftangriff planmÃ¤ssig weggesprengt â€“ ohne Reduktion wÃ¼rden
+ * Standard-Multiplikator auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (0…1).
+ * Diese Felsen werden nur zugebaut, um den Bereich unter dem Tutorial-Hinweisfenster zu füllen,
+ * und anschliessend vom Eröffnungs-Luftangriff planmässig weggesprengt – ohne Reduktion würden
  * Spieler dadurch quasi-garantiert Armor geschenkt bekommen.
  */
 const DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT = 0.15;
@@ -151,7 +151,7 @@ export interface ResolvedCoopDefenseMapPersistentSpawnConfig {
 export interface CoopDefenseMapEncounterGroupConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly count: number;
-  /** VerzÃ¶gerung relativ zum Start des Encounters; Standard 0. */
+  /** Verzögerung relativ zum Start des Encounters; Standard 0. */
   readonly delayMs?: number;
   /** Maximales Zeitfenster fuer zufaellig versetzte Einzelspawns; Standard 1,5 Sekunden. */
   readonly spawnStaggerMs?: number;
@@ -252,7 +252,7 @@ export interface CoopDefenseMapSecondaryObjectiveRewards {
   readonly teamBuffOnComplete?: CoopDefenseMapTeamBuffRewardConfig;
   /**
    * Nur fuer `hold`: Missionsdrohnen stellen das ueberlebende Ziel wieder her. Ohne Angabe ist der
-   * Wert fuer `hold` `true` â€“ eine vergessene Zeile soll den Reward nicht still verschlucken. Ein
+   * Wert fuer `hold` `true` – eine vergessene Zeile soll den Reward nicht still verschlucken. Ein
    * Hold mit anderem Reward (Podest) setzt ihn ausdruecklich auf `false`.
    */
   readonly repairTargetOnComplete?: boolean;
@@ -269,7 +269,7 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   /**
    * Nur fuer `hold` und dort Pflicht: Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
-   * keinen Hintergrundzustand â€“ dieses Fenster ist zugleich sein Fokusfenster.
+   * keinen Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
   readonly holdUntil?: CoopDefenseMapEncounterStart;
   /** Nur fuer `hold`: Mindestanzahl der Zielbasen, die das Haltefenster ueberleben muessen. */
@@ -280,7 +280,7 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly carry?: CoopDefenseMapCarryConfig;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
   /**
-   * Missionsname im HUD, z. B. `BRUTNESTER ZERSTÃ–REN`. Rein darstellend und deshalb bewusst
+   * Missionsname im HUD, z. B. `BRUTNESTER ZERSTÖREN`. Rein darstellend und deshalb bewusst
    * authored statt repliziert: Der Client kennt die Map-Konfiguration ohnehin. Ohne Angabe
    * greift ein archetypischer Ersatzname.
    */
@@ -299,7 +299,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
 }
 
-// Kurze Aliasnamen halten den Vertrag fÃ¼r Systeme/Tests lesbar, ohne die Map-Config-Namensfamilie
+// Kurze Aliasnamen halten den Vertrag für Systeme/Tests lesbar, ohne die Map-Config-Namensfamilie
 // der bestehenden Encounter- und Spawndefinitionen aufzubrechen.
 export type CoopDefenseSecondaryObjectiveConfig = CoopDefenseMapSecondaryObjectiveConfig;
 export type ResolvedCoopDefenseSecondaryObjectiveConfig = ResolvedCoopDefenseMapSecondaryObjectiveConfig;
@@ -347,8 +347,8 @@ export type CoopDefenseMapTrackPosition =
 
 /**
  * Startbedingung der ersten Zugeinfahrt. Bewusst als getaggte Union wie
- * {@link CoopDefenseMapEncounterStart}, damit spÃ¤ter semantische AuslÃ¶ser (`boss-phase`,
- * `base-destroyed`) ergÃ¤nzt werden kÃ¶nnen â€“ ohne dafÃ¼r jetzt eine allgemeine Trigger-Engine
+ * {@link CoopDefenseMapEncounterStart}, damit später semantische Auslöser (`boss-phase`,
+ * `base-destroyed`) ergänzt werden können – ohne dafür jetzt eine allgemeine Trigger-Engine
  * zu bauen.
  */
 /** Kleine Triggerunion fuer alle C-Events. */
@@ -363,14 +363,14 @@ export type CoopDefenseMapEventStart =
 export interface CoopDefenseMapEventBase {
   readonly id: string;
   readonly start: CoopDefenseMapEventStart;
-  /** Warnzeit zwischen erfÃ¼lltem Trigger und Wirkung. */
+  /** Warnzeit zwischen erfülltem Trigger und Wirkung. */
   readonly delayMs?: number;
 }
 
 /** C1-Eventkonfiguration fuer den bestehenden Zug-Fachhandler. */
 export interface CoopDefenseMapTrainEventConfig extends CoopDefenseMapEventBase {
   readonly type: 'train';
-  /** Pause zwischen tatsÃ¤chlichem Verlassen der Arena und nÃ¤chster Einfahrt. */
+  /** Pause zwischen tatsächlichem Verlassen der Arena und nächster Einfahrt. */
   readonly repeatAfterExitMs?: number;
 }
 
@@ -452,7 +452,7 @@ export interface CoopDefenseMapCorridorPoint {
 
 /**
  * Ein Gang durch das Felsfeld: grober Streckenzug, an dem sich der Generator entlanghangelt.
- * Die Punkte geben nur den Verlauf vor â€“ ausgehÃ¶hlt wird mit wandernder Mittellinie und
+ * Die Punkte geben nur den Verlauf vor – ausgehöhlt wird mit wandernder Mittellinie und
  * schwankendem Radius, damit der Gang nicht wie ein gezeichneter Korridor aussieht.
  */
 export interface CoopDefenseMapCorridorConfig {
@@ -464,25 +464,25 @@ export interface CoopDefenseMapCorridorConfig {
 
 /**
  * Ersetzt die prozeduralen Felsen durch ein durchgehend zugebautes Feld, in das nur die
- * konfigurierten GÃ¤nge gefrÃ¤st werden. Die Schutzradien der Basen und die Gleisspalten bleiben
- * wie immer frei; BÃ¤ume entfallen, damit sie keinen Gang zustellen.
+ * konfigurierten Gänge gefräst werden. Die Schutzradien der Basen und die Gleisspalten bleiben
+ * wie immer frei; Bäume entfallen, damit sie keinen Gang zustellen.
  *
- * Alle Streuwerte hÃ¤ngen am Arena-Seed: dieselbe Map sieht jede Runde etwas anders aus, bleibt
+ * Alle Streuwerte hängen am Arena-Seed: dieselbe Map sieht jede Runde etwas anders aus, bleibt
  * aber zwischen Host und Clients identisch.
  */
 export interface CoopDefenseMapRockFieldConfig {
-  /** Mittlerer Radius der GÃ¤nge in Zellen (Mitte der Schwankung). */
+  /** Mittlerer Radius der Gänge in Zellen (Mitte der Schwankung). */
   readonly corridorRadiusCells: number;
-  /** Maximale Abweichung des Radius nach oben und unten â€“ erzeugt Engstellen und Kammern. */
+  /** Maximale Abweichung des Radius nach oben und unten – erzeugt Engstellen und Kammern. */
   readonly corridorRadiusVarianceCells: number;
-  /** Maximaler seitlicher Versatz der Mittellinie gegenÃ¼ber dem konfigurierten Verlauf. */
+  /** Maximaler seitlicher Versatz der Mittellinie gegenüber dem konfigurierten Verlauf. */
   readonly corridorWanderCells: number;
-  /** ZufÃ¤llige Verschiebung der Zwischenpunkte; Anfangs- und Endpunkt bleiben fest. */
+  /** Zufällige Verschiebung der Zwischenpunkte; Anfangs- und Endpunkt bleiben fest. */
   readonly waypointJitterCells: number;
   /**
-   * Globaler Multiplikator auf alle Gang-Radien (Standard 1 = unverÃ¤ndert). Das ist bei einem
-   * Felsfeld das Ã„quivalent zu `rockFillRatio`: kleiner als 1 frÃ¤st schmalere GÃ¤nge (mehr Fels),
-   * grÃ¶ÃŸer als 1 breitere GÃ¤nge (weniger Fels).
+   * Globaler Multiplikator auf alle Gang-Radien (Standard 1 = unverändert). Das ist bei einem
+   * Felsfeld das Äquivalent zu `rockFillRatio`: kleiner als 1 fräst schmalere Gänge (mehr Fels),
+   * größer als 1 breitere Gänge (weniger Fels).
    */
   readonly rockDensityScale?: number;
   readonly corridors: readonly CoopDefenseMapCorridorConfig[];
@@ -501,23 +501,23 @@ export interface CoopDefenseMapConfig {
   readonly tutorialDurationMs?: number;
   /**
    * True: Das Tutorial-Fenster bleibt die komplette Runde stehen; `tutorialDurationMs`
-   * wird dann ignoriert. Gedacht fÃ¼r die Einstiegs-Map, deren Text als Nachschlagewerk dient.
+   * wird dann ignoriert. Gedacht für die Einstiegs-Map, deren Text als Nachschlagewerk dient.
    */
   readonly tutorialPersistent?: boolean;
   /**
-   * True: Unter dem FlieÃŸtext erscheint zusÃ¤tzlich die Steuerungstabelle des Hilfe-Fensters.
-   * Das Fenster wird dadurch deutlich hÃ¶her (siehe `getCoopDefenseTutorialPanelHeight`) und
-   * die Felsformation darunter entsprechend grÃ¶ÃŸer.
+   * True: Unter dem Fließtext erscheint zusätzlich die Steuerungstabelle des Hilfe-Fensters.
+   * Das Fenster wird dadurch deutlich höher (siehe `getCoopDefenseTutorialPanelHeight`) und
+   * die Felsformation darunter entsprechend größer.
    */
   readonly tutorialShowControls?: boolean;
   /**
-   * Anteil der Zellen, die vor dem Cellular-Automata-Smoothing als Fels ausgewÃ¼rfelt werden
-   * (0â€¦1, Standard entspricht dem globalen `ROCK_FILL_RATIO`). Steuert, wie voll die Map mit
-   * Felsen wird. Wird ignoriert, wenn `rockField` gesetzt ist â€“ dort steuert stattdessen
-   * `rockField.rockDensityScale` die FÃ¼lle Ã¼ber die Gangbreite.
+   * Anteil der Zellen, die vor dem Cellular-Automata-Smoothing als Fels ausgewürfelt werden
+   * (0…1, Standard entspricht dem globalen `ROCK_FILL_RATIO`). Steuert, wie voll die Map mit
+   * Felsen wird. Wird ignoriert, wenn `rockField` gesetzt ist – dort steuert stattdessen
+   * `rockField.rockDensityScale` die Fülle über die Gangbreite.
    */
   readonly rockFillRatio?: number;
-  /** Gesetzt: zugebautes Felsfeld mit festen GÃ¤ngen statt prozeduraler Felsverteilung. */
+  /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
   readonly trackMode?: CoopDefenseMapTrackMode;
@@ -527,18 +527,18 @@ export interface CoopDefenseMapConfig {
   readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
   /**
    * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
-   * Grundhelligkeit und FÃ¤rbung der Arena, LÃ¤nge und Deckkraft der statischen Schatten
-   * sowie ob Spieler eine Taschenlampe tragen â€“ stufenlos, ohne Sprung zwischen Tag und
-   * Nacht und ohne Wechsel wÃ¤hrend der Runde. Die Kurve liegt in `effects/TimeOfDay.ts`.
+   * Grundhelligkeit und Färbung der Arena, Länge und Deckkraft der statischen Schatten
+   * sowie ob Spieler eine Taschenlampe tragen – stufenlos, ohne Sprung zwischen Tag und
+   * Nacht und ohne Wechsel während der Runde. Die Kurve liegt in `effects/TimeOfDay.ts`.
    *
    * Wird auf Host und Clients lokal aus der bereits replizierten Map-ID abgeleitet und
    * braucht deshalb keinen eigenen Netzwerkpfad.
    */
   readonly timeOfDay?: string;
   /**
-   * Multiplikator (0â€¦1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
+   * Multiplikator (0…1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
    * `tutorialText`). Nur relevant, wenn die Map eine Tutorial-Formation erzeugt. Standard:
-   * `DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT` â€“ kann pro Map zum Finetuning Ã¼berschrieben werden.
+   * `DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT` – kann pro Map zum Finetuning überschrieben werden.
    */
   readonly tutorialRockArmorDropMult?: number;
   /** Echte Rundendauer; nur fuer `survive` gesetzt und siegrelevant. */
@@ -1556,7 +1556,7 @@ function getAuthoredSecondaryObjectiveTimeWindow(
   if (objective.start.type !== 'time') return null;
   const end = getAuthoredSecondaryObjectiveWindowEnd(objective);
   // Ein Encounter-Clear ist in authored Daten kein fester Zeitpunkt. Das Fenster darf deshalb
-  // nicht fÃ¤lschlich als unendlich lang behandelt und dadurch zu streng abgelehnt werden.
+  // nicht fälschlich als unendlich lang behandelt und dadurch zu streng abgelehnt werden.
   if (end !== undefined && end.type !== 'time') return null;
   return {
     startAtMs: objective.start.atMs,
@@ -2318,10 +2318,10 @@ function isFiniteMapEvent(event: ResolvedCoopDefenseMapEventConfig): boolean {
 }
 
 /**
- * PrÃ¼ft `"HH:MM"` und schreibt den Standard aus, wenn nichts gesetzt ist.
+ * Prüft `"HH:MM"` und schreibt den Standard aus, wenn nichts gesetzt ist.
  *
- * Bewusst mit Wurf statt stillem RÃ¼ckfall: eine vertippte Uhrzeit wÃ¤re sonst als
- * unauffÃ¤llig helle Map kaum von einer bewusst hellen zu unterscheiden.
+ * Bewusst mit Wurf statt stillem Rückfall: eine vertippte Uhrzeit wäre sonst als
+ * unauffällig helle Map kaum von einer bewusst hellen zu unterscheiden.
  */
 function normalizeTimeOfDayValue(mapId: string, timeOfDay: string | undefined): string {
   if (timeOfDay === undefined) return DEFAULT_MAP_TIME_OF_DAY;
@@ -2576,7 +2576,7 @@ function normalizeBasePowerUpPedestalConfig(
     },
     defId: pedestal.defId,
     respawnMs: Math.max(1, Math.floor(pedestal.respawnMs)),
-    // Auch gekoppelte Coop-Podeste starten standardmÃ¤ÃŸig erst nach ihrem ersten Timer.
+    // Auch gekoppelte Coop-Podeste starten standardmäßig erst nach ihrem ersten Timer.
     spawnOnArenaStart: shouldDelayFirstPedestalSpawn(pedestal.defId)
       ? false
       : (pedestal.spawnOnArenaStart ?? false),

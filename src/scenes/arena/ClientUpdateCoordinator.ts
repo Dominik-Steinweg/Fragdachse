@@ -1,4 +1,4 @@
-﻿import type Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
 import { dequantizeAngle } from '../../utils/angle';
 import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
@@ -65,7 +65,7 @@ export class ClientUpdateCoordinator {
   private weaponLastFired: Record<'weapon1' | 'weapon2', number> = { weapon1: 0, weapon2: 0 };
   /**
    * Caches fuer die Loadout-Aufloesung. Beide sind ueber die Objektreferenz ihrer Eingabe
-   * geschluesselt und damit selbstinvalidierend â€“ ein neuer Snapshot liefert eine neue
+   * geschluesselt und damit selbstinvalidierend – ein neuer Snapshot liefert eine neue
    * Referenz. Siehe {@link resolveCommittedLoadoutSelection}.
    */
   private committedSelectionCache: {
@@ -102,7 +102,7 @@ export class ClientUpdateCoordinator {
     private readonly localPlayerState: LocalPlayerState,
     private readonly rockVisualHelper: RockVisualHelper,
   ) {
-    // Auf dem Client gibt es keine Physik â€“ die Ausweich-Skalierung kommt hier aus der
+    // Auf dem Client gibt es keine Physik – die Ausweich-Skalierung kommt hier aus der
     // uebertragenen Dash-Phase.
     this.enemyDashVisuals = new EnemyDashVisualTracker(
       this.scene,
@@ -226,7 +226,7 @@ export class ClientUpdateCoordinator {
       projectilesEffectsMs = performance.now() - effectsStartedAt;
 
       // teslaDomeRenderer is accessed via the bundle (passed from ArenaScene)
-      // â†’ handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
+      // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
       const worldStartedAt = performance.now();
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
@@ -460,9 +460,9 @@ export class ClientUpdateCoordinator {
     const shotId = this.playPredictedLocalHitscanTracer(slot, angle);
     if (shotId === undefined && !bridge.isHost()) {
       // Projektil-Waffen: Audio sofort lokal abspielen (Prediction),
-      // da spawnProjectile nur auf dem Host lÃ¤uft und Network-Jitter sonst
-      // unregelmÃ¤ÃŸige AbstÃ¤nde verursacht.
-      // Melee wird hier NICHT behandelt â€“ der Swing-RPC Ã¼bernimmt das Audio.
+      // da spawnProjectile nur auf dem Host läuft und Network-Jitter sonst
+      // unregelmäßige Abstände verursacht.
+      // Melee wird hier NICHT behandelt – der Swing-RPC übernimmt das Audio.
       const config = this.getLocalWeaponConfig(slot);
       const fireType = config.fire.type;
       if (fireType === 'projectile' || fireType === 'flamethrower') {
@@ -689,7 +689,7 @@ export class ClientUpdateCoordinator {
 
   /**
    * Ausruestung des lokalen Spielers. Der Fallback greift wie beim Profil nur, solange der
-   * Commit-Snapshot noch nicht angekommen ist â€“ sonst zeigte die HUD waehrend des Countdowns
+   * Commit-Snapshot noch nicht angekommen ist – sonst zeigte die HUD waehrend des Countdowns
    * kurzzeitig zu niedrige Maxima. Die Referenz wird gehalten, damit der Totals-Cache greift.
    */
   private getLocalCoopDefenseItems(): readonly CoopDefenseItem[] {
@@ -959,7 +959,7 @@ export class ClientUpdateCoordinator {
   }
 
   /**
-   * Loesst das effektive Loadout auf â€“ memoisiert ueber die Referenz des committed Loadouts.
+   * Loesst das effektive Loadout auf – memoisiert ueber die Referenz des committed Loadouts.
    *
    * Auf dem Client ist `loadoutManager` null (das Loadout ist host-autoritativ), deshalb faellt
    * *jeder* der `getLocal*Config`-Getter auf diesen Pfad zurueck. Er sanitisiert die Auswahl und
@@ -967,7 +967,7 @@ export class ClientUpdateCoordinator {
    * war auf dem Client ein messbarer Teil des Update-Budgets.
    *
    * Der Cache-Schluessel ist die Objektreferenz des committed Loadouts (plus Spielmodus). Sie
-   * wechselt genau dann, wenn ein neuer Snapshot ein anderes Loadout liefert â€“ der Cache kann
+   * wechselt genau dann, wenn ein neuer Snapshot ein anderes Loadout liefert – der Cache kann
    * also nie veralten und braucht keine Frame-Invalidierung.
    */
   private resolveCommittedLoadoutSelection(playerId: string) {

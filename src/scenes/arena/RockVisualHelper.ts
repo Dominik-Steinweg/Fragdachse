@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { ArenaBuilder }     from '../../arena/ArenaBuilder';
 import { RockPresentation, arenaWorldFrameSource } from '../../arena/RockPresentation';
 import { UTILITY_CONFIGS }  from '../../loadout/LoadoutConfig';
@@ -41,7 +41,7 @@ export class RockVisualHelper {
   private obstacleVisualsRequireFullRefresh = false;
   private readonly dirtyRockIds = new Set<number>();
   /**
-   * Gemeinsame Fels-Darstellung. Die Lobby fÃ¼hrt ihren Ambient-Bestand mit derselben Klasse
+   * Gemeinsame Fels-Darstellung. Die Lobby führt ihren Ambient-Bestand mit derselben Klasse
    * und demselben Ablauf, nur mit ihrem eigenen Weltrahmen.
    */
   private readonly rockPresentation: RockPresentation;
@@ -78,9 +78,9 @@ export class RockVisualHelper {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
     this.ensureRuntimeRockSlot(rock);
 
-    // Power-up-Podeste werden vollstÃ¤ndig vom PowerUpRenderer visualisiert und sind wie
+    // Power-up-Podeste werden vollständig vom PowerUpRenderer visualisiert und sind wie
     // feste Arena-Podeste begehbar. Der Runtime-Rock bleibt trotzdem im PlacementSystem,
-    // damit Ownership, Grid-Belegung und RÃ¼ckbau erhalten bleiben.
+    // damit Ownership, Grid-Belegung und Rückbau erhalten bleiben.
     if (rock.kind === 'pedestal') {
       const staleProxy = this.ctx.arenaResult.rockObjects[rock.id];
       if (staleProxy) {
@@ -401,7 +401,7 @@ export class RockVisualHelper {
   }
 
   /**
-   * BestÃ¤tigt die Dauerlichter aller sichtbaren Fliegenpilz-TÃ¼rme pro Frame. Ein einmaliges
+   * Bestätigt die Dauerlichter aller sichtbaren Fliegenpilz-Türme pro Frame. Ein einmaliges
    * Setzen beim Materialisieren reicht nicht, weil `LightingSystem` verwaiste keyed-Lichter
    * nach kurzer Zeit absichtlich entfernt.
    */
@@ -543,13 +543,13 @@ export class RockVisualHelper {
   }
 
   /**
-   * Einziger Trichter fÃ¼r "die Hindernisse haben sich geÃ¤ndert".
+   * Einziger Trichter für "die Hindernisse haben sich geändert".
    *
-   * Statischer Sonnenschatten und dynamische Lichtverdeckung hÃ¤ngen hier gemeinsam
-   * dran, damit ein zerstÃ¶rter Fels nicht seinen Schatten verlieren, aber weiter Licht
+   * Statischer Sonnenschatten und dynamische Lichtverdeckung hängen hier gemeinsam
+   * dran, damit ein zerstörter Fels nicht seinen Schatten verlieren, aber weiter Licht
    * blockieren kann. Beide leiten sich aus denselben Referenzen ab
    * (`arenaResult.rockObjects`, `placementSystem.getAllRuntimeRocks()`), es gibt keine
-   * zweite Liste zerstÃ¶rbarer Felsen.
+   * zweite Liste zerstörbarer Felsen.
    */
   /**
    * Sammelstelle statt Sofortaufruf: Eine Explosion zerstoert typischerweise mehrere Felsen

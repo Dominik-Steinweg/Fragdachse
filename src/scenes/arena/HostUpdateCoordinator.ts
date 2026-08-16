@@ -1,4 +1,4 @@
-﻿import * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
@@ -171,16 +171,16 @@ export class HostUpdateCoordinator {
     // The objective snapshot is now current; activate prebuilt mission structures before
     // flow-field refresh and enemy movement in this same host frame.
     this.ctx.baseManager?.syncDormantStates();
-    // Reward-AusfÃ¼hrung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
+    // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
     this.ctx.coopDefenseObjectiveRepairSystem?.hostUpdate(delta, countdownActive);
     // Read active structure sources after the objective transition so pressure starts in the same
     // host frame in which its linked dormant base becomes active.
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
-    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschÃ¶pft?
+    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
-    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt fÃ¼r FernkÃ¤mpfer die
+    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
     // Wegfindung im selben Frame.
     if (!countdownActive) this.ctx.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
     this.ctx.enemyManager?.hostUpdateMovement(
@@ -267,7 +267,7 @@ export class HostUpdateCoordinator {
     metrics.playerSystemsMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = performance.now();
-    // Letzter Schritt vor der Physik: ein laufender Ausweichschritt Ã¼berschreibt die
+    // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
     if (!countdownActive) this.ctx.coopDefenseEnemyDodgeSystem?.hostUpdate(now);
     this.ctx.hostPhysics.update(countdownActive);
@@ -318,7 +318,7 @@ export class HostUpdateCoordinator {
 
     const detonations = countdownActive ? [] : (this.ctx.detonationSystem?.flushDetonations() ?? []);
     // Ablauf und Verrechnung liegen im gemeinsamen Resolver; hier stehen nur die
-    // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo Ã¼ber denselben Weg.
+    // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo über denselben Weg.
     resolveDetonations(this.detonationEffectSink, detonations);
 
     for (const explosion of explodedProjectiles) {
@@ -727,8 +727,8 @@ export class HostUpdateCoordinator {
       if (dashPhase === 1 && prevDashPhase === 0) {
         this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
       }
-      // Flanke Erholung â†’ kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
-      // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet â€“ ein eigener Callback dort
+      // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
+      // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
       // waere fuer diese eine Flanke unnoetig.
       if (dashPhase === 0 && prevDashPhase === 2) {
         this.ctx.coopDefenseItemRuntimeSystem?.registerDashCompleted(player.id, now);
@@ -899,11 +899,11 @@ export class HostUpdateCoordinator {
 
     phaseStartedAt = performance.now();
     // Gesammelte Treffer-/Todes-Effekte dieses Frames als ein einziges Batch-RPC senden, statt pro
-    // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flÃ¤chigem Massen-Schaden).
+    // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flächigem Massen-Schaden).
     bridge.flushEffects();
     metrics.effectFlushMs = performance.now() - phaseStartedAt;
 
-    // â”€â”€ Network tick throttle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Network tick throttle ─────────────────────────────────────────────
     this.netTickAccumulator += delta;
     if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) {
       metrics.totalMs = performance.now() - startedAt;
@@ -1043,7 +1043,7 @@ export class HostUpdateCoordinator {
       projectiles,
       enemies: this.ctx.enemyManager?.getNetSnapshot() ?? null,
       // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle): der Aufruf VERBRAUCHT
-      // die gesammelten Removals und HP-Ã„nderungen. Weiter oben im Frame aufgerufen, wÃ¼rden
+      // die gesammelten Removals und HP-Änderungen. Weiter oben im Frame aufgerufen, würden
       // sie auf den ~2 von 3 Frames ohne Net-Tick ersatzlos verfallen.
       rocks: this.ctx.rockRegistry?.getNetSnapshot() ?? null,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
@@ -1064,7 +1064,7 @@ export class HostUpdateCoordinator {
       burningGround,
       targetVulnerabilities: this.ctx.targetStatusSystem?.getSnapshot(now) ?? [],
       ak47StrategicTargets: this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(now) ?? [],
-      // Ebenfalls verbrauchend â€“ siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
+      // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
       // dient nur der host-lokalen Darstellung und dem eigenen Aufsammel-Check.
       powerups: this.ctx.powerUpSystem?.getNetSnapshot() ?? null,
       pedestals: this.ctx.powerUpSystem?.getPedestalNetSnapshot() ?? null,
@@ -1187,7 +1187,7 @@ export class HostUpdateCoordinator {
     return undefined;
   }
 
-  // â”€â”€ AoE helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── AoE helpers ──────────────────────────────────────────────────────────
 
   applyAoeEnvironmentDamage(
     x: number, y: number, radius: number, damage: number,
@@ -1197,7 +1197,7 @@ export class HostUpdateCoordinator {
     const arenaResult = this.ctx.arenaResult;
 
     if (arenaResult) {
-      // Der Fels-Anteil lÃ¤uft Ã¼ber den gemeinsamen Kern; die Lobby benutzt denselben Resolver
+      // Der Fels-Anteil läuft über den gemeinsamen Kern; die Lobby benutzt denselben Resolver
       // mit ihrem lokalen Bestand, damit Falloff und `rockDamageMult` identisch wirken.
       applyRadialEnvironmentDamage(
         this.environmentRockSink,
@@ -1227,10 +1227,10 @@ export class HostUpdateCoordinator {
   }
 
   /**
-   * Erzeugt am Explosions-/Detonationsort eine Schaden-Ã¼ber-Zeit-FlÃ¤che, sofern
-   * konfiguriert und aktiv. Generisch nutzbar fÃ¼r Detonationen (ASMD-Ball) und
-   * spÃ¤tere Explosions-Upgrades (Rakete, HE-/Smoke-Granate, â€¦). Der FlÃ¤chenradius
-   * basiert auf dem Ã¼bergebenen Explosionsradius.
+   * Erzeugt am Explosions-/Detonationsort eine Schaden-über-Zeit-Fläche, sofern
+   * konfiguriert und aktiv. Generisch nutzbar für Detonationen (ASMD-Ball) und
+   * spätere Explosions-Upgrades (Rakete, HE-/Smoke-Granate, …). Der Flächenradius
+   * basiert auf dem übergebenen Explosionsradius.
    */
   private spawnDotAreaFromExplosion(
     dot: import('../../types').DamageOverTimeAreaConfig | undefined,
@@ -1254,8 +1254,8 @@ export class HostUpdateCoordinator {
    * Brutbombe des Wurf-Dachses: statt einer Explosion entstehen am Einschlagsort neue Gegner,
    * die sofort ihrem eigenen Bewegungsziel (Spieler) folgen.
    *
-   * Hat ein Spieler die Bombe an seiner Reflexkuppel abgefangen, gehÃ¶rt sie ihm â€“ die Brut
-   * schlÃ¼pft dann als sein VerbÃ¼ndeter und verhÃ¤lt sich wie ein per Nekromantie wiederbelebter
+   * Hat ein Spieler die Bombe an seiner Reflexkuppel abgefangen, gehört sie ihm – die Brut
+   * schlüpft dann als sein Verbündeter und verhält sich wie ein per Nekromantie wiederbelebter
    * Dachs (siehe NecromancySystem.captureAlly).
    */
   private spawnEnemiesFromGrenade(
@@ -1273,7 +1273,7 @@ export class HostUpdateCoordinator {
       const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, effect.count));
       const spawnX = x + Math.cos(angle) * effect.offsetPx;
       const spawnY = y + Math.sin(angle) * effect.offsetPx;
-      // Scheitert die Ãœbernahme (AbfÃ¤nger inzwischen tot), schlÃ¼pft die Brut regulÃ¤r feindlich â€“
+      // Scheitert die Übernahme (Abfänger inzwischen tot), schlüpft die Brut regulär feindlich –
       // die Bombe soll nicht stillschweigend verpuffen.
       const captured = capturedByPlayer
         ? this.ctx.necromancySystem?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
@@ -1569,7 +1569,7 @@ export class HostUpdateCoordinator {
   }
 
   /**
-   * Gameplay-Seite der gemeinsamen Detonationsverarbeitung: autoritativer Schaden, RÃ¼ckstoÃŸ,
+   * Gameplay-Seite der gemeinsamen Detonationsverarbeitung: autoritativer Schaden, Rückstoß,
    * Umgebungsschaden und der replizierte Explosionskanal.
    */
   private readonly detonationEffectSink: DetonationEffectSink = {
@@ -1594,7 +1594,7 @@ export class HostUpdateCoordinator {
     playExplosion: (x, y, radius, color, visualStyle) => {
       bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle);
     },
-    // Optionale Schaden-Ã¼ber-Zeit-FlÃ¤che am Detonationsort (z.B. ASMD-SekundÃ¤r-Upgrade).
+    // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
     spawnDotArea: (dot, x, y, explosionRadius, ownerId, ownerColor) => {
       this.spawnDotAreaFromExplosion(dot, x, y, explosionRadius, ownerId, ownerColor);
     },
@@ -1603,7 +1603,7 @@ export class HostUpdateCoordinator {
 
   /**
    * Gameplay-Seite des gemeinsamen Umgebungsschaden-Kerns: runden-autoritativer Felsbestand,
-   * Zielstatus-Trichter und die replizierte ZerstÃ¶rungsdarstellung.
+   * Zielstatus-Trichter und die replizierte Zerstörungsdarstellung.
    */
   private readonly environmentRockSink: EnvironmentRockSink = {
     forEachActiveRock: (visit) => {
@@ -1995,7 +1995,7 @@ export class HostUpdateCoordinator {
     bridge.broadcastExplosionEffect(x, y, SUPPORT_REGENERATION_EFFECT_RADIUS, color, 'regeneration');
   }
 
-  // â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Private helpers ───────────────────────────────────────────────────────
 
   private applyDashVisual(player: PlayerEntity, id: string, curPhase: number, setScale = true): void {
     if (curPhase === 1) {

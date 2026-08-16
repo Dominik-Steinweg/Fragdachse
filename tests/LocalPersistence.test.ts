@@ -5,16 +5,14 @@ import {
   LOCAL_PROGRESS_STORAGE_KEY,
   LOCAL_SETTINGS_STORAGE_KEY,
   exportStoredGameProgressJson,
-  getStoredCoopDefenseLoadoutSlot,
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
+  getStoredPlayerName,
   getStoredLocale,
   importStoredGameProgressJson,
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
-  setStoredCoopDefenseClassesUnlocked,
-  setStoredCoopDefenseLoadoutSlot,
   setStoredCoopDefenseTotalXp,
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
@@ -84,20 +82,36 @@ describe('local progress generation', () => {
     expect(getStoredCoopDefenseProgress().totalXp).toBe(77);
   });
 
-  it('applies the new-generation v1 to v2 migration to imported saves', () => {
-    setStoredCoopDefenseClassesUnlocked(true);
-    setStoredCoopDefenseLoadoutSlot('dachs_of_steel', 'weapon1', 'AK47');
+  it('ignores progress under the previous storage key and preserves settings', () => {
+    setStoredCoopDefenseTotalXp(99_999);
+    const oldProgress = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    storage.setItem('fragdachse_progress_v1', oldProgress!);
+    storage.removeItem(LOCAL_PROGRESS_STORAGE_KEY);
+    storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify({
+      schemaVersion: 2,
+      locale: 'de',
+      audio: { masterVolume: 0.23, effectsVolume: 0.34, musicVolume: 0.45 },
+      graphics: { quality: 'low' },
+    }));
+    invalidateLocalStorageCache();
+
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(0);
+    expect(getStoredPlayerName()).toBeNull();
+    expect(getStoredMasterVolume()).toBe(0.23);
+    expect(getStoredGraphicsQuality()).toBe('low');
+    expect(getStoredLocale()).toBe('de');
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('rejects exports from the previous progress generation', () => {
+    setStoredCoopDefenseTotalXp(321);
     const envelope = JSON.parse(exportStoredGameProgressJson());
-    const progress = envelope.progress;
-    progress.schemaVersion = 1;
-    progress.coopDefense.classLoadouts = progress.coopDefense.loadoutsByClass;
-    delete progress.coopDefense.loadoutsByClass;
+    envelope.formatVersion = 1;
 
     resetStoredCoopDefenseCharacter();
     const result = importStoredGameProgressJson(JSON.stringify(envelope));
-    expect(result.ok).toBe(true);
-    expect(getStoredCoopDefenseLoadoutSlot('dachs_of_steel', 'weapon1')).toBe('AK47');
-    expect(JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!).schemaVersion).toBe(2);
+    expect(result).toEqual({ ok: false, messageKey: 'ui.lobby.saveIncompatible' });
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(0);
   });
 
   it('stores only changed upgrade levels and no pre-unlock class copies', () => {

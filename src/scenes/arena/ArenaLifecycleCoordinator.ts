@@ -1,4 +1,4 @@
-﻿import type Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';
@@ -121,7 +121,7 @@ import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 /**
  * Manages the arena round lifecycle.
  *
- * Responsibilities: buildArena / tearDownArena, LOBBY â†” ARENA phase transitions,
+ * Responsibilities: buildArena / tearDownArena, LOBBY ↔ ARENA phase transitions,
  * host quality checks, round result saving, train event setup.
  * Mutates ArenaContext round-scoped fields (arenaResult, currentLayout, etc.).
  */
@@ -151,19 +151,19 @@ export class ArenaLifecycleCoordinator {
     private readonly roomQualityMonitor: RoomQualityMonitor,
   ) {}
 
-  // â”€â”€ Public state accessors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Public state accessors ────────────────────────────────────────────────
 
   isMatchTerminated(): boolean { return this.matchTerminated; }
 
   /**
-   * Die von der Map vorgegebene Uhrzeit der laufenden Runde â€“ der Wert, auf den der
-   * Debug-Regler zurÃ¼cksetzt. UnabhÃ¤ngig davon, was gerade lokal eingestellt ist.
+   * Die von der Map vorgegebene Uhrzeit der laufenden Runde – der Wert, auf den der
+   * Debug-Regler zurücksetzt. Unabhängig davon, was gerade lokal eingestellt ist.
    */
   getRoundTimeOfDayMinutes(): number {
     return this.roundTimeOfDayMinutes;
   }
 
-  /** HÃ¤lt die Lobby-Beleuchtung auf der host-autoritativen Slider-Uhrzeit. */
+  /** Hält die Lobby-Beleuchtung auf der host-autoritativen Slider-Uhrzeit. */
   syncLobbyTimeOfDay(): void {
     if (bridge.getGamePhase() !== 'LOBBY') return;
     const minutes = bridge.getLobbyTimeOfDayMinutes();
@@ -196,7 +196,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     // If the scene was created after the host already transitioned to ARENA,
-    // detectPhaseChange() will never see LOBBYâ†’ARENA. Schedule the transition
+    // detectPhaseChange() will never see LOBBY→ARENA. Schedule the transition
     // on the next frame so all create()-time setup (RPC, callbacks) completes first.
     if (this.lastPhase === 'ARENA') {
       this.scene.time.delayedCall(0, () => {
@@ -207,7 +207,7 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  // â”€â”€ Phase detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Phase detection ───────────────────────────────────────────────────────
 
   detectPhaseChange(deferArenaToLobby = false): void {
     const current = bridge.getGamePhase();
@@ -220,7 +220,7 @@ export class ArenaLifecycleCoordinator {
 
     if (current === this.lastPhase) {
       // Safety net: if we've been in ARENA for >5s without having built the
-      // arena, something went wrong during the transition â€” recover gracefully.
+      // arena, something went wrong during the transition — recover gracefully.
       if (current === 'ARENA' && !this.arenaBuilt) {
         const now = Date.now();
         if (this.arenaEnteredAt === 0) {
@@ -243,22 +243,22 @@ export class ArenaLifecycleCoordinator {
     if (prev === 'ARENA' && current === 'LOBBY') this.onTransitionToLobby();
   }
 
-  // â”€â”€ Host helpers called from ArenaScene.update() â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Host helpers called from ArenaScene.update() ─────────────────────────
 
   hostCheckReadyToStart(): void {
-    // Defensiv: eine Runde darf ausschlieÃŸlich aus einer sauberen LOBBY-Phase heraus starten.
+    // Defensiv: eine Runde darf ausschließlich aus einer sauberen LOBBY-Phase heraus starten.
     if (bridge.getGamePhase() !== 'LOBBY') return;
     if (this.roundStartPending) return;
-    // "Alles stimmt Ã¼berein" vor dem Start: ALLE verbundenen Spieler sind bereit UND haben ein
-    // verbindliches Loadout (im Coop zusÃ¤tzlich ein Coop-Profil) â€“ siehe areAllPlayersReady. Da die
-    // Ready-Flags beim Rundenwechsel host-autoritativ zurÃ¼ckgesetzt wurden, kann hier kein veralteter
+    // "Alles stimmt überein" vor dem Start: ALLE verbundenen Spieler sind bereit UND haben ein
+    // verbindliches Loadout (im Coop zusätzlich ein Coop-Profil) – siehe areAllPlayersReady. Da die
+    // Ready-Flags beim Rundenwechsel host-autoritativ zurückgesetzt wurden, kann hier kein veralteter
     // Stand aus der Vorrunde durchschlagen.
     if (!bridge.areAllPlayersReady()) return;
     if (this.roomQualityMonitor.shouldBlockStart()) return;
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
     // Autoritativen Lobby-Snapshot final aktualisieren, damit der Stand, mit dem gestartet wird,
-    // exakt dem entspricht, gegen den die Clients beim "Bereit" geprÃ¼ft haben.
+    // exakt dem entspricht, gegen den die Clients beim "Bereit" geprüft haben.
     bridge.publishLobbySync();
     bridge.setMatchHostId();
     bridge.resetAllFrags();
@@ -323,11 +323,11 @@ export class ArenaLifecycleCoordinator {
       if ((canInitialSpawn || reconnectAfterDeath)
         && bridge.getPlayerReady(profile.id)
         && !this.ctx.playerManager.hasPlayer(profile.id)) {
-        // Erst spawnen, wenn der host das verbindliche Loadout-Snapshot wirklich hat. Sonst wÃ¼rde
-        // resolveCommittedLoadoutSelection() auf die separat propagierten Live-Slots zurÃ¼ckfallen â€“
-        // die bei umgekehrter Key-Reihenfolge noch veraltet sein kÃ¶nnen (Ursache von "mit falscher
+        // Erst spawnen, wenn der host das verbindliche Loadout-Snapshot wirklich hat. Sonst würde
+        // resolveCommittedLoadoutSelection() auf die separat propagierten Live-Slots zurückfallen –
+        // die bei umgekehrter Key-Reihenfolge noch veraltet sein können (Ursache von "mit falscher
         // Waffe gestartet"). Das Match startet ohnehin erst, wenn alle committed sind (areAllPlayersReady),
-        // daher verzÃ¶gert das den Spawn hÃ¶chstens um wenige Frames im Countdown.
+        // daher verzögert das den Spawn höchstens um wenige Frames im Countdown.
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
         this.ctx.playerManager.addPlayer(profile);
         if (reconnectAfterDeath) {
@@ -350,7 +350,7 @@ export class ArenaLifecycleCoordinator {
 
   /**
    * Host: True, wenn das verbindliche Loadout (und im Coop-Modus das Coop-Profil) eines Spielers
-   * vorliegt â€“ Vorbedingung, um ihn mit der korrekten, eingefrorenen Auswahl zu spawnen statt mit
+   * vorliegt – Vorbedingung, um ihn mit der korrekten, eingefrorenen Auswahl zu spawnen statt mit
    * einem Live-Slot-Fallback. Spiegelt die Pro-Spieler-Bedingung aus {@link NetworkBridge.areAllPlayersReady}.
    */
   private hostHasCommittedLoadoutForSpawn(playerId: string): boolean {
@@ -433,16 +433,16 @@ export class ArenaLifecycleCoordinator {
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
-    // zurÃ¼cksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
+    // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
   }
 
   /**
-   * Host: beendet die laufende Partie vorzeitig Ã¼ber das OptionsmenÃ¼ â€“ in jedem Modus. LÃ¤uft
+   * Host: beendet die laufende Partie vorzeitig über das Optionsmenü – in jedem Modus. Läuft
    * bewusst durch {@link hostCompleteRound}, damit Endstand, Ready-Reset und Phasenwechsel exakt
-   * dem regulÃ¤ren Rundenende entsprechen; der abweichende Status `aborted` steuert allein die
-   * Beschriftung im Lobby-Panel. Im Coop-Modus trÃ¤gt der publizierte RoundState damit auch ein
+   * dem regulären Rundenende entsprechen; der abweichende Status `aborted` steuert allein die
+   * Beschriftung im Lobby-Panel. Im Coop-Modus trägt der publizierte RoundState damit auch ein
    * `endedAt`, wodurch die bis dahin erspielten XP wie nach Sieg/Niederlage gutgeschrieben werden.
    */
   hostAbortRound(): void {
@@ -572,19 +572,19 @@ export class ArenaLifecycleCoordinator {
     this.lobbyOverlay.showHostDisconnectedMessage(reason);
   }
 
-  // â”€â”€ Arena build / teardown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Arena build / teardown ────────────────────────────────────────────────
 
   buildArena(networkLayout: ArenaLayout): void {
     this.tearDownArena();
 
-    // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine ZustÃ¤nde aus
-    // der Vorrunde in die neue Runde lecken (z. B. beschÃ¤digte Felsen direkt zu Match-Beginn).
+    // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
+    // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
     bridge.resetGameStateCache();
 
     const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout);
-    // Map-ID bevorzugt aus dem (gegateten) RoundState lesen â€“ derselbe reliable-Snapshot, der auch die
-    // Spielerzahl trÃ¤gt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
-    // auf den separaten Key fÃ¼r Alt-/Edge-FÃ¤lle (z. B. RoundState-Updates ohne Map-ID).
+    // Map-ID bevorzugt aus dem (gegateten) RoundState lesen – derselbe reliable-Snapshot, der auch die
+    // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
+    // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
     const roundState = bridge.getRoundState();
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
@@ -657,8 +657,8 @@ export class ArenaLifecycleCoordinator {
       : null;
 
     // Coop-Defense: BaseManager besitzt die Basis-Entities (Visual + Physik + HP + Sync).
-    // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry â€“
-    // HP-Werte flieÃŸen Ã¼ber GameState.bases (Host â†’ Client).
+    // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
+    // HP-Werte fließen über GameState.bases (Host → Client).
     this.ctx.baseManager = isCoopDefenseMode(bridge.getGameMode())
       ? new BaseManager(this.scene, coopDefenseBases, {
         playExplosion: (x, y, radius, color) => {
@@ -694,11 +694,11 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
-    // Buddel- und Spawn-Visuals der Gegner laufen Ã¼ber dieselbe Effekt-Schicht wie die der
-    // Spieler â€“ auf Host und Client, da beide Seiten Entstehung und Einbuddel-Zustand aus dem
+    // Buddel- und Spawn-Visuals der Gegner laufen über dieselbe Effekt-Schicht wie die der
+    // Spieler – auf Host und Client, da beide Seiten Entstehung und Einbuddel-Zustand aus dem
     // Snapshot kennen.
     this.ctx.enemyManager?.setVisualSink(this.ctx.effectSystem);
-    // Brennende Gegner leuchten wie brennende Projektile; das Licht hÃ¤ngt am
+    // Brennende Gegner leuchten wie brennende Projektile; das Licht hängt am
     // EntityBurnRenderer der jeweiligen Entity.
     this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
@@ -976,9 +976,9 @@ export class ArenaLifecycleCoordinator {
           },
         })
         : null;
-      // Wenn eine Basis zerstÃ¶rt wird, soll die Wegfindung sich neu orientieren:
+      // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
       // Goal-Cells werden nur noch aus den verbleibenden Basen aufgebaut, so dass
-      // Gegner zur nÃ¤chstgelegenen aktiven Basis laufen.
+      // Gegner zur nächstgelegenen aktiven Basis laufen.
       if (baseManager) {
         baseManager.setOnBaseActivated((activatedBase) => {
           this.ctx.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
@@ -997,7 +997,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
 
         if (bridge.isHost()) {
-          // Ob die ZerstÃ¶rung Fortschritt (Destroy) oder Fehlschlag (Hold) bedeutet, entscheidet der
+          // Ob die Zerstörung Fortschritt (Destroy) oder Fehlschlag (Hold) bedeutet, entscheidet der
           // Archetyp im Objective-System; hier wird nur die gemeldete Team-XP gebucht.
           const objectiveId = destroyedBase.dormantObjectiveId;
           const xp = objectiveId
@@ -1198,7 +1198,7 @@ export class ArenaLifecycleCoordinator {
         allowCritical,
         Math.random,
         // Blutrausch und Unversehrt haengen an den aktuellen HP des Angreifers, Kreuzfeuer am
-        // Slot und einem laufenden Zeitfenster â€“ alle drei koennen deshalb nicht im committeten
+        // Slot und einem laufenden Zeitfenster – alle drei koennen deshalb nicht im committeten
         // Stat-Bucket liegen.
         this.ctx.coopDefenseItemRuntimeSystem?.getConditionalOutgoingDamageBonus(attackerId, sourceSlot) ?? 0,
       ) ?? { amount, isCritical: false };
@@ -1365,7 +1365,7 @@ export class ArenaLifecycleCoordinator {
       const burst = this.ctx.slimeTrailSystem?.handleEnemyDeath(enemyId, x, y, Date.now());
       if (burst) bridge.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
       if (death) this.ctx.necromancySystem?.recordEnemyDeath(death);
-      // Sonst bliebe die Verwundbarkeit als Karteileiche stehen, bis ihre Dauer ablaeuft â€“ und
+      // Sonst bliebe die Verwundbarkeit als Karteileiche stehen, bis ihre Dauer ablaeuft – und
       // eine wiederverwendete Gegner-ID erbte sie.
       this.ctx.targetStatusSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
       this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
@@ -1386,14 +1386,14 @@ export class ArenaLifecycleCoordinator {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, resolvedDamage, attackerId);
       if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockIndex, 'damage', attackerId);
     });
-    // Ein Trichter fuer allen Basisschaden â€“ dieselbe Verdrahtung wie bei Felsen und Zug, damit
+    // Ein Trichter fuer allen Basisschaden – dieselbe Verdrahtung wie bei Felsen und Zug, damit
     // Klassen- und Item-Multiplikatoren auch hier greifen.
     this.ctx.combatSystem.setBaseDamageCallback((baseId, damage, attackerId) => {
       const base = this.ctx.baseManager?.getBase(baseId);
-      // Vor dem Schaden anrechnen: Der tÃ¶dliche Treffer lÃ¶st den Destroy-Callback noch in
+      // Vor dem Schaden anrechnen: Der tödliche Treffer löst den Destroy-Callback noch in
       // applyDamage() aus, und der bucht die Bonus-XP bereits gegen diese Anrechnung. Der
-      // Bonus gehÃ¶rt dem Team der laufenden Runde â€“ ein Ziel, das nur Schaden von Spectators
-      // oder Latejoinern erhÃ¤lt, bleibt Fortschritt, erzeugt aber keine XP.
+      // Bonus gehört dem Team der laufenden Runde – ein Ziel, das nur Schaden von Spectators
+      // oder Latejoinern erhält, bleibt Fortschritt, erzeugt aber keine XP.
       const objectiveId = base?.spec.dormantObjectiveId;
       if (objectiveId && bridge.canPlayerReceiveRoundRewards(attackerId)) {
         this.ctx.coopDefenseSecondaryObjectiveSystem?.reportTargetContribution(objectiveId, baseId);
@@ -2342,8 +2342,8 @@ export class ArenaLifecycleCoordinator {
         // Nicht-Coop-Modi behalten ihren klassischen, wiederholbaren Zugrhythmus.
         this.setupTrainManager(trackCell.gridX, getClassicTrainEventPlan());
       } else {
-        // Das Zug-Event ist reliable und Ã¼berlebt den Rundenwechsel; ohne aktives LÃ¶schen
-        // wÃ¼rde eine zuglose Map das HUD der Vorrunde weiterspielen.
+        // Das Zug-Event ist reliable und überlebt den Rundenwechsel; ohne aktives Löschen
+        // würde eine zuglose Map das HUD der Vorrunde weiterspielen.
         bridge.clearTrainEvent();
       }
 
@@ -2359,7 +2359,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
     this.renderers.translocatorTeleport.setLightingSystem(this.renderers.lighting);
     // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
-    // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwÃ¤cht.
+    // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
     const timeOfDayMinutes = roundState?.timeOfDayMinutes
       ?? resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     this.roundTimeOfDayMinutes = timeOfDayMinutes;
@@ -2371,7 +2371,7 @@ export class ArenaLifecycleCoordinator {
     );
 
     // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
-    // (siehe setArenaObstacles/setBaseObstacles weiter oben) â€“ keine eigene Liste.
+    // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
     this.ctx.lightOccluderIndex = new LightOccluderIndex({
       rocks: () => this.ctx.arenaResult?.rockObjects ?? null,
       trunks: () => this.ctx.arenaResult?.trunkObjects ?? null,
@@ -2381,8 +2381,8 @@ export class ArenaLifecycleCoordinator {
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
     this.renderers.lighting.setTimeOfDay(timeOfDayMinutes);
     this.renderers.lighting.setActive(true);
-    // Additive Effektgrafiken liegen teils Ã¼ber dem Lightmap-Overlay und werden vom
-    // Ambient gar nicht erfasst; Ã¼ber hellem Boden brennen sie ohne diese DÃ¤mpfung aus.
+    // Additive Effektgrafiken liegen teils über dem Lightmap-Overlay und werden vom
+    // Ambient gar nicht erfasst; über hellem Boden brennen sie ohne diese Dämpfung aus.
     setEmissiveScale(resolveSkyState(timeOfDayMinutes).emissiveScale);
 
     // Reset per-round state in coordinators
@@ -2398,8 +2398,8 @@ export class ArenaLifecycleCoordinator {
     // und Airstrike-/Train-Callbacks entkoppelt werden koennen.
     this.ctx.coopDefenseMapEventDirector?.reset();
     this.ctx.coopDefenseMapEventDirector = null;
-    // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurÃ¼cksetzen, damit die
-    // Lobby nicht die DÃ¤mpfung der letzten Map erbt.
+    // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurücksetzen, damit die
+    // Lobby nicht die Dämpfung der letzten Map erbt.
     setEmissiveScale(1);
     this.ctx.coopDefenseEnemyAbilitySystem?.clear();
     this.ctx.coopDefenseEnemyBurrowSystem?.clear();
@@ -2432,7 +2432,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.corpseMarker.clearAll();
     this.renderers.flamethrowerUpgrades.clear();
     this.ctx.effectSystem.clearAllBurrowStates();
-    // Laufende Kameraquellen und Trefferkopien dÃ¼rfen nicht in die Lobby Ã¼berlaufen.
+    // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.
     this.ctx.visualFeedback.reset();
     this.placementPreview.clearForTeardown();
     this.rockVisualHelper.destroyAllTurretVisuals();
@@ -2676,14 +2676,14 @@ export class ArenaLifecycleCoordinator {
     this.clientUpdate.clientUtilityOverride = null;
   }
 
-  // â”€â”€ Private â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Private ───────────────────────────────────────────────────────────────
 
   private onTransitionToArena(): void {
     const layout = bridge.getArenaLayout();
-    // Im Coop-Modus zusÃ¤tzlich auf den (reliable) RoundState warten: er trÃ¤gt Map-ID und Spielerzahl,
+    // Im Coop-Modus zusätzlich auf den (reliable) RoundState warten: er trägt Map-ID und Spielerzahl,
     // aus denen Basen/Druckquellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
-    // bauen, bevor diese Keys angekommen sind â†’ fehlende/falsche Basis. Das 3-s-Countdown-Fenster
-    // (ARENA_COUNTDOWN_SEC) bietet reichlich Zeit fÃ¼r die Retries.
+    // bauen, bevor diese Keys angekommen sind → fehlende/falsche Basis. Das 3-s-Countdown-Fenster
+    // (ARENA_COUNTDOWN_SEC) bietet reichlich Zeit für die Retries.
     const roundState = bridge.getRoundState();
     const roundStateReady = roundState?.status === 'active'
       && roundState.roundStartTime === bridge.getArenaStartTime();
@@ -3156,7 +3156,7 @@ export class ArenaLifecycleCoordinator {
    * Item-Affixe, die an einem eigenen Gegner-Kill haengen: Kampfaufladung und Brandzerfall.
    *
    * Laeuft aus dem Kill-Callback, weil dort sowohl der Killer feststeht als auch
-   * `getLastDamageOrigin` noch gefuellt ist â€“ aufgeraeumt wird erst danach.
+   * `getLastDamageOrigin` noch gefuellt ist – aufgeraeumt wird erst danach.
    */
   private hostHandleCoopDefenseItemKill(killerId: string, victimId: string, x: number, y: number): void {
     const runtime = this.ctx.coopDefenseItemRuntimeSystem;
@@ -3400,9 +3400,9 @@ export class ArenaLifecycleCoordinator {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) {
       // Nach dem Spawn-Gate (hostHasCommittedLoadoutForSpawn) sollte das nicht mehr vorkommen.
-      // Tritt es doch auf, ist die eingefrorene Auswahl noch nicht da â†’ Live-Slot-Fallback (Risiko
+      // Tritt es doch auf, ist die eingefrorene Auswahl noch nicht da → Live-Slot-Fallback (Risiko
       // "falsche Waffe"); loggen, um den Fall im Realbetrieb zu erkennen.
-      console.warn(`[Loadout] Kein committed Loadout fÃ¼r ${playerId} â€“ nutze Live-Slot-Fallback.`);
+      console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
       return this.resolveLoadoutSelection(playerId);
     }
     return resolveEffectiveLoadoutSelection({
@@ -3430,16 +3430,16 @@ export class ArenaLifecycleCoordinator {
 }
 
 /**
- * Uhrzeit der Runde. Nur Coop-Defense-Maps setzen eine eigene; alle Ã¼brigen Modi bleiben
+ * Uhrzeit der Runde. Nur Coop-Defense-Maps setzen eine eigene; alle übrigen Modi bleiben
  * beim Mittag und damit exakt bei den bisherigen Kosten und der bisherigen Optik. Host
- * und Client lÃ¶sen dieselbe Map-Konfiguration auf, deshalb ist kein eigener Netzwerkpfad
- * nÃ¶tig â€“ das gilt auch fÃ¼r den lokalen Debug-Regler, der bewusst nur den eigenen Client
+ * und Client lösen dieselbe Map-Konfiguration auf, deshalb ist kein eigener Netzwerkpfad
+ * nötig – das gilt auch für den lokalen Debug-Regler, der bewusst nur den eigenen Client
  * betrifft.
  */
 function resolveRoundTimeOfDayMinutes(mapConfig: CoopDefenseMapConfig | null, lobbyMinutes: number): number {
   const configured = mapConfig?.timeOfDay;
   if (configured === undefined) return lobbyMinutes;
-  // Die Konfiguration ist beim Laden validiert worden; der RÃ¼ckfall deckt nur den Fall
+  // Die Konfiguration ist beim Laden validiert worden; der Rückfall deckt nur den Fall
   // ab, dass jemand die Registry zur Laufzeit umgeht.
   return parseTimeOfDay(configured) ?? DEFAULT_TIME_OF_DAY_MINUTES;
 }

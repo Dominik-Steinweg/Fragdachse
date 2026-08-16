@@ -115,6 +115,8 @@ export type DetailCountKey =
   | 'coneLightCount'
   | 'lightShadowQuadCount'
   | 'lightFalloffQuadCount'
+  | 'dynamicLightOccluderTestCount'
+  | 'dynamicLightOccluderHitCount'
   | 'lightingCommandCount'
   | 'lightMapPixelCount'
   | 'lightingScratchPixelCount'
@@ -507,7 +509,8 @@ export const DETAIL_COUNT_KEYS: readonly DetailCountKey[] = [
   'framebufferBindCount', 'programSwitchCount', 'textureUploadCount', 'textureUploadPixels', 'bufferUploadCount',
   'aimGraphicsCommandCount', 'scopeRefreshCount', 'scopeTexturePixels',
   'directLightCount', 'occludingLightCount', 'fallbackOccludingLightCount', 'radialLightCount', 'coneLightCount',
-  'lightShadowQuadCount', 'lightFalloffQuadCount', 'lightingCommandCount',
+  'lightShadowQuadCount', 'lightFalloffQuadCount',
+  'dynamicLightOccluderTestCount', 'dynamicLightOccluderHitCount', 'lightingCommandCount',
   'lightMapPixelCount', 'lightingScratchPixelCount', 'newNetworkSnapshotCount',
   'hostNetworkTickCount', 'hostExplosionEventCount',
   'transportLinkCount', 'transportBackpressureLinkCount',

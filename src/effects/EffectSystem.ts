@@ -370,8 +370,8 @@ export class EffectSystem implements EnemyVisualSink {
       });
     }
 
-    // Der groÃŸe Zugblitz belichtet die Szene mit, Ã¤hnlich wie die Nuke-Regie. Er wird
-    // nur einmal fÃ¼r die Mittel-Detonation erzeugt, nicht fÃ¼r jeden einzelnen Waggon.
+    // Der große Zugblitz belichtet die Szene mit, ähnlich wie die Nuke-Regie. Er wird
+    // nur einmal für die Mittel-Detonation erzeugt, nicht für jeden einzelnen Waggon.
     if (radius >= 140) {
       const skyFlash = this.scene.add.rectangle(
         GAME_WIDTH * 0.5,

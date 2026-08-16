@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   BurnOnHitConfig,
   ChainLightningConfig,
   DetonatorConfig,
@@ -20,23 +20,23 @@ import type {
 import { getTopDownMuzzleOrigin, type MuzzleOrigin } from '../config';
 
 /**
- * Fire-Typen, die Ã¼ber einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch auÃŸerhalb
+ * Fire-Typen, die über einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch außerhalb
  * eines Matches (lokale Lobby-Inszenierung) benutzbar sind.
  *
- * Alle Ã¼brigen Typen â€“ Flammenwerfer, LaubblÃ¤ser, Tesla-Kuppel, Heilaura, Energieschild,
- * VerstÃ¤rkungsmatrix, Energieinjektor â€“ hÃ¤ngen an Ressourcen-, Runden- oder Netzwerkzustand.
+ * Alle übrigen Typen – Flammenwerfer, Laubbläser, Tesla-Kuppel, Heilaura, Energieschild,
+ * Verstärkungsmatrix, Energieinjektor – hängen an Ressourcen-, Runden- oder Netzwerkzustand.
  * Sie werden **nicht** vereinfacht nachgebaut; sie sind schlicht nicht Ambient-kompatibel.
  */
 export const AMBIENT_COMPATIBLE_FIRE_TYPES = ['projectile', 'hitscan', 'melee'] as const;
 
 export type AmbientCompatibleFireType = typeof AMBIENT_COMPATIBLE_FIRE_TYPES[number];
 
-/** Ist der Fire-Typ dieser Waffe Ã¼ber den gemeinsamen Executor abbildbar? */
+/** Ist der Fire-Typ dieser Waffe über den gemeinsamen Executor abbildbar? */
 export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
   return (AMBIENT_COMPATIBLE_FIRE_TYPES as readonly string[]).includes(config.fire.type);
 }
 
-/** Normalisierter Hitscan-Schuss â€“ frei von Waffen-, Ressourcen- und Netzwerkwissen. */
+/** Normalisierter Hitscan-Schuss – frei von Waffen-, Ressourcen- und Netzwerkwissen. */
 export interface HitscanShotRequest {
   shooterId:       string;
   startX:          number;
@@ -91,7 +91,7 @@ export interface MeleeSwingRequest {
 /**
  * Ziel der drei gemeinsamen Fire-Pfade.
  *
- * Im Gameplay fÃ¼llt der `LoadoutManager` diese Grenze mit `ProjectileManager` und
+ * Im Gameplay füllt der `LoadoutManager` diese Grenze mit `ProjectileManager` und
  * `CombatSystem`; in der Lobby liegt dahinter der lokale Ambient-Projektilmanager und ein
  * lokaler Treffer-Resolver. Der Executor selbst kennt keine der beiden Seiten.
  */
@@ -101,7 +101,7 @@ export interface WeaponFireSink {
   resolveMelee(request: MeleeSwingRequest): boolean;
 }
 
-/** Zusatzangaben automatischer Feuerquellen (TÃ¼rme, Konstrukte). */
+/** Zusatzangaben automatischer Feuerquellen (Türme, Konstrukte). */
 export interface WeaponFireOptions {
   ignoreBaseCollisions?: boolean;
   ignoreRockIndex?: number;
@@ -124,22 +124,22 @@ export interface WeaponFireParams {
   targetY:     number;
   ownerId:     string;
   ownerColor:  number;
-  /** Visueller MÃ¼ndungsursprung; verschiebt niemals den Gameplay-Spawn. */
+  /** Visueller Mündungsursprung; verschiebt niemals den Gameplay-Spawn. */
   visualMuzzleOrigin?: MuzzleOrigin;
   sourceSlot?: LoadoutSlot;
   shotId?:     number;
   options?:    WeaponFireOptions;
   /**
-   * Bereits gezahlte Adrenalinkosten der Mini-Rakete. Wird nur fÃ¼r diese eine Waffe abgefragt,
+   * Bereits gezahlte Adrenalinkosten der Mini-Rakete. Wird nur für diese eine Waffe abgefragt,
    * damit der Executor selbst keine Ressourcenverwaltung braucht. Ambient liefert nichts.
    */
   resolvePaidAdrenalineCost?: () => number;
 }
 
 /**
- * Zustandsarmer Fire-Dispatch fÃ¼r die Ambient-kompatiblen Waffentypen.
+ * Zustandsarmer Fire-Dispatch für die Ambient-kompatiblen Waffentypen.
  *
- * Er Ã¼bersetzt eine {@link WeaponConfig} in Projektil-, Hitscan- oder Melee-AuftrÃ¤ge und hÃ¤lt
+ * Er übersetzt eine {@link WeaponConfig} in Projektil-, Hitscan- oder Melee-Aufträge und hält
  * dabei **keine** Ressourcenverwaltung, Progression, Items, Netzwerklogik oder Matchstatistik.
  * Genau diese Trennung erlaubt es der Lobby, echte Waffen zu zeigen, ohne eine zweite
  * Waffenmechanik zu bauen.
@@ -148,8 +148,8 @@ export class WeaponFireExecutor {
   constructor(private readonly sink: WeaponFireSink) {}
 
   /**
-   * FÃ¼hrt den Schuss aus. Gibt `false` zurÃ¼ck, wenn der Fire-Typ nicht Ã¼ber diesen gemeinsamen
-   * Pfad lÃ¤uft â€“ der Aufrufer entscheidet dann selbst, ob er einen Spezialpfad hat.
+   * Führt den Schuss aus. Gibt `false` zurück, wenn der Fire-Typ nicht über diesen gemeinsamen
+   * Pfad läuft – der Aufrufer entscheidet dann selbst, ob er einen Spezialpfad hat.
    */
   fire(config: WeaponConfig, params: WeaponFireParams): boolean {
     switch (config.fire.type) {
@@ -212,8 +212,8 @@ export class WeaponFireExecutor {
       splitHoming:     (config.splitHomingEnabled ?? 0) > 0 ? {
         acquireDelayMs: 0,
         searchRadius: 500,
-        // Wie die Basis-Waffen: Splitter treten in groÃŸer Zahl auf, und jede Zielsuche
-        // kostet eine SichtlinienprÃ¼fung je geprÃ¼ftem Kandidaten.
+        // Wie die Basis-Waffen: Splitter treten in großer Zahl auf, und jede Zielsuche
+        // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
         retargetIntervalMs: 100,
         maxTurnDegreesPerStep: 20,
         targetTypes: ['players', 'enemies', 'bases'],
@@ -242,7 +242,7 @@ export class WeaponFireExecutor {
       rockDamageMult:  config.rockDamageMult,
       trainDamageMult: config.trainDamageMult,
       baseDamageMult:  config.baseDamageMult ?? 1,
-      // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil Ã¼bertragen.
+      // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
       burnDurationMs:     config.burnOnHit?.durationMs,
       burnDamagePerTick:  config.burnOnHit?.damagePerTick,
       projectileBurnVisualStyle: config.projectileBurnVisualStyle,
