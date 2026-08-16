@@ -15,6 +15,8 @@ import {
 const NOON = resolveSkyState(12 * 60);
 const MIDNIGHT = resolveSkyState(0);
 const DUSK = resolveSkyState(20 * 60);
+const VOID_PHASE_ONE_TIME = resolveSkyState(21 * 60 + 30);
+const VOID_PHASE_TWO_TIME = resolveSkyState(23 * 60 + 30);
 
 function inputs(overrides: Partial<WorldGradeInputs> = {}): WorldGradeInputs {
   return {
@@ -130,19 +132,19 @@ describe('resolveBaseGrade', () => {
 
   it('verwendet fuer Map 15 einen kalten Void-Boss-Look und eskaliert in Phase 2', () => {
     const normal = resolveBaseGrade(inputs({
-      skyState: NOON,
+      skyState: VOID_PHASE_ONE_TIME,
       isVoidMap: true,
       bossVisualProfile: 'void-hunter',
     }));
     const phaseOne = resolveBaseGrade(inputs({
-      skyState: NOON,
+      skyState: VOID_PHASE_ONE_TIME,
       isVoidMap: true,
       bossVisualProfile: 'void-hunter',
       bossPhase: 1,
       bossVisualIntensity: 1,
     }));
     const phaseTwo = resolveBaseGrade(inputs({
-      skyState: NOON,
+      skyState: VOID_PHASE_TWO_TIME,
       isVoidMap: true,
       bossVisualProfile: 'void-hunter',
       bossPhase: 2,
@@ -155,17 +157,21 @@ describe('resolveBaseGrade', () => {
     expect(phaseOne.contrast).toBeGreaterThan(normal.contrast);
     expect(phaseOne.tintStrength).toBeGreaterThan(normal.tintStrength);
     expect(phaseOne.bloomAmount).toBeGreaterThan(normal.bloomAmount);
-    expect(phaseOne.tintStrength).toBeGreaterThan(0.45);
-    expect(phaseOne.brightness).toBeLessThan(0.94);
     expect(phaseTwo.tint).not.toBe(phaseOne.tint);
     expect(phaseTwo.temperature).toBeLessThan(phaseOne.temperature);
-    expect(phaseTwo.brightness).toBeLessThan(phaseOne.brightness);
     expect(phaseTwo.contrast).toBeGreaterThan(phaseOne.contrast);
     expect(phaseTwo.tintStrength).toBeGreaterThan(phaseOne.tintStrength);
     expect(phaseTwo.bloomAmount).toBeGreaterThan(phaseOne.bloomAmount);
-    expect(phaseTwo.tintStrength).toBeGreaterThan(0.55);
-    expect(phaseTwo.brightness).toBeLessThan(0.90);
     expect(phaseTwo.vignetteStrength).toBeGreaterThan(phaseOne.vignetteStrength);
+    // Natuerliche Dunkelheit kommt aus TimeOfDay. Der dauerhafte Void-Grade bleibt mit
+    // Abstimmungsreserve innerhalb der Clamps, statt mehrere authored Werte abzuschneiden.
+    for (const grade of [phaseOne, phaseTwo]) {
+      for (const field of CLAMPED_FIELDS) {
+        const [min, max] = WORLD_GRADE_CLAMPS[field];
+        expect(grade[field]).toBeGreaterThan(min);
+        expect(grade[field]).toBeLessThan(max);
+      }
+    }
     expectWithinClamps(phaseOne);
     expectWithinClamps(phaseTwo);
   });

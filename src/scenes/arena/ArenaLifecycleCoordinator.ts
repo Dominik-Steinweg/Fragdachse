@@ -43,6 +43,10 @@ import { CoopDefenseSurvivalSystem } from '../../systems/CoopDefenseSurvivalSyst
 import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
 import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
+import {
+  ArenaTimeOfDayController,
+  type ArenaTimeOfDaySignals,
+} from '../../systems/ArenaTimeOfDayController';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import { CoopDefenseMapEventDirector, type CoopDefenseMapEventHandler } from '../../systems/CoopDefenseMapEventDirector';
 import { CoopDefenseGroundHazardEventHandler } from '../../systems/CoopDefenseGroundHazardEventHandler';
@@ -128,6 +132,8 @@ import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 export class ArenaLifecycleCoordinator {
   private matchTerminated   = false;
   private roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
+  private timeOfDayController: ArenaTimeOfDayController | null = null;
+  private appliedRuntimeTimeOfDayMinutes: number | null = null;
   private roundStartPending = false;
   private isLocalReady      = false;
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
@@ -163,12 +169,48 @@ export class ArenaLifecycleCoordinator {
     return this.roundTimeOfDayMinutes;
   }
 
+  getCurrentTimeOfDayMinutes(): number {
+    return this.timeOfDayController?.getCurrentMinutes()
+      ?? this.renderers.lighting.getTimeOfDayMinutes();
+  }
+
+  getAutomaticTimeOfDayMinutes(): number {
+    return this.timeOfDayController?.getAutomaticMinutes()
+      ?? this.renderers.lighting.getTimeOfDayMinutes();
+  }
+
+  setTimeOfDayDebugOverride(minutes: number): void {
+    this.timeOfDayController?.setDebugOverride(minutes);
+  }
+
+  clearTimeOfDayDebugOverride(): void {
+    this.timeOfDayController?.clearDebugOverride();
+  }
+
+  /** Wendet genau einen aus synchronisierter Zeit berechneten Arena-Zeitwert an. */
+  syncRuntimeTimeOfDay(synchronizedNowMs: number, signals: ArenaTimeOfDaySignals = {}): boolean {
+    const controller = this.timeOfDayController;
+    if (!controller) return false;
+    const sample = controller.sample(synchronizedNowMs, signals);
+    if (sample.minutes !== this.appliedRuntimeTimeOfDayMinutes) {
+      this.applyRuntimeTimeOfDay(sample.minutes);
+    }
+    return sample.transitionCompleted;
+  }
+
   /** Hält die Lobby-Beleuchtung auf der host-autoritativen Slider-Uhrzeit. */
   syncLobbyTimeOfDay(): void {
     if (bridge.getGamePhase() !== 'LOBBY') return;
     const minutes = bridge.getLobbyTimeOfDayMinutes();
     this.renderers.lighting.setTimeOfDay(minutes);
     this.renderers.lighting.setActive(true);
+    setEmissiveScale(resolveSkyState(minutes).emissiveScale);
+  }
+
+  private applyRuntimeTimeOfDay(minutes: number): void {
+    this.appliedRuntimeTimeOfDayMinutes = minutes;
+    this.renderers.lighting.setTimeOfDay(minutes);
+    this.renderers.shadow.setTimeOfDay(minutes);
     setEmissiveScale(resolveSkyState(minutes).emissiveScale);
   }
   getIsLocalReady(): boolean   { return this.isLocalReady; }
@@ -419,6 +461,7 @@ export class ArenaLifecycleCoordinator {
         status: roundConclusion,
         roundStartTime: bridge.getArenaStartTime(),
         timeOfDayMinutes: currentRoundState?.timeOfDayMinutes,
+        coopDefenseBossSpawnedAtMs: currentRoundState?.coopDefenseBossSpawnedAtMs,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
         resultEligiblePlayerIds: bridge.getRoundResultEligiblePlayerIds(),
@@ -858,6 +901,14 @@ export class ArenaLifecycleCoordinator {
             coopDefenseMapConfig.boss,
             this.ctx.enemyManager,
             this.ctx.coopDefenseSpawnExecutor,
+            (spawnedAtMs) => {
+              const current = bridge.getRoundState();
+              if (!current || current.status !== 'active') return;
+              bridge.publishRoundState({
+                ...current,
+                coopDefenseBossSpawnedAtMs: spawnedAtMs,
+              });
+            },
           )
           : null;
         if (coopDefenseEncounterConfigs.length > 0) {
@@ -2363,7 +2414,18 @@ export class ArenaLifecycleCoordinator {
     const timeOfDayMinutes = roundState?.timeOfDayMinutes
       ?? resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     this.roundTimeOfDayMinutes = timeOfDayMinutes;
-    this.renderers.shadow.setTimeOfDay(timeOfDayMinutes);
+    this.timeOfDayController = new ArenaTimeOfDayController({
+      startMinutes: timeOfDayMinutes,
+      roundStartTime: roundState?.roundStartTime ?? bridge.getArenaStartTime(),
+      dynamic: coopDefenseMapConfig?.dynamicTimeOfDay,
+      bossSpawnAtMs: coopDefenseMapConfig?.boss?.spawnAtMs,
+    });
+    const runtimeTimeOfDayMinutes = this.timeOfDayController
+      .sample(bridge.getSynchronizedNow(), {
+        bossSpawnedAtMs: roundState?.coopDefenseBossSpawnedAtMs,
+      }).minutes;
+    this.appliedRuntimeTimeOfDayMinutes = runtimeTimeOfDayMinutes;
+    this.renderers.shadow.setTimeOfDay(runtimeTimeOfDayMinutes);
     this.renderers.shadow.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,
@@ -2379,11 +2441,11 @@ export class ArenaLifecycleCoordinator {
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
     });
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
-    this.renderers.lighting.setTimeOfDay(timeOfDayMinutes);
+    this.renderers.lighting.setTimeOfDay(runtimeTimeOfDayMinutes);
     this.renderers.lighting.setActive(true);
     // Additive Effektgrafiken liegen teils über dem Lightmap-Overlay und werden vom
     // Ambient gar nicht erfasst; über hellem Boden brennen sie ohne diese Dämpfung aus.
-    setEmissiveScale(resolveSkyState(timeOfDayMinutes).emissiveScale);
+    setEmissiveScale(resolveSkyState(runtimeTimeOfDayMinutes).emissiveScale);
 
     // Reset per-round state in coordinators
     this.hostUpdate.resetPerRound();
@@ -2398,6 +2460,9 @@ export class ArenaLifecycleCoordinator {
     // und Airstrike-/Train-Callbacks entkoppelt werden koennen.
     this.ctx.coopDefenseMapEventDirector?.reset();
     this.ctx.coopDefenseMapEventDirector = null;
+    this.timeOfDayController = null;
+    this.appliedRuntimeTimeOfDayMinutes = null;
+    this.roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
     // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurücksetzen, damit die
     // Lobby nicht die Dämpfung der letzten Map erbt.
     setEmissiveScale(1);

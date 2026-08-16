@@ -231,4 +231,28 @@ describe('static shadow baking', () => {
     shadows.rebuildArenaStaticShadows(layout(1, 1), arenaResult);
     expect(drawCounts(bakes)).toBeGreaterThan(first + 1);
   });
+
+  it('throttles static profile bakes and still forces the scripted final state', () => {
+    const { scene, bakes } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    const initialDraws = drawCounts(bakes);
+
+    shadows.setTimeOfDay(19 * 60 + 45);
+    expect(shadows.syncStaticProfile(1_000)).toBe(true);
+    const firstProfileDraws = drawCounts(bakes);
+    expect(firstProfileDraws).toBeGreaterThan(initialDraws);
+
+    shadows.setTimeOfDay(21 * 60 + 30);
+    expect(shadows.syncStaticProfile(1_200)).toBe(false);
+    expect(drawCounts(bakes)).toBe(firstProfileDraws);
+    expect(shadows.syncStaticProfile(1_600)).toBe(true);
+    const throttledDraws = drawCounts(bakes);
+    expect(throttledDraws).toBeGreaterThan(firstProfileDraws);
+
+    shadows.setTimeOfDay(23 * 60 + 30);
+    expect(shadows.syncStaticProfile(1_601, true)).toBe(true);
+    expect(drawCounts(bakes)).toBeGreaterThan(throttledDraws);
+    expect(shadows.syncStaticProfile(1_602)).toBe(false);
+  });
 });

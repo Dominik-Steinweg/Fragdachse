@@ -15,13 +15,15 @@ export class CoopDefenseBossSystem {
     private readonly bossConfig: CoopDefenseMapBossConfig,
     private readonly enemyManager: EnemyManager,
     private readonly spawnExecutor: BossSpawnExecutor,
+    private readonly onBossSpawned?: (spawnedAtMs: number) => void,
   ) {}
 
-  hostUpdate(deltaMs: number, countdownActive: boolean): void {
+  hostUpdate(deltaMs: number, countdownActive: boolean, synchronizedNowMs = Date.now()): void {
     if (countdownActive || this.bossSpawned) return;
     this.elapsedMs += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
     if (this.elapsedMs < this.bossConfig.spawnAtMs) return;
     this.bossSpawned = this.spawnExecutor.hostSpawnBoss(this.bossConfig.enemyKind);
+    if (this.bossSpawned) this.onBossSpawned?.(synchronizedNowMs);
   }
 
   reset(): void {

@@ -161,7 +161,7 @@ export class HostUpdateCoordinator {
     const now = Date.now();
     let phaseStartedAt = performance.now();
 
-    this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseMapEventDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);

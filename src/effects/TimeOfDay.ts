@@ -14,9 +14,6 @@
  * Weil MULTIPLY nur abdunkeln kann, tragen Lichter zum Mittag hin von selbst immer
  * weniger bei – das ersetzt die früheren `day`-Overrides der einzelnen Lichtpresets.
  *
- * Es gibt bewusst keinen Wechsel während einer Runde: die statischen Schatten werden
- * beim Rundenaufbau gebacken, ein laufender Wechsel würde sie jedes Mal neu erzwingen.
- *
  * Das Modul ist absichtlich frei von Phaser- und Szenenbezug: eine reine Tabelle plus
  * Interpolation, damit die Kurve ohne Renderer testbar bleibt.
  */
@@ -110,7 +107,7 @@ export const NEUTRAL_AMBIENT_COLOR = 0xffffff;
 /** Bringt beliebige Minutenwerte zyklisch nach `[0, MINUTES_PER_DAY)`. */
 export function normalizeTimeOfDay(minutes: number): number {
   if (!Number.isFinite(minutes)) return DEFAULT_TIME_OF_DAY_MINUTES;
-  const wrapped = Math.round(minutes) % MINUTES_PER_DAY;
+  const wrapped = minutes % MINUTES_PER_DAY;
   return wrapped < 0 ? wrapped + MINUTES_PER_DAY : wrapped;
 }
 
@@ -123,7 +120,8 @@ export function parseTimeOfDay(value: string): number | null {
 
 /** Minuten seit Mitternacht → `"HH:MM"`. */
 export function formatTimeOfDay(minutes: number): string {
-  const normalized = normalizeTimeOfDay(minutes);
+  // Runtime-Werte duerfen zwischen Minuten liegen; die Anzeige behaelt ihr HH:MM-Raster.
+  const normalized = normalizeTimeOfDay(Math.round(normalizeTimeOfDay(minutes)));
   const hours = Math.floor(normalized / 60);
   const rest = normalized % 60;
   return `${String(hours).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
@@ -132,8 +130,8 @@ export function formatTimeOfDay(minutes: number): string {
 /**
  * Zustand des Himmels zur gegebenen Uhrzeit.
  *
- * Wird nicht pro Frame aufgerufen, sondern beim Rundenaufbau und beim Ziehen des
- * Debug-Reglers; die lineare Suche über die Tabelle ist deshalb unkritisch.
+ * Die Tabelle ist klein genug fuer die laufende Arena-Uhr; die lineare Suche bleibt auch bei
+ * einem Aufruf pro Frame unkritisch.
  */
 export function resolveSkyState(minutes: number): SkyState {
   const time = normalizeTimeOfDay(minutes);

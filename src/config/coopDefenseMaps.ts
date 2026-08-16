@@ -309,6 +309,30 @@ export interface CoopDefenseMapBossConfig {
   readonly spawnAtMs: number;
 }
 
+export type CoopDefenseTimeOfDayTransitionStart =
+  | { readonly type: 'time'; readonly atMs: number }
+  | { readonly type: 'boss-spawn' }
+  | { readonly type: 'boss-phase'; readonly phase: number };
+
+export interface CoopDefenseTimeOfDayTransitionConfig {
+  readonly start: CoopDefenseTimeOfDayTransitionStart;
+  readonly targetTimeOfDay: string;
+  /** 0 ist ein sofortiger Zustandswechsel; positive Werte werden per Smoothstep interpoliert. */
+  readonly durationMs: number;
+}
+
+/**
+ * Optionale, rein visuelle Laufzeitsteuerung der Arena-Uhr. Alle zeitbasierten Werte werden
+ * gegen den replizierten Rundenstart ausgewertet; es gibt keinen eigenen Tick oder
+ * hochfrequenten Wire-State. Ein erfolgreicher Boss-Spawn publiziert genau einen reliable Anker.
+ */
+export interface CoopDefenseDynamicTimeOfDayConfig {
+  /** Spielminuten pro realer Sekunde. Fehlt der Wert, bleibt die Uhr zwischen Transitionen stehen. */
+  readonly minutesPerSecond?: number;
+  /** Vorwaerts laufende Zielwechsel; Bossphasen duerfen nur als sofortige Endzustaende folgen. */
+  readonly transitions?: readonly CoopDefenseTimeOfDayTransitionConfig[];
+}
+
 /**
  * Siegbedingung der Map.
  *
@@ -526,15 +550,19 @@ export interface CoopDefenseMapConfig {
   /** Authored Map-Events; Gleise ohne Zug-Event bleiben erlaubt. */
   readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
   /**
-   * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
+   * Uhrzeit, zu der die Map startet, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
    * Grundhelligkeit und Färbung der Arena, Länge und Deckkraft der statischen Schatten
    * sowie ob Spieler eine Taschenlampe tragen – stufenlos, ohne Sprung zwischen Tag und
-   * Nacht und ohne Wechsel während der Runde. Die Kurve liegt in `effects/TimeOfDay.ts`.
+   * Nacht. Optionale Laufzeitänderungen stehen in `dynamicTimeOfDay`; die gemeinsame Kurve
+   * liegt in `effects/TimeOfDay.ts`.
    *
-   * Wird auf Host und Clients lokal aus der bereits replizierten Map-ID abgeleitet und
-   * braucht deshalb keinen eigenen Netzwerkpfad.
+   * Der Startwert wird auf Host und Clients lokal aus der bereits replizierten Map-ID
+   * abgeleitet. Nur ein tatsaechlicher Boss-Spawn ergaenzt bei Bedarf einmalig seinen
+   * reliable RoundState-Anker.
    */
   readonly timeOfDay?: string;
+  /** Optionale kontinuierliche bzw. gescriptete Laufzeitsteuerung; ohne Angabe bleibt die Map statisch. */
+  readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   /**
    * Multiplikator (0…1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
    * `tutorialText`). Nur relevant, wenn die Map eine Tutorial-Formation erzeugt. Standard:
@@ -893,6 +921,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     trackPosition,
     mapEvents,
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
+    dynamicTimeOfDay: normalizeDynamicTimeOfDayConfig(mapConfig.mapId, mapConfig.dynamicTimeOfDay, boss),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     surviveDurationSec,
     balanceReferenceDurationSec,
@@ -2330,6 +2359,86 @@ function normalizeTimeOfDayValue(mapId: string, timeOfDay: string | undefined): 
     throw new Error(`[coopDefenseMaps] Invalid timeOfDay in map ${mapId}: ${timeOfDay} (expected "HH:MM")`);
   }
   return formatTimeOfDay(minutes);
+}
+
+function normalizeDynamicTimeOfDayConfig(
+  mapId: string,
+  config: CoopDefenseDynamicTimeOfDayConfig | undefined,
+  boss: CoopDefenseMapBossConfig | undefined,
+): CoopDefenseDynamicTimeOfDayConfig | undefined {
+  if (config === undefined) return undefined;
+
+  const minutesPerSecond = config.minutesPerSecond;
+  if (minutesPerSecond !== undefined && (!Number.isFinite(minutesPerSecond) || minutesPerSecond < 0)) {
+    throw new Error(`[coopDefenseMaps] Invalid dynamic time rate in map ${mapId}`);
+  }
+
+  const transitions = (config.transitions ?? []).map((transition, index) => {
+    const targetMinutes = parseTimeOfDay(transition.targetTimeOfDay);
+    if (targetMinutes === null) {
+      throw new Error(
+        `[coopDefenseMaps] Invalid dynamic time target in map ${mapId} transition ${index}: ${transition.targetTimeOfDay}`,
+      );
+    }
+    if (!Number.isFinite(transition.durationMs) || transition.durationMs < 0) {
+      throw new Error(`[coopDefenseMaps] Dynamic time transition ${index} in map ${mapId} needs a non-negative durationMs`);
+    }
+
+    const start = transition.start;
+    let normalizedStart: CoopDefenseTimeOfDayTransitionStart;
+    if (start.type === 'time') {
+      if (!Number.isFinite(start.atMs) || start.atMs < 0) {
+        throw new Error(`[coopDefenseMaps] Dynamic time transition ${index} in map ${mapId} needs a non-negative atMs`);
+      }
+      normalizedStart = { type: 'time', atMs: Math.floor(start.atMs) };
+    } else if (start.type === 'boss-spawn') {
+      if (!boss) {
+        throw new Error(`[coopDefenseMaps] Dynamic time transition ${index} in map ${mapId} needs a boss`);
+      }
+      normalizedStart = { type: 'boss-spawn' };
+    } else if (start.type === 'boss-phase') {
+      if (!boss || !Number.isInteger(start.phase) || start.phase < 1) {
+        throw new Error(`[coopDefenseMaps] Invalid boss phase time transition ${index} in map ${mapId}`);
+      }
+      if (transition.durationMs !== 0) {
+        throw new Error(
+          `[coopDefenseMaps] Boss phase time transition ${index} in map ${mapId} must be instantaneous`,
+        );
+      }
+      normalizedStart = { type: 'boss-phase', phase: start.phase };
+    } else {
+      throw new Error(`[coopDefenseMaps] Unsupported dynamic time transition ${index} in map ${mapId}`);
+    }
+
+    return {
+      start: normalizedStart,
+      targetTimeOfDay: formatTimeOfDay(targetMinutes),
+      durationMs: Math.floor(transition.durationMs),
+    };
+  });
+
+  if (minutesPerSecond === undefined && transitions.length === 0) {
+    throw new Error(`[coopDefenseMaps] Dynamic time config in map ${mapId} is empty`);
+  }
+
+  const firstBossPhaseIndex = transitions.findIndex((transition) => transition.start.type === 'boss-phase');
+  if (firstBossPhaseIndex >= 0) {
+    const bossPhases = transitions.slice(firstBossPhaseIndex);
+    if (bossPhases.some((transition) => transition.start.type !== 'boss-phase')) {
+      throw new Error(`[coopDefenseMaps] Boss phase time transitions in map ${mapId} must come last`);
+    }
+    const phaseNumbers = bossPhases.map((transition) => (
+      transition.start.type === 'boss-phase' ? transition.start.phase : 0
+    ));
+    if (phaseNumbers.some((phase, index) => index > 0 && phase <= phaseNumbers[index - 1])) {
+      throw new Error(`[coopDefenseMaps] Boss phase time transitions in map ${mapId} must be ascending`);
+    }
+  }
+
+  return {
+    minutesPerSecond,
+    transitions: transitions.length > 0 ? transitions : undefined,
+  };
 }
 
 function normalizeTrackPosition(

@@ -23,7 +23,7 @@ import type {
 
 const PRESENTATION_ONLY_KEYS = new Set([
   'displayName', 'tutorialText', 'imageKey', 'color', 'glow', 'phaseTwoGlow',
-  'spriteRotationOffsetDegrees', 'timeOfDay', 'visualStyle', 'assetKey', 'textureKey',
+  'spriteRotationOffsetDegrees', 'timeOfDay', 'dynamicTimeOfDay', 'visualStyle', 'assetKey', 'textureKey',
   'iconKey', 'image', 'imageUrl', 'sourceId', 'weaponName', 'rewardHint', '_notes',
   'projectileColor', 'projectileStyle', 'bulletVisualPreset', 'visualPreset', 'visualVariant',
   'spriteKey', 'shotAudio', 'audioKey', 'successKey', 'failureKey',

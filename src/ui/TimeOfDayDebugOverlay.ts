@@ -9,9 +9,9 @@ import { MINUTES_PER_DAY, formatTimeOfDay } from '../effects/TimeOfDay';
  * des Ziehens zu beurteilen – ein Dimmer davor würde genau das verhindern. Das Panel
  * sitzt deshalb kompakt am unteren Bildrand und lässt die Arena frei.
  *
- * Die Änderung wirkt rein lokal, wie schon die frühere Tag-/Nacht-Umschaltung: die Runde
- * leitet ihre Uhrzeit auf jedem Client aus der replizierten Map-ID ab, ein Reglerzug hier
- * verstellt also nur die eigene Ansicht.
+ * Die Änderung wirkt rein lokal. AUTO entfernt den Override wieder; auf dynamischen Maps
+ * zeigt der Regler dann die inzwischen aus synchronisierter Rundenzeit berechnete Uhr statt
+ * erneut auf die authored Startzeit zu springen.
  */
 
 /** Viertelstunden: fein genug zum Beurteilen, grob genug für sinnvolle Pfeiltastenschritte. */
@@ -23,8 +23,9 @@ export class TimeOfDayDebugOverlay {
 
   constructor(
     private readonly getCurrentMinutes: () => number,
-    private readonly getMapDefaultMinutes: () => number,
-    private readonly onChange: (minutes: number) => void,
+    private readonly getAutomaticMinutes: () => number,
+    private readonly onOverride: (minutes: number, settled: boolean) => void,
+    private readonly onAuto: () => void,
   ) {}
 
   show(): void {
@@ -104,17 +105,24 @@ export class TimeOfDayDebugOverlay {
     };
 
     const resetBtn = document.createElement('button');
-    resetBtn.innerText = 'MAP-ZEIT';
+    resetBtn.innerText = 'AUTO';
     Object.assign(resetBtn.style, buttonStyle);
 
     const closeBtn = document.createElement('button');
     closeBtn.innerText = 'SCHLIESSEN (ESC)';
     Object.assign(closeBtn.style, buttonStyle);
 
-    const apply = (minutes: number, updateSlider: boolean): void => {
-      if (updateSlider) slider.value = String(minutes);
+    const applyOverride = (minutes: number, settled: boolean): void => {
+      slider.value = String(minutes);
       readout.innerText = formatTimeOfDay(minutes);
-      this.onChange(minutes);
+      this.onOverride(minutes, settled);
+    };
+
+    const applyAuto = (): void => {
+      this.onAuto();
+      const minutes = this.getAutomaticMinutes();
+      slider.value = String(minutes);
+      readout.innerText = formatTimeOfDay(minutes);
     };
 
     const closePanel = (): void => {
@@ -134,8 +142,9 @@ export class TimeOfDayDebugOverlay {
       closePanel();
     };
 
-    slider.addEventListener('input', () => apply(Number(slider.value), false));
-    resetBtn.onclick = () => apply(this.getMapDefaultMinutes(), true);
+    slider.addEventListener('input', () => applyOverride(Number(slider.value), false));
+    slider.addEventListener('change', () => applyOverride(Number(slider.value), true));
+    resetBtn.onclick = applyAuto;
     closeBtn.onclick = closePanel;
     document.addEventListener('keydown', onKeyDown, true);
 
@@ -145,7 +154,7 @@ export class TimeOfDayDebugOverlay {
 
     this.panel = panel;
     this.closePanelFn = closePanel;
-    mapHint.innerText = `Map: ${formatTimeOfDay(this.getMapDefaultMinutes())}`;
+    mapHint.innerText = `Auto: ${formatTimeOfDay(this.getAutomaticMinutes())}`;
     readout.innerText = formatTimeOfDay(this.getCurrentMinutes());
     slider.focus();
   }

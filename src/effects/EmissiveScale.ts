@@ -12,11 +12,11 @@
  * eine `LightingSystem`-Referenz nur für einen Skalar zu geben wäre die schlechtere
  * Kopplung – diese Renderer haben sonst nichts mit Beleuchtung zu tun.
  *
- * Gesetzt wird der Wert beim Rundenaufbau (`ArenaLifecycleCoordinator`) und beim Ziehen
- * des Debug-Reglers. Er wirkt beim **Erzeugen** eines Objekts: kurzlebige Effekte
- * übernehmen ihn also sofort, langlebige (Flammenring, Energieschild, Bodenfeuer) erst
- * bei ihrer Neuerzeugung. Das ist für ein Debug-Werkzeug in Ordnung; die ehrliche
- * Alternative wäre ein Post-Effekt über das gesamte Effekt-Tiefenband.
+ * `ArenaLifecycleCoordinator` setzt den Wert aus derselben laufenden Arena-Uhr wie Licht
+ * und World Grade. Laufend aktualisierte oder neu erzeugte Effekte lesen ihn sofort;
+ * Effekte, die ihr Alpha ausschliesslich bei der Erzeugung festschreiben, behalten diesen
+ * Wert bis zu ihrer Neuerzeugung. Eine nachtraegliche globale Korrektur dafuer braeuchte
+ * einen eigenen Post-Effekt ueber das gesamte Effekt-Tiefenband.
  */
 
 let emissiveScale = 1;

@@ -68,6 +68,10 @@ interface ShadowDirtyChunk {
 }
 
 const SHADOW_DIRTY_CHUNK_SIZE = 128;
+const STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS = 600;
+const STATIC_PROFILE_OPACITY_DELTA = 0.06;
+const STATIC_PROFILE_LENGTH_DELTA = 0.08;
+const STATIC_PROFILE_SOFTNESS_DELTA = 0.08;
 
 // ---------------------------------------------------------------------------
 // Pre-computed stadium arc tables.
@@ -96,6 +100,9 @@ export class ShadowSystem {
   private readonly layers = new Map<string, ShadowLayerBucket>();
   private worldBoundsOverride: ShadowWorldBounds | null = null;
   private profile: ShadowProfile = SHADOW_PROFILES.day;
+  /** Profil, das tatsaechlich in den sichtbaren statischen RenderTextures steckt. */
+  private lastBakedProfile: ShadowProfile | null = null;
+  private lastStaticProfileBakeAtMs = Number.NEGATIVE_INFINITY;
   private quality: GraphicsQualityProfile;
   private unsubscribeQuality: (() => void) | null = null;
   private lastStaticLayout: ArenaLayout | null = null;
@@ -161,7 +168,29 @@ export class ShadowSystem {
    */
   rebuildStaticShadowsForProfileChange(): void {
     if (!this.lastStaticLayout) return;
-    this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
+    this.rebuildStaticLayoutShadowsWithProfile(
+      this.lastStaticLayout,
+      this.lastStaticOptions,
+      this.profile,
+    );
+  }
+
+  /** Gleicht nur die teuren statischen Bakes gedrosselt an das laufende Profil an. */
+  syncStaticProfile(synchronizedNowMs: number, force = false): boolean {
+    if (!this.lastStaticLayout) return false;
+    const nowMs = Number.isFinite(synchronizedNowMs) ? synchronizedNowMs : 0;
+    const baked = this.lastBakedProfile;
+    if (!force) {
+      if (baked && !hasRelevantStaticProfileChange(baked, this.profile)) return false;
+      if (nowMs - this.lastStaticProfileBakeAtMs < STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS) return false;
+    }
+    this.rebuildStaticLayoutShadowsWithProfile(
+      this.lastStaticLayout,
+      this.lastStaticOptions,
+      this.profile,
+      nowMs,
+    );
+    return true;
   }
 
   setVisible(visible: boolean): void {
@@ -196,17 +225,33 @@ export class ShadowSystem {
     this.lastStaticOptions = options;
     if (!layout) {
       this.clearStatic();
+      this.lastBakedProfile = null;
       return;
     }
-    this.rebuildStaticRockShadows(layout, options);
-    this.rebuildStaticTreeShadows(layout, options);
+    this.rebuildStaticLayoutShadowsWithProfile(layout, options, this.profile);
+  }
+
+  private rebuildStaticLayoutShadowsWithProfile(
+    layout: ArenaLayout,
+    options: StaticShadowLayoutBuildOptions,
+    profile: ShadowProfile,
+    bakedAtMs = Number.NEGATIVE_INFINITY,
+  ): void {
+    this.rebuildStaticRockShadows(layout, options, profile);
+    this.rebuildStaticTreeShadows(layout, options, profile);
+    this.lastBakedProfile = { ...profile };
+    this.lastStaticProfileBakeAtMs = bakedAtMs;
   }
 
   /**
    * Fels- und Turret-Schatten. Als einzige statische Gruppe veraenderlich, weil Felsen
    * zerstoert und Turrets gesetzt werden – deshalb eine eigene Gruppe mit eigenem Bake.
    */
-  private rebuildStaticRockShadows(layout: ArenaLayout, options: StaticShadowLayoutBuildOptions): void {
+  private rebuildStaticRockShadows(
+    layout: ArenaLayout,
+    options: StaticShadowLayoutBuildOptions,
+    profile: ShadowProfile,
+  ): void {
     this.clearStaticGroup('rocks');
 
     const runtimeById = new Map<number, SyncedPlaceableRock>();
@@ -226,10 +271,26 @@ export class ShadowSystem {
       const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
       const rockPreset = SHADOW_CASTERS.rock;
-      this.drawFootprint(this.getLayer(rockPreset.layerDepth, 'rocks').staticGraphics, worldX, worldY, rockPreset);
+      this.drawFootprint(
+        this.getLayer(rockPreset.layerDepth, 'rocks').staticGraphics,
+        worldX,
+        worldY,
+        rockPreset,
+        undefined,
+        undefined,
+        profile,
+      );
       if (runtime?.kind === 'turret') {
         const turretPreset = SHADOW_CASTERS.turret;
-        this.drawFootprint(this.getLayer(turretPreset.layerDepth, 'rocks').staticGraphics, worldX, worldY, turretPreset);
+        this.drawFootprint(
+          this.getLayer(turretPreset.layerDepth, 'rocks').staticGraphics,
+          worldX,
+          worldY,
+          turretPreset,
+          undefined,
+          undefined,
+          profile,
+        );
       }
     }
 
@@ -241,7 +302,11 @@ export class ShadowSystem {
    * entfernt, die Gruppe ist also unveraenderlich und wird nach dem Aufbau nie neu gebacken.
    * Gleichzeitig ist sie die teuerste: die Krone stapelt 32 Lagen.
    */
-  private rebuildStaticTreeShadows(layout: ArenaLayout, options: StaticShadowLayoutBuildOptions): void {
+  private rebuildStaticTreeShadows(
+    layout: ArenaLayout,
+    options: StaticShadowLayoutBuildOptions,
+    profile: ShadowProfile,
+  ): void {
     this.clearStaticGroup('trees');
 
     const offsetX = options.offsetX ?? ARENA_OFFSET_X;
@@ -250,8 +315,24 @@ export class ShadowSystem {
     for (const tree of layout.trees) {
       const worldX = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(this.getLayer(SHADOW_CASTERS.trunk.layerDepth, 'trees').staticGraphics, worldX, worldY, SHADOW_CASTERS.trunk);
-      this.drawFootprint(this.getLayer(SHADOW_CASTERS.canopy.layerDepth, 'trees').staticGraphics, worldX, worldY, SHADOW_CASTERS.canopy);
+      this.drawFootprint(
+        this.getLayer(SHADOW_CASTERS.trunk.layerDepth, 'trees').staticGraphics,
+        worldX,
+        worldY,
+        SHADOW_CASTERS.trunk,
+        undefined,
+        undefined,
+        profile,
+      );
+      this.drawFootprint(
+        this.getLayer(SHADOW_CASTERS.canopy.layerDepth, 'trees').staticGraphics,
+        worldX,
+        worldY,
+        SHADOW_CASTERS.canopy,
+        undefined,
+        undefined,
+        profile,
+      );
     }
 
     this.bakeStaticGroup('trees');
@@ -280,12 +361,12 @@ export class ShadowSystem {
     const sameLayout = this.lastStaticLayout === layout;
     this.lastStaticLayout = layout;
     this.lastStaticOptions = options;
+    const staticProfile = sameLayout ? (this.lastBakedProfile ?? this.profile) : this.profile;
     if (sameLayout) {
-      this.rebuildStaticRockShadows(layout, options);
+      this.rebuildStaticRockShadows(layout, options, staticProfile);
       return;
     }
-    this.rebuildStaticRockShadows(layout, options);
-    this.rebuildStaticTreeShadows(layout, options);
+    this.rebuildStaticLayoutShadowsWithProfile(layout, options, staticProfile);
   }
 
   /**
@@ -325,7 +406,8 @@ export class ShadowSystem {
     this.lastStaticOptions = options;
     const runtimeById = new Map<number, SyncedPlaceableRock>();
     for (const rock of runtimeRocks) runtimeById.set(rock.id, rock);
-    const chunks = this.collectDirtyShadowChunks(layout, dirtyRockIds);
+    const staticProfile = this.lastBakedProfile ?? this.profile;
+    const chunks = this.collectDirtyShadowChunks(layout, dirtyRockIds, staticProfile);
     if (chunks.length === 0) return;
 
     for (const [key, bucket] of this.layers) {
@@ -341,14 +423,30 @@ export class ShadowSystem {
           const worldY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
           const rockPreset = SHADOW_CASTERS.rock;
           if (rockPreset.layerDepth === depth
-            && this.shadowBoundsIntersectChunk(worldX, worldY, rockPreset, chunk)) {
-            this.drawFootprint(bucket.staticGraphics, worldX, worldY, rockPreset);
+            && this.shadowBoundsIntersectChunk(worldX, worldY, rockPreset, chunk, staticProfile)) {
+            this.drawFootprint(
+              bucket.staticGraphics,
+              worldX,
+              worldY,
+              rockPreset,
+              undefined,
+              undefined,
+              staticProfile,
+            );
           }
           const runtime = runtimeById.get(id);
           const turretPreset = SHADOW_CASTERS.turret;
           if (runtime?.kind === 'turret' && turretPreset.layerDepth === depth
-            && this.shadowBoundsIntersectChunk(worldX, worldY, turretPreset, chunk)) {
-            this.drawFootprint(bucket.staticGraphics, worldX, worldY, turretPreset);
+            && this.shadowBoundsIntersectChunk(worldX, worldY, turretPreset, chunk, staticProfile)) {
+            this.drawFootprint(
+              bucket.staticGraphics,
+              worldX,
+              worldY,
+              turretPreset,
+              undefined,
+              undefined,
+              staticProfile,
+            );
           }
         }
         this.bakeShadowChunk(bucket, chunk);
@@ -359,6 +457,7 @@ export class ShadowSystem {
   private collectDirtyShadowChunks(
     layout: ArenaLayout,
     dirtyRockIds: ReadonlySet<number>,
+    profile: ShadowProfile,
   ): ShadowDirtyChunk[] {
     const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
     const chunks = new Map<string, ShadowDirtyChunk>();
@@ -368,7 +467,7 @@ export class ShadowSystem {
       const x = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const y = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
       for (const preset of [SHADOW_CASTERS.rock, SHADOW_CASTERS.turret]) {
-        const casterBounds = this.getShadowBounds(x, y, preset);
+        const casterBounds = this.getShadowBounds(x, y, preset, profile);
         const minChunkX = Math.floor((Math.max(bounds.minX, casterBounds.minX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
         const minChunkY = Math.floor((Math.max(bounds.minY, casterBounds.minY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
         const maxChunkX = Math.floor((Math.min(bounds.maxX - 1, casterBounds.maxX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
@@ -385,9 +484,14 @@ export class ShadowSystem {
     return [...chunks.values()];
   }
 
-  private getShadowBounds(x: number, y: number, preset: ShadowCasterConfig): ShadowWorldBounds {
-    const castLength = preset.castHeightPx * preset.stretch * this.profile.lengthMult;
-    const softness = preset.softnessPx * this.profile.softnessMult;
+  private getShadowBounds(
+    x: number,
+    y: number,
+    preset: ShadowCasterConfig,
+    profile: ShadowProfile,
+  ): ShadowWorldBounds {
+    const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
+    const softness = preset.softnessPx * profile.softnessMult;
     const inflate = preset.inflatePx + softness;
     const radius = Math.max(
       preset.footprintWidthPx + inflate * 2,
@@ -409,8 +513,9 @@ export class ShadowSystem {
     y: number,
     preset: ShadowCasterConfig,
     chunk: ShadowDirtyChunk,
+    profile: ShadowProfile,
   ): boolean {
-    const bounds = this.getShadowBounds(x, y, preset);
+    const bounds = this.getShadowBounds(x, y, preset, profile);
     return bounds.maxX > chunk.x
       && bounds.minX < chunk.x + SHADOW_DIRTY_CHUNK_SIZE
       && bounds.maxY > chunk.y
@@ -511,6 +616,8 @@ export class ShadowSystem {
     this.clearDynamic();
     this.lastStaticLayout = null;
     this.lastStaticOptions = {};
+    this.lastBakedProfile = null;
+    this.lastStaticProfileBakeAtMs = Number.NEGATIVE_INFINITY;
   }
 
   destroy(): void {
@@ -525,6 +632,8 @@ export class ShadowSystem {
     this.unsubscribeQuality = null;
     this.lastStaticLayout = null;
     this.lastStaticOptions = {};
+    this.lastBakedProfile = null;
+    this.lastStaticProfileBakeAtMs = Number.NEGATIVE_INFINITY;
   }
 
   /**
@@ -604,10 +713,10 @@ export class ShadowSystem {
     preset: ShadowCasterConfig,
     width = preset.footprintWidthPx,
     height = preset.footprintHeightPx,
+    profile = this.profile,
   ): void {
     // Profil-Multiplikatoren (Tag/Nacht) skalieren Länge, Deckkraft und Weichheit;
     // die Lichtrichtung bleibt konstant, siehe SHADOW_PROFILES.
-    const profile = this.profile;
     const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
     const softnessPx = preset.softnessPx * profile.softnessMult;
 
@@ -848,4 +957,10 @@ export class ShadowSystem {
       && y + margin >= bounds.minY
       && y - margin <= bounds.maxY;
   }
+}
+
+function hasRelevantStaticProfileChange(from: ShadowProfile, to: ShadowProfile): boolean {
+  return Math.abs(from.opacityMult - to.opacityMult) >= STATIC_PROFILE_OPACITY_DELTA
+    || Math.abs(from.lengthMult - to.lengthMult) >= STATIC_PROFILE_LENGTH_DELTA
+    || Math.abs(from.softnessMult - to.softnessMult) >= STATIC_PROFILE_SOFTNESS_DELTA;
 }

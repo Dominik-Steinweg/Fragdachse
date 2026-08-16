@@ -2,6 +2,9 @@
   "mapId": "0",
   "arenaWidthCells": 90,
   "timeOfDay": "12:00",
+  "dynamicTimeOfDay": {
+    "minutesPerSecond": 6
+  },
   "rockFillRatio": 0.3,
   "trackPosition": "center",
   "mapEvents": [

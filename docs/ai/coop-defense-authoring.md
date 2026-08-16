@@ -6,7 +6,7 @@ Coop-Maps sind authored Daten. Die JSON-Dateien unter src/config/coopDefenseMaps
 
 CoopDefenseMapConfig bündelt Layout und Round-Inhalt:
 
-- Arena-Größe, Zeit-of-day, Tutorial/Layout und optionales Rock-Field;
+- Arena-Größe, Time-of-Day samt optionaler Runtime-Steuerung, Tutorial/Layout und optionales Rock-Field;
 - ein authored `rockField` ersetzt die prozedurale CA-Verteilung vollständig: Die Arena wird zugebaut, nur die Korridore werden freigefräst, und es wachsen keine Bäume. Ohne `rockField` steuert `rockFillRatio` die Ausgangsdichte vor dem Smoothing, das die effektive Felsfläche deutlich darunter drückt;
 - sichtbare vertikale Gleise werden über `trackPosition` authored: `left`, `center`, `right` oder `{ kind: "grid", gridX }`; `gridX` bezeichnet die linke Spalte des zweispaltigen Gleis-Fußabdrucks. Der Standard ist `center`, und jede Position muss den bestehenden Basisabstand einhalten;
 - bases, powerUps, persistentSpawns und endliche encounters;
@@ -51,6 +51,8 @@ Secondary Objectives sind destroy, hold oder carry. Destroy/Hold referenzieren B
 ## Zeitbasis
 
 Directors akkumulieren delta in elapsedMs. Authored atMs, Verzögerungen und Wiederholungen beziehen sich auf diese Rundenuhr. Kein Map-Event darf Fälligkeit gegen Date.now() prüfen: Das würde bei Fokusverlust und Frame-Klemmung von der Phaser-Uhr abweichen und kann Completion-Ketten entkoppeln. Ein absoluter Zeitstempel ist nur dann zulässig, wenn er ausdrücklich als replizierter Vertrag für HUD und Runtime definiert ist.
+
+Die rein visuelle Arena-Uhr ist eine solche ausdrücklich synchronisierte Ausnahme: `ArenaTimeOfDayController` berechnet sie ohne Delta-Akkumulation aus `RoundState.roundStartTime` und `NetworkBridge.getSynchronizedNow()`. `timeOfDay` bleibt der Startwert. `dynamicTimeOfDay` kann eine kontinuierliche Rate sowie vorwärts laufende weiche Transitionen ab Rundenzeit oder dem tatsächlich erfolgreichen Boss-Spawn authoren; Maps ohne diesen Block bleiben statisch. Der Spawn publiziert dafür einmalig einen reliable Anker im RoundState, keinen laufenden Zeit-State. Bossphasen sind bereits replizierte Zustände und dürfen als abschließende, sofortige Zielzustände folgen. Sie starten keinen pro Client zeitversetzten lokalen Tween.
 
 ## Erweiterungsmuster
 

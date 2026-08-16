@@ -285,6 +285,8 @@ export interface RoundState {
   // Autoritative Uhrzeit dieser Runde. Coop Defense nutzt weiterhin die Map-Vorgabe;
   // alle anderen Modi uebernehmen die Host-Auswahl aus der Lobby.
   timeOfDayMinutes?: number;
+  /** Einmaliger reliable Anker des tatsaechlich erfolgreichen Coop-Boss-Spawns. */
+  coopDefenseBossSpawnedAtMs?: number;
   coopDefenseHumanPlayerCount?: number;
   // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der
   // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel

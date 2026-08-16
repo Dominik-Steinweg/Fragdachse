@@ -541,6 +541,60 @@ describe('Coop defense map progression', () => {
     }
   });
 
+  it('keeps dynamic time authored only on the soak-test and Void-Hunter maps', () => {
+    const dynamicMaps = COOP_DEFENSE_MAP_CONFIGS
+      .filter((map) => map.dynamicTimeOfDay !== undefined)
+      .map((map) => map.mapId);
+    expect(dynamicMaps).toEqual(['0', '15']);
+    expect(getCoopDefenseMapConfig('0').dynamicTimeOfDay).toEqual({
+      minutesPerSecond: 6,
+      transitions: undefined,
+    });
+
+    const voidMap = getCoopDefenseMapConfig('15');
+    expect(voidMap.dynamicTimeOfDay?.transitions).toEqual([
+      {
+        start: { type: 'boss-spawn' },
+        targetTimeOfDay: '21:30',
+        durationMs: 2_800,
+      },
+      {
+        start: { type: 'boss-phase', phase: 2 },
+        targetTimeOfDay: '23:30',
+        durationMs: 0,
+      },
+    ]);
+    expect(voidMap.boss?.spawnAtMs).toBe(2_500);
+  });
+
+  it('rejects invalid dynamic time authoring', () => {
+    const base = getCoopDefenseMapConfig('0');
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...base,
+      dynamicTimeOfDay: { minutesPerSecond: -1 },
+    })).toThrow(/dynamic time rate/i);
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...base,
+      dynamicTimeOfDay: {
+        transitions: [{
+          start: { type: 'time', atMs: 0 },
+          targetTimeOfDay: '24:00',
+          durationMs: 100,
+        }],
+      },
+    })).toThrow(/dynamic time target/i);
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...getCoopDefenseMapConfig('15'),
+      dynamicTimeOfDay: {
+        transitions: [{
+          start: { type: 'boss-phase', phase: 2 },
+          targetTimeOfDay: '23:30',
+          durationMs: 100,
+        }],
+      },
+    })).toThrow(/must be instantaneous/i);
+  });
+
   it('keeps the maps with the least forgiving telegraphs out of the dark hours', () => {
     // Map 11 lebt von Luftangriffs-Telegraphen, 5 und 10 von Boss-Telegraphen. Sie dürfen
     // dämmrig sein, aber nicht in der tiefen Nacht liegen, in der ohne Taschenlampe kaum

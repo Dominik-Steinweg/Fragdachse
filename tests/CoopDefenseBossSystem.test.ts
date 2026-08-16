@@ -9,18 +9,21 @@ describe('CoopDefenseBossSystem', () => {
       bossActive = true;
       return true;
     });
+    const onBossSpawned = vi.fn();
     const system = new CoopDefenseBossSystem(
       { enemyKind: 'void-hunter', spawnAtMs: 1_000 },
       { hasEnemyKind: (kind: string) => kind === 'void-hunter' && bossActive } as never,
       { hostSpawnBoss: spawnBoss },
+      onBossSpawned,
     );
 
     system.hostUpdate(999, false);
     expect(spawnBoss).not.toHaveBeenCalled();
     expect(system.isBossDefeated()).toBe(false);
 
-    system.hostUpdate(1, false);
+    system.hostUpdate(1, false, 42_000);
     expect(spawnBoss).toHaveBeenCalledTimes(1);
+    expect(onBossSpawned).toHaveBeenCalledWith(42_000);
     expect(system.isBossDefeated()).toBe(false);
 
     bossActive = false;

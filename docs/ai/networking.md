@@ -27,6 +27,8 @@ Fachliche RPCs werden in RpcCoordinator registriert und über Methoden von Netwo
 
 Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, Layout, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen Input, Ping und KEY_GAME_STATE.
 
+Der reliable `RoundState` traegt neben dem Rundenstart nur seltene Zeitanker: Ein erfolgreicher Coop-Boss-Spawn schreibt `coopDefenseBossSpawnedAtMs` genau einmal. Kontinuierliche Arena-Tageszeit wird daraus und aus dem synchronisierten Jetzt lokal rekonstruiert und nie pro Tick repliziert.
+
 Kumulative Raumstatistiken liegen als ein kompakter reliable globaler Snapshot (`rst`) im Raum. Nur
 der Host ändert das In-Memory-Ledger und publiziert es beim Rundenende, beim Lobby-Bootstrap und bei
 Roster-Reconnects; Treffer, Heilung und andere Zähler erzeugen keine Einzel-Replikation. Runden- und

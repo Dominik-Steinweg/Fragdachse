@@ -40,7 +40,6 @@ import { CoopDefenseBalanceTracker, buildBalanceBuildSnapshot } from '../debug/c
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
 import { DEFAULT_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
 import type { WorldGradeInputs } from '../effects/postfx/worldGrade';
-import { setEmissiveScale } from '../effects/EmissiveScale';
 import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
@@ -318,6 +317,7 @@ export class ArenaScene extends Phaser.Scene {
   private performanceHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private timeOfDayHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
+  private forceStaticTimeOfDayBake = false;
   private netDebugOverlay: NetDebugOverlay | null = null;
   private performanceDiagnosticsOverlay: PerformanceDiagnosticsOverlay | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
@@ -716,9 +716,10 @@ export class ArenaScene extends Phaser.Scene {
       () => this.coopDefenseBalanceReportOverlay?.show(),
     );
     this.timeOfDayDebugOverlay = new TimeOfDayDebugOverlay(
-      () => this.renderers.lighting.getTimeOfDayMinutes(),
-      () => this.lifecycle.getRoundTimeOfDayMinutes(),
-      (minutes) => this.applyDebugTimeOfDay(minutes),
+      () => this.lifecycle.getCurrentTimeOfDayMinutes(),
+      () => this.lifecycle.getAutomaticTimeOfDayMinutes(),
+      (minutes, settled) => this.applyDebugTimeOfDay(minutes, settled),
+      () => this.clearDebugTimeOfDay(),
     );
     this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
       this,
@@ -1637,6 +1638,12 @@ export class ArenaScene extends Phaser.Scene {
         clientRendererSyncMs = performance.now() - clientRendererSyncStartedAt;
         primaryStepMs += performance.now() - clientStepStartMs;
       }
+
+      const transitionCompleted = this.lifecycle.syncRuntimeTimeOfDay(
+        bridge.getSynchronizedNow(),
+        this.resolveArenaTimeOfDaySignals(),
+      );
+      this.forceStaticTimeOfDayBake ||= transitionCompleted;
 
       const leaderboardCanopyStartedAt = performance.now();
       if (this.arenaPanelsHeld) {
@@ -2790,15 +2797,35 @@ export class ArenaScene extends Phaser.Scene {
    * Rein lokal – die Runde leitet ihre Uhrzeit auf jedem Client aus der replizierten
    * Map-ID ab, hier wird also nur die eigene Ansicht verstellt.
    *
-   * Reihenfolge wie beim Rundenaufbau: Schattenprofil setzen, *dann* die statischen Layer
-   * neu backen. Kurzlebige Effekte übernehmen den Emissive-Faktor von selbst, langlebige
-   * additive Grafiken erst bei ihrer Neuerzeugung.
+   * Der Override bleibt im zentralen Controller. Waehrend des Ziehens gilt dieselbe
+   * Shadow-Drosselung wie fuer die automatische Uhr; erst das Loslassen erzwingt den exakten
+   * finalen Bake. AUTO loescht den Override und sampelt die inzwischen weitergelaufene Uhr.
    */
-  private applyDebugTimeOfDay(minutes: number): void {
-    this.renderers.lighting.setTimeOfDay(minutes);
-    this.renderers.shadow.setTimeOfDay(minutes);
-    this.renderers.shadow.rebuildStaticShadowsForProfileChange();
-    setEmissiveScale(resolveSkyState(minutes).emissiveScale);
+  private applyDebugTimeOfDay(minutes: number, settled: boolean): void {
+    this.lifecycle.setTimeOfDayDebugOverride(minutes);
+    this.syncDebugTimeOfDay(settled);
+  }
+
+  private clearDebugTimeOfDay(): void {
+    this.lifecycle.clearTimeOfDayDebugOverride();
+    this.syncDebugTimeOfDay(true);
+  }
+
+  private syncDebugTimeOfDay(forceStaticBake: boolean): void {
+    const now = bridge.getSynchronizedNow();
+    this.lifecycle.syncRuntimeTimeOfDay(now, this.resolveArenaTimeOfDaySignals());
+    this.renderers.shadow.syncStaticProfile(now, forceStaticBake);
+  }
+
+  private resolveArenaTimeOfDaySignals(): {
+    bossSpawnedAtMs: number | null;
+    bossPhase: number;
+  } {
+    const observedPhase = this.ctx.enemyManager?.getMaxBossPhase() ?? 0;
+    return {
+      bossSpawnedAtMs: bridge.getRoundState()?.coopDefenseBossSpawnedAtMs ?? null,
+      bossPhase: observedPhase,
+    };
   }
 
   private syncArenaPanelOverlay(visible: boolean, immediate = false): void {
@@ -3054,9 +3081,16 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncWorldShadows(inArena: boolean, trainState: SyncedTrainState | null): void {
     if (!inArena || !this.ctx.currentLayout || !this.ctx.arenaResult) {
+      this.forceStaticTimeOfDayBake = false;
       this.renderers.shadow.clear();
       return;
     }
+
+    this.renderers.shadow.syncStaticProfile(
+      bridge.getSynchronizedNow(),
+      this.forceStaticTimeOfDayBake,
+    );
+    this.forceStaticTimeOfDayBake = false;
 
     this.renderers.shadow.syncDynamicShadows(
       this.ctx.playerManager.getAllPlayers(),

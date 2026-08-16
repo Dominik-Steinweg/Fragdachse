@@ -43,6 +43,14 @@ describe('time of day parsing', () => {
     expect(normalizeTimeOfDay(-30)).toBe(MINUTES_PER_DAY - 30);
     expect(normalizeTimeOfDay(Number.NaN)).toBe(DEFAULT_TIME_OF_DAY_MINUTES);
   });
+
+  it('keeps fractional runtime minutes while formatting only the display value', () => {
+    expect(normalizeTimeOfDay(12.5)).toBe(12.5);
+    expect(normalizeTimeOfDay(-0.25)).toBe(MINUTES_PER_DAY - 0.25);
+    expect(formatTimeOfDay(12.49)).toBe('00:12');
+    expect(formatTimeOfDay(12.5)).toBe('00:13');
+    expect(formatTimeOfDay(MINUTES_PER_DAY - 0.25)).toBe('00:00');
+  });
 });
 
 describe('sky state', () => {
