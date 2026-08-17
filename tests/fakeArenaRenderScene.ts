@@ -118,13 +118,38 @@ export class FakeRenderTexture {
       this.camera.scrollY = y;
     },
   };
-  texture: { key: string };
+  /** Gesetztes Anzeigeframe; `null` heisst "ganze Textur" (`__BASE`). */
+  frameName: string | null = null;
+  texture: {
+    key: string;
+    firstFrame: string;
+    frames: Record<string, FakeFill>;
+    has(name: string): boolean;
+    add(name: string, sourceIndex: number, x: number, y: number, width: number, height: number): void;
+  };
   private pending: Array<() => void> = [];
 
   constructor(key: string, readonly width = 256, readonly height = 256) {
-    this.texture = { key };
+    // Der Sampling-Gutter der Chunk-Renderziele haengt an genau diesen beiden Faehigkeiten:
+    // ein Renderziel groesser als der sichtbare Bereich, und ein Frame, das ihn ausschneidet.
+    const frames: Record<string, FakeFill> = {};
+    this.texture = {
+      key,
+      firstFrame: '__BASE',
+      frames,
+      has: (name) => name in frames,
+      add: (name, _sourceIndex, x, y, frameWidth, frameHeight) => {
+        frames[name] = { x, y, width: frameWidth, height: frameHeight };
+        if (this.texture.firstFrame === '__BASE') this.texture.firstFrame = name;
+      },
+    };
     this.pixels = new Uint8Array(width * height);
     FakeRenderTexture.textures.set(key, this);
+  }
+
+  setFrame(name: string): this {
+    this.frameName = name;
+    return this;
   }
 
   setOrigin(x = 0.5, y = x): this {

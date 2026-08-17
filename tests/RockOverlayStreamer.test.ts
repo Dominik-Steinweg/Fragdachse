@@ -14,6 +14,7 @@ import {
   RockOverlayStreamer,
   rockOverlayMottleLayerId,
 } from '../src/arena/chunks/RockOverlayStreamer';
+import { CHUNK_SAMPLING_GUTTER_PX } from '../src/arena/chunks/ChunkedRenderSurface';
 import { createFakeArenaScene, fakeRockImage, FakeRenderTexture } from './fakeArenaRenderScene';
 
 /**
@@ -119,6 +120,17 @@ function lastBlit(texture: FakeRenderTexture): string[] {
   return texture.blits.at(-1)?.content ?? [];
 }
 
+/**
+ * Rahmenlokale Zeichenposition in eine Texturposition des Chunks.
+ *
+ * Ein Renderziel beginnt eine Gutterbreite *vor* seinem logischen Chunk – dort liegt die
+ * Nachbarschaft, die die Filterung an der Chunkkante braucht. Texturkoordinaten sind deshalb um
+ * genau diese Breite gegenueber dem Chunkinhalt versetzt.
+ */
+function inChunk(key: string, localX: number, localY: number): string {
+  return `${key}@${localX + CHUNK_SAMPLING_GUTTER_PX},${localY + CHUNK_SAMPLING_GUTTER_PX}`;
+}
+
 describe('rock overlay streamer', () => {
   it('bakes each resident chunk chunk-locally, never at world coordinates', () => {
     const { streamer } = buildFixture();
@@ -126,7 +138,7 @@ describe('rock overlay streamer', () => {
     // Der linke Chunk traegt Moos, der rechte nicht.
     const left = chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 0, 0);
     const right = chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 1, 0);
-    expect(lastBlit(left)).toEqual(['rock_moss_01@48,48']);
+    expect(lastBlit(left)).toEqual([inChunk('rock_moss_01', 48, 48)]);
     expect(lastBlit(right)).toEqual([]);
 
     // Jeder Blit sitzt am chunklokalen Ursprung, und die Zielkamera bleibt neutral – sonst
@@ -154,9 +166,9 @@ describe('rock overlay streamer', () => {
       expect(lastBlit(chunkTexture(streamer, layerId, 1, 0))).toEqual([]);
     }
     expect(lastBlit(chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 0, 0)))
-      .toEqual(['rock_moss_01@48,48']);
+      .toEqual([inChunk('rock_moss_01', 48, 48)]);
     expect(lastBlit(chunkTexture(streamer, ROCK_OVERLAY_VEGETATION_LAYER_ID, 0, 0)))
-      .toEqual(['rock_vegetation_01_small@64,32']);
+      .toEqual([inChunk('rock_vegetation_01_small', 64, 32)]);
   });
 
   it('keeps the material source stable across destruction', () => {
@@ -272,11 +284,13 @@ describe('rock decal cutout inside the streamer', () => {
     expect(cleared.length).toBeGreaterThan(0);
     // Jeder geloeschte Pixel liegt im Zellquadrat des gefallenen Felsens – kein
     // Silhouettenschnitt, der die abgerundeten Ecken ueberlebender Nachbarn mitnaehme.
+    // Texturkoordinaten liegen um den Gutter vor dem Chunkinhalt.
+    const cellMin = CELL_SIZE + CHUNK_SAMPLING_GUTTER_PX;
     for (const pixel of cleared) {
-      expect(pixel.x).toBeGreaterThanOrEqual(CELL_SIZE);
-      expect(pixel.x).toBeLessThan(2 * CELL_SIZE);
-      expect(pixel.y).toBeGreaterThanOrEqual(CELL_SIZE);
-      expect(pixel.y).toBeLessThan(2 * CELL_SIZE);
+      expect(pixel.x).toBeGreaterThanOrEqual(cellMin);
+      expect(pixel.x).toBeLessThan(cellMin + CELL_SIZE);
+      expect(pixel.y).toBeGreaterThanOrEqual(cellMin);
+      expect(pixel.y).toBeLessThan(cellMin + CELL_SIZE);
     }
   });
 });

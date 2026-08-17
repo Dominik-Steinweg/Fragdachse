@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // so viel bereit, dass die Modulkette importierbar bleibt.
 vi.mock('phaser', () => ({
   BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17 },
+  Textures: { FilterMode: { LINEAR: 0, NEAREST: 1 } },
   Math: { Clamp: (v: number, min: number, max: number) => Math.min(max, Math.max(min, v)) },
   GameObjects: { Image: class {} },
 }));
@@ -12,7 +13,7 @@ import {
   ARENA_RENDER_CHUNK_SIZE,
   ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX,
 } from '../src/arena/chunks/ArenaChunkGrid';
-import { ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
+import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ChunkBakeRegion } from '../src/arena/chunks/ChunkedRenderSurface';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../src/arena/RockOverlayRegions';
 
@@ -32,14 +33,37 @@ class FakeRenderTexture {
   depth = 0;
   blend = 0;
   camera = { scrollX: 0, scrollY: 0, setScroll(x: number, y: number) { this.scrollX = x; this.scrollY = y; } };
-  texture: { key: string };
+  texture: {
+    key: string;
+    firstFrame: string;
+    frames: Record<string, { x: number; y: number; width: number; height: number }>;
+    source: Array<{ scaleMode: number }>;
+    setFilter(filterMode: number): void;
+    has(name: string): boolean;
+    add(name: string, sourceIndex: number, x: number, y: number, width: number, height: number): void;
+  };
+  frameName: string | null = null;
   writes: Array<{ x: number; y: number; size: number; content: string }> = [];
 
   constructor(key: string, readonly width: number, readonly height: number) {
-    this.texture = { key };
+    const source = { scaleMode: 0 };
+    const frames: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    this.texture = {
+      key,
+      firstFrame: '__BASE',
+      frames,
+      source: [source],
+      setFilter: (filterMode) => { source.scaleMode = filterMode; },
+      has: (name) => name in frames,
+      add: (name, _sourceIndex, x, y, w, h) => {
+        frames[name] = { x, y, width: w, height: h };
+        if (this.texture.firstFrame === '__BASE') this.texture.firstFrame = name;
+      },
+    };
     FakeRenderTexture.created += 1;
   }
 
+  setFrame(name: string): this { this.frameName = name; return this; }
   setOrigin(): this { return this; }
   setDepth(depth: number): this { this.depth = depth; return this; }
   setBlendMode(blend: number): this { this.blend = blend; return this; }
@@ -109,8 +133,12 @@ describe('chunked render surface', () => {
 
     expect(regions.length).toBeGreaterThan(0);
     for (const region of regions) {
-      expect(region.size).toBe(ARENA_RENDER_CHUNK_SIZE);
-      expect(region.localX).toBe(region.chunk.localX);
+      // Gebacken wird der logische Chunk samt Gutter: Der Ueberstand traegt echte Nachbarschaft,
+      // sonst haette der Sampler an der Chunkkante nichts zum Blenden.
+      expect(region.gutterPx).toBe(CHUNK_SAMPLING_GUTTER_PX);
+      expect(region.size).toBe(ARENA_RENDER_CHUNK_SIZE + 2 * CHUNK_SAMPLING_GUTTER_PX);
+      expect(region.localX).toBe(region.chunk.localX - CHUNK_SAMPLING_GUTTER_PX);
+      expect(region.localY).toBe(region.chunk.localY - CHUNK_SAMPLING_GUTTER_PX);
       expect(region.worldX).toBe(FRAME.offsetX + region.localX);
       expect(region.worldY).toBe(FRAME.offsetY + region.localY);
     }
@@ -191,9 +219,9 @@ describe('chunked render surface', () => {
     surface.refreshRegion(ROCK_OVERLAY_CHUNK_SIZE, 0, ROCK_OVERLAY_CHUNK_SIZE);
     expect(regions).toHaveLength(1);
     expect(regions[0]).toMatchObject({
-      localX: ROCK_OVERLAY_CHUNK_SIZE,
-      localY: 0,
-      size: ROCK_OVERLAY_CHUNK_SIZE,
+      localX: ROCK_OVERLAY_CHUNK_SIZE - CHUNK_SAMPLING_GUTTER_PX,
+      localY: -CHUNK_SAMPLING_GUTTER_PX,
+      size: ROCK_OVERLAY_CHUNK_SIZE + 2 * CHUNK_SAMPLING_GUTTER_PX,
     });
     expect(regions[0].chunk.cx).toBe(0);
 
@@ -259,5 +287,77 @@ describe('chunked render surface', () => {
     surface.updateResidency({ x: 0, y: 12, width: ARENA_RENDER_CHUNK_SIZE, height: 100 });
     // Der Chunk rechts daneben ist noch nicht im Bild, liegt aber im Erwerbsrand.
     expect(surface.isResident(1, 0)).toBe(true);
+  });
+
+  it('pads each render target by the gutter but composites only the logical chunk', () => {
+    const { surface } = createSurface();
+    surface.updateResidency(VIEW);
+
+    const padded = ARENA_RENDER_CHUNK_SIZE + 2 * CHUNK_SAMPLING_GUTTER_PX;
+    const first = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    expect(first.width).toBe(padded);
+    expect(first.height).toBe(padded);
+
+    // Sichtbar ist ausschliesslich der logische Bereich – als Frame, nicht als kleineres
+    // Renderziel: Nur so darf die Filterung an der Kante noch in den Gutter greifen.
+    expect(first.frameName).toBe('chunkVisible');
+    expect(first.texture.frames.chunkVisible).toEqual({
+      x: CHUNK_SAMPLING_GUTTER_PX,
+      y: CHUNK_SAMPLING_GUTTER_PX,
+      width: ARENA_RENDER_CHUNK_SIZE,
+      height: ARENA_RENDER_CHUNK_SIZE,
+    });
+    // Die Zeichenbefehle der Textur rechnen weiter in vollen Texturkoordinaten.
+    expect(first.texture.firstFrame).toBe('__BASE');
+
+    // Benachbarte Chunks liegen exakt aneinander; der Gutter darf keine Ueberlappung erzeugen.
+    const second = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    expect(second.x - first.x).toBe(ARENA_RENDER_CHUNK_SIZE);
+  });
+
+  it('pulls the neighbour gutters along when a dirty region sits on a chunk border', () => {
+    const { surface, regions } = createSurface();
+    surface.updateResidency(VIEW);
+    regions.length = 0;
+
+    // Der letzte Dirty-Chunk der ersten Chunkzeile – seine rechte Kante ist die Chunkgrenze.
+    const borderX = ARENA_RENDER_CHUNK_SIZE - ROCK_OVERLAY_CHUNK_SIZE;
+    const borderY = ROCK_OVERLAY_CHUNK_SIZE;
+    surface.refreshRegion(borderX, borderY, ROCK_OVERLAY_CHUNK_SIZE);
+
+    const touched = regions.map((region) => `${region.chunk.cx}:${region.chunk.cy}`);
+    expect(touched).toContain('0:0');
+    // Der oestliche Nachbar traegt dieselbe Weltinformation in seinem Gutter.
+    expect(touched).toContain('1:0');
+    // Nur die beruehrte Kante, nicht die ganze Nachbarschaft.
+    expect(new Set(touched)).toEqual(new Set(['0:0', '1:0']));
+
+    const mirrored = regions.find((region) => region.chunk.cx === 1);
+    expect(mirrored?.localX).toBe(ARENA_RENDER_CHUNK_SIZE - CHUNK_SAMPLING_GUTTER_PX);
+    expect(mirrored?.localY).toBe(borderY - CHUNK_SAMPLING_GUTTER_PX);
+
+    // Eine Region mitten im Chunk laesst die Nachbarn in Ruhe.
+    regions.length = 0;
+    surface.refreshRegion(ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
+    expect(regions).toHaveLength(1);
+  });
+
+  it('changes only chunk texture sampling and restores each target default', () => {
+    const { surface } = createSurface();
+    surface.updateResidency(VIEW);
+
+    const target = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    expect(target.texture.source[0].scaleMode).toBe(0);
+
+    surface.setSamplingMode('nearest');
+    expect(target.texture.source[0].scaleMode).toBe(1);
+
+    // The pooled target is hidden while away and must still return with DEFAULT sampling.
+    surface.updateResidency({ ...VIEW, x: 9_000 });
+    surface.setSamplingMode('default');
+    surface.updateResidency(VIEW);
+
+    const reacquired = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    expect(reacquired.texture.source[0].scaleMode).toBe(0);
   });
 });

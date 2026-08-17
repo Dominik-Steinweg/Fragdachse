@@ -26,6 +26,13 @@ import type { ArenaChunkCoord, ChunkWorldFrame, ChunkWorldRect } from './ArenaCh
  * (siehe `docs/ai/rendering.md`): Weltkoordinaten duerfen weder in das Scratch-Ziel noch in die
  * Zielkamera gelangen.
  *
+ * ## Sampling-Gutter
+ *
+ * Ein Renderziel ist je Seite um {@link CHUNK_SAMPLING_GUTTER_PX} groesser als der logische Chunk
+ * und traegt dort echte angrenzende Weltinformation. Sichtbar bleibt trotzdem ausschliesslich der
+ * logische Bereich – dafuer sorgt ein eigenes Texturframe. Warum das noetig ist, steht bei
+ * {@link ChunkedRenderSurface.applyVisibleFrame}.
+ *
  * ## Determinismus
  *
  * Ein verworfener und spaeter neu gebackener Chunk muss sichtbar identisch sein. Das leistet
@@ -45,14 +52,25 @@ export interface ChunkedSurfaceLayerSpec {
 export interface ChunkBakeRegion {
   /** Render-Chunk, in dem die Region liegt. */
   readonly chunk: ArenaChunkCoord;
-  /** Linke obere Ecke der Region in rahmenlokalen Pixeln. */
+  /**
+   * Linke obere Ecke der zu zeichnenden Flaeche in rahmenlokalen Pixeln.
+   *
+   * Sie liegt um {@link gutterPx} ausserhalb der logischen Region: Der Gutter muss mit echter
+   * Nachbarschaft gefuellt werden, nicht mit Leere. Fuer die Bake-Funktion aendert das nichts –
+   * sie zeichnet wie bisher alles, was `[localX, localX + size)` beruehrt.
+   */
   readonly localX: number;
   readonly localY: number;
-  /** Kantenlaenge der Region; entweder die Chunkgroesse oder eine Dirty-Chunk-Groesse. */
+  /**
+   * Kantenlaenge der zu zeichnenden Flaeche: logische Regionsgroesse plus zweimal
+   * {@link gutterPx}. Das ist zugleich die geforderte Kantenlaenge des Scratch-Ziels.
+   */
   readonly size: number;
   /** Weltposition der linken oberen Ecke – fuer Scratch-Kameras, die Weltobjekte einlesen. */
   readonly worldX: number;
   readonly worldY: number;
+  /** Ueberstand je Seite, der spaeter nur noch gesampelt und nie composited wird. */
+  readonly gutterPx: number;
 }
 
 export interface ChunkBakeSink {
@@ -76,9 +94,31 @@ export interface ChunkedRenderSurfaceOptions {
   readonly layers: readonly ChunkedSurfaceLayerSpec[];
   readonly bake: ChunkBakeFn;
   readonly chunkSize?: number;
+  /** Ueberschreibt {@link CHUNK_SAMPLING_GUTTER_PX}; `0` schaltet den Gutter ab. */
+  readonly gutterPx?: number;
   /** Wird einmal je neu erzeugtem Renderziel aufgerufen – z. B. fuer die Arena-Maske. */
   readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
 }
+
+/**
+ * Ueberstand je Chunkseite, der gebacken und gesampelt, aber nie composited wird.
+ *
+ * Zwei Pixel reichen: Gebraucht wird der Gutter allein von der bilinearen Filterung, die beim
+ * Zeichnen des Chunks hoechstens ein halbes Zieltexel ueber die Kante hinausgreift. Er bleibt
+ * bewusst klein, weil er in *jedes* Renderziel und in *jede* gebackene Region eingeht: Bei 512 px
+ * Chunkgroesse kosten zwei Pixel je Seite rund 1,6 % Flaeche.
+ */
+export const CHUNK_SAMPLING_GUTTER_PX = 2;
+
+/**
+ * Name des Frames, das aus einem Renderziel den logischen Chunk ausschneidet.
+ *
+ * Der Name ist je Textur eindeutig; jedes Chunk-Renderziel hat seine eigene DynamicTexture.
+ */
+const CHUNK_VISIBLE_FRAME_NAME = 'chunkVisible';
+
+/** Sampling override for the visible chunk render textures. */
+export type ChunkSamplingMode = 'default' | 'nearest';
 
 interface ResidentChunk {
   readonly coord: ArenaChunkCoord;
@@ -103,14 +143,20 @@ const CHUNK_TEXTURE_POOL_LIMIT_PER_LAYER = 12;
 
 export class ChunkedRenderSurface {
   readonly grid: ArenaChunkGrid;
+  /** Ueberstand je Seite; siehe {@link CHUNK_SAMPLING_GUTTER_PX}. */
+  readonly gutterPx: number;
+  /** Kantenlaenge eines Renderziels: logischer Chunk plus beidseitiger Gutter. */
+  readonly chunkTextureSize: number;
   private readonly frame: ChunkWorldFrame;
   private readonly layers: readonly ChunkedSurfaceLayerSpec[];
   private readonly bakeFn: ChunkBakeFn;
   private readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
   private readonly resident = new Map<number, ResidentChunk>();
   private readonly pool = new Map<string, Phaser.GameObjects.RenderTexture[]>();
+  private readonly defaultFilterModes = new WeakMap<Phaser.GameObjects.RenderTexture, Phaser.Textures.FilterMode>();
   private readonly layerVisibility = new Map<string, boolean>();
   private visible = true;
+  private samplingMode: ChunkSamplingMode = 'default';
   private destroyed = false;
 
   constructor(
@@ -122,6 +168,8 @@ export class ChunkedRenderSurface {
     this.bakeFn = options.bake;
     this.onChunkTextureCreated = options.onChunkTextureCreated;
     this.grid = new ArenaChunkGrid(options.frame.width, options.frame.height, options.chunkSize);
+    this.gutterPx = Math.max(0, Math.trunc(options.gutterPx ?? CHUNK_SAMPLING_GUTTER_PX));
+    this.chunkTextureSize = this.grid.chunkSize + this.gutterPx * 2;
     for (const layer of this.layers) this.layerVisibility.set(layer.id, true);
   }
 
@@ -161,14 +209,18 @@ export class ChunkedRenderSurface {
    *
    * Nicht residente Chunks werden bewusst uebersprungen: Ihr Inhalt existiert gerade nicht und
    * entsteht beim naechsten Sichtbarwerden ohnehin aus dem dann aktuellen Weltzustand.
+   *
+   * Liegt die Region an einer Chunkgrenze, traegt der Nachbar dieselbe Weltinformation in seinem
+   * Gutter. Sie wird hier mitgezogen – sonst zeigte der Sampler an genau dieser Kante noch den
+   * Weltzustand vor der Aenderung.
    */
   refreshRegion(localX: number, localY: number, size: number): void {
     if (this.destroyed) return;
     const coord = this.grid.chunkAt(localX, localY);
     if (!coord) return;
     const chunk = this.resident.get(this.grid.key(coord.cx, coord.cy));
-    if (!chunk) return;
-    this.runBake(chunk, localX, localY, size);
+    if (chunk) this.runBake(chunk, localX, localY, size);
+    this.refreshNeighbourGutters(coord, localX, localY, size);
   }
 
   /** Ob dieser Chunk gerade ein Renderziel besitzt. */
@@ -185,10 +237,34 @@ export class ChunkedRenderSurface {
     this.syncVisibility();
   }
 
+  isVisible(): boolean {
+    return this.visible;
+  }
+
+  /**
+   * Changes only the sampling of this surface's chunk render textures.
+   *
+   * The original filter mode is captured per texture so DEFAULT restores the exact mode that
+   * Phaser assigned when the render target was created. No renderer-wide or smoothPixelArt
+   * setting is touched.
+   */
+  setSamplingMode(mode: ChunkSamplingMode): void {
+    this.samplingMode = mode;
+    for (const chunk of this.resident.values()) {
+      for (const texture of chunk.textures.values()) this.applySamplingMode(texture);
+    }
+  }
+
+  getSamplingMode(): ChunkSamplingMode {
+    return this.samplingMode;
+  }
+
   getStats(): ChunkedRenderSurfaceStats {
     let pooled = 0;
     for (const bucket of this.pool.values()) pooled += bucket.length;
-    const chunkPixels = this.grid.chunkSize * this.grid.chunkSize;
+    // Gezaehlt wird die belegte Kantenlaenge samt Gutter, nicht die sichtbare: Speicher kostet
+    // das Renderziel, nicht der Ausschnitt.
+    const chunkPixels = this.chunkTextureSize * this.chunkTextureSize;
     return {
       residentChunks: this.resident.size,
       pooledTextures: pooled,
@@ -215,6 +291,56 @@ export class ChunkedRenderSurface {
   }
 
   // ── Interna ────────────────────────────────────────────────────────────────
+
+  /**
+   * Zieht die Gutter der Nachbarchunks an einer Dirty-Region nach.
+   *
+   * Betroffen ist ein Nachbar nur, wenn die Region die gemeinsame Kante beruehrt – bei
+   * 128-px-Dirty-Chunks in einem 512-px-Raster also hoechstens jeder vierte. Nachgezogen wird
+   * ueber denselben Bake-Pfad statt ueber einen Kopierschritt: Der Gutter entsteht damit aus
+   * demselben Weltzustand wie jedes andere Pixel und kann gar nicht auseinanderlaufen.
+   */
+  private refreshNeighbourGutters(
+    coord: ArenaChunkCoord,
+    localX: number,
+    localY: number,
+    size: number,
+  ): void {
+    if (this.gutterPx <= 0) return;
+    const chunkSize = this.grid.chunkSize;
+    const touchesLeft = localX <= coord.localX;
+    const touchesRight = localX + size >= coord.localX + chunkSize;
+    const touchesTop = localY <= coord.localY;
+    const touchesBottom = localY + size >= coord.localY + chunkSize;
+    if (!touchesLeft && !touchesRight && !touchesTop && !touchesBottom) return;
+
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        if (dx < 0 && !touchesLeft) continue;
+        if (dx > 0 && !touchesRight) continue;
+        if (dy < 0 && !touchesTop) continue;
+        if (dy > 0 && !touchesBottom) continue;
+
+        const cx = coord.cx + dx;
+        const cy = coord.cy + dy;
+        // Erst klemmen, dann nachschlagen: `key()` rechnet zeilenweise und traefe fuer `cx = -1`
+        // sonst den letzten Chunk der Vorzeile.
+        if (!this.grid.contains(cx, cy)) continue;
+        const neighbour = this.resident.get(this.grid.key(cx, cy));
+        if (!neighbour) continue;
+
+        // Die Spiegelregion liegt im Nachbarn direkt an der gemeinsamen Kante. Sie ist genauso
+        // gross wie die Dirty-Region, damit Scratch-Groessen und Blit-Arithmetik unveraendert
+        // bleiben; ihr Gutter deckt die geaenderte Flaeche vollstaendig ab.
+        const nearX = neighbour.coord.localX;
+        const nearY = neighbour.coord.localY;
+        const regionX = dx === 0 ? localX : dx < 0 ? nearX + chunkSize - size : nearX;
+        const regionY = dy === 0 ? localY : dy < 0 ? nearY + chunkSize - size : nearY;
+        this.runBake(neighbour, regionX, regionY, size);
+      }
+    }
+  }
 
   private acquireChunk(coord: ArenaChunkCoord): void {
     const textures = new Map<string, Phaser.GameObjects.RenderTexture>();
@@ -252,31 +378,91 @@ export class ChunkedRenderSurface {
   private obtainTexture(layer: ChunkedSurfaceLayerSpec): Phaser.GameObjects.RenderTexture {
     const bucket = this.pool.get(layer.id);
     const pooled = bucket?.pop();
-    if (pooled) return pooled;
+    if (pooled) {
+      this.applySamplingMode(pooled);
+      return pooled;
+    }
 
-    const texture = this.scene.add.renderTexture(0, 0, this.grid.chunkSize, this.grid.chunkSize);
+    const texture = this.scene.add.renderTexture(0, 0, this.chunkTextureSize, this.chunkTextureSize);
     texture.setOrigin(0, 0);
+    this.applyVisibleFrame(texture);
     texture.setDepth(layer.depth);
     if (layer.blend !== undefined) texture.setBlendMode(layer.blend);
     // Der Inhalt eines Chunks ist dauerhaft chunklokal. Die Weltposition traegt allein das
     // GameObject; eine gescrollte interne Kamera wuerde jeden Blit um den Arena-Offset verschieben.
     texture.camera.setScroll(0, 0);
+    const defaultFilterMode = texture.texture.source?.[0]?.scaleMode;
+    if (defaultFilterMode !== undefined) {
+      this.defaultFilterModes.set(texture, defaultFilterMode as Phaser.Textures.FilterMode);
+    }
+    this.applySamplingMode(texture);
     this.onChunkTextureCreated?.(texture, layer.id);
     return texture;
+  }
+
+  /**
+   * Beschraenkt Geometrie und UV-Fenster eines Renderziels auf den logischen Chunk.
+   *
+   * Ohne diesen Schnitt entsteht die sichtbare Naht: Die Chunks liegen zwar exakt aneinander,
+   * aber beim Zeichnen mit Kamerazoom faellt ihre Kante zwischen zwei Bildschirmpixel. Die
+   * bilineare Filterung greift dort ein halbes Texel ueber den Texturrand hinaus, findet nichts
+   * und klemmt (`CLAMP_TO_EDGE`) auf das Randtexel. Beide Nachbarn wiederholen so ihr eigenes
+   * Randtexel statt ineinander zu blenden – ein regelmaessiger Sprung entlang jeder Chunkgrenze,
+   * bei MULTIPLY-Ebenen als helle oder dunkle Linie besonders auffaellig.
+   *
+   * Mit Frame bleibt das Quad exakt `chunkSize` gross und an derselben Weltposition; die
+   * Filterung darf aber ueber `u1`/`v1` hinaus in den Gutter greifen, wo echte Nachbarschaft
+   * liegt. Composited wird weiterhin nur der logische Bereich – benachbarte Chunks ueberlappen
+   * sich nicht um ein einziges Pixel.
+   */
+  private applyVisibleFrame(texture: Phaser.GameObjects.RenderTexture): void {
+    if (this.gutterPx <= 0) return;
+    const source = texture.texture;
+    if (!source.has(CHUNK_VISIBLE_FRAME_NAME)) {
+      source.add(CHUNK_VISIBLE_FRAME_NAME, 0, this.gutterPx, this.gutterPx, this.grid.chunkSize, this.grid.chunkSize);
+      // `Texture.add()` macht das erste eigene Frame zum Standardframe. Die Zeichenbefehle der
+      // DynamicTexture rechnen aber weiter in vollen Texturkoordinaten – inklusive Gutter.
+      source.firstFrame = '__BASE';
+    }
+    texture.setFrame(CHUNK_VISIBLE_FRAME_NAME);
+  }
+
+  private applySamplingMode(texture: Phaser.GameObjects.RenderTexture): void {
+    const filterMode = this.samplingMode === 'nearest'
+      ? Phaser.Textures.FilterMode.NEAREST
+      : this.defaultFilterModes.get(texture);
+    if (filterMode !== undefined) texture.texture.setFilter(filterMode);
   }
 
   private bakeChunk(chunk: ResidentChunk): void {
     this.runBake(chunk, chunk.coord.localX, chunk.coord.localY, this.grid.chunkSize);
   }
 
+  /**
+   * Backt eine logische Region samt Gutter.
+   *
+   * `localX`/`localY`/`size` beschreiben die **logische** Region – die Chunkflaeche oder einen
+   * Dirty-Chunk. Gebacken und geblittet wird das um den Gutter erweiterte Quadrat. Beides ist
+   * derselbe Vorgang, weil der Gutter des Renderziels und die Erweiterung der Region sich exakt
+   * aufheben: Das Blit-Ziel bleibt der Versatz der logischen Region im Chunk.
+   *
+   * Zwei benachbarte Dirty-Blits ueberlappen sich dadurch um `2 * gutterPx`. Das ist unkritisch
+   * und beabsichtigt: Jedes Pixel entsteht aus demselben Weltzustand an derselben ganzzahligen
+   * Position, welcher Blit es zuletzt schreibt, ist gleichgueltig.
+   */
   private runBake(chunk: ResidentChunk, localX: number, localY: number, size: number): void {
+    const gutter = this.gutterPx;
+    const bakeX = localX - gutter;
+    const bakeY = localY - gutter;
+    const bakeSize = size + gutter * 2;
     const region: ChunkBakeRegion = {
       chunk: chunk.coord,
-      localX,
-      localY,
-      size,
-      worldX: this.frame.offsetX + localX,
-      worldY: this.frame.offsetY + localY,
+      localX: bakeX,
+      localY: bakeY,
+      size: bakeSize,
+      worldX: this.frame.offsetX + bakeX,
+      worldY: this.frame.offsetY + bakeY,
+      gutterPx: gutter,
     };
     const destX = localX - chunk.coord.localX;
     const destY = localY - chunk.coord.localY;
@@ -284,21 +470,21 @@ export class ChunkedRenderSurface {
       blit: (layerId, scratch) => {
         const target = chunk.textures.get(layerId);
         if (!target) return;
-        target.clear(destX, destY, size, size);
+        target.clear(destX, destY, bakeSize, bakeSize);
         target.stamp(scratch.texture.key, undefined, destX, destY, { originX: 0, originY: 0 });
         target.render();
       },
       clearRegion: (layerId) => {
         const target = chunk.textures.get(layerId);
         if (!target) return;
-        target.clear(destX, destY, size, size);
+        target.clear(destX, destY, bakeSize, bakeSize);
         target.render();
       },
       fillRegion: (layerId, color, alpha = 1) => {
         const target = chunk.textures.get(layerId);
         if (!target) return;
-        target.clear(destX, destY, size, size);
-        target.fill(color, alpha, destX, destY, size, size);
+        target.clear(destX, destY, bakeSize, bakeSize);
+        target.fill(color, alpha, destX, destY, bakeSize, bakeSize);
         target.render();
       },
     };
@@ -320,6 +506,12 @@ export class ChunkedRenderSurface {
  * Ihre Kantenlaenge folgt der gerade gebackenen Region, nie der Arena – genau das ist die
  * Eigenschaft, die die Bake-Pfade von der Weltgroesse entkoppelt. Ein Satz je Groesse reicht,
  * weil immer nur eine Region gleichzeitig gebacken wird.
+ *
+ * Seit dem Sampling-Gutter ist `region.size` die um beide Gutter erweiterte Kantenlaenge; es
+ * entstehen also zwei Groessen je Rolle (Chunk und Dirty-Chunk) wie zuvor, nur um `2 * gutterPx`
+ * groesser. Beide bleiben gerade, solange die logischen Groessen es sind – wichtig, weil Phaser
+ * ungerade Renderziele aufrundet und {@link eraseChunkScratch} den Mittelpunkt bei `size / 2`
+ * erwartet.
  */
 export class ChunkScratchPool {
   private readonly sets = new Map<string, Phaser.GameObjects.RenderTexture>();

@@ -523,6 +523,24 @@ export class ArenaScene extends Phaser.Scene {
       this.runtimeProfiler,
       () => this.describePerformanceEnvironment(),
       this.performanceAblation,
+      {
+        getState: () => ({
+          staticShadows: this.renderers?.shadow?.isStaticVisible() ?? true,
+          groundSurface: this.ctx?.arenaResult?.groundSurface?.isVisible() ?? true,
+          rockOverlay: this.ctx?.arenaResult?.rockOverlaySurface?.isVisible() ?? true,
+          chunkSampling: this.renderers?.shadow?.getSamplingMode()
+            ?? this.ctx?.arenaResult?.groundSurface?.getSamplingMode()
+            ?? 'default',
+        }),
+        setStaticShadowsVisible: (visible) => this.renderers?.shadow?.setStaticVisible(visible),
+        setGroundSurfaceVisible: (visible) => this.ctx?.arenaResult?.groundSurface?.setVisible(visible),
+        setRockOverlayVisible: (visible) => this.ctx?.arenaResult?.rockOverlaySurface?.setVisible(visible),
+        setChunkSampling: (mode) => {
+          this.renderers?.shadow?.setSamplingMode(mode);
+          this.ctx?.arenaResult?.groundSurface?.setSamplingMode(mode);
+          this.ctx?.arenaResult?.rockOverlaySurface?.setSamplingMode(mode);
+        },
+      },
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unsubscribePerformanceQuality();

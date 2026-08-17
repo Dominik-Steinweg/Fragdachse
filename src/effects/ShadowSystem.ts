@@ -24,6 +24,7 @@ import {
 } from '../graphics/GraphicsQuality';
 import { resolveSkyState } from './TimeOfDay';
 import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
+import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkWorldRect } from '../arena/chunks/ArenaChunkGrid';
 import { ArenaCellBucketIndex } from '../arena/chunks/ArenaCellBucketIndex';
@@ -153,6 +154,7 @@ export class ShadowSystem {
   private lastStaticOptions: StaticShadowLayoutBuildOptions = {};
   /** Von aussen gesetzte Sichtbarkeit; kombiniert sich mit dem Inhalt der gebackenen Layer. */
   private shadowsVisible = true;
+  private staticSamplingMode: ChunkSamplingMode = 'default';
   /**
    * Die gebackenen statischen Schatten liegen in Render-Chunks statt in je einer arenagrossen
    * RenderTexture je Ebene. Auf einer 400 x 80-Karte waeren das vier Ziele zu 12 800 x 2 560 px;
@@ -288,6 +290,20 @@ export class ShadowSystem {
     this.shadowsVisible = visible;
     // `staticGraphics` bleibt dauerhaft unsichtbar – sichtbar sind die gebackenen Chunks.
     this.syncStaticSurfaceVisibility();
+  }
+
+  isStaticVisible(): boolean {
+    return this.shadowsVisible;
+  }
+
+  /** Affects only the render textures used by the baked static shadow chunks. */
+  setSamplingMode(mode: ChunkSamplingMode): void {
+    this.staticSamplingMode = mode;
+    this.staticSurface?.setSamplingMode(mode);
+  }
+
+  getSamplingMode(): ChunkSamplingMode {
+    return this.staticSamplingMode;
   }
 
   setDynamicVisible(visible: boolean): void {
@@ -468,6 +484,7 @@ export class ShadowSystem {
       bake: (region, sink) => this.bakeStaticShadowRegion(region, sink),
       onChunkTextureCreated: (texture) => this.applyMask(texture),
     });
+    this.staticSurface.setSamplingMode(this.staticSamplingMode);
     this.staticSurface.updateResidency(this.staticResidencyView ?? frame);
     return { surface: this.staticSurface, created: true };
   }
@@ -709,6 +726,9 @@ export class ShadowSystem {
   clear(): void {
     this.clearStatic();
     this.clearDynamic();
+    this.shadowsVisible = true;
+    this.staticSamplingMode = 'default';
+    this.setDynamicVisible(true);
     this.lastStaticLayout = null;
     this.lastStaticOptions = {};
     this.lastBakedProfile = null;

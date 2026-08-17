@@ -6,8 +6,24 @@ import type {
   ArenaRuntimeWindowSummary,
 } from '../scenes/arena/ArenaRuntimeProfiler';
 import { ABLATION_LABELS, type PerformanceAblationController } from '../scenes/arena/PerformanceAblation';
+import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
 
 const REFRESH_INTERVAL_MS = 500;
+
+export interface ChunkRenderingDiagnosticsState {
+  staticShadows: boolean;
+  groundSurface: boolean;
+  rockOverlay: boolean;
+  chunkSampling: ChunkSamplingMode;
+}
+
+export interface ChunkRenderingDiagnostics {
+  getState(): ChunkRenderingDiagnosticsState;
+  setStaticShadowsVisible(visible: boolean): void;
+  setGroundSurfaceVisible(visible: boolean): void;
+  setRockOverlayVisible(visible: boolean): void;
+  setChunkSampling(mode: ChunkSamplingMode): void;
+}
 
 function ms(value: number): string {
   return `${value.toFixed(value < 10 ? 2 : 1)} ms`;
@@ -80,11 +96,14 @@ export class PerformanceDiagnosticsOverlay {
   private timer: number | null = null;
 
   private ablationButton: HTMLButtonElement | null = null;
+  private chunkDiagnosticsSection: HTMLDivElement | null = null;
+  private chunkDiagnosticControls: Array<{ render(state: ChunkRenderingDiagnosticsState): void }> = [];
 
   constructor(
     private readonly profiler: ArenaRuntimeProfiler,
     private readonly getEnvironment: () => Record<string, unknown>,
     private readonly ablation: PerformanceAblationController | null = null,
+    private readonly chunkDiagnostics: ChunkRenderingDiagnostics | null = null,
   ) {}
 
   toggle(): void {
@@ -139,7 +158,10 @@ export class PerformanceDiagnosticsOverlay {
 
     this.output = document.createElement('pre');
     Object.assign(this.output.style, { margin: '0', whiteSpace: 'pre-wrap', font: 'inherit' });
-    panel.append(title, controls, this.status, this.output);
+    this.chunkDiagnosticsSection = this.createChunkDiagnosticsSection();
+    panel.append(title, controls);
+    if (this.chunkDiagnosticsSection) panel.append(this.chunkDiagnosticsSection);
+    panel.append(this.status, this.output);
     getOverlayRoot().appendChild(panel);
     this.panel = panel;
     this.profiler.setLiveDrawCallTracking(true);
@@ -162,6 +184,8 @@ export class PerformanceDiagnosticsOverlay {
     this.stopButton = null;
     this.exportButton = null;
     this.ablationButton = null;
+    this.chunkDiagnosticsSection = null;
+    this.chunkDiagnosticControls = [];
   }
 
   destroy(): void {
@@ -202,6 +226,7 @@ export class PerformanceDiagnosticsOverlay {
     if (this.stopButton) this.stopButton.disabled = !recording;
     if (this.exportButton) this.exportButton.disabled = !this.profiler.canExport();
     if (this.ablationButton) this.ablationButton.disabled = recording;
+    this.renderChunkDiagnostics();
     const lines = buildSummaryLines(this.profiler.getLatestSummary());
     if (this.ablation?.isActive()) {
       const category = this.ablation.getCurrentCategory();
@@ -245,5 +270,88 @@ export class PerformanceDiagnosticsOverlay {
     link.download = `fragdachse-performance-${stamp}-${report.recordingScope.qualities.join('-')}.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  private createChunkDiagnosticsSection(): HTMLDivElement | null {
+    if (!this.chunkDiagnostics) return null;
+
+    const section = document.createElement('div');
+    Object.assign(section.style, {
+      marginBottom: '8px',
+      padding: '8px',
+      border: '1px solid #555',
+      background: 'rgba(35, 35, 35, 0.72)',
+    });
+
+    const heading = document.createElement('div');
+    heading.textContent = 'Chunk Rendering Diagnostics';
+    heading.style.fontWeight = 'bold';
+    heading.style.marginBottom = '5px';
+    section.appendChild(heading);
+
+    const addToggle = (
+      label: string,
+      read: (state: ChunkRenderingDiagnosticsState) => boolean,
+      onToggle: (visible: boolean) => void,
+    ): void => {
+      const button = this.createButton('', () => {
+        const state = this.chunkDiagnostics?.getState();
+        if (!state) return;
+        onToggle(!read(state));
+        this.render();
+      });
+      button.style.display = 'block';
+      button.style.width = '100%';
+      button.style.marginTop = '4px';
+      this.chunkDiagnosticControls.push({
+        render: (state) => {
+          const enabled = read(state);
+          button.textContent = `${label}: ${enabled ? 'ON' : 'OFF'}`;
+          button.setAttribute('aria-pressed', String(enabled));
+        },
+      });
+      section.appendChild(button);
+    };
+
+    addToggle(
+      'Static Shadows',
+      (state) => state.staticShadows,
+      (visible) => this.chunkDiagnostics?.setStaticShadowsVisible(visible),
+    );
+    addToggle(
+      'Ground Surface',
+      (state) => state.groundSurface,
+      (visible) => this.chunkDiagnostics?.setGroundSurfaceVisible(visible),
+    );
+    addToggle(
+      'Rock Overlay',
+      (state) => state.rockOverlay,
+      (visible) => this.chunkDiagnostics?.setRockOverlayVisible(visible),
+    );
+
+    const samplingButton = this.createButton('', () => {
+      const state = this.chunkDiagnostics?.getState();
+      if (!state) return;
+      this.chunkDiagnostics?.setChunkSampling(state.chunkSampling === 'default' ? 'nearest' : 'default');
+      this.render();
+    });
+    samplingButton.style.display = 'block';
+    samplingButton.style.width = '100%';
+    samplingButton.style.marginTop = '4px';
+    this.chunkDiagnosticControls.push({
+      render: (state) => {
+        samplingButton.textContent = `Chunk Sampling: ${state.chunkSampling.toUpperCase()}`;
+        samplingButton.setAttribute('aria-pressed', String(state.chunkSampling === 'nearest'));
+      },
+    });
+    section.appendChild(samplingButton);
+
+    return section;
+  }
+
+  private renderChunkDiagnostics(): void {
+    const state = this.chunkDiagnostics?.getState();
+    if (!state) return;
+    for (const control of this.chunkDiagnosticControls) control.render(state);
   }
 }

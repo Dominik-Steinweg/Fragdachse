@@ -8,7 +8,13 @@ vi.mock('phaser', () => ({
 import { ShadowSystem } from '../src/effects/ShadowSystem';
 import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../src/config';
 import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
+import { CHUNK_SAMPLING_GUTTER_PX } from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ArenaLayout } from '../src/types';
+
+/** Kantenlaenge eines Chunk-Renderziels: logischer Chunk plus beidseitiger Sampling-Gutter. */
+const CHUNK_TARGET_SIZE = ARENA_RENDER_CHUNK_SIZE + 2 * CHUNK_SAMPLING_GUTTER_PX;
+/** Kantenlaenge des Scratch-Ziels einer 128er-Dirty-Region – ebenfalls samt Gutter. */
+const DIRTY_SCRATCH_SIZE = 128 + 2 * CHUNK_SAMPLING_GUTTER_PX;
 
 /**
  * Die gebackenen statischen Schatten.
@@ -81,9 +87,22 @@ function makeScene() {
       },
     };
     // `active` ist kein Detail: Der Teardown raeumt nur auf, was noch aktiv ist.
-    const rt: Record<string, unknown> = { camera, active: true, texture: { key: `shadow_rt_${textureId++}` } };
+    const frames: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    const rt: Record<string, unknown> = {
+      camera,
+      active: true,
+      texture: {
+        key: `shadow_rt_${textureId++}`,
+        firstFrame: '__BASE',
+        frames,
+        has: (name: string) => name in frames,
+        add: (name: string, _sourceIndex: number, fx: number, fy: number, fw: number, fh: number) => {
+          frames[name] = { x: fx, y: fy, width: fw, height: fh };
+        },
+      },
+    };
     for (const name of ['setOrigin', 'setBlendMode', 'setMask', 'clearMask', 'setRenderMode',
-      'clear', 'render']) {
+      'setFrame', 'clear', 'render']) {
       rt[name] = () => rt;
     }
     rt.setPosition = (nextX: number, nextY: number) => { event.x = nextX; event.y = nextY; return rt; };
@@ -118,7 +137,7 @@ function layout(rockCount: number, treeCount: number): ArenaLayout {
 
 /** Alle je erzeugten Chunk-Ziele; das Scratch-Ziel ist an seiner Kantenlaenge erkennbar. */
 function chunkTargets(textures: TextureEvent[]): TextureEvent[] {
-  return textures.filter((texture) => texture.width === ARENA_RENDER_CHUNK_SIZE);
+  return textures.filter((texture) => texture.width === CHUNK_TARGET_SIZE);
 }
 
 /** Die gerade residenten: Ein freigegebenes Ziel wandert unsichtbar in den Pool. */
@@ -139,8 +158,8 @@ describe('static shadow baking', () => {
 
     expect(textures.length).toBeGreaterThan(0);
     for (const texture of textures) {
-      expect(texture.width).toBeLessThanOrEqual(ARENA_RENDER_CHUNK_SIZE);
-      expect(texture.height).toBeLessThanOrEqual(ARENA_RENDER_CHUNK_SIZE);
+      expect(texture.width).toBeLessThanOrEqual(CHUNK_TARGET_SIZE);
+      expect(texture.height).toBeLessThanOrEqual(CHUNK_TARGET_SIZE);
       // Die frueheren Ziele waren so gross wie die Arena; genau das darf nicht wiederkommen.
       expect(texture.width).toBeLessThan(ARENA_WIDTH);
       expect(texture.height).toBeLessThan(ARENA_HEIGHT);
@@ -192,7 +211,9 @@ describe('static shadow baking', () => {
     // Eine einzelne Zerstoerung darf nur einen Bruchteil der Arbeit des Vollaufbaus kosten.
     expect(dirtyDraws).toBeLessThan(drawsAfterBuild / 2);
     // Und sie laeuft ueber ein 128er-Scratch-Ziel.
-    expect(textures.some((texture) => texture.width === 128 && texture.height === 128)).toBe(true);
+    expect(textures.some(
+      (texture) => texture.width === DIRTY_SCRATCH_SIZE && texture.height === DIRTY_SCRATCH_SIZE,
+    )).toBe(true);
   });
 
   it('blits a dirty shadow chunk in chunk-local coordinates, with a neutral target camera', () => {
@@ -226,11 +247,12 @@ describe('static shadow baking', () => {
     }
 
     // Das Scratch-Ziel dagegen liest weltpositionierte Graphics ein und scrollt dafuer auf die
-    // Weltecke der Region – der Arena-Offset von 12 px steckt genau dort.
+    // Weltecke der Region – der Arena-Offset von 12 px steckt genau dort, um den Gutter nach
+    // aussen versetzt.
     const scratchScrolls = textures
-      .filter((texture) => texture.width === 128)
+      .filter((texture) => texture.width === DIRTY_SCRATCH_SIZE)
       .flatMap((texture) => texture.cameraScrolls);
-    expect(scratchScrolls.some((scroll) => scroll.y === ARENA_OFFSET_Y)).toBe(true);
+    expect(scratchScrolls.some((scroll) => scroll.y === ARENA_OFFSET_Y - CHUNK_SAMPLING_GUTTER_PX)).toBe(true);
   });
 
   it('drops every chunk target on teardown so no shadows survive into the lobby', () => {

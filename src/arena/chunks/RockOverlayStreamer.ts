@@ -22,6 +22,7 @@ import {
 } from '../RockOverlayRegions';
 import type { RockOverlaySource } from '../RockOverlayRegions';
 import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './ChunkedRenderSurface';
+import type { ChunkSamplingMode } from './ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from './ChunkedRenderSurface';
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 
@@ -139,6 +140,18 @@ export class RockOverlayStreamer {
 
   setVisible(visible: boolean): void {
     this.surface.setVisible(visible);
+  }
+
+  isVisible(): boolean {
+    return this.surface.isVisible();
+  }
+
+  setSamplingMode(mode: ChunkSamplingMode): void {
+    this.surface.setSamplingMode(mode);
+  }
+
+  getSamplingMode(): ChunkSamplingMode {
+    return this.surface.getSamplingMode();
   }
 
   getStats() {
