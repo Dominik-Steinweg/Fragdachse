@@ -629,7 +629,7 @@ export class NetworkBridge {
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private coopDefenseCarryDeliveredFxHandler: CoopDefenseCarryDeliveredFxHandler | null = null;
-  private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void) | null = null;
+  private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset, projectileId?: number) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private diagnostics: TransportDiagnostics | null = null;
   private networkFailureCbs: Array<(message: string) => void> = [];
@@ -2926,9 +2926,14 @@ export class NetworkBridge {
 
   // ── BFG-Laser-RPC: Host → Alle ──────────────────────────────────────────
 
-  broadcastBfgLaserBatch(lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset): void {
+  broadcastBfgLaserBatch(
+    lines: { sx: number; sy: number; ex: number; ey: number }[],
+    color: number,
+    visualPreset?: HitscanVisualPreset,
+    projectileId?: number,
+  ): void {
     if (lines.length === 0) return;
-    this.broadcastGameplayEvent('bfl', { l: lines, c: color, v: visualPreset });
+    this.broadcastGameplayEvent('bfl', { l: lines, c: color, v: visualPreset, pid: projectileId });
   }
 
   broadcastMiniRocketCollectionEffect(x: number, y: number, color: number): void {
@@ -2961,13 +2966,13 @@ export class NetworkBridge {
     });
   }
 
-  registerBfgLaserBatchHandler(handler: (lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void): void {
+  registerBfgLaserBatchHandler(handler: (lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset, projectileId?: number) => void): void {
     this.bfgLaserHandler = handler;
     this.registerAllRpcHandler('bfl', async (data: unknown): Promise<unknown> => {
       const cb = this.bfgLaserHandler;
       if (!cb) return undefined;
-      const { l, c, v } = data as { l: { sx: number; sy: number; ex: number; ey: number }[]; c: number; v?: HitscanVisualPreset };
-      cb(l, c, v);
+      const { l, c, v, pid } = data as { l: { sx: number; sy: number; ex: number; ey: number }[]; c: number; v?: HitscanVisualPreset; pid?: number };
+      cb(l, c, v, pid);
       return undefined;
     });
   }

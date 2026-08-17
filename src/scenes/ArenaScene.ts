@@ -1801,6 +1801,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
     this.renderers.blackHole.update(delta);
+    this.renderers.bfg.update();
     this.renderers.plasmaBurner.update(delta);
     // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
     this.visualFeedback?.update(delta);

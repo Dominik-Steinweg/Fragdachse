@@ -272,11 +272,17 @@ export class RpcCoordinator {
   }
 
   private registerBfgLaserBatchHandler(): void {
-    bridge.registerBfgLaserBatchHandler((lines, color, visualPreset) => {
+    bridge.registerBfgLaserBatchHandler((lines, color, visualPreset, projectileId) => {
       for (const line of lines) {
         if (visualPreset === 'asmd_primary') {
           this.renderers.asmdPrimary.playTracer(line.sx, line.sy, line.ex, line.ey, color, 1.35, 'player');
-        } else {
+        }
+      }
+      if (visualPreset !== 'asmd_primary' && projectileId !== undefined) {
+        this.renderers.bfg.playLaserBatch(lines, projectileId);
+      } else if (visualPreset !== 'asmd_primary') {
+        // Compatibility fallback for batches emitted by older peers without a projectile ID.
+        for (const line of lines) {
           this.ctx.effectSystem.playHitscanTracer(line.sx, line.sy, line.ex, line.ey, color, 2);
         }
       }

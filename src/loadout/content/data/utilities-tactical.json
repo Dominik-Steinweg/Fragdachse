@@ -45,14 +45,15 @@
         "fullChargeDuration": 900
       },
       "projectileSpeed": 250,
-      "projectileSize": 32,
+      "range": 2000,
+      "projectileSize": 64,
       "fuseTime": 0,
       "maxBounces": 0,
       "directDamage": 300,
       "proximityPulse": {
-        "damage": 20,
-        "radius": 184,
-        "scanIntervalMs": 100
+        "damage": 100,
+        "radius": 200,
+        "scanIntervalMs": 500
       },
       "allowedSlots": [],
       "skipCooldownPublish": true,

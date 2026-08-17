@@ -1981,7 +1981,8 @@ export class LoadoutManager {
       damage:           cfg.directDamage,
       color:            COLORS.GREEN_2,
       allowTeamDamage:  cfg.allowTeamDamage,
-      lifetime:         5000,      // großzügig – endet durch Arena-Wand
+      lifetime:         (cfg.range / cfg.projectileSpeed) * 1000,
+      remainingRangePx: cfg.range,
       maxBounces:       0,
       isGrenade:        false,
       adrenalinGain:    0,

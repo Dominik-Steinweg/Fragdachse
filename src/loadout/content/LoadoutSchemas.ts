@@ -99,7 +99,7 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   ],
   molotov: ['fireRadius', 'fireDamagePerTick', 'fireLingerDuration'],
   time_bubble: ['bubbleRadius', 'bubbleDuration', 'projectileSlowFactor', 'playerSlowFactor', 'trainSlowFactor'],
-  bfg: ['directDamage', 'proximityPulse'],
+  bfg: ['range', 'directDamage', 'proximityPulse'],
   nuke: [],
   stinkcloud: ['cloudRadius', 'cloudDuration', 'cloudDamagePerTick', 'cloudTickInterval'],
   taser: ['damage', 'range', 'hitArcDegrees', 'visualPreset'],
@@ -278,7 +278,9 @@ export function validateResolvedUtility(value: unknown): string[] {
   if (value.visualVariant !== undefined && !['stink', 'spore', 'spore_void', 'electric'].includes(String(value.visualVariant))) {
     issues.push('$.visualVariant: unbekannte Stinkwolken-Variante');
   }
-  for (const field of ['cooldown', 'projectileSpeed', 'projectileSize', 'fuseTime', 'maxBounces']) {
+  const numericFields = ['cooldown', 'projectileSpeed', 'projectileSize', 'fuseTime', 'maxBounces'];
+  if (value.type === 'bfg') numericFields.push('range');
+  for (const field of numericFields) {
     if (typeof value[field] !== 'number' || value[field] < 0) issues.push(`$.${field}: endliche nichtnegative Zahl erforderlich`);
   }
   return issues;

@@ -18,9 +18,19 @@ import {
   setEmitterTintArray,
 } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
+import {
+  blendBeamPaths,
+  createJitteredBeamPath,
+  reanchorBeamPathEnd,
+  reanchorBeamPathStart,
+  resampleBeamSpline,
+  sampleBeamPath,
+  sampleBeamTangent,
+  strokeBeamPolyline,
+  type BeamPoint,
+} from './BeamPathShared';
 import type { LightingSystem } from './LightingSystem';
 
-type BeamPoint = { x: number; y: number };
 type BeamOwnerVisualState = { x: number; y: number; color: number };
 
 const TEX_PLASMA_HAZE = '__plasma_burner_haze';
@@ -368,9 +378,9 @@ export class PlasmaBurnerRenderer {
     const shiftY = muzzle.y - visual.startY;
     if ((shiftX * shiftX) + (shiftY * shiftY) <= 0.0001) return;
 
-    this.reanchorPathStart(visual.mainPath, shiftX, shiftY);
-    this.reanchorPathStart(visual.outerPath, shiftX, shiftY);
-    this.reanchorPathStart(visual.corePath, shiftX, shiftY);
+    reanchorBeamPathStart(visual.mainPath, shiftX, shiftY);
+    reanchorBeamPathStart(visual.outerPath, shiftX, shiftY);
+    reanchorBeamPathStart(visual.corePath, shiftX, shiftY);
     visual.startX = muzzle.x;
     visual.startY = muzzle.y;
   }
@@ -394,9 +404,9 @@ export class PlasmaBurnerRenderer {
     const shiftY = (targetY - visual.endY) * follow;
     if ((shiftX * shiftX) + (shiftY * shiftY) <= 0.0001) return;
 
-    this.reanchorPathEnd(visual.mainPath, shiftX, shiftY);
-    this.reanchorPathEnd(visual.outerPath, shiftX, shiftY);
-    this.reanchorPathEnd(visual.corePath, shiftX, shiftY);
+    reanchorBeamPathEnd(visual.mainPath, shiftX, shiftY);
+    reanchorBeamPathEnd(visual.outerPath, shiftX, shiftY);
+    reanchorBeamPathEnd(visual.corePath, shiftX, shiftY);
     visual.endX += shiftX;
     visual.endY += shiftY;
   }
@@ -404,26 +414,6 @@ export class PlasmaBurnerRenderer {
   private getLocalAimAngle(beamId: string): number | null {
     const angle = this.localAimAngleProvider?.(beamId) ?? null;
     return angle !== null && Number.isFinite(angle) ? angle : null;
-  }
-
-  private reanchorPathStart(points: BeamPoint[], shiftX: number, shiftY: number): void {
-    const last = points.length - 1;
-    for (let index = 0; index < points.length; index += 1) {
-      const t = last > 0 ? index / last : 0;
-      const weight = Math.pow(1 - t, 2.35);
-      points[index].x += shiftX * weight;
-      points[index].y += shiftY * weight;
-    }
-  }
-
-  private reanchorPathEnd(points: BeamPoint[], shiftX: number, shiftY: number): void {
-    const last = points.length - 1;
-    for (let index = 0; index < points.length; index += 1) {
-      const t = last > 0 ? index / last : 1;
-      const weight = Math.pow(t, 2.35);
-      points[index].x += shiftX * weight;
-      points[index].y += shiftY * weight;
-    }
   }
 
   private recycleBeam(beamId: string, visual: PlasmaBeamVisual): void {
@@ -451,8 +441,6 @@ export class PlasmaBurnerRenderer {
     const dx = visual.endX - visual.startX;
     const dy = visual.endY - visual.startY;
     const length = Math.hypot(dx, dy);
-    const normalX = length > 0.001 ? -dy / length : 0;
-    const normalY = length > 0.001 ? dx / length : 1;
     const controlCount = Phaser.Math.Clamp(
       Math.ceil(length / CONTROL_POINT_SPACING_PX) + 1,
       MIN_CONTROL_POINTS,
@@ -466,12 +454,23 @@ export class PlasmaBurnerRenderer {
     const jitter = Phaser.Math.Clamp(length * 0.014 + visual.thickness * 0.34, 4.2, 10);
     const phase = this.scene.time.now * 0.015;
 
-    const nextMain = this.createSmoothBeamPath(visual, normalX, normalY, controlCount, divisions, jitter, phase);
-    const nextOuter = this.createSmoothBeamPath(visual, normalX, normalY, controlCount, divisions, jitter * 0.62, phase + 2.7);
-    const nextCore = this.createSmoothBeamPath(visual, normalX, normalY, controlCount, divisions, jitter * 0.38, phase + 5.3);
-    visual.mainPath = this.blendPaths(visual.mainPath, nextMain, 0.62, visual);
-    visual.outerPath = this.blendPaths(visual.outerPath, nextOuter, 0.5, visual);
-    visual.corePath = this.blendPaths(visual.corePath, nextCore, 0.72, visual);
+    const start = { x: visual.startX, y: visual.startY };
+    const end = { x: visual.endX, y: visual.endY };
+    const nextMain = createJitteredBeamPath(
+      start,
+      end,
+      controlCount,
+      divisions,
+      jitter,
+      phase,
+      visual.motionTrailX,
+      visual.motionTrailY,
+    );
+    const nextOuter = createJitteredBeamPath(start, end, controlCount, divisions, jitter * 0.62, phase + 2.7);
+    const nextCore = createJitteredBeamPath(start, end, controlCount, divisions, jitter * 0.38, phase + 5.3);
+    visual.mainPath = blendBeamPaths(visual.mainPath, nextMain, 0.62, start, end);
+    visual.outerPath = blendBeamPaths(visual.outerPath, nextOuter, 0.5, start, end);
+    visual.corePath = blendBeamPaths(visual.corePath, nextCore, 0.72, start, end);
 
     const palette = getBeamPaletteForPlayerColor(visual.color);
     const mainColor = visual.color;
@@ -479,78 +478,17 @@ export class PlasmaBurnerRenderer {
     const coreColor = mixColors(visual.color, 0xffffff, 0.84);
 
     visual.glow.clear();
-    this.strokePolyline(visual.glow, visual.outerPath, Math.max(visual.thickness * 5.2, 24), glowColor, 0.055);
-    this.strokePolyline(visual.glow, visual.outerPath, Math.max(visual.thickness * 3.1, 15), mainColor, 0.14);
+    strokeBeamPolyline(visual.glow, visual.outerPath, Math.max(visual.thickness * 5.2, 24), glowColor, 0.055);
+    strokeBeamPolyline(visual.glow, visual.outerPath, Math.max(visual.thickness * 3.1, 15), mainColor, 0.14);
 
     visual.discharge.clear();
-    this.strokePolyline(visual.discharge, visual.mainPath, Math.max(visual.thickness * 1.08, 4.8), mainColor, 0.86);
-    this.strokePolyline(visual.discharge, visual.corePath, Math.max(visual.thickness * 0.28, 1.35), coreColor, 0.98);
+    strokeBeamPolyline(visual.discharge, visual.mainPath, Math.max(visual.thickness * 1.08, 4.8), mainColor, 0.86);
+    strokeBeamPolyline(visual.discharge, visual.corePath, Math.max(visual.thickness * 0.28, 1.35), coreColor, 0.98);
 
     visual.filaments.clear();
     this.drawFilaments(visual.filaments, visual.mainPath, jitter, mainColor, glowColor, coreColor);
     this.drawSideBranches(visual.filaments, visual.mainPath, length, jitter, mainColor, glowColor, coreColor);
     this.drawEndpointDischarges(visual, dx, dy, length, mainColor, glowColor, coreColor);
-  }
-
-  private createSmoothBeamPath(
-    visual: PlasmaBeamVisual,
-    normalX: number,
-    normalY: number,
-    controlCount: number,
-    divisions: number,
-    jitter: number,
-    phase: number,
-  ): BeamPoint[] {
-    if (Math.hypot(visual.endX - visual.startX, visual.endY - visual.startY) < 0.001) {
-      return [{ x: visual.startX, y: visual.startY }, { x: visual.endX, y: visual.endY }];
-    }
-
-    const controls: BeamPoint[] = [{ x: visual.startX, y: visual.startY }];
-    let filteredNoise = Phaser.Math.FloatBetween(-0.35, 0.35);
-    for (let index = 1; index < controlCount - 1; index += 1) {
-      const t = index / (controlCount - 1);
-      const envelope = Math.pow(Math.sin(Math.PI * t), 0.78);
-      filteredNoise = filteredNoise * 0.42 + Phaser.Math.FloatBetween(-1, 1) * 0.58;
-      const slowBend = Math.sin(phase * 0.34 + t * Math.PI * 2.3) * 0.24;
-      const travelingRipple = Math.sin(phase + t * 11.4 + index * 0.37) * 0.2;
-      const offset = (filteredNoise * 0.72 + slowBend + travelingRipple) * jitter * envelope;
-      const motionEnvelope = Math.sin(Math.PI * t) * Math.pow(1 - t, 1.45);
-      controls.push({
-        x: Phaser.Math.Linear(visual.startX, visual.endX, t) + normalX * offset + visual.motionTrailX * motionEnvelope,
-        y: Phaser.Math.Linear(visual.startY, visual.endY, t) + normalY * offset + visual.motionTrailY * motionEnvelope,
-      });
-    }
-    controls.push({ x: visual.endX, y: visual.endY });
-    return this.resampleSpline(controls, divisions);
-  }
-
-  private resampleSpline(controls: readonly BeamPoint[], divisions: number): BeamPoint[] {
-    if (controls.length < 3) return controls.map(point => ({ ...point }));
-    const spline = new Phaser.Curves.Spline(controls.map(point => new Phaser.Math.Vector2(point.x, point.y)));
-    const sampled = spline.getSpacedPoints(divisions).map(point => ({ x: point.x, y: point.y }));
-    if (sampled[0]) sampled[0] = { ...controls[0] };
-    if (sampled.length > 1) sampled[sampled.length - 1] = { ...controls[controls.length - 1] };
-    return sampled;
-  }
-
-  private blendPaths(
-    previous: readonly BeamPoint[],
-    next: readonly BeamPoint[],
-    nextWeight: number,
-    visual: PlasmaBeamVisual,
-  ): BeamPoint[] {
-    if (previous.length < 2) return next.map(point => ({ ...point }));
-    const blended = next.map((point, index) => {
-      const t = index / Math.max(1, next.length - 1);
-      const old = this.samplePath(previous, t);
-      return {
-        x: Phaser.Math.Linear(old.x, point.x, nextWeight),
-        y: Phaser.Math.Linear(old.y, point.y, nextWeight),
-      };
-    });
-    blended[0] = { x: visual.startX, y: visual.startY };
-    blended[blended.length - 1] = { x: visual.endX, y: visual.endY };
-    return blended;
   }
 
   private drawFilaments(
@@ -574,8 +512,8 @@ export class PlasmaBurnerRenderer {
       for (let index = 0; index < controlCount; index += 1) {
         const localT = index / (controlCount - 1);
         const pathT = Phaser.Math.Linear(startT, endT, localT);
-        const base = this.samplePath(mainPath, pathT);
-        const tangent = this.sampleTangent(mainPath, pathT);
+        const base = sampleBeamPath(mainPath, pathT);
+        const tangent = sampleBeamTangent(mainPath, pathT);
         const envelope = Math.sin(Math.PI * localT);
         const separation = side * jitter * Phaser.Math.FloatBetween(0.18, 0.5) * (0.3 + envelope * 0.7);
         const noise = Phaser.Math.FloatBetween(-jitter * 0.12, jitter * 0.12);
@@ -585,9 +523,9 @@ export class PlasmaBurnerRenderer {
         });
       }
 
-      const filamentPath = this.resampleSpline(controls, Phaser.Math.Between(12, 24));
-      this.strokePolyline(graphics, filamentPath, Phaser.Math.FloatBetween(2.1, 3.2), glowColor, 0.07);
-      this.strokePolyline(
+      const filamentPath = resampleBeamSpline(controls, Phaser.Math.Between(12, 24));
+      strokeBeamPolyline(graphics, filamentPath, Phaser.Math.FloatBetween(2.1, 3.2), glowColor, 0.07);
+      strokeBeamPolyline(
         graphics,
         filamentPath,
         Phaser.Math.FloatBetween(0.62, 1.08),
@@ -612,8 +550,8 @@ export class PlasmaBurnerRenderer {
 
     for (let branch = 0; branch < branchCount; branch += 1) {
       const pivotT = Phaser.Math.FloatBetween(0.22, 0.84);
-      const pivot = this.samplePath(mainPath, pivotT);
-      const tangent = this.sampleTangent(mainPath, pivotT);
+      const pivot = sampleBeamPath(mainPath, pivotT);
+      const tangent = sampleBeamTangent(mainPath, pivotT);
       const side = Math.random() < 0.5 ? -1 : 1;
       const baseAngle = Math.atan2(tangent.y, tangent.x);
       const branchAngle = baseAngle + side * Phaser.Math.FloatBetween(0.62, 1.05);
@@ -622,8 +560,8 @@ export class PlasmaBurnerRenderer {
       const endY = pivot.y + Math.sin(branchAngle) * branchLength;
       const branchPath = this.createSmoothBranch(pivot.x, pivot.y, endX, endY, jitter * 0.28);
 
-      this.strokePolyline(graphics, branchPath, 2.8, glowColor, 0.08);
-      this.strokePolyline(graphics, branchPath, 0.78, branch === 0 ? coreColor : mainColor, 0.62);
+      strokeBeamPolyline(graphics, branchPath, 2.8, glowColor, 0.08);
+      strokeBeamPolyline(graphics, branchPath, 0.78, branch === 0 ? coreColor : mainColor, 0.62);
     }
   }
 
@@ -649,7 +587,7 @@ export class PlasmaBurnerRenderer {
       });
     }
     controls.push({ x: endX, y: endY });
-    return this.resampleSpline(controls, 10);
+    return resampleBeamSpline(controls, 10);
   }
 
   private drawEndpointDischarges(
@@ -704,8 +642,8 @@ export class PlasmaBurnerRenderer {
         visual.endY + Math.sin(angle) * dischargeLength,
         2.8,
       );
-      this.strokePolyline(graphics, branchPath, 2.5, glowColor, 0.08);
-      this.strokePolyline(graphics, branchPath, 0.72, coreColor, 0.72);
+      strokeBeamPolyline(graphics, branchPath, 2.5, glowColor, 0.08);
+      strokeBeamPolyline(graphics, branchPath, 0.72, coreColor, 0.72);
     }
   }
 
@@ -745,8 +683,8 @@ export class PlasmaBurnerRenderer {
       }
       const baseT = (index + 0.5) / count;
       const t = Phaser.Math.Clamp(baseT + Math.sin(now * 0.0024 + index * 1.9) * 0.012, 0.02, 0.98);
-      const point = this.samplePath(visual.outerPath, t);
-      const tangent = this.sampleTangent(visual.outerPath, t);
+      const point = sampleBeamPath(visual.outerPath, t);
+      const tangent = sampleBeamTangent(visual.outerPath, t);
       const drift = Math.sin(now * 0.0053 + index * 2.2) * 2.2;
       const pulse = 0.5 + Math.sin(now * 0.009 + index * 1.43) * 0.5;
       image
@@ -780,8 +718,8 @@ export class PlasmaBurnerRenderer {
       }
       const movingT = this.wrap01(now * (0.00048 + index * 0.000025) + index / count);
       const t = 0.045 + movingT * 0.91;
-      const point = this.samplePath(visual.mainPath, t);
-      const tangent = this.sampleTangent(visual.mainPath, t);
+      const point = sampleBeamPath(visual.mainPath, t);
+      const tangent = sampleBeamTangent(visual.mainPath, t);
       const pulse = 0.5 + Math.sin(now * 0.017 + index * 2.71) * 0.5;
       const lateral = Math.sin(now * 0.011 + index * 1.77) * 1.5;
       image
@@ -815,7 +753,7 @@ export class PlasmaBurnerRenderer {
       }
       const movingT = this.wrap01(1 - now * (0.00062 + index * 0.00004) + index / count);
       const t = 0.035 + movingT * 0.93;
-      const point = this.samplePath(visual.corePath, t);
+      const point = sampleBeamPath(visual.corePath, t);
       const pulse = 0.5 + Math.sin(now * 0.026 + index * 3.17) * 0.5;
       const size = Phaser.Math.Linear(4.5, 9.5, pulse);
       image
@@ -836,7 +774,7 @@ export class PlasmaBurnerRenderer {
     coreColor: number,
   ): void {
     const tangent = visual.mainPath.length >= 2
-      ? this.sampleTangent(visual.mainPath, 0.02)
+      ? sampleBeamTangent(visual.mainPath, 0.02)
       : { x: length > 0.001 ? (visual.endX - visual.startX) / length : 1, y: length > 0.001 ? (visual.endY - visual.startY) / length : 0 };
     const angle = Math.atan2(tangent.y, tangent.x);
     const muzzlePulse = 0.5 + Math.sin(now * 0.024) * 0.5;
@@ -893,48 +831,8 @@ export class PlasmaBurnerRenderer {
     visual.impactFlare.setVisible(false);
   }
 
-  private samplePath(points: readonly BeamPoint[], t: number): BeamPoint {
-    if (points.length === 0) return { x: 0, y: 0 };
-    if (points.length === 1) return { ...points[0] };
-    const scaled = Phaser.Math.Clamp(t, 0, 1) * (points.length - 1);
-    const lower = Math.floor(scaled);
-    const upper = Math.min(points.length - 1, lower + 1);
-    const fraction = scaled - lower;
-    return {
-      x: Phaser.Math.Linear(points[lower].x, points[upper].x, fraction),
-      y: Phaser.Math.Linear(points[lower].y, points[upper].y, fraction),
-    };
-  }
-
-  private sampleTangent(points: readonly BeamPoint[], t: number): BeamPoint {
-    const before = this.samplePath(points, Math.max(0, t - 0.012));
-    const after = this.samplePath(points, Math.min(1, t + 0.012));
-    const dx = after.x - before.x;
-    const dy = after.y - before.y;
-    const length = Math.hypot(dx, dy) || 1;
-    return { x: dx / length, y: dy / length };
-  }
-
   private wrap01(value: number): number {
     return value - Math.floor(value);
-  }
-
-  private strokePolyline(
-    graphics: Phaser.GameObjects.Graphics,
-    points: readonly BeamPoint[],
-    width: number,
-    color: number,
-    alpha: number,
-  ): void {
-    const first = points[0];
-    if (!first) return;
-    graphics.lineStyle(width, color, alpha);
-    graphics.beginPath();
-    graphics.moveTo(first.x, first.y);
-    for (let index = 1; index < points.length; index += 1) {
-      graphics.lineTo(points[index].x, points[index].y);
-    }
-    graphics.strokePath();
   }
 
   private emitImpactSparks(visual: PlasmaBeamVisual, now: number): void {

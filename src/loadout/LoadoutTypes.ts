@@ -564,6 +564,7 @@ export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
 
 export interface BfgUtilityConfig extends BaseUtilityConfig {
   readonly type: 'bfg';
+  readonly range: number;          // px – maximale Hauptprojektil-Reichweite
   readonly directDamage: number;    // HP-Schaden bei Direkttreffer
   readonly proximityPulse: ProjectileProximityPulseConfig;
 }

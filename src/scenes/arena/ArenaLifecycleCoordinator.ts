@@ -2250,6 +2250,7 @@ export class ArenaLifecycleCoordinator {
           [...playerLines, ...pulse.lines],
           proj.isBfg ? COLORS.GREEN_2 : proj.color,
           proj.isBfg ? undefined : 'asmd_primary',
+          proj.isBfg ? proj.id : undefined,
         );
       });
       this.ctx.projectileManager.setTimeBubbleFactorProvider((x, y, now, ownerId) => {
