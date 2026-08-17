@@ -4,6 +4,7 @@ import type { ArenaVisualGridMetrics } from './ArenaVisualFactory';
 import { hashSeededCell01 } from './CellHash';
 import {
   GROUND_COVER_CONFIG,
+  getGroundCoverPlacementBudget,
   getGroundCoverTextureKey,
   getGroundCoverVariantsForAnchor,
 } from './GroundCoverConfig';
@@ -106,11 +107,15 @@ export function generateGroundCoverPlacements(options: GroundCoverFieldOptions):
   const placements: GroundCoverPlacement[] = [];
   const blockCols = Math.ceil(cols / config.blockCells);
   const blockRows = Math.ceil(rows / config.blockCells);
+  const placementBudget = getGroundCoverPlacementBudget(cols, rows, config);
 
   for (let blockY = 0; blockY < blockRows; blockY += 1) {
     for (let blockX = 0; blockX < blockCols; blockX += 1) {
       for (let slot = 0; slot < config.maxPerBlock; slot += 1) {
-        if (placements.length >= config.maxPlacements) return placements;
+        // Das Budget stammt aus genau dem Blockraster, das dieser Lauf verarbeitet. Es kann daher
+        // nur als defensive Konsistenzgrenze wirken und nie einen spaeteren Kartenabschnitt
+        // abschneiden.
+        if (placements.length >= placementBudget) return placements;
         const salt = slot * 997;
         const jitterX = (hashSeededCell01(options.seed, blockX, blockY, salt + 1) - 0.5) * 2 * config.jitterCells;
         const jitterY = (hashSeededCell01(options.seed, blockX, blockY, salt + 2) - 0.5) * 2 * config.jitterCells;

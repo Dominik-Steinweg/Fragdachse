@@ -6,7 +6,11 @@ import { Jimp } from 'jimp';
 
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { generateRockMossPlacements } from '../src/arena/RockMossField';
-import { ROCK_MOSS_CONFIG, getRockMossTextureKey } from '../src/arena/RockMossConfig';
+import {
+  getRockMossPlacementBudget,
+  ROCK_MOSS_CONFIG,
+  getRockMossTextureKey,
+} from '../src/arena/RockMossConfig';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
@@ -19,6 +23,21 @@ import type { RockCell } from '../src/types';
 
 function placementsFor(seed: number, rocks: readonly RockCell[]) {
   return generateRockMossPlacements({ seed, rocks });
+}
+
+const LARGE_COOP_METRICS = {
+  offsetX: ARENA_OFFSET_X,
+  offsetY: ARENA_OFFSET_Y,
+  gridCols: 400,
+  gridRows: 80,
+};
+
+function allRockCells(width: number, height: number): RockCell[] {
+  const rocks: RockCell[] = [];
+  for (let gridY = 0; gridY < height; gridY += 1) {
+    for (let gridX = 0; gridX < width; gridX += 1) rocks.push({ gridX, gridY });
+  }
+  return rocks;
 }
 
 describe('Rock moss field', () => {
@@ -109,9 +128,26 @@ describe('Rock moss field', () => {
     for (let index = 0; index < 10; index += 1) {
       const layout = ArenaGenerator.generate(85_000 + index);
       const placements = placementsFor(layout.seed, layout.rocks);
-      expect(placements.length).toBeLessThanOrEqual(ROCK_MOSS_CONFIG.maxPlacements);
+      expect(placements.length).toBeLessThanOrEqual(getRockMossPlacementBudget(GRID_COLS, GRID_ROWS));
       expect(placements.length).toBeLessThanOrEqual(blocks * ROCK_MOSS_CONFIG.maxPerBlock);
     }
+  });
+
+  it('keeps the local density through the full 400 x 80 Test-Map 0 raster', () => {
+    const placements = generateRockMossPlacements({
+      seed: 85_010,
+      rocks: allRockCells(400, 80),
+      metrics: LARGE_COOP_METRICS,
+    });
+    const upperHalf = placements.filter((placement) =>
+      placement.worldY - LARGE_COOP_METRICS.offsetY < 40 * CELL_SIZE).length;
+    const lowerHalf = placements.length - upperHalf;
+
+    // 400 x 80 has 3 618 Moss-Bloecke. Der alte globale Deckel von 768 liess den zeilenweise
+    // spaeter verarbeiteten unteren Kartenbereich leer.
+    expect(placements.length).toBeGreaterThan(768);
+    expect(placements.length).toBeLessThanOrEqual(getRockMossPlacementBudget(400, 80));
+    expect(lowerHalf).toBeGreaterThan(upperHalf * 0.5);
   });
 
   it('produces nothing without rocks', () => {

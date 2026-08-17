@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Jimp } from 'jimp';
 
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
-import { generateRockVegetationPlacements } from '../src/arena/RockVegetationField';
+import {
+  generateRockVegetationPlacements,
+  getRockVegetationPlacementBudget,
+} from '../src/arena/RockVegetationField';
 import type { RockVegetationPlacement } from '../src/arena/RockVegetationField';
 import {
   ROCK_VEGETATION_CONFIG,
@@ -59,6 +62,23 @@ function describePlacement(placement: RockVegetationPlacement) {
 function straightWall(length: number, row = 5, col = 3): RockCell[] {
   const rocks: RockCell[] = [];
   for (let index = 0; index < length; index += 1) rocks.push({ gridX: col + index, gridY: row });
+  return rocks;
+}
+
+const LARGE_COOP_METRICS = {
+  offsetX: ARENA_OFFSET_X,
+  offsetY: ARENA_OFFSET_Y,
+  gridCols: 400,
+  gridRows: 80,
+};
+
+function checkerboardRocks(width: number, height: number): RockCell[] {
+  const rocks: RockCell[] = [];
+  for (let gridY = 0; gridY < height; gridY += 1) {
+    for (let gridX = 0; gridX < width; gridX += 1) {
+      if ((gridX + gridY) % 2 === 0) rocks.push({ gridX, gridY });
+    }
+  }
   return rocks;
 }
 
@@ -222,8 +242,27 @@ describe('Rock vegetation field', () => {
     for (let index = 0; index < 6; index += 1) {
       const layout = ArenaGenerator.generate(97_000 + index);
       expect(placementsFor(layout.seed, layout.rocks).length)
-        .toBeLessThanOrEqual(ROCK_VEGETATION_CONFIG.maxPlacements);
+        .toBeLessThanOrEqual(getRockVegetationPlacementBudget(layout.rocks));
     }
+  });
+
+  it('keeps edge density through the full 400 x 80 Test-Map 0 raster', () => {
+    const rocks = checkerboardRocks(400, 80);
+    const placements = generateRockVegetationPlacements({
+      seed: 97_010,
+      rocks,
+      metrics: LARGE_COOP_METRICS,
+    });
+    const upperHalf = placements.filter((placement) =>
+      placement.worldY - LARGE_COOP_METRICS.offsetY < 40 * CELL_SIZE).length;
+    const lowerHalf = placements.length - upperHalf;
+
+    // Der alte globale Deckel von 512 stoppte nach dem zeilenweisen Lauf mitten in der Map.
+    expect(placements.length).toBeGreaterThan(512);
+    expect(placements.length).toBeLessThanOrEqual(
+      getRockVegetationPlacementBudget(rocks, LARGE_COOP_METRICS),
+    );
+    expect(lowerHalf).toBeGreaterThan(upperHalf * 0.5);
   });
 
   it('produces nothing without rocks', () => {

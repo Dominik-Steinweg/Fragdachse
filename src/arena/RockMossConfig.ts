@@ -27,8 +27,8 @@ export interface RockMossVariantConfig {
 export interface RockMossLayerConfig {
   /** Kantenlaenge eines Ankerblocks in Zellen. */
   blockCells: number;
+  /** Maximale Zahl lokaler Anker-Slots je Block; der Gesamtumfang folgt aus dem Map-Raster. */
   maxPerBlock: number;
-  maxPlacements: number;
   /** Streuung des Ankers innerhalb seines Blocks, in Zellen. */
   jitterCells: number;
   /** Erwartete Stempelzahl je Ankerblock; der Nachkommaanteil ist Wahrscheinlichkeit. */
@@ -50,13 +50,6 @@ export const ROCK_MOSS_CONFIG: RockMossLayerConfig = {
    */
   blockCells: 3,
   maxPerBlock: 2,
-  /**
-   * Schutzgrenze. Sie muss ueber `Bloecke * maxPerBlock` liegen, sonst bricht der Generator
-   * mitten in seinem zeilenweisen Lauf ab und die Karte bliebe unten rechts unbemoost. Groesste
-   * Karte ist `13-brutbomben` mit 135x40 Zellen, also 45x14 = 630 Bloecke; da `perBlock` unter 1
-   * liegt, kann hoechstens ein Stempel je Block entstehen.
-   */
-  maxPlacements: 768,
   jitterCells: 1.5,
 
   perBlock: 0.75,
@@ -82,6 +75,21 @@ export const ROCK_MOSS_CONFIG: RockMossLayerConfig = {
     { fileName: 'rock_moss_08.png', frequencyPercent: 13 },
   ],
 };
+
+/**
+ * Obergrenze des Blockrasters fuer eine konkrete Map. Sie skaliert mit der Mapflaeche und ist
+ * deshalb keine globale, auf kleine Arenen zugeschnittene Placement-Grenze.
+ */
+export function getRockMossPlacementBudget(
+  gridCols: number,
+  gridRows: number,
+  config: RockMossLayerConfig = ROCK_MOSS_CONFIG,
+): number {
+  if (gridCols <= 0 || gridRows <= 0) return 0;
+  return Math.ceil(gridCols / config.blockCells)
+    * Math.ceil(gridRows / config.blockCells)
+    * Math.ceil(config.maxPerBlock);
+}
 
 export function getRockMossTextureKey(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '');

@@ -43,8 +43,8 @@ export interface GroundCoverAnchorConfig {
 export interface GroundCoverLayerConfig {
   /** Kantenlaenge eines Ankerblocks in Zellen. */
   blockCells: number;
+  /** Maximale Zahl lokaler Anker-Slots je Block; der Gesamtumfang folgt aus dem Map-Raster. */
   maxPerBlock: number;
-  maxPlacements: number;
   /** Streuung des Ankers innerhalb seines Blocks, in Zellen. */
   jitterCells: number;
   seam: GroundCoverAnchorConfig;
@@ -64,16 +64,6 @@ export interface GroundCoverLayerConfig {
 export const GROUND_COVER_CONFIG: GroundCoverLayerConfig = {
   blockCells: 5,
   maxPerBlock: 2,
-  /**
-   * Reine Schutzgrenze gegen kuenftig noch groessere Karten.
-   *
-   * Sie muss ueber `Bloecke * maxPerBlock` liegen, sonst bricht der Generator mitten in seinem
-   * zeilenweisen Lauf ab und die Karte bliebe unten rechts unbemoost – ein Abschnitt, den man
-   * im Spiel sieht, aber an keiner Zahl ablesen kann. Groesste Karte ist derzeit
-   * `13-brutbomben` mit 135x40 Zellen, also 27x8 = 216 Bloecke; 512 traegt damit auch
-   * `perBlock`-Werte ueber 1, bei denen beide Slots je Block feuern.
-   */
-  maxPlacements: 512,
   /** Volle Blockbreite: der Anker landet an jeder Stelle, nie auf einem Zellmittelpunkt. */
   jitterCells: 2.5,
 
@@ -110,6 +100,21 @@ export const GROUND_COVER_CONFIG: GroundCoverLayerConfig = {
     { fileName: 'ground_cover_16.png', frequencyPercent: 6 },
   ],
 };
+
+/**
+ * Obergrenze des Blockrasters fuer eine konkrete Map. Sie skaliert mit der Mapflaeche und ist
+ * deshalb keine globale, auf kleine Arenen zugeschnittene Placement-Grenze.
+ */
+export function getGroundCoverPlacementBudget(
+  gridCols: number,
+  gridRows: number,
+  config: GroundCoverLayerConfig = GROUND_COVER_CONFIG,
+): number {
+  if (gridCols <= 0 || gridRows <= 0) return 0;
+  return Math.ceil(gridCols / config.blockCells)
+    * Math.ceil(gridRows / config.blockCells)
+    * Math.ceil(config.maxPerBlock);
+}
 
 export function getGroundCoverTextureKey(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '');

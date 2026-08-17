@@ -57,6 +57,40 @@ const EDGES = [
   { dx: 1, dy: 0, rotation: Math.PI / 2 },
 ] as const;
 
+function buildRockSet(
+  rocks: readonly RockCell[],
+  cols: number,
+  rows: number,
+): Set<number> {
+  const rockSet = new Set<number>();
+  for (const { gridX, gridY } of rocks) {
+    if (gridX < 0 || gridY < 0 || gridX >= cols || gridY >= rows) continue;
+    rockSet.add(gridY * cols + gridX);
+  }
+  return rockSet;
+}
+
+function getRockVegetationPlacementBudgetFromSet(
+  rockSet: ReadonlySet<number>,
+  config: RockVegetationLayerConfig,
+): number {
+  // Jede Matte belastet mindestens eine Felszelle; `maxEdgesPerCell` begrenzt diese Belastung.
+  // Damit ist die Felszellanzahl mal Kantenbudget eine sichere, geometrisch abgeleitete
+  // Obergrenze, die mit dem Felsbestand waechst und keinen Kartenabschnitt vorzeitig abschneidet.
+  return rockSet.size * Math.max(0, Math.ceil(config.maxEdgesPerCell));
+}
+
+export function getRockVegetationPlacementBudget(
+  rocks: readonly RockCell[],
+  metrics?: ArenaVisualGridMetrics,
+  config: RockVegetationLayerConfig = ROCK_VEGETATION_CONFIG,
+): number {
+  const cols = metrics?.gridCols ?? GRID_COLS;
+  const rows = metrics?.gridRows ?? GRID_ROWS;
+  if (cols <= 0 || rows <= 0) return 0;
+  return getRockVegetationPlacementBudgetFromSet(buildRockSet(rocks, cols, rows), config);
+}
+
 /**
  * Eigener Salt-Versatz gegen {@link ./RockMossField} und {@link ./GroundCoverField}. Ohne ihn
  * lieferten die Felder bei gleichem Seed und gleicher Zelle dieselben Hashwerte, und die
@@ -88,15 +122,13 @@ export function generateRockVegetationPlacements(options: RockVegetationFieldOpt
   const rows = metrics?.gridRows ?? GRID_ROWS;
   if (cols <= 0 || rows <= 0 || options.rocks.length === 0 || config.classes.length === 0) return [];
 
-  const rockSet = new Set<number>();
-  for (const { gridX, gridY } of options.rocks) {
-    if (gridX < 0 || gridY < 0 || gridX >= cols || gridY >= rows) continue;
-    rockSet.add(gridY * cols + gridX);
-  }
+  const rockSet = buildRockSet(options.rocks, cols, rows);
   const isRock = (gridX: number, gridY: number): boolean =>
     gridX >= 0 && gridY >= 0 && gridX < cols && gridY < rows && rockSet.has(gridY * cols + gridX);
 
   const placements: RockVegetationPlacement[] = [];
+  const placementBudget = getRockVegetationPlacementBudgetFromSet(rockSet, config);
+  if (placementBudget === 0) return placements;
   /** Wieviele Kanten je Zelle bereits eine Matte tragen – deckelt den Bewuchs kleiner Felsen. */
   const edgeLoad = new Map<number, number>();
 
@@ -117,7 +149,7 @@ export function generateRockVegetationPlacements(options: RockVegetationFieldOpt
           continue;
         }
         if (start < 0) continue;
-        if (placements.length >= config.maxPlacements) return placements;
+        if (placements.length >= placementBudget) return placements;
         emitRun(placements, edgeLoad, {
           config,
           seed: options.seed,
@@ -130,6 +162,7 @@ export function generateRockVegetationPlacements(options: RockVegetationFieldOpt
           line,
           start,
           length: index - start,
+          placementBudget,
         });
         start = -1;
       }
@@ -151,6 +184,7 @@ interface RunContext {
   line: number;
   start: number;
   length: number;
+  placementBudget: number;
 }
 
 /**
@@ -165,13 +199,13 @@ function emitRun(
   edgeLoad: Map<number, number>,
   run: RunContext,
 ): void {
-  const { config, seed, cols, edge, alongX, line, start, length } = run;
+  const { config, seed, cols, edge, alongX, line, start, length, placementBudget } = run;
   const salt = ROCK_VEGETATION_SALT_BASE + edge * 1013;
   const coverage = Math.min(config.maxCoverage, config.minCoverage + config.coverageSlopePerCell * (length - 1));
 
   let position = 0;
   while (position < length) {
-    if (placements.length >= config.maxPlacements) return;
+    if (placements.length >= placementBudget) return;
     const index = start + position;
     const gridX = alongX ? index : line;
     const gridY = alongX ? line : index;

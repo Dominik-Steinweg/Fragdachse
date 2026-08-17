@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { generateGroundCoverPlacements } from '../src/arena/GroundCoverField';
-import { GROUND_COVER_CONFIG, getGroundCoverTextureKey } from '../src/arena/GroundCoverConfig';
+import {
+  getGroundCoverPlacementBudget,
+  GROUND_COVER_CONFIG,
+  getGroundCoverTextureKey,
+} from '../src/arena/GroundCoverConfig';
 import type { GroundCoverPlacement } from '../src/arena/GroundCoverField';
 import {
   ARENA_OFFSET_X,
@@ -23,6 +27,13 @@ function placementsFor(seed: number, dirt: readonly DirtCell[]): GroundCoverPlac
 function dirtKeys(dirt: readonly DirtCell[]): Set<string> {
   return new Set(dirt.map((cell) => `${cell.gridX}:${cell.gridY}`));
 }
+
+const LARGE_COOP_METRICS = {
+  offsetX: ARENA_OFFSET_X,
+  offsetY: ARENA_OFFSET_Y,
+  gridCols: 400,
+  gridRows: 80,
+};
 
 describe('Ground cover field', () => {
   beforeEach(() => {
@@ -134,9 +145,26 @@ describe('Ground cover field', () => {
     for (let index = 0; index < 10; index += 1) {
       const layout = ArenaGenerator.generate(55_000 + index);
       const placements = placementsFor(layout.seed, layout.dirt);
-      expect(placements.length).toBeLessThanOrEqual(GROUND_COVER_CONFIG.maxPlacements);
+      expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(GRID_COLS, GRID_ROWS));
       expect(placements.length).toBeLessThanOrEqual(blocks * GROUND_COVER_CONFIG.maxPerBlock);
     }
+  });
+
+  it('keeps the local density through the full 400 x 80 Test-Map 0 raster', () => {
+    const placements = generateGroundCoverPlacements({
+      seed: 55_010,
+      dirt: [],
+      metrics: LARGE_COOP_METRICS,
+    });
+    const upperHalf = placements.filter((placement) =>
+      placement.worldY - LARGE_COOP_METRICS.offsetY < 40 * CELL_SIZE).length;
+    const lowerHalf = placements.length - upperHalf;
+
+    // 400 x 80 has 1 280 Ground-Cover-Bloecke. Der alte globale Deckel von 512 liess den
+    // zeilenweise spaeter verarbeiteten unteren Kartenbereich leer.
+    expect(placements.length).toBeGreaterThan(512);
+    expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(400, 80));
+    expect(lowerHalf).toBeGreaterThan(upperHalf * 0.5);
   });
 
   it('honours the exclusion predicate', () => {

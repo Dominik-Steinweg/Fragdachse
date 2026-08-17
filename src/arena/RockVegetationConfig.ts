@@ -94,7 +94,6 @@ export interface RockVegetationLayerConfig {
    * Grundform waere nicht mehr lesbar.
    */
   maxEdgesPerCell: number;
-  maxPlacements: number;
   minAlpha: number;
   maxAlpha: number;
   variants: readonly RockVegetationVariantConfig[];
@@ -149,12 +148,6 @@ export const ROCK_VEGETATION_CONFIG: RockVegetationLayerConfig = {
   maxCoverage: 0.95,
   maxGapCells: 2,
   maxEdgesPerCell: 2,
-  /**
-   * Schutzgrenze wie beim Fels-Moos. Groesste Karte ist `13-brutbomben` mit 135x40 Zellen; selbst
-   * bei durchgehendem Bewuchs bleibt die Zahl der Matten weit darunter, weil jede mindestens eine
-   * Zelle lang ist und das Zellbudget mehrfachen Bewuchs deckelt.
-   */
-  maxPlacements: 512,
   minAlpha: 0.82,
   maxAlpha: 1,
 
