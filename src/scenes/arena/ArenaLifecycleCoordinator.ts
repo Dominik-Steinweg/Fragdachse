@@ -1288,6 +1288,9 @@ export class ArenaLifecycleCoordinator {
       ) ?? 1;
       return vulnerability * matrixMultiplier;
     });
+    this.ctx.combatSystem.setApplyVulnerabilityHandler((target, durationMs) => {
+      this.ctx.targetStatusSystem?.applyVulnerability(target, durationMs);
+    });
     this.ctx.combatSystem.setEnergyInjectorTargetHitCallback((targetType, targetId, x, y, projectile) => {
       if (targetType === 'player' && !bridge.isEnemyPair(projectile.ownerId, targetId)) return;
       this.hostUpdate.applyEnergyInjectorTargetHit(targetType, targetId, x, y, projectile);

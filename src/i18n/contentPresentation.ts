@@ -235,6 +235,7 @@ const SOURCE_NAMES: Readonly<Record<string, LocalizedText>> = Object.freeze({
   'environment.detonation': { de: 'Detonation', en: 'Detonation' },
   'environment.void_meteor': { de: 'Leeren-Meteor', en: 'Void Meteor' },
   'environment.reflector_dome': { de: 'Reflexkuppel', en: 'Reflector Dome' },
+  'weapon.leaf_blower_deflect': { de: 'Gegenwind', en: 'Headwind' },
   'weapon.grenade': { de: 'Granate', en: 'Grenade' },
   'weapon.cluster_charge': { de: 'Clusterladung', en: 'Cluster Charge' },
   'weapon.stink_cloud': { de: 'Stinkwolke', en: 'Stink Cloud' },

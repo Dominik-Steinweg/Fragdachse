@@ -19,6 +19,8 @@ Map-Registry und Map-JSON sind in [coop-defense-authoring.md](coop-defense-autho
 - Coop-Upgrades: src/config/coopDefenseUpgrades.json und src/utils/coopDefenseUpgrades.ts;
 - allgemeine Runtime-/Power-up-Definitionen: src/powerups/PowerUpConfig.ts und src/config/.
 
+Upgrade-IDs bleiben auch beim inhaltlichen Umbau eines Upgrades stabil: Icon-Auflösung (getCoopDefenseUpgradeTextureKey), gespeicherte Profile in src/utils/localPreferences.ts und die englischen Fallback-Namen in src/i18n/upgradePresentation.ts hängen an der ID. Neue Anzeigenamen und Effekte werden über die Presentation- und Effektfelder geändert, nicht über eine neue ID.
+
 Diese Dateien enthalten sowohl Balance als auch technische Verträge. Balance darf sich ändern; IDs, Discriminators, Referenzpfade und die Bedeutung von Feldern sind Stabilitätsverträge und werden von Normalisierern/Validatoren geschützt.
 
 ## Referenzintegrität

@@ -66,7 +66,7 @@ const FIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   ],
   leaf_blower: [
     'projectileSpeed', 'hitboxStartSize', 'hitboxEndSize', 'hitboxGrowRate', 'velocityDecay',
-    'minKnockback', 'maxKnockback', 'selfPush',
+    'minKnockback', 'maxKnockback', 'selfPush', 'deflectProjectiles',
   ],
   tesla_dome: [
     'radius', 'damagePerTick', 'tickInterval', 'adrenalineDrainPerSecond', 'movementSlowFactor',

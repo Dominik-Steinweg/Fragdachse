@@ -2541,6 +2541,9 @@ export class LoadoutManager {
     visualMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
+    // Der Debuff-Wurf faellt pro Luftstoss: ein Stoss verbraucht sich am ersten Ziel, damit
+    // entspricht der Schuss-Wurf genau der beworbenen Trefferchance.
+    const debuffHit = (config.hitDebuffChance ?? 0) > 0 && Math.random() < (config.hitDebuffChance ?? 0);
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
@@ -2564,6 +2567,10 @@ export class LoadoutManager {
       leafBlowerMinKnockback: fireConfig.minKnockback,
       leafBlowerMaxKnockback: fireConfig.maxKnockback,
       leafBlowerSelfPush: fireConfig.selfPush,
+      leafBlowerDeflectsProjectiles: fireConfig.deflectProjectiles > 0,
+      hitSlowFraction:   debuffHit ? config.hitSlowFraction : undefined,
+      hitSlowDurationMs: debuffHit ? config.hitSlowDurationMs : undefined,
+      hitVulnerabilityDurationMs: debuffHit ? config.hitVulnerabilityDurationMs : undefined,
       sourceSlot,
       sourceTurretId:    options?.sourceTurretId,
       visualMuzzleOrigin,

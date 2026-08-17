@@ -676,12 +676,12 @@
                                             {
                                                 "id":  "leaf_blower_adrenalin_gain",
                                                 "de":  {
-                                                           "name":  "Upgrade Laubbläser: Adrenalingewinn",
-                                                           "description":  "+30% Adrenalingewinn für den Laubbläser je Stufe."
+                                                           "name":  "Upgrade Laubbläser: Schockböe",
+                                                           "description":  "10% Chance je Stufe, dass getroffene Gegner 2 Sekunden lang um 30% verlangsamt und verwundbar gemacht werden."
                                                        },
                                                 "en":  {
-                                                           "name":  "Leaf Blower Adrenalin Gain",
-                                                           "description":  "Enhances leaf blower adrenalin gain."
+                                                           "name":  "Leaf Blower Shock Gust",
+                                                           "description":  "10% chance per level that a hit enemy is slowed by 30% and made Vulnerable for 2 seconds."
                                                        }
                                             },
                                             {
@@ -929,23 +929,23 @@
                                             {
                                                 "id":  "leaf_blower_knockback",
                                                 "de":  {
-                                                           "name":  "Upgrade Laubbläser: Rückstoß",
-                                                           "description":  "+10% Maximal-Rückstoß für den Laubbläser je Stufe."
+                                                           "name":  "Upgrade Laubbläser: Turbodüse",
+                                                           "description":  "+15% Reichweite und +15% Projektilgeschwindigkeit für den Laubbläser je Stufe."
                                                        },
                                                 "en":  {
-                                                           "name":  "Leaf Blower Knockback",
-                                                           "description":  "Enhances leaf blower knockback."
+                                                           "name":  "Leaf Blower Turbo Nozzle",
+                                                           "description":  "+15% range and +15% projectile speed for the Leaf Blower per level."
                                                        }
                                             },
                                             {
                                                 "id":  "leaf_blower_hitbox_size",
                                                 "de":  {
-                                                           "name":  "Upgrade Laubbläser: Luftstrom",
-                                                           "description":  "+10% Endgröße der Hitbox für den Laubbläser je Stufe."
+                                                           "name":  "Upgrade Laubbläser: Orkanstoß",
+                                                           "description":  "+10% Rückstoßkraft und +10% größere Projektile für den Laubbläser je Stufe."
                                                        },
                                                 "en":  {
-                                                           "name":  "Leaf Blower Hitbox Size",
-                                                           "description":  "Enhances leaf blower hitbox size."
+                                                           "name":  "Leaf Blower Hurricane Blast",
+                                                           "description":  "+10% knockback force and +10% larger projectiles for the Leaf Blower per level."
                                                        }
                                             },
                                             {
@@ -995,12 +995,12 @@
                                             {
                                                 "id":  "leaf_blower_pressure_damage",
                                                 "de":  {
-                                                           "name":  "Druckluftschaden",
-                                                           "description":  "Erhöht den Direktschaden pro Treffer von 1 auf 10."
+                                                           "name":  "Gegenwind",
+                                                           "description":  "Der Luftstoß wirkt auch auf gegnerische Projektile: Sie werden nach dem Treffer vom Spieler übernommen und zurückgeschleudert, wie bei der Reflexkuppel."
                                                        },
                                                 "en":  {
-                                                           "name":  "Leaf Blower Pressure Damage",
-                                                           "description":  "Enhances leaf blower pressure damage."
+                                                           "name":  "Leaf Blower Headwind",
+                                                           "description":  "The air blast also catches enemy projectiles: they are taken over by the shooter and hurled back, just like the Reflector Dome."
                                                        }
                                             }
                                         ]

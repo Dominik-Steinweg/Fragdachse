@@ -392,6 +392,8 @@ export class CombatSystem {
     maxHp: number,
     isBoss: boolean,
   ) => void) | null = null;
+  /** Setzt die zentrale Verwundbarkeit auf einem Ziel; ohne Handler bleibt der Treffereffekt aus. */
+  private onApplyVulnerability: ((target: TargetStatusTarget, durationMs: number) => void) | null = null;
   private onPlayerDamageTaken: ((
     playerId: string,
     attackerId: string | undefined,
@@ -492,6 +494,10 @@ export class CombatSystem {
    */
   setDirectPrimaryHitHandler(handler: ((attackerId: string, enemyId: string, remainingHp: number, maxHp: number, isBoss: boolean) => void) | null): void {
     this.onDirectPrimaryHit = handler;
+  }
+  /** Uebergibt die zentrale Verwundbarkeit an den Host, wenn ein Projektil sie auf Treffer setzt. */
+  setApplyVulnerabilityHandler(handler: ((target: TargetStatusTarget, durationMs: number) => void) | null): void {
+    this.onApplyVulnerability = handler;
   }
   /** Meldung ueber tatsaechlich verlorene HP/Ruestung eines Spielers, nach der Verteilung. */
   setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind) => void) | null): void {
@@ -1272,6 +1278,7 @@ export class CombatSystem {
     if (!this.bridge.isHost()) return;
 
     this.applyDomeProjectileBarrier();
+    this.applyLeafBlowerProjectileDeflection();
 
     for (const proj of this.projectileManager.getActiveProjectiles()) {
       if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
@@ -1337,6 +1344,70 @@ export class CombatSystem {
   }
 
   /**
+   * Laubbläser-Gegenwind: Ein Luftstoß mit `leafBlowerDeflectsProjectiles` fängt gegnerische
+   * Projektile ab und schleudert sie in Stoßrichtung zurück. Das zurückgeschleuderte Geschoss
+   * gehört danach dem Schützen und trifft dessen Gegner – analog zur Reflexkuppel (d2).
+   */
+  private applyLeafBlowerProjectileDeflection(): void {
+    const blowers: TrackedProjectile[] = [];
+    for (const proj of this.projectileManager.getActiveProjectiles()) {
+      if (proj.leafBlowerDeflectsProjectiles && proj.projectileStyle === 'leaf_blower') blowers.push(proj);
+    }
+    if (blowers.length === 0) return;
+    const now = Date.now();
+
+    for (const target of this.projectileManager.getActiveProjectiles()) {
+      if (target.projectileStyle === 'leaf_blower') continue;
+      // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
+      if (target.isGrenade) continue;
+      if (target.miniRocketDeferredExplosion || target.miniRocketSpent) continue;
+
+      const targetBounds = target.sprite.getBounds();
+      for (const blower of blowers) {
+        if (blower.ownerId === target.ownerId) continue;
+        if (!this.canDamageTarget(target.ownerId, blower.ownerId, target.allowTeamDamage)) continue;
+        if (!Phaser.Geom.Intersects.RectangleToRectangle(targetBounds, blower.sprite.getBounds())) continue;
+
+        this.deflectProjectileFromLeafBlower(target, blower, now);
+        break; // Projektil ist behandelt
+      }
+    }
+  }
+
+  /** Übergibt ein abgefangenes Geschoss an den Laubbläser-Schützen und dreht es in Stoßrichtung. */
+  private deflectProjectileFromLeafBlower(
+    proj: TrackedProjectile,
+    blower: TrackedProjectile,
+    now: number,
+  ): void {
+    const blowLen = Math.hypot(blower.body.velocity.x, blower.body.velocity.y);
+    const angle = blowLen > 0.001
+      ? Math.atan2(blower.body.velocity.y, blower.body.velocity.x)
+      : Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
+    const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
+
+    this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, blower.ownerId, {
+      ...this.inheritedProjectileEffects(proj),
+      speed,
+      size: Math.max(1, proj.sprite.displayWidth),
+      damage: proj.damage,
+      color: proj.color,
+      ownerColor: blower.ownerColor ?? proj.color,
+      lifetime: Math.max(1, proj.lifetime - (now - proj.createdAt)),
+      maxBounces: 0,
+      isGrenade: false,
+      adrenalinGain: 0,
+      sourceId: 'weapon.leaf_blower_deflect',
+      projectileStyle: proj.projectileStyle,
+      bulletVisualPreset: proj.bulletVisualPreset,
+      tracerConfig: proj.tracerConfig,
+      reflected: true,
+      sourceSlot: 'weapon1',
+    });
+    this.projectileManager.destroyProjectile(proj.id);
+  }
+
+  /**
    * Trägt die Trefferwirkungen eines Projektils (Boden-DoT-Wolken, Explosionen, Brand, Debuffs)
    * in ein neu gespawntes Projektil weiter, damit sie nach einem Abprall/einer Reflexion
    * weiterhin ausgelöst werden, statt beim Reflect stillschweigend verloren zu gehen.
@@ -1361,6 +1432,7 @@ export class CombatSystem {
       baseDamageMult:       proj.baseDamageMult,
       hitSlowFraction:      proj.hitSlowFraction,
       hitSlowDurationMs:    proj.hitSlowDurationMs,
+      hitVulnerabilityDurationMs: proj.hitVulnerabilityDurationMs,
       hitKnockback:         proj.hitKnockback,
       hitKnockbackDurationMs: proj.hitKnockbackDurationMs,
     };
@@ -3433,6 +3505,7 @@ export class CombatSystem {
     }
     if (allowDamage) {
       this.applyProjectileBurn(playerId, projectile);
+      this.applyProjectileVulnerability({ targetType: 'player', targetId: playerId }, projectile);
       this.applyDamage(playerId, damage, false, shooterId, sourceId, visualContext, {
         sourceSlot: projectile?.sourceSlot,
         damageKind: 'direct',
@@ -3491,6 +3564,7 @@ export class CombatSystem {
     if (slowFraction > 0 && slowDurationMs > 0) {
       this.applyEnemySlow(enemyId, slowFraction, slowDurationMs);
     }
+    this.applyProjectileVulnerability({ targetType: 'enemy', targetId: enemyId }, projectile);
     this.applyProjectileBurn(enemyId, projectile);
     this.applyDamage(enemyId, damage, false, shooterId, sourceId, visualContext, {
       sourceSlot: projectile?.sourceSlot,
@@ -3634,6 +3708,15 @@ export class CombatSystem {
     if (adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
     }
+  }
+
+  /** Setzt die zentrale Verwundbarkeit, wenn das treffende Projektil sie mitfuehrt. */
+  private applyProjectileVulnerability(
+    target: TargetStatusTarget,
+    projectile: TrackedProjectile | undefined,
+  ): void {
+    const durationMs = projectile?.hitVulnerabilityDurationMs ?? 0;
+    if (durationMs > 0) this.onApplyVulnerability?.(target, durationMs);
   }
 
   private createLeafBlowerImpulse(

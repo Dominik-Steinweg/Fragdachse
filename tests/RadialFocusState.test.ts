@@ -7,7 +7,6 @@ import {
   resolveRadialFocusFrame,
   resolveRadialFocusSampling,
 } from '../src/effects/postfx/radialFocusState';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH } from '../src/config';
 
 describe('radial focus state', () => {
   it('maps a world focus to final screen coordinates after camera feedback', () => {
@@ -17,12 +16,9 @@ describe('radial focus state', () => {
     expect(frame.focusY).toBe(658);
     expect(frame.radiusPx).toBe(176);
     expect(frame.alpha).toBe(1);
-    expect(frame.arenaRect).toEqual({
-      x: ARENA_OFFSET_X,
-      y: ARENA_OFFSET_Y,
-      width: ARENA_VIEWPORT_WIDTH,
-      height: ARENA_HEIGHT,
-    });
+    // Kein Arenarechteck mehr: der Schleier deckt die gesamte Weltkamera ab, sonst bleibt der
+    // Rand außerhalb der Arena (z. B. die obersten Bildzeilen) ungefiltert.
+    expect(Object.keys(frame).sort()).toEqual(['alpha', 'focusX', 'focusY', 'radiusPx']);
   });
 
   it('clamps the overlay alpha but preserves a negative death-close radius', () => {

@@ -692,6 +692,7 @@ export class ProjectileManager {
       shotgunSlowDurationMs: cfg.shotgunSlowDurationMs,
       hitSlowFraction: cfg.hitSlowFraction,
       hitSlowDurationMs: cfg.hitSlowDurationMs,
+      hitVulnerabilityDurationMs: cfg.hitVulnerabilityDurationMs,
       hitKnockback: cfg.hitKnockback,
       hitKnockbackDurationMs: cfg.hitKnockbackDurationMs,
       // Flammenwerfer-Felder
@@ -719,6 +720,7 @@ export class ProjectileManager {
       leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
       leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
       leafBlowerSelfPush: cfg.leafBlowerSelfPush,
+      leafBlowerDeflectsProjectiles: cfg.leafBlowerDeflectsProjectiles,
       initialSpeed:    cfg.speed,
       // Granaten-Countdown
       lastCountdownEmitted: null,

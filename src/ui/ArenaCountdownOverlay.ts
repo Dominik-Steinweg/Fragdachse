@@ -371,10 +371,6 @@ export class ArenaCountdownOverlay {
       frame.focusY,
       frame.radiusPx,
       frame.alpha,
-      frame.arenaRect.x,
-      frame.arenaRect.y,
-      frame.arenaRect.width,
-      frame.arenaRect.height,
     ].map((value) => Math.round(value * 100) / 100).join('|');
     if (key === this.lastFallbackFrameKey) return;
     this.lastFallbackFrameKey = key;
@@ -383,25 +379,22 @@ export class ArenaCountdownOverlay {
     const context = texture.context;
     const scaleX = texture.width / GAME_WIDTH;
     const scaleY = texture.height / GAME_HEIGHT;
-    const arenaX = frame.arenaRect.x * scaleX;
-    const arenaY = frame.arenaRect.y * scaleY;
-    const arenaWidth = frame.arenaRect.width * scaleX;
-    const arenaHeight = frame.arenaRect.height * scaleY;
+    const veilWidth = texture.width;
+    const veilHeight = texture.height;
     const focusX = frame.focusX * scaleX;
     const focusY = frame.focusY * scaleY;
     const radius = frame.radiusPx * scaleX;
     const softness = RADIAL_FOCUS_SOFTNESS_PX * scaleX;
     const alpha = Phaser.Math.Clamp(frame.alpha, 0, 1);
 
-    context.clearRect(0, 0, texture.width, texture.height);
-    context.save();
-    context.beginPath();
-    context.rect(arenaX, arenaY, arenaWidth, arenaHeight);
-    context.clip();
+    // Das Bild deckt den gesamten Designraum ab (`setDisplaySize(GAME_WIDTH, GAME_HEIGHT)`),
+    // deshalb füllt der Schleier die Textur vollständig. Sonst bliebe der Rand außerhalb der
+    // Arena als heller Streifen ohne Schleier stehen.
+    context.clearRect(0, 0, veilWidth, veilHeight);
 
     if (frame.radiusPx <= 0) {
       context.fillStyle = `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_OUTER_ALPHA})`;
-      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+      context.fillRect(0, 0, veilWidth, veilHeight);
     } else {
       const outerRadius = Math.max(1, radius + softness);
       const gradient = context.createRadialGradient(
@@ -416,10 +409,9 @@ export class ArenaCountdownOverlay {
       gradient.addColorStop(0.55, `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_MID_ALPHA})`);
       gradient.addColorStop(1, `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_OUTER_ALPHA})`);
       context.fillStyle = gradient;
-      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+      context.fillRect(0, 0, veilWidth, veilHeight);
     }
 
-    context.restore();
     texture.refresh();
   }
 

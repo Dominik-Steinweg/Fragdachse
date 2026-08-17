@@ -119,11 +119,16 @@
         "velocityDecay": 0.5,
         "minKnockback": 120,
         "maxKnockback": 500,
-        "selfPush": 80
+        "selfPush": 80,
+        "deflectProjectiles": 0
       },
       "allowedSlots": [
         "weapon1"
       ],
+      "hitDebuffChance": 0,
+      "hitSlowFraction": 0.3,
+      "hitSlowDurationMs": 2000,
+      "hitVulnerabilityDurationMs": 2000,
       "adrenalinCost": 0,
       "adrenalinGain": 10,
       "spreadStanding": 6,

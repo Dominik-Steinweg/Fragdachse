@@ -190,20 +190,43 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'XBOW',
     targets: [{ path: ['fire', 'enemyHitExplosion', 'maxDamage'], formula: 'add' }],
   },
-  'weapon.LEAF_BLOWER.maxKnockback': {
+  'weapon.LEAF_BLOWER.range': {
     kind: 'weapon',
     itemId: 'LEAF_BLOWER',
-    targets: [{ path: ['fire', 'maxKnockback'], formula: 'scale' }],
+    targets: [{ path: ['range'], formula: 'scale' }],
   },
-  'weapon.LEAF_BLOWER.hitboxEndSize': {
+  'weapon.LEAF_BLOWER.projectileSpeed': {
     kind: 'weapon',
     itemId: 'LEAF_BLOWER',
-    targets: [{ path: ['fire', 'hitboxEndSize'], formula: 'scale' }],
+    targets: [{ path: ['fire', 'projectileSpeed'], formula: 'scale' }],
   },
-  'weapon.LEAF_BLOWER.adrenalinGain': {
+  // Rückstoßkraft skaliert Nah- und Fernanteil gemeinsam, damit die Kurve ihre Form behält.
+  'weapon.LEAF_BLOWER.knockback': {
     kind: 'weapon',
     itemId: 'LEAF_BLOWER',
-    targets: [{ path: ['adrenalinGain'], formula: 'scale' }],
+    targets: [
+      { path: ['fire', 'minKnockback'], formula: 'scale' },
+      { path: ['fire', 'maxKnockback'], formula: 'scale' },
+    ],
+  },
+  // Projektilgröße skaliert Start- und Endgröße der wachsenden Luft-Hitbox gemeinsam.
+  'weapon.LEAF_BLOWER.hitboxSize': {
+    kind: 'weapon',
+    itemId: 'LEAF_BLOWER',
+    targets: [
+      { path: ['fire', 'hitboxStartSize'], formula: 'scale' },
+      { path: ['fire', 'hitboxEndSize'], formula: 'scale' },
+    ],
+  },
+  'weapon.LEAF_BLOWER.hitDebuffChance': {
+    kind: 'weapon',
+    itemId: 'LEAF_BLOWER',
+    targets: [{ path: ['hitDebuffChance'], formula: 'add' }],
+  },
+  'weapon.LEAF_BLOWER.deflectProjectiles': {
+    kind: 'weapon',
+    itemId: 'LEAF_BLOWER',
+    targets: [{ path: ['fire', 'deflectProjectiles'], formula: 'add' }],
   },
   'weapon.P90.range': {
     kind: 'weapon',

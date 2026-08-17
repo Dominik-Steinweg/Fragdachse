@@ -69,10 +69,6 @@ export class RadialFocusMaskTexture {
       frame.focusY,
       frame.radiusPx,
       frame.alpha,
-      frame.arenaRect.x,
-      frame.arenaRect.y,
-      frame.arenaRect.width,
-      frame.arenaRect.height,
     ].map((value) => Math.round(value * 100) / 100).join('|');
     if (key === this.lastFrameKey) return;
     this.lastFrameKey = key;
@@ -80,23 +76,19 @@ export class RadialFocusMaskTexture {
     const context = this.texture.context;
     const scaleX = this.texture.width / GAME_WIDTH;
     const scaleY = this.texture.height / GAME_HEIGHT;
-    const arenaX = frame.arenaRect.x * scaleX;
-    const arenaY = frame.arenaRect.y * scaleY;
-    const arenaWidth = frame.arenaRect.width * scaleX;
-    const arenaHeight = frame.arenaRect.height * scaleY;
+    const maskWidth = this.texture.width;
+    const maskHeight = this.texture.height;
     const focusX = frame.focusX * scaleX;
     const focusY = frame.focusY * scaleY;
     const alpha = Phaser.Math.Clamp(frame.alpha, 0, 1);
 
-    context.clearRect(0, 0, this.texture.width, this.texture.height);
-    context.save();
-    context.beginPath();
-    context.rect(arenaX, arenaY, arenaWidth, arenaHeight);
-    context.clip();
+    // Die Maske wird über die gesamte Fläche der Weltkamera gestreckt und deckt sie deshalb
+    // vollständig ab. Jede Aussparung bliebe als ungefilterter Streifen am Bildrand stehen.
+    context.clearRect(0, 0, maskWidth, maskHeight);
 
     if (frame.radiusPx <= 0) {
       context.fillStyle = `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha})`;
-      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+      context.fillRect(0, 0, maskWidth, maskHeight);
     } else {
       const radius = Math.max(0, frame.radiusPx * scaleX);
       const softness = RADIAL_FOCUS_SOFTNESS_PX * scaleX;
@@ -118,10 +110,9 @@ export class RadialFocusMaskTexture {
       gradient.addColorStop(0.84, `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha * 0.82})`);
       gradient.addColorStop(1, `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha})`);
       context.fillStyle = gradient;
-      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+      context.fillRect(0, 0, maskWidth, maskHeight);
     }
 
-    context.restore();
     this.texture.refresh();
   }
 

@@ -89,6 +89,7 @@ export interface LeafBlowerWeaponFireConfig {
   readonly minKnockback: number;        // px/s – spätester, schwächster Push
   readonly maxKnockback: number;        // px/s – stärkster Nahbereichs-Push
   readonly selfPush: number;            // px/s – additiver Rückschub für den Schützen während Dauerfeuer
+  readonly deflectProjectiles: number;  // >0: gegnerische Projektile werden vom Luftstoß übernommen und zurückgeschleudert
 }
 
 export interface TeslaDomeWeaponFireConfig {
@@ -247,6 +248,13 @@ export interface WeaponConfigShape {
   readonly shotgunChainRadiusRetention?: number;
   readonly hitSlowFraction?: number;
   readonly hitSlowDurationMs?: number;
+  /** Verwundbarkeitsdauer, die ein Direkttreffer auf dem Ziel setzt (0/undefined = keine). */
+  readonly hitVulnerabilityDurationMs?: number;
+  /**
+   * Trefferchance pro Schuss, mit der die Treffer-Debuffs (`hitSlow*`, `hitVulnerabilityDurationMs`)
+   * überhaupt mitgegeben werden. Ungesetzt/0 = Debuffs bleiben aus.
+   */
+  readonly hitDebuffChance?: number;
 
   // Hydra-Splitting (optional)
   readonly splitCount?:        number; // Anzahl der beim Bounce neu erzeugten Projektile

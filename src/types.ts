@@ -929,6 +929,8 @@ export interface ProjectileSpawnConfig {
   leafBlowerMinKnockback?: number;
   leafBlowerMaxKnockback?: number;
   leafBlowerSelfPush?:     number;
+  /** true = der Luftstoß übernimmt getroffene gegnerische Projektile und schleudert sie zurück. */
+  leafBlowerDeflectsProjectiles?: boolean;
 
   // BFG (optional)
   isBfg?:            boolean;   // true = BFG-Projektil (durchschlagend, Puls-Sub-Attacke)
@@ -977,6 +979,7 @@ export interface ProjectileSpawnConfig {
   shotgunSlowDurationMs?: number;
   hitSlowFraction?: number;
   hitSlowDurationMs?: number;
+  hitVulnerabilityDurationMs?: number;
   hitKnockback?: number;
   hitKnockbackDurationMs?: number;
   fireTrailHalfWidthCells?: number;
@@ -1279,6 +1282,7 @@ export interface TrackedProjectile {
   leafBlowerMinKnockback?: number;
   leafBlowerMaxKnockback?: number;
   leafBlowerSelfPush?:     number;
+  leafBlowerDeflectsProjectiles?: boolean;
 
   // Granaten-Countdown (Host-intern)
   lastCountdownEmitted?: number | null;  // letzter emittierter Countdown-Wert (Dedup)
@@ -1365,6 +1369,7 @@ export interface TrackedProjectile {
   shotgunSlowDurationMs?: number;
   hitSlowFraction?: number;
   hitSlowDurationMs?: number;
+  hitVulnerabilityDurationMs?: number;
   hitKnockback?: number;
   hitKnockbackDurationMs?: number;
   fireTrailHalfWidthCells?: number;

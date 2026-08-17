@@ -1,10 +1,3 @@
-import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
-  ARENA_VIEWPORT_WIDTH,
-  ARENA_HEIGHT,
-} from '../../config';
-
 export type RadialFocusQualityLevel = 'high' | 'medium' | 'low';
 
 export interface RadialFocusFrame {
@@ -15,13 +8,6 @@ export interface RadialFocusFrame {
   readonly radiusPx: number;
   /** Overall overlay strength, 0..1. */
   readonly alpha: number;
-  /** Current visible arena rectangle in the same screen/design space. */
-  readonly arenaRect: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  };
 }
 
 export interface RadialFocusSampling {
@@ -42,6 +28,13 @@ export const RADIAL_FOCUS_DARKEN = 0.18;
 export const RADIAL_FOCUS_DESATURATE = 0.58;
 export const RADIAL_FOCUS_DESATURATE_HIGH = 0.72;
 
+/**
+ * Der Schleier ist bildschirmfest und deckt immer den gesamten Designraum ab. Eine Begrenzung
+ * auf das Arenarechteck lässt die Ränder außerhalb (`ARENA_OFFSET_Y` oben, die Randspalten
+ * links/rechts) ungefiltert stehen – das war als scharfer Streifen am oberen Bildrand sichtbar.
+ * Weltkamera-Fläche und Maskentextur teilen denselben Designraum, deshalb gibt es hier kein
+ * Rechteck mehr.
+ */
 export function resolveRadialFocusFrame(
   focusWorldX: number,
   focusWorldY: number,
@@ -55,15 +48,6 @@ export function resolveRadialFocusFrame(
     focusY: focusWorldY - cameraScrollY,
     radiusPx,
     alpha: Math.max(0, Math.min(1, alpha)),
-    arenaRect: {
-      // The mask is screen-fixed, but it must span the authored arena height as well. On
-      // vertically expanded coop maps the viewport height is only the camera window; clipping
-      // to it leaves the lower part of the radial veil unfiltered.
-      x: ARENA_OFFSET_X,
-      y: ARENA_OFFSET_Y,
-      width: ARENA_VIEWPORT_WIDTH,
-      height: ARENA_HEIGHT,
-    },
   };
 }
 

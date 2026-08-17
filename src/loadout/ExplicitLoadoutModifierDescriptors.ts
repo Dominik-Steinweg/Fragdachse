@@ -432,11 +432,6 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "HYDRA",
     targets: [{ path: ["splitHomingEnabled"], formula: "add", createIfMissing: true }],
   },
-  "weapon.LEAF_BLOWER.directDamageOverride": {
-    kind: "weapon",
-    itemId: "LEAF_BLOWER",
-    targets: [{ path: ["directDamageOverride"], formula: "add" }],
-  },
   "weapon.NEGEV.hitSlowFraction": {
     kind: "weapon",
     itemId: "NEGEV",
