@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH, GRID_COLS, GRID_ROWS } from '../../config';
-import type { ArenaLayout, DecalCell } from '../../types';
+import type { ArenaLayout, DecalCell, DirtCell } from '../../types';
 import { ArenaVisualFactory, DIRT_FRINGE_OVERHANG_PX } from '../ArenaVisualFactory';
 import { DIRT_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleReachPx } from '../BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../BlobSurfaceMottle';
@@ -8,6 +8,8 @@ import { DECAL_SIZE } from '../DecalConfig';
 import { getGroundCoverPlacementRadiusPx, stampGroundCover } from '../GroundCoverLayer';
 import type { GroundCoverPlacement } from '../GroundCoverField';
 import { RockGridIndex } from '../RockGridIndex';
+import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
+import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
 import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './ChunkedRenderSurface';
 import type { ChunkSamplingMode } from './ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from './ChunkedRenderSurface';
@@ -44,11 +46,22 @@ export interface GroundSurfaceStreamerOptions {
 export class GroundSurfaceStreamer {
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
-  private readonly layout: ArenaLayout;
+  private readonly dirtCells: readonly DirtCell[];
   private readonly groundCoverPlacements: readonly GroundCoverPlacement[];
   private readonly groundDecals: readonly DecalCell[];
   private readonly dirtGrid: RockGridIndex;
+  private readonly dirtIndex: ArenaCellBucketIndex;
+  private readonly groundCoverIndex: ArenaPointBucketIndex<GroundCoverPlacement>;
+  private readonly groundDecalIndex: ArenaPointBucketIndex<DecalCell>;
   private readonly dirtIsOccupied: (gx: number, gy: number) => boolean;
+  private readonly dirtCandidateIds: number[] = [];
+  private readonly dirtVisibleCells: DirtCell[] = [];
+  private readonly dirtMottleSourceCells: DirtCell[] = [];
+  private readonly groundCoverCandidateIds: number[] = [];
+  private readonly groundCoverCandidates: GroundCoverPlacement[] = [];
+  private readonly groundDecalCandidateIds: number[] = [];
+  private readonly groundDecalCandidates: DecalCell[] = [];
+  private readonly groundCoverQueryRadius: number;
   private readonly mottleConfigs = [
     DIRT_BLOB_SURFACE_PROFILE.mottle,
     ...(DIRT_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
@@ -59,15 +72,33 @@ export class GroundSurfaceStreamer {
   constructor(options: GroundSurfaceStreamerOptions) {
     this.scene = options.scene;
     this.frame = options.frame;
-    this.layout = options.layout;
+    this.dirtCells = options.layout.dirt ?? [];
     this.groundCoverPlacements = options.groundCoverPlacements;
-    this.groundDecals = (options.layout.decals ?? []).filter(
-      (decal) => (decal.surface ?? 'ground') !== 'rock',
-    );
+    const groundDecals: DecalCell[] = [];
+    for (const decal of options.layout.decals ?? []) {
+      if ((decal.surface ?? 'ground') !== 'rock') groundDecals.push(decal);
+    }
+    this.groundDecals = groundDecals;
     this.scratch = new ChunkScratchPool(options.scene);
     // Der Index sieht den gesamten Dirt-Bestand. Ein chunklokaler Index liesse jede Chunkgrenze
     // wie eine Aussenkante des Bodens aussehen.
-    this.dirtGrid = new RockGridIndex(options.layout.dirt ?? [], { cols: GRID_COLS, rows: GRID_ROWS });
+    this.dirtGrid = new RockGridIndex(this.dirtCells, { cols: GRID_COLS, rows: GRID_ROWS });
+    this.dirtIndex = new ArenaCellBucketIndex(options.frame.width);
+    this.dirtIndex.sync(this.dirtCells);
+    this.groundCoverIndex = new ArenaPointBucketIndex(
+      options.frame,
+      (placement) => ({ x: placement.worldX, y: placement.worldY }),
+    );
+    this.groundCoverIndex.sync(this.groundCoverPlacements);
+    this.groundCoverQueryRadius = maxGroundCoverRadius(this.groundCoverPlacements);
+    this.groundDecalIndex = new ArenaPointBucketIndex(
+      options.frame,
+      (decal) => ({
+        x: options.frame.offsetX + decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX,
+        y: options.frame.offsetY + decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY,
+      }),
+    );
+    this.groundDecalIndex.sync(this.groundDecals);
     this.dirtIsOccupied = (gx, gy) => this.dirtGrid.isOccupiedWithBorder(gx, gy);
 
     const layers: ChunkedSurfaceLayerSpec[] = [
@@ -121,6 +152,9 @@ export class GroundSurfaceStreamer {
   destroy(): void {
     this.surface.destroy();
     this.scratch.destroy();
+    this.dirtIndex.clear();
+    this.groundCoverIndex.clear();
+    this.groundDecalIndex.clear();
   }
 
   // ── Bake ───────────────────────────────────────────────────────────────────
@@ -138,7 +172,7 @@ export class GroundSurfaceStreamer {
    * eigenen Ebene: Sie aendert sich nie und spart so eine komplette Renderziel-Ebene je Chunk.
    */
   private bakeDirtRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
-    const dirtCells = this.layout.dirt ?? [];
+    const dirtCells = this.dirtCells;
     const { size } = region;
     const target = this.scratch.get('dirt', size);
     target.clear();
@@ -155,24 +189,50 @@ export class GroundSurfaceStreamer {
 
     // Zwei verschieden weite Auswahlen: Die sichtbaren Kacheln reichen um die Randfahne ueber
     // ihre Zelle hinaus, die Materialstempel um ein Vielfaches davon.
-    const visibleCells: typeof dirtCells = [];
-    const mottleSourceCells: typeof dirtCells = [];
-    for (const cell of dirtCells) {
+    this.dirtVisibleCells.length = 0;
+    this.dirtMottleSourceCells.length = 0;
+    const visibleCandidateIds = this.dirtIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      DIRT_FRINGE_OVERHANG_PX,
+      this.dirtCandidateIds,
+    );
+    visibleCandidateIds.sort(compareNumbers);
+    for (const id of visibleCandidateIds) {
+      const cell = dirtCells[id];
+      if (!cell) continue;
       const cellMinX = cell.gridX * CELL_SIZE;
       const cellMinY = cell.gridY * CELL_SIZE;
       const cellMaxX = cellMinX + CELL_SIZE;
       const cellMaxY = cellMinY + CELL_SIZE;
       if (cellMaxX + DIRT_FRINGE_OVERHANG_PX > region.localX && cellMinX - DIRT_FRINGE_OVERHANG_PX < maxX
         && cellMaxY + DIRT_FRINGE_OVERHANG_PX > region.localY && cellMinY - DIRT_FRINGE_OVERHANG_PX < maxY) {
-        visibleCells.push(cell);
+        this.dirtVisibleCells.push(cell);
       }
+    }
+    const mottleCandidateIds = this.dirtIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      mottleReach,
+      this.dirtCandidateIds,
+    );
+    mottleCandidateIds.sort(compareNumbers);
+    for (const id of mottleCandidateIds) {
+      const cell = dirtCells[id];
+      if (!cell) continue;
+      const cellMinX = cell.gridX * CELL_SIZE;
+      const cellMinY = cell.gridY * CELL_SIZE;
+      const cellMaxX = cellMinX + CELL_SIZE;
+      const cellMaxY = cellMinY + CELL_SIZE;
       if (cellMaxX + mottleReach > region.localX && cellMinX - mottleReach < maxX
         && cellMaxY + mottleReach > region.localY && cellMinY - mottleReach < maxY) {
-        mottleSourceCells.push(cell);
+        this.dirtMottleSourceCells.push(cell);
       }
     }
 
-    if (visibleCells.length === 0 && mottleSourceCells.length === 0) {
+    if (this.dirtVisibleCells.length === 0 && this.dirtMottleSourceCells.length === 0) {
       target.render();
       sink.blit(GROUND_DIRT_LAYER_ID, target);
       return;
@@ -180,7 +240,7 @@ export class GroundSurfaceStreamer {
 
     const { fringe, surface: tiles } = ArenaVisualFactory.createDirtImagesFromGrid(
       this.scene,
-      visibleCells,
+      this.dirtVisibleCells,
       this.dirtIsOccupied,
       {
         offsetX: -region.localX,
@@ -193,7 +253,7 @@ export class GroundSurfaceStreamer {
     if (tiles.length > 0) target.draw(tiles);
     target.render();
 
-    if (tiles.length > 0 && mottleSourceCells.length > 0) {
+    if (tiles.length > 0 && this.dirtMottleSourceCells.length > 0) {
       // Die Stanzform traegt nur die Silhouette *dieser* Region. Eine Dirt-Kachel deckt exakt
       // ihre eigene Zelle, der Satz ist damit vollstaendig.
       const cutout = this.scratch.get('dirtCutout', size, 'redraw');
@@ -212,7 +272,7 @@ export class GroundSurfaceStreamer {
           layer,
           DIRT_BLOB_SURFACE_PROFILE,
           mottle,
-          mottleSourceCells,
+          this.dirtMottleSourceCells,
           index,
           -region.localX,
           -region.localY,
@@ -237,18 +297,31 @@ export class GroundSurfaceStreamer {
     const { size } = region;
     const maxX = region.localX + size;
     const maxY = region.localY + size;
-    const placements = this.groundCoverPlacements.filter((placement) => {
+    const candidates = this.groundCoverIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      this.groundCoverQueryRadius,
+      this.groundCoverCandidateIds,
+    );
+    candidates.sort(compareNumbers);
+    this.groundCoverCandidates.length = 0;
+    for (const id of candidates) {
+      const placement = this.groundCoverPlacements[id];
+      if (!placement) continue;
       const radius = getGroundCoverPlacementRadiusPx(placement);
       const localX = placement.worldX - this.frame.offsetX;
       const localY = placement.worldY - this.frame.offsetY;
-      return localX + radius > region.localX && localX - radius < maxX
-        && localY + radius > region.localY && localY - radius < maxY;
-    });
+      if (localX + radius > region.localX && localX - radius < maxX
+        && localY + radius > region.localY && localY - radius < maxY) {
+        this.groundCoverCandidates.push(placement);
+      }
+    }
 
     const target = this.scratch.get('groundCover', size);
     target.clear();
-    if (placements.length > 0) {
-      stampGroundCover(this.scene, target, placements, -region.worldX, -region.worldY);
+    if (this.groundCoverCandidates.length > 0) {
+      stampGroundCover(this.scene, target, this.groundCoverCandidates, -region.worldX, -region.worldY);
     }
     // Auch ohne Platzierungen noetig: `clear()` ist ein gepufferter Befehl und wird erst hier
     // ausgefuehrt; sonst blittet die naechste Region den Inhalt dieser.
@@ -261,18 +334,31 @@ export class GroundSurfaceStreamer {
     const maxX = region.localX + size;
     const maxY = region.localY + size;
     const radius = DECAL_SIZE * Math.SQRT1_2;
-    const candidates = this.groundDecals.filter((decal) => {
+    const candidateIds = this.groundDecalIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      DECAL_SIZE * Math.SQRT1_2,
+      this.groundDecalCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.groundDecalCandidates.length = 0;
+    for (const id of candidateIds) {
+      const decal = this.groundDecals[id];
+      if (!decal) continue;
       const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
       const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
-      return centerX + radius > region.localX && centerX - radius < maxX
-        && centerY + radius > region.localY && centerY - radius < maxY;
-    });
+      if (centerX + radius > region.localX && centerX - radius < maxX
+        && centerY + radius > region.localY && centerY - radius < maxY) {
+        this.groundDecalCandidates.push(decal);
+      }
+    }
 
     const target = this.scratch.get('groundDecal', size);
     target.clear();
     const images = ArenaVisualFactory.createDecals(
       this.scene,
-      candidates as DecalCell[],
+      this.groundDecalCandidates,
       { offsetX: -region.localX, offsetY: -region.localY },
     );
     if (images.length > 0) target.draw(images);
@@ -280,4 +366,16 @@ export class GroundSurfaceStreamer {
     for (const image of images) image.destroy();
     sink.blit(GROUND_DECAL_LAYER_ID, target);
   }
+}
+
+function compareNumbers(a: number, b: number): number {
+  return a - b;
+}
+
+function maxGroundCoverRadius(placements: readonly GroundCoverPlacement[]): number {
+  let maxRadius = 0;
+  for (const placement of placements) {
+    maxRadius = Math.max(maxRadius, getGroundCoverPlacementRadiusPx(placement));
+  }
+  return maxRadius;
 }

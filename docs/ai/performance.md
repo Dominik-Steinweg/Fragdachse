@@ -61,6 +61,15 @@ nach einer Zerstoerungswelle der groesste Posten im `POST_UPDATE`. `ArenaCellBuc
 dafuer eine *Obermenge* – der genaue Test bleibt beim Aufrufer, damit der Index keine Auswahlregel
 verschieben kann (`tests/ArenaCellBucketIndex.test.ts`).
 
+Dasselbe gilt fuer alle statischen, weltpositionierten Bake-Platzierungen: Ground Cover, Boden-
+und Fels-Decals sowie Fels-Moos und Kantenvegetation bauen ihren `ArenaPointBucketIndex` genau
+einmal aus den deterministischen Platzierungen auf. Ein Chunk fragt nur Buckets im konservativen
+Ausdehnungsradius ab und prueft danach die echte Groesse/Position; die Treffer bleiben in
+Quelllistenreihenfolge. Die Query- und Arbeitsbuffer werden zwischen Full- und Dirty-Bakes
+wiederverwendet (`tests/ArenaPointBucketIndex.test.ts`). Wachsende Fels- und Materialquellen
+bleiben davon getrennt und werden weiterhin inkrementell ueber `ArenaCellBucketIndex.sync`
+nachgefuehrt.
+
 **Phaser 4 cullt nicht an den Kamera-Bounds.** `GameObject.willRender()` prueft nur Renderflags und
 Kamerafilter; jedes Objekt der Anzeigeliste laeuft sonst durch Transform, Tint, Quad und Batch. Bei
 24 000 Fels-Images waren das 16,7 ms `renderSubmit` je Frame fuer 1 600 tatsaechlich sichtbare

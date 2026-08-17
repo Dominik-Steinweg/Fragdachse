@@ -6,6 +6,7 @@ import { ROCK_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleReachPx } from '../BlobS
 import { stampBlobSurfaceMottle } from '../BlobSurfaceMottle';
 import { ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE, isEnclosedRockDecal } from '../DecalConfig';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
+import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
 import { fillRockDecalCutout } from '../RockDecalLayer';
 import { fillRockMossCutout, stampRockMoss } from '../RockMossLayer';
 import { getRockMossPlacementRadiusPx } from '../RockMossField';
@@ -87,6 +88,7 @@ export class RockOverlayStreamer {
   private readonly overlaySource: RockOverlaySource;
   private readonly mossPlacements: readonly RockMossPlacement[];
   private readonly vegetationPlacements: readonly RockVegetationPlacement[];
+  private readonly rockDecals: readonly DecalCell[];
   private readonly mottleConfigs = [
     ROCK_BLOB_SURFACE_PROFILE.mottle,
     ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
@@ -97,9 +99,28 @@ export class RockOverlayStreamer {
   private readonly rockIndex: ArenaCellBucketIndex;
   /** Raeumlicher Index ueber die Materialquelle; sie waechst, schrumpft aber nie. */
   private readonly sourceIndex: ArenaCellBucketIndex;
+  /** Einmalige Indizes ueber die deterministischen, weltpositionierten Platzierungen. */
+  private readonly mossIndex: ArenaPointBucketIndex<RockMossPlacement>;
+  private readonly vegetationIndex: ArenaPointBucketIndex<RockVegetationPlacement>;
+  private readonly rockDecalIndex: ArenaPointBucketIndex<DecalCell>;
+  private readonly mossQueryRadius: number;
+  private readonly vegetationQueryRadius: number;
+  private readonly rockDecalQueryRadius: number;
   /** Wiederverwendete Trefferpuffer – eine Allokation je Region weniger. */
   private readonly rockCandidates: number[] = [];
   private readonly sourceCandidates: number[] = [];
+  private readonly mossCandidateIds: number[] = [];
+  private readonly vegetationCandidateIds: number[] = [];
+  private readonly rockDecalCandidateIds: number[] = [];
+  private readonly mossCandidates: RockMossPlacement[] = [];
+  private readonly vegetationCandidates: RockVegetationPlacement[] = [];
+  private readonly rockDecalCandidates: DecalCell[] = [];
+  private readonly sourceCells: RockCell[] = [];
+  private readonly decalCutoutCells: RockCell[] = [];
+  private readonly activeCellKeys = new Set<number>();
+  private readonly silhouetteImages: Phaser.GameObjects.Image[] = [];
+  private readonly vegetationMaskImages: Phaser.GameObjects.Image[] = [];
+  private readonly temporaryImages: Phaser.GameObjects.Image[] = [];
 
   constructor(options: RockOverlayStreamerOptions) {
     this.scene = options.scene;
@@ -109,9 +130,35 @@ export class RockOverlayStreamer {
     this.overlaySource = options.overlaySource;
     this.mossPlacements = options.mossPlacements;
     this.vegetationPlacements = options.vegetationPlacements;
+    const rockDecals: DecalCell[] = [];
+    for (const decal of options.layout.decals ?? []) {
+      if ((decal.surface ?? 'ground') === 'rock') rockDecals.push(decal);
+    }
+    this.rockDecals = rockDecals;
     this.scratch = new ChunkScratchPool(options.scene);
     this.rockIndex = new ArenaCellBucketIndex(options.frame.width);
     this.sourceIndex = new ArenaCellBucketIndex(options.frame.width);
+    this.mossIndex = new ArenaPointBucketIndex(
+      options.frame,
+      (placement) => ({ x: placement.worldX, y: placement.worldY }),
+    );
+    this.mossIndex.sync(this.mossPlacements);
+    this.mossQueryRadius = maxMossRadius(this.mossPlacements);
+    this.vegetationIndex = new ArenaPointBucketIndex(
+      options.frame,
+      (placement) => ({ x: placement.worldX, y: placement.worldY }),
+    );
+    this.vegetationIndex.sync(this.vegetationPlacements);
+    this.vegetationQueryRadius = maxVegetationRadius(this.vegetationPlacements);
+    this.rockDecalIndex = new ArenaPointBucketIndex(
+      options.frame,
+      (decal) => ({
+        x: options.frame.offsetX + decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX,
+        y: options.frame.offsetY + decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY,
+      }),
+    );
+    this.rockDecalIndex.sync(this.rockDecals);
+    this.rockDecalQueryRadius = maxRockDecalRadius(this.rockDecals);
 
     const layers: ChunkedSurfaceLayerSpec[] = this.mottleConfigs.map((mottle, index) => ({
       id: rockOverlayMottleLayerId(index),
@@ -199,6 +246,9 @@ export class RockOverlayStreamer {
     this.scratch.destroy();
     this.rockIndex.clear();
     this.sourceIndex.clear();
+    this.mossIndex.clear();
+    this.vegetationIndex.clear();
+    this.rockDecalIndex.clear();
   }
 
   // ── Bake ───────────────────────────────────────────────────────────────────
@@ -212,10 +262,14 @@ export class RockOverlayStreamer {
     // Die kurzlebigen Kopien tragen nur Frame und Alpha des lebenden Felsens und werden
     // ausschliesslich chunklokal gezeichnet. Weltpositionierte Live-Felsen ueber eine
     // Scratch-Kamera einzulesen hat den Arena-Offset gegenueber dem Bake verschoben.
-    const silhouetteImages: Phaser.GameObjects.Image[] = [];
-    const vegetationMaskImages: Phaser.GameObjects.Image[] = [];
-    const temporaryImages: Phaser.GameObjects.Image[] = [];
-    const activeCellKeys = new Set<number>();
+    const silhouetteImages = this.silhouetteImages;
+    const vegetationMaskImages = this.vegetationMaskImages;
+    const temporaryImages = this.temporaryImages;
+    const activeCellKeys = this.activeCellKeys;
+    silhouetteImages.length = 0;
+    vegetationMaskImages.length = 0;
+    temporaryImages.length = 0;
+    activeCellKeys.clear();
 
     // Statt eines Durchlaufs ueber den gesamten Felsbestand nur die Buckets der Region: Auf einer
     // grossen Karte ist das der Unterschied zwischen rund 29 000 und wenigen hundert Kandidaten
@@ -270,8 +324,10 @@ export class RockOverlayStreamer {
     // wuerden sie mit ihm verschwinden, spraenge dort das Material um. Die Decal-Stanzform traegt
     // dagegen ausschliesslich weggefallene Zellen – jede weitere Zelle wuerde Decal-Pixel auf
     // einem unveraenderten Fels loeschen.
-    const sourceCells: RockCell[] = [];
-    const decalCutoutCells: RockCell[] = [];
+    const sourceCells = this.sourceCells;
+    const decalCutoutCells = this.decalCutoutCells;
+    sourceCells.length = 0;
+    decalCutoutCells.length = 0;
     for (const index of this.sourceIndex.collect(
       region.localX,
       region.localY,
@@ -326,6 +382,7 @@ export class RockOverlayStreamer {
     this.bakeVegetationRegion(region, sink, vegetationMaskImages);
 
     for (const image of temporaryImages) image.destroy();
+    temporaryImages.length = 0;
   }
 
   private bakeMossRegion(
@@ -336,13 +393,26 @@ export class RockOverlayStreamer {
     const { size } = region;
     const maxX = region.localX + size;
     const maxY = region.localY + size;
-    const placements = this.mossPlacements.filter((placement) => {
+    const candidateIds = this.mossIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      this.mossQueryRadius,
+      this.mossCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.mossCandidates.length = 0;
+    for (const id of candidateIds) {
+      const placement = this.mossPlacements[id];
+      if (!placement) continue;
       const radius = getRockMossPlacementRadiusPx(placement);
       const localX = placement.worldX - this.frame.offsetX;
       const localY = placement.worldY - this.frame.offsetY;
-      return localX + radius > region.localX && localX - radius < maxX
-        && localY + radius > region.localY && localY - radius < maxY;
-    });
+      if (localX + radius > region.localX && localX - radius < maxX
+        && localY + radius > region.localY && localY - radius < maxY) {
+        this.mossCandidates.push(placement);
+      }
+    }
 
     const masks = ArenaVisualFactory.createRockMossMasks(this.scene, silhouetteImages);
     const cutout = this.scratch.get('mossCutout', size, 'redraw');
@@ -350,8 +420,8 @@ export class RockOverlayStreamer {
 
     const target = this.scratch.get('moss', size);
     target.clear();
-    if (placements.length > 0) {
-      stampRockMoss(this.scene, target, placements, -region.worldX, -region.worldY);
+    if (this.mossCandidates.length > 0) {
+      stampRockMoss(this.scene, target, this.mossCandidates, -region.worldX, -region.worldY);
       target.render();
       eraseChunkScratch(target, cutout, size);
     }
@@ -371,13 +441,26 @@ export class RockOverlayStreamer {
     const { size } = region;
     const maxX = region.localX + size;
     const maxY = region.localY + size;
-    const placements = this.vegetationPlacements.filter((placement) => {
+    const candidateIds = this.vegetationIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      this.vegetationQueryRadius,
+      this.vegetationCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.vegetationCandidates.length = 0;
+    for (const id of candidateIds) {
+      const placement = this.vegetationPlacements[id];
+      if (!placement) continue;
       const radius = getRockVegetationPlacementRadiusPx(placement);
       const localX = placement.worldX - this.frame.offsetX;
       const localY = placement.worldY - this.frame.offsetY;
-      return localX + radius > region.localX && localX - radius < maxX
-        && localY + radius > region.localY && localY - radius < maxY;
-    });
+      if (localX + radius > region.localX && localX - radius < maxX
+        && localY + radius > region.localY && localY - radius < maxY) {
+        this.vegetationCandidates.push(placement);
+      }
+    }
 
     const masks = ArenaVisualFactory.createRockVegetationMasks(this.scene, maskSourceImages);
     const cutout = this.scratch.get('vegetationCutout', size, 'redraw');
@@ -385,8 +468,8 @@ export class RockOverlayStreamer {
 
     const target = this.scratch.get('vegetation', size);
     target.clear();
-    if (placements.length > 0) {
-      stampRockVegetation(this.scene, target, placements, -region.worldX, -region.worldY);
+    if (this.vegetationCandidates.length > 0) {
+      stampRockVegetation(this.scene, target, this.vegetationCandidates, -region.worldX, -region.worldY);
       target.render();
       eraseChunkScratch(target, cutout, size);
     }
@@ -411,22 +494,35 @@ export class RockOverlayStreamer {
     const { size } = region;
     const maxX = region.localX + size;
     const maxY = region.localY + size;
-    const candidates = (this.layout.decals ?? []).filter((decal) => {
-      if (!isRockDecalVisible(decal, activeCellKeys)) return false;
+    const candidateIds = this.rockDecalIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      this.rockDecalQueryRadius,
+      this.rockDecalCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.rockDecalCandidates.length = 0;
+    for (const id of candidateIds) {
+      const decal = this.rockDecals[id];
+      if (!decal) continue;
+      if (!isRockDecalVisible(decal, activeCellKeys)) continue;
       // Dieselbe Ersatzgroesse wie die Bildfabrik; eine andere liesse ein Decal aus dem Neubau
       // fallen, das die Fabrik gezeichnet haette.
       const radius = (decal.displaySize ?? ROCK_DECAL_SIZE) * Math.SQRT1_2;
       const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
       const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
-      return centerX + radius > region.localX && centerX - radius < maxX
-        && centerY + radius > region.localY && centerY - radius < maxY;
-    });
+      if (centerX + radius > region.localX && centerX - radius < maxX
+        && centerY + radius > region.localY && centerY - radius < maxY) {
+        this.rockDecalCandidates.push(decal);
+      }
+    }
 
     const target = this.scratch.get('rockDecal', size);
     target.clear();
     const images = ArenaVisualFactory.createRockDecals(
       this.scene,
-      candidates,
+      this.rockDecalCandidates,
       { offsetX: -region.localX, offsetY: -region.localY },
     );
     if (images.length > 0) {
@@ -442,6 +538,38 @@ export class RockOverlayStreamer {
     for (const image of images) image.destroy();
     sink.blit(ROCK_OVERLAY_DECAL_LAYER_ID, target);
   }
+}
+
+function compareNumbers(a: number, b: number): number {
+  return a - b;
+}
+
+function maxMossRadius(placements: readonly RockMossPlacement[]): number {
+  let maxRadius = 0;
+  for (const placement of placements) {
+    maxRadius = Math.max(maxRadius, getRockMossPlacementRadiusPx(placement));
+  }
+  return maxRadius;
+}
+
+function maxVegetationRadius(placements: readonly RockVegetationPlacement[]): number {
+  let maxRadius = 0;
+  for (const placement of placements) {
+    maxRadius = Math.max(maxRadius, getRockVegetationPlacementRadiusPx(placement));
+  }
+  return maxRadius;
+}
+
+function maxRockDecalRadius(decals: readonly DecalCell[]): number {
+  let maxRadius = 0;
+  for (const decal of decals) {
+    maxRadius = Math.max(
+      maxRadius,
+      (decal.displaySize ?? ROCK_DECAL_SIZE) * Math.SQRT1_2,
+    );
+  }
+  // Auch fuer eine spaeter gelieferte grosse authored Platzierung bleibt der Query konservativ.
+  return Math.max(maxRadius, ROCK_DECAL_LARGE_SIZE * Math.SQRT1_2);
 }
 
 /**
