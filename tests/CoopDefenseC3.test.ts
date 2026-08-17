@@ -12,7 +12,7 @@ vi.mock('phaser', () => ({
   },
 }));
 vi.mock('../src/network/bridge', () => ({
-  bridge: { getCoopDefenseMapId: () => '0' },
+  bridge: { getCoopDefenseMapId: () => '16' },
 }));
 
 import {
@@ -167,8 +167,10 @@ describe('Coop Defense C3 configuration', () => {
   });
 
   it('drops an unresolvable authored footprint instead of failing the arena build', () => {
-    const map = getCoopDefenseMapConfig('0');
-    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells);
+    // Kampagnen-Map 16 statt Map 0: Die Testarena ist seit Block A eine loeschbare Stressarena
+    // ohne authored Events und darf keine Regression mehr tragen.
+    const map = getCoopDefenseMapConfig('16');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
     // Eine Zellenliste komplett auf reservierten Basiszellen ist konfigvalide, aber nicht
     // aufloesbar. Der Generator liefert dafuer keine Zone -- der Handler laesst das Event dann
     // dormant. Ein Layout-Retry bis zum Abbruch waere fuer einen Authoring-Fehler unverhaeltnismaessig.
@@ -188,9 +190,9 @@ describe('Coop Defense C3 configuration', () => {
     expect(layout.groundHazardZones?.length).toBeGreaterThan(0);
   });
 
-  it('prebuilds every 00-test hazard event from the selected arena seed', () => {
-    const map = getCoopDefenseMapConfig('0');
-    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells);
+  it('prebuilds every authored hazard event from the selected arena seed', () => {
+    const map = getCoopDefenseMapConfig('16');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
     const layout = ArenaGenerator.generate(73_000, map);
     const eventIds = new Set(map.mapEvents?.map((event) => event.id));
     expect(layout.groundHazardZones?.length).toBeGreaterThan(0);

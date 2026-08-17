@@ -23,6 +23,10 @@ import {
   type GraphicsQualityProfile,
 } from '../graphics/GraphicsQuality';
 import { resolveSkyState } from './TimeOfDay';
+import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
+import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from '../arena/chunks/ChunkedRenderSurface';
+import type { ChunkWorldRect } from '../arena/chunks/ArenaChunkGrid';
+import { ArenaCellBucketIndex } from '../arena/chunks/ArenaCellBucketIndex';
 
 interface ShadowWorldBounds {
   readonly minX: number;
@@ -42,24 +46,16 @@ interface StaticShadowLayoutBuildOptions {
 type StaticShadowGroup = 'rocks' | 'trees';
 
 interface ShadowLayerBucket {
+  /**
+   * Zeichenpuffer der statischen Footprints **einer gerade gebackenen Region**.
+   *
+   * Er bleibt dauerhaft unsichtbar; sichtbar ist das gebackene Renderziel des Chunks. Ohne das
+   * Backen rastert die GPU pro Frame alle gestapelten Alpha-Fuellungen neu – bei Fels 8 und
+   * Krone 32 Lagen je Schattenwerfer ist das der groesste gemessene Einzelposten im Frame.
+   */
   readonly staticGraphics: Phaser.GameObjects.Graphics;
   readonly dynamicGraphics: Phaser.GameObjects.Graphics;
-  /**
-   * Die statischen Footprints werden einmalig in diese RenderTexture gebacken; `staticGraphics`
-   * dient danach nur noch als Zeichenpuffer und bleibt unsichtbar. Ohne das Backen rastert die
-   * GPU pro Frame alle gestapelten Alpha-Fuellungen neu – bei Fels 8 und Krone 32 Lagen je
-   * Schattenwerfer ist das der groesste gemessene Einzelposten im Frame.
-   */
-  baked: Phaser.GameObjects.RenderTexture | null;
   group: StaticShadowGroup | null;
-  /**
-   * Ob die gebackene Textur gerade Schatten enthaelt. Eine geleerte Textur ist rein weiss und
-   * damit fuer MULTIPLY wirkungslos – sie wird dennoch ausgeblendet, damit sie keine
-   * Vollflaechen-Blendpass pro Frame kostet.
-   */
-  bakedHasContent: boolean;
-  /** Wiederverwendetes lokales Renderziel fuer Dirty-Chunk-Rebakes. */
-  scratch: Phaser.GameObjects.RenderTexture | null;
 }
 
 interface ShadowDirtyChunk {
@@ -68,6 +64,54 @@ interface ShadowDirtyChunk {
 }
 
 const SHADOW_DIRTY_CHUNK_SIZE = 128;
+
+/**
+ * Die Caster, deren Schatten gebacken werden – und damit genau die Ebenen der Chunk-Flaeche.
+ *
+ * Die Menge ist fest, weil die Tiefen Konstanten sind: Fels und Turret aendern sich mit dem
+ * Hindernisbestand, Stamm und Krone gehoeren zum unveraenderlichen Layout. Alles andere
+ * (Spieler, Projektile, Zug) ist dynamisch und wird pro Frame gezeichnet.
+ */
+const STATIC_SHADOW_CASTERS: ReadonlyArray<{
+  readonly config: ShadowCasterConfig;
+  readonly group: StaticShadowGroup;
+}> = [
+  { config: SHADOW_CASTERS.rock, group: 'rocks' },
+  { config: SHADOW_CASTERS.turret, group: 'rocks' },
+  { config: SHADOW_CASTERS.trunk, group: 'trees' },
+  { config: SHADOW_CASTERS.canopy, group: 'trees' },
+];
+/** Leere Kandidatenliste ohne Layout – spart eine Allokation je Region. */
+const EMPTY_INDEX_LIST: readonly number[] = [];
+
+/**
+ * Wie weit die Schattenhuelle eines Casters ueber seinen Mittelpunkt hinausreicht.
+ *
+ * Das ist die Reichweite, mit der ein raeumlicher Index nach Kandidaten fuer eine Region sucht:
+ * Ein Fels ausserhalb der Region kann seinen Schatten noch hineinwerfen.
+ */
+function getStaticShadowReachPx(preset: ShadowCasterConfig, profile: ShadowProfile): number {
+  const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
+  const inflate = preset.inflatePx + preset.softnessPx * profile.softnessMult;
+  const radius = Math.max(
+    preset.footprintWidthPx + inflate * 2,
+    preset.footprintHeightPx + inflate * 2,
+  ) * 0.5;
+  const offset = (preset.airborneHeightPx ?? 0) + castLength;
+  return Math.max(
+    Math.abs(WORLD_SHADOW_CONFIG.lightDirection.x * offset),
+    Math.abs(WORLD_SHADOW_CONFIG.lightDirection.y * offset),
+  ) + radius;
+}
+
+function getMaxStaticShadowReachPx(profile: ShadowProfile): number {
+  let reach = 0;
+  for (const { config } of STATIC_SHADOW_CASTERS) {
+    reach = Math.max(reach, getStaticShadowReachPx(config, profile));
+  }
+  return reach;
+}
+
 const STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS = 600;
 const STATIC_PROFILE_OPACITY_DELTA = 0.06;
 const STATIC_PROFILE_LENGTH_DELTA = 0.08;
@@ -109,6 +153,28 @@ export class ShadowSystem {
   private lastStaticOptions: StaticShadowLayoutBuildOptions = {};
   /** Von aussen gesetzte Sichtbarkeit; kombiniert sich mit dem Inhalt der gebackenen Layer. */
   private shadowsVisible = true;
+  /**
+   * Die gebackenen statischen Schatten liegen in Render-Chunks statt in je einer arenagrossen
+   * RenderTexture je Ebene. Auf einer 400 x 80-Karte waeren das vier Ziele zu 12 800 x 2 560 px;
+   * jetzt folgt der Speicher dem sichtbaren Ausschnitt (siehe `arena/chunks`).
+   */
+  private staticSurface: ChunkedRenderSurface | null = null;
+  private readonly staticScratch = new ChunkScratchPool(this.scene);
+  /** Rahmen, fuer den `staticSurface` gebaut wurde – aendern sich die Bounds, wird er ersetzt. */
+  private staticSurfaceFrameKey = '';
+  /** Profil, mit dem die Chunks gebacken werden. Ein Dirty-Rebake darf nicht vorauseilen. */
+  private staticBakeProfile: ShadowProfile = SHADOW_PROFILES.day;
+  /**
+   * Zuletzt gemeldeter Kameraausschnitt. `null` heisst "kein Streaming" und macht den gesamten
+   * Rahmen resident – der Zustand der Lobby-Vorschau, deren Rahmen ohnehin bildschirmgross ist.
+   */
+  private staticResidencyView: ChunkWorldRect | null = null;
+  private staticHasLayout = false;
+  /** Raeumlicher Index ueber `layout.rocks`; Positionen im Array sind die Fels-IDs. */
+  private staticRockIndex = new ArenaCellBucketIndex(1);
+  /** Wiederverwendete Puffer – eine Allokation je Region weniger. */
+  private readonly staticRockCandidates: number[] = [];
+  private readonly staticRuntimeById = new Map<number, SyncedPlaceableRock>();
 
   // Reusable point buffers — mutated in-place each draw call to avoid
   // allocating hundreds of Vector2 objects per frame.
@@ -133,14 +199,29 @@ export class ShadowSystem {
   setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
     this.arenaMask = mask;
     for (const bucket of this.layers.values()) {
-      // `staticGraphics` rendert nie selbst; die Maske traegt die gebackene Textur.
-      if (bucket.baked) this.applyMask(bucket.baked);
+      // `staticGraphics` rendert nie selbst; die Maske traegt das gebackene Renderziel.
       this.applyMask(bucket.dynamicGraphics);
     }
+    // Die residenten Chunks entstehen und vergehen laufend; die Maske kommt bei ihrer Erzeugung
+    // dazu. Ein Maskenwechsel zur Laufzeit verwirft sie deshalb einmal komplett.
+    this.disposeStaticSurface();
+    if (this.staticHasLayout) this.rebuildStaticShadowsForProfileChange();
   }
 
   setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
     this.worldBoundsOverride = bounds;
+  }
+
+  /**
+   * Meldet den sichtbaren Weltausschnitt fuer das Chunk-Streaming der gebackenen Schatten.
+   *
+   * Gehoert in denselben Frame-Abschnitt wie {@link ArenaBuilder.updateSurfaceResidency}. Wird der
+   * Aufruf nie gemacht – so wie in der Lobby-Vorschau – bleibt der gesamte Rahmen resident.
+   */
+  updateStaticResidency(view: ChunkWorldRect | null): void {
+    this.staticResidencyView = view;
+    if (!this.staticSurface) return;
+    this.staticSurface.updateResidency(view ?? this.getStaticFrameRect());
   }
 
   /**
@@ -205,16 +286,16 @@ export class ShadowSystem {
    */
   setStaticVisible(visible: boolean): void {
     this.shadowsVisible = visible;
-    // `staticGraphics` bleibt dauerhaft unsichtbar – sichtbar ist die gebackene Textur.
-    for (const bucket of this.layers.values()) this.syncBakedVisibility(bucket);
+    // `staticGraphics` bleibt dauerhaft unsichtbar – sichtbar sind die gebackenen Chunks.
+    this.syncStaticSurfaceVisibility();
   }
 
   setDynamicVisible(visible: boolean): void {
     for (const bucket of this.layers.values()) bucket.dynamicGraphics.setVisible(visible);
   }
 
-  private syncBakedVisibility(bucket: ShadowLayerBucket): void {
-    bucket.baked?.setVisible(this.shadowsVisible && bucket.bakedHasContent);
+  private syncStaticSurfaceVisibility(): void {
+    this.staticSurface?.setVisible(this.shadowsVisible && this.staticHasLayout);
   }
 
   rebuildStaticLayoutShadows(
@@ -231,111 +312,38 @@ export class ShadowSystem {
     this.rebuildStaticLayoutShadowsWithProfile(layout, options, this.profile);
   }
 
+  /**
+   * Setzt Zustand und Backprofil und laesst alle residenten Chunks neu backen.
+   *
+   * Es gibt seit dem Chunk-Streaming keinen arenaweiten Bake mehr: Fels-, Turret-, Stamm- und
+   * Kronenschatten entstehen gemeinsam je Region, gefiltert auf die Caster, deren Schattenhuelle
+   * die Region ueberhaupt beruehrt. Die frueher noetige Trennung in eine veraenderliche
+   * Fels-Gruppe und eine unveraenderliche Baum-Gruppe entfaellt damit: Ein Chunk enthaelt in der
+   * Regel gar keinen Baum, und wo doch, ist es genau einer.
+   */
   private rebuildStaticLayoutShadowsWithProfile(
     layout: ArenaLayout,
     options: StaticShadowLayoutBuildOptions,
     profile: ShadowProfile,
     bakedAtMs = Number.NEGATIVE_INFINITY,
   ): void {
-    this.rebuildStaticRockShadows(layout, options, profile);
-    this.rebuildStaticTreeShadows(layout, options, profile);
+    if (this.lastStaticLayout !== layout) {
+      // Neues Layout heisst neuer Felsbestand: Der raeumliche Index muss von vorn beginnen,
+      // sonst zeigte er auf Positionen der Vorrunde.
+      const bounds = this.getStaticWorldBounds();
+      this.staticRockIndex = new ArenaCellBucketIndex(Math.max(1, bounds.maxX - bounds.minX));
+    }
+    this.lastStaticLayout = layout;
+    this.lastStaticOptions = options;
+    this.staticBakeProfile = profile;
+    this.staticHasLayout = true;
+    const { surface, created } = this.ensureStaticSurface();
+    // Ein frisch erzeugter Chunk ist beim Erwerb bereits gebacken; ein zweiter Durchlauf waere
+    // beim Rundenstart genau die doppelte Arbeit.
+    if (!created) surface.refreshAll();
+    this.syncStaticSurfaceVisibility();
     this.lastBakedProfile = { ...profile };
     this.lastStaticProfileBakeAtMs = bakedAtMs;
-  }
-
-  /**
-   * Fels- und Turret-Schatten. Als einzige statische Gruppe veraenderlich, weil Felsen
-   * zerstoert und Turrets gesetzt werden – deshalb eine eigene Gruppe mit eigenem Bake.
-   */
-  private rebuildStaticRockShadows(
-    layout: ArenaLayout,
-    options: StaticShadowLayoutBuildOptions,
-    profile: ShadowProfile,
-  ): void {
-    this.clearStaticGroup('rocks');
-
-    const runtimeById = new Map<number, SyncedPlaceableRock>();
-    for (const rock of options.runtimeRocks ?? []) {
-      runtimeById.set(rock.id, rock);
-    }
-
-    const offsetX = options.offsetX ?? ARENA_OFFSET_X;
-    const offsetY = options.offsetY ?? ARENA_OFFSET_Y;
-    const rockVisibilityPredicate = options.rockVisibilityPredicate ?? (() => true);
-
-    for (let id = 0; id < layout.rocks.length; id += 1) {
-      if (!rockVisibilityPredicate(id)) continue;
-
-      const cell = layout.rocks[id];
-      const runtime = runtimeById.get(id);
-      const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      const rockPreset = SHADOW_CASTERS.rock;
-      this.drawFootprint(
-        this.getLayer(rockPreset.layerDepth, 'rocks').staticGraphics,
-        worldX,
-        worldY,
-        rockPreset,
-        undefined,
-        undefined,
-        profile,
-      );
-      if (runtime?.kind === 'turret') {
-        const turretPreset = SHADOW_CASTERS.turret;
-        this.drawFootprint(
-          this.getLayer(turretPreset.layerDepth, 'rocks').staticGraphics,
-          worldX,
-          worldY,
-          turretPreset,
-          undefined,
-          undefined,
-          profile,
-        );
-      }
-    }
-
-    this.bakeStaticGroup('rocks');
-  }
-
-  /**
-   * Baum-Schatten. `layout.trees` kennt kein Sichtbarkeits-Praedikat – Baeume werden nie
-   * entfernt, die Gruppe ist also unveraenderlich und wird nach dem Aufbau nie neu gebacken.
-   * Gleichzeitig ist sie die teuerste: die Krone stapelt 32 Lagen.
-   */
-  private rebuildStaticTreeShadows(
-    layout: ArenaLayout,
-    options: StaticShadowLayoutBuildOptions,
-    profile: ShadowProfile,
-  ): void {
-    this.clearStaticGroup('trees');
-
-    const offsetX = options.offsetX ?? ARENA_OFFSET_X;
-    const offsetY = options.offsetY ?? ARENA_OFFSET_Y;
-
-    for (const tree of layout.trees) {
-      const worldX = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(
-        this.getLayer(SHADOW_CASTERS.trunk.layerDepth, 'trees').staticGraphics,
-        worldX,
-        worldY,
-        SHADOW_CASTERS.trunk,
-        undefined,
-        undefined,
-        profile,
-      );
-      this.drawFootprint(
-        this.getLayer(SHADOW_CASTERS.canopy.layerDepth, 'trees').staticGraphics,
-        worldX,
-        worldY,
-        SHADOW_CASTERS.canopy,
-        undefined,
-        undefined,
-        profile,
-      );
-    }
-
-    this.bakeStaticGroup('trees');
   }
 
   rebuildArenaStaticShadows(
@@ -356,23 +364,20 @@ export class ShadowSystem {
     };
 
     // Dies ist der Invalidierungspfad: Er laeuft, wenn sich die Hindernisse geaendert haben.
-    // Solange dasselbe Layout gilt, koennen die Baum-Schatten stehen bleiben – sie sind
-    // unveraenderlich und mit 32 Lagen je Krone der teuerste Teil des Bakes.
+    // Solange dasselbe Layout gilt, darf das bereits gebackene Profil weitergelten – sonst
+    // eilte ein Neubau einem noch ausstehenden Profilwechsel voraus und liesse alte Felsraender
+    // als Geisterschatten stehen.
     const sameLayout = this.lastStaticLayout === layout;
-    this.lastStaticLayout = layout;
-    this.lastStaticOptions = options;
     const staticProfile = sameLayout ? (this.lastBakedProfile ?? this.profile) : this.profile;
-    if (sameLayout) {
-      this.rebuildStaticRockShadows(layout, options, staticProfile);
-      return;
-    }
     this.rebuildStaticLayoutShadowsWithProfile(layout, options, staticProfile);
   }
 
   /**
    * Rekonstruiert nach bekannten Fels-Aenderungen nur die betroffenen Schatten-Chunks.
-   * Ein weisser Scratch-Chunk ersetzt den entsprechenden Bereich des persistenten Bakes;
-   * dadurch bleiben ueberlappende Nachbarschatten korrekt, ohne alle Felsen neu zu zeichnen.
+   *
+   * Die Update-Granularitaet bleibt {@link SHADOW_DIRTY_CHUNK_SIZE} = 128 px. Ein weisser
+   * Scratch-Chunk ersetzt den entsprechenden Bereich des residenten Renderziels; dadurch bleiben
+   * ueberlappende Nachbarschatten korrekt, ohne alle Felsen neu zu zeichnen.
    */
   rebuildArenaStaticShadowRegions(
     layout: ArenaLayout | null,
@@ -381,77 +386,206 @@ export class ShadowSystem {
     runtimeRocks: readonly SyncedPlaceableRock[] = [],
   ): void {
     if (!layout || !arenaResult || dirtyRockIds.size === 0) return;
-    if (this.lastStaticLayout !== layout) {
+    if (this.lastStaticLayout !== layout || !this.staticSurface) {
       this.rebuildArenaStaticShadows(layout, arenaResult, runtimeRocks);
       return;
     }
-    const requiredDepths = new Set<number>([SHADOW_CASTERS.rock.layerDepth]);
-    if (runtimeRocks.some((rock) => rock.kind === 'turret')) {
-      requiredDepths.add(SHADOW_CASTERS.turret.layerDepth);
-    }
-    for (const depth of requiredDepths) {
-      const bucket = this.layers.get(depth.toFixed(3));
-      if (!bucket?.baked || bucket.group !== 'rocks') {
-        this.rebuildArenaStaticShadows(layout, arenaResult, runtimeRocks);
-        return;
-      }
-    }
 
-    const options: StaticShadowLayoutBuildOptions = {
+    this.lastStaticOptions = {
       offsetX: ARENA_OFFSET_X,
       offsetY: ARENA_OFFSET_Y,
       runtimeRocks,
       rockVisibilityPredicate: (index) => Boolean(arenaResult.rockObjects[index]?.active),
     };
-    this.lastStaticOptions = options;
-    const runtimeById = new Map<number, SyncedPlaceableRock>();
-    for (const rock of runtimeRocks) runtimeById.set(rock.id, rock);
     const staticProfile = this.lastBakedProfile ?? this.profile;
-    const chunks = this.collectDirtyShadowChunks(layout, dirtyRockIds, staticProfile);
-    if (chunks.length === 0) return;
+    this.staticBakeProfile = staticProfile;
+    const bounds = this.getStaticWorldBounds();
+    for (const chunk of this.collectDirtyShadowChunks(layout, dirtyRockIds, staticProfile)) {
+      this.staticSurface.refreshRegion(
+        chunk.x - bounds.minX,
+        chunk.y - bounds.minY,
+        SHADOW_DIRTY_CHUNK_SIZE,
+      );
+    }
+  }
+
+  // ── Chunk-Streaming der statischen Bakes ───────────────────────────────────
+
+  private getStaticWorldBounds(): ShadowWorldBounds {
+    return this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
+  }
+
+  private getStaticFrameRect(): ChunkWorldRect {
+    const bounds = this.getStaticWorldBounds();
+    return {
+      x: bounds.minX,
+      y: bounds.minY,
+      width: Math.max(1, bounds.maxX - bounds.minX),
+      height: Math.max(1, bounds.maxY - bounds.minY),
+    };
+  }
+
+  /**
+   * Erzeugt die Chunk-Flaeche der statischen Schatten, sobald sie gebraucht wird.
+   *
+   * Die Ebenenmenge ist fest: Sie folgt den vier statischen Castern aus `SHADOW_CASTERS`, deren
+   * Tiefen Konstanten sind. Aendern sich die Weltgrenzen – Moduswechsel, andere Coop-Karte –,
+   * wird die Flaeche verworfen und neu aufgebaut.
+   */
+  private ensureStaticSurface(): { surface: ChunkedRenderSurface; created: boolean } {
+    const bounds = this.getStaticWorldBounds();
+    const frameKey = `${bounds.minX}:${bounds.minY}:${bounds.maxX}:${bounds.maxY}`;
+    if (this.staticSurface && this.staticSurfaceFrameKey === frameKey) {
+      return { surface: this.staticSurface, created: false };
+    }
+
+    this.disposeStaticSurface();
+    this.staticSurfaceFrameKey = frameKey;
+
+    const layers: ChunkedSurfaceLayerSpec[] = [];
+    const seen = new Set<string>();
+    for (const preset of STATIC_SHADOW_CASTERS) {
+      const id = preset.config.layerDepth.toFixed(3);
+      // Zwei Caster koennen dieselbe Tiefe teilen; sie landen dann in derselben Ebene.
+      if (seen.has(id)) continue;
+      seen.add(id);
+      layers.push({
+        id,
+        depth: preset.config.layerDepth,
+        // Die Textur startet deckend weiss, die Footprints tragen ihren eigenen MULTIPLY-Blend
+        // hinein. Weiss ist das neutrale Element: ausserhalb der Schatten aendert der Chunk
+        // nichts. Normales Alpha-Blending waere hier *nicht* gleichwertig, weil die
+        // Schattenfarbe (0x05070b) nicht exakt schwarz ist.
+        blend: Phaser.BlendModes.MULTIPLY,
+      });
+      this.getLayer(preset.config.layerDepth, preset.group);
+    }
+
+    const frame = this.getStaticFrameRect();
+    this.staticSurface = new ChunkedRenderSurface(this.scene, {
+      frame: { offsetX: frame.x, offsetY: frame.y, width: frame.width, height: frame.height },
+      layers,
+      bake: (region, sink) => this.bakeStaticShadowRegion(region, sink),
+      onChunkTextureCreated: (texture) => this.applyMask(texture),
+    });
+    this.staticSurface.updateResidency(this.staticResidencyView ?? frame);
+    return { surface: this.staticSurface, created: true };
+  }
+
+  private disposeStaticSurface(): void {
+    this.staticSurface?.destroy();
+    this.staticSurface = null;
+    this.staticSurfaceFrameKey = '';
+  }
+
+  /**
+   * Backt die statischen Footprints einer Region.
+   *
+   * Der Zeichenpuffer wird je Ebene und Region geleert und nur mit den Castern gefuellt, deren
+   * Schattenhuelle die Region tatsaechlich beruehrt – genau das haelt die Kosten am sichtbaren
+   * Inhalt statt an der Gesamtzahl der Felsen. Der Puffer traegt Weltkoordinaten und wird ueber
+   * die Kamera des chunklokalen Scratch-Ziels eingelesen; in das Renderziel des Chunks selbst
+   * gelangt danach ausschliesslich die fertige Textur.
+   */
+  private bakeStaticShadowRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
+    const layout = this.lastStaticLayout;
+    const profile = this.staticBakeProfile;
+    const options = this.lastStaticOptions;
+    const offsetX = options.offsetX ?? ARENA_OFFSET_X;
+    const offsetY = options.offsetY ?? ARENA_OFFSET_Y;
+    const rockVisible = options.rockVisibilityPredicate ?? (() => true);
+
+    const regionBounds: ShadowWorldBounds = {
+      minX: region.worldX,
+      minY: region.worldY,
+      maxX: region.worldX + region.size,
+      maxY: region.worldY + region.size,
+    };
+
+    // Die Kandidaten werden **einmal je Region** bestimmt, nicht einmal je Ebene: Ein Durchlauf
+    // ueber den gesamten Felsbestand mal vier Ebenen mal dutzender Dirty-Chunks war im Trace der
+    // groesste Posten des `POST_UPDATE` nach einer Flaechenzerstoerung.
+    this.staticRockIndex.sync(layout?.rocks ?? []);
+    const reachPx = getMaxStaticShadowReachPx(profile);
+    const localX = region.worldX - offsetX;
+    const localY = region.worldY - offsetY;
+    const rockCandidates = layout && this.staticHasLayout
+      ? this.staticRockIndex.collect(localX, localY, region.size, reachPx, this.staticRockCandidates)
+      : EMPTY_INDEX_LIST;
+
+    const runtimeById = this.staticRuntimeById;
+    runtimeById.clear();
+    for (const rock of options.runtimeRocks ?? []) runtimeById.set(rock.id, rock);
 
     for (const [key, bucket] of this.layers) {
-      if (bucket.group !== 'rocks' || !bucket.baked) continue;
+      if (!bucket.group) continue;
       const depth = Number(key);
-      for (const chunk of chunks) {
-        bucket.staticGraphics.clear();
-        for (let id = 0; id < layout.rocks.length; id += 1) {
-          if (!arenaResult.rockObjects[id]?.active) continue;
-          const cell = layout.rocks[id];
-          if (!cell) continue;
-          const worldX = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-          const worldY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-          const rockPreset = SHADOW_CASTERS.rock;
-          if (rockPreset.layerDepth === depth
-            && this.shadowBoundsIntersectChunk(worldX, worldY, rockPreset, chunk, staticProfile)) {
-            this.drawFootprint(
-              bucket.staticGraphics,
-              worldX,
-              worldY,
-              rockPreset,
-              undefined,
-              undefined,
-              staticProfile,
-            );
-          }
-          const runtime = runtimeById.get(id);
-          const turretPreset = SHADOW_CASTERS.turret;
-          if (runtime?.kind === 'turret' && turretPreset.layerDepth === depth
-            && this.shadowBoundsIntersectChunk(worldX, worldY, turretPreset, chunk, staticProfile)) {
-            this.drawFootprint(
-              bucket.staticGraphics,
-              worldX,
-              worldY,
-              turretPreset,
-              undefined,
-              undefined,
-              staticProfile,
-            );
+      bucket.staticGraphics.clear();
+
+      if (layout && this.staticHasLayout) {
+        const drawsRock = SHADOW_CASTERS.rock.layerDepth === depth;
+        const drawsTurret = SHADOW_CASTERS.turret.layerDepth === depth;
+        if (drawsRock || drawsTurret) {
+          for (const id of rockCandidates) {
+            const cell = layout.rocks[id];
+            if (!cell || !rockVisible(id)) continue;
+            const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+            const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+            if (drawsRock) {
+              this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.rock, regionBounds, profile);
+            }
+            if (drawsTurret && runtimeById.get(id)?.kind === 'turret') {
+              this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.turret, regionBounds, profile);
+            }
           }
         }
-        this.bakeShadowChunk(bucket, chunk);
+        // Baeume bleiben ungefiltert: Es sind eine Handvoll je Runde, ein Index waere teurer
+        // als der Durchlauf.
+        const drawsTrunk = SHADOW_CASTERS.trunk.layerDepth === depth;
+        const drawsCanopy = SHADOW_CASTERS.canopy.layerDepth === depth;
+        if (drawsTrunk || drawsCanopy) {
+          for (const tree of layout.trees) {
+            const worldX = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2;
+            const worldY = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
+            if (drawsTrunk) {
+              this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.trunk, regionBounds, profile);
+            }
+            if (drawsCanopy) {
+              this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.canopy, regionBounds, profile);
+            }
+          }
+        }
       }
+
+      const scratch = this.staticScratch.get('staticShadow', region.size);
+      scratch.camera.setScroll(region.worldX, region.worldY);
+      scratch.clear();
+      scratch.fill(0xffffff, 1);
+      // draw() rendert das Objekt mit seinem eigenen Blendmode; sichtbar muss es dafuer sein.
+      bucket.staticGraphics.setVisible(true);
+      scratch.draw(bucket.staticGraphics);
+      scratch.render();
+      bucket.staticGraphics.setVisible(false);
+      bucket.staticGraphics.clear();
+
+      sink.blit(key, scratch);
     }
+  }
+
+  private drawStaticFootprintInRegion(
+    bucket: ShadowLayerBucket,
+    worldX: number,
+    worldY: number,
+    preset: ShadowCasterConfig,
+    region: ShadowWorldBounds,
+    profile: ShadowProfile,
+  ): void {
+    const bounds = this.getShadowBounds(worldX, worldY, preset, profile);
+    if (bounds.maxX <= region.minX || bounds.minX >= region.maxX
+      || bounds.maxY <= region.minY || bounds.minY >= region.maxY) {
+      return;
+    }
+    this.drawFootprint(bucket.staticGraphics, worldX, worldY, preset, undefined, undefined, profile);
   }
 
   private collectDirtyShadowChunks(
@@ -522,45 +656,6 @@ export class ShadowSystem {
       && bounds.minY < chunk.y + SHADOW_DIRTY_CHUNK_SIZE;
   }
 
-  private bakeShadowChunk(bucket: ShadowLayerBucket, chunk: ShadowDirtyChunk): void {
-    const worldBounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
-    let scratch = bucket.scratch;
-    if (!scratch) {
-      scratch = this.scene.add.renderTexture(0, 0, SHADOW_DIRTY_CHUNK_SIZE, SHADOW_DIRTY_CHUNK_SIZE);
-      scratch.setOrigin(0, 0);
-      scratch.setVisible(false);
-      bucket.scratch = scratch;
-    }
-    scratch.camera.setScroll(chunk.x, chunk.y);
-    scratch.clear();
-    scratch.fill(0xffffff, 1);
-    bucket.staticGraphics.setVisible(true);
-    scratch.draw(bucket.staticGraphics);
-    scratch.render();
-    bucket.staticGraphics.setVisible(false);
-
-    const localX = chunk.x - worldBounds.minX;
-    const localY = chunk.y - worldBounds.minY;
-    const baked = bucket.baked;
-    if (!baked) return;
-    const scrollX = baked.camera.scrollX;
-    const scrollY = baked.camera.scrollY;
-    // Wie beim Rock-Overlay-Blit muss die Zielkamera waehrend des gesamten gepufferten
-    // clear/stamp/render-Zyklus neutral sein. Sonst verschiebt derselbe Arena-Offset auch den
-    // direkten Fels-Schatten nach oben.
-    baked.camera.setScroll(0, 0);
-    try {
-      baked.clear(localX, localY, SHADOW_DIRTY_CHUNK_SIZE, SHADOW_DIRTY_CHUNK_SIZE);
-      baked.stamp(scratch.texture.key, undefined, localX, localY, {
-        originX: 0,
-        originY: 0,
-      });
-      baked.render();
-    } finally {
-      baked.camera.setScroll(scrollX, scrollY);
-    }
-  }
-
   syncDynamicShadows(
     players: readonly PlayerEntity[],
     projectiles: readonly ShadowProjectileSample[],
@@ -624,10 +719,10 @@ export class ShadowSystem {
     for (const bucket of this.layers.values()) {
       bucket.staticGraphics.destroy();
       bucket.dynamicGraphics.destroy();
-      bucket.baked?.destroy();
-      bucket.scratch?.destroy();
     }
     this.layers.clear();
+    this.disposeStaticSurface();
+    this.staticScratch.destroy();
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
     this.lastStaticLayout = null;
@@ -637,21 +732,16 @@ export class ShadowSystem {
   }
 
   /**
-   * Leert Zeichenpuffer **und** gebackene Texturen. Beides muss zusammen passieren: Der Puffer
+   * Leert Zeichenpuffer **und** gebackene Chunks. Beides muss zusammen passieren: Den Puffer
    * allein zu leeren liesse die gebackenen Schatten stehen – sie ueberlebten dann den
    * Arena-Teardown und blieben als Raster in der Lobby sichtbar.
    */
   private clearStatic(): void {
-    for (const bucket of this.layers.values()) {
-      bucket.staticGraphics.clear();
-      if (bucket.baked) {
-        bucket.baked.clear();
-        bucket.baked.fill(0xffffff, 1);
-        bucket.baked.render();
-      }
-      bucket.bakedHasContent = false;
-      this.syncBakedVisibility(bucket);
-    }
+    for (const bucket of this.layers.values()) bucket.staticGraphics.clear();
+    this.staticHasLayout = false;
+    // Verwerfen statt Weisszeichnen: Ohne Layout gibt es nichts zu backen, und die Renderziele
+    // waeren nur ein neutraler Vollflaechen-Blendpass pro Frame.
+    this.disposeStaticSurface();
   }
 
   private clearDynamic(): void {
@@ -878,69 +968,11 @@ export class ShadowSystem {
     dynamicGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.applyMask(dynamicGraphics);
 
-    const bucket: ShadowLayerBucket = {
-      staticGraphics,
-      dynamicGraphics,
-      baked: null,
-      group,
-      bakedHasContent: false,
-      scratch: null,
-    };
+    const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, group };
     this.layers.set(key, bucket);
     return bucket;
   }
 
-  /**
-   * Backt den statischen Puffer einer Ebene in eine RenderTexture.
-   *
-   * Die Textur startet **deckend weiss** und die Footprints werden mit ihrem
-   * MULTIPLY-Blendmode hineingezeichnet. Damit enthaelt sie exakt das Produkt der gestapelten
-   * Lagen, und ein abschliessendes MULTIPLY der Textur auf die Szene ergibt dasselbe Bild wie
-   * das bisherige Stapeln direkt auf die Szene. Weiss ist dabei das neutrale Element – ausserhalb
-   * der Schatten aendert die Textur nichts. Normales Alpha-Blending waere hier *nicht*
-   * gleichwertig, weil die Schattenfarbe (0x05070b) nicht exakt schwarz ist.
-   */
-  private bakeLayer(depth: number, bucket: ShadowLayerBucket): void {
-    const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
-    const width = Math.max(1, Math.ceil(bounds.maxX - bounds.minX));
-    const height = Math.max(1, Math.ceil(bounds.maxY - bounds.minY));
-
-    let baked = bucket.baked;
-    if (!baked) {
-      baked = this.scene.add.renderTexture(bounds.minX, bounds.minY, width, height);
-      baked.setOrigin(0, 0);
-      baked.setDepth(depth);
-      baked.setBlendMode(Phaser.BlendModes.MULTIPLY);
-      baked.camera.setScroll(bounds.minX, bounds.minY);
-      this.applyMask(baked);
-      bucket.baked = baked;
-    }
-
-    baked.clear();
-    baked.fill(0xffffff, 1);
-    // draw() rendert das Objekt mit seinem eigenen Blendmode; sichtbar muss es dafuer sein.
-    bucket.staticGraphics.setVisible(true);
-    baked.draw(bucket.staticGraphics);
-    bucket.staticGraphics.setVisible(false);
-    baked.render();
-    bucket.bakedHasContent = true;
-    this.syncBakedVisibility(bucket);
-  }
-
-  /** Zeichenpuffer und gebackene Textur einer Gruppe zuruecksetzen. */
-  private clearStaticGroup(group: StaticShadowGroup): void {
-    for (const bucket of this.layers.values()) {
-      if (bucket.group !== group) continue;
-      bucket.staticGraphics.clear();
-    }
-  }
-
-  private bakeStaticGroup(group: StaticShadowGroup): void {
-    for (const [key, bucket] of this.layers) {
-      if (bucket.group !== group) continue;
-      this.bakeLayer(Number(key), bucket);
-    }
-  }
 
   private applyMask(target: Phaser.GameObjects.Graphics | Phaser.GameObjects.RenderTexture): void {
     if (this.arenaMask) {

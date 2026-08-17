@@ -232,13 +232,14 @@ describe('Coop defense carry world guidance', () => {
 
 describe('Coop defense secondary objective labels', () => {
   it('keeps presentation labels out of the resolved map config', () => {
-    const objective = getCoopDefenseMapConfig('0').secondaryObjectives?.[0];
+    // Kampagnen-Map statt Testarena: Map 0 ist eine loeschbare Stressarena.
+    const objective = getCoopDefenseMapConfig('17').secondaryObjectives?.[0];
     expect(objective).not.toHaveProperty('displayName');
     expect(objective).not.toHaveProperty('rewardHint');
   });
 
   it('ignores legacy presentation fields during normalization', () => {
-    const base = getCoopDefenseMapConfig('0');
+    const base = getCoopDefenseMapConfig('17');
     const withObjective = (displayName: string) => ({
       ...base,
       secondaryObjectives: (base.secondaryObjectives ?? []).map((objective) => ({ ...objective, displayName })),

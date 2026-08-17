@@ -585,7 +585,7 @@ export class RockVisualHelper {
   private refreshObstacleVisuals(requireFullRefresh: boolean, dirtyRockIds: ReadonlySet<number>): void {
     const canRefreshRegions = !requireFullRefresh
       && dirtyRockIds.size > 0
-      && (this.ctx.arenaResult?.rockMottleLayers.length ?? 0) > 0;
+      && this.ctx.arenaResult?.rockOverlaySurface != null;
     if (canRefreshRegions) {
       this.rockPresentation.refreshOverlayRegions(dirtyRockIds);
       this.shadowSystem?.rebuildArenaStaticShadowRegions(

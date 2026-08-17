@@ -503,13 +503,29 @@ export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 /
 export let GRID_ROWS              = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 33
 /** Aktuelle Coop-Breite: 60 Rasterzellen entsprechen der 1920-px-Designbreite. */
 export const DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS = FULL_ARENA_WIDTH / CELL_SIZE;
-/** Das vorhandene CTB-Hintergrundbild definiert die gemeinsame maximale Arenabreite. */
-export const MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS = CAPTURE_THE_BEER_ARENA_WIDTH / CELL_SIZE;
+/**
+ * Gemeinsame Obergrenze beider Coop-Achsen.
+ *
+ * Sie ist bewusst kein Designmass und auch keine Ableitung aus einer konkreten Testkarte,
+ * sondern die Stelle, an der die vorhandenen Datenstrukturen technisch enden:
+ *
+ * - `RockOverlayRegions.rockCellKey` packt beide Achsen mit Stride 65536 in eine Zahl,
+ * - `RockGridIndex` haelt `cols * rows` Eintraege in einem `Int32Array`,
+ * - `ArenaTerrainColorGrid` haelt drei Bytes je Rasterzelle.
+ *
+ * 1024 Zellen je Achse bleiben mit rund einer Million Zellen deutlich unter allen dreien.
+ * Die bisherigen Grenzen (135 Spalten aus der CTB-Breite, 56 Zeilen aus arenagrossen
+ * Render-/Sampler-Puffern) sind entfallen, weil ihre technische Ursache entfallen ist:
+ * Der Arena-Hintergrund ist eine kachelnde Textur ohne modusabhaengiges Grossbild, und die
+ * sichtbaren Weltschichten liegen seit dem Chunk-Streaming nicht mehr in arenagrossen
+ * Renderzielen (siehe `arena/chunks/ChunkedRenderSurface.ts`).
+ */
+export const MAX_COOP_DEFENSE_ARENA_AXIS_CELLS = 1024;
+export const MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS = MAX_COOP_DEFENSE_ARENA_AXIS_CELLS;
 /** Bestehende Coop-Maps bleiben ohne Angabe bei 33 Zeilen (1056 px). */
 export const DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS = DEFAULT_ARENA_HEIGHT / CELL_SIZE;
 export const MIN_COOP_DEFENSE_ARENA_HEIGHT_CELLS = DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS;
-/** Obergrenze fuer vertikale Render- und Sampler-Puffer: 56 Zeilen = 1792 px. */
-export const MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS = 56;
+export const MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS = MAX_COOP_DEFENSE_ARENA_AXIS_CELLS;
 export const ROCK_FILL_RATIO     = 0.30;
 export const DIRT_FILL_RATIO     = 0.05;   
 export const DEFAULT_TREE_COUNT  = 3;

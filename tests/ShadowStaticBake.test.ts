@@ -1,34 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
-  BlendModes: { MULTIPLY: 3, ERASE: 17 },
+  BlendModes: { NORMAL: 0, MULTIPLY: 3, ERASE: 17 },
   Math: { Vector2: class { x = 0; y = 0; } },
 }));
 
 import { ShadowSystem } from '../src/effects/ShadowSystem';
+import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../src/config';
+import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
 import type { ArenaLayout } from '../src/types';
 
-interface StampEvent {
-  x: number;
-  y: number;
-  originX?: number;
-  originY?: number;
-}
+/**
+ * Die gebackenen statischen Schatten.
+ *
+ * Sie lagen frueher in je einer arenagrossen RenderTexture pro Tiefe – auf einer 400 x 80-Karte
+ * waeren das vier Ziele zu 12 800 x 2 560 px gewesen. Jetzt liegen sie in denselben Render-Chunks
+ * wie die uebrigen Weltschichten; die Zusicherungen dieses Tests sind entsprechend:
+ *
+ * - kein Renderziel skaliert mit der Weltflaeche,
+ * - jeder Chunk startet deckend weiss (neutral fuer MULTIPLY),
+ * - eine Dirty-Region schreibt chunklokal, nicht in Weltkoordinaten,
+ * - der Teardown laesst nichts stehen.
+ */
 
-interface BakeEvent {
+interface TextureEvent {
   depth: number;
   fills: number;
   draws: number;
   visible: boolean;
   width: number;
   height: number;
-  stamps: StampEvent[];
-  renderScrollYs: number[];
-  cameraScrollY: number;
+  x: number;
+  y: number;
+  destroyed: boolean;
+  stamps: Array<{ x: number; y: number; originX?: number; originY?: number }>;
+  cameraScrolls: Array<{ x: number; y: number }>;
 }
 
 function makeScene() {
-  const bakes: BakeEvent[] = [];
+  const textures: TextureEvent[] = [];
   const graphicsLog: Array<{ depth: number; clears: number }> = [];
 
   const makeGraphics = () => {
@@ -46,62 +56,57 @@ function makeScene() {
   };
 
   let textureId = 0;
-  const makeRenderTexture = (_x: number, _y: number, width: number, height: number) => {
-    const event: BakeEvent = {
+  const makeRenderTexture = (x: number, y: number, width: number, height: number) => {
+    const event: TextureEvent = {
       depth: 0,
       fills: 0,
       draws: 0,
       visible: true,
       width,
       height,
+      x,
+      y,
+      destroyed: false,
       stamps: [],
-      renderScrollYs: [],
-      cameraScrollY: 0,
+      cameraScrolls: [],
     };
-    bakes.push(event);
+    textures.push(event);
     const camera = {
       scrollX: 0,
       scrollY: 0,
-      setScroll(x: number, y: number) {
-        this.scrollX = x;
-        this.scrollY = y;
-        event.cameraScrollY = y;
+      setScroll(nextX: number, nextY: number) {
+        this.scrollX = nextX;
+        this.scrollY = nextY;
+        event.cameraScrolls.push({ x: nextX, y: nextY });
       },
     };
-    const rt: Record<string, unknown> = {
-      camera,
-      texture: { key: `shadow_rt_${textureId++}` },
-    };
-    for (const name of ['setOrigin', 'setPosition', 'setBlendMode', 'setMask', 'clearMask',
-      'clear', 'destroy']) {
+    // `active` ist kein Detail: Der Teardown raeumt nur auf, was noch aktiv ist.
+    const rt: Record<string, unknown> = { camera, active: true, texture: { key: `shadow_rt_${textureId++}` } };
+    for (const name of ['setOrigin', 'setBlendMode', 'setMask', 'clearMask', 'setRenderMode',
+      'clear', 'render']) {
       rt[name] = () => rt;
     }
-    rt.render = () => {
-      event.renderScrollYs.push(camera.scrollY);
-      return rt;
-    };
+    rt.setPosition = (nextX: number, nextY: number) => { event.x = nextX; event.y = nextY; return rt; };
     rt.setVisible = (visible: boolean) => { event.visible = visible; return rt; };
     rt.setDepth = (d: number) => { event.depth = d; return rt; };
     rt.fill = () => { event.fills += 1; return rt; };
     rt.draw = () => { event.draws += 1; return rt; };
+    rt.destroy = () => { event.destroyed = true; rt.active = false; return rt; };
     rt.stamp = (
       _key: string,
       _frame: unknown,
-      x: number,
-      y: number,
+      sx: number,
+      sy: number,
       config?: { originX?: number; originY?: number },
     ) => {
-      event.stamps.push({ x, y, originX: config?.originX, originY: config?.originY });
+      event.stamps.push({ x: sx, y: sy, originX: config?.originX, originY: config?.originY });
       return rt;
     };
     return rt;
   };
 
-  const scene = {
-    add: { graphics: makeGraphics, renderTexture: makeRenderTexture },
-  } as never;
-
-  return { scene, bakes, graphicsLog };
+  const scene = { add: { graphics: makeGraphics, renderTexture: makeRenderTexture } } as never;
+  return { scene, textures, graphicsLog };
 }
 
 function layout(rockCount: number, treeCount: number): ArenaLayout {
@@ -111,148 +116,186 @@ function layout(rockCount: number, treeCount: number): ArenaLayout {
   } as unknown as ArenaLayout;
 }
 
-/** Zaehlt nur Bakes, bei denen tatsaechlich gezeichnet wurde. */
-function drawCounts(bakes: BakeEvent[]): number {
-  return bakes.reduce((sum, bake) => sum + bake.draws, 0);
+/** Alle je erzeugten Chunk-Ziele; das Scratch-Ziel ist an seiner Kantenlaenge erkennbar. */
+function chunkTargets(textures: TextureEvent[]): TextureEvent[] {
+  return textures.filter((texture) => texture.width === ARENA_RENDER_CHUNK_SIZE);
+}
+
+/** Die gerade residenten: Ein freigegebenes Ziel wandert unsichtbar in den Pool. */
+function visibleChunkTargets(textures: TextureEvent[]): TextureEvent[] {
+  return chunkTargets(textures).filter((texture) => texture.visible && !texture.destroyed);
+}
+
+function totalDraws(textures: TextureEvent[]): number {
+  return textures.reduce((sum, texture) => sum + texture.draws, 0);
 }
 
 describe('static shadow baking', () => {
-  it('bakes static footprints into render textures instead of keeping live graphics', () => {
-    const { scene, bakes } = makeScene();
+  it('never allocates a render target that scales with the arena', () => {
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
 
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
 
-    // Fels, Stamm und Krone liegen auf verschiedenen Tiefen -> je ein gebackener Layer.
-    expect(bakes.length).toBeGreaterThanOrEqual(3);
-    // Jede gebackene Textur startet deckend weiss (neutrales Element fuer MULTIPLY).
-    for (const bake of bakes) expect(bake.fills).toBeGreaterThan(0);
-    expect(drawCounts(bakes)).toBeGreaterThanOrEqual(3);
+    expect(textures.length).toBeGreaterThan(0);
+    for (const texture of textures) {
+      expect(texture.width).toBeLessThanOrEqual(ARENA_RENDER_CHUNK_SIZE);
+      expect(texture.height).toBeLessThanOrEqual(ARENA_RENDER_CHUNK_SIZE);
+      // Die frueheren Ziele waren so gross wie die Arena; genau das darf nicht wiederkommen.
+      expect(texture.width).toBeLessThan(ARENA_WIDTH);
+      expect(texture.height).toBeLessThan(ARENA_HEIGHT);
+    }
   });
 
-  it('re-bakes only rock layers when obstacles change, leaving tree layers untouched', () => {
-    const { scene, bakes } = makeScene();
+  it('fills every baked chunk with white, the neutral element of MULTIPLY', () => {
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
-    const arenaLayout = layout(3, 2);
 
-    const arenaResult = {
-      rockObjects: [{ active: true }, { active: true }, { active: true }],
-    } as never;
+    shadows.rebuildStaticLayoutShadows(layout(3, 2));
 
-    shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
-    const drawsAfterBuild = bakes.map((bake) => bake.draws);
-
-    // Zweiter Aufruf mit demselben Layout = Invalidierungspfad nach einer Zerstoerung.
-    shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
-
-    const changed = bakes.filter((bake, index) => bake.draws !== drawsAfterBuild[index]);
-    // Genau die Fels-/Turret-Tiefen duerfen neu gebacken werden, die Baum-Tiefen nicht.
-    expect(changed.length).toBeGreaterThan(0);
-    const treeDepths = changed.map((bake) => bake.depth);
-    // Kronen liegen deutlich hoeher (nahe DEPTH.CANOPY) als Fels-/Stamm-Schatten.
-    for (const depth of treeDepths) expect(depth).toBeLessThan(15);
+    // Der weisse Grund entsteht im chunklokalen Scratch-Ziel und wird von dort geblittet.
+    const scratch = textures.find((texture) => texture.fills > 0);
+    expect(scratch).toBeTruthy();
+    expect(scratch!.draws).toBeGreaterThan(0);
+    // Fels, Stamm und Krone liegen auf verschiedenen Tiefen -> je eine Ebene je Chunk.
+    const depths = new Set(chunkTargets(textures).map((texture) => texture.depth));
+    expect(depths.size).toBeGreaterThanOrEqual(3);
   });
 
-  it('rebuilds a known rock change through bounded scratch chunks', () => {
-    const { scene, bakes } = makeScene();
+  it('positions each chunk target at its own world corner', () => {
+    const { scene, textures } = makeScene();
+    const shadows = new ShadowSystem(scene);
+
+    shadows.rebuildStaticLayoutShadows(layout(3, 2));
+
+    const positions = new Set(chunkTargets(textures).map((texture) => `${texture.x}:${texture.y}`));
+    expect(positions.has(`${ARENA_OFFSET_X}:${ARENA_OFFSET_Y}`)).toBe(true);
+    // Mehr als eine Ecke: Die Arena ist breiter als ein Chunk.
+    expect(positions.size).toBeGreaterThan(1);
+  });
+
+  it('rebuilds a known rock change through a bounded 128 px region, not the whole world', () => {
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     const arenaLayout = layout(20, 2);
     const rockObjects = Array.from({ length: 20 }, () => ({ active: true }));
     const arenaResult = { rockObjects } as never;
 
     shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
-    const treeDraws = bakes.filter((bake) => bake.depth >= 15).map((bake) => bake.draws);
+    const drawsAfterBuild = totalDraws(textures);
+
     rockObjects[4].active = false;
     shadows.rebuildArenaStaticShadowRegions(arenaLayout, arenaResult, new Set([4]));
+    const dirtyDraws = totalDraws(textures) - drawsAfterBuild;
 
-    expect(bakes.some((bake) => bake.width === 128 && bake.height === 128)).toBe(true);
-    expect(bakes.filter((bake) => bake.depth >= 15).map((bake) => bake.draws)).toEqual(treeDraws);
+    expect(dirtyDraws).toBeGreaterThan(0);
+    // Eine einzelne Zerstoerung darf nur einen Bruchteil der Arbeit des Vollaufbaus kosten.
+    expect(dirtyDraws).toBeLessThan(drawsAfterBuild / 2);
+    // Und sie laeuft ueber ein 128er-Scratch-Ziel.
+    expect(textures.some((texture) => texture.width === 128 && texture.height === 128)).toBe(true);
   });
 
-  it('blits a dirty shadow chunk in texture-local coordinates with the 12 px arena offset', () => {
-    const { scene, bakes } = makeScene();
+  it('blits a dirty shadow chunk in chunk-local coordinates, with a neutral target camera', () => {
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     const arenaLayout = layout(20, 0);
     const rockObjects = Array.from({ length: 20 }, () => ({ active: true }));
     const arenaResult = { rockObjects } as never;
 
     shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
+    for (const texture of textures) texture.stamps.length = 0;
+
     rockObjects[4].active = false;
     shadows.rebuildArenaStaticShadowRegions(arenaLayout, arenaResult, new Set([4]));
 
-    const regionalStamps = bakes
-      .filter((bake) => bake.width > 128 || bake.height > 128)
-      .flatMap((bake) => bake.stamps);
-    expect(regionalStamps.length).toBeGreaterThan(0);
-    expect(regionalStamps).toContainEqual({
-      x: 128,
-      y: 0,
-      originX: 0,
-      originY: 0,
-    });
-    const regionalTargets = bakes.filter(
-      (bake) => (bake.width > 128 || bake.height > 128) && bake.stamps.length > 0,
-    );
-    expect(regionalTargets.length).toBeGreaterThan(0);
-    for (const target of regionalTargets) {
-      expect(target.renderScrollYs.at(-1)).toBe(0);
-      expect(target.cameraScrollY).toBe(12);
+    const written = chunkTargets(textures).filter((texture) => texture.stamps.length > 0);
+    expect(written.length).toBeGreaterThan(0);
+    for (const target of written) {
+      for (const stamp of target.stamps) {
+        // Chunklokal: innerhalb des Ziels und am 128er-Raster ausgerichtet – nie die Weltposition.
+        expect(stamp.x).toBeGreaterThanOrEqual(0);
+        expect(stamp.x).toBeLessThan(ARENA_RENDER_CHUNK_SIZE);
+        expect(stamp.y).toBeGreaterThanOrEqual(0);
+        expect(stamp.y).toBeLessThan(ARENA_RENDER_CHUNK_SIZE);
+        expect(stamp.x % 128).toBe(0);
+        expect(stamp.originX).toBe(0);
+        expect(stamp.originY).toBe(0);
+      }
+      // Die Zielkamera bleibt neutral; den Weltversatz traegt allein die Position des Ziels.
+      expect(target.cameraScrolls.every((scroll) => scroll.x === 0 && scroll.y === 0)).toBe(true);
     }
+
+    // Das Scratch-Ziel dagegen liest weltpositionierte Graphics ein und scrollt dafuer auf die
+    // Weltecke der Region – der Arena-Offset von 12 px steckt genau dort.
+    const scratchScrolls = textures
+      .filter((texture) => texture.width === 128)
+      .flatMap((texture) => texture.cameraScrolls);
+    expect(scratchScrolls.some((scroll) => scroll.y === ARENA_OFFSET_Y)).toBe(true);
   });
 
-  it('blanks and hides baked layers on teardown so no shadows survive into the lobby', () => {
-    const { scene, bakes } = makeScene();
+  it('drops every chunk target on teardown so no shadows survive into the lobby', () => {
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
 
-    const fillsAfterBuild = bakes.map((bake) => bake.fills);
-    // Nach dem Aufbau sind die gebackenen Layer sichtbar.
-    expect(bakes.some((bake) => bake.visible)).toBe(true);
+    const targets = visibleChunkTargets(textures);
+    expect(targets.length).toBeGreaterThan(0);
 
     shadows.clear();
 
-    // Jede gebackene Textur wurde erneut auf Weiss gesetzt (Inhalt verworfen) ...
-    bakes.forEach((bake, index) => {
-      expect(bake.fills).toBeGreaterThan(fillsAfterBuild[index]);
-    });
-    // ... und ist danach ausgeblendet. Sonst ueberleben die Schatten den Arena-Teardown
-    // und bleiben als Raster in der Lobby stehen.
-    expect(bakes.every((bake) => !bake.visible)).toBe(true);
+    // Verworfen statt weiss gefuellt: Ohne Layout gibt es nichts zu backen, und ein neutrales
+    // Vollflaechen-Ziel waere nur ein Blendpass pro Frame. Das unsichtbare Scratch-Ziel bleibt
+    // bewusst stehen – es ist wiederverwendeter Arbeitsspeicher, kein sichtbarer Inhalt.
+    expect(targets.every((texture) => texture.destroyed)).toBe(true);
+    expect(visibleChunkTargets(textures)).toEqual([]);
   });
 
-  it('keeps a fresh layout rebuilding both groups', () => {
-    const { scene, bakes } = makeScene();
+  it('keeps a fresh layout rebuilding every chunk', () => {
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     const arenaResult = { rockObjects: [{ active: true }] } as never;
 
     shadows.rebuildArenaStaticShadows(layout(1, 1), arenaResult);
-    const first = drawCounts(bakes);
-    // Neues Layout-Objekt -> Baum-Schatten muessen ebenfalls neu entstehen.
+    const first = totalDraws(textures);
+    // Neues Layout-Objekt -> alles muss neu entstehen.
     shadows.rebuildArenaStaticShadows(layout(1, 1), arenaResult);
-    expect(drawCounts(bakes)).toBeGreaterThan(first + 1);
+    expect(totalDraws(textures)).toBeGreaterThan(first + 1);
   });
 
   it('throttles static profile bakes and still forces the scripted final state', () => {
-    const { scene, bakes } = makeScene();
+    const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
-    const initialDraws = drawCounts(bakes);
+    const initialDraws = totalDraws(textures);
 
     shadows.setTimeOfDay(19 * 60 + 45);
     expect(shadows.syncStaticProfile(1_000)).toBe(true);
-    const firstProfileDraws = drawCounts(bakes);
+    const firstProfileDraws = totalDraws(textures);
     expect(firstProfileDraws).toBeGreaterThan(initialDraws);
 
     shadows.setTimeOfDay(21 * 60 + 30);
     expect(shadows.syncStaticProfile(1_200)).toBe(false);
-    expect(drawCounts(bakes)).toBe(firstProfileDraws);
+    expect(totalDraws(textures)).toBe(firstProfileDraws);
     expect(shadows.syncStaticProfile(1_600)).toBe(true);
-    const throttledDraws = drawCounts(bakes);
+    const throttledDraws = totalDraws(textures);
     expect(throttledDraws).toBeGreaterThan(firstProfileDraws);
 
     shadows.setTimeOfDay(23 * 60 + 30);
     expect(shadows.syncStaticProfile(1_601, true)).toBe(true);
-    expect(drawCounts(bakes)).toBeGreaterThan(throttledDraws);
+    expect(totalDraws(textures)).toBeGreaterThan(throttledDraws);
     expect(shadows.syncStaticProfile(1_602)).toBe(false);
+  });
+
+  it('streams its chunks with the camera once a view is reported', () => {
+    const { scene, textures } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    const fullyResident = visibleChunkTargets(textures).length;
+    expect(fullyResident).toBeGreaterThan(0);
+
+    // Ein gemeldeter Ausschnitt engt die Residenz ein; ohne Meldung – wie in der
+    // Lobby-Vorschau – bleibt der gesamte Rahmen resident.
+    shadows.updateStaticResidency({ x: ARENA_OFFSET_X, y: ARENA_OFFSET_Y, width: 200, height: 200 });
+    expect(visibleChunkTargets(textures).length).toBeLessThan(fullyResident);
   });
 });

@@ -125,11 +125,17 @@ describe('rock overlay dirty chunks', () => {
 
 describe('rock overlay wiring', () => {
   it('feeds the mottle bake from the stable source, never from the living rocks', () => {
-    const builder = readFileSync(new URL('../src/arena/ArenaBuilder.ts', import.meta.url), 'utf8')
-      .replace(/\r\n/g, '\n');
-    // Der Vollbake stempelt aus `rockOverlaySource`; `activeRocks` darf nur noch die Maske sein.
-    expect(builder).toContain('result.rockOverlaySource.cells,\n      activeRocks,');
-    // Und die Chunk-Quelle ebenso – ein Rueckfall auf `activeRockIds` waere genau der alte Fehler.
-    expect(builder).toContain('for (const cell of result.rockOverlaySource.cells)');
+    const streamer = readFileSync(
+      new URL('../src/arena/chunks/RockOverlayStreamer.ts', import.meta.url),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    // Seit dem Chunk-Streaming gibt es nur noch einen Bake-Pfad. Er zieht seine Quellzellen aus
+    // der stabilen Materialquelle; ein Rueckfall auf die gerade lebenden Felsen waere genau der
+    // Fehler, der Flecken auf unbeteiligten Nachbarfelsen umspringen liesse.
+    expect(streamer).toContain('const cell = this.overlaySource.cells[index];');
+    expect(streamer).toContain('sourceCells,\n        index,');
+    // Die lebenden Felsen tragen ausschliesslich die Stanzform.
+    expect(streamer).toContain('if (silhouetteImages.length > 0) cutout.erase(silhouetteImages);');
   });
 });

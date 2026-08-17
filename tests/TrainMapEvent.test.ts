@@ -53,6 +53,20 @@ function fakeTrainHandler() {
   };
 }
 
+/**
+ * Ein einmaliger, encounter-getriggerter Zugeinsatz mit Vorwarnzeit – der C1-Vertrag.
+ *
+ * Er stand frueher in der Testarena; die traegt seit Block A nur noch Stressgeometrie. Der
+ * Vertrag ist eine Regel des Event-Directors und wird deshalb hier authored statt aus einer
+ * loeschbaren Map gelesen.
+ */
+const ENCOUNTER_TRIGGERED_TRAIN = {
+  id: 'c1-opening-train',
+  type: 'train',
+  start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
+  delayMs: 5_000,
+} as const;
+
 describe('Train as a standalone map event', () => {
   it('migrates the train rhythm on every rails map of the campaign', () => {
     const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
@@ -159,8 +173,11 @@ describe('Train as a standalone map event', () => {
     expect(map.mapEvents?.[1]?.start).toEqual({ type: 'after-event', eventId: 'train-a' });
   });
 
-  it('keeps the 00-test C1 slice one-shot with encounter clear and an authored warning', () => {
-    const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
+  it('keeps an encounter-triggered slice one-shot with an authored warning', () => {
+    // Bewusst authored statt aus einer Map gelesen: Die frueher hier benutzte Testarena ist seit
+    // Block A eine loeschbare Stressarena ohne Events, und der Vertrag gehoert ohnehin zum
+    // Event-Director, nicht zu einer bestimmten Karte.
+    const event = ENCOUNTER_TRIGGERED_TRAIN;
     expect(event).toMatchObject({
       id: 'c1-opening-train',
       type: 'train',
@@ -170,9 +187,8 @@ describe('Train as a standalone map event', () => {
     expect(event?.repeatAfterExitMs).toBeUndefined();
   });
 
-  it('runs the 00-test event through scheduled, active and completed', () => {
-    const event = getCoopDefenseMapConfig('0').mapEvents?.[0];
-    if (!event) throw new Error('00-test C1 event missing');
+  it('runs an encounter-triggered event through scheduled, active and completed', () => {
+    const event = ENCOUNTER_TRIGGERED_TRAIN;
     const delayMs = event.delayMs ?? 0;
     let encounterCleared = false;
     const handler = fakeTrainHandler();

@@ -1,0 +1,33 @@
+import type * as Phaser from 'phaser';
+
+/**
+ * Alle Displayobjekte der Szene, eine Ebene tief in `Layer`-Kinder hinein.
+ *
+ * Diagnose und Ablationsmodus lesen die Anzeigeliste direkt. Seit der Felsbestand in einer eigenen
+ * `Layer` liegt – damit die Szenenliste kurz bleibt und `scene.add.*`/`destroy()` nicht linear
+ * ueber zehntausende Eintraege suchen – waeren die Felsen fuer beide sonst unsichtbar: Der
+ * Ablationsmodus koennte seine `rocks`-Kategorie nicht mehr ausblenden, und die Objektzaehlung
+ * meldete eine Szene ohne Welt.
+ *
+ * Bewusst genau eine Ebene tief und nur fuer `Layer`: `Container`-Kinder waren fuer diese Scans
+ * noch nie sichtbar, und ein rekursiver Abstieg wuerde die Kosten der Diagnose an die
+ * Verschachtelungstiefe der HUD-Baeume haengen.
+ */
+export function forEachSceneDisplayObject(
+  scene: Phaser.Scene,
+  visit: (object: Phaser.GameObjects.GameObject) => void,
+): void {
+  for (const child of scene.children.list) {
+    visit(child);
+    const nested = (child as Phaser.GameObjects.GameObject & { type?: string; list?: Phaser.GameObjects.GameObject[] });
+    if (nested.type !== 'Layer' || !Array.isArray(nested.list)) continue;
+    for (const grandChild of nested.list) visit(grandChild);
+  }
+}
+
+/** Wie {@link forEachSceneDisplayObject}, aber als zaehlbare Gesamtzahl. */
+export function countSceneDisplayObjects(scene: Phaser.Scene): number {
+  let count = 0;
+  forEachSceneDisplayObject(scene, () => { count += 1; });
+  return count;
+}

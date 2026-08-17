@@ -24,6 +24,19 @@ import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 
 /** Eigener Salt gegen die uebrigen zellbasierten Felder; siehe {@link ./CellHash}. */
 const ROCK_DECAL_ROTATION_SALT = 0x2c91;
+/**
+ * Eigener Salt fuer Boden-Decals. Bewusst verschieden vom Fels-Salt, damit ein Boden- und ein
+ * Fels-Decal auf derselben Zelle nicht dieselbe Drehung erben.
+ */
+const GROUND_DECAL_ROTATION_SALT = 0x51a7;
+
+/**
+ * Groesste Vergroesserung der Dirt-Randfahne. Sie ist der Ueberhang, um den eine Dirt-Zelle ueber
+ * ihre eigene Zelle hinaus zeichnet – und damit der Rand, mit dem ein Render-Chunk seine
+ * Nachbarzellen einsammeln muss, damit an der Chunkgrenze kein Saum fehlt.
+ */
+export const DIRT_FRINGE_MAX_SCALE = 1.18;
+export const DIRT_FRINGE_OVERHANG_PX = (CELL_SIZE * DIRT_FRINGE_MAX_SCALE - CELL_SIZE) * 0.5;
 
 export interface ArenaTreeVisual {
   trunk: Phaser.GameObjects.Arc;
@@ -49,6 +62,19 @@ function getMetrics(metrics?: ArenaVisualGridMetrics): ArenaVisualGridMetrics {
   };
 }
 
+/**
+ * Warum die Bake-Fabriken `new Phaser.GameObjects.Image(...)` statt `scene.add.image(...)` bauen.
+ *
+ * Ein Bild, das nur in eine RenderTexture gezeichnet und sofort wieder zerstoert wird, hat in der
+ * Anzeigeliste nichts verloren. Die Liste ist auf grossen Karten mehrere zehntausend Eintraege
+ * lang, und sowohl `add()` als auch `destroy()` suchen darin linear: Ein einziges kurzlebiges
+ * Bild kostete damit drei Durchlaeufe ueber die gesamte Liste. Ein Chunk-Bake erzeugt mehrere
+ * hundert davon – im Trace als Ruckler beim blossen Ueberqueren der Karte sichtbar, mit
+ * `List.exists`, `ArrayUtils.Remove` und `removeFromDisplayList` an der Spitze des Profils.
+ *
+ * Ein losgeloestes Bild kann alles, was der Bake braucht: `RenderTexture.draw()` und `erase()`
+ * rendern es direkt, ohne dass es je in einem Renderdurchlauf der Szene auftaucht.
+ */
 export class ArenaVisualFactory {
   /**
    * `cornerTints` traegt Flaechenwash und Kantenlicht. Der Tint
@@ -60,8 +86,17 @@ export class ArenaVisualFactory {
     worldY: number,
     frame: number,
     cornerTints?: BlobSurfaceCornerTints,
+    /**
+     * Ziel-Anzeigeliste. Die Arena reicht hier ihre Fels-Ebene herein: Zehntausende Felsen direkt
+     * in der Szenenliste machen *jede* andere Objekterzeugung teuer, weil `add()` und `destroy()`
+     * linear darin suchen (siehe Klassenkommentar). In einer eigenen Ebene ist der gesamte
+     * Felsbestand ein einziger Eintrag der Szenenliste.
+     */
+    layer?: Phaser.GameObjects.Layer,
   ): Phaser.GameObjects.Image {
-    const img = scene.add.image(worldX, worldY, 'rocks', frame);
+    const img = new Phaser.GameObjects.Image(scene, worldX, worldY, 'rocks', frame);
+    if (layer) layer.add(img);
+    else scene.add.existing(img);
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
     img.setDepth(DEPTH.ROCKS);
     if (cornerTints) img.setTint(...cornerTints);
@@ -86,7 +121,7 @@ export class ArenaVisualFactory {
     const masks: Phaser.GameObjects.Image[] = [];
     for (const rock of rocks) {
       if (!rock.active) continue;
-      const mask = scene.add.image(rock.x, rock.y, ROCK_MOSS_MASK_TEXTURE_KEY, rock.frame.name);
+      const mask = new Phaser.GameObjects.Image(scene, rock.x, rock.y, ROCK_MOSS_MASK_TEXTURE_KEY, rock.frame.name);
       mask.setDisplaySize(CELL_SIZE, CELL_SIZE);
       masks.push(mask);
     }
@@ -106,7 +141,7 @@ export class ArenaVisualFactory {
     const masks: Phaser.GameObjects.Image[] = [];
     for (const rock of rocks) {
       if (!rock.active) continue;
-      const mask = scene.add.image(rock.x, rock.y, ROCK_VEGETATION_MASK_TEXTURE_KEY, rock.frame.name);
+      const mask = new Phaser.GameObjects.Image(scene, rock.x, rock.y, ROCK_VEGETATION_MASK_TEXTURE_KEY, rock.frame.name);
       mask.setDisplaySize(ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_FRAME_SIZE);
       masks.push(mask);
     }
@@ -155,7 +190,7 @@ export class ArenaVisualFactory {
   private static readonly DIRT_FRINGE_STEPS: readonly { scale: number; alpha: number }[] = [
     { scale: 1.05, alpha: 0.34 },
     { scale: 1.11, alpha: 0.19 },
-    { scale: 1.18, alpha: 0.10 },
+    { scale: DIRT_FRINGE_MAX_SCALE, alpha: 0.10 },
   ];
 
   static createDirt(scene: Phaser.Scene, dirtCells: DirtCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.Image[] {
@@ -181,7 +216,31 @@ export class ArenaVisualFactory {
       cols: gridMetrics.gridCols ?? GRID_COLS,
       rows: gridMetrics.gridRows ?? GRID_ROWS,
     });
-    const isOccupied = (gx: number, gy: number) => dirtGrid.isOccupiedWithBorder(gx, gy);
+    return this.createDirtImagesFromGrid(
+      scene,
+      dirtCells,
+      (gx, gy) => dirtGrid.isOccupiedWithBorder(gx, gy),
+      metrics,
+    );
+  }
+
+  /**
+   * Wie {@link createDirtImages}, aber mit von aussen gegebener Belegung.
+   *
+   * Das ist der Unterschied, den das Chunk-Streaming braucht: Ein Render-Chunk erzeugt Bilder nur
+   * fuer die Zellen seiner Region, die Autotile-Maske und die Ecktints muessen dabei aber weiter
+   * den **gesamten** Dirt-Bestand sehen. Baute jeder Chunk seinen Index nur aus den eigenen
+   * Zellen, saehe jede Chunkgrenze wie eine Aussenkante des Bodens aus.
+   */
+  static createDirtImagesFromGrid(
+    scene: Phaser.Scene,
+    dirtCells: readonly DirtCell[],
+    isOccupied: (gx: number, gy: number) => boolean,
+    metrics?: ArenaVisualGridMetrics,
+  ): { fringe: Phaser.GameObjects.Image[]; surface: Phaser.GameObjects.Image[] } {
+    if (dirtCells.length === 0) return { fringe: [], surface: [] };
+
+    const gridMetrics = getMetrics(metrics);
     const fringe: Phaser.GameObjects.Image[] = [];
     const surface: Phaser.GameObjects.Image[] = [];
 
@@ -200,7 +259,7 @@ export class ArenaVisualFactory {
         || !isOccupied(gridX, gridY + 1);
       if (exposed) {
         for (const step of this.DIRT_FRINGE_STEPS) {
-          const halo = scene.add.image(worldX, worldY, 'dirt', frame);
+          const halo = new Phaser.GameObjects.Image(scene, worldX, worldY, 'dirt', frame);
           halo.setDisplaySize(CELL_SIZE * step.scale, CELL_SIZE * step.scale);
           halo.setDepth(DEPTH.DIRT);
           halo.setAlpha(step.alpha);
@@ -209,7 +268,7 @@ export class ArenaVisualFactory {
         }
       }
 
-      const img = scene.add.image(worldX, worldY, 'dirt', frame);
+      const img = new Phaser.GameObjects.Image(scene, worldX, worldY, 'dirt', frame);
       img.setDisplaySize(CELL_SIZE, CELL_SIZE);
       img.setDepth(DEPTH.DIRT);
       img.setTint(...tints);
@@ -237,7 +296,7 @@ export class ArenaVisualFactory {
       const { gridX, gridY, textureKey, offsetX, offsetY } = decal;
       const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
       const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
-      const img = scene.add.image(worldX, worldY, textureKey);
+      const img = new Phaser.GameObjects.Image(scene, worldX, worldY, textureKey);
       const displaySize = surface === 'rock' ? decal.displaySize ?? ROCK_DECAL_DISPLAY_SIZE : DECAL_SIZE;
       img.setDisplaySize(displaySize, displaySize);
       if (decal.alpha !== undefined) img.setAlpha(decal.alpha);
@@ -245,15 +304,14 @@ export class ArenaVisualFactory {
       // random transform on the temporary Image lets both the RenderTexture and the
       // terrain sampler consume the exact same placement.
       //
-      // Der Rueckfall unterscheidet sich nach Untergrund: Ein Bodenband wird genau einmal je Runde
-      // gebacken, ein Fels-Decal dagegen bei jeder Hindernisaenderung neu. Wuerfelte es dabei seine
-      // Drehung neu aus, saehe schon der erste lokale Neubau anders aus als der Vollbake – deshalb
-      // haengt sie dort an der Zelle statt am Zufallsgenerator. Erzeugte Layouts fuehren `rotation`
-      // ohnehin mit; das hier greift nur fuer Altbestand.
+      // Der Rueckfall haengt auf beiden Untergruenden an der Zelle statt am Zufallsgenerator.
+      // Seit die sichtbaren Baender in Render-Chunks liegen, wird auch ein Bodenband nicht mehr
+      // genau einmal je Runde gebacken, sondern bei jedem Sichtbarwerden seines Chunks neu –
+      // eine ausgewuerfelte Drehung liesse das Decal beim Wiederbetreten springen. Erzeugte
+      // Layouts fuehren `rotation` ohnehin mit; das hier greift nur fuer Altbestand.
       img.setRotation(decal.rotation
-        ?? (surface === 'rock'
-          ? hashCell01(gridX, gridY, ROCK_DECAL_ROTATION_SALT) * Math.PI * 2
-          : Phaser.Math.FloatBetween(0, Math.PI * 2)));
+        ?? hashCell01(gridX, gridY, surface === 'rock' ? ROCK_DECAL_ROTATION_SALT : GROUND_DECAL_ROTATION_SALT)
+          * Math.PI * 2);
       img.setDepth(surface === 'rock' ? DEPTH.ROCK_DECALS : DEPTH.DECALS);
       result.push(img);
     }

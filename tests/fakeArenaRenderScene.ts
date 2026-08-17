@@ -64,6 +64,8 @@ export class FakeImage {
     return this;
   }
   setDepth(): this { return this; }
+  /** Vier Ecktints wie beim echten Image; fuer die Paritaetsvergleiche irrelevant. */
+  setTint(): this { return this; }
   setPosition(x: number, y: number): this {
     this.x = x;
     this.y = y;
@@ -353,19 +355,69 @@ export class FakeRenderTexture {
   }
 }
 
+/**
+ * Ein losgeloestes Bild, wie es die Bake-Pfade ueber `new Phaser.GameObjects.Image(...)` bauen.
+ *
+ * Die Argumentreihenfolge folgt Phaser (`scene, x, y, key, frame`), der Rumpf ist {@link FakeImage}.
+ */
+export class FakeDetachedImage extends FakeImage {
+  constructor(_scene: unknown, x: number, y: number, key: string, frame?: string | number) {
+    super(key, x, y);
+    if (frame !== undefined) this.frame = { name: frame as number };
+  }
+}
+
+/**
+ * Ersatzmodul fuer `vi.mock('phaser', ...)`.
+ *
+ * Seit die Bake-Pfade ihre kurzlebigen Bilder losgeloest erzeugen – statt ueber `scene.add.image`,
+ * dessen Anzeigelisten-Eintrag je Objekt drei lineare Suchen kostet – muss die Attrappe auch
+ * `Phaser.GameObjects.Image` liefern und nicht nur die Szene.
+ */
+export function createFakePhaserModule(): Record<string, unknown> {
+  return {
+    BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17, SKIP_CHECK: -1 },
+    Math: {
+      Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
+      Between: (min: number) => min,
+      FloatBetween: () => 0.5,
+      Angle: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1) },
+      Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
+      RND: { pick: <T>(items: readonly T[]) => items[0] },
+      Vector2: class { x = 0; y = 0; },
+    },
+    Geom: { Rectangle: class {} },
+    GameObjects: { Image: FakeDetachedImage },
+  };
+}
+
 export function createFakeArenaScene() {
   let created = 0;
+  const layers: Array<{ list: unknown[] }> = [];
   return {
     add: {
       renderTexture: (_x = 0, _y = 0, width = 32, height = 32) =>
         new FakeRenderTexture(`fake_rt_${created++}`, width, height),
       image: (x: number, y: number, key: string) => new FakeImage(key, x, y),
+      existing: <T>(gameObject: T): T => gameObject,
+      layer: () => {
+        const layer = {
+          list: [] as unknown[],
+          active: true,
+          add(child: unknown) { layer.list.push(child); return layer; },
+          setDepth() { return layer; },
+          destroy() { layer.active = false; },
+        };
+        layers.push(layer);
+        return layer;
+      },
     },
     textures: {
       exists: () => true,
       getFrame: () => ({ width: 32, height: 32 }),
       addDynamicTexture: () => null,
     },
+    layers,
   };
 }
 

@@ -205,28 +205,136 @@ describe('Coop defense encounters', () => {
     expect(normalized.encounters?.[0].start).toEqual({ type: 'base-destroyed', baseId: 'base-a' });
   });
 
-  it('configures the Map 0 side missions alongside its encounters', () => {
-    const map = getCoopDefenseMapConfig('0');
-    const destroyObjective = map.secondaryObjectives?.find((objective) => objective.id === 'destroy-brood-front');
+  /**
+   * Die Verzahnung von Encounter-Kette, Nebenzielen und strukturgebundenem Hintergrunddruck.
+   *
+   * Bewusst authored statt aus einer Karte gelesen: Der frueher hier benutzte Sandkasten war die
+   * Testarena, und die traegt seit Block A nur noch Stressgeometrie. Alle geprueften Regeln
+   * gehoeren ohnehin zur Normalisierung, nicht zu einer bestimmten Karte.
+   */
+  it('wires side missions, persistent pressure and the encounter chain together', () => {
+    const map = normalizeCoopDefenseMapConfig(makeMap(
+      [
+        {
+          id: 'opening',
+          start: { type: 'time', atMs: 1_500 },
+          restAfterMs: 12_000,
+          groups: [{ enemyKind: 'zombie-badger', count: 4 }],
+        },
+        {
+          id: 'follow-up',
+          start: { type: 'after-previous' },
+          restAfterMs: 10_000,
+          groups: [{ enemyKind: 'zombie-badger', count: 5 }],
+        },
+        {
+          id: 'hold-attack',
+          start: { type: 'after-previous' },
+          restAfterMs: 8_000,
+          groups: [{ enemyKind: 'demon-badger', count: 2 }],
+        },
+        // Der Hold darf nicht am letzten Encounter haengen – sonst faellt sein Fenster mit dem
+        // Rundenende zusammen und der Spieler koennte es nie abschliessen sehen.
+        {
+          id: 'closing',
+          start: { type: 'after-previous' },
+          groups: [{ enemyKind: 'zombie-badger', count: 3 }],
+        },
+      ],
+      'repel-assault',
+      [
+        {
+          id: 'north-pressure',
+          enemyKind: 'zombie-badger',
+          intervalMs: 5_000,
+          countPerTick: 1,
+          startAtMs: 0,
+          source: { type: 'base', baseId: 'brood-north' },
+        },
+        {
+          id: 'south-pressure',
+          enemyKind: 'zombie-badger',
+          intervalMs: 5_000,
+          countPerTick: 1,
+          startAtMs: 0,
+          source: { type: 'base', baseId: 'brood-south' },
+        },
+      ],
+      {
+        bases: [
+          {
+            id: 'friendly-main',
+            hpMax: 100,
+            anchor: { kind: 'right-center', edgeInsetCells: 0 },
+            shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+          },
+          {
+            id: 'brood-north',
+            hpMax: 100,
+            faction: 'hostile',
+            role: 'spawn-point',
+            dormant: true,
+            anchor: { kind: 'grid', gridX: 12, gridY: 3 },
+            shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 },
+            spawnCenter: { gridX: 0, gridY: 0 },
+          },
+          {
+            id: 'brood-south',
+            hpMax: 100,
+            faction: 'hostile',
+            role: 'spawn-point',
+            dormant: true,
+            anchor: { kind: 'grid', gridX: 12, gridY: 20 },
+            shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 },
+            spawnCenter: { gridX: 0, gridY: 0 },
+          },
+          {
+            id: 'forward-outpost',
+            hpMax: 1_200,
+            startHpFactor: 0.25,
+            role: 'outpost',
+            dormant: true,
+            anchor: { kind: 'grid', gridX: 30, gridY: 12 },
+            shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 },
+            turrets: [
+              { id: 'rocket-north', cellOffset: { gridX: 0, gridY: 0 }, mountSide: 'front', weaponId: 'TURRET_ROCKET_BURST' },
+              { id: 'rocket-south', cellOffset: { gridX: 0, gridY: 1 }, mountSide: 'front', weaponId: 'TURRET_ROCKET_BURST' },
+            ],
+          },
+        ],
+        secondaryObjectives: [
+          {
+            id: 'destroy-brood',
+            type: 'destroy',
+            start: { type: 'after-encounter', encounterId: 'opening' },
+            focusUntil: { type: 'after-encounter', encounterId: 'follow-up' },
+            targets: ['brood-north', 'brood-south'],
+            rewards: { xpPerTarget: 25 },
+          },
+          {
+            id: 'hold-forward-outpost',
+            type: 'hold',
+            start: { type: 'after-encounter', encounterId: 'follow-up' },
+            holdUntil: { type: 'after-encounter', encounterId: 'hold-attack' },
+            targets: ['forward-outpost'],
+          },
+        ],
+      },
+    ));
+
+    const destroyObjective = map.secondaryObjectives?.find((objective) => objective.id === 'destroy-brood');
     const holdObjective = map.secondaryObjectives?.find((objective) => objective.id === 'hold-forward-outpost');
 
-    expect(map.persistentSpawns).toHaveLength(3);
+    // Der Hintergrunddruck haengt an genau den Strukturen, die der Destroy-Auftrag abraeumt.
+    expect(map.persistentSpawns).toHaveLength(2);
     expect(map.persistentSpawns?.every((spawn) => spawn.source.type === 'base')).toBe(true);
     expect(new Set(map.persistentSpawns?.map((spawn) => (
       spawn.source.type === 'base' ? spawn.source.baseId : 'map-source'
     )))).toEqual(new Set(destroyObjective?.targets));
 
-    // Die Missions-Sandbox waechst mit jedem Archetyp; gepruefet wird deshalb die authored Kette
-    // am Anfang, nicht die Gesamtzahl der Encounter.
-    expect(map.encounters?.map((entry) => entry.id).slice(0, 3)).toEqual([
-      'a2-opening-encounter',
-      'a2-follow-up-encounter',
-      'a2-hold-encounter',
-    ]);
     const encounter = resolveCoopDefenseMapEncounterConfigs(map, 1)[0];
-    expect(encounter?.id).toBe('a2-opening-encounter');
+    expect(encounter?.id).toBe('opening');
     expect(encounter?.start).toMatchObject({ type: 'time', atMs: expect.any(Number) });
-    expect(encounter?.start.type === 'time' ? encounter.start.atMs : -1).toBeGreaterThanOrEqual(0);
     expect(encounter?.restAfterMs).toBeGreaterThan(0);
     expect(encounter?.groups.every((group) => group.front === 'west')).toBe(true);
     expect(encounter?.groups.every((group) => group.count > 0 && group.delayMs >= 0)).toBe(true);
@@ -236,22 +344,18 @@ describe('Coop defense encounters', () => {
 
     expect(destroyObjective).toEqual(expect.objectContaining({
       type: 'destroy',
-      start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
-      focusUntil: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
-      targets: expect.arrayContaining([
-        'destroy-brood-front-north',
-        'destroy-brood-front-center',
-        'destroy-brood-front-south',
-      ]),
+      start: { type: 'after-encounter', encounterId: 'opening' },
+      focusUntil: { type: 'after-encounter', encounterId: 'follow-up' },
+      targets: expect.arrayContaining(['brood-north', 'brood-south']),
       rewards: { xpPerTarget: expect.any(Number) },
     }));
+
     // Die Fokusfenster stossen aneinander an, statt sich zu ueberschneiden: Der Destroy-Auftrag
-    // gibt den Slot mit dem Clear von a2-follow-up-encounter genau dann frei, wenn der Hold ihn
-    // uebernimmt.
+    // gibt den Slot mit dem Clear von `follow-up` genau dann frei, wenn der Hold ihn uebernimmt.
     expect(holdObjective).toEqual(expect.objectContaining({
       type: 'hold',
-      start: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
-      holdUntil: { type: 'after-encounter', encounterId: 'a2-hold-encounter' },
+      start: { type: 'after-encounter', encounterId: 'follow-up' },
+      holdUntil: { type: 'after-encounter', encounterId: 'hold-attack' },
       targets: ['forward-outpost'],
       targetGoal: 1,
       rewards: { repairTargetOnComplete: true },

@@ -1,445 +1,326 @@
 {
   "mapId": "0",
-  "arenaWidthCells": 90,
+  "arenaWidthCells": 400,
+  "arenaHeightCells": 80,
   "timeOfDay": "12:00",
-  "dynamicTimeOfDay": {
-    "minutesPerSecond": 6
-  },
-  "rockFillRatio": 0.3,
+  "trackMode": "void-fire",
   "trackPosition": "center",
-  "mapEvents": [
-    {
-      "id": "c1-opening-train",
-      "type": "train",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "a2-opening-encounter"
+  "rockField": {
+    "corridorRadiusCells": 3.2,
+    "corridorRadiusVarianceCells": 0.9,
+    "corridorWanderCells": 1.6,
+    "waypointJitterCells": 1.2,
+    "rockDensityScale": 1,
+    "corridors": [
+      {
+        "id": "main-west-east",
+        "radiusCells": 3.2,
+        "points": [
+          {
+            "gridX": 1,
+            "gridY": 41
+          },
+          {
+            "gridX": 16,
+            "gridY": 50
+          },
+          {
+            "gridX": 30,
+            "gridY": 55
+          },
+          {
+            "gridX": 44,
+            "gridY": 56
+          },
+          {
+            "gridX": 58,
+            "gridY": 52
+          },
+          {
+            "gridX": 72,
+            "gridY": 48
+          },
+          {
+            "gridX": 86,
+            "gridY": 46
+          },
+          {
+            "gridX": 100,
+            "gridY": 46
+          },
+          {
+            "gridX": 114,
+            "gridY": 46
+          },
+          {
+            "gridX": 128,
+            "gridY": 45
+          },
+          {
+            "gridX": 142,
+            "gridY": 39
+          },
+          {
+            "gridX": 156,
+            "gridY": 32
+          },
+          {
+            "gridX": 170,
+            "gridY": 24
+          },
+          {
+            "gridX": 184,
+            "gridY": 20
+          },
+          {
+            "gridX": 198,
+            "gridY": 22
+          },
+          {
+            "gridX": 212,
+            "gridY": 28
+          },
+          {
+            "gridX": 226,
+            "gridY": 36
+          },
+          {
+            "gridX": 240,
+            "gridY": 43
+          },
+          {
+            "gridX": 254,
+            "gridY": 45
+          },
+          {
+            "gridX": 268,
+            "gridY": 46
+          },
+          {
+            "gridX": 282,
+            "gridY": 45
+          },
+          {
+            "gridX": 296,
+            "gridY": 47
+          },
+          {
+            "gridX": 310,
+            "gridY": 51
+          },
+          {
+            "gridX": 324,
+            "gridY": 55
+          },
+          {
+            "gridX": 338,
+            "gridY": 56
+          },
+          {
+            "gridX": 352,
+            "gridY": 53
+          },
+          {
+            "gridX": 366,
+            "gridY": 46
+          },
+          {
+            "gridX": 380,
+            "gridY": 36
+          },
+          {
+            "gridX": 398,
+            "gridY": 28
+          }
+        ]
       },
-      "delayMs": 5000
-    },
-    {
-      "id": "c2-zone-barrage",
-      "type": "airstrike",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "a2-opening-encounter"
+      {
+        "id": "chamber-north-front",
+        "radiusCells": 4.5,
+        "points": [
+          {
+            "gridX": 40,
+            "gridY": 56
+          },
+          {
+            "gridX": 50,
+            "gridY": 47
+          },
+          {
+            "gridX": 60,
+            "gridY": 36
+          },
+          {
+            "gridX": 70,
+            "gridY": 30
+          },
+          {
+            "gridX": 80,
+            "gridY": 30
+          },
+          {
+            "gridX": 90,
+            "gridY": 37
+          },
+          {
+            "gridX": 100,
+            "gridY": 46
+          }
+        ]
       },
-      "delayMs": 1000,
-      "pattern": "zone-barrage",
-      "strikeCount": 3,
-      "area": {
-        "gridX": 32,
-        "gridY": 4,
-        "widthCells": 8,
-        "heightCells": 5
+      {
+        "id": "chamber-south-middle",
+        "radiusCells": 4.5,
+        "points": [
+          {
+            "gridX": 170,
+            "gridY": 24
+          },
+          {
+            "gridX": 182,
+            "gridY": 30
+          },
+          {
+            "gridX": 193,
+            "gridY": 39
+          },
+          {
+            "gridX": 205,
+            "gridY": 42
+          },
+          {
+            "gridX": 217,
+            "gridY": 45
+          },
+          {
+            "gridX": 228,
+            "gridY": 46
+          },
+          {
+            "gridX": 240,
+            "gridY": 43
+          }
+        ]
       },
-      "orderedSweep": true
-    },
-    {
-      "id": "c2-player-hunt",
-      "type": "airstrike",
-      "start": {
-        "type": "time",
-        "atMs": 5000
-      },
-      "pattern": "player-hunt",
-      "intervalMs": 10000
-    },
-    {
-      "id": "c3-base-hazard",
-      "type": "ground-hazard",
-      "start": {
-        "type": "base-destroyed",
-        "baseId": "destroy-brood-front-north"
-      },
-      "delayMs": 1000,
-      "durationMs": 18000,
-      "area": {
-        "type": "rectangle",
-        "gridX": 46,
-        "gridY": 4,
-        "widthCells": 8,
-        "heightCells": 5
-      },
-      "effect": {
-        "visualStyle": "void",
-        "burnDurationMs": 2000,
-        "burnDamagePerTick": 0.5,
-        "sourceId": "ground_fire.test_c3"
+      {
+        "id": "chamber-north-rear",
+        "radiusCells": 4.5,
+        "points": [
+          {
+            "gridX": 300,
+            "gridY": 47
+          },
+          {
+            "gridX": 310,
+            "gridY": 43
+          },
+          {
+            "gridX": 320,
+            "gridY": 41
+          },
+          {
+            "gridX": 330,
+            "gridY": 39
+          },
+          {
+            "gridX": 340,
+            "gridY": 42
+          },
+          {
+            "gridX": 350,
+            "gridY": 45
+          },
+          {
+            "gridX": 360,
+            "gridY": 46
+          }
+        ]
       }
-    },
-    {
-      "id": "c3-persistent-hazard",
-      "type": "ground-hazard",
-      "start": { "type": "time", "atMs": 0 },
-      "area": {
-        "type": "rectangle",
-        "gridX": 4,
-        "gridY": 4,
-        "widthCells": 4,
-        "heightCells": 4
-      },
-      "effect": {
-        "visualStyle": "normal",
-        "burnDurationMs": 2000,
-        "burnDamagePerTick": 0.5,
-        "sourceId": "ground_fire.test_c3_persistent"
-      }
-    }
-  ],
-  "surviveDurationSec": 600,
-  "balanceReferenceDurationSec": 600,
-  "objective": "survive",
-  "surviveRespawnsPerPlayer": 2,
-  "itemDrop": {
-    "itemLevel": 1
+    ]
   },
+  "objective": "survive",
+  "surviveDurationSec": 5400,
+  "balanceReferenceDurationSec": 5400,
+  "surviveRespawnsPerPlayer": 99,
   "bases": [
     {
-      "id": "dev-test-base",
-      "hpMax": 5000,
+      "id": "stress-home-base",
+      "hpMax": 100000,
       "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      }
-    },
-    {
-      "id": "destroy-brood-front-north",
-      "hpMax": 100,
-      "faction": "hostile",
-      "role": "spawn-point",
-      "dormant": true,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 12,
-        "gridY": 3
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          { "gridX": 0, "gridY": 0 },
-          { "gridX": 1, "gridY": 0 },
-          { "gridX": 2, "gridY": 0 },
-          { "gridX": 0, "gridY": 1 },
-          { "gridX": 0, "gridY": 2 },
-          { "gridX": 1, "gridY": 2 },
-          { "gridX": 2, "gridY": 2 }
-        ]
-      },
-      "spawnCenter": { "gridX": 1, "gridY": 1 }
-    },
-    {
-      "id": "destroy-brood-front-center",
-      "hpMax": 100,
-      "faction": "hostile",
-      "role": "spawn-point",
-      "dormant": true,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 12,
-        "gridY": 15
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          { "gridX": 0, "gridY": 0 },
-          { "gridX": 1, "gridY": 0 },
-          { "gridX": 2, "gridY": 0 },
-          { "gridX": 0, "gridY": 1 },
-          { "gridX": 0, "gridY": 2 },
-          { "gridX": 1, "gridY": 2 },
-          { "gridX": 2, "gridY": 2 }
-        ]
-      },
-      "spawnCenter": { "gridX": 1, "gridY": 1 }
-    },
-    {
-      "id": "destroy-brood-front-south",
-      "hpMax": 100,
-      "faction": "hostile",
-      "role": "spawn-point",
-      "dormant": true,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 12,
-        "gridY": 27
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          { "gridX": 0, "gridY": 0 },
-          { "gridX": 1, "gridY": 0 },
-          { "gridX": 2, "gridY": 0 },
-          { "gridX": 0, "gridY": 1 },
-          { "gridX": 0, "gridY": 2 },
-          { "gridX": 1, "gridY": 2 },
-          { "gridX": 2, "gridY": 2 }
-        ]
-      },
-      "spawnCenter": { "gridX": 1, "gridY": 1 }
-    },
-    {
-      "id": "forward-outpost",
-      "hpMax": 1200,
-      "startHpFactor": 0.25,
-      "role": "outpost",
-      "dormant": true,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 46,
-        "gridY": 15
+        "kind": "left-center",
+        "edgeInsetCells": 1
       },
       "shape": {
         "kind": "rectangle",
         "widthCells": 2,
         "heightCells": 2
-      },
-      "turrets": [
-        {
-          "id": "rocket-north",
-          "cellOffset": { "gridX": 0, "gridY": 0 },
-          "mountSide": "front",
-          "weaponId": "TURRET_ROCKET_BURST"
-        },
-        {
-          "id": "rocket-south",
-          "cellOffset": { "gridX": 0, "gridY": 1 },
-          "mountSide": "front",
-          "weaponId": "TURRET_ROCKET_BURST"
-        }
-      ]
-    },
-    {
-      "id": "supply-base",
-      "hpMax": 1400,
-      "startHpFactor": 0.35,
-      "role": "outpost",
-      "dormant": true,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 60,
-        "gridY": 15
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 2,
-        "heightCells": 2
-      },
-      "turrets": [
-        {
-          "id": "supply-rocket-north",
-          "cellOffset": { "gridX": 0, "gridY": 0 },
-          "mountSide": "front",
-          "weaponId": "TURRET_ROCKET_BURST"
-        },
-        {
-          "id": "supply-rocket-south",
-          "cellOffset": { "gridX": 0, "gridY": 1 },
-          "mountSide": "front",
-          "weaponId": "TURRET_ROCKET_BURST"
-        }
-      ]
-    }
-  ],
-  "powerUps": [],
-  "encounters": [
-    {
-      "id": "a2-opening-encounter",
-      "start": {
-        "type": "time",
-        "atMs": 1500
-      },
-      "restAfterMs": 12000,
-      "groups": [
-        {
-          "enemyKind": "zombie-badger",
-          "count": 4
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "delayMs": 1500
-        }
-      ]
-    },
-    {
-      "id": "a2-follow-up-encounter",
-      "start": {
-        "type": "after-previous"
-      },
-      "restAfterMs": 10000,
-      "groups": [
-        {
-          "enemyKind": "zombie-badger",
-          "count": 5
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "delayMs": 1500
-        }
-      ]
-    },
-    {
-      "id": "a2-hold-encounter",
-      "start": {
-        "type": "after-previous"
-      },
-      "groups": [
-        {
-          "enemyKind": "zombie-badger",
-          "count": 6
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "delayMs": 1500
-        }
-      ]
-    },
-    {
-      "id": "a2-supply-defense-encounter",
-      "start": {
-        "type": "after-previous"
-      },
-      "restAfterMs": 8000,
-      "groups": [
-        {
-          "enemyKind": "zombie-badger",
-          "count": 5
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "delayMs": 1500
-        }
-      ]
-    },
-    {
-      "id": "c2-after-zone-barrage",
-      "start": {
-        "type": "after-event",
-        "eventId": "c2-zone-barrage"
-      },
-      "groups": [
-        {
-          "enemyKind": "zombie-badger",
-          "count": 1
-        }
-      ]
-    }
-  ],
-  "persistentSpawns": [
-    {
-      "id": "destroy-brood-front-north-pressure",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 5000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": { "type": "base", "baseId": "destroy-brood-front-north" }
-    },
-    {
-      "id": "destroy-brood-front-center-pressure",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 5000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": { "type": "base", "baseId": "destroy-brood-front-center" }
-    },
-    {
-      "id": "destroy-brood-front-south-pressure",
-      "enemyKind": "zombie-badger",
-      "intervalMs": 5000,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": { "type": "base", "baseId": "destroy-brood-front-south" }
-    }
-  ],
-  "secondaryObjectives": [
-    {
-      "id": "destroy-brood-front",
-      "type": "destroy",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "a2-opening-encounter"
-      },
-      "focusUntil": {
-        "type": "after-encounter",
-        "encounterId": "a2-follow-up-encounter"
-      },
-      "targets": [
-        "destroy-brood-front-north",
-        "destroy-brood-front-center",
-        "destroy-brood-front-south"
-      ],
-      "rewards": { "xpPerTarget": 25 }
-    },
-    {
-      "id": "hold-forward-outpost",
-      "type": "hold",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "a2-follow-up-encounter"
-      },
-      "holdUntil": {
-        "type": "after-encounter",
-        "encounterId": "a2-hold-encounter"
-      },
-      "targets": ["forward-outpost"]
-    },
-    {
-      "id": "hold-supply-base",
-      "type": "hold",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "a2-hold-encounter"
-      },
-      "holdUntil": {
-        "type": "after-encounter",
-        "encounterId": "a2-supply-defense-encounter"
-      },
-      "targets": ["supply-base"],
-      "rewards": {
-        "repairTargetOnComplete": false,
-        "placeablePedestalOnComplete": {
-          "powerUpDefId": "HOLY_HAND_GRENADE"
-        }
-      }
-    },
-    {
-      "id": "carry-supply-beer",
-      "type": "carry",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "a2-supply-defense-encounter"
-      },
-      "targetGoal": 3,
-      "rewards": {
-        "itemMetaRewardOnComplete": true,
-        "teamBuffOnComplete": {
-          "defId": "TEAM_REGENERATION_SURGE"
-        }
-      },
-      "carry": {
-        "spawnZone": {
-          "gridX": 59,
-          "gridY": 15,
-          "widthCells": 1,
-          "heightCells": 1
-        },
-        "deliveryZone": {
-          "gridX": 88,
-          "gridY": 16,
-          "widthCells": 1,
-          "heightCells": 1
-        },
-        "itemCount": 3
       }
     }
-  ]
+  ],
+  "powerUps": [
+    {
+      "defId": "BFG",
+      "region": "front",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "NUKE",
+      "region": "front",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "BFG",
+      "region": "front",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "NUKE",
+      "region": "front",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "BFG",
+      "region": "middle",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "NUKE",
+      "region": "middle",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "BFG",
+      "region": "middle",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "NUKE",
+      "region": "middle",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "BFG",
+      "region": "rear",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "NUKE",
+      "region": "rear",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "BFG",
+      "region": "rear",
+      "respawnMs": 4000
+    },
+    {
+      "defId": "NUKE",
+      "region": "rear",
+      "respawnMs": 4000
+    }
+  ],
+  "encounters": [],
+  "persistentSpawns": [],
+  "mapEvents": [],
+  "secondaryObjectives": []
 }

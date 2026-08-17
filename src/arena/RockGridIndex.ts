@@ -14,15 +14,22 @@ export interface RockGridIndexDimensions {
  * Wird sowohl auf Host als auch auf Clients identisch aufgebaut.
  */
 export class RockGridIndex {
-  /** Flat Grid: grid[gy * GRID_COLS + gx] = Rock-Index oder -1 */
-  private grid: Int16Array;
+  /**
+   * Flat Grid: grid[gy * GRID_COLS + gx] = Rock-Index oder -1.
+   *
+   * Bewusst `Int32Array` und nicht `Int16Array`: Der gespeicherte Wert ist ein Fels-*Index*,
+   * kein Koordinatenwert. Auf grossen Karten liegt der Bestand deutlich ueber 32 767 Felsen,
+   * und ein `Int16Array` haette daraus einen versteckten Groessendeckel gemacht – die Indizes
+   * waeren stillschweigend uebergelaufen und haetten falsche Felsen adressiert.
+   */
+  private grid: Int32Array;
   private cols: number;
   private rows: number;
 
   constructor(rocks: readonly RockCell[], dimensions?: RockGridIndexDimensions) {
     this.cols = dimensions?.cols ?? GRID_COLS;
     this.rows = dimensions?.rows ?? GRID_ROWS;
-    this.grid = new Int16Array(this.rows * this.cols).fill(-1);
+    this.grid = new Int32Array(this.rows * this.cols).fill(-1);
     for (let i = 0; i < rocks.length; i++) {
       const { gridX, gridY } = rocks[i];
       if (gridX < 0 || gridX >= this.cols || gridY < 0 || gridY >= this.rows) continue;

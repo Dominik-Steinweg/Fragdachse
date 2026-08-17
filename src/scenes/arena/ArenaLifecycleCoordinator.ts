@@ -3,6 +3,7 @@ import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
+import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { ReinforcementMatrixSystem, type TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
@@ -682,6 +683,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
+    // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
+    // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
+    ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
     // Eine vorbereitete Gefahrenflaeche sperrt das Bauen erst ab ihrer Ankuendigung. Host und
     // Client lesen dafuer denselben replizierten Event-Snapshot, damit Bauvorschau und
@@ -1087,7 +1091,7 @@ export class ArenaLifecycleCoordinator {
       return state?.find((entry) => entry.objectiveId === objectiveId)?.state ?? null;
     });
     this.renderers.leafBlower.setTerrainColorSampler(
-      createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
+      createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult, layout),
     );
     if (bridge.isHost()) {
       this.ctx.captureTheBeerSystem?.setFxHandler((event) => {

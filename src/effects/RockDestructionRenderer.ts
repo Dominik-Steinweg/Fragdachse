@@ -1,15 +1,53 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE } from '../config';
+import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { createEmitter, destroyEmitter, fillRadialGradientTexture } from './EffectUtils';
 
 const TEX_ROCK_DUST = '__rock_destruction_dust';
+
+/**
+ * Wie weit ein Truemmerstueck oder eine Staubwolke ueber den Fels hinausreicht.
+ *
+ * Der Flug betraegt hoechstens 0,9 Zellbreiten, dazu kommt der Radius der Staubwolke. Ein Fels
+ * weiter draussen kann nichts Sichtbares mehr beitragen.
+ */
+const DESTRUCTION_VISIBILITY_MARGIN_PX = 64;
 
 interface RockFragmentConfig {
   source: Phaser.GameObjects.Image;
 }
 
 export class RockDestructionRenderer {
+  /** Sichtbarer Weltausschnitt, einmal je Frame bestimmt. */
+  private cachedView: { x: number; y: number; width: number; height: number } | null = null;
+  private cachedViewFrame = -1;
+
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /**
+   * Ob eine Zerstoerung an dieser Stelle ueberhaupt zu sehen waere.
+   *
+   * Eine Flaechenzerstoerung raeumt auf einer grossen Karte tausende Felsen gleichzeitig ab, und
+   * jeder einzelne erzeugt bis zu 36 Truemmer-Images mit je einem Tween. Im Trace war das der
+   * groesste verbliebene Posten eines NUKE-Frames – bei zehntausenden Objekten, von denen der
+   * Spieler nur die wenigen im Bild sehen kann. Wer ausserhalb liegt, bekommt keine VFX; am
+   * sichtbaren Bild aendert das nichts.
+   */
+  private isWorthShowing(x: number, y: number): boolean {
+    const camera = this.scene.cameras?.main;
+    if (!camera) return true;
+    // Der Ausschnitt gilt fuer den ganzen Frame; bei tausenden Aufrufen zaehlt jede Division.
+    const frame = this.scene.game?.loop?.frame ?? -1;
+    if (this.cachedViewFrame !== frame || !this.cachedView) {
+      this.cachedView = getVisibleWorldView(camera);
+      this.cachedViewFrame = frame;
+    }
+    const view = this.cachedView;
+    return x >= view.x - DESTRUCTION_VISIBILITY_MARGIN_PX
+      && x <= view.x + view.width + DESTRUCTION_VISIBILITY_MARGIN_PX
+      && y >= view.y - DESTRUCTION_VISIBILITY_MARGIN_PX
+      && y <= view.y + view.height + DESTRUCTION_VISIBILITY_MARGIN_PX;
+  }
 
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_ROCK_DUST, 28, [
@@ -21,6 +59,7 @@ export class RockDestructionRenderer {
   }
 
   playDestruction({ source }: RockFragmentConfig): void {
+    if (!this.isWorthShowing(source.x, source.y)) return;
     const frameWidth = Math.max(1, Math.round(source.frame.width));
     const frameHeight = Math.max(1, Math.round(source.frame.height));
     const columns = Phaser.Math.Clamp(Math.round(frameWidth / 6), 4, 6);

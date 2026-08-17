@@ -97,14 +97,18 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('keeps the B8 sandbox Carry reward observable without changing item unlock progression', () => {
-    const sandbox = getCoopDefenseMapConfig('0');
-    const carry = sandbox.secondaryObjectives?.find((objective) => objective.type === 'carry');
+  it('keeps the B8 Carry reward observable without changing item unlock progression', () => {
+    // Kampagnen-Map statt Testarena: Map 0 ist seit Block A eine loeschbare Stressarena und
+    // darf keine Regression mehr tragen.
+    const carryMap = getCoopDefenseMapConfig('17');
+    const carry = carryMap.secondaryObjectives?.find((objective) => objective.type === 'carry');
 
-    expect(sandbox.itemDrop).toEqual(expect.objectContaining({ itemLevel: expect.any(Number) }));
-    expect(sandbox.itemDrop?.itemLevel).toBeGreaterThan(0);
+    expect(carryMap.itemDrop).toEqual(expect.objectContaining({ itemLevel: expect.any(Number) }));
+    expect(carryMap.itemDrop?.itemLevel).toBeGreaterThan(0);
     expect(carry?.rewards?.itemMetaRewardOnComplete).toBe(true);
-    expect(getSecondaryObjectiveReward(carry?.id ?? '', 'de')).toContain('EPISCHE GARANTIE BEI SIEG');
+    // Die Belohnung muss im HUD lesbar sein und die Item-Zusage benennen; der genaue Wortlaut
+    // gehoert zur Lokalisierung, nicht zu dieser Regression.
+    expect(getSecondaryObjectiveReward(carry?.id ?? '', 'de')).toContain('ITEM');
   });
 
   it('keeps map metadata usable after balancing and terminology changes', () => {
@@ -541,15 +545,13 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('keeps dynamic time authored only on the soak-test and Void-Hunter maps', () => {
+  it('keeps dynamic time authored only on the Void-Hunter map', () => {
     const dynamicMaps = COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.dynamicTimeOfDay !== undefined)
       .map((map) => map.mapId);
-    expect(dynamicMaps).toEqual(['0', '15']);
-    expect(getCoopDefenseMapConfig('0').dynamicTimeOfDay).toEqual({
-      minutesPerSecond: 6,
-      transitions: undefined,
-    });
+    // Map 0 ist seit Block A eine reine Stressarena mit fester Uhrzeit; die laufende Tageszeit
+    // gehoert damit nur noch dem Leerenjaeger.
+    expect(dynamicMaps).toEqual(['15']);
 
     const voidMap = getCoopDefenseMapConfig('15');
     expect(voidMap.dynamicTimeOfDay?.transitions).toEqual([

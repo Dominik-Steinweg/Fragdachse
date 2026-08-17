@@ -24,6 +24,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../../config';
 import type { GraphicsQualityController } from '../../graphics/GraphicsQuality';
+import { forEachSceneDisplayObject } from './sceneDisplayObjects';
 
 /** Reihenfolge ist die Reihenfolge im Trace; `baseline` wird zwischen alle Ablationen gelegt. */
 export type AblationCategory =
@@ -321,10 +322,12 @@ export class PerformanceAblationController {
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
     // Baseline<->Ablation herausfallen. Fuer `baseline`, `filters` und die Schatten-Kategorien liefert
     // `matchesCategory` grundsaetzlich `false`, es wird dort also nichts versteckt.
-    for (const child of this.scene.children.list) {
+    // Eine Ebene tief in `Layer`-Kinder hinein: Der Felsbestand liegt dort, und ohne den Abstieg
+    // haette die `rocks`-Kategorie nichts mehr zu verstecken.
+    forEachSceneDisplayObject(this.scene, (child) => {
       const visible = (child as Phaser.GameObjects.GameObject & { visible?: boolean }).visible;
-      if (visible === false) continue;
-      if (!matchesCategory(child, category)) continue;
+      if (visible === false) return;
+      if (!matchesCategory(child, category)) return;
       (child as Phaser.GameObjects.GameObject & { setVisible?: (v: boolean) => unknown }).setVisible?.(false);
       this.hidden.add(child);
       // Partikel zusaetzlich stilllegen: Ihre Simulation haengt an `active`, nicht an
@@ -334,7 +337,7 @@ export class PerformanceAblationController {
         (child as Phaser.GameObjects.GameObject & { setActive?: (v: boolean) => unknown }).setActive?.(false);
         this.deactivated.add(child);
       }
-    }
+    });
   }
 
   private setPostFxSuppressed(suppressed: boolean): void {

@@ -1,301 +1,197 @@
 import type * as Phaser from 'phaser';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../config';
-import type { GameMode } from '../types';
+import {
+  ARENA_HEIGHT,
+  ARENA_OFFSET_X,
+  ARENA_OFFSET_Y,
+  ARENA_WIDTH,
+  CELL_SIZE,
+  GRID_COLS,
+  GRID_ROWS,
+} from '../config';
+import type { ArenaLayout, GameMode } from '../types';
 import type { ArenaBuilderResult } from './ArenaBuilder';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
+import { DECAL_SIZE } from './DecalConfig';
+import { getGroundCoverPlacementRadiusPx } from './GroundCoverLayer';
+import {
+  ArenaTerrainColorGrid,
+  TERRAIN_COLOR_FALLBACK,
+  multiplyTerrainColor,
+} from './ArenaTerrainColorGrid';
 
-const TEX_TERRAIN_SAMPLER = '__leaf_blower_terrain_sampler';
+/**
+ * Repraesentative Bodenfarbe je Rasterzelle.
+ *
+ * Der frueher hier gebaute Vollflaechen-Canvas samt `getImageData` ist entfallen: Sein Speicher
+ * skalierte mit der Weltflaeche, und die einzige Frage, die er beantwortet hat – "welche Farbe hat
+ * der Boden unter diesem Punkt?" – braucht keine Pixelaufloesung. Der Aufbau folgt weiterhin
+ * derselben geordneten Ueberlagerung wie die sichtbaren Bodenbaender (Gras, Dirt, Ground Cover,
+ * Gleise, Basiszonen, Decals), rastert sie aber direkt in {@link ArenaTerrainColorGrid}.
+ *
+ * Die Farben der Baender kommen aus den Texturen selbst: je Textur ein einziger, gecachter
+ * Mittelwert. Das ist O(Texturen) statt O(Weltpixel) und bleibt damit unabhaengig von der
+ * Kartengroesse.
+ */
+
+const TERRAIN_SAMPLE_CANVAS_SIZE = 8;
 
 export type TerrainColorSampler = (worldX: number, worldY: number) => number;
+
+interface AverageTextureColor {
+  readonly color: number;
+  /** Mittlere Deckkraft der Textur – eine luecken­hafte Marke faerbt ihre Zelle nur teilweise. */
+  readonly alpha: number;
+}
+
+/**
+ * Ein Mittelwert je Texturschluessel, ueber Rundengrenzen hinweg. Die Texturen selbst ueberleben
+ * einen Rundenwechsel ebenfalls, der Cache also auch.
+ */
+const averageColorCache = new Map<string, AverageTextureColor>();
 
 export function createArenaTerrainColorSampler(
   scene: Phaser.Scene,
   mode: GameMode,
   arenaResult: ArenaBuilderResult,
+  layout: ArenaLayout | null,
 ): TerrainColorSampler {
-  if (scene.textures.exists(TEX_TERRAIN_SAMPLER)) {
-    scene.textures.remove(TEX_TERRAIN_SAMPLER);
-  }
-
-  const canvasTexture = scene.textures.createCanvas(TEX_TERRAIN_SAMPLER, ARENA_WIDTH, ARENA_HEIGHT) as Phaser.Textures.CanvasTexture;
-  const ctx = canvasTexture.context;
-  ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
-
   const background = resolveArenaBackgroundSpec(mode, ARENA_WIDTH);
-  const backgroundFrame = scene.textures.getFrame(background.textureKey);
-  if (backgroundFrame) {
-    drawRepeatedImageFrameRegion(
-      scene,
-      ctx,
-      background.textureKey,
-      undefined,
-      0,
-      0,
-      backgroundFrame.cutWidth,
-      backgroundFrame.cutHeight,
-      0,
-      0,
-      ARENA_WIDTH,
-      ARENA_HEIGHT,
+  const grass = averageTextureColor(scene, background.textureKey);
+  const detail = averageTextureColor(scene, background.detailTextureKey);
+  // Die Feinschicht liegt in der Szene als Multiply-TileSprite ueber dem Gras. Ohne sie laege der
+  // Lookup um den mittleren Multiply-Verlust der Kachel zu hell.
+  const baseColor = detail
+    ? multiplyTerrainColor(grass?.color ?? TERRAIN_COLOR_FALLBACK, detail.color)
+    : grass?.color ?? TERRAIN_COLOR_FALLBACK;
+
+  const grid = new ArenaTerrainColorGrid(GRID_COLS, GRID_ROWS, CELL_SIZE, baseColor);
+
+  const dirt = averageTextureColor(scene, 'dirt');
+  if (dirt && layout) {
+    for (const cell of layout.dirt ?? []) grid.paintCell(cell.gridX, cell.gridY, dirt.color, dirt.alpha);
+  }
+
+  for (const placement of arenaResult.groundCoverPlacements) {
+    const cover = averageTextureColor(scene, placement.textureKey);
+    if (!cover) continue;
+    const radius = getGroundCoverPlacementRadiusPx(placement);
+    const localX = placement.worldX - ARENA_OFFSET_X;
+    const localY = placement.worldY - ARENA_OFFSET_Y;
+    grid.paintRect(
+      localX - radius,
+      localY - radius,
+      localX + radius,
+      localY + radius,
+      cover.color,
+      cover.alpha * placement.alpha,
     );
   }
 
-  // Die Feinschicht liegt in der Szene als Multiply-TileSprite über dem Gras. Canvas' 'multiply'
-  // entspricht Phasers Multiply-Blend, der Sampler bildet die Grasfarbe damit exakt nach – sonst
-  // läge er um den mittleren Multiply-Verlust der Kachel zu hell.
-  const detailFrame = scene.textures.getFrame(background.detailTextureKey);
-  if (backgroundFrame && detailFrame) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = background.detailAlpha;
-    drawRepeatedImageFrameRegion(
-      scene,
-      ctx,
-      background.detailTextureKey,
-      undefined,
-      0,
-      0,
-      detailFrame.cutWidth,
-      detailFrame.cutHeight,
-      0,
-      0,
-      ARENA_WIDTH,
-      ARENA_HEIGHT,
-    );
-    ctx.restore();
-  }
-
-  // Der Dirt-Layer ist als RenderTexture gebacken; der Sampler zeichnet stattdessen aus der
-  // erhaltenen Kachel-Geometrie in seine eigene CPU-Canvas.
-  for (const stamp of arenaResult.dirtStamps) {
-    drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
-  }
-
-  // Die Moosschicht liegt zwischen Dirt und Gleisen (DEPTH.GROUND_COVER) und wird hier in genau
-  // dieser Reihenfolge nachgezogen. Ohne sie meldete der Sampler unter jedem Fleck weiterhin die
-  // reine Dirt- bzw. Grasfarbe.
-  for (const stamp of arenaResult.groundCoverStamps) {
-    drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
-  }
-
-  for (const track of arenaResult.trackObjects) {
-    drawTileSprite(scene, ctx, track);
+  const track = averageTextureColor(scene, 'bg_tracks');
+  if (track && layout) {
+    // Eine Gleiszelle bezeichnet die *linke* der beiden belegten Spalten; die Kachel ist zwei
+    // Zellen breit (siehe `ArenaVisualFactory.createTracks`).
+    for (const cell of layout.tracks ?? []) {
+      grid.paintCell(cell.gridX, cell.gridY, track.color, track.alpha);
+      grid.paintCell(cell.gridX + 1, cell.gridY, track.color, track.alpha);
+    }
   }
 
   for (const rect of arenaResult.baseZoneObjects) {
-    const left = rect.x - rect.width / 2 - ARENA_OFFSET_X;
-    const top = rect.y - rect.height / 2 - ARENA_OFFSET_Y;
-    ctx.save();
-    ctx.globalAlpha = rect.fillAlpha;
-    ctx.fillStyle = colorToCss(rect.fillColor);
-    ctx.fillRect(left, top, rect.width, rect.height);
-    ctx.restore();
+    grid.paintRect(
+      rect.x - rect.width / 2 - ARENA_OFFSET_X,
+      rect.y - rect.height / 2 - ARENA_OFFSET_Y,
+      rect.x + rect.width / 2 - ARENA_OFFSET_X,
+      rect.y + rect.height / 2 - ARENA_OFFSET_Y,
+      rect.fillColor,
+      rect.fillAlpha,
+    );
   }
 
-  // Der Decal-Layer ist wie der Dirt-Boden gebacken; auch hier zeichnet der Sampler aus der
-  // erhaltenen Stamp-Geometrie statt aus Live-Objekten.
-  for (const stamp of arenaResult.decalStamps) {
-    drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
+  for (const decal of layout?.decals ?? []) {
+    if ((decal.surface ?? 'ground') !== 'ground') continue;
+    const color = averageTextureColor(scene, decal.textureKey);
+    if (!color) continue;
+    const half = DECAL_SIZE * 0.5;
+    const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
+    const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
+    grid.paintRect(
+      centerX - half,
+      centerY - half,
+      centerX + half,
+      centerY + half,
+      color.color,
+      color.alpha * (decal.alpha ?? 1),
+    );
   }
 
-  canvasTexture.refresh();
-  const pixelData = ctx.getImageData(0, 0, ARENA_WIDTH, ARENA_HEIGHT).data;
+  grid.freeze();
 
   return (worldX: number, worldY: number): number => {
-    const localX = Math.round(worldX - ARENA_OFFSET_X);
-    const localY = Math.round(worldY - ARENA_OFFSET_Y);
+    const localX = worldX - ARENA_OFFSET_X;
+    const localY = worldY - ARENA_OFFSET_Y;
     if (localX < 0 || localY < 0 || localX >= ARENA_WIDTH || localY >= ARENA_HEIGHT) {
-      return 0xc9d8b0;
+      return TERRAIN_COLOR_FALLBACK;
     }
-
-    const index = (localY * ARENA_WIDTH + localX) * 4;
-    const alpha = pixelData[index + 3];
-    if (alpha <= 4) return 0xc9d8b0;
-    return (pixelData[index] << 16) | (pixelData[index + 1] << 8) | pixelData[index + 2];
+    return grid.sampleLocal(localX, localY);
   };
 }
 
-function drawDisplayObjectFrame(
-  scene: Phaser.Scene,
-  ctx: CanvasRenderingContext2D,
-  textureKey: string,
-  frameName: string | number | undefined,
-  displayObject: {
-    x: number;
-    y: number;
-    displayWidth: number;
-    displayHeight: number;
-    rotation: number;
-    alpha: number;
-    mirrorX?: boolean;
-    mirrorY?: boolean;
-  },
-): void {
-  ctx.save();
-  ctx.globalAlpha = displayObject.alpha;
-  ctx.translate(displayObject.x - ARENA_OFFSET_X, displayObject.y - ARENA_OFFSET_Y);
-  ctx.rotate(displayObject.rotation);
-  // Skalieren nach dem Drehen: das ist die Reihenfolge der Phaser-Transformation (T·R·S). Ohne
-  // die Spiegelung laese der Sampler die Farbe des ungespiegelten Flecks.
-  if (displayObject.mirrorX || displayObject.mirrorY) {
-    ctx.scale(displayObject.mirrorX ? -1 : 1, displayObject.mirrorY ? -1 : 1);
-  }
-  drawImageFrame(
-    scene,
-    ctx,
-    textureKey,
-    frameName,
-    -displayObject.displayWidth / 2,
-    -displayObject.displayHeight / 2,
-    displayObject.displayWidth,
-    displayObject.displayHeight,
-  );
-  ctx.restore();
-}
+/**
+ * Mittlere Farbe und Deckkraft einer Textur.
+ *
+ * Die Textur wird dafuer einmalig auf ein 8x8-Raster heruntergezeichnet; der Browser erledigt die
+ * Mittelung beim Skalieren. Das ist bewusst grob: Gefragt ist ein Farbeindruck, keine Analyse.
+ * Der Cache haengt am Texturschluessel und ueberlebt Rundenwechsel, weil die Texturen es auch tun.
+ */
+function averageTextureColor(scene: Phaser.Scene, textureKey: string): AverageTextureColor | null {
+  const cached = averageColorCache.get(textureKey);
+  if (cached) return cached;
+  if (!scene.textures.exists(textureKey)) return null;
 
-function drawTileSprite(
-  scene: Phaser.Scene,
-  ctx: CanvasRenderingContext2D,
-  tileSprite: Phaser.GameObjects.TileSprite,
-): void {
-  const frame = scene.textures.getFrame(tileSprite.texture.key, tileSprite.frame.name as string | number | undefined);
-  if (!frame) return;
-  const sourceImage = getFrameSource(frame);
-  if (!sourceImage) return;
+  const frame = scene.textures.getFrame(textureKey);
+  const source = frame?.texture.source[frame.sourceIndex]?.image as CanvasImageSource | undefined;
+  if (!frame || !source) return null;
 
-  const patternCanvas = document.createElement('canvas');
-  patternCanvas.width = frame.cutWidth;
-  patternCanvas.height = frame.cutHeight;
-  const patternCtx = patternCanvas.getContext('2d');
-  if (!patternCtx) return;
-  patternCtx.drawImage(
-    sourceImage,
-    frame.cutX,
-    frame.cutY,
-    frame.cutWidth,
-    frame.cutHeight,
-    0,
-    0,
-    frame.cutWidth,
-    frame.cutHeight,
-  );
-
-  const pattern = ctx.createPattern(patternCanvas, 'repeat');
-  if (!pattern) return;
-
-  const left = tileSprite.x - tileSprite.width / 2 - ARENA_OFFSET_X;
-  const top = tileSprite.y - tileSprite.height / 2 - ARENA_OFFSET_Y;
-  ctx.save();
-  ctx.globalAlpha = tileSprite.alpha;
-  ctx.fillStyle = pattern;
-  ctx.fillRect(left, top, tileSprite.width, tileSprite.height);
-  ctx.restore();
-}
-
-function drawImageFrame(
-  scene: Phaser.Scene,
-  ctx: CanvasRenderingContext2D,
-  textureKey: string,
-  frameName: string | number | undefined,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  const frame = scene.textures.getFrame(textureKey, frameName);
-  if (!frame) return;
-  const sourceImage = getFrameSource(frame);
-  if (!sourceImage) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = TERRAIN_SAMPLE_CANVAS_SIZE;
+  canvas.height = TERRAIN_SAMPLE_CANVAS_SIZE;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
 
   ctx.drawImage(
-    sourceImage,
+    source,
     frame.cutX,
     frame.cutY,
-    frame.cutWidth,
-    frame.cutHeight,
-    x,
-    y,
-    width,
-    height,
+    Math.max(1, frame.cutWidth),
+    Math.max(1, frame.cutHeight),
+    0,
+    0,
+    TERRAIN_SAMPLE_CANVAS_SIZE,
+    TERRAIN_SAMPLE_CANVAS_SIZE,
   );
-}
 
-function drawImageFrameRegion(
-  scene: Phaser.Scene,
-  ctx: CanvasRenderingContext2D,
-  textureKey: string,
-  frameName: string | number | undefined,
-  sourceX: number,
-  sourceY: number,
-  sourceWidth: number,
-  sourceHeight: number,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  const frame = scene.textures.getFrame(textureKey, frameName);
-  if (!frame) return;
-  const sourceImage = getFrameSource(frame);
-  if (!sourceImage) return;
-
-  ctx.drawImage(
-    sourceImage,
-    frame.cutX + sourceX,
-    frame.cutY + sourceY,
-    sourceWidth,
-    sourceHeight,
-    x,
-    y,
-    width,
-    height,
-  );
-}
-
-function drawRepeatedImageFrameRegion(
-  scene: Phaser.Scene,
-  ctx: CanvasRenderingContext2D,
-  textureKey: string,
-  frameName: string | number | undefined,
-  sourceX: number,
-  sourceY: number,
-  sourceWidth: number,
-  sourceHeight: number,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  if (sourceWidth <= 0 || sourceHeight <= 0 || width <= 0 || height <= 0) return;
-
-  for (let offsetY = 0; offsetY < height; offsetY += sourceHeight) {
-    const sliceHeight = Math.min(sourceHeight, height - offsetY);
-    for (let offsetX = 0; offsetX < width; offsetX += sourceWidth) {
-      const sliceWidth = Math.min(sourceWidth, width - offsetX);
-      drawImageFrameRegion(
-        scene,
-        ctx,
-        textureKey,
-        frameName,
-        sourceX,
-        sourceY,
-        sliceWidth,
-        sliceHeight,
-        x + offsetX,
-        y + offsetY,
-        sliceWidth,
-        sliceHeight,
-      );
-    }
+  const { data } = ctx.getImageData(0, 0, TERRAIN_SAMPLE_CANVAS_SIZE, TERRAIN_SAMPLE_CANVAS_SIZE);
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  let alpha = 0;
+  let weight = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    const pixelAlpha = data[index + 3] / 255;
+    // Nach Deckkraft gewichten: Ein transparenter Rand darf die Farbe nicht nach Schwarz ziehen.
+    red += data[index] * pixelAlpha;
+    green += data[index + 1] * pixelAlpha;
+    blue += data[index + 2] * pixelAlpha;
+    alpha += pixelAlpha;
+    weight += 1;
   }
-}
+  if (weight === 0 || alpha === 0) return null;
 
-function getFrameSource(frame: Phaser.Textures.Frame): CanvasImageSource | null {
-  const source = frame.texture.source[frame.sourceIndex];
-  return (source?.image ?? null) as CanvasImageSource | null;
-}
-
-function colorToCss(color: number): string {
-  const hex = color.toString(16).padStart(6, '0');
-  return `#${hex}`;
+  const result: AverageTextureColor = {
+    color: (Math.round(red / alpha) << 16) | (Math.round(green / alpha) << 8) | Math.round(blue / alpha),
+    alpha: alpha / weight,
+  };
+  averageColorCache.set(textureKey, result);
+  return result;
 }

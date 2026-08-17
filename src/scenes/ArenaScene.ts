@@ -32,7 +32,8 @@ import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
-import { HostileBaseIndicator } from '../ui/HostileBaseIndicator';
+import { HostileBaseIndicator, getVisibleWorldView } from '../ui/HostileBaseIndicator';
+import { countSceneDisplayObjects, forEachSceneDisplayObject } from './arena/sceneDisplayObjects';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
 import { CoopDefenseBalanceReportOverlay } from '../ui/CoopDefenseBalanceReportOverlay';
@@ -1432,6 +1433,15 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.syncMainCamera(delta, arenaVisible && !terminated);
+    // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
+    // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
+    // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
+    // dazukommt.
+    if (arenaVisible) {
+      const worldView = getVisibleWorldView(this.cameras.main);
+      ArenaBuilder.updateSurfaceResidency(this.ctx?.arenaResult ?? null, worldView);
+      this.renderers?.shadow.updateStaticResidency(worldView);
+    }
 
     this.arenaPanelsHeld = !!(inGame && !terminated && this.arenaPanelTabKey?.isDown);
 
@@ -2103,7 +2113,8 @@ export class ArenaScene extends Phaser.Scene {
       enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
       projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
       playerCount: this.ctx.playerManager.getAllPlayers().length,
-      displayObjectCount: this.children.list.length,
+      // Einschliesslich der Kinder der Fels-Ebene: Sonst meldete die Diagnose eine Szene ohne Welt.
+      displayObjectCount: countSceneDisplayObjects(this),
       visibleObjectCount: sceneCounts.visibleObjectCount,
       particleEmitterCount: sceneCounts.particleEmitterCount,
       aliveParticleCount: sceneCounts.aliveParticleCount,
@@ -3326,7 +3337,7 @@ export class ArenaScene extends Phaser.Scene {
     let visibleCount = 0;
     let activeCount = 0;
 
-    for (const child of this.children.list) {
+    forEachSceneDisplayObject(this, (child) => {
       const gameObject = child as Phaser.GameObjects.GameObject & {
         visible?: boolean;
         active?: boolean;
@@ -3343,7 +3354,7 @@ export class ArenaScene extends Phaser.Scene {
         : null;
       const label = textureKey ? `${baseType}:${textureKey}` : baseType;
       counts.set(label, (counts.get(label) ?? 0) + 1);
-    }
+    });
 
     const topEntries = [...counts.entries()]
       .sort((left, right) => right[1] - left[1])
@@ -3376,7 +3387,7 @@ export class ArenaScene extends Phaser.Scene {
     let filteredObjectCount = 0;
     const filterTypes = new Map<string, number>();
     const camera = this.cameras.main;
-    for (const child of this.children.list) {
+    forEachSceneDisplayObject(this, (child) => {
       const gameObject = child as Phaser.GameObjects.GameObject & {
         visible?: boolean;
         type?: string;
@@ -3414,7 +3425,7 @@ export class ArenaScene extends Phaser.Scene {
         const label = typedFilter.type ?? typedFilter.constructor?.name ?? 'UnknownFilter';
         filterTypes.set(label, (filterTypes.get(label) ?? 0) + 1);
       }
-    }
+    });
     const cameraFilters = (camera as typeof camera & {
       filters?: {
         internal?: { getActive?: () => unknown[] };

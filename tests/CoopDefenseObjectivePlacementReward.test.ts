@@ -12,8 +12,9 @@ vi.mock('phaser', () => ({
 }));
 
 import {
-  getCoopDefenseMapConfig,
+  normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapSecondaryObjectives,
+  type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import {
   getBaseRewardPickupWorldPosition,
@@ -32,6 +33,49 @@ const EMPTY_LAYOUT: ArenaLayout = {
   dirt: [],
   powerUpPedestals: [],
 };
+
+/** Authored Hold-Mission mit Ablage-Belohnung – der Vertrag, den B6 tatsaechlich traegt. */
+const REWARD_MAP = {
+  mapId: 'placement-reward-test',
+  balanceReferenceDurationSec: 60,
+  objective: 'repel-assault',
+  bases: [
+    {
+      id: 'friendly-main',
+      hpMax: 100,
+      anchor: { kind: 'right-center', edgeInsetCells: 0 },
+      shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+    },
+    {
+      id: 'supply-base',
+      hpMax: 1_400,
+      startHpFactor: 0.35,
+      role: 'outpost',
+      dormant: true,
+      anchor: { kind: 'grid', gridX: 30, gridY: 12 },
+      shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 },
+    },
+  ],
+  powerUps: [],
+  encounters: [
+    { id: 'reveal', start: { type: 'time', atMs: 0 }, restAfterMs: 5_000, groups: [{ enemyKind: 'zombie-badger', count: 2 }] },
+    { id: 'defend', start: { type: 'after-previous' }, restAfterMs: 5_000, groups: [{ enemyKind: 'zombie-badger', count: 3 }] },
+    { id: 'closing', start: { type: 'after-previous' }, groups: [{ enemyKind: 'zombie-badger', count: 3 }] },
+  ],
+  secondaryObjectives: [
+    {
+      id: 'hold-supply-base',
+      type: 'hold',
+      start: { type: 'after-encounter', encounterId: 'reveal' },
+      holdUntil: { type: 'after-encounter', encounterId: 'defend' },
+      targets: ['supply-base'],
+      rewards: {
+        repairTargetOnComplete: false,
+        placeablePedestalOnComplete: { powerUpDefId: 'HOLY_HAND_GRENADE' },
+      },
+    },
+  ],
+} as unknown as CoopDefenseMapConfig;
 
 function makeObjective(overrides: Partial<Parameters<typeof CoopDefenseObjectivePlacementRewardSystem>[0][number]> = {}) {
   return {
@@ -89,8 +133,16 @@ function makePowerUpSystem(options: ConstructorParameters<typeof PowerUpSystem>[
 }
 
 describe('B6 objective placement rewards', () => {
-  it('spawns the real 00-test supply-base reward after Hold completion', () => {
-    const map = getCoopDefenseMapConfig('0');
+  /**
+   * Der authored Weg von der Hold-Konfiguration bis zum liegenden Pickup.
+   *
+   * Die Map-Konfiguration ist hier absichtlich im Test aufgebaut und nicht aus einer Karte
+   * gelesen: Der frueher benutzte Sandkasten war die Testarena, und die traegt seit Block A nur
+   * noch Stressgeometrie. Geprueft wird die Kette Normalisierung -> Basis-Aufloesung ->
+   * Ablageposition -> Pickup, nicht der Inhalt einer bestimmten Karte.
+   */
+  it('spawns an authored supply-base reward after Hold completion', () => {
+    const map = normalizeCoopDefenseMapConfig(REWARD_MAP);
     const objective = resolveCoopDefenseMapSecondaryObjectives(map)
       .find((entry) => entry.id === 'hold-supply-base');
     const bases = resolveCoopDefenseBases(map, 1);

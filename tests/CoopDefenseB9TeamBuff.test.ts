@@ -125,8 +125,10 @@ describe('Coop Defense B9 objective completion reward', () => {
     expect(buff.getBuffEndsAt()).toBe(1_000 + TEAM_BUFF.durationMs);
   });
 
-  it('configures the B9 reward on the existing sandbox Carry mission', () => {
-    const carry = getCoopDefenseMapConfig('0').secondaryObjectives?.find((entry) => entry.type === 'carry');
+  it('configures the B9 reward on the authored Carry mission', () => {
+    // Bewusst die Kampagnen-Map 17 und nicht die Testarena: Map 0 ist eine loeschbare
+    // Stressarena und darf keine Regression tragen.
+    const carry = getCoopDefenseMapConfig('17').secondaryObjectives?.find((entry) => entry.type === 'carry');
     expect(carry?.rewards?.itemMetaRewardOnComplete).toBe(true);
     expect(carry?.rewards?.teamBuffOnComplete).toEqual(TEAM_BUFF);
   });
