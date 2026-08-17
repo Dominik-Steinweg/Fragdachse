@@ -223,8 +223,8 @@ describe('Coop defense map progression', () => {
       weaponId: turret.weaponId,
       cellOffset: turret.cellOffset,
     }))).toEqual([
-      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 0, gridY: 3 } },
       { weaponId: 'BASE_SPORES', cellOffset: { gridX: 0, gridY: 4 } },
+      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 4, gridY: 4 } },
     ]);
     expect(bomberMap.bases[0]?.powerUpPedestals?.map((pedestal) => ({
       defId: pedestal.defId,
@@ -237,6 +237,7 @@ describe('Coop defense map progression', () => {
     expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',
       'after-event',
+      'after-previous',
       'after-previous',
       'after-previous',
     ]);
@@ -271,8 +272,8 @@ describe('Coop defense map progression', () => {
       .every((group) => group.front === 'west')).toBe(true);
 
     const map5 = getCoopDefenseMapConfig('5');
-    expect(map5.encounters?.flatMap((encounter) => encounter.groups)
-      .every((group) => group.front === 'west')).toBe(true);
+    expect(new Set(map5.encounters?.flatMap((encounter) => encounter.groups.map((group) => group.front))))
+      .toEqual(new Set(['west', 'south']));
 
     const map6 = getCoopDefenseMapConfig('6');
     expect(map6.encounters?.flatMap((encounter) => encounter.groups)
@@ -292,7 +293,7 @@ describe('Coop defense map progression', () => {
 
     const map10 = getCoopDefenseMapConfig('10');
     expect(map10.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
-    expect(map10.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
+    expect(map10.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: -6, dyCells: 0 });
 
     const map11 = getCoopDefenseMapConfig('11');
     const map11Fronts = new Set(map11.encounters?.flatMap((encounter) => encounter.groups.map((group) => group.front)));
@@ -316,7 +317,7 @@ describe('Coop defense map progression', () => {
       'friendly-outpost-bastion-south',
     ]);
     expect(map8Outposts.every((base) => base.role === 'outpost' && base.dormant === true)).toBe(true);
-    expect(map8Outposts.map((base) => base.hpMax)).toEqual([800, 1200, 800]);
+    expect(map8Outposts.map((base) => base.hpMax)).toEqual([1200, 2000, 1200]);
     expect(map8Outposts.map((base) => base.startHpFactor)).toEqual([0.25, 0.25, 0.25]);
     expect(map8Outposts.flatMap((base) => base.turrets ?? []).map((turret) => turret.weaponId)).toEqual([
       'SPORE_TURRET_PLASMA',
@@ -405,9 +406,14 @@ describe('Coop defense map progression', () => {
     const singleTurretBases = COOP_DEFENSE_MAP_CONFIGS.flatMap((map) => map.bases)
       .filter((base) => (base.turrets?.length ?? 0) === 1);
     expect(singleTurretBases.length).toBeGreaterThan(0);
+    const authoredBalanceOffsets = new Map([
+      ['friendly-outpost-bastion-north', 1],
+      ['friendly-outpost-bastion-south', 3],
+    ]);
     for (const base of singleTurretBases) {
       const { height } = getShapeBounds(base.shape);
-      expect(base.turrets?.[0].cellOffset.gridY).toBe(Math.floor(height / 2));
+      expect(base.turrets?.[0].cellOffset.gridY)
+        .toBe(authoredBalanceOffsets.get(base.id) ?? Math.floor(height / 2));
     }
   });
 
@@ -456,7 +462,7 @@ describe('Coop defense map progression', () => {
     const map = getCoopDefenseMapConfig('13');
     const finiteXp = getCoopDefenseMapScheduledXp(map, 2);
     const persistentSpawns = resolveCoopDefenseMapPersistentSpawnConfigs(map, 2);
-    expect(finiteXp).toBeGreaterThan(0);
+    expect(finiteXp).toBe(0);
     expect(persistentSpawns.length).toBeGreaterThan(0);
     expect(getCoopDefenseMapXpReference(map, persistentSpawns, 2)).toBeGreaterThan(finiteXp);
   });
@@ -635,11 +641,8 @@ describe('Coop defense map progression', () => {
 
     expect(map.objective).toBe('destroy-hostile-bases');
     expect(destroy).toBeDefined();
-    expect(destroy?.start.type).toBe('after-encounter');
-    expect(destroy?.focusUntil?.type).toBe('after-encounter');
-    expect(destroy?.start.type === 'after-encounter' && destroy.focusUntil?.type === 'after-encounter'
-      ? destroy.start.encounterId
-      : null).not.toBe(destroy?.focusUntil?.type === 'after-encounter' ? destroy.focusUntil.encounterId : null);
+    expect(destroy?.start).toEqual({ type: 'time', atMs: 0 });
+    expect(destroy?.focusUntil).toBeUndefined();
     expect(destroy?.rewards?.xpPerTarget).toBeGreaterThan(0);
 
     const targets = destroy?.targets ?? [];
@@ -660,10 +663,6 @@ describe('Coop defense map progression', () => {
     ))).toBe(true);
     expect(targetBases.some((base) => base?.role === 'main')).toBe(false);
 
-    const lastEncounterId = map.encounters?.at(-1)?.id;
-    expect(destroy?.focusUntil?.type === 'after-encounter'
-      ? destroy.focusUntil.encounterId
-      : null).not.toBe(lastEncounterId);
   });
 
   it('uses Map 14 as a 180-second survival map with rock and Void-Fire lanes', () => {

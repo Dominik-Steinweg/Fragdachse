@@ -135,25 +135,30 @@ function runAttackFrames(
 }
 
 describe('Grufttitan Void-Plasma', () => {
-  it('uses the Map 10 rocket salvo contract with the requested plasma values', () => {
+  it('uses the current Map 10 rocket salvo balance contract', () => {
     const salvo = TITAN.weapons.find((weapon) => weapon.weaponId === VOID_PLASMA.id)?.salvo;
+    const fire = VOID_PLASMA.fire as {
+      type?: string;
+      projectileSpeed?: number;
+      homing?: { maxTurnDegreesPerStep?: number };
+    };
     expect(VOID_PLASMA.range).toBe(900);
-    expect(VOID_PLASMA.damage).toBe(3);
+    expect(VOID_PLASMA.damage).toBe(8);
     expect(VOID_PLASMA.projectileColor).toBe(0xb347ff);
-    expect(VOID_PLASMA.fire.type).toBe('projectile');
-    expect(VOID_PLASMA.fire.type === 'projectile' && VOID_PLASMA.fire.projectileSpeed).toBe(250);
+    expect(fire.type).toBe('projectile');
+    expect(fire.projectileSpeed).toBe(370);
     expect(VOID_PLASMA.energyBallVariant).toBe('plasma');
-    expect(VOID_PLASMA.fire.type === 'projectile' && VOID_PLASMA.fire.homing?.maxTurnDegreesPerStep).toBe(4);
+    expect(fire.homing?.maxTurnDegreesPerStep).toBe(12);
     expect(salvo).toEqual({
-      count: 20,
-      intervalMs: 50,
-      cooldownMs: 10000,
+      count: 12,
+      intervalMs: 90,
+      cooldownMs: 5000,
       targetDistribution: 'round_robin',
     });
     expect(TITAN.weapons.find((weapon) => weapon.weaponId === VOID_PLASMA.id)?.minTargetDistancePx).toBe(200);
   });
 
-  it('waits outside the range band, then fires 20 shots at 50 ms over multiple players', () => {
+  it('waits outside the range band, then fires the balanced salvo over multiple players', () => {
     const players = [
       { id: 'p1', sprite: { x: 500, y: 100, active: true } },
       { id: 'p2', sprite: { x: 700, y: 100, active: true } },
@@ -170,10 +175,10 @@ describe('Grufttitan Void-Plasma', () => {
     players[1].sprite.x = 700;
     runAttackFrames(system, 1_510, 2_800);
 
-    expect(shots).toHaveLength(20);
+    expect(shots).toHaveLength(12);
     expect(shots.every((shot) => shot.weaponId === VOID_PLASMA.id)).toBe(true);
-    expect(shots.filter((shot) => shot.targetX === 500)).toHaveLength(10);
-    expect(shots.filter((shot) => shot.targetX === 700)).toHaveLength(10);
+    expect(shots.filter((shot) => shot.targetX === 500)).toHaveLength(6);
+    expect(shots.filter((shot) => shot.targetX === 700)).toHaveLength(6);
   });
 
   it('does not target players inside 200 px, including during an active salvo', () => {
@@ -186,10 +191,10 @@ describe('Grufttitan Void-Plasma', () => {
 
     players[0].sprite.x = 600;
     runAttackFrames(system, 2_010, 2_140);
-    expect(shots).toHaveLength(2);
+    expect(shots).toHaveLength(1);
 
     players[0].sprite.x = 250;
     runAttackFrames(system, 2_070, 2_200);
-    expect(shots).toHaveLength(2);
+    expect(shots).toHaveLength(1);
   });
 });

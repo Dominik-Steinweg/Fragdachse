@@ -47,14 +47,16 @@ describe('coop-defense hostile bases', () => {
     expect(hostile?.turrets?.every((turret) => turret.mountSide === 'rear')).toBe(true);
   });
 
-  it('uses map 13 as the combined objective, encounter, and persistent-pressure reference', () => {
+  it('uses map 13 as the immediate objective and persistent-pressure reference', () => {
     const map = getCoopDefenseMapConfig('13');
     expect(map.objective).toBe('destroy-hostile-bases');
-    expect(map.encounters?.length).toBeGreaterThan(0);
+    expect(map.encounters ?? []).toEqual([]);
     expect(map.persistentSpawns?.some((spawn) => spawn.source.type === 'map')).toBe(true);
     expect(map.persistentSpawns?.some((spawn) => spawn.source.type === 'base')).toBe(true);
-    expect(map.encounters?.some((encounter) => encounter.start.type === 'after-previous')).toBe(true);
-    expect(map.secondaryObjectives?.some((objective) => objective.type === 'destroy')).toBe(true);
+    const destroy = map.secondaryObjectives?.find((objective) => objective.type === 'destroy');
+    expect(destroy).toBeDefined();
+    expect(destroy?.start).toEqual({ type: 'time', atMs: 0 });
+    expect(destroy?.focusUntil).toBeUndefined();
   });
 
   it('keeps map 16 on the authored finite-assault plus structure-source model', () => {
