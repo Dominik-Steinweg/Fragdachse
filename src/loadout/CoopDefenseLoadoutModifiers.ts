@@ -165,20 +165,20 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'HYDRA',
     targets: [{ path: ['fire', 'projectileSpeed'], formula: 'scale' }],
   },
-  'weapon.XBOW.range': {
-    kind: 'weapon',
-    itemId: 'XBOW',
-    targets: [{ path: ['range'], formula: 'scale' }],
-  },
-  'weapon.XBOW.projectileSpeed': {
-    kind: 'weapon',
-    itemId: 'XBOW',
-    targets: [{ path: ['fire', 'projectileSpeed'], formula: 'scale' }],
-  },
   'weapon.XBOW.pelletCount': {
     kind: 'weapon',
     itemId: 'XBOW',
     targets: [{ path: ['pelletCount'], formula: 'add' }],
+  },
+  'weapon.XBOW.homingEnabled': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['homingEnabled'], formula: 'add' }],
+  },
+  'weapon.XBOW.homing.maxTurnDegreesPerStep': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], formula: 'add' }],
   },
   'weapon.XBOW.enemyHitExplosion.radius': {
     kind: 'weapon',

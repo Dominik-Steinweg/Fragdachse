@@ -4,7 +4,7 @@
       "id": "GLOCK",
       "cooldown": 150,
       "damage": 6,
-      "range": 400,
+      "range": 500,
       "fire": {
         "type": "projectile",
         "projectileSpeed": 900,
@@ -18,10 +18,10 @@
       "adrenalinGain": 10,
       "hitKnockback": 0,
       "hitKnockbackDurationMs": 180,
-      "spreadStanding": 5,
-      "spreadMoving": 10,
-      "spreadPerShot": 5,
-      "maxDynamicSpread": 25,
+      "spreadStanding": 2,
+      "spreadMoving": 5,
+      "spreadPerShot": 3,
+      "maxDynamicSpread": 15,
       "spreadRecoveryDelay": 400,
       "spreadRecoveryRate": 5,
       "spreadRecoverySpeed": 100,
@@ -152,6 +152,21 @@
         "projectileSpeed": 1300,
         "projectileSize": 4,
         "projectileMaxBounces": 1,
+        "homing": {
+          "acquireDelayMs": 150,
+          "searchRadius": 450,
+          "retargetIntervalMs": 100,
+          "maxTurnDegreesPerStep": 0,
+          "targetTypes": [
+            "players",
+            "enemies",
+            "bases"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 0.5
+        },
         "enemyHitExplosion": {
           "radius": 0,
           "maxDamage": 0,
@@ -164,6 +179,7 @@
           "visualStyle": "mini_rocket"
         }
       },
+      "homingEnabled": 0,
       "allowedSlots": [
         "weapon1"
       ],
@@ -198,8 +214,8 @@
     "P90": {
       "id": "P90",
       "cooldown": 80,
-      "damage": 6,
-      "range": 500,
+      "damage": 8,
+      "range": 650,
       "fire": {
         "type": "projectile",
         "projectileSpeed": 1200,
@@ -227,10 +243,10 @@
       "adrenalinCost": 4,
       "adrenalinGain": 0,
       "homingEnabled": 0,
-      "spreadStanding": 15,
-      "spreadMoving": 15,
+      "spreadStanding": 2,
+      "spreadMoving": 4,
       "spreadPerShot": 2,
-      "maxDynamicSpread": 18,
+      "maxDynamicSpread": 20,
       "spreadRecoveryDelay": 400,
       "spreadRecoveryRate": 3,
       "spreadRecoverySpeed": 100,
@@ -435,12 +451,12 @@
       "rockDamageMult": 1,
       "penetratesRocks": 0,
       "awpCharge": {
-        "durationMs": 3000,
+        "durationMs": 2000,
         "maxDamageBonus": 0,
         "fullChargeDamageBonus": 0,
         "fireTrailDurationMs": 0,
         "fireTrailBurnDurationMs": 2000,
-        "fireTrailBurnDamagePerTick": 0.5,
+        "fireTrailBurnDamagePerTick": 1,
         "fireTrailHalfWidthCells": 0,
         "corridorEnabled": 0,
         "corridorHalfWidth": 56,
@@ -460,7 +476,7 @@
         "colorCore": "#ffffff"
       },
       "scopeConfig": {
-        "scopeInMs": 1200,
+        "scopeInMs": 1000,
         "fullScopeViewRadius": 48,
         "edgeSoftnessPx": 90,
         "unscopedSpreadDeg": 50,

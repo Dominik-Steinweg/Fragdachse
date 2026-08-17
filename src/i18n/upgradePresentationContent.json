@@ -872,36 +872,36 @@
                                                        }
                                             },
                                             {
-                                                "id":  "xbow_range",
-                                                "de":  {
-                                                           "name":  "Upgrade XXX-BOW: Reichweite",
-                                                           "description":  "+20% Reichweite für XXX-BOW je Stufe."
-                                                       },
-                                                "en":  {
-                                                           "name":  "Xbow Range",
-                                                           "description":  "Enhances xbow range."
-                                                       }
-                                            },
-                                            {
-                                                "id":  "xbow_projectile_speed",
-                                                "de":  {
-                                                           "name":  "Upgrade XXX-BOW: Geschossgeschwindigkeit",
-                                                           "description":  "+10% Projektilgeschwindigkeit für XXX-BOW je Stufe."
-                                                       },
-                                                "en":  {
-                                                           "name":  "Xbow Projectile Speed",
-                                                           "description":  "Enhances xbow projectile speed."
-                                                       }
-                                            },
-                                            {
                                                 "id":  "xbow_arrow_count",
                                                 "de":  {
                                                            "name":  "Upgrade XXX-BOW: Mehrfachbolzen",
-                                                           "description":  "+1 Pfeil pro Schuss für den XXX-BOW je Stufe."
+                                                           "description":  "+1 Bolzen pro Schuss für den XXX-BOW je Stufe."
                                                        },
                                                 "en":  {
                                                            "name":  "Xbow Arrow Count",
-                                                           "description":  "Enhances xbow arrow count."
+                                                           "description":  "+1 bolt per shot for the XXX-BOW per level."
+                                                       }
+                                            },
+                                            {
+                                                "id":  "xbow_life_leech",
+                                                "de":  {
+                                                           "name":  "Upgrade XXX-BOW: Lifeleech",
+                                                           "description":  "Heilt Schaden"
+                                                       },
+                                                "en":  {
+                                                           "name":  "Xbow Life Leech",
+                                                           "description":  "Restore damage"
+                                                       }
+                                            },
+                                            {
+                                                "id":  "xbow_homing",
+                                                "de":  {
+                                                           "name":  "Upgrade XXX-BOW: Homing",
+                                                           "description":  "Schwache Zielverfolgung"
+                                                       },
+                                                "en":  {
+                                                           "name":  "Xbow Homing",
+                                                           "description":  "Weak homing"
                                                        }
                                             },
                                             {
@@ -1647,7 +1647,7 @@
                                                 "id":  "awp_aim_duration",
                                                 "de":  {
                                                            "name":  "Upgrade AWP: Zielzeit und Cooldown",
-                                                           "description":  "-20% Zielzeit und Cooldown für die AWP je Stufe."
+                                                           "description":  "-25% Zielzeit und Cooldown für die AWP je Stufe."
                                                        },
                                                 "en":  {
                                                            "name":  "AWP Aim Duration",
@@ -2175,7 +2175,7 @@
                                                 "id":  "awp_charge_damage",
                                                 "de":  {
                                                            "name":  "Geduldiger Tod",
-                                                           "description":  "Erhöht den AWP-Schaden stetig mit der Zielzeit bis auf +100% nach 3 Sekunden. Ein Kreisbalken um das Fadenkreuz zeigt die Ladung."
+                                                           "description":  "Erhöht den AWP-Schaden stetig mit der Zielzeit bis auf +100% nach 2 Sekunden. Ein Kreisbalken um das Fadenkreuz zeigt die Ladung."
                                                        },
                                                 "en":  {
                                                            "name":  "AWP Charge Damage",

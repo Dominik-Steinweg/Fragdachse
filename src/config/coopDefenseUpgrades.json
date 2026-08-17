@@ -1725,10 +1725,10 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "xbow_range",
+                                                "id":  "xbow_arrow_count",
                                                 "code":  "B-W6-1",
                                                 "kind":  "upgrade",
-                                                "maxLevel":  3,
+                                                "maxLevel":  2,
                                                 "startingLevel":  0,
                                                 "costPerLevel":  1,
                                                 "refundable":  true,
@@ -1741,14 +1741,37 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.XBOW.range",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.2
+                                                                    "stat":  "weapon.XBOW.pelletCount",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  1
                                                                 }
                                                             ]
                                             },
                                             {
-                                                "id":  "xbow_projectile_speed",
+                                                "id":  "xbow_life_leech",
+                                                "code":  "B-W6-3",
+                                                "kind":  "upgrade",
+                                                "maxLevel":  3,
+                                                "startingLevel":  0,
+                                                "costPerLevel":  1,
+                                                "refundable":  true,
+                                                "sortOrder":  260,
+                                                "requires":  [
+                                                                 {
+                                                                     "upgradeId":  "xbow_arrow_count",
+                                                                     "minLevel":  1
+                                                                 }
+                                                             ],
+                                                "effects":  [
+                                                                {
+                                                                    "stat":  "player.lifeLeechFraction",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  0.02
+                                                                }
+                                                            ]
+                                            },
+                                            {
+                                                "id":  "xbow_homing",
                                                 "code":  "B-W6-2",
                                                 "kind":  "upgrade",
                                                 "maxLevel":  3,
@@ -1764,32 +1787,14 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.XBOW.projectileSpeed",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "xbow_arrow_count",
-                                                "code":  "B-W6-3",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  2,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  273,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "xbow_range",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.XBOW.pelletCount",
+                                                                    "stat":  "weapon.XBOW.homingEnabled",
                                                                     "mode":  "add_per_level",
                                                                     "value":  1
+                                                                },
+                                                                {
+                                                                    "stat":  "weapon.XBOW.homing.maxTurnDegreesPerStep",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  2
                                                                 }
                                                             ]
                                             },
@@ -1805,7 +1810,7 @@
                                                 "sortOrder":  275,
                                                 "requires":  [
                                                                  {
-                                                                     "upgradeId":  "xbow_projectile_speed",
+                                                                     "upgradeId":  "xbow_homing",
                                                                      "minLevel":  1
                                                                  }
                                                              ],
@@ -3365,12 +3370,12 @@
                                                                 {
                                                                     "stat":  "weapon.AWP.aimDuration",
                                                                     "mode":  "add_percent_per_level",
-                                                                    "value":  -0.2
+                                                                    "value":  -0.25
                                                                 },
                                                                 {
                                                                     "stat":  "weapon.AWP.cooldown",
                                                                     "mode":  "add_percent_per_level",
-                                                                    "value":  -0.2
+                                                                    "value":  -0.25
                                                                 }
                                                             ]
                                             },

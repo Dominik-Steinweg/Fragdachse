@@ -60,44 +60,44 @@
     },
     "DEMON_BADGER_BITE": {
       "id": "DEMON_BADGER_BITE",
-      "damage": 20,
+      "damage": 15,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "RABID_BADGER_BITE": {
       "id": "RABID_BADGER_BITE",
-      "damage": 25,
+      "damage": 20,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "SPORE_WARDEN_BITE": {
       "id": "SPORE_WARDEN_BITE",
-      "damage": 40,
+      "damage": 20,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "PLAGUE_MEDIC_BITE": {
       "id": "PLAGUE_MEDIC_BITE",
-      "damage": 30,
+      "damage": 25,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "VOID_STALKER_BITE": {
       "id": "VOID_STALKER_BITE",
-      "damage": 50,
+      "damage": 30,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "STINK_BROODMOTHER_BITE": {
       "id": "STINK_BROODMOTHER_BITE",
-      "damage": 40,
+      "damage": 30,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "ALIEN_BADGER_BITE": {
       "id": "ALIEN_BADGER_BITE",
       "cooldown": 500,
-      "damage": 70,
+      "damage": 40,
       "range": 90,
       "fire": {
         "hitArcDegrees": 90,
@@ -112,13 +112,13 @@
     },
     "THROWER_BADGER_BITE": {
       "id": "THROWER_BADGER_BITE",
-      "damage": 85,
+      "damage": 40,
       "baseId": "ALIEN_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "PYRO_BADGER_BITE": {
       "id": "PYRO_BADGER_BITE",
-      "damage": 75,
+      "damage": 50,
       "range": 50,
       "baseId": "ALIEN_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
@@ -133,7 +133,7 @@
     "GRAVE_TITAN_BITE": {
       "id": "GRAVE_TITAN_BITE",
       "cooldown": 500,
-      "damage": 90,
+      "damage": 60,
       "range": 125,
       "fire": {
         "type": "melee",
@@ -160,7 +160,7 @@
     "INFERNO_COLOSSUS_BITE": {
       "id": "INFERNO_COLOSSUS_BITE",
       "cooldown": 500,
-      "damage": 90,
+      "damage": 60,
       "range": 125,
       "fire": {
         "type": "melee",

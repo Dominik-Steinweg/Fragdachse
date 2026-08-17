@@ -320,7 +320,7 @@ export const de = {
   'ui.items.categoryFull': 'KATEGORIE VOLL',
   'ui.items.categoryFullHint': 'Kategorie voll – wähle ein Teil zum Zerlegen',
   'ui.items.slotEmptyDirect': 'Slot leer – wird direkt ausgerüstet',
-  'ui.items.freeSlots': '{count} Platz{plural} frei',
+  'ui.items.freeSlots': '{count} Slot{plural} frei',
   'ui.items.take': 'NEHMEN',
   'ui.items.rewardEquip': 'AUSRÜSTEN',
   'ui.items.salvageChooseEquipped': '{slot}: Das bisher getragene Teil wandert ins Inventar. Wähle vorher ein ungetragenes Teil zum Zerlegen.',

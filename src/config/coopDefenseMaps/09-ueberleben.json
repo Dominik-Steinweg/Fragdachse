@@ -8,7 +8,7 @@
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 45000 },
+    "start": { "type": "time", "atMs": 80000 },
     "repeatAfterExitMs": 45000
   }],
   "surviveDurationSec": 120,

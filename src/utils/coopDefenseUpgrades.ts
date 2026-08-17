@@ -92,6 +92,8 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
   shotgun_lightning_radius: 'UPGRADE_SHOTGUN_LIGHTNING_RADIUS',
   molotov_grenade_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
   mini_rocket_launcher_homing_turn: 'UPGRADE_MINI_ROCKET_LAUNCHER_HOMING_TURN',
+  xbow_life_leech: 'UPGRADE_LIFE_LEECH',
+  xbow_homing: 'UPGRADE_P90_HOMING_TURN',
   flamethrower_range: 'UPGRADE_FLAMETHROWER_RANGE',
   armageddon_radius: 'UPGRADE_ARMAGEDDON_RADIUS',
   ak47_fire_control: 'UPGRADE_AK47_FOCUS',
