@@ -30,6 +30,7 @@ import type { RockVegetationPlacement } from './RockVegetationField';
 import { RockGridIndex } from './RockGridIndex';
 import { GroundSurfaceStreamer } from './chunks/GroundSurfaceStreamer';
 import { RockOverlayStreamer } from './chunks/RockOverlayStreamer';
+import { RockLayerGrid } from './chunks/RockLayerGrid';
 import { RockViewportCuller } from './chunks/RockViewportCuller';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import {
@@ -68,15 +69,17 @@ export interface ArenaBuilderResult {
   /** StaticGroup mit Felsen-Sprites (für Kollision + HP-Tracking) */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
   /**
-   * Eigene Anzeigeliste des gesamten Felsbestands.
+   * Die Anzeigelisten des Felsbestands, eine je 512-px-Rasterchunk.
    *
-   * Zehntausende Felsen direkt in der Szenenliste machen *jede andere* Objekterzeugung teuer:
-   * `scene.add.*` und `destroy()` suchen linear in dieser Liste, und eine Zerstoerungswelle
-   * erzeugt und verwirft tausende Truemmer- und Partikelobjekte. In einer eigenen Ebene ist der
-   * Felsbestand ein einziger Eintrag der Szenenliste; die Ebene selbst kostet je verstecktem Fels
-   * nur noch die billige `willRender`-Abfrage.
+   * Zwei Probleme loest die Aufteilung gemeinsam. Erstens machen zehntausende Felsen direkt in der
+   * Szenenliste *jede andere* Objekterzeugung teuer, weil `scene.add.*` und `destroy()` linear
+   * darin suchen – eine Zerstoerungswelle erzeugt und verwirft tausende Truemmerobjekte. Zweitens
+   * laeuft Phaser durch die Kinder jeder *sichtbaren* Ebene, egal wie weit sie vom Bild entfernt
+   * sind; eine einzige grosse Ebene haette den Renderpfad also weiterhin an den Gesamtbestand
+   * gebunden. Mit einer Ebene je Chunk ist eine Ebene ausserhalb des Ausschnitts selbst unsichtbar
+   * und wird gar nicht erst betreten (siehe {@link ./chunks/RockLayerGrid}).
    */
-  rockLayer:    Phaser.GameObjects.Layer | null;
+  rockLayers:   RockLayerGrid | null;
   /** Paralleles Array zu layout.rocks – null-Slots = bereits zerstört */
   rockObjects:  (Phaser.GameObjects.Image | null)[];
   /**
@@ -225,7 +228,10 @@ export class ArenaBuilder {
   buildDynamic(layout: ArenaLayout): ArenaBuilderResult {
     const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
     const rockGroup    = this.scene.physics.add.staticGroup();
-    const rockLayer    = this.scene.add.layer().setDepth(DEPTH.ROCKS);
+    const frame        = getArenaRockWorldFrame();
+    // Eine Anzeigeliste je Rasterchunk statt einer fuer den gesamten Bestand: Nur so kann der
+    // Renderer ganze Kartenteile ueberspringen, statt jeden Fels einzeln abzufragen.
+    const rockLayers   = new RockLayerGrid(this.scene, frame);
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockObjects:  (Phaser.GameObjects.Image | null)[] = [];
     const rockStateTints: number[] = [];
@@ -258,8 +264,14 @@ export class ArenaBuilder {
       const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
-      const frame  = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      const img    = this.createRockVisual(worldX, worldY, frame, resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied), rockLayer);
+      const autoTileFrame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
+      const img    = this.createRockVisual(
+        worldX,
+        worldY,
+        autoTileFrame,
+        resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
+        rockLayers.layerFor(gridX, gridY),
+      );
       rockGroup.add(img);
       (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
       rockObjects.push(img);
@@ -287,7 +299,7 @@ export class ArenaBuilder {
     const result: ArenaBuilderResult = {
       baseZoneObjects,
       rockGroup,
-      rockLayer,
+      rockLayers,
       rockObjects,
       rockStateTints,
       rockGrid,
@@ -318,7 +330,6 @@ export class ArenaBuilder {
     // wird: Sie entscheidet, welche Flecken ueberhaupt entstehen (siehe `RockOverlayRegions`).
     syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
 
-    const frame = getArenaRockWorldFrame();
     result.groundSurface = new GroundSurfaceStreamer({
       scene: this.scene,
       frame,
@@ -336,7 +347,7 @@ export class ArenaBuilder {
       mossPlacements: result.rockMossPlacements,
       vegetationPlacements: result.rockVegetationPlacements,
     });
-    result.rockCuller = new RockViewportCuller(frame, layout.rocks, rockObjects);
+    result.rockCuller = new RockViewportCuller(frame, layout.rocks, rockObjects, rockLayers);
     return result;
   }
 
@@ -510,7 +521,9 @@ export class ArenaBuilder {
       worldFrame.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
       frame,
       resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
-      result.rockLayer ?? undefined,
+      // Ein zur Laufzeit gebauter Fels gehoert in die Ebene seiner Rasterposition, nicht in
+      // irgendeine: Sonst kaeme er in einem entfernten Kartenteil wieder zum Vorschein.
+      result.rockLayers?.layerFor(gridX, gridY),
     );
     rockObjects[id] = img;
     rockGroup.add(img);
@@ -645,8 +658,8 @@ export class ArenaBuilder {
     result.rockGroup.destroy(true);
     // Nach den Felsen: Die Ebene wuerde ihre Kinder sonst selbst zerstoeren und der Gruppe
     // vorauslaufen.
-    if (result.rockLayer?.active) result.rockLayer.destroy();
-    result.rockLayer = null;
+    result.rockLayers?.destroy();
+    result.rockLayers = null;
 
     // Trunks
     for (const trunk of result.trunkObjects) {

@@ -418,7 +418,7 @@ export function createFakePhaserModule(): Record<string, unknown> {
 
 export function createFakeArenaScene() {
   let created = 0;
-  const layers: Array<{ list: unknown[] }> = [];
+  const layers: Array<{ list: unknown[]; visible: boolean; active: boolean }> = [];
   return {
     add: {
       renderTexture: (_x = 0, _y = 0, width = 32, height = 32) =>
@@ -429,8 +429,11 @@ export function createFakeArenaScene() {
         const layer = {
           list: [] as unknown[],
           active: true,
+          // Sichtbar erzeugt wie in Phaser; das grobe Culling schaltet danach um.
+          visible: true,
           add(child: unknown) { layer.list.push(child); return layer; },
           setDepth() { return layer; },
+          setVisible(visible: boolean) { layer.visible = visible; return layer; },
           destroy() { layer.active = false; },
         };
         layers.push(layer);

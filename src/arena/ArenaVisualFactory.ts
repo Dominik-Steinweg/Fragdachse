@@ -87,10 +87,11 @@ export class ArenaVisualFactory {
     frame: number,
     cornerTints?: BlobSurfaceCornerTints,
     /**
-     * Ziel-Anzeigeliste. Die Arena reicht hier ihre Fels-Ebene herein: Zehntausende Felsen direkt
-     * in der Szenenliste machen *jede* andere Objekterzeugung teuer, weil `add()` und `destroy()`
-     * linear darin suchen (siehe Klassenkommentar). In einer eigenen Ebene ist der gesamte
-     * Felsbestand ein einziger Eintrag der Szenenliste.
+     * Ziel-Anzeigeliste. Die Arena reicht hier die Ebene des Rasterchunks herein, in dem der Fels
+     * liegt (siehe {@link ./chunks/RockLayerGrid}). Das haelt zweierlei klein: die Szenenliste,
+     * in der `add()` und `destroy()` linear suchen, und die Kinderliste, die der Renderer je
+     * sichtbarer Ebene durchlaeuft. Ohne Ebene landet der Fels direkt in der Szenenliste – der
+     * Weg der Lobby-Vorschau, deren Bestand klein und immer vollstaendig sichtbar ist.
      */
     layer?: Phaser.GameObjects.Layer,
   ): Phaser.GameObjects.Image {

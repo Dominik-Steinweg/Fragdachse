@@ -8,9 +8,14 @@ vi.mock('phaser', () => ({
 
 import { CELL_SIZE } from '../src/config';
 import { ArenaCellBucketIndex } from '../src/arena/chunks/ArenaCellBucketIndex';
+import { RockLayerGrid } from '../src/arena/chunks/RockLayerGrid';
 import { RockViewportCuller } from '../src/arena/chunks/RockViewportCuller';
-import { ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX } from '../src/arena/chunks/ArenaChunkGrid';
+import {
+  ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX,
+  ARENA_RENDER_CHUNK_SIZE,
+} from '../src/arena/chunks/ArenaChunkGrid';
 import type { RockCell } from '../src/types';
+import { createFakeArenaScene } from './fakeArenaRenderScene';
 
 /**
  * Der raeumliche Index und die Sichtbarkeitsauswahl der Felsen.
@@ -116,6 +121,10 @@ describe('arena cell bucket index', () => {
   });
 });
 
+/**
+ * Ein Fels-Sprite, so weit die Cullung es liest: `active` sagt, ob er noch steht, `visible`
+ * entscheidet ueber das Rendern.
+ */
 interface FakeRockImage {
   active: boolean;
   visible: boolean;
@@ -133,18 +142,106 @@ function fakeRockImages(count: number): FakeRockImage[] {
   });
 }
 
+function buildCuller(cells: RockCell[], images: FakeRockImage[]) {
+  const scene = createFakeArenaScene();
+  const layerGrid = new RockLayerGrid(scene as never, FRAME);
+  // Wie im Rundenaufbau: Jeder Fels landet beim Erzeugen in der Ebene seiner Rasterposition.
+  for (const cell of cells) layerGrid.layerFor(cell.gridX, cell.gridY);
+  const culler = new RockViewportCuller(FRAME, cells, images as never, layerGrid);
+  return { culler, layerGrid, scene };
+}
+
+function visibleLayerCount(layerGrid: RockLayerGrid): number {
+  let count = 0;
+  for (const key of layerGrid.keys()) {
+    if ((layerGrid.getLayer(key) as unknown as { visible: boolean }).visible) count += 1;
+  }
+  return count;
+}
+
+describe('rock layer grid', () => {
+  it('partitions the inventory into 512 px layers instead of one big list', () => {
+    const cells = grid(400, 80);
+    const { layerGrid } = buildCuller(cells, fakeRockImages(cells.length));
+
+    // 12 800 x 2 560 px bei 512 px Kantenlaenge.
+    expect(layerGrid.grid.chunkSize).toBe(ARENA_RENDER_CHUNK_SIZE);
+    expect(layerGrid.layerCount).toBe(layerGrid.grid.cols * layerGrid.grid.rows);
+    // Und nicht eine einzige Ebene mit dem gesamten Bestand.
+    expect(layerGrid.layerCount).toBeGreaterThan(50);
+  });
+
+  it('creates a layer only where rocks actually are', () => {
+    const scene = createFakeArenaScene();
+    const layerGrid = new RockLayerGrid(scene as never, FRAME);
+    expect(layerGrid.layerCount).toBe(0);
+
+    layerGrid.layerFor(0, 0);
+    layerGrid.layerFor(1, 1);
+    // Beide Zellen liegen im selben 512er-Chunk.
+    expect(layerGrid.layerCount).toBe(1);
+
+    layerGrid.layerFor(100, 0);
+    expect(layerGrid.layerCount).toBe(2);
+  });
+
+  it('puts a rock into the layer of its own grid position', () => {
+    const scene = createFakeArenaScene();
+    const layerGrid = new RockLayerGrid(scene as never, FRAME);
+    const cellsPerChunk = ARENA_RENDER_CHUNK_SIZE / CELL_SIZE;
+
+    expect(layerGrid.keyOf(0, 0)).toBe(layerGrid.keyOf(cellsPerChunk - 1, cellsPerChunk - 1));
+    expect(layerGrid.keyOf(0, 0)).not.toBe(layerGrid.keyOf(cellsPerChunk, 0));
+    expect(layerGrid.keyOf(0, 0)).not.toBe(layerGrid.keyOf(0, cellsPerChunk));
+
+    // Ausserhalb des Rahmens wird geklemmt statt verworfen: Ein Fels ohne Ebene waere unsichtbar.
+    expect(layerGrid.keyOf(100_000, 100_000)).toBe(
+      layerGrid.grid.key(layerGrid.grid.cols - 1, layerGrid.grid.rows - 1),
+    );
+  });
+
+  it('drops every layer on teardown', () => {
+    const cells = grid(60, 30);
+    const { layerGrid } = buildCuller(cells, fakeRockImages(cells.length));
+    const layers = [...layerGrid.keys()].map((key) => layerGrid.getLayer(key) as unknown as { active: boolean });
+    expect(layers.length).toBeGreaterThan(0);
+
+    layerGrid.destroy();
+
+    expect(layers.every((layer) => !layer.active)).toBe(true);
+    expect(layerGrid.layerCount).toBe(0);
+  });
+});
+
 describe('rock viewport culler', () => {
-  it('hides the whole inventory before the first camera update', () => {
+  it('hides every layer and every rock before the first camera update', () => {
     const cells = grid(60, 30);
     const images = fakeRockImages(cells.length);
-    new RockViewportCuller(FRAME, cells, images as never);
+    const { layerGrid } = buildCuller(cells, images);
+
     expect(images.every((image) => !image.visible)).toBe(true);
+    expect(visibleLayerCount(layerGrid)).toBe(0);
+  });
+
+  it('keeps only the camera-near layers visible', () => {
+    const cells = grid(400, 80);
+    const images = fakeRockImages(cells.length);
+    const { culler, layerGrid } = buildCuller(cells, images);
+
+    culler.update({ x: 0, y: 12, width: 1920, height: 1080 });
+
+    // Das ist die eigentliche Zusicherung: Der Renderer betritt nur eine Handvoll Ebenen, statt
+    // die Kinder des Gesamtbestands zu durchlaufen.
+    const visibleLayers = visibleLayerCount(layerGrid);
+    expect(visibleLayers).toBeGreaterThan(0);
+    expect(visibleLayers).toBeLessThan(layerGrid.layerCount / 5);
+    expect(culler.getStats().visibleLayers).toBe(visibleLayers);
   });
 
   it('shows only the rocks around the view', () => {
     const cells = grid(400, 80);
     const images = fakeRockImages(cells.length);
-    const culler = new RockViewportCuller(FRAME, cells, images as never);
+    const { culler } = buildCuller(cells, images);
 
     culler.update({ x: 0, y: 12, width: 1920, height: 1080 });
 
@@ -161,17 +258,45 @@ describe('rock viewport culler', () => {
     expect(images[nearOrigin].visible).toBe(true);
   });
 
+  /**
+   * Die Verzahnung beider Stufen. Ein sichtbarer Fels in einer unsichtbaren Ebene waere ein
+   * stiller Fehler: Er wuerde nicht gerendert, aber beim naechsten Sichtbarwerden der Ebene
+   * ploetzlich auftauchen, obwohl er ausserhalb des Ausschnitts liegt.
+   */
+  it('never leaves a visible rock inside a hidden layer', () => {
+    const cells = grid(400, 80);
+    const images = fakeRockImages(cells.length);
+    const { culler, layerGrid } = buildCuller(cells, images);
+
+    for (const view of [
+      { x: 0, y: 12, width: 1920, height: 1080 },
+      { x: 4_000, y: 12, width: 1920, height: 1080 },
+      { x: 9_000, y: 12, width: 1920, height: 1080 },
+      { x: 4_000, y: 12, width: 1920, height: 1080 },
+    ]) {
+      culler.update(view);
+      for (let id = 0; id < cells.length; id += 1) {
+        if (!images[id].visible) continue;
+        const layer = layerGrid.getLayer(layerGrid.keyOf(cells[id].gridX, cells[id].gridY));
+        expect((layer as unknown as { visible: boolean }).visible).toBe(true);
+      }
+    }
+  });
+
   it('follows the camera east and releases what it leaves behind', () => {
     const cells = grid(400, 80);
     const images = fakeRockImages(cells.length);
-    const culler = new RockViewportCuller(FRAME, cells, images as never);
+    const { culler, layerGrid } = buildCuller(cells, images);
 
     culler.update({ x: 0, y: 12, width: 1920, height: 1080 });
     const nearOrigin = cells.findIndex((cell) => cell.gridX === 10 && cell.gridY === 10);
     expect(images[nearOrigin].visible).toBe(true);
+    const westLayer = layerGrid.getLayer(layerGrid.keyOf(10, 10)) as unknown as { visible: boolean };
+    expect(westLayer.visible).toBe(true);
 
     culler.update({ x: 9_000, y: 12, width: 1920, height: 1080 });
     expect(images[nearOrigin].visible).toBe(false);
+    expect(westLayer.visible).toBe(false);
     const farEast = cells.findIndex((cell) => cell.gridX === 300 && cell.gridY === 20);
     expect(images[farEast].visible).toBe(true);
   });
@@ -179,22 +304,26 @@ describe('rock viewport culler', () => {
   it('does not touch anything while the camera stands still', () => {
     const cells = grid(60, 30);
     const images = fakeRockImages(cells.length);
-    const culler = new RockViewportCuller(FRAME, cells, images as never);
+    const { culler, layerGrid } = buildCuller(cells, images);
     const view = { x: 0, y: 12, width: 1920, height: 1080 };
     culler.update(view);
 
-    const calls = images.map((image) => {
-      const spy = vi.spyOn(image, 'setVisible');
-      return spy;
-    });
+    const imageSpies = images.map((image) => vi.spyOn(image, 'setVisible'));
+    const layerSpies = [...layerGrid.keys()].map((key) => (
+      vi.spyOn(layerGrid.getLayer(key) as unknown as { setVisible: (v: boolean) => unknown }, 'setVisible')
+    ));
+
     culler.update(view);
-    expect(calls.every((spy) => spy.mock.calls.length === 0)).toBe(true);
+
+    // Kein Vollscan, keine Umschaltung: Ein Frame ohne Kamerabewegung kostet nichts.
+    expect(imageSpies.every((spy) => spy.mock.calls.length === 0)).toBe(true);
+    expect(layerSpies.every((spy) => spy.mock.calls.length === 0)).toBe(true);
   });
 
   it('leaves destroyed rocks alone', () => {
     const cells = grid(60, 30);
     const images = fakeRockImages(cells.length);
-    const culler = new RockViewportCuller(FRAME, cells, images as never);
+    const { culler } = buildCuller(cells, images);
     images[5].active = false;
 
     culler.update({ x: 0, y: 12, width: 1920, height: 1080 });
@@ -206,7 +335,7 @@ describe('rock viewport culler', () => {
   it('applies the current state to a rock built at runtime', () => {
     const cells = grid(400, 80);
     const images = fakeRockImages(cells.length);
-    const culler = new RockViewportCuller(FRAME, cells, images as never);
+    const { culler } = buildCuller(cells, images);
     culler.update({ x: 0, y: 12, width: 1920, height: 1080 });
 
     const inside = fakeRockImages(1)[0];

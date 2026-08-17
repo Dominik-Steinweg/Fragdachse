@@ -2,64 +2,73 @@ import type * as Phaser from 'phaser';
 import type { RockCell } from '../../types';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, worldRectToLocalRect } from './ArenaChunkGrid';
-import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
+import type { ChunkLocalRect, ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
+import type { RockLayerGrid } from './RockLayerGrid';
 
 /**
- * Blendet Felsen ausserhalb des Kameraausschnitts aus.
+ * Zweistufiges Culling des Felsbestands.
  *
  * Phaser 4 kennt keine Kamera-Bounds-Cullung auf Objektebene: `GameObject.willRender()` prueft nur
- * Renderflags und Kamerafilter. Jedes Fels-Image der Anzeigeliste laeuft damit pro Frame durch den
- * kompletten Renderpfad – Transform, Tint, Quad, Batch. Auf einer 400 x 80-Karte sind das rund
- * 24 000 Quads je Frame, im Trace 16,7 ms `renderSubmit` bei nur 1 600 tatsaechlich sichtbaren
- * Objekten.
+ * Renderflags und Kamerafilter. Ohne Cullung laeuft jedes Fels-Image pro Frame durch den kompletten
+ * Renderpfad – Transform, Tint, Quad, Batch.
  *
- * `visible = false` setzt genau das Renderflag, das `willRender()` prueft: Der Renderer steigt
- * danach sofort aus, ohne Transform oder Batch. Bewusst **kein** Entfernen aus der Anzeigeliste –
- * das kostet je Objekt eine lineare Suche, zwei Events und eine erneute Tiefensortierung, und der
- * verbleibende Listendurchlauf ist gegenueber dem eingesparten Quad-Aufbau klein.
+ * Deshalb zwei Stufen, die dasselbe Rechteck benutzen:
  *
- * Umgeschaltet wird nur, was sich tatsaechlich aendert: Der Ausschnitt wird auf Buckets abgebildet,
- * und nur Buckets, die neu hinzukommen oder herausfallen, fassen ihre Felsen an. Steht die Kamera
- * still, macht ein Update gar nichts.
+ * 1. **Grob, je 512-px-Ebene.** Eine Ebene ausserhalb des Ausschnitts wird unsichtbar geschaltet;
+ *    der Renderer betritt sie dann gar nicht und ihre Kinder kosten nichts – nicht einmal den
+ *    `willRender()`-Aufruf. Das ist der Unterschied zu einer einzigen grossen Ebene, deren Kinder
+ *    Phaser trotz `visible = false` weiterhin einzeln durchlaeuft.
+ * 2. **Fein, je 128-px-Bucket.** Innerhalb der kameranahen Ebenen entscheidet weiterhin
+ *    `visible` je Fels, damit der Rand einer gerade noch sichtbaren Ebene keine ganze Chunkbreite
+ *    an Quads mitschleppt.
+ *
+ * Beide Stufen lesen dasselbe erweiterte Rechteck, und das Quadrat eines Buckets liegt immer
+ * vollstaendig in dem seiner Ebene. Ein Bucket verlaesst den Ausschnitt damit nie spaeter als seine
+ * Ebene – die beiden Stufen koennen nicht auseinanderlaufen.
+ *
+ * Umgeschaltet wird nur, was sich tatsaechlich aendert: Beide Stufen halten ihre aktuelle Menge und
+ * fassen ausschliesslich Zu- und Abgaenge an. Steht die Kamera still, macht ein Update gar nichts;
+ * einen Vollscan ueber alle Felsen gibt es in keinem Frame.
  */
 export class RockViewportCuller {
   private readonly index: ArenaCellBucketIndex;
   private visibleBuckets = new Set<number>();
+  private visibleLayers = new Set<number>();
   private readonly bucketKeyBuffer: number[] = [];
 
   constructor(
     private readonly frame: ChunkWorldFrame,
     private readonly rocks: readonly (RockCell | undefined)[],
     private readonly rockObjects: readonly (Phaser.GameObjects.Image | null)[],
+    private readonly layerGrid: RockLayerGrid,
   ) {
     this.index = new ArenaCellBucketIndex(frame.width);
     this.index.sync(this.rocks);
-    // Ausgangszustand: alles versteckt. Das erste `update()` schaltet nur Deltas um und wuerde
-    // sonst jeden Fels ausserhalb des ersten Ausschnitts sichtbar stehen lassen.
+    // Ausgangszustand: alles versteckt. Beide Stufen schalten danach nur noch Deltas um und
+    // liessen sonst jeden Fels ausserhalb des ersten Ausschnitts sichtbar stehen.
+    for (const key of this.layerGrid.keys()) this.layerGrid.setLayerVisible(key, false);
     for (const image of this.rockObjects) image?.setVisible(false);
   }
 
-  /** Gleicht die Sichtbarkeit an den Kameraausschnitt an. */
+  /** Gleicht beide Stufen an den Kameraausschnitt an. */
   update(view: ChunkWorldRect): void {
     this.index.sync(this.rocks);
     const local = worldRectToLocalRect(view, this.frame);
     const margin = ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX;
-    const keys = this.index.collectBucketKeys(
-      local.localX - margin,
-      local.localY - margin,
-      local.localX + local.width + margin,
-      local.localY + local.height + margin,
-      this.bucketKeyBuffer,
-    );
+    const rect: ChunkLocalRect = {
+      localX: local.localX - margin,
+      localY: local.localY - margin,
+      width: local.width + margin * 2,
+      height: local.height + margin * 2,
+    };
 
-    const wanted = new Set(keys);
-    for (const key of this.visibleBuckets) {
-      if (!wanted.has(key)) this.setBucketVisible(key, false);
-    }
-    for (const key of wanted) {
-      if (!this.visibleBuckets.has(key)) this.setBucketVisible(key, true);
-    }
-    this.visibleBuckets = wanted;
+    // Erst die Buckets bestimmen, dann die Ebenen **daraus** ableiten. Beide Stufen aus demselben
+    // Rechteck getrennt zu berechnen hat genau eine Klasse stiller Fehler erzeugt: Rasterabfragen
+    // koennen an der Kante unterschiedlich runden, und ein sichtbarer Fels in einer unsichtbaren
+    // Ebene faellt erst auf, wenn die Ebene spaeter aufgeht und er dort ploetzlich auftaucht.
+    const wantedBuckets = this.collectWantedBuckets(rect);
+    this.syncLayers(this.layerKeysOf(wantedBuckets));
+    this.syncBuckets(wantedBuckets);
   }
 
   /**
@@ -70,6 +79,62 @@ export class RockViewportCuller {
    */
   applyTo(image: Phaser.GameObjects.Image, gridX: number, gridY: number): void {
     image.setVisible(this.visibleBuckets.has(this.index.bucketOf(gridX, gridY)));
+  }
+
+  /** Wieviele Ebenen und Buckets gerade sichtbar sind – fuer Diagnose und Tests. */
+  getStats(): { visibleLayers: number; visibleBuckets: number; totalLayers: number } {
+    return {
+      visibleLayers: this.visibleLayers.size,
+      visibleBuckets: this.visibleBuckets.size,
+      totalLayers: this.layerGrid.layerCount,
+    };
+  }
+
+  private collectWantedBuckets(rect: ChunkLocalRect): Set<number> {
+    return new Set(this.index.collectBucketKeys(
+      rect.localX,
+      rect.localY,
+      rect.localX + rect.width,
+      rect.localY + rect.height,
+      this.bucketKeyBuffer,
+    ));
+  }
+
+  /**
+   * Die Ebenen der gewuenschten Buckets.
+   *
+   * Ein 128-px-Bucket liegt immer vollstaendig in genau einer 512-px-Ebene, der erste Fels des
+   * Buckets nennt sie also eindeutig. Leere Buckets bleiben aussen vor: Eine Ebene ohne sichtbaren
+   * Fels braucht der Renderer nicht zu betreten.
+   */
+  private layerKeysOf(wantedBuckets: ReadonlySet<number>): Set<number> {
+    const keys = new Set<number>();
+    for (const bucket of wantedBuckets) {
+      const entries = this.index.getBucket(bucket);
+      const cell = entries && entries.length > 0 ? this.rocks[entries[0]] : undefined;
+      if (cell) keys.add(this.layerGrid.keyOf(cell.gridX, cell.gridY));
+    }
+    return keys;
+  }
+
+  private syncLayers(wanted: Set<number>): void {
+    for (const key of this.visibleLayers) {
+      if (!wanted.has(key)) this.layerGrid.setLayerVisible(key, false);
+    }
+    for (const key of wanted) {
+      if (!this.visibleLayers.has(key)) this.layerGrid.setLayerVisible(key, true);
+    }
+    this.visibleLayers = wanted;
+  }
+
+  private syncBuckets(wanted: Set<number>): void {
+    for (const key of this.visibleBuckets) {
+      if (!wanted.has(key)) this.setBucketVisible(key, false);
+    }
+    for (const key of wanted) {
+      if (!this.visibleBuckets.has(key)) this.setBucketVisible(key, true);
+    }
+    this.visibleBuckets = wanted;
   }
 
   private setBucketVisible(key: number, visible: boolean): void {

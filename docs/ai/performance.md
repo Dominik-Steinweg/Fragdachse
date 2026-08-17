@@ -46,7 +46,7 @@ unkomprimiert als JSON-String (`encodePeerMessage`), die Zahl ist also die tatsa
 reliable Nutzlast. Beides ist gemessen und dokumentiert, aber nicht optimiert: Ein Umbau von
 Generator oder Wire-Format gehoert erst hinter einen Trace, der ihn als reales Problem zeigt.
 
-Fuenf Regeln fuer grosse Felsbestaende sind messungsbelegt und duerfen nicht zurueckfallen:
+Sechs Regeln fuer grosse Felsbestaende sind messungsbelegt und duerfen nicht zurueckfallen:
 
 **`StaticGroup.refresh()` ist kein Nachfuehren, sondern ein Vollumbau.** Es ruft `body.reset()` auf
 jedem Mitglied, und jedes `reset()` entfernt den Koerper aus dem statischen RTree und fuegt ihn
@@ -64,18 +64,32 @@ verschieben kann (`tests/ArenaCellBucketIndex.test.ts`).
 **Phaser 4 cullt nicht an den Kamera-Bounds.** `GameObject.willRender()` prueft nur Renderflags und
 Kamerafilter; jedes Objekt der Anzeigeliste laeuft sonst durch Transform, Tint, Quad und Batch. Bei
 24 000 Fels-Images waren das 16,7 ms `renderSubmit` je Frame fuer 1 600 tatsaechlich sichtbare
-Objekte. `RockViewportCuller` setzt deshalb `visible` bucketweise – nicht die Anzeigeliste selbst,
-deren Aenderung je Objekt eine lineare Suche, zwei Events und eine Tiefensortierung kostet.
-`active` bleibt die Wahrheit darueber, ob ein Fels noch steht; Sichtbarkeit ist rein lokal.
+Objekte. `RockViewportCuller` setzt deshalb `visible` bucketweise statt einzelne Objekte aus der
+Anzeigeliste zu nehmen; deren Aenderung kostet je Objekt eine lineare Suche, zwei Events und eine
+Tiefensortierung. `active` bleibt die Wahrheit darueber, ob ein Fels noch steht; Sichtbarkeit ist
+rein lokal.
 
 **Die Anzeigeliste ist eine lineare Struktur.** `scene.add.*` prueft `List.exists` und `destroy()`
 sucht mit `indexOf` – beides ueber die gesamte Liste. Ein einziges kurzlebiges Objekt kostete damit
-bei zehntausenden Eintraegen drei Vollscans. Zwei Konsequenzen, beide messungsbelegt: Bake-Bilder
-werden losgeloest erzeugt (`new Phaser.GameObjects.Image(...)`, siehe `ArenaVisualFactory`), und
-der Felsbestand liegt in einer eigenen `Layer` statt in der Szenenliste. Damit bleibt die
-Szenenliste kurz, und jede Truemmer-, Partikel- und Tween-Erzeugung einer Zerstoerungswelle wird
-entsprechend billiger. Diagnose und Ablationsmodus steigen ueber `forEachSceneDisplayObject` eine
-Ebene tief in `Layer`-Kinder ab, sonst faende die `rocks`-Kategorie nichts mehr.
+bei zehntausenden Eintraegen drei Vollscans. Bake-Bilder werden deshalb losgeloest erzeugt
+(`new Phaser.GameObjects.Image(...)`, siehe `ArenaVisualFactory`) und kommen gar nicht erst hinein.
+
+**Eine `Layer` cullt ihre Kinder nicht.** Sie macht die Szenenliste kurz, aber `LayerWebGLRenderer`
+laeuft weiterhin durch *alle* Kinder einer sichtbaren Ebene und ruft je Kind `willRender()`. Eine
+einzige grosse Fels-Ebene band den Renderpfad damit weiter an den Gesamtbestand. Der Felsbestand
+liegt deshalb in einer Ebene **je 512-px-Rasterchunk** (`RockLayerGrid`, dasselbe
+`ArenaChunkGrid` wie das Chunk-Streaming – kein zweites Raumraster). Eine Ebene ausserhalb
+des Ausschnitts ist selbst unsichtbar und wird nicht betreten; ihre Kinder kosten nichts.
+`RockViewportCuller` fuehrt beide Stufen: grob je Ebene, fein je 128-px-Bucket innerhalb der
+kameranahen Ebenen. Die Ebenenmenge wird dabei **aus** der Bucketmenge abgeleitet und nicht
+getrennt aus demselben Rechteck berechnet – zwei Rasterabfragen runden an der Kante verschieden,
+und ein sichtbarer Fels in einer unsichtbaren Ebene faellt erst auf, wenn die Ebene spaeter aufgeht
+und er dort ploetzlich auftaucht (`tests/ArenaCellBucketIndex.test.ts`).
+
+Beides zusammen haelt die Szenenliste kurz, sodass jede Truemmer-, Partikel- und Tween-Erzeugung
+einer Zerstoerungswelle billig bleibt. Diagnose und Ablationsmodus steigen ueber
+`forEachSceneDisplayObject` eine Ebene tief in `Layer`-Kinder ab, sonst faende die
+`rocks`-Kategorie nichts mehr.
 
 **Zerstoerungs-VFX ausserhalb des Bildes entfallen.** `RockDestructionRenderer` erzeugt je Fels bis
 zu 36 Truemmer-Images mit je einem Tween. Eine Flaechenzerstoerung raeumt auf einer grossen Karte
