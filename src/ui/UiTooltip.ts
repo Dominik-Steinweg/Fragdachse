@@ -14,8 +14,16 @@ export interface UiTooltipLine {
   readonly text: string;
   readonly color: number;
   readonly bold?: boolean;
+  /** Optional inline runs. When present, runs are laid out and styled independently. */
+  readonly segments?: readonly UiTooltipSegment[];
   /** Optionales, bereits aufgeloestes UI-Icon links neben der Zeile. */
   readonly textureKey?: string | null;
+}
+
+export interface UiTooltipSegment {
+  readonly text: string;
+  readonly color: number;
+  readonly bold?: boolean;
 }
 
 const OFFSET_X = SPACE.lg;
@@ -41,6 +49,7 @@ export class UiTooltip {
   private divider: Phaser.GameObjects.Rectangle | null = null;
   private lineTexts: Phaser.GameObjects.Text[] = [];
   private lineIcons: Phaser.GameObjects.Image[] = [];
+  private lineSegmentTexts: Phaser.GameObjects.Text[][] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -96,6 +105,7 @@ export class UiTooltip {
     if (!this.container || !this.background || !this.titleText || !this.divider) return;
 
     this.titleText.setText(title).setColor(toCssColor(titleColor));
+    this.clearRichText();
     let contentWidth = this.titleText.width;
 
     const dividerY = PADDING + this.titleText.height + TITLE_GAP;
@@ -105,6 +115,14 @@ export class UiTooltip {
       if (!line) {
         text.setVisible(false);
         this.lineIcons[index]?.setVisible(false);
+        return;
+      }
+      if (line.segments && line.segments.length > 0) {
+        text.setVisible(false);
+        this.lineIcons[index]?.setVisible(false);
+        const rich = this.renderRichLine(line.segments, cursorY);
+        contentWidth = Math.max(contentWidth, rich.contentWidth);
+        cursorY = rich.bottom;
         return;
       }
       if (line.text.length === 0) {
@@ -194,5 +212,78 @@ export class UiTooltip {
     this.divider = null;
     this.lineTexts = [];
     this.lineIcons = [];
+    this.lineSegmentTexts = [];
+  }
+
+  private clearRichText(): void {
+    for (const texts of this.lineSegmentTexts) {
+      for (const text of texts) text.destroy();
+    }
+    this.lineSegmentTexts = [];
+  }
+
+  private renderRichLine(
+    segments: readonly UiTooltipSegment[],
+    startY: number,
+  ): { bottom: number; contentWidth: number } {
+    const maxX = PADDING + this.maxWidth;
+    let x = PADDING;
+    let y = startY;
+    let lineHeight = 0;
+    let contentWidth: number = PADDING;
+    const texts: Phaser.GameObjects.Text[] = [];
+
+    const nextVisualLine = (): void => {
+      y += lineHeight;
+      x = PADDING;
+      lineHeight = 0;
+    };
+
+    for (const segment of segments) {
+      // Keep whitespace tokens so the run boundaries remain invisible to the reader.
+      const tokens = segment.text.split(/(\s+)/).filter((token) => token.length > 0);
+      for (const token of tokens) {
+        if (token.includes('\n')) {
+          const parts = token.split('\n');
+          for (const [partIndex, part] of parts.entries()) {
+            if (part.length > 0) {
+              const text = this.scene.add.text(0, 0, part, textStyle('body', { color: segment.color }))
+                .setOrigin(0, 0)
+                .setFontStyle(segment.bold ? 'bold' : '')
+                .setScrollFactor(0);
+              if (x > PADDING && x + text.width > maxX && !/^\s+$/.test(part)) nextVisualLine();
+              text.setPosition(x, y);
+              this.container?.add(text);
+              texts.push(text);
+              x += text.width;
+              lineHeight = Math.max(lineHeight, text.height);
+              contentWidth = Math.max(contentWidth, x);
+            }
+            if (partIndex < parts.length - 1) nextVisualLine();
+          }
+          continue;
+        }
+
+        const whitespace = /^\s+$/.test(token);
+        const text = this.scene.add.text(0, 0, token, textStyle('body', { color: segment.color }))
+          .setOrigin(0, 0)
+          .setFontStyle(segment.bold ? 'bold' : '')
+          .setScrollFactor(0);
+        if (whitespace && x === PADDING) {
+          text.destroy();
+          continue;
+        }
+        if (!whitespace && x > PADDING && x + text.width > maxX) nextVisualLine();
+        text.setPosition(x, y);
+        this.container?.add(text);
+        texts.push(text);
+        x += text.width;
+        lineHeight = Math.max(lineHeight, text.height);
+        contentWidth = Math.max(contentWidth, x);
+      }
+    }
+
+    this.lineSegmentTexts.push(texts);
+    return { bottom: y + lineHeight, contentWidth: contentWidth - PADDING };
   }
 }

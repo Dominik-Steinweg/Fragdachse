@@ -12,12 +12,21 @@ import { isLocale, resolveBrowserLocale, type Locale } from './types';
 
 export type { Locale } from './types';
 export { isLocale, resolveBrowserLocale } from './types';
-export { formatDate, formatDuration, formatNumber, formatPercent, formatTime } from './format';
+export {
+  formatDate,
+  formatDuration,
+  formatNumber,
+  formatPercent,
+  formatTime,
+  formatUpgradeEffectValue,
+} from './format';
 export {
   getTranslationKeySources,
   getTranslationParityIssues,
   getTranslationSourceCollisions,
+  translateSegments,
 } from './catalog';
+export type { TranslationSegment } from './catalog';
 
 let activeLocale: Locale = getStoredLocale() ?? resolveBrowserLocale();
 const localeListeners = new Set<(locale: Locale) => void>();

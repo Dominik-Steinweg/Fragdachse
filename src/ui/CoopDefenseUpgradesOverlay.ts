@@ -28,7 +28,7 @@ import {
   type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { attachHoverEffect } from './uiHover';
-import { UiTooltip } from './UiTooltip';
+import { UiTooltip, type UiTooltipLine } from './UiTooltip';
 import { UiContextMenu, type UiContextMenuEntry } from './UiContextMenu';
 import { BORDER, INTENT, SURFACE, TEXT, textStyle, FONT_MONO } from './uiTheme';
 import {
@@ -50,7 +50,7 @@ import {
 import { createLoadoutSlotControl } from './LoadoutSlotControl';
 import { getClassDescription, getClassName, getClassRole, getClassTooltipLines } from '../i18n/contentPresentation';
 import { getLocale, t } from '../i18n';
-import { getUpgradeCategoryName } from '../i18n/upgradePresentation';
+import { getUpgradeCategoryName, getUpgradeDescriptionSegments } from '../i18n/upgradePresentation';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
 
@@ -1905,7 +1905,7 @@ export class CoopDefenseUpgradesOverlay {
         this.scene.tweens.add({
           targets: nodeGroup, scaleX: 1.06, scaleY: 1.06, duration: 90, ease: 'Sine.easeOut',
         });
-        this.showTooltip(node.label, this.buildNodeTooltipBody(node), pointer);
+        this.showTooltipLines(node.label, this.buildNodeTooltipLines(node), pointer);
       })
       .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
       .on('pointerout', () => {
@@ -2347,6 +2347,10 @@ export class CoopDefenseUpgradesOverlay {
     this.tooltip?.showText(title, body, pointer);
   }
 
+  private showTooltipLines(title: string, lines: readonly UiTooltipLine[], pointer: Phaser.Input.Pointer): void {
+    this.tooltip?.show(title, TEXT.primary, lines, pointer);
+  }
+
   private updateTooltipPosition(pointer: Phaser.Input.Pointer): void {
     this.tooltip?.move(pointer);
   }
@@ -2355,26 +2359,39 @@ export class CoopDefenseUpgradesOverlay {
     this.tooltip?.hide();
   }
 
-  private buildNodeTooltipBody(node: CoopDefenseUpgradeNodeSnapshot): string {
-    const lines = [t('ui.upgrades.level', { current: node.level, max: node.maxLevel })];
+  private buildNodeTooltipLines(node: CoopDefenseUpgradeNodeSnapshot): UiTooltipLine[] {
+    const lines: UiTooltipLine[] = [{
+      text: t('ui.upgrades.level', { current: node.level, max: node.maxLevel }),
+      color: TEXT.primary,
+    }];
 
     if (node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable) {
-      lines.push(t('ui.upgrades.baseUnlock'));
+      lines.push({ text: t('ui.upgrades.baseUnlock'), color: TEXT.primary });
     } else if (!node.refundable) {
-      lines.push(t('ui.upgrades.notRefundable'));
+      lines.push({ text: t('ui.upgrades.notRefundable'), color: TEXT.primary });
     }
 
-    if (node.bossPointCostPerLevel > 0) lines.push(t('ui.upgrades.special'));
-    lines.push(node.description);
     if (node.bossPointCostPerLevel > 0) {
-      lines.push(t('ui.upgrades.bossCost', {
+      lines.push({ text: t('ui.upgrades.special'), color: TEXT.accent, bold: true });
+    }
+    lines.push({
+      text: '',
+      color: TEXT.primary,
+      segments: getUpgradeDescriptionSegments(node.id, getLocale()).map((segment) => ({
+        text: segment.text,
+        color: segment.dynamic ? TEXT.accent : TEXT.primary,
+        bold: segment.dynamic,
+      })),
+    });
+    if (node.bossPointCostPerLevel > 0) {
+      lines.push({ text: t('ui.upgrades.bossCost', {
         points: node.bossPointCostPerLevel,
         plural: node.bossPointCostPerLevel === 1 ? '' : 'e',
-      }));
+      }), color: TEXT.primary });
       if (!node.bossPointRequirementMet && node.level < node.maxLevel) {
-        lines.push(t('ui.upgrades.bossPointMissing'));
+        lines.push({ text: t('ui.upgrades.bossPointMissing'), color: TEXT.primary });
       }
     }
-    return lines.join('\n');
+    return lines;
   }
 }

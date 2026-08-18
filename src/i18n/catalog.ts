@@ -20,6 +20,11 @@ interface BuiltCatalog {
   readonly collisions: readonly string[];
 }
 
+export interface TranslationSegment {
+  readonly text: string;
+  readonly dynamic: boolean;
+}
+
 function buildCatalog(locale: Locale): BuiltCatalog {
   const values: Record<string, string> = {};
   const owners: Record<string, TranslationDomain[]> = {};
@@ -46,11 +51,30 @@ const builtCatalogs: Record<Locale, BuiltCatalog> = {
   en: buildCatalog('en'),
 };
 
-function interpolate(value: string, params: Record<string, string | number> | undefined): string {
-  if (!params) return value;
-  return value.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name: string) => (
-    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match
-  ));
+export function translateSegments(
+  locale: Locale,
+  key: string,
+  params?: Record<string, string | number>,
+): readonly TranslationSegment[] {
+  const value = builtCatalogs[locale].values[key]
+    ?? (locale === 'de' ? builtCatalogs.en.values[key] : undefined)
+    ?? `⟦${key}⟧`;
+  const segments: TranslationSegment[] = [];
+  const pattern = /\{([a-zA-Z0-9_]+)\}/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > cursor) segments.push({ text: value.slice(cursor, match.index), dynamic: false });
+    const name = match[1];
+    if (params && Object.prototype.hasOwnProperty.call(params, name)) {
+      segments.push({ text: String(params[name]), dynamic: true });
+    } else {
+      segments.push({ text: match[0], dynamic: false });
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < value.length) segments.push({ text: value.slice(cursor), dynamic: false });
+  return segments;
 }
 
 /** Resolves one language catalog and falls back from German to the authored English catalog. */
@@ -59,10 +83,7 @@ export function translate(
   key: string,
   params?: Record<string, string | number>,
 ): string {
-  const value = builtCatalogs[locale].values[key]
-    ?? (locale === 'de' ? builtCatalogs.en.values[key] : undefined)
-    ?? `⟦${key}⟧`;
-  return interpolate(value, params);
+  return translateSegments(locale, key, params).map((segment) => segment.text).join('');
 }
 
 export function getCatalog(locale: Locale): Readonly<Record<string, string>> {
