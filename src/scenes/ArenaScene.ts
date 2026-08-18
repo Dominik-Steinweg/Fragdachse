@@ -95,6 +95,7 @@ import {
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
+import { WebGLRectMaskTexture } from '../utils/webglRectMask';
 import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
@@ -250,10 +251,7 @@ interface TransportPerformanceCounts {
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
-  private arenaClipMaskShape: Phaser.GameObjects.Graphics | null = null;
-  private arenaClipMask: Phaser.Display.Masks.GeometryMask | null = null;
-  private lastArenaMaskOffsetX = Number.NaN;
-  private lastArenaMaskViewportWidth = Number.NaN;
+  private arenaClipMask: WebGLRectMaskTexture | null = null;
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
@@ -577,9 +575,6 @@ export class ArenaScene extends Phaser.Scene {
       this.menuArenaPreview?.destroy();
       this.menuArenaPreview = null;
     });
-    this.ensureArenaClipMask();
-
-
     // ── Scene-lifetime systems ─────────────────────────────────────────────
     const playerManager    = new PlayerManager(this);
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
@@ -623,6 +618,9 @@ export class ArenaScene extends Phaser.Scene {
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getGradeInputs: () => this.resolveWorldGradeInputs(),
     });
+    // The world camera owns the single shared arena clip. It is attached after the persistent
+    // camera post-FX chain so the hard boundary remains the final internal mask pass.
+    this.ensureArenaClipMask();
     // Provider-Closure statt Manager-Referenz im Effektsystem: `enemyManager` ist rundengebunden
     // und muss zum Aufrufzeitpunkt gelesen werden (siehe ArenaContext-Vertrag).
     this.visualFeedback.setSilhouetteProvider((targetId) => {
@@ -912,7 +910,7 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── Renderers ─────────────────────────────────────────────────────────
-    this.renderers = createRendererBundle(this, playerManager, this.arenaClipMask);
+    this.renderers = createRendererBundle(this, playerManager);
     this.renderers.lighting.setDynamicOccluderSource(this.trainLightOccluders);
     this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
       ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null
@@ -1010,7 +1008,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
-    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
+    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
     this.hostileBaseIndicator = new HostileBaseIndicator(this);
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this, this.objectiveAnnouncements!);
     this.secondaryObjectiveHud.build();
@@ -2927,15 +2925,24 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private ensureArenaClipMask(): void {
-    // GeometryMask is Canvas-only in Phaser 4. Keep the world on WebGL and
-    // rely on arena bounds, object clamping and visibility checks instead.
-    this.arenaClipMask = null;
-    this.renderers?.shadow.setArenaMask(null);
-    this.renderers?.beer.setArenaMask(null);
+    if (!this.arenaClipMask) {
+      this.arenaClipMask = new WebGLRectMaskTexture(this, '__arena_clip_mask', GAME_WIDTH, GAME_HEIGHT);
+      this.arenaClipMask.attachToCamera(this.cameras.main);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.arenaClipMask?.destroy();
+        this.arenaClipMask = null;
+      });
+    }
+    this.redrawArenaClipMask();
   }
 
   private redrawArenaClipMask(): void {
-    // No-op under Phaser 4 WebGL.
+    this.arenaClipMask?.update({
+      x: ARENA_OFFSET_X,
+      y: ARENA_OFFSET_Y,
+      width: ARENA_VIEWPORT_WIDTH,
+      height: ARENA_HEIGHT,
+    });
   }
 
   private syncArenaMetrics(phase = bridge.getGamePhase()): void {

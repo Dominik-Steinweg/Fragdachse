@@ -113,7 +113,6 @@ export interface RendererBundle {
 export function createRendererBundle(
   scene: Phaser.Scene,
   owners: OwnerVisualSource,
-  arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
 ): RendererBundle {
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
@@ -202,7 +201,7 @@ export function createRendererBundle(
   const translocatorPuck = new TranslocatorPuckRenderer(scene);
   translocatorPuck.generateTextures();
 
-  const beer = new CaptureTheBeerRenderer(scene, arenaMask);
+  const beer = new CaptureTheBeerRenderer(scene);
   beer.generateTextures();
 
   const tracer = new TracerRenderer(scene);
@@ -221,7 +220,7 @@ export function createRendererBundle(
 
   const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
   secondaryObjectiveMarkers.build();
-  const carryZones = new CoopDefenseCarryZoneRenderer(scene, arenaMask);
+  const carryZones = new CoopDefenseCarryZoneRenderer(scene);
   const ak47StrategicTargets = new Ak47StrategicTargetRenderer(scene);
   ak47StrategicTargets.build();
   const objectiveRepairDrones = new CoopDefenseObjectiveRepairDroneRenderer(scene);
@@ -234,7 +233,7 @@ export function createRendererBundle(
   rockDestruction.generateTextures();
 
   const powerUp = new PowerUpRenderer(scene);
-  const shadow = new ShadowSystem(scene, arenaMask);
+  const shadow = new ShadowSystem(scene);
 
   // Dynamische Beleuchtung: scene-lifetime wie der Schatten. Die Lichtquellen melden
   // sich selbst an, deshalb kennen die einzelnen Renderer das System direkt.

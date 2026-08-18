@@ -326,7 +326,7 @@ export class ArenaHUD {
     this.nameText = this.scene.add.text(BAR_X, NAME_Y, '', NAME_FONT).setScrollFactor(0);
     c.add(this.nameText);
 
-    // Phaser 4 keeps GeometryMask on Canvas only; crop is sufficient here
+    // This HUD element needs only a rectangular crop; keep it independent of world masking.
     // because we only need simple clipping for the marquee text.
     this.nameText.setCrop(0, 0, barWidth, NAME_H);
 

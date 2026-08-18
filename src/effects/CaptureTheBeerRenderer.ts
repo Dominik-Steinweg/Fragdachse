@@ -59,12 +59,10 @@ interface BeerVisual {
 
 export class CaptureTheBeerRenderer {
   private readonly visuals = new Map<string, BeerVisual>();
-  private arenaMask: Phaser.Display.Masks.GeometryMask | null;
   private cameraFeedback: CameraFeedbackController | null = null;
   private lighting: LightingSystem | null = null;
 
-  constructor(private readonly scene: Phaser.Scene, arenaMask: Phaser.Display.Masks.GeometryMask | null = null) {
-    this.arenaMask = arenaMask;
+  constructor(private readonly scene: Phaser.Scene) {
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clear();
     });
@@ -76,15 +74,6 @@ export class CaptureTheBeerRenderer {
 
   setCameraFeedback(controller: CameraFeedbackController | null): void {
     this.cameraFeedback = controller;
-  }
-
-  setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
-    this.arenaMask = mask;
-    for (const visual of this.visuals.values()) {
-      this.applyArenaMask(visual.container);
-      this.applyArenaMask(visual.idleEmitter);
-      this.applyArenaMask(visual.bubbleEmitter);
-    }
   }
 
   generateTextures(): void {
@@ -331,25 +320,20 @@ export class CaptureTheBeerRenderer {
       0.6,
       palette.glow,
     ).setScale(0.82);
-    this.applyArenaMask(outerGlow);
     const innerGlow = configureAdditiveImage(
       this.scene.add.image(0, 0, TEX_BEER_INNER_GLOW),
       BEER_DEPTH - 0.1,
       0.55,
       palette.core,
     ).setScale(0.48);
-    this.applyArenaMask(innerGlow);
     const aura = configureAdditiveImage(
       this.scene.add.image(0, 0, TEX_BEER_AURA),
       BEER_DEPTH - 0.05,
       0.28,
       palette.foam,
     ).setScale(0.38);
-    this.applyArenaMask(aura);
     const bottle = this.scene.add.graphics();
-    this.applyArenaMask(bottle);
     container.add([outerGlow, innerGlow, aura, bottle]);
-    this.applyArenaMask(container);
 
     const idleEmitter = createEmitter(this.scene, state.x, state.y, TEX_BEER_BUBBLE, {
       lifespan: { min: 380, max: 880 },
@@ -362,7 +346,6 @@ export class CaptureTheBeerRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, BEER_DEPTH + 0.26);
-    this.applyArenaMask(idleEmitter);
     setCircleEmitZone(idleEmitter, 9, 1, true);
 
     const bubbleEmitter = createEmitter(this.scene, state.x, state.y, TEX_BEER_FOAM, {
@@ -377,7 +360,6 @@ export class CaptureTheBeerRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, BEER_DEPTH + 0.22);
-    this.applyArenaMask(bubbleEmitter);
     setCircleEmitZone(bubbleEmitter, 6, 1, true);
 
     const visual: BeerVisual = {
@@ -462,7 +444,6 @@ export class CaptureTheBeerRenderer {
       0.58,
       visual.palette.foam,
     ).setScale(0.12 + Phaser.Math.FloatBetween(0.02, 0.06));
-    this.applyArenaMask(foam);
 
     const bubble = configureAdditiveImage(
       this.scene.add.image(x + Phaser.Math.FloatBetween(-3, 3), y + Phaser.Math.FloatBetween(-3, 3), TEX_BEER_BUBBLE),
@@ -470,7 +451,6 @@ export class CaptureTheBeerRenderer {
       0.7,
       mixColors(visual.palette.core, 0xffffff, 0.35),
     ).setScale(0.18 + Phaser.Math.FloatBetween(0.03, 0.07));
-    this.applyArenaMask(bubble);
 
     this.scene.tweens.add({
       targets: foam,
@@ -530,7 +510,6 @@ export class CaptureTheBeerRenderer {
       isTarget ? 0.92 : 0.72,
       palette.foam,
     ).setScale(isTarget ? 0.18 : 0.36);
-    this.applyArenaMask(halo);
     this.scene.tweens.add({
       targets: halo,
       scale: isTarget ? 2.4 : 0.16,
@@ -557,7 +536,6 @@ export class CaptureTheBeerRenderer {
         0.8,
         index % 3 === 0 ? 0xffffff : palette.foam,
       ).setScale(Phaser.Math.FloatBetween(0.12, 0.26));
-      this.applyArenaMask(bubble);
 
       this.scene.tweens.add({
         targets: bubble,
@@ -593,7 +571,6 @@ export class CaptureTheBeerRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH_FX + 0.66);
-    this.applyArenaMask(foamEmitter);
     foamEmitter.explode(foamCount, 0, 0);
 
     const bubbleEmitter = createEmitter(this.scene, x, y, TEX_BEER_BUBBLE, {
@@ -607,7 +584,6 @@ export class CaptureTheBeerRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH_FX + 0.7);
-    this.applyArenaMask(bubbleEmitter);
     bubbleEmitter.explode(bubbleCount, 0, 0);
 
     this.scene.time.delayedCall(1100, () => {
@@ -631,7 +607,6 @@ export class CaptureTheBeerRenderer {
       alpha,
       tint,
     ).setScale(startScale);
-    this.applyArenaMask(halo);
     this.scene.tweens.add({
       targets: halo,
       scale: endScale,
@@ -713,7 +688,6 @@ export class CaptureTheBeerRenderer {
       beam.setDepth(DEPTH_FX + 0.95);
       makeAdditive(beam);
       beam.setAngle(spec.angle);
-      this.applyArenaMask(beam);
       this.scene.tweens.add({
         targets: beam,
         scaleX: spec.angle === 90 ? 1.2 : 1.9,
@@ -731,7 +705,6 @@ export class CaptureTheBeerRenderer {
       0.95,
       0xffffff,
     ).setScale(0.32);
-    this.applyArenaMask(core);
 
     const corona = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_BEER_INNER_GLOW),
@@ -739,7 +712,6 @@ export class CaptureTheBeerRenderer {
       0.8,
       palette.foam,
     ).setScale(0.56);
-    this.applyArenaMask(corona);
 
     this.scene.tweens.add({
       targets: core,
@@ -773,7 +745,6 @@ export class CaptureTheBeerRenderer {
       gravityY: 120,
       emitting: false,
     }, DEPTH_FX + 0.86);
-    this.applyArenaMask(shell);
     shell.addEmitZone({
       type: 'edge',
       source: new Phaser.Geom.Circle(0, 0, 16),
@@ -794,7 +765,6 @@ export class CaptureTheBeerRenderer {
       gravityY: 140,
       emitting: false,
     }, DEPTH_FX + 0.88);
-    this.applyArenaMask(plume);
     plume.explode(132, 0, 0);
 
     this.scene.time.delayedCall(1900, () => {
@@ -817,7 +787,6 @@ export class CaptureTheBeerRenderer {
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_FX + 0.6);
     makeAdditive(ring);
-    this.applyArenaMask(ring);
     this.scene.tweens.add({
       targets: ring,
       scale: endRadius / Math.max(startRadius, 1),
@@ -835,7 +804,6 @@ export class CaptureTheBeerRenderer {
       alpha,
       palette.foam,
     ).setScale(0.34);
-    this.applyArenaMask(afterglow);
     this.scene.tweens.add({
       targets: afterglow,
       scale: 1.08,
@@ -850,13 +818,6 @@ export class CaptureTheBeerRenderer {
     destroyEmitter(visual.idleEmitter);
     destroyEmitter(visual.bubbleEmitter);
     visual.container.destroy(true);
-  }
-
-  private applyArenaMask<T extends Phaser.GameObjects.GameObject>(gameObject: T): T {
-    if (this.arenaMask) {
-      (gameObject as T & Phaser.GameObjects.Components.Mask).setMask(this.arenaMask);
-    }
-    return gameObject;
   }
 
   private getPalette(teamId: TeamId): TeamPalette {

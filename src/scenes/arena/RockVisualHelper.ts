@@ -49,7 +49,6 @@ export class RockVisualHelper {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly ctx: ArenaContext,
-    private readonly arenaClipMask: Phaser.Display.Masks.GeometryMask | null,
     private readonly shadowSystem: ShadowSystem | null,
     private readonly rockDestructionRenderer: RockDestructionRenderer,
     private readonly lighting: LightingSystem | null = null,
@@ -338,9 +337,6 @@ export class RockVisualHelper {
         .setDepth(DEPTH.ROCKS + 0.2);
 
       const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
-      if (this.arenaClipMask) {
-        rangeCircle.setMask(this.arenaClipMask);
-      }
       const hpBarBg = this.scene.add.rectangle(world.x, world.y + 22, 24, 4, 0x333333)
         .setDepth(DEPTH.ROCKS + 0.35);
       const hpBarFg = this.scene.add.rectangle(world.x - 12, world.y + 22, 24, 4, 0x00cc44)

@@ -187,7 +187,6 @@ export class ShadowSystem {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
   ) {
     this.quality = getGraphicsQualityProfile(scene);
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
@@ -196,18 +195,6 @@ export class ShadowSystem {
         this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
       }
     }) ?? null;
-  }
-
-  setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
-    this.arenaMask = mask;
-    for (const bucket of this.layers.values()) {
-      // `staticGraphics` rendert nie selbst; die Maske traegt das gebackene Renderziel.
-      this.applyMask(bucket.dynamicGraphics);
-    }
-    // Die residenten Chunks entstehen und vergehen laufend; die Maske kommt bei ihrer Erzeugung
-    // dazu. Ein Maskenwechsel zur Laufzeit verwirft sie deshalb einmal komplett.
-    this.disposeStaticSurface();
-    if (this.staticHasLayout) this.rebuildStaticShadowsForProfileChange();
   }
 
   setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
@@ -488,7 +475,6 @@ export class ShadowSystem {
       frame: { offsetX: frame.x, offsetY: frame.y, width: frame.width, height: frame.height },
       layers,
       bake: (region, sink) => this.bakeStaticShadowRegion(region, sink),
-      onChunkTextureCreated: (texture) => this.applyMask(texture),
     });
     this.staticSurface.setSamplingMode(this.staticSamplingMode);
     this.staticSurface.updateResidency(this.staticResidencyView ?? frame);
@@ -992,20 +978,10 @@ export class ShadowSystem {
     const dynamicGraphics = this.scene.add.graphics();
     dynamicGraphics.setDepth(depth + 0.001);
     dynamicGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
-    this.applyMask(dynamicGraphics);
 
     const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, group };
     this.layers.set(key, bucket);
     return bucket;
-  }
-
-
-  private applyMask(target: Phaser.GameObjects.Graphics | Phaser.GameObjects.RenderTexture): void {
-    if (this.arenaMask) {
-      target.setMask(this.arenaMask);
-    } else {
-      target.clearMask(false);
-    }
   }
 
   private isVisibleInArena(x: number, y: number, margin: number): boolean {

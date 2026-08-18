@@ -19,7 +19,6 @@ export class CoopDefenseCarryZoneRenderer {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
   ) {
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.clear());
   }
@@ -81,10 +80,6 @@ export class CoopDefenseCarryZoneRenderer {
       .setOrigin(0.5)
       .setDepth(DEPTH.BASES - 0.1)
       .setVisible(false);
-    if (this.arenaMask) {
-      spawn.setMask(this.arenaMask);
-      delivery.setMask(this.arenaMask);
-    }
     const visual = { spawn, delivery };
     this.visuals.set(objectiveId, visual);
     return visual;

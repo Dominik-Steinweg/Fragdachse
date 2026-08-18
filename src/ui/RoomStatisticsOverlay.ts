@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { WebGLRectMaskTexture } from '../utils/webglRectMask';
 import { attachHoverEffect } from './uiHover';
 import { ensureFlatPanelTexture, ensureModalPanelTexture } from './uiTextures';
 import { BORDER, FONT_MONO, SURFACE, textStyle } from './uiTheme';
@@ -99,8 +100,7 @@ export class RoomStatisticsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
   private content: Phaser.GameObjects.Container | null = null;
   private tableBackground: Phaser.GameObjects.Image | null = null;
-  private maskShape: Phaser.GameObjects.Graphics | null = null;
-  private tableMask: Phaser.Display.Masks.GeometryMask | null = null;
+  private tableMask: WebGLRectMaskTexture | null = null;
   private scrollInput: Phaser.GameObjects.Rectangle | null = null;
   private scrollTrack: Phaser.GameObjects.Rectangle | null = null;
   private scrollThumb: Phaser.GameObjects.Rectangle | null = null;
@@ -149,11 +149,9 @@ export class RoomStatisticsOverlay {
     const tableHeader = this.buildTableHeader();
 
     this.content = this.scene.add.container(0, 0).setScrollFactor(0);
-    this.maskShape = this.scene.make.graphics({}, false)
-      .fillStyle(0xffffff, 1)
-      .fillRect(TABLE_LEFT, VIEWPORT_TOP, TABLE_W, MAX_VIEWPORT_H);
-    this.tableMask = this.maskShape.createGeometryMask();
-    this.content.setMask(this.tableMask);
+    this.tableMask = new WebGLRectMaskTexture(this.scene, '__room_statistics_table_mask', GAME_WIDTH, GAME_HEIGHT);
+    this.tableMask.update({ x: TABLE_LEFT, y: VIEWPORT_TOP, width: TABLE_W, height: MAX_VIEWPORT_H });
+    this.tableMask.attachToGameObject(this.content);
 
     this.scrollTrack = this.scene.add.rectangle(SCROLLBAR_X, VIEWPORT_TOP + MAX_VIEWPORT_H / 2, SCROLLBAR_W, MAX_VIEWPORT_H, COLORS.GREY_8, 0.9)
       .setScrollFactor(0)
@@ -308,8 +306,6 @@ export class RoomStatisticsOverlay {
     }
     this.tableMask?.destroy();
     this.tableMask = null;
-    this.maskShape?.destroy();
-    this.maskShape = null;
     this.container?.destroy(true);
     this.container = null;
     this.content = null;
@@ -443,10 +439,7 @@ export class RoomStatisticsOverlay {
     this.tableBackground
       ?.setDisplaySize(TABLE_W, tableHeight)
       .setPosition(TABLE_LEFT + TABLE_W / 2, TABLE_TOP + tableHeight / 2);
-    this.maskShape
-      ?.clear()
-      .fillStyle(0xffffff, 1)
-      .fillRect(TABLE_LEFT, VIEWPORT_TOP, TABLE_W, this.viewportHeight);
+    this.tableMask?.update({ x: TABLE_LEFT, y: VIEWPORT_TOP, width: TABLE_W, height: this.viewportHeight });
     this.scrollTrack
       ?.setPosition(SCROLLBAR_X, VIEWPORT_TOP + this.viewportHeight / 2)
       .setSize(SCROLLBAR_W, this.viewportHeight);
