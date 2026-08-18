@@ -706,14 +706,15 @@ function getCoopDefenseArenaMetricsProfile(
 
   const arenaWidth = normalizedWidthCells * CELL_SIZE;
   const arenaHeight = normalizedHeightCells * CELL_SIZE;
+  const usesVerticalScrolling = arenaHeight > DEFAULT_ARENA_VIEWPORT_HEIGHT;
   const profile: ArenaMetricsProfile = {
     arenaWidth,
     arenaOffsetX: 0,
     arenaHeight,
-    arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
+    arenaOffsetY: usesVerticalScrolling ? 0 : DEFAULT_ARENA_OFFSET_Y,
     arenaViewportWidth: GAME_WIDTH,
-    arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
-    usesDynamicCamera: arenaWidth > GAME_WIDTH || arenaHeight > DEFAULT_ARENA_VIEWPORT_HEIGHT,
+    arenaViewportHeight: usesVerticalScrolling ? GAME_HEIGHT : DEFAULT_ARENA_VIEWPORT_HEIGHT,
+    usesDynamicCamera: arenaWidth > GAME_WIDTH || usesVerticalScrolling,
     showStaticArenaFrames: false,
   };
   COOP_DEFENSE_ARENA_METRICS_PROFILES.set(cacheKey, profile);

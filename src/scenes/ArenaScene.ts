@@ -2997,7 +2997,7 @@ export class ArenaScene extends Phaser.Scene {
       x: ARENA_OFFSET_X,
       y: ARENA_OFFSET_Y,
       width: ARENA_VIEWPORT_WIDTH,
-      height: ARENA_HEIGHT,
+      height: ARENA_VIEWPORT_HEIGHT,
     });
   }
 

@@ -4,11 +4,15 @@ import {
   ARENA_HEIGHT,
   ARENA_MAX_Y,
   ARENA_OFFSET_Y,
+  ARENA_VIEWPORT_HEIGHT,
   DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  DEFAULT_ARENA_OFFSET_Y,
+  DEFAULT_ARENA_VIEWPORT_HEIGHT,
   FULL_ARENA_WIDTH,
   GRID_COLS,
   GRID_ROWS,
+  GAME_HEIGHT,
   GAME_WIDTH,
   getArenaMetricsProfile,
   MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
@@ -27,7 +31,8 @@ describe('Arena metrics profiles', () => {
       arenaOffsetX: 0,
       arenaViewportWidth: GAME_WIDTH,
       arenaHeight: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS * CELL_SIZE,
-      arenaOffsetY: ARENA_OFFSET_Y,
+      arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
+      arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
       usesDynamicCamera: false,
       showStaticArenaFrames: false,
     });
@@ -41,12 +46,15 @@ describe('Arena metrics profiles', () => {
     expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', undefined, expandedHeightCells)).toMatchObject({
       arenaWidth: FULL_ARENA_WIDTH,
       arenaHeight: expandedHeightCells * CELL_SIZE,
-      arenaViewportHeight: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS * CELL_SIZE,
+      arenaOffsetY: 0,
+      arenaViewportHeight: GAME_HEIGHT,
       usesDynamicCamera: true,
     });
     expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', intermediateWidthCells, expandedHeightCells)).toMatchObject({
       arenaWidth: intermediateWidthCells * CELL_SIZE,
       arenaHeight: expandedHeightCells * CELL_SIZE,
+      arenaOffsetY: 0,
+      arenaViewportHeight: GAME_HEIGHT,
       usesDynamicCamera: true,
     });
     expect(getArenaMetricsProfile(
@@ -74,6 +82,8 @@ describe('Arena metrics profiles', () => {
       arenaHeight: 80 * CELL_SIZE,
       arenaOffsetX: 0,
       arenaViewportWidth: GAME_WIDTH,
+      arenaOffsetY: 0,
+      arenaViewportHeight: GAME_HEIGHT,
       usesDynamicCamera: true,
       showStaticArenaFrames: false,
     });
@@ -83,6 +93,8 @@ describe('Arena metrics profiles', () => {
       expect(GRID_COLS).toBe(400);
       expect(GRID_ROWS).toBe(80);
       expect(ARENA_HEIGHT).toBe(80 * CELL_SIZE);
+      expect(ARENA_OFFSET_Y).toBe(0);
+      expect(ARENA_VIEWPORT_HEIGHT).toBe(GAME_HEIGHT);
       expect(ARENA_MAX_Y).toBe(ARENA_OFFSET_Y + 80 * CELL_SIZE);
     } finally {
       applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'LOBBY');
@@ -152,6 +164,10 @@ describe('Arena metrics profiles', () => {
     }
     expect(getArenaMetricsProfile('deathmatch', 'LOBBY'))
       .toEqual(getArenaMetricsProfile('deathmatch', 'ARENA'));
+    expect(getArenaMetricsProfile('deathmatch', 'ARENA')).toMatchObject({
+      arenaOffsetY: DEFAULT_ARENA_OFFSET_Y,
+      arenaViewportHeight: DEFAULT_ARENA_VIEWPORT_HEIGHT,
+    });
   });
 
   it('does not change regular arena or Capture the Beer profiles', () => {

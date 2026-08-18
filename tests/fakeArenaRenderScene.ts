@@ -19,6 +19,10 @@ export interface FakeFill {
   height: number;
 }
 
+interface FakeTextureFrame extends FakeFill {
+  setSize(width: number, height: number, x?: number, y?: number): this;
+}
+
 export interface FakeBlit {
   localX: number;
   localY: number;
@@ -123,25 +127,39 @@ export class FakeRenderTexture {
   texture: {
     key: string;
     firstFrame: string;
-    frames: Record<string, FakeFill>;
+    frames: Record<string, FakeTextureFrame>;
     has(name: string): boolean;
     add(name: string, sourceIndex: number, x: number, y: number, width: number, height: number): void;
+    get(name: string): FakeTextureFrame;
   };
   private pending: Array<() => void> = [];
 
   constructor(key: string, readonly width = 256, readonly height = 256) {
     // Der Sampling-Gutter der Chunk-Renderziele haengt an genau diesen beiden Faehigkeiten:
     // ein Renderziel groesser als der sichtbare Bereich, und ein Frame, das ihn ausschneidet.
-    const frames: Record<string, FakeFill> = {};
+    const frames: Record<string, FakeTextureFrame> = {};
     this.texture = {
       key,
       firstFrame: '__BASE',
       frames,
       has: (name) => name in frames,
       add: (name, _sourceIndex, x, y, frameWidth, frameHeight) => {
-        frames[name] = { x, y, width: frameWidth, height: frameHeight };
+        frames[name] = {
+          x,
+          y,
+          width: frameWidth,
+          height: frameHeight,
+          setSize(nextWidth, nextHeight, nextX = 0, nextY = 0) {
+            this.x = nextX;
+            this.y = nextY;
+            this.width = nextWidth;
+            this.height = nextHeight;
+            return this;
+          },
+        };
         if (this.texture.firstFrame === '__BASE') this.texture.firstFrame = name;
       },
+      get: (name) => frames[name],
     };
     this.pixels = new Uint8Array(width * height);
     FakeRenderTexture.textures.set(key, this);

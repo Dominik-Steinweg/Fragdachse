@@ -17,6 +17,23 @@ import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chu
 import type { ChunkBakeRegion } from '../src/arena/chunks/ChunkedRenderSurface';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../src/arena/RockOverlayRegions';
 
+class FakeTextureFrame {
+  constructor(
+    public x: number,
+    public y: number,
+    public width: number,
+    public height: number,
+  ) {}
+
+  setSize(width: number, height: number, x = 0, y = 0): this {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    return this;
+  }
+}
+
 /**
  * Minimales Renderziel: Es merkt sich, was in welche Region geschrieben wurde. Mehr braucht die
  * Residenzlogik nicht – ihr Vertrag ist "welcher Chunk existiert, und was wurde dort gebacken",
@@ -36,11 +53,12 @@ class FakeRenderTexture {
   texture: {
     key: string;
     firstFrame: string;
-    frames: Record<string, { x: number; y: number; width: number; height: number }>;
+    frames: Record<string, FakeTextureFrame>;
     source: Array<{ scaleMode: number }>;
     setFilter(filterMode: number): void;
     has(name: string): boolean;
     add(name: string, sourceIndex: number, x: number, y: number, width: number, height: number): void;
+    get(name: string): FakeTextureFrame;
   };
   frameName: string | null = null;
   writes: Array<{
@@ -54,7 +72,7 @@ class FakeRenderTexture {
 
   constructor(key: string, readonly width: number, readonly height: number) {
     const source = { scaleMode: 0 };
-    const frames: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    const frames: Record<string, FakeTextureFrame> = {};
     this.texture = {
       key,
       firstFrame: '__BASE',
@@ -63,9 +81,10 @@ class FakeRenderTexture {
       setFilter: (filterMode) => { source.scaleMode = filterMode; },
       has: (name) => name in frames,
       add: (name, _sourceIndex, x, y, w, h) => {
-        frames[name] = { x, y, width: w, height: h };
+        frames[name] = new FakeTextureFrame(x, y, w, h);
         if (this.texture.firstFrame === '__BASE') this.texture.firstFrame = name;
       },
+      get: (name) => frames[name],
     };
     FakeRenderTexture.created += 1;
   }
@@ -113,12 +132,12 @@ function createScene() {
 const FRAME = { offsetX: 0, offsetY: 12, width: 12_800, height: 2_560 };
 const LAYERS = [{ id: 'a', depth: 2 }, { id: 'b', depth: 3 }];
 
-function createSurface(onBake?: (region: ChunkBakeRegion) => void) {
+function createSurface(frame = FRAME, onBake?: (region: ChunkBakeRegion) => void) {
   const scene = createScene();
   const regions: ChunkBakeRegion[] = [];
   const scratch = new FakeRenderTexture('scratch', ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_SIZE);
   const surface = new ChunkedRenderSurface(scene, {
-    frame: FRAME,
+    frame,
     layers: LAYERS,
     bake: (region, sink) => {
       regions.push(region);
@@ -247,7 +266,7 @@ describe('chunked render surface', () => {
 
   it('drops chunks that leave the release margin and rebuilds them identically on return', () => {
     const seen: string[] = [];
-    const { surface, regions, scene } = createSurface((region) => {
+    const { surface, regions, scene } = createSurface(FRAME, (region) => {
       seen.push(`${region.chunk.cx}:${region.chunk.cy}@${region.localX},${region.localY}`);
     });
 
@@ -371,6 +390,62 @@ describe('chunked render surface', () => {
     // Benachbarte Chunks liegen exakt aneinander; der Gutter darf keine Ueberlappung erzeugen.
     const second = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
     expect(second.x - first.x).toBe(ARENA_RENDER_CHUNK_SIZE);
+  });
+
+  it('clips the final right and bottom chunks to the remaining world frame', () => {
+    const frame = { offsetX: 32, offsetY: 7, width: 700, height: 700 };
+    const { surface, scene } = createSurface(frame);
+    updateSurface(surface, scene, { x: frame.offsetX, y: frame.offsetY, width: frame.width, height: frame.height });
+
+    const full = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    const right = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    const bottom = surface.getChunkTexture('a', 0, 1) as unknown as FakeRenderTexture;
+    const corner = surface.getChunkTexture('a', 1, 1) as unknown as FakeRenderTexture;
+
+    expect(full.texture.frames.chunkVisible).toMatchObject({
+      x: CHUNK_SAMPLING_GUTTER_PX,
+      y: CHUNK_SAMPLING_GUTTER_PX,
+      width: ARENA_RENDER_CHUNK_SIZE,
+      height: ARENA_RENDER_CHUNK_SIZE,
+    });
+    expect(right.texture.frames.chunkVisible).toMatchObject({
+      x: CHUNK_SAMPLING_GUTTER_PX,
+      y: CHUNK_SAMPLING_GUTTER_PX,
+      width: frame.width - ARENA_RENDER_CHUNK_SIZE,
+      height: ARENA_RENDER_CHUNK_SIZE,
+    });
+    expect(bottom.texture.frames.chunkVisible).toMatchObject({
+      x: CHUNK_SAMPLING_GUTTER_PX,
+      y: CHUNK_SAMPLING_GUTTER_PX,
+      width: ARENA_RENDER_CHUNK_SIZE,
+      height: frame.height - ARENA_RENDER_CHUNK_SIZE,
+    });
+    expect(corner.texture.frames.chunkVisible).toMatchObject({
+      x: CHUNK_SAMPLING_GUTTER_PX,
+      y: CHUNK_SAMPLING_GUTTER_PX,
+      width: frame.width - ARENA_RENDER_CHUNK_SIZE,
+      height: frame.height - ARENA_RENDER_CHUNK_SIZE,
+    });
+  });
+
+  it('updates the visible frame when pooled textures change between full and edge chunks', () => {
+    const frame = { offsetX: 32, offsetY: 7, width: 700, height: 700 };
+    const { surface, scene } = createSurface(frame);
+    const view = { x: frame.offsetX, y: frame.offsetY, width: frame.width, height: frame.height };
+
+    updateSurface(surface, scene, view);
+    updateSurface(surface, scene, { x: 5_000, y: 5_000, width: 100, height: 100 });
+    updateSurface(surface, scene, view);
+
+    const full = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    const right = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    const bottom = surface.getChunkTexture('a', 0, 1) as unknown as FakeRenderTexture;
+    const corner = surface.getChunkTexture('a', 1, 1) as unknown as FakeRenderTexture;
+
+    expect(full.texture.frames.chunkVisible).toMatchObject({ width: 512, height: 512 });
+    expect(right.texture.frames.chunkVisible).toMatchObject({ width: 188, height: 512 });
+    expect(bottom.texture.frames.chunkVisible).toMatchObject({ width: 512, height: 188 });
+    expect(corner.texture.frames.chunkVisible).toMatchObject({ width: 188, height: 188 });
   });
 
   it('copies only the changed edge pixels into a resident neighbour gutter', () => {

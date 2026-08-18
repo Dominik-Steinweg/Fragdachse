@@ -87,7 +87,13 @@ function makeScene() {
       },
     };
     // `active` ist kein Detail: Der Teardown raeumt nur auf, was noch aktiv ist.
-    const frames: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    const frames: Record<string, {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      setSize(width: number, height: number, x?: number, y?: number): this;
+    }> = {};
     const rt: Record<string, unknown> = {
       camera,
       active: true,
@@ -97,8 +103,21 @@ function makeScene() {
         frames,
         has: (name: string) => name in frames,
         add: (name: string, _sourceIndex: number, fx: number, fy: number, fw: number, fh: number) => {
-          frames[name] = { x: fx, y: fy, width: fw, height: fh };
+          frames[name] = {
+            x: fx,
+            y: fy,
+            width: fw,
+            height: fh,
+            setSize(width, height, x = 0, y = 0) {
+              this.x = x;
+              this.y = y;
+              this.width = width;
+              this.height = height;
+              return this;
+            },
+          };
         },
+        get: (name: string) => frames[name],
       },
     };
     for (const name of ['setOrigin', 'setBlendMode', 'setMask', 'clearMask', 'setRenderMode',

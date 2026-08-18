@@ -612,7 +612,7 @@ export class ChunkedRenderSurface {
 
     const texture = this.scene.add.renderTexture(0, 0, this.chunkTextureSize, this.chunkTextureSize);
     texture.setOrigin(0, 0);
-    this.applyVisibleFrame(texture);
+    this.applyVisibleFrame(texture, null);
     texture.setDepth(layer.depth);
     if (layer.blend !== undefined) texture.setBlendMode(layer.blend);
     // Der Inhalt eines Chunks ist dauerhaft chunklokal. Die Weltposition traegt allein das
@@ -632,6 +632,7 @@ export class ChunkedRenderSurface {
     chunk: ResidentChunk,
   ): void {
     texture.setPosition(this.frame.offsetX + chunk.coord.localX, this.frame.offsetY + chunk.coord.localY);
+    this.applyVisibleFrame(texture, chunk.coord);
     texture.setVisible(false);
     texture.clear();
     texture.render();
@@ -670,7 +671,8 @@ export class ChunkedRenderSurface {
   }
 
   /**
-   * Beschraenkt Geometrie und UV-Fenster eines Renderziels auf den logischen Chunk.
+   * Beschraenkt Geometrie und UV-Fenster eines Renderziels auf die Schnittmenge aus logischem
+   * Chunk und World-Frame.
    *
    * Ohne diesen Schnitt entsteht die sichtbare Naht: Die Chunks liegen zwar exakt aneinander,
    * aber beim Zeichnen mit Kamerazoom faellt ihre Kante zwischen zwei Bildschirmpixel. Die
@@ -679,19 +681,40 @@ export class ChunkedRenderSurface {
    * Randtexel statt ineinander zu blenden – ein regelmaessiger Sprung entlang jeder Chunkgrenze,
    * bei MULTIPLY-Ebenen als helle oder dunkle Linie besonders auffaellig.
    *
-   * Mit Frame bleibt das Quad exakt `chunkSize` gross und an derselben Weltposition; die
-   * Filterung darf aber ueber `u1`/`v1` hinaus in den Gutter greifen, wo echte Nachbarschaft
-   * liegt. Composited wird weiterhin nur der logische Bereich – benachbarte Chunks ueberlappen
-   * sich nicht um ein einziges Pixel.
+   * Mit Frame bleibt das Quad exakt an derselben Weltposition; bei Rand-Chunks wird es auf die
+   * verbleibende Frame-Breite/-Hoehe verkleinert. Die Filterung darf am inneren Rand ueber
+   * `u1`/`v1` hinaus in den Gutter greifen, wo echte Nachbarschaft liegt. Bei jeder Zuweisung wird
+   * das bestehende Frame aktualisiert, damit gepoolte Ziele nicht die Groesse ihres vorherigen
+   * Chunks weiterverwenden.
    */
-  private applyVisibleFrame(texture: Phaser.GameObjects.RenderTexture): void {
-    if (this.gutterPx <= 0) return;
+  private applyVisibleFrame(
+    texture: Phaser.GameObjects.RenderTexture,
+    coord: ArenaChunkCoord | null,
+  ): void {
+    const chunkLocalX = coord?.localX ?? 0;
+    const chunkLocalY = coord?.localY ?? 0;
+    const visibleWidth = Math.max(0, Math.min(this.grid.chunkSize, this.frame.width - chunkLocalX));
+    const visibleHeight = Math.max(0, Math.min(this.grid.chunkSize, this.frame.height - chunkLocalY));
     const source = texture.texture;
     if (!source.has(CHUNK_VISIBLE_FRAME_NAME)) {
-      source.add(CHUNK_VISIBLE_FRAME_NAME, 0, this.gutterPx, this.gutterPx, this.grid.chunkSize, this.grid.chunkSize);
+      source.add(
+        CHUNK_VISIBLE_FRAME_NAME,
+        0,
+        this.gutterPx,
+        this.gutterPx,
+        visibleWidth,
+        visibleHeight,
+      );
       // `Texture.add()` macht das erste eigene Frame zum Standardframe. Die Zeichenbefehle der
       // DynamicTexture rechnen aber weiter in vollen Texturkoordinaten – inklusive Gutter.
       source.firstFrame = '__BASE';
+    } else {
+      source.get(CHUNK_VISIBLE_FRAME_NAME).setSize(
+        visibleWidth,
+        visibleHeight,
+        this.gutterPx,
+        this.gutterPx,
+      );
     }
     texture.setFrame(CHUNK_VISIBLE_FRAME_NAME);
   }
