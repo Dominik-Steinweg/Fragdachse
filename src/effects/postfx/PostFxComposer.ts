@@ -13,7 +13,7 @@ import {
   type WorldGrade,
 } from './worldGrade';
 
-export type PostFxEase = 'impulse' | 'linear' | 'expo' | 'bossPhase';
+export type PostFxEase = 'impulse' | 'linear' | 'expo' | 'bossPhase' | 'atmospheric';
 
 export interface PostFxPulse {
   /** Stabile Kennung: erneutes Anfordern aktualisiert den Puls, statt ihn zu stapeln. */
@@ -63,10 +63,18 @@ const OVERRIDE_FIELDS = ['tint', 'vignetteRadius', 'bloomThreshold'] as const;
 type OverrideField = (typeof OVERRIDE_FIELDS)[number];
 
 export function postFxEnvelope(ease: PostFxEase, t: number): number {
-  if (t <= 0) return ease === 'impulse' || ease === 'bossPhase' ? 0 : 1;
+  if (t <= 0) return ease === 'impulse' || ease === 'bossPhase' || ease === 'atmospheric' ? 0 : 1;
   if (t >= 1) return 0;
   if (ease === 'linear') return 1 - t;
   if (ease === 'expo') return (Math.exp(-3 * t) - Math.exp(-3)) / (1 - Math.exp(-3));
+  if (ease === 'atmospheric') {
+    // Langer, atmosphärischer Puls: kurzer weicher Attack, danach ein deutlich längeres
+    // und ruhigeres Release. Der Verlauf ist nicht an ein bestimmtes Ereignis gebunden.
+    const attack = 0.12;
+    if (t < attack) return smoothstep01(t / attack);
+    const u = (t - attack) / (1 - attack);
+    return (Math.exp(-3.2 * u) - Math.exp(-3.2)) / (1 - Math.exp(-3.2));
+  }
   if (ease === 'bossPhase') {
     // Bei 1200 ms sind das 192 ms Attack und rund 1 s weiches Abklingen.
     const attack = 0.16;
@@ -89,6 +97,30 @@ function clampField(field: keyof WorldGrade, value: number): number {
   const range = (POST_FX_PULSE_CLAMPS as Partial<Record<string, readonly [number, number]>>)[field];
   if (!range) return value;
   return value < range[0] ? range[0] : value > range[1] ? range[1] : value;
+}
+
+function lerpNumber(from: number, to: number, gain: number): number {
+  return from + (to - from) * gain;
+}
+
+/** Mischt einen RGB-Tint kanalweise, statt die gepackten Farbzahlen zu interpolieren. */
+function lerpTint(from: number, to: number, gain: number): number {
+  const fromR = (from >> 16) & 0xff;
+  const fromG = (from >> 8) & 0xff;
+  const fromB = from & 0xff;
+  const toR = (to >> 16) & 0xff;
+  const toG = (to >> 8) & 0xff;
+  const toB = to & 0xff;
+  const r = Math.round(lerpNumber(fromR, toR, gain));
+  const g = Math.round(lerpNumber(fromG, toG, gain));
+  const b = Math.round(lerpNumber(fromB, toB, gain));
+  return (r << 16) | (g << 8) | b;
+}
+
+function lerpOverride(field: OverrideField, base: WorldGrade, target: number, gain: number): number {
+  return field === 'tint'
+    ? lerpTint(base.tint, target, gain)
+    : lerpNumber(base[field], target, gain);
 }
 
 /**
@@ -139,9 +171,10 @@ export function composePostFx(
       for (const field of OVERRIDE_FIELDS) {
         const value = pulse.grade[field as OverrideField];
         if (typeof value !== 'number') continue;
-        if (field === 'tint') tint = value;
-        else if (field === 'vignetteRadius') vignetteRadius = value;
-        else bloomThreshold = value;
+        const resolved = lerpOverride(field, base, value, gain);
+        if (field === 'tint') tint = resolved;
+        else if (field === 'vignetteRadius') vignetteRadius = resolved;
+        else bloomThreshold = resolved;
       }
     }
   }

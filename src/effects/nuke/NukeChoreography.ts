@@ -15,6 +15,7 @@ import { DISTORTION_PRIORITY } from '../distortion/distortionFramePlanner';
 import type { PostFxPulse } from '../postfx/PostFxComposer';
 import { getPostFxPreset } from '../postfx/postFxPresets';
 import type { CameraFeedbackRequest } from '../camera/CameraFeedbackModel';
+import { getExplosionLightDurationMs } from '../LightingConfig';
 
 export type NukePhase = 'idle' | 'countdown' | 'detonation' | 'pressureWave' | 'afterglow';
 export type NukeVariant = 'normal' | 'void';
@@ -49,7 +50,8 @@ export interface NukeChoreographyFrame {
 /** Dauer der Detonations- und Druckwellenphase. Der Countdown kommt von außen. */
 export const NUKE_DETONATION_MS = 320;
 export const NUKE_PRESSURE_WAVE_MS = 420;
-export const NUKE_AFTERGLOW_MS = 1500;
+/** Referenzwert für bestehende Aufrufer; konkrete Sequenzen skalieren mit ihrem Radius. */
+export const NUKE_AFTERGLOW_MS = getExplosionLightDurationMs(300) - NUKE_DETONATION_MS - NUKE_PRESSURE_WAVE_MS;
 
 /** Ab hier läuft die letzte Countdownphase mit Rumpeln, Entsättigung und Telegraph-Boost. */
 export const NUKE_COUNTDOWN_TENSION_START = 0.72;
@@ -134,7 +136,8 @@ export function resolveNukeCountdownFrame(
  */
 export class NukeChoreography {
   private elapsedMs = 0;
-  private readonly totalMs = NUKE_DETONATION_MS + NUKE_PRESSURE_WAVE_MS + NUKE_AFTERGLOW_MS;
+  private readonly afterglowMs: number;
+  private readonly totalMs: number;
 
   constructor(
     private readonly profile: NukeVariantProfile,
@@ -142,7 +145,15 @@ export class NukeChoreography {
     private readonly x: number,
     private readonly y: number,
     private readonly radiusPx: number,
-  ) {}
+  ) {
+    // Die Farbphase endet gemeinsam mit dem radiusabhängigen Explosionslicht. Detonation und
+    // Druckwelle behalten ihr authored Timing; nur das atmosphärische Nachglühen streckt sich.
+    this.afterglowMs = Math.max(
+      0,
+      getExplosionLightDurationMs(radiusPx) - NUKE_DETONATION_MS - NUKE_PRESSURE_WAVE_MS,
+    );
+    this.totalMs = NUKE_DETONATION_MS + NUKE_PRESSURE_WAVE_MS + this.afterglowMs;
+  }
 
   isFinished(): boolean {
     return this.elapsedMs >= this.totalMs;
@@ -233,7 +244,7 @@ export class NukeChoreography {
 
     // Phase D – Nachglühen: Farbphase klingt ab, Rauch und Fallout übernehmen.
     const afterglowElapsed = pressureElapsed - NUKE_PRESSURE_WAVE_MS;
-    const t = afterglowElapsed / NUKE_AFTERGLOW_MS;
+    const t = afterglowElapsed / this.afterglowMs;
     return {
       phase: 'afterglow',
       phaseProgress: t,
@@ -242,8 +253,8 @@ export class NukeChoreography {
       postFxPulses: t < 0.02 ? [{
         id: `nukeAfterglow:${this.nukeId}`,
         priority: 92,
-        durationMs: NUKE_AFTERGLOW_MS,
-        ease: 'expo',
+        durationMs: this.afterglowMs,
+        ease: 'atmospheric',
         grade: {
           tint: this.profile.afterglowTint,
           tintStrength: 0.3,

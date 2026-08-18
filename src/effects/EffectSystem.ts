@@ -53,7 +53,11 @@ interface NukeSequenceHost {
 }
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { impactExceptional, impactHeavy, impactLight } from './camera/cameraFeedbackPresets';
-import { EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS, EXPLOSION_LIGHT_RADIUS_FACTOR } from './LightingConfig';
+import {
+  EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
+  EXPLOSION_LIGHT_RADIUS_FACTOR,
+  getExplosionLightDurationMs,
+} from './LightingConfig';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 320;
@@ -1586,10 +1590,9 @@ export class EffectSystem implements EnemyVisualSink {
       radiusPx: radius * (visualStyle === 'train' ? 2.8 : EXPLOSION_LIGHT_RADIUS_FACTOR),
       color: lightColor,
       intensity: 1,
-      // Größere Detonationen glühen deutlich länger nach.
-      durationMs: visualStyle === 'train'
-        ? Phaser.Math.Clamp(520 + radius * 1.9, 540, 1350)
-        : Phaser.Math.Clamp(300 + radius * 1.6, 320, 1100),
+      // Die authored Explosionsgröße bestimmt Reichweite und Lebensdauer gemeinsam. Die
+      // Stilvariante bleibt bei Farbe und Darstellung, bringt aber keine Sonderdauer mit.
+      durationMs: getExplosionLightDurationMs(radius),
       occludes: radius >= EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
     });
   }

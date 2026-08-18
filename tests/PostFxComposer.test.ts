@@ -42,6 +42,15 @@ describe('postFxEnvelope', () => {
     expect(postFxEnvelope('bossPhase', 0.16)).toBeCloseTo(1, 6);
     expect(postFxEnvelope('bossPhase', 0.5)).toBeLessThan(0.4);
   });
+
+  it('stellt einen allgemeinen atmosphaerischen Attack/Release-Envelope bereit', () => {
+    expect(postFxEnvelope('atmospheric', 0)).toBe(0);
+    expect(postFxEnvelope('atmospheric', 0.06)).toBeCloseTo(0.5, 6);
+    expect(postFxEnvelope('atmospheric', 0.12)).toBeCloseTo(1, 6);
+    expect(postFxEnvelope('atmospheric', 0.5)).toBeGreaterThan(0);
+    expect(postFxEnvelope('atmospheric', 0.5)).toBeLessThan(0.4);
+    expect(postFxEnvelope('atmospheric', 1)).toBe(0);
+  });
 });
 
 describe('composePostFx', () => {
@@ -115,6 +124,42 @@ describe('composePostFx', () => {
     set.request({ id: 'low', priority: 10, durationMs: 400, ease: 'linear', grade: { tint: 0x00ff00, tintStrength: 0.1 } }, 0);
     set.request({ id: 'high', priority: 90, durationMs: 400, ease: 'linear', grade: { tint: 0xff0000, tintStrength: 0.1 } }, 0);
     expect(compose(set, 0).tint).toBe(0xff0000);
+  });
+
+  it('blendet Tint und numerische Overrides von der Basis zum Gewinnerzielwert', () => {
+    const set = new PostFxPulseSet();
+    const base: WorldGrade = {
+      ...BASE,
+      tint: 0x204060,
+      vignetteRadius: 1,
+      bloomThreshold: 0.8,
+    };
+    set.request({
+      priority: 90,
+      durationMs: 400,
+      ease: 'linear',
+      grade: { tint: 0xe08040, vignetteRadius: 0.8, bloomThreshold: 0.4 },
+    }, 0);
+
+    const middle = compose(set, 200, base);
+    expect(middle.tint).toBe(0x806050);
+    expect(middle.vignetteRadius).toBeCloseTo(0.9, 6);
+    expect(middle.bloomThreshold).toBeCloseTo(0.6, 6);
+
+    const after = compose(set, 400, base);
+    expect(after.tint).toBe(base.tint);
+    expect(after.vignetteRadius).toBe(base.vignetteRadius);
+    expect(after.bloomThreshold).toBe(base.bloomThreshold);
+  });
+
+  it('laesst einen hochpriorisierten Override weich aus, statt am Ende zu springen', () => {
+    const set = new PostFxPulseSet();
+    const base: WorldGrade = { ...BASE, tint: 0x203040 };
+    set.request({ id: 'low', priority: 40, durationMs: 400, ease: 'linear', grade: { tint: 0x00ff00 } }, 0);
+    set.request({ id: 'high', priority: 90, durationMs: 400, ease: 'linear', grade: { tint: 0xff0000 } }, 0);
+
+    expect(compose(set, 200, base).tint).toBe(0x901820);
+    expect(compose(set, 400, base).tint).toBe(base.tint);
   });
 
   it('aktualisiert einen Puls mit gleicher Kennung, statt ihn zu stapeln', () => {

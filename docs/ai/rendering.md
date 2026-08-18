@@ -96,7 +96,7 @@ der Teardown stellt den kanonischen Bestand wieder her und leert ihn vor dem Are
 
 ShadowSystem, LightingSystem und Post-FX sind getrennte Verantwortlichkeiten. LightingSystem komponiert dynamisches Licht und Verdeckung in eine Lightmap, die als ein Overlay in der Tiefenordnung liegt. Phasers eingebautes per-Object-Lighting ist dafür nicht der Projektvertrag.
 
-Die Lightmap wird mit deckendem Ambient gefüllt und additiven Lichtquellen aufgebaut; das Composite verwendet MULTIPLY. Die Lichtberechnung ist über TimeOfDay parametrisiert, nicht über separate Tages-/Nachtpfade. Baumkronen liegen über dem Lightmap-Overlay und erhalten ihre eigene Tönung. Emissive Gameplay-FX und wichtige Telegraphen dürfen nicht versehentlich durch das Weltlicht unlesbar werden.
+Die Lightmap wird mit deckendem Ambient gefüllt und additiven Lichtquellen aufgebaut; das Composite verwendet MULTIPLY. Die Lichtberechnung ist über TimeOfDay parametrisiert, nicht über separate Tages-/Nachtpfade. Baumkronen liegen über dem Lightmap-Overlay und erhalten ihre eigene Tönung. Emissive Gameplay-FX und wichtige Telegraphen dürfen nicht versehentlich durch das Weltlicht unlesbar werden. Explosionslicht leitet seine Lebensdauer aus dem authored Explosionsradius ab (geklemmt auf einen allgemeinen Mindest-/Höchstwert); `visualStyle` bestimmt Farbe und Stil, keine Nuke-Sonderdauer.
 
 Bei dynamischer Tageszeit folgt das laufende Shadow-Profil sofort den dynamischen Castern. Statische Tree-/Rock-Bakes halten dagegen ein eigenes tatsächlich gebackenes Profil und werden nur bei relevanter Abweichung gedrosselt vollständig ersetzt; ein gescriptetes Transitionsziel erzwingt den finalen Bake. Es werden nie zwei sichtbare MULTIPLY-Bakes alpha-gemischt. Regionale Rock-Dirty-Rebuilds bleiben ungedrosselt und rechnen während eines ausstehenden Profilwechsels mit dem gebackenen Profil, damit kein Chunk vorauseilt und kein alter Felsrand als Geisterschatten stehen bleibt.
 
@@ -106,7 +106,7 @@ Kamerabewegung läuft über Scroll-Offsets der Hauptkamera. Der Feedback-Versatz
 
 ## Post-FX und Displacement
 
-CameraPostFxController/PostFxComposer bauen die Filterkette einmalig auf. Qualitätsprofile und Ereignisaktivität sind getrennt: ein erlaubter, aber gerade inaktiver Filter darf keinen neutralen Vollbildpass ausführen. Objektfilter und Kamera-Post-FX getrennt registrieren, damit Qualitätsdiagnose und Budgets korrekt bleiben.
+CameraPostFxController/PostFxComposer bauen die Filterkette einmalig auf. Qualitätsprofile und Ereignisaktivität sind getrennt: ein erlaubter, aber gerade inaktiver Filter darf keinen neutralen Vollbildpass ausführen. Objektfilter und Kamera-Post-FX getrennt registrieren, damit Qualitätsdiagnose und Budgets korrekt bleiben. Additive Pulse-Felder werden mit ihrem Envelope-Gain skaliert; priorisierte absolute Overrides werden ebenfalls vom Basiswert zum Zielwert interpoliert, einschließlich kanalweisem Tint. Für längere atmosphärische Pulse/Afterglows ist der allgemeine `atmospheric`-Attack/Release-Envelope zu verwenden.
 
 Lokale Zeitblasen-/Schwarzes-Loch-/Druckwellen-Verzerrung läuft über LocalDistortionComposer und eine gemeinsame Displacement-Karte mit genau einem Kamera-Pass. Quellen sind Frame-Anmeldungen; wer nicht mehr anmeldet, verschwindet. Die neutrale Kodierung der Karte ist 0x808080. Änderungen der Kartengröße erfordern eine neue DynamicTexture und eine neue Filterverbindung, nicht setSize() auf der bestehenden Karte. Nach dem Stempeln muss DynamicTexture.render() den Command-Buffer flushen.
 

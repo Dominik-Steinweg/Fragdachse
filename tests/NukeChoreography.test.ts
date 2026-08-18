@@ -10,6 +10,7 @@ import {
   resolveNukeCountdownFrame,
   resolveNukeVariantProfile,
 } from '../src/effects/nuke/NukeChoreography';
+import { getExplosionLightDurationMs } from '../src/effects/LightingConfig';
 
 function makeSequence(variant: 'normal' | 'void' = 'normal') {
   return new NukeChoreography(NUKE_VARIANT_PROFILES[variant], 7, 900, 500, 300);
@@ -125,6 +126,19 @@ describe('NukeChoreography', () => {
     expect(last.telegraphBoost).toBe(0);
     expect(last.postFxPulses).toHaveLength(0);
     expect(last.cameraReleases).toContain('nuke:7');
+  });
+
+  it('streckt das atmosphaerische Nachgluehen mit dem Explosionsradius', () => {
+    const radius = 750;
+    const frames = runToEnd(new NukeChoreography(NUKE_VARIANT_PROFILES.normal, 7, 900, 500, radius));
+    const afterglow = frames
+      .flatMap((frame) => frame.postFxPulses)
+      .find((pulse) => pulse.id === 'nukeAfterglow:7');
+
+    expect(afterglow?.durationMs).toBe(
+      getExplosionLightDurationMs(radius) - NUKE_DETONATION_MS - NUKE_PRESSURE_WAVE_MS,
+    );
+    expect(afterglow?.ease).toBe('atmospheric');
   });
 
   /** Beide Varianten teilen die Grammatik und unterscheiden sich nur im Farbprofil. */

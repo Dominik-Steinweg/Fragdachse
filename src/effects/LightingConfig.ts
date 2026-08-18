@@ -1,4 +1,3 @@
-import * as Phaser from 'phaser';
 import { VOID_FIRE_COLOR } from '../config';
 import type { EnergyBallVariant, GrenadeVisualPreset, ProjectileStyle } from '../types';
 
@@ -49,6 +48,30 @@ export const SHADOW_EXTEND_FACTOR = 2.2;
  * `LightOccluderIndex` liefert dafür die freiliegenden Kanten mit.
  */
 export const OCCLUDER_SHADE_FALLOFF_PX = 14;
+
+/** Untergrenze der radiusabhängigen Lebenszeit eines Explosionslichts. */
+export const EXPLOSION_LIGHT_DURATION_MIN_MS = 900;
+/** Obergrenze der radiusabhängigen Lebenszeit eines Explosionslichts. */
+export const EXPLOSION_LIGHT_DURATION_MAX_MS = 5000;
+/** Grunddauer vor der radiusabhängigen Verlängerung. */
+export const EXPLOSION_LIGHT_DURATION_BASE_MS = 800;
+/** Zusätzliche Lebenszeit pro Pixel Explosionsradius. */
+export const EXPLOSION_LIGHT_DURATION_PER_RADIUS_MS = 4.8;
+
+/**
+ * Skaliert die Lichtlebenszeit mit derselben authored Größe wie die Explosion.
+ *
+ * Der Radius bleibt die fachliche Quelle für Reichweite und Nachglühen; Farb- und
+ * Stilvarianten dürfen die Lichtfarbe ändern, aber keine eigene Sonderdauer einführen.
+ */
+export function getExplosionLightDurationMs(radiusPx: number): number {
+  const radius = Number.isFinite(radiusPx) ? Math.max(0, radiusPx) : 0;
+  const duration = EXPLOSION_LIGHT_DURATION_BASE_MS + radius * EXPLOSION_LIGHT_DURATION_PER_RADIUS_MS;
+  return Math.min(
+    EXPLOSION_LIGHT_DURATION_MAX_MS,
+    Math.max(EXPLOSION_LIGHT_DURATION_MIN_MS, duration),
+  );
+}
 
 export interface LightPreset {
   readonly enabled: boolean;
@@ -105,8 +128,10 @@ export const LIGHT_PRESETS = {
     radiusPx: 240,
     color: 0xffc49f,
     intensity: 1,
-    durationMs: 520,
-    decayExponent: 1.35,
+    // Der Aufrufer setzt die konkrete, radiusabhängige Dauer; die Untergrenze bleibt ein
+    // sinnvoller Fallback für direkte Pulse ohne Override.
+    durationMs: EXPLOSION_LIGHT_DURATION_MIN_MS,
+    decayExponent: 0.95,
     occludes: true,
     priority: 10,
     flickerAmount: 0,
