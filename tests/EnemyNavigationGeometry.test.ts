@@ -135,7 +135,7 @@ describe('Enemy navigation geometry', () => {
     expect(obstacleReads).toBe(readsAfterConstruction);
   });
 
-  it('rebuilds topology and flow data after a map-grid change', () => {
+  it('rebuilds topology and flow data locally after a map-grid change', () => {
     let obstacleCells: ReadonlyArray<{ gridX: number; gridY: number }> = [];
     let obstacleReads = 0;
     const eventBus = createEventBus();
@@ -153,11 +153,18 @@ describe('Enemy navigation geometry', () => {
     eventBus.emitGridChange({ reason: 'placeable_added', source: 'placeable_rock', gridX: 3, gridY: 3 });
 
     expect(service.update(Date.now() + 1_000)).toBe(true);
-    expect(obstacleReads).toBe(initialReads + 1);
+    // Die Koordinate schaltet den persistenten Occupancy-Raster direkt; der globale Provider wird
+    // im normalen lokalen Pfad nicht erneut gelesen.
+    expect(obstacleReads).toBe(initialReads);
     expect(service.getKindAt(3, 3)).toBe('rock');
     expect(service.isTraversableAt(3, 3)).toBe(false);
     expect(service.isDestructibleAt(3, 3)).toBe(true);
     expect(service.getIntegrationValueAt(3, 3)).toBe(EnemyFlowFieldService.INTEGRATION_INFINITY);
+
+    eventBus.emitGridChange({ reason: 'placeable_removed', source: 'placeable_rock', gridX: 3, gridY: 3 });
+    expect(service.update(Date.now() + 2_000)).toBe(true);
+    expect(obstacleReads).toBe(initialReads);
+    expect(service.getKindAt(3, 3)).toBe('ground');
   });
 
   it('shares one topology refresh while keeping dynamic goal fields independent', () => {
@@ -188,11 +195,34 @@ describe('Enemy navigation geometry', () => {
     eventBus.emitGridChange({ reason: 'placeable_added', source: 'placeable_rock', gridX: 3, gridY: 3 });
     expect(dependent.update(Date.now() + 1_000)).toBe(true);
 
-    expect(obstacleReads).toBe(readsAfterConstruction + 1);
+    expect(obstacleReads).toBe(readsAfterConstruction);
     expect(source.getKindAt(3, 3)).toBe('rock');
     expect(dependent.getKindAt(3, 3)).toBe('rock');
     expect(source.getReachedGoalCellAt(4, 5)).toEqual({ gridX: 2, gridY: 5 });
     expect(dependent.getReachedGoalCellAt(12, 5)).toEqual({ gridX: 13, gridY: 5 });
+  });
+
+  it('keeps a full provider fallback for coordinate-less topology changes', () => {
+    let obstacleCells: ReadonlyArray<{ gridX: number; gridY: number }> = [];
+    let obstacleReads = 0;
+    const eventBus = createEventBus();
+    const service = new EnemyFlowFieldService(createLayout(), [], METRICS, {
+      eventBus,
+      obstacleCellProvider: () => {
+        obstacleReads += 1;
+        return obstacleCells;
+      },
+      goalMode: 'dynamic',
+      dynamicGoalCells: [{ gridX: 8, gridY: 5 }],
+    });
+    const initialReads = obstacleReads;
+
+    obstacleCells = [{ gridX: 3, gridY: 3 }];
+    eventBus.emitGridChange({ reason: 'placeable_added', source: 'placeable_rock' });
+
+    expect(service.update(Date.now() + 1_000)).toBe(true);
+    expect(obstacleReads).toBe(initialReads + 1);
+    expect(service.getKindAt(3, 3)).toBe('rock');
   });
 
   it('keeps tracks passable and exits a vertical rail run before following it longitudinally', () => {

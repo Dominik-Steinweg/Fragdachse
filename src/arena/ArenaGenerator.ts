@@ -344,7 +344,10 @@ export class ArenaGenerator {
     return networkLayout;
   }
 
-  static hydrateVisualOnlyFields(layout: ArenaLayout): ArenaLayout {
+  static hydrateVisualOnlyFields(
+    layout: ArenaLayout,
+    coopBaseSpecs: readonly BaseSpec[] = [],
+  ): ArenaLayout {
     if (layout.decals !== undefined) return layout;
 
     const dirtSet = new Set<number>();
@@ -362,6 +365,7 @@ export class ArenaGenerator {
         dirtSet,
         layout.powerUpPedestals,
         layout.groundHazardZones ?? [],
+        coopBaseSpecs,
       ),
     };
   }

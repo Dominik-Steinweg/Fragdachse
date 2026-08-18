@@ -150,6 +150,18 @@ export class HostUpdateCoordinator {
     this.lastPerformance = emptyHostUpdatePerformanceMetrics();
   }
 
+  /**
+   * Bereitet die teuren, startkritischen Host-Caches im verborgenen Arena-Zustand vor.
+   * Dieser Pfad darf keine Runde simulieren: Er baut nur die Hindernis- und Ziel-Indices aus
+   * dem bereits initial gespawnten Zustand auf, damit der erste Gameplay-Frame nicht lazy
+   * nachrechnen muss.
+   */
+  prepareStartupCaches(now: number): void {
+    if (!bridge.isHost()) return;
+    this.ctx.combatSystem.getObstacleIndex().prepare();
+    this.updateEnemyFlowFields(now, true);
+  }
+
   runHostUpdate(delta: number): void {
     if (!this.active) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
@@ -2070,15 +2082,21 @@ export class HostUpdateCoordinator {
     }
   }
 
-  private updateEnemyFlowFields(now: number): void {
-    this.ctx.enemyFlowFieldService?.update(now);
+  private updateEnemyFlowFields(now: number, force = false): void {
+    const updateFlowField = (service: import('../../systems/EnemyFlowFieldService').EnemyFlowFieldService | null | undefined): void => {
+      if (!service) return;
+      if (force) service.prepareNow(now);
+      else service.update(now);
+    };
+
+    updateFlowField(this.ctx.enemyFlowFieldService);
 
     const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
     const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
     const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
     const strategicTargetService = this.ctx.enemyStrategicTargetService;
     if (!playerFlowFieldService) {
-      bossFlowFieldService?.update(now);
+      updateFlowField(bossFlowFieldService);
       return;
     }
 
@@ -2095,8 +2113,8 @@ export class HostUpdateCoordinator {
 
     playerFlowFieldService.setDynamicGoalCells(playerGoalCells);
     bossFlowFieldService?.setDynamicGoalCells(playerGoalCells);
-    playerFlowFieldService.update(now);
-    bossFlowFieldService?.update(now);
+    updateFlowField(playerFlowFieldService);
+    updateFlowField(bossFlowFieldService);
 
     if (strategicFlowFieldService && strategicTargetService) {
       const candidates: EnemyStrategicTargetCandidate[] = [];
@@ -2144,7 +2162,7 @@ export class HostUpdateCoordinator {
       }
 
       strategicTargetService.updateTargets(candidates);
-      strategicFlowFieldService.update(now);
+      updateFlowField(strategicFlowFieldService);
     }
 
     // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den

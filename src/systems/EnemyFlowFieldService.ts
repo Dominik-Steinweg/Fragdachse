@@ -1,4 +1,4 @@
-import type { ArenaLayout, PowerUpPedestalCell } from '../types';
+import type { ArenaLayout } from '../types';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import {
   COOP_DEFENSE_FLOW_FIELD_BASE_COST,
@@ -48,7 +48,22 @@ export interface EnemyFlowFieldVector {
   readonly y: number;
 }
 
-type SourceCellLookup = ReadonlySet<number>;
+interface SourceCellLookup {
+  has(cellKey: number): boolean;
+}
+
+/**
+ * Persistenter Zell-Lookup fuer die einzige mutierbare Topologiequelle. Die statischen Quellen
+ * bleiben als Sets im Build-Kontext; Felsen/Konstrukte werden dagegen direkt im Raster geschaltet,
+ * damit ein lokales Map-Event keinen aktuellen Objektbestand materialisieren muss.
+ */
+class RasterCellLookup implements SourceCellLookup {
+  constructor(private readonly cells: Uint8Array) {}
+
+  has(cellKey: number): boolean {
+    return this.cells[cellKey] === 1;
+  }
+}
 
 interface EnemyFlowFieldBuildContext {
   readonly dirtCells: SourceCellLookup;
@@ -73,6 +88,7 @@ interface EnemyFlowFieldCellRule {
 
 export interface EnemyFlowFieldServiceOptions {
   readonly eventBus?: ArenaEventBus;
+  /** Wird nur beim Initial-/Full-Rebuild gelesen; koordinierte Zell-Events aktualisieren das Raster direkt. */
   readonly obstacleCellProvider?: () => ReadonlyArray<EnemyFlowFieldGridCell>;
   readonly goalMode?: EnemyFlowFieldGoalMode;
   readonly dynamicGoalCells?: ReadonlyArray<EnemyFlowFieldGoalCell>;
@@ -217,6 +233,9 @@ export class EnemyFlowFieldService {
   private readonly eventBus: ArenaEventBus | null;
   private readonly obstacleCellProvider: (() => ReadonlyArray<EnemyFlowFieldGridCell>) | null;
   private readonly topologySource: EnemyFlowFieldService | null;
+  private readonly dynamicObstacleCells: Uint8Array;
+  private readonly dynamicObstacleLookup: SourceCellLookup;
+  private buildContext: EnemyFlowFieldBuildContext;
   private readonly costs: Uint32Array;
   private readonly kindCodes: Uint8Array;
   private readonly traversable: Uint8Array;
@@ -282,6 +301,8 @@ export class EnemyFlowFieldService {
     this.eventBus = options.eventBus ?? null;
     this.obstacleCellProvider = options.obstacleCellProvider ?? null;
     const totalCells = this.metrics.cols * this.metrics.rows;
+    this.dynamicObstacleCells = new Uint8Array(totalCells);
+    this.dynamicObstacleLookup = new RasterCellLookup(this.dynamicObstacleCells);
     const requestedTopologySource = options.topologySource ?? null;
     const canShareTopology = requestedTopologySource !== null
       && requestedTopologySource.costs.length === totalCells
@@ -313,7 +334,16 @@ export class EnemyFlowFieldService {
       countsByKind: this.createEmptyCounts(),
     };
 
-    if (!canShareTopology) this.buildNeighborLookups();
+    if (canShareTopology) {
+      // Shared Services lesen denselben persistenten Kontext wie die Topologiequelle. Die eigenen
+      // dynamischen Arrays bleiben unbenutzt; Events werden ausschliesslich von der Quelle auf
+      // deren Raster angewendet.
+      this.buildContext = this.topologySource!.buildContext;
+    } else {
+      this.initializeDynamicObstacleCells();
+      this.buildContext = this.createBuildContext(this.layout, this.getActiveBaseSpecs());
+      this.buildNeighborLookups();
+    }
     this.recomputeTopology();
     if (initialDynamicGoalCells.length > 0) {
       this.dynamicGoalCells = this.normalizeGoalCells(initialDynamicGoalCells);
@@ -486,6 +516,10 @@ export class EnemyFlowFieldService {
       if (identical) return;
     }
     this.activeBaseIds = next;
+    this.buildContext = {
+      ...this.buildContext,
+      baseCells: this.buildBaseLookup(this.getActiveBaseSpecs()),
+    };
     // A base can be destroyed after the regular flow-field update of the
     // current frame. Rebuilding only after the normal throttle interval
     // leaves an enemy standing on the old goal in the meantime; for bosses
@@ -535,6 +569,20 @@ export class EnemyFlowFieldService {
     }
 
     this.lastDirtyCheckAt = now;
+    return this.rebuildDirtyFields();
+  }
+
+  /**
+   * Erzwingt die einmalige Vorbereitung des aktuellen Zielzustands waehrend des verborgenen
+   * Arena-Aufbaus. Anders als update() ignoriert dieser Pfad bewusst den Runtime-Throttle;
+   * er startet keine Simulation und laesst den ersten Gameplay-Frame nicht lazy nachbauen.
+   */
+  prepareNow(now: number): boolean {
+    this.lastDirtyCheckAt = now;
+    return this.rebuildDirtyFields();
+  }
+
+  private rebuildDirtyFields(): boolean {
     if (!this.isTopologyDirty && !this.isGoalDirty) {
       return false;
     }
@@ -764,6 +812,9 @@ export class EnemyFlowFieldService {
       && event.gridY !== undefined
       && this.isInBounds(event.gridX, event.gridY)
     ) {
+      this.dynamicObstacleCells[this.toIndex(event.gridX, event.gridY)] = this.isObstacleOccupiedAfterEvent(event)
+        ? 1
+        : 0;
       this.pendingTopologyCells.add(this.toIndex(event.gridX, event.gridY));
       return;
     }
@@ -801,8 +852,10 @@ export class EnemyFlowFieldService {
       this.copyTopologySummary(this.topologySource);
       return;
     }
-    const activeSpecs = this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
-    const buildContext = this.createBuildContext(this.layout, activeSpecs);
+    // Der normale lokale Eventpfad aktualisiert das Raster bereits direkt. Nur ein seltener
+    // Full-Rebuild ohne Koordinate darf den externen Provider erneut befragen.
+    this.refreshDynamicObstacleCellsFromProvider();
+    const buildContext = this.buildContext;
     const countsByKind = this.createEmptyCounts();
 
     let traversableCells = 0;
@@ -840,8 +893,7 @@ export class EnemyFlowFieldService {
 
   /** Aktualisiert bei einem Fels-/Bauplatzereignis nur die betroffene Zelle und Nachbarschaft. */
   private recomputeTopologyCells(indexes: ReadonlySet<number>): void {
-    const activeSpecs = this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
-    const buildContext = this.createBuildContext(this.layout, activeSpecs);
+    const buildContext = this.buildContext;
     const adjacencyCandidates = new Set<number>();
     for (const index of indexes) {
       const oldKind = CELL_KINDS_BY_CODE[this.kindCodes[index]];
@@ -896,20 +948,40 @@ export class EnemyFlowFieldService {
     baseSpecs: readonly BaseSpec[],
   ): EnemyFlowFieldBuildContext {
     return {
-      dirtCells: this.buildLookup(layout.dirt.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
-      rockCells: this.buildLookup(this.getCurrentObstacleCells(layout)),
-      trunkCells: this.buildLookup(layout.trees.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
+      dirtCells: this.buildLookup(layout.dirt),
+      rockCells: this.dynamicObstacleLookup,
+      trunkCells: this.buildLookup(layout.trees),
       trackCells: this.buildTrackLookup(layout.tracks),
-      pedestalCells: this.buildPedestalLookup(layout.powerUpPedestals),
+      pedestalCells: this.buildLookup(layout.powerUpPedestals),
       baseCells: this.buildBaseLookup(baseSpecs),
     };
   }
 
-  private getCurrentObstacleCells(layout: ArenaLayout): ReadonlyArray<EnemyFlowFieldGridCell> {
-    if (this.obstacleCellProvider) {
-      return this.obstacleCellProvider();
+  private getActiveBaseSpecs(): readonly BaseSpec[] {
+    return this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
+  }
+
+  private initializeDynamicObstacleCells(): void {
+    const cells = this.obstacleCellProvider?.() ?? this.layout.rocks;
+    this.dynamicObstacleCells.fill(0);
+    for (const cell of cells) {
+      if (!this.isInBounds(cell.gridX, cell.gridY)) continue;
+      this.dynamicObstacleCells[this.toIndex(cell.gridX, cell.gridY)] = 1;
     }
-    return layout.rocks.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }));
+  }
+
+  private refreshDynamicObstacleCellsFromProvider(): void {
+    if (!this.obstacleCellProvider) return;
+    const cells = this.obstacleCellProvider();
+    this.dynamicObstacleCells.fill(0);
+    for (const cell of cells) {
+      if (!this.isInBounds(cell.gridX, cell.gridY)) continue;
+      this.dynamicObstacleCells[this.toIndex(cell.gridX, cell.gridY)] = 1;
+    }
+  }
+
+  private isObstacleOccupiedAfterEvent(event: ArenaMapGridChangedEvent): boolean {
+    return event.reason === 'placeable_added' && event.source !== 'placeable_pedestal';
   }
 
   private buildLookup(cells: ReadonlyArray<{ gridX: number; gridY: number }>): SourceCellLookup {
@@ -933,10 +1005,6 @@ export class EnemyFlowFieldService {
       }
     }
     return lookup;
-  }
-
-  private buildPedestalLookup(pedestals: readonly PowerUpPedestalCell[]): SourceCellLookup {
-    return this.buildLookup(pedestals.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY })));
   }
 
   private buildBaseLookup(baseSpecs: readonly BaseSpec[]): SourceCellLookup {

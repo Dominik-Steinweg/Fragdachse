@@ -14,6 +14,7 @@ Neue Emitter und Filter über die bestehende Qualitätsinfrastruktur registriere
 - Segmentbasierte Hindernisprüfungen laufen über die eine Round-Instanz von ArenaObstacleIndex; nicht pro Kandidat getBounds() aufrufen. Der Index darf konservativ filtern, aber keinen echten Treffer auslassen, und wird bei Geometrieänderungen synchron invalidiert.
 - Homing- und Zielsuche erst bewerten, dann Sichtlinie für die besten Kandidaten prüfen. Keine per-Gegner-Flowfields oder temporären Arrays erzeugen, wenn die bestehenden Services/Callbacks dieselbe Information liefern.
 - Mehrere Coop-Flowfields dürfen gemeinsame Topologie teilen, nicht aber unterschiedliche Zielmengen oder Clearance-Annahmen vermischen.
+- `EnemyFlowFieldService` hält statische Zellquellen und die dynamische Fels-/Obstacle-Belegung persistent. Ein koordiniertes `ARENA_MAP_GRID_CHANGED_EVENT` mit Koordinate aktualisiert nur das Occupancy-Raster und klassifiziert die geänderte Zelle samt Wall-Adjacency-Nachbarn; Provider-/Full-Rebuilds bleiben auf koordinatenlose Events, Base-Strukturwechsel und Clearance-Sonderfälle begrenzt.
 - Häufige homogene Visuals poolen. Physik-/Gameplay-Objekte nur poolen, wenn der Reset vollständig und messbar günstiger ist.
 - Frame-Getter auf dem Client dürfen nicht jedes Mal localStorage lesen, JSON parsen oder Upgrade-Profile neu auflösen; bestehende Referenz-/Round-Caches verwenden und explizit invalidieren.
 - Dirty-Flags und einmal-pro-Frame-Rebuilds für große UI-/Overlay-Bäume nutzen; keine komplette Baumzerstörung pro Klick.

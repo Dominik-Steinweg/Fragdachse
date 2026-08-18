@@ -1,7 +1,6 @@
 import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
-import { ChunkedRenderSurface } from '../../arena/chunks/ChunkedRenderSurface';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
@@ -148,6 +147,7 @@ export class ArenaLifecycleCoordinator {
   private arenaBuilt       = false;
   private lastRoundRevision = 0;
   private localArenaLoadReady = false;
+  private hostStartupCachesPrepared = false;
   private boundRoundStartTime = 0;
   private pendingClassicTrainEvent: {
     readonly trackX: number;
@@ -368,9 +368,13 @@ export class ArenaLifecycleCoordinator {
     const roundRevision = participation?.roundRevision ?? 0;
     if (roundRevision <= 0 || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
 
+    const hostStartupReady = bridge.isHost()
+      ? this.prepareHostStartupCaches(Date.now())
+      : true;
     const localReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
       && this.renderers.shadow.isStaticReadyForView(view, true);
-    if (localReady && !bridge.isLocalArenaLoadReady(roundRevision)) {
+    const arenaLoadReady = localReady && hostStartupReady;
+    if (arenaLoadReady && !bridge.isLocalArenaLoadReady(roundRevision)) {
       bridge.setLocalArenaLoadReady(roundRevision, true);
       this.localArenaLoadReady = true;
     } else if (bridge.isLocalArenaLoadReady(roundRevision)) {
@@ -457,6 +461,31 @@ export class ArenaLifecycleCoordinator {
         this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       }
     }
+  }
+
+  private prepareHostStartupCaches(now: number): boolean {
+    if (!bridge.isHost() || this.hostStartupCachesPrepared) return this.hostStartupCachesPrepared;
+
+    // A reconnect or a delayed committed-loadout snapshot can make the initial spawn arrive one
+    // or more frames after the arena itself. Keep the cache gate behind the actual spawn state.
+    this.spawnReadyPlayers();
+    const participation = bridge.getRoundParticipation();
+    if (!participation || participation.roundRevision <= 0) return false;
+
+    const connected = new Set([...bridge.getConnectedPlayerIds(), bridge.getLocalPlayerId()]);
+    const requiredIds = participation.participantIds.filter((id) => (
+      connected.has(id) && !participation.spectatorIds.includes(id)
+    ));
+    if (requiredIds.length === 0) return false;
+    const allInitialPlayersSpawned = requiredIds.every((id) => {
+      const player = this.ctx.playerManager.getPlayer(id);
+      return player?.sprite.active === true && this.ctx.combatSystem.isAlive(id);
+    });
+    if (!allInitialPlayersSpawned) return false;
+
+    this.hostUpdate.prepareStartupCaches(now);
+    this.hostStartupCachesPrepared = true;
+    return true;
   }
 
   /**
@@ -623,6 +652,9 @@ export class ArenaLifecycleCoordinator {
 
   /** Gemeinsamer Entkopplungspfad fuer Spectator, Disconnect und Arena-Teardown. */
   removePlayerFromActiveRound(playerId: string): void {
+    if (bridge.isHost() && bridge.isArenaLoading() && bridge.getArenaStartTime() <= 0) {
+      this.hostStartupCachesPrepared = false;
+    }
     // Zielstatus und Injector-Fokus gehoeren zur laufenden Runde, nicht zur Lobby-Persona.
     // Deshalb muessen sie auch beim Disconnect/Spectator-Wechsel vor dem naechsten Snapshot
     // entfernt werden.
@@ -693,7 +725,6 @@ export class ArenaLifecycleCoordinator {
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
     bridge.resetGameStateCache();
 
-    const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout);
     // Map-ID bevorzugt aus dem (gegateten) RoundState lesen – derselbe reliable-Snapshot, der auch die
     // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
     // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
@@ -710,6 +741,10 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseBases = coopDefenseMapConfig
       ? getCoopDefenseBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
+    // Die Basen sind bereits fuer diese Runde aufgeloest. Dieselbe Liste muss auch die
+    // Visual-only-Hydration sehen, sonst faellt generateDecals() erneut auf den teuren globalen
+    // Coop-Base-Lookup zurueck.
+    const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout, coopDefenseBases);
     const coopDefensePersistentSpawnConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapPersistentSpawnConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
@@ -2507,11 +2542,6 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult,
       this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
     );
-    // Die Runde startet mit reservierten, aber noch unsichtbaren Chunks. Ein kleiner erster
-    // Scheduler-Schritt waermt die kameranahen Regionen an; der Rest laeuft in den folgenden
-    // Frames ueber denselben gemeinsamen Scheduler weiter.
-    ChunkedRenderSurface.flushBakeBudget(this.scene);
-
     // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
     // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
     this.ctx.lightOccluderIndex = new LightOccluderIndex({
@@ -2535,6 +2565,7 @@ export class ArenaLifecycleCoordinator {
 
   tearDownArena(): void {
     this.localArenaLoadReady = false;
+    this.hostStartupCachesPrepared = false;
     this.boundRoundStartTime = 0;
     this.pendingClassicTrainEvent = null;
     this.cancelTrainExplosionTimers();

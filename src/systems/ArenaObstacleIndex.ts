@@ -164,6 +164,15 @@ export class ArenaObstacleIndex {
   }
 
   /**
+   * Baut den Index explizit fuer den verborgenen Rundenaufbau. Der erste echte LoS-/Hitscan-
+   * Query muss dadurch keinen Voll-Rebuild mehr synchron im Gameplay-Frame ausloesen.
+   * Ist der Cache bereits aktuell, bleibt der Aufruf kostenlos.
+   */
+  prepare(): void {
+    if (this.needsRebuild()) this.rebuild();
+  }
+
+  /**
    * Besucht alle Hindernisse, deren Bucket das Segment berührt.
    *
    * Die Vorauswahl ist konservativ: der Besucher bekommt Kandidaten, nicht Treffer, und
