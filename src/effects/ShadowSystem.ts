@@ -484,6 +484,10 @@ export class ShadowSystem {
     });
     this.staticSurface.setSamplingMode(this.staticSamplingMode);
     this.staticSurface.updateResidency(this.staticResidencyView ?? frame);
+    this.staticScratch.preallocate(
+      'staticShadow',
+      SHADOW_DIRTY_CHUNK_SIZE + this.staticSurface.gutterPx * 2,
+    );
     return { surface: this.staticSurface, created: true };
   }
 

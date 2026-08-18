@@ -148,18 +148,26 @@ export interface ChunkedRenderSurfaceStats {
   readonly pendingRegions: number;
   readonly pendingTextureAcquisitions: number;
   readonly pooledTextures: number;
+  /** Maximale Chunk-Anzahl des konfigurierten Kamera-/Release-Fensters. */
+  readonly maxResidentChunkDemand: number;
+  /** Alle noch lebenden Renderziele dieser Surface, resident oder im Pool. */
+  readonly allocatedTextures: number;
+  /** Renderziele, die nach der ersten Residency-Synchronisierung neu erzeugt wurden. */
+  readonly runtimeTextureCreations: number;
   readonly layers: number;
   readonly chunkSize: number;
   /** Summe der residenten Renderziel-Pixel – die Groesse, die *nicht* mit der Welt skalieren darf. */
   readonly residentPixels: number;
+  /** Summe aller allozierten Renderziel-Pixel inklusive des Recycling-Pools. */
+  readonly allocatedPixels: number;
 }
 
 /**
- * Wieviele freigegebene Renderziele je Ebene vorgehalten werden, bevor sie wirklich zerstoert
- * werden. Der Pool faengt das Hin- und Herlaufen ueber eine Chunkgrenze ab, ohne dass ein
- * Dauerlauf ueber die Karte unbegrenzt Speicher haelt.
+ * Kleine Reserve je Layer fuer den Uebergang zwischen zwei Residency-Fenstern und fuer einen
+ * versteckten Gutter-Bake. Die eigentliche Kapazitaet wird aus dem maximalen Release-Fenster
+ * berechnet; dieser Puffer ist bewusst unabhaengig von der Kartengroesse.
  */
-const CHUNK_TEXTURE_POOL_LIMIT_PER_LAYER = 12;
+export const CHUNK_TEXTURE_POOL_SAFETY_BUFFER = 2;
 let nextSurfaceId = 1;
 
 export class ChunkedRenderSurface {
@@ -178,13 +186,16 @@ export class ChunkedRenderSurface {
   private readonly pool = new Map<string, Phaser.GameObjects.RenderTexture[]>();
   private readonly defaultFilterModes = new WeakMap<Phaser.GameObjects.RenderTexture, Phaser.Textures.FilterMode>();
   private readonly layerVisibility = new Map<string, boolean>();
-  private readonly transientBakeTextures = new Map<string, Phaser.GameObjects.RenderTexture>();
   private visible = true;
   private samplingMode: ChunkSamplingMode = 'default';
   private destroyed = false;
   private lastResidencyView: ChunkWorldRect | null = null;
   private movementX = 0;
   private movementY = 0;
+  private maxResidentChunkDemand = 0;
+  private textureCapacityPerLayer = 0;
+  private hasPreparedInitialResidency = false;
+  private runtimeTextureCreations = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -216,6 +227,7 @@ export class ChunkedRenderSurface {
       this.movementY = view.y - this.lastResidencyView.y;
     }
     this.lastResidencyView = { ...view };
+    this.ensureTexturePoolCapacity(view);
     const local = worldRectToLocalRect(view, this.frame);
     const visible = new Set<number>();
     for (const coord of this.grid.chunksInLocalRect(local)) {
@@ -227,13 +239,9 @@ export class ChunkedRenderSurface {
       keep.add(this.grid.key(coord.cx, coord.cy));
     }
 
-    for (const coord of wanted) {
-      const key = this.grid.key(coord.cx, coord.cy);
-      const chunk = this.resident.get(key) ?? this.acquireChunk(coord);
-      chunk.visibleDemand = visible.has(key);
-      this.syncChunkVisibility(chunk);
-    }
-
+    // Erst freigeben, dann neue Chunks uebernehmen: Die alten Renderziele stehen im selben
+    // Update bereits fuer die neuen Acquisitions zur Verfuegung. So braucht eine Kamerafahrt
+    // keinen zusaetzlichen WebGL-Framebuffer fuer den kurzzeitigen Vereinigungsbereich.
     for (const key of [...this.resident.keys()]) {
       if (!keep.has(key)) this.releaseChunk(key);
       else {
@@ -244,6 +252,14 @@ export class ChunkedRenderSurface {
         }
       }
     }
+
+    for (const coord of wanted) {
+      const key = this.grid.key(coord.cx, coord.cy);
+      const chunk = this.resident.get(key) ?? this.acquireChunk(coord);
+      chunk.visibleDemand = visible.has(key);
+      this.syncChunkVisibility(chunk);
+    }
+    this.hasPreparedInitialResidency = true;
   }
 
   /**
@@ -297,8 +313,14 @@ export class ChunkedRenderSurface {
     // data, without turning the neighbour gutter refresh into a visible dirty-region rebuild.
     if (neighbours.length > 0) {
       const transient = this.getTransientBakeChunk(coord);
-      this.runBake(transient, localX, localY, size);
-      this.refreshNeighbourGutters(transient, localX, localY, size, neighbours);
+      try {
+        this.runBake(transient, localX, localY, size);
+        this.refreshNeighbourGutters(transient, localX, localY, size, neighbours);
+      } finally {
+        // Transient gutter work borrows the same preallocated layer targets as residency. It
+        // must never become a second lazy RenderTexture pool that allocates during a match.
+        this.releaseTransientBakeChunk(transient);
+      }
     }
   }
 
@@ -376,26 +398,31 @@ export class ChunkedRenderSurface {
     let pendingChunks = 0;
     let pendingRegions = 0;
     let pendingTextureAcquisitions = 0;
-    let residentPixels = 0;
+    let residentTextures = 0;
     for (const bucket of this.pool.values()) pooled += bucket.length;
     for (const chunk of this.resident.values()) {
       if (!chunk.ready) pendingChunks += 1;
       pendingRegions += chunk.pendingRegions.size;
       pendingTextureAcquisitions += chunk.pendingTextureLayers.size;
-      residentPixels += chunk.textures.size;
+      residentTextures += chunk.textures.size;
     }
     // Gezaehlt wird die belegte Kantenlaenge samt Gutter, nicht die sichtbare: Speicher kostet
     // das Renderziel, nicht der Ausschnitt.
     const chunkPixels = this.chunkTextureSize * this.chunkTextureSize;
+    const allocatedTextures = residentTextures + pooled;
     return {
       residentChunks: this.resident.size,
       pendingChunks,
       pendingRegions,
       pendingTextureAcquisitions,
       pooledTextures: pooled,
+      maxResidentChunkDemand: this.maxResidentChunkDemand,
+      allocatedTextures,
+      runtimeTextureCreations: this.runtimeTextureCreations,
       layers: this.layers.length,
       chunkSize: this.grid.chunkSize,
-      residentPixels: residentPixels * chunkPixels,
+      residentPixels: residentTextures * chunkPixels,
+      allocatedPixels: allocatedTextures * chunkPixels,
     };
   }
 
@@ -414,10 +441,6 @@ export class ChunkedRenderSurface {
       }
     }
     this.pool.clear();
-    for (const texture of this.transientBakeTextures.values()) {
-      if (texture.active) texture.destroy();
-    }
-    this.transientBakeTextures.clear();
   }
 
   // ── Interna ────────────────────────────────────────────────────────────────
@@ -583,28 +606,71 @@ export class ChunkedRenderSurface {
     for (const layer of chunk.pendingTextureLayers) this.scheduler.cancel(this.textureJobKey(chunk, layer));
     this.resident.delete(key);
     for (const [layerId, texture] of chunk.textures) {
-      texture.clear();
-      texture.render();
-      texture.setVisible(false);
-      const bucket = this.pool.get(layerId) ?? [];
-      if (bucket.length >= CHUNK_TEXTURE_POOL_LIMIT_PER_LAYER) {
-        texture.destroy();
-        continue;
-      }
-      bucket.push(texture);
-      this.pool.set(layerId, bucket);
+      this.returnPooledTexture(layerId, texture);
     }
   }
 
   private takePooledTexture(layer: ChunkedSurfaceLayerSpec): Phaser.GameObjects.RenderTexture | null {
     const bucket = this.pool.get(layer.id);
-    const pooled = bucket?.pop();
-    if (pooled) {
-      this.applySamplingMode(pooled);
-      return pooled;
+    while (bucket && bucket.length > 0) {
+      const pooled = bucket.pop();
+      if (pooled?.active) {
+        this.applySamplingMode(pooled);
+        return pooled;
+      }
     }
 
     return null;
+  }
+
+  private returnPooledTexture(layerId: string, texture: Phaser.GameObjects.RenderTexture): void {
+    if (!texture.active) return;
+    texture.clear();
+    texture.render();
+    texture.setVisible(false);
+    const bucket = this.pool.get(layerId) ?? [];
+    bucket.push(texture);
+    this.pool.set(layerId, bucket);
+  }
+
+  /**
+   * Vorallokiert die gesamte Renderziel-Kapazitaet des Release-Fensters.
+   *
+   * Die Formel ist bewusst nur von Viewport, Prefetch-/Release-Rand und Chunkraster abhaengig.
+   * Sie ist eine konservative obere Schranke fuer beliebige Rasterausrichtung; die Map-Grenzen
+   * kuerzen sie fuer kleine Arenen. Damit werden grosse Karten nicht zu einem proportionalen
+   * VRAM-Reservoir.
+   */
+  private ensureTexturePoolCapacity(view: ChunkWorldRect): void {
+    const local = worldRectToLocalRect(view, this.frame);
+    const maxColumns = Math.min(
+      this.grid.cols,
+      Math.max(1, Math.ceil((local.width + ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX * 2) / this.grid.chunkSize) + 1),
+    );
+    const maxRows = Math.min(
+      this.grid.rows,
+      Math.max(1, Math.ceil((local.height + ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX * 2) / this.grid.chunkSize) + 1),
+    );
+    const demand = maxColumns * maxRows;
+    if (demand > this.maxResidentChunkDemand) {
+      this.maxResidentChunkDemand = demand;
+      this.textureCapacityPerLayer = demand + CHUNK_TEXTURE_POOL_SAFETY_BUFFER;
+    }
+
+    for (const layer of this.layers) {
+      while (this.countOwnedTextures(layer.id) < this.textureCapacityPerLayer) {
+        const texture = this.createTexture(layer);
+        this.returnPooledTexture(layer.id, texture);
+      }
+    }
+  }
+
+  private countOwnedTextures(layerId: string): number {
+    let count = this.pool.get(layerId)?.length ?? 0;
+    for (const chunk of this.resident.values()) {
+      if (chunk.textures.has(layerId)) count += 1;
+    }
+    return count;
   }
 
   /** Creates one genuinely new resident target. Callers must already be on the shared scheduler. */
@@ -624,6 +690,7 @@ export class ChunkedRenderSurface {
     }
     this.applySamplingMode(texture);
     this.onChunkTextureCreated?.(texture, layer.id);
+    if (this.hasPreparedInitialResidency) this.runtimeTextureCreations += 1;
     return texture;
   }
 
@@ -727,23 +794,19 @@ export class ChunkedRenderSurface {
   }
 
   private getTransientBakeChunk(coord: ArenaChunkCoord): ResidentChunk {
-    for (const texture of this.transientBakeTextures.values()) {
+    const textures = new Map<string, Phaser.GameObjects.RenderTexture>();
+    for (const layer of this.layers) {
+      const texture = this.takePooledTexture(layer) ?? this.createTexture(layer);
+      texture.setOrigin(0, 0);
+      texture.setVisible(false);
+      texture.camera.setScroll(0, 0);
       texture.clear();
       texture.render();
-    }
-    if (this.transientBakeTextures.size === 0) {
-      for (const layer of this.layers) {
-        const texture = this.scene.add.renderTexture(0, 0, this.chunkTextureSize, this.chunkTextureSize);
-        texture.setOrigin(0, 0);
-        texture.setVisible(false);
-        texture.camera.setScroll(0, 0);
-        if (layer.blend !== undefined) texture.setBlendMode(layer.blend);
-        this.transientBakeTextures.set(layer.id, texture);
-      }
+      textures.set(layer.id, texture);
     }
     return {
       coord,
-      textures: this.transientBakeTextures,
+      textures,
       pendingRegions: new Map(),
       dirtyRegions: new Set(),
       pendingTextureLayers: new Set(),
@@ -751,6 +814,10 @@ export class ChunkedRenderSurface {
       ready: true,
       visibleDemand: false,
     };
+  }
+
+  private releaseTransientBakeChunk(chunk: ResidentChunk): void {
+    for (const [layerId, texture] of chunk.textures) this.returnPooledTexture(layerId, texture);
   }
 
   private scheduleRegion(
@@ -981,6 +1048,11 @@ export class ChunkScratchPool {
     if (renderMode === 'redraw') texture.setRenderMode('redraw');
     this.sets.set(key, texture);
     return texture;
+  }
+
+  /** Erzeugt ein bekanntes Scratch-Ziel bereits im verdeckten Arena-Startup. */
+  preallocate(role: string, size: number, renderMode: 'render' | 'redraw' = 'render'): void {
+    this.get(role, size, renderMode);
   }
 
   destroy(): void {

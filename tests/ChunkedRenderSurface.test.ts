@@ -13,7 +13,11 @@ import {
   ARENA_RENDER_CHUNK_SIZE,
   ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX,
 } from '../src/arena/chunks/ArenaChunkGrid';
-import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
+import {
+  CHUNK_SAMPLING_GUTTER_PX,
+  CHUNK_TEXTURE_POOL_SAFETY_BUFFER,
+  ChunkedRenderSurface,
+} from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ChunkBakeRegion } from '../src/arena/chunks/ChunkedRenderSurface';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../src/arena/RockOverlayRegions';
 
@@ -171,8 +175,10 @@ describe('chunked render surface', () => {
 
     expect(regions).toEqual([]);
     expect(surface.getStats().pendingRegions).toBeGreaterThan(0);
-    expect(surface.getChunkTexture('a', 0, 0)).toBeNull();
-    expect(surface.getStats().pendingTextureAcquisitions).toBeGreaterThan(0);
+    // Die Renderziele selbst sind beim Startup bereits vorallokiert; sichtbar werden sie erst
+    // nach dem vollstaendigen Regional-Bake.
+    expect(surface.getChunkTexture('a', 0, 0)).not.toBeNull();
+    expect(surface.getStats().pendingTextureAcquisitions).toBe(0);
 
     ChunkedRenderSurface.flushBakeBudget(scene as never);
     expect(regions.length).toBeGreaterThan(0);
@@ -262,6 +268,60 @@ describe('chunked render surface', () => {
     expect(surface.getStats().residentChunks).toBeGreaterThan(0);
     // Ein konstanter Aufschlag ist erlaubt (der Pool ist begrenzt), ein Wachstum je Runde nicht.
     expect(created).toBeLessThan(afterFirst * 8);
+  });
+
+  it('preallocates the release-window capacity and stays allocation-free during streaming', () => {
+    const { surface, scene } = createSurface();
+    updateSurface(surface, scene, VIEW);
+
+    const startup = surface.getStats();
+    expect(startup.maxResidentChunkDemand).toBeGreaterThan(startup.residentChunks);
+    expect(startup.allocatedTextures).toBe(
+      (startup.maxResidentChunkDemand + CHUNK_TEXTURE_POOL_SAFETY_BUFFER) * startup.layers,
+    );
+    expect(startup.runtimeTextureCreations).toBe(0);
+
+    const allocatedAtStartup = startup.allocatedTextures;
+    updateSurface(surface, scene, { ...VIEW, x: 6_000, y: 400 });
+    updateSurface(surface, scene, VIEW);
+
+    const afterStreaming = surface.getStats();
+    expect(afterStreaming.allocatedTextures).toBe(allocatedAtStartup);
+    expect(afterStreaming.runtimeTextureCreations).toBe(0);
+    expect(afterStreaming.pendingTextureAcquisitions).toBe(0);
+  });
+
+  it('keeps pool and VRAM demand constant when only the map grows', () => {
+    const normalFrame = { offsetX: 0, offsetY: 0, width: 20_000, height: 10_000 };
+    const largeFrame = { offsetX: 0, offsetY: 0, width: 100_000, height: 100_000 };
+    const view = { x: 0, y: 0, width: VIEW.width, height: VIEW.height };
+    const normal = createSurface(normalFrame);
+    const large = createSurface(largeFrame);
+
+    updateSurface(normal.surface, normal.scene, view);
+    updateSurface(large.surface, large.scene, view);
+
+    const normalStats = normal.surface.getStats();
+    const largeStats = large.surface.getStats();
+    expect(largeStats.maxResidentChunkDemand).toBe(normalStats.maxResidentChunkDemand);
+    expect(largeStats.allocatedTextures).toBe(normalStats.allocatedTextures);
+    expect(largeStats.allocatedPixels).toBe(normalStats.allocatedPixels);
+  });
+
+  it('coalesces repeated dirty notifications before the scheduler runs', () => {
+    const { surface, regions, scene } = createSurface();
+    updateSurface(surface, scene, VIEW);
+    regions.length = 0;
+
+    // Mehrere Aenderungen liegen in derselben 128-px-Arbeitseinheit. Der Scheduler-Key darf
+    // daraus weder doppelte Arbeit noch eine zweite sichtbare Zwischenversion machen.
+    surface.refreshRegion(0, 0, ROCK_OVERLAY_CHUNK_SIZE);
+    surface.refreshRegion(16, 16, 64);
+    surface.refreshRegion(0, 0, ROCK_OVERLAY_CHUNK_SIZE);
+
+    expect(surface.getStats().pendingRegions).toBe(1);
+    drain(scene);
+    expect(regions).toHaveLength(1);
   });
 
   it('drops chunks that leave the release margin and rebuilds them identically on return', () => {

@@ -14,6 +14,7 @@ import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './Chu
 import type { ChunkSamplingMode } from './ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from './ChunkedRenderSurface';
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
+import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
 
 /**
  * Gestreamte statische Bodenbaender: Dirt samt eingebackener Materialstoerung, Ground Cover und
@@ -113,6 +114,18 @@ export class GroundSurfaceStreamer {
       chunkSize: options.chunkSize,
       bake: (region, sink) => this.bakeRegion(region, sink),
     });
+
+    // Alle Scratch-Rollen haben dieselbe 128-px-Dirty-Groesse. Sie werden neben den Chunk-Zielen
+    // im verdeckten Startup angelegt, damit auch eine spaet erstmals befuellte Mottle-/Decal-
+    // Variante keinen neuen Framebuffer mitten im Match anfordern muss.
+    const scratchSize = ROCK_OVERLAY_CHUNK_SIZE + this.surface.gutterPx * 2;
+    this.scratch.preallocate('dirt', scratchSize);
+    this.scratch.preallocate('dirtCutout', scratchSize, 'redraw');
+    for (let index = 0; index < this.mottleConfigs.length; index += 1) {
+      this.scratch.preallocate(`dirtMottle${index}`, scratchSize);
+    }
+    this.scratch.preallocate('groundCover', scratchSize);
+    this.scratch.preallocate('groundDecal', scratchSize);
   }
 
   updateResidency(view: ChunkWorldRect): void {

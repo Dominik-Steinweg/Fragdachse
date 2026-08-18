@@ -179,6 +179,20 @@ export class RockOverlayStreamer {
       chunkSize: options.chunkSize,
       bake: (region, sink) => this.bakeRegion(region, sink),
     });
+
+    // Scratch-Targets sind klein, aber ebenfalls WebGL-Renderziele. Alle Rollen werden deshalb
+    // mit der Dirty-Region-Groesse im verdeckten Arena-Startup warm gemacht.
+    const scratchSize = ROCK_OVERLAY_CHUNK_SIZE + this.surface.gutterPx * 2;
+    this.scratch.preallocate('silhouetteCutout', scratchSize, 'redraw');
+    for (let index = 0; index < this.mottleConfigs.length; index += 1) {
+      this.scratch.preallocate(`mottle${index}`, scratchSize);
+    }
+    this.scratch.preallocate('mossCutout', scratchSize, 'redraw');
+    this.scratch.preallocate('moss', scratchSize);
+    this.scratch.preallocate('vegetationCutout', scratchSize, 'redraw');
+    this.scratch.preallocate('vegetation', scratchSize);
+    this.scratch.preallocate('rockDecal', scratchSize);
+    this.scratch.preallocate('rockDecalCutout', scratchSize, 'redraw');
   }
 
   updateResidency(view: ChunkWorldRect): void {
