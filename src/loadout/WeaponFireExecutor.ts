@@ -137,6 +137,32 @@ export interface WeaponFireParams {
 }
 
 /**
+ * Resolves the effective hitscan range for a weapon that terminates at the cursor.
+ *
+ * The range is measured from the gameplay muzzle so the replicated trace ends at the
+ * cursor instead of overshooting it by the muzzle offset. Other hitscan weapons keep
+ * their authored range unchanged.
+ */
+export function getHitscanRangeToCursor(
+  config: WeaponConfig,
+  startX: number,
+  startY: number,
+  angle: number,
+  targetX: number,
+  targetY: number,
+): number {
+  if (config.id !== 'PLASMA_BURNER') return config.range;
+
+  const directionX = Math.cos(angle);
+  const directionY = Math.sin(angle);
+  const cursorDistance = Math.max(
+    0,
+    (targetX - startX) * directionX + (targetY - startY) * directionY,
+  );
+  return Math.min(config.range, cursorDistance);
+}
+
+/**
  * Zustandsarmer Fire-Dispatch für die Ambient-kompatiblen Waffentypen.
  *
  * Er übersetzt eine {@link WeaponConfig} in Projektil-, Hitscan- oder Melee-Aufträge und hält
@@ -309,7 +335,14 @@ export class WeaponFireExecutor {
       startX:          gameplayMuzzleOrigin.x,
       startY:          gameplayMuzzleOrigin.y,
       angle:           params.angle,
-      range:           config.range,
+      range:           getHitscanRangeToCursor(
+        config,
+        gameplayMuzzleOrigin.x,
+        gameplayMuzzleOrigin.y,
+        params.angle,
+        params.targetX,
+        params.targetY,
+      ),
       damage:          config.damage,
       traceThickness:  fireConfig.traceThickness,
       color:           params.ownerColor,

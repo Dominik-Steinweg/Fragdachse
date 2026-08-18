@@ -7,6 +7,7 @@ import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONF
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { createCoopDefensePlaceablePedestalUtility } from '../../loadout/CoopDefenseMissionUtility';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
+import { getHitscanRangeToCursor } from '../../loadout/WeaponFireExecutor';
 import { getHeldWeaponMuzzleOrigin } from '../../loadout/HeldItemVisuals';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
@@ -471,7 +472,7 @@ export class ClientUpdateCoordinator {
     if (lastFired > 0 && now - lastFired < wepConfig.cooldown) return undefined; // still on cooldown
 
     this.ctx.aimSystem?.notifyShot(slot);
-    const shotId = this.playPredictedLocalHitscanTracer(slot, angle);
+    const shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
     if (shotId === undefined && !bridge.isHost()) {
       // Projektil-Waffen: Audio sofort lokal abspielen (Prediction),
       // da spawnProjectile nur auf dem Host läuft und Network-Jitter sonst
@@ -914,7 +915,12 @@ export class ClientUpdateCoordinator {
     this.clientUtilityOverride = null;
   }
 
-  private playPredictedLocalHitscanTracer(slot: WeaponSlot, angle: number): number | undefined {
+  private playPredictedLocalHitscanTracer(
+    slot: WeaponSlot,
+    angle: number,
+    targetX: number,
+    targetY: number,
+  ): number | undefined {
     const config = this.getLocalWeaponConfig(slot);
     if (config.fire.type !== 'hitscan') return undefined;
 
@@ -939,7 +945,14 @@ export class ClientUpdateCoordinator {
       startX:     gameplayMuzzleOrigin.x,
       startY:     gameplayMuzzleOrigin.y,
       angle,
-      range:      config.range,
+      range:      getHitscanRangeToCursor(
+        config,
+        gameplayMuzzleOrigin.x,
+        gameplayMuzzleOrigin.y,
+        angle,
+        targetX,
+        targetY,
+      ),
       traceThickness: config.fire.traceThickness,
       applyFavorTheShooter: bridge.isHost(),
       includeShooter: Boolean(config.fire.supportEffect),

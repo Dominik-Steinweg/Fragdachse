@@ -2112,7 +2112,7 @@ export class LoadoutManager {
         return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin);
 
       case 'hitscan':
-        return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin);
+        return this.fireHitscanWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin);
 
       case 'melee':
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
@@ -2385,6 +2385,8 @@ export class LoadoutManager {
     x:           number,
     y:           number,
     angle:       number,
+    targetX:     number,
+    targetY:     number,
     playerId:    string,
     playerColor: number,
     sourceSlot:  WeaponSlot | undefined,
@@ -2393,9 +2395,7 @@ export class LoadoutManager {
   ): boolean {
     void fireConfig;
     return this.weaponFire.fire(config, {
-      x, y, angle,
-      targetX: x,
-      targetY: y,
+      x, y, angle, targetX, targetY,
       ownerId: playerId,
       ownerColor: playerColor,
       sourceSlot,

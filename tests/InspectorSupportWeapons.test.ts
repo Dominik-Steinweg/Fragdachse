@@ -8,7 +8,7 @@ vi.mock('phaser', () => ({
 
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
-import { ENERGY_INJECTOR_COLOR, PLASMA_BURNER_COLOR } from '../src/config';
+import { ENERGY_INJECTOR_COLOR, getTopDownMuzzleOrigin, PLASMA_BURNER_COLOR } from '../src/config';
 import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
 import { getLoadoutItemName } from '../src/i18n/contentPresentation';
 
@@ -78,6 +78,35 @@ describe('inspector support weapons', () => {
     expect(call?.[9]).toBe(testConfig.id);
     expect(call?.[10]).toBe(testConfig.fire.visualPreset);
     expect(call?.[19]).toEqual(supportEffect);
+  });
+
+  it('limits the Plasmabrenner trace to the cursor while retaining its maximum range', () => {
+    const { resolveHitscanShot } = createManagerWithSpawnSpy();
+    const config = WEAPON_CONFIGS.PLASMA_BURNER;
+    const startX = 100;
+    const startY = 200;
+    const angle = 0;
+    const muzzle = getTopDownMuzzleOrigin(startX, startY, angle);
+    const cursorX = muzzle.x + 80;
+
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile: vi.fn() } });
+    Object.defineProperty(manager, 'combatSystem', { value: { resolveHitscanShot } });
+
+    manager.fireAutomatedWeapon(config, startX, startY, angle, cursorX, startY, 'inspector', 0x22cc88);
+    expect(resolveHitscanShot.mock.calls[0]?.[4]).toBeCloseTo(cursorX - muzzle.x, 10);
+
+    manager.fireAutomatedWeapon(
+      config,
+      startX,
+      startY,
+      angle,
+      muzzle.x + config.range + 200,
+      startY,
+      'inspector',
+      0x22cc88,
+    );
+    expect(resolveHitscanShot.mock.calls[1]?.[4]).toBe(config.range);
   });
 
   it('fires the energy injector as a precise non-homing projectile', () => {

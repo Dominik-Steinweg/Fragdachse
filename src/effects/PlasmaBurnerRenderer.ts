@@ -603,6 +603,53 @@ export class PlasmaBurnerRenderer {
     const incomingAngle = length > 0.001 ? Math.atan2(dy, dx) : 0;
     graphics.clear();
 
+    // A free-running beam must not end as a flat line cap. The tapered plasma tip
+    // keeps the cursor endpoint readable even when there is no collision impact.
+    const tangentX = length > 0.001 ? dx / length : 1;
+    const tangentY = length > 0.001 ? dy / length : 0;
+    const normalX = -tangentY;
+    const normalY = tangentX;
+    const tipDepth = Math.min(length * 0.42, Phaser.Math.Clamp(length * 0.08, 8, 18));
+    const tipBaseX = visual.endX - tangentX * tipDepth;
+    const tipBaseY = visual.endY - tangentY * tipDepth;
+    const tipHalfWidth = Math.max(visual.thickness * 1.25, 4.5);
+
+    graphics.fillStyle(glowColor, 0.12);
+    graphics.fillTriangle(
+      tipBaseX + normalX * tipHalfWidth,
+      tipBaseY + normalY * tipHalfWidth,
+      tipBaseX - normalX * tipHalfWidth,
+      tipBaseY - normalY * tipHalfWidth,
+      visual.endX,
+      visual.endY,
+    );
+    graphics.fillStyle(coreColor, 0.62);
+    graphics.fillTriangle(
+      tipBaseX + normalX * (tipHalfWidth * 0.42),
+      tipBaseY + normalY * (tipHalfWidth * 0.42),
+      tipBaseX - normalX * (tipHalfWidth * 0.42),
+      tipBaseY - normalY * (tipHalfWidth * 0.42),
+      visual.endX,
+      visual.endY,
+    );
+    graphics.fillStyle(coreColor, 0.92);
+    graphics.fillCircle(visual.endX, visual.endY, Math.max(visual.thickness * 0.72, 2.4));
+
+    for (let filament = 0; filament < 2; filament += 1) {
+      const side = filament === 0 ? -1 : 1;
+      const branchStartX = tipBaseX + normalX * side * tipHalfWidth * 0.58;
+      const branchStartY = tipBaseY + normalY * side * tipHalfWidth * 0.58;
+      const branchPath = this.createSmoothBranch(
+        branchStartX,
+        branchStartY,
+        branchStartX - tangentX * Phaser.Math.FloatBetween(1, 5) + normalX * side * Phaser.Math.FloatBetween(2, 6),
+        branchStartY - tangentY * Phaser.Math.FloatBetween(1, 5) + normalY * side * Phaser.Math.FloatBetween(2, 6),
+        1.2,
+      );
+      strokeBeamPolyline(graphics, branchPath, 1.8, glowColor, 0.12);
+      strokeBeamPolyline(graphics, branchPath, 0.62, coreColor, 0.5);
+    }
+
     for (let ray = 0; ray < 3; ray += 1) {
       const angle = incomingAngle + Phaser.Math.FloatBetween(-0.55, 0.55);
       const inner = Phaser.Math.FloatBetween(2, 5);
