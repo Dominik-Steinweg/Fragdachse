@@ -243,7 +243,7 @@ export class FakeRenderTexture {
 
   stamp(
     key: string,
-    _frame: unknown,
+    frame: unknown,
     x: number,
     y: number,
     config?: FakeStampConfig,
@@ -264,6 +264,23 @@ export class FakeRenderTexture {
           1,
         );
         return;
+      }
+
+      // Gutter synchronization stamps an explicit physical frame. It must copy only that
+      // narrow source rectangle; treating it as a full-texture stamp would make the fake leak
+      // semantic neighbour content into the visible chunk and would not model Phaser's frame UVs.
+      if (typeof frame === 'string') {
+        const sourceFrame = source.texture.frames[frame];
+        if (sourceFrame) {
+          this.compositeTextureRegion(source, sourceFrame, x, y);
+          // The preceding clear belongs to the same gutter-only copy. Keep the semantic blit
+          // history readable for tests that inspect the last visible bake.
+          const lastBlit = this.blits.at(-1);
+          if (lastBlit && lastBlit.localX === x && lastBlit.localY === y && lastBlit.content.length === 0) {
+            this.blits.pop();
+          }
+          return;
+        }
       }
 
       const drawn = translateContent(source.content, x, y);
@@ -376,6 +393,27 @@ export class FakeRenderTexture {
     this.active = false;
     if (FakeRenderTexture.textures.get(this.texture.key) === this) {
       FakeRenderTexture.textures.delete(this.texture.key);
+    }
+  }
+
+  private compositeTextureRegion(
+    source: FakeRenderTexture,
+    frame: FakeFill,
+    x: number,
+    y: number,
+  ): void {
+    const left = Math.round(x);
+    const top = Math.round(y);
+    for (let sourceY = 0; sourceY < frame.height; sourceY += 1) {
+      const targetY = top + sourceY;
+      if (targetY < 0 || targetY >= this.height) continue;
+      for (let sourceX = 0; sourceX < frame.width; sourceX += 1) {
+        const sourcePixel = source.pixels[(frame.y + sourceY) * source.width + frame.x + sourceX];
+        if (sourcePixel === 0) continue;
+        const targetX = left + sourceX;
+        if (targetX < 0 || targetX >= this.width) continue;
+        this.pixels[targetY * this.width + targetX] = 1;
+      }
     }
   }
 }

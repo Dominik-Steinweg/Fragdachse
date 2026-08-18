@@ -125,6 +125,12 @@ interface ResidentChunk {
   readonly textures: Map<string, Phaser.GameObjects.RenderTexture>;
 }
 
+interface NeighbourGutterTarget {
+  readonly chunk: ResidentChunk;
+  readonly dx: number;
+  readonly dy: number;
+}
+
 export interface ChunkedRenderSurfaceStats {
   readonly residentChunks: number;
   readonly pooledTextures: number;
@@ -155,6 +161,7 @@ export class ChunkedRenderSurface {
   private readonly pool = new Map<string, Phaser.GameObjects.RenderTexture[]>();
   private readonly defaultFilterModes = new WeakMap<Phaser.GameObjects.RenderTexture, Phaser.Textures.FilterMode>();
   private readonly layerVisibility = new Map<string, boolean>();
+  private readonly transientBakeTextures = new Map<string, Phaser.GameObjects.RenderTexture>();
   private visible = true;
   private samplingMode: ChunkSamplingMode = 'default';
   private destroyed = false;
@@ -207,8 +214,10 @@ export class ChunkedRenderSurface {
   /**
    * Backt eine Dirty-Region neu.
    *
-   * Nicht residente Chunks werden bewusst uebersprungen: Ihr Inhalt existiert gerade nicht und
-   * entsteht beim naechsten Sichtbarwerden ohnehin aus dem dann aktuellen Weltzustand.
+   * Nicht residente Chunks werden bewusst nicht als sichtbare Ziele aktualisiert: Ihr Inhalt
+   * entsteht beim naechsten Sichtbarwerden ohnehin aus dem dann aktuellen Weltzustand. Falls ein
+   * residenter Nachbar den Rand trotzdem als Sampling-Gutter braucht, entsteht dafuer einmalig
+   * ein verstecktes, chunklokales Bake-Ziel.
    *
    * Liegt die Region an einer Chunkgrenze, traegt der Nachbar dieselbe Weltinformation in seinem
    * Gutter. Sie wird hier mitgezogen – sonst zeigte der Sampler an genau dieser Kante noch den
@@ -218,9 +227,24 @@ export class ChunkedRenderSurface {
     if (this.destroyed) return;
     const coord = this.grid.chunkAt(localX, localY);
     if (!coord) return;
+    const neighbours = this.collectNeighbourGutterTargets(coord, localX, localY, size);
     const chunk = this.resident.get(this.grid.key(coord.cx, coord.cy));
-    if (chunk) this.runBake(chunk, localX, localY, size);
-    this.refreshNeighbourGutters(coord, localX, localY, size);
+    if (chunk) {
+      // The semantic dirty region is baked exactly once. Its already composed edge pixels are
+      // copied into resident neighbours below; no second region bake is needed there.
+      this.runBake(chunk, localX, localY, size);
+      this.refreshNeighbourGutters(chunk, localX, localY, size, neighbours);
+      return;
+    }
+
+    // A source chunk can be outside the release margin while a neighbour is still resident.
+    // Bake once into a hidden chunk-local target so that the neighbour receives only sampling
+    // data, without turning the neighbour gutter refresh into a visible dirty-region rebuild.
+    if (neighbours.length > 0) {
+      const transient = this.getTransientBakeChunk(coord);
+      this.runBake(transient, localX, localY, size);
+      this.refreshNeighbourGutters(transient, localX, localY, size, neighbours);
+    }
   }
 
   /** Ob dieser Chunk gerade ein Renderziel besitzt. */
@@ -288,31 +312,36 @@ export class ChunkedRenderSurface {
       }
     }
     this.pool.clear();
+    for (const texture of this.transientBakeTextures.values()) {
+      if (texture.active) texture.destroy();
+    }
+    this.transientBakeTextures.clear();
   }
 
   // ── Interna ────────────────────────────────────────────────────────────────
 
   /**
-   * Zieht die Gutter der Nachbarchunks an einer Dirty-Region nach.
+   * Ermittelt die residenten Nachbarchunks, deren physische Gutter-Zone die Dirty-Region beruehrt.
    *
-   * Betroffen ist ein Nachbar nur, wenn die Region die gemeinsame Kante beruehrt – bei
-   * 128-px-Dirty-Chunks in einem 512-px-Raster also hoechstens jeder vierte. Nachgezogen wird
-   * ueber denselben Bake-Pfad statt ueber einen Kopierschritt: Der Gutter entsteht damit aus
-   * demselben Weltzustand wie jedes andere Pixel und kann gar nicht auseinanderlaufen.
+   * Die semantische Dirty-Auswahl bleibt ausserhalb dieser Klasse. Dieser zweite Satz ist nur die
+   * Sampling-Abhaengigkeit des bereits gebackenen Randes: sichtbarer Inhalt des Nachbarchunks wird
+   * hier niemals aktualisiert.
    */
-  private refreshNeighbourGutters(
+  private collectNeighbourGutterTargets(
     coord: ArenaChunkCoord,
     localX: number,
     localY: number,
     size: number,
-  ): void {
-    if (this.gutterPx <= 0) return;
+  ): NeighbourGutterTarget[] {
+    if (this.gutterPx <= 0) return [];
     const chunkSize = this.grid.chunkSize;
     const touchesLeft = localX <= coord.localX;
     const touchesRight = localX + size >= coord.localX + chunkSize;
     const touchesTop = localY <= coord.localY;
     const touchesBottom = localY + size >= coord.localY + chunkSize;
-    if (!touchesLeft && !touchesRight && !touchesTop && !touchesBottom) return;
+    if (!touchesLeft && !touchesRight && !touchesTop && !touchesBottom) return [];
+
+    const targets: NeighbourGutterTarget[] = [];
 
     for (let dy = -1; dy <= 1; dy += 1) {
       for (let dx = -1; dx <= 1; dx += 1) {
@@ -329,17 +358,88 @@ export class ChunkedRenderSurface {
         if (!this.grid.contains(cx, cy)) continue;
         const neighbour = this.resident.get(this.grid.key(cx, cy));
         if (!neighbour) continue;
-
-        // Die Spiegelregion liegt im Nachbarn direkt an der gemeinsamen Kante. Sie ist genauso
-        // gross wie die Dirty-Region, damit Scratch-Groessen und Blit-Arithmetik unveraendert
-        // bleiben; ihr Gutter deckt die geaenderte Flaeche vollstaendig ab.
-        const nearX = neighbour.coord.localX;
-        const nearY = neighbour.coord.localY;
-        const regionX = dx === 0 ? localX : dx < 0 ? nearX + chunkSize - size : nearX;
-        const regionY = dy === 0 ? localY : dy < 0 ? nearY + chunkSize - size : nearY;
-        this.runBake(neighbour, regionX, regionY, size);
+        targets.push({ chunk: neighbour, dx, dy });
       }
     }
+    return targets;
+  }
+
+  /**
+   * Synchronisiert ausschliesslich die schmalen physischen Gutter-Streifen eines Nachbarn.
+   *
+   * `source` enthaelt den fachlich gebackenen Zustand. Die Kopierquelle liegt an dessen
+   * logischer Kante; die Zielkoordinaten liegen ausschliesslich in der unsichtbaren Gutter-Zone
+   * des Nachbarn. Dadurch bleibt die sichtbare Chunkflaeche unangetastet, auch bei MULTIPLY-
+   * Ebenen.
+   */
+  private refreshNeighbourGutters(
+    source: ResidentChunk,
+    localX: number,
+    localY: number,
+    size: number,
+    targets: readonly NeighbourGutterTarget[],
+  ): void {
+    if (this.gutterPx <= 0) return;
+    const gutter = this.gutterPx;
+    const chunkSize = this.grid.chunkSize;
+    const sourceLocalX = localX - source.coord.localX;
+    const sourceLocalY = localY - source.coord.localY;
+
+    for (const { chunk: neighbour, dx, dy } of targets) {
+      const sourceX = dx < 0 ? gutter : dx > 0 ? chunkSize : sourceLocalX + gutter;
+      const sourceY = dy < 0 ? gutter : dy > 0 ? chunkSize : sourceLocalY + gutter;
+      const width = dx === 0 ? size : gutter;
+      const height = dy === 0 ? size : gutter;
+      const destinationX = dx < 0
+        ? chunkSize + gutter
+        : dx > 0
+          ? 0
+          : localX - neighbour.coord.localX + gutter;
+      const destinationY = dy < 0
+        ? chunkSize + gutter
+        : dy > 0
+          ? 0
+          : localY - neighbour.coord.localY + gutter;
+
+      for (const layer of this.layers) {
+        const sourceTexture = source.textures.get(layer.id);
+        const targetTexture = neighbour.textures.get(layer.id);
+        if (!sourceTexture || !targetTexture) continue;
+        this.copyTextureRegion(
+          sourceTexture,
+          targetTexture,
+          sourceX,
+          sourceY,
+          destinationX,
+          destinationY,
+          width,
+          height,
+        );
+      }
+    }
+  }
+
+  private copyTextureRegion(
+    source: Phaser.GameObjects.RenderTexture,
+    target: Phaser.GameObjects.RenderTexture,
+    sourceX: number,
+    sourceY: number,
+    destinationX: number,
+    destinationY: number,
+    width: number,
+    height: number,
+  ): void {
+    const frameName = `chunkGutter:${sourceX}:${sourceY}:${width}:${height}`;
+    if (!source.texture.has(frameName)) {
+      source.texture.add(frameName, 0, sourceX, sourceY, width, height);
+      // `Texture.add()` otherwise promotes the first copied gutter frame to the default frame.
+      // RenderTexture drawing commands use the physical base texture, so keep the explicit base
+      // frame contract established by `applyVisibleFrame()` intact.
+      source.texture.firstFrame = '__BASE';
+    }
+    target.clear(destinationX, destinationY, width, height);
+    target.stamp(source.texture.key, frameName, destinationX, destinationY, { originX: 0, originY: 0 });
+    target.render();
   }
 
   private acquireChunk(coord: ArenaChunkCoord): void {
@@ -438,6 +538,24 @@ export class ChunkedRenderSurface {
     this.runBake(chunk, chunk.coord.localX, chunk.coord.localY, this.grid.chunkSize);
   }
 
+  private getTransientBakeChunk(coord: ArenaChunkCoord): ResidentChunk {
+    for (const texture of this.transientBakeTextures.values()) {
+      texture.clear();
+      texture.render();
+    }
+    if (this.transientBakeTextures.size === 0) {
+      for (const layer of this.layers) {
+        const texture = this.scene.add.renderTexture(0, 0, this.chunkTextureSize, this.chunkTextureSize);
+        texture.setOrigin(0, 0);
+        texture.setVisible(false);
+        texture.camera.setScroll(0, 0);
+        if (layer.blend !== undefined) texture.setBlendMode(layer.blend);
+        this.transientBakeTextures.set(layer.id, texture);
+      }
+    }
+    return { coord, textures: this.transientBakeTextures };
+  }
+
   /**
    * Backt eine logische Region samt Gutter.
    *
@@ -446,9 +564,9 @@ export class ChunkedRenderSurface {
    * derselbe Vorgang, weil der Gutter des Renderziels und die Erweiterung der Region sich exakt
    * aufheben: Das Blit-Ziel bleibt der Versatz der logischen Region im Chunk.
    *
-   * Zwei benachbarte Dirty-Blits ueberlappen sich dadurch um `2 * gutterPx`. Das ist unkritisch
-   * und beabsichtigt: Jedes Pixel entsteht aus demselben Weltzustand an derselben ganzzahligen
-   * Position, welcher Blit es zuletzt schreibt, ist gleichgueltig.
+   * Der fachliche Dirty-Blit schreibt die erweiterte Region einmal in sein Quellziel. Die
+   * anschliessende Gutter-Synchronisierung kopiert daraus nur die betroffenen Rand-/Eckpixel in
+   * benachbarte Ziele; sie ruft diesen Bake-Pfad nicht erneut auf.
    */
   private runBake(chunk: ResidentChunk, localX: number, localY: number, size: number): void {
     const gutter = this.gutterPx;

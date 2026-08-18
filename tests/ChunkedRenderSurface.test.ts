@@ -43,7 +43,14 @@ class FakeRenderTexture {
     add(name: string, sourceIndex: number, x: number, y: number, width: number, height: number): void;
   };
   frameName: string | null = null;
-  writes: Array<{ x: number; y: number; size: number; content: string }> = [];
+  writes: Array<{
+    x: number;
+    y: number;
+    size: number;
+    height: number;
+    content: string;
+    frame?: string | number;
+  }> = [];
 
   constructor(key: string, readonly width: number, readonly height: number) {
     const source = { scaleMode: 0 };
@@ -71,9 +78,9 @@ class FakeRenderTexture {
   setVisible(visible: boolean): this { this.visible = visible; return this; }
   setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
 
-  clear(x?: number, y?: number, w?: number): this {
+  clear(x?: number, y?: number, w?: number, h?: number): this {
     if (x === undefined) this.writes.length = 0;
-    else this.writes.push({ x, y: y ?? 0, size: w ?? 0, content: '' });
+    else this.writes.push({ x, y: y ?? 0, size: w ?? 0, height: h ?? 0, content: '' });
     return this;
   }
 
@@ -82,8 +89,8 @@ class FakeRenderTexture {
   draw(): this { return this; }
   render(): this { return this; }
 
-  stamp(key: string, _frame: unknown, x: number, y: number): this {
-    this.writes.push({ x, y, size: 0, content: key });
+  stamp(key: string, frame: string | number | undefined, x: number, y: number): this {
+    this.writes.push({ x, y, size: 0, height: 0, content: key, ...(frame === undefined ? {} : { frame }) });
     return this;
   }
 
@@ -315,7 +322,7 @@ describe('chunked render surface', () => {
     expect(second.x - first.x).toBe(ARENA_RENDER_CHUNK_SIZE);
   });
 
-  it('pulls the neighbour gutters along when a dirty region sits on a chunk border', () => {
+  it('copies only the changed edge pixels into a resident neighbour gutter', () => {
     const { surface, regions } = createSurface();
     surface.updateResidency(VIEW);
     regions.length = 0;
@@ -323,23 +330,113 @@ describe('chunked render surface', () => {
     // Der letzte Dirty-Chunk der ersten Chunkzeile – seine rechte Kante ist die Chunkgrenze.
     const borderX = ARENA_RENDER_CHUNK_SIZE - ROCK_OVERLAY_CHUNK_SIZE;
     const borderY = ROCK_OVERLAY_CHUNK_SIZE;
+    const source = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    const neighbour = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    source.writes.length = 0;
+    neighbour.writes.length = 0;
+
     surface.refreshRegion(borderX, borderY, ROCK_OVERLAY_CHUNK_SIZE);
 
     const touched = regions.map((region) => `${region.chunk.cx}:${region.chunk.cy}`);
     expect(touched).toContain('0:0');
-    // Der oestliche Nachbar traegt dieselbe Weltinformation in seinem Gutter.
-    expect(touched).toContain('1:0');
-    // Nur die beruehrte Kante, nicht die ganze Nachbarschaft.
-    expect(new Set(touched)).toEqual(new Set(['0:0', '1:0']));
+    // Der Nachbar wird nicht noch einmal fachlich gebacken.
+    expect(regions).toHaveLength(1);
+    expect(new Set(touched)).toEqual(new Set(['0:0']));
 
-    const mirrored = regions.find((region) => region.chunk.cx === 1);
-    expect(mirrored?.localX).toBe(ARENA_RENDER_CHUNK_SIZE - CHUNK_SAMPLING_GUTTER_PX);
-    expect(mirrored?.localY).toBe(borderY - CHUNK_SAMPLING_GUTTER_PX);
+    // Die Kopie schreibt nur den 2px-Randstreifen des Nachbarn. Die Weltkante liegt in der
+    // physischen Quelltextur bei x=512 und im Nachbarn bei x=0.
+    expect(neighbour.writes).toHaveLength(2);
+    expect(neighbour.writes[0]).toMatchObject({
+      x: 0,
+      y: borderY + CHUNK_SAMPLING_GUTTER_PX,
+      size: CHUNK_SAMPLING_GUTTER_PX,
+      height: ROCK_OVERLAY_CHUNK_SIZE,
+      content: '',
+    });
+    expect(neighbour.writes[1]).toMatchObject({
+      x: 0,
+      y: borderY + CHUNK_SAMPLING_GUTTER_PX,
+      content: source.texture.key,
+      frame: `chunkGutter:${ARENA_RENDER_CHUNK_SIZE}:${borderY + CHUNK_SAMPLING_GUTTER_PX}:${CHUNK_SAMPLING_GUTTER_PX}:${ROCK_OVERLAY_CHUNK_SIZE}`,
+    });
+    expect(source.texture.firstFrame).toBe('__BASE');
 
     // Eine Region mitten im Chunk laesst die Nachbarn in Ruhe.
     regions.length = 0;
+    neighbour.writes.length = 0;
     surface.refreshRegion(ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE, ROCK_OVERLAY_CHUNK_SIZE);
     expect(regions).toHaveLength(1);
+    expect(neighbour.writes).toEqual([]);
+  });
+
+  it('copies edge strips and corner pixels without rebaking neighbouring chunks', () => {
+    const { surface, regions } = createSurface();
+    surface.updateResidency(VIEW);
+    regions.length = 0;
+
+    const source = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    const east = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    const south = surface.getChunkTexture('a', 0, 1) as unknown as FakeRenderTexture;
+    const southEast = surface.getChunkTexture('a', 1, 1) as unknown as FakeRenderTexture;
+    for (const texture of [source, east, south, southEast]) texture.writes.length = 0;
+
+    const border = ARENA_RENDER_CHUNK_SIZE - ROCK_OVERLAY_CHUNK_SIZE;
+    surface.refreshRegion(border, border, ROCK_OVERLAY_CHUNK_SIZE);
+
+    expect(regions).toHaveLength(1);
+    expect(east.writes[0]).toMatchObject({
+      x: 0,
+      y: border + CHUNK_SAMPLING_GUTTER_PX,
+      size: CHUNK_SAMPLING_GUTTER_PX,
+      height: ROCK_OVERLAY_CHUNK_SIZE,
+    });
+    expect(south.writes[0]).toMatchObject({
+      x: border + CHUNK_SAMPLING_GUTTER_PX,
+      y: 0,
+      size: ROCK_OVERLAY_CHUNK_SIZE,
+      height: CHUNK_SAMPLING_GUTTER_PX,
+    });
+    expect(southEast.writes[0]).toMatchObject({
+      x: 0,
+      y: 0,
+      size: CHUNK_SAMPLING_GUTTER_PX,
+      height: CHUNK_SAMPLING_GUTTER_PX,
+    });
+    for (const texture of [east, south, southEast]) {
+      expect(texture.writes).toHaveLength(2);
+      expect(texture.writes[1].content).toBe(source.texture.key);
+    }
+  });
+
+  it('bakes a non-resident source once when a resident neighbour still needs its gutter', () => {
+    const { surface, regions } = createSurface();
+    surface.updateResidency(VIEW);
+    // Hysteresis leaves chunk 1 resident while chunk 0 has already crossed the release margin.
+    surface.updateResidency({ ...VIEW, x: 1_200 });
+    expect(surface.isResident(0, 0)).toBe(false);
+    expect(surface.isResident(1, 0)).toBe(true);
+
+    regions.length = 0;
+    const neighbour = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    neighbour.writes.length = 0;
+
+    surface.refreshRegion(
+      ARENA_RENDER_CHUNK_SIZE - ROCK_OVERLAY_CHUNK_SIZE,
+      ROCK_OVERLAY_CHUNK_SIZE,
+      ROCK_OVERLAY_CHUNK_SIZE,
+    );
+
+    expect(regions).toHaveLength(1);
+    expect(regions[0].chunk).toMatchObject({ cx: 0, cy: 0 });
+    expect(neighbour.writes[0]).toMatchObject({
+      x: 0,
+      y: ROCK_OVERLAY_CHUNK_SIZE + CHUNK_SAMPLING_GUTTER_PX,
+      size: CHUNK_SAMPLING_GUTTER_PX,
+      height: ROCK_OVERLAY_CHUNK_SIZE,
+    });
+    expect(neighbour.writes).toHaveLength(2);
+
+    surface.destroy();
   });
 
   it('changes only chunk texture sampling and restores each target default', () => {
