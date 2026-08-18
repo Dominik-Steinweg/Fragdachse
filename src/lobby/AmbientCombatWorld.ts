@@ -274,6 +274,7 @@ export class AmbientCombatWorld implements WeaponFireSink {
       this.environmentSink,
       { x, y, radius, damage, rockDamageMult, falloff },
       attackerId,
+      false,
     );
 
     this.damageActorsInRadius(x, y, radius, damage, falloff, attackerId);
@@ -480,6 +481,7 @@ export class AmbientCombatWorld implements WeaponFireSink {
         this.environmentSink,
         { x, y, radius, damage, rockDamageMult: rockMult, falloff },
         attackerId,
+        false,
       );
     },
     playExplosion: (x, y, radius, color, visualStyle) => {

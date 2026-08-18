@@ -21,8 +21,18 @@ export interface RadialEnvironmentDamageRequest {
  * Rundenzustand.
  */
 export interface EnvironmentRockSink {
-  /** Besucht jeden aktiven Fels mit Index und Weltmittelpunkt – in Layout-Reihenfolge. */
-  forEachActiveRock(visit: (index: number, x: number, y: number) => void): void;
+  /**
+   * Besucht nur die Kandidaten in der konservativen Grid-Radius-Range. Der Aufrufer prueft
+   * Mittelpunkt, Aktivitaet und alle weiteren exakten Trefferregeln.
+   */
+  forEachRockInRadius?: (
+    x: number,
+    y: number,
+    radius: number,
+    visit: (index: number, rockX: number, rockY: number) => void,
+  ) => void;
+  /** Kompatibler Fallback fuer lokale Bestände ohne Radiusindex (z. B. reine Resolver-Tests). */
+  forEachActiveRock?: (visit: (index: number, x: number, y: number) => void) => void;
   /**
    * Zielstatus-Trichter vor dem Abzug (Unverwundbarkeit, Konstrukt-Regeln, Team-Schutz).
    * Ein Bestand ohne solche Regeln gibt den Schaden unverändert zurück.
@@ -42,24 +52,34 @@ export interface RadialEnvironmentDamageResult {
   destroyedRockIndices: number[];
 }
 
+const EMPTY_RADIAL_ENVIRONMENT_DAMAGE_RESULT: RadialEnvironmentDamageResult = {
+  damagedRockIndices: [],
+  destroyedRockIndices: [],
+};
+
 /**
  * Gemeinsamer Kern des Umgebungsschadens.
  *
  * Radius, Falloff, {@link computeRadialDamage} und `rockDamageMult` werden hier – und nur hier
  * – ausgewertet. Es gibt keine künstliche Obergrenze für die Trefferzahl und keine
  * nachträgliche Immunität: eine Explosion beschädigt genau die Felsen, die real im Radius
- * liegen. Wer die Zerstörung begrenzen will, muss den Schuss vorher anders planen.
+ * liegen. Wer die Zerstörung begrenzen will, muss den Schuss vorher anders planen. Hotpaths
+ * ohne Auswertung des Trefferprotokolls können `collectResult = false` setzen und vermeiden
+ * damit die Ergebnisarrays.
  */
 export function applyRadialEnvironmentDamage(
   sink: EnvironmentRockSink,
   request: RadialEnvironmentDamageRequest,
   attackerId: string,
+  collectResult = true,
 ): RadialEnvironmentDamageResult {
-  const result: RadialEnvironmentDamageResult = { damagedRockIndices: [], destroyedRockIndices: [] };
+  const result = collectResult
+    ? { damagedRockIndices: [], destroyedRockIndices: [] }
+    : EMPTY_RADIAL_ENVIRONMENT_DAMAGE_RESULT;
   const { x, y, radius, damage, rockDamageMult, falloff } = request;
   if (rockDamageMult === 0) return result;
 
-  sink.forEachActiveRock((index, rockX, rockY) => {
+  const visitRock = (index: number, rockX: number, rockY: number): void => {
     // Bewusst dieselbe Formel wie `Phaser.Math.Distance.Between`, damit Grenzfälle exakt am
     // Radius sich nicht zwischen Arena und Lobby unterscheiden.
     const dx = x - rockX;
@@ -74,12 +94,22 @@ export function applyRadialEnvironmentDamage(
     if (resolvedDamage <= 0) return;
 
     const remainingHp = sink.applyRockDamage(index, resolvedDamage, attackerId);
+    if (!collectResult) {
+      if (remainingHp <= 0) sink.onRockDestroyed(index);
+      return;
+    }
     result.damagedRockIndices.push(index);
     if (remainingHp <= 0) {
       result.destroyedRockIndices.push(index);
       sink.onRockDestroyed(index);
     }
-  });
+  };
+
+  if (sink.forEachRockInRadius) {
+    sink.forEachRockInRadius(x, y, radius, visitRock);
+  } else {
+    sink.forEachActiveRock?.(visitRock);
+  }
 
   return result;
 }

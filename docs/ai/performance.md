@@ -25,6 +25,11 @@ Neue Emitter und Filter über die bestehende Qualitätsinfrastruktur registriere
 - Entfernte Felsen invalidieren `ArenaObstacleIndex` nicht: Queries lesen `active` live und
   überspringen zerstörte Quellen sofort. Nur neue bzw. geometrisch veränderte Hindernisse
   fordern einen Index-Neubau an, damit Pelletserien nicht zwischen Treffern voll neu indizieren.
+- Radiale Felsabfragen verwenden den bestehenden `ArenaBuilderResult.rockGrid` über
+  `RockGridIndex.forEachRockInRadius`: Die Weltkreis-Range liefert nur eine konservative
+  Zellober-Menge, danach bleiben Mittelpunkt-, Aktiv-, Schaden-, Falloff- und LOS-Prüfungen
+  beim Aufrufer. Der Query-Buffer dedupliziert IDs und bewahrt die `rockObjects`-Reihenfolge;
+  es gibt keine zweite Belegungsstruktur.
 
 ## Grosse Arenen
 

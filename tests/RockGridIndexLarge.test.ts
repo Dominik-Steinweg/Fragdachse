@@ -75,4 +75,23 @@ describe('rock grid index at large arena sizes', () => {
     expect(index.getIndex(400, 79)).toBe(-1);
     expect(index.getIndex(399, 80)).toBe(-1);
   });
+
+  it('queries only the conservative cell range, de-duplicates ids, and keeps id order', () => {
+    const index = new RockGridIndex([
+      { gridX: 3, gridY: 2 },
+      { gridX: 1, gridY: 2 },
+      { gridX: 2, gridY: 1 },
+      { gridX: 6, gridY: 6 },
+    ], { cols: 8, rows: 8 });
+    // A runtime update can legally point another occupied cell at an existing id; the query
+    // must still expose that rock exactly once.
+    index.set(2, 2, 0);
+
+    const visited: number[] = [];
+    index.forEachRockInRadius(2.5 * 32, 2.5 * 32, 40, 0, 0, 32, (id) => {
+      visited.push(id);
+    });
+
+    expect(visited).toEqual([0, 1, 2]);
+  });
 });

@@ -27,15 +27,15 @@ export function computeRadialDamage(
 }
 
 export function computeProjectileExplosionDamage(distance: number, effect: ProjectileExplosionConfig): number {
-  const falloffReduction = clamp01(effect.falloffReduction ?? 0);
+  return computeRadialDamage(distance, effect.radius, effect.maxDamage, resolveProjectileExplosionFalloff(effect));
+}
+
+/** Liefert den linearen Falloff eines Projektils in der Form des gemeinsamen Radial-Resolvers. */
+export function resolveProjectileExplosionFalloff(
+  effect: ProjectileExplosionConfig,
+): RadialDamageFalloffConfig | undefined {
   const baseMinDamage = effect.minDamage;
-  const effectiveMinDamage = baseMinDamage === undefined
-    ? undefined
-    : lerp(baseMinDamage, effect.maxDamage, falloffReduction);
-  return computeRadialDamage(
-    distance,
-    effect.radius,
-    effect.maxDamage,
-    effectiveMinDamage === undefined ? undefined : { minDamage: effectiveMinDamage },
-  );
+  if (baseMinDamage === undefined) return undefined;
+  const falloffReduction = clamp01(effect.falloffReduction ?? 0);
+  return { minDamage: lerp(baseMinDamage, effect.maxDamage, falloffReduction) };
 }

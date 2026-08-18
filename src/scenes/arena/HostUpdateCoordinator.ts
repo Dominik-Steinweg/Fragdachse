@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
-import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
+import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE, ARENA_OFFSET_X, ARENA_OFFSET_Y } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
@@ -9,7 +9,7 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
-import { computeProjectileExplosionDamage, computeRadialDamage } from '../../utils/radialDamage';
+import { computeProjectileExplosionDamage, computeRadialDamage, resolveProjectileExplosionFalloff } from '../../utils/radialDamage';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import type { ArenaContext }      from './ArenaContext';
@@ -1207,6 +1207,33 @@ export class HostUpdateCoordinator {
 
   // ── AoE helpers ──────────────────────────────────────────────────────────
 
+  /**
+   * Gemeinsamer Arena-Radiuspfad fuer Felsen. Der Grid-Index liefert nur eine konservative
+   * Kandidatenmenge; aktive Objekte und exakte Trefferbedingungen bleiben beim Aufrufer.
+   */
+  private forEachArenaRockInRadius(
+    x: number,
+    y: number,
+    radius: number,
+    visit: (index: number, rock: Phaser.GameObjects.Image) => void,
+  ): void {
+    const arenaResult = this.ctx.arenaResult;
+    if (!arenaResult) return;
+    arenaResult.rockGrid.forEachRockInRadius(
+      x,
+      y,
+      radius,
+      ARENA_OFFSET_X,
+      ARENA_OFFSET_Y,
+      CELL_SIZE,
+      (index) => {
+        const rock = arenaResult.rockObjects[index];
+        if (!rock?.active) return;
+        visit(index, rock);
+      },
+    );
+  }
+
   applyAoeEnvironmentDamage(
     x: number, y: number, radius: number, damage: number,
     rockMult: number, trainMult: number, attackerId: string,
@@ -1221,6 +1248,7 @@ export class HostUpdateCoordinator {
         this.environmentRockSink,
         { x, y, radius, damage, rockDamageMult: rockMult, falloff: damageFalloff },
         attackerId,
+        false,
       );
     }
 
@@ -1318,19 +1346,19 @@ export class HostUpdateCoordinator {
     const trainMult = effect.trainDamageMult ?? 1;
 
     if (rockMult !== 0 && arenaResult) {
-      const rockObjects = arenaResult.rockObjects;
-      for (let i = 0; i < rockObjects.length; i++) {
-        const rock = rockObjects[i];
-        if (!rock?.active) continue;
-        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
-        if (dist > effect.radius) continue;
-        const damage = Math.round(computeProjectileExplosionDamage(dist, effect) * rockMult);
-        if (damage <= 0) continue;
-        const resolvedDamage = this.resolveObstacleDamage(i, damage, attackerId);
-        if (resolvedDamage <= 0) continue;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, attackerId);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
-      }
+      applyRadialEnvironmentDamage(
+        this.environmentRockSink,
+        {
+          x,
+          y,
+          radius: effect.radius,
+          damage: effect.maxDamage,
+          rockDamageMult: rockMult,
+          falloff: resolveProjectileExplosionFalloff(effect),
+        },
+        attackerId,
+        false,
+      );
     }
 
     if (trainMult !== 0 && this.ctx.trainManager) {
@@ -1359,17 +1387,19 @@ export class HostUpdateCoordinator {
     const trainMult: number = NUKE_CONFIG.trainDamageMult;
 
     if (rockMult !== 0 && arenaResult) {
-      for (let i = 0; i < arenaResult.rockObjects.length; i++) {
-        const rock = arenaResult.rockObjects[i];
-        if (!rock?.active) continue;
-        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
-        if (dist > radius) continue;
-        const baseDmg = computeRadialDamage(dist, radius, NUKE_CONFIG.maxDamage, { minDamage: NUKE_CONFIG.minDamage });
-        const resolvedDamage = this.resolveObstacleDamage(i, Math.round(baseDmg * rockMult), triggeredBy);
-        if (resolvedDamage <= 0) continue;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, triggeredBy);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
-      }
+      applyRadialEnvironmentDamage(
+        this.environmentRockSink,
+        {
+          x,
+          y,
+          radius,
+          damage: NUKE_CONFIG.maxDamage,
+          rockDamageMult: rockMult,
+          falloff: { minDamage: NUKE_CONFIG.minDamage },
+        },
+        triggeredBy,
+        false,
+      );
     }
 
     if (trainMult !== 0 && this.ctx.trainManager) {
@@ -1436,17 +1466,12 @@ export class HostUpdateCoordinator {
 
     // Felsen-Schaden
     if (cfg.rockDamageMult !== 0 && arenaResult) {
-      for (let i = 0; i < arenaResult.rockObjects.length; i++) {
-        const rock = arenaResult.rockObjects[i];
-        if (!rock?.active) continue;
-        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
-        if (dist > radius) continue;
-        const baseDmg = computeRadialDamage(dist, radius, cfg.maxDamage, falloff);
-        const resolvedDamage = this.resolveObstacleDamage(i, Math.round(baseDmg * cfg.rockDamageMult), triggeredBy);
-        if (resolvedDamage <= 0) continue;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, triggeredBy);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
-      }
+      applyRadialEnvironmentDamage(
+        this.environmentRockSink,
+        { x, y, radius, damage: cfg.maxDamage, rockDamageMult: cfg.rockDamageMult, falloff },
+        triggeredBy,
+        false,
+      );
     }
 
     // Zug-Schaden
@@ -1500,21 +1525,19 @@ export class HostUpdateCoordinator {
 
     const arenaResult = this.ctx.arenaResult;
     if (arenaResult) {
-      for (let i = 0; i < arenaResult.rockObjects.length; i++) {
-        const rock = arenaResult.rockObjects[i];
-        if (!rock?.active) continue;
-        if (Phaser.Math.Distance.Squared(originX, originY, rock.x, rock.y) > radiusSquared) continue;
-        if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, rock.x, rock.y, i)) continue;
+      this.forEachArenaRockInRadius(originX, originY, config.radius, (i, rock) => {
+        if (Phaser.Math.Distance.Squared(originX, originY, rock.x, rock.y) > radiusSquared) return;
+        if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, rock.x, rock.y, i)) return;
         const resolvedDamage = this.resolveObstacleDamage(
           i,
           config.damage * (proj.rockDamageMult ?? 1),
           proj.ownerId,
         );
-        if (resolvedDamage <= 0) continue;
+        if (resolvedDamage <= 0) return;
         const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, proj.ownerId);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
         lines.push(lineTo(rock.x, rock.y));
-      }
+      });
     }
 
     const trainMult = proj.trainDamageMult ?? 1;
@@ -1624,14 +1647,10 @@ export class HostUpdateCoordinator {
    * Zielstatus-Trichter und die replizierte Zerstörungsdarstellung.
    */
   private readonly environmentRockSink: EnvironmentRockSink = {
-    forEachActiveRock: (visit) => {
-      const rockObjects = this.ctx.arenaResult?.rockObjects;
-      if (!rockObjects) return;
-      for (let i = 0; i < rockObjects.length; i++) {
-        const rock = rockObjects[i];
-        if (!rock?.active) continue;
-        visit(i, rock.x, rock.y);
-      }
+    forEachRockInRadius: (x, y, radius, visit) => {
+      this.forEachArenaRockInRadius(x, y, radius, (index, rock) => {
+        visit(index, rock.x, rock.y);
+      });
     },
     resolveRockDamage: (index, damage, attackerId) => this.resolveObstacleDamage(index, damage, attackerId),
     applyRockDamage: (index, damage, attackerId) => this.rockVisualHelper.applyObstacleDamageById(index, damage, attackerId),
