@@ -54,6 +54,12 @@ export class ArenaGenerator {
    * Versucht bis zu 100 Mal einen konnektiven Layout zu erzeugen.
    */
   static generate(seed: number, coopMapConfig?: CoopDefenseMapConfig): ArenaLayout {
+    // Die Basisgeometrie hängt nur von Map-Konfiguration und aktuellen Arena-Metriken ab,
+    // nicht vom Retry-Seed. Bei expliziten Coop-Maps wird sie deshalb einmal pro Generate-Aufruf
+    // aufgelöst und an alle Zellprüfungen weitergereicht. Ohne Map-Konfiguration bleibt
+    // `undefined` bewusst der Fallback auf die aktive Registry-Auflösung.
+    const coopBaseSpecs = coopMapConfig ? resolveCoopDefenseBases(coopMapConfig) : undefined;
+
     for (let attempt = 0; attempt < 100; attempt++) {
       const rng = ArenaGenerator.makePrng(seed + attempt);
       const blocked: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
@@ -61,14 +67,13 @@ export class ArenaGenerator {
       );
 
       // --- Gleise zuerst generieren (vor Felsen) ---
-      const coopBaseSpecs = coopMapConfig ? resolveCoopDefenseBases(coopMapConfig) : [];
       const generatedTrackLayout = ArenaGenerator.generateTracks(
         rng,
         // Void-fire keeps its authored centered hazard corridor even though no train track is
         // rendered. All other Coop maps keep a free cell between the railway and every base.
         coopMapConfig?.trackMode === 'void-fire' || coopMapConfig === undefined
           ? []
-          : coopBaseSpecs,
+          : coopBaseSpecs ?? [],
         coopMapConfig?.trackPosition,
       );
       const trackCols = generatedTrackLayout.trackCols;
@@ -124,7 +129,11 @@ export class ArenaGenerator {
       }
       if (coopMapConfig && getMapTutorial(coopMapConfig.mapId, 'de')) {
         tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(
-          map, trackCols, rng, coopMapConfig.tutorialShowControls === true,
+          map,
+          trackCols,
+          rng,
+          coopMapConfig.tutorialShowControls === true,
+          coopBaseSpecs,
         );
       }
 
@@ -134,7 +143,11 @@ export class ArenaGenerator {
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
-          if (map[gy][gx] && !trackCols.has(gx) && !isReservedBaseObstacleCell(gx, gy)) {
+          if (
+            map[gy][gx]
+            && !trackCols.has(gx)
+            && !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
+          ) {
             blocked[gy][gx] = true;
             const isTutorialRock = tutorialRockCells?.has(`${gx}_${gy}`) ?? false;
             rocks.push({
@@ -170,7 +183,7 @@ export class ArenaGenerator {
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
-          !isReservedBaseObstacleCell(gx, gy) &&
+          !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -206,14 +219,20 @@ export class ArenaGenerator {
           rocks,
           trees,
           trackCols,
-          coopBaseSpecs,
+          coopBaseSpecs ?? [],
           tutorialRockCells,
+          coopBaseSpecs,
         );
       }
       if (
         coopMapConfig
         && tracks.length > 0
-        && !ArenaGenerator.hasAcceptableSpawnToBaseRoutes(blocked, tracks, coopMapConfig, coopBaseSpecs)
+        && !ArenaGenerator.hasAcceptableSpawnToBaseRoutes(
+          blocked,
+          tracks,
+          coopMapConfig,
+          coopBaseSpecs ?? [],
+        )
       ) {
         // Ein selten unguenstiges Fels-/Baum-Layout wird vollstaendig verworfen. So gelangen
         // keine authored Spawn-Ziele in eine lange notwendige Gleisfahrt.
@@ -231,7 +250,7 @@ export class ArenaGenerator {
         maxCols: GRID_COLS,
         maxRows: GRID_ROWS,
         rng,
-        isReservedCell: isReservedBaseSurfaceCell,
+        isReservedCell: (gridX, gridY) => isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs),
       })) {
         dirtSet.add(cell.gridY * GRID_COLS + cell.gridX);
       }
@@ -249,7 +268,7 @@ export class ArenaGenerator {
               const nx = gx + dx;
               const ny = gy + dy;
               if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-              if (isReservedBaseSurfaceCell(nx, ny)) continue;
+              if (isReservedBaseSurfaceCell(nx, ny, coopBaseSpecs)) continue;
               const nk = ny * GRID_COLS + nx;
               if (!dirtSet.has(nk)) frontier.push(nk);
             }
@@ -265,8 +284,14 @@ export class ArenaGenerator {
       }
 
       const powerUpPedestals = coopMapConfig === undefined
-        ? ArenaGenerator.generateRandomPowerUpPedestals(rng, blocked, trackCols)
-        : ArenaGenerator.generateCoopPowerUpPedestals(rng, blocked, trackCols, coopMapConfig);
+        ? ArenaGenerator.generateRandomPowerUpPedestals(rng, blocked, trackCols, coopBaseSpecs)
+        : ArenaGenerator.generateCoopPowerUpPedestals(
+          rng,
+          blocked,
+          trackCols,
+          coopMapConfig,
+          coopBaseSpecs ?? [],
+        );
       // Eine Coop-Map soll exakt die konfigurierten Podeste erhalten. Falls der aktuelle
       // prozedurale Versuch in einem Bereich keinen freien Platz lässt, wird die Arena
       // mit dem nächsten Seed-Versuch neu erzeugt.
@@ -279,6 +304,7 @@ export class ArenaGenerator {
         tracks,
         powerUpPedestals,
         coopMapConfig,
+        coopBaseSpecs ?? [],
       );
       // Nur die prozeduralen Patch-Flaechen rechtfertigen einen neuen Seed-Versuch: Sie haengen
       // an derselben Zufallsgeometrie wie Felsen und Podeste. Authored Rechtecke und Zellenlisten
@@ -293,6 +319,7 @@ export class ArenaGenerator {
         dirtSet,
         powerUpPedestals,
         groundHazardZones,
+        coopBaseSpecs,
       );
 
       return {
@@ -420,6 +447,7 @@ export class ArenaGenerator {
     trackCols: ReadonlySet<number>,
     bases: readonly BaseSpec[],
     protectedCells: ReadonlySet<string> | null = null,
+    reservationBaseSpecs?: readonly BaseSpec[],
   ): void {
     if (trackCols.size === 0) return;
     const trackMinX = Math.min(...trackCols);
@@ -445,7 +473,12 @@ export class ArenaGenerator {
           if (
             gridX < 0
             || gridX >= GRID_COLS
-            || ArenaGenerator.isTrackCrossingProtectedCell(gridX, gridY, bases)
+            || ArenaGenerator.isTrackCrossingProtectedCell(
+              gridX,
+              gridY,
+              bases,
+              reservationBaseSpecs,
+            )
             || protectedCells?.has(`${gridX}_${gridY}`)
           ) continue;
           if (!blocked[gridY][gridX]) continue;
@@ -464,8 +497,11 @@ export class ArenaGenerator {
     gridX: number,
     gridY: number,
     bases: readonly BaseSpec[],
+    reservationBaseSpecs?: readonly BaseSpec[],
   ): boolean {
-    if (bases.length === 0) return isReservedBaseObstacleCell(gridX, gridY);
+    if (bases.length === 0) {
+      return isReservedBaseObstacleCell(gridX, gridY, reservationBaseSpecs);
+    }
     return bases.some((base) => (
       gridX >= base.region.minGridX - COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
       && gridX <= base.region.maxGridX + COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
@@ -775,6 +811,7 @@ export class ArenaGenerator {
     trackCols: ReadonlySet<number>,
     rng: () => number,
     tutorialShowControls: boolean,
+    coopBaseSpecs?: readonly BaseSpec[],
   ): Set<string> {
     const tutorialRockCells = new Set<string>();
     // Gemeinsamer Generator; die Lobby-Felslandschaft unter dem Mittelpanel benutzt ihn mit
@@ -786,7 +823,9 @@ export class ArenaGenerator {
       outerHaloFillChance: 0.36,
       gridCols: GRID_COLS,
       gridRows: GRID_ROWS,
-      isBlockedCell: (gx, gy) => trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy),
+      isBlockedCell: (gx, gy) => (
+        trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
+      ),
     });
     for (const { gridX, gridY } of cells) {
       map[gridY][gridX] = true;
@@ -799,6 +838,7 @@ export class ArenaGenerator {
     rng: () => number,
     blocked: boolean[][],
     trackCols: Set<number>,
+    coopBaseSpecs?: readonly BaseSpec[],
   ) {
     const candidates: Array<{ gx: number; gy: number }> = [];
     const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
@@ -808,7 +848,7 @@ export class ArenaGenerator {
       for (let gx = margin; gx < GRID_COLS - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (isReservedBaseObstacleCell(gx, gy)) continue;
+        if (isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
         if (middleThirdRegion && !isGridCellInArenaRegion(middleThirdRegion, gx, gy)) continue;
         candidates.push({ gx, gy });
       }
@@ -831,6 +871,7 @@ export class ArenaGenerator {
     blocked: boolean[][],
     trackCols: Set<number>,
     configs: readonly CoopDefenseMapPowerUpConfig[],
+    coopBaseSpecs?: readonly BaseSpec[],
   ): ArenaLayout['powerUpPedestals'] | null {
     const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
     const candidatesByRegion = new Map<CoopDefensePowerUpRegion, Array<{ gx: number; gy: number }>>([
@@ -843,7 +884,7 @@ export class ArenaGenerator {
       for (let gx = margin; gx < GRID_COLS - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (isReservedBaseObstacleCell(gx, gy)) continue;
+        if (isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
         candidatesByRegion.get(ArenaGenerator.getPowerUpRegion(gx))!.push({ gx, gy });
       }
     }
@@ -878,17 +919,19 @@ export class ArenaGenerator {
     blocked: boolean[][],
     trackCols: Set<number>,
     mapConfig: CoopDefenseMapConfig,
+    coopBaseSpecs: readonly BaseSpec[],
   ): ArenaLayout['powerUpPedestals'] | null {
     const pedestals = ArenaGenerator.generateConfiguredPowerUpPedestals(
       rng,
       blocked,
       trackCols,
       mapConfig.powerUps,
+      coopBaseSpecs,
     );
     if (pedestals === null) return null;
 
     const occupied = new Set(pedestals.map((pedestal) => ArenaGenerator.cellKey(pedestal.gridX, pedestal.gridY)));
-    for (const base of resolveCoopDefenseBases(mapConfig)) {
+    for (const base of coopBaseSpecs) {
       for (const config of base.powerUpPedestals) {
         const key = ArenaGenerator.cellKey(config.gridX, config.gridY);
         if (trackCols.has(config.gridX)) {
@@ -959,6 +1002,7 @@ export class ArenaGenerator {
     dirtSet: ReadonlySet<number>,
     powerUpPedestals: ArenaLayout['powerUpPedestals'],
     groundHazardZones: readonly ArenaGroundHazardZone[],
+    coopBaseSpecs?: readonly BaseSpec[],
   ): DecalCell[] {
     const blockedCells = new Set<number>();
     for (const { gridX, gridY } of rocks) {
@@ -986,7 +1030,7 @@ export class ArenaGenerator {
     for (let gy = 0; gy < GRID_ROWS; gy++) {
       for (let gx = 0; gx < GRID_COLS; gx++) {
         const key = ArenaGenerator.cellKey(gx, gy);
-        if (blockedCells.has(key) || isReservedBaseSurfaceCell(gx, gy)) continue;
+        if (blockedCells.has(key) || isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)) continue;
 
         const terrain: DecalTerrainLayer = dirtSet.has(key) ? 'dirt' : 'grass';
         const layerConfig = ARENA_DECAL_CONFIG[terrain];
@@ -1017,7 +1061,7 @@ export class ArenaGenerator {
     const underRockMaxOffsetY = clampDecalOffsetPx(DIRT_ROCK_UNDERLAY_DECAL_CONFIG.maxOffsetY);
     for (const { gridX, gridY } of rocks) {
       const key = ArenaGenerator.cellKey(gridX, gridY);
-      if (!dirtSet.has(key) || isReservedBaseSurfaceCell(gridX, gridY)) continue;
+      if (!dirtSet.has(key) || isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)) continue;
       if (!ArenaGenerator.rollPercent(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.coveragePercent)) continue;
 
       const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.variants);
@@ -1152,6 +1196,7 @@ export class ArenaGenerator {
     tracks: readonly TrackCell[],
     powerUpPedestals: ArenaLayout['powerUpPedestals'],
     mapConfig?: CoopDefenseMapConfig,
+    coopBaseSpecs: readonly BaseSpec[] = [],
   ): ArenaGroundHazardZone[] | null {
     if (!mapConfig) return [];
     const events = (mapConfig.mapEvents ?? []).filter(
@@ -1169,7 +1214,7 @@ export class ArenaGenerator {
       occupied.add(ArenaGenerator.cellKey(pedestal.gridX, pedestal.gridY));
     }
 
-    const baseCells = resolveCoopDefenseBases(mapConfig).flatMap((base) => base.cells);
+    const baseCells = coopBaseSpecs.flatMap((base) => base.cells);
     const isValidCell = (
       gridX: number,
       gridY: number,
@@ -1181,7 +1226,7 @@ export class ArenaGenerator {
       if (
         blocked[gridY][gridX]
         || occupied.has(key)
-        || isReservedBaseSurfaceCell(gridX, gridY)
+        || isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)
         || (avoidVoidTrackCorridor && trackCols.has(gridX))
       ) return false;
       return baseCells.every((baseCell) => (

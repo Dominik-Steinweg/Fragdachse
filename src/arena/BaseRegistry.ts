@@ -425,9 +425,13 @@ function isCoopDefenseBaseWithinBoundingBoxDistance(
 }
 
 /** True wenn (gx, gy) **exakt** auf einer Zelle einer Coop-Basis liegt (konkavitätsbewusst). */
-export function isCoopDefenseBaseCell(gx: number, gy: number): boolean {
-  if (!isCoopDefenseBasesActive()) return false;
-  for (const base of getCoopDefenseBases()) {
+export function isCoopDefenseBaseCell(
+  gx: number,
+  gy: number,
+  bases?: readonly BaseSpec[],
+): boolean {
+  if (!bases && !isCoopDefenseBasesActive()) return false;
+  for (const base of bases ?? getCoopDefenseBases()) {
     for (const cell of base.cells) {
       if (cell.gridX === gx && cell.gridY === gy) return true;
     }
@@ -469,9 +473,13 @@ export function isCoopDefenseBaseObstacleClearanceCell(
  * - CTB: exakte Basis-Zelle.
  * - Coop: Bounding-Box + 5-Zellen-Schutz-Radius.
  */
-export function isReservedBaseObstacleCell(gx: number, gy: number): boolean {
+export function isReservedBaseObstacleCell(
+  gx: number,
+  gy: number,
+  bases?: readonly BaseSpec[],
+): boolean {
   if (isCaptureTheBeerBaseCell(gx, gy)) return true;
-  if (isCoopDefenseBaseObstacleClearanceCell(gx, gy)) return true;
+  if (isCoopDefenseBaseObstacleClearanceCell(gx, gy, bases)) return true;
   return false;
 }
 
@@ -482,9 +490,13 @@ export function isReservedBaseObstacleCell(gx: number, gy: number): boolean {
  * - Coop: exakte Basis-Zelle (konkavitätsbewusst – Lücken bleiben begehbar
  *   und dürfen Dirt/Decals tragen).
  */
-export function isReservedBaseSurfaceCell(gx: number, gy: number): boolean {
+export function isReservedBaseSurfaceCell(
+  gx: number,
+  gy: number,
+  bases?: readonly BaseSpec[],
+): boolean {
   if (isCaptureTheBeerBaseCell(gx, gy)) return true;
-  if (isCoopDefenseBaseCell(gx, gy)) return true;
+  if (isCoopDefenseBaseCell(gx, gy, bases)) return true;
   return false;
 }
 
