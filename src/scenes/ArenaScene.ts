@@ -3640,7 +3640,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private describePerformanceEnvironment(): Record<string, unknown> {
     const canvas = this.game.canvas;
-    const renderer = this.game.renderer as typeof this.game.renderer & { gl?: WebGLRenderingContext };
+    const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     const gl = renderer.gl;
     const debugRendererInfo = gl?.getExtension('WEBGL_debug_renderer_info');
     const gpuRenderer = gl && debugRendererInfo
@@ -3650,24 +3650,24 @@ export class ArenaScene extends Phaser.Scene {
       ? gl.getParameter(debugRendererInfo.UNMASKED_VENDOR_WEBGL)
       : null;
     const nav = typeof navigator === 'undefined' ? null : navigator as Navigator & { deviceMemory?: number };
-    const glLimits = gl ? {
+    const glLimits = {
       maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
       maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
       maxTextureImageUnits: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS),
       maxVertexTextureImageUnits: gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS),
       maxCombinedTextureImageUnits: gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS),
       maxViewportDims: Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array),
-    } : null;
+    };
 
     // Nur Geraete- und Renderer-Daten. Rolle, Qualitaet, Modus und Map wechseln waehrend einer
     // Messung und stehen deshalb pro Fenster sowie gebuendelt in `recordingScope` des Reports.
     return {
-      renderer: this.game.renderer.type === Phaser.WEBGL ? 'webgl' : 'canvas',
+      renderer: 'webgl',
       gpuRenderer,
       gpuVendor,
-      webglVersion: gl?.getParameter(gl.VERSION) ?? null,
-      shadingLanguageVersion: gl?.getParameter(gl.SHADING_LANGUAGE_VERSION) ?? null,
-      supportedExtensions: gl?.getSupportedExtensions() ?? [],
+      webglVersion: gl.getParameter(gl.VERSION),
+      shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+      supportedExtensions: gl.getSupportedExtensions() ?? [],
       glLimits,
       canvas: { width: canvas.width, height: canvas.height },
       screen: typeof window === 'undefined'

@@ -26,7 +26,7 @@ type FilterTargetLike = {
  * on every frame.
  */
 export class WebGLRectMaskTexture {
-  private readonly texture: Phaser.Textures.CanvasTexture | null;
+  private readonly texture: Phaser.Textures.CanvasTexture;
   private lastBounds: WebGLRectMaskBounds | null = null;
   private cameraAttachment: { list: FilterListLike; filter: Phaser.Filters.Mask } | null = null;
   private objectAttachment: { target: FilterTargetLike; list: FilterListLike; filter: Phaser.Filters.Mask } | null = null;
@@ -38,19 +38,16 @@ export class WebGLRectMaskTexture {
     width: number,
     height: number,
   ) {
-    const texture = scene.game.renderer.type === Phaser.WEBGL
-      ? scene.textures.createCanvas(textureKey, width, height)
-      : null;
-    if (texture) {
-      // A hard alpha boundary matches the former filled rectangle without a blended fringe.
-      texture.setSmoothPixelArt(false);
-      texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    }
+    const texture = scene.textures.createCanvas(textureKey, width, height);
+    if (!texture) throw new Error(`Cannot create WebGL mask texture: ${textureKey}`);
+    // A hard alpha boundary matches the former filled rectangle without a blended fringe.
+    texture.setSmoothPixelArt(false);
+    texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.texture = texture;
   }
 
   update(bounds: WebGLRectMaskBounds): void {
-    if (this.destroyed || !this.texture || this.isSameBounds(bounds)) return;
+    if (this.destroyed || this.isSameBounds(bounds)) return;
 
     const context = this.texture.context;
     context.clearRect(0, 0, this.texture.width, this.texture.height);
@@ -61,7 +58,7 @@ export class WebGLRectMaskTexture {
   }
 
   attachToCamera(camera: Phaser.Cameras.Scene2D.Camera): Phaser.Filters.Mask | null {
-    if (this.destroyed || !this.texture || this.cameraAttachment) return this.cameraAttachment?.filter ?? null;
+    if (this.destroyed || this.cameraAttachment) return this.cameraAttachment?.filter ?? null;
 
     const list = camera.filters.internal as unknown as FilterListLike;
     const filter = list.addMask(this.textureKey);
@@ -70,7 +67,7 @@ export class WebGLRectMaskTexture {
   }
 
   attachToGameObject(target: object): Phaser.Filters.Mask | null {
-    if (this.destroyed || !this.texture || this.objectAttachment) return this.objectAttachment?.filter ?? null;
+    if (this.destroyed || this.objectAttachment) return this.objectAttachment?.filter ?? null;
 
     const filterTarget = target as FilterTargetLike;
     filterTarget.enableFilters?.();

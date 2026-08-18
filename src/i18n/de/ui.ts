@@ -210,6 +210,8 @@ export const deUi = {
   "ui.results.yourFragsTotal": "DEINE FRAGS · GESAMT",
   "ui.common.dash": "—",
   "ui.boot.connectionFailed": "Verbindung fehlgeschlagen",
+  "ui.boot.webglRequired": "WebGL erforderlich",
+  "ui.boot.webglRequiredDetail": "Fragdachse benötigt WebGL. Dein Browser oder Grafiktreiber stellt keinen WebGL-Kontext bereit. Bitte aktiviere WebGL oder verwende einen unterstützten Browser.",
   "ui.boot.rejoin": "ERNEUT BEITRETEN",
   "ui.boot.newRoom": "NEUEN RAUM ERÖFFNEN",
   "ui.boot.rejoinHint": "Zum erneuten Beitreten die Einladung noch einmal öffnen.",

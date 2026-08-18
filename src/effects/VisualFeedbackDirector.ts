@@ -91,9 +91,9 @@ export class VisualFeedbackDirector {
   /**
    * Startet die mehrphasige Nuke-Regie.
    *
-   * @returns `false`, wenn keine Bildkomposition verfügbar ist (kein WebGL, Qualitätsstufe
-   *   `low`). Der Aufrufer fällt dann auf seine bisherigen Einzeleffekte zurück – die Sequenz
-   *   ersetzt sie, sie ergänzt sie nicht.
+   * @returns `false`, wenn die Bildkomposition wegen der Qualitätsstufe `low` deaktiviert ist.
+   *   Der Aufrufer fällt dann auf seine bisherigen Einzeleffekte zurück – die Sequenz ersetzt
+   *   sie, sie ergänzt sie nicht.
    */
   startNukeSequence(options: {
     variant: NukeVariant;

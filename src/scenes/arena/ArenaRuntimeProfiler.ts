@@ -853,7 +853,7 @@ export class ArenaRuntimeProfiler {
     if (this.game === game) return;
     this.detachGame();
     this.game = game;
-    this.glContext = (game.renderer as { gl?: GlContext }).gl ?? null;
+    this.glContext = (game.renderer as Phaser.Renderer.WebGL.WebGLRenderer).gl;
     const loop = (game as Phaser.Game & {
       loop?: { callback?: (time: number, delta: number) => void };
     }).loop;

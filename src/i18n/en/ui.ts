@@ -210,6 +210,8 @@ export const enUi = {
   "ui.results.yourFragsTotal": "YOUR FRAGS · TOTAL",
   "ui.common.dash": "—",
   "ui.boot.connectionFailed": "Connection failed",
+  "ui.boot.webglRequired": "WebGL required",
+  "ui.boot.webglRequiredDetail": "Fragdachse requires WebGL. Your browser or graphics driver does not provide a WebGL context. Enable WebGL or use a supported browser.",
   "ui.boot.rejoin": "REJOIN",
   "ui.boot.newRoom": "OPEN NEW ROOM",
   "ui.boot.rejoinHint": "Open the invitation again to rejoin.",

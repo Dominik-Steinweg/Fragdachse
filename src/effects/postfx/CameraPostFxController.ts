@@ -105,8 +105,8 @@ const BLOOM_EDGE_WIDTH = 0.14;
  * - **Phaser 4 hat keine Bloom-Klasse.** Der kontrollierte Bloom entsteht aus Phasers eigenem
  *   Rezept: `ParallelFilters` mit `Threshold` und `Blur` im oberen Zweig, additiv
  *   zurückgemischt. Nur Spitzlichter gehen ein, die Schärfe des Bildes bleibt erhalten.
- * - **Filter sind WebGL-only.** Ohne WebGL wird nichts konstruiert und jede Methode ist ein
- *   No-op; das Spiel läuft mit den bestehenden lokalen Effekten weiter.
+ * - **Filter sind WebGL-only.** WebGL wird vor dem Phaser-Start geprüft, daher wird die Kette
+ *   hier ohne einen parallelen Canvas- oder No-op-Pfad aufgebaut.
  */
 export class CameraPostFxController {
   private readonly pulses = new PostFxPulseSet();
@@ -123,20 +123,13 @@ export class CameraPostFxController {
   private distortionTextureKey: string | null = null;
   private lastRadialFocusDesaturate = Number.NaN;
   private enabled = true;
-  private readonly supported: boolean;
-  private readonly radialFocusMask: RadialFocusMaskTexture | null;
+  private readonly radialFocusMask: RadialFocusMaskTexture;
   private unsubscribeQuality: (() => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly worldCamera: Phaser.Cameras.Scene2D.Camera,
   ) {
-    this.supported = CameraPostFxController.isSupported(scene, worldCamera);
-    if (!this.supported) {
-      this.radialFocusMask = null;
-      console.info('[PostFX] Kamerafilter nicht verfügbar (kein WebGL) – Bildkomposition bleibt aus.');
-      return;
-    }
     this.radialFocusMask = new RadialFocusMaskTexture(scene);
     this.buildChain();
     const quality = getGraphicsQualityController(scene);
@@ -145,15 +138,8 @@ export class CameraPostFxController {
     this.unsubscribeQuality = quality?.subscribe(() => this.applyState(this.lastState)) ?? null;
   }
 
-  /** Filter existieren nur unter WebGL; unter Canvas fehlt der Renderpfad vollständig. */
-  static isSupported(scene: Phaser.Scene, camera: Phaser.Cameras.Scene2D.Camera): boolean {
-    if (scene.game.renderer.type !== Phaser.WEBGL) return false;
-    const list = (camera as unknown as { filters?: { internal?: { addParallelFilters?: unknown } } }).filters?.internal;
-    return typeof list?.addParallelFilters === 'function';
-  }
-
   isActive(): boolean {
-    return this.supported && this.enabled;
+    return this.enabled;
   }
 
   setBaseGrade(grade: WorldGrade): void {
@@ -207,7 +193,7 @@ export class CameraPostFxController {
 
   /** Ereignisse laufen ausschließlich über die Whitelist in `postFxPresets`. */
   pulseEvent(event: PostFxEvent, overrides?: Partial<PostFxPulse>): void {
-    if (!this.supported || !this.enabled) return;
+    if (!this.enabled) return;
     if (!getGraphicsQualityProfile(this.scene).eventPostFx) return;
     const preset = getPostFxPreset(event);
     this.pulses.request({ ...preset, ...overrides, id: overrides?.id ?? event }, this.scene.time.now);
@@ -215,7 +201,7 @@ export class CameraPostFxController {
 
   /** Für die Ereignis-Choreografien aus Stufe 3, die eigene Phasen zusammensetzen. */
   pulse(pulse: PostFxPulse): void {
-    if (!this.supported || !this.enabled) return;
+    if (!this.enabled) return;
     if (!getGraphicsQualityProfile(this.scene).eventPostFx) return;
     this.pulses.request(pulse, this.scene.time.now);
   }
@@ -225,7 +211,6 @@ export class CameraPostFxController {
   }
 
   update(_deltaMs: number): void {
-    if (!this.supported) return;
     if (!this.enabled) {
       this.applyState(null);
       return;
@@ -266,7 +251,7 @@ export class CameraPostFxController {
     return {
       activePulses: this.lastState?.activePulses ?? 0,
       neutral: this.lastState?.neutral ?? true,
-      supported: this.supported,
+      supported: true,
     };
   }
 

@@ -2,6 +2,14 @@
 
 Diese Seite dokumentiert technische Renderverträge. Art Direction steht in visual-guidelines.md; Phaser-API-Details zuerst im passenden offiziellen Skill prüfen.
 
+## Renderer-Voraussetzung
+
+Fragdachse startet ausschließlich mit `Phaser.WEBGL`. `src/main.ts` prüft vor Content-Validierung,
+Netzwerkaufbau und Phaser-Initialisierung, ob der Browser einen WebGL-Kontext bereitstellt, und
+zeigt bei fehlender Unterstützung eine reine DOM-Fehlermeldung. Der Phaser-Canvas bleibt dabei die
+Ausgabefläche; `CanvasTexture`, `createCanvas()` und Offscreen-Canvas für Textur-, Font- oder
+Pixel-Erzeugung sind weiterhin legitime Bestandteile des WebGL-Pfads.
+
 ## Designraum, Canvas und Kamera
 
 Gameplay, HUD und Layout rechnen im Designraum GAME_WIDTH × GAME_HEIGHT aus src/config.ts. Die Canvas-/Backing-Store-Größe ist davon getrennt und wird durch graphics/RenderResolution.ts begrenzt und bei Resize, Vollbild und Zoom synchronisiert.
