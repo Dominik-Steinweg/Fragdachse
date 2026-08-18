@@ -96,7 +96,7 @@ import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaDescriptor, ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
+import type { ArenaDescriptor, ArenaLayout, GameMode, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -151,6 +151,13 @@ export class ArenaLifecycleCoordinator {
   private localArenaLoadReady = false;
   private hostStartupCachesPrepared = false;
   private preparedRoundLayout: { descriptor: ArenaDescriptor; layout: ArenaLayout } | null = null;
+  private pendingHostArenaGeneration: {
+    readonly roundRevision: number;
+    readonly gameMode: GameMode;
+    readonly mapConfig: CoopDefenseMapConfig | null;
+    readonly seed: number;
+  } | null = null;
+  private hostArenaGenerationTimer: Phaser.Time.TimerEvent | null = null;
   private boundRoundStartTime = 0;
   private pendingClassicTrainEvent: {
     readonly trackX: number;
@@ -347,18 +354,15 @@ export class ArenaLifecycleCoordinator {
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     const seed = Date.now();
-    const layout = ArenaGenerator.generate(seed, coopDefenseMapConfig ?? undefined);
-    const descriptor: ArenaDescriptor = {
+    // The phase and participation state deliberately become visible before the expensive
+    // generator/fingerprint step. The next scene tick installs the loading veil and schedules
+    // generation, so a host never blocks the lobby while still reporting LOBBY.
+    this.pendingHostArenaGeneration = {
       roundRevision,
       gameMode: bridge.getGameMode(),
-      mapId: coopDefenseMapConfig?.mapId ?? null,
+      mapConfig: coopDefenseMapConfig,
       seed,
-      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
-      layoutFingerprint: ArenaGenerator.fingerprint(layout),
     };
-    this.preparedRoundLayout = { descriptor, layout };
-    bridge.publishArenaDescriptor(descriptor);
-    bridge.setLocalArenaLoadProgress(roundRevision, 10, 'generating');
     const roundState: RoundState = {
       status: 'active',
       roundStartTime: 0,
@@ -457,7 +461,9 @@ export class ArenaLifecycleCoordinator {
   }
 
   spawnReadyPlayers(): void {
-    if (!bridge.isHost()) return;
+    // The phase switches to ARENA before host generation now. Do not create round entities until
+    // buildArena has installed the matching layout and round-scoped systems.
+    if (!bridge.isHost() || !this.arenaBuilt) return;
     for (const profile of bridge.getConnectedPlayers()) {
       const canInitialSpawn = bridge.canPlayerInitialSpawn(profile.id);
       const reconnectAfterDeath = this.ctx.coopDefenseSurvivalSystem !== null
@@ -2610,6 +2616,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    this.cancelPendingHostArenaGeneration();
     this.localArenaLoadReady = false;
     this.hostStartupCachesPrepared = false;
     this.preparedRoundLayout = null;
@@ -2905,6 +2912,60 @@ export class ArenaLifecycleCoordinator {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
+  private scheduleHostArenaGeneration(request: {
+    readonly roundRevision: number;
+    readonly gameMode: GameMode;
+    readonly mapConfig: CoopDefenseMapConfig | null;
+    readonly seed: number;
+  }): void {
+    if (this.hostArenaGenerationTimer) return;
+
+    this.hostArenaGenerationTimer = this.scene.time.delayedCall(0, () => {
+      this.hostArenaGenerationTimer = null;
+      if (this.pendingHostArenaGeneration !== request
+        || this.matchTerminated
+        || bridge.getGamePhase() !== 'ARENA'
+        || bridge.getRoundParticipation()?.roundRevision !== request.roundRevision) {
+        return;
+      }
+
+      // Keep the technical loading stage explicit while the synchronous generator runs. The
+      // phase/overlay was already committed in the preceding frame; this callback is the only
+      // place that performs the host's layout work for the new round.
+      this.pendingHostArenaGeneration = null;
+      bridge.setLocalArenaLoadProgress(request.roundRevision, 10, 'generating');
+      try {
+        applyArenaMetricsForMode(
+          request.gameMode,
+          'ARENA',
+          request.mapConfig?.arenaWidthCells,
+          request.mapConfig?.arenaHeightCells,
+        );
+        const layout = ArenaGenerator.generate(request.seed, request.mapConfig ?? undefined);
+        const descriptor: ArenaDescriptor = {
+          roundRevision: request.roundRevision,
+          gameMode: request.gameMode,
+          mapId: request.mapConfig?.mapId ?? null,
+          seed: request.seed,
+          arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+          layoutFingerprint: ArenaGenerator.fingerprint(layout),
+        };
+        this.preparedRoundLayout = { descriptor, layout };
+        bridge.publishArenaDescriptor(descriptor);
+        this.onTransitionToArena();
+      } catch (error) {
+        console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
+        this.terminateMatch('Lokale Arena-Erzeugung fehlgeschlagen (Generator/Fingerprint abweichend).');
+      }
+    });
+  }
+
+  private cancelPendingHostArenaGeneration(): void {
+    this.hostArenaGenerationTimer?.remove(false);
+    this.hostArenaGenerationTimer = null;
+    this.pendingHostArenaGeneration = null;
+  }
+
   private onTransitionToArena(): void {
     // Install the independent black loading screen before the descriptor/round snapshot arrives.
     // A phase change must never expose the arena during the retry window.
@@ -2918,6 +2979,15 @@ export class ArenaLifecycleCoordinator {
     const roundStateReady = roundState?.status === 'active'
       && roundState.roundStartTime === bridge.getArenaStartTime();
     const participation = bridge.getRoundParticipation();
+    const pendingHostGeneration = this.pendingHostArenaGeneration;
+    if (bridge.isHost()
+      && pendingHostGeneration
+      && participation?.roundRevision === pendingHostGeneration.roundRevision
+      && roundStateReady
+      && descriptor?.roundRevision !== pendingHostGeneration.roundRevision) {
+      this.scheduleHostArenaGeneration(pendingHostGeneration);
+      return;
+    }
     if (!descriptor
       || !participation
       || descriptor.roundRevision !== participation.roundRevision

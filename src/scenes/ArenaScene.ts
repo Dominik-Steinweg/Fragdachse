@@ -97,6 +97,7 @@ import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
 import { WebGLRectMaskTexture } from '../utils/webglRectMask';
+import { coversDesignSpace } from './arena/ArenaClipPolicy';
 import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
@@ -2983,22 +2984,29 @@ export class ArenaScene extends Phaser.Scene {
   private ensureArenaClipMask(): void {
     if (!this.arenaClipMask) {
       this.arenaClipMask = new WebGLRectMaskTexture(this, '__arena_clip_mask', GAME_WIDTH, GAME_HEIGHT);
-      this.arenaClipMask.attachToCamera(this.cameras.main);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
         this.arenaClipMask?.destroy();
         this.arenaClipMask = null;
       });
     }
-    this.redrawArenaClipMask();
+    this.syncArenaClipMask();
   }
 
-  private redrawArenaClipMask(): void {
-    this.arenaClipMask?.update({
+  private syncArenaClipMask(): void {
+    const bounds = {
       x: ARENA_OFFSET_X,
       y: ARENA_OFFSET_Y,
       width: ARENA_VIEWPORT_WIDTH,
       height: ARENA_VIEWPORT_HEIGHT,
-    });
+    };
+    const mask = this.arenaClipMask;
+    if (!mask) return;
+    if (coversDesignSpace(bounds, GAME_WIDTH, GAME_HEIGHT)) {
+      mask.detachFromCamera();
+      return;
+    }
+    mask.update(bounds);
+    mask.attachToCamera(this.cameras.main);
   }
 
   private syncArenaMetrics(phase = bridge.getGamePhase()): void {
@@ -3009,7 +3017,7 @@ export class ArenaScene extends Phaser.Scene {
       this.resolveCoopDefenseArenaHeightCells(phase),
     );
     this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), phase);
-    this.redrawArenaClipMask();
+    this.syncArenaClipMask();
     this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
     this.syncMainCameraBounds();
     this.ctx?.combatSystem.syncArenaBounds();

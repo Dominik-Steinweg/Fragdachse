@@ -7,6 +7,16 @@ import { resolveArenaLoadProgress } from '../src/scenes/arena/ArenaLoadProgress'
 import { resolveArenaStartTime } from '../src/scenes/arena/ArenaStartTiming';
 import type { ArenaDescriptor } from '../src/types';
 
+function legacyFingerprint(layout: unknown): string {
+  const serialized = JSON.stringify(layout);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
 describe('arena loading contracts', () => {
   it('reproduces the large Map 0 locally and keeps the descriptor compact', () => {
     const map = getCoopDefenseMapConfig('0');
@@ -25,6 +35,7 @@ describe('arena loading contracts', () => {
       };
 
       expect(ArenaGenerator.fingerprint(clientLayout)).toBe(descriptor.layoutFingerprint);
+      expect(ArenaGenerator.fingerprint(hostLayout)).toBe(legacyFingerprint(hostLayout));
       expect(JSON.stringify(descriptor).length).toBeLessThan(1024);
       expect(hostLayout.rocks.length).toBeGreaterThan(10_000);
     } finally {

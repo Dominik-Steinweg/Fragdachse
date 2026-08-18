@@ -66,6 +66,13 @@ export class WebGLRectMaskTexture {
     return filter;
   }
 
+  /** Removes only the camera filter so this helper can be reactivated without a new texture. */
+  detachFromCamera(): void {
+    if (!this.cameraAttachment) return;
+    this.cameraAttachment.list.remove(this.cameraAttachment.filter, true);
+    this.cameraAttachment = null;
+  }
+
   attachToGameObject(target: object): Phaser.Filters.Mask | null {
     if (this.destroyed || this.objectAttachment) return this.objectAttachment?.filter ?? null;
 
@@ -85,8 +92,7 @@ export class WebGLRectMaskTexture {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.cameraAttachment?.list.remove(this.cameraAttachment.filter);
-    this.cameraAttachment = null;
+    this.detachFromCamera();
     this.objectAttachment?.list.remove(this.objectAttachment.filter);
     this.objectAttachment = null;
     if (this.scene.textures.exists(this.textureKey)) {

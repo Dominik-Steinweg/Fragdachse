@@ -36,6 +36,63 @@ const CORRIDOR_TAPER_CELLS = 3;
 /** Harte Untergrenze des Aushubradius, damit nie eine unpassierbare Engstelle entsteht. */
 const MIN_CARVED_RADIUS_CELLS = 1.05;
 
+function updateFingerprintHash(hash: number, value: string): number {
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash;
+}
+
+/**
+ * Hashes JSON-compatible layout data without materializing one large serialized layout string.
+ * The delimiters, key order and primitive encoding intentionally mirror JSON.stringify so the
+ * wire-visible fingerprint remains unchanged.
+ */
+function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false): number {
+  if (value === null) return updateFingerprintHash(hash, 'null');
+  if (value === undefined || typeof value === 'function' || typeof value === 'symbol') {
+    return inArray ? updateFingerprintHash(hash, 'null') : hash;
+  }
+
+  switch (typeof value) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+      return updateFingerprintHash(hash, JSON.stringify(value) ?? 'null');
+    case 'bigint':
+      // Preserve JSON.stringify's failure mode for unsupported layout values.
+      throw new TypeError('Cannot fingerprint a BigInt layout value');
+    case 'object': {
+      if (Array.isArray(value)) {
+        let nextHash = updateFingerprintHash(hash, '[');
+        for (let index = 0; index < value.length; index += 1) {
+          if (index > 0) nextHash = updateFingerprintHash(nextHash, ',');
+          nextHash = updateJsonFingerprintHash(value[index], nextHash, true);
+        }
+        return updateFingerprintHash(nextHash, ']');
+      }
+
+      let nextHash = updateFingerprintHash(hash, '{');
+      let firstProperty = true;
+      for (const key of Object.keys(value)) {
+        const propertyValue = (value as Record<string, unknown>)[key];
+        if (propertyValue === undefined
+          || typeof propertyValue === 'function'
+          || typeof propertyValue === 'symbol') continue;
+        if (!firstProperty) nextHash = updateFingerprintHash(nextHash, ',');
+        firstProperty = false;
+        nextHash = updateFingerprintHash(nextHash, JSON.stringify(key));
+        nextHash = updateFingerprintHash(nextHash, ':');
+        nextHash = updateJsonFingerprintHash(propertyValue, nextHash);
+      }
+      return updateFingerprintHash(nextHash, '}');
+    }
+    default:
+      return hash;
+  }
+}
+
 /** Increment whenever deterministic generation changes in a wire-visible way. */
 export const ARENA_GENERATOR_VERSION = 1;
 
@@ -54,12 +111,7 @@ function clampToUnitRange(value: number): number {
 export class ArenaGenerator {
   /** Compact deterministic fingerprint for host/client generation diagnostics. */
   static fingerprint(layout: ArenaLayout): string {
-    const serialized = JSON.stringify(layout);
-    let hash = 0x811c9dc5;
-    for (let index = 0; index < serialized.length; index += 1) {
-      hash ^= serialized.charCodeAt(index);
-      hash = Math.imul(hash, 0x01000193);
-    }
+    const hash = updateJsonFingerprintHash(layout, 0x811c9dc5);
     return (hash >>> 0).toString(16).padStart(8, '0');
   }
 
