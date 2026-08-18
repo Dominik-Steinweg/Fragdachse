@@ -365,6 +365,17 @@ export class ArenaBuilder {
     result.rockCuller?.update(view);
   }
 
+  /**
+   * Startup-ready means that both streamed ground surfaces have all visible and prefetched
+   * chunks, including their render targets, fully baked. The large map outside this working set
+   * remains ordinary runtime streaming.
+   */
+  static isSurfaceWorkingSetReady(result: ArenaBuilderResult | null, view: ChunkWorldRect): boolean {
+    if (!result?.groundSurface || !result.rockOverlaySurface) return false;
+    return result.groundSurface.isReadyForView(view, true)
+      && result.rockOverlaySurface.isReadyForView(view, true);
+  }
+
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
 

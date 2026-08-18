@@ -5,6 +5,7 @@ import { ChunkedRenderSurface } from '../../arena/chunks/ChunkedRenderSurface';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
+import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { ReinforcementMatrixSystem, type TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
@@ -84,7 +85,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_START_SYNC_LEAD_MS, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -145,6 +146,14 @@ export class ArenaLifecycleCoordinator {
   private layoutRetryCount = 0;
   private arenaEnteredAt   = 0;
   private arenaBuilt       = false;
+  private lastRoundRevision = 0;
+  private localArenaLoadReady = false;
+  private boundRoundStartTime = 0;
+  private pendingClassicTrainEvent: {
+    readonly trackX: number;
+    readonly direction: 1 | -1;
+    readonly plan: TrainEventPlan;
+  } | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
 
   constructor(
@@ -322,30 +331,23 @@ export class ArenaLifecycleCoordinator {
       coopDefenseMapConfig?.arenaWidthCells,
       coopDefenseMapConfig?.arenaHeightCells,
     );
-    const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
-    bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), arenaStartTime);
+    // Enter ARENA with no gameplay timestamp yet. The round revision is the identity used by
+    // the separate local arena-load barrier; it must not be confused with Lobby Ready or with
+    // the later authoritative gameplay start timestamp.
+    // Keep the revision monotone even when an abort/restart happens within the same millisecond;
+    // a stale reliable acknowledgement must never be able to match a new round by coincidence.
+    const roundRevision = Math.max(Date.now(), this.lastRoundRevision + 1);
+    this.lastRoundRevision = roundRevision;
+    bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
+    bridge.setArenaStartTime(0);
+    bridge.setRoundEndTime(0);
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
-    const isCoopDefense = isCoopDefenseMode(bridge.getGameMode());
     const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
     bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
-    bridge.setArenaStartTime(arenaStartTime);
-    let roundEndTime = arenaStartTime + ARENA_DURATION_SEC * 1000;
-    if (isCoopDefense) {
-      if (coopDefenseMapConfig?.objective === 'survive') {
-        const surviveDurationSec = coopDefenseMapConfig.surviveDurationSec;
-        if (surviveDurationSec === undefined) {
-          throw new Error(`[ArenaLifecycleCoordinator] Survival map ${coopDefenseMapConfig.mapId} has no surviveDurationSec`);
-        }
-        roundEndTime = arenaStartTime + surviveDurationSec * 1000;
-      } else {
-        roundEndTime = 0;
-      }
-    }
-    bridge.setRoundEndTime(roundEndTime);
     const roundState: RoundState = {
       status: 'active',
-      roundStartTime: arenaStartTime,
+      roundStartTime: 0,
       timeOfDayMinutes,
       coopDefenseHumanPlayerCount: isCoopDefenseMode(bridge.getGameMode())
         ? Math.max(1, bridge.getConnectedPlayers().length)
@@ -356,6 +358,71 @@ export class ArenaLifecycleCoordinator {
     };
     bridge.publishRoundState(roundState);
     bridge.setGamePhase('ARENA');
+  }
+
+  /** Called after the shared chunk scheduler has had its frame budget. */
+  syncArenaLoadReady(view: WorldViewRect | null): void {
+    if (bridge.getGamePhase() !== 'ARENA' || this.matchTerminated || !this.arenaBuilt || !view) return;
+    this.syncAuthoritativeRoundStartAnchors();
+    const participation = bridge.getRoundParticipation();
+    const roundRevision = participation?.roundRevision ?? 0;
+    if (roundRevision <= 0 || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
+
+    const localReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
+      && this.renderers.shadow.isStaticReadyForView(view, true);
+    if (localReady && !bridge.isLocalArenaLoadReady(roundRevision)) {
+      bridge.setLocalArenaLoadReady(roundRevision, true);
+      this.localArenaLoadReady = true;
+    } else if (bridge.isLocalArenaLoadReady(roundRevision)) {
+      this.localArenaLoadReady = true;
+    }
+
+    if (bridge.isHost()) this.tryScheduleArenaStart();
+  }
+
+  private tryScheduleArenaStart(): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
+    if (bridge.getArenaStartTime() > 0 || !bridge.areRoundParticipantsArenaLoadReady()) return;
+
+    const arenaStartTime = Date.now() + ARENA_START_SYNC_LEAD_MS + ARENA_COUNTDOWN_SEC * 1000;
+    bridge.setArenaStartTime(arenaStartTime);
+    bridge.setRoundEndTime(this.resolveRoundEndTime(arenaStartTime));
+
+    const currentRoundState = bridge.getRoundState();
+    if (currentRoundState?.status === 'active') {
+      bridge.publishRoundState({ ...currentRoundState, roundStartTime: arenaStartTime });
+    }
+    this.syncAuthoritativeRoundStartAnchors();
+    if (this.pendingClassicTrainEvent) {
+      const { trackX, direction, plan } = this.pendingClassicTrainEvent;
+      bridge.publishTrainEvent({
+        trackX,
+        direction,
+        spawnAt: arenaStartTime + plan.firstArrivalDelayMs,
+      });
+    }
+    this.hostUpdate.setActive(true);
+  }
+
+  private syncAuthoritativeRoundStartAnchors(): void {
+    const roundStartTime = bridge.getArenaStartTime();
+    if (roundStartTime <= 0 || roundStartTime === this.boundRoundStartTime) return;
+    this.boundRoundStartTime = roundStartTime;
+    this.timeOfDayController?.setRoundStartTime(roundStartTime);
+    this.ctx.powerUpSystem?.setArenaStartTime(roundStartTime);
+  }
+
+  private resolveRoundEndTime(arenaStartTime: number): number {
+    if (!isCoopDefenseMode(bridge.getGameMode())) {
+      return arenaStartTime + ARENA_DURATION_SEC * 1000;
+    }
+    const mapConfig = getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
+    if (mapConfig?.objective !== 'survive') return 0;
+    const surviveDurationSec = mapConfig.surviveDurationSec;
+    if (surviveDurationSec === undefined) {
+      throw new Error(`[ArenaLifecycleCoordinator] Survival map ${mapConfig.mapId} has no surviveDurationSec`);
+    }
+    return arenaStartTime + surviveDurationSec * 1000;
   }
 
   spawnReadyPlayers(): void {
@@ -2467,6 +2534,9 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    this.localArenaLoadReady = false;
+    this.boundRoundStartTime = 0;
+    this.pendingClassicTrainEvent = null;
     this.cancelTrainExplosionTimers();
     // Event-Handler besitzen occurrence-/sourcebezogene Zustaende. Sie muessen vor dem
     // Fachsystem-Cleanup laufen, damit Ground-Hazard-Quellen sauber aus dem FireSystem entfernt
@@ -2720,6 +2790,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.airstrike.clear();
     this.renderers.encounterTelegraph.clear();
     this.renderers.meteor.clear();
+    this.renderers.rockDestruction.clear();
     this.ctx.armageddonSystem?.destroyAll();
     this.ctx.armageddonSystem = null;
     this.ctx.airstrikeSystem?.clear();
@@ -2757,6 +2828,11 @@ export class ArenaLifecycleCoordinator {
   // ── Private ───────────────────────────────────────────────────────────────
 
   private onTransitionToArena(): void {
+    // Install the full-screen loading state before even the reliable layout/round snapshot has
+    // arrived. A phase change must never expose the arena during the retry window.
+    this.ctx.arenaCountdown?.showLoading();
+    this.lobbyOverlay.lockButton();
+    this.lobbyOverlay.hide();
     const layout = bridge.getArenaLayout();
     // Im Coop-Modus zusätzlich auf den (reliable) RoundState warten: er trägt Map-ID und Spielerzahl,
     // aus denen Basen/Druckquellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
@@ -2790,6 +2866,7 @@ export class ArenaLifecycleCoordinator {
     );
     this.buildArena(layout);
     this.arenaBuilt = true;
+    this.localArenaLoadReady = false;
 
     for (const profile of bridge.getConnectedPlayers()) {
       const canCreatePlayer = bridge.canPlayerSpawnOrRespawn(profile.id)
@@ -2816,10 +2893,8 @@ export class ArenaLifecycleCoordinator {
     this.resetLocalArenaHudState();
     this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
-    this.ctx.arenaCountdown?.syncTo(bridge.getArenaStartTime());
-    this.lobbyOverlay.lockButton();
-    this.lobbyOverlay.hide();
-    this.hostUpdate.setActive(true);
+    // Round systems exist locally, but simulation stays inert until the common start timestamp.
+    this.hostUpdate.setActive(false);
     this.ctx.gameAudioSystem.playMusic('music_arena');
   }
 
@@ -2910,9 +2985,15 @@ export class ArenaLifecycleCoordinator {
     direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1,
   ): TrainManager {
     const trackX     = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE;
-    const spawnAt    = plan ? bridge.getArenaStartTime() + plan.firstArrivalDelayMs : null;
+    const arenaStartTime = bridge.getArenaStartTime();
+    const spawnAt    = plan && arenaStartTime > 0
+      ? arenaStartTime + plan.firstArrivalDelayMs
+      : null;
 
-    if (spawnAt !== null) bridge.publishTrainEvent({ trackX, direction, spawnAt });
+    if (plan) {
+      this.pendingClassicTrainEvent = { trackX, direction, plan };
+      if (spawnAt !== null && bridge.isHost()) bridge.publishTrainEvent({ trackX, direction, spawnAt });
+    }
 
     this.ctx.trainManager = new TrainManager(this.scene, this.ctx.playerManager, trackX, direction);
     this.ctx.trainManager.setTimeBubbleSystem(this.ctx.timeBubbleSystem);

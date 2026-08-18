@@ -23,8 +23,16 @@ export type RoundPlayerRole = 'participant' | 'spectator';
 
 export interface RoundParticipationState {
   roundStartTime: number;
+  /** Stable identity of the round while local arena loading is still in progress. */
+  roundRevision: number;
   participantIds: string[];
   spectatorIds: string[];
+}
+
+/** Reliable per-player acknowledgement of the local arena build. */
+export interface ArenaLoadReadyState {
+  roundRevision: number;
+  ready: boolean;
 }
 
 /** Host-autoritärer, replizierter Lebenszustand einer aktivierten Survival-Runde. */

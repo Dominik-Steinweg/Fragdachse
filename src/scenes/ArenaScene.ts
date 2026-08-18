@@ -1433,9 +1433,13 @@ export class ArenaScene extends Phaser.Scene {
       && this.lastObservedGamePhase === 'ARENA'
       && phase === 'LOBBY';
     const inGame          = phase === 'ARENA';
-    const arenaVisible    = inGame || deferArenaExit;
+    const countdownVisible = bridge.isArenaCountdownVisible();
+    const arenaLoading    = bridge.isArenaLoading();
+    const arenaStarted    = bridge.isArenaStarted();
+    const arenaVisible    = countdownVisible || deferArenaExit;
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
+    const gameplayActive  = inGame && arenaStarted && !terminated;
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
@@ -1451,18 +1455,34 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay?.hide();
     }
 
-    this.syncMainCamera(delta, arenaVisible && !terminated);
+    // Initial player placement is a round-build step, not simulation. Keep it before the camera
+    // so the same prepared spawn defines the startup working set that the load barrier waits for.
+    if (inGame && !terminated && !spectator) {
+      if (bridge.isHost()) {
+        // Initial spawn is part of the hidden local build. It must happen before the first
+        // residency check so the startup working set follows the actual local player focus.
+        this.lifecycle.spawnReadyPlayers();
+        this.localPlayerState.alive = this.ctx.combatSystem.isAlive(bridge.getLocalPlayerId());
+      } else if (arenaLoading || countdownActive) {
+        // The client receives the first authoritative alive bit with the first post-start
+        // snapshot; the local prepared entity is nevertheless a valid camera focus meanwhile.
+        this.localPlayerState.alive = true;
+      }
+    }
+
+    // The camera must already be positioned while the world is hidden, because its initial view
+    // defines the startup working set that the load barrier waits for.
+    this.syncMainCamera(delta, inGame && !terminated);
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
-    if (arenaVisible) {
+    if (inGame && !terminated) {
       const worldView = getVisibleWorldView(this.cameras.main);
       ArenaBuilder.updateSurfaceResidency(this.ctx?.arenaResult ?? null, worldView);
       this.renderers?.shadow.updateStaticResidency(worldView);
     }
-
-    this.arenaPanelsHeld = !!(inGame && !terminated && this.arenaPanelTabKey?.isDown);
+    this.arenaPanelsHeld = !!(gameplayActive && !terminated && this.arenaPanelTabKey?.isDown);
 
     if (!inGame && this.arenaPanelsHeld) {
       this.arenaPanelsHeld = false;
@@ -1476,11 +1496,11 @@ export class ArenaScene extends Phaser.Scene {
     if (lobbyVisible) this.lobbyAmbient?.update(delta);
 
     if (inGame) {
-      // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.
-      this.ctx.inputSystem.setAimEnabled(!optionsOpen && !spectator);
+      // Loading and countdown are both input-locked. Camera positioning is handled separately.
+      this.ctx.inputSystem.setAimEnabled(gameplayActive && !optionsOpen && !spectator);
       this.ctx.inputSystem.setInputEnabled(
-        !countdownActive && !optionsOpen && !spectator,
-        !optionsOpen && !spectator,
+        gameplayActive && !optionsOpen && !spectator,
+        gameplayActive && !optionsOpen && !spectator,
       );
       this.ctx.inputSystem.update();
     } else {
@@ -1563,7 +1583,7 @@ export class ArenaScene extends Phaser.Scene {
     const sceneStateEndMs = performance.now();
     const sceneStateMs = sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs);
 
-    if (inGame && !terminated) {
+    if (gameplayActive && !terminated) {
       const arenaHudStartedAt = performance.now();
       const secs = bridge.computeSecondsLeft();
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
@@ -1621,8 +1641,6 @@ export class ArenaScene extends Phaser.Scene {
           && !this.ctx.leftPanel.isHotkeyInputBlocked()) {
           this.ctx.coopDefenseRoundStateSystem?.applyDebugBaseDamage(50);
         }
-        this.lifecycle.spawnReadyPlayers();
-        if (countdownActive) this.lifecycle.syncHostLoadoutsFromCommittedSelections();
         this.hostUpdate.runHostUpdate(delta);
         const coopRoundOutcome = this.ctx.coopDefenseRoundStateSystem?.update() ?? null;
         if (coopRoundOutcome) {
@@ -1691,7 +1709,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const arenaPanelStartedAt = performance.now();
-    this.syncArenaPanelOverlayState(inGame && !terminated);
+    this.syncArenaPanelOverlayState(gameplayActive && !terminated);
     arenaPanelMs = performance.now() - arenaPanelStartedAt;
 
     const visualsStartMs = performance.now();
@@ -1710,7 +1728,10 @@ export class ArenaScene extends Phaser.Scene {
     );
     // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
     // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
-    this.syncMainCamera(spectator ? 0 : delta, inArena);
+    // Keep the camera active while the arena is hidden behind the loading veil. Its position is
+    // part of the local startup working set and must not be reset to the lobby origin before the
+    // readiness check at the end of the frame.
+    this.syncMainCamera(spectator ? 0 : delta, (inGame && !terminated) || deferArenaExit);
     const coopDefensePresentationActive = inArena && isCoopDefenseMode(bridge.getGameMode());
     const presentationMapConfig = coopDefensePresentationActive
       ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
@@ -1814,7 +1835,9 @@ export class ArenaScene extends Phaser.Scene {
     } else {
       this.enemyHoverNameLabel?.clear(true);
     }
-    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
+    // Loading uses the full-screen veil even though the arena itself is still hidden; once the
+    // authoritative countdown timestamp exists, the same overlay switches to 3 → 2 → 1.
+    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
     const visualCameraEndMs = performance.now();
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
@@ -1958,7 +1981,10 @@ export class ArenaScene extends Phaser.Scene {
 
     const shadowStepStartMs = visualsEndMs;
     const trainState = inArena ? this.resolveTrainState() : null;
-    this.syncWorldShadows(inArena, trainState);
+    // Keep round-scoped static shadows alive while the arena is hidden behind the loading veil;
+    // clearing them here would destroy the startup surface before the load barrier can observe it.
+    const shadowArenaActive = inArena || (inGame && !terminated);
+    this.syncWorldShadows(shadowArenaActive, trainState);
     const shadowStepMs = performance.now() - shadowStepStartMs;
     this.syncWorldLighting(inArena, trainState);
     const lightingStepMs = this.renderers.lighting.getLastUpdateCostMs();
@@ -1966,6 +1992,9 @@ export class ArenaScene extends Phaser.Scene {
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
     ChunkedRenderSurface.flushBakeBudget(this);
+    if (inGame && !terminated) {
+      this.lifecycle.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
+    }
 
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
     // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
@@ -2558,6 +2587,22 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
+    if (bridge.isArenaLoading()) {
+      this.localPlayerState.overlayTrackedAlive = null;
+      this.ctx.arenaCountdown.showLoading();
+      this.ctx.arenaCountdown.update(now);
+      return;
+    }
+
+    // A backgrounded or late-joining peer can miss the three-second window entirely. Switch the
+    // loading veil directly into the authoritative reveal instead of leaving it opaque forever.
+    if (bridge.isArenaStarted() && this.ctx.arenaCountdown.isLoading()) {
+      this.localPlayerState.overlayTrackedAlive = this.localPlayerState.alive;
+      this.ctx.arenaCountdown.syncTo(bridge.getArenaStartTime());
+      this.ctx.arenaCountdown.update(now);
+      return;
+    }
+
     // Spectatoren sehen die Arena direkt: ihre Rolle ist kein Todeszustand und darf deshalb
     // weder den Death-Veil noch den Respawn-Reveal ausloesen.
     if (this.localPlayerState.spectator || bridge.isLocalSpectator()) {
@@ -2568,6 +2613,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (countdownActive) {
       this.localPlayerState.overlayTrackedAlive = this.localPlayerState.alive;
+      this.ctx.arenaCountdown.syncTo(bridge.getArenaStartTime());
       this.ctx.arenaCountdown.update(now);
       return;
     }
@@ -3012,7 +3058,8 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
-    if (!localSprite?.active || !this.localPlayerState.alive) {
+    const preparedStartFocus = bridge.isArenaLoading() || bridge.isArenaCountdownActive();
+    if (!localSprite?.active || (!this.localPlayerState.alive && !preparedStartFocus)) {
       camera.scrollX = this.lastCameraScrollX;
       camera.scrollY = this.lastCameraScrollY;
       setCameraBaseScroll(this, this.lastCameraScrollX, this.lastCameraScrollY);
@@ -3025,7 +3072,9 @@ export class ArenaScene extends Phaser.Scene {
     const focusScreenY = ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5;
     const targetScrollX = Phaser.Math.Clamp(localSprite.x - focusScreenX, 0, maxScrollX);
     const targetScrollY = Phaser.Math.Clamp(localSprite.y - focusScreenY, 0, maxScrollY);
-    const followLerp = 1 - Math.exp(-delta / 120);
+    // The first local spawn is already known during loading; snap once so the startup working
+    // set is not invalidated by a camera glide while the barrier is being evaluated.
+    const followLerp = bridge.isArenaLoading() ? 1 : 1 - Math.exp(-delta / 120);
     this.lastCameraScrollX = Phaser.Math.Linear(this.lastCameraScrollX, targetScrollX, followLerp);
     this.lastCameraScrollY = Phaser.Math.Linear(this.lastCameraScrollY, targetScrollY, followLerp);
     camera.scrollX = this.lastCameraScrollX;

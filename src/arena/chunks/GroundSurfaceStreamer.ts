@@ -119,6 +119,10 @@ export class GroundSurfaceStreamer {
     this.surface.updateResidency(view);
   }
 
+  isReadyForView(view: ChunkWorldRect, includePrefetch = true): boolean {
+    return this.surface.isReadyForView(view, includePrefetch);
+  }
+
   setVisible(visible: boolean): void {
     this.surface.setVisible(visible);
   }

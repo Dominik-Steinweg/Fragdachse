@@ -28,6 +28,7 @@ import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQu
 import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
+import type { ArenaLoadReadyState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -35,6 +36,7 @@ import {
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
+  ARENA_COUNTDOWN_SEC,
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { countEnemyUpserts } from './enemySnapshotCodec';
@@ -117,6 +119,7 @@ const KEY_INPUT        = 'inp';
 const KEY_PLAYERS      = 'plr';
 const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
+const KEY_ARENA_LOAD_READY = 'alr'; // per-player reliable: { roundRevision, ready }
 const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
@@ -1396,21 +1399,75 @@ export class NetworkBridge {
     const raw = getState(KEY_ROUND_PARTICIPATION) as RoundParticipationState | null | undefined;
     if (!raw || typeof raw !== 'object') return null;
     if (!Array.isArray(raw.participantIds) || !Array.isArray(raw.spectatorIds)) return null;
+    const roundStartTime = typeof raw.roundStartTime === 'number' && Number.isFinite(raw.roundStartTime)
+      ? raw.roundStartTime
+      : 0;
+    const roundRevision = typeof raw.roundRevision === 'number' && Number.isFinite(raw.roundRevision)
+      ? raw.roundRevision
+      : roundStartTime;
     return {
-      roundStartTime: typeof raw.roundStartTime === 'number' ? raw.roundStartTime : 0,
+      roundStartTime,
+      roundRevision,
       participantIds: [...raw.participantIds],
       spectatorIds: [...raw.spectatorIds],
     };
   }
 
   /** Host-only: friert die Teilnehmerliste beim Wechsel in die Arena ein. */
-  hostStartRoundParticipants(participantIds: readonly string[], roundStartTime: number): void {
+  hostStartRoundParticipants(
+    participantIds: readonly string[],
+    roundStartTime: number,
+    roundRevision = roundStartTime,
+  ): void {
     if (!isHost()) return;
+    const participation = createRoundParticipationState(roundStartTime, participantIds, roundRevision);
     setState(
       KEY_ROUND_PARTICIPATION,
-      createRoundParticipationState(roundStartTime, participantIds),
+      participation,
       true,
     );
+    // This is deliberately a separate technical state from Lobby Ready. The revision binding
+    // makes a late reliable packet from the previous round harmless.
+    for (const playerId of participation.participantIds) {
+      this.playerStateMap.get(playerId)?.setState(KEY_ARENA_LOAD_READY, {
+        roundRevision,
+        ready: false,
+      } satisfies ArenaLoadReadyState, true);
+    }
+  }
+
+  /** Local peer acknowledgement that its current arena working set is complete. */
+  setLocalArenaLoadReady(roundRevision: number, ready = true): void {
+    myPlayer().setState(KEY_ARENA_LOAD_READY, {
+      roundRevision,
+      ready,
+    } satisfies ArenaLoadReadyState, true);
+  }
+
+  getPlayerArenaLoadReady(playerId: string, roundRevision: number): boolean {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_ARENA_LOAD_READY) as
+      Partial<ArenaLoadReadyState> | undefined;
+    return raw?.ready === true && raw.roundRevision === roundRevision;
+  }
+
+  isLocalArenaLoadReady(roundRevision: number): boolean {
+    return this.getPlayerArenaLoadReady(this.getLocalPlayerId(), roundRevision);
+  }
+
+  /**
+   * Host barrier: only currently connected, still participating peers count. Late joiners and
+   * spectators are intentionally outside this snapshot and cannot reset a prepared start.
+   */
+  areRoundParticipantsArenaLoadReady(): boolean {
+    if (!isHost()) return false;
+    const participation = this.getRoundParticipation();
+    if (!participation || participation.roundRevision <= 0) return false;
+    if (!this.isLocalArenaLoadReady(participation.roundRevision)) return false;
+    const connected = new Set([...this.connectedPlayers.keys(), this.getLocalPlayerId()]);
+    const spectators = new Set(participation.spectatorIds);
+    const participants = participation.participantIds.filter((id) => connected.has(id) && !spectators.has(id));
+    if (participants.length === 0) return false;
+    return participants.every((id) => this.getPlayerArenaLoadReady(id, participation.roundRevision));
   }
 
   /** Host-only: setzt einen spaeter beigetretenen Roster-Eintrag auf Spectator. */
@@ -1780,7 +1837,36 @@ export class NetworkBridge {
   /** true solange die Runde bereits in ARENA ist, aber der Start-Countdown noch läuft. */
   isArenaCountdownActive(now?: number): boolean {
     const effectiveNow = now ?? this.getSynchronizedNow();
-    return this.getGamePhase() === 'ARENA' && effectiveNow < this.getArenaStartTime();
+    const start = this.getArenaStartTime();
+    const countdownBegin = start - ARENA_COUNTDOWN_SEC * 1000;
+    return this.getGamePhase() === 'ARENA'
+      && start > 0
+      && effectiveNow >= countdownBegin
+      && effectiveNow < start;
+  }
+
+  /** True once the arena may be revealed, including the visible countdown and live round. */
+  isArenaCountdownVisible(now?: number): boolean {
+    const effectiveNow = now ?? this.getSynchronizedNow();
+    const start = this.getArenaStartTime();
+    return this.getGamePhase() === 'ARENA'
+      && start > 0
+      && effectiveNow >= start - ARENA_COUNTDOWN_SEC * 1000;
+  }
+
+  /** True while the local round is still building or waiting for the common start time. */
+  isArenaLoading(now?: number): boolean {
+    const effectiveNow = now ?? this.getSynchronizedNow();
+    const start = this.getArenaStartTime();
+    return this.getGamePhase() === 'ARENA'
+      && (start <= 0 || effectiveNow < start - ARENA_COUNTDOWN_SEC * 1000);
+  }
+
+  /** Exact gameplay gate shared by input, simulation and all round timers. */
+  isArenaStarted(now?: number): boolean {
+    const effectiveNow = now ?? this.getSynchronizedNow();
+    const start = this.getArenaStartTime();
+    return this.getGamePhase() === 'ARENA' && start > 0 && effectiveNow >= start;
   }
 
   /** Verbleibende Countdown-Sekunden als 3,2,1 (sonst 0). */

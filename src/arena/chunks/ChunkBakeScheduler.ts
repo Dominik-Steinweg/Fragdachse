@@ -6,17 +6,31 @@
  * ohne dass eine Schicht ihre eigene Vollbake-Schleife vor die anderen stellt.
  */
 
-export const CHUNK_BAKE_FRAME_BUDGET_MS = 4;
+/**
+ * Prefetch is deliberately gentle.  The urgent budget is still shared by Ground, RockOverlay
+ * and StaticShadow, so a visible chunk can finish without turning every streaming frame into a
+ * long GPU flush.
+ */
+export const CHUNK_BAKE_PREFETCH_FRAME_BUDGET_MS = 1.5;
+export const CHUNK_BAKE_URGENT_FRAME_BUDGET_MS = 4;
+
+/** Backwards-compatible name for callers that explicitly want the urgent ceiling. */
+export const CHUNK_BAKE_FRAME_BUDGET_MS = CHUNK_BAKE_URGENT_FRAME_BUDGET_MS;
 
 /** Obergrenze zusaetzlich zum Zeitbudget: schnelle Test-/Canvas-Backends sollen nicht alles in
  * einem Aufruf verschlingen, waehrend ein WebGL-Backend meist durch die Zeitgrenze stoppt. */
-const MAX_BAKE_OPERATIONS_PER_FRAME = 8;
+const MAX_BAKE_OPERATIONS_PER_FRAME = 32;
 const MAX_CONSECUTIVE_OPERATIONS_PER_OWNER = 2;
+const COMPLETION_PRIORITY_TOLERANCE = 250;
 
 export interface ChunkBakeJob {
   readonly key: string;
   readonly owner: object;
   readonly priority: () => number;
+  /** Jobs with the same key are kept together so a chunk does not become visible as patchwork. */
+  readonly completionKey?: object;
+  /** Raises the frame budget only while visible/inherently urgent work is pending. */
+  readonly urgent?: () => boolean;
   readonly run: () => void;
 }
 
@@ -33,6 +47,7 @@ export class ChunkBakeScheduler {
   private readonly jobs = new Map<string, ChunkBakeJob>();
   private lastOwner: object | null = null;
   private consecutiveOwnerOperations = 0;
+  private activeCompletionKey: object | null = null;
 
   enqueue(job: ChunkBakeJob): void {
     this.jobs.set(job.key, job);
@@ -50,6 +65,9 @@ export class ChunkBakeScheduler {
       this.lastOwner = null;
       this.consecutiveOwnerOperations = 0;
     }
+    if (this.activeCompletionKey && !this.hasCompletionJobs(this.activeCompletionKey)) {
+      this.activeCompletionKey = null;
+    }
   }
 
   get pendingJobs(): number {
@@ -57,11 +75,19 @@ export class ChunkBakeScheduler {
   }
 
   /** Verbraucht genau ein gemeinsames Budget fuer alle registrierten Renderflaechen. */
-  runFrame(budgetMs = CHUNK_BAKE_FRAME_BUDGET_MS): number {
-    if (this.jobs.size === 0 || budgetMs <= 0) return 0;
+  runFrame(budgetMs?: number): number {
+    if (this.jobs.size === 0) return 0;
+    if (budgetMs !== undefined && budgetMs <= 0) return 0;
+
+    const effectiveBudget = budgetMs ?? (
+      this.hasUrgentJobs()
+        ? CHUNK_BAKE_URGENT_FRAME_BUDGET_MS
+        : CHUNK_BAKE_PREFETCH_FRAME_BUDGET_MS
+    );
+    if (effectiveBudget <= 0) return 0;
 
     const startedAt = now();
-    const deadline = startedAt + budgetMs;
+    const deadline = startedAt + effectiveBudget;
     let operations = 0;
     while (this.jobs.size > 0 && operations < MAX_BAKE_OPERATIONS_PER_FRAME) {
       const job = this.pickNextJob();
@@ -69,12 +95,7 @@ export class ChunkBakeScheduler {
       this.jobs.delete(job.key);
       job.run();
       operations += 1;
-
-      if (this.lastOwner === job.owner) this.consecutiveOwnerOperations += 1;
-      else {
-        this.lastOwner = job.owner;
-        this.consecutiveOwnerOperations = 1;
-      }
+      this.recordOperation(job);
 
       // Mindestens eine Region pro Aufruf wird abgeschlossen. Danach stoppt die Uhr auch dann,
       // wenn ein einzelner GPU-Flush bereits das gesamte Budget verbraucht hat.
@@ -92,13 +113,19 @@ export class ChunkBakeScheduler {
       this.jobs.delete(job.key);
       job.run();
       operations += 1;
+      this.recordOperation(job);
     }
     this.lastOwner = null;
     this.consecutiveOwnerOperations = 0;
+    this.activeCompletionKey = null;
     return operations;
   }
 
   private pickNextJob(): ChunkBakeJob | null {
+    if (this.activeCompletionKey && !this.hasCompletionJobs(this.activeCompletionKey)) {
+      this.activeCompletionKey = null;
+    }
+
     let best: ChunkBakeJob | null = null;
     let bestPriority = Number.POSITIVE_INFINITY;
     for (const job of this.jobs.values()) {
@@ -109,6 +136,24 @@ export class ChunkBakeScheduler {
       }
     }
     if (!best) return null;
+
+    // Once a chunk has started, finish its remaining acquisition/region jobs when they are in
+    // the same priority band. A newly visible chunk can still interrupt a prefetch group.
+    if (this.activeCompletionKey) {
+      let completionBest: ChunkBakeJob | null = null;
+      let completionPriority = Number.POSITIVE_INFINITY;
+      for (const job of this.jobs.values()) {
+        if (job.completionKey !== this.activeCompletionKey) continue;
+        const priority = job.priority();
+        if (priority < completionPriority) {
+          completionBest = job;
+          completionPriority = priority;
+        }
+      }
+      if (completionBest && completionPriority <= bestPriority + COMPLETION_PRIORITY_TOLERANCE) {
+        return completionBest;
+      }
+    }
 
     // Sichtbare Arbeit aller drei Schichten soll vorankommen. Zwei aufeinanderfolgende Regionen
     // derselben Schicht sind genug, um den Scratch-Pool warm zu halten, danach gewinnt die beste
@@ -127,6 +172,31 @@ export class ChunkBakeScheduler {
       if (alternative && alternativePriority <= bestPriority + 250) return alternative;
     }
     return best;
+  }
+
+  private hasUrgentJobs(): boolean {
+    for (const job of this.jobs.values()) {
+      if (job.urgent?.()) return true;
+    }
+    return false;
+  }
+
+  private hasCompletionJobs(completionKey: object): boolean {
+    for (const job of this.jobs.values()) {
+      if (job.completionKey === completionKey) return true;
+    }
+    return false;
+  }
+
+  private recordOperation(job: ChunkBakeJob): void {
+    if (job.completionKey) this.activeCompletionKey = job.completionKey;
+    else this.activeCompletionKey = null;
+
+    if (this.lastOwner === job.owner) this.consecutiveOwnerOperations += 1;
+    else {
+      this.lastOwner = job.owner;
+      this.consecutiveOwnerOperations = 1;
+    }
   }
 }
 

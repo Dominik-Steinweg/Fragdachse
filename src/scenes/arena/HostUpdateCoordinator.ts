@@ -155,6 +155,12 @@ export class HostUpdateCoordinator {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
+    // Loading and the synchronized countdown are presentation-only. Keep every host-authoritative
+    // mission, encounter, physics and round timer behind the exact common gameplay gate.
+    if (!bridge.isArenaStarted()) {
+      this.lastPerformance = emptyHostUpdatePerformanceMetrics();
+      return;
+    }
     const startedAt = performance.now();
     const metrics = emptyHostUpdatePerformanceMetrics();
     const countdownActive = bridge.isArenaCountdownActive();

@@ -114,6 +114,20 @@ export class ClientUpdateCoordinator {
   }
 
   runClientUpdate(delta: number): void {
+    if (!bridge.isArenaStarted()) {
+      this.lastPerformance = {
+        totalMs: 0,
+        snapshotMs: 0,
+        playersMs: 0,
+        projectilesEffectsMs: 0,
+        worldStateMs: 0,
+        interpolationMs: 0,
+        hudMs: 0,
+        postSyncMs: 0,
+        newSnapshot: false,
+      };
+      return;
+    }
     const startedAt = performance.now();
     this.reconcileClientUtilityOverride();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first

@@ -100,11 +100,13 @@ einer Zerstoerungswelle billig bleibt. Diagnose und Ablationsmodus steigen ueber
 `forEachSceneDisplayObject` eine Ebene tief in `Layer`-Kinder ab, sonst faende die
 `rocks`-Kategorie nichts mehr.
 
-**Zerstoerungs-VFX ausserhalb des Bildes entfallen.** `RockDestructionRenderer` erzeugt je Fels bis
-zu 36 Truemmer-Images mit je einem Tween. Eine Flaechenzerstoerung raeumt auf einer grossen Karte
-tausende Felsen gleichzeitig ab – zehntausende Objekte, von denen der Spieler nur die wenigen im
-Bild sieht. Der Sichtbarkeitstest steht deshalb ganz vorn in `playDestruction()`; am sichtbaren
-Bild aendert er nichts.
+**Zerstoerungs-VFX ausserhalb des Bildes entfallen.** `RockDestructionRenderer` sammelt sichtbare
+Zerstoerungen bis `POST_UPDATE` und vergibt ein gemeinsames Budget: hoechstens vier raeumlich
+verteilte Felsen laufen gleichzeitig durch die hochwertige Fragmentspur, deren maximal 144 Images
+aus einem Pool kommen; der Rest wird durch hoechstens 32 gemeinsame Dust-/Debris-Bursts vertreten.
+Die beiden Partikelemitter bleiben bestehen und werden wiederverwendet. Dadurch entstehen weder
+pro Fragment Tween-/Destroy-Ketten noch pro Fels ein Emitter, und der Sichtbarkeitstest steht
+weiterhin ganz vorn in `playDestruction()`.
 
 ## Messworkflow
 

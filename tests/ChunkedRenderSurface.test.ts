@@ -152,7 +152,8 @@ describe('chunked render surface', () => {
 
     expect(regions).toEqual([]);
     expect(surface.getStats().pendingRegions).toBeGreaterThan(0);
-    expect((surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture).visible).toBe(false);
+    expect(surface.getChunkTexture('a', 0, 0)).toBeNull();
+    expect(surface.getStats().pendingTextureAcquisitions).toBeGreaterThan(0);
 
     ChunkedRenderSurface.flushBakeBudget(scene as never);
     expect(regions.length).toBeGreaterThan(0);

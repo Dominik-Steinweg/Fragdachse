@@ -53,7 +53,7 @@ export interface ArenaTimeOfDayControllerOptions {
  */
 export class ArenaTimeOfDayController {
   private readonly startMinutes: number;
-  private readonly roundStartTime: number;
+  private roundStartTime: number;
   private readonly minutesPerSecond: number;
   private readonly scheduledTransitions: readonly ScheduledTransition[];
   private readonly bossPhaseTransitions: readonly BossPhaseTransition[];
@@ -106,6 +106,18 @@ export class ArenaTimeOfDayController {
 
   getCurrentMinutes(): number {
     return this.currentMinutes;
+  }
+
+  /**
+   * The round can be fully built before the host chooses the common gameplay start timestamp.
+   * Re-anchor the deterministic clock once that timestamp is known; no loading time leaks into
+   * dynamic transitions or boss-relative phases.
+   */
+  setRoundStartTime(roundStartTime: number): void {
+    this.roundStartTime = Number.isFinite(roundStartTime) ? roundStartTime : 0;
+    this.reportedCompletions.clear();
+    this.automaticMinutes = this.startMinutes;
+    this.currentMinutes = this.debugOverrideMinutes ?? this.startMinutes;
   }
 
   hasDebugOverride(): boolean {

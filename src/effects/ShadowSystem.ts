@@ -226,6 +226,12 @@ export class ShadowSystem {
     this.staticSurface.updateResidency(view ?? this.getStaticFrameRect());
   }
 
+  /** Startup barrier for the static-shadow working set. */
+  isStaticReadyForView(view: ChunkWorldRect, includePrefetch = true): boolean {
+    if (!this.staticHasLayout || !this.staticSurface) return false;
+    return this.staticSurface.isReadyForView(view, includePrefetch);
+  }
+
   /**
    * Setzt die Uhrzeit der Runde. Zur Nacht hin bleiben die Sonnenschatten erhalten,
    * werden aber zu kurzen, weichen und blassen Mondschatten. Vor einem Rebuild der

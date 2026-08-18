@@ -29,6 +29,8 @@ Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort l
 
 Der reliable `RoundState` traegt neben dem Rundenstart nur seltene Zeitanker: Ein erfolgreicher Coop-Boss-Spawn schreibt `coopDefenseBossSpawnedAtMs` genau einmal. Kontinuierliche Arena-Tageszeit wird daraus und aus dem synchronisierten Jetzt lokal rekonstruiert und nie pro Tick repliziert.
 
+Der technische Arena-Ladezustand ist vom Lobby-Ready getrennt. `hostStartRoundParticipants()` friert dafür eine `roundRevision` ein; jeder Peer meldet `arenaLoadReady` zuverlässig pro Spieler und mit dieser Revision gebunden, nachdem sein lokaler Arena-Working-Set (einschließlich Ground-, RockOverlay- und statischer Schatten-Chunks) vollständig resident und gebacken ist. Der Host wertet nur die für diese Participation-Revision relevanten, noch verbundenen Teilnehmer aus; Disconnects blockieren die Barriere nicht dauerhaft, und spätere Spectators oder Late Joiner verändern den vorbereiteten Start nicht. Erst wenn Host und alle eingefrorenen Teilnehmer bereit sind, setzt der Host einen autoritativen zukünftigen `arenaStartTime` mit kurzem Synchronisationsvorlauf. Countdown, Inputfreigabe und alle Round-Timer orientieren sich an diesem absoluten Startzeitpunkt.
+
 Kumulative Raumstatistiken liegen als ein kompakter reliable globaler Snapshot (`rst`) im Raum. Nur
 der Host ändert das In-Memory-Ledger und publiziert es beim Rundenende, beim Lobby-Bootstrap und bei
 Roster-Reconnects; Treffer, Heilung und andere Zähler erzeugen keine Einzel-Replikation. Runden- und

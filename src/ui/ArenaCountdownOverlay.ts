@@ -39,7 +39,7 @@ const FOCUS_FALLBACK_TINT = '54,54,54';
 const FOCUS_FALLBACK_MID_ALPHA = 0.14;
 const FOCUS_FALLBACK_OUTER_ALPHA = 0.30;
 
-type OverlayMode = 'hidden' | 'countdown' | 'death' | 'respawn-reveal';
+type OverlayMode = 'hidden' | 'loading' | 'countdown' | 'death' | 'respawn-reveal';
 
 export class ArenaCountdownOverlay {
   private readonly focusFallbackTexture: Phaser.Textures.CanvasTexture;
@@ -125,6 +125,32 @@ export class ArenaCountdownOverlay {
     this.unlockAtMs = unlockAtMs;
   }
 
+  /** Full-screen loading veil used while local chunks and round systems are being prepared. */
+  showLoading(): void {
+    if (this.mode === 'loading') return;
+    this.resetOverlayState(CLOSED_VEIL_RADIUS_PX, VEIL_ALPHA);
+    this.mode = 'loading';
+    this.unlockAtMs = 0;
+    this.text.setStyle({
+      fontFamily: 'monospace',
+      fontSize: '56px',
+      fontStyle: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+      stroke: toCssColor(COLORS.GREY_8),
+      strokeThickness: 10,
+    });
+    this.text
+      .setText(t('ui.common.loading'))
+      .setPosition(this.baseX, this.baseY)
+      .setAlpha(1)
+      .setScale(1)
+      .setVisible(true);
+  }
+
+  isLoading(): boolean {
+    return this.mode === 'loading';
+  }
+
   showDeathVeil(): void {
     if (this.mode === 'death') return;
 
@@ -145,6 +171,11 @@ export class ArenaCountdownOverlay {
   update(now = Date.now()): void {
     if (this.mode === 'hidden') {
       this.clear();
+      return;
+    }
+
+    if (this.mode === 'loading') {
+      this.captureFocusPoint();
       return;
     }
 
@@ -393,7 +424,8 @@ export class ArenaCountdownOverlay {
     context.clearRect(0, 0, veilWidth, veilHeight);
 
     if (frame.radiusPx <= 0) {
-      context.fillStyle = `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_OUTER_ALPHA})`;
+      const loadingAlpha = this.mode === 'loading' ? alpha : alpha * FOCUS_FALLBACK_OUTER_ALPHA;
+      context.fillStyle = `rgba(${FOCUS_FALLBACK_TINT},${loadingAlpha})`;
       context.fillRect(0, 0, veilWidth, veilHeight);
     } else {
       const outerRadius = Math.max(1, radius + softness);

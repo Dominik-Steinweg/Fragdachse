@@ -7,6 +7,7 @@ function uniqueSorted(ids: readonly string[]): string[] {
 function cloneState(state: RoundParticipationState): RoundParticipationState {
   return {
     roundStartTime: state.roundStartTime,
+    roundRevision: state.roundRevision,
     participantIds: [...state.participantIds],
     spectatorIds: [...state.spectatorIds],
   };
@@ -16,9 +17,11 @@ function cloneState(state: RoundParticipationState): RoundParticipationState {
 export function createRoundParticipationState(
   roundStartTime: number,
   participantIds: readonly string[],
+  roundRevision = roundStartTime,
 ): RoundParticipationState {
   return {
     roundStartTime,
+    roundRevision,
     participantIds: uniqueSorted(participantIds),
     spectatorIds: [],
   };
