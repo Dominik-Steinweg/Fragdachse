@@ -10,6 +10,7 @@ import type { ArenaLayout } from '../src/types';
 import { createRockOverlaySource, syncRockOverlaySource } from '../src/arena/RockOverlayRegions';
 import { GroundSurfaceStreamer } from '../src/arena/chunks/GroundSurfaceStreamer';
 import { RockOverlayStreamer } from '../src/arena/chunks/RockOverlayStreamer';
+import { ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import { createFakeArenaScene, fakeRockImage, FakeRenderTexture } from './fakeArenaRenderScene';
 
 /**
@@ -77,6 +78,7 @@ function buildResult() {
   });
   groundSurface.updateResidency(VIEW);
   rockOverlaySurface.updateResidency(VIEW);
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
 
   const result = {
     baseZoneObjects: [],
@@ -148,11 +150,12 @@ describe('round-scoped world surface teardown', () => {
   });
 
   it('releases the pooled targets of a chunk that was walked away from', () => {
-    const { result, rockOverlaySurface } = buildResult();
+    const { result, rockOverlaySurface, scene } = buildResult();
 
     // Weglaufen legt die Renderziele in den Pool statt sie zu zerstoeren – der Teardown muss
     // auch diese finden.
     rockOverlaySurface.updateResidency({ x: 100_000, y: 0, width: 100, height: 100 });
+    ChunkedRenderSurface.drainBakeQueue(scene as never);
     expect(rockOverlaySurface.getStats().residentChunks).toBe(0);
     expect(rockOverlaySurface.getStats().pooledTextures).toBeGreaterThan(0);
 

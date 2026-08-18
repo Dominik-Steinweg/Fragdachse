@@ -27,19 +27,23 @@ import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
  */
 export const ARENA_RENDER_CHUNK_SIZE = 512;
 
-/**
- * Sicherheitsrand um den sichtbaren Ausschnitt, ab dem ein Chunk resident wird. Er deckt die
- * Strecke ab, die die Kamera zwischen zwei Residenz-Updates zuruecklegen kann.
- */
+/** Sicherheitsrand fuer unmittelbare Sichtbarkeits-/Culler-Entscheidungen. */
 export const ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX = 128;
 
 /**
- * Rand, ab dem ein Chunk wieder freigegeben wird. Bewusst um eine Chunkbreite groesser als der
- * Erwerbsrand: Ohne diese Hysterese wechselte ein Chunk direkt an der Grenze bei jeder kleinen
- * Kamerabewegung zwischen "gebacken" und "verworfen".
+ * Groesserer Vorlauf fuer die progressive Render-Vorbereitung. Drei Dirty-Regionen entsprechen
+ * 384 px und geben dem Scheduler mehrere Frames, bevor eine normale Kamerabewegung den Chunk
+ * erreicht. Der alte 128-px-Acquire-Rand bleibt fuer engere Objekt-Culler erhalten.
+ */
+export const ARENA_RENDER_CHUNK_PREFETCH_MARGIN_PX = ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX * 3;
+
+/**
+ * Rand, ab dem ein Chunk wieder freigegeben wird. Er liegt deutlich hinter dem neuen Prefetch-
+ * Vorlauf, damit vorbereitete Arbeit bei kleinen Rueckbewegungen erhalten bleibt, ohne bei einer
+ * echten Richtungsveraenderung die Pending-Queue an der Kamera vorbei wachsen zu lassen.
  */
 export const ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX =
-  ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX + ARENA_RENDER_CHUNK_SIZE;
+  ARENA_RENDER_CHUNK_PREFETCH_MARGIN_PX + ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX * 2;
 
 export interface ChunkLocalRect {
   localX: number;

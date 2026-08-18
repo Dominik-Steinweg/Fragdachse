@@ -1,11 +1,16 @@
 import * as Phaser from 'phaser';
 import {
-  ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX,
+  ARENA_RENDER_CHUNK_PREFETCH_MARGIN_PX,
   ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
   ArenaChunkGrid,
   worldRectToLocalRect,
 } from './ArenaChunkGrid';
 import type { ArenaChunkCoord, ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
+import {
+  flushChunkBakeScheduler,
+  getChunkBakeScheduler,
+  type ChunkBakeScheduler,
+} from './ChunkBakeScheduler';
 
 /**
  * Residenzverwaltung der gestreamten Weltschichten.
@@ -123,6 +128,10 @@ export type ChunkSamplingMode = 'default' | 'nearest';
 interface ResidentChunk {
   readonly coord: ArenaChunkCoord;
   readonly textures: Map<string, Phaser.GameObjects.RenderTexture>;
+  readonly pendingRegions: Map<string, { localX: number; localY: number; width: number; height: number }>;
+  readonly gutterSyncRegions: Set<string>;
+  ready: boolean;
+  visibleDemand: boolean;
 }
 
 interface NeighbourGutterTarget {
@@ -133,6 +142,8 @@ interface NeighbourGutterTarget {
 
 export interface ChunkedRenderSurfaceStats {
   readonly residentChunks: number;
+  readonly pendingChunks: number;
+  readonly pendingRegions: number;
   readonly pooledTextures: number;
   readonly layers: number;
   readonly chunkSize: number;
@@ -146,6 +157,7 @@ export interface ChunkedRenderSurfaceStats {
  * Dauerlauf ueber die Karte unbegrenzt Speicher haelt.
  */
 const CHUNK_TEXTURE_POOL_LIMIT_PER_LAYER = 12;
+let nextSurfaceId = 1;
 
 export class ChunkedRenderSurface {
   readonly grid: ArenaChunkGrid;
@@ -157,6 +169,8 @@ export class ChunkedRenderSurface {
   private readonly layers: readonly ChunkedSurfaceLayerSpec[];
   private readonly bakeFn: ChunkBakeFn;
   private readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
+  private readonly scheduler: ChunkBakeScheduler;
+  private readonly surfaceId = nextSurfaceId++;
   private readonly resident = new Map<number, ResidentChunk>();
   private readonly pool = new Map<string, Phaser.GameObjects.RenderTexture[]>();
   private readonly defaultFilterModes = new WeakMap<Phaser.GameObjects.RenderTexture, Phaser.Textures.FilterMode>();
@@ -165,6 +179,9 @@ export class ChunkedRenderSurface {
   private visible = true;
   private samplingMode: ChunkSamplingMode = 'default';
   private destroyed = false;
+  private lastResidencyView: ChunkWorldRect | null = null;
+  private movementX = 0;
+  private movementY = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -174,6 +191,7 @@ export class ChunkedRenderSurface {
     this.layers = options.layers;
     this.bakeFn = options.bake;
     this.onChunkTextureCreated = options.onChunkTextureCreated;
+    this.scheduler = getChunkBakeScheduler(scene);
     this.grid = new ArenaChunkGrid(options.frame.width, options.frame.height, options.chunkSize);
     this.gutterPx = Math.max(0, Math.trunc(options.gutterPx ?? CHUNK_SAMPLING_GUTTER_PX));
     this.chunkTextureSize = this.grid.chunkSize + this.gutterPx * 2;
@@ -183,13 +201,24 @@ export class ChunkedRenderSurface {
   /**
    * Gleicht die residenten Chunks an den sichtbaren Weltausschnitt an.
    *
-   * Erwerb und Freigabe benutzen absichtlich verschiedene Raender: Ein Chunk wird knapp vor dem
-   * Sichtbarwerden gebacken und erst eine Chunkbreite hinter dem Bild wieder verworfen.
+   * Die Methode reserviert Renderziele und Arbeitsregionen nur. Der eigentliche Bake laeuft ueber
+   * den gemeinsamen Scheduler am Frame-Ende, damit Acquisition nie wieder einen synchronen
+   * Vollbake ausfuehrt. Der Prefetch-Rand ist groesser als der alte 128-px-Sicherheitsrand; die
+   * Freigabe bleibt nochmals deutlich dahinter.
    */
   updateResidency(view: ChunkWorldRect): void {
     if (this.destroyed) return;
+    if (this.lastResidencyView) {
+      this.movementX = view.x - this.lastResidencyView.x;
+      this.movementY = view.y - this.lastResidencyView.y;
+    }
+    this.lastResidencyView = { ...view };
     const local = worldRectToLocalRect(view, this.frame);
-    const wanted = this.grid.chunksInLocalRect(local, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX);
+    const visible = new Set<number>();
+    for (const coord of this.grid.chunksInLocalRect(local)) {
+      visible.add(this.grid.key(coord.cx, coord.cy));
+    }
+    const wanted = this.grid.chunksInLocalRect(local, ARENA_RENDER_CHUNK_PREFETCH_MARGIN_PX);
     const keep = new Set<number>();
     for (const coord of this.grid.chunksInLocalRect(local, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX)) {
       keep.add(this.grid.key(coord.cx, coord.cy));
@@ -197,18 +226,32 @@ export class ChunkedRenderSurface {
 
     for (const coord of wanted) {
       const key = this.grid.key(coord.cx, coord.cy);
-      if (!this.resident.has(key)) this.acquireChunk(coord);
+      const chunk = this.resident.get(key) ?? this.acquireChunk(coord);
+      chunk.visibleDemand = visible.has(key);
+      this.syncChunkVisibility(chunk);
     }
 
     for (const key of [...this.resident.keys()]) {
       if (!keep.has(key)) this.releaseChunk(key);
+      else {
+        const chunk = this.resident.get(key);
+        if (chunk) {
+          chunk.visibleDemand = visible.has(key);
+          this.syncChunkVisibility(chunk);
+        }
+      }
     }
   }
 
-  /** Backt alle residenten Chunks komplett neu – fuer Aenderungen ohne lokale Dirty-Region. */
+  /**
+   * Plant alle 128-px-Regionen residenter Chunks neu. Der Aufruf selbst bleibt billig; die
+   * tatsaechlichen RenderTexture-Flushes teilen sich das Frame-Budget mit Acquisition.
+   */
   refreshAll(): void {
     if (this.destroyed) return;
-    for (const chunk of this.resident.values()) this.bakeChunk(chunk);
+    for (const chunk of this.resident.values()) {
+      for (const region of this.grid.dirtyRegionsOf(chunk.coord)) this.scheduleRegion(chunk, region, true);
+    }
   }
 
   /**
@@ -230,10 +273,14 @@ export class ChunkedRenderSurface {
     const neighbours = this.collectNeighbourGutterTargets(coord, localX, localY, size);
     const chunk = this.resident.get(this.grid.key(coord.cx, coord.cy));
     if (chunk) {
-      // The semantic dirty region is baked exactly once. Its already composed edge pixels are
-      // copied into resident neighbours below; no second region bake is needed there.
-      this.runBake(chunk, localX, localY, size);
-      this.refreshNeighbourGutters(chunk, localX, localY, size, neighbours);
+      // Pending acquisition and dirty invalidation use precisely the same 128-px work units.
+      // Re-adding a region here is intentional: a world change can arrive after that region was
+      // already baked, but before the chunk became visible.
+      for (const region of this.grid.dirtyRegionsOf(coord)) {
+        if (regionsOverlap(region.localX, region.localY, region.width, region.height, localX, localY, size, size)) {
+          this.scheduleRegion(chunk, region, true);
+        }
+      }
       return;
     }
 
@@ -250,6 +297,21 @@ export class ChunkedRenderSurface {
   /** Ob dieser Chunk gerade ein Renderziel besitzt. */
   isResident(cx: number, cy: number): boolean {
     return this.resident.has(this.grid.key(cx, cy));
+  }
+
+  /** Ob der sichtbare Inhalt des Chunks vollstaendig gebacken ist. */
+  isReady(cx: number, cy: number): boolean {
+    return this.resident.get(this.grid.key(cx, cy))?.ready ?? false;
+  }
+
+  /** Frame-Ende-Punkt fuer alle ChunkedRenderSurfaces derselben Scene. */
+  static flushBakeBudget(scene: Phaser.Scene): number {
+    return flushChunkBakeScheduler(scene);
+  }
+
+  /** Nur fuer deterministische Tests und kontrollierte Offline-Builds. */
+  static drainBakeQueue(scene: Phaser.Scene): number {
+    return getChunkBakeScheduler(scene).drain();
   }
 
   getChunkTexture(layerId: string, cx: number, cy: number): Phaser.GameObjects.RenderTexture | null {
@@ -285,12 +347,20 @@ export class ChunkedRenderSurface {
 
   getStats(): ChunkedRenderSurfaceStats {
     let pooled = 0;
+    let pendingChunks = 0;
+    let pendingRegions = 0;
     for (const bucket of this.pool.values()) pooled += bucket.length;
+    for (const chunk of this.resident.values()) {
+      if (!chunk.ready) pendingChunks += 1;
+      pendingRegions += chunk.pendingRegions.size;
+    }
     // Gezaehlt wird die belegte Kantenlaenge samt Gutter, nicht die sichtbare: Speicher kostet
     // das Renderziel, nicht der Ausschnitt.
     const chunkPixels = this.chunkTextureSize * this.chunkTextureSize;
     return {
       residentChunks: this.resident.size,
+      pendingChunks,
+      pendingRegions,
       pooledTextures: pooled,
       layers: this.layers.length,
       chunkSize: this.grid.chunkSize,
@@ -300,6 +370,7 @@ export class ChunkedRenderSurface {
 
   destroy(): void {
     this.destroyed = true;
+    this.scheduler.cancelOwner(this);
     for (const chunk of this.resident.values()) {
       for (const texture of chunk.textures.values()) {
         if (texture.active) texture.destroy();
@@ -442,7 +513,7 @@ export class ChunkedRenderSurface {
     target.render();
   }
 
-  private acquireChunk(coord: ArenaChunkCoord): void {
+  private acquireChunk(coord: ArenaChunkCoord): ResidentChunk {
     const textures = new Map<string, Phaser.GameObjects.RenderTexture>();
     for (const layer of this.layers) {
       const texture = this.obtainTexture(layer);
@@ -452,14 +523,25 @@ export class ChunkedRenderSurface {
       texture.render();
       textures.set(layer.id, texture);
     }
-    const chunk: ResidentChunk = { coord, textures };
+    const chunk: ResidentChunk = {
+      coord,
+      textures,
+      pendingRegions: new Map(),
+      gutterSyncRegions: new Set(),
+      ready: false,
+      visibleDemand: false,
+    };
     this.resident.set(this.grid.key(coord.cx, coord.cy), chunk);
-    this.bakeChunk(chunk);
+    // Ein neuer Chunk bleibt unsichtbar, bis alle 16 (bei 512 px) 128-px-Regionen fertig sind.
+    // Die Unterteilung kommt aus derselben Geometrie wie die Dirty-Rebuilds.
+    for (const region of this.grid.dirtyRegionsOf(coord)) this.scheduleRegion(chunk, region);
+    return chunk;
   }
 
   private releaseChunk(key: number): void {
     const chunk = this.resident.get(key);
     if (!chunk) return;
+    for (const region of chunk.pendingRegions.keys()) this.scheduler.cancel(this.jobKey(chunk, region));
     this.resident.delete(key);
     for (const [layerId, texture] of chunk.textures) {
       texture.clear();
@@ -534,10 +616,6 @@ export class ChunkedRenderSurface {
     if (filterMode !== undefined) texture.texture.setFilter(filterMode);
   }
 
-  private bakeChunk(chunk: ResidentChunk): void {
-    this.runBake(chunk, chunk.coord.localX, chunk.coord.localY, this.grid.chunkSize);
-  }
-
   private getTransientBakeChunk(coord: ArenaChunkCoord): ResidentChunk {
     for (const texture of this.transientBakeTextures.values()) {
       texture.clear();
@@ -553,7 +631,93 @@ export class ChunkedRenderSurface {
         this.transientBakeTextures.set(layer.id, texture);
       }
     }
-    return { coord, textures: this.transientBakeTextures };
+    return {
+      coord,
+      textures: this.transientBakeTextures,
+      pendingRegions: new Map(),
+      gutterSyncRegions: new Set(),
+      ready: true,
+      visibleDemand: false,
+    };
+  }
+
+  private scheduleRegion(
+    chunk: ResidentChunk,
+    region: { localX: number; localY: number; width: number; height: number },
+    syncNeighbourGutter = false,
+  ): void {
+    const regionKey = this.regionKey(region);
+    chunk.pendingRegions.set(regionKey, region);
+    if (syncNeighbourGutter) chunk.gutterSyncRegions.add(regionKey);
+    this.scheduler.enqueue({
+      key: this.jobKey(chunk, regionKey),
+      owner: this,
+      priority: () => this.getRegionPriority(chunk, region),
+      run: () => this.runScheduledRegion(chunk, regionKey, region),
+    });
+    // A pending chunk must never leak a partly written target into the display list. A ready
+    // chunk remains visible while a later dirty rebuild is queued; it still shows its last
+    // complete state until the replacement region is ready.
+    if (!chunk.ready) this.syncChunkVisibility(chunk);
+  }
+
+  private runScheduledRegion(
+    chunk: ResidentChunk,
+    regionKey: string,
+    region: { localX: number; localY: number; width: number; height: number },
+  ): void {
+    if (this.destroyed || this.resident.get(this.grid.key(chunk.coord.cx, chunk.coord.cy)) !== chunk) return;
+    this.runBake(chunk, region.localX, region.localY, region.width);
+    if (chunk.gutterSyncRegions.delete(regionKey)) {
+      const neighbours = this.collectNeighbourGutterTargets(
+        chunk.coord,
+        region.localX,
+        region.localY,
+        region.width,
+      );
+      this.refreshNeighbourGutters(chunk, region.localX, region.localY, region.width, neighbours);
+    }
+    chunk.pendingRegions.delete(regionKey);
+    if (!chunk.ready && chunk.pendingRegions.size === 0) {
+      chunk.ready = true;
+      this.syncChunkVisibility(chunk);
+    }
+  }
+
+  private getRegionPriority(chunk: ResidentChunk, region: { localX: number; localY: number }): number {
+    const view = this.lastResidencyView;
+    if (!view) return chunk.visibleDemand ? 0 : 1_000;
+
+    const centerX = this.frame.offsetX + region.localX + 64;
+    const centerY = this.frame.offsetY + region.localY + 64;
+    const viewCenterX = view.x + view.width * 0.5;
+    const viewCenterY = view.y + view.height * 0.5;
+    const dx = centerX - viewCenterX;
+    const dy = centerY - viewCenterY;
+    const distance = Math.hypot(dx, dy) / this.grid.chunkSize;
+    const movementLength = Math.hypot(this.movementX, this.movementY);
+    const directionBias = movementLength > 0
+      ? (dx * this.movementX + dy * this.movementY) / movementLength / this.grid.chunkSize
+      : 0;
+    // Visible chunks always beat pure prefetch, independent of the layer that owns the job.
+    // Within a band, near regions and regions ahead of the camera win first.
+    const visibilityBand = chunk.visibleDemand ? 0 : 1_000;
+    return visibilityBand + distance * 16 - directionBias * 24;
+  }
+
+  private syncChunkVisibility(chunk: ResidentChunk): void {
+    const shouldShow = this.visible && chunk.ready && chunk.visibleDemand;
+    for (const [layerId, texture] of chunk.textures) {
+      texture.setVisible(shouldShow && (this.layerVisibility.get(layerId) ?? true));
+    }
+  }
+
+  private regionKey(region: { localX: number; localY: number }): string {
+    return `${region.localX}:${region.localY}`;
+  }
+
+  private jobKey(chunk: ResidentChunk, regionKey: string): string {
+    return `${this.surfaceId}:${chunk.coord.cx}:${chunk.coord.cy}:${regionKey}`;
   }
 
   /**
@@ -611,11 +775,22 @@ export class ChunkedRenderSurface {
 
   private syncVisibility(): void {
     for (const chunk of this.resident.values()) {
-      for (const [layerId, texture] of chunk.textures) {
-        texture.setVisible(this.visible && (this.layerVisibility.get(layerId) ?? true));
-      }
+      this.syncChunkVisibility(chunk);
     }
   }
+}
+
+function regionsOverlap(
+  ax: number,
+  ay: number,
+  aw: number,
+  ah: number,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number,
+): boolean {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
 /**

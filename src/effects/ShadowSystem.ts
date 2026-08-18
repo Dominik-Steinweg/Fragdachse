@@ -354,8 +354,8 @@ export class ShadowSystem {
     this.staticBakeProfile = profile;
     this.staticHasLayout = true;
     const { surface, created } = this.ensureStaticSurface();
-    // Ein frisch erzeugter Chunk ist beim Erwerb bereits gebacken; ein zweiter Durchlauf waere
-    // beim Rundenstart genau die doppelte Arbeit.
+    // Ein frisch erzeugter Chunk hat seine 128-px-Regionen bereits im gemeinsamen Scheduler;
+    // ein zweiter Voll-Plan waere beim Rundenstart doppelte Arbeit.
     if (!created) surface.refreshAll();
     this.syncStaticSurfaceVisibility();
     this.lastBakedProfile = { ...profile };

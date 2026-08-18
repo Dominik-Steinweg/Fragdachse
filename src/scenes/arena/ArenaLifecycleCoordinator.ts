@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
+import { ChunkedRenderSurface } from '../../arena/chunks/ChunkedRenderSurface';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
@@ -2439,6 +2440,10 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult,
       this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
     );
+    // Die Runde startet mit reservierten, aber noch unsichtbaren Chunks. Ein kleiner erster
+    // Scheduler-Schritt waermt die kameranahen Regionen an; der Rest laeuft in den folgenden
+    // Frames ueber denselben gemeinsamen Scheduler weiter.
+    ChunkedRenderSurface.flushBakeBudget(this.scene);
 
     // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
     // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.

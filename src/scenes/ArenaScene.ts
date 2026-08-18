@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
+import { ChunkedRenderSurface }  from '../arena/chunks/ChunkedRenderSurface';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
@@ -1961,6 +1962,10 @@ export class ArenaScene extends Phaser.Scene {
     const shadowStepMs = performance.now() - shadowStepStartMs;
     this.syncWorldLighting(inArena, trainState);
     const lightingStepMs = this.renderers.lighting.getLastUpdateCostMs();
+
+    // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
+    // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
+    ChunkedRenderSurface.flushBakeBudget(this);
 
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
     // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.

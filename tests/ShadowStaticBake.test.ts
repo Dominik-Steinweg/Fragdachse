@@ -8,7 +8,7 @@ vi.mock('phaser', () => ({
 import { ShadowSystem } from '../src/effects/ShadowSystem';
 import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../src/config';
 import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
-import { CHUNK_SAMPLING_GUTTER_PX } from '../src/arena/chunks/ChunkedRenderSurface';
+import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ArenaLayout } from '../src/types';
 
 /** Kantenlaenge eines Chunk-Renderziels: logischer Chunk plus beidseitiger Sampling-Gutter. */
@@ -149,12 +149,17 @@ function totalDraws(textures: TextureEvent[]): number {
   return textures.reduce((sum, texture) => sum + texture.draws, 0);
 }
 
+function drain(scene: object): void {
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+}
+
 describe('static shadow baking', () => {
   it('never allocates a render target that scales with the arena', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
 
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    drain(scene);
 
     expect(textures.length).toBeGreaterThan(0);
     for (const texture of textures) {
@@ -171,6 +176,7 @@ describe('static shadow baking', () => {
     const shadows = new ShadowSystem(scene);
 
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    drain(scene);
 
     // Der weisse Grund entsteht im chunklokalen Scratch-Ziel und wird von dort geblittet.
     const scratch = textures.find((texture) => texture.fills > 0);
@@ -186,6 +192,7 @@ describe('static shadow baking', () => {
     const shadows = new ShadowSystem(scene);
 
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    drain(scene);
 
     const positions = new Set(chunkTargets(textures).map((texture) => `${texture.x}:${texture.y}`));
     expect(positions.has(`${ARENA_OFFSET_X}:${ARENA_OFFSET_Y}`)).toBe(true);
@@ -201,10 +208,12 @@ describe('static shadow baking', () => {
     const arenaResult = { rockObjects } as never;
 
     shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
+    drain(scene);
     const drawsAfterBuild = totalDraws(textures);
 
     rockObjects[4].active = false;
     shadows.rebuildArenaStaticShadowRegions(arenaLayout, arenaResult, new Set([4]));
+    drain(scene);
     const dirtyDraws = totalDraws(textures) - drawsAfterBuild;
 
     expect(dirtyDraws).toBeGreaterThan(0);
@@ -224,10 +233,12 @@ describe('static shadow baking', () => {
     const arenaResult = { rockObjects } as never;
 
     shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
+    drain(scene);
     for (const texture of textures) texture.stamps.length = 0;
 
     rockObjects[4].active = false;
     shadows.rebuildArenaStaticShadowRegions(arenaLayout, arenaResult, new Set([4]));
+    drain(scene);
 
     const written = chunkTargets(textures).filter((texture) => texture.stamps.length > 0);
     expect(written.length).toBeGreaterThan(0);
@@ -259,6 +270,7 @@ describe('static shadow baking', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    drain(scene);
 
     const targets = visibleChunkTargets(textures);
     expect(targets.length).toBeGreaterThan(0);
@@ -278,9 +290,11 @@ describe('static shadow baking', () => {
     const arenaResult = { rockObjects: [{ active: true }] } as never;
 
     shadows.rebuildArenaStaticShadows(layout(1, 1), arenaResult);
+    drain(scene);
     const first = totalDraws(textures);
     // Neues Layout-Objekt -> alles muss neu entstehen.
     shadows.rebuildArenaStaticShadows(layout(1, 1), arenaResult);
+    drain(scene);
     expect(totalDraws(textures)).toBeGreaterThan(first + 1);
   });
 
@@ -288,10 +302,12 @@ describe('static shadow baking', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    drain(scene);
     const initialDraws = totalDraws(textures);
 
     shadows.setTimeOfDay(19 * 60 + 45);
     expect(shadows.syncStaticProfile(1_000)).toBe(true);
+    drain(scene);
     const firstProfileDraws = totalDraws(textures);
     expect(firstProfileDraws).toBeGreaterThan(initialDraws);
 
@@ -299,11 +315,13 @@ describe('static shadow baking', () => {
     expect(shadows.syncStaticProfile(1_200)).toBe(false);
     expect(totalDraws(textures)).toBe(firstProfileDraws);
     expect(shadows.syncStaticProfile(1_600)).toBe(true);
+    drain(scene);
     const throttledDraws = totalDraws(textures);
     expect(throttledDraws).toBeGreaterThan(firstProfileDraws);
 
     shadows.setTimeOfDay(23 * 60 + 30);
     expect(shadows.syncStaticProfile(1_601, true)).toBe(true);
+    drain(scene);
     expect(totalDraws(textures)).toBeGreaterThan(throttledDraws);
     expect(shadows.syncStaticProfile(1_602)).toBe(false);
   });
@@ -312,12 +330,14 @@ describe('static shadow baking', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
+    drain(scene);
     const fullyResident = visibleChunkTargets(textures).length;
     expect(fullyResident).toBeGreaterThan(0);
 
     // Ein gemeldeter Ausschnitt engt die Residenz ein; ohne Meldung – wie in der
     // Lobby-Vorschau – bleibt der gesamte Rahmen resident.
     shadows.updateStaticResidency({ x: ARENA_OFFSET_X, y: ARENA_OFFSET_Y, width: 200, height: 200 });
+    drain(scene);
     expect(visibleChunkTargets(textures).length).toBeLessThan(fullyResident);
   });
 });
