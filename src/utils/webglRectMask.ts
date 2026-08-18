@@ -14,8 +14,7 @@ type FilterListLike = {
 
 type FilterTargetLike = {
   enableFilters?: () => unknown;
-  filters?: { internal?: FilterListLike | null } | null;
-  filtersFocusContext?: boolean;
+  filters?: { external?: FilterListLike | null } | null;
 };
 
 /**
@@ -78,12 +77,13 @@ export class WebGLRectMaskTexture {
 
     const filterTarget = target as FilterTargetLike;
     filterTarget.enableFilters?.();
-    const list = filterTarget.filters?.internal;
+    // This helper stores bounds in design-/screen-space. On a GameObject the internal list
+    // runs before the camera composition and therefore interprets the mask against the object's
+    // filter framebuffer. The external list runs against the actual camera context, which keeps
+    // the rectangle aligned for nested UI Containers as well.
+    const list = filterTarget.filters?.external;
     if (!list) return null;
 
-    // Containers have no useful intrinsic bounds here. Matching the active camera context keeps
-    // the texture in the same screen-space coordinates as the original rectangle clip.
-    filterTarget.filtersFocusContext = true;
     const filter = list.addMask(this.textureKey);
     this.objectAttachment = { target: filterTarget, list, filter };
     return filter;
