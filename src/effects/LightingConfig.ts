@@ -777,6 +777,10 @@ export function getProjectileLightSpec(
         : { preset: 'sporeProjectile', baseRadiusPx: 42, radiusPerSizePx: 1.8 };
     case 'holy_grenade':
       return { preset: 'holyProjectile', baseRadiusPx: 78, radiusPerSizePx: 2.4 };
+    case 'tesla_bolt':
+      // Eine Gewitterentladung ist selbst eine Lichtquelle: eng, sehr hell und fast weiß,
+      // damit eine Salve den Boden unter sich flackern lässt.
+      return { preset: 'energyProjectile', baseRadiusPx: 62, radiusPerSizePx: 3.2, whitenFromColor: 0.82 };
     case 'translocator_puck':
       return { preset: 'teleportFlash', baseRadiusPx: 52, radiusPerSizePx: 1.6 };
     case 'grenade':

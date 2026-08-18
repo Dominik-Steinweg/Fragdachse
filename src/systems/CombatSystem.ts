@@ -1660,6 +1660,27 @@ export class CombatSystem {
           return true;
         }
 
+        if (proj.piercesTargets) {
+          // Wie gegen Gegner: jeder Spieler zählt genau einmal, das Projektil fliegt weiter.
+          if (!proj.piercingHitIds) proj.piercingHitIds = new Set();
+          if (proj.piercingHitIds.has(player.id)) continue;
+          proj.piercingHitIds.add(player.id);
+          if (canDealDamage) {
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.sourceId, {
+              sourceX: proj.sprite.x,
+              sourceY: proj.sprite.y,
+              dirX: proj.body.velocity.x,
+              dirY: proj.body.velocity.y,
+            }, {
+              allowTeamDamage: proj.allowTeamDamage,
+              sourceSlot: proj.sourceSlot,
+              damageKind: 'direct',
+            });
+            this.applyProjectileBurn(player.id, proj);
+          }
+          continue;
+        }
+
         if (proj.isBfg || proj.projectileStyle === 'gauss') {
           // Piercing-Projektile: Spieler nur 1x treffen, Projektil fliegt weiter.
           if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
@@ -1764,10 +1785,10 @@ export class CombatSystem {
         const asmdProximityPiercing = proj.projectileStyle === 'energy_ball'
           && (proj.proximityPulse?.radius ?? 0) > 0
           && (proj.proximityPulse?.damage ?? 0) > 0;
-        if (asmdProximityPiercing) {
-          // Das Kugelgewitter macht ASMD_SEC nur gegen feindliche Coop-Gegner
-          // durchschlagend. Felsen und Zug bleiben in ProjectileManager normale
-          // Hindernisse und verbrauchen den Ball dort weiterhin.
+        if (proj.piercesTargets || asmdProximityPiercing) {
+          // Durchschlag gilt nur gegen logische Kampfziele. Felsen und Zug bleiben in
+          // ProjectileManager normale Weltblocker und verbrauchen das Projektil dort
+          // weiterhin – das gilt für ASMD_SEC ebenso wie für die Gewitterentladung.
           if (!proj.piercingHitIds) proj.piercingHitIds = new Set();
           if (proj.piercingHitIds.has(enemy.id)) continue;
           proj.piercingHitIds.add(enemy.id);

@@ -1872,6 +1872,7 @@ export class ArenaScene extends Phaser.Scene {
         : (bridge.getLatestGameState()?.remoteControlTurrets ?? []);
     this.renderers.remoteControl.syncVisuals(remoteControlTargets, bridge.getSynchronizedNow());
     this.renderers.teslaDome.update(delta);
+    this.renderers.teslaNova.update();
     const visualEnemyStartMs = performance.now();
     const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
     this.ctx.enemyManager?.syncHostVisuals();

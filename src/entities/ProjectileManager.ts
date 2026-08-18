@@ -113,6 +113,7 @@ export class ProjectileManager {
 
   // ── Translocator-Puck-Renderer ──────────────────────────────────────────
   private translocatorPuckRenderer: import('../effects/TranslocatorPuckRenderer').TranslocatorPuckRenderer | null = null;
+  private teslaBoltRenderer: import('../effects/TeslaBoltRenderer').TeslaBoltRenderer | null = null;
 
 
   // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
@@ -348,6 +349,11 @@ export class ProjectileManager {
     this.translocatorPuckRenderer = renderer;
   }
 
+  /** Injiziert den TeslaBoltRenderer für die Gewitterentladung der Tesla-Kuppel. */
+  setTeslaBoltRenderer(renderer: import('../effects/TeslaBoltRenderer').TeslaBoltRenderer | null): void {
+    this.teslaBoltRenderer = renderer;
+  }
+
   /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
   setTracerRenderer(renderer: TracerRenderer | null): void {
     this.tracerRenderer = renderer;
@@ -512,6 +518,12 @@ export class ProjectileManager {
       this.translocatorPuckRenderer.createVisual(id, x, y, cfg.ownerColor ?? cfg.color);
     }
 
+    if (style === 'tesla_bolt' && this.teslaBoltRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.teslaBoltRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+    }
+
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
     if (style === 'flame' || style === 'leaf_blower') {
       sprite.setVisible(false);
@@ -648,7 +660,8 @@ export class ProjectileManager {
       penetrationRemaining: cfg.penetrationCount,
       penetrationDamageRetention: cfg.penetrationDamageRetention,
       penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
-      piercingHitIds: (cfg.isBfg || (cfg.projectileStyle === 'energy_ball'
+      piercesTargets:  cfg.piercesTargets,
+      piercingHitIds: (cfg.isBfg || cfg.piercesTargets || (cfg.projectileStyle === 'energy_ball'
         && (cfg.proximityPulse?.radius ?? 0) > 0
         && (cfg.proximityPulse?.damage ?? 0) > 0)) ? new Set<string>() : undefined,
       penetratesRocks: cfg.penetratesRocks,
@@ -1815,6 +1828,9 @@ export class ProjectileManager {
         proj.sporeVisualVariant,
       );
     }
+    if (proj.projectileStyle === 'tesla_bolt') {
+      this.teslaBoltRenderer?.playImpact(destroyX, destroyY, proj.sprite.displayWidth, proj.color);
+    }
     this.hydraRenderer?.destroyVisual(proj.id);
     this.energyBallRenderer?.destroyVisual(proj.id);
     this.grenadeRenderer?.destroyVisual(proj.id);
@@ -1823,6 +1839,7 @@ export class ProjectileManager {
     this.fireballRenderer?.destroyVisual(proj.id);
     this.sporeRenderer?.destroyVisual(proj.id);
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
+    this.teslaBoltRenderer?.destroyVisual(proj.id);
   }
 
   private removeActiveProjectile(proj: TrackedProjectile): void {
@@ -2192,6 +2209,7 @@ export class ProjectileManager {
     this.fireballRenderer?.destroyAll();
     this.sporeRenderer?.destroyAll();
     this.translocatorPuckRenderer?.destroyAll();
+    this.teslaBoltRenderer?.destroyAll();
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
@@ -2645,6 +2663,7 @@ export class ProjectileManager {
     const sporeR = this.sporeRenderer;
     const grenadeR = this.grenadeRenderer;
     const tlPuckR = this.translocatorPuckRenderer;
+    const teslaBoltR = this.teslaBoltRenderer;
     const tracerR = this.tracerRenderer;
     const burnR = this.projectileBurnRenderer;
 
@@ -2752,6 +2771,12 @@ export class ProjectileManager {
             tlPuckR.updateVisual(id, x, y, proj.ownerColor ?? proj.color);
           }
           break;
+        case 'tesla_bolt':
+          if (teslaBoltR) {
+            if (!teslaBoltR.has(id)) teslaBoltR.createVisual(id, x, y, w, proj.color);
+            teslaBoltR.updateVisual(id, x, y, w, vx, vy, proj.color);
+          }
+          break;
         default:
           break;
       }
@@ -2818,6 +2843,7 @@ export class ProjectileManager {
     const grenades = this.grenadeRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
     const tlPucks = this.translocatorPuckRenderer;
+    const teslaBolts = this.teslaBoltRenderer;
     const bfgR = this.bfgRenderer;
     const tracerRc = this.tracerRenderer;
     const burningIds = new Set<number>();
@@ -2939,6 +2965,11 @@ export class ProjectileManager {
           tlPucks.createVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
         }
         tlPucks.updateVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
+      } else if (proj.style === 'tesla_bolt' && teslaBolts) {
+        if (!teslaBolts.has(proj.id)) {
+          teslaBolts.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        teslaBolts.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
       } else if (isFireball && fireballs) {
         if (!fireballs.has(proj.id)) fireballs.createVisual(proj.id, proj.x, proj.y, proj.size);
         fireballs.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
@@ -3044,6 +3075,7 @@ export class ProjectileManager {
     const grenades = this.grenadeRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
     const tlPucks = this.translocatorPuckRenderer;
+    const teslaBolts = this.teslaBoltRenderer;
     const bfgR = this.bfgRenderer;
     const tracerRc = this.tracerRenderer;
     const incomingHydras = data.filter((proj) => proj.style === 'hydra');
@@ -3169,6 +3201,18 @@ export class ProjectileManager {
         }
       }
     }
+    if (teslaBolts) {
+      for (const id of teslaBolts.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'tesla_bolt') {
+            teslaBolts.playImpact(state.serverX, state.serverY, state.size, state.color);
+          }
+          teslaBolts.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
     if (bfgR) {
       for (const id of bfgR.getActiveIds()) {
         if (!activeIds.has(id)) {
@@ -3229,6 +3273,8 @@ export class ProjectileManager {
         );
       } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {
         this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
+      } else if (state.style === 'tesla_bolt' && this.teslaBoltRenderer?.has(id)) {
+        this.teslaBoltRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
         this.rocketRenderer.updateVisual(
           id,

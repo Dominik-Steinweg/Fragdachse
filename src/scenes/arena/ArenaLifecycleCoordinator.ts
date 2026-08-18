@@ -1883,6 +1883,45 @@ export class ArenaLifecycleCoordinator {
         () => this.ctx.trainManager?.getNetSnapshot()?.alive ? this.ctx.trainManager.getSegmentPositions() : [],
         (damage, ownerId) => this.ctx.trainManager?.applyDamage(damage, ownerId),
       );
+      // Gewitterentladung: reguläre Projektile über die bestehende Projektil-/Homing-Infrastruktur.
+      this.ctx.teslaDomeSystem.setStormProjectileSpawner((request) => {
+        const lifetimeMs = request.speed > 0 ? (request.rangePx / request.speed) * 1000 : 0;
+        this.ctx.projectileManager.spawnProjectile(request.x, request.y, request.angle, request.ownerId, {
+          speed: request.speed,
+          size: request.size,
+          damage: request.damage,
+          color: request.color,
+          ownerColor: request.color,
+          lifetime: lifetimeMs,
+          remainingRangePx: request.rangePx,
+          maxBounces: 0,
+          isGrenade: false,
+          adrenalinGain: 0,
+          sourceId: request.weaponId,
+          projectileStyle: 'tesla_bolt',
+          piercesTargets: true,
+          homing: request.homing,
+          // Felsen bleiben Weltblocker und sind kein Ziel der Gewitterentladung.
+          rockDamageMult: 0,
+          sourceSlot: request.sourceSlot,
+          suppressSpawnFx: true,
+        });
+      });
+      // Blitznova: kein Schaden, nur Slow auf Gegner und Rückstoß auf jede getroffene Entität.
+      this.ctx.teslaDomeSystem.setNovaHitHandler((hit) => {
+        if (hit.type === 'enemies' && hit.slowFraction > 0 && hit.slowDurationMs > 0) {
+          this.ctx.combatSystem.applyEnemySlow(hit.targetId, hit.slowFraction, hit.slowDurationMs);
+        }
+        if (hit.knockback <= 0) return;
+        if (hit.type !== 'enemies' && hit.type !== 'players') return;
+        const dome = this.ctx.playerManager.getPlayer(hit.ownerId);
+        const dirX = hit.x - (dome?.sprite.x ?? hit.x);
+        const dirY = hit.y - (dome?.sprite.y ?? hit.y);
+        const length = Math.hypot(dirX, dirY);
+        const nx = length > 0.001 ? dirX / length : 0;
+        const ny = length > 0.001 ? dirY / length : -1;
+        this.ctx.hostPhysics.addRecoil(hit.targetId, nx * hit.knockback, ny * hit.knockback, 260, hit.ownerId);
+      });
       this.ctx.burrowSystem = new BurrowSystem(
         this.ctx.resourceSystem,
         this.ctx.playerManager,
@@ -2655,6 +2694,8 @@ export class ArenaLifecycleCoordinator {
     this.renderers.plasmaBurner.clear();
     this.renderers.remoteControl.destroyAll();
     this.renderers.teslaDome.destroyAll();
+    this.renderers.teslaNova.destroyAll();
+    this.renderers.teslaBolt.destroyAll();
     this.renderers.healingAura.destroyAll();
     this.renderers.miniTeslaDome.destroyAll();
     this.renderers.energyShield.destroyAll();

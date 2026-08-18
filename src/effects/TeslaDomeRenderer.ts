@@ -5,6 +5,7 @@ import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/Loadout
 import type { SyncedTeslaDome, TeslaDomeTargetType } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LightingSystem } from './LightingSystem';
+import type { TeslaNovaRenderer } from './TeslaNovaRenderer';
 import { configureAdditiveImage, createEmitter, destroyEmitter, edgeZone, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
 
 const TEX_DOME_CORE = '__tesla_dome_core';
@@ -41,9 +42,22 @@ interface TeslaDomeVisual {
   targetAlpha: number;
   targets: TeslaBoltTargetState[];
   lastIdleBurstAt: number;
+  /** Absolute Ladestufe; die Darstellung normalisiert sie bewusst nicht über MaxCharge. */
+  chargeStacks: number;
+  /** Weich nachgeführte Ladestufe, damit Radius- und Intensitätssprünge nicht hart schalten. */
+  currentCharge: number;
+  lastPulseSequence: number;
+  overchargePulseEnabled: boolean;
+  stormEnabled: boolean;
+  /** Solange gesetzt, läuft der Überladungsschlag über alle Primärstrahlen. */
+  overchargeFlashUntil: number;
+  lastOverchargeBurstAt: number;
 }
 
 interface TeslaBoltTargetState {
+  /** Stabile logische Zielidentität; sie und nicht der Array-Index hält den Strahl ruhig. */
+  targetKey: string;
+  slotIndex: number;
   type: TeslaDomeTargetType;
   currentX: number;
   currentY: number;
@@ -62,15 +76,19 @@ interface TargetImpactProfile {
 
 const DOME_SMOOTH_TIME_MS = 52;
 const TARGET_SMOOTH_TIME_MS = 38;
+const CHARGE_SMOOTH_TIME_MS = 130;
 const IDLE_BURST_INTERVAL_MS = 64;
 const ACTIVE_PULSE_INTERVAL_MS = 92;
 const ACTIVE_SURGE_INTERVAL_MS = 70;
+/** Dauer des Überladungsschlags über die Primärstrahlen. */
+const OVERCHARGE_FLASH_MS = 190;
 
 export class TeslaDomeRenderer {
   private readonly visuals = new Map<string, TeslaDomeVisual>();
   private readonly configs = new Map<string, WeaponConfig & { fire: TeslaDomeWeaponFireConfig }>();
   private audioSystem: GameAudioSystem | null = null;
   private lighting: LightingSystem | null = null;
+  private novaRenderer: TeslaNovaRenderer | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -80,6 +98,11 @@ export class TeslaDomeRenderer {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+  }
+
+  /** Die Blitznova hängt am Feldpuls der Kuppel und wird deshalb von hier ausgelöst. */
+  setNovaRenderer(renderer: TeslaNovaRenderer | null): void {
+    this.novaRenderer = renderer;
   }
 
   generateTextures(): void {
@@ -212,32 +235,67 @@ export class TeslaDomeRenderer {
       visual.targetRadius = dome.radius;
       visual.targetAlpha = dome.alpha;
       visual.ownerColor = dome.color;
+      visual.chargeStacks = dome.chargeStacks ?? 0;
+      visual.overchargePulseEnabled = dome.overchargePulseEnabled === true;
+      visual.stormEnabled = dome.stormEnabled === true;
 
-      const nextTargets: TeslaBoltTargetState[] = dome.targets.map((target, index) => {
-        const previous = visual.targets[index];
+      // Strahlzustand hängt an der stabilen Zielidentität. Wechselt die Array-Reihenfolge,
+      // behält jeder Strahl trotzdem seine geglättete Position und seine Puls-Timer.
+      const previousByKey = new Map(visual.targets.map(target => [target.targetKey, target]));
+      visual.targets = dome.targets.map((target) => {
+        const previous = previousByKey.get(target.targetKey);
         return {
+          targetKey: target.targetKey,
+          slotIndex: target.slotIndex,
           type: target.type,
           currentX: previous?.currentX ?? visual.currentX,
           currentY: previous?.currentY ?? visual.currentY,
           targetX: target.x,
           targetY: target.y,
-          lastPulseAt: previous?.type === target.type ? previous.lastPulseAt : 0,
-          lastSurgeAt: previous?.type === target.type ? previous.lastSurgeAt : 0,
+          lastPulseAt: previous?.lastPulseAt ?? 0,
+          lastSurgeAt: previous?.lastSurgeAt ?? 0,
         };
       });
-      visual.targets = nextTargets;
+
+      this.consumeFieldPulse(dome, visual);
+    }
+  }
+
+  /**
+   * Löst die pulsgebundenen Boss-Darstellungen aus.
+   *
+   * `pulseSequence` ist der einzige Trigger: der Renderer leitet nichts aus der Aktivierungsdauer
+   * ab und bleibt damit auch bei Paketverlust oder wechselnder Snapshot-Rate synchron.
+   */
+  private consumeFieldPulse(dome: SyncedTeslaDome, visual: TeslaDomeVisual): void {
+    const sequence = dome.pulseSequence ?? 0;
+    if (sequence <= visual.lastPulseSequence) {
+      visual.lastPulseSequence = sequence;
+      return;
+    }
+    const isFirstSnapshot = visual.lastPulseSequence < 0;
+    visual.lastPulseSequence = sequence;
+    if (isFirstSnapshot) return;
+
+    if (visual.overchargePulseEnabled) {
+      visual.overchargeFlashUntil = this.scene.time.now + OVERCHARGE_FLASH_MS;
+    }
+    if (visual.stormEnabled) {
+      this.novaRenderer?.play(dome.x, dome.y, dome.radius, this.resolveOwnerColor(visual, visual.config));
     }
   }
 
   update(delta: number): void {
     const domeLerp = 1 - Math.exp(-delta / DOME_SMOOTH_TIME_MS);
     const targetLerp = 1 - Math.exp(-delta / TARGET_SMOOTH_TIME_MS);
+    const chargeLerp = 1 - Math.exp(-delta / CHARGE_SMOOTH_TIME_MS);
 
     for (const [ownerId, visual] of this.visuals) {
       visual.currentX = Phaser.Math.Linear(visual.currentX, visual.targetX, domeLerp);
       visual.currentY = Phaser.Math.Linear(visual.currentY, visual.targetY, domeLerp);
       visual.currentRadius = Phaser.Math.Linear(visual.currentRadius, visual.targetRadius, domeLerp);
       visual.currentAlpha = Phaser.Math.Linear(visual.currentAlpha, visual.targetAlpha, domeLerp);
+      visual.currentCharge = Phaser.Math.Linear(visual.currentCharge, visual.chargeStacks, chargeLerp);
 
       for (const target of visual.targets) {
         target.currentX = Phaser.Math.Linear(target.currentX, target.targetX, targetLerp);
@@ -257,7 +315,7 @@ export class TeslaDomeRenderer {
         {
           radiusPx: Math.max(visual.currentRadius * 1.25, 90),
           color: mixColors(visual.ownerColor, 0xffffff, 0.62),
-          intensity: 0.62 * Phaser.Math.Clamp(visual.currentAlpha, 0, 1),
+          intensity: 0.62 * chargeIntensity(visual) * Phaser.Math.Clamp(visual.currentAlpha, 0, 1),
         },
       );
     }
@@ -428,6 +486,8 @@ export class TeslaDomeRenderer {
       currentAlpha: dome.alpha,
       targetAlpha: dome.alpha,
       targets: dome.targets.map(target => ({
+        targetKey: target.targetKey,
+        slotIndex: target.slotIndex,
         type: target.type,
         currentX: target.x,
         currentY: target.y,
@@ -437,6 +497,14 @@ export class TeslaDomeRenderer {
         lastSurgeAt: 0,
       })),
       lastIdleBurstAt: 0,
+      chargeStacks: dome.chargeStacks ?? 0,
+      currentCharge: dome.chargeStacks ?? 0,
+      // Negativ, damit der erste Snapshot einer laufenden Kuppel keinen Puls nachfeuert.
+      lastPulseSequence: -1,
+      overchargePulseEnabled: dome.overchargePulseEnabled === true,
+      stormEnabled: dome.stormEnabled === true,
+      overchargeFlashUntil: 0,
+      lastOverchargeBurstAt: 0,
     };
   }
 
@@ -447,72 +515,148 @@ export class TeslaDomeRenderer {
   ): void {
     const time = this.scene.time.now;
     const fire = this.getFireConfig(config);
+    // Die Ladung verdichtet das Feld sichtbar: mehr Leuchtdichte, schnelleres Pulsen und ein
+    // heißerer Kern. Sie bildet die absolute Stufe ab, damit Stufe 3 unabhängig vom Maximum
+    // immer gleich aussieht.
+    const charge = visual.currentCharge;
+    const intensity = chargeIntensity(visual);
     const alphaScale = Phaser.Math.Clamp(visual.currentAlpha, 0, 1);
     const ownerSeed = this.computeOwnerSeed(ownerId);
     const baseScale = visual.currentRadius / 128;
-    const pulse = Math.sin(time * fire.visualPulseSpeed + ownerSeed * 0.17);
-    const secondaryPulse = Math.cos(time * (fire.visualPulseSpeed * 0.54) + ownerSeed * 0.11);
-    const ringPulse = 1 + pulse * 0.01;
+    const pulseSpeed = fire.visualPulseSpeed * (1 + charge * 0.16);
+    const pulse = Math.sin(time * pulseSpeed + ownerSeed * 0.17);
+    const secondaryPulse = Math.cos(time * (pulseSpeed * 0.54) + ownerSeed * 0.11);
+    const ringPulse = 1 + pulse * (0.01 + charge * 0.004);
     const ownerColor = this.resolveOwnerColor(visual, config);
-    const coreColor = this.resolveHotColor(ownerColor, fire.visualWhiteness);
-    const accentColor = this.resolveAccentColor(ownerColor, fire.visualWhiteness);
-    const membraneColor = mixColors(accentColor, 0x73d9ff, 0.2 + fire.visualWhiteness * 0.18);
+    const chargedWhiteness = Phaser.Math.Clamp(fire.visualWhiteness + charge * 0.06, 0, 1);
+    const coreColor = this.resolveHotColor(ownerColor, chargedWhiteness);
+    const accentColor = this.resolveAccentColor(ownerColor, chargedWhiteness);
+    const membraneColor = mixColors(accentColor, 0x73d9ff, 0.2 + chargedWhiteness * 0.18);
+    const overchargeSurge = this.getOverchargeSurge(visual, time);
 
     visual.coreGlow.setPosition(visual.currentX, visual.currentY);
-    visual.coreGlow.setScale(Math.max(baseScale * 1.12, 0.68) * (1.015 + pulse * 0.015));
-    visual.coreGlow.setAlpha((fire.visualFieldAlpha * 1.45) * alphaScale);
+    visual.coreGlow.setScale(Math.max(baseScale * 1.12, 0.68) * (1.015 + pulse * 0.015) * (1 + overchargeSurge * 0.1));
+    visual.coreGlow.setAlpha((fire.visualFieldAlpha * 1.45) * intensity * (1 + overchargeSurge * 0.9) * alphaScale);
     visual.coreGlow.setTint(coreColor);
 
     visual.fieldGlow.setPosition(visual.currentX, visual.currentY);
     visual.fieldGlow.setScale(Math.max(visual.currentRadius / 128, 0.74) * (1.01 + secondaryPulse * 0.018));
-    visual.fieldGlow.setAlpha((fire.visualFieldAlpha * 0.9) * alphaScale);
+    visual.fieldGlow.setAlpha((fire.visualFieldAlpha * 0.9) * intensity * alphaScale);
     visual.fieldGlow.setTint(accentColor);
 
     visual.membrane.setPosition(visual.currentX, visual.currentY);
     visual.membrane.setScale(Math.max(visual.currentRadius / 178, 0.64) * ringPulse);
     visual.membrane.setRotation(Math.sin(time * 0.00022 + ownerSeed * 0.13) * 0.014);
-    visual.membrane.setAlpha((fire.visualFieldAlpha * 0.88) * alphaScale);
+    visual.membrane.setAlpha((fire.visualFieldAlpha * 0.88) * intensity * alphaScale);
     visual.membrane.setTint(membraneColor);
 
     visual.ring.setPosition(visual.currentX, visual.currentY);
     visual.ring.setScale(Math.max(visual.currentRadius / 142, 0.72) * (1.004 + pulse * 0.01));
     visual.ring.setRotation(Math.sin(time * 0.00018 + ownerSeed * 0.07) * 0.01);
-    visual.ring.setAlpha((fire.visualIndicatorAlpha * 1.55) * (0.96 + secondaryPulse * 0.03) * alphaScale);
-    visual.ring.setTint(mixColors(accentColor, 0xffffff, 0.22));
+    visual.ring.setAlpha(
+      (fire.visualIndicatorAlpha * 1.55) * intensity * (0.96 + secondaryPulse * 0.03)
+      * (1 + overchargeSurge * 1.2) * alphaScale,
+    );
+    visual.ring.setTint(mixColors(accentColor, 0xffffff, 0.22 + overchargeSurge * 0.4));
 
-    this.updateEmitters(visual, fire, accentColor, coreColor, alphaScale, pulse, secondaryPulse);
+    this.updateEmitters(visual, fire, accentColor, coreColor, alphaScale * intensity, pulse, secondaryPulse);
 
     visual.fieldFilaments.clear();
     visual.boltGlow.clear();
     visual.boltCore.clear();
 
-    this.drawFieldFilaments(visual, ownerSeed, fire, accentColor, coreColor, alphaScale, visual.targets.length > 0 ? 1 : 0.28);
+    this.drawFieldFilaments(
+      visual,
+      ownerSeed,
+      fire,
+      accentColor,
+      coreColor,
+      alphaScale * intensity,
+      visual.targets.length > 0 ? 1 : 0.28,
+    );
 
     if (visual.targets.length === 0) {
       this.drawIdleArcs(visual, ownerSeed, fire, accentColor, coreColor);
       return;
     }
 
-    for (let index = 0; index < visual.targets.length; index++) {
-      const target = visual.targets[index];
-      const intensity = this.getTargetIntensity(target.type);
+    for (const target of visual.targets) {
+      const targetIntensity = this.getTargetIntensity(target.type);
+      // Der Seed hängt am Slot, nicht am Array-Index: ein wegfallender Strahl darf die
+      // Form der übrigen Strahlen nicht umspringen lassen.
+      const boltSeed = ownerSeed + target.slotIndex * 37;
       this.drawBolt(
         visual,
         visual.currentX,
         visual.currentY,
         target.currentX,
         target.currentY,
-        ownerSeed + index * 37,
-        fire.visualBoltThicknessMin,
-        fire.visualBoltThicknessMax,
-        fire.visualJitter * intensity,
-        Phaser.Math.Clamp(fire.visualBranchChance * (0.72 + intensity * 0.16), 0, 0.72),
-        (0.28 + intensity * 0.08) * alphaScale,
+        boltSeed,
+        fire.visualBoltThicknessMin * (1 + overchargeSurge * 1.5),
+        fire.visualBoltThicknessMax * (1 + overchargeSurge * 2.2),
+        fire.visualJitter * targetIntensity * (1 + overchargeSurge * 0.7),
+        Phaser.Math.Clamp(fire.visualBranchChance * (0.72 + targetIntensity * 0.16) + overchargeSurge * 0.5, 0, 0.95),
+        (0.28 + targetIntensity * 0.08) * (1 + overchargeSurge * 1.6) * alphaScale,
         accentColor,
         coreColor,
       );
-      this.maybeEmitBoltSurge(visual, target, accentColor, coreColor, alphaScale, intensity);
-      this.maybePulseTargetImpact(visual, target, fire, accentColor, coreColor, alphaScale, intensity);
+      this.maybeEmitBoltSurge(visual, target, accentColor, coreColor, alphaScale, targetIntensity);
+      this.maybePulseTargetImpact(visual, target, fire, accentColor, coreColor, alphaScale, targetIntensity);
+    }
+
+    if (overchargeSurge > 0) this.maybeBurstOverchargeImpacts(visual, fire, accentColor, coreColor, alphaScale);
+  }
+
+  /**
+   * Kurzer, quadratisch auslaufender Schlag über alle Primärstrahlen.
+   *
+   * Er ist bewusst deutlich stärker als der normale Tick, damit der Überladungsimpuls auch bei
+   * voller Kuppelaktivität als eigenes Ereignis lesbar bleibt.
+   */
+  private getOverchargeSurge(visual: TeslaDomeVisual, time: number): number {
+    const remaining = visual.overchargeFlashUntil - time;
+    if (remaining <= 0) return 0;
+    const progress = 1 - remaining / OVERCHARGE_FLASH_MS;
+    return (1 - progress) ** 2;
+  }
+
+  /** Einmaliger Trefferausbruch je Puls; danach übernimmt wieder der reguläre Impact-Takt. */
+  private maybeBurstOverchargeImpacts(
+    visual: TeslaDomeVisual,
+    fire: TeslaDomeWeaponFireConfig,
+    accentColor: number,
+    coreColor: number,
+    alphaScale: number,
+  ): void {
+    const time = this.scene.time.now;
+    if (time - visual.lastOverchargeBurstAt < OVERCHARGE_FLASH_MS) return;
+    visual.lastOverchargeBurstAt = time;
+
+    for (const target of visual.targets) {
+      const profile = this.getImpactProfile(target.type, fire.visualImpactBurstScale * 2.1);
+      const halo = this.scene.add.circle(
+        target.currentX,
+        target.currentY,
+        Math.max(visual.currentRadius * 0.1, 11),
+        coreColor,
+        Math.min(1, profile.haloAlpha * 2.1 * alphaScale),
+      );
+      halo.setDepth(DEPTH.FIRE + 0.25);
+      makeAdditive(halo);
+      this.scene.tweens.add({
+        targets: halo,
+        alpha: 0,
+        scaleX: 2.6,
+        scaleY: 2.6,
+        duration: OVERCHARGE_FLASH_MS,
+        ease: 'Quad.easeOut',
+        onComplete: () => halo.destroy(),
+      });
+
+      visual.impactEmitter.setPosition(target.currentX, target.currentY);
+      visual.impactEmitter.setParticleTint([0xffffff, coreColor, accentColor]);
+      visual.impactEmitter.setParticleSpeed(profile.burstSpeedMin * 1.5, profile.burstSpeedMax * 1.7);
+      visual.impactEmitter.explode(Math.round(profile.burstCount * 1.8));
     }
   }
 
@@ -911,6 +1055,16 @@ export class TeslaDomeRenderer {
     }
     return Math.abs(hash) + 1;
   }
+}
+
+/**
+ * Sichtbare Verdichtung des Feldes je Ladestufe.
+ *
+ * Bewusst linear und ungedeckelt an der absoluten Stufe: Stufe 3 sieht mit MaxCharge 3 genauso
+ * aus wie mit MaxCharge 6.
+ */
+function chargeIntensity(visual: TeslaDomeVisual): number {
+  return 1 + visual.currentCharge * 0.22;
 }
 
 function lightKey(ownerId: string): string {

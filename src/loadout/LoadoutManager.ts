@@ -1134,8 +1134,9 @@ export class LoadoutManager {
     if (held && Date.now() - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
       const cfg = this.loadouts.get(playerId)?.[held.slot].config;
       if (cfg?.fire.type === 'tesla_dome') {
-        const fireCfg = cfg.fire as TeslaDomeWeaponFireConfig;
-        const holdFactor = this.teslaDomeSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
+        // Feldstabilisierung hebt den Bewegungsfaktor mit der Ladestufe an. Der maßgebliche
+        // Wert steht deshalb im Laufzeitzustand des TeslaDomeSystem, nicht in der statischen Config.
+        const holdFactor = this.teslaDomeSystem?.getMovementSlowFactor(playerId) ?? 1;
         return ultimateMult * gaussSlowMult * holdFactor;
       }
       if (cfg?.fire.type === 'energy_shield') {
@@ -1620,7 +1621,7 @@ export class LoadoutManager {
     params?:  LoadoutUseParams,
   ): LoadoutUseResult {
     if (weapon.config.fire.type === 'tesla_dome') {
-      this.activateTeslaDomeWeapon(weapon, x, y, playerId, now, playerColor);
+      this.activateTeslaDomeWeapon(weapon, x, y, angle, playerId, now, playerColor);
       return this.okResult;
     }
     if (weapon.config.fire.type === 'energy_shield') {
@@ -2284,6 +2285,7 @@ export class LoadoutManager {
     weapon: BaseWeapon,
     x: number,
     y: number,
+    aimAngle: number,
     playerId: string,
     now: number,
     playerColor: number,
@@ -2295,7 +2297,7 @@ export class LoadoutManager {
     }
 
     const cfg = weapon.config as WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
-    this.teslaDomeSystem.hostRefresh(playerId, x, y, now, cfg, cfg.projectileColor ?? playerColor);
+    this.teslaDomeSystem.hostRefresh(playerId, x, y, now, cfg, cfg.projectileColor ?? playerColor, aimAngle);
   }
 
   private activateEnergyShieldWeapon(

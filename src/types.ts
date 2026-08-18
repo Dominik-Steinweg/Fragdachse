@@ -243,6 +243,10 @@ export interface SyncedTeslaDomeTarget {
   x: number;
   y: number;
   type: TeslaDomeTargetType;
+  /** Stable logical identity; positions are presentation data and may move each snapshot. */
+  targetKey: string;
+  /** Stable beam slot. A surviving lock keeps its slot until it becomes invalid. */
+  slotIndex: number;
 }
 
 export interface SyncedTeslaDome {
@@ -252,6 +256,14 @@ export interface SyncedTeslaDome {
   radius: number;
   color: number;
   alpha: number;
+  /** Absolute charge level. Visual intensity must not normalize this by max charge. */
+  chargeStacks: number;
+  /** Monotonically increasing for every field pulse, including pulses at max charge. */
+  pulseSequence: number;
+  /** Enables the strong primary-beam pulse presentation for this dome. */
+  overchargePulseEnabled?: boolean;
+  /** Enables the expanding electric nova presentation for this dome. */
+  stormEnabled?: boolean;
   /** Optionaler Config-Schluessel fuer Nicht-Spieler-Kuppeln, z. B. den Tesla-Turm. */
   weaponId?: string;
   targets: SyncedTeslaDomeTarget[];
@@ -286,7 +298,7 @@ export interface SyncedDecoy {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck' | 'tesla_bolt';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 // 'awp_charged'  = voll aufgeladener Schuss (Geduldiger Tod) ohne Schneisen-Upgrade
@@ -914,6 +926,8 @@ export interface ProjectileSpawnConfig {
   /** Sporen-Projektilpalette, aus der Impact-Cloud-Variante abgeleitet. */
   sporeVisualVariant?: 'spore' | 'spore_void';
   homing?:         ProjectileHomingConfig;
+  /** Passes through logical combat targets once each, but not through world blockers. */
+  piercesTargets?: boolean;
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
   smokeTrailColor?: number;
@@ -1255,6 +1269,8 @@ export interface TrackedProjectile {
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
+  /** Generic target piercing; `piercingHitIds` debounces every logical target. */
+  piercesTargets?: boolean;
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
   /** Nutzlast bereits an einem Hindernis abgegeben; verhindert Mehrfachwirkung vor dem Cleanup. */

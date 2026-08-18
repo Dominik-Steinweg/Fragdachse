@@ -99,6 +99,14 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
   ak47_fire_control: 'UPGRADE_AK47_FOCUS',
   ak47_rhythm: 'UPGRADE_AK47_FOCUS_DAMAGE',
   ak47_breakthrough_magazine: 'UPGRADE_AK47_FIRE_SUPERIORITY_SHOTS',
+  // Tesla-Rework: nur Symbole der ersetzten Vorgänger, deren Motiv fachlich weiterträgt.
+  // Zusätzliche Strahlen, Fokussierte Leitfähigkeit, Gewittersturm und Schnellladung haben
+  // bewusst kein Alias und zeigen im Baum den lokalisierten Namen als Text.
+  tesla_dome_energy_efficiency: 'UPGRADE_TESLA_DOME_ADRENALIN_DRAIN',
+  tesla_dome_field_charge: 'UPGRADE_TESLA_DOME_HIGH_VOLTAGE',
+  tesla_dome_field_stabilization: 'UPGRADE_TESLA_DOME_MOVEMENT_SLOW',
+  tesla_dome_overcharge_pulse: 'UPGRADE_TESLA_DOME_DAMAGE',
+  tesla_dome_overcharge: 'UPGRADE_TESLA_DOME_RADIUS',
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {

@@ -48,6 +48,10 @@ Spielerzustände werden vollständig pro Tick durch playerStateCodec.ts kompakt 
 
 Zeitlich begrenzte replizierte Zustände tragen einen absoluten Ablaufzeitpunkt, nicht nur eine Restdauer. Clients können zwischen Snapshots lokal herunterzählen, ohne beim Ablauf ein weiteres Netzwerkereignis zu benötigen.
 
+Replizierte Listen je Entität brauchen einen stabilen Identitätsschlüssel, sobald der Client daran Zustand hängt. Position und Typ allein reichen nicht: ein Renderer, der Einträge positionsweise dem Array-Index zuordnet, springt bei jeder Umsortierung sichtbar um. Der Host führt die Identität selbst und schickt sie mit, zusammen mit der fachlichen Slot-Nummer, wenn die Reihenfolge Bedeutung trägt (`SyncedTeslaDomeTarget.targetKey`/`slotIndex`).
+
+Wiederkehrende hostseitige Ereignisse werden über einen monoton steigenden Zähler repliziert, nicht über eine aus der Aktivierungsdauer abgeleitete Stufe. Der Client löst seine Darstellung beim Anstieg des Zählers aus und bleibt damit auch bei Paketverlust und schwankender Snapshot-Rate synchron (`SyncedTeslaDome.pulseSequence`).
+
 Der Host relayt Store-Schreibvorgänge, aber nicht blind jeden Key: HOST_ONLY_PLAYER_KEYS bleiben hostlokal. KEY_INPUT ist bewusst kein solcher Key, weil PlacementPreviewRenderer die Vorschau anderer Spieler lesen muss. Neue Keys zuerst nach Besitzer, Kanal, Änderungsfrequenz und Latejoin-Baseline klassifizieren.
 
 Power-up-Pickups laufen als Request/ACK. Ein Client darf aus einer replizierten Definition keinen Effekt lokal anwenden; der Host prüft UID, Reichweite und Spielerzustand und wendet den Effekt im PowerUpSystem an. Temporäre Utility-Overrides werden als reliable UtilityOverrideDescriptor repliziert und beim Default-Loadout, beim Spielerabgang und vor Round-Teardown zentral entfernt.

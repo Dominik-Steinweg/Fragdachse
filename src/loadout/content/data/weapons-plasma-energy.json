@@ -314,9 +314,9 @@
       "range": 0,
       "fire": {
         "type": "tesla_dome",
-        "radius": 190,
-        "damagePerTick": 7,
-        "tickInterval": 180,
+        "radius": 200,
+        "damagePerTick": 6,
+        "tickInterval": 200,
         "adrenalineDrainPerSecond": 16,
         "movementSlowFactor": 0.3,
         "requireLineOfSight": true,
@@ -341,10 +341,35 @@
         "visualImpactBurstScale": 0.95,
         "visualWhiteness": 0.62,
         "visualPulseSpeed": 0.0034,
-        "chargeIntervalMs": 0,
+        "maxTargets": 4,
+        "focusedDamageBonusPerFreeTarget": 0,
+        "chargeIntervalMs": 1000,
         "maxChargeStacks": 0,
         "radiusBonusPerCharge": 0,
-        "damageBonusPerCharge": 0
+        "movementRecoveryPerCharge": 0,
+        "overchargePulseEnabled": 0,
+        "stormEnabled": 0,
+        "stormProjectileBaseCount": 6,
+        "stormProjectileDamage": 4,
+        "stormProjectileSpeed": 460,
+        "stormProjectileSize": 10,
+        "stormProjectileRangeFactor": 2,
+        "stormProjectileAngleJitterDegrees": 5,
+        "stormProjectileSpreadDegrees": 30,
+        "stormProjectileLateralOffsetPx": 9,
+        "stormProjectileHoming": {
+          "searchRadius": 320,
+          "maxTurnDegreesPerStep": 4,
+          "retargetIntervalMs": 260,
+          "acquireDelayMs": 60,
+          "requireLineOfSight": false,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1.4
+        },
+        "stormNovaSlowFraction": 0.3,
+        "stormNovaSlowDurationMs": 2000,
+        "stormNovaKnockback": 650
       },
       "allowedSlots": [
         "weapon2"
@@ -395,8 +420,7 @@
         "visualPulseSpeed": 0.0042,
         "chargeIntervalMs": 0,
         "maxChargeStacks": 0,
-        "radiusBonusPerCharge": 0,
-        "damageBonusPerCharge": 0
+        "radiusBonusPerCharge": 0
       },
       "allowedSlots": [],
       "adrenalinCost": 0,
@@ -445,8 +469,7 @@
         "visualPulseSpeed": 0.004,
         "chargeIntervalMs": 0,
         "maxChargeStacks": 0,
-        "radiusBonusPerCharge": 0,
-        "damageBonusPerCharge": 0
+        "radiusBonusPerCharge": 0
       },
       "allowedSlots": [],
       "adrenalinCost": 0,

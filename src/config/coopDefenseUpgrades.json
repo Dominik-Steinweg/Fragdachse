@@ -3930,7 +3930,7 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "tesla_dome_radius",
+                                                "id":  "tesla_dome_additional_beams",
                                                 "code":  "C-W10-1",
                                                 "kind":  "upgrade",
                                                 "maxLevel":  3,
@@ -3946,44 +3946,67 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.TESLA_DOME.radius",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
+                                                                    "stat":  "weapon.TESLA_DOME.fire.maxTargets",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  1
                                                                 }
                                                             ]
                                             },
                                             {
-                                                "id":  "tesla_dome_damage",
+                                                "id":  "tesla_dome_focused_conductivity",
                                                 "code":  "C-W10-2",
                                                 "kind":  "upgrade",
-                                                "maxLevel":  1,
+                                                "maxLevel":  3,
                                                 "startingLevel":  0,
                                                 "costPerLevel":  1,
                                                 "refundable":  true,
-                                                "sortOrder":  390,
+                                                "sortOrder":  382,
                                                 "requires":  [
                                                                  {
-                                                                     "upgradeId":  "tesla_dome_radius",
+                                                                     "upgradeId":  "tesla_dome_additional_beams",
                                                                      "minLevel":  1
                                                                  }
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.TESLA_DOME.damagePerTick",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.5
+                                                                    "stat":  "weapon.TESLA_DOME.fire.focusedDamageBonusPerFreeTarget",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  0.02
                                                                 }
                                                             ]
                                             },
                                             {
-                                                "id":  "tesla_dome_movement_slow",
+                                                "id":  "tesla_dome_energy_efficiency",
                                                 "code":  "C-W10-3",
                                                 "kind":  "upgrade",
                                                 "maxLevel":  3,
                                                 "startingLevel":  0,
                                                 "costPerLevel":  1,
                                                 "refundable":  true,
-                                                "sortOrder":  395,
+                                                "sortOrder":  384,
+                                                "requires":  [
+                                                                 {
+                                                                     "upgradeId":  "tesla_dome_focused_conductivity",
+                                                                     "minLevel":  1
+                                                                 }
+                                                             ],
+                                                "effects":  [
+                                                                {
+                                                                    "stat":  "weapon.TESLA_DOME.adrenalineDrain",
+                                                                    "mode":  "add_percent_per_level",
+                                                                    "value":  -0.1
+                                                                }
+                                                            ]
+                                            },
+                                            {
+                                                "id":  "tesla_dome_field_charge",
+                                                "code":  "C-W10-4",
+                                                "kind":  "upgrade",
+                                                "maxLevel":  1,
+                                                "startingLevel":  0,
+                                                "costPerLevel":  1,
+                                                "refundable":  true,
+                                                "sortOrder":  386,
                                                 "requires":  [
                                                                  {
                                                                      "upgradeId":  "unlock_tesla_dome",
@@ -3992,32 +4015,131 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.TESLA_DOME.movementSlowFactor",
+                                                                    "stat":  "weapon.TESLA_DOME.fire.maxChargeStacks",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  0.14
+                                                                    "value":  3
+                                                                },
+                                                                {
+                                                                    "stat":  "weapon.TESLA_DOME.fire.radiusBonusPerCharge",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  0.1
                                                                 }
                                                             ]
                                             },
                                             {
-                                                "id":  "tesla_dome_adrenalin_drain",
-                                                "code":  "C-W10-4",
+                                                "id":  "tesla_dome_field_stabilization",
+                                                "code":  "C-W10-5",
                                                 "kind":  "upgrade",
                                                 "maxLevel":  1,
                                                 "startingLevel":  0,
                                                 "costPerLevel":  1,
                                                 "refundable":  true,
-                                                "sortOrder":  405,
+                                                "sortOrder":  388,
                                                 "requires":  [
                                                                  {
-                                                                     "upgradeId":  "tesla_dome_movement_slow",
+                                                                     "upgradeId":  "tesla_dome_field_charge",
                                                                      "minLevel":  1
                                                                  }
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.TESLA_DOME.adrenalineDrain",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  -0.3
+                                                                    "stat":  "weapon.TESLA_DOME.fire.movementRecoveryPerCharge",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  0.1
+                                                                }
+                                                            ]
+                                            },
+                                            {
+                                                "id":  "tesla_dome_overcharge_pulse",
+                                                "code":  "C-W10-B1",
+                                                "kind":  "upgrade",
+                                                "maxLevel":  1,
+                                                "costPerLevel":  0,
+                                                "bossPointCostPerLevel":  1,
+                                                "sortOrder":  390,
+                                                "requires":  [
+                                                                 {
+                                                                     "upgradeId":  "tesla_dome_field_stabilization",
+                                                                     "minLevel":  1
+                                                                 }
+                                                             ],
+                                                "effects":  [
+                                                                {
+                                                                    "stat":  "weapon.TESLA_DOME.fire.overchargePulseEnabled",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  1
+                                                                }
+                                                            ]
+                                            },
+                                            {
+                                                "id":  "tesla_dome_thunderstorm",
+                                                "code":  "C-W10-B2",
+                                                "kind":  "upgrade",
+                                                "maxLevel":  1,
+                                                "costPerLevel":  0,
+                                                "bossPointCostPerLevel":  1,
+                                                "sortOrder":  392,
+                                                "requires":  [
+                                                                 {
+                                                                     "upgradeId":  "tesla_dome_energy_efficiency",
+                                                                     "minLevel":  1
+                                                                 },
+                                                                 {
+                                                                     "upgradeId":  "tesla_dome_overcharge_pulse",
+                                                                     "minLevel":  1
+                                                                 }
+                                                             ],
+                                                "effects":  [
+                                                                {
+                                                                    "stat":  "weapon.TESLA_DOME.fire.stormEnabled",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  1
+                                                                }
+                                                            ]
+                                            },
+                                            {
+                                                "id":  "tesla_dome_fast_charge",
+                                                "code":  "C-W10-6",
+                                                "kind":  "upgrade",
+                                                "maxLevel":  3,
+                                                "startingLevel":  0,
+                                                "costPerLevel":  1,
+                                                "refundable":  true,
+                                                "sortOrder":  394,
+                                                "requires":  [
+                                                                 {
+                                                                     "upgradeId":  "tesla_dome_thunderstorm",
+                                                                     "minLevel":  1
+                                                                 }
+                                                             ],
+                                                "effects":  [
+                                                                {
+                                                                    "stat":  "weapon.TESLA_DOME.fire.chargeIntervalMs",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  -100
+                                                                }
+                                                            ]
+                                            },
+                                            {
+                                                "id":  "tesla_dome_overcharge",
+                                                "code":  "C-W10-7",
+                                                "kind":  "upgrade",
+                                                "maxLevel":  3,
+                                                "startingLevel":  0,
+                                                "costPerLevel":  1,
+                                                "refundable":  true,
+                                                "sortOrder":  396,
+                                                "requires":  [
+                                                                 {
+                                                                     "upgradeId":  "tesla_dome_thunderstorm",
+                                                                     "minLevel":  1
+                                                                 }
+                                                             ],
+                                                "effects":  [
+                                                                {
+                                                                    "stat":  "weapon.TESLA_DOME.fire.maxChargeStacks",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  1
                                                                 }
                                                             ]
                                             },
@@ -4636,43 +4758,6 @@
                                                                     "stat":  "weapon.AWP.awpCharge.fullChargeDamageBonus",
                                                                     "mode":  "add_per_level",
                                                                     "value":  0.2
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "tesla_dome_high_voltage",
-                                                "code":  "C-W10-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  405,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "tesla_dome_damage",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.TESLA_DOME.fire.chargeIntervalMs",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  1000
-                                                                },
-                                                                {
-                                                                    "stat":  "weapon.TESLA_DOME.fire.maxChargeStacks",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  3
-                                                                },
-                                                                {
-                                                                    "stat":  "weapon.TESLA_DOME.fire.radiusBonusPerCharge",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.1
-                                                                },
-                                                                {
-                                                                    "stat":  "weapon.TESLA_DOME.fire.damageBonusPerCharge",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.1
                                                                 }
                                                             ]
                                             },

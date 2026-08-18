@@ -567,19 +567,39 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "TESLA_DOME",
     targets: [{ path: ["fire","chargeIntervalMs"], formula: "add" }],
   },
-  "weapon.TESLA_DOME.fire.damageBonusPerCharge": {
+  "weapon.TESLA_DOME.fire.focusedDamageBonusPerFreeTarget": {
     kind: "weapon",
     itemId: "TESLA_DOME",
-    targets: [{ path: ["fire","damageBonusPerCharge"], formula: "add" }],
+    targets: [{ path: ["fire","focusedDamageBonusPerFreeTarget"], formula: "add" }],
   },
   "weapon.TESLA_DOME.fire.maxChargeStacks": {
     kind: "weapon",
     itemId: "TESLA_DOME",
     targets: [{ path: ["fire","maxChargeStacks"], formula: "add" }],
   },
+  "weapon.TESLA_DOME.fire.maxTargets": {
+    kind: "weapon",
+    itemId: "TESLA_DOME",
+    targets: [{ path: ["fire","maxTargets"], formula: "add" }],
+  },
+  "weapon.TESLA_DOME.fire.movementRecoveryPerCharge": {
+    kind: "weapon",
+    itemId: "TESLA_DOME",
+    targets: [{ path: ["fire","movementRecoveryPerCharge"], formula: "add" }],
+  },
+  "weapon.TESLA_DOME.fire.overchargePulseEnabled": {
+    kind: "weapon",
+    itemId: "TESLA_DOME",
+    targets: [{ path: ["fire","overchargePulseEnabled"], formula: "add" }],
+  },
   "weapon.TESLA_DOME.fire.radiusBonusPerCharge": {
     kind: "weapon",
     itemId: "TESLA_DOME",
     targets: [{ path: ["fire","radiusBonusPerCharge"], formula: "add" }],
+  },
+  "weapon.TESLA_DOME.fire.stormEnabled": {
+    kind: "weapon",
+    itemId: "TESLA_DOME",
+    targets: [{ path: ["fire","stormEnabled"], formula: "add" }],
   },
 } as const satisfies Readonly<Record<string, ConfigStatDescriptor>>;

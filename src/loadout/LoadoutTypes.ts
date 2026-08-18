@@ -115,10 +115,29 @@ export interface TeslaDomeWeaponFireConfig {
   readonly visualImpactBurstScale: number;
   readonly visualWhiteness: number;
   readonly visualPulseSpeed: number;
+  /** Zero/undefined keeps legacy unlimited targeting for non-player Tesla variants. */
+  readonly maxTargets?: number;
+  readonly focusedDamageBonusPerFreeTarget?: number;
   readonly chargeIntervalMs?: number;
   readonly maxChargeStacks?: number;
   readonly radiusBonusPerCharge?: number;
-  readonly damageBonusPerCharge?: number;
+  readonly movementRecoveryPerCharge?: number;
+  readonly overchargePulseEnabled?: number;
+  readonly stormEnabled?: number;
+  readonly stormProjectileBaseCount?: number;
+  readonly stormProjectileDamage?: number;
+  readonly stormProjectileSpeed?: number;
+  readonly stormProjectileSize?: number;
+  readonly stormProjectileRangeFactor?: number;
+  readonly stormProjectileAngleJitterDegrees?: number;
+  /** Oeffnungswinkel des gerichteten Salven-Kegels um die Blickrichtung. */
+  readonly stormProjectileSpreadDegrees?: number;
+  /** Seitlicher Startversatz der aeusseren Bolzen; sie starten nebeneinander statt aus einem Punkt. */
+  readonly stormProjectileLateralOffsetPx?: number;
+  readonly stormProjectileHoming?: ProjectileHomingConfig;
+  readonly stormNovaSlowFraction?: number;
+  readonly stormNovaSlowDurationMs?: number;
+  readonly stormNovaKnockback?: number;
 }
 
 export interface HealingAuraWeaponFireConfig {

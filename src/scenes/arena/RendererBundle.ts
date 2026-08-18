@@ -13,6 +13,8 @@ import { GaussRenderer }       from '../../effects/GaussRenderer';
 import { HydraRenderer }       from '../../effects/HydraRenderer';
 import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
+import { TeslaNovaRenderer }   from '../../effects/TeslaNovaRenderer';
+import { TeslaBoltRenderer }   from '../../effects/TeslaBoltRenderer';
 import { HealingAuraRenderer } from '../../effects/HealingAuraRenderer';
 import { GuardianSpiritRenderer } from '../../effects/GuardianSpiritRenderer';
 import { RepairDroneRenderer } from '../../effects/RepairDroneRenderer';
@@ -71,6 +73,8 @@ export interface RendererBundle {
   gauss:               GaussRenderer;
   energyShield:        EnergyShieldRenderer;
   teslaDome:           TeslaDomeRenderer;
+  teslaNova:           TeslaNovaRenderer;
+  teslaBolt:           TeslaBoltRenderer;
   healingAura:         HealingAuraRenderer;
   guardianSpirit:      GuardianSpiritRenderer;
   repairDrone:         RepairDroneRenderer;
@@ -156,6 +160,14 @@ export function createRendererBundle(
 
   const teslaDome = new TeslaDomeRenderer(scene);
   teslaDome.generateTextures();
+
+  // Blitznova und Gewitterprojektile sind eigene Effektfamilien, haengen aber am selben Feldpuls.
+  const teslaNova = new TeslaNovaRenderer(scene);
+  teslaNova.generateTextures();
+  teslaDome.setNovaRenderer(teslaNova);
+
+  const teslaBolt = new TeslaBoltRenderer(scene);
+  teslaBolt.generateTextures();
 
   const healingAura = new HealingAuraRenderer(scene);
   healingAura.generateTextures();
@@ -245,6 +257,7 @@ export function createRendererBundle(
   asmdPrimary.setLightingSystem(lighting);
   plasmaBurner.setLightingSystem(lighting);
   teslaDome.setLightingSystem(lighting);
+  teslaNova.setLightingSystem(lighting);
   miniTeslaDome.setLightingSystem(lighting);
   energyShield.setLightingSystem(lighting);
   timeBubble.setLightingSystem(lighting);
@@ -260,7 +273,7 @@ export function createRendererBundle(
   // `ProjectileManager.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
-    bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
+    bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
@@ -296,6 +309,7 @@ export function wireProjectileRenderers(
   pm.setSporeRenderer(bundle.spore);
   pm.setGrenadeRenderer(bundle.grenade);
   pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);
+  pm.setTeslaBoltRenderer(bundle.teslaBolt);
   pm.setTracerRenderer(bundle.tracer);
   pm.setMuzzleFlashRenderer(bundle.muzzleFlash);
   pm.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
@@ -321,6 +335,7 @@ export function wireRenderersToProjManager(
   pm.setSporeRenderer(bundle.spore);
   pm.setGrenadeRenderer(bundle.grenade);
   pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);
+  pm.setTeslaBoltRenderer(bundle.teslaBolt);
   pm.setTracerRenderer(bundle.tracer);
   pm.setMuzzleFlashRenderer(bundle.muzzleFlash);
   pm.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
