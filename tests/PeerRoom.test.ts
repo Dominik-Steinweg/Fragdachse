@@ -353,8 +353,8 @@ describe('PeerRoom replicated state', () => {
     const host = await createHostRoom(network);
     const client = await addClientRoom(network);
 
-    host.room.setGlobal('aly', { seed: 1 }, true);
-    expect(client.room.getGlobal('aly')).toEqual({ seed: 1 });
+    host.room.setGlobal('genericReliable', { seed: 1 }, true);
+    expect(client.room.getGlobal('genericReliable')).toEqual({ seed: 1 });
 
     host.room.setGlobal('gs', { _s: 1 }, false);
     expect(client.room.getGlobal('gs')).toBeUndefined();
@@ -791,6 +791,73 @@ describe('PeerRoom disconnects', () => {
       expect(leaving.room.getGlobal('gph')).toBeUndefined();
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('arena loading barrier', () => {
+  it('replicates a compact descriptor, exposes per-player progress, and ignores spectators', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const participant = await addClientRoom(network);
+    const lateJoiner = await addClientRoom(network);
+    const bridge = new NetworkBridge();
+    setActiveSession({ room: host.room, transport: host.transport, roomCode: 'ABC123' });
+    bridge.activate();
+
+    try {
+      host.room.setGlobal('gph', 'ARENA', true);
+      bridge.hostStartRoundParticipants(['p0', 'p1'], 0, 42);
+      bridge.setLocalArenaLoadProgress(42, 20, 'building');
+      expect(bridge.getPlayerArenaLoadState('p0', 42)).toEqual({
+        roundRevision: 42,
+        progress: 20,
+        stage: 'building',
+        ready: false,
+      });
+      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(false);
+
+      host.room.setPlayerState('p1', 'alr', {
+        roundRevision: 42,
+        progress: 100,
+        stage: 'ready',
+        ready: true,
+      }, true);
+      bridge.setLocalArenaLoadReady(42);
+      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
+
+      bridge.publishArenaDescriptor({
+        roundRevision: 42,
+        gameMode: 'coop_defense',
+        mapId: '0',
+        seed: 123,
+        arenaGeneratorVersion: 1,
+        layoutFingerprint: 'deadbeef',
+      });
+      expect(JSON.stringify(participant.room.getGlobal('ard')).length).toBeLessThan(1024);
+      expect(lateJoiner.room.getGlobal('ard')).toEqual(host.room.getGlobal('ard'));
+      expect(host.room.getGlobal('aly')).toBeUndefined();
+
+      bridge.hostEnterSpectator('p1');
+      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
+    } finally {
+      clearActiveSession();
+    }
+  });
+
+  it('starts the solo barrier as soon as the local working set is ready', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const bridge = new NetworkBridge();
+    setActiveSession({ room: host.room, transport: host.transport, roomCode: 'ABC123' });
+    bridge.activate();
+    try {
+      host.room.setGlobal('gph', 'ARENA', true);
+      bridge.hostStartRoundParticipants(['p0'], 0, 7);
+      bridge.setLocalArenaLoadProgress(7, 100, 'ready', true);
+      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
+    } finally {
+      clearActiveSession();
     }
   });
 });

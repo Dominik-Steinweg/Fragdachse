@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
-import { ArenaGenerator }    from '../../arena/ArenaGenerator';
+import { ArenaGenerator, ARENA_GENERATOR_VERSION } from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
@@ -84,7 +84,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_START_SYNC_LEAD_MS, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -96,7 +96,7 @@ import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
+import type { ArenaDescriptor, ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -123,6 +123,8 @@ import {
 import { getUnlockedCoopDefenseConstructionIds } from '../../utils/coopDefenseUpgrades';
 import type { ConstructionId, LoadoutToolRef, LoadoutUseResult } from '../../types';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
+import { resolveArenaLoadProgress } from './ArenaLoadProgress';
+import { resolveArenaStartTime } from './ArenaStartTiming';
 
 /**
  * Manages the arena round lifecycle.
@@ -148,6 +150,7 @@ export class ArenaLifecycleCoordinator {
   private lastRoundRevision = 0;
   private localArenaLoadReady = false;
   private hostStartupCachesPrepared = false;
+  private preparedRoundLayout: { descriptor: ArenaDescriptor; layout: ArenaLayout } | null = null;
   private boundRoundStartTime = 0;
   private pendingClassicTrainEvent: {
     readonly trackX: number;
@@ -343,8 +346,19 @@ export class ArenaLifecycleCoordinator {
     bridge.setRoundEndTime(0);
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
-    const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
-    bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
+    const seed = Date.now();
+    const layout = ArenaGenerator.generate(seed, coopDefenseMapConfig ?? undefined);
+    const descriptor: ArenaDescriptor = {
+      roundRevision,
+      gameMode: bridge.getGameMode(),
+      mapId: coopDefenseMapConfig?.mapId ?? null,
+      seed,
+      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+      layoutFingerprint: ArenaGenerator.fingerprint(layout),
+    };
+    this.preparedRoundLayout = { descriptor, layout };
+    bridge.publishArenaDescriptor(descriptor);
+    bridge.setLocalArenaLoadProgress(roundRevision, 10, 'generating');
     const roundState: RoundState = {
       status: 'active',
       roundStartTime: 0,
@@ -371,15 +385,28 @@ export class ArenaLifecycleCoordinator {
     const hostStartupReady = bridge.isHost()
       ? this.prepareHostStartupCaches(Date.now())
       : true;
-    const localReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
+    const localRenderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
       && this.renderers.shadow.isStaticReadyForView(view, true);
-    const arenaLoadReady = localReady && hostStartupReady;
-    if (arenaLoadReady && !bridge.isLocalArenaLoadReady(roundRevision)) {
-      bridge.setLocalArenaLoadReady(roundRevision, true);
-      this.localArenaLoadReady = true;
-    } else if (bridge.isLocalArenaLoadReady(roundRevision)) {
-      this.localArenaLoadReady = true;
-    }
+    const groundStats = this.ctx.arenaResult.groundSurface?.getStats();
+    const rockStats = this.ctx.arenaResult.rockOverlaySurface?.getStats();
+    const shadowStats = this.renderers.shadow.getStaticSurfaceStats();
+    const pending = (groundStats?.pendingChunks ?? 0) + (groundStats?.pendingRegions ?? 0)
+      + (groundStats?.pendingTextureAcquisitions ?? 0)
+      + (rockStats?.pendingChunks ?? 0) + (rockStats?.pendingRegions ?? 0)
+      + (rockStats?.pendingTextureAcquisitions ?? 0)
+      + (shadowStats?.pendingChunks ?? 0) + (shadowStats?.pendingRegions ?? 0)
+      + (shadowStats?.pendingTextureAcquisitions ?? 0);
+    const resident = (groundStats?.residentChunks ?? 0)
+      + (rockStats?.residentChunks ?? 0)
+      + (shadowStats?.residentChunks ?? 0);
+    const loadProgress = resolveArenaLoadProgress(pending, resident, localRenderReady, hostStartupReady);
+    bridge.setLocalArenaLoadProgress(
+      roundRevision,
+      loadProgress.progress,
+      loadProgress.stage,
+      loadProgress.ready,
+    );
+    this.localArenaLoadReady = loadProgress.ready;
 
     if (bridge.isHost()) this.tryScheduleArenaStart();
   }
@@ -388,7 +415,7 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     if (bridge.getArenaStartTime() > 0 || !bridge.areRoundParticipantsArenaLoadReady()) return;
 
-    const arenaStartTime = Date.now() + ARENA_START_SYNC_LEAD_MS + ARENA_COUNTDOWN_SEC * 1000;
+    const arenaStartTime = resolveArenaStartTime(Date.now());
     bridge.setArenaStartTime(arenaStartTime);
     bridge.setRoundEndTime(this.resolveRoundEndTime(arenaStartTime));
 
@@ -718,7 +745,14 @@ export class ArenaLifecycleCoordinator {
 
   // ── Arena build / teardown ────────────────────────────────────────────────
 
-  buildArena(networkLayout: ArenaLayout): void {
+  buildArena(descriptor: ArenaDescriptor): void {
+    if (descriptor.arenaGeneratorVersion !== ARENA_GENERATOR_VERSION) {
+      throw new Error(
+        `[ArenaLifecycleCoordinator] Unsupported arena generator version ${descriptor.arenaGeneratorVersion}; expected ${ARENA_GENERATOR_VERSION}`,
+      );
+    }
+
+    const prepared = this.preparedRoundLayout;
     this.tearDownArena();
 
     // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
@@ -729,22 +763,33 @@ export class ArenaLifecycleCoordinator {
     // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
     // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
     const roundState = bridge.getRoundState();
-    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+    const coopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
+      ? getCoopDefenseMapConfig(descriptor.mapId ?? roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : null;
-    const coopDefenseHumanPlayerCount = isCoopDefenseMode(bridge.getGameMode())
+    const coopDefenseHumanPlayerCount = isCoopDefenseMode(descriptor.gameMode)
       ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
-    const coopDefenseEnemyConfigs = isCoopDefenseMode(bridge.getGameMode())
+    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
     const coopDefenseBases = coopDefenseMapConfig
       ? getCoopDefenseBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
-    // Die Basen sind bereits fuer diese Runde aufgeloest. Dieselbe Liste muss auch die
-    // Visual-only-Hydration sehen, sonst faellt generateDecals() erneut auf den teuren globalen
-    // Coop-Base-Lookup zurueck.
-    const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout, coopDefenseBases);
+    const locallyGeneratedLayout = prepared
+      && prepared.descriptor.roundRevision === descriptor.roundRevision
+      && prepared.descriptor.seed === descriptor.seed
+      && prepared.descriptor.layoutFingerprint === descriptor.layoutFingerprint
+      ? prepared.layout
+      : ArenaGenerator.generate(descriptor.seed, coopDefenseMapConfig ?? undefined);
+    const actualFingerprint = ArenaGenerator.fingerprint(locallyGeneratedLayout);
+    if (actualFingerprint !== descriptor.layoutFingerprint) {
+      throw new Error(
+        `[ArenaLifecycleCoordinator] Arena fingerprint mismatch: expected ${descriptor.layoutFingerprint}, got ${actualFingerprint}`,
+      );
+    }
+    const layout = locallyGeneratedLayout;
+    this.preparedRoundLayout = null;
+    bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 35, 'building');
     const coopDefensePersistentSpawnConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapPersistentSpawnConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
@@ -786,6 +831,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
+    bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
     ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
@@ -2566,6 +2612,7 @@ export class ArenaLifecycleCoordinator {
   tearDownArena(): void {
     this.localArenaLoadReady = false;
     this.hostStartupCachesPrepared = false;
+    this.preparedRoundLayout = null;
     this.boundRoundStartTime = 0;
     this.pendingClassicTrainEvent = null;
     this.cancelTrainExplosionTimers();
@@ -2859,24 +2906,27 @@ export class ArenaLifecycleCoordinator {
   // ── Private ───────────────────────────────────────────────────────────────
 
   private onTransitionToArena(): void {
-    // Install the full-screen loading state before even the reliable layout/round snapshot has
-    // arrived. A phase change must never expose the arena during the retry window.
+    // Install the independent black loading screen before the descriptor/round snapshot arrives.
+    // A phase change must never expose the arena during the retry window.
     this.ctx.arenaCountdown?.showLoading();
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
-    const layout = bridge.getArenaLayout();
-    // Im Coop-Modus zusätzlich auf den (reliable) RoundState warten: er trägt Map-ID und Spielerzahl,
-    // aus denen Basen/Druckquellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
-    // bauen, bevor diese Keys angekommen sind → fehlende/falsche Basis. Das 3-s-Countdown-Fenster
-    // (ARENA_COUNTDOWN_SEC) bietet reichlich Zeit für die Retries.
+    const descriptor = bridge.getArenaDescriptor();
+    // Im Coop-Modus zusätzlich auf den reliable RoundState warten: er trägt Spielerzahl und
+    // bestätigt die Runde, aus denen Basen/Druckquellen/Gegner lokal gebaut werden.
     const roundState = bridge.getRoundState();
     const roundStateReady = roundState?.status === 'active'
       && roundState.roundStartTime === bridge.getArenaStartTime();
-    if (!layout || !roundStateReady) {
+    const participation = bridge.getRoundParticipation();
+    if (!descriptor
+      || !participation
+      || descriptor.roundRevision !== participation.roundRevision
+      || descriptor.gameMode !== bridge.getGameMode()
+      || !roundStateReady) {
       this.layoutRetryCount++;
       if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
         this.layoutRetryCount = 0;
-        this.terminateMatch();
+        this.terminateMatch('Arena-Descriptor oder Round-State wurde nicht rechtzeitig repliziert.');
         return;
       }
       this.scene.time.delayedCall(16, () => this.onTransitionToArena());
@@ -2895,7 +2945,13 @@ export class ArenaLifecycleCoordinator {
       coopDefenseArenaWidthCells,
       coopDefenseArenaHeightCells,
     );
-    this.buildArena(layout);
+    try {
+      this.buildArena(descriptor);
+    } catch (error) {
+      console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
+      this.terminateMatch('Lokale Arena-Erzeugung fehlgeschlagen (Generator/Fingerprint abweichend).');
+      return;
+    }
     this.arenaBuilt = true;
     this.localArenaLoadReady = false;
 

@@ -954,7 +954,6 @@ export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;
 export const MAX_PLAYERS        = 12;
 export const ARENA_COUNTDOWN_SEC = 3;
 /** Vorlauf fuer die reliable Verteilung des autoritativen Startzeitpunkts. */
-export const ARENA_START_SYNC_LEAD_MS = 500;
 export const DEFAULT_ARENA_DURATION_SEC = 120;
 export const CAPTURE_THE_BEER_ARENA_DURATION_SEC = 300;
 export let ARENA_DURATION_SEC = DEFAULT_ARENA_DURATION_SEC;

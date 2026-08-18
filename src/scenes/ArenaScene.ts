@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { ChunkedRenderSurface }  from '../arena/chunks/ChunkedRenderSurface';
+import { CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS } from '../arena/chunks/ChunkBakeScheduler';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
@@ -31,7 +32,7 @@ import { preloadAllAudio }        from '../audio/AudioCatalog';
 import { GameAudioSystem }        from '../audio/GameAudioSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ScopeOverlay } from '../ui/ScopeOverlay';
-import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
+import { ArenaCountdownOverlay, type ArenaLoadingScreenState } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { HostileBaseIndicator, getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { countSceneDisplayObjects, forEachSceneDisplayObject } from './arena/sceneDisplayObjects';
@@ -174,6 +175,7 @@ import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
 import { PerformanceAblationController } from './arena/PerformanceAblation';
 import { PerformanceDiagnosticsOverlay } from '../ui/PerformanceDiagnosticsOverlay';
 import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
+import { dequantizeAngle } from '../utils/angle';
 
 import {
   type ArenaContext,
@@ -1494,13 +1496,18 @@ export class ArenaScene extends Phaser.Scene {
     if (lobbyVisible) this.lobbyAmbient?.update(delta);
 
     if (inGame) {
-      // Loading and countdown are both input-locked. Camera positioning is handled separately.
-      this.ctx.inputSystem.setAimEnabled(gameplayActive && !optionsOpen && !spectator);
+      // Loading blocks input, while the countdown intentionally keeps aiming and the Inspector
+      // radial menu available so the pre-round presentation remains interactive.
+      const countdownInputAllowed = countdownActive && !optionsOpen && !spectator;
+      this.ctx.inputSystem.setAimEnabled(
+        (gameplayActive || countdownActive) && !optionsOpen && !spectator,
+      );
       this.ctx.inputSystem.setInputEnabled(
         gameplayActive && !optionsOpen && !spectator,
-        gameplayActive && !optionsOpen && !spectator,
+        gameplayActive && !optionsOpen && !spectator || countdownInputAllowed,
       );
       this.ctx.inputSystem.update();
+      if (countdownActive) this.syncCountdownPlayerPresentation();
     } else {
       this.ctx.inputSystem.setAimEnabled(false);
       this.ctx.inputSystem.setInputEnabled(false);
@@ -1989,7 +1996,10 @@ export class ArenaScene extends Phaser.Scene {
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
-    ChunkedRenderSurface.flushBakeBudget(this);
+    ChunkedRenderSurface.flushBakeBudget(
+      this,
+      arenaLoading ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,
+    );
     if (inGame && !terminated) {
       this.lifecycle.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
     }
@@ -2588,6 +2598,7 @@ export class ArenaScene extends Phaser.Scene {
     if (bridge.isArenaLoading()) {
       this.localPlayerState.overlayTrackedAlive = null;
       this.ctx.arenaCountdown.showLoading();
+      this.ctx.arenaCountdown.updateLoadingScreen(this.getArenaLoadingScreenState());
       this.ctx.arenaCountdown.update(now);
       return;
     }
@@ -2626,6 +2637,51 @@ export class ArenaScene extends Phaser.Scene {
 
     this.localPlayerState.overlayTrackedAlive = this.localPlayerState.alive;
     this.ctx.arenaCountdown.update(now);
+  }
+
+  private getArenaLoadingScreenState(): ArenaLoadingScreenState {
+    const participation = bridge.getRoundParticipation();
+    const descriptor = bridge.getArenaDescriptor();
+    const spectatorIds = new Set(participation?.spectatorIds ?? []);
+    const participantIds = new Set(participation?.participantIds ?? []);
+    const players = bridge.getConnectedPlayers()
+      .filter((profile) => participantIds.has(profile.id) && !spectatorIds.has(profile.id))
+      .map((profile) => {
+        const state = bridge.getPlayerArenaLoadState(
+          profile.id,
+          participation?.roundRevision ?? descriptor?.roundRevision ?? 0,
+        ) ?? {
+          roundRevision: participation?.roundRevision ?? descriptor?.roundRevision ?? 0,
+          progress: 0,
+          stage: 'generating' as const,
+          ready: false,
+        };
+        return {
+          id: profile.id,
+          name: profile.name,
+          colorHex: profile.colorHex,
+          progress: state.progress,
+          stage: state.stage,
+          ready: state.ready,
+        };
+      });
+    const modeLabel = getLocalizedGameModeLabel(bridge.getGameMode());
+    const mapLabel = descriptor?.mapId
+      ? getMapName(descriptor.mapId, getLocale())
+      : modeLabel;
+    return { mapLabel, modeLabel, players };
+  }
+
+  private syncCountdownPlayerPresentation(): void {
+    const localId = bridge.getLocalPlayerId();
+    for (const player of this.ctx.playerManager.getAllPlayers()) {
+      player.setHeldItemId(bridge.getPlayerHeldItemId(player.id));
+      const input = bridge.getPlayerInput(player.id);
+      const aim = player.id === localId
+        ? this.ctx.inputSystem.getAimAngle()
+        : input ? dequantizeAngle(input.aim) : player.getAimAngle();
+      player.setRotation(aim);
+    }
   }
 
   private getLocalPlacementPreview() {

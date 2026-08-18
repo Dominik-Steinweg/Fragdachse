@@ -69,7 +69,7 @@ export class PeerJsTransport implements PeerRoomTransport {
     if (this.isHost) {
       this.peer.on('connection', (connection: DataConnection) => {
         void this.openLink(connection).catch((error: unknown) => {
-          console.warn('[PeerJsTransport] Eingehende Verbindung nicht aufgebaut:', error);
+          console.warn(`[PeerJsTransport] Eingehende Verbindung nicht aufgebaut (peer=${connection.peer}):`, error);
         });
       });
       return;
@@ -123,6 +123,7 @@ export class PeerJsTransport implements PeerRoomTransport {
         }),
       ]);
     } catch (error) {
+      console.warn(`[PeerJsTransport] Verbindung zum Host fehlgeschlagen (room=${this.roomCode}):`, error);
       connection.close();
       throw error;
     } finally {
@@ -197,6 +198,7 @@ export class PeerJsTransport implements PeerRoomTransport {
       });
     } catch (error) {
       if (this.openLinks.delete(link)) this.handlers?.onLinkClosed(link);
+      console.warn(`[PeerJsTransport] Link konnte nicht geöffnet werden (peer=${connection.peer}):`, error);
       link.close();
       throw error;
     }

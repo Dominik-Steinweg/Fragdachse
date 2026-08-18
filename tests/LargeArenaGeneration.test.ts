@@ -55,8 +55,8 @@ describe('large arena generation', () => {
       expect(sample.rockCount).toBeGreaterThan(10_000);
       expect(sample.dirtCount).toBeGreaterThan(0);
       expect(sample.decalCount).toBeGreaterThan(0);
-      // Das Wire-Format traegt keine Decals; es muss also kleiner sein als das volle Layout.
-      expect(sample.wireBytes).toBeLessThan(sample.fullBytes);
+      // Nur der kleine Descriptor geht über WebRTC; das vollständige Layout wird lokal erzeugt.
+      expect(sample.descriptorBytes).toBeLessThan(1024);
     }
 
     // Landet im Testprotokoll und ist damit die dokumentierte Messung.

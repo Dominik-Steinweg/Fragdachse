@@ -13,6 +13,8 @@
  */
 export const CHUNK_BAKE_PREFETCH_FRAME_BUDGET_MS = 1.5;
 export const CHUNK_BAKE_URGENT_FRAME_BUDGET_MS = 4;
+/** Startup-only ceiling while the independent black loading screen is active. */
+export const CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS = 14;
 
 /** Backwards-compatible name for callers that explicitly want the urgent ceiling. */
 export const CHUNK_BAKE_FRAME_BUDGET_MS = CHUNK_BAKE_URGENT_FRAME_BUDGET_MS;
@@ -212,6 +214,6 @@ export function getChunkBakeScheduler(scene: object): ChunkBakeScheduler {
 }
 
 /** Zentraler Frame-Ende-Punkt fuer Ground, RockOverlay und Static Shadows. */
-export function flushChunkBakeScheduler(scene: object): number {
-  return getChunkBakeScheduler(scene).runFrame();
+export function flushChunkBakeScheduler(scene: object, budgetMs?: number): number {
+  return getChunkBakeScheduler(scene).runFrame(budgetMs);
 }

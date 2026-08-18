@@ -14,6 +14,7 @@ import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import type { CameraPostFxController } from '../effects/postfx/CameraPostFxController';
 import { t } from '../i18n';
+import type { ArenaLoadStage } from '../types';
 import {
   RADIAL_FOCUS_SOFTNESS_PX,
   resolveRadialFocusFrame,
@@ -41,10 +42,34 @@ const FOCUS_FALLBACK_OUTER_ALPHA = 0.30;
 
 type OverlayMode = 'hidden' | 'loading' | 'countdown' | 'death' | 'respawn-reveal';
 
+export interface ArenaLoadingPlayerView {
+  id: string;
+  name: string;
+  colorHex: number;
+  progress: number;
+  stage: ArenaLoadStage;
+  ready: boolean;
+}
+
+export interface ArenaLoadingScreenState {
+  mapLabel: string;
+  modeLabel: string;
+  players: readonly ArenaLoadingPlayerView[];
+}
+
 export class ArenaCountdownOverlay {
   private readonly focusFallbackTexture: Phaser.Textures.CanvasTexture;
   private readonly focusFallback: Phaser.GameObjects.Image;
   private readonly text: Phaser.GameObjects.Text;
+  private readonly loadingRoot: Phaser.GameObjects.Container;
+  private readonly loadingTitle: Phaser.GameObjects.Text;
+  private readonly loadingSubtitle: Phaser.GameObjects.Text;
+  private readonly loadingBars: Phaser.GameObjects.Graphics;
+  private readonly loadingRows: Array<{
+    name: Phaser.GameObjects.Text;
+    status: Phaser.GameObjects.Text;
+    progress: Phaser.GameObjects.Text;
+  }> = [];
   private readonly getFocusSprite: () => Phaser.GameObjects.Image | undefined;
   private readonly postFx: CameraPostFxController | null;
   private mode: OverlayMode = 'hidden';
@@ -100,7 +125,44 @@ export class ArenaCountdownOverlay {
       .setScrollFactor(0)
       .setVisible(false);
 
+    this.loadingRoot = scene.add.container(0, 0)
+      .setDepth(DEPTH.OVERLAY - 3)
+      .setScrollFactor(0)
+      .setVisible(false)
+      .setAlpha(0);
+    const loadingBackground = scene.add.rectangle(this.baseX, this.baseY, GAME_WIDTH, GAME_HEIGHT, 0x030406, 1)
+      .setOrigin(0.5);
+    this.loadingTitle = scene.add.text(this.baseX, 160, t('ui.arena.loading.title'), {
+      fontFamily: 'monospace', fontSize: '58px', fontStyle: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+    }).setOrigin(0.5);
+    this.loadingSubtitle = scene.add.text(this.baseX, 225, '', {
+      fontFamily: 'monospace', fontSize: '25px', color: toCssColor(COLORS.GREY_3),
+    }).setOrigin(0.5);
+    const loadingStatus = scene.add.text(510, 285, t('ui.arena.loading.status'), {
+      fontFamily: 'monospace', fontSize: '20px', color: toCssColor(COLORS.GREY_4),
+    }).setOrigin(0, 0.5);
+    this.loadingBars = scene.add.graphics();
+    this.loadingRoot.add([loadingBackground, this.loadingTitle, this.loadingSubtitle, loadingStatus, this.loadingBars]);
+    for (let index = 0; index < 12; index += 1) {
+      const y = 330 + index * 54;
+      const row = {
+        name: scene.add.text(510, y, '', {
+          fontFamily: 'monospace', fontSize: '23px', color: toCssColor(COLORS.GREY_1),
+        }).setOrigin(0, 0.5),
+        status: scene.add.text(800, y, '', {
+          fontFamily: 'monospace', fontSize: '18px', color: toCssColor(COLORS.GREY_4),
+        }).setOrigin(0, 0.5),
+        progress: scene.add.text(1390, y, '', {
+          fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        }).setOrigin(1, 0.5),
+      };
+      this.loadingRows.push(row);
+      this.loadingRoot.add([row.name, row.status, row.progress]);
+    }
+
     promoteToClarityCamera(scene, this.text);
+    promoteToClarityCamera(scene, this.loadingRoot);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
 
@@ -119,6 +181,7 @@ export class ArenaCountdownOverlay {
       unlockAtMs !== this.unlockAtMs
       || this.mode !== 'countdown'
     ) {
+      this.fadeLoadingScreenOut();
       this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
       this.mode = 'countdown';
     }
@@ -131,20 +194,45 @@ export class ArenaCountdownOverlay {
     this.resetOverlayState(CLOSED_VEIL_RADIUS_PX, VEIL_ALPHA);
     this.mode = 'loading';
     this.unlockAtMs = 0;
-    this.text.setStyle({
-      fontFamily: 'monospace',
-      fontSize: '56px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GOLD_1),
-      stroke: toCssColor(COLORS.GREY_8),
-      strokeThickness: 10,
+    this.text.setVisible(false);
+    this.postFx?.setRadialFocus(null);
+    this.focusFallback.setVisible(false);
+    this.scene.tweens.killTweensOf(this.loadingRoot);
+    this.loadingRoot.setVisible(true).setAlpha(0);
+    this.scene.tweens.add({
+      targets: this.loadingRoot,
+      alpha: 1,
+      duration: 180,
+      ease: 'Sine.easeOut',
     });
-    this.text
-      .setText(t('ui.common.loading'))
-      .setPosition(this.baseX, this.baseY)
-      .setAlpha(1)
-      .setScale(1)
-      .setVisible(true);
+  }
+
+  updateLoadingScreen(state: ArenaLoadingScreenState): void {
+    if (this.mode !== 'loading') return;
+    this.loadingTitle.setText(t('ui.arena.loading.title'));
+    this.loadingSubtitle.setText(`${state.modeLabel}  ·  ${state.mapLabel}`);
+    this.loadingBars.clear();
+    for (let index = 0; index < this.loadingRows.length; index += 1) {
+      const row = this.loadingRows[index];
+      const player = state.players[index];
+      if (!player) {
+        row.name.setVisible(false);
+        row.status.setVisible(false);
+        row.progress.setVisible(false);
+        continue;
+      }
+      const progress = Math.max(0, Math.min(100, Math.round(player.progress)));
+      const y = 330 + index * 54;
+      const color = toCssColor(player.colorHex);
+      row.name.setVisible(true).setText(player.name).setColor(color);
+      row.status.setVisible(true).setText(t(`ui.arena.loading.${player.stage}`));
+      row.progress.setVisible(true).setText(`${progress}%`).setColor(player.ready ? toCssColor(COLORS.GREEN_1) : color);
+      this.loadingBars.fillStyle(0x182027, 1).fillRoundedRect(510, y + 18, 820, 10, 5);
+      if (progress > 0) {
+        this.loadingBars.fillStyle(player.ready ? COLORS.GREEN_1 : player.colorHex, 1)
+          .fillRoundedRect(510, y + 18, 820 * progress / 100, 10, 5);
+      }
+    }
   }
 
   isLoading(): boolean {
@@ -238,6 +326,11 @@ export class ArenaCountdownOverlay {
    * the same coordinate space as the rendered world.
    */
   syncAfterCameraFeedback(): void {
+    if (this.mode === 'loading') {
+      this.postFx?.setRadialFocus(null);
+      this.focusFallback.setVisible(false);
+      return;
+    }
     if (this.mode === 'hidden' || this.veilAlpha <= 0.01) {
       this.postFx?.setRadialFocus(null);
       this.focusFallback.setVisible(false);
@@ -263,6 +356,8 @@ export class ArenaCountdownOverlay {
   clear(): void {
     this.mode = 'hidden';
     this.unlockAtMs = 0;
+    this.scene.tweens.killTweensOf(this.loadingRoot);
+    this.loadingRoot.setVisible(false).setAlpha(0);
     this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
     this.lastFallbackFrameKey = null;
     this.postFx?.setRadialFocus(null);
@@ -276,6 +371,7 @@ export class ArenaCountdownOverlay {
     this.postFx?.setRadialFocus(null);
     this.focusFallback.destroy();
     this.text.destroy();
+    this.loadingRoot.destroy(true);
     if (this.scene.textures.exists(FOCUS_FALLBACK_TEXTURE_KEY)) {
       this.scene.textures.remove(FOCUS_FALLBACK_TEXTURE_KEY);
     }
@@ -450,5 +546,19 @@ export class ArenaCountdownOverlay {
   private stopTextTweens(): void {
     this.scene.tweens.killTweensOf(this.text);
     this.scene.tweens.killTweensOf(this);
+  }
+
+  private fadeLoadingScreenOut(): void {
+    if (!this.loadingRoot.visible) return;
+    this.scene.tweens.killTweensOf(this.loadingRoot);
+    this.scene.tweens.add({
+      targets: this.loadingRoot,
+      alpha: 0,
+      duration: 220,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        if (this.mode !== 'loading') this.loadingRoot.setVisible(false);
+      },
+    });
   }
 }

@@ -29,6 +29,14 @@ interface QueuedMessage {
   channel: PeerChannelKind;
 }
 
+const PEER_LARGE_PAYLOAD_WARN_BYTES = 64 * 1024;
+const peerTextEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+
+function payloadByteLength(payload: string): number {
+  if (peerTextEncoder) return peerTextEncoder.encode(payload).byteLength;
+  return payload.length;
+}
+
 export interface PeerLinkHandlers {
   onMessage: (message: PeerMessage, channel: PeerChannelKind) => void;
   onClose: () => void;
@@ -43,6 +51,7 @@ export class PeerLink implements PeerLinkLike {
   private monitoredPeerConnection: RTCPeerConnection | null = null;
   private peerConnectionStateHandler: ((event: Event) => void) | null = null;
   private disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
+  private reliableClosedWarningShown = false;
 
   playerId = '';
 
@@ -109,6 +118,16 @@ export class PeerLink implements PeerLinkLike {
   send(message: PeerMessage, channel: PeerChannelKind): void {
     if (this.closed) return;
     const payload = encodePeerMessage(message);
+    // Avoid a second UTF-8 scan on the hot fast channel unless the string is already large
+    // enough to be diagnostically interesting.
+    const payloadBytes = payload.length >= PEER_LARGE_PAYLOAD_WARN_BYTES
+      ? payloadByteLength(payload)
+      : payload.length;
+    if (payloadBytes >= PEER_LARGE_PAYLOAD_WARN_BYTES) {
+      console.warn(
+        `[PeerLink] Große ${channel}-Payload (${payloadBytes} Bytes, type=${message.t}, peer=${this.remotePeerId}).`,
+      );
+    }
 
     if (channel === 'fast') {
       if (this.fastChannel?.readyState !== 'open') {
@@ -123,14 +142,24 @@ export class PeerLink implements PeerLinkLike {
       }
       try {
         this.fastChannel.send(payload);
-      } catch {
-        this.handleRemoteClose();
+      } catch (error) {
+        this.handleRemoteClose(error);
       }
       return;
     }
 
-    if (!this.connection.open) return;
-    this.connection.send(payload);
+    if (!this.connection.open) {
+      if (!this.reliableClosedWarningShown) {
+        this.reliableClosedWarningShown = true;
+        console.warn(`[PeerLink] Reliable-Send verworfen: Verbindung nicht offen (peer=${this.remotePeerId}, type=${message.t}).`);
+      }
+      return;
+    }
+    try {
+      this.connection.send(payload);
+    } catch (error) {
+      this.handleRemoteClose(error);
+    }
   }
 
   close(): void {
@@ -221,8 +250,9 @@ export class PeerLink implements PeerLinkLike {
     channel.addEventListener('error', fail, { once: true });
   }
 
-  private handleRemoteClose(): void {
+  private handleRemoteClose(reason?: unknown): void {
     if (this.closed) return;
+    console.warn(`[PeerLink] Verbindung geschlossen (peer=${this.remotePeerId}).`, reason ?? 'kein Grund vom Transport');
     this.closed = true;
     this.clearPeerConnectionMonitor();
     try {

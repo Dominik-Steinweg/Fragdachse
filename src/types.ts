@@ -29,9 +29,23 @@ export interface RoundParticipationState {
   spectatorIds: string[];
 }
 
-/** Reliable per-player acknowledgement of the local arena build. */
+export type ArenaLoadStage = 'generating' | 'building' | 'rendering' | 'ready';
+
+/** Small host-authored round identity used to reproduce the arena locally. */
+export interface ArenaDescriptor {
+  roundRevision: number;
+  gameMode: GameMode;
+  mapId: string | null;
+  seed: number;
+  arenaGeneratorVersion: number;
+  layoutFingerprint: string;
+}
+
+/** Reliable, low-frequency per-player status of the local arena build. */
 export interface ArenaLoadReadyState {
   roundRevision: number;
+  progress: number;
+  stage: ArenaLoadStage;
   ready: boolean;
 }
 
@@ -1562,7 +1576,7 @@ export interface SlimeBloomTarget {
   y: number;
 }
 
-/** Vollständiger Arena-Layout-Deskriptor – visuelle Decals können im Netzwerkpayload ausgelassen und lokal rekonstruiert werden. */
+/** Vollständiger lokaler Arena-Layoutzustand; wird nicht als Netzwerkpayload übertragen. */
 export interface ArenaLayout {
   seed:   number;
   rocks:  RockCell[];

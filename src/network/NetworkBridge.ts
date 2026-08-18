@@ -25,10 +25,9 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
-import type { ArenaLoadReadyState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -119,7 +118,7 @@ const KEY_INPUT        = 'inp';
 const KEY_PLAYERS      = 'plr';
 const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
-const KEY_ARENA_LOAD_READY = 'alr'; // per-player reliable: { roundRevision, ready }
+const KEY_ARENA_LOAD_READY = 'alr'; // per-player reliable: ArenaLoadReadyState
 const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
@@ -128,7 +127,7 @@ const KEY_TIME_OF_DAY  = 'tod';   // global reliable: number (Lobby-Uhrzeit in M
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
-const KEY_ARENA_LAYOUT = 'aly';   // global: ArenaLayout (reliable, einmalig pro Runde)
+const KEY_ARENA_DESCRIPTOR = 'ard'; // global: small deterministic round descriptor
 const KEY_ROCK_HP      = 'rck';   // global: RockNetState[] (unreliable, Delta-Snapshot)
 const KEY_AVAIL_COLORS = 'avc';   // global: number[] (verfügbarer Farbpool, reliable)
 const KEY_PLAYER_COLOR = 'clr';   // per-player: number (benutzerdefinierte Spielerfarbe)
@@ -551,6 +550,14 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function isArenaLoadStage(value: unknown): value is ArenaLoadStage {
+  return value === 'generating' || value === 'building' || value === 'rendering' || value === 'ready';
+}
+
+function normalizeArenaLoadProgress(value: unknown): number {
+  return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0;
+}
+
 const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
 
 export class NetworkBridge {
@@ -587,6 +594,7 @@ export class NetworkBridge {
   private connectedPlayers = new Map<string, PlayerProfile>();
   private cachedConnectedPlayers: PlayerProfile[] = [];
   private connectedPlayersCacheDirty = true;
+  private lastLocalArenaLoadStateKey: string | null = null;
 
   private joinCbs: Array<(profile: PlayerProfile) => void> = [];
   private quitCbs: Array<(id: string) => void>             = [];
@@ -1431,23 +1439,60 @@ export class NetworkBridge {
     for (const playerId of participation.participantIds) {
       this.playerStateMap.get(playerId)?.setState(KEY_ARENA_LOAD_READY, {
         roundRevision,
+        progress: 0,
+        stage: 'generating',
         ready: false,
       } satisfies ArenaLoadReadyState, true);
     }
+    this.lastLocalArenaLoadStateKey = null;
+  }
+
+  /** Publishes only stage changes or meaningful progress steps for the current round. */
+  setLocalArenaLoadProgress(
+    roundRevision: number,
+    progress: number,
+    stage: ArenaLoadStage,
+    ready = stage === 'ready',
+  ): void {
+    const normalizedProgress = ready || stage === 'ready'
+      ? 100
+      : Math.min(95, Math.floor(normalizeArenaLoadProgress(progress) / 5) * 5);
+    const normalizedReady = ready === true && normalizedProgress >= 100 && stage === 'ready';
+    const stateKey = `${roundRevision}|${stage}|${normalizedProgress}|${normalizedReady}`;
+    if (this.lastLocalArenaLoadStateKey === stateKey) return;
+    this.lastLocalArenaLoadStateKey = stateKey;
+    myPlayer().setState(KEY_ARENA_LOAD_READY, {
+      roundRevision,
+      progress: normalizedProgress,
+      stage,
+      ready: normalizedReady,
+    } satisfies ArenaLoadReadyState, true);
   }
 
   /** Local peer acknowledgement that its current arena working set is complete. */
   setLocalArenaLoadReady(roundRevision: number, ready = true): void {
-    myPlayer().setState(KEY_ARENA_LOAD_READY, {
+    if (ready) {
+      this.setLocalArenaLoadProgress(roundRevision, 100, 'ready', true);
+      return;
+    }
+    this.setLocalArenaLoadProgress(roundRevision, 0, 'generating', false);
+  }
+
+  getPlayerArenaLoadState(playerId: string, roundRevision: number): ArenaLoadReadyState | null {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_ARENA_LOAD_READY) as
+      Partial<ArenaLoadReadyState> | undefined;
+    if (!raw || raw.roundRevision !== roundRevision || !isArenaLoadStage(raw.stage)) return null;
+    const progress = normalizeArenaLoadProgress(raw.progress);
+    return {
       roundRevision,
-      ready,
-    } satisfies ArenaLoadReadyState, true);
+      progress,
+      stage: raw.stage,
+      ready: raw.ready === true && raw.stage === 'ready' && progress >= 100,
+    };
   }
 
   getPlayerArenaLoadReady(playerId: string, roundRevision: number): boolean {
-    const raw = this.playerStateMap.get(playerId)?.getState(KEY_ARENA_LOAD_READY) as
-      Partial<ArenaLoadReadyState> | undefined;
-    return raw?.ready === true && raw.roundRevision === roundRevision;
+    return this.getPlayerArenaLoadState(playerId, roundRevision)?.ready === true;
   }
 
   isLocalArenaLoadReady(roundRevision: number): boolean {
@@ -1917,13 +1962,28 @@ export class NetworkBridge {
     return (getState(KEY_HOST_ID) as string | undefined) ?? null;
   }
 
-  // ── Arena Layout: Host → Alle (global, reliable, einmalig pro Runde) ─────────
-  publishArenaLayout(layout: ArenaLayout): void {
-    setState(KEY_ARENA_LAYOUT, layout, true);   // reliable=true: kommt garantiert vor Phase-Wechsel an
+  // ── Arena descriptor: Host → Alle (global, reliable, einmalig pro Runde) ────
+  publishArenaDescriptor(descriptor: ArenaDescriptor): void {
+    setState(KEY_ARENA_DESCRIPTOR, descriptor, true);
   }
 
-  getArenaLayout(): ArenaLayout | undefined {
-    return getState(KEY_ARENA_LAYOUT) as ArenaLayout | undefined;
+  getArenaDescriptor(): ArenaDescriptor | null {
+    const raw = getState(KEY_ARENA_DESCRIPTOR) as Partial<ArenaDescriptor> | null | undefined;
+    if (!raw || typeof raw !== 'object') return null;
+    if (!isFiniteNumber(raw.roundRevision) || !Number.isSafeInteger(raw.roundRevision) || raw.roundRevision <= 0) return null;
+    if (typeof raw.gameMode !== 'string') return null;
+    if (raw.mapId !== null && typeof raw.mapId !== 'string') return null;
+    if (!isFiniteNumber(raw.seed) || !Number.isSafeInteger(raw.seed)) return null;
+    if (!isFiniteNumber(raw.arenaGeneratorVersion) || !Number.isSafeInteger(raw.arenaGeneratorVersion)) return null;
+    if (typeof raw.layoutFingerprint !== 'string' || raw.layoutFingerprint.length === 0) return null;
+    return {
+      roundRevision: raw.roundRevision,
+      gameMode: raw.gameMode as GameMode,
+      mapId: raw.mapId ?? null,
+      seed: raw.seed,
+      arenaGeneratorVersion: raw.arenaGeneratorVersion,
+      layoutFingerprint: raw.layoutFingerprint,
+    };
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

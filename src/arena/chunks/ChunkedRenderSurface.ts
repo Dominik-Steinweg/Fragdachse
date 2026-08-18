@@ -331,8 +331,8 @@ export class ChunkedRenderSurface {
   }
 
   /** Frame-Ende-Punkt fuer alle ChunkedRenderSurfaces derselben Scene. */
-  static flushBakeBudget(scene: Phaser.Scene): number {
-    return flushChunkBakeScheduler(scene);
+  static flushBakeBudget(scene: Phaser.Scene, budgetMs?: number): number {
+    return flushChunkBakeScheduler(scene, budgetMs);
   }
 
   /** Nur fuer deterministische Tests und kontrollierte Offline-Builds. */

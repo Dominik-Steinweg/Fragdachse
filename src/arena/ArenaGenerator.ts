@@ -36,6 +36,9 @@ const CORRIDOR_TAPER_CELLS = 3;
 /** Harte Untergrenze des Aushubradius, damit nie eine unpassierbare Engstelle entsteht. */
 const MIN_CARVED_RADIUS_CELLS = 1.05;
 
+/** Increment whenever deterministic generation changes in a wire-visible way. */
+export const ARENA_GENERATOR_VERSION = 1;
+
 // Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin und wird auch von der Lobby-Vorschau
 // verwendet; die Arena behält hier nur ihre eigene Reserveflaechen- und Wachstumslogik.
 function clampToUnitRange(value: number): number {
@@ -49,6 +52,17 @@ function clampToUnitRange(value: number): number {
  * miteinander verbunden sind (keine eingesperrten Bereiche).
  */
 export class ArenaGenerator {
+  /** Compact deterministic fingerprint for host/client generation diagnostics. */
+  static fingerprint(layout: ArenaLayout): string {
+    const serialized = JSON.stringify(layout);
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < serialized.length; index += 1) {
+      hash ^= serialized.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  }
+
   /**
    * Generiert ein ArenaLayout für den gegebenen Seed.
    * Versucht bis zu 100 Mal einen konnektiven Layout zu erzeugen.
@@ -337,37 +351,6 @@ export class ArenaGenerator {
     throw new Error(
       `ArenaGenerator: Konnte nach 100 Versuchen kein konnektives Layout generieren (seed=${seed})`,
     );
-  }
-
-  static stripVisualOnlyFields(layout: ArenaLayout): ArenaLayout {
-    const { decals: _decals, ...networkLayout } = layout;
-    return networkLayout;
-  }
-
-  static hydrateVisualOnlyFields(
-    layout: ArenaLayout,
-    coopBaseSpecs: readonly BaseSpec[] = [],
-  ): ArenaLayout {
-    if (layout.decals !== undefined) return layout;
-
-    const dirtSet = new Set<number>();
-    for (const { gridX, gridY } of layout.dirt) {
-      dirtSet.add(ArenaGenerator.cellKey(gridX, gridY));
-    }
-
-    return {
-      ...layout,
-      decals: ArenaGenerator.generateDecals(
-        ArenaGenerator.makeDecalPrng(layout.seed),
-        layout.rocks,
-        layout.trees,
-        layout.tracks,
-        dirtSet,
-        layout.powerUpPedestals,
-        layout.groundHazardZones ?? [],
-        coopBaseSpecs,
-      ),
-    };
   }
 
   /**

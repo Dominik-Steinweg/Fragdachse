@@ -24,6 +24,7 @@ import {
 } from '../graphics/GraphicsQuality';
 import { resolveSkyState } from './TimeOfDay';
 import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
+import type { ChunkedRenderSurfaceStats } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkWorldRect } from '../arena/chunks/ArenaChunkGrid';
@@ -217,6 +218,11 @@ export class ShadowSystem {
   isStaticReadyForView(view: ChunkWorldRect, includePrefetch = true): boolean {
     if (!this.staticHasLayout || !this.staticSurface) return false;
     return this.staticSurface.isReadyForView(view, includePrefetch);
+  }
+
+  /** Startup diagnostics for the replicated arena-loading progress. */
+  getStaticSurfaceStats(): ChunkedRenderSurfaceStats | null {
+    return this.staticSurface?.getStats() ?? null;
   }
 
   /**

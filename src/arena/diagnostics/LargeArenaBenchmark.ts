@@ -6,8 +6,8 @@ import {
 } from '../../config';
 import { COOP_DEFENSE_MODE } from '../../gameModes';
 import type { CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
-import type { ArenaLayout } from '../../types';
-import { ArenaGenerator } from '../ArenaGenerator';
+import type { ArenaDescriptor, ArenaLayout } from '../../types';
+import { ArenaGenerator, ARENA_GENERATOR_VERSION } from '../ArenaGenerator';
 
 /**
  * Mess- und Diagnoseharness fuer grosse Arenen.
@@ -18,7 +18,7 @@ import { ArenaGenerator } from '../ArenaGenerator';
  *
  * 1. Wie lange dauert die Generierung einer 400 x 80-Arena, im Median und im schlechten Fall?
  * 2. Ist derselbe Seed reproduzierbar?
- * 3. Wie gross ist das initiale, um Decals reduzierte `ArenaLayout` auf der Leitung?
+ * 3. Wie klein bleibt der initiale Arena-Descriptor auf der Leitung?
  *
  * Was er ausdruecklich **nicht** ist: ein Performance-Gate. Er liefert Zahlen, keine Grenzwerte.
  * Eine feste Millisekundenschwelle waere auf fremder Hardware und unter Last instabil und wuerde
@@ -33,14 +33,9 @@ export interface ArenaGenerationSample {
   readonly decalCount: number;
   readonly treeCount: number;
   /**
-   * Groesse des tatsaechlich uebertragenen Initial-Layouts in Bytes.
-   *
-   * Gemessen an der JSON-Serialisierung des um Decals reduzierten Layouts – das ist die Form,
-   * die `publishArenaLayout()` reliable an die Clients gibt.
+   * Groesse des tatsaechlich uebertragenen Initial-Descriptors in Bytes.
    */
-  readonly wireBytes: number;
-  /** Zum Vergleich: dasselbe Layout inklusive der rein visuellen Decals. */
-  readonly fullBytes: number;
+  readonly descriptorBytes: number;
 }
 
 export interface ArenaGenerationBenchmarkResult {
@@ -143,7 +138,14 @@ export function runArenaGenerationBenchmark(
       const layout = ArenaGenerator.generate(seed, mapConfig);
       const durationMs = now() - startedAt;
 
-      const wire = ArenaGenerator.stripVisualOnlyFields(layout);
+      const descriptor: ArenaDescriptor = {
+        roundRevision: 1,
+        gameMode: COOP_DEFENSE_MODE,
+        mapId: mapConfig.mapId,
+        seed,
+        arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+        layoutFingerprint: ArenaGenerator.fingerprint(layout),
+      };
       samples.push({
         seed,
         durationMs,
@@ -151,8 +153,7 @@ export function runArenaGenerationBenchmark(
         dirtCount: layout.dirt.length,
         decalCount: layout.decals?.length ?? 0,
         treeCount: layout.trees.length,
-        wireBytes: measureJsonBytes(wire),
-        fullBytes: measureJsonBytes(layout),
+        descriptorBytes: measureJsonBytes(descriptor),
       });
 
       if (options.checkDeterminism !== false) {
@@ -199,7 +200,7 @@ export function formatArenaGenerationBenchmark(result: ArenaGenerationBenchmarkR
     lines.push(
       `  seed ${sample.seed}: ${format(sample.durationMs)} ms | `
       + `${sample.rockCount} Felsen, ${sample.dirtCount} Dirt, ${sample.decalCount} Decals | `
-      + `Wire ${formatBytes(sample.wireBytes)} (mit Decals ${formatBytes(sample.fullBytes)})`,
+      + `Descriptor ${formatBytes(sample.descriptorBytes)}`,
     );
   }
   return lines.join('\n');

@@ -7,7 +7,7 @@ Gameplay-Regeln liegen in src/systems/, die Modus-IDs und gemeinsamen Verträge 
 GamePhase kennt nur LOBBY und ARENA.
 
 - In der Lobby verwaltet der Host Modus, Map, Teams, Loadouts, Ready und Raumqualität; der Client zeigt den replizierten Stand.
-- In der Arena läuft zunächst ein lokaler Ladeabschnitt ohne sichtbare Arena, Countdown, Input, Gameplay- oder Round-Timer-Fortschritt. Jeder Peer meldet erst nach vollständigem Aufbau seines initialen Working-Sets ein eigenes `arenaLoadReady`; danach beginnt die gemeinsame Countdown-/Startphase und erst am autoritativen `arenaStartTime` die host-autoritativ aufgebaute Simulation. Round-Systeme existieren nur während dieser Phase.
+- In der Arena läuft zunächst ein eigenständiger schwarzer Ladeabschnitt ohne sichtbare Arena, Countdown, Input, Gameplay- oder Round-Timer-Fortschritt. Für jeden eingefrorenen Teilnehmer werden Name, Stufe, Prozent und Ready-Status angezeigt. Jeder Peer meldet erst nach vollständigem Aufbau seines initialen Working-Sets ein eigenes `ArenaLoadReadyState`; danach beginnt unmittelbar die gemeinsame Countdown-/Startphase und erst am autoritativen `arenaStartTime` die host-autoritativ aufgebaute Simulation. Round-Systeme existieren nur während dieser Phase.
 - ArenaLifecycleCoordinator führt Start, Ende und Rückkehr zur Lobby aus. RoundState beziehungsweise RoundResult sind replizierte Ergebnisse, keine dritte Netzwerkphase. Ergebnis- und Progressions-Overlays bleiben lokale Darstellung.
 
 Ein Host startet nur mit erfüllten Ready-/Loadout- und Modusbedingungen. Vorzeitige Abschlüsse laufen über hostCompleteRound() und verwenden den definierten RoundConclusion-Vertrag. Rewards und Freischaltungen prüfen ihre Eligibility getrennt vom sichtbaren Overlay.

@@ -32,7 +32,7 @@ Coop-Arenen sind auf beiden Achsen bis 1024 Zellen konfigurierbar; die Grenze is
 Designentscheidung, sondern die Stelle, an der `rockCellKey` (Stride 65536), der
 `Int32Array`-Fels-Index und der zellbasierte Terrain-Lookup technisch enden. Kein sichtbares
 Renderziel skaliert mehr mit der Weltflaeche (siehe rendering.md); was mit ihr skaliert, sind
-Datenmengen: Fels-, Dirt- und Decal-Listen, Flow-Field-Raster und das initiale `ArenaLayout`.
+Datenmengen: Fels-, Dirt- und Decal-Listen sowie Flow-Field-Raster; das initiale `ArenaLayout` wird nicht über WebRTC übertragen. Übertragen wird nur der kompakte `ArenaDescriptor`.
 
 `src/arena/diagnostics/LargeArenaBenchmark.ts` ist der dauerhafte Messpunkt dafuer. Er baut sich
 seine Karte selbst und haengt bewusst an keiner authored Map, damit er das Loeschen einer
@@ -40,12 +40,11 @@ Testarena ueberlebt; `tests/LargeArenaGeneration.test.ts` faehrt ihn mit festen 
 Determinismus und Vollstaendigkeit, nie Laufzeiten. Eine feste Millisekundenschwelle waere auf
 fremder Hardware ein instabiles Gate und keine Aussage ueber den Code.
 
-Referenzmessung auf dem Entwicklungsrechner (400 x 80 Zellen, drei feste Seeds, Node 24):
-`ArenaGenerator.generate()` Median rund 750 ms, Maximum rund 830 ms, deterministisch. Das um
-Decals reduzierte Initial-Layout ist dabei rund 1,4 MiB – der Peer-Transport serialisiert
-unkomprimiert als JSON-String (`encodePeerMessage`), die Zahl ist also die tatsaechliche
-reliable Nutzlast. Beides ist gemessen und dokumentiert, aber nicht optimiert: Ein Umbau von
-Generator oder Wire-Format gehoert erst hinter einen Trace, der ihn als reales Problem zeigt.
+Für große Karten prüft `tests/LargeArenaGeneration.test.ts` die deterministische Host-/Client-
+Generierung und misst die Descriptor-Größe. Die vollständigen Layout-Listen bleiben lokal; der
+Fingerprint dient als klarer Diagnosefehler bei abweichenden Generatorständen. Während des
+Loading-Screens darf der gemeinsame Chunk-Scheduler aggressiv arbeiten; nach dem Countdown gelten
+unverändert `CHUNK_BAKE_PREFETCH_FRAME_BUDGET_MS` und `CHUNK_BAKE_URGENT_FRAME_BUDGET_MS`.
 
 Sechs Regeln fuer grosse Felsbestaende sind messungsbelegt und duerfen nicht zurueckfallen:
 
