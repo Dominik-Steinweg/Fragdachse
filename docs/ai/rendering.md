@@ -150,7 +150,11 @@ Jeder Round-Teardown muss Emitter, Tweens, Timer, Filter, temporäre Texturen, R
 
 ## SpriteGPULayer-Partikel
 
-`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind ausschliesslich die Airstrike-Partikel.
+`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind die Airstrike-Partikel und der Rocket-Exhaust.
+
+`src/effects/gpu/GpuVfxRegistry.ts` ist die gemeinsame Klammer und der einzige Ort, an dem neue Effekte andocken – kein Effekt baut sich seine eigene Layer-, Uhr- oder Ablationslogik. Sie legt Layer an (Blend, Depth, Ease-Vorwaermung, Priming), haelt eine gemeinsame Partikeluhr, behandelt den Zeit-Ruecksprung, faehrt den Retire-Sweep und schaltet Rendering plus Scheduler fuer die Ablation gemeinsam ab. Die Reihenfolge in `update()` ist Vertrag: erst stilllegen, dann emittieren, weil `acquire()` nur freie Slots vergibt. Effekte melden ihren Emissions-Tick ueber `registerEmission()` an; `ArenaScene` ruft genau ein `gpuVfx.update(delta)` pro Frame, rollen- und netzzustandsunabhaengig.
+
+Der Tick liegt in `ArenaScene.update()` nach dem Host-/Client-Schritt, ein Spawn sieht also die Position aus *diesem* Frame. Ein klassischer `ParticleEmitter` emittierte an derselben Stelle eine Frame-Position spaeter, weil die `UpdateList` auf `SceneEvents.UPDATE` vor `scene.update()` laeuft. Bei mitbewegten Emittern verschiebt die Migration den Partikelansatz dadurch minimal nach vorn.
 
 Eine Member-Animation ist `base` plus `amplitude` als Delta ueber die volle `duration` – es gibt kein `from`/`to`. `loop` und `yoyo` defaulten auf `true` und muessen fuer One-Shots explizit `false` sein. `amplitude: 0` oder `duration: 0` schaltet die Animation stumm ab. `editMember()` ueberschreibt den Member vollstaendig; ausgelassene Felder fallen auf Defaults zurueck. `creationTime` defaultet auf `layer.timeElapsed`, die Animation startet also beim Schreiben.
 

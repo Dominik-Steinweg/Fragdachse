@@ -29,6 +29,7 @@ import { EnergyInjectorRenderer } from '../../effects/EnergyInjectorRenderer';
 import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
+import { GpuVfxRegistry }      from '../../effects/gpu/GpuVfxRegistry';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
 import { SporeRenderer }       from '../../effects/SporeRenderer';
 import { GrenadeRenderer }     from '../../effects/GrenadeRenderer';
@@ -89,6 +90,8 @@ export interface RendererBundle {
   remoteControl:       RemoteControlRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
+  /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
+  gpuVfx:              GpuVfxRegistry;
   fireball:            FireballRenderer;
   spore:               SporeRenderer;
   grenade:             GrenadeRenderer;
@@ -118,6 +121,9 @@ export function createRendererBundle(
   scene: Phaser.Scene,
   owners: OwnerVisualSource,
 ): RendererBundle {
+  // Vor allen Renderern: die GPU-VFX-Layer werden waehrend deren Aufbau angemeldet.
+  const gpuVfx = new GpuVfxRegistry(scene);
+
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
 
@@ -202,6 +208,7 @@ export function createRendererBundle(
 
   const rocket = new RocketRenderer(scene);
   rocket.generateTextures();
+  rocket.initGpuLayers(gpuVfx);
   const fireball = new FireballRenderer(scene);
 
   const spore = new SporeRenderer(scene);
@@ -226,8 +233,8 @@ export function createRendererBundle(
 
   const airstrike = new AirstrikeRenderer(scene);
   airstrike.generateTextures();
-  // Genau zwei geteilte GPU-Layer fuer alle Strikes, szenenlebenslang wie die Texturen.
-  airstrike.initGpuLayers();
+  // Geteilte GPU-Layer fuer alle Strikes, szenenlebenslang wie die Texturen.
+  airstrike.initGpuLayers(gpuVfx);
 
   const encounterTelegraph = new CoopDefenseEncounterTelegraphRenderer(scene);
   encounterTelegraph.generateTextures();
@@ -279,6 +286,7 @@ export function createRendererBundle(
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
+    gpuVfx,
     train: null,
     translocatorTeleport: null,
   };

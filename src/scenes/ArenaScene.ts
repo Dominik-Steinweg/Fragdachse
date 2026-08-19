@@ -536,7 +536,7 @@ export class ArenaScene extends Phaser.Scene {
       getShadowSystem: () => this.renderers?.shadow ?? null,
       getLightingSystem: () => this.renderers?.lighting ?? null,
       getPostFxController: () => this.visualFeedback?.postFx ?? null,
-      getGpuParticleSuppressor: () => this.renderers?.airstrike ?? null,
+      getGpuParticleSuppressor: () => this.renderers?.gpuVfx ?? null,
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.performanceAblation?.destroy());
     const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
@@ -564,7 +564,7 @@ export class ArenaScene extends Phaser.Scene {
           this.ctx?.arenaResult?.rockOverlaySurface?.setSamplingMode(mode);
         },
       },
-      () => this.renderers?.airstrike.getGpuVfxStats() ?? null,
+      () => this.renderers?.gpuVfx.getStats() ?? null,
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unsubscribePerformanceQuality();
@@ -1751,9 +1751,10 @@ export class ArenaScene extends Phaser.Scene {
     const postRoleMs = visualsStartMs - sceneStateEndMs - primaryStepMs;
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
-    // Der Partikel-Tick des Airstrikes haengt bewusst nicht am Zustands-Sync: auf Clients laeuft
-    // `sync()` nur mit frischem Netzzustand, der bisherige Emitter lief dagegen autonom weiter.
-    this.renderers.airstrike.updateParticles(delta);
+    // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
+    // Renderer-Syncs nur mit frischem Netzzustand, die bisherigen Emitter liefen dagegen
+    // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
+    this.renderers.gpuVfx.update(delta);
     const inArena = arenaVisible && !terminated;
     const strategicTargets = bridge.isHost()
       ? (this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
