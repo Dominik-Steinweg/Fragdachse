@@ -19,7 +19,7 @@ import { UnsupportedWeaponMechanicError } from './weaponCapabilityValidator';
 const PROJECTILE_KNOWN_FIELDS = new Set<string>([
   // Supported
   'speed', 'size', 'damage', 'lifetime', 'maxBounces', 'adrenalinGain', 'sourceId',
-  'allowTeamDamage', 'ignoreBaseCollisions', 'ignoreRockIndex',
+  'allowTeamDamage', 'ignoreBaseCollisions', 'ignoreRockIndex', 'burnDurationMs', 'burnDamagePerTick',
   // Scenario-irrelevant (Visuals / Audio / Single-Target Inactive)
   'color', 'ownerColor', 'visualMuzzleOrigin', 'projectileVisualScale', 'projectileStyle',
   'bulletVisualPreset', 'grenadeVisualPreset', 'energyBallVariant', 'tracerConfig',
@@ -37,7 +37,7 @@ const PROJECTILE_KNOWN_FIELDS = new Set<string>([
   'ak47ShotId', 'ak47DamageMultiplier',
   // Unsupported Relevant
   'isGrenade', 'fuseTime', 'grenadeEffect', 'isFlame', 'hitboxGrowRate', 'hitboxMaxSize',
-  'velocityDecay', 'burnDurationMs', 'burnDamagePerTick', 'flamePiercing', 'supplementalBurnOnHit',
+  'velocityDecay', 'flamePiercing', 'supplementalBurnOnHit',
   'fireTrail', 'explosion', 'enemyHitExplosion', 'impactCloud', 'homing', 'splitHoming',
   'piercesTargets', 'penetrationCount', 'isBfg', 'splitCount', 'splitSpread', 'splitFactor',
   'detonable', 'proximityPulse', 'plasmaSwarmEnabled', 'plasmaSwarmProjectile',
@@ -69,12 +69,8 @@ export function validateProjectileSpawnPayload(
     reasons.push('Granaten-Payload (fuseTime/grenadeEffect) ist headless nicht implementiert');
   }
 
-  if (cfg.isFlame || (cfg.burnDamagePerTick !== undefined && cfg.burnDamagePerTick > 0) || cfg.supplementalBurnOnHit) {
-    reasons.push('Flammen-/Brand-Payload ist headless nicht implementiert');
-  }
-
-  if (cfg.burnDurationMs !== undefined && cfg.burnDurationMs > 0 && (cfg.burnDamagePerTick ?? 0) > 0) {
-    reasons.push('burnOnHit-Payload ist headless nicht implementiert');
+  if (cfg.isFlame || cfg.supplementalBurnOnHit) {
+    reasons.push('Flammen-/Supplemental-Brand-Payload ist headless nicht implementiert');
   }
 
   if (cfg.explosion && (cfg.explosion.maxDamage > 0 || cfg.explosion.radius > 0)) {
@@ -147,12 +143,12 @@ export function validateProjectileSpawnPayload(
 const HITSCAN_KNOWN_FIELDS = new Set<string>([
   // Supported
   'shooterId', 'startX', 'startY', 'angle', 'range', 'damage', 'traceThickness',
-  'adrenalinGain', 'sourceId',
+  'adrenalinGain', 'sourceId', 'burnOnHit',
   // Scenario-irrelevant
   'color', 'visualPreset', 'shotAudioKey', 'visualMuzzleOrigin', 'sourceSlot', 'shotId',
   'rockDamageMult', 'trainDamageMult', 'baseDamageMult', 'detonator', 'chainLightning',
   // Unsupported Relevant
-  'burnOnHit', 'supportEffect',
+  'supportEffect',
 ]);
 
 export function validateHitscanShotRequest(
@@ -178,10 +174,6 @@ export function validateHitscanShotRequest(
     }
   }
 
-  if (request.burnOnHit && ((request.burnOnHit.damagePerTick ?? 0) > 0 || (request.burnOnHit.durationMs ?? 0) > 0)) {
-    reasons.push('burnOnHit-Payload (Brand-DoT) ist headless nicht implementiert');
-  }
-
   if (request.supportEffect) {
     reasons.push('supportEffect-Payload ist headless nicht implementiert');
   }
@@ -197,12 +189,12 @@ export const validateHitscanShotPayload = validateHitscanShotRequest;
 
 const MELEE_KNOWN_FIELDS = new Set<string>([
   // Supported
-  'shooterId', 'x', 'y', 'angle', 'range', 'arcDegrees', 'damage', 'adrenalinGain', 'sourceId',
+  'shooterId', 'x', 'y', 'angle', 'range', 'arcDegrees', 'damage', 'adrenalinGain', 'sourceId', 'burnOnHit',
   // Scenario-irrelevant
   'color', 'visualPreset', 'shotAudioKey', 'bloodEffectMultiplier', 'sourceSlot',
   'damageTargets', 'rockDamageMult', 'trainDamageMult', 'baseDamageMult', 'hitHeal',
   // Unsupported Relevant
-  'burnOnHit', 'hitAdrenaline',
+  'hitAdrenaline',
 ]);
 
 export function validateMeleeSwingPayload(
@@ -222,10 +214,6 @@ export function validateMeleeSwingPayload(
   }
 
   // 2. Semantische Prüfungen
-  if (request.burnOnHit && ((request.burnOnHit.damagePerTick ?? 0) > 0 || (request.burnOnHit.durationMs ?? 0) > 0)) {
-    reasons.push('burnOnHit-Payload (Brand-DoT) ist headless nicht implementiert');
-  }
-
   if (request.hitAdrenaline > 0) {
     reasons.push('hitAdrenaline (Treffer-Adrenalin) ist headless nicht implementiert');
   }

@@ -1,5 +1,5 @@
 import { PLAYER_SIZE } from '../../config';
-import type { CombatDamageKind, ProjectileSpawnConfig } from '../../types';
+import type { CombatDamageKind, GroundFireVisualStyle, ProjectileSpawnConfig } from '../../types';
 import type {
   HitscanShotRequest,
   MeleeSwingRequest,
@@ -10,6 +10,7 @@ import {
   checkHitscanRayCircleHit,
   checkMeleeArcHit,
 } from '../../combat/rules/DirectCombatHitResolver';
+import { BurnStateMachine } from '../../combat/rules/BurnStateMachine';
 import {
   validateProjectileSpawnPayload,
   validateHitscanShotPayload,
@@ -32,6 +33,9 @@ export interface HeadlessActiveProjectile {
   ageMs: number;
   readonly adrenalinGain: number;
   readonly sourceId: string;
+  readonly burnDurationMs?: number;
+  readonly burnDamagePerTick?: number;
+  readonly projectileBurnVisualStyle?: GroundFireVisualStyle;
 }
 
 /** Ein statisches, unsterbliches Dummy-Ziel in Spielergröße. */
@@ -56,16 +60,17 @@ export function createMulberry32Prng(seed: number): () => number {
 /**
  * Headless-Simulationsumgebung für den Single-Target-Benchmark.
  *
- * Implementiert {@link WeaponFireSink} und verarbeitet Projektile, Hitscan-Strahlen und
- * Nahkampfschwünge mit virtueller Zeit und deterministischem RNG gegen ein statisches,
- * unsterbliches Ziel in Spielergröße (`PLAYER_SIZE / 2`).
+ * Implementiert {@link WeaponFireSink} und verarbeitet Projektile, Hitscan-Strahlen,
+ * Nahkampfschwünge und Brand-Ticks mit virtueller Zeit und deterministischem RNG gegen ein
+ * statisches, unsterbliches Ziel in Spielergröße (`PLAYER_SIZE / 2`).
  *
- * Verwendet dieselben mathematischen Hit-Resolver wie die Runtime.
+ * Verwendet dieselben mathematischen Resolver und dieselbe Brand-State-Machine wie die Runtime.
  * Frei von Rendering, Audio, Netzwerk und Wandzeit.
  */
 export class HeadlessSingleTargetWorld implements WeaponFireSink {
   readonly target: HeadlessTarget;
   readonly rng: () => number;
+  readonly burnStateMachine = new BurnStateMachine();
 
   private now = 0;
   private nextProjectileId = 1;
@@ -75,6 +80,8 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   private readonly resourceEvents: ResourceEventRecord[] = [];
 
   private totalDamage = 0;
+  private directDamage = 0;
+  private burnDamage = 0;
   private hits = 0;
   private shotsFired = 0;
   private adrenalineGenerated = 0;
@@ -112,13 +119,24 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     return this.activeProjectiles.length > 0;
   }
 
+  /** Prüft, ob noch laufende Kampfeffekte (Projektile oder aktive Brand-Ticks) existieren. */
+  hasPendingCombatEffects(now = this.now): boolean {
+    return this.hasActiveProjectiles() || this.burnStateMachine.hasAnyActiveBurns(now);
+  }
+
   /**
-   * Führt einen Simulationsschritt für alle aktiven Projektile aus.
-   * Prüft kontinuierliche Liniensegment-Kollision (Anti-Tunneling) über den gemeinsamen Resolver.
+   * Führt einen Simulationsschritt für alle aktiven Projektile und Brand-Ticks aus.
+   *
+   * Bei Projektiltreffern wird der exakte kontinuierliche Auftreffzeitpunkt ermittelt,
+   * sodass Brand-Ablaufzeiten unabhängig vom Zeitschritt (stepDeltaMs) präzise platziert werden.
    */
   step(deltaMs: number): void {
     if (deltaMs <= 0) return;
 
+    const stepStartTime = this.now;
+    const stepEndTime = this.now + deltaMs;
+
+    // 1. Projektil-Bewegung & Kollision
     for (let index = this.activeProjectiles.length - 1; index >= 0; index -= 1) {
       const proj = this.activeProjectiles[index];
       proj.lastX = proj.x;
@@ -139,15 +157,50 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       );
 
       if (hit) {
+        // Kontinuierliche Auftreffzeit innerhalb des Zeitschritts ermitteln
+        const stepDist = Math.hypot(proj.x - proj.lastX, proj.y - proj.lastY);
+        const hitFraction = stepDist > 1e-6 ? Math.max(0, Math.min(1, hit.distance / stepDist)) : 0;
+        const impactTime = stepStartTime + hitFraction * deltaMs;
+
         this.hits += 1;
-        this.recordDamage(this.target.id, proj.damage, proj.sourceId, 'direct');
+        this.recordDamage(this.target.id, proj.damage, proj.sourceId, 'direct', false, impactTime);
         if (proj.adrenalinGain > 0) {
-          this.recordAdrenalineGain(proj.adrenalinGain, proj.sourceId);
+          this.recordAdrenalineGain(proj.adrenalinGain, proj.sourceId, impactTime);
         }
+
+        // Brand-Treffer registrieren
+        if (proj.burnDurationMs && proj.burnDurationMs > 0 && proj.burnDamagePerTick && proj.burnDamagePerTick > 0) {
+          this.burnStateMachine.applyHit({
+            targetId: this.target.id,
+            attackerId: 'sim_player',
+            durationMs: proj.burnDurationMs,
+            damagePerTick: proj.burnDamagePerTick,
+            sourceKey: 'weapon',
+            sourceId: proj.sourceId,
+            origin: 'generic',
+            visualStyle: proj.projectileBurnVisualStyle ?? 'normal',
+            now: impactTime,
+          });
+        }
+
         this.activeProjectiles.splice(index, 1);
       } else if (proj.ageMs >= proj.lifetimeMs) {
         this.activeProjectiles.splice(index, 1);
       }
+    }
+
+    // 2. Zeit auf Schrittende setzen & fällige Brand-Ticks ausführen
+    this.now = stepEndTime;
+    const dueContributions = this.burnStateMachine.advanceTo(this.now);
+    for (const contribution of dueContributions) {
+      this.recordDamage(
+        contribution.targetId,
+        contribution.damage,
+        contribution.sourceId,
+        'burn',
+        false,
+        contribution.tickAt,
+      );
     }
   }
 
@@ -176,6 +229,9 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       ageMs: 0,
       adrenalinGain: cfg.adrenalinGain,
       sourceId: cfg.sourceId ?? 'weapon.unknown',
+      burnDurationMs: cfg.burnDurationMs,
+      burnDamagePerTick: cfg.burnDamagePerTick,
+      projectileBurnVisualStyle: cfg.projectileBurnVisualStyle,
     });
     return true;
   }
@@ -200,10 +256,24 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
     if (hit) {
       this.hits += 1;
-      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct');
+      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct', false, this.now);
       if (request.adrenalinGain > 0) {
-        this.recordAdrenalineGain(request.adrenalinGain, request.sourceId);
+        this.recordAdrenalineGain(request.adrenalinGain, request.sourceId, this.now);
       }
+
+      if (request.burnOnHit && request.burnOnHit.durationMs > 0 && request.burnOnHit.damagePerTick > 0) {
+        this.burnStateMachine.applyHit({
+          targetId: this.target.id,
+          attackerId: request.shooterId,
+          durationMs: request.burnOnHit.durationMs,
+          damagePerTick: request.burnOnHit.damagePerTick,
+          sourceKey: 'weapon',
+          sourceId: request.sourceId,
+          origin: 'generic',
+          now: this.now,
+        });
+      }
+
       return true;
     }
     return false;
@@ -229,10 +299,24 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
     if (hit) {
       this.hits += 1;
-      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct');
+      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct', false, this.now);
       if (request.adrenalinGain > 0) {
-        this.recordAdrenalineGain(request.adrenalinGain, request.sourceId);
+        this.recordAdrenalineGain(request.adrenalinGain, request.sourceId, this.now);
       }
+
+      if (request.burnOnHit && request.burnOnHit.durationMs > 0 && request.burnOnHit.damagePerTick > 0) {
+        this.burnStateMachine.applyHit({
+          targetId: this.target.id,
+          attackerId: request.shooterId,
+          durationMs: request.burnOnHit.durationMs,
+          damagePerTick: request.burnOnHit.damagePerTick,
+          sourceKey: 'weapon',
+          sourceId: request.sourceId,
+          origin: 'generic',
+          now: this.now,
+        });
+      }
+
       return true;
     }
     return false;
@@ -250,11 +334,18 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     sourceId: string,
     damageKind: CombatDamageKind = 'direct',
     isCritical = false,
+    timestampMs = this.now,
   ): void {
     this.totalDamage += damage;
+    if (damageKind === 'burn') {
+      this.burnDamage += damage;
+    } else {
+      this.directDamage += damage;
+    }
+
     if (this.recordEvents) {
       this.damageEvents.push({
-        timestampMs: this.now,
+        timestampMs,
         targetId,
         damage,
         sourceId,
@@ -264,11 +355,11 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     }
   }
 
-  recordAdrenalineGain(amount: number, sourceId?: string): void {
+  recordAdrenalineGain(amount: number, sourceId?: string, timestampMs = this.now): void {
     this.adrenalineGenerated += amount;
     if (this.recordEvents) {
       this.resourceEvents.push({
-        timestampMs: this.now,
+        timestampMs,
         action: 'gain',
         amount,
         resourceKind: 'adrenaline',
@@ -277,11 +368,11 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     }
   }
 
-  recordAdrenalineDrain(amount: number, sourceId?: string): void {
+  recordAdrenalineDrain(amount: number, sourceId?: string, timestampMs = this.now): void {
     this.adrenalineSpent += amount;
     if (this.recordEvents) {
       this.resourceEvents.push({
-        timestampMs: this.now,
+        timestampMs,
         action: 'drain',
         amount,
         resourceKind: 'adrenaline',
@@ -294,6 +385,14 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   getTotalDamage(): number {
     return this.totalDamage;
+  }
+
+  getDirectDamage(): number {
+    return this.directDamage;
+  }
+
+  getBurnDamage(): number {
+    return this.burnDamage;
   }
 
   getHits(): number {
@@ -318,9 +417,5 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   getResourceEvents(): readonly ResourceEventRecord[] {
     return this.resourceEvents;
-  }
-
-  getActiveProjectiles(): readonly HeadlessActiveProjectile[] {
-    return this.activeProjectiles;
   }
 }

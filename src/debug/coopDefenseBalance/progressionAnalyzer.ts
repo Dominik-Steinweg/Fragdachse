@@ -80,6 +80,9 @@ function formatProgressionSummary(
     lines.push(`\n[${st.stageLabel.toUpperCase()}] Budget: ${st.normalPointBudget} normal / ${st.bossPointBudget} boss`);
     lines.push(`  Best Supported Expected ST DPS: ${st.bestSupportedExpectedDps.toFixed(1)}`);
     if (st.benchmarkAggregate) {
+      if (st.benchmarkAggregate.expectedBurnDps > 0) {
+        lines.push(`    (Direct DPS: ${st.benchmarkAggregate.expectedDirectDps.toFixed(1)} | Burn DPS: ${st.benchmarkAggregate.expectedBurnDps.toFixed(1)})`);
+      }
       lines.push(`    (Median: ${st.benchmarkAggregate.medianDps.toFixed(1)} | P10: ${st.benchmarkAggregate.p10Dps.toFixed(1)} | P90: ${st.benchmarkAggregate.p90Dps.toFixed(1)} | Min: ${st.benchmarkAggregate.minDps.toFixed(1)} | Max: ${st.benchmarkAggregate.maxDps.toFixed(1)})`);
       lines.push(`    (Expected Hit Rate: ${(st.benchmarkAggregate.expectedHitRate * 100).toFixed(1)}% | Shots/s: ${st.benchmarkAggregate.expectedShotsPerSecond.toFixed(1)})`);
     }
@@ -132,7 +135,13 @@ export function analyzeWeaponSingleTargetProgression(
 
   const slot = resolveAndValidateWeaponSlot(baseConfig, options.slot);
   const classId = options.classId ?? DEFAULT_COOP_DEFENSE_CLASS_ID;
-  const scenario: WeaponBalanceScenario = options.scenario ?? 'single_target_static';
+
+  if (options.scenario !== undefined && options.scenario !== 'single_target_static') {
+    throw new Error(
+      `[WeaponBalanceLab] analyzeWeaponSingleTargetProgression() unterstützt ausschließlich das Szenario "single_target_static" (angefragt: "${options.scenario}").`,
+    );
+  }
+  const scenario: WeaponBalanceScenario = 'single_target_static';
 
   // Deterministisches Multi-Seed-Set auflösen und normalisieren
   const rawSeeds = options.seeds && options.seeds.length > 0

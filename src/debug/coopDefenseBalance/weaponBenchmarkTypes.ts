@@ -27,7 +27,7 @@ export interface ResourceEventRecord {
 
 /** Konfigurationsoptionen für den Single-Target-Benchmark. */
 export interface SingleTargetBenchmarkOptions {
-  /** ID der zu testenden Waffe, z. B. 'P90', 'ASMD_PRIM', 'BITE'. */
+  /** ID der zu testenden Waffe, z. B. 'P90', 'ASMD_PRIM', 'BITE', 'GLOCK'. */
   readonly weaponId: string;
   /** Virtuelles Angriffsfenster (Attack Window) in Millisekunden. Standard: 30_000 (30 Sekunden). */
   readonly durationMs?: number;
@@ -57,7 +57,11 @@ export interface SingleTargetBenchmarkResult {
   readonly durationMs: number;
   readonly settleDurationMs: number;
   readonly totalDamage: number;
+  readonly directDamage: number;
+  readonly burnDamage: number;
   readonly dps: number;
+  readonly directDps: number;
+  readonly burnDps: number;
   readonly shotsFired: number;
   readonly hits: number;
   readonly hitRate: number;
@@ -65,6 +69,7 @@ export interface SingleTargetBenchmarkResult {
   readonly adrenalineSpent: number;
   readonly adrenalineGeneratedPerSec: number;
   readonly adrenalineSpentPerSec: number;
+  readonly settleTruncated?: boolean;
   readonly damageEvents: readonly DamageEventRecord[];
   readonly resourceEvents: readonly ResourceEventRecord[];
 }
@@ -87,7 +92,9 @@ export interface SingleTargetBenchmarkAggregate {
   readonly weaponId: string;
   readonly seedCount: number;
   readonly seeds: readonly number[];
-  readonly expectedDps: number;       // Mittelwert (Mean DPS)
+  readonly expectedDps: number;       // Mittelwert (Mean Total DPS)
+  readonly expectedDirectDps: number; // Mittelwert (Mean Direct DPS)
+  readonly expectedBurnDps: number;   // Mittelwert (Mean Burn DPS)
   readonly medianDps: number;         // 50. Perzentil
   readonly p10Dps: number;            // 10. Perzentil
   readonly p90Dps: number;            // 90. Perzentil
@@ -97,5 +104,6 @@ export interface SingleTargetBenchmarkAggregate {
   readonly expectedShotsPerSecond: number;
   readonly expectedAdrenalineGeneratedPerSec: number;
   readonly expectedAdrenalineSpentPerSec: number;
+  readonly settleTruncated?: boolean;
   readonly runs?: readonly SingleTargetBenchmarkResult[];
 }

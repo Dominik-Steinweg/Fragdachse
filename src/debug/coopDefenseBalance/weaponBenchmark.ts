@@ -204,9 +204,9 @@ export function runWeaponSingleTargetBenchmark(
     }
   }
 
-  // ── Phase 2: Settle Phase (keine neuen Schüsse, fliegende Projektile auflösen)
+  // ── Phase 2: Settle Phase (keine neuen Schüsse, fliegende Projektile und Brand auslaufen lassen)
   const settleStart = currentTime;
-  while (world.hasActiveProjectiles() && (currentTime - settleStart < maxSettleMs)) {
+  while (world.hasPendingCombatEffects(currentTime) && (currentTime - settleStart < maxSettleMs)) {
     const remainingSettle = maxSettleMs - (currentTime - settleStart);
     const stepMs = Math.min(stepDeltaMs, remainingSettle);
     if (stepMs <= 0) break;
@@ -216,15 +216,20 @@ export function runWeaponSingleTargetBenchmark(
     world.setTime(currentTime);
   }
   const settleDurationMs = currentTime - settleStart;
+  const settleTruncated = world.hasPendingCombatEffects(currentTime);
 
   // ── Phase 3: Metriken auswerten ───────────────────────────────────────────
   const totalDamage = world.getTotalDamage();
+  const directDamage = world.getDirectDamage();
+  const burnDamage = world.getBurnDamage();
   const shotsFired = world.getShotsFired();
   const hits = world.getHits();
   const totalExpectedPellets = shotsFired * resolveEffectivePelletCount(config);
   const hitRate = totalExpectedPellets > 0 ? hits / totalExpectedPellets : 0;
   const durationSec = attackWindowDurationMs / 1000;
   const dps = durationSec > 0 ? totalDamage / durationSec : 0;
+  const directDps = durationSec > 0 ? directDamage / durationSec : 0;
+  const burnDps = durationSec > 0 ? burnDamage / durationSec : 0;
   const adrenalineGenerated = world.getAdrenalineGenerated();
   const adrenalineSpent = world.getAdrenalineSpent();
   const adrenalineGeneratedPerSec = durationSec > 0 ? adrenalineGenerated / durationSec : 0;
@@ -235,7 +240,11 @@ export function runWeaponSingleTargetBenchmark(
     durationMs: attackWindowDurationMs,
     settleDurationMs,
     totalDamage,
+    directDamage,
+    burnDamage,
     dps,
+    directDps,
+    burnDps,
     shotsFired,
     hits,
     hitRate,
@@ -243,6 +252,7 @@ export function runWeaponSingleTargetBenchmark(
     adrenalineSpent,
     adrenalineGeneratedPerSec,
     adrenalineSpentPerSec,
+    settleTruncated,
     damageEvents: world.getDamageEvents(),
     resourceEvents: world.getResourceEvents(),
   };
@@ -251,10 +261,6 @@ export function runWeaponSingleTargetBenchmark(
 /**
  * Führt einen Multi-Seed-Benchmark aus und aggregiert die Ergebnisse deterministisch zu
  * Erwartungswerten (Mean), Median, P10/P90-Quantilen und Extremwerten.
- *
- * Normalisiert und dedupliziert die Seed-Liste deterministisch, aggregiert gewichtet nach
- * tatsächlicher Simulationsdauer und Trefferkapazität und unterstützt einen speicherschonenden
- * Lightweight-Modus für Optimizer-Sweeps.
  */
 export function runWeaponSingleTargetBenchmarkSet(
   options: SingleTargetBenchmarkSetOptions,
@@ -272,11 +278,14 @@ export function runWeaponSingleTargetBenchmarkSet(
 
   let totalDurationSec = 0;
   let totalDamage = 0;
+  let totalDirectDamage = 0;
+  let totalBurnDamage = 0;
   let totalShots = 0;
   let totalHits = 0;
   let totalPossiblePellets = 0;
   let totalAdrenalineGen = 0;
   let totalAdrenalineSpent = 0;
+  let anyTruncated = false;
 
   const recordEvents = options.includeIndividualRuns ?? false;
 
@@ -301,6 +310,8 @@ export function runWeaponSingleTargetBenchmarkSet(
     const durSec = (result.durationMs ?? 30_000) / 1000;
     totalDurationSec += durSec;
     totalDamage += result.totalDamage;
+    totalDirectDamage += result.directDamage;
+    totalBurnDamage += result.burnDamage;
     totalShots += result.shotsFired;
     totalHits += result.hits;
 
@@ -310,10 +321,13 @@ export function runWeaponSingleTargetBenchmarkSet(
 
     totalAdrenalineGen += result.adrenalineGenerated;
     totalAdrenalineSpent += result.adrenalineSpent;
+    if (result.settleTruncated) anyTruncated = true;
   }
 
   const sortedDps = [...dpsValues].sort((a, b) => a - b);
   const expectedDps = totalDurationSec > 0 ? totalDamage / totalDurationSec : 0;
+  const expectedDirectDps = totalDurationSec > 0 ? totalDirectDamage / totalDurationSec : 0;
+  const expectedBurnDps = totalDurationSec > 0 ? totalBurnDamage / totalDurationSec : 0;
   const medianDps = calculatePercentile(sortedDps, 50);
   const p10Dps = calculatePercentile(sortedDps, 10);
   const p90Dps = calculatePercentile(sortedDps, 90);
@@ -330,6 +344,8 @@ export function runWeaponSingleTargetBenchmarkSet(
     seedCount: n,
     seeds: [...seeds],
     expectedDps,
+    expectedDirectDps,
+    expectedBurnDps,
     medianDps,
     p10Dps,
     p90Dps,
@@ -339,6 +355,7 @@ export function runWeaponSingleTargetBenchmarkSet(
     expectedShotsPerSecond,
     expectedAdrenalineGeneratedPerSec,
     expectedAdrenalineSpentPerSec,
+    settleTruncated: anyTruncated ? true : undefined,
     runs: recordEvents ? runs : undefined,
   };
 }

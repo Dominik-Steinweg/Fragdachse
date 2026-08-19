@@ -217,7 +217,7 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
     });
 
     it('wirft Fehler bei ununterstützter Hitscan-Payload (z.B. Brand oder Kettenblitz im Multi-Target)', () => {
-      // 1. Brand ist immer unsupported
+      // 1. SupportEffect ist unsupported
       expect(() => {
         validateHitscanShotPayload({
           shooterId: 'p1',
@@ -234,10 +234,7 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
           rockDamageMult: 1,
           trainDamageMult: 1,
           baseDamageMult: 1,
-          burnOnHit: {
-            durationMs: 2000,
-            damagePerTick: 5,
-          },
+          supportEffect: 'heal' as any,
         });
       }).toThrow(UnsupportedWeaponMechanicError);
 

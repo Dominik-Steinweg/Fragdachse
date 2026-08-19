@@ -161,34 +161,8 @@ function toDamageOptions(
 }
 
 
-const MAX_BURN_CATCH_UP_TICKS = 4;
-
-interface BurnStackBucket {
-  expiresAt: number;
-  damagePerTick: number;
-  stackCount: number;
-}
-
-interface BurnSourceState {
-  attackerId: string;
-  sourceKey: string;
-  stacks: BurnStackBucket[];
-  sourceId: string;
-  origin: BurnOrigin;
-  visualStyle: GroundFireVisualStyle;
-}
-
-export interface ActiveBurnSource {
-  attackerId: string;
-  sourceKey: string;
-  sourceId: string;
-  origin: BurnOrigin;
-  visualStyle: GroundFireVisualStyle;
-  stackCount: number;
-  damagePerTick: number;
-  tickIntervalMs: number;
-  effectiveDamagePerSecond: number;
-}
+import { BurnStateMachine, type ActiveBurnSource } from '../combat/rules/BurnStateMachine';
+export type { ActiveBurnSource };
 
 export interface HitscanTraceResult {
   readonly endX: number;
@@ -261,11 +235,7 @@ export class CombatSystem {
   private armor:         Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
-  // Burn-Stacks pro Ziel, gruppiert nach Quelle (Angreifer + Waffe), damit
-  // unterschiedliche Quellen (z.B. Flammenwerfer + Molotov) sauber stacken und
-  // ihren Schaden addieren statt sich gegenseitig zu überschreiben.
-  private burnStates:    Map<string, Map<string, BurnSourceState>>      = new Map();
-  private nextBurnTickAt = 0;
+  private readonly burnStateMachine = new BurnStateMachine();
   private enemySlowStates: Map<string, EnemySlowState> = new Map();
   private readonly plasmaChargeTracker = new PlasmaChargeTracker();
   private readonly hitscanLine       = new Phaser.Geom.Line();
@@ -682,19 +652,7 @@ export class CombatSystem {
     id: string,
     now = Date.now(),
   ): { stackCount: number; visualStyle: GroundFireVisualStyle } {
-    const sourceStates = this.burnStates.get(id);
-    if (!sourceStates) return { stackCount: 0, visualStyle: 'normal' };
-
-    let totalStacks = 0;
-    let visualStyle: GroundFireVisualStyle = 'normal';
-    for (const state of sourceStates.values()) {
-      for (const bucket of state.stacks) {
-        if (bucket.expiresAt <= now) continue;
-        totalStacks += bucket.stackCount;
-        if (state.visualStyle === 'void') visualStyle = 'void';
-      }
-    }
-    return { stackCount: totalStacks, visualStyle };
+    return this.burnStateMachine.getVisualState(id, now);
   }
 
   getBurnStackCount(id: string): number {
@@ -702,30 +660,7 @@ export class CombatSystem {
   }
 
   getActiveBurnSources(id: string, now = Date.now()): ActiveBurnSource[] {
-    const sourceStates = this.burnStates.get(id);
-    if (!sourceStates) return [];
-    const result: ActiveBurnSource[] = [];
-    for (const state of sourceStates.values()) {
-      const activeBuckets = state.stacks.filter(bucket => bucket.expiresAt > now);
-      const stackCount = activeBuckets.reduce((sum, bucket) => sum + bucket.stackCount, 0);
-      if (stackCount <= 0) continue;
-      const totalDamagePerTick = activeBuckets.reduce(
-        (sum, bucket) => sum + bucket.damagePerTick * bucket.stackCount,
-        0,
-      );
-      result.push({
-        attackerId: state.attackerId,
-        sourceKey: state.sourceKey,
-        sourceId: state.sourceId,
-        origin: state.origin,
-        visualStyle: state.visualStyle,
-        stackCount,
-        damagePerTick: totalDamagePerTick / stackCount,
-        tickIntervalMs: BURN_TICK_INTERVAL_MS,
-        effectiveDamagePerSecond: totalDamagePerTick * 1000 / BURN_TICK_INTERVAL_MS,
-      });
-    }
-    return result;
+    return this.burnStateMachine.getActiveSources(id, now);
   }
 
   // ── Öffentliche Schadens-Methode ───────────────────────────────────────────
@@ -861,39 +796,17 @@ export class CombatSystem {
     if (!this.canDamageTarget(attackerId, targetId)) return;
     if (durationMs <= 0 || damagePerTick <= 0 || !sourceId) return;
 
-    const now = Date.now();
-    let targetState = this.burnStates.get(targetId);
-    if (!targetState) {
-      targetState = new Map();
-      this.burnStates.set(targetId, targetState);
-    }
-
-    // Einheitliche Regel: Jeder Brandtreffer erzeugt genau einen Stack.
-    // sourceId trennt physisch eigenständige Quellen für Attribution und Overlap.
-    const keyedSource = `${attackerId}\u001f${sourceKey}`;
-    let sourceState = targetState.get(keyedSource);
-    if (!sourceState) {
-      sourceState = {
-        attackerId,
-        sourceKey,
-        stacks: [],
-        sourceId,
-        origin,
-        visualStyle,
-      };
-      targetState.set(keyedSource, sourceState);
-    } else {
-      sourceState.visualStyle = visualStyle;
-    }
-
-    // Ablaufzeiten werden auf den globalen Brandtick gebündelt. Treffer desselben
-    // Zeitfensters teilen so einen kompakten Bucket, bleiben spielerisch aber Stacks.
-    const expiresAt = Math.ceil((now + durationMs) / BURN_TICK_INTERVAL_MS) * BURN_TICK_INTERVAL_MS;
-    const bucket = sourceState.stacks.find(entry => (
-      entry.expiresAt === expiresAt && entry.damagePerTick === damagePerTick
-    ));
-    if (bucket) bucket.stackCount += 1;
-    else sourceState.stacks.push({ expiresAt, damagePerTick, stackCount: 1 });
+    this.burnStateMachine.applyHit({
+      targetId,
+      attackerId,
+      durationMs,
+      damagePerTick,
+      sourceKey,
+      sourceId,
+      origin,
+      visualStyle,
+      now: Date.now(),
+    });
   }
 
   /**
@@ -955,80 +868,21 @@ export class CombatSystem {
   }
 
   updateBurnEffects(now: number): void {
-    if (this.nextBurnTickAt <= 0) {
-      this.nextBurnTickAt = Math.floor(now / BURN_TICK_INTERVAL_MS) * BURN_TICK_INTERVAL_MS
-        + BURN_TICK_INTERVAL_MS;
-    }
+    const isTargetValid = (targetId: string) => this.isAlive(targetId) && !this.isBurrowed(targetId);
+    const contributions = this.burnStateMachine.advanceTo(now, isTargetValid);
 
-    let processedTicks = 0;
-    while (now >= this.nextBurnTickAt && processedTicks < MAX_BURN_CATCH_UP_TICKS) {
-      this.processBurnTick(this.nextBurnTickAt);
-      this.nextBurnTickAt += BURN_TICK_INTERVAL_MS;
-      processedTicks += 1;
-    }
-    if (now >= this.nextBurnTickAt) {
-      this.nextBurnTickAt = Math.floor(now / BURN_TICK_INTERVAL_MS) * BURN_TICK_INTERVAL_MS
-        + BURN_TICK_INTERVAL_MS;
-    }
-    this.pruneExpiredBurns(now);
-  }
-
-  private processBurnTick(tickAt: number): void {
-    for (const [targetId, sourceStates] of [...this.burnStates]) {
-      if (!this.isAlive(targetId) || this.isBurrowed(targetId)) {
-        this.clearBurnForPlayer(targetId);
-        continue;
-      }
-
-      const contributions: Array<{ state: BurnSourceState; damage: number }> = [];
-      for (const [sourceKey, state] of sourceStates) {
-        state.stacks = state.stacks.filter(bucket => bucket.expiresAt > tickAt);
-        if (state.stacks.length === 0) {
-          sourceStates.delete(sourceKey);
-          continue;
-        }
-        const damage = state.stacks.reduce(
-          (sum, bucket) => sum + bucket.damagePerTick * bucket.stackCount,
-          0,
-        );
-        if (damage > 0) contributions.push({ state, damage });
-      }
-
-      // Der stärkste Beitrag wird zuerst verarbeitet. Das macht die Attribution
-      // bei gleichzeitig fälligen Brandquellen deterministisch und nachvollziehbar.
-      contributions.sort((left, right) => (
-        right.damage - left.damage
-        || left.state.attackerId.localeCompare(right.state.attackerId)
-        || left.state.sourceId.localeCompare(right.state.sourceId)
-      ));
-      for (const contribution of contributions) {
-        if (!this.isAlive(targetId)) break;
-        const { state, damage } = contribution;
-        const attacker = this.playerManager.getPlayer(state.attackerId);
-        this.applyDamage(
-          targetId,
-          damage,
-          false,
-          state.attackerId,
-          state.sourceId,
-          attacker ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y } : undefined,
-          { allowCritical: false, damageKind: 'burn' },
-        );
-      }
-
-      if (sourceStates.size === 0) {
-        this.burnStates.delete(targetId);
-      }
-    }
-  }
-
-  private pruneExpiredBurns(now: number): void {
-    for (const [targetId, sourceStates] of this.burnStates) {
-      for (const [sourceKey, state] of sourceStates) {
-        state.stacks = state.stacks.filter(bucket => bucket.expiresAt > now);
-        if (state.stacks.length === 0) sourceStates.delete(sourceKey);
-      }
-      if (sourceStates.size === 0) this.burnStates.delete(targetId);
+    for (const contribution of contributions) {
+      if (!this.isAlive(contribution.targetId)) continue;
+      const attacker = this.playerManager.getPlayer(contribution.attackerId);
+      this.applyDamage(
+        contribution.targetId,
+        contribution.damage,
+        false,
+        contribution.attackerId,
+        contribution.sourceId,
+        attacker ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y } : undefined,
+        { allowCritical: false, damageKind: 'burn' },
+      );
     }
   }
 
@@ -4098,15 +3952,10 @@ export class CombatSystem {
   }
 
   private clearBurnForPlayer(playerId: string): void {
-    this.burnStates.delete(playerId);
+    this.burnStateMachine.clearTarget(playerId);
   }
 
   private clearBurnByAttacker(attackerId: string): void {
-    for (const [targetId, sourceStates] of this.burnStates) {
-      for (const [sourceKey, state] of sourceStates) {
-        if (state.attackerId === attackerId) sourceStates.delete(sourceKey);
-      }
-      if (sourceStates.size === 0) this.burnStates.delete(targetId);
-    }
+    this.burnStateMachine.clearByAttacker(attackerId);
   }
 }

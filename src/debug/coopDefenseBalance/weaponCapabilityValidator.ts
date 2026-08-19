@@ -132,7 +132,7 @@ export function validateWeaponBalanceCapabilities(
 
   // 6. Brand & DoT
   if (config.burnOnHit && ((config.burnOnHit.damagePerTick ?? 0) > 0 || (config.burnOnHit.durationMs ?? 0) > 0)) {
-    add('burnOnHit', 'unsupported_relevant', 'burnOnHit (Brand-DoT) verursacht relevanten Schaden, ist headless aber noch nicht implementiert');
+    add('burnOnHit', 'supported', 'burnOnHit (Brand-DoT) wird über die geteilte BurnStateMachine vollständig simuliert');
   }
   if (config.warmupBurnThreshold !== undefined && config.warmupBurnThreshold > 0) {
     add('warmupBurnThreshold', 'unsupported_relevant', 'warmupBurnThreshold (Brand-Aufwärmung) ist noch nicht implementiert');

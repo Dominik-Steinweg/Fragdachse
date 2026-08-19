@@ -4,7 +4,7 @@
  * Verschiedene Benchmarks stellen unterschiedliche Anforderungen an die Simulation:
  * - `single_target_static`: 1 unsterblicher, unbeweglicher Dummy auf fester Distanz.
  * - `five_target`: 5 Ziele (z.B. für Kettenblitze, Penetration, Spaltung).
- * - `combat_scenario`: Vollständiges Kampfszenario mit KI, Bewegung und Gegenangriffen.
+ * - `combat_scenario`: Kampfszenario mit KI, Bewegung und Spawn-Wellen (gemäß GDD ohne direkte Gegnerangriffe auf den Spieler im Standard-DPS-Benchmark).
  */
 export type WeaponBalanceScenario =
   | 'single_target_static'

@@ -57,9 +57,21 @@ describe('Programmatic Progression Coverage Smoke Test', () => {
     expect(biteBase.bestSupportedExpectedDps).toBeCloseTo(biteStandalone.expectedDps, 2);
     expect(biteEarly.bestSupportedExpectedDps).toBeGreaterThan(biteBase.bestSupportedExpectedDps);
 
-    // 4. Cache-Funktionalität prüfen
+    // 4. GLOCK (mit Shared Burn)
+    const glock = analyzeWeaponSingleTargetProgression({ weaponId: 'GLOCK', slot: 'weapon1' });
+    expect(glock.stages.length).toBe(5);
+    const glockBase = glock.stages.find((s) => s.stage === 'base')!;
+    const glockEarly = glock.stages.find((s) => s.stage === 'early')!;
+    const glockMid = glock.stages.find((s) => s.stage === 'mid')!;
+    const glockStandalone = runWeaponSingleTargetBenchmarkSet({ weaponId: 'GLOCK', sourceSlot: 'weapon1' });
+    expect(glockBase.bestSupportedExpectedDps).toBeCloseTo(glockStandalone.expectedDps, 2);
+    expect(glockEarly.bestSupportedExpectedDps).toBeGreaterThanOrEqual(glockBase.bestSupportedExpectedDps);
+    expect(glockMid.bestSupportedExpectedDps).toBeGreaterThan(glockEarly.bestSupportedExpectedDps);
+
+    // 5. Cache-Funktionalität prüfen
     expect(p90.cacheHits).toBeGreaterThan(0);
     expect(asmd.cacheHits).toBeGreaterThan(0);
     expect(bite.cacheHits).toBeGreaterThan(0);
-  }, 30000);
+    expect(glock.cacheHits).toBeGreaterThan(0);
+  }, 45000);
 });

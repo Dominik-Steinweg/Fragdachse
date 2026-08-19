@@ -412,32 +412,30 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
   });
 
   describe('7. Unsupported Mechanics Erkennung', () => {
-    it('lehnt ununterstützte Mechaniken wie Burn oder Explosion explizit ab', () => {
-      const burnConfig: WeaponConfig = {
+    it('lehnt ununterstützte Mechaniken wie warmupBurnThreshold oder Explosion explizit ab', () => {
+      const customConfig: WeaponConfig = {
         ...WEAPON_CONFIGS.P90,
-        id: 'UNSUPPORTED_BURN_GUN',
-        burnOnHit: {
-          durationMs: 3000,
-          damagePerTick: 5,
-        },
+        id: 'UNSUPPORTED_WARMUP_GUN',
+        warmupBurnThreshold: 50,
       };
 
-      const check = validateWeaponBalanceCapabilities(burnConfig);
+      const check = validateWeaponBalanceCapabilities(customConfig);
       expect(check.supported).toBe(false);
-      expect(check.unsupportedReasons.some(r => r.includes('burnOnHit'))).toBe(true);
+      expect(check.unsupportedReasons.some((r) => r.includes('warmupBurnThreshold'))).toBe(true);
 
       expect(() => {
         runWeaponSingleTargetBenchmark({
-          weaponId: 'UNSUPPORTED_BURN_GUN',
-          weaponConfigOverride: burnConfig,
+          weaponId: 'UNSUPPORTED_WARMUP_GUN',
+          weaponConfigOverride: customConfig,
         });
       }).toThrow(UnsupportedWeaponMechanicError);
     });
 
-    it('akzeptiert P90, ASMD Primär und Bite als unterstützt', () => {
+    it('akzeptiert P90, ASMD Primär, Bite und Glock als unterstützt', () => {
       expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.P90).supported).toBe(true);
       expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.ASMD_PRIM).supported).toBe(true);
       expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.BITE).supported).toBe(true);
+      expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.GLOCK).supported).toBe(true);
     });
   });
 
