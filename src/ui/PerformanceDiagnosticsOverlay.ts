@@ -7,6 +7,7 @@ import type {
 } from '../scenes/arena/ArenaRuntimeProfiler';
 import { ABLATION_LABELS, type PerformanceAblationController } from '../scenes/arena/PerformanceAblation';
 import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
+import type { GpuVfxPoolStats } from '../effects/gpu/GpuVfxPool';
 
 const REFRESH_INTERVAL_MS = 500;
 
@@ -104,6 +105,11 @@ export class PerformanceDiagnosticsOverlay {
     private readonly getEnvironment: () => Record<string, unknown>,
     private readonly ablation: PerformanceAblationController | null = null,
     private readonly chunkDiagnostics: ChunkRenderingDiagnostics | null = null,
+    /**
+     * GPU-Partikel tauchen in `particleEmitterCount`/`aliveParticleCount` naturgemaess nicht
+     * auf – die zaehlen weiterhin klassische Emitter. Diese Zeile haelt die Diagnose ehrlich.
+     */
+    private readonly getGpuVfxStats: (() => Record<string, GpuVfxPoolStats> | null) | null = null,
   ) {}
 
   toggle(): void {
@@ -228,6 +234,15 @@ export class PerformanceDiagnosticsOverlay {
     if (this.ablationButton) this.ablationButton.disabled = recording;
     this.renderChunkDiagnostics();
     const lines = buildSummaryLines(this.profiler.getLatestSummary());
+    const gpuVfx = this.getGpuVfxStats?.() ?? null;
+    if (gpuVfx) {
+      for (const [label, stats] of Object.entries(gpuVfx)) {
+        lines.push(
+          `GPU-VFX ${label} ${stats.activeSlots}/${stats.capacity} aktiv`
+          + ` · Fenster ${stats.scanWindow} · Rearms ${stats.rearms} · Overruns ${stats.overruns}`,
+        );
+      }
+    }
     if (this.ablation?.isActive()) {
       const category = this.ablation.getCurrentCategory();
       lines.unshift(

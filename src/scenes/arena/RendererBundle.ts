@@ -226,6 +226,8 @@ export function createRendererBundle(
 
   const airstrike = new AirstrikeRenderer(scene);
   airstrike.generateTextures();
+  // Genau zwei geteilte GPU-Layer fuer alle Strikes, szenenlebenslang wie die Texturen.
+  airstrike.initGpuLayers();
 
   const encounterTelegraph = new CoopDefenseEncounterTelegraphRenderer(scene);
   encounterTelegraph.generateTextures();

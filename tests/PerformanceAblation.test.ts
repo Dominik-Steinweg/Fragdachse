@@ -31,8 +31,12 @@ function makeController(children: FakeObject[]) {
   const staticShadowCalls: boolean[] = [];
   const dynamicShadowCalls: boolean[] = [];
   const lightCompositeCalls: boolean[] = [];
+  const gpuParticleCalls: boolean[] = [];
   const scene = { children: { list: children } } as never;
   const controller = new PerformanceAblationController(scene, {
+    getGpuParticleSuppressor: () => ({
+      setSuppressed: (suppressed: boolean) => { gpuParticleCalls.push(suppressed); },
+    }),
     getQualityController: () => ({
       setAblationFiltersDisabled: (disabled: boolean) => { filterCalls.push(disabled); },
     }) as never,
@@ -44,7 +48,14 @@ function makeController(children: FakeObject[]) {
       setCompositeSuppressed: (suppressed: boolean) => { lightCompositeCalls.push(suppressed); },
     }),
   });
-  return { controller, filterCalls, staticShadowCalls, dynamicShadowCalls, lightCompositeCalls };
+  return {
+    controller,
+    filterCalls,
+    staticShadowCalls,
+    dynamicShadowCalls,
+    lightCompositeCalls,
+    gpuParticleCalls,
+  };
 }
 
 describe('performance ablation', () => {
@@ -196,6 +207,29 @@ describe('performance ablation', () => {
     controller.stop((step + 1) * 1000);
     expect(emitter.visible).toBe(true);
     expect(active).toBe(true);
+  });
+
+  it('switches GPU particles off together with the classic emitters', () => {
+    // GPU-Partikel sind Member eines SpriteGPULayer und liegen nicht als `ParticleEmitter` in
+    // der Display-Liste; ohne den expliziten Hook wuerde das Segment sie schlicht uebersehen.
+    const emitter = fakeObject({ type: 'ParticleEmitter' });
+    (emitter as unknown as { active: boolean }).active = true;
+    (emitter as unknown as { setActive: (v: boolean) => void }).setActive = (v: boolean) => {
+      (emitter as unknown as { active: boolean }).active = v;
+    };
+    const { controller, gpuParticleCalls } = makeController([emitter]);
+
+    controller.start(1000, 0);
+    expect(gpuParticleCalls).toEqual([]);
+
+    const step = ABLATION_CATEGORIES.indexOf('particles') * 2 + 1;
+    for (let s = 1; s <= step; s++) controller.update(s * 1000);
+    expect(gpuParticleCalls).toEqual([true]);
+    expect(emitter.visible).toBe(false);
+
+    controller.stop((step + 1) * 1000);
+    expect(gpuParticleCalls).toEqual([true, false]);
+    expect(emitter.visible).toBe(true);
   });
 
   it('classifies HUD by screen-fixed scroll factor and depth', () => {

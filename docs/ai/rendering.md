@@ -147,3 +147,15 @@ Partikelkoordinaten sind emitterlokal. Entweder Emitter an der Weltposition plus
 Die Mündungsposition wird zentral über getTopDownMuzzleOrigin() beziehungsweise getTopDownMuzzleOriginFromVector() aus src/config.ts berechnet. MuzzleFlashRenderer erhält bereits diese Position; keinen zweiten Vorwärtsoffset addieren. Trails und Anhänge leiten lokale Offsets aus der normalisierten Flug-/Aimrichtung ab.
 
 Jeder Round-Teardown muss Emitter, Tweens, Timer, Filter, temporäre Texturen, RenderTextures und Game Objects der Round-Ressourcen freigeben. Häufige Effekte dürfen gepoolt werden, aber nur mit vollständigem Reset.
+
+## SpriteGPULayer-Partikel
+
+`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind ausschliesslich die Airstrike-Partikel.
+
+Eine Member-Animation ist `base` plus `amplitude` als Delta ueber die volle `duration` – es gibt kein `from`/`to`. `loop` und `yoyo` defaulten auf `true` und muessen fuer One-Shots explizit `false` sein. `amplitude: 0` oder `duration: 0` schaltet die Animation stumm ab. `editMember()` ueberschreibt den Member vollstaendig; ausgelassene Felder fallen auf Defaults zurueck. `creationTime` defaultet auf `layer.timeElapsed`, die Animation startet also beim Schreiben.
+
+Eine abgelaufene One-Shot-Animation haelt **nicht** auf ihrem Endwert: bei `loop:false` extrapoliert die lineare Kurve unbegrenzt weiter, und die Tint-Stufe clampt die Alpha nicht. Unter `BlendModes.ADD` verdunkelt ein abgelaufener Member die Szene deshalb aktiv, bei wachsendem Quad. Wer solche Member erzeugt, muss sie explizit stilllegen – am guenstigsten per `patchMember()` mit vorbereiteter Nullmaske auf `scaleX`/`scaleY`/`alpha`. Dasselbe gilt beim Ruecksprung von `layer.timeElapsed` (`timeElapsedResetPeriod`, eine Stunde): die `creationTime` der Member wird dabei nicht mitgezogen.
+
+Jeder erstmals verwendete Ease-Typ laesst Shader und FrameData neu bauen. Alle spaeter genutzten Typen deshalb bei der Initialisierung ueber `setAnimationEnabled()` freischalten, und zwar mit dem Namen aus Phasers Rueckwaertsabbildung `EASE_CODES` (mehrere Aliase teilen sich einen Code, etwa `Power0` und `Linear`). Fuer Gravity gilt `gravityFactor: 1` plus `layer.gravity` als Beschleunigung in px/s²; `velocity` wird ganzzahlig kodiert.
+
+Geteilte Layer werden einmal beim Szenenaufbau erzeugt, nicht pro Effektinstanz. Weil sie damit vor Spielern, Felsen und Telegraph-Shapes entstehen, brauchen sie gegenueber der bisherigen Depth einen kleinen dokumentierten Epsilon-Offset, um dieselbe Reihenfolge zu behalten. GPU-Member liegen nicht als `ParticleEmitter` in der Display-Liste: `PerformanceAblation` und `ArenaRuntimeProfiler` erfassen sie nur ueber explizite Hooks, nicht ueber den generischen Scan.

@@ -137,6 +137,17 @@ export interface PerformanceAblationDeps {
   getPostFxController?: () => {
     setEnabled(enabled: boolean): void;
   } | null;
+  /**
+   * GPU-Partikel liegen nicht als `ParticleEmitter` in der Display-Liste, sondern als Member
+   * eines `SpriteGPULayer`. Der generische Scan kann sie deshalb nicht erfassen, und eine neue
+   * Heuristik ueber Texturschluessel oder Tiefenband waere unsicher: dieselben Layer duerfen
+   * nicht versehentlich in `rocks` oder `groundFire` landen. Der Hook schaltet stattdessen
+   * Rendering *und* Rearm-Scheduler gemeinsam ab. Optional, damit bestehende Aufrufer und
+   * Tests unveraendert bleiben.
+   */
+  getGpuParticleSuppressor?: () => {
+    setSuppressed(suppressed: boolean): void;
+  } | null;
 }
 
 const BLOOD_TEXTURE_PREFIX = '__blood';
@@ -224,6 +235,7 @@ export class PerformanceAblationController {
   private staticShadowsSuppressed = false;
   private dynamicShadowsSuppressed = false;
   private lightCompositeSuppressed = false;
+  private gpuParticlesSuppressed = false;
   private readonly segments: AblationSegment[] = [];
 
   constructor(
@@ -317,6 +329,8 @@ export class PerformanceAblationController {
     this.setDynamicShadowsSuppressed(category === 'dynamicShadows');
     this.setLightCompositeSuppressed(category === 'lights');
     this.setPostFxSuppressed(category === 'postFx');
+    // GPU-Partikel gehoeren in dieselbe Kategorie wie die klassischen Emitter unten.
+    this.setGpuParticlesSuppressed(category === 'particles');
 
     // Der Scan laeuft in JEDEM Segment inklusive Baseline und wertet immer das Praedikat aus,
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
@@ -346,6 +360,14 @@ export class PerformanceAblationController {
     if (!controller) return;
     controller.setEnabled(!suppressed);
     this.postFxSuppressed = suppressed;
+  }
+
+  private setGpuParticlesSuppressed(suppressed: boolean): void {
+    if (this.gpuParticlesSuppressed === suppressed) return;
+    const gpuParticles = this.deps.getGpuParticleSuppressor?.() ?? null;
+    if (!gpuParticles) return;
+    gpuParticles.setSuppressed(suppressed);
+    this.gpuParticlesSuppressed = suppressed;
   }
 
   private setFiltersSuppressed(suppressed: boolean): void {
@@ -399,6 +421,7 @@ export class PerformanceAblationController {
     this.setDynamicShadowsSuppressed(false);
     this.setLightCompositeSuppressed(false);
     this.setPostFxSuppressed(false);
+    this.setGpuParticlesSuppressed(false);
   }
 
   destroy(): void {
