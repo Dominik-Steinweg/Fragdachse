@@ -239,25 +239,27 @@ export class HostPhysicsSystem {
       this.addRecoil(player.id, nx * impulse, ny * impulse, durationMs, ownerId);
     }
 
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+    this.enemyManager?.forEachEnemy((enemy) => {
       const dx = enemy.sprite.x - x;
       const dy = enemy.sprite.y - y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > radius) continue;
+      if (dist > radius) return;
 
       const t = Phaser.Math.Clamp(dist / radius, 0, 1);
       const impulse = force * (1 - t);
-      if (impulse <= 0) continue;
+      if (impulse <= 0) return;
 
       const nx = dist > 0.001 ? dx / dist : 0;
       const ny = dist > 0.001 ? dy / dist : -1;
       this.addRecoil(enemy.id, nx * impulse, ny * impulse, durationMs, ownerId);
-    }
+    });
   }
 
-  private consumeImpulseVelocity(playerId: string, now: number): { vx: number; vy: number } {
+  private static readonly ZERO_IMPULSE: { readonly vx: number; readonly vy: number } = { vx: 0, vy: 0 };
+
+  private consumeImpulseVelocity(playerId: string, now: number): { vx: number; vy: number } | typeof HostPhysicsSystem.ZERO_IMPULSE {
     const impulses = this.pendingRecoils.get(playerId);
-    if (!impulses || impulses.length === 0) return { vx: 0, vy: 0 };
+    if (!impulses || impulses.length === 0) return HostPhysicsSystem.ZERO_IMPULSE;
 
     let totalVx = 0;
     let totalVy = 0;
@@ -282,30 +284,26 @@ export class HostPhysicsSystem {
     return { vx: totalVx, vy: totalVy };
   }
 
-  private applyTimeBubbleFactor(
+  private getTimeBubbleFactor(
     playerId: string,
     x: number,
     y: number,
-    vx: number,
-    vy: number,
     now: number,
-  ): { vx: number; vy: number } {
-    if (this.burrowSystem?.isBurrowed(playerId)) return { vx, vy };
+  ): number {
+    if (this.burrowSystem?.isBurrowed(playerId)) return 1;
     const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now, playerId) ?? 1;
-    if (factor >= 0.999) return { vx, vy };
-    return { vx: vx * factor, vy: vy * factor };
+    if (factor >= 0.999) return 1;
+    return factor;
   }
 
-  private applyWorldMovementFactor(
+  private getWorldMovementFactor(
     x: number,
     y: number,
-    vx: number,
-    vy: number,
     now: number,
-  ): { vx: number; vy: number } {
+  ): number {
     const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
-    if (factor >= 0.999) return { vx, vy };
-    return { vx: vx * factor, vy: vy * factor };
+    if (factor >= 0.999) return 1;
+    return factor;
   }
 
   // ── Dash-Abfragen ─────────────────────────────────────────────────────────
@@ -509,7 +507,7 @@ export class HostPhysicsSystem {
 
     const now = Date.now();
 
-    for (const enemyId of [...this.enemyColliders.keys()]) {
+    for (const enemyId of this.enemyColliders.keys()) {
       if (this.enemyManager?.hasEnemy(enemyId)) continue;
       this.removeEnemy(enemyId);
     }
@@ -558,28 +556,29 @@ export class HostPhysicsSystem {
       const forcedMovement = this.forcedMovement.get(player.id);
 
       if (movementLocked) {
-        const slowed = this.applyTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
-        playerBody.setVelocity(slowed.vx, slowed.vy);
+        const factor = this.getTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, now);
+        playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
         continue;
       }
 
       if (forcedMovement) {
-        const slowed = this.applyTimeBubbleFactor(
+        const factor = this.getTimeBubbleFactor(
           player.id,
           player.sprite.x,
           player.sprite.y,
-          forcedMovement.vx + impulse.vx,
-          forcedMovement.vy + impulse.vy,
           now,
         );
-        playerBody.setVelocity(slowed.vx, slowed.vy);
+        playerBody.setVelocity(
+          (forcedMovement.vx + impulse.vx) * factor,
+          (forcedMovement.vy + impulse.vy) * factor,
+        );
         continue;
       }
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {
-        const slowed = this.applyTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
-        playerBody.setVelocity(slowed.vx, slowed.vy);
+        const factor = this.getTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, now);
+        playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
         continue;
       }
 
@@ -673,15 +672,16 @@ export class HostPhysicsSystem {
         if (!done) {
           baseVx = dirX * dash.vNorm * speedFactor;
           baseVy = dirY * dash.vNorm * speedFactor;
-          const slowed = this.applyTimeBubbleFactor(
+          const factor = this.getTimeBubbleFactor(
             player.id,
             player.sprite.x,
             player.sprite.y,
-            baseVx + impulse.vx,
-            baseVy + impulse.vy,
             now,
           );
-          playerBody.setVelocity(slowed.vx, slowed.vy);
+          playerBody.setVelocity(
+            (baseVx + impulse.vx) * factor,
+            (baseVy + impulse.vy) * factor,
+          );
           continue;
         }
         // done → fällt durch zur normalen Bewegung
@@ -711,20 +711,21 @@ export class HostPhysicsSystem {
         baseVy += selfPush.vy;
       }
 
-      const slowed = this.applyTimeBubbleFactor(
+      const factor = this.getTimeBubbleFactor(
         player.id,
         player.sprite.x,
         player.sprite.y,
-        baseVx + impulse.vx,
-        baseVy + impulse.vy,
         now,
       );
-      playerBody.setVelocity(slowed.vx, slowed.vy);
+      playerBody.setVelocity(
+        (baseVx + impulse.vx) * factor,
+        (baseVy + impulse.vy) * factor,
+      );
     }
 
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+    this.enemyManager?.forEachEnemy((enemy) => {
       const enemyBody = enemy.sprite.body as Phaser.Physics.Arcade.Body | null;
-      if (!enemy.sprite.active || !enemyBody) continue;
+      if (!enemy.sprite.active || !enemyBody) return;
 
       if (this.rockGroup && !this.enemyRockCollidersSetup.has(enemy.id)) {
         const existing = this.enemyColliders.get(enemy.id) ?? [];
@@ -759,18 +760,22 @@ export class HostPhysicsSystem {
       const impulse = this.consumeImpulseVelocity(enemy.id, now);
       const dashVelocity = this.advanceEnemyDash(enemy, now);
       const desiredVelocity = dashVelocity ?? enemy.getDesiredVelocity();
-      const slowed = this.applyWorldMovementFactor(
+      const worldFactor = this.getWorldMovementFactor(
         enemy.sprite.x,
         enemy.sprite.y,
-        desiredVelocity.vx + impulse.vx,
-        desiredVelocity.vy + impulse.vy,
         now,
       );
       const enemyMovementFactor = Phaser.Math.Clamp(this.enemyMovementFactorResolver?.(enemy.id, now) ?? 1, 0, 1);
-      enemyBody.setVelocity(slowed.vx * enemyMovementFactor, slowed.vy * enemyMovementFactor);
+      const combinedFactor = worldFactor * enemyMovementFactor;
+      enemyBody.setVelocity(
+        (desiredVelocity.vx + impulse.vx) * combinedFactor,
+        (desiredVelocity.vy + impulse.vy) * combinedFactor,
+      );
       enemy.setWalking(isVelocityMoving(enemyBody.velocity.x, enemyBody.velocity.y));
-      enemy.syncBar();
-    }
+      // Visual sync (HP bar, boss decorations, glow, burn, fuse) is handled
+      // centrally by EnemyManager.syncHostVisuals() later in the frame,
+      // after combat resolution and status updates have been applied.
+    });
 
     // Stirbt ein Gegner mitten im Ausweichschritt, bleibt sein Eintrag sonst bis zum Rundenende liegen.
     for (const enemyId of this.enemyDashStates.keys()) {

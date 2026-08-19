@@ -121,6 +121,11 @@ export class EnemyManager {
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
   private readonly separationVector = { x: 0, y: 0 };
+  // --- Persistent separation grid (recycled across frames to avoid per-frame Map/Array allocations) ---
+  private readonly separationGrid = new Map<number, EnemyEntity[]>();
+  private readonly separationBucketPool: EnemyEntity[][] = [];
+  /** Counts frames since last pool-cleanup to avoid running it every frame. */
+  private separationGridCleanupCounter = 0;
   private onEnemySpawned: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null = null;
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
@@ -610,18 +615,45 @@ export class EnemyManager {
    * Baut ein Spatial-Hash-Grid mit Zellengröße = Separations-Radius.
    * Dadurch wird die Nachbarsuche in {@link computeSeparation} von O(N²) auf ~O(N) reduziert:
    * Nur die 3×3 umliegenden Zellen können Gegner innerhalb des Radius enthalten.
+   *
+   * Die Map und die Bucket-Arrays werden über Frames hinweg wiederverwendet, um im Hotpath
+   * keine temporären Allokationen zu erzeugen.
    */
   private buildSeparationGrid(): Map<number, EnemyEntity[]> {
-    const grid = new Map<number, EnemyEntity[]>();
+    const grid = this.separationGrid;
+    const pool = this.separationBucketPool;
+
+    // Alle bestehenden Buckets leeren und in den Pool zurückgeben.
+    for (const bucket of grid.values()) {
+      bucket.length = 0;
+      pool.push(bucket);
+    }
+    grid.clear();
+
+    // Gegner in recycelte oder (nur initial) neue Buckets einsortieren.
     for (const enemy of this.enemies.values()) {
       const key = this.separationCellKey(enemy.sprite.x, enemy.sprite.y);
       const bucket = grid.get(key);
       if (bucket) {
         bucket.push(enemy);
       } else {
-        grid.set(key, [enemy]);
+        const newBucket = pool.length > 0 ? pool.pop()! : [];
+        newBucket.push(enemy);
+        grid.set(key, newBucket);
       }
     }
+
+    // Periodischer Cleanup: Wenn der Pool nach Gegnerschwund dauerhaft viele leere
+    // Buckets hält, wird er alle 300 Frames auf das Doppelte der aktuellen Grid-Größe gekürzt.
+    this.separationGridCleanupCounter += 1;
+    if (this.separationGridCleanupCounter >= 300) {
+      this.separationGridCleanupCounter = 0;
+      const maxPoolSize = grid.size * 2;
+      if (pool.length > maxPoolSize) {
+        pool.length = maxPoolSize;
+      }
+    }
+
     return grid;
   }
 
@@ -949,6 +981,9 @@ export class EnemyManager {
     this.wildfirePanicStates.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovals.clear();
+    this.separationGrid.clear();
+    this.separationBucketPool.length = 0;
+    this.separationGridCleanupCounter = 0;
     this.nextEnemyIdSeq = 1;
     this.remoteSnapshotSeen = false;
     this.ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
