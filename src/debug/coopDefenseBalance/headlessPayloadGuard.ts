@@ -1,24 +1,80 @@
 import type { ProjectileSpawnConfig } from '../../types';
 import type { HitscanShotRequest, MeleeSwingRequest } from '../../loadout/WeaponFireExecutor';
+import type { WeaponBalanceScenario } from './scenarioTypes';
 import { UnsupportedWeaponMechanicError } from './weaponCapabilityValidator';
 
 /**
- * Zweite Sicherheitsgrenze auf den tatsächlich empfangenen Fire-Requests am Headless-Sink.
+ * Deklarativer Vertrag für Headless-Fire-Requests.
  *
- * Verhindert, dass zukünftige oder veränderte Projektil-/Hitscan-/Melee-Payloads (wie Burn,
- * Explosionen, Kettenblitze, Homing oder Treffer-Ressourcen) in der Simulation stillschweigend
- * ignoriert oder fehlerhaft ohne ihre Gameplay-Wirkung berechnet werden.
+ * Jedes zur Laufzeit empfangene Feld muss einer bekannten Kategorie angehören:
+ * - `SUPPORTED`: Wird im Headless-Simulator simuliert.
+ * - `SCENARIO_IRRELEVANT`: Existiert im Request, hat aber im aktuellen Szenario keinen Einfluss auf Damage/Ressourcen.
+ * - `UNSUPPORTED_RELEVANT`: Relevanter Gameplay-Effekt, der im Headless-Simulator noch nicht unterstützt wird.
+ *
+ * Neu auftauchende, nicht klassifizierte Felder werden fail-closed abgefangen.
  */
 
-export function validateProjectileSpawnPayload(cfg: ProjectileSpawnConfig): void {
+// ── Projektil-Contract ───────────────────────────────────────────────────────
+
+const PROJECTILE_KNOWN_FIELDS = new Set<string>([
+  // Supported
+  'speed', 'size', 'damage', 'lifetime', 'maxBounces', 'adrenalinGain', 'sourceId',
+  'allowTeamDamage', 'ignoreBaseCollisions', 'ignoreRockIndex',
+  // Scenario-irrelevant (Visuals / Audio / Single-Target Inactive)
+  'color', 'ownerColor', 'visualMuzzleOrigin', 'projectileVisualScale', 'projectileStyle',
+  'bulletVisualPreset', 'grenadeVisualPreset', 'energyBallVariant', 'tracerConfig',
+  'smokeTrailColor', 'sporeVisualVariant', 'projectileBurnVisualStyle', 'suppressSpawnFx',
+  'shotAudioKey', 'sourceTurretId', 'sourceSlot', 'rockDamageMult', 'trainDamageMult',
+  'baseDamageMult', 'frictionDelayMs', 'airFrictionDecayPerSec', 'bounceFrictionMultiplier',
+  'stopSpeedThreshold', 'initialBounceCount', 'remainingRangePx', 'detonator', 'canReceiveFireImbue',
+  'shotgunOriginX', 'shotgunOriginY', 'shotgunResolvedRange', 'shotgunSlowFraction', 'shotgunSlowDurationMs',
+  'hitSlowFraction', 'hitSlowDurationMs', 'hitKnockback', 'hitKnockbackDurationMs',
+  'penetrationDamageRetention', 'penetratesRocks', 'multiExplosionCoastMs', 'miniRocketStageRangePx',
+  'miniRocketReturnRangeBuffer', 'miniRocketPickupRadius', 'miniRocketPickupAdrenalineRefundFraction',
+  'miniRocketPickupArmor', 'miniRocketAdrenalineCostPaid', 'miniRocketSafetyLifetimeMs',
+  'fireTrailHalfWidthCells', 'awpCorridorHalfWidth', 'awpCorridorDotDurationMs',
+  'awpCorridorDotTickIntervalMs', 'awpCorridorKnockback', 'awpCorridorKnockbackDurationMs',
+  'ak47ShotId', 'ak47DamageMultiplier',
+  // Unsupported Relevant
+  'isGrenade', 'fuseTime', 'grenadeEffect', 'isFlame', 'hitboxGrowRate', 'hitboxMaxSize',
+  'velocityDecay', 'burnDurationMs', 'burnDamagePerTick', 'flamePiercing', 'supplementalBurnOnHit',
+  'fireTrail', 'explosion', 'enemyHitExplosion', 'impactCloud', 'homing', 'splitHoming',
+  'piercesTargets', 'penetrationCount', 'isBfg', 'splitCount', 'splitSpread', 'splitFactor',
+  'detonable', 'proximityPulse', 'plasmaSwarmEnabled', 'plasmaSwarmProjectile',
+  'plasmaSwarmOriginEnemyId', 'plasmaSwarmProjectileCount', 'plasmaSwarmExplosionRadius',
+  'plasmaSwarmExplosionDamage', 'plasmaSwarmExplosionSlowFraction', 'energyInjectorPayload',
+  'leafBlowerMinKnockback', 'leafBlowerMaxKnockback', 'leafBlowerSelfPush', 'leafBlowerDeflectsProjectiles',
+  'shotgunProximityMaxDamageBonus', 'multiExplosionCount', 'miniRocketReturnEnabled',
+  'miniRocketCascadeDamageBonusPerExplosion', 'awpCorridorDamage', 'ak47FireSuperiorityShot',
+]);
+
+export function validateProjectileSpawnPayload(
+  cfg: ProjectileSpawnConfig,
+  scenario: WeaponBalanceScenario = 'single_target_static',
+): void {
   const reasons: string[] = [];
 
+  // 1. Fail-closed Check auf unbekannte Felder
+  for (const key of Object.keys(cfg)) {
+    if (!PROJECTILE_KNOWN_FIELDS.has(key)) {
+      const val = (cfg as unknown as Record<string, unknown>)[key];
+      if (val !== undefined && val !== null && val !== false && val !== 0) {
+        reasons.push(`Unbekanntes / nicht klassifiziertes Projektil-Feld "${key}" am Headless-Sink`);
+      }
+    }
+  }
+
+  // 2. Semantische Prüfungen auf unsupported_relevant
   if (cfg.isGrenade || (cfg.fuseTime !== undefined && cfg.fuseTime > 0) || cfg.grenadeEffect) {
     reasons.push('Granaten-Payload (fuseTime/grenadeEffect) ist headless nicht implementiert');
   }
 
   if (cfg.isFlame || (cfg.burnDamagePerTick !== undefined && cfg.burnDamagePerTick > 0) || cfg.supplementalBurnOnHit) {
     reasons.push('Flammen-/Brand-Payload ist headless nicht implementiert');
+  }
+
+  if (cfg.burnDurationMs !== undefined && cfg.burnDurationMs > 0 && (cfg.burnDamagePerTick ?? 0) > 0) {
+    reasons.push('burnOnHit-Payload ist headless nicht implementiert');
   }
 
   if (cfg.explosion && (cfg.explosion.maxDamage > 0 || cfg.explosion.radius > 0)) {
@@ -57,16 +113,69 @@ export function validateProjectileSpawnPayload(cfg: ProjectileSpawnConfig): void
     reasons.push('Injector-/Cloud-Payload ist headless nicht implementiert');
   }
 
+  if (cfg.shotgunProximityMaxDamageBonus !== undefined && cfg.shotgunProximityMaxDamageBonus > 0) {
+    reasons.push('shotgunProximity-Payload ist headless nicht implementiert');
+  }
+
+  if (cfg.multiExplosionCount !== undefined && cfg.multiExplosionCount > 1) {
+    reasons.push('multiExplosion-Payload ist headless nicht implementiert');
+  }
+
+  if (cfg.miniRocketReturnEnabled) {
+    reasons.push('miniRocketReturn-Payload ist headless nicht implementiert');
+  }
+
+  if (cfg.miniRocketCascadeDamageBonusPerExplosion !== undefined && cfg.miniRocketCascadeDamageBonusPerExplosion > 0) {
+    reasons.push('miniRocketCascade-Payload ist headless nicht implementiert');
+  }
+
+  if (cfg.awpCorridorDamage !== undefined && cfg.awpCorridorDamage > 0) {
+    reasons.push('awpCorridor-Payload ist headless nicht implementiert');
+  }
+
+  if (cfg.ak47FireSuperiorityShot) {
+    reasons.push('ak47FireSuperiority-Payload ist headless nicht implementiert');
+  }
+
   if (reasons.length > 0) {
-    throw new UnsupportedWeaponMechanicError(cfg.sourceId ?? 'projectile', reasons);
+    throw new UnsupportedWeaponMechanicError(cfg.sourceId ?? 'projectile', reasons, scenario);
   }
 }
 
-export function validateHitscanShotPayload(request: HitscanShotRequest): void {
+// ── Hitscan-Contract ────────────────────────────────────────────────────────
+
+const HITSCAN_KNOWN_FIELDS = new Set<string>([
+  // Supported
+  'shooterId', 'startX', 'startY', 'angle', 'range', 'damage', 'traceThickness',
+  'adrenalinGain', 'sourceId',
+  // Scenario-irrelevant
+  'color', 'visualPreset', 'shotAudioKey', 'visualMuzzleOrigin', 'sourceSlot', 'shotId',
+  'rockDamageMult', 'trainDamageMult', 'baseDamageMult', 'detonator', 'chainLightning',
+  // Unsupported Relevant
+  'burnOnHit', 'supportEffect',
+]);
+
+export function validateHitscanShotRequest(
+  request: HitscanShotRequest,
+  scenario: WeaponBalanceScenario = 'single_target_static',
+): void {
   const reasons: string[] = [];
 
+  // 1. Fail-closed Check auf unbekannte Felder
+  for (const key of Object.keys(request)) {
+    if (!HITSCAN_KNOWN_FIELDS.has(key)) {
+      const val = (request as unknown as Record<string, unknown>)[key];
+      if (val !== undefined && val !== null && val !== false && val !== 0) {
+        reasons.push(`Unbekanntes / nicht klassifiziertes Hitscan-Feld "${key}" am Headless-Sink`);
+      }
+    }
+  }
+
+  // 2. Semantische Prüfungen
   if (request.chainLightning && request.chainLightning.maxJumps > 0) {
-    reasons.push('chainLightning-Payload (Kettenblitz) ist headless nicht implementiert');
+    if (scenario !== 'single_target_static') {
+      reasons.push('chainLightning-Payload (Kettenblitz) ist für Multi-Target noch nicht implementiert');
+    }
   }
 
   if (request.burnOnHit && ((request.burnOnHit.damagePerTick ?? 0) > 0 || (request.burnOnHit.durationMs ?? 0) > 0)) {
@@ -78,13 +187,41 @@ export function validateHitscanShotPayload(request: HitscanShotRequest): void {
   }
 
   if (reasons.length > 0) {
-    throw new UnsupportedWeaponMechanicError(request.sourceId ?? 'hitscan', reasons);
+    throw new UnsupportedWeaponMechanicError(request.sourceId ?? 'hitscan', reasons, scenario);
   }
 }
 
-export function validateMeleeSwingPayload(request: MeleeSwingRequest): void {
+export const validateHitscanShotPayload = validateHitscanShotRequest;
+
+// ── Melee-Contract ──────────────────────────────────────────────────────────
+
+const MELEE_KNOWN_FIELDS = new Set<string>([
+  // Supported
+  'shooterId', 'x', 'y', 'angle', 'range', 'arcDegrees', 'damage', 'adrenalinGain', 'sourceId',
+  // Scenario-irrelevant
+  'color', 'visualPreset', 'shotAudioKey', 'bloodEffectMultiplier', 'sourceSlot',
+  'damageTargets', 'rockDamageMult', 'trainDamageMult', 'baseDamageMult', 'hitHeal',
+  // Unsupported Relevant
+  'burnOnHit', 'hitAdrenaline',
+]);
+
+export function validateMeleeSwingPayload(
+  request: MeleeSwingRequest,
+  scenario: WeaponBalanceScenario = 'single_target_static',
+): void {
   const reasons: string[] = [];
 
+  // 1. Fail-closed Check auf unbekannte Felder
+  for (const key of Object.keys(request)) {
+    if (!MELEE_KNOWN_FIELDS.has(key)) {
+      const val = (request as unknown as Record<string, unknown>)[key];
+      if (val !== undefined && val !== null && val !== false && val !== 0) {
+        reasons.push(`Unbekanntes / nicht klassifiziertes Melee-Feld "${key}" am Headless-Sink`);
+      }
+    }
+  }
+
+  // 2. Semantische Prüfungen
   if (request.burnOnHit && ((request.burnOnHit.damagePerTick ?? 0) > 0 || (request.burnOnHit.durationMs ?? 0) > 0)) {
     reasons.push('burnOnHit-Payload (Brand-DoT) ist headless nicht implementiert');
   }
@@ -93,11 +230,7 @@ export function validateMeleeSwingPayload(request: MeleeSwingRequest): void {
     reasons.push('hitAdrenaline (Treffer-Adrenalin) ist headless nicht implementiert');
   }
 
-  if (request.hitHeal > 0) {
-    reasons.push('hitHeal (Treffer-Heilung) ist headless nicht implementiert');
-  }
-
   if (reasons.length > 0) {
-    throw new UnsupportedWeaponMechanicError(request.sourceId ?? 'melee', reasons);
+    throw new UnsupportedWeaponMechanicError(request.sourceId ?? 'melee', reasons, scenario);
   }
 }

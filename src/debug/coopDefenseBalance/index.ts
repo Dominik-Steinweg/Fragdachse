@@ -4,6 +4,7 @@ export * from './report';
 export * from './csv';
 export * from './tracker';
 export * from './weaponBenchmarkTypes';
+export * from './scenarioTypes';
 export * from './HeadlessSingleTargetWorld';
 export * from './weaponBenchmark';
 export * from './weaponCapabilityValidator';

@@ -87,16 +87,17 @@ export function runWeaponSingleTargetBenchmark(
   }
 
   // Capability-Check: nicht unterstützte Mechaniken explizit ablehnen
-  assertWeaponBalanceSupported(config);
+  assertWeaponBalanceSupported(config, 'single_target_static');
 
   const slot = resolveAndValidateWeaponSlot(config, options.sourceSlot);
   const attackWindowDurationMs = options.durationMs ?? 30_000;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
   const seed = options.seed ?? 1;
   const maxSettleMs = options.maxSettleDurationMs ?? 5_000;
+  const recordEvents = options.recordEvents ?? true;
 
   const targetDistance = options.targetDistance ?? resolveDefaultTargetDistance(config.fire.type, config.range);
-  const world = new HeadlessSingleTargetWorld(targetDistance, seed);
+  const world = new HeadlessSingleTargetWorld(targetDistance, seed, recordEvents);
   const weapon = new GenericWeapon(config);
   const executor = new WeaponFireExecutor(world);
 
@@ -250,20 +251,34 @@ export function runWeaponSingleTargetBenchmark(
 /**
  * Führt einen Multi-Seed-Benchmark aus und aggregiert die Ergebnisse deterministisch zu
  * Erwartungswerten (Mean), Median, P10/P90-Quantilen und Extremwerten.
+ *
+ * Normalisiert und dedupliziert die Seed-Liste deterministisch, aggregiert gewichtet nach
+ * tatsächlicher Simulationsdauer und Trefferkapazität und unterstützt einen speicherschonenden
+ * Lightweight-Modus für Optimizer-Sweeps.
  */
 export function runWeaponSingleTargetBenchmarkSet(
   options: SingleTargetBenchmarkSetOptions,
 ): SingleTargetBenchmarkAggregate {
-  const seeds = options.seeds && options.seeds.length > 0
+  const rawSeeds = options.seeds && options.seeds.length > 0
     ? options.seeds
     : DEFAULT_BENCHMARK_SEEDS;
 
+  // Deterministische Normalisierung (Deduplizieren + Sortieren)
+  const seeds = Array.from(new Set(rawSeeds)).sort((a, b) => a - b);
+  const n = seeds.length;
+
   const runs: SingleTargetBenchmarkResult[] = [];
   const dpsValues: number[] = [];
-  let totalHitRate = 0;
-  let totalShotsPerSec = 0;
-  let totalAdrenalineGenPerSec = 0;
-  let totalAdrenalineSpentPerSec = 0;
+
+  let totalDurationSec = 0;
+  let totalDamage = 0;
+  let totalShots = 0;
+  let totalHits = 0;
+  let totalPossiblePellets = 0;
+  let totalAdrenalineGen = 0;
+  let totalAdrenalineSpent = 0;
+
+  const recordEvents = options.includeIndividualRuns ?? false;
 
   for (const seed of seeds) {
     const result = runWeaponSingleTargetBenchmark({
@@ -274,26 +289,41 @@ export function runWeaponSingleTargetBenchmarkSet(
       stepDeltaMs: options.stepDeltaMs,
       targetDistance: options.targetDistance,
       maxSettleDurationMs: options.maxSettleDurationMs,
+      recordEvents,
       seed,
     });
 
-    runs.push(result);
+    if (recordEvents) {
+      runs.push(result);
+    }
     dpsValues.push(result.dps);
-    totalHitRate += result.hitRate;
-    const durationSec = (result.durationMs ?? 30_000) / 1000;
-    totalShotsPerSec += durationSec > 0 ? result.shotsFired / durationSec : 0;
-    totalAdrenalineGenPerSec += result.adrenalineGeneratedPerSec;
-    totalAdrenalineSpentPerSec += result.adrenalineSpentPerSec;
+
+    const durSec = (result.durationMs ?? 30_000) / 1000;
+    totalDurationSec += durSec;
+    totalDamage += result.totalDamage;
+    totalShots += result.shotsFired;
+    totalHits += result.hits;
+
+    const config = options.weaponConfigOverride ?? getWeaponConfig(options.weaponId);
+    const pelletsPerShot = config ? resolveEffectivePelletCount(config) : 1;
+    totalPossiblePellets += result.shotsFired * pelletsPerShot;
+
+    totalAdrenalineGen += result.adrenalineGenerated;
+    totalAdrenalineSpent += result.adrenalineSpent;
   }
 
   const sortedDps = [...dpsValues].sort((a, b) => a - b);
-  const n = seeds.length;
-  const expectedDps = dpsValues.reduce((sum, val) => sum + val, 0) / n;
+  const expectedDps = totalDurationSec > 0 ? totalDamage / totalDurationSec : 0;
   const medianDps = calculatePercentile(sortedDps, 50);
   const p10Dps = calculatePercentile(sortedDps, 10);
   const p90Dps = calculatePercentile(sortedDps, 90);
   const minDps = sortedDps[0] ?? 0;
   const maxDps = sortedDps[sortedDps.length - 1] ?? 0;
+
+  const expectedHitRate = totalPossiblePellets > 0 ? totalHits / totalPossiblePellets : 0;
+  const expectedShotsPerSecond = totalDurationSec > 0 ? totalShots / totalDurationSec : 0;
+  const expectedAdrenalineGeneratedPerSec = totalDurationSec > 0 ? totalAdrenalineGen / totalDurationSec : 0;
+  const expectedAdrenalineSpentPerSec = totalDurationSec > 0 ? totalAdrenalineSpent / totalDurationSec : 0;
 
   return {
     weaponId: options.weaponId,
@@ -305,10 +335,10 @@ export function runWeaponSingleTargetBenchmarkSet(
     p90Dps,
     minDps,
     maxDps,
-    expectedHitRate: totalHitRate / n,
-    expectedShotsPerSecond: totalShotsPerSec / n,
-    expectedAdrenalineGeneratedPerSec: totalAdrenalineGenPerSec / n,
-    expectedAdrenalineSpentPerSec: totalAdrenalineSpentPerSec / n,
-    runs: options.includeIndividualRuns ? runs : undefined,
+    expectedHitRate,
+    expectedShotsPerSecond,
+    expectedAdrenalineGeneratedPerSec,
+    expectedAdrenalineSpentPerSec,
+    runs: recordEvents ? runs : undefined,
   };
 }

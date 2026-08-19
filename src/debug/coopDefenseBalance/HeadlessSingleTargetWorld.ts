@@ -82,8 +82,9 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   /** Falls true, schlägt jede Schussannahme fehl (für Tests). */
   failingSink = false;
+  readonly recordEvents: boolean;
 
-  constructor(targetDistance: number, seed = 1) {
+  constructor(targetDistance: number, seed = 1, recordEvents = true) {
     this.target = {
       id: 'dummy_target',
       x: targetDistance,
@@ -91,6 +92,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       radius: PLAYER_SIZE * 0.5,
     };
     this.rng = createMulberry32Prng(seed);
+    this.recordEvents = recordEvents;
   }
 
   // ── Zeit & Simulation ───────────────────────────────────────────────────────
@@ -250,36 +252,42 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     isCritical = false,
   ): void {
     this.totalDamage += damage;
-    this.damageEvents.push({
-      timestampMs: this.now,
-      targetId,
-      damage,
-      sourceId,
-      damageKind,
-      isCritical,
-    });
+    if (this.recordEvents) {
+      this.damageEvents.push({
+        timestampMs: this.now,
+        targetId,
+        damage,
+        sourceId,
+        damageKind,
+        isCritical,
+      });
+    }
   }
 
   recordAdrenalineGain(amount: number, sourceId?: string): void {
     this.adrenalineGenerated += amount;
-    this.resourceEvents.push({
-      timestampMs: this.now,
-      action: 'gain',
-      amount,
-      resourceKind: 'adrenaline',
-      sourceId,
-    });
+    if (this.recordEvents) {
+      this.resourceEvents.push({
+        timestampMs: this.now,
+        action: 'gain',
+        amount,
+        resourceKind: 'adrenaline',
+        sourceId,
+      });
+    }
   }
 
   recordAdrenalineDrain(amount: number, sourceId?: string): void {
     this.adrenalineSpent += amount;
-    this.resourceEvents.push({
-      timestampMs: this.now,
-      action: 'drain',
-      amount,
-      resourceKind: 'adrenaline',
-      sourceId,
-    });
+    if (this.recordEvents) {
+      this.resourceEvents.push({
+        timestampMs: this.now,
+        action: 'drain',
+        amount,
+        resourceKind: 'adrenaline',
+        sourceId,
+      });
+    }
   }
 
   // ── Metrik-Abfragen ────────────────────────────────────────────────────────

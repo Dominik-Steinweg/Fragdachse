@@ -3,6 +3,7 @@ import { applyCoopDefenseModifiersToWeaponConfig } from '../../loadout/CoopDefen
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import type { CoopDefenseClassId, WeaponSlot } from '../../types';
+import type { WeaponBalanceScenario } from './scenarioTypes';
 import { PROGRESSION_STAGES, type ProgressionStageName } from './progressionStages';
 import {
   generateWeaponUpgradeBuilds,
@@ -41,13 +42,17 @@ export interface StageAnalysisResult {
 export interface WeaponProgressionAnalysisResult {
   readonly weaponId: string;
   readonly slot: WeaponSlot;
+  readonly scenario: WeaponBalanceScenario;
   readonly stages: readonly StageAnalysisResult[];
+  readonly cacheHits: number;
+  readonly cacheMisses: number;
   readonly summaryText: string;
 }
 
 export interface AnalyzeWeaponProgressionOptions {
   readonly weaponId: string;
   readonly slot?: WeaponSlot;
+  readonly scenario?: WeaponBalanceScenario;
   readonly seeds?: readonly number[];
   /** Optionaler Einzel-Seed für Abwärtskompatibilität. */
   readonly seed?: number;
@@ -62,10 +67,14 @@ export interface AnalyzeWeaponProgressionOptions {
 function formatProgressionSummary(
   weaponId: string,
   slot: WeaponSlot,
+  scenario: WeaponBalanceScenario,
   stages: readonly StageAnalysisResult[],
+  cacheHits: number,
+  cacheMisses: number,
 ): string {
   const lines: string[] = [];
-  lines.push(`=== Single-Target Progression: ${weaponId} (${slot}) ===`);
+  lines.push(`=== Single-Target Progression: ${weaponId} (${slot}) [Scenario: ${scenario}] ===`);
+  lines.push(`Cache-Statistik: ${cacheHits} Hits / ${cacheMisses} Misses (Simulationsläufe)`);
 
   for (const st of stages) {
     lines.push(`\n[${st.stageLabel.toUpperCase()}] Budget: ${st.normalPointBudget} normal / ${st.bossPointBudget} boss`);
@@ -95,7 +104,7 @@ function formatProgressionSummary(
     }
 
     if (st.unsupportedReasons.length > 0) {
-      lines.push('  Nicht unterstützte Mechaniken:');
+      lines.push('  Nicht unterstützte relevante Mechaniken:');
       for (const [reason, count] of Object.entries(st.unsupportedReasonCounts)) {
         lines.push(`    - ${reason} (${count} Kandidaten)`);
       }
@@ -108,9 +117,10 @@ function formatProgressionSummary(
 /**
  * Führt die vollständige Single-Target-Progressionsanalyse über alle fünf Stufen für eine Waffe durch.
  *
- * Findet für jede Stufe deterministisch den besten legal erreichbaren Build mit maximalem
- * Expected ST DPS über ein stabiles Multi-Seed-Set und weist transparent aus, ob das
- * theoretische Maximum bewiesen ist (`provenMaximum = true`).
+ * Optimierungsmerkmale in V0.5:
+ * - Analyse-lokales Caching verhindert redundante Simulationen identischer Builds über verschachtelte Stages.
+ * - Lightweight-Modus spart Allokationen großer Event-Historien während des Parameter-Sweeps.
+ * - Szenario-spezifische Capability-Klassifizierung trennt relevante von irrelevanten Effekten.
  */
 export function analyzeWeaponSingleTargetProgression(
   options: AnalyzeWeaponProgressionOptions,
@@ -120,19 +130,25 @@ export function analyzeWeaponSingleTargetProgression(
     throw new Error(`[WeaponBalanceLab] Unbekannte Weapon-ID: "${options.weaponId}"`);
   }
 
-  // Typsichere Slot-Validierung gegen allowedSlots der realen WeaponConfig
   const slot = resolveAndValidateWeaponSlot(baseConfig, options.slot);
   const classId = options.classId ?? DEFAULT_COOP_DEFENSE_CLASS_ID;
+  const scenario: WeaponBalanceScenario = options.scenario ?? 'single_target_static';
 
-  // Deterministisches Multi-Seed-Set auflösen
-  const seeds = options.seeds && options.seeds.length > 0
+  // Deterministisches Multi-Seed-Set auflösen und normalisieren
+  const rawSeeds = options.seeds && options.seeds.length > 0
     ? options.seeds
     : options.seed !== undefined
       ? [options.seed]
       : DEFAULT_BENCHMARK_SEEDS;
+  const seeds = Array.from(new Set(rawSeeds)).sort((a, b) => a - b);
 
   const durationMs = options.durationMs ?? 30_000;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
+
+  // Analyse-lokaler Cache
+  const buildCache = new Map<string, SingleTargetBenchmarkAggregate>();
+  let cacheHits = 0;
+  let cacheMisses = 0;
 
   const stages: StageAnalysisResult[] = [];
 
@@ -161,25 +177,36 @@ export function analyzeWeaponSingleTargetProgression(
         effectTotals,
       );
 
-      const capCheck = validateWeaponBalanceCapabilities(modifiedConfig);
+      const capCheck = validateWeaponBalanceCapabilities(modifiedConfig, scenario);
       if (!capCheck.supported) {
         unsupportedCandidates += 1;
-        for (const reason of capCheck.unsupportedReasons) {
+        for (const reason of capCheck.unsupportedRelevant) {
           unsupportedReasonCounts[reason] = (unsupportedReasonCounts[reason] ?? 0) + 1;
         }
         continue;
       }
 
       evaluatedCandidates += 1;
-      const aggregate = runWeaponSingleTargetBenchmarkSet({
-        weaponId: options.weaponId,
-        weaponConfigOverride: modifiedConfig,
-        sourceSlot: slot,
-        seeds,
-        durationMs,
-        stepDeltaMs,
-        includeIndividualRuns: true,
-      });
+
+      // Cache-Key für diesen Build
+      const cacheKey = `${options.weaponId}:${slot}:${candidate.signature}:${seeds.join(',')}:${durationMs}:${stepDeltaMs}:${scenario}`;
+      let aggregate = buildCache.get(cacheKey);
+
+      if (aggregate) {
+        cacheHits += 1;
+      } else {
+        cacheMisses += 1;
+        aggregate = runWeaponSingleTargetBenchmarkSet({
+          weaponId: options.weaponId,
+          weaponConfigOverride: modifiedConfig,
+          sourceSlot: slot,
+          seeds,
+          durationMs,
+          stepDeltaMs,
+          includeIndividualRuns: false, // Lightweight-Modus während Sweep
+        });
+        buildCache.set(cacheKey, aggregate);
+      }
 
       // Deterministischer Tie-Breaker bei identischem Expected DPS
       let isBetter = false;
@@ -235,12 +262,22 @@ export function analyzeWeaponSingleTargetProgression(
     });
   }
 
-  const summaryText = formatProgressionSummary(options.weaponId, slot, stages);
+  const summaryText = formatProgressionSummary(
+    options.weaponId,
+    slot,
+    scenario,
+    stages,
+    cacheHits,
+    cacheMisses,
+  );
 
   return {
     weaponId: options.weaponId,
     slot,
+    scenario,
     stages,
+    cacheHits,
+    cacheMisses,
     summaryText,
   };
 }

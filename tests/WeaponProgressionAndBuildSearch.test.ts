@@ -356,7 +356,7 @@ describe('Weapon Balance Lab 0.3 – Single-Target Progression & Build Search', 
       const endgameStage = analysis.stages.find((s) => s.stage === 'endgame')!;
       expect(endgameStage.unsupportedCandidates).toBeGreaterThan(0);
       expect(endgameStage.provenMaximum).toBe(false);
-      expect(endgameStage.unsupportedReasons.some((r) => r.includes('Homing'))).toBe(true);
+      expect(endgameStage.unsupportedReasons.some((r) => r.toLowerCase().includes('homing'))).toBe(true);
       // Liefert dennoch den besten unterstützten Non-Homing Build
       expect(endgameStage.bestSupportedDps).toBeGreaterThan(0);
     });
@@ -388,7 +388,7 @@ describe('Weapon Balance Lab 0.3 – Single-Target Progression & Build Search', 
         seed: 1,
       });
 
-      expect(analysis.summaryText).toContain('=== Single-Target Progression: P90 (weapon2) ===');
+      expect(analysis.summaryText).toContain('=== Single-Target Progression: P90 (weapon2)');
       expect(analysis.summaryText).toContain('[BASE]');
       expect(analysis.summaryText).toContain('[EARLY]');
       expect(analysis.summaryText).toContain('[ENDGAME]');

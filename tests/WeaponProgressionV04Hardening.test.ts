@@ -164,10 +164,10 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
         warmupBurnThreshold: 15,
       }).supported).toBe(false);
 
-      // 4. Hit Heal
+      // 4. Hit Adrenaline
       expect(validateWeaponBalanceCapabilities({
         ...WEAPON_CONFIGS.P90,
-        hitHeal: 25,
+        hitAdrenaline: 10,
       }).supported).toBe(false);
 
       // 5. Direct Damage Override
@@ -175,6 +175,17 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
         ...WEAPON_CONFIGS.P90,
         directDamageOverride: 99,
       }).supported).toBe(false);
+
+      // 6. Hit Heal: im statischen Dummy-Benchmark scenario-irrelevant, im Combat-Szenario unsupported
+      expect(validateWeaponBalanceCapabilities({
+        ...WEAPON_CONFIGS.P90,
+        hitHeal: 25,
+      }, 'single_target_static').supported).toBe(true);
+
+      expect(validateWeaponBalanceCapabilities({
+        ...WEAPON_CONFIGS.P90,
+        hitHeal: 25,
+      }, 'combat_scenario').supported).toBe(false);
     });
   });
 
@@ -205,7 +216,32 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
       }).toThrow(UnsupportedWeaponMechanicError);
     });
 
-    it('wirft Fehler bei ununterstützter Hitscan-Payload (z.B. Kettenblitz)', () => {
+    it('wirft Fehler bei ununterstützter Hitscan-Payload (z.B. Brand oder Kettenblitz im Multi-Target)', () => {
+      // 1. Brand ist immer unsupported
+      expect(() => {
+        validateHitscanShotPayload({
+          shooterId: 'p1',
+          startX: 0,
+          startY: 0,
+          angle: 0,
+          range: 500,
+          damage: 20,
+          traceThickness: 2,
+          color: 0xffffff,
+          adrenalinGain: 0,
+          sourceId: 'gun',
+          visualPreset: 'laser',
+          rockDamageMult: 1,
+          trainDamageMult: 1,
+          baseDamageMult: 1,
+          burnOnHit: {
+            durationMs: 2000,
+            damagePerTick: 5,
+          },
+        });
+      }).toThrow(UnsupportedWeaponMechanicError);
+
+      // 2. Kettenblitz ist im Multi-Target-Szenario unsupported
       expect(() => {
         validateHitscanShotPayload({
           shooterId: 'p1',
@@ -228,7 +264,7 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
             maxJumps: 3,
             retargetIntervalMs: 50,
           },
-        });
+        }, 'five_target');
       }).toThrow(UnsupportedWeaponMechanicError);
     });
 
@@ -330,7 +366,7 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
 
       const lateStage = progression.stages.find((s) => s.stage === 'late')!;
       expect(lateStage.unsupportedReasonCounts).toBeDefined();
-      const homingCount = Object.entries(lateStage.unsupportedReasonCounts).find(([r]) => r.includes('Homing'))?.[1];
+      const homingCount = Object.entries(lateStage.unsupportedReasonCounts).find(([r]) => r.toLowerCase().includes('homing'))?.[1];
       expect(homingCount).toBeGreaterThan(0);
       expect(lateStage.provenMaximum).toBe(false);
     });

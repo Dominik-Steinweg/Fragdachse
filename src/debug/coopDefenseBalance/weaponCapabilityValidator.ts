@@ -1,199 +1,243 @@
 import type { WeaponConfig } from '../../loadout/LoadoutConfig';
+import type {
+  WeaponBalanceScenario,
+  CapabilityStatus,
+  WeaponCapabilityClassification,
+  ScenarioCapabilityCheckResult,
+} from './scenarioTypes';
 
-export interface WeaponBalanceCapabilityCheck {
-  readonly supported: boolean;
+export interface WeaponBalanceCapabilityCheck extends ScenarioCapabilityCheckResult {
+  /** Alias für unsupportedRelevant zur Abwärtskompatibilität. */
   readonly unsupportedReasons: readonly string[];
 }
 
 export class UnsupportedWeaponMechanicError extends Error {
   readonly weaponId: string;
   readonly unsupportedReasons: readonly string[];
+  readonly scenario: WeaponBalanceScenario;
 
-  constructor(weaponId: string, unsupportedReasons: readonly string[]) {
+  constructor(
+    weaponId: string,
+    unsupportedReasons: readonly string[],
+    scenario: WeaponBalanceScenario = 'single_target_static',
+  ) {
     super(
-      `[WeaponBalanceLab] Waffe "${weaponId}" verwendet noch nicht unterstützte Mechaniken für Headless-Single-Target: ${unsupportedReasons.join(', ')}`,
+      `[WeaponBalanceLab] Waffe "${weaponId}" verwendet im Szenario "${scenario}" noch nicht unterstützte relevante Mechaniken: ${unsupportedReasons.join(', ')}`,
     );
     this.name = 'UnsupportedWeaponMechanicError';
     this.weaponId = weaponId;
     this.unsupportedReasons = unsupportedReasons;
+    this.scenario = scenario;
   }
 }
 
 /**
- * Validiert, ob eine WeaponConfig für den Headless-Single-Target-Benchmark unterstützt wird.
+ * Validiert eine WeaponConfig szenariospezifisch gegen die Fähigkeiten des Headless-Simulators.
  *
- * Systematische Einteilung aller Felder von `WeaponConfigShape`:
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * KATEGORIE A: Bereits korrekt im Headless Single-Target unterstützt
- * - `id`, `cooldown`, `damage`, `range`
- * - `fire.type`: 'projectile', 'hitscan', 'melee'
- * - `fire.projectileSpeed`, `fire.projectileSize`, `fire.projectileMaxBounces`
- * - `fire.traceThickness`, `fire.tracerColor`
- * - `fire.arcDegrees`
- * - `allowedSlots`, `allowedModes`
- * - `adrenalinCost`, `adrenalinGain`
- * - `spreadStanding`, `spreadMoving` (isMoving=false im Stand), `spreadPerShot`, `maxDynamicSpread`
- * - `spreadRecoveryDelay`, `spreadRecoveryRate`, `spreadRecoverySpeed`
- * - `warmupSpeedMultiplier`
- * - `pelletCount`, `pelletSpreadAngle`, `pelletCountMultiplier`
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * KATEGORIE B: Im Single-Target Dummy-Szenario bewusst irrelevant (ohne Einfluss auf DPS/Ressourcen)
- * - Visuals / Audio / UI: `projectileColor`, `projectileStyle`, `projectileVisualScale`,
- *   `bulletVisualPreset`, `grenadeVisualPreset`, `energyBallVariant`, `projectileBurnVisualStyle`,
- *   `rocketSmokeTrailColor`, `tracerConfig`, `showCrosshair`, `shotAudio`, `shotScreenShake`
- * - Spieler-Rückstoß / Bewegungsbremse: `holdSpeedFactor`, `shotRecoilForce`, `shotRecoilDuration`
- *   (Schütze steht im Benchmark still)
- * - Dummy-Rückstoß: `hitKnockback`, `hitKnockbackDurationMs` (Dummy bleibt fest auf Messposition)
- * - Spieler-Defensive: `damageReduction` (Dummy greift nicht an)
- * - Objekt-/Umgebungs-Multiplikatoren: `rockDamageMult`, `trainDamageMult`, `baseDamageMult`
- *   (Dummy ist ein einzelnes spielergroßes Dachs-Ziel)
- * - Turret-Burst: `turretBurst` (normale Spielerwaffen ignorieren ihn laut Schema)
- * - Kosmetik: `bloodEffectMultiplier`
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * KATEGORIE C: Ergebnisrelevant für Single-Target, aber noch unsupported (BLOCKIERT)
- * - Treffer-Ressourcen: `hitAdrenaline`, `hitHeal`
- * - Debuffs & Schadensverstärkung: `hitVulnerabilityDurationMs`, `hitDebuffChance`, `hitSlow*`, `shotgunSlow*`
- * - Scopes & Aim: `scopeConfig`, `awpCharge`
- * - Schaden-Overrides: `directDamageOverride`
- * - Brand & Status: `burnOnHit`, `warmupBurnThreshold`
- * - Flächenschaden & Explosionen: `impactExplosion`, `enemyHitExplosion`, `multiExplosionCount`
- * - Zielsuchung & Spaltung: `homing`, `homingEnabled`, `splitCount`, `splitHomingEnabled`
- * - Ketten & Durchschlag: `chainLightning`, `penetrationCount`, `penetratesRocks`
- * - Detonationen: `detonable`, `detonator`
- * - Spezifische Waffenmechaniken: `ak47Focus`, `negevKillstreak`, `plasmaSwarm*`, `sideBurst*`,
- *   `proximityPulse`, `shotgunLightning*`, `shotgunProximity*`, `shotgunChain*`, `miniRocket*`
+ * Klassifiziert alle aktiven Eigenschaften in:
+ * - `supported`: Wird tatsächlich simuliert.
+ * - `scenario_irrelevant`: Existiert auf der Waffe, kann das Ergebnis unter den definierten Szenariobedingungen aber nachweislich nicht beeinflussen.
+ * - `unsupported_relevant`: Könnte das Ergebnis beeinflussen, ist aber noch nicht simuliert (blockiert `provenMaximum`).
  */
-export function validateWeaponBalanceCapabilities(config: WeaponConfig): WeaponBalanceCapabilityCheck {
-  const unsupportedReasons: string[] = [];
+export function validateWeaponBalanceCapabilities(
+  config: WeaponConfig,
+  scenario: WeaponBalanceScenario = 'single_target_static',
+): WeaponBalanceCapabilityCheck {
+  const classifications: WeaponCapabilityClassification[] = [];
+
+  const add = (feature: string, status: CapabilityStatus, rationale: string) => {
+    classifications.push({ feature, status, rationale });
+  };
 
   const fireType = config.fire.type;
   if (fireType !== 'projectile' && fireType !== 'hitscan' && fireType !== 'melee') {
-    unsupportedReasons.push(`Fire-Typ "${fireType}" ist noch nicht headless implementiert`);
+    add(`fire.type:${fireType}`, 'unsupported_relevant', `Fire-Typ "${fireType}" ist noch nicht headless implementiert`);
+  } else {
+    add(`fire.type:${fireType}`, 'supported', `Fire-Typ "${fireType}" wird headless vollständig simuliert`);
   }
 
-  // 1. Treffer-Ressourcen (Bite, etc.)
+  // 1. Ressourcen
+  if (config.adrenalinCost > 0) {
+    add('adrenalinCost', 'supported', 'Adrenalinkosten werden pro Schuss korrekt abgezogen');
+  }
+  if (config.adrenalinGain > 0) {
+    add('adrenalinGain', 'supported', 'Adrenalingewinn wird pro Direkttreffer korrekt verbucht');
+  }
   if (config.hitAdrenaline !== undefined && config.hitAdrenaline > 0) {
-    unsupportedReasons.push('hitAdrenaline (Treffer-Adrenalin) ist in Headless noch nicht implementiert');
+    add('hitAdrenaline', 'unsupported_relevant', 'hitAdrenaline beeinflusst die Adrenalingenerierung, ist headless aber noch nicht implementiert');
   }
   if (config.hitHeal !== undefined && config.hitHeal > 0) {
-    unsupportedReasons.push('hitHeal (Treffer-Heilung) ist in Headless noch nicht implementiert');
+    if (scenario === 'single_target_static') {
+      add('hitHeal', 'scenario_irrelevant', 'Spieler-HP ist im Single-Target-Dummy-Benchmark keine Zielmetrik');
+    } else {
+      add('hitHeal', 'unsupported_relevant', 'hitHeal ist für Überlebensszenarien noch nicht implementiert');
+    }
   }
 
   // 2. Debuffs & Schadensmodifikatoren auf Treffer
   if (config.hitVulnerabilityDurationMs !== undefined && config.hitVulnerabilityDurationMs > 0) {
-    unsupportedReasons.push('hitVulnerabilityDurationMs (Verwundbarkeits-Debuff) ist noch nicht implementiert');
+    add('hitVulnerabilityDurationMs', 'unsupported_relevant', 'hitVulnerabilityDurationMs erhöht Folgeschaden, ist headless aber noch nicht implementiert');
   }
   if (config.hitDebuffChance !== undefined && config.hitDebuffChance > 0) {
-    if ((config.hitVulnerabilityDurationMs ?? 0) > 0 || (config.hitSlowDurationMs ?? 0) > 0) {
-      unsupportedReasons.push('hitDebuffChance mit aktiven Debuffs ist noch nicht implementiert');
+    if ((config.hitVulnerabilityDurationMs ?? 0) > 0) {
+      add('hitDebuffChance', 'unsupported_relevant', 'hitDebuffChance mit aktiver Verwundbarkeit ist noch nicht implementiert');
     }
   }
   if ((config.hitSlowDurationMs ?? 0) > 0 && (config.hitSlowFraction ?? 0) > 0) {
-    unsupportedReasons.push('hitSlow (Gegner-Verlangsamung) ist noch nicht implementiert');
+    if (scenario === 'single_target_static') {
+      add('hitSlow', 'scenario_irrelevant', 'Dummy ist unbeweglich; Gegner-Verlangsamung ändert Treffer oder Schaden nicht');
+    } else {
+      add('hitSlow', 'unsupported_relevant', 'hitSlow beeinflusst Gegnerbewegung in dynamischen Szenarien');
+    }
   }
   if ((config.shotgunSlowDurationMs ?? 0) > 0 && (config.shotgunSlowFraction ?? 0) > 0) {
-    unsupportedReasons.push('shotgunSlow ist noch nicht implementiert');
+    if (scenario === 'single_target_static') {
+      add('shotgunSlow', 'scenario_irrelevant', 'Dummy ist unbeweglich; Shotgun-Slow ändert Treffer oder Schaden nicht');
+    } else {
+      add('shotgunSlow', 'unsupported_relevant', 'shotgunSlow ist für dynamische Szenarien noch nicht implementiert');
+    }
   }
   if (config.directDamageOverride !== undefined) {
-    unsupportedReasons.push('directDamageOverride ist noch nicht implementiert');
+    add('directDamageOverride', 'unsupported_relevant', 'directDamageOverride ist noch nicht implementiert');
   }
 
-  // 3. Scope & AWP-Charge
+  // 3. Kettenblitze (Chain Lightning)
+  if (config.chainLightning && config.chainLightning.maxJumps > 0) {
+    if (scenario === 'single_target_static') {
+      add(
+        'chainLightning',
+        'scenario_irrelevant',
+        'Im Single-Target-Dummy-Szenario existiert kein zweites Ziel für Kettenblitz-Sprünge und keine ASMD-Bälle zum Detonieren',
+      );
+    } else {
+      add('chainLightning', 'unsupported_relevant', 'chainLightning benötigt Multi-Target-Simulation');
+    }
+  }
+
+  // 4. Defensive & Knockback
+  if (config.damageReduction !== undefined && config.damageReduction > 0) {
+    add('damageReduction', 'scenario_irrelevant', 'Dummy greift im Benchmark nicht an; Schadensreduktion des Spielers ist irrelevant');
+  }
+  if (config.hitKnockback !== undefined && config.hitKnockback > 0) {
+    add('hitKnockback', 'scenario_irrelevant', 'Dummy ist im Single-Target-Benchmark ortsfest fixiert');
+  }
+
+  // 5. Scopes & Aim
   if (config.scopeConfig !== undefined) {
-    unsupportedReasons.push('scopeConfig (Scharfschützen-Scope) ist in Headless noch nicht implementiert');
+    add('scopeConfig', 'unsupported_relevant', 'scopeConfig (Scharfschützen-Scope) ist in Headless noch nicht implementiert');
   }
   if (config.awpCharge && ((config.awpCharge.maxDamageBonus ?? 0) > 0 || (config.awpCharge.corridorEnabled ?? 0) > 0)) {
-    unsupportedReasons.push('awpCharge (Scope-Aufladung / Schneise) ist noch nicht implementiert');
+    add('awpCharge', 'unsupported_relevant', 'awpCharge (Scope-Aufladung / Schneise) ist noch nicht implementiert');
   }
 
-  // 4. Brand & Warmup-Burn
+  // 6. Brand & DoT
   if (config.burnOnHit && ((config.burnOnHit.damagePerTick ?? 0) > 0 || (config.burnOnHit.durationMs ?? 0) > 0)) {
-    unsupportedReasons.push('burnOnHit (Brand-DoT) ist noch nicht headless implementiert');
+    add('burnOnHit', 'unsupported_relevant', 'burnOnHit (Brand-DoT) verursacht relevanten Schaden, ist headless aber noch nicht implementiert');
   }
   if (config.warmupBurnThreshold !== undefined && config.warmupBurnThreshold > 0) {
-    unsupportedReasons.push('warmupBurnThreshold (Brand-Aufwärmung) ist noch nicht implementiert');
+    add('warmupBurnThreshold', 'unsupported_relevant', 'warmupBurnThreshold (Brand-Aufwärmung) ist noch nicht implementiert');
   }
 
-  // 5. Projektil-Sonderpayloads
+  // 7. Projektil-Sonderpayloads & Explosionen
   if (fireType === 'projectile') {
     const projFire = config.fire;
     if (projFire.impactExplosion && projFire.impactExplosion.maxDamage > 0 && projFire.impactExplosion.radius > 0) {
-      unsupportedReasons.push('impactExplosion (Flächenschaden) ist noch nicht headless implementiert');
+      add('impactExplosion', 'unsupported_relevant', 'impactExplosion (Flächenschaden) ist noch nicht headless implementiert');
     }
     if (projFire.enemyHitExplosion && projFire.enemyHitExplosion.maxDamage > 0 && projFire.enemyHitExplosion.radius > 0) {
-      unsupportedReasons.push('enemyHitExplosion ist noch nicht headless implementiert');
+      add('enemyHitExplosion', 'unsupported_relevant', 'enemyHitExplosion ist noch nicht headless implementiert');
     }
     if (projFire.homing && (config.homingEnabled === undefined || config.homingEnabled > 0)) {
-      unsupportedReasons.push('Homing (Zielverfolgung) ist noch nicht headless implementiert');
+      add('homing', 'unsupported_relevant', 'Homing (Zielverfolgung) verändert Trefferwahrscheinlichkeit, ist headless aber noch nicht implementiert');
     }
   }
 
-  // 6. Spaltung & Kettenblitze
+  // 8. Spaltung, Durchschlag & Detonationen
   if (config.splitCount !== undefined && config.splitCount > 0) {
-    unsupportedReasons.push('Hydra-Splitting (splitCount) ist noch nicht headless implementiert');
+    add('splitCount', 'unsupported_relevant', 'Hydra-Splitting (splitCount) ist noch nicht headless implementiert');
   }
-  if (config.chainLightning && config.chainLightning.maxJumps > 0) {
-    unsupportedReasons.push('chainLightning (Kettenblitze) ist noch nicht headless implementiert');
-  }
-
-  // 7. Durchschlag & Detonationen
   if (config.penetrationCount !== undefined && config.penetrationCount > 0) {
-    unsupportedReasons.push('penetrationCount (Durchschlag) ist noch nicht headless implementiert');
+    add('penetrationCount', 'unsupported_relevant', 'penetrationCount (Durchschlag) ist noch nicht headless implementiert');
   }
   if (config.detonable) {
-    unsupportedReasons.push('detonable (ASMD-Ball-Detonation) ist noch nicht headless implementiert');
+    add('detonable', 'unsupported_relevant', 'detonable (ASMD-Ball-Detonation) ist noch nicht headless implementiert');
   }
   if (config.proximityPulse && config.proximityPulse.damage > 0) {
-    unsupportedReasons.push('proximityPulse ist noch nicht headless implementiert');
+    add('proximityPulse', 'unsupported_relevant', 'proximityPulse ist noch nicht headless implementiert');
   }
 
-  // 8. Spezifische Waffenmechaniken
+  // 9. Spezifische Waffenmechaniken
   if (config.sideBurstEveryShots !== undefined && config.sideBurstEveryShots > 0 && (config.sideBurstCount ?? 0) >= 2) {
-    unsupportedReasons.push('sideBurst (zusätzliche Seitenschüsse) ist noch nicht headless implementiert');
+    add('sideBurst', 'unsupported_relevant', 'sideBurst (zusätzliche Seitenschüsse) ist noch nicht headless implementiert');
   }
   if (config.plasmaSwarmEnabled !== undefined && config.plasmaSwarmEnabled > 0) {
-    unsupportedReasons.push('plasmaSwarm (Funken-Schwarm) ist noch nicht headless implementiert');
+    add('plasmaSwarm', 'unsupported_relevant', 'plasmaSwarm (Funken-Schwarm) ist noch nicht headless implementiert');
   }
   if (config.ak47Focus && ((config.ak47Focus.maxStacks ?? 0) > 0 || (config.ak47Focus.fireSuperiorityShots ?? 0) > 0)) {
-    unsupportedReasons.push('ak47Focus (Fokus-Stacks / Überlegenheit) ist noch nicht headless implementiert');
+    add('ak47Focus', 'unsupported_relevant', 'ak47Focus (Fokus-Stacks / Überlegenheit) ist noch nicht headless implementiert');
   }
   if (config.negevKillstreak && (config.negevKillstreak.damageBonusPerKill ?? 0) > 0) {
-    unsupportedReasons.push('negevKillstreak (Killstreak-Schaden) ist noch nicht headless implementiert');
+    if (scenario === 'single_target_static') {
+      add('negevKillstreak', 'scenario_irrelevant', 'Dummy stirbt nicht; Killstreak-Stacks können im Dummy-Benchmark nicht aufgebaut werden');
+    } else {
+      add('negevKillstreak', 'unsupported_relevant', 'negevKillstreak ist für Kampfszenarien noch nicht implementiert');
+    }
   }
   if (config.shotgunLightningDamage !== undefined && config.shotgunLightningDamage > 0) {
-    unsupportedReasons.push('shotgunLightning (Kugelblitz) ist noch nicht headless implementiert');
+    add('shotgunLightning', 'unsupported_relevant', 'shotgunLightning (Kugelblitz) ist noch nicht headless implementiert');
   }
   if (config.shotgunProximityMaxDamageBonus !== undefined && config.shotgunProximityMaxDamageBonus > 0) {
-    unsupportedReasons.push('shotgunProximity (Distanzschadensbonus) ist noch nicht headless implementiert');
+    add('shotgunProximity', 'unsupported_relevant', 'shotgunProximity (Distanzschadensbonus) ist noch nicht headless implementiert');
   }
   if (config.shotgunChainEnabled !== undefined && config.shotgunChainEnabled > 0) {
-    unsupportedReasons.push('shotgunChain ist noch nicht headless implementiert');
+    if (scenario === 'single_target_static') {
+      add('shotgunChain', 'scenario_irrelevant', 'Kein zweites Ziel für Shotgun-Kettenblitz vorhanden');
+    } else {
+      add('shotgunChain', 'unsupported_relevant', 'shotgunChain benötigt Multi-Target-Simulation');
+    }
   }
   if (config.miniRocketCascadeDamageBonusPerExplosion !== undefined && config.miniRocketCascadeDamageBonusPerExplosion > 0) {
-    unsupportedReasons.push('miniRocketCascade (Kaskaden-Bonus) ist noch nicht headless implementiert');
+    add('miniRocketCascade', 'unsupported_relevant', 'miniRocketCascade (Kaskaden-Bonus) ist noch nicht headless implementiert');
   }
   if (config.miniRocketReturnEnabled !== undefined && config.miniRocketReturnEnabled > 0) {
-    unsupportedReasons.push('miniRocketReturn (Rückkehr) ist noch nicht headless implementiert');
+    add('miniRocketReturn', 'unsupported_relevant', 'miniRocketReturn (Rückkehr) ist noch nicht headless implementiert');
   }
   if (config.multiExplosionCount !== undefined && config.multiExplosionCount > 1) {
-    unsupportedReasons.push('multiExplosionCount (Mehrfachexplosionen) ist noch nicht headless implementiert');
+    add('multiExplosionCount', 'unsupported_relevant', 'multiExplosionCount (Mehrfachexplosionen) ist noch nicht headless implementiert');
   }
 
+  const supportedRelevant = classifications
+    .filter((c) => c.status === 'supported')
+    .map((c) => c.feature);
+
+  const ignoredScenarioIrrelevant = classifications
+    .filter((c) => c.status === 'scenario_irrelevant')
+    .map((c) => c.feature);
+
+  const unsupportedRelevant = classifications
+    .filter((c) => c.status === 'unsupported_relevant')
+    .map((c) => c.feature);
+
   return {
-    supported: unsupportedReasons.length === 0,
-    unsupportedReasons,
+    scenario,
+    supported: unsupportedRelevant.length === 0,
+    supportedRelevant,
+    ignoredScenarioIrrelevant,
+    unsupportedRelevant,
+    unsupportedReasons: unsupportedRelevant,
+    classifications,
   };
 }
 
 /**
- * Wirft einen expliziten Fehler, falls die Waffe noch nicht unterstützte Mechaniken enthält.
+ * Wirft einen expliziten Fehler, falls die Waffe im gegebenen Szenario nicht unterstützte relevante Mechaniken enthält.
  */
-export function assertWeaponBalanceSupported(config: WeaponConfig): void {
-  const check = validateWeaponBalanceCapabilities(config);
+export function assertWeaponBalanceSupported(
+  config: WeaponConfig,
+  scenario: WeaponBalanceScenario = 'single_target_static',
+): void {
+  const check = validateWeaponBalanceCapabilities(config, scenario);
   if (!check.supported) {
-    throw new UnsupportedWeaponMechanicError(config.id, check.unsupportedReasons);
+    throw new UnsupportedWeaponMechanicError(config.id, check.unsupportedRelevant, scenario);
   }
 }

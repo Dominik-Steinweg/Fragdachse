@@ -47,6 +47,8 @@ export interface SingleTargetBenchmarkOptions {
   readonly weaponConfigOverride?: WeaponConfig;
   /** Maximale Dauer der Settle-Phase nach dem Angriffsfenster in ms. Standard: 5_000. */
   readonly maxSettleDurationMs?: number;
+  /** Falls false, werden keine detaillierten Damage-/Resource-Eventlisten allokiert (Lightweight-Modus). Standard: true. */
+  readonly recordEvents?: boolean;
 }
 
 /** Strukturiertes Messergebnis eines Single-Target-Benchmark-Laufs. */
