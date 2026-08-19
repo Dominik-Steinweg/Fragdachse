@@ -318,7 +318,9 @@ export class RocketRenderer {
       tint: {
         onEmit: () => this.nextSmokeColor,
       },
-      maxParticles: 640,
+      // In Phaser 4.2.1 limitiert maxParticles die Gesamtzahl aller je emittierten Partikel
+      // ueber die Lebensdauer des Emitters und stoppt ihn nach Erreichen des Limits dauerhaft.
+      // Fuer kontinuierliche Emissionen wird daher ausschliesslich maxAliveParticles als Laufzeitlimit verwendet.
       maxAliveParticles: 640,
       reserve: 256,
       emitting: false,

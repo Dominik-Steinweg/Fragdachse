@@ -56,7 +56,7 @@ import type { TrackedProjectile } from '../src/types';
 
 interface SmokeEmitterConfig {
   reserve: number;
-  maxParticles: number;
+  maxParticles?: number;
   maxAliveParticles: number;
   scale: {
     onEmit: (particle?: Phaser.GameObjects.Particles.Particle) => number;
@@ -322,9 +322,9 @@ describe('projectile performance paths', () => {
     expect(particles).toHaveBeenCalledTimes(1);
     expect(config).toMatchObject({
       reserve: 256,
-      maxParticles: 640,
       maxAliveParticles: 640,
     });
+    expect(config).not.toHaveProperty('maxParticles');
     expect(emissions).toEqual([
       { x: 10, y: 20, scale: 0.28, tint: 0x123456, scaleAtHalfLife: 0.462 },
       { x: 30, y: 40, scale: 1, tint: 0xabcdef, scaleAtHalfLife: 1.65 },
