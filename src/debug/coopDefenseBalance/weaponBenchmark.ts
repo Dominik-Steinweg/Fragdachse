@@ -4,6 +4,10 @@ import { WeaponFireExecutor } from '../../loadout/WeaponFireExecutor';
 import { resolveShotPlan, resolveEffectivePelletCount } from '../../loadout/ShotPlanResolver';
 import { HeadlessSingleTargetWorld } from './HeadlessSingleTargetWorld';
 import { assertWeaponBalanceSupported } from './weaponCapabilityValidator';
+import {
+  isSpreadWithinTriggerDiscipline,
+  calculateTriggerDisciplineReadyTime,
+} from './triggerDiscipline';
 import type {
   SingleTargetBenchmarkOptions,
   SingleTargetBenchmarkResult,
@@ -24,11 +28,12 @@ export function resolveDefaultTargetDistance(fireType: string, range: number): n
 /**
  * Führt einen deterministischen Headless-Single-Target-Benchmark für die angegebene Waffe aus.
  *
- * Simuliert das Feuern mit maximal zulässiger Kadenz über das definierte Angriffsfenster (Attack Window)
- * und lässt in der anschließenden Settle-Phase verbleibende Projektile im Flug auflösen.
+ * Simuliert das Feuern mit optimaler Trigger Discipline (Schussfreigabe nur bei zuverlässiger
+ * Zielabdeckung) über das definierte Angriffsfenster (Attack Window) und lässt in der
+ * anschließenden Settle-Phase verbleibende Projektile im Flug auflösen.
  *
- * Verwendet einen sub-step-genauen Scheduler, damit die Feuerrate unabhängig von `stepDeltaMs`
- * mathematisch exakt auf den Cooldown-Zeitpunkten stattfindet.
+ * Verwendet einen sub-step-genauen Event-Scheduler, damit die Feuerrate unabhängig von `stepDeltaMs`
+ * mathematisch exakt auf den Cooldown-, Recovery- und Schussfreigabe-Zeitpunkten stattfindet.
  *
  * @param options Konfigurationsparameter des Benchmark-Laufs
  * @returns Strukturiertes Messergebnis inklusive DPS, Trefferquote und Event-Historie
@@ -65,12 +70,22 @@ export function runWeaponSingleTargetBenchmark(
 
   let currentTime = 0;
 
+  const TIME_EPSILON = 1e-6;
+
   // ── Phase 1: Attack Window (Feuern + Simulation) ───────────────────────────
-  while (currentTime < attackWindowDurationMs) {
+  while (currentTime < attackWindowDurationMs - TIME_EPSILON) {
     world.setTime(currentTime);
 
-    // 1. Feuern, wenn Cooldown abgelaufen ist
-    if (!weapon.isOnCooldown(currentTime)) {
+    const cooldownReady = !weapon.isOnCooldown(currentTime);
+    const triggerReady = isSpreadWithinTriggerDiscipline(
+      config,
+      weapon.getDynamicSpread(),
+      targetDistance,
+      world.target.radius,
+    );
+
+    // 1. Feuern, wenn Cooldown abgelaufen ist UND Trigger Discipline Schussfreigabe erteilt
+    if (cooldownReady && triggerReady) {
       const shotPlan = resolveShotPlan({
         config,
         aimAngle: targetAngle,
@@ -94,7 +109,7 @@ export function runWeaponSingleTargetBenchmark(
         if (fired) anyFired = true;
       }
 
-      // Buchhaltung exakt wie in der Runtime nur bei erfolgreichem Schuss ausführen
+      // Buchhaltung nur bei erfolgreichem Schuss
       if (anyFired) {
         world.recordShotFired();
         if (config.adrenalinCost > 0) {
@@ -105,26 +120,46 @@ export function runWeaponSingleTargetBenchmark(
       }
     }
 
-    // 2. Nächsten Zeitschritt ermitteln (Sub-Stepping auf exakte Cooldown-Ready-Events)
+    // 2. Nächsten exakten Ereignis-Zeitpunkt ermitteln
     const lastUsedAt = weapon.getLastUsedAt();
-    const nextReadyTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.cooldown;
+    const cooldownReadyTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.cooldown;
+    const recoveryStartTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.spreadRecoveryDelay;
+    const spreadReadyTime = calculateTriggerDisciplineReadyTime(
+      config,
+      weapon.getDynamicSpread(),
+      lastUsedAt,
+      currentTime,
+      targetDistance,
+      world.target.radius,
+    );
+    const nextActionTime = Math.max(cooldownReadyTime, spreadReadyTime);
+
     const nextStepBoundary = Math.min(attackWindowDurationMs, currentTime + stepDeltaMs);
 
-    let nextTime: number;
-    if (nextReadyTime > currentTime && nextReadyTime < nextStepBoundary) {
-      nextTime = nextReadyTime;
-    } else {
-      nextTime = nextStepBoundary;
+    let nextTime = nextStepBoundary;
+    if (cooldownReadyTime > currentTime + TIME_EPSILON && cooldownReadyTime < nextTime) {
+      nextTime = cooldownReadyTime;
+    }
+    if (recoveryStartTime > currentTime + TIME_EPSILON && recoveryStartTime < nextTime) {
+      nextTime = recoveryStartTime;
+    }
+    if (nextActionTime > currentTime + TIME_EPSILON && nextActionTime < nextTime) {
+      nextTime = nextActionTime;
     }
 
     const subDelta = nextTime - currentTime;
-    if (subDelta > 0) {
+    if (subDelta > TIME_EPSILON) {
       world.step(subDelta);
-      weapon.decaySpread(subDelta, nextTime);
-      currentTime = nextTime;
+
+      const activeDecayDelta = Math.max(0, nextTime - Math.max(currentTime, recoveryStartTime));
+      if (activeDecayDelta > 0) {
+        weapon.decaySpread(activeDecayDelta, nextTime);
+      }
+
+      currentTime = Math.round(nextTime * 1e6) / 1e6;
       world.setTime(currentTime);
     } else {
-      currentTime = nextStepBoundary;
+      currentTime = Math.round(nextStepBoundary * 1e6) / 1e6;
       world.setTime(currentTime);
     }
   }

@@ -20,54 +20,94 @@ export class UnsupportedWeaponMechanicError extends Error {
 }
 
 /**
- * Validiert, ob eine WeaponConfig für den Headless-Single-Target-Benchmark in V0.2 unterstützt wird.
+ * Validiert, ob eine WeaponConfig für den Headless-Single-Target-Benchmark unterstützt wird.
  *
- * Liefert eine strukturierte Auswertung ohne stillschweigend relevante Schadens- oder
- * Verhaltensmechaniken zu ignorieren.
+ * Prüft konservativ alle spielrelevanten Eigenschaften ab, die Schaden, Schusszahl, Ressourcen
+ * oder Trefferverhalten beeinflussen und noch nicht im Headless-Pfad aufgelöst werden können.
  */
 export function validateWeaponBalanceCapabilities(config: WeaponConfig): WeaponBalanceCapabilityCheck {
   const unsupportedReasons: string[] = [];
 
   const fireType = config.fire.type;
   if (fireType !== 'projectile' && fireType !== 'hitscan' && fireType !== 'melee') {
-    unsupportedReasons.push(`Fire-Typ "${fireType}" ist in V0.2 noch nicht headless implementiert`);
+    unsupportedReasons.push(`Fire-Typ "${fireType}" ist noch nicht headless implementiert`);
   }
 
   if (config.burnOnHit && (config.burnOnHit.damagePerTick > 0 || config.burnOnHit.durationMs > 0)) {
-    unsupportedReasons.push('burnOnHit (Brand-DoT) ist in V0.2 noch nicht headless implementiert');
+    unsupportedReasons.push('burnOnHit (Brand-DoT) ist noch nicht headless implementiert');
   }
 
   if (fireType === 'projectile') {
     const projFire = config.fire;
     if (projFire.impactExplosion && projFire.impactExplosion.maxDamage > 0 && projFire.impactExplosion.radius > 0) {
-      unsupportedReasons.push('impactExplosion (Flächenschaden) ist in V0.2 noch nicht headless implementiert');
+      unsupportedReasons.push('impactExplosion (Flächenschaden) ist noch nicht headless implementiert');
     }
     if (projFire.enemyHitExplosion && projFire.enemyHitExplosion.maxDamage > 0 && projFire.enemyHitExplosion.radius > 0) {
-      unsupportedReasons.push('enemyHitExplosion ist in V0.2 noch nicht headless implementiert');
+      unsupportedReasons.push('enemyHitExplosion ist noch nicht headless implementiert');
     }
     if (projFire.homing && (config.homingEnabled === undefined || config.homingEnabled > 0)) {
-      unsupportedReasons.push('Homing (Zielverfolgung) ist in V0.2 noch nicht headless implementiert');
+      unsupportedReasons.push('Homing (Zielverfolgung) ist noch nicht headless implementiert');
     }
   }
 
   if (config.splitCount !== undefined && config.splitCount > 0) {
-    unsupportedReasons.push('Hydra-Splitting (splitCount) ist in V0.2 noch nicht headless implementiert');
+    unsupportedReasons.push('Hydra-Splitting (splitCount) ist noch nicht headless implementiert');
   }
 
   if (config.chainLightning && config.chainLightning.maxJumps > 0) {
-    unsupportedReasons.push('chainLightning (Kettenblitze) ist in V0.2 noch nicht headless implementiert');
+    unsupportedReasons.push('chainLightning (Kettenblitze) ist noch nicht headless implementiert');
   }
 
   if (config.penetrationCount !== undefined && config.penetrationCount > 0) {
-    unsupportedReasons.push('penetrationCount (Durchschlag) ist in V0.2 noch nicht headless implementiert');
+    unsupportedReasons.push('penetrationCount (Durchschlag) ist noch nicht headless implementiert');
   }
 
   if (config.detonable) {
-    unsupportedReasons.push('detonable (ASMD-Ball-Detonation) ist in V0.2 noch nicht headless implementiert');
+    unsupportedReasons.push('detonable (ASMD-Ball-Detonation) ist noch nicht headless implementiert');
   }
 
   if (config.proximityPulse && config.proximityPulse.damage > 0) {
-    unsupportedReasons.push('proximityPulse ist in V0.2 noch nicht headless implementiert');
+    unsupportedReasons.push('proximityPulse ist noch nicht headless implementiert');
+  }
+
+  if (config.sideBurstEveryShots !== undefined && config.sideBurstEveryShots > 0 && (config.sideBurstCount ?? 0) >= 2) {
+    unsupportedReasons.push('sideBurst (zusätzliche Seitenschüsse) ist noch nicht headless implementiert');
+  }
+
+  if (config.awpCharge && ((config.awpCharge.maxDamageBonus ?? 0) > 0 || (config.awpCharge.corridorEnabled ?? 0) > 0)) {
+    unsupportedReasons.push('awpCharge (Scope-Aufladung / Schneise) ist noch nicht headless implementiert');
+  }
+
+  if (config.plasmaSwarmEnabled !== undefined && config.plasmaSwarmEnabled > 0) {
+    unsupportedReasons.push('plasmaSwarm (Funken-Schwarm) ist noch nicht headless implementiert');
+  }
+
+  if (config.ak47Focus && ((config.ak47Focus.maxStacks ?? 0) > 0 || (config.ak47Focus.fireSuperiorityShots ?? 0) > 0)) {
+    unsupportedReasons.push('ak47Focus (Fokus-Stacks / Überlegenheit) ist noch nicht headless implementiert');
+  }
+
+  if (config.negevKillstreak && (config.negevKillstreak.damageBonusPerKill ?? 0) > 0) {
+    unsupportedReasons.push('negevKillstreak (Killstreak-Schaden) ist noch nicht headless implementiert');
+  }
+
+  if (config.shotgunLightningDamage !== undefined && config.shotgunLightningDamage > 0) {
+    unsupportedReasons.push('shotgunLightning (Kugelblitz) ist noch nicht headless implementiert');
+  }
+
+  if (config.shotgunProximityMaxDamageBonus !== undefined && config.shotgunProximityMaxDamageBonus > 0) {
+    unsupportedReasons.push('shotgunProximity (Distanzschadensbonus) ist noch nicht headless implementiert');
+  }
+
+  if (config.miniRocketCascadeDamageBonusPerExplosion !== undefined && config.miniRocketCascadeDamageBonusPerExplosion > 0) {
+    unsupportedReasons.push('miniRocketCascade (Kaskaden-Bonus) ist noch nicht headless implementiert');
+  }
+
+  if (config.miniRocketReturnEnabled !== undefined && config.miniRocketReturnEnabled > 0) {
+    unsupportedReasons.push('miniRocketReturn (Rückkehr) ist noch nicht headless implementiert');
+  }
+
+  if (config.multiExplosionCount !== undefined && config.multiExplosionCount > 1) {
+    unsupportedReasons.push('multiExplosionCount (Mehrfachexplosionen) ist noch nicht headless implementiert');
   }
 
   return {
