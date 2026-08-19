@@ -227,6 +227,16 @@ export interface PlayerNetState {
   aim:        PlayerAimNetState;
 }
 
+export type CombatDamageKind =
+  | 'direct'
+  | 'explosion'
+  | 'burn'
+  | 'chain'
+  | 'ground'
+  | 'reflect';
+
+export type CombatDamageTargetType = 'player' | 'enemy';
+
 export type ShieldBlockCategory = 'projectile' | 'hitscan' | 'melee' | 'explosion' | 'tesla' | 'damage_over_time';
 
 export interface ShieldBuffHudState {

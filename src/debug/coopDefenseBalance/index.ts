@@ -6,3 +6,4 @@ export * from './tracker';
 export * from './weaponBenchmarkTypes';
 export * from './HeadlessSingleTargetWorld';
 export * from './weaponBenchmark';
+export * from './weaponCapabilityValidator';

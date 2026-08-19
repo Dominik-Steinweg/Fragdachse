@@ -8,7 +8,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, CombatDamageKind, CombatDamageTargetType, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
 } from '../utils/geometry';
@@ -102,15 +102,7 @@ export interface Ak47DirectEnemyHitImpact {
  * andere ist Folgeschaden und darf trefferabhaengige Effekte nicht erneut ausloesen. Die
  * Unterscheidung ist nicht aus `sourceId` ableitbar: das ist ein Anzeigetext.
  */
-export type CombatDamageKind =
-  | 'direct'
-  | 'explosion'
-  | 'burn'
-  | 'chain'
-  | 'ground'
-  | 'reflect';
-
-export type CombatDamageTargetType = 'player' | 'enemy';
+export type { CombatDamageKind, CombatDamageTargetType };
 
 /**
  * Begleitdaten eines Schadensereignisses.

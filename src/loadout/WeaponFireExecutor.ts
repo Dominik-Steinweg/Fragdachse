@@ -96,7 +96,7 @@ export interface MeleeSwingRequest {
  * lokaler Treffer-Resolver. Der Executor selbst kennt keine der beiden Seiten.
  */
 export interface WeaponFireSink {
-  spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): void;
+  spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): boolean | void;
   resolveHitscan(request: HitscanShotRequest): boolean;
   resolveMelee(request: MeleeSwingRequest): boolean;
 }
@@ -210,7 +210,7 @@ export class WeaponFireExecutor {
       && sourceSlot === 'weapon1'
       && (config.plasmaSwarmEnabled ?? 0) > 0;
 
-    this.sink.spawnProjectile(x, y, angle, ownerId, {
+    const spawnResult = this.sink.spawnProjectile(x, y, angle, ownerId, {
       speed:           fireConfig.projectileSpeed,
       ignoreBaseCollisions: options?.ignoreBaseCollisions,
       ignoreRockIndex: options?.ignoreRockIndex,
@@ -321,7 +321,7 @@ export class WeaponFireExecutor {
       ak47FireSuperiorityShot: config.ak47FireSuperiorityShot,
     });
 
-    return true;
+    return spawnResult !== false;
   }
 
   private fireHitscan(

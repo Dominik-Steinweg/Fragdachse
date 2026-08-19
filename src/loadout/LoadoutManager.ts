@@ -38,9 +38,9 @@ import type {
 } from './LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
 import { COLORS, type MuzzleOrigin } from '../config';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
+import { resolveShotPlan } from './ShotPlanResolver';
 import { WeaponFireExecutor, type WeaponFireOptions } from './WeaponFireExecutor';
 import { getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
@@ -1655,21 +1655,10 @@ export class LoadoutManager {
     // daher ist velocity immer aktuell (kein Netzwerk-Lag wie bei getPlayerInput).
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
     const isMoving    = isVelocityMoving(shooterBody?.velocity.x ?? 0, shooterBody?.velocity.y ?? 0);
-    // Bei Scope-Waffen: Spread interpoliert zwischen unscopedSpreadDeg (scope=0) und normalem Spread (scope=1)
-    const scopeCfg      = cfg.scopeConfig;
     const scopeProgress = params?.scopeProgress;
-    let baseSpread: number;
-    if (scopeCfg !== undefined && scopeProgress !== undefined) {
-      const fullyAimedSpread = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
-      baseSpread = scopeCfg.unscopedSpreadDeg + (fullyAimedSpread - scopeCfg.unscopedSpreadDeg) * scopeProgress;
-    } else {
-      baseSpread = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
-    }
     const fireControlSpreadMultiplier = cfg.id === 'AK47' && ak47Focus && ak47Focus.fireControlEnabled > 0
       ? Math.max(0, 1 - ak47State!.stacks * ak47Focus.fireControlSpreadPerStack)
       : 1;
-    const totalSpreadDeg = Math.max(0, (baseSpread + weapon.getDynamicSpread()) * fireControlSpreadMultiplier);
-    const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
 
     // 4. Typ-spezifische Waffenlogik ausführen.
     //    Multi-Pellet-Waffen (z.B. Shotgun) feuern alle Projektile gleichzeitig ab.
@@ -1752,25 +1741,31 @@ export class LoadoutManager {
       if (kineticBonus > 0) shotCfg = { ...shotCfg, damage: shotCfg.damage * (1 + kineticBonus) };
     }
 
-    const pelletCount = Math.max(1, Math.round((shotCfg.pelletCount ?? 1) * (shotCfg.pelletCountMultiplier ?? 1)));
-    let didFire: boolean;
-    if (pelletCount > 1) {
-      const pelletOffsets = calcPelletAngles(pelletCount, cfg.pelletSpreadAngle ?? 0);
-      for (let pelletIndex = 0; pelletIndex < pelletOffsets.length; pelletIndex += 1) {
-        const offset = pelletOffsets[pelletIndex];
-        const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
-        // Eine Salve ist ein einzelner Schuss: Nur das erste Projektil darf den
-        // Waffensound auf Host und Remote-Clients replizieren. Mündungsfeuer und
-        // Projektilvisuals bleiben für jedes Pellet aktiv.
-        const pelletConfig = pelletIndex === 0
-          ? shotCfg
-          : { ...shotCfg, shotAudio: undefined };
-        this.dispatchWeaponFire(pelletConfig, x, y, pelletAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
-      }
-      didFire = true;
-    } else {
-      const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
-      didFire = this.dispatchWeaponFire(shotCfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
+    const shotPlan = resolveShotPlan({
+      config: shotCfg,
+      aimAngle: angle,
+      dynamicSpread: weapon.getDynamicSpread(),
+      isMoving,
+      scopeProgress,
+      fireControlSpreadMultiplier,
+      random: Math.random,
+    });
+
+    let didFire = false;
+    for (const shot of shotPlan.shots) {
+      const fired = this.dispatchWeaponFire(
+        shot.config,
+        x,
+        y,
+        shot.angle,
+        targetX,
+        targetY,
+        playerId,
+        playerColor,
+        sourceSlot,
+        shotId,
+      );
+      if (fired) didFire = true;
     }
     if (!didFire) return { ok: false, reason: 'blocked' };
 

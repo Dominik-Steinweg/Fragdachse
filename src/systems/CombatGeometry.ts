@@ -4,6 +4,7 @@ import {
   findNearestRectangleHit as geomNearestRectangleHit,
   type GeometryHit,
 } from '../utils/geometry';
+import { isAngleWithinArc } from '../combat/rules/DirectCombatHitResolver';
 import { ArenaObstacleIndex, OBSTACLE_BASE, OBSTACLE_ROCK } from './ArenaObstacleIndex';
 
 /** Art des getroffenen Hindernisses aus dem {@link ArenaObstacleIndex}. */
@@ -163,10 +164,7 @@ export class CombatGeometry {
    * `dx`/`dy` gebildete Zielrichtung sind Weltwinkel im Bogenmaß.
    */
   static isWithinArc(dx: number, dy: number, facingAngle: number, halfArcRad: number): boolean {
-    let angleDiff = Math.atan2(dy, dx) - facingAngle;
-    while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-    return Math.abs(angleDiff) <= halfArcRad;
+    return isAngleWithinArc(dx, dy, facingAngle, halfArcRad);
   }
 
   /**

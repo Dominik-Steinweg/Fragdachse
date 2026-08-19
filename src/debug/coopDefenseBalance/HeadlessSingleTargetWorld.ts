@@ -1,13 +1,15 @@
-import * as Phaser from 'phaser';
 import { PLAYER_SIZE } from '../../config';
-import type { ProjectileSpawnConfig } from '../../types';
+import type { CombatDamageKind, ProjectileSpawnConfig } from '../../types';
 import type {
   HitscanShotRequest,
   MeleeSwingRequest,
   WeaponFireSink,
 } from '../../loadout/WeaponFireExecutor';
-import { CombatGeometry } from '../../systems/CombatGeometry';
-import { findNearestCircleHit } from '../../utils/geometry';
+import {
+  checkSweptCircleHit,
+  checkHitscanRayCircleHit,
+  checkMeleeArcHit,
+} from '../../combat/rules/DirectCombatHitResolver';
 import type { DamageEventRecord, ResourceEventRecord } from './weaponBenchmarkTypes';
 
 /** Interner Tracking-Zustand für ein im Flug befindliches Projektil im Headless-Modus. */
@@ -53,6 +55,7 @@ export function createMulberry32Prng(seed: number): () => number {
  * Nahkampfschwünge mit virtueller Zeit und deterministischem RNG gegen ein statisches,
  * unsterbliches Ziel in Spielergröße (`PLAYER_SIZE / 2`).
  *
+ * Verwendet dieselben mathematischen Hit-Resolver wie die Runtime.
  * Frei von Rendering, Audio, Netzwerk und Wandzeit.
  */
 export class HeadlessSingleTargetWorld implements WeaponFireSink {
@@ -72,10 +75,8 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   private adrenalineGenerated = 0;
   private adrenalineSpent = 0;
 
-  // Wiederverwendbare Scratch-Objekte für geometrische Schnittprüfungen
-  private readonly scratchLine = new Phaser.Geom.Line();
-  private readonly scratchCircle = new Phaser.Geom.Circle();
-  private readonly scratchPoints: Phaser.Math.Vector2[] = [];
+  /** Falls true, schlägt jede Schussannahme fehl (für Tests). */
+  failingSink = false;
 
   constructor(targetDistance: number, seed = 1) {
     this.target = {
@@ -99,11 +100,18 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     return this.now;
   }
 
+  /** Prüft, ob sich aktuell noch Projektile im Flug befinden. */
+  hasActiveProjectiles(): boolean {
+    return this.activeProjectiles.length > 0;
+  }
+
   /**
    * Führt einen Simulationsschritt für alle aktiven Projektile aus.
-   * Prüft kontinuierliche Liniensegment-Kollision (Anti-Tunneling) gegen das Ziel.
+   * Prüft kontinuierliche Liniensegment-Kollision (Anti-Tunneling) über den gemeinsamen Resolver.
    */
   step(deltaMs: number): void {
+    if (deltaMs <= 0) return;
+
     for (let index = this.activeProjectiles.length - 1; index >= 0; index -= 1) {
       const proj = this.activeProjectiles[index];
       proj.lastX = proj.x;
@@ -112,19 +120,16 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       proj.y += proj.vy * (deltaMs / 1000);
       proj.ageMs += deltaMs;
 
-      const sweptLine = this.scratchLine.setTo(proj.lastX, proj.lastY, proj.x, proj.y);
       const collisionRadius = this.target.radius + proj.size * 0.5;
-      const inside = Math.hypot(this.target.x - sweptLine.x1, this.target.y - sweptLine.y1) <= collisionRadius;
-      const hit = inside
-        ? { distance: 0, x: sweptLine.x1, y: sweptLine.y1 }
-        : findNearestCircleHit(
-            sweptLine,
-            this.target.x,
-            this.target.y,
-            collisionRadius,
-            this.scratchCircle,
-            this.scratchPoints,
-          );
+      const hit = checkSweptCircleHit(
+        proj.lastX,
+        proj.lastY,
+        proj.x,
+        proj.y,
+        this.target.x,
+        this.target.y,
+        collisionRadius,
+      );
 
       if (hit) {
         this.hits += 1;
@@ -142,7 +147,9 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   // ── WeaponFireSink-Implementierung ─────────────────────────────────────────
 
   /** Spawnt ein fliegendes Projektil in der virtuellen Welt. */
-  spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): void {
+  spawnProjectile(x: number, y: number, angle: number, _ownerId: string, cfg: ProjectileSpawnConfig): boolean {
+    if (this.failingSink) return false;
+
     const vx = Math.cos(angle) * cfg.speed;
     const vy = Math.sin(angle) * cfg.speed;
     this.activeProjectiles.push({
@@ -160,30 +167,25 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       adrenalinGain: cfg.adrenalinGain,
       sourceId: cfg.sourceId ?? 'weapon.unknown',
     });
+    return true;
   }
 
-  /** Löst einen Hitscan-Strahl über Geometrie-Schnittprüfung gegen das Ziel auf. */
+  /** Löst einen Hitscan-Strahl über den gemeinsamen Schnitt-Resolver auf. */
   resolveHitscan(request: HitscanShotRequest): boolean {
-    const dirX = Math.cos(request.angle);
-    const dirY = Math.sin(request.angle);
-    const endX = request.startX + dirX * request.range;
-    const endY = request.startY + dirY * request.range;
-    const line = this.scratchLine.setTo(request.startX, request.startY, endX, endY);
+    if (this.failingSink) return false;
 
-    const collisionRadius = this.target.radius + request.traceThickness * 0.5;
-    const inside = Math.hypot(this.target.x - line.x1, this.target.y - line.y1) <= collisionRadius;
-    const hit = inside
-      ? { distance: 0, x: line.x1, y: line.y1 }
-      : findNearestCircleHit(
-          line,
-          this.target.x,
-          this.target.y,
-          collisionRadius,
-          this.scratchCircle,
-          this.scratchPoints,
-        );
+    const hit = checkHitscanRayCircleHit(
+      request.startX,
+      request.startY,
+      request.angle,
+      request.range,
+      request.traceThickness,
+      this.target.x,
+      this.target.y,
+      this.target.radius,
+    );
 
-    if (hit && hit.distance <= request.range) {
+    if (hit) {
       this.hits += 1;
       this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct');
       if (request.adrenalinGain > 0) {
@@ -194,26 +196,30 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     return false;
   }
 
-  /** Löst einen Nahkampfschlag über Bogen- und Reichweitenprüfung gegen das Ziel auf. */
+  /** Löst einen Nahkampfschlag über den gemeinsamen Bogen- und Reichweiten-Resolver auf. */
   resolveMelee(request: MeleeSwingRequest): boolean {
-    const halfArcRad = (request.arcDegrees * Math.PI / 180) / 2;
-    const dx = this.target.x - request.x;
-    const dy = this.target.y - request.y;
-    const distance = Math.hypot(dx, dy);
+    if (this.failingSink) return false;
 
-    if (distance > request.range + this.target.radius) {
-      return false;
-    }
-    if (!CombatGeometry.isWithinArc(dx, dy, request.angle, halfArcRad)) {
-      return false;
-    }
+    const hit = checkMeleeArcHit(
+      request.x,
+      request.y,
+      request.angle,
+      request.range,
+      request.arcDegrees,
+      this.target.x,
+      this.target.y,
+      this.target.radius,
+    );
 
-    this.hits += 1;
-    this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct');
-    if (request.adrenalinGain > 0) {
-      this.recordAdrenalineGain(request.adrenalinGain, request.sourceId);
+    if (hit) {
+      this.hits += 1;
+      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct');
+      if (request.adrenalinGain > 0) {
+        this.recordAdrenalineGain(request.adrenalinGain, request.sourceId);
+      }
+      return true;
     }
-    return true;
+    return false;
   }
 
   // ── Recording-Hilfsmethoden ────────────────────────────────────────────────
@@ -226,7 +232,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     targetId: string,
     damage: number,
     sourceId: string,
-    damageKind: 'direct' | 'burn' | 'chain' | 'radial' | 'reflected' = 'direct',
+    damageKind: CombatDamageKind = 'direct',
     isCritical = false,
   ): void {
     this.totalDamage += damage;

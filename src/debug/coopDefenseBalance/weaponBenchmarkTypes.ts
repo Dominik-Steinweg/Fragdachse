@@ -1,4 +1,4 @@
-import type { LoadoutSlot } from '../../types';
+import type { CombatDamageKind, LoadoutSlot } from '../../types';
 import type { WeaponConfig } from '../../loadout/LoadoutConfig';
 
 /** Ein einzelnes aufgezeichnetes Schadensereignis im Benchmark. */
@@ -7,7 +7,7 @@ export interface DamageEventRecord {
   readonly targetId: string;
   readonly damage: number;
   readonly sourceId: string;
-  readonly damageKind: 'direct' | 'burn' | 'chain' | 'radial' | 'reflected';
+  readonly damageKind: CombatDamageKind;
   readonly isCritical?: boolean;
 }
 
@@ -24,9 +24,9 @@ export interface ResourceEventRecord {
 export interface SingleTargetBenchmarkOptions {
   /** ID der zu testenden Waffe, z. B. 'P90', 'ASMD_PRIM', 'BITE'. */
   readonly weaponId: string;
-  /** Virtuelle Simulationsdauer in Millisekunden. Standard: 30_000 (30 Sekunden). */
+  /** Virtuelles Angriffsfenster (Attack Window) in Millisekunden. Standard: 30_000 (30 Sekunden). */
   readonly durationMs?: number;
-  /** Diskrete Zeitschritt-Länge in ms. Standard: 16 (ca. 60 Hz). */
+  /** Diskrete Zeitschritt-Länge in ms. Standard: 16. */
   readonly stepDeltaMs?: number;
   /** Deterministischer PRNG-Seed. Standard: 1. */
   readonly seed?: number;
@@ -40,12 +40,15 @@ export interface SingleTargetBenchmarkOptions {
   readonly sourceSlot?: LoadoutSlot;
   /** Optionale modifizierte WeaponConfig (für Reaktivitäts- und Modifikator-Tests). */
   readonly weaponConfigOverride?: WeaponConfig;
+  /** Maximale Dauer der Settle-Phase nach dem Angriffsfenster in ms. Standard: 5_000. */
+  readonly maxSettleDurationMs?: number;
 }
 
 /** Strukturiertes Messergebnis eines Single-Target-Benchmark-Laufs. */
 export interface SingleTargetBenchmarkResult {
   readonly weaponId: string;
   readonly durationMs: number;
+  readonly settleDurationMs: number;
   readonly totalDamage: number;
   readonly dps: number;
   readonly shotsFired: number;

@@ -1,7 +1,9 @@
 import { getWeaponConfig } from '../../loadout/LoadoutConfig';
 import { GenericWeapon } from '../../loadout/GenericWeapon';
 import { WeaponFireExecutor } from '../../loadout/WeaponFireExecutor';
+import { resolveShotPlan, resolveEffectivePelletCount } from '../../loadout/ShotPlanResolver';
 import { HeadlessSingleTargetWorld } from './HeadlessSingleTargetWorld';
+import { assertWeaponBalanceSupported } from './weaponCapabilityValidator';
 import type {
   SingleTargetBenchmarkOptions,
   SingleTargetBenchmarkResult,
@@ -22,9 +24,11 @@ export function resolveDefaultTargetDistance(fireType: string, range: number): n
 /**
  * Führt einen deterministischen Headless-Single-Target-Benchmark für die angegebene Waffe aus.
  *
- * Simuliert das Feuern mit maximal zulässiger Kadenz über die gewünschte virtuelle Zeitdauer,
- * misst den tatsächlich verursachten Schaden und erfasste Ressourcen (Adrenalin),
- * ohne Rendering, Audio, Netzwerk oder Echtzeit-Kopplung.
+ * Simuliert das Feuern mit maximal zulässiger Kadenz über das definierte Angriffsfenster (Attack Window)
+ * und lässt in der anschließenden Settle-Phase verbleibende Projektile im Flug auflösen.
+ *
+ * Verwendet einen sub-step-genauen Scheduler, damit die Feuerrate unabhängig von `stepDeltaMs`
+ * mathematisch exakt auf den Cooldown-Zeitpunkten stattfindet.
  *
  * @param options Konfigurationsparameter des Benchmark-Laufs
  * @returns Strukturiertes Messergebnis inklusive DPS, Trefferquote und Event-Historie
@@ -37,10 +41,14 @@ export function runWeaponSingleTargetBenchmark(
     throw new Error(`[WeaponBalanceLab] Unbekannte Weapon-ID: "${options.weaponId}"`);
   }
 
-  const durationMs = options.durationMs ?? 30_000;
+  // Capability-Check: nicht unterstützte Mechaniken explizit ablehnen
+  assertWeaponBalanceSupported(config);
+
+  const attackWindowDurationMs = options.durationMs ?? 30_000;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
   const seed = options.seed ?? 1;
   const slot = options.sourceSlot ?? config.allowedSlots[0] ?? 'weapon1';
+  const maxSettleMs = options.maxSettleDurationMs ?? 5_000;
 
   const targetDistance = options.targetDistance ?? resolveDefaultTargetDistance(config.fire.type, config.range);
   const world = new HeadlessSingleTargetWorld(targetDistance, seed);
@@ -55,54 +63,92 @@ export function runWeaponSingleTargetBenchmark(
   const targetY = world.target.y;
   const targetAngle = Math.atan2(targetY - shooterY, targetX - shooterX);
 
-  for (let now = 0; now < durationMs; now += stepDeltaMs) {
-    world.setTime(now);
+  let currentTime = 0;
 
-    // Prüfen, ob die Waffe zu diesem Zeitpunkt feuerbereit ist (Cooldown)
-    if (!weapon.isOnCooldown(now)) {
-      // Authentische Spread-Berechnung (Basis-Spread im Stehen + dynamischer Bloom)
-      const dynamicSpread = weapon.getDynamicSpread();
-      const totalSpreadDeg = Math.max(0, config.spreadStanding + dynamicSpread);
-      const halfSpreadRad = (totalSpreadDeg * Math.PI / 180) / 2;
-      const spreadRoll = (world.rng() * 2 - 1) * halfSpreadRad;
-      const shotAngle = targetAngle + spreadRoll;
+  // ── Phase 1: Attack Window (Feuern + Simulation) ───────────────────────────
+  while (currentTime < attackWindowDurationMs) {
+    world.setTime(currentTime);
 
-      world.recordShotFired();
-
-      // Ressourcenverbrauch (Adrenalin) erfassen
-      if (config.adrenalinCost > 0) {
-        world.recordAdrenalineDrain(config.adrenalinCost, config.id);
-      }
-
-      // Schuss über den gemeinsamen WeaponFireExecutor absetzen
-      executor.fire(config, {
-        x: shooterX,
-        y: shooterY,
-        angle: shotAngle,
-        targetX,
-        targetY,
-        ownerId: shooterId,
-        ownerColor: playerColor,
-        sourceSlot: slot,
+    // 1. Feuern, wenn Cooldown abgelaufen ist
+    if (!weapon.isOnCooldown(currentTime)) {
+      const shotPlan = resolveShotPlan({
+        config,
+        aimAngle: targetAngle,
+        dynamicSpread: weapon.getDynamicSpread(),
+        isMoving: false,
+        random: world.rng,
       });
 
-      // Cooldown und dynamischen Bloom aktualisieren
-      weapon.addSpread();
-      weapon.recordUse(now);
+      let anyFired = false;
+      for (const shot of shotPlan.shots) {
+        const fired = executor.fire(shot.config, {
+          x: shooterX,
+          y: shooterY,
+          angle: shot.angle,
+          targetX,
+          targetY,
+          ownerId: shooterId,
+          ownerColor: playerColor,
+          sourceSlot: slot,
+        });
+        if (fired) anyFired = true;
+      }
+
+      // Buchhaltung exakt wie in der Runtime nur bei erfolgreichem Schuss ausführen
+      if (anyFired) {
+        world.recordShotFired();
+        if (config.adrenalinCost > 0) {
+          world.recordAdrenalineDrain(config.adrenalinCost, config.id);
+        }
+        weapon.addSpread();
+        weapon.recordUse(currentTime);
+      }
     }
 
-    // Dynamischen Bloom über die Zeit abbauen
-    weapon.decaySpread(stepDeltaMs, now);
+    // 2. Nächsten Zeitschritt ermitteln (Sub-Stepping auf exakte Cooldown-Ready-Events)
+    const lastUsedAt = weapon.getLastUsedAt();
+    const nextReadyTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.cooldown;
+    const nextStepBoundary = Math.min(attackWindowDurationMs, currentTime + stepDeltaMs);
 
-    // Aktive Projektile im Flug weiterbewegen und Treffer auswerten
-    world.step(stepDeltaMs);
+    let nextTime: number;
+    if (nextReadyTime > currentTime && nextReadyTime < nextStepBoundary) {
+      nextTime = nextReadyTime;
+    } else {
+      nextTime = nextStepBoundary;
+    }
+
+    const subDelta = nextTime - currentTime;
+    if (subDelta > 0) {
+      world.step(subDelta);
+      weapon.decaySpread(subDelta, nextTime);
+      currentTime = nextTime;
+      world.setTime(currentTime);
+    } else {
+      currentTime = nextStepBoundary;
+      world.setTime(currentTime);
+    }
   }
 
+  // ── Phase 2: Settle Phase (keine neuen Schüsse, fliegende Projektile auflösen)
+  const settleStart = currentTime;
+  while (world.hasActiveProjectiles() && (currentTime - settleStart < maxSettleMs)) {
+    const remainingSettle = maxSettleMs - (currentTime - settleStart);
+    const stepMs = Math.min(stepDeltaMs, remainingSettle);
+    if (stepMs <= 0) break;
+
+    world.step(stepMs);
+    currentTime += stepMs;
+    world.setTime(currentTime);
+  }
+  const settleDurationMs = currentTime - settleStart;
+
+  // ── Phase 3: Metriken auswerten (DPS-Nenner ist exakt das Angriffsfenster) ──
   const totalDamage = world.getTotalDamage();
   const shotsFired = world.getShotsFired();
   const hits = world.getHits();
-  const hitRate = shotsFired > 0 ? hits / shotsFired : 0;
-  const durationSec = durationMs / 1000;
+  const totalExpectedPellets = shotsFired * resolveEffectivePelletCount(config);
+  const hitRate = totalExpectedPellets > 0 ? hits / totalExpectedPellets : 0;
+  const durationSec = attackWindowDurationMs / 1000;
   const dps = durationSec > 0 ? totalDamage / durationSec : 0;
   const adrenalineGenerated = world.getAdrenalineGenerated();
   const adrenalineSpent = world.getAdrenalineSpent();
@@ -111,7 +157,8 @@ export function runWeaponSingleTargetBenchmark(
 
   return {
     weaponId: config.id,
-    durationMs,
+    durationMs: attackWindowDurationMs,
+    settleDurationMs,
     totalDamage,
     dps,
     shotsFired,

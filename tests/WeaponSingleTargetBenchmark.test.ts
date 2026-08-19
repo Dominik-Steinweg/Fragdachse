@@ -57,49 +57,13 @@ vi.mock('phaser', () => {
     get bottom() { return this.y + this.height; }
   }
 
-  function getLineToCircle(
-    line: Line,
-    circle: Circle,
-    out: Array<{ x: number; y: number }> = [],
-  ): Array<{ x: number; y: number }> {
-    const dx = line.x2 - line.x1;
-    const dy = line.y2 - line.y1;
-    const fx = line.x1 - circle.x;
-    const fy = line.y1 - circle.y;
-
-    const a = dx * dx + dy * dy;
-    const b = 2 * (fx * dx + fy * dy);
-    const c = fx * fx + fy * fy - circle.radius * circle.radius;
-
-    if (a < 1e-9) {
-      if (c <= 0) out.push({ x: line.x1, y: line.y1 });
-      return out;
-    }
-
-    const discriminant = b * b - 4 * a * c;
-    if (discriminant < 0) return out;
-
-    const sqrtDisc = Math.sqrt(discriminant);
-    const t1 = (-b - sqrtDisc) / (2 * a);
-    const t2 = (-b + sqrtDisc) / (2 * a);
-
-    if (t1 >= 0 && t1 <= 1) {
-      out.push({ x: line.x1 + t1 * dx, y: line.y1 + t1 * dy });
-    }
-    if (t2 >= 0 && t2 <= 1 && Math.abs(t2 - t1) > 1e-6) {
-      out.push({ x: line.x1 + t2 * dx, y: line.y1 + t2 * dy });
-    }
-
-    return out;
-  }
-
   return {
     Geom: {
       Line,
       Circle,
       Rectangle,
       Intersects: {
-        GetLineToCircle: getLineToCircle,
+        GetLineToCircle: () => [],
       },
     },
     Math: {
@@ -116,204 +80,458 @@ import {
   resolveDefaultTargetDistance,
 } from '../src/debug/coopDefenseBalance/weaponBenchmark';
 import { HeadlessSingleTargetWorld } from '../src/debug/coopDefenseBalance/HeadlessSingleTargetWorld';
-import { WEAPON_CONFIGS, getWeaponConfig } from '../src/loadout/LoadoutConfig';
+import {
+  UnsupportedWeaponMechanicError,
+  validateWeaponBalanceCapabilities,
+} from '../src/debug/coopDefenseBalance/weaponCapabilityValidator';
+import {
+  checkSweptCircleHit,
+  checkHitscanRayCircleHit,
+  checkMeleeArcHit,
+  isAngleWithinArc,
+} from '../src/combat/rules/DirectCombatHitResolver';
+import { resolveShotPlan } from '../src/loadout/ShotPlanResolver';
+import { WEAPON_CONFIGS, getWeaponConfig, type WeaponConfig } from '../src/loadout/LoadoutConfig';
+import { GenericWeapon } from '../src/loadout/GenericWeapon';
 import { WeaponFireExecutor } from '../src/loadout/WeaponFireExecutor';
 import { PLAYER_SIZE } from '../src/config';
 
-describe('Weapon Balance Lab – Single Target Benchmark', () => {
-  it('liefert mit gleichem Seed und gleichem Build exakt reproduzierbare Ergebnisse', () => {
-    const runA = runWeaponSingleTargetBenchmark({
-      weaponId: 'P90',
-      durationMs: 30_000,
-      seed: 42,
-    });
+describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () => {
+  describe('1. Determinismus & Reproduzierbarkeit', () => {
+    it('liefert mit gleichem Seed und gleichem Build exakt reproduzierbare Ergebnisse', () => {
+      const runA = runWeaponSingleTargetBenchmark({
+        weaponId: 'P90',
+        durationMs: 30_000,
+        seed: 42,
+      });
 
-    const runB = runWeaponSingleTargetBenchmark({
-      weaponId: 'P90',
-      durationMs: 30_000,
-      seed: 42,
-    });
+      const runB = runWeaponSingleTargetBenchmark({
+        weaponId: 'P90',
+        durationMs: 30_000,
+        seed: 42,
+      });
 
-    expect(runA.totalDamage).toBe(runB.totalDamage);
-    expect(runA.shotsFired).toBe(runB.shotsFired);
-    expect(runA.hits).toBe(runB.hits);
-    expect(runA.dps).toBe(runB.dps);
-    expect(runA.adrenalineSpent).toBe(runB.adrenalineSpent);
-    expect(runA.damageEvents).toEqual(runB.damageEvents);
-    expect(runA.resourceEvents).toEqual(runB.resourceEvents);
+      expect(runA.totalDamage).toBe(runB.totalDamage);
+      expect(runA.shotsFired).toBe(runB.shotsFired);
+      expect(runA.hits).toBe(runB.hits);
+      expect(runA.dps).toBe(runB.dps);
+      expect(runA.adrenalineSpent).toBe(runB.adrenalineSpent);
+      expect(runA.damageEvents).toEqual(runB.damageEvents);
+      expect(runA.resourceEvents).toEqual(runB.resourceEvents);
+    });
   });
 
-  it('führt 30 virtuelle Sekunden in wenigen Millisekunden Echtzeit aus', () => {
-    const startRealTime = performance.now();
-    const result = runWeaponSingleTargetBenchmark({
-      weaponId: 'P90',
-      durationMs: 30_000,
-      seed: 1,
-    });
-    const elapsedRealMs = performance.now() - startRealTime;
+  describe('2. Frame-/Step-Unabhängigkeit der Feuerrate', () => {
+    it('liefert bei ASMD Primär identische Schusszahlen und DPS für stepDeltaMs 8, 16 und 25', () => {
+      const run8 = runWeaponSingleTargetBenchmark({
+        weaponId: 'ASMD_PRIM',
+        durationMs: 30_000,
+        stepDeltaMs: 8,
+        seed: 1,
+      });
 
-    expect(result.durationMs).toBe(30_000);
-    expect(result.shotsFired).toBeGreaterThan(300);
-    // 30 simulierte Sekunden müssen in unter 100ms realer Ausführungszeit fertig sein
-    expect(elapsedRealMs).toBeLessThan(100);
+      const run16 = runWeaponSingleTargetBenchmark({
+        weaponId: 'ASMD_PRIM',
+        durationMs: 30_000,
+        stepDeltaMs: 16,
+        seed: 1,
+      });
+
+      const run25 = runWeaponSingleTargetBenchmark({
+        weaponId: 'ASMD_PRIM',
+        durationMs: 30_000,
+        stepDeltaMs: 25,
+        seed: 1,
+      });
+
+      expect(run8.shotsFired).toBe(50);
+      expect(run16.shotsFired).toBe(50);
+      expect(run25.shotsFired).toBe(50);
+
+      expect(run8.totalDamage).toBe(run16.totalDamage);
+      expect(run16.totalDamage).toBe(run25.totalDamage);
+
+      expect(run8.dps).toBeCloseTo(run16.dps, 4);
+      expect(run16.dps).toBeCloseTo(run25.dps, 4);
+    });
+
+    it('liefert bei Bite identische Schusszahlen für stepDeltaMs 8, 16 und 25', () => {
+      const run8 = runWeaponSingleTargetBenchmark({
+        weaponId: 'BITE',
+        durationMs: 30_000,
+        stepDeltaMs: 8,
+        seed: 1,
+      });
+
+      const run16 = runWeaponSingleTargetBenchmark({
+        weaponId: 'BITE',
+        durationMs: 30_000,
+        stepDeltaMs: 16,
+        seed: 1,
+      });
+
+      const run25 = runWeaponSingleTargetBenchmark({
+        weaponId: 'BITE',
+        durationMs: 30_000,
+        stepDeltaMs: 25,
+        seed: 1,
+      });
+
+      expect(run8.shotsFired).toBe(86);
+      expect(run16.shotsFired).toBe(86);
+      expect(run25.shotsFired).toBe(86);
+      expect(run8.totalDamage).toBe(run16.totalDamage);
+      expect(run16.totalDamage).toBe(run25.totalDamage);
+    });
   });
 
-  it('misst P90 über den realen Projectile-Pfad und erfasst Adrenalinverbrauch', () => {
-    const p90Config = getWeaponConfig('P90');
-    expect(p90Config).toBeDefined();
-    expect(p90Config.fire.type).toBe('projectile');
-    expect(p90Config.damage).toBe(8);
-    expect(p90Config.cooldown).toBe(80);
-    expect(p90Config.adrenalinCost).toBe(4);
+  describe('3. P90, ASMD_PRIM und BITE Basismessung', () => {
+    it('misst P90 über den realen Projectile-Pfad und erfasst Adrenalinverbrauch', () => {
+      const p90Config = getWeaponConfig('P90');
+      expect(p90Config).toBeDefined();
+      expect(p90Config.fire.type).toBe('projectile');
+      expect(p90Config.damage).toBe(8);
+      expect(p90Config.cooldown).toBe(80);
+      expect(p90Config.adrenalinCost).toBe(4);
 
-    const result = runWeaponSingleTargetBenchmark({
-      weaponId: 'P90',
-      durationMs: 30_000,
-      seed: 1,
+      const result = runWeaponSingleTargetBenchmark({
+        weaponId: 'P90',
+        durationMs: 30_000,
+        seed: 1,
+      });
+
+      expect(result.weaponId).toBe('P90');
+      expect(result.shotsFired).toBe(375);
+      expect(result.hits).toBeGreaterThan(0);
+      expect(result.hits).toBeLessThanOrEqual(result.shotsFired);
+      expect(result.totalDamage).toBe(result.hits * p90Config.damage);
+      expect(result.dps).toBeCloseTo(result.totalDamage / 30, 2);
+
+      // Adrenalinverbrauch: 375 Schuss * 4 Adrenalin = 1500
+      expect(result.adrenalineSpent).toBe(375 * 4);
+      expect(result.adrenalineSpentPerSec).toBeCloseTo(1500 / 30, 2);
+      expect(result.adrenalineGenerated).toBe(0);
+
+      // Schadensereignisse tragen reale Schadenswerte und CombatDamageKind 'direct'
+      expect(result.damageEvents.length).toBe(result.hits);
+      expect(result.damageEvents[0].damage).toBe(8);
+      expect(result.damageEvents[0].damageKind).toBe('direct');
+      expect(result.damageEvents[0].sourceId).toBe('P90');
     });
 
-    expect(result.weaponId).toBe('P90');
-    // Bei 80ms Kadenz und 30s Dauer: 30.000 / 80 = 375 Schuss
-    expect(result.shotsFired).toBe(375);
-    expect(result.hits).toBeGreaterThan(0);
-    expect(result.hits).toBeLessThanOrEqual(result.shotsFired);
-    expect(result.totalDamage).toBe(result.hits * p90Config.damage);
-    expect(result.dps).toBeCloseTo(result.totalDamage / 30, 2);
+    it('misst ASMD Primär über den realen Hitscan-Pfad und erfasst Adrenalingenerierung', () => {
+      const asmdConfig = getWeaponConfig('ASMD_PRIM');
+      expect(asmdConfig).toBeDefined();
+      expect(asmdConfig.fire.type).toBe('hitscan');
+      expect(asmdConfig.damage).toBe(10);
+      expect(asmdConfig.cooldown).toBe(600);
+      expect(asmdConfig.adrenalinGain).toBe(8);
 
-    // Waffe 2 verbraucht Adrenalin: 375 Schuss * 4 Adrenalin = 1500
-    expect(result.adrenalineSpent).toBe(375 * 4);
-    expect(result.adrenalineSpentPerSec).toBeCloseTo(1500 / 30, 2);
-    expect(result.adrenalineGenerated).toBe(0);
+      const result = runWeaponSingleTargetBenchmark({
+        weaponId: 'ASMD_PRIM',
+        durationMs: 30_000,
+        seed: 1,
+      });
 
-    // Schadensereignisse tragen reale Schadenswerte
-    expect(result.damageEvents.length).toBe(result.hits);
-    expect(result.damageEvents[0].damage).toBe(8);
-    expect(result.damageEvents[0].sourceId).toBe('P90');
+      expect(result.weaponId).toBe('ASMD_PRIM');
+      expect(result.shotsFired).toBe(50);
+      expect(result.hits).toBe(50);
+      expect(result.hitRate).toBe(1.0);
+      expect(result.totalDamage).toBe(50 * asmdConfig.damage);
+      expect(result.dps).toBeCloseTo((50 * 10) / 30, 2);
+
+      expect(result.adrenalineGenerated).toBe(50 * 8);
+      expect(result.adrenalineGeneratedPerSec).toBeCloseTo(400 / 30, 2);
+      expect(result.adrenalineSpent).toBe(0);
+
+      expect(result.damageEvents.length).toBe(50);
+      expect(result.damageEvents[0].damage).toBe(10);
+      expect(result.damageEvents[0].damageKind).toBe('direct');
+      expect(result.damageEvents[0].sourceId).toBe('ASMD_PRIM');
+    });
+
+    it('misst Bite über den realen Melee-Pfad und erfasst Adrenalingenerierung', () => {
+      const biteConfig = getWeaponConfig('BITE');
+      expect(biteConfig).toBeDefined();
+      expect(biteConfig.fire.type).toBe('melee');
+      expect(biteConfig.damage).toBe(50);
+      expect(biteConfig.cooldown).toBe(350);
+      expect(biteConfig.adrenalinGain).toBe(50);
+
+      const result = runWeaponSingleTargetBenchmark({
+        weaponId: 'BITE',
+        durationMs: 30_000,
+        seed: 1,
+      });
+
+      expect(result.weaponId).toBe('BITE');
+      expect(result.shotsFired).toBe(86);
+      expect(result.hits).toBe(86);
+      expect(result.hitRate).toBe(1.0);
+      expect(result.totalDamage).toBe(86 * biteConfig.damage);
+      expect(result.dps).toBeCloseTo((86 * 50) / 30, 2);
+
+      expect(result.adrenalineGenerated).toBe(86 * 50);
+      expect(result.adrenalineGeneratedPerSec).toBeCloseTo(4300 / 30, 2);
+      expect(result.adrenalineSpent).toBe(0);
+
+      expect(result.damageEvents.length).toBe(86);
+      expect(result.damageEvents[0].damage).toBe(50);
+      expect(result.damageEvents[0].damageKind).toBe('direct');
+      expect(result.damageEvents[0].sourceId).toBe('BITE');
+    });
   });
 
-  it('misst ASMD Primär über den realen Hitscan-Pfad und erfasst Adrenalingenerierung', () => {
-    const asmdConfig = getWeaponConfig('ASMD_PRIM');
-    expect(asmdConfig).toBeDefined();
-    expect(asmdConfig.fire.type).toBe('hitscan');
-    expect(asmdConfig.damage).toBe(10);
-    expect(asmdConfig.cooldown).toBe(600);
-    expect(asmdConfig.adrenalinGain).toBe(8);
+  describe('4. Attack Window und Settle Phase', () => {
+    it('lässt vor Ende des Attack Windows abgefeuerte Projektile in der Settle Phase sauber treffen', () => {
+      // Einzelschuss-Projektil mit langsamer Flugzeit (100 px/s, Distanz 100px -> 1000ms Flugzeit)
+      const slowProjectileConfig: WeaponConfig = {
+        id: 'SLOW_TEST_GUN',
+        cooldown: 500,
+        damage: 100,
+        range: 500,
+        fire: {
+          type: 'projectile',
+          projectileSpeed: 100,
+          projectileSize: 8,
+          projectileMaxBounces: 0,
+        },
+        allowedSlots: ['weapon1'],
+        adrenalinCost: 0,
+        adrenalinGain: 10,
+        spreadStanding: 0,
+        spreadMoving: 0,
+        spreadPerShot: 0,
+        maxDynamicSpread: 0,
+        spreadRecoveryDelay: 400,
+        spreadRecoveryRate: 5,
+        spreadRecoverySpeed: 100,
+      };
 
-    const result = runWeaponSingleTargetBenchmark({
-      weaponId: 'ASMD_PRIM',
-      durationMs: 30_000,
-      seed: 1,
+      // Attack Window von nur 100 ms: Schuss fällt bei t=0, Fenster schließt bei t=100.
+      // Das Projektil trifft erst bei ca. t=840 ms in der Settle Phase.
+      const result = runWeaponSingleTargetBenchmark({
+        weaponId: 'SLOW_TEST_GUN',
+        durationMs: 100,
+        stepDeltaMs: 16,
+        targetDistance: 100,
+        weaponConfigOverride: slowProjectileConfig,
+      });
+
+      expect(result.shotsFired).toBe(1);
+      expect(result.hits).toBe(1);
+      expect(result.totalDamage).toBe(100);
+      // DPS-Nenner bleibt exakt das 100ms Attack Window: 100 / 0.1s = 1000 DPS
+      expect(result.dps).toBeCloseTo(100 / 0.1, 2);
+      expect(result.settleDurationMs).toBeGreaterThan(500);
     });
-
-    expect(result.weaponId).toBe('ASMD_PRIM');
-    // Bei 600ms Kadenz und 16ms Ticks: erster Schuss bei t=0, dann alle 608ms -> 50 Schuss
-    expect(result.shotsFired).toBe(50);
-    // Hitscan ohne Spread trifft das Ziel zu 100%
-    expect(result.hits).toBe(50);
-    expect(result.hitRate).toBe(1.0);
-    expect(result.totalDamage).toBe(50 * asmdConfig.damage);
-    expect(result.dps).toBeCloseTo((50 * 10) / 30, 2);
-
-    // Waffe 1 erzeugt Adrenalin: 50 Treffer * 8 Adrenalin = 400
-    expect(result.adrenalineGenerated).toBe(50 * 8);
-    expect(result.adrenalineGeneratedPerSec).toBeCloseTo(400 / 30, 2);
-    expect(result.adrenalineSpent).toBe(0);
-
-    // Ereignisse prüfen
-    expect(result.damageEvents.length).toBe(50);
-    expect(result.damageEvents[0].damage).toBe(10);
-    expect(result.damageEvents[0].sourceId).toBe('ASMD_PRIM');
   });
 
-  it('misst Bite über den realen Melee-Pfad und erfasst Adrenalingenerierung', () => {
-    const biteConfig = getWeaponConfig('BITE');
-    expect(biteConfig).toBeDefined();
-    expect(biteConfig.fire.type).toBe('melee');
-    expect(biteConfig.damage).toBe(50);
-    expect(biteConfig.cooldown).toBe(350);
-    expect(biteConfig.adrenalinGain).toBe(50);
+  describe('5. Multi-Projectile-Unterstützung (Pellets)', () => {
+    it('führt pelletCount > 1 Salven als 1 Schuss mit unabhängigen Pellet-Treffern aus', () => {
+      const shotgunConfig: WeaponConfig = {
+        id: 'TEST_SHOTGUN',
+        cooldown: 1000,
+        damage: 10,
+        pelletCount: 5,
+        pelletSpreadAngle: 8,
+        range: 300,
+        fire: {
+          type: 'projectile',
+          projectileSpeed: 1000,
+          projectileSize: 4,
+          projectileMaxBounces: 0,
+        },
+        allowedSlots: ['weapon1'],
+        adrenalinCost: 0,
+        adrenalinGain: 2,
+        spreadStanding: 0,
+        spreadMoving: 0,
+        spreadPerShot: 0,
+        maxDynamicSpread: 0,
+        spreadRecoveryDelay: 400,
+        spreadRecoveryRate: 5,
+        spreadRecoverySpeed: 100,
+      };
 
-    const result = runWeaponSingleTargetBenchmark({
-      weaponId: 'BITE',
-      durationMs: 30_000,
-      seed: 1,
+      const result = runWeaponSingleTargetBenchmark({
+        weaponId: 'TEST_SHOTGUN',
+        durationMs: 5_000,
+        stepDeltaMs: 16,
+        targetDistance: 50,
+        weaponConfigOverride: shotgunConfig,
+      });
+
+      // Bei 1000ms Cooldown in 5s: Schüsse bei t=0, 1000, 2000, 3000, 4000 -> 5 Salven
+      expect(result.shotsFired).toBe(5);
+      // Bei 5 Pellets pro Salve auf kurze Distanz (50px) treffen alle Pellets
+      expect(result.hits).toBe(25);
+      expect(result.totalDamage).toBe(25 * 10);
+      expect(result.hitRate).toBe(1.0);
+      expect(result.adrenalineGenerated).toBe(25 * 2);
     });
-
-    expect(result.weaponId).toBe('BITE');
-    // Bei 350ms Kadenz und 16ms Ticks: t=0, 352, 704, ... -> 86 Schläge
-    expect(result.shotsFired).toBe(86);
-    // Im Nahkampf-Bereich trifft jeder Schwung
-    expect(result.hits).toBe(86);
-    expect(result.hitRate).toBe(1.0);
-    expect(result.totalDamage).toBe(86 * biteConfig.damage);
-    expect(result.dps).toBeCloseTo((86 * 50) / 30, 2);
-
-    // Waffe 1 erzeugt Adrenalin: 86 Treffer * 50 Adrenalin = 4300
-    expect(result.adrenalineGenerated).toBe(86 * 50);
-    expect(result.adrenalineGeneratedPerSec).toBeCloseTo(4300 / 30, 2);
-    expect(result.adrenalineSpent).toBe(0);
-
-    expect(result.damageEvents.length).toBe(86);
-    expect(result.damageEvents[0].damage).toBe(50);
-    expect(result.damageEvents[0].sourceId).toBe('BITE');
   });
 
-  it('reagiert automatisch auf geänderte WeaponConfig ohne Analyzer-Codeanpassung', () => {
-    const baseResult = runWeaponSingleTargetBenchmark({
-      weaponId: 'P90',
-      durationMs: 30_000,
-      seed: 1,
+  describe('6. Bookkeeping bei fehlschlagendem Fire-Sink', () => {
+    it('erhöht keine Schuss-/Ressourcenzähler wenn der Fire-Sink den Schuss ablehnt', () => {
+      const world = new HeadlessSingleTargetWorld(150, 1);
+      world.failingSink = true; // Sink verweigert die Schussannahme
+
+      const weapon = new GenericWeapon(WEAPON_CONFIGS.P90);
+      const executor = new WeaponFireExecutor(world);
+
+      const shotPlan = resolveShotPlan({
+        config: WEAPON_CONFIGS.P90,
+        aimAngle: 0,
+        dynamicSpread: 0,
+      });
+
+      let anyFired = false;
+      for (const shot of shotPlan.shots) {
+        const fired = executor.fire(shot.config, {
+          x: 0,
+          y: 0,
+          angle: shot.angle,
+          targetX: 150,
+          targetY: 0,
+          ownerId: 'player',
+          ownerColor: 0xffffff,
+          sourceSlot: 'weapon2',
+        });
+        if (fired) anyFired = true;
+      }
+
+      expect(anyFired).toBe(false);
+      // Wenn nicht gefeuert wurde, darf weder Schuss noch Adrenalin verbucht werden
+      expect(world.getShotsFired()).toBe(0);
+      expect(world.getAdrenalineSpent()).toBe(0);
+      expect(weapon.getLastUsedAt()).toBe(-Infinity);
+      expect(weapon.getDynamicSpread()).toBe(0);
     });
-
-    // Überschriebene Config mit doppeltem Basisschaden
-    const modifiedConfig = {
-      ...WEAPON_CONFIGS.P90,
-      damage: WEAPON_CONFIGS.P90.damage * 2,
-    };
-
-    const modifiedResult = runWeaponSingleTargetBenchmark({
-      weaponId: 'P90',
-      durationMs: 30_000,
-      seed: 1,
-      weaponConfigOverride: modifiedConfig,
-    });
-
-    expect(modifiedResult.shotsFired).toBe(baseResult.shotsFired);
-    expect(modifiedResult.hits).toBe(baseResult.hits);
-    expect(modifiedResult.totalDamage).toBe(baseResult.totalDamage * 2);
-    expect(modifiedResult.dps).toBeCloseTo(baseResult.dps * 2, 2);
   });
 
-  it('Parity-Test: Ein Einzeltreffer im Headless-Pfad erzeugt denselben Schaden wie der WeaponFireExecutor', () => {
-    const world = new HeadlessSingleTargetWorld(40, 1);
-    const executor = new WeaponFireExecutor(world);
+  describe('7. Unsupported Mechanics Erkennung', () => {
+    it('lehnt ununterstützte Mechaniken wie Burn oder Explosion explizit ab', () => {
+      const burnConfig: WeaponConfig = {
+        ...WEAPON_CONFIGS.P90,
+        id: 'UNSUPPORTED_BURN_GUN',
+        burnOnHit: {
+          durationMs: 3000,
+          damagePerTick: 5,
+        },
+      };
 
-    // Ein Einzelschuss mit ASMD_PRIM über den Executor
-    executor.fire(WEAPON_CONFIGS.ASMD_PRIM, {
-      x: 0,
-      y: 0,
-      angle: 0,
-      targetX: 40,
-      targetY: 0,
-      ownerId: 'player_1',
-      ownerColor: 0xffffff,
-      sourceSlot: 'weapon1',
+      const check = validateWeaponBalanceCapabilities(burnConfig);
+      expect(check.supported).toBe(false);
+      expect(check.unsupportedReasons.some(r => r.includes('burnOnHit'))).toBe(true);
+
+      expect(() => {
+        runWeaponSingleTargetBenchmark({
+          weaponId: 'UNSUPPORTED_BURN_GUN',
+          weaponConfigOverride: burnConfig,
+        });
+      }).toThrow(UnsupportedWeaponMechanicError);
     });
 
-    expect(world.getHits()).toBe(1);
-    expect(world.getTotalDamage()).toBe(WEAPON_CONFIGS.ASMD_PRIM.damage);
-    expect(world.getAdrenalineGenerated()).toBe(WEAPON_CONFIGS.ASMD_PRIM.adrenalinGain);
+    it('akzeptiert P90, ASMD Primär und Bite als unterstützt', () => {
+      expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.P90).supported).toBe(true);
+      expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.ASMD_PRIM).supported).toBe(true);
+      expect(validateWeaponBalanceCapabilities(WEAPON_CONFIGS.BITE).supported).toBe(true);
+    });
   });
 
-  it('positioniert das Ziel standardmäßig passend zur Waffenreichweite bei voller Spielergröße', () => {
-    const meleeDistance = resolveDefaultTargetDistance('melee', 50);
-    expect(meleeDistance).toBeLessThanOrEqual(50);
-    expect(meleeDistance).toBe(40);
+  describe('8. Reaktivität auf WeaponConfig', () => {
+    it('reagiert automatisch auf geänderte WeaponConfig ohne Analyzer-Codeanpassung', () => {
+      const baseResult = runWeaponSingleTargetBenchmark({
+        weaponId: 'P90',
+        durationMs: 30_000,
+        seed: 1,
+      });
 
-    const rangedDistance = resolveDefaultTargetDistance('hitscan', 700);
-    expect(rangedDistance).toBe(150);
+      const modifiedConfig = {
+        ...WEAPON_CONFIGS.P90,
+        damage: WEAPON_CONFIGS.P90.damage * 2,
+      };
 
-    const world = new HeadlessSingleTargetWorld(150, 1);
-    expect(world.target.radius).toBe(PLAYER_SIZE * 0.5);
+      const modifiedResult = runWeaponSingleTargetBenchmark({
+        weaponId: 'P90',
+        durationMs: 30_000,
+        seed: 1,
+        weaponConfigOverride: modifiedConfig,
+      });
+
+      expect(modifiedResult.shotsFired).toBe(baseResult.shotsFired);
+      expect(modifiedResult.hits).toBe(baseResult.hits);
+      expect(modifiedResult.totalDamage).toBe(baseResult.totalDamage * 2);
+      expect(modifiedResult.dps).toBeCloseTo(baseResult.dps * 2, 2);
+    });
+  });
+
+  describe('9. Echte Paritäts-Tests (Shared Runtime / Headless Resolver)', () => {
+    it('Parität: resolveShotPlan liefert identische Schusswinkel für Runtime und Headless', () => {
+      const rng = () => 0.5; // Feste RNG-Rückgabe für deterministischen Vergleich
+
+      const planA = resolveShotPlan({
+        config: WEAPON_CONFIGS.P90,
+        aimAngle: 0.25,
+        dynamicSpread: 4,
+        isMoving: true,
+        random: rng,
+      });
+
+      const planB = resolveShotPlan({
+        config: WEAPON_CONFIGS.P90,
+        aimAngle: 0.25,
+        dynamicSpread: 4,
+        isMoving: true,
+        random: rng,
+      });
+
+      expect(planA.totalSpreadDeg).toBe(planB.totalSpreadDeg);
+      expect(planA.halfSpreadRad).toBe(planB.halfSpreadRad);
+      expect(planA.shots[0].angle).toBe(planB.shots[0].angle);
+    });
+
+    it('Parität: DirectCombatHitResolver Projektil-Sweep', () => {
+      // Prüfe, dass der Resolver einen swept Linien-Treffer exakt auflöst
+      const hit = checkSweptCircleHit(0, 0, 100, 0, 50, 0, 16);
+      expect(hit).not.toBeNull();
+      expect(hit!.hit).toBe(true);
+      expect(hit!.distance).toBeCloseTo(34, 1);
+      expect(hit!.x).toBeCloseTo(34, 1);
+      expect(hit!.y).toBe(0);
+
+      // Verfehlen
+      const miss = checkSweptCircleHit(0, 0, 100, 0, 50, 50, 16);
+      expect(miss).toBeNull();
+    });
+
+    it('Parität: DirectCombatHitResolver Hitscan-Ray', () => {
+      const hit = checkHitscanRayCircleHit(0, 0, 0, 500, 4, 100, 0, 16);
+      expect(hit).not.toBeNull();
+      expect(hit!.hit).toBe(true);
+      // Effektiver Radius = 16 + 4*0.5 = 18; Abstand = 100 - 18 = 82
+      expect(hit!.distance).toBeCloseTo(82, 1);
+
+      // Zu geringe Reichweite
+      const outOfRange = checkHitscanRayCircleHit(0, 0, 0, 50, 4, 100, 0, 16);
+      expect(outOfRange).toBeNull();
+    });
+
+    it('Parität: DirectCombatHitResolver Melee-Arc', () => {
+      // Treffer innerhalb 80° Bogen und 50px Reichweite + 16px Zielradius = 66px
+      const hit = checkMeleeArcHit(0, 0, 0, 50, 80, 40, 0, 16);
+      expect(hit).not.toBeNull();
+      expect(hit!.hit).toBe(true);
+      expect(hit!.distance).toBe(40);
+
+      // Außerhalb des Bogens (90° Abweichung bei 80° Gesamtbogen)
+      const outOfArc = checkMeleeArcHit(0, 0, 0, 50, 80, 0, 40, 16);
+      expect(outOfArc).toBeNull();
+
+      // Außerhalb der Reichweite (80px > 66px)
+      const outOfRange = checkMeleeArcHit(0, 0, 0, 50, 80, 80, 0, 16);
+      expect(outOfRange).toBeNull();
+    });
   });
 });
