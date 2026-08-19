@@ -1,4 +1,4 @@
-import { getWeaponConfig } from '../../loadout/LoadoutConfig';
+import { getWeaponConfig, type WeaponConfig } from '../../loadout/LoadoutConfig';
 import { GenericWeapon } from '../../loadout/GenericWeapon';
 import { WeaponFireExecutor } from '../../loadout/WeaponFireExecutor';
 import { resolveShotPlan, resolveEffectivePelletCount } from '../../loadout/ShotPlanResolver';
@@ -8,10 +8,46 @@ import {
   isSpreadWithinTriggerDiscipline,
   calculateTriggerDisciplineReadyTime,
 } from './triggerDiscipline';
-import type {
-  SingleTargetBenchmarkOptions,
-  SingleTargetBenchmarkResult,
+import {
+  DEFAULT_BENCHMARK_SEEDS,
+  type SingleTargetBenchmarkOptions,
+  type SingleTargetBenchmarkResult,
+  type SingleTargetBenchmarkSetOptions,
+  type SingleTargetBenchmarkAggregate,
 } from './weaponBenchmarkTypes';
+import type { WeaponSlot } from '../../types';
+
+/**
+ * Validiert den Waffen-Slot gegen die reale allowedSlots-Konfiguration der Waffe.
+ */
+export function resolveAndValidateWeaponSlot(
+  config: WeaponConfig,
+  requestedSlot?: string,
+): WeaponSlot {
+  if (requestedSlot !== undefined) {
+    if (requestedSlot !== 'weapon1' && requestedSlot !== 'weapon2') {
+      throw new Error(
+        `[WeaponBalanceLab] Ungültiger Slot "${requestedSlot}". Für Waffenprogression sind ausschließlich "weapon1" oder "weapon2" zulässig.`,
+      );
+    }
+    if (!config.allowedSlots.includes(requestedSlot as WeaponSlot)) {
+      throw new Error(
+        `[WeaponBalanceLab] Waffe "${config.id}" ist nicht für Slot "${requestedSlot}" zugelassen (erlaubt: ${config.allowedSlots.join(', ')}).`,
+      );
+    }
+    return requestedSlot as WeaponSlot;
+  }
+
+  const validSlot = config.allowedSlots.find(
+    (s): s is WeaponSlot => s === 'weapon1' || s === 'weapon2',
+  );
+  if (!validSlot) {
+    throw new Error(
+      `[WeaponBalanceLab] Waffe "${config.id}" besitzt keinen gültigen Waffen-Slot (allowedSlots: ${config.allowedSlots.join(', ')}).`,
+    );
+  }
+  return validSlot;
+}
 
 /**
  * Ermittelt eine sinnvolle Standarddistanz zum Ziel passend zur Reichweite und zum Typ der Waffe.
@@ -26,17 +62,21 @@ export function resolveDefaultTargetDistance(fireType: string, range: number): n
 }
 
 /**
+ * Berechnet ein Quantil / Perzentil aus einem aufsteigend sortierten Zahlenarray via linearer Interpolation.
+ */
+export function calculatePercentile(sortedValues: readonly number[], percentile: number): number {
+  if (sortedValues.length === 0) return 0;
+  if (sortedValues.length === 1) return sortedValues[0];
+  const clampedPercentile = Math.max(0, Math.min(100, percentile));
+  const index = (clampedPercentile / 100) * (sortedValues.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  const weight = index - lower;
+  return sortedValues[lower] + weight * (sortedValues[upper] - sortedValues[lower]);
+}
+
+/**
  * Führt einen deterministischen Headless-Single-Target-Benchmark für die angegebene Waffe aus.
- *
- * Simuliert das Feuern mit optimaler Trigger Discipline (Schussfreigabe nur bei zuverlässiger
- * Zielabdeckung) über das definierte Angriffsfenster (Attack Window) und lässt in der
- * anschließenden Settle-Phase verbleibende Projektile im Flug auflösen.
- *
- * Verwendet einen sub-step-genauen Event-Scheduler, damit die Feuerrate unabhängig von `stepDeltaMs`
- * mathematisch exakt auf den Cooldown-, Recovery- und Schussfreigabe-Zeitpunkten stattfindet.
- *
- * @param options Konfigurationsparameter des Benchmark-Laufs
- * @returns Strukturiertes Messergebnis inklusive DPS, Trefferquote und Event-Historie
  */
 export function runWeaponSingleTargetBenchmark(
   options: SingleTargetBenchmarkOptions,
@@ -49,10 +89,10 @@ export function runWeaponSingleTargetBenchmark(
   // Capability-Check: nicht unterstützte Mechaniken explizit ablehnen
   assertWeaponBalanceSupported(config);
 
+  const slot = resolveAndValidateWeaponSlot(config, options.sourceSlot);
   const attackWindowDurationMs = options.durationMs ?? 30_000;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
   const seed = options.seed ?? 1;
-  const slot = options.sourceSlot ?? config.allowedSlots[0] ?? 'weapon1';
   const maxSettleMs = options.maxSettleDurationMs ?? 5_000;
 
   const targetDistance = options.targetDistance ?? resolveDefaultTargetDistance(config.fire.type, config.range);
@@ -69,7 +109,6 @@ export function runWeaponSingleTargetBenchmark(
   const targetAngle = Math.atan2(targetY - shooterY, targetX - shooterX);
 
   let currentTime = 0;
-
   const TIME_EPSILON = 1e-6;
 
   // ── Phase 1: Attack Window (Feuern + Simulation) ───────────────────────────
@@ -177,7 +216,7 @@ export function runWeaponSingleTargetBenchmark(
   }
   const settleDurationMs = currentTime - settleStart;
 
-  // ── Phase 3: Metriken auswerten (DPS-Nenner ist exakt das Angriffsfenster) ──
+  // ── Phase 3: Metriken auswerten ───────────────────────────────────────────
   const totalDamage = world.getTotalDamage();
   const shotsFired = world.getShotsFired();
   const hits = world.getHits();
@@ -205,5 +244,71 @@ export function runWeaponSingleTargetBenchmark(
     adrenalineSpentPerSec,
     damageEvents: world.getDamageEvents(),
     resourceEvents: world.getResourceEvents(),
+  };
+}
+
+/**
+ * Führt einen Multi-Seed-Benchmark aus und aggregiert die Ergebnisse deterministisch zu
+ * Erwartungswerten (Mean), Median, P10/P90-Quantilen und Extremwerten.
+ */
+export function runWeaponSingleTargetBenchmarkSet(
+  options: SingleTargetBenchmarkSetOptions,
+): SingleTargetBenchmarkAggregate {
+  const seeds = options.seeds && options.seeds.length > 0
+    ? options.seeds
+    : DEFAULT_BENCHMARK_SEEDS;
+
+  const runs: SingleTargetBenchmarkResult[] = [];
+  const dpsValues: number[] = [];
+  let totalHitRate = 0;
+  let totalShotsPerSec = 0;
+  let totalAdrenalineGenPerSec = 0;
+  let totalAdrenalineSpentPerSec = 0;
+
+  for (const seed of seeds) {
+    const result = runWeaponSingleTargetBenchmark({
+      weaponId: options.weaponId,
+      weaponConfigOverride: options.weaponConfigOverride,
+      sourceSlot: options.sourceSlot,
+      durationMs: options.durationMs,
+      stepDeltaMs: options.stepDeltaMs,
+      targetDistance: options.targetDistance,
+      maxSettleDurationMs: options.maxSettleDurationMs,
+      seed,
+    });
+
+    runs.push(result);
+    dpsValues.push(result.dps);
+    totalHitRate += result.hitRate;
+    const durationSec = (result.durationMs ?? 30_000) / 1000;
+    totalShotsPerSec += durationSec > 0 ? result.shotsFired / durationSec : 0;
+    totalAdrenalineGenPerSec += result.adrenalineGeneratedPerSec;
+    totalAdrenalineSpentPerSec += result.adrenalineSpentPerSec;
+  }
+
+  const sortedDps = [...dpsValues].sort((a, b) => a - b);
+  const n = seeds.length;
+  const expectedDps = dpsValues.reduce((sum, val) => sum + val, 0) / n;
+  const medianDps = calculatePercentile(sortedDps, 50);
+  const p10Dps = calculatePercentile(sortedDps, 10);
+  const p90Dps = calculatePercentile(sortedDps, 90);
+  const minDps = sortedDps[0] ?? 0;
+  const maxDps = sortedDps[sortedDps.length - 1] ?? 0;
+
+  return {
+    weaponId: options.weaponId,
+    seedCount: n,
+    seeds: [...seeds],
+    expectedDps,
+    medianDps,
+    p10Dps,
+    p90Dps,
+    minDps,
+    maxDps,
+    expectedHitRate: totalHitRate / n,
+    expectedShotsPerSecond: totalShotsPerSec / n,
+    expectedAdrenalineGeneratedPerSec: totalAdrenalineGenPerSec / n,
+    expectedAdrenalineSpentPerSec: totalAdrenalineSpentPerSec / n,
+    runs: options.includeIndividualRuns ? runs : undefined,
   };
 }

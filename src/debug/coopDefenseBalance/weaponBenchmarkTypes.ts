@@ -1,5 +1,10 @@
-import type { CombatDamageKind, LoadoutSlot } from '../../types';
+import type { CombatDamageKind, WeaponSlot } from '../../types';
 import type { WeaponConfig } from '../../loadout/LoadoutConfig';
+
+/** Standard-Seed-Set für deterministische Multi-Seed-Aggregationen (16 Seeds). */
+export const DEFAULT_BENCHMARK_SEEDS: readonly number[] = Object.freeze([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+]);
 
 /** Ein einzelnes aufgezeichnetes Schadensereignis im Benchmark. */
 export interface DamageEventRecord {
@@ -36,8 +41,8 @@ export interface SingleTargetBenchmarkOptions {
    * (z.B. 40px für Nahkampf, 150px für Fernkampf).
    */
   readonly targetDistance?: number;
-  /** Slot der Waffe ('weapon1' | 'weapon2'). Standardmäßig aus allowedSlots der Waffe. */
-  readonly sourceSlot?: LoadoutSlot;
+  /** Slot der Waffe ('weapon1' | 'weapon2'). */
+  readonly sourceSlot?: WeaponSlot;
   /** Optionale modifizierte WeaponConfig (für Reaktivitäts- und Modifikator-Tests). */
   readonly weaponConfigOverride?: WeaponConfig;
   /** Maximale Dauer der Settle-Phase nach dem Angriffsfenster in ms. Standard: 5_000. */
@@ -60,4 +65,35 @@ export interface SingleTargetBenchmarkResult {
   readonly adrenalineSpentPerSec: number;
   readonly damageEvents: readonly DamageEventRecord[];
   readonly resourceEvents: readonly ResourceEventRecord[];
+}
+
+/** Konfigurationsoptionen für einen Multi-Seed-Benchmark-Lauf. */
+export interface SingleTargetBenchmarkSetOptions {
+  readonly weaponId: string;
+  readonly weaponConfigOverride?: WeaponConfig;
+  readonly sourceSlot?: WeaponSlot;
+  readonly durationMs?: number;
+  readonly stepDeltaMs?: number;
+  readonly targetDistance?: number;
+  readonly maxSettleDurationMs?: number;
+  readonly seeds?: readonly number[];
+  readonly includeIndividualRuns?: boolean;
+}
+
+/** Strukturiertes Aggregationsergebnis über mehrere Seeds. */
+export interface SingleTargetBenchmarkAggregate {
+  readonly weaponId: string;
+  readonly seedCount: number;
+  readonly seeds: readonly number[];
+  readonly expectedDps: number;       // Mittelwert (Mean DPS)
+  readonly medianDps: number;         // 50. Perzentil
+  readonly p10Dps: number;            // 10. Perzentil
+  readonly p90Dps: number;            // 90. Perzentil
+  readonly minDps: number;
+  readonly maxDps: number;
+  readonly expectedHitRate: number;
+  readonly expectedShotsPerSecond: number;
+  readonly expectedAdrenalineGeneratedPerSec: number;
+  readonly expectedAdrenalineSpentPerSec: number;
+  readonly runs?: readonly SingleTargetBenchmarkResult[];
 }

@@ -8,12 +8,12 @@ import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import type {
   CoopDefenseClassId,
   CoopDefenseUpgradeProfile,
-  LoadoutSlot,
+  WeaponSlot,
 } from '../../types';
 
 export interface WeaponUpgradeBuild {
   readonly weaponId: string;
-  readonly slot: LoadoutSlot;
+  readonly slot: WeaponSlot;
   readonly levels: Readonly<Record<string, number>>;
   readonly spentNormalPoints: number;
   readonly spentBossPoints: number;
@@ -23,7 +23,7 @@ export interface WeaponUpgradeBuild {
 
 export interface GenerateBuildsOptions {
   readonly weaponId: string;
-  readonly slot: LoadoutSlot;
+  readonly slot: WeaponSlot;
   readonly normalPointBudget: number;
   readonly bossPointBudget: number;
   readonly classId?: CoopDefenseClassId;

@@ -10,6 +10,11 @@ import {
   checkHitscanRayCircleHit,
   checkMeleeArcHit,
 } from '../../combat/rules/DirectCombatHitResolver';
+import {
+  validateProjectileSpawnPayload,
+  validateHitscanShotPayload,
+  validateMeleeSwingPayload,
+} from './headlessPayloadGuard';
 import type { DamageEventRecord, ResourceEventRecord } from './weaponBenchmarkTypes';
 
 /** Interner Tracking-Zustand für ein im Flug befindliches Projektil im Headless-Modus. */
@@ -150,6 +155,9 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   spawnProjectile(x: number, y: number, angle: number, _ownerId: string, cfg: ProjectileSpawnConfig): boolean {
     if (this.failingSink) return false;
 
+    // Zweite Sicherheitsgrenze auf empfangene Projektil-Payloads
+    validateProjectileSpawnPayload(cfg);
+
     const vx = Math.cos(angle) * cfg.speed;
     const vy = Math.sin(angle) * cfg.speed;
     this.activeProjectiles.push({
@@ -173,6 +181,9 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   /** Löst einen Hitscan-Strahl über den gemeinsamen Schnitt-Resolver auf. */
   resolveHitscan(request: HitscanShotRequest): boolean {
     if (this.failingSink) return false;
+
+    // Zweite Sicherheitsgrenze auf empfangene Hitscan-Payloads
+    validateHitscanShotPayload(request);
 
     const hit = checkHitscanRayCircleHit(
       request.startX,
@@ -199,6 +210,9 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   /** Löst einen Nahkampfschlag über den gemeinsamen Bogen- und Reichweiten-Resolver auf. */
   resolveMelee(request: MeleeSwingRequest): boolean {
     if (this.failingSink) return false;
+
+    // Zweite Sicherheitsgrenze auf empfangene Melee-Payloads
+    validateMeleeSwingPayload(request);
 
     const hit = checkMeleeArcHit(
       request.x,

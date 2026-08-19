@@ -2,15 +2,22 @@ import { getWeaponConfig } from '../../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToWeaponConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
-import type { CoopDefenseClassId, LoadoutSlot } from '../../types';
+import type { CoopDefenseClassId, WeaponSlot } from '../../types';
 import { PROGRESSION_STAGES, type ProgressionStageName } from './progressionStages';
 import {
   generateWeaponUpgradeBuilds,
   type WeaponUpgradeBuild,
 } from './WeaponUpgradeBuildGenerator';
 import { validateWeaponBalanceCapabilities } from './weaponCapabilityValidator';
-import { runWeaponSingleTargetBenchmark } from './weaponBenchmark';
-import type { SingleTargetBenchmarkResult } from './weaponBenchmarkTypes';
+import {
+  resolveAndValidateWeaponSlot,
+  runWeaponSingleTargetBenchmarkSet,
+} from './weaponBenchmark';
+import {
+  DEFAULT_BENCHMARK_SEEDS,
+  type SingleTargetBenchmarkAggregate,
+  type SingleTargetBenchmarkResult,
+} from './weaponBenchmarkTypes';
 
 export interface StageAnalysisResult {
   readonly stage: ProgressionStageName;
@@ -18,25 +25,31 @@ export interface StageAnalysisResult {
   readonly normalPointBudget: number;
   readonly bossPointBudget: number;
   readonly bestSupportedBuild: WeaponUpgradeBuild | null;
+  readonly bestSupportedExpectedDps: number;
+  /** Alias für bestSupportedExpectedDps zur Abwärtskompatibilität. */
   readonly bestSupportedDps: number;
   readonly totalLegalCandidates: number;
   readonly evaluatedCandidates: number;
   readonly unsupportedCandidates: number;
   readonly unsupportedReasons: readonly string[];
+  readonly unsupportedReasonCounts: Readonly<Record<string, number>>;
   readonly provenMaximum: boolean;
+  readonly benchmarkAggregate?: SingleTargetBenchmarkAggregate;
   readonly benchmarkResult?: SingleTargetBenchmarkResult;
 }
 
 export interface WeaponProgressionAnalysisResult {
   readonly weaponId: string;
-  readonly slot: LoadoutSlot;
+  readonly slot: WeaponSlot;
   readonly stages: readonly StageAnalysisResult[];
   readonly summaryText: string;
 }
 
 export interface AnalyzeWeaponProgressionOptions {
   readonly weaponId: string;
-  readonly slot?: LoadoutSlot;
+  readonly slot?: WeaponSlot;
+  readonly seeds?: readonly number[];
+  /** Optionaler Einzel-Seed für Abwärtskompatibilität. */
   readonly seed?: number;
   readonly durationMs?: number;
   readonly stepDeltaMs?: number;
@@ -48,7 +61,7 @@ export interface AnalyzeWeaponProgressionOptions {
  */
 function formatProgressionSummary(
   weaponId: string,
-  slot: LoadoutSlot,
+  slot: WeaponSlot,
   stages: readonly StageAnalysisResult[],
 ): string {
   const lines: string[] = [];
@@ -56,7 +69,11 @@ function formatProgressionSummary(
 
   for (const st of stages) {
     lines.push(`\n[${st.stageLabel.toUpperCase()}] Budget: ${st.normalPointBudget} normal / ${st.bossPointBudget} boss`);
-    lines.push(`  Best Supported ST DPS: ${st.bestSupportedDps.toFixed(1)}`);
+    lines.push(`  Best Supported Expected ST DPS: ${st.bestSupportedExpectedDps.toFixed(1)}`);
+    if (st.benchmarkAggregate) {
+      lines.push(`    (Median: ${st.benchmarkAggregate.medianDps.toFixed(1)} | P10: ${st.benchmarkAggregate.p10Dps.toFixed(1)} | P90: ${st.benchmarkAggregate.p90Dps.toFixed(1)} | Min: ${st.benchmarkAggregate.minDps.toFixed(1)} | Max: ${st.benchmarkAggregate.maxDps.toFixed(1)})`);
+      lines.push(`    (Expected Hit Rate: ${(st.benchmarkAggregate.expectedHitRate * 100).toFixed(1)}% | Shots/s: ${st.benchmarkAggregate.expectedShotsPerSecond.toFixed(1)})`);
+    }
     lines.push(`  Proven Maximum: ${st.provenMaximum ? 'YES' : 'NO (partiell unterstützt)'}`);
     lines.push(`  Candidates: ${st.evaluatedCandidates}/${st.totalLegalCandidates} ausgewertet (${st.unsupportedCandidates} unsupported)`);
 
@@ -69,16 +86,19 @@ function formatProgressionSummary(
       lines.push('  Build: Base (keine Upgrades)');
     }
 
-    if (st.benchmarkResult) {
+    if (st.benchmarkAggregate) {
       if (slot === 'weapon1') {
-        lines.push(`  Adrenalin/s generiert: ${st.benchmarkResult.adrenalineGeneratedPerSec.toFixed(1)}`);
+        lines.push(`  Adrenalin/s generiert: ${st.benchmarkAggregate.expectedAdrenalineGeneratedPerSec.toFixed(1)}`);
       } else {
-        lines.push(`  Adrenalin/s verbraucht: ${st.benchmarkResult.adrenalineSpentPerSec.toFixed(1)}`);
+        lines.push(`  Adrenalin/s verbraucht: ${st.benchmarkAggregate.expectedAdrenalineSpentPerSec.toFixed(1)}`);
       }
     }
 
     if (st.unsupportedReasons.length > 0) {
-      lines.push(`  Nicht unterstützte Mechaniken: ${st.unsupportedReasons.join('; ')}`);
+      lines.push('  Nicht unterstützte Mechaniken:');
+      for (const [reason, count] of Object.entries(st.unsupportedReasonCounts)) {
+        lines.push(`    - ${reason} (${count} Kandidaten)`);
+      }
     }
   }
 
@@ -88,10 +108,9 @@ function formatProgressionSummary(
 /**
  * Führt die vollständige Single-Target-Progressionsanalyse über alle fünf Stufen für eine Waffe durch.
  *
- * Findet für jede Stufe deterministisch den besten legal erreichbaren Build, der im aktuellen
- * Headless-Simulationskern vollständig unterstützt wird, und weist transparent aus, ob das
- * theoretische Maximum bewiesen ist (`provenMaximum = true`) oder noch unvollständig analysiert
- * werden musste (`provenMaximum = false`).
+ * Findet für jede Stufe deterministisch den besten legal erreichbaren Build mit maximalem
+ * Expected ST DPS über ein stabiles Multi-Seed-Set und weist transparent aus, ob das
+ * theoretische Maximum bewiesen ist (`provenMaximum = true`).
  */
 export function analyzeWeaponSingleTargetProgression(
   options: AnalyzeWeaponProgressionOptions,
@@ -101,9 +120,17 @@ export function analyzeWeaponSingleTargetProgression(
     throw new Error(`[WeaponBalanceLab] Unbekannte Weapon-ID: "${options.weaponId}"`);
   }
 
-  const slot = options.slot ?? (baseConfig.allowedSlots[0] ?? 'weapon1');
+  // Typsichere Slot-Validierung gegen allowedSlots der realen WeaponConfig
+  const slot = resolveAndValidateWeaponSlot(baseConfig, options.slot);
   const classId = options.classId ?? DEFAULT_COOP_DEFENSE_CLASS_ID;
-  const seed = options.seed ?? 1;
+
+  // Deterministisches Multi-Seed-Set auflösen
+  const seeds = options.seeds && options.seeds.length > 0
+    ? options.seeds
+    : options.seed !== undefined
+      ? [options.seed]
+      : DEFAULT_BENCHMARK_SEEDS;
+
   const durationMs = options.durationMs ?? 30_000;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
 
@@ -119,18 +146,18 @@ export function analyzeWeaponSingleTargetProgression(
     });
 
     let bestBuild: WeaponUpgradeBuild | null = null;
-    let bestDps = -Infinity;
-    let bestResult: SingleTargetBenchmarkResult | undefined = undefined;
+    let bestExpectedDps = -Infinity;
+    let bestAggregate: SingleTargetBenchmarkAggregate | undefined = undefined;
 
     let evaluatedCandidates = 0;
     let unsupportedCandidates = 0;
-    const unsupportedReasonsSet = new Set<string>();
+    const unsupportedReasonCounts: Record<string, number> = {};
 
     for (const candidate of candidates) {
       const effectTotals = getCoopDefenseResolvedEffectTotals(candidate.profile, classId);
       const modifiedConfig = applyCoopDefenseModifiersToWeaponConfig(
         baseConfig,
-        slot as 'weapon1' | 'weapon2',
+        slot,
         effectTotals,
       );
 
@@ -138,26 +165,27 @@ export function analyzeWeaponSingleTargetProgression(
       if (!capCheck.supported) {
         unsupportedCandidates += 1;
         for (const reason of capCheck.unsupportedReasons) {
-          unsupportedReasonsSet.add(reason);
+          unsupportedReasonCounts[reason] = (unsupportedReasonCounts[reason] ?? 0) + 1;
         }
         continue;
       }
 
       evaluatedCandidates += 1;
-      const simResult = runWeaponSingleTargetBenchmark({
+      const aggregate = runWeaponSingleTargetBenchmarkSet({
         weaponId: options.weaponId,
         weaponConfigOverride: modifiedConfig,
         sourceSlot: slot,
-        seed,
+        seeds,
         durationMs,
         stepDeltaMs,
+        includeIndividualRuns: true,
       });
 
-      // Deterministischer Tie-Breaker bei identischem DPS
+      // Deterministischer Tie-Breaker bei identischem Expected DPS
       let isBetter = false;
-      if (simResult.dps > bestDps) {
+      if (aggregate.expectedDps > bestExpectedDps) {
         isBetter = true;
-      } else if (Math.abs(simResult.dps - bestDps) < 1e-6 && bestBuild !== null) {
+      } else if (Math.abs(aggregate.expectedDps - bestExpectedDps) < 1e-6 && bestBuild !== null) {
         if (candidate.spentNormalPoints < bestBuild.spentNormalPoints) {
           isBetter = true;
         } else if (
@@ -175,14 +203,18 @@ export function analyzeWeaponSingleTargetProgression(
       }
 
       if (isBetter || bestBuild === null) {
-        bestDps = simResult.dps;
+        bestExpectedDps = aggregate.expectedDps;
         bestBuild = candidate;
-        bestResult = simResult;
+        bestAggregate = aggregate;
       }
     }
 
-    const provenMaximum = unsupportedCandidates === 0 && evaluatedCandidates > 0;
-    const unsupportedReasons = Array.from(unsupportedReasonsSet).sort();
+    const provenMaximum = unsupportedCandidates === 0
+      && evaluatedCandidates === candidates.length
+      && candidates.length > 0;
+    const unsupportedReasons = Object.keys(unsupportedReasonCounts).sort();
+
+    const dps = bestExpectedDps >= 0 ? bestExpectedDps : 0;
 
     stages.push({
       stage: stageDef.name,
@@ -190,13 +222,16 @@ export function analyzeWeaponSingleTargetProgression(
       normalPointBudget: stageDef.normalPointBudget,
       bossPointBudget: stageDef.bossPointBudget,
       bestSupportedBuild: bestBuild,
-      bestSupportedDps: bestDps >= 0 ? bestDps : 0,
+      bestSupportedExpectedDps: dps,
+      bestSupportedDps: dps,
       totalLegalCandidates: candidates.length,
       evaluatedCandidates,
       unsupportedCandidates,
       unsupportedReasons,
+      unsupportedReasonCounts,
       provenMaximum,
-      benchmarkResult: bestResult,
+      benchmarkAggregate: bestAggregate,
+      benchmarkResult: bestAggregate?.runs?.[0],
     });
   }
 

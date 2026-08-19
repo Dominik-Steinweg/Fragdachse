@@ -7,6 +7,7 @@ export * from './weaponBenchmarkTypes';
 export * from './HeadlessSingleTargetWorld';
 export * from './weaponBenchmark';
 export * from './weaponCapabilityValidator';
+export * from './headlessPayloadGuard';
 export * from './triggerDiscipline';
 export * from './progressionStages';
 export * from './WeaponUpgradeBuildGenerator';
