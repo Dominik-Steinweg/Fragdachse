@@ -9,7 +9,6 @@ import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 const TARGET_RESELECT_DEBOUNCE_MS = 200;
 const TARGET_HIT_CONFIRMATION_MS = 150;
 const CURSOR_DISTANCE_PX = 1_000;
-const STRATEGIC_TARGET_PERMANENT_END = Number.MAX_SAFE_INTEGER;
 
 const EXPLOSION_BY_LEVEL = [
   { radius: 0, fraction: 0 },
@@ -46,11 +45,7 @@ export class Ak47StrategicTargetSystem {
   hostUpdate(now: number): void {
     for (const player of this.playerManager.getAllPlayers()) {
       const focus = this.loadoutManager.getEquippedWeaponConfig(player.id, 'weapon2')?.ak47Focus;
-      if (
-        !focus
-        || focus.strategicTargetEnabled <= 0
-        || !this.loadoutManager.isAk47FocusAtMaxStacks(player.id)
-      ) {
+      if (!focus || focus.strategicTargetEnabled <= 0) {
         this.states.delete(player.id);
         continue;
       }
@@ -76,7 +71,6 @@ export class Ak47StrategicTargetSystem {
       !state
       || !focus
       || focus.strategicTargetEnabled <= 0
-      || !this.loadoutManager.isAk47FocusAtMaxStacks(projectile.ownerId)
       || state.targetId !== enemyId
     ) return null;
 
@@ -96,19 +90,16 @@ export class Ak47StrategicTargetSystem {
   isCurrentTarget(playerId: string, enemyId: string, now = Date.now()): boolean {
     const state = this.states.get(playerId);
     void now;
-    return !!state
-      && this.loadoutManager.isAk47FocusAtMaxStacks(playerId)
-      && state.targetId === enemyId;
+    return !!state && state.targetId === enemyId;
   }
 
   getNetSnapshot(now = Date.now()): SyncedAk47StrategicTarget[] {
     const result: SyncedAk47StrategicTarget[] = [];
     for (const [ownerId, state] of this.states) {
-      if (state.targetId === null || !this.loadoutManager.isAk47FocusAtMaxStacks(ownerId)) continue;
+      if (state.targetId === null) continue;
       result.push({
         ownerId,
         enemyId: state.targetId,
-        phaseEndsAt: STRATEGIC_TARGET_PERMANENT_END,
         confirmationUntil: state.confirmationUntil,
       });
     }

@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({
   Math: {
     Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+    DegToRad: Math.PI / 180,
+  },
+  Scenes: {
+    Events: {
+      SHUTDOWN: 'shutdown',
+    },
   },
 }));
 
@@ -16,6 +22,7 @@ import {
 import type { CoopDefenseUpgradeProfile, TrackedProjectile } from '../src/types';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
+import { Ak47StrategicTargetRenderer } from '../src/effects/Ak47StrategicTargetRenderer';
 
 function profile(levels: Readonly<Record<string, number>>): CoopDefenseUpgradeProfile {
   return {
@@ -196,9 +203,74 @@ function makeTargetFixture(focus: any) {
   };
 }
 
+function makeRendererFixture() {
+  const graphicsObjects: any[] = [];
+  const containers: any[] = [];
+  const tweens: any[] = [];
+
+  const scene = {
+    events: { once: vi.fn() },
+    add: {
+      graphics: () => {
+        const g: any = {
+          clear: vi.fn().mockReturnThis(),
+          lineStyle: vi.fn().mockReturnThis(),
+          lineBetween: vi.fn().mockReturnThis(),
+          beginPath: vi.fn().mockReturnThis(),
+          arc: vi.fn().mockReturnThis(),
+          strokePath: vi.fn().mockReturnThis(),
+          strokeCircle: vi.fn().mockReturnThis(),
+          setVisible: vi.fn(function (this: any, v: boolean) { this.visible = v; return this; }),
+          visible: true,
+        };
+        graphicsObjects.push(g);
+        return g;
+      },
+      container: (x: number, y: number, children: any[]) => {
+        const c: any = {
+          x,
+          y,
+          children,
+          visible: false,
+          alpha: 1,
+          scale: 1,
+          scaleX: 1,
+          scaleY: 1,
+          rotation: 0,
+          depth: 0,
+          setDepth: vi.fn().mockReturnThis(),
+          setVisible: vi.fn(function (this: any, v: boolean) { this.visible = v; return this; }),
+          setAlpha: vi.fn(function (this: any, a: number) { this.alpha = a; return this; }),
+          setScale: vi.fn(function (this: any, s: number) { this.scale = s; this.scaleX = s; this.scaleY = s; return this; }),
+          setRotation: vi.fn(function (this: any, r: number) { this.rotation = r; return this; }),
+          setPosition: vi.fn(function (this: any, px: number, py: number) { this.x = px; this.y = py; return this; }),
+          destroy: vi.fn(),
+        };
+        containers.push(c);
+        return c;
+      },
+    },
+    tweens: {
+      add: (config: any) => {
+        const tween = {
+          stop: vi.fn(),
+          config,
+        };
+        tweens.push(tween);
+        config.onComplete?.();
+        return tween;
+      },
+    },
+  } as any;
+
+  const renderer = new Ak47StrategicTargetRenderer(scene);
+  renderer.build();
+  return { scene, renderer, graphicsObjects, containers, tweens };
+}
+
 describe('AK-47 Strategische Ziele', () => {
-  it('stays active at full stacks and debounces a replacement target for exactly 200ms', () => {
-    const { enemies, system } = makeTargetFixture({
+  it('stays active permanently once unlocked and debounces a replacement target for exactly 200ms after death', () => {
+    const { enemies, system, setFullStacks } = makeTargetFixture({
       strategicTargetEnabled: 1,
       strategicTargetDamageBonus: 0.25,
       targetPrioritizationEnabled: 0,
@@ -208,6 +280,14 @@ describe('AK-47 Strategische Ziele', () => {
     system.hostUpdate(0);
     expect(system.getNetSnapshot(0)).toHaveLength(1);
     const marked = system.getNetSnapshot(0)[0];
+
+    // Remains active even when focus stacks are 0 / lost
+    setFullStacks(false);
+    system.hostUpdate(100);
+    expect(system.getNetSnapshot(100)).toHaveLength(1);
+    expect(system.isCurrentTarget('p1', marked.enemyId)).toBe(true);
+
+    // Target dies
     enemies.find(enemy => enemy.id === marked.enemyId).getHp = () => 0;
 
     system.hostUpdate(1000);
@@ -216,12 +296,11 @@ describe('AK-47 Strategische Ziele', () => {
     expect(system.getNetSnapshot(1199)).toHaveLength(0);
     system.hostUpdate(1200);
     expect(system.getNetSnapshot(1200)).toHaveLength(1);
-    expect(system.getNetSnapshot(1200)[0]?.phaseEndsAt).toBe(Number.MAX_SAFE_INTEGER);
     system.hostUpdate(9000);
     expect(system.getNetSnapshot(9000)).toHaveLength(1);
   });
 
-  it('removes the target when stacks are lost and does not cascade replacements on multi-kills', () => {
+  it('stays active when stacks are lost and does not cascade replacements on multi-kills', () => {
     const fixture = makeTargetFixture({
       strategicTargetEnabled: 1,
       strategicTargetDamageBonus: 0.25,
@@ -230,19 +309,26 @@ describe('AK-47 Strategische Ziele', () => {
     });
     fixture.system.hostUpdate(0);
     const marked = fixture.system.getNetSnapshot(0)[0]?.enemyId;
+    expect(marked).toBeTruthy();
+
     fixture.setFullStacks(false);
     fixture.system.hostUpdate(1);
-    expect(fixture.system.getNetSnapshot(1)).toHaveLength(0);
-    fixture.setFullStacks(true);
-    fixture.system.hostUpdate(2);
-    expect(fixture.system.getNetSnapshot(2)).toHaveLength(1);
+    expect(fixture.system.getNetSnapshot(1)).toHaveLength(1);
+    expect(fixture.system.isCurrentTarget('p1', marked!)).toBe(true);
+
+    const directHit = fixture.system.handleDirectAk47EnemyHit(projectile(1), marked!, 2);
+    expect(directHit).toEqual({
+      damageMultiplier: 1.25,
+      explosionRadius: 0,
+      explosionDamageFraction: 0,
+    });
+
     fixture.enemies.forEach(enemy => { enemy.getHp = () => 0; });
     fixture.system.hostUpdate(3);
     fixture.system.hostUpdate(201);
     expect(fixture.system.getNetSnapshot(201)).toHaveLength(0);
     fixture.system.hostUpdate(202);
     expect(fixture.system.getNetSnapshot(202)).toHaveLength(0);
-    expect(marked).toBeTruthy();
   });
 
   it('uses random visible targets normally and cursor-first selection with the follow-up', () => {
@@ -276,5 +362,86 @@ describe('AK-47 Strategische Ziele', () => {
       expect(fixture.system.handleDirectAk47EnemyHit(projectile(level), 'near', 0))
         .toEqual({ damageMultiplier: 1.25, explosionRadius: radius, explosionDamageFraction: fraction });
     }
+  });
+
+  it('only renders the local player strategic target and filters out foreign targets', () => {
+    const { renderer, containers } = makeRendererFixture();
+    const enemy = {
+      id: 'e1',
+      sprite: { x: 350, y: 420, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32 },
+      getHp: () => 100,
+    };
+    const enemyManager = {
+      getEnemy: (id: string) => (id === 'e1' ? enemy : null),
+    } as any;
+
+    // Snapshot contains only target for foreign player 'p2'
+    renderer.sync(
+      [{ ownerId: 'p2', enemyId: 'e1', confirmationUntil: 0 }],
+      enemyManager,
+      'p1', // local player
+      1000,
+      true,
+    );
+    expect(containers[0].visible).toBe(false);
+
+    // Snapshot contains target for local player 'p1'
+    renderer.sync(
+      [
+        { ownerId: 'p2', enemyId: 'e1', confirmationUntil: 0 },
+        { ownerId: 'p1', enemyId: 'e1', confirmationUntil: 0 },
+      ],
+      enemyManager,
+      'p1', // local player
+      1000,
+      true,
+    );
+    expect(containers[0].visible).toBe(true);
+    expect(containers[0].x).toBe(350);
+    expect(containers[0].y).toBe(420);
+
+    // If enemy dies / inactive, marker is hidden
+    enemy.sprite.active = false;
+    renderer.sync(
+      [{ ownerId: 'p1', enemyId: 'e1', confirmationUntil: 0 }],
+      enemyManager,
+      'p1',
+      1001,
+      true,
+    );
+    expect(containers[0].visible).toBe(false);
+  });
+
+  it('shows hit confirmation graphics when confirmationUntil is active', () => {
+    const { renderer, graphicsObjects } = makeRendererFixture();
+    const enemy = {
+      id: 'e1',
+      sprite: { x: 100, y: 100, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32 },
+      getHp: () => 100,
+    };
+    const enemyManager = {
+      getEnemy: (id: string) => (id === 'e1' ? enemy : null),
+    } as any;
+    const confirmationGraphics = graphicsObjects[1]; // second graphics object is confirmation
+
+    // With confirmationUntil in future (hit confirmation active)
+    renderer.sync(
+      [{ ownerId: 'p1', enemyId: 'e1', confirmationUntil: 1150 }],
+      enemyManager,
+      'p1',
+      1000,
+      true,
+    );
+    expect(confirmationGraphics.visible).toBe(true);
+
+    // After confirmation expires
+    renderer.sync(
+      [{ ownerId: 'p1', enemyId: 'e1', confirmationUntil: 1150 }],
+      enemyManager,
+      'p1',
+      1200,
+      true,
+    );
+    expect(confirmationGraphics.visible).toBe(false);
   });
 });

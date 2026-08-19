@@ -238,7 +238,7 @@ export const deUpgrades = {
   "upgrade.ak47_breakthrough_magazine.name": "Durchbruchsmagazin",
   "upgrade.ak47_breakthrough_magazine.description": "Gewährt {value0Unsigned} Durchbruchsschüsse je Stufe, bis zu Stufe {maxLevel}.",
   "upgrade.ak47_strategic_targets.name": "Strategische Ziele",
-  "upgrade.ak47_strategic_targets.description": "Markiert regelmäßig einen lebenden Gegner. AK-Treffer verursachen an ihm zusätzlichen Direktschaden; ein Durchbruchstreffer kann erstattet werden.",
+  "upgrade.ak47_strategic_targets.description": "Markiert dauerhaft einen lebenden Gegner. AK-Treffer verursachen an ihm zusätzlichen Direktschaden; ein Durchbruchstreffer kann erstattet werden.",
   "upgrade.ak47_target_prioritization.name": "Zielpriorisierung",
   "upgrade.ak47_target_prioritization.description": "Strategische Ziele werden vor allem nach Cursor-Nähe, danach grober Gegnerstärke und Sichtlinie ausgewählt.",
   "upgrade.ak47_explosive_target_acquisition.name": "Explosive Zielerfassung",

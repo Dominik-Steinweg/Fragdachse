@@ -238,7 +238,7 @@ export const enUpgrades = {
   "upgrade.ak47_breakthrough_magazine.name": "AK-47 Breakthrough Magazine",
   "upgrade.ak47_breakthrough_magazine.description": "Grants {value0Unsigned} breakthrough shots per level, up to level {maxLevel}.",
   "upgrade.ak47_strategic_targets.name": "AK-47 Strategic Targets",
-  "upgrade.ak47_strategic_targets.description": "Periodically marks a living enemy. AK hits deal additional direct damage to it; a breakthrough hit can be refunded.",
+  "upgrade.ak47_strategic_targets.description": "Permanently marks a living enemy. AK hits deal additional direct damage to it; a breakthrough hit can be refunded.",
   "upgrade.ak47_target_prioritization.name": "AK-47 Target Prioritization",
   "upgrade.ak47_target_prioritization.description": "Strategic targets are chosen by cursor proximity first, then rough enemy strength and line of sight.",
   "upgrade.ak47_explosive_target_acquisition.name": "AK-47 Explosive Target Acquisition",

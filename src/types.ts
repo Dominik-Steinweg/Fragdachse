@@ -1548,7 +1548,6 @@ export interface SyncedTargetVulnerability {
 export interface SyncedAk47StrategicTarget {
   ownerId: string;
   enemyId: string;
-  phaseEndsAt: number;
   confirmationUntil: number;
 }
 

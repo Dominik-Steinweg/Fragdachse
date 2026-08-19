@@ -1734,6 +1734,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.ak47StrategicTargets.sync(
       strategicTargets,
       this.ctx.enemyManager,
+      bridge.getLocalPlayerId(),
       bridge.getSynchronizedNow(),
       inArena && isCoopDefenseMode(bridge.getGameMode()),
     );
