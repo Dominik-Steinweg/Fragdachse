@@ -150,7 +150,7 @@ Jeder Round-Teardown muss Emitter, Tweens, Timer, Filter, temporäre Texturen, R
 
 ## SpriteGPULayer-Partikel
 
-`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind die Airstrike-Partikel und der Rocket-Exhaust.
+`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind die Airstrike-Partikel, der Rocket-Exhaust und der Rocket-Smoke.
 
 `src/effects/gpu/GpuVfxRegistry.ts` ist die gemeinsame Klammer und der einzige Ort, an dem neue Effekte andocken – kein Effekt baut sich seine eigene Layer-, Uhr- oder Ablationslogik. Sie legt Layer an (Blend, Depth, Ease-Vorwaermung, Priming), haelt eine gemeinsame Partikeluhr, behandelt den Zeit-Ruecksprung, faehrt den Retire-Sweep und schaltet Rendering plus Scheduler fuer die Ablation gemeinsam ab. Die Reihenfolge in `update()` ist Vertrag: erst stilllegen, dann emittieren, weil `acquire()` nur freie Slots vergibt. Effekte melden ihren Emissions-Tick ueber `registerEmission()` an; `ArenaScene` ruft genau ein `gpuVfx.update(delta)` pro Frame, rollen- und netzzustandsunabhaengig.
 
@@ -159,6 +159,10 @@ Der Tick liegt in `ArenaScene.update()` nach dem Host-/Client-Schritt, ein Spawn
 Eine Member-Animation ist `base` plus `amplitude` als Delta ueber die volle `duration` – es gibt kein `from`/`to`. `loop` und `yoyo` defaulten auf `true` und muessen fuer One-Shots explizit `false` sein. `amplitude: 0` oder `duration: 0` schaltet die Animation stumm ab. `editMember()` ueberschreibt den Member vollstaendig; ausgelassene Felder fallen auf Defaults zurueck. `creationTime` defaultet auf `layer.timeElapsed`, die Animation startet also beim Schreiben.
 
 Eine abgelaufene One-Shot-Animation haelt **nicht** auf ihrem Endwert: bei `loop:false` extrapoliert die lineare Kurve unbegrenzt weiter, und die Tint-Stufe clampt die Alpha nicht. Unter `BlendModes.ADD` verdunkelt ein abgelaufener Member die Szene deshalb aktiv, bei wachsendem Quad. Wer solche Member erzeugt, muss sie explizit stilllegen – am guenstigsten per `patchMember()` mit vorbereiteter Nullmaske auf `scaleX`/`scaleY`/`alpha`. Dasselbe gilt beim Ruecksprung von `layer.timeElapsed` (`timeElapsedResetPeriod`, eine Stunde): die `creationTime` der Member wird dabei nicht mitgezogen.
+
+Nicht-lineare Eases brauchen zusaetzlich `gpuVfxEasedBase()`. Der Shader addiert bei `loop: false` ueber die gesamte Laufzeit `floor(amplitude) * amplitude` – ein Term fuer die Frame-Index-Animation, der jede andere Groesse verfaelscht und schon ab Amplitude -1 bzw. +1 greift. Eine Alphakurve 0.95 → 0 auf `Quad.easeOut` kaeme sonst als 1.9 → 0.95 heraus. `Linear` ist davon nicht betroffen und braucht die Korrektur nicht.
+
+Der Blend-Mode gehoert zum Effekt, nicht zur Infrastruktur: `createEmitter()` defaultet auf ADD, klassisch normal gezeichnete Effekte geben `blendMode: NORMAL` mit. Den Epsilon-Versatz braucht nur, wer einen zur Laufzeit erzeugten Emitter ersetzt; ein schon beim Szenenaufbau erzeugter geteilter Emitter (Rocket-Smoke) behaelt seine Depth unveraendert.
 
 Jeder erstmals verwendete Ease-Typ laesst Shader und FrameData neu bauen. Alle spaeter genutzten Typen deshalb bei der Initialisierung ueber `setAnimationEnabled()` freischalten, und zwar mit dem Namen aus Phasers Rueckwaertsabbildung `EASE_CODES` (mehrere Aliase teilen sich einen Code, etwa `Power0` und `Linear`). Fuer Gravity gilt `gravityFactor: 1` plus `layer.gravity` als Beschleunigung in px/s²; `velocity` wird ganzzahlig kodiert.
 

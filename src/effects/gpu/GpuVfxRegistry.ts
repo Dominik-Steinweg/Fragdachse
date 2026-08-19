@@ -38,6 +38,8 @@ export interface GpuVfxEmitterOptions {
    * Aliase teilen sich einen Code (`Power0` und `Linear` beide 1).
    */
   readonly eases: readonly string[];
+  /** Default `ADD`. Effekte, die der klassische Emitter ungedaempft gezeichnet hat, brauchen `NORMAL`. */
+  readonly blendMode?: number;
   /** Nur fuer `ease: 'Gravity'`: Beschleunigung in px/s². */
   readonly gravity?: number;
 }
@@ -51,6 +53,23 @@ export type GpuVfxMemberAnimation = Phaser.Types.GameObjects.SpriteGPULayer.Memb
 /** Gleiche Auswahl wie Phasers `EmitterOp.randomStaticValueEmit` fuer Tint-Arrays. */
 export function pickGpuVfxTint(tints: readonly number[]): number {
   return tints[Math.floor(Math.random() * tints.length)];
+}
+
+/**
+ * Basiswert fuer eine **nicht-lineare** Ease mit `loop: false`.
+ *
+ * Der Shader addiert dort ueber die gesamte Laufzeit `floor(amplitude) * amplitude`
+ * (`SpriteGPULayer.vert`: `repeats = loop ? 0.0 : floor(a)`). Der Term ist fuer die
+ * Frame-Index-Animation gedacht, wo `amplitude` die Anzahl der Frames ist, und stoert bei
+ * jeder anderen Groesse. Bei negativen Amplituden greift `floor` bereits ab -1: eine
+ * Alpha-Kurve 0.95 → 0 kaeme ohne Korrektur als 1.9 → 0.95 heraus.
+ *
+ * Diese Funktion nimmt den Term vorweg, sodass am Ende exakt `base + amplitude * ease(t)`
+ * herauskommt – unabhaengig vom Betrag der Amplitude. Lineare Animationen brauchen sie nicht:
+ * `Linear` rechnet mit `timeContinuous` und ohne `repeats`.
+ */
+export function gpuVfxEasedBase(base: number, amplitude: number): number {
+  return base - Math.floor(amplitude) * amplitude;
 }
 
 /**
@@ -99,7 +118,7 @@ export class GpuVfxRegistry {
    */
   createEmitter(options: GpuVfxEmitterOptions): GpuVfxEmitter {
     const layer = this.scene.add.spriteGPULayer(options.texture, options.capacity);
-    layer.setBlendMode(Phaser.BlendModes.ADD);
+    layer.setBlendMode(options.blendMode ?? Phaser.BlendModes.ADD);
     layer.setDepth(options.depth);
     if (options.gravity !== undefined) layer.gravity = options.gravity;
     for (const ease of options.eases) layer.setAnimationEnabled(ease, true);

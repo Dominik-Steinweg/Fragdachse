@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   BlendModes: {
+    NORMAL: 0,
     ADD: 1,
   },
   // Der ProjectileManager legt Scratch-Geometrie schon im Feld-Initialisierer an.
@@ -46,30 +47,16 @@ vi.mock('phaser', () => ({
     Distance: {
       Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1),
     },
+    FloatBetween: (min: number, max: number) => (min + max) / 2,
   },
 }));
 
 import * as Phaser from 'phaser';
 import { RocketRenderer } from '../src/effects/RocketRenderer';
+import { GpuVfxRegistry } from '../src/effects/gpu/GpuVfxRegistry';
+import { evaluateFakeAnimation, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 import { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { TrackedProjectile } from '../src/types';
-
-interface SmokeEmitterConfig {
-  reserve: number;
-  maxParticles?: number;
-  maxAliveParticles: number;
-  scale: {
-    onEmit: (particle?: Phaser.GameObjects.Particles.Particle) => number;
-    onUpdate: (
-      particle: Phaser.GameObjects.Particles.Particle,
-      key: string,
-      t: number,
-    ) => number;
-  };
-  tint: {
-    onEmit: () => number;
-  };
-}
 
 describe('projectile performance paths', () => {
   it('damages each obstacle once per flame and uses kind-specific rock scaling', () => {
@@ -279,39 +266,16 @@ describe('projectile performance paths', () => {
     expect(tracked.hitBaseIds).toEqual(new Set());
   });
 
-  it('reuses one reserved particle emitter for all rocket smoke puffs', () => {
-    const emissions: Array<{ x: number; y: number; scale: number; tint: number; scaleAtHalfLife: number }> = [];
-    let config: SmokeEmitterConfig | null = null;
-    const emitter = {
-      setDepth: vi.fn().mockReturnThis(),
-      emitParticleAt: vi.fn((x: number, y: number) => {
-        const particle = {} as Phaser.GameObjects.Particles.Particle;
-        const currentConfig = config!;
-        const scale = currentConfig.scale.onEmit(particle);
-        emissions.push({
-          x,
-          y,
-          scale,
-          tint: currentConfig.tint.onEmit(),
-          scaleAtHalfLife: currentConfig.scale.onUpdate(particle, 'scaleX', 0.5),
-        });
-      }),
-      killAll: vi.fn(),
-      forEachDead: vi.fn(),
-    };
-    const particles = vi.fn((
-      _x: number,
-      _y: number,
-      _texture: string,
-      emitterConfig: SmokeEmitterConfig,
-    ) => {
-      config = emitterConfig;
-      return emitter;
-    });
-    const scene = {
-      add: { particles },
-    } as unknown as Phaser.Scene;
-    const renderer = new RocketRenderer(scene);
+  it('reuses one shared gpu layer for all rocket smoke puffs', () => {
+    // Der Smoke laeuft nicht mehr ueber einen `ParticleEmitter`, sondern ueber einen geteilten
+    // SpriteGPULayer. Die Puff-Charakteristik bleibt: dynamischer Startscale aus der
+    // Raketengroesse, Tint je Puff, Wachstum auf `startScale * (1 + Quad.easeOut(t) * 1.3)`
+    // und eine Alphakurve 0.95 -> 0. Die Kurven liegen jetzt im Shader, nicht in Callbacks.
+    const scene = makeFakeGpuVfxScene();
+    const registry = new GpuVfxRegistry(scene as never);
+    const renderer = new RocketRenderer(scene as never);
+    renderer.generateTextures();
+    renderer.initGpuLayers(registry);
     const internals = renderer as unknown as {
       spawnSmokePuff: (x: number, y: number, size: number, color: number) => void;
     };
@@ -319,19 +283,39 @@ describe('projectile performance paths', () => {
     internals.spawnSmokePuff(10, 20, 6, 0x123456);
     internals.spawnSmokePuff(30, 40, 28, 0xabcdef);
 
-    expect(particles).toHaveBeenCalledTimes(1);
-    expect(config).toMatchObject({
-      reserve: 256,
-      maxAliveParticles: 640,
-    });
-    expect(config).not.toHaveProperty('maxParticles');
-    expect(emissions).toEqual([
-      { x: 10, y: 20, scale: 0.28, tint: 0x123456, scaleAtHalfLife: 0.462 },
-      { x: 30, y: 40, scale: 1, tint: 0xabcdef, scaleAtHalfLife: 1.65 },
-    ]);
+    const smoke = scene.layers.filter((layer) => layer.key === '__rocket_smoke');
+    expect(smoke).toHaveLength(1);
+    expect(scene.emitters).toHaveLength(0);
+    // Entspricht dem bisherigen `maxAliveParticles: 640`.
+    expect(smoke[0].size).toBe(640);
+
+    const [small, large] = smoke[0].members;
+    // Bisher: `startScale * (1 + Quadratic.Out(t) * 1.3)` mit `startScale = max(size/28, 0.28)`.
+    const legacyScale = (startScale: number, t: number) => startScale * (1 + t * (2 - t) * 1.3);
+
+    expect(small.scaleX.ease).toBe('Quad.easeOut');
+    expect(evaluateFakeAnimation(small.scaleX, 0)).toBeCloseTo(legacyScale(0.28, 0), 10);
+    expect(evaluateFakeAnimation(small.scaleX, 0.5)).toBeCloseTo(legacyScale(0.28, 0.5), 10);
+    expect(small.x.base).toBe(10);
+    expect(small.y.base).toBe(20);
+    expect(small.tint).toBe(0x123456);
+
+    // Groesse 28 ergibt startScale 1, die Wachstums-Amplitude wird damit > 1 – genau der Fall,
+    // in dem der Shader ohne Basiskorrektur `floor(amplitude) * amplitude` danebenlegen wuerde.
+    expect(evaluateFakeAnimation(large.scaleX, 0)).toBeCloseTo(legacyScale(1, 0), 10);
+    expect(evaluateFakeAnimation(large.scaleX, 0.5)).toBeCloseTo(legacyScale(1, 0.5), 10);
+    expect(large.x.base).toBe(30);
+    expect(large.y.base).toBe(40);
+    expect(large.tint).toBe(0xabcdef);
+
+    // Alpha 0.95 -> 0 auf derselben Quad-Kurve, ueber die volle Lebenszeit.
+    expect(evaluateFakeAnimation(small.alpha, 0)).toBeCloseTo(0.95, 10);
+    expect(evaluateFakeAnimation(small.alpha, 0.5)).toBeCloseTo(0.95 - 0.95 * 0.75, 10);
+    expect(small.alpha.duration).toBe(1000);
+    expect(small.scaleX.duration).toBe(1000);
 
     renderer.destroyAll();
-    expect(emitter.killAll).toHaveBeenCalledOnce();
+    expect(smoke[0].patched).toHaveLength(2);
   });
 
   it('keeps an allocation-free active view and removes destroyed projectiles centrally', () => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
-  BlendModes: { ADD: 1 },
+  BlendModes: { NORMAL: 0, ADD: 1 },
   Math: {
     FloatBetween: (min: number, max: number) => min + Math.random() * (max - min),
     Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
@@ -27,7 +27,8 @@ function setup() {
   const renderer = new RocketRenderer(scene as never);
   renderer.generateTextures();
   renderer.initGpuLayers(registry);
-  return { scene, registry, renderer, exhaust: scene.layers[0] };
+  const layerBy = (key: string) => scene.layers.find((layer) => layer.key === key)!;
+  return { scene, registry, renderer, exhaust: layerBy('__rocket_exhaust'), smoke: layerBy('__rocket_smoke') };
 }
 
 function spawnRocket(renderer: RocketRenderer, id: number): void {
@@ -46,20 +47,22 @@ afterEach(() => {
 describe('rocket exhaust gpu particles', () => {
   it('uses a single shared layer for every rocket', () => {
     const { scene, registry, renderer, exhaust } = setup();
-    expect(scene.layers.length).toBe(1);
+    // Ein Exhaust- und ein Smoke-Layer, beide geteilt.
+    expect(scene.layers.length).toBe(2);
     expect(exhaust.key).toBe('__rocket_exhaust');
 
     for (let id = 1; id <= 12; id += 1) spawnRocket(renderer, id);
     registry.update(100);
-    expect(scene.layers.length).toBe(1);
+    expect(scene.layers.length).toBe(2);
   });
 
-  it('creates no ParticleEmitter per rocket any more', () => {
-    // Der geteilte Smoke-Emitter bleibt bewusst klassisch und entsteht einmal beim Texturbau.
+  it('creates no ParticleEmitter for the flight visuals any more', () => {
+    // Weder pro Rakete noch geteilt: Exhaust und Smoke laufen beide ueber GPU-Layer. Klassische
+    // Emitter entstehen nur noch in den Einmal-Bursts von playCollection/playSpentDestruction.
     const { renderer, scene } = setup();
-    const beforeRockets = scene.emitters.length;
+    expect(scene.emitters.length).toBe(0);
     for (let id = 1; id <= 5; id += 1) spawnRocket(renderer, id);
-    expect(scene.emitters.length).toBe(beforeRockets);
+    expect(scene.emitters.length).toBe(0);
   });
 
   it('primes the layer and sits additively just above the rocket body', () => {
