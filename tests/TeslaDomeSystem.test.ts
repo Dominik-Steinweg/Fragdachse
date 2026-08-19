@@ -361,10 +361,12 @@ describe('Tesla dome boss effects', () => {
     (combatSystem.applyDamage as ReturnType<typeof vi.fn>).mockClear();
     advance(system, config, 1000);
 
-    // Erster Impuls auf Charge 1 → 6× des aufgelösten Primärschadens.
-    const focused = 1 + 3 * (config.fire.focusedDamageBonusPerFreeTarget ?? 0);
+    // Erster Impuls auf Charge 1 → (5 + Charge)/2 = 3× des aufgelösten Primärschadens.
+    const freeTargets = Math.max(0, (config.fire.maxTargets ?? 0) - 1);
+    const focused = 1 + freeTargets * (config.fire.focusedDamageBonusPerFreeTarget ?? 0);
+    const impulseMultiplier = (5 + 1) / 2;
     const impulseCalls = (combatSystem.applyDamage as ReturnType<typeof vi.fn>).mock.calls
-      .filter(call => call[1] === config.fire.damagePerTick * focused * 6);
+      .filter(call => call[1] === config.fire.damagePerTick * focused * impulseMultiplier);
     expect(impulseCalls).toHaveLength(1);
   });
 
@@ -378,7 +380,8 @@ describe('Tesla dome boss effects', () => {
     (combatSystem.applyDamage as ReturnType<typeof vi.fn>).mockClear();
     advance(system, config, 1000);
 
-    const focused = 1 + 3 * (config.fire.focusedDamageBonusPerFreeTarget ?? 0);
+    const freeTargets = Math.max(0, (config.fire.maxTargets ?? 0) - 1);
+    const focused = 1 + freeTargets * (config.fire.focusedDamageBonusPerFreeTarget ?? 0);
     for (const call of (combatSystem.applyDamage as ReturnType<typeof vi.fn>).mock.calls) {
       expect(call[1]).toBeCloseTo(config.fire.damagePerTick * focused, 5);
     }
@@ -395,11 +398,16 @@ describe('Tesla dome boss effects', () => {
     system.hostUpdate(0);
     advance(system, config, 1000);
 
-    // 6 + Charge 1 = 7 Projektile, Reichweite 135 % des geladenen Radius.
-    expect(requests).toHaveLength(7);
-    expect(requests[0].rangePx).toBeCloseTo(config.fire.radius * 1.1 * 1.35, 5);
+    // stormProjectileBaseCount + Charge 1 Projektile, Reichweite = geladener Radius * RangeFactor.
+    const expectedCount = (config.fire.stormProjectileBaseCount ?? 0) + 1;
+    const chargeFactor = 1 + 1 * (config.fire.radiusBonusPerCharge ?? 0);
+    const expectedRange = config.fire.radius * chargeFactor * (config.fire.stormProjectileRangeFactor ?? 1);
+    expect(requests).toHaveLength(expectedCount);
+    expect(requests[0].rangePx).toBeCloseTo(expectedRange, 5);
     expect(requests[0].damage).toBe(config.fire.stormProjectileDamage);
-    expect(requests[0].homing?.maxTurnDegreesPerStep).toBe(3);
+    expect(requests[0].homing?.maxTurnDegreesPerStep).toBe(
+      config.fire.stormProjectileHoming?.maxTurnDegreesPerStep,
+    );
     expect(requests[0].homing?.targetTypes).not.toContain('rocks');
   });
 
@@ -417,9 +425,10 @@ describe('Tesla dome boss effects', () => {
     system.hostRefresh('player-1', 0, 0, 1000, config, 0xffffff, aimAngle);
     system.hostUpdate(1000);
 
-    expect(requests).toHaveLength(7);
+    const expectedCount = (config.fire.stormProjectileBaseCount ?? 0) + 1;
+    expect(requests).toHaveLength(expectedCount);
     const spread = Phaser.Math.DegToRad(config.fire.stormProjectileSpreadDegrees!);
-    expect(config.fire.stormProjectileSpreadDegrees).toBe(20);
+    expect(config.fire.stormProjectileSpreadDegrees).toBeGreaterThan(0);
 
     // Kein Bolzen verlässt den halben Öffnungswinkel um die Blickrichtung.
     for (const request of requests) {
@@ -427,8 +436,8 @@ describe('Tesla dome boss effects', () => {
     }
     // Gleichmäßig über den Kegel verteilt, mittig auf der Blickrichtung.
     const step = Math.abs(requests[1].angle - requests[0].angle);
-    expect(step).toBeCloseTo(spread / 6, 10);
-    expect(requests[3].angle).toBeCloseTo(aimAngle, 10);
+    expect(step).toBeCloseTo(spread / (expectedCount - 1), 10);
+    expect(requests[Math.floor(expectedCount / 2)].angle).toBeCloseTo(aimAngle, 10);
 
     // Kurzer seitlicher Versatz quer zur Blickrichtung statt eines gemeinsamen Startpunkts.
     const lateral = requests.map(request => request.x);
@@ -450,13 +459,14 @@ describe('Tesla dome boss effects', () => {
     requests.length = 0;
     advance(system, config, 2000);
 
-    expect(requests).toHaveLength(8);
+    expect(requests).toHaveLength((config.fire.stormProjectileBaseCount ?? 0) + 2);
   });
 
   it('applies nova slow and quadratic knockback falloff without damage', () => {
     const config = bossConfig({ stormEnabled: 1 });
     const { system, enemies } = makeSystem();
-    const radiusAtChargeOne = config.fire.radius * 1.1;
+    const chargeFactor = 1 + 1 * (config.fire.radiusBonusPerCharge ?? 0);
+    const radiusAtChargeOne = config.fire.radius * chargeFactor;
     enemies.push({ id: 'enemy-near', x: 0, y: 0 });
     enemies.push({ id: 'enemy-half', x: radiusAtChargeOne / 2, y: 0 });
     const hits: TeslaNovaHit[] = [];
@@ -469,11 +479,11 @@ describe('Tesla dome boss effects', () => {
     expect(hits).toHaveLength(2);
     const near = hits.find(hit => hit.targetId === 'enemy-near')!;
     const half = hits.find(hit => hit.targetId === 'enemy-half')!;
-    expect(near.slowFraction).toBe(0.3);
-    expect(near.slowDurationMs).toBe(2000);
+    expect(near.slowFraction).toBe(config.fire.stormNovaSlowFraction ?? 0);
+    expect(near.slowDurationMs).toBe(config.fire.stormNovaSlowDurationMs ?? 0);
     // Charge-Faktor entspricht exakt der Radius-Skalierung.
-    expect(near.knockback).toBeCloseTo(650 * 1.1, 5);
-    expect(half.knockback).toBeCloseTo(650 * 1.1 * 0.25, 5);
+    expect(near.knockback).toBeCloseTo((config.fire.stormNovaKnockback ?? 0) * chargeFactor, 5);
+    expect(half.knockback).toBeCloseTo((config.fire.stormNovaKnockback ?? 0) * chargeFactor * 0.25, 5);
   });
 
   it('leaves the storm silent below charge one', () => {

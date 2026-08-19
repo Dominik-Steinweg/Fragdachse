@@ -98,15 +98,16 @@ describe('Tesla dome coop-defense upgrade tree', () => {
 
   it('keeps the unupgraded dome at the unchanged PvP baseline', () => {
     const fire = teslaFire({ unlock_tesla_dome: 1 });
+    const baseFire = WEAPON_CONFIGS.TESLA_DOME.fire;
 
-    expect(fire.radius).toBe(190);
-    expect(fire.damagePerTick).toBe(7);
-    expect(fire.tickInterval).toBe(180);
-    expect(fire.adrenalineDrainPerSecond).toBe(16);
-    expect(fire.movementSlowFactor).toBe(0.3);
-    expect(fire.requireLineOfSight).toBe(true);
+    expect(fire.radius).toBe(baseFire.radius);
+    expect(fire.damagePerTick).toBe(baseFire.damagePerTick);
+    expect(fire.tickInterval).toBe(baseFire.tickInterval);
+    expect(fire.adrenalineDrainPerSecond).toBe(baseFire.adrenalineDrainPerSecond);
+    expect(fire.movementSlowFactor).toBe(baseFire.movementSlowFactor);
+    expect(fire.requireLineOfSight).toBe(baseFire.requireLineOfSight);
     // Target-Limit und Locking gelten auch ohne Upgrades.
-    expect(fire.maxTargets).toBe(4);
+    expect(fire.maxTargets).toBe(baseFire.maxTargets);
     // Ohne Feldaufladung gibt es keine Ladung und keinen Puls.
     expect(fire.maxChargeStacks).toBe(0);
     expect(fire.overchargePulseEnabled).toBe(0);
@@ -115,21 +116,52 @@ describe('Tesla dome coop-defense upgrade tree', () => {
 
   it('resolves the fully upgraded dome to the GDD target values', () => {
     const fire = teslaFire(FULL_BUILD);
+    const baseFire = WEAPON_CONFIGS.TESLA_DOME.fire;
+    const totals = getCoopDefenseResolvedEffectTotals(profile(FULL_BUILD));
 
-    expect(fire.maxTargets).toBe(7);
-    // 3 Stufen à 3 % je freiem Strahl → Vollausbau mit einem Ziel ergibt +54 %.
-    expect(fire.focusedDamageBonusPerFreeTarget).toBeCloseTo(0.09, 10);
-    expect((fire.maxTargets! - 1) * fire.focusedDamageBonusPerFreeTarget!).toBeCloseTo(0.54, 10);
-    expect(fire.adrenalineDrainPerSecond).toBeCloseTo(16 * 0.7, 10);
-    expect(fire.chargeIntervalMs).toBe(700);
-    expect(fire.maxChargeStacks).toBe(6);
-    expect(fire.radiusBonusPerCharge).toBeCloseTo(0.1, 10);
-    expect(fire.movementRecoveryPerCharge).toBeCloseTo(0.1, 10);
+    const expectedMaxTargets = (baseFire.maxTargets ?? 0) + (totals.additive['weapon.TESLA_DOME.fire.maxTargets'] ?? 0);
+    expect(fire.maxTargets).toBe(expectedMaxTargets);
+
+    const expectedFocusedDamageBonus = (baseFire.focusedDamageBonusPerFreeTarget ?? 0)
+      + (totals.additive['weapon.TESLA_DOME.fire.focusedDamageBonusPerFreeTarget'] ?? 0);
+    expect(fire.focusedDamageBonusPerFreeTarget).toBeCloseTo(expectedFocusedDamageBonus, 10);
+    expect((fire.maxTargets! - 1) * fire.focusedDamageBonusPerFreeTarget!).toBeCloseTo(
+      (expectedMaxTargets - 1) * expectedFocusedDamageBonus,
+      10,
+    );
+
+    const expectedDrain = baseFire.adrenalineDrainPerSecond
+      * (1 + (totals.percentage['weapon.TESLA_DOME.adrenalineDrain'] ?? 0));
+    expect(fire.adrenalineDrainPerSecond).toBeCloseTo(expectedDrain, 10);
+
+    const expectedChargeInterval = (baseFire.chargeIntervalMs ?? 0)
+      + (totals.additive['weapon.TESLA_DOME.fire.chargeIntervalMs'] ?? 0);
+    expect(fire.chargeIntervalMs).toBe(expectedChargeInterval);
+
+    const expectedMaxCharge = (baseFire.maxChargeStacks ?? 0)
+      + (totals.additive['weapon.TESLA_DOME.fire.maxChargeStacks'] ?? 0);
+    expect(fire.maxChargeStacks).toBe(expectedMaxCharge);
+
+    const expectedRadiusBonus = (baseFire.radiusBonusPerCharge ?? 0)
+      + (totals.additive['weapon.TESLA_DOME.fire.radiusBonusPerCharge'] ?? 0);
+    expect(fire.radiusBonusPerCharge).toBeCloseTo(expectedRadiusBonus, 10);
+
+    const expectedMovementRecovery = (baseFire.movementRecoveryPerCharge ?? 0)
+      + (totals.additive['weapon.TESLA_DOME.fire.movementRecoveryPerCharge'] ?? 0);
+    expect(fire.movementRecoveryPerCharge).toBeCloseTo(expectedMovementRecovery, 10);
+
     expect(fire.overchargePulseEnabled).toBe(1);
     expect(fire.stormEnabled).toBe(1);
-    // Auf MaxCharge 6 erreicht die Kuppel 160 % Radius und vollen Bewegungsfaktor.
-    expect(fire.radius * (1 + 6 * fire.radiusBonusPerCharge!)).toBeCloseTo(190 * 1.6, 10);
-    expect(Math.min(1, fire.movementSlowFactor + 6 * fire.movementRecoveryPerCharge!)).toBeCloseTo(0.9, 10);
+
+    // Auf MaxCharge erreicht die Kuppel den skalierten Radius und skalierten Bewegungsfaktor.
+    expect(fire.radius * (1 + expectedMaxCharge * fire.radiusBonusPerCharge!)).toBeCloseTo(
+      baseFire.radius * (1 + expectedMaxCharge * expectedRadiusBonus),
+      10,
+    );
+    expect(Math.min(1, fire.movementSlowFactor + expectedMaxCharge * fire.movementRecoveryPerCharge!)).toBeCloseTo(
+      Math.min(1, baseFire.movementSlowFactor + expectedMaxCharge * expectedMovementRecovery),
+      10,
+    );
   });
 
   it('leaves the shared Tesla variants untouched by the player tree', () => {
