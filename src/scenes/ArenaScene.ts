@@ -77,6 +77,7 @@ import { CoopDefenseMapEventAnnouncementPresenter } from '../ui/CoopDefenseMapEv
 import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
 import { buildMainObjectiveViewModel } from '../ui/coopDefenseMainObjectiveModel';
 import { LobbyOverlay }          from './LobbyOverlay';
+import { BootScreen }             from '../ui/BootScreen';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
@@ -394,6 +395,25 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
+    BootScreen.setStatus(t('ui.boot.loadingData'));
+    BootScreen.setProgress(0);
+
+    const onProgress = (ratio: number) => {
+      BootScreen.setProgress(ratio);
+    };
+
+    const cleanupLoader = () => {
+      this.load.off(Phaser.Loader.Events.PROGRESS, onProgress);
+    };
+
+    this.load.on(Phaser.Loader.Events.PROGRESS, onProgress);
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      cleanupLoader();
+      BootScreen.setStatus(t('ui.boot.preparingLobby'));
+      BootScreen.setProgress(1);
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupLoader);
+
     preloadAllAudio(this.load);
     // Beide Boden-Kacheln stammen aus scripts/generate-grass-tiles.mjs; die Detailkachel liegt
     // als Multiply-Ebene darueber und bricht die Periode der Basiskachel (siehe ArenaBackground).
@@ -1408,6 +1428,13 @@ export class ArenaScene extends Phaser.Scene {
     this.refreshStoredCoopDefenseProgress();
     this.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
+
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+      void BootScreen.fadeOut();
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      BootScreen.dismissImmediate();
+    });
   }
 
   update(_time: number, delta: number): void {

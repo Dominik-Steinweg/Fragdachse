@@ -8,6 +8,7 @@ import { initialRenderSize, installRenderResolution } from './graphics/RenderRes
 import { FULLSCREEN_TARGET_ID, installFullscreenSupport } from './ui/fullscreen';
 import { loadUiFonts } from './ui/uiFonts';
 import { validateGameContentReferences } from './loadout/content/GameContentValidation';
+import { BootScreen }     from './ui/BootScreen';
 import { t } from './i18n';
 
 /**
@@ -20,6 +21,7 @@ interface BootErrorOptions {
 }
 
 function showBootError(message: string, canRejoin: boolean, options: BootErrorOptions = {}): void {
+  BootScreen.dismissImmediate();
   const container = document.getElementById('game-container');
   if (!container) return;
   const panel = document.createElement('div');
@@ -32,7 +34,6 @@ function showBootError(message: string, canRejoin: boolean, options: BootErrorOp
   const title = document.createElement('div');
   title.textContent = options.title ?? t('ui.boot.connectionFailed');
   title.style.cssText = 'font-size:24px;font-weight:bold;color:#d98d3a';
-
   const detail = document.createElement('div');
   detail.textContent = message;
   detail.style.cssText = 'font-size:16px;max-width:560px;line-height:1.5';
@@ -119,6 +120,10 @@ async function boot(): Promise<void> {
   // Ausgelieferter Content muss vollständig konsistent sein, bevor Netzwerk oder Phaser starten.
   validateGameContentReferences();
 
+  // Initialer Status während Verbindungsaufbau (Phase 1).
+  BootScreen.setStatus(t('ui.boot.connecting'));
+  BootScreen.setIndeterminate(true);
+
   // Die UI-Schriften starten *vor* dem Verbindungsaufbau und werden erst danach abgewartet:
   // beides laeuft dann nebeneinander, und der Start kostet keine zusaetzliche Zeit. Das
   // Warten ist zeitlich begrenzt und schlaegt nie fehl (siehe `ui/uiFonts`).
@@ -134,14 +139,7 @@ async function boot(): Promise<void> {
   installPageLeave();
 
   // 3. Phaser-Spiel starten – ERST nach stehender Verbindung und geladenen Schriften.
-  //
-  //    Phaser-Text rastert seine Glyphen beim Anlegen einmalig: was hier noch fehlt, bliebe
-  //    dauerhaft im Fallback stehen. `ui/uiFonts` rastert zwar auch spaeter noch nach, aber
-  //    ein Aufflackern beim Start laesst sich so ganz vermeiden.
-  //
-  //    Breite/Höhe sind die *Render*auflösung, nicht der Designraum: sie folgen der Fläche,
-  //    die der Browser tatsächlich darstellt (siehe `graphics/RenderResolution`). Der
-  //    Designraum bleibt GAME_WIDTH x GAME_HEIGHT und wird über den Kamera-Zoom hergestellt.
+  BootScreen.setStatus(t('ui.boot.loadingData'));
   await fontsReady;
   const renderSize = initialRenderSize();
   const game = new Phaser.Game({
