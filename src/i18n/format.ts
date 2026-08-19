@@ -1,12 +1,81 @@
 import type { Locale } from './types';
 import type { CoopDefenseUpgradeEffectDefinition } from '../utils/coopDefenseUpgrades';
 
+const MAX_FORMAT_CACHE_SIZE = 128;
+const numberFormatCache = new Map<string, Intl.NumberFormat>();
+const dateTimeFormatCache = new Map<string, Intl.DateTimeFormat>();
+
 function localeTag(locale: Locale): string {
   return locale === 'de' ? 'de-DE' : 'en-US';
 }
 
+function getFormatCacheKey(tag: string, options?: Record<string, unknown>): string {
+  if (!options) return tag;
+  const keys = Object.keys(options);
+  if (keys.length === 0) return tag;
+
+  let validCount = 0;
+  for (let i = 0; i < keys.length; i++) {
+    if (options[keys[i]!] !== undefined) {
+      if (validCount !== i) {
+        keys[validCount] = keys[i]!;
+      }
+      validCount++;
+    }
+  }
+  keys.length = validCount;
+  if (keys.length === 0) return tag;
+
+  keys.sort();
+  let key = tag;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i]!;
+    key += `|${k}:${String(options[k])}`;
+  }
+  return key;
+}
+
+export function getNumberFormat(locale: Locale, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const tag = localeTag(locale);
+  const key = getFormatCacheKey(tag, options as Record<string, unknown> | undefined);
+  let formatter = numberFormatCache.get(key);
+  if (!formatter) {
+    if (numberFormatCache.size >= MAX_FORMAT_CACHE_SIZE) {
+      const oldestKey = numberFormatCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        numberFormatCache.delete(oldestKey);
+      }
+    }
+    formatter = new Intl.NumberFormat(tag, options);
+    numberFormatCache.set(key, formatter);
+  }
+  return formatter;
+}
+
+export function getDateTimeFormat(locale: Locale, options?: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const tag = localeTag(locale);
+  const key = getFormatCacheKey(tag, options as Record<string, unknown> | undefined);
+  let formatter = dateTimeFormatCache.get(key);
+  if (!formatter) {
+    if (dateTimeFormatCache.size >= MAX_FORMAT_CACHE_SIZE) {
+      const oldestKey = dateTimeFormatCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        dateTimeFormatCache.delete(oldestKey);
+      }
+    }
+    formatter = new Intl.DateTimeFormat(tag, options);
+    dateTimeFormatCache.set(key, formatter);
+  }
+  return formatter;
+}
+
+export function clearFormatCache(): void {
+  numberFormatCache.clear();
+  dateTimeFormatCache.clear();
+}
+
 export function formatNumber(value: number, locale: Locale, options?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(localeTag(locale), options).format(value);
+  return getNumberFormat(locale, options).format(value);
 }
 
 export function formatPercent(value: number, locale: Locale, maximumFractionDigits = 0): string {
@@ -123,16 +192,18 @@ export function formatUpgradeEffectValue(
   return formatSigned(formatted.numericValue, formatted.text.replace(/^-/, ''), sign);
 }
 
+const DEFAULT_TIME_OPTIONS: Intl.DateTimeFormatOptions = Object.freeze({
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
 export function formatDate(value: Date | number, locale: Locale, options?: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(localeTag(locale), options).format(value);
+  return getDateTimeFormat(locale, options).format(value);
 }
 
 export function formatTime(valueMs: number, locale: Locale, options?: Intl.DateTimeFormatOptions): string {
-  return formatDate(new Date(valueMs), locale, options ?? {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatDate(valueMs, locale, options ?? DEFAULT_TIME_OPTIONS);
 }
 
 export function formatDuration(totalSeconds: number, locale: Locale): string {

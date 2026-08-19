@@ -13,12 +13,15 @@ import { isLocale, resolveBrowserLocale, type Locale } from './types';
 export type { Locale } from './types';
 export { isLocale, resolveBrowserLocale } from './types';
 export {
+  clearFormatCache,
   formatDate,
   formatDuration,
   formatNumber,
   formatPercent,
   formatTime,
   formatUpgradeEffectValue,
+  getDateTimeFormat,
+  getNumberFormat,
 } from './format';
 export {
   getTranslationKeySources,

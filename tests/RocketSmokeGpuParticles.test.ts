@@ -175,6 +175,40 @@ describe('rocket smoke gpu particles', () => {
     expect(smoke.edited.length).toBe(stats!.rearms);
     warn.mockRestore();
   });
+
+  it('does not spawn smoke or advance emission carry while the registry is suppressed', () => {
+    qualityFactors.standard = 0.5;
+    const { registry, renderer, smoke } = setup();
+
+    // 1 Vorab-Puff bei 0.5 Factor (Schritt 1: carry 0.5, Schritt 2: carry 1.0 -> 1 Puff)
+    flyRocket(renderer, 1, 2);
+    expect(smoke.edited.length).toBe(1);
+
+    // Ablation aktivieren
+    registry.setSuppressed(true);
+    expect(registry.getStats()?.['rocket-smoke'].activeSlots).toBe(0);
+
+    // Waehrend der Ablation fliegen: weder Spawns noch Carry-Akkumulation
+    flyRocket(renderer, 2, 20);
+    renderer.playSpentDestruction(100, 100, 0xff0000);
+    expect(smoke.edited.length).toBe(1);
+    expect(registry.getStats()?.['rocket-smoke'].activeSlots).toBe(0);
+
+    // Ablation deaktivieren
+    registry.setSuppressed(false);
+
+    // Nach Ende der Ablation: Kein Catch-up-Burst aus den 20 unterdrueckten Schritten.
+    // Carry stand vor Ablation nach Step 2 auf 0.5.
+    // Neuer Flugschritt bringt +0.5 -> Carry erreicht 1.0 -> genau 1 Puff (insgesamt 2).
+    // Folgeschritt bringt +0.5 -> Carry 0.5 -> kein neuer Puff (bleibt bei 2).
+    // Weiterer Schritt bringt +0.5 -> Carry 1.0 -> weiterer Puff (insgesamt 3).
+    renderer.updateVisual(1, 300, 0, 10, 200, 0);
+    expect(smoke.edited.length).toBe(2);
+    renderer.updateVisual(1, 360, 0, 10, 200, 0);
+    expect(smoke.edited.length).toBe(2);
+    renderer.updateVisual(1, 420, 0, 10, 200, 0);
+    expect(smoke.edited.length).toBe(3);
+  });
 });
 
 describe('gpu vfx eased base', () => {

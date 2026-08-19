@@ -421,7 +421,7 @@ export class RocketRenderer {
    */
   private spawnSmokePuff(x: number, y: number, visualSize: number, smokeColor: number): void {
     const fx = this.smokeFx;
-    if (!fx) return;
+    if (!fx || this.registry?.isSuppressed()) return;
 
     const factor = this.quality?.getProfile().particleFactors.standard ?? 1;
     this.smokeEmissionCarry += Math.max(0, factor);
