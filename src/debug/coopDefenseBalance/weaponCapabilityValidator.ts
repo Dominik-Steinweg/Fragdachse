@@ -64,7 +64,7 @@ export function validateWeaponBalanceCapabilities(
     add('adrenalinGain', 'supported', 'Adrenalingewinn wird pro Direkttreffer korrekt verbucht');
   }
   if (config.hitAdrenaline !== undefined && config.hitAdrenaline > 0) {
-    add('hitAdrenaline', 'unsupported_relevant', 'hitAdrenaline beeinflusst die Adrenalingenerierung, ist headless aber noch nicht implementiert');
+    add('hitAdrenaline', 'supported', 'hitAdrenaline gewährt zusätzliches Adrenalin pro Nahkampftreffer und wird vollständig simuliert');
   }
   if (config.hitHeal !== undefined && config.hitHeal > 0) {
     if (scenario === 'single_target_static') {

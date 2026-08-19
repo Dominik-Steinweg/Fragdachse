@@ -87,37 +87,37 @@ import { analyzeWeaponSingleTargetProgression } from '../src/debug/coopDefenseBa
 import { WEAPON_CONFIGS, type WeaponConfig } from '../src/loadout/LoadoutConfig';
 
 describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Foundation', () => {
-  describe('1. Bite hitAdrenaline Korrektur', () => {
-    it('lehnt Waffen mit hitAdrenaline > 0 als unsupported ab', () => {
+  describe('1. Bite hitAdrenaline Unterstützung', () => {
+    it('akzeptiert Waffen mit hitAdrenaline > 0 als supported', () => {
       const biteWithHitAdrenaline: WeaponConfig = {
         ...WEAPON_CONFIGS.BITE,
         hitAdrenaline: 10,
       };
 
       const check = validateWeaponBalanceCapabilities(biteWithHitAdrenaline);
-      expect(check.supported).toBe(false);
-      expect(check.unsupportedReasons.some((r) => r.includes('hitAdrenaline'))).toBe(true);
+      expect(check.supported).toBe(true);
 
-      expect(() => {
-        runWeaponSingleTargetBenchmark({
-          weaponId: 'BITE',
-          weaponConfigOverride: biteWithHitAdrenaline,
-          sourceSlot: 'weapon1',
-        });
-      }).toThrow(UnsupportedWeaponMechanicError);
+      const result = runWeaponSingleTargetBenchmark({
+        weaponId: 'BITE',
+        weaponConfigOverride: biteWithHitAdrenaline,
+        sourceSlot: 'weapon1',
+        durationMs: 5000,
+        seed: 1,
+      });
+      expect(result.hits).toBeGreaterThan(0);
+      expect(result.adrenalineGenerated).toBeGreaterThan(0);
     });
 
-    it('behandelt Bite-Bossstufen mit hitAdrenaline transparent als nicht provenMaximum', () => {
+    it('evaluiert Bite-Bossstufen mit hitAdrenaline vollständig mit provenMaximum = true', () => {
       const progression = analyzeWeaponSingleTargetProgression({
         weaponId: 'BITE',
         slot: 'weapon1',
       });
 
-      // In Mid (1 Boss Point) gibt es den Boss-Knoten bite_blood_bite (hitAdrenaline +10)
+      // In Mid (1 Boss Point) gibt es den Boss-Knoten bite_life_leech (hitAdrenaline +10)
       const midStage = progression.stages.find((s) => s.stage === 'mid')!;
-      expect(midStage.unsupportedCandidates).toBeGreaterThan(0);
-      expect(midStage.unsupportedReasons.some((r) => r.includes('hitAdrenaline'))).toBe(true);
-      expect(midStage.provenMaximum).toBe(false);
+      expect(midStage.unsupportedCandidates).toBe(0);
+      expect(midStage.provenMaximum).toBe(true);
     });
   });
 
@@ -164,10 +164,10 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
         warmupBurnThreshold: 15,
       }).supported).toBe(false);
 
-      // 4. Hit Adrenaline
+      // 4. Hit Vulnerability
       expect(validateWeaponBalanceCapabilities({
         ...WEAPON_CONFIGS.P90,
-        hitAdrenaline: 10,
+        hitVulnerabilityDurationMs: 1000,
       }).supported).toBe(false);
 
       // 5. Direct Damage Override
@@ -265,7 +265,7 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
       }).toThrow(UnsupportedWeaponMechanicError);
     });
 
-    it('wirft Fehler bei ununterstützter Melee-Payload (z.B. hitAdrenaline)', () => {
+    it('wirft Fehler bei ununterstützter Melee-Payload (z.B. unbekanntes Feld)', () => {
       expect(() => {
         validateMeleeSwingPayload({
           shooterId: 'p1',
@@ -283,9 +283,10 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
           baseDamageMult: 1,
           visualPreset: 'bite',
           hitHeal: 0,
-          hitAdrenaline: 10, // Noch nicht headless unterstützt
+          hitAdrenaline: 10,
           bloodEffectMultiplier: 1,
-        });
+          unknown_future_field: 123,
+        } as any);
       }).toThrow(UnsupportedWeaponMechanicError);
     });
   });

@@ -34,7 +34,11 @@ export interface StageAnalysisResult {
   readonly unsupportedCandidates: number;
   readonly unsupportedReasons: readonly string[];
   readonly unsupportedReasonCounts: Readonly<Record<string, number>>;
+  readonly incompleteCandidates: number;
+  readonly incompleteReasons: readonly string[];
+  readonly incompleteReasonCounts: Readonly<Record<string, number>>;
   readonly provenMaximum: boolean;
+  readonly settleTruncated?: boolean;
   readonly benchmarkAggregate?: SingleTargetBenchmarkAggregate;
   readonly benchmarkResult?: SingleTargetBenchmarkResult;
 }
@@ -177,6 +181,8 @@ export function analyzeWeaponSingleTargetProgression(
     let evaluatedCandidates = 0;
     let unsupportedCandidates = 0;
     const unsupportedReasonCounts: Record<string, number> = {};
+    let incompleteCandidates = 0;
+    const incompleteReasonCounts: Record<string, number> = {};
 
     for (const candidate of candidates) {
       const effectTotals = getCoopDefenseResolvedEffectTotals(candidate.profile, classId);
@@ -194,8 +200,6 @@ export function analyzeWeaponSingleTargetProgression(
         }
         continue;
       }
-
-      evaluatedCandidates += 1;
 
       // Cache-Key für diesen Build
       const cacheKey = `${options.weaponId}:${slot}:${candidate.signature}:${seeds.join(',')}:${durationMs}:${stepDeltaMs}:${scenario}`;
@@ -216,6 +220,16 @@ export function analyzeWeaponSingleTargetProgression(
         });
         buildCache.set(cacheKey, aggregate);
       }
+
+      // Unvollständig ausgewertete Settle-Läufe (z.B. abgebrochener Brand) dürfen nicht
+      // still als bewiesenes Ergebnis in die Best-Suche einfließen
+      if (aggregate.settleTruncated) {
+        incompleteCandidates += 1;
+        incompleteReasonCounts['settle_truncated'] = (incompleteReasonCounts['settle_truncated'] ?? 0) + 1;
+        continue;
+      }
+
+      evaluatedCandidates += 1;
 
       // Deterministischer Tie-Breaker bei identischem Expected DPS
       let isBetter = false;
@@ -246,9 +260,11 @@ export function analyzeWeaponSingleTargetProgression(
     }
 
     const provenMaximum = unsupportedCandidates === 0
+      && incompleteCandidates === 0
       && evaluatedCandidates === candidates.length
       && candidates.length > 0;
     const unsupportedReasons = Object.keys(unsupportedReasonCounts).sort();
+    const incompleteReasons = Object.keys(incompleteReasonCounts).sort();
 
     const dps = bestExpectedDps >= 0 ? bestExpectedDps : 0;
 
@@ -265,7 +281,11 @@ export function analyzeWeaponSingleTargetProgression(
       unsupportedCandidates,
       unsupportedReasons,
       unsupportedReasonCounts,
+      incompleteCandidates,
+      incompleteReasons,
+      incompleteReasonCounts,
       provenMaximum,
+      settleTruncated: bestAggregate?.settleTruncated,
       benchmarkAggregate: bestAggregate,
       benchmarkResult: bestAggregate?.runs?.[0],
     });

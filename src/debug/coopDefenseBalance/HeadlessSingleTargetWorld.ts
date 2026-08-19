@@ -33,6 +33,7 @@ export interface HeadlessActiveProjectile {
   ageMs: number;
   readonly adrenalinGain: number;
   readonly sourceId: string;
+  readonly ownerId: string;
   readonly burnDurationMs?: number;
   readonly burnDamagePerTick?: number;
   readonly projectileBurnVisualStyle?: GroundFireVisualStyle;
@@ -64,8 +65,8 @@ export function createMulberry32Prng(seed: number): () => number {
  * Nahkampfschwünge und Brand-Ticks mit virtueller Zeit und deterministischem RNG gegen ein
  * statisches, unsterbliches Ziel in Spielergröße (`PLAYER_SIZE / 2`).
  *
- * Verwendet dieselben mathematischen Resolver und dieselbe Brand-State-Machine wie die Runtime.
- * Frei von Rendering, Audio, Netzwerk und Wandzeit.
+ * Verwendet exaktes Sub-Step Event-Scheduling, dieselben mathematischen Resolver und dieselbe
+ * Brand-State-Machine wie die Runtime. Frei von Rendering, Audio, Netzwerk und Wandzeit.
  */
 export class HeadlessSingleTargetWorld implements WeaponFireSink {
   readonly target: HeadlessTarget;
@@ -125,89 +126,141 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   }
 
   /**
-   * Führt einen Simulationsschritt für alle aktiven Projektile und Brand-Ticks aus.
+   * Führt einen Simulationsschritt mit chronologischer Sub-Step-Ereignisverarbeitung aus.
    *
-   * Bei Projektiltreffern wird der exakte kontinuierliche Auftreffzeitpunkt ermittelt,
-   * sodass Brand-Ablaufzeiten unabhängig vom Zeitschritt (stepDeltaMs) präzise platziert werden.
+   * Ereignisse innerhalb des Zeitschritts [now, now + deltaMs] (Brand-Ticks, Projektiltreffer, Expiration)
+   * werden strikt in ihrer zeitlichen Reihenfolge abgearbeitet. Dies stellt sicher, dass:
+   * - Ein Projektiltreffer nach einem Brandtick keinen rückwirkenden Schaden für diesen Tick erhält.
+   * - Ein Projektiltreffer vor einem Brandtick pünktlich an diesem Tick teilnimmt.
+   * - Der Benchmark exakt invariant gegenüber der Schrittweite (stepDeltaMs = 8, 16, 25) ist.
    */
   step(deltaMs: number): void {
     if (deltaMs <= 0) return;
 
-    const stepStartTime = this.now;
     const stepEndTime = this.now + deltaMs;
+    const TIME_EPSILON = 1e-9;
 
-    // 1. Projektil-Bewegung & Kollision
-    for (let index = this.activeProjectiles.length - 1; index >= 0; index -= 1) {
-      const proj = this.activeProjectiles[index];
-      proj.lastX = proj.x;
-      proj.lastY = proj.y;
-      proj.x += proj.vx * (deltaMs / 1000);
-      proj.y += proj.vy * (deltaMs / 1000);
-      proj.ageMs += deltaMs;
+    while (this.now < stepEndTime - TIME_EPSILON) {
+      const remainingMs = stepEndTime - this.now;
 
-      const collisionRadius = this.target.radius + proj.size * 0.5;
-      const hit = checkSweptCircleHit(
-        proj.lastX,
-        proj.lastY,
-        proj.x,
-        proj.y,
-        this.target.x,
-        this.target.y,
-        collisionRadius,
-      );
+      // 1. Früheste Ereignisse im Intervall [this.now, stepEndTime] suchen
+      let nextEventTime = stepEndTime;
 
-      if (hit) {
-        // Kontinuierliche Auftreffzeit innerhalb des Zeitschritts ermitteln
-        const stepDist = Math.hypot(proj.x - proj.lastX, proj.y - proj.lastY);
-        const hitFraction = stepDist > 1e-6 ? Math.max(0, Math.min(1, hit.distance / stepDist)) : 0;
-        const impactTime = stepStartTime + hitFraction * deltaMs;
+      // a) Nächster geplanter Brand-Tick
+      const nextBurnTick = this.burnStateMachine.getNextBurnTickAt();
+      if (nextBurnTick > this.now + TIME_EPSILON && nextBurnTick < nextEventTime) {
+        nextEventTime = nextBurnTick;
+      }
 
-        this.hits += 1;
-        this.recordDamage(this.target.id, proj.damage, proj.sourceId, 'direct', false, impactTime);
-        if (proj.adrenalinGain > 0) {
-          this.recordAdrenalineGain(proj.adrenalinGain, proj.sourceId, impactTime);
+      // b) Früheste Projektil-Kollision oder Expiration
+      interface ProjectileImpactInfo {
+        readonly proj: HeadlessActiveProjectile;
+        readonly impactTime: number;
+        readonly isHit: boolean;
+      }
+
+      const pendingImpacts: ProjectileImpactInfo[] = [];
+
+      for (const proj of this.activeProjectiles) {
+        const destX = proj.x + proj.vx * (remainingMs / 1000);
+        const destY = proj.y + proj.vy * (remainingMs / 1000);
+        const collisionRadius = this.target.radius + proj.size * 0.5;
+
+        const hit = checkSweptCircleHit(
+          proj.x,
+          proj.y,
+          destX,
+          destY,
+          this.target.x,
+          this.target.y,
+          collisionRadius,
+        );
+
+        if (hit) {
+          const stepDist = Math.hypot(destX - proj.x, destY - proj.y);
+          const hitFraction = stepDist > 1e-6 ? Math.max(0, Math.min(1, hit.distance / stepDist)) : 0;
+          const impactTime = this.now + hitFraction * remainingMs;
+
+          if (impactTime < nextEventTime - TIME_EPSILON) {
+            nextEventTime = impactTime;
+          }
+          pendingImpacts.push({ proj, impactTime, isHit: true });
+        } else {
+          const remainingLifetime = proj.lifetimeMs - proj.ageMs;
+          if (remainingLifetime <= remainingMs) {
+            const expireTime = this.now + remainingLifetime;
+            if (expireTime < nextEventTime - TIME_EPSILON) {
+              nextEventTime = expireTime;
+            }
+            pendingImpacts.push({ proj, impactTime: expireTime, isHit: false });
+          }
         }
+      }
 
-        // Brand-Treffer registrieren
-        if (proj.burnDurationMs && proj.burnDurationMs > 0 && proj.burnDamagePerTick && proj.burnDamagePerTick > 0) {
-          this.burnStateMachine.applyHit({
-            targetId: this.target.id,
-            attackerId: 'sim_player',
-            durationMs: proj.burnDurationMs,
-            damagePerTick: proj.burnDamagePerTick,
-            sourceKey: 'weapon',
-            sourceId: proj.sourceId,
-            origin: 'generic',
-            visualStyle: proj.projectileBurnVisualStyle ?? 'normal',
-            now: impactTime,
-          });
+      // 2. Zeit auf nextEventTime vorrücken und alle Projektile bis zu diesem Zeitpunkt bewegen
+      const subDeltaMs = Math.max(0, nextEventTime - this.now);
+      for (const proj of this.activeProjectiles) {
+        proj.lastX = proj.x;
+        proj.lastY = proj.y;
+        proj.x += proj.vx * (subDeltaMs / 1000);
+        proj.y += proj.vy * (subDeltaMs / 1000);
+        proj.ageMs += subDeltaMs;
+      }
+
+      this.now = nextEventTime;
+
+      // 3. Fällige Brand-Ticks bis zum aktuellen Zeitpunkt ausführen
+      const dueContributions = this.burnStateMachine.advanceTo(this.now);
+      for (const contribution of dueContributions) {
+        this.recordDamage(
+          contribution.targetId,
+          contribution.damage,
+          contribution.sourceId,
+          'burn',
+          false,
+          contribution.tickAt,
+        );
+      }
+
+      // 4. Projektiltreffer verarbeiten, die genau bei nextEventTime eintreffen
+      for (let i = this.activeProjectiles.length - 1; i >= 0; i -= 1) {
+        const proj = this.activeProjectiles[i];
+        const match = pendingImpacts.find((p) => p.proj === proj);
+
+        if (match && Math.abs(match.impactTime - nextEventTime) <= 1e-6) {
+          if (match.isHit) {
+            this.hits += 1;
+            this.recordDamage(this.target.id, proj.damage, proj.sourceId, 'direct', false, this.now);
+            if (proj.adrenalinGain > 0) {
+              this.recordAdrenalineGain(proj.adrenalinGain, proj.sourceId, this.now);
+            }
+
+            if (proj.burnDurationMs && proj.burnDurationMs > 0 && proj.burnDamagePerTick && proj.burnDamagePerTick > 0) {
+              this.burnStateMachine.applyHit({
+                targetId: this.target.id,
+                attackerId: proj.ownerId,
+                durationMs: proj.burnDurationMs,
+                damagePerTick: proj.burnDamagePerTick,
+                sourceKey: `weapon:${proj.sourceId}`,
+                sourceId: proj.sourceId,
+                origin: 'generic',
+                visualStyle: proj.projectileBurnVisualStyle ?? 'normal',
+                now: this.now,
+              });
+            }
+          }
+          this.activeProjectiles.splice(i, 1);
         }
-
-        this.activeProjectiles.splice(index, 1);
-      } else if (proj.ageMs >= proj.lifetimeMs) {
-        this.activeProjectiles.splice(index, 1);
       }
     }
 
-    // 2. Zeit auf Schrittende setzen & fällige Brand-Ticks ausführen
     this.now = stepEndTime;
-    const dueContributions = this.burnStateMachine.advanceTo(this.now);
-    for (const contribution of dueContributions) {
-      this.recordDamage(
-        contribution.targetId,
-        contribution.damage,
-        contribution.sourceId,
-        'burn',
-        false,
-        contribution.tickAt,
-      );
-    }
   }
 
   // ── WeaponFireSink-Implementierung ─────────────────────────────────────────
 
   /** Spawnt ein fliegendes Projektil in der virtuellen Welt. */
-  spawnProjectile(x: number, y: number, angle: number, _ownerId: string, cfg: ProjectileSpawnConfig): boolean {
+  spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): boolean {
     if (this.failingSink) return false;
 
     // Zweite Sicherheitsgrenze auf empfangene Projektil-Payloads
@@ -229,6 +282,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       ageMs: 0,
       adrenalinGain: cfg.adrenalinGain,
       sourceId: cfg.sourceId ?? 'weapon.unknown',
+      ownerId: ownerId || 'sim_player',
       burnDurationMs: cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,
       projectileBurnVisualStyle: cfg.projectileBurnVisualStyle,
@@ -267,7 +321,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
           attackerId: request.shooterId,
           durationMs: request.burnOnHit.durationMs,
           damagePerTick: request.burnOnHit.damagePerTick,
-          sourceKey: 'weapon',
+          sourceKey: `weapon:${request.sourceId}`,
           sourceId: request.sourceId,
           origin: 'generic',
           now: this.now,
@@ -300,8 +354,11 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     if (hit) {
       this.hits += 1;
       this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct', false, this.now);
-      if (request.adrenalinGain > 0) {
-        this.recordAdrenalineGain(request.adrenalinGain, request.sourceId, this.now);
+
+      // Treffer-Adrenalin: Basis-adrenalinGain + zusätzliches hitAdrenaline gemäß Runtime-Regel
+      const totalAdrenaline = (request.adrenalinGain ?? 0) + (request.hitAdrenaline ?? 0);
+      if (totalAdrenaline > 0) {
+        this.recordAdrenalineGain(totalAdrenaline, request.sourceId, this.now);
       }
 
       if (request.burnOnHit && request.burnOnHit.durationMs > 0 && request.burnOnHit.damagePerTick > 0) {
@@ -310,7 +367,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
           attackerId: request.shooterId,
           durationMs: request.burnOnHit.durationMs,
           damagePerTick: request.burnOnHit.damagePerTick,
-          sourceKey: 'weapon',
+          sourceKey: `weapon:${request.sourceId}`,
           sourceId: request.sourceId,
           origin: 'generic',
           now: this.now,

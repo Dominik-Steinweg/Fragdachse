@@ -189,12 +189,11 @@ export const validateHitscanShotPayload = validateHitscanShotRequest;
 
 const MELEE_KNOWN_FIELDS = new Set<string>([
   // Supported
-  'shooterId', 'x', 'y', 'angle', 'range', 'arcDegrees', 'damage', 'adrenalinGain', 'sourceId', 'burnOnHit',
+  'shooterId', 'x', 'y', 'angle', 'range', 'arcDegrees', 'damage', 'adrenalinGain', 'hitAdrenaline', 'sourceId', 'burnOnHit',
   // Scenario-irrelevant
   'color', 'visualPreset', 'shotAudioKey', 'bloodEffectMultiplier', 'sourceSlot',
   'damageTargets', 'rockDamageMult', 'trainDamageMult', 'baseDamageMult', 'hitHeal',
   // Unsupported Relevant
-  'hitAdrenaline',
 ]);
 
 export function validateMeleeSwingPayload(
@@ -214,10 +213,6 @@ export function validateMeleeSwingPayload(
   }
 
   // 2. Semantische Prüfungen
-  if (request.hitAdrenaline > 0) {
-    reasons.push('hitAdrenaline (Treffer-Adrenalin) ist headless nicht implementiert');
-  }
-
   if (reasons.length > 0) {
     throw new UnsupportedWeaponMechanicError(request.sourceId ?? 'melee', reasons, scenario);
   }
