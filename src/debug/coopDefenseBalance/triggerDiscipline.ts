@@ -1,5 +1,24 @@
 import type { WeaponConfig } from '../../loadout/LoadoutConfig';
 import { resolveTotalSpreadDeg } from '../../loadout/ShotPlanResolver';
+import type { SingleTargetAimPolicy, SingleTargetTriggerPolicy } from './scenarioTypes';
+
+/** Liefert den Zielwinkel gemaess der expliziten Benchmark-Aim-Policy. */
+export function resolveSingleTargetAimAngle(
+  policy: SingleTargetAimPolicy,
+  shooterX: number,
+  shooterY: number,
+  targetX: number,
+  targetY: number,
+): number {
+  switch (policy) {
+    case 'target_center':
+      return Math.atan2(targetY - shooterY, targetX - shooterX);
+    default: {
+      const exhaustivePolicy: never = policy;
+      throw new Error(`[WeaponBalanceLab] Unbekannte Aim-Policy "${exhaustivePolicy}"`);
+    }
+  }
+}
 
 /**
  * Berechnet den halben Bogenwinkel, den das kreisförmige Ziel vom Schützen aus einnimmt.
@@ -54,6 +73,24 @@ export function isSpreadWithinTriggerDiscipline(
   return totalSpreadDeg <= maxAllowedDeg + 1e-6;
 }
 
+/** Schussfreigabe des versionierten Single-Target-Controllers. */
+export function isSingleTargetTriggerReady(
+  policy: SingleTargetTriggerPolicy,
+  config: WeaponConfig,
+  dynamicSpread: number,
+  targetDistance: number,
+  targetRadius: number,
+): boolean {
+  switch (policy) {
+    case 'spread_coverage_and_recovery':
+      return isSpreadWithinTriggerDiscipline(config, dynamicSpread, targetDistance, targetRadius);
+    default: {
+      const exhaustivePolicy: never = policy;
+      throw new Error(`[WeaponBalanceLab] Unbekannte Trigger-Policy "${exhaustivePolicy}"`);
+    }
+  }
+}
+
 /**
  * Berechnet den exakten virtuellen Zeitstempel, an dem der dynamische Spread wieder weit genug
  * abgeklungen ist, um die Schussfreigabe zu erteilen.
@@ -98,4 +135,31 @@ export function calculateTriggerDisciplineReadyTime(
   const decayTimeMs = excessSpreadDeg / ratePerMs;
 
   return now + remainingDelay + decayTimeMs;
+}
+
+/** Exakter naechster Freigabezeitpunkt fuer die versionierte Trigger-Policy. */
+export function calculateSingleTargetTriggerReadyTime(
+  policy: SingleTargetTriggerPolicy,
+  config: WeaponConfig,
+  dynamicSpread: number,
+  lastUsedAt: number,
+  now: number,
+  targetDistance: number,
+  targetRadius: number,
+): number {
+  switch (policy) {
+    case 'spread_coverage_and_recovery':
+      return calculateTriggerDisciplineReadyTime(
+        config,
+        dynamicSpread,
+        lastUsedAt,
+        now,
+        targetDistance,
+        targetRadius,
+      );
+    default: {
+      const exhaustivePolicy: never = policy;
+      throw new Error(`[WeaponBalanceLab] Unbekannte Trigger-Policy "${exhaustivePolicy}"`);
+    }
+  }
 }

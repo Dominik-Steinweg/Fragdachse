@@ -18,6 +18,7 @@ import {
   type ObstacleCircleVisitor,
 } from './ArenaObstacleIndex';
 import { CombatGeometry } from './CombatGeometry';
+import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -1797,7 +1798,16 @@ export class CombatSystem {
       if (proj.penetrationHitIds?.has(player.id)) continue;
       if (!this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
 
-      const hit = this.findNearestCircleHit(line, player.sprite.x, player.sprite.y, PLAYER_SIZE * 0.5 + projectileRadius);
+       const hit = resolveProjectileTargetImpact({
+         startX: line.x1,
+         startY: line.y1,
+         endX: line.x2,
+         endY: line.y2,
+         targetX: player.sprite.x,
+         targetY: player.sprite.y,
+         radius: PLAYER_SIZE * 0.5 + projectileRadius,
+         ignoreStartingOverlap: true,
+       });
       if (!hit) continue;
       if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
       if (!bestHit || hit.distance < bestHit.distance) {
@@ -1811,7 +1821,16 @@ export class CombatSystem {
       if (!this.canDamageTarget(proj.ownerId, enemy.id, proj.allowTeamDamage)) continue;
 
       const enemyRadius = Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5 + projectileRadius;
-      const hit = this.findNearestCircleHit(line, enemy.sprite.x, enemy.sprite.y, enemyRadius);
+       const hit = resolveProjectileTargetImpact({
+         startX: line.x1,
+         startY: line.y1,
+         endX: line.x2,
+         endY: line.y2,
+         targetX: enemy.sprite.x,
+         targetY: enemy.sprite.y,
+         radius: enemyRadius,
+         ignoreStartingOverlap: true,
+       });
       if (!hit) continue;
       if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
       if (!bestHit || hit.distance < bestHit.distance) {
@@ -1824,7 +1843,16 @@ export class CombatSystem {
       if (proj.penetrationHitIds?.has(`decoy_${decoy.id}`)) continue;
 
       const decoyRadius = Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5 + projectileRadius;
-      const hit = this.findNearestCircleHit(line, decoy.sprite.x, decoy.sprite.y, decoyRadius);
+       const hit = resolveProjectileTargetImpact({
+         startX: line.x1,
+         startY: line.y1,
+         endX: line.x2,
+         endY: line.y2,
+         targetX: decoy.sprite.x,
+         targetY: decoy.sprite.y,
+         radius: decoyRadius,
+         ignoreStartingOverlap: true,
+       });
       if (!hit) continue;
       if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
       if (!bestHit || hit.distance < bestHit.distance) {

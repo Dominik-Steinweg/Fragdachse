@@ -5,9 +5,16 @@ import { resolveShotPlan, resolveEffectivePelletCount } from '../../loadout/Shot
 import { HeadlessSingleTargetWorld } from './HeadlessSingleTargetWorld';
 import { assertWeaponBalanceSupported } from './weaponCapabilityValidator';
 import {
-  isSpreadWithinTriggerDiscipline,
-  calculateTriggerDisciplineReadyTime,
+  isSingleTargetTriggerReady,
+  calculateSingleTargetTriggerReadyTime,
+  resolveSingleTargetAimAngle,
 } from './triggerDiscipline';
+import {
+  assertSingleTargetScenarioConfig,
+  DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG,
+  resolveSingleTargetScenarioProfile,
+  type SingleTargetScenarioConfig,
+} from './scenarioTypes';
 import {
   DEFAULT_BENCHMARK_SEEDS,
   type SingleTargetBenchmarkOptions,
@@ -50,15 +57,32 @@ export function resolveAndValidateWeaponSlot(
 }
 
 /**
- * Ermittelt eine sinnvolle Standarddistanz zum Ziel passend zur Reichweite und zum Typ der Waffe.
+ * @deprecated Nur noch ein Kompatibilitaets-Export. Die Benchmark-Distanz kommt aus einem
+ * versionierten Szenario-Profil und wird nicht aus Fire-Typ oder Weapon-Range berechnet.
  */
-export function resolveDefaultTargetDistance(fireType: string, range: number): number {
-  if (fireType === 'melee') {
-    // Nahkampf: Ziel so platzieren, dass es sicher innerhalb der Reichweite liegt
-    return Math.min(40, Math.max(10, range * 0.8));
-  }
-  // Fernkampf (Hitscan / Projektil): Standard-Prüfdistanz von 150px
-  return Math.min(150, Math.max(40, range * 0.5));
+export function resolveDefaultTargetDistance(_fireType: string, _range: number): number {
+  // Abwaertskompatibilitaet fuer alte Importe. Der Benchmark selbst verwendet diese
+  // Funktion bewusst nicht mehr; die Distanz kommt ausschliesslich aus dem versionierten
+  // SingleTargetScenarioConfig.
+  return DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG.targetDistance;
+}
+
+function resolveSingleTargetScenarioConfig(
+  options: SingleTargetBenchmarkOptions | SingleTargetBenchmarkSetOptions,
+  fireType = 'projectile',
+): SingleTargetScenarioConfig {
+  const base = options.scenarioConfig
+    ?? (fireType === 'projectile'
+      ? DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG
+      : resolveSingleTargetScenarioProfile(fireType));
+  const config: SingleTargetScenarioConfig = {
+    ...base,
+    attackWindowMs: options.durationMs ?? base.attackWindowMs,
+    targetDistance: options.targetDistance ?? base.targetDistance,
+    settleLimitMs: options.maxSettleDurationMs ?? base.settleLimitMs,
+  };
+  assertSingleTargetScenarioConfig(config);
+  return config;
 }
 
 /**
@@ -90,14 +114,23 @@ export function runWeaponSingleTargetBenchmark(
   assertWeaponBalanceSupported(config, 'single_target_static');
 
   const slot = resolveAndValidateWeaponSlot(config, options.sourceSlot);
-  const attackWindowDurationMs = options.durationMs ?? 30_000;
+  const scenario = resolveSingleTargetScenarioConfig(options, config.fire.type);
+  const attackWindowDurationMs = scenario.attackWindowMs;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
   const seed = options.seed ?? 1;
-  const maxSettleMs = options.maxSettleDurationMs ?? 5_000;
+  const maxSettleMs = scenario.settleLimitMs;
   const recordEvents = options.recordEvents ?? true;
 
-  const targetDistance = options.targetDistance ?? resolveDefaultTargetDistance(config.fire.type, config.range);
-  const world = new HeadlessSingleTargetWorld(targetDistance, seed, recordEvents);
+  const targetDistance = scenario.targetDistance;
+  const measurementStartMs = scenario.warmupMs;
+  const measurementEndMs = measurementStartMs + attackWindowDurationMs;
+  const world = new HeadlessSingleTargetWorld(
+    targetDistance,
+    seed,
+    recordEvents,
+    scenario.targetRadius,
+  );
+  world.setDamageMeasurementWindow(measurementStartMs, measurementEndMs);
   const weapon = new GenericWeapon(config);
   const executor = new WeaponFireExecutor(world);
 
@@ -107,17 +140,27 @@ export function runWeaponSingleTargetBenchmark(
   const shooterY = 0;
   const targetX = world.target.x;
   const targetY = world.target.y;
-  const targetAngle = Math.atan2(targetY - shooterY, targetX - shooterX);
+  const targetAngle = resolveSingleTargetAimAngle(
+    scenario.aimPolicy,
+    shooterX,
+    shooterY,
+    targetX,
+    targetY,
+  );
 
   let currentTime = 0;
   const TIME_EPSILON = 1e-6;
 
-  // ── Phase 1: Attack Window (Feuern + Simulation) ───────────────────────────
-  while (currentTime < attackWindowDurationMs - TIME_EPSILON) {
+  // ── Phase 1 + 2: Warmup und Measurement Window ─────────────────────────────
+  // Beide Phasen benutzen denselben Controller. Nur das Zeitfenster der Metrik ist
+  // getrennt; Warmup-Treffer werden nicht nachtraeglich in den Measurement-DPS gezogen.
+  const controllerEndTime = measurementEndMs;
+  while (currentTime < controllerEndTime - TIME_EPSILON) {
     world.setTime(currentTime);
 
     const cooldownReady = !weapon.isOnCooldown(currentTime);
-    const triggerReady = isSpreadWithinTriggerDiscipline(
+    const triggerReady = isSingleTargetTriggerReady(
+      scenario.triggerPolicy,
       config,
       weapon.getDynamicSpread(),
       targetDistance,
@@ -164,7 +207,8 @@ export function runWeaponSingleTargetBenchmark(
     const lastUsedAt = weapon.getLastUsedAt();
     const cooldownReadyTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.cooldown;
     const recoveryStartTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.spreadRecoveryDelay;
-    const spreadReadyTime = calculateTriggerDisciplineReadyTime(
+    const spreadReadyTime = calculateSingleTargetTriggerReadyTime(
+      scenario.triggerPolicy,
       config,
       weapon.getDynamicSpread(),
       lastUsedAt,
@@ -174,7 +218,7 @@ export function runWeaponSingleTargetBenchmark(
     );
     const nextActionTime = Math.max(cooldownReadyTime, spreadReadyTime);
 
-    const nextStepBoundary = Math.min(attackWindowDurationMs, currentTime + stepDeltaMs);
+    const nextStepBoundary = Math.min(controllerEndTime, currentTime + stepDeltaMs);
 
     let nextTime = nextStepBoundary;
     if (cooldownReadyTime > currentTime + TIME_EPSILON && cooldownReadyTime < nextTime) {
@@ -204,7 +248,7 @@ export function runWeaponSingleTargetBenchmark(
     }
   }
 
-  // ── Phase 2: Settle Phase (keine neuen Schüsse, fliegende Projektile und Brand auslaufen lassen)
+  // ── Phase 3: Settle Phase (keine neuen Schüsse, fliegende Projektile und Brand auslaufen lassen)
   const settleStart = currentTime;
   while (world.hasPendingCombatEffects(currentTime) && (currentTime - settleStart < maxSettleMs)) {
     const remainingSettle = maxSettleMs - (currentTime - settleStart);
@@ -218,10 +262,14 @@ export function runWeaponSingleTargetBenchmark(
   const settleDurationMs = currentTime - settleStart;
   const settleTruncated = world.hasPendingCombatEffects(currentTime);
 
-  // ── Phase 3: Metriken auswerten ───────────────────────────────────────────
-  const totalDamage = world.getTotalDamage();
-  const directDamage = world.getDirectDamage();
-  const burnDamage = world.getBurnDamage();
+  // ── Phase 4: Metriken auswerten ────────────────────────────────────────────
+  // Das Messfenster ist halboffen: [warmupMs, warmupMs + attackWindowMs).
+  const totalDamage = world.getMeasurementTotalDamage();
+  const directDamage = world.getMeasurementDirectDamage();
+  const burnDamage = world.getMeasurementBurnDamage();
+  const damageYieldIncludingTail = world.getTotalDamage();
+  const directDamageIncludingTail = world.getDirectDamage();
+  const burnDamageIncludingTail = world.getBurnDamage();
   const shotsFired = world.getShotsFired();
   const hits = world.getHits();
   const totalExpectedPellets = shotsFired * resolveEffectivePelletCount(config);
@@ -237,11 +285,22 @@ export function runWeaponSingleTargetBenchmark(
 
   return {
     weaponId: config.id,
+    scenarioId: scenario.id,
+    scenarioVersion: scenario.version,
+    warmupMs: scenario.warmupMs,
+    measurementStartMs,
+    measurementEndMs,
     durationMs: attackWindowDurationMs,
     settleDurationMs,
     totalDamage,
     directDamage,
     burnDamage,
+    damageYieldIncludingTail,
+    directDamageIncludingTail,
+    burnDamageIncludingTail,
+    tailDamage: world.getTailDamage(),
+    tailDirectDamage: world.getTailDirectDamage(),
+    tailBurnDamage: world.getTailBurnDamage(),
     dps,
     directDps,
     burnDps,
@@ -272,6 +331,8 @@ export function runWeaponSingleTargetBenchmarkSet(
   // Deterministische Normalisierung (Deduplizieren + Sortieren)
   const seeds = Array.from(new Set(rawSeeds)).sort((a, b) => a - b);
   const n = seeds.length;
+  const aggregateConfig = options.weaponConfigOverride ?? getWeaponConfig(options.weaponId);
+  const scenario = resolveSingleTargetScenarioConfig(options, aggregateConfig?.fire.type);
 
   const runs: SingleTargetBenchmarkResult[] = [];
   const dpsValues: number[] = [];
@@ -280,6 +341,7 @@ export function runWeaponSingleTargetBenchmarkSet(
   let totalDamage = 0;
   let totalDirectDamage = 0;
   let totalBurnDamage = 0;
+  let totalDamageYieldIncludingTail = 0;
   let totalShots = 0;
   let totalHits = 0;
   let totalPossiblePellets = 0;
@@ -294,6 +356,7 @@ export function runWeaponSingleTargetBenchmarkSet(
       weaponId: options.weaponId,
       weaponConfigOverride: options.weaponConfigOverride,
       sourceSlot: options.sourceSlot,
+      scenarioConfig: scenario,
       durationMs: options.durationMs,
       stepDeltaMs: options.stepDeltaMs,
       targetDistance: options.targetDistance,
@@ -312,6 +375,7 @@ export function runWeaponSingleTargetBenchmarkSet(
     totalDamage += result.totalDamage;
     totalDirectDamage += result.directDamage;
     totalBurnDamage += result.burnDamage;
+    totalDamageYieldIncludingTail += result.damageYieldIncludingTail;
     totalShots += result.shotsFired;
     totalHits += result.hits;
 
@@ -341,11 +405,14 @@ export function runWeaponSingleTargetBenchmarkSet(
 
   return {
     weaponId: options.weaponId,
+    scenarioId: scenario.id,
+    scenarioVersion: scenario.version,
     seedCount: n,
     seeds: [...seeds],
     expectedDps,
     expectedDirectDps,
     expectedBurnDps,
+    expectedDamageYieldIncludingTail: n > 0 ? totalDamageYieldIncludingTail / n : 0,
     medianDps,
     p10Dps,
     p90Dps,

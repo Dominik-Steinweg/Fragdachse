@@ -321,9 +321,12 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
 
       expect(result.shotsFired).toBe(1);
       expect(result.hits).toBe(1);
-      expect(result.totalDamage).toBe(100);
-      // DPS-Nenner bleibt exakt das 100ms Attack Window: 100 / 0.1s = 1000 DPS
-      expect(result.dps).toBeCloseTo(100 / 0.1, 2);
+      // Der Treffer bleibt im Event-Log sichtbar, gehoert aber wegen des halboffenen
+      // Measurement Windows [0, 100ms) nicht zum ST-DPS.
+      expect(result.totalDamage).toBe(0);
+      expect(result.damageYieldIncludingTail).toBe(100);
+      expect(result.tailDamage).toBe(100);
+      expect(result.dps).toBe(0);
       expect(result.settleDurationMs).toBeGreaterThan(500);
     });
   });

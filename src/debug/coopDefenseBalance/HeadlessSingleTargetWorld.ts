@@ -6,10 +6,10 @@ import type {
   WeaponFireSink,
 } from '../../loadout/WeaponFireExecutor';
 import {
-  checkSweptCircleHit,
   checkHitscanRayCircleHit,
   checkMeleeArcHit,
 } from '../../combat/rules/DirectCombatHitResolver';
+import { resolveProjectileTargetImpact } from '../../combat/rules/ProjectileImpactResolver';
 import { BurnStateMachine } from '../../combat/rules/BurnStateMachine';
 import {
   validateProjectileSpawnPayload,
@@ -83,6 +83,13 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   private totalDamage = 0;
   private directDamage = 0;
   private burnDamage = 0;
+  private measurementWindow: { startMs: number; endMs: number } | null = null;
+  private measurementTotalDamage = 0;
+  private measurementDirectDamage = 0;
+  private measurementBurnDamage = 0;
+  private tailDamage = 0;
+  private tailDirectDamage = 0;
+  private tailBurnDamage = 0;
   private hits = 0;
   private shotsFired = 0;
   private adrenalineGenerated = 0;
@@ -92,12 +99,17 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   failingSink = false;
   readonly recordEvents: boolean;
 
-  constructor(targetDistance: number, seed = 1, recordEvents = true) {
+  constructor(
+    targetDistance: number,
+    seed = 1,
+    recordEvents = true,
+    targetRadius = PLAYER_SIZE * 0.5,
+  ) {
     this.target = {
       id: 'dummy_target',
       x: targetDistance,
       y: 0,
-      radius: PLAYER_SIZE * 0.5,
+      radius: targetRadius,
     };
     this.rng = createMulberry32Prng(seed);
     this.recordEvents = recordEvents;
@@ -113,6 +125,23 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   /** Liefert den aktuellen virtuellen Zeitstempel. */
   getTime(): number {
     return this.now;
+  }
+
+  /**
+   * Setzt das Messfenster als halboffenes Intervall [startMs, endMs).
+   * Treffer am Start gehoeren zur Messung; Treffer exakt am Ende sind Tail-Damage.
+   */
+  setDamageMeasurementWindow(startMs: number, endMs: number): void {
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+      throw new Error('[WeaponBalanceLab] Ungueltiges Schadens-Messfenster.');
+    }
+    this.measurementWindow = { startMs, endMs };
+    this.measurementTotalDamage = 0;
+    this.measurementDirectDamage = 0;
+    this.measurementBurnDamage = 0;
+    this.tailDamage = 0;
+    this.tailDirectDamage = 0;
+    this.tailBurnDamage = 0;
   }
 
   /** Prüft, ob sich aktuell noch Projektile im Flug befinden. */
@@ -166,15 +195,15 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
         const destY = proj.y + proj.vy * (remainingMs / 1000);
         const collisionRadius = this.target.radius + proj.size * 0.5;
 
-        const hit = checkSweptCircleHit(
-          proj.x,
-          proj.y,
-          destX,
-          destY,
-          this.target.x,
-          this.target.y,
-          collisionRadius,
-        );
+        const hit = resolveProjectileTargetImpact({
+          startX: proj.x,
+          startY: proj.y,
+          endX: destX,
+          endY: destY,
+          targetX: this.target.x,
+          targetY: this.target.y,
+          radius: collisionRadius,
+        });
 
         if (hit) {
           const stepDist = Math.hypot(destX - proj.x, destY - proj.y);
@@ -400,6 +429,24 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       this.directDamage += damage;
     }
 
+    if (!this.measurementWindow) {
+      // Direkte World-Tests ohne Benchmark-Fenster behalten ihre bisherige Semantik.
+      this.measurementTotalDamage += damage;
+      if (damageKind === 'burn') this.measurementBurnDamage += damage;
+      else this.measurementDirectDamage += damage;
+    } else if (
+      timestampMs >= this.measurementWindow.startMs
+      && timestampMs < this.measurementWindow.endMs
+    ) {
+      this.measurementTotalDamage += damage;
+      if (damageKind === 'burn') this.measurementBurnDamage += damage;
+      else this.measurementDirectDamage += damage;
+    } else {
+      this.tailDamage += damage;
+      if (damageKind === 'burn') this.tailBurnDamage += damage;
+      else this.tailDirectDamage += damage;
+    }
+
     if (this.recordEvents) {
       this.damageEvents.push({
         timestampMs,
@@ -450,6 +497,32 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   getBurnDamage(): number {
     return this.burnDamage;
+  }
+
+  /** Schaden innerhalb des konfigurierten Measurement Windows. */
+  getMeasurementTotalDamage(): number {
+    return this.measurementTotalDamage;
+  }
+
+  getMeasurementDirectDamage(): number {
+    return this.measurementDirectDamage;
+  }
+
+  getMeasurementBurnDamage(): number {
+    return this.measurementBurnDamage;
+  }
+
+  /** Schaden ausserhalb des Measurement Windows (Warmup-/Settle-Tail). */
+  getTailDamage(): number {
+    return this.tailDamage;
+  }
+
+  getTailDirectDamage(): number {
+    return this.tailDirectDamage;
+  }
+
+  getTailBurnDamage(): number {
+    return this.tailBurnDamage;
   }
 
   getHits(): number {

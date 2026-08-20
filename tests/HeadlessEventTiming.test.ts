@@ -27,6 +27,14 @@ vi.mock('phaser', () => {
 
 import { HeadlessSingleTargetWorld } from '../src/debug/coopDefenseBalance/HeadlessSingleTargetWorld';
 import { runWeaponSingleTargetBenchmark } from '../src/debug/coopDefenseBalance/weaponBenchmark';
+import {
+  DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG,
+  MELEE_SINGLE_TARGET_SCENARIO_CONFIG,
+} from '../src/debug/coopDefenseBalance/scenarioTypes';
+import { validateWeaponBalanceCapabilities } from '../src/debug/coopDefenseBalance/weaponCapabilityValidator';
+import { validateProjectileSpawnPayload } from '../src/debug/coopDefenseBalance/headlessPayloadGuard';
+import { resolveProjectileTargetImpact } from '../src/combat/rules/ProjectileImpactResolver';
+import { checkSweptCircleHit } from '../src/combat/rules/DirectCombatHitResolver';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../src/loadout/LoadoutConfig';
 
 describe('Headless Event Timing & Causal Correctness', () => {
@@ -181,6 +189,77 @@ describe('Headless Event Timing & Causal Correctness', () => {
       expect(sources[0].attackerId).toBe('player_alpha');
       expect(sources[0].sourceId).toBe('plasma_rifle');
       expect(sources[0].sourceKey).toBe('weapon:plasma_rifle');
+    });
+  });
+
+  describe('4. Measurement-Window-Semantik', () => {
+    it('zaehlt Schaden am Anfang inklusiv und exakt am Ende exklusiv', () => {
+      const world = new HeadlessSingleTargetWorld(40, 1, true);
+      world.setDamageMeasurementWindow(100, 200);
+
+      world.recordDamage('dummy_target', 3, 'before', 'direct', false, 99.999);
+      world.recordDamage('dummy_target', 5, 'start', 'direct', false, 100);
+      world.recordDamage('dummy_target', 7, 'inside', 'direct', false, 199.999);
+      world.recordDamage('dummy_target', 11, 'end', 'direct', false, 200);
+
+      expect(world.getMeasurementTotalDamage()).toBe(12);
+      expect(world.getTailDamage()).toBe(14);
+      expect(world.getTotalDamage()).toBe(26);
+    });
+
+    it('ordnet Burn-Ticks direkt vor und nach der Grenze getrennt zu', () => {
+      const world = new HeadlessSingleTargetWorld(40, 1, true);
+      world.setDamageMeasurementWindow(0, 250);
+      world.recordDamage('dummy_target', 4, 'burn', 'burn', false, 249.999);
+      world.recordDamage('dummy_target', 6, 'burn', 'burn', false, 250);
+
+      expect(world.getMeasurementBurnDamage()).toBe(4);
+      expect(world.getTailBurnDamage()).toBe(6);
+      expect(world.getDamageEvents().map((event) => event.timestampMs)).toEqual([249.999, 250]);
+    });
+
+    it('liefert eine versionierte Standardgeometrie und ein explizites Melee-Profil', () => {
+      expect(DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG.id).toBe('single_target_static.v1');
+      expect(DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG.targetDistance).toBe(150);
+      expect(MELEE_SINGLE_TARGET_SCENARIO_CONFIG.targetDistance).toBe(40);
+      expect(MELEE_SINGLE_TARGET_SCENARIO_CONFIG.version).toBe(DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG.version);
+    });
+  });
+
+  describe('5. Shared Projectile Resolver & Fail-Closed Capability Boundary', () => {
+    it('liefert fuer den Headless- und Runtime-Mathekern denselben Impact', () => {
+      const shared = resolveProjectileTargetImpact({
+        startX: 0,
+        startY: 0,
+        endX: 100,
+        endY: 0,
+        targetX: 50,
+        targetY: 0,
+        radius: 4,
+      });
+      const legacyDirect = checkSweptCircleHit(0, 0, 100, 0, 50, 0, 4);
+
+      expect(shared).toEqual(legacyDirect);
+    });
+
+    it('lehnt neue aktive Weapon- und Payload-Felder fail-closed ab', () => {
+      const unknownWeapon = {
+        ...WEAPON_CONFIGS.P90,
+        unknownFutureRelevantField: 1,
+      } as WeaponConfig;
+      expect(validateWeaponBalanceCapabilities(unknownWeapon).supported).toBe(false);
+      expect(validateWeaponBalanceCapabilities(unknownWeapon).unsupportedReasons.some((reason) => reason.includes('unknownFutureRelevantField'))).toBe(true);
+
+      expect(() => validateProjectileSpawnPayload({
+        speed: 100,
+        size: 2,
+        damage: 1,
+        lifetime: 1000,
+        maxBounces: 0,
+        adrenalinGain: 0,
+        sourceId: 'future-test',
+        unknown_future_payload: 1,
+      } as any)).toThrow(/Unbekanntes/);
     });
   });
 });

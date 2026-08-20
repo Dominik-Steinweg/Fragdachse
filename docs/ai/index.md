@@ -10,6 +10,7 @@ Kompakter Router für langlebiges Projektwissen. Der Quellcode, die Typen und di
 - [rendering.md](rendering.md): Designraum, Kameras, Clarity Camera, Lightmap, Post-FX und Koordinatenfallen.
 - [visual-guidelines.md](visual-guidelines.md): Art Direction, Top-down-Perspektive und Lesbarkeit.
 - [performance.md](performance.md): Messmethodik, Qualitätsprofile und dauerhafte Hotpath-Regeln.
+- [weapon-balance-lab.md](weapon-balance-lab.md): Versionierte Benchmark-Szenarien, Messfenster, Paritaet und Capability-Vertraege.
 - [reference-implementations.md](reference-implementations.md): wenige kanonische Codebeispiele.
 - [local-dev-environment.md](local-dev-environment.md): Agenten-Ports und opt-in Browserprüfung.
 - [local-persistence.md](local-persistence.md): lokale Settings, Fortschritt, Migration und Import/Export.

@@ -75,7 +75,7 @@ describe('Coverage Report Regression & Source of Truth', () => {
       expect(result.dps).toBeCloseTo(500 / 30, 2); // 16.666...
     });
 
-    it('GLOCK Base erzielt 68 Treffer / 408 Schaden in 30s (13.6 DPS)', () => {
+    it('GLOCK Base zaehlt den Treffer an der Window-Grenze nicht in ST-DPS (402 Schaden / 13.4 DPS)', () => {
       const result = runWeaponSingleTargetBenchmark({
         weaponId: 'GLOCK',
         sourceSlot: 'weapon1',
@@ -85,8 +85,9 @@ describe('Coverage Report Regression & Source of Truth', () => {
 
       expect(result.shotsFired).toBe(68);
       expect(result.hits).toBe(68);
-      expect(result.totalDamage).toBe(408);
-      expect(result.dps).toBeCloseTo(13.6, 2);
+      expect(result.totalDamage).toBe(402);
+      expect(result.damageYieldIncludingTail).toBe(408);
+      expect(result.dps).toBeCloseTo(13.4, 2);
     });
   });
 
@@ -129,7 +130,7 @@ describe('Coverage Report Regression & Source of Truth', () => {
       expect(md).toContain('| **BITE** | `weapon1` | 143.3 DPS');
       expect(md).toContain('| **P90** | `weapon2` | 18.4 DPS');
       expect(md).toContain('| **ASMD_PRIM** | `weapon1` | 16.7 DPS');
-      expect(md).toContain('| **GLOCK** | `weapon1` | 13.6 DPS');
+      expect(md).toContain('| **GLOCK** | `weapon1` | 13.4 DPS');
     }, 45000);
   });
 });

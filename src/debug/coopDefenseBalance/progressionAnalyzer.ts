@@ -3,7 +3,7 @@ import { applyCoopDefenseModifiersToWeaponConfig } from '../../loadout/CoopDefen
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import type { CoopDefenseClassId, WeaponSlot } from '../../types';
-import type { WeaponBalanceScenario } from './scenarioTypes';
+import type { SingleTargetScenarioConfig, WeaponBalanceScenario } from './scenarioTypes';
 import { PROGRESSION_STAGES, type ProgressionStageName } from './progressionStages';
 import {
   generateWeaponUpgradeBuilds,
@@ -62,6 +62,7 @@ export interface AnalyzeWeaponProgressionOptions {
   readonly seed?: number;
   readonly durationMs?: number;
   readonly stepDeltaMs?: number;
+  readonly scenarioConfig?: SingleTargetScenarioConfig;
   readonly classId?: CoopDefenseClassId;
 }
 
@@ -202,7 +203,10 @@ export function analyzeWeaponSingleTargetProgression(
       }
 
       // Cache-Key für diesen Build
-      const cacheKey = `${options.weaponId}:${slot}:${candidate.signature}:${seeds.join(',')}:${durationMs}:${stepDeltaMs}:${scenario}`;
+      const scenarioKey = options.scenarioConfig
+        ? `${options.scenarioConfig.id}:${options.scenarioConfig.version}:${options.scenarioConfig.targetRadius}:${options.scenarioConfig.targetDistance}:${options.scenarioConfig.attackWindowMs}:${options.scenarioConfig.warmupMs}:${options.scenarioConfig.settleLimitMs}:${options.scenarioConfig.triggerPolicy}:${options.scenarioConfig.aimPolicy}`
+        : 'profile:auto';
+      const cacheKey = `${options.weaponId}:${slot}:${candidate.signature}:${seeds.join(',')}:${durationMs}:${stepDeltaMs}:${scenario}:${scenarioKey}`;
       let aggregate = buildCache.get(cacheKey);
 
       if (aggregate) {
@@ -216,6 +220,7 @@ export function analyzeWeaponSingleTargetProgression(
           seeds,
           durationMs,
           stepDeltaMs,
+          scenarioConfig: options.scenarioConfig,
           includeIndividualRuns: false, // Lightweight-Modus während Sweep
         });
         buildCache.set(cacheKey, aggregate);

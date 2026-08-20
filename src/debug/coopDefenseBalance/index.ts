@@ -8,6 +8,7 @@ export * from './scenarioTypes';
 export * from './HeadlessSingleTargetWorld';
 export * from './weaponBenchmark';
 export * from './weaponCapabilityValidator';
+export * from './weaponBalanceCapabilities';
 export * from './headlessPayloadGuard';
 export * from './triggerDiscipline';
 export * from './progressionStages';
