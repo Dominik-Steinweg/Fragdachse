@@ -1,6 +1,7 @@
 import type { CombatDamageKind, WeaponSlot } from '../../types';
 import type { WeaponConfig } from '../../loadout/LoadoutConfig';
-import type { SingleTargetScenarioConfig } from './scenarioTypes';
+import type { FiveTargetScenarioConfig, SingleTargetScenarioConfig } from './scenarioTypes';
+import type { HeadlessTarget } from './HeadlessSingleTargetWorld';
 
 /** Standard-Seed-Set für deterministische Multi-Seed-Aggregationen (16 Seeds). */
 export const DEFAULT_BENCHMARK_SEEDS: readonly number[] = Object.freeze([
@@ -85,11 +86,21 @@ export interface SingleTargetBenchmarkResult {
   readonly burnDps: number;
   readonly shotsFired: number;
   readonly hits: number;
+  /** V0.8-Kompatibilitaetsrate ueber alle aufgezeichneten Treffer. */
   readonly hitRate: number;
+  /** Primaere Rate-Zaehler, strikt aus [measurementStartMs, measurementEndMs). */
+  readonly measurementShotsFired: number;
+  readonly measurementTargetHits: number;
+  readonly measurementProjectileHits: number;
+  readonly measurementHitRate: number;
+  readonly measurementAdrenalineGenerated: number;
+  readonly measurementAdrenalineSpent: number;
   readonly adrenalineGenerated: number;
   readonly adrenalineSpent: number;
   readonly adrenalineGeneratedPerSec: number;
   readonly adrenalineSpentPerSec: number;
+  readonly primaryMetricComplete: boolean;
+  readonly tailComplete: boolean;
   readonly settleTruncated?: boolean;
   readonly damageEvents: readonly DamageEventRecord[];
   readonly resourceEvents: readonly ResourceEventRecord[];
@@ -122,6 +133,7 @@ export interface SingleTargetBenchmarkAggregate {
   readonly expectedDirectDps: number; // Mittelwert (Mean Direct DPS)
   readonly expectedBurnDps: number;   // Mittelwert (Mean Burn DPS)
   readonly expectedDamageYieldIncludingTail: number;
+  readonly expectedTailDamage: number;
   readonly medianDps: number;         // 50. Perzentil
   readonly p10Dps: number;            // 10. Perzentil
   readonly p90Dps: number;            // 90. Perzentil
@@ -131,6 +143,113 @@ export interface SingleTargetBenchmarkAggregate {
   readonly expectedShotsPerSecond: number;
   readonly expectedAdrenalineGeneratedPerSec: number;
   readonly expectedAdrenalineSpentPerSec: number;
+  readonly primaryMetricComplete: boolean;
+  readonly tailComplete: boolean;
   readonly settleTruncated?: boolean;
   readonly runs?: readonly SingleTargetBenchmarkResult[];
+}
+
+/** Konfigurationsoptionen fuer einen versionierten Five-Target-Benchmark. */
+export interface FiveTargetBenchmarkOptions {
+  readonly weaponId: string;
+  readonly scenarioConfig?: FiveTargetScenarioConfig;
+  readonly durationMs?: number;
+  readonly stepDeltaMs?: number;
+  /** Oeffentlicher Benchmark-Seed; Layout- und Weapon-Seed werden daraus getrennt abgeleitet. */
+  readonly seed?: number;
+  readonly sourceSlot?: WeaponSlot;
+  readonly weaponConfigOverride?: WeaponConfig;
+  readonly maxSettleDurationMs?: number;
+  readonly recordEvents?: boolean;
+}
+
+/** Einzelresultat des statischen 5T-Benchmarks. */
+export interface FiveTargetBenchmarkResult {
+  readonly weaponId: string;
+  readonly scenarioId: FiveTargetScenarioConfig['id'];
+  readonly scenarioVersion: FiveTargetScenarioConfig['version'];
+  readonly benchmarkSeed: number;
+  readonly layoutSeed: number;
+  readonly weaponSeed: number;
+  readonly targetLayout: readonly HeadlessTarget[];
+  readonly warmupMs: number;
+  readonly measurementStartMs: number;
+  readonly measurementEndMs: number;
+  readonly durationMs: number;
+  readonly settleDurationMs: number;
+  readonly measurementTotalDamage: number;
+  readonly measurementDirectDamage: number;
+  readonly measurementBurnDamage: number;
+  readonly totalDamage: number;
+  readonly directDamage: number;
+  readonly burnDamage: number;
+  readonly damageYieldIncludingTail: number;
+  readonly directDamageIncludingTail: number;
+  readonly burnDamageIncludingTail: number;
+  readonly tailDamage: number;
+  readonly tailDirectDamage: number;
+  readonly tailBurnDamage: number;
+  readonly dps: number;
+  readonly directDps: number;
+  readonly burnDps: number;
+  /** Primary target-hit counter, restricted to [measurementStartMs, measurementEndMs). */
+  readonly targetHits: number;
+  readonly measurementTargetHits: number;
+  readonly measurementProjectileHits: number;
+  readonly shotsFired: number;
+  readonly measurementShotsFired: number;
+  readonly targetsHitPerShot: number;
+  readonly projectileHitRate?: number;
+  /** Primary resource counters, restricted to the Measurement Window. */
+  readonly adrenalineGenerated: number;
+  readonly adrenalineSpent: number;
+  readonly measurementAdrenalineGenerated: number;
+  readonly measurementAdrenalineSpent: number;
+  readonly adrenalineGeneratedPerSec: number;
+  readonly adrenalineSpentPerSec: number;
+  readonly primaryMetricComplete: boolean;
+  readonly tailComplete: boolean;
+  readonly settleTruncated?: boolean;
+  readonly damageEvents: readonly DamageEventRecord[];
+  readonly resourceEvents: readonly ResourceEventRecord[];
+}
+
+export interface FiveTargetBenchmarkSetOptions {
+  readonly weaponId: string;
+  readonly weaponConfigOverride?: WeaponConfig;
+  readonly sourceSlot?: WeaponSlot;
+  readonly scenarioConfig?: FiveTargetScenarioConfig;
+  readonly durationMs?: number;
+  readonly stepDeltaMs?: number;
+  readonly maxSettleDurationMs?: number;
+  readonly seeds?: readonly number[];
+  readonly includeIndividualRuns?: boolean;
+}
+
+/** Deterministische Multi-Seed-Aggregation fuer den 5T-Total-DPS. */
+export interface FiveTargetBenchmarkAggregate {
+  readonly weaponId: string;
+  readonly scenarioId: FiveTargetScenarioConfig['id'];
+  readonly scenarioVersion: FiveTargetScenarioConfig['version'];
+  readonly seedCount: number;
+  readonly seeds: readonly number[];
+  readonly expectedDps: number;
+  readonly expectedDirectDps: number;
+  readonly expectedBurnDps: number;
+  readonly expectedDamageYieldIncludingTail: number;
+  readonly expectedTailDamage: number;
+  readonly medianDps: number;
+  readonly p10Dps: number;
+  readonly p90Dps: number;
+  readonly minDps: number;
+  readonly maxDps: number;
+  readonly expectedTargetsHitPerShot: number;
+  readonly expectedProjectileHitRate: number;
+  readonly expectedShotsPerSecond: number;
+  readonly expectedAdrenalineGeneratedPerSec: number;
+  readonly expectedAdrenalineSpentPerSec: number;
+  readonly primaryMetricComplete: boolean;
+  readonly tailComplete: boolean;
+  readonly settleTruncated?: boolean;
+  readonly runs?: readonly FiveTargetBenchmarkResult[];
 }

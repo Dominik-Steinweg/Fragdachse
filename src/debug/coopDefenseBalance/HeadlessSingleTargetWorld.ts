@@ -17,6 +17,7 @@ import {
   validateMeleeSwingPayload,
 } from './headlessPayloadGuard';
 import type { DamageEventRecord, ResourceEventRecord } from './weaponBenchmarkTypes';
+import type { WeaponBalanceScenario } from './scenarioTypes';
 
 /** Interner Tracking-Zustand für ein im Flug befindliches Projektil im Headless-Modus. */
 export interface HeadlessActiveProjectile {
@@ -59,17 +60,20 @@ export function createMulberry32Prng(seed: number): () => number {
 }
 
 /**
- * Headless-Simulationsumgebung für den Single-Target-Benchmark.
+ * Gemeinsame Headless-Simulationsumgebung fuer statische Ziel-Benchmarks.
  *
  * Implementiert {@link WeaponFireSink} und verarbeitet Projektile, Hitscan-Strahlen,
  * Nahkampfschwünge und Brand-Ticks mit virtueller Zeit und deterministischem RNG gegen ein
- * statisches, unsterbliches Ziel in Spielergröße (`PLAYER_SIZE / 2`).
+ * statische, unsterbliche Ziele in Spielergröße (`PLAYER_SIZE / 2`).
  *
  * Verwendet exaktes Sub-Step Event-Scheduling, dieselben mathematischen Resolver und dieselbe
  * Brand-State-Machine wie die Runtime. Frei von Rendering, Audio, Netzwerk und Wandzeit.
  */
-export class HeadlessSingleTargetWorld implements WeaponFireSink {
+export class HeadlessStaticTargetWorld implements WeaponFireSink {
+  readonly targets: readonly HeadlessTarget[];
+  /** Kompatibilitaetszugriff fuer die bisherige Single-Target-API. */
   readonly target: HeadlessTarget;
+  readonly scenario: WeaponBalanceScenario;
   readonly rng: () => number;
   readonly burnStateMachine = new BurnStateMachine();
 
@@ -91,26 +95,41 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
   private tailDirectDamage = 0;
   private tailBurnDamage = 0;
   private hits = 0;
+  private projectileHits = 0;
   private shotsFired = 0;
   private adrenalineGenerated = 0;
   private adrenalineSpent = 0;
+  private measurementShotsFired = 0;
+  private measurementTargetHits = 0;
+  private measurementProjectileHits = 0;
+  private measurementAdrenalineGenerated = 0;
+  private measurementAdrenalineSpent = 0;
 
   /** Falls true, schlägt jede Schussannahme fehl (für Tests). */
   failingSink = false;
   readonly recordEvents: boolean;
 
   constructor(
-    targetDistance: number,
+    targetsOrDistance: readonly HeadlessTarget[] | number,
     seed = 1,
     recordEvents = true,
     targetRadius = PLAYER_SIZE * 0.5,
+    scenario: WeaponBalanceScenario = 'single_target_static',
   ) {
-    this.target = {
-      id: 'dummy_target',
-      x: targetDistance,
-      y: 0,
-      radius: targetRadius,
-    };
+    const targets = typeof targetsOrDistance === 'number'
+      ? [{
+        id: 'dummy_target',
+        x: targetsOrDistance,
+        y: 0,
+        radius: targetRadius,
+      }]
+      : targetsOrDistance.map((target) => ({ ...target }));
+    if (targets.length === 0) {
+      throw new Error('[WeaponBalanceLab] HeadlessStaticTargetWorld benoetigt mindestens ein Ziel.');
+    }
+    this.targets = Object.freeze(targets);
+    this.target = this.targets[0];
+    this.scenario = scenario;
     this.rng = createMulberry32Prng(seed);
     this.recordEvents = recordEvents;
   }
@@ -142,6 +161,11 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     this.tailDamage = 0;
     this.tailDirectDamage = 0;
     this.tailBurnDamage = 0;
+    this.measurementShotsFired = 0;
+    this.measurementTargetHits = 0;
+    this.measurementProjectileHits = 0;
+    this.measurementAdrenalineGenerated = 0;
+    this.measurementAdrenalineSpent = 0;
   }
 
   /** Prüft, ob sich aktuell noch Projektile im Flug befinden. */
@@ -186,43 +210,96 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
         readonly proj: HeadlessActiveProjectile;
         readonly impactTime: number;
         readonly isHit: boolean;
+        readonly target?: HeadlessTarget;
       }
 
-      const pendingImpacts: ProjectileImpactInfo[] = [];
+      const pendingImpactByProjectile = new Map<HeadlessActiveProjectile, ProjectileImpactInfo>();
 
       for (const proj of this.activeProjectiles) {
-        const destX = proj.x + proj.vx * (remainingMs / 1000);
-        const destY = proj.y + proj.vy * (remainingMs / 1000);
-        const collisionRadius = this.target.radius + proj.size * 0.5;
+        const remainingLifetime = Math.max(0, proj.lifetimeMs - proj.ageMs);
+        // Die Lebensdauer ist ein harter Suchhorizont. Ein Treffer hinter dem Ablaufzeitpunkt
+        // darf nicht mehr aus einem Sweep bis zum Step-Ende rekonstruiert werden.
+        const searchDurationMs = Math.min(remainingMs, remainingLifetime);
+        const destX = proj.x + proj.vx * (searchDurationMs / 1000);
+        const destY = proj.y + proj.vy * (searchDurationMs / 1000);
+        const collisionRadiusOffset = proj.size * 0.5;
+        let bestHit: { readonly target: HeadlessTarget; readonly distance: number } | undefined;
 
-        const hit = resolveProjectileTargetImpact({
-          startX: proj.x,
-          startY: proj.y,
-          endX: destX,
-          endY: destY,
-          targetX: this.target.x,
-          targetY: this.target.y,
-          radius: collisionRadius,
-        });
-
-        if (hit) {
-          const stepDist = Math.hypot(destX - proj.x, destY - proj.y);
-          const hitFraction = stepDist > 1e-6 ? Math.max(0, Math.min(1, hit.distance / stepDist)) : 0;
-          const impactTime = this.now + hitFraction * remainingMs;
-
-          if (impactTime < nextEventTime - TIME_EPSILON) {
-            nextEventTime = impactTime;
-          }
-          pendingImpacts.push({ proj, impactTime, isHit: true });
-        } else {
-          const remainingLifetime = proj.lifetimeMs - proj.ageMs;
-          if (remainingLifetime <= remainingMs) {
-            const expireTime = this.now + remainingLifetime;
-            if (expireTime < nextEventTime - TIME_EPSILON) {
-              nextEventTime = expireTime;
+        if (searchDurationMs > TIME_EPSILON) {
+          const singleTarget = this.targets.length === 1 ? this.targets[0] : undefined;
+          if (singleTarget) {
+            const hit = resolveProjectileTargetImpact({
+              startX: proj.x,
+              startY: proj.y,
+              endX: destX,
+              endY: destY,
+              targetX: singleTarget.x,
+              targetY: singleTarget.y,
+              radius: singleTarget.radius + collisionRadiusOffset,
+            });
+            if (hit) {
+              bestHit = { target: singleTarget, distance: hit.distance };
             }
-            pendingImpacts.push({ proj, impactTime: expireTime, isHit: false });
+          } else {
+            for (const target of this.targets) {
+              const hit = resolveProjectileTargetImpact({
+                startX: proj.x,
+                startY: proj.y,
+                endX: destX,
+                endY: destY,
+                targetX: target.x,
+                targetY: target.y,
+                radius: target.radius + collisionRadiusOffset,
+              });
+              if (!hit) continue;
+              if (
+                !bestHit
+                || hit.distance < bestHit.distance - TIME_EPSILON
+                || (Math.abs(hit.distance - bestHit.distance) <= TIME_EPSILON
+                  && target.id.localeCompare(bestHit.target.id) < 0)
+              ) {
+                bestHit = { target, distance: hit.distance };
+              }
+            }
           }
+        }
+
+        const expireTime = this.now + remainingLifetime;
+        if (bestHit) {
+          const stepDist = Math.hypot(destX - proj.x, destY - proj.y);
+          const hitFraction = stepDist > 1e-6
+            ? Math.max(0, Math.min(1, bestHit.distance / stepDist))
+            : 0;
+          const impactTime = this.now + hitFraction * searchDurationMs;
+          const expiresAtImpact = remainingLifetime <= remainingMs + TIME_EPSILON
+            && Math.abs(impactTime - expireTime) <= TIME_EPSILON;
+
+          // Projectile lifetime uses a half-open validity interval [spawn, expire): at an exact
+          // impact/expiration tie expiration wins deterministically.
+          if (!expiresAtImpact && impactTime < expireTime - TIME_EPSILON) {
+            if (impactTime < nextEventTime - TIME_EPSILON) {
+              nextEventTime = impactTime;
+            }
+            // Keep candidates at the current earliest event as well. This preserves simultaneous
+            // projectile hits (and hits coincident with burn ticks) instead of dropping them when
+            // another event selected nextEventTime first.
+            const impactInfo = {
+              proj,
+              impactTime,
+              isHit: true,
+              target: bestHit.target,
+            } satisfies ProjectileImpactInfo;
+            pendingImpactByProjectile.set(proj, impactInfo);
+            continue;
+          }
+        }
+
+        if (remainingLifetime <= remainingMs + TIME_EPSILON) {
+          if (expireTime < nextEventTime - TIME_EPSILON) {
+            nextEventTime = expireTime;
+          }
+          const expirationInfo = { proj, impactTime: expireTime, isHit: false } satisfies ProjectileImpactInfo;
+          pendingImpactByProjectile.set(proj, expirationInfo);
         }
       }
 
@@ -254,19 +331,19 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
       // 4. Projektiltreffer verarbeiten, die genau bei nextEventTime eintreffen
       for (let i = this.activeProjectiles.length - 1; i >= 0; i -= 1) {
         const proj = this.activeProjectiles[i];
-        const match = pendingImpacts.find((p) => p.proj === proj);
+        const match = pendingImpactByProjectile.get(proj);
 
         if (match && Math.abs(match.impactTime - nextEventTime) <= 1e-6) {
-          if (match.isHit) {
-            this.hits += 1;
-            this.recordDamage(this.target.id, proj.damage, proj.sourceId, 'direct', false, this.now);
+          if (match.isHit && match.target) {
+            this.recordHit('projectile', this.now);
+            this.recordDamage(match.target.id, proj.damage, proj.sourceId, 'direct', false, this.now);
             if (proj.adrenalinGain > 0) {
               this.recordAdrenalineGain(proj.adrenalinGain, proj.sourceId, this.now);
             }
 
             if (proj.burnDurationMs && proj.burnDurationMs > 0 && proj.burnDamagePerTick && proj.burnDamagePerTick > 0) {
               this.burnStateMachine.applyHit({
-                targetId: this.target.id,
+                targetId: match.target.id,
                 attackerId: proj.ownerId,
                 durationMs: proj.burnDurationMs,
                 damagePerTick: proj.burnDamagePerTick,
@@ -293,7 +370,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     if (this.failingSink) return false;
 
     // Zweite Sicherheitsgrenze auf empfangene Projektil-Payloads
-    validateProjectileSpawnPayload(cfg);
+    validateProjectileSpawnPayload(cfg, this.scenario);
 
     const vx = Math.cos(angle) * cfg.speed;
     const vy = Math.sin(angle) * cfg.speed;
@@ -324,29 +401,41 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     if (this.failingSink) return false;
 
     // Zweite Sicherheitsgrenze auf empfangene Hitscan-Payloads
-    validateHitscanShotPayload(request);
+    validateHitscanShotPayload(request, this.scenario);
 
-    const hit = checkHitscanRayCircleHit(
-      request.startX,
-      request.startY,
-      request.angle,
-      request.range,
-      request.traceThickness,
-      this.target.x,
-      this.target.y,
-      this.target.radius,
-    );
+    let bestHit: { readonly target: HeadlessTarget; readonly distance: number } | undefined;
+    for (const target of this.targets) {
+      const hit = checkHitscanRayCircleHit(
+        request.startX,
+        request.startY,
+        request.angle,
+        request.range,
+        request.traceThickness,
+        target.x,
+        target.y,
+        target.radius,
+      );
+      if (!hit) continue;
+      if (
+        !bestHit
+        || hit.distance < bestHit.distance - 1e-9
+        || (Math.abs(hit.distance - bestHit.distance) <= 1e-9
+          && target.id.localeCompare(bestHit.target.id) < 0)
+      ) {
+        bestHit = { target, distance: hit.distance };
+      }
+    }
 
-    if (hit) {
-      this.hits += 1;
-      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct', false, this.now);
+    if (bestHit) {
+      this.recordHit('hitscan', this.now);
+      this.recordDamage(bestHit.target.id, request.damage, request.sourceId, 'direct', false, this.now);
       if (request.adrenalinGain > 0) {
         this.recordAdrenalineGain(request.adrenalinGain, request.sourceId, this.now);
       }
 
       if (request.burnOnHit && request.burnOnHit.durationMs > 0 && request.burnOnHit.damagePerTick > 0) {
         this.burnStateMachine.applyHit({
-          targetId: this.target.id,
+          targetId: bestHit.target.id,
           attackerId: request.shooterId,
           durationMs: request.burnOnHit.durationMs,
           damagePerTick: request.burnOnHit.damagePerTick,
@@ -367,24 +456,27 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     if (this.failingSink) return false;
 
     // Zweite Sicherheitsgrenze auf empfangene Melee-Payloads
-    validateMeleeSwingPayload(request);
+    validateMeleeSwingPayload(request, this.scenario);
 
-    const hit = checkMeleeArcHit(
-      request.x,
-      request.y,
-      request.angle,
-      request.range,
-      request.arcDegrees,
-      this.target.x,
-      this.target.y,
-      this.target.radius,
-    );
+    let didHit = false;
+    for (const target of this.targets) {
+      const hit = checkMeleeArcHit(
+        request.x,
+        request.y,
+        request.angle,
+        request.range,
+        request.arcDegrees,
+        target.x,
+        target.y,
+        target.radius,
+      );
+      if (!hit) continue;
 
-    if (hit) {
-      this.hits += 1;
-      this.recordDamage(this.target.id, request.damage, request.sourceId, 'direct', false, this.now);
+      didHit = true;
+      this.recordHit('melee', this.now);
+      this.recordDamage(target.id, request.damage, request.sourceId, 'direct', false, this.now);
 
-      // Treffer-Adrenalin: Basis-adrenalinGain + zusätzliches hitAdrenaline gemäß Runtime-Regel
+      // Runtime-Regel: Basis-Adrenalin und hitAdrenaline werden pro getroffenem Ziel vergeben.
       const totalAdrenaline = (request.adrenalinGain ?? 0) + (request.hitAdrenaline ?? 0);
       if (totalAdrenaline > 0) {
         this.recordAdrenalineGain(totalAdrenaline, request.sourceId, this.now);
@@ -392,7 +484,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
       if (request.burnOnHit && request.burnOnHit.durationMs > 0 && request.burnOnHit.damagePerTick > 0) {
         this.burnStateMachine.applyHit({
-          targetId: this.target.id,
+          targetId: target.id,
           attackerId: request.shooterId,
           durationMs: request.burnOnHit.durationMs,
           damagePerTick: request.burnOnHit.damagePerTick,
@@ -402,16 +494,31 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
           now: this.now,
         });
       }
-
-      return true;
     }
-    return false;
+    return didHit;
   }
 
   // ── Recording-Hilfsmethoden ────────────────────────────────────────────────
 
-  recordShotFired(): void {
+  private isMeasurementTimestamp(timestampMs: number): boolean {
+    return !this.measurementWindow
+      || (
+        timestampMs >= this.measurementWindow.startMs
+        && timestampMs < this.measurementWindow.endMs
+      );
+  }
+
+  private recordHit(kind: 'projectile' | 'hitscan' | 'melee', timestampMs: number): void {
+    this.hits += 1;
+    if (kind === 'projectile') this.projectileHits += 1;
+    if (!this.isMeasurementTimestamp(timestampMs)) return;
+    this.measurementTargetHits += 1;
+    if (kind === 'projectile') this.measurementProjectileHits += 1;
+  }
+
+  recordShotFired(timestampMs = this.now): void {
     this.shotsFired += 1;
+    if (this.isMeasurementTimestamp(timestampMs)) this.measurementShotsFired += 1;
   }
 
   recordDamage(
@@ -461,6 +568,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   recordAdrenalineGain(amount: number, sourceId?: string, timestampMs = this.now): void {
     this.adrenalineGenerated += amount;
+    if (this.isMeasurementTimestamp(timestampMs)) this.measurementAdrenalineGenerated += amount;
     if (this.recordEvents) {
       this.resourceEvents.push({
         timestampMs,
@@ -474,6 +582,7 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   recordAdrenalineDrain(amount: number, sourceId?: string, timestampMs = this.now): void {
     this.adrenalineSpent += amount;
+    if (this.isMeasurementTimestamp(timestampMs)) this.measurementAdrenalineSpent += amount;
     if (this.recordEvents) {
       this.resourceEvents.push({
         timestampMs,
@@ -529,16 +638,40 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
     return this.hits;
   }
 
+  getProjectileHits(): number {
+    return this.projectileHits;
+  }
+
   getShotsFired(): number {
     return this.shotsFired;
+  }
+
+  getMeasurementShotsFired(): number {
+    return this.measurementShotsFired;
+  }
+
+  getMeasurementTargetHits(): number {
+    return this.measurementTargetHits;
+  }
+
+  getMeasurementProjectileHits(): number {
+    return this.measurementProjectileHits;
   }
 
   getAdrenalineGenerated(): number {
     return this.adrenalineGenerated;
   }
 
+  getMeasurementAdrenalineGenerated(): number {
+    return this.measurementAdrenalineGenerated;
+  }
+
   getAdrenalineSpent(): number {
     return this.adrenalineSpent;
+  }
+
+  getMeasurementAdrenalineSpent(): number {
+    return this.measurementAdrenalineSpent;
   }
 
   getDamageEvents(): readonly DamageEventRecord[] {
@@ -547,5 +680,21 @@ export class HeadlessSingleTargetWorld implements WeaponFireSink {
 
   getResourceEvents(): readonly ResourceEventRecord[] {
     return this.resourceEvents;
+  }
+}
+
+/**
+ * Abwaertskompatibler Single-Target-Wrapper. Die Simulationslogik lebt ausschliesslich in
+ * `HeadlessStaticTargetWorld`; Single Target und Five Target teilen damit Scheduling, Resolver,
+ * Burn, Messfenster und Ressourcenbuchhaltung.
+ */
+export class HeadlessSingleTargetWorld extends HeadlessStaticTargetWorld {
+  constructor(
+    targetDistance: number,
+    seed = 1,
+    recordEvents = true,
+    targetRadius = PLAYER_SIZE * 0.5,
+  ) {
+    super(targetDistance, seed, recordEvents, targetRadius, 'single_target_static');
   }
 }

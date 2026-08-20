@@ -1,16 +1,22 @@
 import {
+  analyzeWeaponFiveTargetProgression,
   analyzeWeaponSingleTargetProgression,
   type AnalyzeWeaponProgressionOptions,
+  type WeaponBenchmarkAggregate,
   type WeaponProgressionAnalysisResult,
 } from './progressionAnalyzer';
 import { getWeaponConfig } from '../../loadout/LoadoutConfig';
 import { resolveAndValidateWeaponSlot } from './weaponBenchmark';
 import type { ProgressionStageName } from './progressionStages';
 import type { WeaponSlot } from '../../types';
+import type { WeaponBalanceScenario } from './scenarioTypes';
 
 export interface WeaponStageCoverageData {
   readonly weaponId: string;
   readonly slot: WeaponSlot;
+  readonly scenario: WeaponBalanceScenario;
+  readonly scenarioId: string;
+  readonly scenarioVersion: number;
   readonly stage: ProgressionStageName;
   readonly stageLabel: string;
   readonly normalPointBudget: number;
@@ -18,7 +24,11 @@ export interface WeaponStageCoverageData {
   readonly expectedDps: number;
   readonly directDps: number;
   readonly burnDps: number;
+  readonly expectedDamageYieldIncludingTail: number;
+  readonly expectedTailDamage: number;
   readonly expectedHitRate: number;
+  readonly expectedTargetsHitPerShot: number;
+  readonly expectedProjectileHitRate: number;
   readonly expectedShotsPerSecond: number;
   readonly adrenalineGeneratedPerSec: number;
   readonly adrenalineSpentPerSec: number;
@@ -30,13 +40,20 @@ export interface WeaponStageCoverageData {
   readonly unsupportedReasons: readonly string[];
   readonly incompleteCandidates: number;
   readonly incompleteReasons: readonly string[];
+  readonly tailIncompleteCandidates: number;
+  readonly tailIncompleteReasons: readonly string[];
   readonly provenMaximum: boolean;
+  readonly primaryMetricComplete: boolean;
+  readonly tailComplete: boolean;
   readonly settleTruncated: boolean;
 }
 
 export interface WeaponCoverageData {
   readonly weaponId: string;
   readonly slot: WeaponSlot;
+  readonly scenario: WeaponBalanceScenario;
+  readonly scenarioId: string;
+  readonly scenarioVersion: number;
   readonly stages: readonly WeaponStageCoverageData[];
   readonly cacheHits: number;
   readonly cacheMisses: number;
@@ -49,6 +66,10 @@ export interface WeaponBalanceCoverageReportData {
 
 export interface CoverageReportOptions extends Omit<AnalyzeWeaponProgressionOptions, 'weaponId'> {
   readonly weaponSlots?: Readonly<Record<string, WeaponSlot>>;
+}
+
+function isFiveTargetAggregate(aggregate: WeaponBenchmarkAggregate): aggregate is Extract<WeaponBenchmarkAggregate, { readonly expectedTargetsHitPerShot: number }> {
+  return 'expectedTargetsHitPerShot' in aggregate;
 }
 
 /**
@@ -70,18 +91,25 @@ export function generateWeaponBalanceCoverageData(
     const requestedSlot = options?.weaponSlots?.[weaponId] ?? options?.slot;
     const slot = resolveAndValidateWeaponSlot(config, requestedSlot);
 
-    const result: WeaponProgressionAnalysisResult = analyzeWeaponSingleTargetProgression({
-      ...options,
-      weaponId,
-      slot,
-    });
+    const scenario = options?.scenario ?? 'single_target_static';
+    const result: WeaponProgressionAnalysisResult = scenario === 'five_target'
+      ? analyzeWeaponFiveTargetProgression({ ...options, weaponId, slot, scenario })
+      : analyzeWeaponSingleTargetProgression({ ...options, weaponId, slot, scenario });
 
     const stageEntries: WeaponStageCoverageData[] = result.stages.map((st) => {
       const agg = st.benchmarkAggregate;
       const expectedDps = st.bestSupportedExpectedDps;
       const directDps = agg ? agg.expectedDirectDps : expectedDps;
       const burnDps = agg ? agg.expectedBurnDps : 0;
-      const expectedHitRate = agg ? agg.expectedHitRate : 0;
+      const expectedDamageYieldIncludingTail = agg ? agg.expectedDamageYieldIncludingTail : 0;
+      const expectedTailDamage = agg ? agg.expectedTailDamage : 0;
+      const expectedHitRate = agg && !isFiveTargetAggregate(agg) ? agg.expectedHitRate : 0;
+      const expectedTargetsHitPerShot = agg && isFiveTargetAggregate(agg)
+        ? agg.expectedTargetsHitPerShot
+        : 0;
+      const expectedProjectileHitRate = agg && isFiveTargetAggregate(agg)
+        ? agg.expectedProjectileHitRate
+        : 0;
       const expectedShotsPerSecond = agg ? agg.expectedShotsPerSecond : 0;
       const adrenalineGeneratedPerSec = agg ? agg.expectedAdrenalineGeneratedPerSec : 0;
       const adrenalineSpentPerSec = agg ? agg.expectedAdrenalineSpentPerSec : 0;
@@ -89,6 +117,9 @@ export function generateWeaponBalanceCoverageData(
       return {
         weaponId,
         slot,
+        scenario: result.scenario,
+        scenarioId: agg?.scenarioId ?? 'unknown',
+        scenarioVersion: agg?.scenarioVersion ?? 0,
         stage: st.stage,
         stageLabel: st.stageLabel,
         normalPointBudget: st.normalPointBudget,
@@ -96,7 +127,11 @@ export function generateWeaponBalanceCoverageData(
         expectedDps,
         directDps,
         burnDps,
+        expectedDamageYieldIncludingTail,
+        expectedTailDamage,
         expectedHitRate,
+        expectedTargetsHitPerShot,
+        expectedProjectileHitRate,
         expectedShotsPerSecond,
         adrenalineGeneratedPerSec,
         adrenalineSpentPerSec,
@@ -108,7 +143,11 @@ export function generateWeaponBalanceCoverageData(
         unsupportedReasons: [...st.unsupportedReasons],
         incompleteCandidates: st.incompleteCandidates,
         incompleteReasons: [...st.incompleteReasons],
+        tailIncompleteCandidates: st.tailIncompleteCandidates,
+        tailIncompleteReasons: [...st.tailIncompleteReasons],
         provenMaximum: st.provenMaximum,
+        primaryMetricComplete: st.primaryMetricComplete,
+        tailComplete: st.tailComplete,
         settleTruncated: Boolean(st.settleTruncated),
       };
     });
@@ -116,6 +155,9 @@ export function generateWeaponBalanceCoverageData(
     weaponsData.push({
       weaponId,
       slot,
+      scenario: result.scenario,
+      scenarioId: result.stages[0]?.benchmarkAggregate?.scenarioId ?? 'unknown',
+      scenarioVersion: result.stages[0]?.benchmarkAggregate?.scenarioVersion ?? 0,
       stages: stageEntries,
       cacheHits: result.cacheHits,
       cacheMisses: result.cacheMisses,
@@ -136,7 +178,13 @@ export function formatWeaponBalanceCoverageMarkdown(
 ): string {
   const lines: string[] = [];
 
-  lines.push('### Single-Target Progression Coverage Overview');
+  const scenarios = new Set(data.weapons.map((weapon) => weapon.scenario));
+  const title = scenarios.size === 1 && scenarios.has('five_target')
+    ? '### Five-Target Progression Coverage Overview'
+    : scenarios.size === 1
+      ? '### Single-Target Progression Coverage Overview'
+      : '### Weapon Balance Progression Coverage Overview';
+  lines.push(title);
   lines.push('');
   lines.push('| Waffe | Slot | Base | Early | Mid | Late | Endgame | Proven Maximum |');
   lines.push('|---|---|---|---|---|---|---|---|');
@@ -177,19 +225,25 @@ export function formatWeaponBalanceCoverageMarkdown(
 
   for (const w of data.weapons) {
     lines.push('');
-    lines.push(`#### ${w.weaponId} (\`${w.slot}\`)`);
+    lines.push(`#### ${w.weaponId} (\`${w.slot}\`, ${w.scenario} ${w.scenarioVersion})`);
 
     for (const st of w.stages) {
       lines.push(`- **[${st.stageLabel.toUpperCase()}]** (Budget: ${st.normalPointBudget}N / ${st.bossPointBudget}B)`);
       lines.push(`  - **Expected DPS**: ${st.expectedDps.toFixed(1)} (Direct: ${st.directDps.toFixed(1)}, Burn: ${st.burnDps.toFixed(1)})`);
-      lines.push(`  - **Hit Rate / Kadenz**: ${(st.expectedHitRate * 100).toFixed(1)}% Trefferquote | ${st.expectedShotsPerSecond.toFixed(1)} Schüsse/s`);
+      lines.push(`  - **Yield inkl. Tail**: ${st.expectedDamageYieldIncludingTail.toFixed(1)} (Tail: ${st.expectedTailDamage.toFixed(1)})`);
+      if (st.scenario === 'five_target') {
+        lines.push(`  - **Targets hit / Kadenz**: ${st.expectedTargetsHitPerShot.toFixed(2)} Ziele/Schuss | ${st.expectedShotsPerSecond.toFixed(1)} Schüsse/s`);
+      } else {
+        lines.push(`  - **Hit Rate / Kadenz**: ${(st.expectedHitRate * 100).toFixed(1)}% Trefferquote | ${st.expectedShotsPerSecond.toFixed(1)} Schüsse/s`);
+      }
       if (w.slot === 'weapon1') {
         lines.push(`  - **Adrenalin generiert**: ${st.adrenalineGeneratedPerSec.toFixed(1)} / s`);
       } else {
         lines.push(`  - **Adrenalin verbraucht**: ${st.adrenalineSpentPerSec.toFixed(1)} / s`);
       }
       lines.push(`  - **Proven Maximum**: ${st.provenMaximum ? 'YES' : 'NO'}`);
-      lines.push(`  - **Kandidaten**: ${st.evaluatedCandidates}/${st.totalLegalCandidates} evaluiert (${st.unsupportedCandidates} unsupported, ${st.incompleteCandidates} incomplete)`);
+      lines.push(`  - **Completeness**: primary=${st.primaryMetricComplete ? 'complete' : 'incomplete'}, tail=${st.tailComplete ? 'complete' : 'truncated'}`);
+      lines.push(`  - **Kandidaten**: ${st.evaluatedCandidates}/${st.totalLegalCandidates} evaluiert (${st.unsupportedCandidates} unsupported, ${st.incompleteCandidates} primary-incomplete, ${st.tailIncompleteCandidates} tail-incomplete)`);
 
       if (st.selectedBuildSignature !== 'base') {
         const buildStr = Object.entries(st.selectedBuildLevels)
@@ -221,4 +275,33 @@ export function generateWeaponBalanceCoverageReport(
 ): string {
   const data = generateWeaponBalanceCoverageData(weaponIds, options);
   return formatWeaponBalanceCoverageMarkdown(data);
+}
+
+/** Erzeugt den machine-generated Abschlussdatensatz fuer ST und 5T gemeinsam. */
+export function generateWeaponBalanceCoverageDataForScenarios(
+  weaponIds: readonly string[],
+  options?: Omit<CoverageReportOptions, 'scenario'>,
+): WeaponBalanceCoverageReportData {
+  const single = generateWeaponBalanceCoverageData(weaponIds, {
+    ...options,
+    scenario: 'single_target_static',
+  });
+  const five = generateWeaponBalanceCoverageData(weaponIds, {
+    ...options,
+    scenario: 'five_target',
+  });
+  return {
+    timestampIso: new Date().toISOString(),
+    weapons: [...single.weapons, ...five.weapons],
+  };
+}
+
+/** Formatiert den gemeinsamen machine-generated ST-/5T-Abschlussbericht. */
+export function generateWeaponBalanceCoverageReportForScenarios(
+  weaponIds: readonly string[],
+  options?: Omit<CoverageReportOptions, 'scenario'>,
+): string {
+  return formatWeaponBalanceCoverageMarkdown(
+    generateWeaponBalanceCoverageDataForScenarios(weaponIds, options),
+  );
 }

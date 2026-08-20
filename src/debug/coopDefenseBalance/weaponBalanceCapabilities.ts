@@ -72,10 +72,27 @@ export const WEAPON_BALANCE_CAPABILITY_DEFINITIONS: readonly WeaponCapabilityDef
   configDefinition('hitAdrenaline', activeField('hitAdrenaline'), 'supported', 'hitAdrenaline wird pro Nahkampftreffer vollstaendig simuliert'),
   configDefinition(
     'hitHeal', activeField('hitHeal'),
-    (_config, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : 'unsupported_relevant',
-    (_config, scenario) => scenario === 'single_target_static'
-      ? 'Spieler-HP ist im Single-Target-Dummy-Benchmark keine Zielmetrik'
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'Spieler-HP ist im statischen Dummy-Benchmark keine Zielmetrik'
       : 'hitHeal ist fuer Ueberlebensszenarien noch nicht implementiert',
+  ),
+  configDefinition(
+    'killHeal', activeField('killHeal'),
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'Statische Ziele sind unsterblich; Kill-Heal kann nicht ausgeloest werden'
+      : 'killHeal ist fuer Kampfszenarien noch nicht implementiert',
+  ),
+  configDefinition(
+    'killAdrenaline', activeField('killAdrenaline'),
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'Statische Ziele sind unsterblich; Kill-Adrenalin kann nicht ausgeloest werden'
+      : 'killAdrenaline ist fuer Kampfszenarien noch nicht implementiert',
   ),
   configDefinition('hitVulnerabilityDurationMs', activeField('hitVulnerabilityDurationMs'), 'unsupported_relevant', 'hitVulnerabilityDurationMs erhoeht Folgeschaden, ist headless aber noch nicht implementiert'),
   configDefinition(
@@ -87,17 +104,17 @@ export const WEAPON_BALANCE_CAPABILITY_DEFINITIONS: readonly WeaponCapabilityDef
   configDefinition(
     'hitSlow',
     (config) => positive(config.hitSlowDurationMs) && positive(config.hitSlowFraction),
-    (_config, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : 'unsupported_relevant',
-    (_config, scenario) => scenario === 'single_target_static'
-      ? 'Dummy ist unbeweglich; Gegner-Verlangsamung aendert Treffer oder Schaden nicht'
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target' ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'Dummy-Ziele sind unbeweglich; Gegner-Verlangsamung aendert Treffer oder Schaden nicht'
       : 'hitSlow beeinflusst Gegnerbewegung in dynamischen Szenarien',
   ),
   configDefinition(
     'shotgunSlow',
     (config) => positive(config.shotgunSlowDurationMs) && positive(config.shotgunSlowFraction),
-    (_config, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : 'unsupported_relevant',
-    (_config, scenario) => scenario === 'single_target_static'
-      ? 'Dummy ist unbeweglich; Shotgun-Slow aendert Treffer oder Schaden nicht'
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target' ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'Dummy-Ziele sind unbeweglich; Shotgun-Slow aendert Treffer oder Schaden nicht'
       : 'shotgunSlow ist fuer dynamische Szenarien noch nicht implementiert',
   ),
   configDefinition('directDamageOverride', activeField('directDamageOverride'), 'unsupported_relevant', 'directDamageOverride ist noch nicht implementiert'),
@@ -110,7 +127,7 @@ export const WEAPON_BALANCE_CAPABILITY_DEFINITIONS: readonly WeaponCapabilityDef
       : 'chainLightning benoetigt Multi-Target-Simulation',
   ),
   configDefinition('damageReduction', activeField('damageReduction'), 'scenario_irrelevant', 'Dummy greift im Benchmark nicht an'),
-  configDefinition('hitKnockback', activeField('hitKnockback'), 'scenario_irrelevant', 'Dummy ist im Single-Target-Benchmark ortsfest fixiert'),
+  configDefinition('hitKnockback', activeField('hitKnockback'), 'scenario_irrelevant', 'Statische Dummies bleiben im Benchmark ortsfest fixiert'),
   configDefinition('scopeConfig', (config) => config.scopeConfig !== undefined, 'unsupported_relevant', 'scopeConfig ist in Headless noch nicht implementiert'),
   configDefinition(
     'awpCharge',
@@ -158,9 +175,9 @@ export const WEAPON_BALANCE_CAPABILITY_DEFINITIONS: readonly WeaponCapabilityDef
   configDefinition(
     'negevKillstreak',
     (config) => positive(config.negevKillstreak?.damageBonusPerKill),
-    (_config, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : 'unsupported_relevant',
-    (_config, scenario) => scenario === 'single_target_static'
-      ? 'Dummy stirbt nicht; Killstreak-Stacks koennen nicht aufgebaut werden'
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target' ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' || scenario === 'five_target'
+      ? 'Statische Ziele sterben nicht; Killstreak-Stacks koennen nicht aufgebaut werden'
       : 'negevKillstreak ist fuer Kampfszenarien noch nicht implementiert',
   ),
   configDefinition('shotgunLightning', activeField('shotgunLightningDamage'), 'unsupported_relevant', 'shotgunLightning ist noch nicht headless implementiert'),

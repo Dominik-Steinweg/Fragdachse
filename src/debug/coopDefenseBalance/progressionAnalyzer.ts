@@ -3,7 +3,11 @@ import { applyCoopDefenseModifiersToWeaponConfig } from '../../loadout/CoopDefen
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import type { CoopDefenseClassId, WeaponSlot } from '../../types';
-import type { SingleTargetScenarioConfig, WeaponBalanceScenario } from './scenarioTypes';
+import {
+  type FiveTargetScenarioConfig,
+  type SingleTargetScenarioConfig,
+  type WeaponBalanceScenario,
+} from './scenarioTypes';
 import { PROGRESSION_STAGES, type ProgressionStageName } from './progressionStages';
 import {
   generateWeaponUpgradeBuilds,
@@ -12,13 +16,25 @@ import {
 import { validateWeaponBalanceCapabilities } from './weaponCapabilityValidator';
 import {
   resolveAndValidateWeaponSlot,
+  resolveSingleTargetScenarioConfig,
   runWeaponSingleTargetBenchmarkSet,
 } from './weaponBenchmark';
 import {
+  resolveFiveTargetScenarioConfig,
+  runWeaponFiveTargetBenchmarkSet,
+} from './fiveTargetBenchmark';
+import {
   DEFAULT_BENCHMARK_SEEDS,
+  type FiveTargetBenchmarkAggregate,
+  type FiveTargetBenchmarkResult,
   type SingleTargetBenchmarkAggregate,
   type SingleTargetBenchmarkResult,
 } from './weaponBenchmarkTypes';
+import { buildScenarioCacheKey } from './scenarioCacheKey';
+
+export type WeaponBenchmarkAggregate = SingleTargetBenchmarkAggregate | FiveTargetBenchmarkAggregate;
+export type WeaponBenchmarkResult = SingleTargetBenchmarkResult | FiveTargetBenchmarkResult;
+export type WeaponScenarioConfig = SingleTargetScenarioConfig | FiveTargetScenarioConfig;
 
 export interface StageAnalysisResult {
   readonly stage: ProgressionStageName;
@@ -27,20 +43,27 @@ export interface StageAnalysisResult {
   readonly bossPointBudget: number;
   readonly bestSupportedBuild: WeaponUpgradeBuild | null;
   readonly bestSupportedExpectedDps: number;
-  /** Alias für bestSupportedExpectedDps zur Abwärtskompatibilität. */
+  /** Alias fuer bestSupportedExpectedDps zur Abwaertskompatibilitaet. */
   readonly bestSupportedDps: number;
   readonly totalLegalCandidates: number;
   readonly evaluatedCandidates: number;
   readonly unsupportedCandidates: number;
   readonly unsupportedReasons: readonly string[];
   readonly unsupportedReasonCounts: Readonly<Record<string, number>>;
+  /** Nur Kandidaten, deren primaeres Measurement Window unvollstaendig ist. */
   readonly incompleteCandidates: number;
   readonly incompleteReasons: readonly string[];
   readonly incompleteReasonCounts: Readonly<Record<string, number>>;
+  /** Tail-Unvollstaendigkeit bleibt fuer Diagnose getrennt von incompleteCandidates. */
+  readonly tailIncompleteCandidates: number;
+  readonly tailIncompleteReasons: readonly string[];
+  readonly tailIncompleteReasonCounts: Readonly<Record<string, number>>;
   readonly provenMaximum: boolean;
+  readonly primaryMetricComplete: boolean;
+  readonly tailComplete: boolean;
   readonly settleTruncated?: boolean;
-  readonly benchmarkAggregate?: SingleTargetBenchmarkAggregate;
-  readonly benchmarkResult?: SingleTargetBenchmarkResult;
+  readonly benchmarkAggregate?: WeaponBenchmarkAggregate;
+  readonly benchmarkResult?: WeaponBenchmarkResult;
 }
 
 export interface WeaponProgressionAnalysisResult {
@@ -56,43 +79,53 @@ export interface WeaponProgressionAnalysisResult {
 export interface AnalyzeWeaponProgressionOptions {
   readonly weaponId: string;
   readonly slot?: WeaponSlot;
-  readonly scenario?: WeaponBalanceScenario;
+  readonly scenario?: Extract<WeaponBalanceScenario, 'single_target_static' | 'five_target'>;
   readonly seeds?: readonly number[];
-  /** Optionaler Einzel-Seed für Abwärtskompatibilität. */
+  /** Optionaler Einzel-Seed fuer Abwaertskompatibilitaet. */
   readonly seed?: number;
   readonly durationMs?: number;
   readonly stepDeltaMs?: number;
-  readonly scenarioConfig?: SingleTargetScenarioConfig;
+  readonly scenarioConfig?: WeaponScenarioConfig;
   readonly classId?: CoopDefenseClassId;
 }
 
-/**
- * Erzeugt eine strukturierte Text-Zusammenfassung der Progressionsanalyse.
- */
+function aggregateHasFiveTargetMetrics(
+  aggregate: WeaponBenchmarkAggregate,
+): aggregate is FiveTargetBenchmarkAggregate {
+  return 'expectedTargetsHitPerShot' in aggregate;
+}
+
 function formatProgressionSummary(
   weaponId: string,
   slot: WeaponSlot,
-  scenario: WeaponBalanceScenario,
+  scenario: Extract<WeaponBalanceScenario, 'single_target_static' | 'five_target'>,
   stages: readonly StageAnalysisResult[],
   cacheHits: number,
   cacheMisses: number,
 ): string {
+  const isFiveTarget = scenario === 'five_target';
   const lines: string[] = [];
-  lines.push(`=== Single-Target Progression: ${weaponId} (${slot}) [Scenario: ${scenario}] ===`);
+  lines.push(`=== ${isFiveTarget ? 'Five-Target' : 'Single-Target'} Progression: ${weaponId} (${slot}) [Scenario: ${scenario}] ===`);
   lines.push(`Cache-Statistik: ${cacheHits} Hits / ${cacheMisses} Misses (Simulationsläufe)`);
 
   for (const st of stages) {
     lines.push(`\n[${st.stageLabel.toUpperCase()}] Budget: ${st.normalPointBudget} normal / ${st.bossPointBudget} boss`);
-    lines.push(`  Best Supported Expected ST DPS: ${st.bestSupportedExpectedDps.toFixed(1)}`);
+    lines.push(`  Best Supported Expected ${isFiveTarget ? '5T Total' : 'ST'} DPS: ${st.bestSupportedExpectedDps.toFixed(1)}`);
     if (st.benchmarkAggregate) {
-      if (st.benchmarkAggregate.expectedBurnDps > 0) {
-        lines.push(`    (Direct DPS: ${st.benchmarkAggregate.expectedDirectDps.toFixed(1)} | Burn DPS: ${st.benchmarkAggregate.expectedBurnDps.toFixed(1)})`);
+      const aggregate = st.benchmarkAggregate;
+      if (aggregate.expectedBurnDps > 0) {
+        lines.push(`    (Direct DPS: ${aggregate.expectedDirectDps.toFixed(1)} | Burn DPS: ${aggregate.expectedBurnDps.toFixed(1)})`);
       }
-      lines.push(`    (Median: ${st.benchmarkAggregate.medianDps.toFixed(1)} | P10: ${st.benchmarkAggregate.p10Dps.toFixed(1)} | P90: ${st.benchmarkAggregate.p90Dps.toFixed(1)} | Min: ${st.benchmarkAggregate.minDps.toFixed(1)} | Max: ${st.benchmarkAggregate.maxDps.toFixed(1)})`);
-      lines.push(`    (Expected Hit Rate: ${(st.benchmarkAggregate.expectedHitRate * 100).toFixed(1)}% | Shots/s: ${st.benchmarkAggregate.expectedShotsPerSecond.toFixed(1)})`);
+      lines.push(`    (Median: ${aggregate.medianDps.toFixed(1)} | P10: ${aggregate.p10Dps.toFixed(1)} | P90: ${aggregate.p90Dps.toFixed(1)} | Min: ${aggregate.minDps.toFixed(1)} | Max: ${aggregate.maxDps.toFixed(1)})`);
+      if (aggregateHasFiveTargetMetrics(aggregate)) {
+        lines.push(`    (Targets hit/shot: ${aggregate.expectedTargetsHitPerShot.toFixed(2)} | Shots/s: ${aggregate.expectedShotsPerSecond.toFixed(1)})`);
+      } else {
+        lines.push(`    (Expected Hit Rate: ${(aggregate.expectedHitRate * 100).toFixed(1)}% | Shots/s: ${aggregate.expectedShotsPerSecond.toFixed(1)})`);
+      }
+      lines.push(`    (Primary complete: ${aggregate.primaryMetricComplete ? 'YES' : 'NO'} | Tail complete: ${aggregate.tailComplete ? 'YES' : 'NO'})`);
     }
     lines.push(`  Proven Maximum: ${st.provenMaximum ? 'YES' : 'NO (partiell unterstützt)'}`);
-    lines.push(`  Candidates: ${st.evaluatedCandidates}/${st.totalLegalCandidates} ausgewertet (${st.unsupportedCandidates} unsupported)`);
+    lines.push(`  Candidates: ${st.evaluatedCandidates}/${st.totalLegalCandidates} ausgewertet (${st.unsupportedCandidates} unsupported, ${st.incompleteCandidates} primary-incomplete)`);
 
     if (st.bestSupportedBuild && st.bestSupportedBuild.signature !== 'base') {
       lines.push('  Build:');
@@ -109,6 +142,7 @@ function formatProgressionSummary(
       } else {
         lines.push(`  Adrenalin/s verbraucht: ${st.benchmarkAggregate.expectedAdrenalineSpentPerSec.toFixed(1)}`);
       }
+      lines.push(`  Tail: ${st.tailComplete ? 'complete' : 'truncated'} (settleTruncated=${Boolean(st.settleTruncated)})`);
     }
 
     if (st.unsupportedReasons.length > 0) {
@@ -117,53 +151,63 @@ function formatProgressionSummary(
         lines.push(`    - ${reason} (${count} Kandidaten)`);
       }
     }
+    if (st.incompleteReasons.length > 0) {
+      lines.push(`  Primary-Incomplete Reasons: ${st.incompleteReasons.join(', ')}`);
+    }
   }
 
   return lines.join('\n');
 }
 
-/**
- * Führt die vollständige Single-Target-Progressionsanalyse über alle fünf Stufen für eine Waffe durch.
- *
- * Optimierungsmerkmale in V0.5:
- * - Analyse-lokales Caching verhindert redundante Simulationen identischer Builds über verschachtelte Stages.
- * - Lightweight-Modus spart Allokationen großer Event-Historien während des Parameter-Sweeps.
- * - Szenario-spezifische Capability-Klassifizierung trennt relevante von irrelevanten Effekten.
- */
-export function analyzeWeaponSingleTargetProgression(
+function resolveScenarioConfig(
   options: AnalyzeWeaponProgressionOptions,
+  scenario: Extract<WeaponBalanceScenario, 'single_target_static' | 'five_target'>,
+  fireType: string,
+): WeaponScenarioConfig {
+  if (scenario === 'single_target_static') {
+    return resolveSingleTargetScenarioConfig({
+      weaponId: options.weaponId,
+      scenarioConfig: options.scenarioConfig as SingleTargetScenarioConfig | undefined,
+      durationMs: options.durationMs,
+      stepDeltaMs: options.stepDeltaMs,
+    }, fireType);
+  }
+  return resolveFiveTargetScenarioConfig({
+    weaponId: options.weaponId,
+    scenarioConfig: options.scenarioConfig as FiveTargetScenarioConfig | undefined,
+    durationMs: options.durationMs,
+    stepDeltaMs: options.stepDeltaMs,
+  }, fireType);
+}
+
+function analyzeWeaponProgression(
+  options: AnalyzeWeaponProgressionOptions,
+  scenario: Extract<WeaponBalanceScenario, 'single_target_static' | 'five_target'>,
 ): WeaponProgressionAnalysisResult {
   const baseConfig = getWeaponConfig(options.weaponId);
   if (!baseConfig) {
     throw new Error(`[WeaponBalanceLab] Unbekannte Weapon-ID: "${options.weaponId}"`);
   }
-
   const slot = resolveAndValidateWeaponSlot(baseConfig, options.slot);
   const classId = options.classId ?? DEFAULT_COOP_DEFENSE_CLASS_ID;
 
-  if (options.scenario !== undefined && options.scenario !== 'single_target_static') {
+  if (options.scenario !== undefined && options.scenario !== scenario) {
     throw new Error(
-      `[WeaponBalanceLab] analyzeWeaponSingleTargetProgression() unterstützt ausschließlich das Szenario "single_target_static" (angefragt: "${options.scenario}").`,
+      `[WeaponBalanceLab] Analyzer-Szenario "${scenario}" kann nicht mit "${options.scenario}" ausgefuehrt werden.`,
     );
   }
-  const scenario: WeaponBalanceScenario = 'single_target_static';
 
-  // Deterministisches Multi-Seed-Set auflösen und normalisieren
   const rawSeeds = options.seeds && options.seeds.length > 0
     ? options.seeds
     : options.seed !== undefined
       ? [options.seed]
       : DEFAULT_BENCHMARK_SEEDS;
   const seeds = Array.from(new Set(rawSeeds)).sort((a, b) => a - b);
-
-  const durationMs = options.durationMs ?? 30_000;
   const stepDeltaMs = options.stepDeltaMs ?? 16;
-
-  // Analyse-lokaler Cache
-  const buildCache = new Map<string, SingleTargetBenchmarkAggregate>();
+  const scenarioConfig = resolveScenarioConfig(options, scenario, baseConfig.fire.type);
+  const buildCache = new Map<string, WeaponBenchmarkAggregate>();
   let cacheHits = 0;
   let cacheMisses = 0;
-
   const stages: StageAnalysisResult[] = [];
 
   for (const stageDef of PROGRESSION_STAGES) {
@@ -174,25 +218,20 @@ export function analyzeWeaponSingleTargetProgression(
       bossPointBudget: stageDef.bossPointBudget,
       classId,
     });
-
     let bestBuild: WeaponUpgradeBuild | null = null;
     let bestExpectedDps = -Infinity;
-    let bestAggregate: SingleTargetBenchmarkAggregate | undefined = undefined;
-
+    let bestAggregate: WeaponBenchmarkAggregate | undefined;
     let evaluatedCandidates = 0;
     let unsupportedCandidates = 0;
-    const unsupportedReasonCounts: Record<string, number> = {};
     let incompleteCandidates = 0;
+    let tailIncompleteCandidates = 0;
+    const unsupportedReasonCounts: Record<string, number> = {};
     const incompleteReasonCounts: Record<string, number> = {};
+    const tailIncompleteReasonCounts: Record<string, number> = {};
 
     for (const candidate of candidates) {
       const effectTotals = getCoopDefenseResolvedEffectTotals(candidate.profile, classId);
-      const modifiedConfig = applyCoopDefenseModifiersToWeaponConfig(
-        baseConfig,
-        slot,
-        effectTotals,
-      );
-
+      const modifiedConfig = applyCoopDefenseModifiersToWeaponConfig(baseConfig, slot, effectTotals);
       const capCheck = validateWeaponBalanceCapabilities(modifiedConfig, scenario);
       if (!capCheck.supported) {
         unsupportedCandidates += 1;
@@ -202,41 +241,53 @@ export function analyzeWeaponSingleTargetProgression(
         continue;
       }
 
-      // Cache-Key für diesen Build
-      const scenarioKey = options.scenarioConfig
-        ? `${options.scenarioConfig.id}:${options.scenarioConfig.version}:${options.scenarioConfig.targetRadius}:${options.scenarioConfig.targetDistance}:${options.scenarioConfig.attackWindowMs}:${options.scenarioConfig.warmupMs}:${options.scenarioConfig.settleLimitMs}:${options.scenarioConfig.triggerPolicy}:${options.scenarioConfig.aimPolicy}`
-        : 'profile:auto';
-      const cacheKey = `${options.weaponId}:${slot}:${candidate.signature}:${seeds.join(',')}:${durationMs}:${stepDeltaMs}:${scenario}:${scenarioKey}`;
+      const cacheKey = buildScenarioCacheKey({
+        weaponId: options.weaponId,
+        slot,
+        buildSignature: candidate.signature,
+        scenario,
+        scenarioConfig,
+        seeds,
+        stepDeltaMs,
+      });
       let aggregate = buildCache.get(cacheKey);
-
       if (aggregate) {
         cacheHits += 1;
       } else {
         cacheMisses += 1;
-        aggregate = runWeaponSingleTargetBenchmarkSet({
-          weaponId: options.weaponId,
-          weaponConfigOverride: modifiedConfig,
-          sourceSlot: slot,
-          seeds,
-          durationMs,
-          stepDeltaMs,
-          scenarioConfig: options.scenarioConfig,
-          includeIndividualRuns: false, // Lightweight-Modus während Sweep
-        });
+        aggregate = scenario === 'single_target_static'
+          ? runWeaponSingleTargetBenchmarkSet({
+            weaponId: options.weaponId,
+            weaponConfigOverride: modifiedConfig,
+            sourceSlot: slot,
+            seeds,
+            stepDeltaMs,
+            scenarioConfig: scenarioConfig as SingleTargetScenarioConfig,
+            includeIndividualRuns: false,
+          })
+          : runWeaponFiveTargetBenchmarkSet({
+            weaponId: options.weaponId,
+            weaponConfigOverride: modifiedConfig,
+            sourceSlot: slot,
+            seeds,
+            stepDeltaMs,
+            scenarioConfig: scenarioConfig as FiveTargetScenarioConfig,
+            includeIndividualRuns: false,
+          });
         buildCache.set(cacheKey, aggregate);
       }
 
-      // Unvollständig ausgewertete Settle-Läufe (z.B. abgebrochener Brand) dürfen nicht
-      // still als bewiesenes Ergebnis in die Best-Suche einfließen
-      if (aggregate.settleTruncated) {
+      if (!aggregate.tailComplete) {
+        tailIncompleteCandidates += 1;
+        tailIncompleteReasonCounts['settle_truncated'] = (tailIncompleteReasonCounts['settle_truncated'] ?? 0) + 1;
+      }
+      if (!aggregate.primaryMetricComplete) {
         incompleteCandidates += 1;
-        incompleteReasonCounts['settle_truncated'] = (incompleteReasonCounts['settle_truncated'] ?? 0) + 1;
+        incompleteReasonCounts['primary_metric_incomplete'] = (incompleteReasonCounts['primary_metric_incomplete'] ?? 0) + 1;
         continue;
       }
 
       evaluatedCandidates += 1;
-
-      // Deterministischer Tie-Breaker bei identischem Expected DPS
       let isBetter = false;
       if (aggregate.expectedDps > bestExpectedDps) {
         isBetter = true;
@@ -256,7 +307,6 @@ export function analyzeWeaponSingleTargetProgression(
           isBetter = true;
         }
       }
-
       if (isBetter || bestBuild === null) {
         bestExpectedDps = aggregate.expectedDps;
         bestBuild = candidate;
@@ -268,11 +318,7 @@ export function analyzeWeaponSingleTargetProgression(
       && incompleteCandidates === 0
       && evaluatedCandidates === candidates.length
       && candidates.length > 0;
-    const unsupportedReasons = Object.keys(unsupportedReasonCounts).sort();
-    const incompleteReasons = Object.keys(incompleteReasonCounts).sort();
-
     const dps = bestExpectedDps >= 0 ? bestExpectedDps : 0;
-
     stages.push({
       stage: stageDef.name,
       stageLabel: stageDef.label,
@@ -284,26 +330,22 @@ export function analyzeWeaponSingleTargetProgression(
       totalLegalCandidates: candidates.length,
       evaluatedCandidates,
       unsupportedCandidates,
-      unsupportedReasons,
+      unsupportedReasons: Object.keys(unsupportedReasonCounts).sort(),
       unsupportedReasonCounts,
       incompleteCandidates,
-      incompleteReasons,
+      incompleteReasons: Object.keys(incompleteReasonCounts).sort(),
       incompleteReasonCounts,
+      tailIncompleteCandidates,
+      tailIncompleteReasons: Object.keys(tailIncompleteReasonCounts).sort(),
+      tailIncompleteReasonCounts,
       provenMaximum,
+      primaryMetricComplete: bestAggregate?.primaryMetricComplete ?? false,
+      tailComplete: bestAggregate?.tailComplete ?? false,
       settleTruncated: bestAggregate?.settleTruncated,
       benchmarkAggregate: bestAggregate,
       benchmarkResult: bestAggregate?.runs?.[0],
     });
   }
-
-  const summaryText = formatProgressionSummary(
-    options.weaponId,
-    slot,
-    scenario,
-    stages,
-    cacheHits,
-    cacheMisses,
-  );
 
   return {
     weaponId: options.weaponId,
@@ -312,6 +354,20 @@ export function analyzeWeaponSingleTargetProgression(
     stages,
     cacheHits,
     cacheMisses,
-    summaryText,
+    summaryText: formatProgressionSummary(options.weaponId, slot, scenario, stages, cacheHits, cacheMisses),
   };
+}
+
+/** Gemeinsamer Analyzer-Einstieg fuer den versionierten ST-Benchmark. */
+export function analyzeWeaponSingleTargetProgression(
+  options: AnalyzeWeaponProgressionOptions,
+): WeaponProgressionAnalysisResult {
+  return analyzeWeaponProgression(options, 'single_target_static');
+}
+
+/** Gemeinsamer Analyzer-Einstieg fuer den versionierten Five-Target-Benchmark. */
+export function analyzeWeaponFiveTargetProgression(
+  options: AnalyzeWeaponProgressionOptions,
+): WeaponProgressionAnalysisResult {
+  return analyzeWeaponProgression(options, 'five_target');
 }

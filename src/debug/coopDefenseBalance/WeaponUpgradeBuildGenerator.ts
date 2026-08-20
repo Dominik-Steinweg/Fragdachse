@@ -103,11 +103,12 @@ export function generateWeaponUpgradeBuilds(
 
   // 3. Breitensuche über alle legalen Upgrades
   const queue: Array<Record<string, number>> = [{}];
+  let queueIndex = 0;
   const visited = new Set<string>();
   const results: WeaponUpgradeBuild[] = [];
 
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  while (queueIndex < queue.length) {
+    const current = queue[queueIndex++]!;
     const info = evaluateLevels(current);
 
     if (visited.has(info.signature)) {

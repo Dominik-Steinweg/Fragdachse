@@ -1,8 +1,7 @@
 import { getWeaponConfig, type WeaponConfig } from '../../loadout/LoadoutConfig';
-import { GenericWeapon } from '../../loadout/GenericWeapon';
-import { WeaponFireExecutor } from '../../loadout/WeaponFireExecutor';
-import { resolveShotPlan, resolveEffectivePelletCount } from '../../loadout/ShotPlanResolver';
+import { resolveEffectivePelletCount } from '../../loadout/ShotPlanResolver';
 import { HeadlessSingleTargetWorld } from './HeadlessSingleTargetWorld';
+import { runStaticTargetBenchmarkCore } from './staticTargetBenchmarkCore';
 import { assertWeaponBalanceSupported } from './weaponCapabilityValidator';
 import {
   isSingleTargetTriggerReady,
@@ -23,6 +22,9 @@ import {
   type SingleTargetBenchmarkAggregate,
 } from './weaponBenchmarkTypes';
 import type { WeaponSlot } from '../../types';
+import { buildBenchmarkRunCacheKey } from './scenarioCacheKey';
+
+const singleTargetRunCache = new Map<string, SingleTargetBenchmarkResult>();
 
 /**
  * Validiert den Waffen-Slot gegen die reale allowedSlots-Konfiguration der Waffe.
@@ -67,7 +69,7 @@ export function resolveDefaultTargetDistance(_fireType: string, _range: number):
   return DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG.targetDistance;
 }
 
-function resolveSingleTargetScenarioConfig(
+export function resolveSingleTargetScenarioConfig(
   options: SingleTargetBenchmarkOptions | SingleTargetBenchmarkSetOptions,
   fireType = 'projectile',
 ): SingleTargetScenarioConfig {
@@ -120,6 +122,23 @@ export function runWeaponSingleTargetBenchmark(
   const seed = options.seed ?? 1;
   const maxSettleMs = scenario.settleLimitMs;
   const recordEvents = options.recordEvents ?? true;
+  const runCacheKey = buildBenchmarkRunCacheKey({
+    weaponId: options.weaponId,
+    slot,
+    weaponConfig: config,
+    scenario,
+    scenarioKind: 'single_target_static',
+    seed,
+    stepDeltaMs,
+  });
+  const cachedRun = singleTargetRunCache.get(runCacheKey);
+  if (cachedRun && !recordEvents) {
+    return {
+      ...cachedRun,
+      damageEvents: [],
+      resourceEvents: [],
+    };
+  }
 
   const targetDistance = scenario.targetDistance;
   const measurementStartMs = scenario.warmupMs;
@@ -131,136 +150,49 @@ export function runWeaponSingleTargetBenchmark(
     scenario.targetRadius,
   );
   world.setDamageMeasurementWindow(measurementStartMs, measurementEndMs);
-  const weapon = new GenericWeapon(config);
-  const executor = new WeaponFireExecutor(world);
-
-  const shooterId = 'sim_player';
-  const playerColor = 0xffffff;
-  const shooterX = 0;
-  const shooterY = 0;
-  const targetX = world.target.x;
-  const targetY = world.target.y;
-  const targetAngle = resolveSingleTargetAimAngle(
-    scenario.aimPolicy,
-    shooterX,
-    shooterY,
-    targetX,
-    targetY,
-  );
-
-  let currentTime = 0;
-  const TIME_EPSILON = 1e-6;
-
-  // ── Phase 1 + 2: Warmup und Measurement Window ─────────────────────────────
-  // Beide Phasen benutzen denselben Controller. Nur das Zeitfenster der Metrik ist
-  // getrennt; Warmup-Treffer werden nicht nachtraeglich in den Measurement-DPS gezogen.
-  const controllerEndTime = measurementEndMs;
-  while (currentTime < controllerEndTime - TIME_EPSILON) {
-    world.setTime(currentTime);
-
-    const cooldownReady = !weapon.isOnCooldown(currentTime);
-    const triggerReady = isSingleTargetTriggerReady(
-      scenario.triggerPolicy,
-      config,
-      weapon.getDynamicSpread(),
-      targetDistance,
-      world.target.radius,
-    );
-
-    // 1. Feuern, wenn Cooldown abgelaufen ist UND Trigger Discipline Schussfreigabe erteilt
-    if (cooldownReady && triggerReady) {
-      const shotPlan = resolveShotPlan({
+  const core = runStaticTargetBenchmarkCore({
+    config,
+    sourceSlot: slot,
+    world,
+    measurementStartMs,
+    measurementEndMs,
+    stepDeltaMs,
+    maxSettleMs,
+    controller: {
+      resolveAim: (_config, currentWorld) => ({
+        aimAngle: resolveSingleTargetAimAngle(
+          scenario.aimPolicy,
+          0,
+          0,
+          currentWorld.target.x,
+          currentWorld.target.y,
+        ),
+        targetX: currentWorld.target.x,
+        targetY: currentWorld.target.y,
+        triggerTargetDistance: targetDistance,
+        triggerTargetRadius: currentWorld.target.radius,
+      }),
+      isTriggerReady: (_config, dynamicSpread, aim) => isSingleTargetTriggerReady(
+        scenario.triggerPolicy,
         config,
-        aimAngle: targetAngle,
-        dynamicSpread: weapon.getDynamicSpread(),
-        isMoving: false,
-        random: world.rng,
-      });
-
-      let anyFired = false;
-      for (const shot of shotPlan.shots) {
-        const fired = executor.fire(shot.config, {
-          x: shooterX,
-          y: shooterY,
-          angle: shot.angle,
-          targetX,
-          targetY,
-          ownerId: shooterId,
-          ownerColor: playerColor,
-          sourceSlot: slot,
-        });
-        if (fired) anyFired = true;
-      }
-
-      // Buchhaltung nur bei erfolgreichem Schuss
-      if (anyFired) {
-        world.recordShotFired();
-        if (config.adrenalinCost > 0) {
-          world.recordAdrenalineDrain(config.adrenalinCost, config.id);
-        }
-        weapon.addSpread();
-        weapon.recordUse(currentTime);
-      }
-    }
-
-    // 2. Nächsten exakten Ereignis-Zeitpunkt ermitteln
-    const lastUsedAt = weapon.getLastUsedAt();
-    const cooldownReadyTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.cooldown;
-    const recoveryStartTime = lastUsedAt < 0 ? 0 : lastUsedAt + config.spreadRecoveryDelay;
-    const spreadReadyTime = calculateSingleTargetTriggerReadyTime(
-      scenario.triggerPolicy,
-      config,
-      weapon.getDynamicSpread(),
-      lastUsedAt,
-      currentTime,
-      targetDistance,
-      world.target.radius,
-    );
-    const nextActionTime = Math.max(cooldownReadyTime, spreadReadyTime);
-
-    const nextStepBoundary = Math.min(controllerEndTime, currentTime + stepDeltaMs);
-
-    let nextTime = nextStepBoundary;
-    if (cooldownReadyTime > currentTime + TIME_EPSILON && cooldownReadyTime < nextTime) {
-      nextTime = cooldownReadyTime;
-    }
-    if (recoveryStartTime > currentTime + TIME_EPSILON && recoveryStartTime < nextTime) {
-      nextTime = recoveryStartTime;
-    }
-    if (nextActionTime > currentTime + TIME_EPSILON && nextActionTime < nextTime) {
-      nextTime = nextActionTime;
-    }
-
-    const subDelta = nextTime - currentTime;
-    if (subDelta > TIME_EPSILON) {
-      world.step(subDelta);
-
-      const activeDecayDelta = Math.max(0, nextTime - Math.max(currentTime, recoveryStartTime));
-      if (activeDecayDelta > 0) {
-        weapon.decaySpread(activeDecayDelta, nextTime);
-      }
-
-      currentTime = Math.round(nextTime * 1e6) / 1e6;
-      world.setTime(currentTime);
-    } else {
-      currentTime = Math.round(nextStepBoundary * 1e6) / 1e6;
-      world.setTime(currentTime);
-    }
-  }
-
-  // ── Phase 3: Settle Phase (keine neuen Schüsse, fliegende Projektile und Brand auslaufen lassen)
-  const settleStart = currentTime;
-  while (world.hasPendingCombatEffects(currentTime) && (currentTime - settleStart < maxSettleMs)) {
-    const remainingSettle = maxSettleMs - (currentTime - settleStart);
-    const stepMs = Math.min(stepDeltaMs, remainingSettle);
-    if (stepMs <= 0) break;
-
-    world.step(stepMs);
-    currentTime += stepMs;
-    world.setTime(currentTime);
-  }
-  const settleDurationMs = currentTime - settleStart;
-  const settleTruncated = world.hasPendingCombatEffects(currentTime);
+        dynamicSpread,
+        aim.triggerTargetDistance,
+        aim.triggerTargetRadius,
+      ),
+      calculateTriggerReadyTime: (_config, dynamicSpread, lastUsedAt, now, aim) => calculateSingleTargetTriggerReadyTime(
+        scenario.triggerPolicy,
+        config,
+        dynamicSpread,
+        lastUsedAt,
+        now,
+        aim.triggerTargetDistance,
+        aim.triggerTargetRadius,
+      ),
+    },
+  });
+  const settleDurationMs = core.settleDurationMs;
+  const settleTruncated = core.settleTruncated;
+  const primaryMetricComplete = core.primaryMetricComplete;
 
   // ── Phase 4: Metriken auswerten ────────────────────────────────────────────
   // Das Messfenster ist halboffen: [warmupMs, warmupMs + attackWindowMs).
@@ -272,18 +204,25 @@ export function runWeaponSingleTargetBenchmark(
   const burnDamageIncludingTail = world.getBurnDamage();
   const shotsFired = world.getShotsFired();
   const hits = world.getHits();
-  const totalExpectedPellets = shotsFired * resolveEffectivePelletCount(config);
-  const hitRate = totalExpectedPellets > 0 ? hits / totalExpectedPellets : 0;
+  const measurementShotsFired = world.getMeasurementShotsFired();
+  const measurementTargetHits = world.getMeasurementTargetHits();
+  const measurementProjectileHits = world.getMeasurementProjectileHits();
+  const totalExpectedPellets = measurementShotsFired * resolveEffectivePelletCount(config);
+  const totalExpectedPelletsIncludingTail = shotsFired * resolveEffectivePelletCount(config);
+  const hitRate = totalExpectedPelletsIncludingTail > 0 ? hits / totalExpectedPelletsIncludingTail : 0;
+  const measurementHitRate = totalExpectedPellets > 0 ? measurementTargetHits / totalExpectedPellets : 0;
   const durationSec = attackWindowDurationMs / 1000;
   const dps = durationSec > 0 ? totalDamage / durationSec : 0;
   const directDps = durationSec > 0 ? directDamage / durationSec : 0;
   const burnDps = durationSec > 0 ? burnDamage / durationSec : 0;
   const adrenalineGenerated = world.getAdrenalineGenerated();
   const adrenalineSpent = world.getAdrenalineSpent();
-  const adrenalineGeneratedPerSec = durationSec > 0 ? adrenalineGenerated / durationSec : 0;
-  const adrenalineSpentPerSec = durationSec > 0 ? adrenalineSpent / durationSec : 0;
+  const measurementAdrenalineGenerated = world.getMeasurementAdrenalineGenerated();
+  const measurementAdrenalineSpent = world.getMeasurementAdrenalineSpent();
+  const adrenalineGeneratedPerSec = durationSec > 0 ? measurementAdrenalineGenerated / durationSec : 0;
+  const adrenalineSpentPerSec = durationSec > 0 ? measurementAdrenalineSpent / durationSec : 0;
 
-  return {
+  const result: SingleTargetBenchmarkResult = {
     weaponId: config.id,
     scenarioId: scenario.id,
     scenarioVersion: scenario.version,
@@ -307,14 +246,30 @@ export function runWeaponSingleTargetBenchmark(
     shotsFired,
     hits,
     hitRate,
+    measurementShotsFired,
+    measurementTargetHits,
+    measurementProjectileHits,
+    measurementHitRate,
+    measurementAdrenalineGenerated,
+    measurementAdrenalineSpent,
     adrenalineGenerated,
     adrenalineSpent,
     adrenalineGeneratedPerSec,
     adrenalineSpentPerSec,
+    primaryMetricComplete,
+    tailComplete: !settleTruncated,
     settleTruncated,
     damageEvents: world.getDamageEvents(),
     resourceEvents: world.getResourceEvents(),
   };
+  singleTargetRunCache.set(runCacheKey, result);
+  return recordEvents
+    ? result
+    : {
+      ...result,
+      damageEvents: [],
+      resourceEvents: [],
+    };
 }
 
 /**
@@ -342,12 +297,14 @@ export function runWeaponSingleTargetBenchmarkSet(
   let totalDirectDamage = 0;
   let totalBurnDamage = 0;
   let totalDamageYieldIncludingTail = 0;
+  let totalTailDamage = 0;
   let totalShots = 0;
   let totalHits = 0;
   let totalPossiblePellets = 0;
   let totalAdrenalineGen = 0;
   let totalAdrenalineSpent = 0;
   let anyTruncated = false;
+  let allPrimaryComplete = true;
 
   const recordEvents = options.includeIndividualRuns ?? false;
 
@@ -376,16 +333,18 @@ export function runWeaponSingleTargetBenchmarkSet(
     totalDirectDamage += result.directDamage;
     totalBurnDamage += result.burnDamage;
     totalDamageYieldIncludingTail += result.damageYieldIncludingTail;
-    totalShots += result.shotsFired;
-    totalHits += result.hits;
+    totalTailDamage += result.tailDamage;
+    totalShots += result.measurementShotsFired;
+    totalHits += result.measurementTargetHits;
 
     const config = options.weaponConfigOverride ?? getWeaponConfig(options.weaponId);
     const pelletsPerShot = config ? resolveEffectivePelletCount(config) : 1;
-    totalPossiblePellets += result.shotsFired * pelletsPerShot;
+    totalPossiblePellets += result.measurementShotsFired * pelletsPerShot;
 
-    totalAdrenalineGen += result.adrenalineGenerated;
-    totalAdrenalineSpent += result.adrenalineSpent;
+    totalAdrenalineGen += result.measurementAdrenalineGenerated;
+    totalAdrenalineSpent += result.measurementAdrenalineSpent;
     if (result.settleTruncated) anyTruncated = true;
+    if (!result.primaryMetricComplete) allPrimaryComplete = false;
   }
 
   const sortedDps = [...dpsValues].sort((a, b) => a - b);
@@ -413,6 +372,7 @@ export function runWeaponSingleTargetBenchmarkSet(
     expectedDirectDps,
     expectedBurnDps,
     expectedDamageYieldIncludingTail: n > 0 ? totalDamageYieldIncludingTail / n : 0,
+    expectedTailDamage: n > 0 ? totalTailDamage / n : 0,
     medianDps,
     p10Dps,
     p90Dps,
@@ -422,6 +382,8 @@ export function runWeaponSingleTargetBenchmarkSet(
     expectedShotsPerSecond,
     expectedAdrenalineGeneratedPerSec,
     expectedAdrenalineSpentPerSec,
+    primaryMetricComplete: allPrimaryComplete,
+    tailComplete: !anyTruncated,
     settleTruncated: anyTruncated ? true : undefined,
     runs: recordEvents ? runs : undefined,
   };

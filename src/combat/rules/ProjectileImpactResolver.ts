@@ -12,6 +12,9 @@ export interface ProjectileTargetImpactParams {
   readonly ignoreStartingOverlap?: boolean;
 }
 
+/** Runtime-Charakterisierung: Schnittpunkte direkt am Sweep-Start werden bis 0.01px ignoriert. */
+const RUNTIME_STARTING_INTERSECTION_EPSILON_PX = 0.01;
+
 /**
  * Gemeinsamer, Phaser-freier Resolver fuer einen Projektil-Sweep gegen ein Kreisziel.
  *
@@ -38,9 +41,10 @@ export function resolveProjectileTargetImpact(
   const fx = startX - targetX;
   const fy = startY - targetY;
   const a = dx * dx + dy * dy;
-  const startDistance = Math.hypot(targetX - startX, targetY - startY);
+  const startOffsetX = targetX - startX;
+  const startOffsetY = targetY - startY;
 
-  if (startDistance <= radius && !ignoreStartingOverlap) {
+  if (radius >= 0 && startOffsetX * startOffsetX + startOffsetY * startOffsetY <= radius * radius && !ignoreStartingOverlap) {
     return { hit: true, distance: 0, x: startX, y: startY };
   }
   if (a < 1e-9) return null;
@@ -51,11 +55,20 @@ export function resolveProjectileTargetImpact(
   if (discriminant < 0) return null;
 
   const sqrtDisc = Math.sqrt(discriminant);
-  const roots = [
-    (-b - sqrtDisc) / (2 * a),
-    (-b + sqrtDisc) / (2 * a),
-  ].sort((left, right) => left - right);
-  const tHit = roots.find((t) => t >= (ignoreStartingOverlap ? 1e-6 : 0) && t <= 1);
+  const segmentLength = Math.sqrt(a);
+  const minimumHitT = ignoreStartingOverlap && segmentLength > 1e-9
+    ? RUNTIME_STARTING_INTERSECTION_EPSILON_PX / segmentLength
+    : 0;
+  const denominator = 2 * a;
+  // Die Minus-Wurzel ist bei a > 0 bereits die kleinere der beiden Lösungen. Die
+  // explizite Auswahl erhält die bisherige sort/find-Semantik ohne Array-Allokation.
+  const firstRoot = (-b - sqrtDisc) / denominator;
+  const secondRoot = (-b + sqrtDisc) / denominator;
+  const tHit = firstRoot >= minimumHitT && firstRoot <= 1
+    ? firstRoot
+    : secondRoot >= minimumHitT && secondRoot <= 1
+      ? secondRoot
+      : undefined;
   if (tHit === undefined) return null;
 
   const hitX = startX + tHit * dx;
