@@ -100,6 +100,7 @@ export function runWeaponFiveTargetBenchmark(
   const measurementTotalDamage = world.getMeasurementTotalDamage();
   const measurementDirectDamage = world.getMeasurementDirectDamage();
   const measurementBurnDamage = world.getMeasurementBurnDamage();
+  const measurementChainDamage = world.getMeasurementChainDamage();
   const durationSec = scenario.attackWindowMs / 1000;
   const measurementShotsFired = world.getMeasurementShotsFired();
   const measurementTargetHits = world.getMeasurementTargetHits();
@@ -123,18 +124,23 @@ export function runWeaponFiveTargetBenchmark(
     measurementTotalDamage,
     measurementDirectDamage,
     measurementBurnDamage,
+    measurementChainDamage,
     totalDamage: measurementTotalDamage,
     directDamage: measurementDirectDamage,
     burnDamage: measurementBurnDamage,
+    chainDamage: measurementChainDamage,
     damageYieldIncludingTail: world.getTotalDamage(),
     directDamageIncludingTail: world.getDirectDamage(),
     burnDamageIncludingTail: world.getBurnDamage(),
+    chainDamageIncludingTail: world.getChainDamage(),
     tailDamage: world.getTailDamage(),
     tailDirectDamage: world.getTailDirectDamage(),
     tailBurnDamage: world.getTailBurnDamage(),
+    tailChainDamage: world.getTailChainDamage(),
     dps: durationSec > 0 ? measurementTotalDamage / durationSec : 0,
     directDps: durationSec > 0 ? measurementDirectDamage / durationSec : 0,
     burnDps: durationSec > 0 ? measurementBurnDamage / durationSec : 0,
+    chainDps: durationSec > 0 ? measurementChainDamage / durationSec : 0,
     targetHits: measurementTargetHits,
     measurementTargetHits,
     measurementProjectileHits,
@@ -181,6 +187,7 @@ export function runWeaponFiveTargetBenchmarkSet(
   let totalDamage = 0;
   let totalDirectDamage = 0;
   let totalBurnDamage = 0;
+  let totalChainDamage = 0;
   let totalYield = 0;
   let totalTailDamage = 0;
   let totalShots = 0;
@@ -209,6 +216,7 @@ export function runWeaponFiveTargetBenchmarkSet(
     totalDamage += result.measurementTotalDamage;
     totalDirectDamage += result.measurementDirectDamage;
     totalBurnDamage += result.measurementBurnDamage;
+    totalChainDamage += result.measurementChainDamage;
     totalYield += result.damageYieldIncludingTail;
     totalTailDamage += result.tailDamage;
     totalShots += result.measurementShotsFired;
@@ -232,6 +240,7 @@ export function runWeaponFiveTargetBenchmarkSet(
     expectedDps: durationSec > 0 && seeds.length > 0 ? totalDamage / (durationSec * seeds.length) : 0,
     expectedDirectDps: durationSec > 0 && seeds.length > 0 ? totalDirectDamage / (durationSec * seeds.length) : 0,
     expectedBurnDps: durationSec > 0 && seeds.length > 0 ? totalBurnDamage / (durationSec * seeds.length) : 0,
+    expectedChainDps: durationSec > 0 && seeds.length > 0 ? totalChainDamage / (durationSec * seeds.length) : 0,
     expectedDamageYieldIncludingTail: seeds.length > 0 ? totalYield / seeds.length : 0,
     expectedTailDamage: seeds.length > 0 ? totalTailDamage / seeds.length : 0,
     medianDps: calculatePercentile(sortedDps, 50),

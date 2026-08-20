@@ -26,7 +26,7 @@ vi.mock('phaser', () => {
 });
 
 import { generateWeaponUpgradeBuilds } from '../src/debug/coopDefenseBalance/WeaponUpgradeBuildGenerator';
-import { analyzeWeaponSingleTargetProgression } from '../src/debug/coopDefenseBalance/progressionAnalyzer';
+import { analyzeWeaponFiveTargetProgression, analyzeWeaponSingleTargetProgression } from '../src/debug/coopDefenseBalance/progressionAnalyzer';
 import { getCoopDefenseResolvedEffectTotals } from '../src/utils/coopDefenseUpgrades';
 import { applyCoopDefenseModifiersToWeaponConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
@@ -120,4 +120,26 @@ describe('ASMD_PRIM Progression & Registry Hardening', () => {
     expect(lateStage.provenMaximum).toBe(true);
     expect(endgameStage.provenMaximum).toBe(true);
   });
+
+  it('5. Five-Target: ASMD-Bossbuild simuliert Direct und Chain getrennt und bleibt provenMaximum', () => {
+    const progression = analyzeWeaponFiveTargetProgression({
+      weaponId: 'ASMD_PRIM',
+      slot: 'weapon1',
+      seeds: [1],
+      durationMs: 30_000,
+    });
+
+    for (const stage of progression.stages) {
+      expect(stage.provenMaximum).toBe(true);
+      expect(stage.benchmarkAggregate?.expectedDps).toBeCloseTo(
+        stage.benchmarkAggregate!.expectedDirectDps + stage.benchmarkAggregate!.expectedBurnDps + stage.benchmarkAggregate!.expectedChainDps,
+        8,
+      );
+    }
+
+    const endgame = progression.stages.find((stage) => stage.stage === 'endgame')!;
+    expect(endgame.bestSupportedBuild?.levels.asmd_primary_chain_lightning).toBe(1);
+    expect(endgame.benchmarkAggregate?.expectedDirectDps).toBeGreaterThan(0);
+    expect(endgame.benchmarkAggregate?.expectedChainDps).toBeGreaterThan(0);
+  }, 30000);
 });

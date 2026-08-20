@@ -199,9 +199,11 @@ export function runWeaponSingleTargetBenchmark(
   const totalDamage = world.getMeasurementTotalDamage();
   const directDamage = world.getMeasurementDirectDamage();
   const burnDamage = world.getMeasurementBurnDamage();
+  const chainDamage = world.getMeasurementChainDamage();
   const damageYieldIncludingTail = world.getTotalDamage();
   const directDamageIncludingTail = world.getDirectDamage();
   const burnDamageIncludingTail = world.getBurnDamage();
+  const chainDamageIncludingTail = world.getChainDamage();
   const shotsFired = world.getShotsFired();
   const hits = world.getHits();
   const measurementShotsFired = world.getMeasurementShotsFired();
@@ -215,6 +217,7 @@ export function runWeaponSingleTargetBenchmark(
   const dps = durationSec > 0 ? totalDamage / durationSec : 0;
   const directDps = durationSec > 0 ? directDamage / durationSec : 0;
   const burnDps = durationSec > 0 ? burnDamage / durationSec : 0;
+  const chainDps = durationSec > 0 ? chainDamage / durationSec : 0;
   const adrenalineGenerated = world.getAdrenalineGenerated();
   const adrenalineSpent = world.getAdrenalineSpent();
   const measurementAdrenalineGenerated = world.getMeasurementAdrenalineGenerated();
@@ -234,15 +237,19 @@ export function runWeaponSingleTargetBenchmark(
     totalDamage,
     directDamage,
     burnDamage,
+    chainDamage,
     damageYieldIncludingTail,
     directDamageIncludingTail,
     burnDamageIncludingTail,
+    chainDamageIncludingTail,
     tailDamage: world.getTailDamage(),
     tailDirectDamage: world.getTailDirectDamage(),
     tailBurnDamage: world.getTailBurnDamage(),
+    tailChainDamage: world.getTailChainDamage(),
     dps,
     directDps,
     burnDps,
+    chainDps,
     shotsFired,
     hits,
     hitRate,
@@ -296,6 +303,7 @@ export function runWeaponSingleTargetBenchmarkSet(
   let totalDamage = 0;
   let totalDirectDamage = 0;
   let totalBurnDamage = 0;
+  let totalChainDamage = 0;
   let totalDamageYieldIncludingTail = 0;
   let totalTailDamage = 0;
   let totalShots = 0;
@@ -332,6 +340,7 @@ export function runWeaponSingleTargetBenchmarkSet(
     totalDamage += result.totalDamage;
     totalDirectDamage += result.directDamage;
     totalBurnDamage += result.burnDamage;
+    totalChainDamage += result.chainDamage;
     totalDamageYieldIncludingTail += result.damageYieldIncludingTail;
     totalTailDamage += result.tailDamage;
     totalShots += result.measurementShotsFired;
@@ -351,6 +360,7 @@ export function runWeaponSingleTargetBenchmarkSet(
   const expectedDps = totalDurationSec > 0 ? totalDamage / totalDurationSec : 0;
   const expectedDirectDps = totalDurationSec > 0 ? totalDirectDamage / totalDurationSec : 0;
   const expectedBurnDps = totalDurationSec > 0 ? totalBurnDamage / totalDurationSec : 0;
+  const expectedChainDps = totalDurationSec > 0 ? totalChainDamage / totalDurationSec : 0;
   const medianDps = calculatePercentile(sortedDps, 50);
   const p10Dps = calculatePercentile(sortedDps, 10);
   const p90Dps = calculatePercentile(sortedDps, 90);
@@ -371,6 +381,7 @@ export function runWeaponSingleTargetBenchmarkSet(
     expectedDps,
     expectedDirectDps,
     expectedBurnDps,
+    expectedChainDps,
     expectedDamageYieldIncludingTail: n > 0 ? totalDamageYieldIncludingTail / n : 0,
     expectedTailDamage: n > 0 ? totalTailDamage / n : 0,
     medianDps,

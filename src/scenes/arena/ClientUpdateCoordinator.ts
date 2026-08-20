@@ -90,6 +90,7 @@ export class ClientUpdateCoordinator {
     totalMs: 0, snapshotMs: 0, playersMs: 0, projectilesEffectsMs: 0,
     worldStateMs: 0, interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
   };
+  private performanceMetricsEnabled = false;
 
   /** Locally reconstructed utility override from the host-published descriptor. */
   clientUtilityOverride: UtilityConfig | null = null;
@@ -114,6 +115,17 @@ export class ClientUpdateCoordinator {
     this.refreshStoredProgressFallback();
   }
 
+  setPerformanceMetricsEnabled(enabled: boolean): void {
+    if (this.performanceMetricsEnabled === enabled) return;
+    this.performanceMetricsEnabled = enabled;
+    if (!enabled) {
+      this.lastPerformance = {
+        totalMs: 0, snapshotMs: 0, playersMs: 0, projectilesEffectsMs: 0,
+        worldStateMs: 0, interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
+      };
+    }
+  }
+
   runClientUpdate(delta: number): void {
     if (!bridge.isArenaStarted()) {
       this.lastPerformance = {
@@ -129,19 +141,21 @@ export class ClientUpdateCoordinator {
       };
       return;
     }
-    const startedAt = performance.now();
+    const startedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     this.reconcileClientUtilityOverride();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.ctx.baseManager?.syncDormantStates();
     const state = bridge.getLatestGameState();
     if (!state) {
-      this.lastPerformance = {
-        totalMs: performance.now() - startedAt,
-        snapshotMs: performance.now() - startedAt,
-        playersMs: 0, projectilesEffectsMs: 0, worldStateMs: 0,
-        interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
-      };
+      if (this.performanceMetricsEnabled) {
+        this.lastPerformance = {
+          totalMs: performance.now() - startedAt,
+          snapshotMs: performance.now() - startedAt,
+          playersMs: 0, projectilesEffectsMs: 0, worldStateMs: 0,
+          interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
+        };
+      }
       return;
     }
 
@@ -150,7 +164,7 @@ export class ClientUpdateCoordinator {
     const currentVersion = bridge.getGameStateVersion();
     const isNewData = currentVersion !== this.lastGameStateVersion;
     if (isNewData) this.lastGameStateVersion = currentVersion;
-    const snapshotMs = performance.now() - startedAt;
+    const snapshotMs = this.performanceMetricsEnabled ? performance.now() - startedAt : 0;
     let playersMs = 0;
     let projectilesEffectsMs = 0;
     let worldStateMs = 0;
@@ -176,7 +190,7 @@ export class ClientUpdateCoordinator {
     }
 
     if (isNewData) {
-      const playersStartedAt = performance.now();
+      const playersStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
       const localId = bridge.getLocalPlayerId();
       for (const [id, ps] of Object.entries(state.players)) {
         if (participationKnown && !bridge.canPlayerSpawnOrRespawn(id)) continue;
@@ -231,19 +245,19 @@ export class ClientUpdateCoordinator {
         this.applyBurrowVisual(player, ps.burrowPhase);
       }
 
-      playersMs = performance.now() - playersStartedAt;
-      const effectsStartedAt = performance.now();
+      if (this.performanceMetricsEnabled) playersMs = performance.now() - playersStartedAt;
+      const effectsStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
       this.ctx.projectileManager.clientSyncVisuals(state.projectiles, bridge.getLocalPlayerId());
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.smokeSystem.syncVisuals(state.smokes);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
-      projectilesEffectsMs = performance.now() - effectsStartedAt;
+      if (this.performanceMetricsEnabled) projectilesEffectsMs = performance.now() - effectsStartedAt;
 
       // teslaDomeRenderer is accessed via the bundle (passed from ArenaScene)
       // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
-      const worldStartedAt = performance.now();
+      const worldStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
         const nextDamagedStaticRockIds = new Set<number>();
         for (const rockId of state.rockRemovals) {
@@ -316,10 +330,10 @@ export class ClientUpdateCoordinator {
       }
 
       this.checkLocalPickup(state.powerups ?? []);
-      worldStateMs = performance.now() - worldStartedAt;
+      if (this.performanceMetricsEnabled) worldStateMs = performance.now() - worldStartedAt;
     }
 
-    const interpolationStartedAt = performance.now();
+    const interpolationStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       player.lerpStep(lerpFactor);
       const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
@@ -349,9 +363,9 @@ export class ClientUpdateCoordinator {
     if (localPlayerClient) {
       localPlayerClient.setRotation(this.ctx.inputSystem.getAimAngle());
     }
-    const interpolationMs = performance.now() - interpolationStartedAt;
+    const interpolationMs = this.performanceMetricsEnabled ? performance.now() - interpolationStartedAt : 0;
 
-    const hudStartedAt = performance.now();
+    const hudStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const localState = state.players[localId2];
     if (localState) {
       this.ctx.aimSystem?.setAuthoritativeState(localState.aim);
@@ -431,24 +445,26 @@ export class ClientUpdateCoordinator {
       );
       this.ctx.playerStatusRing?.update(hudData);
     }
-    const hudMs = performance.now() - hudStartedAt;
+    const hudMs = this.performanceMetricsEnabled ? performance.now() - hudStartedAt : 0;
 
-    const postSyncStartedAt = performance.now();
+    const postSyncStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (state.projectiles.some(p => p.style === 'bfg')) {
       this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
-    const postSyncMs = performance.now() - postSyncStartedAt;
-    this.lastPerformance = {
-      totalMs: performance.now() - startedAt,
-      snapshotMs,
-      playersMs,
-      projectilesEffectsMs,
-      worldStateMs,
-      interpolationMs,
-      hudMs,
-      postSyncMs,
-      newSnapshot: isNewData,
-    };
+    const postSyncMs = this.performanceMetricsEnabled ? performance.now() - postSyncStartedAt : 0;
+    if (this.performanceMetricsEnabled) {
+      this.lastPerformance = {
+        totalMs: performance.now() - startedAt,
+        snapshotMs,
+        playersMs,
+        projectilesEffectsMs,
+        worldStateMs,
+        interpolationMs,
+        hudMs,
+        postSyncMs,
+        newSnapshot: isNewData,
+      };
+    }
   }
 
   getPerformanceMetrics(): ClientUpdatePerformanceMetrics {

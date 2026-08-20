@@ -24,6 +24,7 @@ export interface WeaponStageCoverageData {
   readonly expectedDps: number;
   readonly directDps: number;
   readonly burnDps: number;
+  readonly chainDps: number;
   readonly expectedDamageYieldIncludingTail: number;
   readonly expectedTailDamage: number;
   readonly expectedHitRate: number;
@@ -101,6 +102,7 @@ export function generateWeaponBalanceCoverageData(
       const expectedDps = st.bestSupportedExpectedDps;
       const directDps = agg ? agg.expectedDirectDps : expectedDps;
       const burnDps = agg ? agg.expectedBurnDps : 0;
+      const chainDps = agg ? agg.expectedChainDps : 0;
       const expectedDamageYieldIncludingTail = agg ? agg.expectedDamageYieldIncludingTail : 0;
       const expectedTailDamage = agg ? agg.expectedTailDamage : 0;
       const expectedHitRate = agg && !isFiveTargetAggregate(agg) ? agg.expectedHitRate : 0;
@@ -127,6 +129,7 @@ export function generateWeaponBalanceCoverageData(
         expectedDps,
         directDps,
         burnDps,
+        chainDps,
         expectedDamageYieldIncludingTail,
         expectedTailDamage,
         expectedHitRate,
@@ -198,8 +201,8 @@ export function formatWeaponBalanceCoverageMarkdown(
     const formatStageCell = (st?: WeaponStageCoverageData): string => {
       if (!st) return '-';
       const dpsStr = `${st.expectedDps.toFixed(1)} DPS`;
-      if (st.burnDps > 0.05) {
-        return `${dpsStr} *(Dir: ${st.directDps.toFixed(1)}, Burn: ${st.burnDps.toFixed(1)})*`;
+      if (st.burnDps > 0.05 || st.chainDps > 0.05) {
+        return `${dpsStr} *(Dir: ${st.directDps.toFixed(1)}, Burn: ${st.burnDps.toFixed(1)}, Chain: ${st.chainDps.toFixed(1)})*`;
       }
       return dpsStr;
     };
@@ -229,7 +232,7 @@ export function formatWeaponBalanceCoverageMarkdown(
 
     for (const st of w.stages) {
       lines.push(`- **[${st.stageLabel.toUpperCase()}]** (Budget: ${st.normalPointBudget}N / ${st.bossPointBudget}B)`);
-      lines.push(`  - **Expected DPS**: ${st.expectedDps.toFixed(1)} (Direct: ${st.directDps.toFixed(1)}, Burn: ${st.burnDps.toFixed(1)})`);
+      lines.push(`  - **Expected Total DPS**: ${st.expectedDps.toFixed(1)} (Direct: ${st.directDps.toFixed(1)}, Burn: ${st.burnDps.toFixed(1)}, Chain: ${st.chainDps.toFixed(1)})`);
       lines.push(`  - **Yield inkl. Tail**: ${st.expectedDamageYieldIncludingTail.toFixed(1)} (Tail: ${st.expectedTailDamage.toFixed(1)})`);
       if (st.scenario === 'five_target') {
         lines.push(`  - **Targets hit / Kadenz**: ${st.expectedTargetsHitPerShot.toFixed(2)} Ziele/Schuss | ${st.expectedShotsPerSecond.toFixed(1)} Schüsse/s`);

@@ -44,6 +44,38 @@ function targetDistance(target: HeadlessTarget): number {
   return Math.hypot(target.x - SHOOTER_X, target.y - SHOOTER_Y);
 }
 
+function compareNumbers(a: number, b: number): number {
+  if (Math.abs(a - b) <= 1e-9) return 0;
+  return a < b ? -1 : 1;
+}
+
+function compareIds(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/** Geometrie ist der eigentliche Tie-Breaker; die ID ist nur der letzte stabile Fallback. */
+function compareTargetGeometry(a: HeadlessTarget, b: HeadlessTarget): number {
+  return compareNumbers(targetDistance(a), targetDistance(b))
+    || compareNumbers(targetAngle(a), targetAngle(b))
+    || compareNumbers(a.x, b.x)
+    || compareNumbers(a.y, b.y)
+    || compareNumbers(a.radius, b.radius)
+    || compareIds(a.id, b.id);
+}
+
+function sortTargets(targets: readonly HeadlessTarget[]): HeadlessTarget[] {
+  return [...targets].sort(compareTargetGeometry);
+}
+
+/** Fuer Einzel-Aims gewinnt die geometrisch toleranteste Loesung, danach die Geometrie. */
+function compareSingleAimTargets(config: WeaponConfig, a: HeadlessTarget, b: HeadlessTarget): number {
+  return compareNumbers(
+    calculateMaxAllowedSpreadDeg(config, targetDistance(b), b.radius),
+    calculateMaxAllowedSpreadDeg(config, targetDistance(a), a.radius),
+  ) || compareTargetGeometry(a, b);
+}
+
 function isReachable(config: WeaponConfig, target: HeadlessTarget): boolean {
   return targetDistance(target) <= config.range + target.radius + 1e-9;
 }
@@ -61,10 +93,10 @@ function resolveProjectileCoverage(
   aimAngle: number,
   targets: readonly HeadlessTarget[],
   pelletOffsets: readonly number[],
-): { count: number; targetX: number; targetY: number } {
+): { count: number; coveredTargets: readonly HeadlessTarget[] } {
   const range = Math.max(0, config.range);
   const projectileRadius = (config.fire.type === 'projectile' ? config.fire.projectileSize : 0) * 0.5;
-  const covered = new Set<string>();
+  const covered = new Map<string, HeadlessTarget>();
   for (const offset of pelletOffsets) {
     const angle = aimAngle + offset;
     const endX = Math.cos(angle) * range;
@@ -96,21 +128,32 @@ function resolveProjectileCoverage(
         !best
         || hit.distance < best.distance - 1e-9
         || (Math.abs(hit.distance - best.distance) <= 1e-9
-          && target.id.localeCompare(best.target.id) < 0)
+          && compareTargetGeometry(target, best.target) < 0)
       ) {
         best = { target, distance: hit.distance };
       }
     }
-    if (best) covered.add(best.target.id);
+    if (best) covered.set(best.target.id, best.target);
   }
-
-  const firstTarget = targets.find((target) => covered.has(target.id)) ?? targets[0];
-  const cluster = resolveClusterTarget(targets);
   return {
     count: covered.size,
-    targetX: firstTarget?.x ?? cluster.x,
-    targetY: firstTarget?.y ?? cluster.y,
+    coveredTargets: sortTargets([...covered.values()]),
   };
+}
+
+function resolveTriggerTarget(
+  config: WeaponConfig,
+  targets: readonly HeadlessTarget[],
+): HeadlessTarget | undefined {
+  return [...targets].sort((a, b) => {
+    // Die kleinste zulässige Gesamtstreuung ist die konservative Grenze für eine
+    // Multi-Target-Lösung. Bei gleicher Grenze bleibt die Geometrie deterministisch.
+    const accuracy = compareNumbers(
+      calculateMaxAllowedSpreadDeg(config, targetDistance(a), a.radius),
+      calculateMaxAllowedSpreadDeg(config, targetDistance(b), b.radius),
+    );
+    return accuracy || compareTargetGeometry(a, b);
+  })[0];
 }
 
 function resolveMeleeCoverage(
@@ -119,13 +162,14 @@ function resolveMeleeCoverage(
 ): { angle: number; count: number; targetX: number; targetY: number } {
   const reachable = targets.filter((target) => isReachable(config, target));
   const cluster = resolveClusterTarget(reachable);
+  const orderedReachable = sortTargets(reachable);
   const candidates = [
-    ...reachable.map((target) => targetAngle(target)),
+    ...orderedReachable.map((target) => targetAngle(target)),
     Math.atan2(cluster.y, cluster.x),
   ];
-  let best: { angle: number; count: number; firstId: string; targetX: number; targetY: number } | undefined;
+  let best: { angle: number; count: number; triggerTarget?: HeadlessTarget } | undefined;
   for (const angle of candidates) {
-    const covered = reachable.filter((target) => checkMeleeArcHit(
+    const covered = orderedReachable.filter((target) => checkMeleeArcHit(
       SHOOTER_X,
       SHOOTER_Y,
       angle,
@@ -135,24 +179,27 @@ function resolveMeleeCoverage(
       target.y,
       target.radius,
     ));
-    const first = covered[0] ?? reachable[0];
+    const triggerTarget = resolveTriggerTarget(config, covered) ?? orderedReachable[0];
     const candidate = {
       angle,
       count: covered.length,
-      firstId: first?.id ?? 'target_9',
-      targetX: first?.x ?? cluster.x,
-      targetY: first?.y ?? cluster.y,
+      triggerTarget,
     };
     if (
       !best
       || candidate.count > best.count
-      || (candidate.count === best.count && candidate.firstId.localeCompare(best.firstId) < 0)
-      || (candidate.count === best.count && candidate.firstId === best.firstId && candidate.angle < best.angle)
+      || (candidate.count === best.count && candidate.angle < best.angle)
     ) {
       best = candidate;
     }
   }
-  return best ?? { angle: Math.atan2(cluster.y, cluster.x), count: 0, targetX: cluster.x, targetY: cluster.y };
+  const triggerTarget = best?.triggerTarget;
+  return {
+    angle: best?.angle ?? Math.atan2(cluster.y, cluster.x),
+    count: best?.count ?? 0,
+    targetX: triggerTarget?.x ?? cluster.x,
+    targetY: triggerTarget?.y ?? cluster.y,
+  };
 }
 
 /** Deterministischer, RNG-blinder Aim-Resolver fuer fuenf statische Ziele. */
@@ -164,11 +211,13 @@ export function resolveFiveTargetAim(
   switch (policy) {
     case 'coverage_aware_v1': {
       const reachable = targets.filter((target) => isReachable(config, target));
+      const orderedReachable = sortTargets(reachable);
       const pelletCount = resolveEffectivePelletCount(config);
       let aimAngle: number;
       let targetX: number;
       let targetY: number;
       let intentionalCoverageCount: number;
+      let triggerTarget: HeadlessTarget | undefined;
 
       if (config.fire.type === 'melee') {
         const melee = resolveMeleeCoverage(config, targets);
@@ -176,47 +225,81 @@ export function resolveFiveTargetAim(
         targetX = melee.targetX;
         targetY = melee.targetY;
         intentionalCoverageCount = melee.count;
+        triggerTarget = resolveTriggerTarget(config, reachable.filter((target) => checkMeleeArcHit(
+          SHOOTER_X,
+          SHOOTER_Y,
+          aimAngle,
+          config.range,
+          config.fire.type === 'melee' ? config.fire.hitArcDegrees : 0,
+          target.x,
+          target.y,
+          target.radius,
+        )));
       } else if (pelletCount > 1) {
         const pelletOffsets = calcPelletAngles(pelletCount, config.pelletSpreadAngle ?? 0);
         const candidates = [
-          ...reachable.flatMap((target) => pelletOffsets.map((offset) => targetAngle(target) - offset)),
+          ...orderedReachable.flatMap((target) => pelletOffsets.map((offset) => targetAngle(target) - offset)),
           Math.atan2(resolveClusterTarget(reachable).y, resolveClusterTarget(reachable).x),
         ];
-        let best: { angle: number; count: number; targetX: number; targetY: number } | undefined;
+        let best: {
+          angle: number;
+          count: number;
+          coveredTargets: readonly HeadlessTarget[];
+          limitingAccuracy: number;
+          totalAccuracy: number;
+        } | undefined;
         for (const candidateAngle of candidates) {
           const coverage = resolveProjectileCoverage(config, candidateAngle, reachable, pelletOffsets);
+          const accuracies = coverage.coveredTargets.map((target) => calculateMaxAllowedSpreadDeg(
+            config,
+            targetDistance(target),
+            target.radius,
+          ));
+          const limitingAccuracy = accuracies.length > 0 ? Math.min(...accuracies) : -Infinity;
+          const totalAccuracy = accuracies.reduce((sum, accuracy) => sum + accuracy, 0);
           if (
             !best
             || coverage.count > best.count
-            || (coverage.count === best.count && candidateAngle < best.angle)
+            || (coverage.count === best.count && limitingAccuracy > best.limitingAccuracy + 1e-9)
+            || (coverage.count === best.count
+              && Math.abs(limitingAccuracy - best.limitingAccuracy) <= 1e-9
+              && totalAccuracy > best.totalAccuracy + 1e-9)
+            || (coverage.count === best.count
+              && Math.abs(limitingAccuracy - best.limitingAccuracy) <= 1e-9
+              && Math.abs(totalAccuracy - best.totalAccuracy) <= 1e-9
+              && candidateAngle < best.angle)
           ) {
-            best = { angle: candidateAngle, ...coverage };
+            best = { angle: candidateAngle, ...coverage, limitingAccuracy, totalAccuracy };
           }
         }
         const fallback = resolveClusterTarget(reachable);
         aimAngle = best?.angle ?? Math.atan2(fallback.y, fallback.x);
-        targetX = best?.targetX ?? fallback.x;
-        targetY = best?.targetY ?? fallback.y;
+        triggerTarget = resolveTriggerTarget(config, best?.coveredTargets ?? orderedReachable);
+        targetX = triggerTarget?.x ?? fallback.x;
+        targetY = triggerTarget?.y ?? fallback.y;
         intentionalCoverageCount = best?.count ?? 0;
       } else {
-        const target = reachable[0] ?? targets[0];
+        const targetCandidates = [...(reachable.length > 0 ? reachable : targets)]
+          .sort((a, b) => compareSingleAimTargets(config, a, b));
+        const target = targetCandidates[0];
         const fallback = resolveClusterTarget(reachable);
         targetX = target?.x ?? fallback.x;
         targetY = target?.y ?? fallback.y;
         aimAngle = Math.atan2(targetY, targetX);
         intentionalCoverageCount = target ? 1 : 0;
+        triggerTarget = target;
       }
 
-      const triggerTarget = reachable[0] ?? targets[0];
-      const triggerDistance = triggerTarget ? targetDistance(triggerTarget) : Math.max(1, config.range);
-      const triggerRadius = triggerTarget?.radius ?? 1;
+      const fallbackTriggerTarget = triggerTarget ?? orderedReachable[0] ?? sortTargets(targets)[0];
+      const triggerDistance = fallbackTriggerTarget ? targetDistance(fallbackTriggerTarget) : Math.max(1, config.range);
+      const triggerRadius = fallbackTriggerTarget?.radius ?? 1;
       return {
         aimAngle,
         targetX,
         targetY,
         triggerTargetDistance: triggerDistance,
         triggerTargetRadius: triggerRadius,
-        reachableTargetIds: reachable.map((target) => target.id),
+        reachableTargetIds: orderedReachable.map((target) => target.id).sort(),
         intentionalCoverageCount,
         maxAllowedAccuracySpreadDeg: calculateMaxAllowedSpreadDeg(config, triggerDistance, triggerRadius),
       };

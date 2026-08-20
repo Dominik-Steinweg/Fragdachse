@@ -6,6 +6,7 @@ export * from './tracker';
 export * from './weaponBenchmarkTypes';
 export * from './scenarioTypes';
 export * from './HeadlessSingleTargetWorld';
+export * from './HeadlessStaticTargetWorld';
 export * from './weaponBenchmark';
 export * from './fiveTargetBenchmark';
 export * from './fiveTargetLayout';

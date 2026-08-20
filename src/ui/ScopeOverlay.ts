@@ -48,6 +48,7 @@ export class ScopeOverlay {
     refreshed: false,
     texturePixels: 0,
   };
+  private performanceMetricsEnabled = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     // Designraum, nicht Renderauflösung: das Overlay hängt mit `scrollFactor 0` an der Kamera
@@ -96,14 +97,17 @@ export class ScopeOverlay {
     delta:          number,
     config:         ScopeModeConfig,
   ): void {
-    const startedAt = performance.now();
-    this.lastPerformance = {
-      totalMs: 0,
-      rasterMs: 0,
-      uploadMs: 0,
-      refreshed: false,
-      texturePixels: 0,
-    };
+    const metricsEnabled = this.performanceMetricsEnabled;
+    const startedAt = metricsEnabled ? performance.now() : 0;
+    if (metricsEnabled) {
+      this.lastPerformance = {
+        totalMs: 0,
+        rasterMs: 0,
+        uploadMs: 0,
+        refreshed: false,
+        texturePixels: 0,
+      };
+    }
     // Animiertes Annähern: Einscopen mit scopeInMs, Entscopen mit unscopeSpeedMs
     if (targetProgress > this.displayProgress) {
       this.displayProgress = Math.min(targetProgress, this.displayProgress + delta / config.scopeInMs);
@@ -113,7 +117,7 @@ export class ScopeOverlay {
 
     if (this.displayProgress <= 0.005) {
       this.image.setVisible(false);
-      this.lastPerformance.totalMs = performance.now() - startedAt;
+      if (metricsEnabled) this.lastPerformance.totalMs = performance.now() - startedAt;
       return;
     }
     this.image.setVisible(true);
@@ -138,11 +142,11 @@ export class ScopeOverlay {
       && outerR === this.drawnOuterR
       && this.displayProgress === this.drawnProgress
     ) {
-      this.lastPerformance.totalMs = performance.now() - startedAt;
+      if (metricsEnabled) this.lastPerformance.totalMs = performance.now() - startedAt;
       return;
     }
 
-    const rasterStartedAt = performance.now();
+    const rasterStartedAt = metricsEnabled ? performance.now() : 0;
     const ctx = this.canvasTex.context;
 
     // 1. Canvas leeren und schwarzes Overlay zeichnen
@@ -169,23 +173,39 @@ export class ScopeOverlay {
     ctx.globalCompositeOperation = 'source-over'; // Blend-Mode zurücksetzen
 
     // GPU-Textur aus dem Canvas-Inhalt aktualisieren
-    this.lastPerformance.rasterMs = performance.now() - rasterStartedAt;
-    const uploadStartedAt = performance.now();
+    if (metricsEnabled) this.lastPerformance.rasterMs = performance.now() - rasterStartedAt;
+    const uploadStartedAt = metricsEnabled ? performance.now() : 0;
     this.canvasTex.refresh();
-    this.lastPerformance.uploadMs = performance.now() - uploadStartedAt;
-    this.lastPerformance.refreshed = true;
-    this.lastPerformance.texturePixels = W * H;
+    if (metricsEnabled) {
+      this.lastPerformance.uploadMs = performance.now() - uploadStartedAt;
+      this.lastPerformance.refreshed = true;
+      this.lastPerformance.texturePixels = W * H;
+    }
 
     this.drawnX = cx;
     this.drawnY = cy;
     this.drawnInnerR = innerR;
     this.drawnOuterR = outerR;
     this.drawnProgress = this.displayProgress;
-    this.lastPerformance.totalMs = performance.now() - startedAt;
+    if (metricsEnabled) this.lastPerformance.totalMs = performance.now() - startedAt;
   }
 
   getPerformanceMetrics(): ScopePerformanceMetrics {
     return this.lastPerformance;
+  }
+
+  setPerformanceMetricsEnabled(enabled: boolean): void {
+    if (this.performanceMetricsEnabled === enabled) return;
+    this.performanceMetricsEnabled = enabled;
+    if (!enabled) {
+      this.lastPerformance = {
+        totalMs: 0,
+        rasterMs: 0,
+        uploadMs: 0,
+        refreshed: false,
+        texturePixels: 0,
+      };
+    }
   }
 
   destroy(): void {

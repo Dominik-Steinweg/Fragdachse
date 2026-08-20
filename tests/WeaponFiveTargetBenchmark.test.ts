@@ -47,8 +47,9 @@ import {
 } from '../src/debug/coopDefenseBalance/fiveTargetBenchmark';
 import { runWeaponSingleTargetBenchmark } from '../src/debug/coopDefenseBalance/weaponBenchmark';
 import { analyzeWeaponFiveTargetProgression } from '../src/debug/coopDefenseBalance/progressionAnalyzer';
-import { validateWeaponBalanceCapabilities, UnsupportedWeaponMechanicError } from '../src/debug/coopDefenseBalance/weaponCapabilityValidator';
+import { validateWeaponBalanceCapabilities } from '../src/debug/coopDefenseBalance/weaponCapabilityValidator';
 import { resolveProjectileTargetImpact } from '../src/combat/rules/ProjectileImpactResolver';
+import { resolveFiveTargetAim } from '../src/debug/coopDefenseBalance/fiveTargetAim';
 
 function projectileConfig(overrides: Partial<WeaponConfig['fire']> = {}): any {
   return {
@@ -157,8 +158,8 @@ describe('Weapon Balance Lab V0.9 – Measurement Semantics & Static Five-Target
       },
     });
     expect(fiveTargetResult.shotsFired).toBe(fiveTargetResult.measurementShotsFired);
-    expect(fiveTargetResult.targetHits).toBe(0);
-    expect(fiveTargetResult.adrenalineGenerated).toBe(0);
+    expect(fiveTargetResult.targetHits).toBe(1);
+    expect(fiveTargetResult.adrenalineGenerated).toBe(10);
     expect(fiveTargetResult.damageYieldIncludingTail).toBeGreaterThan(0);
   });
 
@@ -312,7 +313,7 @@ describe('Weapon Balance Lab V0.9 – Measurement Semantics & Static Five-Target
     expect(validateWeaponBalanceCapabilities({ ...WEAPON_CONFIGS.BITE, hitHeal: 1 }, 'five_target').supported).toBe(true);
     expect(validateWeaponBalanceCapabilities({ ...WEAPON_CONFIGS.P90, hitSlowFraction: 0.5, hitSlowDurationMs: 100 }, 'five_target').ignoredScenarioIrrelevant).toContain('hitSlow');
     expect(validateWeaponBalanceCapabilities({ ...WEAPON_CONFIGS.P90, killHeal: 1, killAdrenaline: 1 }, 'five_target').ignoredScenarioIrrelevant).toEqual(expect.arrayContaining(['killHeal', 'killAdrenaline']));
-    expect(validateWeaponBalanceCapabilities({ ...WEAPON_CONFIGS.ASMD_PRIM, chainLightning: { ...WEAPON_CONFIGS.ASMD_PRIM.chainLightning!, maxJumps: 1 } }, 'five_target').supported).toBe(false);
+    expect(validateWeaponBalanceCapabilities({ ...WEAPON_CONFIGS.ASMD_PRIM, chainLightning: { ...WEAPON_CONFIGS.ASMD_PRIM.chainLightning!, maxJumps: 1 } }, 'five_target').supported).toBe(true);
   });
 
   it('liefert 5T-Expected-Total-DPS und getrennte Multi-Seed-Aggregate fuer die initialen Waffen', () => {
@@ -334,15 +335,94 @@ describe('Weapon Balance Lab V0.9 – Measurement Semantics & Static Five-Target
     expect(aggregate.expectedTargetsHitPerShot).toBe(reversed.expectedTargetsHitPerShot);
   });
 
-  it('lehnt Chain Lightning in 5T fail-closed ab und liefert einen gemeinsamen 5T-Optimizer/Reporter-Datensatz', () => {
+  it('integriert Shared Chain Lightning in 5T und hält Shotgun Chain weiterhin fail-closed', () => {
     const chainConfig: WeaponConfig = {
       ...WEAPON_CONFIGS.ASMD_PRIM,
       id: 'ASMD_CHAIN_FIXTURE',
       chainLightning: { ...WEAPON_CONFIGS.ASMD_PRIM.chainLightning!, maxJumps: 1 },
     };
-    expect(() => runWeaponFiveTargetBenchmark({ weaponId: chainConfig.id, weaponConfigOverride: chainConfig, sourceSlot: 'weapon1', durationMs: 500 })).toThrow(UnsupportedWeaponMechanicError);
+    const chainRun = runWeaponFiveTargetBenchmark({ weaponId: chainConfig.id, weaponConfigOverride: chainConfig, sourceSlot: 'weapon1', durationMs: 600 });
+    expect(chainRun.directDamage).toBe(10);
+    expect(chainRun.chainDamage).toBeGreaterThan(0);
+    expect(chainRun.chainDps).toBeGreaterThan(0);
+    expect(chainRun.damageEvents.some((event) => event.damageKind === 'direct')).toBe(true);
+    expect(chainRun.damageEvents.some((event) => event.damageKind === 'chain')).toBe(true);
+    expect(chainRun.adrenalineGenerated).toBe(8 * (1 + chainRun.damageEvents.filter((event) => event.damageKind === 'chain').length));
+
+    const singleTargetChain = runWeaponSingleTargetBenchmark({
+      weaponId: chainConfig.id,
+      weaponConfigOverride: chainConfig,
+      sourceSlot: 'weapon1',
+      durationMs: 600,
+    });
+    expect(singleTargetChain.chainDamage).toBe(0);
+    expect(validateWeaponBalanceCapabilities(chainConfig, 'single_target_static').supported).toBe(true);
+
+    const shotgunChainConfig: WeaponConfig = {
+      ...WEAPON_CONFIGS.P90,
+      id: 'P90_SHOTGUN_CHAIN_FIXTURE',
+      pelletCount: 2,
+      shotgunChainEnabled: 1,
+      shotgunChainDamageRetention: 1,
+      shotgunChainRadiusRetention: 1,
+    };
+    expect(validateWeaponBalanceCapabilities(shotgunChainConfig, 'five_target').supported).toBe(false);
     const progression = analyzeWeaponFiveTargetProgression({ weaponId: 'GLOCK', slot: 'weapon1', seeds: [1], durationMs: 100 });
     expect(progression.scenario).toBe('five_target');
     expect(progression.summaryText).toContain('Five-Target Progression');
   }, 30000);
+
+  it('liefert fuer jede Aim-Klasse bei Target-Permutationen dieselbe Loesung und denselben Benchmarkwert', () => {
+    const targets = [
+      { id: 'target_1', x: 130, y: -18, radius: 16 },
+      { id: 'target_2', x: 145, y: 0, radius: 16 },
+      { id: 'target_3', x: 165, y: 24, radius: 16 },
+      { id: 'target_4', x: 185, y: -28, radius: 16 },
+      { id: 'target_5', x: 205, y: 10, radius: 16 },
+    ] as const;
+    const permuted = [targets[4], targets[1], targets[3], targets[0], targets[2]];
+
+    const singleAimA = resolveFiveTargetAim('coverage_aware_v1', WEAPON_CONFIGS.ASMD_PRIM, targets);
+    const singleAimB = resolveFiveTargetAim('coverage_aware_v1', WEAPON_CONFIGS.ASMD_PRIM, permuted);
+    expect(singleAimB).toEqual(singleAimA);
+
+    const pelletConfig: WeaponConfig = {
+      ...WEAPON_CONFIGS.P90,
+      id: 'P90_AIM_PERMUTATION_FIXTURE',
+      pelletCount: 5,
+      pelletSpreadAngle: 8,
+    };
+    expect(resolveFiveTargetAim('coverage_aware_v1', pelletConfig, permuted))
+      .toEqual(resolveFiveTargetAim('coverage_aware_v1', pelletConfig, targets));
+    expect(resolveFiveTargetAim('coverage_aware_v1', WEAPON_CONFIGS.BITE, permuted))
+      .toEqual(resolveFiveTargetAim('coverage_aware_v1', WEAPON_CONFIGS.BITE, targets));
+
+    const benchmarkOnce = (orderedTargets: readonly typeof targets[number][]) => {
+      const world = new HeadlessStaticTargetWorld(orderedTargets, 1, true, 16, 'five_target');
+      world.setDamageMeasurementWindow(0, 600);
+      const aim = resolveFiveTargetAim('coverage_aware_v1', WEAPON_CONFIGS.ASMD_PRIM, orderedTargets);
+      const fired = world.resolveHitscan({
+        shooterId: 'sim_player',
+        startX: 0,
+        startY: 0,
+        angle: aim.aimAngle,
+        range: WEAPON_CONFIGS.ASMD_PRIM.range,
+        damage: WEAPON_CONFIGS.ASMD_PRIM.damage,
+        traceThickness: WEAPON_CONFIGS.ASMD_PRIM.fire.type === 'hitscan' ? WEAPON_CONFIGS.ASMD_PRIM.fire.traceThickness : 0,
+        color: 0xffffff,
+        adrenalinGain: WEAPON_CONFIGS.ASMD_PRIM.adrenalinGain,
+        sourceId: WEAPON_CONFIGS.ASMD_PRIM.id,
+        visualPreset: 'asmd_primary',
+        rockDamageMult: 1,
+        trainDamageMult: 1,
+        baseDamageMult: 1,
+      });
+      if (fired) world.recordShotFired(0);
+      return { aim, damage: world.getMeasurementTotalDamage(), events: world.getDamageEvents() };
+    };
+
+    const benchmarkA = benchmarkOnce(targets);
+    const benchmarkB = benchmarkOnce(permuted);
+    expect(benchmarkB).toEqual(benchmarkA);
+  });
 });

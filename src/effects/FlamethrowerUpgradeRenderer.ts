@@ -162,6 +162,7 @@ export class FlamethrowerUpgradeRenderer {
   private groundAccumulator = 0;
   private previousNow = 0;
   private lastUpdateMs = 0;
+  private performanceMetricsEnabled = false;
   private lighting: LightingSystem | null = null;
   /**
    * Gröbere Cluster-Ebene über der 32-px-Blockkarte, allein für die Beleuchtung:
@@ -356,7 +357,7 @@ export class FlamethrowerUpgradeRenderer {
   }
 
   update(now: number): void {
-    const updateStartedAt = performance.now();
+    const updateStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const delta = this.previousNow > 0 ? Phaser.Math.Clamp(now - this.previousNow, 0, 100) : 16.67;
     this.previousNow = now;
 
@@ -384,7 +385,7 @@ export class FlamethrowerUpgradeRenderer {
     this.emitGroundParticles(delta);
     this.updateRingVisuals(delta, now);
     this.syncGroundFireLights(now);
-    this.lastUpdateMs = performance.now() - updateStartedAt;
+    if (this.performanceMetricsEnabled) this.lastUpdateMs = performance.now() - updateStartedAt;
   }
 
   /**
@@ -452,6 +453,12 @@ export class FlamethrowerUpgradeRenderer {
   }
 
   getLastUpdateCostMs(): number { return this.lastUpdateMs; }
+
+  setPerformanceMetricsEnabled(enabled: boolean): void {
+    if (this.performanceMetricsEnabled === enabled) return;
+    this.performanceMetricsEnabled = enabled;
+    if (!enabled) this.lastUpdateMs = 0;
+  }
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;

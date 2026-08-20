@@ -623,6 +623,9 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gameAudioSystem.cleanup());
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
+    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
+      fireSystem.setPerformanceMetricsEnabled(enabled);
+    });
     const stinkCloudSystem = new StinkCloudSystem(this);
     const hostPhysics      = new HostPhysicsSystem(this, playerManager, bridge, combatSystem);
     const inputSystem      = new InputSystem(
@@ -700,6 +703,9 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
     this.scopeOverlay = new ScopeOverlay(this);
+    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
+      this.scopeOverlay?.setPerformanceMetricsEnabled(enabled);
+    });
     this.utilityChargeIndicator = new UtilityChargeIndicator(
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
@@ -936,6 +942,10 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager);
+    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
+      this.renderers?.lighting.setPerformanceMetricsEnabled(enabled);
+      this.renderers?.flamethrowerUpgrades.setPerformanceMetricsEnabled(enabled);
+    });
     this.renderers.lighting.setDynamicOccluderSource(this.trainLightOccluders);
     this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
       ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null
@@ -1048,6 +1058,10 @@ export class ArenaScene extends Phaser.Scene {
     // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
     this.clientUpdate = new ClientUpdateCoordinator(this, this.ctx, this.localPlayerState, this.rockVisualHelper);
+    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
+      this.hostUpdate?.setPerformanceMetricsEnabled(enabled);
+      this.clientUpdate?.setPerformanceMetricsEnabled(enabled);
+    });
 
     // ── Input setup ───────────────────────────────────────────────────────
     inputSystem.setup();
@@ -1439,10 +1453,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const frameStartMs = performance.now();
+    const diagnosticsActive = this.runtimeProfiler?.isDiagnosticsActive() ?? false;
+    const frameStartMs = diagnosticsActive ? performance.now() : 0;
     // Vor allem anderen, damit die Diagnose-Zaehlungen weiter unten den abgeschalteten
     // Zustand sehen und nicht den des Vorframes.
-    this.performanceAblation?.update();
+    if (diagnosticsActive) this.performanceAblation?.update();
     let primaryStepMs = 0;
     let clientRendererSyncMs = 0;
     let inputCameraMs = 0;
@@ -1450,10 +1465,10 @@ export class ArenaScene extends Phaser.Scene {
     let arenaHudMs = 0;
     let leaderboardCanopyMs = 0;
     let arenaPanelMs = 0;
-    const networkUpdateStartMs = performance.now();
-    const scenePreludeMs = networkUpdateStartMs - frameStartMs;
+    const networkUpdateStartMs = diagnosticsActive ? performance.now() : 0;
+    const scenePreludeMs = diagnosticsActive ? networkUpdateStartMs - frameStartMs : 0;
     bridge.updateNetwork();
-    const networkUpdateMs = performance.now() - networkUpdateStartMs;
+    const networkUpdateMs = diagnosticsActive ? performance.now() - networkUpdateStartMs : 0;
 
     const phase           = bridge.getGamePhase();
     const deferArenaExit  = this.syncArenaExitFade(phase);
@@ -1543,11 +1558,13 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.inputSystem.setAimEnabled(false);
       this.ctx.inputSystem.setInputEnabled(false);
     }
-    inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
+    if (diagnosticsActive) {
+      inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
+    }
 
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
-      const lobbyUiStartedAt = performance.now();
+      const lobbyUiStartedAt = diagnosticsActive ? performance.now() : 0;
       if (enteredLobbyFromArena) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
       this.lifecycle.syncLobbyTimeOfDay();
@@ -1601,7 +1618,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.leftPanel.refreshColorPickerIfOpen();
       this.ctx.leftPanel.updateLobby();
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
-      lobbyUiMs = performance.now() - lobbyUiStartedAt;
+      if (diagnosticsActive) lobbyUiMs = performance.now() - lobbyUiStartedAt;
     } else if (!terminated && this.lobbyOverlay.isVisible()) {
       this.coopDefenseXpDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
@@ -1616,11 +1633,13 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (!deferArenaExit) this.lastObservedGamePhase = phase;
-    const sceneStateEndMs = performance.now();
-    const sceneStateMs = sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs);
+    const sceneStateEndMs = diagnosticsActive ? performance.now() : 0;
+    const sceneStateMs = diagnosticsActive
+      ? sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs)
+      : 0;
 
     if (gameplayActive && !terminated) {
-      const arenaHudStartedAt = performance.now();
+      const arenaHudStartedAt = diagnosticsActive ? performance.now() : 0;
       const secs = bridge.computeSecondsLeft();
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
         ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
@@ -1667,10 +1686,10 @@ export class ArenaScene extends Phaser.Scene {
           }
         }
       }
-      arenaHudMs = performance.now() - arenaHudStartedAt;
+      if (diagnosticsActive) arenaHudMs = performance.now() - arenaHudStartedAt;
 
       if (bridge.isHost()) {
-        const hostStepStartMs = performance.now();
+        const hostStepStartMs = diagnosticsActive ? performance.now() : 0;
         if (isCoopDefenseMode(bridge.getGameMode())
           && this.coopDefenseDebugDamageKey
           && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
@@ -1685,13 +1704,13 @@ export class ArenaScene extends Phaser.Scene {
         } else if (!isCoopDefenseMode(bridge.getGameMode()) && !countdownActive && secs <= 0) {
           this.lifecycle.hostCompleteRound();
         }
-        primaryStepMs += performance.now() - hostStepStartMs;
+        if (diagnosticsActive) primaryStepMs += performance.now() - hostStepStartMs;
       } else {
-        const clientStepStartMs = performance.now();
+        const clientStepStartMs = diagnosticsActive ? performance.now() : 0;
         this.clientUpdate.runClientUpdate(delta);
 
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
-        const clientRendererSyncStartedAt = performance.now();
+        const clientRendererSyncStartedAt = diagnosticsActive ? performance.now() : 0;
         const state = bridge.getLatestGameState();
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
@@ -1718,8 +1737,10 @@ export class ArenaScene extends Phaser.Scene {
         }
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
         this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
-        clientRendererSyncMs = performance.now() - clientRendererSyncStartedAt;
-        primaryStepMs += performance.now() - clientStepStartMs;
+        if (diagnosticsActive) {
+          clientRendererSyncMs = performance.now() - clientRendererSyncStartedAt;
+          primaryStepMs += performance.now() - clientStepStartMs;
+        }
       }
 
       const transitionCompleted = this.lifecycle.syncRuntimeTimeOfDay(
@@ -1728,7 +1749,7 @@ export class ArenaScene extends Phaser.Scene {
       );
       this.forceStaticTimeOfDayBake ||= transitionCompleted;
 
-      const leaderboardCanopyStartedAt = performance.now();
+      const leaderboardCanopyStartedAt = diagnosticsActive ? performance.now() : 0;
       if (this.arenaPanelsHeld) {
         this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
       }
@@ -1741,15 +1762,15 @@ export class ArenaScene extends Phaser.Scene {
           (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
         );
       }
-      leaderboardCanopyMs = performance.now() - leaderboardCanopyStartedAt;
+      if (diagnosticsActive) leaderboardCanopyMs = performance.now() - leaderboardCanopyStartedAt;
     }
 
-    const arenaPanelStartedAt = performance.now();
+    const arenaPanelStartedAt = diagnosticsActive ? performance.now() : 0;
     this.syncArenaPanelOverlayState(gameplayActive && !terminated);
-    arenaPanelMs = performance.now() - arenaPanelStartedAt;
+    if (diagnosticsActive) arenaPanelMs = performance.now() - arenaPanelStartedAt;
 
-    const visualsStartMs = performance.now();
-    const postRoleMs = visualsStartMs - sceneStateEndMs - primaryStepMs;
+    const visualsStartMs = diagnosticsActive ? performance.now() : 0;
+    const postRoleMs = diagnosticsActive ? visualsStartMs - sceneStateEndMs - primaryStepMs : 0;
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
@@ -1879,7 +1900,7 @@ export class ArenaScene extends Phaser.Scene {
     // Loading uses the full-screen veil even though the arena itself is still hidden; once the
     // authoritative countdown timestamp exists, the same overlay switches to 3 → 2 → 1.
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
-    const visualCameraEndMs = performance.now();
+    const visualCameraEndMs = diagnosticsActive ? performance.now() : 0;
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
@@ -1908,10 +1929,10 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.remoteControl.syncVisuals(remoteControlTargets, bridge.getSynchronizedNow());
     this.renderers.teslaDome.update(delta);
     this.renderers.teslaNova.update();
-    const visualEnemyStartMs = performance.now();
+    const visualEnemyStartMs = diagnosticsActive ? performance.now() : 0;
     const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
     this.ctx.enemyManager?.syncHostVisuals();
-    const visualEnemyMs = performance.now() - visualEnemyStartMs;
+    const visualEnemyMs = diagnosticsActive ? performance.now() - visualEnemyStartMs : 0;
     this.renderers.healingAura.syncEnemies(auraEnemies);
     this.renderers.healingAura.update(delta);
     this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
@@ -1921,9 +1942,9 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.repairDrone.update(delta);
     this.renderers.slimeTrail.update(delta);
     this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
-    const visualEffectsEndMs = performance.now();
+    const visualEffectsEndMs = diagnosticsActive ? performance.now() : 0;
 
-    const aimPreviewStartedAt = performance.now();
+    const aimPreviewStartedAt = diagnosticsActive ? performance.now() : 0;
     const utilityTargeting    = inArena && !spectator ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
     const airstrikeTargeting  = inArena && !spectator ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
     const utilityPlacement    = inArena && !spectator ? this.getLocalPlacementPreview() : undefined;
@@ -1943,8 +1964,8 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isInspectorConstructionPlacementActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
-    const aimPreviewMs = performance.now() - aimPreviewStartedAt;
-    const aimGraphicsStartedAt = performance.now();
+    const aimPreviewMs = diagnosticsActive ? performance.now() - aimPreviewStartedAt : 0;
+    const aimGraphicsStartedAt = diagnosticsActive ? performance.now() : 0;
     this.ctx.aimSystem?.setScopeProgress(scopeProgress);
     this.ctx.aimSystem?.setScoping(this.ctx.inputSystem.isScoping());
     this.ctx.aimSystem?.setWeaponChargeProgress(this.ctx.inputSystem.getScopeChargeProgress());
@@ -1956,10 +1977,10 @@ export class ArenaScene extends Phaser.Scene {
       optionsOpen ? undefined : targetingForReticle,
       optionsOpen ? undefined : ultimatePreview,
     );
-    const aimGraphicsMs = performance.now() - aimGraphicsStartedAt;
+    const aimGraphicsMs = diagnosticsActive ? performance.now() - aimGraphicsStartedAt : 0;
 
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
-    const scopeStartedAt = performance.now();
+    const scopeStartedAt = diagnosticsActive ? performance.now() : 0;
     if (this.scopeOverlay) {
       const scopeCfg = inArena && !spectator ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
       if (scopeCfg) {
@@ -1977,13 +1998,13 @@ export class ArenaScene extends Phaser.Scene {
         this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
       }
     }
-    const scopeMs = performance.now() - scopeStartedAt;
+    const scopeMs = diagnosticsActive ? performance.now() - scopeStartedAt : 0;
 
-    const aimIndicatorsStartedAt = performance.now();
+    const aimIndicatorsStartedAt = diagnosticsActive ? performance.now() : 0;
     this.utilityChargeIndicator?.update(inArena && !spectator ? this.ctx.inputSystem.getUtilityChargePreviewState() : undefined);
     this.ultimateChargeIndicator?.update(ultimatePreview);
-    const aimIndicatorsMs = performance.now() - aimIndicatorsStartedAt;
-    const visualAimEndMs = performance.now();
+    const aimIndicatorsMs = diagnosticsActive ? performance.now() - aimIndicatorsStartedAt : 0;
+    const visualAimEndMs = diagnosticsActive ? performance.now() : 0;
 
     this.gaussWarning.update(inArena);
     this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
@@ -1997,13 +2018,13 @@ export class ArenaScene extends Phaser.Scene {
     this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
     this.tunnelRenderer.update(this.time.now);
 
-    const visualsEndMs = performance.now();
-    const visualStepMs   = visualsEndMs - visualsStartMs;
-    const visualCameraMs = visualCameraEndMs - visualsStartMs;
+    const visualsEndMs = diagnosticsActive ? performance.now() : 0;
+    const visualStepMs   = diagnosticsActive ? visualsEndMs - visualsStartMs : 0;
+    const visualCameraMs = diagnosticsActive ? visualCameraEndMs - visualsStartMs : 0;
     // Der Gegner-Sync liegt mitten im Effektblock und wird deshalb wieder herausgerechnet.
-    const visualEffectsMs = visualEffectsEndMs - visualCameraEndMs - visualEnemyMs;
-    const visualAimMs = visualAimEndMs - visualEffectsEndMs;
-    const visualHudMs = visualsEndMs - visualAimEndMs;
+    const visualEffectsMs = diagnosticsActive ? visualEffectsEndMs - visualCameraEndMs - visualEnemyMs : 0;
+    const visualAimMs = diagnosticsActive ? visualAimEndMs - visualEffectsEndMs : 0;
+    const visualHudMs = diagnosticsActive ? visualsEndMs - visualAimEndMs : 0;
 
     // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
     // unversetzten Kameraposition (siehe `applyCameraFeedback`).
@@ -2021,15 +2042,15 @@ export class ArenaScene extends Phaser.Scene {
     // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
 
-    const shadowStepStartMs = visualsEndMs;
+    const shadowStepStartMs = diagnosticsActive ? visualsEndMs : 0;
     const trainState = inArena ? this.resolveTrainState() : null;
     // Keep round-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
     const shadowArenaActive = inArena || (inGame && !terminated);
     this.syncWorldShadows(shadowArenaActive, trainState);
-    const shadowStepMs = performance.now() - shadowStepStartMs;
+    const shadowStepMs = diagnosticsActive ? performance.now() - shadowStepStartMs : 0;
     this.syncWorldLighting(inArena, trainState);
-    const lightingStepMs = this.renderers.lighting.getLastUpdateCostMs();
+    const lightingStepMs = diagnosticsActive ? this.renderers.lighting.getLastUpdateCostMs() : 0;
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
@@ -2043,9 +2064,11 @@ export class ArenaScene extends Phaser.Scene {
 
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
     // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
-    const networkFlushStartMs = performance.now();
+    const networkFlushStartMs = diagnosticsActive ? performance.now() : 0;
     bridge.flushNetwork();
-    const networkFlushMs = performance.now() - networkFlushStartMs;
+    const networkFlushMs = diagnosticsActive ? performance.now() - networkFlushStartMs : 0;
+
+    if (!diagnosticsActive) return;
 
     const diagnosticsStartedAt = performance.now();
     const role = bridge.isHost() ? 'host' : 'client';

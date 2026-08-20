@@ -695,6 +695,8 @@ export interface PhaserFrameLifecycleMetrics {
   betweenFramesMs: number;
 }
 
+export type RuntimeDiagnosticsListener = (active: boolean) => void;
+
 function emptyPhaserFrameLifecycleMetrics(): PhaserFrameLifecycleMetrics {
   return {
     gameStepMs: 0,
@@ -757,6 +759,8 @@ export class ArenaRuntimeProfiler {
   private eventTimingObserver: PerformanceObserver | null = null;
   private gcObserver: PerformanceObserver | null = null;
   private latestRecordedSample: RecordedSample | null = null;
+  private diagnosticsActive = false;
+  private readonly diagnosticsListeners = new Set<RuntimeDiagnosticsListener>();
   private renderStartedAtMs = 0;
   private lastRenderSubmitMs = 0;
   private preStepStartedAtMs = 0;
@@ -772,6 +776,7 @@ export class ArenaRuntimeProfiler {
   private wrappedLoopCallback: ((time: number, delta: number) => void) | null = null;
   private lastLoopCallbackEndedAtMs = 0;
   private game: Phaser.Game | null = null;
+  private gameEventsInstalled = false;
   private glContext: GlContext | null = null;
   private drawCallHooksInstalled = false;
   private glDiagnosticHooksInstalled = false;
@@ -854,10 +859,37 @@ export class ArenaRuntimeProfiler {
     this.detachGame();
     this.game = game;
     this.glContext = (game.renderer as Phaser.Renderer.WebGL.WebGLRenderer).gl;
-    const loop = (game as Phaser.Game & {
+    this.syncDiagnosticsLifecycle();
+  }
+
+  subscribeDiagnostics(listener: RuntimeDiagnosticsListener): () => void {
+    this.diagnosticsListeners.add(listener);
+    listener(this.diagnosticsActive);
+    return () => {
+      this.diagnosticsListeners.delete(listener);
+    };
+  }
+
+  isDiagnosticsActive(): boolean {
+    return this.diagnosticsActive;
+  }
+
+  private syncDiagnosticsLifecycle(): void {
+    const active = this.recording || this.liveDrawCallTracking;
+    if (active) this.installGameDiagnostics();
+    else this.removeGameDiagnostics();
+
+    if (active === this.diagnosticsActive) return;
+    this.diagnosticsActive = active;
+    for (const listener of this.diagnosticsListeners) listener(active);
+  }
+
+  private installGameDiagnostics(): void {
+    if (!this.game) return;
+    const loop = (this.game as Phaser.Game & {
       loop?: { callback?: (time: number, delta: number) => void };
     }).loop;
-    if (loop && typeof loop.callback === 'function') {
+    if (loop && typeof loop.callback === 'function' && !this.wrappedLoopCallback) {
       this.originalLoopCallback = loop.callback;
       this.wrappedLoopCallback = (time: number, delta: number): void => {
         const startedAt = performance.now();
@@ -875,12 +907,56 @@ export class ArenaRuntimeProfiler {
       };
       loop.callback = this.wrappedLoopCallback;
     }
+    if (!this.gameEventsInstalled) {
+      this.game.events.on(GAME_PRE_STEP_EVENT, this.onPreStep);
+      this.game.events.on(GAME_STEP_EVENT, this.onStep);
+      this.game.events.on(GAME_POST_STEP_EVENT, this.onPostStep);
+      this.game.events.on(GAME_PRE_RENDER_EVENT, this.onPreRender);
+      this.game.events.on(GAME_POST_RENDER_EVENT, this.onPostRender);
+      this.gameEventsInstalled = true;
+    }
     this.setupGpuTimer();
-    game.events.on(GAME_PRE_STEP_EVENT, this.onPreStep);
-    game.events.on(GAME_STEP_EVENT, this.onStep);
-    game.events.on(GAME_POST_STEP_EVENT, this.onPostStep);
-    game.events.on(GAME_PRE_RENDER_EVENT, this.onPreRender);
-    game.events.on(GAME_POST_RENDER_EVENT, this.onPostRender);
+    this.syncDrawCallHooks();
+  }
+
+  private removeGameDiagnostics(): void {
+    this.finishGpuQueries();
+    const game = this.game;
+    const loop = (game as Phaser.Game & {
+      loop?: { callback?: (time: number, delta: number) => void };
+    } | null)?.loop;
+    if (loop && this.wrappedLoopCallback && loop.callback === this.wrappedLoopCallback && this.originalLoopCallback) {
+      loop.callback = this.originalLoopCallback;
+    }
+    this.originalLoopCallback = null;
+    this.wrappedLoopCallback = null;
+    if (game && this.gameEventsInstalled) {
+      game.events.off(GAME_PRE_STEP_EVENT, this.onPreStep);
+      game.events.off(GAME_STEP_EVENT, this.onStep);
+      game.events.off(GAME_POST_STEP_EVENT, this.onPostStep);
+      game.events.off(GAME_PRE_RENDER_EVENT, this.onPreRender);
+      game.events.off(GAME_POST_RENDER_EVENT, this.onPostRender);
+    }
+    this.gameEventsInstalled = false;
+    this.removeDrawCallHooks();
+    this.removeGlDiagnosticHooks();
+    this.gpuTimer = null;
+    this.resetFrameLifecycleMetrics();
+  }
+
+  private resetFrameLifecycleMetrics(): void {
+    this.renderStartedAtMs = 0;
+    this.lastRenderSubmitMs = 0;
+    this.preStepStartedAtMs = 0;
+    this.sceneManagerStartedAtMs = 0;
+    this.postStepAtMs = 0;
+    this.lastPostRenderAtMs = 0;
+    this.previousSceneUpdateMs = 0;
+    this.currentBetweenFramesMs = 0;
+    this.currentSceneManagerUpdateMs = 0;
+    this.currentRendererSetupMs = 0;
+    this.lastFrameLifecycle = emptyPhaserFrameLifecycleMetrics();
+    this.lastLoopCallbackEndedAtMs = 0;
   }
 
   /**
@@ -888,13 +964,14 @@ export class ArenaRuntimeProfiler {
    * wird fuer die Systems/Plugins-Restzeit des naechsten abgeschlossenen Frames vorgemerkt.
    */
   takeLastFrameLifecycleMetrics(currentSceneUpdateMs: number): PhaserFrameLifecycleMetrics {
+    if (!this.diagnosticsActive) return emptyPhaserFrameLifecycleMetrics();
     const result = { ...this.lastFrameLifecycle };
     this.previousSceneUpdateMs = currentSceneUpdateMs;
     return result;
   }
 
   takeLastRenderSubmitMs(): number {
-    return this.lastRenderSubmitMs;
+    return this.diagnosticsActive ? this.lastRenderSubmitMs : 0;
   }
 
   /**
@@ -902,13 +979,13 @@ export class ArenaRuntimeProfiler {
    * der Wert den vorherigen Frame, weil `update` vor `render` laeuft.
    */
   takeLastDrawCallCount(): number {
-    return this.lastFrameDrawCallCount;
+    return this.diagnosticsActive ? this.lastFrameDrawCallCount : 0;
   }
 
-  /** Zaehlung fuer die Live-Ansicht. Waehrend einer Aufzeichnung laeuft sie ohnehin. */
-  setLiveDrawCallTracking(enabled: boolean): void {
+  /** Aktiviert die vollstaendige Live-Diagnose, nicht nur die Draw-Call-Zaehler. */
+  setLiveDiagnosticsEnabled(enabled: boolean): void {
     this.liveDrawCallTracking = enabled;
-    this.syncDrawCallHooks();
+    this.syncDiagnosticsLifecycle();
   }
 
   isCountingDrawCalls(): boolean {
@@ -916,6 +993,7 @@ export class ArenaRuntimeProfiler {
   }
 
   record(sample: ArenaRuntimeSample): void {
+    if (!this.diagnosticsActive) return;
     const profilerStartedAt = performance.now();
     const now = performance.now();
     const metadataMatches = this.metricsWindow
@@ -969,7 +1047,7 @@ export class ArenaRuntimeProfiler {
   }
 
   shouldCaptureSceneBreakdown(role: 'host' | 'client', deltaMs: number): boolean {
-    if (!this.wantsDetailedSampling()) return false;
+    if (!this.diagnosticsActive) return false;
     const now = performance.now();
     const window = this.metricsWindow;
     if (!window || window.role !== role) return true;
@@ -1017,8 +1095,7 @@ export class ArenaRuntimeProfiler {
     this.startEventTimingObserver();
     this.startGcObserver();
     this.startLifecycleTracking();
-    this.setupGpuTimer();
-    this.syncDrawCallHooks();
+    this.syncDiagnosticsLifecycle();
     this.recordingUsedDrawCallHooks = this.drawCallHooksInstalled;
     this.recordingUsedGlDiagnosticHooks = this.glDiagnosticHooksInstalled;
   }
@@ -1035,7 +1112,7 @@ export class ArenaRuntimeProfiler {
     this.stopGcObserver();
     this.stopLifecycleTracking();
     this.finishGpuQueries();
-    this.syncDrawCallHooks();
+    this.syncDiagnosticsLifecycle();
   }
 
   recordQualityChange(from: GraphicsQuality, to: GraphicsQuality): void {
@@ -1062,7 +1139,7 @@ export class ArenaRuntimeProfiler {
 
   /** Teure Scene-Scans sind nur fuer eine sichtbare Live-Ansicht oder einen Export relevant. */
   wantsDetailedSampling(): boolean {
-    return this.recording || this.liveDrawCallTracking;
+    return this.diagnosticsActive;
   }
 
   getRecordingDurationMs(): number {
@@ -1152,19 +1229,17 @@ export class ArenaRuntimeProfiler {
   }
 
   destroy(): void {
+    this.recording = false;
+    this.liveDrawCallTracking = false;
+    this.syncDiagnosticsLifecycle();
     this.stopLongTaskObserver();
     this.stopLongAnimationFrameObserver();
     this.stopEventTimingObserver();
     this.stopGcObserver();
     this.stopLifecycleTracking();
-    this.finishGpuQueries();
-    this.liveDrawCallTracking = false;
-    // Direkt statt ueber `syncDrawCallHooks()`: die Wrapper muessen weg, auch wenn die
-    // Aufzeichnung noch als laufend markiert ist, sonst bleiben sie am toten GL-Kontext haengen.
-    this.removeDrawCallHooks();
-    this.removeGlDiagnosticHooks();
     this.detachGame();
     this.metricsWindow = null;
+    this.diagnosticsListeners.clear();
   }
 
   private finishWindow(now: number): void {
@@ -1547,8 +1622,9 @@ export class ArenaRuntimeProfiler {
     const drawCallsWanted = this.recording || this.liveDrawCallTracking;
     if (drawCallsWanted && !this.drawCallHooksInstalled) this.installDrawCallHooks();
     if (!drawCallsWanted && this.drawCallHooksInstalled) this.removeDrawCallHooks();
-    if (this.recording && !this.glDiagnosticHooksInstalled) this.installGlDiagnosticHooks();
-    if (!this.recording && this.glDiagnosticHooksInstalled) this.removeGlDiagnosticHooks();
+    const glDiagnosticsWanted = this.recording || this.liveDrawCallTracking;
+    if (glDiagnosticsWanted && !this.glDiagnosticHooksInstalled) this.installGlDiagnosticHooks();
+    if (!glDiagnosticsWanted && this.glDiagnosticHooksInstalled) this.removeGlDiagnosticHooks();
   }
 
   private installDrawCallHooks(): void {
@@ -1721,29 +1797,10 @@ export class ArenaRuntimeProfiler {
 
   private detachGame(): void {
     if (!this.game) return;
-    this.finishGpuQueries();
-    const loop = (this.game as Phaser.Game & {
-      loop?: { callback?: (time: number, delta: number) => void };
-    }).loop;
-    if (loop && this.wrappedLoopCallback && loop.callback === this.wrappedLoopCallback && this.originalLoopCallback) {
-      loop.callback = this.originalLoopCallback;
-    }
-    this.game.events.off(GAME_PRE_STEP_EVENT, this.onPreStep);
-    this.game.events.off(GAME_STEP_EVENT, this.onStep);
-    this.game.events.off(GAME_POST_STEP_EVENT, this.onPostStep);
-    this.game.events.off(GAME_PRE_RENDER_EVENT, this.onPreRender);
-    this.game.events.off(GAME_POST_RENDER_EVENT, this.onPostRender);
+    this.removeGameDiagnostics();
     this.game = null;
     this.glContext = null;
-    this.gpuTimer = null;
-    this.preStepStartedAtMs = 0;
-    this.sceneManagerStartedAtMs = 0;
-    this.postStepAtMs = 0;
-    this.lastPostRenderAtMs = 0;
-    this.previousSceneUpdateMs = 0;
-    this.lastFrameLifecycle = emptyPhaserFrameLifecycleMetrics();
     this.originalLoopCallback = null;
     this.wrappedLoopCallback = null;
-    this.lastLoopCallbackEndedAtMs = 0;
   }
 }

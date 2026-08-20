@@ -45,6 +45,34 @@ Resource-Recording, Burn, Hitscan, Melee, Fire Sink und Payload-Validation werde
 Bei mehreren Targets gewinnt der räumlich/früheste Treffer, bei gleicher Distanz deterministisch
 die kleinere Target-ID; ein normaler Melee-Swing darf mehrere Targets treffen.
 
+## V0.10 – Aim- und Chain-Lightning-Vertrag
+
+`resolveFiveTargetAim()` löst seine Trigger-Grenze aus der tatsächlich gewählten Aim-Lösung:
+Einzel-Projektile/Hitscans wählen ein geometrisch geeignetes erreichbares Ziel, Pellet-Aims die
+reale Pellet-Coverage und deren strengste Accuracy-Grenze, Melee die gewählte Multi-Hit-Menge.
+Die Auswahl ist unabhängig von der Target-Array-Reihenfolge; Geometrie kommt vor der ID als
+letztem deterministischem Tie-Breaker. Die fünf kanonischen Szenario-Profile bleiben
+`single_target_static.v1` und `five_target_static.v1`.
+
+Der allgemeine Chain-Lightning-Traversal-/Damage-Resolver liegt in
+`src/combat/rules/ChainLightningResolver.ts`. Die einzige geänderte Runtime-Datei ist
+`src/systems/CombatSystem.ts`; sie liefert weiterhin Kandidaten, Sichtlinie, Zielregeln und
+Folgeeffekte. Vor und nach dem Extract gelten unverändert: Start am erfolgreichen primären
+Hitscan-Aufschlagspunkt, `floor(maxJumps)`, 1-basierter Sprung-Falloff, Suchradius,
+bereits getroffene Ziele, Kandidatenreihenfolge Enemy → Player → Decoy → Detonable und der
+aktuelle first-encountered-Tie bei gleicher Distanz. Chain-Schaden läuft weiter als
+`damageKind: 'chain'` durch `applyDamage` ohne `sourceSlot`; der direkte Primärschaden behält
+seine normalen Multiplikatoren, Crit-Default und Primärtreffer-Affixe, während Chain-Jumps
+keine Direct-Primary-Hit-Affixe auslösen. Die bisherige Resource-Semantik pro gültigem
+Enemy-/Player-/Decoy-Chain-Treffer bleibt erhalten; Detonables verursachen keinen Chain-Schaden.
+`tests/ChainLightningResolverCharacterization.test.ts` und
+`tests/CombatSystemChainLightningParity.test.ts` sichern diese Parität.
+
+Im statischen Five-Target-Profil werden die Dummies als Enemy-Kandidaten ohne LoS-Blocker
+eingespeist. Der Primärtreffer bleibt `direct`, Chain-Ereignisse werden separat als
+`chainDamage`/`chainDps` aggregiert; im Single-Target-Profil ist Chain weiterhin
+`scenario_irrelevant`. `shotgunChain` bleibt absichtlich `unsupported_relevant`.
+
 Renderobjekte, Netzwerk, Arena-Hindernisse, VFX und Runtime-Callbacks bleiben außerhalb.
 Projektilflug-Sondermechaniken wie Homing, Explosionen, Piercing, Splits und Detonationen werden
 nicht im Headless-Pfad nachgebaut; der Capability-Katalog klassifiziert sie für relevante

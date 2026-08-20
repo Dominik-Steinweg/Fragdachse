@@ -102,6 +102,7 @@ export class HostUpdateCoordinator {
   private readonly blackHoleSystem: BlackHoleSystem;
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private lastPerformance = emptyHostUpdatePerformanceMetrics();
+  private performanceMetricsEnabled = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -123,6 +124,12 @@ export class HostUpdateCoordinator {
   }
 
   setActive(v: boolean): void { this.active = v; }
+
+  setPerformanceMetricsEnabled(enabled: boolean): void {
+    if (this.performanceMetricsEnabled === enabled) return;
+    this.performanceMetricsEnabled = enabled;
+    if (!enabled) this.lastPerformance = emptyHostUpdatePerformanceMetrics();
+  }
 
   setClassicTrainSpawned(v: boolean): void { this.classicTrainSpawned = v; }
   getClassicTrainSpawned(): boolean { return this.classicTrainSpawned; }
@@ -173,11 +180,11 @@ export class HostUpdateCoordinator {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
-    const startedAt = performance.now();
-    const metrics = emptyHostUpdatePerformanceMetrics();
+    const startedAt = this.performanceMetricsEnabled ? performance.now() : 0;
+    const metrics = this.performanceMetricsEnabled ? emptyHostUpdatePerformanceMetrics() : null;
     const countdownActive = bridge.isArenaCountdownActive();
     const now = Date.now();
-    let phaseStartedAt = performance.now();
+    let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
@@ -222,9 +229,9 @@ export class HostUpdateCoordinator {
       this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
     }
-    metrics.enemyAiMs = performance.now() - phaseStartedAt;
+    if (metrics) metrics.enemyAiMs = performance.now() - phaseStartedAt;
 
-    phaseStartedAt = performance.now();
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (!countdownActive && this.ctx.coopDefenseItemRuntimeSystem) {
       const runtime = this.ctx.coopDefenseItemRuntimeSystem;
       runtime.hostUpdate(now);
@@ -282,9 +289,9 @@ export class HostUpdateCoordinator {
     }
 
     this.blackHoleSystem.update(now);
-    metrics.playerSystemsMs = performance.now() - phaseStartedAt;
+    if (metrics) metrics.playerSystemsMs = performance.now() - phaseStartedAt;
 
-    phaseStartedAt = performance.now();
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
     if (!countdownActive) this.ctx.coopDefenseEnemyDodgeSystem?.hostUpdate(now);
@@ -295,9 +302,9 @@ export class HostUpdateCoordinator {
       this.refreshMatrixVulnerabilities(now);
     }
     const decoys = countdownActive ? [] : this.ctx.decoySystem.hostUpdate(now);
-    metrics.physicsMs = performance.now() - phaseStartedAt;
+    if (metrics) metrics.physicsMs = performance.now() - phaseStartedAt;
 
-    phaseStartedAt = performance.now();
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (!countdownActive) {
       this.ctx.detonationSystem?.checkProjectileDetonations();
       this.ctx.flamethrowerUpgradeSystem?.prepareProjectileBurns(now);
@@ -327,9 +334,9 @@ export class HostUpdateCoordinator {
       : (this.ctx.slimeTrailSystem?.hostUpdate(now) ?? { cells: [], affectedEnemies: [] });
     this.renderers.slimeTrail.syncVisuals(slimeTrail);
     if (!countdownActive) this.ctx.flamethrowerUpgradeSystem?.hostUpdate(now);
-    metrics.combatProjectilesMs = performance.now() - phaseStartedAt;
+    if (metrics) metrics.combatProjectilesMs = performance.now() - phaseStartedAt;
 
-    phaseStartedAt = performance.now();
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     for (const evt of countdownEvents) {
       bridge.broadcastGrenadeCountdown(evt.x, evt.y, evt.value);
     }
@@ -484,9 +491,11 @@ export class HostUpdateCoordinator {
       }
     }
 
-    metrics.explosionsMs = performance.now() - phaseStartedAt;
-    metrics.explosionEventCount = detonations.length + explodedProjectiles.length + explodedGrenades.length;
-    phaseStartedAt = performance.now();
+    if (metrics) {
+      metrics.explosionsMs = performance.now() - phaseStartedAt;
+      metrics.explosionEventCount = detonations.length + explodedProjectiles.length + explodedGrenades.length;
+    }
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const { synced: smokes, damageEvents: smokeDmg } = countdownActive
       ? { synced: [], damageEvents: [] }
       : this.ctx.smokeSystem.hostUpdate(Date.now());
@@ -692,9 +701,9 @@ export class HostUpdateCoordinator {
       );
     }
 
-    metrics.explosionEventCount += meteorImpacts.length;
-    metrics.areaEffectsMs = performance.now() - phaseStartedAt;
-    phaseStartedAt = performance.now();
+    if (metrics) metrics.explosionEventCount += meteorImpacts.length;
+    if (metrics) metrics.areaEffectsMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (!countdownActive && !isCoopDefenseMode(bridge.getGameMode()) && this.ctx.trainManager) {
       if (!this.classicTrainSpawned) {
         const trainEvent = bridge.getTrainEvent();
@@ -802,8 +811,8 @@ export class HostUpdateCoordinator {
       this.applyBurrowVisual(player, burrowPhase);
     }
 
-    metrics.worldVisualsMs = performance.now() - phaseStartedAt;
-    phaseStartedAt = performance.now();
+    if (metrics) metrics.worldVisualsMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     // Local host HUD
     const localPlayer = this.ctx.playerManager.getPlayer(localId);
     if (localPlayer) {
@@ -913,25 +922,27 @@ export class HostUpdateCoordinator {
     }
 
     this.ctx.stinkCloudSystem.clientUpdate(delta);
-    metrics.hudMs = performance.now() - phaseStartedAt;
+    if (metrics) metrics.hudMs = performance.now() - phaseStartedAt;
 
-    phaseStartedAt = performance.now();
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     // Gesammelte Treffer-/Todes-Effekte dieses Frames als ein einziges Batch-RPC senden, statt pro
     // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flächigem Massen-Schaden).
     bridge.flushEffects();
-    metrics.effectFlushMs = performance.now() - phaseStartedAt;
+    if (metrics) metrics.effectFlushMs = performance.now() - phaseStartedAt;
 
     // ── Network tick throttle ─────────────────────────────────────────────
     this.netTickAccumulator += delta;
     if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) {
-      metrics.totalMs = performance.now() - startedAt;
-      this.lastPerformance = metrics;
+      if (metrics) {
+        metrics.totalMs = performance.now() - startedAt;
+        this.lastPerformance = metrics;
+      }
       return;
     }
     this.netTickAccumulator -= NET_TICK_INTERVAL_MS;
     if (this.netTickAccumulator > NET_TICK_INTERVAL_MS) this.netTickAccumulator = 0;
-    metrics.networkTick = true;
-    phaseStartedAt = performance.now();
+    if (metrics) metrics.networkTick = true;
+    phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
     // Erst nach dem Throttle konsumieren: In Frames ohne Net-Tick muss die Anforderung
     // erhalten bleiben, damit der reliable Bootstrap garantiert veroeffentlicht wird.
@@ -1099,9 +1110,11 @@ export class HostUpdateCoordinator {
     if (projectiles.some(p => p.style === 'bfg')) {
       this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
-    metrics.snapshotBuildMs = performance.now() - phaseStartedAt;
-    metrics.totalMs = performance.now() - startedAt;
-    this.lastPerformance = metrics;
+    if (metrics) {
+      metrics.snapshotBuildMs = performance.now() - phaseStartedAt;
+      metrics.totalMs = performance.now() - startedAt;
+      this.lastPerformance = metrics;
+    }
   }
 
   private publishCoopDefenseEncounterPresentation(): void {

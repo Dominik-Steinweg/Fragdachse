@@ -238,7 +238,7 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
         });
       }).toThrow(UnsupportedWeaponMechanicError);
 
-      // 2. Kettenblitz ist im Multi-Target-Szenario unsupported
+      // 2. Kettenblitz ist im kanonischen Multi-Target-Szenario seit V0.10 supported
       expect(() => {
         validateHitscanShotPayload({
           shooterId: 'p1',
@@ -256,13 +256,13 @@ describe('Weapon Balance Lab V0.4 – Correctness Hardening & Expected-Value Fou
           trainDamageMult: 1,
           baseDamageMult: 1,
           chainLightning: {
-            damageRetention: 0.7,
-            jumpRadius: 200,
+            damageFalloffPerJump: 0.3,
+            searchRadius: 200,
             maxJumps: 3,
-            retargetIntervalMs: 50,
+            targetEnemies: true,
           },
         }, 'five_target');
-      }).toThrow(UnsupportedWeaponMechanicError);
+      }).not.toThrow();
     });
 
     it('wirft Fehler bei ununterstützter Melee-Payload (z.B. unbekanntes Feld)', () => {

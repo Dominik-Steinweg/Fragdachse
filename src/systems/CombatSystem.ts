@@ -20,6 +20,10 @@ import {
 import { CombatGeometry } from './CombatGeometry';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import {
+  resolveChainLightning as resolveChainLightningTraversal,
+  type ChainLightningTarget,
+} from '../combat/rules/ChainLightningResolver';
+import {
   ARENA_HEIGHT,
   ARMOR_MAX,
   BURN_TICK_INTERVAL_MS,
@@ -223,12 +227,6 @@ type SweptProjectileHit =
   | { kind: 'player'; playerId: string; distance: number; x: number; y: number }
   | { kind: 'enemy'; enemyId: string; distance: number; x: number; y: number }
   | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
-
-type ChainTarget =
-  | { kind: 'enemy'; enemyId: string; x: number; y: number }
-  | { kind: 'player'; playerId: string; x: number; y: number }
-  | { kind: 'decoy'; decoyId: number; x: number; y: number }
-  | { kind: 'detonable'; projectileId: number; x: number; y: number };
 
 export class CombatSystem {
   private hp:            Map<string, number>                           = new Map();
@@ -2305,7 +2303,7 @@ export class CombatSystem {
     originY:        number;
     baseDamage:     number;   // Primärschaden inkl. Multiplikatoren
     chainCfg:       ChainLightningConfig;
-    sourceId:     string;
+    sourceId:      string;
     adrenalinGain:  number;
     playerColor:    number;
     visualPreset:   HitscanVisualPreset;
@@ -2315,129 +2313,115 @@ export class CombatSystem {
     visitedDecoys:  Set<number>;
   }): void {
     const { chainCfg } = opts;
-    const maxJumps = Math.floor(chainCfg.maxJumps);
-    if (maxJumps <= 0 || opts.baseDamage <= 0) return;
-
-    const falloffPerJump   = Math.max(0, chainCfg.damageFalloffPerJump);
     const thicknessFalloff = chainCfg.thicknessFalloffPerJump ?? 0.2;
-    const detonableTags    = chainCfg.detonableTags ?? [];
+    const detonableTags = chainCfg.detonableTags ?? [];
+    const visitedTargetIds = new Set<string>([
+      ...[...opts.visitedEnemies].map((id) => `enemy:${id}`),
+      ...[...opts.visitedPlayers].map((id) => `player:${id}`),
+      ...[...opts.visitedDecoys].map((id) => `decoy:${id}`),
+    ]);
 
-    let originX = opts.originX;
-    let originY = opts.originY;
-
-    for (let jump = 1; jump <= maxJumps; jump++) {
-      const target = this.findNearestChainTarget(originX, originY, opts.shooterId, chainCfg, detonableTags, opts);
-      if (!target) break;
-
-      // Tracer wie die Hitscan-Linie, je Sprung etwas schmaler.
-      const thickness = Math.max(1, opts.baseThickness * Math.max(0.15, 1 - thicknessFalloff * jump));
-      this.queueHitscanTrace({
-        startX:      Math.round(originX),
-        startY:      Math.round(originY),
-        endX:        Math.round(target.x),
-        endY:        Math.round(target.y),
-        color:       opts.playerColor,
-        thickness,
-        impactKind:  'player',
-        visualPreset: opts.visualPreset,
-        shooterId:   opts.shooterId,
-      });
-
-      const jumpDamage = opts.baseDamage * Math.max(0, 1 - falloffPerJump * jump);
-      const visualContext: DamageVisualContext = { sourceX: originX, sourceY: originY };
-
-      if (target.kind === 'enemy') {
-        opts.visitedEnemies.add(target.enemyId);
-        this.applyDamage(target.enemyId, jumpDamage, false, opts.shooterId, opts.sourceId, visualContext, { damageKind: 'chain' });
-        if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
-      } else if (target.kind === 'player') {
-        opts.visitedPlayers.add(target.playerId);
-        const canDeal = this.canDamageTarget(opts.shooterId, target.playerId);
-        if (!(canDeal && this.shouldBlockWithShield(target.playerId, 'hitscan', jumpDamage, originX, originY))) {
-          this.applyDamage(target.playerId, jumpDamage, false, opts.shooterId, opts.sourceId, visualContext, { damageKind: 'chain' });
-          if (canDeal && opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+    resolveChainLightningTraversal({
+      originX: opts.originX,
+      originY: opts.originY,
+      baseDamage: opts.baseDamage,
+      config: chainCfg,
+      visitedTargetIds,
+      getCandidates: () => {
+        const candidates: ChainLightningTarget[] = [];
+        if (chainCfg.targetEnemies) {
+          for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+            if (enemy.id === opts.shooterId) continue;
+            if (!this.canDamageTarget(opts.shooterId, enemy.id)) continue;
+            candidates.push({
+              id: `enemy:${enemy.id}`,
+              kind: 'enemy',
+              x: enemy.sprite.x,
+              y: enemy.sprite.y,
+            });
+          }
         }
-      } else if (target.kind === 'decoy') {
-        opts.visitedDecoys.add(target.decoyId);
-        this.decoySystem?.applyDamage(target.decoyId, jumpDamage, opts.shooterId, opts.sourceId, visualContext);
-        if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
-      } else {
-        // Detonierbares Ziel (z.B. ASMD-Ball) → Detonation auslösen; Projektil wird zerstört.
-        this.detonationSystem?.detonateProjectile(target.projectileId, opts.shooterId);
-      }
+        if (chainCfg.targetPlayers) {
+          for (const player of this.playerManager.getAllPlayers()) {
+            if (player.id === opts.shooterId) continue;
+            if (!this.isAlive(player.id) || this.burrowSystem?.isBurrowed(player.id)) continue;
+            if (!this.canDamageTarget(opts.shooterId, player.id)) continue;
+            candidates.push({
+              id: `player:${player.id}`,
+              kind: 'player',
+              x: player.sprite.x,
+              y: player.sprite.y,
+            });
+          }
+        }
+        if (chainCfg.targetDecoys) {
+          for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+            if (decoy.ownerId === opts.shooterId) continue;
+            candidates.push({
+              id: `decoy:${decoy.id}`,
+              kind: 'decoy',
+              x: decoy.sprite.x,
+              y: decoy.sprite.y,
+            });
+          }
+        }
+        if (detonableTags.length > 0) {
+          for (const proj of this.projectileManager.getActiveProjectiles()) {
+            if (!proj.detonable || !detonableTags.includes(proj.detonable.tag)) continue;
+            if (!proj.detonable.allowCrossTeam && proj.ownerId !== opts.shooterId) continue;
+            candidates.push({
+              id: `detonable:${proj.id}`,
+              kind: 'detonable',
+              x: proj.sprite.x,
+              y: proj.sprite.y,
+            });
+          }
+        }
+        return candidates;
+      },
+      hasLineOfSight: (originX, originY, targetX, targetY) => (
+        this.hasChainLineOfSight(originX, originY, targetX, targetY)
+      ),
+      onJump: (jump) => {
+        // Tracer wie die Hitscan-Linie, je Sprung etwas schmaler.
+        const thickness = Math.max(1, opts.baseThickness * Math.max(0.15, 1 - thicknessFalloff * jump.jump));
+        this.queueHitscanTrace({
+          startX: Math.round(jump.originX),
+          startY: Math.round(jump.originY),
+          endX: Math.round(jump.target.x),
+          endY: Math.round(jump.target.y),
+          color: opts.playerColor,
+          thickness,
+          impactKind: 'player',
+          visualPreset: opts.visualPreset,
+          shooterId: opts.shooterId,
+        });
 
-      originX = target.x;
-      originY = target.y;
-    }
+        const runtimeId = jump.target.id.slice(jump.target.id.indexOf(':') + 1);
+        const visualContext: DamageVisualContext = { sourceX: jump.originX, sourceY: jump.originY };
+        if (jump.target.kind === 'enemy') {
+          opts.visitedEnemies.add(runtimeId);
+          this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, { damageKind: 'chain' });
+          if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+        } else if (jump.target.kind === 'player') {
+          opts.visitedPlayers.add(runtimeId);
+          const canDeal = this.canDamageTarget(opts.shooterId, runtimeId);
+          if (!(canDeal && this.shouldBlockWithShield(runtimeId, 'hitscan', jump.damage, jump.originX, jump.originY))) {
+            this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, { damageKind: 'chain' });
+            if (canDeal && opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+          }
+        } else if (jump.target.kind === 'decoy') {
+          const decoyId = Number(runtimeId);
+          opts.visitedDecoys.add(decoyId);
+          this.decoySystem?.applyDamage(decoyId, jump.damage, opts.shooterId, opts.sourceId, visualContext);
+          if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+        } else {
+          // Detonierbares Ziel (z.B. ASMD-Ball) → Detonation auslösen; Projektil wird zerstört.
+          this.detonationSystem?.detonateProjectile(Number(runtimeId), opts.shooterId);
+        }
+      },
+    });
   }
-
-  /**
-   * Sucht das nächstgelegene gültige Kettenblitz-Ziel innerhalb des Suchradius
-   * mit freier Sichtlinie zum Ausgangspunkt. Bereits getroffene Ziele werden
-   * übersprungen. Priorität: geringste Distanz.
-   */
-  private findNearestChainTarget(
-    originX:        number,
-    originY:        number,
-    shooterId:      string,
-    chainCfg:       ChainLightningConfig,
-    detonableTags:  readonly string[],
-    visited: {
-      visitedPlayers: ReadonlySet<string>;
-      visitedEnemies: ReadonlySet<string>;
-      visitedDecoys:  ReadonlySet<number>;
-    },
-  ): ChainTarget | null {
-    const radiusSq = chainCfg.searchRadius * chainCfg.searchRadius;
-    let best: ChainTarget | null = null;
-    let bestDistSq = Number.POSITIVE_INFINITY;
-
-    const consider = (x: number, y: number, build: () => ChainTarget): void => {
-      const dx = x - originX;
-      const dy = y - originY;
-      const distSq = dx * dx + dy * dy;
-      if (distSq > radiusSq || distSq >= bestDistSq) return;
-      if (!this.hasChainLineOfSight(originX, originY, x, y)) return;
-      best = build();
-      bestDistSq = distSq;
-    };
-
-    if (chainCfg.targetEnemies) {
-      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-        if (enemy.id === shooterId || visited.visitedEnemies.has(enemy.id)) continue;
-        if (!this.canDamageTarget(shooterId, enemy.id)) continue;
-        consider(enemy.sprite.x, enemy.sprite.y, () => ({ kind: 'enemy', enemyId: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y }));
-      }
-    }
-
-    if (chainCfg.targetPlayers) {
-      for (const player of this.playerManager.getAllPlayers()) {
-        if (player.id === shooterId || visited.visitedPlayers.has(player.id)) continue;
-        if (!this.isAlive(player.id) || this.burrowSystem?.isBurrowed(player.id)) continue;
-        if (!this.canDamageTarget(shooterId, player.id)) continue;
-        consider(player.sprite.x, player.sprite.y, () => ({ kind: 'player', playerId: player.id, x: player.sprite.x, y: player.sprite.y }));
-      }
-    }
-
-    if (chainCfg.targetDecoys) {
-      for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
-        if (decoy.ownerId === shooterId || visited.visitedDecoys.has(decoy.id)) continue;
-        consider(decoy.sprite.x, decoy.sprite.y, () => ({ kind: 'decoy', decoyId: decoy.id, x: decoy.sprite.x, y: decoy.sprite.y }));
-      }
-    }
-
-    if (detonableTags.length > 0) {
-      for (const proj of this.projectileManager.getActiveProjectiles()) {
-        if (!proj.detonable || !detonableTags.includes(proj.detonable.tag)) continue;
-        if (!proj.detonable.allowCrossTeam && proj.ownerId !== shooterId) continue;
-        const projId = proj.id;
-        consider(proj.sprite.x, proj.sprite.y, () => ({ kind: 'detonable', projectileId: projId, x: proj.sprite.x, y: proj.sprite.y }));
-      }
-    }
-
-    return best;
-  }
-
   /**
    * Sichtlinie für Kettenblitz-Sprünge: blockiert durch Felsen, Baumstämme,
    * Basen und den Zug – analog zur normalen Hitscan-/Projektil-Hindernislogik.

@@ -162,9 +162,19 @@ export class FireSystem {
   private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
   private lastSimulationMs = 0;
   private lastCreationMs = 0;
+  private performanceMetricsEnabled = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     void this.scene;
+  }
+
+  setPerformanceMetricsEnabled(enabled: boolean): void {
+    if (this.performanceMetricsEnabled === enabled) return;
+    this.performanceMetricsEnabled = enabled;
+    if (!enabled) {
+      this.lastSimulationMs = 0;
+      this.lastCreationMs = 0;
+    }
   }
 
   setGroundResolvers(
@@ -181,7 +191,7 @@ export class FireSystem {
     const radius = Math.max(0, config.radius);
     if (durationMs <= 0 || radius <= 0) return;
 
-    const creationStartedAt = performance.now();
+    const creationStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const now = Date.now();
     const id = this.nextSourceId++;
     const key = `zone:${id}`;
@@ -218,7 +228,7 @@ export class FireSystem {
       this.dynamicSources.set(key, source);
       if (source.wildfire) this.buildWildfireEscapeField(source);
     }
-    this.lastCreationMs = performance.now() - creationStartedAt;
+    if (this.performanceMetricsEnabled) this.lastCreationMs = performance.now() - creationStartedAt;
   }
 
   /**
@@ -408,7 +418,7 @@ export class FireSystem {
   }
 
   hostUpdate(now: number): FireSystemUpdate {
-    const simulationStartedAt = performance.now();
+    const simulationStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     this.removeExpiredSources(now);
     const tick = Math.floor(now / BURN_TICK_INTERVAL_MS);
     const damageTick = tick !== this.lastDamageTick;
@@ -442,7 +452,7 @@ export class FireSystem {
       : [];
 
     const result = { synced, ground: this.getGroundSnapshot(), damageEvents, damageTick };
-    this.lastSimulationMs = performance.now() - simulationStartedAt;
+    if (this.performanceMetricsEnabled) this.lastSimulationMs = performance.now() - simulationStartedAt;
     return result;
   }
 

@@ -1,7 +1,7 @@
 import type { CombatDamageKind, WeaponSlot } from '../../types';
 import type { WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { FiveTargetScenarioConfig, SingleTargetScenarioConfig } from './scenarioTypes';
-import type { HeadlessTarget } from './HeadlessSingleTargetWorld';
+import type { HeadlessTarget } from './HeadlessStaticTargetWorld';
 
 /** Standard-Seed-Set für deterministische Multi-Seed-Aggregationen (16 Seeds). */
 export const DEFAULT_BENCHMARK_SEEDS: readonly number[] = Object.freeze([
@@ -74,16 +74,20 @@ export interface SingleTargetBenchmarkResult {
   readonly totalDamage: number;
   readonly directDamage: number;
   readonly burnDamage: number;
+  readonly chainDamage: number;
   /** Vollständiger Schaden inklusive Warmup-/Settle-Tail. */
   readonly damageYieldIncludingTail: number;
   readonly directDamageIncludingTail: number;
   readonly burnDamageIncludingTail: number;
+  readonly chainDamageIncludingTail: number;
   readonly tailDamage: number;
   readonly tailDirectDamage: number;
   readonly tailBurnDamage: number;
+  readonly tailChainDamage: number;
   readonly dps: number;
   readonly directDps: number;
   readonly burnDps: number;
+  readonly chainDps: number;
   readonly shotsFired: number;
   readonly hits: number;
   /** V0.8-Kompatibilitaetsrate ueber alle aufgezeichneten Treffer. */
@@ -132,6 +136,7 @@ export interface SingleTargetBenchmarkAggregate {
   readonly expectedDps: number;       // Mittelwert (Mean Total DPS)
   readonly expectedDirectDps: number; // Mittelwert (Mean Direct DPS)
   readonly expectedBurnDps: number;   // Mittelwert (Mean Burn DPS)
+  readonly expectedChainDps: number;  // Mittelwert (Mean Chain DPS)
   readonly expectedDamageYieldIncludingTail: number;
   readonly expectedTailDamage: number;
   readonly medianDps: number;         // 50. Perzentil
@@ -180,18 +185,23 @@ export interface FiveTargetBenchmarkResult {
   readonly measurementTotalDamage: number;
   readonly measurementDirectDamage: number;
   readonly measurementBurnDamage: number;
+  readonly measurementChainDamage: number;
   readonly totalDamage: number;
   readonly directDamage: number;
   readonly burnDamage: number;
+  readonly chainDamage: number;
   readonly damageYieldIncludingTail: number;
   readonly directDamageIncludingTail: number;
   readonly burnDamageIncludingTail: number;
+  readonly chainDamageIncludingTail: number;
   readonly tailDamage: number;
   readonly tailDirectDamage: number;
   readonly tailBurnDamage: number;
+  readonly tailChainDamage: number;
   readonly dps: number;
   readonly directDps: number;
   readonly burnDps: number;
+  readonly chainDps: number;
   /** Primary target-hit counter, restricted to [measurementStartMs, measurementEndMs). */
   readonly targetHits: number;
   readonly measurementTargetHits: number;
@@ -236,6 +246,7 @@ export interface FiveTargetBenchmarkAggregate {
   readonly expectedDps: number;
   readonly expectedDirectDps: number;
   readonly expectedBurnDps: number;
+  readonly expectedChainDps: number;
   readonly expectedDamageYieldIncludingTail: number;
   readonly expectedTailDamage: number;
   readonly medianDps: number;

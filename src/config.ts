@@ -999,7 +999,7 @@ export const NET_DEBUG_ENEMY_SYNC_METRICS = (
 /** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
 export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
 /** Debug-only: Lokale Laufzeitmetriken fuer Host-/Client-Frames, unabhaengig vom Netzwerkpayload. */
-export const DEBUG_RUNTIME_PERF_METRICS = true;
+export const DEBUG_RUNTIME_PERF_METRICS = false;
 /** Aggregationsfenster fuer lokale Laufzeitmetriken. */
 export const DEBUG_RUNTIME_PERF_METRICS_WINDOW_MS = 2000;
 

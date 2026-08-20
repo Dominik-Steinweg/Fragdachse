@@ -71,18 +71,34 @@ class FakeGlContext {
   drawnVertices = 0;
   framebufferBinds = 0;
   textureUploads = 0;
+  deletedQueries = 0;
+  private nextQueryId = 0;
   drawArrays(count: number): void { this.drawnVertices += count; }
   drawElements(count: number): void { this.drawnVertices += count; }
   bindFramebuffer(): void { this.framebufferBinds += 1; }
   useProgram(_program?: unknown): void {}
   texImage2D(..._args: unknown[]): void { this.textureUploads += 1; }
   bufferData(): void {}
+  createQuery(): { id: number } { return { id: this.nextQueryId += 1 }; }
+  beginQuery(): void {}
+  endQuery(): void {}
+  getExtension(): { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } {
+    return { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
+  }
+  getParameter(): boolean { return false; }
+  getQueryParameter(_query: unknown, parameter: unknown): boolean | number {
+    return parameter === 1 ? true : 1_000_000;
+  }
+  deleteQuery(): void { this.deletedQueries += 1; }
+  readonly QUERY_RESULT_AVAILABLE = 1;
+  readonly QUERY_RESULT = 2;
 }
 
 class FakePerformanceObserver {
   static readonly supportedEntryTypes = ['longtask', 'long-animation-frame', 'event', 'gc'];
   static readonly instances: FakePerformanceObserver[] = [];
   observedType = '';
+  disconnected = false;
 
   constructor(private readonly callback: (list: { getEntries: () => PerformanceEntry[] }) => void) {
     FakePerformanceObserver.instances.push(this);
@@ -92,24 +108,40 @@ class FakePerformanceObserver {
     this.observedType = options.entryTypes?.[0] ?? options.type ?? '';
   }
 
-  disconnect(): void {}
+  disconnect(): void { this.disconnected = true; }
 
   emit(entries: PerformanceEntry[]): void {
     this.callback({ getEntries: () => entries });
   }
 }
 
-function fakeGame(gl: unknown): { events: { on: (e: string, l: () => void) => void; off: () => void }; renderer: { gl: unknown }; emit: (event: string) => void } {
+function fakeGame(gl: unknown): {
+  events: {
+    on: (event: string, listener: () => void) => void;
+    off: (event: string, listener: () => void) => void;
+  };
+  renderer: { gl: unknown };
+  loop: { callback: (time: number, delta: number) => void };
+  originalLoopCallback: (time: number, delta: number) => void;
+  emit: (event: string) => void;
+  listenerCount: (event: string) => number;
+} {
   const listeners = new Map<string, (() => void)[]>();
+  const originalLoopCallback = vi.fn((_time: number, _delta: number) => undefined);
   return {
     events: {
       on: (event: string, listener: () => void) => {
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       },
-      off: () => undefined,
+      off: (event: string, listener: () => void) => {
+        listeners.set(event, (listeners.get(event) ?? []).filter((candidate) => candidate !== listener));
+      },
     },
     renderer: { gl },
+    loop: { callback: originalLoopCallback },
+    originalLoopCallback,
     emit: (event: string) => (listeners.get(event) ?? []).forEach((listener) => listener()),
+    listenerCount: (event: string) => listeners.get(event)?.length ?? 0,
   };
 }
 
@@ -197,6 +229,32 @@ describe('ArenaRuntimeProfiler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('bleibt im normalen Spielbetrieb vollständig inaktiv', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const gl = new FakeGlContext();
+    const game = fakeGame(gl);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+
+    expect(profiler.isDiagnosticsActive()).toBe(false);
+    expect(profiler.isCountingDrawCalls()).toBe(false);
+    expect(game.listenerCount('prestep')).toBe(0);
+    expect(game.loop.callback).toBe(game.originalLoopCallback);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'drawArrays')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'bindFramebuffer')).toBe(false);
+
+    game.emit('prestep');
+    game.emit('step');
+    game.emit('poststep');
+    game.emit('prerender');
+    game.emit('postrender');
+    profiler.record(sample());
+
+    expect(now).not.toHaveBeenCalled();
+    expect(profiler.getLatestSummary()).toBeNull();
   });
 
   it('records host and rendering costs separately and exports quality changes', () => {
@@ -306,7 +364,10 @@ describe('ArenaRuntimeProfiler', () => {
     expect(Object.prototype.hasOwnProperty.call(gl, 'drawArrays')).toBe(false);
 
     profiler.startRecording();
+    expect(profiler.isDiagnosticsActive()).toBe(true);
     expect(profiler.isCountingDrawCalls()).toBe(true);
+    expect(game.listenerCount('prestep')).toBe(1);
+    expect(game.loop.callback).not.toBe(game.originalLoopCallback);
 
     game.emit('prerender');
     gl.drawArrays(6);
@@ -340,27 +401,48 @@ describe('ArenaRuntimeProfiler', () => {
     expect(detailCounts?.textureUploadPixels.avg).toBe(64 * 32);
     expect(detailCounts?.bufferUploadCount.avg).toBe(1);
     expect(profiler.isCountingDrawCalls()).toBe(false);
+    expect(profiler.isDiagnosticsActive()).toBe(false);
+    expect(game.listenerCount('prestep')).toBe(0);
+    expect(game.loop.callback).toBe(game.originalLoopCallback);
     expect(Object.prototype.hasOwnProperty.call(gl, 'drawArrays')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(gl, 'drawElements')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(gl, 'bindFramebuffer')).toBe(false);
+
+    profiler.startRecording();
+    expect(game.listenerCount('prestep')).toBe(1);
+    expect(game.loop.callback).not.toBe(game.originalLoopCallback);
+    profiler.stopRecording();
+    expect(game.listenerCount('prestep')).toBe(0);
+    expect(game.loop.callback).toBe(game.originalLoopCallback);
   });
 
-  it('keeps counting draw calls while the live view is open without a recording', () => {
+  it('keeps diagnostics active while the live view is open without a recording', () => {
     vi.spyOn(performance, 'now').mockImplementation(() => 0);
     vi.stubGlobal('PerformanceObserver', undefined);
     const gl = new FakeGlContext();
     const game = fakeGame(gl);
     const profiler = new ArenaRuntimeProfiler();
     profiler.attachGame(game as never);
+    const states: boolean[] = [];
+    profiler.subscribeDiagnostics((active) => states.push(active));
 
-    profiler.setLiveDrawCallTracking(true);
+    profiler.setLiveDiagnosticsEnabled(true);
     profiler.startRecording();
     profiler.stopRecording();
     // Die Aufzeichnung endet, die offene Diagnose haelt die Zaehlung aber weiter aktiv.
     expect(profiler.isCountingDrawCalls()).toBe(true);
+    expect(profiler.isDiagnosticsActive()).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'bindFramebuffer')).toBe(true);
+    expect(game.listenerCount('prestep')).toBe(1);
+    expect(game.loop.callback).not.toBe(game.originalLoopCallback);
 
-    profiler.setLiveDrawCallTracking(false);
+    profiler.setLiveDiagnosticsEnabled(false);
     expect(profiler.isCountingDrawCalls()).toBe(false);
+    expect(profiler.isDiagnosticsActive()).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'bindFramebuffer')).toBe(false);
+    expect(game.listenerCount('prestep')).toBe(0);
+    expect(game.loop.callback).toBe(game.originalLoopCallback);
+    expect(states).toEqual([false, true, false]);
 
     profiler.destroy();
     expect(Object.prototype.hasOwnProperty.call(gl, 'drawArrays')).toBe(false);
@@ -373,6 +455,7 @@ describe('ArenaRuntimeProfiler', () => {
     const game = fakeGame(null);
     const profiler = new ArenaRuntimeProfiler();
     profiler.attachGame(game as never);
+    profiler.setLiveDiagnosticsEnabled(true);
 
     now = 1;
     game.emit('prestep');
@@ -412,6 +495,31 @@ describe('ArenaRuntimeProfiler', () => {
     expect(second.rendererSetupMs).toBe(2);
     expect(second.betweenFramesMs).toBe(6);
     profiler.destroy();
+  });
+
+  it('entfernt bei destroy auch aktive Hooks und offene GPU-Queries idempotent', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const gl = new FakeGlContext();
+    const game = fakeGame(gl);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+
+    profiler.startRecording();
+    for (let frame = 0; frame < 4; frame += 1) game.emit('prerender');
+    expect(profiler.isDiagnosticsActive()).toBe(true);
+    expect(gl.deletedQueries).toBe(0);
+
+    profiler.destroy();
+    profiler.destroy();
+
+    expect(profiler.isDiagnosticsActive()).toBe(false);
+    expect(profiler.isCountingDrawCalls()).toBe(false);
+    expect(game.listenerCount('prestep')).toBe(0);
+    expect(game.loop.callback).toBe(game.originalLoopCallback);
+    expect(gl.deletedQueries).toBe(1);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'drawArrays')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'bindFramebuffer')).toBe(false);
   });
 
   it('exports browser long-animation-frame and event attribution when supported', () => {
@@ -472,6 +580,7 @@ describe('ArenaRuntimeProfiler', () => {
       presentationDelayMs: 12,
       interactionId: 7,
     });
+    expect(FakePerformanceObserver.instances.every(observer => observer.disconnected)).toBe(true);
   });
 
   it('splits the visual step into per-subsystem buckets', () => {

@@ -59,6 +59,15 @@ function makeController(children: FakeObject[]) {
 }
 
 describe('performance ablation', () => {
+  it('wertet im inaktiven Zustand keine Default-Zeit aus', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(123);
+    const { controller } = makeController([]);
+
+    controller.update();
+
+    expect(now).not.toHaveBeenCalled();
+  });
+
   it('alternates baseline and ablation so every measurement has an adjacent baseline', () => {
     const { controller } = makeController([]);
     controller.start(1000, 0);

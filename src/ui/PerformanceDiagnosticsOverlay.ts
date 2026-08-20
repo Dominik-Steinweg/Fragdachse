@@ -170,7 +170,7 @@ export class PerformanceDiagnosticsOverlay {
     panel.append(this.status, this.output);
     getOverlayRoot().appendChild(panel);
     this.panel = panel;
-    this.profiler.setLiveDrawCallTracking(true);
+    this.profiler.setLiveDiagnosticsEnabled(true);
     this.render();
     this.timer = window.setInterval(() => this.render(), REFRESH_INTERVAL_MS);
   }
@@ -181,7 +181,7 @@ export class PerformanceDiagnosticsOverlay {
       this.timer = null;
     }
     // Waehrend einer laufenden Aufzeichnung haelt der Profiler die Zaehlung selbst aktiv.
-    this.profiler.setLiveDrawCallTracking(false);
+    this.profiler.setLiveDiagnosticsEnabled(false);
     this.panel?.remove();
     this.panel = null;
     this.output = null;

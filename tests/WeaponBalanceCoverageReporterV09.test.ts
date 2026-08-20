@@ -31,10 +31,14 @@ vi.mock('phaser', () => ({
   },
 }));
 
-import { generateWeaponBalanceCoverageData } from '../src/debug/coopDefenseBalance/coverageReporter';
+import {
+  generateWeaponBalanceCoverageData,
+  generateWeaponBalanceCoverageDataForScenarios,
+  generateWeaponBalanceCoverageReport,
+} from '../src/debug/coopDefenseBalance/coverageReporter';
 import { analyzeWeaponFiveTargetProgression } from '../src/debug/coopDefenseBalance/progressionAnalyzer';
 
-describe('Weapon Balance V0.9 machine-generated reporter', () => {
+describe('Weapon Balance V0.10 machine-generated reporter', () => {
   it('matches the shared five-target analyzer exactly', () => {
     const analysis = analyzeWeaponFiveTargetProgression({ weaponId: 'GLOCK', slot: 'weapon1', scenario: 'five_target', seeds: [1], durationMs: 100, stepDeltaMs: 16 });
     const report = generateWeaponBalanceCoverageData(['GLOCK'], {
@@ -57,5 +61,34 @@ describe('Weapon Balance V0.9 machine-generated reporter', () => {
       expect(reported.primaryMetricComplete).toBe(stage.primaryMetricComplete);
       expect(reported.tailComplete).toBe(stage.tailComplete);
     }
+  }, 30000);
+
+  it('reports canonical ST/5T profiles with separate ASMD Direct/Chain DPS', () => {
+    const data = generateWeaponBalanceCoverageDataForScenarios(['ASMD_PRIM'], {
+      slot: 'weapon1',
+      seeds: [1],
+      durationMs: 30_000,
+      stepDeltaMs: 16,
+    });
+    expect(data.weapons.map((weapon) => weapon.scenarioId)).toEqual([
+      'single_target_static.v1',
+      'five_target_static.v1',
+    ]);
+
+    const fiveTarget = data.weapons[1];
+    const endgame = fiveTarget.stages.find((stage) => stage.stage === 'endgame')!;
+    expect(endgame.provenMaximum).toBe(true);
+    expect(endgame.directDps).toBeGreaterThan(0);
+    expect(endgame.chainDps).toBeGreaterThan(0);
+
+    const markdown = generateWeaponBalanceCoverageReport(['ASMD_PRIM'], {
+      slot: 'weapon1',
+      scenario: 'five_target',
+      seeds: [1],
+      durationMs: 30_000,
+      stepDeltaMs: 16,
+    });
+    expect(markdown).toContain('Expected Total DPS');
+    expect(markdown).toContain('Chain:');
   }, 30000);
 });

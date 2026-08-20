@@ -10,6 +10,12 @@ Neue Emitter und Filter über die bestehende Qualitätsinfrastruktur registriere
 
 ## Dauerhafte Hotpath-Regeln
 
+- Laufende Performance-Diagnostik ist ausschließlich während einer expliziten Aufzeichnung oder
+  geöffneten Live-Ansicht aktiv. `ArenaRuntimeProfiler` besitzt den zentralen Lifecycle; Frame-,
+  GL-/Draw-Call- und GPU-Hooks, Scene-/DisplayObject-Scans, Detailmetriken sowie zusätzliche
+  `performance.now()`-Messungen werden beim Aktivieren gemeinsam installiert und beim Deaktivieren
+  vollständig entfernt. Die funktionale Transportbasisdiagnose (Lobby-Ping und Relay-Erkennung)
+  bleibt davon unberührt.
 - Statische Arena- und Menüflächen backen, wenn sie unveränderlich sind. Dynamische Hindernisse, Blut und Gameplay-Visuals bleiben separat, damit Zerstörung und Replikation nicht gegen einen Bake arbeiten.
 - Segmentbasierte Hindernisprüfungen laufen über die eine Round-Instanz von ArenaObstacleIndex; nicht pro Kandidat getBounds() aufrufen. Der Index darf konservativ filtern, aber keinen echten Treffer auslassen, und wird bei Geometrieänderungen synchron invalidiert.
 - Homing- und Zielsuche erst bewerten, dann Sichtlinie für die besten Kandidaten prüfen. Keine per-Gegner-Flowfields oder temporären Arrays erzeugen, wenn die bestehenden Services/Callbacks dieselbe Information liefern.

@@ -121,10 +121,12 @@ export const WEAPON_BALANCE_CAPABILITY_DEFINITIONS: readonly WeaponCapabilityDef
   configDefinition(
     'chainLightning',
     (config) => positive(config.chainLightning?.maxJumps),
-    (_config, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_config, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : scenario === 'five_target' ? 'supported' : 'unsupported_relevant',
     (_config, scenario) => scenario === 'single_target_static'
       ? 'Im Single-Target-Szenario existiert kein zweites Ziel fuer Kettenblitz-Spruenge'
-      : 'chainLightning benoetigt Multi-Target-Simulation',
+      : scenario === 'five_target'
+        ? 'Shared Chain-Lightning-Resolver traversiert die statischen Five-Target-Enemies ohne LoS-Blocker'
+        : 'chainLightning benoetigt Multi-Target-Simulation',
   ),
   configDefinition('damageReduction', activeField('damageReduction'), 'scenario_irrelevant', 'Dummy greift im Benchmark nicht an'),
   configDefinition('hitKnockback', activeField('hitKnockback'), 'scenario_irrelevant', 'Statische Dummies bleiben im Benchmark ortsfest fixiert'),
@@ -297,10 +299,12 @@ export const HEADLESS_PAYLOAD_CAPABILITY_DEFINITIONS: readonly HeadlessPayloadCa
     'chainLightning',
     ['chainLightning'],
     (p) => positive(p.chainLightning?.maxJumps),
-    (_p, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : 'unsupported_relevant',
+    (_p, scenario) => scenario === 'single_target_static' ? 'scenario_irrelevant' : scenario === 'five_target' ? 'supported' : 'unsupported_relevant',
     (_p, scenario) => scenario === 'single_target_static'
       ? 'Kein zweites Ziel fuer Kettenblitz-Spruenge vorhanden'
-      : 'chainLightning ist fuer Multi-Target noch nicht implementiert',
+      : scenario === 'five_target'
+        ? 'HitscanShotRequest.chainLightning wird im statischen Five-Target-World-Kern ueber denselben Resolver ausgefuehrt'
+        : 'chainLightning ist fuer Multi-Target noch nicht implementiert',
   ),
   payloadDefinition('supportEffect', ['supportEffect'], (p) => !!p.supportEffect, alwaysUnsupported, 'supportEffect-Payload ist headless nicht implementiert'),
 ];

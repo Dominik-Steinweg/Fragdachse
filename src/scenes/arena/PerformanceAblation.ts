@@ -288,14 +288,15 @@ export class PerformanceAblationController {
    * Pro Frame aufzurufen. Schaltet bei Segmentende weiter und haelt die Ablation aufrecht,
    * weil waehrend eines Segments laufend neue Objekte entstehen.
    */
-  update(now = performance.now()): void {
+  update(now?: number): void {
     if (!this.active) return;
+    const currentNow = now ?? performance.now();
 
-    if (now - this.segmentStartedAtMs >= this.segmentMs) {
-      this.closeSegment(now);
+    if (currentNow - this.segmentStartedAtMs >= this.segmentMs) {
+      this.closeSegment(currentNow);
       this.restoreAll();
       this.currentIndex += 1;
-      this.segmentStartedAtMs = now;
+      this.segmentStartedAtMs = currentNow;
       this.currentCategory = this.resolveCategory(this.currentIndex);
     }
 
