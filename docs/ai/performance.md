@@ -111,6 +111,12 @@ einer Zerstoerungswelle billig bleibt. Diagnose und Ablationsmodus steigen ueber
 `forEachSceneDisplayObject` eine Ebene tief in `Layer`-Kinder ab, sonst faende die
 `rocks`-Kategorie nichts mehr.
 
+Der Ablationsmodus nutzt fuer seine gleichmaessig in Baseline und Segmenten laufenden Scans
+zusaetzlich `forEachAblationDisplayObject`, das `Container`-Kinder rekursiv erreicht. Die
+allgemeine Diagnose-/Count-Traversierung bleibt bewusst nicht-rekursiv. `vectorShapes` blendet
+dabei ausschliesslich Arc-/Graphics-Rendering aus; klassische `ParticleEmitter` und
+`SpriteGPULayer`-VFX bleiben eigene Ablationskategorien.
+
 **Zerstoerungs-VFX ausserhalb des Bildes entfallen.** `RockDestructionRenderer` sammelt sichtbare
 Zerstoerungen bis `POST_UPDATE` und vergibt ein gemeinsames Budget: hoechstens vier raeumlich
 verteilte Felsen laufen gleichzeitig durch die hochwertige Fragmentspur, deren maximal 144 Images

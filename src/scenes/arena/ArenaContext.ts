@@ -43,6 +43,7 @@ import type { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidH
 import type { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
 import type { CoopDefenseSurvivalSystem } from '../../systems/CoopDefenseSurvivalSystem';
 import type { EnemyStrategicTargetService } from '../../systems/EnemyStrategicTargetService';
+import type { EnemyAiTargetCatalog } from '../../systems/EnemyAiTargetCatalog';
 import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import type { RepairDroneSystem } from '../../systems/RepairDroneSystem';
@@ -194,6 +195,7 @@ export interface ArenaContext {
   enemyFlowFieldService: EnemyFlowFieldService | null;
   enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
   enemyStrategicFlowFieldService: EnemyFlowFieldService | null;
+  enemyAiTargetCatalog: EnemyAiTargetCatalog | null;
   enemyStrategicTargetService: EnemyStrategicTargetService | null;
   enemyBossFlowFieldService: EnemyFlowFieldService | null;
   allyFlowFieldServices: Map<string, EnemyFlowFieldService>;

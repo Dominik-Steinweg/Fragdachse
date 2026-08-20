@@ -208,6 +208,47 @@ export class SmokeSystem {
     this.activeClouds.push({ id: this.nextId++, x, y, createdAt: now, config, ownerId, lastTickAt: now });
   }
 
+  /**
+   * Read-only host query for local AI modifiers. It intentionally returns an existing cloud ID
+   * instead of exposing mutable cloud state or allocating a snapshot per enemy.
+   */
+  getActiveCloudIdAt(
+    x: number,
+    y: number,
+    now: number,
+    preferredCloudId?: number,
+  ): number | null {
+    if (preferredCloudId !== undefined && this.isPointInCloud(preferredCloudId, x, y, now)) {
+      return preferredCloudId;
+    }
+
+    let selected: number | null = null;
+    for (const cloud of this.activeClouds) {
+      const radius = this.getActiveCloudRadius(cloud, now);
+      if (radius === null) continue;
+      const dx = x - cloud.x;
+      const dy = y - cloud.y;
+      if (dx * dx + dy * dy > radius * radius) continue;
+      // activeClouds is insertion ordered; choosing the first match is deterministic and keeps
+      // overlapping clouds stable until the currently selected one is actually left.
+      selected = cloud.id;
+      break;
+    }
+    return selected;
+  }
+
+  isPointInCloud(cloudId: number, x: number, y: number, now: number): boolean {
+    for (const cloud of this.activeClouds) {
+      if (cloud.id !== cloudId) continue;
+      const radius = this.getActiveCloudRadius(cloud, now);
+      if (radius === null) return false;
+      const dx = x - cloud.x;
+      const dy = y - cloud.y;
+      return dx * dx + dy * dy <= radius * radius;
+    }
+    return false;
+  }
+
   hostUpdate(now: number): { synced: SyncedSmokeCloud[]; damageEvents: SmokeDamageEvent[] } {
     const synced: SyncedSmokeCloud[] = [];
     const damageEvents: SmokeDamageEvent[] = [];
@@ -317,6 +358,26 @@ export class SmokeSystem {
       density: Math.round(Phaser.Math.Linear(1, 0.2, eased) * 100) / 100,
       storm,
     };
+  }
+
+  private getActiveCloudRadius(cloud: ActiveSmokeCloud, now: number): number | null {
+    const { spreadDuration, lingerDuration, dissipateDuration, radius } = cloud.config;
+    const elapsed = now - cloud.createdAt;
+    const totalDuration = spreadDuration + lingerDuration + dissipateDuration;
+    if (elapsed < 0 || elapsed >= totalDuration) return null;
+    if (elapsed < spreadDuration) {
+      const t = Phaser.Math.Clamp(elapsed / Math.max(1, spreadDuration), 0, 1);
+      const eased = t * t * (3 - 2 * t);
+      return radius * eased;
+    }
+    if (elapsed < spreadDuration + lingerDuration) return radius;
+    const t = Phaser.Math.Clamp(
+      (elapsed - spreadDuration - lingerDuration) / Math.max(1, dissipateDuration),
+      0,
+      1,
+    );
+    const eased = t * t * (3 - 2 * t);
+    return radius * Phaser.Math.Linear(1, 1.05, eased);
   }
 
   private createVisual(cloud: SyncedSmokeCloud): SmokeCloudVisual {

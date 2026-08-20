@@ -983,8 +983,8 @@ export class EnemyEntity {
         impactCloud: config.fire.impactCloud
           ? { ...config.fire.impactCloud, rockDamageMult: 0, trainDamageMult: 0 }
           : undefined,
-        homing: config.fire.homing
-          ? { ...config.fire.homing, targetTypes: this.faction === 'allied' ? ['enemies'] : ['players'] }
+          homing: config.fire.homing
+          ? { ...config.fire.homing, targetTypes: this.faction === 'allied' ? ['enemies'] : ['players', 'decoys'] }
           : undefined,
       },
     };

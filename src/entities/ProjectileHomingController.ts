@@ -40,6 +40,7 @@ export type HomingTargetProvider = (
  * fährt.
  */
 export type HomingLineOfFireChecker = (sx: number, sy: number, ex: number, ey: number) => boolean;
+export type HomingTargetValidityChecker = (id: string, type: HomingTargetType, ownerId: string) => boolean;
 
 const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 
@@ -51,6 +52,7 @@ const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 export class ProjectileHomingController {
   private targetProvider: HomingTargetProvider | null = null;
   private lineOfFireChecker: HomingLineOfFireChecker | null = null;
+  private targetValidityChecker: HomingTargetValidityChecker | null = null;
 
   // Kandidaten-Pool: bei vielen zielsuchenden Projektilen läuft die Zielsuche mehrfach
   // pro Frame, ein frisches Array mit einem Objekt je Gegner wäre reiner GC-Druck.
@@ -80,10 +82,25 @@ export class ProjectileHomingController {
     this.lineOfFireChecker = checker;
   }
 
+  setTargetValidityChecker(checker: HomingTargetValidityChecker | null): void {
+    this.targetValidityChecker = checker;
+  }
+
   /** Lenkt ein zielsuchendes Projektil pro Host-Schritt Richtung seines (ggf. neu gewählten) Ziels. */
   update(proj: TrackedProjectile, simulatedAgeMs: number, forceSearch = false): boolean {
     const homing = proj.homing;
     if (!homing || !this.targetProvider) return false;
+    if (
+      proj.lockedTargetId !== null
+      && proj.lockedTargetId !== undefined
+      && proj.lockedTargetType
+      && this.targetValidityChecker
+      && !this.targetValidityChecker(proj.lockedTargetId, proj.lockedTargetType, proj.ownerId)
+    ) {
+      proj.lockedTargetId = null;
+      proj.lockedTargetType = undefined;
+      forceSearch = true;
+    }
     if (!forceSearch && simulatedAgeMs < homing.acquireDelayMs) return proj.lockedTargetId != null;
 
     const lastSearchAt = proj.lastHomingSearchAt ?? 0;

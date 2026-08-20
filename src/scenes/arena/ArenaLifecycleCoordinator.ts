@@ -28,6 +28,7 @@ import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefen
 import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
 import { EnemyStrategicTargetService } from '../../systems/EnemyStrategicTargetService';
+import { EnemyAiTargetCatalog } from '../../systems/EnemyAiTargetCatalog';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
@@ -1007,6 +1008,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.enemyStrategicTargetService = this.ctx.enemyStrategicFlowFieldService
         ? new EnemyStrategicTargetService(this.ctx.enemyStrategicFlowFieldService)
         : null;
+      this.ctx.enemyAiTargetCatalog = new EnemyAiTargetCatalog();
       this.ctx.enemyBossFlowFieldService = coopDefenseMapConfig?.boss
         ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
           eventBus: this.scene.game.events,
@@ -2197,6 +2199,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem,
           (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
           (fromX, fromY, toX, toY, radius) => this.hasWalkableEnemyCircleLine(fromX, fromY, toX, toY, radius),
+          this.ctx.enemyAiTargetCatalog,
         );
         this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
           this.ctx.enemyManager,
@@ -2207,6 +2210,8 @@ export class ArenaLifecycleCoordinator {
           this.ctx.stinkCloudSystem,
           this.ctx.flamethrowerUpgradeSystem,
           this.ctx.fireSystem,
+          this.ctx.enemyAiTargetCatalog,
+          this.ctx.decoySystem,
         );
         this.ctx.coopDefenseEnemyAttackSystem = new CoopDefenseEnemyAttackSystem(
           this.ctx.enemyManager,
@@ -2217,6 +2222,7 @@ export class ArenaLifecycleCoordinator {
           () => this.ctx.arenaResult?.rockObjects ?? null,
           this.ctx.coopDefenseEnemyTrainAwarenessSystem,
           this.ctx.placementSystem,
+          this.ctx.enemyAiTargetCatalog,
         );
         this.ctx.hostPhysics.setEnemyRockContactCallback((enemyId, rock, now) => {
           this.ctx.coopDefenseEnemyAttackSystem?.recordObstacleContact(enemyId, rock, now);
@@ -2380,6 +2386,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.armageddonSystem,
           this.ctx.coopDefenseEnemyBurrowSystem,
           this.ctx.flamethrowerUpgradeSystem,
+          this.ctx.enemyAiTargetCatalog,
         );
       }
       this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
@@ -2931,6 +2938,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyPlayerFlowFieldService = null;
     this.ctx.enemyStrategicTargetService?.clear();
     this.ctx.enemyStrategicTargetService = null;
+    this.ctx.enemyAiTargetCatalog?.clear();
+    this.ctx.enemyAiTargetCatalog = null;
     this.ctx.enemyStrategicFlowFieldService?.destroy();
     this.ctx.enemyStrategicFlowFieldService = null;
     this.ctx.enemyBossFlowFieldService?.destroy();

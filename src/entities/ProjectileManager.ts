@@ -4,7 +4,7 @@ import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact } from '../types';
 import { ProjectileHomingController } from './ProjectileHomingController';
-import type { HomingTargetProvider } from './ProjectileHomingController';
+import type { HomingTargetProvider, HomingTargetValidityChecker } from './ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { type GeometryHit, findNearestRectangleHit as geomNearestRectangleHit } from '../utils/geometry';
@@ -405,6 +405,10 @@ export class ProjectileManager {
   /** Registriert die Host-seitige Line-of-Fire-Prüfung für Homing-Projektile. */
   setHomingLineOfFireChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
     this.homingController.setLineOfFireChecker(cb);
+  }
+
+  setHomingTargetValidityChecker(cb: HomingTargetValidityChecker | null): void {
+    this.homingController.setTargetValidityChecker(cb);
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────

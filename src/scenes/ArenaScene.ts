@@ -862,6 +862,7 @@ export class ArenaScene extends Phaser.Scene {
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
+      enemyAiTargetCatalog: null,
       enemyStrategicTargetService: null,
       enemyBossFlowFieldService: null,
       allyFlowFieldServices: new Map(),
@@ -1020,6 +1021,13 @@ export class ArenaScene extends Phaser.Scene {
         if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
         emit(player.id, 'players', player.sprite.x, player.sprite.y);
       }
+      if (config.targetTypes?.includes('decoys')) {
+        for (const decoy of this.ctx.decoySystem.getHostTargets()) {
+          if (decoy.ownerId === ownerId) continue;
+          if (!inRange(decoy.sprite.x, decoy.sprite.y)) continue;
+          emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
+        }
+      }
       for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
         if (!enemy.sprite.active) continue;
         if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
@@ -1038,6 +1046,12 @@ export class ArenaScene extends Phaser.Scene {
     });
     projectileManager.setHomingLineOfFireChecker((sx, sy, ex, ey) => {
       return combatSystem.hasClearLineOfFire(sx, sy, ex, ey);
+    });
+    projectileManager.setHomingTargetValidityChecker((id, type) => {
+      if (type !== 'players' && type !== 'decoys') return true;
+      const catalog = this.ctx.enemyAiTargetCatalog;
+      if (!catalog) return true;
+      return catalog.isTargetValid({ kind: type === 'players' ? 'player' : 'decoy', id });
     });
 
     effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });

@@ -8,6 +8,7 @@ import type { EnemyCombatPositioningSource, EnemyManager } from '../entities/Ene
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from './CombatSystem';
 import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
+import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 
 /** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden für den Gegner ist. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
@@ -39,6 +40,7 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
     private readonly combatSystem: CombatSystem,
     private readonly isFreeGroundAt: FreeGroundResolver,
     private readonly hasWalkableCircleLine?: EnemyCirclePathResolver,
+    private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
   ) {}
 
   getMovementOverride(enemyId: string): { vx: number; vy: number } | null {
@@ -90,24 +92,30 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
   ): { x: number; y: number; distance: number } | null {
     let best: { x: number; y: number; distance: number } | null = null;
 
-    for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
-      if (this.combatSystem.isBurrowed(player.id)) continue;
-      if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-
-      const distance = Phaser.Math.Distance.Between(
-        enemy.sprite.x,
-        enemy.sprite.y,
-        player.sprite.x,
-        player.sprite.y,
-      );
-      if (best && distance >= best.distance) continue;
-      if (
-        positioning.requireLineOfSight
-        && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)
-      ) continue;
-
-      best = { x: player.sprite.x, y: player.sprite.y, distance };
+    if (this.targetCatalog) {
+      this.targetCatalog.forEachTarget('player-like', (target) => {
+        const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
+        const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
+        if (best && distance >= best.distance) return;
+        if (
+          positioning.requireLineOfSight
+          && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, position.x, position.y)
+        ) return;
+        best = { x: position.x, y: position.y, distance };
+      });
+    } else {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
+        if (this.combatSystem.isBurrowed(player.id)) continue;
+        if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
+        const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+        if (best && distance >= best.distance) continue;
+        if (
+          positioning.requireLineOfSight
+          && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)
+        ) continue;
+        best = { x: player.sprite.x, y: player.sprite.y, distance };
+      }
     }
 
     return best;

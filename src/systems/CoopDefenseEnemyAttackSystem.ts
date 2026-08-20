@@ -7,10 +7,11 @@ import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { CombatSystem } from './CombatSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from './CoopDefenseEnemyTrainAwarenessSystem';
 import type { PlacementSystem } from './PlacementSystem';
+import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { COLORS, PLAYER_SIZE } from '../config';
 
-type EnemyAttackTargetKind = 'base' | 'player' | 'ally' | 'train' | 'obstacle';
+type EnemyAttackTargetKind = 'base' | 'player' | 'decoy' | 'ally' | 'train' | 'obstacle';
 
 interface EnemyAttackCandidate {
   readonly kind: EnemyAttackTargetKind;
@@ -19,12 +20,14 @@ interface EnemyAttackCandidate {
   readonly targetX: number;
   readonly targetY: number;
   readonly targetId?: string;
+  readonly targetRef?: EnemyAiTargetRef;
   readonly obstacle?: Phaser.GameObjects.Image;
 }
 
 interface SustainedEnemyAttackState {
   readonly weaponId: string;
-  readonly targetId: string;
+  readonly targetRef: EnemyAiTargetRef | null;
+  readonly targetId: string | null;
   targetX: number;
   targetY: number;
   readonly fireUntil: number;
@@ -32,13 +35,13 @@ interface SustainedEnemyAttackState {
 }
 
 interface PlayerTargetLockState {
-  readonly targetId: string;
+  readonly targetRef: EnemyAiTargetRef;
   readonly lockedUntil: number;
 }
 
 interface MeleeWindupState {
   readonly weaponId: string;
-  readonly targetId: string;
+  readonly targetRef: EnemyAiTargetRef;
   readonly aimAngle: number;
   readonly executeAt: number;
 }
@@ -106,6 +109,7 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly getRockObjects: () => readonly (Phaser.GameObjects.Image | null)[] | null,
     private readonly trainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null = null,
     private readonly placementSystem: PlacementSystem | null = null,
+    private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
   ) {}
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
@@ -239,15 +243,15 @@ export class CoopDefenseEnemyAttackSystem {
   }
 
   private shouldStartMeleeWindup(attack: SelectedEnemyAttack): boolean {
-    return attack.target.kind === 'player'
+    return (attack.target.kind === 'player' || attack.target.kind === 'decoy')
       && attack.attackWeapon.weapon.config.fire.type === 'melee'
       && attack.attackWeapon.playerMeleeWindupMs > 0
-      && attack.target.targetId !== undefined;
+      && attack.target.targetRef !== undefined;
   }
 
   private startMeleeWindup(enemy: EnemyEntity, attack: SelectedEnemyAttack, now: number): void {
-    const targetId = attack.target.targetId;
-    if (!targetId) return;
+    const targetRef = attack.target.targetRef;
+    if (!targetRef) return;
 
     const aimAngle = Phaser.Math.Angle.Between(
       enemy.sprite.x,
@@ -257,7 +261,7 @@ export class CoopDefenseEnemyAttackSystem {
     );
     this.meleeWindups.set(enemy.id, {
       weaponId: attack.attackWeapon.weapon.config.id,
-      targetId,
+      targetRef,
       aimAngle,
       executeAt: now + attack.attackWeapon.playerMeleeWindupMs,
     });
@@ -271,12 +275,11 @@ export class CoopDefenseEnemyAttackSystem {
     if (!state) return;
 
     const attackWeapon = enemy.getAttackWeapons().find(candidate => candidate.weapon.config.id === state.weaponId);
-    const player = this.playerManager.getPlayer(state.targetId);
+    const target = this.buildPlayerLikeTargetCandidate(enemy, state.targetRef, attackWeapon?.weapon.config.range ?? 0);
     if (
       !attackWeapon
       || attackWeapon.weapon.config.fire.type !== 'melee'
-      || !player
-      || !this.isValidPlayerTarget(enemy, player.id, attackWeapon.weapon.config.range)
+      || !target
     ) {
       this.meleeWindups.delete(enemy.id);
       return;
@@ -294,12 +297,13 @@ export class CoopDefenseEnemyAttackSystem {
       {
         attackWeapon,
         target: {
-          kind: 'player',
+          kind: target.kind,
           priority: 2,
-          distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y),
-          targetX: player.sprite.x,
-          targetY: player.sprite.y,
-          targetId: player.id,
+          distance: target.distance,
+          targetX: target.targetX,
+          targetY: target.targetY,
+          targetId: target.targetId,
+          targetRef: target.targetRef,
         },
       },
       now,
@@ -343,10 +347,11 @@ export class CoopDefenseEnemyAttackSystem {
     const existingSustainedAttack = this.sustainedAttacks.get(enemy.id);
     if (existingSustainedAttack) {
       existingSustainedAttack.lastShotAt = now;
-    } else if (attackWeapon.minimumFireDurationMs > 0 && target.targetId) {
+    } else if (attackWeapon.minimumFireDurationMs > 0 && (target.targetRef || target.targetId)) {
       this.sustainedAttacks.set(enemy.id, {
         weaponId: weapon.config.id,
-        targetId: target.targetId,
+        targetRef: target.targetRef ?? null,
+        targetId: target.targetId ?? null,
         targetX: target.targetX,
         targetY: target.targetY,
         fireUntil: now + attackWeapon.minimumFireDurationMs,
@@ -476,12 +481,20 @@ export class CoopDefenseEnemyAttackSystem {
     salvoShotIndex: number,
   ): EnemyAttackCandidate | null {
     const candidates: EnemyAttackCandidate[] = [];
-    for (const player of this.playerManager.getAllPlayers()) {
-      const candidate = this.buildPlayerTargetCandidate(enemy, player.id, range);
-      if (!candidate || candidate.distance < minTargetDistancePx) continue;
-      candidates.push(candidate);
+    if (this.targetCatalog) {
+      this.targetCatalog.forEachTarget('player-like', (target) => {
+        const candidate = this.buildPlayerLikeTargetCandidate(enemy, { kind: target.kind, id: target.id }, range);
+        if (!candidate || candidate.distance < minTargetDistancePx) return;
+        candidates.push(candidate);
+      });
+    } else {
+      for (const player of this.playerManager.getAllPlayers()) {
+        const candidate = this.buildPlayerTargetCandidate(enemy, player.id, range);
+        if (!candidate || candidate.distance < minTargetDistancePx) continue;
+        candidates.push(candidate);
+      }
     }
-    candidates.sort((left, right) => left.distance - right.distance || (left.targetId ?? '').localeCompare(right.targetId ?? ''));
+    candidates.sort((left, right) => left.distance - right.distance || this.targetKey(left).localeCompare(this.targetKey(right)));
     return candidates.length > 0 ? candidates[salvoShotIndex % candidates.length] : null;
   }
 
@@ -505,11 +518,10 @@ export class CoopDefenseEnemyAttackSystem {
       return { active: true, attack: null };
     }
 
-    const player = this.playerManager.getPlayer(state.targetId);
-    const playerTarget = player
-      ? this.buildPlayerTargetCandidate(enemy, player.id, attackWeapon.weapon.config.range)
+    const playerTarget = state.targetRef
+      ? this.buildPlayerLikeTargetCandidate(enemy, state.targetRef, attackWeapon.weapon.config.range)
       : null;
-    const ally = this.enemyManager.getEnemy(state.targetId);
+    const ally = state.targetId ? this.enemyManager.getEnemy(state.targetId) : null;
     const allyTarget = !playerTarget && ally?.faction === 'allied'
       ? this.buildAllyTargetCandidate(enemy, ally, attackWeapon.weapon.config.range)
       : null;
@@ -713,9 +725,9 @@ export class CoopDefenseEnemyAttackSystem {
     if (lockedTarget) return lockedTarget;
 
     const target = this.findNearestLivingTarget(enemy, range);
-    if (target?.kind === 'player' && target.targetId) {
+    if ((target?.kind === 'player' || target?.kind === 'decoy') && target.targetRef) {
       this.playerTargetLocks.set(enemy.id, {
-        targetId: target.targetId,
+        targetRef: target.targetRef,
         lockedUntil: now + CoopDefenseEnemyAttackSystem.PLAYER_TARGET_LOCK_DURATION_MS,
       });
     }
@@ -734,7 +746,7 @@ export class CoopDefenseEnemyAttackSystem {
       return null;
     }
 
-    const target = this.buildPlayerTargetCandidate(enemy, lock.targetId, range);
+    const target = this.buildPlayerLikeTargetCandidate(enemy, lock.targetRef, range);
     if (!target) this.playerTargetLocks.delete(enemy.id);
     return target;
   }
@@ -744,16 +756,42 @@ export class CoopDefenseEnemyAttackSystem {
     playerId: string,
     range: number,
   ): EnemyAttackCandidate | null {
-    const player = this.playerManager.getPlayer(playerId);
-    if (!player || !this.isValidPlayerTarget(enemy, player.id, range)) return null;
+    return this.buildPlayerLikeTargetCandidate(enemy, { kind: 'player', id: playerId }, range);
+  }
 
+  private buildPlayerLikeTargetCandidate(
+    enemy: EnemyEntity,
+    targetRef: EnemyAiTargetRef,
+    range: number,
+  ): EnemyAttackCandidate | null {
+    if (targetRef.kind === 'player' && !this.targetCatalog) {
+      const player = this.playerManager.getPlayer(targetRef.id);
+      if (!player || !this.isValidPlayerTarget(enemy, targetRef.id, range)) return null;
+      return {
+        kind: 'player',
+        priority: 2,
+        distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y),
+        targetX: player.sprite.x,
+        targetY: player.sprite.y,
+        targetId: player.id,
+        targetRef,
+      };
+    }
+
+    const target = this.targetCatalog?.resolve(targetRef);
+    if (!target || (target.kind !== 'player' && target.kind !== 'decoy')) return null;
+    const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
+    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
+    if (distance > range + (target.radius ?? PLAYER_SIZE * 0.5)) return null;
+    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, position.x, position.y)) return null;
     return {
-      kind: 'player',
+      kind: target.kind,
       priority: 2,
-      distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y),
-      targetX: player.sprite.x,
-      targetY: player.sprite.y,
-      targetId: player.id,
+      distance,
+      targetX: position.x,
+      targetY: position.y,
+      targetId: target.kind === 'player' ? target.id : undefined,
+      targetRef,
     };
   }
 
@@ -785,6 +823,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (!player?.sprite.active) return false;
     if (!this.combatSystem.isAlive(player.id)) return false;
     if (this.combatSystem.isBurrowed(player.id)) return false;
+    if (this.targetCatalog?.isTargetValid({ kind: 'player', id: playerId }) === false) return false;
     if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) return false;
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
@@ -885,6 +924,12 @@ export class CoopDefenseEnemyAttackSystem {
       return candidate.priority < current.priority;
     }
     return candidate.distance < current.distance;
+  }
+
+  private targetKey(candidate: EnemyAttackCandidate): string {
+    return candidate.targetRef
+      ? `${candidate.targetRef.kind}:${candidate.targetRef.id}`
+      : (candidate.targetId ?? candidate.kind);
   }
 }
 

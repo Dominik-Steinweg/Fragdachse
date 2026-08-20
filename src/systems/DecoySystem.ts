@@ -152,27 +152,30 @@ export class DecoySystem {
     return true;
   }
 
-  hostUpdate(now: number): SyncedDecoy[] {
-    if (this.bridge.isHost()) {
-      for (const decoy of [...this.hostDecoys.values()]) {
-        if (now >= decoy.expiresAt) {
-          this.destroyDecoy(decoy.id, true);
-          continue;
-        }
-        decoy.entity.body?.setVelocity(
-          Math.cos(decoy.rotation) * decoy.speed,
-          Math.sin(decoy.rotation) * decoy.speed,
-        );
-        decoy.entity.syncBar();
-      }
+  /** Updates AI-visible lifecycle state before target and flowfield refresh. */
+  hostUpdateLifecycle(now: number): void {
+    if (!this.bridge.isHost()) return;
 
-      for (const stealth of [...this.stealthStates.values()]) {
-        if (now >= stealth.expiresAt) {
-          this.breakStealth(stealth.playerId, now);
-        }
+    for (const decoy of [...this.hostDecoys.values()]) {
+      if (now >= decoy.expiresAt) {
+        // Decoy expiry is deliberately independent from the owner's stealth state.
+        this.destroyDecoy(decoy.id, true);
+        continue;
       }
+      decoy.entity.body?.setVelocity(
+        Math.cos(decoy.rotation) * decoy.speed,
+        Math.sin(decoy.rotation) * decoy.speed,
+      );
+      decoy.entity.syncBar();
     }
 
+    for (const stealth of [...this.stealthStates.values()]) {
+      if (now >= stealth.expiresAt) this.breakStealth(stealth.playerId, now);
+    }
+  }
+
+  /** Creates the network view after host physics has produced the current decoy position. */
+  createHostSnapshots(): SyncedDecoy[] {
     return [...this.hostDecoys.values()].map((decoy) => ({
       id: decoy.id,
       ownerId: decoy.ownerId,
@@ -185,6 +188,12 @@ export class DecoySystem {
       maxArmor: decoy.maxArmor,
       color: decoy.color,
     }));
+  }
+
+  /** Compatibility entry point for callers that still need both operations together. */
+  hostUpdate(now: number): SyncedDecoy[] {
+    if (this.bridge.isHost()) this.hostUpdateLifecycle(now);
+    return this.createHostSnapshots();
   }
 
   syncSnapshots(snapshots: readonly SyncedDecoy[]): void {
@@ -315,6 +324,17 @@ export class DecoySystem {
       sprite: decoy.entity.sprite,
       body: decoy.entity.body,
     }));
+  }
+
+  getHostTarget(decoyId: number): DecoyTargetSnapshot | null {
+    const decoy = this.hostDecoys.get(decoyId);
+    if (!decoy) return null;
+    return {
+      id: decoy.id,
+      ownerId: decoy.ownerId,
+      sprite: decoy.entity.sprite,
+      body: decoy.entity.body,
+    };
   }
 
   applyDamage(

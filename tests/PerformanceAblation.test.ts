@@ -4,16 +4,25 @@ vi.mock('phaser', () => ({}));
 
 import {
   ABLATION_CATEGORIES,
+  ABLATION_CODES,
+  ABLATION_LABELS,
   PerformanceAblationController,
 } from '../src/scenes/arena/PerformanceAblation';
+import {
+  countSceneDisplayObjects,
+  forEachAblationDisplayObject,
+  forEachSceneDisplayObject,
+} from '../src/scenes/arena/sceneDisplayObjects';
 import { DEPTH, DEPTH_LIGHTING } from '../src/config';
 
 interface FakeObject {
   type?: string;
   visible: boolean;
+  active?: boolean;
   depth?: number;
   scrollFactorX?: number;
   texture?: { key: string };
+  list?: FakeObject[];
   setVisible: (visible: boolean) => void;
 }
 
@@ -59,6 +68,50 @@ function makeController(children: FakeObject[]) {
 }
 
 describe('performance ablation', () => {
+  it('keeps the general scan flat while the ablation scan reaches nested containers', () => {
+    const nestedGraphics = fakeObject({ type: 'Graphics' });
+    const deepContainer = fakeObject({ type: 'Container', list: [nestedGraphics] });
+    const containerArc = fakeObject({ type: 'Arc' });
+    const outerContainer = fakeObject({ type: 'Container', list: [containerArc, deepContainer] });
+    const layerArc = fakeObject({ type: 'Arc' });
+    const layer = fakeObject({ type: 'Layer', list: [layerArc] });
+    const scene = { children: { list: [outerContainer, layer] } } as never;
+    const generalObjects: FakeObject[] = [];
+    const ablationObjects: FakeObject[] = [];
+
+    forEachSceneDisplayObject(scene, (object) => generalObjects.push(object as never));
+    forEachAblationDisplayObject(scene, (object) => ablationObjects.push(object as never));
+
+    expect(generalObjects).toEqual([outerContainer, layer, layerArc]);
+    expect(ablationObjects).toEqual([
+      outerContainer,
+      containerArc,
+      deepContainer,
+      nestedGraphics,
+      layer,
+      layerArc,
+    ]);
+    expect(countSceneDisplayObjects(scene)).toBe(3);
+  });
+
+  it('publishes separate append-only codes and labels for the new categories', () => {
+    expect(ABLATION_CODES).toMatchObject({
+      baseline: 0,
+      postFx: 13,
+      gpuParticles: 14,
+      vectorShapes: 15,
+    });
+    expect(ABLATION_LABELS.particles).toBe('Klassische Partikel (ParticleEmitter)');
+    expect(ABLATION_LABELS.gpuParticles).toBe('SpriteGPU-VFX (SpriteGPULayer)');
+    expect(ABLATION_LABELS.vectorShapes).toBe('Arc/Graphics-Rendering');
+    expect(ABLATION_CATEGORIES.slice(0, 4)).toEqual([
+      'filters',
+      'particles',
+      'gpuParticles',
+      'vectorShapes',
+    ]);
+  });
+
   it('wertet im inaktiven Zustand keine Default-Zeit aus', () => {
     const now = vi.spyOn(performance, 'now').mockReturnValue(123);
     const { controller } = makeController([]);
@@ -204,7 +257,7 @@ describe('performance ablation', () => {
       active = v;
       (emitter as unknown as { active: boolean }).active = v;
     };
-    const { controller } = makeController([emitter]);
+    const { controller, gpuParticleCalls } = makeController([emitter]);
 
     controller.start(1000, 0);
     const step = ABLATION_CATEGORIES.indexOf('particles') * 2 + 1;
@@ -212,33 +265,80 @@ describe('performance ablation', () => {
 
     expect(emitter.visible).toBe(false);
     expect(active).toBe(false);
+    expect(gpuParticleCalls).toEqual([]);
 
     controller.stop((step + 1) * 1000);
     expect(emitter.visible).toBe(true);
     expect(active).toBe(true);
   });
 
-  it('switches GPU particles off together with the classic emitters', () => {
+  it('switches GPU particles independently from classic emitters', () => {
     // GPU-Partikel sind Member eines SpriteGPULayer und liegen nicht als `ParticleEmitter` in
-    // der Display-Liste; ohne den expliziten Hook wuerde das Segment sie schlicht uebersehen.
+    // der Display-Liste; die eigene Kategorie verwendet deshalb den zentralen Hook.
     const emitter = fakeObject({ type: 'ParticleEmitter' });
-    (emitter as unknown as { active: boolean }).active = true;
+    emitter.active = true;
     (emitter as unknown as { setActive: (v: boolean) => void }).setActive = (v: boolean) => {
-      (emitter as unknown as { active: boolean }).active = v;
+      emitter.active = v;
     };
     const { controller, gpuParticleCalls } = makeController([emitter]);
 
     controller.start(1000, 0);
     expect(gpuParticleCalls).toEqual([]);
 
-    const step = ABLATION_CATEGORIES.indexOf('particles') * 2 + 1;
+    const step = ABLATION_CATEGORIES.indexOf('gpuParticles') * 2 + 1;
     for (let s = 1; s <= step; s++) controller.update(s * 1000);
     expect(gpuParticleCalls).toEqual([true]);
-    expect(emitter.visible).toBe(false);
+    expect(emitter.visible).toBe(true);
+    expect(emitter.active).toBe(true);
 
     controller.stop((step + 1) * 1000);
     expect(gpuParticleCalls).toEqual([true, false]);
     expect(emitter.visible).toBe(true);
+    expect(emitter.active).toBe(true);
+  });
+
+  it('hides Arc and Graphics in nested containers for rendering only', () => {
+    const arc = fakeObject({ type: 'Arc', active: true });
+    const graphics = fakeObject({ type: 'Graphics', active: true });
+    const deepGraphics = fakeObject({ type: 'Graphics', active: true });
+    const deepContainer = fakeObject({ type: 'Container', list: [deepGraphics] });
+    const container = fakeObject({ type: 'Container', list: [arc, graphics, deepContainer] });
+    const alreadyHidden = fakeObject({ type: 'Arc', visible: false, active: true });
+    const unrelatedShape = fakeObject({ type: 'Rectangle', active: true });
+    const { controller } = makeController([container, alreadyHidden, unrelatedShape]);
+
+    controller.start(1000, 0);
+    controller.update(0); // Baseline uses the same recursive scan without hiding.
+    expect(arc.visible).toBe(true);
+    expect(graphics.visible).toBe(true);
+    expect(deepGraphics.visible).toBe(true);
+
+    const vectorStep = ABLATION_CATEGORIES.indexOf('vectorShapes') * 2 + 1;
+    for (let step = 1; step <= vectorStep; step++) controller.update(step * 1000);
+
+    expect(controller.getCurrentCategory()).toBe('vectorShapes');
+    expect(arc.visible).toBe(false);
+    expect(graphics.visible).toBe(false);
+    expect(deepGraphics.visible).toBe(false);
+    expect(arc.active).toBe(true);
+    expect(graphics.active).toBe(true);
+    expect(deepGraphics.active).toBe(true);
+    expect(alreadyHidden.visible).toBe(false);
+    expect(unrelatedShape.visible).toBe(true);
+
+    const newGraphics = fakeObject({ type: 'Graphics', active: true });
+    deepContainer.list?.push(newGraphics);
+    controller.update(vectorStep * 1000 + 1);
+    expect(newGraphics.visible).toBe(false);
+    expect(newGraphics.active).toBe(true);
+
+    controller.stop((vectorStep + 1) * 1000);
+    expect(arc.visible).toBe(true);
+    expect(graphics.visible).toBe(true);
+    expect(deepGraphics.visible).toBe(true);
+    expect(newGraphics.visible).toBe(true);
+    expect(alreadyHidden.visible).toBe(false);
+    expect(unrelatedShape.visible).toBe(true);
   });
 
   it('classifies HUD by screen-fixed scroll factor and depth', () => {

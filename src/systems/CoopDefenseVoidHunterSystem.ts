@@ -21,9 +21,10 @@ import type { ArmageddonSystem } from './ArmageddonSystem';
 import type { CombatSystem } from './CombatSystem';
 import type { CoopDefenseEnemyBurrowSystem } from './CoopDefenseEnemyBurrowSystem';
 import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
+import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 
 interface GaussChargeState {
-  readonly targetId: string;
+  readonly targetRef: EnemyAiTargetRef;
   readonly startedAt: number;
   readonly endsAt: number;
   nextAimUpdateAt: number;
@@ -89,6 +90,7 @@ export class CoopDefenseVoidHunterSystem {
     private readonly armageddonSystem: ArmageddonSystem,
     private readonly burrowSystem: CoopDefenseEnemyBurrowSystem,
     private readonly fireChunks: FlamethrowerUpgradeSystem,
+    private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
   ) {}
 
   hostUpdate(now: number): void {
@@ -215,9 +217,19 @@ export class CoopDefenseVoidHunterSystem {
     this.reachedPhases.add(2);
     enemy.setMoveSpeedMultiplier(config.phaseTwoSpeedMultiplier);
 
-    const positions = this.playerManager.getAllPlayers()
-      .filter((player) => player.sprite.active && this.combatSystem.isAlive(player.id))
-      .map((player) => ({ x: player.sprite.x, y: player.sprite.y }));
+    const positions: VoidHunterTargetPoint[] = [];
+    if (this.targetCatalog) {
+      this.targetCatalog.forEachTarget('player-like', (target) => {
+        const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
+        positions.push({ x: position.x, y: position.y });
+      });
+    } else {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (player.sprite.active && this.combatSystem.isAlive(player.id)) {
+          positions.push({ x: player.sprite.x, y: player.sprite.y });
+        }
+      }
+    }
     const target = computeVoidHunterNukeTarget(positions, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,
@@ -242,25 +254,26 @@ export class CoopDefenseVoidHunterSystem {
 
   private canStartGauss(enemy: EnemyEntity, config: CoopDefenseVoidHunterBossConfig): boolean {
     let hasTarget = false;
-    for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
-      if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-      const distance = Phaser.Math.Distance.Between(
-        enemy.sprite.x,
-        enemy.sprite.y,
-        player.sprite.x,
-        player.sprite.y,
-      );
-      if (distance <= config.shotgunRangePx) return false;
-      if (
-        distance <= VOID_HUNTER_GAUSS.range
-        && this.combatSystem.hasLineOfSight(
-          enemy.sprite.x,
-          enemy.sprite.y,
-          player.sprite.x,
-          player.sprite.y,
-        )
-      ) hasTarget = true;
+    const checkTarget = (x: number, y: number): boolean => {
+      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, x, y);
+      if (distance <= config.shotgunRangePx) return true;
+      if (distance <= VOID_HUNTER_GAUSS.range
+        && this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, x, y)) hasTarget = true;
+      return false;
+    };
+    if (this.targetCatalog) {
+      let tooClose = false;
+      this.targetCatalog.forEachTarget('player-like', (target) => {
+        const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
+        if (checkTarget(position.x, position.y)) tooClose = true;
+      });
+      if (tooClose) return false;
+    } else {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
+        if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
+        if (checkTarget(player.sprite.x, player.sprite.y)) return false;
+      }
     }
     for (const ally of this.enemyManager.getAllEnemies()) {
       if (ally.faction !== 'allied' || !ally.sprite.active || ally.getHp() <= 0) continue;
@@ -284,7 +297,7 @@ export class CoopDefenseVoidHunterSystem {
     const target = this.findGaussTarget(enemy);
     if (!target) return;
     state.gauss = {
-      targetId: target.id,
+      targetRef: target.ref,
       startedAt: now,
       endsAt: now + config.gauss.chargeDurationMs,
       nextAimUpdateAt: now + config.gauss.aimUpdateIntervalMs,
@@ -292,8 +305,8 @@ export class CoopDefenseVoidHunterSystem {
       desiredAngle: Phaser.Math.Angle.Between(
         enemy.sprite.x,
         enemy.sprite.y,
-        target.sprite.x,
-        target.sprite.y,
+        target.x,
+        target.y,
       ),
       actualAngle: enemy.getAimAngle(),
     };
@@ -312,14 +325,26 @@ export class CoopDefenseVoidHunterSystem {
     enemy.stopMovement();
 
     if (now >= gauss.nextAimUpdateAt) {
-      const target = this.playerManager.getPlayer(gauss.targetId);
-      if (target?.sprite.active && this.combatSystem.isAlive(target.id)) {
+      const targetPosition = this.targetCatalog?.getPosition(gauss.targetRef, enemy.sprite.x, enemy.sprite.y)
+        ?? (() => {
+          if (gauss.targetRef.kind !== 'player') return null;
+          const target = this.playerManager.getPlayer(gauss.targetRef.id);
+          return target?.sprite.active && this.combatSystem.isAlive(target.id)
+            ? { x: target.sprite.x, y: target.sprite.y }
+            : null;
+        })();
+      if (targetPosition) {
         gauss.desiredAngle = Phaser.Math.Angle.Between(
           enemy.sprite.x,
           enemy.sprite.y,
-          target.sprite.x,
-          target.sprite.y,
+          targetPosition.x,
+          targetPosition.y,
         );
+      } else {
+        state.gauss = null;
+        state.nextGaussAt = now + config.gauss.cooldownMs;
+        enemy.setSpecialAction('none');
+        return;
       }
       gauss.nextAimUpdateAt = now + config.gauss.aimUpdateIntervalMs;
     }
@@ -373,22 +398,31 @@ export class CoopDefenseVoidHunterSystem {
     state.nextArmageddonAt = Number.POSITIVE_INFINITY;
     this.armageddonSystem.activate(enemy.id, config.armageddon, () => {
       const target = this.findGaussTarget(enemy);
-      return target ? { x: target.sprite.x, y: target.sprite.y } : null;
+      return target ? { x: target.x, y: target.y } : null;
     });
     enemy.setSpecialAction('armageddon', state.armageddonActiveUntil);
   }
 
   private findGaussTarget(enemy: EnemyEntity) {
-    return this.playerManager.getAllPlayers()
-      .filter((player) => (
-        player.sprite.active
-        && this.combatSystem.isAlive(player.id)
-        && this.combatSystem.canDamageTarget(enemy.id, player.id)
-      ))
-      .sort((a, b) => (
-        Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, a.sprite.x, a.sprite.y)
-        - Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, b.sprite.x, b.sprite.y)
-      ))[0];
+    let best: { ref: EnemyAiTargetRef; x: number; y: number; distanceSq: number } | null = null;
+    if (this.targetCatalog) {
+      this.targetCatalog.forEachTarget('player-like', (target) => {
+        const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
+        const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
+        if (!best || distanceSq < best.distanceSq) {
+          best = { ref: { kind: target.kind, id: target.id }, x: position.x, y: position.y, distanceSq };
+        }
+      });
+      return best;
+    }
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!player.sprite.active || !this.combatSystem.isAlive(player.id) || !this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
+      const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+      if (!best || distanceSq < best.distanceSq) {
+        best = { ref: { kind: 'player', id: player.id }, x: player.sprite.x, y: player.sprite.y, distanceSq };
+      }
+    }
+    return best;
   }
 
   private getConfig(enemy: EnemyEntity): CoopDefenseVoidHunterBossConfig | undefined {

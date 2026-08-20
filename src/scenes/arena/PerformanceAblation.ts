@@ -24,13 +24,15 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../../config';
 import type { GraphicsQualityController } from '../../graphics/GraphicsQuality';
-import { forEachSceneDisplayObject } from './sceneDisplayObjects';
+import { forEachAblationDisplayObject } from './sceneDisplayObjects';
 
 /** Reihenfolge ist die Reihenfolge im Trace; `baseline` wird zwischen alle Ablationen gelegt. */
 export type AblationCategory =
   | 'baseline'
   | 'filters'
   | 'particles'
+  | 'gpuParticles'
+  | 'vectorShapes'
   | 'lights'
   | 'staticShadows'
   | 'dynamicShadows'
@@ -58,13 +60,17 @@ export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
   dynamicShadows: 11,
   train: 12,
   postFx: 13,
+  gpuParticles: 14,
+  vectorShapes: 15,
 };
 
 /** Was in einem Segment abgeschaltet wird – erscheint so auch in der Anleitung und im Overlay. */
 export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
   baseline: 'Baseline (nichts abgeschaltet)',
   filters: 'Objektfilter (Glow/Blur, ohne Kamera-PostFX)',
-  particles: 'Alle Partikel-Emitter',
+  particles: 'Klassische Partikel (ParticleEmitter)',
+  gpuParticles: 'SpriteGPU-VFX (SpriteGPULayer)',
+  vectorShapes: 'Arc/Graphics-Rendering',
   lights: 'Dynamische Beleuchtung (Composite)',
   staticShadows: 'Statische Schatten (gebackene Layer)',
   dynamicShadows: 'Schatten bewegter Werfer',
@@ -87,6 +93,8 @@ export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
 export const ABLATION_CATEGORIES: readonly AblationCategory[] = [
   'filters',
   'particles',
+  'gpuParticles',
+  'vectorShapes',
   'lights',
   'staticShadows',
   'dynamicShadows',
@@ -179,6 +187,8 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
   switch (category) {
     case 'particles':
       return object.type === 'ParticleEmitter';
+    case 'vectorShapes':
+      return object.type === 'Arc' || object.type === 'Graphics';
     case 'lights':
       // Das Composite selbst läuft über `setCompositeSuppressed`, nicht über den Scan.
       // Hier bleiben nur die Scratch-Texturen der verdeckenden Lichter, die knapp
@@ -204,6 +214,7 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
     case 'hud':
       return isScreenFixed(object) || depth >= DEPTH.LOCAL_UI;
     case 'filters':
+    case 'gpuParticles':
     case 'staticShadows':
     case 'dynamicShadows':
     case 'postFx':
@@ -330,16 +341,16 @@ export class PerformanceAblationController {
     this.setDynamicShadowsSuppressed(category === 'dynamicShadows');
     this.setLightCompositeSuppressed(category === 'lights');
     this.setPostFxSuppressed(category === 'postFx');
-    // GPU-Partikel gehoeren in dieselbe Kategorie wie die klassischen Emitter unten.
-    this.setGpuParticlesSuppressed(category === 'particles');
+    // GPU-Partikel werden ausschliesslich ueber die zentrale Registry und ihre Scheduler
+    // abgeschaltet; klassische ParticleEmitter bleiben davon getrennt.
+    this.setGpuParticlesSuppressed(category === 'gpuParticles');
 
     // Der Scan laeuft in JEDEM Segment inklusive Baseline und wertet immer das Praedikat aus,
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
-    // Baseline<->Ablation herausfallen. Fuer `baseline`, `filters` und die Schatten-Kategorien liefert
-    // `matchesCategory` grundsaetzlich `false`, es wird dort also nichts versteckt.
-    // Eine Ebene tief in `Layer`-Kinder hinein: Der Felsbestand liegt dort, und ohne den Abstieg
-    // haette die `rocks`-Kategorie nichts mehr zu verstecken.
-    forEachSceneDisplayObject(this.scene, (child) => {
+    // Baseline<->Ablation herausfallen. Der ablationsspezifische Scan steigt ausserdem in Layer-
+    // und Container-Kinder hinab, damit Arc/Graphics in verschachtelten HUD-Containern erfasst
+    // werden, ohne den allgemeinen Diagnose-/Count-Scan global rekursiv zu machen.
+    forEachAblationDisplayObject(this.scene, (child) => {
       const visible = (child as Phaser.GameObjects.GameObject & { visible?: boolean }).visible;
       if (visible === false) return;
       if (!matchesCategory(child, category)) return;

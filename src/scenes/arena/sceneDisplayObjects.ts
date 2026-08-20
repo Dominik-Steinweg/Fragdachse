@@ -25,6 +25,31 @@ export function forEachSceneDisplayObject(
   }
 }
 
+/**
+ * Ablationsscan mit Container-Unterstützung.
+ *
+ * Der allgemeine Diagnose-/Count-Scan bleibt bewusst flach, damit seine Kosten nicht von der
+ * Verschachtelungstiefe der HUD-Bäume abhängen. Die Ablation braucht dagegen auch Graphics- und
+ * Arc-Kinder in Containern. Dieser separate Scan läuft für jedes Ablationssegment inklusive
+ * Baseline, damit die zusätzliche Traversierung aus dem Baseline-Vergleich herausfällt.
+ */
+export function forEachAblationDisplayObject(
+  scene: Phaser.Scene,
+  visit: (object: Phaser.GameObjects.GameObject) => void,
+): void {
+  const visitNested = (object: Phaser.GameObjects.GameObject): void => {
+    visit(object);
+    const nested = object as Phaser.GameObjects.GameObject & {
+      type?: string;
+      list?: Phaser.GameObjects.GameObject[];
+    };
+    if ((nested.type !== 'Layer' && nested.type !== 'Container') || !Array.isArray(nested.list)) return;
+    for (const child of nested.list) visitNested(child);
+  };
+
+  for (const child of scene.children.list) visitNested(child);
+}
+
 /** Wie {@link forEachSceneDisplayObject}, aber als zaehlbare Gesamtzahl. */
 export function countSceneDisplayObjects(scene: Phaser.Scene): number {
   let count = 0;

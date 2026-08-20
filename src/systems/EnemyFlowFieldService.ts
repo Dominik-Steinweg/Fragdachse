@@ -714,6 +714,26 @@ export class EnemyFlowFieldService {
   }
 
   /**
+   * Visits only currently traversable neighbors of a cell. The diagonal corner-cutting rules are
+   * identical to the rules used while building the flowfield; consumers may use this read-only
+   * API for local steering without adding another topology or field pass.
+   */
+  forEachReachableNeighbor(
+    gridX: number,
+    gridY: number,
+    visitor: (neighborGridX: number, neighborGridY: number, directionIndex: number) => void,
+  ): void {
+    if (!this.isInBounds(gridX, gridY)) return;
+    const currentIndex = this.toIndex(gridX, gridY);
+    const base = currentIndex * 8;
+    for (let direction = 0; direction < EnemyFlowFieldService.NEIGHBOR_DIRECTIONS.length; direction += 1) {
+      if (!this.isReachableNeighborIndex(currentIndex, direction)) continue;
+      const neighborIndex = this.neighborIndices[base + direction];
+      visitor(neighborIndex % this.metrics.cols, Math.floor(neighborIndex / this.metrics.cols), direction);
+    }
+  }
+
+  /**
    * Sucht von einer ungueltigen/abgedraengten Zelle aus den naechsten
    * erreichbaren Korridorpunkt. Das ist insbesondere nach Rueckstoss oder
    * Kollisionsaufloesung wichtig: Ohne Recovery bleibt ein grosser Gegner in

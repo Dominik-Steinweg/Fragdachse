@@ -1,19 +1,14 @@
 import type { CoopDefenseEnemyMovementTarget } from '../config/coopDefenseEnemies';
 import type { EnemyFlowFieldGoalCell } from './EnemyFlowFieldService';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
+import type { EnemyAiTargetCandidate, EnemyAiTargetKind, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 
-export type EnemyStrategicTargetKind = 'player' | 'armed-construct' | 'armed-outpost';
+export type EnemyStrategicTargetKind = EnemyAiTargetKind;
 
-export interface EnemyStrategicTargetRef {
-  readonly kind: EnemyStrategicTargetKind;
-  readonly id: string;
-}
+export type EnemyStrategicTargetRef = EnemyAiTargetRef;
 
-export interface EnemyStrategicTargetCandidate extends EnemyStrategicTargetRef {
-  readonly x: number;
-  readonly y: number;
+export interface EnemyStrategicTargetCandidate extends EnemyAiTargetCandidate {
   readonly goalCells: readonly EnemyFlowFieldGoalCell[];
-  readonly resolvePosition?: (fromX: number, fromY: number) => { x: number; y: number } | null;
 }
 
 /**
@@ -26,12 +21,18 @@ export class EnemyStrategicTargetService {
 
   constructor(private readonly flowField: EnemyFlowFieldService) {}
 
-  updateTargets(candidates: readonly EnemyStrategicTargetCandidate[]): void {
+  updateTargets(candidates: readonly EnemyAiTargetCandidate[]): void {
     this.targets.clear();
     this.targetKeysByGoal.clear();
     const goals: EnemyFlowFieldGoalCell[] = [];
 
-    for (const candidate of [...candidates].sort((left, right) => this.key(left).localeCompare(this.key(right)))) {
+    for (const candidate of [...candidates]
+      .filter((candidate): candidate is EnemyStrategicTargetCandidate => (
+        candidate.goalCells !== undefined
+        && candidate.goalCells.length > 0
+        && (candidate.isTargetable?.() ?? true)
+      ))
+      .sort((left, right) => this.key(left).localeCompare(this.key(right)))) {
       const targetKey = this.key(candidate);
       this.targets.set(targetKey, candidate);
       for (const goal of candidate.goalCells) {
@@ -62,6 +63,7 @@ export class EnemyStrategicTargetService {
     for (const key of keys) {
       const candidate = this.targets.get(key);
       if (!candidate) continue;
+      if (!(candidate.isTargetable?.() ?? true)) continue;
       const position = this.resolvePosition(candidate, worldX, worldY);
       if (!position) continue;
       const distanceSq = (position.x - worldX) ** 2 + (position.y - worldY) ** 2;
@@ -74,7 +76,8 @@ export class EnemyStrategicTargetService {
   }
 
   resolve(ref: EnemyStrategicTargetRef): EnemyStrategicTargetCandidate | null {
-    return this.targets.get(this.key(ref)) ?? null;
+    const target = this.targets.get(this.key(ref));
+    return target && (target.isTargetable?.() ?? true) ? target : null;
   }
 
   getPosition(

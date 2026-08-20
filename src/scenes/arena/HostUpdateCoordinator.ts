@@ -26,7 +26,7 @@ import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import type { HitscanSupportImpact } from '../../systems/CombatSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
-import type { EnemyStrategicTargetCandidate } from '../../systems/EnemyStrategicTargetService';
+import type { EnemyAiTargetCandidate } from '../../systems/EnemyAiTargetCatalog';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
@@ -201,6 +201,7 @@ export class HostUpdateCoordinator {
     // Read active structure sources after the objective transition so pressure starts in the same
     // host frame in which its linked dormant base becomes active.
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
+    if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
@@ -222,6 +223,7 @@ export class HostUpdateCoordinator {
       this.ctx.coopDefenseEnemyBurrowSystem,
       this.ctx.coopDefenseEnemyCombatPositioningSystem,
       this.ctx.coopDefenseTimebombSystem,
+      this.ctx.smokeSystem,
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
     if (!countdownActive) {
@@ -301,7 +303,7 @@ export class HostUpdateCoordinator {
       this.ctx.energyInjectorSystem?.update(now);
       this.refreshMatrixVulnerabilities(now);
     }
-    const decoys = countdownActive ? [] : this.ctx.decoySystem.hostUpdate(now);
+    const decoys = countdownActive ? [] : this.ctx.decoySystem.createHostSnapshots();
     if (metrics) metrics.physicsMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
@@ -2127,20 +2129,113 @@ export class HostUpdateCoordinator {
     const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
     const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
     const strategicTargetService = this.ctx.enemyStrategicTargetService;
+
+    const targetCatalog = this.ctx.enemyAiTargetCatalog;
+    const strategicGrid = strategicFlowFieldService ?? playerFlowFieldService;
+    if (targetCatalog) {
+      const candidates: EnemyAiTargetCandidate[] = [];
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        const goal = strategicGrid?.worldToGrid(player.sprite.x, player.sprite.y);
+        candidates.push({
+          kind: 'player',
+          id: player.id,
+          x: player.sprite.x,
+          y: player.sprite.y,
+          goalCells: goal ? [goal] : [],
+          resolvePosition: () => {
+            const current = this.ctx.playerManager.getPlayer(player.id);
+            return current ? { x: current.sprite.x, y: current.sprite.y } : null;
+          },
+          isTargetable: () => (
+            player.sprite.active
+            && this.ctx.combatSystem.isAlive(player.id)
+            && !(this.ctx.burrowSystem?.isBurrowed(player.id) ?? false)
+            && !this.ctx.decoySystem.isStealthed(player.id)
+          ),
+        });
+      }
+
+      for (const decoy of this.ctx.decoySystem.getHostTargets()) {
+        const goal = strategicGrid?.worldToGrid(decoy.sprite.x, decoy.sprite.y);
+        candidates.push({
+          kind: 'decoy',
+          id: String(decoy.id),
+          ownerId: decoy.ownerId,
+          x: decoy.sprite.x,
+          y: decoy.sprite.y,
+          radius: Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5,
+          goalCells: goal ? [goal] : [],
+          resolvePosition: () => {
+            const current = this.ctx.decoySystem.getHostTarget(decoy.id);
+            return current ? { x: current.sprite.x, y: current.sprite.y } : null;
+          },
+          isTargetable: () => this.ctx.decoySystem.getHostTarget(decoy.id) !== null,
+        });
+      }
+
+      if (strategicFlowFieldService) {
+        for (const construction of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+          if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+          const world = strategicFlowFieldService.gridToWorld(construction.gridX, construction.gridY);
+          if (!world) continue;
+          candidates.push({
+            kind: 'armed-construct',
+            id: String(construction.id),
+            x: world.x,
+            y: world.y,
+            goalCells: this.buildAdjacentGoalCells([{ gridX: construction.gridX, gridY: construction.gridY }]),
+            isTargetable: () => construction.hp > 0,
+          });
+        }
+
+        for (const base of this.ctx.baseManager?.getBasesByFaction('friendly') ?? []) {
+          if (base.role !== 'outpost' || base.isInert?.() === true || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
+          const turret = base.getTurrets()[0];
+          candidates.push({
+            kind: 'armed-outpost',
+            id: base.id,
+            x: turret.x,
+            y: turret.y,
+            goalCells: this.buildAdjacentGoalCells(base.getSpec().cells),
+            resolvePosition: (fromX, fromY) => {
+              const surface = base.getNearestSurfacePoint(fromX, fromY);
+              return surface ? { x: surface.x, y: surface.y } : null;
+            },
+            isTargetable: () => (
+              base.isInert?.() !== true && base.getHp() > 0 && base.getTurrets().length > 0
+            ),
+          });
+        }
+      }
+      targetCatalog.updateTargets(candidates);
+      if (strategicFlowFieldService && strategicTargetService) {
+        strategicTargetService.updateTargets(targetCatalog.getStrategicCandidates());
+      }
+    }
+
     if (!playerFlowFieldService) {
       updateFlowField(bossFlowFieldService);
       return;
     }
 
     const playerGoalCells: { gridX: number; gridY: number }[] = [];
-    for (const player of this.ctx.playerManager.getAllPlayers()) {
-      if (!player.sprite.active) continue;
-      if (!this.ctx.combatSystem.isAlive(player.id)) continue;
-      if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
-
-      const goalCell = playerFlowFieldService.worldToGrid(player.sprite.x, player.sprite.y);
-      if (!goalCell) continue;
-      playerGoalCells.push(goalCell);
+    if (targetCatalog) {
+      targetCatalog.forEachTarget('player-like', (target) => {
+        const position = target.resolvePosition?.(0, 0) ?? { x: target.x, y: target.y };
+        const goalCell = playerFlowFieldService.worldToGrid(position.x, position.y);
+        if (!goalCell) return;
+        playerGoalCells.push(goalCell);
+      });
+    } else {
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        if (!player.sprite.active) continue;
+        if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+        if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+        if (this.ctx.decoySystem.isStealthed(player.id)) continue;
+        const goalCell = playerFlowFieldService.worldToGrid(player.sprite.x, player.sprite.y);
+        if (!goalCell) continue;
+        playerGoalCells.push(goalCell);
+      }
     }
 
     playerFlowFieldService.setDynamicGoalCells(playerGoalCells);
@@ -2149,51 +2244,6 @@ export class HostUpdateCoordinator {
     updateFlowField(bossFlowFieldService);
 
     if (strategicFlowFieldService && strategicTargetService) {
-      const candidates: EnemyStrategicTargetCandidate[] = [];
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        if (!player.sprite.active || !this.ctx.combatSystem.isAlive(player.id)) continue;
-        if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
-        const goal = strategicFlowFieldService.worldToGrid(player.sprite.x, player.sprite.y);
-        if (!goal) continue;
-        candidates.push({
-          kind: 'player',
-          id: player.id,
-          x: player.sprite.x,
-          y: player.sprite.y,
-          goalCells: [goal],
-        });
-      }
-
-      for (const construction of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-        if (construction.hp <= 0 || construction.kind !== 'turret') continue;
-        const world = strategicFlowFieldService.gridToWorld(construction.gridX, construction.gridY);
-        if (!world) continue;
-        candidates.push({
-          kind: 'armed-construct',
-          id: String(construction.id),
-          x: world.x,
-          y: world.y,
-          goalCells: this.buildAdjacentGoalCells([{ gridX: construction.gridX, gridY: construction.gridY }]),
-        });
-      }
-
-      for (const base of this.ctx.baseManager?.getBasesByFaction('friendly') ?? []) {
-        if (base.role !== 'outpost' || base.isInert?.() === true || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
-        const turret = base.getTurrets()[0];
-        candidates.push({
-          kind: 'armed-outpost',
-          id: base.id,
-          x: turret.x,
-          y: turret.y,
-          goalCells: this.buildAdjacentGoalCells(base.getSpec().cells),
-          resolvePosition: (fromX, fromY) => {
-            const surface = base.getNearestSurfacePoint(fromX, fromY);
-            return surface ? { x: surface.x, y: surface.y } : null;
-          },
-        });
-      }
-
-      strategicTargetService.updateTargets(candidates);
       updateFlowField(strategicFlowFieldService);
     }
 

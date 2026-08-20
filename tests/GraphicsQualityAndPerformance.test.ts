@@ -9,6 +9,7 @@ import {
   setStoredGraphicsQuality,
 } from '../src/utils/localPreferences';
 import { ArenaRuntimeProfiler, type ArenaRuntimeSample } from '../src/scenes/arena/ArenaRuntimeProfiler';
+import { ABLATION_CODES, ABLATION_LABELS } from '../src/scenes/arena/PerformanceAblation';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -283,6 +284,25 @@ describe('ArenaRuntimeProfiler', () => {
     expect(report?.windows[0].timings.roleStepMs.avg).toBe(6);
     expect(report?.windows[0].timings.renderSubmitMs.avg).toBe(4);
     expect(report?.windows[0].over33msPercent).toBe(50);
+  });
+
+  it('exports the separated ablation categories without changing the report schema', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.startRecording();
+    profiler.record(sample());
+    now = 200;
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.schemaVersion).toBe(4);
+    expect(report?.ablation.codes).toEqual(ABLATION_CODES);
+    expect(report?.ablation.labels).toEqual(ABLATION_LABELS);
+    expect(report?.ablation.labels.vectorShapes).toBe('Arc/Graphics-Rendering');
+    expect(report?.ablation.labels.gpuParticles).toBe('SpriteGPU-VFX (SpriteGPULayer)');
   });
 
   it('keeps the environment of the recording instead of the export moment', () => {

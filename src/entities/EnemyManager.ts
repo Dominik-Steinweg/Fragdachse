@@ -10,7 +10,9 @@ import {
   ENEMY_NET_ROTATION_DELTA_RAD,
 } from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
+import { resolveEnemySmokeConfusion, type EnemySmokeConfusionState } from '../systems/EnemySmokeConfusion';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
+import type { SmokeSystem } from '../effects/SmokeSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { BurrowPhase, SpawnFront, SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import {
@@ -120,6 +122,7 @@ export class EnemyManager {
   private forceFullNetSnapshot = false;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
+  private readonly smokeConfusionStates = new Map<string, EnemySmokeConfusionState>();
   private readonly separationVector = { x: 0, y: 0 };
   // --- Persistent separation grid (recycled across frames to avoid per-frame Map/Array allocations) ---
   private readonly separationGrid = new Map<number, EnemyEntity[]>();
@@ -273,6 +276,7 @@ export class EnemyManager {
     burrowSystem?: EnemyBurrowMovementSource | null,
     combatPositioningSystem?: EnemyCombatPositioningSource | null,
     specialMovementSource?: EnemySpecialMovementSource | null,
+    smokeSystem?: SmokeSystem | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
@@ -339,6 +343,7 @@ export class EnemyManager {
       }
 
       if (!primaryFlowFieldService) {
+        this.smokeConfusionStates.delete(enemy.id);
         enemy.stopMovement();
         continue;
       }
@@ -453,10 +458,29 @@ export class EnemyManager {
       // Steht der Gegner exakt auf dem Wegpunkt, liefert die Normalisierung 0/0. Dann traegt der
       // Zellvektor weiter, statt die Bewegung fuer einen Frame auf die Separation zu reduzieren.
       const waypointDirection = steerDirection.x === 0 && steerDirection.y === 0 ? vector : steerDirection;
+      const navigationDirection = resolveEnemySmokeConfusion(
+        this.smokeConfusionStates,
+        enemy.id,
+        enemy.sprite.x,
+        enemy.sprite.y,
+        smokeSystem ?? null,
+        flowFieldService,
+        gridCell.gridX,
+        gridCell.gridY,
+        waypointDirection,
+        now,
+      ) ?? waypointDirection;
       let targetVx = waypointDirection.x * speed
         + separation.x * SEPARATION_STRENGTH * separationMultiplier * speed;
       let targetVy = waypointDirection.y * speed
         + separation.y * SEPARATION_STRENGTH * separationMultiplier * speed;
+
+      if (navigationDirection !== waypointDirection) {
+        targetVx = navigationDirection.x * speed
+          + separation.x * SEPARATION_STRENGTH * separationMultiplier * speed;
+        targetVy = navigationDirection.y * speed
+          + separation.y * SEPARATION_STRENGTH * separationMultiplier * speed;
+      }
 
       const targetSpeed = Math.hypot(targetVx, targetVy);
       if (targetSpeed > speed) {
@@ -477,6 +501,7 @@ export class EnemyManager {
       }
     }
   }
+
 
   isEnemyPanicking(enemyId: string): boolean {
     return this.wildfirePanicStates.has(enemyId);
@@ -859,6 +884,7 @@ export class EnemyManager {
     this.netSnapshotCache.delete(id);
     this.destroyEnemyEntity(id, enemy);
     this.wildfirePanicStates.delete(id);
+    this.smokeConfusionStates.delete(id);
     return death;
   }
 
@@ -895,6 +921,7 @@ export class EnemyManager {
     this.netSnapshotCache.delete(id);
     this.destroyEnemyEntity(id, enemy);
     this.wildfirePanicStates.delete(id);
+    this.smokeConfusionStates.delete(id);
     for (const spawnConfig of deathSpawns) {
       const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
       for (let index = 0; index < spawnConfig.count; index += 1) {
@@ -979,6 +1006,7 @@ export class EnemyManager {
     }
     this.enemies.clear();
     this.wildfirePanicStates.clear();
+    this.smokeConfusionStates.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovals.clear();
     this.separationGrid.clear();

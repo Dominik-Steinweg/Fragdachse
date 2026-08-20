@@ -488,7 +488,7 @@ export interface DamageOverTimeAreaConfig {
   readonly baseDamageMult?: number;
 }
 
-export type HomingTargetType = 'players' | 'enemies' | 'bases' | 'train' | 'projectiles' | 'turrets';
+export type HomingTargetType = 'players' | 'decoys' | 'enemies' | 'bases' | 'train' | 'projectiles' | 'turrets';
 export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 
 /**
