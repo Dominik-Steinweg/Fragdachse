@@ -150,7 +150,9 @@ Jeder Round-Teardown muss Emitter, Tweens, Timer, Filter, temporäre Texturen, R
 
 ## SpriteGPULayer-Partikel
 
-`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind die Airstrike-Partikel, der Rocket-Exhaust und der Rocket-Smoke.
+`Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Der Ringbuffer-Pool dafuer ist `src/effects/gpu/GpuVfxPool.ts`, die Flow-Semantik `src/effects/gpu/ParticleFlowScheduler.ts`. Bisher migriert sind die Airstrike-Partikel, Rocket-Exhaust, Rocket-Smoke und die vier kontinuierlichen StinkCloud-Familien.
+
+`ParticleEmitter.setFrequency()` setzt `flowCounter = frequency` zurueck. Pro Frame aufgerufen kann der Zaehler nie unter null laufen, solange `delta < frequency` – der Emitter emittiert dann **nichts** und meldet sich erst bei Frames, die laenger dauern als sein Intervall. Frequenzen gehoeren deshalb entweder hinter eine Aenderungserkennung (so machen es EntityBurnRenderer, SmokeSystem und PlasmaChargeRenderer) oder direkt auf `emitter.frequency` geschrieben. Beim Portieren eines Emitters immer erst pruefen, ob er im Ist-Zustand ueberhaupt emittiert.
 
 `src/effects/gpu/GpuVfxRegistry.ts` ist die gemeinsame Klammer und der einzige Ort, an dem neue Effekte andocken – kein Effekt baut sich seine eigene Layer-, Uhr- oder Ablationslogik. Sie legt Layer an (Blend, Depth, Ease-Vorwaermung, Priming), haelt eine gemeinsame Partikeluhr, behandelt den Zeit-Ruecksprung, faehrt den Retire-Sweep und schaltet Rendering plus Scheduler fuer die Ablation gemeinsam ab. Die Reihenfolge in `update()` ist Vertrag: erst stilllegen, dann emittieren, weil `acquire()` nur freie Slots vergibt. Effekte melden ihren Emissions-Tick ueber `registerEmission()` an; `ArenaScene` ruft genau ein `gpuVfx.update(delta)` pro Frame, rollen- und netzzustandsunabhaengig.
 

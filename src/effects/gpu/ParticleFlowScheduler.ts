@@ -34,6 +34,18 @@ export class ParticleFlowScheduler {
   }
 
   /**
+   * Setzt den Countdown auf die aktuelle Frequenz zurueck – die Semantik von Phasers
+   * `setFrequency()`.
+   *
+   * Nur fuer Effekte gedacht, die das heute schon pro Frame tun und deren Ist-Verhalten
+   * dadurch an die Framerate gekoppelt ist. Regulaere Flow-Emission darf den laufenden
+   * Countdown nicht anfassen, sonst kommt sie bei `delta < frequency` nie zum Zug.
+   */
+  resetCountdown(): void {
+    this.counterMs = this.frequencyMs;
+  }
+
+  /**
    * Ein Frame Fortschritt. Rueckgabe ist die Zahl der jetzt faelligen Partikel; nach jedem
    * davon wird die gueltige Frequenz aufaddiert, wie in Phasers `flow`. `frequencyMs` ist
    * immer >= 1, die Schleife terminiert daher auch bei grossen Deltas.

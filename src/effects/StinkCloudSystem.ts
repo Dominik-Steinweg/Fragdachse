@@ -1,9 +1,11 @@
 import * as Phaser from 'phaser';
 import { DEPTH, NET_SMOOTH_TIME_MS, VOID_FIRE_COLOR } from '../config';
-import { circleZone, edgeZone, ensureCanvasTexture } from './EffectUtils';
+import { edgeZone, ensureCanvasTexture } from './EffectUtils';
 import type { DamageZoneVisualStyle, SyncedStinkCloud } from '../types';
 import type { LightingSystem } from './LightingSystem';
 import type { LightPresetKey } from './LightingConfig';
+import type { GpuVfxRegistry } from './gpu/GpuVfxRegistry';
+import { StinkCloudGpuParticles, type StinkCloudParticleTints } from './StinkCloudGpuParticles';
 
 /* ── Texture keys ─────────────────────────────────────── */
 const TEX_STINK_GROUND = 'stink_ground';
@@ -195,12 +197,7 @@ interface StinkCloudVisual {
   blobs:          StinkBlob[];
   neonCore:       Phaser.GameObjects.Image;
   outerGlow:      Phaser.GameObjects.Image;
-  accentEmitter:  Phaser.GameObjects.Particles.ParticleEmitter;
-  plumeEmitter:   Phaser.GameObjects.Particles.ParticleEmitter;
-  edgeEmitter:    Phaser.GameObjects.Particles.ParticleEmitter;
-  innerEmitter:   Phaser.GameObjects.Particles.ParticleEmitter;
   fairnessCircle: Phaser.GameObjects.Graphics;
-  zoneRadius:     number;
   visualVariant:  DamageZoneVisualStyle;
   birthTime:      number;
   /** Interpolated display position (lerped toward target each frame) */
@@ -230,11 +227,43 @@ const CLOUD_LIGHT: Record<DamageZoneVisualStyle, {
   electric: { preset: 'electricField',  color: 0xcdf1ff, radiusScale: 1.6, intensity: 1.0 },
 };
 
+/**
+ * Tint-Auswahl der vier Partikelfamilien je Variante. Einmal aufgeloest statt pro Wolke neu
+ * zusammengebaut; die Auswahl selbst passiert beim Spawn wie in Phasers Tint-Array-Op.
+ */
+const PARTICLE_TINTS: Readonly<Record<DamageZoneVisualStyle, StinkCloudParticleTints>> = {
+  stink: {
+    inner:  [TINT_PARTICLE_1, TINT_PARTICLE_2, TINT_TOXIC],
+    accent: [TINT_CHEM_BLUE, TINT_CHEM_CYAN, TINT_SULFUR],
+    plume:  [TINT_PARTICLE_2, TINT_PARTICLE_3, TINT_ACID],
+    edge:   [TINT_RIM_SOFT, TINT_ACID, TINT_CHEM_CYAN],
+  },
+  spore: {
+    inner:  [TINT_PARTICLE_1, TINT_PARTICLE_2, TINT_TOXIC],
+    accent: [TINT_CHEM_BLUE, TINT_CHEM_CYAN, TINT_SULFUR],
+    plume:  [TINT_PARTICLE_2, TINT_PARTICLE_3, TINT_ACID],
+    edge:   [TINT_RIM_SOFT, TINT_ACID, TINT_CHEM_CYAN],
+  },
+  spore_void: {
+    inner:  [...VOID_SPORE_PARTICLE],
+    accent: [...VOID_SPORE_PARTICLE],
+    plume:  [...VOID_SPORE_PARTICLE],
+    edge:   [...VOID_SPORE_EDGE],
+  },
+  electric: {
+    inner:  [...ELEC_PARTICLE],
+    accent: [...ELEC_PARTICLE],
+    plume:  [...ELEC_PARTICLE],
+    edge:   [...ELEC_EDGE],
+  },
+};
+
 export class StinkCloudSystem {
   private readonly activeZones: ActiveStinkCloud[] = [];
   private readonly visuals = new Map<number, StinkCloudVisual>();
   private nextId = 0;
   private lighting: LightingSystem | null = null;
+  private gpuParticles: StinkCloudGpuParticles | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.ensureTextures();
@@ -242,6 +271,16 @@ export class StinkCloudSystem {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+  }
+
+  /**
+   * Legt die geteilten GPU-Layer der vier kontinuierlichen Partikelfamilien an – einmalig,
+   * szenenlebenslang, niemals pro Wolke. Die Registry existiert erst mit dem Renderer-Bundle,
+   * deshalb wie beim Lighting eine nachgereichte Injektion.
+   */
+  setGpuVfxRegistry(registry: GpuVfxRegistry | null): void {
+    if (!registry || this.gpuParticles) return;
+    this.gpuParticles = new StinkCloudGpuParticles(this.scene, registry, TEX_STINK_PUFF, STINK_DEPTH);
   }
 
   // ── Host API ───────────────────────────────────────────────────────────────
@@ -548,72 +587,12 @@ export class StinkCloudSystem {
       return { image: img, template: tmpl, phase: Math.random() * Math.PI * 2 };
     });
 
-    /* ── Inner particle emitter (rolling core gas) ── */
-    const innerEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_STINK_PUFF, {
-      lifespan:  { min: 900, max: 1800 },
-      frequency: 52,
-      quantity:  1,
-      speedX:    { min: -18, max: 18 },
-      speedY:    { min: -16, max: 10 },
-      scale:     { start: 0.34, end: 1.0 },
-      alpha:     { start: 0.2, end: 0 },
-      tint:      isElectric ? [...ELEC_PARTICLE] : isVoidSpore ? [...VOID_SPORE_PARTICLE] : [TINT_PARTICLE_1, TINT_PARTICLE_2, TINT_TOXIC],
-      rotate:    { min: 0, max: 360 },
-      emitting:  true,
-      blendMode: isElectric || isVoidSpore ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
-    });
-    innerEmitter.setDepth(STINK_DEPTH);
-    innerEmitter.addEmitZone(circleZone(Math.max(r * 0.42, 10)));
-
-    const accentEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_STINK_PUFF, {
-      lifespan:  { min: 900, max: 1600 },
-      frequency: 44,
-      quantity:  1,
-      speedX:    { min: -14, max: 14 },
-      speedY:    { min: -20, max: 6 },
-      scale:     { start: 0.12, end: 0.42 },
-      alpha:     { start: 0.34, end: 0 },
-      tint:      isElectric ? [...ELEC_PARTICLE] : isVoidSpore ? [...VOID_SPORE_PARTICLE] : [TINT_CHEM_BLUE, TINT_CHEM_CYAN, TINT_SULFUR],
-      rotate:    { min: 0, max: 360 },
-      emitting:  true,
-      blendMode: Phaser.BlendModes.ADD,
-    });
-    accentEmitter.setDepth(STINK_DEPTH + 0.03);
-    accentEmitter.addEmitZone(circleZone(Math.max(r * 0.3, 8)));
-
-    /* ── Upward plume emitter (sells volume) ── */
-    const plumeEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_STINK_PUFF, {
-      lifespan:  { min: 1400, max: 2600 },
-      frequency: 62,
-      quantity:  1,
-      speedX:    { min: -10, max: 10 },
-      speedY:    { min: -34, max: -12 },
-      scale:     { start: 0.3, end: 1.26 },
-      alpha:     { start: 0.16, end: 0 },
-      tint:      isElectric ? [...ELEC_PARTICLE] : isVoidSpore ? [...VOID_SPORE_PARTICLE] : [TINT_PARTICLE_2, TINT_PARTICLE_3, TINT_ACID],
-      rotate:    { min: 0, max: 360 },
-      emitting:  true,
-      blendMode: isElectric || isVoidSpore ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
-    });
-    plumeEmitter.setDepth(STINK_DEPTH + 0.02);
-    plumeEmitter.addEmitZone(circleZone(Math.max(r * 0.24, 6)));
-
-    /* ── Edge emitter (bright wisps at the radius) ── */
-    const edgeEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_STINK_PUFF, {
-      lifespan:  { min: 1300, max: 2400 },
-      frequency: 34,
-      quantity:  3,
-      speedX:    { min: -18, max: 18 },
-      speedY:    { min: -18, max: 18 },
-      scale:     { start: 0.22, end: 1.36 },
-      alpha:     { start: 0.22, end: 0 },
-      tint:      isElectric ? [...ELEC_EDGE] : isVoidSpore ? [...VOID_SPORE_EDGE] : [TINT_RIM_SOFT, TINT_ACID, TINT_CHEM_CYAN],
-      rotate:    { min: 0, max: 360 },
-      emitting:  true,
-      blendMode: Phaser.BlendModes.ADD,
-    });
-    edgeEmitter.setDepth(STINK_DEPTH + 0.04);
-    edgeEmitter.addEmitZone(edgeZone(Math.max(r * 0.86, 12), 56));
+    /* ── Kontinuierliche Partikel (inner/plume/accent/edge) auf geteilten GPU-Layern ── */
+    this.gpuParticles?.registerCloud(
+      cloud.id,
+      cloud.visualVariant ?? 'stink',
+      PARTICLE_TINTS[cloud.visualVariant ?? 'stink'],
+    );
 
     /* ── Fairness circle: readable, still organic ── */
     const fairnessCircle = this.scene.add.graphics()
@@ -632,12 +611,7 @@ export class StinkCloudSystem {
       blobs,
       neonCore,
       outerGlow,
-      accentEmitter,
-      plumeEmitter,
-      edgeEmitter,
-      innerEmitter,
       fairnessCircle,
-      zoneRadius:  r,
       visualVariant: cloud.visualVariant ?? 'stink',
       birthTime:   this.scene.time.now,
       displayX:    cloud.x,
@@ -733,49 +707,18 @@ export class StinkCloudSystem {
       b.image.setRotation(t * (0.06 + tp.swirl * 0.02) + p);
     }
 
-    /* ── Edge emitter ── */
-    visual.edgeEmitter.setPosition(x, y).setVisible(visible);
-    visual.edgeEmitter.setAlpha(Phaser.Math.Linear(0.1, 0.24, alpha));
-    visual.edgeEmitter.setFrequency(Math.floor(Phaser.Math.Linear(54, 24, alpha)), 3);
-    visual.edgeEmitter.setParticleScale(0.24 * rScale, Phaser.Math.Linear(1.08, 1.68, alpha) * rScale);
-
-    /* ── Inner emitter ── */
-    visual.innerEmitter.setPosition(x, y).setVisible(visible);
-    visual.innerEmitter.setAlpha(Phaser.Math.Linear(0.12, 0.28, alpha));
-    visual.innerEmitter.setFrequency(Math.floor(Phaser.Math.Linear(74, 34, alpha)), 2);
-    visual.innerEmitter.setParticleScale(0.22 * rScale, Phaser.Math.Linear(0.82, 1.26, alpha) * rScale);
-
-    /* ── Neon accent emitter ── */
-    visual.accentEmitter.setPosition(x, y - radius * 0.04).setVisible(visible);
-    visual.accentEmitter.setAlpha(Phaser.Math.Linear(0.08, 0.18 + pulseWave * 0.14, alpha));
-    visual.accentEmitter.setFrequency(Math.floor(Phaser.Math.Linear(54, 18, alpha)), 1);
-    visual.accentEmitter.setParticleScale(0.1 * rScale, Phaser.Math.Linear(0.24, 0.66 + pulseWave * 0.18, alpha) * rScale);
-
-    /* ── Upward plume emitter ── */
-    visual.plumeEmitter.setPosition(x, y + radius * 0.12).setVisible(visible);
-    visual.plumeEmitter.setAlpha(Phaser.Math.Linear(0.08, 0.18, alpha));
-    visual.plumeEmitter.setFrequency(Math.floor(Phaser.Math.Linear(92, 42, alpha)), 2);
-    visual.plumeEmitter.setParticleScale(0.18 * rScale, Phaser.Math.Linear(0.94, 1.46, alpha) * rScale);
+    /* ── Kontinuierliche Partikel: nur den Wolkenzustand nachfuehren ── */
+    // Neue Puffs entstehen an der aktuellen interpolierten Position; bereits gespawnte Member
+    // laufen rein GPU-seitig weiter und bleiben bei bewegten Wolken bewusst in Weltkoordinaten
+    // zurueck. Das ist billiger als eine Member-Aktualisierung pro Frame und faellt bei
+    // Gaswolken kaum auf. Wolkenbild, Fairness-Radius und Licht folgen weiterhin exakt.
+    this.gpuParticles?.syncCloud(cloud.id, x, y, radius, alpha, pulseWave, visible);
 
     /* ── Fairness circle ── */
     this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t, cloud.visualVariant);
 
     /* ── Dynamisches Licht der Fläche ── */
     this.syncCloudLight(cloud, x, y, radius, alpha);
-
-    /* ── Emit-zone resize ── */
-    const target = Math.max(radius * 0.86, 12);
-    if (Math.abs(target - visual.zoneRadius) >= 5) {
-      visual.edgeEmitter.clearEmitZones();
-      visual.edgeEmitter.addEmitZone(edgeZone(target, 56));
-      visual.innerEmitter.clearEmitZones();
-      visual.innerEmitter.addEmitZone(circleZone(Math.max(target * 0.5, 8)));
-      visual.accentEmitter.clearEmitZones();
-      visual.accentEmitter.addEmitZone(circleZone(Math.max(target * 0.36, 8)));
-      visual.plumeEmitter.clearEmitZones();
-      visual.plumeEmitter.addEmitZone(circleZone(Math.max(target * 0.28, 6)));
-      visual.zoneRadius = target;
-    }
   }
 
   /**
@@ -952,14 +895,7 @@ export class StinkCloudSystem {
     visual.groundGlow.destroy();
     visual.damageAura.destroy();
     visual.reactionPulse.destroy();
-    visual.accentEmitter.stop();
-    visual.accentEmitter.destroy();
-    visual.plumeEmitter.stop();
-    visual.plumeEmitter.destroy();
-    visual.edgeEmitter.stop();
-    visual.edgeEmitter.destroy();
-    visual.innerEmitter.stop();
-    visual.innerEmitter.destroy();
+    this.gpuParticles?.releaseCloud(visual.lastCloud.id);
     visual.neonCore.destroy();
     visual.outerGlow.destroy();
     visual.fairnessCircle.destroy();

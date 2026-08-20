@@ -944,6 +944,7 @@ export class ArenaScene extends Phaser.Scene {
     // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
+    stinkCloudSystem.setGpuVfxRegistry(this.renderers.gpuVfx);
     smokeSystem.setLightingSystem(this.renderers.lighting);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     // Die Lobby-Inszenierung braucht die fertige Renderkette und entsteht deshalb hier,
