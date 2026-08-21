@@ -10,12 +10,15 @@ Neue Emitter und Filter über die bestehende Qualitätsinfrastruktur registriere
 
 ## Dauerhafte Hotpath-Regeln
 
-- Laufende Performance-Diagnostik ist ausschließlich während einer expliziten Aufzeichnung oder
-  geöffneten Live-Ansicht aktiv. `ArenaRuntimeProfiler` besitzt den zentralen Lifecycle; Frame-,
-  GL-/Draw-Call- und GPU-Hooks, Scene-/DisplayObject-Scans, Detailmetriken sowie zusätzliche
-  `performance.now()`-Messungen werden beim Aktivieren gemeinsam installiert und beim Deaktivieren
-  vollständig entfernt. Die funktionale Transportbasisdiagnose (Lobby-Ping und Relay-Erkennung)
-  bleibt davon unberührt.
+- Laufende Performance-Diagnostik ist ausschließlich während einer expliziten Trace-Assist-
+  Aufzeichnung oder geöffneten Live-Ansicht aktiv. `ArenaRuntimeProfiler` besitzt den zentralen
+  Lifecycle. Die normale Companion-Serie läuft mit 4 Hz: Gauges beschreiben den aktuellen Zustand,
+  Intervallfelder werden seit dem letzten Sample per Delta/Total/Max gesammelt, damit kurze CPU-,
+  Snapshot-, Flowfield-, Rock- und VFX-Bursts nicht zwischen zwei 250-ms-Samples verschwinden.
+  Es gibt keinen periodischen Scene-Vollscan; Scene Inspection ist eine ausdrückliche Aktion.
+  Der GPU-Timer bleibt auf aufgezeichnete Frames begrenzt und exportiert asynchrone Ergebnisse als
+  sparse `{atMs, renderFrame, durationMs}`-Serie. Die funktionale Transportbasisdiagnose
+  (Lobby-Ping und Relay-Erkennung) bleibt davon unberührt.
 - Statische Arena- und Menüflächen backen, wenn sie unveränderlich sind. Dynamische Hindernisse, Blut und Gameplay-Visuals bleiben separat, damit Zerstörung und Replikation nicht gegen einen Bake arbeiten.
 - Segmentbasierte Hindernisprüfungen laufen über die eine Round-Instanz von ArenaObstacleIndex; nicht pro Kandidat getBounds() aufrufen. Der Index darf konservativ filtern, aber keinen echten Treffer auslassen, und wird bei Geometrieänderungen synchron invalidiert.
 - Homing- und Zielsuche erst bewerten, dann Sichtlinie für die besten Kandidaten prüfen. Keine per-Gegner-Flowfields oder temporären Arrays erzeugen, wenn die bestehenden Services/Callbacks dieselbe Information liefern.
@@ -134,11 +137,28 @@ weiterhin ganz vorn in `playDestruction()`.
 
 ## Messworkflow
 
-T öffnet PerformanceDiagnosticsOverlay. Der Profiler trennt Frame-Delta, Scene-Update, Render-Abgabe, Netzwerk, Host-Simulation, Client-Synchronisierung und Visual-Buckets. Render-Abgabe ist CPU-Zeit um Phaser-Render-Ereignisse, nicht automatisch GPU-Zeit.
+T öffnet PerformanceDiagnosticsOverlay. Der Profiler trennt Frame-Delta, aktuelle Gauges,
+Intervallaggregate, Netzwerk, Host-Simulation, Client-Synchronisierung und semantische Visual-
+Buckets. `hostCpuMs`/`clientCpuMs` sind Intervall-Total/Maxwerte; Durchschnittswerte werden erst
+aus Total/Count abgeleitet. Worker-Compute wird vollständig im Worker gemessen, Round-Trip
+vollständig im Main Thread; `atMs` bleibt immer Main-Thread-Sessionzeit. Render-Abgabe ist
+CPU-Zeit um Phaser-Render-Ereignisse, nicht automatisch GPU-Zeit.
 
 Für Ursachenzuordnung den vorhandenen Ablationsmodus verwenden: immer baseline → Kategorie → baseline, gleiche Map und stabile Spielsituation. ΔgameStepMs/ΔrenderSubmitMs über mehrere Zyklen auswerten, nicht FPS-Sprünge oder zwei verschiedene Ablationen direkt vergleichen. Ablation schaltet Darstellung ab; Host-Logik, Physik und Netzwerk laufen weiter.
 
-Chrome DevTools nur ergänzend und nicht gleichzeitig mit dem In-App-Profiler verwenden. P95/P99 und Slow-Frame-Anteil sind für Hänger aussagekräftiger als ein Mittelwert. Report-Schema und Messfelder leben in src/scenes/arena/ArenaRuntimeProfiler.ts und src/scenes/arena/PerformanceAblation.ts; nicht in Markdown nacherzählen.
+Empfohlener Korrelation-Workflow: Chrome Recording starten → Trace Assist starten → spielen →
+Trace Assist stoppen → Chrome Recording stoppen. Die `FD:session:sync:<id>:<elapsedMs>`-Marker
+alle fünf Sekunden sind eine robuste Fallback-Korrelation, aber bei sehr kurzen Chrome-Aufnahmen
+nicht garantiert enthalten. Der bisherige Workflow bleibt gültig, sobald mindestens ein Sync-
+Marker im Chrome-Trace liegt. P95/P99 und Slow-Frame-Anteil sind für Hänger aussagekräftiger als
+ein Mittelwert. Report-Schema und Messfelder leben in
+`src/scenes/arena/ArenaRuntimeProfiler.ts` und `src/scenes/arena/PerformanceAblation.ts`.
+
+Netzwerk-`bytesSent`/`bytesReceived` stammen weiterhin als echte Transportwerte aus WebRTC-
+Statistiken. Diagnose führt keine zusätzliche Serialisierungs- oder UTF-8-Runde ein; lokale
+Payload-Warnungen sind ausdrücklich nur geschätzt. Session-Kontext wie Rolle, Phase, Modus, Map,
+Quality sowie Rock-Renderer/Page-Size wird als beobachteter Kontext fortgeschrieben und nicht nur
+im Start-Environment eingefroren.
 
 ## Verifikation
 

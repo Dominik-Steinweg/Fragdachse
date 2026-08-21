@@ -119,6 +119,7 @@ export class HostUpdateCoordinator {
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private lastPerformance = emptyHostUpdatePerformanceMetrics();
   private performanceMetricsEnabled = false;
+  private coarsePerformanceMetricsEnabled = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -142,8 +143,12 @@ export class HostUpdateCoordinator {
   setActive(v: boolean): void { this.active = v; }
 
   setPerformanceMetricsEnabled(enabled: boolean): void {
-    if (this.performanceMetricsEnabled === enabled) return;
-    this.performanceMetricsEnabled = enabled;
+    if (this.coarsePerformanceMetricsEnabled === enabled) return;
+    this.coarsePerformanceMetricsEnabled = enabled;
+    // Companion diagnostics keep only the complete host step and existing worker counters.
+    // Fine phase timing remains intentionally disabled so the diagnostics path does not add a
+    // performance.now() pair around every simulation subsystem.
+    this.performanceMetricsEnabled = false;
     if (!enabled) this.lastPerformance = emptyHostUpdatePerformanceMetrics();
   }
 
@@ -196,7 +201,7 @@ export class HostUpdateCoordinator {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
-    const startedAt = this.performanceMetricsEnabled ? performance.now() : 0;
+    const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     const metrics = this.performanceMetricsEnabled ? emptyHostUpdatePerformanceMetrics() : null;
     const countdownActive = bridge.isArenaCountdownActive();
     const now = Date.now();
@@ -959,6 +964,12 @@ export class HostUpdateCoordinator {
       if (metrics) {
         metrics.totalMs = performance.now() - startedAt;
         this.lastPerformance = metrics;
+      } else if (this.coarsePerformanceMetricsEnabled) {
+        this.lastPerformance = {
+          ...emptyHostUpdatePerformanceMetrics(),
+          totalMs: performance.now() - startedAt,
+          navWorkerComputeMs: this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0,
+        };
       }
       return;
     }
@@ -1137,6 +1148,13 @@ export class HostUpdateCoordinator {
       metrics.snapshotBuildMs = performance.now() - phaseStartedAt;
       metrics.totalMs = performance.now() - startedAt;
       this.lastPerformance = metrics;
+    } else if (this.coarsePerformanceMetricsEnabled) {
+      this.lastPerformance = {
+        ...emptyHostUpdatePerformanceMetrics(),
+        totalMs: performance.now() - startedAt,
+        networkTick: true,
+        navWorkerComputeMs: this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0,
+      };
     }
   }
 

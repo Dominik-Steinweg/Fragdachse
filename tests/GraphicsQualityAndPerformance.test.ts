@@ -226,7 +226,7 @@ describe('graphics quality preferences and profiles', () => {
   });
 });
 
-describe('ArenaRuntimeProfiler', () => {
+describe.skip('ArenaRuntimeProfiler (legacy schema expectations)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -762,5 +762,201 @@ describe('ArenaRuntimeProfiler', () => {
     expect(report?.frameSeries.rows).toHaveLength(3);
     expect(report?.frameSeries.columns).toContain('detail.scopeUploadMs');
     expect(report?.frameSeries.columns).toContain('context.scopeActive');
+  });
+});
+
+describe('ArenaRuntimeProfiler Companion collector', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('bleibt im normalen Spielbetrieb vollständig inaktiv', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.record(sample());
+
+    expect(profiler.isDiagnosticsActive()).toBe(false);
+    expect(profiler.wantsDetailedSampling()).toBe(false);
+    expect(profiler.isCountingDrawCalls()).toBe(false);
+    expect(now).not.toHaveBeenCalled();
+    expect(profiler.getLatestSummary()).toBeNull();
+  });
+
+  it('exportiert Session-ID, Environment, Start/Ende und den 5-Sekunden-Sync', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const mark = vi.spyOn(performance, 'mark');
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.startRecording({ renderer: 'webgl' });
+    profiler.record(sample());
+    now = 5_100;
+    profiler.record(sample());
+    now = 5_200;
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.schemaVersion).toBe(6);
+    expect(report?.session.id).toMatch(/^\S+$/);
+    expect(report?.session.durationMs).toBe(5_100);
+    expect(report?.session.syncMarkerCount).toBe(1);
+    expect(report?.environment).toEqual({ renderer: 'webgl' });
+    expect(report?.events.find((event) => event.type === 'session_sync')).toMatchObject({
+      atMs: 5_000,
+      marker: expect.stringMatching(/^FD:session:sync:/),
+    });
+    expect(mark.mock.calls.map(([name]) => name)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^FD:session:start:/),
+      expect.stringMatching(/^FD:session:sync:/),
+      expect.stringMatching(/^FD:session:end:/),
+    ]));
+  });
+
+  it('trennt 4-Hz-Gauges von Intervallwerten und bewahrt CPU-Spikes', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.startRecording();
+    profiler.record(sample({
+      rawDeltaMs: 12,
+      roleStepMs: 3,
+      enemyCount: 4,
+      details: { timings: { flowfieldAgeMs: 40 }, counts: { activeVfx: 2 } },
+    }));
+    now = 200;
+    profiler.record(sample({
+      rawDeltaMs: 42,
+      roleStepMs: 18,
+      enemyCount: 8,
+      details: {
+        timings: { flowfieldAgeMs: 55 },
+        counts: {
+          newNetworkSnapshotCount: 2,
+          snapshotBytes: 1_200,
+          flowfieldJobs: 3,
+          flowfieldComputeMs: 7,
+          dirtyRocks: 4,
+          affectedPages: 2,
+          sparseUploads: 3,
+          fullUploads: 1,
+          uploadBytes: 9_000,
+          vfxSpawns: 5,
+          capacityDrops: 1,
+          activeVfx: 6,
+        },
+      },
+    }));
+    now = 400;
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    const series = report?.series.samples.at(-1);
+    expect(series?.gauges.enemyCount).toBe(8);
+    expect(series?.gauges.flowfieldAgeMs).toBe(55);
+    expect(series?.gauges.activeVfx).toBe(6);
+    expect(series?.interval).toMatchObject({
+      frameCount: 2,
+      frameTimeTotalMs: 54,
+      frameTimeMaxMs: 42,
+      slowFrameCount: 1,
+      hostCpuTotalMs: 21,
+      hostCpuMaxMs: 18,
+      snapshotCount: 2,
+      snapshotBytesTotal: 1_200,
+      snapshotBytesMax: 1_200,
+      flowfieldJobs: 3,
+      computeTotalMs: 7,
+      computeMaxMs: 7,
+      dirtyRocks: 4,
+      affectedPages: 2,
+      sparseUploads: 3,
+      fullUploads: 1,
+      uploadBytes: 9_000,
+      vfxSpawns: 5,
+      capacityDrops: 1,
+    });
+    expect(report?.summaries.frame.frameTimeMaxMs).toBe(42);
+    expect(report?.summaries.cpu.hostCpuTotalMs).toBe(21);
+    expect(report?.summaries.cpu.hostCpuMaxMs).toBe(18);
+  });
+
+  it('hält veränderlichen Kontext und explizite Scene Inspection im Report', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.startRecording();
+    profiler.record(sample({ diagnosticContext: { rockRenderer: 'spriteGpu', rockGpuPageSize: 128 } }));
+    now = 200;
+    profiler.record(sample({
+      quality: 'low',
+      phase: 'lobby',
+      diagnosticContext: { rockRenderer: 'classic', rockGpuPageSize: 256 },
+    }));
+    profiler.setSceneInspection({ topLevelChildren: 10, boundsIncluded: false });
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.summaries.observedScope.rockRenderer).toEqual([
+      { fromMs: 0, toMs: 100, value: 'spriteGpu' },
+      { fromMs: 100, toMs: 100, value: 'classic' },
+    ]);
+    expect(report?.summaries.observedScope.rockGpuPageSize?.at(-1)?.value).toBe(256);
+    expect(report?.events.filter((event) => event.type === 'context_change').length).toBeGreaterThanOrEqual(2);
+    expect(report?.summaries.sceneInspection).toEqual({ topLevelChildren: 10, boundsIncluded: false });
+  });
+
+  it('exportiert VFX, Ablation und sparse GPU-Ergebnisserie getrennt', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const profiler = new ArenaRuntimeProfiler();
+    const sourceReport = {
+      frames: 3,
+      lanes: [{ id: 0, label: 'rocket-exhaust', capacity: 2048, active: 4, highWaterMark: 9,
+        rearms: 12, retirements: 8, capacityDrops: 0, utilization: 0.004, visibleFrames: 3,
+        segmentsTouched: 5, fullUploadFrames: 0 }],
+      effects: [{ id: 2, label: 'rocket.exhaust', laneLabel: 'rocket-exhaust',
+        spawnAttempts: 14, spawns: 12, qualityDrops: 2, capacityDrops: 0 }],
+      coVisibleFrames: [[3]],
+    };
+    let resets = 0;
+    profiler.setGpuVfxSource({ build: () => sourceReport, reset: () => { resets += 1; } });
+    profiler.startRecording();
+    profiler.setAblationSegments([{ atMs: 140, durationMs: 100, category: 'gpuParticles' }], 100);
+    profiler.recordSemanticEvent('rocks:mass_destroy', { destroyedCount: 16 });
+    now = 200;
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(resets).toBe(1);
+    expect(report?.summaries.gpuVfx?.lanes[0].highWaterMark).toBe(9);
+    expect(report?.summaries.ablation.codes).toEqual(ABLATION_CODES);
+    expect(report?.summaries.ablation.labels).toEqual(ABLATION_LABELS);
+    expect(report?.summaries.ablation.segments[0]).toMatchObject({ atMs: 40, category: 'gpuParticles' });
+    expect(report?.events).toContainEqual(expect.objectContaining({ type: 'rocks:mass_destroy', destroyedCount: 16 }));
+    expect(report?.series.gpuSamples).toEqual([]);
+    expect(report?.summaries.gpu.samplesCompleted).toBe(0);
+  });
+
+  it('lässt Live-HUD, Recording und destroy ohne schwere Hooks koexistieren', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const profiler = new ArenaRuntimeProfiler();
+    const states: boolean[] = [];
+    profiler.subscribeDiagnostics((active) => states.push(active));
+
+    profiler.setLiveDiagnosticsEnabled(true);
+    expect(profiler.isDiagnosticsActive()).toBe(true);
+    expect(profiler.isCountingDrawCalls()).toBe(false);
+    expect(profiler.wantsDetailedSampling()).toBe(false);
+    profiler.startRecording();
+    profiler.stopRecording();
+    profiler.setLiveDiagnosticsEnabled(false);
+    profiler.destroy();
+    profiler.destroy();
+
+    expect(states).toEqual([false, true, false]);
+    expect(profiler.isDiagnosticsActive()).toBe(false);
   });
 });

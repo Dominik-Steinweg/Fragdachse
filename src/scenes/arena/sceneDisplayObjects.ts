@@ -52,7 +52,10 @@ export function forEachAblationDisplayObject(
 
 /** Wie {@link forEachSceneDisplayObject}, aber als zaehlbare Gesamtzahl. */
 export function countSceneDisplayObjects(scene: Phaser.Scene): number {
-  let count = 0;
-  forEachSceneDisplayObject(scene, () => { count += 1; });
+  let count = scene.children.list.length;
+  for (const child of scene.children.list) {
+    const nested = child as Phaser.GameObjects.GameObject & { type?: string; list?: Phaser.GameObjects.GameObject[] };
+    if (nested.type === 'Layer' && Array.isArray(nested.list)) count += nested.list.length;
+  }
   return count;
 }

@@ -195,6 +195,34 @@ describe('FlowFieldCoordinator', () => {
     harness.coordinator.destroy();
   });
 
+  it('uses field cadence for stale diagnostics and exempts static base fields', () => {
+    const harness = createHarness({ autoFlush: true });
+    harness.coordinator.registerField('player', { goalMode: 'dynamic' });
+    harness.coordinator.registerField('strategic', { goalMode: 'dynamic', tickDivisor: 4 });
+    harness.coordinator.registerField('base', { goalMode: 'bases' });
+    harness.bootstrap();
+
+    const fields = harness.coordinator.getDiagnostics(1_000_000).fields;
+    expect(fields.player).toMatchObject({
+      targetCadenceMs: 50,
+      staleAfterMs: 150,
+      staleEligible: true,
+      stale: true,
+    });
+    expect(fields.strategic).toMatchObject({
+      targetCadenceMs: 200,
+      staleAfterMs: 600,
+      staleEligible: true,
+      stale: true,
+    });
+    expect(fields.base).toMatchObject({
+      staleAfterMs: null,
+      staleEligible: false,
+      stale: false,
+    });
+    harness.coordinator.destroy();
+  });
+
   it('drops a result from an earlier arena generation', () => {
     const harness = createHarness({ autoFlush: false });
     const view = harness.coordinator.registerField('player', { goalMode: 'dynamic' });

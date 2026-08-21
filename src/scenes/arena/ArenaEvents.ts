@@ -1,4 +1,5 @@
 export const ARENA_MAP_GRID_CHANGED_EVENT = 'arena-map-grid-changed';
+export const ARENA_ROCK_DESTROYED_EVENT = 'arena-rock-destroyed';
 
 export type ArenaMapGridChangeReason =
   | 'static_rock_destroyed'
@@ -16,6 +17,12 @@ export interface ArenaMapGridChangedEvent {
   readonly gridY?: number;
 }
 
+export interface ArenaRockDestroyedEvent {
+  readonly rockId: number;
+  readonly source: 'static_rock' | 'placeable_rock';
+  readonly reason: 'damage' | 'decay';
+}
+
 export interface ArenaEventBus {
   on(event: string, fn: (...args: any[]) => void, context?: unknown): this;
   off(event: string, fn?: (...args: any[]) => void, context?: unknown, once?: boolean): this;
@@ -27,4 +34,11 @@ export function emitArenaMapGridChanged(
   payload: ArenaMapGridChangedEvent,
 ): boolean {
   return eventBus?.emit(ARENA_MAP_GRID_CHANGED_EVENT, payload) ?? false;
+}
+
+export function emitArenaRockDestroyed(
+  eventBus: ArenaEventBus | null | undefined,
+  payload: ArenaRockDestroyedEvent,
+): boolean {
+  return eventBus?.emit(ARENA_ROCK_DESTROYED_EVENT, payload) ?? false;
 }

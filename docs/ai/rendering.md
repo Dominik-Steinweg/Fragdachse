@@ -241,7 +241,7 @@ Admission-Control ist eine rein logische Reserve auf `liveCount`: die letzten `r
 
 ### Diagnose
 
-`GpuVfxProfiler.ts` zaehlt auf zwei Ebenen, im Hotpath nur ueber TypedArray-Indizes: je Lane `capacity`, `active`, `highWaterMark`, `rearms`, `retirements`, `capacityDrops`, `utilization`, `visibleFrames`, `segmentsTouched`, `fullUploadFrames`; je logischem Effekt `spawnAttempts`, `spawns`, `qualityDrops`, `capacityDrops`. Beides landet im Performance-JSON (`ArenaPerformanceReport.gpuVfx`, `schemaVersion: 5`) und nicht nur im Live-Overlay. Sobald mehrere Effekte einen Layer teilen, beantwortet die Lane-Zeile allein nicht mehr, *wer* ihn fuellt.
+`GpuVfxProfiler.ts` zaehlt auf zwei Ebenen, im Hotpath nur ueber TypedArray-Indizes: je Lane `capacity`, `active`, `highWaterMark`, `rearms`, `retirements`, `capacityDrops`, `utilization`, `visibleFrames`, `segmentsTouched`, `fullUploadFrames`; je logischem Effekt `spawnAttempts`, `spawns`, `qualityDrops`, `capacityDrops`. Beides landet im Performance-JSON (`ArenaPerformanceReport.summaries.gpuVfx`, `schemaVersion: 6`) und nicht nur im Live-Overlay. `highWaterMark`/Peak bleibt Summary-Diagnostik; ein aktiver Auslastungsmarker basiert ausschließlich auf der aktuellen Belegung `liveCount / capacity`. Sobald mehrere Effekte einen Layer teilen, beantwortet die Lane-Zeile allein nicht mehr, *wer* ihn fuellt.
 
 ### Fallen, die bleiben
 

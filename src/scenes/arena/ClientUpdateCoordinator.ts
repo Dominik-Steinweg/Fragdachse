@@ -91,6 +91,7 @@ export class ClientUpdateCoordinator {
     worldStateMs: 0, interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
   };
   private performanceMetricsEnabled = false;
+  private coarsePerformanceMetricsEnabled = false;
 
   /** Locally reconstructed utility override from the host-published descriptor. */
   clientUtilityOverride: UtilityConfig | null = null;
@@ -116,8 +117,11 @@ export class ClientUpdateCoordinator {
   }
 
   setPerformanceMetricsEnabled(enabled: boolean): void {
-    if (this.performanceMetricsEnabled === enabled) return;
-    this.performanceMetricsEnabled = enabled;
+    if (this.coarsePerformanceMetricsEnabled === enabled) return;
+    this.coarsePerformanceMetricsEnabled = enabled;
+    // The companion HUD needs the complete client-sync cost, not a timestamp pair around every
+    // renderer and interpolation subsection.
+    this.performanceMetricsEnabled = false;
     if (!enabled) {
       this.lastPerformance = {
         totalMs: 0, snapshotMs: 0, playersMs: 0, projectilesEffectsMs: 0,
@@ -141,14 +145,14 @@ export class ClientUpdateCoordinator {
       };
       return;
     }
-    const startedAt = this.performanceMetricsEnabled ? performance.now() : 0;
+    const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     this.reconcileClientUtilityOverride();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.ctx.baseManager?.syncDormantStates();
     const state = bridge.getLatestGameState();
     if (!state) {
-      if (this.performanceMetricsEnabled) {
+      if (this.coarsePerformanceMetricsEnabled) {
         this.lastPerformance = {
           totalMs: performance.now() - startedAt,
           snapshotMs: performance.now() - startedAt,
@@ -462,6 +466,18 @@ export class ClientUpdateCoordinator {
         interpolationMs,
         hudMs,
         postSyncMs,
+        newSnapshot: isNewData,
+      };
+    } else if (this.coarsePerformanceMetricsEnabled) {
+      this.lastPerformance = {
+        totalMs: performance.now() - startedAt,
+        snapshotMs: 0,
+        playersMs: 0,
+        projectilesEffectsMs: 0,
+        worldStateMs: 0,
+        interpolationMs: 0,
+        hudMs: 0,
+        postSyncMs: 0,
         newSnapshot: isNewData,
       };
     }

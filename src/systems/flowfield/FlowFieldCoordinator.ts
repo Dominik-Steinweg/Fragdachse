@@ -133,13 +133,37 @@ export interface FlowFieldCoordinatorOptions {
 
 export interface FlowFieldDiagnostics {
   readonly runnerKind: FlowFieldRunnerKind;
+  readonly requestedUpdates: number;
   readonly dispatchedJobs: number;
+  readonly startedJobs: number;
+  readonly completedJobs: number;
   readonly activatedBatches: number;
   readonly droppedStale: number;
+  readonly coalescedJobs: number;
   readonly skippedUnchangedFields: number;
   readonly backlogTicks: number;
   readonly lastWorkerComputeMs: number;
+  readonly workerComputeTotalMs: number;
+  readonly workerComputeMaxMs: number;
+  readonly roundTripTotalMs: number;
+  readonly roundTripMaxMs: number;
   readonly lastRoundTripMs: number;
+  readonly fields: Readonly<Record<string, FlowFieldFieldDiagnostics>>;
+}
+
+export interface FlowFieldFieldDiagnostics {
+  readonly fieldId: string;
+  readonly goalMode: FlowFieldGoalMode;
+  readonly targetCadenceMs: number;
+  readonly staleAfterMs: number | null;
+  readonly staleEligible: boolean;
+  readonly requestedUpdates: number;
+  readonly startedJobs: number;
+  readonly completedJobs: number;
+  readonly coalescedJobs: number;
+  readonly skippedUnchangedFields: number;
+  readonly activeAgeMs: number | null;
+  readonly stale: boolean;
 }
 
 interface BufferPool {
@@ -160,6 +184,12 @@ interface CoordinatorField {
   dispatchedTopologyVersion: number;
   dispatchedPayload: unknown;
   activeSnapshot: FlowFieldSnapshot | null;
+  requestedUpdates: number;
+  startedJobs: number;
+  completedJobs: number;
+  coalescedJobs: number;
+  skippedUnchangedFields: number;
+  lastActivatedAtMs: number;
   readonly activationListeners: Set<(payload: unknown) => void>;
   readonly pool: BufferPool;
   readonly view: FlowFieldFieldView;
@@ -206,10 +236,18 @@ export class FlowFieldCoordinator {
   private destroyed = false;
 
   private dispatchedJobs = 0;
+  private requestedUpdates = 0;
+  private startedJobs = 0;
+  private completedJobs = 0;
+  private coalescedJobs = 0;
   private activatedBatches = 0;
   private droppedStale = 0;
   private skippedUnchangedFields = 0;
   private lastWorkerComputeMs = 0;
+  private workerComputeTotalMs = 0;
+  private workerComputeMaxMs = 0;
+  private roundTripTotalMs = 0;
+  private roundTripMaxMs = 0;
   private lastRoundTripMs = 0;
 
   constructor(options: FlowFieldCoordinatorOptions) {
@@ -265,6 +303,12 @@ export class FlowFieldCoordinator {
       dispatchedTopologyVersion: -1,
       dispatchedPayload: undefined,
       activeSnapshot: null,
+      requestedUpdates: 0,
+      startedJobs: 0,
+      completedJobs: 0,
+      coalescedJobs: 0,
+      skippedUnchangedFields: 0,
+      lastActivatedAtMs: 0,
       activationListeners: new Set(),
       pool: { integration: [], vector: [], goalSource: [], traversable: [] },
       view: undefined as unknown as FlowFieldFieldView,
@@ -300,7 +344,17 @@ export class FlowFieldCoordinator {
   setGoalCells(fieldId: string, goalIndexes: ArrayLike<number>, payload?: unknown): void {
     const field = this.fields.get(fieldId);
     if (!field) return;
-    field.rawGoals = sortedUnique(goalIndexes);
+    const nextGoals = sortedUnique(goalIndexes);
+    const changed = !sameIndexes(field.rawGoals, nextGoals) || field.pendingPayload !== payload;
+    if (changed) {
+      this.requestedUpdates += 1;
+      field.requestedUpdates += 1;
+      if (this.inFlightJobId >= 0) {
+        this.coalescedJobs += 1;
+        field.coalescedJobs += 1;
+      }
+    }
+    field.rawGoals = nextGoals;
     field.pendingPayload = payload;
   }
 
@@ -487,6 +541,11 @@ export class FlowFieldCoordinator {
   private dispatch(job: FlowFieldJobMessage | null): void {
     if (!job) return;
     this.dispatchedJobs += 1;
+    this.startedJobs += 1;
+    for (const resultField of job.fields) {
+      const field = this.fields.get(resultField.fieldId);
+      if (field) field.startedJobs += 1;
+    }
     this.inFlightJobId = job.jobId;
     this.inFlightSinceTick = this.tickCounter;
     this.inFlightStartedAt = nowMs();
@@ -501,6 +560,7 @@ export class FlowFieldCoordinator {
     for (const field of candidates) {
       if (!force && !this.needsRecompute(field)) {
         this.skippedUnchangedFields += 1;
+        field.skippedUnchangedFields += 1;
         continue;
       }
       field.goalVersion += 1;
@@ -562,8 +622,17 @@ export class FlowFieldCoordinator {
       return;
     }
     this.inFlightJobId = -1;
+    this.completedJobs += result.fields.length;
+    for (const resultField of result.fields) {
+      const field = this.fields.get(resultField.fieldId);
+      if (field) field.completedJobs += 1;
+    }
     this.lastWorkerComputeMs = result.computeMs;
-    this.lastRoundTripMs = nowMs() - this.inFlightStartedAt;
+    this.workerComputeTotalMs += Math.max(0, result.computeMs);
+    this.workerComputeMaxMs = Math.max(this.workerComputeMaxMs, result.computeMs);
+    this.lastRoundTripMs = Math.max(0, nowMs() - this.inFlightStartedAt);
+    this.roundTripTotalMs += this.lastRoundTripMs;
+    this.roundTripMaxMs = Math.max(this.roundTripMaxMs, this.lastRoundTripMs);
     this.completedBatch = result;
   }
 
@@ -591,6 +660,7 @@ export class FlowFieldCoordinator {
         goalIndexes: resultField.goalIndexes,
         profileTraversable: resultField.profileTraversable,
       };
+      field.lastActivatedAtMs = nowMs();
       activated.push(field);
     }
 
@@ -749,7 +819,17 @@ export class FlowFieldCoordinator {
       snapshot: () => field.activeSnapshot,
       counts: () => this.counts,
       setGoals: (goalIndexes, payload) => {
-        field.rawGoals = sortedUnique(goalIndexes);
+        const nextGoals = sortedUnique(goalIndexes);
+        const changed = !sameIndexes(field.rawGoals, nextGoals) || field.pendingPayload !== payload;
+        if (changed) {
+          this.requestedUpdates += 1;
+          field.requestedUpdates += 1;
+          if (this.inFlightJobId >= 0) {
+            this.coalescedJobs += 1;
+            field.coalescedJobs += 1;
+          }
+        }
+        field.rawGoals = nextGoals;
         field.pendingPayload = payload;
       },
       isGoalSuppressed: (index) => this.suppressedGoalIndexes.size > 0
@@ -781,16 +861,48 @@ export class FlowFieldCoordinator {
 
   // ---- Diagnose und Lifecycle ----
 
-  getDiagnostics(): FlowFieldDiagnostics {
+  getDiagnostics(atMs = nowMs()): FlowFieldDiagnostics {
+    const fields: Record<string, FlowFieldFieldDiagnostics> = {};
+    for (const [fieldId, field] of this.fields) {
+      const targetCadenceMs = this.navTickIntervalMs * field.tickDivisor;
+      const staleEligible = field.descriptor.goalMode !== 'bases';
+      const staleAfterMs = staleEligible ? targetCadenceMs * 3 : null;
+      const activeAgeMs = field.lastActivatedAtMs > 0
+        ? Math.max(0, atMs - field.lastActivatedAtMs)
+        : null;
+      fields[fieldId] = {
+        fieldId,
+        goalMode: field.descriptor.goalMode,
+        targetCadenceMs,
+        staleAfterMs,
+        staleEligible,
+        requestedUpdates: field.requestedUpdates,
+        startedJobs: field.startedJobs,
+        completedJobs: field.completedJobs,
+        coalescedJobs: field.coalescedJobs,
+        skippedUnchangedFields: field.skippedUnchangedFields,
+        activeAgeMs,
+        stale: staleEligible && activeAgeMs !== null && staleAfterMs !== null && activeAgeMs > staleAfterMs,
+      };
+    }
     return {
       runnerKind: this.runner.kind,
+      requestedUpdates: this.requestedUpdates,
       dispatchedJobs: this.dispatchedJobs,
+      startedJobs: this.startedJobs,
+      completedJobs: this.completedJobs,
       activatedBatches: this.activatedBatches,
       droppedStale: this.droppedStale,
+      coalescedJobs: this.coalescedJobs,
       skippedUnchangedFields: this.skippedUnchangedFields,
       backlogTicks: this.inFlightJobId >= 0 ? this.tickCounter - this.inFlightSinceTick : 0,
       lastWorkerComputeMs: this.lastWorkerComputeMs,
+      workerComputeTotalMs: this.workerComputeTotalMs,
+      workerComputeMaxMs: this.workerComputeMaxMs,
+      roundTripTotalMs: this.roundTripTotalMs,
+      roundTripMaxMs: this.roundTripMaxMs,
       lastRoundTripMs: this.lastRoundTripMs,
+      fields,
     };
   }
 

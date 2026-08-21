@@ -60,6 +60,12 @@ export interface GpuVfxReport {
   readonly coVisibleFrames: readonly (readonly number[])[];
 }
 
+export interface GpuVfxCompanionCounters {
+  readonly frames: number;
+  readonly spawns: number;
+  readonly capacityDrops: number;
+}
+
 export class GpuVfxProfiler {
   private readonly laneCount = GPU_VFX_LANES.length;
   private readonly visibleFrames  = new Int32Array(GPU_VFX_LANES.length);
@@ -99,6 +105,17 @@ export class GpuVfxProfiler {
         if (b !== a) this.coVisible[b * this.laneCount + a] += 1;
       }
     }
+  }
+
+  /** Cumulative counters for the low-cost Companion interval collector. */
+  getCompanionCounters(): GpuVfxCompanionCounters {
+    let spawns = 0;
+    let capacityDrops = 0;
+    for (let index = 0; index < this.spawns.length; index += 1) {
+      spawns += this.spawns[index];
+      capacityDrops += this.capacityDrops[index];
+    }
+    return { frames: this.frames, spawns, capacityDrops };
   }
 
   buildReport(laneStats: readonly GpuVfxPoolStats[]): GpuVfxReport {

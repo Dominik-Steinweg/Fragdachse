@@ -115,6 +115,8 @@ export interface AblationSegment {
 }
 
 export interface PerformanceAblationDeps {
+  /** Optional semantic trace sink; does not alter the ablation schedule. */
+  onTraceEvent?: (type: string, fields?: Record<string, unknown>) => void;
   /** Filter laufen über den Quality-Controller, der sie ohnehin schon alle kennt. */
   getQualityController: () => GraphicsQualityController | null;
   /**
@@ -285,6 +287,7 @@ export class PerformanceAblationController {
     this.segments.length = 0;
     this.segmentStartedAtMs = now;
     this.currentCategory = 'baseline';
+    this.deps.onTraceEvent?.(`FD:ablation:start:${this.currentCategory}`, { category: this.currentCategory });
   }
 
   stop(now = performance.now()): void {
@@ -309,6 +312,7 @@ export class PerformanceAblationController {
       this.currentIndex += 1;
       this.segmentStartedAtMs = currentNow;
       this.currentCategory = this.resolveCategory(this.currentIndex);
+      this.deps.onTraceEvent?.(`FD:ablation:start:${this.currentCategory}`, { category: this.currentCategory });
     }
 
     this.applyCurrent();
@@ -325,6 +329,10 @@ export class PerformanceAblationController {
   }
 
   private closeSegment(now: number): void {
+    this.deps.onTraceEvent?.(`FD:ablation:end:${this.currentCategory}`, {
+      category: this.currentCategory,
+      durationMs: Math.max(0, now - this.segmentStartedAtMs),
+    });
     this.segments.push({
       atMs: this.segmentStartedAtMs,
       durationMs: Math.max(0, now - this.segmentStartedAtMs),

@@ -4,7 +4,7 @@ import { GPU_VFX_EASE_NAMES } from './GpuVfxEase';
 import { GPU_VFX_EFFECTS, type GpuVfxEffectId, type GpuVfxImportance } from './GpuVfxEffects';
 import { GPU_VFX_DEAD_MEMBER, writeGpuVfxMember } from './GpuVfxMember';
 import { GPU_VFX_NO_SLOT, GpuVfxPool, type GpuVfxPoolStats } from './GpuVfxPool';
-import { GpuVfxProfiler, type GpuVfxReport } from './GpuVfxProfiler';
+import { GpuVfxProfiler, type GpuVfxCompanionCounters, type GpuVfxReport } from './GpuVfxProfiler';
 import { GpuVfxQuality } from './GpuVfxQuality';
 import { GPU_VFX_LANES, type GpuVfxLaneId, type GpuVfxLaneSpec } from './GpuVfxRenderLanes';
 import type { GpuVfxSpawnSpec } from './GpuVfxSpawnSpec';
@@ -56,6 +56,7 @@ export function admitGpuVfxSpawn(
 
 /** Wird pro Renderframe gerufen, nachdem abgelaufene Member stillgelegt wurden. */
 export type GpuVfxEmissionTick = (deltaMs: number, nowMs: number) => void;
+export type GpuVfxDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
 /** Rueckgabe von `createSource()`, wenn die Source-Tabelle erschoepft ist. */
 export const GPU_VFX_NO_SOURCE_HANDLE = -1;
@@ -84,6 +85,8 @@ export class GpuVfxSystem {
   private readonly laneStats: GpuVfxPoolStats[] = [];
   readonly quality: GpuVfxQuality;
   private readonly profiler = new GpuVfxProfiler();
+  private diagnosticEventSink: GpuVfxDiagnosticEventSink | null = null;
+  private readonly highUtilizationState: boolean[] = [];
 
   /** `SOURCE_FREE` heisst frei; sonst der Release-Modus des Effekts, der sie angelegt hat. */
   private readonly sourceMode = new Uint8Array(MAX_SOURCES);
@@ -246,6 +249,10 @@ export class GpuVfxSystem {
     this.ticks.push(tick);
   }
 
+  setDiagnosticEventSink(sink: GpuVfxDiagnosticEventSink | null): void {
+    this.diagnosticEventSink = sink;
+  }
+
   /** Aktueller Stand der Partikeluhr; identisch mit dem, was `update()` den Ticks uebergibt. */
   now(): number {
     return this.clockMs;
@@ -282,6 +289,17 @@ export class GpuVfxSystem {
       const lane = this.lanes[index];
       this.applyVisibility(lane);
       if (lane.pool.getLiveCount() > 0) activeMask |= (1 << index);
+      const capacity = Math.max(1, lane.spec.capacity);
+      const high = lane.pool.getLiveCount() / capacity >= 0.9;
+      if (high && !this.highUtilizationState[index]) {
+        this.diagnosticEventSink?.('gpu:vfx_high_utilization', {
+          lane: lane.spec.label,
+          liveCount: lane.pool.getLiveCount(),
+          capacity,
+          utilization: lane.pool.getLiveCount() / capacity,
+        });
+      }
+      this.highUtilizationState[index] = high;
     }
     this.profiler.recordFrame(this.suppressed ? 0 : activeMask);
   }
@@ -321,6 +339,11 @@ export class GpuVfxSystem {
     return stats;
   }
 
+  /** Low-cost cumulative counters used by the 4-Hz Companion series. */
+  getCompanionCounters(): GpuVfxCompanionCounters {
+    return this.profiler.getCompanionCounters();
+  }
+
   /** Vollstaendiger Zwei-Ebenen-Report fuer den Performance-Export. */
   buildReport(): GpuVfxReport {
     this.laneStats.length = 0;
@@ -332,6 +355,7 @@ export class GpuVfxSystem {
   resetProfiling(): void {
     this.profiler.reset();
     for (const lane of this.lanes) lane.pool.resetStats();
+    this.highUtilizationState.fill(false);
   }
 
   getLaneStats(id: GpuVfxLaneId): GpuVfxPoolStats | null {

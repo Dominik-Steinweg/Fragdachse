@@ -389,6 +389,31 @@ describe('gpu vfx system: admission and diagnostics', () => {
     expect(report.coVisibleFrames[GpuVfxLaneId.RocketExhaust][GpuVfxLaneId.StinkAdd]).toBe(0);
   });
 
+  it('marks current VFX utilization, not a historical peak, as the active anomaly', () => {
+    const { system } = setup();
+    const sink = vi.fn();
+    system.setDiagnosticEventSink(sink);
+    const spec = spawnSpec(system, GpuVfxEffectId.RocketSmoke);
+    spec.lifeMs = 10_000;
+    for (let index = 0; index < 576; index += 1) system.spawn(spec, 0, 0);
+
+    system.update(16);
+    expect(sink).toHaveBeenCalledWith('gpu:vfx_high_utilization', expect.objectContaining({
+      lane: 'rocket-smoke',
+      liveCount: 576,
+      capacity: 640,
+    }));
+    const countAfterHigh = sink.mock.calls.length;
+
+    system.releaseAll();
+    system.update(16);
+    system.spawn(spec, 0, 16);
+    system.update(16);
+    expect(sink.mock.calls.length).toBe(countAfterHigh);
+    expect(system.buildReport().lanes.find((lane) => lane.label === 'rocket-smoke')?.highWaterMark)
+      .toBe(576);
+  });
+
   it('starts a fresh measurement window on demand', () => {
     // Die Zaehler laufen seit dem Szenenaufbau; eine Messung braucht dasselbe Fenster wie der
     // uebrige Performance-Report.

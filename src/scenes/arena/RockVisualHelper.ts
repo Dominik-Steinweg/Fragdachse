@@ -12,7 +12,7 @@ import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
-import { emitArenaMapGridChanged } from './ArenaEvents';
+import { emitArenaMapGridChanged, emitArenaRockDestroyed } from './ArenaEvents';
 import { isCoopDefenseMode } from '../../gameModes';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
@@ -299,11 +299,25 @@ export class RockVisualHelper {
         gridX: runtimeRock.gridX,
         gridY: runtimeRock.gridY,
       });
+      if (runtimeRock.kind === 'rock') {
+        emitArenaRockDestroyed(this.scene.game.events, {
+          rockId,
+          source: 'placeable_rock',
+          reason,
+        });
+      }
       return;
     }
 
     if (!this.rockPresentation.destroyRock(rockId)) return;
-    this.ctx.rockRegistry?.remove(rockId);
+    const removed = this.ctx.rockRegistry?.remove(rockId) ?? false;
+    if (removed) {
+      emitArenaRockDestroyed(this.scene.game.events, {
+        rockId,
+        source: 'static_rock',
+        reason,
+      });
+    }
     this.markObstaclesDirty(rockId, false);
     const dropsArmor = !isCoopDefenseMode(bridge.getGameMode())
       || (

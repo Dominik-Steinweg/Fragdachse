@@ -30,12 +30,6 @@ interface QueuedMessage {
 }
 
 const PEER_LARGE_PAYLOAD_WARN_BYTES = 64 * 1024;
-const peerTextEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
-
-function payloadByteLength(payload: string): number {
-  if (peerTextEncoder) return peerTextEncoder.encode(payload).byteLength;
-  return payload.length;
-}
 
 export interface PeerLinkHandlers {
   onMessage: (message: PeerMessage, channel: PeerChannelKind) => void;
@@ -118,14 +112,11 @@ export class PeerLink implements PeerLinkLike {
   send(message: PeerMessage, channel: PeerChannelKind): void {
     if (this.closed) return;
     const payload = encodePeerMessage(message);
-    // Avoid a second UTF-8 scan on the hot fast channel unless the string is already large
-    // enough to be diagnostically interesting.
-    const payloadBytes = payload.length >= PEER_LARGE_PAYLOAD_WARN_BYTES
-      ? payloadByteLength(payload)
-      : payload.length;
-    if (payloadBytes >= PEER_LARGE_PAYLOAD_WARN_BYTES) {
+    // `payload.length` is only an estimate (UTF-16 code units). Do not add a second encoding
+    // pass for diagnostics; exact transport bytes remain the WebRTC stats values.
+    if (payload.length >= PEER_LARGE_PAYLOAD_WARN_BYTES) {
       console.warn(
-        `[PeerLink] Große ${channel}-Payload (${payloadBytes} Bytes, type=${message.t}, peer=${this.remotePeerId}).`,
+        `[PeerLink] Große ${channel}-Payload (geschätzt ${payload.length} Bytes, type=${message.t}, peer=${this.remotePeerId}).`,
       );
     }
 

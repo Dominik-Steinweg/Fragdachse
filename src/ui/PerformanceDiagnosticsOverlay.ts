@@ -47,50 +47,16 @@ function formatDuration(durationMs: number): string {
 }
 
 function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] {
-  if (!summary) return ['Noch kein vollständiges Messfenster vorhanden.'];
+  if (!summary) return ['Noch kein Companion-Sample vorhanden.'];
   const timings = summary.timings;
   const counts = summary.counts;
-  const detailTimings = summary.detailTimings;
-  const detailCounts = summary.detailCounts;
-  const roleLabel = summary.role === 'host' ? 'Host-Simulation' : 'Client-Synchronisierung';
   return [
-    `CPU-Frame ${ms(timings.gameStepMs.avg)} | Frame-Abstand ${ms(timings.betweenFramesMs.avg)} | raw Delta ${ms(timings.rawDeltaMs.avg)}`,
-    `SceneManager ${ms(timings.phaserSceneUpdateMs.avg)} (Systems/Plugins ${ms(timings.phaserSceneSystemsMs.avg)}) | Renderer-Setup ${ms(timings.rendererSetupMs.avg)} | unbekannte CPU ${ms(timings.unaccountedFrameMs.avg)}`,
-    `Messueberlappung CPU ${ms(timings.overaccountedFrameMs.avg)} | Update ${ms(timings.overaccountedUpdateMs.avg)} (sollte nahe 0 sein)`,
-    `Scene: Prelude ${ms(detailTimings.scenePreludeMs.avg)} | Zustand ${ms(detailTimings.sceneStateMs.avg)} | nach Rolle ${ms(detailTimings.postRoleMs.avg)} | Diagnose ${ms(detailTimings.diagnosticsMs.avg)}`,
-    `UI: Input/Kamera ${ms(detailTimings.inputCameraMs.avg)} | Lobby ${ms(detailTimings.lobbyUiMs.avg)} | Arena-HUD ${ms(detailTimings.arenaHudMs.avg)} | Rangliste/Canopy ${ms(detailTimings.leaderboardCanopyMs.avg)}`,
-    ...(summary.role === 'host'
-      ? [
-        `Host: KI ${ms(detailTimings.hostEnemyAiMs.avg)} (davon Nav ${ms(detailTimings.hostNavFlowFieldMs.avg)}, Worker ${ms(detailTimings.hostNavWorkerMs.avg)}) | Spieler ${ms(detailTimings.hostPlayerSystemsMs.avg)} | Physik ${ms(detailTimings.hostPhysicsMs.avg)} | Kampf/Projektile ${ms(detailTimings.hostCombatProjectilesMs.avg)}`,
-        `Host: Explosionen ${ms(detailTimings.hostExplosionsMs.avg)} | Flaecheneffekte ${ms(detailTimings.hostAreaEffectsMs.avg)} | Welt/Visuals ${ms(detailTimings.hostWorldVisualsMs.avg)} | HUD ${ms(detailTimings.hostHudMs.avg)} | Snapshot ${ms(detailTimings.hostSnapshotBuildMs.avg)}`,
-      ]
-      : [
-        `Client: Snapshot ${ms(detailTimings.clientSnapshotMs.avg)} | Spieler ${ms(detailTimings.clientPlayersMs.avg)} | Projektile/FX ${ms(detailTimings.clientProjectilesEffectsMs.avg)} | Welt ${ms(detailTimings.clientWorldStateMs.avg)}`,
-        `Client: Interpolation ${ms(detailTimings.clientInterpolationMs.avg)} | HUD ${ms(detailTimings.clientHudMs.avg)} | Renderer-Sync ${ms(detailTimings.clientRendererSyncMs.avg)}`,
-      ]),
-    `Netz: ${count(detailCounts.transportSentBytesPerSec.avg / 1024)} / ${count(detailCounts.transportReceivedBytesPerSec.avg / 1024)} KiB/s raus/rein | Puffer ${count(detailCounts.transportReliableBufferedBytes.avg + detailCounts.transportFastBufferedBytes.avg)} B | Drops ${count(detailCounts.transportDroppedFastMessages.peak)}`,
-    `Phase ${summary.phase.toUpperCase()} · raw FPS ${summary.fps.toFixed(1)} · raw p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)} · geglättet ${summary.smoothedFps.toFixed(1)}`,
-    `${summary.role.toUpperCase()} · ${summary.quality.toUpperCase()} · ${summary.mode}${summary.mapId ? ` · ${summary.mapId}` : ''}`,
-    `FPS ${summary.fps.toFixed(1)} · Frame p95 ${ms(timings.deltaMs.p95)} · p99 ${ms(timings.deltaMs.p99)}`,
-    summary.coveragePercent < 95
-      ? `⚠ Nur ${summary.coveragePercent.toFixed(0)}% des Fensters gesampelt · größte Lücke ${ms(summary.maxSampleGapMs)} · FPS oben nicht repräsentativ`
-      : `Abdeckung ${summary.coveragePercent.toFixed(0)}% · ${summary.sampleCount} Samples`,
-    `Langsame Frames >16,7 ${summary.over16msPercent.toFixed(1)}% · >33,3 ${summary.over33msPercent.toFixed(1)}%`,
-    `Update ${ms(timings.updateMs.avg)} · Render-Abgabe ${ms(timings.renderSubmitMs.avg)} · Rest/Frame ${ms(timings.unaccountedFrameMs.avg)}`,
-    `${roleLabel} ${ms(timings.roleStepMs.avg)} · Visuals ${ms(timings.visualStepMs.avg)} · Rest/Update ${ms(timings.unaccountedUpdateMs.avg)}`,
-    `  Kamera ${ms(timings.visualCameraMs.avg)} · Gegner ${ms(timings.visualEnemyMs.avg)} · Effekte ${ms(timings.visualEffectsMs.avg)}`,
-    `  Zielen ${ms(timings.visualAimMs.avg)} · HUD ${ms(timings.visualHudMs.avg)}`,
-    `    Aim: Preview ${ms(detailTimings.aimPreviewMs.avg)} · Graphics ${ms(detailTimings.aimGraphicsMs.avg)} · Scope ${ms(detailTimings.scopeMs.avg)} (Raster ${ms(detailTimings.scopeRasterMs.avg)}, Upload ${ms(detailTimings.scopeUploadMs.avg)})`,
-    `    Scope-Refresh ${count(detailCounts.scopeRefreshCount.avg)}/Frame · Aim-Befehle ${count(detailCounts.aimGraphicsCommandCount.avg)}`,
-    `Netz Update ${ms(timings.networkUpdateMs.avg)} · Flush ${ms(timings.networkFlushMs.avg)}`,
-    `Schatten ${ms(timings.shadowStepMs.avg)} · Licht ${ms(timings.lightingStepMs.avg)}`,
-    `  Licht: Queue ${ms(detailTimings.lightingQueueMs.avg)} · Befehle ${ms(detailTimings.lightingCommandBuildMs.avg)} · Occlusion ${ms(detailTimings.lightingOcclusionMs.avg)} · Geometrie ${ms(detailTimings.lightingShadowGeometryMs.avg)}`,
-    `  Direkt/verdeckt/fallback ${count(detailCounts.directLightCount.avg)}/${count(detailCounts.occludingLightCount.avg)}/${count(detailCounts.fallbackOccludingLightCount.avg)} · Schattenquads ${count(detailCounts.lightShadowQuadCount.avg)} · Dyn-Occluder ${count(detailCounts.dynamicLightOccluderHitCount.avg)}/${count(detailCounts.dynamicLightOccluderTestCount.avg)}`,
-    `Feuer Sim ${ms(timings.fireSimulationMs.avg)} · Erzeugung ${ms(timings.fireCreationMs.avg)} · Visuals ${ms(timings.fireVisualMs.avg)}`,
-    `Objekte ${count(counts.displayObjectCount.avg)} · sichtbar ${count(counts.visibleObjectCount.avg)} · Filter ${count(counts.activeFilterCount.avg)}`,
-    `Draw-Calls ${count(counts.drawCallCount.avg)} · Spitze ${counts.drawCallCount.peak} · ${count(counts.visibleObjectCount.avg / Math.max(1, counts.drawCallCount.avg))} Objekte/Call`,
-    `Partikel ${count(counts.aliveParticleCount.avg)} in ${count(counts.particleEmitterCount.avg)} Emittern`,
-    `Lichter ${count(counts.renderedLightCount.avg)} / ${count(counts.activeLightCount.avg)} · Gegner ${count(counts.enemyCount.avg)} · Projektile ${count(counts.projectileCount.avg)}`,
+    `${summary.role.toUpperCase()} · ${summary.phase.toUpperCase()} · ${summary.quality.toUpperCase()} · ${summary.mode}`
+      + (summary.mapId ? ` · ${summary.mapId}` : ''),
+    `FPS ${summary.fps.toFixed(1)} · Frame-p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)}`,
+    `Slow Frames >16,7 ms ${summary.over16msPercent.toFixed(1)}% · Samples ${summary.sampleCount}`,
+    `Host/Client CPU ${ms(timings.roleStepMs.avg)} · Gegner ${count(counts.enemyCount.avg)} · Projektile ${count(counts.projectileCount.avg)}`,
+    'Chrome Trace liefert Call Stacks, Renderer/GPU, GC und Scheduling; Companion sammelt semantische Korrelationen.',
   ];
 }
 
@@ -101,6 +67,7 @@ export class PerformanceDiagnosticsOverlay {
   private startButton: HTMLButtonElement | null = null;
   private stopButton: HTMLButtonElement | null = null;
   private exportButton: HTMLButtonElement | null = null;
+  private sceneInspectionButton: HTMLButtonElement | null = null;
   private timer: number | null = null;
 
   private ablationButton: HTMLButtonElement | null = null;
@@ -117,6 +84,7 @@ export class PerformanceDiagnosticsOverlay {
      * auf – die zaehlen weiterhin klassische Emitter. Diese Zeile haelt die Diagnose ehrlich.
      */
     private readonly getGpuVfxStats: (() => Record<string, GpuVfxPoolStats> | null) | null = null,
+    private readonly captureSceneInspection: (() => void) | null = null,
   ) {}
 
   toggle(): void {
@@ -154,10 +122,14 @@ export class PerformanceDiagnosticsOverlay {
     controls.style.display = 'flex';
     controls.style.gap = '8px';
     controls.style.marginBottom = '8px';
-    this.startButton = this.createButton('Messung starten', () => this.profiler.startRecording(this.getEnvironment()));
+    this.startButton = this.createButton('Trace Assist starten', () => this.profiler.startRecording(this.getEnvironment()));
     this.stopButton = this.createButton('Messung stoppen', () => this.stopRecording());
     this.exportButton = this.createButton('JSON exportieren', () => this.exportJson());
+    this.sceneInspectionButton = this.captureSceneInspection
+      ? this.createButton('Scene Inspection', () => this.captureSceneInspection?.())
+      : null;
     controls.append(this.startButton, this.stopButton, this.exportButton);
+    if (this.sceneInspectionButton) controls.append(this.sceneInspectionButton);
     if (this.ablation) {
       this.ablationButton = this.createButton('Diagnose-Trace starten', () => this.startAblationRecording());
       this.ablationButton.title = 'Startet Messung + Ablationsmodus: schaltet reihum einzelne '
@@ -196,6 +168,7 @@ export class PerformanceDiagnosticsOverlay {
     this.startButton = null;
     this.stopButton = null;
     this.exportButton = null;
+    this.sceneInspectionButton = null;
     this.ablationButton = null;
     this.chunkDiagnosticsSection = null;
     this.chunkDiagnosticControls = [];
@@ -232,8 +205,8 @@ export class PerformanceDiagnosticsOverlay {
       this.profiler.setAblationSegments(this.ablation.getSegments(), this.ablation.getSegmentMs());
     }
     this.status.textContent = recording
-      ? `● Messung läuft ${formatDuration(this.profiler.getRecordingDurationMs())} (max. 30:00)`
-      : this.profiler.canExport() ? 'Messung beendet · JSON kann exportiert werden.' : 'Live-Ansicht · Messung noch nicht gestartet.';
+      ? `● Trace Assist läuft ${formatDuration(this.profiler.getRecordingDurationMs())} · Sync alle 5 s`
+      : this.profiler.canExport() ? 'Trace Assist beendet · Companion-Report kann exportiert werden.' : 'Live-HUD · Trace Assist noch nicht gestartet.';
     this.status.style.color = recording ? '#7ee787' : '#b7c7b7';
     if (this.startButton) this.startButton.disabled = recording;
     if (this.stopButton) this.stopButton.disabled = !recording;
@@ -301,8 +274,8 @@ export class PerformanceDiagnosticsOverlay {
     link.href = url;
     // Startzeit der Messung statt Exportzeit: Zwei Exporte derselben Messung kollidieren im
     // Dateinamen und sind dadurch sofort als Dublette erkennbar.
-    const stamp = report.recordingStartedAt.replace(/[:.]/g, '-');
-    link.download = `fragdachse-performance-${stamp}-${report.recordingScope.qualities.join('-')}.json`;
+    const stamp = report.session.startedAtIso.replace(/[:.]/g, '-');
+    link.download = `fragdachse-performance-${stamp}-${report.session.id}.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }

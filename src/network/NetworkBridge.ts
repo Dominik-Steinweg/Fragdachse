@@ -29,8 +29,6 @@ import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase,
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
-  NET_DEBUG_ENEMY_SYNC_METRICS,
-  NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
   NET_TICK_RATE_HZ,
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   TEAM_BLUE_COLOR,
@@ -38,7 +36,6 @@ import {
   ARENA_COUNTDOWN_SEC,
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
-import { countEnemyUpserts } from './enemySnapshotCodec';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import { sanitizePlayerName } from '../utils/playerName';
@@ -188,59 +185,6 @@ export type KickPlayerResult = { ok: true } | { ok: false; reason: KickPlayerFai
  * dem Input fremder Spieler und laeuft auch auf Clients.
  */
 const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE];
-
-interface EnemySyncMetricsWindow {
-  startedAtMs: number;
-  tickCount: number;
-  totalPayloadBytes: number;
-  enemyPayloadBytes: number;
-  enemyCountSum: number;
-  fullTickCount: number;
-  upsertCountSum: number;
-  removalCountSum: number;
-  maxEnemyCount: number;
-  maxTotalPayloadBytes: number;
-  maxEnemyPayloadBytes: number;
-  slicePayloadBytesSums: Record<string, number>;
-  slicePayloadBytesPeaks: Record<string, number>;
-}
-
-const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
-  _s: 'seq',
-  rt: 'round',
-  p: 'players',
-  j: 'projectiles',
-  e: 'enemies',
-  r: 'rocks',
-  br: 'placeableRocks',
-  oc: 'reinforcementMatrices',
-  ei: 'energyInjectorEffects',
-  fi: 'energyInjectorFocus',
-  dc: 'decoys',
-  s: 'smokes',
-  f: 'fires',
-  sc: 'stinkClouds',
-  tb: 'timeBubbles',
-  td: 'teslaDomes',
-  es: 'energyShields',
-  g: 'guardianSpirits',
-  rd: 'repairDrones',
-  sl: 'slimeTrail',
-  vu: 'targetVulnerabilities',
-  st: 'ak47StrategicTargets',
-  fg: 'burningGround',
-  rc: 'remoteControlTurrets',
-  u: 'powerups',
-  pd: 'pedestals',
-  n: 'nukes',
-  ak: 'airstrikes',
-  mt: 'meteors',
-  tn: 'tunnels',
-  t: 'train',
-  b: 'bases',
-  cb: 'captureTheBeer',
-  cc: 'coopDefenseCarry',
-};
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -641,7 +585,6 @@ export class NetworkBridge {
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private coopDefenseCarryDeliveredFxHandler: CoopDefenseCarryDeliveredFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset, projectileId?: number) => void) | null = null;
-  private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private diagnostics: TransportDiagnostics | null = null;
   private networkFailureCbs: Array<(message: string) => void> = [];
   private reconnectStatusCbs: Array<(status: PeerReconnectStatus) => void> = [];
@@ -2067,7 +2010,6 @@ export class NetworkBridge {
     // Unlike delta-friendly world slices, Carry must publish an empty array after delivery so
     // a completed item cannot survive in a client's merge cache.
     payload.cc = state.coopDefenseCarry;
-    this.recordEnemySyncMetrics(payload, state.enemies);
     setState(KEY_GAME_STATE, payload, false);
   }
 
@@ -2110,115 +2052,10 @@ export class NetworkBridge {
       cb: state.captureTheBeer,
       cc: state.coopDefenseCarry,
     };
-    this.recordEnemySyncMetrics(payload, state.enemies);
     // Die unreliable Kopie hält bereits verbundene Clients aktuell; der reliable Key ist der
     // Bootstrap für neue Teilnehmer und bleibt bis zum nächsten Full-Resync erhalten.
     setState(KEY_GAME_STATE, payload, false);
     setState(KEY_GAME_STATE_INITIAL, payload, true);
-  }
-
-  private recordEnemySyncMetrics(payload: Record<string, unknown>, enemySnapshot: SyncedEnemySnapshot | null): void {
-    if (!NET_DEBUG_ENEMY_SYNC_METRICS || !isHost() || !enemySnapshot) return;
-
-    const now = Date.now();
-    const totalPayloadBytes = JSON.stringify(payload).length;
-    const enemyPayloadBytes = payload.e ? JSON.stringify(payload.e).length : 0;
-    const enemyCount = enemySnapshot.c;
-    const window = this.enemySyncMetricsWindow ?? {
-      startedAtMs: now,
-      tickCount: 0,
-      totalPayloadBytes: 0,
-      enemyPayloadBytes: 0,
-      enemyCountSum: 0,
-      fullTickCount: 0,
-      upsertCountSum: 0,
-      removalCountSum: 0,
-      maxEnemyCount: 0,
-      maxTotalPayloadBytes: 0,
-      maxEnemyPayloadBytes: 0,
-      slicePayloadBytesSums: {},
-      slicePayloadBytesPeaks: {},
-    } satisfies EnemySyncMetricsWindow;
-    const slicePayloadBytes = this.measurePayloadSlices(payload);
-
-    window.tickCount += 1;
-    window.totalPayloadBytes += totalPayloadBytes;
-    window.enemyPayloadBytes += enemyPayloadBytes;
-    window.enemyCountSum += enemyCount;
-    window.fullTickCount += enemySnapshot.a ? 1 : 0;
-    window.upsertCountSum += countEnemyUpserts(enemySnapshot.u);
-    window.removalCountSum += enemySnapshot.r.length;
-    window.maxEnemyCount = Math.max(window.maxEnemyCount, enemyCount);
-    window.maxTotalPayloadBytes = Math.max(window.maxTotalPayloadBytes, totalPayloadBytes);
-    window.maxEnemyPayloadBytes = Math.max(window.maxEnemyPayloadBytes, enemyPayloadBytes);
-    for (const [key, bytes] of Object.entries(slicePayloadBytes)) {
-      window.slicePayloadBytesSums[key] = (window.slicePayloadBytesSums[key] ?? 0) + bytes;
-      window.slicePayloadBytesPeaks[key] = Math.max(window.slicePayloadBytesPeaks[key] ?? 0, bytes);
-    }
-    this.enemySyncMetricsWindow = window;
-
-    if (now - window.startedAtMs < NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS) return;
-
-    const avgEnemyCount = window.enemyCountSum / Math.max(1, window.tickCount);
-    const avgTotalPayloadBytes = window.totalPayloadBytes / Math.max(1, window.tickCount);
-    const avgEnemyPayloadBytes = window.enemyPayloadBytes / Math.max(1, window.tickCount);
-    const avgEnemyPayloadShare = avgTotalPayloadBytes > 0
-      ? (avgEnemyPayloadBytes / avgTotalPayloadBytes) * 100
-      : 0;
-    const avgUpserts = window.upsertCountSum / Math.max(1, window.tickCount);
-    const avgRemovals = window.removalCountSum / Math.max(1, window.tickCount);
-    const topAvgSlices = this.formatTopSliceMetrics(window.slicePayloadBytesSums, window.tickCount, 'avg');
-    const topPeakSlices = this.formatTopSliceMetrics(window.slicePayloadBytesPeaks, 1, 'peak');
-
-    console.log(
-      `[NET][enemy-sync] ticks=${window.tickCount} fullTicks=${window.fullTickCount} avgEnemies=${avgEnemyCount.toFixed(1)} maxEnemies=${window.maxEnemyCount} avgUpserts=${avgUpserts.toFixed(1)} avgRemovals=${avgRemovals.toFixed(1)} avgPayload=${avgTotalPayloadBytes.toFixed(0)}B avgEnemy=${avgEnemyPayloadBytes.toFixed(0)}B enemyShare=${avgEnemyPayloadShare.toFixed(1)}% peakPayload=${window.maxTotalPayloadBytes}B peakEnemy=${window.maxEnemyPayloadBytes}B`,
-    );
-    console.log(`[NET][game-state] topAvg=${topAvgSlices} topPeak=${topPeakSlices}`);
-
-    this.enemySyncMetricsWindow = {
-      startedAtMs: now,
-      tickCount: 0,
-      totalPayloadBytes: 0,
-      enemyPayloadBytes: 0,
-      enemyCountSum: 0,
-      fullTickCount: 0,
-      upsertCountSum: 0,
-      removalCountSum: 0,
-      maxEnemyCount: enemyCount,
-      maxTotalPayloadBytes: totalPayloadBytes,
-      maxEnemyPayloadBytes: enemyPayloadBytes,
-      slicePayloadBytesSums: {},
-      slicePayloadBytesPeaks: {},
-    };
-  }
-
-  private measurePayloadSlices(payload: Record<string, unknown>): Record<string, number> {
-    const result: Record<string, number> = {};
-    for (const [key, value] of Object.entries(payload)) {
-      result[key] = JSON.stringify(value).length;
-    }
-    return result;
-  }
-
-  private formatTopSliceMetrics(
-    sliceBytes: Record<string, number>,
-    divisor: number,
-    mode: 'avg' | 'peak',
-  ): string {
-    const entries = Object.entries(sliceBytes)
-      .filter(([key, bytes]) => bytes > 0 && key !== '_s' && key !== 'rt')
-      .map(([key, bytes]) => ({
-        label: GAME_STATE_SLICE_LABELS[key] ?? key,
-        bytes: mode === 'avg' ? bytes / Math.max(1, divisor) : bytes,
-      }))
-      .sort((left, right) => right.bytes - left.bytes)
-      .slice(0, 5);
-
-    if (entries.length === 0) return 'none';
-
-    return entries
-      .map((entry) => `${entry.label}:${entry.bytes.toFixed(0)}B`)
-      .join(', ');
   }
 
   getLatestGameState(): GameState | undefined {
