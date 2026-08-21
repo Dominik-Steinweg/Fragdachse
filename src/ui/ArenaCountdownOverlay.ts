@@ -61,6 +61,7 @@ export class ArenaCountdownOverlay {
   private readonly focusFallbackTexture: Phaser.Textures.CanvasTexture;
   private readonly focusFallback: Phaser.GameObjects.Image;
   private readonly text: Phaser.GameObjects.Text;
+  private readonly loadingBackdrop: Phaser.GameObjects.Rectangle;
   private readonly loadingRoot: Phaser.GameObjects.Container;
   private readonly loadingTitle: Phaser.GameObjects.Text;
   private readonly loadingSubtitle: Phaser.GameObjects.Text;
@@ -125,13 +126,17 @@ export class ArenaCountdownOverlay {
       .setScrollFactor(0)
       .setVisible(false);
 
+    this.loadingBackdrop = scene.add.rectangle(this.baseX, this.baseY, GAME_WIDTH, GAME_HEIGHT, 0x030406, 1)
+      .setOrigin(0.5)
+      .setDepth(DEPTH.OVERLAY - 4)
+      .setScrollFactor(0)
+      .setVisible(false);
+
     this.loadingRoot = scene.add.container(0, 0)
       .setDepth(DEPTH.OVERLAY - 3)
       .setScrollFactor(0)
       .setVisible(false)
       .setAlpha(0);
-    const loadingBackground = scene.add.rectangle(this.baseX, this.baseY, GAME_WIDTH, GAME_HEIGHT, 0x030406, 1)
-      .setOrigin(0.5);
     this.loadingTitle = scene.add.text(this.baseX, 160, t('ui.arena.loading.title'), {
       fontFamily: 'monospace', fontSize: '58px', fontStyle: 'bold',
       color: toCssColor(COLORS.GOLD_1),
@@ -143,7 +148,7 @@ export class ArenaCountdownOverlay {
       fontFamily: 'monospace', fontSize: '20px', color: toCssColor(COLORS.GREY_4),
     }).setOrigin(0, 0.5);
     this.loadingBars = scene.add.graphics();
-    this.loadingRoot.add([loadingBackground, this.loadingTitle, this.loadingSubtitle, loadingStatus, this.loadingBars]);
+    this.loadingRoot.add([this.loadingTitle, this.loadingSubtitle, loadingStatus, this.loadingBars]);
     for (let index = 0; index < 12; index += 1) {
       const y = 330 + index * 54;
       const row = {
@@ -162,6 +167,7 @@ export class ArenaCountdownOverlay {
     }
 
     promoteToClarityCamera(scene, this.text);
+    promoteToClarityCamera(scene, this.loadingBackdrop);
     promoteToClarityCamera(scene, this.loadingRoot);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
@@ -197,7 +203,9 @@ export class ArenaCountdownOverlay {
     this.text.setVisible(false);
     this.postFx?.setRadialFocus(null);
     this.focusFallback.setVisible(false);
+    this.scene.tweens.killTweensOf(this.loadingBackdrop);
     this.scene.tweens.killTweensOf(this.loadingRoot);
+    this.loadingBackdrop.setVisible(true).setAlpha(1);
     this.loadingRoot.setVisible(true).setAlpha(0);
     this.scene.tweens.add({
       targets: this.loadingRoot,
@@ -356,8 +364,10 @@ export class ArenaCountdownOverlay {
   clear(): void {
     this.mode = 'hidden';
     this.unlockAtMs = 0;
+    this.scene.tweens.killTweensOf(this.loadingBackdrop);
     this.scene.tweens.killTweensOf(this.loadingRoot);
     this.loadingRoot.setVisible(false).setAlpha(0);
+    this.loadingBackdrop.setVisible(false).setAlpha(1);
     this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
     this.lastFallbackFrameKey = null;
     this.postFx?.setRadialFocus(null);
@@ -368,9 +378,12 @@ export class ArenaCountdownOverlay {
     if (this.destroyed) return;
     this.destroyed = true;
     this.stopTextTweens();
+    this.scene.tweens.killTweensOf(this.loadingBackdrop);
+    this.scene.tweens.killTweensOf(this.loadingRoot);
     this.postFx?.setRadialFocus(null);
     this.focusFallback.destroy();
     this.text.destroy();
+    this.loadingBackdrop.destroy();
     this.loadingRoot.destroy(true);
     if (this.scene.textures.exists(FOCUS_FALLBACK_TEXTURE_KEY)) {
       this.scene.textures.remove(FOCUS_FALLBACK_TEXTURE_KEY);
@@ -549,15 +562,19 @@ export class ArenaCountdownOverlay {
   }
 
   private fadeLoadingScreenOut(): void {
-    if (!this.loadingRoot.visible) return;
+    if (!this.loadingRoot.visible && !this.loadingBackdrop.visible) return;
+    this.scene.tweens.killTweensOf(this.loadingBackdrop);
     this.scene.tweens.killTweensOf(this.loadingRoot);
     this.scene.tweens.add({
-      targets: this.loadingRoot,
+      targets: [this.loadingRoot, this.loadingBackdrop],
       alpha: 0,
       duration: 220,
       ease: 'Sine.easeInOut',
       onComplete: () => {
-        if (this.mode !== 'loading') this.loadingRoot.setVisible(false);
+        if (this.mode !== 'loading') {
+          this.loadingRoot.setVisible(false).setAlpha(0);
+          this.loadingBackdrop.setVisible(false).setAlpha(1);
+        }
       },
     });
   }
