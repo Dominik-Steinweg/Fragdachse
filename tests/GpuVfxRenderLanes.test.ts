@@ -5,6 +5,7 @@ vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
 import { GPU_VFX_ATLAS, GpuVfxFrameId } from '../src/effects/gpu/GpuVfxAtlas';
 import { GPU_VFX_EFFECTS } from '../src/effects/gpu/GpuVfxEffects';
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
+import { DEPTH } from '../src/config';
 
 /** Die layerglobalen Eigenschaften – nur sie duerfen eine eigene Lane rechtfertigen. */
 function laneKey(lane: (typeof GPU_VFX_LANES)[number]): string {
@@ -73,9 +74,25 @@ describe('gpu vfx render lanes', () => {
   });
 
   it('never grows the lane count with the effect count', () => {
-    // Der eigentliche Architekturvertrag: acht logische Effekte auf sechs physischen Lanes.
+    // Der eigentliche Architekturvertrag: elf logische Effekte auf neun physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
-    expect(GPU_VFX_LANES.length).toBe(6);
+    expect(GPU_VFX_LANES.length).toBe(9);
+  });
+
+  it('keeps flame depth, blend, gravity and derived capacities stable', () => {
+    const outer = GPU_VFX_LANES[GpuVfxLaneId.FlameOuter];
+    const core = GPU_VFX_LANES[GpuVfxLaneId.FlameCore];
+    const spark = GPU_VFX_LANES[GpuVfxLaneId.FlameSpark];
+
+    expect(outer.blendMode).toBe(1);
+    expect(outer.depth).toBe(DEPTH.FIRE);
+    expect(core.depth).toBe(DEPTH.FIRE + 0.05);
+    expect(spark.depth).toBe(DEPTH.FIRE + 0.1);
+    expect(spark.gravity).toBe(-30);
+    expect(spark.eases).toEqual([0, 2]);
+    expect(outer.capacity).toBe(3072);
+    expect(core.capacity).toBe(2304);
+    expect(spark.capacity).toBe(512);
   });
 
   it('keeps every effect pointing at an existing lane and atlas frame', () => {

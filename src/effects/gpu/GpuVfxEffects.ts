@@ -19,6 +19,9 @@ export const GpuVfxEffectId = {
   StinkPlume:     5,
   StinkAccent:    6,
   StinkEdge:      7,
+  FlameCore:      8,
+  FlameOuter:     9,
+  FlameSpark:     10,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -111,6 +114,30 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     label: 'stink.edge',
     lane: GpuVfxLaneId.StinkAdd,
     frame: GpuVfxFrameId.StinkPuff,
+    importance: 'standard',
+    release: 'kill-with-source',
+  },
+  {
+    id: GpuVfxEffectId.FlameCore,
+    label: 'flame.core',
+    lane: GpuVfxLaneId.FlameCore,
+    frame: GpuVfxFrameId.FlameCore,
+    importance: 'standard',
+    release: 'kill-with-source',
+  },
+  {
+    id: GpuVfxEffectId.FlameOuter,
+    label: 'flame.outer',
+    lane: GpuVfxLaneId.FlameOuter,
+    frame: GpuVfxFrameId.FlameOuter,
+    importance: 'standard',
+    release: 'kill-with-source',
+  },
+  {
+    id: GpuVfxEffectId.FlameSpark,
+    label: 'flame.spark',
+    lane: GpuVfxLaneId.FlameSpark,
+    frame: GpuVfxFrameId.FlameSpark,
     importance: 'standard',
     release: 'kill-with-source',
   },

@@ -11,6 +11,16 @@ import {
   ensureRocketSmokeTexture,
   ensureStinkPuffTexture,
 } from './GpuVfxSourceTextures';
+import {
+  TEX_FLAME_CORE,
+  TEX_FLAME_EMBER,
+  TEX_FLAME_SPARK,
+  TEX_VOID_FLAME_CORE,
+  TEX_VOID_FLAME_EMBER,
+  TEX_VOID_FLAME_SPARK,
+  ensureFlameTextures,
+  ensureVoidFlameTextures,
+} from '../FlameShared';
 
 /**
  * GpuVfxAtlas – ein gemeinsames Bild fuer alle GPU-VFX-Partikel.
@@ -52,6 +62,12 @@ export const GpuVfxFrameId = {
   RocketExhaust:   3,
   RocketSmoke:     4,
   StinkPuff:       5,
+  FlameCore:       6,
+  FlameCoreVoid:   7,
+  FlameOuter:      8,
+  FlameOuterVoid:  9,
+  FlameSpark:      10,
+  FlameSparkVoid:  11,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -93,6 +109,30 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.StinkPuff, frame: 'stink-puff',
     sourceTextureKey: TEX_STINK_PUFF, width: 40, height: 40, ensure: ensureStinkPuffTexture,
+  },
+  {
+    id: GpuVfxFrameId.FlameCore, frame: 'flame-core',
+    sourceTextureKey: TEX_FLAME_CORE, width: 24, height: 24, ensure: ensureFlameTextures,
+  },
+  {
+    id: GpuVfxFrameId.FlameCoreVoid, frame: 'flame-core-void',
+    sourceTextureKey: TEX_VOID_FLAME_CORE, width: 24, height: 24, ensure: ensureVoidFlameTextures,
+  },
+  {
+    id: GpuVfxFrameId.FlameOuter, frame: 'flame-outer',
+    sourceTextureKey: TEX_FLAME_EMBER, width: 16, height: 16, ensure: ensureFlameTextures,
+  },
+  {
+    id: GpuVfxFrameId.FlameOuterVoid, frame: 'flame-outer-void',
+    sourceTextureKey: TEX_VOID_FLAME_EMBER, width: 16, height: 16, ensure: ensureVoidFlameTextures,
+  },
+  {
+    id: GpuVfxFrameId.FlameSpark, frame: 'flame-spark',
+    sourceTextureKey: TEX_FLAME_SPARK, width: 6, height: 6, ensure: ensureFlameTextures,
+  },
+  {
+    id: GpuVfxFrameId.FlameSparkVoid, frame: 'flame-spark-void',
+    sourceTextureKey: TEX_VOID_FLAME_SPARK, width: 6, height: 6, ensure: ensureVoidFlameTextures,
   },
 ];
 

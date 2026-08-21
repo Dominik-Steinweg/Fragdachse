@@ -48,6 +48,9 @@ export const GpuVfxLaneId = {
   RocketSmoke:    3,
   StinkNormal:    4,
   StinkAdd:       5,
+  FlameOuter:     6,
+  FlameCore:      7,
+  FlameSpark:     8,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -212,5 +215,57 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       'Summe der vier fruehreren Lanes (512 + 768 + 512 + 1536). Je Wolke rund 54 (inner), 80 '
       + '(plume), 50 (accent) und 222 (edge) gleichzeitig lebende Member im 50-ms-Fall, sechs '
       + 'Wolken. Erst gegen gemessenes `peakLive` reduzieren.',
+  },
+  {
+    id: GpuVfxLaneId.FlameOuter,
+    label: 'flame-outer',
+    depth: DEPTH.FIRE,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear],
+    capacity: 3072,
+    maxLifetimeMs: 450,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Eigenes additives Flammenband auf DEPTH.FIRE; die Outer-Partikel entsprechen dem alten '
+      + 'Emitter und muessen unter Core und Spark bleiben.',
+    capacityRationale:
+      '48 plausible parallele Hitboxen x 2 Spawns / 20 ms x 450 ms = 2160 lebende Member; '
+      + '3072 gibt rund 42 Prozent Reserve fuer Burst- und Timing-Schwankungen.',
+  },
+  {
+    id: GpuVfxLaneId.FlameCore,
+    label: 'flame-core',
+    depth: DEPTH.FIRE + 0.05,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear],
+    capacity: 2304,
+    maxLifetimeMs: 280,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Eigenes additives Flammenband ueber Outer; Core bleibt damit in derselben Tiefenstaffelung '
+      + 'wie der bisherige per-Hitbox-Emitter.',
+    capacityRationale:
+      '48 plausible parallele Hitboxen x 2 Spawns / 16 ms x 280 ms = 1680 lebende Member; '
+      + '2304 gibt rund 37 Prozent Reserve fuer Burst- und Timing-Schwankungen.',
+  },
+  {
+    id: GpuVfxLaneId.FlameSpark,
+    label: 'flame-spark',
+    depth: DEPTH.FIRE + 0.1,
+    blendMode: Phaser.BlendModes.ADD,
+    gravity: -30,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.Gravity],
+    capacity: 512,
+    maxLifetimeMs: 300,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Eigenes additives Spark-Band ueber Core; die Lane traegt die layerglobale Gravity von -30 '
+      + 'px/s² und darf deshalb keine anderen Flows aufnehmen.',
+    capacityRationale:
+      '48 plausible parallele Hitboxen x 1 Spawn / 50 ms x 300 ms = 288 lebende Member; '
+      + '512 gibt rund 78 Prozent Reserve fuer Burst- und Timing-Schwankungen.',
   },
 ];

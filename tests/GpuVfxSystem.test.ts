@@ -70,6 +70,7 @@ describe('gpu vfx system: lanes', () => {
     const { scene } = setup();
     expect(findFakeLane(scene, 'airstrike-bomb').gravity).toBe(30);
     expect(findFakeLane(scene, 'airstrike-spark').gravity).toBe(1024);
+    expect(findFakeLane(scene, 'flame-spark').gravity).toBe(-30);
   });
 
   it('prewarms exactly the eases its lane declares', () => {
@@ -79,6 +80,7 @@ describe('gpu vfx system: lanes', () => {
       expect(layer.enabledEases.length).toBe(spec.eases.length);
     }
     expect(findFakeLane(scene, 'rocket-smoke').enabledEases).toEqual(['Linear', 'Quad.easeOut']);
+    expect(findFakeLane(scene, 'flame-spark').enabledEases).toEqual(['Linear', 'Gravity']);
   });
 
   it('routes every lane through the shared atlas', () => {

@@ -147,6 +147,7 @@ export function createRendererBundle(
 
   const flame = new FlameRenderer(scene);
   flame.generateTextures();
+  flame.registerGpuVfx(gpuVfx);
 
   const leafBlower = new LeafBlowerRenderer(scene);
   leafBlower.generateTextures();

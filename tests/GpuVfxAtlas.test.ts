@@ -13,6 +13,14 @@ import {
   resetGpuVfxAtlasForTests,
 } from '../src/effects/gpu/GpuVfxAtlas';
 import { TEX_STINK_PUFF } from '../src/effects/gpu/GpuVfxSourceTextures';
+import {
+  TEX_FLAME_CORE,
+  TEX_FLAME_EMBER,
+  TEX_FLAME_SPARK,
+  TEX_VOID_FLAME_CORE,
+  TEX_VOID_FLAME_EMBER,
+  TEX_VOID_FLAME_SPARK,
+} from '../src/effects/FlameShared';
 import { makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 function build() {
@@ -95,6 +103,12 @@ describe('gpu vfx atlas', () => {
     }
     // `stink_puff` bleibt eigenstaendig bestehen – der klassische Spawn-Burst benutzt sie weiter.
     expect(scene.textures.exists(TEX_STINK_PUFF)).toBe(true);
+    expect(scene.textures.exists(TEX_FLAME_CORE)).toBe(true);
+    expect(scene.textures.exists(TEX_FLAME_EMBER)).toBe(true);
+    expect(scene.textures.exists(TEX_FLAME_SPARK)).toBe(true);
+    expect(scene.textures.exists(TEX_VOID_FLAME_CORE)).toBe(true);
+    expect(scene.textures.exists(TEX_VOID_FLAME_EMBER)).toBe(true);
+    expect(scene.textures.exists(TEX_VOID_FLAME_SPARK)).toBe(true);
   });
 
   it('resolves every manifest id to its own frame', () => {
@@ -104,6 +118,9 @@ describe('gpu vfx atlas', () => {
     }
     // Die Ids sind eigene, stabile Manifest-Ids – nicht Phasers Frame-Indizes.
     expect(getGpuVfxFrame(GpuVfxFrameId.StinkPuff).name).toBe('stink-puff');
+    expect(getGpuVfxFrame(GpuVfxFrameId.FlameCoreVoid).name).toBe('flame-core-void');
+    expect(getGpuVfxFrame(GpuVfxFrameId.FlameOuterVoid).name).toBe('flame-outer-void');
+    expect(getGpuVfxFrame(GpuVfxFrameId.FlameSparkVoid).name).toBe('flame-spark-void');
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
 
