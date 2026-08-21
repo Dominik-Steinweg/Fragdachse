@@ -29,7 +29,7 @@ import { EnergyInjectorRenderer } from '../../effects/EnergyInjectorRenderer';
 import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
-import { GpuVfxRegistry }      from '../../effects/gpu/GpuVfxRegistry';
+import { GpuVfxSystem }        from '../../effects/gpu/GpuVfxSystem';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
 import { SporeRenderer }       from '../../effects/SporeRenderer';
 import { GrenadeRenderer }     from '../../effects/GrenadeRenderer';
@@ -91,7 +91,7 @@ export interface RendererBundle {
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
-  gpuVfx:              GpuVfxRegistry;
+  gpuVfx:              GpuVfxSystem;
   fireball:            FireballRenderer;
   spore:               SporeRenderer;
   grenade:             GrenadeRenderer;
@@ -121,8 +121,10 @@ export function createRendererBundle(
   scene: Phaser.Scene,
   owners: OwnerVisualSource,
 ): RendererBundle {
-  // Vor allen Renderern: die GPU-VFX-Layer werden waehrend deren Aufbau angemeldet.
-  const gpuVfx = new GpuVfxRegistry(scene);
+  // Vor allen Renderern: das Backend baut den geteilten Atlas und alle Render-Lanes. Beides
+  // muss stehen, bevor ein Effekt sich anmeldet – Frames, die erst nach dem Layer entstehen,
+  // existieren fuer dessen Shader nicht.
+  const gpuVfx = new GpuVfxSystem(scene);
 
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
@@ -208,7 +210,7 @@ export function createRendererBundle(
 
   const rocket = new RocketRenderer(scene);
   rocket.generateTextures();
-  rocket.initGpuLayers(gpuVfx);
+  rocket.registerGpuVfx(gpuVfx);
   const fireball = new FireballRenderer(scene);
 
   const spore = new SporeRenderer(scene);
@@ -233,8 +235,8 @@ export function createRendererBundle(
 
   const airstrike = new AirstrikeRenderer(scene);
   airstrike.generateTextures();
-  // Geteilte GPU-Layer fuer alle Strikes, szenenlebenslang wie die Texturen.
-  airstrike.initGpuLayers(gpuVfx);
+  // Geteilte Render-Lanes fuer alle Strikes, szenenlebenslang wie die Texturen.
+  airstrike.registerGpuVfx(gpuVfx);
 
   const encounterTelegraph = new CoopDefenseEncounterTelegraphRenderer(scene);
   encounterTelegraph.generateTextures();

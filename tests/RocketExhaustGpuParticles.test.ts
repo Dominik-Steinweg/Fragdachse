@@ -13,22 +13,30 @@ const qualityFactors = { critical: 1, standard: 1, decorative: 1 };
 vi.mock('../src/graphics/GraphicsQuality', () => ({
   getGraphicsQualityController: () => ({
     getProfile: () => ({ particleFactors: qualityFactors }),
+    subscribe: () => () => {},
   }),
 }));
 
 import { RocketRenderer } from '../src/effects/RocketRenderer';
-import { GpuVfxRegistry } from '../src/effects/gpu/GpuVfxRegistry';
+import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
+import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
+import { GPU_VFX_LANES } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { DEPTH } from '../src/config';
-import { makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 function setup() {
   const scene = makeFakeGpuVfxScene();
-  const registry = new GpuVfxRegistry(scene as never);
+  const registry = new GpuVfxSystem(scene as never);
   const renderer = new RocketRenderer(scene as never);
   renderer.generateTextures();
-  renderer.initGpuLayers(registry);
-  const layerBy = (key: string) => scene.layers.find((layer) => layer.key === key)!;
-  return { scene, registry, renderer, exhaust: layerBy('__rocket_exhaust'), smoke: layerBy('__rocket_smoke') };
+  renderer.registerGpuVfx(registry);
+  return {
+    scene,
+    registry,
+    renderer,
+    exhaust: findFakeLane(scene, 'rocket-exhaust'),
+    smoke: findFakeLane(scene, 'rocket-smoke'),
+  };
 }
 
 function spawnRocket(renderer: RocketRenderer, id: number): void {
@@ -36,6 +44,7 @@ function spawnRocket(renderer: RocketRenderer, id: number): void {
 }
 
 beforeEach(() => {
+  resetGpuVfxAtlasForTests();
   qualityFactors.standard = 1;
   vi.spyOn(Math, 'random').mockReturnValue(0.5);
 });
@@ -45,15 +54,17 @@ afterEach(() => {
 });
 
 describe('rocket exhaust gpu particles', () => {
-  it('uses a single shared layer for every rocket', () => {
+  it('uses a single shared lane for every rocket', () => {
     const { scene, registry, renderer, exhaust } = setup();
-    // Ein Exhaust- und ein Smoke-Layer, beide geteilt.
-    expect(scene.layers.length).toBe(2);
-    expect(exhaust.key).toBe('__rocket_exhaust');
+    // Die Lanes entstehen aus dem Manifest, nicht je Rakete.
+    expect(scene.layers.length).toBe(GPU_VFX_LANES.length);
+    // Alle Lanes teilen sich den Atlas; das Motiv steckt im Frame des Members.
+    expect(exhaust.key).toBe('__gpu_vfx_atlas');
 
     for (let id = 1; id <= 12; id += 1) spawnRocket(renderer, id);
     registry.update(100);
-    expect(scene.layers.length).toBe(2);
+    expect(scene.layers.length).toBe(GPU_VFX_LANES.length);
+    expect(exhaust.members.every((member) => member.frame === 'rocket-exhaust')).toBe(true);
   });
 
   it('creates no ParticleEmitter for the flight visuals any more', () => {
@@ -65,7 +76,7 @@ describe('rocket exhaust gpu particles', () => {
     expect(scene.emitters.length).toBe(0);
   });
 
-  it('primes the layer and sits additively just above the rocket body', () => {
+  it('primes the lane and sits additively just above the rocket body', () => {
     const { exhaust } = setup();
     expect(exhaust.blendMode).toBe(1);
     expect(exhaust.enabledEases).toEqual(['Linear']);
@@ -154,7 +165,7 @@ describe('rocket exhaust gpu particles', () => {
     const stats = registry.getStats();
     const exhaustStats = stats?.['rocket-exhaust'];
     expect(exhaustStats).toBeDefined();
-    expect(exhaustStats!.activeSlots).toBeLessThanOrEqual(exhaustStats!.capacity);
+    expect(exhaustStats!.liveCount).toBeLessThanOrEqual(exhaustStats!.capacity);
     // Kein Slot wurde doppelt vergeben: jeder Edit gehoert zu genau einem Rearm.
     expect(exhaust.edited.length).toBe(exhaustStats!.rearms);
     warn.mockRestore();
@@ -169,6 +180,6 @@ describe('rocket exhaust gpu particles', () => {
 
     renderer.destroyAll();
     expect(exhaust.patched.length).toBe(spawned);
-    expect(registry.getStats()?.['rocket-exhaust'].activeSlots).toBe(0);
+    expect(registry.getStats()?.['rocket-exhaust'].liveCount).toBe(0);
   });
 });

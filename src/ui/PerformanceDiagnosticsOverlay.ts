@@ -237,9 +237,12 @@ export class PerformanceDiagnosticsOverlay {
     const gpuVfx = this.getGpuVfxStats?.() ?? null;
     if (gpuVfx) {
       for (const [label, stats] of Object.entries(gpuVfx)) {
+        // Nur belegte Lanes zeigen; leere sind nach dem Idle-Hiding ohnehin unsichtbar.
+        if (stats.liveCount === 0 && stats.peakLive === 0) continue;
         lines.push(
-          `GPU-VFX ${label} ${stats.activeSlots}/${stats.capacity} aktiv`
-          + ` · Fenster ${stats.scanWindow} · Rearms ${stats.rearms} · Overruns ${stats.overruns}`,
+          `GPU-VFX ${label} ${stats.liveCount}/${stats.capacity} aktiv`
+          + ` · Peak ${stats.peakLive} · Rearms ${stats.rearms}`
+          + ` · Drops ${stats.capacityDrops} · Segmente ${stats.segmentsTouched}`,
         );
       }
     }

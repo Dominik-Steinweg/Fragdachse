@@ -5,6 +5,16 @@ import {
 } from '../../config';
 import type { GraphicsQuality } from '../../graphics/GraphicsQuality';
 import { ABLATION_CODES, ABLATION_LABELS, type AblationCategory, type AblationSegment } from './PerformanceAblation';
+import type { GpuVfxReport } from '../../effects/gpu/GpuVfxProfiler';
+
+/**
+ * Das GPU-VFX-Backend als Messquelle. `reset()` beim Start einer Messung haelt Lane- und
+ * Effektzaehler im selben Fenster wie den Rest des Reports.
+ */
+export interface GpuVfxReportSource {
+  build(): GpuVfxReport;
+  reset(): void;
+}
 
 const MAX_RECORDING_MS = 30 * 60 * 1000;
 const MAX_RAW_FRAME_SAMPLES = 60_000;
@@ -22,7 +32,9 @@ const GAME_POST_RENDER_EVENT = 'postrender';
  * Phaser 4 fuehrt fuer WebGL keinen Draw-Call-Zaehler: `drawCount` existiert nur am
  * CanvasRenderer, und der RenderNodeManager bietet nur einen Debug-Graphen fuer einen Einzelframe.
  * Die Zeichenaufrufe werden deshalb am GL-Kontext gezaehlt. Die Wrapper liegen als eigene
- * Eigenschaft auf dem Kontext und verdecken die Prototyp-Methode, `delete` stellt sie wieder her.
+ * Eigenschaft auf dem Kontext und verdecken die bisherige Methode. Beim Entfernen wird der
+ * vorherige Besitz- und Werte-Zustand wiederhergestellt, weil Phaser selbst eigene WebGL1-
+ * Kompatibilitaetsmethoden am Kontext anlegt.
  */
 const GL_DRAW_METHODS = [
   'drawArrays',
@@ -31,6 +43,13 @@ const GL_DRAW_METHODS = [
   'drawElementsInstanced',
   'drawRangeElements',
 ] as const;
+
+type GlDrawMethod = typeof GL_DRAW_METHODS[number];
+
+interface DrawCallHookOriginal {
+  readonly hadOwnProperty: boolean;
+  readonly value: unknown;
+}
 
 type GlContext = WebGLRenderingContext | WebGL2RenderingContext;
 export type RuntimePhase = 'lobby' | 'arena' | 'terminated';
@@ -370,7 +389,7 @@ export interface PerformanceGpuSample {
 }
 
 export interface ArenaPerformanceReport {
-  schemaVersion: 4;
+  schemaVersion: 5;
   /** Laufende Nummer der Messung. Zwei Exporte derselben Messung tragen dieselbe Nummer. */
   recordingId: number;
   createdAt: string;
@@ -413,6 +432,12 @@ export interface ArenaPerformanceReport {
     disjointSamplesDropped: number;
     samples: PerformanceGpuSample[];
   };
+  /**
+   * GPU-Partikel auf zwei Ebenen: physische Render-Lanes und logische Effekte. Beides fehlt in
+   * `particleEmitterCount`/`aliveParticleCount` – die zaehlen weiterhin nur klassische Emitter.
+   * `null`, wenn keine Quelle angemeldet ist (etwa im Lobby-Kontext ohne Renderer-Bundle).
+   */
+  gpuVfx: GpuVfxReport | null;
   instrumentation: {
     drawCallHooks: boolean;
     glDiagnosticHooks: boolean;
@@ -730,6 +755,7 @@ function sanitizeSourceUrl(sourceUrl: string): string {
 export class ArenaRuntimeProfiler {
   private metricsWindow: RuntimeWindow | null = null;
   private latestSummary: ArenaRuntimeWindowSummary | null = null;
+  private gpuVfxSource: GpuVfxReportSource | null = null;
   private recording = false;
   private recordingStartedEpochMs = 0;
   private recordingStartedAtMs = 0;
@@ -779,6 +805,7 @@ export class ArenaRuntimeProfiler {
   private gameEventsInstalled = false;
   private glContext: GlContext | null = null;
   private drawCallHooksInstalled = false;
+  private drawCallHookOriginals: Partial<Record<GlDrawMethod, DrawCallHookOriginal>> = {};
   private glDiagnosticHooksInstalled = false;
   private recordingUsedDrawCallHooks = false;
   private recordingUsedGlDiagnosticHooks = false;
@@ -1060,6 +1087,8 @@ export class ArenaRuntimeProfiler {
    */
   startRecording(environment: Record<string, unknown> = {}): void {
     const now = performance.now();
+    // Die GPU-VFX-Zaehler laufen seit dem Szenenaufbau; fuer den Export zaehlt das Messfenster.
+    this.gpuVfxSource?.reset();
     this.recording = true;
     this.recordingId += 1;
     this.recordingEnvironment = { ...environment };
@@ -1153,6 +1182,14 @@ export class ArenaRuntimeProfiler {
     return this.latestSummary;
   }
 
+  /**
+   * Quelle des GPU-VFX-Reports. Der Profiler entsteht vor dem Renderer-Bundle, das Backend also
+   * erst danach – deshalb nachgereicht statt im Konstruktor.
+   */
+  setGpuVfxSource(source: GpuVfxReportSource | null): void {
+    this.gpuVfxSource = source;
+  }
+
   canExport(): boolean {
     return !this.recording && this.recordedWindows.length > 0;
   }
@@ -1160,7 +1197,7 @@ export class ArenaRuntimeProfiler {
   buildReport(): ArenaPerformanceReport | null {
     if (!this.canExport()) return null;
     return {
-      schemaVersion: 4,
+      schemaVersion: 5,
       recordingId: this.recordingId,
       createdAt: new Date().toISOString(),
       recordingStartedAt: new Date(this.recordingStartedEpochMs).toISOString(),
@@ -1205,6 +1242,7 @@ export class ArenaRuntimeProfiler {
         disjointSamplesDropped: this.disjointGpuSamplesDropped,
         samples: [...this.gpuSamples],
       },
+      gpuVfx: this.gpuVfxSource?.build() ?? null,
       instrumentation: {
         drawCallHooks: this.recordingUsedDrawCallHooks,
         glDiagnosticHooks: this.recordingUsedGlDiagnosticHooks,
@@ -1631,8 +1669,11 @@ export class ArenaRuntimeProfiler {
     const gl = this.glContext;
     if (!gl) return;
     const target = gl as unknown as Record<string, unknown>;
+    this.drawCallHookOriginals = {};
     for (const method of GL_DRAW_METHODS) {
+      const hadOwnProperty = Object.prototype.hasOwnProperty.call(target, method);
       const original = target[method];
+      this.drawCallHookOriginals[method] = { hadOwnProperty, value: original };
       if (typeof original !== 'function') continue;
       const bound = (original as (...args: unknown[]) => unknown).bind(gl);
       target[method] = (...args: unknown[]): unknown => {
@@ -1650,10 +1691,16 @@ export class ArenaRuntimeProfiler {
     this.lastFrameDrawCallCount = 0;
     if (!gl) return;
     const target = gl as unknown as Record<string, unknown>;
-    // Die Wrapper sind eigene Eigenschaften; `delete` legt die Prototyp-Methode wieder frei.
+    // Phaser legt bei WebGL1 selbst eigene Alias-Methoden fuer ANGLE_instanced_arrays an.
+    // Deshalb nicht pauschal alle eigenen Eigenschaften loeschen, sondern nur unseren
+    // vorherigen Zustand wiederherstellen.
     for (const method of GL_DRAW_METHODS) {
-      if (Object.prototype.hasOwnProperty.call(target, method)) delete target[method];
+      const original = this.drawCallHookOriginals[method];
+      if (!original) continue;
+      if (original.hadOwnProperty) target[method] = original.value;
+      else delete target[method];
     }
+    this.drawCallHookOriginals = {};
   }
 
   private installGlDiagnosticHooks(): void {

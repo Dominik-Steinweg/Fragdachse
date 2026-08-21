@@ -4,22 +4,16 @@ import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, DEPTH, VOID_PALETTE } from '.
 import type { EffectSystem }          from './EffectSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
-import { GPU_VFX_NO_SLOT } from './gpu/GpuVfxPool';
-import {
-  GPU_VFX_DEPTH_EPSILON,
-  pickGpuVfxTint,
-  setGpuVfxTint,
-  type GpuVfxEmitter,
-  type GpuVfxMember,
-  type GpuVfxMemberAnimation,
-  type GpuVfxRegistry,
-} from './gpu/GpuVfxRegistry';
+import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import { pickGpuVfxTint } from './gpu/GpuVfxMember';
+import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
+import { ensureAirstrikeBombTexture, ensureAirstrikeSparkTexture } from './gpu/GpuVfxSourceTextures';
+import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
-const TEX_AS_BOMB   = '__airstrike_bomb';
 const TEX_AS_TRAIL  = '__airstrike_trail';
-const TEX_AS_WARN   = '__airstrike_warn';
 
 // ── Farb-Palette ────────────────────────────────────────────────────────────
 const COL_WARNING  = 0xff6600;
@@ -57,43 +51,16 @@ const ENEMY_AIRSTRIKE_PALETTE: AirstrikePalette = {
 
 // ── GPU-Partikel: Konstanten ────────────────────────────────────────────────
 
-/**
- * Feste Kapazitaet je Layer. Worst Case ist der Eroeffnungs-Sweep von Map 11: bis zu neun
- * gleichzeitige Strikes, Endfrequenz 20 ms (Bombs) bzw. 15 ms (Sparks) bei Lebenszeiten bis
- * 460 ms bzw. 480 ms, also rund 210 bzw. 290 gleichzeitig lebende Member. 1024 laesst rund
- * das Drei- bis Fuenffache an Luft. Keine dynamische Vergroesserung im Hotpath.
- */
-const GPU_POOL_CAPACITY = 1024;
-
-/** Ergibt zusammen mit `gravityFactor: 1` exakt die bisherige `accelerationY: 30`. */
-const BOMB_GRAVITY_PX_PER_S2 = 30;
-
 /** Startwerte der Flow-Countdowns – identisch mit der bisherigen `frequency` beim Erzeugen. */
 const BOMB_FLOW_START_MS  = 80;
 const SPARK_FLOW_START_MS = 70;
 
-/**
- * Wiederverwendete Spawn-Vorlagen. Die verschachtelten Animationsobjekte werden nur mutiert,
- * niemals neu angelegt – `editMember` liest sie synchron aus. `loop`/`yoyo` defaulten in Phaser
- * auf `true` und muessen fuer One-Shots ueberall explizit `false` sein.
- */
-const bombX: GpuVfxMemberAnimation     = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const bombY: GpuVfxMemberAnimation     = { base: 0, velocity: 0, gravityFactor: 1, duration: 0, ease: 'Gravity', loop: false, yoyo: false };
-const bombScale: GpuVfxMemberAnimation = { base: 1.2, amplitude: -1, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const bombAlpha: GpuVfxMemberAnimation = { base: 0.85, amplitude: -0.85, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const BOMB_MEMBER: GpuVfxMember = {
-  x: bombX, y: bombY, scaleX: bombScale, scaleY: bombScale, alpha: bombAlpha, tintBlend: 1,
-  tintTopLeft: 0xffffff, tintTopRight: 0xffffff, tintBottomLeft: 0xffffff, tintBottomRight: 0xffffff,
-};
+const BOMB_SCALE_START = 1.2;
+const BOMB_SCALE_END   = 0.2;
+const BOMB_ALPHA_START = 0.85;
 
-const sparkX: GpuVfxMemberAnimation     = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const sparkY: GpuVfxMemberAnimation     = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const sparkScale: GpuVfxMemberAnimation = { base: 0.9, amplitude: -0.9, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const sparkAlpha: GpuVfxMemberAnimation = { base: 0.8, amplitude: -0.8, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const SPARK_MEMBER: GpuVfxMember = {
-  x: sparkX, y: sparkY, scaleX: sparkScale, scaleY: sparkScale, alpha: sparkAlpha, tintBlend: 1,
-  tintTopLeft: 0xffffff, tintTopRight: 0xffffff, tintBottomLeft: 0xffffff, tintBottomRight: 0xffffff,
-};
+const SPARK_SCALE_START = 0.9;
+const SPARK_ALPHA_START = 0.8;
 
 /** Scratch fuer die Spawn-Zone; `Circle.Random` liefert dieselbe Flaechenverteilung wie bisher. */
 const SPAWN_CIRCLE = new Phaser.Geom.Circle(0, 0, 1);
@@ -119,6 +86,8 @@ interface AirstrikeVisual {
   palette:       AirstrikePalette;
   bombFlow:      ParticleFlowScheduler;
   sparkFlow:     ParticleFlowScheduler;
+  /** Numerischer Source-Handle des Backends; alle Partikel dieses Strikes haengen daran. */
+  source:        number;
   lastCountdown: number | null;
 }
 
@@ -135,12 +104,12 @@ interface AirstrikeVisual {
  * ## Partikel auf der GPU
  *
  * Bomben-Schweife und Boden-Funken laufen nicht mehr ueber je einen `ParticleEmitter` pro
- * Strike, sondern ueber genau zwei szenenweit geteilte `SpriteGPULayer` – unabhaengig davon,
- * wie viele Strikes gleichzeitig laufen. Ein gespawntes Partikel bekommt danach kein
+ * Strike, sondern ueber zwei szenenweit geteilte Render-Lanes des GPU-VFX-Backends – unabhaengig
+ * davon, wie viele Strikes gleichzeitig laufen. Ein gespawntes Partikel bekommt danach kein
  * CPU-Update mehr: Bewegung, Scale und Alpha sind GPU-Member-Animationen.
  *
  * Getrennt bleiben dabei bewusst zwei Dinge: `sync()` fuehrt Strike-Zustand und die aktuell
- * gueltige Emissionsfrequenz nach, der bei der `GpuVfxRegistry` angemeldete Emissions-Tick nur
+ * gueltige Emissionsfrequenz nach, der beim `GpuVfxSystem` angemeldete Emissions-Tick nur
  * Flow-Countdown und faellige Rearms. Auf Clients laeuft `sync()` nicht garantiert in jedem
  * Renderframe mit frischem Netzzustand, waehrend der bisherige Emitter autonom weiterlief – der
  * Partikel-Tick braucht deshalb einen eigenen, rollenunabhaengigen Aufruf pro Frame.
@@ -152,8 +121,9 @@ export class AirstrikeRenderer {
   private effectSystem: EffectSystem | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
 
-  private bombFx:  GpuVfxEmitter | null = null;
-  private sparkFx: GpuVfxEmitter | null = null;
+  private gpuVfx: GpuVfxSystem | null = null;
+  private bombSpec:  GpuVfxSpawnSpec | null = null;
+  private sparkSpec: GpuVfxSpawnSpec | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -168,21 +138,9 @@ export class AirstrikeRenderer {
   generateTextures(): void {
     const texMgr = this.scene.textures;
 
-    // Bomben-Silhouette (8×20 px)
-    if (!texMgr.exists(TEX_AS_BOMB)) {
-      const c = texMgr.createCanvas(TEX_AS_BOMB, 8, 20);
-      if (c) {
-        const ctx = c.context;
-        const g = ctx.createLinearGradient(0, 0, 0, 20);
-        g.addColorStop(0,   'rgba(255,255,255,0.0)');
-        g.addColorStop(0.2, 'rgba(255,255,255,0.85)');
-        g.addColorStop(0.7, 'rgba(255,255,255,0.65)');
-        g.addColorStop(1,   'rgba(255,255,255,0.0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, 8, 20);
-        c.refresh();
-      }
-    }
+    // Bomben-Silhouette und Bodenfunke liegen im gemeinsamen GPU-VFX-Atlas.
+    ensureAirstrikeBombTexture(this.scene);
+    ensureAirstrikeSparkTexture(this.scene);
 
     // Schweif-Partikel (6×6 px, weiß→orange)
     if (!texMgr.exists(TEX_AS_TRAIL)) {
@@ -199,48 +157,32 @@ export class AirstrikeRenderer {
       }
     }
 
-    // Warnsignal-Partikel am Boden (8×8 px)
-    if (!texMgr.exists(TEX_AS_WARN)) {
-      const c = texMgr.createCanvas(TEX_AS_WARN, 8, 8);
-      if (c) {
-        const ctx  = c.context;
-        const grad = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
-        grad.addColorStop(0,   'rgba(255,255,255,1)');
-        grad.addColorStop(0.4, 'rgba(255,255,255,0.7)');
-        grad.addColorStop(1,   'rgba(255,255,255,0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 8, 8);
-        c.refresh();
-      }
-    }
   }
 
   /**
-   * Legt die beiden geteilten GPU-Layer an – einmalig, szenenlebenslang, niemals pro Strike.
-   * Direkt nach `generateTextures()` aufzurufen.
+   * Meldet Bomben und Funken beim gemeinsamen GPU-VFX-Backend an. Die Layer gehoeren dem
+   * Backend; hier entstehen nur die beiden Spawn-Specs.
    */
-  initGpuLayers(registry: GpuVfxRegistry): void {
-    if (this.bombFx) return;
+  registerGpuVfx(system: GpuVfxSystem): void {
+    if (this.gpuVfx) return;
+    this.gpuVfx = system;
 
-    this.bombFx = registry.createEmitter({
-      name:     'airstrike-bomb',
-      texture:  TEX_AS_BOMB,
-      capacity: GPU_POOL_CAPACITY,
-      depth:    DEPTH.PLAYERS + GPU_VFX_DEPTH_EPSILON,
-      eases:    ['Linear', 'Gravity'],
-      // Der Shader rechnet `0.5 * uGravity * gravityFactor * t^2`; `gravityFactor: 1` wird als
-      // 0 kodiert und vom Shader wieder als 1 gelesen – exakt 30 px/s².
-      gravity:  BOMB_GRAVITY_PX_PER_S2,
-    });
-    this.sparkFx = registry.createEmitter({
-      name:     'airstrike-spark',
-      texture:  TEX_AS_WARN,
-      capacity: GPU_POOL_CAPACITY,
-      depth:    DEPTH.PLAYERS - 1 + GPU_VFX_DEPTH_EPSILON,
-      eases:    ['Linear'],
-    });
+    this.bombSpec = system.createSpec(GpuVfxEffectId.AirstrikeBomb);
+    // Der Shader rechnet `0.5 * uGravity * gravityFactor * t^2` mit der layerglobalen Gravity
+    // der Lane – exakt die fruehere `accelerationY: 30`.
+    this.bombSpec.yMode      = GpuVfxEase.Gravity;
+    this.bombSpec.scaleStart = BOMB_SCALE_START;
+    this.bombSpec.scaleEnd   = BOMB_SCALE_END;
+    this.bombSpec.alphaStart = BOMB_ALPHA_START;
+    this.bombSpec.alphaEnd   = 0;
 
-    registry.registerEmission((deltaMs, nowMs) => this.emitParticles(deltaMs, nowMs));
+    this.sparkSpec = system.createSpec(GpuVfxEffectId.AirstrikeSpark);
+    this.sparkSpec.scaleStart = SPARK_SCALE_START;
+    this.sparkSpec.scaleEnd   = 0;
+    this.sparkSpec.alphaStart = SPARK_ALPHA_START;
+    this.sparkSpec.alphaEnd   = 0;
+
+    system.registerEmission((deltaMs, nowMs) => this.emitParticles(deltaMs, nowMs));
   }
 
   sync(strikes: SyncedAirstrikeStrike[]): void {
@@ -273,8 +215,7 @@ export class AirstrikeRenderer {
     for (const v of this.visuals.values()) this.destroyVisual(v);
     this.visuals.clear();
     this.activeVisuals.length = 0;
-    this.bombFx?.pool.releaseAll();
-    this.sparkFx?.pool.releaseAll();
+    // Die Strikes haben ihre Quellen in `destroyVisual()` bereits freigegeben.
   }
 
   // ── Hilfsmethoden ──────────────────────────────────────────────────────────
@@ -284,12 +225,17 @@ export class AirstrikeRenderer {
    * ausserhalb der Ablation.
    */
   private emitParticles(deltaMs: number, nowMs: number): void {
+    const quality = this.gpuVfx?.quality;
+    // Faktor 0 (dekorativ auf `low`) stellt die Emission ganz ab, wie `applyEmitterProfile`.
+    const bombOn  = !quality || quality.getEmissionFactor(GpuVfxEffectId.AirstrikeBomb) > 0;
+    const sparkOn = !quality || quality.getEmissionFactor(GpuVfxEffectId.AirstrikeSpark) > 0;
+
     for (let index = 0; index < this.activeVisuals.length; index += 1) {
       const visual = this.activeVisuals[index];
       const bombs  = visual.bombFlow.tick(deltaMs);
-      for (let n = 0; n < bombs; n += 1) this.spawnBomb(visual, nowMs);
+      if (bombOn) for (let n = 0; n < bombs; n += 1) this.spawnBomb(visual, nowMs);
       const sparks = visual.sparkFlow.tick(deltaMs);
-      for (let n = 0; n < sparks; n += 1) this.spawnSpark(visual, nowMs);
+      if (sparkOn) for (let n = 0; n < sparks; n += 1) this.spawnSpark(visual, nowMs);
     }
   }
 
@@ -299,31 +245,22 @@ export class AirstrikeRenderer {
    * nicht-radial, beide Komponenten werden also unabhaengig gezogen.
    */
   private spawnBomb(visual: AirstrikeVisual, nowMs: number): void {
-    const fx = this.bombFx;
-    if (!fx) return;
-    const { pool, layer } = fx;
+    const system = this.gpuVfx;
+    const spec = this.bombSpec;
+    if (!system || !spec) return;
 
-    const life = Phaser.Math.FloatBetween(260, 460);
-    const slot = pool.acquire(visual.id, nowMs, life);
-    if (slot === GPU_VFX_NO_SLOT) return;
-
+    // Ziehreihenfolge wie bisher: erst Lebenszeit, dann Zone, dann Geschwindigkeit.
+    spec.lifeMs = Phaser.Math.FloatBetween(260, 460);
     SPAWN_CIRCLE.setTo(visual.x, visual.y, visual.radius * 0.4);
     Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
 
-    const lifeS = life / 1000;
-    bombX.base      = SPAWN_POINT.x;
-    bombX.amplitude = Phaser.Math.FloatBetween(-28, 28) * lifeS;
-    bombX.duration  = life;
-    bombY.base      = SPAWN_POINT.y;
-    // Phaser kodiert `velocity` ganzzahlig (`Math.floor`); die Rundung kostet < 0,5 px/s und
-    // ueber die maximale Lebenszeit weniger als einen Viertelpixel.
-    bombY.velocity  = Math.round(Phaser.Math.FloatBetween(55, 110));
-    bombY.duration  = life;
-    bombScale.duration = life;
-    bombAlpha.duration = life;
-    setGpuVfxTint(BOMB_MEMBER, pickGpuVfxTint(visual.palette.bombTints));
+    spec.x  = SPAWN_POINT.x;
+    spec.y  = SPAWN_POINT.y;
+    spec.vx = Phaser.Math.FloatBetween(-28, 28);
+    spec.vy = Phaser.Math.FloatBetween(55, 110);
+    spec.tint = pickGpuVfxTint(visual.palette.bombTints);
 
-    layer.editMember(slot, BOMB_MEMBER);
+    system.spawn(spec, visual.source, nowMs);
   }
 
   /**
@@ -331,31 +268,24 @@ export class AirstrikeRenderer {
    * und gleichverteiltem Winkel – so wirkte das alte `speed`-Config im radialen Modus.
    */
   private spawnSpark(visual: AirstrikeVisual, nowMs: number): void {
-    const fx = this.sparkFx;
-    if (!fx) return;
-    const { pool, layer } = fx;
+    const system = this.gpuVfx;
+    const spec = this.sparkSpec;
+    if (!system || !spec) return;
 
-    const life = Phaser.Math.FloatBetween(200, 480);
-    const slot = pool.acquire(visual.id, nowMs, life);
-    if (slot === GPU_VFX_NO_SLOT) return;
-
+    // Ziehreihenfolge wie bisher: erst Lebenszeit, dann Zone, dann Geschwindigkeit.
+    spec.lifeMs = Phaser.Math.FloatBetween(200, 480);
     SPAWN_CIRCLE.setTo(visual.x, visual.y, visual.radius * 0.15);
     Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
 
-    const lifeS = life / 1000;
     const speed = Phaser.Math.FloatBetween(20, 55);
     const rad   = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(0, 360));
-    sparkX.base      = SPAWN_POINT.x;
-    sparkX.amplitude = Math.cos(rad) * speed * lifeS;
-    sparkX.duration  = life;
-    sparkY.base      = SPAWN_POINT.y;
-    sparkY.amplitude = Math.sin(rad) * speed * lifeS;
-    sparkY.duration  = life;
-    sparkScale.duration = life;
-    sparkAlpha.duration = life;
-    setGpuVfxTint(SPARK_MEMBER, pickGpuVfxTint(visual.palette.sparkTints));
+    spec.x  = SPAWN_POINT.x;
+    spec.y  = SPAWN_POINT.y;
+    spec.vx = Math.cos(rad) * speed;
+    spec.vy = Math.sin(rad) * speed;
+    spec.tint = pickGpuVfxTint(visual.palette.sparkTints);
 
-    layer.editMember(slot, SPARK_MEMBER);
+    system.spawn(spec, visual.source, nowMs);
   }
 
   private updateVisual(
@@ -398,13 +328,16 @@ export class AirstrikeRenderer {
     // bewusst nicht zurueck – genau so verhielt sich der direkte Schreibzugriff auf
     // `emitter.frequency`.
     //
-    // Bekannte Inkonsistenz, hier absichtlich unveraendert uebernommen: der Wert umgeht die
-    // Flow-Skalierung des GraphicsQuality-Controllers. Auf `high` sind alle `particleFactors`
-    // gleich 1, die Darstellung ist dort also identisch; unterhalb von `high` entfaellt mit den
-    // Emittern zusaetzlich deren `maxAliveParticles`-Deckel. Beides gehoert zusammen und wird
-    // getrennt von dieser Migration behoben.
-    v.bombFlow.setFrequency(Math.max(20, 120 - progress * 100));
-    v.sparkFlow.setFrequency(Math.max(15, 90 - progress * 70));
+    // Das progress-abhaengige Intervall ist die Basis, die zentrale Quality-Politik streckt sie.
+    // Auf `high` (Faktor 1) ist das bitgleich zu vorher; darunter emittiert der Airstrike jetzt
+    // ueberhaupt qualitaetsabhaengig. Bis zur Zentralisierung tat er das nie: die alten Emitter
+    // bekamen zwar eine skalierte `frequency`, `updateVisual()` ueberschrieb sie aber im selben
+    // Frame, und ein `maxAliveParticles`-Deckel kam wegen `lifespan: {min,max}` nie zustande.
+    const quality = this.gpuVfx?.quality;
+    const bombBase  = Math.max(20, 120 - progress * 100);
+    const sparkBase = Math.max(15, 90 - progress * 70);
+    v.bombFlow.setFrequency(quality?.scaleFrequency(bombBase, GpuVfxEffectId.AirstrikeBomb) ?? bombBase);
+    v.sparkFlow.setFrequency(quality?.scaleFrequency(sparkBase, GpuVfxEffectId.AirstrikeSpark) ?? sparkBase);
 
     // Anschwellendes Rumpeln kurz vor dem Einschlag. Stabile `id` je Strike: die Anforderung
     // läuft pro Frame und soll die Quelle aktualisieren, nicht stapeln oder neu starten.
@@ -500,6 +433,8 @@ export class AirstrikeRenderer {
       palette,
       bombFlow:  new ParticleFlowScheduler(BOMB_FLOW_START_MS),
       sparkFlow: new ParticleFlowScheduler(SPARK_FLOW_START_MS),
+      // Bomben und Funken teilen sich die Quelle: sie verschwinden gemeinsam mit dem Strike.
+      source: this.gpuVfx?.createSource(GpuVfxEffectId.AirstrikeBomb) ?? GPU_VFX_NO_SOURCE_HANDLE,
       lastCountdown: null,
     };
   }
@@ -512,8 +447,7 @@ export class AirstrikeRenderer {
     v.crossH.destroy();
     v.crossV.destroy();
     // Noch sichtbare Partikel dieses Strikes sofort ausblenden – wie bisher `emitter.destroy()`.
-    this.bombFx?.pool.releaseOwner(v.id);
-    this.sparkFx?.pool.releaseOwner(v.id);
+    this.gpuVfx?.releaseSource(v.source);
     const index = this.activeVisuals.indexOf(v);
     if (index >= 0) this.activeVisuals.splice(index, 1);
   }

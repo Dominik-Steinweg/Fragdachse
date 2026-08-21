@@ -1,9 +1,14 @@
 /**
  * Gemeinsame Fakes fuer die SpriteGPULayer-Partikeltests.
  *
- * Der Layer protokolliert, was `GpuVfxPool` und die Renderer mit ihm anstellen: wie viele
- * Member angelegt (`added`), bespielt (`edited`) und stillgelegt (`patched`) wurden. Damit
- * laesst sich die Emission pruefen, ohne WebGL oder echtes Phaser zu brauchen.
+ * Der Layer protokolliert, was das GPU-VFX-Backend mit ihm anstellt: wie viele Member angelegt
+ * (`added`), bespielt (`edited`) und stillgelegt (`patched`) wurden, und wie oft die Sichtbarkeit
+ * umgeschaltet hat. Damit laesst sich die Emission pruefen, ohne WebGL oder echtes Phaser zu
+ * brauchen.
+ *
+ * Der Texture-Manager bildet genau die Phaser-Semantik nach, an der der Atlas haengt: die
+ * `firstFrame`-Befoerderung des ersten hinzugefuegten Frames und die Einfuegereihenfolge von
+ * `getFrameNames()`.
  */
 
 /** Eine Member-Animation, so wie sie im Buffer landen wuerde. */
@@ -40,6 +45,9 @@ export interface FakeGpuMemberSnapshot {
   y: FakeGpuAnimation;
   scaleX: FakeGpuAnimation;
   alpha: FakeGpuAnimation;
+  rotation: FakeGpuAnimation;
+  /** Frame-Name aus dem Atlas; `null`, wenn der Member gar keinen Frame gesetzt hat. */
+  frame: string | null;
   tint: number;
 }
 
@@ -59,8 +67,16 @@ function readAnimation(value: unknown): FakeGpuAnimation {
   };
 }
 
+function readFrameName(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && typeof (value as { name?: unknown }).name === 'string') {
+    return (value as { name: string }).name;
+  }
+  return null;
+}
+
 /**
- * Kopiert die Felder, auf die es in den Tests ankommt. Die Renderer mutieren ihre Vorlagen
+ * Kopiert die Felder, auf die es in den Tests ankommt. Das Backend mutiert seine Vorlage
  * bewusst wieder, ein Referenz-Mitschnitt waere also immer der letzte Spawn.
  */
 function snapshotMember(member: Record<string, unknown>): FakeGpuMemberSnapshot {
@@ -69,16 +85,23 @@ function snapshotMember(member: Record<string, unknown>): FakeGpuMemberSnapshot 
     y: readAnimation(member.y),
     scaleX: readAnimation(member.scaleX),
     alpha: readAnimation(member.alpha),
+    rotation: readAnimation(member.rotation),
+    frame: readFrameName(member.frame),
     tint: (member.tintTopLeft as number) ?? 0,
   };
 }
 
 export interface FakeGpuLayer {
   key: string;
+  /** Lane-Label; alle Lanes teilen sich den Atlas, der Key unterscheidet sie also nicht mehr. */
+  name: string;
   size: number;
+  memberCount: number;
   gravity: number;
   timeElapsed: number;
   visible: boolean;
+  /** Jede echte Sichtbarkeitsumschaltung, in Reihenfolge. */
+  visibleTransitions: boolean[];
   depth: number;
   blendMode: number;
   enabledEases: string[];
@@ -100,10 +123,13 @@ export interface FakeGpuLayer {
 export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
   const layer: FakeGpuLayer = {
     key,
+    name: '',
     size,
+    memberCount: 0,
     gravity: 1024,
     timeElapsed: 0,
     visible: true,
+    visibleTransitions: [],
     depth: 0,
     blendMode: 0,
     enabledEases: [],
@@ -112,13 +138,22 @@ export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
     members: [],
     patched: [],
     getDataByteSize: () => 42 * 4,
-    addMember: () => { layer.added += 1; },
+    addMember: () => { layer.added += 1; layer.memberCount += 1; },
     editMember: (index, member) => {
+      // Phaser steigt bei `index >= memberCount` still aus.
+      if (index < 0 || index >= layer.memberCount) return;
       layer.edited.push(index);
       layer.members.push(snapshotMember(member));
     },
-    patchMember: (index) => { layer.patched.push(index); },
-    setVisible: (visible) => { layer.visible = visible; return layer; },
+    patchMember: (index) => {
+      if (index < 0 || index >= layer.memberCount) return;
+      layer.patched.push(index);
+    },
+    setVisible: (visible) => {
+      if (visible !== layer.visible) layer.visibleTransitions.push(visible);
+      layer.visible = visible;
+      return layer;
+    },
     setDepth: (depth) => { layer.depth = depth; return layer; },
     setBlendMode: (mode) => { layer.blendMode = mode; return layer; },
     setAnimationEnabled: (name, enabled) => {
@@ -127,6 +162,132 @@ export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
     },
   };
   return layer;
+}
+
+/* ── Texturen ─────────────────────────────────────────────────────────────── */
+
+export interface FakeDrawCall {
+  readonly source: string;
+  readonly x: number;
+  readonly y: number;
+  readonly smoothing: boolean;
+  readonly composite: string;
+}
+
+export interface FakeFrame {
+  name: string;
+  cutX: number;
+  cutY: number;
+  cutWidth: number;
+  cutHeight: number;
+}
+
+export interface FakeCanvasTexture {
+  key: string;
+  width: number;
+  height: number;
+  firstFrame: string;
+  /** Einfuegereihenfolge – daran haengen Phasers Frame-Indizes. */
+  frameOrder: string[];
+  frames: Map<string, FakeFrame>;
+  refreshed: number;
+  drawCalls: FakeDrawCall[];
+  context: FakeCanvasContext;
+  add(name: string, sourceIndex: number, x: number, y: number, w: number, h: number): FakeFrame | null;
+  has(name: string): boolean;
+  get(name?: string): FakeFrame;
+  getFrameNames(includeBase?: boolean): string[];
+  getSourceImage(): { key: string };
+  refresh(): void;
+}
+
+export interface FakeCanvasContext {
+  imageSmoothingEnabled: boolean;
+  globalCompositeOperation: string;
+  fillStyle: unknown;
+  clearRect(x: number, y: number, w: number, h: number): void;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  drawImage(source: { key?: string }, x: number, y: number): void;
+  createRadialGradient(...args: number[]): { addColorStop(): void };
+  createLinearGradient(...args: number[]): { addColorStop(): void };
+  /** Alle uebrigen Canvas-Methoden sind No-Ops (siehe Proxy in `makeFakeCanvasTexture`). */
+  [method: string]: unknown;
+}
+
+const noop = (): undefined => undefined;
+
+function makeFakeCanvasTexture(key: string, width: number, height: number): FakeCanvasTexture {
+  const gradient = { addColorStop: () => {} };
+  const texture: FakeCanvasTexture = {
+    key,
+    width,
+    height,
+    firstFrame: '__BASE',
+    frameOrder: ['__BASE'],
+    frames: new Map([['__BASE', { name: '__BASE', cutX: 0, cutY: 0, cutWidth: width, cutHeight: height }]]),
+    refreshed: 0,
+    drawCalls: [],
+    // Unbekannte Canvas-Methoden sind No-Ops: die Renderer zeichnen hier echte Pfade, die
+    // Tests interessieren aber nur Frame-Geometrie und Blit-Parameter.
+    context: new Proxy({
+      imageSmoothingEnabled: true,
+      globalCompositeOperation: 'source-over',
+      fillStyle: null,
+      clearRect: () => {},
+      fillRect: () => {},
+      drawImage: (source: { key?: string }, x: number, y: number) => {
+        texture.drawCalls.push({
+          source: source.key ?? '?',
+          x,
+          y,
+          smoothing: texture.context.imageSmoothingEnabled as boolean,
+          composite: texture.context.globalCompositeOperation as string,
+        });
+      },
+      createRadialGradient: () => gradient,
+      createLinearGradient: () => gradient,
+    } as Record<string, unknown>, {
+      get: (target, key: string) => (key in target ? target[key] : noop),
+    }) as unknown as FakeCanvasContext,
+    add: (name, _sourceIndex, x, y, w, h) => {
+      if (texture.frames.has(name)) return null;
+      const frame: FakeFrame = { name, cutX: x, cutY: y, cutWidth: w, cutHeight: h };
+      texture.frames.set(name, frame);
+      texture.frameOrder.push(name);
+      // Phaser befoerdert den ersten hinzugefuegten Frame zum Default der Textur.
+      if (texture.firstFrame === '__BASE') texture.firstFrame = name;
+      return frame;
+    },
+    has: (name) => texture.frames.has(name),
+    get: (name) => texture.frames.get(name ?? texture.firstFrame)!,
+    getFrameNames: (includeBase = false) => (
+      includeBase ? [...texture.frameOrder] : texture.frameOrder.filter((n) => n !== '__BASE')
+    ),
+    getSourceImage: () => ({ key }),
+    refresh: () => { texture.refreshed += 1; },
+  };
+  return texture;
+}
+
+export interface FakeTextureManager {
+  list: Map<string, FakeCanvasTexture>;
+  exists(key: string): boolean;
+  get(key: string): FakeCanvasTexture;
+  createCanvas(key: string, width: number, height: number): FakeCanvasTexture;
+}
+
+export function makeFakeTextureManager(): FakeTextureManager {
+  const list = new Map<string, FakeCanvasTexture>();
+  return {
+    list,
+    exists: (key) => list.has(key),
+    get: (key) => list.get(key)!,
+    createCanvas: (key, width, height) => {
+      const texture = makeFakeCanvasTexture(key, width, height);
+      list.set(key, texture);
+      return texture;
+    },
+  };
 }
 
 export interface FakeDisplayObject {
@@ -150,7 +311,7 @@ export interface FakeGpuVfxScene {
   layers: FakeGpuLayer[];
   objects: FakeDisplayObject[];
   emitters: FakeDisplayObject[];
-  textures: { exists: () => boolean; createCanvas: () => null };
+  textures: FakeTextureManager;
   tweens: { add: () => object };
   time: { now: number; delayedCall: () => object };
   add: Record<string, (...args: never[]) => unknown>;
@@ -169,7 +330,7 @@ export function makeFakeGpuVfxScene(): FakeGpuVfxScene {
     layers,
     objects,
     emitters,
-    textures: { exists: () => true, createCanvas: () => null },
+    textures: makeFakeTextureManager(),
     tweens: { add: () => ({}) },
     time: { now: 0, delayedCall: () => ({}) },
     add: {
@@ -181,7 +342,7 @@ export function makeFakeGpuVfxScene(): FakeGpuVfxScene {
         emitter.emitParticleAt = () => emitter;
         emitter.explode = () => emitter;
         emitter.stop = () => emitter;
-        // Der klassische Smoke-Emitter bleibt unveraendert und wird beim Teardown zurueckgesetzt.
+        // Der klassische Burst-Emitter bleibt unveraendert und wird beim Teardown zurueckgesetzt.
         emitter.killAll = () => emitter;
         emitter.forEachDead = () => emitter;
         emitters.push(emitter);
@@ -195,4 +356,11 @@ export function makeFakeGpuVfxScene(): FakeGpuVfxScene {
     },
   };
   return scene;
+}
+
+/** Lane-Layer nach Label, so wie das Backend ihn benannt hat. */
+export function findFakeLane(scene: FakeGpuVfxScene, label: string): FakeGpuLayer {
+  const layer = scene.layers.find((candidate) => candidate.name === label);
+  if (!layer) throw new Error(`Keine Lane mit dem Label ${label}`);
+  return layer;
 }

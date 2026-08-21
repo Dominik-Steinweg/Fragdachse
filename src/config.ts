@@ -118,6 +118,8 @@ export const DEPTH = {
   TRAIN: 11,  
   PROJECTILES: 15,
   FIRE: 16,
+  /** Giftwolken und ihre Partikel; liegt zwischen FIRE (16) und SMOKE (18). */
+  STINK: 17,
   SMOKE: 18,
   CANOPY: 20,
   LOCAL_UI: 22,

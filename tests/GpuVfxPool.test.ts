@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { GPU_VFX_NO_SLOT, GpuVfxPool, type GpuVfxLayerHandle } from '../src/effects/gpu/GpuVfxPool';
+import {
+  GPU_VFX_NO_SLOT,
+  GpuVfxPool,
+  type GpuVfxLayerHandle,
+} from '../src/effects/gpu/GpuVfxPool';
 
 /** Stride eines Members in Bytes: 42 Float32-Woerter. */
 const MEMBER_BYTES = 42 * 4;
+
+/** Phasers `SpriteGPULayer._segments`. */
+const BUFFER_SEGMENTS = 24;
 
 interface FakeLayer extends GpuVfxLayerHandle {
   readonly added: object[];
@@ -30,9 +37,9 @@ function fakeLayer(size = 8): FakeLayer {
   };
 }
 
-function primedPool(size = 8): { pool: GpuVfxPool; layer: FakeLayer } {
+function primedPool(size = 8, maxSources = 8): { pool: GpuVfxPool; layer: FakeLayer } {
   const layer = fakeLayer(size);
-  const pool = new GpuVfxPool(layer, size, 'test');
+  const pool = new GpuVfxPool(layer, size, 'test', maxSources);
   pool.prime({ scaleX: 0, scaleY: 0, alpha: 0 });
   return { pool, layer };
 }
@@ -46,12 +53,12 @@ describe('gpu vfx pool', () => {
     expect(layer.added.length).toBe(8);
   });
 
-  it('hands out slots in ring order', () => {
+  it('hands out slots in ascending ring order', () => {
     const { pool } = primedPool(4);
     expect(pool.acquire(1, 0, 100)).toBe(0);
     expect(pool.acquire(1, 0, 100)).toBe(1);
     expect(pool.acquire(1, 0, 100)).toBe(2);
-    expect(pool.getStats().activeSlots).toBe(3);
+    expect(pool.getStats().liveCount).toBe(3);
   });
 
   it('reuses a slot only after its member expired', () => {
@@ -59,16 +66,16 @@ describe('gpu vfx pool', () => {
     const { pool } = primedPool(4);
     for (let n = 0; n < 4; n += 1) pool.acquire(1, 0, 100);
 
-    // Ring voll, nichts abgelaufen: kein Slot, kein Ueberschreiben.
+    // Alles belegt, nichts abgelaufen: kein Slot, kein Ueberschreiben.
     expect(pool.acquire(1, 50, 100)).toBe(GPU_VFX_NO_SLOT);
     warn.mockRestore();
 
     pool.retireExpired(100);
-    expect(pool.getStats().activeSlots).toBe(0);
+    expect(pool.getStats().liveCount).toBe(0);
     expect(pool.acquire(1, 100, 100)).toBe(0);
   });
 
-  it('never overwrites a living slot and reports the overrun', () => {
+  it('never overwrites a living slot and reports the capacity drop', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { pool, layer } = primedPool(2);
     pool.acquire(1, 0, 1000);
@@ -79,8 +86,8 @@ describe('gpu vfx pool', () => {
     expect(pool.acquire(1, 10, 1000)).toBe(GPU_VFX_NO_SLOT);
 
     const stats = pool.getStats();
-    expect(stats.overruns).toBe(2);
-    expect(stats.activeSlots).toBe(2);
+    expect(stats.capacityDrops).toBe(2);
+    expect(stats.liveCount).toBe(2);
     // Nichts wurde still ueberschrieben, und die Warnung kommt genau einmal.
     expect(layer.edited).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(1);
@@ -111,32 +118,122 @@ describe('gpu vfx pool', () => {
   });
 
   it('retires out-of-order deaths without blocking on a long-lived slot', () => {
-    // Lebenszeiten streuen (260..460 ms); ein langlebiger Slot am Fensteranfang darf juengere,
-    // bereits abgelaufene Slots nicht am Stilllegen hindern.
+    // Lebenszeiten streuen; ein langlebiger Slot am Anfang darf juengere, bereits abgelaufene
+    // Slots nicht am Stilllegen hindern.
     const { pool, layer } = primedPool(8);
     pool.acquire(1, 0, 1000);
     pool.acquire(1, 0, 100);
     pool.acquire(1, 0, 100);
 
     pool.retireExpired(200);
-    expect(layer.patched).toEqual([1, 2]);
-    expect(pool.getStats().activeSlots).toBe(1);
+    expect(layer.patched.sort()).toEqual([1, 2]);
+    expect(pool.getStats().liveCount).toBe(1);
   });
 
-  it('hides exactly the members of a vanished owner', () => {
+  it('hands out both free slots of a fragmented pool [live, free, free, live]', () => {
+    const { pool } = primedPool(4);
+    pool.acquire(1, 0, 1000); // Slot 0, langlebig
+    pool.acquire(1, 0, 100);  // Slot 1
+    pool.acquire(1, 0, 100);  // Slot 2
+    pool.acquire(1, 0, 1000); // Slot 3, langlebig
+
+    pool.retireExpired(150);
+    expect(pool.getStats().liveCount).toBe(2);
+
+    // Der Cursor steht hinter Slot 3, also auf 0 – und 0 lebt noch. Beide Luecken muessen
+    // trotzdem vergeben werden, ohne lebendes Material anzutasten.
+    expect(pool.acquire(2, 150, 100)).toBe(1);
+    expect(pool.acquire(2, 150, 100)).toBe(2);
+    expect(pool.acquire(2, 150, 100)).toBe(GPU_VFX_NO_SLOT);
+    expect(pool.getStats().liveCount).toBe(4);
+  });
+
+  it('does not lose a spawn to a long-lived member sitting on the cursor', () => {
+    const { pool } = primedPool(4);
+    // Ringzyklus vollenden, damit der Cursor wieder auf 0 steht.
+    pool.acquire(1, 0, 10_000);
+    pool.acquire(1, 0, 100);
+    pool.acquire(1, 0, 100);
+    pool.acquire(1, 0, 100);
+    pool.retireExpired(200);
+
+    // Slot 0 lebt weiter, 1..3 sind frei: drei Spawns muessen durchgehen.
+    for (let n = 0; n < 3; n += 1) {
+      expect(pool.acquire(2, 200, 100)).not.toBe(GPU_VFX_NO_SLOT);
+    }
+    expect(pool.getStats().capacityDrops).toBe(0);
+  });
+
+  it('keeps slot indices ascending across a full wrap cycle', () => {
+    // Die Zeichenreihenfolge innerhalb einer Lane ist die Slot-Reihenfolge. `rocket-smoke`
+    // zeichnet NORMAL mit Alpha 0.95 – frische Puffs muessen ueber aelteren liegen.
+    const { pool } = primedPool(8);
+    let now = 0;
+    let previous = -1;
+    let wraps = 0;
+    for (let step = 0; step < 40; step += 1) {
+      now += 40;
+      pool.retireExpired(now);
+      const slot = pool.acquire(1, now, 100);
+      expect(slot).not.toBe(GPU_VFX_NO_SLOT);
+      if (slot <= previous) wraps += 1;
+      else expect(slot).toBeGreaterThan(previous);
+      previous = slot;
+    }
+    // Ueber 40 Spawns bei Kapazitaet 8 sind mehrere Zyklen zu erwarten, aber kein Zickzack.
+    expect(wraps).toBeGreaterThan(2);
+  });
+
+  it('keeps the spawns of one frame inside few buffer segments', () => {
+    // Regressionswaechter fuer die Buffer-Uploads: Phaser laedt je dirtyem Segment hoch und
+    // kippt auf einen Vollupload, sobald alle belegten Segmente dirty sind.
+    const capacity = 240;
+    const { pool } = primedPool(capacity, 4);
+    const segmentSize = Math.ceil(capacity / BUFFER_SEGMENTS);
+    for (let n = 0; n < segmentSize + 2; n += 1) pool.acquire(1, 0, 1000);
+
+    pool.beginFrame();
+    const stats = pool.getStats();
+    expect(stats.segmentsTouched).toBe(2);
+    expect(stats.fullUploadFrames).toBe(0);
+  });
+
+  it('hides exactly the members of a vanished source', () => {
     const { pool, layer } = primedPool(8);
     pool.acquire(1, 0, 1000);
     pool.acquire(2, 0, 1000);
     pool.acquire(1, 0, 1000);
     pool.acquire(2, 0, 1000);
 
-    pool.releaseOwner(1);
-    expect(layer.patched).toEqual([0, 2]);
-    expect(pool.getStats().activeSlots).toBe(2);
+    pool.releaseSource(1);
+    expect(layer.patched.slice().sort()).toEqual([0, 2]);
+    expect(pool.getStats().liveCount).toBe(2);
 
-    pool.releaseOwner(2);
-    expect(layer.patched).toEqual([0, 2, 1, 3]);
-    expect(pool.getStats().activeSlots).toBe(0);
+    pool.releaseSource(2);
+    expect(layer.patched.slice().sort()).toEqual([0, 1, 2, 3]);
+    expect(pool.getStats().liveCount).toBe(0);
+  });
+
+  it('lets detached members live on and keeps a recycled source from claiming them', () => {
+    const { pool, layer } = primedPool(8);
+    pool.acquire(1, 0, 1000);
+    pool.acquire(1, 0, 1000);
+
+    // `linger`: die Quelle verschwindet, die Member laufen aus.
+    pool.detachSource(1);
+    expect(layer.patched).toEqual([]);
+    expect(pool.getStats().liveCount).toBe(2);
+
+    // Derselbe Index wird recycelt und spaeter hart freigegeben – die alten Member duerfen das
+    // nicht mitbekommen.
+    pool.acquire(1, 0, 1000);
+    pool.releaseSource(1);
+    expect(layer.patched).toEqual([2]);
+    expect(pool.getStats().liveCount).toBe(2);
+
+    // Erst ihr eigener Ablauf legt sie still.
+    pool.retireExpired(1000);
+    expect(pool.getStats().liveCount).toBe(0);
   });
 
   it('clears everything on teardown and is idempotent', () => {
@@ -146,26 +243,38 @@ describe('gpu vfx pool', () => {
 
     pool.releaseAll();
     expect(layer.patched.length).toBe(2);
-    expect(pool.getStats().activeSlots).toBe(0);
+    expect(pool.getStats().liveCount).toBe(0);
 
     pool.releaseAll();
     expect(layer.patched.length).toBe(2);
 
-    // Ring steht wieder am Anfang und ist sofort wieder benutzbar.
+    // Cursor steht wieder am Anfang und der Pool ist sofort wieder benutzbar.
     expect(pool.acquire(3, 0, 100)).toBe(0);
   });
 
-  it('keeps the per-frame scan bounded by the live window, not by capacity', () => {
-    const { pool } = primedPool(8);
+  it('retires only expired members, independent of the capacity', () => {
+    const { pool, layer } = primedPool(512, 4);
     pool.acquire(1, 0, 100);
+    pool.acquire(1, 0, 5000);
     pool.acquire(1, 0, 100);
-    expect(pool.getStats().scanWindow).toBe(2);
 
     pool.retireExpired(100);
-    expect(pool.getStats().scanWindow).toBe(0);
+    // Der Sweep laeuft ueber die dichte Liste der Lebenden, nicht ueber die Kapazitaet.
+    expect(layer.patched.slice().sort((a, b) => a - b)).toEqual([0, 2]);
+    expect(pool.getStats().liveCount).toBe(1);
+  });
 
+  it('tracks the high water mark for the capacity decision', () => {
+    const { pool } = primedPool(8);
+    for (let n = 0; n < 5; n += 1) pool.acquire(1, 0, 100);
+    pool.retireExpired(100);
     pool.acquire(1, 100, 100);
-    expect(pool.getStats().scanWindow).toBe(1);
+
+    const stats = pool.getStats();
+    expect(stats.peakLive).toBe(5);
+    expect(stats.liveCount).toBe(1);
+    expect(stats.rearms).toBe(6);
+    expect(stats.retirements).toBe(5);
   });
 
   it('survives many wrap-arounds without leaking active slots', () => {
@@ -177,7 +286,7 @@ describe('gpu vfx pool', () => {
       expect(pool.acquire(1, now, 100)).not.toBe(GPU_VFX_NO_SLOT);
     }
     // Bei 50 ms Takt und 100 ms Lebenszeit sind hoechstens zwei Slots gleichzeitig lebend.
-    expect(pool.getStats().activeSlots).toBeLessThanOrEqual(2);
-    expect(pool.getStats().overruns).toBe(0);
+    expect(pool.getStats().liveCount).toBeLessThanOrEqual(2);
+    expect(pool.getStats().capacityDrops).toBe(0);
   });
 });

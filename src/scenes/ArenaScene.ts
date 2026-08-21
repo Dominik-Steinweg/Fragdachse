@@ -943,6 +943,16 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager);
+    // Der Profiler entsteht vor dem Renderer-Bundle; die GPU-VFX-Statistik wird deshalb hier
+    // nachgereicht. Ohne sie fehlen Lanes und Effekte im Performance-Export vollstaendig.
+    this.runtimeProfiler.setGpuVfxSource({
+      build: () => this.renderers!.gpuVfx.buildReport(),
+      reset: () => this.renderers?.gpuVfx.resetProfiling(),
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.runtimeProfiler?.setGpuVfxSource(null);
+      this.renderers?.gpuVfx.destroy();
+    });
     this.runtimeProfiler.subscribeDiagnostics((enabled) => {
       this.renderers?.lighting.setPerformanceMetricsEnabled(enabled);
       this.renderers?.flamethrowerUpgrades.setPerformanceMetricsEnabled(enabled);
@@ -955,7 +965,7 @@ export class ArenaScene extends Phaser.Scene {
     // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
-    stinkCloudSystem.setGpuVfxRegistry(this.renderers.gpuVfx);
+    stinkCloudSystem.setGpuVfxSystem(this.renderers.gpuVfx);
     smokeSystem.setLightingSystem(this.renderers.lighting);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     // Die Lobby-Inszenierung braucht die fertige Renderkette und entsteht deshalb hier,

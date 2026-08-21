@@ -273,7 +273,7 @@ describe('ArenaRuntimeProfiler', () => {
     profiler.stopRecording();
 
     const report = profiler.buildReport();
-    expect(report?.schemaVersion).toBe(4);
+    expect(report?.schemaVersion).toBe(5);
     expect(report?.environment).toEqual({ renderer: 'webgl' });
     expect(report?.longAnimationFrames).toEqual([]);
     expect(report?.eventTimings).toEqual([]);
@@ -284,6 +284,52 @@ describe('ArenaRuntimeProfiler', () => {
     expect(report?.windows[0].timings.roleStepMs.avg).toBe(6);
     expect(report?.windows[0].timings.renderSubmitMs.avg).toBe(4);
     expect(report?.windows[0].over33msPercent).toBe(50);
+  });
+
+  it('exports the gpu vfx report on both levels, or null without a source', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.startRecording();
+    profiler.record(sample());
+    now = 200;
+    profiler.stopRecording();
+
+    // Ohne angemeldete Quelle (etwa in der Lobby ohne Renderer-Bundle) bleibt der Block leer.
+    expect(profiler.buildReport()?.gpuVfx).toBeNull();
+
+    let resets = 0;
+    const report0 = {
+      frames: 3,
+      lanes: [{
+        id: 0, label: 'rocket-exhaust', capacity: 2048, active: 4, highWaterMark: 9,
+        rearms: 12, retirements: 8, capacityDrops: 0, utilization: 0.004, visibleFrames: 3,
+        segmentsTouched: 5, fullUploadFrames: 0,
+      }],
+      effects: [{
+        id: 2, label: 'rocket.exhaust', laneLabel: 'rocket-exhaust',
+        spawnAttempts: 14, spawns: 12, qualityDrops: 2, capacityDrops: 0,
+      }],
+      coVisibleFrames: [[3]],
+    };
+    profiler.setGpuVfxSource({ build: () => report0, reset: () => { resets += 1; } });
+
+    const report = profiler.buildReport();
+    // Physische Lane und logischer Effekt stehen beide im Export – bei geteilten Lanes ist die
+    // Lane-Zeile allein nicht mehr aussagekraeftig.
+    expect(report?.gpuVfx?.lanes[0].label).toBe('rocket-exhaust');
+    expect(report?.gpuVfx?.lanes[0].highWaterMark).toBe(9);
+    expect(report?.gpuVfx?.effects[0].label).toBe('rocket.exhaust');
+    expect(report?.gpuVfx?.effects[0].qualityDrops).toBe(2);
+    expect(report?.gpuVfx?.coVisibleFrames[0][0]).toBe(3);
+    // Der Export muss serialisierbar bleiben.
+    expect(() => JSON.stringify(report)).not.toThrow();
+
+    // Eine neue Messung setzt die GPU-VFX-Zaehler auf dasselbe Fenster wie den Rest des Reports.
+    profiler.startRecording();
+    expect(resets).toBe(1);
   });
 
   it('exports the separated ablation categories without changing the report schema', () => {
@@ -298,7 +344,7 @@ describe('ArenaRuntimeProfiler', () => {
     profiler.stopRecording();
 
     const report = profiler.buildReport();
-    expect(report?.schemaVersion).toBe(4);
+    expect(report?.schemaVersion).toBe(5);
     expect(report?.ablation.codes).toEqual(ABLATION_CODES);
     expect(report?.ablation.labels).toEqual(ABLATION_LABELS);
     expect(report?.ablation.labels.vectorShapes).toBe('Arc/Graphics-Rendering');

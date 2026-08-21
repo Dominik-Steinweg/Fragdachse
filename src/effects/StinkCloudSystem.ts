@@ -4,28 +4,26 @@ import { edgeZone, ensureCanvasTexture } from './EffectUtils';
 import type { DamageZoneVisualStyle, SyncedStinkCloud } from '../types';
 import type { LightingSystem } from './LightingSystem';
 import type { LightPresetKey } from './LightingConfig';
-import type { GpuVfxRegistry } from './gpu/GpuVfxRegistry';
+import { TEX_STINK_PUFF, ensureStinkPuffTexture } from './gpu/GpuVfxSourceTextures';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { StinkCloudGpuParticles, type StinkCloudParticleTints } from './StinkCloudGpuParticles';
 
 /* ── Texture keys ─────────────────────────────────────── */
 const TEX_STINK_GROUND = 'stink_ground';
 const TEX_STINK_HAZE = 'stink_haze';
 const TEX_STINK_BLOB = 'stink_blob';
-const TEX_STINK_PUFF = 'stink_puff';
 
 /* ── Texture generation params ─────────────────────────── */
 const HAZE_SIZE = 192;
 const GROUND_SIZE = 256;
 const BLOB_SIZE = 96;
 const BLOB_PX   = 3;
-const PUFF_SIZE = 40;
-const PUFF_PX   = 2;
 
 /* ── Visual constants ──────────────────────────────────── */
 const FADE_IN_MS  = 300;
 const FADE_OUT_MS = 500;
 const REF_RADIUS  = 180;
-const STINK_DEPTH = DEPTH.FIRE + 1; // between FIRE (16) and SMOKE (18)
+const STINK_DEPTH = DEPTH.STINK; // between FIRE (16) and SMOKE (18)
 
 /* ── Stink cloud tint palette ─────────────────────────── */
 const TINT_CORE_DEEP   = 0x35581f;
@@ -274,13 +272,13 @@ export class StinkCloudSystem {
   }
 
   /**
-   * Legt die geteilten GPU-Layer der vier kontinuierlichen Partikelfamilien an – einmalig,
-   * szenenlebenslang, niemals pro Wolke. Die Registry existiert erst mit dem Renderer-Bundle,
-   * deshalb wie beim Lighting eine nachgereichte Injektion.
+   * Haengt die vier kontinuierlichen Partikelfamilien an das gemeinsame GPU-VFX-Backend – die
+   * Layer gehoeren dort hin, nicht der Wolke. Das Backend existiert erst mit dem
+   * Renderer-Bundle, deshalb wie beim Lighting eine nachgereichte Injektion.
    */
-  setGpuVfxRegistry(registry: GpuVfxRegistry | null): void {
-    if (!registry || this.gpuParticles) return;
-    this.gpuParticles = new StinkCloudGpuParticles(this.scene, registry, TEX_STINK_PUFF, STINK_DEPTH);
+  setGpuVfxSystem(system: GpuVfxSystem | null): void {
+    if (!system || this.gpuParticles) return;
+    this.gpuParticles = new StinkCloudGpuParticles(system);
   }
 
   // ── Host API ───────────────────────────────────────────────────────────────
@@ -990,29 +988,11 @@ export class StinkCloudSystem {
     });
   }
 
+  /**
+   * Die Partikeltextur liegt im gemeinsamen GPU-VFX-Modul: der Atlas blittet sie, der klassische
+   * Spawn-Burst-Emitter benutzt sie weiterhin einzeln.
+   */
   private generatePuffTexture(): void {
-    ensureCanvasTexture(this.scene.textures, TEX_STINK_PUFF, PUFF_SIZE, PUFF_SIZE, (ctx) => {
-      const half = PUFF_SIZE / 2;
-      const maxR = half - PUFF_PX * 2;
-
-      ctx.clearRect(0, 0, PUFF_SIZE, PUFF_SIZE);
-
-      for (let py = 0; py < PUFF_SIZE; py += PUFF_PX) {
-        for (let px = 0; px < PUFF_SIZE; px += PUFF_PX) {
-          const sx = px + PUFF_PX / 2 - half;
-          const sy = py + PUFF_PX / 2 - half;
-          const angle = Math.atan2(sy, sx);
-          const wobble = Math.sin(angle * 5.1 + 0.8) * 0.08 + Math.cos(angle * 2.7 - 0.5) * 0.04;
-          const d = Math.hypot(sx, sy) / maxR;
-          if (d > 1.05 + wobble) continue;
-          const a = d < 0.24 ? 0.74
-                  : d < 0.48 ? 0.46
-                  : d < 0.72 ? 0.22
-                  :            0.07;
-          ctx.fillStyle = `rgba(255,255,255,${a})`;
-          ctx.fillRect(px, py, PUFF_PX, PUFF_PX);
-        }
-      }
-    });
+    ensureStinkPuffTexture(this.scene);
   }
 }

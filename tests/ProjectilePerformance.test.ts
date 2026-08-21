@@ -53,8 +53,8 @@ vi.mock('phaser', () => ({
 
 import * as Phaser from 'phaser';
 import { RocketRenderer } from '../src/effects/RocketRenderer';
-import { GpuVfxRegistry } from '../src/effects/gpu/GpuVfxRegistry';
-import { evaluateFakeAnimation, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
+import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 import { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { TrackedProjectile } from '../src/types';
 
@@ -266,16 +266,16 @@ describe('projectile performance paths', () => {
     expect(tracked.hitBaseIds).toEqual(new Set());
   });
 
-  it('reuses one shared gpu layer for all rocket smoke puffs', () => {
+  it('reuses one shared gpu lane for all rocket smoke puffs', () => {
     // Der Smoke laeuft nicht mehr ueber einen `ParticleEmitter`, sondern ueber einen geteilten
     // SpriteGPULayer. Die Puff-Charakteristik bleibt: dynamischer Startscale aus der
     // Raketengroesse, Tint je Puff, Wachstum auf `startScale * (1 + Quad.easeOut(t) * 1.3)`
     // und eine Alphakurve 0.95 -> 0. Die Kurven liegen jetzt im Shader, nicht in Callbacks.
     const scene = makeFakeGpuVfxScene();
-    const registry = new GpuVfxRegistry(scene as never);
+    const system = new GpuVfxSystem(scene as never);
     const renderer = new RocketRenderer(scene as never);
     renderer.generateTextures();
-    renderer.initGpuLayers(registry);
+    renderer.registerGpuVfx(system);
     const internals = renderer as unknown as {
       spawnSmokePuff: (x: number, y: number, size: number, color: number) => void;
     };
@@ -283,11 +283,12 @@ describe('projectile performance paths', () => {
     internals.spawnSmokePuff(10, 20, 6, 0x123456);
     internals.spawnSmokePuff(30, 40, 28, 0xabcdef);
 
-    const smoke = scene.layers.filter((layer) => layer.key === '__rocket_smoke');
-    expect(smoke).toHaveLength(1);
+    // Eine Lane fuer allen Rauch; alle Lanes teilen sich den Atlas.
+    const smoke = [findFakeLane(scene, 'rocket-smoke')];
     expect(scene.emitters).toHaveLength(0);
     // Entspricht dem bisherigen `maxAliveParticles: 640`.
     expect(smoke[0].size).toBe(640);
+    expect(smoke[0].members.every((member) => member.frame === 'rocket-smoke')).toBe(true);
 
     const [small, large] = smoke[0].members;
     // Bisher: `startScale * (1 + Quadratic.Out(t) * 1.3)` mit `startScale = max(size/28, 0.28)`.

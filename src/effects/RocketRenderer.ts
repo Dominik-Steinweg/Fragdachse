@@ -1,40 +1,27 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { MiniRocketFlightPhase } from '../types';
-import { getGraphicsQualityController, type GraphicsQualityController } from '../graphics/GraphicsQuality';
-import { GPU_VFX_NO_SLOT } from './gpu/GpuVfxPool';
+import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import { pickGpuVfxTint } from './gpu/GpuVfxMember';
+import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import {
-  GPU_VFX_DEPTH_EPSILON,
-  gpuVfxEasedBase,
-  pickGpuVfxTint,
-  setGpuVfxTint,
-  type GpuVfxEmitter,
-  type GpuVfxMember,
-  type GpuVfxMemberAnimation,
-  type GpuVfxRegistry,
-} from './gpu/GpuVfxRegistry';
+  TEX_ROCKET_EXHAUST,
+  TEX_ROCKET_SMOKE,
+  ensureRocketExhaustTexture,
+  ensureRocketSmokeTexture,
+} from './gpu/GpuVfxSourceTextures';
+import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 
 const TEX_ROCKET_BODY = '__rocket_body';
 const TEX_ROCKET_ACCENT = '__rocket_accent';
-const TEX_ROCKET_SMOKE = '__rocket_smoke';
-const TEX_ROCKET_EXHAUST = '__rocket_exhaust';
 const TEX_ROCKET_GLOW = '__rocket_glow';
 const TEX_ROCKET_ENGINE = '__rocket_engine';
 
 // ── GPU-Exhaust: Konstanten ─────────────────────────────────────────────────
 
-/**
- * Feste Kapazitaet des geteilten Exhaust-Layers. Der Exhaust emittiert durchgehend, solange
- * eine Rakete fliegt: auf `high` alle 14 ms bei bis zu 140 ms Lebenszeit, also rund zehn
- * gleichzeitig lebende Member je Rakete. 2048 traegt damit ueber 200 gleichzeitige Raketen –
- * deutlich mehr, als Salven, Turret-Bursts und Mini-Rocket-Kaskaden zusammen erzeugen. Keine
- * dynamische Vergroesserung im Hotpath; ein Overrun verwirft den Spawn, statt lebendes
- * Material zu ueberschreiben.
- */
-const EXHAUST_POOL_CAPACITY = 2048;
-
-/** Basisintervall der Emission; GraphicsQuality streckt es wie bisher ueber seinen Faktor. */
+/** Basisintervall der Emission; die zentrale Quality-Politik streckt es ueber ihren Faktor. */
 const EXHAUST_BASE_FREQUENCY_MS = 14;
 
 const EXHAUST_LIFE_MIN_MS  = 80;
@@ -57,28 +44,6 @@ const EXHAUST_SCALE_START = 0.34;
 const EXHAUST_SCALE_END   = 0.05;
 const EXHAUST_ALPHA_START = 0.95;
 
-/**
- * Wiederverwendete Spawn-Vorlage; die verschachtelten Animationsobjekte werden nur mutiert.
- * `loop`/`yoyo` defaulten in Phaser auf `true` und muessen fuer One-Shots explizit `false` sein.
- */
-const exhaustX: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const exhaustY: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
-const exhaustScale: GpuVfxMemberAnimation = {
-  base: EXHAUST_SCALE_START,
-  amplitude: EXHAUST_SCALE_END - EXHAUST_SCALE_START,
-  duration: 0, ease: 'Linear', loop: false, yoyo: false,
-};
-const exhaustAlpha: GpuVfxMemberAnimation = {
-  base: EXHAUST_ALPHA_START,
-  amplitude: -EXHAUST_ALPHA_START,
-  duration: 0, ease: 'Linear', loop: false, yoyo: false,
-};
-const EXHAUST_MEMBER: GpuVfxMember = {
-  x: exhaustX, y: exhaustY, scaleX: exhaustScale, scaleY: exhaustScale, alpha: exhaustAlpha,
-  tintBlend: 1,
-  tintTopLeft: 0xffffff, tintTopRight: 0xffffff, tintBottomLeft: 0xffffff, tintBottomRight: 0xffffff,
-};
-
 interface RocketVisual {
   id: number;
   body: Phaser.GameObjects.Image;
@@ -89,6 +54,8 @@ interface RocketVisual {
   exhaustX: number;
   exhaustY: number;
   exhaustFlow: ParticleFlowScheduler;
+  /** Numerischer Source-Handle des Backends; alle Exhaust-Member dieser Rakete haengen daran. */
+  exhaustSource: number;
   exhaustTints: number[];
   bodyColor: number;
   accentColor: number;
@@ -101,14 +68,6 @@ interface RocketVisual {
 
 // ── GPU-Smoke: Konstanten ───────────────────────────────────────────────────
 
-/**
- * Entspricht dem bisherigen `maxAliveParticles: 640` des geteilten Smoke-Emitters. Phaser
- * verwarf ueber diesem Limit stillschweigend neue Partikel (`atLimit()`), der Pool verwirft
- * den Spawn ebenso. Ein Overrun ist hier also der nachgebildete Deckel und kein Hinweis auf
- * eine zu klein gewaehlte Kapazitaet.
- */
-const SMOKE_POOL_CAPACITY = 640;
-
 /** Konstante `lifespan: 1000` des bisherigen Emitters. */
 const SMOKE_LIFE_MS = 1000;
 const SMOKE_SPEED_X = 6;
@@ -119,102 +78,62 @@ const SMOKE_ALPHA_START = 0.95;
 const SMOKE_SCALE_GROWTH = 1.3;
 
 /**
- * Alle Puffs teilen sich einen Owner: Beim Zerstoeren einer einzelnen Rakete liefen die
- * Schwaden des geteilten Emitters bisher aus, statt zu verschwinden. Nur der Teardown raeumt
- * sie ueber `releaseAll()` ab. Bewusst kein moeglicher Projektil-Id und nicht -1, das der Pool
- * intern als "Slot frei" fuehrt.
+ * Alle Puffs teilen sich eine Quelle, die laenger lebt als jede einzelne Rakete: beim Zerstoeren
+ * einer Rakete liefen die Schwaden des geteilten Emitters bisher aus, statt zu verschwinden.
+ * Genau das meint `release: 'linger'` im Effekt-Manifest. Erst der Teardown raeumt sie ab.
  */
-const SMOKE_OWNER = -2;
-
-/**
- * Wiederverwendete Spawn-Vorlage; die verschachtelten Animationsobjekte werden nur mutiert.
- *
- * Scale und Alpha laufen auf `Quad.easeOut` – Phasers `Quadratic.Out(v) = v * (2 - v)` ist
- * exakt der Term `a * time * (2.0 - time)` im Shader. Beide brauchen deshalb `gpuVfxEasedBase`,
- * weil nicht-lineare Eases mit `loop: false` sonst `floor(amplitude) * amplitude` aufaddieren.
- */
-const smokeX: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: SMOKE_LIFE_MS, ease: 'Linear', loop: false, yoyo: false };
-const smokeY: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: SMOKE_LIFE_MS, ease: 'Linear', loop: false, yoyo: false };
-const smokeScale: GpuVfxMemberAnimation = {
-  base: 0, amplitude: 0, duration: SMOKE_LIFE_MS, ease: 'Quad.easeOut', loop: false, yoyo: false,
-};
-const smokeAlpha: GpuVfxMemberAnimation = {
-  base: gpuVfxEasedBase(SMOKE_ALPHA_START, -SMOKE_ALPHA_START),
-  amplitude: -SMOKE_ALPHA_START,
-  duration: SMOKE_LIFE_MS, ease: 'Quad.easeOut', loop: false, yoyo: false,
-};
-const SMOKE_MEMBER: GpuVfxMember = {
-  x: smokeX, y: smokeY, scaleX: smokeScale, scaleY: smokeScale, alpha: smokeAlpha,
-  tintBlend: 1,
-  tintTopLeft: 0xffffff, tintTopRight: 0xffffff, tintBottomLeft: 0xffffff, tintBottomRight: 0xffffff,
-};
 
 export class RocketRenderer {
   private rockets = new Map<number, RocketVisual>();
   /** Parallel zur Map, damit der Emissions-Tick ohne Iterator-Allokation laufen kann. */
   private readonly activeRockets: RocketVisual[] = [];
-  private exhaustFx: GpuVfxEmitter | null = null;
-  private smokeFx: GpuVfxEmitter | null = null;
-  private registry: GpuVfxRegistry | null = null;
-  private quality: GraphicsQualityController | null = null;
-  /**
-   * Bruchteil-Uebertrag der qualitaetsskalierten Handemission, wie ihn der Quality-Controller
-   * fuer `emitParticleAt()` fuehrt: pro Aufruf kommt `factor` dazu, emittiert wird der
-   * ganzzahlige Anteil.
-   */
-  private smokeEmissionCarry = 0;
+  private gpuVfx: GpuVfxSystem | null = null;
+  private exhaustSpec: GpuVfxSpawnSpec | null = null;
+  private smokeSpec: GpuVfxSpawnSpec | null = null;
+  /** Gemeinsame Quelle aller Rauchschwaden; ueberlebt jede einzelne Rakete. */
+  private smokeSource = GPU_VFX_NO_SOURCE_HANDLE;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   /**
-   * Legt den geteilten Exhaust-Layer an – einmalig, szenenlebenslang, niemals pro Rakete.
-   * Direkt nach `generateTextures()` aufzurufen.
+   * Meldet Exhaust und Rauch beim gemeinsamen GPU-VFX-Backend an. Die Layer gehoeren dem
+   * Backend; hier entstehen nur die beiden Spawn-Specs und die geteilte Rauchquelle.
    */
-  initGpuLayers(registry: GpuVfxRegistry): void {
-    if (this.exhaustFx) return;
-    this.registry = registry;
-    this.quality = getGraphicsQualityController(this.scene);
-    this.smokeFx = registry.createEmitter({
-      name:     'rocket-smoke',
-      texture:  TEX_ROCKET_SMOKE,
-      capacity: SMOKE_POOL_CAPACITY,
-      // Der Smoke-Emitter hatte keinen Blend-Mode im Config und zeichnete damit normal, nicht
-      // additiv. Er entstand ausserdem schon beim Szenenaufbau, lag also bei gleicher Depth
-      // ohnehin unter allem zur Laufzeit Erzeugten – hier braucht es keinen Epsilon-Versatz.
-      blendMode: Phaser.BlendModes.NORMAL,
-      depth:    DEPTH.FIRE,
-      eases:    ['Linear', 'Quad.easeOut'],
-    });
-    this.exhaustFx = registry.createEmitter({
-      name:     'rocket-exhaust',
-      texture:  TEX_ROCKET_EXHAUST,
-      capacity: EXHAUST_POOL_CAPACITY,
-      // Der bisherige Emitter entstand pro Rakete und lag bei gleicher Depth ueber Body und
-      // Engine; der Accent auf DEPTH.PROJECTILES + 1 blieb darueber. Der Versatz haelt genau
-      // diese Reihenfolge.
-      depth:    DEPTH.PROJECTILES + GPU_VFX_DEPTH_EPSILON,
-      eases:    ['Linear'],
-    });
-    registry.registerEmission((deltaMs, nowMs) => this.emitExhaust(deltaMs, nowMs));
+  registerGpuVfx(system: GpuVfxSystem): void {
+    if (this.gpuVfx) return;
+    this.gpuVfx = system;
+
+    this.exhaustSpec = system.createSpec(GpuVfxEffectId.RocketExhaust);
+    this.exhaustSpec.scaleStart = EXHAUST_SCALE_START;
+    this.exhaustSpec.scaleEnd   = EXHAUST_SCALE_END;
+    this.exhaustSpec.alphaStart = EXHAUST_ALPHA_START;
+    this.exhaustSpec.alphaEnd   = 0;
+
+    this.smokeSpec = system.createSpec(GpuVfxEffectId.RocketSmoke);
+    this.smokeSpec.lifeMs     = SMOKE_LIFE_MS;
+    this.smokeSpec.alphaStart = SMOKE_ALPHA_START;
+    this.smokeSpec.alphaEnd   = 0;
+    // Scale und Alpha liefen im bisherigen `onUpdate` auf `Quadratic.Out`.
+    this.smokeSpec.scaleEase = GpuVfxEase.QuadOut;
+    this.smokeSpec.alphaEase = GpuVfxEase.QuadOut;
+
+    this.smokeSource = system.createSource(GpuVfxEffectId.RocketSmoke);
+    system.registerEmission((deltaMs, nowMs) => this.emitExhaust(deltaMs, nowMs));
   }
 
   /**
-   * Emissionsintervall wie bisher: der Quality-Controller streckt das Basisintervall ueber
-   * `particleFactors.standard` (`applyEmitterProfile`), ein Faktor <= 0 stellt die Emission
-   * ganz ab. Nur die Frequenz war beim Exhaust ueberhaupt wirksam – einen
-   * `maxAliveParticles`-Deckel gab es nie, weil `lifespan` als `{min,max}` keine Schaetzung
-   * liefert und der Config auch keinen expliziten Wert setzt.
+   * Emissionsintervall wie bisher: die zentrale Quality-Politik streckt das Basisintervall
+   * (`applyEmitterProfile`-Semantik), ein Faktor <= 0 stellt die Emission ganz ab. Nur die
+   * Frequenz war beim Exhaust ueberhaupt wirksam – einen `maxAliveParticles`-Deckel gab es nie,
+   * weil `lifespan` als `{min,max}` keine Schaetzung liefert.
    */
   private exhaustFrequencyMs(): number {
-    const factor = this.quality?.getProfile().particleFactors.standard ?? 1;
-    if (factor <= 0) return 0;
-    return Math.max(1, Math.round(EXHAUST_BASE_FREQUENCY_MS / factor));
+    return this.gpuVfx?.quality.scaleFrequency(EXHAUST_BASE_FREQUENCY_MS, GpuVfxEffectId.RocketExhaust)
+      ?? EXHAUST_BASE_FREQUENCY_MS;
   }
 
-  /** Emissions-Tick, von der Registry pro Renderframe nach dem Retire-Sweep gerufen. */
+  /** Emissions-Tick, vom Backend pro Renderframe nach dem Retire-Sweep gerufen. */
   private emitExhaust(deltaMs: number, nowMs: number): void {
-    const fx = this.exhaustFx;
-    if (!fx) return;
     const frequency = this.exhaustFrequencyMs();
     if (frequency <= 0) return;
 
@@ -224,31 +143,30 @@ export class RocketRenderer {
       // Qualitaetswechsel unterbricht den Fluss also nicht.
       rocket.exhaustFlow.setFrequency(frequency);
       const due = rocket.exhaustFlow.tick(deltaMs);
-      for (let n = 0; n < due; n += 1) this.spawnExhaust(fx, rocket, nowMs);
+      for (let n = 0; n < due; n += 1) this.spawnExhaust(rocket, nowMs);
     }
   }
 
-  private spawnExhaust(fx: GpuVfxEmitter, rocket: RocketVisual, nowMs: number): void {
-    const life = Phaser.Math.FloatBetween(EXHAUST_LIFE_MIN_MS, EXHAUST_LIFE_MAX_MS);
-    const slot = fx.pool.acquire(rocket.id, nowMs, life);
-    if (slot === GPU_VFX_NO_SLOT) return;
+  private spawnExhaust(rocket: RocketVisual, nowMs: number): void {
+    const system = this.gpuVfx;
+    const spec = this.exhaustSpec;
+    if (!system || !spec) return;
 
-    const lifeS = life / 1000;
-    exhaustX.base      = rocket.exhaustX;
-    exhaustX.amplitude = Phaser.Math.FloatBetween(-EXHAUST_SPEED_SPREAD, EXHAUST_SPEED_SPREAD) * lifeS;
-    exhaustX.duration  = life;
-    exhaustY.base      = rocket.exhaustY;
-    exhaustY.amplitude = Phaser.Math.FloatBetween(-EXHAUST_SPEED_SPREAD, EXHAUST_SPEED_SPREAD) * lifeS;
-    exhaustY.duration  = life;
-    exhaustScale.duration = life;
-    exhaustAlpha.duration = life;
-    setGpuVfxTint(EXHAUST_MEMBER, pickGpuVfxTint(rocket.exhaustTints));
+    spec.lifeMs = Phaser.Math.FloatBetween(EXHAUST_LIFE_MIN_MS, EXHAUST_LIFE_MAX_MS);
+    spec.x = rocket.exhaustX;
+    spec.y = rocket.exhaustY;
+    // `speedX`/`speedY` im alten Config: nicht-radial, beide Achsen unabhaengig gezogen.
+    spec.vx = Phaser.Math.FloatBetween(-EXHAUST_SPEED_SPREAD, EXHAUST_SPEED_SPREAD);
+    spec.vy = Phaser.Math.FloatBetween(-EXHAUST_SPEED_SPREAD, EXHAUST_SPEED_SPREAD);
+    spec.tint = pickGpuVfxTint(rocket.exhaustTints);
 
-    fx.layer.editMember(slot, EXHAUST_MEMBER);
+    system.spawn(spec, rocket.exhaustSource, nowMs);
   }
 
   generateTextures(): void {
     const tex = this.scene.textures;
+    ensureRocketSmokeTexture(this.scene);
+    ensureRocketExhaustTexture(this.scene);
 
     if (!tex.exists(TEX_ROCKET_BODY)) {
       const w = 28;
@@ -291,33 +209,6 @@ export class RocketRenderer {
       ctx.lineTo(2, h - 5);
       ctx.closePath();
       ctx.fill();
-      canvas.refresh();
-    }
-
-    if (!tex.exists(TEX_ROCKET_SMOKE)) {
-      const s = 24;
-      const canvas = tex.createCanvas(TEX_ROCKET_SMOKE, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 1, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(190, 198, 202, 0.45)');
-      grad.addColorStop(0.55, 'rgba(120, 136, 145, 0.22)');
-      grad.addColorStop(1, 'rgba(70, 80, 88, 0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    if (!tex.exists(TEX_ROCKET_EXHAUST)) {
-      const s = 18;
-      const canvas = tex.createCanvas(TEX_ROCKET_EXHAUST, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.25, 'rgba(255,224,132,0.95)');
-      grad.addColorStop(0.6, 'rgba(255,129,48,0.4)');
-      grad.addColorStop(1, 'rgba(255,90,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
       canvas.refresh();
     }
 
@@ -398,6 +289,7 @@ export class RocketRenderer {
       // Startet auf dem aktuell gueltigen Intervall, wie Phasers Flow-Zaehler nach dem
       // `setFrequency()` des Quality-Controllers beim Erzeugen des Emitters.
       exhaustFlow: new ParticleFlowScheduler(Math.max(1, this.exhaustFrequencyMs())),
+      exhaustSource: this.gpuVfx?.createSource(GpuVfxEffectId.RocketExhaust) ?? GPU_VFX_NO_SOURCE_HANDLE,
       exhaustTints: [0xffffff, accentColor, accentColor],
       bodyColor: color,
       accentColor,
@@ -420,36 +312,34 @@ export class RocketRenderer {
    * emittiert wird sein ganzzahliger Anteil. Ein Faktor von 0 unterbindet die Emission ganz.
    */
   private spawnSmokePuff(x: number, y: number, visualSize: number, smokeColor: number): void {
-    const fx = this.smokeFx;
-    if (!fx || this.registry?.isSuppressed()) return;
+    const system = this.gpuVfx;
+    const spec = this.smokeSpec;
+    if (!system || !spec || system.isSuppressed()) return;
 
-    const factor = this.quality?.getProfile().particleFactors.standard ?? 1;
-    this.smokeEmissionCarry += Math.max(0, factor);
-    const count = Math.floor(this.smokeEmissionCarry);
-    if (count <= 0) return;
-    this.smokeEmissionCarry -= count;
+    const count = system.quality.scaleBurst(GpuVfxEffectId.RocketSmoke, 1);
+    if (count <= 0) {
+      system.recordQualityDrop(GpuVfxEffectId.RocketSmoke);
+      return;
+    }
 
     // Der Puff entsteht ausserhalb des Emissions-Ticks, die Uhr steht also noch auf dem Stand
     // des Vorframes. Der Retire-Sweep greift dadurch hoechstens einen Frame zu frueh – dort ist
     // die Alpha der Quad-Kurve bereits praktisch null.
-    const nowMs = this.registry?.now() ?? 0;
+    const nowMs = system.now();
     const startScale = Math.max(visualSize / 28, 0.28);
 
+    spec.x = x;
+    spec.y = y;
+    spec.scaleStart = startScale;
+    // `onUpdate` skalierte mit `startScale * (1 + Quadratic.Out(t) * 1.3)`.
+    spec.scaleEnd = startScale + startScale * SMOKE_SCALE_GROWTH;
+    spec.tint = smokeColor;
+
     for (let n = 0; n < count; n += 1) {
-      const slot = fx.pool.acquire(SMOKE_OWNER, nowMs, SMOKE_LIFE_MS);
-      if (slot === GPU_VFX_NO_SLOT) return;
-
-      smokeX.base      = x;
-      smokeX.amplitude = Phaser.Math.FloatBetween(-SMOKE_SPEED_X, SMOKE_SPEED_X);
-      smokeY.base      = y;
-      smokeY.amplitude = Phaser.Math.FloatBetween(SMOKE_SPEED_Y_MIN, SMOKE_SPEED_Y_MAX);
-      // `lifespan` ist konstant 1000 ms, die Amplitude ist damit direkt die Geschwindigkeit.
-      const growth = startScale * SMOKE_SCALE_GROWTH;
-      smokeScale.base      = gpuVfxEasedBase(startScale, growth);
-      smokeScale.amplitude = growth;
-      setGpuVfxTint(SMOKE_MEMBER, smokeColor);
-
-      fx.layer.editMember(slot, SMOKE_MEMBER);
+      // `lifespan` ist konstant 1000 ms, die Geschwindigkeit ist damit direkt die Amplitude.
+      spec.vx = Phaser.Math.FloatBetween(-SMOKE_SPEED_X, SMOKE_SPEED_X);
+      spec.vy = Phaser.Math.FloatBetween(SMOKE_SPEED_Y_MIN, SMOKE_SPEED_Y_MAX);
+      if (!system.spawn(spec, this.smokeSource, nowMs)) return;
     }
   }
 
@@ -597,7 +487,7 @@ export class RocketRenderer {
     visual.glow.destroy();
     visual.engine.destroy();
     // Noch sichtbare Exhaust-Member sofort ausblenden – wie bisher `emitter.destroy()`.
-    this.exhaustFx?.pool.releaseOwner(id);
+    this.gpuVfx?.releaseSource(visual.exhaustSource);
     const index = this.activeRockets.indexOf(visual);
     if (index >= 0) this.activeRockets.splice(index, 1);
     this.rockets.delete(id);
@@ -615,8 +505,9 @@ export class RocketRenderer {
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }
-    // Einzelne Raketen lassen ihre Schwaden auslaufen; erst der Teardown raeumt sie ab.
-    this.smokeFx?.pool.releaseAll();
-    this.smokeEmissionCarry = 0;
+    // Einzelne Raketen lassen ihre Schwaden auslaufen; erst der Teardown raeumt sie ab. Die
+    // Quelle selbst bleibt bestehen, sie ist szenenlebenslang.
+    this.gpuVfx?.clearSource(this.smokeSource);
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.RocketSmoke);
   }
 }

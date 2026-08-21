@@ -13,22 +13,24 @@ const qualityFactors = { critical: 1, standard: 1, decorative: 1 };
 vi.mock('../src/graphics/GraphicsQuality', () => ({
   getGraphicsQualityController: () => ({
     getProfile: () => ({ particleFactors: qualityFactors }),
+    subscribe: () => () => {},
   }),
 }));
 
 import { RocketRenderer } from '../src/effects/RocketRenderer';
-import { GpuVfxRegistry, gpuVfxEasedBase } from '../src/effects/gpu/GpuVfxRegistry';
+import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
+import { gpuVfxEasedBase } from '../src/effects/gpu/GpuVfxMember';
+import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { DEPTH } from '../src/config';
-import { evaluateFakeAnimation, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 function setup() {
   const scene = makeFakeGpuVfxScene();
-  const registry = new GpuVfxRegistry(scene as never);
+  const registry = new GpuVfxSystem(scene as never);
   const renderer = new RocketRenderer(scene as never);
   renderer.generateTextures();
-  renderer.initGpuLayers(registry);
-  const smoke = scene.layers.find((layer) => layer.key === '__rocket_smoke')!;
-  return { scene, registry, renderer, smoke };
+  renderer.registerGpuVfx(registry);
+  return { scene, registry, renderer, smoke: findFakeLane(scene, 'rocket-smoke') };
 }
 
 /**
@@ -43,6 +45,7 @@ function flyRocket(renderer: RocketRenderer, id: number, steps: number): void {
 }
 
 beforeEach(() => {
+  resetGpuVfxAtlasForTests();
   qualityFactors.standard = 1;
   vi.spyOn(Math, 'random').mockReturnValue(0.5);
 });
@@ -52,7 +55,7 @@ afterEach(() => {
 });
 
 describe('rocket smoke gpu particles', () => {
-  it('replaces the shared emitter with one normally blended layer', () => {
+  it('replaces the shared emitter with one normally blended lane', () => {
     const { scene, smoke } = setup();
     // Der Smoke-Emitter hatte keinen Blend-Mode im Config, zeichnete also normal statt additiv.
     expect(smoke.blendMode).toBe(0);
@@ -61,6 +64,8 @@ describe('rocket smoke gpu particles', () => {
     // Entspricht dem bisherigen maxAliveParticles-Deckel.
     expect(smoke.size).toBe(640);
     expect(scene.emitters.length).toBe(0);
+    // Alle Lanes teilen sich den Atlas; das Motiv steckt im Frame des Members.
+    expect(smoke.key).toBe('__gpu_vfx_atlas');
   });
 
   it('keeps DEPTH.FIRE without an epsilon offset', () => {
@@ -100,6 +105,7 @@ describe('rocket smoke gpu particles', () => {
     expect(evaluateFakeAnimation(puff.x, 0)).toBeCloseTo(50 - 10 * 0.9, 10);
     expect(evaluateFakeAnimation(puff.y, 1) - evaluateFakeAnimation(puff.y, 0)).toBeCloseTo(-6, 10);
     expect(puff.tint).toBe(0x445566);
+    expect(puff.frame).toBe('rocket-smoke');
   });
 
   it('never touches a spawned puff again', () => {
@@ -147,7 +153,7 @@ describe('rocket smoke gpu particles', () => {
 
     renderer.destroyAll();
     expect(smoke.patched.length).toBe(spawned);
-    expect(registry.getStats()?.['rocket-smoke'].activeSlots).toBe(0);
+    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
   });
 
   it('retires puffs after their 1000 ms lifespan', () => {
@@ -169,14 +175,14 @@ describe('rocket smoke gpu particles', () => {
     for (let id = 1; id <= 40; id += 1) flyRocket(renderer, id, 30);
 
     const stats = registry.getStats()?.['rocket-smoke'];
-    expect(stats!.activeSlots).toBeLessThanOrEqual(640);
-    expect(stats!.overruns).toBeGreaterThan(0);
+    expect(stats!.liveCount).toBeLessThanOrEqual(640);
+    expect(stats!.capacityDrops).toBeGreaterThan(0);
     // Jeder Edit gehoert zu genau einem Rearm: kein lebender Slot wurde ueberschrieben.
     expect(smoke.edited.length).toBe(stats!.rearms);
     warn.mockRestore();
   });
 
-  it('does not spawn smoke or advance emission carry while the registry is suppressed', () => {
+  it('does not spawn smoke or advance emission carry while the backend is suppressed', () => {
     qualityFactors.standard = 0.5;
     const { registry, renderer, smoke } = setup();
 
@@ -186,13 +192,13 @@ describe('rocket smoke gpu particles', () => {
 
     // Ablation aktivieren
     registry.setSuppressed(true);
-    expect(registry.getStats()?.['rocket-smoke'].activeSlots).toBe(0);
+    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
 
     // Waehrend der Ablation fliegen: weder Spawns noch Carry-Akkumulation
     flyRocket(renderer, 2, 20);
     renderer.playSpentDestruction(100, 100, 0xff0000);
     expect(smoke.edited.length).toBe(1);
-    expect(registry.getStats()?.['rocket-smoke'].activeSlots).toBe(0);
+    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
 
     // Ablation deaktivieren
     registry.setSuppressed(false);
