@@ -81,7 +81,7 @@ export class RockVisualHelper {
     // feste Arena-Podeste begehbar. Der Runtime-Rock bleibt trotzdem im PlacementSystem,
     // damit Ownership, Grid-Belegung und Rückbau erhalten bleiben.
     if (rock.kind === 'pedestal') {
-      const staleProxy = this.ctx.arenaResult.rockObjects[rock.id];
+      const staleProxy = this.ctx.arenaResult.rockPhysicsProxies[rock.id];
       if (staleProxy) {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
         this.markObstaclesDirty(rock.id, false);
@@ -96,7 +96,7 @@ export class RockVisualHelper {
 
     let refreshStaticShadows = false;
 
-    if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'rock') {
+    if (!this.ctx.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'rock') {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
         this.ctx.arenaResult,
@@ -108,7 +108,7 @@ export class RockVisualHelper {
         rock.maxHp,
       );
       refreshStaticShadows = true;
-    } else if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'turret') {
+    } else if (!this.ctx.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'turret') {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
         this.ctx.arenaResult,
@@ -161,9 +161,9 @@ export class RockVisualHelper {
 
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
-    const currentVisual = this.ctx.arenaResult.rockObjects[rock.id];
+    const currentProxy = this.ctx.arenaResult.rockPhysicsProxies[rock.id];
     if (rock.kind === 'pedestal') {
-      if (currentVisual) {
+      if (currentProxy) {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
       }
       this.destroyTurretVisual(rock.id);
@@ -174,8 +174,9 @@ export class RockVisualHelper {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
-      } else if (currentVisual?.active) {
-        this.rockDestructionRenderer.playDestruction({ source: currentVisual });
+      } else if (currentProxy?.active) {
+        const snapshot = this.ctx.arenaResult.rockVisualSystem.getDestructionSnapshot(rock.id);
+        if (snapshot) this.rockDestructionRenderer.playDestruction(snapshot);
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
       }
@@ -487,8 +488,8 @@ export class RockVisualHelper {
   private ensureRuntimeRockSlot(rock: SyncedPlaceableRock): void {
     if (!this.ctx.currentLayout || !this.ctx.arenaResult) return;
     this.ctx.currentLayout.rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
-    while (this.ctx.arenaResult.rockObjects.length <= rock.id) {
-      this.ctx.arenaResult.rockObjects.push(null);
+    while (this.ctx.arenaResult.rockPhysicsProxies.length <= rock.id) {
+      this.ctx.arenaResult.rockPhysicsProxies.push(null);
     }
   }
 
@@ -544,7 +545,7 @@ export class RockVisualHelper {
    * Statischer Sonnenschatten und dynamische Lichtverdeckung hängen hier gemeinsam
    * dran, damit ein zerstörter Fels nicht seinen Schatten verlieren, aber weiter Licht
    * blockieren kann. Beide leiten sich aus denselben Referenzen ab
-   * (`arenaResult.rockObjects`, `placementSystem.getAllRuntimeRocks()`), es gibt keine
+   * (`arenaResult.rockPhysicsProxies`, `placementSystem.getAllRuntimeRocks()`), es gibt keine
    * zweite Liste zerstörbarer Felsen.
    */
   /**

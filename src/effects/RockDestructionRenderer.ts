@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE } from '../config';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
+import type { RockDestructionVisualSnapshot } from '../arena/rocks/RockVisualSystem';
 import {
   createEmitter,
   destroyEmitter,
@@ -39,7 +40,7 @@ interface RockDestructionRequest {
   displayWidth: number;
   displayHeight: number;
   textureKey: string;
-  frameName: string;
+  frameName: string | number;
   tint: number;
   angle: number;
   columns: number;
@@ -81,7 +82,7 @@ interface FragmentSpawnConfig {
   readonly endScaleX: number;
   readonly endScaleY: number;
   readonly textureKey: string;
-  readonly frameName: string;
+  readonly frameName: string | number;
 }
 
 interface WorldPoint {
@@ -150,26 +151,23 @@ export class RockDestructionRenderer {
     this.prewarmFragmentPool();
   }
 
-  /**
-   * Nimmt nur einen billigen Snapshot auf. Die Quelle wird direkt danach vom Rock-Lifecycle
-   * zerstoert; deshalb darf der Renderer sie nicht bis zum naechsten postupdate referenzieren.
-   */
-  playDestruction({ source }: { source: Phaser.GameObjects.Image }): void {
-    if (this.destroyed || !this.isWorthShowing(source.x, source.y)) return;
+  /** Nimmt ausschliesslich den rendererunabhaengigen Zustandssnapshot entgegen. */
+  playDestruction(snapshot: RockDestructionVisualSnapshot): void {
+    if (this.destroyed || !this.isWorthShowing(snapshot.x, snapshot.y)) return;
 
-    const frameWidth = Math.max(1, Math.round(source.frame.width));
-    const frameHeight = Math.max(1, Math.round(source.frame.height));
+    const frameWidth = Math.max(1, Math.round(snapshot.size));
+    const frameHeight = frameWidth;
     this.pendingRequests.push({
-      x: source.x,
-      y: source.y,
+      x: snapshot.x,
+      y: snapshot.y,
       frameWidth,
       frameHeight,
-      displayWidth: source.displayWidth,
-      displayHeight: source.displayHeight,
-      textureKey: source.texture.key,
-      frameName: source.frame.name,
-      tint: source.tintTopLeft ?? 0xffffff,
-      angle: source.angle,
+      displayWidth: snapshot.size * snapshot.scaleX,
+      displayHeight: snapshot.size * snapshot.scaleY,
+      textureKey: ROCK_TEXTURE_KEY,
+      frameName: snapshot.frame,
+      tint: snapshot.tint,
+      angle: snapshot.angle,
       columns: Phaser.Math.Clamp(Math.round(frameWidth / 6), 4, 6),
       rows: Phaser.Math.Clamp(Math.round(frameHeight / 6), 4, 6),
     });

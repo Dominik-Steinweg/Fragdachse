@@ -375,7 +375,7 @@ export class ShadowSystem {
       offsetX: ARENA_OFFSET_X,
       offsetY: ARENA_OFFSET_Y,
       runtimeRocks,
-      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockObjects[index]?.active),
+      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockPhysicsProxies[index]?.active),
     };
 
     // Dies ist der Invalidierungspfad: Er laeuft, wenn sich die Hindernisse geaendert haben.
@@ -410,7 +410,7 @@ export class ShadowSystem {
       offsetX: ARENA_OFFSET_X,
       offsetY: ARENA_OFFSET_Y,
       runtimeRocks,
-      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockObjects[index]?.active),
+      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockPhysicsProxies[index]?.active),
     };
     const staticProfile = this.lastBakedProfile ?? this.profile;
     this.staticBakeProfile = staticProfile;

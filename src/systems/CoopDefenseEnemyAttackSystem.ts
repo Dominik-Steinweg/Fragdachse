@@ -10,6 +10,7 @@ import type { PlacementSystem } from './PlacementSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { COLORS, PLAYER_SIZE } from '../config';
+import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 
 type EnemyAttackTargetKind = 'base' | 'player' | 'decoy' | 'ally' | 'train' | 'obstacle';
 
@@ -21,7 +22,7 @@ interface EnemyAttackCandidate {
   readonly targetY: number;
   readonly targetId?: string;
   readonly targetRef?: EnemyAiTargetRef;
-  readonly obstacle?: Phaser.GameObjects.Image;
+  readonly obstacle?: RockPhysicsProxy;
 }
 
 interface SustainedEnemyAttackState {
@@ -56,11 +57,11 @@ interface EnemyMovementProgressState {
    * Fernkämpfer würde sonst nie bemerken, dass er in einem Felsen klemmt.
    */
   blockedMs: number;
-  clearingObstacle: Phaser.GameObjects.Image | null;
+  clearingObstacle: RockPhysicsProxy | null;
 }
 
 interface EnemyObstacleContactState {
-  readonly obstacle: Phaser.GameObjects.Image;
+  readonly obstacle: RockPhysicsProxy;
   readonly lastContactAt: number;
 }
 
@@ -106,7 +107,7 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly baseManager: BaseManager,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,
-    private readonly getRockObjects: () => readonly (Phaser.GameObjects.Image | null)[] | null,
+    private readonly getRockObjects: () => readonly (RockPhysicsProxy | null)[] | null,
     private readonly trainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null = null,
     private readonly placementSystem: PlacementSystem | null = null,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
@@ -116,7 +117,7 @@ export class CoopDefenseEnemyAttackSystem {
     this.actionBlockedChecker = checker;
   }
 
-  recordObstacleContact(enemyId: string, obstacle: Phaser.GameObjects.Image, now: number): void {
+  recordObstacleContact(enemyId: string, obstacle: RockPhysicsProxy, now: number): void {
     if (!obstacle.active || !this.enemyManager.hasEnemy(enemyId)) return;
     this.obstacleContacts.set(enemyId, { obstacle, lastContactAt: now });
   }
@@ -669,8 +670,8 @@ export class CoopDefenseEnemyAttackSystem {
 
   private buildObstacleCandidate(
     enemy: EnemyEntity,
-    obstacle: Phaser.GameObjects.Image,
-    rockObjects: readonly (Phaser.GameObjects.Image | null)[],
+    obstacle: RockPhysicsProxy,
+    rockObjects: readonly (RockPhysicsProxy | null)[],
     range: number,
     knownIndex?: number,
   ): EnemyAttackCandidate | null {

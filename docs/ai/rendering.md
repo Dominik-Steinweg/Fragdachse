@@ -147,6 +147,36 @@ Partikelkoordinaten sind emitterlokal. Entweder Emitter an der Weltposition plus
 Die Mündungsposition wird zentral über getTopDownMuzzleOrigin() beziehungsweise getTopDownMuzzleOriginFromVector() aus src/config.ts berechnet. MuzzleFlashRenderer erhält bereits diese Position; keinen zweiten Vorwärtsoffset addieren. Trails und Anhänge leiten lokale Offsets aus der normalisierten Flug-/Aimrichtung ab.
 
 Jeder Round-Teardown muss Emitter, Tweens, Timer, Filter, temporäre Texturen, RenderTextures und Game Objects der Round-Ressourcen freigeben. Häufige Effekte dürfen gepoolt werden, aber nur mit vollständigem Reset.
+## Persistente Sprite-GPU-Weltobjekte
+
+Arena-Felsen trennen vier Lebenszyklen: `RockGridIndex`/HP als Gameplay, nicht rendernde
+`RockPhysicsProxy`-Zones mit Arcade-`StaticBody`, `RockVisualState` als rendererunabhaengige
+Darstellungswahrheit und den jeweiligen Visual-Handle. Kein Gameplay-, Physics-, Overlay-,
+Licht- oder VFX-Pfad darf ein Arena-Rock-`Image` voraussetzen. `RockDestructionRenderer` erhaelt
+einen kleinen Snapshot aus dem Visual State; die Lobby darf denselben Vertrag aus ihrem
+klassischen Body bilden.
+
+`RockVisualSystem` konsumiert deduplizierte State-Aenderungen einmal in `PRE_RENDER` und schaltet
+zwischen `classic` und `spriteGpu`. Classic kapselt `RockLayerGrid`, Images und
+`RockViewportCuller`. `PersistentGpuWorldSystem` besitzt ausschliesslich `SpriteGPULayer`-Pages
+und GPU-Handles. Ein Wechsel im Performance-Menue baut nur diese Praesentation neu; Gameplay,
+Grid und Physics-Proxies bleiben bestehen.
+
+GPU-Pages benutzen `ArenaChunkGrid`, standardmaessig 512 px; 1024, 2048 und eine globale Page
+sind Diagnosevarianten. Alle Pages und ihre Kapazitaeten entstehen beim Rendereraufbau und
+werden danach weder wegen der Kamera erzeugt noch vergroessert. Die Kamera schaltet nur
+Page-Sichtbarkeit im Prefetch-Rechteck. Eine 512-px-Page enthaelt 16 x 16 feste Zellslots;
+`localY * 16 + localX` bleibt fuer Zerstoerung und Neubau stabil. Inaktive Slots haben Alpha und
+Scale 0. Frame, vier Ecktints, Damage-/Owner-Mischung, Alpha und Scale kommen ausschliesslich aus
+`RockVisualState`; Blob-Maske und 47-Frame-Auswahl bleiben CPU-seitig.
+
+Aenderungen werden page-lokal als Member-Edits angewandt. Phaser teilt den Member-Buffer in 24
+Segmente; ab zwoelf betroffenen Segmenten markiert der Prototyp die ganze Page fuer den Upload,
+darunter bleiben die Segmentpatches sparse. Das Performance-Menue zeigt kumulierte Dirty Rocks,
+Pages, Segmente, Sparse-/Full-Uploads und geschaetzte Bytes sowie Page-Sichtbarkeit und
+Bufferbelegung. `GpuVfxSystem` bleibt davon getrennt: transient/emissionsgetrieben dort,
+persistent/eventgetrieben hier (`tests/PersistentGpuWorldSystem.test.ts`).
+
 ## SpriteGPULayer-Partikel
 
 `Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Das gesamte Backend liegt in `src/effects/gpu/`; ein Effektcontroller legt weder Layer noch Pool an und sieht keine Phaser-GPU-Interna mehr.

@@ -224,7 +224,7 @@ describe('static shadow baking', () => {
     const shadows = new ShadowSystem(scene);
     const arenaLayout = layout(20, 2);
     const rockObjects = Array.from({ length: 20 }, () => ({ active: true }));
-    const arenaResult = { rockObjects } as never;
+    const arenaResult = { rockPhysicsProxies: rockObjects } as never;
 
     shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
     drain(scene);
@@ -249,7 +249,7 @@ describe('static shadow baking', () => {
     const shadows = new ShadowSystem(scene);
     const arenaLayout = layout(20, 0);
     const rockObjects = Array.from({ length: 20 }, () => ({ active: true }));
-    const arenaResult = { rockObjects } as never;
+    const arenaResult = { rockPhysicsProxies: rockObjects } as never;
 
     shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
     drain(scene);
@@ -306,7 +306,7 @@ describe('static shadow baking', () => {
   it('keeps a fresh layout rebuilding every chunk', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
-    const arenaResult = { rockObjects: [{ active: true }] } as never;
+    const arenaResult = { rockPhysicsProxies: [{ active: true }] } as never;
 
     shadows.rebuildArenaStaticShadows(layout(1, 1), arenaResult);
     drain(scene);

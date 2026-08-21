@@ -1,6 +1,12 @@
 import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
+import {
+  getRockGpuPageSize,
+  getRockRendererMode,
+  setRockGpuPageSize,
+  setRockRendererMode,
+} from '../arena/rocks/RockRendererSettings';
 import { ChunkedRenderSurface }  from '../arena/chunks/ChunkedRenderSurface';
 import { CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS } from '../arena/chunks/ChunkBakeScheduler';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
@@ -554,6 +560,9 @@ export class ArenaScene extends Phaser.Scene {
           chunkSampling: this.renderers?.shadow?.getSamplingMode()
             ?? this.ctx?.arenaResult?.groundSurface?.getSamplingMode()
             ?? 'default',
+          rockRenderer: this.ctx?.arenaResult?.rockVisualSystem.getMode() ?? getRockRendererMode(),
+          rockGpuPageSize: this.ctx?.arenaResult?.rockVisualSystem.getPageSize() ?? getRockGpuPageSize(),
+          rockGpu: this.ctx?.arenaResult?.rockVisualSystem.getGpuDiagnostics() ?? null,
         }),
         setStaticShadowsVisible: (visible) => this.renderers?.shadow?.setStaticVisible(visible),
         setGroundSurfaceVisible: (visible) => this.ctx?.arenaResult?.groundSurface?.setVisible(visible),
@@ -562,6 +571,14 @@ export class ArenaScene extends Phaser.Scene {
           this.renderers?.shadow?.setSamplingMode(mode);
           this.ctx?.arenaResult?.groundSurface?.setSamplingMode(mode);
           this.ctx?.arenaResult?.rockOverlaySurface?.setSamplingMode(mode);
+        },
+        setRockRenderer: (mode) => {
+          setRockRendererMode(mode);
+          this.ctx?.arenaResult?.rockVisualSystem.setMode(mode);
+        },
+        setRockGpuPageSize: (size) => {
+          setRockGpuPageSize(size);
+          this.ctx?.arenaResult?.rockVisualSystem.setPageSize(size);
         },
       },
       () => this.renderers?.gpuVfx.getStats() ?? null,
@@ -3750,8 +3767,9 @@ export class ArenaScene extends Phaser.Scene {
       maxViewportDims: Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array),
     };
 
-    // Nur Geraete- und Renderer-Daten. Rolle, Qualitaet, Modus und Map wechseln waehrend einer
-    // Messung und stehen deshalb pro Fenster sowie gebuendelt in `recordingScope` des Reports.
+    // Vorwiegend Geraete- und Renderer-Daten. Rock-Renderer und Page-Groesse gehoeren als
+    // ausdrueckliche Vergleichsparameter dazu; Rolle, Qualitaet, Modus und Map stehen dagegen pro
+    // Fenster sowie gebuendelt in `recordingScope` des Reports.
     return {
       renderer: 'webgl',
       gpuRenderer,
@@ -3776,6 +3794,11 @@ export class ArenaScene extends Phaser.Scene {
       platform: nav?.platform ?? null,
       hardwareConcurrency: nav?.hardwareConcurrency ?? null,
       deviceMemoryGb: nav?.deviceMemory ?? null,
+      rockRendering: {
+        mode: this.ctx?.arenaResult?.rockVisualSystem.getMode() ?? getRockRendererMode(),
+        pageSize: this.ctx?.arenaResult?.rockVisualSystem.getPageSize() ?? getRockGpuPageSize(),
+        gpu: this.ctx?.arenaResult?.rockVisualSystem.getGpuDiagnostics() ?? null,
+      },
     };
   }
 

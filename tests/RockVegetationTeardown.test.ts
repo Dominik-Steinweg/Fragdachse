@@ -38,6 +38,21 @@ function buildResult() {
 
   const scene = createFakeArenaScene();
   const rockObjects = ROCKS.map((cell) => fakeRockImage(cell.gridX, cell.gridY, CELL_SIZE, FRAME.offsetX, FRAME.offsetY));
+  const rockVisualStates = ROCKS.map((cell, id) => ({
+    id,
+    gridX: cell.gridX,
+    gridY: cell.gridY,
+    x: FRAME.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2,
+    y: FRAME.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2,
+    active: true,
+    frame: 0,
+    cornerTints: [0xffffff, 0xffffff, 0xffffff, 0xffffff] as const,
+    damageTint: 0xffffff,
+    ownerTintStrength: 0,
+    alpha: 1,
+    scaleX: 1,
+    scaleY: 1,
+  }));
   const overlaySource = createRockOverlaySource();
   syncRockOverlaySource(overlaySource, ROCKS);
 
@@ -52,7 +67,8 @@ function buildResult() {
     scene: scene as never,
     frame: FRAME,
     layout,
-    rockObjects,
+    rockPhysicsProxies: rockObjects,
+    rockVisualStates,
     overlaySource,
     mossPlacements: [{
       textureKey: 'rock_moss_01',
@@ -83,8 +99,8 @@ function buildResult() {
   const result = {
     baseZoneObjects: [],
     rockGroup: { destroy() {} },
-    rockObjects: [],
-    rockStateTints: [],
+    rockPhysicsProxies: [],
+    rockVisualSystem: { destroy() {} },
     trunkGroup: { destroy() {} },
     trunkObjects: [],
     canopyObjects: [],

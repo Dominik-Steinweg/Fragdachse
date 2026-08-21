@@ -7,6 +7,7 @@ import type { ArenaBuilderResult } from '../src/arena/ArenaBuilder';
 import { CELL_SIZE } from '../src/config';
 import type { RockCell } from '../src/types';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
+import { RockVisualStateStore } from '../src/arena/rocks/RockVisualState';
 
 /**
  * Die Kosten einer Felszerstoerung duerfen nicht am Gesamtbestand haengen.
@@ -39,7 +40,23 @@ function fakeRock() {
 }
 
 function buildResult() {
-  const rockObjects = ROCKS.map(() => fakeRock());
+  const rockPhysicsProxies = ROCKS.map(() => fakeRock());
+  const rockVisualStates = new RockVisualStateStore();
+  ROCKS.forEach((cell, id) => rockVisualStates.add({
+    id,
+    gridX: cell.gridX,
+    gridY: cell.gridY,
+    x: cell.gridX * CELL_SIZE + CELL_SIZE / 2,
+    y: cell.gridY * CELL_SIZE + CELL_SIZE / 2,
+    active: true,
+    frame: 0,
+    cornerTints: [0xffffff, 0xffffff, 0xffffff, 0xffffff],
+    damageTint: 0xffffff,
+    ownerTintStrength: 0,
+    alpha: 1,
+    scaleX: 1,
+    scaleY: 1,
+  }, false));
   const removed: unknown[] = [];
   const rockGroup = {
     // Wie die echte StaticGroup: Der Beitritt versorgt das Objekt mit seinem Koerper.
@@ -55,24 +72,23 @@ function buildResult() {
     destroy: vi.fn(),
   };
   const result = {
-    rockObjects,
-    rockStateTints: ROCKS.map(() => 0xffffff),
+    rockPhysicsProxies,
+    rockVisualStates,
     rockGroup,
     rockGrid: new RockGridIndex(ROCKS, { cols: 8, rows: 8 }),
-    rockCuller: null,
   } as unknown as ArenaBuilderResult;
-  return { result, rockGroup, rockObjects, removed };
+  return { result, rockGroup, rockPhysicsProxies, removed };
 }
 
 describe('rock destruction physics churn', () => {
   it('never resets the whole static group when a single rock falls', () => {
-    const { result, rockGroup, rockObjects } = buildResult();
-    const destroyed = rockObjects[10];
+    const { result, rockGroup, rockPhysicsProxies } = buildResult();
+    const destroyed = rockPhysicsProxies[10];
 
     ArenaBuilder.destroyRock(result, 10);
 
     expect(destroyed.active).toBe(false);
-    expect(result.rockObjects[10]).toBeNull();
+    expect(result.rockPhysicsProxies[10]).toBeNull();
     // Der Gruppenabgang meldet den Koerper bereits ab; ein `refresh()` waere ein O(Bestand)-Sturm.
     expect(rockGroup.refresh).not.toHaveBeenCalled();
     expect(rockGroup.remove).toHaveBeenCalledTimes(1);
@@ -87,13 +103,13 @@ describe('rock destruction physics churn', () => {
 
     expect(rockGroup.refresh).not.toHaveBeenCalled();
     expect(rockGroup.remove).toHaveBeenCalledTimes(ROCKS.length);
-    expect(result.rockObjects.every((image) => image === null)).toBe(true);
+    expect(result.rockPhysicsProxies.every((proxy) => proxy === null)).toBe(true);
   });
 
   it('touches only the new body when a rock is built at runtime', () => {
     const { result, rockGroup } = buildResult();
     // Alle Nachbarn merken, bevor der Slot neu besetzt wird.
-    const survivors = result.rockObjects.filter((image, id) => image !== null && id !== 10);
+    const survivors = result.rockPhysicsProxies.filter((proxy, id) => proxy !== null && id !== 10);
     ArenaBuilder.destroyRockAndRetile(result, ROCKS, 10);
     rockGroup.refresh.mockClear();
 
@@ -113,13 +129,13 @@ describe('rock destruction physics churn', () => {
     );
 
     expect(rockGroup.refresh).not.toHaveBeenCalled();
-    expect(result.rockObjects[10]).toBeTruthy();
+    expect(result.rockPhysicsProxies[10]).toBeTruthy();
     // Genau ein Koerper wird in den Baum eingetragen: der neue. Kein Nachbar wird angefasst.
     const touchedSurvivors = survivors.filter((image) => (
       (image as unknown as ReturnType<typeof fakeRock>).body.updateFromGameObject.mock.calls.length > 0
     ));
     expect(touchedSurvivors).toHaveLength(0);
-    const spawned = result.rockObjects[10] as unknown as ReturnType<typeof fakeRock>;
+    const spawned = result.rockPhysicsProxies[10] as unknown as ReturnType<typeof fakeRock>;
     expect(spawned.body.updateFromGameObject).toHaveBeenCalledTimes(1);
   });
 });

@@ -963,7 +963,7 @@ export class ArenaLifecycleCoordinator {
 
       const obstacleCellProvider = () => {
         const staticRockCells = layout.rocks.flatMap((rock, index) => {
-          const isActive = this.ctx.arenaResult?.rockObjects[index]?.active ?? false;
+          const isActive = this.ctx.arenaResult?.rockPhysicsProxies[index]?.active ?? false;
           return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
         });
         const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
@@ -1260,7 +1260,7 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.projectileManager.setRockGroup(
       this.ctx.arenaResult.rockGroup,
-      this.ctx.arenaResult.rockObjects,
+      this.ctx.arenaResult.rockPhysicsProxies,
       this.ctx.arenaResult.trunkGroup,
     );
     this.ctx.projectileManager.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
@@ -1268,7 +1268,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.rockGroup,
       this.ctx.arenaResult.trunkGroup,
     );
-    this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
+    this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockPhysicsProxies, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
     // Dieselbe Index-Instanz, damit Sichtlinie und Projektil-Kollision denselben Stand sehen.
     this.ctx.projectileManager.setObstacleIndex(this.ctx.combatSystem.getObstacleIndex());
@@ -1300,7 +1300,7 @@ export class ArenaLifecycleCoordinator {
       fireObstacleIndexUpdatedAt = now;
       blockedFireCells.clear();
       fireLineOfSightCells.clear();
-      for (const rock of this.ctx.arenaResult?.rockObjects ?? []) {
+      for (const rock of this.ctx.arenaResult?.rockPhysicsProxies ?? []) {
         if (!rock?.active) continue;
         const bounds = rock.getBounds();
         addBoundsToFireIndex(bounds.left, bounds.top, bounds.right, bounds.bottom, true);
@@ -1854,7 +1854,7 @@ export class ArenaLifecycleCoordinator {
         ) ?? 1
       ));
       this.ctx.teslaDomeSystem.setRockCallbacks(
-        () => (this.ctx.arenaResult?.rockObjects ?? [])
+        () => (this.ctx.arenaResult?.rockPhysicsProxies ?? [])
           .flatMap((rock, index) => (rock && rock.active)
             ? [{ index, x: rock.x, y: rock.y }]
             : []),
@@ -2219,7 +2219,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.baseManager,
           this.ctx.combatSystem,
           this.ctx.loadoutManager,
-          () => this.ctx.arenaResult?.rockObjects ?? null,
+          () => this.ctx.arenaResult?.rockPhysicsProxies ?? null,
           this.ctx.coopDefenseEnemyTrainAwarenessSystem,
           this.ctx.placementSystem,
           this.ctx.enemyAiTargetCatalog,
@@ -2644,7 +2644,7 @@ export class ArenaLifecycleCoordinator {
     // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
     // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
     this.ctx.lightOccluderIndex = new LightOccluderIndex({
-      rocks: () => this.ctx.arenaResult?.rockObjects ?? null,
+      rocks: () => this.ctx.arenaResult?.rockPhysicsProxies ?? null,
       trunks: () => this.ctx.arenaResult?.trunkObjects ?? null,
       baseCells: () => this.ctx.baseManager?.getObstacleRectangles() ?? null,
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
@@ -3733,7 +3733,7 @@ export class ArenaLifecycleCoordinator {
       const world = this.rockVisualHelper.gridToWorld(runtimeRock.gridX, runtimeRock.gridY);
       return { x: world.x, y: world.y, width: CELL_SIZE, height: CELL_SIZE };
     }
-    const rock = this.ctx.arenaResult?.rockObjects[rockId];
+    const rock = this.ctx.arenaResult?.rockPhysicsProxies[rockId];
     if (!rock?.active) return null;
     const bounds = rock.getBounds();
     return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };

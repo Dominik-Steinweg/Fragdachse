@@ -84,10 +84,10 @@ nachgefuehrt.
 **Phaser 4 cullt nicht an den Kamera-Bounds.** `GameObject.willRender()` prueft nur Renderflags und
 Kamerafilter; jedes Objekt der Anzeigeliste laeuft sonst durch Transform, Tint, Quad und Batch. Bei
 24 000 Fels-Images waren das 16,7 ms `renderSubmit` je Frame fuer 1 600 tatsaechlich sichtbare
-Objekte. `RockViewportCuller` setzt deshalb `visible` bucketweise statt einzelne Objekte aus der
-Anzeigeliste zu nehmen; deren Aenderung kostet je Objekt eine lineare Suche, zwei Events und eine
-Tiefensortierung. `active` bleibt die Wahrheit darueber, ob ein Fels noch steht; Sichtbarkeit ist
-rein lokal.
+Objekte. Im Classic-Pfad setzt `RockViewportCuller` deshalb `visible` bucketweise statt einzelne
+Objekte aus der Anzeigeliste zu nehmen; deren Aenderung kostet je Objekt eine lineare Suche, zwei
+Events und eine Tiefensortierung. `RockVisualState.active` bleibt die Darstellungswahrheit;
+Sichtbarkeit ist rein lokal.
 
 **Die Anzeigeliste ist eine lineare Struktur.** `scene.add.*` prueft `List.exists` und `destroy()`
 sucht mit `indexOf` – beides ueber die gesamte Liste. Ein einziges kurzlebiges Objekt kostete damit
@@ -104,12 +104,15 @@ des Ausschnitts ist selbst unsichtbar und wird nicht betreten; ihre Kinder koste
 kameranahen Ebenen. Die Ebenenmenge wird dabei **aus** der Bucketmenge abgeleitet und nicht
 getrennt aus demselben Rechteck berechnet – zwei Rasterabfragen runden an der Kante verschieden,
 und ein sichtbarer Fels in einer unsichtbaren Ebene faellt erst auf, wenn die Ebene spaeter aufgeht
-und er dort ploetzlich auftaucht (`tests/ArenaCellBucketIndex.test.ts`).
+und er dort ploetzlich auftaucht (`tests/ArenaCellBucketIndex.test.ts`). Das gilt nur fuer
+`rockRenderer=classic`; `spriteGpu` erzeugt keine Classic-Images, keine `RockLayerGrid` und keinen
+per-Rock-Culler, sondern schaltet feste GPU-Pages als Ganzes.
 
 Beides zusammen haelt die Szenenliste kurz, sodass jede Truemmer-, Partikel- und Tween-Erzeugung
 einer Zerstoerungswelle billig bleibt. Diagnose und Ablationsmodus steigen ueber
 `forEachSceneDisplayObject` eine Ebene tief in `Layer`-Kinder ab, sonst faende die
-`rocks`-Kategorie nichts mehr.
+`rocks`-Kategorie nichts mehr. Im Sprite-GPU-Pfad ist jede Page selbst ein Displayobjekt mit der
+Textur `rocks` und bleibt dadurch derselben Ablationskategorie zugeordnet.
 
 Der Ablationsmodus nutzt fuer seine gleichmaessig in Baseline und Segmenten laufenden Scans
 zusaetzlich `forEachAblationDisplayObject`, das `Container`-Kinder rekursiv erreicht. Die

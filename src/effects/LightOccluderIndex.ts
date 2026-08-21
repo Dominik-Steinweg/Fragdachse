@@ -1,6 +1,7 @@
 // Nur Typ-Import: dieses Modul soll ohne Phaser-Laufzeit (und damit ohne DOM) nutzbar
 // und testbar bleiben. Alle Phaser-Aufrufe laufen über die übergebenen Objekte.
 import type * as Phaser from 'phaser';
+import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import {
   ARENA_HEIGHT,
   ARENA_OFFSET_X,
@@ -22,7 +23,7 @@ const GROUP_BASE = 2;
 
 export interface LightOccluderSources {
   /** Paralleles Array zu `layout.rocks` – `null`/inaktiv bedeutet zerstört. */
-  readonly rocks: () => readonly (Phaser.GameObjects.Image | null)[] | null;
+  readonly rocks: () => readonly (RockPhysicsProxy | null)[] | null;
   /** Baumstämme als Kreis-Occluder. */
   readonly trunks: () => readonly Phaser.GameObjects.Arc[] | null;
   /** Zell-Rechtecke lebender Basen; zerstörte Basen liefern bereits nichts mehr. */
@@ -51,7 +52,7 @@ export type CircleOccluderVisitor = (
  *
  * Bewusst ein reiner Cache und kein zweiter Bestand: gebaut wird ausschließlich aus
  * denselben Referenzen, die `CombatSystem` für Hitscan und Line-of-Sight nutzt
- * (`arenaResult.rockObjects`, `arenaResult.trunkObjects`,
+ * (`arenaResult.rockPhysicsProxies`, `arenaResult.trunkObjects`,
  * `BaseManager.getObstacleRectangles()`). Ein zerstörter Fels verschwindet damit
  * zwangsläufig auch aus der Lichtverdeckung – es gibt keine eigene Liste, die
  * auseinanderlaufen könnte.
@@ -207,7 +208,7 @@ export class LightOccluderIndex {
 
   private writeRect(
     rectIndex: number,
-    source: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle,
+    source: { getBounds(output?: Phaser.Geom.Rectangle): Phaser.Geom.Rectangle },
   ): void {
     // Beim ersten Aufruf legt Phaser das Rechteck an, danach wird es wiederbefüllt.
     const bounds = this.scratchBounds

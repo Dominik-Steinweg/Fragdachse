@@ -14,6 +14,7 @@ import type { RockMossPlacement } from '../RockMossField';
 import { fillRockVegetationCutout, stampRockVegetation } from '../RockVegetationLayer';
 import { getRockVegetationPlacementRadiusPx } from '../RockVegetationField';
 import type { RockVegetationPlacement } from '../RockVegetationField';
+import type { RockVisualState } from '../rocks/RockVisualState';
 import { ROCK_VEGETATION_MASK_MARGIN_PX } from '../RockVegetationConfig';
 import {
   ROCK_OVERLAY_CHUNK_SIZE,
@@ -73,7 +74,8 @@ export interface RockOverlayStreamerOptions {
   readonly frame: ChunkWorldFrame;
   readonly layout: ArenaLayout;
   /** Paralleles Array zu `layout.rocks`; wird von aussen in-place mutiert. */
-  readonly rockObjects: readonly (Phaser.GameObjects.Image | null)[];
+  readonly rockPhysicsProxies: readonly ({ readonly active: boolean } | null)[];
+  readonly rockVisualStates: readonly (RockVisualState | undefined)[];
   readonly overlaySource: RockOverlaySource;
   readonly mossPlacements: readonly RockMossPlacement[];
   readonly vegetationPlacements: readonly RockVegetationPlacement[];
@@ -84,7 +86,8 @@ export class RockOverlayStreamer {
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
   private readonly layout: ArenaLayout;
-  private readonly rockObjects: readonly (Phaser.GameObjects.Image | null)[];
+  private readonly rockPhysicsProxies: readonly ({ readonly active: boolean } | null)[];
+  private readonly rockVisualStates: readonly (RockVisualState | undefined)[];
   private readonly overlaySource: RockOverlaySource;
   private readonly mossPlacements: readonly RockMossPlacement[];
   private readonly vegetationPlacements: readonly RockVegetationPlacement[];
@@ -126,7 +129,8 @@ export class RockOverlayStreamer {
     this.scene = options.scene;
     this.frame = options.frame;
     this.layout = options.layout;
-    this.rockObjects = options.rockObjects;
+    this.rockPhysicsProxies = options.rockPhysicsProxies;
+    this.rockVisualStates = options.rockVisualStates;
     this.overlaySource = options.overlaySource;
     this.mossPlacements = options.mossPlacements;
     this.vegetationPlacements = options.vegetationPlacements;
@@ -304,8 +308,9 @@ export class RockOverlayStreamer {
       this.rockCandidates,
     )) {
       const cell = this.layout.rocks[id];
-      const image = this.rockObjects[id];
-      if (!cell || !image?.active) continue;
+      const proxy = this.rockPhysicsProxies[id];
+      const visualState = this.rockVisualStates[id];
+      if (!cell || !proxy?.active || !visualState?.active) continue;
       activeCellKeys.add(rockCellKey(cell));
 
       const cellMinX = cell.gridX * CELL_SIZE;
@@ -329,8 +334,8 @@ export class RockOverlayStreamer {
         this.scene,
         cellMinX + CELL_SIZE * 0.5 - region.localX,
         cellMinY + CELL_SIZE * 0.5 - region.localY,
-        image.texture.key,
-        image.frame.name,
+        ROCK_BLOB_SURFACE_PROFILE.textureKey,
+        visualState.frame,
       ).setDisplaySize(CELL_SIZE, CELL_SIZE);
       temporaryImages.push(copy);
       if (intersectsSilhouette) silhouetteImages.push(copy);

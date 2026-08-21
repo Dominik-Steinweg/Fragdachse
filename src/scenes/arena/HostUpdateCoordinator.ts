@@ -30,6 +30,7 @@ import type { EnemyAiTargetCandidate } from '../../systems/EnemyAiTargetCatalog'
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
+import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -1230,7 +1231,7 @@ export class HostUpdateCoordinator {
     x: number,
     y: number,
     radius: number,
-    visit: (index: number, rock: Phaser.GameObjects.Image) => void,
+    visit: (index: number, rock: RockPhysicsProxy) => void,
   ): void {
     const arenaResult = this.ctx.arenaResult;
     if (!arenaResult) return;
@@ -1242,7 +1243,7 @@ export class HostUpdateCoordinator {
       ARENA_OFFSET_Y,
       CELL_SIZE,
       (index) => {
-        const rock = arenaResult.rockObjects[index];
+        const rock = arenaResult.rockPhysicsProxies[index];
         if (!rock?.active) return;
         visit(index, rock);
       },

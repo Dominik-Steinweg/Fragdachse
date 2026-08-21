@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager }     from '../entities/PlayerManager';
@@ -285,7 +286,7 @@ export class CombatSystem {
   private loadoutManager:   LoadoutManagerType  | null  = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private powerUpSystem:    PowerUpSystemType   | null  = null;
-  private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
+  private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (RockPhysicsProxy | null)[] | null = null;
   private decoySystem:      DecoySystem | null = null;
   private enemyManager:     EnemyManager | null = null;
   private baseManager:      BaseManager | null = null;
@@ -490,7 +491,7 @@ export class CombatSystem {
     this.playerOutgoingDamageResolver = resolver;
   }
   setArenaObstacles(
-    rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
+    rockObjects: readonly (RockPhysicsProxy | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
   ): void {
     this.rockObjects = rockObjects;

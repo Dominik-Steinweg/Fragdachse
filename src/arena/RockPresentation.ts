@@ -3,6 +3,7 @@ import { ROCK_HP_MAX, CELL_SIZE } from '../config';
 import type { ArenaLayout } from '../types';
 import type { RockDestructionRenderer } from '../effects/RockDestructionRenderer';
 import { ArenaBuilder, getArenaRockWorldFrame, type ArenaBuilderResult, type RockWorldFrame } from './ArenaBuilder';
+import type { RockPhysicsProxy } from './rocks/RockPhysicsProxy';
 
 /**
  * Woher der Felsbestand kommt, dessen Darstellung geführt wird.
@@ -63,10 +64,11 @@ export class RockPresentation {
     const result = this.sources.getResult();
     const layout = this.sources.getLayout();
     if (!result || !layout) return false;
-    const image = result.rockObjects[id];
-    if (!image?.active) return false;
+    const proxy = result.rockPhysicsProxies[id];
+    const snapshot = result.rockVisualSystem.getDestructionSnapshot(id);
+    if (!proxy?.active || !snapshot) return false;
 
-    this.destructionRenderer.playDestruction({ source: image });
+    this.destructionRenderer.playDestruction(snapshot);
     ArenaBuilder.destroyRockAndRetile(result, layout.rocks, id);
     return true;
   }
@@ -83,11 +85,11 @@ export class RockPresentation {
     maxHp = ROCK_HP_MAX,
     ownerColor?: number,
     ownerTintStrength = 0,
-  ): Phaser.GameObjects.Image | null {
+  ): RockPhysicsProxy | null {
     const result = this.sources.getResult();
     const layout = this.sources.getLayout();
     if (!result || !layout || !layout.rocks[id]) return null;
-    if (result.rockObjects[id]?.active) return result.rockObjects[id];
+    if (result.rockPhysicsProxies[id]?.active) return result.rockPhysicsProxies[id];
 
     return ArenaBuilder.spawnRockAndRetile(
       this.sources.scene,

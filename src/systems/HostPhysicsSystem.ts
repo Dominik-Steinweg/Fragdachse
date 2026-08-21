@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -114,7 +115,7 @@ export class HostPhysicsSystem {
   private dashGroundFireHandler: DashGroundFireHandler | null = null;
   private dashHoldEnabledResolver: ((playerId: string) => boolean) | null = null;
   private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
-  private enemyRockContactCallback: ((enemyId: string, rock: Phaser.GameObjects.Image, now: number) => void) | null = null;
+  private enemyRockContactCallback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -161,7 +162,7 @@ export class HostPhysicsSystem {
   setDashHoldEnabledResolver(resolver: ((playerId: string) => boolean) | null): void { this.dashHoldEnabledResolver = resolver; }
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
   setEnemyRockContactCallback(
-    callback: ((enemyId: string, rock: Phaser.GameObjects.Image, now: number) => void) | null,
+    callback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null,
   ): void {
     this.enemyRockContactCallback = callback;
   }
@@ -730,7 +731,7 @@ export class HostPhysicsSystem {
       if (this.rockGroup && !this.enemyRockCollidersSetup.has(enemy.id)) {
         const existing = this.enemyColliders.get(enemy.id) ?? [];
         existing.push(this.scene.physics.add.collider(enemy.sprite, this.rockGroup, (_enemy, rockObject) => {
-          const rock = rockObject as Phaser.GameObjects.Image;
+          const rock = rockObject as RockPhysicsProxy;
           if (!rock.active) return;
           this.enemyRockContactCallback?.(enemy.id, rock, Date.now());
         }));

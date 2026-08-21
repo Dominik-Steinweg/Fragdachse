@@ -8,6 +8,8 @@ import type {
 import { ABLATION_LABELS, type PerformanceAblationController } from '../scenes/arena/PerformanceAblation';
 import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
 import type { GpuVfxPoolStats } from '../effects/gpu/GpuVfxPool';
+import type { PersistentGpuWorldDiagnostics } from '../arena/rocks/PersistentGpuWorldSystem';
+import type { RockGpuPageSize, RockRendererMode } from '../arena/rocks/RockRendererSettings';
 
 const REFRESH_INTERVAL_MS = 500;
 
@@ -16,6 +18,9 @@ export interface ChunkRenderingDiagnosticsState {
   groundSurface: boolean;
   rockOverlay: boolean;
   chunkSampling: ChunkSamplingMode;
+  rockRenderer: RockRendererMode;
+  rockGpuPageSize: RockGpuPageSize;
+  rockGpu: PersistentGpuWorldDiagnostics | null;
 }
 
 export interface ChunkRenderingDiagnostics {
@@ -24,6 +29,8 @@ export interface ChunkRenderingDiagnostics {
   setGroundSurfaceVisible(visible: boolean): void;
   setRockOverlayVisible(visible: boolean): void;
   setChunkSampling(mode: ChunkSamplingMode): void;
+  setRockRenderer(mode: RockRendererMode): void;
+  setRockGpuPageSize(size: RockGpuPageSize): void;
 }
 
 function ms(value: number): string {
@@ -234,6 +241,16 @@ export class PerformanceDiagnosticsOverlay {
     if (this.ablationButton) this.ablationButton.disabled = recording;
     this.renderChunkDiagnostics();
     const lines = buildSummaryLines(this.profiler.getLatestSummary());
+    const rockGpu = this.chunkDiagnostics?.getState().rockGpu ?? null;
+    if (rockGpu) {
+      lines.push(
+        `GPU-Rocks Pages ${rockGpu.visiblePages}/${rockGpu.pageCount} · Slots ${rockGpu.capacity}`
+        + ` · Buffer ${(rockGpu.bufferBytes / 1024 / 1024).toFixed(2)} MiB`,
+        `GPU-Rocks dirty ${rockGpu.dirtyRocks} · Pages ${rockGpu.affectedPages}`
+        + ` · Segmente ${rockGpu.dirtyBufferSegments} · Sparse/Full ${rockGpu.sparseUploads}/${rockGpu.fullUploads}`
+        + ` · Upload ~${(rockGpu.estimatedUploadBytes / 1024).toFixed(1)} KiB`,
+      );
+    }
     const gpuVfx = this.getGpuVfxStats?.() ?? null;
     if (gpuVfx) {
       for (const [label, stats] of Object.entries(gpuVfx)) {
@@ -363,6 +380,41 @@ export class PerformanceDiagnosticsOverlay {
       },
     });
     section.appendChild(samplingButton);
+
+    const rendererButton = this.createButton('', () => {
+      const state = this.chunkDiagnostics?.getState();
+      if (!state) return;
+      this.chunkDiagnostics?.setRockRenderer(state.rockRenderer === 'classic' ? 'spriteGpu' : 'classic');
+      this.render();
+    });
+    rendererButton.style.display = 'block';
+    rendererButton.style.width = '100%';
+    rendererButton.style.marginTop = '4px';
+    this.chunkDiagnosticControls.push({
+      render: (state) => {
+        rendererButton.textContent = `Rock Renderer: ${state.rockRenderer === 'classic' ? 'CLASSIC' : 'SPRITE GPU'}`;
+        rendererButton.setAttribute('aria-pressed', String(state.rockRenderer === 'spriteGpu'));
+      },
+    });
+    section.appendChild(rendererButton);
+
+    const pageSizes: readonly RockGpuPageSize[] = [512, 1024, 2048, 'global'];
+    const pageSizeButton = this.createButton('', () => {
+      const state = this.chunkDiagnostics?.getState();
+      if (!state) return;
+      const index = pageSizes.indexOf(state.rockGpuPageSize);
+      this.chunkDiagnostics?.setRockGpuPageSize(pageSizes[(index + 1) % pageSizes.length]);
+      this.render();
+    });
+    pageSizeButton.style.display = 'block';
+    pageSizeButton.style.width = '100%';
+    pageSizeButton.style.marginTop = '4px';
+    this.chunkDiagnosticControls.push({
+      render: (state) => {
+        pageSizeButton.textContent = `Rock GPU Page: ${String(state.rockGpuPageSize).toUpperCase()}`;
+      },
+    });
+    section.appendChild(pageSizeButton);
 
     return section;
   }

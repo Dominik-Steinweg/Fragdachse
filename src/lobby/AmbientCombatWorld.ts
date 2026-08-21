@@ -509,10 +509,20 @@ export class AmbientCombatWorld implements WeaponFireSink {
     this.rockHp.remove(rockId);
     this.noteDamagedRock(rockId, true);
 
-    // Der Kollisionskörper der Zone ist zugleich die Vorlage der Trümmer: gleiche Textur,
-    // gleicher Frame, gleiche Weltgröße. Deshalb erst zeichnen, dann freigeben.
+    // Die Lobby nutzt noch klassische Bodies, reicht dem gemeinsamen VFX-Pfad aber denselben
+    // rendererunabhaengigen Snapshot wie die Arena.
     const body = this.deps.bodyPool.getObjects()?.[rockId];
-    if (body) this.deps.renderers.rockDestruction.playDestruction({ source: body });
+    if (body) this.deps.renderers.rockDestruction.playDestruction({
+      x: body.x,
+      y: body.y,
+      frame: Number(body.frame.name),
+      size: Math.max(1, body.frame.width),
+      tint: body.tintTopLeft ?? 0xffffff,
+      angle: body.angle,
+      alpha: body.alpha,
+      scaleX: body.displayWidth / Math.max(1, body.frame.width),
+      scaleY: body.displayHeight / Math.max(1, body.frame.height),
+    });
     this.deps.bodyPool.removeBody(rockId);
     this.deps.onRockAliveChanged(rockId, false);
   }

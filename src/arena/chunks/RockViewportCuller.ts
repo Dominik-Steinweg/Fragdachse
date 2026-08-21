@@ -1,5 +1,4 @@
 import type * as Phaser from 'phaser';
-import type { RockCell } from '../../types';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, worldRectToLocalRect } from './ArenaChunkGrid';
 import type { ChunkLocalRect, ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
@@ -38,7 +37,7 @@ export class RockViewportCuller {
 
   constructor(
     private readonly frame: ChunkWorldFrame,
-    private readonly rocks: readonly (RockCell | undefined)[],
+    private readonly rocks: readonly ({ readonly gridX: number; readonly gridY: number } | undefined)[],
     private readonly rockObjects: readonly (Phaser.GameObjects.Image | null)[],
     private readonly layerGrid: RockLayerGrid,
   ) {

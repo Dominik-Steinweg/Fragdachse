@@ -69,6 +69,21 @@ function buildFixture(options: FixtureOptions = {}) {
   const layout = { seed: 7, rocks, trees: [], decals } as unknown as ArenaLayout;
   const rockObjects: Array<ReturnType<typeof fakeRockImage> | null> =
     rocks.map((cell) => fakeRockImage(cell.gridX, cell.gridY, CELL_SIZE, FRAME.offsetX, FRAME.offsetY));
+  const rockVisualStates = rocks.map((cell, id) => ({
+    id,
+    gridX: cell.gridX,
+    gridY: cell.gridY,
+    x: FRAME.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2,
+    y: FRAME.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2,
+    active: true,
+    frame: 0,
+    cornerTints: [0xffffff, 0xffffff, 0xffffff, 0xffffff] as const,
+    damageTint: 0xffffff,
+    ownerTintStrength: 0,
+    alpha: 1,
+    scaleX: 1,
+    scaleY: 1,
+  }));
 
   // Zustand nach dem Rundenaufbau: Die Materialquelle steht bereits, eine spaetere Zerstoerung ist
   // damit die einzige Aenderung und bestimmt die Chunk-Auswahl allein.
@@ -80,7 +95,8 @@ function buildFixture(options: FixtureOptions = {}) {
     scene: scene as never,
     frame: FRAME,
     layout,
-    rockObjects,
+    rockPhysicsProxies: rockObjects,
+    rockVisualStates,
     overlaySource,
     mossPlacements: [{
       textureKey: 'rock_moss_01',

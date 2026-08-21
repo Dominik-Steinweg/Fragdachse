@@ -17,7 +17,7 @@ import type { ArenaLayout, RockCell, TrackCell, GameMode, GamePhase } from '../t
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { ROCK_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
-import { multiplyTint, resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
+import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { createRockOverlaySource, syncRockOverlaySource } from './RockOverlayRegions';
 import type { RockOverlaySource } from './RockOverlayRegions';
@@ -30,9 +30,11 @@ import type { RockVegetationPlacement } from './RockVegetationField';
 import { RockGridIndex } from './RockGridIndex';
 import { GroundSurfaceStreamer } from './chunks/GroundSurfaceStreamer';
 import { RockOverlayStreamer } from './chunks/RockOverlayStreamer';
-import { RockLayerGrid } from './chunks/RockLayerGrid';
-import { RockViewportCuller } from './chunks/RockViewportCuller';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
+import { createRockPhysicsProxy, type RockPhysicsProxy } from './rocks/RockPhysicsProxy';
+import { RockVisualStateStore, type RockVisualState } from './rocks/RockVisualState';
+import { RockVisualSystem } from './rocks/RockVisualSystem';
+import { getRockGpuPageSize, getRockRendererMode } from './rocks/RockRendererSettings';
 import {
   ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
   ARENA_BACKGROUND_TEXTURE_KEY,
@@ -66,31 +68,14 @@ export function getArenaRockWorldFrame(): RockWorldFrame {
 export interface ArenaBuilderResult {
   /** CTB-Basis-Tintflächen (round-scoped). Coop-Defense-Basen leben in BaseManager. */
   baseZoneObjects: Phaser.GameObjects.Rectangle[];
-  /** StaticGroup mit Felsen-Sprites (für Kollision + HP-Tracking) */
+  /** StaticGroup mit nicht rendernden Fels-Proxies. */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
-  /**
-   * Die Anzeigelisten des Felsbestands, eine je 512-px-Rasterchunk.
-   *
-   * Zwei Probleme loest die Aufteilung gemeinsam. Erstens machen zehntausende Felsen direkt in der
-   * Szenenliste *jede andere* Objekterzeugung teuer, weil `scene.add.*` und `destroy()` linear
-   * darin suchen – eine Zerstoerungswelle erzeugt und verwirft tausende Truemmerobjekte. Zweitens
-   * laeuft Phaser durch die Kinder jeder *sichtbaren* Ebene, egal wie weit sie vom Bild entfernt
-   * sind; eine einzige grosse Ebene haette den Renderpfad also weiterhin an den Gesamtbestand
-   * gebunden. Mit einer Ebene je Chunk ist eine Ebene ausserhalb des Ausschnitts selbst unsichtbar
-   * und wird gar nicht erst betreten (siehe {@link ./chunks/RockLayerGrid}).
-   */
-  rockLayers:   RockLayerGrid | null;
-  /** Paralleles Array zu layout.rocks – null-Slots = bereits zerstört */
-  rockObjects:  (Phaser.GameObjects.Image | null)[];
-  /**
-   * Zuletzt angewendeter Zustandstint je Fels (Schaden × Besitzerfarbe), parallel zu
-   * `rockObjects`. Der sichtbare Tint ist das Produkt aus diesem Wert und dem
-   * 4-Ecken-Flaechentint; ohne den gespeicherten Zustand liesse sich der Flaechenanteil
-   * nach einer Hindernisaenderung nicht neu berechnen, ohne den Schaden zu verlieren.
-   * Auf Clients ist das ausserdem die einzige verfuegbare Quelle: dort fuehrt die
-   * `RockRegistry` keine HP, die kommt aus dem Host-Snapshot.
-   */
-  rockStateTints: number[];
+  /** Paralleles Array zu layout.rocks; null bedeutet physisch nicht vorhanden. */
+  rockPhysicsProxies: (RockPhysicsProxy | null)[];
+  /** Rendererunabhaengige Source of Truth samt dedupliziertem Dirty-Trichter. */
+  rockVisualStates: RockVisualStateStore;
+  /** Umschaltbarer Classic-/SpriteGPU-Consumer der Visual States. */
+  rockVisualSystem: RockVisualSystem;
   /** Spatial Index für Grid-basierte Nachbar-Lookups (Autotiling) */
   rockGrid:     RockGridIndex;
   /** StaticGroup mit Baumstümpfen (Kreis-Körper, keine HP) */
@@ -121,11 +106,6 @@ export interface ArenaBuilderResult {
    * Kantenvegetation (siehe {@link ./chunks/RockOverlayStreamer}).
    */
   rockOverlaySurface: RockOverlayStreamer | null;
-  /**
-   * Blendet Felsen ausserhalb des Kameraausschnitts aus. Rein lokale Darstellung – `active`
-   * bleibt die Wahrheit darueber, ob ein Fels noch steht (siehe {@link ./chunks/RockViewportCuller}).
-   */
-  rockCuller: RockViewportCuller | null;
   /**
    * Materialquelle aller felsgebundenen Overlays: jede Zelle, auf der in dieser Runde je ein Fels
    * stand. Sie waechst mit gebauten Felsen und schrumpft nie – nur so bleiben Materialflecken,
@@ -229,12 +209,9 @@ export class ArenaBuilder {
     const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
     const rockGroup    = this.scene.physics.add.staticGroup();
     const frame        = getArenaRockWorldFrame();
-    // Eine Anzeigeliste je Rasterchunk statt einer fuer den gesamten Bestand: Nur so kann der
-    // Renderer ganze Kartenteile ueberspringen, statt jeden Fels einzeln abzufragen.
-    const rockLayers   = new RockLayerGrid(this.scene, frame);
     const trunkGroup   = this.scene.physics.add.staticGroup();
-    const rockObjects:  (Phaser.GameObjects.Image | null)[] = [];
-    const rockStateTints: number[] = [];
+    const rockPhysicsProxies: (RockPhysicsProxy | null)[] = [];
+    const rockVisualStates = new RockVisualStateStore();
     const trunkObjects: Phaser.GameObjects.Arc[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
 
@@ -265,17 +242,25 @@ export class ArenaBuilder {
       const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const autoTileFrame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      const img    = this.createRockVisual(
-        worldX,
-        worldY,
-        autoTileFrame,
-        resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
-        rockLayers.layerFor(gridX, gridY),
-      );
-      rockGroup.add(img);
-      (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-      rockObjects.push(img);
-      rockStateTints.push(0xffffff);
+      rockVisualStates.add({
+        id: i,
+        gridX,
+        gridY,
+        x: worldX,
+        y: worldY,
+        active: true,
+        frame: autoTileFrame,
+        cornerTints: resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
+        damageTint: 0xffffff,
+        ownerTintStrength: 0,
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+      }, false);
+      const proxy = createRockPhysicsProxy(this.scene, worldX, worldY);
+      rockGroup.add(proxy);
+      (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      rockPhysicsProxies.push(proxy);
     }
 
     // Bäume (Trunk + Canopy)
@@ -296,12 +281,19 @@ export class ArenaBuilder {
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
+    const rockVisualSystem = new RockVisualSystem(
+      this.scene,
+      frame,
+      rockVisualStates,
+      getRockRendererMode(),
+      getRockGpuPageSize(),
+    );
     const result: ArenaBuilderResult = {
       baseZoneObjects,
       rockGroup,
-      rockLayers,
-      rockObjects,
-      rockStateTints,
+      rockPhysicsProxies,
+      rockVisualStates,
+      rockVisualSystem,
       rockGrid,
       trunkGroup,
       trunkObjects,
@@ -310,7 +302,6 @@ export class ArenaBuilder {
       groundSurface: null,
       groundCoverPlacements,
       rockOverlaySurface: null,
-      rockCuller: null,
       rockOverlaySource: createRockOverlaySource(),
       // Einmalig hier erzeugt und nie wieder: siehe `rockMossPlacements`.
       rockMossPlacements: generateRockMossPlacements({
@@ -342,12 +333,12 @@ export class ArenaBuilder {
       scene: this.scene,
       frame,
       layout,
-      rockObjects,
+      rockPhysicsProxies,
+      rockVisualStates: rockVisualStates.states,
       overlaySource: result.rockOverlaySource,
       mossPlacements: result.rockMossPlacements,
       vegetationPlacements: result.rockVegetationPlacements,
     });
-    result.rockCuller = new RockViewportCuller(frame, layout.rocks, rockObjects, rockLayers);
     return result;
   }
 
@@ -362,7 +353,7 @@ export class ArenaBuilder {
     if (!result) return;
     result.groundSurface?.updateResidency(view);
     result.rockOverlaySurface?.updateResidency(view);
-    result.rockCuller?.update(view);
+    result.rockVisualSystem.updateVisibility(view);
   }
 
   /**
@@ -422,16 +413,19 @@ export class ArenaBuilder {
     ownerTintStrength = 0,
   ): void {
     if (hp <= 0) return;
-    const img = result.rockObjects[id];
-    if (!img?.active) return;
+    const state = result.rockVisualStates.get(id);
+    if (!state?.active) return;
 
     // Glatte Abstufung in ROCK_TINT_STEPS Schritten: 0xffffff (voll) → 0x666666 (fast zerstört)
     const ratio = Math.round((hp / Math.max(1, maxHp)) * ROCK_TINT_STEPS) / ROCK_TINT_STEPS;
     const gray  = Math.round(0x66 + (0xFF - 0x66) * ratio);
     const damageTint = (gray << 16) | (gray << 8) | gray;
-    const stateTint = ArenaBuilder.mixTint(damageTint, ownerColor, ownerTintStrength);
-    result.rockStateTints[id] = stateTint;
-    ArenaBuilder.applyRockTint(img, stateTint, ArenaBuilder.resolveSurfaceTints(result.rockGrid, rocks, id));
+    result.rockVisualStates.patch(id, {
+      damageTint,
+      ownerColor,
+      ownerTintStrength,
+      cornerTints: ArenaBuilder.resolveSurfaceTints(result.rockGrid, rocks, id) ?? state.cornerTints,
+    });
   }
 
   /**
@@ -467,13 +461,10 @@ export class ArenaBuilder {
     }
 
     for (const id of ids) {
-      const img = result.rockObjects[id];
-      if (!img?.active) continue;
-      ArenaBuilder.applyRockTint(
-        img,
-        result.rockStateTints[id] ?? 0xffffff,
-        ArenaBuilder.resolveSurfaceTints(result.rockGrid, layout.rocks, id),
-      );
+      const state = result.rockVisualStates.get(id);
+      if (!state?.active) continue;
+      const cornerTints = ArenaBuilder.resolveSurfaceTints(result.rockGrid, layout.rocks, id);
+      if (cornerTints) result.rockVisualStates.patch(id, { cornerTints });
     }
   }
 
@@ -492,23 +483,6 @@ export class ArenaBuilder {
     );
   }
 
-  private static applyRockTint(
-    img: Phaser.GameObjects.Image,
-    stateTint: number,
-    surfaceTints: BlobSurfaceCornerTints | null,
-  ): void {
-    if (!surfaceTints) {
-      img.setTint(stateTint);
-      return;
-    }
-    img.setTint(
-      multiplyTint(stateTint, surfaceTints[0]),
-      multiplyTint(stateTint, surfaceTints[1]),
-      multiplyTint(stateTint, surfaceTints[2]),
-      multiplyTint(stateTint, surfaceTints[3]),
-    );
-  }
-
   static spawnRockAndRetile(
     scene: Phaser.Scene,
     result: ArenaBuilderResult,
@@ -519,45 +493,66 @@ export class ArenaBuilder {
     hp = ROCK_HP_MAX,
     maxHp = ROCK_HP_MAX,
     worldFrame: RockWorldFrame = getArenaRockWorldFrame(),
-  ): Phaser.GameObjects.Image {
-    const { rockObjects, rockGroup, rockGrid } = result;
+  ): RockPhysicsProxy {
+    const { rockPhysicsProxies, rockGroup, rockGrid } = result;
     const { gridX, gridY } = rocks[id];
     const isOccupied = (gx: number, gy: number) => gx === gridX && gy === gridY
       ? true
       : rockGrid.isOccupiedWithBorder(gx, gy);
     const frame = AutoTiler.getFrame(AutoTiler.computeMask(gridX, gridY, isOccupied), ROCK_AUTOTILE);
-    const img = ArenaBuilder.createRockVisual(
-      scene,
-      worldFrame.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
-      worldFrame.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
+    const worldX = worldFrame.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
+    const worldY = worldFrame.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
+    const existingState = result.rockVisualStates.get(id);
+    const visualState: RockVisualState = existingState ?? {
+      id,
+      gridX,
+      gridY,
+      x: worldX,
+      y: worldY,
+      active: true,
       frame,
-      resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
-      // Ein zur Laufzeit gebauter Fels gehoert in die Ebene seiner Rasterposition, nicht in
-      // irgendeine: Sonst kaeme er in einem entfernten Kartenteil wieder zum Vorschein.
-      result.rockLayers?.layerFor(gridX, gridY),
-    );
-    rockObjects[id] = img;
-    rockGroup.add(img);
+      cornerTints: resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
+      damageTint: 0xffffff,
+      ownerTintStrength: 0,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    if (existingState) {
+      result.rockVisualStates.patch(id, {
+        x: worldX,
+        y: worldY,
+        active: true,
+        frame,
+        cornerTints: resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+      });
+    } else {
+      result.rockVisualStates.add(visualState);
+    }
+
+    const proxy = createRockPhysicsProxy(scene, worldX, worldY);
+    rockPhysicsProxies[id] = proxy;
+    rockGroup.add(proxy);
     // Nur der neue Koerper wird in den statischen RTree eingetragen. `rockGroup.refresh()` waere
     // hier ein O(Bestand)-Sturm: Es setzt *jeden* Koerper der Gruppe zurueck und entfernt ihn
     // dafuer aus dem Baum, um ihn sofort wieder einzufuegen – siehe `destroyRock`.
-    (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-    // Ein zur Laufzeit gebauter Fels ausserhalb des Ausschnitts muss sofort verdeckt sein; sonst
-    // bliebe er sichtbar, bis sein Bucket das naechste Mal umschaltet.
-    result.rockCuller?.applyTo(img, gridX, gridY);
+    (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
     rockGrid.set(gridX, gridY, id);
 
     const neighborIds = rockGrid.getNeighborIndices(gridX, gridY);
     for (const neighborId of neighborIds) {
-      const neighbor = rockObjects[neighborId];
+      const neighbor = result.rockVisualStates.get(neighborId);
       if (!neighbor?.active) continue;
       const cell = rocks[neighborId];
       const neighborFrame = AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, (gx, gy) => rockGrid.isOccupiedWithBorder(gx, gy)), ROCK_AUTOTILE);
-      neighbor.setFrame(neighborFrame);
+      result.rockVisualStates.patch(neighborId, { frame: neighborFrame });
     }
 
     ArenaBuilder.updateRockVisual(result, rocks, id, hp, maxHp, ownerColor, ownerTintStrength);
-    return img;
+    return proxy;
   }
 
   /**
@@ -569,7 +564,7 @@ export class ArenaBuilder {
     id:          number,
   ): void {
     if (!rocks[id]) return;
-    const { rockObjects, rockGrid } = result;
+    const { rockVisualStates, rockGrid } = result;
     const { gridX, gridY } = rocks[id];
     ArenaBuilder.destroyRock(result, id);
     rockGrid.remove(gridX, gridY);
@@ -578,13 +573,13 @@ export class ArenaBuilder {
     const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
     const neighborIds = rockGrid.getNeighborIndices(gridX, gridY);
     for (const nid of neighborIds) {
-      const img = rockObjects[nid];
-      if (!img?.active) continue;
+      const state = rockVisualStates.get(nid);
+      if (!state?.active) continue;
       if (!rocks[nid]) continue;
       const { gridX: ngx, gridY: ngy } = rocks[nid];
       const mask  = AutoTiler.computeMask(ngx, ngy, isOccupied);
       const frame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      img.setFrame(frame);
+      rockVisualStates.patch(nid, { frame });
     }
   }
 
@@ -602,11 +597,19 @@ export class ArenaBuilder {
    * als 30-Sekunden-Standbild bei der NUKE. Felsen bewegen sich nie; es gibt nichts nachzufuehren.
    */
   static destroyRock(result: ArenaBuilderResult, id: number): void {
-    const img = result.rockObjects[id];
-    if (!img) return;
-    result.rockGroup.remove(img, true, true);
-    result.rockObjects[id] = null;
-    result.rockStateTints[id] = 0xffffff;
+    const proxy = result.rockPhysicsProxies[id];
+    if (!proxy) return;
+    result.rockGroup.remove(proxy, true, true);
+    result.rockPhysicsProxies[id] = null;
+    result.rockVisualStates.patch(id, {
+      active: false,
+      damageTint: 0xffffff,
+      ownerColor: undefined,
+      ownerTintStrength: 0,
+      alpha: 0,
+      scaleX: 0,
+      scaleY: 0,
+    });
   }
 
   /**
@@ -660,17 +663,13 @@ export class ArenaBuilder {
     }
     result.baseZoneObjects.length = 0;
 
-    // Felsen
-    for (const img of result.rockObjects) {
-      if (img?.active) img.destroy();
+    // Felsen: Visuals und Physics haben getrennte Besitzer.
+    result.rockVisualSystem.destroy();
+    for (const proxy of result.rockPhysicsProxies) {
+      if (proxy?.active) proxy.destroy();
     }
-    result.rockObjects.length = 0;
-    result.rockStateTints.length = 0;
+    result.rockPhysicsProxies.length = 0;
     result.rockGroup.destroy(true);
-    // Nach den Felsen: Die Ebene wuerde ihre Kinder sonst selbst zerstoeren und der Gruppe
-    // vorauslaufen.
-    result.rockLayers?.destroy();
-    result.rockLayers = null;
 
     // Trunks
     for (const trunk of result.trunkObjects) {
@@ -698,7 +697,6 @@ export class ArenaBuilder {
 
     result.rockOverlaySurface?.destroy();
     result.rockOverlaySurface = null;
-    result.rockCuller = null;
     result.rockOverlaySource.cells.length = 0;
     result.rockOverlaySource.keys.clear();
     result.rockMossPlacements.length = 0;
@@ -706,45 +704,6 @@ export class ArenaBuilder {
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
-
-  /**
-   * Erstellt einen Felsen-Sprite aus dem Autotile-Spritesheet.
-   */
-  private createRockVisual(
-    worldX: number,
-    worldY: number,
-    frame: number,
-    cornerTints?: BlobSurfaceCornerTints,
-    layer?: Phaser.GameObjects.Layer,
-  ): Phaser.GameObjects.Image {
-    return ArenaVisualFactory.createRock(this.scene, worldX, worldY, frame, cornerTints, layer);
-  }
-
-  private static createRockVisual(
-    scene: Phaser.Scene,
-    worldX: number,
-    worldY: number,
-    frame: number,
-    cornerTints?: BlobSurfaceCornerTints,
-    layer?: Phaser.GameObjects.Layer,
-  ): Phaser.GameObjects.Image {
-    return ArenaVisualFactory.createRock(scene, worldX, worldY, frame, cornerTints, layer);
-  }
-
-  private static mixTint(baseColor: number, ownerColor?: number, strength = 0): number {
-    if (ownerColor === undefined || strength <= 0) return baseColor;
-    const mix = Phaser.Math.Clamp(strength, 0, 1);
-    const baseRed = (baseColor >> 16) & 0xff;
-    const baseGreen = (baseColor >> 8) & 0xff;
-    const baseBlue = baseColor & 0xff;
-    const ownerRed = (ownerColor >> 16) & 0xff;
-    const ownerGreen = (ownerColor >> 8) & 0xff;
-    const ownerBlue = ownerColor & 0xff;
-    const red = Math.round(baseRed + (ownerRed - baseRed) * mix);
-    const green = Math.round(baseGreen + (ownerGreen - baseGreen) * mix);
-    const blue = Math.round(baseBlue + (ownerBlue - baseBlue) * mix);
-    return (red << 16) | (green << 8) | blue;
-  }
 
   /**
    * Erstellt den Baumstumpf-Sprite (aktuell: Arc/Kreis).

@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
@@ -141,7 +142,7 @@ export class ProjectileManager {
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
-  private rockObjects: (Phaser.GameObjects.Image | null)[] | null = null;
+  private rockObjects: (RockPhysicsProxy | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   /** Geteilte räumliche Vorauswahl aus dem `CombatSystem` (siehe `setObstacleIndex`). */
   private obstacleIndex: ArenaObstacleIndex | null = null;
@@ -175,7 +176,7 @@ export class ProjectileManager {
    */
   setRockGroup(
     group:      Phaser.Physics.Arcade.StaticGroup | null,
-    objects:    (Phaser.GameObjects.Image | null)[] | null,
+    objects:    (RockPhysicsProxy | null)[] | null,
     trunkGroup: Phaser.Physics.Arcade.StaticGroup | null,
   ): void {
     this.rockGroup   = group;
@@ -812,7 +813,7 @@ export class ProjectileManager {
   }
 
   private canCollideWithRock(tracked: TrackedProjectile, rockGO: Phaser.GameObjects.GameObject): boolean {
-    const rockIndex = this.rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+    const rockIndex = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
     return this.canCollideWithRockIndex(tracked, rockIndex);
   }
 
@@ -855,7 +856,7 @@ export class ProjectileManager {
           if (!rockObjects || !onHit) return;
             if (isGauss && !tracked.gaussHitRocks) tracked.gaussHitRocks = new Set();
             if (!isGauss && !tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
-          const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
+          const idx = rockObjects.indexOf(rockGO as RockPhysicsProxy);
           const hitSet = isGauss ? tracked.gaussHitRocks : tracked.bfgHitRocks;
           if (idx !== -1 && hitSet && !hitSet.has(idx)) {
             hitSet.add(idx);
@@ -1067,7 +1068,7 @@ export class ProjectileManager {
       const onHit = this.onRockHit;
       const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         if (tracked.pendingDestroy) return;
-        const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+        const idx = rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
         if (idx < 0) return;
         tracked.hitObstacleIds ??= new Set<number>();
         if (tracked.hitObstacleIds.has(idx)) return;
@@ -1220,7 +1221,7 @@ export class ProjectileManager {
       const onHit       = this.onRockHit;
       if (tracked.penetratesRocks) {
         const rockOverlap = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
-          const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+          const idx = rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
           if (idx < 0 || tracked.penetratedRockIds?.has(idx)) return;
           tracked.penetratedRockIds?.add(idx);
           const obstacleKind = this.obstacleKindResolver?.(idx);
@@ -1236,7 +1237,7 @@ export class ProjectileManager {
         tracked.colliders.push(rockOverlap);
       } else {
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
-        const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+        const idx = rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
         if (this.tryResolveSupportImpact(tracked, rockGO as Phaser.GameObjects.GameObject, idx)) return;
         if (tracked.bounceProcessedThisStep) {
           // Phasers zweite Velocity-Spiegelung rückgängig machen, damit keine Doppelumkehr entsteht

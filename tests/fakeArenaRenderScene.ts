@@ -448,6 +448,35 @@ export class FakeDetachedImage extends FakeImage {
   }
 }
 
+/** Nicht rendernde Zone fuer die getrennten Arena-Physics-Proxies. */
+export class FakeZone {
+  active = true;
+  body: unknown = null;
+
+  constructor(
+    _scene: unknown,
+    public x: number,
+    public y: number,
+    public width: number,
+    public height: number,
+  ) {}
+
+  getBounds(): { left: number; top: number; right: number; bottom: number; centerX: number; centerY: number; width: number; height: number } {
+    return {
+      left: this.x - this.width / 2,
+      top: this.y - this.height / 2,
+      right: this.x + this.width / 2,
+      bottom: this.y + this.height / 2,
+      centerX: this.x,
+      centerY: this.y,
+      width: this.width,
+      height: this.height,
+    };
+  }
+
+  destroy(): void { this.active = false; }
+}
+
 /**
  * Ersatzmodul fuer `vi.mock('phaser', ...)`.
  *
@@ -468,7 +497,7 @@ export function createFakePhaserModule(): Record<string, unknown> {
       Vector2: class { x = 0; y = 0; },
     },
     Geom: { Rectangle: class {} },
-    GameObjects: { Image: FakeDetachedImage },
+    GameObjects: { Image: FakeDetachedImage, Zone: FakeZone },
   };
 }
 
