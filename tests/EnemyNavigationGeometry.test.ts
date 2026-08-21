@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { EnemyFlowFieldService, type EnemyFlowFieldMetrics } from '../src/systems/EnemyFlowFieldService';
+import { FlowFieldCoordinator } from '../src/systems/flowfield/FlowFieldCoordinator';
+import { InlineFlowFieldRunner } from '../src/systems/flowfield/FlowFieldRunner';
+import {
+  buildStaticKindRaster,
+  createFlowFieldTuning,
+  goalCellsToIndexes,
+} from '../src/systems/flowfield/FlowFieldSources';
 import type { ArenaEventBus, ArenaMapGridChangedEvent } from '../src/scenes/arena/ArenaEvents';
 import type { ArenaLayout } from '../src/types';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
@@ -167,39 +174,44 @@ describe('Enemy navigation geometry', () => {
     expect(service.getKindAt(3, 3)).toBe('ground');
   });
 
-  it('shares one topology refresh while keeping dynamic goal fields independent', () => {
+  it('derives one topology for several independent goal fields', () => {
+    // Loest den frueheren `topologySource`-Vertrag ab: Statt Arrays zwischen Service-Instanzen zu
+    // teilen, haelt der Coordinator eine Topologie und speist daraus mehrere Felder.
     let obstacleCells: ReadonlyArray<{ gridX: number; gridY: number }> = [];
     let obstacleReads = 0;
-    const eventBus = createEventBus();
-    const source = new EnemyFlowFieldService(createLayout(), [], METRICS, {
-      eventBus,
+    const coordinator = new FlowFieldCoordinator({
+      metrics: METRICS,
+      tuning: createFlowFieldTuning(),
+      staticKind: buildStaticKindRaster(createLayout(), METRICS),
+      bases: [],
+      activeBaseIds: new Set<string>(),
       obstacleCellProvider: () => {
         obstacleReads += 1;
         return obstacleCells;
       },
-      goalMode: 'dynamic',
-      dynamicGoalCells: [{ gridX: 2, gridY: 5 }],
+      runner: new InlineFlowFieldRunner(true),
+      navTickIntervalMs: 50,
     });
-    const dependent = new EnemyFlowFieldService(createLayout(), [], METRICS, {
-      eventBus,
-      obstacleCellProvider: () => {
-        throw new Error('shared topology must not query its own obstacle provider');
-      },
-      goalMode: 'dynamic',
-      dynamicGoalCells: [{ gridX: 13, gridY: 5 }],
-      topologySource: source,
-    });
-    const readsAfterConstruction = obstacleReads;
+    const left = EnemyFlowFieldService.fromView(coordinator.registerField('left', { goalMode: 'dynamic' }));
+    const right = EnemyFlowFieldService.fromView(coordinator.registerField('right', { goalMode: 'dynamic' }));
+    coordinator.setGoalCells('left', goalCellsToIndexes([{ gridX: 2, gridY: 5 }], METRICS));
+    coordinator.setGoalCells('right', goalCellsToIndexes([{ gridX: 13, gridY: 5 }], METRICS));
+    coordinator.prepareNow();
+    const readsAfterSetup = obstacleReads;
 
     obstacleCells = [{ gridX: 3, gridY: 3 }];
-    eventBus.emitGridChange({ reason: 'placeable_added', source: 'placeable_rock', gridX: 3, gridY: 3 });
-    expect(dependent.update(Date.now() + 1_000)).toBe(true);
+    coordinator.patchCell(3, 3, true);
+    coordinator.advance(50);
+    coordinator.advance(50);
 
-    expect(obstacleReads).toBe(readsAfterConstruction);
-    expect(source.getKindAt(3, 3)).toBe('rock');
-    expect(dependent.getKindAt(3, 3)).toBe('rock');
-    expect(source.getReachedGoalCellAt(4, 5)).toEqual({ gridX: 2, gridY: 5 });
-    expect(dependent.getReachedGoalCellAt(12, 5)).toEqual({ gridX: 13, gridY: 5 });
+    // Ein Ereignis mit Koordinate aktualisiert nur die eine Zelle und liest den Provider nicht.
+    expect(obstacleReads).toBe(readsAfterSetup);
+    expect(left.getKindAt(3, 3)).toBe('rock');
+    expect(right.getKindAt(3, 3)).toBe('rock');
+    // Beide Felder behalten trotz gemeinsamer Topologie ihre eigene Zielmenge.
+    expect(left.getReachedGoalCellAt(4, 5)).toEqual({ gridX: 2, gridY: 5 });
+    expect(right.getReachedGoalCellAt(12, 5)).toEqual({ gridX: 13, gridY: 5 });
+    coordinator.destroy();
   });
 
   it('keeps a full provider fallback for coordinate-less topology changes', () => {

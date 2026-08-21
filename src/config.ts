@@ -596,6 +596,20 @@ export const COOP_DEFENSE_FLOW_FIELD_BASE_COST = COOP_DEFENSE_FLOW_FIELD_ROCK_CO
 export const COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST = 2;
 /** Host prueft hoechstens alle 100 ms, ob das Flow Field wegen Arena-Mutationen neu gebaut werden muss. */
 export const COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS = 100;
+/**
+ * Basistakt der Flowfield-Navigation. Die Berechnung laeuft im Web Worker; aktiviert wird ein
+ * Ergebnis ausschliesslich an einem Nav-Tick und nie dazwischen. Damit haengt das Verhalten weder
+ * an den Render-FPS noch an der Worker-Dauer, solange diese innerhalb eines Ticks bleibt.
+ *
+ * 50 ms statt der frueheren 100 ms: Ziel-Eingaben werden erst am Folgetick aktiv, ein 100-ms-Takt
+ * wuerde die Verfolgungslatenz gegenueber der synchronen Berechnung sonst verdoppeln. Unveraenderte
+ * Zielzellen erzeugen keinen Rebuild, die zusaetzlichen Ticks sind also meist kostenlos.
+ */
+export const COOP_DEFENSE_NAV_TICK_INTERVAL_MS = 50;
+/** Player-, Boss- und Ally-Felder folgen jedem Nav-Tick (20 Hz). */
+export const COOP_DEFENSE_NAV_TICK_DIVISOR_DEFAULT = 1;
+/** Das strategische Feld reicht mit 5 Hz; seine Zielmenge aendert sich deutlich traeger. */
+export const COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC = 4;
 
 export interface ArenaGridRegion {
   minGridX: number;

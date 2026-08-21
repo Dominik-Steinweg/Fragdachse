@@ -9,6 +9,11 @@ export default defineConfig(() => {
   server: {
     port: 8080,
   },
+  // Der Flowfield-Worker wird als ES-Modul geladen (`new Worker(..., { type: 'module' })`).
+  // Rollups Default für Worker ist IIFE und würde dessen Imports brechen.
+  worker: {
+    format: 'es',
+  },
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 3000,

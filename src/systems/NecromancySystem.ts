@@ -187,7 +187,7 @@ export class NecromancySystem {
         ? { x: player.sprite.x, y: player.sprite.y, target: undefined }
         : { x: target.sprite.x, y: target.sprite.y, target };
 
-      this.updateFlowFieldGoal(player.id, destination.x, destination.y, now);
+      this.updateFlowFieldGoal(player.id, destination.x, destination.y);
       const followRadius = Math.min(
         FOLLOW_RADIUS_MAX_PX,
         FOLLOW_RADIUS_BASE_PX + FOLLOW_RADIUS_PER_ALLY_PX * Math.max(0, allies.length - 1),
@@ -417,12 +417,15 @@ export class NecromancySystem {
     return best;
   }
 
-  private updateFlowFieldGoal(ownerId: string, worldX: number, worldY: number, now: number): void {
+  /**
+   * Setzt nur das Ziel. Die Taktung uebernimmt seit dem Worker-Umbau der `FlowFieldCoordinator`;
+   * ein eigener Rebuild-Aufruf hier wuerde am festen Nav-Tick vorbeirechnen.
+   */
+  private updateFlowFieldGoal(ownerId: string, worldX: number, worldY: number): void {
     const flowField = this.allyFlowFields.get(ownerId);
     if (!flowField) return;
     const goal = flowField.worldToGrid(worldX, worldY);
     flowField.setDynamicGoalCells(goal ? [goal] : []);
-    flowField.update(now);
   }
 
   /**

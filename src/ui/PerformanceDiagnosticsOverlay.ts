@@ -61,7 +61,7 @@ function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] 
     `UI: Input/Kamera ${ms(detailTimings.inputCameraMs.avg)} | Lobby ${ms(detailTimings.lobbyUiMs.avg)} | Arena-HUD ${ms(detailTimings.arenaHudMs.avg)} | Rangliste/Canopy ${ms(detailTimings.leaderboardCanopyMs.avg)}`,
     ...(summary.role === 'host'
       ? [
-        `Host: KI ${ms(detailTimings.hostEnemyAiMs.avg)} | Spieler ${ms(detailTimings.hostPlayerSystemsMs.avg)} | Physik ${ms(detailTimings.hostPhysicsMs.avg)} | Kampf/Projektile ${ms(detailTimings.hostCombatProjectilesMs.avg)}`,
+        `Host: KI ${ms(detailTimings.hostEnemyAiMs.avg)} (davon Nav ${ms(detailTimings.hostNavFlowFieldMs.avg)}, Worker ${ms(detailTimings.hostNavWorkerMs.avg)}) | Spieler ${ms(detailTimings.hostPlayerSystemsMs.avg)} | Physik ${ms(detailTimings.hostPhysicsMs.avg)} | Kampf/Projektile ${ms(detailTimings.hostCombatProjectilesMs.avg)}`,
         `Host: Explosionen ${ms(detailTimings.hostExplosionsMs.avg)} | Flaecheneffekte ${ms(detailTimings.hostAreaEffectsMs.avg)} | Welt/Visuals ${ms(detailTimings.hostWorldVisualsMs.avg)} | HUD ${ms(detailTimings.hostHudMs.avg)} | Snapshot ${ms(detailTimings.hostSnapshotBuildMs.avg)}`,
       ]
       : [

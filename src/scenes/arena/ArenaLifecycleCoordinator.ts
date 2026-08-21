@@ -19,6 +19,18 @@ import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
+import {
+  ENEMY_FLOW_FIELD_IDS,
+  FlowFieldCoordinator,
+  allyFlowFieldId,
+} from '../../systems/flowfield/FlowFieldCoordinator';
+import { createFlowFieldRunner } from '../../systems/flowfield/FlowFieldRunnerFactory';
+import {
+  buildBaseDescriptors,
+  buildStaticKindRaster,
+  createFlowFieldTuning,
+  resolveGridChange,
+} from '../../systems/flowfield/FlowFieldSources';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
@@ -27,7 +39,7 @@ import { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodge
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
 import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
-import { EnemyStrategicTargetService } from '../../systems/EnemyStrategicTargetService';
+import { EnemyStrategicTargetService, type PreparedStrategicTargets } from '../../systems/EnemyStrategicTargetService';
 import { EnemyAiTargetCatalog } from '../../systems/EnemyAiTargetCatalog';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
@@ -85,7 +97,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -111,7 +123,7 @@ import {
 } from '../../effects/BaseDestructionPlan';
 import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
-import { emitArenaMapGridChanged } from './ArenaEvents';
+import { ARENA_MAP_GRID_CHANGED_EVENT, emitArenaMapGridChanged, type ArenaMapGridChangedEvent } from './ArenaEvents';
 import {
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
   COOP_DEFENSE_DISMANTLE_RANGE,
@@ -144,6 +156,13 @@ export class ArenaLifecycleCoordinator {
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
   private trainDestroyedShown = false;
   private trainExplosionTimers: Phaser.Time.TimerEvent[] = [];
+
+  /**
+   * Zaehlt ueber Runden hinweg hoch. Ein verspaetetes Worker-Ergebnis aus einer alten Arena traegt
+   * die alte Generation und kann deshalb nie mehr aktiviert werden.
+   */
+  private flowFieldGenerationId = 0;
+  private flowFieldGridListener: ((event: ArenaMapGridChangedEvent) => void) | null = null;
 
   private layoutRetryCount = 0;
   private arenaEnteredAt   = 0;
@@ -488,6 +507,9 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem.initPlayer(profile.id);
           this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
         }
+        // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
+        // Arenaaufbau existierten sie noch nicht.
+        this.ensureAllyFlowField(profile.id);
         this.ctx.resourceSystem?.initPlayer(profile.id);
         this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
         this.ctx.burrowSystem?.initPlayer(profile.id);
@@ -925,15 +947,12 @@ export class ArenaLifecycleCoordinator {
       })
       : null;
     const baseManager = this.ctx.baseManager;
+    // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
+    // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
     const syncActiveBaseIds = (): void => {
-      const activeBaseIds = baseManager?.getActiveBaseIds() ?? new Set<string>();
-      this.ctx.enemyFlowFieldService?.setActiveBaseIds(activeBaseIds);
-      this.ctx.enemyPlayerFlowFieldService?.setActiveBaseIds(activeBaseIds);
-      this.ctx.enemyStrategicFlowFieldService?.setActiveBaseIds(activeBaseIds);
-      this.ctx.enemyBossFlowFieldService?.setActiveBaseIds(activeBaseIds);
-      for (const allyFlowField of this.ctx.allyFlowFieldServices.values()) {
-        allyFlowField.setActiveBaseIds(activeBaseIds);
-      }
+      this.ctx.flowFieldCoordinator?.setActiveBaseIds(
+        baseManager?.getActiveBaseIds() ?? new Set<string>(),
+      );
     };
     if (bridge.isHost()) {
       this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(bridge.getGameMode())
@@ -983,56 +1002,88 @@ export class ArenaLifecycleCoordinator {
         arenaOffsetY: ARENA_OFFSET_Y,
       };
 
-      this.ctx.enemyFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
-        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
-          eventBus: this.scene.game.events,
+      // Ein Coordinator fuer alle Runtime-Flowfields. Er haelt den Topologiespiegel, taktet die
+      // Nav-Ticks und besitzt den Worker; die Services sind nur noch synchrone Lesefassaden.
+      if (isCoopDefenseMode(bridge.getGameMode())) {
+        const bossConfig = coopDefenseMapConfig?.boss
+          ? getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind)
+          : null;
+        const bossClearanceCells = bossConfig
+          ? Math.ceil(Math.max(0, bossConfig.size * 0.5 - CELL_SIZE * 0.5) / CELL_SIZE)
+          : 0;
+        const flowFieldCoordinator = new FlowFieldCoordinator({
+          metrics: flowFieldMetrics,
+          tuning: createFlowFieldTuning(),
+          staticKind: buildStaticKindRaster(layout, flowFieldMetrics),
+          bases: buildBaseDescriptors(coopDefenseBases),
+          activeBaseIds: this.ctx.baseManager?.getActiveBaseIds()
+            ?? new Set(coopDefenseBases.map((spec) => spec.id)),
           obstacleCellProvider,
-        })
-        : null;
-      this.ctx.enemyPlayerFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
-        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
-          eventBus: this.scene.game.events,
-          obstacleCellProvider,
-          goalMode: 'dynamic-fallback-bases',
-          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
-        })
-        : null;
-      this.ctx.enemyStrategicFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
-        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
-          eventBus: this.scene.game.events,
-          obstacleCellProvider,
-          goalMode: 'dynamic',
-          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
-        })
-        : null;
+          runner: createFlowFieldRunner(),
+          navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS,
+          generationId: this.nextFlowFieldGenerationId(),
+        });
+        this.ctx.flowFieldCoordinator = flowFieldCoordinator;
+        // Einmalige Ansage, welches Substrat wirklich laeuft. Ohne sie greift der Inline-Fallback
+        // still, und ein Trace zeigt dann faelschlich "die Verlagerung hat nichts gebracht".
+        console.info(`[flowfield] runner=${flowFieldCoordinator.getDiagnostics().runnerKind}`);
+
+        this.ctx.enemyFlowFieldService = EnemyFlowFieldService.fromView(
+          flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.base, { goalMode: 'bases' }),
+        );
+        this.ctx.enemyPlayerFlowFieldService = EnemyFlowFieldService.fromView(
+          flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.player, {
+            goalMode: 'dynamic-fallback-bases',
+          }),
+        );
+        this.ctx.enemyStrategicFlowFieldService = EnemyFlowFieldService.fromView(
+          flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.strategic, {
+            goalMode: 'dynamic',
+            tickDivisor: COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC,
+          }),
+        );
+        this.ctx.enemyBossFlowFieldService = bossConfig
+          ? EnemyFlowFieldService.fromView(
+            flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.boss, {
+              goalMode: bossConfig.movementTarget === 'players' ? 'dynamic-fallback-bases' : 'bases',
+              clearanceCells: bossClearanceCells,
+            }),
+          )
+          : null;
+        // Ally-Felder gibt es fuer alle bereits vorhandenen Spieler; Nachzuegler registriert
+        // `ensureAllyFlowField` beim Spawn nach.
+        this.ctx.allyFlowFieldServices.clear();
+        for (const player of this.ctx.playerManager.getAllPlayers()) {
+          this.ensureAllyFlowField(player.id);
+        }
+
+        this.flowFieldGridListener = (event: ArenaMapGridChangedEvent): void => {
+          const change = resolveGridChange(event);
+          if (change) flowFieldCoordinator.patchCell(change.gridX, change.gridY, change.occupied);
+          else flowFieldCoordinator.requestFullResync();
+        };
+        this.scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.flowFieldGridListener);
+      } else {
+        this.ctx.enemyFlowFieldService = null;
+        this.ctx.enemyPlayerFlowFieldService = null;
+        this.ctx.enemyStrategicFlowFieldService = null;
+        this.ctx.enemyBossFlowFieldService = null;
+        this.ctx.allyFlowFieldServices.clear();
+      }
       this.ctx.enemyStrategicTargetService = this.ctx.enemyStrategicFlowFieldService
         ? new EnemyStrategicTargetService(this.ctx.enemyStrategicFlowFieldService)
         : null;
-      this.ctx.enemyAiTargetCatalog = new EnemyAiTargetCatalog();
-      this.ctx.enemyBossFlowFieldService = coopDefenseMapConfig?.boss
-        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
-          eventBus: this.scene.game.events,
-          obstacleCellProvider,
-          goalMode: getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind).movementTarget === 'players'
-            ? 'dynamic-fallback-bases'
-            : 'bases',
-          clearanceCells: Math.ceil(Math.max(
-            0,
-            getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind).size * 0.5 - CELL_SIZE * 0.5,
-          ) / CELL_SIZE),
-          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
-        })
-        : null;
-      for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
-      this.ctx.allyFlowFieldServices.clear();
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        this.ctx.allyFlowFieldServices.set(player.id, new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
-          eventBus: this.scene.game.events,
-          obstacleCellProvider,
-          goalMode: 'dynamic-fallback-bases',
-          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
-        }));
+      if (this.ctx.enemyStrategicTargetService && this.ctx.flowFieldCoordinator) {
+        // Die Zielzuordnung wird exakt mit dem Feld aktiv, aus dessen Zielmenge sie stammt.
+        this.ctx.flowFieldCoordinator.getFieldView(ENEMY_FLOW_FIELD_IDS.strategic)?.onActivated(
+          (payload) => {
+            if (payload) {
+              this.ctx.enemyStrategicTargetService?.activate(payload as PreparedStrategicTargets);
+            }
+          },
+        );
       }
+      this.ctx.enemyAiTargetCatalog = new EnemyAiTargetCatalog();
       if (
         this.ctx.enemyManager
         && this.ctx.enemyFlowFieldService
@@ -2933,6 +2984,10 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;
+    if (this.flowFieldGridListener) {
+      this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.flowFieldGridListener);
+      this.flowFieldGridListener = null;
+    }
     this.ctx.enemyFlowFieldService?.destroy();
     this.ctx.enemyFlowFieldService = null;
     this.ctx.enemyPlayerFlowFieldService?.destroy();
@@ -2947,6 +3002,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyBossFlowFieldService = null;
     for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
     this.ctx.allyFlowFieldServices.clear();
+    // Zuletzt: erhoeht die Generation und beendet den Worker, wodurch jedes noch unterwegs
+    // befindliche Ergebnis dieser Runde unbrauchbar wird.
+    this.ctx.flowFieldCoordinator?.destroy();
+    this.ctx.flowFieldCoordinator = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
     this.renderers.beer.clear();
@@ -3150,6 +3209,27 @@ export class ArenaLifecycleCoordinator {
   }
 
   /** Liefert das gemeinsame Boden-/Flowfield-Raster fuer Gegner-Sonderbewegungen. */
+  private nextFlowFieldGenerationId(): number {
+    this.flowFieldGenerationId += 1;
+    return this.flowFieldGenerationId;
+  }
+
+  /**
+   * Legt das Ally-Flowfield eines Spielers an, falls es noch fehlt. Wird sowohl beim Arenaaufbau
+   * als auch beim Nachspawnen gerufen: Spieler, die erst nach `buildArena()` dazukommen (Reconnect,
+   * verspaetetes Loadout), hatten frueher dauerhaft kein eigenes Feld.
+   */
+  ensureAllyFlowField(playerId: string): void {
+    const coordinator = this.ctx.flowFieldCoordinator;
+    if (!coordinator || this.ctx.allyFlowFieldServices.has(playerId)) return;
+    this.ctx.allyFlowFieldServices.set(
+      playerId,
+      EnemyFlowFieldService.fromView(
+        coordinator.registerField(allyFlowFieldId(playerId), { goalMode: 'dynamic-fallback-bases' }),
+      ),
+    );
+  }
+
   private getEnemyNavigationFlowField(): EnemyFlowFieldService | null {
     return this.ctx.enemyPlayerFlowFieldService ?? this.ctx.enemyFlowFieldService;
   }

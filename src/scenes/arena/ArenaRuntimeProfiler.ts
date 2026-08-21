@@ -77,6 +77,13 @@ export type DetailTimingKey =
   | 'arenaPanelMs'
   | 'hostCoordinatorMs'
   | 'hostEnemyAiMs'
+  /** Unterposten von hostEnemyAiMs: Main-Thread-Anteil der Flowfield-Navigation. */
+  | 'hostNavFlowFieldMs'
+  /**
+   * Rechenzeit desselben Vorgangs im Worker. Ohne diesen Wert laesst sich "die Arbeit ist
+   * verlagert" nicht von "die Arbeit findet nicht mehr statt" unterscheiden.
+   */
+  | 'hostNavWorkerMs'
   | 'hostPlayerSystemsMs'
   | 'hostPhysicsMs'
   | 'hostCombatProjectilesMs'
@@ -511,7 +518,8 @@ const TIMING_KEYS: readonly TimingKey[] = [
 export const DETAIL_TIMING_KEYS: readonly DetailTimingKey[] = [
   'scenePreludeMs', 'sceneStateMs', 'postRoleMs', 'diagnosticsMs',
   'inputCameraMs', 'lobbyUiMs', 'arenaHudMs', 'leaderboardCanopyMs', 'arenaPanelMs',
-  'hostCoordinatorMs', 'hostEnemyAiMs', 'hostPlayerSystemsMs', 'hostPhysicsMs',
+  'hostCoordinatorMs', 'hostEnemyAiMs', 'hostNavFlowFieldMs', 'hostNavWorkerMs',
+  'hostPlayerSystemsMs', 'hostPhysicsMs',
   'hostCombatProjectilesMs', 'hostExplosionsMs', 'hostAreaEffectsMs', 'hostWorldVisualsMs',
   'hostHudMs', 'hostEffectFlushMs', 'hostSnapshotBuildMs',
   'clientCoordinatorMs', 'clientSnapshotMs', 'clientPlayersMs', 'clientProjectilesEffectsMs',

@@ -74,6 +74,7 @@ import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
 import type { TimeBubbleSystem }    from '../../systems/TimeBubbleSystem';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
+import type { FlowFieldCoordinator } from '../../systems/flowfield/FlowFieldCoordinator';
 import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
 
 interface PlayerStatusRingLike {
@@ -192,6 +193,11 @@ export interface ArenaContext {
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;
   trainManager:      TrainManager      | null;
+  /**
+   * Besitzt Topologiespiegel, Nav-Takt und Worker aller Runtime-Flowfields. Die `*FlowFieldService`
+   * darunter sind nur noch synchrone Lesefassaden auf je ein Feld dieses Coordinators.
+   */
+  flowFieldCoordinator: FlowFieldCoordinator | null;
   enemyFlowFieldService: EnemyFlowFieldService | null;
   enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
   enemyStrategicFlowFieldService: EnemyFlowFieldService | null;

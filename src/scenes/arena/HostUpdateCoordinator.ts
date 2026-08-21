@@ -1,5 +1,10 @@
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
+import {
+  ENEMY_FLOW_FIELD_IDS,
+  type FlowFieldCoordinator,
+} from '../../systems/flowfield/FlowFieldCoordinator';
+import { goalCellsToIndexes } from '../../systems/flowfield/FlowFieldSources';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE, ARENA_OFFSET_X, ARENA_OFFSET_Y } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
@@ -45,6 +50,14 @@ const SUPPORT_REGENERATION_EFFECT_RADIUS = 30;
 export interface HostUpdatePerformanceMetrics {
   totalMs: number;
   enemyAiMs: number;
+  /**
+   * Unterposten von `enemyAiMs`: Aktivierung und Ziel-Sampling der Flowfields im Main Thread.
+   * Die eigentliche Berechnung laeuft im Worker und taucht hier bewusst nicht auf - genau daran
+   * laesst sich die Verlagerung im Trace ablesen.
+   */
+  navFlowFieldMs: number;
+  /** Im Worker gemessene Rechenzeit des zuletzt eingegangenen Ergebnisses. */
+  navWorkerComputeMs: number;
   playerSystemsMs: number;
   physicsMs: number;
   combatProjectilesMs: number;
@@ -62,6 +75,8 @@ function emptyHostUpdatePerformanceMetrics(): HostUpdatePerformanceMetrics {
   return {
     totalMs: 0,
     enemyAiMs: 0,
+    navFlowFieldMs: 0,
+    navWorkerComputeMs: 0,
     playerSystemsMs: 0,
     physicsMs: 0,
     combatProjectilesMs: 0,
@@ -167,7 +182,7 @@ export class HostUpdateCoordinator {
   prepareStartupCaches(now: number): void {
     if (!bridge.isHost()) return;
     this.ctx.combatSystem.getObstacleIndex().prepare();
-    this.updateEnemyFlowFields(now, true);
+    this.updateEnemyFlowFields(now, 0, true);
   }
 
   runHostUpdate(delta: number): void {
@@ -203,7 +218,12 @@ export class HostUpdateCoordinator {
     // host frame in which its linked dormant base becomes active.
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
-    this.updateEnemyFlowFields(now);
+    const navStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
+    this.updateEnemyFlowFields(now, delta);
+    if (metrics) {
+      metrics.navFlowFieldMs = performance.now() - navStartedAt;
+      metrics.navWorkerComputeMs = this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0;
+    }
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
@@ -2117,15 +2137,15 @@ export class HostUpdateCoordinator {
     }
   }
 
-  private updateEnemyFlowFields(now: number, force = false): void {
-    const updateFlowField = (service: import('../../systems/EnemyFlowFieldService').EnemyFlowFieldService | null | undefined): void => {
-      if (!service) return;
-      if (force) service.prepareNow(now);
-      else service.update(now);
-    };
-
-    updateFlowField(this.ctx.enemyFlowFieldService);
-
+  /**
+   * Sammelt die Ziel-Eingaben aller Flowfields und uebergibt sie dem Coordinator. Gerechnet und
+   * aktiviert wird ausschliesslich an dessen Nav-Ticks; dieser Aufruf bleibt pro Frame billig.
+   *
+   * `deltaMs` treibt den Nav-Takt. `force` ist der Arena-Erstaufbau: Dort wird einmalig synchron
+   * gerechnet, damit der erste Gameplay-Frame vollstaendige Felder vorfindet.
+   */
+  private updateEnemyFlowFields(now: number, deltaMs: number, force = false): void {
+    const flowFieldCoordinator = this.ctx.flowFieldCoordinator;
     const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
     const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
     const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
@@ -2209,13 +2229,21 @@ export class HostUpdateCoordinator {
         }
       }
       targetCatalog.updateTargets(candidates);
-      if (strategicFlowFieldService && strategicTargetService) {
-        strategicTargetService.updateTargets(targetCatalog.getStrategicCandidates());
+      if (strategicFlowFieldService && strategicTargetService && flowFieldCoordinator) {
+        // Zielzuordnung und Zielmenge reisen als ein Paket: Der Coordinator uebernimmt die
+        // Zuordnung erst in dem Moment, in dem er das daraus gerechnete Feld aktiviert.
+        const prepared = strategicTargetService.prepareTargets(targetCatalog.getStrategicCandidates());
+        flowFieldCoordinator.setGoalCells(
+          ENEMY_FLOW_FIELD_IDS.strategic,
+          goalCellsToIndexes(prepared.goalCells, flowFieldCoordinator.metrics),
+          prepared,
+        );
       }
     }
 
+    if (!flowFieldCoordinator) return;
     if (!playerFlowFieldService) {
-      updateFlowField(bossFlowFieldService);
+      this.advanceFlowFields(flowFieldCoordinator, deltaMs, force);
       return;
     }
 
@@ -2239,18 +2267,27 @@ export class HostUpdateCoordinator {
       }
     }
 
-    playerFlowFieldService.setDynamicGoalCells(playerGoalCells);
-    bossFlowFieldService?.setDynamicGoalCells(playerGoalCells);
-    updateFlowField(playerFlowFieldService);
-    updateFlowField(bossFlowFieldService);
-
-    if (strategicFlowFieldService && strategicTargetService) {
-      updateFlowField(strategicFlowFieldService);
+    const playerGoalIndexes = goalCellsToIndexes(playerGoalCells, flowFieldCoordinator.metrics);
+    flowFieldCoordinator.setGoalCells(ENEMY_FLOW_FIELD_IDS.player, playerGoalIndexes);
+    if (bossFlowFieldService) {
+      flowFieldCoordinator.setGoalCells(ENEMY_FLOW_FIELD_IDS.boss, playerGoalIndexes);
     }
 
     // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den
     // aktuellen Gegner oder, beim Leash-Rueckzug, auf den Besitzer. Ein zweites
     // Ziel-Update hier wuerde das Angriffsziel jeden Frame wieder ueberschreiben.
+
+    this.advanceFlowFields(flowFieldCoordinator, deltaMs, force);
+  }
+
+  private advanceFlowFields(
+    flowFieldCoordinator: FlowFieldCoordinator,
+    deltaMs: number,
+    force: boolean,
+  ): void {
+    // Der Erstaufbau laeuft im verborgenen Ladezustand einmalig synchron durch denselben Kernel.
+    if (force) flowFieldCoordinator.prepareNow();
+    else flowFieldCoordinator.advance(deltaMs);
   }
 
   private buildAdjacentGoalCells(
