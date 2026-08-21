@@ -152,6 +152,14 @@ interface ActiveSmokeCloud {
   lastTickAt: number;
 }
 
+interface ResolvedSmokeCloudState {
+  radius: number;
+  alpha: number;
+  density: number;
+  storm: boolean;
+  stormTickMs?: number;
+}
+
 /* ── Damage event (returned to host for CombatSystem processing) ── */
 export interface SmokeDamageEvent {
   x:       number;
@@ -224,11 +232,11 @@ export class SmokeSystem {
 
     let selected: number | null = null;
     for (const cloud of this.activeClouds) {
-      const radius = this.getActiveCloudRadius(cloud, now);
-      if (radius === null) continue;
+      const state = this.resolveCloudState(cloud, now);
+      if (!state) continue;
       const dx = x - cloud.x;
       const dy = y - cloud.y;
-      if (dx * dx + dy * dy > radius * radius) continue;
+      if (dx * dx + dy * dy > state.radius * state.radius) continue;
       // activeClouds is insertion ordered; choosing the first match is deterministic and keeps
       // overlapping clouds stable until the currently selected one is actually left.
       selected = cloud.id;
@@ -240,11 +248,11 @@ export class SmokeSystem {
   isPointInCloud(cloudId: number, x: number, y: number, now: number): boolean {
     for (const cloud of this.activeClouds) {
       if (cloud.id !== cloudId) continue;
-      const radius = this.getActiveCloudRadius(cloud, now);
-      if (radius === null) return false;
+      const state = this.resolveCloudState(cloud, now);
+      if (!state) return false;
       const dx = x - cloud.x;
       const dy = y - cloud.y;
-      return dx * dx + dy * dy <= radius * radius;
+      return dx * dx + dy * dy <= state.radius * state.radius;
     }
     return false;
   }
@@ -255,11 +263,12 @@ export class SmokeSystem {
 
     for (let i = this.activeClouds.length - 1; i >= 0; i--) {
       const cloud = this.activeClouds[i];
-      const snapshot = this.buildSnapshot(cloud, now);
-      if (!snapshot) {
+      const state = this.resolveCloudState(cloud, now);
+      if (!state) {
         this.activeClouds.splice(i, 1);
         continue;
       }
+      const snapshot = this.buildSnapshot(cloud, state);
       synced.push(snapshot);
 
       // Schaden über Zeit ("Gewittersturm"): Radius/Dauer kommen vom Rauch,
@@ -272,7 +281,7 @@ export class SmokeSystem {
           damageEvents.push({
             x: cloud.x,
             y: cloud.y,
-            radius: snapshot.radius,
+            radius: state.radius,
             damage: dpt,
             ownerId: cloud.ownerId,
           });
@@ -309,75 +318,57 @@ export class SmokeSystem {
     this.syncVisuals([]);
   }
 
-  private buildSnapshot(cloud: ActiveSmokeCloud, now: number): SyncedSmokeCloud | null {
+  private buildSnapshot(cloud: ActiveSmokeCloud, state: ResolvedSmokeCloudState): SyncedSmokeCloud {
+    return {
+      id: cloud.id,
+      x: cloud.x,
+      y: cloud.y,
+      radius: Math.round(state.radius),
+      alpha: Math.round(state.alpha * 100) / 100,
+      density: Math.round(state.density * 100) / 100,
+      storm: state.storm,
+      stormTickMs: state.stormTickMs,
+    };
+  }
+
+  private resolveCloudState(cloud: ActiveSmokeCloud, now: number): ResolvedSmokeCloudState | null {
     const { spreadDuration, lingerDuration, dissipateDuration, radius, maxAlpha } = cloud.config;
     const elapsed = now - cloud.createdAt;
     const totalDuration = spreadDuration + lingerDuration + dissipateDuration;
-    if (elapsed >= totalDuration) return null;
+    if (elapsed < 0 || elapsed >= totalDuration) return null;
 
     const storm = (cloud.config.dotDamagePerTick ?? 0) > 0;
     const stormTickMs = storm ? (cloud.config.dotTickIntervalMs ?? 250) : undefined;
 
     if (elapsed < spreadDuration) {
-      const t = Phaser.Math.Clamp(elapsed / spreadDuration, 0, 1);
+      const t = Phaser.Math.Clamp(elapsed / Math.max(1, spreadDuration), 0, 1);
       const eased = Phaser.Math.Easing.Cubic.Out(t);
       return {
-        id: cloud.id,
-        x: cloud.x,
-        y: cloud.y,
-        radius: Math.round(radius * eased),
-        alpha: Math.round(maxAlpha * Phaser.Math.Linear(0.18, 1, eased) * 100) / 100,
-        density: Math.round(Phaser.Math.Linear(0.35, 1, eased) * 100) / 100,
+        radius: radius * eased,
+        alpha: maxAlpha * Phaser.Math.Linear(0.18, 1, eased),
+        density: Phaser.Math.Linear(0.35, 1, eased),
         storm,
         stormTickMs,
       };
     }
 
     if (elapsed < spreadDuration + lingerDuration) {
-      return {
-        id: cloud.id,
-        x: cloud.x,
-        y: cloud.y,
-        radius,
-        alpha: maxAlpha,
-        density: 1,
-        storm,
-        stormTickMs,
-      };
+      return { radius, alpha: maxAlpha, density: 1, storm, stormTickMs };
     }
 
-    const dissipateElapsed = elapsed - spreadDuration - lingerDuration;
-    const t = Phaser.Math.Clamp(dissipateElapsed / dissipateDuration, 0, 1);
-    const eased = Phaser.Math.Easing.Quadratic.In(t);
-    return {
-      id: cloud.id,
-      x: cloud.x,
-      y: cloud.y,
-      radius: Math.round(radius * Phaser.Math.Linear(1, 1.05, eased)),
-      alpha: Math.round(maxAlpha * (1 - eased) * 100) / 100,
-      density: Math.round(Phaser.Math.Linear(1, 0.2, eased) * 100) / 100,
-      storm,
-    };
-  }
-
-  private getActiveCloudRadius(cloud: ActiveSmokeCloud, now: number): number | null {
-    const { spreadDuration, lingerDuration, dissipateDuration, radius } = cloud.config;
-    const elapsed = now - cloud.createdAt;
-    const totalDuration = spreadDuration + lingerDuration + dissipateDuration;
-    if (elapsed < 0 || elapsed >= totalDuration) return null;
-    if (elapsed < spreadDuration) {
-      const t = Phaser.Math.Clamp(elapsed / Math.max(1, spreadDuration), 0, 1);
-      const eased = t * t * (3 - 2 * t);
-      return radius * eased;
-    }
-    if (elapsed < spreadDuration + lingerDuration) return radius;
     const t = Phaser.Math.Clamp(
       (elapsed - spreadDuration - lingerDuration) / Math.max(1, dissipateDuration),
       0,
       1,
     );
-    const eased = t * t * (3 - 2 * t);
-    return radius * Phaser.Math.Linear(1, 1.05, eased);
+    const eased = Phaser.Math.Easing.Quadratic.In(t);
+    return {
+      radius: radius * Phaser.Math.Linear(1, 1.05, eased),
+      alpha: maxAlpha * (1 - eased),
+      density: Phaser.Math.Linear(1, 0.2, eased),
+      storm,
+      stormTickMs,
+    };
   }
 
   private createVisual(cloud: SyncedSmokeCloud): SmokeCloudVisual {

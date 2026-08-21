@@ -76,6 +76,7 @@ describe('Zeitbombendachs', () => {
     const playExplosion = vi.fn();
     const applyRadialImpulse = vi.fn();
     const applyBaseDamage = vi.fn();
+    const decoyDamage = vi.fn();
     const sound = vi.fn();
     const system = new CoopDefenseTimebombSystem(
       enemyManager,
@@ -96,6 +97,10 @@ describe('Zeitbombendachs', () => {
       strategicFlow,
       fireChunks,
       { playExplosion, applyRadialImpulse, damageConstruction: vi.fn(), sound },
+      {
+        getHostTargets: () => [{ id: 7, sprite: { active: true, x: 60, y: 0 } }],
+        applyDamage: decoyDamage,
+      },
     );
 
     system.hostUpdate(0);
@@ -123,6 +128,13 @@ describe('Zeitbombendachs', () => {
     expect(baseDamage).toBeGreaterThan(0);
     expect(baseDamage).toBeLessThanOrEqual(timebomb.explosionDamage);
     expect(applyBaseDamage).not.toHaveBeenCalled();
+    expect(decoyDamage).toHaveBeenCalledWith(
+      7,
+      expect.any(Number),
+      'e1',
+      'Zeitbombendachs',
+      { sourceX: 60, sourceY: 0 },
+    );
     expect(fireChunks.hostCreateFireChunkBurst).toHaveBeenCalledTimes(1);
     expect(sound).toHaveBeenCalledWith(expect.objectContaining({ type: 'timebomb-detonate' }));
   });

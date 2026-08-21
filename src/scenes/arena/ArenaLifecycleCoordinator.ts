@@ -2370,6 +2370,7 @@ export class ArenaLifecycleCoordinator {
             // bereits den vorhandenen Explosionssound ueber den Effekt-RPC.
             sound: (_event) => { /* intentionally unmapped */ },
           },
+          this.ctx.decoySystem,
         );
       }
       if (

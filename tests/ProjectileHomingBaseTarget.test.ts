@@ -85,4 +85,30 @@ describe('projectile homing against hostile bases', () => {
     expect(projectile.lockedTargetId).toBeNull();
     expect(lineOfFire).toHaveBeenCalledWith(0, 0, 100, 0);
   });
+
+  it('filters stealthed reacquire candidates while keeping decoys valid', () => {
+    const controller = new ProjectileHomingController();
+    let stealthed = false;
+    controller.setTargetProvider((_config, _ownerId, _x, _y, _radius, emit) => {
+      emit('player-2', 'players', 120, 0);
+      emit('decoy-7', 'decoys', 180, 0);
+    });
+    controller.setLineOfFireChecker(() => true);
+    controller.setTargetValidityChecker((id, type) => (
+      type === 'decoys' || id !== 'player-2' || !stealthed
+    ));
+
+    const projectile = makeProjectile({
+      ...BASE_HOMING,
+      targetTypes: ['players', 'decoys'],
+    });
+    expect(controller.update(projectile, 0, true)).toBe(true);
+    expect(projectile.lockedTargetId).toBe('player-2');
+    expect(projectile.lockedTargetType).toBe('players');
+
+    stealthed = true;
+    expect(controller.update(projectile, 1)).toBe(true);
+    expect(projectile.lockedTargetId).toBe('decoy-7');
+    expect(projectile.lockedTargetType).toBe('decoys');
+  });
 });

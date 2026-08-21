@@ -32,6 +32,7 @@ import type { LoadoutManager } from '../src/loadout/LoadoutManager';
 import type { CombatSystem } from '../src/systems/CombatSystem';
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
+import { EnemyAiTargetCatalog } from '../src/systems/EnemyAiTargetCatalog';
 
 const COLOSSUS = getCoopDefenseEnemyConfig('inferno-colossus');
 const SCAN_INTERVAL_MS = COLOSSUS.attackScanIntervalMs;
@@ -67,10 +68,10 @@ type TestColossus = EnemyEntity & {
  * und Scan-Takt bilden die echte {@link EnemyEntity} nach, damit die Waffenwahl unter denselben
  * Bedingungen laeuft wie im Spiel.
  */
-function createColossus(x = 100, y = 100): TestColossus {
+function createColossus(x = 100, y = 100, targetModeOverride?: 'all' | 'players'): TestColossus {
   const weapons: EnemyAttackWeapon[] = COLOSSUS.weapons.map(configured => ({
     weapon: new GenericWeapon(WEAPON_CONFIGS[configured.weaponId as keyof typeof WEAPON_CONFIGS]),
-    targetMode: configured.targetMode,
+    targetMode: targetModeOverride ?? configured.targetMode,
     minimumFireDurationMs: configured.minimumFireDurationMs ?? 0,
     playerMeleeWindupMs: configured.playerMeleeWindupMs ?? 0,
     attackMovementSpeedFactor: configured.attackMovementSpeedFactor ?? 0,
@@ -129,7 +130,11 @@ function createColossus(x = 100, y = 100): TestColossus {
   } as unknown as TestColossus;
 }
 
-function createAttackSystem(enemy: TestColossus, players: readonly TestPlayer[]) {
+function createAttackSystem(
+  enemy: TestColossus,
+  players: readonly TestPlayer[],
+  targetCatalog: EnemyAiTargetCatalog | null = null,
+) {
   const shots: FiredShot[] = [];
   const enemyManager = {
     getAllEnemies: () => [enemy],
@@ -167,6 +172,9 @@ function createAttackSystem(enemy: TestColossus, players: readonly TestPlayer[])
       },
     } as unknown as LoadoutManager,
     () => [],
+    null,
+    null,
+    targetCatalog,
   );
 
   return { system, shots };
@@ -185,6 +193,25 @@ function runAttackFrames(
 }
 
 describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
+  it.each(['players', 'all'] as const)('waehlt einen Decoy auch im normalen %s-Angriff', (targetMode) => {
+    const enemy = createColossus(100, 100, targetMode);
+    const targetCatalog = new EnemyAiTargetCatalog();
+    targetCatalog.updateTargets([{
+      kind: 'decoy',
+      id: '7',
+      x: 240,
+      y: 100,
+      isTargetable: () => true,
+    }]);
+    const { system, shots } = createAttackSystem(enemy, [], targetCatalog);
+
+    system.hostUpdate(16, 1_000);
+
+    expect(shots.length).toBeGreaterThan(0);
+    expect(shots[0].targetX).toBe(240);
+    expect(shots[0].targetY).toBe(100);
+  });
+
   it('nutzt im Nahbereich den Hoellenwerfer und laeuft dabei mit 75 % weiter', () => {
     const enemy = createColossus();
     const { system, shots } = createAttackSystem(enemy, [{ id: 'p1', sprite: { x: 300, y: 100, active: true } }]);

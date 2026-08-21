@@ -9,6 +9,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
 import type { CombatSystem } from './CombatSystem';
 import type { PlacementSystem } from './PlacementSystem';
+import type { DecoySystem } from './DecoySystem';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 import {
   EnemyStrategicTargetService,
@@ -73,6 +74,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     private readonly strategicFlowField: EnemyFlowFieldService,
     private readonly fireChunks: FlamethrowerUpgradeSystem | null,
     private readonly hooks: CoopDefenseTimebombHooks,
+    private readonly decoySystem: DecoySystem | null = null,
   ) {}
 
   hostUpdate(now: number): void {
@@ -161,6 +163,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     if (!config || death.faction !== 'hostile') return false;
     this.states.delete(death.id);
     this.damagePlayers(death.id, death.x, death.y, config.killedPopRadiusPx, config.killedPopDamage, 'Zeitbomben-Verpuffung');
+    this.damageDecoys(death.id, death.x, death.y, config.killedPopRadiusPx, config.killedPopDamage, 'Zeitbomben-Verpuffung');
     this.hooks.playExplosion(death.x, death.y, config.killedPopRadiusPx, 'timebomb_pop');
     this.emitSound('timebomb-killed-pop', death.id, death.x, death.y);
     return true;
@@ -352,6 +355,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     const y = enemy.sprite.y;
     this.states.delete(enemy.id);
     this.damagePlayers(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, 'Zeitbombendachs');
+    this.damageDecoys(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, 'Zeitbombendachs');
     this.damageConstructions(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage);
     this.damageArmedOutposts(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage);
     this.hooks.applyRadialImpulse(x, y, config.explosionRadiusPx, config.explosionKnockback, enemy.id);
@@ -386,6 +390,24 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
       this.combatSystem.applyDamage(player.id, damage, false, attackerId, sourceId, { sourceX: x, sourceY: y });
+    }
+  }
+
+  private damageDecoys(
+    attackerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    maxDamage: number,
+    sourceId: string,
+  ): void {
+    if (!this.decoySystem || maxDamage <= 0) return;
+    for (const decoy of this.decoySystem.getHostTargets()) {
+      if (!decoy.sprite.active) continue;
+      const distance = Math.hypot(decoy.sprite.x - x, decoy.sprite.y - y);
+      if (distance > radius) continue;
+      const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
+      this.decoySystem.applyDamage(decoy.id, damage, attackerId, sourceId, { sourceX: x, sourceY: y });
     }
   }
 

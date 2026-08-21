@@ -695,12 +695,20 @@ export class CoopDefenseEnemyAttackSystem {
   private findNearestPlayerTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
     let best: EnemyAttackCandidate | null = null;
 
+    if (this.targetCatalog) {
+      this.targetCatalog.forEachTarget('player-like', (target) => {
+        const candidate = this.buildPlayerLikeTargetCandidate(enemy, {
+          kind: target.kind,
+          id: target.id,
+        }, range);
+        if (candidate && this.isBetterCandidate(candidate, best)) best = candidate;
+      });
+      return best;
+    }
+
     for (const player of this.playerManager.getAllPlayers()) {
       const candidate = this.buildPlayerTargetCandidate(enemy, player.id, range);
-      if (!candidate) continue;
-      if (this.isBetterCandidate(candidate, best)) {
-        best = candidate;
-      }
+      if (candidate && this.isBetterCandidate(candidate, best)) best = candidate;
     }
 
     return best;

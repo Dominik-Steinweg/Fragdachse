@@ -245,35 +245,6 @@ export class CoopDefenseEnemyAbilitySystem {
       return;
     }
 
-    if (this.targetCatalog) {
-      this.targetCatalog.forEachTarget('player-like', (target) => {
-        const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
-        if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y) > fire.radius) return;
-        if (fire.requireLineOfSight
-          && !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, position.x, position.y)) return;
-        if (target.kind === 'decoy') {
-          this.decoySystem?.applyDamage(Number(target.id), damage, enemy.id, weapon.id, {
-            sourceX: enemy.sprite.x,
-            sourceY: enemy.sprite.y,
-          });
-          return;
-        }
-        if (this.energyShieldSystem?.tryBlockDamage({
-          targetId: target.id,
-          category: 'tesla',
-          damage,
-          sourceX: enemy.sprite.x,
-          sourceY: enemy.sprite.y,
-          now,
-        })) return;
-        this.combatSystem.applyDamage(target.id, damage, false, enemy.id, weapon.id, {
-          sourceX: enemy.sprite.x,
-          sourceY: enemy.sprite.y,
-        });
-      });
-      return;
-    }
-
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
       if (this.combatSystem.isBurrowed(player.id)) continue;

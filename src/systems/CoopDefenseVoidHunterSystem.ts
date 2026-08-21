@@ -217,19 +217,9 @@ export class CoopDefenseVoidHunterSystem {
     this.reachedPhases.add(2);
     enemy.setMoveSpeedMultiplier(config.phaseTwoSpeedMultiplier);
 
-    const positions: VoidHunterTargetPoint[] = [];
-    if (this.targetCatalog) {
-      this.targetCatalog.forEachTarget('player-like', (target) => {
-        const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
-        positions.push({ x: position.x, y: position.y });
-      });
-    } else {
-      for (const player of this.playerManager.getAllPlayers()) {
-        if (player.sprite.active && this.combatSystem.isAlive(player.id)) {
-          positions.push({ x: player.sprite.x, y: player.sprite.y });
-        }
-      }
-    }
+    const positions = this.playerManager.getAllPlayers()
+      .filter((player) => player.sprite.active && this.combatSystem.isAlive(player.id))
+      .map((player) => ({ x: player.sprite.x, y: player.sprite.y }));
     const target = computeVoidHunterNukeTarget(positions, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,

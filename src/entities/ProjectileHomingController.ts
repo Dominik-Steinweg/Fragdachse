@@ -94,8 +94,7 @@ export class ProjectileHomingController {
       proj.lockedTargetId !== null
       && proj.lockedTargetId !== undefined
       && proj.lockedTargetType
-      && this.targetValidityChecker
-      && !this.targetValidityChecker(proj.lockedTargetId, proj.lockedTargetType, proj.ownerId)
+      && !this.isTargetCurrentlyValid(proj.lockedTargetId, proj.lockedTargetType, proj.ownerId)
     ) {
       proj.lockedTargetId = null;
       proj.lockedTargetType = undefined;
@@ -177,7 +176,8 @@ export class ProjectileHomingController {
       const ineligible = !targetTypes.includes(candidate.type)
         || (excludeOwner && candidate.id === proj.ownerId)
         || dx * dx + dy * dy > searchRadiusSq
-        || proj.multiExplosionExcludedTargetKeys?.has(`${candidate.type}:${candidate.id}`) === true;
+        || proj.multiExplosionExcludedTargetKeys?.has(`${candidate.type}:${candidate.id}`) === true
+        || !this.isTargetCurrentlyValid(candidate.id, candidate.type, proj.ownerId);
       this.rejected[i] = ineligible ? 1 : 0;
       if (!ineligible) eligible += 1;
     }
@@ -232,5 +232,9 @@ export class ProjectileHomingController {
     }
 
     return null;
+  }
+
+  private isTargetCurrentlyValid(id: string, type: HomingTargetType, ownerId: string): boolean {
+    return this.targetValidityChecker?.(id, type, ownerId) ?? true;
   }
 }
