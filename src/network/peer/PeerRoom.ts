@@ -30,7 +30,7 @@ import {
   type PeerMessage,
   type RosterEntry,
 } from './protocol';
-import type { PeerLinkLike, PeerRoomTransport } from './transport';
+import type { PeerLinkLike, PeerPayloadDiagnostics, PeerRoomTransport } from './transport';
 
 let temporaryResumeTokenSequence = 0;
 const KICK_DISCONNECT_DELAY_MS = 100;
@@ -54,6 +54,7 @@ export interface PeerRoomOptions {
   hostOnlyPlayerKeys?: readonly string[];
   /** Stable per-room client token used only for the short resume window. */
   resumeToken?: string;
+  onPayloadDiagnostics?: (info: PeerPayloadDiagnostics) => void;
 }
 
 export type PeerReconnectStatus =
@@ -116,6 +117,7 @@ export class PeerRoom {
   private readonly quitCallbacks = new Map<string, Array<() => void>>();
   private readonly hostOnlyPlayerKeys: ReadonlySet<string>;
   private readonly resumeToken: string;
+  private readonly onPayloadDiagnostics: ((info: PeerPayloadDiagnostics) => void) | null;
   private readonly resumeSlots = new Map<string, ResumeSlot>();
   private readonly linkResumeTokens = new Map<PeerLinkLike, string>();
   private readonly lastHeartbeatAt = new Map<PeerLinkLike, number>();
@@ -147,6 +149,7 @@ export class PeerRoom {
   constructor(private readonly transport: PeerRoomTransport, options: PeerRoomOptions = {}) {
     this.hostOnlyPlayerKeys = new Set(options.hostOnlyPlayerKeys ?? []);
     this.resumeToken = options.resumeToken ?? `temporary-client-token-${++temporaryResumeTokenSequence}`;
+    this.onPayloadDiagnostics = options.onPayloadDiagnostics ?? null;
     this.transport.setHandlers({
       onLinkRegistered: (link) => this.handleLinkRegistered(link),
       onLinkReady: (link) => this.handleLinkReady(link),
@@ -681,6 +684,7 @@ export class PeerRoom {
 
   private handleLinkRegistered(link: PeerLinkLike): void {
     this.links.add(link);
+    link.setPayloadDiagnosticsSink?.(this.onPayloadDiagnostics);
     this.fastBuffers.set(link, new OutboundBuffer());
     this.fastSendSequences.set(link, 0);
     this.fastReceiveSequences.set(link, 0);

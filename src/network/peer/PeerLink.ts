@@ -22,7 +22,7 @@ import {
 } from '../../config';
 import { createPeerNetworkError } from './PeerSignaling';
 import { encodePeerMessage, parsePeerMessage, type PeerChannelKind, type PeerMessage } from './protocol';
-import type { PeerLinkLike } from './transport';
+import type { PeerLinkLike, PeerPayloadDiagnostics } from './transport';
 
 interface QueuedMessage {
   message: PeerMessage;
@@ -46,6 +46,7 @@ export class PeerLink implements PeerLinkLike {
   private peerConnectionStateHandler: ((event: Event) => void) | null = null;
   private disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
   private reliableClosedWarningShown = false;
+  private payloadDiagnosticsSink: ((info: PeerPayloadDiagnostics) => void) | null = null;
 
   playerId = '';
 
@@ -92,6 +93,10 @@ export class PeerLink implements PeerLinkLike {
     return this.droppedFastMessages;
   }
 
+  setPayloadDiagnosticsSink(sink: ((info: PeerPayloadDiagnostics) => void) | null): void {
+    this.payloadDiagnosticsSink = sink;
+  }
+
   /**
    * Wartet, bis der zuverlässige Kanal offen ist, legt danach den schnellen Kanal an und
    * wartet auch auf dessen `open`. Erst danach gilt der Link als benutzbar.
@@ -133,6 +138,7 @@ export class PeerLink implements PeerLinkLike {
       }
       try {
         this.fastChannel.send(payload);
+        this.emitPayloadDiagnostics(message, channel, payload);
       } catch (error) {
         this.handleRemoteClose(error);
       }
@@ -148,6 +154,7 @@ export class PeerLink implements PeerLinkLike {
     }
     try {
       this.connection.send(payload);
+      this.emitPayloadDiagnostics(message, channel, payload);
     } catch (error) {
       this.handleRemoteClose(error);
     }
@@ -232,6 +239,25 @@ export class PeerLink implements PeerLinkLike {
       channel.addEventListener('open', onOpen);
       channel.addEventListener('close', onClose);
       channel.addEventListener('error', onError);
+    });
+  }
+
+  private emitPayloadDiagnostics(message: PeerMessage, channel: PeerChannelKind, payload: string): void {
+    const globalEntries = message.t === 'b' ? (message.g ?? []) : [];
+    const gameStateEntry = globalEntries.find(([key]) => key === 'gs' || key === 'gsi');
+    const gameState: PeerPayloadDiagnostics['gameState'] = gameStateEntry
+      ? gameStateEntry[0] === 'gsi' || (
+        typeof gameStateEntry[1] === 'object'
+        && gameStateEntry[1] !== null
+        && (gameStateEntry[1] as { _full?: unknown })._full === true
+      ) ? 'full' : 'delta'
+      : 'none';
+    this.payloadDiagnosticsSink?.({
+      channel,
+      messageType: message.t,
+      payloadLength: payload.length,
+      payloadSizeKind: 'estimated_utf16_code_units',
+      gameState,
     });
   }
 

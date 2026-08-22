@@ -397,7 +397,11 @@ export class ArenaScene extends Phaser.Scene {
     medianAppPingMs: 0,
     sampleMs: 0,
   };
-  private companionPerformanceFrame = 0;
+  private nextCompanionSubsystemSampleAtMs = 0;
+  private companionBaselineRecordingId = -1;
+  private companionFlowfieldSource: object | null = null;
+  private companionRockSource: object | null = null;
+  private companionVfxSource: object | null = null;
   private companionBackpressureActive = false;
   private companionFlowfieldCounters = {
     startedJobs: 0,
@@ -560,6 +564,10 @@ export class ArenaScene extends Phaser.Scene {
     getRenderResolutionController()?.setMaxRenderScale(this.graphicsQuality.getProfile().maxRenderScale);
     this.runtimeProfiler = new ArenaRuntimeProfiler();
     this.runtimeProfiler.attachGame(this.game);
+    bridge.setPayloadDiagnosticsSink((info) => this.runtimeProfiler?.recordNetworkPayload(info));
+    const unsubscribeProfilerRecording = this.runtimeProfiler.subscribeRecording((recordingId) => {
+      this.seedCompanionBaselines(recordingId);
+    });
     this.performanceAblation = new PerformanceAblationController(this, {
       onTraceEvent: (type, fields) => this.runtimeProfiler?.recordSemanticEvent(type, fields),
       getQualityController: () => this.graphicsQuality,
@@ -613,6 +621,8 @@ export class ArenaScene extends Phaser.Scene {
       this.performanceDiagnosticsOverlay?.destroy();
       this.performanceDiagnosticsOverlay = null;
       this.runtimeProfiler?.destroy();
+      bridge.setPayloadDiagnosticsSink(null);
+      unsubscribeProfilerRecording();
       this.runtimeProfiler = null;
     });
 
@@ -2169,7 +2179,6 @@ export class ArenaScene extends Phaser.Scene {
       sceneBreakdownScanMs = performance.now() - breakdownStartedAt;
     }
     const localId = bridge.getLocalPlayerId();
-    const nowSynchronized = bridge.getSynchronizedNow();
     const rawDelta = this.game.loop.rawDelta;
     const runtimeContext = {
       localAlive: this.localPlayerState.alive,
@@ -2180,7 +2189,6 @@ export class ArenaScene extends Phaser.Scene {
       optionsOpen,
       pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
       documentFocused: typeof document === 'undefined' || document.hasFocus(),
-      roundElapsedMs: runtimePhase === 'arena' ? nowSynchronized - bridge.getArenaStartTime() : null,
       weapon1Id: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
       weapon2Id: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
       utilityId: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
@@ -2334,6 +2342,38 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
+  private seedCompanionBaselines(recordingId: number): void {
+    const flowfieldSource = this.ctx.flowFieldCoordinator ?? null;
+    const rockSource = this.ctx.arenaResult?.rockVisualSystem ?? null;
+    const vfxSource = this.renderers.gpuVfx;
+    const flowfield = flowfieldSource?.getDiagnostics(performance.now()) ?? null;
+    const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
+    const vfxCounters = vfxSource.getCompanionCounters();
+    this.companionBaselineRecordingId = recordingId;
+    this.companionFlowfieldSource = flowfieldSource;
+    this.companionRockSource = rockSource;
+    this.companionVfxSource = vfxSource;
+    this.companionFlowfieldCounters = {
+      startedJobs: flowfield?.startedJobs ?? 0,
+      workerComputeTotalMs: flowfield?.workerComputeTotalMs ?? 0,
+      roundTripTotalMs: flowfield?.roundTripTotalMs ?? 0,
+    };
+    this.companionRockCounters = {
+      dirtyRocks: rockGpu?.dirtyRocks ?? 0,
+      affectedPages: rockGpu?.affectedPages ?? 0,
+      sparseUploads: rockGpu?.sparseUploads ?? 0,
+      fullUploads: rockGpu?.fullUploads ?? 0,
+      uploadBytes: rockGpu?.estimatedUploadBytes ?? 0,
+    };
+    this.companionVfxCounters = {
+      spawns: vfxCounters.spawns,
+      capacityDrops: vfxCounters.capacityDrops,
+    };
+    this.companionRockInterval = { dirtyRocks: 0, affectedPages: 0, sparseUploads: 0, fullUploads: 0, uploadBytes: 0 };
+    this.companionVfxInterval = { spawns: 0, capacityDrops: 0 };
+    this.companionStaleFlowfields.clear();
+  }
+
   private recordCompanionFrame(delta: number): void {
     const runtimePhase = this.lifecycle.isMatchTerminated()
       ? 'terminated'
@@ -2342,10 +2382,10 @@ export class ArenaScene extends Phaser.Scene {
     const rawDelta = this.game.loop.rawDelta;
     const hostPerformance = bridge.isHost() ? this.hostUpdate.getPerformanceMetrics() : null;
     const clientPerformance = bridge.isHost() ? null : this.clientUpdate.getPerformanceMetrics();
-    this.companionPerformanceFrame += 1;
-    if (this.companionPerformanceFrame % 4 === 0) {
-      this.sampleTransportPerformanceCounts(performance.now());
-    }
+    const performanceNow = performance.now();
+    const sampleSubsystems = performanceNow >= this.nextCompanionSubsystemSampleAtMs;
+    if (sampleSubsystems) this.nextCompanionSubsystemSampleAtMs = performanceNow + 250;
+    if (sampleSubsystems) this.sampleTransportPerformanceCounts(performanceNow);
     const transport = this.transportPerformanceCounts;
     const backpressureActive = transport.backpressureLinkCount > 0;
     if (backpressureActive !== this.companionBackpressureActive) {
@@ -2363,17 +2403,52 @@ export class ArenaScene extends Phaser.Scene {
     const hostCpuMs = hostPerformance?.totalMs ?? 0;
     const clientCpuMs = clientPerformance?.totalMs ?? 0;
     const roleCpuMs = role === 'host' ? hostCpuMs : clientCpuMs;
-    const now = bridge.getSynchronizedNow();
     let flowfield: FlowFieldDiagnostics | null = null;
     let flowfieldJobs = 0;
     let flowfieldComputeMs = 0;
     let flowfieldRoundTripMs = 0;
-    if (this.companionPerformanceFrame % 4 === 0) {
-      flowfield = this.ctx.flowFieldCoordinator?.getDiagnostics(performance.now()) ?? null;
+    if (sampleSubsystems) {
+      flowfield = this.ctx.flowFieldCoordinator?.getDiagnostics(performanceNow) ?? null;
+      const flowfieldSource = this.ctx.flowFieldCoordinator ?? null;
+      const rockSource = this.ctx.arenaResult?.rockVisualSystem ?? null;
+      const vfxSource = this.renderers.gpuVfx;
+      const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
+      const vfxCounters = vfxSource.getCompanionCounters();
+      const newBaseline = this.companionBaselineRecordingId !== (this.runtimeProfiler?.getRecordingId() ?? 0)
+        || this.companionFlowfieldSource !== flowfieldSource
+        || this.companionRockSource !== rockSource
+        || this.companionVfxSource !== vfxSource;
+      if (newBaseline) {
+        this.companionBaselineRecordingId = this.runtimeProfiler?.getRecordingId() ?? 0;
+        this.companionFlowfieldSource = flowfieldSource;
+        this.companionRockSource = rockSource;
+        this.companionVfxSource = vfxSource;
+        this.companionFlowfieldCounters = {
+          startedJobs: flowfield?.startedJobs ?? 0,
+          workerComputeTotalMs: flowfield?.workerComputeTotalMs ?? 0,
+          roundTripTotalMs: flowfield?.roundTripTotalMs ?? 0,
+        };
+        this.companionRockCounters = {
+          dirtyRocks: rockGpu?.dirtyRocks ?? 0,
+          affectedPages: rockGpu?.affectedPages ?? 0,
+          sparseUploads: rockGpu?.sparseUploads ?? 0,
+          fullUploads: rockGpu?.fullUploads ?? 0,
+          uploadBytes: rockGpu?.estimatedUploadBytes ?? 0,
+        };
+        this.companionVfxCounters = {
+          spawns: vfxCounters.spawns,
+          capacityDrops: vfxCounters.capacityDrops,
+        };
+        this.companionRockInterval = { dirtyRocks: 0, affectedPages: 0, sparseUploads: 0, fullUploads: 0, uploadBytes: 0 };
+        this.companionVfxInterval = { spawns: 0, capacityDrops: 0 };
+        this.companionStaleFlowfields.clear();
+      }
       if (flowfield) {
-        flowfieldJobs = Math.max(0, flowfield.startedJobs - this.companionFlowfieldCounters.startedJobs);
-        flowfieldComputeMs = Math.max(0, flowfield.workerComputeTotalMs - this.companionFlowfieldCounters.workerComputeTotalMs);
-        flowfieldRoundTripMs = Math.max(0, flowfield.roundTripTotalMs - this.companionFlowfieldCounters.roundTripTotalMs);
+        if (!newBaseline) {
+          flowfieldJobs = Math.max(0, flowfield.startedJobs - this.companionFlowfieldCounters.startedJobs);
+          flowfieldComputeMs = Math.max(0, flowfield.workerComputeTotalMs - this.companionFlowfieldCounters.workerComputeTotalMs);
+          flowfieldRoundTripMs = Math.max(0, flowfield.roundTripTotalMs - this.companionFlowfieldCounters.roundTripTotalMs);
+        }
         this.companionFlowfieldCounters.startedJobs = flowfield.startedJobs;
         this.companionFlowfieldCounters.workerComputeTotalMs = flowfield.workerComputeTotalMs;
         this.companionFlowfieldCounters.roundTripTotalMs = flowfield.roundTripTotalMs;
@@ -2394,20 +2469,18 @@ export class ArenaScene extends Phaser.Scene {
           else this.companionStaleFlowfields.delete(fieldId);
         }
       }
-    }
-    const rockGpu = this.ctx.arenaResult?.rockVisualSystem.getGpuDiagnostics() ?? null;
-    if (this.companionPerformanceFrame % 4 === 0) {
-      this.updateCompanionRockCounters(rockGpu);
-      const vfxCounters = this.renderers.gpuVfx.getCompanionCounters();
-      this.companionVfxInterval = {
-        spawns: Math.max(0, vfxCounters.spawns - this.companionVfxCounters.spawns),
-        capacityDrops: Math.max(0, vfxCounters.capacityDrops - this.companionVfxCounters.capacityDrops),
-      };
+      if (!newBaseline) this.updateCompanionRockCounters(rockGpu);
+      if (!newBaseline) {
+        this.companionVfxInterval = {
+          spawns: Math.max(0, vfxCounters.spawns - this.companionVfxCounters.spawns),
+          capacityDrops: Math.max(0, vfxCounters.capacityDrops - this.companionVfxCounters.capacityDrops),
+        };
+      }
       this.companionVfxCounters = {
         spawns: vfxCounters.spawns,
         capacityDrops: vfxCounters.capacityDrops,
       };
-      const vfxStats = this.renderers.gpuVfx.getStats();
+      const vfxStats = vfxSource.getStats();
       this.companionActiveVfx = vfxStats
         ? Object.values(vfxStats).reduce((sum, stats) => sum + stats.liveCount, 0)
         : 0;
@@ -2458,6 +2531,7 @@ export class ArenaScene extends Phaser.Scene {
         timings: {
           hostCpuMs,
           clientCpuMs,
+          snapshotBuildMs: hostPerformance?.snapshotBuildMs ?? 0,
           flowfieldComputeMs,
           flowfieldRoundTripMs,
           flowfieldAgeMs: this.companionFlowfieldGauge.ageMs,
@@ -2494,7 +2568,6 @@ export class ArenaScene extends Phaser.Scene {
         optionsOpen: this.ctx.leftPanel.isOptionsOverlayOpen(),
         pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
         documentFocused: typeof document === 'undefined' || document.hasFocus(),
-        roundElapsedMs: runtimePhase === 'arena' ? now - bridge.getArenaStartTime() : null,
         weapon1Id: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'weapon1') ?? null,
         weapon2Id: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'weapon2') ?? null,
         utilityId: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'utility') ?? null,

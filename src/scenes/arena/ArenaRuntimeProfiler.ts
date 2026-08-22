@@ -29,7 +29,6 @@ export interface ArenaRuntimeContext {
   optionsOpen: boolean;
   pageVisible: boolean;
   documentFocused: boolean;
-  roundElapsedMs: number | null;
   weapon1Id: string | null;
   weapon2Id: string | null;
   utilityId: string | null;
@@ -150,6 +149,7 @@ export interface ArenaPerformanceReport {
     durationMs: number;
     syncIntervalMs: number;
     syncMarkerCount: number;
+    eventsTruncated: boolean;
   };
   environment: Record<string, unknown>;
   events: CompanionEvent[];
@@ -205,7 +205,7 @@ export interface ArenaPerformanceReport {
     semanticSamplingHz: number;
     networkBytes: {
       transport: 'exact_webrtc_stats';
-      payload: 'not_collected';
+      payload: 'estimated_utf16_code_units';
       diagnosticEncodingPass: false;
     };
     recorderCostMs: MetricSummary;
@@ -213,6 +213,7 @@ export interface ArenaPerformanceReport {
 }
 
 export type RuntimeDiagnosticsListener = (active: boolean) => void;
+export type RuntimeRecordingListener = (recordingId: number) => void;
 
 export interface PhaserFrameLifecycleMetrics {
   gameStepMs: number;
@@ -239,6 +240,14 @@ const MAX_SERIES_SAMPLES = 12_000;
 const GPU_QUERY_INTERVAL_FRAMES = 4;
 const MAX_PENDING_GPU_QUERIES = 16;
 const FRAME_SLOW_THRESHOLD_MS = 16.7;
+const FRAME_OVER_33MS_THRESHOLD = 33.3;
+const FRAME_RING_CAPACITY = 4096;
+const FRAME_HISTOGRAM_BUCKET_MS = 0.5;
+const FRAME_HISTOGRAM_BUCKET_COUNT = 512;
+const MAX_EVENTS = 4096;
+const CONTEXT_SAMPLE_INTERVAL_MS = 250;
+const LIVE_SUMMARY_INTERVAL_MS = 500;
+const SNAPSHOT_SPIKE_BYTES = 64 * 1024;
 const GAME_PRE_RENDER_EVENT = 'prerender';
 const GAME_POST_RENDER_EVENT = 'postrender';
 
@@ -268,8 +277,16 @@ function numberDetail(sample: ArenaRuntimeSample, key: string): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+const OBSERVED_CONTEXT_KEYS = new Set([
+  'role', 'phase', 'mode', 'mapId', 'quality', 'ablation',
+  'localAlive', 'aimVisible', 'scopeActive', 'utilityPlacementActive',
+  'ultimatePlacementActive', 'optionsOpen', 'pageVisible', 'documentFocused',
+  'weapon1Id', 'weapon2Id', 'utilityId', 'ultimateId',
+  'rockRenderer', 'rockGpuPageSize', 'rockPageSize', 'rendererMode',
+]);
+
 function sampleContext(sample: ArenaRuntimeSample): Record<string, unknown> {
-  return {
+  const candidate: Record<string, unknown> = {
     role: sample.role,
     phase: sample.phase,
     mode: sample.mode,
@@ -279,6 +296,7 @@ function sampleContext(sample: ArenaRuntimeSample): Record<string, unknown> {
     ...(sample.context ?? {}),
     ...(sample.diagnosticContext ?? {}),
   };
+  return Object.fromEntries(Object.entries(candidate).filter(([key]) => OBSERVED_CONTEXT_KEYS.has(key)));
 }
 
 export class ArenaRuntimeProfiler {
@@ -297,15 +315,29 @@ export class ArenaRuntimeProfiler {
   private autoStopped = false;
   private nextSyncAtMs = 0;
   private syncMarkerCount = 0;
+  private eventsTruncated = false;
   private nextSeriesAtMs = 0;
+  private nextContextObserveAtMs = 0;
+  private nextLiveSummaryAtMs = 0;
   private seriesTruncated = false;
   private readonly events: CompanionEvent[] = [];
   private readonly seriesSamples: CompanionSeriesSample[] = [];
   private readonly gpuSamples: PerformanceGpuSample[] = [];
-  private readonly frameTimes: number[] = [];
+  private readonly frameTimeRing = new Array<number>(FRAME_RING_CAPACITY).fill(0);
+  private frameTimeRingIndex = 0;
+  private frameTimeRingCount = 0;
+  private frameTimeRingTotalMs = 0;
+  private frameTimeRingOver33Ms = 0;
+  private readonly frameTimeHistogram = new Array<number>(FRAME_HISTOGRAM_BUCKET_COUNT).fill(0);
+  private frameTimeHistogramTotal = 0;
+  private readonly sessionTotals = new Map<string, number>();
+  private readonly sessionMaxima = new Map<string, number>();
   private readonly recorderCosts: number[] = [];
   private readonly observedScope = new Map<string, Array<{ fromMs: number; toMs: number | null; value: unknown }>>();
   private lastContext: Record<string, unknown> | null = null;
+  private pendingContext: Record<string, unknown> | null = null;
+  private pendingContextSample: ArenaRuntimeSample | null = null;
+  private pendingContextSampleAtMs = 0;
   private currentInterval: Record<string, number> = {};
   private latestGauges: Record<string, number | string | boolean | null> = {};
   private latestSummary: ArenaRuntimeWindowSummary | null = null;
@@ -314,6 +346,7 @@ export class ArenaRuntimeProfiler {
   private ablationSegments: AblationSegment[] = [];
   private ablationSegmentMs = 0;
   private readonly diagnosticsListeners = new Set<RuntimeDiagnosticsListener>();
+  private readonly recordingListeners = new Set<RuntimeRecordingListener>();
   private renderFrame = 0;
   private activeGpuQuery: PendingGpuQuery | null = null;
   private readonly pendingGpuQueries: PendingGpuQuery[] = [];
@@ -324,6 +357,10 @@ export class ArenaRuntimeProfiler {
   private gameEventsInstalled = false;
   private rockDestroyBurstCount = 0;
   private lastRockDestroyedAtMs = Number.NEGATIVE_INFINITY;
+  private pendingSnapshotBytesTotal = 0;
+  private pendingSnapshotBytesMax = 0;
+  private gpuTimerStatus: 'supported' | 'unsupported' | 'unavailable' = 'unavailable';
+  private gpuTimerWasEnabled = false;
 
   private readonly onPreRender = (): void => {
     if (!this.recording || !this.gpuTimer) return;
@@ -379,8 +416,42 @@ export class ArenaRuntimeProfiler {
     return () => this.diagnosticsListeners.delete(listener);
   }
 
+  subscribeRecording(listener: RuntimeRecordingListener): () => void {
+    this.recordingListeners.add(listener);
+    return () => this.recordingListeners.delete(listener);
+  }
+
   isDiagnosticsActive(): boolean {
     return this.diagnosticsActive;
+  }
+
+  getRecordingId(): number {
+    return this.recordingId;
+  }
+
+  /**
+   * Receives the payload size measured at the existing PeerLink encoding boundary. The callback
+   * never serializes again; the value is intentionally classified as an estimate because the
+   * existing string payload length is not a byte-level transport measurement.
+   */
+  recordNetworkPayload(info: {
+    channel: 'rel' | 'fast';
+    payloadLength: number;
+    gameState: 'none' | 'delta' | 'full';
+  }): void {
+    if (!this.recording || info.gameState === 'none' || !Number.isFinite(info.payloadLength)) return;
+    const bytes = Math.max(0, info.payloadLength);
+    this.pendingSnapshotBytesTotal += bytes;
+    this.pendingSnapshotBytesMax = Math.max(this.pendingSnapshotBytesMax, bytes);
+    if (bytes >= SNAPSHOT_SPIKE_BYTES) {
+      this.recordSemanticEvent('network:snapshot_spike', {
+        channel: info.channel,
+        gameState: info.gameState,
+        payloadBytes: bytes,
+        payloadBytesExact: false,
+        payloadSizeKind: 'estimated_utf16_code_units',
+      });
+    }
   }
 
   /** Normal Trace Assist never requests Scene-/DisplayObject-level timing. */
@@ -419,6 +490,9 @@ export class ArenaRuntimeProfiler {
     const now = startedAt;
     const frameMs = Number.isFinite(sample.rawDeltaMs) && sample.rawDeltaMs > 0 ? sample.rawDeltaMs : sample.deltaMs;
     const roleCpuMs = Math.max(0, sample.roleStepMs);
+    const snapshotCount = numberDetail(sample, 'newNetworkSnapshotCount')
+      + numberDetail(sample, 'hostNetworkTickCount');
+    const snapshotBytes = numberDetail(sample, 'snapshotBytes') + this.pendingSnapshotBytesTotal;
     this.latestGauges = {
       enemyCount: sample.enemyCount,
       projectileCount: sample.projectileCount,
@@ -445,9 +519,11 @@ export class ArenaRuntimeProfiler {
       this.addInterval('clientCpuTotalMs', roleCpuMs);
       this.addInterval('clientCpuMaxMs', roleCpuMs, true);
     }
-    this.addInterval('snapshotCount', numberDetail(sample, 'newNetworkSnapshotCount'));
-    this.addInterval('snapshotBytesTotal', numberDetail(sample, 'snapshotBytes'));
-    this.addInterval('snapshotBytesMax', numberDetail(sample, 'snapshotBytes'), true);
+    this.addInterval('snapshotCount', snapshotCount);
+    this.addInterval('snapshotBytesTotal', snapshotBytes);
+    this.addInterval('snapshotBytesMax', Math.max(numberDetail(sample, 'snapshotBytes'), this.pendingSnapshotBytesMax), true);
+    this.addInterval('snapshotBuildTotalMs', numberDetail(sample, 'snapshotBuildMs'));
+    this.addInterval('snapshotBuildMaxMs', numberDetail(sample, 'snapshotBuildMs'), true);
     this.addInterval('flowfieldJobs', numberDetail(sample, 'flowfieldJobs'));
     this.addInterval('computeTotalMs', numberDetail(sample, 'flowfieldComputeMs'));
     this.addInterval('computeMaxMs', numberDetail(sample, 'flowfieldComputeMs'), true);
@@ -460,9 +536,17 @@ export class ArenaRuntimeProfiler {
     this.addInterval('uploadBytes', numberDetail(sample, 'uploadBytes'));
     this.addInterval('vfxSpawns', numberDetail(sample, 'vfxSpawns'));
     this.addInterval('capacityDrops', numberDetail(sample, 'capacityDrops'));
-    this.frameTimes.push(frameMs);
-    if (this.frameTimes.length > 4096) this.frameTimes.shift();
-    this.observeContext(sampleContext(sample), now);
+    this.recordFrameTime(frameMs);
+    this.pendingContextSample = sample;
+    this.pendingContextSampleAtMs = now;
+    if (!this.lastContext || now >= this.nextContextObserveAtMs) {
+      const context = sampleContext(sample);
+      this.pendingContext = context;
+      this.observeContext(context, now);
+      this.nextContextObserveAtMs = now + CONTEXT_SAMPLE_INTERVAL_MS;
+    }
+    this.pendingSnapshotBytesTotal = 0;
+    this.pendingSnapshotBytesMax = 0;
     if (this.recording) {
       this.emitSessionSyncIfDue(now);
       if (now >= this.nextSeriesAtMs) this.flushSeries(now);
@@ -470,7 +554,10 @@ export class ArenaRuntimeProfiler {
       if (this.recorderCosts.length > 256) this.recorderCosts.shift();
       if (now - this.recordingStartedAtMs >= 30 * 60 * 1000) this.stopRecording(true);
     }
-    this.latestSummary = this.buildLiveSummary(now, sample);
+    if (this.latestSummary === null || now >= this.nextLiveSummaryAtMs) {
+      this.latestSummary = this.buildLiveSummary(now, sample);
+      this.nextLiveSummaryAtMs = now + LIVE_SUMMARY_INTERVAL_MS;
+    }
   }
 
   startRecording(environment: Record<string, unknown> = {}): void {
@@ -488,14 +575,27 @@ export class ArenaRuntimeProfiler {
     this.nextSyncAtMs = now + SESSION_SYNC_INTERVAL_MS;
     this.nextSeriesAtMs = now + SERIES_INTERVAL_MS;
     this.syncMarkerCount = 0;
+    this.eventsTruncated = false;
     this.events.length = 0;
     this.seriesSamples.length = 0;
     this.gpuSamples.length = 0;
-    this.frameTimes.length = 0;
+    this.frameTimeRingIndex = 0;
+    this.frameTimeRingCount = 0;
+    this.frameTimeRingTotalMs = 0;
+    this.frameTimeRingOver33Ms = 0;
+    this.frameTimeHistogram.fill(0);
+    this.frameTimeHistogramTotal = 0;
+    this.sessionTotals.clear();
+    this.sessionMaxima.clear();
     this.recorderCosts.length = 0;
     this.currentInterval = {};
     this.latestGauges = {};
     this.lastContext = null;
+    this.pendingContext = null;
+    this.pendingContextSample = null;
+    this.pendingContextSampleAtMs = 0;
+    this.nextContextObserveAtMs = now;
+    this.nextLiveSummaryAtMs = now;
     this.rockDestroyBurstCount = 0;
     this.lastRockDestroyedAtMs = Number.NEGATIVE_INFINITY;
     this.observedScope.clear();
@@ -505,7 +605,12 @@ export class ArenaRuntimeProfiler {
     this.seriesTruncated = false;
     this.pendingGpuQueriesDropped = 0;
     this.disjointGpuSamplesDropped = 0;
+    this.pendingSnapshotBytesTotal = 0;
+    this.pendingSnapshotBytesMax = 0;
+    this.gpuTimerWasEnabled = false;
+    this.gpuTimerStatus = this.game ? 'unsupported' : 'unavailable';
     this.gpuVfxSource?.reset();
+    for (const listener of this.recordingListeners) listener(this.recordingId);
     this.safeMark(`FD:session:start:${this.sessionId}`);
     this.syncDiagnosticsLifecycle();
   }
@@ -513,6 +618,10 @@ export class ArenaRuntimeProfiler {
   stopRecording(autoStopped = false): void {
     if (!this.recording) return;
     const now = performance.now();
+    const finalContext = this.pendingContextSample ? sampleContext(this.pendingContextSample) : this.pendingContext;
+    if (finalContext && (!this.lastContext || !this.sameContext(this.lastContext, finalContext))) {
+      this.observeContext(finalContext, this.pendingContextSampleAtMs || now);
+    }
     this.flushSeries(now, true);
     this.recording = false;
     this.recordingEndedAtMs = now;
@@ -527,12 +636,21 @@ export class ArenaRuntimeProfiler {
   recordQualityChange(from: GraphicsQuality, to: GraphicsQuality): void {
     if (!this.recording) return;
     this.recordSemanticEvent('context_change', { scope: 'quality', from, to });
+    if (this.lastContext) {
+      const atMs = Math.max(0, performance.now() - this.recordingStartedAtMs);
+      const scopes = this.observedScope.get('quality') ?? [];
+      const current = scopes[scopes.length - 1];
+      if (current) current.toMs = atMs;
+      scopes.push({ fromMs: atMs, toMs: null, value: to });
+      this.observedScope.set('quality', scopes);
+      this.lastContext.quality = to;
+    }
   }
 
   recordSemanticEvent(type: string, fields: Record<string, unknown> = {}): void {
     if (!this.recording) return;
     const atMs = Math.max(0, performance.now() - this.recordingStartedAtMs);
-    this.events.push({ atMs, type, ...fields });
+    this.pushEvent({ atMs, type, ...fields });
     const marker = type.startsWith('FD:')
       ? type
       : type.includes(':') ? `FD:${type}` : `FD:event:${type}`;
@@ -590,6 +708,7 @@ export class ArenaRuntimeProfiler {
         durationMs,
         syncIntervalMs: SESSION_SYNC_INTERVAL_MS,
         syncMarkerCount: this.syncMarkerCount,
+        eventsTruncated: this.eventsTruncated,
       },
       environment: { ...this.recordingEnvironment },
       events: this.events.map((event) => ({ ...event })),
@@ -614,7 +733,7 @@ export class ArenaRuntimeProfiler {
           clientFrameCount: this.summaryTotal('clientFrameCount'),
         },
         gpu: {
-          status: this.game ? (this.gpuTimer ? 'supported' : 'unsupported') : 'unavailable',
+          status: this.gpuTimerStatus,
           sampleEveryFrames: GPU_QUERY_INTERVAL_FRAMES,
           pendingQueriesDropped: this.pendingGpuQueriesDropped,
           disjointSamplesDropped: this.disjointGpuSamplesDropped,
@@ -634,13 +753,13 @@ export class ArenaRuntimeProfiler {
         traceAssistEnabled: true,
         recordingEnabled: true,
         liveHudEnabled: this.liveHudEnabled,
-        gpuTimerEnabled: this.gpuTimer !== null,
+        gpuTimerEnabled: this.gpuTimerWasEnabled,
         drawCallHooksEnabled: false,
         glDiagnosticHooksEnabled: false,
         semanticSamplingHz: 1000 / SERIES_INTERVAL_MS,
         networkBytes: {
           transport: 'exact_webrtc_stats',
-          payload: 'not_collected',
+          payload: 'estimated_utf16_code_units',
           diagnosticEncodingPass: false,
         },
         recorderCostMs: summarize(this.recorderCosts),
@@ -658,8 +777,72 @@ export class ArenaRuntimeProfiler {
 
   private addInterval(key: string, value: number, max = false): void {
     if (!Number.isFinite(value) || value === 0) return;
-    if (max) this.currentInterval[key] = Math.max(this.currentInterval[key] ?? 0, value);
-    else this.currentInterval[key] = (this.currentInterval[key] ?? 0) + value;
+    if (max) {
+      this.currentInterval[key] = Math.max(this.currentInterval[key] ?? 0, value);
+      this.sessionMaxima.set(key, Math.max(this.sessionMaxima.get(key) ?? 0, value));
+    } else {
+      this.currentInterval[key] = (this.currentInterval[key] ?? 0) + value;
+      this.sessionTotals.set(key, (this.sessionTotals.get(key) ?? 0) + value);
+    }
+  }
+
+  private recordFrameTime(frameMs: number): void {
+    const index = this.frameTimeRingIndex;
+    if (this.frameTimeRingCount === FRAME_RING_CAPACITY) {
+      const retired = this.frameTimeRing[index];
+      this.frameTimeRingTotalMs -= retired;
+      if (retired > FRAME_OVER_33MS_THRESHOLD) this.frameTimeRingOver33Ms -= 1;
+    } else {
+      this.frameTimeRingCount += 1;
+    }
+    this.frameTimeRing[index] = frameMs;
+    this.frameTimeRingTotalMs += frameMs;
+    if (frameMs > FRAME_OVER_33MS_THRESHOLD) this.frameTimeRingOver33Ms += 1;
+    this.frameTimeRingIndex = (index + 1) % FRAME_RING_CAPACITY;
+
+    const bucket = Math.min(
+      FRAME_HISTOGRAM_BUCKET_COUNT - 1,
+      Math.max(0, Math.floor(frameMs / FRAME_HISTOGRAM_BUCKET_MS)),
+    );
+    this.frameTimeHistogram[bucket] += 1;
+    this.frameTimeHistogramTotal += 1;
+  }
+
+  private frameRingValues(): number[] {
+    const values: number[] = [];
+    const start = this.frameTimeRingCount === FRAME_RING_CAPACITY ? this.frameTimeRingIndex : 0;
+    for (let offset = 0; offset < this.frameTimeRingCount; offset += 1) {
+      values.push(this.frameTimeRing[(start + offset) % FRAME_RING_CAPACITY]);
+    }
+    return values;
+  }
+
+  private frameRingSummary(): MetricSummary {
+    const values = this.frameRingValues();
+    if (values.length === 0) return emptyMetricSummary();
+    const p95 = percentile(values, 0.95);
+    const p99 = percentile(values, 0.99);
+    let peak = 0;
+    for (const value of values) peak = Math.max(peak, value);
+    return {
+      avg: this.frameTimeRingTotalMs / this.frameTimeRingCount,
+      p95,
+      p99,
+      peak,
+    };
+  }
+
+  private histogramPercentile(fraction: number): number {
+    if (this.frameTimeHistogramTotal === 0) return 0;
+    const target = Math.max(1, Math.ceil(this.frameTimeHistogramTotal * fraction));
+    let cumulative = 0;
+    for (let index = 0; index < this.frameTimeHistogram.length; index += 1) {
+      cumulative += this.frameTimeHistogram[index];
+      if (cumulative >= target) {
+        return (index + 0.5) * FRAME_HISTOGRAM_BUCKET_MS;
+      }
+    }
+    return FRAME_HISTOGRAM_BUCKET_COUNT * FRAME_HISTOGRAM_BUCKET_MS;
   }
 
   private flushSeries(now: number, final = false): void {
@@ -679,7 +862,7 @@ export class ArenaRuntimeProfiler {
     const elapsedMs = Math.max(0, Math.round(now - this.recordingStartedAtMs));
     const marker = `FD:session:sync:${this.sessionId}:${elapsedMs}`;
     this.safeMark(marker);
-    this.events.push({ atMs: elapsedMs, type: 'session_sync', marker });
+    this.pushEvent({ atMs: elapsedMs, type: 'session_sync', marker });
     this.syncMarkerCount += 1;
     this.nextSyncAtMs = now + SESSION_SYNC_INTERVAL_MS;
   }
@@ -690,19 +873,37 @@ export class ArenaRuntimeProfiler {
     if (this.lastContext) {
       for (const key of new Set([...Object.keys(this.lastContext), ...Object.keys(context)])) {
         if (this.lastContext[key] === context[key]) continue;
-        this.events.push({ atMs, type: 'context_change', scope: key, from: this.lastContext[key] ?? null, to: context[key] ?? null });
-        this.safeMark('FD:context:change');
-        const scopes = this.observedScope.get(key) ?? [];
-        const current = scopes[scopes.length - 1];
-        if (current) current.toMs = atMs;
-        scopes.push({ fromMs: atMs, toMs: null, value: context[key] ?? null });
-        this.observedScope.set(key, scopes);
+        this.applyContextValue(key, context[key] ?? null, atMs, this.lastContext[key] ?? null);
       }
     }
     if (!this.lastContext) {
       for (const [key, value] of Object.entries(context)) this.observedScope.set(key, [{ fromMs: 0, toMs: null, value }]);
     }
     this.lastContext = context;
+  }
+
+  private applyContextValue(key: string, value: unknown, atMs: number, from: unknown): void {
+    this.pushEvent({ atMs, type: 'context_change', scope: key, from, to: value });
+    this.safeMark('FD:context:change');
+    const scopes = this.observedScope.get(key) ?? [];
+    const current = scopes[scopes.length - 1];
+    if (current) current.toMs = atMs;
+    scopes.push({ fromMs: atMs, toMs: null, value });
+    this.observedScope.set(key, scopes);
+  }
+
+  private sameContext(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    for (const key of keys) if (left[key] !== right[key]) return false;
+    return true;
+  }
+
+  private pushEvent(event: CompanionEvent): void {
+    if (this.events.length >= MAX_EVENTS) {
+      this.events.shift();
+      this.eventsTruncated = true;
+    }
+    this.events.push(event);
   }
 
   private closeObservedScopes(atMs: number): void {
@@ -725,8 +926,8 @@ export class ArenaRuntimeProfiler {
       frameTimeTotalMs: total,
       frameTimeMaxMs: this.summaryMax('frameTimeMaxMs'),
       slowFrameCount: slow,
-      p95Ms: percentile(this.frameTimes, 0.95),
-      p99Ms: percentile(this.frameTimes, 0.99),
+      p95Ms: this.histogramPercentile(0.95),
+      p99Ms: this.histogramPercentile(0.99),
       fps: total > 0 ? frameCount * 1000 / total : 0,
       slowFramePercent: frameCount > 0 ? slow / frameCount * 100 : 0,
     };
@@ -734,6 +935,7 @@ export class ArenaRuntimeProfiler {
 
   private buildLiveSummary(now: number, sample: ArenaRuntimeSample): ArenaRuntimeWindowSummary {
     const frame = this.buildFrameSummary();
+    const liveRawDelta = this.frameRingSummary();
     return {
       startedAtMs: this.recording ? 0 : now,
       durationMs: this.recording ? Math.max(0, now - this.recordingStartedAtMs) : 0,
@@ -749,9 +951,9 @@ export class ArenaRuntimeProfiler {
       coveragePercent: 100,
       maxSampleGapMs: 0,
       over16msPercent: frame.slowFramePercent,
-      over33msPercent: this.frameTimes.length > 0 ? this.frameTimes.filter((value) => value > 33.3).length / this.frameTimes.length * 100 : 0,
+      over33msPercent: this.frameTimeRingCount > 0 ? this.frameTimeRingOver33Ms / this.frameTimeRingCount * 100 : 0,
       timings: {
-        rawDeltaMs: summarize(this.frameTimes),
+        rawDeltaMs: liveRawDelta,
         deltaMs: summarize([sample.deltaMs]),
         gameStepMs: summarize([sample.gameStepMs]),
         roleStepMs: summarize([sample.roleStepMs]),
@@ -770,11 +972,11 @@ export class ArenaRuntimeProfiler {
   }
 
   private summaryTotal(key: string): number {
-    return this.seriesSamples.reduce((sum, sample) => sum + (sample.interval[key] ?? 0), 0) + (this.currentInterval[key] ?? 0);
+    return this.sessionTotals.get(key) ?? 0;
   }
 
   private summaryMax(key: string): number {
-    return Math.max(0, ...this.seriesSamples.map((sample) => sample.interval[key] ?? 0), this.currentInterval[key] ?? 0);
+    return this.sessionMaxima.get(key) ?? 0;
   }
 
   private safeMark(name: string): void {
@@ -820,12 +1022,28 @@ export class ArenaRuntimeProfiler {
   }
 
   private setupGpuTimer(): void {
-    if (this.gpuTimer || !this.game || typeof WebGL2RenderingContext === 'undefined') return;
+    if (this.gpuTimer) {
+      this.gpuTimerWasEnabled = true;
+      this.gpuTimerStatus = 'supported';
+      return;
+    }
+    if (!this.game || typeof WebGL2RenderingContext === 'undefined') {
+      this.gpuTimerStatus = this.game ? 'unsupported' : 'unavailable';
+      return;
+    }
     const gl = (this.game.renderer as { gl?: WebGLRenderingContext }).gl;
-    if (!(gl instanceof WebGL2RenderingContext)) return;
+    if (!(gl instanceof WebGL2RenderingContext)) {
+      this.gpuTimerStatus = 'unsupported';
+      return;
+    }
     const extension = gl.getExtension('EXT_disjoint_timer_query_webgl2');
-    if (!extension) return;
+    if (!extension) {
+      this.gpuTimerStatus = 'unsupported';
+      return;
+    }
     this.gpuTimer = { gl, extension };
+    this.gpuTimerWasEnabled = true;
+    this.gpuTimerStatus = 'supported';
   }
 
   private pollGpuQueries(): void {

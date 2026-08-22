@@ -23,6 +23,7 @@ import {
   type LinkDiagnostics,
   type PeerPlayerHandle,
   type PeerReconnectStatus,
+  type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
 import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
@@ -503,6 +504,7 @@ function normalizeArenaLoadProgress(value: unknown): number {
 }
 
 const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
+let networkPayloadDiagnosticsSink: ((info: PeerPayloadDiagnostics) => void) | null = null;
 
 export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
@@ -651,12 +653,20 @@ export class NetworkBridge {
   static async connect(): Promise<void> {
     const roomCode = readRoomCodeFromUrl();
     const session = roomCode === null
-      ? await createHostSession({ hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS })
+      ? await createHostSession({
+        hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
+        onPayloadDiagnostics: (info) => networkPayloadDiagnosticsSink?.(info),
+      })
       : await joinHostSession(roomCode, {
         hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
         resumeToken: getOrCreateRoomResumeToken(roomCode),
+        onPayloadDiagnostics: (info) => networkPayloadDiagnosticsSink?.(info),
       });
     console.info(`[Netz] Raum ${session.roomCode} – Rolle ${session.room.isHost() ? 'Host' : 'Client'}`);
+  }
+
+  setPayloadDiagnosticsSink(sink: ((info: PeerPayloadDiagnostics) => void) | null): void {
+    networkPayloadDiagnosticsSink = sink;
   }
 
   /** Beendet den aktuellen Raum bewusst; ein Client kündigt das dem Host explizit an. */

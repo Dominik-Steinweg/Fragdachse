@@ -8,6 +8,15 @@
 import type { PeerNetworkError } from './PeerSignaling';
 import type { PeerChannelKind, PeerMessage } from './protocol';
 
+export interface PeerPayloadDiagnostics {
+  channel: PeerChannelKind;
+  messageType: PeerMessage['t'];
+  /** Existing encoded string length; no diagnostic re-encoding is performed. */
+  payloadLength: number;
+  payloadSizeKind: 'estimated_utf16_code_units';
+  gameState: 'none' | 'delta' | 'full';
+}
+
 /** Eine gerichtete Verbindung zur Gegenseite (Host↔Client). */
 export interface PeerLinkLike {
   /** Transportinterne Broker-ID. Nur für Diagnose und als Map-Schlüssel. */
@@ -15,6 +24,7 @@ export interface PeerLinkLike {
   /** Spiel-seitige Spieler-ID der Gegenseite; erst nach dem Handshake gesetzt. */
   playerId: string;
   send(message: PeerMessage, channel: PeerChannelKind): void;
+  setPayloadDiagnosticsSink?(sink: ((info: PeerPayloadDiagnostics) => void) | null): void;
   close(): void;
 }
 

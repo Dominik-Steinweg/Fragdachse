@@ -1100,6 +1100,9 @@ export class HostUpdateCoordinator {
       this.ctx.turretSystem?.getTurrets() ?? [],
     ) ?? [];
 
+    // One coarse timing pair only around the actual 20-Hz snapshot construction/publication.
+    // The regular host step remains covered by its single outer measurement.
+    const snapshotBuildStartedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     bridge.publishGameState({
       roundStartTime: bridge.getArenaStartTime(),
       players,
@@ -1140,6 +1143,9 @@ export class HostUpdateCoordinator {
       captureTheBeer,
       coopDefenseCarry,
     }, fullSnapshotRequested);
+    const snapshotBuildMs = this.coarsePerformanceMetricsEnabled
+      ? Math.max(0, performance.now() - snapshotBuildStartedAt)
+      : 0;
 
     if (projectiles.some(p => p.style === 'bfg')) {
       this.ctx.visualFeedback.camera.request(bfgFlightRumble());
@@ -1153,6 +1159,7 @@ export class HostUpdateCoordinator {
         ...emptyHostUpdatePerformanceMetrics(),
         totalMs: performance.now() - startedAt,
         networkTick: true,
+        snapshotBuildMs,
         navWorkerComputeMs: this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0,
       };
     }

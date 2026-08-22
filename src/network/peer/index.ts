@@ -41,6 +41,7 @@ export type {
   PeerRoomOptions,
   PeerRpcHandler,
 } from './PeerRoom';
+export type { PeerPayloadDiagnostics } from './transport';
 export { PeerJsTransport } from './PeerJsTransport';
 export { PeerLink } from './PeerLink';
 export {

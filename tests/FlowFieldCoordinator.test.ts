@@ -202,6 +202,14 @@ describe('FlowFieldCoordinator', () => {
     harness.coordinator.registerField('base', { goalMode: 'bases' });
     harness.bootstrap();
 
+    // Ein unveraendertes Feld bleibt gueltig, auch wenn sein letzter Aktivierungszeitpunkt
+    // lange zurueckliegt. Erst eine neuere gewuenschte Generation darf stale werden.
+    expect(harness.coordinator.getDiagnostics(1_000_000).fields.player.stale).toBe(false);
+    expect(harness.coordinator.getDiagnostics(1_000_000).fields.strategic.stale).toBe(false);
+    const player = harness.coordinator.getFieldView('player');
+    const strategic = harness.coordinator.getFieldView('strategic');
+    player?.setGoals(harness.goals([{ gridX: 3, gridY: 5 }]));
+    strategic?.setGoals(harness.goals([{ gridX: 4, gridY: 5 }]));
     const fields = harness.coordinator.getDiagnostics(1_000_000).fields;
     expect(fields.player).toMatchObject({
       targetCadenceMs: 50,

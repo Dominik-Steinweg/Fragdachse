@@ -289,14 +289,15 @@ export class GpuVfxSystem {
       const lane = this.lanes[index];
       this.applyVisibility(lane);
       if (lane.pool.getLiveCount() > 0) activeMask |= (1 << index);
-      const capacity = Math.max(1, lane.spec.capacity);
-      const high = lane.pool.getLiveCount() / capacity >= 0.9;
+      const capacity = Math.max(1, lane.pool.getCapacity());
+      const liveCount = lane.pool.getLiveCount();
+      const high = liveCount / capacity >= 0.9;
       if (high && !this.highUtilizationState[index]) {
         this.diagnosticEventSink?.('gpu:vfx_high_utilization', {
           lane: lane.spec.label,
-          liveCount: lane.pool.getLiveCount(),
+          liveCount,
           capacity,
-          utilization: lane.pool.getLiveCount() / capacity,
+          utilization: liveCount / capacity,
         });
       }
       this.highUtilizationState[index] = high;

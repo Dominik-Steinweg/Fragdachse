@@ -163,6 +163,10 @@ export interface FlowFieldFieldDiagnostics {
   readonly coalescedJobs: number;
   readonly skippedUnchangedFields: number;
   readonly activeAgeMs: number | null;
+  readonly recomputePending: boolean;
+  readonly recomputePendingAgeMs: number | null;
+  readonly recomputeInFlight: boolean;
+  readonly recomputeBlocked: boolean;
   readonly stale: boolean;
 }
 
@@ -193,6 +197,7 @@ interface CoordinatorField {
   readonly activationListeners: Set<(payload: unknown) => void>;
   readonly pool: BufferPool;
   readonly view: FlowFieldFieldView;
+  recomputeRequestedAtMs: number | null;
 }
 
 const EMPTY_GOALS = new Int32Array(0);
@@ -229,6 +234,7 @@ export class FlowFieldCoordinator {
   private accumulatorMs = 0;
   private tickCounter = 0;
   private inFlightJobId = -1;
+  private readonly inFlightFieldIds = new Set<string>();
   private inFlightSinceTick = -1;
   private inFlightStartedAt = 0;
   private jobSequence = 0;
@@ -309,6 +315,7 @@ export class FlowFieldCoordinator {
       coalescedJobs: 0,
       skippedUnchangedFields: 0,
       lastActivatedAtMs: 0,
+      recomputeRequestedAtMs: null,
       activationListeners: new Set(),
       pool: { integration: [], vector: [], goalSource: [], traversable: [] },
       view: undefined as unknown as FlowFieldFieldView,
@@ -353,6 +360,7 @@ export class FlowFieldCoordinator {
         this.coalescedJobs += 1;
         field.coalescedJobs += 1;
       }
+      field.recomputeRequestedAtMs ??= nowMs();
     }
     field.rawGoals = nextGoals;
     field.pendingPayload = payload;
@@ -372,6 +380,7 @@ export class FlowFieldCoordinator {
       this.lookups, [index], this.counts,
     );
     this.topologyVersion += 1;
+    this.markFieldsRecomputeRequested();
     if (this.pendingFullResync) return;
     this.pendingCellPatchByIndex.set(index, next);
   }
@@ -381,6 +390,7 @@ export class FlowFieldCoordinator {
     this.refreshRockOccupancyFromProvider();
     this.counts = this.classifyMirror();
     this.topologyVersion += 1;
+    this.markFieldsRecomputeRequested();
     this.pendingFullResync = true;
     this.pendingCellPatchByIndex.clear();
   }
@@ -399,6 +409,7 @@ export class FlowFieldCoordinator {
     this.refreshBaseOccupancy();
     this.counts = this.classifyMirror();
     this.topologyVersion += 1;
+    this.markFieldsRecomputeRequested();
     this.pendingPatches.push({ t: 'active-bases', ids: [...ids] });
 
     const goalsAfter = new Set(
@@ -521,6 +532,7 @@ export class FlowFieldCoordinator {
   private dispatchNow(): void {
     if (!this.initialized) return;
     this.inFlightJobId = -1;
+    this.inFlightFieldIds.clear();
     if (this.completedBatch) {
       // Der Batch beruht auf der alten Basismenge und darf nicht mehr aktiviert werden.
       this.recycleResult(this.completedBatch);
@@ -549,6 +561,8 @@ export class FlowFieldCoordinator {
     this.inFlightJobId = job.jobId;
     this.inFlightSinceTick = this.tickCounter;
     this.inFlightStartedAt = nowMs();
+    this.inFlightFieldIds.clear();
+    for (const resultField of job.fields) this.inFlightFieldIds.add(resultField.fieldId);
     this.runner.post(job);
   }
 
@@ -593,8 +607,14 @@ export class FlowFieldCoordinator {
 
   private needsRecompute(field: CoordinatorField): boolean {
     if (field.activeSnapshot === null && field.dispatchedGoals === null) return true;
+    if (field.activeSnapshot !== null && field.activeSnapshot.goalVersion !== field.goalVersion) return true;
     if (field.dispatchedTopologyVersion !== this.topologyVersion) return true;
-    return !sameIndexes(field.dispatchedGoals, field.rawGoals);
+    return !sameIndexes(field.dispatchedGoals, field.rawGoals) || field.dispatchedPayload !== field.pendingPayload;
+  }
+
+  private markFieldsRecomputeRequested(): void {
+    const requestedAtMs = nowMs();
+    for (const field of this.fields.values()) field.recomputeRequestedAtMs ??= requestedAtMs;
   }
 
   private takePendingPatches(): FlowFieldPatch[] {
@@ -622,6 +642,7 @@ export class FlowFieldCoordinator {
       return;
     }
     this.inFlightJobId = -1;
+    this.inFlightFieldIds.clear();
     this.completedJobs += result.fields.length;
     for (const resultField of result.fields) {
       const field = this.fields.get(resultField.fieldId);
@@ -661,6 +682,8 @@ export class FlowFieldCoordinator {
         profileTraversable: resultField.profileTraversable,
       };
       field.lastActivatedAtMs = nowMs();
+      if (this.needsRecompute(field)) field.recomputeRequestedAtMs ??= field.lastActivatedAtMs;
+      else field.recomputeRequestedAtMs = null;
       activated.push(field);
     }
 
@@ -711,6 +734,7 @@ export class FlowFieldCoordinator {
     this.attachRunner(this.runner);
     this.initialized = false;
     this.inFlightJobId = -1;
+    this.inFlightFieldIds.clear();
     this.completedBatch = null;
     this.pendingPatches = [];
     this.pendingCellPatchByIndex.clear();
@@ -727,6 +751,7 @@ export class FlowFieldCoordinator {
     this.attachRunner(runner);
     this.initialized = false;
     this.inFlightJobId = -1;
+    this.inFlightFieldIds.clear();
     this.completedBatch = null;
     for (const field of this.fields.values()) {
       field.dispatchedGoals = null;
@@ -828,6 +853,7 @@ export class FlowFieldCoordinator {
             this.coalescedJobs += 1;
             field.coalescedJobs += 1;
           }
+          field.recomputeRequestedAtMs ??= nowMs();
         }
         field.rawGoals = nextGoals;
         field.pendingPayload = payload;
@@ -870,6 +896,12 @@ export class FlowFieldCoordinator {
       const activeAgeMs = field.lastActivatedAtMs > 0
         ? Math.max(0, atMs - field.lastActivatedAtMs)
         : null;
+      const recomputePending = field.activeSnapshot !== null && this.needsRecompute(field);
+      const recomputePendingAgeMs = recomputePending && field.recomputeRequestedAtMs !== null
+        ? Math.max(0, atMs - field.recomputeRequestedAtMs)
+        : null;
+      const recomputeInFlight = recomputePending && this.inFlightFieldIds.has(fieldId);
+      const recomputeBlocked = recomputePending && !recomputeInFlight;
       fields[fieldId] = {
         fieldId,
         goalMode: field.descriptor.goalMode,
@@ -882,7 +914,15 @@ export class FlowFieldCoordinator {
         coalescedJobs: field.coalescedJobs,
         skippedUnchangedFields: field.skippedUnchangedFields,
         activeAgeMs,
-        stale: staleEligible && activeAgeMs !== null && staleAfterMs !== null && activeAgeMs > staleAfterMs,
+        recomputePending,
+        recomputePendingAgeMs,
+        recomputeInFlight,
+        recomputeBlocked,
+        stale: staleEligible
+          && staleAfterMs !== null
+          && recomputePendingAgeMs !== null
+          && recomputePendingAgeMs > staleAfterMs
+          && (recomputeInFlight || recomputeBlocked),
       };
     }
     return {
