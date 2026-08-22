@@ -159,8 +159,8 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
       return [size.width, size.height];
     };
 
-    expect(dimensions('GLOCK')).toEqual([7, 11]);
-    expect(dimensions('P90')).toEqual([9, 13]);
+    expect(dimensions('GLOCK')).toEqual([9, 11]);
+    expect(dimensions('P90')).toEqual([9, 14]);
     expect(dimensions('AK47')).toEqual([9, 22]);
     expect(dimensions('AWP')).toEqual([9, 28]);
     expect(dimensions('ROCKET_LAUNCHER')).toEqual([13, 22]);

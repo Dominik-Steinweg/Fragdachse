@@ -143,8 +143,11 @@ export class GpuVfxSystem {
       yMode: 0, gravityFactor: 1,
       rotation: 0, angularVelocity: 0,
       scaleStart: 1, scaleEnd: 1, scaleEase: 0,
+      // Neutral: uniforme Skalierung und voller Tint – exakt das Verhalten vor diesen Feldern.
+      stretchStart: 1, stretchEnd: 1,
       alphaStart: 1, alphaEnd: 0, alphaEase: 0,
       tint: 0xffffff,
+      tintBlendStart: 1, tintBlendEnd: 1,
     };
   }
 

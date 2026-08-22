@@ -88,13 +88,18 @@ export const TEX_FLAME_TONGUE = '__flame_tongue';
 
 /**
  * Temperaturbaender des Jets. Ein Flammenwerfer liest sich als Verlauf entlang des Strahls:
- * weissgelb an der Duese, orange in der Mitte, glutrot am ausbrennenden Ende. Zufaellig aus
+ * goldgelb an der Duese, orange in der Mitte, glutrot am ausbrennenden Ende. Zufaellig aus
  * *einer* Palette gezogene Tints ergeben dagegen ein Farbrauschen, das wie Funkenflug wirkt.
+ *
+ * Kein Band enthaelt reines Weiss. Additiv summieren sich ueberlappende Partikel, und schon
+ * wenige weisse Beitraege heben *alle drei* Kanaele gemeinsam an – der Strahl kippt dann als
+ * Ganzes ins Weisse, statt seine Farbe zu zeigen. Die Hitze traegt deshalb der Farbton (Gold
+ * gegen Glutrot), nicht die Entsaettigung.
  */
-export const FLAME_JET_TINTS_HOT  = [0xffffff, 0xfff0bb, 0xffdf8a, 0xffc95e] as const;
+export const FLAME_JET_TINTS_HOT  = [0xffe9a8, 0xffd979, 0xffc65a, 0xffb845] as const;
 export const FLAME_JET_TINTS_MID  = [0xffa838, 0xff8a20, 0xff7412, 0xffbb52] as const;
 export const FLAME_JET_TINTS_COOL = [0xe0450c, 0xb63108, 0xc93a0a, 0x8e2c0c] as const;
-export const VOID_JET_TINTS_HOT   = [0xffffff, 0xf6dcff, 0xe6b6ff, 0xd79bff] as const;
+export const VOID_JET_TINTS_HOT   = [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff] as const;
 export const VOID_JET_TINTS_MID   = [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff] as const;
 export const VOID_JET_TINTS_COOL  = [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4] as const;
 

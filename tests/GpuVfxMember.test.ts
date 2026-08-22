@@ -32,10 +32,14 @@ function spec(overrides: Partial<GpuVfxSpawnSpec> = {}): GpuVfxSpawnSpec {
     scaleStart: 1,
     scaleEnd: 0,
     scaleEase: GpuVfxEase.Linear,
+    stretchStart: 1,
+    stretchEnd: 1,
     alphaStart: 1,
     alphaEnd: 0,
     alphaEase: GpuVfxEase.Linear,
     tint: 0xffffff,
+    tintBlendStart: 1,
+    tintBlendEnd: 1,
     ...overrides,
   } as GpuVfxSpawnSpec;
 }
@@ -98,5 +102,45 @@ describe('gpu vfx member: gravityFactor', () => {
     // Reine Strecke ueber die Lebenszeit, keine Beschleunigung.
     expect(y.base).toBe(100);
     expect(y.amplitude).toBeCloseTo(-20, 6);
+  });
+});
+
+describe('gpu vfx member: Streckung und Tint-Blend', () => {
+  it('teilt sich ohne Streckung ein Kurvenobjekt fuer beide Achsen', () => {
+    const member = writeGpuVfxMember(spec({ scaleStart: 2, scaleEnd: 0.5 }), FRAME);
+
+    // Der uniforme Normalfall darf keinen zweiten Animationsslot beschreiben.
+    expect(member.scaleX).toBe(member.scaleY);
+    expect((member.scaleY as { base: number }).base).toBe(2);
+    expect(member.tintBlend).toBe(1);
+  });
+
+  it('streckt die lokale X-Achse und laesst die Streckung auslaufen', () => {
+    const member = writeGpuVfxMember(
+      spec({ scaleStart: 2, scaleEnd: 4, stretchStart: 1.5, stretchEnd: 1 }),
+      FRAME,
+    );
+    const scaleX = member.scaleX as { base: number; amplitude: number };
+    const scaleY = member.scaleY as { base: number; amplitude: number };
+
+    expect(member.scaleX).not.toBe(member.scaleY);
+    // X traegt Groesse mal Streckung, Y nur die Groesse.
+    expect(scaleX.base).toBeCloseTo(3, 6);
+    expect(scaleX.base + scaleX.amplitude).toBeCloseTo(4, 6);
+    expect(scaleY.base).toBeCloseTo(2, 6);
+    expect(scaleY.base + scaleY.amplitude).toBeCloseTo(4, 6);
+  });
+
+  it('animiert den Tint-Blend linear ueber die Lebenszeit', () => {
+    const member = writeGpuVfxMember(
+      spec({ tintBlendStart: 0.2, tintBlendEnd: 1, lifeMs: 400 }),
+      FRAME,
+    );
+    const tintBlend = member.tintBlend as { base: number; amplitude: number; ease: string; duration: number };
+
+    expect(tintBlend.ease).toBe('Linear');
+    expect(tintBlend.base).toBeCloseTo(0.2, 6);
+    expect(tintBlend.amplitude).toBeCloseTo(0.8, 6);
+    expect(tintBlend.duration).toBe(400);
   });
 });

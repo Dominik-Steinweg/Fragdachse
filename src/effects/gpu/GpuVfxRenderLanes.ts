@@ -247,8 +247,10 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       'Eigenes additives Flammenband auf DEPTH.FIRE; die Outer-Partikel entsprechen dem alten '
       + 'Emitter und muessen unter Core und Spark bleiben.',
     capacityRationale:
-      '48 plausible parallele Hitboxen x 2 Spawns / 20 ms x 450 ms = 2160 lebende Member; '
-      + '3072 gibt rund 42 Prozent Reserve fuer Burst- und Timing-Schwankungen.',
+      '48 plausible parallele Hitboxen x 2 Spawns / 17 ms x 450 ms = 2541 lebende Member; '
+      + '3072 gibt rund 20 Prozent Reserve fuer Burst- und Timing-Schwankungen. Die Frequenz '
+      + 'traegt die Dichte des Strahls und ist der Wert, der bei gemessenen capacityDrops '
+      + 'zuerst zurueckgeht.',
   },
   {
     id: GpuVfxLaneId.FlameCore,

@@ -2700,7 +2700,11 @@ export class ProjectileManager {
       switch (style) {
         case 'flame':
           if (flames) {
-            if (!flames.has(id)) flames.createVisual(id, x, y, w, proj.color);
+            // Der Kettenschluessel trennt Straehle *einer* Quelle: zwei Tuerme desselben
+            // Besitzers duerfen nicht miteinander verkettet werden.
+            if (!flames.has(id)) {
+              flames.createVisual(id, x, y, w, proj.color, proj.sourceTurretId ?? proj.ownerId);
+            }
             flames.updateVisual(id, x, y, w, vx, vy);
           }
           break;
@@ -3008,7 +3012,9 @@ export class ProjectileManager {
         leafBlowers.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isFlame && flames) {
         if (!flames.has(proj.id)) {
-          flames.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+          // Der Client kennt keine Turm-Id; der Abstandsdeckel der Verkettung faengt zwei
+          // gleichzeitig feuernde Quellen desselben Besitzers ab.
+          flames.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.ownerId);
         }
         flames.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if ((isAwpP || isGaussP) && renderer) {

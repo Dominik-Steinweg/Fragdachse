@@ -334,17 +334,27 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.12,
     flickerHz: 11,
   },
+  /**
+   * Flammenwerfer-Strahl: die groesste dauerhaft brennende Lichtquelle, die ein Spieler
+   * mitbringt, und nachts sein eigentliches Leuchtmittel.
+   *
+   * Farbe, Intensitaet und Prioritaet folgen derselben Ueberlegung wie bei `projectileBurn`:
+   * unter dem MULTIPLY-Composite der Nacht deckelt der *schwaechste* Kanal, wie hell der Boden
+   * werden kann. Das fruehere 0xffab4a (1.00/0.67/0.29) liess Blau unten und las sich als
+   * roetlicher Schleier statt als Licht. Das Flackern bleibt klein, weil der Ausschlag nach
+   * oben bei Intensitaet 1 ohnehin abgeschnitten wird und den Mittelwert nur senken wuerde.
+   */
   flameProjectile: {
     enabled: true,
     shape: 'radial',
     radiusPx: 130,
-    color: 0xffab4a,
-    intensity: 0.8,
+    color: 0xffc57e,
+    intensity: 1,
     durationMs: 0,
     decayExponent: 1,
     occludes: false,
-    priority: 4,
-    flickerAmount: 0.24,
+    priority: 6,
+    flickerAmount: 0.1,
     flickerHz: 11,
   },
   voidFlameProjectile: {
@@ -684,8 +694,12 @@ export const MAX_GROUND_FIRE_LIGHTS = 12;
  * Projektil-ID trägt Licht. Da die IDs monoton vergeben werden, ergibt das eine
  * gleichmäßig verteilte, in der Anzahl begrenzte Lichterkette entlang des Strahls –
  * ohne Besitzer-Buchführung und ohne dass die Auswahl von Frame zu Frame springt.
+ *
+ * Unabhängig davon trägt die jeweils jüngste Hitbox einer Kette ein eigenes, an den
+ * Kettenschlüssel gebundenes Mündungslicht (`FlameRenderer`): die Wurzel des Strahls ist
+ * sein hellster Punkt, und sie darf nicht davon abhängen, ob gerade eine passende ID fällt.
  */
-export const FLAME_LIGHT_ID_STRIDE = 4;
+export const FLAME_LIGHT_ID_STRIDE = 3;
 
 /**
  * Schleimspur: dasselbe Cluster-Verfahren wie beim brennenden Boden. Eine Spur besteht

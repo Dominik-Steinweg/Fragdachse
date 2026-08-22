@@ -33,25 +33,37 @@ const OUTER_LIFESPAN = { min: 200, max: 450 };
 const SPARK_LIFESPAN = { min: 100, max: 300 };
 
 const CORE_FREQUENCY_MS  = 16;
-const OUTER_FREQUENCY_MS = 20;
+const OUTER_FREQUENCY_MS = 17;
 const SPARK_FREQUENCY_MS = 50;
 
 /**
- * Laenge der Nachlaufstrecke, ueber die die Spawns *einer* Hitbox verteilt werden – als Zeit,
- * nicht als Pixelwert.
+ * Laenge des Nachlaufs hinter dem Kopf einer Hitbox – als Zeit, nicht als Pixelwert.
  *
- * Der Flammenwerfer schiesst eine Kette einzelner Hitboxen; bei 70 ms Nachladezeit und 400 px/s
- * liegen an der Duese rund 28 px zwischen zwei Hitboxen, waehrend ihre Partikelwolke dort erst
- * rund 6 px Radius hat. Genau daraus entsteht der Eindruck einzelner Projektile mit Schweif.
- * Wird jeder Spawn stattdessen gleichverteilt hinter den Kopf gelegt, schliesst der Nachlauf
- * jeder Hitbox die Luecke zur naechsten – ohne ein einziges zusaetzliches Partikel.
- *
- * Als Zeit formuliert traegt sich das selbst: Hitboxen und Nachlauf werden durch `velocityDecay`
- * im gleichen Mass langsamer, der Abstand und die Strecke schrumpfen also gemeinsam. Begrenzt
- * wird zusaetzlich durch die tatsaechlich zurueckgelegte Strecke, sonst malte die erste Flamme
- * eines Schusses ihren Nachlauf in den Schuetzen hinein.
+ * Sie deckt das Stueck zwischen Duese und juengster Hitbox ab, das noch keine nachfolgende
+ * Flamme hat. Als Zeit formuliert traegt sie sich selbst: `velocityDecay` verlangsamt Abstand
+ * und Nachlauf im gleichen Mass. Zusaetzlich begrenzt die tatsaechlich zurueckgelegte Strecke,
+ * sonst malte die erste Flamme eines Schusses ihren Nachlauf in den Schuetzen hinein.
  */
 const SMEAR_SECONDS = 0.085;
+
+/**
+ * Verkettung: beim Anlegen darf eine Hitbox hoechstens so weit von ihrem Vorgaenger entfernt
+ * sein. Der Duesenabstand betraegt Feuerrate x Muendungsgeschwindigkeit (rund 28 px beim
+ * Flammenwerfer); der Wert laesst Bewegung und Zielrichtungswechsel zu, verhindert aber, dass
+ * zwei Quellen desselben Besitzers (zwei Tuerme) miteinander verkettet werden.
+ */
+const CHAIN_LINK_MAX_PX = 76;
+
+/**
+ * Beim Emittieren: reisst die Kette weiter auf (Feuerpause, blockierte Flamme, Teleport), wird
+ * die Bruecke verworfen und der Nachlauf uebernimmt wieder. Grosszuegiger als
+ * `CHAIN_LINK_MAX_PX`, weil zwei verkettete Hitboxen beim Schwenken auseinanderlaufen duerfen –
+ * genau dieses Auffaechern soll als Feuerfahne gefuellt werden.
+ */
+const BRIDGE_MAX_PX = 150;
+
+/** Wie viele juengste Hitboxen je Besitzer als Verkettungskandidaten gepruefte werden. */
+const CHAIN_RECENT_PER_OWNER = 4;
 
 /** Zeit, in der eine Flamme optisch von Weissglut auf Glutrot faellt. */
 const HEAT_RAMP_MS = 520;
@@ -62,25 +74,30 @@ const OUTER_FORWARD_INHERIT = 0.28;
 const SPARK_FORWARD_INHERIT = 0.5;
 
 /**
- * Restlicher Auftrieb nach oben. Bewusst klein: der fruehere Wert (-40 bis -5 px/s ohne jede
- * Stroemungsrichtung) liess den Strahl unabhaengig von der Zielrichtung nach Norden ziehen und
- * damit wie ein Lagerfeuer statt wie ein gerichteter Jet aussehen.
+ * Restlicher Auftrieb nach oben. Bewusst klein: ein richtungsloser Drift nach Norden laesst den
+ * Strahl unabhaengig von der Zielrichtung wie ein Lagerfeuer aussehen.
  */
 const CORE_BUOYANCY  = -6;
 const OUTER_BUOYANCY = -10;
 const SPARK_BUOYANCY = -14;
 
+/**
+ * Querstreuung als Anteil der Hitbox-Groesse. Die Hitbox ist die Wahrheit: ihr Radius ist
+ * `size * 0.5`, und die Huelle darf ihn ausschoepfen. Sie ist der Grund, warum benachbarte
+ * Bahnen einer aufgefaecherten Salve ueberhaupt ineinanderlaufen.
+ */
+const CORE_LATERAL_FRACTION  = 0.3;
+const OUTER_LATERAL_FRACTION = 0.5;
+const SPARK_LATERAL_FRACTION = 0.34;
+
 const DEPTH_FLAME = DEPTH.FIRE;
 
-/** Scratch-Geometrie fuer den richtungslosen Notfall-Spawn; nie im Frame neu angelegt. */
-const SPAWN_CIRCLE = new Phaser.Geom.Circle(0, 0, 1);
-const SPAWN_POINT = new Phaser.Math.Vector2(0, 0);
-
-/** Ergebnis eines Spawn-Platzes; wiederverwendet, damit der Hotpath nichts allokiert. */
-const SPAWN_PLACE = { x: 0, y: 0, heat: 0 };
+/** Ergebnis einer Spawn-Platzierung; wiederverwendet, damit der Hotpath nichts allokiert. */
+const SPAWN_PLACE = { x: 0, y: 0, heat: 0, size: 0, dirX: 0, dirY: 0 };
 
 // ── Interner State pro Flammen-Hitbox ──────────────────────────────────────
 interface FlameVisual {
+  id: number;
   x: number;
   y: number;
   size: number;
@@ -93,6 +110,19 @@ interface FlameVisual {
   smearPx: number;
   smearMs: number;
   birthMs: number;
+  /** Kettenschluessel (Turm- bzw. Spieler-Id) und die Hitbox, die vor dieser abgefeuert wurde. */
+  chainKey: string;
+  predecessorId: number;
+  /** Eine Hitbox ist Vorgaenger genau einer anderen; sonst bliebe eine Luecke unbedeckt. */
+  claimed: boolean;
+  /** Je Frame aufgeloeste Bruecke zum Vorgaenger; Laenge 0 heisst "kein Vorgaenger". */
+  bridgeX: number;
+  bridgeY: number;
+  bridgeLen: number;
+  bridgeSize: number;
+  bridgeBirthMs: number;
+  bridgeDirX: number;
+  bridgeDirY: number;
   coreFlow: ParticleFlowScheduler;
   outerFlow: ParticleFlowScheduler;
   sparkFlow: ParticleFlowScheduler;
@@ -114,23 +144,30 @@ interface FlameVisual {
  * Stroeme teilen sich die szenenweiten SpriteGPULayer, waehrend Countdown und aktueller Spawn-
  * Zustand je FlameVisual erhalten bleiben.
  *
- * ## Warum der Strahl nicht Hitbox fuer Hitbox gezeichnet wird
+ * ## Der Strahl ist die Kette, nicht die einzelne Hitbox
  *
- * Die Netzlast deckelt die Zahl der Flammen-Hitboxen; sichtbar bleiben soll trotzdem *ein*
- * Strahl. Drei Eigenschaften tragen das, alle ohne zusaetzliche Partikel:
+ * Netzseitig ist der Flammenwerfer eine Folge einzelner Projektile, und die liegen weder
+ * aufeinander noch auf einer Linie: Streuung, Spielerbewegung und Zielrichtungswechsel
+ * faechern sie auf. Wer jede Hitbox fuer sich zeichnet – egal wie dicht – bekommt deshalb
+ * parallele Einzelbahnen mit Luecken dazwischen.
  *
- * 1. **Nachlauf** (`SMEAR_SECONDS`): Spawns liegen gleichverteilt hinter dem Kopf und schliessen
- *    die Luecke zur nachfolgenden Hitbox.
- * 2. **Stroemung**: jedes Partikel erbt einen Teil der Hitbox-Geschwindigkeit und streut nur
- *    quer dazu. Der Strahl zeigt damit dorthin, wohin gezielt wird.
- * 3. **Temperaturverlauf** (`HEAT_RAMP_MS`): der Tint haengt am Alter der Flamme an der Stelle,
- *    an der das Partikel entsteht – weissgelb an der Duese, glutrot am Ende.
+ * Jede Hitbox kennt darum ihren *Vorgaenger* (die vorher abgefeuerte Hitbox derselben Quelle)
+ * und emittiert gleichverteilt auf der Strecke `[-Nachlauf, Bruecke zum Vorgaenger]`. Diese
+ * Strecke ist die tatsaechliche Verbindung zweier Kettenglieder; sie deckt Auffaechern,
+ * Strafen und Schwenks gleichermassen ab, weil sie aus den echten Positionen entsteht statt
+ * aus einer Annahme ueber die Schussachse. Groesse, Alter und Flugrichtung werden entlang der
+ * Bruecke interpoliert, sodass Breite und Farbe stetig ineinander laufen.
+ *
+ * Der Kopf der Kette (aeltestes lebendes Glied) und der erste Schuss einer Salve haben keinen
+ * Vorgaenger und fallen auf den reinen Nachlauf zurueck.
  */
 export class FlameRenderer {
   private readonly scene: Phaser.Scene;
   private readonly flames = new Map<number, FlameVisual>();
   /** Parallel zur Map, damit der GPU-Emissionstick ohne Iterator-Allokation laeuft. */
   private readonly activeFlames: FlameVisual[] = [];
+  /** Je Kettenschluessel die juengsten Hitbox-Ids, neueste zuerst. */
+  private readonly recentByChain = new Map<string, number[]>();
   private lighting: LightingSystem | null = null;
 
   private gpuVfx: GpuVfxSystem | null = null;
@@ -163,14 +200,22 @@ export class FlameRenderer {
     this.coreSpec = system.createSpec(GpuVfxEffectId.FlameCore);
     this.coreSpec.frame = GpuVfxFrameId.FlameTongue;
     this.coreSpec.scaleEase = GpuVfxEase.QuadOut;
-    this.coreSpec.alphaStart = 0.72;
+    this.coreSpec.alphaStart = 0.58;
     this.coreSpec.alphaEnd = 0;
+    // Ein Hauch Weissglut beim Zuenden, danach die volle Bandfarbe. Bewusst nur ein Hauch:
+    // additiv hebt jeder entsaettigte Beitrag alle drei Kanaele an, und der Strahl kippt als
+    // Ganzes ins Weisse, statt gelb-orange zu lesen.
+    this.coreSpec.tintBlendStart = 0.62;
+    this.coreSpec.tintBlendEnd = 1;
 
     this.outerSpec = system.createSpec(GpuVfxEffectId.FlameOuter);
     this.outerSpec.frame = GpuVfxFrameId.FlameBillow;
     this.outerSpec.scaleEase = GpuVfxEase.QuadOut;
-    this.outerSpec.alphaStart = 0.44;
+    this.outerSpec.alphaStart = 0.4;
     this.outerSpec.alphaEnd = 0;
+    // Die Huelle deckt die groesste Flaeche ab und traegt deshalb praktisch keine Entsaettigung.
+    this.outerSpec.tintBlendStart = 0.9;
+    this.outerSpec.tintBlendEnd = 1;
 
     this.sparkSpec = system.createSpec(GpuVfxEffectId.FlameSpark);
     this.sparkSpec.scaleStart = 0.6;
@@ -184,12 +229,19 @@ export class FlameRenderer {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  /** Registriert eine neue Flammen-Hitbox fuer die visuelle Darstellung. */
-  createVisual(id: number, x: number, y: number, size: number, color: number): void {
+  /**
+   * Registriert eine neue Flammen-Hitbox fuer die visuelle Darstellung.
+   *
+   * `chainKey` benennt die Quelle des Strahls (Turm- oder Spieler-Id). Ohne ihn bleibt die
+   * Hitbox unverkettet und zeichnet nur ihren eigenen Nachlauf.
+   */
+  createVisual(id: number, x: number, y: number, size: number, color: number, chainKey = ''): void {
     if (this.flames.has(id)) return;
 
     const isVoid = color === VOID_FIRE_COLOR;
-    const glowBaseAlpha = isVoid ? 0.82 : 0.55;
+    // Der Halo ist eine breite additive Flaeche unter dem ganzen Strahl; er hebt den Untergrund
+    // gleichmaessig an und ist damit der zweite Weg, auf dem die Flamme ins Weisse kippt.
+    const glowBaseAlpha = isVoid ? 0.64 : 0.4;
 
     // Glow: additiver Leucht-Halo der mit der Hitbox waechst.
     const glowImage = this.scene.add.image(
@@ -204,6 +256,7 @@ export class FlameRenderer {
     glowImage.setTint(isVoid ? VOID_FIRE_COLOR : 0xffaa44);
 
     const visual: FlameVisual = {
+      id,
       x,
       y,
       size,
@@ -214,6 +267,16 @@ export class FlameRenderer {
       smearPx: 0,
       smearMs: 0,
       birthMs: this.gpuVfx?.now() ?? 0,
+      chainKey,
+      predecessorId: this.linkPredecessor(chainKey, x, y),
+      claimed: false,
+      bridgeX: 0,
+      bridgeY: 0,
+      bridgeLen: 0,
+      bridgeSize: size,
+      bridgeBirthMs: 0,
+      bridgeDirX: 0,
+      bridgeDirY: 0,
       coreFlow: new ParticleFlowScheduler(CORE_FREQUENCY_MS),
       outerFlow: new ParticleFlowScheduler(OUTER_FREQUENCY_MS),
       sparkFlow: new ParticleFlowScheduler(SPARK_FREQUENCY_MS),
@@ -229,6 +292,7 @@ export class FlameRenderer {
 
     this.flames.set(id, visual);
     this.activeFlames.push(visual);
+    if (chainKey !== '') this.pushRecent(chainKey, id);
   }
 
   /** Aktualisiert Position, Groesse und Richtung einer Flammen-Hitbox. */
@@ -262,13 +326,23 @@ export class FlameRenderer {
     visual.smearMs = speed > 0.001 ? (visual.smearPx / speed) * 1000 : 0;
 
     visual.glowImage.setPosition(x, y);
-    visual.glowImage.setScale(glowScale(size));
+
+    const preset = visual.isVoid ? 'voidFlameProjectile' : 'flameProjectile';
 
     // Nur jede n-te Hitbox traegt Licht – sonst ueberstrahlt ein einzelner Strahl das gesamte
     // Frame-Budget. Freigabe laeuft ueber destroyVisual().
     if (id % FLAME_LIGHT_ID_STRIDE === 0) {
-      this.lighting?.setLight(`flame:${id}`, visual.isVoid ? 'voidFlameProjectile' : 'flameProjectile', x, y, {
+      this.lighting?.setLight(`flame:${id}`, preset, x, y, {
         radiusPx: visual.isVoid ? 96 + size * 2.55 : 80 + size * 2.2,
+      });
+    }
+
+    // Die Wurzel des Strahls ist sein hellster Punkt und darf nicht davon abhaengen, ob gerade
+    // eine passende Id faellt. Das Licht haengt am Kettenschluessel, nicht an der Hitbox: es
+    // wandert dadurch mit der Duese weiter, statt beim Weiterruecken der Kette zu springen.
+    if (visual.chainKey !== '' && this.recentByChain.get(visual.chainKey)?.[0] === id) {
+      this.lighting?.setLight(`flameMuzzle:${visual.chainKey}`, preset, x, y, {
+        radiusPx: visual.isVoid ? 172 : 150,
       });
     }
   }
@@ -281,6 +355,7 @@ export class FlameRenderer {
 
     this.gpuVfx?.releaseSource(visual.source);
     visual.glowImage.destroy();
+    this.dropRecent(visual.chainKey, id);
 
     const index = this.activeFlames.indexOf(visual);
     if (index >= 0) this.activeFlames.splice(index, 1);
@@ -300,6 +375,79 @@ export class FlameRenderer {
   /** Entfernt alle Flammen-Visualisierungen und laesst andere GPUFX-Effekte unangetastet. */
   destroyAll(): void {
     for (const [id] of this.flames) this.destroyVisual(id);
+    // `destroyVisual` raeumt jede Kette einzeln ab; der Rest faengt Ketten ohne Hitbox ab.
+    for (const chainKey of this.recentByChain.keys()) {
+      this.lighting?.releaseLight(`flameMuzzle:${chainKey}`);
+    }
+    this.recentByChain.clear();
+  }
+
+  // ── Verkettung ────────────────────────────────────────────────────────────
+
+  /**
+   * Sucht den Vorgaenger einer neu entstehenden Hitbox.
+   *
+   * Gepruefte werden die juengsten Hitboxen derselben Quelle, neueste zuerst. Ein Kandidat
+   * scheidet aus, wenn er zu weit weg ist (zwei Tuerme desselben Besitzers, Feuerpause) oder
+   * bereits Vorgaenger einer anderen Hitbox ist – sonst blieb dessen Luecke ungefuellt und eine
+   * andere doppelt belegt.
+   */
+  private linkPredecessor(chainKey: string, x: number, y: number): number {
+    if (chainKey === '') return -1;
+    const recent = this.recentByChain.get(chainKey);
+    if (!recent) return -1;
+
+    for (let index = 0; index < recent.length; index += 1) {
+      const candidate = this.flames.get(recent[index]);
+      if (!candidate || candidate.claimed) continue;
+      if (Math.hypot(candidate.x - x, candidate.y - y) > CHAIN_LINK_MAX_PX) continue;
+      candidate.claimed = true;
+      return candidate.id;
+    }
+    return -1;
+  }
+
+  private pushRecent(chainKey: string, id: number): void {
+    let recent = this.recentByChain.get(chainKey);
+    if (!recent) {
+      recent = [];
+      this.recentByChain.set(chainKey, recent);
+    }
+    recent.unshift(id);
+    if (recent.length > CHAIN_RECENT_PER_OWNER) recent.length = CHAIN_RECENT_PER_OWNER;
+  }
+
+  private dropRecent(chainKey: string, id: number): void {
+    const recent = this.recentByChain.get(chainKey);
+    if (!recent) return;
+    const index = recent.indexOf(id);
+    if (index >= 0) recent.splice(index, 1);
+    if (recent.length > 0) return;
+    // Mit dem letzten Kettenglied verschwindet auch das Muendungslicht dieser Quelle.
+    this.recentByChain.delete(chainKey);
+    this.lighting?.releaseLight(`flameMuzzle:${chainKey}`);
+  }
+
+  /** Loest die Bruecke zum Vorgaenger fuer dieses Frame auf. */
+  private resolveBridge(visual: FlameVisual): void {
+    visual.bridgeLen = 0;
+    if (visual.predecessorId < 0) return;
+
+    const predecessor = this.flames.get(visual.predecessorId);
+    if (!predecessor) return;
+
+    const bridgeX = predecessor.x - visual.x;
+    const bridgeY = predecessor.y - visual.y;
+    const length = Math.hypot(bridgeX, bridgeY);
+    if (length < 0.001 || length > BRIDGE_MAX_PX) return;
+
+    visual.bridgeX = bridgeX;
+    visual.bridgeY = bridgeY;
+    visual.bridgeLen = length;
+    visual.bridgeSize = predecessor.size;
+    visual.bridgeBirthMs = predecessor.birthMs;
+    visual.bridgeDirX = predecessor.dirX;
+    visual.bridgeDirY = predecessor.dirY;
   }
 
   // ── GPU-Emission ──────────────────────────────────────────────────────────
@@ -319,10 +467,8 @@ export class FlameRenderer {
     for (let index = 0; index < this.activeFlames.length; index += 1) {
       const visual = this.activeFlames[index];
       const ageMs = nowMs - visual.birthMs;
-
-      // Der Halo folgt der Temperatur: an der Duese traegt er den Strahl, am ausbrennenden Ende
-      // wuerde er als eigenstaendige Scheibe wieder die einzelne Hitbox verraten.
-      visual.glowImage.setAlpha(emissiveAlpha(visual.glowBaseAlpha * (0.3 + 0.7 * heatOf(ageMs))));
+      this.resolveBridge(visual);
+      this.updateGlow(visual, ageMs);
 
       if (coreFrequency > 0) {
         visual.coreFlow.setFrequency(coreFrequency);
@@ -356,26 +502,44 @@ export class FlameRenderer {
     }
   }
 
+  /**
+   * Der Halo folgt Temperatur *und* Strahlrichtung: als runde Scheibe je Hitbox verriete er
+   * genau die Perlenkette, die der Partikelstrom gerade aufloest, deshalb wird er entlang der
+   * Bruecke gestreckt und am ausbrennenden Ende ausgeblendet.
+   */
+  private updateGlow(visual: FlameVisual, ageMs: number): void {
+    const scale = glowScale(visual.size);
+    const stretch = visual.bridgeLen > 0
+      ? Math.min(1 + visual.bridgeLen / Math.max(visual.size, 24), 2.2)
+      : 1.25;
+    visual.glowImage.setRotation(Math.atan2(visual.dirY, visual.dirX));
+    visual.glowImage.setScale(scale * stretch, scale);
+    visual.glowImage.setAlpha(emissiveAlpha(visual.glowBaseAlpha * (0.3 + 0.7 * heatOf(ageMs))));
+  }
+
   private spawnCore(visual: FlameVisual, spec: GpuVfxSpawnSpec, nowMs: number, ageMs: number): void {
     const system = this.gpuVfx;
     if (!system) return;
 
-    const place = this.placeSpawn(visual, ageMs, Math.max(visual.size * 0.16, 2.5));
+    const place = this.placeSpawn(visual, nowMs, ageMs, CORE_LATERAL_FRACTION, 2.5);
     const advect = visual.speed * CORE_FORWARD_INHERIT;
-    const lateral = spreadFactor() * (14 + visual.size * 0.22);
-    const length = 10 + visual.size * 0.35;
+    const lateral = spreadFactor() * (14 + place.size * 0.22);
+    const length = 10 + place.size * 0.35;
 
     spec.frame = GpuVfxFrameId.FlameTongue;
     spec.lifeMs = Phaser.Math.FloatBetween(CORE_LIFESPAN.min, CORE_LIFESPAN.max);
     spec.x = place.x;
     spec.y = place.y;
-    spec.vx = visual.dirX * advect - visual.dirY * lateral;
-    spec.vy = visual.dirY * advect + visual.dirX * lateral + CORE_BUOYANCY;
+    spec.vx = place.dirX * advect - place.dirY * lateral;
+    spec.vy = place.dirY * advect + place.dirX * lateral + CORE_BUOYANCY;
     // Die Zunge liegt in der Stroemung; der kleine Winkelfehler haelt den Strahl unruhig.
     spec.rotation = Math.atan2(spec.vy, spec.vx) + Phaser.Math.FloatBetween(-0.18, 0.18);
     spec.angularVelocity = Phaser.Math.FloatBetween(-0.6, 0.6);
     spec.scaleStart = length / 32;
     spec.scaleEnd = spec.scaleStart * 1.3;
+    // Gestreckt geboren, beim Ausbrennen wieder rund.
+    spec.stretchStart = 1.15;
+    spec.stretchEnd = 0.95;
     spec.tint = pickHeatTint(visual.hotTints, visual.midTints, visual.coolTints, place.heat * 0.55 + 0.45);
     system.spawn(spec, visual.source, nowMs);
   }
@@ -384,23 +548,26 @@ export class FlameRenderer {
     const system = this.gpuVfx;
     if (!system) return;
 
-    const place = this.placeSpawn(visual, ageMs, Math.max(visual.size * 0.34, 4));
+    const place = this.placeSpawn(visual, nowMs, ageMs, OUTER_LATERAL_FRACTION, 4);
     const advect = visual.speed * OUTER_FORWARD_INHERIT;
-    const lateral = spreadFactor() * (20 + visual.size * 0.35);
-    const diameter = 12 + visual.size * 0.42;
+    const lateral = spreadFactor() * (20 + place.size * 0.35);
+    const diameter = 12 + place.size * 0.42;
 
     spec.frame = GpuVfxFrameId.FlameBillow;
     spec.lifeMs = Phaser.Math.FloatBetween(OUTER_LIFESPAN.min, OUTER_LIFESPAN.max);
     spec.x = place.x;
     spec.y = place.y;
-    spec.vx = visual.dirX * advect - visual.dirY * lateral;
-    spec.vy = visual.dirY * advect + visual.dirX * lateral + OUTER_BUOYANCY;
-    spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    spec.angularVelocity = Phaser.Math.FloatBetween(-1.4, 1.4);
+    spec.vx = place.dirX * advect - place.dirY * lateral;
+    spec.vy = place.dirY * advect + place.dirX * lateral + OUTER_BUOYANCY;
+    // An der Stroemung ausgerichtet und in ihre Richtung gestreckt: benachbarte Ballen
+    // ueberlappen dadurch entlang des Strahls, statt als runde Tupfen nebeneinanderzuliegen.
+    spec.rotation = Math.atan2(place.dirY, place.dirX) + Phaser.Math.FloatBetween(-0.35, 0.35);
+    spec.angularVelocity = Phaser.Math.FloatBetween(-0.9, 0.9);
     spec.scaleStart = diameter / 32;
-    // Ein Gasballen dehnt sich beim Abkuehlen aus. Der fruehere Verlauf auf 0.05 liess ihn
-    // stattdessen zu einem Punkt schrumpfen – die Lesart "Funke mit Schweif".
+    // Ein Gasballen dehnt sich beim Abkuehlen aus und verliert dabei seine Streckung.
     spec.scaleEnd = spec.scaleStart * 1.45;
+    spec.stretchStart = 1.55;
+    spec.stretchEnd = 1.1;
     spec.tint = pickHeatTint(visual.hotTints, visual.midTints, visual.coolTints, place.heat);
     system.spawn(spec, visual.source, nowMs);
   }
@@ -409,16 +576,16 @@ export class FlameRenderer {
     const system = this.gpuVfx;
     if (!system) return;
 
-    const place = this.placeSpawn(visual, ageMs, Math.max(visual.size * 0.24, 3));
+    const place = this.placeSpawn(visual, nowMs, ageMs, SPARK_LATERAL_FRACTION, 3);
     const advect = visual.speed * SPARK_FORWARD_INHERIT;
-    const lateral = spreadFactor() * (30 + visual.size * 0.3);
+    const lateral = spreadFactor() * (30 + place.size * 0.3);
 
     spec.frame = visual.isVoid ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
     spec.lifeMs = Phaser.Math.FloatBetween(SPARK_LIFESPAN.min, SPARK_LIFESPAN.max);
     spec.x = place.x;
     spec.y = place.y;
-    spec.vx = visual.dirX * advect - visual.dirY * lateral;
-    spec.vy = visual.dirY * advect + visual.dirX * lateral + SPARK_BUOYANCY;
+    spec.vx = place.dirX * advect - place.dirY * lateral;
+    spec.vy = place.dirY * advect + place.dirX * lateral + SPARK_BUOYANCY;
     spec.rotation = 0;
     spec.angularVelocity = 0;
     spec.tint = pickGpuVfxTint(visual.sparkTints);
@@ -426,34 +593,80 @@ export class FlameRenderer {
   }
 
   /**
-   * Legt einen Spawn irgendwo auf der Nachlaufstrecke ab und liefert die dort gueltige Hitze.
+   * Legt einen Spawn gleichverteilt auf `[-Nachlauf, Bruecke]` ab und liefert den dort
+   * gueltigen Zustand des Strahls.
    *
-   * Die Streuung quer zur Flugrichtung ist dreiecksverteilt: gleichverteilte Punkte in einem
-   * Kreis lassen den Strahl an den Raendern ebenso dicht wirken wie in der Mitte und nehmen ihm
-   * die Kernhelligkeit. Weiter hinten liegende Punkte gehoeren zu einer *juengeren* Stelle des
-   * Strahls – dort war die Hitbox noch schmaler und heisser.
+   * Gleichverteilt *in der Laenge* – nicht je Abschnitt gleich viele – sonst haengt die Dichte
+   * davon ab, wie weit zwei Kettenglieder gerade auseinanderliegen. Die Fenster benachbarter
+   * Hitboxen ueberlappen sich bewusst: dadurch gibt es an den Kettengliedern keine Naht.
+   *
+   * Die Streuung quer zur Stroemung ist dreiecksverteilt: gleichverteilte Punkte in einem Kreis
+   * lassen den Rand ebenso dicht wirken wie die Mitte und nehmen dem Strahl seinen Kern.
    */
-  private placeSpawn(visual: FlameVisual, ageMs: number, lateralRadius: number): typeof SPAWN_PLACE {
-    if (visual.speed <= 0.001) {
-      SPAWN_CIRCLE.setTo(visual.x, visual.y, lateralRadius);
-      Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
-      SPAWN_PLACE.x = SPAWN_POINT.x;
-      SPAWN_PLACE.y = SPAWN_POINT.y;
-      SPAWN_PLACE.heat = heatOf(ageMs);
-      return SPAWN_PLACE;
+  private placeSpawn(
+    visual: FlameVisual,
+    nowMs: number,
+    ageMs: number,
+    lateralFraction: number,
+    minLateralPx: number,
+  ): typeof SPAWN_PLACE {
+    const along = Phaser.Math.FloatBetween(-visual.smearPx, visual.bridgeLen);
+
+    if (along >= 0 && visual.bridgeLen > 0) {
+      const u = along / visual.bridgeLen;
+      SPAWN_PLACE.x = visual.x + visual.bridgeX * u;
+      SPAWN_PLACE.y = visual.y + visual.bridgeY * u;
+      SPAWN_PLACE.size = visual.size + (visual.bridgeSize - visual.size) * u;
+      // Der Vorgaenger ist aelter, also kaelter: die Bruecke traegt den Temperaturverlauf.
+      SPAWN_PLACE.heat = heatOf(ageMs + (nowMs - visual.bridgeBirthMs - ageMs) * u);
+      setLerpedDirection(visual.dirX, visual.dirY, visual.bridgeDirX, visual.bridgeDirY, u);
+    } else {
+      const back = Math.max(0, -along);
+      SPAWN_PLACE.x = visual.x - visual.dirX * back;
+      SPAWN_PLACE.y = visual.y - visual.dirY * back;
+      // Weiter hinten war die Hitbox juenger, schmaler und heisser.
+      const shrink = visual.smearPx > 0 ? 1 - 0.25 * (back / visual.smearPx) : 1;
+      SPAWN_PLACE.size = visual.size * shrink;
+      SPAWN_PLACE.heat = heatOf(ageMs - (visual.speed > 0.001 ? (back / visual.speed) * 1000 : 0));
+      SPAWN_PLACE.dirX = visual.dirX;
+      SPAWN_PLACE.dirY = visual.dirY;
     }
 
-    const along = Math.random();
-    const back = visual.smearPx * along;
-    const radius = lateralRadius * (1 - 0.3 * along);
-    const lateral = spreadFactor() * radius;
-    const jitter = (Math.random() - 0.5) * radius * 0.8;
+    if (SPAWN_PLACE.dirX === 0 && SPAWN_PLACE.dirY === 0) {
+      // Vor dem ersten `updateVisual` ist keine Richtung bekannt; dann streut die Hitbox
+      // isotrop statt in eine willkuerliche Achse.
+      const angle = Math.random() * Math.PI * 2;
+      SPAWN_PLACE.dirX = Math.cos(angle);
+      SPAWN_PLACE.dirY = Math.sin(angle);
+    }
 
-    SPAWN_PLACE.x = visual.x - visual.dirX * (back - jitter) - visual.dirY * lateral;
-    SPAWN_PLACE.y = visual.y - visual.dirY * (back - jitter) + visual.dirX * lateral;
-    SPAWN_PLACE.heat = heatOf(ageMs - visual.smearMs * along);
+    const radius = Math.max(SPAWN_PLACE.size * lateralFraction, minLateralPx);
+    const lateral = spreadFactor() * radius;
+    SPAWN_PLACE.x += -SPAWN_PLACE.dirY * lateral;
+    SPAWN_PLACE.y += SPAWN_PLACE.dirX * lateral;
     return SPAWN_PLACE;
   }
+}
+
+/** Interpoliert zwei Richtungen und schreibt das Ergebnis normiert in `SPAWN_PLACE`. */
+function setLerpedDirection(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  u: number,
+): void {
+  const x = fromX + (toX - fromX) * u;
+  const y = fromY + (toY - fromY) * u;
+  const length = Math.hypot(x, y);
+  if (length < 0.001) {
+    // Gegenlaeufige Richtungen heben sich auf; dann gilt die der juengeren Hitbox.
+    SPAWN_PLACE.dirX = fromX;
+    SPAWN_PLACE.dirY = fromY;
+    return;
+  }
+  SPAWN_PLACE.dirX = x / length;
+  SPAWN_PLACE.dirY = y / length;
 }
 
 /** Resthitze einer Flamme: 1 an der Duese, 0 am ausgebrannten Ende. */

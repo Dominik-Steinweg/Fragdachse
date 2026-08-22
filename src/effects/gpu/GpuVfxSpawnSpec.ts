@@ -56,10 +56,24 @@ export interface GpuVfxSpawnSpec {
   /** Drehgeschwindigkeit in rad/s. 0 laesst die Rotation statisch – wie bei allen Piloten. */
   angularVelocity: number;
 
-  /** Ein Verlauf fuer beide Achsen: alle bisherigen Effekte skalieren uniform. */
+  /** Der gemeinsame Groessenverlauf. Ohne `stretch*` gilt er unveraendert fuer beide Achsen. */
   scaleStart: number;
   scaleEnd: number;
   scaleEase: GpuVfxEase;
+
+  /**
+   * Streckung entlang der lokalen X-Achse, als Faktor auf `scaleStart`/`scaleEnd`; 1 = uniform.
+   *
+   * Zusammen mit `rotation` wird daraus ein an der Stroemung ausgerichteter Streifen: eine
+   * Flammenzunge, ein Funkenstrich, eine Druckwelle. Getrennte Achsen kosten einen zweiten
+   * Animationsslot pro Spawn, deshalb faellt der Pfad bei `1/1` auf das bisherige *eine*
+   * Kurvenobjekt fuer beide Achsen zurueck.
+   *
+   * Ein von `stretchStart` abweichendes `stretchEnd` laesst die Form ueber die Lebenszeit
+   * relaxieren – ein gestreckter Ballen wird beim Ausbrennen wieder rund.
+   */
+  stretchStart: number;
+  stretchEnd: number;
 
   alphaStart: number;
   alphaEnd: number;
@@ -67,4 +81,17 @@ export interface GpuVfxSpawnSpec {
 
   /** Multiply-Tint; wird auf alle vier Ecken verteilt. */
   tint: number;
+
+  /**
+   * Wie stark `tint` wirkt: 0 laesst die Textur unveraendert (also weiss), 1 ist der volle
+   * Tint. Phaser sieht dafuer einen eigenen Animationsslot vor – es ist der einzige Weg, eine
+   * Farbe ueber die Lebenszeit zu veraendern, denn die vier Eckfarben selbst sind statisch.
+   *
+   * Ein Verlauf 0 -> 1 ist die Temperaturkurve eines Glutpartikels: weissheiss geboren, in
+   * seiner Zielfarbe ausgebrannt. Bei `1/1` wird wie bisher die Konstante geschrieben.
+   * Die Kurve laeuft immer linear; jede andere Ease muesste auf jeder Lane vorgewaermt werden,
+   * die sie benutzen koennte.
+   */
+  tintBlendStart: number;
+  tintBlendEnd: number;
 }

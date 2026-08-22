@@ -44,11 +44,15 @@ export interface FakeGpuMemberSnapshot {
   x: FakeGpuAnimation;
   y: FakeGpuAnimation;
   scaleX: FakeGpuAnimation;
+  /** Traegt den Groessenverlauf ohne Streckung, `scaleX` traegt ihn mit. */
+  scaleY: FakeGpuAnimation;
   alpha: FakeGpuAnimation;
   rotation: FakeGpuAnimation;
   /** Frame-Name aus dem Atlas; `null`, wenn der Member gar keinen Frame gesetzt hat. */
   frame: string | null;
   tint: number;
+  /** Konstante 1 oder der Verlauf, mit dem der Tint ueber die Lebenszeit einblendet. */
+  tintBlend: FakeGpuAnimation;
 }
 
 const STATIC_ANIMATION: FakeGpuAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'None', loop: false };
@@ -84,10 +88,12 @@ function snapshotMember(member: Record<string, unknown>): FakeGpuMemberSnapshot 
     x: readAnimation(member.x),
     y: readAnimation(member.y),
     scaleX: readAnimation(member.scaleX),
+    scaleY: readAnimation(member.scaleY),
     alpha: readAnimation(member.alpha),
     rotation: readAnimation(member.rotation),
     frame: readFrameName(member.frame),
     tint: (member.tintTopLeft as number) ?? 0,
+    tintBlend: readAnimation(member.tintBlend),
   };
 }
 

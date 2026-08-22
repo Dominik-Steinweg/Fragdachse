@@ -65,8 +65,12 @@ const animYGravity: GpuVfxMemberAnimation = {
   base: 0, velocity: 0, gravityFactor: 1, duration: 0, ease: 'Gravity', loop: false, yoyo: false,
 };
 const animScale: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
+/** Nur belegt, wenn ein Spawn wirklich streckt; sonst tragen beide Achsen `animScale`. */
+const animScaleX: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 const animAlpha: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 const animRotation: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
+/** Farbverlauf ueber die Lebenszeit; die vier Eckfarben selbst sind statisch. */
+const animTintBlend: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 
 const MEMBER: GpuVfxMember = {
   x: animX,
@@ -107,7 +111,27 @@ export function writeGpuVfxMember(spec: GpuVfxSpawnSpec, frame: Phaser.Textures.
   }
 
   writeCurve(animScale, spec.scaleStart, spec.scaleEnd, spec.scaleEase, life);
+  if (spec.stretchStart === 1 && spec.stretchEnd === 1) {
+    // Der uniforme Normalfall: *ein* Kurvenobjekt fuer beide Achsen, wie vor der Streckung.
+    MEMBER.scaleX = animScale;
+  } else {
+    writeCurve(
+      animScaleX,
+      spec.scaleStart * spec.stretchStart,
+      spec.scaleEnd * spec.stretchEnd,
+      spec.scaleEase,
+      life,
+    );
+    MEMBER.scaleX = animScaleX;
+  }
   writeCurve(animAlpha, spec.alphaStart, spec.alphaEnd, spec.alphaEase, life);
+
+  if (spec.tintBlendStart === 1 && spec.tintBlendEnd === 1) {
+    MEMBER.tintBlend = 1;
+  } else {
+    writeCurve(animTintBlend, spec.tintBlendStart, spec.tintBlendEnd, GpuVfxEase.Linear, life);
+    MEMBER.tintBlend = animTintBlend;
+  }
 
   if (spec.angularVelocity === 0) {
     MEMBER.rotation = spec.rotation;

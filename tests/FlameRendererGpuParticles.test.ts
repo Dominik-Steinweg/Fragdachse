@@ -136,12 +136,19 @@ describe('flame renderer gpu particles', () => {
     expect(core.members.slice(-6).every((member) => member.frame === 'flame-tongue')).toBe(true);
     expect(outer.members.slice(-4).every((member) => member.frame === 'flame-billow')).toBe(true);
     expect(spark.members.at(-1)?.frame).toBe('flame-spark');
-    // Laenge der Zunge = (10 + size * 0.35) / 32 Frame-Breite.
-    expect(core.members.at(-1)?.scaleX.base).toBeCloseTo(24 / 32, 10);
-    expect(core.members.at(-1)?.alpha.base).toBeCloseTo(0.72, 10);
+    // Laenge der Zunge = (10 + size * 0.35) / 32 Frame-Breite, entlang der Stroemung um 1.15
+    // gestreckt: die Querachse traegt den reinen Groessenverlauf.
+    expect(core.members.at(-1)?.scaleY.base).toBeCloseTo(24 / 32, 10);
+    expect(core.members.at(-1)?.scaleX.base).toBeCloseTo(24 / 32 * 1.15, 10);
+    expect(core.members.at(-1)?.alpha.base).toBeCloseTo(0.58, 10);
+    // Nur ein Hauch Weissglut beim Zuenden: additiv hebt jeder entsaettigte Beitrag alle drei
+    // Kanaele an, und die Huelle deckt die groesste Flaeche ab.
+    expect(core.members.at(-1)?.tintBlend.base).toBeCloseTo(0.62, 10);
+    expect(core.members.at(-1)?.tintBlend.amplitude).toBeCloseTo(0.38, 10);
+    expect(outer.members.at(-1)?.tintBlend.base).toBeCloseTo(0.9, 10);
     // Frisch gezuendet: beide Stroeme ziehen aus dem heissen Band.
-    expect(core.members.at(-1)?.tint).toBe(0xffdf8a);
-    expect(outer.members.at(-1)?.tint).toBe(0xffdf8a);
+    expect(core.members.at(-1)?.tint).toBe(0xffc65a);
+    expect(outer.members.at(-1)?.tint).toBe(0xffc65a);
     expect(spark.members.at(-1)?.scaleX.base).toBeCloseTo(0.6, 10);
     expect(spark.members.at(-1)?.alpha.base).toBeCloseTo(1, 10);
     expect(spark.members.at(-1)?.tint).toBe(0xffaa44);
@@ -155,8 +162,8 @@ describe('flame renderer gpu particles', () => {
     expect(core.members.slice(-6).every((member) => member.frame === 'flame-tongue')).toBe(true);
     expect(outer.members.slice(-4).every((member) => member.frame === 'flame-billow')).toBe(true);
     expect(spark.members.at(-1)?.frame).toBe('flame-spark-void');
-    expect(core.members.at(-1)?.tint).toBe(0xe6b6ff);
-    expect(outer.members.at(-1)?.tint).toBe(0xe6b6ff);
+    expect(core.members.at(-1)?.tint).toBe(0xd79bff);
+    expect(outer.members.at(-1)?.tint).toBe(0xd79bff);
     expect(spark.members.at(-1)?.tint).toBe(0xd477ff);
   });
 
@@ -192,7 +199,7 @@ describe('flame renderer gpu particles', () => {
     // Jenseits der Temperaturrampe zieht der Ballen aus dem kalten Band, der Kern bleibt
     // bewusst im mittleren: ein Flammenkern brennt bis zuletzt heller als seine Huelle.
     registry.update(600);
-    expect(hotOuter).toBe(0xffdf8a);
+    expect(hotOuter).toBe(0xffc65a);
     expect(outer.members.at(-1)?.tint).toBe(0xc93a0a);
     expect(core.members.at(-1)?.tint).toBe(0xff7412);
   });
@@ -210,7 +217,8 @@ describe('flame renderer gpu particles', () => {
     expect(core.members[0].x.base).toBe(firstX);
     expect(core.members[2].x.base).toBeGreaterThanOrEqual(368);
     expect(core.members[2].x.base).toBeLessThanOrEqual(432);
-    expect(core.members[2].scaleX.base).toBeCloseTo(38 / 32, 10);
+    // Der Spawn liegt im Nachlauf, wo die Hitbox noch schmaler war: size 80 * 0.875.
+    expect(core.members[2].scaleY.base).toBeCloseTo((10 + 70 * 0.35) / 32, 10);
     expect(core.patched).toEqual([]);
   });
 
@@ -240,21 +248,78 @@ describe('flame renderer gpu particles', () => {
     expect(registry.getLaneStats(GpuVfxLaneId.FlameSpark)?.liveCount).toBe(0);
   });
 
-  it('keeps the existing lighting cadence and variant profile', () => {
+  it('keeps the lighting cadence and variant profile', () => {
     const { renderer } = setup();
     const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
     renderer.setLightingSystem(lighting as never);
-    renderer.createVisual(4, 40, 50, 30, VOID_FIRE_COLOR);
-    renderer.updateVisual(4, 44, 55, 32, 0, 0);
+    renderer.createVisual(6, 40, 50, 30, VOID_FIRE_COLOR);
+    renderer.updateVisual(6, 44, 55, 32, 0, 0);
 
     expect(lighting.setLight).toHaveBeenCalledWith(
-      'flame:4',
+      'flame:6',
       'voidFlameProjectile',
       44,
       55,
       { radiusPx: 96 + 32 * 2.55 },
     );
-    renderer.destroyVisual(4);
-    expect(lighting.releaseLight).toHaveBeenCalledWith('flame:4');
+    renderer.destroyVisual(6);
+    expect(lighting.releaseLight).toHaveBeenCalledWith('flame:6');
+  });
+
+  it('lights the nozzle of every chain, independent of the id stride', () => {
+    const { renderer } = setup();
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+    renderer.setLightingSystem(lighting as never);
+
+    // Keine der beiden Ids faellt auf die Schrittweite; das Muendungslicht haengt allein am
+    // Kettenschluessel und wandert mit der juengsten Hitbox weiter.
+    renderer.createVisual(7, 10, 10, 20, 0xff6600, 'player-a');
+    renderer.updateVisual(7, 10, 10, 20, 400, 0);
+    expect(lighting.setLight).toHaveBeenCalledWith(
+      'flameMuzzle:player-a', 'flameProjectile', 10, 10, { radiusPx: 150 },
+    );
+
+    renderer.createVisual(8, 38, 10, 20, 0xff6600, 'player-a');
+    lighting.setLight.mockClear();
+    renderer.updateVisual(7, 40, 10, 24, 400, 0);
+    renderer.updateVisual(8, 12, 10, 20, 400, 0);
+    // Die aeltere Hitbox erneuert das Muendungslicht nicht mehr.
+    expect(lighting.setLight).toHaveBeenCalledWith(
+      'flameMuzzle:player-a', 'flameProjectile', 12, 10, { radiusPx: 150 },
+    );
+    expect(lighting.setLight).not.toHaveBeenCalledWith(
+      'flameMuzzle:player-a', 'flameProjectile', 40, 10, { radiusPx: 150 },
+    );
+
+    renderer.destroyVisual(7);
+    expect(lighting.releaseLight).not.toHaveBeenCalledWith('flameMuzzle:player-a');
+    renderer.destroyVisual(8);
+    expect(lighting.releaseLight).toHaveBeenCalledWith('flameMuzzle:player-a');
+  });
+
+  it('bridges each hitbox to its predecessor in the same chain', () => {
+    const { registry, renderer, outer } = setup();
+    // Zwei Hitboxen derselben Quelle, quer zueinander versetzt wie beim Strafen.
+    renderer.createVisual(1, 100, 0, 30, 0xff6600, 'player-a');
+    renderer.updateVisual(1, 100, 0, 30, 400, 0);
+    renderer.createVisual(2, 70, 24, 24, 0xff6600, 'player-a');
+    renderer.updateVisual(2, 70, 24, 24, 400, 0);
+    registry.update(20);
+
+    // Die juengere Hitbox emittiert auf der Strecke zu ihrem Vorgaenger, nicht um sich selbst.
+    const bridged = outer.members.at(-1);
+    expect(bridged?.x.base).toBeCloseTo(85, 6);
+    expect(bridged?.y.base).toBeCloseTo(12, 6);
+    // Groesse und damit Ballendurchmesser laufen entlang der Bruecke ineinander.
+    expect(bridged?.scaleY.base).toBeCloseTo((12 + 27 * 0.42) / 32, 6);
+
+    // Eine fremde Quelle wird nicht verkettet, auch wenn sie unmittelbar daneben liegt: sie
+    // faellt auf ihren eigenen Nachlauf zurueck.
+    renderer.createVisual(3, 40, 26, 24, 0xff6600, 'player-b');
+    renderer.updateVisual(3, 72, 26, 24, 400, 0);
+    registry.update(20);
+    const unbridged = outer.members.at(-1);
+    expect(unbridged?.x.base).toBeCloseTo(72 - 32 / 2, 6);
+    expect(unbridged?.y.base).toBeCloseTo(26, 6);
   });
 });
