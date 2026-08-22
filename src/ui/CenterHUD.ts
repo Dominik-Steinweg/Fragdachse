@@ -42,6 +42,17 @@ import {
   COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT,
 } from './CoopDefenseSecondaryObjectiveLayout';
 import {
+  BOTTOM_STACK_BAR_H,
+  BOTTOM_STACK_BAR_LEFT,
+  BOTTOM_STACK_BAR_W,
+  BOTTOM_STACK_GAP,
+  BOTTOM_STACK_LABEL_FONT,
+  BOTTOM_STACK_LABEL_H,
+  BOTTOM_STACK_PANEL_H,
+  BOTTOM_STACK_PANEL_W,
+  BOTTOM_STACK_TOTAL_H,
+} from './BottomStackLayout';
+import {
   advanceHudOcclusionFade,
   createHudOcclusionFadeState,
   type HudOcclusionRect,
@@ -246,17 +257,9 @@ function formatEncounterLabel(
   return t('ui.encounter.waveLabel', { index, count, fronts: formatEncounterFronts(fronts) });
 }
 
-const STACK_BAR_W      = 212;
-const STACK_BAR_H      = 14;
-const STACK_LABEL_H    = 20;
-const STACK_TOTAL_H    = STACK_LABEL_H + STACK_BAR_H;
-const STACK_PANEL_W    = STACK_BAR_W + 20;
-const STACK_PANEL_H    = STACK_TOTAL_H + 4;
 const STACK_MARGIN     = 20;
-const STACK_GAP        = 8;
 const STACK_REVEAL_MS  = 500;
 const ULTIMATE_REVEAL_MS = 850;
-const STACK_BAR_LEFT   = -STACK_BAR_W / 2;
 const STACK_FADE_MS    = 100;
 const STACK_CORE_TEX   = '_center_core';
 
@@ -273,9 +276,6 @@ const COL_BAR_BG      = COLORS.GREY_9;
 const COL_BAR_BG2     = COLORS.GREY_8;
 const COL_BORDER      = COLORS.GREY_6;
 
-const LABEL_FONT = {
-  fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
-};
 const ANNOUNCEMENT_FONT = {
   fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: ANNOUNCEMENT_TEXT_COLOR,
   align: 'center' as const,
@@ -586,7 +586,7 @@ export class CenterHUD {
     ensureFadedPanelTexture(this.scene, TIMER_PANEL_FADE_TEX, TOP_PANEL_W, TIMER_BG_H, 0.35);
     ensureFadedPanelTexture(this.scene, TOP_PANEL_FADE_TEX, TOP_PANEL_W, TOP_PANEL_H, 0.3);
     ensureBarBgTexture(this.scene, TRAIN_BAR_BG_TEX, TRAIN_BAR_W, TRAIN_BAR_H);
-    ensureBarBgTexture(this.scene, STACK_BAR_BG_TEX, STACK_BAR_W, STACK_BAR_H);
+    ensureBarBgTexture(this.scene, STACK_BAR_BG_TEX, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
     ensureRadialTexture(this.scene, STACK_CORE_TEX, 14, [
       [0, 'rgba(255,255,255,1.0)'],
       [0.3, 'rgba(255,255,255,0.7)'],
@@ -597,13 +597,13 @@ export class CenterHUD {
       createGradientTexture(this.scene, TRAIN_BAR_TEX, TRAIN_PAL, TRAIN_BAR_W, TRAIN_BAR_H);
     }
     if (!this.scene.textures.exists(UTIL_BAR_TEX)) {
-      createGradientTexture(this.scene, UTIL_BAR_TEX, UTIL_PAL, STACK_BAR_W, STACK_BAR_H);
+      createGradientTexture(this.scene, UTIL_BAR_TEX, UTIL_PAL, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
     }
     if (!this.scene.textures.exists(ARM_BAR_TEX)) {
-      createGradientTexture(this.scene, ARM_BAR_TEX, ARM_PAL, STACK_BAR_W, STACK_BAR_H);
+      createGradientTexture(this.scene, ARM_BAR_TEX, ARM_PAL, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
     }
     if (!this.scene.textures.exists(ULT_BAR_TEX)) {
-      createGradientTexture(this.scene, ULT_BAR_TEX, ULT_PAL, STACK_BAR_W, STACK_BAR_H);
+      createGradientTexture(this.scene, ULT_BAR_TEX, ULT_PAL, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
     }
 
     this.buildTimer();
@@ -912,27 +912,27 @@ export class CenterHUD {
     const section = this.scene.add.container(CENTER_X, 0);
     section.setVisible(false).setAlpha(1);
 
-    const panelBg = this.scene.add.rectangle(0, STACK_TOTAL_H / 2, STACK_PANEL_W, STACK_PANEL_H, PANEL_BG_COL, PANEL_BG_ALPHA)
+    const panelBg = this.scene.add.rectangle(0, BOTTOM_STACK_TOTAL_H / 2, BOTTOM_STACK_PANEL_W, BOTTOM_STACK_PANEL_H, PANEL_BG_COL, PANEL_BG_ALPHA)
       .setScrollFactor(0);
     registerGraphicsObject(this.scene, 'gameplayHud', panelBg);
-    const label = this.scene.add.text(0, 0, '', LABEL_FONT)
+    const label = this.scene.add.text(0, 0, '', BOTTOM_STACK_LABEL_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
-    const bg = this.scene.add.image(STACK_BAR_LEFT, STACK_LABEL_H, STACK_BAR_BG_TEX)
+    const bg = this.scene.add.image(BOTTOM_STACK_BAR_LEFT, BOTTOM_STACK_LABEL_H, STACK_BAR_BG_TEX)
       .setOrigin(0, 0)
       .setScrollFactor(0);
-    const fg = this.scene.add.image(STACK_BAR_LEFT, STACK_LABEL_H, textureKey)
+    const fg = this.scene.add.image(BOTTOM_STACK_BAR_LEFT, BOTTOM_STACK_LABEL_H, textureKey)
       .setOrigin(0, 0)
       .setScrollFactor(0);
-    fg.setCrop(0, 0, 0, STACK_BAR_H);
-    const border = this.scene.add.rectangle(STACK_BAR_LEFT, STACK_LABEL_H, STACK_BAR_W, STACK_BAR_H)
+    fg.setCrop(0, 0, 0, BOTTOM_STACK_BAR_H);
+    const border = this.scene.add.rectangle(BOTTOM_STACK_BAR_LEFT, BOTTOM_STACK_LABEL_H, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setStrokeStyle(1, COL_BORDER, 1)
       .setFillStyle(0, 0);
     registerGraphicsObject(this.scene, 'gameplayHud', border);
 
-    const energyZone = new Phaser.Geom.Rectangle(STACK_BAR_LEFT + 2, STACK_LABEL_H + 1, STACK_BAR_W - 4, STACK_BAR_H - 2);
+    const energyZone = new Phaser.Geom.Rectangle(BOTTOM_STACK_BAR_LEFT + 2, BOTTOM_STACK_LABEL_H + 1, BOTTOM_STACK_BAR_W - 4, BOTTOM_STACK_BAR_H - 2);
     const zoneData = randomEmitZoneData(energyZone as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource);
     const coreEmitter = this.scene.add.particles(0, 0, STACK_CORE_TEX, {
       lifespan:  { min: 200, max: 500 },
@@ -968,10 +968,10 @@ export class CenterHUD {
     const effect = new LivingBarEffect(
       this.scene,
       section,
-      STACK_BAR_LEFT,
-      STACK_LABEL_H,
-      STACK_BAR_W,
-      STACK_BAR_H,
+      BOTTOM_STACK_BAR_LEFT,
+      BOTTOM_STACK_LABEL_H,
+      BOTTOM_STACK_BAR_W,
+      BOTTOM_STACK_BAR_H,
       palette,
       { glowTarget: fg, scrollFactor: 0 },
     );
@@ -1732,10 +1732,10 @@ export class CenterHUD {
         t('ui.hud.ultimate', { name: data.ultimateId ? getContentDisplayName(data.ultimateId, getLocale()) : t('ui.common.unknown') }),
         Phaser.Math.Clamp(data.rage / Math.max(1, data.maxRage), 0, 1),
         CENTER_X,
-        nextBottom - STACK_TOTAL_H,
+        nextBottom - BOTTOM_STACK_TOTAL_H,
       );
       this.setUltimateReadyVisual(isUltimateReady);
-      nextBottom = this.ultimateSection.container.y - STACK_GAP;
+      nextBottom = this.ultimateSection.container.y - BOTTOM_STACK_GAP;
     } else {
       this.setUltimateReadyVisual(false);
       this.hideLowerSection(this.ultimateSection);
@@ -1747,10 +1747,10 @@ export class CenterHUD {
         t('ui.hud.utility', { name: data.utilityId ? getContentDisplayName(data.utilityId, getLocale()) : t('ui.common.unknown') }),
         Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
         CENTER_X,
-        nextBottom - STACK_TOTAL_H,
+        nextBottom - BOTTOM_STACK_TOTAL_H,
       );
       this.setUtilityAttention(data.isUtilityOverridden ?? false);
-      nextBottom = this.utilitySection.container.y - STACK_GAP;
+      nextBottom = this.utilitySection.container.y - BOTTOM_STACK_GAP;
     } else {
       this.setUtilityAttention(false);
       this.hideLowerSection(this.utilitySection);
@@ -1762,9 +1762,9 @@ export class CenterHUD {
         `Armor: ${Math.round(data.armor)}/${Math.round(data.maxArmor)}`,
         Phaser.Math.Clamp(data.armor / Math.max(1, data.maxArmor), 0, 1),
         CENTER_X,
-        nextBottom - STACK_TOTAL_H,
+        nextBottom - BOTTOM_STACK_TOTAL_H,
       );
-      nextBottom = this.armorSection.container.y - STACK_GAP;
+      nextBottom = this.armorSection.container.y - BOTTOM_STACK_GAP;
     } else {
       this.hideLowerSection(this.armorSection);
     }
@@ -1845,7 +1845,7 @@ export class CenterHUD {
   }
 
   private showLowerSection(section: LowerBarSection, label: string, frac: number, x: number, y: number): void {
-    const fillW = Math.max(0, Math.round(STACK_BAR_W * Phaser.Math.Clamp(frac, 0, 1)));
+    const fillW = Math.max(0, Math.round(BOTTOM_STACK_BAR_W * Phaser.Math.Clamp(frac, 0, 1)));
     if (section.hideTween) {
       section.hideTween.destroy();
       section.hideTween = null;
@@ -1861,7 +1861,7 @@ export class CenterHUD {
     }
     section.label.setVisible(true);
     if (section.lastWidth !== fillW) {
-      section.fg.setCrop(0, 0, fillW, STACK_BAR_H);
+      section.fg.setCrop(0, 0, fillW, BOTTOM_STACK_BAR_H);
       section.effect.setFilledWidth(fillW);
       section.energyZone.width = fillW > 6 ? fillW - 4 : 0;
       section.lastWidth = fillW;

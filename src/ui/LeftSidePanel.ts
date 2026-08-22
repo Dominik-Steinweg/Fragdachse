@@ -196,9 +196,10 @@ interface SwatchEntry {
 }
 
 // ── Power-Up-Container (center-bottom, nicht animiert) ─────────────────────
-// x=840 → Balken (BAR_X=14, BAR_W=212) erscheinen zentriert auf x=960
-// y wird dynamisch von ArenaHUD gesetzt (abhängig von Anzahl aktiver Power-Ups)
-const PU_CONTAINER_X = GAME_WIDTH / 2 - 120; // 840
+// Die Kinder verwenden negative lokale X-Koordinaten und liegen dadurch exakt
+// auf derselben Mittelachse wie der Armor-/Utility-/Ultimate-Stack.
+// y wird dynamisch von ArenaHUD/CenterHUD gesetzt (abhängig von den Zeilen).
+const PU_CONTAINER_X = GAME_WIDTH / 2;
 
 export class LeftSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;

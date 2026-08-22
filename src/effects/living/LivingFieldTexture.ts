@@ -160,7 +160,11 @@ export class LivingFieldTexture {
     return this.textureKey;
   }
 
-  /** Texturpixel je Feldeinheit. Aendert sich mit der Qualitaetsstufe, die Feldgeometrie nicht. */
+  /**
+   * Texturpixel je Feldeinheit. Konstant, solange die Texturgroesse konstant ist — die
+   * Qualitaetsstufe aendert nur die Renderkadenz. Balken rechnen ihren Bildmassstab daraus, ein
+   * Wechsel muesste also alle Konsumenten neu vermessen.
+   */
   getPixelsPerUnit(): number {
     return this.step.width / LIVING_FIELD_UNIT_WIDTH;
   }

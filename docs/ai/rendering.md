@@ -335,5 +335,12 @@ Regeln, die dabei bleiben:
   aus mehreren Kacheln zusammengesetzt statt gestreckt; das Feld ist in X periodisch, weil nur der
   Hash-Schluessel gewickelt wird, nicht die Blobposition. `wrapCells` muss ein ganzzahliger Teiler
   der Feldbreite sein.
+- **Die Groesse des Renderziels ist fix.** Jedes Balken-Image haelt einen Frame der geteilten
+  Textur; sie neu zu bauen zieht die Quelle unter allen bestehenden Konsumenten weg. Die
+  Qualitaetsstufe darf deshalb nur die Renderkadenz aendern, nicht die Aufloesung
+  (`tests/LivingFieldTexture.test.ts`).
+- **Ein ShaderQuad rechnet in WebGL-Texturkoordinaten**, `outTexCoord.y` zeigt also nach oben. Wer
+  im Fragment-Shader mit Bildschirmachsen argumentiert (der Ring tut das, weil seine Winkel aus
+  `degToRadFromTop` stammen), muss die Y-Achse explizit spiegeln.
 - Beide haengen am Profilschalter `livingBarEffects`. Er ist kein reines Sichtbarkeitsflag: ohne ihn
   bliebe die geteilte Feldtextur fuer unsichtbare Balken am Rendern.

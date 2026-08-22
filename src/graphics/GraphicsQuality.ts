@@ -29,8 +29,10 @@ export interface GraphicsQualityProfile {
    *
    * In `low` komplett aus. Der Schalter ist deshalb kein reines Sichtbarkeitsflag: ohne ihn
    * bliebe die geteilte Feldtextur fuer unsichtbare Balken am Rendern, und die Puls-Anmeldungen
-   * am Atem-Treiber liefen weiter. `high` rendert das Feld in voller Aufloesung mit 30 Hz,
-   * `medium` halbiert beides.
+   * am Atem-Treiber liefen weiter. Zwischen `high` und `medium` unterscheidet sich nur die
+   * Renderkadenz des Feldes (30 Hz gegen 20 Hz); seine Aufloesung bleibt fest, weil jedes
+   * Balken-Image einen Frame darauf haelt und ein Groessenwechsel die Textur unter allen
+   * bestehenden Konsumenten austauschen wuerde.
    */
   readonly livingBarEffects: boolean;
   readonly externalDecorativeFilters: boolean;
