@@ -56,8 +56,6 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   playerStealth: ['PlayerEntity'],
   arenaHud: ['ArenaHUD'],
   centerHud: ['CenterHUD'],
-  livingBar: ['LivingBarEffect'],
-  playerStatusRing: ['PlayerStatusRing'],
 } as const;
 
 export const GRAPHICS_FAMILIES = {

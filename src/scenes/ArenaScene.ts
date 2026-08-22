@@ -3467,6 +3467,10 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay = null;
       this.hostileBaseIndicator?.destroy();
       this.hostileBaseIndicator = null;
+      // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
+      // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
+      this.playerStatusRing?.destroy();
+      this.playerStatusRing = null;
       this.secondaryObjectiveHud?.destroy();
       this.secondaryObjectiveHud = null;
       this.mapEventAnnouncementPresenter?.reset();

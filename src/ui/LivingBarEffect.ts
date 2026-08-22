@@ -1,13 +1,17 @@
 /**
- * LivingBarEffect — reusable "breathing liquid" particle effect for bars.
+ * LivingBarEffect — reusable "breathing liquid" effect for bars.
  *
- * Two layers of slow, overlapping blob particles (additive blend) plus an
- * optional pulsing, pre-baked aura. Used by ArenaHUD, UtilityChargeIndicator,
- * and the lobby colour indicator.
+ * Ein additiv getintetes Fenster der szenenweit geteilten {@link LivingFieldTexture} plus eine
+ * optional pulsierende Aura. Genutzt von ArenaHUD, CenterHUD, AimSystem und den Overlays.
+ *
+ * Diese Datei hält außerdem die Farb- und Texturhelfer, die die Balken-Aufrufer gemeinsam nutzen
+ * (`paletteFromColor`, `createGradientTexture`, `ensureLivingBarTextures`, `rectZone`).
  */
 import * as Phaser from 'phaser';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
-import { killAllAndResetParticlePositions, registerParticleEmitter } from '../effects/EffectUtils';
+import { LivingBreathDriver } from '../effects/living/LivingBreathDriver';
+import { LivingFieldTexture } from '../effects/living/LivingFieldTexture';
+import { LIVING_FIELD_UNITS_PER_BAR_HEIGHT } from '../effects/living/livingFieldShader';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -44,11 +48,11 @@ export function paletteFromColor(color: number): LivingBarPalette {
 // ── Shared textures ─────────────────────────────────────────────────────────
 
 const TEX_BLOB = '_living_blob';
-const CORE_FREQUENCY_MS = 30;
-const OUTER_FREQUENCY_MS = 36;
-const CORE_PARTICLE_CAP = 52;
-const OUTER_PARTICLE_CAP = 64;
 
+/**
+ * Weicher Radialverlauf. Der Balkeneffekt selbst braucht ihn nur noch für die gebackene Aura;
+ * die "energized"-Emitter in ArenaHUD und CenterHUD sowie einige Overlays nutzen ihn weiter.
+ */
 export function ensureLivingBarTextures(scene: Phaser.Scene): void {
   if (scene.textures.exists(TEX_BLOB)) return;
   const s = 20;
@@ -124,22 +128,22 @@ export interface LivingBarEffectOpts {
 /**
  * Lebendiger Balken-Effekt für HUD, Menüs und Overlays.
  *
- * Kostenhinweis: Jede Instanz erzeugt zwei begrenzte Emitter mit 28–33 Partikeln pro Sekunde
- * und animiert an jedem davon `scale` und `alpha` über die Lebenszeit. Wer den Effekt
- * vervielfacht (etwa je Upgrade-Knoten), vervielfacht diese Kosten weiterhin linear.
+ * Der Effekt zeigt ein Fenster der szenenweit geteilten {@link LivingFieldTexture}: ein einziger
+ * Shader-Quad rendert das Blob-Feld offscreen, jeder Balken ist danach nur noch ein additiv
+ * getintetes `Image`. Eine zusätzliche Instanz kostet damit einen batchbaren Quad statt zweier
+ * Partikel-Emitter mit zusammen über hundert CPU-aktualisierten Partikeln.
  *
- * Im `low`-Profil ist der Effekt vollständig abgeschaltet: Ohne den Schalter blieben zwar die
- * Partikel über `particleFactors.decorative` aus, die Emitter-Objekte und der Aura-Tween
- * liefen aber weiter.
+ * Zwei Dinge, die beim Ändern zählen:
+ * - Die Blobgröße hängt an der Balkenhöhe, nicht an der Balkenbreite: eine Balkenhöhe entspricht
+ *   `LIVING_FIELD_UNITS_PER_BAR_HEIGHT` Feldeinheiten. Ein sehr breiter Balken wird deshalb aus
+ *   mehreren Kacheln zusammengesetzt statt gestreckt — das Feld ist in X periodisch, die Kacheln
+ *   stoßen nahtlos aneinander.
+ * - Im `low`-Profil entsteht gar nichts: kein Image, keine Aura, keine Atem-Anmeldung. Ohne den
+ *   Schalter bliebe sonst die Feldtextur für einen unsichtbaren Balken am Rendern.
  */
 export class LivingBarEffect {
-  idleCore:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
-  idleOuter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
-  readonly emitZone:  Phaser.Geom.Rectangle;
-
   breathAura: Phaser.GameObjects.Image | null = null;
   breathGlow: GlowHandle | null = null;
-  breathTween: Phaser.Tweens.Tween | null = null;
 
   private active = true;
   private glowTarget: Phaser.GameObjects.Image | null;
@@ -149,9 +153,19 @@ export class LivingBarEffect {
   private readonly barHeight: number;
   private readonly barX: number;
   private readonly barY: number;
+  private readonly fullWidth: number;
   private filledWidth: number;
   private readonly opts: LivingBarEffectOpts | undefined;
   private unsubscribeQuality: (() => void) | null = null;
+
+  private field: LivingFieldTexture | null = null;
+  private tiles: Phaser.GameObjects.Image[] = [];
+  /** Bildschirmpixel je Texturpixel. */
+  private imageScale = 1;
+  /** Breite einer Kachel in Bildschirmpixeln. */
+  private tileWidth = 1;
+  private cropHeight = 1;
+  private cropTop = 0;
 
   constructor(
     private scene: Phaser.Scene,
@@ -161,18 +175,16 @@ export class LivingBarEffect {
     opts?: LivingBarEffectOpts,
   ) {
     this.container = container;
-    this.barHeight = h;
+    this.barHeight = Math.max(1, h);
     this.barX = x;
     this.barY = y;
-    this.filledWidth = w;
+    this.fullWidth = Math.max(1, w);
+    this.filledWidth = Math.max(0, w);
     this.opts = opts;
     const qualityProfile = getGraphicsQualityProfile(scene);
     this.enabled = qualityProfile.livingBarEffects;
     this.filterGlowEnabled = qualityProfile.externalDecorativeFilters;
     this.glowTarget = opts?.glowTarget ?? null;
-    // Die Zone wird auch im abgeschalteten Zustand gefuehrt: `setFilledWidth()` schreibt
-    // weiterhin hinein, und die Aufrufer sollen keine Fallunterscheidung brauchen.
-    this.emitZone = new Phaser.Geom.Rectangle(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
 
     // Der Effekt muss auf Qualitaetswechsel zur Laufzeit reagieren: Die Instanzen leben so
     // lange wie ihr HUD-Element und wuerden sonst nach einem Wechsel von `low` auf `high`
@@ -185,7 +197,7 @@ export class LivingBarEffect {
     }) ?? null;
 
     if (this.enabled) {
-      this.createEmitters();
+      this.createTiles();
       this.setFilledWidth(this.filledWidth);
     }
   }
@@ -194,115 +206,125 @@ export class LivingBarEffect {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (enabled) {
-      this.createEmitters();
+      this.createTiles();
       if (this.active) this.setFilledWidth(this.filledWidth);
       else {
-        this.stopEmitter(this.idleCore);
-        this.stopEmitter(this.idleOuter);
+        this.hideTiles();
         this.removeGlowVisual();
       }
       return;
     }
     this.removeGlowVisual();
-    this.idleCore?.destroy();
-    this.idleOuter?.destroy();
-    this.idleCore = null;
-    this.idleOuter = null;
+    this.destroyTiles();
   }
 
-  private createEmitters(): void {
-    const scene = this.scene;
-    const container = this.container;
-    const opts = this.opts;
-    const palette = this.palette;
-    const h = this.barHeight;
+  private createTiles(): void {
+    if (this.tiles.length > 0) return;
 
-    ensureLivingBarTextures(scene);
-    const intensity = opts?.intensity ?? 1.0;
-    const zoneData = randomEmitZoneData(this.emitZone as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource);
+    const field = LivingFieldTexture.get(this.scene);
+    // Ohne WebGL-Shader (Tests, exotische Kontexte) bleibt der Effekt still, statt einen
+    // fehlenden Texturschluessel an `add.image` zu reichen.
+    if (!field.isAvailable()) return;
 
-    // Scale particle sizes relative to bar height (reference = 14px)
-    const sf = Math.max(0.3, h / 14);
+    field.retain();
+    this.field = field;
 
-    this.idleCore = scene.add.particles(0, 0, TEX_BLOB, {
-      lifespan:  { min: 1200, max: 1500 },
-      frequency: CORE_FREQUENCY_MS,
-      quantity:  1,
-      maxAliveParticles: CORE_PARTICLE_CAP,
-      reserve: CORE_PARTICLE_CAP,
-      emitting: false,
-      speedX:    { min: -2, max: 2 },
-      speedY:    { min: -1, max: 1 },
-      scale:     { start: 1.0 * sf, end: 0.4 * sf },
-      alpha:     { start: 0.05 * intensity, end: 0.03 * intensity },
-      tint:      [palette.mid, palette.dark, palette.light],
-      blendMode: Phaser.BlendModes.ADD,
-    });
-    registerParticleEmitter(scene, 'livingBar', this.idleCore);
-    getGraphicsQualityController(scene)?.setEmitterImportance(this.idleCore, 'decorative');
-    this.idleCore.addEmitZone(zoneData);
-    if (opts?.scrollFactor !== undefined) this.idleCore.setScrollFactor(opts.scrollFactor);
-    container.add(this.idleCore);
+    const pixelsPerUnit = field.getPixelsPerUnit();
+    this.imageScale = (this.barHeight / LIVING_FIELD_UNITS_PER_BAR_HEIGHT) / pixelsPerUnit;
+    this.tileWidth = field.getTextureWidth() * this.imageScale;
+    this.cropHeight = Math.min(
+      field.getTextureHeight(),
+      LIVING_FIELD_UNITS_PER_BAR_HEIGHT * pixelsPerUnit,
+    );
+    // Der senkrechte Versatz ist die einzige Variation zwischen benachbarten Balken. Er ist
+    // stetig und aus der Balkengeometrie abgeleitet, damit derselbe Balken nach einem
+    // Qualitaetswechsel dasselbe Fenster zeigt.
+    const verticalRange = Math.max(0, field.getTextureHeight() - this.cropHeight);
+    this.cropTop = verticalRange * variantFraction(this.barX, this.barY, this.palette.mid);
 
-    this.idleOuter = scene.add.particles(0, 0, TEX_BLOB, {
-      lifespan:  { min: 1000, max: 2500 },
-      frequency: OUTER_FREQUENCY_MS,
-      quantity:  1,
-      maxAliveParticles: OUTER_PARTICLE_CAP,
-      reserve: OUTER_PARTICLE_CAP,
-      emitting: false,
-      speedX:    { min: -1, max: 1 },
-      speedY:    { min: -0.5, max: 0.5 },
-      scale:     { start: 1.5 * sf, end: 0.7 * sf },
-      alpha:     { start: 0.1 * intensity, end: 0.03 * intensity },
-      tint:      [palette.dark, palette.mid],
-      blendMode: Phaser.BlendModes.ADD,
-    });
-    registerParticleEmitter(scene, 'livingBar', this.idleOuter);
-    getGraphicsQualityController(scene)?.setEmitterImportance(this.idleOuter, 'decorative');
-    this.idleOuter.addEmitZone(zoneData);
-    if (opts?.scrollFactor !== undefined) this.idleOuter.setScrollFactor(opts.scrollFactor);
-    container.add(this.idleOuter);
+    const intensity = Phaser.Math.Clamp(this.opts?.intensity ?? 1, 0, 1);
+    const tileCount = Math.max(1, Math.ceil(this.fullWidth / this.tileWidth));
+
+    for (let index = 0; index < tileCount; index += 1) {
+      const tile = this.scene.add.image(0, 0, field.getTextureKey())
+        .setOrigin(0, 0)
+        .setScale(this.imageScale)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(intensity)
+        .setVisible(false);
+      // Eckweiser Tint bildet den dark→light-Verlauf ab, den die frueheren Partikel ueber ihre
+      // Tint-Liste im Mittel erzeugt haben.
+      tile.setTint(this.palette.dark, this.palette.light, this.palette.dark, this.palette.light);
+      tile.setPosition(
+        this.barX + index * this.tileWidth,
+        this.barY - this.cropTop * this.imageScale,
+      );
+      if (this.opts?.scrollFactor !== undefined) tile.setScrollFactor(this.opts.scrollFactor);
+      this.container.add(tile);
+      this.tiles.push(tile);
+    }
 
     this.ensureGlowVisual();
   }
 
-  /** Update the particle spawn region width (call when bar fill changes). */
+  /** Update the visible field region (call when bar fill changes). */
   setFilledWidth(w: number): void {
     this.filledWidth = Math.max(0, w);
-    if (w > 4) {
-      this.emitZone.width = w - 2;
-      if (this.active) {
-        this.startEmitter(this.idleCore);
-        this.startEmitter(this.idleOuter);
-        this.ensureGlowVisual();
-        this.syncAuraGeometry();
+
+    if (w > 4 && this.active) {
+      this.applyCrop(Math.min(this.filledWidth, this.fullWidth));
+      this.ensureGlowVisual();
+      this.syncAuraGeometry();
+      return;
+    }
+
+    this.hideTiles();
+    if (w <= 4) this.removeGlowVisual();
+  }
+
+  private applyCrop(width: number): void {
+    if (this.tiles.length === 0 || this.imageScale <= 0) return;
+    const textureWidth = this.field?.getTextureWidth() ?? 0;
+
+    for (let index = 0; index < this.tiles.length; index += 1) {
+      const tile = this.tiles[index];
+      const covered = index * this.tileWidth;
+      const remaining = width - covered;
+      if (remaining <= 0) {
+        tile.setVisible(false);
+        continue;
       }
-    } else {
-      this.emitZone.width = 0;
-      this.stopEmitter(this.idleCore);
-      this.stopEmitter(this.idleOuter);
-      this.removeGlowVisual();
+      const cropWidth = Math.min(textureWidth, remaining / this.imageScale);
+      tile.setCrop(0, this.cropTop, cropWidth, this.cropHeight);
+      tile.setVisible(true);
     }
   }
 
-  /** Pause the effect (particles stop, glow removed). */
+  private hideTiles(): void {
+    for (const tile of this.tiles) tile.setVisible(false);
+  }
+
+  private destroyTiles(): void {
+    for (const tile of this.tiles) tile.destroy();
+    this.tiles = [];
+    this.field?.release();
+    this.field = null;
+  }
+
+  /** Pause the effect (field hidden, glow removed). */
   stop(): void {
     this.active = false;
-    this.stopEmitter(this.idleCore);
-    this.stopEmitter(this.idleOuter);
+    this.hideTiles();
     this.removeGlowVisual();
   }
 
-  /** Resume the effect (particles start, glow added). */
+  /** Resume the effect (field shown, glow added). */
   start(): void {
     this.active = true;
-    if (this.emitZone.width > 2) {
-      this.startEmitter(this.idleCore);
-      this.startEmitter(this.idleOuter);
+    if (this.filledWidth > 4) {
+      this.applyCrop(Math.min(this.filledWidth, this.fullWidth));
       this.ensureGlowVisual();
       this.breathAura?.setVisible(true);
-      this.breathTween?.resume();
     }
   }
 
@@ -313,7 +335,7 @@ export class LivingBarEffect {
 
   /** High erhaelt den urspruenglichen Filter-Glow; medium nutzt den guenstigen Textur-Fallback. */
   private ensureGlowVisual(): void {
-    if (!this.enabled || !this.glowTarget || this.emitZone.width <= 2) return;
+    if (!this.enabled || !this.glowTarget || this.filledWidth <= 4) return;
     if (this.filterGlowEnabled) this.ensureFilterGlow();
     else this.ensureAura();
   }
@@ -323,20 +345,14 @@ export class LivingBarEffect {
     const intensity = this.opts?.intensity ?? 1;
     this.breathGlow = addExternalGlow(this.glowTarget, this.palette.mid, 0, 0, false, 0.1, 6);
     if (!this.breathGlow) return;
-    this.breathTween = this.scene.tweens.add({
-      targets: this.breathGlow,
-      outerStrength: 2.5 * intensity,
-      duration: 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    LivingBreathDriver.get(this.scene).register(this.breathGlow, 'outerStrength', 0, 2.5 * intensity);
   }
 
   private ensureAura(): void {
     if (!this.enabled) return;
-    if (!this.glowTarget || this.breathAura || this.emitZone.width <= 2) return;
+    if (!this.glowTarget || this.breathAura || this.filledWidth <= 4) return;
     const intensity = this.opts?.intensity ?? 1;
+    ensureLivingBarTextures(this.scene);
     this.breathAura = this.scene.add.image(0, 0, TEX_BLOB)
       .setTint(this.palette.mid)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -344,14 +360,7 @@ export class LivingBarEffect {
     if (this.opts?.scrollFactor !== undefined) this.breathAura.setScrollFactor(this.opts.scrollFactor);
     this.container.addAt(this.breathAura, 0);
     this.syncAuraGeometry();
-    this.breathTween = this.scene.tweens.add({
-      targets: this.breathAura,
-      alpha: { from: 0.08 * intensity, to: 0.2 * intensity },
-      duration: 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    LivingBreathDriver.get(this.scene).register(this.breathAura, 'alpha', 0.08 * intensity, 0.2 * intensity);
   }
 
   private syncAuraGeometry(): void {
@@ -363,31 +372,21 @@ export class LivingBarEffect {
       .setVisible(this.active && width > 4);
   }
 
-  private startEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter | null): void {
-    if (!emitter) return;
-    emitter.setActive(true);
-    if (!emitter.emitting) emitter.start();
-  }
-
-  private stopEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter | null): void {
-    if (!emitter) return;
-    if (!emitter.active && !emitter.emitting) return;
-    emitter.stop();
-    killAllAndResetParticlePositions(emitter);
-    emitter.setActive(false);
-  }
-
   private removeGlowVisual(): void {
-    if (this.breathTween) {
-      this.breathTween.destroy();
-      this.breathTween = null;
-    }
+    // Den Treiber nur anfassen, wenn wirklich etwas angemeldet war: sonst entstuende auf `low`
+    // beim Aufraeumen noch ein Szenen-Update-Listener fuer einen Effekt, den es nie gab.
+    if (!this.breathGlow && !this.breathAura) return;
+    const breath = LivingBreathDriver.get(this.scene);
     if (this.breathGlow && this.glowTarget) {
+      breath.unregister(this.breathGlow);
       removeExternalFx(this.glowTarget, this.breathGlow);
       this.breathGlow = null;
     }
-    this.breathAura?.destroy();
-    this.breathAura = null;
+    if (this.breathAura) {
+      breath.unregister(this.breathAura);
+      this.breathAura.destroy();
+      this.breathAura = null;
+    }
   }
 
   destroy(): void {
@@ -395,9 +394,12 @@ export class LivingBarEffect {
     this.unsubscribeQuality = null;
     this.stop();
     this.removeGlowVisual();
-    this.idleCore?.destroy();
-    this.idleOuter?.destroy();
-    this.idleCore = null;
-    this.idleOuter = null;
+    this.destroyTiles();
   }
+}
+
+/** Stabiler, aus der Balkengeometrie abgeleiteter Wert in [0, 1) für den Fensterversatz. */
+function variantFraction(x: number, y: number, color: number): number {
+  const mixed = Math.sin(x * 12.9898 + y * 78.233 + (color & 0xffff) * 0.0131) * 43758.5453;
+  return mixed - Math.floor(mixed);
 }

@@ -5,9 +5,13 @@ import {
   DEPTH,
   PLAYER_SIZE,
 } from '../config';
-import { ensureLivingBarTextures } from './LivingBarEffect';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
-import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
+import { registerGraphicsObject } from '../effects/EffectUtils';
+import {
+  STATUS_RING_FRAGMENT_SOURCE,
+  STATUS_RING_SEGMENT_COUNT,
+  STATUS_RING_SHADER_NAME,
+} from '../effects/living/statusRingShader';
 import type { LocalArenaHudData } from './LocalArenaHudData';
 
 type SegmentKey = 'hp' | 'adrenaline' | 'rage';
@@ -31,16 +35,6 @@ interface AngleSection {
   endAngle: number;
 }
 
-interface SegmentEmitterBundle {
-  core: Phaser.GameObjects.Particles.ParticleEmitter;
-  outer: Phaser.GameObjects.Particles.ParticleEmitter;
-  coreSource: ArcRingRandomSource;
-  outerSource: ArcRingRandomSource;
-  activeMode: boolean;
-  lastFraction: number;
-  section: AngleSection | null;
-}
-
 const RING_GAP_PX = 16;
 const RING_THICKNESS = 6;
 const RING_OUTER_RADIUS = PLAYER_SIZE / 2 + RING_GAP_PX + RING_THICKNESS;
@@ -54,10 +48,12 @@ const FLASH_MS = 180;
 const BURST_MS = 320;
 const WARNING_MS = 540;
 const WARNING_PUNCH_MS = 140;
-const LIVING_EMITTER_IDLE_FREQUENCY = 48;
-const LIVING_EMITTER_ACTIVE_FREQUENCY = 20;
-const LIVING_EMITTER_DEPTH = DEPTH.LOCAL_UI;
 const GRAPHICS_REFRESH_INTERVAL_MS = 1000 / 30;
+/** Ab dieser Fuellung traegt ein Segment ueberhaupt einen lebendigen Anteil. */
+const LIVING_MIN_FRACTION = 0.03;
+/** Frueher `setAlpha(alpha * 0.92|0.88 * fraction)` auf den Emittern. */
+const LIVING_ALPHA_SCALE = 0.9;
+const LIVING_QUAD_ALPHA = 0.95;
 const TEX_STATUS_RING_STATIC = '__player_status_ring_static_v2';
 const STATUS_RING_TEXTURE_PADDING = 8;
 const STATUS_RING_TEXTURE_RADIUS = RING_OUTER_RADIUS + STATUS_RING_TEXTURE_PADDING;
@@ -153,34 +149,6 @@ function ensureStatusRingStaticTexture(scene: Phaser.Scene): void {
   texture.refresh();
 }
 
-class ArcRingRandomSource {
-  private innerRadius = 0;
-  private outerRadius = 0;
-  private section: AngleSection | null = null;
-
-  set(innerRadius: number, outerRadius: number, section: AngleSection | null): void {
-    this.innerRadius = innerRadius;
-    this.outerRadius = outerRadius;
-    this.section = section;
-  }
-
-  getRandomPoint(point: Phaser.Types.Math.Vector2Like): Phaser.Types.Math.Vector2Like {
-    const target = point;
-    if (!this.section) {
-      target.x = 0;
-      target.y = 0;
-      return target;
-    }
-
-    const angle = Phaser.Math.FloatBetween(this.section.startAngle, this.section.endAngle);
-    const radius = Math.sqrt(Phaser.Math.FloatBetween(this.innerRadius * this.innerRadius, this.outerRadius * this.outerRadius));
-    const rad = degToRadFromTop(angle);
-    target.x = Math.cos(rad) * radius;
-    target.y = Math.sin(rad) * radius;
-    return target;
-  }
-}
-
 export class PlayerStatusRing {
   private readonly container: Phaser.GameObjects.Container;
   private readonly staticRing: Phaser.GameObjects.Image;
@@ -189,10 +157,21 @@ export class PlayerStatusRing {
   private readonly fillGraphics: Phaser.GameObjects.Graphics;
   private readonly sparkGraphics: Phaser.GameObjects.Graphics;
 
-  private readonly livingEmitters = new Map<SegmentKey, SegmentEmitterBundle>();
-  private armorEmitter: SegmentEmitterBundle | null = null;
+  /**
+   * Der lebendige Anteil des Rings: ein einziger Shader-Quad statt der frueheren acht Emitter.
+   * `null`, wenn die Qualitaetsstufe ihn abschaltet oder kein WebGL-Renderer verfuegbar ist.
+   */
+  private livingQuad: Phaser.GameObjects.Shader | null = null;
   private livingEnabled = true;
   private unsubscribeQuality: (() => void) | null = null;
+
+  // Uniform-Puffer der vier Segmente (HP, Adrenalin, Rage, Armor). Sie werden nur bei einer
+  // Zustandsaenderung neu befuellt; der Shader liest sie bei jedem Renderschritt.
+  private readonly segmentArc = new Float32Array(STATUS_RING_SEGMENT_COUNT * 4);
+  private readonly segmentBand = new Float32Array(STATUS_RING_SEGMENT_COUNT * 4);
+  private readonly segmentTintMid = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
+  private readonly segmentTintDark = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
+  private livingElapsedSec = 0;
 
   private active = false;
   private latestData: LocalArenaHudData | null = null;
@@ -227,7 +206,6 @@ export class PlayerStatusRing {
     private readonly isLocalAlive: () => boolean = () => true,
     private readonly isLocalBurrowed: () => boolean = () => false,
   ) {
-    ensureLivingBarTextures(scene);
     ensureStatusRingStaticTexture(scene);
     this.staticRing = scene.add.image(SHADOW_OFFSET, SHADOW_OFFSET, TEX_STATUS_RING_STATIC);
     this.warningGraphics = scene.add.graphics();
@@ -241,42 +219,41 @@ export class PlayerStatusRing {
     registerGraphicsObject(scene, 'playerStatus', this.fillGraphics);
     registerGraphicsObject(scene, 'playerStatus', this.sparkGraphics);
 
-    for (const segment of SEGMENTS) {
-      this.livingEmitters.set(segment.key, this.createLivingEmitters(segment));
-    }
-    this.armorEmitter = this.createArmorEmitters();
-
-    // Der Ring baut dasselbe Partikelmuster wie der LivingBarEffect nach – vier Bundles zu je
-    // zwei Emittern mit langer Lebensdauer, also mit Abstand die groesste Instanz davon. Er
-    // haengt deshalb am selben Qualitaetsschalter und wird bei Bedarf zur Laufzeit
-    // aus- und wieder eingeschaltet.
+    // Der Ring teilt sich den Qualitaetsschalter mit dem LivingBarEffect: beide zeigen dasselbe
+    // lebendige Feld, nur in unterschiedlicher Geometrie.
     this.livingEnabled = getGraphicsQualityProfile(scene).livingBarEffects;
-    // Der Ring startet verborgen; auch auf hoher Qualitaet sollen seine acht Emitter bis zum
-    // ersten aktiven HUD-Frame nicht in der UpdateList arbeiten.
-    this.stopLivingEmitters();
+    if (this.livingEnabled) this.livingQuad = this.createLivingQuad();
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       if (profile.livingBarEffects === this.livingEnabled) return;
       this.livingEnabled = profile.livingBarEffects;
-      if (!this.livingEnabled) this.stopLivingEmitters();
+      if (!this.livingEnabled) {
+        this.livingQuad?.destroy();
+        this.livingQuad = null;
+        return;
+      }
+      const quad = this.createLivingQuad();
+      if (quad) this.container.add(quad);
+      this.livingQuad = quad;
     }) ?? null;
 
-    this.container = scene.add.container(0, 0, [
+    const children: Phaser.GameObjects.GameObject[] = [
       this.staticRing,
       this.warningGraphics,
       this.glowGraphics,
       this.fillGraphics,
       this.sparkGraphics,
-    ]);
+    ];
+    // Zuoberst: die frueheren Emitter lagen auf derselben Tiefe, wurden aber nach dem Container
+    // erzeugt und zeichneten damit ueber allen seinen Kindern.
+    if (this.livingQuad) children.push(this.livingQuad);
+    this.container = scene.add.container(0, 0, children);
     this.container.setDepth(DEPTH.LOCAL_UI);
     this.container.setVisible(false);
   }
 
   setActive(active: boolean): void {
     this.active = active;
-    if (!active) {
-      this.container.setVisible(false);
-      this.stopLivingEmitters();
-    }
+    if (!active) this.container.setVisible(false);
   }
 
   notifyAdrenalineInsufficientShot(): void {
@@ -331,104 +308,55 @@ export class PlayerStatusRing {
   destroy(): void {
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
-    this.stopLivingEmitters();
-    for (const bundle of this.livingEmitters.values()) {
-      bundle.core.destroy();
-      bundle.outer.destroy();
-    }
-    if (this.armorEmitter) {
-      this.armorEmitter.core.destroy();
-      this.armorEmitter.outer.destroy();
-    }
+    this.livingQuad = null;
+    // `true` zerstoert auch die Kinder, den Shader-Quad eingeschlossen.
     this.container.destroy(true);
   }
 
-  private createLivingEmitters(segment: SegmentConfig): SegmentEmitterBundle {
-    const coreSource = new ArcRingRandomSource();
-    const outerSource = new ArcRingRandomSource();
-    const coreZone = { type: 'random', source: coreSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
-    const outerZone = { type: 'random', source: outerSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
-
-    const core = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 1300, max: 2200 },
-      frequency: LIVING_EMITTER_IDLE_FREQUENCY,
-      quantity: 1,
-      maxAliveParticles: 64,
-      reserve: 64,
-      speedX: { min: -2, max: 2 },
-      speedY: { min: -1, max: 1 },
-      scale: { start: 0.72, end: 0.28 },
-      alpha: { start: 0.09, end: 0.035 },
-      tint: [segment.palette.mid, segment.palette.dark, segment.palette.mid],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: true,
-    });
-    registerParticleEmitter(this.scene, 'playerStatusRing', core);
-    this.markDecorative(core);
-    core.addEmitZone(coreZone);
-    core.setDepth(LIVING_EMITTER_DEPTH);
-
-    const outer = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 1500, max: 2600 },
-      frequency: LIVING_EMITTER_IDLE_FREQUENCY,
-      quantity: 1,
-      maxAliveParticles: 72,
-      reserve: 72,
-      speedX: { min: -1, max: 1 },
-      speedY: { min: -0.5, max: 0.5 },
-      scale: { start: 1.05, end: 0.5 },
-      alpha: { start: 0.14, end: 0.035 },
-      tint: [segment.palette.dark, segment.palette.dark, segment.palette.mid],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: true,
-    });
-    registerParticleEmitter(this.scene, 'playerStatusRing', outer);
-    this.markDecorative(outer);
-    outer.addEmitZone(outerZone);
-    outer.setDepth(LIVING_EMITTER_DEPTH);
-
-    return {
-      core,
-      outer,
-      coreSource,
-      outerSource,
-      activeMode: false,
-      lastFraction: Number.NaN,
-      section: null,
-    };
-  }
-
   /**
-   * Registriert einen Ring-Emitter als rein dekorativ. Ohne das laufen die acht Emitter des
-   * Rings als `standard` und werden in den niedrigeren Qualitaetsstufen nur gedrosselt statt
-   * abgeschaltet.
+   * Der Quad haengt an der Display-Liste (anders als das Balkenfeld, das offscreen rendert) und
+   * wird deshalb von Phaser selbst gezeichnet. `setupUniforms` laeuft dabei je Renderschritt und
+   * liest nur die vorbereiteten Puffer.
    */
-  private markDecorative(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
-    getGraphicsQualityController(this.scene)?.setEmitterImportance(emitter, 'decorative');
-  }
+  private createLivingQuad(): Phaser.GameObjects.Shader | null {
+    const renderer = this.scene.sys?.renderer as { gl?: WebGLRenderingContext } | undefined;
+    if (!renderer?.gl || typeof Phaser.GameObjects?.Shader !== 'function') return null;
 
-  private stopLivingEmitters(): void {
-    for (const bundle of this.livingEmitters.values()) {
-      this.stopEmitter(bundle.core);
-      this.stopEmitter(bundle.outer);
-    }
-    if (this.armorEmitter) {
-      this.stopEmitter(this.armorEmitter.core);
-      this.stopEmitter(this.armorEmitter.outer);
-    }
+    const quad = new Phaser.GameObjects.Shader(
+      this.scene,
+      {
+        name: STATUS_RING_SHADER_NAME,
+        shaderName: STATUS_RING_SHADER_NAME,
+        fragmentSource: STATUS_RING_FRAGMENT_SOURCE,
+        setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
+          setUniform('uTime', this.livingElapsedSec);
+          setUniform('uAlpha', LIVING_QUAD_ALPHA);
+          setUniform('uSize', [STATUS_RING_TEXTURE_SIZE, STATUS_RING_TEXTURE_SIZE]);
+          setUniform('uSegmentArc[0]', this.segmentArc);
+          setUniform('uSegmentBand[0]', this.segmentBand);
+          setUniform('uSegmentTintMid[0]', this.segmentTintMid);
+          setUniform('uSegmentTintDark[0]', this.segmentTintDark);
+        },
+      },
+      SHADOW_OFFSET,
+      SHADOW_OFFSET,
+      STATUS_RING_TEXTURE_SIZE,
+      STATUS_RING_TEXTURE_SIZE,
+    );
+    quad.setOrigin(0.5, 0.5);
+    quad.setBlendMode(Phaser.BlendModes.ADD);
+    return quad;
   }
 
   private render(now: number): void {
     const sprite = this.getLocalSprite();
     if (!this.active || !this.latestData || !sprite || !sprite.active || !this.isLocalAlive()) {
       this.container.setVisible(false);
-      this.stopLivingEmitters();
       return;
     }
 
     if (!sprite.visible && !this.isLocalBurrowed()) {
       this.container.setVisible(false);
-      this.stopLivingEmitters();
       return;
     }
 
@@ -447,7 +375,7 @@ export class PlayerStatusRing {
 
     this.container.setVisible(true);
     this.container.setPosition(sprite.x + wobbleX, sprite.y + wobbleY);
-    this.container.setAlpha(0.95);
+    this.container.setAlpha(LIVING_QUAD_ALPHA);
 
     this.updateHpTrail(now);
 
@@ -479,7 +407,7 @@ export class PlayerStatusRing {
       this.nextAnimatedGraphicsAt = now + GRAPHICS_REFRESH_INTERVAL_MS;
     }
 
-    this.syncLivingEmitters(1, now);
+    this.syncLivingSegments(now);
   }
 
   private updateHpTrail(now: number): void {
@@ -630,55 +558,72 @@ export class PlayerStatusRing {
     return data.weapon2AdrenalineCost > 0 && data.adrenaline < data.weapon2AdrenalineCost;
   }
 
-  private syncLivingEmitters(alpha: number, now: number): void {
-    this.syncEmitterBundle(SEGMENTS[1], this.hpFrac, alpha, this.isHpEmitterActive(now));
-    this.syncEmitterBundle(SEGMENTS[0], this.adrFrac, alpha, this.adrenalineBoostActive);
-    this.syncEmitterBundle(SEGMENTS[2], this.rageFrac, alpha, this.rageReady);
-    this.syncArmorEmitter(alpha);
+  /**
+   * Befuellt die Uniform-Puffer des lebendigen Quads. Ersetzt die frueheren acht
+   * `setPosition`/`setAlpha`/`setFrequency`-Aufrufe je Frame durch vier Pufferschreibvorgaenge
+   * auf genau einem Renderobjekt.
+   */
+  private syncLivingSegments(now: number): void {
+    const quad = this.livingQuad;
+    if (!quad) return;
+    this.livingElapsedSec = now / 1000;
+
+    const coreInner = RING_INNER_RADIUS + 0.8;
+    const coreOuter = RING_INNER_RADIUS + RING_THICKNESS * 0.72;
+    const bandInner = RING_INNER_RADIUS + 0.2;
+    const bandOuter = RING_OUTER_RADIUS - 0.4;
+    const rimInner = RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS;
+    const rimOuter = RING_OUTER_RADIUS + 0.4;
+
+    // HP wurde frueher nur waehrend des Trefferblitzes dichter, Adrenalin bei aktiver Spritze,
+    // Rage ab Ultimate-Bereitschaft. Armor kannte keine Umschaltung.
+    this.writeSegment(0, SEGMENTS[1], this.hpFrac, PAL_HP, this.hpFlashUntil > now,
+      coreInner, coreOuter, bandInner, bandOuter);
+    this.writeSegment(1, SEGMENTS[0], this.adrFrac,
+      this.isAdrenalineInsufficientForWeapon2() ? PAL_ADR_LOW : PAL_ADR, this.adrenalineBoostActive,
+      coreInner, coreOuter, bandInner, bandOuter);
+    this.writeSegment(2, SEGMENTS[2], this.rageFrac, PAL_RAGE, this.rageReady,
+      coreInner, coreOuter, bandInner, bandOuter);
+    // Armor folgt dem HP-Bogen, liegt aber auf dem Aussenrand.
+    this.writeSegment(3, SEGMENTS[1], this.armorFrac, PAL_ARMOR, false,
+      rimInner, rimOuter, rimInner - 0.4, rimOuter + 0.8);
   }
 
-  private syncEmitterBundle(segment: SegmentConfig, fraction: number, alpha: number, isActive: boolean): void {
-    const bundle = this.livingEmitters.get(segment.key);
-    if (!bundle) return;
+  private writeSegment(
+    index: number,
+    segment: SegmentConfig,
+    fraction: number,
+    palette: SegmentPalette,
+    active: boolean,
+    coreInner: number,
+    coreOuter: number,
+    bandInner: number,
+    bandOuter: number,
+  ): void {
+    const arcBase = index * 4;
+    const bandBase = index * 4;
+    const clamped = clamp01(fraction);
+    const section = this.livingEnabled && clamped > LIVING_MIN_FRACTION
+      ? this.getFilledSection(segment, clamped)
+      : null;
 
-    const centerX = this.container.x;
-    const centerY = this.container.y;
-    const quantizedFraction = Math.round(clamp01(fraction) * 128) / 128;
-    if (bundle.lastFraction !== quantizedFraction) {
-      bundle.lastFraction = quantizedFraction;
-      bundle.section = this.getFilledSection(segment, quantizedFraction);
-      bundle.coreSource.set(
-        RING_INNER_RADIUS + 0.8,
-        RING_INNER_RADIUS + RING_THICKNESS * 0.72,
-        bundle.section,
-      );
-      bundle.outerSource.set(
-        RING_INNER_RADIUS + 0.2,
-        RING_OUTER_RADIUS - 0.4,
-        bundle.section,
-      );
+    if (!section) {
+      this.segmentBand[bandBase + 3] = 0;
+      return;
     }
-    const section = bundle.section;
 
-    bundle.core.setPosition(centerX, centerY);
-    bundle.outer.setPosition(centerX, centerY);
-    const fracScale = Phaser.Math.Clamp(fraction, 0, 1);
-    bundle.core.setAlpha(alpha * 0.92 * fracScale);
-    bundle.outer.setAlpha(alpha * 0.88 * fracScale);
+    this.segmentArc[arcBase] = Phaser.Math.DegToRad(section.startAngle);
+    this.segmentArc[arcBase + 1] = Phaser.Math.DegToRad(section.endAngle - section.startAngle);
+    this.segmentArc[arcBase + 2] = coreInner;
+    this.segmentArc[arcBase + 3] = coreOuter;
 
-    if (bundle.activeMode !== isActive) {
-      bundle.activeMode = isActive;
-      const freq = isActive ? LIVING_EMITTER_ACTIVE_FREQUENCY : LIVING_EMITTER_IDLE_FREQUENCY;
-      bundle.core.setFrequency(freq, 1);
-      bundle.outer.setFrequency(freq, 1);
-    }
-    if (this.livingEnabled && fraction > 0.03 && section) {
-      this.startEmitter(bundle.core);
-      this.startEmitter(bundle.outer);
-    } else {
-      this.stopEmitter(bundle.core);
-      this.stopEmitter(bundle.outer);
-    }
+    this.segmentBand[bandBase] = bandInner;
+    this.segmentBand[bandBase + 1] = bandOuter;
+    this.segmentBand[bandBase + 2] = active ? 1 : 0;
+    this.segmentBand[bandBase + 3] = LIVING_ALPHA_SCALE * clamped;
+
+    writeColor(this.segmentTintMid, index * 3, palette.mid);
+    writeColor(this.segmentTintDark, index * 3, palette.dark);
   }
 
   private drawSparks(now: number): void {
@@ -720,99 +665,6 @@ export class PlayerStatusRing {
     }
   }
 
-  private isHpEmitterActive(now: number): boolean {
-    return (this.hpFlashUntil - now) > 0;
-  }
-
-  private createArmorEmitters(): SegmentEmitterBundle {
-    const coreSource = new ArcRingRandomSource();
-    const outerSource = new ArcRingRandomSource();
-    const coreZone = { type: 'random', source: coreSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
-    const outerZone = { type: 'random', source: outerSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
-
-    const core = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 1200, max: 2000 },
-      frequency: LIVING_EMITTER_IDLE_FREQUENCY,
-      quantity: 1,
-      maxAliveParticles: 48,
-      reserve: 48,
-      speedX: { min: -1.5, max: 1.5 },
-      speedY: { min: -0.8, max: 0.8 },
-      scale: { start: 0.55, end: 0.18 },
-      alpha: { start: 0.12, end: 0.04 },
-      tint: [PAL_ARMOR.mid, PAL_ARMOR.dark, PAL_ARMOR.light],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: true,
-    });
-    registerParticleEmitter(this.scene, 'playerStatusRing', core);
-    this.markDecorative(core);
-    core.addEmitZone(coreZone);
-    core.setDepth(LIVING_EMITTER_DEPTH);
-
-    const outer = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 1200, max: 2200 },
-      frequency: LIVING_EMITTER_IDLE_FREQUENCY,
-      quantity: 1,
-      maxAliveParticles: 44,
-      reserve: 44,
-      speedX: { min: -0.8, max: 0.8 },
-      speedY: { min: -0.4, max: 0.4 },
-      scale: { start: 0.75, end: 0.28 },
-      alpha: { start: 0.08, end: 0.02 },
-      tint: [PAL_ARMOR.dark, PAL_ARMOR.mid, PAL_ARMOR.light],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: true,
-    });
-    registerParticleEmitter(this.scene, 'playerStatusRing', outer);
-    this.markDecorative(outer);
-    outer.addEmitZone(outerZone);
-    outer.setDepth(LIVING_EMITTER_DEPTH);
-
-    return {
-      core,
-      outer,
-      coreSource,
-      outerSource,
-      activeMode: false,
-      lastFraction: Number.NaN,
-      section: null,
-    };
-  }
-
-  private syncArmorEmitter(alpha: number): void {
-    const bundle = this.armorEmitter;
-    if (!bundle) return;
-
-    const centerX = this.container.x;
-    const centerY = this.container.y;
-    // Armor follows the HP arc, so use SEGMENTS[1] as the angular template
-    const quantizedFraction = Math.round(clamp01(this.armorFrac) * 128) / 128;
-    if (bundle.lastFraction !== quantizedFraction) {
-      bundle.lastFraction = quantizedFraction;
-      bundle.section = this.getFilledSection(SEGMENTS[1], quantizedFraction);
-      const rimInner = RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS;
-      const rimOuter = RING_OUTER_RADIUS + 0.4;
-      bundle.coreSource.set(rimInner, rimOuter, bundle.section);
-      bundle.outerSource.set(rimInner - 0.4, rimOuter + 0.8, bundle.section);
-    }
-    const section = bundle.section;
-
-    bundle.core.setPosition(centerX, centerY);
-    bundle.outer.setPosition(centerX, centerY);
-
-    const fracScale = Phaser.Math.Clamp(this.armorFrac, 0, 1);
-    bundle.core.setAlpha(alpha * 0.9 * fracScale);
-    bundle.outer.setAlpha(alpha * 0.85 * fracScale);
-
-    if (this.livingEnabled && this.armorFrac > 0.03 && section) {
-      this.startEmitter(bundle.core);
-      this.startEmitter(bundle.outer);
-    } else {
-      this.stopEmitter(bundle.core);
-      this.stopEmitter(bundle.outer);
-    }
-  }
-
   private drawSegmentLayer(
     graphics: Phaser.GameObjects.Graphics,
     segment: SegmentConfig,
@@ -835,18 +687,6 @@ export class PlayerStatusRing {
     );
   }
 
-  private startEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
-    emitter.setActive(true);
-    if (!emitter.emitting) emitter.start();
-  }
-
-  private stopEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
-    if (!emitter.active && !emitter.emitting) return;
-    emitter.stop();
-    killAllAndResetParticlePositions(emitter);
-    emitter.setActive(false);
-  }
-
   private getFilledSection(segment: SegmentConfig, fraction: number): AngleSection | null {
     const clamped = clamp01(fraction);
     if (clamped <= 0) return null;
@@ -859,4 +699,11 @@ export class PlayerStatusRing {
       endAngle,
     };
   }
+}
+
+/** Schreibt eine 0xRRGGBB-Farbe als normalisiertes vec3 in einen Uniform-Puffer. */
+function writeColor(target: Float32Array, offset: number, color: number): void {
+  target[offset] = ((color >> 16) & 0xff) / 255;
+  target[offset + 1] = ((color >> 8) & 0xff) / 255;
+  target[offset + 2] = (color & 0xff) / 255;
 }

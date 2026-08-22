@@ -163,7 +163,7 @@ describe('ArenaVisualAttributionCollector', () => {
     const collector = new ArenaVisualAttributionCollector();
     const inactive = emitter(false, 0);
     const active = emitter(true, 7);
-    collector.registerParticleEmitter('playerStatusRing', inactive);
+    collector.registerParticleEmitter('playerStealth', inactive);
     collector.registerParticleEmitter('asmdPrimary', active);
     collector.setActive(true);
     collector.setRecording(true);
@@ -171,7 +171,7 @@ describe('ArenaVisualAttributionCollector', () => {
 
     const snapshot = collector.sampleAndReset();
 
-    expect(snapshot.particleFamilies.playerStatusRing).toEqual({
+    expect(snapshot.particleFamilies.playerStealth).toEqual({
       emitterCount: 1,
       activeEmitterCount: 0,
       aliveParticles: 0,

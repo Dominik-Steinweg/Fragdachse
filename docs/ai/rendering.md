@@ -293,3 +293,41 @@ GPU-Member liegen nicht als `ParticleEmitter` in der Display-Liste: `Performance
 ### Was bewusst klassisch bleibt
 
 Die Stinkwolke ist ein Hybrid und bleibt es: Haze, Blobs, Ground Glow, Damage Aura, Reaction Pulse, Fairness-Kreis, Electric Bolts, Lighting und der Spawn-Burst laufen unveraendert auf der CPU. Noch nicht migriert (kuenftig reine Consumer derselben Infrastruktur): Flame, EntityBurn, Hydra, Spore, BFG, PlasmaCharge, EnergyShield, Tesla, Slime, PowerUp. Dauerhaft klassisch bleiben Effekte mit echter laufender CPU-Simulation – `GravityWell` (BlackHole), eigene `ParticleProcessor` (Flammenring-Turbulenz), dynamische Kollisionen und Per-Frame-Tracking eines einzelnen Partikels.
+
+## Lebendige Balken und Statusring (Shader-Quads)
+
+`LivingBarEffect` und der lebendige Anteil des `PlayerStatusRing` sind keine Partikeleffekte mehr.
+Beide zeigen dasselbe prozedurale Blob-Feld aus `src/effects/living/livingFieldShader.ts` — ein
+Hash-Gitter statt einer Partikelliste: eine Zelle traegt genau einen Blob, dessen Position,
+Geburtsphase und Lebensdauer-Jitter aus dem Zellindex gehasht werden. Ein Blob braucht damit weder
+CPU-Update noch Speicher, und das Feld ist allein aus `time` reproduzierbar.
+
+Zwei Traeger, weil die Geometrie verschieden ist:
+
+- **Balken**: ein einziger Shader-Quad je Szene rendert das Feld offscreen in `LivingFieldTexture`;
+  jeder Balken ist danach ein additiv getintetes `Image`, das ueber `setCrop` ein Fenster dieser
+  Textur zeigt. Balken sind damit batchbar und kosten keine eigenen GL-Objekte — wichtig, weil das
+  Upgrade-Overlay bei jedem `refresh()` alle Knoteneffekte neu baut.
+- **Ring**: ein eigener Shader-Quad im Polarraum, an der Display-Liste, mit den vier Ressourcen als
+  Uniform-Segmenten. Winkel- und Radientest im Shader entsprechen exakt der Verwerfung, die die
+  fruehere `ArcRingRandomSource` beim Ziehen der Emit-Position vornahm.
+
+Regeln, die dabei bleiben:
+
+- **`shaderName` ist ein globaler Programm-Cache-Schluessel.** `renderer.shaderProgramFactory` haelt
+  kompilierte Programme unter Basisname plus Additions plus Features. Beliebig viele `ShaderQuad`
+  mit gleichem Namen teilen sich ein Programm — zwei *verschiedene* Quellen unter einem Namen sind
+  dagegen ein stiller Fehler, denn die zuerst kompilierte gewinnt.
+- **Ein Shader mit `renderToTexture` rendert nicht von selbst.** `setRenderToTexture()` zeichnet
+  genau einmal. Liegt der Shader auf der Display-Liste, rendert er je Kamera einmal pro Frame in
+  seine Textur; deshalb haengt das Balkenfeld bewusst *nicht* dort, sondern ruft
+  `renderWebGLStep(renderer, shader, shader.drawingContext)` selbst auf und bestimmt so die Rate.
+- **Das Renderziel leert sich nicht selbst.** Vor jedem Schritt `drawingContext.clear(...)`, sonst
+  bleibt das vorherige Bild anteilig stehen und das Feld verschmiert statt zu atmen.
+- **Blobradius hoechstens Zellgroesse.** Die Auswertung sieht nur die 3x3-Nachbarschaft.
+- **Die Blobgroesse haengt an der Balkenhoehe, nicht an der Balkenbreite.** Ein breiter Balken wird
+  aus mehreren Kacheln zusammengesetzt statt gestreckt; das Feld ist in X periodisch, weil nur der
+  Hash-Schluessel gewickelt wird, nicht die Blobposition. `wrapCells` muss ein ganzzahliger Teiler
+  der Feldbreite sein.
+- Beide haengen am Profilschalter `livingBarEffects`. Er ist kein reines Sichtbarkeitsflag: ohne ihn
+  bliebe die geteilte Feldtextur fuer unsichtbare Balken am Rendern.

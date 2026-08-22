@@ -22,9 +22,15 @@ export interface GraphicsQualityProfile {
    */
   readonly dynamicShadows: boolean;
   /**
-   * Der lebendige Balken-Effekt (LivingBarEffect) in HUD, Menues und Overlays. Jede Instanz
-   * traegt zwei begrenzte Partikel-Emitter sowie eine dauerhaft pulsierende, vorgebackene Aura.
-   * In `low` komplett aus, damit auch Emitter-Objekte und Puls-Tween nicht weiterlaufen.
+   * Der lebendige Balken-Effekt (LivingBarEffect) in HUD, Menues und Overlays sowie der
+   * gleichartige Anteil des PlayerStatusRing. Beide zeigen dasselbe GPU-Feld: die Balken als
+   * getintete Ausschnitte einer geteilten, offscreen gerenderten Feldtextur, der Ring als
+   * eigener Shader-Quad im Polarraum.
+   *
+   * In `low` komplett aus. Der Schalter ist deshalb kein reines Sichtbarkeitsflag: ohne ihn
+   * bliebe die geteilte Feldtextur fuer unsichtbare Balken am Rendern, und die Puls-Anmeldungen
+   * am Atem-Treiber liefen weiter. `high` rendert das Feld in voller Aufloesung mit 30 Hz,
+   * `medium` halbiert beides.
    */
   readonly livingBarEffects: boolean;
   readonly externalDecorativeFilters: boolean;
