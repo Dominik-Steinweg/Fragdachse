@@ -195,9 +195,17 @@ export interface ArenaPerformanceReport {
     gpuVfx: GpuVfxReport | null;
     sceneInspection: Record<string, unknown> | null;
     network: {
+      /** Logical host net-ticks/client snapshot arrivals; not a per-peer send count. */
       snapshotCount: number;
+      logicalSnapshotCount: number;
+      /** Payload sends and payload bytes are counted once per PeerLink/connection. */
+      payloadSendCount: number;
+      payloadBytesTotal: number;
+      payloadBytesMax: number;
+      /** Compatibility aliases for payloadBytesTotal/payloadBytesMax. */
       snapshotBytesTotal: number;
       snapshotBytesMax: number;
+      /** Per-peer full/delta payload sends, not logical snapshot builds. */
       fullSnapshotCount: number;
       deltaSnapshotCount: number;
       droppedFastMessages: number;
@@ -235,6 +243,8 @@ export interface ArenaPerformanceReport {
     networkBytes: {
       transport: 'exact_webrtc_stats';
       payload: 'estimated_utf16_code_units';
+      payloadAggregation: 'per_peer_send';
+      logicalSnapshotCounter: 'host_net_tick_or_client_snapshot';
       diagnosticEncodingPass: false;
     };
     recorderCostMs: MetricSummary;
@@ -390,7 +400,6 @@ export class ArenaRuntimeProfiler {
   private gameEventsInstalled = false;
   private rockDestroyBurstCount = 0;
   private lastRockDestroyedAtMs = Number.NEGATIVE_INFINITY;
-  private rockDestroyWaveTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly rockDestroyWaveSources = new Set<string>();
   private readonly rockDestroyWaveReasons = new Set<string>();
   private pendingSnapshotBytesTotal = 0;
@@ -430,12 +439,10 @@ export class ArenaRuntimeProfiler {
     if (!this.recording) return;
     const now = performance.now();
     if (now - this.lastRockDestroyedAtMs > ROCK_DESTROY_WAVE_IDLE_MS) this.finalizeRockDestroyWave();
-    this.clearRockDestroyWaveTimer();
     this.lastRockDestroyedAtMs = now;
     this.rockDestroyBurstCount += 1;
     if (event.source) this.rockDestroyWaveSources.add(event.source);
     if (event.reason) this.rockDestroyWaveReasons.add(event.reason);
-    this.rockDestroyWaveTimer = setTimeout(() => this.finalizeRockDestroyWave(), ROCK_DESTROY_WAVE_IDLE_MS);
   };
 
   attachGame(game: Phaser.Game): void {
@@ -507,6 +514,8 @@ export class ArenaRuntimeProfiler {
 
   setLiveDiagnosticsEnabled(enabled: boolean): void {
     this.liveHudEnabled = enabled;
+    if (!enabled) this.latestSummary = null;
+    else this.nextLiveSummaryAtMs = 0;
     this.syncDiagnosticsLifecycle();
   }
 
@@ -530,6 +539,7 @@ export class ArenaRuntimeProfiler {
     if (!this.diagnosticsActive) return;
     const startedAt = performance.now();
     const now = startedAt;
+    this.finalizeRockDestroyWaveIfIdle(now);
     const frameMs = Number.isFinite(sample.rawDeltaMs) && sample.rawDeltaMs > 0 ? sample.rawDeltaMs : sample.deltaMs;
     const roleCpuMs = Math.max(0, sample.roleStepMs);
     const snapshotCount = numberDetail(sample, 'newNetworkSnapshotCount')
@@ -570,10 +580,15 @@ export class ArenaRuntimeProfiler {
       this.addInterval('clientCpuMaxMs', roleCpuMs, true);
     }
     this.addInterval('snapshotCount', snapshotCount);
+    this.addInterval('logicalSnapshotCount', snapshotCount);
     this.addInterval('snapshotBytesTotal', snapshotBytes);
-    this.addInterval('snapshotBytesMax', Math.max(numberDetail(sample, 'snapshotBytes'), this.pendingSnapshotBytesMax), true);
+    const snapshotBytesMax = Math.max(numberDetail(sample, 'snapshotBytes'), this.pendingSnapshotBytesMax);
+    this.addInterval('snapshotBytesMax', snapshotBytesMax, true);
+    this.addInterval('payloadBytesTotal', snapshotBytes);
+    this.addInterval('payloadBytesMax', snapshotBytesMax, true);
     this.addInterval('fullSnapshotCount', fullSnapshotCount);
     this.addInterval('deltaSnapshotCount', deltaSnapshotCount);
+    this.addInterval('payloadSendCount', fullSnapshotCount + deltaSnapshotCount);
     this.addInterval('snapshotBuildTotalMs', numberDetail(sample, 'snapshotBuildMs'));
     this.addInterval('snapshotBuildMaxMs', numberDetail(sample, 'snapshotBuildMs'), true);
     this.addInterval('flowfieldJobs', numberDetail(sample, 'flowfieldJobs'));
@@ -616,9 +631,11 @@ export class ArenaRuntimeProfiler {
       if (this.recorderCosts.length > 256) this.recorderCosts.shift();
       if (now - this.recordingStartedAtMs >= 30 * 60 * 1000) this.stopRecording(true);
     }
-    if (this.latestSummary === null || now >= this.nextLiveSummaryAtMs) {
+    if (this.liveHudEnabled && (this.latestSummary === null || now >= this.nextLiveSummaryAtMs)) {
       this.latestSummary = this.buildLiveSummary(now, sample);
       this.nextLiveSummaryAtMs = now + LIVE_SUMMARY_INTERVAL_MS;
+    } else if (!this.liveHudEnabled) {
+      this.latestSummary = null;
     }
   }
 
@@ -660,7 +677,6 @@ export class ArenaRuntimeProfiler {
     this.nextLiveSummaryAtMs = now;
     this.rockDestroyBurstCount = 0;
     this.lastRockDestroyedAtMs = Number.NEGATIVE_INFINITY;
-    this.clearRockDestroyWaveTimer();
     this.rockDestroyWaveSources.clear();
     this.rockDestroyWaveReasons.clear();
     this.observedScope.clear();
@@ -820,6 +836,10 @@ export class ArenaRuntimeProfiler {
         sceneInspection: this.latestSceneInspection ? { ...this.latestSceneInspection } : null,
         network: {
           snapshotCount: this.summaryTotal('snapshotCount'),
+          logicalSnapshotCount: this.summaryTotal('logicalSnapshotCount'),
+          payloadSendCount: this.summaryTotal('payloadSendCount'),
+          payloadBytesTotal: this.summaryTotal('payloadBytesTotal'),
+          payloadBytesMax: this.summaryMax('payloadBytesMax'),
           snapshotBytesTotal: this.summaryTotal('snapshotBytesTotal'),
           snapshotBytesMax: this.summaryMax('snapshotBytesMax'),
           fullSnapshotCount: this.summaryTotal('fullSnapshotCount'),
@@ -859,6 +879,8 @@ export class ArenaRuntimeProfiler {
         networkBytes: {
           transport: 'exact_webrtc_stats',
           payload: 'estimated_utf16_code_units',
+          payloadAggregation: 'per_peer_send',
+          logicalSnapshotCounter: 'host_net_tick_or_client_snapshot',
           diagnosticEncodingPass: false,
         },
         recorderCostMs: summarize(this.recorderCosts),
@@ -885,15 +907,13 @@ export class ArenaRuntimeProfiler {
     }
   }
 
-  private clearRockDestroyWaveTimer(): void {
-    if (this.rockDestroyWaveTimer !== null) {
-      clearTimeout(this.rockDestroyWaveTimer);
-      this.rockDestroyWaveTimer = null;
+  private finalizeRockDestroyWaveIfIdle(now: number): void {
+    if (this.rockDestroyBurstCount > 0 && now - this.lastRockDestroyedAtMs > ROCK_DESTROY_WAVE_IDLE_MS) {
+      this.finalizeRockDestroyWave();
     }
   }
 
   private finalizeRockDestroyWave(): void {
-    this.clearRockDestroyWaveTimer();
     if (this.recording && this.rockDestroyBurstCount >= ROCK_MASS_DESTROY_THRESHOLD) {
       this.recordSemanticEvent('rocks:mass_destroy', {
         destroyedCount: this.rockDestroyBurstCount,
@@ -929,22 +949,12 @@ export class ArenaRuntimeProfiler {
     this.frameTimeHistogramTotal += 1;
   }
 
-  private frameRingValues(): number[] {
-    const values: number[] = [];
-    const start = this.frameTimeRingCount === FRAME_RING_CAPACITY ? this.frameTimeRingIndex : 0;
-    for (let offset = 0; offset < this.frameTimeRingCount; offset += 1) {
-      values.push(this.frameTimeRing[(start + offset) % FRAME_RING_CAPACITY]);
-    }
-    return values;
-  }
-
-  private frameRingSummary(): MetricSummary {
-    const values = this.frameRingValues();
-    if (values.length === 0) return emptyMetricSummary();
-    const p95 = percentile(values, 0.95);
-    const p99 = percentile(values, 0.99);
+  private frameRingSummary(p95: number, p99: number): MetricSummary {
+    if (this.frameTimeRingCount === 0) return emptyMetricSummary();
     let peak = 0;
-    for (const value of values) peak = Math.max(peak, value);
+    for (let offset = 0; offset < this.frameTimeRingCount; offset += 1) {
+      peak = Math.max(peak, this.frameTimeRing[(this.frameTimeRingIndex - this.frameTimeRingCount + offset + FRAME_RING_CAPACITY) % FRAME_RING_CAPACITY]);
+    }
     return {
       avg: this.frameTimeRingTotalMs / this.frameTimeRingCount,
       p95,
@@ -1056,7 +1066,7 @@ export class ArenaRuntimeProfiler {
 
   private buildLiveSummary(now: number, sample: ArenaRuntimeSample): ArenaRuntimeWindowSummary {
     const frame = this.buildFrameSummary();
-    const liveRawDelta = this.frameRingSummary();
+    const liveRawDelta = this.frameRingSummary(frame.p95Ms, frame.p99Ms);
     return {
       startedAtMs: this.recording ? 0 : now,
       durationMs: this.recording ? Math.max(0, now - this.recordingStartedAtMs) : 0,
