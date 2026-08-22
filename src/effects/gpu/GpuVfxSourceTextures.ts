@@ -20,6 +20,27 @@ export const TEX_STINK_PUFF      = 'stink_puff';
 export const TEX_GROUND_FIRE_SMOKE = '__ground_fire_smoke';
 export const TEX_LEAF_DEBRIS     = '__leaf_blower_leaf';
 export const TEX_LEAF_BLOWER_DUST = '__leaf_blower_dust';
+export const TEX_EXPLOSION_SPARK = '__explosion_spark';
+export const TEX_EXPLOSION_EMBER = '__explosion_ember';
+
+/** Weicher Funkenpunkt fuer die Explosionen. */
+export function ensureExplosionSparkTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_SPARK, 6, 6, (ctx) => {
+    const gradient = ctx.createRadialGradient(3, 3, 0, 3, 3, 3);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 6, 6);
+  });
+}
+
+/** Solider weisser Glutblock fuer die Explosionen. */
+export function ensureExplosionEmberTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_EMBER, 4, 4, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.fillRect(0, 0, 4, 4);
+  });
+}
 
 /** Bestehendes Leaf-Motiv als Atlas-Quelltextur. */
 export function ensureLeafDebrisTexture(scene: Phaser.Scene): void {

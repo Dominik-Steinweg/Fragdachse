@@ -393,6 +393,7 @@ export class RpcCoordinator {
 
   private registerPickupPowerUpHandler(): void {
     bridge.registerPickupPowerUpHandler((uid, playerId) => {
+      if (bridge.isArenaCountdownActive()) return false;
       if (!bridge.canPlayerAct(playerId)) return false;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (!player) return false;

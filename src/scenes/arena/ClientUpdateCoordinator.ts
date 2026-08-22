@@ -132,7 +132,8 @@ export class ClientUpdateCoordinator {
   }
 
   runClientUpdate(delta: number): void {
-    if (!bridge.isArenaStarted()) {
+    const countdownActive = bridge.isArenaCountdownActive();
+    if (!bridge.isArenaStarted() && !countdownActive) {
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -210,11 +211,11 @@ export class ClientUpdateCoordinator {
         if (!player) continue;
 
         const wasAlive = this.prevAliveStates.get(id) ?? false;
-        if (ps.alive && !wasAlive) {
+        if (ps.alive && !wasAlive && !countdownActive) {
           player.sprite.setPosition(ps.x, ps.y);
           this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);
         }
-        this.prevAliveStates.set(id, ps.alive);
+        if (!countdownActive) this.prevAliveStates.set(id, ps.alive);
 
         player.setTargetPosition(ps.x, ps.y);
         if (id !== localId) {

@@ -12,7 +12,11 @@ import {
   packGpuVfxAtlas,
   resetGpuVfxAtlasForTests,
 } from '../src/effects/gpu/GpuVfxAtlas';
-import { TEX_STINK_PUFF } from '../src/effects/gpu/GpuVfxSourceTextures';
+import {
+  TEX_EXPLOSION_EMBER,
+  TEX_EXPLOSION_SPARK,
+  TEX_STINK_PUFF,
+} from '../src/effects/gpu/GpuVfxSourceTextures';
 import {
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
@@ -103,6 +107,8 @@ describe('gpu vfx atlas', () => {
     }
     // `stink_puff` bleibt eigenstaendig bestehen – der klassische Spawn-Burst benutzt sie weiter.
     expect(scene.textures.exists(TEX_STINK_PUFF)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_SPARK)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_EMBER)).toBe(true);
     expect(scene.textures.exists(TEX_FLAME_CORE)).toBe(true);
     expect(scene.textures.exists(TEX_FLAME_EMBER)).toBe(true);
     expect(scene.textures.exists(TEX_FLAME_SPARK)).toBe(true);
@@ -121,6 +127,8 @@ describe('gpu vfx atlas', () => {
     expect(getGpuVfxFrame(GpuVfxFrameId.FlameCoreVoid).name).toBe('flame-core-void');
     expect(getGpuVfxFrame(GpuVfxFrameId.FlameOuterVoid).name).toBe('flame-outer-void');
     expect(getGpuVfxFrame(GpuVfxFrameId.FlameSparkVoid).name).toBe('flame-spark-void');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionSpark).name).toBe('explosion-spark');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionEmber).name).toBe('explosion-ember');
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
 

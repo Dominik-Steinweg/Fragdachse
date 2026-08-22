@@ -72,6 +72,7 @@ vi.mock('../src/effects/FlameShared', () => ({
   ensureFlameJetTextures: () => {},
   TEX_FLAME_BILLOW: 'flame-billow',
   TEX_FLAME_TONGUE: 'flame-tongue',
+  TEX_FLAME_BED: 'flame-bed',
   FLAME_COLORS_CORE: [0xffffff],
   FLAME_COLORS_OUTER: [0xffffff],
   FLAME_COLORS_SPARK: [0xffffff],

@@ -49,6 +49,7 @@ import { CoopDefenseSecondaryObjectiveMarkerRenderer } from '../../effects/CoopD
 import { CoopDefenseCarryZoneRenderer } from '../../effects/CoopDefenseCarryZoneRenderer';
 import { Ak47StrategicTargetRenderer } from '../../effects/Ak47StrategicTargetRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
+import { ExplosionGpuRenderer } from '../../effects/ExplosionGpuRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { LightingSystem }      from '../../effects/LightingSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
@@ -94,6 +95,7 @@ export interface RendererBundle {
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
   gpuVfx:              GpuVfxSystem;
   entityBurnGpu:       EntityBurnGpuController;
+  explosionGpu:        ExplosionGpuRenderer;
   fireball:            FireballRenderer;
   spore:               SporeRenderer;
   grenade:             GrenadeRenderer;
@@ -130,6 +132,8 @@ export function createRendererBundle(
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
   // melden sich hier an, statt je Brand eigene Emitter oder Callbacks zu erzeugen.
   const entityBurnGpu = new EntityBurnGpuController(gpuVfx);
+  const explosionGpu = new ExplosionGpuRenderer();
+  explosionGpu.registerGpuVfx(gpuVfx);
 
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
@@ -300,6 +304,7 @@ export function createRendererBundle(
     remoteControl,
     gpuVfx,
     entityBurnGpu,
+    explosionGpu,
     train: null,
     translocatorTeleport: null,
   };
@@ -376,6 +381,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.nuke.setEffectSystem(effectSystem);
   bundle.airstrike.setEffectSystem(effectSystem);
   effectSystem.setLightingSystem(bundle.lighting);
+  effectSystem.setExplosionGpuRenderer(bundle.explosionGpu);
 }
 
 /**

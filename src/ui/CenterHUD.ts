@@ -963,6 +963,11 @@ export class CenterHUD {
 
   transitionToGame(): void {
     this.container.setVisible(true);
+    // Der eigentliche Rundentimer wird erst ab `isArenaStarted()` synchronisiert. Bis dahin
+    // darf der Build-Default (2:00) nicht als bereits laufender Spieltimer erscheinen.
+    this.timerPanelBg.setVisible(false);
+    this.timerText.setVisible(false);
+    this.topPanelBg.setVisible(false);
   }
 
   transitionToLobby(): void {

@@ -99,6 +99,19 @@ describe('Train as a standalone map event', () => {
     expect(trainEvent?.repeatAfterExitMs).toBeUndefined();
   });
 
+  it('announces Map 1 train traffic from round start without changing its first arrival time', () => {
+    const map = getCoopDefenseMapConfig('1');
+    const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
+
+    expect(trainEvent).toMatchObject({
+      id: 'train-rhythm',
+      type: 'train',
+      start: { type: 'time', atMs: 0 },
+      delayMs: 10_000,
+      repeatAfterExitMs: 10_000,
+    });
+  });
+
   it('allows rails without a train', () => {
     // trackMode bleibt `rails`, die Map konfiguriert aber kein Zug-Event.
     const map = buildMap({ trackMode: 'rails' });

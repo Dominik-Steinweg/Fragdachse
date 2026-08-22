@@ -20,6 +20,8 @@ Die Welt arbeitet im 32-px-Raster und mit klaren Tiefenbändern. Neue Assets mü
 
 Eine Effektfamilie wird als zeitliche Sequenz entworfen: Antizipation/Flash, primäre Form, Impact, optionale Sekundärlayer und Residual/Cleanup. Layer nur hinzufügen, wenn sie Gameplay-Lesbarkeit oder Waffencharakter verbessern. Häufige Effekte benötigen begrenzte Emission, Wiederverwendung und vollständiges Cleanup von Emittern, Tweens, Timern, Filtern und Game Objects.
 
+Flächeneffekte (Bodenfeuer, Zonen) werden über eine Emissionsdichte *pro Rasterzelle* begrenzt, nicht über einen festen Node-Deckel je Fläche: ein Deckel lässt die Deckung mit wachsender Fläche gegen null gehen, und die Fläche zerfällt sichtbar in einzelne Partikelnester. Die Zellzahl geht dabei gedämpft und gedeckelt ein, damit die Lane-Kapazität endlich bleibt.
+
 Kamera-Feedback und Trefferreaktionen bleiben zentral gesteuert. Kein globaler Hit-Stop und kein direktes cameras.main.shake(); die technische Regel und die vorhandene Feedback-Regie stehen in rendering.md.
 
 ## Asset-Authoring

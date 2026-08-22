@@ -74,9 +74,9 @@ describe('gpu vfx render lanes', () => {
   });
 
   it('never grows the lane count with the effect count', () => {
-    // Der eigentliche Architekturvertrag: 23 logische Effekte auf 14 physischen Lanes.
+    // Der eigentliche Architekturvertrag: mehr logische Effekte auf weniger physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
-    expect(GPU_VFX_LANES.length).toBe(14);
+    expect(GPU_VFX_LANES.length).toBe(26);
   });
 
   it('keeps leaf debris in an explicit ordered world lane', () => {
@@ -124,7 +124,7 @@ describe('gpu vfx render lanes', () => {
     expect(projectileBurn.gravity).toBe(-30);
     expect(groundSmoke.gravity).toBeUndefined();
 
-    expect(groundFire.capacity).toBe(1536);
+    expect(groundFire.capacity).toBe(3072);
     expect(groundSmoke.capacity).toBe(128);
     expect(entityBurn.capacity).toBe(2048);
     expect(projectileBurn.capacity).toBe(2048);
@@ -196,6 +196,25 @@ describe('gpu vfx render lanes', () => {
       // `__void` ist der unsichtbare Platzhalter und darf nie das Motiv eines Effekts sein.
       expect(effect.frame).not.toBe(GpuVfxFrameId.Void);
     }
+  });
+
+  it('keeps explosion depth and blend bands separated', () => {
+    const spark = GPU_VFX_LANES[GpuVfxLaneId.ExplosionSpark];
+    const emberDown = GPU_VFX_LANES[GpuVfxLaneId.ExplosionEmberDown];
+    const emberUp = GPU_VFX_LANES[GpuVfxLaneId.ExplosionEmberUp];
+    const accent = GPU_VFX_LANES[GpuVfxLaneId.ExplosionAccent];
+    const fallout = GPU_VFX_LANES[GpuVfxLaneId.ExplosionNukeFallout];
+    const regeneration = GPU_VFX_LANES[GpuVfxLaneId.ExplosionRegeneration];
+
+    expect(spark.depth).toBe(emberDown.depth);
+    expect(spark.blendMode).toBe(1);
+    expect(emberDown.blendMode).toBe(0);
+    expect(emberDown.gravity).toBe(40);
+    expect(emberUp.gravity).toBe(-180);
+    expect(accent.depth).toBe(spark.depth + 0.1);
+    expect(fallout.depth).toBe(regeneration.depth);
+    expect(fallout.blendMode).toBe(0);
+    expect(regeneration.blendMode).toBe(1);
   });
 
   it('lets every effect stay identifiable on a shared lane', () => {

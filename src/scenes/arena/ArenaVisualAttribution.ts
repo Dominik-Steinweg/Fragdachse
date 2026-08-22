@@ -33,7 +33,7 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   hydra: ['HydraRenderer'],
   meteor: ['MeteorRenderer'],
   muzzleFlash: ['MuzzleFlashRenderer'],
-  nuke: ['NukeRenderer', 'EffectSystem'],
+  nuke: ['NukeRenderer'],
   plasmaBurner: ['PlasmaBurnerRenderer'],
   plasmaCharge: ['PlasmaChargeRenderer'],
   powerUp: ['PowerUpRenderer'],

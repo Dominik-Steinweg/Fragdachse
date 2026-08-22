@@ -172,6 +172,7 @@ import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName, getMapTutorial } from '../i18n/contentPresentation';
@@ -1776,7 +1777,7 @@ export class ArenaScene extends Phaser.Scene {
       ? sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs)
       : 0;
 
-    if (gameplayActive && !terminated) {
+    if ((gameplayActive || countdownActive) && !terminated) {
       const arenaHudStartedAt = diagnosticsActive ? performance.now() : 0;
       const secs = bridge.computeSecondsLeft();
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
@@ -1807,21 +1808,17 @@ export class ArenaScene extends Phaser.Scene {
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
       // Gleisen ohne Zug und Runden ohne weitere Einfahrt haben schlicht kein Event.
-      if (isCoopDefenseMode(bridge.getGameMode())) {
+      const trainEvent = bridge.getTrainEvent();
+      if (!trainEvent) {
         this.ctx.centerHUD.hideTrainWidget();
-      } else {
-        const trainEvent = bridge.getTrainEvent();
-        if (!trainEvent) {
-          this.ctx.centerHUD.hideTrainWidget();
-        } else if (!this.lifecycle.isTrainDestroyedShown()) {
-          const trainState = bridge.getLatestGameState()?.train ?? null;
-          if (trainState?.alive) {
-            this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
-          } else {
-            // Echte Restzeit bis zur Einfahrt; der Rundentimer spielt dabei keine Rolle.
-            const arrivalSecs = getTrainArrivalCountdownSecs(trainEvent.spawnAt, bridge.getSynchronizedNow());
-            if (arrivalSecs !== null) this.ctx.centerHUD.setTrainArrival(arrivalSecs);
-          }
+      } else if (!this.lifecycle.isTrainDestroyedShown()) {
+        const trainState = bridge.getLatestGameState()?.train ?? null;
+        if (trainState?.alive) {
+          this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
+        } else {
+          // Echte Restzeit bis zur Einfahrt; der Rundentimer spielt dabei keine Rolle.
+          const arrivalSecs = getTrainArrivalCountdownSecs(trainEvent.spawnAt, bridge.getSynchronizedNow());
+          if (arrivalSecs !== null) this.ctx.centerHUD.setTrainArrival(arrivalSecs);
         }
       }
       if (diagnosticsActive) arenaHudMs = performance.now() - arenaHudStartedAt;
@@ -1831,11 +1828,14 @@ export class ArenaScene extends Phaser.Scene {
         if (isCoopDefenseMode(bridge.getGameMode())
           && this.coopDefenseDebugDamageKey
           && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
-          && !this.ctx.leftPanel.isHotkeyInputBlocked()) {
+          && !this.ctx.leftPanel.isHotkeyInputBlocked()
+          && !countdownActive) {
           this.ctx.coopDefenseRoundStateSystem?.applyDebugBaseDamage(50);
         }
         this.hostUpdate.runHostUpdate(delta);
-        const coopRoundOutcome = this.ctx.coopDefenseRoundStateSystem?.update() ?? null;
+        const coopRoundOutcome = gameplayActive
+          ? this.ctx.coopDefenseRoundStateSystem?.update() ?? null
+          : null;
         if (coopRoundOutcome) {
           this.prepareCoopDefenseBalanceRound(coopRoundOutcome);
           this.lifecycle.hostCompleteRound(coopRoundOutcome);
@@ -1850,6 +1850,14 @@ export class ArenaScene extends Phaser.Scene {
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
         const clientRendererSyncStartedAt = diagnosticsActive ? performance.now() : 0;
         const state = bridge.getLatestGameState();
+        const countdownGround = countdownActive
+          ? buildCountdownGroundFirePreview(
+            this.ctx.currentLayout,
+            getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()),
+            bridge.getArenaStartTime(),
+          )
+          : { cells: [] };
+        const countdownPedestals = this.ctx.powerUpSystem?.getPedestalSnapshot() ?? [];
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
           this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
@@ -1865,16 +1873,26 @@ export class ArenaScene extends Phaser.Scene {
           );
           this.renderers.slimeTrail.syncVisuals(state.slimeTrail ?? { cells: [], affectedEnemies: [] });
           this.renderers.flamethrowerUpgrades.syncGround(
-            state.burningGround ?? { cells: [] },
+            countdownActive && (state.burningGround?.cells.length ?? 0) === 0
+              ? countdownGround
+              : state.burningGround ?? countdownGround,
             bridge.getSynchronizedNow(),
           );
           this.renderers.flamethrowerUpgrades.syncRings(state.players);
           this.renderers.train?.setTarget(state.train ?? null);
-          this.renderers.powerUp.syncPedestals(state.pedestals ?? []);
+          this.renderers.powerUp.syncPedestals(
+            countdownActive && (state.pedestals?.length ?? 0) === 0
+              ? countdownPedestals
+              : state.pedestals ?? countdownPedestals,
+          );
           this.renderers.powerUp.sync(state.powerups ?? []);
           this.renderers.nuke.sync(state.nukes ?? []);
           this.renderers.airstrike.sync(state.airstrikes ?? []);
           this.renderers.meteor.sync(state.meteors ?? []);
+        } else if (countdownActive) {
+          this.renderers.flamethrowerUpgrades.syncGround(countdownGround, bridge.getSynchronizedNow());
+          this.renderers.powerUp.syncPedestals(countdownPedestals);
+          this.renderers.powerUp.sync([]);
         }
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
         this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));

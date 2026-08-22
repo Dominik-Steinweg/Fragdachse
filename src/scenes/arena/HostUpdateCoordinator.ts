@@ -17,6 +17,8 @@ import { dequantizeAngle }   from '../../utils/angle';
 import { computeProjectileExplosionDamage, computeRadialDamage, resolveProjectileExplosionFalloff } from '../../utils/radialDamage';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
+import { getCoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { buildCountdownGroundFirePreview } from '../../effects/CountdownGroundFirePreview';
 import type { ArenaContext }      from './ArenaContext';
 import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
@@ -195,15 +197,16 @@ export class HostUpdateCoordinator {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
-    // Loading and the synchronized countdown are presentation-only. Keep every host-authoritative
-    // mission, encounter, physics and round timer behind the exact common gameplay gate.
-    if (!bridge.isArenaStarted()) {
+    // Loading is still inert. During the synchronized countdown we run this coordinator only to
+    // publish/render presentation state; every authoritative system below keeps its own gameplay
+    // gate via countdownActive.
+    const countdownActive = bridge.isArenaCountdownActive();
+    if (!bridge.isArenaStarted() && !countdownActive) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     const metrics = this.performanceMetricsEnabled ? emptyHostUpdatePerformanceMetrics() : null;
-    const countdownActive = bridge.isArenaCountdownActive();
     const now = Date.now();
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
@@ -529,12 +532,19 @@ export class HostUpdateCoordinator {
       : this.ctx.smokeSystem.hostUpdate(Date.now());
     const {
       synced: fires,
-      ground: burningGround,
+      ground: liveBurningGround,
       damageEvents: fireDamageEvents,
       damageTick: fireDamageTick,
     } = countdownActive
       ? { synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }
       : this.ctx.fireSystem.hostUpdate(now);
+    const burningGround = countdownActive
+      ? buildCountdownGroundFirePreview(
+        this.ctx.currentLayout,
+        getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()),
+        bridge.getArenaStartTime(),
+      )
+      : liveBurningGround;
     this.renderers.flamethrowerUpgrades.syncGround(burningGround, now);
 
     const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
@@ -753,10 +763,10 @@ export class HostUpdateCoordinator {
       const armor = this.ctx.combatSystem.getArmor(player.id);
       const alive    = this.ctx.combatSystem.isAlive(player.id);
       const wasAlive = this.prevAliveStates.get(player.id) ?? false;
-      if (alive && !wasAlive) {
+      if (alive && !wasAlive && !countdownActive) {
         this.ctx.gameAudioSystem.playSound('sfx_player_spawn', player.sprite.x, player.sprite.y, player.id);
       }
-      this.prevAliveStates.set(player.id, alive);
+      if (!countdownActive) this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp, maxHp);
       player.updateArmor(armor);
       const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
@@ -825,7 +835,7 @@ export class HostUpdateCoordinator {
     this.renderers.nuke.sync(nukes);
     this.renderers.airstrike.sync(airstrikes);
     this.renderers.meteor.sync(meteors);
-    this.checkLocalPickup(powerups);
+    if (!countdownActive) this.checkLocalPickup(powerups);
 
     const localId = bridge.getLocalPlayerId();
     for (const p of this.ctx.playerManager.getAllPlayers()) {

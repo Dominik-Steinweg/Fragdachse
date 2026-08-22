@@ -8,6 +8,8 @@ import {
   TEX_GROUND_FIRE_SMOKE,
   TEX_LEAF_DEBRIS,
   TEX_LEAF_BLOWER_DUST,
+  TEX_EXPLOSION_SPARK,
+  TEX_EXPLOSION_EMBER,
   ensureAirstrikeBombTexture,
   ensureAirstrikeSparkTexture,
   ensureRocketExhaustTexture,
@@ -16,8 +18,11 @@ import {
   ensureGroundFireSmokeTexture,
   ensureLeafDebrisTexture,
   ensureLeafBlowerDustTexture,
+  ensureExplosionSparkTexture,
+  ensureExplosionEmberTexture,
 } from './GpuVfxSourceTextures';
 import {
+  TEX_FLAME_BED,
   TEX_FLAME_BILLOW,
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
@@ -83,6 +88,10 @@ export const GpuVfxFrameId = {
   /** Weisse Jet-Motive; der Stil steckt allein im Tint, deshalb ohne Void-Zwilling. */
   FlameBillow:     15,
   FlameTongue:     16,
+  ExplosionSpark:  17,
+  ExplosionEmber:  18,
+  /** Flaechendeckendes Glutbett des Bodenfeuers; ebenfalls weiss und rein ueber Tint gefaerbt. */
+  FlameBed:        19,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -168,6 +177,18 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.FlameTongue, frame: 'flame-tongue',
     sourceTextureKey: TEX_FLAME_TONGUE, width: 32, height: 16, ensure: ensureFlameJetTextures,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionSpark, frame: 'explosion-spark',
+    sourceTextureKey: TEX_EXPLOSION_SPARK, width: 6, height: 6, ensure: ensureExplosionSparkTexture,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionEmber, frame: 'explosion-ember',
+    sourceTextureKey: TEX_EXPLOSION_EMBER, width: 4, height: 4, ensure: ensureExplosionEmberTexture,
+  },
+  {
+    id: GpuVfxFrameId.FlameBed, frame: 'flame-bed',
+    sourceTextureKey: TEX_FLAME_BED, width: 32, height: 32, ensure: ensureFlameJetTextures,
   },
 ];
 

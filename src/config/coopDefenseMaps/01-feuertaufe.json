@@ -9,7 +9,8 @@
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
+    "start": { "type": "time", "atMs": 0 },
+    "delayMs": 10000,
     "repeatAfterExitMs": 10000
   }],
   "balanceReferenceDurationSec": 45,

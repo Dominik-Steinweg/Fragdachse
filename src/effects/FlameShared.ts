@@ -85,6 +85,7 @@ export function ensureVoidFlameTextures(scene: Phaser.Scene): void {
 
 export const TEX_FLAME_BILLOW = '__flame_billow';
 export const TEX_FLAME_TONGUE = '__flame_tongue';
+export const TEX_FLAME_BED    = '__flame_bed';
 
 /**
  * Temperaturbaender des Jets. Ein Flammenwerfer liest sich als Verlauf entlang des Strahls:
@@ -139,6 +140,15 @@ const TONGUE_LOBES: readonly (readonly [number, number, number, number, number])
   [28, 8, 3.6, 1.8, 0.16],
 ];
 
+/**
+ * Glutbett (32x32): eine runde Scheibe mit breitem Plateau statt eines Lappenmotivs.
+ *
+ * Das Motiv traegt hier keine eigene Silhouette, sondern deckt eine *Flaeche*. Ein Lappenmotiv
+ * malt bei der hohen Ueberlappung einer Brandflaeche seine Struktur immer wieder an dieselben
+ * Stellen und laesst die Flaeche fleckig wirken; ein Plateau mit zweifach gestuetzter Flanke
+ * summiert sich additiv dagegen zu einer ebenen Glut, aus der erst die Flammen darueber ihre
+ * Form nehmen. Eine einstufige lineare Flanke zoege am Plateauansatz einen sichtbaren Ring.
+ */
 export function ensureFlameJetTextures(scene: Phaser.Scene): void {
   const textures = scene.textures;
 
@@ -152,6 +162,17 @@ export function ensureFlameJetTextures(scene: Phaser.Scene): void {
     for (const [x, y, radiusX, radiusY, alpha] of TONGUE_LOBES) {
       drawSoftLobe(ctx, x, y, radiusX, radiusY, alpha);
     }
+  });
+
+  ensureCanvasTexture(textures, TEX_FLAME_BED, 32, 32, (ctx) => {
+    const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.34, 'rgba(255,255,255,0.94)');
+    gradient.addColorStop(0.62, 'rgba(255,255,255,0.52)');
+    gradient.addColorStop(0.84, 'rgba(255,255,255,0.16)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 32, 32);
   });
 }
 
