@@ -132,6 +132,7 @@ export interface FlowFieldCoordinatorOptions {
 }
 
 export interface FlowFieldDiagnostics {
+  readonly generationId: number;
   readonly runnerKind: FlowFieldRunnerKind;
   readonly requestedUpdates: number;
   readonly dispatchedJobs: number;
@@ -926,6 +927,7 @@ export class FlowFieldCoordinator {
       };
     }
     return {
+      generationId: this.generationId,
       runnerKind: this.runner.kind,
       requestedUpdates: this.requestedUpdates,
       dispatchedJobs: this.dispatchedJobs,

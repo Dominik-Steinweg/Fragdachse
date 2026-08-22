@@ -49,6 +49,8 @@ export interface CoopDefenseMapDirectorOptions {
   readonly spawnBackstopAfterMs?: number;
   /** Long grace period for a proven stuck active enemy. */
   readonly technicalStuckBackstopAfterMs?: number;
+  /** Low-cost semantic hook; it must not influence scheduling or gameplay. */
+  readonly onDiagnosticEvent?: (type: string, fields: Record<string, unknown>) => void;
 }
 
 interface EncounterExecutionState {
@@ -103,6 +105,7 @@ export class CoopDefenseMapDirector {
   private readonly random: () => number;
   private readonly spawnBackstopAfterMs: number;
   private readonly technicalStuckBackstopAfterMs: number;
+  private readonly onDiagnosticEvent: ((type: string, fields: Record<string, unknown>) => void) | null;
   private repelEncounterIndex = 0;
   private repelPhase: RepelAssaultPhase = 'waiting';
   private restUntilMs = 0;
@@ -128,6 +131,7 @@ export class CoopDefenseMapDirector {
       options.technicalStuckBackstopAfterMs,
       DEFAULT_TECHNICAL_STUCK_BACKSTOP_MS,
     );
+    this.onDiagnosticEvent = options.onDiagnosticEvent ?? null;
     this.executionStates = encounters.map((encounter) => ({
       encounterId: encounter.id,
       started: false,
@@ -248,6 +252,11 @@ export class CoopDefenseMapDirector {
         state.startedAtMs = this.getScheduledEncounterStartAtMs(encounterIndex);
         state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(encounterIndex);
         this.initializeGroupSpawnSchedule(encounter, state);
+        this.onDiagnosticEvent?.('encounter:start', {
+          encounterId: state.encounterId,
+          sequenceIndex: encounterIndex,
+          sequenceCount: this.encounters.length,
+        });
       }
       if (!state.started) continue;
       if (!state.cleared) this.trackProgressEnemies(state);
@@ -266,6 +275,11 @@ export class CoopDefenseMapDirector {
       if (!state.cleared && this.isEncounterSpawnCompleteState(state) && this.isThreatCleared(state)) {
         state.cleared = true;
         state.clearedAtMs = this.elapsedMs;
+        this.onDiagnosticEvent?.('encounter:end', {
+          encounterId: state.encounterId,
+          sequenceIndex: encounterIndex,
+          durationMs: Math.max(0, state.clearedAtMs - state.startedAtMs),
+        });
       }
     }
 
@@ -309,6 +323,11 @@ export class CoopDefenseMapDirector {
       if (!state.cleared && this.isEncounterSpawnCompleteState(state) && this.isThreatCleared(state)) {
         state.cleared = true;
         state.clearedAtMs = this.elapsedMs;
+        this.onDiagnosticEvent?.('encounter:end', {
+          encounterId: state.encounterId,
+          sequenceIndex: this.repelEncounterIndex,
+          durationMs: Math.max(0, state.clearedAtMs - state.startedAtMs),
+        });
         if (this.repelEncounterIndex >= this.encounters.length - 1) {
           this.assaultRepelled = true;
           this.repelPhase = 'complete';
@@ -337,6 +356,11 @@ export class CoopDefenseMapDirector {
     state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(index);
     this.initializeGroupSpawnSchedule(this.encounters[index], state);
     this.repelPhase = 'active';
+    this.onDiagnosticEvent?.('encounter:start', {
+      encounterId: state.encounterId,
+      sequenceIndex: index,
+      sequenceCount: this.encounters.length,
+    });
   }
 
   private canStartScheduledEncounter(index: number): boolean {
@@ -738,6 +762,13 @@ export class CoopDefenseMapDirector {
       if (group.count > 0 && state.firstGroupSpawnedAtMs === null) {
         state.firstGroupSpawnedAtMs = this.elapsedMs;
       }
+      this.onDiagnosticEvent?.('wave:spawn', {
+        encounterId: state.encounterId,
+        groupIndex,
+        enemyKind: group.enemyKind,
+        count: spawnCount,
+        front,
+      });
       return;
     }
 
@@ -754,6 +785,13 @@ export class CoopDefenseMapDirector {
     if (spawnedCount > 0) {
       if (state.firstGroupSpawnedAtMs === null) state.firstGroupSpawnedAtMs = this.elapsedMs;
       state.groupNoProgressMs[groupIndex] = 0;
+      this.onDiagnosticEvent?.('wave:spawn', {
+        encounterId: state.encounterId,
+        groupIndex,
+        enemyKind: group.enemyKind,
+        count: spawnedCount,
+        front,
+      });
     } else if (!this.hasActiveOrigin(state)) {
       state.groupNoProgressMs[groupIndex] += this.lastDeltaMs;
       if (state.groupNoProgressMs[groupIndex] >= this.spawnBackstopAfterMs) {

@@ -655,18 +655,19 @@ export class NetworkBridge {
     const session = roomCode === null
       ? await createHostSession({
         hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
-        onPayloadDiagnostics: (info) => networkPayloadDiagnosticsSink?.(info),
+        onPayloadDiagnostics: null,
       })
       : await joinHostSession(roomCode, {
         hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
         resumeToken: getOrCreateRoomResumeToken(roomCode),
-        onPayloadDiagnostics: (info) => networkPayloadDiagnosticsSink?.(info),
+        onPayloadDiagnostics: null,
       });
     console.info(`[Netz] Raum ${session.roomCode} – Rolle ${session.room.isHost() ? 'Host' : 'Client'}`);
   }
 
   setPayloadDiagnosticsSink(sink: ((info: PeerPayloadDiagnostics) => void) | null): void {
     networkPayloadDiagnosticsSink = sink;
+    getActiveSession()?.room.setPayloadDiagnosticsSink(sink);
   }
 
   /** Beendet den aktuellen Raum bewusst; ein Client kündigt das dem Host explizit an. */

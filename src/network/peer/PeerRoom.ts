@@ -54,7 +54,7 @@ export interface PeerRoomOptions {
   hostOnlyPlayerKeys?: readonly string[];
   /** Stable per-room client token used only for the short resume window. */
   resumeToken?: string;
-  onPayloadDiagnostics?: (info: PeerPayloadDiagnostics) => void;
+  onPayloadDiagnostics?: ((info: PeerPayloadDiagnostics) => void) | null;
 }
 
 export type PeerReconnectStatus =
@@ -117,7 +117,7 @@ export class PeerRoom {
   private readonly quitCallbacks = new Map<string, Array<() => void>>();
   private readonly hostOnlyPlayerKeys: ReadonlySet<string>;
   private readonly resumeToken: string;
-  private readonly onPayloadDiagnostics: ((info: PeerPayloadDiagnostics) => void) | null;
+  private onPayloadDiagnostics: ((info: PeerPayloadDiagnostics) => void) | null;
   private readonly resumeSlots = new Map<string, ResumeSlot>();
   private readonly linkResumeTokens = new Map<PeerLinkLike, string>();
   private readonly lastHeartbeatAt = new Map<PeerLinkLike, number>();
@@ -191,6 +191,12 @@ export class PeerRoom {
 
   getLocalPlayerId(): string {
     return this.localPlayerId;
+  }
+
+  /** Installs the Trace Assist payload hook only for the active recording lifetime. */
+  setPayloadDiagnosticsSink(sink: ((info: PeerPayloadDiagnostics) => void) | null): void {
+    this.onPayloadDiagnostics = sink;
+    for (const link of this.links) link.setPayloadDiagnosticsSink?.(sink);
   }
 
   /**

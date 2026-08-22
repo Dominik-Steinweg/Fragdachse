@@ -91,6 +91,7 @@ export class CoopDefenseVoidHunterSystem {
     private readonly burrowSystem: CoopDefenseEnemyBurrowSystem,
     private readonly fireChunks: FlamethrowerUpgradeSystem,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
+    private readonly onPhaseReached?: (phase: number) => void,
   ) {}
 
   hostUpdate(now: number): void {
@@ -215,6 +216,7 @@ export class CoopDefenseVoidHunterSystem {
   ): void {
     state.phaseTwo = true;
     this.reachedPhases.add(2);
+    this.onPhaseReached?.(2);
     enemy.setMoveSpeedMultiplier(config.phaseTwoSpeedMultiplier);
 
     const positions = this.playerManager.getAllPlayers()

@@ -243,6 +243,8 @@ export class PeerLink implements PeerLinkLike {
   }
 
   private emitPayloadDiagnostics(message: PeerMessage, channel: PeerChannelKind, payload: string): void {
+    const sink = this.payloadDiagnosticsSink;
+    if (!sink) return;
     const globalEntries = message.t === 'b' ? (message.g ?? []) : [];
     const gameStateEntry = globalEntries.find(([key]) => key === 'gs' || key === 'gsi');
     const gameState: PeerPayloadDiagnostics['gameState'] = gameStateEntry
@@ -252,7 +254,7 @@ export class PeerLink implements PeerLinkLike {
         && (gameStateEntry[1] as { _full?: unknown })._full === true
       ) ? 'full' : 'delta'
       : 'none';
-    this.payloadDiagnosticsSink?.({
+    sink({
       channel,
       messageType: message.t,
       payloadLength: payload.length,

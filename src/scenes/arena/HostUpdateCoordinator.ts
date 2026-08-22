@@ -976,6 +976,9 @@ export class HostUpdateCoordinator {
     this.netTickAccumulator -= NET_TICK_INTERVAL_MS;
     if (this.netTickAccumulator > NET_TICK_INTERVAL_MS) this.netTickAccumulator = 0;
     if (metrics) metrics.networkTick = true;
+    // One coarse timing pair covers the complete net-tick snapshot path: request consumption,
+    // temporary snapshot structures and the final publication. No fine-grained timers are added.
+    const snapshotBuildStartedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
     // Erst nach dem Throttle konsumieren: In Frames ohne Net-Tick muss die Anforderung
@@ -1100,9 +1103,6 @@ export class HostUpdateCoordinator {
       this.ctx.turretSystem?.getTurrets() ?? [],
     ) ?? [];
 
-    // One coarse timing pair only around the actual 20-Hz snapshot construction/publication.
-    // The regular host step remains covered by its single outer measurement.
-    const snapshotBuildStartedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     bridge.publishGameState({
       roundStartTime: bridge.getArenaStartTime(),
       players,
@@ -1151,7 +1151,7 @@ export class HostUpdateCoordinator {
       this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
     if (metrics) {
-      metrics.snapshotBuildMs = performance.now() - phaseStartedAt;
+      metrics.snapshotBuildMs = snapshotBuildMs;
       metrics.totalMs = performance.now() - startedAt;
       this.lastPerformance = metrics;
     } else if (this.coarsePerformanceMetricsEnabled) {

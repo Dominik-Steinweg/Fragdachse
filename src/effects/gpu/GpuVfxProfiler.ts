@@ -61,6 +61,7 @@ export interface GpuVfxReport {
 }
 
 export interface GpuVfxCompanionCounters {
+  readonly epoch: number;
   readonly frames: number;
   readonly spawns: number;
   readonly capacityDrops: number;
@@ -75,6 +76,7 @@ export class GpuVfxProfiler {
   private readonly qualityDrops   = new Int32Array(GPU_VFX_EFFECTS.length);
   private readonly capacityDrops  = new Int32Array(GPU_VFX_EFFECTS.length);
   private frames = 0;
+  private epoch = 0;
 
   recordAttempt(effect: GpuVfxEffectId): void {
     this.attempts[effect] += 1;
@@ -115,7 +117,7 @@ export class GpuVfxProfiler {
       spawns += this.spawns[index];
       capacityDrops += this.capacityDrops[index];
     }
-    return { frames: this.frames, spawns, capacityDrops };
+    return { epoch: this.epoch, frames: this.frames, spawns, capacityDrops };
   }
 
   buildReport(laneStats: readonly GpuVfxPoolStats[]): GpuVfxReport {
@@ -161,6 +163,7 @@ export class GpuVfxProfiler {
   }
 
   reset(): void {
+    this.epoch += 1;
     this.visibleFrames.fill(0);
     this.coVisible.fill(0);
     this.attempts.fill(0);

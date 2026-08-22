@@ -139,6 +139,8 @@ import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveArenaLoadProgress } from './ArenaLoadProgress';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 
+type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
+
 /**
  * Manages the arena round lifecycle.
  *
@@ -177,6 +179,7 @@ export class ArenaLifecycleCoordinator {
     readonly mapConfig: CoopDefenseMapConfig | null;
     readonly seed: number;
   } | null = null;
+  private runtimeDiagnosticEventSink: RuntimeDiagnosticEventSink | null = null;
   private hostArenaGenerationTimer: Phaser.Time.TimerEvent | null = null;
   private boundRoundStartTime = 0;
   private pendingClassicTrainEvent: {
@@ -201,6 +204,10 @@ export class ArenaLifecycleCoordinator {
   // ── Public state accessors ────────────────────────────────────────────────
 
   isMatchTerminated(): boolean { return this.matchTerminated; }
+
+  setRuntimeDiagnosticEventSink(sink: RuntimeDiagnosticEventSink | null): void {
+    this.runtimeDiagnosticEventSink = sink;
+  }
 
   /**
    * Die von der Map vorgegebene Uhrzeit der laufenden Runde – der Wert, auf den der
@@ -1114,6 +1121,7 @@ export class ArenaLifecycleCoordinator {
             this.ctx.enemyManager,
             this.ctx.coopDefenseSpawnExecutor,
             (spawnedAtMs) => {
+              this.runtimeDiagnosticEventSink?.('boss:spawn', { spawnedAtMs });
               const current = bridge.getRoundState();
               if (!current || current.status !== 'active') return;
               bridge.publishRoundState({
@@ -1153,6 +1161,7 @@ export class ArenaLifecycleCoordinator {
                 return enemy?.sprite.active === true && enemy.getHp() > 0 && enemy.isPathBlocked();
               },
               removeEnemy: (enemyId) => (this.ctx.enemyManager?.hostRemoveWithoutKill(enemyId) ?? null) !== null,
+              onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
             },
           );
         }
@@ -2334,11 +2343,17 @@ export class ArenaLifecycleCoordinator {
           return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1) ?? false;
         },
         onNukeExploded: (x, y, radius, triggeredBy) => {
+          this.runtimeDiagnosticEventSink?.('nuke:explode', { variant: 'standard', radius, triggeredBy });
           bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a, 'nuke');
           this.hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy);
         },
         onConfiguredNukeExploded: (strike) => {
           if (strike.variant !== 'void') return;
+          this.runtimeDiagnosticEventSink?.('nuke:explode', {
+            variant: strike.variant,
+            radius: strike.radius,
+            triggeredBy: strike.triggeredBy,
+          });
           bridge.broadcastExplosionEffect(strike.x, strike.y, strike.radius, 0xa631ff, 'void_nuke');
           this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike);
         },
@@ -2439,6 +2454,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.coopDefenseEnemyBurrowSystem,
           this.ctx.flamethrowerUpgradeSystem,
           this.ctx.enemyAiTargetCatalog,
+          (phase: number) => this.runtimeDiagnosticEventSink?.('boss:phase', { phase }),
         );
       }
       this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
@@ -2449,6 +2465,7 @@ export class ArenaLifecycleCoordinator {
 
       this.ctx.airstrikeSystem = new AirstrikeSystem();
       this.ctx.airstrikeSystem.setExplodedCallback((x, y, radius, triggeredBy, cfg) => {
+        this.runtimeDiagnosticEventSink?.('airstrike:explode', { radius, triggeredBy, delayMs: cfg.delayMs });
         bridge.broadcastExplosionEffect(x, y, radius, 0xff9933, 'nuke');
         this.hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, cfg, triggeredBy);
       });
