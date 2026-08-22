@@ -1,7 +1,7 @@
 export type RockRendererMode = 'classic' | 'spriteGpu';
 export type RockGpuPageSize = 512 | 1024 | 2048 | 'global';
 
-let rockRenderer: RockRendererMode = 'classic';
+let rockRenderer: RockRendererMode = 'spriteGpu';
 let rockGpuPageSize: RockGpuPageSize = 512;
 
 /** Feature-Flag-Quelle fuer den naechsten Rundenaufbau und das Trace-Menue. */
@@ -20,4 +20,3 @@ export function getRockGpuPageSize(): RockGpuPageSize {
 export function setRockGpuPageSize(size: RockGpuPageSize): void {
   rockGpuPageSize = size;
 }
-

@@ -157,7 +157,8 @@ einen kleinen Snapshot aus dem Visual State; die Lobby darf denselben Vertrag au
 klassischen Body bilden.
 
 `RockVisualSystem` konsumiert deduplizierte State-Aenderungen einmal in `PRE_RENDER` und schaltet
-zwischen `classic` und `spriteGpu`. Classic kapselt `RockLayerGrid`, Images und
+zwischen `classic` und `spriteGpu`. Der normale Arena-Default ist `spriteGpu`; `classic` bleibt als
+Debug-/Fallback-Modus manuell zuschaltbar. Classic kapselt `RockLayerGrid`, Images und
 `RockViewportCuller`. `PersistentGpuWorldSystem` besitzt ausschliesslich `SpriteGPULayer`-Pages
 und GPU-Handles. Ein Wechsel im Performance-Menue baut nur diese Praesentation neu; Gameplay,
 Grid und Physics-Proxies bleiben bestehen.
