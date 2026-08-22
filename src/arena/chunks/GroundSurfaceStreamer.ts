@@ -218,6 +218,7 @@ export class GroundSurfaceStreamer {
                 scaleY: renderScale,
               },
             );
+            target.render();
           },
           clearRegion: () => {},
           fillRegion: () => {},

@@ -11,6 +11,7 @@ import { TerrainColorSnapshot } from '../src/arena/TerrainColorSnapshot';
 import { DIRT_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../src/arena/BlobSurfaceMottle';
 import { stampGroundCover } from '../src/arena/GroundCoverLayer';
+import { FakeRenderTexture } from './fakeArenaRenderScene';
 
 describe('TerrainColorSnapshot', () => {
   it('uses fixed 1:4 RGB coordinates with explicit world offsets', () => {
@@ -176,6 +177,35 @@ describe('TerrainColorSnapshot', () => {
     // Der normale sichtbare Bake bleibt auf demselben bestehenden Cutout-/Erase-Pfad.
     expect(normalBakePath).toContain('eraseChunkScratch(layer, cutout, size)');
     expect(normalBakePath).toContain('target.draw(layer)');
+  });
+
+  it('flushes each dirt blit before reusing the scratch texture', () => {
+    const source = readFileSync(
+      new URL('../src/arena/chunks/GroundSurfaceStreamer.ts', import.meta.url),
+      'utf8',
+    );
+    const dirtPath = source.slice(
+      source.indexOf('renderSnapshotDirt('),
+      source.indexOf('renderSnapshotGroundCover('),
+    );
+    const stampAt = dirtPath.indexOf('target.stamp(');
+    expect(stampAt).toBeGreaterThanOrEqual(0);
+    expect(dirtPath.indexOf('target.render()', stampAt)).toBeGreaterThan(stampAt);
+
+    const target = new FakeRenderTexture('snapshot-dirt-target-regression', 64, 32);
+    const scratch = new FakeRenderTexture('snapshot-dirt-scratch-regression', 16, 16);
+
+    scratch.content = ['dirt-first@0,0'];
+    target.stamp(scratch.texture.key, undefined, 0, 0, { originX: 0, originY: 0 });
+    target.render();
+
+    scratch.content = ['dirt-second@0,0'];
+    target.stamp(scratch.texture.key, undefined, 16, 0, { originX: 0, originY: 0 });
+    target.render();
+
+    expect(target.content).toContain('dirt-first@0,0');
+    expect(target.content).toContain('dirt-second@16,0');
+    expect(target.content).not.toContain('dirt-second@0,0');
   });
 
   it('keeps the legacy leaf source artwork colors', () => {
