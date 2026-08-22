@@ -1046,6 +1046,7 @@ export class ArenaScene extends Phaser.Scene {
     // Spawn-Blitz und Brand hängen an der jeweiligen Entity, nicht an einem zentralen
     // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
+    playerManager.setEntityBurnGpuController(this.renderers.entityBurnGpu);
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
     stinkCloudSystem.setGpuVfxSystem(this.renderers.gpuVfx);
     smokeSystem.setLightingSystem(this.renderers.lighting);

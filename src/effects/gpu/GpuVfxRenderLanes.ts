@@ -13,9 +13,15 @@ import { GpuVfxEase } from './GpuVfxEase';
  * ## Wann zwei Effekte dieselbe Lane benutzen duerfen
  *
  * Notwendig ist Gleichheit in allem, was *layerglobal* ist:
- * Depth, Blend-Mode, Textur (durch den Atlas immer erfuellt), `gravity`, Scroll-/Kamera-Verhalten,
- * Lighting. Nicht relevant sind alle Eigenschaften, die pro Member existieren: Position, Frame,
- * Rotation, Scale, Alpha, Tint, Lebenszeit, Creation Time.
+ * Depth, Blend-Mode, Textur (durch den Atlas immer erfuellt), Scroll-/Kamera-Verhalten, Lighting.
+ * Nicht relevant sind alle Eigenschaften, die pro Member existieren: Position, Frame, Rotation,
+ * Scale, Alpha, Tint, Lebenszeit, Creation Time.
+ *
+ * Auch die Beschleunigung ist *kein* Trennkriterium, obwohl `layer.gravity` layerglobal ist: der
+ * Shader rechnet `uGravity * gravityFactor`, und `gravityFactor` liegt pro Member. Eine Lane
+ * deklariert deshalb die staerkste Beschleunigung ihrer Bewohner, die uebrigen skalieren sie ueber
+ * `GpuVfxSpawnSpec.gravityFactor`. Nur das *Vorzeichen* ist gebunden – ein Faktor ausserhalb
+ * [-1, 1] laesst sich nicht kodieren.
  *
  * Hinreichend ist das aber nicht. Zusaetzlich gilt:
  *
@@ -51,6 +57,10 @@ export const GpuVfxLaneId = {
   FlameOuter:     6,
   FlameCore:      7,
   FlameSpark:     8,
+  GroundFire:      9,
+  GroundFireSmoke: 10,
+  EntityBurn:      11,
+  ProjectileBurn:  12,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -67,7 +77,11 @@ export interface GpuVfxLaneSpec {
   readonly label: string;
   readonly depth: number;
   readonly blendMode: number;
-  /** Nur fuer `GpuVfxEase.Gravity`: Beschleunigung in px/s². Layerglobal. */
+  /**
+   * Nur fuer `GpuVfxEase.Gravity`: die *staerkste* Beschleunigung der Lane in px/s². Layerglobal.
+   * Schwaechere Beschleunigungen laufen ueber `GpuVfxSpawnSpec.gravityFactor` (Shader:
+   * `uGravity * gravityFactor`) und rechtfertigen deshalb keine eigene Lane.
+   */
   readonly gravity?: number;
   /** Alle Eases, die Effekte auf dieser Lane benutzen duerfen; werden bei Init vorgewaermt. */
   readonly eases: readonly GpuVfxEase[];
@@ -267,5 +281,103 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     capacityRationale:
       '48 plausible parallele Hitboxen x 1 Spawn / 50 ms x 300 ms = 288 lebende Member; '
       + '512 gibt rund 78 Prozent Reserve fuer Burst- und Timing-Schwankungen.',
+  },
+  {
+    id: GpuVfxLaneId.GroundFire,
+    label: 'ground-fire',
+    // Frueher sechs Emitter: outer 9.2, core 9.25, spark 9.3 und die Void-Varianten auf 9.22,
+    // 9.27, 9.32. Zwischen 9.12 und 9.35 liegt nichts weiter, und alle sechs blenden additiv
+    // ueber dem opaken Arenaboden – die Staffelung untereinander war rechnerisch folgenlos.
+    depth: DEPTH.ROCKS + 0.2,
+    blendMode: Phaser.BlendModes.ADD,
+    // Staerkste Beschleunigung der Lane (Funken). Core laeuft mit Faktor 0.5 (-18 px/s²),
+    // Outer mit 10/36 (-10 px/s²).
+    gravity: -36,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.Gravity],
+    capacity: 1536,
+    maxLifetimeMs: 780,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Eigenes additives Tiefenband knapp ueber den Felsen und unter den Spielern; der Bodenrauch '
+      + 'liegt als NORMAL-Lane darunter. Traegt outer, core und spark in beiden Stilen – ihre '
+      + 'abweichenden Beschleunigungen laufen ueber `gravityFactor` und trennen keine Lanes mehr.',
+    capacityRationale:
+      'Deckel der Bodenemission sind 540 Emissionen/s (MAX_GROUND_EMISSIONS_PER_SECOND). Im '
+      + 'unguenstigsten Fall je Emission 2 outer, 1 core und 0.42 spark, mit den jeweiligen '
+      + 'Maximallebenszeiten rund 842 + 281 + 154 = 1277 gleichzeitig lebende Member; 1536 gibt '
+      + 'rund 20 Prozent Reserve. Die fruehreren maxAliveParticles summierten sich auf 1160.',
+  },
+  {
+    id: GpuVfxLaneId.GroundFireSmoke,
+    label: 'ground-fire-smoke',
+    // Der Smoke-Emitter entstand schon beim Szenenaufbau und lag bei gleicher Depth deshalb unter
+    // der zur Rundenzeit gebauten Felsvegetation (DEPTH.ROCK_VEGETATION 9.12) – die Lane entsteht
+    // noch frueher und behaelt dieselbe Reihenfolge. Kein Epsilon-Versatz noetig.
+    depth: DEPTH.ROCKS + 0.12,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear],
+    capacity: 128,
+    maxLifetimeMs: 1650,
+    order: 'ordered',
+    reserveCritical: 0,
+    rationale:
+      'Einziger nicht-additiver Teil des Bodenfeuers: der Rauch blendet normal und muss unter den '
+      + 'additiven Flammen liegen. Der Blend-Mode ist layerglobal, teilen kann er sich die Lane '
+      + 'deshalb mit niemandem.',
+    capacityRationale:
+      '0.12 Rauchpartikel je Emission x 540 Emissionen/s x 1.65 s Lebenszeit = rund 107 '
+      + 'gleichzeitig lebende Member. Der fruehere Emitter klemmte bei maxAliveParticles 96; '
+      + '128 laesst den Deckel knapp darueber statt exakt darauf.',
+  },
+  {
+    id: GpuVfxLaneId.EntityBurn,
+    label: 'entity-burn',
+    // Frueher drei per-Entity-Emitter: outer 10.23, core 10.27, spark 10.32. Das Band traegt
+    // ausserdem PlasmaChargeRenderer (10.24 / 10.30) – alles additiv, die Reihenfolge ist egal.
+    depth: DEPTH.PLAYERS + 0.23,
+    blendMode: Phaser.BlendModes.ADD,
+    // Nur die Funken fallen; core und outer laufen mit linearer Y-Achse und ignorieren sie.
+    gravity: -34,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.Gravity],
+    capacity: 2048,
+    maxLifetimeMs: 560,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Eigenes additives Tiefenband ueber den Spielern und unter dem Zug. Ersetzt die drei '
+      + 'Emitter, die bisher *je brennender Entity* neu entstanden; die Lane existiert stattdessen '
+      + 'einmal fuer die ganze Szene.',
+    capacityRationale:
+      'Rund 30 gleichzeitig brennende Entities bei 8 Stacks ergeben je etwa 50 gleichzeitig '
+      + 'lebende Member, also rund 1500. 2048 ist zugleich die erste Obergrenze, die dieser Effekt '
+      + 'ueberhaupt hat – die per-Entity-Emitter waren unbegrenzt. Gegen gemessenes peakLive '
+      + 'nachziehen.',
+  },
+  {
+    id: GpuVfxLaneId.ProjectileBurn,
+    label: 'projectile-burn',
+    // Frueher sechs Emitter: outer 15.34, core 15.39, spark 15.43 und die Void-Varianten auf
+    // denselben Tiefen. Das Band 15.28 bis 15.48 traegt nur additive Nachbarn (GuardianSpirit,
+    // Slime-Bubbles, fliegende Feuerbrocken).
+    depth: DEPTH.PROJECTILES + 0.34,
+    blendMode: Phaser.BlendModes.ADD,
+    // Staerkste Beschleunigung der Lane (Funken); outer laeuft mit Faktor 0.8 (-24 px/s²), core
+    // mit linearer Y-Achse.
+    gravity: -30,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.Gravity],
+    capacity: 2048,
+    maxLifetimeMs: 380,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Eigenes additives Tiefenband ueber den Projektilkoerpern und ueber der Rocket-Exhaust-Lane; '
+      + 'der Glow des brennenden Projektils bleibt als CPU-Image knapp darunter. Getrennt von '
+      + 'flame-outer, weil dessen Tiefenband bei DEPTH.FIRE liegt.',
+    capacityRationale:
+      'Die Trail-Logik deckelt sich global auf rund 2500 emitAt/s (TARGET_TRAIL_SAMPLES_PER_SYNC '
+      + 'geteilt durch die Zahl brennender Projektile, dazu MAX_TRAIL_SAMPLES_PER_MS). Daraus '
+      + 'folgen rund 900 + 625 + 317 = 1842 gleichzeitig lebende Member; 2048 entspricht zugleich '
+      + 'der Summe der alten maxAliveParticles (900 + 720 + 420).',
   },
 ];

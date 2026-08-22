@@ -1,27 +1,22 @@
 import * as Phaser from 'phaser';
 import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import type { GroundFireVisualStyle } from '../types';
-import {
-  createEmitter,
-  destroyEmitter,
-  killAllAndResetParticlePositions,
-} from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 import {
   ensureFlameTextures,
   ensureVoidFlameTextures,
-  TEX_FLAME_CORE,
-  TEX_FLAME_EMBER,
   TEX_FLAME_GLOW,
-  TEX_FLAME_SPARK,
-  TEX_VOID_FLAME_CORE,
-  TEX_VOID_FLAME_EMBER,
   TEX_VOID_FLAME_GLOW,
-  TEX_VOID_FLAME_SPARK,
   VOID_FLAME_COLORS_CORE,
   VOID_FLAME_COLORS_OUTER,
   VOID_FLAME_COLORS_SPARK,
 } from './FlameShared';
+import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
+import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import { pickGpuVfxTint } from './gpu/GpuVfxMember';
+import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
+import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 
 interface BurningProjectileVisual {
   glow: Phaser.GameObjects.Image;
@@ -39,103 +34,67 @@ const TARGET_TRAIL_SAMPLES_PER_SYNC = 36;
 const MIN_TRAIL_EMIT_INTERVAL_MS = 14;
 const MAX_TRAIL_SAMPLES_PER_MS = 2.5;
 
+/**
+ * Die Trail-Palette ist eigenstaendig und bewusst nicht `FLAME_COLORS_*`: sie ist waermer und
+ * kontrastreicher als das Standardfeuer, damit ein brennendes Projektil auch vor hellem Boden
+ * lesbar bleibt.
+ */
+const TRAIL_COLORS_OUTER = [0xff7b21, 0xff4417, 0xe52611, 0xffad2f] as const;
+const TRAIL_COLORS_CORE  = [0xffffff, 0xffe36b, 0xffa526, 0xff681c] as const;
+const TRAIL_COLORS_SPARK = [0xffffff, 0xffd94f, 0xff7a22, 0xed2d15] as const;
+
 /** Starkes, rendererunabhaengiges Brand-Overlay fuer schnelle und kleine Projektile. */
 export class ProjectileBurnRenderer {
   private readonly visuals = new Map<number, BurningProjectileVisual>();
   private lighting: LightingSystem | null = null;
-  private readonly outer: Phaser.GameObjects.Particles.ParticleEmitter;
-  private readonly core: Phaser.GameObjects.Particles.ParticleEmitter;
-  private readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
-  private readonly voidOuter: Phaser.GameObjects.Particles.ParticleEmitter;
-  private readonly voidCore: Phaser.GameObjects.Particles.ParticleEmitter;
-  private readonly voidSparks: Phaser.GameObjects.Particles.ParticleEmitter;
+  private gpuVfx: GpuVfxSystem | null = null;
+  private outerSpec: GpuVfxSpawnSpec | null = null;
+  private coreSpec: GpuVfxSpawnSpec | null = null;
+  private sparkSpec: GpuVfxSpawnSpec | null = null;
+  /**
+   * Eine einzige Quelle fuer alle brennenden Projektile – die Emitter waren schon bisher global
+   * geteilt. Ein verschwindendes Projektil laesst seinen Trail auslaufen ('linger'); erst
+   * `destroyAll()` raeumt ihn ab.
+   */
+  private source = GPU_VFX_NO_SOURCE_HANDLE;
 
   constructor(private readonly scene: Phaser.Scene) {
     ensureFlameTextures(scene);
     ensureVoidFlameTextures(scene);
-    this.outer = createEmitter(scene, 0, 0, TEX_FLAME_EMBER, {
-      lifespan: { min: 170, max: 360 },
-      frequency: -1,
-      speedX: { min: -25, max: 25 },
-      speedY: { min: -55, max: -15 },
-      gravityY: -24,
-      scale: { start: 0.72, end: 0.04 },
-      alpha: { start: 0.94, end: 0 },
-      tint: [0xff7b21, 0xff4417, 0xe52611, 0xffad2f],
-      blendMode: Phaser.BlendModes.ADD,
-      maxAliveParticles: 900,
-      reserve: 260,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 0.34);
-    this.core = createEmitter(scene, 0, 0, TEX_FLAME_CORE, {
-      lifespan: { min: 120, max: 250 },
-      frequency: -1,
-      speedX: { min: -15, max: 15 },
-      speedY: { min: -42, max: -9 },
-      scale: { start: 0.52, end: 0.025 },
-      alpha: { start: 1, end: 0 },
-      tint: [0xffffff, 0xffe36b, 0xffa526, 0xff681c],
-      blendMode: Phaser.BlendModes.ADD,
-      maxAliveParticles: 720,
-      reserve: 220,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 0.39);
-    this.sparks = createEmitter(scene, 0, 0, TEX_FLAME_SPARK, {
-      lifespan: { min: 170, max: 380 },
-      frequency: -1,
-      speedX: { min: -52, max: 52 },
-      speedY: { min: -105, max: -36 },
-      gravityY: -30,
-      scale: { start: 0.9, end: 0.04 },
-      alpha: { start: 1, end: 0 },
-      tint: [0xffffff, 0xffd94f, 0xff7a22, 0xed2d15],
-      blendMode: Phaser.BlendModes.ADD,
-      maxAliveParticles: 420,
-      reserve: 128,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 0.43);
+  }
 
-    this.voidOuter = createEmitter(scene, 0, 0, TEX_VOID_FLAME_EMBER, {
-      lifespan: { min: 170, max: 360 },
-      frequency: -1,
-      speedX: { min: -25, max: 25 },
-      speedY: { min: -55, max: -15 },
-      gravityY: -24,
-      scale: { start: 0.72, end: 0.04 },
-      alpha: { start: 0.94, end: 0 },
-      tint: [...VOID_FLAME_COLORS_OUTER],
-      blendMode: Phaser.BlendModes.ADD,
-      maxAliveParticles: 900,
-      reserve: 260,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 0.34);
-    this.voidCore = createEmitter(scene, 0, 0, TEX_VOID_FLAME_CORE, {
-      lifespan: { min: 120, max: 250 },
-      frequency: -1,
-      speedX: { min: -15, max: 15 },
-      speedY: { min: -42, max: -9 },
-      scale: { start: 0.52, end: 0.025 },
-      alpha: { start: 1, end: 0 },
-      tint: [...VOID_FLAME_COLORS_CORE],
-      blendMode: Phaser.BlendModes.ADD,
-      maxAliveParticles: 720,
-      reserve: 220,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 0.39);
-    this.voidSparks = createEmitter(scene, 0, 0, TEX_VOID_FLAME_SPARK, {
-      lifespan: { min: 170, max: 380 },
-      frequency: -1,
-      speedX: { min: -52, max: 52 },
-      speedY: { min: -105, max: -36 },
-      gravityY: -30,
-      scale: { start: 0.9, end: 0.04 },
-      alpha: { start: 1, end: 0 },
-      tint: [...VOID_FLAME_COLORS_SPARK],
-      blendMode: Phaser.BlendModes.ADD,
-      maxAliveParticles: 420,
-      reserve: 128,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 0.43);
+  /** Meldet die drei Trail-Effekte beim szenenweiten GPUFX-Backend an. */
+  registerGpuVfx(system: GpuVfxSystem): void {
+    if (this.gpuVfx) return;
+    this.gpuVfx = system;
+
+    // Die Lane traegt -30 px/s²; der Outer-Anteil entspricht den fruehreren -24 px/s².
+    const outer = system.createSpec(GpuVfxEffectId.ProjectileBurnOuter);
+    outer.yMode = GpuVfxEase.Gravity;
+    outer.gravityFactor = 24 / 30;
+    outer.scaleStart = 0.72;
+    outer.scaleEnd = 0.04;
+    outer.alphaStart = 0.94;
+    outer.alphaEnd = 0;
+    this.outerSpec = outer;
+
+    // Der Kern stieg schon bisher ohne Gravity auf.
+    const core = system.createSpec(GpuVfxEffectId.ProjectileBurnCore);
+    core.scaleStart = 0.52;
+    core.scaleEnd = 0.025;
+    core.alphaStart = 1;
+    core.alphaEnd = 0;
+    this.coreSpec = core;
+
+    const spark = system.createSpec(GpuVfxEffectId.ProjectileBurnSpark);
+    spark.yMode = GpuVfxEase.Gravity;
+    spark.scaleStart = 0.9;
+    spark.scaleEnd = 0.04;
+    spark.alphaStart = 1;
+    spark.alphaEnd = 0;
+    this.sparkSpec = spark;
+
+    this.source = system.createSource(GpuVfxEffectId.ProjectileBurnOuter);
   }
 
   sync(
@@ -256,35 +215,100 @@ export class ProjectileBurnRenderer {
 
   destroyAll(): void {
     for (const id of [...this.visuals.keys()]) this.destroyVisual(id);
-    killAllAndResetParticlePositions(this.outer);
-    killAllAndResetParticlePositions(this.core);
-    killAllAndResetParticlePositions(this.sparks);
-    killAllAndResetParticlePositions(this.voidOuter);
-    killAllAndResetParticlePositions(this.voidCore);
-    killAllAndResetParticlePositions(this.voidSparks);
+    // Die Quelle bleibt bestehen; nur ihre Member werden stillgelegt.
+    this.gpuVfx?.clearSource(this.source);
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.ProjectileBurnOuter);
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.ProjectileBurnCore);
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.ProjectileBurnSpark);
   }
 
   shutdown(): void {
     this.destroyAll();
-    destroyEmitter(this.outer);
-    destroyEmitter(this.core);
-    destroyEmitter(this.sparks);
-    destroyEmitter(this.voidOuter);
-    destroyEmitter(this.voidCore);
-    destroyEmitter(this.voidSparks);
   }
 
+  /**
+   * Ein Trail-Sample. Die Emission laeuft nicht ueber den GPUFX-Emissions-Tick, sondern direkt
+   * aus dem CPU-Sync-Pfad: Sampling-Budget und Distanzinterpolation in `sync()` bestimmen
+   * weiterhin, wann und wo ein Sample entsteht.
+   */
   private emitAt(x: number, y: number, size: number, strength: number, visualStyle: GroundFireVisualStyle): void {
+    const system = this.gpuVfx;
+    if (!system || system.isSuppressed()) return;
     const jitter = Math.max(1.5, size * 0.35);
     const px = x + Phaser.Math.FloatBetween(-jitter, jitter);
     const py = y + Phaser.Math.FloatBetween(-jitter, jitter);
-    const outer = visualStyle === 'void' ? this.voidOuter : this.outer;
-    const core = visualStyle === 'void' ? this.voidCore : this.core;
-    const sparks = visualStyle === 'void' ? this.voidSparks : this.sparks;
-    outer.emitParticleAt(px, py, Math.max(1, strength));
-    core.emitParticleAt(px, py + 1, 1);
+    const isVoid = visualStyle === 'void';
+    // Der Spawn liegt ausserhalb des Emissions-Ticks; die Partikeluhr steht auf dem Vorframe.
+    const nowMs = system.now();
+
+    this.spawnTrailOuter(px, py, Math.max(1, strength), isVoid, nowMs);
+    this.spawnTrailCore(px, py + 1, isVoid, nowMs);
     if ((Math.floor(this.scene.time.now) + Math.round(x + y)) % 3 === 0) {
-      sparks.emitParticleAt(px, py, 1);
+      this.spawnTrailSpark(px, py, isVoid, nowMs);
     }
+  }
+
+  /**
+   * Burst-Politik der Grafikqualitaet, identisch zum fruehreren `emitParticleAt`-Wrapper samt
+   * Nachkomma-Uebertrag. Die Differenz wird als Qualitaets-Drop gebucht.
+   */
+  private admitTrailBurst(effect: GpuVfxEffectId, count: number): number {
+    const system = this.gpuVfx;
+    if (!system) return 0;
+    const amount = system.quality.scaleBurst(effect, count);
+    if (amount < count) system.recordQualityDrop(effect, count - amount);
+    return amount;
+  }
+
+  private spawnTrailOuter(x: number, y: number, count: number, isVoid: boolean, nowMs: number): void {
+    const system = this.gpuVfx;
+    const spec = this.outerSpec;
+    if (!system || !spec) return;
+    const amount = this.admitTrailBurst(GpuVfxEffectId.ProjectileBurnOuter, count);
+    if (amount <= 0) return;
+
+    spec.frame = isVoid ? GpuVfxFrameId.FlameOuterVoid : GpuVfxFrameId.FlameOuter;
+    const tints = isVoid ? VOID_FLAME_COLORS_OUTER : TRAIL_COLORS_OUTER;
+    spec.x = x;
+    spec.y = y;
+    for (let index = 0; index < amount; index += 1) {
+      spec.lifeMs = Phaser.Math.FloatBetween(170, 360);
+      spec.vx = Phaser.Math.FloatBetween(-25, 25);
+      spec.vy = Phaser.Math.FloatBetween(-55, -15);
+      spec.tint = pickGpuVfxTint(tints);
+      system.spawn(spec, this.source, nowMs);
+    }
+  }
+
+  private spawnTrailCore(x: number, y: number, isVoid: boolean, nowMs: number): void {
+    const system = this.gpuVfx;
+    const spec = this.coreSpec;
+    if (!system || !spec) return;
+    if (this.admitTrailBurst(GpuVfxEffectId.ProjectileBurnCore, 1) <= 0) return;
+
+    spec.frame = isVoid ? GpuVfxFrameId.FlameCoreVoid : GpuVfxFrameId.FlameCore;
+    spec.lifeMs = Phaser.Math.FloatBetween(120, 250);
+    spec.x = x;
+    spec.y = y;
+    spec.vx = Phaser.Math.FloatBetween(-15, 15);
+    spec.vy = Phaser.Math.FloatBetween(-42, -9);
+    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_CORE : TRAIL_COLORS_CORE);
+    system.spawn(spec, this.source, nowMs);
+  }
+
+  private spawnTrailSpark(x: number, y: number, isVoid: boolean, nowMs: number): void {
+    const system = this.gpuVfx;
+    const spec = this.sparkSpec;
+    if (!system || !spec) return;
+    if (this.admitTrailBurst(GpuVfxEffectId.ProjectileBurnSpark, 1) <= 0) return;
+
+    spec.frame = isVoid ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
+    spec.lifeMs = Phaser.Math.FloatBetween(170, 380);
+    spec.x = x;
+    spec.y = y;
+    spec.vx = Phaser.Math.FloatBetween(-52, 52);
+    spec.vy = Phaser.Math.FloatBetween(-105, -36);
+    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_SPARK : TRAIL_COLORS_SPARK);
+    system.spawn(spec, this.source, nowMs);
   }
 }

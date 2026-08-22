@@ -21,6 +21,7 @@ import {
 } from '../config/coopDefenseEnemies';
 import type { GroundFireVisualStyle, SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
+import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/PlasmaChargeRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
@@ -98,6 +99,7 @@ export class EnemyEntity {
   private targetAimAngle = 0;
   private hpBarVisibleUntilMs = 0;
   private burnRenderer: EntityBurnRenderer | null = null;
+  private burnGpu: EntityBurnGpuController | null = null;
   private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
   private vulnerableRing: Phaser.GameObjects.Arc | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
@@ -316,7 +318,7 @@ export class EnemyEntity {
       return;
     }
     if (!this.burnRenderer) {
-      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
+      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene, this.burnGpu);
       this.burnRenderer.setLightingSystem(this.lighting, this.burnLightKey());
     }
     this.syncBurnEffect();
@@ -344,6 +346,14 @@ export class EnemyEntity {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     this.burnRenderer?.setLightingSystem(lighting, this.burnLightKey());
+  }
+
+  /**
+   * Der Brand-Partikelcontroller ist ebenfalls scene-lifetime. Ein bereits bestehender
+   * Brand-Renderer haelt sein Handle; er bekommt den Controller beim Anlegen mit.
+   */
+  setEntityBurnGpuController(controller: EntityBurnGpuController | null): void {
+    this.burnGpu = controller;
   }
 
   private burnLightKey(): string {

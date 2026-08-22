@@ -12,6 +12,7 @@ import type {
 import { PlayerEntity }       from './PlayerEntity';
 import type { OwnerVisualSource, OwnerVisualState } from './OwnerVisualSource';
 import type { LightingSystem } from '../effects/LightingSystem';
+import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import {
   ARENA_HEIGHT,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -133,6 +134,7 @@ export class PlayerManager implements OwnerVisualSource {
   private relationshipResolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null = null;
   private teamResolver: ((playerId: string) => TeamId | null) | null = null;
   private lighting: LightingSystem | null = null;
+  private burnGpu: EntityBurnGpuController | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -146,6 +148,12 @@ export class PlayerManager implements OwnerVisualSource {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     for (const entity of this.players.values()) entity.setLightingSystem(lighting);
+  }
+
+  /** Reicht den scene-lifetime Brand-Partikelcontroller durch, genau wie die Beleuchtung. */
+  setEntityBurnGpuController(controller: EntityBurnGpuController | null): void {
+    this.burnGpu = controller;
+    for (const entity of this.players.values()) entity.setEntityBurnGpuController(controller);
   }
 
   setRelationshipResolver(resolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null): void {
@@ -180,6 +188,9 @@ export class PlayerManager implements OwnerVisualSource {
       this.localPlayerId !== null && this.resolveIsEnemy(profile.id),
       this.lighting,
     );
+    // Die Beleuchtung geht ueber den Konstruktor, der Brandcontroller ueber den Setter – beide
+    // sind scene-lifetime und muessen auch bei spaeter dazukommenden Spielern anliegen.
+    entity.setEntityBurnGpuController(this.burnGpu);
     this.players.set(profile.id, entity);
   }
 

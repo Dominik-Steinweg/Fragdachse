@@ -93,14 +93,17 @@ vi.mock('../src/effects/LightingConfig', () => ({
 import { FlamethrowerUpgradeRenderer } from '../src/effects/FlamethrowerUpgradeRenderer';
 
 describe('FlamethrowerUpgradeRenderer particle pools', () => {
-  it('reuses ground-fire particles at the new position after clear()', () => {
+  it('keeps only the ring emitters classic and reuses their particles after clear()', () => {
     const renderer = new FlamethrowerUpgradeRenderer(
       {} as Phaser.Scene,
       {} as PlayerManager,
     );
-    expect(createdEmitters).toHaveLength(9);
+    // Das Bodenfeuer laeuft ueber GPUFX; klassisch bleiben allein Ringflammen und Ringfunken,
+    // die an eigener Ringgeometrie und am RingTurbulenceProcessor haengen.
+    expect(createdEmitters).toHaveLength(2);
     for (const emitter of createdEmitters) emitter.emitParticleAt(512, 640);
 
+    // Ohne `registerGpuVfx()` darf der Bodenpfad nur nichts tun, nicht werfen.
     renderer.clear();
 
     for (const emitter of createdEmitters) {

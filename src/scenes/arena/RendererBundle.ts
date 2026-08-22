@@ -30,6 +30,7 @@ import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
 import { GpuVfxSystem }        from '../../effects/gpu/GpuVfxSystem';
+import { EntityBurnGpuController } from '../../effects/EntityBurnGpuController';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
 import { SporeRenderer }       from '../../effects/SporeRenderer';
 import { GrenadeRenderer }     from '../../effects/GrenadeRenderer';
@@ -92,6 +93,7 @@ export interface RendererBundle {
   rocket:              RocketRenderer;
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
   gpuVfx:              GpuVfxSystem;
+  entityBurnGpu:       EntityBurnGpuController;
   fireball:            FireballRenderer;
   spore:               SporeRenderer;
   grenade:             GrenadeRenderer;
@@ -125,6 +127,9 @@ export function createRendererBundle(
   // muss stehen, bevor ein Effekt sich anmeldet – Frames, die erst nach dem Layer entstehen,
   // existieren fuer dessen Shader nicht.
   const gpuVfx = new GpuVfxSystem(scene);
+  // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
+  // melden sich hier an, statt je Brand eigene Emitter oder Callbacks zu erzeugen.
+  const entityBurnGpu = new EntityBurnGpuController(gpuVfx);
 
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
@@ -189,7 +194,10 @@ export function createRendererBundle(
   const slimeTrail = new SlimeTrailRenderer(scene);
   const corpseMarker = new CorpseMarkerRenderer(scene);
   const flamethrowerUpgrades = new FlamethrowerUpgradeRenderer(scene, owners);
+  // Bodenfeuer: geteilte Lanes fuer alle Brandzellen. Der Flammenring bleibt klassisch.
+  flamethrowerUpgrades.registerGpuVfx(gpuVfx);
   const projectileBurn = new ProjectileBurnRenderer(scene);
+  projectileBurn.registerGpuVfx(gpuVfx);
 
   const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
   miniTeslaDome.generateTextures();
@@ -290,6 +298,7 @@ export function createRendererBundle(
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     gpuVfx,
+    entityBurnGpu,
     train: null,
     translocatorTeleport: null,
   };

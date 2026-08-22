@@ -23,6 +23,7 @@ import {
 } from '../network/enemySnapshotCodec';
 import { EnemyEntity, type EnemyFaction } from './EnemyEntity';
 import type { LightingSystem } from '../effects/LightingSystem';
+import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import {
   resolveCoopDefenseEnemyConfigs,
   type CoopDefenseEnemyKind,
@@ -133,6 +134,7 @@ export class EnemyManager {
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
+  private burnGpu: EntityBurnGpuController | null = null;
   /**
    * True, sobald der erste Snapshot verarbeitet wurde. Die Gegner daraus existieren beim Host
    * bereits seit Längerem – ein Client, der mitten in die Runde kommt, würde sonst für das
@@ -149,6 +151,12 @@ export class EnemyManager {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     for (const enemy of this.enemies.values()) enemy.setLightingSystem(lighting);
+  }
+
+  /** Reicht den scene-lifetime Brand-Partikelcontroller durch, genau wie die Beleuchtung. */
+  setEntityBurnGpuController(controller: EntityBurnGpuController | null): void {
+    this.burnGpu = controller;
+    for (const enemy of this.enemies.values()) enemy.setEntityBurnGpuController(controller);
   }
 
   /**
@@ -244,6 +252,7 @@ export class EnemyManager {
       options.originId,
     );
     enemy.setLightingSystem(this.lighting);
+    enemy.setEntityBurnGpuController(this.burnGpu);
     this.enemies.set(id, enemy);
     this.playSpawnEffect(enemy, options);
     this.onEnemySpawned?.(enemy, options);
@@ -1135,6 +1144,7 @@ export class EnemyManager {
         remote.ownerColor,
       );
       enemy.setLightingSystem(this.lighting);
+      enemy.setEntityBurnGpuController(this.burnGpu);
       const rotation = remote.rot ?? 0;
       enemy.faceAngle(rotation);
       enemy.setTargetRotation(rotation);

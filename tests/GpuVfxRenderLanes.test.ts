@@ -74,9 +74,76 @@ describe('gpu vfx render lanes', () => {
   });
 
   it('never grows the lane count with the effect count', () => {
-    // Der eigentliche Architekturvertrag: elf logische Effekte auf neun physischen Lanes.
+    // Der eigentliche Architekturvertrag: 21 logische Effekte auf 13 physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
-    expect(GPU_VFX_LANES.length).toBe(9);
+    expect(GPU_VFX_LANES.length).toBe(13);
+  });
+
+  it('keeps the migrated fire families on one lane per depth band', () => {
+    const groundFire = GPU_VFX_LANES[GpuVfxLaneId.GroundFire];
+    const groundSmoke = GPU_VFX_LANES[GpuVfxLaneId.GroundFireSmoke];
+    const entityBurn = GPU_VFX_LANES[GpuVfxLaneId.EntityBurn];
+    const projectileBurn = GPU_VFX_LANES[GpuVfxLaneId.ProjectileBurn];
+
+    // Bodenfeuer liegt zwischen Felsvegetation und Spielern, der Rauch darunter.
+    expect(groundFire.depth).toBe(DEPTH.ROCKS + 0.2);
+    expect(groundSmoke.depth).toBe(DEPTH.ROCKS + 0.12);
+    expect(groundSmoke.depth).toBeLessThan(groundFire.depth);
+    expect(groundFire.depth).toBeLessThan(DEPTH.PLAYERS);
+    // Der Rauch ist der einzige nicht-additive Teil und deshalb eine eigene Lane.
+    expect(groundSmoke.blendMode).toBe(0);
+    expect(groundFire.blendMode).toBe(1);
+
+    expect(entityBurn.depth).toBe(DEPTH.PLAYERS + 0.23);
+    expect(projectileBurn.depth).toBe(DEPTH.PROJECTILES + 0.34);
+
+    // Jede Lane deklariert die *staerkste* Beschleunigung ihrer Bewohner.
+    expect(groundFire.gravity).toBe(-36);
+    expect(entityBurn.gravity).toBe(-34);
+    expect(projectileBurn.gravity).toBe(-30);
+    expect(groundSmoke.gravity).toBeUndefined();
+
+    expect(groundFire.capacity).toBe(1536);
+    expect(groundSmoke.capacity).toBe(128);
+    expect(entityBurn.capacity).toBe(2048);
+    expect(projectileBurn.capacity).toBe(2048);
+  });
+
+  it('lets effects with different accelerations share one lane', () => {
+    const effect = (label: string) => GPU_VFX_EFFECTS.find((candidate) => candidate.label === label)!;
+
+    // Frueher haetten outer (-10), core (-18) und spark (-36) drei Lanes erzwungen. Der Shader
+    // rechnet `uGravity * gravityFactor`, und `gravityFactor` liegt pro Member – die drei teilen
+    // sich deshalb eine Lane und skalieren die Lane-Gravity von -36 herunter.
+    expect(effect('groundfire.outer').lane).toBe(GpuVfxLaneId.GroundFire);
+    expect(effect('groundfire.core').lane).toBe(GpuVfxLaneId.GroundFire);
+    expect(effect('groundfire.spark').lane).toBe(GpuVfxLaneId.GroundFire);
+    expect(effect('groundfire.smoke').lane).toBe(GpuVfxLaneId.GroundFireSmoke);
+
+    expect(effect('projburn.outer').lane).toBe(GpuVfxLaneId.ProjectileBurn);
+    expect(effect('projburn.core').lane).toBe(GpuVfxLaneId.ProjectileBurn);
+    expect(effect('projburn.spark').lane).toBe(GpuVfxLaneId.ProjectileBurn);
+
+    expect(effect('entityburn.core').lane).toBe(GpuVfxLaneId.EntityBurn);
+    expect(effect('entityburn.outer').lane).toBe(GpuVfxLaneId.EntityBurn);
+    expect(effect('entityburn.spark').lane).toBe(GpuVfxLaneId.EntityBurn);
+  });
+
+  it('reuses the existing flame frames for every migrated fire effect', () => {
+    // Die Flammenmotive liegen normal *und* void bereits im Atlas; nur der Bodenrauch ist neu.
+    const flameFrames = new Set<number>([
+      GpuVfxFrameId.FlameCore, GpuVfxFrameId.FlameOuter, GpuVfxFrameId.FlameSpark,
+    ]);
+    for (const label of [
+      'groundfire.outer', 'groundfire.core', 'groundfire.spark',
+      'projburn.outer', 'projburn.core', 'projburn.spark',
+      'entityburn.core', 'entityburn.outer', 'entityburn.spark',
+    ]) {
+      const effect = GPU_VFX_EFFECTS.find((candidate) => candidate.label === label)!;
+      expect(flameFrames.has(effect.frame), label).toBe(true);
+    }
+    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.smoke')!.frame)
+      .toBe(GpuVfxFrameId.GroundFireSmoke);
   });
 
   it('keeps flame depth, blend, gravity and derived capacities stable', () => {

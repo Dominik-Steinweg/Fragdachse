@@ -17,6 +17,7 @@ export const TEX_AIRSTRIKE_SPARK = '__airstrike_warn';
 export const TEX_ROCKET_SMOKE    = '__rocket_smoke';
 export const TEX_ROCKET_EXHAUST  = '__rocket_exhaust';
 export const TEX_STINK_PUFF      = 'stink_puff';
+export const TEX_GROUND_FIRE_SMOKE = '__ground_fire_smoke';
 
 /** Kantenlaenge der Wolkenpartikel-Textur und ihre Rasterweite. */
 const PUFF_SIZE = 40;
@@ -57,6 +58,18 @@ export function ensureRocketSmokeTexture(scene: Phaser.Scene): void {
     grad.addColorStop(1, 'rgba(70, 80, 88, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, s, s);
+  });
+}
+
+/** Rauchschwade des Bodenfeuers (48x48 px). */
+export function ensureGroundFireSmokeTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_GROUND_FIRE_SMOKE, 48, 48, (ctx) => {
+    const gradient = ctx.createRadialGradient(24, 24, 2, 24, 24, 24);
+    gradient.addColorStop(0, 'rgba(255,255,255,0.5)');
+    gradient.addColorStop(0.45, 'rgba(230,230,230,0.23)');
+    gradient.addColorStop(1, 'rgba(200,200,200,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 48, 48);
   });
 }
 

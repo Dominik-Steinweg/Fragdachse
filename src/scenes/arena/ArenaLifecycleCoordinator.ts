@@ -933,6 +933,7 @@ export class ArenaLifecycleCoordinator {
     // Brennende Gegner leuchten wie brennende Projektile; das Licht hängt am
     // EntityBurnRenderer der jeweiligen Entity.
     this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
+    this.ctx.enemyManager?.setEntityBurnGpuController(this.renderers.entityBurnGpu);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
       && this.ctx.baseManager
       && isCoopDefenseMode(bridge.getGameMode())
@@ -2781,6 +2782,9 @@ export class ArenaLifecycleCoordinator {
     this.renderers.slimeTrail.clear();
     this.renderers.corpseMarker.clearAll();
     this.renderers.flamethrowerUpgrades.clear();
+    // Die Entities geben ihre Brand-Handles beim Zerstoeren selbst frei; das hier raeumt die
+    // Partikel derer ab, die den Teardown noch als brennend erleben.
+    this.renderers.entityBurnGpu.clearAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.
     this.ctx.visualFeedback.reset();

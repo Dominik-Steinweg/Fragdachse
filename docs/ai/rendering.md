@@ -184,9 +184,13 @@ persistent/eventgetrieben hier (`tests/PersistentGpuWorldSystem.test.ts`).
 
 ### Logischer Effekt und physische Render-Lane sind zwei verschiedene Dinge
 
-Ein **logischer Effekt** (`GpuVfxEffects.ts`) traegt Semantik: Motiv, Qualitaetsklasse, Source-Lifecycle, eigene Zeile im Profiler. Eine **Render-Lane** (`GpuVfxRenderLanes.ts`) ist genau ein `SpriteGPULayer`. Mehrere Effekte duerfen sich eine Lane teilen, und derselbe Effekt darf je Variante die Lane wechseln. Ohne diese Trennung waechst die Layerzahl mit der Effektzahl – genau das verhindert die Architektur. Heute: acht logische Effekte auf sechs Lanes.
+Ein **logischer Effekt** (`GpuVfxEffects.ts`) traegt Semantik: Motiv, Qualitaetsklasse, Source-Lifecycle, eigene Zeile im Profiler. Eine **Render-Lane** (`GpuVfxRenderLanes.ts`) ist genau ein `SpriteGPULayer`. Mehrere Effekte duerfen sich eine Lane teilen, und derselbe Effekt darf je Variante die Lane wechseln. Ohne diese Trennung waechst die Layerzahl mit der Effektzahl – genau das verhindert die Architektur. Heute: 21 logische Effekte auf 13 Lanes.
 
-Eine gemeinsame Lane setzt Gleichheit in allem *layerglobalen* voraus – Depth, Blend-Mode, Textur, `gravity`, Scroll-/Kamera-Verhalten, Lighting. Alles, was pro Member existiert (Position, Frame, Rotation, Scale, Alpha, Tint, Lebenszeit, Creation Time), ist kein Trennkriterium. Hinreichend ist das aber nicht:
+Eine gemeinsame Lane setzt Gleichheit in allem *layerglobalen* voraus – Depth, Blend-Mode, Textur, Scroll-/Kamera-Verhalten, Lighting. Alles, was pro Member existiert (Position, Frame, Rotation, Scale, Alpha, Tint, Lebenszeit, Creation Time), ist kein Trennkriterium.
+
+**Auch die Beschleunigung nicht.** `layer.gravity` ist zwar layerglobal, der Shader rechnet aber `uGravity * gravityFactor`, und `gravityFactor` liegt pro Member (`SpriteGPULayer.vert`; Phaser kodiert ihn in den Nachkommaanteil der Amplitude, `amplitude = floor(velocity) + (factor + 1) / 2`). Eine Lane deklariert deshalb die **staerkste** Beschleunigung ihrer Bewohner, alle uebrigen skalieren sie ueber `GpuVfxSpawnSpec.gravityFactor` herunter. Gebunden ist nur das Vorzeichen und der Bereich [-1, 1]; ausserdem muss `velocity` ganzzahlig bleiben, sonst frisst Phasers `Math.floor` den Nachkommaanteil, in dem der Faktor steckt. Das Bodenfeuer nutzt das mit -10, -18 und -36 px/s² auf einer Lane.
+
+Hinreichend ist Gleichheit im Layerglobalen aber nicht:
 
 - **Zeichenreihenfolge.** Innerhalb einer Lane ist die Reihenfolge die Slot-Index-Reihenfolge, und Slots werden recycelt. Teilen duerfen sich eine Lane nur Effekte, deren gegenseitige Reihenfolge egal ist – oder die sich nie ueberlappen. Phasers ADD ist `[ONE, DST_ALPHA, ONE, DST_ALPHA]` und nur dort kommutativ, wo `dstAlpha` bereits gesaettigt ist, also ueber opaker Geometrie. Deshalb heisst die Policy im Manifest `add-over-opaque` und nicht `orderIndependent`: sie ist eine Ortsbedingung.
 - **Co-Activity.** Eine Lane wird gezeichnet, sobald *irgendein* Effekt darauf lebt – mit `instanceCount = memberCount`. Ein selten aktiver Effekt zahlt dann die Kapazitaet aller Mitbewohner. `visibleFrames` und die paarweise Matrix `coVisibleFrames` im Profiler-Report messen das; `visibleFrames` allein reicht nicht, weil zwei Lanes gleich oft aktiv sein koennen, ohne je zusammenzufallen.
@@ -195,7 +199,7 @@ Eine gemeinsame Lane setzt Gleichheit in allem *layerglobalen* voraus – Depth,
 
 Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen zusammenfaellt) und ihre `capacityRationale`. `tests/GpuVfxRenderLanes.test.ts` laesst keine zwei Lanes mit identischen layerglobalen Eigenschaften zu.
 
-### Die sechs Lanes
+### Die 13 Lanes
 
 | Lane | Depth | Blend | Kapazitaet | Logische Effekte | Warum getrennt |
 |---|---|---|---|---|---|
@@ -205,8 +209,15 @@ Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen
 | `rocket-smoke` | `FIRE` (16) | NORMAL | 640 | `rocket.smoke` | NORMAL bei Alpha 0.95: die Reihenfolge ist sichtbar, teilen darf sich die Lane niemand. Kapazitaet bildet den alten `maxAliveParticles: 640` nach |
 | `stink-normal` | `STINK+0.02` (17.02) | NORMAL | 1280 | `stink.inner`, `stink.plume` (nicht-additive Varianten) | NORMAL-Blend, muss ueber dem Haze/Blob-Container auf 17.0 liegen |
 | `stink-add` | `STINK+0.04` (17.04) | ADD | 3328 | `stink.inner`, `stink.plume` (additive Varianten), `stink.accent`, `stink.edge` | ADD ueber opakem Boden und damit reihenfolgeunabhaengig; getrennt von `stink-normal`, weil der Blend-Mode layerglobal ist |
+| `flame-outer` | `FIRE` (16) | ADD | 3072 | `flame.outer` | eigenes additives Flammenband auf DEPTH.FIRE, unter Core und Spark |
+| `flame-core` | `FIRE+0.05` (16.05) | ADD | 2304 | `flame.core` | eigenes additives Flammenband ueber Outer |
+| `flame-spark` | `FIRE+0.1` (16.1) | ADD | 512 | `flame.spark` | eigenes additives Spark-Band ueber Core; `gravity = -30` |
+| `ground-fire` | `ROCKS+0.2` (9.2) | ADD | 1536 | `groundfire.outer`, `groundfire.core`, `groundfire.spark` (je normal und void) | eigenes Tiefenband zwischen Felsen und Spielern; `gravity = -36`, die drei Motive skalieren sie ueber `gravityFactor` |
+| `ground-fire-smoke` | `ROCKS+0.12` (9.12) | NORMAL | 128 | `groundfire.smoke` | einziger nicht-additiver Teil des Bodenfeuers, muss unter den Flammen liegen |
+| `entity-burn` | `PLAYERS+0.23` (10.23) | ADD | 2048 | `entityburn.core`, `entityburn.outer`, `entityburn.spark` | eigenes Tiefenband ueber den Spielern; `gravity = -34` nur fuer die Funken |
+| `projectile-burn` | `PROJECTILES+0.34` (15.34) | ADD | 2048 | `projburn.outer`, `projburn.core`, `projburn.spark` (je normal und void) | eigenes Tiefenband ueber den Projektilkoerpern; `gravity = -30`, Outer skaliert auf 0.8 |
 
-Summe 9344 vorgehaltene Member; der Instance-Buffer belegt damit rund 1,5 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 128×128 RGBA (64 KB). Die Kapazitaeten der beiden Stink-Lanes sind bewusst die Summen der sechs fruehreren Lanes; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung.
+Summe 20 992 vorgehaltene Member; der Instance-Buffer belegt damit rund 3,4 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 128×128 RGBA (64 KB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, neu ist allein `ground-fire-smoke`. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
 
 Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 16.92 damageAura, 16.96 reactionPulse, 17.0 Container mit Haze und Blobs, 17.02 `stink-normal`, 17.03 Spawn-Flash (ADD), 17.04 `stink-add`, 17.05 Spawn-Burst-Emitter (ADD), 17.1 Fairness-Kreis (ADD). **Dokumentierte Abweichung der Zusammenlegung:** die additive `inner`-Variante wandert von 17.001 auf 17.04 und kreuzt dabei `stink-normal`. Der Fehler ist das Produkt aus der plume-Partikelalpha (≤ 0.029) und dem additiven Beitrag, also ≤ 3 %, und tritt nur dort auf, wo sich Wolken *unterschiedlicher* Variante ueberlappen. `inner` und `plume` untereinander auf der NORMAL-Lane liegen bei ≈ 0.0016.
 
@@ -231,6 +242,8 @@ Die Einzeltexturen bleiben bestehen – `stink_puff` benutzt weiterhin der klass
 Der Expiration-Sweep laeuft ueber eine dichte Liste der Lebenden (`liveSlots`/`slotPos`, Swap-Remove), nicht ueber ein Fenster oder die Kapazitaet. Je Quelle fuehrt der Pool eine intrusive doppelt verkettete Liste; `releaseSource()` ist damit O(Partikel dieser Quelle) statt O(Lane) – der Punkt, an dem die Architektur mit vielen Effekten auf einer geteilten Lane steht und faellt.
 
 Der Source-Lifecycle steht im Effekt-Manifest: `kill-with-source` legt die Member beim Freigeben still, `linger` loest sie nur von der Quelle. Das Loesen ist kein Detail, sondern die Bedingung dafuer, dass Source-Indizes recycelt werden duerfen – ein spaeterer Besitzer desselben Index wuerde sonst fremde Member stilllegen. `clearSource()` raeumt eine langlebige geteilte Quelle ab, ohne ihren Handle aufzugeben (Rocket-Rauch beim Teardown).
+
+**Die Emissions-Registry kennt kein Abmelden.** `registerEmission()` gilt fuer die Szene; ein Tick je Effektinstanz wuerde sich ueber die Sitzung ansammeln. Effekte, die pro Entity existieren, brauchen deshalb einen gemeinsamen scene-lifetime Controller, der einen Tick anmeldet und je Entity nur Zustand und eine Quelle haelt – so macht es `EntityBurnGpuController` fuer die brennenden Spieler und Gegner, deren `EntityBurnRenderer` nur noch Glow und Licht besitzt.
 
 ### Sichtbarkeit, Quality und Admission
 

@@ -9,7 +9,7 @@ import type { GpuVfxLaneId } from './GpuVfxRenderLanes';
  * Nur flache Zahlen: der Controller beschreibt *was* entstehen soll, das Backend uebersetzt das
  * in Phasers `MemberAnimation`-Objekte, wendet die Basis-Korrektur fuer nicht-lineare Eases an
  * und schreibt den Member. Ein Controller sieht danach weder `editMember` noch `creationTime`,
- * `loop`/`yoyo`, `gravityFactor` oder das Buffer-Layout.
+ * `loop`/`yoyo`, die Kodierung von `gravityFactor` oder das Buffer-Layout.
  *
  * ## Warum ein Spec je Controller und kein geteiltes Scratch-Objekt
  *
@@ -43,6 +43,13 @@ export interface GpuVfxSpawnSpec {
    * layerglobale `gravity` der Lane; Phaser kodiert diese Geschwindigkeit ganzzahlig.
    */
   yMode: typeof GpuVfxEase.Linear | typeof GpuVfxEase.Gravity;
+  /**
+   * Nur fuer `yMode: Gravity`: Anteil der layerglobalen `gravity` dieser Lane, in (0, 1].
+   * Phaser kodiert ihn in den Nachkommaanteil der Amplitude, die Beschleunigung im Shader ist
+   * `uGravity * gravityFactor`. Damit traegt eine Lane mehrere Beschleunigungen, solange die
+   * staerkste als `gravity` deklariert ist – abweichende Gravity ist kein Lane-Trennkriterium.
+   */
+  gravityFactor: number;
 
   /** Statische Ausrichtung in Radiant. */
   rotation: number;

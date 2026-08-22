@@ -10,6 +10,7 @@ import {
 import { HeldItemVisual } from './HeldItemVisual';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
+import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
@@ -76,6 +77,7 @@ export class PlayerEntity {
   private stealthAmbientParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private stealthTrailParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private burnRenderer: EntityBurnRenderer | null = null;
+  private burnGpu: EntityBurnGpuController | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
   /** Getragenes Loadout-Item; liegt knapp ueber der Figur, aber unter Spawn- und Stealth-Ebenen. */
   private readonly heldItem: HeldItemVisual;
@@ -445,7 +447,7 @@ export class PlayerEntity {
     }
 
     if (!this.burnRenderer) {
-      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
+      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene, this.burnGpu);
       this.burnRenderer.setLightingSystem(this.lighting, `entityburn:player:${this.id}`);
     }
 
@@ -460,6 +462,14 @@ export class PlayerEntity {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     this.burnRenderer?.setLightingSystem(lighting, `entityburn:player:${this.id}`);
+  }
+
+  /**
+   * Der Brand-Partikelcontroller ist ebenfalls scene-lifetime. Ein bereits bestehender
+   * Brand-Renderer haelt sein Handle; er bekommt den Controller beim Anlegen mit.
+   */
+  setEntityBurnGpuController(controller: EntityBurnGpuController | null): void {
+    this.burnGpu = controller;
   }
 
   /** Sprite und Balken ein-/ausblenden (Tod / Respawn). */

@@ -5,11 +5,13 @@ import {
   TEX_ROCKET_EXHAUST,
   TEX_ROCKET_SMOKE,
   TEX_STINK_PUFF,
+  TEX_GROUND_FIRE_SMOKE,
   ensureAirstrikeBombTexture,
   ensureAirstrikeSparkTexture,
   ensureRocketExhaustTexture,
   ensureRocketSmokeTexture,
   ensureStinkPuffTexture,
+  ensureGroundFireSmokeTexture,
 } from './GpuVfxSourceTextures';
 import {
   TEX_FLAME_CORE,
@@ -68,6 +70,7 @@ export const GpuVfxFrameId = {
   FlameOuterVoid:  9,
   FlameSpark:      10,
   FlameSparkVoid:  11,
+  GroundFireSmoke: 12,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -133,6 +136,10 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.FlameSparkVoid, frame: 'flame-spark-void',
     sourceTextureKey: TEX_VOID_FLAME_SPARK, width: 6, height: 6, ensure: ensureVoidFlameTextures,
+  },
+  {
+    id: GpuVfxFrameId.GroundFireSmoke, frame: 'ground-fire-smoke',
+    sourceTextureKey: TEX_GROUND_FIRE_SMOKE, width: 48, height: 48, ensure: ensureGroundFireSmokeTexture,
   },
 ];
 

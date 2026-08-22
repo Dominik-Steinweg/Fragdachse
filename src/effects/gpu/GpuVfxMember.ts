@@ -55,6 +55,12 @@ export const GPU_VFX_DEAD_MEMBER: GpuVfxMember = { scaleX: 0, scaleY: 0, alpha: 
       `true` und muessen fuer One-Shots ueberall explizit `false` sein. ── */
 const animX: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 const animYLinear: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
+/**
+ * `gravityFactor` kommt pro Spawn aus dem Spec: Phaser kodiert ihn in den Nachkommaanteil der
+ * Amplitude (`amplitude = floor(velocity) + (factor + 1) / 2`), der Shader liest ihn ueber
+ * `v = floor(a)` wieder heraus und beschleunigt mit `uGravity * gravityFactor`. Eine Lane traegt
+ * damit mehrere Beschleunigungen; `velocity` ist deshalb oben schon ganzzahlig gerundet.
+ */
 const animYGravity: GpuVfxMemberAnimation = {
   base: 0, velocity: 0, gravityFactor: 1, duration: 0, ease: 'Gravity', loop: false, yoyo: false,
 };
@@ -90,6 +96,7 @@ export function writeGpuVfxMember(spec: GpuVfxSpawnSpec, frame: Phaser.Textures.
     animYGravity.base = spec.y;
     // Phaser kodiert `velocity` ganzzahlig (`Math.floor`); die Rundung kostet < 0,5 px/s.
     animYGravity.velocity = Math.round(spec.vy);
+    animYGravity.gravityFactor = spec.gravityFactor;
     animYGravity.duration = life;
     MEMBER.y = animYGravity;
   } else {
