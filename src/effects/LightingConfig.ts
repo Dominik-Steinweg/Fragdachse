@@ -393,7 +393,7 @@ export const LIGHT_PRESETS = {
     enabled: true,
     shape: 'radial',
     radiusPx: 260,
-    color: 0xdcffd0,
+    color: 0xa6ff86,
     intensity: 1,
     durationMs: 0,
     decayExponent: 1,

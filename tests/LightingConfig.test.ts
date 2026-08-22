@@ -17,4 +17,10 @@ describe('Explosionsbeleuchtung', () => {
     expect(LIGHT_PRESETS.explosion.decayExponent).toBeGreaterThanOrEqual(0.9);
     expect(LIGHT_PRESETS.explosion.decayExponent).toBeLessThanOrEqual(1);
   });
+
+  it('hält das BFG-Licht kompakt, aber klar BFG-grün und verdeckend', () => {
+    expect(LIGHT_PRESETS.bfgOrb.color).toBe(0xa6ff86);
+    expect(LIGHT_PRESETS.bfgOrb.radiusPx).toBe(260);
+    expect(LIGHT_PRESETS.bfgOrb.occludes).toBe(true);
+  });
 });

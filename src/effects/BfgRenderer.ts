@@ -18,6 +18,7 @@ import {
   makeAdditive,
   setCircleEmitZone,
 } from './EffectUtils';
+import { emissiveAlpha } from './EmissiveScale';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_BFG_CORE  = '__bfg_core';
@@ -34,6 +35,14 @@ const BFG_COLORS_SPARK = [0xffffff, COLORS.GREEN_1, COLORS.GREEN_2];
 const CORE_LIFESPAN  = { min: 150, max: 350 };
 const OUTER_LIFESPAN = { min: 250, max: 500 };
 const SPARK_LIFESPAN = { min: 120, max: 350 };
+
+const BFG_GLOW_ALPHA = 0.2;
+const BFG_GLOW_TINT = 0xa6ff86;
+const BFG_GLOW_SCALE_PER_SIZE = 12;
+const BFG_GLOW_MIN_SCALE = 0.6;
+const BFG_GLOW_PULSE_SCALE = 0.07;
+const BFG_GLOW_PULSE_ALPHA = 0.06;
+const BFG_GLOW_PULSE_SPEED = (Math.PI * 2 * 1.1) / 1000;
 
 const DEPTH_BFG   = DEPTH.FIRE;
 const DEPTH_SPARK = DEPTH.FIRE + 0.1;
@@ -80,6 +89,8 @@ interface BfgVisual {
   outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   glowImage:    Phaser.GameObjects.Image;
+  glowBaseScale: number;
+  glowPhase: number;
 }
 
 /**
@@ -134,9 +145,10 @@ export class BfgRenderer {
 
     // Glow: 48×48 – großer weicher grüner Halo
     fillRadialGradientTexture(texMgr, TEX_BFG_GLOW, 48, [
-      [0, 'rgba(168,202,88,0.6)'],
-      [0.4, 'rgba(117,167,67,0.3)'],
-      [0.7, 'rgba(70,130,50,0.1)'],
+      [0, 'rgba(176,255,143,0.72)'],
+      [0.35, 'rgba(154,255,128,0.38)'],
+      [0.68, 'rgba(91,190,70,0.14)'],
+      [0.86, 'rgba(50,116,40,0.04)'],
       [1, 'rgba(37,86,46,0.0)'],
     ]);
   }
@@ -171,6 +183,10 @@ export class BfgRenderer {
   /** Advances beam lifetimes and reanchors every visible beam to its projectile each frame. */
   update(): void {
     const now = this.scene.time.now;
+    for (const visual of this.visuals.values()) {
+      this.updateGlowPulse(visual, now);
+    }
+
     for (const [beamId, visual] of this.beams) {
       if (now >= visual.fadeEndsAt) {
         this.recycleBeam(beamId, visual);
@@ -259,13 +275,20 @@ export class BfgRenderer {
     const glowImage = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_BFG_GLOW),
       DEPTH_BFG - 0.1,
-      0.6,
-      COLORS.GREEN_3,
+      BFG_GLOW_ALPHA,
+      BFG_GLOW_TINT,
     );
-    const glowScale = Math.max(size / 48 * 3.0, 0.6);
-    glowImage.setScale(glowScale);
+    const glowBaseScale = this.getGlowScale(size);
+    glowImage.setScale(glowBaseScale);
 
-    this.visuals.set(id, { coreEmitter, outerEmitter, sparkEmitter, glowImage });
+    this.visuals.set(id, {
+      coreEmitter,
+      outerEmitter,
+      sparkEmitter,
+      glowImage,
+      glowBaseScale,
+      glowPhase: id * 0.37,
+    });
   }
 
   /** Aktualisiert Position und Größe eines BFG-Projektils. */
@@ -281,8 +304,7 @@ export class BfgRenderer {
     visual.glowImage.setPosition(x, y);
 
     // Glow-Größe an Projektil anpassen
-    const glowScale = Math.max(size / 48 * 3.0, 0.6);
-    visual.glowImage.setScale(glowScale);
+    visual.glowBaseScale = this.getGlowScale(size);
 
     // Emit-Zone-Radius an Größe anpassen
     const spread = Math.max(size * 0.5, 6);
@@ -320,6 +342,17 @@ export class BfgRenderer {
   /** Gibt alle aktiven BFG-IDs zurück (für Orphan-Cleanup). */
   getActiveIds(): number[] {
     return [...this.visuals.keys()];
+  }
+
+  private getGlowScale(size: number): number {
+    return Math.max(size / 48 * BFG_GLOW_SCALE_PER_SIZE, BFG_GLOW_MIN_SCALE);
+  }
+
+  private updateGlowPulse(visual: BfgVisual, now: number): void {
+    const pulse = Math.sin(now * BFG_GLOW_PULSE_SPEED + visual.glowPhase);
+    visual.glowImage
+      .setScale(visual.glowBaseScale * (1 + pulse * BFG_GLOW_PULSE_SCALE))
+      .setAlpha(emissiveAlpha(BFG_GLOW_ALPHA * (1 + pulse * BFG_GLOW_PULSE_ALPHA)));
   }
 
   /** Entfernt alle BFG-Visualisierungen. */
