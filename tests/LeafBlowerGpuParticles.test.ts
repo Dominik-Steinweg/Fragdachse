@@ -97,18 +97,19 @@ describe('leaf blower gpu particles', () => {
     system.update(40);
 
     const lane = findFakeLane(scene, 'world-debris');
+    const leaves = lane.members.filter((member) => member.frame === 'leaf-debris');
     expect(scene.emitters).toHaveLength(0);
-    expect(lane.edited).toHaveLength(5);
-    expect(lane.members.every((member) => member.frame === 'leaf-debris')).toBe(true);
-    expect(lane.members.every((member) => member.tint === compensateLeafTint(LEAF_GREEN_COLORS[2]))).toBe(true);
-    expect(lane.members.every((member) => member.x.duration >= 360)).toBe(true);
-    expect(lane.members.every((member) => member.x.duration <= 860)).toBe(true);
-    expect(lane.members.every((member) => member.x.amplitude < 0)).toBe(true);
-    expect(lane.members.every((member) => member.rotation.ease === 'None')).toBe(true);
-    expect(lane.members.every((member) => member.rotation.amplitude === 0)).toBe(true);
-    expect(lane.members.every((member) => member.rotation.base >= 0 && member.rotation.base <= Math.PI * 2)).toBe(true);
-    expect(lane.members.every((member) => Math.abs(member.scaleX.base - 82 / 102) < 1e-10)).toBe(true);
-    expect(lane.members.every((member) => Math.abs(member.alpha.base - 0.96) < 1e-10)).toBe(true);
+    expect(lane.edited).toHaveLength(6);
+    expect(leaves).toHaveLength(5);
+    expect(leaves.every((member) => member.tint === compensateLeafTint(LEAF_GREEN_COLORS[2]))).toBe(true);
+    expect(leaves.every((member) => member.x.duration >= 360)).toBe(true);
+    expect(leaves.every((member) => member.x.duration <= 860)).toBe(true);
+    expect(leaves.every((member) => member.x.amplitude < 0)).toBe(true);
+    expect(leaves.every((member) => member.rotation.ease === 'None')).toBe(true);
+    expect(leaves.every((member) => member.rotation.amplitude === 0)).toBe(true);
+    expect(leaves.every((member) => member.rotation.base >= 0 && member.rotation.base <= Math.PI * 2)).toBe(true);
+    expect(leaves.every((member) => Math.abs(member.scaleX.base - 82 / 102) < 1e-10)).toBe(true);
+    expect(leaves.every((member) => Math.abs(member.alpha.base - 0.96) < 1e-10)).toBe(true);
   });
 
   it('samples terrain for dust at spawn and holds every dust tint', () => {
@@ -125,47 +126,70 @@ describe('leaf blower gpu particles', () => {
 
     system.update(40);
     const lane = findFakeLane(scene, 'world-debris');
-    const firstLeafTint = lane.members[0].tint;
-    expect(sample).not.toHaveBeenCalled();
-    expect(lane.members.every((member) => member.frame === 'leaf-debris')).toBe(true);
+    const firstLeaves = lane.members.filter((member) => member.frame === 'leaf-debris');
+    const firstDust = lane.members.find((member) => member.frame === 'leaf-blower-dust');
+    const firstLeafTint = firstLeaves[0].tint;
+    expect(sample).toHaveBeenCalledTimes(1);
+    expect(firstDust).toBeDefined();
+    expect(firstDust?.tint).toBe(0x707070);
+    expect(sample).toHaveBeenNthCalledWith(1, firstDust?.x.base, firstDust?.y.base);
+    expect([firstDust?.x.base, firstDust?.y.base]).not.toEqual([200, 220]);
+    expect(firstDust?.scaleX.amplitude).toBeGreaterThan(0);
+    expect(firstDust?.alpha.base).toBeCloseTo(0.48);
+    expect(firstDust?.x.duration).toBeGreaterThanOrEqual(350);
+    expect(firstDust?.x.duration).toBeLessThanOrEqual(650);
 
     renderer.updateVisual(7, 800, 900, 64, 0, 80);
     system.update(40);
-    const firstDust = lane.members.find((member) => member.frame === 'leaf-blower-dust');
-    expect(firstDust?.tint).toBe(0x707070);
-    expect(sample).toHaveBeenCalledTimes(1);
-    expect(sample).toHaveBeenNthCalledWith(1, 800, 900);
-    expect(lane.members.filter((member) => member.frame === 'leaf-debris').every((member) => member.tint === firstLeafTint)).toBe(true);
-
-    system.update(80);
-    expect(sample).toHaveBeenCalledTimes(2);
     const dustMembers = lane.members.filter((member) => member.frame === 'leaf-blower-dust');
+    const secondDust = dustMembers[1];
+    expect(secondDust?.tint).toBe(0x8a6b4f);
+    expect(sample).toHaveBeenCalledTimes(2);
+    expect(sample).toHaveBeenNthCalledWith(2, secondDust?.x.base, secondDust?.y.base);
+    expect([secondDust?.x.base, secondDust?.y.base]).not.toEqual([800, 900]);
+    expect(secondDust?.scaleX.amplitude).toBeGreaterThan(0);
+    expect(secondDust?.x.duration).toBeGreaterThanOrEqual(350);
+    expect(secondDust?.x.duration).toBeLessThanOrEqual(650);
+    expect(lane.members.filter((member) => member.frame === 'leaf-debris').every((member) => member.tint === firstLeafTint)).toBe(true);
     expect(dustMembers).toHaveLength(2);
     expect(dustMembers[0].tint).toBe(0x707070);
     expect(dustMembers[1].tint).toBe(0x8a6b4f);
-    expect(sample).toHaveBeenNthCalledWith(2, 800, 900);
   });
 
-  it('uses mostly green leaves on grass and a brown-heavy mix on dirt', () => {
-    const scene = makeFakeGpuVfxScene();
-    const system = new GpuVfxSystem(scene as never);
-    const renderer = new LeafBlowerRenderer(scene as never);
-    renderer.registerGpuVfx(system);
-    renderer.setTerrainColorSnapshot({ sample: () => 0x888888 } as unknown as TerrainColorSnapshot);
-    renderer.setTerrainMaterialLayout({
-      dirt: [{ gridX: 1, gridY: 0 }],
-      tracks: [],
+  it('keeps the configured grass and dirt leaf distributions distinct', () => {
+    const selectionValues = [0.01, ...Array.from({ length: 17 }, () => 0.5), 0.95, 0.95];
+    let randomCall = 0;
+    vi.mocked(Math.random).mockImplementation(() => {
+      const leafCall = Math.floor(randomCall / 2);
+      const value = randomCall % 2 === 0 ? selectionValues[leafCall] : 0;
+      randomCall += 1;
+      return value;
     });
-    renderer.createVisual(1, ARENA_OFFSET_X + CELL_SIZE / 2, ARENA_OFFSET_Y + CELL_SIZE / 2, 20);
-    renderer.createVisual(2, ARENA_OFFSET_X + CELL_SIZE * 1.5, ARENA_OFFSET_Y + CELL_SIZE / 2, 20);
-    renderer.updateVisual(1, ARENA_OFFSET_X + CELL_SIZE / 2, ARENA_OFFSET_Y + CELL_SIZE / 2, 20, 100, 0);
-    renderer.updateVisual(2, ARENA_OFFSET_X + CELL_SIZE * 1.5, ARENA_OFFSET_Y + CELL_SIZE / 2, 20, 100, 0);
 
-    system.update(40);
+    const runDistribution = (x: number): number => {
+      randomCall = 0;
+      const scene = makeFakeGpuVfxScene();
+      const system = new GpuVfxSystem(scene as never);
+      const renderer = new LeafBlowerRenderer(scene as never);
+      renderer.registerGpuVfx(system);
+      renderer.setTerrainColorSnapshot({ sample: () => 0x888888 } as unknown as TerrainColorSnapshot);
+      renderer.setTerrainMaterialLayout({
+        dirt: [{ gridX: 1, gridY: 0 }],
+        tracks: [],
+      });
+      renderer.createVisual(1, x, ARENA_OFFSET_Y + CELL_SIZE / 2, 20);
+      renderer.updateVisual(1, x, ARENA_OFFSET_Y + CELL_SIZE / 2, 20, 100, 0);
 
-    const lane = findFakeLane(scene, 'world-debris');
-    expect(lane.members.slice(0, 5).every((member) => member.tint === compensateLeafTint(LEAF_GREEN_COLORS[2]))).toBe(true);
-    expect(lane.members.slice(5, 10).every((member) => member.tint === compensateLeafTint(LEAF_BROWN_COLORS[2]))).toBe(true);
+      for (let cycle = 0; cycle < 4; cycle += 1) system.update(40);
+
+      const leaves = findFakeLane(scene, 'world-debris').members
+        .filter((member) => member.frame === 'leaf-debris');
+      const brownTints = new Set(LEAF_BROWN_COLORS.map(compensateLeafTint));
+      return leaves.filter((member) => brownTints.has(member.tint)).length;
+    };
+
+    expect(runDistribution(ARENA_OFFSET_X + CELL_SIZE / 2)).toBe(1);
+    expect(runDistribution(ARENA_OFFSET_X + CELL_SIZE * 1.5)).toBe(18);
   });
 
   it('adds brown leaves after 32px of grass-to-dirt travel and keeps the tint fixed', () => {
@@ -187,8 +211,9 @@ describe('leaf blower gpu particles', () => {
     renderer.updateVisual(1, ARENA_OFFSET_X + CELL_SIZE * 1.5, ARENA_OFFSET_Y + CELL_SIZE / 2, 20, 100, 0);
     system.update(40);
 
-    expect(lane.members.slice(0, 5).every((member) => member.tint === grassTint)).toBe(true);
-    expect(lane.members.slice(5, 10).every((member) => member.tint === compensateLeafTint(LEAF_BROWN_COLORS[2]))).toBe(true);
+    const leaves = lane.members.filter((member) => member.frame === 'leaf-debris');
+    expect(leaves.slice(0, 5).every((member) => member.tint === grassTint)).toBe(true);
+    expect(leaves.slice(5, 10).every((member) => member.tint === compensateLeafTint(LEAF_BROWN_COLORS[2]))).toBe(true);
   });
 
   it('does not change the leaf mix when dirt travel reaches a track, while the track dust is gray', () => {

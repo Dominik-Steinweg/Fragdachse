@@ -16,12 +16,12 @@ const LEAF_PARTICLE_FREQUENCY_MS = 40;
 const LEAF_PARTICLE_QUANTITY = 5;
 const LEAF_PARTICLE_LIFESPAN_MIN_MS = 360;
 const LEAF_PARTICLE_LIFESPAN_MAX_MS = 860;
-const DUST_PARTICLE_FREQUENCY_MS = 80;
-const DUST_PARTICLE_LIFESPAN_MIN_MS = 220;
-const DUST_PARTICLE_LIFESPAN_MAX_MS = 420;
-const DUST_PARTICLE_ALPHA = 0.34;
-const GRASS_BROWN_CHANCE = 0.15;
-const DIRT_BROWN_CHANCE = 0.60;
+const DUST_PARTICLE_FREQUENCY_MS = 40;
+const DUST_PARTICLE_LIFESPAN_MIN_MS = 350;
+const DUST_PARTICLE_LIFESPAN_MAX_MS = 650;
+const DUST_PARTICLE_ALPHA = 0.48;
+const GRASS_BROWN_CHANCE = 0.05;
+const DIRT_BROWN_CHANCE = 0.90;
 const LEAF_BLOWER_VISUAL_SIZE_SCALE = 4.7;
 const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
 
@@ -284,11 +284,11 @@ export class LeafBlowerRenderer {
     spec.yMode = GpuVfxEase.Linear;
     spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
     spec.angularVelocity = 0;
-    spec.scaleStart = Math.max(visualSize / 140, 0.08);
-    spec.scaleEnd = 0.02;
+    spec.scaleStart = Math.max(visualSize / 160, 0.08);
+    spec.scaleEnd = Math.max(visualSize / 105, 0.14);
     spec.alphaStart = DUST_PARTICLE_ALPHA;
     spec.alphaEnd = 0;
-    spec.tint = snapshot.sample(visual.x, visual.y);
+    spec.tint = snapshot.sample(SPAWN_POINT.x, SPAWN_POINT.y);
     system.spawn(spec, visual.dustSource, nowMs);
   }
 

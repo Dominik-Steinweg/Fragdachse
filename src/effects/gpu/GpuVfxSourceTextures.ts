@@ -47,9 +47,9 @@ export function ensureLeafDebrisTexture(scene: Phaser.Scene): void {
 export function ensureLeafBlowerDustTexture(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, TEX_LEAF_BLOWER_DUST, 18, 18, (ctx) => {
     const gradient = ctx.createRadialGradient(9, 9, 1, 9, 9, 9);
-    gradient.addColorStop(0, 'rgba(255,255,255,0.42)');
-    gradient.addColorStop(0.62, 'rgba(255,255,255,0.20)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    gradient.addColorStop(0, 'rgba(244,244,244,0.82)');
+    gradient.addColorStop(0.62, 'rgba(220,220,220,0.58)');
+    gradient.addColorStop(1, 'rgba(204,204,204,0)');
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.moveTo(3, 8);
