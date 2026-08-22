@@ -178,15 +178,15 @@ describe('TerrainColorSnapshot', () => {
     expect(normalBakePath).toContain('target.draw(layer)');
   });
 
-  it('keeps the leaf source artwork neutral for multiply tinting', () => {
+  it('keeps the legacy leaf source artwork colors', () => {
     const source = readFileSync(
       new URL('../src/effects/gpu/GpuVfxSourceTextures.ts', import.meta.url),
       'utf8',
     );
 
-    expect(source).toContain("ctx.fillStyle = '#f2f2ee'");
-    expect(source).toContain("ctx.strokeStyle = '#ffffff'");
-    expect(source).not.toContain('#8aa357');
-    expect(source).not.toContain('#d8c97a');
+    expect(source).toContain("ctx.fillStyle = '#8aa357'");
+    expect(source).toContain("ctx.strokeStyle = '#d8c97a'");
+    expect(source).not.toContain('#f2f2ee');
+    expect(source).not.toContain('#ffffff');
   });
 });

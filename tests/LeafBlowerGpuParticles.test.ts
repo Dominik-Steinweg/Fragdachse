@@ -98,17 +98,21 @@ describe('leaf blower gpu particles', () => {
     expect(lane.members.every((member) => member.x.duration >= 360)).toBe(true);
     expect(lane.members.every((member) => member.x.duration <= 860)).toBe(true);
     expect(lane.members.every((member) => member.x.amplitude < 0)).toBe(true);
-    expect(lane.members.every((member) => member.rotation.ease === 'Linear')).toBe(true);
+    expect(lane.members.every((member) => member.rotation.ease === 'None')).toBe(true);
+    expect(lane.members.every((member) => member.rotation.amplitude === 0)).toBe(true);
+    expect(lane.members.every((member) => member.rotation.base >= 0 && member.rotation.base <= Math.PI * 2)).toBe(true);
     expect(lane.members.every((member) => Math.abs(member.scaleX.base - 82 / 102) < 1e-10)).toBe(true);
     expect(lane.members.every((member) => Math.abs(member.alpha.base - 0.96) < 1e-10)).toBe(true);
   });
 
-  it('samples at spawn and never changes a leaf tint afterwards', () => {
+  it('samples once per visual interval and holds each spawned leaf tint', () => {
     const scene = makeFakeGpuVfxScene();
     const system = new GpuVfxSystem(scene as never);
     const renderer = new LeafBlowerRenderer(scene as never);
     renderer.registerGpuVfx(system);
-    const sample = vi.fn(() => 0x123456);
+    const sample = vi.fn()
+      .mockReturnValueOnce(0x123456)
+      .mockReturnValue(0x654321);
     renderer.setTerrainColorSnapshot({ sample } as unknown as TerrainColorSnapshot);
     renderer.createVisual(7, 200, 220, 24);
     renderer.updateVisual(7, 200, 220, 24, 80, 0);
@@ -116,14 +120,22 @@ describe('leaf blower gpu particles', () => {
     system.update(40);
     const lane = findFakeLane(scene, 'world-debris');
     const firstTint = lane.members[0].tint;
-    expect(sample).toHaveBeenCalledTimes(5);
+    expect(sample).toHaveBeenCalledTimes(1);
+    expect(sample).toHaveBeenNthCalledWith(1, 200, 220);
     expect(firstTint).toBe(0x123456);
 
     renderer.updateVisual(7, 800, 900, 64, 0, 80);
     system.update(40);
-    expect(sample).toHaveBeenCalledTimes(10);
+    expect(sample).toHaveBeenCalledTimes(1);
     expect(lane.members[0].tint).toBe(firstTint);
     expect(lane.members.slice(5).every((member) => member.tint === firstTint)).toBe(true);
+
+    // Erst nach dem 300-ms-Fenster wird an der inzwischen verschobenen Visual-Position neu
+    // gelesen; alle in diesem neuen Fenster erzeugten Blaetter erhalten dieselbe Quellfarbe.
+    system.update(260);
+    expect(sample).toHaveBeenCalledTimes(2);
+    expect(sample).toHaveBeenNthCalledWith(2, 800, 900);
+    expect(lane.members.slice(10).every((member) => member.tint === 0x654321)).toBe(true);
   });
 
   it('lets leaf members linger when their source is destroyed', () => {

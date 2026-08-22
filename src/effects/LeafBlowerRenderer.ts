@@ -14,6 +14,7 @@ const LEAF_PARTICLE_FREQUENCY_MS = 40;
 const LEAF_PARTICLE_QUANTITY = 5;
 const LEAF_PARTICLE_LIFESPAN_MIN_MS = 360;
 const LEAF_PARTICLE_LIFESPAN_MAX_MS = 860;
+const TERRAIN_SAMPLE_INTERVAL_MS = 300;
 const LEAF_BLOWER_VISUAL_SIZE_SCALE = 4.7;
 const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
 
@@ -28,6 +29,8 @@ interface LeafBlowerVisual {
   vy: number;
   flow: ParticleFlowScheduler;
   source: number;
+  sampledColor: number;
+  lastTerrainSampleAt: number;
 }
 
 function ensureLeafBlowerTextures(scene: Phaser.Scene): void {
@@ -74,6 +77,8 @@ export class LeafBlowerRenderer {
       vy: 0,
       flow: new ParticleFlowScheduler(LEAF_PARTICLE_FREQUENCY_MS),
       source: this.gpuVfx?.createSource(GpuVfxEffectId.LeafDebris) ?? GPU_VFX_NO_SOURCE_HANDLE,
+      sampledColor: 0xb7c8a7,
+      lastTerrainSampleAt: -9999,
     });
   }
 
@@ -125,6 +130,10 @@ export class LeafBlowerRenderer {
     }
 
     for (const visual of this.visuals.values()) {
+      if (nowMs - visual.lastTerrainSampleAt >= TERRAIN_SAMPLE_INTERVAL_MS) {
+        visual.sampledColor = this.terrainSnapshot.sample(visual.x, visual.y);
+        visual.lastTerrainSampleAt = nowMs;
+      }
       visual.flow.setFrequency(frequency);
       const due = visual.flow.tick(deltaMs);
       for (let cycle = 0; cycle < due; cycle += 1) {
@@ -137,8 +146,7 @@ export class LeafBlowerRenderer {
 
   private spawnLeaf(visual: LeafBlowerVisual, spec: GpuVfxSpawnSpec, nowMs: number): void {
     const system = this.gpuVfx;
-    const snapshot = this.terrainSnapshot;
-    if (!system || !snapshot) return;
+    if (!system) return;
 
     const visualSize = getVisualSize(visual.size);
     const speed = Math.max(1, Math.hypot(visual.vx, visual.vy));
@@ -154,7 +162,7 @@ export class LeafBlowerRenderer {
     SPAWN_CIRCLE.setTo(sourceX, sourceY, radius);
     Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
 
-    const terrainBase = snapshot.sample(SPAWN_POINT.x, SPAWN_POINT.y);
+    const terrainBase = visual.sampledColor;
     const tint = pickGpuVfxTint([
       terrainBase,
       mixColors(terrainBase, 0x6f9340, 0.22),
@@ -175,7 +183,7 @@ export class LeafBlowerRenderer {
     spec.vy = Math.sin(emissionAngle) * emissionSpeed;
     spec.yMode = GpuVfxEase.Linear;
     spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    spec.angularVelocity = Phaser.Math.FloatBetween(-3.2, 3.2);
+    spec.angularVelocity = 0;
     spec.scaleStart = Math.max(visualSize / 102, 0.11);
     spec.tint = tint;
     system.spawn(spec, visual.source, nowMs);
