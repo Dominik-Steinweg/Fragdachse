@@ -8,7 +8,7 @@
 import * as Phaser from 'phaser';
 import { PLAYER_SIZE } from '../config';
 import { HeldItemVisual } from '../entities/HeldItemVisual';
-import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 
 const ROTATION_OFFSET = Math.PI / 2;
 
@@ -40,7 +40,7 @@ export class BadgerPreview {
     this.heldItem = new HeldItemVisual(scene, 0, onHeldItemCreated);
 
     setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlow(this.sprite, color, 4, 0, false, 0.1, 16);
+    this.glowFx = addInternalGlowLegacy(this.sprite, color, 4, 0, false, 0.1, 16);
     if (this.glowFx) {
       this.glowTween = scene.tweens.add({
         targets:       this.glowFx,

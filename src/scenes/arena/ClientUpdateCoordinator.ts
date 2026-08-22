@@ -31,6 +31,7 @@ import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapa
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { getLocale } from '../../i18n';
 import { getHudBuffValueText } from '../../i18n/hudPresentation';
+import { emitArenaMapGridChanged } from './ArenaEvents';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
 const EMPTY_EFFECT_TOTALS = EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
@@ -298,16 +299,35 @@ export class ClientUpdateCoordinator {
         const placementChanges = this.ctx.placementSystem.syncFromSnapshot(state.placeableRocks ?? []);
         for (const rock of placementChanges.added) {
           this.rockVisualHelper.materializePlaceableRock(rock, true);
+          emitArenaMapGridChanged(this.scene.game.events, {
+            reason: 'placeable_added',
+            source: rock.kind === 'rock'
+              ? 'placeable_rock'
+              : rock.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
+            obstacleId: rock.id,
+            gridX: rock.gridX,
+            gridY: rock.gridY,
+          });
         }
         for (const rock of placementChanges.updated) {
           this.rockVisualHelper.materializePlaceableRock(rock, false);
           this.rockVisualHelper.updateRockVisualById(rock.id, rock.hp);
         }
         for (const rock of placementChanges.removed) {
+          const expired = bridge.getSynchronizedNow() >= rock.expiresAt;
           this.rockVisualHelper.removePlaceableRockVisual(
             rock,
-            rock.kind === 'rock' || bridge.getSynchronizedNow() >= rock.expiresAt,
+            rock.kind === 'rock' || expired,
           );
+          emitArenaMapGridChanged(this.scene.game.events, {
+            reason: expired ? 'placeable_expired' : 'placeable_removed',
+            source: rock.kind === 'rock'
+              ? 'placeable_rock'
+              : rock.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
+            obstacleId: rock.id,
+            gridX: rock.gridX,
+            gridY: rock.gridY,
+          });
         }
       }
 

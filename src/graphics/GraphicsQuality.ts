@@ -6,6 +6,20 @@ export type GraphicsQuality = 'high' | 'medium' | 'low';
 export type VisualImportance = 'critical' | 'standard' | 'decorative';
 export type FilterScope = 'object' | 'camera';
 
+export interface SharedGlowBandProfile {
+  readonly quality: 0 | 1 | 2;
+  readonly offsetPx: number;
+  readonly steps: number;
+}
+
+export interface SharedGlowProfile {
+  readonly enabled: boolean;
+  readonly bufferScale: number;
+  readonly importance: Readonly<Record<VisualImportance, boolean>>;
+  readonly near: SharedGlowBandProfile;
+  readonly far: SharedGlowBandProfile | null;
+}
+
 export interface GraphicsQualityProfile {
   readonly level: GraphicsQuality;
   readonly particleFactors: Readonly<Record<VisualImportance, number>>;
@@ -37,6 +51,7 @@ export interface GraphicsQualityProfile {
   readonly livingBarEffects: boolean;
   readonly externalDecorativeFilters: boolean;
   readonly decorativeFilters: boolean;
+  readonly sharedGlow: SharedGlowProfile;
   /**
    * Obergrenze für die Renderauflösung relativ zum 1920x1080-Designraum (siehe
    * `graphics/RenderResolution`). Ein hochauflösender Monitor kostet quadratisch Fill-Rate:
@@ -105,6 +120,13 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     livingBarEffects: true,
     externalDecorativeFilters: true,
     decorativeFilters: true,
+    sharedGlow: {
+      enabled: true,
+      bufferScale: 1,
+      importance: { critical: true, standard: true, decorative: true },
+      near: { quality: 2, offsetPx: 2.75, steps: 4 },
+      far: { quality: 2, offsetPx: 5.5, steps: 6 },
+    },
     maxRenderScale: 2,
     cameraMotionScale: 1,
     hitFlash: true,
@@ -130,6 +152,13 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     livingBarEffects: true,
     externalDecorativeFilters: false,
     decorativeFilters: true,
+    sharedGlow: {
+      enabled: true,
+      bufferScale: 0.5,
+      importance: { critical: true, standard: true, decorative: true },
+      near: { quality: 1, offsetPx: 2.75, steps: 3 },
+      far: { quality: 1, offsetPx: 5.5, steps: 4 },
+    },
     maxRenderScale: 1.5,
     cameraMotionScale: 1,
     hitFlash: true,
@@ -155,6 +184,13 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     livingBarEffects: false,
     externalDecorativeFilters: false,
     decorativeFilters: false,
+    sharedGlow: {
+      enabled: true,
+      bufferScale: 0.25,
+      importance: { critical: true, standard: false, decorative: false },
+      near: { quality: 0, offsetPx: 2.75, steps: 1 },
+      far: null,
+    },
     maxRenderScale: 1,
     cameraMotionScale: 0.7,
     hitFlash: true,
@@ -195,6 +231,7 @@ interface TrackedFilter {
   readonly external: boolean;
   readonly importance: VisualImportance;
   readonly scope: FilterScope;
+  readonly shared: boolean;
   readonly destroyHandler: () => void;
 }
 
@@ -336,6 +373,7 @@ export class GraphicsQualityController {
     external: boolean,
     importance: VisualImportance = 'standard',
     scope: FilterScope = 'object',
+    shared = false,
   ): void {
     const tracked: TrackedFilter = {
       target,
@@ -343,11 +381,20 @@ export class GraphicsQualityController {
       external,
       importance,
       scope,
+      shared,
       destroyHandler: () => this.filters.delete(tracked),
     };
     target.once?.(GAME_OBJECT_DESTROY_EVENT, tracked.destroyHandler);
     this.filters.add(tracked);
     this.applyFilterProfile(tracked);
+  }
+
+  trackSharedGlow(
+    target: { once?: (event: string, listener: () => void) => void; off?: (event: string, listener: () => void) => void },
+    handle: { active?: boolean; setActive?: (active: boolean) => unknown },
+    importance: VisualImportance = 'standard',
+  ): void {
+    this.trackFilter(target, handle, false, importance, 'object', true);
   }
 
   untrackFilter(handle: object): void {
@@ -396,9 +443,13 @@ export class GraphicsQualityController {
 
   private applyFilterProfile(tracked: TrackedFilter): void {
     const profile = this.getProfile();
-    const active = !(this.ablationFiltersDisabled && tracked.scope === 'object')
-      && (tracked.importance === 'critical'
-        || (profile.decorativeFilters && (!tracked.external || profile.externalDecorativeFilters)));
+    const active = tracked.shared
+      ? !(this.ablationFiltersDisabled && tracked.scope === 'object')
+        && profile.sharedGlow.enabled
+        && profile.sharedGlow.importance[tracked.importance]
+      : !(this.ablationFiltersDisabled && tracked.scope === 'object')
+        && (tracked.importance === 'critical'
+          || (profile.decorativeFilters && (!tracked.external || profile.externalDecorativeFilters)));
     if (tracked.handle.setActive) tracked.handle.setActive(active);
     else tracked.handle.active = active;
   }

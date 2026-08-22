@@ -55,7 +55,6 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   zeusTaser: ['ZeusTaserRenderer'],
   playerStealth: ['PlayerEntity'],
   arenaHud: ['ArenaHUD'],
-  centerHud: ['CenterHUD'],
 } as const;
 
 export const GRAPHICS_FAMILIES = {

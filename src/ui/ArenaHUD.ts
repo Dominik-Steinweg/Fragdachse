@@ -1,9 +1,8 @@
 /**
  * ArenaHUD – Premium left-sidebar HUD for the arena phase.
  *
- * Bar rendering inspired by BfgRenderer: multi-layered canvas textures
- * with core + outer energy particle layers using additive blending,
- * giving bars a living, breathing energy-plasma feel.
+ * Bar rendering uses the shared LivingBarEffect field for the breathing energy-plasma feel.
+ * Energized states only raise that existing GPU presentation; they do not add per-bar emitters.
  *
  * Layout (top→bottom):
  *  1. Spielername (large, scrolling marquee if overflow)
@@ -26,11 +25,11 @@ import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ShieldBuffHudState } from '../types';
 import {
   type LivingBarPalette,
-  rgbStr, createGradientTexture, rectZone,
+  rgbStr, createGradientTexture,
   ensureLivingBarTextures, LivingBarEffect,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
-import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
+import { registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import { FONT_MONO } from './uiTheme';
 import {
   BOTTOM_STACK_BAR_H,
@@ -93,16 +92,15 @@ interface BarPalette {
   dark:  number;  // gradient left (darker)
   mid:   number;  // gradient middle
   light: number;  // gradient right / highlight
-  spark: number;  // bright spark tint
 }
 
-const PAL_HP:   BarPalette = { dark: COLORS.GREEN_4, mid: COLORS.GREEN_3, light: COLORS.GREEN_1, spark: 0xffffff };
+const PAL_HP:   BarPalette = { dark: COLORS.GREEN_4, mid: COLORS.GREEN_3, light: COLORS.GREEN_1 };
 const PAL_ARM:  BarPalette = paletteFromColor(ARMOR_COLOR);
-const PAL_ADR:  BarPalette = { dark: COLORS.BLUE_4,  mid: COLORS.BLUE_3,  light: COLORS.BLUE_1,  spark: 0xffffff };
-const PAL_ULT:  BarPalette = { dark: COLORS.RED_3,   mid: COLORS.RED_2,   light: COLORS.RED_1,   spark: 0xffffff };
-const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light: COLORS.GREY_2,  spark: COLORS.GREY_1 };
-const PAL_UTIL: BarPalette = { dark: 0x8a4018,  mid: 0xd97030,  light: 0xf0a048,  spark: 0xffffff };
-const PAL_CAP:  BarPalette = { dark: COLORS.BROWN_5, mid: COLORS.GOLD_3, light: COLORS.GOLD_1, spark: 0xffffff };
+const PAL_ADR:  BarPalette = { dark: COLORS.BLUE_4,  mid: COLORS.BLUE_3,  light: COLORS.BLUE_1 };
+const PAL_ULT:  BarPalette = { dark: COLORS.RED_3,   mid: COLORS.RED_2,   light: COLORS.RED_1 };
+const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light: COLORS.GREY_2 };
+const PAL_UTIL: BarPalette = { dark: 0x8a4018,  mid: 0xd97030,  light: 0xf0a048 };
+const PAL_CAP:  BarPalette = { dark: COLORS.BROWN_5, mid: COLORS.GOLD_3, light: COLORS.GOLD_1 };
 
 const COL_HP_TRAIL = COLORS.RED_1;
 const COL_BAR_BG   = COLORS.GREY_9;
@@ -110,9 +108,8 @@ const COL_BAR_BG2  = COLORS.GREY_8;
 const COL_BORDER   = COLORS.GREY_6;
 const COL_DIVIDER  = COLORS.GREY_7;
 
-// Texture keys (energized-mode particles, specific to ArenaHUD)
+// Texture key for the separate adrenaline gain burst. Bar energy uses LivingBarEffect directly.
 const TEX_PARTICLE   = '_hud_particle';
-const TEX_CORE       = '_hud_core';
 
 export function configureArenaHudLayout(nextPanelWidth = DEFAULT_PANEL_W): void {
   panelWidth = nextPanelWidth;
@@ -133,7 +130,6 @@ function paletteFromColor(base: number): BarPalette {
     dark:  toHex(darken(r, 0.55), darken(g, 0.55), darken(b, 0.55)),
     mid:   base,
     light: toHex(lighten(r, 0.35), lighten(g, 0.35), lighten(b, 0.35)),
-    spark: 0xffffff,
   };
 }
 
@@ -173,11 +169,7 @@ interface BarBundle {
   bgImg:        Phaser.GameObjects.Image;
   trail?:       Phaser.GameObjects.Rectangle;
   fgImg:        Phaser.GameObjects.Image;
-  // Additive energized layer: small, fast, dense sparkle particles
-  coreEmitter:  Phaser.GameObjects.Particles.ParticleEmitter;
-  outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  energyZone:   Phaser.Geom.Rectangle; // emit zone for energized emitters
-  // Base layer: reusable breathing effect
+  // Shared GPU field; this remains visible while the bar is energized.
   idleEffect:   LivingBarEffect;
   border:       Phaser.GameObjects.Rectangle;
   valueText?:   Phaser.GameObjects.Text;
@@ -187,9 +179,9 @@ interface BarBundle {
   prevFrac:     number;
   currentFrac:  number;
   renderedWidth: number;
-  energized:    boolean;       // true = add intense sparkle on top of the living field
+  energized:    boolean;       // true = the shared living field is in its energized state
   keepAliveWhenPresentationInactive: boolean;
-  particleIntensity: number;   // 0..1 – zuletzt angewandte Partikel-Verstärkung
+  energyIntensity: number;    // 0..1 – direct mapping of the former particle intensity
 }
 
 interface BarLayout {
@@ -244,7 +236,7 @@ export interface ActivePowerUpInfo {
   defId:         string;
   remainingFrac: number; // 1 = full, 0 = expired
   valueText?:    string;
-  intensity?:    number; // 0..1 – skaliert die Partikel-Intensität der Leiste
+  intensity?:    number; // 0..1 – skaliert die Energized-Intensität der Leiste
 }
 
 /** Data pushed every frame from ArenaScene. */
@@ -303,7 +295,7 @@ export class ArenaHUD {
   private hpTrailDelay:     Phaser.Time.TimerEvent | null = null;
   private armorTrailDelay:  Phaser.Time.TimerEvent | null = null;
 
-  // Adrenaline burst particles (separate from bar core emitter)
+  // Adrenaline burst particles (separate from the shared bar field)
   private adrBurstEmitter:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private currentMaxAdrenaline = 100;
   private currentMaxRage = 600;
@@ -370,13 +362,6 @@ export class ArenaHUD {
       [1,   'rgba(255,255,255,0)'],
     ]);
 
-    // Energized-mode core particle (14x14, bright center)
-    makeRadialTexture(s, TEX_CORE, 14, [
-      [0,   'rgba(255,255,255,1.0)'],
-      [0.3, 'rgba(255,255,255,0.7)'],
-      [0.6, 'rgba(255,255,255,0.2)'],
-      [1,   'rgba(255,255,255,0)'],
-    ]);
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -500,44 +485,6 @@ export class ArenaHUD {
     const idleEffect = new LivingBarEffect(s, c, layout.x, barY, layout.width, layout.height, idlePal,
       { glowTarget: fgImg, scrollFactor: 0 });
 
-    // Energized particles: small, fast, dense sparkle (BFG core style)
-    const { zone: energyZone, data: energyZoneData } = rectZone(
-      layout.x + 2,
-      barY + 1,
-      layout.width - 4,
-      layout.height - 2,
-    );
-
-    const coreEmitter = s.add.particles(0, 0, TEX_CORE, {
-      lifespan:  { min: 200, max: 500 },
-      frequency: 30,
-      quantity:  2,
-      speedX:    { min: -8, max: 8 },
-      speedY:    { min: -3, max: 3 },
-      scale:     { start: 0.6, end: 0.1 },
-      alpha:     { start: 0.9, end: 0 },
-      tint:      [palette.light, palette.spark, 0xffffff],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-    }).setScrollFactor(0);
-    coreEmitter.addEmitZone(energyZoneData);
-    c.add(coreEmitter);
-
-    const outerEmitter = s.add.particles(0, 0, '_living_blob', {
-      lifespan:  { min: 400, max: 800 },
-      frequency: 50,
-      quantity:  1,
-      speedX:    { min: -5, max: 5 },
-      speedY:    { min: -2, max: 2 },
-      scale:     { start: 0.7, end: 0.15 },
-      alpha:     { start: 0.5, end: 0 },
-      tint:      [palette.mid, palette.light, palette.dark],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-    }).setScrollFactor(0);
-    outerEmitter.addEmitZone(energyZoneData);
-    c.add(outerEmitter);
-
     // Border
     const border = s.add.rectangle(layout.x, barY, layout.width, layout.height)
       .setOrigin(0, 0).setScrollFactor(0)
@@ -569,9 +516,6 @@ export class ArenaHUD {
       bgImg,
       trail,
       fgImg,
-      coreEmitter,
-      outerEmitter,
-      energyZone,
       idleEffect,
       border,
       valueText,
@@ -583,28 +527,19 @@ export class ArenaHUD {
       renderedWidth: layout.width,
       energized: false,
       keepAliveWhenPresentationInactive: opts?.keepAliveWhenPresentationInactive ?? false,
-      particleIntensity: 0,
+      energyIntensity: 0,
     };
   }
 
   /**
-   * Verstärkt die Energized-Partikel einer Leiste stufenlos (0 = Grundzustand,
-   * 1 = maximal). Genutzt für unbegrenzte Buffs wie den Negev-Killstreak, die
-   * ihre Stärke nicht über einen Balken zeigen können.
+   * Map the former particle intensity directly to the shared living field (0 = base,
+   * 1 = maximum). This is used for unbounded buffs such as the Negev kill streak.
    */
-  private setBarParticleIntensity(bundle: BarBundle, intensity: number): void {
+  private setBarEnergyIntensity(bundle: BarBundle, intensity: number): void {
     const t = Phaser.Math.Clamp(intensity, 0, 1);
-    if (Math.abs(bundle.particleIntensity - t) < 0.01) return;
-    bundle.particleIntensity = t;
-
-    bundle.coreEmitter.setFrequency(Phaser.Math.Linear(30, 8, t), Phaser.Math.Linear(2, 6, t));
-    bundle.coreEmitter.ops.scaleX.start = Phaser.Math.Linear(0.6, 1.2, t);
-    bundle.coreEmitter.ops.scaleY.start = Phaser.Math.Linear(0.6, 1.2, t);
-
-    bundle.outerEmitter.setFrequency(Phaser.Math.Linear(50, 14, t), Phaser.Math.Linear(1, 4, t));
-    bundle.outerEmitter.ops.scaleX.start = Phaser.Math.Linear(0.7, 1.4, t);
-    bundle.outerEmitter.ops.scaleY.start = Phaser.Math.Linear(0.7, 1.4, t);
-    bundle.outerEmitter.ops.alpha.start = Phaser.Math.Linear(0.5, 0.9, t);
+    if (Math.abs(bundle.energyIntensity - t) < 0.01) return;
+    bundle.energyIntensity = t;
+    if (bundle.energized) bundle.idleEffect.setEnergyIntensity(t);
   }
 
   private divider(y: number): Phaser.GameObjects.Rectangle {
@@ -713,7 +648,10 @@ export class ArenaHUD {
 
     if (this.adrBurstEmitter) {
       if (active) this.adrBurstEmitter.setActive(true);
-      else this.deactivateEmitter(this.adrBurstEmitter);
+      else {
+        this.adrBurstEmitter.stop();
+        this.adrBurstEmitter.setActive(false);
+      }
     }
 
     for (const tween of [
@@ -926,7 +864,7 @@ export class ArenaHUD {
       this.emitAdrBurst(frac);
     }
 
-    // Syringe: energized particles + glow
+    // Syringe: energized living field + glow
     this.setBarEnergized(this.adr, syringeActive);
     if (syringeActive && !this.wasSyringeActive) {
       this.startAdrSyringe();
@@ -1140,8 +1078,6 @@ export class ArenaHUD {
   /** Properly destroy all game objects inside a BarBundle. */
   private destroyBarBundle(b: BarBundle): void {
     b.idleEffect.destroy();
-    b.coreEmitter.destroy();
-    b.outerEmitter.destroy();
     b.panelBg?.destroy();
     b.label.destroy();
     b.bgImg.destroy();
@@ -1201,7 +1137,7 @@ export class ArenaHUD {
         );
       }
       this.setBarEnergized(bundle, true);
-      this.setBarParticleIntensity(bundle, pu.intensity ?? 0);
+      this.setBarEnergyIntensity(bundle, pu.intensity ?? 0);
 
       this.puEntries.set(pu.defId, bundle);
       this.puOrder.push(pu.defId);
@@ -1293,16 +1229,18 @@ export class ArenaHUD {
       if (pu.defId !== 'NEGEV_KILLSTREAK') this.setBarFrac(bundle, frac);
       bundle.valueText?.setText(pu.valueText ?? '');
       this.fitPowerUpLabel(bundle);
-      this.setBarParticleIntensity(bundle, pu.intensity ?? 0);
+      this.setBarEnergyIntensity(bundle, pu.intensity ?? 0);
     }
   }
 
   // ── Bar intensity mode ──────────────────────────────────────────────────
 
-  /** Set the optional additive sparkle layer for a bar. */
+  /** Toggle the shared living field's energized presentation for a bar. */
   private setBarEnergized(bundle: BarBundle, energized: boolean): void {
     if (bundle.energized === energized) return;
     bundle.energized = energized;
+    bundle.energyIntensity = energized ? 1 : 0;
+    bundle.idleEffect.setEnergyIntensity(bundle.energyIntensity);
     this.syncBarPresentation(bundle);
   }
 
@@ -1311,39 +1249,18 @@ export class ArenaHUD {
     const presentationActive = this.presentationActive || bundle.keepAliveWhenPresentationInactive;
     if (!presentationActive) {
       bundle.idleEffect.stop();
-      this.deactivateEmitter(bundle.coreEmitter);
-      this.deactivateEmitter(bundle.outerEmitter);
       return;
     }
 
-    // The LivingBarEffect is always the base presentation. Energized only adds
-    // the denser particle layer, so readiness/buffs cannot hide the living field.
+    // The LivingBarEffect is always the complete presentation. Energized only changes its
+    // intensity, so readiness/buffs cannot hide the living field.
     if (hasFill) bundle.idleEffect.start();
     else bundle.idleEffect.stop();
-
-    if (bundle.energized && hasFill) {
-      this.activateEmitter(bundle.coreEmitter);
-      this.activateEmitter(bundle.outerEmitter);
-    } else {
-      this.deactivateEmitter(bundle.coreEmitter);
-      this.deactivateEmitter(bundle.outerEmitter);
-    }
-  }
-
-  private activateEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
-    emitter.setActive(true);
-    if (!emitter.emitting) emitter.start();
-  }
-
-  private deactivateEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
-    emitter.stop();
-    killAllAndResetParticlePositions(emitter);
-    emitter.setActive(false);
   }
 
   // ── Shared bar helpers ────────────────────────────────────────────────────
 
-  /** Set the visible fill fraction and constrain particles to the filled area. */
+  /** Set the visible fill fraction; the shared living field is cropped to the filled area. */
   private setBarFrac(bundle: BarBundle, frac: number): void {
     const w = Math.max(0, Math.round(bundle.layout.width * frac));
     if (bundle.renderedWidth === w && Math.abs(bundle.currentFrac - frac) < 0.0001) return;
@@ -1355,18 +1272,8 @@ export class ArenaHUD {
     // Update idle effect zone
     bundle.idleEffect.setFilledWidth(w);
 
-    // Update energized zone
-    if (w > 6) {
-      bundle.energyZone.width = w - 4;
-      if (bundle.energized && (this.presentationActive || bundle.keepAliveWhenPresentationInactive)) {
-        this.activateEmitter(bundle.coreEmitter);
-        this.activateEmitter(bundle.outerEmitter);
-      }
-    } else {
-      bundle.energyZone.width = 0;
-      this.deactivateEmitter(bundle.coreEmitter);
-      this.deactivateEmitter(bundle.outerEmitter);
-    }
+    // The shared living field owns both the base and energized presentation.
+    this.syncBarPresentation(bundle);
   }
 
   /** Quick flash effect on bar (border highlight). */

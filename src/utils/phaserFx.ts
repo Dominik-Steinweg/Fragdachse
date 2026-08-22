@@ -1,5 +1,9 @@
 import * as Phaser from 'phaser';
 import { getGraphicsQualityController, type VisualImportance } from '../graphics/GraphicsQuality';
+import {
+  getSharedGlowSystem,
+  type SharedGlowHandleLike,
+} from '../effects/SharedGlowSystem';
 
 type FilterListLike = {
   addGlow?: (
@@ -38,10 +42,14 @@ type LegacyFxListLike = {
 };
 
 export interface GlowHandle {
+  active?: boolean;
+  setActive?: (active: boolean) => unknown;
   outerStrength: number;
   innerStrength: number;
   color: number;
   renderNode?: string;
+  fallbackHandle?: GlowHandle | null;
+  setFallbackHandle?: (handle: GlowHandle | null) => void;
   destroy?: () => void;
   setPaddingOverride?: (left?: number | null, top?: number, right?: number, bottom?: number) => void;
 }
@@ -115,6 +123,102 @@ function attachDestroyCleanup(target: object, cleanup: () => void): void {
   );
 }
 
+function addFilterGlow(
+  target: object,
+  external: boolean,
+  color: number,
+  outerStrength: number,
+  innerStrength: number,
+  knockout: boolean,
+  quality: number,
+  distance: number,
+  importance: VisualImportance,
+): GlowHandle | null {
+  ensureFilters(target);
+  const filters = external ? getExternalFilters(target) : getInternalFilters(target);
+  const glow = (filters?.addGlow?.(
+    color,
+    outerStrength,
+    innerStrength,
+    1,
+    knockout,
+    normalizeGlowQuality(quality),
+    distance,
+  ) ?? null) as GlowHandle | null;
+
+  if (!external) applyInternalPadding(target, glow);
+  trackFilter(target, glow, external, importance);
+  if (glow) {
+    attachDestroyCleanup(target, () => {
+      if (external) removeExternalFx(target, glow);
+      else removeInternalFx(target, glow);
+    });
+  }
+  return glow;
+}
+
+function legacyFilterAvailable(target: object, external: boolean): boolean {
+  return Boolean(external ? getLegacyExternalFx(target) : getLegacyInternalFx(target));
+}
+
+function removeSharedGlow(target: object, handle: SharedGlowHandleLike): void {
+  const controller = getTargetQualityController(target);
+  controller?.untrackFilter(handle);
+  if (handle.fallbackHandle) controller?.untrackFilter(handle.fallbackHandle);
+  handle.destroy();
+}
+
+function addSharedGlow(
+  target: object,
+  external: boolean,
+  color: number,
+  outerStrength: number,
+  innerStrength: number,
+  knockout: boolean,
+  quality: number,
+  distance: number,
+  importance: VisualImportance,
+): GlowHandle | null {
+  const scene = (target as { scene?: Phaser.Scene }).scene;
+  if (!scene) return null;
+  const system = getSharedGlowSystem(scene);
+  if (!system || legacyFilterAvailable(target, external)) return null;
+
+  const promoteToFallback = (handle: SharedGlowHandleLike): void => {
+    if (handle.fallbackHandle) return;
+    getTargetQualityController(target)?.untrackFilter(handle);
+    const fallback = addFilterGlow(
+      target,
+      external,
+      handle.color,
+      handle.outerStrength,
+      handle.innerStrength,
+      knockout,
+      quality,
+      distance,
+      importance,
+    );
+    handle.setFallbackHandle?.(fallback);
+    if (!fallback) handle.setActive(false);
+  };
+
+  const shared = system.add({
+    target: target as Phaser.GameObjects.GameObject,
+    color,
+    outerStrength,
+    innerStrength,
+    knockout,
+    distance,
+    importance,
+    onRequiresFallback: promoteToFallback,
+  });
+  if (!shared) return null;
+
+  getTargetQualityController(target)?.trackSharedGlow(target, shared, importance);
+  attachDestroyCleanup(target, () => removeSharedGlow(target, shared));
+  return shared as GlowHandle;
+}
+
 export function setInternalFxPadding(target: object, padding: number): void {
   const legacyFx = getLegacyInternalFx(target);
   if (legacyFx?.setPadding) {
@@ -142,25 +246,37 @@ export function addInternalGlow(
     return legacyGlow;
   }
 
-  ensureFilters(target);
-  const glow = (getInternalFilters(target)?.addGlow?.(
-    color,
-    outerStrength,
-    innerStrength,
-    1,
-    knockout,
-    normalizeGlowQuality(quality),
-    distance,
-  ) ?? null) as GlowHandle | null;
-
-  applyInternalPadding(target, glow);
-  if (glow) {
-    trackFilter(target, glow, false, importance);
-    attachDestroyCleanup(target, () => {
-      removeInternalFx(target, glow);
-    });
+  if (innerStrength <= 0 && !knockout) {
+    const shared = addSharedGlow(target, false, color, outerStrength, innerStrength, knockout, quality, distance, importance);
+    if (shared) return shared;
   }
-  return glow;
+
+  return addFilterGlow(target, false, color, outerStrength, innerStrength, knockout, quality, distance, importance);
+}
+
+/**
+ * Player silhouettes deliberately keep the original object-local glow. The shared compositor
+ * is ideal for many UI/world sources, but the old internal filter preserves the tight, padded
+ * contour that makes a player readable against the arena background.
+ */
+export function addInternalGlowLegacy(
+  target: object,
+  color: number,
+  outerStrength: number,
+  innerStrength: number,
+  knockout: boolean,
+  quality: number,
+  distance: number,
+  importance: VisualImportance = 'standard',
+): GlowHandle | null {
+  const legacyFx = getLegacyInternalFx(target);
+  if (legacyFx?.addGlow) {
+    const legacyGlow = (legacyFx.addGlow(color, outerStrength, innerStrength, knockout, quality, distance) ?? null) as GlowHandle | null;
+    trackFilter(target, legacyGlow, false, importance);
+    return legacyGlow;
+  }
+
+  return addFilterGlow(target, false, color, outerStrength, innerStrength, knockout, quality, distance, importance);
 }
 
 export function addExternalGlow(
@@ -180,18 +296,12 @@ export function addExternalGlow(
     return legacyGlow;
   }
 
-  ensureFilters(target);
-  const glow = (getExternalFilters(target)?.addGlow?.(
-    color,
-    outerStrength,
-    innerStrength,
-    1,
-    knockout,
-    normalizeGlowQuality(quality),
-    distance,
-  ) ?? null) as GlowHandle | null;
-  trackFilter(target, glow, true, importance);
-  return glow;
+  if (innerStrength <= 0 && !knockout) {
+    const shared = addSharedGlow(target, true, color, outerStrength, innerStrength, knockout, quality, distance, importance);
+    if (shared) return shared;
+  }
+
+  return addFilterGlow(target, true, color, outerStrength, innerStrength, knockout, quality, distance, importance);
 }
 
 export function addInternalShine(
@@ -219,6 +329,12 @@ export function removeInternalFx(target: object, fx: FxHandle | null | undefined
   if (!fx) return;
   if (markFxRemoved(fx)) return;
   getTargetQualityController(target)?.untrackFilter(fx);
+  const shared = fx as FxHandle & { fallbackHandle?: FxHandle | null; setFallbackHandle?: unknown };
+  if (shared.fallbackHandle) getTargetQualityController(target)?.untrackFilter(shared.fallbackHandle);
+  if (typeof shared.setFallbackHandle === 'function') {
+    fx.destroy?.();
+    return;
+  }
 
   const legacyFx = getLegacyInternalFx(target);
   if (legacyFx?.remove) {
@@ -267,6 +383,12 @@ export function removeExternalFx(target: object, fx: FxHandle | null | undefined
   if (!fx) return;
   if (markFxRemoved(fx)) return;
   getTargetQualityController(target)?.untrackFilter(fx);
+  const shared = fx as FxHandle & { fallbackHandle?: FxHandle | null; setFallbackHandle?: unknown };
+  if (shared.fallbackHandle) getTargetQualityController(target)?.untrackFilter(shared.fallbackHandle);
+  if (typeof shared.setFallbackHandle === 'function') {
+    fx.destroy?.();
+    return;
+  }
 
   const legacyFx = getLegacyExternalFx(target);
   if (legacyFx?.remove) {

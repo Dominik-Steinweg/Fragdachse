@@ -5,7 +5,7 @@
  * optional pulsierende Aura. Genutzt von ArenaHUD, CenterHUD, AimSystem und den Overlays.
  *
  * Diese Datei hält außerdem die Farb- und Texturhelfer, die die Balken-Aufrufer gemeinsam nutzen
- * (`paletteFromColor`, `createGradientTexture`, `ensureLivingBarTextures`, `rectZone`).
+ * (`paletteFromColor`, `createGradientTexture`, `ensureLivingBarTextures`).
  */
 import * as Phaser from 'phaser';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
@@ -51,7 +51,7 @@ const TEX_BLOB = '_living_blob';
 
 /**
  * Weicher Radialverlauf. Der Balkeneffekt selbst braucht ihn nur noch für die gebackene Aura;
- * die "energized"-Emitter in ArenaHUD und CenterHUD sowie einige Overlays nutzen ihn weiter.
+ * einzelne unabhängige UI-/Gameplay-Effekte nutzen ihn weiter.
  */
 export function ensureLivingBarTextures(scene: Phaser.Scene): void {
   if (scene.textures.exists(TEX_BLOB)) return;
@@ -95,25 +95,6 @@ export function createGradientTexture(
   ct.refresh();
 }
 
-// ── Emit-zone helper ────────────────────────────────────────────────────────
-
-export function rectZone(x: number, y: number, w: number, h: number): {
-  zone: Phaser.Geom.Rectangle;
-  data: Phaser.Types.GameObjects.Particles.EmitZoneData;
-} {
-  const rect = new Phaser.Geom.Rectangle(x, y, w, h);
-  return {
-    zone: rect,
-    data: randomEmitZoneData(rect as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource),
-  };
-}
-
-export function randomEmitZoneData(
-  source: Phaser.Types.GameObjects.Particles.RandomZoneSource,
-): Phaser.Types.GameObjects.Particles.EmitZoneData {
-  return { type: 'random', source } as unknown as Phaser.Types.GameObjects.Particles.EmitZoneData;
-}
-
 // ── LivingBarEffect class ───────────────────────────────────────────────────
 
 export interface LivingBarEffectOpts {
@@ -121,7 +102,7 @@ export interface LivingBarEffectOpts {
   glowTarget?: Phaser.GameObjects.Image;
   /** Set to 0 for screen-fixed HUD elements. Default: don't override. */
   scrollFactor?: number;
-  /** Scales particle alpha and glow strength (0–1). Default: 1.0 (full intensity). */
+  /** Scales field alpha and glow strength. Default: 1.0 (full intensity). */
   intensity?: number;
 }
 
@@ -130,8 +111,8 @@ export interface LivingBarEffectOpts {
  *
  * Der Effekt zeigt ein Fenster der szenenweit geteilten {@link LivingFieldTexture}: ein einziger
  * Shader-Quad rendert das Blob-Feld offscreen, jeder Balken ist danach nur noch ein additiv
- * getintetes `Image`. Eine zusätzliche Instanz kostet damit einen batchbaren Quad statt zweier
- * Partikel-Emitter mit zusammen über hundert CPU-aktualisierten Partikeln.
+ * getintetes `Image`. Eine zusätzliche Instanz kostet damit einen batchbaren Quad statt vieler
+ * CPU-aktualisierter Partikel.
  *
  * Zwei Dinge, die beim Ändern zählen:
  * - Die Blobgröße hängt an der Balkenhöhe, nicht an der Balkenbreite: eine Balkenhöhe entspricht
@@ -156,6 +137,8 @@ export class LivingBarEffect {
   private readonly fullWidth: number;
   private filledWidth: number;
   private readonly opts: LivingBarEffectOpts | undefined;
+  private readonly baseIntensity: number;
+  private readonly glowIntensity: number;
   private unsubscribeQuality: (() => void) | null = null;
 
   private field: LivingFieldTexture | null = null;
@@ -166,6 +149,7 @@ export class LivingBarEffect {
   private tileWidth = 1;
   private cropHeight = 1;
   private cropTop = 0;
+  private energyIntensity = 0;
 
   constructor(
     private scene: Phaser.Scene,
@@ -181,17 +165,21 @@ export class LivingBarEffect {
     this.fullWidth = Math.max(1, w);
     this.filledWidth = Math.max(0, w);
     this.opts = opts;
+    this.baseIntensity = Phaser.Math.Clamp(opts?.intensity ?? 1, 0, 1);
+    this.glowIntensity = opts?.intensity ?? 1;
     const qualityProfile = getGraphicsQualityProfile(scene);
     this.enabled = qualityProfile.livingBarEffects;
-    this.filterGlowEnabled = qualityProfile.externalDecorativeFilters;
+    this.filterGlowEnabled = qualityProfile.sharedGlow.enabled
+      && qualityProfile.sharedGlow.importance.standard;
     this.glowTarget = opts?.glowTarget ?? null;
 
     // Der Effekt muss auf Qualitaetswechsel zur Laufzeit reagieren: Die Instanzen leben so
     // lange wie ihr HUD-Element und wuerden sonst nach einem Wechsel von `low` auf `high`
     // dauerhaft abgeschaltet bleiben.
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
-      const glowModeChanged = this.filterGlowEnabled !== profile.externalDecorativeFilters;
-      this.filterGlowEnabled = profile.externalDecorativeFilters;
+      const sharedGlowEnabled = profile.sharedGlow.enabled && profile.sharedGlow.importance.standard;
+      const glowModeChanged = this.filterGlowEnabled !== sharedGlowEnabled;
+      this.filterGlowEnabled = sharedGlowEnabled;
       this.applyEnabled(profile.livingBarEffects);
       if (glowModeChanged && this.enabled && this.active) this.rebuildGlowVisual();
     }) ?? null;
@@ -242,7 +230,6 @@ export class LivingBarEffect {
     const verticalRange = Math.max(0, field.getTextureHeight() - this.cropHeight);
     this.cropTop = verticalRange * variantFraction(this.barX, this.barY, this.palette.mid);
 
-    const intensity = Phaser.Math.Clamp(this.opts?.intensity ?? 1, 0, 1);
     const tileCount = Math.max(1, Math.ceil(this.fullWidth / this.tileWidth));
 
     for (let index = 0; index < tileCount; index += 1) {
@@ -250,7 +237,7 @@ export class LivingBarEffect {
         .setOrigin(0, 0)
         .setScale(this.imageScale)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha(intensity)
+        .setAlpha(this.baseIntensity)
         .setVisible(false);
       // Eckweiser Tint bildet den dark→light-Verlauf ab, den die frueheren Partikel ueber ihre
       // Tint-Liste im Mittel erzeugt haben.
@@ -264,7 +251,53 @@ export class LivingBarEffect {
       this.tiles.push(tile);
     }
 
+    this.applyEnergyVisuals();
     this.ensureGlowVisual();
+  }
+
+  /**
+   * Scale the existing living field for an energized state without adding another renderer.
+   * The shared shader still supplies all moving structures; this only changes the tint/alpha of
+   * the already visible field window and the existing shared glow.
+   */
+  setEnergyIntensity(intensity: number): void {
+    const next = Phaser.Math.Clamp(Number.isFinite(intensity) ? intensity : 0, 0, 1);
+    if (Math.abs(this.energyIntensity - next) < 0.001) return;
+    this.energyIntensity = next;
+    this.applyEnergyVisuals();
+  }
+
+  private applyEnergyVisuals(): void {
+    const energy = this.energyIntensity;
+    const alpha = this.baseIntensity * (1 + energy * 0.2);
+    const dark = energyTint(this.palette.dark, this.palette.light, energy * 0.28);
+    const light = energyTint(this.palette.light, 0xffffff, energy * 0.72);
+
+    for (const tile of this.tiles) {
+      tile
+        .setTint(dark, light, dark, light)
+        .setAlpha(alpha);
+    }
+
+    if (this.breathAura) {
+      this.breathAura
+        .setTint(energyTint(this.palette.mid, 0xffffff, energy * 0.65))
+        .setAlpha(0.1 * this.glowIntensity * (1 + energy * 1.5));
+      LivingBreathDriver.get(this.scene).register(
+        this.breathAura,
+        'alpha',
+        0.08 * this.glowIntensity * (1 + energy * 1.5),
+        0.2 * this.glowIntensity * (1 + energy * 1.5),
+      );
+    }
+    if (this.breathGlow) {
+      LivingBreathDriver.get(this.scene).register(
+        this.breathGlow,
+        'outerStrength',
+        0,
+        2.5 * this.glowIntensity * (1 + energy * 1.5),
+      );
+    }
   }
 
   /** Update the visible field region (call when bar fill changes). */
@@ -333,7 +366,7 @@ export class LivingBarEffect {
     this.ensureGlowVisual();
   }
 
-  /** High erhaelt den urspruenglichen Filter-Glow; medium nutzt den guenstigen Textur-Fallback. */
+  /** High und medium nutzen den zentralen Shared-Glow; die Aura bleibt ein sicherer Fallback. */
   private ensureGlowVisual(): void {
     if (!this.enabled || !this.glowTarget || this.filledWidth <= 4) return;
     if (this.filterGlowEnabled) this.ensureFilterGlow();
@@ -342,7 +375,7 @@ export class LivingBarEffect {
 
   private ensureFilterGlow(): void {
     if (!this.glowTarget || this.breathGlow) return;
-    const intensity = this.opts?.intensity ?? 1;
+    const intensity = this.glowIntensity * (1 + this.energyIntensity * 1.5);
     this.breathGlow = addExternalGlow(this.glowTarget, this.palette.mid, 0, 0, false, 0.1, 6);
     if (!this.breathGlow) return;
     LivingBreathDriver.get(this.scene).register(this.breathGlow, 'outerStrength', 0, 2.5 * intensity);
@@ -351,16 +384,22 @@ export class LivingBarEffect {
   private ensureAura(): void {
     if (!this.enabled) return;
     if (!this.glowTarget || this.breathAura || this.filledWidth <= 4) return;
-    const intensity = this.opts?.intensity ?? 1;
+    const energyScale = 1 + this.energyIntensity * 1.5;
+    const intensity = this.glowIntensity;
     ensureLivingBarTextures(this.scene);
     this.breathAura = this.scene.add.image(0, 0, TEX_BLOB)
-      .setTint(this.palette.mid)
+      .setTint(energyTint(this.palette.mid, 0xffffff, this.energyIntensity * 0.65))
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.1 * intensity);
+      .setAlpha(0.1 * intensity * energyScale);
     if (this.opts?.scrollFactor !== undefined) this.breathAura.setScrollFactor(this.opts.scrollFactor);
     this.container.addAt(this.breathAura, 0);
     this.syncAuraGeometry();
-    LivingBreathDriver.get(this.scene).register(this.breathAura, 'alpha', 0.08 * intensity, 0.2 * intensity);
+    LivingBreathDriver.get(this.scene).register(
+      this.breathAura,
+      'alpha',
+      0.08 * intensity * energyScale,
+      0.2 * intensity * energyScale,
+    );
   }
 
   private syncAuraGeometry(): void {
@@ -402,4 +441,13 @@ export class LivingBarEffect {
 function variantFraction(x: number, y: number, color: number): number {
   const mixed = Math.sin(x * 12.9898 + y * 78.233 + (color & 0xffff) * 0.0131) * 43758.5453;
   return mixed - Math.floor(mixed);
+}
+
+/** Lift the existing palette toward a brighter energized highlight without changing energy=0. */
+function energyTint(color: number, target: number, amount: number): number {
+  const t = Phaser.Math.Clamp(amount, 0, 1);
+  const r = Math.round(((color >> 16) & 0xff) + ((((target >> 16) & 0xff) - ((color >> 16) & 0xff)) * t));
+  const g = Math.round(((color >> 8) & 0xff) + ((((target >> 8) & 0xff) - ((color >> 8) & 0xff)) * t));
+  const b = Math.round((color & 0xff) + (((target & 0xff) - (color & 0xff)) * t));
+  return (r << 16) | (g << 8) | b;
 }

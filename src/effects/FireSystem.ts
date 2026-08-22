@@ -105,6 +105,7 @@ interface ActiveGroundSource {
   damageTarget: GroundFireDamageTarget;
   staticSource: boolean;
   exposeAsZone: boolean;
+  obstacleRevision: number;
   cells: Set<string>;
   wildfire?: FireGrenadeEffect['wildfire'];
   wildfireEscapeVectors: Map<string, { x: number; y: number }>;
@@ -139,6 +140,7 @@ export type GroundFireLineOfSightResolver = (
   endX: number,
   endY: number,
 ) => boolean;
+export type GroundFireObstacleRevisionResolver = () => number;
 
 /**
  * Host-autoritatives, generisches Brandflaechen-System.
@@ -158,6 +160,7 @@ export class FireSystem {
   private lastDamageTick = -1;
   private isCellBlocked: GroundFireCellBlockedResolver | null = null;
   private hasLineOfSight: GroundFireLineOfSightResolver | null = null;
+  private getObstacleRevision: GroundFireObstacleRevisionResolver | null = null;
   private groundSnapshotDirty = true;
   private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
   private lastSimulationMs = 0;
@@ -180,9 +183,11 @@ export class FireSystem {
   setGroundResolvers(
     isCellBlocked: GroundFireCellBlockedResolver | null,
     hasLineOfSight: GroundFireLineOfSightResolver | null,
+    getObstacleRevision: GroundFireObstacleRevisionResolver | null = null,
   ): void {
     this.isCellBlocked = isCellBlocked;
     this.hasLineOfSight = hasLineOfSight;
+    this.getObstacleRevision = getObstacleRevision;
   }
 
   /** Legt eine neue, eigenstaendig stapelnde Kreisquelle in das gemeinsame Raster. */
@@ -216,6 +221,7 @@ export class FireSystem {
       damageTarget: config.damageTarget ?? 'all',
       staticSource: false,
       exposeAsZone: true,
+      obstacleRevision: this.getObstacleRevision?.() ?? Number.NaN,
       cells: new Set(),
       wildfire: config.wildfire ? { ...config.wildfire } : undefined,
       wildfireEscapeVectors: new Map(),
@@ -249,10 +255,15 @@ export class FireSystem {
     const bounds = this.cellBounds(gridX, gridY);
     const centerX = bounds.centerX;
     const centerY = bounds.centerY;
-    if (!isPointInsideArena(centerX, centerY) || this.isCellBlocked?.(bounds)) return false;
-
     const key = `cell:${options.sourceKey}:${gridX}:${gridY}`;
     let source = this.sources.get(key);
+    const obstacleRevision = this.getObstacleRevision?.() ?? Number.NaN;
+    const needsObstacleValidation = !source
+      || !this.getObstacleRevision
+      || source.obstacleRevision !== obstacleRevision;
+    if (!isPointInsideArena(centerX, centerY)
+      || (needsObstacleValidation && this.isCellBlocked?.(bounds))) return false;
+
     if (!source) {
       source = {
         id: this.nextSourceId++,
@@ -275,6 +286,7 @@ export class FireSystem {
         damageTarget: options.damageTarget ?? 'all',
         staticSource: options.static === true && options.permanent === true,
         exposeAsZone: false,
+        obstacleRevision,
         cells: new Set(),
         wildfireEscapeVectors: new Map(),
       };
@@ -282,6 +294,7 @@ export class FireSystem {
       if (!source.staticSource) this.dynamicSources.set(key, source);
       this.attachSourceToCell(source, gridX, gridY);
     } else {
+      source.obstacleRevision = obstacleRevision;
       source.expiresAt = expiresAt;
       source.damagePerTick = Math.max(0, options.damagePerTick ?? 0);
       source.burn = options.burn ? { ...options.burn } : undefined;

@@ -61,6 +61,7 @@ import {
   setStoredCoopDefenseUpgradeProfile,
   setStoredLoadoutSlot,
   setStoredPlayerName,
+  type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
@@ -259,6 +260,8 @@ export class LeftSidePanel {
   private previewHeldSlot: HeldItemSlot = 'weapon1';
   private loadoutLayer: Phaser.GameObjects.Container | null = null;
   private loadoutPicker: LoadoutSlotPicker | null = null;
+  private lastLoadoutStateSignature: string | null = null;
+  private lastLoadoutControlEnabled: boolean | null = null;
   private loadoutEnabled    = true;
   private lobbyFieldsLocked = false;
   private helpOverlay:      HelpOverlay | null = null;
@@ -1030,29 +1033,20 @@ export class LeftSidePanel {
     this.badgerPreview?.setHeldItemId(itemId);
   }
 
-  private updateCarouselDisplay(slot: LoadoutSlot): void {
-    const items = this.getSlotItems(slot);
-    if (items.length === 0) {
-      this.loadoutIndices[slot] = 0;
-      this.renderLoadoutControls();
-      return;
-    }
-    const nextIndex = Phaser.Math.Clamp(this.loadoutIndices[slot], 0, items.length - 1);
-    this.loadoutIndices[slot] = nextIndex;
-    this.renderLoadoutControls();
-  }
-
-  private renderLoadoutControls(): void {
+  private renderLoadoutControls(storedProgressOverride?: CoopDefenseProgressPreferences | null): void {
     if (!this.loadoutLayer) return;
     this.loadoutLayer.removeAll(true);
-    const inspector = this.isInspectorLoadout();
+    const storedProgress = isCoopDefenseMode(this.bridge.getGameMode())
+      ? (storedProgressOverride ?? getStoredCoopDefenseProgress())
+      : null;
+    const inspector = this.isInspectorLoadout(storedProgress);
     const rowSlots: readonly LoadoutSlot[] = inspector
       ? ['weapon1', 'weapon2', 'ultimate']
       : ['weapon1', 'weapon2', 'utility', 'ultimate'];
 
     rowSlots.forEach((slot, visibleIndex) => {
       const rowIndex = inspector && slot === 'ultimate' ? 3 : visibleIndex;
-      const items = this.getSlotItems(slot);
+      const items = this.getSlotItems(slot, storedProgress);
       const item = items[this.loadoutIndices[slot]] ?? null;
       this.loadoutLayer!.add(createLoadoutSlotControl(this.scene, {
         x: CENTER_X,
@@ -1067,7 +1061,9 @@ export class LeftSidePanel {
       }));
     });
 
-    if (inspector) this.renderInspectorToolSlots();
+    if (inspector) this.renderInspectorToolSlots(storedProgress);
+    this.lastLoadoutStateSignature = this.getLoadoutStateSignature(storedProgress);
+    this.lastLoadoutControlEnabled = this.loadoutEnabled && !this.lobbyFieldsLocked;
   }
 
   private openLoadoutSlotPicker(slot: LoadoutSlot, anchorX: number): void {
@@ -1103,16 +1099,20 @@ export class LeftSidePanel {
     });
   }
 
-  private isInspectorLoadout(): boolean {
-    const progress = getStoredCoopDefenseProgress();
-    return isCoopDefenseMode(this.bridge.getGameMode())
+  private isInspectorLoadout(progressOverride?: CoopDefenseProgressPreferences | null): boolean {
+    const progress = progressOverride === undefined
+      ? getStoredCoopDefenseProgress()
+      : progressOverride;
+    return progress !== null
+      && isCoopDefenseMode(this.bridge.getGameMode())
       && progress.unlockedClassIds.includes('inspector_gadachs')
       && progress.selectedClassId === 'inspector_gadachs';
   }
 
-  private renderInspectorToolSlots(): void {
+  private renderInspectorToolSlots(progressOverride?: CoopDefenseProgressPreferences | null): void {
     if (!this.loadoutLayer) return;
-    const profile = getStoredCoopDefenseUpgradeProfile('inspector_gadachs');
+    const profile = progressOverride?.profilesByClass.inspector_gadachs
+      ?? getStoredCoopDefenseUpgradeProfile('inspector_gadachs');
     const tools = getLoadoutToolSlots(profile);
     const capacity = Math.max(1, getCoopDefenseToolCapacity(profile));
     const rowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP;
@@ -1184,17 +1184,39 @@ export class LeftSidePanel {
     this.renderLoadoutControls();
   }
 
-  private getSlotItems(slot: LoadoutSlot): readonly LoadoutCarouselItem[] {
+  private getLoadoutStateSignature(progress: CoopDefenseProgressPreferences | null): string {
+    const mode = this.bridge.getGameMode();
+    const slots = (['weapon1', 'weapon2', 'utility', 'ultimate'] as const)
+      .map((slot) => this.getSlotItems(slot, progress).map((item) => item.id).join(','))
+      .join('|');
+    if (!progress || !isCoopDefenseMode(mode)) return `${mode}|${slots}`;
+
+    const profile = progress.unlockedClassIds.length > 0
+      ? progress.profilesByClass[progress.selectedClassId]
+      : progress.defaultProfile;
+    const tools = progress.selectedClassId === 'inspector_gadachs'
+      ? getLoadoutToolSlots(profile).map((tool) => loadoutToolKey(tool)).join('|')
+      : '';
+    const capacity = progress.selectedClassId === 'inspector_gadachs'
+      ? getCoopDefenseToolCapacity(profile)
+      : 0;
+    return `${mode}|${progress.selectedClassId}|${slots}|${capacity}|${tools}`;
+  }
+
+  private getSlotItems(
+    slot: LoadoutSlot,
+    storedProgressOverride?: CoopDefenseProgressPreferences | null,
+  ): readonly LoadoutCarouselItem[] {
     const mode = this.bridge.getGameMode();
     if (!isCoopDefenseMode(mode)) return getSelectableLoadoutItems(slot, mode, null, 'dachs_nukem');
 
-    const storedProgress = getStoredCoopDefenseProgress();
+    const storedProgress = storedProgressOverride ?? getStoredCoopDefenseProgress();
     const classesUnlocked = storedProgress.unlockedClassIds.length > 0;
     const classId = classesUnlocked
       ? storedProgress.selectedClassId
       : 'dachs_nukem';
     const profile = classesUnlocked
-      ? getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId)
+      ? storedProgress.profilesByClass[storedProgress.selectedClassId]
       : storedProgress.defaultProfile;
     // Nur der Utility-Slot des Inspectors wird ueber seine geteilten Werkzeug-Slots belegt.
     // Waffe 2 bleibt ein regulaerer Slot und zeigt seine Klassenwaffe an.
@@ -1213,23 +1235,36 @@ export class LeftSidePanel {
   }
 
   private syncAllLoadoutSelections(): void {
-    this.syncLoadoutSelectionFromBridge('weapon1');
-    this.syncLoadoutSelectionFromBridge('weapon2');
-    this.syncLoadoutSelectionFromBridge('utility');
-    this.syncLoadoutSelectionFromBridge('ultimate');
+    const storedProgress = isCoopDefenseMode(this.bridge.getGameMode())
+      ? getStoredCoopDefenseProgress()
+      : null;
+    const previousSignature = this.lastLoadoutStateSignature;
+    let selectionChanged = false;
+    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
+      selectionChanged = this.syncLoadoutSelectionFromBridge(slot, storedProgress) || selectionChanged;
+    }
+    const nextSignature = this.getLoadoutStateSignature(storedProgress);
+    if (selectionChanged || previousSignature !== nextSignature) {
+      this.renderLoadoutControls(storedProgress);
+    }
   }
 
-  private syncLoadoutSelectionFromBridge(slot: LoadoutSlot): void {
-    const items = this.getSlotItems(slot);
+  private syncLoadoutSelectionFromBridge(
+    slot: LoadoutSlot,
+    storedProgress: CoopDefenseProgressPreferences | null,
+  ): boolean {
+    const items = this.getSlotItems(slot, storedProgress);
     if (items.length === 0) {
+      const changed = this.loadoutIndices[slot] !== 0;
       this.loadoutIndices[slot] = 0;
-      this.renderLoadoutControls();
-      return;
+      return changed;
     }
 
     const localId = this.bridge.getLocalPlayerId();
     const selectedId = this.bridge.getPlayerLoadoutSlot(localId, slot);
-    const activeClassId = this.getActiveCoopDefenseLoadoutClassId();
+    const activeClassId = storedProgress && storedProgress.unlockedClassIds.length > 0
+      ? storedProgress.selectedClassId
+      : null;
     const storedId = activeClassId
       ? getStoredCoopDefenseLoadoutSlot(activeClassId, slot)
       : null;
@@ -1238,22 +1273,25 @@ export class LeftSidePanel {
       : selectedId;
     const nextIndex = items.findIndex((item) => item.id === preferredId);
     if (nextIndex >= 0) {
+      let changed = false;
       if (this.loadoutIndices[slot] !== nextIndex) {
         this.loadoutIndices[slot] = nextIndex;
         this.persistStoredLoadoutSlot(slot, items[nextIndex].id);
+        changed = true;
       }
-      this.updateCarouselDisplay(slot);
       if (preferredId !== selectedId) {
         this.applyLocalLoadoutSelection(slot, items[nextIndex].id);
+        changed = true;
       }
-      return;
+      return changed;
     }
 
+    const changed = this.loadoutIndices[slot] !== 0 || selectedId !== items[0].id;
     this.loadoutIndices[slot] = 0;
-    this.updateCarouselDisplay(slot);
     if (selectedId !== items[0].id) {
       this.applyLocalLoadoutSelection(slot, items[0].id);
     }
+    return changed;
   }
 
   // ── Namens-Edit DOM-Popup ──────────────────────────────────────────────────
@@ -1513,6 +1551,9 @@ export class LeftSidePanel {
   }
 
   private updateLoadoutArrowVisibility(): void {
+    const enabled = this.loadoutEnabled && !this.lobbyFieldsLocked;
+    if (this.lastLoadoutControlEnabled === enabled) return;
+    this.lastLoadoutControlEnabled = enabled;
     this.loadoutPicker?.close();
     this.renderLoadoutControls();
   }

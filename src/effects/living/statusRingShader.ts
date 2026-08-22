@@ -35,6 +35,15 @@ const OUTER_ALPHA_START = 0.14;
 const OUTER_ALPHA_END = 0.035;
 const OUTER_DRIFT = 1;
 
+// Die alten Blobtexturen wurden nur innerhalb des Bands emittiert, liefen als weiche Sprites
+// aber einige Pixel ueber dessen Kanten. Diese kleinen GPU-Feather stellen denselben Spielraum
+// wieder her, ohne die Feld- oder GameObject-Struktur zu vergroessern.
+const CORE_INNER_FEATHER = 1.2;
+const CORE_OUTER_FEATHER = 1.6;
+const OUTER_INNER_FEATHER = 4.0;
+const OUTER_OUTER_FEATHER = 6.0;
+const SEGMENT_END_FEATHER_RAD = 0.12;
+
 /**
  * Wie beim Balkenfeld trägt das Hash-Gitter weniger, dafür größere Blobs als die früheren
  * Emitter. Der Faktor gleicht die geringere Überdeckung aus.
@@ -66,8 +75,16 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   `uniform vec3 uSegmentTintMid[${STATUS_RING_SEGMENT_COUNT}];`,
   `uniform vec3 uSegmentTintDark[${STATUS_RING_SEGMENT_COUNT}];`,
   LIVING_FIELD_GLSL,
-  'float bandMask(float radius, float inner, float outer) {',
-  '  return step(inner, radius) * step(radius, outer);',
+  'float bandMask(float radius, float inner, float outer, float innerFeather, float outerFeather) {',
+  '  float innerFade = smoothstep(inner - innerFeather, inner, radius);',
+  '  float outerFade = 1.0 - smoothstep(outer, outer + outerFeather, radius);',
+  '  return innerFade * outerFade;',
+  '}',
+  'float segmentMask(float rel, float width) {',
+  `  float edge = ${SEGMENT_END_FEATHER_RAD.toFixed(4)};`,
+  '  float startFade = smoothstep(-edge, 0.0, rel);',
+  '  float endFade = 1.0 - smoothstep(width, width + edge, rel);',
+  '  return startFade * endFade;',
   '}',
   'void main () {',
   // ShaderQuad uses WebGL texture coordinates (y=1 at the visual top). Convert them to the
@@ -98,11 +115,15 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   // compare both angles in the same normalized domain as `angle`.
   `    float start = mod(arc.x + ${TAU}, ${TAU});`,
   `    float rel = arc.y >= 0.0 ? mod(angle - start + ${TAU}, ${TAU}) : mod(start - angle + ${TAU}, ${TAU});`,
-  '    if (rel > width) continue;',
+  // Auch knapp vor dem Startwinkel kann noch der weiche Blobrand liegen. In den signierten
+  // Bereich zurueckfalten, damit segmentMask() beide Enden symmetrisch auslaufen laesst.
+  '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
+  '    float sectorValue = segmentMask(signedRel, width);',
+  '    if (sectorValue <= 0.0) continue;',
   `    float activity = 1.0 + band.z * ${(ACTIVE_GAIN - 1).toFixed(3)};`,
   `    float gain = ${FIELD_GAIN.toFixed(3)} * activity * band.w;`,
-  '    float coreValue = core * bandMask(radius, arc.z, arc.w) * gain;',
-  '    float outerValue = outerLayer * bandMask(radius, band.x, band.y) * gain;',
+  `    float coreValue = core * bandMask(radius, arc.z, arc.w, ${CORE_INNER_FEATHER.toFixed(1)}, ${CORE_OUTER_FEATHER.toFixed(1)}) * gain * sectorValue;`,
+  `    float outerValue = outerLayer * bandMask(radius, band.x, band.y, ${OUTER_INNER_FEATHER.toFixed(1)}, ${OUTER_OUTER_FEATHER.toFixed(1)}) * gain * sectorValue;`,
   // Die frueheren Tint-Listen waren [mid, dark, mid] fuer die Kern- und [dark, dark, mid] fuer
   // die Aussenschicht — im Mittel zwei Drittel mid bzw. zwei Drittel dark.
   '    accum += mix(uSegmentTintDark[i], uSegmentTintMid[i], 0.67) * coreValue;',

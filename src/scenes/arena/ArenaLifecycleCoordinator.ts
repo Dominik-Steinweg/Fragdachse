@@ -88,6 +88,7 @@ import { CoopDefenseTrainEventHandler } from '../../train/CoopDefenseTrainEventH
 import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
 import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
+import { FireObstacleIndex } from '../../effects/FireObstacleIndex';
 import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
@@ -97,7 +98,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -165,6 +166,8 @@ export class ArenaLifecycleCoordinator {
    */
   private flowFieldGenerationId = 0;
   private flowFieldGridListener: ((event: ArenaMapGridChangedEvent) => void) | null = null;
+  private fireObstacleGridListener: ((event: ArenaMapGridChangedEvent) => void) | null = null;
+  private fireObstacleIndex: FireObstacleIndex | null = null;
 
   private layoutRetryCount = 0;
   private arenaEnteredAt   = 0;
@@ -1262,6 +1265,13 @@ export class ArenaLifecycleCoordinator {
       if (baseManager) {
         baseManager.setOnBaseActivated((activatedBase) => {
           this.ctx.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
+          const activatedEntity = baseManager.getBases().find((base) => base.id === activatedBase.id);
+          if (activatedEntity) {
+            this.fireObstacleIndex?.setBase(
+              activatedEntity.id,
+              activatedEntity.getCellBodies().map((body) => body.getBounds()),
+            );
+          }
           this.ctx.powerUpSystem?.activatePedestalsLinkedToBase(activatedBase.id);
           syncActiveBaseIds();
         });
@@ -1272,6 +1282,7 @@ export class ArenaLifecycleCoordinator {
     }
     if (baseManager) {
       baseManager.setOnBaseDestroyed((destroyedBase) => {
+        this.fireObstacleIndex?.removeBase(destroyedBase.id);
         this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
         this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
         this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
@@ -1301,10 +1312,17 @@ export class ArenaLifecycleCoordinator {
       });
     }
     if (!bridge.isHost()) {
-      this.ctx.baseManager?.setOnBaseActivated(() => {
+      this.ctx.baseManager?.setOnBaseActivated((activatedBase) => {
         // Clients have no host flow fields, but their shared obstacle index still needs the
         // newly materialized cell bodies for local LoS and presentation-side queries.
         this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+        const activatedEntity = this.ctx.baseManager?.getBases().find((base) => base.id === activatedBase.id);
+        if (activatedEntity) {
+          this.fireObstacleIndex?.setBase(
+            activatedEntity.id,
+            activatedEntity.getCellBodies().map((body) => body.getBounds()),
+          );
+        }
         syncActiveBaseIds();
       });
     }
@@ -1337,64 +1355,77 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
     // Dieselbe Index-Instanz, damit Sichtlinie und Projektil-Kollision denselben Stand sehen.
     this.ctx.projectileManager.setObstacleIndex(this.ctx.combatSystem.getObstacleIndex());
-    // Brandraster-Hindernisse werden einmalig in 16-px-Zellen projiziert und bei
-    // platzierten/zerstoerten Felsen periodisch aktualisiert. Damit ist sowohl die
-    // Zellpruefung als auch der Sichtstrahl unabhaengig von der Felsanzahl.
-    const blockedFireCells = new Set<string>();
-    const fireLineOfSightCells = new Set<string>();
-    let fireObstacleIndexUpdatedAt = -Infinity;
-    const fireCellKey = (gridX: number, gridY: number) => `${gridX}:${gridY}`;
-    const addBoundsToFireIndex = (
-      left: number, top: number, right: number, bottom: number, blocksCell: boolean,
-    ) => {
-      const minX = Math.floor(left / GROUND_FIRE_CELL_SIZE);
-      const maxX = Math.floor((right - 0.001) / GROUND_FIRE_CELL_SIZE);
-      const minY = Math.floor(top / GROUND_FIRE_CELL_SIZE);
-      const maxY = Math.floor((bottom - 0.001) / GROUND_FIRE_CELL_SIZE);
-      for (let gridY = minY; gridY <= maxY; gridY += 1) {
-        for (let gridX = minX; gridX <= maxX; gridX += 1) {
-          const key = fireCellKey(gridX, gridY);
-          fireLineOfSightCells.add(key);
-          if (blocksCell) blockedFireCells.add(key);
-        }
-      }
-    };
-    const refreshFireObstacleIndex = () => {
-      const now = performance.now();
-      if (now - fireObstacleIndexUpdatedAt < 100) return;
-      fireObstacleIndexUpdatedAt = now;
-      blockedFireCells.clear();
-      fireLineOfSightCells.clear();
-      for (const rock of this.ctx.arenaResult?.rockPhysicsProxies ?? []) {
+    // Brandraster-Hindernisse werden einmalig in 16-px-Zellen projiziert. Danach werden nur
+    // die Footprints der betroffenen Map-Zellen gepatcht; Fire-Cell-Lookups bleiben konstant.
+    if (this.fireObstacleGridListener) {
+      this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.fireObstacleGridListener);
+      this.fireObstacleGridListener = null;
+    }
+    this.fireObstacleIndex?.reset();
+    const fireObstacleIndex = new FireObstacleIndex({
+      width: Math.ceil((ARENA_OFFSET_X + ARENA_WIDTH) / GROUND_FIRE_CELL_SIZE),
+      height: Math.ceil((ARENA_OFFSET_Y + ARENA_HEIGHT) / GROUND_FIRE_CELL_SIZE),
+      fireCellSize: GROUND_FIRE_CELL_SIZE,
+      worldOriginX: ARENA_OFFSET_X,
+      worldOriginY: ARENA_OFFSET_Y,
+      worldCellSize: CELL_SIZE,
+    });
+    this.fireObstacleIndex = fireObstacleIndex;
+
+    const rebuildFireObstacleIndex = (): void => {
+      fireObstacleIndex.reset();
+      for (let rockId = 0; rockId < (this.ctx.arenaResult?.rockPhysicsProxies.length ?? 0); rockId += 1) {
+        const rock = this.ctx.arenaResult?.rockPhysicsProxies[rockId];
         if (!rock?.active) continue;
-        const bounds = rock.getBounds();
-        addBoundsToFireIndex(bounds.left, bounds.top, bounds.right, bounds.bottom, true);
+        fireObstacleIndex.addStaticRock(rockId, rock.getBounds());
       }
       for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-        if (rock.kind === 'pedestal') continue;
-        const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
-        const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
-        addBoundsToFireIndex(left, top, left + CELL_SIZE, top + CELL_SIZE, true);
+        if (rock.kind !== 'pedestal') fireObstacleIndex.addPlaceableRock(rock.id, rock.gridX, rock.gridY);
       }
       for (const trunk of this.ctx.arenaResult?.trunkObjects ?? []) {
-        if (!trunk?.active) continue;
-        const bounds = trunk.getBounds();
-        addBoundsToFireIndex(bounds.left, bounds.top, bounds.right, bounds.bottom, false);
+        if (trunk?.active) fireObstacleIndex.addLineOfSightBounds(trunk.getBounds());
       }
-      for (const bounds of this.ctx.baseManager?.getObstacleRectangles() ?? []) {
-        addBoundsToFireIndex(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height, false);
+      for (const base of this.ctx.baseManager?.getBases() ?? []) {
+        if (base.isInert()) continue;
+        fireObstacleIndex.setBase(
+          base.id,
+          base.getCellBodies().map((body) => body.getBounds()),
+        );
       }
     };
+    rebuildFireObstacleIndex();
+    this.fireObstacleGridListener = (event: ArenaMapGridChangedEvent): void => {
+      if (event.source === 'placeable_pedestal') return;
+      if (event.source === 'static_rock'
+        && event.reason === 'static_rock_destroyed'
+        && event.obstacleId !== undefined) {
+        fireObstacleIndex.removeStaticRock(event.obstacleId);
+        return;
+      }
+      if ((event.reason === 'placeable_added'
+        || event.reason === 'placeable_removed'
+        || event.reason === 'placeable_expired')
+        && event.obstacleId !== undefined
+        && event.gridX !== undefined
+        && event.gridY !== undefined) {
+        if (event.reason === 'placeable_added') {
+          fireObstacleIndex.addPlaceableRock(event.obstacleId, event.gridX, event.gridY);
+        } else {
+          fireObstacleIndex.removePlaceableRock(event.obstacleId);
+        }
+        return;
+      }
+      // Unknown map-grid payloads are handled outside the FireSystem call stack. This keeps
+      // the normal resolver hotpath free of a hidden full-map fallback.
+      rebuildFireObstacleIndex();
+    };
+    this.scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.fireObstacleGridListener);
     this.ctx.fireSystem.setGroundResolvers(
-      (bounds) => {
-        refreshFireObstacleIndex();
-        return blockedFireCells.has(fireCellKey(
-          Math.floor(bounds.centerX / GROUND_FIRE_CELL_SIZE),
-          Math.floor(bounds.centerY / GROUND_FIRE_CELL_SIZE),
-        ));
-      },
+      (bounds) => fireObstacleIndex.isCellBlocked(
+        Math.floor(bounds.centerX / GROUND_FIRE_CELL_SIZE),
+        Math.floor(bounds.centerY / GROUND_FIRE_CELL_SIZE),
+      ),
       (startX, startY, endX, endY) => {
-        refreshFireObstacleIndex();
         const dx = endX - startX;
         const dy = endY - startY;
         const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / GROUND_FIRE_CELL_SIZE));
@@ -1402,10 +1433,11 @@ export class ArenaLifecycleCoordinator {
           const t = step / steps;
           const gridX = Math.floor((startX + dx * t) / GROUND_FIRE_CELL_SIZE);
           const gridY = Math.floor((startY + dy * t) / GROUND_FIRE_CELL_SIZE);
-          if (fireLineOfSightCells.has(fireCellKey(gridX, gridY))) return false;
+          if (fireObstacleIndex.hasLineOfSightObstacle(gridX, gridY)) return false;
         }
         return true;
       },
+      () => fireObstacleIndex.revision,
     );
     this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
@@ -2765,6 +2797,12 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
+    if (this.fireObstacleGridListener) {
+      this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.fireObstacleGridListener);
+      this.fireObstacleGridListener = null;
+    }
+    this.fireObstacleIndex?.reset();
+    this.fireObstacleIndex = null;
     this.ctx.fireSystem.destroyAll();
     this.ctx.fireSystem.setGroundResolvers(null, null);
     this.ctx.stinkCloudSystem.destroyAll();

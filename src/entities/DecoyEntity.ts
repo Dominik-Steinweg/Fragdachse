@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { HeldItemVisual } from './HeldItemVisual';
-import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
@@ -69,7 +69,7 @@ export class DecoyEntity {
     }
 
     setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlow(this.sprite, colorHex, 4, 0, false, 0.08, 16, 'critical');
+    this.glowFx = addInternalGlowLegacy(this.sprite, colorHex, 4, 0, false, 0.08, 16, 'critical');
 
     this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS - 0.015);
 

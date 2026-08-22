@@ -14,7 +14,7 @@ import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   toCssColor,
@@ -158,7 +158,10 @@ export class PlayerEntity {
     // expandiert den Sprite korrekt über die Padding-Grenze hinaus und bleibt an der
     // tatsächlichen Spielertextur ausgerichtet.
     setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
+    // Die Spieler-Silhouette bleibt bewusst auf der alten internen Phaser-Glow-Kette: Sie
+    // liefert die enge, gepaddete Kontur, die fuer die unmittelbare Lesbarkeit der Figur
+    // wichtiger ist als die letzte Reduktion eines einzelnen kritischen Filters.
+    this.glowFx = addInternalGlowLegacy(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
     this.startDefaultGlowTween();
 
     this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);

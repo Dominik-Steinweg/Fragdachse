@@ -79,6 +79,7 @@ function lerpColor(a: number, b: number, t: number): number {
 
 const NODE_TEX_RADIUS = 12;
 const XP_BAR_TEX_KEY = '_ccd_xpbar';
+const TREE_BACKGROUND_TEX_KEY = '_ccd_tree_background';
 
 const PANEL_W = GAME_WIDTH - 120;
 const PANEL_H = GAME_HEIGHT - 88;
@@ -311,6 +312,9 @@ export class CoopDefenseUpgradesOverlay {
   private loadoutHintText: Phaser.GameObjects.Text | null = null;
   private loadoutHintTimer: Phaser.Time.TimerEvent | null = null;
   private picker: LoadoutSlotPicker | null = null;
+  private treeBackgroundContainer: Phaser.GameObjects.Container | null = null;
+  private treeBackground: Phaser.GameObjects.Image | null = null;
+  private treeBackgroundSignature: string | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltip: UiTooltip | null = null;
   private visible = false;
@@ -363,6 +367,9 @@ export class CoopDefenseUpgradesOverlay {
     this.classContainer = null;
     this.loadoutContainer = null;
     this.loadoutHintText = null;
+    this.treeBackgroundContainer = null;
+    this.treeBackground = null;
+    this.treeBackgroundSignature = null;
     this.upgradesContainer = null;
     this.tooltip = null;
 
@@ -497,6 +504,12 @@ export class CoopDefenseUpgradesOverlay {
     this.contentBg = this.scene.add.image(CX, CONTENT_Y, this.ensureContentBgTexture(COLORS.GREY_5))
       .setScrollFactor(0);
     objects.push(this.contentBg);
+
+    // Statische Lanes und Connectoren liegen getrennt von den dynamischen Nodes. Der
+    // Hintergrund kann dadurch als ein einziges gebackenes Bild bestehen bleiben, wenn
+    // nur Punkte, Texte oder Effekte aktualisiert werden.
+    this.treeBackgroundContainer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.treeBackgroundContainer);
 
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
@@ -673,6 +686,9 @@ export class CoopDefenseUpgradesOverlay {
     this.container = null;
     this.dimRect = null;
     this.progressFill = null;
+    this.treeBackgroundContainer = null;
+    this.treeBackground = null;
+    this.treeBackgroundSignature = null;
   }
 
   /**
@@ -773,15 +789,16 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private executeRespec(action: RespecAction): void {
-    const changed = action === 'category'
-      ? (() => {
-        const category = this.getProgress().upgradeCategories[this.activeCategoryIndex];
-        return category ? this.onCategoryRespec(category.id) : false;
-      })()
-      : action === 'class'
-        ? this.onClassRespec()
-        : this.onFullRespec();
-    if (changed) this.requestRefresh();
+    if (action === 'category') {
+      const category = this.getProgress().upgradeCategories[this.activeCategoryIndex];
+      if (category) this.onCategoryRespec(category.id);
+    } else if (action === 'class') {
+      this.onClassRespec();
+    } else {
+      this.onFullRespec();
+    }
+    // ArenaScene owns the mutation and schedules the single coalesced refresh.
+    // Do not enqueue another refresh from the overlay callback.
   }
 
   private closeRespecMenu(): void {
@@ -1121,7 +1138,7 @@ export class CoopDefenseUpgradesOverlay {
         selected: item.id === currentId,
         disabled: false,
         onPick: () => {
-          if (this.onSelectLoadoutItem(slot, item.id)) this.requestRefresh();
+          this.onSelectLoadoutItem(slot, item.id);
         },
       };
     });
@@ -1193,7 +1210,6 @@ export class CoopDefenseUpgradesOverlay {
 
   private applyToolSlots(tools: readonly LoadoutToolRef[]): void {
     if (this.onSetLoadoutTools(tools)) {
-      this.requestRefresh();
       return;
     }
     this.showLoadoutHint(t('ui.upgrades.utilityEquipFailed'));
@@ -1201,7 +1217,6 @@ export class CoopDefenseUpgradesOverlay {
 
   private toggleTool(tool: LoadoutToolRef): void {
     if (this.onToggleLoadoutTool(tool)) {
-      this.requestRefresh();
       return;
     }
     this.showLoadoutHint(t('ui.upgrades.noUtilitySlots'));
@@ -1382,7 +1397,12 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer.removeAll(true);
 
     const category = progress.upgradeCategories[this.activeCategoryIndex];
-    if (!category) return;
+    if (!category) {
+      this.treeBackgroundContainer?.removeAll(true);
+      this.treeBackground = null;
+      this.treeBackgroundSignature = null;
+      return;
+    }
 
     const visuals = this.getCategoryVisuals(category.id, progress.classId);
     this.contentBg?.setTexture(this.ensureContentBgTexture(visuals.connector));
@@ -1446,17 +1466,63 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     this.repositionMergeNodes(placed, placedById, tree.childrenByParentId);
-    this.renderItemLanes(itemLanes, visuals);
-    this.renderConnections(placed, placedById, visuals);
+    const treeBackgroundSignature = this.getTreeBackgroundSignature(
+      category.id,
+      progress.classId,
+      itemLanes,
+      placed,
+      placedById,
+      visuals,
+    );
+    this.renderTreeBackground(
+      treeBackgroundSignature,
+      itemLanes,
+      placed,
+      placedById,
+      visuals,
+    );
+    this.renderFlowingDots(placed, placedById, visuals);
     for (const placedNode of placed) {
       this.renderNode(placedNode, visuals);
     }
   }
 
-  private renderItemLanes(lanes: readonly PlacedItemLane[], visuals: CategoryVisuals): void {
-    if (!this.upgradesContainer || lanes.length === 0) return;
+  private renderTreeBackground(
+    signature: string,
+    lanes: readonly PlacedItemLane[],
+    placed: readonly PlacedNode[],
+    placedById: ReadonlyMap<string, PlacedNode>,
+    visuals: CategoryVisuals,
+  ): void {
+    if (!this.treeBackgroundContainer) return;
+    if (this.treeBackground && this.treeBackgroundSignature === signature) {
+      this.treeBackground.setVisible(true);
+      return;
+    }
 
-    const graphics = this.scene.add.graphics().setScrollFactor(0);
+    this.treeBackgroundContainer.removeAll(true);
+    this.treeBackground = null;
+
+    // Graphics is used only as a one-shot authoring surface. The resulting texture is
+    // the only object that remains in the display list, so GraphicsWebGLRenderer does
+    // not replay the lane/connector command buffer while the menu is idle.
+    const graphics = this.scene.add.graphics();
+    this.drawItemLanes(graphics, lanes, visuals);
+    this.drawConnections(graphics, placed, placedById, visuals);
+    graphics.generateTexture(TREE_BACKGROUND_TEX_KEY, GAME_WIDTH, GAME_HEIGHT);
+    graphics.destroy();
+
+    this.treeBackground = this.scene.add.image(CX, CY, TREE_BACKGROUND_TEX_KEY)
+      .setScrollFactor(0);
+    this.treeBackgroundContainer.add(this.treeBackground);
+    this.treeBackgroundSignature = signature;
+  }
+
+  private drawItemLanes(
+    graphics: Phaser.GameObjects.Graphics,
+    lanes: readonly PlacedItemLane[],
+    visuals: CategoryVisuals,
+  ): void {
     for (const lane of lanes) {
       const left = lane.x - lane.width / 2;
       const top = lane.y - lane.height / 2;
@@ -1475,7 +1541,6 @@ export class CoopDefenseUpgradesOverlay {
       graphics.lineStyle(1, 0xffffff, 0.035);
       graphics.strokeRoundedRect(left + 2, top + 2, lane.width - 4, lane.height - 4, radius - 2);
     }
-    this.upgradesContainer.add(graphics);
   }
 
   private layoutSubtree(params: {
@@ -1624,53 +1689,88 @@ export class CoopDefenseUpgradesOverlay {
     return depth;
   }
 
-  private renderConnections(
+  private drawConnections(
+    graphics: Phaser.GameObjects.Graphics,
     placed: readonly PlacedNode[],
     placedById: ReadonlyMap<string, PlacedNode>,
     visuals: CategoryVisuals,
   ): void {
-    if (!this.upgradesContainer) return;
-
-    const graphics = this.scene.add.graphics().setScrollFactor(0);
-    this.upgradesContainer.add(graphics);
-
     for (const child of placed) {
       for (const requirement of child.node.requires) {
         const parent = placedById.get(requirement.upgradeId);
         if (!parent) continue;
 
-        const startX = parent.x;
-        const startY = parent.y + NODE_H / 2;
-        const endX = child.x;
-        const endY = child.y - NODE_H / 2;
-        const midY = startY + Math.max(8, (endY - startY) * 0.5);
-
-        const points: Array<{ x: number; y: number }> = [
-          { x: startX, y: startY },
-          { x: startX, y: midY },
-          { x: endX, y: midY },
-          { x: endX, y: endY },
-        ];
+        const points = this.getConnectionPoints(parent, child);
 
         if (requirement.satisfied) {
-          const connectorColor = child.node.bossPointCostPerLevel > 0
-            ? (child.node.bossPointRequirementMet || child.node.level > 0 ? COLORS.GOLD_1 : COLORS.RED_2)
-            : visuals.connector;
-          // The path lights up as soon as its prerequisite is satisfied. The
-          // energy dot only appears once both connected upgrades are active.
+          const connectorColor = this.getConnectorColor(child, visuals);
           graphics.lineStyle(4, connectorColor, 0.18);
           this.strokePolyline(graphics, points);
           graphics.lineStyle(2, connectorColor, 0.85);
           this.strokePolyline(graphics, points);
-          if (parent.node.level > 0 && child.node.level > 0) {
-            this.addFlowingDot(points, connectorColor);
-          }
         } else {
           graphics.lineStyle(2, COLORS.GREY_5, 0.45);
           this.strokePolyline(graphics, points);
         }
       }
     }
+  }
+
+  private renderFlowingDots(
+    placed: readonly PlacedNode[],
+    placedById: ReadonlyMap<string, PlacedNode>,
+    visuals: CategoryVisuals,
+  ): void {
+    for (const child of placed) {
+      for (const requirement of child.node.requires) {
+        const parent = placedById.get(requirement.upgradeId);
+        if (!parent || !requirement.satisfied || parent.node.level <= 0 || child.node.level <= 0) continue;
+        this.addFlowingDot(this.getConnectionPoints(parent, child), this.getConnectorColor(child, visuals));
+      }
+    }
+  }
+
+  private getConnectionPoints(
+    parent: PlacedNode,
+    child: PlacedNode,
+  ): Array<{ x: number; y: number }> {
+    const startX = parent.x;
+    const startY = parent.y + NODE_H / 2;
+    const endX = child.x;
+    const endY = child.y - NODE_H / 2;
+    const midY = startY + Math.max(8, (endY - startY) * 0.5);
+    return [
+      { x: startX, y: startY },
+      { x: startX, y: midY },
+      { x: endX, y: midY },
+      { x: endX, y: endY },
+    ];
+  }
+
+  private getConnectorColor(child: PlacedNode, visuals: CategoryVisuals): number {
+    return child.node.bossPointCostPerLevel > 0
+      ? (child.node.bossPointRequirementMet || child.node.level > 0 ? COLORS.GOLD_1 : COLORS.RED_2)
+      : visuals.connector;
+  }
+
+  private getTreeBackgroundSignature(
+    categoryId: string,
+    classId: CoopDefenseClassId,
+    lanes: readonly PlacedItemLane[],
+    placed: readonly PlacedNode[],
+    placedById: ReadonlyMap<string, PlacedNode>,
+    visuals: CategoryVisuals,
+  ): string {
+    const laneSignature = lanes
+      .map((lane) => `${lane.x},${lane.y},${lane.width},${lane.height}`)
+      .join(';');
+    const connectionSignature = placed.flatMap((child) => child.node.requires.map((requirement) => {
+      const parent = placedById.get(requirement.upgradeId);
+      return parent
+        ? `${requirement.upgradeId}>${child.node.id}:${requirement.satisfied}:${this.getConnectorColor(child, visuals)}:${parent.x},${parent.y},${child.x},${child.y}`
+        : '';
+    })).join(';');
+    return `${categoryId}|${classId}|${visuals.laneFill}|${visuals.divider}|${visuals.connector}|${laneSignature}|${connectionSignature}`;
   }
 
   private strokePolyline(
@@ -1939,8 +2039,8 @@ export class CoopDefenseUpgradesOverlay {
           if (!pointer.leftButtonDown()) return;
           if (equipTarget.kind === 'tool') {
             this.toggleTool(equipTarget.tool);
-          } else if (this.onSelectLoadoutItem(equipTarget.slot, equipTarget.itemId)) {
-            this.requestRefresh();
+          } else {
+            this.onSelectLoadoutItem(equipTarget.slot, equipTarget.itemId);
           }
         });
       }
@@ -2308,7 +2408,6 @@ export class CoopDefenseUpgradesOverlay {
   private handleUpgradePointerDown(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
     if (pointer.rightButtonDown()) this.onLevelDownUpgrade(node.id);
     else this.onLevelUpUpgrade(node.id);
-    this.requestRefresh();
   }
 
   /**
@@ -2319,7 +2418,7 @@ export class CoopDefenseUpgradesOverlay {
    * Beim schnellen Vergeben mehrerer Punkte lief das pro Klick und war deutlich spuerbar; so
    * laeuft es hoechstens einmal pro Frame.
    */
-  private requestRefresh(): void {
+  scheduleRefresh(): void {
     if (this.refreshPending) return;
     this.refreshPending = true;
     this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {

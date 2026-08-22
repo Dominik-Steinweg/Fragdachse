@@ -33,6 +33,26 @@ vi.mock('phaser', () => ({
 import { FireSystem } from '../src/effects/FireSystem';
 
 describe('FireSystem visual styles and damage targets', () => {
+  it('revalidates an existing fire cell only after the obstacle revision changes', () => {
+    const fireSystem = new FireSystem({} as Phaser.Scene);
+    const isBlocked = vi.fn(() => false);
+    let obstacleRevision = 1;
+    fireSystem.setGroundResolvers(isBlocked, null, () => obstacleRevision);
+    const options = {
+      sourceKey: 'repeated-fire',
+      ownerId: 'p0',
+      durationMs: 2_000,
+    };
+
+    expect(fireSystem.hostRefreshGroundCell(300, 300, options, 1_000)).toBe(true);
+    expect(fireSystem.hostRefreshGroundCell(300, 300, options, 1_100)).toBe(true);
+    expect(isBlocked).toHaveBeenCalledTimes(1);
+
+    obstacleRevision += 1;
+    expect(fireSystem.hostRefreshGroundCell(300, 300, options, 1_200)).toBe(true);
+    expect(isBlocked).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps normal and void fire independent on the same grid cell', () => {
     const fireSystem = new FireSystem({} as Phaser.Scene);
     const now = 1_000;
