@@ -443,9 +443,13 @@ export class CoopDefenseEnemyAttackSystem {
         higherPriorityWeaponBusy = true;
         continue;
       }
-      // Ausnahme: Felsen freibeissen. Ein blockierter Gegner muss sich immer befreien duerfen,
-      // sonst haengt er waehrend des Cooldowns seiner Fernwaffe dauerhaft fest.
-      if (higherPriorityWeaponBusy && target.kind !== 'obstacle') return null;
+      // Ausnahme: Felsen freibeissen und Basen angreifen. Ein blockierter Gegner muss sich
+      // befreien bzw. weiter an seiner strategischen Basis arbeiten duerfen.
+      if (
+        higherPriorityWeaponBusy
+        && target.kind !== 'obstacle'
+        && target.kind !== 'base'
+      ) return null;
       return { attackWeapon, target };
     }
 

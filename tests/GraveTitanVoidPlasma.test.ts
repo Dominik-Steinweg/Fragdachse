@@ -31,6 +31,15 @@ interface TestPlayer {
   sprite: { x: number; y: number; active: boolean };
 }
 
+interface TestBase {
+  faction: 'friendly';
+  role: 'main';
+  isInert: () => boolean;
+  getHp: () => number;
+  getTurrets: () => readonly unknown[];
+  getNearestSurfacePoint: (x: number, y: number) => { x: number; y: number; distance: number } | null;
+}
+
 interface FiredShot {
   weaponId: string;
   targetX: number;
@@ -82,7 +91,11 @@ function createTitan(): TestTitan {
   } as unknown as TestTitan;
 }
 
-function createAttackSystem(enemy: TestTitan, players: readonly TestPlayer[]) {
+function createAttackSystem(
+  enemy: TestTitan,
+  players: readonly TestPlayer[],
+  bases: readonly TestBase[] = [],
+) {
   const shots: FiredShot[] = [];
   const system = new CoopDefenseEnemyAttackSystem(
     {
@@ -96,7 +109,9 @@ function createAttackSystem(enemy: TestTitan, players: readonly TestPlayer[]) {
       getAllPlayers: () => players,
       getPlayer: (id: string) => players.find((player) => player.id === id),
     } as unknown as PlayerManager,
-    { getBasesByFaction: () => [] } as unknown as BaseManager,
+    {
+      getBasesByFaction: (faction: 'friendly' | 'hostile') => faction === 'friendly' ? bases : [],
+    } as unknown as BaseManager,
     {
       isAlive: () => true,
       isBurrowed: () => false,
@@ -196,5 +211,32 @@ describe('Grufttitan Void-Plasma', () => {
     players[0].sprite.x = 250;
     runAttackFrames(system, 2_070, 2_200);
     expect(shots).toHaveLength(1);
+  });
+
+  it('greift eine erreichbare Basis waehrend des Plasma-Cooldowns an und setzt Plasma danach fort', () => {
+    const players = [{ id: 'p1', sprite: { x: 500, y: 100, active: true } }];
+    const bases: TestBase[] = [{
+      faction: 'friendly',
+      role: 'main',
+      isInert: () => false,
+      getHp: () => 1_000,
+      getTurrets: () => [],
+      getNearestSurfacePoint: () => ({ x: 200, y: 100, distance: 100 }),
+    }];
+    const enemy = createTitan();
+    const { system, shots } = createAttackSystem(enemy, players, bases);
+
+    runAttackFrames(system, 1_000, 7_200);
+
+    const weaponIds = shots.map((shot) => shot.weaponId);
+    const firstBiteIndex = weaponIds.indexOf('GRAVE_TITAN_BITE');
+    expect(weaponIds.slice(0, 12).every((weaponId) => weaponId === VOID_PLASMA.id)).toBe(true);
+    expect(firstBiteIndex).toBeGreaterThanOrEqual(12);
+    expect(shots[firstBiteIndex]).toMatchObject({
+      weaponId: 'GRAVE_TITAN_BITE',
+      targetX: 200,
+      targetY: 100,
+    });
+    expect(weaponIds.slice(firstBiteIndex + 1)).toContain(VOID_PLASMA.id);
   });
 });
