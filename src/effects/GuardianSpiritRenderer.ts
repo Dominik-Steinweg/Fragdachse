@@ -190,7 +190,7 @@ export class GuardianSpiritRenderer {
       alpha: { start: 0.76, end: 0 },
       tint: tints,
       blendMode: Phaser.BlendModes.ADD,
-    }, SPIRIT_DEPTH - 0.08);
+    }, SPIRIT_DEPTH - 0.08, undefined, 'guardianSpirit');
     const motes = createEmitter(this.scene, snapshot.x, snapshot.y, TEX_GUARDIAN_PARTICLE, {
       lifespan: { min: 420, max: 760 },
       frequency: 105,
@@ -202,7 +202,7 @@ export class GuardianSpiritRenderer {
       alpha: { start: 0.7, end: 0 },
       tint: tints,
       blendMode: Phaser.BlendModes.ADD,
-    }, SPIRIT_DEPTH - 0.05);
+    }, SPIRIT_DEPTH - 0.05, undefined, 'guardianSpirit');
     return {
       halo,
       core,
@@ -250,7 +250,7 @@ export class GuardianSpiritRenderer {
       tint: [0xffffff, 0xd9fff1, color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, SPIRIT_DEPTH + 0.12);
+    }, SPIRIT_DEPTH + 0.12, undefined, 'guardianSpirit');
     emitter.explode(count);
     this.scene.time.delayedCall(700, () => destroyEmitter(emitter));
   }

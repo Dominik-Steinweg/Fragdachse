@@ -183,94 +183,46 @@ export class GroundSurfaceStreamer {
     region: GroundSnapshotRegion,
     renderScale: number,
   ): void {
-    const localX = region.worldX - this.frame.offsetX;
-    const localY = region.worldY - this.frame.offsetY;
-    const maxX = localX + region.width;
-    const maxY = localY + region.height;
-    this.dirtVisibleCells.length = 0;
-    this.dirtMottleSourceCells.length = 0;
-
-    const visibleCandidateIds = this.dirtIndex.collect(
-      localX,
-      localY,
-      region.width,
-      DIRT_FRINGE_OVERHANG_PX,
-      this.dirtCandidateIds,
-    );
-    visibleCandidateIds.sort(compareNumbers);
-    for (const id of visibleCandidateIds) {
-      const cell = this.dirtCells[id];
-      if (!cell) continue;
-      const cellMinX = cell.gridX * CELL_SIZE;
-      const cellMinY = cell.gridY * CELL_SIZE;
-      const cellMaxX = cellMinX + CELL_SIZE;
-      const cellMaxY = cellMinY + CELL_SIZE;
-      if (cellMaxX + DIRT_FRINGE_OVERHANG_PX > localX && cellMinX - DIRT_FRINGE_OVERHANG_PX < maxX
-        && cellMaxY + DIRT_FRINGE_OVERHANG_PX > localY && cellMinY - DIRT_FRINGE_OVERHANG_PX < maxY) {
-        this.dirtVisibleCells.push(cell);
+    // Die Aufloesung des Snapshot-Targets ist grober als der bestehende Dirt-Bake. Wir lassen
+    // deshalb denselben 128-px-Bake in kleinen Quadraten laufen und stempeln jedes fertige,
+    // silhouette-geclipte Ergebnis 1:4 in das eine Snapshot-Target. Dadurch braucht der
+    // Snapshot keinen zweiten 512er-Mottle-/Cutout-Puffer und kann trotzdem exakt den normalen
+    // Dirt-Schnitt wiederverwenden.
+    const bakeSize = ROCK_OVERLAY_CHUNK_SIZE;
+    const regionRight = region.worldX + region.width;
+    const regionBottom = region.worldY + region.height;
+    for (let worldY = region.worldY; worldY < regionBottom; worldY += bakeSize) {
+      for (let worldX = region.worldX; worldX < regionRight; worldX += bakeSize) {
+        const localX = worldX - this.frame.offsetX;
+        const localY = worldY - this.frame.offsetY;
+        const bakeRegion: ChunkBakeRegion = {
+          chunk: { cx: 0, cy: 0, localX, localY },
+          localX,
+          localY,
+          size: bakeSize,
+          worldX,
+          worldY,
+          gutterPx: 0,
+        };
+        this.bakeDirtRegion(bakeRegion, {
+          blit: (_layerId, scratch) => {
+            target.stamp(
+              scratch.texture.key,
+              undefined,
+              (worldX - region.worldX) * renderScale,
+              (worldY - region.worldY) * renderScale,
+              {
+                originX: 0,
+                originY: 0,
+                scaleX: renderScale,
+                scaleY: renderScale,
+              },
+            );
+          },
+          clearRegion: () => {},
+          fillRegion: () => {},
+        });
       }
-    }
-
-    const mottleReach = getBlobSurfaceMottleReachPx(DIRT_BLOB_SURFACE_PROFILE);
-    const mottleCandidateIds = this.dirtIndex.collect(
-      localX,
-      localY,
-      region.width,
-      mottleReach,
-      this.dirtCandidateIds,
-    );
-    mottleCandidateIds.sort(compareNumbers);
-    for (const id of mottleCandidateIds) {
-      const cell = this.dirtCells[id];
-      if (!cell) continue;
-      const cellMinX = cell.gridX * CELL_SIZE;
-      const cellMinY = cell.gridY * CELL_SIZE;
-      const cellMaxX = cellMinX + CELL_SIZE;
-      const cellMaxY = cellMinY + CELL_SIZE;
-      if (cellMaxX + mottleReach > localX && cellMinX - mottleReach < maxX
-        && cellMaxY + mottleReach > localY && cellMinY - mottleReach < maxY) {
-        this.dirtMottleSourceCells.push(cell);
-      }
-    }
-
-    if (this.dirtVisibleCells.length === 0) return;
-
-    const { fringe, surface: tiles } = ArenaVisualFactory.createDirtImagesFromGrid(
-      this.scene,
-      this.dirtVisibleCells,
-      this.dirtIsOccupied,
-      {
-        offsetX: this.frame.offsetX,
-        offsetY: this.frame.offsetY,
-        gridCols: GRID_COLS,
-        gridRows: GRID_ROWS,
-      },
-    );
-    if (fringe.length > 0) target.draw(fringe);
-    if (tiles.length > 0) target.draw(tiles);
-    target.callback(() => {
-      for (const image of fringe) image.destroy();
-      for (const image of tiles) image.destroy();
-    });
-
-    const drawOffsetX = (this.frame.offsetX - region.worldX) * renderScale;
-    const drawOffsetY = (this.frame.offsetY - region.worldY) * renderScale;
-    const mottleConfigs = [
-      DIRT_BLOB_SURFACE_PROFILE.mottle,
-      ...(DIRT_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
-    ];
-    for (let index = 0; index < mottleConfigs.length; index += 1) {
-      stampBlobSurfaceMottle(
-        this.scene,
-        target,
-        DIRT_BLOB_SURFACE_PROFILE,
-        mottleConfigs[index],
-        this.dirtMottleSourceCells,
-        index,
-        drawOffsetX,
-        drawOffsetY,
-        renderScale,
-      );
     }
   }
 

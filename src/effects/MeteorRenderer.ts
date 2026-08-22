@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
 import { DEPTH, DEPTH_FX, VOID_PALETTE } from '../config';
-import { circleZone, makeAdditive } from './EffectUtils';
+import { circleZone, makeAdditive, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
@@ -237,6 +237,7 @@ export class MeteorRenderer {
       emitting:  false,
     });
     trailEmitter.setDepth(DEPTH_METEOR + 0.05);
+    registerParticleEmitter(this.scene, 'meteor', trailEmitter);
     trailEmitter.setScale(sizeFactor);
 
     return { warningCircle, warningFill, shadow, meteorGlow, trailEmitter, sizeFactor, isVoid };
@@ -351,6 +352,7 @@ export class MeteorRenderer {
       emitting:  false,
     });
     sparkEmitter.setDepth(DEPTH_IMPACT + 0.1);
+    registerParticleEmitter(this.scene, 'meteor', sparkEmitter);
     const impactParticleFactor = Math.max(0.75, Math.sqrt(radius / BASE_METEOR_RADIUS));
     sparkEmitter.explode(Math.round(18 * impactParticleFactor));
     this.scene.time.delayedCall(700, () => sparkEmitter.destroy());
@@ -369,6 +371,7 @@ export class MeteorRenderer {
       emitting:  false,
     });
     emberEmitter.setDepth(DEPTH_IMPACT);
+    registerParticleEmitter(this.scene, 'meteor', emberEmitter);
     emberEmitter.explode(Math.round(10 * impactParticleFactor));
     this.scene.time.delayedCall(1100, () => emberEmitter.destroy());
 

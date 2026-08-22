@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, clipPointToArenaRay, isPointInsideArena } from '../config';
 import type { HitscanImpactKind } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordParticleSpawn } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import type { LightingSystem } from './LightingSystem';
 
@@ -241,8 +241,10 @@ export class AsmdPrimaryRenderer {
       tint: [0xffffff, mixColors(playerColor, 0xffffff, 0.45), playerColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.12);
-    sparks.explode(impactKind === 'player' ? 9 : 15);
+    }, DEPTH_TRACE + 0.12, undefined, 'asmdPrimary');
+    const impactSparkCount = impactKind === 'player' ? 9 : 15;
+    sparks.explode(impactSparkCount);
+    recordParticleSpawn(this.scene, 'asmdPrimary', impactSparkCount);
     this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => destroyEmitter(sparks));
 
     this.playImpactArcs(
@@ -317,8 +319,9 @@ export class AsmdPrimaryRenderer {
       tint: [hotColor, accentColor, glowColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.13);
+    }, DEPTH_TRACE + 0.13, undefined, 'asmdPrimary');
     sparks.explode(12);
+    recordParticleSpawn(this.scene, 'asmdPrimary', 12);
     this.scene.time.delayedCall(Math.round(220 * lingerMultiplier), () => destroyEmitter(sparks));
   }
 
@@ -367,8 +370,9 @@ export class AsmdPrimaryRenderer {
       tint: [playerColor, accentColor, hotColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.08);
+    }, DEPTH_TRACE + 0.08, undefined, 'asmdPrimary');
     flow.explode(quantity);
+    recordParticleSpawn(this.scene, 'asmdPrimary', quantity);
 
     const front = createEmitter(this.scene, 0, 0, TEX_ASMD_SPARK, {
       lifespan: { min: Math.round(140 * lingerMultiplier), max: Math.round(220 * lingerMultiplier) },
@@ -382,8 +386,9 @@ export class AsmdPrimaryRenderer {
       tint: [hotColor, accentColor, playerColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.1);
+    }, DEPTH_TRACE + 0.1, undefined, 'asmdPrimary');
     front.explode(frontQuantity);
+    recordParticleSpawn(this.scene, 'asmdPrimary', frontQuantity);
 
     this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => {
       destroyEmitter(flow);

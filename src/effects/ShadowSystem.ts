@@ -17,6 +17,7 @@ import {
   type ShadowProjectileSample,
   WORLD_SHADOW_CONFIG,
 } from './ShadowConfig';
+import type { ArenaVisualAttributionCollector } from '../scenes/arena/ArenaVisualAttribution';
 import {
   getGraphicsQualityController,
   getGraphicsQualityProfile,
@@ -178,6 +179,7 @@ export class ShadowSystem {
   /** Wiederverwendete Puffer – eine Allokation je Region weniger. */
   private readonly staticRockCandidates: number[] = [];
   private readonly staticRuntimeById = new Map<number, SyncedPlaceableRock>();
+  private attributionCollector: ArenaVisualAttributionCollector | null = null;
 
   // Reusable point buffers — mutated in-place each draw call to avoid
   // allocating hundreds of Vector2 objects per frame.
@@ -212,6 +214,10 @@ export class ShadowSystem {
     this.staticResidencyView = view;
     if (!this.staticSurface) return;
     this.staticSurface.updateResidency(view ?? this.getStaticFrameRect());
+  }
+
+  setAttributionCollector(collector: ArenaVisualAttributionCollector | null): void {
+    this.attributionCollector = collector;
   }
 
   /** Startup barrier for the static-shadow working set. */
@@ -681,11 +687,23 @@ export class ShadowSystem {
     train: SyncedTrainState | null,
   ): void {
     this.clearDynamic();
+    let primitivesBuilt = 0;
 
     // In `low` entfallen die Schatten bewegter Werfer komplett. Sie sind der einzige
     // Schattenanteil, der sich nicht backen laesst, und werden jeden Frame als gestapelte
     // Alpha-Fuellungen neu gezeichnet. `clearDynamic()` lief bereits – der Layer ist also leer.
-    if (!this.quality.dynamicShadows) return;
+    if (!this.quality.dynamicShadows) {
+      const collector = this.attributionCollector;
+      if (collector?.isActive()) {
+        collector.setGraphicsGauge('dynamicShadows', {
+          objectCount: this.layers.size,
+          activeObjects: 0,
+          dynamicCasterCount: 0,
+          primitiveCount: 0,
+        });
+      }
+      return;
+    }
 
     for (const player of players) {
       const sprite = player.sprite;
@@ -694,7 +712,7 @@ export class ShadowSystem {
       const burrowPhase = player.getBurrowPhase();
       if (burrowPhase === 'underground' || burrowPhase === 'trapped') continue;
 
-      this.drawFootprint(
+      primitivesBuilt += this.drawFootprint(
         this.getLayer(SHADOW_CASTERS.player.layerDepth).dynamicGraphics,
         sprite.x,
         sprite.y,
@@ -710,7 +728,7 @@ export class ShadowSystem {
       if (!preset?.enabled) continue;
 
       const sizeScale = Phaser.Math.Clamp(projectile.size / 18, 0.75, 1.45);
-      this.drawFootprint(
+      primitivesBuilt += this.drawFootprint(
         this.getLayer(preset.layerDepth).dynamicGraphics,
         projectile.x,
         projectile.y,
@@ -721,7 +739,22 @@ export class ShadowSystem {
     }
 
     if (train?.alive) {
-      this.drawTrainShadow(train);
+      primitivesBuilt += this.drawTrainShadow(train);
+    }
+    const collector = this.attributionCollector;
+    if (collector?.isActive()) {
+      const dynamicCasterCount = players.length + projectiles.length + (train?.alive ? 1 : 0);
+      collector.setGraphicsGauge('dynamicShadows', {
+        objectCount: this.layers.size,
+        activeObjects: dynamicCasterCount,
+        dynamicCasterCount,
+        primitiveCount: primitivesBuilt,
+      });
+      collector.recordGraphicsWork('dynamicShadows', {
+        redraws: dynamicCasterCount > 0 ? 1 : 0,
+        primitivesBuilt,
+        maxDynamicPrimitivesPerFrame: primitivesBuilt,
+      });
     }
   }
 
@@ -772,12 +805,12 @@ export class ShadowSystem {
     }
   }
 
-  private drawTrainShadow(train: SyncedTrainState): void {
+  private drawTrainShadow(train: SyncedTrainState): number {
     const locoPreset = SHADOW_CASTERS.trainLoco;
     const wagonPreset = SHADOW_CASTERS.trainWagon;
     const yPositions = this.computeTrainSegmentYs(train.y, train.dir);
 
-    this.drawFootprint(
+    let primitivesBuilt = this.drawFootprint(
       this.getLayer(locoPreset.layerDepth).dynamicGraphics,
       train.x,
       yPositions[0],
@@ -787,7 +820,7 @@ export class ShadowSystem {
     );
 
     for (let index = 1; index < yPositions.length; index += 1) {
-      this.drawFootprint(
+      primitivesBuilt += this.drawFootprint(
         this.getLayer(wagonPreset.layerDepth).dynamicGraphics,
         train.x,
         yPositions[index],
@@ -796,6 +829,7 @@ export class ShadowSystem {
         wagonPreset.footprintHeightPx,
       );
     }
+    return primitivesBuilt;
   }
 
   private computeTrainSegmentYs(locoY: number, direction: 1 | -1): number[] {
@@ -826,7 +860,7 @@ export class ShadowSystem {
     width = preset.footprintWidthPx,
     height = preset.footprintHeightPx,
     profile = this.profile,
-  ): void {
+  ): number {
     // Profil-Multiplikatoren (Tag/Nacht) skalieren Länge, Deckkraft und Weichheit;
     // die Lichtrichtung bleibt konstant, siehe SHADOW_PROFILES.
     const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
@@ -837,7 +871,7 @@ export class ShadowSystem {
       + castLength
       + softnessPx
       + 16;
-    if (!this.isVisibleInArena(x, y, maxExtent)) return;
+    if (!this.isVisibleInArena(x, y, maxExtent)) return 0;
 
     const steps = Math.max(1, Math.round(preset.blurLayers * this.quality.shadowLayerFactor));
     const denominator = Math.max(1, steps - 1);
@@ -870,6 +904,7 @@ export class ShadowSystem {
         this.fillShape(graphics, preset.shape, drawX, drawY, drawWidth, drawHeight, alpha);
       }
     }
+    return steps;
   }
 
   // Draws the convex hull of two circles as a single closed polygon (stadium).

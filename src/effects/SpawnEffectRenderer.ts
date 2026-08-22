@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
-import { ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors } from './EffectUtils';
+import { ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordGraphicsWork, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -164,8 +164,10 @@ export class SpawnEffectRenderer {
       emitting:  false,
       gravityY:  40,
     });
+    registerParticleEmitter(this.scene, 'spawnEffect', emitter);
     emitter.setDepth(DEPTH_FX + 0.5);
     emitter.explode(12);
+    recordParticleSpawn(this.scene, 'spawnEffect', 12);
 
     this.scene.time.delayedCall(600, () => emitter.destroy());
   }
@@ -232,6 +234,8 @@ export class SpawnEffectRenderer {
   ): void {
     const startRadius = 5;
     const ring = this.scene.add.circle(x, y, startRadius, 0, 0);
+    registerGraphicsObject(this.scene, 'spawnRings', ring);
+    recordGraphicsWork(this.scene, 'spawnRings', { createdObjects: 1 });
     ring.setDepth(DEPTH_FX);
     ring.isFilled     = false;
     ring.isStroked    = true;
@@ -302,8 +306,10 @@ export class SpawnEffectRenderer {
       emitting:  false,
       gravityY:  60,
     });
+    registerParticleEmitter(this.scene, 'spawnEffect', emitter);
     emitter.setDepth(DEPTH_FX + 0.5);
     emitter.explode(28);
+    recordParticleSpawn(this.scene, 'spawnEffect', 28);
 
     this.scene.time.delayedCall(800, () => emitter.destroy());
   }

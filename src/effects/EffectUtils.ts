@@ -4,6 +4,10 @@ import {
   type VisualImportance,
 } from '../graphics/GraphicsQuality';
 import { emissiveAlpha } from './EmissiveScale';
+import {
+  getArenaVisualAttribution,
+  type ClassicParticleFamily,
+} from '../scenes/arena/ArenaVisualAttribution';
 
 type CanvasTextureDrawCallback = (
   ctx: CanvasRenderingContext2D,
@@ -76,9 +80,11 @@ export function createEmitter(
   config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig,
   depth: number,
   importance: VisualImportance = 'standard',
+  family?: ClassicParticleFamily,
 ): Phaser.GameObjects.Particles.ParticleEmitter {
   const emitter = createQualityEmitter(scene, x, y, texture, config, importance);
   emitter.setDepth(depth);
+  if (family) getArenaVisualAttribution(scene).registerParticleEmitter(family, emitter);
   return emitter;
 }
 
@@ -104,9 +110,11 @@ export function createQualityEmitter(
   texture: string,
   config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig,
   importance: VisualImportance = 'standard',
+  family?: ClassicParticleFamily,
 ): Phaser.GameObjects.Particles.ParticleEmitter {
   const emitter = scene.add.particles(x, y, texture, config);
   getGraphicsQualityController(scene)?.setEmitterImportance(emitter, importance);
+  if (family) getArenaVisualAttribution(scene).registerParticleEmitter(family, emitter);
   return emitter;
 }
 
@@ -118,6 +126,37 @@ export function trackQualityEmitter(
 ): Phaser.GameObjects.Particles.ParticleEmitter {
   getGraphicsQualityController(scene)?.trackEmitter(emitter, config, importance);
   return emitter;
+}
+
+export function registerParticleEmitter(
+  scene: Phaser.Scene,
+  family: ClassicParticleFamily,
+  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  getArenaVisualAttribution(scene).registerParticleEmitter(family, emitter);
+  return emitter;
+}
+
+export function recordParticleSpawn(scene: Phaser.Scene, family: ClassicParticleFamily, count: number): void {
+  getArenaVisualAttribution(scene).recordParticleSpawn(family, count);
+}
+
+export function recordGraphicsWork(
+  scene: Phaser.Scene,
+  family: import('../scenes/arena/ArenaVisualAttribution').GraphicsFamily,
+  work: import('../scenes/arena/ArenaVisualAttribution').GraphicsWorkCounters,
+): void {
+  getArenaVisualAttribution(scene).recordGraphicsWork(family, work);
+}
+
+export function registerGraphicsObject(
+  scene: Phaser.Scene,
+  family: import('../scenes/arena/ArenaVisualAttribution').GraphicsFamily,
+  object: Phaser.GameObjects.GameObject,
+  isActive?: () => boolean,
+): Phaser.GameObjects.GameObject {
+  getArenaVisualAttribution(scene).registerGraphicsObject(family, object, isActive);
+  return object;
 }
 
 export function setCircleEmitZone(

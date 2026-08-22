@@ -285,7 +285,7 @@ export class ZeusTaserRenderer {
       tint: [hotColor, accentColor, playerColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.1);
+    }, DEPTH_TRACE + 0.1, undefined, 'zeusTaser');
     sparks.explode(16);
     this.scene.time.delayedCall(Math.round(240 * ZEUS_LINGER_MULT), () => destroyEmitter(sparks));
   }
@@ -310,7 +310,7 @@ export class ZeusTaserRenderer {
       tint: [playerColor, accentColor, hotColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.07);
+    }, DEPTH_TRACE + 0.07, undefined, 'zeusTaser');
 
     const rim = createEmitter(this.scene, 0, 0, TEX_ZEUS_SPARK, {
       lifespan: { min: Math.round(110 * ZEUS_LINGER_MULT), max: Math.round(220 * ZEUS_LINGER_MULT) },
@@ -322,7 +322,7 @@ export class ZeusTaserRenderer {
       tint: [hotColor, accentColor, playerColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.11);
+    }, DEPTH_TRACE + 0.11, undefined, 'zeusTaser');
 
     const volumeBursts = Phaser.Math.Clamp(Math.round(range / 10), 12, 24);
     for (let burst = 0; burst < volumeBursts; burst++) {
@@ -421,7 +421,7 @@ export class ZeusTaserRenderer {
       tint: [0xffffff, hotColor, accentColor, playerColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.16);
+    }, DEPTH_TRACE + 0.16, undefined, 'zeusTaser');
     sparks.explode(18);
 
     const branches = this.scene.add.graphics();

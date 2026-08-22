@@ -378,7 +378,7 @@ export class TeslaDomeRenderer {
       tint: [0xffffff, coreColor, accentColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE + 0.17);
+    }, DEPTH.FIRE + 0.17, undefined, 'teslaDome');
 
     const fieldEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_SPARK, {
       lifespan: { min: 320, max: 560 },
@@ -391,7 +391,7 @@ export class TeslaDomeRenderer {
       tint: [accentColor, coreColor, dome.color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE + 0.09);
+    }, DEPTH.FIRE + 0.09, undefined, 'teslaDome');
 
     const rimEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_SPARK, {
       lifespan: { min: 340, max: 560 },
@@ -403,7 +403,7 @@ export class TeslaDomeRenderer {
       tint: [0xffffff, accentColor, dome.color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE + 0.18);
+    }, DEPTH.FIRE + 0.18, undefined, 'teslaDome');
     rimEmitter.addEmitZone(edgeZone(Math.max(dome.radius * 0.92, 8), 24));
 
     const wispEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_WISP, {
@@ -419,7 +419,7 @@ export class TeslaDomeRenderer {
       tint: [mixColors(accentColor, 0xffffff, 0.16), accentColor, dome.color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE + 0.04);
+    }, DEPTH.FIRE + 0.04, undefined, 'teslaDome');
 
     const impactEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_SPARK, {
       lifespan: { min: 90, max: 180 },
@@ -432,7 +432,7 @@ export class TeslaDomeRenderer {
       tint: [0xffffff, coreColor, accentColor],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.FIRE + 0.24);
+    }, DEPTH.FIRE + 0.24, undefined, 'teslaDome');
 
     const idleEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_SPARK, {
       lifespan: { min: 220, max: 380 },
@@ -445,7 +445,7 @@ export class TeslaDomeRenderer {
       tint: [0xffffff, accentColor, dome.color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.FIRE + 0.23);
+    }, DEPTH.FIRE + 0.23, undefined, 'teslaDome');
 
     const boltEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_SPARK, {
       lifespan: { min: 160, max: 280 },

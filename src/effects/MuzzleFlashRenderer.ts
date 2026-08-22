@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors, recordParticleSpawn } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -200,8 +200,9 @@ export class MuzzleFlashRenderer {
         : [...cfg.sparkTints],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PROJECTILES + 1.5);
+    }, DEPTH.PROJECTILES + 1.5, undefined, 'muzzleFlash');
     emitter.explode(cfg.sparkCount);
+    recordParticleSpawn(this.scene, 'muzzleFlash', cfg.sparkCount);
     this.scene.time.delayedCall(cfg.duration * 2 + 40, () => destroyEmitter(emitter));
   }
 

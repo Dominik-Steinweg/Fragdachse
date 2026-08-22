@@ -92,6 +92,7 @@ export class TerrainColorSnapshotBuilder {
       TERRAIN_SNAPSHOT_SCRATCH_SIZE,
       TERRAIN_SNAPSHOT_SCRATCH_SIZE,
     );
+    this.scratch.camera.setOrigin(0, 0);
     this.scratch.setOrigin(0, 0).setVisible(false).setScrollFactor(0);
   }
 

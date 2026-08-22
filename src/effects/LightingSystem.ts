@@ -35,6 +35,9 @@ import {
   projectCircleShadowQuad,
   projectRectShadowQuads,
 } from './lightShadowGeometry';
+import {
+  type ArenaVisualAttributionCollector,
+} from '../scenes/arena/ArenaVisualAttribution';
 
 const TEX_LIGHT_RADIAL = '__light_radial';
 const RADIAL_TEX_SIZE = 256;
@@ -195,6 +198,7 @@ export class LightingSystem {
   private lastCostMs = 0;
   private lastPerformance = emptyPerformanceMetrics();
   private performanceMetricsEnabled = false;
+  private attributionCollector: ArenaVisualAttributionCollector | null = null;
   private quality: GraphicsQualityProfile;
   private unsubscribeQuality: (() => void) | null = null;
 
@@ -272,6 +276,10 @@ export class LightingSystem {
       this.lastDynamicOccluderTests = 0;
       this.lastDynamicOccluderHits = 0;
     }
+  }
+
+  setAttributionCollector(collector: ArenaVisualAttributionCollector | null): void {
+    this.attributionCollector = collector;
   }
 
   getLastUpdateCostMs(): number {
@@ -436,6 +444,8 @@ export class LightingSystem {
 
   update(): void {
     const metricsEnabled = this.performanceMetricsEnabled;
+    const semanticMetricsEnabled = this.attributionCollector?.isActive() === true;
+    const countMetrics = metricsEnabled || semanticMetricsEnabled;
     const startMs = metricsEnabled ? performance.now() : 0;
     const now = this.now();
 
@@ -444,6 +454,9 @@ export class LightingSystem {
     const expireMs = metricsEnabled ? performance.now() - expireStartedAt : 0;
 
     if (!this.enabled) {
+      if (semanticMetricsEnabled) {
+        this.recordAttributionMetrics(this.lights.length, 0, 0, 0, 0, 0, 0, 0);
+      }
       if (metricsEnabled) {
         this.lastCostMs = performance.now() - startMs;
         this.lastPerformance = {
@@ -489,6 +502,9 @@ export class LightingSystem {
           activeLights: this.lights.length,
         };
       }
+      if (semanticMetricsEnabled) {
+        this.recordAttributionMetrics(this.lights.length, 0, 0, 0, 0, 0, 0, 0);
+      }
       return;
     }
     overlay.setVisible(true);
@@ -507,6 +523,9 @@ export class LightingSystem {
           queueMs,
           activeLights: this.lights.length,
         };
+      }
+      if (semanticMetricsEnabled) {
+        this.recordAttributionMetrics(this.lights.length, 0, 0, 0, 0, 0, 0, 0);
       }
       return;
     }
@@ -535,9 +554,9 @@ export class LightingSystem {
     let commandCount = 1;
     let radialLights = 0;
     let coneLights = 0;
-    const presetCounts = metricsEnabled ? {} as Record<string, number> : null;
+    const presetCounts = countMetrics ? {} as Record<string, number> : null;
     for (const light of this.renderQueue) {
-      if (metricsEnabled) {
+      if (countMetrics) {
         presetCounts![light.presetKey] = (presetCounts![light.presetKey] ?? 0) + 1;
         if (light.shape === 'radial') radialLights += 1;
         else coneLights += 1;
@@ -555,9 +574,10 @@ export class LightingSystem {
           scrollX,
           scrollY,
           metricsEnabled,
+          countMetrics,
         );
-        if (metricsEnabled && geometry) {
-          occlusionMs += performance.now() - occlusionStartedAt;
+        if (countMetrics && geometry) {
+          if (metricsEnabled) occlusionMs += performance.now() - occlusionStartedAt;
           shadowGeometryMs += geometry.durationMs;
           shadowQuads += geometry.shadowQuads;
           falloffQuads += geometry.falloffQuads;
@@ -577,8 +597,8 @@ export class LightingSystem {
           (light.x - scrollX + overscanX) * scale,
           (light.y - scrollY + overscanY) * scale,
         );
-        if (metricsEnabled) {
-          directMs += performance.now() - directStartedAt;
+        if (countMetrics) {
+          if (metricsEnabled) directMs += performance.now() - directStartedAt;
           directLights += 1;
           commandCount += 1;
           if (light.occludes) fallbackOccludingLights += 1;
@@ -586,6 +606,18 @@ export class LightingSystem {
       }
     }
 
+    if (semanticMetricsEnabled) {
+      this.recordAttributionMetrics(
+        this.lights.length,
+        this.renderQueue.length,
+        occludingUsed,
+        commandCount,
+        shadowQuads,
+        falloffQuads,
+        dynamicOccluderTests,
+        dynamicOccluderHits,
+      );
+    }
     if (!metricsEnabled) return;
 
     this.lastCostMs = performance.now() - startMs;
@@ -792,6 +824,7 @@ export class LightingSystem {
     scrollX: number,
     scrollY: number,
     collectMetrics: boolean,
+    collectCounts: boolean,
   ): {
     durationMs: number;
     shadowQuads: number;
@@ -806,10 +839,10 @@ export class LightingSystem {
     this.stampLight(slot.renderTexture, light, center, center);
 
     const geometryStartedAt = collectMetrics ? performance.now() : 0;
-    this.buildShadowGraphics(light, slot.graphics, center, collectMetrics);
+    this.buildShadowGraphics(light, slot.graphics, center, collectCounts);
     const durationMs = collectMetrics ? performance.now() - geometryStartedAt : 0;
-    const shadowQuads = collectMetrics ? this.shadowQuads.length : 0;
-    const falloffQuads = collectMetrics ? this.falloffQuads.length : 0;
+    const shadowQuads = collectCounts ? this.shadowQuads.length : 0;
+    const falloffQuads = collectCounts ? this.falloffQuads.length : 0;
     slot.renderTexture.erase([slot.graphics]);
 
     slot.image.setPosition(
@@ -817,7 +850,7 @@ export class LightingSystem {
       (light.y - scrollY + this.getLightMapOverscanPx(GAME_HEIGHT)) * this.quality.lightMapScale,
     );
     this.lightMap?.draw([slot.image]);
-    if (!collectMetrics) return null;
+    if (!collectCounts) return null;
 
     return {
       durationMs,
@@ -845,10 +878,10 @@ export class LightingSystem {
     light: ActiveLight,
     graphics: Phaser.GameObjects.Graphics,
     center: number,
-    collectMetrics: boolean,
+    collectCounts: boolean,
   ): void {
     graphics.clear();
-    if (collectMetrics) {
+    if (collectCounts) {
       this.lastDynamicOccluderTests = 0;
       this.lastDynamicOccluderHits = 0;
     }
@@ -911,17 +944,52 @@ export class LightingSystem {
       light.y,
       light.radiusPx,
       (left, top, right, bottom, exposedEdges) => {
-        if (collectMetrics) this.lastDynamicOccluderHits += 1;
+        if (collectCounts) this.lastDynamicOccluderHits += 1;
         projectRect(left, top, right, bottom, exposedEdges);
       },
     ) ?? 0;
-    if (!collectMetrics) this.lastDynamicOccluderTests = 0;
+    if (!collectCounts) this.lastDynamicOccluderTests = 0;
 
     if (core.length === 0 && falloff.length === 0) return;
 
     graphics.fillStyle(0xffffff, 1);
     this.fillShadowQuads(graphics, core, light, center);
     this.fillFalloffQuads(graphics, falloff, light, center);
+  }
+
+  private recordAttributionMetrics(
+    activeLights: number,
+    renderedLights: number,
+    occludingLights: number,
+    commandCount: number,
+    shadowQuads: number,
+    falloffQuads: number,
+    dynamicOccluderTests: number,
+    dynamicOccluderHits: number,
+  ): void {
+    const collector = this.attributionCollector;
+    if (!collector?.isActive()) return;
+    collector.setGraphicsGauge('lightingOcclusion', {
+      objectCount: this.slots.length,
+      activeObjects: renderedLights,
+      activeLights,
+      renderedLights,
+      occludingLights,
+      primitiveCount: shadowQuads + falloffQuads,
+      commandCount,
+      shadowQuads,
+      falloffQuads,
+    });
+    collector.recordGraphicsWork('lightingOcclusion', {
+      commandsBuilt: commandCount,
+      shadowQuadsBuilt: shadowQuads,
+      falloffQuadsBuilt: falloffQuads,
+      maxCommandsPerFrame: commandCount,
+      maxShadowQuadsPerFrame: shadowQuads,
+      maxFalloffQuadsPerFrame: falloffQuads,
+      dynamicOccluderTests,
+      dynamicOccluderHits,
+    });
   }
 
   private fillShadowQuads(

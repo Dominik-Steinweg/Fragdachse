@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedRemoteControlTurret } from '../types';
-import { circleZone, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
+import { circleZone, ensureCanvasTexture, fillRadialGradientTexture, mixColors, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -108,6 +108,7 @@ export class RemoteControlRenderer {
       tint: mixColors(target.color, 0xffffff, 0.28),
       emitZone: circleZone(VISUAL_RADIUS * 0.8),
     }).setDepth(DEPTH.PROJECTILES - 0.12);
+    registerParticleEmitter(this.scene, 'remoteControl', sparks);
 
     return { halo, ring, sparks, snapshot: target, seed: hashSeed(target.turretId) };
   }

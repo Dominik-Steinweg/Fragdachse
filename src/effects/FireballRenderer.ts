@@ -33,14 +33,14 @@ export class FireballRenderer {
       scale: { start: 0.72, end: 0.05 }, alpha: { start: 0.78, end: 0 },
       tint: [...FLAME_COLORS_OUTER], rotate: { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD, maxParticles: 420, reserve: 100, emitting: false,
-    }, DEPTH.PROJECTILES - 0.2);
+    }, DEPTH.PROJECTILES - 0.2, undefined, 'fireball');
     this.sparks = createEmitter(scene, 0, 0, TEX_FLAME_SPARK, {
       lifespan: { min: 240, max: 480 }, frequency: -1, quantity: 1,
       speedX: { min: -40, max: 40 }, speedY: { min: -46, max: 18 },
       scale: { start: 0.82, end: 0.03 }, alpha: { start: 0.9, end: 0 },
       tint: [...FLAME_COLORS_SPARK], blendMode: Phaser.BlendModes.ADD,
       maxParticles: 180, reserve: 50, emitting: false,
-    }, DEPTH.PROJECTILES + 0.2);
+    }, DEPTH.PROJECTILES + 0.2, undefined, 'fireball');
   }
 
   createVisual(id: number, x: number, y: number, size: number): void {

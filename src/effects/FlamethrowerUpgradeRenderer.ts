@@ -781,7 +781,7 @@ export class FlamethrowerUpgradeRenderer {
       reserve: this.getRingBandReserve(radius),
       emitting: true,
       emitZone: this.createRingBandZone(radius, phase),
-    }, RING_PARTICLE_DEPTH);
+    }, RING_PARTICLE_DEPTH, undefined, 'flamethrowerRing');
 
     bandEmitter.onParticleEmit((particle) => {
       const tangentAngle = Math.atan2(particle.y, particle.x) + Math.PI * 0.5;
@@ -833,7 +833,7 @@ export class FlamethrowerUpgradeRenderer {
       reserve: this.getRingCoreReserve(radius),
       emitting: true,
       emitZone: this.createRingBandZone(radius, phase, RING_CORE_THICKNESS),
-    }, RING_PARTICLE_DEPTH + 0.02);
+    }, RING_PARTICLE_DEPTH + 0.02, undefined, 'flamethrowerRing');
 
     coreEmitter.onParticleEmit((particle) => {
       const tangentAngle = Math.atan2(particle.y, particle.x) + Math.PI * 0.5;
@@ -1014,7 +1014,7 @@ export class FlamethrowerUpgradeRenderer {
       maxAliveParticles: 640,
       reserve: 420,
       emitting: false,
-    }, depth);
+    }, depth, undefined, 'flamethrowerRing');
   }
 
   /**
@@ -1037,7 +1037,7 @@ export class FlamethrowerUpgradeRenderer {
       maxAliveParticles: 220,
       reserve: 100,
       emitting: false,
-    }, depth);
+    }, depth, undefined, 'flamethrowerRing');
   }
 
   private releaseGroundVisual(id: string, visual: GroundVisual): void {

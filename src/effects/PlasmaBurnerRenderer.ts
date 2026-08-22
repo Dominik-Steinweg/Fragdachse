@@ -913,7 +913,7 @@ export class PlasmaBurnerRenderer {
       reserve: 64,
       maxParticles: 64,
       maxAliveParticles: 36,
-    }, DEPTH_TRACE + 0.2);
+    }, DEPTH_TRACE + 0.2, undefined, 'plasmaBurner');
     return this.impactSparkEmitter;
   }
 

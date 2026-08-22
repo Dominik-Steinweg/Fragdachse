@@ -302,7 +302,7 @@ export class TeslaBoltRenderer {
       alpha: { start: 0.95, end: 0 },
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PROJECTILES + 0.31);
+    }, DEPTH.PROJECTILES + 0.31, undefined, 'teslaBolt');
     return this.impactEmitter;
   }
 }

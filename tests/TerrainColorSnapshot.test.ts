@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, MULTIPLY: 1 } }));
@@ -83,6 +84,24 @@ describe('TerrainColorSnapshot', () => {
     expect(nextRegionStart).not.toBe(0);
   });
 
+  it('maps a region origin to snapshot pixel 0,0 with a top-left camera origin', () => {
+    const [region] = getTerrainSnapshotRegions(2048, 2048, 320, 640);
+    const renderScale = 0.25;
+
+    expect({
+      x: (region.worldX - region.worldX) * renderScale,
+      y: (region.worldY - region.worldY) * renderScale,
+    }).toEqual({ x: 0, y: 0 });
+
+    const source = readFileSync(
+      new URL('../src/arena/TerrainColorSnapshotBuilder.ts', import.meta.url),
+      'utf8',
+    );
+    expect(source).toContain('this.scratch.camera.setOrigin(0, 0);');
+    expect(source).toContain('this.scratch.camera.setScroll(region.worldX, region.worldY);');
+    expect(source).toContain('this.scratch.camera.setZoom(renderScale);');
+  });
+
   it('scales stamp positions and sizes only for the snapshot path', () => {
     const calls: Array<{ x: number; y: number; config: Record<string, number> }> = [];
     const layer = {
@@ -134,5 +153,40 @@ describe('TerrainColorSnapshot', () => {
     expect(snapshot.x).toBeCloseTo(normal.x * 0.25, 10);
     expect(snapshot.y).toBeCloseTo(normal.y * 0.25, 10);
     expect(snapshot.scaleX).toBeCloseTo(normal.scaleX * 0.25, 10);
+  });
+
+  it('clips snapshot mottle with the dirt silhouette before compositing', () => {
+    const source = readFileSync(
+      new URL('../src/arena/chunks/GroundSurfaceStreamer.ts', import.meta.url),
+      'utf8',
+    );
+    const snapshotPath = source.slice(
+      source.indexOf('renderSnapshotDirt('),
+      source.indexOf('renderSnapshotGroundCover('),
+    );
+    const normalBakePath = source.slice(
+      source.indexOf('private bakeDirtRegion('),
+      source.indexOf('private bakeGroundCoverRegion('),
+    );
+
+    expect(snapshotPath).toContain('this.bakeDirtRegion(bakeRegion');
+    expect(snapshotPath).toContain('scaleX: renderScale');
+    expect(snapshotPath).not.toMatch(/stampBlobSurfaceMottle\(\s*this\.scene,\s*target/u);
+
+    // Der normale sichtbare Bake bleibt auf demselben bestehenden Cutout-/Erase-Pfad.
+    expect(normalBakePath).toContain('eraseChunkScratch(layer, cutout, size)');
+    expect(normalBakePath).toContain('target.draw(layer)');
+  });
+
+  it('keeps the leaf source artwork neutral for multiply tinting', () => {
+    const source = readFileSync(
+      new URL('../src/effects/gpu/GpuVfxSourceTextures.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).toContain("ctx.fillStyle = '#f2f2ee'");
+    expect(source).toContain("ctx.strokeStyle = '#ffffff'");
+    expect(source).not.toContain('#8aa357');
+    expect(source).not.toContain('#d8c97a');
   });
 });

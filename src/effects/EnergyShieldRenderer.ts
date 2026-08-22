@@ -296,7 +296,7 @@ export class EnergyShieldRenderer {
       blendMode: Phaser.BlendModes.ADD,
       tint:      [shield.color, shield.color, lightColor],
       emitting:  false,
-    }, DEPTH.FIRE + 0.21);
+    }, DEPTH.FIRE + 0.21, undefined, 'energyShield');
 
     // Continuous energy flow – sweeps along the arc to give life.
     const flowEmitter = createEmitter(this.scene, shield.x, shield.y, TEX_SHIELD_FLARE, {
@@ -310,7 +310,7 @@ export class EnergyShieldRenderer {
       blendMode: Phaser.BlendModes.ADD,
       tint:      [shield.color, lightColor],
       emitting:  true,
-    }, DEPTH.FIRE + 0.23);
+    }, DEPTH.FIRE + 0.23, undefined, 'energyShield');
 
     // Burst sparks on hit – player color throughout.
     const sparkEmitter = createEmitter(this.scene, shield.x, shield.y, TEX_SHIELD_PARTICLE, {
@@ -324,7 +324,7 @@ export class EnergyShieldRenderer {
       blendMode: Phaser.BlendModes.ADD,
       tint:      [shield.color, lightColor, 0xffffff],
       emitting:  false,
-    }, DEPTH.FIRE + 0.25);
+    }, DEPTH.FIRE + 0.25, undefined, 'energyShield');
 
     // Energie-Kuppel: gefülltes, additiv leuchtendes Energiefeld (Phaser-4 Glow-PostFX),
     // leicht in Spielerfarbe getränkt – klar unterscheidbar von der irisierenden TimeBubble.

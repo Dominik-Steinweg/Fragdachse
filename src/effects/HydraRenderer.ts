@@ -178,7 +178,7 @@ export class HydraRenderer {
       tint: [0xffffff, color, mixColors(color, 0xffffff, 0.16)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 1.1);
+    }, DEPTH.PROJECTILES + 1.1, undefined, 'hydra');
 
     const shellEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_SPARK, {
       lifespan: { min: 180, max: 360 },
@@ -191,7 +191,7 @@ export class HydraRenderer {
       tint: [0xffffff, color, mixColors(color, 0x080f19, 0.2)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 0.85);
+    }, DEPTH.PROJECTILES + 0.85, undefined, 'hydra');
 
     const moteEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_SPARK, {
       lifespan: { min: 220, max: 420 },
@@ -204,7 +204,7 @@ export class HydraRenderer {
       tint: [mixColors(color, 0xffffff, 0.1), color, mixColors(color, 0x050a14, 0.3)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 0.95);
+    }, DEPTH.PROJECTILES + 0.95, undefined, 'hydra');
 
     const wakeEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_WISP, {
       lifespan: { min: 220, max: 420 },
@@ -219,7 +219,7 @@ export class HydraRenderer {
       tint: [mixColors(color, 0xffffff, 0.04), color, mixColors(color, 0x07101b, 0.18)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES - 0.05);
+    }, DEPTH.PROJECTILES - 0.05, undefined, 'hydra');
 
     this.visuals.set(id, {
       glow,
@@ -363,7 +363,7 @@ export class HydraRenderer {
       tint: [0xffffff, color, mixColors(color, 0x0d1d35, 0.22)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PROJECTILES + 1.75);
+    }, DEPTH.PROJECTILES + 1.75, undefined, 'hydra');
     burst.explode(20, 0, 0);
 
     this.scene.tweens.add({
@@ -434,7 +434,7 @@ export class HydraRenderer {
         tint: [0xffffff, color, mixColors(color, 0x0b1d33, 0.18)],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
-      }, DEPTH.PROJECTILES + 1.85);
+      }, DEPTH.PROJECTILES + 1.85, undefined, 'hydra');
       emitter.explode(7, 0, 0);
       this.scene.time.delayedCall(320, () => destroyEmitter(emitter));
 

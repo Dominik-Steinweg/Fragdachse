@@ -345,7 +345,7 @@ export class CaptureTheBeerRenderer {
       tint: [palette.foam, palette.core, 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, BEER_DEPTH + 0.26);
+    }, BEER_DEPTH + 0.26, undefined, 'captureTheBeer');
     setCircleEmitZone(idleEmitter, 9, 1, true);
 
     const bubbleEmitter = createEmitter(this.scene, state.x, state.y, TEX_BEER_FOAM, {
@@ -359,7 +359,7 @@ export class CaptureTheBeerRenderer {
       tint: [palette.foam, palette.glow, 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, BEER_DEPTH + 0.22);
+    }, BEER_DEPTH + 0.22, undefined, 'captureTheBeer');
     setCircleEmitZone(bubbleEmitter, 6, 1, true);
 
     const visual: BeerVisual = {
@@ -570,7 +570,7 @@ export class CaptureTheBeerRenderer {
       tint: [palette.foam, palette.glow, 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_FX + 0.66);
+    }, DEPTH_FX + 0.66, undefined, 'captureTheBeer');
     foamEmitter.explode(foamCount, 0, 0);
 
     const bubbleEmitter = createEmitter(this.scene, x, y, TEX_BEER_BUBBLE, {
@@ -583,7 +583,7 @@ export class CaptureTheBeerRenderer {
       tint: [0xffffff, palette.foam, palette.core],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_FX + 0.7);
+    }, DEPTH_FX + 0.7, undefined, 'captureTheBeer');
     bubbleEmitter.explode(bubbleCount, 0, 0);
 
     this.scene.time.delayedCall(1100, () => {
@@ -744,7 +744,7 @@ export class CaptureTheBeerRenderer {
       blendMode: Phaser.BlendModes.ADD,
       gravityY: 120,
       emitting: false,
-    }, DEPTH_FX + 0.86);
+    }, DEPTH_FX + 0.86, undefined, 'captureTheBeer');
     shell.addEmitZone({
       type: 'edge',
       source: new Phaser.Geom.Circle(0, 0, 16),
@@ -764,7 +764,7 @@ export class CaptureTheBeerRenderer {
       blendMode: Phaser.BlendModes.ADD,
       gravityY: 140,
       emitting: false,
-    }, DEPTH_FX + 0.88);
+    }, DEPTH_FX + 0.88, undefined, 'captureTheBeer');
     plume.explode(132, 0, 0);
 
     this.scene.time.delayedCall(1900, () => {

@@ -403,7 +403,7 @@ export class SlimeTrailRenderer {
       maxParticles: depth > DEPTH.PROJECTILES ? 320 : 520,
       reserve: depth > DEPTH.PROJECTILES ? 96 : 192,
       emitting: false,
-    }, depth);
+    }, depth, undefined, 'slimeTrail');
   }
 
   private createGlintEmitter(): Phaser.GameObjects.Particles.ParticleEmitter {
@@ -421,7 +421,7 @@ export class SlimeTrailRenderer {
       maxParticles: 420,
       reserve: 160,
       emitting: false,
-    }, SLIME_GROUND_DEPTH + 0.06);
+    }, SLIME_GROUND_DEPTH + 0.06, undefined, 'slimeTrail');
   }
 
   private createRippleEmitter(): Phaser.GameObjects.Particles.ParticleEmitter {
@@ -438,7 +438,7 @@ export class SlimeTrailRenderer {
       maxParticles: 180,
       reserve: 72,
       emitting: false,
-    }, SLIME_GROUND_DEPTH + 0.04);
+    }, SLIME_GROUND_DEPTH + 0.04, undefined, 'slimeTrail');
   }
 
   private syncPuddles(cells: readonly SyncedSlimeTrailCell[]): void {

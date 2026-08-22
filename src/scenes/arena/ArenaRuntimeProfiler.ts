@@ -3,6 +3,12 @@ import type { GraphicsQuality } from '../../graphics/GraphicsQuality';
 import { ABLATION_CODES, ABLATION_LABELS, type AblationCategory, type AblationSegment } from './PerformanceAblation';
 import type { GpuVfxReport } from '../../effects/gpu/GpuVfxProfiler';
 import { ARENA_ROCK_DESTROYED_EVENT, type ArenaRockDestroyedEvent } from './ArenaEvents';
+import type {
+  ArenaVisualAttributionCatalog,
+  ArenaVisualAttributionSample,
+  ArenaVisualAttributionSource,
+  ArenaVisualAttributionSummary,
+} from './ArenaVisualAttribution';
 
 export interface GpuVfxReportSource {
   build(): GpuVfxReport;
@@ -18,6 +24,11 @@ export type CountKey = string;
 export interface ArenaRuntimeDetails {
   timings?: Partial<Record<string, number>>;
   counts?: Partial<Record<string, number>>;
+}
+
+export interface ArenaAttributionReport {
+  catalog: ArenaVisualAttributionCatalog;
+  summary: ArenaVisualAttributionSummary;
 }
 
 export interface ArenaRuntimeContext {
@@ -135,10 +146,11 @@ export interface CompanionSeriesSample {
   atMs: number;
   gauges: Record<string, number | string | boolean | null>;
   interval: Record<string, number>;
+  attribution?: ArenaVisualAttributionSample;
 }
 
 export interface ArenaPerformanceReport {
-  schemaVersion: 6;
+  schemaVersion: 7;
   recordingId: number;
   createdAt: string;
   session: {
@@ -152,6 +164,7 @@ export interface ArenaPerformanceReport {
     eventsTruncated: boolean;
   };
   environment: Record<string, unknown>;
+  attributionCatalog: ArenaVisualAttributionCatalog | null;
   events: CompanionEvent[];
   series: {
     sampleIntervalMs: number;
@@ -193,6 +206,7 @@ export interface ArenaPerformanceReport {
       labels: Record<AblationCategory, string>;
     };
     gpuVfx: GpuVfxReport | null;
+    attribution: ArenaAttributionReport | null;
     sceneInspection: Record<string, unknown> | null;
     network: {
       /** Logical host net-ticks/client snapshot arrivals; not a per-peer send count. */
@@ -359,6 +373,7 @@ export class ArenaRuntimeProfiler {
   private syncMarkerCount = 0;
   private eventsTruncated = false;
   private nextSeriesAtMs = 0;
+  private nextLiveAttributionAtMs = 0;
   private nextContextObserveAtMs = 0;
   private nextLiveSummaryAtMs = 0;
   private seriesTruncated = false;
@@ -372,8 +387,12 @@ export class ArenaRuntimeProfiler {
   private frameTimeRingOver33Ms = 0;
   private readonly frameTimeHistogram = new Array<number>(FRAME_HISTOGRAM_BUCKET_COUNT).fill(0);
   private frameTimeHistogramTotal = 0;
+  private readonly liveFrameTimeHistogram = new Array<number>(FRAME_HISTOGRAM_BUCKET_COUNT).fill(0);
+  private liveFrameTimeHistogramTotal = 0;
   private readonly sessionTotals = new Map<string, number>();
   private readonly sessionMaxima = new Map<string, number>();
+  private readonly liveTotals = new Map<string, number>();
+  private readonly liveMaxima = new Map<string, number>();
   private readonly recorderCosts: number[] = [];
   private readonly observedScope = new Map<string, Array<{ fromMs: number; toMs: number | null; value: unknown }>>();
   private lastContext: Record<string, unknown> | null = null;
@@ -385,6 +404,11 @@ export class ArenaRuntimeProfiler {
   private latestSummary: ArenaRuntimeWindowSummary | null = null;
   private latestSceneInspection: Record<string, unknown> | null = null;
   private gpuVfxSource: GpuVfxReportSource | null = null;
+  private attributionSource: ArenaVisualAttributionSource | null = null;
+  private latestAttribution: ArenaVisualAttributionSample | null = null;
+  private frozenAttribution: ArenaAttributionReport | null = null;
+  private frozenGpuVfxReport: GpuVfxReport | null = null;
+  private frozenFrameSummary: ArenaPerformanceReport['summaries']['frame'] | null = null;
   private ablationSegments: AblationSegment[] = [];
   private ablationSegmentMs = 0;
   private readonly diagnosticsListeners = new Set<RuntimeDiagnosticsListener>();
@@ -637,6 +661,10 @@ export class ArenaRuntimeProfiler {
     } else if (!this.liveHudEnabled) {
       this.latestSummary = null;
     }
+    if (!this.recording && this.liveHudEnabled && now >= this.nextLiveAttributionAtMs) {
+      this.latestAttribution = this.attributionSource?.sampleAndReset() ?? null;
+      this.nextLiveAttributionAtMs = now + SERIES_INTERVAL_MS;
+    }
   }
 
   startRecording(environment: Record<string, unknown> = {}): void {
@@ -666,6 +694,10 @@ export class ArenaRuntimeProfiler {
     this.frameTimeHistogramTotal = 0;
     this.sessionTotals.clear();
     this.sessionMaxima.clear();
+    this.liveTotals.clear();
+    this.liveMaxima.clear();
+    this.liveFrameTimeHistogram.fill(0);
+    this.liveFrameTimeHistogramTotal = 0;
     this.recorderCosts.length = 0;
     this.currentInterval = {};
     this.latestGauges = {};
@@ -675,6 +707,11 @@ export class ArenaRuntimeProfiler {
     this.pendingContextSampleAtMs = 0;
     this.nextContextObserveAtMs = now;
     this.nextLiveSummaryAtMs = now;
+    this.nextLiveAttributionAtMs = now;
+    this.latestAttribution = null;
+    this.frozenAttribution = null;
+    this.frozenGpuVfxReport = null;
+    this.frozenFrameSummary = null;
     this.rockDestroyBurstCount = 0;
     this.lastRockDestroyedAtMs = Number.NEGATIVE_INFINITY;
     this.rockDestroyWaveSources.clear();
@@ -693,6 +730,8 @@ export class ArenaRuntimeProfiler {
     this.gpuTimerWasEnabled = false;
     this.gpuTimerStatus = this.game ? 'unsupported' : 'unavailable';
     this.gpuVfxSource?.reset();
+    this.attributionSource?.resetRecording();
+    this.attributionSource?.setRecording(true);
     for (const listener of this.recordingListeners) listener(this.recordingId);
     for (const listener of this.recordingLifecycleListeners) listener(true, this.recordingId);
     this.safeMark(`FD:session:start:${this.sessionId}`);
@@ -708,7 +747,13 @@ export class ArenaRuntimeProfiler {
       this.observeContext(finalContext, this.pendingContextSampleAtMs || now);
     }
     this.flushSeries(now, true);
+    this.frozenFrameSummary = this.buildFrameSummary(true);
+    this.frozenGpuVfxReport = this.gpuVfxSource?.build() ?? null;
+    this.frozenAttribution = this.attributionSource
+      ? { catalog: this.attributionSource.getCatalog(), summary: this.attributionSource.getRecordingSummary() }
+      : null;
     this.recording = false;
+    this.attributionSource?.setRecording(false);
     for (const listener of this.recordingLifecycleListeners) listener(false, this.recordingId);
     this.recordingEndedAtMs = now;
     this.recordingEndedEpochMs = Date.now();
@@ -774,6 +819,14 @@ export class ArenaRuntimeProfiler {
     this.gpuVfxSource = source;
   }
 
+  setAttributionSource(source: ArenaVisualAttributionSource | null): void {
+    if (this.attributionSource === source) return;
+    this.attributionSource?.setRecording(false);
+    this.attributionSource = source;
+    this.attributionSource?.setActive(this.diagnosticsActive);
+    this.attributionSource?.setRecording(this.recording);
+  }
+
   canExport(): boolean {
     return !this.recording && this.sessionId.length > 0;
   }
@@ -781,9 +834,10 @@ export class ArenaRuntimeProfiler {
   buildReport(): ArenaPerformanceReport | null {
     if (!this.canExport()) return null;
     const durationMs = Math.max(0, this.recordingEndedAtMs - this.recordingStartedAtMs);
-    const frameSummary = this.buildFrameSummary();
+    const frameSummary = this.frozenFrameSummary ?? this.buildFrameSummary(true);
+    const frozenAttribution = this.frozenAttribution;
     return {
-      schemaVersion: 6,
+      schemaVersion: 7,
       recordingId: this.recordingId,
       createdAt: new Date().toISOString(),
       session: {
@@ -797,6 +851,7 @@ export class ArenaRuntimeProfiler {
         eventsTruncated: this.eventsTruncated,
       },
       environment: { ...this.recordingEnvironment },
+      attributionCatalog: frozenAttribution?.catalog ?? this.attributionSource?.getCatalog() ?? null,
       events: this.events.map((event) => ({ ...event })),
       series: {
         sampleIntervalMs: SERIES_INTERVAL_MS,
@@ -804,6 +859,23 @@ export class ArenaRuntimeProfiler {
           atMs: sample.atMs,
           gauges: { ...sample.gauges },
           interval: { ...sample.interval },
+          attribution: sample.attribution
+            ? {
+              particleFamilies: Object.fromEntries(Object.entries(sample.attribution.particleFamilies)
+                .map(([family, gauge]) => [family, { ...gauge }])),
+              graphicsFamilies: Object.fromEntries(Object.entries(sample.attribution.graphicsFamilies)
+                .map(([family, gauge]) => [family, { ...gauge }])),
+              ...(sample.attribution.interval ? {
+                interval: {
+                  particleSpawns: sample.attribution.interval.particleSpawns
+                    ? { ...sample.attribution.interval.particleSpawns } : undefined,
+                  graphicsWork: sample.attribution.interval.graphicsWork
+                    ? Object.fromEntries(Object.entries(sample.attribution.interval.graphicsWork)
+                      .map(([family, work]) => [family, { ...work }])) : undefined,
+                },
+              } : {}),
+            }
+            : undefined,
         })),
         gpuSamples: this.gpuSamples.map((sample) => ({ ...sample })),
         truncated: this.seriesTruncated,
@@ -832,7 +904,8 @@ export class ArenaRuntimeProfiler {
           codes: { ...ABLATION_CODES },
           labels: { ...ABLATION_LABELS },
         },
-        gpuVfx: this.gpuVfxSource?.build() ?? null,
+        gpuVfx: this.frozenGpuVfxReport ?? null,
+        attribution: frozenAttribution,
         sceneInspection: this.latestSceneInspection ? { ...this.latestSceneInspection } : null,
         network: {
           snapshotCount: this.summaryTotal('snapshotCount'),
@@ -898,12 +971,18 @@ export class ArenaRuntimeProfiler {
 
   private addInterval(key: string, value: number, max = false): void {
     if (!Number.isFinite(value) || value === 0) return;
-    if (max) {
-      this.currentInterval[key] = Math.max(this.currentInterval[key] ?? 0, value);
-      this.sessionMaxima.set(key, Math.max(this.sessionMaxima.get(key) ?? 0, value));
-    } else {
-      this.currentInterval[key] = (this.currentInterval[key] ?? 0) + value;
-      this.sessionTotals.set(key, (this.sessionTotals.get(key) ?? 0) + value);
+    if (this.recording) {
+      if (max) {
+        this.currentInterval[key] = Math.max(this.currentInterval[key] ?? 0, value);
+        this.sessionMaxima.set(key, Math.max(this.sessionMaxima.get(key) ?? 0, value));
+      } else {
+        this.currentInterval[key] = (this.currentInterval[key] ?? 0) + value;
+        this.sessionTotals.set(key, (this.sessionTotals.get(key) ?? 0) + value);
+      }
+    }
+    if (this.liveHudEnabled) {
+      if (max) this.liveMaxima.set(key, Math.max(this.liveMaxima.get(key) ?? 0, value));
+      else this.liveTotals.set(key, (this.liveTotals.get(key) ?? 0) + value);
     }
   }
 
@@ -945,8 +1024,14 @@ export class ArenaRuntimeProfiler {
       FRAME_HISTOGRAM_BUCKET_COUNT - 1,
       Math.max(0, Math.floor(frameMs / FRAME_HISTOGRAM_BUCKET_MS)),
     );
-    this.frameTimeHistogram[bucket] += 1;
-    this.frameTimeHistogramTotal += 1;
+    if (this.recording) {
+      this.frameTimeHistogram[bucket] += 1;
+      this.frameTimeHistogramTotal += 1;
+    }
+    if (this.liveHudEnabled) {
+      this.liveFrameTimeHistogram[bucket] += 1;
+      this.liveFrameTimeHistogramTotal += 1;
+    }
   }
 
   private frameRingSummary(p95: number, p99: number): MetricSummary {
@@ -963,12 +1048,14 @@ export class ArenaRuntimeProfiler {
     };
   }
 
-  private histogramPercentile(fraction: number): number {
-    if (this.frameTimeHistogramTotal === 0) return 0;
-    const target = Math.max(1, Math.ceil(this.frameTimeHistogramTotal * fraction));
+  private histogramPercentile(fraction: number, recording = true): number {
+    const histogram = recording ? this.frameTimeHistogram : this.liveFrameTimeHistogram;
+    const total = recording ? this.frameTimeHistogramTotal : this.liveFrameTimeHistogramTotal;
+    if (total === 0) return 0;
+    const target = Math.max(1, Math.ceil(total * fraction));
     let cumulative = 0;
-    for (let index = 0; index < this.frameTimeHistogram.length; index += 1) {
-      cumulative += this.frameTimeHistogram[index];
+    for (let index = 0; index < histogram.length; index += 1) {
+      cumulative += histogram[index];
       if (cumulative >= target) {
         return (index + 0.5) * FRAME_HISTOGRAM_BUCKET_MS;
       }
@@ -979,11 +1066,17 @@ export class ArenaRuntimeProfiler {
   private flushSeries(now: number, final = false): void {
     if (!this.recording) return;
     const atMs = Math.max(0, now - this.recordingStartedAtMs);
+    this.latestAttribution = this.attributionSource?.sampleAndReset() ?? null;
     if (this.seriesSamples.length >= MAX_SERIES_SAMPLES) {
       this.seriesSamples.shift();
       this.seriesTruncated = true;
     }
-    this.seriesSamples.push({ atMs, gauges: { ...this.latestGauges }, interval: { ...this.currentInterval } });
+    this.seriesSamples.push({
+      atMs,
+      gauges: { ...this.latestGauges },
+      interval: { ...this.currentInterval },
+      attribution: this.latestAttribution ?? undefined,
+    });
     this.currentInterval = {};
     this.nextSeriesAtMs = final ? Number.POSITIVE_INFINITY : now + SERIES_INTERVAL_MS;
   }
@@ -1048,24 +1141,24 @@ export class ArenaRuntimeProfiler {
     return Object.fromEntries([...this.observedScope.entries()].map(([key, values]) => [key, values.map((value) => ({ ...value }))]));
   }
 
-  private buildFrameSummary(): ArenaPerformanceReport['summaries']['frame'] {
-    const frameCount = this.summaryTotal('frameCount');
-    const total = this.summaryTotal('frameTimeTotalMs');
-    const slow = this.summaryTotal('slowFrameCount');
+  private buildFrameSummary(recording = this.recording): ArenaPerformanceReport['summaries']['frame'] {
+    const frameCount = this.summaryTotal('frameCount', recording);
+    const total = this.summaryTotal('frameTimeTotalMs', recording);
+    const slow = this.summaryTotal('slowFrameCount', recording);
     return {
       frameCount,
       frameTimeTotalMs: total,
-      frameTimeMaxMs: this.summaryMax('frameTimeMaxMs'),
+      frameTimeMaxMs: this.summaryMax('frameTimeMaxMs', recording),
       slowFrameCount: slow,
-      p95Ms: this.histogramPercentile(0.95),
-      p99Ms: this.histogramPercentile(0.99),
+      p95Ms: this.histogramPercentile(0.95, recording),
+      p99Ms: this.histogramPercentile(0.99, recording),
       fps: total > 0 ? frameCount * 1000 / total : 0,
       slowFramePercent: frameCount > 0 ? slow / frameCount * 100 : 0,
     };
   }
 
   private buildLiveSummary(now: number, sample: ArenaRuntimeSample): ArenaRuntimeWindowSummary {
-    const frame = this.buildFrameSummary();
+    const frame = this.buildFrameSummary(this.recording);
     const liveRawDelta = this.frameRingSummary(frame.p95Ms, frame.p99Ms);
     return {
       startedAtMs: this.recording ? 0 : now,
@@ -1102,12 +1195,12 @@ export class ArenaRuntimeProfiler {
     };
   }
 
-  private summaryTotal(key: string): number {
-    return this.sessionTotals.get(key) ?? 0;
+  private summaryTotal(key: string, recording = true): number {
+    return (recording ? this.sessionTotals : this.liveTotals).get(key) ?? 0;
   }
 
-  private summaryMax(key: string): number {
-    return this.sessionMaxima.get(key) ?? 0;
+  private summaryMax(key: string, recording = true): number {
+    return (recording ? this.sessionMaxima : this.liveMaxima).get(key) ?? 0;
   }
 
   private safeMark(name: string): void {
@@ -1129,6 +1222,7 @@ export class ArenaRuntimeProfiler {
     else this.removeGameDiagnostics();
     if (active === this.diagnosticsActive) return;
     this.diagnosticsActive = active;
+    this.attributionSource?.setActive(active);
     for (const listener of this.diagnosticsListeners) listener(active);
   }
 

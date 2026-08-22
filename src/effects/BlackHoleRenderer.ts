@@ -197,7 +197,7 @@ export class BlackHoleRenderer {
       tint: [0x7847a9, 0xa970df, 0xe5c7ff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE - 0.055).setAlpha(0);
+    }, DEPTH.FIRE - 0.055, undefined, 'blackHole').setAlpha(0);
     outerOrbitEmitter.createGravityWell({
       x: 0,
       y: 0,
@@ -222,7 +222,7 @@ export class BlackHoleRenderer {
       tint: [0x8050b4, 0xb985ea, 0xe1c2ff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE - 0.052).setAlpha(0);
+    }, DEPTH.FIRE - 0.052, undefined, 'blackHole').setAlpha(0);
     wispEmitter.createGravityWell({
       x: 0,
       y: 0,
@@ -247,7 +247,7 @@ export class BlackHoleRenderer {
       tint: [0xa46be0, 0xd7a9ff, 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.FIRE - 0.05).setAlpha(0);
+    }, DEPTH.FIRE - 0.05, undefined, 'blackHole').setAlpha(0);
     innerOrbitEmitter.createGravityWell({
       x: 0,
       y: 0,

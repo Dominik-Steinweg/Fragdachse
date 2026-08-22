@@ -284,7 +284,7 @@ export class BiteRenderer {
       tint: [BITE_PALETTE.gore, BITE_PALETTE.deepRed, BITE_PALETTE.hot],
       blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
-    }, DEPTH_TRACE + 0.1);
+    }, DEPTH_TRACE + 0.1, undefined, 'bite');
 
     const flecks = createEmitter(this.scene, 0, 0, TEX_BITE_FLECK, {
       lifespan: { min: 80, max: 170 },
@@ -297,7 +297,7 @@ export class BiteRenderer {
       tint: [BITE_PALETTE.ivory, BITE_PALETTE.shadow, BITE_PALETTE.deepRed],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.11);
+    }, DEPTH_TRACE + 0.11, undefined, 'bite');
 
     for (const claw of clawPaths) {
       const burstCount = hitPlayer ? 5 : 4;
@@ -377,7 +377,7 @@ export class BiteRenderer {
       tint: [BITE_PALETTE.gore, BITE_PALETTE.deepRed, BITE_PALETTE.hot],
       blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
-    }, DEPTH_TRACE + 0.16);
+    }, DEPTH_TRACE + 0.16, undefined, 'bite');
     blood.explode(Math.round(24 * bloodEffectMultiplier));
 
     const chips = createEmitter(this.scene, impactX, impactY, TEX_BITE_FLECK, {
@@ -392,7 +392,7 @@ export class BiteRenderer {
       tint: [BITE_PALETTE.ivory, BITE_PALETTE.shadow, BITE_PALETTE.deepRed],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH_TRACE + 0.17);
+    }, DEPTH_TRACE + 0.17, undefined, 'bite');
     chips.explode(16);
 
     this.scene.time.delayedCall(320, () => {

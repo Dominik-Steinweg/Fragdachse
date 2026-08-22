@@ -798,7 +798,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     profiler.stopRecording();
 
     const report = profiler.buildReport();
-    expect(report?.schemaVersion).toBe(6);
+    expect(report?.schemaVersion).toBe(7);
     expect(report?.session.id).toMatch(/^\S+$/);
     expect(report?.session.durationMs).toBe(5_100);
     expect(report?.session.syncMarkerCount).toBe(1);

@@ -407,7 +407,7 @@ export class EffectSystem implements EnemyVisualSink {
       rotate: { min: -180, max: 180 },
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, 'critical');
+    }, 'critical', 'effectSystem');
     chunkEmitter.setDepth(DEPTH_FX + 0.24);
     chunkEmitter.setAlpha(emissiveAlpha(1));
     chunkEmitter.addEmitZone(circleZone(Math.max(6, radius * 0.24)));
@@ -423,7 +423,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY: 95,
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, 'critical');
+    }, 'critical', 'effectSystem');
     sparkEmitter.setDepth(DEPTH_FX + 0.3);
     sparkEmitter.setAlpha(emissiveAlpha(1));
     sparkEmitter.explode(Math.max(28, Math.ceil(radius * 0.62)));
@@ -438,7 +438,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY: 110,
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, 'critical');
+    }, 'critical', 'effectSystem');
     coreEmitter.setDepth(DEPTH_FX + 0.34);
     coreEmitter.setAlpha(emissiveAlpha(1));
     coreEmitter.explode(Math.max(16, Math.ceil(radius * 0.38)));
@@ -465,7 +465,7 @@ export class EffectSystem implements EnemyVisualSink {
       blendMode: Phaser.BlendModes.ADD,
       frequency: -1,
       emitting:  false,
-    });
+    }, undefined, 'effectSystem');
     spark.setDepth(DEPTH_FX);
 
     const ember = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_EMBER, {
@@ -477,7 +477,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY:  -180,
       frequency: -1,
       emitting:  false,
-    });
+    }, undefined, 'effectSystem');
     ember.setDepth(DEPTH_FX);
 
     const plume = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_SPARK, {
@@ -491,7 +491,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY:  -120,
       frequency: -1,
       emitting:  false,
-    });
+    }, undefined, 'effectSystem');
     plume.setDepth(DEPTH_FX + 0.4);
 
     const fallout = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_EMBER, {
@@ -504,7 +504,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY:  45,
       frequency: -1,
       emitting:  false,
-    });
+    }, undefined, 'effectSystem');
     fallout.setDepth(DEPTH_FX + 0.35);
 
     const emitters = { spark, ember, plume, fallout };

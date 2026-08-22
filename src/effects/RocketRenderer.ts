@@ -13,6 +13,7 @@ import {
 } from './gpu/GpuVfxSourceTextures';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
+import { recordGraphicsWork, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 
 const TEX_ROCKET_BODY = '__rocket_body';
 const TEX_ROCKET_ACCENT = '__rocket_accent';
@@ -425,6 +426,8 @@ export class RocketRenderer {
       .setDepth(DEPTH.PROJECTILES + 1)
       .setStrokeStyle(2, color, 0.95)
       .setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'rocketLifecycleGraphics', ring);
+    recordGraphicsWork(this.scene, 'rocketLifecycleGraphics', { createdObjects: 1 });
     this.scene.tweens.add({
       targets: ring,
       radius: 38,
@@ -444,9 +447,11 @@ export class RocketRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }).setDepth(DEPTH.PROJECTILES + 1);
+    registerParticleEmitter(this.scene, 'rocketLifecycleBurst', burst);
     // Partikelkoordinaten sind emitterlokal: Der Emitter steht bereits auf (x, y),
     // ein zusaetzliches explode(count, x, y) wuerde die Weltposition verdoppeln.
     burst.explode(18);
+    recordParticleSpawn(this.scene, 'rocketLifecycleBurst', 18);
     this.scene.time.delayedCall(520, () => burst.destroy());
   }
 
@@ -455,6 +460,8 @@ export class RocketRenderer {
       .setDepth(DEPTH.PROJECTILES + 1)
       .setStrokeStyle(1.5, 0xffffff, 0.85)
       .setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'rocketLifecycleGraphics', flash);
+    recordGraphicsWork(this.scene, 'rocketLifecycleGraphics', { createdObjects: 1 });
     this.scene.tweens.add({
       targets: flash,
       radius: 14,
@@ -474,7 +481,9 @@ export class RocketRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }).setDepth(DEPTH.PROJECTILES + 1);
+    registerParticleEmitter(this.scene, 'rocketLifecycleBurst', sparks);
     sparks.explode(8);
+    recordParticleSpawn(this.scene, 'rocketLifecycleBurst', 8);
     this.spawnSmokePuff(x, y, 6, color);
     this.scene.time.delayedCall(320, () => sparks.destroy());
   }

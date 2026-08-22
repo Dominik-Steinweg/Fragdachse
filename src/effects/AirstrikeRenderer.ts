@@ -6,6 +6,7 @@ import type { CameraFeedbackController } from './camera/CameraFeedbackController
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import { recordGraphicsWork, registerGraphicsObject } from './EffectUtils';
 import { pickGpuVfxTint } from './gpu/GpuVfxMember';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { ensureAirstrikeBombTexture, ensureAirstrikeSparkTexture } from './gpu/GpuVfxSourceTextures';
@@ -370,23 +371,28 @@ export class AirstrikeRenderer {
 
     // Großer Warnkreis (gefüllt)
     const warningFill = this.scene.add.circle(x, y, radius, palette.warning, 0.08);
+    registerGraphicsObject(this.scene, 'airstrikeWarning', warningFill);
     warningFill.setDepth(DEPTH.CANOPY - 1);
     warningFill.setBlendMode(Phaser.BlendModes.ADD);
 
     // Äußerer Warnring (Stroke)
     const warningRing = this.scene.add.circle(x, y, radius);
+    registerGraphicsObject(this.scene, 'airstrikeWarning', warningRing);
     warningRing.setStrokeStyle(3, palette.ring, 0.65);
     warningRing.setDepth(DEPTH.CANOPY);
     warningRing.setBlendMode(Phaser.BlendModes.ADD);
 
     // Innerer pulsierender Ring
     const innerRing = this.scene.add.circle(x, y, radius * 0.22);
+    registerGraphicsObject(this.scene, 'airstrikeWarning', innerRing);
     innerRing.setStrokeStyle(2, palette.core, 0.75);
     innerRing.setDepth(DEPTH.PLAYERS - 1);
     innerRing.setBlendMode(Phaser.BlendModes.ADD);
 
     // Zentrum-Glow
     const coreGlow = this.scene.add.circle(x, y, 18, palette.glow, 0.28);
+    registerGraphicsObject(this.scene, 'airstrikeWarning', coreGlow);
+    recordGraphicsWork(this.scene, 'airstrikeWarning', { createdObjects: 4 });
     coreGlow.setDepth(DEPTH.PLAYERS - 1);
     coreGlow.setBlendMode(Phaser.BlendModes.ADD);
 

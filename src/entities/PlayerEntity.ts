@@ -12,7 +12,7 @@ import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
-import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { killAllAndResetParticlePositions, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
@@ -198,6 +198,7 @@ export class PlayerEntity {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
+    registerParticleEmitter(scene, 'playerStealth', this.stealthAmbientParticles);
     this.stealthAmbientParticles.setDepth(DEPTH.PLAYERS + 0.01);
     this.stealthAmbientParticles.startFollow(this.sprite, 0, 0, false);
 
@@ -213,6 +214,7 @@ export class PlayerEntity {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
+    registerParticleEmitter(scene, 'playerStealth', this.stealthTrailParticles);
     this.stealthTrailParticles.setDepth(DEPTH.PLAYERS);
     this.stealthTrailParticles.startFollow(this.sprite, 0, 0, false);
 

@@ -266,7 +266,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
         tint: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
-      }, 'critical');
+      }, 'critical', 'coopDefenseTelegraph');
       const drift = createQualityEmitter(this.scene, 0, 0, TEX_ENCOUNTER_SPARK, {
         lifespan: { min: 360, max: 820 },
         frequency: 90,
@@ -278,7 +278,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
         tint: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
-      }, 'critical');
+      }, 'critical', 'coopDefenseTelegraph');
       const crest = createQualityEmitter(this.scene, 0, 0, TEX_ENCOUNTER_SPARK, {
         lifespan: { min: 170, max: 430 },
         frequency: 30,
@@ -290,7 +290,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
         tint: [0xffffff, COLORS.PURPLE_1, COLORS.PURPLE_3],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
-      }, 'critical');
+      }, 'critical', 'coopDefenseTelegraph');
       haze.setDepth(DEPTH_FX - 0.2).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
       drift.setDepth(DEPTH_FX + 0.1).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
       crest.setDepth(DEPTH_FX + 0.15).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);

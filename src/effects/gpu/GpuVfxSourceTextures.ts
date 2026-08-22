@@ -25,14 +25,14 @@ export function ensureLeafDebrisTexture(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, TEX_LEAF_DEBRIS, 24, 18, (ctx) => {
     ctx.translate(12, 9);
     ctx.rotate(-0.28);
-    ctx.fillStyle = '#8aa357';
+    ctx.fillStyle = '#f2f2ee';
     ctx.beginPath();
     ctx.moveTo(-9, 0);
     ctx.quadraticCurveTo(-2, -8, 8, -2);
     ctx.quadraticCurveTo(10, 0, 8, 2);
     ctx.quadraticCurveTo(-2, 8, -9, 0);
     ctx.fill();
-    ctx.strokeStyle = '#d8c97a';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(-7, 0);

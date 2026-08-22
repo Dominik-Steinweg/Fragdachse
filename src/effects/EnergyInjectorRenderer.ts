@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 // Canonical implementation filename: EnergyInjectorRenderer.
 import { DEPTH } from '../config';
 import type { SyncedEnergyInjectorEffect } from '../types';
-import { circleZone, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
+import { circleZone, ensureCanvasTexture, fillRadialGradientTexture, mixColors, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -132,6 +132,7 @@ export class EnergyInjectorRenderer {
       tint: mixColors(effect.color, 0xffffff, 0.4),
       emitZone: circleZone(VISUAL_RADIUS),
     }).setDepth(DEPTH.PROJECTILES - 0.15);
+    registerParticleEmitter(this.scene, 'energyInjector', sparks);
 
     return { halo, ring, sparks, snapshot: effect, seed: hashSeed(effect.targetId) };
   }

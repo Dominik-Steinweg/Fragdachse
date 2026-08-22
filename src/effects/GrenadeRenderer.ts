@@ -199,7 +199,7 @@ export class GrenadeRenderer {
       tint:      [...cfg.trailTints],
       blendMode: (cfg.trailAdditive ?? true) ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
       emitting:  true,
-    }, DEPTH.PROJECTILES - 0.2);
+    }, DEPTH.PROJECTILES - 0.2, undefined, 'grenade');
 
     const now = this.scene.time.now;
     this.visuals.set(id, { glow, body, detail, trail, preset, lastFireX: x, lastFireY: y, lastFireAt: now });

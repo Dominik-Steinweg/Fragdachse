@@ -227,7 +227,7 @@ export class EnergyBallRenderer {
       tint: coreTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 1);
+    }, DEPTH.PROJECTILES + 1, undefined, 'energyBall');
 
     const shellEmitter = createEmitter(this.scene, x, y, textureSet.spark, {
       lifespan: { min: 160, max: 320 },
@@ -240,7 +240,7 @@ export class EnergyBallRenderer {
       tint: shellTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 0.5);
+    }, DEPTH.PROJECTILES + 0.5, undefined, 'energyBall');
 
     const glowImage = configureAdditiveImage(
       this.scene.add.image(x, y, textureSet.glow),
@@ -374,7 +374,7 @@ export class EnergyBallRenderer {
         : [0xffffff, color, this.mixColor(color, COLORS.BLUE_1, 0.42)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PROJECTILES + 1.45);
+    }, DEPTH.PROJECTILES + 1.45, undefined, 'energyBall');
     sparkEmitter.explode(variant === 'plasma' ? 12 : 16);
     this.scene.time.delayedCall(420, () => destroyEmitter(sparkEmitter));
   }

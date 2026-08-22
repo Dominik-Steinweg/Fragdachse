@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 // Canonical implementation filename: ReinforcementMatrixRenderer.
 import { DEPTH } from '../config';
 import type { SyncedReinforcementMatrix } from '../types';
-import { circleZone, ensureCanvasTexture, mixColors } from './EffectUtils';
+import { circleZone, ensureCanvasTexture, mixColors, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -189,6 +189,7 @@ export class ReinforcementMatrixRenderer {
       tint: mixColors(field.color, 0xffffff, 0.3),
       emitZone: circleZone(field.radius * 0.92),
     }).setDepth(DEPTH.DECALS + 0.5);
+    registerParticleEmitter(this.scene, 'reinforcementMatrix', sparks);
 
     return { carpet, ring, sparks, snapshot: field, seed: field.id * 1.317 };
   }

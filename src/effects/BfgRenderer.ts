@@ -239,7 +239,7 @@ export class BfgRenderer {
       rotate:    { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
-    }, DEPTH_BFG + 0.05);
+    }, DEPTH_BFG + 0.05, undefined, 'bfg');
     setCircleEmitZone(coreEmitter, spread * 0.35, 3);
 
     const outerEmitter = createEmitter(this.scene, x, y, TEX_BFG_EMBER, {
@@ -254,7 +254,7 @@ export class BfgRenderer {
       rotate:    { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
-    }, DEPTH_BFG);
+    }, DEPTH_BFG, undefined, 'bfg');
     setCircleEmitZone(outerEmitter, spread, 2);
 
     const sparkEmitter = createEmitter(this.scene, x, y, TEX_BFG_SPARK, {
@@ -268,7 +268,7 @@ export class BfgRenderer {
       tint:      BFG_COLORS_SPARK,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
-    }, DEPTH_SPARK);
+    }, DEPTH_SPARK, undefined, 'bfg');
     setCircleEmitZone(sparkEmitter, spread * 0.5, 1);
 
     // Glow: additiver grüner Halo

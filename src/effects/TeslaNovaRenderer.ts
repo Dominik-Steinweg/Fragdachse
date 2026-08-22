@@ -266,7 +266,7 @@ export class TeslaNovaRenderer {
       rotate: { onEmit: (particle) => Phaser.Math.RadToDeg(Math.atan2(particle!.velocityY, particle!.velocityX)) },
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.FIRE + 0.28);
+    }, DEPTH.FIRE + 0.28, undefined, 'teslaNova');
     return this.shardEmitter;
   }
 }

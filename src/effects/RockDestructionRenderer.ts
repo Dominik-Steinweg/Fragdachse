@@ -439,7 +439,7 @@ export class RockDestructionRenderer {
       tint: [0xffffff, COLORS.BROWN_2, COLORS.BROWN_5],
       gravityY: 10,
       emitting: false,
-    }, DEPTH_TRACE - 0.3);
+    }, DEPTH_TRACE - 0.3, undefined, 'rockDestruction');
 
     this.sharedDebrisEmitter = createEmitter(this.scene, 0, 0, TEX_ROCK_DUST, {
       frequency: -1,
@@ -455,7 +455,7 @@ export class RockDestructionRenderer {
       tint: [0xffffff, COLORS.BROWN_2, COLORS.BROWN_5],
       gravityY: 90,
       emitting: false,
-    }, DEPTH_TRACE - 0.25);
+    }, DEPTH_TRACE - 0.25, undefined, 'rockDestruction');
   }
 
   private prewarmFragmentPool(): void {

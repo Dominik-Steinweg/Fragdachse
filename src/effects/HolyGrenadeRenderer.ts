@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
+import { registerParticleEmitter } from './EffectUtils';
 
 const TEX_HOLY_GRENADE_BODY = '__holy_grenade_body';
 const TEX_HOLY_GRENADE_TRIM = '__holy_grenade_trim';
@@ -146,6 +147,7 @@ export class HolyGrenadeRenderer {
       emitting: true,
     });
     sparkEmitter.setDepth(DEPTH.PROJECTILES - 0.4);
+    registerParticleEmitter(this.scene, 'holyGrenade', sparkEmitter);
 
     this.visuals.set(id, { glow, body, trim, pin, sparkEmitter });
     this.updateVisual(id, x, y, size, 1, 0);

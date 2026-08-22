@@ -74,7 +74,7 @@ export class GaussRenderer {
       tint: isVoid ? [VOID_PALETTE.core, color, VOID_PALETTE.deep] : [0xffffff, color, COLORS.BLUE_1],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH_GAUSS_ARC);
+    }, DEPTH_GAUSS_ARC, undefined, 'gauss');
     setCircleEmitZone(arcEmitter, Math.max(6, size * 0.45), 2);
 
     this.visuals.set(id, { halo, core, arcEmitter, isVoid });

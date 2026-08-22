@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH, NET_SMOOTH_TIME_MS, VOID_FIRE_COLOR } from '../config';
-import { edgeZone, ensureCanvasTexture } from './EffectUtils';
+import { edgeZone, ensureCanvasTexture, recordGraphicsWork, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import type { DamageZoneVisualStyle, SyncedStinkCloud } from '../types';
 import type { LightingSystem } from './LightingSystem';
 import type { LightPresetKey } from './LightingConfig';
@@ -596,6 +596,7 @@ export class StinkCloudSystem {
     const fairnessCircle = this.scene.add.graphics()
       .setDepth(STINK_DEPTH + 0.1)
       .setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'stinkCloudGraphics', fairnessCircle);
     this.drawFairnessCircle(fairnessCircle, cloud.x, cloud.y, r, cloud.ownerColor, 0, 0, cloud.visualVariant);
 
     this.playSpawnBurst(cloud.x, cloud.y, r, cloud.visualVariant);
@@ -859,9 +860,12 @@ export class StinkCloudSystem {
       emitting:  false,
       blendMode: Phaser.BlendModes.ADD,
     });
+    registerParticleEmitter(this.scene, 'stinkCloudBurst', burstEmitter);
     burstEmitter.setDepth(STINK_DEPTH + 0.05);
     burstEmitter.addEmitZone(edgeZone(Math.max(radius * 0.72, 12), 64));
-    burstEmitter.explode(Math.max(32, Math.round(radius * 0.22)));
+    const burstCount = Math.max(32, Math.round(radius * 0.22));
+    burstEmitter.explode(burstCount);
+    recordParticleSpawn(this.scene, 'stinkCloudBurst', burstCount);
 
     const flash = this.scene.add.image(x, y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH + 0.03)

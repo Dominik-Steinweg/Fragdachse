@@ -112,7 +112,7 @@ export class HoneyBadgerRageRenderer {
       gravityY: 0,
       blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
-    }, DEPTH_RAGE_BLOOD);
+    }, DEPTH_RAGE_BLOOD, undefined, 'honeyBadgerRage');
     this.bloodEmitter.startFollow(sprite, 0, 0, false);
   }
 

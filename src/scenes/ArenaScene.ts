@@ -142,6 +142,7 @@ import {
   rollCoopDefenseItemOffer,
 } from '../utils/coopDefenseItems';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
+import { getArenaVisualAttribution } from './arena/ArenaVisualAttribution';
 import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
 import { installTextResolution } from '../graphics/TextResolution';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
@@ -365,6 +366,7 @@ export class ArenaScene extends Phaser.Scene {
   private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
+  private visualAttribution: ReturnType<typeof getArenaVisualAttribution> | null = null;
   private performanceAblation: PerformanceAblationController | null = null;
   private graphicsQuality!: GraphicsQualityController;
   private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
@@ -581,6 +583,8 @@ export class ArenaScene extends Phaser.Scene {
     });
     getRenderResolutionController()?.setMaxRenderScale(this.graphicsQuality.getProfile().maxRenderScale);
     this.runtimeProfiler = new ArenaRuntimeProfiler();
+    this.visualAttribution = getArenaVisualAttribution(this);
+    this.runtimeProfiler.setAttributionSource(this.visualAttribution);
     this.runtimeProfiler.attachGame(this.game);
     const payloadDiagnosticsSink = (info: Parameters<ArenaRuntimeProfiler['recordNetworkPayload']>[0]) => {
       this.runtimeProfiler?.recordNetworkPayload(info);
@@ -644,6 +648,7 @@ export class ArenaScene extends Phaser.Scene {
       this.performanceDiagnosticsOverlay?.destroy();
       this.performanceDiagnosticsOverlay = null;
       this.runtimeProfiler?.destroy();
+      this.visualAttribution = null;
       bridge.setPayloadDiagnosticsSink(null);
       unsubscribePayloadDiagnostics();
       unsubscribeProfilerRecording();
@@ -1039,6 +1044,8 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers?.lighting.setPerformanceMetricsEnabled(detailed);
       this.renderers?.flamethrowerUpgrades.setPerformanceMetricsEnabled(detailed);
     });
+    this.renderers.lighting.setAttributionCollector(this.visualAttribution);
+    this.renderers.shadow.setAttributionCollector(this.visualAttribution);
     this.renderers.lighting.setDynamicOccluderSource(this.trainLightOccluders);
     this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
       ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null

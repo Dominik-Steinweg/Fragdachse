@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { circleZone, ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import { circleZone, ensureCanvasTexture, fillRadialGradientTexture, registerParticleEmitter } from './EffectUtils';
 
 const TEX_TIMEBOMB_FUSE_RING = '__timebomb_fuse_ring';
 const TEX_TIMEBOMB_FUSE_SPARK = '__timebomb_fuse_spark';
@@ -42,6 +42,7 @@ export class TimebombFuseRenderer {
       tint: [FUSE_HOT_COLOR, 0xdc8cff, FUSE_COLOR],
       emitZone: circleZone(enemySize * 0.95),
     }).setDepth(DEPTH.PLAYERS + 0.08);
+    registerParticleEmitter(scene, 'timebombFuse', this.sparks);
   }
 
   sync(x: number, y: number, progress: number, fuseDurationMs: number): void {

@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
 import { addInternalBlur, setInternalFxPadding, type BlurHandle } from '../utils/phaserFx';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
+import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors, registerParticleEmitter } from './EffectUtils';
 import type { SmokeGrenadeEffect, SyncedSmokeCloud } from '../types';
 import type { LightingSystem } from './LightingSystem';
 
@@ -412,6 +412,7 @@ export class SmokeSystem {
       emitting: true,
       blendMode: Phaser.BlendModes.NORMAL,
     });
+    registerParticleEmitter(this.scene, 'smoke', rimEmitter);
     rimEmitter.setDepth(DEPTH.SMOKE);
     rimEmitter.addEmitZone(edgeZone(rimZoneRadius, 64));
 
@@ -429,6 +430,7 @@ export class SmokeSystem {
       emitting: true,
       blendMode: Phaser.BlendModes.NORMAL,
     });
+    registerParticleEmitter(this.scene, 'smoke', bodyEmitter);
     bodyEmitter.setDepth(DEPTH.SMOKE);
     bodyEmitter.addEmitZone(circleZone(bodyZoneRadius));
 

@@ -3,7 +3,7 @@ import { DEPTH } from '../config';
 import {
   PLASMA_CHARGE_MAX_STACKS,
 } from '../systems/PlasmaCharge';
-import { circleZone, ensureCanvasTexture, makeAdditive } from './EffectUtils';
+import { circleZone, ensureCanvasTexture, makeAdditive, registerParticleEmitter } from './EffectUtils';
 
 export const MAX_PLASMA_CHARGE_STACKS = PLASMA_CHARGE_MAX_STACKS;
 
@@ -41,6 +41,7 @@ export class PlasmaChargeRenderer {
       maxAliveParticles: 28,
       emitting: false,
     }).setDepth(CHARGE_CORE_DEPTH);
+    registerParticleEmitter(scene, 'plasmaCharge', this.coreEmitter);
 
     this.sparkEmitter = scene.add.particles(0, 0, TEX_CHARGE_SPARK, {
       lifespan: { min: 180, max: 380 },
@@ -56,6 +57,7 @@ export class PlasmaChargeRenderer {
       maxAliveParticles: 22,
       emitting: false,
     }).setDepth(CHARGE_SPARK_DEPTH);
+    registerParticleEmitter(scene, 'plasmaCharge', this.sparkEmitter);
 
     this.glowImage = makeAdditive(
       scene.add.image(0, 0, TEX_CHARGE_GLOW)

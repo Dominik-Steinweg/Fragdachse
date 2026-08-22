@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, isPointInsideArena } from '../config';
 import type { BulletVisualPreset } from '../types';
-import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, makeAdditive, setEmitterAngleRange } from './EffectUtils';
+import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, makeAdditive, recordParticleSpawn, registerParticleEmitter, setEmitterAngleRange } from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_TRAIL = '__bullet_trail';
@@ -949,6 +949,7 @@ export class BulletRenderer {
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
       });
+      registerParticleEmitter(this.scene, 'bullet', emitter);
       emitter.setDepth(DEPTH_WIND);
       return emitter;
     };
@@ -1188,8 +1189,10 @@ export class BulletRenderer {
       gravityY:  cfg.sparkGravityY,
       emitting:  false,
     });
+    registerParticleEmitter(this.scene, 'bullet', emitter);
     emitter.setDepth(DEPTH_SPARK);
     emitter.explode(cfg.sparkCount);
+    recordParticleSpawn(this.scene, 'bullet', cfg.sparkCount);
 
     const impactFlash = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_GLOW).setScale(cfg.impactFlashScale),

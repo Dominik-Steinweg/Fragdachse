@@ -149,7 +149,7 @@ export class SporeRenderer {
       tint: isVoid ? VOID_SPORE_CORE_TINTS : [0xf5ffdf, color, 0x7db749],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 1);
+    }, DEPTH.PROJECTILES + 1, undefined, 'spore');
 
     const wakeEmitter = createEmitter(this.scene, x, y, TEX_SPORE_MOTE, {
       lifespan: { min: 180, max: 320 },
@@ -162,7 +162,7 @@ export class SporeRenderer {
       tint: isVoid ? VOID_SPORE_WAKE_TINTS : [0xe8ffbf, 0xa2dd61, 0x5c8b32],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, DEPTH.PROJECTILES + 0.2);
+    }, DEPTH.PROJECTILES + 0.2, undefined, 'spore');
 
     this.visuals.set(id, {
       glow,
@@ -296,7 +296,7 @@ export class SporeRenderer {
       tint: isVoid ? VOID_SPORE_IMPACT_TINTS : [0xf2ffd8, color, 0x74ab3c],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PROJECTILES + 1.7);
+    }, DEPTH.PROJECTILES + 1.7, undefined, 'spore');
     setCircleEmitZone(burst, Math.max(8, scale * 9), 28, true);
     burst.explode(28, 0, 0);
 
@@ -310,7 +310,7 @@ export class SporeRenderer {
       tint: isVoid ? VOID_SPORE_HAZE_TINTS : [0xd7ff9d, 0x98d65a, 0x577d30],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.FIRE + 0.2);
+    }, DEPTH.FIRE + 0.2, undefined, 'spore');
     haze.explode(10, 0, 0);
 
     this.scene.tweens.add({
