@@ -13,7 +13,7 @@ import {
 } from './gpu/GpuVfxSourceTextures';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
-import { recordGraphicsWork, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
+import { recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 
 const TEX_ROCKET_BODY = '__rocket_body';
 const TEX_ROCKET_ACCENT = '__rocket_accent';
@@ -427,7 +427,6 @@ export class RocketRenderer {
       .setStrokeStyle(2, color, 0.95)
       .setBlendMode(Phaser.BlendModes.ADD);
     registerGraphicsObject(this.scene, 'rocketLifecycleGraphics', ring);
-    recordGraphicsWork(this.scene, 'rocketLifecycleGraphics', { createdObjects: 1 });
     this.scene.tweens.add({
       targets: ring,
       radius: 38,
@@ -461,7 +460,6 @@ export class RocketRenderer {
       .setStrokeStyle(1.5, 0xffffff, 0.85)
       .setBlendMode(Phaser.BlendModes.ADD);
     registerGraphicsObject(this.scene, 'rocketLifecycleGraphics', flash);
-    recordGraphicsWork(this.scene, 'rocketLifecycleGraphics', { createdObjects: 1 });
     this.scene.tweens.add({
       targets: flash,
       radius: 14,

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
-import { ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordGraphicsWork, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
+import { ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -235,7 +235,6 @@ export class SpawnEffectRenderer {
     const startRadius = 5;
     const ring = this.scene.add.circle(x, y, startRadius, 0, 0);
     registerGraphicsObject(this.scene, 'spawnRings', ring);
-    recordGraphicsWork(this.scene, 'spawnRings', { createdObjects: 1 });
     ring.setDepth(DEPTH_FX);
     ring.isFilled     = false;
     ring.isStroked    = true;
@@ -260,6 +259,7 @@ export class SpawnEffectRenderer {
 
   private playBeam(x: number, y: number, colorHex: number): void {
     const beam = this.scene.add.rectangle(x, y - 56, 10, 112, colorHex, 0.75);
+    registerGraphicsObject(this.scene, 'spawnRings', beam);
     beam.setDepth(DEPTH_FX - 0.5);
     makeAdditive(beam);
 
@@ -275,6 +275,7 @@ export class SpawnEffectRenderer {
 
     // Weicher weißer Überschuss am Strahl
     const beamGlow = this.scene.add.rectangle(x, y - 56, 28, 112, 0xffffff, 0.25);
+    registerGraphicsObject(this.scene, 'spawnRings', beamGlow);
     beamGlow.setDepth(DEPTH_FX - 0.6);
     makeAdditive(beamGlow);
 

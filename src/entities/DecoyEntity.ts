@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { HeldItemVisual } from './HeldItemVisual';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { registerGraphicsObject } from '../effects/EffectUtils';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -74,15 +75,19 @@ export class DecoyEntity {
 
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
+    registerGraphicsObject(scene, 'playerStatus', this.hpBarBg);
     this.hpBarFg = scene.add.rectangle(x - HP_BAR_WIDTH / 2, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
     this.hpBarFg.setOrigin(0, 0.5);
     this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+    registerGraphicsObject(scene, 'playerStatus', this.hpBarFg);
 
     this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
     this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
+    registerGraphicsObject(scene, 'playerStatus', this.armorBarBg);
     this.armorBarFg = scene.add.rectangle(x - ARMOR_BAR_WIDTH / 2, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
     this.armorBarFg.setOrigin(0, 0.5);
     this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
+    registerGraphicsObject(scene, 'playerStatus', this.armorBarFg);
 
     this.startAnomalyTween();
     this.syncBar();

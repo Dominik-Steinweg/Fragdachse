@@ -644,6 +644,7 @@ export class TeslaDomeRenderer {
         coreColor,
         Math.min(1, profile.haloAlpha * 2.1 * alphaScale),
       );
+      registerGraphicsObject(this.scene, 'teslaDomeEffects', halo);
       halo.setDepth(DEPTH.FIRE + 0.25);
       makeAdditive(halo);
       this.scene.tweens.add({
@@ -782,6 +783,7 @@ export class TeslaDomeRenderer {
     const profile = this.getImpactProfile(target.type, fire.visualImpactBurstScale * intensity);
     const radius = Math.max(visual.currentRadius * 0.06 * intensity, 7);
     const halo = this.scene.add.circle(target.currentX, target.currentY, radius, accentColor, profile.haloAlpha * alphaScale);
+    registerGraphicsObject(this.scene, 'teslaDomeEffects', halo);
     halo.setDepth(DEPTH.FIRE + 0.21);
     makeAdditive(halo);
     this.scene.tweens.add({

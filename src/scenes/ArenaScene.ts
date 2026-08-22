@@ -183,6 +183,7 @@ import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
 import { PerformanceAblationController } from './arena/PerformanceAblation';
 import { PerformanceDiagnosticsOverlay } from '../ui/PerformanceDiagnosticsOverlay';
+import { getWebGLRendererType } from '../utils/webglContext';
 import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
 import type { FlowFieldDiagnostics } from '../systems/flowfield/FlowFieldCoordinator';
@@ -602,6 +603,18 @@ export class ArenaScene extends Phaser.Scene {
       getLightingSystem: () => this.renderers?.lighting ?? null,
       getPostFxController: () => this.visualFeedback?.postFx ?? null,
       getGpuParticleSuppressor: () => this.renderers?.gpuVfx ?? null,
+      getVectorEffectSystem: () => ({
+        setSuppressed: (suppressed: boolean) => this.visualAttribution?.setGraphicsFamilySuppressed('effectSystemGraphics', suppressed),
+      }),
+      getVectorLighting: () => this.renderers?.lighting
+        ? { setSuppressed: (suppressed: boolean) => this.renderers?.lighting.setVectorSuppressed(suppressed) }
+        : null,
+      getVectorTreeTrunks: () => ({
+        setSuppressed: (suppressed: boolean) => this.visualAttribution?.setGraphicsFamilySuppressed('treeTrunks', suppressed),
+      }),
+      getVectorPowerUpEffects: () => ({
+        setSuppressed: (suppressed: boolean) => this.visualAttribution?.setGraphicsFamilySuppressed('powerUpEffects', suppressed),
+      }),
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.performanceAblation?.destroy());
     const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
@@ -4275,7 +4288,7 @@ export class ArenaScene extends Phaser.Scene {
     // ausdrueckliche Vergleichsparameter dazu; Rolle, Qualitaet, Modus und Map werden zusaetzlich
     // als beobachteter, veraenderlicher Session-Kontext aufgezeichnet.
     return {
-      renderer: 'webgl',
+      renderer: getWebGLRendererType(gl),
       gpuRenderer,
       gpuVendor,
       webglVersion: gl.getParameter(gl.VERSION),

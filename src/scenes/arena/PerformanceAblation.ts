@@ -33,6 +33,10 @@ export type AblationCategory =
   | 'particles'
   | 'gpuParticles'
   | 'vectorShapes'
+  | 'vectorEffectSystem'
+  | 'vectorLighting'
+  | 'vectorTreeTrunks'
+  | 'vectorPowerUpEffects'
   | 'lights'
   | 'staticShadows'
   | 'dynamicShadows'
@@ -62,6 +66,10 @@ export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
   postFx: 13,
   gpuParticles: 14,
   vectorShapes: 15,
+  vectorEffectSystem: 16,
+  vectorLighting: 17,
+  vectorTreeTrunks: 18,
+  vectorPowerUpEffects: 19,
 };
 
 /** Was in einem Segment abgeschaltet wird – erscheint so auch in der Anleitung und im Overlay. */
@@ -71,6 +79,10 @@ export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
   particles: 'Klassische Partikel (ParticleEmitter)',
   gpuParticles: 'SpriteGPU-VFX (SpriteGPULayer)',
   vectorShapes: 'Arc/Graphics-Rendering',
+  vectorEffectSystem: 'Vector-Effekte (EffectSystem)',
+  vectorLighting: 'Vector-Licht-Overlays',
+  vectorTreeTrunks: 'Vector-Baumstämme',
+  vectorPowerUpEffects: 'Vector-PowerUp-Effekte',
   lights: 'Dynamische Beleuchtung (Composite)',
   staticShadows: 'Statische Schatten (gebackene Layer)',
   dynamicShadows: 'Schatten bewegter Werfer',
@@ -95,6 +107,10 @@ export const ABLATION_CATEGORIES: readonly AblationCategory[] = [
   'particles',
   'gpuParticles',
   'vectorShapes',
+  'vectorEffectSystem',
+  'vectorLighting',
+  'vectorTreeTrunks',
+  'vectorPowerUpEffects',
   'lights',
   'staticShadows',
   'dynamicShadows',
@@ -158,6 +174,11 @@ export interface PerformanceAblationDeps {
   getGpuParticleSuppressor?: () => {
     setSuppressed(suppressed: boolean): void;
   } | null;
+  /** Targeted vector subgroups use existing attribution registries/system switches. */
+  getVectorEffectSystem?: () => { setSuppressed(suppressed: boolean): void } | null;
+  getVectorLighting?: () => { setSuppressed(suppressed: boolean): void } | null;
+  getVectorTreeTrunks?: () => { setSuppressed(suppressed: boolean): void } | null;
+  getVectorPowerUpEffects?: () => { setSuppressed(suppressed: boolean): void } | null;
 }
 
 const BLOOD_TEXTURE_PREFIX = '__blood';
@@ -249,6 +270,10 @@ export class PerformanceAblationController {
   private dynamicShadowsSuppressed = false;
   private lightCompositeSuppressed = false;
   private gpuParticlesSuppressed = false;
+  private vectorEffectSystemSuppressed = false;
+  private vectorLightingSuppressed = false;
+  private vectorTreeTrunksSuppressed = false;
+  private vectorPowerUpEffectsSuppressed = false;
   private readonly segments: AblationSegment[] = [];
 
   constructor(
@@ -352,6 +377,10 @@ export class PerformanceAblationController {
     // GPU-Partikel werden ausschliesslich ueber die zentrale Registry und ihre Scheduler
     // abgeschaltet; klassische ParticleEmitter bleiben davon getrennt.
     this.setGpuParticlesSuppressed(category === 'gpuParticles');
+    this.setVectorEffectSystemSuppressed(category === 'vectorEffectSystem');
+    this.setVectorLightingSuppressed(category === 'vectorLighting');
+    this.setVectorTreeTrunksSuppressed(category === 'vectorTreeTrunks');
+    this.setVectorPowerUpEffectsSuppressed(category === 'vectorPowerUpEffects');
 
     // Der Scan laeuft in JEDEM Segment inklusive Baseline und wertet immer das Praedikat aus,
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
@@ -388,6 +417,38 @@ export class PerformanceAblationController {
     if (!gpuParticles) return;
     gpuParticles.setSuppressed(suppressed);
     this.gpuParticlesSuppressed = suppressed;
+  }
+
+  private setVectorEffectSystemSuppressed(suppressed: boolean): void {
+    if (this.vectorEffectSystemSuppressed === suppressed) return;
+    const controller = this.deps.getVectorEffectSystem?.() ?? null;
+    if (!controller) return;
+    controller.setSuppressed(suppressed);
+    this.vectorEffectSystemSuppressed = suppressed;
+  }
+
+  private setVectorLightingSuppressed(suppressed: boolean): void {
+    if (this.vectorLightingSuppressed === suppressed) return;
+    const controller = this.deps.getVectorLighting?.() ?? null;
+    if (!controller) return;
+    controller.setSuppressed(suppressed);
+    this.vectorLightingSuppressed = suppressed;
+  }
+
+  private setVectorTreeTrunksSuppressed(suppressed: boolean): void {
+    if (this.vectorTreeTrunksSuppressed === suppressed) return;
+    const controller = this.deps.getVectorTreeTrunks?.() ?? null;
+    if (!controller) return;
+    controller.setSuppressed(suppressed);
+    this.vectorTreeTrunksSuppressed = suppressed;
+  }
+
+  private setVectorPowerUpEffectsSuppressed(suppressed: boolean): void {
+    if (this.vectorPowerUpEffectsSuppressed === suppressed) return;
+    const controller = this.deps.getVectorPowerUpEffects?.() ?? null;
+    if (!controller) return;
+    controller.setSuppressed(suppressed);
+    this.vectorPowerUpEffectsSuppressed = suppressed;
   }
 
   private setFiltersSuppressed(suppressed: boolean): void {
@@ -442,6 +503,10 @@ export class PerformanceAblationController {
     this.setLightCompositeSuppressed(false);
     this.setPostFxSuppressed(false);
     this.setGpuParticlesSuppressed(false);
+    this.setVectorEffectSystemSuppressed(false);
+    this.setVectorLightingSuppressed(false);
+    this.setVectorTreeTrunksSuppressed(false);
+    this.setVectorPowerUpEffectsSuppressed(false);
   }
 
   destroy(): void {

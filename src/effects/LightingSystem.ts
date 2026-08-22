@@ -188,6 +188,7 @@ export class LightingSystem {
 
   private enabled = false;
   private compositeSuppressed = false;
+  private vectorSuppressed = false;
   /**
    * Merker für die Fill-Ersparnis: solange das Ambient gleich bleibt und weder in diesem
    * noch im vorigen Frame ein Licht gerendert wurde, steht in der Lightmap bereits genau
@@ -265,6 +266,11 @@ export class LightingSystem {
     if (this.compositeSuppressed === suppressed) return;
     this.compositeSuppressed = suppressed;
     this.syncOverlayVisibility();
+  }
+
+  /** Targeted diagnosis switch for the vector occlusion path; direct light stamps remain intact. */
+  setVectorSuppressed(suppressed: boolean): void {
+    this.vectorSuppressed = suppressed;
   }
 
   setPerformanceMetricsEnabled(enabled: boolean): void {
@@ -363,6 +369,7 @@ export class LightingSystem {
 
   destroy(): void {
     this.clear();
+    this.vectorSuppressed = false;
     this.destroyRenderTargets();
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
@@ -562,6 +569,7 @@ export class LightingSystem {
         else coneLights += 1;
       }
       const useOcclusion = light.occludes
+        && !this.vectorSuppressed
         && occludingUsed < this.quality.maxOccludingLightsPerFrame
         && occludingUsed < this.slots.length
         && (this.occluders !== null || this.dynamicOccluders?.hasOccluders() === true);

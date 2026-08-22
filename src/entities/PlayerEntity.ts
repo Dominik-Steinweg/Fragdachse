@@ -12,7 +12,7 @@ import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
-import { killAllAndResetParticlePositions, registerParticleEmitter } from '../effects/EffectUtils';
+import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
@@ -232,20 +232,24 @@ export class PlayerEntity {
       // HP-Balken Hintergrund (dunkelgrau, zentriert)
       this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
       this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
+      registerGraphicsObject(scene, 'playerStatus', this.hpBarBg);
 
       // HP-Balken Vordergrund (farbig, links ausgerichtet)
       this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
       this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
       this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+      registerGraphicsObject(scene, 'playerStatus', this.hpBarFg);
 
       this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
       this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
       this.armorBarBg.setVisible(false);
+      registerGraphicsObject(scene, 'playerStatus', this.armorBarBg);
 
       this.armorBarFg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
       this.armorBarFg.setOrigin(0, 0.5);
       this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
       this.armorBarFg.setVisible(false);
+      registerGraphicsObject(scene, 'playerStatus', this.armorBarFg);
 
       this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
         fontSize: '12px',

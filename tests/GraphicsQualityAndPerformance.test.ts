@@ -74,6 +74,10 @@ class FakeGlContext {
   textureUploads = 0;
   deletedQueries = 0;
   private nextQueryId = 0;
+  readonly VERSION = 0x1f02;
+
+  constructor(private readonly version = 'WebGL 2.0 (test)') {}
+
   drawArrays(count: number): void { this.drawnVertices += count; }
   drawElements(count: number): void { this.drawnVertices += count; }
   bindFramebuffer(): void { this.framebufferBinds += 1; }
@@ -86,13 +90,39 @@ class FakeGlContext {
   getExtension(): { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } {
     return { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
   }
-  getParameter(): boolean { return false; }
+  getParameter(parameter: unknown): boolean | string {
+    return parameter === this.VERSION ? this.version : false;
+  }
   getQueryParameter(_query: unknown, parameter: unknown): boolean | number {
     return parameter === 1 ? true : 1_000_000;
   }
   deleteQuery(): void { this.deletedQueries += 1; }
   readonly QUERY_RESULT_AVAILABLE = 1;
   readonly QUERY_RESULT = 2;
+}
+
+class FakeWebGl1Context {
+  private nextQueryId = 0;
+  readonly VERSION = 0x1f02;
+  readonly timerExtension = {
+    TIME_ELAPSED_EXT: 1,
+    GPU_DISJOINT_EXT: 2,
+    QUERY_RESULT_AVAILABLE_EXT: 3,
+    QUERY_RESULT_EXT: 4,
+    createQueryEXT: () => ({ id: this.nextQueryId += 1 }),
+    beginQueryEXT: () => undefined,
+    endQueryEXT: () => undefined,
+    getQueryObjectEXT: (_query: unknown, parameter: number) => parameter === 3 ? true : 1_000_000,
+    deleteQueryEXT: () => undefined,
+  };
+
+  getParameter(parameter: unknown): boolean | string {
+    return parameter === this.VERSION ? 'WebGL 1.0 (test)' : false;
+  }
+
+  getExtension(name: string): typeof this.timerExtension | null {
+    return name === 'EXT_disjoint_timer_query' ? this.timerExtension : null;
+  }
 }
 
 class FakePerformanceObserver {
@@ -798,7 +828,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     profiler.stopRecording();
 
     const report = profiler.buildReport();
-    expect(report?.schemaVersion).toBe(7);
+    expect(report?.schemaVersion).toBe(8);
     expect(report?.session.id).toMatch(/^\S+$/);
     expect(report?.session.durationMs).toBe(5_100);
     expect(report?.session.syncMarkerCount).toBe(1);
@@ -938,6 +968,105 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     expect(report?.events).toContainEqual(expect.objectContaining({ type: 'rocks:mass_destroy', destroyedCount: 16 }));
     expect(report?.series.gpuSamples).toEqual([]);
     expect(report?.summaries.gpu.samplesCompleted).toBe(0);
+  });
+
+  it('nutzt den WebGL2-Timer über EXT_disjoint_timer_query_webgl2', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(100);
+    const gl = new FakeGlContext();
+    const game = fakeGame(gl);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+
+    profiler.startRecording();
+    for (let frame = 0; frame < 4; frame += 1) {
+      game.emit('prerender');
+      game.emit('postrender');
+    }
+    // The next render polls the query submitted by frame four.
+    game.emit('prerender');
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.summaries.gpu.status).toBe('supported');
+    expect(report?.summaries.gpu.samplesCompleted).toBe(1);
+    expect(report?.series.gpuSamples[0]).toMatchObject({ durationMs: 1, renderFrame: 4 });
+  });
+
+  it('lässt den GPU-Timer auf WebGL1 deaktiviert', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(100);
+    const gl = new FakeGlContext('WebGL 1.0 (test)');
+    const game = fakeGame(gl);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+
+    profiler.startRecording();
+    game.emit('prerender');
+    game.emit('postrender');
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.summaries.gpu.status).toBe('unsupported');
+    expect(report?.series.gpuSamples).toEqual([]);
+  });
+
+  it('nutzt den WebGL1-Timer-Fallback asynchron und exportiert die GPU-Statistik', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(100);
+    const gl = new FakeWebGl1Context();
+    const game = fakeGame(gl);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+
+    profiler.startRecording();
+    for (let frame = 0; frame < 4; frame += 1) {
+      game.emit('prerender');
+      game.emit('postrender');
+    }
+    game.emit('prerender');
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.summaries.gpu).toMatchObject({
+      status: 'supported',
+      backend: 'webgl1_ext',
+      samplesCompleted: 1,
+    });
+    expect(report?.summaries.gpu.frameTime).toEqual({ avg: 1, p95: 1, p99: 1, peak: 1 });
+  });
+
+  it('exportiert Draw Calls und Phaser-Batch-Flushes ohne GL-Aufzeichnung', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const gl = new FakeGlContext();
+    const game = fakeGame(gl);
+    const node = {
+      name: 'BatchHandlerQuad',
+      instanceCount: 1,
+      run: function run(this: { instanceCount: number }): void { this.instanceCount = 0; },
+    };
+    const renderer = game.renderer as unknown as {
+      drawElements: () => void;
+      renderNodes: { _nodes: Record<string, typeof node>; getNode(name: string): typeof node };
+    };
+    renderer.drawElements = vi.fn();
+    renderer.renderNodes = {
+      _nodes: { BatchHandlerQuad: node },
+      getNode: (name: string) => renderer.renderNodes._nodes[name],
+    };
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+    profiler.startRecording();
+    game.emit('prerender');
+    renderer.drawElements();
+    node.run();
+    game.emit('postrender');
+    profiler.record(sample({ drawCallCount: profiler.takeLastDrawCallCount() }));
+    profiler.stopRecording();
+
+    const pipeline = profiler.buildReport()?.summaries.renderPipeline;
+    expect(pipeline?.backend).toBe('webgl');
+    expect(pipeline?.drawCalls).toMatchObject({ avg: 1, p95: 1, p99: 1, peak: 1 });
+    expect(pipeline?.phaserBatchFlushes).toMatchObject({ avg: 1, p95: 1, p99: 1, peak: 1 });
+    expect(pipeline?.pipelineChanges).toBe('unsupported');
+    expect(pipeline?.textureBatchChanges).toBe('unsupported');
   });
 
   it('lässt Live-HUD, Recording und destroy ohne schwere Hooks koexistieren', () => {

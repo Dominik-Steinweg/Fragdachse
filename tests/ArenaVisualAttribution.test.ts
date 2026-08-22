@@ -23,6 +23,7 @@ interface FakeEmitter {
 interface FakeGraphics {
   active: boolean;
   visible: boolean;
+  setVisible(visible: boolean): void;
   once(): void;
 }
 
@@ -30,6 +31,39 @@ interface TypeScriptSource {
   readonly path: string;
   readonly text: string;
 }
+
+const VECTOR_FACTORIES = ['graphics', 'circle', 'ellipse', 'rectangle', 'arc', 'line', 'polygon'] as const;
+type VectorFactory = (typeof VECTOR_FACTORIES)[number];
+
+/**
+ * Nur normale Arena-Runtime-Quellen werden hier automatisch geprüft. Lobby-/Setup-UI bleibt
+ * außerhalb des Scopes; einzelne bewusst getrennte Runtime-Systeme sind unten pro Factory
+ * dokumentiert, damit kein Directory pauschal ausgenommen wird.
+ */
+const ARENA_RUNTIME_SOURCE_PREFIXES = [
+  'src/arena/',
+  'src/effects/',
+  'src/entities/',
+  'src/powerups/',
+  'src/scenes/arena/',
+  'src/train/',
+] as const;
+const ARENA_RUNTIME_SOURCE_NAMES = new Set([
+  'src/ui/ArenaHUD.ts',
+  'src/ui/CenterHUD.ts',
+  'src/ui/CoopDefenseSecondaryObjectiveHud.ts',
+  'src/ui/HostileBaseIndicator.ts',
+  'src/ui/PlayerStatusRing.ts',
+]);
+
+const DIRECT_VECTOR_FACTORY_EXCEPTIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  // AimSystem and LivingBarEffect are explicitly handled in a separate optimization pass.
+  'src/ui/AimSystem.ts': Object.fromEntries(VECTOR_FACTORIES.map((factory) => [factory, 'AimSystem is outside this attribution change and is optimized separately.'])),
+  'src/entities/BaseEntity.ts:130': { rectangle: 'Invisible Arcade physics hitbox; it never renders.' },
+  'src/effects/ShadowSystem.ts:1019': { graphics: 'Invisible RenderTexture bake helper; only the baked texture is rendered.' },
+  'src/scenes/arena/EnemyFlowFieldDebugOverlay.ts': { graphics: 'Optional Shift+D+B developer overlay, outside normal arena runtime attribution.' },
+  'src/train/TrainManager.ts:324': { rectangle: 'Invisible Arcade physics hitbox kept in the static collision group.' },
+};
 
 function readTypeScriptSources(directory: string): TypeScriptSource[] {
   const sources: TypeScriptSource[] = [];
@@ -63,7 +97,65 @@ function sourceDeclaresClass(source: TypeScriptSource, className: string): boole
 }
 
 function sourceHasDirectPhaserFactory(source: TypeScriptSource): boolean {
-  return /(?:this\.)?scene\.add\.(?:particles|graphics|circle|ellipse|rectangle|arc|line|polygon)\s*\(/u.test(source.text);
+  return /(?:this\.)?(?:sprite\.)?scene\.add\.(?:particles|graphics|circle|ellipse|rectangle|arc|line|polygon)\s*\(/u.test(source.text);
+}
+
+function normalizedSourcePath(path: string): string {
+  return path.replaceAll('\\', '/').split('/src/').at(-1) ? `src/${path.replaceAll('\\', '/').split('/src/').at(-1)}` : path.replaceAll('\\', '/');
+}
+
+function isArenaRuntimeSource(source: TypeScriptSource): boolean {
+  const path = normalizedSourcePath(source.path);
+  return ARENA_RUNTIME_SOURCE_NAMES.has(path) || ARENA_RUNTIME_SOURCE_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function lineNumberAt(source: string, offset: number): number {
+  return source.slice(0, offset).split('\n').length;
+}
+
+function factoryReference(source: string, offset: number): string | null {
+  const prefix = source.slice(Math.max(0, offset - 800), offset);
+  const matches = [...prefix.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)(?:\s*:\s*[^=;\n]+)?\s*=|((?:[A-Za-z_$][\w$]*\.)*[A-Za-z_$][\w$]*)\s*=\s*/gu)];
+  const match = matches.at(-1);
+  return match?.[1] ?? match?.[2] ?? null;
+}
+
+function hasConcreteRegistrationForFactory(source: string, offset: number, factory: VectorFactory, family: string): boolean {
+  const reference = factoryReference(source, offset);
+  if (!reference) return false;
+  const following = source.slice(offset, offset + 1000);
+  const familyArgument = `(?:['"]${family}['"]|[^,()]*['"]${family}['"][^,()]*)`;
+  return new RegExp(
+    `registerGraphicsObject\\(\\s*(?:this\\.)?(?:sprite\\.)?scene\\s*,\\s*${familyArgument}\\s*,\\s*${reference.replace('.', '\\.') }\\s*\\)`,
+    'u',
+  ).test(following);
+}
+
+function findUnattributedRuntimeVectorFactories(source: TypeScriptSource, families: Readonly<Record<string, readonly string[]>>): string[] {
+  const missing: string[] = [];
+  const sourcePath = normalizedSourcePath(source.path);
+  const sourceName = sourcePath.split('/').at(-1)!.replace(/\.ts$/u, '');
+  const sourceFamilies = Object.entries(families)
+    .filter(([, sourceNames]) => sourceNames.includes(sourceName))
+    .map(([family]) => family);
+  const factoryPattern = /(?:this\.)?(?:sprite\.)?scene\.add\.(graphics|circle|ellipse|rectangle|arc|line|polygon)\s*\(/gu;
+
+  for (const match of source.text.matchAll(factoryPattern)) {
+    const offset = match.index ?? 0;
+    const factory = match[1] as VectorFactory;
+    const line = lineNumberAt(source.text, offset);
+    const exception = DIRECT_VECTOR_FACTORY_EXCEPTIONS[`${sourcePath}:${line}`]?.[factory]
+      ?? DIRECT_VECTOR_FACTORY_EXCEPTIONS[sourcePath]?.[factory];
+    if (exception) continue;
+    if (!sourceFamilies.length) {
+      missing.push(`${sourcePath}:${line} ${factory} (source is missing from GRAPHICS_FAMILIES)`);
+      continue;
+    }
+    if (!sourceFamilies.some((family) => hasConcreteRegistrationForFactory(source.text, offset, factory, family))) {
+      missing.push(`${sourcePath}:${line} ${factory} (${factoryReference(source.text, offset) ?? 'unbound factory'})`);
+    }
+  }
+  return missing;
 }
 
 function findUnattributedEffectSystemGraphicsFactories(source: string): string[] {
@@ -106,11 +198,13 @@ function emitter(active = false, alive = 0): Phaser.GameObjects.Particles.Partic
 }
 
 function graphics(active = false): Phaser.GameObjects.GameObject {
-  return {
+  const value: FakeGraphics = {
     active,
     visible: active,
+    setVisible: (visible: boolean) => { value.visible = visible; },
     once: () => undefined,
-  } as unknown as Phaser.GameObjects.GameObject;
+  };
+  return value as unknown as Phaser.GameObjects.GameObject;
 }
 
 function sample(): ArenaRuntimeSample {
@@ -212,6 +306,59 @@ describe('ArenaVisualAttributionCollector', () => {
     expect(new ArenaVisualAttributionCollector().getCatalog().gpuVfxCatalogRef).toBe('GPU_VFX_EFFECTS');
   });
 
+  it('keeps the trace blind spots on concrete object registrations', () => {
+    const sources = readTypeScriptSources(resolve(process.cwd(), 'src'));
+    const expected = [
+      ['PowerUpRenderer', 'powerUpEffects', ['shadow', 'base', 'plate', 'core', 'ringOuter', 'ringInner', 'ownerRing']],
+      ['ArenaVisualFactory', 'treeTrunks', ['trunk']],
+      ['ProjectileManager', 'projectileShapes', ['sprite']],
+      ['EnemyEntity', 'enemyStatus', ['ring', 'this.voidMolotovWindupRing']],
+    ] as const;
+    for (const [sourceName, family, objects] of expected) {
+      const source = sources.find((candidate) => sourceDeclaresClass(candidate, sourceName));
+      expect(source, sourceName).toBeDefined();
+      for (const object of objects) {
+        expect(
+          source?.text,
+          `${sourceName}.${object} -> ${family}`,
+        ).toMatch(new RegExp(
+          `registerGraphicsObject\\(\\s*(?:this\\.)?(?:sprite\\.)?scene\\s*,\\s*['"]${family}['"]\\s*,\\s*${object.replace('.', '\\.') }\\s*\\)`,
+          'u',
+        ));
+      }
+    }
+  });
+
+  it('reports graphics creation and destruction churn in interval and recording data', () => {
+    const collector = new ArenaVisualAttributionCollector();
+    collector.setActive(true);
+    collector.setRecording(true);
+    const object = graphics(true);
+    const unregister = collector.registerGraphicsObject('powerUpEffects', object);
+
+    expect(collector.sampleAndReset().interval?.graphicsWork?.powerUpEffects).toEqual({ createdObjects: 1 });
+    unregister();
+    expect(collector.sampleAndReset().interval?.graphicsWork?.powerUpEffects).toEqual({ destroyedObjects: 1 });
+    expect(collector.getRecordingSummary().graphicsWork.powerUpEffects).toEqual({
+      createdObjects: 1,
+      destroyedObjects: 1,
+    });
+  });
+
+  it('suppresses and restores only the registered vector family', () => {
+    const collector = new ArenaVisualAttributionCollector();
+    const object = graphics(true);
+    collector.setActive(true);
+    collector.registerGraphicsObject('treeTrunks', object);
+    collector.setGraphicsFamilySuppressed('treeTrunks', true);
+    expect(object.visible).toBe(false);
+    collector.setGraphicsFamilySuppressed('treeTrunks', false);
+    expect(object.visible).toBe(true);
+    collector.setGraphicsFamilySuppressed('treeTrunks', true);
+    collector.setActive(false);
+    expect(object.visible).toBe(true);
+  });
+
   it('requires every catalog family to have a concrete runtime attribution hook', () => {
     const sources = readTypeScriptSources(resolve(process.cwd(), 'src'));
     const particleHooks = ['registerParticleEmitter', 'createEmitter', 'createQualityEmitter'];
@@ -239,23 +386,12 @@ describe('ArenaVisualAttributionCollector', () => {
       }
     }
 
-    const catalogSourceNames = new Set([
-      ...Object.values(CLASSIC_PARTICLE_FAMILIES).flat(),
-      ...Object.values(GRAPHICS_FAMILIES).flat(),
-    ]);
     for (const source of sources) {
-      if (!sourceHasDirectPhaserFactory(source)) continue;
-      const sourceFamilies = [
-        ...Object.entries(CLASSIC_PARTICLE_FAMILIES)
-          .filter(([, sourceNames]) => sourceNames.includes(source.path.split(/[\\/]/u).pop()!.replace(/\.ts$/u, '') as never)),
-        ...Object.entries(GRAPHICS_FAMILIES)
-          .filter(([, sourceNames]) => sourceNames.includes(source.path.split(/[\\/]/u).pop()!.replace(/\.ts$/u, '') as never)),
-      ];
-      if (!sourceFamilies.length || !catalogSourceNames.has(source.path.split(/[\\/]/u).pop()!.replace(/\.ts$/u, ''))) continue;
+      if (!isArenaRuntimeSource(source) || !sourceHasDirectPhaserFactory(source)) continue;
       expect(
-        sourceFamilies.some(([family]) => hasHookForFamily(source.text, family, [...particleHooks, ...graphicsHooks])),
-        `direct Phaser factory attribution in ${source.path}`,
-      ).toBe(true);
+        findUnattributedRuntimeVectorFactories(source, GRAPHICS_FAMILIES),
+        `every direct renderable Vector factory in ${normalizedSourcePath(source.path)} must have object-level attribution`,
+      ).toEqual([]);
     }
 
     const effectSystem = sources.find((source) => sourceDeclaresClass(source, 'EffectSystem'));

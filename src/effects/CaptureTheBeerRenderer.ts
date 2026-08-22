@@ -620,11 +620,13 @@ export class CaptureTheBeerRenderer {
 
   private playScoreScreenFlash(palette: TeamPalette): void {
     const colorWash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, palette.glow, 0.24);
+    registerGraphicsObject(this.scene, 'captureObjectiveEffects', colorWash);
     colorWash.setScrollFactor(0);
     colorWash.setDepth(DEPTH_FX + 1.75);
     makeAdditive(colorWash);
 
     const whiteWash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.18);
+    registerGraphicsObject(this.scene, 'captureObjectiveEffects', whiteWash);
     whiteWash.setScrollFactor(0);
     whiteWash.setDepth(DEPTH_FX + 1.8);
     makeAdditive(whiteWash);
@@ -686,6 +688,7 @@ export class CaptureTheBeerRenderer {
 
     for (const spec of beamSpecs) {
       const beam = this.scene.add.rectangle(x, y, spec.width, spec.height, beamColor, spec.alpha);
+      registerGraphicsObject(this.scene, 'captureObjectiveEffects', beam);
       beam.setDepth(DEPTH_FX + 0.95);
       makeAdditive(beam);
       beam.setAngle(spec.angle);
@@ -784,6 +787,7 @@ export class CaptureTheBeerRenderer {
     lineWidth: number,
   ): void {
     const ring = this.scene.add.circle(x, y, startRadius);
+    registerGraphicsObject(this.scene, 'captureObjectiveEffects', ring);
     ring.setStrokeStyle(lineWidth, color, 0.9);
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_FX + 0.6);

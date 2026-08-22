@@ -21,6 +21,7 @@ import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } fro
 import { DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
+import { registerGraphicsObject } from '../effects/EffectUtils';
 
 /** Eigener Salt gegen die uebrigen zellbasierten Felder; siehe {@link ./CellHash}. */
 const ROCK_DECAL_ROTATION_SALT = 0x2c91;
@@ -158,6 +159,7 @@ export class ArenaVisualFactory {
 
   static createTrunk(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Arc {
     const trunk = scene.add.circle(worldX, worldY, TRUNK_RADIUS, COLORS.BROWN_4);
+    registerGraphicsObject(scene, 'treeTrunks', trunk);
     trunk.setDepth(DEPTH.ROCKS);
     return trunk;
   }

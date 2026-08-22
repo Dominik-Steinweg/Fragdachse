@@ -6,7 +6,7 @@ import type { CameraFeedbackController } from './camera/CameraFeedbackController
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
-import { recordGraphicsWork, registerGraphicsObject } from './EffectUtils';
+import { registerGraphicsObject } from './EffectUtils';
 import { pickGpuVfxTint } from './gpu/GpuVfxMember';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { ensureAirstrikeBombTexture, ensureAirstrikeSparkTexture } from './gpu/GpuVfxSourceTextures';
@@ -392,17 +392,18 @@ export class AirstrikeRenderer {
     // Zentrum-Glow
     const coreGlow = this.scene.add.circle(x, y, 18, palette.glow, 0.28);
     registerGraphicsObject(this.scene, 'airstrikeWarning', coreGlow);
-    recordGraphicsWork(this.scene, 'airstrikeWarning', { createdObjects: 4 });
     coreGlow.setDepth(DEPTH.PLAYERS - 1);
     coreGlow.setBlendMode(Phaser.BlendModes.ADD);
 
     // Fadenkreuz – horizontal
     const crossH = this.scene.add.rectangle(x, y, radius * 1.2, 2, palette.ring, 0.7);
+    registerGraphicsObject(this.scene, 'airstrikeWarning', crossH);
     crossH.setDepth(DEPTH.PLAYERS - 1);
     crossH.setBlendMode(Phaser.BlendModes.ADD);
 
     // Fadenkreuz – vertikal
     const crossV = this.scene.add.rectangle(x, y, 2, radius * 1.2, palette.ring, 0.7);
+    registerGraphicsObject(this.scene, 'airstrikeWarning', crossV);
     crossV.setDepth(DEPTH.PLAYERS - 1);
     crossV.setBlendMode(Phaser.BlendModes.ADD);
 

@@ -612,6 +612,8 @@ export class PlayerStatusRing {
       return;
     }
 
+    // `SEGMENTS`/`getFilledSection` use degrees from the top, clockwise. Keep the signed
+    // delta so the shader traverses the same direction as `fillArcPolygon` and `canvasArcLayer`.
     this.segmentArc[arcBase] = Phaser.Math.DegToRad(section.startAngle);
     this.segmentArc[arcBase + 1] = Phaser.Math.DegToRad(section.endAngle - section.startAngle);
     this.segmentArc[arcBase + 2] = coreInner;

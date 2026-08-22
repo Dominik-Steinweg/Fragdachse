@@ -539,9 +539,11 @@ export class PlacementPreviewRenderer {
   }
 
   private createTunnelPreviewState(keyBase: string): TunnelPreviewVisualState {
+    const line = this.scene.add.graphics().setDepth(TUNNEL_VISUAL_DEPTH + 0.025).setVisible(false);
+    registerGraphicsObject(this.scene, 'placementPreview', line);
     return {
       keyBase,
-      line: this.scene.add.graphics().setDepth(TUNNEL_VISUAL_DEPTH + 0.025).setVisible(false),
+      line,
       anchor: null,
       target: null,
     };
@@ -590,6 +592,7 @@ export class PlacementPreviewRenderer {
     const x = GAME_WIDTH * 0.5;
     const y = ARENA_OFFSET_Y + 136;
     const panel = this.scene.add.rectangle(0, 0, 500, 64, COLORS.GREY_10, 0.72);
+    registerGraphicsObject(this.scene, 'placementPreview', panel);
     panel.setStrokeStyle(2, COLORS.RED_2, 0.9);
     const title = this.scene.add.text(0, -11, t('ui.placement.nukeTargetTitle'), {
       fontFamily: 'monospace',
@@ -618,6 +621,7 @@ export class PlacementPreviewRenderer {
     const x = GAME_WIDTH * 0.5;
     const y = ARENA_OFFSET_Y + 136;
     const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
+    registerGraphicsObject(this.scene, 'placementPreview', panel);
     panel.setStrokeStyle(2, 0xff6600, 0.9);
     const title = this.scene.add.text(0, -11, t('ui.placement.airstrikeTargetTitle'), {
       fontFamily: 'monospace',
@@ -646,6 +650,7 @@ export class PlacementPreviewRenderer {
     const x = GAME_WIDTH * 0.5;
     const y = ARENA_OFFSET_Y + 54;
     const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
+    registerGraphicsObject(this.scene, 'placementPreview', panel);
     panel.setStrokeStyle(2, COLORS.BROWN_2, 0.9);
     const title = this.scene.add.text(0, -11, t('ui.placement.buildTitle'), {
       fontFamily: 'monospace',

@@ -24,6 +24,7 @@ import {
   type GraphicsQualityProfile,
 } from '../graphics/GraphicsQuality';
 import { resolveSkyState } from './TimeOfDay';
+import { registerGraphicsObject } from './EffectUtils';
 import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkedRenderSurfaceStats } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
@@ -1021,6 +1022,7 @@ export class ShadowSystem {
     staticGraphics.setVisible(false);
 
     const dynamicGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'dynamicShadows', dynamicGraphics);
     dynamicGraphics.setDepth(depth + 0.001);
     dynamicGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
 

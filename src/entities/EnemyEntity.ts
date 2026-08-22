@@ -382,6 +382,7 @@ export class EnemyEntity {
     ring.setStrokeStyle(2, VULNERABLE_MARKER_COLOR, 0.85);
     ring.setDepth(DEPTH.PLAYERS - 0.08);
     makeAdditive(ring);
+    registerGraphicsObject(this.sprite.scene, 'enemyStatus', ring);
     this.sprite.scene.tweens.add({
       targets: ring,
       scaleX: 1.14,
@@ -887,6 +888,7 @@ export class EnemyEntity {
       this.voidMolotovWindupRing.setStrokeStyle(3, VOID_FIRE_COLOR, 0.95);
       this.voidMolotovWindupRing.setDepth(DEPTH.PLAYERS - 0.06);
       makeAdditive(this.voidMolotovWindupRing);
+      registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.voidMolotovWindupRing);
     }
     const progress = this.gaussChargeProgress;
     this.voidMolotovWindupRing.setPosition(this.sprite.x, this.sprite.y);

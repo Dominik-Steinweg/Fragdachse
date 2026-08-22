@@ -103,6 +103,11 @@ export class PowerUpRenderer {
           : def?.spriteKey
           ? this.scene.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
           : this.scene.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor);
+      // Nur der seltene Shape-Fallback gehoert zur Vector-Attribution; Bilder bleiben normale
+      // Sprite-Last und werden nicht in eine Graphics-Familie eingemischt.
+      if (graphic && !isMissionReward && !def?.spriteKey) {
+        registerGraphicsObject(this.scene, 'powerUpEffects', graphic);
+      }
       if (isMissionMarker) {
         container.add(this.scene.add.image(0, 0, 'mission_reward_pedestal').setDisplaySize(
           MISSION_REWARD_PEDESTAL_SIZE,
@@ -204,16 +209,22 @@ export class PowerUpRenderer {
       registerGraphicsObject(this.scene, 'powerUpEffects', shadow);
       const base = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius, 0x0c121c, 0.96)
         .setStrokeStyle(2, 0x25313c, 0.95);
+      registerGraphicsObject(this.scene, 'powerUpEffects', base);
       const plate = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderInnerRadius, 0x121b27, 0.94)
         .setStrokeStyle(2, glowColor, 0.42);
+      registerGraphicsObject(this.scene, 'powerUpEffects', plate);
       const core = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderCoreRadius, glowColor, 0.2)
         .setStrokeStyle(1.5, 0xffffff, 0.14);
+      registerGraphicsObject(this.scene, 'powerUpEffects', core);
       const ringOuter = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 1)
         .setStrokeStyle(2, glowColor, 0.75);
+      registerGraphicsObject(this.scene, 'powerUpEffects', ringOuter);
       const ringInner = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderInnerRadius - 2)
         .setStrokeStyle(2, 0xffffff, 0.18);
+      registerGraphicsObject(this.scene, 'powerUpEffects', ringInner);
       const ownerRing = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius - 2)
         .setStrokeStyle(1.5, pedestal.ownerColor ?? 0xffffff, pedestal.ownerColor === undefined ? 0 : 0.78);
+      registerGraphicsObject(this.scene, 'powerUpEffects', ownerRing);
       const glow = configureAdditiveImage(
         this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_GLOW),
         DEPTH.PLAYERS - 2.2,

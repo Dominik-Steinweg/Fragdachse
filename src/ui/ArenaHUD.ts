@@ -517,8 +517,10 @@ export class ArenaHUD {
   }
 
   private divider(y: number): Phaser.GameObjects.Rectangle {
-    return this.scene.add.rectangle(BAR_X, y, barWidth, 1, COL_DIVIDER, 0.5)
+    const divider = this.scene.add.rectangle(BAR_X, y, barWidth, 1, COL_DIVIDER, 0.5)
       .setOrigin(0, 0).setScrollFactor(0);
+    registerGraphicsObject(this.scene, 'gameplayHud', divider);
+    return divider;
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -670,6 +672,7 @@ export class ArenaHUD {
       const x = BAR_X + Math.round(barWidth * frac);
       const mark = this.scene.add.rectangle(x, ADR_BAR_Y + 2, 1, BAR_H - 4, 0xffffff, 0.3)
         .setOrigin(0.5, 0).setScrollFactor(0);
+      registerGraphicsObject(this.scene, 'gameplayHud', mark);
       this.container.add(mark);
       this.adrTickMarks.push(mark);
     }
@@ -938,6 +941,7 @@ export class ArenaHUD {
       const mark = this.scene.add.rectangle(BAR_X, ULT_BAR_Y, 1, BAR_H, COL_DIVIDER, 0.5)
         .setOrigin(0.5, 0)
         .setScrollFactor(0);
+      registerGraphicsObject(this.scene, 'gameplayHud', mark);
       this.container.add(mark);
       this.ultThresholdMarks.push(mark);
     }

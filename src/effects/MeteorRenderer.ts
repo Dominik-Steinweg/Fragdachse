@@ -297,6 +297,7 @@ export class MeteorRenderer {
 
     // 1. Heller Blitz (weiß, expandiert schnell)
     const flash = this.scene.add.circle(x, y, 6, 0xffffff, 1);
+    registerGraphicsObject(this.scene, 'meteorEffects', flash);
     flash.setDepth(DEPTH_IMPACT + 1);
     makeAdditive(flash);
     const flashEndScale = (radius * 0.6) / 6;
@@ -312,6 +313,7 @@ export class MeteorRenderer {
 
     // 2. Feurige Explosionsfüllung
     const blast = this.scene.add.circle(x, y, 4, visual.isVoid ? VOID_PALETTE.primary : 0xff6622, 0.75);
+    registerGraphicsObject(this.scene, 'meteorEffects', blast);
     blast.setDepth(DEPTH_IMPACT);
     makeAdditive(blast);
     const blastEndScale = radius / 4;
@@ -329,6 +331,7 @@ export class MeteorRenderer {
     const ringStartR = radius * 0.4;
     const ringEndScale = (radius * 1.2) / ringStartR;
     const ring = this.scene.add.circle(x, y, ringStartR);
+    registerGraphicsObject(this.scene, 'meteorEffects', ring);
     ring.setStrokeStyle(2, visual.isVoid ? VOID_PALETTE.bright : 0xff8800, 0.7);
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_IMPACT);
@@ -386,6 +389,7 @@ export class MeteorRenderer {
       visual.isVoid ? VOID_PALETTE.shadow : 0x1a0a00,
       0.2,
     );
+    registerGraphicsObject(this.scene, 'meteorEffects', scorch);
     scorch.setDepth(DEPTH_WARNING - 0.1);
     this.scene.tweens.add({
       targets:    scorch,

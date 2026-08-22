@@ -153,6 +153,17 @@ nicht garantiert enthalten. Der bisherige Workflow bleibt gültig, sobald mindes
 Marker im Chrome-Trace liegt. P95/P99 und Slow-Frame-Anteil sind für Hänger aussagekräftiger als
 ein Mittelwert. Report-Schema und Messfelder leben in
 `src/scenes/arena/ArenaRuntimeProfiler.ts` und `src/scenes/arena/PerformanceAblation.ts`.
+Das Environment-Feld `renderer` unterscheidet dabei `webgl2` und `webgl1`; der asynchrone
+GPU-Timer nutzt auf WebGL2 `EXT_disjoint_timer_query_webgl2` und fällt auf WebGL1, sofern
+`EXT_disjoint_timer_query` verfügbar ist.
+
+Die aktive Attribution registriert jedes renderbare Vector-Objekt einzeln; ein Hook in derselben
+Source deckt keine weiteren Factory-Ergebnisse ab. Registrierung und Destroy-Lifecycle liefern
+je Graphics-Familie `createdObjects`/`destroyedObjects` als 250-ms-Intervallwerte und in der
+Recording-Summary. Der Performance-Report weist den verwendeten GPU-Timer-Backend sowie
+GPU-Framezeit als `avg`/`p95`/`p99`/`peak` aus. Draw Calls und Phaser-Batch-Flushes werden, wenn
+der konkrete Renderer-Hook verfügbar ist, separat erfasst; Pipeline- und Texture-Batch-Wechsel
+bleiben andernfalls explizit `unsupported`.
 
 Netzwerk-`bytesSent`/`bytesReceived` stammen weiterhin als echte Transportwerte aus WebRTC-
 Statistiken. Diagnose führt keine zusätzliche Serialisierungs- oder UTF-8-Runde ein; lokale

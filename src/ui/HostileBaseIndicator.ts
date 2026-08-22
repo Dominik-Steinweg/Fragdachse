@@ -4,6 +4,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { registerGraphicsObject } from '../effects/EffectUtils';
 
 const HOSTILE_BASE_EDGE_INSET_PX = 20;
 
@@ -112,10 +113,12 @@ export class HostileBaseIndicator {
     this.worldArrow = scene.add.graphics()
       .setDepth(DEPTH.BASES + 8)
       .setVisible(false);
+    registerGraphicsObject(scene, 'baseMarkers', this.worldArrow);
     this.edgeArrow = scene.add.graphics()
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);
+    registerGraphicsObject(scene, 'baseMarkers', this.edgeArrow);
     // Nur der Randpfeil ist HUD. `worldArrow` steht in Weltkoordinaten und bleibt in der Welt.
     promoteToClarityCamera(scene, this.edgeArrow);
     this.drawArrow(this.worldArrow);

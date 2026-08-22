@@ -16,6 +16,7 @@ import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { ArenaLayout, RockCell, TrackCell, GameMode, GamePhase } from '../types';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
+import { registerGraphicsObject } from '../effects/EffectUtils';
 import { ROCK_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
@@ -751,6 +752,7 @@ export class ArenaBuilder {
       alpha,
     );
     rect.setDepth(DEPTH.BASES);
+    registerGraphicsObject(this.scene, 'baseMarkers', rect);
     return rect;
   }
 

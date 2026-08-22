@@ -25,6 +25,7 @@ import type { FireballRenderer } from '../effects/FireballRenderer';
 import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
+import { registerGraphicsObject } from '../effects/EffectUtils';
 
 /** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
 const MIN_BODY_LEN = 10;
@@ -569,6 +570,11 @@ export class ProjectileManager {
     sprite.setDepth(DEPTH.PROJECTILES);
 
     this.createSpawnRendererVisuals(id, sprite, x, y, cfg);
+    // Renderer-übernommene Hitbox-Shapes sind bereits unsichtbar und werden nicht attribuiert.
+    // Sichtbare Host-Fallbacks (z. B. Ball/Shape ohne Spezialrenderer) bleiben messbar.
+    if (sprite.visible !== false && sprite.alpha !== 0) {
+      registerGraphicsObject(this.scene, 'projectileShapes', sprite);
+    }
 
     this.scene.physics.add.existing(sprite);
 
@@ -3041,6 +3047,7 @@ export class ProjectileManager {
             ? this.scene.add.circle(proj.x, proj.y, proj.size / 2, proj.color)
             : this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
           sprite.setDepth(DEPTH.PROJECTILES);
+          registerGraphicsObject(this.scene, 'projectileShapes', sprite);
           this.clientVisuals.set(proj.id, sprite);
         } else {
           existing.setPosition(proj.x, proj.y);

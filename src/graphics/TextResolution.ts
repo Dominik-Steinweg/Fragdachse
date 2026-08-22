@@ -57,6 +57,7 @@ export function installTextResolution(scene: Phaser.Scene): () => void {
 export function reRasterAllText(scene: Phaser.Scene): void {
   if (!scene.sys.isActive() && !scene.sys.isSleeping()) return;
   forEachText(scene.children.list, (text) => {
+    if (!isLiveText(text)) return;
     text.updateText();
   });
 }
@@ -64,9 +65,20 @@ export function reRasterAllText(scene: Phaser.Scene): void {
 function applyTextResolution(scene: Phaser.Scene): void {
   const resolution = getTextResolution(scene.scale);
   forEachText(scene.children.list, (text) => {
+    // Phaser destroys the Text texture before it has necessarily disappeared from a
+    // Container's child list. In that short window `frame.source` is null and both
+    // reading the style or calling setResolution would enter Phaser with invalid state.
+    if (!isLiveText(text)) return;
     if (text.style.resolution === resolution) return;
     text.setResolution(resolution);
   });
+}
+
+function isLiveText(text: Phaser.GameObjects.Text): boolean {
+  return !text.isDestroyed
+    && text.scene != null
+    && text.style != null
+    && text.frame?.source != null;
 }
 
 /** Läuft die Anzeigeliste ab und steigt dabei in Container und Layer hinab. */

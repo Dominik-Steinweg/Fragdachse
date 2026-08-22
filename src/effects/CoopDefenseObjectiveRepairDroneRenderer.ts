@@ -80,6 +80,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
         .setStrokeStyle(1, 0xbfffe3, 0.45)
         .setDepth(REPAIR_DRONE_DEPTH - 0.02)
         .setVisible(false);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
       const beam = this.scene.add.graphics()
         .setDepth(REPAIR_DRONE_DEPTH - 0.01)
         .setVisible(false);
@@ -87,7 +88,6 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(REPAIR_DRONE_DEPTH - 0.015)
         .setVisible(false);
-      registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
       registerGraphicsObject(this.scene, 'objectiveMarkers', beam);
       registerGraphicsObject(this.scene, 'objectiveMarkers', spark);
       this.drones.push({ body, glow, beam, spark });

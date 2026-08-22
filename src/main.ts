@@ -10,6 +10,7 @@ import { loadUiFonts } from './ui/uiFonts';
 import { validateGameContentReferences } from './loadout/content/GameContentValidation';
 import { BootScreen }     from './ui/BootScreen';
 import { t } from './i18n';
+import { createWebGLStartupContext } from './utils/webglContext';
 
 /**
  * Zeigt einen Verbindungsfehler an, statt ein Spiel zu starten, das nicht spielbar waere.
@@ -72,15 +73,6 @@ function showBootError(message: string, canRejoin: boolean, options: BootErrorOp
   container.appendChild(panel);
 }
 
-function hasWebGLSupport(): boolean {
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
-  } catch {
-    return false;
-  }
-}
-
 function isWebGLStartupError(error: unknown): boolean {
   return error instanceof Error && /webgl/i.test(error.message);
 }
@@ -108,7 +100,8 @@ function installPageLeave(): void {
 }
 
 async function boot(): Promise<void> {
-  if (!hasWebGLSupport()) {
+  const startupContext = createWebGLStartupContext();
+  if (!startupContext) {
     showBootError(
       t('ui.boot.webglRequiredDetail'),
       false,
@@ -144,11 +137,19 @@ async function boot(): Promise<void> {
   const renderSize = initialRenderSize();
   const game = new Phaser.Game({
     type:            Phaser.WEBGL,
+    canvas:          startupContext.canvas,
+    // Phaser 4.2.1's declaration only lists CanvasRenderingContext2D here, while its WebGL
+    // renderer explicitly accepts a supplied WebGL context at runtime.
+    context:         startupContext.context as unknown as CanvasRenderingContext2D,
     width:           renderSize.width,
     height:          renderSize.height,
     parent:          FULLSCREEN_TARGET_ID,
     backgroundColor: '#000000',
-    smoothPixelArt: true,
+    // Phaser 4.2.1's smooth-pixel shader is GLSL 1.00 and requires
+    // GL_OES_standard_derivatives, which is not available in WebGL2.
+    // Keep the existing behavior on WebGL1 and avoid compiling that shader
+    // on WebGL2, where derivatives are core GLSL ES 3 functionality.
+    smoothPixelArt: startupContext.rendererType === 'webgl1',
     physics: {
       default: 'arcade',
       arcade:  { gravity: { x: 0, y: 0 }, debug: false, fps: 120 },

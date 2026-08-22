@@ -85,13 +85,32 @@ describe('LivingFieldTexture', () => {
     expect(shaderInstances[0].renders).toBe(2);
   });
 
-  it('halves resolution below the high profile', () => {
+  it('keeps the texture resolution stable below the high profile', () => {
     shaderInstances.length = 0;
     const { scene } = makeScene('SceneC');
     new GraphicsQualityController('medium').attach(scene);
     const field = LivingFieldTexture.get(scene);
-    expect(field.getTextureWidth()).toBe(512);
-    expect(field.getPixelsPerUnit()).toBe(0.5);
+    expect(field.getTextureWidth()).toBe(1024);
+    expect(field.getTextureHeight()).toBe(128);
+    expect(field.getPixelsPerUnit()).toBe(1);
+  });
+
+  it('keeps existing texture consumers valid when quality changes', () => {
+    shaderInstances.length = 0;
+    const { scene } = makeScene('SceneE');
+    const controller = new GraphicsQualityController('high');
+    controller.attach(scene);
+    const field = LivingFieldTexture.get(scene);
+    field.retain();
+
+    const originalShader = shaderInstances[0];
+    controller.setLevel('medium');
+
+    expect(originalShader.destroyed).toBe(false);
+    expect(shaderInstances).toHaveLength(1);
+    expect(field.getTextureWidth()).toBe(1024);
+
+    field.release();
   });
 
   it('reports itself unavailable without a WebGL renderer', () => {

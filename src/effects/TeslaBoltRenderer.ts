@@ -169,6 +169,7 @@ export class TeslaBoltRenderer {
     const hotColor = mixColors(color, 0xffffff, 0.72);
 
     const flash = this.scene.add.circle(x, y, Math.max(size * 0.8, 7), hotColor, 0.9);
+    registerGraphicsObject(this.scene, 'teslaBoltEffects', flash);
     flash.setDepth(DEPTH.PROJECTILES + 0.3);
     makeAdditive(flash);
     this.scene.tweens.add({

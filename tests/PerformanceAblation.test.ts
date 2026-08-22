@@ -41,6 +41,10 @@ function makeController(children: FakeObject[]) {
   const dynamicShadowCalls: boolean[] = [];
   const lightCompositeCalls: boolean[] = [];
   const gpuParticleCalls: boolean[] = [];
+  const vectorEffectSystemCalls: boolean[] = [];
+  const vectorLightingCalls: boolean[] = [];
+  const vectorTreeTrunkCalls: boolean[] = [];
+  const vectorPowerUpCalls: boolean[] = [];
   const scene = { children: { list: children } } as never;
   const controller = new PerformanceAblationController(scene, {
     getGpuParticleSuppressor: () => ({
@@ -56,6 +60,18 @@ function makeController(children: FakeObject[]) {
     getLightingSystem: () => ({
       setCompositeSuppressed: (suppressed: boolean) => { lightCompositeCalls.push(suppressed); },
     }),
+    getVectorEffectSystem: () => ({
+      setSuppressed: (suppressed: boolean) => { vectorEffectSystemCalls.push(suppressed); },
+    }),
+    getVectorLighting: () => ({
+      setSuppressed: (suppressed: boolean) => { vectorLightingCalls.push(suppressed); },
+    }),
+    getVectorTreeTrunks: () => ({
+      setSuppressed: (suppressed: boolean) => { vectorTreeTrunkCalls.push(suppressed); },
+    }),
+    getVectorPowerUpEffects: () => ({
+      setSuppressed: (suppressed: boolean) => { vectorPowerUpCalls.push(suppressed); },
+    }),
   });
   return {
     controller,
@@ -64,6 +80,10 @@ function makeController(children: FakeObject[]) {
     dynamicShadowCalls,
     lightCompositeCalls,
     gpuParticleCalls,
+    vectorEffectSystemCalls,
+    vectorLightingCalls,
+    vectorTreeTrunkCalls,
+    vectorPowerUpCalls,
   };
 }
 
@@ -295,6 +315,36 @@ describe('performance ablation', () => {
     expect(gpuParticleCalls).toEqual([true, false]);
     expect(emitter.visible).toBe(true);
     expect(emitter.active).toBe(true);
+  });
+
+  it('runs the targeted vector ablations through their narrow switches', () => {
+    const {
+      controller,
+      vectorEffectSystemCalls,
+      vectorLightingCalls,
+      vectorTreeTrunkCalls,
+      vectorPowerUpCalls,
+    } = makeController([]);
+    controller.start(1000, 0);
+    const categories = [
+      ['vectorEffectSystem', vectorEffectSystemCalls],
+      ['vectorLighting', vectorLightingCalls],
+      ['vectorTreeTrunks', vectorTreeTrunkCalls],
+      ['vectorPowerUpEffects', vectorPowerUpCalls],
+    ] as const;
+
+    for (const [category, calls] of categories) {
+      const step = ABLATION_CATEGORIES.indexOf(category) * 2 + 1;
+      for (let time = 1; time <= step; time += 1) controller.update(time * 1000);
+      expect(controller.getCurrentCategory()).toBe(category);
+      expect(calls).toContain(true);
+    }
+
+    controller.stop((ABLATION_CATEGORIES.length * 2 + 1) * 1000);
+    expect(vectorEffectSystemCalls.at(-1)).toBe(false);
+    expect(vectorLightingCalls.at(-1)).toBe(false);
+    expect(vectorTreeTrunkCalls.at(-1)).toBe(false);
+    expect(vectorPowerUpCalls.at(-1)).toBe(false);
   });
 
   it('hides Arc and Graphics in nested containers for rendering only', () => {

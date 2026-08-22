@@ -61,8 +61,9 @@ export const CLASSIC_PARTICLE_FAMILIES = {
 export const GRAPHICS_FAMILIES = {
   lightingOcclusion: ['LightingSystem'],
   dynamicShadows: ['ShadowSystem'],
+  treeTrunks: ['ArenaVisualFactory'],
   spawnRings: ['SpawnEffectRenderer'],
-  playerStatus: ['PlayerStatusRing'],
+  playerStatus: ['PlayerStatusRing', 'PlayerEntity', 'DecoyEntity'],
   enemyStatus: ['EnemyEntity'],
   bossDecoration: ['EnemyEntity'],
   smokeStorm: ['SmokeSystem'],
@@ -83,6 +84,7 @@ export const GRAPHICS_FAMILIES = {
   objectiveMarkers: ['CoopDefenseSecondaryObjectiveMarkerRenderer', 'CoopDefenseObjectiveRepairDroneRenderer', 'RepairDroneRenderer'],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
   powerUpEffects: ['PowerUpRenderer'],
+  projectileShapes: ['ProjectileManager'],
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
   healingAura: ['HealingAuraRenderer'],
   teleportEffects: ['TranslocatorTeleportRenderer'],
@@ -91,7 +93,7 @@ export const GRAPHICS_FAMILIES = {
   weaponTrails: ['TracerRenderer'],
   biteEffects: ['BiteRenderer'],
   zeusTaserEffects: ['ZeusTaserRenderer'],
-  baseMarkers: ['BaseEntity'],
+  baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator'],
   placementPreview: ['PlacementPreviewRenderer'],
   rockTools: ['RockVisualHelper'],
   gameplayHud: ['ArenaHUD', 'CenterHUD', 'CoopDefenseSecondaryObjectiveHud'],
@@ -136,6 +138,7 @@ export interface GraphicsAttributionGauge {
 
 export interface GraphicsWorkCounters {
   createdObjects?: number;
+  destroyedObjects?: number;
   redraws?: number;
   primitivesBuilt?: number;
   commandsBuilt?: number;
@@ -185,6 +188,8 @@ interface ParticleRegistration {
 interface GraphicsRegistration {
   readonly object: Phaser.GameObjects.GameObject;
   readonly isActive?: () => boolean;
+  readonly countedCreation: boolean;
+  visibilityBeforeSuppression?: boolean;
   readonly unregister: () => void;
 }
 
@@ -211,6 +216,7 @@ export class ArenaVisualAttributionCollector implements ArenaVisualAttributionSo
   private readonly graphicsRegistrations = new Map<string, Map<object, GraphicsRegistration>>();
   private readonly particleOwners = new WeakMap<object, string>();
   private readonly graphicsOwners = new WeakMap<object, string>();
+  private readonly suppressedGraphicsFamilies = new Set<GraphicsFamily>();
   private readonly latestGraphicsGauges = new Map<string, GraphicsAttributionGauge>();
   private readonly intervalParticleSpawns: Record<string, number> = {};
   private readonly intervalGraphicsWork: Record<string, GraphicsWorkCounters> = {};
@@ -225,7 +231,11 @@ export class ArenaVisualAttributionCollector implements ArenaVisualAttributionSo
   };
 
   setActive(active: boolean): void {
+    if (!active && this.active) {
+      for (const family of [...this.suppressedGraphicsFamilies]) this.setGraphicsFamilySuppressed(family, false);
+    }
     this.active = active;
+    if (!active) this.suppressedGraphicsFamilies.clear();
   }
 
   isActive(): boolean {
@@ -284,16 +294,51 @@ export class ArenaVisualAttributionCollector implements ArenaVisualAttributionSo
     const registrations = this.graphicsRegistrations.get(family) ?? new Map<object, GraphicsRegistration>();
     this.graphicsRegistrations.set(family, registrations);
     let registered = true;
+    const countedCreation = this.active;
     const unregister = (): void => {
       if (!registered) return;
       registered = false;
       registrations.delete(resource);
       this.graphicsOwners.delete(resource);
+      if (countedCreation && this.active) this.recordGraphicsWork(family, { destroyedObjects: 1 });
     };
-    registrations.set(resource, { object, isActive, unregister });
+    registrations.set(resource, { object, isActive, countedCreation, unregister });
     this.graphicsOwners.set(resource, family);
+    if (countedCreation) this.recordGraphicsWork(family, { createdObjects: 1 });
+    if (this.suppressedGraphicsFamilies.has(family)) {
+      const target = object as Phaser.GameObjects.GameObject & { visible?: boolean; setVisible?: (visible: boolean) => unknown };
+      registrations.get(resource)!.visibilityBeforeSuppression = target.visible !== false;
+      target.setVisible?.(false);
+    }
     (object as unknown as { once?: (event: string, listener: () => void) => void }).once?.('destroy', unregister);
     return unregister;
+  }
+
+  /**
+   * Hides only already-attributed members of one family for a targeted diagnostic ablation.
+   * This deliberately reuses the registration registry; it never traverses a Scene display list.
+   */
+  setGraphicsFamilySuppressed(family: GraphicsFamily, suppressed: boolean): void {
+    if (!this.active) return;
+    const registrations = this.graphicsRegistrations.get(family);
+    if (suppressed) {
+      if (this.suppressedGraphicsFamilies.has(family)) return;
+      this.suppressedGraphicsFamilies.add(family);
+      for (const registration of registrations?.values() ?? []) {
+        const target = registration.object as Phaser.GameObjects.GameObject & { visible?: boolean; setVisible?: (visible: boolean) => unknown };
+        registration.visibilityBeforeSuppression = target.visible !== false;
+        target.setVisible?.(false);
+      }
+      return;
+    }
+    if (!this.suppressedGraphicsFamilies.delete(family)) return;
+    for (const registration of registrations?.values() ?? []) {
+      const target = registration.object as Phaser.GameObjects.GameObject & { setVisible?: (visible: boolean) => unknown };
+      if (registration.visibilityBeforeSuppression !== undefined) {
+        target.setVisible?.(registration.visibilityBeforeSuppression);
+        registration.visibilityBeforeSuppression = undefined;
+      }
+    }
   }
 
   recordParticleSpawn(family: ClassicParticleFamily, count: number): void {

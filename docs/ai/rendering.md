@@ -4,11 +4,13 @@ Diese Seite dokumentiert technische Renderverträge. Art Direction steht in visu
 
 ## Renderer-Voraussetzung
 
-Fragdachse startet ausschließlich mit `Phaser.WEBGL`. `src/main.ts` prüft vor Content-Validierung,
-Netzwerkaufbau und Phaser-Initialisierung, ob der Browser einen WebGL-Kontext bereitstellt, und
-zeigt bei fehlender Unterstützung eine reine DOM-Fehlermeldung. Der Phaser-Canvas bleibt dabei die
-Ausgabefläche; `CanvasTexture`, `createCanvas()` und Offscreen-Canvas für Textur-, Font- oder
-Pixel-Erzeugung sind weiterhin legitime Bestandteile des WebGL-Pfads.
+Fragdachse startet ausschließlich mit `Phaser.WEBGL`. `src/main.ts` erzeugt vor Content-
+Validierung, Netzwerkaufbau und Phaser-Initialisierung zuerst einen WebGL2-Kontext und übergibt
+ihn zusammen mit demselben Canvas über `GameConfig.context`/`GameConfig.canvas` an Phaser. Ist
+WebGL2 nicht verfügbar oder der erzeugte Kontext bereits verloren, werden WebGL1 und danach
+`experimental-webgl` versucht. WebGL2 ist damit optional; bei fehlendem WebGL bleibt die reine
+DOM-Fehlermeldung bestehen. `CanvasTexture`, `createCanvas()` und Offscreen-Canvas für
+Textur-, Font- oder Pixel-Erzeugung sind weiterhin legitime Bestandteile des WebGL-Pfads.
 
 ## Designraum, Canvas und Kamera
 
@@ -18,7 +20,7 @@ ArenaScene.bindCameraToDesignSpace() bindet die Hauptkamera an den Designraum un
 
 Rohes pointer.x/y ist in Renderpixeln. Für UI-Positionen zuerst toDesignSpace() aus RenderResolution.ts verwenden. camera.getWorldPoint() und Phaser-Input-Hit-Tests invertieren ihre Kameramatrix bereits; dort nicht zusätzlich umrechnen.
 
-Text wird in Designpixeln gerastert. Textobjekte über scene.add.text erzeugen, damit TextResolution.ts die Auflösung an die Renderauflösung und verspätet geladene UI-Schriften anpassen kann. Die Canvas verwendet bewusst kein image-rendering: pixelated; die bestehende smoothPixelArt-Strategie braucht gefilterte Skalierung.
+Text wird in Designpixeln gerastert. Textobjekte über scene.add.text erzeugen, damit TextResolution.ts die Auflösung an die Renderauflösung und verspätet geladene UI-Schriften anpassen kann. Die Canvas verwendet bewusst kein image-rendering: pixelated; die bestehende smoothPixelArt-Strategie braucht gefilterte Skalierung. Diese Strategie bleibt auf WebGL1 aktiv. Phaser 4.2.1 erzeugt dafür einen GLSL-1.00-Shader mit `GL_OES_standard_derivatives`; unter WebGL2 wird sie deshalb nur für diesen Phaser-Kompatibilitätspfad deaktiviert, damit der WebGL2-Renderer ohne ungültige Shader startet.
 
 Bei Origin (0, 0) ist camera.worldView für die sichtbare Weltfläche nicht die verlässliche Quelle. Sichtbarkeitslogik verwendet die abgeleitete getVisibleWorldView()-Hilfe aus src/ui/HostileBaseIndicator.ts beziehungsweise den dort etablierten Vertrag. Ein HUD-Container mit absolut positionierten Kindern wird nicht skaliert; für Popups den Container auf die Elementmitte setzen und Kinder lokal platzieren.
 
@@ -308,6 +310,10 @@ Zwei Traeger, weil die Geometrie verschieden ist:
   jeder Balken ist danach ein additiv getintetes `Image`, das ueber `setCrop` ein Fenster dieser
   Textur zeigt. Balken sind damit batchbar und kosten keine eigenen GL-Objekte — wichtig, weil das
   Upgrade-Overlay bei jedem `refresh()` alle Knoteneffekte neu baut.
+- **Stabiles Renderziel**: `LivingFieldTexture` behaelt fuer alle Qualitaetsstufen dieselbe
+  Texturgroesse (1024x128), weil die vorhandenen Balkenbilder am Texture-Key gebunden bleiben.
+  Die Qualitaet aendert dort nur das Renderintervall; ein Textur-Rebuild wuerde die Quellen der
+  vorhandenen Images zerstoeren und alle Consumer synchron neu binden muessen.
 - **Ring**: ein eigener Shader-Quad im Polarraum, an der Display-Liste, mit den vier Ressourcen als
   Uniform-Segmenten. Winkel- und Radientest im Shader entsprechen exakt der Verwerfung, die die
   fruehere `ArcRingRandomSource` beim Ziehen der Emit-Position vornahm.

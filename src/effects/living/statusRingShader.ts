@@ -70,11 +70,13 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   '  return step(inner, radius) * step(radius, outer);',
   '}',
   'void main () {',
-  '  vec2 local = (outTexCoord - 0.5) * uSize;',
+  // ShaderQuad uses WebGL texture coordinates (y=1 at the visual top). Convert them to the
+  // same screen-space axes as `degToRadFromTop` in PlayerStatusRing (x right, y down).
+  '  vec2 local = vec2(outTexCoord.x - 0.5, 0.5 - outTexCoord.y) * uSize;',
   '  float radius = length(local);',
   // Winkel von oben im Uhrzeigersinn — dieselbe Konvention wie `degToRadFromTop` auf der
-  // TypeScript-Seite.
-  '  float angle = atan(local.x, -local.y);',
+  // TypeScript-Seite. `atan` liefert [-PI, PI], die Ringwinkel liegen aber in [0, TAU).
+  `  float angle = mod(atan(local.x, -local.y) + ${TAU}, ${TAU});`,
   '  float core = livingField(',
   `    local, uTime, ${CORE_CELL.toFixed(1)}, 0.0, ${CORE_LIFE.toFixed(4)},`,
   `    ${CORE_DIAMETER_START.toFixed(1)}, ${CORE_DIAMETER_END.toFixed(1)},`,
@@ -92,7 +94,10 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   '    vec4 band = uSegmentBand[i];',
   '    float width = abs(arc.y);',
   '    if (band.w <= 0.0 || width < 0.0001) continue;',
-  `    float rel = arc.y >= 0.0 ? mod(angle - arc.x + ${TAU}, ${TAU}) : mod(arc.x - angle + ${TAU}, ${TAU});`,
+  // `arc.y` is the signed TypeScript delta from `getFilledSection`: preserve its direction and
+  // compare both angles in the same normalized domain as `angle`.
+  `    float start = mod(arc.x + ${TAU}, ${TAU});`,
+  `    float rel = arc.y >= 0.0 ? mod(angle - start + ${TAU}, ${TAU}) : mod(start - angle + ${TAU}, ${TAU});`,
   '    if (rel > width) continue;',
   `    float activity = 1.0 + band.z * ${(ACTIVE_GAIN - 1).toFixed(3)};`,
   `    float gain = ${FIELD_GAIN.toFixed(3)} * activity * band.w;`,

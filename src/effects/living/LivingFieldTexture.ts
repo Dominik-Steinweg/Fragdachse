@@ -84,8 +84,20 @@ interface QualityStep {
   readonly intervalMs: number;
 }
 
-const QUALITY_HIGH: QualityStep = { width: 1024, height: 128, intervalMs: 1000 / 30 };
-const QUALITY_MEDIUM: QualityStep = { width: 512, height: 64, intervalMs: 1000 / 20 };
+// LivingBarEffect keeps Image consumers bound to this texture key. Keep the render target size
+// stable across quality changes; changing it destroys the source behind all existing tiles.
+const FIELD_TEXTURE_WIDTH = 1024;
+const FIELD_TEXTURE_HEIGHT = 128;
+const QUALITY_HIGH: QualityStep = {
+  width: FIELD_TEXTURE_WIDTH,
+  height: FIELD_TEXTURE_HEIGHT,
+  intervalMs: 1000 / 30,
+};
+const QUALITY_MEDIUM: QualityStep = {
+  width: FIELD_TEXTURE_WIDTH,
+  height: FIELD_TEXTURE_HEIGHT,
+  intervalMs: 1000 / 20,
+};
 
 const instances = new WeakMap<Phaser.Scene, LivingFieldTexture>();
 
@@ -117,8 +129,11 @@ export class LivingFieldTexture {
 
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe(() => {
       const next = resolveStep(scene);
-      if (next === this.step) return;
+      const textureSizeChanged = next.width !== this.step.width || next.height !== this.step.height;
       this.step = next;
+      // The render cadence may change without touching the shared texture. Existing Images must
+      // keep their frame source alive because Phaser destroys it when the texture is replaced.
+      if (!textureSizeChanged) return;
       // Ein Shader-Renderziel darf nicht in der Groesse veraendert werden; jeder Konsument haelt
       // bereits einen Frame darauf. Neu bauen statt anpassen.
       const hadConsumers = this.consumers > 0;

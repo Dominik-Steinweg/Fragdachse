@@ -747,6 +747,7 @@ export class CenterHUD {
 
     this.encounterBg = this.scene.add.image(0, 0, ENCOUNTER_BG_TEX).setOrigin(0.5);
     this.encounterFrame = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.encounterFrame);
     this.encounterRailGlow = this.scene.add
       .image(ENCOUNTER_RAIL_X, 0, ENCOUNTER_RAIL_GLOW_TEX)
       .setOrigin(0.5)
@@ -756,6 +757,7 @@ export class CenterHUD {
       .image(ENCOUNTER_RAIL_X, 0, ENCOUNTER_RAIL_TEX)
       .setOrigin(0.5);
     this.encounterPips = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.encounterPips);
 
     this.encounterKicker = this.scene.add
       .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_KICKER_Y, t('ui.encounter.series'), ENCOUNTER_KICKER_FONT)
@@ -797,6 +799,7 @@ export class CenterHUD {
 
   private buildTutorialPanel(): void {
     this.tutorialGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.tutorialGraphics);
     this.tutorialTitle = this.scene.add.text(0, TUTORIAL_PAD_TOP, t('ui.help.title'), TUTORIAL_TITLE_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(1);
@@ -848,6 +851,7 @@ export class CenterHUD {
     this.announcementBg = this.scene.add.rectangle(CENTER_X, ANNOUNCEMENT_Y, ANNOUNCEMENT_MIN_W, ANNOUNCEMENT_MIN_H, PANEL_BG_COL, PANEL_BG_ALPHA)
       .setScrollFactor(0)
       .setVisible(false);
+    registerGraphicsObject(this.scene, 'gameplayHud', this.announcementBg);
     this.announcementText = this.scene.add.text(CENTER_X, ANNOUNCEMENT_Y, '', ANNOUNCEMENT_FONT)
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -894,6 +898,7 @@ export class CenterHUD {
       .setFillStyle(0, 0)
       .setAlpha(TRAIN_BAR_ALPHA)
       .setVisible(false);
+    registerGraphicsObject(this.scene, 'gameplayHud', this.trainBarBorder);
     this.container.add(this.trainBarBorder);
   }
 
@@ -909,6 +914,7 @@ export class CenterHUD {
 
     const panelBg = this.scene.add.rectangle(0, STACK_TOTAL_H / 2, STACK_PANEL_W, STACK_PANEL_H, PANEL_BG_COL, PANEL_BG_ALPHA)
       .setScrollFactor(0);
+    registerGraphicsObject(this.scene, 'gameplayHud', panelBg);
     const label = this.scene.add.text(0, 0, '', LABEL_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
@@ -924,6 +930,7 @@ export class CenterHUD {
       .setScrollFactor(0)
       .setStrokeStyle(1, COL_BORDER, 1)
       .setFillStyle(0, 0);
+    registerGraphicsObject(this.scene, 'gameplayHud', border);
 
     const energyZone = new Phaser.Geom.Rectangle(STACK_BAR_LEFT + 2, STACK_LABEL_H + 1, STACK_BAR_W - 4, STACK_BAR_H - 2);
     const zoneData = randomEmitZoneData(energyZone as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource);

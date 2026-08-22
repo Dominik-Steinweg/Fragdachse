@@ -202,6 +202,7 @@ export class AsmdPrimaryRenderer {
     const baseColor = mixColors(playerColor, COLORS.BLUE_1, 0.48);
     const haloRadius = Math.max(thickness * (impactKind === 'player' ? 2.6 : 3.4), impactKind === 'player' ? 7 : 9);
     const halo = this.scene.add.circle(x, y, haloRadius, baseColor, 0.42);
+    registerGraphicsObject(this.scene, 'asmdEffects', halo);
     halo.setDepth(DEPTH_TRACE + 0.1);
     makeAdditive(halo);
     this.scene.tweens.add({
@@ -216,6 +217,7 @@ export class AsmdPrimaryRenderer {
 
     const flashColor = mixColors(playerColor, 0xffffff, impactKind === 'player' ? 0.58 : 0.42);
     const flash = this.scene.add.circle(x, y, Math.max(thickness * (impactKind === 'player' ? 1.8 : 1.35), 3), flashColor, 0.72);
+    registerGraphicsObject(this.scene, 'asmdEffects', flash);
     flash.setDepth(DEPTH_TRACE + 0.13);
     makeAdditive(flash);
     this.scene.tweens.add({
@@ -275,6 +277,7 @@ export class AsmdPrimaryRenderer {
     const flashY = y + dirY * beamThickness * 0.55;
 
     const bloom = this.scene.add.circle(x, y, Math.max(beamThickness * 1.18, 7), glowColor, 0.28);
+    registerGraphicsObject(this.scene, 'asmdEffects', bloom);
     bloom.setDepth(DEPTH_TRACE + 0.1);
     makeAdditive(bloom);
 
