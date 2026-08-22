@@ -34,6 +34,7 @@ export const GpuVfxEffectId = {
   EntityBurnSpark:    20,
   LeafDebris:         21,
   LeafBlowerDust:     22,
+  GroundFireHeatBody:  23,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -153,13 +154,13 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     importance: 'standard',
     release: 'kill-with-source',
   },
-  // ── Bodenfeuer. Eine erloschene Ground-Cell liess ihre Partikel bisher auslaufen; nur der
+  // ── Bodenfeuer. Eine erloschene GroundFire-Quelle laesst ihre Partikel auslaufen; nur der
   //    Rundenteardown raeumt sie ab. Deshalb `linger` und eine einzige geteilte Quelle.
   {
     id: GpuVfxEffectId.GroundFireOuter,
     label: 'groundfire.outer',
     lane: GpuVfxLaneId.GroundFire,
-    frame: GpuVfxFrameId.FlameOuter,
+    frame: GpuVfxFrameId.FlameBillow,
     importance: 'standard',
     release: 'linger',
   },
@@ -167,7 +168,7 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.GroundFireCore,
     label: 'groundfire.core',
     lane: GpuVfxLaneId.GroundFire,
-    frame: GpuVfxFrameId.FlameCore,
+    frame: GpuVfxFrameId.FlameTongue,
     importance: 'standard',
     release: 'linger',
   },
@@ -252,6 +253,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     label: 'leafblower.dust',
     lane: GpuVfxLaneId.WorldDebris,
     frame: GpuVfxFrameId.LeafBlowerDust,
+    importance: 'standard',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.GroundFireHeatBody,
+    label: 'groundfire.heat-body',
+    lane: GpuVfxLaneId.GroundFire,
+    frame: GpuVfxFrameId.FlameBillow,
     importance: 'standard',
     release: 'linger',
   },

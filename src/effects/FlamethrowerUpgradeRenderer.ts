@@ -1,55 +1,28 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { OwnerVisualSource } from '../entities/OwnerVisualSource';
-import type { FireChunkTarget, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
+import type { FireChunkTarget, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundSnapshot } from '../types';
 import {
   createEmitter,
   destroyEmitter,
-  ensureCanvasTexture,
   killAllAndResetParticlePositions,
 } from './EffectUtils';
 import {
   ensureFlameTextures,
   ensureVoidFlameTextures,
-  FLAME_COLORS_CORE,
   FLAME_COLORS_OUTER,
   FLAME_COLORS_SPARK,
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
   TEX_FLAME_SPARK,
   TEX_VOID_FLAME_EMBER,
-  VOID_FLAME_COLORS_CORE,
   VOID_FLAME_COLORS_OUTER,
-  VOID_FLAME_COLORS_SPARK,
 } from './FlameShared';
-import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
-import { GpuVfxEase } from './gpu/GpuVfxEase';
-import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
-import { pickGpuVfxTint } from './gpu/GpuVfxMember';
-import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
-import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
-import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
-import { GROUND_FIRE_LIGHT_BUCKET_SIZE, MAX_GROUND_FIRE_LIGHTS } from './LightingConfig';
+import { GroundFireClusterRenderer } from './GroundFireClusterRenderer';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { LightingSystem } from './LightingSystem';
 
-const TEX_GROUND_HEAT = '__ground_fire_heat_haze';
-const TEX_VOID_GROUND_HEAT = '__void_ground_fire_heat_haze';
-const GROUND_DEPTH = DEPTH.ROCKS - 0.24;
-/** Rauchtoene des Bodenfeuers; unveraendert aus dem fruehreren Smoke-Emitter. */
-const GROUND_SMOKE_COLORS = [0x72675d, 0x857468, 0x5c5651] as const;
 const RING_PARTICLE_DEPTH = DEPTH.FIRE + 0.12;
-const MAX_GROUND_EMISSIONS_PER_SECOND = 540;
-/**
- * Wie viele Heat-Haze-Bilder ueber ein Rundenende hinaus vorgehalten werden.
- *
- * Der Pool waechst innerhalb einer Runde bis zum Spitzenbedarf – das ist gewollt, damit
- * Bodenfeuer nicht mitten im Gefecht nachallokiert. Er wurde bisher aber nie wieder
- * verkleinert: Da der Renderer scene-lifetime ist, blieb die Spitze einer Runde fuer die
- * gesamte Sitzung als unsichtbare Objekte in der Display-Liste liegen und wurde auch in der
- * Lobby jeden Frame mit durch Update- und Depth-Sort-Paesse gezogen. Beim Teardown bleibt
- * deshalb nur noch ein Grundstock stehen.
- */
-const GROUND_IMAGE_POOL_RETAINED = 32;
 const RING_BAND_THICKNESS = 16;
 const RING_CORE_THICKNESS = 7;
 const RING_POINT_SPACING = 4;
@@ -66,14 +39,6 @@ const RING_ACCENT_RATE_AT_BASE_RADIUS = 88;
 const RING_BASE_RADIUS = 64;
 const RING_GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const TWO_PI = Math.PI * 2;
-
-interface GroundVisual {
-  image: Phaser.GameObjects.Image;
-  expiresAt: number;
-  intensity: number;
-  phase: number;
-  visualStyle: GroundFireVisualStyle;
-}
 
 interface RingVisual {
   radius: number;
@@ -142,53 +107,20 @@ class RingTurbulenceProcessor extends Phaser.GameObjects.Particles.ParticleProce
 
 /**
  * Gemeinsamer Partikelrenderer fuer das 16-Pixel-Brandraster und Flammenringe.
- * Weit ueberlappende, weiche Heat-Haze-Decals verbinden Nachbarzellen; die
- * sichtbaren Flammen, Glut und Funken stammen aus wenigen gepoolten Emittern.
+ * GroundFire wird als zusammenhaengende Clusterflaeche visualisiert; die
+ * sichtbaren Flammen, Glut und Funken stammen aus wenigen gepoolten GPUFX-Flows.
  */
 export class FlamethrowerUpgradeRenderer {
-  private readonly ground = new Map<string, GroundVisual>();
-  private readonly groundImagePool: Phaser.GameObjects.Image[] = [];
+  private readonly groundFire: GroundFireClusterRenderer;
   private readonly flyingChunks = new Set<Phaser.GameObjects.Image>();
   private readonly ringRadii = new Map<string, number>();
   private readonly ringVisuals = new Map<string, RingVisual>();
   private readonly ringFlames: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly ringSparks: Phaser.GameObjects.Particles.ParticleEmitter;
-  private cells: readonly SyncedBurningGroundCell[] = [];
-  /**
-   * Das Bodenfeuer emittiert ueber GPUFX; die Auswahl der Zelle, die Rate und der Frame-Deckel
-   * bleiben CPU-seitig. Alle vier Effekte haengen an *einer* Quelle: eine erloschene Zelle laesst
-   * ihre Partikel auslaufen, nur der Rundenteardown raeumt sie ab.
-   */
-  private gpuVfx: GpuVfxSystem | null = null;
-  private groundOuterSpec: GpuVfxSpawnSpec | null = null;
-  private groundCoreSpec: GpuVfxSpawnSpec | null = null;
-  private groundSparkSpec: GpuVfxSpawnSpec | null = null;
-  private groundSmokeSpec: GpuVfxSpawnSpec | null = null;
-  private groundSource = GPU_VFX_NO_SOURCE_HANDLE;
-  private groundAccumulator = 0;
   private previousNow = 0;
   private lastUpdateMs = 0;
   private performanceMetricsEnabled = false;
   private lighting: LightingSystem | null = null;
-  /**
-   * Gröbere Cluster-Ebene über der 32-px-Blockkarte, allein für die Beleuchtung:
-   * ein Flächenbrand soll wenige große warme Lichter werfen statt hunderter kleiner.
-   * Wiederverwendete Puffer, damit pro Frame nichts allokiert wird.
-   */
-  private readonly groundLightBuckets = new Map<string, {
-    x: number;
-    y: number;
-    weight: number;
-    visualStyle: GroundFireVisualStyle;
-  }>();
-  private readonly activeGroundLightKeys = new Set<string>();
-  private readonly groundLightRanking: Array<{
-    key: string;
-    x: number;
-    y: number;
-    weight: number;
-    visualStyle: GroundFireVisualStyle;
-  }> = [];
   private nextChunkLightId = 0;
   private readonly activeChunkLightKeys = new Set<string>();
 
@@ -198,8 +130,7 @@ export class FlamethrowerUpgradeRenderer {
   ) {
     ensureFlameTextures(scene);
     ensureVoidFlameTextures(scene);
-    this.ensureHeatTexture();
-    this.ensureVoidHeatTexture();
+    this.groundFire = new GroundFireClusterRenderer();
     this.ringFlames = this.createRingFlameEmitter(RING_PARTICLE_DEPTH + 0.04);
     this.ringSparks = this.createRingSparkEmitter(RING_PARTICLE_DEPTH + 0.1);
     this.ringFlames.addParticleProcessor(new RingTurbulenceProcessor(32));
@@ -207,117 +138,16 @@ export class FlamethrowerUpgradeRenderer {
   }
 
   /**
-   * Meldet die vier Bodenfeuer-Effekte beim szenenweiten GPUFX-Backend an. Der Flammenring
+   * Meldet den GroundFire-Clusterrenderer beim szenenweiten GPUFX-Backend an. Der Flammenring
    * bleibt bewusst auf klassischen Emittern: er haengt an eigener Ringgeometrie und am
    * `RingTurbulenceProcessor`, beides hat im GPUFX-Modell keine Entsprechung.
    */
   registerGpuVfx(system: GpuVfxSystem): void {
-    if (this.gpuVfx) return;
-    this.gpuVfx = system;
-
-    // Die Lane traegt -36 px/s²; die schwaecheren Beschleunigungen der alten Emitter kommen
-    // ueber den Anteil an dieser Gravity zurueck.
-    const outer = system.createSpec(GpuVfxEffectId.GroundFireOuter);
-    outer.yMode = GpuVfxEase.Gravity;
-    outer.gravityFactor = 10 / 36;
-    outer.scaleStart = 0.67;
-    outer.scaleEnd = 0.055;
-    outer.alphaStart = 0.82;
-    outer.alphaEnd = 0;
-    this.groundOuterSpec = outer;
-
-    const core = system.createSpec(GpuVfxEffectId.GroundFireCore);
-    core.yMode = GpuVfxEase.Gravity;
-    core.gravityFactor = 18 / 36;
-    core.scaleStart = 0.52;
-    core.scaleEnd = 0.035;
-    core.alphaStart = 0.96;
-    core.alphaEnd = 0;
-    this.groundCoreSpec = core;
-
-    // Funken laufen mit der vollen Lane-Gravity, `gravityFactor` bleibt auf 1.
-    const spark = system.createSpec(GpuVfxEffectId.GroundFireSpark);
-    spark.yMode = GpuVfxEase.Gravity;
-    spark.scaleStart = 0.75;
-    spark.scaleEnd = 0.04;
-    spark.alphaStart = 1;
-    spark.alphaEnd = 0;
-    this.groundSparkSpec = spark;
-
-    // Der Rauch stieg schon bisher ohne Gravity auf und blendet als einziger normal.
-    const smoke = system.createSpec(GpuVfxEffectId.GroundFireSmoke);
-    smoke.scaleStart = 0.34;
-    smoke.scaleEnd = 0.78;
-    smoke.alphaStart = 0.16;
-    smoke.alphaEnd = 0;
-    this.groundSmokeSpec = smoke;
-
-    this.groundSource = system.createSource(GpuVfxEffectId.GroundFireOuter);
-    system.registerEmission((deltaMs, nowMs) => this.emitGroundParticles(deltaMs, nowMs));
+    this.groundFire.registerGpuVfx(system);
   }
 
-  syncGround(snapshot: SyncedBurningGroundSnapshot): void {
-    this.cells = snapshot.cells;
-    const blocks = new Map<string, {
-      x: number;
-      y: number;
-      expiresAt: number;
-      intensity: number;
-      seed: number;
-      visualStyle: GroundFireVisualStyle;
-    }>();
-    for (const cell of snapshot.cells) {
-      const blockX = Math.floor(cell.gridX / 2);
-      const blockY = Math.floor(cell.gridY / 2);
-      const key = `${cell.visualStyle}:${blockX}:${blockY}`;
-      const current = blocks.get(key);
-      if (current) {
-        current.expiresAt = Math.max(current.expiresAt, cell.expiresAt);
-        current.intensity += Math.max(1, cell.intensity);
-      } else {
-        blocks.set(key, {
-          x: (blockX * 2 + 1) * GROUND_FIRE_CELL_SIZE,
-          y: (blockY * 2 + 1) * GROUND_FIRE_CELL_SIZE,
-          expiresAt: cell.expiresAt,
-          intensity: Math.max(1, cell.intensity),
-          seed: (blockX * 73856093) ^ (blockY * 19349663) ^ (cell.visualStyle === 'void' ? 83492791 : 0),
-          visualStyle: cell.visualStyle,
-        });
-      }
-    }
-    for (const [key, visual] of this.ground) {
-      if (!blocks.has(key)) this.releaseGroundVisual(key, visual);
-    }
-
-    for (const [key, block] of blocks) {
-      let visual = this.ground.get(key);
-      if (!visual) {
-        const image = this.groundImagePool.pop()
-          ?? this.scene.add.image(0, 0, TEX_GROUND_HEAT);
-        const phase = this.seededUnit(block.seed, 17) * Math.PI * 2;
-        image
-          .setTexture(block.visualStyle === 'void' ? TEX_VOID_GROUND_HEAT : TEX_GROUND_HEAT)
-          .setPosition(
-            block.x + (this.seededUnit(block.seed, 31) - 0.5) * GROUND_FIRE_CELL_SIZE * 0.65,
-            block.y + (this.seededUnit(block.seed, 47) - 0.5) * GROUND_FIRE_CELL_SIZE * 0.6,
-          )
-          .setDepth(GROUND_DEPTH)
-          .setBlendMode(Phaser.BlendModes.ADD)
-          .setRotation(phase)
-          .setVisible(true)
-          .setActive(true);
-        visual = {
-          image,
-          expiresAt: block.expiresAt,
-          intensity: block.intensity,
-          phase,
-          visualStyle: block.visualStyle,
-        };
-        this.ground.set(key, visual);
-      }
-      visual.expiresAt = block.expiresAt;
-      visual.intensity = block.intensity;
-    }
+  syncGround(snapshot: SyncedBurningGroundSnapshot, now = Date.now()): void {
+    this.groundFire.syncGround(snapshot, now);
   }
 
   playFireChunkBurst(
@@ -369,12 +199,7 @@ export class FlamethrowerUpgradeRenderer {
           this.lighting?.pulse(isVoid ? 'voidFireChunkImpact' : 'fireChunkImpact', target.x, target.y);
           // Der Einschlag benutzt dieselben Bodenfeuer-Effekte, entsteht aber ausserhalb des
           // Emissions-Ticks: die Partikeluhr steht noch auf dem Stand des Vorframes.
-          const system = this.gpuVfx;
-          if (!system || system.isSuppressed()) return;
-          const burstAt = system.now();
-          this.spawnGroundOuter(target.x, target.y, 3, visualStyle, burstAt);
-          this.spawnGroundCore(target.x, target.y, 2, visualStyle, burstAt);
-          this.spawnGroundSpark(target.x, target.y, 3, visualStyle, burstAt);
+          this.groundFire.spawnImpact(target.x, target.y, visualStyle);
         },
       });
     }
@@ -397,98 +222,9 @@ export class FlamethrowerUpgradeRenderer {
     const updateStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const delta = this.previousNow > 0 ? Phaser.Math.Clamp(now - this.previousNow, 0, 100) : 16.67;
     this.previousNow = now;
-
-    for (const [id, visual] of this.ground) {
-      const remaining = visual.expiresAt - now;
-      if (remaining <= 0) {
-        this.releaseGroundVisual(id, visual);
-        continue;
-      }
-      const intensity = Phaser.Math.Clamp(Math.log2(visual.intensity + 1) / 3, 0.28, 1);
-      const fade = Phaser.Math.Clamp(remaining / 420, 0, 1);
-      const breathe = 1 + Math.sin(now * 0.0022 + visual.phase) * 0.055;
-      const baseScale = (GROUND_FIRE_CELL_SIZE * (3.7 + intensity * 0.52)) / 96;
-      visual.image
-        .setScale(baseScale * breathe, baseScale * (0.88 + Math.cos(now * 0.0017 + visual.phase) * 0.045))
-        .setRotation(visual.phase + Math.sin(now * 0.00045 + visual.phase) * 0.08)
-        .setAlpha((0.12 + intensity * 0.24) * fade)
-        .setTint(
-          visual.visualStyle === 'void'
-            ? (intensity > 0.72 ? 0xd989ff : 0x9b3ce0)
-            : (intensity > 0.72 ? 0xff9a32 : 0xd94a1f),
-        );
-    }
-
-    // Die Bodenemission haengt am GPUFX-Emissions-Tick, nicht an diesem Update: das Backend
-    // legt zuerst abgelaufene Member still und emittiert danach. `delta` bleibt hier fuer den
-    // Flammenring stehen, der weiterhin auf klassischen Emittern laeuft.
+    this.groundFire.update(now);
     this.updateRingVisuals(delta, now);
-    this.syncGroundFireLights(now);
     if (this.performanceMetricsEnabled) this.lastUpdateMs = performance.now() - updateStartedAt;
-  }
-
-  /**
-   * Fasst die Bodenfeuer-Blöcke zu wenigen Lichtern zusammen. Die Blockkarte `ground`
-   * ist die einzige Quelle; erlischt ein Block, verschwindet sein Beitrag automatisch,
-   * und leergelaufene Licht-Buckets werden freigegeben.
-   */
-  private syncGroundFireLights(now: number): void {
-    const lighting = this.lighting;
-    if (!lighting) return;
-
-    const buckets = this.groundLightBuckets;
-    buckets.clear();
-
-    for (const visual of this.ground.values()) {
-      const remaining = visual.expiresAt - now;
-      if (remaining <= 0) continue;
-      const bucketX = Math.floor(visual.image.x / GROUND_FIRE_LIGHT_BUCKET_SIZE);
-      const bucketY = Math.floor(visual.image.y / GROUND_FIRE_LIGHT_BUCKET_SIZE);
-      const key = `${visual.visualStyle}:${bucketX}:${bucketY}`;
-      const weight = Phaser.Math.Clamp(Math.log2(visual.intensity + 1) / 3, 0.28, 1)
-        * Phaser.Math.Clamp(remaining / 420, 0, 1);
-
-      const existing = buckets.get(key);
-      if (existing) {
-        existing.weight += weight;
-      } else {
-        buckets.set(key, {
-          x: (bucketX + 0.5) * GROUND_FIRE_LIGHT_BUCKET_SIZE,
-          y: (bucketY + 0.5) * GROUND_FIRE_LIGHT_BUCKET_SIZE,
-          weight,
-          visualStyle: visual.visualStyle,
-        });
-      }
-    }
-
-    this.groundLightRanking.length = 0;
-    for (const [key, bucket] of buckets) {
-      this.groundLightRanking.push({
-        key,
-        x: bucket.x,
-        y: bucket.y,
-        weight: bucket.weight,
-        visualStyle: bucket.visualStyle,
-      });
-    }
-    this.groundLightRanking.sort((left, right) => right.weight - left.weight);
-    if (this.groundLightRanking.length > MAX_GROUND_FIRE_LIGHTS) {
-      this.groundLightRanking.length = MAX_GROUND_FIRE_LIGHTS;
-    }
-
-    const stillActive = this.activeGroundLightKeys;
-    for (const entry of this.groundLightRanking) {
-      const strength = Phaser.Math.Clamp(entry.weight, 0.25, 2.2);
-      lighting.setLight(`groundfire:${entry.key}`, entry.visualStyle === 'void' ? 'voidGroundFire' : 'groundFire', entry.x, entry.y, {
-        radiusPx: GROUND_FIRE_LIGHT_BUCKET_SIZE * (1.1 + Math.min(strength, 1.6) * 0.6),
-        intensity: 0.45 + Math.min(strength, 1.6) * 0.3,
-      });
-      stillActive.delete(entry.key);
-    }
-    for (const staleKey of stillActive) lighting.releaseLight(`groundfire:${staleKey}`);
-
-    stillActive.clear();
-    for (const entry of this.groundLightRanking) stillActive.add(entry.key);
   }
 
   getLastUpdateCostMs(): number { return this.lastUpdateMs; }
@@ -501,23 +237,15 @@ export class FlamethrowerUpgradeRenderer {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+    this.groundFire.setLightingSystem(lighting);
   }
 
   clear(): void {
-    this.cells = [];
-    for (const [id, visual] of this.ground) this.releaseGroundVisual(id, visual);
+    this.groundFire.clear();
     this.ringRadii.clear();
     for (const [playerId, visual] of this.ringVisuals) this.destroyRingVisual(playerId, visual);
-    this.groundAccumulator = 0;
     this.previousNow = 0;
     this.lastUpdateMs = 0;
-    // Die Quelle bleibt bestehen, ihre Member werden stillgelegt – der Renderer ist
-    // scene-lifetime und braucht nach dem Rundenende keinen neuen Handle.
-    this.gpuVfx?.clearSource(this.groundSource);
-    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.GroundFireOuter);
-    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.GroundFireCore);
-    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.GroundFireSpark);
-    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.GroundFireSmoke);
     killAllAndResetParticlePositions(this.ringFlames);
     killAllAndResetParticlePositions(this.ringSparks);
     for (const chunk of this.flyingChunks) {
@@ -528,180 +256,13 @@ export class FlamethrowerUpgradeRenderer {
     // Die Tweens wurden abgebrochen, ihre onComplete-Freigabe läuft also nicht mehr.
     for (const key of this.activeChunkLightKeys) this.lighting?.releaseLight(key);
     this.activeChunkLightKeys.clear();
-    for (const key of this.activeGroundLightKeys) this.lighting?.releaseLight(`groundfire:${key}`);
-    this.activeGroundLightKeys.clear();
-    this.groundLightBuckets.clear();
-    this.groundLightRanking.length = 0;
-    this.trimGroundImagePool();
-  }
-
-  /**
-   * Gibt den ueber den Grundstock hinausgehenden Teil des Heat-Haze-Pools frei. Rein
-   * unsichtbare, inaktive Bilder – optisch aendert sich dadurch nichts, und innerhalb einer
-   * laufenden Runde wird nie getrimmt.
-   */
-  private trimGroundImagePool(): void {
-    for (let i = this.groundImagePool.length - 1; i >= GROUND_IMAGE_POOL_RETAINED; i--) {
-      this.groundImagePool[i].destroy();
-    }
-    if (this.groundImagePool.length > GROUND_IMAGE_POOL_RETAINED) {
-      this.groundImagePool.length = GROUND_IMAGE_POOL_RETAINED;
-    }
   }
 
   destroyAll(): void {
     this.clear();
-    for (const image of this.groundImagePool) image.destroy();
-    this.groundImagePool.length = 0;
+    this.groundFire.destroyAll();
     destroyEmitter(this.ringFlames);
     destroyEmitter(this.ringSparks);
-  }
-
-  /**
-   * Vom GpuVfxSystem pro Renderframe nach dem Retire-Sweep gerufen. Zellauswahl, Rate, Deckel
-   * und Jitter sind unveraendert; nur die vier `emitParticleAt`-Aufrufe sind GPUFX-Spawns
-   * geworden.
-   */
-  private emitGroundParticles(delta: number, nowMs: number): void {
-    if (this.cells.length === 0) return;
-    const intensitySum = this.cells.reduce((sum, cell) => sum + Math.min(4, Math.max(1, cell.intensity)), 0);
-    const rate = Math.min(MAX_GROUND_EMISSIONS_PER_SECOND, 30 + intensitySum * 1.8);
-    this.groundAccumulator += delta * rate / 1000;
-    let emissions = Math.min(32, Math.floor(this.groundAccumulator));
-    this.groundAccumulator -= emissions;
-
-    while (emissions-- > 0 && this.cells.length > 0) {
-      let cell = Phaser.Utils.Array.GetRandom(this.cells as SyncedBurningGroundCell[]);
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const candidate = Phaser.Utils.Array.GetRandom(this.cells as SyncedBurningGroundCell[]);
-        if (candidate.intensity > cell.intensity && Math.random() < 0.7) cell = candidate;
-      }
-      const intensity = Math.max(1, cell.intensity);
-      const x = (cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE
-        + Phaser.Math.FloatBetween(-GROUND_FIRE_CELL_SIZE * 0.72, GROUND_FIRE_CELL_SIZE * 0.72);
-      const y = (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE
-        + Phaser.Math.FloatBetween(-GROUND_FIRE_CELL_SIZE * 0.58, GROUND_FIRE_CELL_SIZE * 0.58);
-      const style = cell.visualStyle;
-      this.spawnGroundOuter(x, y, intensity >= 3 ? 2 : 1, style, nowMs);
-      if (Math.random() < 0.55 || intensity >= 2) this.spawnGroundCore(x, y + 2, 1, style, nowMs);
-      if (Math.random() < Math.min(0.42, 0.08 + intensity * 0.07)) {
-        this.spawnGroundSpark(x, y, 1, style, nowMs);
-      }
-      if (Math.random() < 0.12) this.spawnGroundSmoke(x, y - 3, nowMs);
-    }
-  }
-
-  /**
-   * Wendet die Burst-Politik der Grafikqualitaet an – dieselbe Semantik samt Nachkomma-
-   * Uebertrag, die frueher der `emitParticleAt`-Wrapper lieferte. Liefert die tatsaechlich zu
-   * spawnende Menge und bucht die Differenz als Qualitaets-Drop.
-   */
-  private admitGroundBurst(effect: GpuVfxEffectId, count: number): number {
-    const system = this.gpuVfx;
-    if (!system) return 0;
-    const amount = system.quality.scaleBurst(effect, count);
-    if (amount < count) system.recordQualityDrop(effect, count - amount);
-    return amount;
-  }
-
-  private spawnGroundOuter(
-    x: number,
-    y: number,
-    count: number,
-    style: GroundFireVisualStyle,
-    nowMs: number,
-  ): void {
-    const system = this.gpuVfx;
-    const spec = this.groundOuterSpec;
-    if (!system || !spec) return;
-    const amount = this.admitGroundBurst(GpuVfxEffectId.GroundFireOuter, count);
-    if (amount <= 0) return;
-
-    const isVoid = style === 'void';
-    spec.frame = isVoid ? GpuVfxFrameId.FlameOuterVoid : GpuVfxFrameId.FlameOuter;
-    const tints = isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER;
-    spec.x = x;
-    spec.y = y;
-    for (let index = 0; index < amount; index += 1) {
-      spec.lifeMs = Phaser.Math.FloatBetween(390, 780);
-      spec.vx = Phaser.Math.FloatBetween(-20, 20);
-      spec.vy = Phaser.Math.FloatBetween(-46, -7);
-      spec.rotation = Phaser.Math.FloatBetween(0, TWO_PI);
-      spec.tint = pickGpuVfxTint(tints);
-      system.spawn(spec, this.groundSource, nowMs);
-    }
-  }
-
-  private spawnGroundCore(
-    x: number,
-    y: number,
-    count: number,
-    style: GroundFireVisualStyle,
-    nowMs: number,
-  ): void {
-    const system = this.gpuVfx;
-    const spec = this.groundCoreSpec;
-    if (!system || !spec) return;
-    const amount = this.admitGroundBurst(GpuVfxEffectId.GroundFireCore, count);
-    if (amount <= 0) return;
-
-    const isVoid = style === 'void';
-    spec.frame = isVoid ? GpuVfxFrameId.FlameCoreVoid : GpuVfxFrameId.FlameCore;
-    const tints = isVoid ? VOID_FLAME_COLORS_CORE : FLAME_COLORS_CORE;
-    spec.x = x;
-    spec.y = y;
-    for (let index = 0; index < amount; index += 1) {
-      spec.lifeMs = Phaser.Math.FloatBetween(250, 520);
-      spec.vx = Phaser.Math.FloatBetween(-13, 13);
-      spec.vy = Phaser.Math.FloatBetween(-48, -14);
-      spec.rotation = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-35, 35));
-      spec.tint = pickGpuVfxTint(tints);
-      system.spawn(spec, this.groundSource, nowMs);
-    }
-  }
-
-  private spawnGroundSpark(
-    x: number,
-    y: number,
-    count: number,
-    style: GroundFireVisualStyle,
-    nowMs: number,
-  ): void {
-    const system = this.gpuVfx;
-    const spec = this.groundSparkSpec;
-    if (!system || !spec) return;
-    const amount = this.admitGroundBurst(GpuVfxEffectId.GroundFireSpark, count);
-    if (amount <= 0) return;
-
-    const isVoid = style === 'void';
-    spec.frame = isVoid ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
-    const tints = isVoid ? VOID_FLAME_COLORS_SPARK : FLAME_COLORS_SPARK;
-    spec.x = x;
-    spec.y = y;
-    for (let index = 0; index < amount; index += 1) {
-      spec.lifeMs = Phaser.Math.FloatBetween(300, 680);
-      spec.vx = Phaser.Math.FloatBetween(-34, 34);
-      spec.vy = Phaser.Math.FloatBetween(-98, -38);
-      spec.tint = pickGpuVfxTint(tints);
-      system.spawn(spec, this.groundSource, nowMs);
-    }
-  }
-
-  /** Der Rauch kennt keine Void-Variante – beide Stile teilten sich schon bisher einen Emitter. */
-  private spawnGroundSmoke(x: number, y: number, nowMs: number): void {
-    const system = this.gpuVfx;
-    const spec = this.groundSmokeSpec;
-    if (!system || !spec) return;
-    if (this.admitGroundBurst(GpuVfxEffectId.GroundFireSmoke, 1) <= 0) return;
-
-    spec.lifeMs = Phaser.Math.FloatBetween(950, 1650);
-    spec.x = x;
-    spec.y = y;
-    spec.vx = Phaser.Math.FloatBetween(-9, 9);
-    spec.vy = Phaser.Math.FloatBetween(-24, -10);
-    spec.rotation = Phaser.Math.FloatBetween(0, TWO_PI);
-    spec.tint = pickGpuVfxTint(GROUND_SMOKE_COLORS);
-    system.spawn(spec, this.groundSource, nowMs);
   }
 
   private updateRingVisuals(delta: number, now: number): void {
@@ -1038,74 +599,6 @@ export class FlamethrowerUpgradeRenderer {
       reserve: 100,
       emitting: false,
     }, depth, undefined, 'flamethrowerRing');
-  }
-
-  private releaseGroundVisual(id: string, visual: GroundVisual): void {
-    this.ground.delete(id);
-    visual.image.setVisible(false).setActive(false).clearTint();
-    this.groundImagePool.push(visual.image);
-  }
-
-  private ensureHeatTexture(): void {
-    ensureCanvasTexture(this.scene.textures, TEX_GROUND_HEAT, 96, 96, (ctx) => {
-      const size = 96;
-      const center = size * 0.5;
-      const pixels = ctx.createImageData(size, size);
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          const nx = (x + 0.5 - center) / center;
-          const ny = (y + 0.5 - center) / center;
-          const radius = Math.hypot(nx, ny);
-          const angle = Math.atan2(ny, nx);
-          const contour = 0.73
-            + Math.sin(angle * 3 + 0.8) * 0.09
-            + Math.sin(angle * 7 - 1.5) * 0.045;
-          const edge = Phaser.Math.Clamp((contour - radius) / 0.56, 0, 1);
-          const turbulence = 0.78
-            + Math.sin(nx * 8.1 + ny * 5.7) * 0.09
-            + Math.sin(nx * 17.3 - ny * 11.2) * 0.05;
-          const alpha = Math.pow(edge, 1.28) * turbulence;
-          if (alpha <= 0.002) continue;
-          const offset = (y * size + x) * 4;
-          pixels.data[offset] = 255;
-          pixels.data[offset + 1] = 116;
-          pixels.data[offset + 2] = 24;
-          pixels.data[offset + 3] = Math.round(Phaser.Math.Clamp(alpha * 82, 0, 82));
-        }
-      }
-      ctx.putImageData(pixels, 0, 0);
-    });
-  }
-
-  private ensureVoidHeatTexture(): void {
-    ensureCanvasTexture(this.scene.textures, TEX_VOID_GROUND_HEAT, 96, 96, (ctx) => {
-      const size = 96;
-      const center = size * 0.5;
-      const pixels = ctx.createImageData(size, size);
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          const nx = (x + 0.5 - center) / center;
-          const ny = (y + 0.5 - center) / center;
-          const radius = Math.hypot(nx, ny);
-          const angle = Math.atan2(ny, nx);
-          const contour = 0.73
-            + Math.sin(angle * 3 + 0.8) * 0.09
-            + Math.sin(angle * 7 - 1.5) * 0.045;
-          const edge = Phaser.Math.Clamp((contour - radius) / 0.56, 0, 1);
-          const turbulence = 0.78
-            + Math.sin(nx * 8.1 + ny * 5.7) * 0.09
-            + Math.sin(nx * 17.3 - ny * 11.2) * 0.05;
-          const alpha = Math.pow(edge, 1.28) * turbulence;
-          if (alpha <= 0.002) continue;
-          const offset = (y * size + x) * 4;
-          pixels.data[offset] = 255;
-          pixels.data[offset + 1] = 255;
-          pixels.data[offset + 2] = 255;
-          pixels.data[offset + 3] = Math.round(Phaser.Math.Clamp(alpha * 82, 0, 82));
-        }
-      }
-      ctx.putImageData(pixels, 0, 0);
-    });
   }
 
   private sampleRingParticleProfile(

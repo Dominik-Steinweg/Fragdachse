@@ -1864,7 +1864,10 @@ export class ArenaScene extends Phaser.Scene {
             state.placeableRocks ?? [],
           );
           this.renderers.slimeTrail.syncVisuals(state.slimeTrail ?? { cells: [], affectedEnemies: [] });
-          this.renderers.flamethrowerUpgrades.syncGround(state.burningGround ?? { cells: [] });
+          this.renderers.flamethrowerUpgrades.syncGround(
+            state.burningGround ?? { cells: [] },
+            bridge.getSynchronizedNow(),
+          );
           this.renderers.flamethrowerUpgrades.syncRings(state.players);
           this.renderers.train?.setTarget(state.train ?? null);
           this.renderers.powerUp.syncPedestals(state.pedestals ?? []);

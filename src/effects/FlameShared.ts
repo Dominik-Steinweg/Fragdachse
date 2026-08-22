@@ -81,7 +81,7 @@ export function ensureVoidFlameTextures(scene: Phaser.Scene): void {
    Die Jet-Motive sind bewusst *weiss* und tragen keine Farbe in der Textur: erst dadurch
    ergibt der Multiply-Tint exakt die gewuenschte Temperaturfarbe, und dasselbe Frame traegt
    den normalen wie den Void-Stil. Die aelteren `TEX_FLAME_*`-Texturen behalten ihre
-   eingebackenen Farben, weil Bodenfeuer, EntityBurn und Fireball auf ihnen stehen. ── */
+   eingebackenen Farben, weil EntityBurn und Fireball weiterhin auf ihnen stehen. ── */
 
 export const TEX_FLAME_BILLOW = '__flame_billow';
 export const TEX_FLAME_TONGUE = '__flame_tongue';

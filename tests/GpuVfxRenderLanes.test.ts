@@ -150,19 +150,23 @@ describe('gpu vfx render lanes', () => {
     expect(effect('entityburn.spark').lane).toBe(GpuVfxLaneId.EntityBurn);
   });
 
-  it('reuses the existing flame frames for every migrated fire effect', () => {
-    // Die Flammenmotive liegen normal *und* void bereits im Atlas; nur der Bodenrauch ist neu.
+  it('uses the white FlameJet primitives for GroundFire and keeps other fire effects stable', () => {
+    // GroundFire nutzt die tintbaren Jet-Motive; Trails und EntityBurn behalten ihre bisherigen
+    // Frames. Alle Motive liegen bereits im gemeinsamen Atlas.
     const flameFrames = new Set<number>([
       GpuVfxFrameId.FlameCore, GpuVfxFrameId.FlameOuter, GpuVfxFrameId.FlameSpark,
     ]);
-    for (const label of [
-      'groundfire.outer', 'groundfire.core', 'groundfire.spark',
-      'projburn.outer', 'projburn.core', 'projburn.spark',
-      'entityburn.core', 'entityburn.outer', 'entityburn.spark',
-    ]) {
+    for (const label of ['projburn.outer', 'projburn.core', 'projburn.spark',
+      'entityburn.core', 'entityburn.outer', 'entityburn.spark']) {
       const effect = GPU_VFX_EFFECTS.find((candidate) => candidate.label === label)!;
       expect(flameFrames.has(effect.frame), label).toBe(true);
     }
+    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.outer')!.frame)
+      .toBe(GpuVfxFrameId.FlameBillow);
+    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.core')!.frame)
+      .toBe(GpuVfxFrameId.FlameTongue);
+    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.spark')!.frame)
+      .toBe(GpuVfxFrameId.FlameSpark);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.smoke')!.frame)
       .toBe(GpuVfxFrameId.GroundFireSmoke);
   });

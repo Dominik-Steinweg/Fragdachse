@@ -535,7 +535,7 @@ export class HostUpdateCoordinator {
     } = countdownActive
       ? { synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }
       : this.ctx.fireSystem.hostUpdate(now);
-    this.renderers.flamethrowerUpgrades.syncGround(burningGround);
+    this.renderers.flamethrowerUpgrades.syncGround(burningGround, now);
 
     const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
       ? { synced: [], damageEvents: [] }

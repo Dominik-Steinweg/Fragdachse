@@ -301,7 +301,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     gravity: -36,
     eases: [GpuVfxEase.Linear, GpuVfxEase.Gravity],
     capacity: 1536,
-    maxLifetimeMs: 780,
+    maxLifetimeMs: 960,
     order: 'add-over-opaque',
     reserveCritical: 0,
     rationale:
@@ -309,10 +309,9 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'liegt als NORMAL-Lane darunter. Traegt outer, core und spark in beiden Stilen – ihre '
       + 'abweichenden Beschleunigungen laufen ueber `gravityFactor` und trennen keine Lanes mehr.',
     capacityRationale:
-      'Deckel der Bodenemission sind 540 Emissionen/s (MAX_GROUND_EMISSIONS_PER_SECOND). Im '
-      + 'unguenstigsten Fall je Emission 2 outer, 1 core und 0.42 spark, mit den jeweiligen '
-      + 'Maximallebenszeiten rund 842 + 281 + 154 = 1277 gleichzeitig lebende Member; 1536 gibt '
-      + 'rund 20 Prozent Reserve. Die fruehreren maxAliveParticles summierten sich auf 1160.',
+      'GroundFire emittiert clusterbasiert mit einem festen Node-Deckel; Billows, Tongues, Heat Bodies '
+      + 'und Sparks teilen sich die Lane. 1536 Slots halten die kurzen, additiven Flows auch bei '
+      + 'mehreren getrennten Clustern ohne lineare Zellskalierung.',
   },
   {
     id: GpuVfxLaneId.GroundFireSmoke,
@@ -332,9 +331,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'additiven Flammen liegen. Der Blend-Mode ist layerglobal, teilen kann er sich die Lane '
       + 'deshalb mit niemandem.',
     capacityRationale:
-      '0.12 Rauchpartikel je Emission x 540 Emissionen/s x 1.65 s Lebenszeit = rund 107 '
-      + 'gleichzeitig lebende Member. Der fruehere Emitter klemmte bei maxAliveParticles 96; '
-      + '128 laesst den Deckel knapp darueber statt exakt darauf.',
+      'Rauch bleibt ein sparsamer Cluster-Accent mit einer langen Lebenszeit; 128 Slots halten '
+      + 'auch mehrere getrennte Brandflächen ohne eine per-Zelle-Emission.',
   },
   {
     id: GpuVfxLaneId.EntityBurn,
