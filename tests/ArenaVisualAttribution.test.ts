@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type * as Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -22,6 +24,35 @@ interface FakeGraphics {
   active: boolean;
   visible: boolean;
   once(): void;
+}
+
+function readTypeScriptSources(directory: string): string[] {
+  const sources: string[] = [];
+  for (const entry of readdirSync(directory)) {
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) {
+      sources.push(...readTypeScriptSources(path));
+    } else if (path.endsWith('.ts') && !path.endsWith('ArenaVisualAttribution.ts')) {
+      sources.push(readFileSync(path, 'utf8'));
+    }
+  }
+  return sources;
+}
+
+function hasHookForFamily(sources: readonly string[], family: string, hooks: readonly string[]): boolean {
+  const literal = `'${family}'`;
+  for (const source of sources) {
+    let offset = 0;
+    while (true) {
+      const familyOffset = source.indexOf(literal, offset);
+      if (familyOffset < 0) break;
+      const statementStart = source.lastIndexOf(';', familyOffset) + 1;
+      const statement = source.slice(statementStart, familyOffset + literal.length);
+      if (hooks.some((hook) => new RegExp(`${hook}\\s*\\(`).test(statement))) return true;
+      offset = familyOffset + literal.length;
+    }
+  }
+  return false;
 }
 
 function emitter(active = false, alive = 0): Phaser.GameObjects.Particles.ParticleEmitter {
@@ -139,6 +170,19 @@ describe('ArenaVisualAttributionCollector', () => {
     expect(Object.keys(CLASSIC_PARTICLE_FAMILIES).length + Object.keys(GRAPHICS_FAMILIES).length)
       .toBeLessThanOrEqual(MAX_ATTRIBUTION_FAMILIES);
     expect(new ArenaVisualAttributionCollector().getCatalog().gpuVfxCatalogRef).toBe('GPU_VFX_EFFECTS');
+  });
+
+  it('requires every catalog family to have a concrete runtime attribution hook', () => {
+    const sources = readTypeScriptSources(resolve(process.cwd(), 'src'));
+    const particleHooks = ['registerParticleEmitter', 'createEmitter', 'createQualityEmitter'];
+    const graphicsHooks = ['registerGraphicsObject', 'recordGraphicsWork', 'setGraphicsGauge'];
+
+    for (const family of Object.keys(CLASSIC_PARTICLE_FAMILIES)) {
+      expect(hasHookForFamily(sources, family, particleHooks), `classic family ${family}`).toBe(true);
+    }
+    for (const family of Object.keys(GRAPHICS_FAMILIES)) {
+      expect(hasHookForFamily(sources, family, graphicsHooks), `graphics family ${family}`).toBe(true);
+    }
   });
 });
 

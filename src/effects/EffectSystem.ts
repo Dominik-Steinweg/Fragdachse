@@ -15,7 +15,7 @@ import {
   ensureBloodHitTextures,
   spawnBloodStain,
 } from './BloodEffectShared';
-import { circleZone, createQualityEmitter, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
+import { circleZone, createQualityEmitter, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import {
   ensureFlameTextures,
@@ -465,7 +465,7 @@ export class EffectSystem implements EnemyVisualSink {
       blendMode: Phaser.BlendModes.ADD,
       frequency: -1,
       emitting:  false,
-    }, undefined, 'effectSystem');
+    }, undefined, 'nuke');
     spark.setDepth(DEPTH_FX);
 
     const ember = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_EMBER, {
@@ -477,7 +477,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY:  -180,
       frequency: -1,
       emitting:  false,
-    }, undefined, 'effectSystem');
+    }, undefined, 'nuke');
     ember.setDepth(DEPTH_FX);
 
     const plume = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_SPARK, {
@@ -491,7 +491,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY:  -120,
       frequency: -1,
       emitting:  false,
-    }, undefined, 'effectSystem');
+    }, undefined, 'nuke');
     plume.setDepth(DEPTH_FX + 0.4);
 
     const fallout = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_EMBER, {
@@ -504,7 +504,7 @@ export class EffectSystem implements EnemyVisualSink {
       gravityY:  45,
       frequency: -1,
       emitting:  false,
-    }, undefined, 'effectSystem');
+    }, undefined, 'nuke');
     fallout.setDepth(DEPTH_FX + 0.35);
 
     const emitters = { spark, ember, plume, fallout };
@@ -1171,6 +1171,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     const flash = this.scene.add.circle(x, y, startRadius, flashColor, 1);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', flash);
     flash.setDepth(DEPTH_FX + 1);
     const flashEndScale = (radius * 0.3) / startRadius;
     this.scene.tweens.add({
@@ -1283,6 +1284,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     const ringStartRadius = radius * 0.5;
     const ring = this.scene.add.circle(x, y, ringStartRadius);
+    registerGraphicsObject(this.scene, isNuke ? 'nukeTelegraphs' : 'effectSystemGraphics', ring);
     ring.setStrokeStyle(isEnergy ? 3 : (isHoly ? 3 : (isNuke ? 5 : 2)), isEnergy ? haloColor : fillColor, isNuke ? 0.95 : 0.8);
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_FX);
@@ -1404,7 +1406,7 @@ export class EffectSystem implements EnemyVisualSink {
           ? [0xffffff, 0xfff0b8, 0xffa348, 0xff6422]
           : [fillColor, 0xffaa00, 0xff6600];
     const sparkCount = Math.ceil(radius / (isHoly ? 1.55 : (isEnergy ? 2.4 : (isNuke ? 1.2 : 5))));
-    const sparkEmitter = nukeParticleEmitters?.spark ?? this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+    const sparkEmitter = nukeParticleEmitters?.spark ?? registerParticleEmitter(this.scene, isNuke ? 'nuke' : 'effectSystem', this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
       lifespan:  isEnergy ? { min: 220, max: 520 } : (isHoly ? { min: 380, max: 980 } : { min: 300, max: 600 }),
       speed:     isEnergy ? { min: radius * 0.5, max: radius * 1.9 } : (isHoly ? { min: radius * 0.32, max: radius * 2.35 } : { min: 50, max: radius * 1.5 }),
       scale:     isEnergy ? { start: 1.45, end: 0 } : (isHoly ? { start: 1.85, end: 0 } : { start: 1.2, end: 0 }),
@@ -1412,7 +1414,7 @@ export class EffectSystem implements EnemyVisualSink {
       tint:      sparkTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
-    });
+    }));
     sparkEmitter.setDepth(DEPTH_FX);
     if (nukeParticleEmitters) {
       sparkEmitter.emitParticleAt(x, y, sparkCount);
@@ -1422,7 +1424,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     if (isEnergy) {
-      const arcEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+      const arcEmitter = registerParticleEmitter(this.scene, 'effectSystem', this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
         lifespan:  { min: 180, max: 360 },
         speed:     { min: radius * 0.35, max: radius * 0.85 },
         scale:     { start: 1.1, end: 0 },
@@ -1430,7 +1432,7 @@ export class EffectSystem implements EnemyVisualSink {
         tint:      [0xffffff, haloColor, fillColor],
         blendMode: Phaser.BlendModes.ADD,
         emitting:  false,
-      });
+      }));
       arcEmitter.setDepth(DEPTH_FX + 0.1);
       arcEmitter.addEmitZone(edgeZone(radius * 0.28, Math.max(Math.ceil(radius / 5), 18)));
       arcEmitter.explode(Math.max(Math.ceil(radius / 2.4), 28));
@@ -1445,7 +1447,7 @@ export class EffectSystem implements EnemyVisualSink {
           ? [0xffd27a, 0xff8f42, 0x6a2a1b, 0x2e1d23]
           : [fillColor, 0xff4400];
     const emberCount = Math.ceil(radius / (isHoly ? 2.15 : (isEnergy ? 4.8 : (isNuke ? 2.3 : 8))));
-    const emberEmitter = nukeParticleEmitters?.ember ?? this.scene.add.particles(x, y, TEX_EXPLOSION_EMBER, {
+    const emberEmitter = nukeParticleEmitters?.ember ?? registerParticleEmitter(this.scene, isNuke ? 'nuke' : 'effectSystem', this.scene.add.particles(x, y, TEX_EXPLOSION_EMBER, {
       lifespan:  isEnergy ? { min: 260, max: 620 } : (isHoly ? { min: 700, max: 1650 } : { min: 500, max: 1000 }),
       speed:     isEnergy ? { min: radius * 0.15, max: radius * 0.95 } : (isHoly ? { min: radius * 0.22, max: radius * 1.38 } : { min: 20, max: radius * 0.8 }),
       scale:     isEnergy ? { start: 1.0, end: 0.1 } : (isHoly ? { start: 1.45, end: 0.12 } : { start: 0.8, end: 0.2 }),
@@ -1453,7 +1455,7 @@ export class EffectSystem implements EnemyVisualSink {
       tint:      emberTints,
       gravityY:  isEnergy ? -20 : (isHoly ? -80 : 40),
       emitting:  false,
-    });
+    }));
     emberEmitter.setDepth(DEPTH_FX);
     if (nukeParticleEmitters) {
       emberEmitter.emitParticleAt(x, y, emberCount);

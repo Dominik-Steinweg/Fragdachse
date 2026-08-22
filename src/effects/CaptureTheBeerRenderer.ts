@@ -15,7 +15,7 @@ import {
 import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, SyncedCoopDefenseCarryItem, TeamId } from '../types';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { impactMedium } from './camera/cameraFeedbackPresets';
-import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
+import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, registerGraphicsObject, setCircleEmitZone } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_BEER_OUTER_GLOW = '__ctb_beer_outer_glow';
@@ -333,6 +333,7 @@ export class CaptureTheBeerRenderer {
       palette.foam,
     ).setScale(0.38);
     const bottle = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'captureObjectiveEffects', bottle);
     container.add([outerGlow, innerGlow, aura, bottle]);
 
     const idleEmitter = createEmitter(this.scene, state.x, state.y, TEX_BEER_BUBBLE, {

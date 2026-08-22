@@ -7,6 +7,7 @@ import {
   destroyEmitter,
   ensureCanvasTexture,
   fillRadialGradientTexture,
+  registerGraphicsObject,
   setCircleEmitZone,
 } from '../effects/EffectUtils';
 import { mixColors } from '../effects/EffectUtils';
@@ -200,6 +201,7 @@ export class PowerUpRenderer {
       );
 
       const shadow = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 6, 0x04070c, 0.42);
+      registerGraphicsObject(this.scene, 'powerUpEffects', shadow);
       const base = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius, 0x0c121c, 0.96)
         .setStrokeStyle(2, 0x25313c, 0.95);
       const plate = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderInnerRadius, 0x121b27, 0.94)
@@ -236,7 +238,7 @@ export class PowerUpRenderer {
         tint: [glowColor, 0xffffff],
         blendMode: Phaser.BlendModes.ADD,
         emitting: true,
-      }, DEPTH.PLAYERS - 2.15);
+      }, DEPTH.PLAYERS - 2.15, 'standard', 'powerUp');
       setCircleEmitZone(ambientEmitter, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 8, 2, true);
 
       const sparkEmitter = createEmitter(this.scene, pedestal.x, pedestal.y, TEX_POWERUP_PEDESTAL_PIXEL, {
@@ -250,7 +252,7 @@ export class PowerUpRenderer {
         tint: [0xffffff, glowColor],
         blendMode: Phaser.BlendModes.ADD,
         emitting: true,
-      }, DEPTH.PLAYERS - 2.05);
+      }, DEPTH.PLAYERS - 2.05, 'standard', 'powerUp');
       setCircleEmitZone(sparkEmitter, POWERUP_PEDESTAL_CONFIG.renderInnerRadius + 3, 1, true);
 
       container.add([outerGlow, glow, aura, shadow, base, plate, core, ringOuter, ringInner, ownerRing]);
@@ -448,7 +450,7 @@ export class PowerUpRenderer {
       tint: [0xffffff, color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PLAYERS - 0.95);
+    }, DEPTH.PLAYERS - 0.95, 'standard', 'powerUp');
     burst.explode(18);
     this.scene.time.delayedCall(450, () => destroyEmitter(burst));
   }
@@ -507,7 +509,7 @@ export class PowerUpRenderer {
       tint: [0xffffff, color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PLAYERS - 0.85);
+    }, DEPTH.PLAYERS - 0.85, 'standard', 'powerUp');
     setCircleEmitZone(pixelBurst, 12, 14, true);
     pixelBurst.explode(14);
 
@@ -522,7 +524,7 @@ export class PowerUpRenderer {
       tint: [color, 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
-    }, DEPTH.PLAYERS - 0.83);
+    }, DEPTH.PLAYERS - 0.83, 'standard', 'powerUp');
     embers.explode(10);
 
     this.scene.time.delayedCall(420, () => {

@@ -28,6 +28,7 @@ import {
 } from './repairDroneVisuals';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
+import { registerGraphicsObject } from './EffectUtils';
 
 /** Höchstens zwei gleichzeitig wiederhergestellte Ziele; die Objekte werden vorab angelegt. */
 const MAX_JOBS = 2;
@@ -86,6 +87,9 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(REPAIR_DRONE_DEPTH - 0.015)
         .setVisible(false);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', beam);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', spark);
       this.drones.push({ body, glow, beam, spark });
     }
   }

@@ -91,7 +91,7 @@ export class TunnelEndpointVisual {
       tint: [0x4d2f17, 0x734523, 0xa36a3c, 0xd8bf93],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, depth + 0.05);
+    }, depth + 0.05, 'standard', 'tunnelEndpoint');
 
     this.moteEmitter = createEmitter(scene, initialState.x, initialState.y, TEX_TUNNEL_MOTE, {
       lifespan: { min: 500, max: 900 },
@@ -104,7 +104,7 @@ export class TunnelEndpointVisual {
       tint: [mixColors(initialState.ownerColor, 0xffffff, 0.5), mixColors(initialState.ownerColor, 0xffffff, 0.2), 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, depth + 0.06);
+    }, depth + 0.06, 'standard', 'tunnelEndpoint');
 
     this.emberEmitter = createEmitter(scene, initialState.x, initialState.y, TEX_TUNNEL_DUST, {
       lifespan: { min: 800, max: 1400 },
@@ -117,7 +117,7 @@ export class TunnelEndpointVisual {
       tint: [0x5c3920, 0xa97e55, 0xd8bf93],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    }, depth + 0.07);
+    }, depth + 0.07, 'standard', 'tunnelEndpoint');
 
     this.sync(initialState, 0);
   }

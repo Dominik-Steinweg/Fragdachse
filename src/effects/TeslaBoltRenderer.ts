@@ -9,6 +9,7 @@ import {
   fillRadialGradientTexture,
   makeAdditive,
   mixColors,
+  registerGraphicsObject,
 } from './EffectUtils';
 
 const TEX_BOLT_CORE = '__tesla_bolt_core';
@@ -100,6 +101,7 @@ export class TeslaBoltRenderer {
     const arcs = this.scene.add.graphics()
       .setDepth(DEPTH.PROJECTILES + 0.2)
       .setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'teslaBoltEffects', arcs);
 
     const visual: BoltVisual = {
       core,

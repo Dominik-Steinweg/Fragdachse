@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, clipPointToArenaRay, isPointInsideArena } from '../config';
 import type { HitscanImpactKind } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordParticleSpawn } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordParticleSpawn, registerGraphicsObject } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import type { LightingSystem } from './LightingSystem';
 
@@ -404,6 +404,7 @@ export class AsmdPrimaryRenderer {
     turbulence: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'asmdEffects', gfx);
     makeAdditive(gfx);
     const halfLength = segmentLength * 0.52;
     const lineCount = turbulence > 1 ? 3 : 2;
@@ -448,6 +449,7 @@ export class AsmdPrimaryRenderer {
     duration: number,
   ): void {
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'asmdEffects', gfx);
     gfx.setPosition(x, y);
     gfx.setDepth(DEPTH_TRACE + 0.14);
     makeAdditive(gfx);

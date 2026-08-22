@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, registerGraphicsObject } from './EffectUtils';
 
 const TEX_ZEUS_HAZE = '__zeus_taser_haze';
 const TEX_ZEUS_STREAK = '__zeus_taser_streak';
@@ -112,6 +112,7 @@ export class ZeusTaserRenderer {
     hotColor: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'zeusTaserEffects', gfx);
     makeAdditive(gfx);
 
     gfx.fillStyle(glowColor, 0.12);
@@ -152,6 +153,7 @@ export class ZeusTaserRenderer {
     hotColor: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'zeusTaserEffects', gfx);
     makeAdditive(gfx);
 
     const boltCount = Phaser.Math.Clamp(Math.round(range / 18), 7, 12);
@@ -359,6 +361,7 @@ export class ZeusTaserRenderer {
     if (!isPointInsideArena(impactX, impactY)) return;
 
     const chain = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'zeusTaserEffects', chain);
     chain.setDepth(DEPTH_TRACE + 0.13);
     makeAdditive(chain);
     const points = this.createLightningPath(startX, startY, impactX, impactY, 5, 10);
@@ -425,6 +428,7 @@ export class ZeusTaserRenderer {
     sparks.explode(18);
 
     const branches = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'zeusTaserEffects', branches);
     branches.setDepth(DEPTH_TRACE + 0.15);
     makeAdditive(branches);
     for (let bolt = 0; bolt < 5; bolt++) {

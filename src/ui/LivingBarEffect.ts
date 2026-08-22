@@ -7,7 +7,7 @@
  */
 import * as Phaser from 'phaser';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
-import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { killAllAndResetParticlePositions, registerParticleEmitter } from '../effects/EffectUtils';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -238,6 +238,7 @@ export class LivingBarEffect {
       tint:      [palette.mid, palette.dark, palette.light],
       blendMode: Phaser.BlendModes.ADD,
     });
+    registerParticleEmitter(scene, 'livingBar', this.idleCore);
     getGraphicsQualityController(scene)?.setEmitterImportance(this.idleCore, 'decorative');
     this.idleCore.addEmitZone(zoneData);
     if (opts?.scrollFactor !== undefined) this.idleCore.setScrollFactor(opts.scrollFactor);
@@ -257,6 +258,7 @@ export class LivingBarEffect {
       tint:      [palette.dark, palette.mid],
       blendMode: Phaser.BlendModes.ADD,
     });
+    registerParticleEmitter(scene, 'livingBar', this.idleOuter);
     getGraphicsQualityController(scene)?.setEmitterImportance(this.idleOuter, 'decorative');
     this.idleOuter.addEmitZone(zoneData);
     if (opts?.scrollFactor !== undefined) this.idleOuter.setScrollFactor(opts.scrollFactor);

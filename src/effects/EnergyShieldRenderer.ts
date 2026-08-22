@@ -10,6 +10,7 @@ import {
   ensureCanvasTexture,
   fillRadialGradientTexture,
   mixColors,
+  registerGraphicsObject,
 } from './EffectUtils';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
@@ -283,6 +284,9 @@ export class EnergyShieldRenderer {
     const outerGlow = this.scene.add.graphics().setDepth(DEPTH.FIRE + 0.19);
     const glow      = this.scene.add.graphics().setDepth(DEPTH.FIRE + 0.22);
     const core      = this.scene.add.graphics().setDepth(DEPTH.FIRE + 0.24);
+    registerGraphicsObject(this.scene, 'energyShieldEffects', outerGlow);
+    registerGraphicsObject(this.scene, 'energyShieldEffects', glow);
+    registerGraphicsObject(this.scene, 'energyShieldEffects', core);
 
     // Burst rim particles on hit – player color only.
     const rimEmitter = createEmitter(this.scene, shield.x, shield.y, TEX_SHIELD_PARTICLE, {

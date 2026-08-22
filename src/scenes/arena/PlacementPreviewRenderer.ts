@@ -10,6 +10,7 @@ import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseCo
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
 import { t } from '../../i18n';
+import { registerGraphicsObject } from '../../effects/EffectUtils';
 
 interface TunnelPreviewVisualState {
   keyBase: string;
@@ -50,6 +51,9 @@ export class PlacementPreviewRenderer {
     this.rangeGraphics   = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
     this.invalidGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 1);
     this.remoteMissionPedestalPreviewGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 3);
+    registerGraphicsObject(scene, 'placementPreview', this.rangeGraphics);
+    registerGraphicsObject(scene, 'placementPreview', this.invalidGraphics);
+    registerGraphicsObject(scene, 'placementPreview', this.remoteMissionPedestalPreviewGraphics);
     this.localTunnelPreview = this.createTunnelPreviewState('local');
 
     this.errorText = scene.add.text(

@@ -16,6 +16,7 @@ import {
   destroyEmitter,
   fillRadialGradientTexture,
   makeAdditive,
+  registerGraphicsObject,
   setCircleEmitZone,
 } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
@@ -391,6 +392,10 @@ export class BfgRenderer {
     const body = makeAdditive(this.scene.add.graphics());
     const core = makeAdditive(this.scene.add.graphics());
     const branches = makeAdditive(this.scene.add.graphics());
+    registerGraphicsObject(this.scene, 'bfgEffects', glow);
+    registerGraphicsObject(this.scene, 'bfgEffects', body);
+    registerGraphicsObject(this.scene, 'bfgEffects', core);
+    registerGraphicsObject(this.scene, 'bfgEffects', branches);
     root.add([glow, body, core, branches]);
     return {
       root,

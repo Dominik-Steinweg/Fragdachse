@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
 import { addInternalBlur, setInternalFxPadding, type BlurHandle } from '../utils/phaserFx';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors, registerParticleEmitter } from './EffectUtils';
+import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import type { SmokeGrenadeEffect, SyncedSmokeCloud } from '../types';
 import type { LightingSystem } from './LightingSystem';
 
@@ -557,6 +557,7 @@ export class SmokeSystem {
     const gfx = this.scene.add.graphics()
       .setDepth(DEPTH.SMOKE + 0.2)
       .setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'smokeStorm', gfx);
 
     // Sanftes Aufleuchten des gesamten Rauchs beim Einschlag (verkauft das Wetterleuchten).
     const glow = this.scene.add.image(cloud.x, cloud.y, TEX_PARTICLE)

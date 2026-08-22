@@ -3,6 +3,7 @@ import { COLORS, DEPTH } from '../config';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { SyncedAk47StrategicTarget } from '../types';
+import { registerGraphicsObject } from './EffectUtils';
 
 const MARKER_COLOR = COLORS.GOLD_1;
 const MARKER_RING_COLOR = COLORS.GOLD_2;
@@ -35,6 +36,8 @@ export class Ak47StrategicTargetRenderer {
     this.built = true;
     const crosshair = this.scene.add.graphics();
     const confirmation = this.scene.add.graphics().setVisible(false);
+    registerGraphicsObject(this.scene, 'weaponTelegraphs', crosshair);
+    registerGraphicsObject(this.scene, 'weaponTelegraphs', confirmation);
     const container = this.scene.add.container(0, 0, [confirmation, crosshair])
       .setDepth(DEPTH.PROJECTILES + 2)
       .setVisible(false);

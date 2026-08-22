@@ -6,7 +6,7 @@ import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig, PlaceableRoc
 import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
 import { bridge }           from '../../network/bridge';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, ROCK_HP_MAX } from '../../config';
-import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../effects/EffectUtils';
+import { createEmitter, destroyEmitter, fillRadialGradientTexture, registerGraphicsObject } from '../../effects/EffectUtils';
 import type { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { LightingSystem } from '../../effects/LightingSystem';
@@ -358,6 +358,10 @@ export class RockVisualHelper {
         .setOrigin(0, 0.5)
         .setDepth(DEPTH.ROCKS + 0.4);
 
+      registerGraphicsObject(this.scene, 'rockTools', rangeCircle);
+      registerGraphicsObject(this.scene, 'rockTools', hpBarBg);
+      registerGraphicsObject(this.scene, 'rockTools', hpBarFg);
+
       visual = { image, aura, rangeCircle, hpBarBg, hpBarFg, constructionId: rock.constructionId };
       this.turretVisuals.set(rock.id, visual);
     }
@@ -525,7 +529,7 @@ export class RockVisualHelper {
       tint:     [ownerColor, COLORS.BROWN_2, COLORS.BROWN_4],
       gravityY: -20,
       emitting: false,
-    }, DEPTH.ROCKS + 1);
+    }, DEPTH.ROCKS + 1, 'standard', 'rockVisual');
     emitter.explode(18);
     this.scene.time.delayedCall(650, () => destroyEmitter(emitter));
   }
@@ -548,7 +552,7 @@ export class RockVisualHelper {
       tint:     [ownerColor, 0xe6da7a, 0xf5edd0],
       emitting: false,
       blendMode: Phaser.BlendModes.ADD,
-    }, DEPTH.ROCKS + 1);
+    }, DEPTH.ROCKS + 1, 'standard', 'rockVisual');
     emitter.explode(14);
     this.scene.time.delayedCall(700, () => destroyEmitter(emitter));
   }

@@ -6,7 +6,7 @@ import type { SyncedTeslaDome, TeslaDomeTargetType } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LightingSystem } from './LightingSystem';
 import type { TeslaNovaRenderer } from './TeslaNovaRenderer';
-import { configureAdditiveImage, createEmitter, destroyEmitter, edgeZone, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
+import { configureAdditiveImage, createEmitter, destroyEmitter, edgeZone, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, registerGraphicsObject, setCircleEmitZone } from './EffectUtils';
 
 const TEX_DOME_CORE = '__tesla_dome_core';
 const TEX_DOME_FIELD = '__tesla_dome_field';
@@ -366,6 +366,9 @@ export class TeslaDomeRenderer {
     const fieldFilaments = this.scene.add.graphics().setDepth(DEPTH.FIRE + 0.16).setBlendMode(Phaser.BlendModes.ADD);
     const boltGlow = this.scene.add.graphics().setDepth(DEPTH.FIRE + 0.2).setBlendMode(Phaser.BlendModes.ADD);
     const boltCore = this.scene.add.graphics().setDepth(DEPTH.FIRE + 0.22).setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'teslaDomeEffects', fieldFilaments);
+    registerGraphicsObject(this.scene, 'teslaDomeEffects', boltGlow);
+    registerGraphicsObject(this.scene, 'teslaDomeEffects', boltCore);
 
     const coreEmitter = createEmitter(this.scene, dome.x, dome.y, TEX_DOME_SPARK, {
       lifespan: { min: 180, max: 320 },

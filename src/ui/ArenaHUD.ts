@@ -30,7 +30,7 @@ import {
   ensureLivingBarTextures, LivingBarEffect,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
-import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import { FONT_MONO } from './uiTheme';
 
 // ── Layout ──────────────────────────────────────────────────────────────────
@@ -347,6 +347,7 @@ export class ArenaHUD {
     // Red overlay on weapon 2 bar — shown when adrenaline is insufficient
     this.w2RedOverlay = this.scene.add.rectangle(BAR_X, W2_BAR_Y, barWidth, BAR_H, COLORS.RED_3)
       .setOrigin(0, 0).setScrollFactor(0).setAlpha(0);
+    registerGraphicsObject(this.scene, 'gameplayHud', this.w2RedOverlay);
     c.add(this.w2RedOverlay);
 
     // Adrenaline burst particle emitter (intense, for hit-gain + syringe)
@@ -361,6 +362,7 @@ export class ArenaHUD {
       emitting:  false,
       quantity:  16,
     }).setScrollFactor(0);
+    registerParticleEmitter(this.scene, 'arenaHud', this.adrBurstEmitter);
     c.add(this.adrBurstEmitter);
 
     // Power-Up section: dynamisch befüllt via updatePowerUpSection(), startet leer

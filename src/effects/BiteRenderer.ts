@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH_TRACE, isPointInsideArena } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from './EffectUtils';
 
 const TEX_BITE_HAZE = '__bite_haze';
 const TEX_BITE_DROPLET = '__bite_droplet';
@@ -189,6 +189,7 @@ export class BiteRenderer {
     yOffset = 0,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'biteEffects', gfx);
     gfx.setBlendMode(Phaser.BlendModes.NORMAL);
 
     for (const claw of clawPaths) {
@@ -206,6 +207,7 @@ export class BiteRenderer {
     offsetFactor: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'biteEffects', gfx);
     makeAdditive(gfx);
 
     for (const claw of clawPaths) {
@@ -410,6 +412,7 @@ export class BiteRenderer {
     if (!isPointInsideArena(x, y)) return;
 
     const snap = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'biteEffects', snap);
     snap.setDepth(DEPTH_TRACE + 0.12);
     snap.setBlendMode(Phaser.BlendModes.NORMAL);
     snap.x = x;

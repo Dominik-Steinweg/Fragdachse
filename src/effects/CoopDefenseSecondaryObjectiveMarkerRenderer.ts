@@ -43,6 +43,7 @@ import type {
   CoopDefenseSecondaryObjectivePresentationState,
   SyncedCoopDefenseCarryItem,
 } from '../types';
+import { registerGraphicsObject } from './EffectUtils';
 
 /** Harte Obergrenze gleichzeitig gezeichneter Zielmarken; die Objekte werden vorab angelegt. */
 const MAX_MARKERS = 8;
@@ -155,6 +156,8 @@ export class CoopDefenseSecondaryObjectiveMarkerRenderer {
         .setBlendMode(Phaser.BlendModes.ADD);
       const diamond = this.scene.add.graphics();
       const ring = this.scene.add.graphics();
+      registerGraphicsObject(this.scene, 'objectiveMarkers', diamond);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', ring);
       const container = this.scene.add.container(0, 0, [ring, glow, diamond])
         .setDepth(DEPTH.BASES + 8)
         .setVisible(false);
@@ -169,6 +172,7 @@ export class CoopDefenseSecondaryObjectiveMarkerRenderer {
         .setDepth(DEPTH.OVERLAY)
         .setScrollFactor(0)
         .setVisible(false);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', arrow);
       const label = this.scene.add.text(0, 0, '', {
         fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
       })

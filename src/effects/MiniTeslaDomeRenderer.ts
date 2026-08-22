@@ -3,7 +3,7 @@ import { DEPTH } from '../config';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
-import { configureAdditiveImage, fillRadialGradientTexture } from './EffectUtils';
+import { configureAdditiveImage, fillRadialGradientTexture, registerGraphicsObject } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_MINI_DOME_FIELD = '__enemy_mini_tesla_field';
@@ -120,6 +120,8 @@ export class MiniTeslaDomeRenderer {
         .setFillStyle(0x7b20d4, 0.05)
         .setDepth(DEPTH.PLAYERS - 0.13);
       const arcs = this.scene.add.graphics().setDepth(DEPTH.PLAYERS + 0.12);
+      registerGraphicsObject(this.scene, 'miniTeslaDomeEffects', ring);
+      registerGraphicsObject(this.scene, 'miniTeslaDomeEffects', arcs);
       visual = {
         field,
         ring,

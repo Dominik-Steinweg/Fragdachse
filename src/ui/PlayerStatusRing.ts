@@ -7,7 +7,7 @@ import {
 } from '../config';
 import { ensureLivingBarTextures } from './LivingBarEffect';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
-import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LocalArenaHudData } from './LocalArenaHudData';
 
 type SegmentKey = 'hp' | 'adrenaline' | 'rage';
@@ -236,6 +236,10 @@ export class PlayerStatusRing {
     this.fillGraphics = scene.add.graphics();
     this.sparkGraphics = scene.add.graphics();
     this.sparkGraphics.setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(scene, 'playerStatus', this.warningGraphics);
+    registerGraphicsObject(scene, 'playerStatus', this.glowGraphics);
+    registerGraphicsObject(scene, 'playerStatus', this.fillGraphics);
+    registerGraphicsObject(scene, 'playerStatus', this.sparkGraphics);
 
     for (const segment of SEGMENTS) {
       this.livingEmitters.set(segment.key, this.createLivingEmitters(segment));
@@ -359,6 +363,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    registerParticleEmitter(this.scene, 'playerStatusRing', core);
     this.markDecorative(core);
     core.addEmitZone(coreZone);
     core.setDepth(LIVING_EMITTER_DEPTH);
@@ -377,6 +382,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    registerParticleEmitter(this.scene, 'playerStatusRing', outer);
     this.markDecorative(outer);
     outer.addEmitZone(outerZone);
     outer.setDepth(LIVING_EMITTER_DEPTH);
@@ -738,6 +744,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    registerParticleEmitter(this.scene, 'playerStatusRing', core);
     this.markDecorative(core);
     core.addEmitZone(coreZone);
     core.setDepth(LIVING_EMITTER_DEPTH);
@@ -756,6 +763,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    registerParticleEmitter(this.scene, 'playerStatusRing', outer);
     this.markDecorative(outer);
     outer.addEmitZone(outerZone);
     outer.setDepth(LIVING_EMITTER_DEPTH);

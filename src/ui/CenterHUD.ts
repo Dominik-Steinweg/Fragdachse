@@ -14,6 +14,7 @@ import {
   ensureLivingBarTextures, createGradientTexture, LivingBarEffect, randomEmitZoneData,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import { registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import { formatTrainArrivalLabel } from '../train/TrainEvent';
 import { formatNumber, getLocale, t } from '../i18n';
 import { getContentDisplayName, getSourceName } from '../i18n/contentPresentation';
@@ -656,6 +657,7 @@ export class CenterHUD {
 
     this.mainObjectiveBg = this.scene.add.image(0, 0, MAIN_BG_TEX).setOrigin(0.5);
     this.mainObjectiveFrame = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.mainObjectiveFrame);
     this.mainObjectiveFill = this.scene.add.image(
       MAIN_CONTENT_LEFT + 1,
       MAIN_PROGRESS_Y - MAIN_FILL_H / 2,
@@ -937,6 +939,7 @@ export class CenterHUD {
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     }).setScrollFactor(0);
+    registerParticleEmitter(this.scene, 'centerHud', coreEmitter);
     coreEmitter.addEmitZone(zoneData);
 
     const outerEmitter = this.scene.add.particles(0, 0, '_living_blob', {
@@ -951,6 +954,7 @@ export class CenterHUD {
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     }).setScrollFactor(0);
+    registerParticleEmitter(this.scene, 'centerHud', outerEmitter);
     outerEmitter.addEmitZone(zoneData);
 
     section.add([panelBg, label, bg, fg]);

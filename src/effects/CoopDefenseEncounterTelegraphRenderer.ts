@@ -17,6 +17,7 @@ import {
   createQualityEmitter,
   ensureCanvasTexture,
   killAllAndResetParticlePositions,
+  registerGraphicsObject,
   setEmitterTintArray,
 } from './EffectUtils';
 
@@ -205,6 +206,7 @@ export class CoopDefenseEncounterTelegraphRenderer {
       .setDepth(DEPTH_FX)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
+    registerGraphicsObject(scene, 'encounterTelegraphs', this.graphics);
   }
 
   generateTextures(): void {

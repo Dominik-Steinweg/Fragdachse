@@ -7,6 +7,7 @@ import {
   ensureCanvasTexture,
   fillRadialGradientTexture,
   mixColors,
+  registerGraphicsObject,
 } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
@@ -124,6 +125,7 @@ export class TeslaNovaRenderer {
     const filaments = this.scene.add.graphics()
       .setDepth(DEPTH.FIRE + 0.27)
       .setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'teslaNovaEffects', filaments);
 
     const wave: NovaWave = {
       x,

@@ -15,6 +15,7 @@ import {
   killAllAndResetParticlePositions,
   makeAdditive,
   mixColors,
+  registerGraphicsObject,
   setEmitterTintArray,
 } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
@@ -283,6 +284,10 @@ export class PlasmaBurnerRenderer {
     const discharge = makeAdditive(this.scene.add.graphics());
     const filaments = makeAdditive(this.scene.add.graphics());
     const endpoints = makeAdditive(this.scene.add.graphics());
+    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', glow);
+    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', discharge);
+    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', filaments);
+    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', endpoints);
     const hazeSamples = Array.from({ length: MAX_HAZE_SAMPLES }, () => this.createAdditiveImage(TEX_PLASMA_HAZE));
     const streakSamples = Array.from({ length: MAX_STREAK_SAMPLES }, () => this.createAdditiveImage(TEX_PLASMA_STREAK));
     const sparkSamples = Array.from({ length: MAX_SPARK_SAMPLES }, () => this.createAdditiveImage(TEX_PLASMA_SPARK));

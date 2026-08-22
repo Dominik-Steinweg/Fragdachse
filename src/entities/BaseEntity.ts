@@ -16,7 +16,7 @@ import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefe
 import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
-import { makeAdditive } from '../effects/EffectUtils';
+import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
@@ -158,6 +158,7 @@ export class BaseEntity {
       marker.strokeCircle(0, 0, CELL_SIZE * 0.18);
       marker.lineBetween(-CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48, 0);
       marker.lineBetween(0, -CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48);
+      registerGraphicsObject(this.scene, 'baseMarkers', marker);
       this.spawnCenterMarker = marker;
       this.spawnCenterTween = this.scene.tweens.add({
         targets: marker,
@@ -183,6 +184,7 @@ export class BaseEntity {
     );
     hpBarBg.setStrokeStyle(1, COLORS.GREY_6);
     hpBarBg.setDepth(DEPTH.BASES + 1);
+    registerGraphicsObject(this.scene, 'baseMarkers', hpBarBg);
     this.hpBarBg = hpBarBg;
     const hpBarFg = this.scene.add.rectangle(
       centerX - this.hpBarWidth / 2,
@@ -193,6 +195,7 @@ export class BaseEntity {
     );
     hpBarFg.setOrigin(0, 0.5);
     hpBarFg.setDepth(DEPTH.BASES + 2);
+    registerGraphicsObject(this.scene, 'baseMarkers', hpBarFg);
     this.hpBarFg = hpBarFg;
     this.refreshHpBar();
   }
@@ -245,6 +248,7 @@ export class BaseEntity {
     if (this.vulnerableMarker || this.isInert()) return;
     const bounds = getBaseWorldBounds(this.spec.region);
     const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 5);
+    registerGraphicsObject(this.scene, 'baseMarkers', marker);
     marker.lineStyle(3, VULNERABLE_MARKER_COLOR, 0.88);
     marker.strokeRect(bounds.x - 4, bounds.y - 4, bounds.width + 8, bounds.height + 8);
     makeAdditive(marker);

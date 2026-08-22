@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
 import { DEPTH, DEPTH_FX, VOID_PALETTE } from '../config';
-import { circleZone, makeAdditive, registerParticleEmitter } from './EffectUtils';
+import { circleZone, makeAdditive, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
@@ -191,11 +191,13 @@ export class MeteorRenderer {
     warningCircle.setFillStyle(0, 0);
     warningCircle.setDepth(DEPTH_WARNING);
     warningCircle.setScale(0);
+    registerGraphicsObject(this.scene, 'meteorEffects', warningCircle);
 
     // Boden-Füllung (semi-transparent)
     const warningFill = this.scene.add.circle(m.x, m.y, m.radius, warningColor, WARNING_FILL_ALPHA);
     warningFill.setDepth(DEPTH_WARNING - 0.01);
     warningFill.setScale(0);
+    registerGraphicsObject(this.scene, 'meteorEffects', warningFill);
 
     // Pulsierender Warnkreis-Tween
     this.scene.tweens.add({
@@ -210,6 +212,7 @@ export class MeteorRenderer {
     // Schlagschatten am Boden
     const shadow = this.scene.add.ellipse(m.x, m.y, 10, 5, 0x000000, 0.25);
     shadow.setDepth(DEPTH_WARNING - 0.02);
+    registerGraphicsObject(this.scene, 'meteorEffects', shadow);
 
     // Meteor-Glow (Kern) – startet klein, skaliert hoch
     const meteorGlow = this.scene.add.image(m.x, m.y, TEX_METEOR_GLOW);

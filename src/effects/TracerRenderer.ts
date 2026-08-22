@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TracerConfig } from '../types';
 import { emissiveAlpha } from './EmissiveScale';
+import { registerGraphicsObject } from './EffectUtils';
 
 const DEPTH_TRACER = DEPTH.PROJECTILES - 2;
 
@@ -38,6 +39,7 @@ export class TracerRenderer {
   createTracer(id: number, x: number, y: number, config: TracerConfig, color: number): void {
     if (this.visuals.has(id)) return;
     const graphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'weaponTrails', graphics);
     graphics.setDepth(DEPTH_TRACER);
     this.visuals.set(id, { graphics, spawnX: x, spawnY: y, prevX: x, prevY: y, config, color });
   }

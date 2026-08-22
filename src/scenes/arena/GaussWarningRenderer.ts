@@ -4,6 +4,7 @@ import { dequantizeAngle }   from '../../utils/angle';
 import { DEPTH, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, getTopDownMuzzleOrigin } from '../../config';
 import { VOID_PALETTE } from '../../config';
 import type { EnemyEntity } from '../../entities/EnemyEntity';
+import { registerGraphicsObject } from '../../effects/EffectUtils';
 
 /**
  * Draws the Gauss charge beam for every remote player currently charging
@@ -19,6 +20,7 @@ export class GaussWarningRenderer {
     private readonly getEnemies: () => readonly EnemyEntity[] = () => [],
   ) {
     this.gfx = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
+    registerGraphicsObject(scene, 'gaussWarning', this.gfx);
   }
 
   update(inArena: boolean): void {

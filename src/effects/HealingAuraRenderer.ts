@@ -3,7 +3,7 @@ import { DEPTH } from '../config';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import { WEAPON_CONFIGS, type HealingAuraWeaponFireConfig } from '../loadout/LoadoutConfig';
-import { configureAdditiveImage, fillRadialGradientTexture } from './EffectUtils';
+import { configureAdditiveImage, fillRadialGradientTexture, registerGraphicsObject } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_HEAL_FIELD = '__enemy_heal_aura_field';
@@ -126,6 +126,7 @@ export class HealingAuraRenderer {
         .setStrokeStyle(3, 0x73ff9f, 0.72)
         .setFillStyle(0x20b85a, 0.035)
         .setDepth(DEPTH.PLAYERS - 0.17);
+      registerGraphicsObject(this.scene, 'healingAura', ring);
       visual = { field, ring, radius: fire.radius, phase: Phaser.Math.FloatBetween(0, Math.PI * 2) };
       this.visuals.set(enemy.id, visual);
     }

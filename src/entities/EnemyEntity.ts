@@ -24,7 +24,7 @@ import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBur
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/PlasmaChargeRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
+import { fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
 import { TimebombFuseRenderer } from '../effects/TimebombFuseRenderer';
 import { getEnemyName } from '../i18n/contentPresentation';
@@ -160,6 +160,7 @@ export class EnemyEntity {
       this.ownerRing = scene.add.ellipse(x, y + this.config.size * 0.22, this.config.size * 1.15, this.config.size * 0.52, 0x000000, 0)
         .setStrokeStyle(2, ownerColor ?? 0x80ff80, 0.95)
         .setDepth(DEPTH.PLAYERS - 0.08);
+      registerGraphicsObject(scene, 'enemyStatus', this.ownerRing);
     } else if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
     }
@@ -726,6 +727,8 @@ export class EnemyEntity {
     this.hpBarFg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, COLORS.RED_2);
     this.hpBarFg.setOrigin(0, 0.5);
     this.hpBarFg.setDepth(DEPTH.SMOKE + 0.6);
+    registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.hpBarBg);
+    registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.hpBarFg);
   }
 
   private destroyHpBars(): void {
@@ -915,6 +918,8 @@ export class EnemyEntity {
       0x000000,
       0,
     ).setStrokeStyle(3, COLORS.GOLD_1, 0.9).setDepth(DEPTH.PLAYERS - 0.07);
+    registerGraphicsObject(scene, 'bossDecoration', this.bossAura);
+    registerGraphicsObject(scene, 'bossDecoration', this.bossRing);
     this.bossLabel = scene.add.text(
       this.sprite.x,
       this.sprite.y - this.config.size * 0.5 - 11,
