@@ -132,28 +132,69 @@ describe('flame renderer gpu particles', () => {
     expect(spark.depth).toBe(DEPTH.FIRE + 0.1);
     expect(spark.blendMode).toBe(1);
     expect(spark.gravity).toBe(-30);
-    expect(core.members.slice(-6).every((member) => member.frame === 'flame-core')).toBe(true);
-    expect(outer.members.slice(-4).every((member) => member.frame === 'flame-outer')).toBe(true);
+    // Zunge und Ballen sind weiss und tragen beide Stile; nur die Funken haben ein Void-Frame.
+    expect(core.members.slice(-6).every((member) => member.frame === 'flame-tongue')).toBe(true);
+    expect(outer.members.slice(-4).every((member) => member.frame === 'flame-billow')).toBe(true);
     expect(spark.members.at(-1)?.frame).toBe('flame-spark');
-    expect(core.members.at(-1)?.scaleX.base).toBeCloseTo(0.7, 10);
-    expect(core.members.at(-1)?.alpha.base).toBeCloseTo(0.9, 10);
-    expect(core.members.at(-1)?.tint).toBe(0xff9922);
-    expect(outer.members.at(-1)?.tint).toBe(0xdd2200);
+    // Laenge der Zunge = (10 + size * 0.35) / 32 Frame-Breite.
+    expect(core.members.at(-1)?.scaleX.base).toBeCloseTo(24 / 32, 10);
+    expect(core.members.at(-1)?.alpha.base).toBeCloseTo(0.72, 10);
+    // Frisch gezuendet: beide Stroeme ziehen aus dem heissen Band.
+    expect(core.members.at(-1)?.tint).toBe(0xffdf8a);
+    expect(outer.members.at(-1)?.tint).toBe(0xffdf8a);
     expect(spark.members.at(-1)?.scaleX.base).toBeCloseTo(0.6, 10);
     expect(spark.members.at(-1)?.alpha.base).toBeCloseTo(1, 10);
     expect(spark.members.at(-1)?.tint).toBe(0xffaa44);
     expect(spark.members.at(-1)?.y.ease).toBe('Gravity');
-    expect(spark.members.at(-1)?.y.amplitude).toBe(-32);
+    // Ohne Hitbox-Geschwindigkeit bleibt vom Startimpuls nur der Auftrieb.
+    expect(spark.members.at(-1)?.y.amplitude).toBe(-14);
 
     renderer.destroyVisual(1);
     renderer.createVisual(2, 100, 120, 40, VOID_FIRE_COLOR);
     registry.update(50);
-    expect(core.members.slice(-6).every((member) => member.frame === 'flame-core-void')).toBe(true);
-    expect(outer.members.slice(-4).every((member) => member.frame === 'flame-outer-void')).toBe(true);
+    expect(core.members.slice(-6).every((member) => member.frame === 'flame-tongue')).toBe(true);
+    expect(outer.members.slice(-4).every((member) => member.frame === 'flame-billow')).toBe(true);
     expect(spark.members.at(-1)?.frame).toBe('flame-spark-void');
-    expect(core.members.at(-1)?.tint).toBe(0xd887ff);
-    expect(outer.members.at(-1)?.tint).toBe(0x9d35ee);
+    expect(core.members.at(-1)?.tint).toBe(0xe6b6ff);
+    expect(outer.members.at(-1)?.tint).toBe(0xe6b6ff);
     expect(spark.members.at(-1)?.tint).toBe(0xd477ff);
+  });
+
+  it('streams along the flight path instead of clustering on the hitbox', () => {
+    const { registry, renderer, core, outer } = setup();
+    renderer.createVisual(1, 0, 0, 20, 0xff6600);
+    // Zwei Frames Flug nach rechts: erst danach ist genug Strecke fuer den vollen Nachlauf da.
+    renderer.updateVisual(1, 40, 0, 24, 400, 0);
+    registry.update(16);
+    renderer.updateVisual(1, 80, 0, 28, 400, 0);
+    registry.update(20);
+
+    const smearPx = 400 * 0.085;
+    for (const member of [...core.members, ...outer.members].slice(-4)) {
+      // Der Spawn liegt zwischen Kopf und Nachlaufende, nicht auf einem Punkt.
+      expect(member.x.base).toBeLessThanOrEqual(80);
+      expect(member.x.base).toBeGreaterThanOrEqual(80 - smearPx);
+      // Und er stroemt in Schussrichtung weiter, statt nach Norden zu treiben.
+      expect(member.x.amplitude).toBeGreaterThan(0);
+    }
+    // Ohne Querstreuung (Math.random ist fixiert) bleibt nur der kleine Auftrieb uebrig.
+    expect(core.members.at(-1)?.y.amplitude).toBeLessThan(0);
+    expect(core.members.at(-1)?.y.base).toBe(0);
+  });
+
+  it('cools the jet down along its lifetime', () => {
+    const { registry, renderer, core, outer } = setup();
+    renderer.createVisual(1, 0, 0, 60, 0xff6600);
+    renderer.updateVisual(1, 0, 0, 60, 400, 0);
+    registry.update(20);
+    const hotOuter = outer.members.at(-1)?.tint;
+
+    // Jenseits der Temperaturrampe zieht der Ballen aus dem kalten Band, der Kern bleibt
+    // bewusst im mittleren: ein Flammenkern brennt bis zuletzt heller als seine Huelle.
+    registry.update(600);
+    expect(hotOuter).toBe(0xffdf8a);
+    expect(outer.members.at(-1)?.tint).toBe(0xc93a0a);
+    expect(core.members.at(-1)?.tint).toBe(0xff7412);
   });
 
   it('uses current position and size only for new members', () => {
@@ -169,7 +210,7 @@ describe('flame renderer gpu particles', () => {
     expect(core.members[0].x.base).toBe(firstX);
     expect(core.members[2].x.base).toBeGreaterThanOrEqual(368);
     expect(core.members[2].x.base).toBeLessThanOrEqual(432);
-    expect(core.members[2].scaleX.base).toBeCloseTo(1.1, 10);
+    expect(core.members[2].scaleX.base).toBeCloseTo(38 / 32, 10);
     expect(core.patched).toEqual([]);
   });
 

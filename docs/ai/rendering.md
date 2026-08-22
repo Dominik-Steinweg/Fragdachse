@@ -220,7 +220,7 @@ Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen
 | `projectile-burn` | `PROJECTILES+0.34` (15.34) | ADD | 2048 | `projburn.outer`, `projburn.core`, `projburn.spark` (je normal und void) | eigenes Tiefenband ueber den Projektilkoerpern; `gravity = -30`, Outer skaliert auf 0.8 |
 | `world-debris` | `FIRE+0.075` (16.075) | NORMAL | 2048 | `leaf.debris`, `leafblower.dust` | gemeinsame geordnete Lane fuer Blaetter und Terrain-Staub; explizit zwischen FlameCore und FlameSpark |
 
-Summe 23 040 vorgehaltene Member; der Instance-Buffer belegt damit rund 3,8 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 128×128 RGBA (64 KB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, neu sind `ground-fire-smoke` und `leaf-blower-dust`. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
+Summe 23 040 vorgehaltene Member; der Instance-Buffer belegt damit rund 3,8 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 128×128 RGBA (64 KB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, dazu kommen `ground-fire-smoke`, `leaf-blower-dust` sowie die beiden Jet-Motive `flame-billow` und `flame-tongue`. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
 
 Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 16.92 damageAura, 16.96 reactionPulse, 17.0 Container mit Haze und Blobs, 17.02 `stink-normal`, 17.03 Spawn-Flash (ADD), 17.04 `stink-add`, 17.05 Spawn-Burst-Emitter (ADD), 17.1 Fairness-Kreis (ADD). **Dokumentierte Abweichung der Zusammenlegung:** die additive `inner`-Variante wandert von 17.001 auf 17.04 und kreuzt dabei `stink-normal`. Der Fehler ist das Produkt aus der plume-Partikelalpha (≤ 0.029) und dem additiven Beitrag, also ≤ 3 %, und tritt nur dort auf, wo sich Wolken *unterschiedlicher* Variante ueberlappen. `inner` und `plume` untereinander auf der NORMAL-Lane liegen bei ≈ 0.0016.
 
@@ -234,6 +234,17 @@ Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 
 - **Zwei Pixel Padding und ein bit-exakter Blit**: `smoothPixelArt` klemmt den Tap auf `seam ± 0.5` Texel; `imageSmoothingEnabled = false`, `globalCompositeOperation = 'source-over'`, ganzzahlige Zielkoordinaten. Die Atlasgroesse steht nicht im Code, ein Shelf-Packer waehlt die kleinste passende Zweierpotenz.
 
 Die Einzeltexturen bleiben bestehen – `stink_puff` benutzt weiterhin der klassische Spawn-Burst-Emitter.
+
+### Ein Strahl aus einzelnen Hitboxen
+
+Der Flammenwerfer ist netzseitig eine Kette einzelner Projektile: an der Duese liegen bei 70 ms Nachladezeit und 400 px/s rund 28 px zwischen zwei Hitboxen, ihre Partikelwolke hat dort aber erst wenige Pixel Radius. Werden die Partikel um den Hitbox-Mittelpunkt gestreut, liest sich das zwangslaeufig als Reihe einzelner Projektile mit Schweif – unabhaengig davon, wie viele Partikel je Hitbox entstehen. `FlameRenderer` loest das ueber die Platzierung, nicht ueber die Menge:
+
+- **Nachlauf.** Jeder Spawn liegt gleichverteilt hinter dem Kopf, auf einer Strecke von `speed * SMEAR_SECONDS`, zusaetzlich gedeckelt durch die seit dem Spawn tatsaechlich zurueckgelegte Strecke. Damit schliesst der Nachlauf jeder Hitbox die Luecke zur naechsten, und die erste Flamme eines Schusses malt ihren Nachlauf nicht in den Schuetzen. Als *Zeit* formuliert traegt sich das selbst: `velocityDecay` verlangsamt Abstand und Nachlauf im gleichen Mass.
+- **Stroemung.** Partikel erben einen Anteil der Hitbox-Geschwindigkeit und streuen nur quer dazu (dreiecksverteilt, also dicht in der Mitte). Ein reiner Auftrieb nach Norden – unabhaengig von der Zielrichtung – laesst denselben Effekt wie ein Lagerfeuer wirken.
+- **Temperatur.** Der Tint kommt aus einem von drei Baendern, gewaehlt ueber das Alter der Flamme an der Stelle, an der das Partikel entsteht. Zufaellig aus *einer* Palette gezogene Tints ergeben Farbrauschen und damit die Lesart "Funkenflug".
+- **Ausdehnung.** Flammenballen wachsen ueber ihre Lebenszeit und verblassen dabei; ein Verlauf auf nahe null laesst sie stattdessen zu Punkten schrumpfen.
+
+Die Jet-Frames `flame-billow` und `flame-tongue` sind bewusst **weiss**: erst dadurch ergibt der Multiply-Tint exakt die Temperaturfarbe, und dasselbe Frame traegt den normalen wie den Void-Stil. Die aelteren `TEX_FLAME_*`-Texturen behalten ihre eingebackene Farbe, weil Bodenfeuer, EntityBurn und Fireball auf ihnen stehen.
 
 ### Slot-Verwaltung: Ring-Cursor, kein Free-List
 

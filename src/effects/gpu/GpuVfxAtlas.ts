@@ -18,12 +18,15 @@ import {
   ensureLeafBlowerDustTexture,
 } from './GpuVfxSourceTextures';
 import {
+  TEX_FLAME_BILLOW,
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
   TEX_FLAME_SPARK,
+  TEX_FLAME_TONGUE,
   TEX_VOID_FLAME_CORE,
   TEX_VOID_FLAME_EMBER,
   TEX_VOID_FLAME_SPARK,
+  ensureFlameJetTextures,
   ensureFlameTextures,
   ensureVoidFlameTextures,
 } from '../FlameShared';
@@ -77,6 +80,9 @@ export const GpuVfxFrameId = {
   GroundFireSmoke: 12,
   LeafDebris:      13,
   LeafBlowerDust:  14,
+  /** Weisse Jet-Motive; der Stil steckt allein im Tint, deshalb ohne Void-Zwilling. */
+  FlameBillow:     15,
+  FlameTongue:     16,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -154,6 +160,14 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.LeafBlowerDust, frame: 'leaf-blower-dust',
     sourceTextureKey: TEX_LEAF_BLOWER_DUST, width: 18, height: 18, ensure: ensureLeafBlowerDustTexture,
+  },
+  {
+    id: GpuVfxFrameId.FlameBillow, frame: 'flame-billow',
+    sourceTextureKey: TEX_FLAME_BILLOW, width: 32, height: 32, ensure: ensureFlameJetTextures,
+  },
+  {
+    id: GpuVfxFrameId.FlameTongue, frame: 'flame-tongue',
+    sourceTextureKey: TEX_FLAME_TONGUE, width: 32, height: 16, ensure: ensureFlameJetTextures,
   },
 ];
 

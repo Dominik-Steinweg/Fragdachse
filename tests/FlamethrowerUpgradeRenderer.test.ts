@@ -67,6 +67,11 @@ vi.mock('../src/utils/phaserFx', () => ({
 vi.mock('../src/effects/FlameShared', () => ({
   ensureFlameTextures: () => {},
   ensureVoidFlameTextures: () => {},
+  // Der Atlas zieht die Jet-Motive aus demselben Modul, auch wenn dieser Renderer sie nicht
+  // benutzt – ohne die Exporte scheitert schon der Import.
+  ensureFlameJetTextures: () => {},
+  TEX_FLAME_BILLOW: 'flame-billow',
+  TEX_FLAME_TONGUE: 'flame-tongue',
   FLAME_COLORS_CORE: [0xffffff],
   FLAME_COLORS_OUTER: [0xffffff],
   FLAME_COLORS_SPARK: [0xffffff],

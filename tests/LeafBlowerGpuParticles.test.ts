@@ -134,8 +134,9 @@ describe('leaf blower gpu particles', () => {
     expect(firstDust?.tint).toBe(0x707070);
     expect(sample).toHaveBeenNthCalledWith(1, firstDust?.x.base, firstDust?.y.base);
     expect([firstDust?.x.base, firstDust?.y.base]).not.toEqual([200, 220]);
-    expect(firstDust?.scaleX.amplitude).toBeGreaterThan(0);
-    expect(firstDust?.alpha.base).toBeCloseTo(0.48);
+    expect(firstDust?.scaleX.base).toBeCloseTo(100.8 / 135);
+    expect(firstDust?.scaleX.amplitude).toBeCloseTo(100.8 / 90 - 100.8 / 135);
+    expect(firstDust?.alpha.base).toBeCloseTo(0.62);
     expect(firstDust?.x.duration).toBeGreaterThanOrEqual(350);
     expect(firstDust?.x.duration).toBeLessThanOrEqual(650);
 
@@ -147,7 +148,8 @@ describe('leaf blower gpu particles', () => {
     expect(sample).toHaveBeenCalledTimes(2);
     expect(sample).toHaveBeenNthCalledWith(2, secondDust?.x.base, secondDust?.y.base);
     expect([secondDust?.x.base, secondDust?.y.base]).not.toEqual([800, 900]);
-    expect(secondDust?.scaleX.amplitude).toBeGreaterThan(0);
+    expect(secondDust?.scaleX.base).toBeCloseTo(288.8 / 135);
+    expect(secondDust?.scaleX.amplitude).toBeCloseTo(288.8 / 90 - 288.8 / 135);
     expect(secondDust?.x.duration).toBeGreaterThanOrEqual(350);
     expect(secondDust?.x.duration).toBeLessThanOrEqual(650);
     expect(lane.members.filter((member) => member.frame === 'leaf-debris').every((member) => member.tint === firstLeafTint)).toBe(true);

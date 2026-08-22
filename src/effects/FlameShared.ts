@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { VOID_FIRE_COLOR } from '../config';
-import { fillRadialGradientTexture } from './EffectUtils';
+import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
 
 export const TEX_FLAME_EMBER = '__flame_ember';
 export const TEX_FLAME_CORE  = '__flame_core';
@@ -75,4 +75,101 @@ export function ensureVoidFlameTextures(scene: Phaser.Scene): void {
     [0.72, 'rgba(255,255,255,0.12)'],
     [1, 'rgba(255,255,255,0)'],
   ]);
+}
+
+/* ── Flammenwerfer-Jet ─────────────────────────────────────────────────────
+   Die Jet-Motive sind bewusst *weiss* und tragen keine Farbe in der Textur: erst dadurch
+   ergibt der Multiply-Tint exakt die gewuenschte Temperaturfarbe, und dasselbe Frame traegt
+   den normalen wie den Void-Stil. Die aelteren `TEX_FLAME_*`-Texturen behalten ihre
+   eingebackenen Farben, weil Bodenfeuer, EntityBurn und Fireball auf ihnen stehen. ── */
+
+export const TEX_FLAME_BILLOW = '__flame_billow';
+export const TEX_FLAME_TONGUE = '__flame_tongue';
+
+/**
+ * Temperaturbaender des Jets. Ein Flammenwerfer liest sich als Verlauf entlang des Strahls:
+ * weissgelb an der Duese, orange in der Mitte, glutrot am ausbrennenden Ende. Zufaellig aus
+ * *einer* Palette gezogene Tints ergeben dagegen ein Farbrauschen, das wie Funkenflug wirkt.
+ */
+export const FLAME_JET_TINTS_HOT  = [0xffffff, 0xfff0bb, 0xffdf8a, 0xffc95e] as const;
+export const FLAME_JET_TINTS_MID  = [0xffa838, 0xff8a20, 0xff7412, 0xffbb52] as const;
+export const FLAME_JET_TINTS_COOL = [0xe0450c, 0xb63108, 0xc93a0a, 0x8e2c0c] as const;
+export const VOID_JET_TINTS_HOT   = [0xffffff, 0xf6dcff, 0xe6b6ff, 0xd79bff] as const;
+export const VOID_JET_TINTS_MID   = [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff] as const;
+export const VOID_JET_TINTS_COOL  = [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4] as const;
+
+/**
+ * Waehlt den Tint nach Resthitze (1 = Duese, 0 = ausgebranntes Ende). Die Bandgrenzen werden
+ * pro Partikel leicht verrauscht, sonst faellt die Farbe in zwei sichtbaren Ringen um.
+ */
+export function pickHeatTint(
+  hot: readonly number[],
+  mid: readonly number[],
+  cool: readonly number[],
+  heat: number,
+): number {
+  const jittered = heat + (Math.random() - 0.5) * 0.22;
+  const band = jittered > 0.62 ? hot : jittered > 0.28 ? mid : cool;
+  return band[(Math.random() * band.length) | 0];
+}
+
+/** Weiche, unregelmaessige Flammenwolke (32x32). Mehrere Lappen statt eines runden Verlaufs. */
+const BILLOW_LOBES: readonly (readonly [number, number, number, number])[] = [
+  [16, 16, 13, 0.5],
+  [11.5, 12, 9, 0.34],
+  [21, 13.5, 8, 0.3],
+  [12, 21, 8.5, 0.28],
+  [22, 20.5, 7.5, 0.26],
+  [16, 9.5, 6.5, 0.24],
+  [17, 24, 6, 0.22],
+];
+
+/** Flammenzunge (32x16), Spitze nach +X. Die Rotation richtet sie auf die Stroemung aus. */
+const TONGUE_LOBES: readonly (readonly [number, number, number, number, number])[] = [
+  [9, 8, 8, 7, 0.5],
+  [10, 8, 3.6, 3.2, 0.42],
+  [14.5, 8, 7, 5.4, 0.34],
+  [19.5, 8, 6, 4, 0.28],
+  [24, 8, 5, 2.8, 0.22],
+  [28, 8, 3.6, 1.8, 0.16],
+];
+
+export function ensureFlameJetTextures(scene: Phaser.Scene): void {
+  const textures = scene.textures;
+
+  ensureCanvasTexture(textures, TEX_FLAME_BILLOW, 32, 32, (ctx) => {
+    for (const [x, y, radius, alpha] of BILLOW_LOBES) {
+      drawSoftLobe(ctx, x, y, radius, radius, alpha);
+    }
+  });
+
+  ensureCanvasTexture(textures, TEX_FLAME_TONGUE, 32, 16, (ctx) => {
+    for (const [x, y, radiusX, radiusY, alpha] of TONGUE_LOBES) {
+      drawSoftLobe(ctx, x, y, radiusX, radiusY, alpha);
+    }
+  });
+}
+
+/**
+ * Ein weicher, elliptischer Lappen. Die Ellipse entsteht ueber die Transformation, nicht ueber
+ * einen zweiten Verlauf: `createRadialGradient` kennt nur Kreise.
+ */
+function drawSoftLobe(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+  alpha: number,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1, radiusY / radiusX);
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radiusX);
+  gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  gradient.addColorStop(0.55, `rgba(255,255,255,${alpha * 0.55})`);
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(-radiusX, -radiusX, radiusX * 2, radiusX * 2);
+  ctx.restore();
 }

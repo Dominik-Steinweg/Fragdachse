@@ -236,7 +236,9 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'flame-outer',
     depth: DEPTH.FIRE,
     blendMode: Phaser.BlendModes.ADD,
-    eases: [GpuVfxEase.Linear],
+    // QuadOut traegt die Ausdehnung der Flammenballen: ein Gasballen waechst zuerst schnell und
+    // laeuft dann aus. Linear bleibt fuer Position und Alpha.
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
     capacity: 3072,
     maxLifetimeMs: 450,
     order: 'add-over-opaque',
@@ -253,7 +255,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'flame-core',
     depth: DEPTH.FIRE + 0.05,
     blendMode: Phaser.BlendModes.ADD,
-    eases: [GpuVfxEase.Linear],
+    // Wie flame-outer: die Zungen dehnen sich ueber QuadOut, alles andere bleibt linear.
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
     capacity: 2304,
     maxLifetimeMs: 280,
     order: 'add-over-opaque',

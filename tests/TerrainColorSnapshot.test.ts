@@ -227,7 +227,8 @@ describe('TerrainColorSnapshot', () => {
     );
 
     expect(source).toContain("export const TEX_LEAF_BLOWER_DUST");
-    expect(source).toContain("rgba(244,244,244,0.82)");
-    expect(source).toContain("rgba(220,220,220,0.58)");
+    expect(source).toContain("rgba(148,148,148,0.92)");
+    expect(source).toContain("rgba(184,184,184,0.72)");
+    expect(source).toContain("rgba(216,216,216,0.30)");
   });
 });
