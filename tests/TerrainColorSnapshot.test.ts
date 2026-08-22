@@ -219,4 +219,15 @@ describe('TerrainColorSnapshot', () => {
     expect(source).not.toContain('#f2f2ee');
     expect(source).not.toContain('#ffffff');
   });
+
+  it('keeps the leaf blower dust source neutral for direct terrain tinting', () => {
+    const source = readFileSync(
+      new URL('../src/effects/gpu/GpuVfxSourceTextures.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).toContain("export const TEX_LEAF_BLOWER_DUST");
+    expect(source).toContain("rgba(255,255,255,0.42)");
+    expect(source).toContain("rgba(255,255,255,0.20)");
+  });
 });

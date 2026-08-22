@@ -19,6 +19,7 @@ export const TEX_ROCKET_EXHAUST  = '__rocket_exhaust';
 export const TEX_STINK_PUFF      = 'stink_puff';
 export const TEX_GROUND_FIRE_SMOKE = '__ground_fire_smoke';
 export const TEX_LEAF_DEBRIS     = '__leaf_blower_leaf';
+export const TEX_LEAF_BLOWER_DUST = '__leaf_blower_dust';
 
 /** Bestehendes Leaf-Motiv als Atlas-Quelltextur. */
 export function ensureLeafDebrisTexture(scene: Phaser.Scene): void {
@@ -39,6 +40,26 @@ export function ensureLeafDebrisTexture(scene: Phaser.Scene): void {
     ctx.lineTo(8, 0);
     ctx.stroke();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  });
+}
+
+/** Kleine weiche, bewusst farbneutrale Staubwolke fuer den LeafBlower. */
+export function ensureLeafBlowerDustTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_LEAF_BLOWER_DUST, 18, 18, (ctx) => {
+    const gradient = ctx.createRadialGradient(9, 9, 1, 9, 9, 9);
+    gradient.addColorStop(0, 'rgba(255,255,255,0.42)');
+    gradient.addColorStop(0.62, 'rgba(255,255,255,0.20)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(3, 8);
+    ctx.quadraticCurveTo(5, 3, 9, 4);
+    ctx.quadraticCurveTo(14, 2, 15, 8);
+    ctx.quadraticCurveTo(17, 12, 12, 14);
+    ctx.quadraticCurveTo(7, 17, 4, 13);
+    ctx.quadraticCurveTo(1, 11, 3, 8);
+    ctx.closePath();
+    ctx.fill();
   });
 }
 

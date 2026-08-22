@@ -397,7 +397,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'Erzeugungsreihenfolge der GPU-Quellen abhaengt.',
     capacityRationale:
       'Ein LeafBlower erzeugt 5 Blaetter je 40 ms, also 125/s; bei maximal 860 ms leben rund '
-      + '108 Member je Quelle. 16 gleichzeitig sichtbare LeafBlower benoetigen damit rund '
-      + '1720 Slots; 2048 ist die naechste begruendete Reserve.',
+      + '108 Member je Quelle. Der zusaetzliche Staub liegt bei 1 je 80 ms und maximal 420 ms, '
+      + 'also rund 6 weitere Member je Quelle. 16 gleichzeitig sichtbare LeafBlower benoetigen '
+      + 'damit rund 1824 Slots; 2048 ist die naechste begruendete Reserve.',
   },
 ];

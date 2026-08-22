@@ -827,6 +827,10 @@ export class ArenaLifecycleCoordinator {
       );
     }
     const layout = locallyGeneratedLayout;
+    this.renderers.leafBlower.setTerrainMaterialLayout(
+      layout,
+      coopDefenseBases.flatMap((base) => base.cells),
+    );
     this.preparedRoundLayout = null;
     bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 35, 'building');
     const coopDefensePersistentSpawnConfigs = coopDefenseMapConfig
@@ -2989,6 +2993,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.ctx.hostPhysics.setBaseGroup(null);
     this.renderers.leafBlower.setTerrainColorSnapshot(null);
+    this.renderers.leafBlower.setTerrainMaterialLayout(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
     this.ctx.coopDefenseRoundStateSystem = null;

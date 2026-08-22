@@ -302,6 +302,7 @@ export class EffectSystem implements EnemyVisualSink {
     const startRadius = Math.max(6, radius * 0.11);
 
     const flash = this.scene.add.circle(x, y, startRadius, 0xffffe2, 1);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', flash);
     flash.setDepth(DEPTH_FX + 1);
     makeAdditive(flash);
     this.scene.tweens.add({
@@ -315,6 +316,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const core = this.scene.add.circle(x, y, startRadius, coreColor, 0.82);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', core);
     core.setDepth(DEPTH_FX + 0.6);
     makeAdditive(core);
     this.scene.tweens.add({
@@ -328,6 +330,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const blast = this.scene.add.circle(x, y, startRadius, fillColor, 0.72);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', blast);
     blast.setDepth(DEPTH_FX + 0.2);
     makeAdditive(blast);
     this.scene.tweens.add({
@@ -341,6 +344,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const halo = this.scene.add.circle(x, y, startRadius, haloColor, 0.32);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', halo);
     halo.setDepth(DEPTH_FX + 0.1);
     makeAdditive(halo);
     this.scene.tweens.add({
@@ -359,6 +363,7 @@ export class EffectSystem implements EnemyVisualSink {
     ];
     for (const profile of ringProfiles) {
       const ring = this.scene.add.circle(x, y, Math.max(5, radius * profile.start));
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
       ring.setFillStyle(0, 0);
       ring.setStrokeStyle(profile.width, profile.start < 0.3 ? coreColor : fillColor, profile.alpha);
       ring.setDepth(DEPTH_FX + 0.16);
@@ -385,6 +390,7 @@ export class EffectSystem implements EnemyVisualSink {
         0xffedc7,
         0.18,
       );
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', skyFlash);
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
       makeAdditive(skyFlash);
@@ -609,6 +615,7 @@ export class EffectSystem implements EnemyVisualSink {
         .setStrokeStyle(2.5, 0xfff3b0, 0.95)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(DEPTH_FX + 0.35);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', criticalRing);
       const criticalLabel = this.scene.add.text(effect.x, effect.y - 18, t('ui.combat.critical'), {
         fontFamily: 'Arial Black, Arial, sans-serif',
         fontSize: '12px',
@@ -757,6 +764,7 @@ export class EffectSystem implements EnemyVisualSink {
     const endScale = SHOCKWAVE_RADIUS / startRadius;
 
     const coreFlash = this.scene.add.circle(x, y, 12, 0xe7c59a, 0.65);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', coreFlash);
     coreFlash.setDepth(DEPTH_FX + 0.3);
     makeAdditive(coreFlash);
     this.scene.tweens.add({
@@ -770,6 +778,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const innerRing = this.scene.add.circle(x, y, startRadius, 0, 0);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', innerRing);
     innerRing.setDepth(DEPTH_FX + 0.2);
     innerRing.setStrokeStyle(5, 0x8d5e3b, 0.85);
     this.scene.tweens.add({
@@ -783,6 +792,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const dustRing = this.scene.add.circle(x, y, startRadius * 0.9, 0, 0);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', dustRing);
     dustRing.setDepth(DEPTH_FX + 0.1);
     dustRing.setStrokeStyle(9, 0x3f342d, 0.42);
     this.scene.tweens.add({
@@ -848,6 +858,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.ensureTextures();
     const particleCount = revealing ? 28 : 22;
     const core = this.scene.add.circle(x, y, revealing ? 16 : 12, color, revealing ? 0.34 : 0.24);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', core);
     core.setDepth(DEPTH_FX + 0.2);
     makeAdditive(core);
     this.scene.tweens.add({
@@ -861,6 +872,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const ring = this.scene.add.circle(x, y, revealing ? 16 : 12, 0, 0);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
     ring.setDepth(DEPTH_FX + 0.16);
     ring.setStrokeStyle(revealing ? 6 : 5, color, revealing ? 0.7 : 0.54);
     makeAdditive(ring);
@@ -875,6 +887,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     const outerRing = this.scene.add.circle(x, y, revealing ? 22 : 18, 0, 0);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', outerRing);
     outerRing.setDepth(DEPTH_FX + 0.12);
     outerRing.setStrokeStyle(revealing ? 10 : 8, color, revealing ? 0.24 : 0.18);
     this.scene.tweens.add({
@@ -892,6 +905,7 @@ export class EffectSystem implements EnemyVisualSink {
       const travel = Phaser.Math.Between(revealing ? 24 : 14, revealing ? 68 : 42);
       const size = Phaser.Math.Between(2, 5);
       const pixel = this.scene.add.rectangle(x, y, size, size, color, revealing ? 0.82 : 0.6);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', pixel);
       pixel.setDepth(DEPTH_FX + 0.1);
       pixel.setRotation(Math.random() * Math.PI);
       makeAdditive(pixel);
@@ -1009,6 +1023,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (phase === 'windup') {
       const ring = this.scene.add.circle(x, y + 2, 12, 0, 0);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
       ring.setDepth(DEPTH_FX + 0.05);
       ring.setStrokeStyle(4, 0x6f4a33, 0.8);
       this.scene.tweens.add({
@@ -1080,6 +1095,7 @@ export class EffectSystem implements EnemyVisualSink {
     if (visualStyle === 'timebomb_pop') {
       const popColor = color ?? 0xb82fff;
       const core = this.scene.add.circle(x, y, 5, 0xf3d9ff, 0.9).setDepth(DEPTH_FX + 0.4);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', core);
       makeAdditive(core);
       this.scene.tweens.add({
         targets: core,
@@ -1091,6 +1107,7 @@ export class EffectSystem implements EnemyVisualSink {
         onComplete: () => core.destroy(),
       });
       const ring = this.scene.add.circle(x, y, Math.max(4, radius * 0.22)).setDepth(DEPTH_FX + 0.2);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
       ring.setFillStyle(0, 0).setStrokeStyle(2, popColor, 0.8);
       makeAdditive(ring);
       this.scene.tweens.add({
@@ -1143,6 +1160,7 @@ export class EffectSystem implements EnemyVisualSink {
         isVoidNuke ? 0xc76cff : 0xfff1cf,
         0.24,
       );
+      registerGraphicsObject(this.scene, 'nukeTelegraphs', skyFlash);
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
       makeAdditive(skyFlash);
@@ -1186,6 +1204,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (isEnergy || isNuke || isHoly) {
       const halo = this.scene.add.circle(x, y, startRadius, haloColor, isNuke ? 0.55 : 0.4);
+      registerGraphicsObject(this.scene, isNuke ? 'nukeTelegraphs' : 'effectSystemGraphics', halo);
       halo.setDepth(DEPTH_FX + 0.5);
       makeAdditive(halo);
       this.scene.tweens.add({
@@ -1200,6 +1219,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     const blast = this.scene.add.circle(x, y, startRadius, fillColor, isEnergy ? 0.5 : (isNuke ? 0.88 : 0.7));
+    registerGraphicsObject(this.scene, isNuke ? 'nukeTelegraphs' : 'effectSystemGraphics', blast);
     blast.setDepth(DEPTH_FX);
     if (isEnergy || isNuke || isHoly) {
       makeAdditive(blast);
@@ -1216,6 +1236,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (isHoly) {
       const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffefc4, 0.18);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', skyFlash);
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
       makeAdditive(skyFlash);
@@ -1228,6 +1249,7 @@ export class EffectSystem implements EnemyVisualSink {
       });
 
       const coreCorona = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.72);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', coreCorona);
       coreCorona.setDepth(DEPTH_FX + 0.45);
       makeAdditive(coreCorona);
       this.scene.tweens.add({
@@ -1241,6 +1263,7 @@ export class EffectSystem implements EnemyVisualSink {
       });
 
       const blastOuter = this.scene.add.circle(x, y, startRadius, 0xffb11f, 0.52);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', blastOuter);
       blastOuter.setDepth(DEPTH_FX + 0.15);
       makeAdditive(blastOuter);
       this.scene.tweens.add({
@@ -1256,6 +1279,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (isNuke) {
       const secondaryBlast = this.scene.add.circle(x, y, startRadius, 0xff7a2f, 0.55);
+      registerGraphicsObject(this.scene, 'nukeTelegraphs', secondaryBlast);
       secondaryBlast.setDepth(DEPTH_FX + 0.2);
       makeAdditive(secondaryBlast);
       this.scene.tweens.add({
@@ -1269,6 +1293,7 @@ export class EffectSystem implements EnemyVisualSink {
       });
 
       const heatHalo = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.25);
+      registerGraphicsObject(this.scene, 'nukeTelegraphs', heatHalo);
       heatHalo.setDepth(DEPTH_FX + 0.3);
       makeAdditive(heatHalo);
       this.scene.tweens.add({
@@ -1306,6 +1331,7 @@ export class EffectSystem implements EnemyVisualSink {
       // mit etwas hellerem Kern und einer zweiten, kurzen Druckwelle. Der echte
       // Schadensradius bleibt weiterhin der uebergebene Radius.
       const cascadeCore = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.62);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', cascadeCore);
       cascadeCore.setDepth(DEPTH_FX + 0.35);
       makeAdditive(cascadeCore);
       this.scene.tweens.add({
@@ -1320,6 +1346,7 @@ export class EffectSystem implements EnemyVisualSink {
 
       const pressureStartRadius = Math.max(6, radius * 0.34);
       const pressureRing = this.scene.add.circle(x, y, pressureStartRadius);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', pressureRing);
       pressureRing.setFillStyle(0, 0);
       pressureRing.setStrokeStyle(3, this.mixColor(fillColor, 0xffffff, 0.34), 0.72);
       pressureRing.setDepth(DEPTH_FX + 0.08);
@@ -1351,6 +1378,7 @@ export class EffectSystem implements EnemyVisualSink {
     if (isEnergy) {
       const outerRingRadius = radius * 0.3;
       const outerRing = this.scene.add.circle(x, y, outerRingRadius);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', outerRing);
       outerRing.setStrokeStyle(2, fillColor, 0.9);
       outerRing.setFillStyle(0, 0);
       outerRing.setDepth(DEPTH_FX + 0.2);
@@ -1368,6 +1396,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (isNuke) {
       const shockRingA = this.scene.add.circle(x, y, radius * 0.18);
+      registerGraphicsObject(this.scene, 'nukeTelegraphs', shockRingA);
       shockRingA.setStrokeStyle(6, 0xfff0b8, 0.92);
       shockRingA.setFillStyle(0, 0);
       shockRingA.setDepth(DEPTH_FX + 0.1);
@@ -1383,6 +1412,7 @@ export class EffectSystem implements EnemyVisualSink {
       });
 
       const shockRingB = this.scene.add.circle(x, y, radius * 0.12);
+      registerGraphicsObject(this.scene, 'nukeTelegraphs', shockRingB);
       shockRingB.setStrokeStyle(3, 0xff7a2f, 0.8);
       shockRingB.setFillStyle(0, 0);
       shockRingB.setDepth(DEPTH_FX + 0.12);
@@ -1478,6 +1508,7 @@ export class EffectSystem implements EnemyVisualSink {
       const holyRingRadius = radius * 0.28;
       const holyRingEndScale = (radius * 1.75) / holyRingRadius;
       const holyRing = this.scene.add.circle(x, y, holyRingRadius);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', holyRing);
       holyRing.setStrokeStyle(6, 0xffe8a3, 0.85);
       holyRing.setFillStyle(0, 0);
       holyRing.setDepth(DEPTH_FX + 0.25);
@@ -1493,6 +1524,7 @@ export class EffectSystem implements EnemyVisualSink {
       });
 
       const holyRingInner = this.scene.add.circle(x, y, radius * 0.18);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', holyRingInner);
       holyRingInner.setStrokeStyle(3, 0xffffff, 0.72);
       holyRingInner.setFillStyle(0, 0);
       holyRingInner.setDepth(DEPTH_FX + 0.26);
@@ -1508,9 +1540,11 @@ export class EffectSystem implements EnemyVisualSink {
       });
 
       const verticalBeam = this.scene.add.rectangle(x, y, Math.max(radius * 0.16, 20), radius * 0.95, 0xfff4d0, 0.24);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', verticalBeam);
       verticalBeam.setDepth(DEPTH_FX + 0.3);
       makeAdditive(verticalBeam);
       const horizontalBeam = this.scene.add.rectangle(x, y, radius * 0.95, Math.max(radius * 0.16, 20), 0xffe0a4, 0.2);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', horizontalBeam);
       horizontalBeam.setDepth(DEPTH_FX + 0.31);
       makeAdditive(horizontalBeam);
       this.scene.tweens.add({
@@ -1604,6 +1638,7 @@ export class EffectSystem implements EnemyVisualSink {
     const outerColor = this.mixColor(color, 0x3557d6, 0.32);
 
     const flash = this.scene.add.circle(x, y, Math.max(5, radius * 0.12), 0xffffff, 0.92);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', flash);
     flash.setDepth(DEPTH_FX + 0.45);
     makeAdditive(flash);
     this.scene.tweens.add({
@@ -1618,6 +1653,7 @@ export class EffectSystem implements EnemyVisualSink {
     for (let ringIndex = 0; ringIndex < 2; ringIndex += 1) {
       const startRadius = Math.max(5, radius * (0.2 + ringIndex * 0.08));
       const ring = this.scene.add.circle(x, y, startRadius);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
       ring.setFillStyle(0, 0);
       ring.setStrokeStyle(ringIndex === 0 ? 4 : 2, ringIndex === 0 ? coreColor : outerColor, 0.95);
       ring.setDepth(DEPTH_FX + 0.25 - ringIndex * 0.03);
@@ -1633,6 +1669,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     const arcs = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', arcs);
     arcs.setDepth(DEPTH_FX + 0.35);
     makeAdditive(arcs);
     const arcCount = Math.max(8, Math.ceil(radius / 7));
@@ -1684,6 +1721,7 @@ export class EffectSystem implements EnemyVisualSink {
     const startRadius = Math.max(5, radius * 0.3);
 
     const core = this.scene.add.circle(x, y, startRadius, brightColor, 0.75);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', core);
     core.setDepth(DEPTH_FX + 0.4);
     makeAdditive(core);
     this.scene.tweens.add({
@@ -1698,6 +1736,7 @@ export class EffectSystem implements EnemyVisualSink {
     // Zwei nach aussen laufende Ringe: die Doppelung liest sich als Puls, nicht als Druckwelle.
     for (let ringIndex = 0; ringIndex < 2; ringIndex += 1) {
       const ring = this.scene.add.circle(x, y, startRadius);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
       ring.setFillStyle(0, 0);
       ring.setStrokeStyle(ringIndex === 0 ? 2.4 : 1.4, ringIndex === 0 ? brightColor : color, 0.85);
       ring.setDepth(DEPTH_FX + 0.3 - ringIndex * 0.02);
@@ -1836,6 +1875,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, visualPreset, playerColor);
 
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', gfx);
     gfx.setDepth(DEPTH_TRACE);
     this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, renderEndX, renderEndY);
     this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, renderEndX, renderEndY);
@@ -1958,6 +1998,7 @@ export class EffectSystem implements EnemyVisualSink {
     const baseColor = this.mixColor(playerColor, 0xffffff, 0.3);
     const haloRadius = Math.max(thickness * 2.4, 7);
     const halo = this.scene.add.circle(x, y, haloRadius, baseColor, 0.24);
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', halo);
     halo.setDepth(DEPTH_TRACE + 0.1);
     makeAdditive(halo);
     this.scene.tweens.add({
@@ -2020,6 +2061,7 @@ export class EffectSystem implements EnemyVisualSink {
     const endAngle   = angle + halfArcRad;
 
     const gfx = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'effectSystemGraphics', gfx);
     gfx.setDepth(DEPTH_FX);
 
     // 1. Gefüllter Sektor (Fächer)
@@ -2311,6 +2353,7 @@ export class EffectSystem implements EnemyVisualSink {
         .setDepth(DEPTH_FX - 0.1)
         .setOrigin(0.5)
         .setScale(DEATH_DISINTEGRATION_VFX.scaleStart);
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', pixel);
       this.activeDeathPixelRectangles += 1;
       spawnedChunks += 1;
 

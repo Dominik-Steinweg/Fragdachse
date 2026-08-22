@@ -66,6 +66,35 @@ function sourceHasDirectPhaserFactory(source: TypeScriptSource): boolean {
   return /(?:this\.)?scene\.add\.(?:particles|graphics|circle|ellipse|rectangle|arc|line|polygon)\s*\(/u.test(source.text);
 }
 
+function findUnattributedEffectSystemGraphicsFactories(source: string): string[] {
+  const factoryPattern = /this\.scene\.add\.(graphics|circle|ellipse|rectangle|arc|line|polygon)\s*\(/gu;
+  const missing: string[] = [];
+
+  for (const match of source.matchAll(factoryPattern)) {
+    const offset = match.index ?? 0;
+    const statementStart = source.lastIndexOf(';', offset) + 1;
+    const statementEnd = source.indexOf(';', offset);
+    const end = statementEnd >= 0 ? statementEnd + 1 : source.length;
+    const statement = source.slice(statementStart, end);
+    const variable = statement.match(/\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=/u)?.[1];
+    if (!variable) {
+      missing.push(`${match[1]}@${offset}`);
+      continue;
+    }
+
+    const registration = new RegExp(
+      `registerGraphicsObject\\(\\s*this\\.scene\\s*,\\s*(?:'effectSystemGraphics'|'nukeTelegraphs'|isNuke\\s*\\?\\s*'nukeTelegraphs'\\s*:\\s*'effectSystemGraphics')\\s*,\\s*${variable}\\s*\\)`,
+      'u',
+    );
+    const following = source.slice(end, end + 320);
+    if (!registration.test(statement) && !registration.test(following)) {
+      missing.push(`${variable} (${match[1]})`);
+    }
+  }
+
+  return missing;
+}
+
 function emitter(active = false, alive = 0): Phaser.GameObjects.Particles.ParticleEmitter {
   const value: FakeEmitter = {
     active,
@@ -227,6 +256,30 @@ describe('ArenaVisualAttributionCollector', () => {
         sourceFamilies.some(([family]) => hasHookForFamily(source.text, family, [...particleHooks, ...graphicsHooks])),
         `direct Phaser factory attribution in ${source.path}`,
       ).toBe(true);
+    }
+
+    const effectSystem = sources.find((source) => sourceDeclaresClass(source, 'EffectSystem'));
+    expect(effectSystem, 'EffectSystem source').toBeDefined();
+    if (effectSystem) {
+      expect(
+        findUnattributedEffectSystemGraphicsFactories(effectSystem.text),
+        'every direct EffectSystem Runtime-Graphics factory must have its own hook',
+      ).toEqual([]);
+      expect(effectSystem.text).toMatch(
+        /registerGraphicsObject\(\s*this\.scene\s*,\s*isNuke\s*\?\s*'nukeTelegraphs'\s*:\s*'effectSystemGraphics'\s*,\s*halo\s*\)/u,
+      );
+      expect(effectSystem.text).toMatch(
+        /registerGraphicsObject\(\s*this\.scene\s*,\s*isNuke\s*\?\s*'nukeTelegraphs'\s*:\s*'effectSystemGraphics'\s*,\s*blast\s*\)/u,
+      );
+      for (const objectName of ['skyFlash', 'secondaryBlast', 'heatHalo', 'shockRingA', 'shockRingB']) {
+        expect(
+          effectSystem.text,
+          `nuke graphics hook for EffectSystem.${objectName}`,
+        ).toMatch(new RegExp(
+          `registerGraphicsObject\\(\\s*this\\.scene\\s*,\\s*'nukeTelegraphs'\\s*,\\s*${objectName}\\s*\\)`,
+          'u',
+        ));
+      }
     }
   });
 });

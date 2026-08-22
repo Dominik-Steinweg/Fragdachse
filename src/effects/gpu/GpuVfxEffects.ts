@@ -33,6 +33,7 @@ export const GpuVfxEffectId = {
   EntityBurnOuter:    19,
   EntityBurnSpark:    20,
   LeafDebris:         21,
+  LeafBlowerDust:     22,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -243,6 +244,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     label: 'leaf.debris',
     lane: GpuVfxLaneId.WorldDebris,
     frame: GpuVfxFrameId.LeafDebris,
+    importance: 'standard',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.LeafBlowerDust,
+    label: 'leafblower.dust',
+    lane: GpuVfxLaneId.WorldDebris,
+    frame: GpuVfxFrameId.LeafBlowerDust,
     importance: 'standard',
     release: 'linger',
   },

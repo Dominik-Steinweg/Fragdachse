@@ -7,6 +7,7 @@ import {
   TEX_STINK_PUFF,
   TEX_GROUND_FIRE_SMOKE,
   TEX_LEAF_DEBRIS,
+  TEX_LEAF_BLOWER_DUST,
   ensureAirstrikeBombTexture,
   ensureAirstrikeSparkTexture,
   ensureRocketExhaustTexture,
@@ -14,6 +15,7 @@ import {
   ensureStinkPuffTexture,
   ensureGroundFireSmokeTexture,
   ensureLeafDebrisTexture,
+  ensureLeafBlowerDustTexture,
 } from './GpuVfxSourceTextures';
 import {
   TEX_FLAME_CORE,
@@ -74,6 +76,7 @@ export const GpuVfxFrameId = {
   FlameSparkVoid:  11,
   GroundFireSmoke: 12,
   LeafDebris:      13,
+  LeafBlowerDust:  14,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -147,6 +150,10 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.LeafDebris, frame: 'leaf-debris',
     sourceTextureKey: TEX_LEAF_DEBRIS, width: 24, height: 18, ensure: ensureLeafDebrisTexture,
+  },
+  {
+    id: GpuVfxFrameId.LeafBlowerDust, frame: 'leaf-blower-dust',
+    sourceTextureKey: TEX_LEAF_BLOWER_DUST, width: 18, height: 18, ensure: ensureLeafBlowerDustTexture,
   },
 ];
 
