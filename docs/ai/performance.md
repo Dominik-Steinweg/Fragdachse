@@ -29,6 +29,13 @@ Neue Emitter und Filter über die bestehende Qualitätsinfrastruktur registriere
 - Ein Clearance-Profil ist keine reine Maske: `applyWallAdjacencySurcharge` läuft nach `applyClearanceMask` und liest `traversable`, deshalb weichen neben `traversable` auch `costs` und `wallAdjacent` ab, und der Zielabstand zu Basen wächst auf `clearanceCells + 1`. Ein solches Profil braucht eigene Arrays und eine eigene Zielableitung; Profile werden nach `clearanceCells` gekeyt, nicht nach Rolle.
 - Base-Änderungen rechnen nicht mehr synchron im Frame. Der Coordinator verschickt den Patch prioritär und sperrt die entfallenen Basisziele sofort im Main Thread, bis das neue Feld aktiv ist – ohne diese Sperre bliebe ein Gegner auf der Zielzelle der toten Basis stehen, weil sein Integrationswert dort `0` ist und `EnemyManager` das als „angekommen" wertet.
 - Häufige homogene Visuals poolen. Physik-/Gameplay-Objekte nur poolen, wenn der Reset vollständig und messbar günstiger ist.
+- `Graphics.strokeCircle`, `fillCircle` und `arc` erzeugen im WebGL-Renderer rund 101 Punkte pro
+  Bogen, unabhängig vom Radius (`GraphicsWebGLRenderer.js`, `iterStep = 0.01`; jeder Punkt ist eine
+  Objektallokation plus ein `cos`/`sin`-Paar). Die Tessellierung läuft in jedem gezeichneten Frame
+  erneut über den gesamten `commandBuffer` – ein Dirty-Flag auf den Neuaufbau senkt die
+  Renderkosten deshalb nicht, und `pathDetailThreshold` verwirft Punkte erst nach ihrer Erzeugung.
+  In Pro-Frame-Pfaden gehören gebackene Texturen mit langlebigen Images hin (`src/ui/AimVisuals.ts`);
+  wo die Winkelgeometrie wirklich dynamisch ist, den Bogen mit `moveTo`/`lineTo` selbst tessellieren.
 - Frame-Getter auf dem Client dürfen nicht jedes Mal localStorage lesen, JSON parsen oder Upgrade-Profile neu auflösen; bestehende Referenz-/Round-Caches verwenden und explizit invalidieren.
 - Dirty-Flags und einmal-pro-Frame-Rebuilds für große UI-/Overlay-Bäume nutzen; keine komplette Baumzerstörung pro Klick.
 - Fels-Änderungswellen sammeln IDs bis `POST_UPDATE` und backen Mottle, Decals und statische

@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { AimSpreadModel } from './AimSpreadModel';
+import { AimVisuals, type SlotPalette } from './AimVisuals';
 import type { PlayerAimNetState, UltimateChargePreviewState, UtilityChargePreviewState, UtilityTargetingPreviewState, WeaponSlot } from '../types';
 import {
   COLORS,
@@ -11,14 +12,6 @@ import {
 } from '../config';
 import { LivingBarEffect, paletteFromColor } from './LivingBarEffect';
 import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
-
-type SlotPalette = {
-  beamShadow: number;
-  beamGlow: number;
-  beamCore: number;
-  crossGlow: number;
-  crossMain: number;
-};
 
 const SLOT_PALETTES: Record<WeaponSlot, SlotPalette> = {
   weapon1: {
@@ -37,42 +30,18 @@ const SLOT_PALETTES: Record<WeaponSlot, SlotPalette> = {
   },
 };
 
-const TARGETING_PALETTE: SlotPalette = {
-  beamShadow: COLORS.RED_6,
-  beamGlow:   COLORS.RED_4,
-  beamCore:   COLORS.RED_2,
-  crossGlow:  COLORS.RED_3,
-  crossMain:  COLORS.RED_1,
-};
-
 // ── Visuelle Konstanten ────────────────────────────────────────────────────
-const CROSS_SHADOW_COLOR  = COLORS.GREY_10;
+// Reine Darstellungswerte (Strichstaerken, Querschnitte, Ausblendungen) stecken in `AimVisuals`,
+// weil sie dort die gebackenen Texturen definieren. Hier bleibt, was pro Frame berechnet wird.
 const HIT_FLASH_MS        = 100;
 
 // Fadenkreuz – Punkt + Spread-Ring
-const RING_SHADOW_W      = 5;    // Schattenbreite Ring/Indikator
-const RING_GLOW_W        = 3;    // Glowbreite Ring/Indikator
 const RING_GAP_MIN       = 5;    // Ringradius bei 0 % Spread
 const RING_GAP_MAX       = 20;   // Ringradius bei 100 % Spread
-const CENTER_DOT_R       = 1.5;  // Radius Mittelpunkt
 const RING_BASE_ALPHA    = 0.08; // Ringalpha ohne Spread
 const RING_SPREAD_ALPHA  = 0.14; // Zusatzalpha bei vollem Spread
 const PULSE_SPEED        = 0.005;
 const PULSE_AMP          = 0.025;
-
-// Beam
-const BEAM_SEGMENTS      = 14;
-const BEAM_SHADOW_W      = 4;
-const BEAM_GLOW_W        = 2;
-const BEAM_CORE_W        = 1;
-const BEAM_SHADOW_ALPHA  = 0.10;
-const BEAM_GLOW_ALPHA    = 0.14;
-const BEAM_CORE_ALPHA    = 0.34;
-const BEAM_START_FADE_AT = 0.10;
-const BEAM_END_FADE_AT   = 0.90;
-
-// Reichweiten-Indikator
-const RANGE_BAR_HALF_LEN = 9;
 
 const MOVE_THRESHOLD = 0.3;
 
@@ -83,44 +52,13 @@ const CHARGE_BAR_WIDTH = 52;
 const CHARGE_BAR_HEIGHT = 8;
 const CHARGE_BAR_START_X = CHARGE_ANCHOR_OFFSET_X + CHARGE_STEM_LENGTH + CHARGE_BAR_GAP;
 
-function smoothStep(edge0: number, edge1: number, value: number): number {
-  if (edge0 === edge1) return value < edge0 ? 0 : 1;
-  const t = Phaser.Math.Clamp((value - edge0) / (edge1 - edge0), 0, 1);
-  return t * t * (3 - 2 * t);
-}
-
-interface BeamRun {
-  startT: number;
-  endT: number;
-  fade: number;
-}
-
 /**
- * Der Beam blendet nur an seinen Enden aus; dazwischen ist die Deckkraft konstant. Segmente mit
- * gleicher Deckkraft ergeben zusammenhaengend dieselbe Linie und werden deshalb einmalig zu einem
- * Strich zusammengefasst. Mit den aktuellen Fade-Grenzen bleiben aus 14 Segmenten drei Striche,
- * und der Beam kostet pro Frame drei statt 42 Graphics-Aufrufe. Aendert man die Grenzen, faellt
- * die Zusammenfassung automatisch feiner aus.
+ * Zielhilfe des lokalen Spielers. Diese Klasse rechnet nur noch: Spread, Richtung, Reichweite,
+ * Ladezustand und Trefferblitz. Die Darstellung uebernimmt `AimVisuals` mit langlebigen Images
+ * auf gebackenen Texturen – siehe dort, warum Immediate-Mode-Bogen teuer sind.
  */
-const BEAM_RUNS: readonly BeamRun[] = (() => {
-  const runs: BeamRun[] = [];
-  for (let index = 0; index < BEAM_SEGMENTS; index += 1) {
-    const startT = index / BEAM_SEGMENTS;
-    const endT = (index + 1) / BEAM_SEGMENTS;
-    const midT = (startT + endT) * 0.5;
-    const fade = Math.min(
-      smoothStep(0, BEAM_START_FADE_AT, midT),
-      smoothStep(1, BEAM_END_FADE_AT, midT),
-    );
-    const previous = runs[runs.length - 1];
-    if (previous && Math.abs(previous.fade - fade) < 1e-6) previous.endT = endT;
-    else runs.push({ startT, endT, fade });
-  }
-  return runs;
-})();
-
 export class AimSystem {
-  private readonly gfx: Phaser.GameObjects.Graphics;
+  private readonly visuals: AimVisuals;
   private readonly spreadModel: AimSpreadModel;
 
   private prevX: number | null = null;
@@ -137,8 +75,7 @@ export class AimSystem {
     private readonly getWeaponConfig: (slot: WeaponSlot) => WeaponConfig,
     private readonly getPlayerColor:  () => number,
   ) {
-    this.gfx = scene.add.graphics();
-    this.gfx.setDepth(DEPTH_AIM);
+    this.visuals = new AimVisuals(scene);
     this.spreadModel = new AimSpreadModel(getWeaponConfig);
   }
 
@@ -190,7 +127,9 @@ export class AimSystem {
     }
     this.prevShowAim = showAim;
 
-    this.gfx.clear();
+    // Versteckt alle Visuals. Steht bewusst vor jedem Early Return, damit kein Zweig etwas
+    // stehen lassen kann – dieselbe Rolle, die frueher `gfx.clear()` hatte.
+    this.visuals.beginFrame();
     if (!showAim) return;
 
     const sprite = this.getLocalSprite();
@@ -202,12 +141,12 @@ export class AimSystem {
     if (utilityTargeting) {
       const tx = this.snap(utilityTargeting.targetX);
       const ty = this.snap(utilityTargeting.targetY);
-      this.drawTargetingReticle(tx, ty);
+      this.visuals.showTargetingReticle(tx, ty);
       return;
     }
 
     if (ultimatePreview?.reticleStyle === 'gauss' && ultimatePreview.range) {
-      this.drawGaussAimReticle(sx, sy, ultimatePreview);
+      this.showGaussAimReticle(sx, sy, ultimatePreview);
       return;
     }
 
@@ -254,7 +193,7 @@ export class AimSystem {
     const accentColor = this.getAccentColor();
 
     if (cfg.showCrosshair !== false && this.scopeProgress < 0.1) {
-      this.drawBeam(sx, sy, tx, ty, palette, frac);
+      this.visuals.showBeam(sx, sy, tx, ty, palette, frac);
 
       if (dist > cfg.range) {
         const rx = sx + nx * cfg.range;
@@ -265,41 +204,30 @@ export class AimSystem {
           && ry >= ARENA_OFFSET_Y
           && ry <= ARENA_OFFSET_Y + ARENA_HEIGHT
         ) {
-          this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
+          this.visuals.showRangeTick(this.snap(rx), this.snap(ry), nx, ny, accentColor);
         }
       }
     }
 
-    this.drawCrosshair(this.snap(px), this.snap(py), frac, palette, accentColor);
+    // Bewusst ausserhalb des Crosshair-/Scope-Guards: Ring und Mittelpunkt bleiben auch bei
+    // `showCrosshair: false` und im Scope sichtbar.
+    this.showCrosshair(this.snap(px), this.snap(py), frac, palette, accentColor);
     if ((cfg.awpCharge?.maxDamageBonus ?? 0) > 0 && this.weaponChargeProgress > 0) {
-      this.drawWeaponChargeRing(this.snap(px), this.snap(py), frac, this.weaponChargeProgress, palette);
+      this.showWeaponChargeRing(this.snap(px), this.snap(py), frac, this.weaponChargeProgress, palette);
     }
   }
 
   getGraphicsCommandCount(): number {
-    return this.gfx.commandBuffer.length;
+    return this.visuals.getGraphicsCommandCount();
   }
 
   destroy(): void {
     this.scene.input.setDefaultCursor('default');
     this.appliedCursor = 'default';
-    this.gfx.destroy();
+    this.visuals.destroy();
   }
 
-  private drawBeam(
-    sx: number,
-    sy: number,
-    ex: number,
-    ey: number,
-    palette: SlotPalette,
-    frac: number,
-  ): void {
-    this.strokeSegmentedLine(BEAM_SHADOW_W, palette.beamShadow, BEAM_SHADOW_ALPHA + frac * 0.04, sx, sy, ex, ey);
-    this.strokeSegmentedLine(BEAM_GLOW_W, palette.beamGlow, BEAM_GLOW_ALPHA + frac * 0.05, sx, sy, ex, ey);
-    this.strokeSegmentedLine(BEAM_CORE_W, palette.beamCore, Math.max(0.14, BEAM_CORE_ALPHA - frac * 0.08), sx, sy, ex, ey);
-  }
-
-  private drawCrosshair(
+  private showCrosshair(
     cx: number,
     cy: number,
     frac: number,
@@ -310,32 +238,16 @@ export class AimSystem {
     const pulse = 1 + PULSE_AMP * Math.sin(this.scene.time.now * PULSE_SPEED);
     const isHit = this.scene.time.now <= this.confirmedHitUntil;
 
-    // Spread-Ring
     const ringR     = gap * 1.1;
     const ringColor = isHit ? accentColor : palette.crossGlow;
     const ringAlpha = isHit
       ? Math.min(0.85, (RING_BASE_ALPHA + frac * RING_SPREAD_ALPHA) * 5.5)
       : (RING_BASE_ALPHA + frac * RING_SPREAD_ALPHA) * pulse;
 
-    this.gfx.lineStyle(RING_SHADOW_W, CROSS_SHADOW_COLOR, 0.22);
-    this.gfx.strokeCircle(cx, cy, ringR + 1.5);
-    this.gfx.lineStyle(RING_GLOW_W + 2, ringColor, ringAlpha * 0.45);
-    this.gfx.strokeCircle(cx, cy, ringR + 1);
-    this.gfx.lineStyle(2, ringColor, ringAlpha);
-    this.gfx.strokeCircle(cx, cy, ringR);
-
-    // Mittelpunkt – intensiverer Glow
-    this.gfx.fillStyle(accentColor, 0.12);
-    this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 6);
-    this.gfx.fillStyle(accentColor, 0.28);
-    this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 3.5);
-    this.gfx.fillStyle(CROSS_SHADOW_COLOR, 0.55);
-    this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 1.5);
-    this.gfx.fillStyle(accentColor, 0.97);
-    this.gfx.fillCircle(cx, cy, CENTER_DOT_R);
+    this.visuals.showCrosshair(cx, cy, ringR, ringColor, ringAlpha, accentColor);
   }
 
-  private drawWeaponChargeRing(
+  private showWeaponChargeRing(
     cx: number,
     cy: number,
     spreadFrac: number,
@@ -344,77 +256,14 @@ export class AimSystem {
   ): void {
     const spreadRadius = (RING_GAP_MIN + spreadFrac * (RING_GAP_MAX - RING_GAP_MIN)) * 1.1;
     const radius = spreadRadius + 8;
-    const start = -Math.PI / 2;
-    const end = start + Math.PI * 2 * Phaser.Math.Clamp(chargeFrac, 0, 1);
     const full = chargeFrac >= 0.999;
     const pulse = full ? 0.78 + Math.sin(this.scene.time.now * 0.012) * 0.16 : 0.68;
     const color = full ? 0xff6a2b : palette.crossMain;
 
-    this.gfx.lineStyle(5, CROSS_SHADOW_COLOR, 0.34);
-    this.gfx.strokeCircle(cx, cy, radius);
-    this.gfx.lineStyle(3, palette.crossGlow, 0.18);
-    this.gfx.strokeCircle(cx, cy, radius);
-    this.gfx.lineStyle(full ? 3 : 2, color, pulse);
-    this.gfx.beginPath();
-    this.gfx.arc(cx, cy, radius, start, end, false);
-    this.gfx.strokePath();
+    this.visuals.showChargeRing(cx, cy, radius, chargeFrac, palette, color, pulse, full);
   }
 
-  private drawRangeIndicator(
-    rx: number,
-    ry: number,
-    nx: number,
-    ny: number,
-    palette: SlotPalette,
-    accentColor: number,
-  ): void {
-    // Senkrecht zur Schussrichtung
-    const px = -ny;
-    const py =  nx;
-    const x1 = rx - px * RANGE_BAR_HALF_LEN;
-    const y1 = ry - py * RANGE_BAR_HALF_LEN;
-    const x2 = rx + px * RANGE_BAR_HALF_LEN;
-    const y2 = ry + py * RANGE_BAR_HALF_LEN;
-
-    this.strokeLine(RING_SHADOW_W, CROSS_SHADOW_COLOR, 0.28, x1, y1, x2, y2);
-    this.strokeLine(RING_GLOW_W,  palette.crossGlow,  0.18, x1, y1, x2, y2);
-    this.strokeLine(2,            accentColor,         0.55, x1, y1, x2, y2);
-  }
-
-  private drawTargetingReticle(cx: number, cy: number): void {
-    const outerRadius = 26;
-    const innerRadius = 12;
-    const bracketGap = 34;
-    const bracketLen = 12;
-    const diamondRadius = 9;
-
-    this.gfx.lineStyle(7, TARGETING_PALETTE.beamShadow, 0.34);
-    this.gfx.strokeCircle(cx, cy, outerRadius + 2);
-    this.gfx.lineStyle(4, TARGETING_PALETTE.crossGlow, 0.46);
-    this.gfx.strokeCircle(cx, cy, outerRadius);
-    this.gfx.lineStyle(2, COLORS.GREY_1, 0.9);
-    this.gfx.strokeCircle(cx, cy, innerRadius);
-
-    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx - bracketGap, cy, cx - bracketGap - bracketLen, cy);
-    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx + bracketGap, cy, cx + bracketGap + bracketLen, cy);
-    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx, cy - bracketGap, cx, cy - bracketGap - bracketLen);
-    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx, cy + bracketGap, cx, cy + bracketGap + bracketLen);
-
-    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx - bracketGap, cy, cx - bracketGap - bracketLen, cy);
-    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx + bracketGap, cy, cx + bracketGap + bracketLen, cy);
-    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx, cy - bracketGap, cx, cy - bracketGap - bracketLen);
-    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx, cy + bracketGap, cx, cy + bracketGap + bracketLen);
-
-    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx, cy - diamondRadius, cx + diamondRadius, cy);
-    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx + diamondRadius, cy, cx, cy + diamondRadius);
-    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx, cy + diamondRadius, cx - diamondRadius, cy);
-    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx - diamondRadius, cy, cx, cy - diamondRadius);
-
-    this.gfx.fillStyle(COLORS.GREY_1, 0.9);
-    this.gfx.fillCircle(cx, cy, 2);
-  }
-
-  private drawGaussAimReticle(sx: number, sy: number, preview: UltimateChargePreviewState): void {
+  private showGaussAimReticle(sx: number, sy: number, preview: UltimateChargePreviewState): void {
     const range = Math.max(0, preview.range ?? 0);
     const chargeFraction = Phaser.Math.Clamp(preview.chargeFraction, 0, 1);
     const color = preview.colorOverride ?? this.getAccentColor();
@@ -429,53 +278,22 @@ export class AimSystem {
     const startY = this.snap(muzzle.y);
     const tx = this.snap(clipped.x);
     const ty = this.snap(clipped.y);
-    const glowColor = this.mixWithWhite(color, 0.2);
     const coreColor = this.mixWithWhite(color, 0.62);
     const alpha = Math.max(0.04, chargeFraction * chargeFraction);
     const pulse = 0.92 + 0.08 * Math.sin(this.scene.time.now * 0.018);
+    const clippedLength = Math.hypot(tx - startX, ty - startY);
 
-    this.strokeLine(18, COLORS.GREY_10, 0.05 * alpha, startX, startY, tx, ty);
-    this.strokeLine(14, glowColor, 0.14 * alpha * pulse, startX, startY, tx, ty);
-    this.strokeLine(9, color, 0.3 * alpha * pulse, startX, startY, tx, ty);
-    this.strokeLine(4, coreColor, 0.55 * alpha, startX, startY, tx, ty);
-    this.strokeLine(2, 0xffffff, 0.9 * alpha, startX, startY, tx, ty);
-
-    const emitterRadius = 6 + chargeFraction * 6;
-    this.gfx.fillStyle(glowColor, 0.12 * alpha * pulse);
-    this.gfx.fillCircle(startX, startY, emitterRadius * 2.1);
-    this.gfx.fillStyle(color, 0.25 * alpha);
-    this.gfx.fillCircle(startX, startY, emitterRadius * 1.3);
-    this.gfx.fillStyle(0xffffff, 0.5 * alpha);
-    this.gfx.fillCircle(startX, startY, Math.max(2, emitterRadius * 0.55));
-  }
-
-
-  private strokeSegmentedLine(
-    width: number,
-    color: number,
-    baseAlpha: number,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-  ): void {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-
-    for (const run of BEAM_RUNS) {
-      const alpha = baseAlpha * run.fade;
-      if (alpha <= 0.01) continue;
-
-      this.strokeLine(
-        width,
-        color,
-        alpha,
-        x1 + dx * run.startT,
-        y1 + dy * run.startT,
-        x1 + dx * run.endT,
-        y1 + dy * run.endT,
-      );
-    }
+    this.visuals.showGauss(
+      startX,
+      startY,
+      preview.angle,
+      clippedLength,
+      color,
+      coreColor,
+      alpha,
+      pulse,
+      6 + chargeFraction * 6,
+    );
   }
 
   private getAccentColor(): number {
@@ -496,14 +314,6 @@ export class AimSystem {
     const mixedGreen = Math.round(green + (255 - green) * mix);
     const mixedBlue = Math.round(blue + (255 - blue) * mix);
     return (mixedRed << 16) | (mixedGreen << 8) | mixedBlue;
-  }
-
-  private strokeLine(width: number, color: number, alpha: number, x1: number, y1: number, x2: number, y2: number): void {
-    this.gfx.lineStyle(width, color, alpha);
-    this.gfx.beginPath();
-    this.gfx.moveTo(x1, y1);
-    this.gfx.lineTo(x2, y2);
-    this.gfx.strokePath();
   }
 
   private snap(value: number): number {

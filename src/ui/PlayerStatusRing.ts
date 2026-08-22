@@ -6,7 +6,7 @@ import {
   PLAYER_SIZE,
 } from '../config';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
-import { registerGraphicsObject } from '../effects/EffectUtils';
+import { fillRadialGradientTexture, registerGraphicsObject } from '../effects/EffectUtils';
 import {
   STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SEGMENT_COUNT,
@@ -58,6 +58,13 @@ const TEX_STATUS_RING_STATIC = '__player_status_ring_static_v2';
 const STATUS_RING_TEXTURE_PADDING = 8;
 const STATUS_RING_TEXTURE_RADIUS = RING_OUTER_RADIUS + STATUS_RING_TEXTURE_PADDING;
 const STATUS_RING_TEXTURE_SIZE = Math.ceil(STATUS_RING_TEXTURE_RADIUS * 2);
+
+/** Innerer Kern des Sparks, als Anteil seines Radius. */
+const SPARK_INNER_RATIO = 0.58;
+const SPARK_TEXTURE_SIZE = 32;
+const TEX_STATUS_RING_SPARK = `__player_status_ring_spark/${SPARK_TEXTURE_SIZE}/${SPARK_INNER_RATIO}`;
+/** Gleichzeitig sichtbare Sparks: 3 (Burst) + 2 (Boost) + 4 (Ultimate-Rage). */
+const MAX_SPARKS = 9;
 
 const PAL_HP: SegmentPalette = { dark: COLORS.GREEN_3, mid: 0x00cc44, light: COLORS.GREEN_1, spark: 0xffffff };
 const PAL_ADR: SegmentPalette = { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1, spark: 0xffffff };
@@ -149,13 +156,29 @@ function ensureStatusRingStaticTexture(scene: Phaser.Scene): void {
   texture.refresh();
 }
 
+/**
+ * Zwei ineinanderliegende Scheiben als Radialverlauf: aussen 0.7, innen voll. Frueher waren das
+ * zwei `fillCircle` pro Spark – und damit rund 101 tesselierte Punkte je Kreis, in jedem
+ * gezeichneten Frame neu, unabhaengig vom Radius.
+ */
+function ensureStatusRingSparkTexture(scene: Phaser.Scene): void {
+  fillRadialGradientTexture(scene.textures, TEX_STATUS_RING_SPARK, SPARK_TEXTURE_SIZE, [
+    [0, 'rgba(255,255,255,1.00)'],
+    [SPARK_INNER_RATIO - 0.02, 'rgba(255,255,255,1.00)'],
+    [SPARK_INNER_RATIO, 'rgba(255,255,255,0.70)'],
+    [0.94, 'rgba(255,255,255,0.70)'],
+    [1, 'rgba(255,255,255,0.00)'],
+  ]);
+}
+
 export class PlayerStatusRing {
   private readonly container: Phaser.GameObjects.Container;
   private readonly staticRing: Phaser.GameObjects.Image;
   private readonly warningGraphics: Phaser.GameObjects.Graphics;
   private readonly glowGraphics: Phaser.GameObjects.Graphics;
   private readonly fillGraphics: Phaser.GameObjects.Graphics;
-  private readonly sparkGraphics: Phaser.GameObjects.Graphics;
+  private readonly sparkImages: readonly Phaser.GameObjects.Image[];
+  private sparkCursor = 0;
 
   /**
    * Der lebendige Anteil des Rings: ein einziger Shader-Quad statt der frueheren acht Emitter.
@@ -212,12 +235,14 @@ export class PlayerStatusRing {
     this.glowGraphics = scene.add.graphics();
     this.glowGraphics.setBlendMode(Phaser.BlendModes.ADD);
     this.fillGraphics = scene.add.graphics();
-    this.sparkGraphics = scene.add.graphics();
-    this.sparkGraphics.setBlendMode(Phaser.BlendModes.ADD);
+    ensureStatusRingSparkTexture(scene);
+    this.sparkImages = Array.from({ length: MAX_SPARKS }, () => scene.add
+      .image(0, 0, TEX_STATUS_RING_SPARK)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false));
     registerGraphicsObject(scene, 'playerStatus', this.warningGraphics);
     registerGraphicsObject(scene, 'playerStatus', this.glowGraphics);
     registerGraphicsObject(scene, 'playerStatus', this.fillGraphics);
-    registerGraphicsObject(scene, 'playerStatus', this.sparkGraphics);
 
     // Der Ring teilt sich den Qualitaetsschalter mit dem LivingBarEffect: beide zeigen dasselbe
     // lebendige Feld, nur in unterschiedlicher Geometrie.
@@ -241,7 +266,7 @@ export class PlayerStatusRing {
       this.warningGraphics,
       this.glowGraphics,
       this.fillGraphics,
-      this.sparkGraphics,
+      ...this.sparkImages,
     ];
     // Zuoberst: die frueheren Emitter lagen auf derselben Tiefe, wurden aber nach dem Container
     // erzeugt und zeichneten damit ueber allen seinen Kindern.
@@ -398,15 +423,14 @@ export class PlayerStatusRing {
       this.warningGraphics.clear();
       this.glowGraphics.clear();
       this.fillGraphics.clear();
-      this.sparkGraphics.clear();
       this.drawAdrenalineWarning(warningFrac, warningPulse, warningPunchFrac);
       this.drawEffectGlows(now, warningFrac, warningPulse, warningPunchFrac);
       this.drawFilledSegments(now);
-      this.drawSparks(now);
       this.lastGraphicsSignature = signature;
       this.nextAnimatedGraphicsAt = now + GRAPHICS_REFRESH_INTERVAL_MS;
     }
 
+    this.syncSparks(now);
     this.syncLivingSegments(now);
   }
 
@@ -628,20 +652,30 @@ export class PlayerStatusRing {
     writeColor(this.segmentTintDark, index * 3, palette.dark);
   }
 
-  private drawSparks(now: number): void {
+  /**
+   * Sparks sind eigenstaendige Bilder und laufen deshalb ausserhalb des 30-Hz-Gates von
+   * `render()` – ihre Kreisbahn bewegt sich damit fluessig statt in Stufen.
+   */
+  private syncSparks(now: number): void {
+    this.sparkCursor = 0;
+
     const adrBurst = clamp01((this.adrBurstUntil - now) / BURST_MS);
     if (adrBurst > 0.01) {
-      this.drawEndpointSpark(SEGMENTS[0], this.adrFrac, PAL_ADR, 0.22 + adrBurst * 0.42, now, 3);
+      this.placeEndpointSparks(SEGMENTS[0], this.adrFrac, PAL_ADR, 0.22 + adrBurst * 0.42, now, 3);
     }
     if (this.adrenalineBoostActive) {
-      this.drawEndpointSpark(SEGMENTS[0], Math.max(this.adrFrac, 0.08), PAL_ADR, 0.24, now + 190, 2);
+      this.placeEndpointSparks(SEGMENTS[0], Math.max(this.adrFrac, 0.08), PAL_ADR, 0.24, now + 190, 2);
     }
     if (this.rageReady) {
-      this.drawEndpointSpark(SEGMENTS[2], Math.max(this.rageFrac, 0.08), PAL_RAGE, this.ultimateActive ? 0.34 : 0.24, now + 90, this.ultimateActive ? 4 : 2);
+      this.placeEndpointSparks(SEGMENTS[2], Math.max(this.rageFrac, 0.08), PAL_RAGE, this.ultimateActive ? 0.34 : 0.24, now + 90, this.ultimateActive ? 4 : 2);
+    }
+
+    for (let index = this.sparkCursor; index < this.sparkImages.length; index += 1) {
+      this.sparkImages[index].setVisible(false);
     }
   }
 
-  private drawEndpointSpark(
+  private placeEndpointSparks(
     segment: SegmentConfig,
     fraction: number,
     palette: SegmentPalette,
@@ -653,17 +687,23 @@ export class PlayerStatusRing {
 
     const angle = Phaser.Math.Linear(segment.fillStartAngle, segment.fillEndAngle, clamp01(fraction));
     for (let index = 0; index < sparkCount; index += 1) {
+      const image = this.sparkImages[this.sparkCursor];
+      if (!image) return;
+      this.sparkCursor += 1;
+
       const wave = now * 0.01 + index * 1.7;
       const radius = RING_OUTER_RADIUS + 1.5 + Math.sin(wave) * 1.2;
       const offsetAngle = angle + Math.sin(wave * 1.35) * 2.4;
       const rad = degToRadFromTop(offsetAngle);
-      const pointX = Math.cos(rad) * radius;
-      const pointY = Math.sin(rad) * radius;
       const size = 1.2 + ((Math.sin(wave * 1.9) + 1) * 0.5);
-      this.sparkGraphics.fillStyle(palette.spark, alpha * 0.7);
-      this.sparkGraphics.fillCircle(pointX, pointY, size);
-      this.sparkGraphics.fillStyle(palette.light, alpha);
-      this.sparkGraphics.fillCircle(pointX, pointY, size * 0.58);
+
+      // Beide Scheiben stecken im Verlauf; getintet wird mit der helleren Kernfarbe, weil sie
+      // unter ADD den sichtbaren Eindruck traegt.
+      image.setVisible(true);
+      image.setPosition(Math.cos(rad) * radius, Math.sin(rad) * radius);
+      image.setDisplaySize(size * 2, size * 2);
+      image.setTint(palette.light);
+      image.setAlpha(alpha);
     }
   }
 

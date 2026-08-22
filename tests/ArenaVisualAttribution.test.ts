@@ -57,8 +57,11 @@ const ARENA_RUNTIME_SOURCE_NAMES = new Set([
 ]);
 
 const DIRECT_VECTOR_FACTORY_EXCEPTIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  // AimSystem and LivingBarEffect are explicitly handled in a separate optimization pass.
-  'src/ui/AimSystem.ts': Object.fromEntries(VECTOR_FACTORIES.map((factory) => [factory, 'AimSystem is outside this attribution change and is optimized separately.'])),
+  // AimSystem and AimVisuals render from baked textures; the only remaining Graphics is the AWP
+  // charge sweep in AimVisuals.ts. Kept as insurance: `src/ui/` is not in
+  // ARENA_RUNTIME_SOURCE_PREFIXES, so this key is currently never read. Should `src/ui/` ever be
+  // added there, duplicate this entry for 'src/ui/AimVisuals.ts'.
+  'src/ui/AimSystem.ts': Object.fromEntries(VECTOR_FACTORIES.map((factory) => [factory, 'AimSystem renders through AimVisuals and no longer creates vector factories itself.'])),
   'src/entities/BaseEntity.ts:130': { rectangle: 'Invisible Arcade physics hitbox; it never renders.' },
   'src/effects/ShadowSystem.ts:1019': { graphics: 'Invisible RenderTexture bake helper; only the baked texture is rendered.' },
   'src/scenes/arena/EnemyFlowFieldDebugOverlay.ts': { graphics: 'Optional Shift+D+B developer overlay, outside normal arena runtime attribution.' },
@@ -460,5 +463,78 @@ describe('ArenaRuntimeProfiler attribution freeze', () => {
       events: reportB?.events,
       attributionCatalog: reportB?.attributionCatalog,
     }).toEqual(frozen);
+  });
+});
+
+/**
+ * `Graphics.strokeCircle`, `fillCircle` und `arc` erzeugen im WebGL-Renderer rund 101 Punkte pro
+ * Bogen, unabhaengig vom Radius, und werden in jedem gezeichneten Frame neu tesseliert. Diese
+ * Liste ist eine Ratsche: bestehende Systeme duerfen bleiben, neue Dateien nicht dazukommen, und
+ * ein umgestelltes System muss seinen Eintrag wieder verlieren. Begruendung siehe
+ * `docs/ai/performance.md`.
+ */
+const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
+  'src/effects/Ak47StrategicTargetRenderer.ts': 'Zielmarkierung, noch nicht auf gebackene Ringe umgestellt.',
+  'src/effects/BfgRenderer.ts': 'Strahlendpunkte, noch nicht auf gebackene Glowquads umgestellt.',
+  'src/effects/CaptureTheBeerRenderer.ts': 'Flaschensymbol, noch nicht auf eine gebackene Textur umgestellt.',
+  'src/effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts': 'Markerringe, noch nicht auf gebackene Ringe umgestellt.',
+  'src/effects/EffectSystem.ts': 'Explosions- und Kegelgeometrie, noch nicht umgestellt.',
+  'src/effects/EnergyShieldRenderer.ts': 'Schildkuppel mit dynamischen Teilbogen, noch nicht umgestellt.',
+  'src/effects/PlasmaBurnerRenderer.ts': 'Strahlendpunkt, noch nicht auf ein gebackenes Glowquad umgestellt.',
+  'src/effects/ShadowSystem.ts': 'Einmaliger Bake in eine RenderTexture, kein Pro-Frame-Pfad.',
+  'src/effects/StinkCloudSystem.ts': 'Wolkenringe, noch nicht auf gebackene Ringe umgestellt.',
+  'src/effects/TeslaDomeRenderer.ts': 'Feldfilamente mit dynamischen Teilbogen, noch nicht umgestellt.',
+  'src/effects/ZeusTaserRenderer.ts': 'Kegeltelegraph, noch nicht umgestellt.',
+  'src/entities/BaseEntity.ts': 'Einmalig gezeichnete Basismarkierung, kein Pro-Frame-Pfad.',
+  'src/scenes/arena/GaussWarningRenderer.ts': 'Emitterglow der Fremdspieler, noch nicht umgestellt.',
+  'src/scenes/arena/PlacementPreviewRenderer.ts': 'Platzierungsvorschau, noch nicht umgestellt.',
+  'src/scenes/arena/RockVisualHelper.ts': 'Reichweitenkreis, noch nicht umgestellt.',
+  'src/ui/CoopDefenseObjectiveAnnouncement.ts': 'Einmalig gezeichneter Rahmenschmuck, kein Pro-Frame-Pfad.',
+  'src/ui/HostileBaseIndicator.ts': 'Pfeilspitze, noch nicht umgestellt.',
+  'src/ui/InspectorToolRadialMenu.ts': 'Radialmenue, zeichnet nur bei geoeffnetem Menue.',
+};
+
+/** `ctx`/`context` sind der Canvas-2D-Kontext beim Backen und damit ausdruecklich erlaubt. */
+const CANVAS_CONTEXT_RECEIVERS = new Set(['ctx', 'context']);
+
+function findGraphicsArcCalls(source: TypeScriptSource): number[] {
+  const pattern = /([A-Za-z_$][\w$]*)\s*\.\s*(?:strokeCircle|fillCircle|arc)\s*\(/gu;
+  const lines: number[] = [];
+
+  for (const match of source.text.matchAll(pattern)) {
+    if (CANVAS_CONTEXT_RECEIVERS.has(match[1])) continue;
+
+    const offset = match.index ?? 0;
+    const lineStart = source.text.lastIndexOf('\n', offset) + 1;
+    const prefix = source.text.slice(lineStart, offset);
+    // Kommentare zaehlen nicht: Zeilenkommentar davor oder JSDoc-Fortsetzungszeile.
+    if (prefix.includes('//') || /^\s*\*/u.test(prefix)) continue;
+
+    lines.push(lineNumberAt(source.text, offset));
+  }
+  return lines;
+}
+
+describe('Graphics arc guardrail', () => {
+  it('keeps new sources free of per-frame Graphics arcs', () => {
+    const sources = readTypeScriptSources(resolve(process.cwd(), 'src'));
+    const offenders = sources
+      .map((source) => ({ path: normalizedSourcePath(source.path), lines: findGraphicsArcCalls(source) }))
+      .filter((entry) => entry.lines.length > 0 && !(entry.path in GRAPHICS_ARC_LEGACY_SOURCES))
+      .map((entry) => `${entry.path}:${entry.lines.join(',')}`);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the legacy list a ratchet without stale entries', () => {
+    const sources = readTypeScriptSources(resolve(process.cwd(), 'src'));
+    const withArcs = new Set(
+      sources
+        .filter((source) => findGraphicsArcCalls(source).length > 0)
+        .map((source) => normalizedSourcePath(source.path)),
+    );
+    const stale = Object.keys(GRAPHICS_ARC_LEGACY_SOURCES).filter((path) => !withArcs.has(path));
+
+    expect(stale).toEqual([]);
   });
 });
