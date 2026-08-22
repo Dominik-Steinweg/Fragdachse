@@ -61,6 +61,7 @@ export const GpuVfxLaneId = {
   GroundFireSmoke: 10,
   EntityBurn:      11,
   ProjectileBurn:  12,
+  WorldDebris:      13,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -379,5 +380,24 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'geteilt durch die Zahl brennender Projektile, dazu MAX_TRAIL_SAMPLES_PER_MS). Daraus '
       + 'folgen rund 900 + 625 + 317 = 1842 gleichzeitig lebende Member; 2048 entspricht zugleich '
       + 'der Summe der alten maxAliveParticles (900 + 720 + 420).',
+  },
+  {
+    id: GpuVfxLaneId.WorldDebris,
+    label: 'world-debris',
+    depth: DEPTH.FIRE + 0.075,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear],
+    capacity: 2048,
+    maxLifetimeMs: 860,
+    order: 'ordered',
+    reserveCritical: 0,
+    rationale:
+      'NORMAL-Blend fuer fallendes Weltdebris. Die Tiefe liegt explizit zwischen FlameCore '
+      + '(FIRE + 0.05) und FlameSpark (FIRE + 0.1), damit die Reihenfolge nicht von der '
+      + 'Erzeugungsreihenfolge der GPU-Quellen abhaengt.',
+    capacityRationale:
+      'Ein LeafBlower erzeugt 5 Blaetter je 40 ms, also 125/s; bei maximal 860 ms leben rund '
+      + '108 Member je Quelle. 16 gleichzeitig sichtbare LeafBlower benoetigen damit rund '
+      + '1720 Slots; 2048 ist die naechste begruendete Reserve.',
   },
 ];

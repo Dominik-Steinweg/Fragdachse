@@ -74,9 +74,25 @@ describe('gpu vfx render lanes', () => {
   });
 
   it('never grows the lane count with the effect count', () => {
-    // Der eigentliche Architekturvertrag: 21 logische Effekte auf 13 physischen Lanes.
+    // Der eigentliche Architekturvertrag: 22 logische Effekte auf 14 physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
-    expect(GPU_VFX_LANES.length).toBe(13);
+    expect(GPU_VFX_LANES.length).toBe(14);
+  });
+
+  it('keeps leaf debris in an explicit ordered world lane', () => {
+    const lane = GPU_VFX_LANES[GpuVfxLaneId.WorldDebris];
+    const effect = GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'leaf.debris')!;
+
+    expect(lane.depth).toBe(DEPTH.FIRE + 0.075);
+    expect(lane.depth).toBeGreaterThan(DEPTH.FIRE + 0.05);
+    expect(lane.depth).toBeLessThan(DEPTH.FIRE + 0.1);
+    expect(lane.blendMode).toBe(0);
+    expect(lane.order).toBe('ordered');
+    expect(lane.capacity).toBe(2048);
+    expect(lane.maxLifetimeMs).toBe(860);
+    expect(effect.lane).toBe(GpuVfxLaneId.WorldDebris);
+    expect(effect.frame).toBe(GpuVfxFrameId.LeafDebris);
+    expect(effect.release).toBe('linger');
   });
 
   it('keeps the migrated fire families on one lane per depth band', () => {

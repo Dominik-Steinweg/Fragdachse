@@ -513,7 +513,7 @@ export const DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS = FULL_ARENA_WIDTH / CELL_SI
  *
  * - `RockOverlayRegions.rockCellKey` packt beide Achsen mit Stride 65536 in eine Zahl,
  * - `RockGridIndex` haelt `cols * rows` Eintraege in einem `Int32Array`,
- * - `ArenaTerrainColorGrid` haelt drei Bytes je Rasterzelle.
+ * - `TerrainColorSnapshot` haelt drei Bytes je 4x4-Samplingpixel.
  *
  * 1024 Zellen je Achse bleiben mit rund einer Million Zellen deutlich unter allen dreien.
  * Die bisherigen Grenzen (135 Spalten aus der CTB-Breite, 56 Zeilen aus arenagrossen

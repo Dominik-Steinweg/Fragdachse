@@ -44,6 +44,13 @@ export interface GroundSurfaceStreamerOptions {
   readonly chunkSize?: number;
 }
 
+export interface GroundSnapshotRegion {
+  readonly worldX: number;
+  readonly worldY: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export class GroundSurfaceStreamer {
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
@@ -164,6 +171,188 @@ export class GroundSurfaceStreamer {
   /** Renderziel einer Ebene in einem residenten Chunk – fuer Diagnose und Tests. */
   getChunkTexture(layerId: string, cx: number, cy: number): Phaser.GameObjects.RenderTexture | null {
     return this.surface.getChunkTexture(layerId, cx, cy);
+  }
+
+  /**
+   * Zeichnet die unveraenderten Dirt-Quelldaten in ein externes Snapshot-Target. Die Methode
+   * benutzt bewusst dieselben Indizes, Autotile-/Corner-Tint-Fabriken und Mottle-Stempel wie der
+   * normale Chunk-Bake; sie besitzt kein eigenes Renderziel.
+   */
+  renderSnapshotDirt(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+  ): void {
+    const localX = region.worldX - this.frame.offsetX;
+    const localY = region.worldY - this.frame.offsetY;
+    const maxX = localX + region.width;
+    const maxY = localY + region.height;
+    this.dirtVisibleCells.length = 0;
+    this.dirtMottleSourceCells.length = 0;
+
+    const visibleCandidateIds = this.dirtIndex.collect(
+      localX,
+      localY,
+      region.width,
+      DIRT_FRINGE_OVERHANG_PX,
+      this.dirtCandidateIds,
+    );
+    visibleCandidateIds.sort(compareNumbers);
+    for (const id of visibleCandidateIds) {
+      const cell = this.dirtCells[id];
+      if (!cell) continue;
+      const cellMinX = cell.gridX * CELL_SIZE;
+      const cellMinY = cell.gridY * CELL_SIZE;
+      const cellMaxX = cellMinX + CELL_SIZE;
+      const cellMaxY = cellMinY + CELL_SIZE;
+      if (cellMaxX + DIRT_FRINGE_OVERHANG_PX > localX && cellMinX - DIRT_FRINGE_OVERHANG_PX < maxX
+        && cellMaxY + DIRT_FRINGE_OVERHANG_PX > localY && cellMinY - DIRT_FRINGE_OVERHANG_PX < maxY) {
+        this.dirtVisibleCells.push(cell);
+      }
+    }
+
+    const mottleReach = getBlobSurfaceMottleReachPx(DIRT_BLOB_SURFACE_PROFILE);
+    const mottleCandidateIds = this.dirtIndex.collect(
+      localX,
+      localY,
+      region.width,
+      mottleReach,
+      this.dirtCandidateIds,
+    );
+    mottleCandidateIds.sort(compareNumbers);
+    for (const id of mottleCandidateIds) {
+      const cell = this.dirtCells[id];
+      if (!cell) continue;
+      const cellMinX = cell.gridX * CELL_SIZE;
+      const cellMinY = cell.gridY * CELL_SIZE;
+      const cellMaxX = cellMinX + CELL_SIZE;
+      const cellMaxY = cellMinY + CELL_SIZE;
+      if (cellMaxX + mottleReach > localX && cellMinX - mottleReach < maxX
+        && cellMaxY + mottleReach > localY && cellMinY - mottleReach < maxY) {
+        this.dirtMottleSourceCells.push(cell);
+      }
+    }
+
+    if (this.dirtVisibleCells.length === 0) return;
+
+    const { fringe, surface: tiles } = ArenaVisualFactory.createDirtImagesFromGrid(
+      this.scene,
+      this.dirtVisibleCells,
+      this.dirtIsOccupied,
+      {
+        offsetX: this.frame.offsetX,
+        offsetY: this.frame.offsetY,
+        gridCols: GRID_COLS,
+        gridRows: GRID_ROWS,
+      },
+    );
+    if (fringe.length > 0) target.draw(fringe);
+    if (tiles.length > 0) target.draw(tiles);
+    target.callback(() => {
+      for (const image of fringe) image.destroy();
+      for (const image of tiles) image.destroy();
+    });
+
+    const drawOffsetX = (this.frame.offsetX - region.worldX) * renderScale;
+    const drawOffsetY = (this.frame.offsetY - region.worldY) * renderScale;
+    const mottleConfigs = [
+      DIRT_BLOB_SURFACE_PROFILE.mottle,
+      ...(DIRT_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
+    ];
+    for (let index = 0; index < mottleConfigs.length; index += 1) {
+      stampBlobSurfaceMottle(
+        this.scene,
+        target,
+        DIRT_BLOB_SURFACE_PROFILE,
+        mottleConfigs[index],
+        this.dirtMottleSourceCells,
+        index,
+        drawOffsetX,
+        drawOffsetY,
+        renderScale,
+      );
+    }
+  }
+
+  renderSnapshotGroundCover(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+  ): void {
+    const localX = region.worldX - this.frame.offsetX;
+    const localY = region.worldY - this.frame.offsetY;
+    const maxX = localX + region.width;
+    const maxY = localY + region.height;
+    const candidateIds = this.groundCoverIndex.collect(
+      localX,
+      localY,
+      region.width,
+      this.groundCoverQueryRadius,
+      this.groundCoverCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.groundCoverCandidates.length = 0;
+    for (const id of candidateIds) {
+      const placement = this.groundCoverPlacements[id];
+      if (!placement) continue;
+      const radius = getGroundCoverPlacementRadiusPx(placement);
+      const placementX = placement.worldX - this.frame.offsetX;
+      const placementY = placement.worldY - this.frame.offsetY;
+      if (placementX + radius > localX && placementX - radius < maxX
+        && placementY + radius > localY && placementY - radius < maxY) {
+        this.groundCoverCandidates.push(placement);
+      }
+    }
+    stampGroundCover(
+      this.scene,
+      target,
+      this.groundCoverCandidates,
+      -region.worldX * renderScale,
+      -region.worldY * renderScale,
+      1,
+      renderScale,
+    );
+  }
+
+  renderSnapshotDecals(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+  ): void {
+    const localX = region.worldX - this.frame.offsetX;
+    const localY = region.worldY - this.frame.offsetY;
+    const maxX = localX + region.width;
+    const maxY = localY + region.height;
+    const radius = DECAL_SIZE * Math.SQRT2 * 0.5;
+    const candidateIds = this.groundDecalIndex.collect(
+      localX,
+      localY,
+      region.width,
+      radius,
+      this.groundDecalCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.groundDecalCandidates.length = 0;
+    for (const id of candidateIds) {
+      const decal = this.groundDecals[id];
+      if (!decal) continue;
+      const centerX = decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX;
+      const centerY = decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY;
+      if (centerX + radius > localX && centerX - radius < maxX
+        && centerY + radius > localY && centerY - radius < maxY) {
+        this.groundDecalCandidates.push(decal);
+      }
+    }
+    const images = ArenaVisualFactory.createDecals(
+      this.scene,
+      this.groundDecalCandidates,
+      { offsetX: this.frame.offsetX, offsetY: this.frame.offsetY },
+    );
+    if (images.length > 0) target.draw(images);
+    target.callback(() => {
+      for (const image of images) image.destroy();
+    });
+    void renderScale;
   }
 
   destroy(): void {

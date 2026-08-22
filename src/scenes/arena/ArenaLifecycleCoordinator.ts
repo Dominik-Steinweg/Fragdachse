@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION } from '../../arena/ArenaGenerator';
-import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
+import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
 import { RockRegistry }      from '../../arena/RockRegistry';
@@ -171,6 +171,8 @@ export class ArenaLifecycleCoordinator {
   private arenaBuilt       = false;
   private lastRoundRevision = 0;
   private localArenaLoadReady = false;
+  private terrainSnapshotReady = false;
+  private terrainSnapshotGenerationId = 0;
   private hostStartupCachesPrepared = false;
   private preparedRoundLayout: { descriptor: ArenaDescriptor; layout: ArenaLayout } | null = null;
   private pendingHostArenaGeneration: {
@@ -416,8 +418,9 @@ export class ArenaLifecycleCoordinator {
     const hostStartupReady = bridge.isHost()
       ? this.prepareHostStartupCaches(Date.now())
       : true;
-    const localRenderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
+    const renderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
       && this.renderers.shadow.isStaticReadyForView(view, true);
+    const localRenderReady = renderReady && this.terrainSnapshotReady;
     const groundStats = this.ctx.arenaResult.groundSurface?.getStats();
     const rockStats = this.ctx.arenaResult.rockOverlaySurface?.getStats();
     const shadowStats = this.renderers.shadow.getStaticSurfaceStats();
@@ -1308,9 +1311,6 @@ export class ArenaLifecycleCoordinator {
       const state = bridge.getCoopDefenseSecondaryObjectivePresentationState();
       return state?.find((entry) => entry.objectiveId === objectiveId)?.state ?? null;
     });
-    this.renderers.leafBlower.setTerrainColorSampler(
-      createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult, layout),
-    );
     if (bridge.isHost()) {
       this.ctx.captureTheBeerSystem?.setFxHandler((event) => {
         bridge.broadcastCaptureTheBeerFx(event);
@@ -2732,6 +2732,8 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    this.terrainSnapshotGenerationId += 1;
+    this.terrainSnapshotReady = false;
     this.cancelPendingHostArenaGeneration();
     this.localArenaLoadReady = false;
     this.hostStartupCachesPrepared = false;
@@ -2986,7 +2988,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.ctx.hostPhysics.setBaseGroup(null);
-    this.renderers.leafBlower.setTerrainColorSampler(null);
+    this.renderers.leafBlower.setTerrainColorSnapshot(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
     this.ctx.coopDefenseRoundStateSystem = null;
@@ -3155,6 +3157,8 @@ export class ArenaLifecycleCoordinator {
     }
     this.arenaBuilt = true;
     this.localArenaLoadReady = false;
+    this.terrainSnapshotReady = false;
+    this.startTerrainSnapshotBuild(descriptor.roundRevision);
 
     for (const profile of bridge.getConnectedPlayers()) {
       const canCreatePlayer = bridge.canPlayerSpawnOrRespawn(profile.id)
@@ -3184,6 +3188,46 @@ export class ArenaLifecycleCoordinator {
     // Round systems exist locally, but simulation stays inert until the common start timestamp.
     this.hostUpdate.setActive(false);
     this.ctx.gameAudioSystem.playMusic('music_arena');
+  }
+
+  private startTerrainSnapshotBuild(roundRevision: number): void {
+    const layout = this.ctx.currentLayout;
+    const arenaResult = this.ctx.arenaResult;
+    if (!layout || !arenaResult) return;
+
+    const generation = ++this.terrainSnapshotGenerationId;
+    const isCurrent = (): boolean => (
+      generation === this.terrainSnapshotGenerationId
+      && this.arenaBuilt
+      && this.ctx.currentLayout === layout
+      && this.ctx.arenaResult === arenaResult
+      && bridge.getRoundParticipation()?.roundRevision === roundRevision
+    );
+
+    bridge.setLocalArenaLoadProgress(roundRevision, 70, 'rendering');
+    let build: Promise<import('../../arena/TerrainColorSnapshot').TerrainColorSnapshot>;
+    try {
+      build = new TerrainColorSnapshotBuilder({
+        scene: this.scene,
+        mode: bridge.getGameMode(),
+        layout,
+        arenaResult,
+      }).build();
+    } catch (error) {
+      console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot konnte nicht gestartet werden:', error);
+      if (isCurrent()) this.terminateMatch('Terrain-Farb-Snapshot konnte nicht gestartet werden.');
+      return;
+    }
+
+    build.then((snapshot) => {
+      if (!isCurrent()) return;
+      this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
+      this.terrainSnapshotReady = true;
+    }).catch((error: unknown) => {
+      if (!isCurrent()) return;
+      console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot fehlgeschlagen:', error);
+      this.terminateMatch('Terrain-Farb-Snapshot konnte nicht erstellt werden.');
+    });
   }
 
   private get localPlayerState() { return this.hostUpdate['localPlayerState']; }

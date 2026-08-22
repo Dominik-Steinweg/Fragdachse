@@ -52,6 +52,13 @@ export interface ArenaVisualGridMetrics {
   gridRows?: number;
 }
 
+export interface ArenaTrackColumnSpec {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 function getMetrics(metrics?: ArenaVisualGridMetrics): ArenaVisualGridMetrics {
   if (metrics) return metrics;
   return {
@@ -329,7 +336,7 @@ export class ArenaVisualFactory {
     return this.createDecals(scene, decals, metrics, 'rock', activeRockIds);
   }
 
-  static createTracks(scene: Phaser.Scene, tracks: TrackCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.TileSprite[] {
+  static getTrackColumnSpecs(tracks: readonly TrackCell[], metrics?: ArenaVisualGridMetrics): ArenaTrackColumnSpec[] {
     if (tracks.length === 0) return [];
 
     const gridMetrics = getMetrics(metrics);
@@ -339,13 +346,32 @@ export class ArenaVisualFactory {
       colRows.set(gridX, Math.max(current, gridY + 1));
     }
 
-    const result: Phaser.GameObjects.TileSprite[] = [];
+    const result: ArenaTrackColumnSpec[] = [];
     for (const [col, rowCount] of colRows) {
       const width = CELL_SIZE * 2;
       const height = rowCount * CELL_SIZE;
       const centerX = gridMetrics.offsetX + col * CELL_SIZE + width / 2;
       const centerY = gridMetrics.offsetY + height / 2;
-      const tileSprite = scene.add.tileSprite(centerX, centerY, width, height, 'bg_tracks');
+      result.push({
+        x: centerX - width / 2,
+        y: centerY - height / 2,
+        width,
+        height,
+      });
+    }
+    return result;
+  }
+
+  static createTracks(scene: Phaser.Scene, tracks: TrackCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.TileSprite[] {
+    const result: Phaser.GameObjects.TileSprite[] = [];
+    for (const column of this.getTrackColumnSpecs(tracks, metrics)) {
+      const tileSprite = scene.add.tileSprite(
+        column.x + column.width / 2,
+        column.y + column.height / 2,
+        column.width,
+        column.height,
+        'bg_tracks',
+      );
       tileSprite.setDepth(DEPTH.TRACKS);
       result.push(tileSprite);
     }

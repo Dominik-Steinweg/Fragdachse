@@ -156,6 +156,7 @@ export function createRendererBundle(
 
   const leafBlower = new LeafBlowerRenderer(scene);
   leafBlower.generateTextures();
+  leafBlower.registerGpuVfx(gpuVfx);
 
   const bfg = new BfgRenderer(scene);
   bfg.generateTextures();

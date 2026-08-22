@@ -4,9 +4,9 @@ import type { GroundCoverPlacement } from './GroundCoverField';
 /**
  * Geometrie eines gebackenen Stempels.
  *
- * Die Arena braucht sie nicht mehr – ihr Terrain-Farb-Lookup arbeitet seit dem Chunk-Streaming
- * direkt auf den Platzierungen (siehe {@link ./ArenaTerrainColorGrid}). Die Lobby-Vorschau backt
- * dagegen weiterhin einmalig in eine bildschirmgrosse Textur und gibt die Geometrie zurueck.
+ * Die Arena verwendet die Platzierungen sowohl fuer den normalen Chunk-Bake als auch fuer den
+ * einmaligen regionierten TerrainColorSnapshot. Die Lobby-Vorschau backt dagegen weiterhin
+ * einmalig in eine bildschirmgrosse Textur und gibt die Geometrie zurueck.
  */
 export interface DirtStamp {
   textureKey: string;
@@ -36,7 +36,7 @@ export interface GroundCoverBakeBounds {
 
 export interface GroundCoverBakeResult {
   layer: Phaser.GameObjects.RenderTexture | null;
-  /** Geometrie fuer den Terrain-Farb-Sampler; die Stempel existieren nicht als Objekte. */
+  /** Geometrie fuer den TerrainColorSnapshot; die Stempel existieren nicht als Objekte. */
   stamps: DirtStamp[];
 }
 
@@ -57,12 +57,13 @@ export function stampGroundCover(
   drawOffsetX: number,
   drawOffsetY: number,
   layerAlpha = 1,
+  renderScale = 1,
 ): void {
   for (const placement of placements) {
     const frame = scene.textures.getFrame(placement.textureKey);
     if (!frame) continue;
-    const scale = placement.sizePx / Math.max(frame.width, frame.height);
-    layer.stamp(placement.textureKey, undefined, placement.worldX + drawOffsetX, placement.worldY + drawOffsetY, {
+    const scale = placement.sizePx / Math.max(frame.width, frame.height) * renderScale;
+    layer.stamp(placement.textureKey, undefined, placement.worldX * renderScale + drawOffsetX, placement.worldY * renderScale + drawOffsetY, {
       alpha: placement.alpha * layerAlpha,
       rotation: placement.rotation,
       scaleX: placement.mirrorX ? -scale : scale,

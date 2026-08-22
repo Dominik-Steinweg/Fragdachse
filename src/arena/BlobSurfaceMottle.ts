@@ -126,10 +126,11 @@ export function stampBlobSurfaceMottle(
   layerIndex = 0,
   drawOffsetX = 0,
   drawOffsetY = 0,
+  renderScale = 1,
 ): void {
   if (cells.length === 0) return;
   const key = ensureBlobSurfaceMottleTexture(scene, profile, mottle, layerIndex);
-  const baseScale = CELL_SIZE / mottle.textureSize;
+  const baseScale = CELL_SIZE / mottle.textureSize * renderScale;
   const layerSalt = layerIndex * 7919;
   for (const { gridX, gridY } of cells) {
     for (let passIndex = 0; passIndex < mottle.passes.length; passIndex += 1) {
@@ -142,8 +143,8 @@ export function stampBlobSurfaceMottle(
         layer.stamp(
           key,
           undefined,
-          (gridX + hash01(gridX, gridY, salt + 2)) * CELL_SIZE + drawOffsetX,
-          (gridY + hash01(gridX, gridY, salt + 3)) * CELL_SIZE + drawOffsetY,
+          ((gridX + hash01(gridX, gridY, salt + 2)) * CELL_SIZE) * renderScale + drawOffsetX,
+          ((gridY + hash01(gridX, gridY, salt + 3)) * CELL_SIZE) * renderScale + drawOffsetY,
           {
             alpha: pass.alpha,
             rotation: hash01(gridX, gridY, salt + 4) * Math.PI * 2,
@@ -152,6 +153,9 @@ export function stampBlobSurfaceMottle(
             // constraint, unlike the tiles themselves.
             scaleX: hash01(gridX, gridY, salt + 5) < 0.5 ? -scale : scale,
             scaleY: hash01(gridX, gridY, salt + 6) < 0.5 ? -scale : scale,
+            ...(renderScale !== 1 && {
+              blendMode: mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL,
+            }),
           },
         );
       }

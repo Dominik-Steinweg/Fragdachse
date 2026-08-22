@@ -1,56 +1,45 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors, setCircleEmitZone, setEmitterTintArray } from './EffectUtils';
-import type { TerrainColorSampler } from '../arena/ArenaTerrainColorSampler';
+import { mixColors } from './EffectUtils';
+import { ensureLeafDebrisTexture } from './gpu/GpuVfxSourceTextures';
+import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
+import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
+import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
+import { pickGpuVfxTint } from './gpu/GpuVfxMember';
+import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
+import type { TerrainColorSnapshot } from '../arena/TerrainColorSnapshot';
 
-const TEX_LEAF = '__leaf_blower_leaf';
-const TERRAIN_SAMPLE_INTERVAL_MS = 300;
-const LEAF_PARTICLE_LINGER_MS = 1220;
+const LEAF_PARTICLE_FREQUENCY_MS = 40;
+const LEAF_PARTICLE_QUANTITY = 5;
+const LEAF_PARTICLE_LIFESPAN_MIN_MS = 360;
+const LEAF_PARTICLE_LIFESPAN_MAX_MS = 860;
 const LEAF_BLOWER_VISUAL_SIZE_SCALE = 4.7;
 const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
 
-const DEPTH_DEBRIS = DEPTH.FIRE + 0.05;
+const SPAWN_CIRCLE = new Phaser.Geom.Circle();
+const SPAWN_POINT = new Phaser.Math.Vector2();
 
 interface LeafBlowerVisual {
-  leafEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  sampledColor: number;
-  lastTerrainSampleAt: number;
+  x: number;
+  y: number;
+  size: number;
+  vx: number;
+  vy: number;
+  flow: ParticleFlowScheduler;
+  source: number;
 }
 
 function ensureLeafBlowerTextures(scene: Phaser.Scene): void {
-  const textures = scene.textures;
-  refreshLeafTexture(textures, TEX_LEAF);
-
-  ensureCanvasTexture(textures, TEX_LEAF, 24, 18, (ctx) => {
-    ctx.translate(12, 9);
-    ctx.rotate(-0.28);
-    ctx.fillStyle = '#8aa357';
-    ctx.beginPath();
-    ctx.moveTo(-9, 0);
-    ctx.quadraticCurveTo(-2, -8, 8, -2);
-    ctx.quadraticCurveTo(10, 0, 8, 2);
-    ctx.quadraticCurveTo(-2, 8, -9, 0);
-    ctx.fill();
-    ctx.strokeStyle = '#d8c97a';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-7, 0);
-    ctx.lineTo(8, 0);
-    ctx.stroke();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  });
-}
-
-function refreshLeafTexture(textures: Phaser.Textures.TextureManager, key: string): void {
-  if (textures.exists(key)) {
-    textures.remove(key);
-  }
+  ensureLeafDebrisTexture(scene);
 }
 
 export class LeafBlowerRenderer {
-  private scene: Phaser.Scene;
-  private visuals = new Map<number, LeafBlowerVisual>();
-  private terrainColorSampler: TerrainColorSampler | null = null;
+  private readonly scene: Phaser.Scene;
+  private readonly visuals = new Map<number, LeafBlowerVisual>();
+  private gpuVfx: GpuVfxSystem | null = null;
+  private leafSpec: GpuVfxSpawnSpec | null = null;
+  private terrainSnapshot: TerrainColorSnapshot | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -60,80 +49,53 @@ export class LeafBlowerRenderer {
     ensureLeafBlowerTextures(this.scene);
   }
 
-  setTerrainColorSampler(sampler: TerrainColorSampler | null): void {
-    this.terrainColorSampler = sampler;
+  registerGpuVfx(system: GpuVfxSystem): void {
+    if (this.gpuVfx) return;
+    this.gpuVfx = system;
+    this.leafSpec = system.createSpec(GpuVfxEffectId.LeafDebris);
+    this.leafSpec.scaleEnd = 0.04;
+    this.leafSpec.alphaStart = 0.96;
+    this.leafSpec.alphaEnd = 0;
+    system.registerEmission((deltaMs, nowMs) => this.emitParticles(deltaMs, nowMs));
+  }
+
+  setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void {
+    this.terrainSnapshot = snapshot;
   }
 
   createVisual(id: number, x: number, y: number, size: number): void {
     if (this.visuals.has(id)) return;
 
-    const visualSize = getVisualSize(size);
-
-    const leafEmitter = createEmitter(this.scene, x, y, TEX_LEAF, {
-      lifespan: { min: 360, max: 860 },
-      frequency: 40,
-      quantity: 5,
-      angle: 0,
-      speed: { min: 34, max: 62 },
-      scale: { start: 0.16 + visualSize * 0.016, end: 0.01 },
-      alpha: { start: 0.96, end: 0 },
-      rotate: { min: 0, max: 360 },
-      gravityY: 0,
-      blendMode: Phaser.BlendModes.NORMAL,
-      emitting: true,
-    }, DEPTH_DEBRIS);
-
     this.visuals.set(id, {
-      leafEmitter,
-      sampledColor: 0xb7c8a7,
-      lastTerrainSampleAt: -9999,
+      x,
+      y,
+      size,
+      vx: 0,
+      vy: 0,
+      flow: new ParticleFlowScheduler(LEAF_PARTICLE_FREQUENCY_MS),
+      source: this.gpuVfx?.createSource(GpuVfxEffectId.LeafDebris) ?? GPU_VFX_NO_SOURCE_HANDLE,
     });
-    this.updateVisual(id, x, y, size, 0, 0);
   }
 
   updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number): void {
     const visual = this.visuals.get(id);
     if (!visual) return;
-
-    const visualSize = getVisualSize(size);
-
-    const speed = Math.max(1, Math.hypot(vx, vy));
-    const dirX = vx / speed;
-    const dirY = vy / speed;
-    const heading = Math.atan2(vy, vx);
-    const angleDeg = Phaser.Math.RadToDeg(heading);
-    const now = this.scene.time.now;
-    if (this.terrainColorSampler && now - visual.lastTerrainSampleAt >= TERRAIN_SAMPLE_INTERVAL_MS) {
-      visual.sampledColor = this.terrainColorSampler(x, y);
-      visual.lastTerrainSampleAt = now;
-    }
-
-    const sourceRadius = Math.max(visualSize * 0.06, 1.25);
-    const debrisRadius = Math.max(visualSize * 0.12, 2.4);
-    const terrainBase = visual.sampledColor;
-    const leafMain = mixColors(terrainBase, 0x6f9340, 0.22);
-    const leafAlt = mixColors(terrainBase, 0x9e7c45, 0.12);
-
-    visual.leafEmitter.setPosition(x - dirX * sourceRadius * 1.15, y - dirY * sourceRadius * 1.15);
-    visual.leafEmitter.setAngle(angleDeg + 180);
-    visual.leafEmitter.setParticleSpeed(Math.max(speed * 0.08, 18), Math.max(speed * 0.28, 48));
-    visual.leafEmitter.setParticleScale(Math.max(visualSize / 102, 0.11), 0.04);
-    setEmitterTintArray(visual.leafEmitter, [terrainBase, leafMain, leafAlt, mixColors(terrainBase, 0x597637, 0.16)]);
-    setCircleEmitZone(visual.leafEmitter, Math.max(debrisRadius * 1.45, 4.4), 1, true);
+    visual.x = x;
+    visual.y = y;
+    visual.size = size;
+    visual.vx = vx;
+    visual.vy = vy;
   }
 
   destroyVisual(id: number, immediate = false): void {
     const visual = this.visuals.get(id);
     if (!visual) return;
-
     this.visuals.delete(id);
 
-    if (immediate) {
-      destroyEmitter(visual.leafEmitter);
-      return;
+    if (this.gpuVfx && visual.source !== GPU_VFX_NO_SOURCE_HANDLE) {
+      if (immediate) this.gpuVfx.clearSource(visual.source);
+      this.gpuVfx.releaseSource(visual.source);
     }
-
-    stopEmitterWithLinger(this.scene, visual.leafEmitter, LEAF_PARTICLE_LINGER_MS);
   }
 
   has(id: number): boolean {
@@ -145,24 +107,81 @@ export class LeafBlowerRenderer {
   }
 
   destroyAll(): void {
-    for (const [id] of this.visuals) {
-      this.destroyVisual(id, true);
+    for (const [id] of this.visuals) this.destroyVisual(id, true);
+  }
+
+  private emitParticles(deltaMs: number, nowMs: number): void {
+    const system = this.gpuVfx;
+    const spec = this.leafSpec;
+    if (!system || !spec || !this.terrainSnapshot) return;
+
+    const frequency = system.quality.scaleFrequency(
+      LEAF_PARTICLE_FREQUENCY_MS,
+      GpuVfxEffectId.LeafDebris,
+    );
+    if (frequency <= 0) {
+      system.recordQualityDrop(GpuVfxEffectId.LeafDebris);
+      return;
     }
+
+    for (const visual of this.visuals.values()) {
+      visual.flow.setFrequency(frequency);
+      const due = visual.flow.tick(deltaMs);
+      for (let cycle = 0; cycle < due; cycle += 1) {
+        for (let count = 0; count < LEAF_PARTICLE_QUANTITY; count += 1) {
+          this.spawnLeaf(visual, spec, nowMs);
+        }
+      }
+    }
+  }
+
+  private spawnLeaf(visual: LeafBlowerVisual, spec: GpuVfxSpawnSpec, nowMs: number): void {
+    const system = this.gpuVfx;
+    const snapshot = this.terrainSnapshot;
+    if (!system || !snapshot) return;
+
+    const visualSize = getVisualSize(visual.size);
+    const speed = Math.max(1, Math.hypot(visual.vx, visual.vy));
+    const dirX = visual.vx / speed;
+    const dirY = visual.vy / speed;
+    const heading = Math.atan2(visual.vy, visual.vx);
+    const sourceRadius = Math.max(visualSize * 0.06, 1.25);
+    const debrisRadius = Math.max(visualSize * 0.12, 2.4);
+    const radius = Math.max(debrisRadius * 1.45, 4.4);
+    const sourceX = visual.x - dirX * sourceRadius * 1.15;
+    const sourceY = visual.y - dirY * sourceRadius * 1.15;
+
+    SPAWN_CIRCLE.setTo(sourceX, sourceY, radius);
+    Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
+
+    const terrainBase = snapshot.sample(SPAWN_POINT.x, SPAWN_POINT.y);
+    const tint = pickGpuVfxTint([
+      terrainBase,
+      mixColors(terrainBase, 0x6f9340, 0.22),
+      mixColors(terrainBase, 0x9e7c45, 0.12),
+      mixColors(terrainBase, 0x597637, 0.16),
+    ]);
+    const emissionAngle = heading + Math.PI;
+    const emissionSpeed = Phaser.Math.FloatBetween(
+      Math.max(speed * 0.08, 18),
+      Math.max(speed * 0.28, 48),
+    );
+
+    spec.frame = GpuVfxFrameId.LeafDebris;
+    spec.lifeMs = Phaser.Math.FloatBetween(LEAF_PARTICLE_LIFESPAN_MIN_MS, LEAF_PARTICLE_LIFESPAN_MAX_MS);
+    spec.x = SPAWN_POINT.x;
+    spec.y = SPAWN_POINT.y;
+    spec.vx = Math.cos(emissionAngle) * emissionSpeed;
+    spec.vy = Math.sin(emissionAngle) * emissionSpeed;
+    spec.yMode = GpuVfxEase.Linear;
+    spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    spec.angularVelocity = Phaser.Math.FloatBetween(-3.2, 3.2);
+    spec.scaleStart = Math.max(visualSize / 102, 0.11);
+    spec.tint = tint;
+    system.spawn(spec, visual.source, nowMs);
   }
 }
 
 function getVisualSize(size: number): number {
   return Math.max(size * LEAF_BLOWER_VISUAL_SIZE_SCALE + LEAF_BLOWER_VISUAL_SIZE_OFFSET, size);
-}
-
-function stopEmitterWithLinger(
-  scene: Phaser.Scene,
-  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
-  lingerMs: number,
-): void {
-  emitter.stop();
-  scene.time.delayedCall(lingerMs, () => {
-    if (!emitter.active) return;
-    emitter.destroy();
-  });
 }
