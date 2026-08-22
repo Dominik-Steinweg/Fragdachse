@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { makeAdditive } from '../effects/EffectUtils';
+import { makeAdditive, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { SyncedNukeStrike } from '../types';
 import { DEPTH, COLORS, VOID_PALETTE } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
@@ -195,29 +195,35 @@ export class NukeRenderer {
     // Ungedämpft (`setBlendMode` statt `makeAdditive`): die Zielmarkierung ist ein
     // Telegraph und muss zu jeder Tageszeit voll lesbar bleiben.
     const radius = this.scene.add.circle(nuke.x, nuke.y, nuke.radius, warningColor, NUKE_CONFIG.circleFillAlpha);
+    registerGraphicsObject(this.scene, 'nukeTelegraphs', radius);
     radius.setDepth(DEPTH.CANOPY - 1);
     radius.setBlendMode(Phaser.BlendModes.ADD);
 
     const ring = this.scene.add.circle(nuke.x, nuke.y, nuke.radius);
+    registerGraphicsObject(this.scene, 'nukeTelegraphs', ring);
     ring.setStrokeStyle(4, ringColor, NUKE_CONFIG.circleStrokeAlpha);
     ring.setDepth(DEPTH.CANOPY);
     ring.setBlendMode(Phaser.BlendModes.ADD);
 
     const outerRing = this.scene.add.circle(nuke.x, nuke.y, nuke.radius * 0.84);
+    registerGraphicsObject(this.scene, 'nukeTelegraphs', outerRing);
     outerRing.setStrokeStyle(2, outerColor, 0.28);
     outerRing.setDepth(DEPTH.CANOPY);
     outerRing.setBlendMode(Phaser.BlendModes.ADD);
 
     const coreGlow = this.scene.add.circle(nuke.x, nuke.y, 30, outerColor, 0.24);
+    registerGraphicsObject(this.scene, 'nukeTelegraphs', coreGlow);
     coreGlow.setDepth(DEPTH.PLAYERS - 2);
     coreGlow.setBlendMode(Phaser.BlendModes.ADD);
 
     const targetRing = this.scene.add.circle(nuke.x, nuke.y, 44);
+    registerGraphicsObject(this.scene, 'nukeTelegraphs', targetRing);
     targetRing.setStrokeStyle(3, isVoid ? VOID_PALETTE.core : COLORS.GREY_1, 0.68);
     targetRing.setDepth(DEPTH.PLAYERS - 1);
     targetRing.setBlendMode(Phaser.BlendModes.ADD);
 
     const shadow = this.scene.add.ellipse(nuke.x, nuke.y + 16, 34, 12, COLORS.GREY_10, 0.28);
+    registerGraphicsObject(this.scene, 'nukeTelegraphs', shadow);
     shadow.setDepth(DEPTH.PLAYERS - 2);
 
     const icon = this.scene.add.image(nuke.x, nuke.y, TEX_NUKE_ICON);
@@ -225,7 +231,7 @@ export class NukeRenderer {
     icon.setDepth(DEPTH.PLAYERS - 1);
     if (isVoid) icon.setTint(VOID_PALETTE.primary);
 
-    const sparks = this.scene.add.particles(nuke.x, nuke.y, TEX_NUKE_WARN, {
+    const sparks = registerParticleEmitter(this.scene, 'nuke', this.scene.add.particles(nuke.x, nuke.y, TEX_NUKE_WARN, {
       lifespan:  { min: 260, max: 620 },
       speed:     { min: 18, max: 48 },
       scale:     { start: 0.8, end: 0 },
@@ -236,7 +242,7 @@ export class NukeRenderer {
       blendMode: Phaser.BlendModes.ADD,
       frequency: 90,
       quantity:  1,
-    });
+    }));
     sparks.setDepth(DEPTH.PLAYERS - 1);
 
     this.scene.tweens.add({

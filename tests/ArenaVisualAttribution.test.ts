@@ -26,33 +26,44 @@ interface FakeGraphics {
   once(): void;
 }
 
-function readTypeScriptSources(directory: string): string[] {
-  const sources: string[] = [];
+interface TypeScriptSource {
+  readonly path: string;
+  readonly text: string;
+}
+
+function readTypeScriptSources(directory: string): TypeScriptSource[] {
+  const sources: TypeScriptSource[] = [];
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) {
       sources.push(...readTypeScriptSources(path));
     } else if (path.endsWith('.ts') && !path.endsWith('ArenaVisualAttribution.ts')) {
-      sources.push(readFileSync(path, 'utf8'));
+      sources.push({ path, text: readFileSync(path, 'utf8') });
     }
   }
   return sources;
 }
 
-function hasHookForFamily(sources: readonly string[], family: string, hooks: readonly string[]): boolean {
+function hasHookForFamily(source: string, family: string, hooks: readonly string[]): boolean {
   const literal = `'${family}'`;
-  for (const source of sources) {
-    let offset = 0;
-    while (true) {
-      const familyOffset = source.indexOf(literal, offset);
-      if (familyOffset < 0) break;
-      const statementStart = source.lastIndexOf(';', familyOffset) + 1;
-      const statement = source.slice(statementStart, familyOffset + literal.length);
-      if (hooks.some((hook) => new RegExp(`${hook}\\s*\\(`).test(statement))) return true;
-      offset = familyOffset + literal.length;
-    }
+  let offset = 0;
+  while (true) {
+    const familyOffset = source.indexOf(literal, offset);
+    if (familyOffset < 0) break;
+    const statementStart = source.lastIndexOf(';', familyOffset) + 1;
+    const statement = source.slice(statementStart, familyOffset + literal.length);
+    if (hooks.some((hook) => new RegExp(`${hook}\\s*\\(`).test(statement))) return true;
+    offset = familyOffset + literal.length;
   }
   return false;
+}
+
+function sourceDeclaresClass(source: TypeScriptSource, className: string): boolean {
+  return new RegExp(`\\bclass\\s+${className}\\b`).test(source.text);
+}
+
+function sourceHasDirectPhaserFactory(source: TypeScriptSource): boolean {
+  return /(?:this\.)?scene\.add\.(?:particles|graphics|circle|ellipse|rectangle|arc|line|polygon)\s*\(/u.test(source.text);
 }
 
 function emitter(active = false, alive = 0): Phaser.GameObjects.Particles.ParticleEmitter {
@@ -177,11 +188,45 @@ describe('ArenaVisualAttributionCollector', () => {
     const particleHooks = ['registerParticleEmitter', 'createEmitter', 'createQualityEmitter'];
     const graphicsHooks = ['registerGraphicsObject', 'recordGraphicsWork', 'setGraphicsGauge'];
 
-    for (const family of Object.keys(CLASSIC_PARTICLE_FAMILIES)) {
-      expect(hasHookForFamily(sources, family, particleHooks), `classic family ${family}`).toBe(true);
+    for (const [family, sourceNames] of Object.entries(CLASSIC_PARTICLE_FAMILIES)) {
+      for (const sourceName of sourceNames) {
+        const source = sources.find((candidate) => sourceDeclaresClass(candidate, sourceName));
+        expect(source, `classic source ${sourceName} for ${family}`).toBeDefined();
+        expect(
+          source && hasHookForFamily(source.text, family, particleHooks),
+          `classic hook ${family} in ${sourceName}`,
+        ).toBe(true);
+      }
     }
-    for (const family of Object.keys(GRAPHICS_FAMILIES)) {
-      expect(hasHookForFamily(sources, family, graphicsHooks), `graphics family ${family}`).toBe(true);
+
+    for (const [family, sourceNames] of Object.entries(GRAPHICS_FAMILIES)) {
+      for (const sourceName of sourceNames) {
+        const source = sources.find((candidate) => sourceDeclaresClass(candidate, sourceName));
+        expect(source, `graphics source ${sourceName} for ${family}`).toBeDefined();
+        expect(
+          source && hasHookForFamily(source.text, family, graphicsHooks),
+          `graphics hook ${family} in ${sourceName}`,
+        ).toBe(true);
+      }
+    }
+
+    const catalogSourceNames = new Set([
+      ...Object.values(CLASSIC_PARTICLE_FAMILIES).flat(),
+      ...Object.values(GRAPHICS_FAMILIES).flat(),
+    ]);
+    for (const source of sources) {
+      if (!sourceHasDirectPhaserFactory(source)) continue;
+      const sourceFamilies = [
+        ...Object.entries(CLASSIC_PARTICLE_FAMILIES)
+          .filter(([, sourceNames]) => sourceNames.includes(source.path.split(/[\\/]/u).pop()!.replace(/\.ts$/u, '') as never)),
+        ...Object.entries(GRAPHICS_FAMILIES)
+          .filter(([, sourceNames]) => sourceNames.includes(source.path.split(/[\\/]/u).pop()!.replace(/\.ts$/u, '') as never)),
+      ];
+      if (!sourceFamilies.length || !catalogSourceNames.has(source.path.split(/[\\/]/u).pop()!.replace(/\.ts$/u, ''))) continue;
+      expect(
+        sourceFamilies.some(([family]) => hasHookForFamily(source.text, family, [...particleHooks, ...graphicsHooks])),
+        `direct Phaser factory attribution in ${source.path}`,
+      ).toBe(true);
     }
   });
 });

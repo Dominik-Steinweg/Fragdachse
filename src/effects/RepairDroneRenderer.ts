@@ -8,6 +8,7 @@ import {
   drawRepairBeam,
   ensureRepairDroneTexture,
 } from './repairDroneVisuals';
+import { registerGraphicsObject } from './EffectUtils';
 
 interface RepairDroneVisual {
   body: Phaser.GameObjects.Image;
@@ -96,14 +97,19 @@ export class RepairDroneRenderer {
   }
 
   private createVisual(snapshot: SyncedRepairDrone): RepairDroneVisual {
+    const glow = this.scene.add.circle(snapshot.x, snapshot.y, 13, 0x63ffc0, 0.12)
+      .setStrokeStyle(1, 0xbfffe3, 0.45)
+      .setDepth(DRONE_DEPTH - 0.02);
+    const beam = this.scene.add.graphics().setDepth(DRONE_DEPTH - 0.01);
+    registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
+    registerGraphicsObject(this.scene, 'objectiveMarkers', beam);
+
     return {
       body: this.scene.add.image(snapshot.x, snapshot.y, TEX_REPAIR_DRONE)
         .setDepth(DRONE_DEPTH)
         .setTint(snapshot.ownerColor),
-      glow: this.scene.add.circle(snapshot.x, snapshot.y, 13, 0x63ffc0, 0.12)
-        .setStrokeStyle(1, 0xbfffe3, 0.45)
-        .setDepth(DRONE_DEPTH - 0.02),
-      beam: this.scene.add.graphics().setDepth(DRONE_DEPTH - 0.01),
+      glow,
+      beam,
       currentX: snapshot.x,
       currentY: snapshot.y,
       targetX: snapshot.x,

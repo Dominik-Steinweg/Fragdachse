@@ -37,6 +37,7 @@ import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnn
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { t } from '../i18n';
+import { registerGraphicsObject } from '../effects/EffectUtils';
 
 /** Gleiche Breite wie das Pflichtziel-Panel; die Spalte liest sich dadurch als dessen Fortsetzung. */
 const PANEL_W = COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT.panelWidth;
@@ -244,6 +245,7 @@ export class CoopDefenseSecondaryObjectiveHud {
   private buildPanel(): void {
     this.panelBg = this.scene.add.image(0, 0, PANEL_BG_TEX).setOrigin(0.5);
     this.panelFrame = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.panelFrame);
     this.panelGlyphGlow = this.scene.add
       .image(PANEL_GLYPH_X, -1, GLYPH_GLOW_TEX)
       .setOrigin(0.5)
@@ -251,6 +253,8 @@ export class CoopDefenseSecondaryObjectiveHud {
       .setBlendMode(Phaser.BlendModes.ADD);
     this.panelGlyph = this.scene.add.graphics();
     this.panelPips = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.panelGlyph);
+    registerGraphicsObject(this.scene, 'gameplayHud', this.panelPips);
     this.panelKicker = this.scene.add
       .text(PANEL_CONTENT_LEFT, PANEL_KICKER_Y, t('ui.objective.secondary'), KICKER_FONT)
       .setOrigin(0, 0.5);
@@ -283,6 +287,8 @@ export class CoopDefenseSecondaryObjectiveHud {
       const bg = this.scene.add.image(0, 0, CHIP_BG_TEX).setOrigin(0.5);
       const frame = this.scene.add.graphics();
       const glyph = this.scene.add.graphics();
+      registerGraphicsObject(this.scene, 'gameplayHud', frame);
+      registerGraphicsObject(this.scene, 'gameplayHud', glyph);
       const title = this.scene.add.text(CHIP_CONTENT_LEFT, 0, '', CHIP_TITLE_FONT).setOrigin(0, 0.5);
       const progress = this.scene.add.text(CHIP_CONTENT_RIGHT, 0, '', CHIP_PROGRESS_FONT).setOrigin(1, 0.5);
       const container = this.scene.add
