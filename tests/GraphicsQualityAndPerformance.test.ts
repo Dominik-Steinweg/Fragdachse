@@ -814,6 +814,23 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     expect(profiler.getLatestSummary()).toBeNull();
   });
 
+  it('exposes the latest raw-frame FPS separately in the live summary', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.setLiveDiagnosticsEnabled(true);
+    profiler.record(sample({ rawDeltaMs: 40, deltaMs: 20 }));
+    expect(profiler.getLatestSummary()?.currentFps).toBe(25);
+    expect(profiler.getLatestSummary()?.fps).toBe(25);
+
+    now = 600;
+    profiler.record(sample({ rawDeltaMs: 60, deltaMs: 20 }));
+    expect(profiler.getLatestSummary()?.currentFps).toBeCloseTo(1000 / 60, 10);
+    expect(profiler.getLatestSummary()?.fps).toBe(20);
+  });
+
   it('exportiert Session-ID, Environment, Start/Ende und den 5-Sekunden-Sync', () => {
     let now = 100;
     vi.spyOn(performance, 'now').mockImplementation(() => now);

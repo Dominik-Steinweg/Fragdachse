@@ -160,11 +160,11 @@ interface BarBundle {
   bgImg:        Phaser.GameObjects.Image;
   trail?:       Phaser.GameObjects.Rectangle;
   fgImg:        Phaser.GameObjects.Image;
-  // Energized mode: small, fast, dense sparkle particles
+  // Additive energized layer: small, fast, dense sparkle particles
   coreEmitter:  Phaser.GameObjects.Particles.ParticleEmitter;
   outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   energyZone:   Phaser.Geom.Rectangle; // emit zone for energized emitters
-  // Idle mode: reusable breathing effect
+  // Base layer: reusable breathing effect
   idleEffect:   LivingBarEffect;
   border:       Phaser.GameObjects.Rectangle;
   valueText?:   Phaser.GameObjects.Text;
@@ -174,7 +174,8 @@ interface BarBundle {
   prevFrac:     number;
   currentFrac:  number;
   renderedWidth: number;
-  energized:    boolean;       // true = intense sparkle, false = calm breathing
+  energized:    boolean;       // true = add intense sparkle on top of the living field
+  keepAliveWhenPresentationInactive: boolean;
   particleIntensity: number;   // 0..1 – zuletzt angewandte Partikel-Verstärkung
 }
 
@@ -376,7 +377,14 @@ export class ArenaHUD {
     labelText: string,
     palette:   BarPalette,
     texKey:    string,
-    opts?:     { trail?: boolean; value?: boolean; highlight?: boolean; trailColor?: number; panel?: boolean },
+    opts?:     {
+      trail?: boolean;
+      value?: boolean;
+      highlight?: boolean;
+      trailColor?: number;
+      panel?: boolean;
+      keepAliveWhenPresentationInactive?: boolean;
+    },
     targetContainer?: Phaser.GameObjects.Container,
   ): BarBundle {
     const c = targetContainer ?? this.container;
@@ -492,6 +500,7 @@ export class ArenaHUD {
       currentFrac: 1,
       renderedWidth: barWidth,
       energized: false,
+      keepAliveWhenPresentationInactive: opts?.keepAliveWhenPresentationInactive ?? false,
       particleIntensity: 0,
     };
   }
@@ -1090,8 +1099,8 @@ export class ArenaHUD {
         palette,
         texKey,
         isConstructionCapacity || pu.defId === 'SHIELD_OVERCHARGE' || pu.defId === 'NEGEV_KILLSTREAK'
-          ? { value: true, panel: true }
-          : { panel: true },
+          ? { value: true, panel: true, keepAliveWhenPresentationInactive: true }
+          : { panel: true, keepAliveWhenPresentationInactive: true },
         this.puContainer,
       );
       if (pu.defId === 'NEGEV_KILLSTREAK') {
@@ -1187,10 +1196,7 @@ export class ArenaHUD {
 
   // ── Bar intensity mode ──────────────────────────────────────────────────
 
-  /**
-   * Switch a bar between calm idle (breathing fluid) and energized (intense sparkle) mode.
-   * Modular — can be called for any bar from any trigger.
-   */
+  /** Set the optional additive sparkle layer for a bar. */
   private setBarEnergized(bundle: BarBundle, energized: boolean): void {
     if (bundle.energized === energized) return;
     bundle.energized = energized;
@@ -1199,29 +1205,26 @@ export class ArenaHUD {
 
   private syncBarPresentation(bundle: BarBundle): void {
     const hasFill = bundle.currentFrac > 0.03;
-    if (!this.presentationActive) {
+    const presentationActive = this.presentationActive || bundle.keepAliveWhenPresentationInactive;
+    if (!presentationActive) {
       bundle.idleEffect.stop();
       this.deactivateEmitter(bundle.coreEmitter);
       this.deactivateEmitter(bundle.outerEmitter);
       return;
     }
 
-    if (bundle.energized) {
-      bundle.idleEffect.stop();
-      if (hasFill) {
-        this.activateEmitter(bundle.coreEmitter);
-        this.activateEmitter(bundle.outerEmitter);
-      } else {
-        this.deactivateEmitter(bundle.coreEmitter);
-        this.deactivateEmitter(bundle.outerEmitter);
-      }
-      return;
-    }
-
-    this.deactivateEmitter(bundle.coreEmitter);
-    this.deactivateEmitter(bundle.outerEmitter);
+    // The LivingBarEffect is always the base presentation. Energized only adds
+    // the denser particle layer, so readiness/buffs cannot hide the living field.
     if (hasFill) bundle.idleEffect.start();
     else bundle.idleEffect.stop();
+
+    if (bundle.energized && hasFill) {
+      this.activateEmitter(bundle.coreEmitter);
+      this.activateEmitter(bundle.outerEmitter);
+    } else {
+      this.deactivateEmitter(bundle.coreEmitter);
+      this.deactivateEmitter(bundle.outerEmitter);
+    }
   }
 
   private activateEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
@@ -1252,7 +1255,7 @@ export class ArenaHUD {
     // Update energized zone
     if (w > 6) {
       bundle.energyZone.width = w - 4;
-      if (bundle.energized && this.presentationActive) {
+      if (bundle.energized && (this.presentationActive || bundle.keepAliveWhenPresentationInactive)) {
         this.activateEmitter(bundle.coreEmitter);
         this.activateEmitter(bundle.outerEmitter);
       }

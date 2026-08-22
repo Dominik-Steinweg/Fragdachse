@@ -53,7 +53,8 @@ function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] 
   return [
     `${summary.role.toUpperCase()} · ${summary.phase.toUpperCase()} · ${summary.quality.toUpperCase()} · ${summary.mode}`
       + (summary.mapId ? ` · ${summary.mapId}` : ''),
-    `FPS ${summary.fps.toFixed(1)} · Frame-p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)}`,
+    `FPS aktuell ${summary.currentFps.toFixed(1)} · Ø FPS ${summary.fps.toFixed(1)}`
+      + ` · Frame-p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)}`,
     `Slow Frames >16,7 ms ${summary.over16msPercent.toFixed(1)}% · Samples ${summary.sampleCount}`,
     `Host/Client CPU ${ms(timings.roleStepMs.avg)} · Gegner ${count(counts.enemyCount.avg)} · Projektile ${count(counts.projectileCount.avg)}`,
     'Chrome Trace liefert Call Stacks, Renderer/GPU, GC und Scheduling; Companion sammelt semantische Korrelationen.',

@@ -116,6 +116,7 @@ export interface ArenaRuntimeWindowSummary {
   ablation: AblationCategory;
   sampleCount: number;
   fps: number;
+  currentFps: number;
   smoothedFps: number;
   coveragePercent: number;
   maxSampleGapMs: number;
@@ -1274,6 +1275,9 @@ export class ArenaRuntimeProfiler {
   private buildLiveSummary(now: number, sample: ArenaRuntimeSample): ArenaRuntimeWindowSummary {
     const frame = this.buildFrameSummary(this.recording);
     const liveRawDelta = this.frameRingSummary(frame.p95Ms, frame.p99Ms);
+    const currentFrameMs = Number.isFinite(sample.rawDeltaMs) && sample.rawDeltaMs > 0
+      ? sample.rawDeltaMs
+      : sample.deltaMs;
     return {
       startedAtMs: this.recording ? 0 : now,
       durationMs: this.recording ? Math.max(0, now - this.recordingStartedAtMs) : 0,
@@ -1285,6 +1289,7 @@ export class ArenaRuntimeProfiler {
       ablation: sample.ablation,
       sampleCount: frame.frameCount,
       fps: frame.fps,
+      currentFps: currentFrameMs > 0 ? 1000 / currentFrameMs : 0,
       smoothedFps: sample.deltaMs > 0 ? 1000 / sample.deltaMs : 0,
       coveragePercent: 100,
       maxSampleGapMs: 0,

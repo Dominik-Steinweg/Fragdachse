@@ -137,7 +137,9 @@ weiterhin ganz vorn in `playDestruction()`.
 
 ## Messworkflow
 
-T öffnet PerformanceDiagnosticsOverlay. Der Profiler trennt Frame-Delta, aktuelle Gauges,
+T öffnet PerformanceDiagnosticsOverlay. Die Live-Anzeige enthält sowohl `FPS aktuell` aus dem
+letzten ungeglätteten Frame als auch `Ø FPS` aus dem bisherigen Messfenster. Der Profiler trennt
+Frame-Delta, aktuelle Gauges,
 Intervallaggregate, Netzwerk, Host-Simulation, Client-Synchronisierung und semantische Visual-
 Buckets. `hostCpuMs`/`clientCpuMs` sind Intervall-Total/Maxwerte; Durchschnittswerte werden erst
 aus Total/Count abgeleitet. Worker-Compute wird vollständig im Worker gemessen, Round-Trip
