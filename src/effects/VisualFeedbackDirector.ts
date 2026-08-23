@@ -4,6 +4,13 @@ import { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CameraPostFxController } from './postfx/CameraPostFxController';
 import { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
 import {
+  createExplosionShockwaveSequence,
+  resolveExplosionShockwaveFrame,
+  shouldStartExplosionShockwave,
+  type ExplosionShockwaveSequence,
+} from './distortion/ExplosionShockwaveSequence';
+import type { CombatExplosionVisualStyle } from './ExplosionVisualProfiles';
+import {
   NUKE_VARIANT_PROFILES,
   NukeChoreography,
   type NukeChoreographyFrame,
@@ -57,6 +64,8 @@ export class VisualFeedbackDirector {
   private bossVisualProgress = 0;
   private nextNukeSequenceId = 1;
   private readonly nukeSequences: NukeSequenceEntry[] = [];
+  private nextExplosionShockwaveId = 1;
+  private readonly explosionShockwaves: ExplosionShockwaveSequence[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -122,6 +131,25 @@ export class VisualFeedbackDirector {
     return this.nukeSequences.length > 0;
   }
 
+  /** Dezente lokale Ringverzerrung nur fuer grosse, physische Detonationen. */
+  startExplosionShockwave(options: {
+    x: number;
+    y: number;
+    radiusPx: number;
+    style: CombatExplosionVisualStyle;
+  }): boolean {
+    if (!getGraphicsQualityProfile(this.scene).localDistortion) return false;
+    if (!shouldStartExplosionShockwave(options.style, options.radiusPx)) return false;
+    this.explosionShockwaves.push(createExplosionShockwaveSequence(
+      this.nextExplosionShockwaveId++,
+      options.x,
+      options.y,
+      options.radiusPx,
+      options.style,
+    ));
+    return true;
+  }
+
   /**
    * Phase A der Nuke: anschwellendes Rumpeln, leichte Entsättigung und – entscheidend – ein
    * Telegraph-Boost, der die Warnzone **stärker** vom sicheren Bereich abhebt, statt sie mit
@@ -167,6 +195,7 @@ export class VisualFeedbackDirector {
     this.lastBossPhase = inputs.bossPhase;
 
     this.stepNukeSequences(deltaMs);
+    this.stepExplosionShockwaves(deltaMs);
     this.postFx.setBaseGrade(resolveBaseGrade({ ...inputs, bossVisualIntensity }));
     this.postFx.update(deltaMs);
     // Niedrige Gesundheit spricht am Bildrand über Blut, nicht über zunehmende Dunkelheit.
@@ -182,6 +211,19 @@ export class VisualFeedbackDirector {
         this.nukeSequences.splice(i, 1);
         entry.onFinished?.();
       }
+    }
+  }
+
+  private stepExplosionShockwaves(deltaMs: number): void {
+    for (let i = this.explosionShockwaves.length - 1; i >= 0; i -= 1) {
+      const sequence = this.explosionShockwaves[i];
+      sequence.elapsedMs += Math.max(0, deltaMs);
+      const frame = resolveExplosionShockwaveFrame(sequence);
+      if (!frame) {
+        this.explosionShockwaves.splice(i, 1);
+        continue;
+      }
+      this.distortion.submit(frame);
     }
   }
 
@@ -242,6 +284,7 @@ export class VisualFeedbackDirector {
     // Bildschirmblitz einer Nuke noch in der Lobby.
     for (const entry of this.nukeSequences) entry.onFinished?.();
     this.nukeSequences.length = 0;
+    this.explosionShockwaves.length = 0;
     this.lastBossPhase = 0;
     this.bossVisualProgress = 0;
   }

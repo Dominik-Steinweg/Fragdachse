@@ -239,6 +239,16 @@ Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 
 
 Die Einzeltexturen bleiben bestehen – `stink_puff` benutzt weiterhin der klassische Spawn-Burst-Emitter.
 
+### Gestaffelte GPU-Kampfexplosionen
+
+Destruktive Explosionen laufen intern ausschliesslich ueber `ExplosionGpuRenderer.spawnCombatExplosion(request)`. Der Request enthaelt Position, authored Schadensradius, den kompatiblen `ExplosionVisualStyle` und eine bereits aufgeloeste Palette; Netzwerk- und Gameplay-Vertraege bleiben davon unberuehrt. `ExplosionVisualProfiles.ts` klassifiziert jeden Wire-Stil exhaustiv. `regeneration` und `brood_hatch` sind dort bewusst keine Kampfprofile und behalten eigene Darstellungen.
+
+Die gemeinsame Choreografie setzt den lesbaren Impact sofort, Sekundaerballen nach 70 ms und Rauch/Residual nach 140 ms; `mini_rocket_cascade` fuegt bei 90 ms einen eigenen Akzent hinzu. Der szenenweite Scheduler ist auf 256 Stufen begrenzt. Bei Ueberlauf entfallen in dieser Reihenfolge Rauch und sekundaere Standardlagen, waehrend Kaskadenakzente Vorrang haben. Nach GPU-Ablation werden ueberfaellige Stufen verworfen, und Runden- sowie Szenenteardown leeren die Queue.
+
+Feuerkoerper, Kern, Streak, Glutbrocken und Druckwellenring teilen die vorhandenen kompatiblen Explosions-Lanes. Nur der nicht-additive Rauch rechtfertigt `explosion-smoke`: eine geordnete NORMAL-Lane unterhalb des Hauptkoerpers, deren 2048 Member aus ueberlappenden Grossdetonationen und 1900 ms Maximallebensdauer abgeleitet sind. Alle Motive sind weisse prozedurale Atlasframes mit transparentem Rand; Farbe, Rotation, richtungsbezogene Streckung, `tintBlend`-Abkuehlung und Scale-Eases liegen pro Member.
+
+Grosse physische Explosionen ab 128 px melden fuer 280 ms eine lokale Ringquelle an `LocalDistortionComposer`: Radius 0,35x bis 1,25x, sinusfoermige Spitzenstaerke 0,22 beziehungsweise 0,30 fuer Train. Nuke bleibt bei ihrer staerkeren eigenen Choreografie. Der Composer behaelt Priorisierung und Quellenlimit; niedrige Qualitaet deaktiviert dekorativen Rauch und lokale Verzerrung, nicht aber kritischen Kern und GPU-Druckwelle.
+
 #### Motive fuer additiv gestapelte Flaechen
 
 Drei Regeln gelten fuer jedes Frame, das in grosser Zahl additiv uebereinanderliegt (Bodenfeuer, Flammenwerfer, Wolken). Alle drei sind an sichtbaren Fehlern verifiziert:

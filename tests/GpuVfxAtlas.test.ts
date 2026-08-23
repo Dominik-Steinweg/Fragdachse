@@ -14,6 +14,13 @@ import {
 } from '../src/effects/gpu/GpuVfxAtlas';
 import {
   TEX_EXPLOSION_EMBER,
+  TEX_EXPLOSION_FIREBALL_A,
+  TEX_EXPLOSION_FIREBALL_B,
+  TEX_EXPLOSION_CORE,
+  TEX_EXPLOSION_SMOKE,
+  TEX_EXPLOSION_STREAK,
+  TEX_EXPLOSION_CHUNK,
+  TEX_EXPLOSION_RING,
   TEX_EXPLOSION_SPARK,
   TEX_STINK_PUFF,
 } from '../src/effects/gpu/GpuVfxSourceTextures';
@@ -110,6 +117,13 @@ describe('gpu vfx atlas', () => {
     expect(scene.textures.exists(TEX_STINK_PUFF)).toBe(true);
     expect(scene.textures.exists(TEX_EXPLOSION_SPARK)).toBe(true);
     expect(scene.textures.exists(TEX_EXPLOSION_EMBER)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_FIREBALL_A)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_FIREBALL_B)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_CORE)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_SMOKE)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_STREAK)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_CHUNK)).toBe(true);
+    expect(scene.textures.exists(TEX_EXPLOSION_RING)).toBe(true);
     expect(scene.textures.exists(TEX_FLAME_CORE)).toBe(true);
     expect(scene.textures.exists(TEX_FLAME_EMBER)).toBe(true);
     expect(scene.textures.exists(TEX_FLAME_SPARK)).toBe(true);
@@ -130,6 +144,13 @@ describe('gpu vfx atlas', () => {
     expect(getGpuVfxFrame(GpuVfxFrameId.FlameSparkVoid).name).toBe('flame-spark-void');
     expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionSpark).name).toBe('explosion-spark');
     expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionEmber).name).toBe('explosion-ember');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionFireballA).name).toBe('explosion-fireball-a');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionFireballB).name).toBe('explosion-fireball-b');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionCore).name).toBe('explosion-core');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionSmoke).name).toBe('explosion-smoke');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionStreak).name).toBe('explosion-streak');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionChunk).name).toBe('explosion-chunk');
+    expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionRing).name).toBe('explosion-ring');
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
 

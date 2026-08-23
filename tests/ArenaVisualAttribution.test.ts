@@ -404,21 +404,12 @@ describe('ArenaVisualAttributionCollector', () => {
         findUnattributedEffectSystemGraphicsFactories(effectSystem.text),
         'every direct EffectSystem Runtime-Graphics factory must have its own hook',
       ).toEqual([]);
+      // Strukturierte Koerper/Ringe leben im GPU-Manifest. Als spezialisiertes Nuke-GameObject
+      // verbleibt nur der choreografierte Vollbildblitz in der Vector-Attribution.
+      expect(effectSystem.text).toMatch(/spawnCombatExplosionGpu\(x, y, radius, visualStyle/u);
       expect(effectSystem.text).toMatch(
-        /registerGraphicsObject\(\s*this\.scene\s*,\s*isNuke\s*\?\s*'nukeTelegraphs'\s*:\s*'effectSystemGraphics'\s*,\s*halo\s*\)/u,
+        /registerGraphicsObject\(\s*this\.scene\s*,\s*'nukeTelegraphs'\s*,\s*skyFlash\s*\)/u,
       );
-      expect(effectSystem.text).toMatch(
-        /registerGraphicsObject\(\s*this\.scene\s*,\s*isNuke\s*\?\s*'nukeTelegraphs'\s*:\s*'effectSystemGraphics'\s*,\s*blast\s*\)/u,
-      );
-      for (const objectName of ['skyFlash', 'secondaryBlast', 'heatHalo', 'shockRingA', 'shockRingB']) {
-        expect(
-          effectSystem.text,
-          `nuke graphics hook for EffectSystem.${objectName}`,
-        ).toMatch(new RegExp(
-          `registerGraphicsObject\\(\\s*this\\.scene\\s*,\\s*'nukeTelegraphs'\\s*,\\s*${objectName}\\s*\\)`,
-          'u',
-        ));
-      }
     }
   });
 });

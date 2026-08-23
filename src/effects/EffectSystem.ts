@@ -31,9 +31,10 @@ import type { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import type { CameraPostFxController } from './postfx/CameraPostFxController';
 import type { NukeVariant } from './nuke/NukeChoreography';
+import type { CombatExplosionVisualStyle } from './ExplosionVisualProfiles';
 
-/** Schmaler Ausschnitt der Regie, den das Effektsystem für die Nuke braucht. */
-interface NukeSequenceHost {
+/** Schmaler Ausschnitt der Regie fuer mehrphasige Explosionssequenzen. */
+interface ExplosionSequenceHost {
   startNukeSequence(options: {
     variant: NukeVariant;
     x: number;
@@ -41,6 +42,12 @@ interface NukeSequenceHost {
     radiusPx: number;
     onSkyFlash?: (alpha: number) => void;
     onFinished?: () => void;
+  }): boolean;
+  startExplosionShockwave(options: {
+    x: number;
+    y: number;
+    radiusPx: number;
+    style: CombatExplosionVisualStyle;
   }): boolean;
   hasActiveNukeSequence(): boolean;
 }
@@ -57,7 +64,11 @@ import {
   ensureExplosionEmberTexture,
   ensureExplosionSparkTexture,
 } from './gpu/GpuVfxSourceTextures';
-import type { ExplosionGpuRenderer } from './ExplosionGpuRenderer';
+import {
+  isDestructiveExplosionStyle,
+  type ExplosionCombatPalette,
+  type ExplosionGpuRenderer,
+} from './ExplosionGpuRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 320;
 const MELEE_SWING_FADE_MS    = 220;
@@ -105,7 +116,7 @@ export class EffectSystem implements EnemyVisualSink {
   private hitFeedbackRenderer: HitFeedbackRenderer | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
   private postFx: CameraPostFxController | null = null;
-  private visualFeedback: NukeSequenceHost | null = null;
+  private visualFeedback: ExplosionSequenceHost | null = null;
   private spawnEffectRenderer: SpawnEffectRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private explosionGpuRenderer: ExplosionGpuRenderer | null = null;
@@ -146,8 +157,8 @@ export class EffectSystem implements EnemyVisualSink {
     this.postFx = controller;
   }
 
-  /** Nur für die mehrphasige Nuke-Regie; alles andere läuft über die schmalen Setter. */
-  setVisualFeedback(director: NukeSequenceHost | null): void {
+  /** Mehrphasige Nuke- und lokale Explosionsregie ueber eine schmale Schnittstelle. */
+  setVisualFeedback(director: ExplosionSequenceHost | null): void {
     this.visualFeedback = director;
   }
 
@@ -255,7 +266,6 @@ export class EffectSystem implements EnemyVisualSink {
 
   private playTrainExplosionEffect(x: number, y: number, radius: number, color?: number): void {
     const fillColor = color ?? 0xff5a1e;
-    const coreColor = this.mixColor(fillColor, 0xffffff, 0.78);
     const haloColor = this.mixColor(fillColor, 0xffffff, 0.52);
     const startRadius = Math.max(6, radius * 0.11);
 
@@ -272,70 +282,6 @@ export class EffectSystem implements EnemyVisualSink {
       ease: 'Expo.easeOut',
       onComplete: () => flash.destroy(),
     });
-
-    const core = this.scene.add.circle(x, y, startRadius, coreColor, 0.82);
-    registerGraphicsObject(this.scene, 'effectSystemGraphics', core);
-    core.setDepth(DEPTH_FX + 0.6);
-    makeAdditive(core);
-    this.scene.tweens.add({
-      targets: core,
-      scaleX: (radius * 0.78) / startRadius,
-      scaleY: (radius * 0.78) / startRadius,
-      alpha: 0,
-      duration: 320,
-      ease: 'Cubic.easeOut',
-      onComplete: () => core.destroy(),
-    });
-
-    const blast = this.scene.add.circle(x, y, startRadius, fillColor, 0.72);
-    registerGraphicsObject(this.scene, 'effectSystemGraphics', blast);
-    blast.setDepth(DEPTH_FX + 0.2);
-    makeAdditive(blast);
-    this.scene.tweens.add({
-      targets: blast,
-      scaleX: (radius * 1.08) / startRadius,
-      scaleY: (radius * 1.08) / startRadius,
-      alpha: 0,
-      duration: 720,
-      ease: 'Cubic.easeOut',
-      onComplete: () => blast.destroy(),
-    });
-
-    const halo = this.scene.add.circle(x, y, startRadius, haloColor, 0.32);
-    registerGraphicsObject(this.scene, 'effectSystemGraphics', halo);
-    halo.setDepth(DEPTH_FX + 0.1);
-    makeAdditive(halo);
-    this.scene.tweens.add({
-      targets: halo,
-      scaleX: (radius * 1.55) / startRadius,
-      scaleY: (radius * 1.55) / startRadius,
-      alpha: 0,
-      duration: 1120,
-      ease: 'Sine.easeOut',
-      onComplete: () => halo.destroy(),
-    });
-
-    const ringProfiles = [
-      { start: 0.24, end: 1.18, width: 5, duration: 470, alpha: 0.9 },
-      { start: 0.48, end: 1.48, width: 2.5, duration: 780, alpha: 0.68 },
-    ];
-    for (const profile of ringProfiles) {
-      const ring = this.scene.add.circle(x, y, Math.max(5, radius * profile.start));
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
-      ring.setFillStyle(0, 0);
-      ring.setStrokeStyle(profile.width, profile.start < 0.3 ? coreColor : fillColor, profile.alpha);
-      ring.setDepth(DEPTH_FX + 0.16);
-      makeAdditive(ring);
-      this.scene.tweens.add({
-        targets: ring,
-        scaleX: (radius * profile.end) / Math.max(5, radius * profile.start),
-        scaleY: (radius * profile.end) / Math.max(5, radius * profile.start),
-        alpha: 0,
-        duration: profile.duration,
-        ease: 'Cubic.easeOut',
-        onComplete: () => ring.destroy(),
-      });
-    }
 
     // Der große Zugblitz belichtet die Szene mit, ähnlich wie die Nuke-Regie. Er wird
     // nur einmal für die Mittel-Detonation erzeugt, nicht für jeden einzelnen Waggon.
@@ -361,7 +307,7 @@ export class EffectSystem implements EnemyVisualSink {
       });
     }
 
-    this.explosionGpuRenderer?.spawnTrainExplosion(x, y, radius, coreColor, haloColor);
+    this.spawnCombatExplosionGpu(x, y, radius, 'train', fillColor, 0xffffe2, haloColor);
 
     if (radius >= 140) {
       this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
@@ -942,6 +888,11 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
+    if (visualStyle === 'brood_hatch') {
+      this.playBroodHatchEffect(x, y, radius, color ?? 0x94c95b);
+      return;
+    }
+
     if (visualStyle === 'timebomb_pop') {
       const popColor = color ?? 0xb82fff;
       const core = this.scene.add.circle(x, y, 5, 0xf3d9ff, 0.9).setDepth(DEPTH_FX + 0.4);
@@ -956,20 +907,7 @@ export class EffectSystem implements EnemyVisualSink {
         ease: 'Expo.easeOut',
         onComplete: () => core.destroy(),
       });
-      const ring = this.scene.add.circle(x, y, Math.max(4, radius * 0.22)).setDepth(DEPTH_FX + 0.2);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
-      ring.setFillStyle(0, 0).setStrokeStyle(2, popColor, 0.8);
-      makeAdditive(ring);
-      this.scene.tweens.add({
-        targets: ring,
-        scaleX: 2.6,
-        scaleY: 2.6,
-        alpha: 0,
-        duration: 300,
-        ease: 'Cubic.easeOut',
-        onComplete: () => ring.destroy(),
-      });
-      this.explosionGpuRenderer?.spawnTimebombPop(x, y, radius, popColor);
+      this.spawnCombatExplosionGpu(x, y, radius, 'timebomb_pop', popColor, 0xf3d9ff, 0xd58aff);
       return;
     }
 
@@ -978,7 +916,6 @@ export class EffectSystem implements EnemyVisualSink {
     const isEnergy = visualStyle === 'energy' || isTimebomb;
     const isVoidNuke = visualStyle === 'void_nuke';
     const isNuke = visualStyle === 'nuke' || isVoidNuke;
-    const isMiniRocketCascade = visualStyle === 'mini_rocket_cascade';
     const fillColor = isHoly
       ? 0xf0c53a
       : (color ?? (isTimebomb ? 0xb82fff : (isEnergy ? 0x73bed3 : (isVoidNuke ? 0xa631ff : (isNuke ? 0xffb347 : 0xff2200)))));
@@ -986,8 +923,8 @@ export class EffectSystem implements EnemyVisualSink {
     const haloColor = isEnergy
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
+    this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
     const startRadius = 8;
-    const endScale = radius / startRadius;
     if (isNuke) {
       const skyFlash = this.scene.add.rectangle(
         GAME_WIDTH * 0.5,
@@ -1039,38 +976,6 @@ export class EffectSystem implements EnemyVisualSink {
       onComplete: () => flash.destroy(),
     });
 
-    if (isEnergy || isNuke || isHoly) {
-      const halo = this.scene.add.circle(x, y, startRadius, haloColor, isNuke ? 0.55 : 0.4);
-      registerGraphicsObject(this.scene, isNuke ? 'nukeTelegraphs' : 'effectSystemGraphics', halo);
-      halo.setDepth(DEPTH_FX + 0.5);
-      makeAdditive(halo);
-      this.scene.tweens.add({
-        targets:    halo,
-        scaleX:     (radius * (isNuke ? 1.3 : (isHoly ? 1.05 : 0.9))) / startRadius,
-        scaleY:     (radius * (isNuke ? 1.3 : (isHoly ? 1.05 : 0.9))) / startRadius,
-        alpha:      0,
-        duration:   isNuke ? 900 : (isHoly ? 640 : 420),
-        ease:       'Sine.easeOut',
-        onComplete: () => halo.destroy(),
-      });
-    }
-
-    const blast = this.scene.add.circle(x, y, startRadius, fillColor, isEnergy ? 0.5 : (isNuke ? 0.88 : 0.7));
-    registerGraphicsObject(this.scene, isNuke ? 'nukeTelegraphs' : 'effectSystemGraphics', blast);
-    blast.setDepth(DEPTH_FX);
-    if (isEnergy || isNuke || isHoly) {
-      makeAdditive(blast);
-    }
-    this.scene.tweens.add({
-      targets:    blast,
-      scaleX:     endScale,
-      scaleY:     endScale,
-      alpha:      0,
-      duration:   isEnergy ? 520 : (isNuke ? 760 : (isHoly ? 820 : 600)),
-      ease:       isEnergy ? 'Sine.easeOut' : (isNuke ? 'Cubic.easeOut' : (isHoly ? 'Expo.easeOut' : 'Power2Out')),
-      onComplete: () => blast.destroy(),
-    });
-
     if (isHoly) {
       const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffefc4, 0.18);
       registerGraphicsObject(this.scene, 'effectSystemGraphics', skyFlash);
@@ -1085,272 +990,9 @@ export class EffectSystem implements EnemyVisualSink {
         onComplete: () => skyFlash.destroy(),
       });
 
-      const coreCorona = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.72);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', coreCorona);
-      coreCorona.setDepth(DEPTH_FX + 0.45);
-      makeAdditive(coreCorona);
-      this.scene.tweens.add({
-        targets:    coreCorona,
-        scaleX:     (radius * 0.58) / startRadius,
-        scaleY:     (radius * 0.58) / startRadius,
-        alpha:      0,
-        duration:   420,
-        ease:       'Expo.easeOut',
-        onComplete: () => coreCorona.destroy(),
-      });
-
-      const blastOuter = this.scene.add.circle(x, y, startRadius, 0xffb11f, 0.52);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', blastOuter);
-      blastOuter.setDepth(DEPTH_FX + 0.15);
-      makeAdditive(blastOuter);
-      this.scene.tweens.add({
-        targets:    blastOuter,
-        scaleX:     (radius * 1.28) / startRadius,
-        scaleY:     (radius * 1.28) / startRadius,
-        alpha:      0,
-        duration:   980,
-        ease:       'Expo.easeOut',
-        onComplete: () => blastOuter.destroy(),
-      });
-    }
-
-    if (isNuke) {
-      const secondaryBlast = this.scene.add.circle(x, y, startRadius, 0xff7a2f, 0.55);
-      registerGraphicsObject(this.scene, 'nukeTelegraphs', secondaryBlast);
-      secondaryBlast.setDepth(DEPTH_FX + 0.2);
-      makeAdditive(secondaryBlast);
-      this.scene.tweens.add({
-        targets:    secondaryBlast,
-        scaleX:     (radius * 1.22) / startRadius,
-        scaleY:     (radius * 1.22) / startRadius,
-        alpha:      0,
-        duration:   980,
-        ease:       'Expo.easeOut',
-        onComplete: () => secondaryBlast.destroy(),
-      });
-
-      const heatHalo = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.25);
-      registerGraphicsObject(this.scene, 'nukeTelegraphs', heatHalo);
-      heatHalo.setDepth(DEPTH_FX + 0.3);
-      makeAdditive(heatHalo);
-      this.scene.tweens.add({
-        targets:    heatHalo,
-        scaleX:     (radius * 1.7) / startRadius,
-        scaleY:     (radius * 1.7) / startRadius,
-        alpha:      0,
-        duration:   1300,
-        ease:       'Sine.easeOut',
-        onComplete: () => heatHalo.destroy(),
-      });
-    }
-
-    const ringStartRadius = radius * 0.5;
-    const ring = this.scene.add.circle(x, y, ringStartRadius);
-    registerGraphicsObject(this.scene, isNuke ? 'nukeTelegraphs' : 'effectSystemGraphics', ring);
-    ring.setStrokeStyle(isEnergy ? 3 : (isHoly ? 3 : (isNuke ? 5 : 2)), isEnergy ? haloColor : fillColor, isNuke ? 0.95 : 0.8);
-    ring.setFillStyle(0, 0);
-    ring.setDepth(DEPTH_FX);
-    if (isEnergy || isNuke || isHoly) {
-      makeAdditive(ring);
-    }
-    this.scene.tweens.add({
-      targets:    ring,
-      scaleX:     isNuke ? (radius * 1.35) / ringStartRadius : (isHoly ? (radius * 1.3) / ringStartRadius : (radius * 1.15) / ringStartRadius),
-      scaleY:     isNuke ? (radius * 1.35) / ringStartRadius : (isHoly ? (radius * 1.3) / ringStartRadius : (radius * 1.15) / ringStartRadius),
-      alpha:      0,
-      duration:   isEnergy ? 340 : (isNuke ? 720 : (isHoly ? 860 : 400)),
-      ease:       'Linear',
-      onComplete: () => ring.destroy(),
-    });
-
-    if (isMiniRocketCascade) {
-      // Gleiche visuelle Sprache wie die normale Mini-Raketen-Explosion, aber
-      // mit etwas hellerem Kern und einer zweiten, kurzen Druckwelle. Der echte
-      // Schadensradius bleibt weiterhin der uebergebene Radius.
-      const cascadeCore = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.62);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', cascadeCore);
-      cascadeCore.setDepth(DEPTH_FX + 0.35);
-      makeAdditive(cascadeCore);
-      this.scene.tweens.add({
-        targets: cascadeCore,
-        scaleX: (radius * 0.48) / startRadius,
-        scaleY: (radius * 0.48) / startRadius,
-        alpha: 0,
-        duration: 210,
-        ease: 'Expo.easeOut',
-        onComplete: () => cascadeCore.destroy(),
-      });
-
-      const pressureStartRadius = Math.max(6, radius * 0.34);
-      const pressureRing = this.scene.add.circle(x, y, pressureStartRadius);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', pressureRing);
-      pressureRing.setFillStyle(0, 0);
-      pressureRing.setStrokeStyle(3, this.mixColor(fillColor, 0xffffff, 0.34), 0.72);
-      pressureRing.setDepth(DEPTH_FX + 0.08);
-      makeAdditive(pressureRing);
-      this.scene.tweens.add({
-        targets: pressureRing,
-        scaleX: (radius * 1.28) / pressureStartRadius,
-        scaleY: (radius * 1.28) / pressureStartRadius,
-        alpha: 0,
-        duration: 470,
-        ease: 'Cubic.easeOut',
-        onComplete: () => pressureRing.destroy(),
-      });
-
-      this.explosionGpuRenderer?.spawnCascadeSparks(
-        x,
-        y,
-        radius,
-        Math.max(8, Math.ceil(radius / 7)),
-        [0xffffff, this.mixColor(fillColor, 0xffffff, 0.28), fillColor],
-      );
-    }
-
-    if (isEnergy) {
-      const outerRingRadius = radius * 0.3;
-      const outerRing = this.scene.add.circle(x, y, outerRingRadius);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', outerRing);
-      outerRing.setStrokeStyle(2, fillColor, 0.9);
-      outerRing.setFillStyle(0, 0);
-      outerRing.setDepth(DEPTH_FX + 0.2);
-      makeAdditive(outerRing);
-      this.scene.tweens.add({
-        targets:    outerRing,
-        scaleX:     (radius * 1.45) / outerRingRadius,
-        scaleY:     (radius * 1.45) / outerRingRadius,
-        alpha:      0,
-        duration:   520,
-        ease:       'Quad.easeOut',
-        onComplete: () => outerRing.destroy(),
-      });
-    }
-
-    if (isNuke) {
-      const shockRingA = this.scene.add.circle(x, y, radius * 0.18);
-      registerGraphicsObject(this.scene, 'nukeTelegraphs', shockRingA);
-      shockRingA.setStrokeStyle(6, 0xfff0b8, 0.92);
-      shockRingA.setFillStyle(0, 0);
-      shockRingA.setDepth(DEPTH_FX + 0.1);
-      makeAdditive(shockRingA);
-      this.scene.tweens.add({
-        targets:    shockRingA,
-        scaleX:     6.2,
-        scaleY:     6.2,
-        alpha:      0,
-        duration:   920,
-        ease:       'Expo.easeOut',
-        onComplete: () => shockRingA.destroy(),
-      });
-
-      const shockRingB = this.scene.add.circle(x, y, radius * 0.12);
-      registerGraphicsObject(this.scene, 'nukeTelegraphs', shockRingB);
-      shockRingB.setStrokeStyle(3, 0xff7a2f, 0.8);
-      shockRingB.setFillStyle(0, 0);
-      shockRingB.setDepth(DEPTH_FX + 0.12);
-      makeAdditive(shockRingB);
-      this.scene.tweens.add({
-        targets:    shockRingB,
-        scaleX:     9.5,
-        scaleY:     9.5,
-        alpha:      0,
-        duration:   1180,
-        ease:       'Quad.easeOut',
-        onComplete: () => shockRingB.destroy(),
-      });
-    }
-
-    const sparkTints = isHoly
-      ? [0xffffff, 0xfff2bf, 0xffd34d, 0xffa31f]
-      : isEnergy
-        ? [0xffffff, haloColor, fillColor]
-        : isNuke
-          ? [0xffffff, 0xfff0b8, 0xffa348, 0xff6422]
-          : [fillColor, 0xffaa00, 0xff6600];
-    const sparkCount = Math.ceil(radius / (isHoly ? 1.55 : (isEnergy ? 2.4 : (isNuke ? 1.2 : 5))));
-    const emberTints = isHoly
-      ? [0xfff0bc, 0xf2c14a, 0xad6b16, 0x5a2e08]
-      : isEnergy
-        ? [haloColor, fillColor, this.mixColor(fillColor, 0x172038, 0.45)]
-        : isNuke
-          ? [0xffd27a, 0xff8f42, 0x6a2a1b, 0x2e1d23]
-          : [fillColor, 0xff4400];
-    const emberCount = Math.ceil(radius / (isHoly ? 2.15 : (isEnergy ? 4.8 : (isNuke ? 2.3 : 8))));
-
-    if (isNuke) {
-      this.explosionGpuRenderer?.spawnNuke(
-        x,
-        y,
-        radius,
-        sparkCount,
-        emberCount,
-        Math.max(Math.ceil(radius / 1.8), 140),
-        Math.max(Math.ceil(radius / 3.1), 90),
-      );
-    } else {
-      this.explosionGpuRenderer?.spawnStandardSpark(
-        x,
-        y,
-        sparkCount,
-        isEnergy ? 220 : (isHoly ? 380 : 300),
-        isEnergy ? 520 : (isHoly ? 980 : 600),
-        isEnergy ? radius * 0.5 : (isHoly ? radius * 0.32 : 50),
-        isEnergy ? radius * 1.9 : (isHoly ? radius * 2.35 : radius * 1.5),
-        isEnergy ? 1.45 : (isHoly ? 1.85 : 1.2),
-        isEnergy ? 1.0 : (isHoly ? 0.96 : 0.9),
-        sparkTints,
-      );
-      this.explosionGpuRenderer?.spawnEmber(
-        x,
-        y,
-        emberCount,
-        isEnergy ? 260 : (isHoly ? 700 : 500),
-        isEnergy ? 620 : (isHoly ? 1650 : 1000),
-        isEnergy ? radius * 0.15 : (isHoly ? radius * 0.22 : 20),
-        isEnergy ? radius * 0.95 : (isHoly ? radius * 1.38 : radius * 0.8),
-        isEnergy ? 1.0 : (isHoly ? 1.45 : 0.8),
-        isEnergy ? 0.1 : (isHoly ? 0.12 : 0.2),
-        isEnergy ? 0.8 : (isHoly ? 0.86 : 0.7),
-        emberTints,
-        isEnergy ? -20 : (isHoly ? -80 : 40),
-      );
     }
 
     if (isHoly) {
-      const holyRingRadius = radius * 0.28;
-      const holyRingEndScale = (radius * 1.75) / holyRingRadius;
-      const holyRing = this.scene.add.circle(x, y, holyRingRadius);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', holyRing);
-      holyRing.setStrokeStyle(6, 0xffe8a3, 0.85);
-      holyRing.setFillStyle(0, 0);
-      holyRing.setDepth(DEPTH_FX + 0.25);
-      makeAdditive(holyRing);
-      this.scene.tweens.add({
-        targets:    holyRing,
-        scaleX:     holyRingEndScale,
-        scaleY:     holyRingEndScale,
-        alpha:      0,
-        duration:   980,
-        ease:       'Expo.easeOut',
-        onComplete: () => holyRing.destroy(),
-      });
-
-      const holyRingInner = this.scene.add.circle(x, y, radius * 0.18);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', holyRingInner);
-      holyRingInner.setStrokeStyle(3, 0xffffff, 0.72);
-      holyRingInner.setFillStyle(0, 0);
-      holyRingInner.setDepth(DEPTH_FX + 0.26);
-      makeAdditive(holyRingInner);
-      this.scene.tweens.add({
-        targets:    holyRingInner,
-        scaleX:     6.1,
-        scaleY:     6.1,
-        alpha:      0,
-        duration:   760,
-        ease:       'Quad.easeOut',
-        onComplete: () => holyRingInner.destroy(),
-      });
-
       const verticalBeam = this.scene.add.rectangle(x, y, Math.max(radius * 0.16, 20), radius * 0.95, 0xfff4d0, 0.24);
       registerGraphicsObject(this.scene, 'effectSystemGraphics', verticalBeam);
       verticalBeam.setDepth(DEPTH_FX + 0.3);
@@ -1371,13 +1013,6 @@ export class EffectSystem implements EnemyVisualSink {
           horizontalBeam.destroy();
         },
       });
-
-      this.explosionGpuRenderer?.spawnHolyCrown(
-        x,
-        y,
-        radius,
-        Math.max(Math.ceil(radius / 1.9), 92),
-      );
 
       this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
     } else if (isEnergy) {
@@ -1454,24 +1089,6 @@ export class EffectSystem implements EnemyVisualSink {
       onComplete: () => flash.destroy(),
     });
 
-    for (let ringIndex = 0; ringIndex < 2; ringIndex += 1) {
-      const startRadius = Math.max(5, radius * (0.2 + ringIndex * 0.08));
-      const ring = this.scene.add.circle(x, y, startRadius);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
-      ring.setFillStyle(0, 0);
-      ring.setStrokeStyle(ringIndex === 0 ? 4 : 2, ringIndex === 0 ? coreColor : outerColor, 0.95);
-      ring.setDepth(DEPTH_FX + 0.25 - ringIndex * 0.03);
-      makeAdditive(ring);
-      this.scene.tweens.add({
-        targets: ring,
-        scale: (radius * (ringIndex === 0 ? 1.12 : 1.42)) / startRadius,
-        alpha: 0,
-        duration: ringIndex === 0 ? 280 : 430,
-        ease: 'Cubic.easeOut',
-        onComplete: () => ring.destroy(),
-      });
-    }
-
     const arcs = this.scene.add.graphics();
     registerGraphicsObject(this.scene, 'effectSystemGraphics', arcs);
     arcs.setDepth(DEPTH_FX + 0.35);
@@ -1501,15 +1118,63 @@ export class EffectSystem implements EnemyVisualSink {
       onComplete: () => arcs.destroy(),
     });
 
-    this.explosionGpuRenderer?.spawnLightning(
-      x,
-      y,
-      radius,
-      Math.max(18, Math.ceil(radius * 0.7)),
-      color,
-      coreColor,
-      outerColor,
-    );
+    this.spawnCombatExplosionGpu(x, y, radius, 'lightning', color, coreColor, outerColor);
+  }
+
+  private spawnCombatExplosionGpu(
+    x: number,
+    y: number,
+    radius: number,
+    style: ExplosionVisualStyle,
+    bodyColor: number,
+    coreColor: number,
+    hotColor: number,
+  ): void {
+    if (!this.explosionGpuRenderer || !isDestructiveExplosionStyle(style)) return;
+
+    const energyLike = style === 'energy' || style === 'timebomb' || style === 'timebomb_pop' || style === 'lightning';
+    const voidLike = style === 'void_nuke';
+    const holyLike = style === 'holy';
+    const palette: ExplosionCombatPalette = {
+      core: coreColor,
+      hot: hotColor,
+      body: bodyColor,
+      outer: this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),
+      ember: this.mixColor(bodyColor, holyLike ? 0x7a4610 : (voidLike ? 0x160c22 : (energyLike ? 0x20345b : 0x61200d)), 0.62),
+      smoke: this.mixColor(bodyColor, voidLike ? 0x130f1d : (energyLike ? 0x17223a : 0x282528), 0.82),
+    };
+    this.explosionGpuRenderer.spawnCombatExplosion({ x, y, radius, style, palette });
+    this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: radius, style });
+  }
+
+  /** Organisches Aufbrechen statt Kampfdetonation; bleibt bewusst ausserhalb der GPU-Profile. */
+  private playBroodHatchEffect(x: number, y: number, radius: number, color: number): void {
+    const brightColor = this.mixColor(color, 0xf5ffd8, 0.48);
+    const lobeCount = 5;
+    for (let index = 0; index < lobeCount; index += 1) {
+      const angle = index / lobeCount * Math.PI * 2 + Phaser.Math.FloatBetween(-0.16, 0.16);
+      const lobe = this.scene.add.ellipse(
+        x + Math.cos(angle) * radius * 0.08,
+        y + Math.sin(angle) * radius * 0.08,
+        Math.max(7, radius * 0.22),
+        Math.max(12, radius * 0.46),
+        index % 2 === 0 ? brightColor : color,
+        0.42,
+      );
+      registerGraphicsObject(this.scene, 'effectSystemGraphics', lobe);
+      lobe.setDepth(DEPTH_FX + 0.12).setRotation(angle + Math.PI * 0.5);
+      this.scene.tweens.add({
+        targets: lobe,
+        x: x + Math.cos(angle) * radius * 0.72,
+        y: y + Math.sin(angle) * radius * 0.72,
+        scaleX: 0.35,
+        scaleY: 1.28,
+        alpha: 0,
+        duration: 460,
+        ease: 'Cubic.easeOut',
+        onComplete: () => lobe.destroy(),
+      });
+    }
   }
 
   /**

@@ -10,6 +10,13 @@ import {
   TEX_LEAF_BLOWER_DUST,
   TEX_EXPLOSION_SPARK,
   TEX_EXPLOSION_EMBER,
+  TEX_EXPLOSION_FIREBALL_A,
+  TEX_EXPLOSION_FIREBALL_B,
+  TEX_EXPLOSION_CORE,
+  TEX_EXPLOSION_SMOKE,
+  TEX_EXPLOSION_STREAK,
+  TEX_EXPLOSION_CHUNK,
+  TEX_EXPLOSION_RING,
   ensureAirstrikeBombTexture,
   ensureAirstrikeSparkTexture,
   ensureRocketExhaustTexture,
@@ -20,6 +27,12 @@ import {
   ensureLeafBlowerDustTexture,
   ensureExplosionSparkTexture,
   ensureExplosionEmberTexture,
+  ensureExplosionFireballTextures,
+  ensureExplosionCoreTexture,
+  ensureExplosionSmokeTexture,
+  ensureExplosionStreakTexture,
+  ensureExplosionChunkTexture,
+  ensureExplosionRingTexture,
 } from './GpuVfxSourceTextures';
 import {
   GROUND_FIRE_BED_SIZE,
@@ -102,6 +115,13 @@ export const GpuVfxFrameId = {
    */
   GroundFireSurface: 19,
   GroundFireBed:     20,
+  ExplosionFireballA: 21,
+  ExplosionFireballB: 22,
+  ExplosionCore:      23,
+  ExplosionSmoke:     24,
+  ExplosionStreak:    25,
+  ExplosionChunk:     26,
+  ExplosionRing:      27,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -205,6 +225,34 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
     id: GpuVfxFrameId.GroundFireBed, frame: 'ground-fire-bed',
     sourceTextureKey: TEX_GROUND_FIRE_BED,
     width: GROUND_FIRE_BED_SIZE, height: GROUND_FIRE_BED_SIZE, ensure: ensureGroundFireTextures,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionFireballA, frame: 'explosion-fireball-a',
+    sourceTextureKey: TEX_EXPLOSION_FIREBALL_A, width: 48, height: 48, ensure: ensureExplosionFireballTextures,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionFireballB, frame: 'explosion-fireball-b',
+    sourceTextureKey: TEX_EXPLOSION_FIREBALL_B, width: 48, height: 48, ensure: ensureExplosionFireballTextures,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionCore, frame: 'explosion-core',
+    sourceTextureKey: TEX_EXPLOSION_CORE, width: 32, height: 32, ensure: ensureExplosionCoreTexture,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionSmoke, frame: 'explosion-smoke',
+    sourceTextureKey: TEX_EXPLOSION_SMOKE, width: 56, height: 56, ensure: ensureExplosionSmokeTexture,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionStreak, frame: 'explosion-streak',
+    sourceTextureKey: TEX_EXPLOSION_STREAK, width: 24, height: 8, ensure: ensureExplosionStreakTexture,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionChunk, frame: 'explosion-chunk',
+    sourceTextureKey: TEX_EXPLOSION_CHUNK, width: 16, height: 16, ensure: ensureExplosionChunkTexture,
+  },
+  {
+    id: GpuVfxFrameId.ExplosionRing, frame: 'explosion-ring',
+    sourceTextureKey: TEX_EXPLOSION_RING, width: 64, height: 64, ensure: ensureExplosionRingTexture,
   },
 ];
 

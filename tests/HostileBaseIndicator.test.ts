@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Geometry tests do not instantiate Phaser. Keep the transitive renderer import headless.
+vi.mock('phaser', () => ({}));
 import {
   getArrowPointOnScreenViewEdge,
   getArrowPointOnWorldViewEdge,

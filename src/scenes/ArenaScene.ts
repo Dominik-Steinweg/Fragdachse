@@ -1056,6 +1056,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.runtimeProfiler?.setGpuVfxSource(null);
       this.renderers?.gpuVfx.setDiagnosticEventSink(null);
+      this.renderers?.explosionGpu.clearPending();
       this.renderers?.gpuVfx.destroy();
     });
     this.runtimeProfiler.subscribeDiagnostics((enabled) => {

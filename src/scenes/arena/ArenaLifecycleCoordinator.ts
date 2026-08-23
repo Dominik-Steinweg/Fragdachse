@@ -2829,6 +2829,8 @@ export class ArenaLifecycleCoordinator {
     // Die Entities geben ihre Brand-Handles beim Zerstoeren selbst frei; das hier raeumt die
     // Partikel derer ab, die den Teardown noch als brennend erleben.
     this.renderers.entityBurnGpu.clearAll();
+    this.renderers.explosionGpu.clearPending();
+    this.renderers.gpuVfx.releaseAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.
     this.ctx.visualFeedback.reset();

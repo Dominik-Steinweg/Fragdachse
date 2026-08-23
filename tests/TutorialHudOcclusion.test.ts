@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Layout math is pure; the announcement renderer is imported only for its rect resolver.
+vi.mock('phaser', () => ({}));
 import {
   advanceHudOcclusionFade,
   createHudOcclusionFadeState,

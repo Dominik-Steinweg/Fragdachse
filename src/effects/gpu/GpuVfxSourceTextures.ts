@@ -22,6 +22,13 @@ export const TEX_LEAF_DEBRIS     = '__leaf_blower_leaf';
 export const TEX_LEAF_BLOWER_DUST = '__leaf_blower_dust';
 export const TEX_EXPLOSION_SPARK = '__explosion_spark';
 export const TEX_EXPLOSION_EMBER = '__explosion_ember';
+export const TEX_EXPLOSION_FIREBALL_A = '__explosion_fireball_a';
+export const TEX_EXPLOSION_FIREBALL_B = '__explosion_fireball_b';
+export const TEX_EXPLOSION_CORE = '__explosion_core';
+export const TEX_EXPLOSION_SMOKE = '__explosion_smoke';
+export const TEX_EXPLOSION_STREAK = '__explosion_streak';
+export const TEX_EXPLOSION_CHUNK = '__explosion_chunk';
+export const TEX_EXPLOSION_RING = '__explosion_ring';
 
 /** Weicher Funkenpunkt fuer die Explosionen. */
 export function ensureExplosionSparkTexture(scene: Phaser.Scene): void {
@@ -39,6 +46,123 @@ export function ensureExplosionEmberTexture(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, TEX_EXPLOSION_EMBER, 4, 4, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,1)';
     ctx.fillRect(0, 0, 4, 4);
+  });
+}
+
+/**
+ * Unregelmaessige, farbneutrale Feuerballen. Die zwei Varianten teilen Groesse und Mittelalpha,
+ * unterscheiden sich aber in ihrer Silhouette, damit ein Burst nicht wie gestapelte Kreise liest.
+ */
+export function ensureExplosionFireballTextures(scene: Phaser.Scene): void {
+  drawExplosionBlob(scene, TEX_EXPLOSION_FIREBALL_A, [
+    0.82, 0.94, 0.78, 0.9, 0.76, 0.98, 0.8, 0.92, 0.74, 0.88, 0.79, 0.96,
+  ]);
+  drawExplosionBlob(scene, TEX_EXPLOSION_FIREBALL_B, [
+    0.91, 0.75, 0.96, 0.8, 0.89, 0.72, 0.93, 0.81, 0.98, 0.77, 0.87, 0.74,
+  ]);
+}
+
+/** Heisser, dichter Kern mit weichem Rand fuer den ersten Detonationsframe. */
+export function ensureExplosionCoreTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_CORE, 32, 32, (ctx) => {
+    const gradient = ctx.createRadialGradient(16, 16, 1, 16, 16, 15);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.34, 'rgba(255,255,255,0.96)');
+    gradient.addColorStop(0.7, 'rgba(255,255,255,0.46)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 32, 32);
+  });
+}
+
+/** Weiche, leicht asymmetrische Rauchwolke ohne harte Frame-Kante. */
+export function ensureExplosionSmokeTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_SMOKE, 56, 56, (ctx) => {
+    const lobes = [
+      [27, 29, 23], [19, 25, 16], [36, 23, 15], [34, 36, 14], [20, 38, 12],
+    ] as const;
+    for (const [x, y, radius] of lobes) {
+      const gradient = ctx.createRadialGradient(x, y, 1, x, y, radius);
+      gradient.addColorStop(0, 'rgba(255,255,255,0.34)');
+      gradient.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
+  });
+}
+
+/** Horizontaler Funkenstrich; Rotation und Streckung richten ihn pro Member an der Flugbahn aus. */
+export function ensureExplosionStreakTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_STREAK, 24, 8, (ctx) => {
+    const gradient = ctx.createLinearGradient(0, 4, 24, 4);
+    gradient.addColorStop(0, 'rgba(255,255,255,0)');
+    gradient.addColorStop(0.18, 'rgba(255,255,255,0.3)');
+    gradient.addColorStop(0.72, 'rgba(255,255,255,1)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 2, 24, 4);
+  });
+}
+
+/** Kantiger Glutbrocken mit transparenten Ecken statt des bisherigen Vollblocks. */
+export function ensureExplosionChunkTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_CHUNK, 16, 16, (ctx) => {
+    const gradient = ctx.createRadialGradient(8, 8, 1, 8, 8, 8);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.62, 'rgba(255,255,255,0.9)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(4, 2);
+    ctx.lineTo(12, 3);
+    ctx.lineTo(15, 8);
+    ctx.lineTo(11, 14);
+    ctx.lineTo(4, 13);
+    ctx.lineTo(1, 7);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+/** Weicher Druckwellenring; seine sichtbare Aussengrenze erreicht den uebergebenen Radius. */
+export function ensureExplosionRingTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_EXPLOSION_RING, 64, 64, (ctx) => {
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255,255,255,0)');
+    gradient.addColorStop(0.68, 'rgba(255,255,255,0)');
+    gradient.addColorStop(0.82, 'rgba(255,255,255,0.78)');
+    gradient.addColorStop(0.92, 'rgba(255,255,255,0.2)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+  });
+}
+
+function drawExplosionBlob(scene: Phaser.Scene, key: string, radii: readonly number[]): void {
+  const size = 48;
+  const half = size / 2;
+  ensureCanvasTexture(scene.textures, key, size, size, (ctx) => {
+    ctx.save();
+    ctx.beginPath();
+    for (let index = 0; index < radii.length; index += 1) {
+      const angle = (index / radii.length) * Math.PI * 2;
+      const radius = half * 0.82 * radii[index];
+      const x = half + Math.cos(angle) * radius;
+      const y = half + Math.sin(angle) * radius;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.clip();
+    const gradient = ctx.createRadialGradient(half - 3, half - 4, 2, half, half, half - 2);
+    gradient.addColorStop(0, 'rgba(255,255,255,0.96)');
+    gradient.addColorStop(0.38, 'rgba(255,255,255,0.78)');
+    gradient.addColorStop(0.74, 'rgba(255,255,255,0.34)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    ctx.restore();
   });
 }
 
