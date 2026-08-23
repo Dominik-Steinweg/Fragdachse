@@ -80,7 +80,12 @@ export const GRAPHICS_FAMILIES = {
   meteorEffects: ['MeteorRenderer'],
   nukeTelegraphs: ['NukeRenderer', 'EffectSystem'],
   effectSystemGraphics: ['EffectSystem'],
-  objectiveMarkers: ['CoopDefenseSecondaryObjectiveMarkerRenderer', 'CoopDefenseObjectiveRepairDroneRenderer', 'RepairDroneRenderer'],
+  objectiveMarkers: [
+    'CoopDefenseSecondaryObjectiveMarkerRenderer',
+    'CoopDefenseMissionProgressRenderer',
+    'CoopDefenseObjectiveRepairDroneRenderer',
+    'RepairDroneRenderer',
+  ],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
   powerUpEffects: ['PowerUpRenderer'],
   projectileShapes: ['ProjectileManager'],

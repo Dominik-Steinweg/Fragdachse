@@ -465,6 +465,69 @@ describe('dynamic construction pedestals', () => {
     expect(rockGrid.isOccupied(placed!.gridX, placed!.gridY)).toBe(false);
   });
 
+  it('batch-removes only the requesting owners constructions', () => {
+    const rockGrid = new RockGridIndex(layout.rocks);
+    const placement = new PlacementSystem(
+      layout,
+      rockGrid,
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
+    );
+    const world = (gridX: number, gridY: number) => ({
+      x: ARENA_OFFSET_X + CELL_SIZE * (gridX + 0.5),
+      y: ARENA_OFFSET_Y + CELL_SIZE * (gridY + 0.5),
+    });
+    const origin = world(3, 3);
+    const ownTurret = placement.tryPlaceConstruction(
+      COOP_DEFENSE_CONSTRUCTIONS.rocket_turret,
+      100,
+      'inspector',
+      0x52d273,
+      origin.x,
+      origin.y,
+      world(4, 3).x,
+      world(4, 3).y,
+    );
+    const ownPedestal = placement.tryPlaceConstruction(
+      COOP_DEFENSE_CONSTRUCTIONS.medic_pedestal,
+      1,
+      'inspector',
+      0x52d273,
+      origin.x,
+      origin.y,
+      world(3, 4).x,
+      world(3, 4).y,
+    );
+    const foreignTurret = placement.tryPlaceConstruction(
+      COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret,
+      100,
+      'other',
+      0xff9955,
+      origin.x,
+      origin.y,
+      world(2, 3).x,
+      world(2, 3).y,
+    );
+
+    expect(placement.removeOwnedConstructions('inspector').map((rock) => rock.id).sort())
+      .toEqual([ownTurret!.id, ownPedestal!.id].sort());
+    expect(placement.getRuntimeRock(foreignTurret!.id)?.ownerId).toBe('other');
+    expect(placement.removeOwnedConstructions('inspector')).toEqual([]);
+  });
+
+  it('blocks construction cells and diagonal tunnel segments at closed mission barriers', () => {
+    const placement = new PlacementSystem(
+      layout,
+      new RockGridIndex(layout.rocks),
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
+    );
+    placement.setClosedBarrierCellResolver((gridX, gridY) => gridX === 2 && gridY === 0);
+
+    expect(placement.canPlaceSingleCell(2, 0)).toBe(false);
+    // Die Linie schneidet (2,0), obwohl ein einfacher Round-DDA nur (1,0) und (2,1) abtasten wuerde.
+    expect(placement.doesGridSegmentCrossClosedBarrier(0, 0, 3, 1)).toBe(true);
+    expect(placement.doesGridSegmentCrossClosedBarrier(0, 2, 3, 2)).toBe(false);
+  });
+
   it('previews turret bases with the connected rock autotile frame', () => {
     const connectedLayout = { ...layout, rocks: [{ gridX: 5, gridY: 3 }] };
     const rockGrid = new RockGridIndex(connectedLayout.rocks);

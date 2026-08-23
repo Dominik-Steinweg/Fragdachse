@@ -112,6 +112,7 @@ export class HostUpdateCoordinator {
   private readonly burrowLoopHandles    = new Map<string, string>();
   private readonly prevStealthStates    = new Map<string, boolean>();
   private readonly prevAliveStates      = new Map<string, boolean>();
+  private readonly heldActionUtilityIds = new Map<string, string | null>();
   private moveLoopHandle: string | null = null;
   private classicTrainSpawned = false;
   private lastEncounterPresentationSignature: string | null = null;
@@ -170,6 +171,7 @@ export class HostUpdateCoordinator {
     this.burrowLoopHandles.clear();
     this.prevStealthStates.clear();
     this.prevAliveStates.clear();
+    this.heldActionUtilityIds.clear();
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.classicTrainSpawned = false;
     this.lastEncounterPresentationSignature = null;
@@ -210,7 +212,38 @@ export class HostUpdateCoordinator {
     const now = Date.now();
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
+    const heldActions = this.ctx.hostHeldActionSystem;
+    heldActions?.clearExpired(now);
+    if (countdownActive) {
+      heldActions?.reset();
+    } else if (heldActions) {
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        const utilityId = this.ctx.loadoutManager?.getEquippedUtilityConfig(player.id)?.id ?? null;
+        if (this.heldActionUtilityIds.has(player.id)
+          && this.heldActionUtilityIds.get(player.id) !== utilityId) {
+          heldActions.clearPlayer(player.id);
+        }
+        this.heldActionUtilityIds.set(player.id, utilityId);
+        if (!bridge.canPlayerAct(player.id)
+          || !this.ctx.combatSystem.isAlive(player.id)
+          || this.ctx.burrowSystem?.isBurrowed(player.id)
+          || this.ctx.burrowSystem?.isStunned(player.id)) {
+          heldActions.clearPlayer(player.id);
+        }
+      }
+    }
+
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
+    this.ctx.coopDefenseMissionProgressSystem?.hostUpdate(
+      delta,
+      countdownActive,
+      this.ctx.playerManager.getAllPlayers().map((player) => ({
+        playerId: player.id,
+        x: player.sprite.x,
+        y: player.sprite.y,
+        eligible: bridge.canPlayerAct(player.id) && this.ctx.combatSystem.isAlive(player.id),
+      })),
+    );
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseMapEventDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);

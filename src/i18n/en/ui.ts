@@ -124,6 +124,7 @@ export const enUi = {
   "ui.radial.cooldown": "CD {seconds}s",
   "ui.radial.closeKey": "E",
   "ui.radial.dismantle": "Dismantle",
+  "ui.radial.dismantleAll": "Dismantle all",
   "ui.hud.powerUp": "Power-up: {name}",
   "ui.hud.constructionCapacity": "Build capacity",
   "ui.hud.capacityCost": "{cost} BC",

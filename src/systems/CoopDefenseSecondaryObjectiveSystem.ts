@@ -14,6 +14,8 @@ export interface CoopDefenseSecondaryObjectiveSystemOptions {
   readonly onHoldFailed?: (objectiveId: string) => void;
   /** Liefert ausschließlich den semantischen Clear-Zustand des Encounter-Owners. */
   readonly isEncounterCleared?: (encounterId: string) => boolean;
+  /** Semantische Lifecycle-Naht fuer bewusst kleine externe Trigger wie Checkpoint/Defense. */
+  readonly isExternalTriggerSatisfied?: (trigger: CoopDefenseMapEncounterStart) => boolean;
   /**
    * Reward-Anforderung eines erfolgreich gehaltenen Ziels. Das System kennt die Wirkung nicht; der
    * Aufrufer löst den authored Reward auf und stößt das zuständige System an.
@@ -35,6 +37,7 @@ interface SecondaryObjectiveRuntimeState {
   readonly creditedTargetIds: Set<string>;
   state: CoopDefenseSecondaryObjectiveState;
   stateChangedAtMs: number;
+  holdEndsAtRoundMs: number | null;
 }
 
 /**
@@ -51,6 +54,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
   private focusedObjectiveIndex: number | null = null;
   private epicGuaranteeCount = 0;
   private readonly isEncounterCleared: ((encounterId: string) => boolean) | null;
+  private readonly isExternalTriggerSatisfied: ((trigger: CoopDefenseMapEncounterStart) => boolean) | null;
   private readonly onObjectiveActivated: ((objectiveId: string) => void) | null;
   private readonly onObjectiveCompleted: ((objectiveId: string) => void) | null;
   private readonly onHoldFailed: ((objectiveId: string) => void) | null;
@@ -62,6 +66,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     options: CoopDefenseSecondaryObjectiveSystemOptions = {},
   ) {
     this.isEncounterCleared = options.isEncounterCleared ?? null;
+    this.isExternalTriggerSatisfied = options.isExternalTriggerSatisfied ?? null;
     this.onObjectiveActivated = options.onObjectiveActivated ?? null;
     this.onObjectiveCompleted = options.onObjectiveCompleted ?? null;
     this.onHoldFailed = options.onHoldFailed ?? null;
@@ -73,6 +78,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
       creditedTargetIds: new Set<string>(),
       state: 'dormant',
       stateChangedAtMs: 0,
+      holdEndsAtRoundMs: null,
     }));
   }
 
@@ -112,6 +118,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
       state.creditedTargetIds.clear();
       state.state = 'dormant';
       state.stateChangedAtMs = 0;
+      state.holdEndsAtRoundMs = null;
     }
   }
 
@@ -243,8 +250,11 @@ export class CoopDefenseSecondaryObjectiveSystem {
   private updateHoldObjectives(): void {
     for (const state of this.objectiveStates) {
       if (state.state !== 'active' || state.config.type !== 'hold') continue;
-      const holdUntil = state.config.holdUntil;
-      if (holdUntil === undefined || !this.isTriggerSatisfied(holdUntil)) continue;
+      const reachedAuthoredEnd = state.config.holdUntil !== undefined
+        && this.isTriggerSatisfied(state.config.holdUntil);
+      const reachedRelativeEnd = state.holdEndsAtRoundMs !== null
+        && this.elapsedMs >= state.holdEndsAtRoundMs;
+      if (!reachedAuthoredEnd && !reachedRelativeEnd) continue;
       if (this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
         this.failObjective(state);
       } else {
@@ -267,6 +277,9 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (!state || state.state !== 'dormant' || this.focusedObjectiveIndex !== null) return;
     state.state = 'active';
     state.stateChangedAtMs = this.elapsedMs;
+    state.holdEndsAtRoundMs = state.config.type === 'hold' && state.config.holdDurationMs !== undefined
+      ? this.elapsedMs + state.config.holdDurationMs
+      : null;
     this.focusedObjectiveIndex = index;
     this.onObjectiveActivated?.(state.config.id);
   }
@@ -310,6 +323,9 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (trigger.type === 'time') return this.elapsedMs >= Math.max(0, Math.floor(trigger.atMs));
     if (trigger.type === 'after-encounter') {
       return this.isEncounterCleared?.(trigger.encounterId) === true;
+    }
+    if (trigger.type === 'after-checkpoint' || trigger.type === 'after-defense') {
+      return this.isExternalTriggerSatisfied?.(trigger) === true;
     }
     // Map validation rejects these for Objectives. Keeping the runtime fail-closed prevents a
     // malformed direct constructor call from activating an unsupported trigger.

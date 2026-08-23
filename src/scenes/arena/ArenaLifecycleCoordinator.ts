@@ -68,6 +68,9 @@ import { CoopDefenseGroundHazardEventHandler } from '../../systems/CoopDefenseGr
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
+import { CoopDefenseMissionProgressSystem } from '../../systems/CoopDefenseMissionProgressSystem';
+import { CoopDefenseMissionBarrierManager } from '../../systems/CoopDefenseMissionBarrierManager';
+import { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
 import { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
 import { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import {
@@ -96,7 +99,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -135,7 +138,7 @@ import {
   isConstructionId,
 } from '../../config/coopDefenseConstructions';
 import { getUnlockedCoopDefenseConstructionIds } from '../../utils/coopDefenseUpgrades';
-import type { ConstructionId, LoadoutToolRef, LoadoutUseResult } from '../../types';
+import type { ConstructionId, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock } from '../../types';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveArenaLoadProgress } from './ArenaLoadProgress';
 import { resolveArenaStartTime } from './ArenaStartTiming';
@@ -364,6 +367,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
+    bridge.publishCoopDefenseMissionProgressPresentationState(null);
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
@@ -621,6 +625,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
+    bridge.publishCoopDefenseMissionProgressPresentationState(null);
 
     if (roundConclusion) {
       const currentRoundState = bridge.getRoundState();
@@ -845,7 +850,15 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseSecondaryObjectiveConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapSecondaryObjectives(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
+    const missionProgressConfig = coopDefenseMapConfig
+      ? resolveCoopDefenseMapMissionProgress(coopDefenseMapConfig)
+      : undefined;
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseMissionProgressSystem = null;
+    this.ctx.coopDefenseMissionBarrierManager?.destroy();
+    this.ctx.coopDefenseMissionBarrierManager = null;
+    this.ctx.hostHeldActionSystem?.reset();
+    this.ctx.hostHeldActionSystem = bridge.isHost() ? new HostHeldActionSystem() : null;
     this.ctx.coopDefenseCarrySystem = null;
     this.ctx.coopDefenseTeamBuffSystem?.reset();
     this.ctx.coopDefenseTeamBuffSystem = bridge.isHost() && coopDefenseMapConfig
@@ -882,6 +895,18 @@ export class ArenaLifecycleCoordinator {
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
     ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
+    this.ctx.coopDefenseMissionBarrierManager = missionProgressConfig
+      ? new CoopDefenseMissionBarrierManager(this.scene, missionProgressConfig, {
+        physicsGroup: this.ctx.arenaResult.trunkGroup,
+        onOccupancyChanged: (changes) => {
+          this.ctx.flowFieldCoordinator?.patchBarrierCells(changes);
+          this.ctx.lightOccluderIndex?.markDirty();
+        },
+      })
+      : null;
+    this.ctx.placementSystem.setClosedBarrierCellResolver((gridX, gridY) => (
+      this.ctx.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false
+    ));
     // Eine vorbereitete Gefahrenflaeche sperrt das Bauen erst ab ihrer Ankuendigung. Host und
     // Client lesen dafuer denselben replizierten Event-Snapshot, damit Bauvorschau und
     // Host-Pruefung nicht auseinanderlaufen.
@@ -1037,6 +1062,7 @@ export class ArenaLifecycleCoordinator {
           activeBaseIds: this.ctx.baseManager?.getActiveBaseIds()
             ?? new Set(coopDefenseBases.map((spec) => spec.id)),
           obstacleCellProvider,
+          barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
           runner: createFlowFieldRunner(),
           navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS,
           generationId: this.nextFlowFieldGenerationId(),
@@ -1158,6 +1184,10 @@ export class ArenaLifecycleCoordinator {
                     return this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false;
                   case 'after-encounter':
                     return this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false;
+                  case 'after-checkpoint':
+                    return this.ctx.coopDefenseMissionProgressSystem?.isCheckpointActivated(start.checkpointId) ?? false;
+                  case 'after-defense':
+                    return this.ctx.coopDefenseMissionProgressSystem?.isDefenseResolved(start.defenseId) ?? false;
                   case 'base-destroyed':
                     return this.ctx.baseManager?.getBase(start.baseId)?.isDestroyed() ?? false;
                   case 'time':
@@ -1209,6 +1239,15 @@ export class ArenaLifecycleCoordinator {
       this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
         ? new CoopDefenseSecondaryObjectiveSystem(coopDefenseSecondaryObjectiveConfigs, {
           isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
+          isExternalTriggerSatisfied: (trigger) => {
+            if (trigger.type === 'after-checkpoint') {
+              return this.ctx.coopDefenseMissionProgressSystem?.isCheckpointActivated(trigger.checkpointId) ?? false;
+            }
+            if (trigger.type === 'after-defense') {
+              return this.ctx.coopDefenseMissionProgressSystem?.isDefenseResolved(trigger.defenseId) ?? false;
+            }
+            return false;
+          },
           onObjectiveActivated: (objectiveId) => {
             if (!bridge.isHost()) return;
             this.ctx.coopDefenseCarrySystem?.activateObjective(objectiveId);
@@ -1243,6 +1282,31 @@ export class ArenaLifecycleCoordinator {
           },
         })
         : null;
+      this.ctx.coopDefenseMissionProgressSystem = bridge.isHost() && missionProgressConfig
+        ? new CoopDefenseMissionProgressSystem(missionProgressConfig, {
+          roundRevision: descriptor.roundRevision,
+          getDefenseObjectiveState: (objectiveId) => (
+            this.ctx.coopDefenseSecondaryObjectiveSystem?.getObjectiveState(objectiveId) ?? null
+          ),
+          isEncounterCleared: (encounterId) => (
+            this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false
+          ),
+          onPresentationChanged: (state) => {
+            this.ctx.coopDefenseMissionBarrierManager?.syncPresentationState(state);
+            bridge.publishCoopDefenseMissionProgressPresentationState(state);
+          },
+        })
+        : null;
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(
+          player.id,
+          player.sprite.x,
+          player.sprite.y,
+        );
+      }
+      bridge.publishCoopDefenseMissionProgressPresentationState(
+        this.ctx.coopDefenseMissionProgressSystem?.getPresentationState() ?? null,
+      );
       this.ctx.coopDefenseCarrySystem = coopDefenseSecondaryObjectiveConfigs.some(
         (config) => config.type === 'carry' && config.carry !== undefined,
       )
@@ -1353,6 +1417,7 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockPhysicsProxies, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+    this.ctx.combatSystem.setBarrierObstacles(this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null);
     // Dieselbe Index-Instanz, damit Sichtlinie und Projektil-Kollision denselben Stand sehen.
     this.ctx.projectileManager.setObstacleIndex(this.ctx.combatSystem.getObstacleIndex());
     // Brandraster-Hindernisse werden einmalig in 16-px-Zellen projiziert. Danach werden nur
@@ -1452,6 +1517,9 @@ export class ArenaLifecycleCoordinator {
       const consumed = survival.consumeRespawn(playerId);
       if (consumed) bridge.publishCoopDefenseSurvivalState(survival.getSnapshot());
       return consumed;
+    });
+    this.ctx.combatSystem.setAuthoritativePositionResetCallback((playerId, x, y) => {
+      this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
     });
     this.ctx.combatSystem.setPlayerActionAllowedResolver((playerId) => bridge.canPlayerAct(playerId));
     this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
@@ -2195,6 +2263,9 @@ export class ArenaLifecycleCoordinator {
       this.ctx.translocatorSystem.setRadialImpulseCallback((x, y, radius, knockback, ownerId) => {
         this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);
       });
+      this.ctx.translocatorSystem.setPositionResetCallback((playerId, x, y) => {
+        this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
+      });
 
       this.ctx.loadoutManager.setCombatSystem(this.ctx.combatSystem);
       this.ctx.loadoutManager.setDashBurstChecker(id => this.ctx.hostPhysics.isDashBurst(id));
@@ -2338,6 +2409,9 @@ export class ArenaLifecycleCoordinator {
       this.ctx.tunnelSystem.setTunnelEnterCallback((playerId, x, y) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
         this.ctx.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);
+      });
+      this.ctx.tunnelSystem.setPositionResetCallback((playerId, x, y) => {
+        this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
       });
       this.ctx.burrowSystem.setTunnelTransitEndedCallback((playerId) => {
         this.ctx.tunnelSystem?.notifyTransitEnded(playerId);
@@ -2752,6 +2826,7 @@ export class ArenaLifecycleCoordinator {
       rocks: () => this.ctx.arenaResult?.rockPhysicsProxies ?? null,
       trunks: () => this.ctx.arenaResult?.trunkObjects ?? null,
       baseCells: () => this.ctx.baseManager?.getObstacleRectangles() ?? null,
+      barrierCells: () => this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
     });
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
@@ -2837,6 +2912,9 @@ export class ArenaLifecycleCoordinator {
     this.placementPreview.clearForTeardown();
     this.rockVisualHelper.destroyAllTurretVisuals();
 
+    this.ctx.coopDefenseMissionBarrierManager?.destroy();
+    this.ctx.coopDefenseMissionBarrierManager = null;
+
     if (this.ctx.arenaResult) {
       ArenaBuilder.destroyDynamic(this.ctx.arenaResult);
       this.ctx.arenaResult = null;
@@ -2882,6 +2960,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setInitialSpawnAllowedResolver(null);
     this.ctx.combatSystem.setRespawnAllowedResolver(null);
     this.ctx.combatSystem.setRespawnCallback(null);
+    this.ctx.combatSystem.setAuthoritativePositionResetCallback(null);
     this.ctx.combatSystem.setPlayerActionAllowedResolver(null);
     this.ctx.combatSystem.setPlayerDamageReductionResolver(null);
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
@@ -2965,6 +3044,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);
     this.ctx.combatSystem.setBaseObstacles(null);
+    this.ctx.combatSystem.setBarrierObstacles(null);
     this.ctx.combatSystem.setBaseManager(null);
     this.ctx.combatSystem.setEnemyManager(null);
     this.ctx.combatSystem.setTrainSegments(null);
@@ -2991,6 +3071,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseMapDirector = null;
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseMissionProgressSystem?.reset();
+    this.ctx.coopDefenseMissionProgressSystem = null;
+    this.ctx.hostHeldActionSystem?.reset();
+    this.ctx.hostHeldActionSystem = null;
     this.ctx.coopDefenseCarrySystem?.reset();
     this.ctx.coopDefenseCarrySystem = null;
     this.ctx.coopDefenseCarryItems = [];
@@ -3007,6 +3091,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseObjectivePlacementRewardSystem?.reset();
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
+    bridge.publishCoopDefenseMissionProgressPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     this.ctx.coopDefensePersistentPressureSystem?.reset();
     this.ctx.coopDefensePersistentPressureSystem = null;
@@ -3789,22 +3874,56 @@ export class ArenaLifecycleCoordinator {
     const removed = this.ctx.placementSystem?.removeRockAt(cell.gridX, cell.gridY, playerId);
     if (!removed) return { ok: false, reason: 'blocked' };
 
-    this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
-    this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
-
-    if (removed.kind === 'pedestal') {
-      this.ctx.powerUpSystem?.unregisterConstructionPedestal(removed.id);
-    }
-    this.rockVisualHelper.removePlaceableRockVisual(removed, true);
+    this.finalizeDismantledConstruction(removed, true);
     this.ctx.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_removed',
-      source: removed.kind === 'rock' ? 'placeable_rock' : 'placeable_turret',
+      source: removed.kind === 'rock'
+        ? 'placeable_rock'
+        : removed.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
       obstacleId: removed.id,
       gridX: removed.gridX,
       gridY: removed.gridY,
     });
     return { ok: true };
+  }
+
+  /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
+  dismantleAllInspectorConstructions(playerId: string): LoadoutUseResult {
+    if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    if (committed?.coopDefenseClassId !== 'inspector_gadachs'
+      || !player?.sprite.active
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)) {
+      return { ok: false, reason: 'blocked' };
+    }
+
+    const removed = this.ctx.placementSystem?.removeOwnedConstructions(playerId) ?? [];
+    for (const construction of removed) {
+      // Die visuellen Einzelobjekte muessen verschwinden; deren teure Schatten-/Occluder-
+      // Aktualisierung wird vom RockVisualHelper auf genau einen POST_UPDATE-Flush gebuendelt.
+      this.finalizeDismantledConstruction(construction, false);
+    }
+    if (removed.length > 0) {
+      // Unvollstaendige Payload erzwingt bewusst genau einen Flowfield-/Fire-Resync fuer den Batch.
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeables_batch_removed',
+        source: 'placeable_rock',
+      });
+      this.ctx.gameAudioSystem.playSound('sfx_place_rock', player.sprite.x, player.sprite.y, playerId);
+    }
+    return { ok: true };
+  }
+
+  private finalizeDismantledConstruction(removed: SyncedPlaceableRock, playDust: boolean): void {
+    this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
+    this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
+    if (removed.kind === 'pedestal') {
+      this.ctx.powerUpSystem?.unregisterConstructionPedestal(removed.id);
+    }
+    this.rockVisualHelper.removePlaceableRockVisual(removed, playDust);
   }
 
   private placeTunnel(

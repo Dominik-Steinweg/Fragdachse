@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCostByCode,
+  CELL_CODE,
   buildNeighborLookups,
   classifyTopology,
   computeBaseGoalIndexes,
@@ -10,6 +11,7 @@ import {
   createFieldArrays,
   createTopology,
   normalizeGoalIndexes,
+  resolveCellCode,
   totalCellsOf,
   type FlowFieldMetrics,
   type FlowFieldTopologyCounts,
@@ -197,6 +199,7 @@ function runKernel(fixture: Fixture): KernelResult {
     staticKind: buildStaticKindRaster(fixture.layout, METRICS),
     rockOccupancy: buildOccupancyRaster(fixture.layout.rocks, METRICS),
     baseOccupancy: buildBaseOccupancy(bases, activeBaseIds, METRICS),
+    barrierOccupancy: new Uint8Array(METRICS.cols * METRICS.rows),
   };
 
   const topology = createTopology(totalCellsOf(METRICS));
@@ -247,6 +250,20 @@ function digestsOf(result: KernelResult): Record<string, string> {
 }
 
 describe('FlowFieldKernel golden fields', () => {
+  it('maps barrier occupancy to the existing non-destructible hard-wall code', () => {
+    const total = METRICS.cols * METRICS.rows;
+    const barrierOccupancy = new Uint8Array(total);
+    barrierOccupancy[3] = 1;
+    const sources = {
+      staticKind: new Uint8Array(total).fill(CELL_CODE.ground),
+      rockOccupancy: new Uint8Array(total),
+      baseOccupancy: new Uint8Array(total),
+      barrierOccupancy,
+    };
+
+    expect(resolveCellCode(sources, 3)).toBe(CELL_CODE.trunk);
+    expect(Object.keys(CELL_CODE)).not.toContain('barrier');
+  });
   for (const fixture of FIXTURES) {
     it(`reproduces every field for: ${fixture.name}`, () => {
       const actual = digestsOf(runKernel(fixture));

@@ -126,6 +126,8 @@ export interface FlowFieldCoordinatorOptions {
   readonly activeBaseIds: ReadonlySet<string>;
   /** Wird nur beim Initial- und beim koordinatenlosen Full-Resync gelesen. */
   readonly obstacleCellProvider: () => ReadonlyArray<{ gridX: number; gridY: number }>;
+  /** Initial geschlossene Missionsbarrieren; spaetere Aenderungen laufen ueber patchBarrierCells. */
+  readonly barrierCells?: ReadonlyArray<{ gridX: number; gridY: number }>;
   readonly runner?: FlowFieldRunner;
   readonly navTickIntervalMs: number;
   readonly generationId?: number;
@@ -232,6 +234,7 @@ export class FlowFieldCoordinator {
   private pendingPatches: FlowFieldPatch[] = [];
   private pendingCellPatchByIndex = new Map<number, number>();
   private pendingFullResync = false;
+  private pendingBarrierResync = false;
   private accumulatorMs = 0;
   private tickCounter = 0;
   private inFlightJobId = -1;
@@ -274,8 +277,14 @@ export class FlowFieldCoordinator {
       staticKind: options.staticKind,
       rockOccupancy: new Uint8Array(totalCells),
       baseOccupancy: new Uint8Array(totalCells),
+      barrierOccupancy: new Uint8Array(totalCells),
     };
     this.refreshRockOccupancyFromProvider();
+    for (const cell of options.barrierCells ?? []) {
+      if (cell.gridX < 0 || cell.gridX >= this.metrics.cols) continue;
+      if (cell.gridY < 0 || cell.gridY >= this.metrics.rows) continue;
+      this.sources.barrierOccupancy[cell.gridY * this.metrics.cols + cell.gridX] = 1;
+    }
     this.refreshBaseOccupancy();
 
     this.topology = createTopology(totalCells);
@@ -384,6 +393,28 @@ export class FlowFieldCoordinator {
     this.markFieldsRecomputeRequested();
     if (this.pendingFullResync) return;
     this.pendingCellPatchByIndex.set(index, next);
+  }
+
+  /** Gebuendelte Gate-Aenderung; ein Worker-Patch deckt alle Zellen desselben Zustandswechsels ab. */
+  patchBarrierCells(changes: readonly { gridX: number; gridY: number; occupied: boolean }[]): void {
+    const touched: number[] = [];
+    for (const change of changes) {
+      if (change.gridX < 0 || change.gridX >= this.metrics.cols
+        || change.gridY < 0 || change.gridY >= this.metrics.rows) continue;
+      const index = change.gridY * this.metrics.cols + change.gridX;
+      const next = change.occupied ? 1 : 0;
+      if (this.sources.barrierOccupancy[index] === next) continue;
+      this.sources.barrierOccupancy[index] = next;
+      touched.push(index);
+    }
+    if (touched.length === 0) return;
+    patchTopologyCells(
+      this.topology, this.sources, this.metrics, this.costByCode, this.tuning,
+      this.lookups, touched, this.counts,
+    );
+    this.topologyVersion += 1;
+    this.markFieldsRecomputeRequested();
+    this.pendingBarrierResync = true;
   }
 
   /** Koordinatenloses Ereignis: Hindernisbestand neu lesen und komplett neu klassifizieren. */
@@ -625,6 +656,10 @@ export class FlowFieldCoordinator {
       patches.unshift({ t: 'rock-resync', rockOccupancy: this.sources.rockOccupancy.slice() });
       this.pendingFullResync = false;
     }
+    if (this.pendingBarrierResync) {
+      patches.unshift({ t: 'barrier-resync', barrierOccupancy: this.sources.barrierOccupancy.slice() });
+      this.pendingBarrierResync = false;
+    }
     for (const [index, occupied] of this.pendingCellPatchByIndex) {
       patches.push({ t: 'cell', index, occupied: occupied as 0 | 1 });
     }
@@ -740,6 +775,7 @@ export class FlowFieldCoordinator {
     this.pendingPatches = [];
     this.pendingCellPatchByIndex.clear();
     this.pendingFullResync = false;
+    this.pendingBarrierResync = false;
     for (const field of this.fields.values()) {
       field.dispatchedGoals = null;
       field.dispatchedTopologyVersion = -1;
@@ -776,6 +812,7 @@ export class FlowFieldCoordinator {
       // Kopien: Der Spiegel behaelt seine eigenen Raster, die Nachricht gibt ihre weg.
       staticKind: this.sources.staticKind.slice(),
       rockOccupancy: this.sources.rockOccupancy.slice(),
+      barrierOccupancy: this.sources.barrierOccupancy.slice(),
       bases: this.bases,
       activeBaseIds: [...this.activeBaseIds],
       profiles: [...this.clearanceProfiles].map((clearanceCells) => ({

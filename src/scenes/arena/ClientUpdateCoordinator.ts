@@ -149,6 +149,9 @@ export class ClientUpdateCoordinator {
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     this.reconcileClientUtilityOverride();
+    this.ctx.coopDefenseMissionBarrierManager?.syncPresentationState(
+      bridge.getCoopDefenseMissionProgressPresentationState(),
+    );
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.ctx.baseManager?.syncDormantStates();

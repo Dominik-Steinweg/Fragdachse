@@ -10,7 +10,7 @@ import type {
   FlowFieldTuning,
 } from './FlowFieldKernel';
 
-export const FLOW_FIELD_PROTOCOL_VERSION = 1;
+export const FLOW_FIELD_PROTOCOL_VERSION = 2;
 
 export type FlowFieldGoalMode = 'bases' | 'dynamic' | 'dynamic-fallback-bases';
 
@@ -33,6 +33,7 @@ export interface FlowFieldInitMessage {
   readonly tuning: FlowFieldTuning;
   readonly staticKind: Uint8Array;
   readonly rockOccupancy: Uint8Array;
+  readonly barrierOccupancy: Uint8Array;
   readonly bases: readonly FlowFieldBaseDescriptor[];
   readonly activeBaseIds: readonly string[];
   readonly profiles: readonly FlowFieldProfileDescriptor[];
@@ -46,6 +47,7 @@ export interface FlowFieldInitMessage {
 export type FlowFieldPatch =
   | { readonly t: 'cell'; readonly index: number; readonly occupied: 0 | 1 }
   | { readonly t: 'rock-resync'; readonly rockOccupancy: Uint8Array }
+  | { readonly t: 'barrier-resync'; readonly barrierOccupancy: Uint8Array }
   | { readonly t: 'active-bases'; readonly ids: readonly string[] }
   | { readonly t: 'field-add'; readonly field: FlowFieldFieldDescriptor }
   | { readonly t: 'field-remove'; readonly fieldId: string };
@@ -125,11 +127,16 @@ export function collectResultTransferables(result: FlowFieldResultMessage): Arra
 /** Sammelt alle uebertragbaren Puffer einer Anfrage fuer die `transfer`-Liste. */
 export function collectRequestTransferables(request: FlowFieldRequest): ArrayBuffer[] {
   if (request.type === 'init') {
-    return [request.staticKind.buffer as ArrayBuffer, request.rockOccupancy.buffer as ArrayBuffer];
+    return [
+      request.staticKind.buffer as ArrayBuffer,
+      request.rockOccupancy.buffer as ArrayBuffer,
+      request.barrierOccupancy.buffer as ArrayBuffer,
+    ];
   }
   const transfer: ArrayBuffer[] = [];
   for (const patch of request.patches) {
     if (patch.t === 'rock-resync') transfer.push(patch.rockOccupancy.buffer as ArrayBuffer);
+    if (patch.t === 'barrier-resync') transfer.push(patch.barrierOccupancy.buffer as ArrayBuffer);
   }
   for (const field of request.fields) {
     transfer.push(field.goals.buffer as ArrayBuffer);

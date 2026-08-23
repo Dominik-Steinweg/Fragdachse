@@ -19,7 +19,8 @@ const LABEL_RADIUS = 76;
  */
 export type InspectorRadialSelection =
   | { kind: 'tool'; tool: LoadoutToolRef }
-  | { kind: 'dismantle' };
+  | { kind: 'dismantle' }
+  | { kind: 'global-dismantle' };
 
 interface RadialEntry {
   readonly selection: InspectorRadialSelection;
@@ -38,7 +39,7 @@ export function isSameInspectorRadialSelection(
   right: InspectorRadialSelection | null,
 ): boolean {
   if (!left || !right) return left === right;
-  if (left.kind === 'dismantle' || right.kind === 'dismantle') return left.kind === right.kind;
+  if (left.kind !== 'tool' || right.kind !== 'tool') return left.kind === right.kind;
   return left.tool.kind === right.tool.kind && left.tool.id === right.tool.id;
 }
 
@@ -221,11 +222,20 @@ function buildEntries(
     cooldownMs: 0,
     affordable: true,
   });
+  entries.push({
+    selection: { kind: 'global-dismantle' },
+    displayName: t('ui.radial.dismantleAll'),
+    textureKey: null,
+    accentColor: COLORS.GOLD_2,
+    capacityCost: 0,
+    cooldownMs: 1_000,
+    affordable: true,
+  });
   return entries;
 }
 
 function cloneSelection(selection: InspectorRadialSelection): InspectorRadialSelection {
-  return selection.kind === 'dismantle'
-    ? { kind: 'dismantle' }
-    : { kind: 'tool', tool: { ...selection.tool } };
+  if (selection.kind === 'dismantle') return { kind: 'dismantle' };
+  if (selection.kind === 'global-dismantle') return { kind: 'global-dismantle' };
+  return { kind: 'tool', tool: { ...selection.tool } };
 }

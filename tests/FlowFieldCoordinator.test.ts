@@ -173,6 +173,33 @@ describe('FlowFieldCoordinator', () => {
     harness.coordinator.destroy();
   });
 
+  it('batches barrier cells into hard-wall topology and can reopen them', () => {
+    const harness = createHarness({ autoFlush: false });
+    const view = harness.coordinator.registerField('player', { goalMode: 'dynamic' });
+    const service = EnemyFlowFieldService.fromView(view);
+    view.setGoals(harness.goals([{ gridX: 2, gridY: 5 }]));
+    harness.bootstrap();
+    const baseline = harness.coordinator.getDiagnostics().dispatchedJobs;
+
+    harness.coordinator.patchBarrierCells([
+      { gridX: 6, gridY: 4, occupied: true },
+      { gridX: 6, gridY: 5, occupied: true },
+      { gridX: 6, gridY: 6, occupied: true },
+    ]);
+    harness.coordinator.advance(NAV_TICK_MS);
+    expect(harness.coordinator.getDiagnostics().dispatchedJobs).toBe(baseline + 1);
+    harness.runner.flush();
+    harness.coordinator.advance(NAV_TICK_MS);
+    expect(service.isTraversableAt(6, 5)).toBe(false);
+
+    harness.coordinator.patchBarrierCells([{ gridX: 6, gridY: 5, occupied: false }]);
+    harness.coordinator.advance(NAV_TICK_MS);
+    harness.runner.flush();
+    harness.coordinator.advance(NAV_TICK_MS);
+    expect(service.isTraversableAt(6, 5)).toBe(true);
+    harness.coordinator.destroy();
+  });
+
   it('does not dispatch a field whose goals and topology are unchanged', () => {
     const harness = createHarness({ autoFlush: false });
     const view = harness.coordinator.registerField('player', { goalMode: 'dynamic' });

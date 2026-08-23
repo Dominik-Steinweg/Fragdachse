@@ -26,7 +26,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
@@ -154,6 +154,7 @@ const KEY_COOP_SURVIVAL = 'csv'; // global reliable: CoopDefenseSurvivalState | 
 const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEncounterPresentationState | null
 const KEY_COOP_MAP_EVENT_PRESENTATION = 'cme'; // global reliable: CoopDefenseMapEventPresentationState | null
 const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Objective-Presentationseinträge | null
+const KEY_COOP_MISSION_PROGRESS_PRESENTATION = 'cmp'; // global reliable: route/checkpoint snapshot | null
 const MAX_COOP_MAP_EVENT_PRESENTATION_ENTRIES = 64;
 const MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES = 32;
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
@@ -495,6 +496,77 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function sanitizeMissionProgressPresentationState(
+  raw: unknown,
+): CoopDefenseMissionProgressPresentationState | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const state = raw as Partial<CoopDefenseMissionProgressPresentationState>;
+  if (!Number.isSafeInteger(state.roundRevision) || (state.roundRevision ?? 0) <= 0
+    || !Number.isSafeInteger(state.missionRevision) || (state.missionRevision ?? -1) < 0
+    || !Array.isArray(state.activatedCheckpoints) || state.activatedCheckpoints.length > 128
+    || !Array.isArray(state.resolvedDefenses) || state.resolvedDefenses.length > 64
+    || !Array.isArray(state.barriers) || state.barriers.length > 128
+    || !isValidNullableMissionId(state.nextCheckpointId)
+    || !isValidNullableMissionId(state.respawnCheckpointId)
+    || !isValidNullableMissionId(state.routeLockDefenseId)
+    || typeof state.routeComplete !== 'boolean') return null;
+
+  const checkpointIds = new Set<string>();
+  const activatedCheckpoints: CoopDefenseMissionProgressPresentationState['activatedCheckpoints'][number][] = [];
+  for (const rawCheckpoint of state.activatedCheckpoints) {
+    const checkpoint = rawCheckpoint as Partial<CoopDefenseMissionProgressPresentationState['activatedCheckpoints'][number]>;
+    if (!isValidMissionId(checkpoint.checkpointId) || checkpointIds.has(checkpoint.checkpointId)
+      || !isFiniteNumber(checkpoint.activatedAtRoundMs) || checkpoint.activatedAtRoundMs < 0) return null;
+    checkpointIds.add(checkpoint.checkpointId);
+    activatedCheckpoints.push({ checkpointId: checkpoint.checkpointId, activatedAtRoundMs: checkpoint.activatedAtRoundMs });
+  }
+
+  const defenseIds = new Set<string>();
+  const resolvedDefenses: CoopDefenseMissionProgressPresentationState['resolvedDefenses'][number][] = [];
+  for (const rawDefense of state.resolvedDefenses) {
+    const defense = rawDefense as Partial<CoopDefenseMissionProgressPresentationState['resolvedDefenses'][number]>;
+    if (!isValidMissionId(defense.defenseId) || defenseIds.has(defense.defenseId)
+      || (defense.outcome !== 'completed' && defense.outcome !== 'failed')
+      || !isFiniteNumber(defense.resolvedAtRoundMs) || defense.resolvedAtRoundMs < 0) return null;
+    defenseIds.add(defense.defenseId);
+    resolvedDefenses.push({
+      defenseId: defense.defenseId,
+      outcome: defense.outcome,
+      resolvedAtRoundMs: defense.resolvedAtRoundMs,
+    });
+  }
+
+  const barrierIds = new Set<string>();
+  const barriers: CoopDefenseMissionProgressPresentationState['barriers'][number][] = [];
+  for (const rawBarrier of state.barriers) {
+    const barrier = rawBarrier as Partial<CoopDefenseMissionProgressPresentationState['barriers'][number]>;
+    if (!isValidMissionId(barrier.barrierId) || barrierIds.has(barrier.barrierId)
+      || typeof barrier.open !== 'boolean') return null;
+    barrierIds.add(barrier.barrierId);
+    barriers.push({ barrierId: barrier.barrierId, open: barrier.open });
+  }
+
+  return {
+    roundRevision: state.roundRevision as number,
+    missionRevision: state.missionRevision as number,
+    activatedCheckpoints,
+    nextCheckpointId: state.nextCheckpointId ?? null,
+    respawnCheckpointId: state.respawnCheckpointId ?? null,
+    routeLockDefenseId: state.routeLockDefenseId ?? null,
+    resolvedDefenses,
+    barriers,
+    routeComplete: state.routeComplete,
+  };
+}
+
+function isValidMissionId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 96 && value.trim() === value;
+}
+
+function isValidNullableMissionId(value: unknown): value is string | null {
+  return value === null || isValidMissionId(value);
+}
+
 function isArenaLoadStage(value: unknown): value is ArenaLoadStage {
   return value === 'generating' || value === 'building' || value === 'rendering' || value === 'ready';
 }
@@ -528,6 +600,10 @@ export class NetworkBridge {
     raw: unknown;
     value: CoopDefenseSecondaryObjectivePresentationState | null;
   } | null = null;
+  private missionProgressPresentationCache: {
+    raw: unknown;
+    value: CoopDefenseMissionProgressPresentationState | null;
+  } | null = null;
   /**
    * Reliable Map-Event-Snapshots werden vom HUD pro Frame gelesen. Der Transport behält bei
    * unverändertem Zustand dieselbe Raw-Referenz; deshalb wird die Fail-Closed-Sanitization nur
@@ -555,6 +631,13 @@ export class NetworkBridge {
   private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
+  private heldActionHandler: ((
+    playerId: string,
+    operation: 'start' | 'cancel',
+    actionId: string,
+    kind?: HostHeldActionKind,
+    durationMs?: number,
+  ) => boolean) | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private slimeBloomEffectHandler: SlimeBloomEffectHandler | null = null;
   private corpseMarkerHandler: CorpseMarkerHandler | null = null;
@@ -1743,6 +1826,22 @@ export class NetworkBridge {
     return value;
   }
 
+  publishCoopDefenseMissionProgressPresentationState(
+    state: CoopDefenseMissionProgressPresentationState | null,
+  ): void {
+    if (!isHost()) return;
+    setState(KEY_COOP_MISSION_PROGRESS_PRESENTATION, state, true);
+  }
+
+  getCoopDefenseMissionProgressPresentationState(): CoopDefenseMissionProgressPresentationState | null {
+    const raw = getState(KEY_COOP_MISSION_PROGRESS_PRESENTATION) as unknown;
+    const cached = this.missionProgressPresentationCache;
+    if (cached && cached.raw === raw) return cached.value;
+    const value = sanitizeMissionProgressPresentationState(raw);
+    this.missionProgressPresentationCache = { raw, value };
+    return value;
+  }
+
   /** Fail-closed: Ein einziger unplausibler Eintrag verwirft den ganzen Snapshot. */
   private sanitizeCoopDefenseSecondaryObjectivePresentationState(
     raw: unknown,
@@ -2278,6 +2377,44 @@ export class NetworkBridge {
   }
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
+
+  sendHeldActionStart(actionId: string, kind: HostHeldActionKind, durationMs: number): void {
+    if (isHost()) {
+      this.heldActionHandler?.(myPlayer().id, 'start', actionId, kind, durationMs);
+      return;
+    }
+    this.sendHostRpc('hact', { op: 'start', aid: actionId, kind, dur: durationMs });
+  }
+
+  sendHeldActionCancel(actionId: string): void {
+    if (isHost()) {
+      this.heldActionHandler?.(myPlayer().id, 'cancel', actionId);
+      return;
+    }
+    this.sendHostRpc('hact', { op: 'cancel', aid: actionId });
+  }
+
+  registerHeldActionHandler(
+    handler: (
+      playerId: string,
+      operation: 'start' | 'cancel',
+      actionId: string,
+      kind?: HostHeldActionKind,
+      durationMs?: number,
+    ) => boolean,
+  ): void {
+    this.heldActionHandler = handler;
+    this.registerHostRpcHandler('hact', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !isRecord(data)) return false;
+      const { op, aid, kind, dur } = data as { op?: unknown; aid?: unknown; kind?: unknown; dur?: unknown };
+      if ((op !== 'start' && op !== 'cancel')
+        || typeof aid !== 'string' || aid.length === 0 || aid.length > 80 || aid.trim() !== aid) return false;
+      if (op === 'cancel') return this.heldActionHandler?.(caller.id, op, aid) === true;
+      if ((kind !== 'charged_throw' && kind !== 'charged_gate' && kind !== 'global_dismantle')
+        || !isFiniteNumber(dur) || dur <= 0 || dur > 30_000) return false;
+      return this.heldActionHandler?.(caller.id, op, aid, kind, dur) === true;
+    });
+  }
 
   async sendLoadoutUse(
     slot: LoadoutSlot,

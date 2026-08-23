@@ -62,6 +62,7 @@ export class RpcCoordinator {
     this.registerDashHandler();
     this.registerBurrowRpcHandler();
     this.registerDecoyStealthBreakHandler();
+    this.registerHeldActionHandler();
     this.registerLoadoutUseHandler();
     this.registerCaptureTheBeerFxHandler();
     this.registerCoopDefenseCarryDeliveredFxHandler();
@@ -117,13 +118,75 @@ export class RpcCoordinator {
     });
   }
 
+  private registerHeldActionHandler(): void {
+    bridge.registerHeldActionHandler((playerId, operation, actionId, kind) => {
+      if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return false;
+      const system = this.ctx.hostHeldActionSystem;
+      if (!system) return false;
+      if (operation === 'cancel') {
+        system.cancel(playerId, actionId);
+        return true;
+      }
+      if (!kind || !bridge.canPlayerAct(playerId) || bridge.isArenaCountdownActive()
+        || !this.ctx.combatSystem.isAlive(playerId)
+        || this.ctx.burrowSystem?.isBurrowed(playerId)
+        || this.ctx.burrowSystem?.isStunned(playerId)) return false;
+
+      if (kind === 'global_dismantle') {
+        if (bridge.getPlayerCommittedLoadout(playerId)?.coopDefenseClassId !== 'inspector_gadachs') return false;
+        return system.start(playerId, actionId, kind, 1_000, Date.now());
+      }
+      const utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
+      if (!utility || utility.activation.type !== kind) return false;
+      return system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
+    });
+  }
+
   private registerLoadoutUseHandler(): void {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       if (!bridge.canPlayerAct(senderId)) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
+      let authoritativeParams = params;
+      if (slot === 'utility') {
+        const utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(senderId);
+        const activation = utility?.activation;
+        const isTranslocatorRecall = utility?.type === 'translocator'
+          && this.ctx.translocatorSystem?.getActivePuckId(senderId) !== undefined;
+        if (isTranslocatorRecall) this.ctx.hostHeldActionSystem?.clearPlayer(senderId);
+        if (!params?.globalDismantle
+          && activation && (activation.type === 'charged_throw' || activation.type === 'charged_gate')
+          && !isTranslocatorRecall) {
+          const held = this.ctx.hostHeldActionSystem?.consume(
+            senderId,
+            params?.heldActionId,
+            activation.type,
+            activation.fullChargeDuration,
+            Date.now(),
+          );
+          if (!held || (activation.type === 'charged_gate' && held.chargeFraction < 1)) {
+            return { ok: false, reason: 'blocked' };
+          }
+          authoritativeParams = { ...params, utilityChargeFraction: held.chargeFraction };
+        }
+      }
       if (committed?.coopDefenseClassId === 'inspector_gadachs') {
+        if (params?.globalDismantle) {
+          if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle) {
+            return { ok: false, reason: 'invalid' };
+          }
+          const held = this.ctx.hostHeldActionSystem?.consume(
+            senderId,
+            params.heldActionId,
+            'global_dismantle',
+            1_000,
+            Date.now(),
+          );
+          if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
+          return this.lifecycle?.dismantleAllInspectorConstructions(senderId)
+            ?? { ok: false, reason: 'blocked' };
+        }
         // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
         if (params?.dismantle) {
           if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined) {
@@ -138,7 +201,7 @@ export class RpcCoordinator {
           && bridge.getPlayerUtilityOverrideId(senderId) === '') {
           return { ok: false, reason: 'blocked' };
         }
-      } else if (params?.dismantle) {
+      } else if (params?.dismantle || params?.globalDismantle) {
         return { ok: false, reason: 'invalid' };
       }
       if (params?.toolRef) {
@@ -177,7 +240,7 @@ export class RpcCoordinator {
           targetY,
         ) ?? { ok: false, reason: 'blocked' };
       }
-      return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY)
+      return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, authoritativeParams, clientX, clientY)
         ?? { ok: false, reason: 'blocked' };
     });
   }

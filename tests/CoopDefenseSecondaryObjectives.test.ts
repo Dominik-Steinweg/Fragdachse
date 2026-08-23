@@ -165,7 +165,16 @@ describe('Coop defense secondary objectives', () => {
   it('rejects a Hold without its own window and a hold window on any other archetype', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
       id: 'hold-open', type: 'hold', start: { type: 'time', atMs: 100 }, targets: ['friendly-outpost'],
-    }]))).toThrow('needs a holdUntil trigger');
+    }]))).toThrow('needs exactly one of holdUntil or holdDurationMs');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'hold-double',
+      type: 'hold',
+      start: { type: 'time', atMs: 100 },
+      holdUntil: { type: 'time', atMs: 300 },
+      holdDurationMs: 200,
+      targets: ['friendly-outpost'],
+    }]))).toThrow('needs exactly one of holdUntil or holdDurationMs');
 
     expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
       id: 'hold-focus',
@@ -277,6 +286,40 @@ describe('Coop defense secondary objectives', () => {
       },
     ], 'survive', undefined, { surviveDurationSec: 60, surviveRespawnsPerPlayer: 1 })))
       .toThrow('same start encounter');
+  });
+
+  it('normalizes mission checkpoints and requires mandatory defenses to reference matching Holds', () => {
+    const normalized = normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'hold-gate',
+      type: 'hold',
+      start: { type: 'after-checkpoint', checkpointId: 'gate' },
+      holdDurationMs: 2_500.9,
+      targets: ['friendly-outpost'],
+    }], 'survive', undefined, {
+      bases: TEST_BASES.slice(0, 2),
+      surviveDurationSec: 60,
+      surviveRespawnsPerPlayer: 1,
+      missionProgress: {
+        checkpoints: [{ id: ' gate ', gridX: 3, gridY: 4, setRespawn: true }],
+        mandatoryDefenses: [{ id: ' defend ', checkpointId: 'gate', objectiveId: 'hold-gate' }],
+        barriers: [{
+          id: ' door ',
+          cells: [{ gridX: 5, gridY: 4 }],
+          openOn: { type: 'after-defense', defenseId: 'defend' },
+        }],
+      },
+    }));
+
+    expect(normalized.secondaryObjectives?.[0]).toMatchObject({ holdDurationMs: 2_500 });
+    expect(normalized.missionProgress).toEqual({
+      checkpoints: [{ id: 'gate', gridX: 3, gridY: 4, radiusCells: 1, setRespawn: true }],
+      mandatoryDefenses: [{ id: 'defend', checkpointId: 'gate', objectiveId: 'hold-gate' }],
+      barriers: [{
+        id: 'door',
+        cells: [{ gridX: 5, gridY: 4 }],
+        openOn: { type: 'after-defense', defenseId: 'defend' },
+      }],
+    });
   });
 
   it('validates deterministic after-encounter conflicts without rejecting sequential handoffs', () => {
@@ -532,6 +575,32 @@ describe('Coop defense secondary objectives', () => {
     expect(completedHolds).toEqual(['hold-supply']);
   });
 
+  it('measures holdDurationMs from actual activation in host round time', () => {
+    let checkpointReached = false;
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'hold-route',
+      type: 'hold',
+      start: { type: 'after-checkpoint', checkpointId: 'entry' },
+      targets: ['outpost'],
+      targetGoal: 1,
+      holdDurationMs: 1_000,
+    })], {
+      isExternalTriggerSatisfied: (trigger) => (
+        trigger.type === 'after-checkpoint' && trigger.checkpointId === 'entry' && checkpointReached
+      ),
+    });
+
+    system.hostUpdate(5_000, false);
+    expect(system.getObjectiveState('hold-route')).toBe('dormant');
+    checkpointReached = true;
+    system.hostUpdate(250, false);
+    expect(system.getObjectiveState('hold-route')).toBe('active');
+    system.hostUpdate(999, false);
+    expect(system.getObjectiveState('hold-route')).toBe('active');
+    system.hostUpdate(1, false);
+    expect(system.getObjectiveState('hold-route')).toBe('completed');
+  });
+
   it('supports a minimum survivor count and fails only when it becomes unreachable', () => {
     const completedHolds: string[] = [];
     const failedHolds: string[] = [];
@@ -642,5 +711,41 @@ describe('Coop defense secondary objectives', () => {
       ...snapshot[0], objectiveId: `objective-${index}`, focused: index === 0,
     })));
     expect(bridge.getCoopDefenseSecondaryObjectivePresentationState()).toBeNull();
+  });
+
+  it('replicates a sanitized mission snapshot to a late reader and clears it on teardown', () => {
+    const globalState = new Map<string, unknown>();
+    const room = {
+      isHost: () => true,
+      setGlobal: (key: string, value: unknown) => globalState.set(key, value),
+      getGlobal: (key: string) => globalState.get(key),
+      destroy: () => undefined,
+    };
+    setActiveSession({ room: room as never, transport: {} as never, roomCode: 'test' });
+
+    const hostBridge = new NetworkBridge();
+    const snapshot = {
+      roundRevision: 42,
+      missionRevision: 3,
+      activatedCheckpoints: [{ checkpointId: 'entry', activatedAtRoundMs: 1_250 }],
+      nextCheckpointId: 'exit',
+      respawnCheckpointId: 'entry',
+      routeLockDefenseId: null,
+      resolvedDefenses: [{ defenseId: 'entry-hold', outcome: 'failed' as const, resolvedAtRoundMs: 4_500 }],
+      barriers: [{ barrierId: 'entry-gate', open: true }],
+      routeComplete: false,
+    };
+    hostBridge.publishCoopDefenseMissionProgressPresentationState(snapshot);
+
+    const lateBridge = new NetworkBridge();
+    expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toEqual(snapshot);
+
+    globalState.set('cmp', { ...snapshot, activatedCheckpoints: [{ checkpointId: 'entry', activatedAtRoundMs: -1 }] });
+    expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+    globalState.set('cmp', { ...snapshot, nextCheckpointId: ` ${snapshot.nextCheckpointId}` });
+    expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+
+    hostBridge.publishCoopDefenseMissionProgressPresentationState(null);
+    expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
   });
 });

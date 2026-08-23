@@ -41,6 +41,7 @@ export class TunnelSystem {
   private readonly activeTransitByPlayer = new Map<string, TunnelTransitState>();
   private readonly reentryBlockedUntil = new Map<string, TunnelReentryGate>();
   private onTunnelEnter: TunnelEnterCallback | null = null;
+  private onPositionReset: TunnelEnterCallback | null = null;
 
   constructor(
     private readonly playerManager: PlayerManager,
@@ -52,6 +53,10 @@ export class TunnelSystem {
 
   setTunnelEnterCallback(cb: TunnelEnterCallback | null): void {
     this.onTunnelEnter = cb;
+  }
+
+  setPositionResetCallback(cb: TunnelEnterCallback | null): void {
+    this.onPositionReset = cb;
   }
 
   tryPlaceTunnel(
@@ -72,6 +77,12 @@ export class TunnelSystem {
     if (!endCell) return false;
     if (!this.placementSystem.canPlaceSingleCell(endCell.gridX, endCell.gridY)) return false;
     if (startGridX === endCell.gridX && startGridY === endCell.gridY) return false;
+    if (this.placementSystem.doesGridSegmentCrossClosedBarrier(
+      startGridX,
+      startGridY,
+      endCell.gridX,
+      endCell.gridY,
+    )) return false;
 
     const entranceA = this.toEndpoint(startGridX, startGridY);
     const entranceB = this.toEndpoint(endCell.gridX, endCell.gridY);
@@ -144,6 +155,7 @@ export class TunnelSystem {
       if (elapsed >= transit.durationMs) {
         player.sprite.setPosition(transit.destination.x, transit.destination.y);
         player.body.reset(transit.destination.x, transit.destination.y);
+        this.onPositionReset?.(playerId, transit.destination.x, transit.destination.y);
         this.hostPhysics.clearForcedMovement(playerId);
         this.burrowSystem.completeTunnelTransit(playerId);
         continue;
@@ -172,6 +184,13 @@ export class TunnelSystem {
         if (!source) continue;
 
         const destination = source === 'A' ? tunnel.entranceB : tunnel.entranceA;
+        const sourceEndpoint = source === 'A' ? tunnel.entranceA : tunnel.entranceB;
+        if (this.placementSystem.doesGridSegmentCrossClosedBarrier(
+          sourceEndpoint.gridX,
+          sourceEndpoint.gridY,
+          destination.gridX,
+          destination.gridY,
+        )) continue;
         const dx = destination.x - player.sprite.x;
         const dy = destination.y - player.sprite.y;
         const distance = Math.hypot(dx, dy);

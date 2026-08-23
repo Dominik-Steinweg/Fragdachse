@@ -46,6 +46,7 @@ import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
 import { CoopDefenseEncounterTelegraphRenderer } from '../../effects/CoopDefenseEncounterTelegraphRenderer';
 import { CoopDefenseObjectiveRepairDroneRenderer } from '../../effects/CoopDefenseObjectiveRepairDroneRenderer';
 import { CoopDefenseSecondaryObjectiveMarkerRenderer } from '../../effects/CoopDefenseSecondaryObjectiveMarkerRenderer';
+import { CoopDefenseMissionProgressRenderer } from '../../effects/CoopDefenseMissionProgressRenderer';
 import { CoopDefenseCarryZoneRenderer } from '../../effects/CoopDefenseCarryZoneRenderer';
 import { Ak47StrategicTargetRenderer } from '../../effects/Ak47StrategicTargetRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
@@ -107,6 +108,7 @@ export interface RendererBundle {
   airstrike:           AirstrikeRenderer;
   encounterTelegraph:  CoopDefenseEncounterTelegraphRenderer;
   secondaryObjectiveMarkers: CoopDefenseSecondaryObjectiveMarkerRenderer;
+  missionProgress: CoopDefenseMissionProgressRenderer;
   carryZones:          CoopDefenseCarryZoneRenderer;
   ak47StrategicTargets: Ak47StrategicTargetRenderer;
   objectiveRepairDrones: CoopDefenseObjectiveRepairDroneRenderer;
@@ -257,6 +259,7 @@ export function createRendererBundle(
 
   const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
   secondaryObjectiveMarkers.build();
+  const missionProgress = new CoopDefenseMissionProgressRenderer(scene);
   const carryZones = new CoopDefenseCarryZoneRenderer(scene);
   const ak47StrategicTargets = new Ak47StrategicTargetRenderer(scene);
   ak47StrategicTargets.build();
@@ -300,7 +303,7 @@ export function createRendererBundle(
   return {
     bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
+    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     gpuVfx,
     entityBurnGpu,

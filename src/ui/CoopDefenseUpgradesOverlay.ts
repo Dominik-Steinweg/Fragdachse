@@ -1509,6 +1509,10 @@ export class CoopDefenseUpgradesOverlay {
     const graphics = this.scene.add.graphics();
     this.drawItemLanes(graphics, lanes, visuals);
     this.drawConnections(graphics, placed, placedById, visuals);
+    const existingTreeBackground = this.scene.textures.get(TREE_BACKGROUND_TEX_KEY);
+    if (existingTreeBackground instanceof Phaser.Textures.CanvasTexture) {
+      existingTreeBackground.clear();
+    }
     graphics.generateTexture(TREE_BACKGROUND_TEX_KEY, GAME_WIDTH, GAME_HEIGHT);
     graphics.destroy();
 

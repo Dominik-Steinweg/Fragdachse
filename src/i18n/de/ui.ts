@@ -124,6 +124,7 @@ export const deUi = {
   "ui.radial.cooldown": "CD {seconds}s",
   "ui.radial.closeKey": "E",
   "ui.radial.dismantle": "Rückbau",
+  "ui.radial.dismantleAll": "Alles rückbauen",
   "ui.hud.powerUp": "Power-Up: {name}",
   "ui.hud.constructionCapacity": "Baukapazität",
   "ui.hud.capacityCost": "{cost} BK",

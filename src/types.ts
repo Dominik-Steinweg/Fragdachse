@@ -139,6 +139,30 @@ export interface CoopDefenseSecondaryObjectivePresentationEntry {
 /** Alle nicht-dormanten Objectives, in stabiler authored Reihenfolge. */
 export type CoopDefenseSecondaryObjectivePresentationState = readonly CoopDefenseSecondaryObjectivePresentationEntry[];
 
+export type CoopDefenseMissionDefenseOutcome = 'completed' | 'failed';
+
+export interface CoopDefenseMissionProgressPresentationState {
+  roundRevision: number;
+  missionRevision: number;
+  activatedCheckpoints: readonly {
+    checkpointId: string;
+    activatedAtRoundMs: number;
+  }[];
+  nextCheckpointId: string | null;
+  respawnCheckpointId: string | null;
+  routeLockDefenseId: string | null;
+  resolvedDefenses: readonly {
+    defenseId: string;
+    outcome: CoopDefenseMissionDefenseOutcome;
+    resolvedAtRoundMs: number;
+  }[];
+  barriers: readonly {
+    barrierId: string;
+    open: boolean;
+  }[];
+  routeComplete: boolean;
+}
+
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
   dx: number;  // -1 | 0 | 1
@@ -833,7 +857,13 @@ export interface LoadoutUseParams {
   toolRef?: LoadoutToolRef;
   /** Rueckbau eines eigenen Konstrukts; belegt keinen Ausruestungsplatz. */
   dismantle?: boolean;
+  /** Finaler Commit einer zuvor auf dem Host gestarteten Hold-Aktion. */
+  heldActionId?: string;
+  /** Inspector: gebuendelter Rueckbau aller eigenen Konstruktionen. */
+  globalDismantle?: boolean;
 }
+
+export type HostHeldActionKind = 'charged_throw' | 'charged_gate' | 'global_dismantle';
 
 export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity';
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';

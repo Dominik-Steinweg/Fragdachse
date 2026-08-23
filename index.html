@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" type="image/png" href="/assets/sprites/32x32dachs.png" />
+  <link rel="icon" type="image/png" href="./assets/sprites/32x32dachs.png" />
   <title>FRAGDACHSE</title>
   <!--
     Die UI-Schriften werden vorgeladen, weil Phaser-Text seine Glyphen beim Anlegen einmalig
     rastert: was beim ersten `setText` nicht da ist, bleibt im Fallback stehen. Details und die
     Nachrasterung: src/ui/uiFonts.ts.
   -->
-  <link rel="preload" href="/assets/fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/assets/fonts/chakra-petch-500.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/assets/fonts/jetbrains-mono-variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/chakra-petch-500.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/jetbrains-mono-variable.woff2" as="font" type="font/woff2" crossorigin />
   <style>
     /*
       Beide Familien stehen unter SIL OFL 1.1; die Lizenztexte liegen neben den Dateien in
@@ -24,14 +24,14 @@
       font-style: normal;
       font-weight: 500;
       font-display: block;
-      src: url('/assets/fonts/chakra-petch-500.woff2') format('woff2');
+      src: url('./assets/fonts/chakra-petch-500.woff2') format('woff2');
     }
     @font-face {
       font-family: 'Chakra Petch';
       font-style: normal;
       font-weight: 700;
       font-display: block;
-      src: url('/assets/fonts/chakra-petch-700.woff2') format('woff2');
+      src: url('./assets/fonts/chakra-petch-700.woff2') format('woff2');
     }
     /* Variabler Schnitt: eine Datei bedient die gesamte Gewichtsachse. */
     @font-face {
@@ -39,7 +39,7 @@
       font-style: normal;
       font-weight: 100 800;
       font-display: block;
-      src: url('/assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
+      src: url('./assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
     }
 
     * { margin: 0; padding: 0; }

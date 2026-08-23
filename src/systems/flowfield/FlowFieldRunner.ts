@@ -110,12 +110,15 @@ function detachRequest(request: FlowFieldRequest): FlowFieldRequest {
       ...request,
       staticKind: copyOf(request.staticKind),
       rockOccupancy: copyOf(request.rockOccupancy),
+      barrierOccupancy: copyOf(request.barrierOccupancy),
     };
   }
   return {
     ...request,
     patches: request.patches.map((patch) => (
-      patch.t === 'rock-resync' ? { ...patch, rockOccupancy: copyOf(patch.rockOccupancy) } : patch
+      patch.t === 'rock-resync' ? { ...patch, rockOccupancy: copyOf(patch.rockOccupancy) }
+        : patch.t === 'barrier-resync' ? { ...patch, barrierOccupancy: copyOf(patch.barrierOccupancy) }
+          : patch
     )),
     fields: request.fields.map((field) => ({
       ...field,

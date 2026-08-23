@@ -238,6 +238,7 @@ export interface FlowFieldTopologySources {
   readonly staticKind: Uint8Array;
   readonly rockOccupancy: Uint8Array;
   readonly baseOccupancy: Uint8Array;
+  readonly barrierOccupancy: Uint8Array;
 }
 
 export interface FlowFieldTopologyCounts {
@@ -256,9 +257,11 @@ export function createTopology(totalCells: number): FlowFieldTopology {
   };
 }
 
-/** Prioritaet: Basis vor Fels vor allen statischen Quellen. */
+/** Prioritaet: Basis vor Barriere vor Fels vor allen statischen Quellen. */
 export function resolveCellCode(sources: FlowFieldTopologySources, index: number): number {
   if (sources.baseOccupancy[index] === 1) return CELL_CODE.base;
+  // Kein eigener Cell-Code: aktive Tore teilen die vorhandene nicht-destruktible Hard-Wall-Semantik.
+  if (sources.barrierOccupancy[index] === 1) return CELL_CODE.trunk;
   if (sources.rockOccupancy[index] === 1) return CELL_CODE.rock;
   return sources.staticKind[index];
 }

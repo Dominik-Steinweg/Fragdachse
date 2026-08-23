@@ -20,6 +20,7 @@ const BUCKET_SIZE = 128;
  */
 const GROUP_ROCK = 1;
 const GROUP_BASE = 2;
+const GROUP_BARRIER = 3;
 
 export interface LightOccluderSources {
   /** Paralleles Array zu `layout.rocks` – `null`/inaktiv bedeutet zerstört. */
@@ -28,6 +29,7 @@ export interface LightOccluderSources {
   readonly trunks: () => readonly Phaser.GameObjects.Arc[] | null;
   /** Zell-Rechtecke lebender Basen; zerstörte Basen liefern bereits nichts mehr. */
   readonly baseCells: () => readonly Phaser.GameObjects.Rectangle[] | null;
+  readonly barrierCells?: () => readonly Phaser.GameObjects.Rectangle[] | null;
   /**
    * Zähler, der sich ändert, sobald eine Basis zerstört wird. Felsen und Turrets melden
    * sich über `markDirty()` am gemeinsamen Trichter
@@ -188,10 +190,12 @@ export class LightOccluderIndex {
     const rocks = this.sources.rocks() ?? [];
     const trunks = this.sources.trunks() ?? [];
     const baseCells = this.sources.baseCells() ?? [];
+    const barrierCells = this.sources.barrierCells?.() ?? [];
 
     let rectCount = 0;
     for (const rock of rocks) if (rock?.active) rectCount += 1;
     for (const cell of baseCells) if (cell.active) rectCount += 1;
+    for (const cell of barrierCells) if (cell.active) rectCount += 1;
     let circleCount = 0;
     for (const trunk of trunks) if (trunk.active) circleCount += 1;
 
@@ -212,6 +216,12 @@ export class LightOccluderIndex {
     for (const cell of baseCells) {
       if (!cell.active) continue;
       this.rectGroup[rectIndex] = GROUP_BASE;
+      this.writeRect(rectIndex, cell);
+      rectIndex += 1;
+    }
+    for (const cell of barrierCells) {
+      if (!cell.active) continue;
+      this.rectGroup[rectIndex] = GROUP_BARRIER;
       this.writeRect(rectIndex, cell);
       rectIndex += 1;
     }

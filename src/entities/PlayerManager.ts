@@ -86,6 +86,8 @@ interface SpawnContextSnapshot {
   readonly enemyThreats?: readonly SpawnEnemyThreatSnapshot[];
   /** Coop-Defense: IDs der noch lebenden Basen (für Spawn-Fokus und Fallback). */
   readonly livingCoopBaseIds?: ReadonlySet<string>;
+  /** Bevorzugter Missionsfokus; Sicherheit und globale Fallbacks bleiben unveraendert. */
+  readonly preferredSpawnFocus?: { readonly x: number; readonly y: number };
   readonly isRelevantOpponent?: (playerId: string) => boolean;
   readonly hasLineOfSight?: (sx: number, sy: number, ex: number, ey: number) => boolean;
 }
@@ -100,6 +102,7 @@ interface SpawnCandidate {
 interface SpawnEvaluation {
   candidate: SpawnCandidate;
   coopBaseDistance: number;
+  preferredFocusDistance: number;
   nearestOpponentDistance: number;
   nearestProjectileDistance: number;
   edgeDistance: number;
@@ -262,10 +265,15 @@ export class PlayerManager implements OwnerVisualSource {
       coopDefenseBase,
     ));
 
-    const focusedEvaluations = coopDefenseBase
-      ? evaluations.filter((evaluation) => evaluation.coopBaseDistance <= COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX)
+    const hasMissionFocus = spawnContext.preferredSpawnFocus !== undefined;
+    const focusedEvaluations = hasMissionFocus
+      ? evaluations.filter((evaluation) => evaluation.preferredFocusDistance <= COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX)
+      : coopDefenseBase
+        ? evaluations.filter((evaluation) => evaluation.coopBaseDistance <= COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX)
       : evaluations;
-    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations);
+    // Ein Missionsfokus ist nur eine Praeferenz. Sind alle nahen Kandidaten hart gefaehrdet,
+    // faellt die Auswahl auf die vollstaendige sichere Bewertung zurueck.
+    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations, !hasMissionFocus);
     if (focusedChoice) return focusedChoice;
 
     const globalChoice = focusedEvaluations === evaluations
@@ -276,6 +284,7 @@ export class PlayerManager implements OwnerVisualSource {
 
   private pickSpawnWithFallbacks(
     evaluations: readonly SpawnEvaluation[],
+    allowDangerousFallbacks = true,
   ): { x: number; y: number } | null {
     if (evaluations.length === 0) return null;
     const relaxedThresholds = this.buildRelaxedOpponentThresholds();
@@ -310,6 +319,7 @@ export class PlayerManager implements OwnerVisualSource {
       && this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
     )));
     if (safeChoice) return safeChoice;
+    if (!allowDangerousFallbacks) return null;
 
     const minimumChoice = this.pickCandidate(evaluations.filter((evaluation) => (
       this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
@@ -550,6 +560,19 @@ export class PlayerManager implements OwnerVisualSource {
       score -= Math.max(0, coopBaseDistance - COOP_BASE_NEAR_SPAWN_RANGE_PX) * 0.8;
     }
 
+    const preferredFocusDistance = spawnContext.preferredSpawnFocus
+      ? Phaser.Math.Distance.Between(
+        candidate.worldX,
+        candidate.worldY,
+        spawnContext.preferredSpawnFocus.x,
+        spawnContext.preferredSpawnFocus.y,
+      )
+      : Number.POSITIVE_INFINITY;
+    if (Number.isFinite(preferredFocusDistance)) {
+      score += Math.max(0, COOP_BASE_NEAR_SPAWN_RANGE_PX - preferredFocusDistance) * COOP_BASE_NEAR_SPAWN_WEIGHT;
+      score -= Math.max(0, preferredFocusDistance - COOP_BASE_NEAR_SPAWN_RANGE_PX) * 0.8;
+    }
+
     if (edgeDistance < EDGE_SOFT_DISTANCE_PX) {
       score -= (EDGE_SOFT_DISTANCE_PX - edgeDistance) * 2.2;
     }
@@ -565,6 +588,7 @@ export class PlayerManager implements OwnerVisualSource {
     return {
       candidate,
       coopBaseDistance,
+      preferredFocusDistance,
       nearestOpponentDistance,
       nearestProjectileDistance: projectileDanger.nearestDistance,
       edgeDistance,

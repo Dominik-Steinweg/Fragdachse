@@ -163,6 +163,8 @@ export type CoopDefenseMapEncounterStart =
   | { readonly type: 'time'; readonly atMs: number }
   | { readonly type: 'after-previous' }
   | { readonly type: 'after-encounter'; readonly encounterId: string }
+  | { readonly type: 'after-checkpoint'; readonly checkpointId: string }
+  | { readonly type: 'after-defense'; readonly defenseId: string }
   | { readonly type: 'after-event'; readonly eventId: string }
   | { readonly type: 'boss-phase'; readonly phase: number }
   | { readonly type: 'base-destroyed'; readonly baseId: string };
@@ -272,6 +274,8 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
    * keinen Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  /** Nur fuer `hold`: relative Dauer ab tatsaechlicher Aktivierung in Host-Rundenzeit. */
+  readonly holdDurationMs?: number;
   /** Nur fuer `hold`: Mindestanzahl der Zielbasen, die das Haltefenster ueberleben muessen. */
   readonly requiredSurvivors?: number;
   /** Base targets for Destroy/Hold. Carry uses its authored `carry` zones instead. */
@@ -292,6 +296,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  readonly holdDurationMs?: number;
   readonly requiredSurvivors?: number;
   readonly targets: readonly string[];
   readonly targetGoal: number;
@@ -303,6 +308,49 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
 // der bestehenden Encounter- und Spawndefinitionen aufzubrechen.
 export type CoopDefenseSecondaryObjectiveConfig = CoopDefenseMapSecondaryObjectiveConfig;
 export type ResolvedCoopDefenseSecondaryObjectiveConfig = ResolvedCoopDefenseMapSecondaryObjectiveConfig;
+
+export interface CoopDefenseMapMissionCheckpointConfig {
+  readonly id: string;
+  readonly gridX: number;
+  readonly gridY: number;
+  /** Radius in Rasterzellen; Standard 1. */
+  readonly radiusCells?: number;
+  readonly setRespawn?: boolean;
+}
+
+export interface ResolvedCoopDefenseMapMissionCheckpointConfig extends CoopDefenseMapMissionCheckpointConfig {
+  readonly radiusCells: number;
+  readonly setRespawn: boolean;
+}
+
+export type CoopDefenseMapMissionBarrierOpenTrigger =
+  | { readonly type: 'after-checkpoint'; readonly checkpointId: string }
+  | { readonly type: 'after-defense'; readonly defenseId: string }
+  | { readonly type: 'after-encounter'; readonly encounterId: string };
+
+export interface CoopDefenseMapMissionBarrierConfig {
+  readonly id: string;
+  readonly cells: readonly { readonly gridX: number; readonly gridY: number }[];
+  readonly openOn: CoopDefenseMapMissionBarrierOpenTrigger;
+}
+
+export interface CoopDefenseMapMandatoryDefenseConfig {
+  readonly id: string;
+  readonly checkpointId: string;
+  readonly objectiveId: string;
+}
+
+export interface CoopDefenseMapMissionProgressConfig {
+  readonly checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[];
+  readonly barriers?: readonly CoopDefenseMapMissionBarrierConfig[];
+  readonly mandatoryDefenses?: readonly CoopDefenseMapMandatoryDefenseConfig[];
+}
+
+export interface ResolvedCoopDefenseMapMissionProgressConfig {
+  readonly checkpoints: readonly ResolvedCoopDefenseMapMissionCheckpointConfig[];
+  readonly barriers: readonly CoopDefenseMapMissionBarrierConfig[];
+  readonly mandatoryDefenses: readonly CoopDefenseMapMandatoryDefenseConfig[];
+}
 
 export interface CoopDefenseMapBossConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
@@ -581,6 +629,8 @@ export interface CoopDefenseMapConfig {
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   /** Optionale, host-autoritativ aktivierte Nebenmissionen ohne Einfluss auf den Mapsieg. */
   readonly secondaryObjectives?: readonly CoopDefenseMapSecondaryObjectiveConfig[];
+  /** Optionaler, geordneter Vorstoss-Pfad. Verteidigung selbst bleibt ein Hold-Secondary-Objective. */
+  readonly missionProgress?: ResolvedCoopDefenseMapMissionProgressConfig | CoopDefenseMapMissionProgressConfig;
   readonly boss?: CoopDefenseMapBossConfig;
   /** Jede Map muss ihr Ziel explizit konfigurieren. */
   readonly objective: CoopDefenseMapObjective;
@@ -612,6 +662,13 @@ export interface CoopDefenseCampaignAuditEntry {
   readonly rockField: boolean;
   readonly train: boolean;
   readonly hazards: readonly string[];
+}
+
+/** Registry maps are normalized at load; systems use this narrow resolved view. */
+export function resolveCoopDefenseMapMissionProgress(
+  mapConfig: CoopDefenseMapConfig,
+): ResolvedCoopDefenseMapMissionProgressConfig | undefined {
+  return mapConfig.missionProgress as ResolvedCoopDefenseMapMissionProgressConfig | undefined;
 }
 
 interface CoopDefenseMapRegistryFile {
@@ -902,6 +959,15 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     arenaWidthCells,
     arenaHeightCells,
   });
+  const missionProgress = normalizeMissionProgressConfig(
+    mapConfig.mapId,
+    mapConfig.missionProgress,
+    arenaWidthCells,
+    arenaHeightCells,
+    encounters ?? [],
+    secondaryObjectives ?? [],
+  );
+  validateMissionTriggerReferences(mapConfig.mapId, encounters ?? [], secondaryObjectives ?? [], missionProgress);
   return {
     mapId: mapConfig.mapId,
     arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
@@ -930,6 +996,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
     encounters,
     secondaryObjectives,
+    missionProgress,
     boss,
     objective,
     surviveRespawnsPerPlayer: normalizeSurviveRespawnsPerPlayer(
@@ -1127,8 +1194,12 @@ function normalizeSecondaryObjectiveConfigs(
     // Hold ist binaer und besitzt keinen Hintergrundzustand: mindestens ein authored Ziel und ein
     // Haltefenster statt eines Fokusfensters. Ohne requiredSurvivors muessen alle Targets leben.
     if (objective.type === 'hold') {
-      if (objective.holdUntil === undefined) {
-        throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs a holdUntil trigger`);
+      const hasHoldUntil = objective.holdUntil !== undefined;
+      const hasHoldDuration = objective.holdDurationMs !== undefined;
+      if (hasHoldUntil === hasHoldDuration) {
+        throw new Error(
+          `[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs exactly one of holdUntil or holdDurationMs`,
+        );
       }
       if (objective.focusUntil !== undefined) {
         throw new Error(`[coopDefenseMaps] Hold secondary objective ${mapId}:${id} must not declare focusUntil`);
@@ -1144,6 +1215,9 @@ function normalizeSecondaryObjectiveConfigs(
     } else {
       if (objective.holdUntil !== undefined) {
         throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdUntil`);
+      }
+      if (objective.holdDurationMs !== undefined) {
+        throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdDurationMs`);
       }
       if (objective.requiredSurvivors !== undefined) {
         throw new Error(
@@ -1191,6 +1265,9 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.holdUntil === undefined
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
+      ...(objective.holdDurationMs === undefined
+        ? {}
+        : { holdDurationMs: normalizePositiveMilliseconds(mapId, id, objective.holdDurationMs, 'holdDurationMs') }),
       ...(objective.requiredSurvivors === undefined
         ? {}
         : { requiredSurvivors: objective.requiredSurvivors }),
@@ -1383,6 +1460,20 @@ function normalizeSecondaryObjectiveTrigger(
         );
       }
       return { type: 'after-encounter', encounterId };
+    }
+    case 'after-checkpoint': {
+      const checkpointId = normalizeRequiredId(
+        trigger.checkpointId,
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a checkpoint id for ${fieldName}`,
+      );
+      return { type: 'after-checkpoint', checkpointId };
+    }
+    case 'after-defense': {
+      const defenseId = normalizeRequiredId(
+        trigger.defenseId,
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a defense id for ${fieldName}`,
+      );
+      return { type: 'after-defense', defenseId };
     }
     default:
       throw new Error(
@@ -1720,6 +1811,22 @@ function normalizeEncounterStart(
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an encounter id`);
       }
       return { type: 'after-encounter', encounterId: start.encounterId.trim() };
+    case 'after-checkpoint':
+      return {
+        type: 'after-checkpoint',
+        checkpointId: normalizeRequiredId(
+          start.checkpointId,
+          `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a checkpoint id`,
+        ),
+      };
+    case 'after-defense':
+      return {
+        type: 'after-defense',
+        defenseId: normalizeRequiredId(
+          start.defenseId,
+          `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a defense id`,
+        ),
+      };
     case 'after-event':
       if (typeof start.eventId !== 'string' || start.eventId.trim().length === 0) {
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an event id`);
@@ -2439,6 +2546,181 @@ function normalizeDynamicTimeOfDayConfig(
     minutesPerSecond,
     transitions: transitions.length > 0 ? transitions : undefined,
   };
+}
+
+function normalizeMissionProgressConfig(
+  mapId: string,
+  config: CoopDefenseMapMissionProgressConfig | ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+  encounters: readonly CoopDefenseMapEncounterConfig[],
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+): ResolvedCoopDefenseMapMissionProgressConfig | undefined {
+  if (config === undefined) return undefined;
+  if (!Array.isArray(config.checkpoints) || config.checkpoints.length === 0) {
+    throw new Error(`[coopDefenseMaps] Mission progress ${mapId} needs at least one checkpoint`);
+  }
+
+  const checkpointIds = new Set<string>();
+  const checkpoints = config.checkpoints.map((checkpoint) => {
+    const id = normalizeRequiredId(
+      checkpoint.id,
+      `[coopDefenseMaps] Mission progress ${mapId} checkpoint needs a non-empty id`,
+    );
+    if (checkpointIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate mission checkpoint id on map ${mapId}: ${id}`);
+    }
+    checkpointIds.add(id);
+    if (!Number.isInteger(checkpoint.gridX) || !Number.isInteger(checkpoint.gridY)
+      || checkpoint.gridX < 0 || checkpoint.gridX >= arenaWidthCells
+      || checkpoint.gridY < 0 || checkpoint.gridY >= arenaHeightCells) {
+      throw new Error(`[coopDefenseMaps] Mission checkpoint ${mapId}:${id} is outside the arena`);
+    }
+    const radiusCells = checkpoint.radiusCells ?? 1;
+    if (typeof radiusCells !== 'number' || !Number.isFinite(radiusCells) || radiusCells <= 0) {
+      throw new Error(`[coopDefenseMaps] Mission checkpoint ${mapId}:${id} needs a positive radiusCells`);
+    }
+    return {
+      id,
+      gridX: checkpoint.gridX,
+      gridY: checkpoint.gridY,
+      radiusCells,
+      setRespawn: checkpoint.setRespawn === true,
+    };
+  });
+
+  const defenseIds = new Set<string>();
+  const mandatoryDefenses = (config.mandatoryDefenses ?? []).map((defense) => {
+    const id = normalizeRequiredId(
+      defense.id,
+      `[coopDefenseMaps] Mandatory defense on map ${mapId} needs a non-empty id`,
+    );
+    if (defenseIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate mandatory defense id on map ${mapId}: ${id}`);
+    }
+    defenseIds.add(id);
+    const checkpointId = normalizeRequiredId(
+      defense.checkpointId,
+      `[coopDefenseMaps] Mandatory defense ${mapId}:${id} needs a checkpointId`,
+    );
+    const objectiveId = normalizeRequiredId(
+      defense.objectiveId,
+      `[coopDefenseMaps] Mandatory defense ${mapId}:${id} needs an objectiveId`,
+    );
+    if (!checkpointIds.has(checkpointId)) {
+      throw new Error(`[coopDefenseMaps] Mandatory defense ${mapId}:${id} references unknown checkpoint: ${checkpointId}`);
+    }
+    const objective = objectives.find((candidate) => candidate.id === objectiveId);
+    if (!objective || objective.type !== 'hold') {
+      throw new Error(`[coopDefenseMaps] Mandatory defense ${mapId}:${id} must reference a hold objective: ${objectiveId}`);
+    }
+    if (objective.start.type !== 'after-checkpoint' || objective.start.checkpointId !== checkpointId) {
+      throw new Error(
+        `[coopDefenseMaps] Mandatory defense ${mapId}:${id} hold ${objectiveId} must start after checkpoint ${checkpointId}`,
+      );
+    }
+    return { id, checkpointId, objectiveId };
+  });
+
+  const barrierIds = new Set<string>();
+  const reservedCells = new Set<string>();
+  const barriers = (config.barriers ?? []).map((barrier) => {
+    const id = normalizeRequiredId(
+      barrier.id,
+      `[coopDefenseMaps] Mission barrier on map ${mapId} needs a non-empty id`,
+    );
+    if (barrierIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate mission barrier id on map ${mapId}: ${id}`);
+    }
+    barrierIds.add(id);
+    if (!Array.isArray(barrier.cells) || barrier.cells.length === 0) {
+      throw new Error(`[coopDefenseMaps] Mission barrier ${mapId}:${id} needs at least one cell`);
+    }
+    const cells = barrier.cells.map((cell) => {
+      if (!Number.isInteger(cell.gridX) || !Number.isInteger(cell.gridY)
+        || cell.gridX < 0 || cell.gridX >= arenaWidthCells
+        || cell.gridY < 0 || cell.gridY >= arenaHeightCells) {
+        throw new Error(`[coopDefenseMaps] Mission barrier ${mapId}:${id} has an out-of-bounds cell`);
+      }
+      const key = `${cell.gridX},${cell.gridY}`;
+      if (reservedCells.has(key)) {
+        throw new Error(`[coopDefenseMaps] Mission barrier cell ${mapId}:${key} is reserved more than once`);
+      }
+      reservedCells.add(key);
+      return { gridX: cell.gridX, gridY: cell.gridY };
+    });
+    const openOn = normalizeMissionBarrierTrigger(mapId, id, barrier.openOn, checkpointIds, defenseIds, encounters);
+    return { id, cells, openOn };
+  });
+
+  return { checkpoints, barriers, mandatoryDefenses };
+}
+
+function normalizeMissionBarrierTrigger(
+  mapId: string,
+  barrierId: string,
+  trigger: CoopDefenseMapMissionBarrierOpenTrigger,
+  checkpointIds: ReadonlySet<string>,
+  defenseIds: ReadonlySet<string>,
+  encounters: readonly CoopDefenseMapEncounterConfig[],
+): CoopDefenseMapMissionBarrierOpenTrigger {
+  if (!trigger || typeof trigger.type !== 'string') {
+    throw new Error(`[coopDefenseMaps] Mission barrier ${mapId}:${barrierId} needs an openOn trigger`);
+  }
+  if (trigger.type === 'after-checkpoint') {
+    const checkpointId = normalizeRequiredId(trigger.checkpointId, `[coopDefenseMaps] Barrier ${mapId}:${barrierId} needs checkpointId`);
+    if (!checkpointIds.has(checkpointId)) throw new Error(`[coopDefenseMaps] Barrier ${mapId}:${barrierId} references unknown checkpoint: ${checkpointId}`);
+    return { type: 'after-checkpoint', checkpointId };
+  }
+  if (trigger.type === 'after-defense') {
+    const defenseId = normalizeRequiredId(trigger.defenseId, `[coopDefenseMaps] Barrier ${mapId}:${barrierId} needs defenseId`);
+    if (!defenseIds.has(defenseId)) throw new Error(`[coopDefenseMaps] Barrier ${mapId}:${barrierId} references unknown defense: ${defenseId}`);
+    return { type: 'after-defense', defenseId };
+  }
+  if (trigger.type === 'after-encounter') {
+    const encounterId = normalizeRequiredId(trigger.encounterId, `[coopDefenseMaps] Barrier ${mapId}:${barrierId} needs encounterId`);
+    if (!encounters.some((encounter) => encounter.id === encounterId)) {
+      throw new Error(`[coopDefenseMaps] Barrier ${mapId}:${barrierId} references unknown encounter: ${encounterId}`);
+    }
+    return { type: 'after-encounter', encounterId };
+  }
+  throw new Error(`[coopDefenseMaps] Mission barrier ${mapId}:${barrierId} has unsupported openOn trigger`);
+}
+
+function validateMissionTriggerReferences(
+  mapId: string,
+  encounters: readonly CoopDefenseMapEncounterConfig[],
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+): void {
+  const checkpointIds = new Set(mission?.checkpoints.map(({ id }) => id) ?? []);
+  const defenseIds = new Set(mission?.mandatoryDefenses.map(({ id }) => id) ?? []);
+  const validate = (owner: string, trigger: CoopDefenseMapEncounterStart): void => {
+    if (trigger.type === 'after-checkpoint' && !checkpointIds.has(trigger.checkpointId)) {
+      throw new Error(`[coopDefenseMaps] ${owner} on map ${mapId} references unknown checkpoint: ${trigger.checkpointId}`);
+    }
+    if (trigger.type === 'after-defense' && !defenseIds.has(trigger.defenseId)) {
+      throw new Error(`[coopDefenseMaps] ${owner} on map ${mapId} references unknown defense: ${trigger.defenseId}`);
+    }
+  };
+  for (const encounter of encounters) validate(`Encounter ${encounter.id}`, encounter.start);
+  for (const objective of objectives) {
+    validate(`Secondary objective ${objective.id}`, objective.start);
+    if (objective.focusUntil) validate(`Secondary objective ${objective.id}`, objective.focusUntil);
+    if (objective.holdUntil) validate(`Secondary objective ${objective.id}`, objective.holdUntil);
+  }
+}
+
+function normalizeRequiredId(value: unknown, message: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) throw new Error(message);
+  return value.trim();
+}
+
+function normalizePositiveMilliseconds(mapId: string, ownerId: string, value: number, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} needs a positive ${label}`);
+  }
+  return Math.max(1, Math.floor(value));
 }
 
 function normalizeTrackPosition(

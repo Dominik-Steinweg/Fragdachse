@@ -15,12 +15,14 @@
     "dev": "vite",
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --pool=threads",
+    "test": "vitest run --pool=threads --exclude tests/AsmdProgressionRegression.test.ts --exclude tests/BiteProgressionAndAdrenaline.test.ts --exclude tests/CoopDefenseBalanceLab.test.ts --exclude tests/CoverageReportRegression.test.ts --exclude tests/GlockProgressionAndBurn.test.ts --exclude tests/P90ProgressionSanity.test.ts --exclude tests/ProgressionCoverageSmoke.test.ts --exclude tests/WeaponBalanceCoverageReporterV09.test.ts --exclude tests/WeaponFiveTargetBenchmark.test.ts --exclude tests/WeaponProgressionAndBuildSearch.test.ts --exclude tests/WeaponProgressionV04Hardening.test.ts --exclude tests/WeaponSingleTargetBenchmark.test.ts",
+    "test:balance": "vitest run --pool=threads tests/AsmdProgressionRegression.test.ts tests/BiteProgressionAndAdrenaline.test.ts tests/CoopDefenseBalanceLab.test.ts tests/CoverageReportRegression.test.ts tests/GlockProgressionAndBurn.test.ts tests/P90ProgressionSanity.test.ts tests/ProgressionCoverageSmoke.test.ts tests/WeaponBalanceCoverageReporterV09.test.ts tests/WeaponFiveTargetBenchmark.test.ts tests/WeaponProgressionAndBuildSearch.test.ts tests/WeaponProgressionV04Hardening.test.ts tests/WeaponSingleTargetBenchmark.test.ts",
     "build": "tsc && vite build",
     "check": "npm test && npm run build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "deploy:current": "npm run build && gh-pages -d dist -e current"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

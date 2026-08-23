@@ -67,6 +67,31 @@ describe('Coop defense arena generation', () => {
     expect(() => ArenaGenerator.generate(2_004, overlappingMap)).toThrow(/overlaps a base or its clearance/);
   });
 
+  it('keeps authored mission barrier cells free of generated obstacles and objectives', () => {
+    const barrierCell = { gridX: 4, gridY: 4 };
+    const missionMap = {
+      ...map,
+      missionProgress: {
+        checkpoints: [{ id: 'entry', gridX: 3, gridY: 4, radiusCells: 0.5, setRespawn: false }],
+        mandatoryDefenses: [],
+        barriers: [{
+          id: 'entry-gate',
+          cells: [barrierCell],
+          openOn: { type: 'after-checkpoint' as const, checkpointId: 'entry' },
+        }],
+      },
+    };
+    const layout = ArenaGenerator.generate(2_005, missionMap);
+    const occupiesBarrier = (cell: { gridX: number; gridY: number }) => (
+      cell.gridX === barrierCell.gridX && cell.gridY === barrierCell.gridY
+    );
+
+    expect(layout.rocks.some(occupiesBarrier)).toBe(false);
+    expect(layout.trees.some(occupiesBarrier)).toBe(false);
+    expect(layout.powerUpPedestals.some(occupiesBarrier)).toBe(false);
+    expect(layout.groundHazardZones?.some((zone) => zone.cells.some(occupiesBarrier)) ?? false).toBe(false);
+  });
+
   it('keeps Map 5 west-spawn routes from requiring a long longitudinal rail run', () => {
     const map5 = getCoopDefenseMapConfig('5');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map5.arenaWidthCells, map5.arenaHeightCells);

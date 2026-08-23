@@ -171,7 +171,7 @@ import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '../config/coopDefenseMaps';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -958,7 +958,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseMissionProgressSystem: null, coopDefenseMissionBarrierManager: null, hostHeldActionSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       flowFieldCoordinator: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
@@ -971,6 +971,13 @@ export class ArenaScene extends Phaser.Scene {
 
     playerManager.setSpawnContextProvider((playerId) => {
       const latestState = bridge.getLatestGameState();
+      const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
+      const missionConfig = resolveCoopDefenseMapMissionProgress(
+        getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()),
+      );
+      const respawnCheckpoint = missionConfig?.checkpoints.find(
+        ({ id }) => id === missionState?.respawnCheckpointId,
+      );
       const runtimePlaceables = this.ctx.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
       const turretRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
 
@@ -1035,6 +1042,12 @@ export class ArenaScene extends Phaser.Scene {
           });
         })(),
         livingCoopBaseIds: this.ctx.baseManager?.getActiveMainBaseIds('friendly'),
+        preferredSpawnFocus: respawnCheckpoint
+          ? {
+            x: ARENA_OFFSET_X + (respawnCheckpoint.gridX + 0.5) * CELL_SIZE,
+            y: ARENA_OFFSET_Y + (respawnCheckpoint.gridY + 0.5) * CELL_SIZE,
+          }
+          : undefined,
         isRelevantOpponent: (otherPlayerId) => playerId === null
           ? combatSystem.isAlive(otherPlayerId)
           : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
@@ -2026,6 +2039,11 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.baseManager,
       this.ctx.coopDefenseCarryItems,
       secondaryObjectivesActive,
+    );
+    this.renderers.missionProgress.sync(
+      presentationMapConfig ? resolveCoopDefenseMapMissionProgress(presentationMapConfig) : undefined,
+      coopDefensePresentationActive ? bridge.getCoopDefenseMissionProgressPresentationState() : null,
+      coopDefensePresentationActive,
     );
     this.renderers.carryZones.sync(
       secondaryObjectivePresentation,

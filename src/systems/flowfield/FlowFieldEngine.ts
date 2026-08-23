@@ -76,6 +76,7 @@ export class FlowFieldEngine {
       staticKind: message.staticKind,
       rockOccupancy: message.rockOccupancy,
       baseOccupancy: new Uint8Array(totalCells),
+      barrierOccupancy: message.barrierOccupancy,
     };
     this.refreshBaseOccupancy();
 
@@ -212,6 +213,11 @@ export class FlowFieldEngine {
       }
       case 'rock-resync': {
         sources.rockOccupancy.set(patch.rockOccupancy);
+        this.markAllProfilesForFullReclassify();
+        return;
+      }
+      case 'barrier-resync': {
+        sources.barrierOccupancy.set(patch.barrierOccupancy);
         this.markAllProfilesForFullReclassify();
         return;
       }

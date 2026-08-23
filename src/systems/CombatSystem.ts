@@ -17,6 +17,7 @@ import {
   ArenaObstacleIndex,
   OBSTACLE_ROCK,
   type ObstacleCircleVisitor,
+  type ObstacleRectBody,
 } from './ArenaObstacleIndex';
 import { CombatGeometry } from './CombatGeometry';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
@@ -193,7 +194,7 @@ export interface HitscanTraceOptions {
   readonly includeShooter?: boolean;
 }
 
-export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'trunk' | 'train';
+export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'barrier' | 'trunk' | 'train';
 
 /**
  * Optionen der Schusslinienprüfung.
@@ -255,6 +256,7 @@ export class CombatSystem {
     rocks:  () => this.rockObjects,
     trunks: () => this.trunkObjects,
     bases:  () => this.baseObstacles,
+    barriers: () => this.barrierObstacles,
   });
   /**
    * Gemeinsamer mathematischer Kern aller Segmentprüfungen. Dieselbe Klasse trägt die lokale
@@ -298,6 +300,7 @@ export class CombatSystem {
    * außerdem als physische Wände, hinter denen Spieler nicht getroffen werden.
    */
   private baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null = null;
+  private barrierObstacles: readonly ObstacleRectBody[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
   /** Client-seitiger Fallback: vorberechnete Zug-Bounds aus SyncedTrainState */
   private clientTrainBounds: Phaser.Geom.Rectangle | null = null;
@@ -346,6 +349,7 @@ export class CombatSystem {
   private initialSpawnAllowedResolver: ((playerId: string) => boolean) | null = null;
   /** Called exactly once after the respawn gate passes and a real respawn is committed. */
   private onRespawnCb: ((playerId: string) => boolean | void) | null = null;
+  private onAuthoritativePositionReset: ((playerId: string, x: number, y: number) => void) | null = null;
   private playerActionAllowedResolver: ((playerId: string) => boolean) | null = null;
   private onDirectPrimaryHit: ((
     attackerId: string,
@@ -449,6 +453,11 @@ export class CombatSystem {
   setRespawnCallback(cb: ((playerId: string) => boolean | void) | null): void {
     this.onRespawnCb = cb;
   }
+  setAuthoritativePositionResetCallback(
+    cb: ((playerId: string, x: number, y: number) => void) | null,
+  ): void {
+    this.onAuthoritativePositionReset = cb;
+  }
   setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
   /**
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
@@ -525,6 +534,11 @@ export class CombatSystem {
     baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null,
   ): void {
     this.baseObstacles = baseObstacles;
+    this.obstacleIndex.markDirty();
+  }
+
+  setBarrierObstacles(barriers: readonly ObstacleRectBody[] | null): void {
+    this.barrierObstacles = barriers;
     this.obstacleIndex.markDirty();
   }
 
@@ -618,7 +632,10 @@ export class CombatSystem {
     const player = this.playerManager.getPlayer(id)!;
     player.body.enable = true;
     const spawn = this.playerManager.getSpawnPoint(id);
-    player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
+    const spawnX = ARENA_OFFSET_X + spawn.x;
+    const spawnY = ARENA_OFFSET_Y + spawn.y;
+    player.setPosition(spawnX, spawnY);
+    this.onAuthoritativePositionReset?.(id, spawnX, spawnY);
     return true;
   }
 
@@ -3928,7 +3945,10 @@ export class CombatSystem {
 
     player.body.enable = true;
     const spawn = this.playerManager.getSpawnPoint(playerId);
-    player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
+    const spawnX = ARENA_OFFSET_X + spawn.x;
+    const spawnY = ARENA_OFFSET_Y + spawn.y;
+    player.setPosition(spawnX, spawnY);
+    this.onAuthoritativePositionReset?.(playerId, spawnX, spawnY);
   }
 
   hpRegenTick(playerId: string, deltaMs: number): void {

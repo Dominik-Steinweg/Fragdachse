@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, CELL_SIZE } from '../src/config';
-import { ArenaObstacleIndex, OBSTACLE_BASE, OBSTACLE_ROCK } from '../src/systems/ArenaObstacleIndex';
+import { ArenaObstacleIndex, OBSTACLE_BARRIER, OBSTACLE_BASE, OBSTACLE_ROCK } from '../src/systems/ArenaObstacleIndex';
 
 /**
  * Minimaler Stand-in für die Phaser-Objekte, aus denen der Index gebaut wird.
@@ -40,6 +40,7 @@ type AnyBox = any;
 interface Visited {
   rockIndices: number[];
   baseCount: number;
+  barrierCount: number;
   circleCount: number;
 }
 
@@ -48,9 +49,10 @@ function visit(
   x1: number, y1: number, x2: number, y2: number,
   padding = 0,
 ): Visited {
-  const result: Visited = { rockIndices: [], baseCount: 0, circleCount: 0 };
+  const result: Visited = { rockIndices: [], baseCount: 0, barrierCount: 0, circleCount: 0 };
   index.querySegment(x1, y1, x2, y2, (kind, rockIndex) => {
     if (kind === OBSTACLE_ROCK) result.rockIndices.push(rockIndex);
+    else if (kind === OBSTACLE_BARRIER) result.barrierCount += 1;
     else result.baseCount += 1;
     return false;
   }, () => { result.circleCount += 1; return false; }, padding);
@@ -131,6 +133,21 @@ describe('ArenaObstacleIndex', () => {
     // nicht mehr, auch wenn niemand markDirty() gerufen hat.
     rock.active = false;
     expect(visit(index, spot.x - 100, spot.y, spot.x + 100, spot.y).rockIndices).toEqual([]);
+  });
+
+  it('fuehrt Barrieren als eigenen stabilen Typ und liest active live', () => {
+    const spot = worldPosition(7, 7);
+    const barrier = new FakeBox(spot.x, spot.y);
+    const index = new ArenaObstacleIndex({
+      rocks: () => null,
+      trunks: () => null,
+      bases: () => null,
+      barriers: () => [barrier as AnyBox],
+    });
+
+    expect(visit(index, spot.x - 100, spot.y, spot.x + 100, spot.y).barrierCount).toBe(1);
+    barrier.active = false;
+    expect(visit(index, spot.x - 100, spot.y, spot.x + 100, spot.y).barrierCount).toBe(0);
   });
 
   it('erkennt einen neu gesetzten Fels nach der Invalidierung', () => {

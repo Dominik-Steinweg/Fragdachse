@@ -7,6 +7,7 @@ const BUCKET_SIZE = 128;
 
 export const OBSTACLE_ROCK = 1;
 export const OBSTACLE_BASE = 2;
+export const OBSTACLE_BARRIER = 3;
 
 /**
  * Was der Index von einem Rechteck-Hindernis braucht.
@@ -35,6 +36,8 @@ export interface ArenaObstacleSources {
   readonly trunks: () => readonly ObstacleCircleBody[] | null;
   /** Zell-Rechtecke der Coop-Defense-Basen. */
   readonly bases: () => readonly ObstacleRectBody[] | null;
+  /** Stabile Missionsbarrieren; ihr active-Zustand wird live gelesen. */
+  readonly barriers?: () => readonly ObstacleRectBody[] | null;
 }
 
 /**
@@ -42,7 +45,7 @@ export interface ArenaObstacleSources {
  * Rückgabe `true` bricht die Traversierung ab (Frühausstieg für reine Ja/Nein-Prüfungen).
  */
 export type ObstacleRectVisitor = (
-  kind: typeof OBSTACLE_ROCK | typeof OBSTACLE_BASE,
+  kind: typeof OBSTACLE_ROCK | typeof OBSTACLE_BASE | typeof OBSTACLE_BARRIER,
   /** Index in `rockObjects` bei Felsen, sonst -1. */
   rockIndex: number,
   left: number, top: number, right: number, bottom: number,
@@ -150,9 +153,11 @@ export class ArenaObstacleIndex {
   private builtRocks: readonly (ObstacleRectBody | null)[] | null = null;
   private builtTrunks: readonly ObstacleCircleBody[] | null = null;
   private builtBases: readonly ObstacleRectBody[] | null = null;
+  private builtBarriers: readonly ObstacleRectBody[] | null = null;
   private builtRockLength = -1;
   private builtTrunkLength = -1;
   private builtBaseLength = -1;
+  private builtBarrierLength = -1;
   /** Lazy vom ersten Hindernis erzeugt, danach wiederverwendet (siehe `writeRect`). */
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
@@ -234,7 +239,7 @@ export class ArenaObstacleIndex {
             if (!this.rectSource[entry]?.active) continue;
             const offset = entry * 4;
             const stop = visitRect(
-              this.rectKind[entry] as typeof OBSTACLE_ROCK | typeof OBSTACLE_BASE,
+              this.rectKind[entry] as typeof OBSTACLE_ROCK | typeof OBSTACLE_BASE | typeof OBSTACLE_BARRIER,
               this.rectRockIndex[entry],
               this.rectData[offset],
               this.rectData[offset + 1],
@@ -263,12 +268,15 @@ export class ArenaObstacleIndex {
     const rocks = this.sources.rocks();
     const trunks = this.sources.trunks();
     const bases = this.sources.bases();
+    const barriers = this.sources.barriers?.() ?? null;
     return rocks !== this.builtRocks
       || trunks !== this.builtTrunks
       || bases !== this.builtBases
+      || barriers !== this.builtBarriers
       || (rocks?.length ?? -1) !== this.builtRockLength
       || (trunks?.length ?? -1) !== this.builtTrunkLength
-      || (bases?.length ?? -1) !== this.builtBaseLength;
+      || (bases?.length ?? -1) !== this.builtBaseLength
+      || (barriers?.length ?? -1) !== this.builtBarrierLength;
   }
 
   private rebuild(): void {
@@ -281,18 +289,22 @@ export class ArenaObstacleIndex {
     const rocks = this.sources.rocks();
     const trunks = this.sources.trunks();
     const bases = this.sources.bases();
+    const barriers = this.sources.barriers?.() ?? null;
     this.builtRocks = rocks;
     this.builtTrunks = trunks;
     this.builtBases = bases;
+    this.builtBarriers = barriers;
     this.builtRockLength = rocks?.length ?? -1;
     this.builtTrunkLength = trunks?.length ?? -1;
     this.builtBaseLength = bases?.length ?? -1;
+    this.builtBarrierLength = barriers?.length ?? -1;
 
     // Inaktive, aber noch vorhandene Objekte kommen mit in den Index: ihr `active` wird
     // beim Query gelesen, und ein wieder aktiviertes Objekt braucht so keinen Neubau.
     let rectCount = 0;
     for (const rock of rocks ?? []) if (rock) rectCount += 1;
     for (const base of bases ?? []) if (base) rectCount += 1;
+    for (const barrier of barriers ?? []) if (barrier) rectCount += 1;
     let circleCount = 0;
     for (const trunk of trunks ?? []) if (trunk) circleCount += 1;
 
@@ -322,6 +334,14 @@ export class ArenaObstacleIndex {
       this.rectRockIndex[rectIndex] = -1;
       this.rectSource[rectIndex] = base;
       this.writeRect(rectIndex, base);
+      rectIndex += 1;
+    }
+    for (const barrier of barriers ?? []) {
+      if (!barrier) continue;
+      this.rectKind[rectIndex] = OBSTACLE_BARRIER;
+      this.rectRockIndex[rectIndex] = -1;
+      this.rectSource[rectIndex] = barrier;
+      this.writeRect(rectIndex, barrier);
       rectIndex += 1;
     }
 

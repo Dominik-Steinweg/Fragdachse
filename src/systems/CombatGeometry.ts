@@ -5,10 +5,10 @@ import {
   type GeometryHit,
 } from '../utils/geometry';
 import { isAngleWithinArc } from '../combat/rules/DirectCombatHitResolver';
-import { ArenaObstacleIndex, OBSTACLE_BASE, OBSTACLE_ROCK } from './ArenaObstacleIndex';
+import { ArenaObstacleIndex, OBSTACLE_BARRIER, OBSTACLE_BASE, OBSTACLE_ROCK } from './ArenaObstacleIndex';
 
 /** Art des getroffenen Hindernisses aus dem {@link ArenaObstacleIndex}. */
-export type ObstacleHitKind = 'rock' | 'trunk' | 'base';
+export type ObstacleHitKind = 'rock' | 'trunk' | 'base' | 'barrier';
 
 export interface ObstacleHit extends GeometryHit {
   kind: ObstacleHitKind;
@@ -92,7 +92,7 @@ export class CombatGeometry {
         if (hit && (!bestHit || hit.distance < bestHit.distance)) {
           bestHit = {
             ...hit,
-            kind: kind === OBSTACLE_ROCK ? 'rock' : 'base',
+            kind: kind === OBSTACLE_ROCK ? 'rock' : kind === OBSTACLE_BARRIER ? 'barrier' : 'base',
             ...(kind === OBSTACLE_ROCK ? { index: rockIndex } : {}),
           };
         }

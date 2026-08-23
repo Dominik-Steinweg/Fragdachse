@@ -102,7 +102,11 @@ export class InputSystem {
   private inspectorConstructionPlacementActive = false;
   /** Rueckbau ist eine reine Client-Auswahl und wandert nie in das persistierte Loadout. */
   private inspectorDismantleSelected = false;
+  private inspectorGlobalDismantleSelected = false;
   private inspectorDismantlePlacementActive = false;
+  private globalDismantleHoldStartedAt: number | null = null;
+  private activeHeldActionId: string | null = null;
+  private heldActionSequence = 0;
   /** Liefert Verbrauch und persoenliches Maximum als Paar, damit beide nie auseinanderlaufen. */
   private inspectorGetCapacity: (() => { used: number; max: number }) | null = null;
   private getDismantlePreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
@@ -224,7 +228,9 @@ export class InputSystem {
   }
 
   private getSelectedInspectorTool(): LoadoutToolRef | null {
-    return this.inspectorDismantleSelected ? null : (this.inspectorGetSelectedTool?.() ?? null);
+    return this.inspectorDismantleSelected || this.inspectorGlobalDismantleSelected
+      ? null
+      : (this.inspectorGetSelectedTool?.() ?? null);
   }
 
   getSelectedInspectorToolForHud(): LoadoutToolRef | null {
@@ -238,6 +244,7 @@ export class InputSystem {
 
   private getSelectedInspectorRadialSelection(): InspectorRadialSelection | null {
     if (this.inspectorDismantleSelected) return { kind: 'dismantle' };
+    if (this.inspectorGlobalDismantleSelected) return { kind: 'global-dismantle' };
     const tool = this.inspectorGetSelectedTool?.() ?? null;
     return tool ? { kind: 'tool', tool } : null;
   }
@@ -245,9 +252,16 @@ export class InputSystem {
   private applyInspectorRadialSelection(selection: InspectorRadialSelection): void {
     if (selection.kind === 'dismantle') {
       this.inspectorDismantleSelected = true;
+      this.inspectorGlobalDismantleSelected = false;
+      return;
+    }
+    if (selection.kind === 'global-dismantle') {
+      this.inspectorDismantleSelected = false;
+      this.inspectorGlobalDismantleSelected = true;
       return;
     }
     this.inspectorDismantleSelected = false;
+    this.inspectorGlobalDismantleSelected = false;
     this.inspectorSetSelectedTool?.(selection.tool);
   }
 
@@ -265,6 +279,7 @@ export class InputSystem {
     const inspectorModeActive = this.utilityPlacementActive
       || this.utilityTargetingActive
       || this.utilityHoldActive
+      || this.globalDismantleHoldStartedAt !== null
       || this.inspectorConstructionPlacementActive
       || this.inspectorDismantlePlacementActive;
     if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
@@ -787,6 +802,7 @@ export class InputSystem {
       const inspectorModeActive = this.utilityPlacementActive
         || this.utilityTargetingActive
         || this.utilityHoldActive
+        || this.globalDismantleHoldStartedAt !== null
         || this.inspectorConstructionPlacementActive
         || this.inspectorDismantlePlacementActive;
       if (rightInputStarted && inspectorModeActive) {
@@ -1026,7 +1042,33 @@ export class InputSystem {
       this.scopeChargeProgress = 0;
     }
 
+    if (this.globalDismantleHoldStartedAt !== null) {
+      if (this.keyE.isDown) return;
+      const startedAt = this.globalDismantleHoldStartedAt;
+      const actionId = this.activeHeldActionId;
+      this.globalDismantleHoldStartedAt = null;
+      this.activeHeldActionId = null;
+      if (actionId && now - startedAt >= 1_000) {
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, {
+          inputStarted: true,
+          globalDismantle: true,
+          heldActionId: actionId,
+        });
+      } else if (actionId) {
+        this.bridge.sendHeldActionCancel(actionId);
+      }
+      return;
+    }
+
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (this.isInspectorMode() && this.inspectorGlobalDismantleSelected && !this.isInspectorUtilityOverrideActive()) {
+        this.cancelUtilityInteraction();
+        const actionId = this.createHeldActionId('global-dismantle');
+        this.activeHeldActionId = actionId;
+        this.globalDismantleHoldStartedAt = now;
+        this.bridge.sendHeldActionStart(actionId, 'global_dismantle', 1_000);
+        return;
+      }
       if (this.isInspectorDismantleSelected() && !this.isInspectorUtilityOverrideActive()) {
         this.cancelUtilityInteraction();
         this.inspectorDismantlePlacementActive = true;
@@ -1240,11 +1282,22 @@ export class InputSystem {
     const eligibleAt = this.utilityChargeEligibleAt ?? now;
     if (now < eligibleAt) return;
 
-    this.utilityChargeStartedAt = eligibleAt;
+    // Die Host-Aktion beginnt erst mit diesem Request. Auch die lokale Prediction startet
+    // deshalb am aktuellen Frame und nicht rueckwirkend am bereits verstrichenen Cooldown-Ende.
+    this.utilityChargeStartedAt = now;
     this.utilityChargeEligibleAt = null;
 
     // BFG charge sound (charged_gate utilities)
     const utCfg = this.getChargeableUtilityConfig();
+    if (utCfg) {
+      const actionId = this.createHeldActionId(utCfg.activation.type);
+      this.activeHeldActionId = actionId;
+      this.bridge.sendHeldActionStart(
+        actionId,
+        utCfg.activation.type,
+        utCfg.activation.fullChargeDuration,
+      );
+    }
     if (utCfg?.activation.type === 'charged_gate') {
       this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_bfg_charge') ?? null;
     }
@@ -1253,19 +1306,27 @@ export class InputSystem {
   private releaseChargedUtility(angle: number, targetX: number, targetY: number, now: number): void {
     const cfg = this.getChargeableUtilityConfig();
     const startedAt = this.utilityChargeStartedAt;
-    this.cancelUtilityCharge();
-    if (!cfg || startedAt === null) return;
+    const actionId = this.activeHeldActionId;
+    this.cancelUtilityCharge(false);
+    if (!cfg || startedAt === null || !actionId) {
+      if (actionId) this.bridge.sendHeldActionCancel(actionId);
+      return;
+    }
 
     const chargeFraction = this.computeUtilityChargeFraction(startedAt, cfg.activation, now);
 
     // Gate-Charge: nur feuern wenn voll aufgeladen (fraction >= 1.0)
-    if (cfg.activation.type === 'charged_gate' && chargeFraction < 1.0) return;
+    if (cfg.activation.type === 'charged_gate' && chargeFraction < 1.0) {
+      this.bridge.sendHeldActionCancel(actionId);
+      return;
+    }
 
     this.predictedUtilityCooldownUntil = now + cfg.cooldown;
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
       ...this.getInspectorUtilityParams(),
       utilityChargeFraction: chargeFraction,
+      heldActionId: actionId,
     });
   }
 
@@ -1324,6 +1385,7 @@ export class InputSystem {
     this.cancelUtilityTargeting();
     this.cancelUtilityPlacement();
     this.cancelInspectorConstructionPlacement();
+    this.cancelGlobalDismantleHold();
   }
 
   private cancelInspectorConstructionPlacement(): void {
@@ -1332,7 +1394,9 @@ export class InputSystem {
     this.placementPreviewState = null;
   }
 
-  private cancelUtilityCharge(): void {
+  private cancelUtilityCharge(cancelHost = true): void {
+    if (cancelHost && this.activeHeldActionId) this.bridge.sendHeldActionCancel(this.activeHeldActionId);
+    this.activeHeldActionId = null;
     this.utilityHoldActive = false;
     this.utilityChargeEligibleAt = null;
     this.utilityChargeStartedAt = null;
@@ -1340,6 +1404,18 @@ export class InputSystem {
       this.audioSystem?.stopLoop(this.chargeLoopHandle);
       this.chargeLoopHandle = null;
     }
+  }
+
+  private cancelGlobalDismantleHold(): void {
+    if (this.globalDismantleHoldStartedAt === null) return;
+    if (this.activeHeldActionId) this.bridge.sendHeldActionCancel(this.activeHeldActionId);
+    this.globalDismantleHoldStartedAt = null;
+    this.activeHeldActionId = null;
+  }
+
+  private createHeldActionId(kind: string): string {
+    this.heldActionSequence += 1;
+    return `ha:${kind}:${this.heldActionSequence.toString(36)}`;
   }
 
   private cancelScopeAim(): void {

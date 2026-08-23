@@ -94,7 +94,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 1;
+export const ARENA_GENERATOR_VERSION = 2;
 
 // Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin und wird auch von der Lobby-Vorschau
 // verwendet; die Arena behält hier nur ihre eigene Reserveflaechen- und Wachstumslogik.
@@ -125,6 +125,11 @@ export class ArenaGenerator {
     // aufgelöst und an alle Zellprüfungen weitergereicht. Ohne Map-Konfiguration bleibt
     // `undefined` bewusst der Fallback auf die aktive Registry-Auflösung.
     const coopBaseSpecs = coopMapConfig ? resolveCoopDefenseBases(coopMapConfig) : undefined;
+    const missionBarrierCells = new Set(
+      (coopMapConfig?.missionProgress?.barriers ?? []).flatMap((barrier) => (
+        barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
+      )),
+    );
 
     for (let attempt = 0; attempt < 100; attempt++) {
       const rng = ArenaGenerator.makePrng(seed + attempt);
@@ -213,6 +218,7 @@ export class ArenaGenerator {
             map[gy][gx]
             && !trackCols.has(gx)
             && !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
+            && !missionBarrierCells.has(`${gx}_${gy}`)
           ) {
             blocked[gy][gx] = true;
             const isTutorialRock = tutorialRockCells?.has(`${gx}_${gy}`) ?? false;
@@ -250,6 +256,7 @@ export class ArenaGenerator {
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
           !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs) &&
+          !missionBarrierCells.has(`${gx}_${gy}`) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -347,6 +354,13 @@ export class ArenaGenerator {
       const dirt: DirtCell[] = [];
       for (const key of dirtSet) {
         dirt.push({ gridX: key % GRID_COLS, gridY: Math.floor(key / GRID_COLS) });
+      }
+
+      // Geschlossene Tore zaehlen fuer Podeste und Hazards als reservierte Geometrie, ohne die
+      // zuvor gepruefte permanente Fels-Konnektivitaet kuenstlich zu beeinflussen.
+      for (const key of missionBarrierCells) {
+        const [gridX, gridY] = key.split('_').map(Number);
+        if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS) blocked[gridY][gridX] = true;
       }
 
       const powerUpPedestals = coopMapConfig === undefined

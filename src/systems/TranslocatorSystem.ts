@@ -11,6 +11,7 @@ export class TranslocatorSystem {
   private activePucks = new Map<string, number>();
   private onUseCb: ((playerId: string) => void) | null = null;
   private radialImpulseCb: ((x: number, y: number, radius: number, knockback: number, ownerId: string) => void) | null = null;
+  private positionResetCb: ((playerId: string, x: number, y: number) => void) | null = null;
 
   constructor(
     private playerManager: PlayerManager,
@@ -27,6 +28,7 @@ export class TranslocatorSystem {
     this.onUseCb = cb;
   }
   public setRadialImpulseCallback(cb: ((x: number, y: number, radius: number, knockback: number, ownerId: string) => void) | null): void { this.radialImpulseCb = cb; }
+  public setPositionResetCallback(cb: ((playerId: string, x: number, y: number) => void) | null): void { this.positionResetCb = cb; }
 
   public getActivePuckId(playerId: string): number | undefined {
     return this.activePucks.get(playerId);
@@ -123,6 +125,7 @@ export class TranslocatorSystem {
     player.sprite.x = targetX;
     player.sprite.y = targetY;
     player.body.reset(targetX, targetY);
+    this.positionResetCb?.(playerId, targetX, targetY);
 
     // 4. Ziel-VFX RPC senden
     bridge.broadcastTranslocatorFlash(targetX, targetY, playerColor, 'end', playerId);

@@ -62,6 +62,9 @@ import type { CoopDefenseMapEventDirector } from '../../systems/CoopDefenseMapEv
 import type { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
 import type { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
+import type { CoopDefenseMissionProgressSystem } from '../../systems/CoopDefenseMissionProgressSystem';
+import type { CoopDefenseMissionBarrierManager } from '../../systems/CoopDefenseMissionBarrierManager';
+import type { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
 import type { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
 import type { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
@@ -171,6 +174,9 @@ export interface ArenaContext {
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
   coopDefenseMapEventDirector: CoopDefenseMapEventDirector | null;
   coopDefenseSecondaryObjectiveSystem: CoopDefenseSecondaryObjectiveSystem | null;
+  coopDefenseMissionProgressSystem: CoopDefenseMissionProgressSystem | null;
+  coopDefenseMissionBarrierManager: CoopDefenseMissionBarrierManager | null;
+  hostHeldActionSystem: HostHeldActionSystem | null;
   coopDefenseCarrySystem: CoopDefenseCarrySystem | null;
   /** Host-only: one shared, round-local team buff end timestamp. */
   coopDefenseTeamBuffSystem: CoopDefenseTeamBuffSystem | null;

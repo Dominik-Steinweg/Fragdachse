@@ -5,7 +5,8 @@ export type ArenaMapGridChangeReason =
   | 'static_rock_destroyed'
   | 'placeable_added'
   | 'placeable_removed'
-  | 'placeable_expired';
+  | 'placeable_expired'
+  | 'placeables_batch_removed';
 
 export type ArenaMapGridChangeSource = 'static_rock' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal';
 

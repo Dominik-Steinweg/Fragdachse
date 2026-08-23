@@ -30,6 +30,7 @@ export interface PlacementSyncResult {
 export class PlacementSystem {
   private readonly layout: ArenaLayout;
   private readonly rockGrid: RockGridIndex;
+  private closedBarrierCellResolver: ((gridX: number, gridY: number) => boolean) | null = null;
   private readonly playerManager: PlayerManager;
   private readonly runtimeRocks = new Map<number, RuntimeRockRecord>();
   private readonly treeCells = new Set<string>();
@@ -61,6 +62,37 @@ export class PlacementSystem {
         this.hazardCellEventIds.set(this.key(cell.gridX, cell.gridY), zone.eventId);
       }
     }
+  }
+
+  setClosedBarrierCellResolver(resolver: ((gridX: number, gridY: number) => boolean) | null): void {
+    this.closedBarrierCellResolver = resolver;
+  }
+
+  isClosedBarrierCell(gridX: number, gridY: number): boolean {
+    return this.closedBarrierCellResolver?.(gridX, gridY) === true;
+  }
+
+  doesGridSegmentCrossClosedBarrier(
+    startGridX: number,
+    startGridY: number,
+    endGridX: number,
+    endGridY: number,
+  ): boolean {
+    const startX = startGridX + 0.5;
+    const startY = startGridY + 0.5;
+    const endX = endGridX + 0.5;
+    const endY = endGridY + 0.5;
+    const minGridX = Math.max(0, Math.floor(Math.min(startX, endX)));
+    const maxGridX = Math.min(GRID_COLS - 1, Math.floor(Math.max(startX, endX)));
+    const minGridY = Math.max(0, Math.floor(Math.min(startY, endY)));
+    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(Math.max(startY, endY)));
+    for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
+      for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
+        if (!this.isClosedBarrierCell(gridX, gridY)) continue;
+        if (segmentIntersectsGridCell(startX, startY, endX, endY, gridX, gridY)) return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -155,6 +187,21 @@ export class PlacementSystem {
     return [...this.runtimeRocks.values()].filter((rock) => (
       rock.ownerId === ownerId && rock.constructionId !== undefined
     ));
+  }
+
+  /**
+   * Entfernt den vollstaendigen eigenen Konstruktionsbestand in einem Durchlauf. Die
+   * Owner-Pruefung bleibt an derselben Datenquelle wie beim Einzelrueckbau; statische
+   * Felsen und nicht als Konstruktion markierte Runtime-Objekte sind ausgeschlossen.
+   */
+  removeOwnedConstructions(ownerId: string): SyncedPlaceableRock[] {
+    const removed: SyncedPlaceableRock[] = [];
+    for (const rock of this.getOwnedConstructions(ownerId)) {
+      if (rock.ownerId !== ownerId || rock.constructionId === undefined) continue;
+      const result = this.removeRock(rock.id);
+      if (result) removed.push(result);
+    }
+    return removed;
   }
 
   /**
@@ -518,6 +565,7 @@ export class PlacementSystem {
       if (this.trackCells.has(this.key(tx, ty))) return false;
       if (this.pedestalCells.has(this.key(tx, ty))) return false;
       if (this.isHazardCellLocked(this.key(tx, ty))) return false;
+      if (this.isClosedBarrierCell(tx, ty)) return false;
       if (this.isPlayerOccupyingCell(tx, ty)) return false;
     }
 
@@ -563,4 +611,33 @@ export class PlacementSystem {
   private key(gx: number, gy: number): string {
     return `${gx}_${gy}`;
   }
+}
+
+function segmentIntersectsGridCell(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  gridX: number,
+  gridY: number,
+): boolean {
+  const dx = endX - startX;
+  const dy = endY - startY;
+  let minT = 0;
+  let maxT = 1;
+  for (const [origin, delta, min, max] of [
+    [startX, dx, gridX, gridX + 1],
+    [startY, dy, gridY, gridY + 1],
+  ] as const) {
+    if (Math.abs(delta) < 1e-9) {
+      if (origin < min || origin > max) return false;
+      continue;
+    }
+    const first = (min - origin) / delta;
+    const second = (max - origin) / delta;
+    minT = Math.max(minT, Math.min(first, second));
+    maxT = Math.min(maxT, Math.max(first, second));
+    if (minT > maxT) return false;
+  }
+  return true;
 }

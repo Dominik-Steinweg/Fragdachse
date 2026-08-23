@@ -17,7 +17,7 @@ vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '15' },
 }));
 
-import { CELL_SIZE, GRID_COLS, GRID_ROWS } from '../src/config';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_COLS, GRID_ROWS } from '../src/config';
 import { PlayerManager } from '../src/entities/PlayerManager';
 import type { ArenaLayout } from '../src/types';
 
@@ -61,6 +61,45 @@ describe('PlayerManager ground hazard spawns', () => {
     ).getGroundHazardSpawnExclusionCells();
     expect(fireExclusion).toEqual(new Set(['0_0', '1_0', '0_1', '1_1']));
     expect(fireExclusion.has(`${safeCell.gridX}_${safeCell.gridY}`)).toBe(false);
+
+    expect(manager.getSpawnPoint('player-1')).toEqual({
+      x: safeCell.gridX * CELL_SIZE + CELL_SIZE / 2,
+      y: safeCell.gridY * CELL_SIZE + CELL_SIZE / 2,
+    });
+  });
+
+  it('falls back from a dangerous mission focus to a safe global spawn candidate', () => {
+    const focusedCell = { gridX: 1, gridY: 1 };
+    const safeCell = { gridX: 20, gridY: 1 };
+    const rocks: ArenaLayout['rocks'] = [];
+    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+      for (let gridX = 0; gridX < GRID_COLS; gridX += 1) {
+        if ((gridX === focusedCell.gridX || gridX === safeCell.gridX) && gridY === 1) continue;
+        rocks.push({ gridX, gridY });
+      }
+    }
+    const manager = new PlayerManager({} as never);
+    manager.setLayout({
+      seed: 16,
+      rocks,
+      trees: [],
+      tracks: [],
+      dirt: [],
+      powerUpPedestals: [],
+    });
+    const focusX = ARENA_OFFSET_X + (focusedCell.gridX + 0.5) * CELL_SIZE;
+    const focusY = ARENA_OFFSET_Y + (focusedCell.gridY + 0.5) * CELL_SIZE;
+    manager.setSpawnContextProvider(() => ({
+      fires: [],
+      stinkClouds: [],
+      teslaDomes: [],
+      nukes: [],
+      meteors: [],
+      turrets: [],
+      projectiles: [],
+      enemyThreats: [{ x: focusX, y: focusY, attackRange: 1 }],
+      preferredSpawnFocus: { x: focusX, y: focusY },
+    }));
 
     expect(manager.getSpawnPoint('player-1')).toEqual({
       x: safeCell.gridX * CELL_SIZE + CELL_SIZE / 2,
