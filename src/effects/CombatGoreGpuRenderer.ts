@@ -249,8 +249,10 @@ export class CombatGoreGpuRenderer {
 
     const spreadScale = killshot ? 1.38 : (effect.isCritical ? 1.14 : 1);
     const streakRequested = randomInt(rng, band.streakCountMin, band.streakCountMax)
+      + 1
       + (killshot ? 2 : effect.isCritical ? 1 : 0);
     const dropletRequested = randomInt(rng, band.dropletCountMin, band.dropletCountMax)
+      + 1
       + (killshot ? 1 : 0);
     const stainCount = randomInt(rng, band.stainCountMin, band.stainCountMax);
     let stainsCreated = 0;
@@ -272,8 +274,9 @@ export class CombatGoreGpuRenderer {
         * (killshot ? 0.9 : 1);
       const speed = Math.hypot(endX - startX, endY - startY) * 1000 / Math.max(1, duration);
       const scale = randomBetween(rng, band.streakScaleMin, band.streakScaleMax)
+        * 1.1
         * (killshot ? 1.06 : 1);
-      const stretchStart = clamp(0.88 + speed / 125, 0.9, killshot ? 2.75 : 2.35);
+      const stretchStart = clamp(0.98 + speed / 115, 1, killshot ? 2.9 : 2.55);
       const leaveStain = stainsCreated < stainCount && (index < stainCount || rng() > 0.45);
       if (leaveStain) stainsCreated += 1;
 
@@ -292,7 +295,7 @@ export class CombatGoreGpuRenderer {
       streakSpec.scaleEase = GpuVfxEase.QuadOut;
       streakSpec.stretchStart = stretchStart;
       streakSpec.stretchEnd = Math.max(0.78, stretchStart * 0.48);
-      streakSpec.alphaStart = 0.84;
+      streakSpec.alphaStart = 0.98;
       streakSpec.alphaEnd = 0;
       streakSpec.alphaEase = GpuVfxEase.QuadOut;
       streakSpec.tint = pickBloodTint(rng);
@@ -339,12 +342,13 @@ export class CombatGoreGpuRenderer {
       dropletSpec.rotation = angle + (rng() - 0.5) * 0.8;
       dropletSpec.angularVelocity = (rng() - 0.5) * (killshot ? 4.4 : 3.1);
       dropletSpec.scaleStart = randomBetween(rng, band.dropletScaleMin, band.dropletScaleMax)
+        * 1.1
         * (killshot ? 1.08 : 1);
       dropletSpec.scaleEnd = dropletSpec.scaleStart * 0.42;
       dropletSpec.scaleEase = GpuVfxEase.QuadOut;
       dropletSpec.stretchStart = 1;
       dropletSpec.stretchEnd = 1;
-      dropletSpec.alphaStart = 0.74;
+      dropletSpec.alphaStart = 0.9;
       dropletSpec.alphaEnd = 0;
       dropletSpec.alphaEase = GpuVfxEase.QuadOut;
       dropletSpec.tint = pickBloodTint(rng);
@@ -376,12 +380,12 @@ export class CombatGoreGpuRenderer {
       microSpec.gravityFactor = 1;
       microSpec.rotation = angle + (rng() - 0.5) * 1.5;
       microSpec.angularVelocity = (rng() - 0.5) * 7.5;
-      microSpec.scaleStart = randomBetween(rng, 0.18, 0.34) * (killshot ? 1.08 : 1);
+      microSpec.scaleStart = randomBetween(rng, 0.22, 0.42) * (killshot ? 1.08 : 1);
       microSpec.scaleEnd = microSpec.scaleStart * 0.28;
       microSpec.scaleEase = GpuVfxEase.QuadOut;
       microSpec.stretchStart = rng() < 0.28 ? randomBetween(rng, 1.1, 1.7) : 1;
       microSpec.stretchEnd = microSpec.stretchStart * 0.62;
-      microSpec.alphaStart = 0.68;
+      microSpec.alphaStart = 0.82;
       microSpec.alphaEnd = 0;
       microSpec.alphaEase = GpuVfxEase.QuadOut;
       microSpec.tint = pickBloodTint(rng);
@@ -458,7 +462,11 @@ export class CombatGoreGpuRenderer {
     );
     const width = Math.max(0.8, chunk.width * displayWidth);
     const height = Math.max(0.8, chunk.height * displayHeight);
-    const baseScale = clamp(height / DEATH_FRAGMENT_TEXTURE_SIZE, 0.2, 16);
+    const baseScale = clamp(
+      height / DEATH_FRAGMENT_TEXTURE_SIZE * DEATH_DISINTEGRATION_VFX.scaleStart,
+      0.2,
+      16,
+    );
     const aspect = clamp(width / Math.max(0.8, height), 0.38, 3.2);
     const smallMass = micro || rng() > 0.72;
     const largeMass = !micro && rng() < 0.24;
@@ -487,7 +495,7 @@ export class CombatGoreGpuRenderer {
     spec.scaleEase = GpuVfxEase.QuadOut;
     spec.stretchStart = stretch;
     spec.stretchEnd = Math.max(0.72, stretch * (smallMass ? 0.68 : 0.84));
-    spec.alphaStart = DEATH_DISINTEGRATION_VFX.alpha * randomBetween(rng, 0.9, 1.04);
+    spec.alphaStart = Math.min(1, DEATH_DISINTEGRATION_VFX.alpha * randomBetween(rng, 0.98, 1.08));
     spec.alphaEnd = 0;
     spec.alphaEase = GpuVfxEase.QuadOut;
     spec.tint = tint;
@@ -499,11 +507,11 @@ export class CombatGoreGpuRenderer {
 
 function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathProfile {
   const profile = maxDimension <= 24
-    ? { main: 20, micro: 2, glow: 2, travelScale: 0.78 }
+    ? { main: 24, micro: 3, glow: 2, travelScale: 0.78 }
     : maxDimension <= 36
-      ? { main: 32, micro: 5, glow: 3, travelScale: 0.94 }
+      ? { main: 40, micro: 6, glow: 3, travelScale: 0.94 }
       : maxDimension <= 64
-        ? { main: 50, micro: 8, glow: 5, travelScale: 1.14 }
+        ? { main: 56, micro: 10, glow: 5, travelScale: 1.14 }
         : { main: 64, micro: 14, glow: 8, travelScale: 1.34 };
   return {
     main: Math.min(chunkCount, Math.min(DEATH_DISINTEGRATION_VFX.maxChunksPerEffect, profile.main)),
@@ -524,7 +532,11 @@ function pickBloodTint(rng: () => number): number {
     BLOOD_HIT_VFX.palette.length - 1,
     Math.floor(rng() * BLOOD_HIT_VFX.palette.length),
   );
-  return BLOOD_HIT_VFX.palette[index] ?? BLOOD_HIT_VFX.palette[0];
+  const baseTint = BLOOD_HIT_VFX.palette[index] ?? BLOOD_HIT_VFX.palette[0];
+  // Keep the established dark-crimson palette, but lift it enough for the GPU layer to read
+  // clearly against grass, dirt and night grading. This only affects transient/stain blood;
+  // the low-health overlay keeps its existing palette contract.
+  return mixColors(baseTint, COLORS.RED_3, 0.24);
 }
 
 function randomBetween(rng: () => number, min: number, max: number): number {
