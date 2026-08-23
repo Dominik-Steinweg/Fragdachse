@@ -602,6 +602,7 @@ export class NetworkBridge {
   } | null = null;
   private missionProgressPresentationCache: {
     raw: unknown;
+    expectedRoundRevision: number | null;
     value: CoopDefenseMissionProgressPresentationState | null;
   } | null = null;
   /**
@@ -1835,11 +1836,32 @@ export class NetworkBridge {
 
   getCoopDefenseMissionProgressPresentationState(): CoopDefenseMissionProgressPresentationState | null {
     const raw = getState(KEY_COOP_MISSION_PROGRESS_PRESENTATION) as unknown;
+    const expectedRoundRevision = this.getActiveRoundRevision();
     const cached = this.missionProgressPresentationCache;
-    if (cached && cached.raw === raw) return cached.value;
-    const value = sanitizeMissionProgressPresentationState(raw);
-    this.missionProgressPresentationCache = { raw, value };
+    if (cached
+      && cached.raw === raw
+      && cached.expectedRoundRevision === expectedRoundRevision) {
+      return cached.value;
+    }
+
+    const sanitized = sanitizeMissionProgressPresentationState(raw);
+    const value = expectedRoundRevision !== null
+      && sanitized?.roundRevision === expectedRoundRevision
+      ? sanitized
+      : null;
+    this.missionProgressPresentationCache = { raw, expectedRoundRevision, value };
     return value;
+  }
+
+  /** Only an active Arena participation snapshot defines the current mission round. */
+  private getActiveRoundRevision(): number | null {
+    if (this.getGamePhase() !== 'ARENA') return null;
+    const roundRevision = this.getRoundParticipation()?.roundRevision;
+    return typeof roundRevision === 'number'
+      && Number.isSafeInteger(roundRevision)
+      && roundRevision > 0
+      ? roundRevision
+      : null;
   }
 
   /** Fail-closed: Ein einziger unplausibler Eintrag verwirft den ganzen Snapshot. */

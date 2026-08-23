@@ -4,13 +4,20 @@ import * as Phaser from 'phaser';
 export const ASMD_LOADOUT_ICON_SCALE = 0.86;
 export const ASMD_LOADOUT_ICON_PADDING = 2;
 
+const ASMD_LOADOUT_ICON_IDS = ['ASMD_PRIM', 'ASMD_SEC'] as const;
+const UI_LOADOUT_ICON_KEY_PREFIX = '__ui_loadout_icon_';
+const UI_LOADOUT_ICON_KEY_SUFFIX = '_padded';
+
 export interface LoadoutIconDisplaySize {
   readonly width: number;
   readonly height: number;
 }
 
 function isAsmdLoadoutIcon(textureKey: string): boolean {
-  return textureKey === 'ASMD_PRIM' || textureKey === 'ASMD_SEC';
+  return ASMD_LOADOUT_ICON_IDS.some((iconId) => (
+    textureKey === iconId
+    || textureKey === `${UI_LOADOUT_ICON_KEY_PREFIX}${iconId}${UI_LOADOUT_ICON_KEY_SUFFIX}`
+  ));
 }
 
 /**
@@ -22,7 +29,7 @@ function isAsmdLoadoutIcon(textureKey: string): boolean {
 export function getLoadoutIconTextureKey(scene: Phaser.Scene, textureKey: string): string {
   if (!isAsmdLoadoutIcon(textureKey)) return textureKey;
 
-  const paddedKey = `__ui_loadout_icon_${textureKey}_padded`;
+  const paddedKey = `${UI_LOADOUT_ICON_KEY_PREFIX}${textureKey}${UI_LOADOUT_ICON_KEY_SUFFIX}`;
   if (scene.textures.exists(paddedKey)) return paddedKey;
   if (!scene.textures.exists(textureKey)) return textureKey;
 

@@ -949,7 +949,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     arenaWidthCells,
     arenaHeightCells,
   );
-  validateMapEventDependencyGraph(mapConfig.mapId, encounters ?? [], mapEvents);
   const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
     bases,
@@ -967,7 +966,13 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     encounters ?? [],
     secondaryObjectives ?? [],
   );
-  validateMissionTriggerReferences(mapConfig.mapId, encounters ?? [], secondaryObjectives ?? [], missionProgress);
+  validateMissionDependencyGraph(
+    mapConfig.mapId,
+    encounters ?? [],
+    mapEvents,
+    secondaryObjectives ?? [],
+    missionProgress,
+  );
   return {
     mapId: mapConfig.mapId,
     arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
@@ -2352,23 +2357,64 @@ function normalizePositiveMapEventInteger(
   return value;
 }
 
-type MapEventDependencyNode = `encounter:${string}` | `event:${string}`;
+type MissionDependencyNode =
+  | `encounter:${string}`
+  | `event:${string}`
+  | `checkpoint:${string}`
+  | `defense:${string}`
+  | `objective:${string}`;
 
-function validateMapEventDependencyGraph(
+function validateMissionDependencyGraph(
   mapId: string,
   encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
   events: readonly ResolvedCoopDefenseMapEventConfig[],
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
 ): void {
   const encounterIds = new Set(encounters.map((encounter) => encounter.id));
   const eventById = new Map(events.map((event) => [event.id, event]));
-  const adjacency = new Map<MapEventDependencyNode, MapEventDependencyNode[]>();
-  const addNode = (node: MapEventDependencyNode): void => {
+  const checkpointIds = new Set(mission?.checkpoints.map((checkpoint) => checkpoint.id) ?? []);
+  const defenseById = new Map(mission?.mandatoryDefenses.map((defense) => [defense.id, defense]) ?? []);
+  const adjacency = new Map<MissionDependencyNode, MissionDependencyNode[]>();
+  const addNode = (node: MissionDependencyNode): void => {
     if (!adjacency.has(node)) adjacency.set(node, []);
   };
-  const addDependency = (source: MapEventDependencyNode, dependent: MapEventDependencyNode): void => {
+  const addDependency = (source: MissionDependencyNode, dependent: MissionDependencyNode): void => {
     addNode(source);
     addNode(dependent);
     adjacency.get(source)!.push(dependent);
+  };
+
+  const validateMissionTrigger = (
+    owner: string,
+    trigger: CoopDefenseMapEncounterStart,
+  ): void => {
+    if (trigger.type === 'after-checkpoint' && !checkpointIds.has(trigger.checkpointId)) {
+      throw new Error(`[coopDefenseMaps] ${owner} on map ${mapId} references unknown checkpoint: ${trigger.checkpointId}`);
+    }
+    if (trigger.type === 'after-defense' && !defenseById.has(trigger.defenseId)) {
+      throw new Error(`[coopDefenseMaps] ${owner} on map ${mapId} references unknown defense: ${trigger.defenseId}`);
+    }
+  };
+
+  const addMissionTriggerDependency = (
+    owner: MissionDependencyNode,
+    ownerLabel: string,
+    trigger: CoopDefenseMapEncounterStart,
+  ): void => {
+    validateMissionTrigger(ownerLabel, trigger);
+    if (trigger.type === 'after-checkpoint') {
+      addDependency(`checkpoint:${trigger.checkpointId}`, owner);
+    } else if (trigger.type === 'after-defense') {
+      addDependency(`defense:${trigger.defenseId}`, owner);
+    } else if (trigger.type === 'after-encounter') {
+      if (!encounterIds.has(trigger.encounterId)) {
+        throw new Error(
+          `[coopDefenseMaps] ${ownerLabel} on map ${mapId} references unknown encounter: ${trigger.encounterId}`,
+        );
+      }
+      addDependency(`encounter:${trigger.encounterId}`, owner);
+    }
   };
 
   for (let index = 0; index < encounters.length; index += 1) {
@@ -2401,6 +2447,8 @@ function validateMapEventDependencyGraph(
         );
       }
       addDependency(`event:${source.id}`, dependent);
+    } else if (encounter.start.type === 'after-checkpoint' || encounter.start.type === 'after-defense') {
+      addMissionTriggerDependency(dependent, `Encounter ${encounter.id}`, encounter.start);
     }
   }
 
@@ -2432,15 +2480,41 @@ function validateMapEventDependencyGraph(
     }
   }
 
-  const visiting = new Set<MapEventDependencyNode>();
-  const visited = new Set<MapEventDependencyNode>();
-  const visit = (node: MapEventDependencyNode): void => {
+  for (const checkpoint of mission?.checkpoints ?? []) {
+    addNode(`checkpoint:${checkpoint.id}`);
+  }
+  for (const defense of mission?.mandatoryDefenses ?? []) {
+    const defenseNode = `defense:${defense.id}` as const;
+    addDependency(`checkpoint:${defense.checkpointId}`, defenseNode);
+    addDependency(`objective:${defense.objectiveId}`, defenseNode);
+  }
+
+  for (const objective of objectives) {
+    const objectiveNode = `objective:${objective.id}` as const;
+    addNode(objectiveNode);
+    addMissionTriggerDependency(objectiveNode, `Secondary objective ${objective.id}`, objective.start);
+    if (objective.focusUntil) {
+      addMissionTriggerDependency(objectiveNode, `Secondary objective ${objective.id}`, objective.focusUntil);
+    }
+    if (objective.holdUntil) {
+      addMissionTriggerDependency(objectiveNode, `Secondary objective ${objective.id}`, objective.holdUntil);
+    }
+  }
+
+  const visiting = new Set<MissionDependencyNode>();
+  const visited = new Set<MissionDependencyNode>();
+  const path: MissionDependencyNode[] = [];
+  const visit = (node: MissionDependencyNode): void => {
     if (visiting.has(node)) {
-      throw new Error(`[coopDefenseMaps] Map ${mapId} has a cyclic encounter/map-event dependency`);
+      const cycleStart = path.indexOf(node);
+      const cycle = [...path.slice(cycleStart), node].join(' -> ');
+      throw new Error(`[coopDefenseMaps] Map ${mapId} has cyclic mission dependency: ${cycle}`);
     }
     if (visited.has(node)) return;
     visiting.add(node);
+    path.push(node);
     for (const dependent of adjacency.get(node) ?? []) visit(dependent);
+    path.pop();
     visiting.delete(node);
     visited.add(node);
   };
@@ -2685,30 +2759,6 @@ function normalizeMissionBarrierTrigger(
     return { type: 'after-encounter', encounterId };
   }
   throw new Error(`[coopDefenseMaps] Mission barrier ${mapId}:${barrierId} has unsupported openOn trigger`);
-}
-
-function validateMissionTriggerReferences(
-  mapId: string,
-  encounters: readonly CoopDefenseMapEncounterConfig[],
-  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
-  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
-): void {
-  const checkpointIds = new Set(mission?.checkpoints.map(({ id }) => id) ?? []);
-  const defenseIds = new Set(mission?.mandatoryDefenses.map(({ id }) => id) ?? []);
-  const validate = (owner: string, trigger: CoopDefenseMapEncounterStart): void => {
-    if (trigger.type === 'after-checkpoint' && !checkpointIds.has(trigger.checkpointId)) {
-      throw new Error(`[coopDefenseMaps] ${owner} on map ${mapId} references unknown checkpoint: ${trigger.checkpointId}`);
-    }
-    if (trigger.type === 'after-defense' && !defenseIds.has(trigger.defenseId)) {
-      throw new Error(`[coopDefenseMaps] ${owner} on map ${mapId} references unknown defense: ${trigger.defenseId}`);
-    }
-  };
-  for (const encounter of encounters) validate(`Encounter ${encounter.id}`, encounter.start);
-  for (const objective of objectives) {
-    validate(`Secondary objective ${objective.id}`, objective.start);
-    if (objective.focusUntil) validate(`Secondary objective ${objective.id}`, objective.focusUntil);
-    if (objective.holdUntil) validate(`Secondary objective ${objective.id}`, objective.holdUntil);
-  }
 }
 
 function normalizeRequiredId(value: unknown, message: string): string {

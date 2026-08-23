@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ASMD_LOADOUT_ICON_SCALE,
+  fitLoadoutIcon,
   getLoadoutIconDisplaySize,
 } from '../src/ui/LoadoutIconLayout';
 
@@ -17,6 +18,24 @@ describe('loadout icon layout', () => {
       width: 44 * ASMD_LOADOUT_ICON_SCALE,
       height: 44 * ASMD_LOADOUT_ICON_SCALE,
     });
+  });
+
+  it.each([
+    '__ui_loadout_icon_ASMD_PRIM_padded',
+    '__ui_loadout_icon_ASMD_SEC_padded',
+  ])('applies the ASMD inset to the padded runtime texture key %s', (textureKey) => {
+    const image = {
+      texture: { key: textureKey },
+      frame: { width: 32, height: 32 },
+      setDisplaySize: vi.fn(),
+    };
+
+    fitLoadoutIcon(image as Parameters<typeof fitLoadoutIcon>[0], 32, 32);
+
+    expect(image.setDisplaySize).toHaveBeenCalledWith(
+      32 * ASMD_LOADOUT_ICON_SCALE,
+      32 * ASMD_LOADOUT_ICON_SCALE,
+    );
   });
 
   it('keeps standard icons at their existing maximum size', () => {

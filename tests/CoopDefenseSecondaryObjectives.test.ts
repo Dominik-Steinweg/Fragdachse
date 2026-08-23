@@ -3,6 +3,7 @@ import {
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapSecondaryObjectives,
   type CoopDefenseMapConfig,
+  type CoopDefenseMapEncounterStart,
   type CoopDefenseMapObjective,
 } from '../src/config/coopDefenseMaps';
 import { CoopDefenseSecondaryObjectiveSystem } from '../src/systems/CoopDefenseSecondaryObjectiveSystem';
@@ -88,6 +89,28 @@ function resolvedObjective(
     targetGoal: 3,
     ...overrides,
   };
+}
+
+function createMissionTestSession(): Map<string, unknown> {
+  const globalState = new Map<string, unknown>();
+  const room = {
+    isHost: () => true,
+    setGlobal: (key: string, value: unknown) => globalState.set(key, value),
+    getGlobal: (key: string) => globalState.get(key),
+    destroy: () => undefined,
+  };
+  setActiveSession({ room: room as never, transport: {} as never, roomCode: 'test' });
+  return globalState;
+}
+
+function setActiveMissionRound(globalState: Map<string, unknown>, roundRevision: number): void {
+  globalState.set('gph', 'ARENA');
+  globalState.set('rpt', {
+    roundStartTime: 0,
+    roundRevision,
+    participantIds: ['p0'],
+    spectatorIds: [],
+  });
 }
 
 describe('Coop defense secondary objectives', () => {
@@ -320,6 +343,74 @@ describe('Coop defense secondary objectives', () => {
         openOn: { type: 'after-defense', defenseId: 'defend' },
       }],
     });
+  });
+
+  it('rejects cyclic mission dependencies while allowing a terminal mandatory-hold handoff', () => {
+    const encounters: CoopDefenseMapConfig['encounters'] = [{
+      id: 'ambush',
+      start: { type: 'after-defense', defenseId: 'gate-defense' },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    }];
+    const missionProgress: NonNullable<CoopDefenseMapConfig['missionProgress']> = {
+      checkpoints: [{ id: 'gate', gridX: 3, gridY: 4 }],
+      mandatoryDefenses: [{ id: 'gate-defense', checkpointId: 'gate', objectiveId: 'gate-hold' }],
+    };
+    const baseMap: Partial<CoopDefenseMapConfig> = {
+      bases: TEST_BASES.slice(0, 2),
+      surviveDurationSec: 60,
+      surviveRespawnsPerPlayer: 1,
+      missionProgress,
+    };
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'gate-hold',
+      type: 'hold',
+      start: { type: 'after-checkpoint', checkpointId: 'gate' },
+      holdUntil: { type: 'after-encounter', encounterId: 'ambush' },
+      targets: ['friendly-outpost'],
+    }], 'survive', encounters, baseMap))).toThrow(
+      /cyclic mission dependency: .*encounter:ambush.*objective:gate-hold.*defense:gate-defense.*encounter:ambush/,
+    );
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'gate-hold',
+      type: 'hold',
+      start: { type: 'after-checkpoint', checkpointId: 'gate' },
+      holdDurationMs: 1_000,
+      targets: ['friendly-outpost'],
+    }], 'survive', encounters, baseMap))).not.toThrow();
+  });
+
+  it('keeps mission trigger references fail-closed during graph construction', () => {
+    const encounter = (start: CoopDefenseMapEncounterStart): NonNullable<CoopDefenseMapConfig['encounters']>[number] => ({
+      id: 'triggered',
+      start,
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    });
+    const survival = {
+      bases: TEST_BASES.slice(0, 1),
+      objective: 'survive' as const,
+      surviveDurationSec: 60,
+      surviveRespawnsPerPlayer: 1,
+    };
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([], 'survive', [encounter({
+      type: 'after-checkpoint',
+      checkpointId: 'missing-checkpoint',
+    })], survival))).toThrow('unknown checkpoint');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([], 'survive', [encounter({
+      type: 'after-defense',
+      defenseId: 'missing-defense',
+    })], survival))).toThrow('unknown defense');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'missing-encounter',
+      type: 'hold',
+      start: { type: 'after-encounter', encounterId: 'missing-encounter' },
+      holdDurationMs: 1_000,
+      targets: ['friendly-outpost'],
+    }]))).toThrow('unknown encounter');
   });
 
   it('validates deterministic after-encounter conflicts without rejecting sequential handoffs', () => {
@@ -673,14 +764,8 @@ describe('Coop defense secondary objectives', () => {
   });
 
   it('round-trips a sanitized presentation snapshot and rejects manipulated values', () => {
-    const globalState = new Map<string, unknown>();
-    const room = {
-      isHost: () => true,
-      setGlobal: (key: string, value: unknown) => globalState.set(key, value),
-      getGlobal: (key: string) => globalState.get(key),
-      destroy: () => undefined,
-    };
-    setActiveSession({ room: room as never, transport: {} as never, roomCode: 'test' });
+    const globalState = createMissionTestSession();
+    setActiveMissionRound(globalState, 42);
 
     const bridge = new NetworkBridge();
     const snapshot = [{
@@ -714,14 +799,8 @@ describe('Coop defense secondary objectives', () => {
   });
 
   it('replicates a sanitized mission snapshot to a late reader and clears it on teardown', () => {
-    const globalState = new Map<string, unknown>();
-    const room = {
-      isHost: () => true,
-      setGlobal: (key: string, value: unknown) => globalState.set(key, value),
-      getGlobal: (key: string) => globalState.get(key),
-      destroy: () => undefined,
-    };
-    setActiveSession({ room: room as never, transport: {} as never, roomCode: 'test' });
+    const globalState = createMissionTestSession();
+    setActiveMissionRound(globalState, 42);
 
     const hostBridge = new NetworkBridge();
     const snapshot = {
@@ -747,5 +826,109 @@ describe('Coop defense secondary objectives', () => {
 
     hostBridge.publishCoopDefenseMissionProgressPresentationState(null);
     expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+  });
+
+  it('binds mission progress snapshots to the active round revision', () => {
+    const globalState = createMissionTestSession();
+    const bridge = new NetworkBridge();
+    const snapshot = {
+      roundRevision: 42,
+      missionRevision: 3,
+      activatedCheckpoints: [],
+      nextCheckpointId: null,
+      respawnCheckpointId: null,
+      routeLockDefenseId: null,
+      resolvedDefenses: [],
+      barriers: [{ barrierId: 'entry-gate', open: true }],
+      routeComplete: false,
+    };
+
+    setActiveMissionRound(globalState, 42);
+    globalState.set('cmp', snapshot);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toEqual(snapshot);
+
+    setActiveMissionRound(globalState, 43);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+  });
+
+  it('revalidates an unchanged raw snapshot when the active round revision changes', () => {
+    const globalState = createMissionTestSession();
+    const bridge = new NetworkBridge();
+    const snapshot = {
+      roundRevision: 42,
+      missionRevision: 1,
+      activatedCheckpoints: [],
+      nextCheckpointId: null,
+      respawnCheckpointId: null,
+      routeLockDefenseId: null,
+      resolvedDefenses: [],
+      barriers: [],
+      routeComplete: false,
+    };
+
+    setActiveMissionRound(globalState, 42);
+    globalState.set('cmp', snapshot);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toEqual(snapshot);
+
+    // Keep the raw cmp object unchanged; only the authoritative participation revision moves on.
+    setActiveMissionRound(globalState, 43);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+  });
+
+  it('accepts a new-round snapshot after rejecting a stale one', () => {
+    const globalState = createMissionTestSession();
+    const bridge = new NetworkBridge();
+    const staleSnapshot = {
+      roundRevision: 42,
+      missionRevision: 1,
+      activatedCheckpoints: [],
+      nextCheckpointId: null,
+      respawnCheckpointId: null,
+      routeLockDefenseId: null,
+      resolvedDefenses: [],
+      barriers: [{ barrierId: 'entry-gate', open: true }],
+      routeComplete: false,
+    };
+    const currentSnapshot = { ...staleSnapshot, roundRevision: 43, missionRevision: 0 };
+
+    setActiveMissionRound(globalState, 43);
+    globalState.set('cmp', staleSnapshot);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+
+    globalState.set('cmp', currentSnapshot);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toEqual(currentSnapshot);
+  });
+
+  it('fails closed without an active Arena participation revision', () => {
+    const globalState = createMissionTestSession();
+    const bridge = new NetworkBridge();
+    const snapshot = {
+      roundRevision: 42,
+      missionRevision: 1,
+      activatedCheckpoints: [],
+      nextCheckpointId: null,
+      respawnCheckpointId: null,
+      routeLockDefenseId: null,
+      resolvedDefenses: [],
+      barriers: [],
+      routeComplete: false,
+    };
+
+    setActiveMissionRound(globalState, 42);
+    globalState.set('cmp', snapshot);
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toEqual(snapshot);
+
+    globalState.delete('rpt');
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+
+    // Even a lingering old participation value is not active while the game is back in the lobby.
+    globalState.set('rpt', {
+      roundStartTime: 0,
+      roundRevision: 42,
+      participantIds: ['p0'],
+      spectatorIds: [],
+    });
+    globalState.set('gph', 'LOBBY');
+    expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
   });
 });
