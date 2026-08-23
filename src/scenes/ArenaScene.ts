@@ -959,7 +959,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseMissionProgressSystem: null, coopDefenseMissionBarrierManager: null, hostHeldActionSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseRespawnBudgetSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseMissionProgressSystem: null, coopDefenseMissionBarrierManager: null, hostHeldActionSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       flowFieldCoordinator: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
@@ -1802,14 +1802,10 @@ export class ArenaScene extends Phaser.Scene {
         secs,
         activeMapConfig === null || activeMapConfig.objective === 'survive',
       );
-      const localPlayerId = bridge.getLocalPlayerId();
       this.ctx.centerHUD.updateLifeStatus(buildCoopDefenseLifeStatusViewModel({
-        objective: activeMapConfig?.objective ?? null,
-        survival: bridge.getLocalCoopDefenseSurvivalState(),
+        budget: bridge.getLocalCoopDefenseRespawnBudgetState(),
         missionRespawnActive: bridge.getCoopDefenseMissionProgressPresentationState()
           ?.respawnCheckpointId != null,
-        alive: this.ctx.combatSystem.isAlive(localPlayerId),
-        canRespawn: bridge.canPlayerRespawn(localPlayerId),
       }));
       const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
       const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
@@ -4656,7 +4652,7 @@ export class ArenaScene extends Phaser.Scene {
       ownMainBaseMaxHp: ownBase?.maxHp ?? null,
       hostileMainBaseHp: hostileBase?.hp ?? null,
       hostileMainBaseMaxHp: hostileBase?.maxHp ?? null,
-      survivalRemainingRespawns: bridge.getLocalCoopDefenseSurvivalState()?.remainingRespawns ?? null,
+      survivalRemainingRespawns: bridge.getLocalCoopDefenseRespawnBudgetState()?.remainingRespawns ?? null,
       build: buildBalanceBuildSnapshot(
         storedProgress.totalXp,
         this.coopDefenseProgress.level,

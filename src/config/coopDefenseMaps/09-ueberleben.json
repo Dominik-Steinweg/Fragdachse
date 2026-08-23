@@ -14,7 +14,7 @@
   "surviveDurationSec": 120,
   "balanceReferenceDurationSec": 120,
   "objective": "survive",
-  "surviveRespawnsPerPlayer": 2,
+  "respawnsPerPlayer": 2,
   "bases": [],
   "powerUps": [
     { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },

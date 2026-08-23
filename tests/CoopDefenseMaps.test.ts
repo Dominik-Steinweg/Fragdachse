@@ -71,7 +71,7 @@ describe('Coop defense map progression', () => {
       balanceReferenceDurationSec: 60,
       objective: 'survive' as const,
       surviveDurationSec: 60,
-      surviveRespawnsPerPlayer: 0,
+      respawnsPerPlayer: 0,
       bases: [],
       powerUps: [],
     };
@@ -339,7 +339,7 @@ describe('Coop defense map progression', () => {
     expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9', '14']);
     for (const map of survivalMaps) {
       expect(map.surviveDurationSec).toBeGreaterThan(0);
-      expect(map.surviveRespawnsPerPlayer).toBeGreaterThanOrEqual(0);
+      expect(map.respawnsPerPlayer).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -669,7 +669,7 @@ describe('Coop defense map progression', () => {
     const map = getCoopDefenseMapConfig('14');
     expect(map.objective).toBe('survive');
     expect(map.surviveDurationSec).toBeGreaterThan(0);
-    expect(map.surviveRespawnsPerPlayer).toBeGreaterThanOrEqual(0);
+    expect(map.respawnsPerPlayer).toBeGreaterThanOrEqual(0);
     expect(map.secondaryObjectives).toEqual([]);
     expect(map.trackMode).toBe('void-fire');
     expect(map.rockField).toBeDefined();

@@ -93,7 +93,7 @@ describe('CoopDefenseRoundStateSystem', () => {
       baseManager: createBaseManager(friendly(500)),
       objective: 'survive',
       getSecondsLeft: () => 0,
-      isSurvivalTeamWiped: () => true,
+      isTeamWipedOut: () => true,
     }).update()).toBe('defeat');
   });
 
@@ -102,7 +102,7 @@ describe('CoopDefenseRoundStateSystem', () => {
       baseManager: createBaseManager(friendly(500)),
       objective: 'repel-assault',
       getSecondsLeft: () => 10,
-      isSurvivalTeamWiped: () => true,
+      isTeamWipedOut: () => true,
     }).update()).toBeNull();
   });
 });

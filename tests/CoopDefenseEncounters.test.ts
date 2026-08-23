@@ -140,7 +140,7 @@ describe('Coop defense encounters', () => {
       ...valid,
       objective: 'survive',
       surviveDurationSec: 60,
-    })).toThrow('surviveRespawnsPerPlayer');
+    })).toThrow('respawnsPerPlayer');
     expect(() => normalizeCoopDefenseMapConfig({
       ...valid,
       balanceReferenceDurationSec: 0,

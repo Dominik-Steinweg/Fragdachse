@@ -44,7 +44,7 @@ function makeSingleTargetMap(
 ): CoopDefenseMapConfig {
   return makeMap(secondaryObjectives, objective, undefined, {
     bases: TEST_BASES.slice(0, 2),
-    ...(objective === 'survive' ? { surviveDurationSec: 60, surviveRespawnsPerPlayer: 1 } : {}),
+    ...(objective === 'survive' ? { surviveDurationSec: 60, respawnsPerPlayer: 1 } : {}),
   });
 }
 
@@ -307,7 +307,7 @@ describe('Coop defense secondary objectives', () => {
         start: { type: 'after-encounter', encounterId: 'assault-1' },
         targets: ['friendly-outpost-b'],
       },
-    ], 'survive', undefined, { surviveDurationSec: 60, surviveRespawnsPerPlayer: 1 })))
+    ], 'survive', undefined, { surviveDurationSec: 60, respawnsPerPlayer: 1 })))
       .toThrow('same start encounter');
   });
 
@@ -321,7 +321,7 @@ describe('Coop defense secondary objectives', () => {
     }], 'survive', undefined, {
       bases: TEST_BASES.slice(0, 2),
       surviveDurationSec: 60,
-      surviveRespawnsPerPlayer: 1,
+      respawnsPerPlayer: 1,
       missionProgress: {
         checkpoints: [{ id: ' gate ', gridX: 3, gridY: 4, setRespawn: true }],
         mandatoryDefenses: [{ id: ' defend ', checkpointId: 'gate', objectiveId: 'hold-gate' }],
@@ -358,7 +358,7 @@ describe('Coop defense secondary objectives', () => {
     const baseMap: Partial<CoopDefenseMapConfig> = {
       bases: TEST_BASES.slice(0, 2),
       surviveDurationSec: 60,
-      surviveRespawnsPerPlayer: 1,
+      respawnsPerPlayer: 1,
       missionProgress,
     };
 
@@ -391,7 +391,7 @@ describe('Coop defense secondary objectives', () => {
       bases: TEST_BASES.slice(0, 1),
       objective: 'survive' as const,
       surviveDurationSec: 60,
-      surviveRespawnsPerPlayer: 1,
+      respawnsPerPlayer: 1,
     };
 
     expect(() => normalizeCoopDefenseMapConfig(makeMap([], 'survive', [encounter({

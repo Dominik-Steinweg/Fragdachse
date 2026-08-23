@@ -487,7 +487,7 @@ export class CenterHUD {
   private timerPanelBg!: Phaser.GameObjects.Image;
   private topPanelBg!: Phaser.GameObjects.Image;
   private timerText!: Phaser.GameObjects.Text;
-  private survivalText!: Phaser.GameObjects.Text;
+  private lifeStatusText!: Phaser.GameObjects.Text;
   private tutorialContainer!: Phaser.GameObjects.Container;
   private tutorialLifecycleContainer!: Phaser.GameObjects.Container;
   private tutorialGraphics!: Phaser.GameObjects.Graphics;
@@ -542,7 +542,7 @@ export class CenterHUD {
 
   private lastTimerText: string | null = null;
   private lastTimerColor: string | null = null;
-  private lastSurvivalText: string | null = null;
+  private lastLifeStatusText: string | null = null;
   private lastMainObjectiveId: string | null = null;
   private lastMainObjectiveSignature: string | null = null;
   private lastMainObjectiveProgressWidth = -1;
@@ -627,10 +627,10 @@ export class CenterHUD {
     this.timerText = this.scene.add.text(CENTER_X, TIMER_Y, '2:00', {
       fontSize: '32px', fontFamily: 'monospace', color: TIMER_COLOR_NORMAL, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.survivalText = this.scene.add.text(CENTER_X + PANEL_WIDTH / 2 + 18, TIMER_Y, '', {
+    this.lifeStatusText = this.scene.add.text(CENTER_X + PANEL_WIDTH / 2 + 18, TIMER_Y, '', {
       fontSize: '14px', fontFamily: 'monospace', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    this.container.add([this.timerPanelBg, this.topPanelBg, this.timerText, this.survivalText]);
+    this.container.add([this.timerPanelBg, this.topPanelBg, this.timerText, this.lifeStatusText]);
   }
 
   private buildMainObjectivePanel(): void {
@@ -995,8 +995,8 @@ export class CenterHUD {
     this.ultimateReadyActive = false;
     this.lastTimerText = null;
     this.lastTimerColor = null;
-    this.lastSurvivalText = null;
-    this.survivalText.setVisible(false);
+    this.lastLifeStatusText = null;
+    this.lifeStatusText.setVisible(false);
   }
 
   setPuContainer(c: Phaser.GameObjects.Container): void {
@@ -1023,21 +1023,21 @@ export class CenterHUD {
   }
 
   /**
-   * Kompakte Lebens-/Rueckkehrzeile neben dem Timer. Survival zeigt sein Respawn-Budget,
-   * Vorstoss nur den aktiven Missions-Respawnpunkt; das Anzeigemodell entscheidet.
+   * Kompakte Lebens-/Rueckkehrzeile neben dem Timer. Jede Map mit authored Respawn-Budget
+   * fuellt sie; welcher Text erscheint, entscheidet allein das Anzeigemodell.
    */
   updateLifeStatus(model: CoopDefenseLifeStatusViewModel | null): void {
     if (!model) {
-      if (this.survivalText.visible) this.survivalText.setVisible(false);
-      this.lastSurvivalText = null;
+      if (this.lifeStatusText.visible) this.lifeStatusText.setVisible(false);
+      this.lastLifeStatusText = null;
       return;
     }
 
-    if (model.text !== this.lastSurvivalText) {
-      this.survivalText.setText(model.text);
-      this.lastSurvivalText = model.text;
+    if (model.text !== this.lastLifeStatusText) {
+      this.lifeStatusText.setText(model.text);
+      this.lastLifeStatusText = model.text;
     }
-    this.survivalText.setColor(model.color).setVisible(true);
+    this.lifeStatusText.setColor(model.color).setVisible(true);
   }
 
   updateMainObjectivePresentation(model: MainObjectiveViewModel | null): void {

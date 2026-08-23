@@ -7,10 +7,9 @@ import {
   type ResolvedCoopDefenseMapMissionProgressConfig,
 } from '../src/config/coopDefenseMaps';
 import type { BaseManager } from '../src/entities/BaseManager';
-import { isRoundTeamPermanentlyDown } from '../src/scenes/arena/RoundParticipationPolicy';
 import { CoopDefenseMissionProgressSystem } from '../src/systems/CoopDefenseMissionProgressSystem';
+import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';
 import { CoopDefenseRoundStateSystem } from '../src/systems/CoopDefenseRoundStateSystem';
-import type { RoundParticipationState } from '../src/types';
 import { buildCoopDefenseLifeStatusViewModel } from '../src/ui/coopDefenseLifeStatusModel';
 import { buildMainObjectiveViewModel } from '../src/ui/coopDefenseMainObjectiveModel';
 
@@ -34,7 +33,7 @@ function createBaseManager(friendlyHp: readonly number[]): BaseManager {
 
 function advanceRoundState(options: {
   readonly routeComplete?: boolean;
-  readonly teamDefeated?: boolean;
+  readonly teamWipedOut?: boolean;
   readonly friendlyHp?: readonly number[];
 }): CoopDefenseRoundStateSystem {
   return new CoopDefenseRoundStateSystem({
@@ -42,7 +41,7 @@ function advanceRoundState(options: {
     objective: 'advance',
     getSecondsLeft: () => 0,
     isAdvanceComplete: () => options.routeComplete === true,
-    isAdvanceTeamDefeated: () => options.teamDefeated === true,
+    isTeamWipedOut: () => options.teamWipedOut === true,
   });
 }
 
@@ -57,16 +56,21 @@ describe('advance round state', () => {
     expect(advanceRoundState({ routeComplete: true }).update()).toBe('victory');
   });
 
-  it('keeps running while nobody is alive but a regular respawn is still allowed', () => {
-    expect(advanceRoundState({ teamDefeated: false }).update()).toBeNull();
+  it('keeps running while nobody is alive but respawn budget is still free', () => {
+    expect(advanceRoundState({ teamWipedOut: false }).update()).toBeNull();
   });
 
-  it('loses once no relevant participant is alive or able to return', () => {
-    expect(advanceRoundState({ teamDefeated: true }).update()).toBe('defeat');
+  it('loses once the shared team-wipe rule reports an exhausted team', () => {
+    expect(advanceRoundState({ teamWipedOut: true }).update()).toBe('defeat');
   });
 
   it('prefers the final defeat when both signals arrive in the same host tick', () => {
-    expect(advanceRoundState({ teamDefeated: true, routeComplete: true }).update()).toBe('defeat');
+    expect(advanceRoundState({ teamWipedOut: true, routeComplete: true }).update()).toBe('defeat');
+  });
+
+  it('never wins an advance map through the survive timer', () => {
+    // getSecondsLeft() ist 0; nur die Route darf den Vorstoss gewinnen.
+    expect(advanceRoundState({ routeComplete: false }).update()).toBeNull();
   });
 
   it('concludes only once', () => {
@@ -76,56 +80,55 @@ describe('advance round state', () => {
   });
 });
 
-describe('advance team defeat policy', () => {
-  const participation: RoundParticipationState = {
-    roundStartTime: 1,
-    roundRevision: 1,
-    participantIds: ['a', 'b'],
-    spectatorIds: [],
-  };
+describe('advance respawn budget', () => {
   const connected = ['a', 'b', 'late'];
 
-  it('is false while at least one participant lives', () => {
-    expect(isRoundTeamPermanentlyDown(
-      participation,
-      connected,
-      (id) => id === 'a',
-      () => false,
-    )).toBe(false);
+  function budgetSystem(respawnsPerPlayer: number): CoopDefenseRespawnBudgetSystem {
+    return new CoopDefenseRespawnBudgetSystem({ respawnsPerPlayer, participantIds: ['a', 'b'] });
+  }
+
+  it('keeps a momentary team wipe alive while budget is left', () => {
+    const budget = budgetSystem(1);
+    budget.handlePlayerDeath('a');
+    budget.handlePlayerDeath('b');
+
+    expect(budget.isTeamWiped(connected)).toBe(false);
+    expect(budget.canPlayerRespawn('a')).toBe(true);
   });
 
-  it('is false for a momentary wipe with respawns still allowed', () => {
-    expect(isRoundTeamPermanentlyDown(participation, connected, () => false, () => true)).toBe(false);
+  it('loses the team only after the last budget is spent and consumed', () => {
+    const budget = budgetSystem(1);
+    for (const id of ['a', 'b']) {
+      budget.handlePlayerDeath(id);
+      expect(budget.consumeRespawn(id)).toBe(true);
+      budget.handlePlayerDeath(id);
+    }
+
+    expect(budget.isPlayerEliminated('a')).toBe(true);
+    expect(budget.isTeamWiped(connected)).toBe(true);
   });
 
-  it('is true once nobody lives and nobody may respawn', () => {
-    expect(isRoundTeamPermanentlyDown(participation, connected, () => false, () => false)).toBe(true);
+  it('lets one survivor with budget hold the mission open', () => {
+    const budget = budgetSystem(0);
+    budget.handlePlayerDeath('a');
+
+    expect(budget.isTeamWiped(connected)).toBe(false);
   });
 
-  it('ignores late joiners and disconnected participants', () => {
-    // Der Late Joiner lebt, ist aber kein Teilnehmer und verhindert die Niederlage deshalb nicht.
-    expect(isRoundTeamPermanentlyDown(
-      participation,
-      connected,
-      (id) => id === 'late',
-      () => false,
-    )).toBe(true);
-    // Ein dauerhaft getrennter Teilnehmer blockiert die Pruefung nicht.
-    expect(isRoundTeamPermanentlyDown(
-      participation,
-      ['a'],
-      () => false,
-      () => false,
-    )).toBe(true);
-  });
+  it('ignores late joiners and disconnected or spectating participants', () => {
+    const budget = budgetSystem(0);
+    budget.handlePlayerDeath('a');
+    budget.handlePlayerDeath('b');
 
-  it('ignores participants that were switched to spectator', () => {
-    expect(isRoundTeamPermanentlyDown(
-      { ...participation, spectatorIds: ['b'] },
-      connected,
-      (id) => id === 'b',
-      () => false,
-    )).toBe(true);
+    // Der Late Joiner fuehrt kein Budget und kann den Wipe weder ausloesen noch verhindern.
+    expect(budget.isTeamWiped(connected)).toBe(true);
+    expect(budget.hasPlayer('late')).toBe(false);
+    // Ein getrennter Teilnehmer mit Restbudget blockiert die Pruefung nicht.
+    expect(budgetSystem(3).isTeamWiped([])).toBe(true);
+
+    const spectating = budgetSystem(3);
+    spectating.handlePlayerDeath('a');
+    expect(spectating.isTeamWiped(['a', 'b'], ['b'])).toBe(false);
   });
 });
 
@@ -302,6 +305,7 @@ function makeAdvanceMap(overrides: Partial<CoopDefenseMapConfig> = {}): CoopDefe
     arenaHeightCells: 34,
     balanceReferenceDurationSec: 60,
     objective: 'advance',
+    respawnsPerPlayer: 2,
     bases: [],
     powerUps: [],
     missionProgress: {
@@ -321,7 +325,7 @@ describe('advance map validation', () => {
     expect(normalized.bases).toHaveLength(0);
     expect(normalized.missionProgress?.checkpoints).toHaveLength(2);
     expect(normalized.surviveDurationSec).toBeUndefined();
-    expect(normalized.surviveRespawnsPerPlayer).toBeUndefined();
+    expect(normalized.respawnsPerPlayer).toBe(2);
   });
 
   it('rejects an advance map without missionProgress', () => {
@@ -334,11 +338,13 @@ describe('advance map validation', () => {
       .toThrow(/needs at least one checkpoint/);
   });
 
-  it('rejects an advance-specific respawn or survival configuration', () => {
-    expect(() => normalizeCoopDefenseMapConfig(makeAdvanceMap({ surviveRespawnsPerPlayer: 2 })))
-      .toThrow(/Only survive maps may declare surviveRespawnsPerPlayer/);
+  it('requires an explicit respawn budget and rejects a survive timer', () => {
+    expect(() => normalizeCoopDefenseMapConfig(makeAdvanceMap({ respawnsPerPlayer: undefined })))
+      .toThrow(/Invalid respawnsPerPlayer/);
     expect(() => normalizeCoopDefenseMapConfig(makeAdvanceMap({ surviveDurationSec: 120 })))
       .toThrow(/Only survive maps may declare surviveDurationSec/);
+    expect(normalizeCoopDefenseMapConfig(makeAdvanceMap({ respawnsPerPlayer: 0 })).respawnsPerPlayer)
+      .toBe(0);
   });
 
   it('keeps the Block B reference validation active on advance maps', () => {
@@ -369,6 +375,7 @@ describe('advance presentation', () => {
     boss: null,
     hostileBases: null,
   };
+  const living = { remainingRespawns: 2, alive: true, eliminated: false };
 
   it('shows the advance title with the checkpoint progress', () => {
     const model = buildMainObjectiveViewModel({
@@ -397,47 +404,31 @@ describe('advance presentation', () => {
     expect(model.progress).toBe(0);
   });
 
-  it('communicates the checkpoint respawn instead of an elimination state', () => {
-    const dead = buildCoopDefenseLifeStatusViewModel({
-      objective: 'advance',
-      survival: null,
-      missionRespawnActive: true,
-      alive: false,
-      canRespawn: true,
-    });
-    expect(dead?.text).toBe('RESPAWN AM LETZTEN CHECKPOINT');
-
+  it('shows the same respawn budget line on every map that authors one', () => {
+    expect(buildCoopDefenseLifeStatusViewModel({ budget: living, missionRespawnActive: false }))
+      .toEqual({ text: 'RESPAWNS: 2', color: '#ffd166' });
     expect(buildCoopDefenseLifeStatusViewModel({
-      objective: 'advance',
-      survival: null,
+      budget: { remainingRespawns: 0, alive: true, eliminated: false },
       missionRespawnActive: true,
-      alive: true,
-      canRespawn: true,
-    })).toBeNull();
-    // Ohne aktivierten Missions-Checkpoint greift der normale Spawn-Fallback ohne Zusatztext.
-    expect(buildCoopDefenseLifeStatusViewModel({
-      objective: 'advance',
-      survival: null,
-      missionRespawnActive: false,
-      alive: false,
-      canRespawn: true,
-    })).toBeNull();
+    })).toEqual({ text: 'LETZTES LEBEN', color: '#ffb347' });
+    // Ohne authored Budget bleibt die Zeile leer.
+    expect(buildCoopDefenseLifeStatusViewModel({ budget: null, missionRespawnActive: true })).toBeNull();
   });
 
-  it('keeps the survival respawn budget untouched', () => {
+  it('names the checkpoint while a respawn is still possible and only then eliminates', () => {
     expect(buildCoopDefenseLifeStatusViewModel({
-      objective: 'survive',
-      survival: { remainingRespawns: 2, alive: true, eliminated: false },
-      missionRespawnActive: false,
-      alive: true,
-      canRespawn: true,
-    })).toEqual({ text: 'RESPAWNS: 2', color: '#ffd166' });
+      budget: { remainingRespawns: 1, alive: false, eliminated: false },
+      missionRespawnActive: true,
+    })).toEqual({ text: 'RESPAWN AM LETZTEN CHECKPOINT', color: '#ffd166' });
+    // Ohne aktivierten Missions-Checkpoint greift der normale Spawn-Fallback ohne Zusatztext.
     expect(buildCoopDefenseLifeStatusViewModel({
-      objective: 'survive',
-      survival: { remainingRespawns: 0, alive: false, eliminated: true },
+      budget: { remainingRespawns: 1, alive: false, eliminated: false },
       missionRespawnActive: false,
-      alive: false,
-      canRespawn: false,
+    })).toEqual({ text: 'RESPAWNS: 1', color: '#ffd166' });
+    // Erst das aufgebrauchte Budget fuehrt in den endgueltigen Zustand.
+    expect(buildCoopDefenseLifeStatusViewModel({
+      budget: { remainingRespawns: 0, alive: false, eliminated: true },
+      missionRespawnActive: true,
     })).toEqual({ text: 'AUSGESCHIEDEN', color: '#ff5555' });
   });
 });

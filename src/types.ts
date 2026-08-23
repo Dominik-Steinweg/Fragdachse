@@ -49,16 +49,16 @@ export interface ArenaLoadReadyState {
   ready: boolean;
 }
 
-/** Host-autoritärer, replizierter Lebenszustand einer aktivierten Survival-Runde. */
-export interface CoopDefenseSurvivalPlayerState {
+/** Host-autoritärer, replizierter Lebenszustand einer Runde mit authored Respawn-Budget. */
+export interface CoopDefenseRespawnBudgetPlayerState {
   remainingRespawns: number;
   alive: boolean;
   eliminated: boolean;
 }
 
-export interface CoopDefenseSurvivalState {
+export interface CoopDefenseRespawnBudgetState {
   respawnsPerPlayer: number;
-  players: Record<string, CoopDefenseSurvivalPlayerState>;
+  players: Record<string, CoopDefenseRespawnBudgetPlayerState>;
 }
 
 /** Host-autoritärer, zuverlässiger Präsentationszustand eines endlichen Coop-Encounter. */

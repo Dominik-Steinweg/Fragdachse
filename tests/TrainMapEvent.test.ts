@@ -22,7 +22,7 @@ function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfi
     balanceReferenceDurationSec: 60,
     objective: 'survive',
     surviveDurationSec: 60,
-    surviveRespawnsPerPlayer: 0,
+    respawnsPerPlayer: 0,
     bases: [{
       id: 'friendly-main',
       hpMax: 100,

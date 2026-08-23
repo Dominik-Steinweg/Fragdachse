@@ -241,7 +241,7 @@
   "objective": "survive",
   "surviveDurationSec": 5400,
   "balanceReferenceDurationSec": 5400,
-  "surviveRespawnsPerPlayer": 99,
+  "respawnsPerPlayer": 99,
   "bases": [
     {
       "id": "stress-home-base",

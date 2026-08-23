@@ -272,7 +272,7 @@ function buildMapSignature(mapConfig: CoopDefenseMapConfig): string {
     trackPosition: mapConfig.trackPosition,
     balanceReferenceDurationSec: mapConfig.balanceReferenceDurationSec,
     surviveDurationSec: mapConfig.surviveDurationSec,
-    surviveRespawnsPerPlayer: mapConfig.surviveRespawnsPerPlayer,
+    respawnsPerPlayer: mapConfig.respawnsPerPlayer,
     objective: mapConfig.objective,
     bases: mapConfig.bases,
     powerUps: mapConfig.powerUps,
@@ -403,7 +403,7 @@ export function buildCoopDefenseBalanceMapSnapshot(mapConfig: CoopDefenseMapConf
     objective: mapConfig.objective,
     balanceReferenceDurationSec: mapConfig.balanceReferenceDurationSec,
     survivalDurationSec: mapConfig.surviveDurationSec ?? null,
-    surviveRespawnsPerPlayer: mapConfig.surviveRespawnsPerPlayer ?? null,
+    respawnsPerPlayer: mapConfig.respawnsPerPlayer ?? null,
     arena: { widthCells, heightCells, areaCells: widthCells * heightCells },
     terrain: {
       rockField: mapConfig.rockField !== undefined,

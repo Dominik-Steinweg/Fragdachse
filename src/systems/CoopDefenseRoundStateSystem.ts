@@ -4,25 +4,26 @@ import type { RoundOutcome } from '../network/NetworkBridge';
 
 export interface CoopDefenseRoundStateSystemOptions {
   readonly baseManager: BaseManager;
-  /** Explizites Map-Ziel; es gibt keinen impliziten Survival-Fallback. */
+  /** Explizites Map-Ziel; es gibt keinen impliziten Fallback. */
   readonly objective: CoopDefenseMapObjective;
   readonly getSecondsLeft: () => number;
   readonly isBossDefeated?: () => boolean;
   /** `repel-assault`: wird vom host-only MapDirector gesetzt, loest aber selbst keinen Sieg aus. */
   readonly isAssaultRepelled?: () => boolean;
-  /** `survive`: true, sobald kein relevanter Teilnehmer mehr kaempfen oder respawnen kann. */
-  readonly isSurvivalTeamWiped?: () => boolean;
+  /**
+   * `survive` und `advance`: true, sobald kein relevanter Teilnehmer mehr lebt und keiner sein
+   * authored Respawn-Budget noch einsetzen kann. Beide Ziele teilen sich dieselbe Quelle.
+   */
+  readonly isTeamWipedOut?: () => boolean;
   /** `advance`: host-autoritatives `isRouteComplete()` des Missionsfortschritts. */
   readonly isAdvanceComplete?: () => boolean;
-  /** `advance`: true, sobald kein relevanter Teilnehmer mehr lebt oder regulaer zurueckkehren kann. */
-  readonly isAdvanceTeamDefeated?: () => boolean;
 }
 
 /**
  * Entscheidet host-autoritativ ueber Sieg und Niederlage einer Coop-Defense-Runde.
  *
- * Verloren wird bei Survival und Vorstoss ausschliesslich ueber einen endgueltigen Spielerwipe,
- * sonst ueber die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
+ * `survive` und `advance` verlieren ausschliesslich ueber den endgueltigen Team-Wipe, alle
+ * anderen Ziele ueber die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
  * Abwehren des Assaults (`repel-assault`), das Zeitlimit (`survive`), den Boss (`defeat-boss`),
  * die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`) oder die vollstaendig
  * durchquerte Route bis zur Extraktion (`advance`).
@@ -34,9 +35,8 @@ export class CoopDefenseRoundStateSystem {
   private readonly getSecondsLeft: () => number;
   private readonly isBossDefeated: () => boolean;
   private readonly isAssaultRepelled: () => boolean;
-  private readonly isSurvivalTeamWiped: () => boolean;
+  private readonly isTeamWipedOut: () => boolean;
   private readonly isAdvanceComplete: () => boolean;
-  private readonly isAdvanceTeamDefeated: () => boolean;
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
@@ -44,9 +44,8 @@ export class CoopDefenseRoundStateSystem {
     this.getSecondsLeft = options.getSecondsLeft;
     this.isBossDefeated = options.isBossDefeated ?? (() => false);
     this.isAssaultRepelled = options.isAssaultRepelled ?? (() => false);
-    this.isSurvivalTeamWiped = options.isSurvivalTeamWiped ?? (() => false);
+    this.isTeamWipedOut = options.isTeamWipedOut ?? (() => false);
     this.isAdvanceComplete = options.isAdvanceComplete ?? (() => false);
-    this.isAdvanceTeamDefeated = options.isAdvanceTeamDefeated ?? (() => false);
   }
 
   update(): RoundOutcome | null {
@@ -89,27 +88,17 @@ export class CoopDefenseRoundStateSystem {
       return null;
     }
 
-    if (this.objective === 'advance') {
-      // Die endgueltige Niederlage hat Vorrang, falls beide Signale im selben Host-Tick anliegen.
-      // Ein momentaner Wipe mit laufenden Respawn-Timern ist ausdruecklich kein Defeat.
-      if (this.isAdvanceTeamDefeated()) {
-        this.concluded = true;
-        return 'defeat';
-      }
-      if (this.isAdvanceComplete()) {
-        this.concluded = true;
-        return 'victory';
-      }
-      return null;
-    }
-
-    if (this.objective === 'survive') {
-      if (this.isSurvivalTeamWiped()) {
+    // `survive` und `advance` verlieren beide ueber denselben endgueltigen Team-Wipe; nur die
+    // Siegbedingung dahinter unterscheidet sich. Ein momentaner Wipe mit noch freiem
+    // Respawn-Budget ist ausdruecklich kein Defeat.
+    if (this.objective === 'survive' || this.objective === 'advance') {
+      if (this.isTeamWipedOut()) {
         this.concluded = true;
         return 'defeat';
       }
 
-      if (this.getSecondsLeft() <= 0) {
+      const won = this.objective === 'advance' ? this.isAdvanceComplete() : this.getSecondsLeft() <= 0;
+      if (won) {
         this.concluded = true;
         return 'victory';
       }

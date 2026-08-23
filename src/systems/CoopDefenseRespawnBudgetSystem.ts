@@ -1,23 +1,25 @@
-import type { CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState } from '../types';
+import type { CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState } from '../types';
 
-export interface CoopDefenseSurvivalSystemOptions {
+export interface CoopDefenseRespawnBudgetSystemOptions {
   readonly respawnsPerPlayer: number;
   readonly participantIds: readonly string[];
 }
 
 /**
- * Host-only Lebensverwaltung fuer bewusst konfigurierte Survival-Maps.
+ * Host-only Lebensverwaltung fuer jede Map, die ein Respawn-Budget authoriert (`survive`,
+ * `advance`). Das Ziel der Map entscheidet nur, was aus dem Team-Wipe folgt - nicht, wie das
+ * Budget gefuehrt wird.
  *
  * `remainingRespawns === 0` beschreibt dabei weiterhin ein aktives letztes Leben. Erst ein
  * danach eintretender Tod setzt `eliminated` auf true. Der Respawn-Gate bleibt rein lesend;
  * der Verbrauch passiert ausschliesslich in `consumeRespawn`, also beim tatsaechlich ausgefuehrten
  * Respawn.
  */
-export class CoopDefenseSurvivalSystem {
+export class CoopDefenseRespawnBudgetSystem {
   private readonly respawnsPerPlayer: number;
-  private readonly players = new Map<string, CoopDefenseSurvivalPlayerState>();
+  private readonly players = new Map<string, CoopDefenseRespawnBudgetPlayerState>();
 
-  constructor(options: CoopDefenseSurvivalSystemOptions) {
+  constructor(options: CoopDefenseRespawnBudgetSystemOptions) {
     this.respawnsPerPlayer = normalizeRespawnCount(options.respawnsPerPlayer);
     for (const playerId of new Set(options.participantIds)) {
       if (typeof playerId !== 'string' || playerId.length === 0) continue;
@@ -30,8 +32,8 @@ export class CoopDefenseSurvivalSystem {
     }
   }
 
-  getSnapshot(): CoopDefenseSurvivalState {
-    const players: Record<string, CoopDefenseSurvivalPlayerState> = {};
+  getSnapshot(): CoopDefenseRespawnBudgetState {
+    const players: Record<string, CoopDefenseRespawnBudgetPlayerState> = {};
     for (const [playerId, state] of this.players) players[playerId] = { ...state };
     return {
       respawnsPerPlayer: this.respawnsPerPlayer,
@@ -43,7 +45,7 @@ export class CoopDefenseSurvivalSystem {
     return this.players.has(playerId);
   }
 
-  getPlayerState(playerId: string): CoopDefenseSurvivalPlayerState | null {
+  getPlayerState(playerId: string): CoopDefenseRespawnBudgetPlayerState | null {
     const state = this.players.get(playerId);
     return state ? { ...state } : null;
   }
@@ -116,7 +118,7 @@ export class CoopDefenseSurvivalSystem {
 
 function normalizeRespawnCount(value: number): number {
   if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`[CoopDefenseSurvivalSystem] Invalid respawn count: ${value}`);
+    throw new Error(`[CoopDefenseRespawnBudgetSystem] Invalid respawn count: ${value}`);
   }
   return Math.floor(value);
 }

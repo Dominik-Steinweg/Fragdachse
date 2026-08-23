@@ -176,7 +176,7 @@ describe('B7 Carry map validation', () => {
       balanceReferenceDurationSec: 60,
       objective: 'survive',
       surviveDurationSec: 60,
-      surviveRespawnsPerPlayer: 1,
+      respawnsPerPlayer: 1,
       bases: [{
         id: 'main',
         hpMax: 100,

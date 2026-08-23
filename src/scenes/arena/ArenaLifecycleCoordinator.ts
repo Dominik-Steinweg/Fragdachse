@@ -54,7 +54,7 @@ import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../../systems/Ak47StrategicTargetSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
-import { CoopDefenseSurvivalSystem } from '../../systems/CoopDefenseSurvivalSystem';
+import { CoopDefenseRespawnBudgetSystem } from '../../systems/CoopDefenseRespawnBudgetSystem';
 import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
 import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
@@ -99,7 +99,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -503,7 +503,7 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || !this.arenaBuilt) return;
     for (const profile of bridge.getConnectedPlayers()) {
       const canInitialSpawn = bridge.canPlayerInitialSpawn(profile.id);
-      const reconnectAfterDeath = this.ctx.coopDefenseSurvivalSystem !== null
+      const reconnectAfterDeath = this.ctx.coopDefenseRespawnBudgetSystem !== null
         && bridge.canPlayerRespawn(profile.id);
       if ((canInitialSpawn || reconnectAfterDeath)
         && bridge.getPlayerReady(profile.id)
@@ -522,7 +522,7 @@ export class ArenaLifecycleCoordinator {
           }
         } else {
           this.ctx.combatSystem.initPlayer(profile.id);
-          this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
+          this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
         }
         // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
         // Arenaaufbau existierten sie noch nicht.
@@ -644,7 +644,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
-    bridge.publishCoopDefenseSurvivalState(null);
+    bridge.publishCoopDefenseRespawnBudgetState(null);
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -695,10 +695,10 @@ export class ArenaLifecycleCoordinator {
     }
 
     const localId = bridge.getLocalPlayerId();
-    // Survival-Eliminierung ist nur eine lokale Darstellungs-/Aktionssperre. Die Netzwerkrolle
+    // Die Budget-Eliminierung ist nur eine lokale Darstellungs-/Aktionssperre. Die Netzwerkrolle
     // bleibt participant, damit Result-/Reward-Eligibility und der Round-Snapshot erhalten bleiben.
     const spectator = bridge.isRoundSpectator(localId)
-      || bridge.getLocalCoopDefenseSurvivalState()?.eliminated === true;
+      || bridge.getLocalCoopDefenseRespawnBudgetState()?.eliminated === true;
     this.localPlayerState.spectator = spectator;
     if (spectator) {
       this.localPlayerState.alive = false;
@@ -868,24 +868,24 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
     if (bridge.isHost()) {
-      if (coopDefenseMapConfig?.objective === 'survive') {
-        const respawnsPerPlayer = coopDefenseMapConfig.surviveRespawnsPerPlayer;
+      if (coopDefenseMapConfig && objectiveUsesRespawnBudget(coopDefenseMapConfig.objective)) {
+        const respawnsPerPlayer = coopDefenseMapConfig.respawnsPerPlayer;
         if (respawnsPerPlayer === undefined) {
-          throw new Error(`[ArenaLifecycleCoordinator] Survival map ${coopDefenseMapConfig.mapId} has no surviveRespawnsPerPlayer`);
+          throw new Error(`[ArenaLifecycleCoordinator] Map ${coopDefenseMapConfig.mapId} has no respawnsPerPlayer`);
         }
         const participantIds = bridge.getRoundParticipation()?.participantIds
           ?? bridge.getConnectedPlayerIds();
-        this.ctx.coopDefenseSurvivalSystem = new CoopDefenseSurvivalSystem({
+        this.ctx.coopDefenseRespawnBudgetSystem = new CoopDefenseRespawnBudgetSystem({
           respawnsPerPlayer,
           participantIds,
         });
-        bridge.publishCoopDefenseSurvivalState(this.ctx.coopDefenseSurvivalSystem.getSnapshot());
+        bridge.publishCoopDefenseRespawnBudgetState(this.ctx.coopDefenseRespawnBudgetSystem.getSnapshot());
       } else {
-        this.ctx.coopDefenseSurvivalSystem = null;
-        bridge.publishCoopDefenseSurvivalState(null);
+        this.ctx.coopDefenseRespawnBudgetSystem = null;
+        bridge.publishCoopDefenseRespawnBudgetState(null);
       }
     } else {
-      this.ctx.coopDefenseSurvivalSystem = null;
+      this.ctx.coopDefenseRespawnBudgetSystem = null;
     }
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
@@ -979,20 +979,18 @@ export class ArenaLifecycleCoordinator {
         getSecondsLeft: () => bridge.computeSecondsLeft(),
         isBossDefeated: () => this.ctx.coopDefenseBossSystem?.isBossDefeated() ?? false,
         isAssaultRepelled: () => this.ctx.coopDefenseMapDirector?.isAssaultRepelled() ?? false,
-        isSurvivalTeamWiped: () => {
-          const survival = this.ctx.coopDefenseSurvivalSystem;
-          if (!survival) return false;
-          return survival.isTeamWiped(
+        // Dieselbe Quelle fuer survive und advance: das authored Respawn-Budget entscheidet,
+        // wann ein Team-Wipe endgueltig ist.
+        isTeamWipedOut: () => {
+          const budget = this.ctx.coopDefenseRespawnBudgetSystem;
+          if (!budget) return false;
+          return budget.isTeamWiped(
             bridge.getConnectedPlayerIds(),
             bridge.getRoundParticipation()?.spectatorIds ?? [],
           );
         },
-        // Vorstoss setzt Sieg und Niederlage rein semantisch aus vorhandenen Systemen zusammen:
-        // die Route gehoert dem MissionProgress, die Rueckkehrfrage der Respawn-Policy.
+        // Der Vorstoss-Sieg gehoert vollstaendig dem Missionsfortschritt.
         isAdvanceComplete: () => this.ctx.coopDefenseMissionProgressSystem?.isRouteComplete() ?? false,
-        isAdvanceTeamDefeated: () => bridge.isRoundTeamPermanentlyDown(
-          (playerId) => this.ctx.combatSystem.isAlive(playerId),
-        ),
       })
       : null;
     const baseManager = this.ctx.baseManager;
@@ -1521,10 +1519,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setInitialSpawnAllowedResolver((playerId) => bridge.canPlayerInitialSpawn(playerId));
     this.ctx.combatSystem.setRespawnAllowedResolver((playerId) => bridge.canPlayerRespawn(playerId));
     this.ctx.combatSystem.setRespawnCallback((playerId) => {
-      const survival = this.ctx.coopDefenseSurvivalSystem;
+      const survival = this.ctx.coopDefenseRespawnBudgetSystem;
       if (!survival) return true;
       const consumed = survival.consumeRespawn(playerId);
-      if (consumed) bridge.publishCoopDefenseSurvivalState(survival.getSnapshot());
+      if (consumed) bridge.publishCoopDefenseRespawnBudgetState(survival.getSnapshot());
       return consumed;
     });
     this.ctx.combatSystem.setAuthoritativePositionResetCallback((playerId, x, y) => {
@@ -1812,9 +1810,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
       bridge.recordPlayerDeath(playerId);
       this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
-      this.ctx.coopDefenseSurvivalSystem?.handlePlayerDeath(playerId);
-      if (this.ctx.coopDefenseSurvivalSystem) {
-        bridge.publishCoopDefenseSurvivalState(this.ctx.coopDefenseSurvivalSystem.getSnapshot());
+      this.ctx.coopDefenseRespawnBudgetSystem?.handlePlayerDeath(playerId);
+      if (this.ctx.coopDefenseRespawnBudgetSystem) {
+        bridge.publishCoopDefenseRespawnBudgetState(this.ctx.coopDefenseRespawnBudgetSystem.getSnapshot());
       }
       this.ctx.flamethrowerUpgradeSystem?.handlePlayerDeath(playerId, x, y);
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
@@ -2960,7 +2958,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.flamethrowerUpgradeSystem?.clear();
     this.ctx.flamethrowerUpgradeSystem = null;
     this.ctx.weaponUpgradeSystem = null;
-    this.ctx.coopDefenseSurvivalSystem = null;
+    this.ctx.coopDefenseRespawnBudgetSystem = null;
     this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
     this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);
@@ -3308,7 +3306,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.playerManager.addPlayer(profile);
         if (bridge.isHost()) {
           this.ctx.combatSystem.initPlayer(profile.id);
-          this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
+          this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
           this.ctx.resourceSystem?.initPlayer(profile.id);
           this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
           this.ctx.burrowSystem?.initPlayer(profile.id);

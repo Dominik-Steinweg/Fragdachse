@@ -47,7 +47,7 @@ export interface BalanceMapSnapshot {
   readonly objective: CoopDefenseMapObjective;
   readonly balanceReferenceDurationSec: number;
   readonly survivalDurationSec: number | null;
-  readonly surviveRespawnsPerPlayer: number | null;
+  readonly respawnsPerPlayer: number | null;
   readonly arena: { readonly widthCells: number; readonly heightCells: number; readonly areaCells: number };
   readonly terrain: {
     readonly rockField: boolean;

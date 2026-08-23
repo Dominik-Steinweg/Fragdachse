@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { CoopDefenseSurvivalSystem } from '../src/systems/CoopDefenseSurvivalSystem';
+import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';
 
-function createSystem(respawnsPerPlayer = 2): CoopDefenseSurvivalSystem {
-  return new CoopDefenseSurvivalSystem({
+function createSystem(respawnsPerPlayer = 2): CoopDefenseRespawnBudgetSystem {
+  return new CoopDefenseRespawnBudgetSystem({
     respawnsPerPlayer,
     participantIds: ['p1', 'p2'],
   });
 }
 
-describe('CoopDefenseSurvivalSystem', () => {
+describe('CoopDefenseRespawnBudgetSystem', () => {
   it('does not consume a respawn on the initial spawn', () => {
     const system = createSystem();
 
@@ -80,7 +80,7 @@ describe('CoopDefenseSurvivalSystem', () => {
     expect(system.registerInitialSpawn('p1')).toBe(false);
   });
 
-  it('keeps eliminated players as survival participants while excluding spectators and disconnects from the wipe', () => {
+  it('keeps eliminated players as budget participants while excluding spectators and disconnects from the wipe', () => {
     const system = createSystem(1);
     system.handlePlayerDeath('p1');
     system.handlePlayerDeath('p2');

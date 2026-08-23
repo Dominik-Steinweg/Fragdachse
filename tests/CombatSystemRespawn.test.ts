@@ -31,7 +31,7 @@ vi.mock('phaser', () => {
 });
 
 import { CombatSystem } from '../src/systems/CombatSystem';
-import { CoopDefenseSurvivalSystem } from '../src/systems/CoopDefenseSurvivalSystem';
+import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
@@ -56,7 +56,7 @@ describe('CombatSystem respawn lifecycle', () => {
         broadcastEffect: vi.fn(),
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
-      const survival = new CoopDefenseSurvivalSystem({ respawnsPerPlayer: 1, participantIds: ['p1'] });
+      const survival = new CoopDefenseRespawnBudgetSystem({ respawnsPerPlayer: 1, participantIds: ['p1'] });
 
       combat.setInitialSpawnAllowedResolver(() => true);
       combat.setRespawnAllowedResolver((id) => survival.canPlayerRespawn(id));

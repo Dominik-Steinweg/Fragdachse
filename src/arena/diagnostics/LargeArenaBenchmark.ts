@@ -104,7 +104,7 @@ export function createSyntheticLargeArenaMapConfig(
     objective: 'survive',
     surviveDurationSec: 600,
     balanceReferenceDurationSec: 600,
-    surviveRespawnsPerPlayer: 0,
+    respawnsPerPlayer: 0,
     bases: [
       {
         id: 'synthetic-home-base',

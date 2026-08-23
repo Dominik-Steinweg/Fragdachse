@@ -32,9 +32,9 @@ Eine Survival-Eliminierung ändert nicht automatisch die Netzwerkrolle: Der Spie
 
 ## Coop-Zielgrenzen
 
-Coop-Sieg und -Niederlage gehören ausschließlich CoopDefenseRoundStateSystem und den authored Objective-Verträgen. CoopDefenseSurvivalSystem, CoopDefenseMapDirector, CoopDefenseBossSystem, CoopDefensePersistentPressureSystem und CoopDefenseMapEventDirector liefern jeweils nur ihren fachlichen Input.
+Coop-Sieg und -Niederlage gehören ausschließlich CoopDefenseRoundStateSystem und den authored Objective-Verträgen. CoopDefenseRespawnBudgetSystem, CoopDefenseMapDirector, CoopDefenseBossSystem, CoopDefensePersistentPressureSystem und CoopDefenseMapEventDirector liefern jeweils nur ihren fachlichen Input.
 
-Survival ist explizit: Maps mit objective: "survive" müssen Dauer und begrenzte persönliche Respawns authoren. Andere Coop-Ziele dürfen keinen impliziten Rundentimer aus einer Balance-Referenz ableiten.
+Wer über den Team-Wipe verliert, führt ein Budget: `survive` und `advance` müssen `respawnsPerPlayer` authoren, alle anderen Ziele dürfen es nicht. `CoopDefenseRespawnBudgetSystem` ist die einzige Implementierung dieses Budgets; das Map-Ziel entscheidet nur, was aus dem erschöpften Team folgt. Zusätzlich muss `survive` seine Dauer authoren. Andere Coop-Ziele dürfen keinen impliziten Rundentimer aus einer Balance-Referenz ableiten.
 
 Nebenmissionen sind optionale, nicht siegrelevante Ziele mit den Archetypen destroy, hold und carry. Ihre authored Konfiguration, Lebenszyklus und Rewards gehören in coop-defense-authoring.md; die Netzrolle bleibt host-autoritativ.
 

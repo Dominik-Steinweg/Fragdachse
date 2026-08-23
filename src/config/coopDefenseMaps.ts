@@ -640,8 +640,8 @@ export interface CoopDefenseMapConfig {
   readonly boss?: CoopDefenseMapBossConfig;
   /** Jede Map muss ihr Ziel explizit konfigurieren. */
   readonly objective: CoopDefenseMapObjective;
-  /** Fuer jede Survival-Map zwingend: begrenzte persoenliche Respawns. */
-  readonly surviveRespawnsPerPlayer?: number;
+  /** Zwingend fuer jedes Ziel, das ueber den Team-Wipe verliert: begrenzte persoenliche Respawns. */
+  readonly respawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
 }
@@ -1012,10 +1012,10 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     missionProgress,
     boss,
     objective,
-    surviveRespawnsPerPlayer: normalizeSurviveRespawnsPerPlayer(
+    respawnsPerPlayer: normalizeRespawnsPerPlayer(
       mapConfig.mapId,
       objective,
-      mapConfig.surviveRespawnsPerPlayer,
+      mapConfig.respawnsPerPlayer,
     ),
     itemDrop,
   };
@@ -1085,19 +1085,29 @@ function normalizeBalanceReferenceDurationSec(mapId: string, value: number): num
   return normalized;
 }
 
-function normalizeSurviveRespawnsPerPlayer(
+/**
+ * Ein authored Respawn-Budget gehoert genau den Zielen, die ueber den Team-Wipe verlieren.
+ * Alle anderen Ziele verlieren ueber ihre Basen und duerfen kein Budget fuehren.
+ */
+export function objectiveUsesRespawnBudget(objective: CoopDefenseMapObjective): boolean {
+  return objective === 'survive' || objective === 'advance';
+}
+
+function normalizeRespawnsPerPlayer(
   mapId: string,
   objective: CoopDefenseMapObjective,
   value: number | undefined,
 ): number | undefined {
-  if (objective !== 'survive') {
+  if (!objectiveUsesRespawnBudget(objective)) {
     if (value !== undefined) {
-      throw new Error(`[coopDefenseMaps] Only survive maps may declare surviveRespawnsPerPlayer: ${mapId}`);
+      throw new Error(
+        `[coopDefenseMaps] Only survive and advance maps may declare respawnsPerPlayer: ${mapId}`,
+      );
     }
     return undefined;
   }
   if (value === undefined || !Number.isFinite(value) || value < 0) {
-    throw new Error(`[coopDefenseMaps] Invalid surviveRespawnsPerPlayer on map ${mapId}: ${value}`);
+    throw new Error(`[coopDefenseMaps] Invalid respawnsPerPlayer on map ${mapId}: ${value}`);
   }
   return Math.floor(value);
 }

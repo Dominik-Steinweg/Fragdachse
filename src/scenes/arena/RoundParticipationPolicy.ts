@@ -69,7 +69,7 @@ export function isRoundParticipant(
   return getRoundPlayerRole(state, playerId) === 'participant';
 }
 
-/** Rollen-Gate fuer Spawn und Respawn; Survival-Lebensregeln liegen bewusst darueber. */
+/** Rollen-Gate fuer Spawn und Respawn; das authored Respawn-Budget liegt bewusst darueber. */
 export function canRoundPlayerSpawnOrRespawn(
   state: RoundParticipationState | null | undefined,
   playerId: string,
@@ -92,22 +92,4 @@ export function getRoundResultEligibleIds(
   if (!state) return [];
   const connected = new Set(connectedIds);
   return state.participantIds.filter((id) => connected.has(id) && isRoundParticipant(state, id));
-}
-
-/**
- * Endgueltiger Team-Wipe: kein relevanter Teilnehmer lebt und keiner kann nach der bestehenden
- * Respawn-Policy noch zurueckkehren. Relevant sind ausschliesslich verbundene, aktive
- * Teilnehmer - ein dauerhaft getrennter oder auf Spectator geschalteter Spieler darf die
- * Niederlagepruefung weder blockieren noch selbst ausloesen.
- *
- * Ein momentaner Wipe mit noch zulaessigen Respawns bleibt bewusst `false`.
- */
-export function isRoundTeamPermanentlyDown(
-  state: RoundParticipationState | null | undefined,
-  connectedIds: readonly string[],
-  isAlive: (playerId: string) => boolean,
-  canRespawn: (playerId: string) => boolean,
-): boolean {
-  return getRoundResultEligibleIds(state, connectedIds)
-    .every((playerId) => !isAlive(playerId) && !canRespawn(playerId));
 }

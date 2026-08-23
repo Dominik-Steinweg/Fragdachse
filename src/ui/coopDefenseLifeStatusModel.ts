@@ -1,16 +1,11 @@
-import type { CoopDefenseMapObjective } from '../config/coopDefenseMaps';
-import type { CoopDefenseSurvivalPlayerState } from '../types';
-import { t } from '../i18n';
+import type { CoopDefenseRespawnBudgetPlayerState } from '../types';
+import { formatNumber, getLocale, t } from '../i18n';
 
 export interface CoopDefenseLifeStatusInput {
-  readonly objective: CoopDefenseMapObjective | null;
-  /** Nur `survive` fuehrt ein persoenliches Respawn-Budget. */
-  readonly survival: CoopDefenseSurvivalPlayerState | null;
-  /** `advance`: ein Checkpoint mit `setRespawn` ist bereits autoritativ aktiviert. */
+  /** Replizierter Budgetzustand des lokalen Spielers; `null` auf Maps ohne authored Budget. */
+  readonly budget: CoopDefenseRespawnBudgetPlayerState | null;
+  /** Ein Checkpoint mit `setRespawn` ist bereits autoritativ aktiviert. */
   readonly missionRespawnActive: boolean;
-  readonly alive: boolean;
-  /** Ergebnis der bestehenden Respawn-Policy; Vorstoss kennt keine eigene Zaehlung. */
-  readonly canRespawn: boolean;
 }
 
 export interface CoopDefenseLifeStatusViewModel {
@@ -21,25 +16,26 @@ export interface CoopDefenseLifeStatusViewModel {
 /**
  * Phaser-freie Kurzanzeige neben dem Rundentimer.
  *
- * Survival zeigt sein Respawn-Budget, Vorstoss bewusst keinen Lebenszaehler: dort erklaert die
- * Zeile nur waehrend eines respawnfaehigen Todes, wo der Spieler zurueckkehrt. Ohne aktiven
- * Missions-Respawn-Checkpoint bleibt sie leer, weil dann der normale Spawn-Fallback greift.
+ * Jede Map mit authored Respawn-Budget zeigt dieselbe Zeile; das Map-Ziel entscheidet nur, was
+ * aus dem Aufbrauchen folgt. Waehrend eines respawnfaehigen Todes erklaert die Zeile zusaetzlich,
+ * wo der Spieler zurueckkehrt, sobald ein Missions-Respawn-Checkpoint aktiv ist.
  */
 export function buildCoopDefenseLifeStatusViewModel(
   input: CoopDefenseLifeStatusInput,
 ): CoopDefenseLifeStatusViewModel | null {
-  if (input.objective === 'survive') {
-    const survival = input.survival;
-    if (!survival) return null;
-    if (survival.eliminated) return { text: 'AUSGESCHIEDEN', color: '#ff5555' };
-    if (survival.alive && survival.remainingRespawns === 0) return { text: 'LETZTES LEBEN', color: '#ffb347' };
-    return { text: `RESPAWNS: ${survival.remainingRespawns}`, color: '#ffd166' };
-  }
-
-  if (input.objective === 'advance') {
-    if (input.alive || !input.canRespawn || !input.missionRespawnActive) return null;
+  const budget = input.budget;
+  if (!budget) return null;
+  if (budget.eliminated) return { text: t('ui.lifeStatus.eliminated'), color: '#ff5555' };
+  if (!budget.alive && budget.remainingRespawns > 0 && input.missionRespawnActive) {
     return { text: t('ui.lifeStatus.missionRespawn'), color: '#ffd166' };
   }
-
-  return null;
+  if (budget.alive && budget.remainingRespawns === 0) {
+    return { text: t('ui.lifeStatus.lastLife'), color: '#ffb347' };
+  }
+  return {
+    text: t('ui.lifeStatus.respawns', {
+      count: formatNumber(budget.remainingRespawns, getLocale(), { useGrouping: false }),
+    }),
+    color: '#ffd166',
+  };
 }
