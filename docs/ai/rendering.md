@@ -218,7 +218,7 @@ Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen
 | `flame-outer` | `FIRE` (16) | ADD | 3072 | `flame.outer` | eigenes additives Flammenband auf DEPTH.FIRE, unter Core und Spark |
 | `flame-core` | `FIRE+0.05` (16.05) | ADD | 2304 | `flame.core` | eigenes additives Flammenband ueber Outer |
 | `flame-spark` | `FIRE+0.1` (16.1) | ADD | 512 | `flame.spark` | eigenes additives Spark-Band ueber Core; `gravity = -30` |
-| `ground-fire` | `ROCKS+0.2` (9.2) | ADD | 6144 | `groundfire.heat-body`, `groundfire.outer`, `groundfire.core`, `groundfire.ember`, `groundfire.spark` (je normal und void) | eigenes Tiefenband zwischen Felsen und Spielern; `gravity = -36`, die Motive skalieren sie ueber `gravityFactor`. Kapazitaet = Dichte je Rasterzelle (0.70 + 1.30 + 0.85 + 0.40 + 0.06) x 320 gedeckelte Zellen x rund fuenf gleichzeitig sichtbare Grossflaechen |
+| `ground-fire` | `ROCKS+0.2` (9.2) | ADD | 6144 | `groundfire.heat-body`, `groundfire.outer`, `groundfire.core`, `groundfire.ember`, `groundfire.spark` (je normal und void) | eigenes Tiefenband zwischen Felsen und Spielern; `gravity = -36`, die Motive skalieren sie ueber `gravityFactor`. Kapazitaet = Dichte je Rasterzelle (0.70 + 1.30 + 0.85 + 0.40 + 0.28 + 0.035) x 320 gedeckelte Zellen x rund fuenf gleichzeitig sichtbare Grossflaechen = rund 5704 Member |
 | `ground-fire-smoke` | `ROCKS+0.12` (9.12) | NORMAL | 128 | `groundfire.smoke` | einziger nicht-additiver Teil des Bodenfeuers, muss unter den Flammen liegen |
 | `entity-burn` | `PLAYERS+0.23` (10.23) | ADD | 2048 | `entityburn.core`, `entityburn.outer`, `entityburn.spark` | eigenes Tiefenband ueber den Spielern; `gravity = -34` nur fuer die Funken |
 | `projectile-burn` | `PROJECTILES+0.34` (15.34) | ADD | 2048 | `projburn.outer`, `projburn.core`, `projburn.spark` (je normal und void) | eigenes Tiefenband ueber den Projektilkoerpern; `gravity = -30`, Outer skaliert auf 0.8 |
@@ -259,7 +259,9 @@ Drei Regeln gelten fuer jedes Frame, das in grosser Zahl additiv uebereinanderli
 
 Die Flaechenhelligkeit einer Schicht ist `Dichte je Rasterzelle x Motiv-Mittelalpha x Startalpha x 0.567 x Motivflaeche in Zellen`; der Faktor 0.567 ist das Integral aus linear ausblendender Alpha und ueber die Lebenszeit wachsender Flaeche. Fuer das Bodenfeuer summieren sich die vier Schichten auf rund 0.97 – das urspruengliche lag bei 0.56 und wirkte genau deshalb zu blass.
 
-Ruhe ist eine Frage der Lebensdauer, nicht der Partikelzahl: bei fester Ziel-Lebendzahl ist die Spawnrate `Lebendzahl / Lebensdauer`. Kurze Motive tauschen die Flaeche staendig aus und lassen sie flimmern; ein Bodenfeuer steht, seine Bewegung kommt aus dem langsam wandernden Konvektions- und Temperaturfeld.
+Ruhe ist eine Frage der Lebensdauer, nicht der Partikelzahl: bei fester Ziel-Lebendzahl ist die Spawnrate `Lebendzahl / Lebensdauer`. Kurze Motive tauschen die Flaeche staendig aus und lassen sie flimmern; ein Bodenfeuer steht, seine Bewegung kommt aus dem langsam morphenden Konvektions- und Temperaturfeld.
+
+Jede GroundFire-Schicht durchlaeuft eine eigene seed-deterministische Permutation aller Zellen. So bleibt die Deckung vollstaendig, ohne dass Bett, Flaechenfeld, Kern, Glut, Rauch und Funken gemeinsam eine sortierte Rasterfolge ablaufen. Temperatur und Drift stammen aus zwei zeitlich morphenden Value-Noise-Skalen (rund 4,8 und 2,9 Sekunden); lokale Curl-Richtungen erzeugen Wirbel, aber keine gerichtete Wellenfront. Die Funken sind bewusst der lebhafte Gegenpol zur ruhigen Flaeche: ein dichter Glutregen (0.28 lebende Member je effektiver Zelle) und seltene, grosse Ausreisser (0.035) teilen Effekt, Lane und Profilerzeile, besitzen aber getrennte Scheduler und Zellpermutationen.
 
 ### Ein Strahl aus einzelnen Hitboxen
 

@@ -10,6 +10,11 @@ import {
   GROUND_FIRE_BED_SIZE,
   GROUND_FIRE_SURFACE_SIZE,
 } from './GroundFireTextures';
+import {
+  buildGroundFireTraversal,
+  sampleGroundFireMotion,
+  type GroundFireMotionSample,
+} from './GroundFireMotionField';
 import { GROUND_FIRE_LIGHT_BUCKET_SIZE, MAX_GROUND_FIRE_LIGHTS } from './LightingConfig';
 import type { LightingSystem } from './LightingSystem';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
@@ -46,12 +51,13 @@ const GROUND_FIRE_VOID_TINTS_EMBER = [0xf7e2ff, 0xeac2ff, 0xdda4ff, 0xc887ff] as
  * Ein Bodenfeuer *steht* – seine Bewegung kommt aus dem Konvektionsfeld, nicht aus dem
  * Erscheinen und Verschwinden einzelner Partikel.
  */
-const GROUND_FIRE_BED_LIFESPAN   = { min: 1200, max: 1900 };
-const GROUND_FIRE_FIELD_LIFESPAN = { min: 900, max: 1450 };
-const GROUND_FIRE_CORE_LIFESPAN  = { min: 620, max: 1050 };
-const GROUND_FIRE_EMBER_LIFESPAN = { min: 480, max: 860 };
-const GROUND_FIRE_SPARK_LIFESPAN = { min: 420, max: 800 };
-const GROUND_FIRE_SMOKE_LIFESPAN = { min: 950, max: 1650 };
+const GROUND_FIRE_BED_LIFESPAN   = { min: 1500, max: 1900 };
+const GROUND_FIRE_FIELD_LIFESPAN = { min: 1250, max: 1750 };
+const GROUND_FIRE_CORE_LIFESPAN  = { min: 900, max: 1350 };
+const GROUND_FIRE_EMBER_LIFESPAN = { min: 700, max: 1100 };
+const GROUND_FIRE_SPARK_LIFESPAN = { min: 650, max: 1100 };
+const GROUND_FIRE_SPARK_ACCENT_LIFESPAN = { min: 1000, max: 1700 };
+const GROUND_FIRE_SMOKE_LIFESPAN = { min: 1200, max: 1650 };
 const GROUND_FIRE_FADE_MS = 450;
 
 /**
@@ -69,7 +75,8 @@ const BED_DENSITY_PER_CELL   = 0.70;
 const FIELD_DENSITY_PER_CELL = 1.30;
 const CORE_DENSITY_PER_CELL  = 0.85;
 const EMBER_DENSITY_PER_CELL = 0.40;
-const SPARK_DENSITY_PER_CELL = 0.06;
+export const GROUND_FIRE_SPARK_DENSITY_PER_CELL = 0.28;
+export const GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL = 0.035;
 /** Rauch bleibt ein sparsamer Accent; eigene Lane mit nur 128 Slots. */
 const SMOKE_DENSITY_PER_CELL = 0.035;
 
@@ -90,7 +97,8 @@ const BED_MIN_LIVE   = 4;
 const FIELD_MIN_LIVE = 7;
 const CORE_MIN_LIVE  = 5;
 const EMBER_MIN_LIVE = 2;
-const SPARK_MIN_LIVE = 1;
+const SPARK_MIN_LIVE = 3;
+const SPARK_ACCENT_MIN_LIVE = 1;
 const SMOKE_MIN_LIVE = 1;
 
 /**
@@ -99,7 +107,13 @@ const SMOKE_MIN_LIVE = 1;
  * der Bildausschnitt – dort kostet volle Dichte Slots fuer Partikel, die niemand sieht.
  */
 const GROUND_FIRE_FULL_DENSITY_CELLS = 140;
-const GROUND_FIRE_MAX_EFFECTIVE_CELLS = 320;
+export const GROUND_FIRE_MAX_EFFECTIVE_CELLS = 320;
+export const GROUND_FIRE_DENSITY_BUDGET_PER_CELL = BED_DENSITY_PER_CELL
+  + FIELD_DENSITY_PER_CELL
+  + CORE_DENSITY_PER_CELL
+  + EMBER_DENSITY_PER_CELL
+  + GROUND_FIRE_SPARK_DENSITY_PER_CELL
+  + GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL;
 
 /** Deckel je Frame und Flow, als Anteil der Ziel-Lebendzahl. Faengt Frame-Spikes ab. */
 const GROUND_FIRE_FRAME_BURST_FRACTION = 0.3;
@@ -121,10 +135,10 @@ const EMBER_SIZE_CELLS = 1.0;
  * wandernde Partikel machen die Flaeche hektisch, obwohl die Bewegung eines Bodenfeuers aus dem
  * langsamen Wandern der heissen Zonen kommen soll.
  */
-const BED_DRIFT_SPEED = 2;
-const FIELD_DRIFT_SPEED = 5;
-const CORE_DRIFT_SPEED = 8;
-const EMBER_DRIFT_SPEED = 4;
+const BED_DRIFT_SPEED = 0.75;
+const FIELD_DRIFT_SPEED = 2;
+const CORE_DRIFT_SPEED = 3.5;
+const EMBER_DRIFT_SPEED = 1.5;
 
 /**
  * Startalpha je Schicht – der Intensitaetsregler des Bodenfeuers.
@@ -174,7 +188,6 @@ interface GroundFireCluster {
   maxIntensity: number;
   expiresAt: number;
   bornAt: number;
-  phase: number;
   /**
    * 0 bei einer einzelnen Zelle, 1 ab `GROUND_FIRE_SPREAD_CELLS`.
    *
@@ -185,19 +198,27 @@ interface GroundFireCluster {
   spread: number;
   /** Gedaempfte Zellzahl; Basis aller Ziel-Lebendzahlen. */
   effectiveCells: number;
-  /** Teilerfremd zur Feldlaenge: der Zellzeiger laeuft die Flaeche gleichmaessig ab. */
-  stride: number;
+  /** Unabhaengige, vollstaendige Permutationen verhindern Rasterlaeufe und Layer-Gleichlauf. */
+  bedOrder: Int32Array;
+  fieldOrder: Int32Array;
+  coreOrder: Int32Array;
+  emberOrder: Int32Array;
+  sparkOrder: Int32Array;
+  sparkAccentOrder: Int32Array;
+  smokeOrder: Int32Array;
   bedCursor: number;
   fieldCursor: number;
   coreCursor: number;
   emberCursor: number;
   sparkCursor: number;
+  sparkAccentCursor: number;
   smokeCursor: number;
   bedFlow: ParticleFlowScheduler;
   fieldFlow: ParticleFlowScheduler;
   coreFlow: ParticleFlowScheduler;
   emberFlow: ParticleFlowScheduler;
   sparkFlow: ParticleFlowScheduler;
+  sparkAccentFlow: ParticleFlowScheduler;
   smokeFlow: ParticleFlowScheduler;
 }
 
@@ -213,14 +234,14 @@ interface GroundFireLightRecord {
 }
 
 /** Ergebnis des Konvektionsfeldes; wiederverwendet, damit der Hotpath nichts allokiert. */
-const DRIFT = { x: 0, y: 0 };
+const MOTION: GroundFireMotionSample = { x: 0, y: 0, heat: 0 };
 
 /**
  * Cluster-only visual backend for persistent ground fire.
  *
- * It owns no Phaser GameObjects. A burning area is sampled as a *surface*: every spawn walks the
- * cell field with a coprime stride, so coverage follows the area instead of a handful of fixed
- * nodes, and four stacked layers build the fire from the ground up.
+ * It owns no Phaser GameObjects. A burning area is sampled as a *surface*: every visual layer
+ * walks its own deterministic cell permutation, so coverage follows the area without a raster
+ * sweep or synchronized layers. Four stacked surface layers build the fire from the ground up.
  *
  * ## Warum vier Schichten mit *unterschiedlichen* Motiven
  *
@@ -238,14 +259,15 @@ const DRIFT = { x: 0, y: 0 };
  *
  * ## Warum die Bewegung ein Feld ist und kein Zufall je Partikel
  *
- * Richtung und Drehung kommen aus einem cluster-weiten, langsam wandernden Konvektionsfeld, das
- * nur von Ort und Zeit abhaengt. Benachbarte Partikel bekommen dadurch fast dieselbe Richtung und
- * die Flaeche bewegt sich als *ein* Feuer. Pro Partikel gewuerfelte Drift ergibt stattdessen ein
- * Flimmern, in dem jeder Partikel als eigenes Objekt sichtbar wird.
+ * Richtung und Drehung kommen aus einem cluster-weiten, langsam morphenden Curl-Feld, das nur
+ * von Ort und Zeit abhaengt. Benachbarte Partikel bekommen dadurch aehnliche lokale Richtungen,
+ * ohne dass eine globale Welle ueber die Flaeche laeuft. Pro Partikel gewuerfelte Drift ergibt
+ * stattdessen ein Flimmern, in dem jeder Partikel als eigenes Objekt sichtbar wird.
  *
  * Aus demselben Feld kommt die Temperatur: `coreness` legt den Grundverlauf (heisser Kern, kuehler
- * Rand), ein wanderndes Flackern hebt einzelne Stellen darueber hinaus an. Reales Feuer hat
- * wandernde heisse Zonen; ein statischer Verlauf vom Schwerpunkt nach aussen liest sich als Kreis.
+ * Rand), morphendes Value-Noise hebt einzelne Stellen darueber hinaus an. Heisse Zonen entstehen
+ * lokal und vergehen wieder; ein statischer Verlauf vom Schwerpunkt nach aussen liest sich als
+ * Kreis, eine gerichtete Sinuswelle als synchrones Aufflammen.
  */
 export class GroundFireClusterRenderer {
   private readonly clusters = new Map<string, GroundFireCluster>();
@@ -259,6 +281,7 @@ export class GroundFireClusterRenderer {
   private coreSpec: GpuVfxSpawnSpec | null = null;
   private emberSpec: GpuVfxSpawnSpec | null = null;
   private sparkSpec: GpuVfxSpawnSpec | null = null;
+  private sparkAccentSpec: GpuVfxSpawnSpec | null = null;
   private smokeSpec: GpuVfxSpawnSpec | null = null;
   private source = GPU_VFX_NO_SOURCE_HANDLE;
   private lighting: LightingSystem | null = null;
@@ -310,11 +333,24 @@ export class GroundFireClusterRenderer {
     // der volle Faktor ist hier genau richtig.
     spark.yMode = GpuVfxEase.Gravity;
     spark.gravityFactor = 1;
-    spark.scaleStart = 0.72;
-    spark.scaleEnd = 0.04;
-    spark.alphaStart = 0.9;
+    spark.scaleStart = 1.1;
+    spark.scaleEnd = 0.12;
+    spark.alphaStart = 1;
     spark.alphaEnd = 0;
+    spark.tintBlendStart = 0.28;
+    spark.tintBlendEnd = 1;
     this.sparkSpec = spark;
+
+    const sparkAccent = system.createSpec(GpuVfxEffectId.GroundFireSpark);
+    sparkAccent.frame = GpuVfxFrameId.FlameSpark;
+    sparkAccent.yMode = GpuVfxEase.Gravity;
+    sparkAccent.gravityFactor = 1;
+    sparkAccent.scaleEnd = 0.16;
+    sparkAccent.alphaStart = 1;
+    sparkAccent.alphaEnd = 0;
+    sparkAccent.tintBlendStart = 0.08;
+    sparkAccent.tintBlendEnd = 0.9;
+    this.sparkAccentSpec = sparkAccent;
 
     const smoke = system.createSpec(GpuVfxEffectId.GroundFireSmoke);
     smoke.yMode = GpuVfxEase.Linear;
@@ -359,9 +395,9 @@ export class GroundFireClusterRenderer {
     if (!this.gpuVfx || this.gpuVfx.isSuppressed()) return;
     const nowMs = this.gpuVfx.now();
     const seed = this.hashPosition(x, y);
-    this.driftAt(x, y, nowMs, 0);
-    const dirX = DRIFT.x;
-    const dirY = DRIFT.y;
+    sampleGroundFireMotion(x, y, nowMs, seed, MOTION);
+    const dirX = MOTION.x;
+    const dirY = MOTION.y;
     this.spawnBedAt(x, y, BED_SIZE_CELLS, 0.5, visualStyle, seed, nowMs, dirX, dirY, 1);
     this.spawnFieldAt(x, y, FIELD_SIZE_CELLS, 0.8, visualStyle, seed, nowMs, dirX, dirY, 1);
     this.spawnFieldAt(
@@ -369,7 +405,10 @@ export class GroundFireClusterRenderer {
     );
     this.spawnCoreAt(x, y, CORE_SIZE_CELLS, 0.92, visualStyle, seed ^ 0x83, nowMs, dirX, dirY, 1);
     this.spawnEmberAt(x, y, EMBER_SIZE_CELLS, 0.95, visualStyle, seed ^ 0x1d, nowMs, dirX, dirY, 1);
-    this.spawnSparkAt(x, y, 0.9, visualStyle, seed ^ 0xc7, nowMs);
+    for (let index = 0; index < 4; index += 1) {
+      this.spawnSparkAt(x, y, 0.9, visualStyle, seed ^ Math.imul(index + 1, 0x45d9f3b), nowMs);
+    }
+    this.spawnAccentSparkAt(x, y, 1, visualStyle, seed ^ 0x7f4a7c15, nowMs);
   }
 
   setLightingSystem(lighting: LightingSystem | null): void {
@@ -415,21 +454,28 @@ export class GroundFireClusterRenderer {
       maxIntensity: layout.maxIntensity,
       expiresAt: layout.expiresAt,
       bornAt: this.gpuVfx?.now() ?? 0,
-      phase: this.seededUnit(layout.seed, 17) * TWO_PI,
       spread: 0,
       effectiveCells: 1,
-      stride: 1,
+      bedOrder: new Int32Array(0),
+      fieldOrder: new Int32Array(0),
+      coreOrder: new Int32Array(0),
+      emberOrder: new Int32Array(0),
+      sparkOrder: new Int32Array(0),
+      sparkAccentOrder: new Int32Array(0),
+      smokeOrder: new Int32Array(0),
       bedCursor: 0,
       fieldCursor: 0,
       coreCursor: 0,
       emberCursor: 0,
       sparkCursor: 0,
+      sparkAccentCursor: 0,
       smokeCursor: 0,
       bedFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_BED_LIFESPAN)),
       fieldFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_FIELD_LIFESPAN)),
       coreFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_CORE_LIFESPAN)),
       emberFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_EMBER_LIFESPAN)),
       sparkFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_SPARK_LIFESPAN)),
+      sparkAccentFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_SPARK_ACCENT_LIFESPAN)),
       smokeFlow: new ParticleFlowScheduler(this.averageLife(GROUND_FIRE_SMOKE_LIFESPAN)),
     };
   }
@@ -470,11 +516,12 @@ export class GroundFireClusterRenderer {
     cluster.coreFlow.primeForImmediateEmission();
     cluster.emberFlow.primeForImmediateEmission();
     cluster.sparkFlow.primeForImmediateEmission();
+    cluster.sparkAccentFlow.primeForImmediateEmission();
     cluster.smokeFlow.primeForImmediateEmission();
   }
 
   /**
-   * Baut das Zellfeld neu: Weltmittelpunkte, Randdistanz und der teilerfremde Schrittweite.
+   * Baut das Zellfeld neu: Weltmittelpunkte, Randdistanz und die schichtspezifischen Permutationen.
    *
    * Die Randdistanz ist eine Vielquellen-BFS von aussen nach innen. Sie ersetzt die frueher
    * benutzte Distanz zum Schwerpunkt: die machte aus jeder Form – auch aus einer langen
@@ -533,7 +580,22 @@ export class GroundFireClusterRenderer {
       });
     }
 
-    cluster.stride = this.coprimeStride(count, cluster.seed);
+    cluster.bedOrder = buildGroundFireTraversal(count, cluster.seed, 11);
+    cluster.fieldOrder = buildGroundFireTraversal(count, cluster.seed, 23);
+    cluster.coreOrder = buildGroundFireTraversal(count, cluster.seed, 37);
+    cluster.emberOrder = buildGroundFireTraversal(count, cluster.seed, 53);
+    cluster.sparkOrder = buildGroundFireTraversal(count, cluster.seed, 71);
+    cluster.sparkAccentOrder = buildGroundFireTraversal(count, cluster.seed, 89);
+    cluster.smokeOrder = buildGroundFireTraversal(count, cluster.seed, 107);
+
+    // Auch der erste Zugriff beginnt pro Schicht an einer anderen Stelle der Permutation.
+    cluster.bedCursor = this.seededUnit(cluster.seed, 113) * count | 0;
+    cluster.fieldCursor = this.seededUnit(cluster.seed, 127) * count | 0;
+    cluster.coreCursor = this.seededUnit(cluster.seed, 131) * count | 0;
+    cluster.emberCursor = this.seededUnit(cluster.seed, 137) * count | 0;
+    cluster.sparkCursor = this.seededUnit(cluster.seed, 139) * count | 0;
+    cluster.sparkAccentCursor = this.seededUnit(cluster.seed, 149) * count | 0;
+    cluster.smokeCursor = this.seededUnit(cluster.seed, 151) * count | 0;
     this.refreshFieldValues(cluster);
   }
 
@@ -575,8 +637,13 @@ export class GroundFireClusterRenderer {
         EMBER_MIN_LIVE, GpuVfxEffectId.GroundFireEmber, intensity, nowMs, this.spawnEmber,
       );
       this.runFlow(
-        cluster, cluster.sparkFlow, deltaMs, GROUND_FIRE_SPARK_LIFESPAN, SPARK_DENSITY_PER_CELL,
+        cluster, cluster.sparkFlow, deltaMs, GROUND_FIRE_SPARK_LIFESPAN, GROUND_FIRE_SPARK_DENSITY_PER_CELL,
         SPARK_MIN_LIVE, GpuVfxEffectId.GroundFireSpark, intensity, nowMs, this.spawnClusterSpark,
+      );
+      this.runFlow(
+        cluster, cluster.sparkAccentFlow, deltaMs, GROUND_FIRE_SPARK_ACCENT_LIFESPAN,
+        GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL, SPARK_ACCENT_MIN_LIVE,
+        GpuVfxEffectId.GroundFireSpark, intensity, nowMs, this.spawnClusterAccentSpark,
       );
       if (intensity > 0.5) {
         this.runFlow(
@@ -628,14 +695,14 @@ export class GroundFireClusterRenderer {
   }
 
   private spawnBed(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
-    const cell = this.pickCell(cluster, cluster.bedCursor++);
+    const cell = this.pickCell(cluster, cluster.bedOrder, cluster.bedCursor++);
     if (!cell) return;
     const fade = this.cellFade(cell);
     if (fade <= 0) return;
     const seed = cell.seed ^ Math.imul(cluster.bedCursor, -1640531527);
-    this.driftAt(cell.x, cell.y, nowMs, cluster.phase);
-    const dirX = DRIFT.x;
-    const dirY = DRIFT.y;
+    sampleGroundFireMotion(cell.x, cell.y, nowMs, cluster.seed, MOTION);
+    const dirX = MOTION.x;
+    const dirY = MOTION.y;
     const scatter = this.scatterScale(cluster) * CELL * 1.25;
     // Etwas ueber die Zelle hinaus gestreut: eine exakt auf die Zelle geklemmte Streuung zeichnet
     // das Raster nach, sobald die Flanken der Motive uebereinanderliegen.
@@ -643,7 +710,7 @@ export class GroundFireClusterRenderer {
       cell.x + (this.seededUnit(seed, 53) - 0.5) * scatter,
       cell.y + (this.seededUnit(seed, 59) - 0.5) * scatter,
       BED_SIZE_CELLS * (0.88 + this.seededUnit(seed, 61) * 0.26),
-      this.heatAt(cluster, cell, nowMs, intensity) * 0.72,
+      this.heatAt(cluster, cell, MOTION.heat, intensity) * 0.72,
       cluster.visualStyle,
       seed,
       nowMs,
@@ -654,14 +721,14 @@ export class GroundFireClusterRenderer {
   }
 
   private spawnField(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
-    const cell = this.pickCell(cluster, cluster.fieldCursor++);
+    const cell = this.pickCell(cluster, cluster.fieldOrder, cluster.fieldCursor++);
     if (!cell) return;
     const fade = this.cellFade(cell);
     if (fade <= 0) return;
     const seed = cell.seed ^ Math.imul(cluster.fieldCursor, -1640531527);
-    this.driftAt(cell.x, cell.y, nowMs, cluster.phase);
-    const dirX = DRIFT.x;
-    const dirY = DRIFT.y;
+    sampleGroundFireMotion(cell.x, cell.y, nowMs, cluster.seed, MOTION);
+    const dirX = MOTION.x;
+    const dirY = MOTION.y;
     const scatter = this.scatterScale(cluster) * CELL;
     const size = FIELD_SIZE_CELLS
       * (0.86 + this.seededUnit(seed, 23) * 0.3) * (0.94 + intensity * 0.08);
@@ -669,7 +736,7 @@ export class GroundFireClusterRenderer {
       cell.x + (this.seededUnit(seed, 67) - 0.5) * scatter,
       cell.y + (this.seededUnit(seed, 71) - 0.5) * scatter,
       size,
-      this.heatAt(cluster, cell, nowMs, intensity),
+      this.heatAt(cluster, cell, MOTION.heat, intensity),
       cluster.visualStyle,
       seed,
       nowMs,
@@ -685,22 +752,22 @@ export class GroundFireClusterRenderer {
    * ein reiner Kernfilter liesse die Raender kalt.
    */
   private spawnCore(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
-    const first = this.pickCell(cluster, cluster.coreCursor++);
-    const second = this.pickCell(cluster, cluster.coreCursor + 7);
+    const first = this.pickCell(cluster, cluster.coreOrder, cluster.coreCursor++);
+    const second = this.pickCell(cluster, cluster.coreOrder, cluster.coreCursor + 7);
     if (!first) return;
     const cell = second && second.coreness > first.coreness ? second : first;
     const fade = this.cellFade(cell);
     if (fade <= 0) return;
     const seed = cell.seed ^ Math.imul(cluster.coreCursor, -2048144789);
-    this.driftAt(cell.x, cell.y, nowMs, cluster.phase);
-    const dirX = DRIFT.x;
-    const dirY = DRIFT.y;
+    sampleGroundFireMotion(cell.x, cell.y, nowMs, cluster.seed, MOTION);
+    const dirX = MOTION.x;
+    const dirY = MOTION.y;
     const scatter = this.scatterScale(cluster) * CELL * 0.8;
     this.spawnCoreAt(
       cell.x + (this.seededUnit(seed, 73) - 0.5) * scatter,
       cell.y + (this.seededUnit(seed, 79) - 0.5) * scatter,
       CORE_SIZE_CELLS * (0.82 + this.seededUnit(seed, 83) * 0.42) * (0.92 + intensity * 0.14),
-      Math.max(0.5, this.heatAt(cluster, cell, nowMs, intensity) + 0.14),
+      Math.max(0.5, this.heatAt(cluster, cell, MOTION.heat, intensity) + 0.14),
       cluster.visualStyle,
       seed,
       nowMs,
@@ -716,22 +783,22 @@ export class GroundFireClusterRenderer {
    * ohne eigenes Flackern, sonst wird die Flaeche unruhig.
    */
   private spawnEmber(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
-    const first = this.pickCell(cluster, cluster.emberCursor++);
-    const second = this.pickCell(cluster, cluster.emberCursor + 13);
+    const first = this.pickCell(cluster, cluster.emberOrder, cluster.emberCursor++);
+    const second = this.pickCell(cluster, cluster.emberOrder, cluster.emberCursor + 13);
     if (!first) return;
     const cell = second && second.coreness > first.coreness ? second : first;
     const fade = this.cellFade(cell);
     if (fade <= 0) return;
     const seed = cell.seed ^ Math.imul(cluster.emberCursor, 0x9e3779b1);
-    this.driftAt(cell.x, cell.y, nowMs, cluster.phase);
-    const dirX = DRIFT.x;
-    const dirY = DRIFT.y;
+    sampleGroundFireMotion(cell.x, cell.y, nowMs, cluster.seed, MOTION);
+    const dirX = MOTION.x;
+    const dirY = MOTION.y;
     const scatter = this.scatterScale(cluster) * CELL * 0.9;
     this.spawnEmberAt(
       cell.x + (this.seededUnit(seed, 31) - 0.5) * scatter,
       cell.y + (this.seededUnit(seed, 37) - 0.5) * scatter,
       EMBER_SIZE_CELLS * (0.78 + this.seededUnit(seed, 41) * 0.56),
-      Math.max(0.55, this.heatAt(cluster, cell, nowMs, intensity) + 0.2),
+      Math.max(0.55, this.heatAt(cluster, cell, MOTION.heat, intensity) + 0.2),
       cluster.visualStyle,
       seed,
       nowMs,
@@ -742,7 +809,7 @@ export class GroundFireClusterRenderer {
   }
 
   private spawnClusterSpark(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
-    const cell = this.pickCell(cluster, cluster.sparkCursor++);
+    const cell = this.pickCell(cluster, cluster.sparkOrder, cluster.sparkCursor++);
     if (!cell) return;
     const fade = this.cellFade(cell);
     if (fade <= 0) return;
@@ -750,11 +817,28 @@ export class GroundFireClusterRenderer {
     this.spawnSparkAt(cell.x, cell.y, intensity * (0.72 + cell.coreness * 0.3), cluster.visualStyle, seed, nowMs, fade);
   }
 
+  private spawnClusterAccentSpark(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
+    const cell = this.pickCell(cluster, cluster.sparkAccentOrder, cluster.sparkAccentCursor++);
+    if (!cell) return;
+    const fade = this.cellFade(cell);
+    if (fade <= 0) return;
+    const seed = cell.seed ^ Math.imul(cluster.sparkAccentCursor, 0x27d4eb2d);
+    this.spawnAccentSparkAt(
+      cell.x,
+      cell.y,
+      intensity * (0.82 + cell.coreness * 0.28),
+      cluster.visualStyle,
+      seed,
+      nowMs,
+      fade,
+    );
+  }
+
   private spawnSmoke(cluster: GroundFireCluster, intensity: number, nowMs: number): void {
     const spec = this.smokeSpec;
     const system = this.gpuVfx;
     if (!spec || !system) return;
-    const cell = this.pickCell(cluster, cluster.smokeCursor++);
+    const cell = this.pickCell(cluster, cluster.smokeOrder, cluster.smokeCursor++);
     if (!cell) return;
     const fade = this.cellFade(cell);
     if (fade <= 0) return;
@@ -762,8 +846,8 @@ export class GroundFireClusterRenderer {
     spec.lifeMs = this.seededRange(seed, 71, GROUND_FIRE_SMOKE_LIFESPAN.min, GROUND_FIRE_SMOKE_LIFESPAN.max);
     spec.x = cell.x + (this.seededUnit(seed, 89) - 0.5) * CELL;
     spec.y = cell.y - 3;
-    spec.vx = (this.seededUnit(seed, 73) - 0.5) * 12;
-    spec.vy = -8 - this.seededUnit(seed, 79) * 14;
+    spec.vx = (this.seededUnit(seed, 73) - 0.5) * 6;
+    spec.vy = -5 - this.seededUnit(seed, 79) * 7;
     spec.rotation = this.seededUnit(seed, 83) * TWO_PI;
     spec.alphaStart = 0.08 * intensity * fade;
     spec.tint = 0x75675d;
@@ -793,11 +877,11 @@ export class GroundFireClusterRenderer {
     spec.vx = dirX * BED_DRIFT_SPEED;
     spec.vy = dirY * BED_DRIFT_SPEED;
     spec.rotation = this.seededUnit(seed, 95) * TWO_PI;
-    spec.angularVelocity = (this.seededUnit(seed, 96) - 0.5) * 0.24;
+    spec.angularVelocity = (this.seededUnit(seed, 96) - 0.5) * 0.1;
     spec.scaleStart = sizeCells * CELL / GROUND_FIRE_BED_SIZE;
     // Die Glut breitet sich kaum aus; ein wachsendes Bett wuerde ueber die Brandflaeche
     // hinauslaufen und ihre Kante ausfransen.
-    spec.scaleEnd = spec.scaleStart * 1.05;
+    spec.scaleEnd = spec.scaleStart * 1.02;
     spec.stretchStart = 0.92 + this.seededUnit(seed, 98) * 0.32;
     spec.stretchEnd = 0.96;
     spec.alphaStart = BED_ALPHA * fade;
@@ -828,9 +912,9 @@ export class GroundFireClusterRenderer {
     // Die Flaechenmaske ist rotationssymmetrisch genug fuer ein freies Drehen; dadurch entstehen
     // keine wiedererkennbaren, gleich ausgerichteten Einzelmotive im Raster.
     spec.rotation = this.seededUnit(seed, 99) * TWO_PI;
-    spec.angularVelocity = (this.seededUnit(seed, 100) - 0.5) * 0.42;
+    spec.angularVelocity = (this.seededUnit(seed, 100) - 0.5) * 0.2;
     spec.scaleStart = sizeCells * CELL / GROUND_FIRE_SURFACE_SIZE;
-    spec.scaleEnd = spec.scaleStart * (1.08 + this.seededUnit(seed, 102) * 0.22);
+    spec.scaleEnd = spec.scaleStart * (1.04 + this.seededUnit(seed, 102) * 0.08);
     spec.stretchStart = 0.9 + this.seededUnit(seed, 105) * 0.48;
     spec.stretchEnd = 0.96 + this.seededUnit(seed, 106) * 0.18;
     spec.alphaStart = FIELD_ALPHA * fade;
@@ -860,9 +944,9 @@ export class GroundFireClusterRenderer {
     spec.vx = dirX * CORE_DRIFT_SPEED;
     spec.vy = dirY * CORE_DRIFT_SPEED;
     spec.rotation = this.seededUnit(seed, 111) * TWO_PI;
-    spec.angularVelocity = (this.seededUnit(seed, 112) - 0.5) * 0.26;
+    spec.angularVelocity = (this.seededUnit(seed, 112) - 0.5) * 0.16;
     spec.scaleStart = sizeCells * CELL / GROUND_FIRE_SURFACE_SIZE;
-    spec.scaleEnd = spec.scaleStart * (1.1 + this.seededUnit(seed, 114) * 0.24);
+    spec.scaleEnd = spec.scaleStart * (1.06 + this.seededUnit(seed, 114) * 0.1);
     spec.stretchStart = 0.88 + this.seededUnit(seed, 113) * 0.4;
     spec.stretchEnd = 0.96 + this.seededUnit(seed, 115) * 0.16;
     spec.alphaStart = CORE_ALPHA * fade;
@@ -899,7 +983,7 @@ export class GroundFireClusterRenderer {
     spec.angularVelocity = 0;
     spec.scaleStart = scale;
     // Ein Glutnest brennt herunter, es dehnt sich nicht aus.
-    spec.scaleEnd = scale * 0.7;
+    spec.scaleEnd = scale * 0.82;
     spec.stretchStart = 0.86 + this.seededUnit(seed, 53) * 0.36;
     spec.stretchEnd = 1;
     spec.alphaStart = EMBER_ALPHA * fade * (0.72 + heat * 0.34);
@@ -924,56 +1008,75 @@ export class GroundFireClusterRenderer {
     if (!spec || !system) return;
     const phase = this.seededUnit(seed, 131) * TWO_PI;
     spec.lifeMs = this.seededRange(seed, 137, GROUND_FIRE_SPARK_LIFESPAN.min, GROUND_FIRE_SPARK_LIFESPAN.max);
-    spec.x = x + Math.cos(phase) * 3;
-    spec.y = y + Math.sin(phase) * 3;
-    spec.vx = Math.cos(phase) * (7 + intensity * 8);
-    spec.vy = Math.sin(phase) * (7 + intensity * 8);
+    spec.x = x + Math.cos(phase) * 5;
+    spec.y = y + Math.sin(phase) * 5;
+    const speed = 10 + intensity * 10 + this.seededUnit(seed, 133) * 8;
+    spec.vx = Math.cos(phase) * speed;
+    spec.vy = Math.sin(phase) * speed - 10 - this.seededUnit(seed, 135) * 12;
     spec.rotation = phase;
-    spec.angularVelocity = (this.seededUnit(seed, 139) - 0.5) * 1.2;
-    spec.alphaStart = Phaser.Math.Clamp(0.5 + intensity * 0.45, 0.35, 1) * fade;
-    spec.tint = this.pickHeatTint(style, 0.55 + intensity * 0.2, seed, 149);
+    spec.angularVelocity = (this.seededUnit(seed, 139) - 0.5) * 0.8;
+    spec.alphaStart = Phaser.Math.Clamp(0.78 + intensity * 0.3, 0.65, 1) * fade;
+    spec.tint = this.pickEmberTint(style, seed, 149);
+    system.spawn(spec, this.source, nowMs);
+  }
+
+  private spawnAccentSparkAt(
+    x: number,
+    y: number,
+    intensity: number,
+    style: GroundFireVisualStyle,
+    seed: number,
+    nowMs: number,
+    fade = 1,
+  ): void {
+    const spec = this.sparkAccentSpec;
+    const system = this.gpuVfx;
+    if (!spec || !system) return;
+    // Oberer Halbkreis: die lange lokale X-Achse zeigt entlang der Flugrichtung.
+    const phase = -Math.PI + this.seededUnit(seed, 157) * Math.PI;
+    const speed = this.seededRange(seed, 163, 35, 70);
+    spec.lifeMs = this.seededRange(
+      seed,
+      167,
+      GROUND_FIRE_SPARK_ACCENT_LIFESPAN.min,
+      GROUND_FIRE_SPARK_ACCENT_LIFESPAN.max,
+    );
+    spec.x = x + (this.seededUnit(seed, 173) - 0.5) * CELL * 0.7;
+    spec.y = y + (this.seededUnit(seed, 179) - 0.5) * CELL * 0.7;
+    spec.vx = Math.cos(phase) * speed;
+    spec.vy = Math.sin(phase) * speed - 8;
+    spec.rotation = phase;
+    spec.angularVelocity = 0;
+    spec.scaleStart = this.seededRange(seed, 181, 1.4, 2.2);
+    spec.scaleEnd = 0.16;
+    spec.stretchStart = this.seededRange(seed, 191, 1.4, 2);
+    spec.stretchEnd = 0.45;
+    spec.alphaStart = Phaser.Math.Clamp(0.88 + intensity * 0.18, 0.78, 1) * fade;
+    spec.tint = this.pickEmberTint(style, seed, 193);
     system.spawn(spec, this.source, nowMs);
   }
 
   // ── Felder ─────────────────────────────────────────────────────────────────
 
   /**
-   * Konvektionsfeld: normierte Stroemungsrichtung an einem Ort. Rein aus Ort und Zeit, damit
-   * benachbarte Partikel dieselbe Richtung bekommen und die Flaeche als ein Feuer stroemt.
-   *
-   * Die zwei Wellenlaengen (rund 300 px und rund 110 px) ergeben zusammen eine grosse wandernde
-   * Stroemung mit kleineren Wirbeln darin.
-   */
-  private driftAt(x: number, y: number, nowMs: number, phase: number): void {
-    const slow = x * 0.021 + y * 0.017 + nowMs * 0.00042 + phase;
-    const fast = y * 0.057 - x * 0.041 - nowMs * 0.00071 + phase * 1.7;
-    const dx = Math.cos(slow) + Math.sin(fast) * 0.55;
-    const dy = Math.sin(slow) + Math.cos(fast) * 0.55;
-    const length = Math.hypot(dx, dy);
-    if (length < 0.001) {
-      DRIFT.x = 1;
-      DRIFT.y = 0;
-      return;
-    }
-    DRIFT.x = dx / length;
-    DRIFT.y = dy / length;
-  }
-
-  /**
-   * Temperatur einer Zelle: Grundverlauf ueber die Randdistanz plus eine wandernde Flackerwelle.
-   * Die Welle laeuft langsam, damit heisse Zonen sichtbar *wandern*, statt zu flimmern. Ein
-   * zweites, schnelles Flackern hat die Flaeche nur hektisch gemacht und ist wieder entfallen.
+   * Temperatur einer Zelle: Grundverlauf ueber die Randdistanz plus das lokal morphende Noise.
+   * Das Noise hat keine globale Bewegungsrichtung; heisse Zonen entstehen und vergehen vor Ort,
+   * statt als sichtbare Welle durch die sortierte Zellkarte zu laufen.
    *
    * `coreness` bekommt eine Untergrenze aus `spread`: in einem kleinen Cluster ist *jede* Zelle
    * das Feuer und nicht sein Rand. Ohne diese Untergrenze landete eine einzelne brennende Zelle
    * immer im kuehlen Farbband und blieb dunkelrot – genau der Grund, warum sie nur als Glut und
    * nicht als Feuer las.
    */
-  private heatAt(cluster: GroundFireCluster, cell: GroundFireCellField, nowMs: number, intensity: number): number {
+  private heatAt(
+    cluster: GroundFireCluster,
+    cell: GroundFireCellField,
+    localHeat: number,
+    intensity: number,
+  ): number {
     const coreness = Math.max(cell.coreness, 1 - cluster.spread);
-    const flicker = 0.5 + 0.5 * Math.sin(cell.x * 0.043 + cell.y * 0.037 + nowMs * 0.0026 + cluster.phase);
     return Phaser.Math.Clamp(
-      0.26 + coreness * 0.38 + flicker * 0.22 + intensity * 0.14,
+      0.26 + coreness * 0.38 + localHeat * 0.22 + intensity * 0.14,
       0,
       1,
     );
@@ -990,37 +1093,17 @@ export class GroundFireClusterRenderer {
   }
 
   /**
-   * Die naechste Zelle des gleichmaessigen Rundlaufs. Weil `stride` teilerfremd zur Feldlaenge
-   * ist, trifft der Zeiger jede Zelle genau einmal, bevor er sich wiederholt – die Deckung ist
-   * damit auch ueber kurze Zeitfenster gleichmaessig statt zufaellig geklumpt.
+   * Die naechste Zelle einer schichtspezifischen Permutation. Jede Schicht trifft jede Zelle
+   * genau einmal pro Umlauf, aber in einer anderen, nicht raeumlich sortierten Reihenfolge.
    */
-  private pickCell(cluster: GroundFireCluster, cursor: number): GroundFireCellField | null {
-    const count = cluster.field.length;
+  private pickCell(
+    cluster: GroundFireCluster,
+    order: Int32Array,
+    cursor: number,
+  ): GroundFireCellField | null {
+    const count = order.length;
     if (count === 0) return null;
-    return cluster.field[(cursor * cluster.stride) % count];
-  }
-
-  private coprimeStride(count: number, seed: number): number {
-    if (count <= 2) return 1;
-    // Vom goldenen Schnitt aus nach oben suchen: der erste teilerfremde Schritt liegt bei jeder
-    // Zellzahl nach wenigen Versuchen und verteilt die Treffer maximal ungleichfoermig im Raster.
-    let stride = Math.max(1, Math.floor(count * 0.618) + (this.seededUnit(seed, 151) * 5 | 0));
-    for (let attempt = 0; attempt < count; attempt += 1) {
-      if (this.greatestCommonDivisor(stride, count) === 1) return stride;
-      stride = stride % count + 1;
-    }
-    return 1;
-  }
-
-  private greatestCommonDivisor(a: number, b: number): number {
-    let left = a;
-    let right = b;
-    while (right !== 0) {
-      const next = left % right;
-      left = right;
-      right = next;
-    }
-    return left;
+    return cluster.field[order[cursor % count]] ?? null;
   }
 
   private effectiveCellCount(count: number): number {

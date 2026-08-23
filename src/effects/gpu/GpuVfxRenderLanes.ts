@@ -326,12 +326,13 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'und trennen keine Lanes mehr.',
     capacityRationale:
       'GroundFire emittiert flaechendeckend: die Lebendzahl je Cluster ist eine Dichte *pro '
-      + 'Rasterzelle* (Bett 0.70, Flaechenfeld 1.30, Heissfeld 0.85, Glutnest 0.40, Funken 0.06), '
+      + 'Rasterzelle* (Bett 0.70, Flaechenfeld 1.30, Heissfeld 0.85, Glutnest 0.40, Glutregen '
+      + '0.28, Funken-Ausreisser 0.035), '
       + 'damit eine Brandflaeche als geschlossene Flaeche liest statt als Perlenkette. Die '
       + 'Zellzahl geht dabei nur bis 140 voll ein und ist bei 320 gedeckelt, ein Cluster kostet '
-      + 'also hoechstens rund 1060 Member. Fuenf gleichzeitig sichtbare Grossflaechen passen damit '
-      + 'in 6144 Slots. Die Dichten im Renderer sind die Werte, die bei gemessenen capacityDrops '
-      + 'zuerst zurueckgehen.',
+      + 'also hoechstens rund 1141 Member. Fuenf gleichzeitig sichtbare Grossflaechen brauchen '
+      + 'rechnerisch rund 5704 und passen damit in 6144 Slots. Die Dichten im Renderer sind die '
+      + 'Werte, die bei gemessenen capacityDrops zuerst zurueckgehen.',
   },
   {
     id: GpuVfxLaneId.GroundFireSmoke,
