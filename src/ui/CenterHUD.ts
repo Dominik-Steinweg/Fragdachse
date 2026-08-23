@@ -92,17 +92,6 @@ const TUTORIAL_CONTROLS_TOP    = TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H + COOP_DEFE
 const TUTORIAL_CONTROLS_ROWS_Y = TUTORIAL_CONTROLS_TOP + COOP_DEFENSE_TUTORIAL_CONTROLS_HEADING_H;
 const TUTORIAL_CONTROLS_SEP_Y  = TUTORIAL_CONTROLS_TOP + 26;
 
-// ── Tutorial-Hinweis entlang der Route ───────────────────────────────────────
-// Bewusst dieselbe Bildsprache wie das Tutorial-Fenster, aber screen-space: Der Hinweis
-// gehört zum Spieler, nicht zu einer Felsformation, und muss ihn über die ganze Route
-// begleiten. Er bleibt rein lokal und trägt keinen Rundenzustand.
-const TUTORIAL_HINT_W          = 760;
-const TUTORIAL_HINT_PAD_X      = 24;
-const TUTORIAL_HINT_PAD_TOP    = 14;
-const TUTORIAL_HINT_TITLE_H    = 22;
-const TUTORIAL_HINT_PAD_BOTTOM = 16;
-const TUTORIAL_HINT_CENTER_Y   = GAME_HEIGHT - 250;
-
 const ANNOUNCEMENT_Y          = GAME_HEIGHT / 2;
 const ANNOUNCEMENT_MAX_TEXT_W = 560;
 const ANNOUNCEMENT_MIN_W      = 240;
@@ -301,15 +290,6 @@ const TUTORIAL_BODY_FONT = {
   fontSize: '19px', fontFamily: 'monospace', color: '#f1f4f6', align: 'center' as const,
   lineSpacing: 5,
   wordWrap: { width: COOP_DEFENSE_TUTORIAL_PANEL_WIDTH - TUTORIAL_PAD_X * 2 },
-};
-const TUTORIAL_HINT_TITLE_FONT = {
-  fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(TUTORIAL_ACCENT),
-  letterSpacing: 3,
-};
-const TUTORIAL_HINT_BODY_FONT = {
-  fontSize: '18px', fontFamily: 'monospace', color: '#f1f4f6', align: 'center' as const,
-  lineSpacing: 5,
-  wordWrap: { width: TUTORIAL_HINT_W - TUTORIAL_HINT_PAD_X * 2 },
 };
 const TUTORIAL_CONTROLS_KEY_FONT = {
   fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
@@ -520,13 +500,13 @@ export class CenterHUD {
   private readonly tutorialOcclusionFade = createHudOcclusionFadeState();
   private tutorialValue: string | null = null;
   private tutorialControlsValue = false;
-  private tutorialHintContainer!: Phaser.GameObjects.Container;
-  private tutorialHintGraphics!: Phaser.GameObjects.Graphics;
-  private tutorialHintTitle!: Phaser.GameObjects.Text;
-  private tutorialHintBody!: Phaser.GameObjects.Text;
-  private tutorialHintTween: Phaser.Tweens.Tween | null = null;
-  private tutorialHintValue: string | null = null;
-  private tutorialHintHeight = 0;
+  private tutorialStepContainer!: Phaser.GameObjects.Container;
+  private tutorialStepLifecycleContainer!: Phaser.GameObjects.Container;
+  private tutorialStepGraphics!: Phaser.GameObjects.Graphics;
+  private tutorialStepTitle!: Phaser.GameObjects.Text;
+  private tutorialStepBody!: Phaser.GameObjects.Text;
+  private tutorialStepTween: Phaser.Tweens.Tween | null = null;
+  private tutorialStepValue: string | null = null;
   private announcementContainer!: Phaser.GameObjects.Container;
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
@@ -641,7 +621,7 @@ export class CenterHUD {
     this.buildMainObjectivePanel();
     this.buildEncounterPanel();
     this.buildTutorialPanel();
-    this.buildTutorialHintPanel();
+    this.buildTutorialStepPanel();
     this.buildAnnouncementOverlay();
     this.buildTrainWidget();
     this.buildBottomStack();
@@ -874,86 +854,30 @@ export class CenterHUD {
       .setAlpha(1);
   }
 
-  private buildTutorialHintPanel(): void {
-    this.tutorialHintGraphics = this.scene.add.graphics();
-    registerGraphicsObject(this.scene, 'gameplayHud', this.tutorialHintGraphics);
-    this.tutorialHintTitle = this.scene.add.text(0, 0, t('ui.help.hint'), TUTORIAL_HINT_TITLE_FONT)
+  private buildTutorialStepPanel(): void {
+    this.tutorialStepGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.tutorialStepGraphics);
+    this.tutorialStepTitle = this.scene.add.text(0, TUTORIAL_PAD_TOP, t('ui.help.title'), TUTORIAL_TITLE_FONT)
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
-    this.tutorialHintBody = this.scene.add.text(0, 0, '', TUTORIAL_HINT_BODY_FONT)
+      .setScrollFactor(1);
+    this.tutorialStepBody = this.scene.add.text(0, TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H, '', TUTORIAL_BODY_FONT)
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
-    this.tutorialHintContainer = this.scene.add.container(CENTER_X, TUTORIAL_HINT_CENTER_Y, [
-      this.tutorialHintGraphics,
-      this.tutorialHintTitle,
-      this.tutorialHintBody,
-    ]).setScrollFactor(0).setVisible(false).setAlpha(0);
-    this.container.add(this.tutorialHintContainer);
-  }
-
-  /**
-   * Lokaler Tutorial-Hinweis. `null` blendet ihn aus; identischer Text laesst das laufende
-   * Fenster unveraendert stehen.
-   */
-  updateTutorialHint(text: string | null): void {
-    const nextText = text?.trim() || null;
-    if (nextText === this.tutorialHintValue) return;
-    this.tutorialHintValue = nextText;
-    this.tutorialHintTween?.destroy();
-    this.tutorialHintTween = null;
-
-    if (!nextText) {
-      this.hideTutorialHint(false);
-      return;
-    }
-
-    this.tutorialHintBody.setText(nextText);
-    const height = TUTORIAL_HINT_PAD_TOP
-      + TUTORIAL_HINT_TITLE_H
-      + this.tutorialHintBody.height
-      + TUTORIAL_HINT_PAD_BOTTOM;
-    this.tutorialHintHeight = height;
-    const top = -height / 2;
-    const left = -TUTORIAL_HINT_W / 2;
-    this.tutorialHintTitle.setY(top + TUTORIAL_HINT_PAD_TOP);
-    this.tutorialHintBody.setY(top + TUTORIAL_HINT_PAD_TOP + TUTORIAL_HINT_TITLE_H);
-
-    this.tutorialHintGraphics.clear();
-    this.tutorialHintGraphics.fillStyle(0x000000, 0.24);
-    this.tutorialHintGraphics.fillRoundedRect(left + 4, top + 4, TUTORIAL_HINT_W, height, 12);
-    this.tutorialHintGraphics.fillStyle(TUTORIAL_BG_COLOR, 0.82);
-    this.tutorialHintGraphics.fillRoundedRect(left, top, TUTORIAL_HINT_W, height, 12);
-    this.tutorialHintGraphics.lineStyle(2, TUTORIAL_ACCENT, 0.72);
-    this.tutorialHintGraphics.strokeRoundedRect(left, top, TUTORIAL_HINT_W, height, 12);
-
-    this.tutorialHintContainer.setVisible(true).setAlpha(0);
-    this.tutorialHintTween = this.scene.tweens.add({
-      targets: this.tutorialHintContainer,
-      alpha: 1,
-      duration: TUTORIAL_FADE_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => { this.tutorialHintTween = null; },
-    });
-  }
-
-  private hideTutorialHint(immediate: boolean): void {
-    this.tutorialHintTween?.destroy();
-    this.tutorialHintTween = null;
-    this.tutorialHintValue = null;
-    if (immediate || !this.tutorialHintContainer?.visible) {
-      this.tutorialHintContainer?.setVisible(false).setAlpha(0);
-      return;
-    }
-    this.tutorialHintTween = this.scene.tweens.add({
-      targets: this.tutorialHintContainer,
-      alpha: 0,
-      duration: TUTORIAL_FADE_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        this.tutorialHintTween = null;
-        this.tutorialHintContainer.setVisible(false).setAlpha(0);
-      },
-    });
+      .setScrollFactor(1);
+    this.tutorialStepLifecycleContainer = this.scene.add.container(0, 0, [
+      this.tutorialStepGraphics,
+      this.tutorialStepTitle,
+      this.tutorialStepBody,
+    ]).setScrollFactor(1).setAlpha(0);
+    this.tutorialStepContainer = this.scene.add.container(
+      getCoopDefenseTutorialPanelCenterX(),
+      getCoopDefenseTutorialPanelTopY(),
+      [this.tutorialStepLifecycleContainer],
+    );
+    this.tutorialStepContainer
+      .setDepth(DEPTH.OVERLAY - 1)
+      .setScrollFactor(1)
+      .setVisible(false)
+      .setAlpha(1);
   }
 
   private buildAnnouncementOverlay(): void {
@@ -1092,7 +1016,7 @@ export class CenterHUD {
     this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
     this.hideTutorial(true);
-    this.hideTutorialHint(true);
+    this.hideTutorialStep(true);
     this.hideTrainWidget();
     this.hideLowerSection(this.armorSection);
     this.hideLowerSection(this.utilitySection);
@@ -1297,7 +1221,6 @@ export class CenterHUD {
 
     addPanelRect(this.mainObjectivePanel, MAIN_PANEL_W, MAIN_PANEL_H);
     addPanelRect(this.encounterPanel, ENCOUNTER_PANEL_W, ENCOUNTER_PANEL_H);
-    addPanelRect(this.tutorialHintContainer, TUTORIAL_HINT_W, this.tutorialHintHeight);
     return rects;
   }
 
@@ -1309,36 +1232,53 @@ export class CenterHUD {
     deltaMs: number,
     reservedHudRects: readonly HudOcclusionRect[],
   ): void {
-    const tutorialRect = this.getTutorialScreenRect();
-    if (!tutorialRect) {
+    const tutorialRects = this.getTutorialScreenRects();
+    if (tutorialRects.length === 0) {
       resetHudOcclusionFade(this.tutorialOcclusionFade);
       if (this.tutorialContainer?.active) this.tutorialContainer.setAlpha(1);
+      if (this.tutorialStepContainer?.active) this.tutorialStepContainer.setAlpha(1);
       return;
     }
 
-    const occluded = reservedHudRects.some((reservedRect) => (
+    const occluded = tutorialRects.some((tutorialRect) => reservedHudRects.some((reservedRect) => (
       doHudRectsOverlap(tutorialRect, reservedRect, TUTORIAL_OCCLUSION_MARGIN_PX)
-    ));
-    this.tutorialContainer.setAlpha(advanceHudOcclusionFade(
+    )));
+    const alpha = advanceHudOcclusionFade(
       this.tutorialOcclusionFade,
       occluded,
       deltaMs,
       TUTORIAL_OCCLUSION_FADE,
-    ));
+    );
+    this.tutorialContainer.setAlpha(alpha);
+    this.tutorialStepContainer.setAlpha(alpha);
   }
 
   /** Aktuelle sichtbare Panel-Fläche des Tutorials in Design-Screen-Koordinaten. */
   getTutorialScreenRect(): HudOcclusionRect | null {
-    if (!this.tutorialContainer?.visible) return null;
+    return this.getTutorialScreenRectForContainer(this.tutorialContainer, this.tutorialControlsValue);
+  }
+
+  private getTutorialScreenRects(): HudOcclusionRect[] {
+    return [
+      this.getTutorialScreenRectForContainer(this.tutorialContainer, this.tutorialControlsValue),
+      this.getTutorialScreenRectForContainer(this.tutorialStepContainer, false),
+    ].filter((rect): rect is HudOcclusionRect => rect !== null);
+  }
+
+  private getTutorialScreenRectForContainer(
+    container: Phaser.GameObjects.Container | undefined,
+    showControls: boolean,
+  ): HudOcclusionRect | null {
+    if (!container?.visible) return null;
     const camera = this.scene.cameras?.main;
     if (!camera) return null;
     const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-    const height = getCoopDefenseTutorialPanelHeight(this.tutorialControlsValue);
+    const height = getCoopDefenseTutorialPanelHeight(showControls);
     return getWorldRectOnScreen({
-      left: this.tutorialContainer.x - width / 2,
-      right: this.tutorialContainer.x + width / 2,
-      top: this.tutorialContainer.y,
-      bottom: this.tutorialContainer.y + height,
+      left: container.x - width / 2,
+      right: container.x + width / 2,
+      top: container.y,
+      bottom: container.y + height,
     }, camera);
   }
 
@@ -1687,30 +1627,8 @@ export class CenterHUD {
 
     const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
     const height = getCoopDefenseTutorialPanelHeight(showControls);
-    const left = -width / 2;
 
-    this.tutorialGraphics.clear();
-    this.tutorialGraphics.fillStyle(0x000000, 0.24);
-    this.tutorialGraphics.fillRoundedRect(left + 4, 4, width, height, 12);
-    this.tutorialGraphics.fillStyle(TUTORIAL_BG_COLOR, 0.78);
-    this.tutorialGraphics.fillRoundedRect(left, 0, width, height, 12);
-    this.tutorialGraphics.lineStyle(2, TUTORIAL_ACCENT, 0.72);
-    this.tutorialGraphics.strokeRoundedRect(left, 0, width, height, 12);
-
-    if (showControls) {
-      // Trennlinie unter der Überschrift + Zeilen-Alternierung wie im Hilfe-Fenster.
-      this.tutorialGraphics.fillStyle(TUTORIAL_ACCENT, 0.55);
-      this.tutorialGraphics.fillRect(left + TUTORIAL_PAD_X, TUTORIAL_CONTROLS_SEP_Y, width - TUTORIAL_PAD_X * 2, 1);
-      this.tutorialGraphics.fillStyle(COLORS.GREY_8, 0.3);
-      for (let i = 0; i < HELP_CONTROLS.length; i += 2) {
-        this.tutorialGraphics.fillRect(
-          left + TUTORIAL_PAD_X,
-          TUTORIAL_CONTROLS_ROWS_Y + i * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H + 2,
-          width - TUTORIAL_PAD_X * 2,
-          COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H - 4,
-        );
-      }
-    }
+    this.drawTutorialPanel(this.tutorialGraphics, showControls, width, height);
 
     this.tutorialContainer.setVisible(true).setAlpha(this.tutorialOcclusionFade.alpha);
     this.tutorialLifecycleContainer.setAlpha(0);
@@ -1721,6 +1639,78 @@ export class CenterHUD {
       ease: 'Quad.easeOut',
       onComplete: () => { this.tutorialTween = null; },
     });
+  }
+
+  /**
+   * Lokaler Tutorial-Step im selben World-Space-Panel wie das Starttutorial. Der Checkpoint
+   * wird außerhalb der HUD-Darstellung ausgewertet; `anchor` bestimmt ausschließlich die
+   * authored Weltposition des Fensters.
+   */
+  updateTutorialStep(
+    text: string | null,
+    anchor?: CoopDefenseTutorialAnchor,
+  ): void {
+    this.tutorialStepContainer.setPosition(
+      getCoopDefenseTutorialPanelCenterX(anchor),
+      getCoopDefenseTutorialPanelTopY(anchor),
+    );
+    const nextText = text?.trim() || null;
+    if (nextText === this.tutorialStepValue) return;
+    this.tutorialStepValue = nextText;
+    this.tutorialStepTween?.destroy();
+    this.tutorialStepTween = null;
+
+    if (!nextText) {
+      this.hideTutorialStep(false);
+      return;
+    }
+
+    this.tutorialStepBody.setText(nextText);
+    this.drawTutorialPanel(
+      this.tutorialStepGraphics,
+      false,
+      COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
+      getCoopDefenseTutorialPanelHeight(false),
+    );
+    this.tutorialStepContainer.setVisible(true).setAlpha(1);
+    this.tutorialStepLifecycleContainer.setAlpha(0);
+    this.tutorialStepTween = this.scene.tweens.add({
+      targets: this.tutorialStepLifecycleContainer,
+      alpha: 1,
+      duration: TUTORIAL_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => { this.tutorialStepTween = null; },
+    });
+  }
+
+  private drawTutorialPanel(
+    graphics: Phaser.GameObjects.Graphics,
+    showControls: boolean,
+    width: number,
+    height: number,
+  ): void {
+    const left = -width / 2;
+    graphics.clear();
+    graphics.fillStyle(0x000000, 0.24);
+    graphics.fillRoundedRect(left + 4, 4, width, height, 12);
+    graphics.fillStyle(TUTORIAL_BG_COLOR, 0.78);
+    graphics.fillRoundedRect(left, 0, width, height, 12);
+    graphics.lineStyle(2, TUTORIAL_ACCENT, 0.72);
+    graphics.strokeRoundedRect(left, 0, width, height, 12);
+
+    if (!showControls) return;
+    // Trennlinie unter der Überschrift + Zeilen-Alternierung wie im Hilfe-Fenster.
+    graphics.fillStyle(TUTORIAL_ACCENT, 0.55);
+    graphics.fillRect(left + TUTORIAL_PAD_X, TUTORIAL_CONTROLS_SEP_Y, width - TUTORIAL_PAD_X * 2, 1);
+    graphics.fillStyle(COLORS.GREY_8, 0.3);
+    for (let i = 0; i < HELP_CONTROLS.length; i += 2) {
+      graphics.fillRect(
+        left + TUTORIAL_PAD_X,
+        TUTORIAL_CONTROLS_ROWS_Y + i * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H + 2,
+        width - TUTORIAL_PAD_X * 2,
+        COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H - 4,
+      );
+    }
   }
 
   /** @param arrivalTimerSecs Verbleibende Sekunden bis zur nächsten Einfahrt. */
@@ -1908,6 +1898,9 @@ export class CenterHUD {
     this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
     this.hideTutorial(true);
+    this.hideTutorialStep(true);
+    this.tutorialContainer.destroy(true);
+    this.tutorialStepContainer.destroy(true);
     this.trainBarEffect.destroy();
     this.stopSectionAttention(this.armorSection);
     this.stopSectionAttention(this.utilitySection);
@@ -2084,6 +2077,27 @@ export class CenterHUD {
         this.tutorialTween = null;
         this.tutorialContainer.setVisible(false).setAlpha(1);
         resetHudOcclusionFade(this.tutorialOcclusionFade);
+      },
+    });
+  }
+
+  private hideTutorialStep(immediate: boolean): void {
+    this.tutorialStepTween?.destroy();
+    this.tutorialStepTween = null;
+    this.tutorialStepValue = null;
+    if (immediate || !this.tutorialStepContainer?.visible) {
+      this.tutorialStepContainer?.setVisible(false).setAlpha(1);
+      this.tutorialStepLifecycleContainer?.setAlpha(0);
+      return;
+    }
+    this.tutorialStepTween = this.scene.tweens.add({
+      targets: this.tutorialStepLifecycleContainer,
+      alpha: 0,
+      duration: TUTORIAL_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tutorialStepTween = null;
+        this.tutorialStepContainer.setVisible(false).setAlpha(1);
       },
     });
   }

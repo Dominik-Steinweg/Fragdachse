@@ -1,16 +1,79 @@
 {
   "mapId": "1",
-  "arenaWidthCells": 160,
-  "arenaHeightCells": 44,
+  "arenaWidthCells": 260,
+  "arenaHeightCells": 33,
   "timeOfDay": "12:00",
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "tutorialAnchor": {
     "gridX": 15,
-    "gridY": 7
+    "gridY": 1
   },
-  "rockFillRatio": 0.22,
   "trackPosition": "center",
+  "rockField": {
+    "corridorRadiusCells": 3.8,
+    "corridorRadiusVarianceCells": 0.9,
+    "corridorWanderCells": 2.5,
+    "waypointJitterCells": 1.8,
+    "rockDensityScale": 0.92,
+    "corridors": [
+      {
+        "id": "main-advance-route",
+        "points": [
+          { "gridX": 10, "gridY": 23 },
+          { "gridX": 30, "gridY": 23 },
+          { "gridX": 44, "gridY": 20 },
+          { "gridX": 60, "gridY": 18 },
+          { "gridX": 78, "gridY": 15 },
+          { "gridX": 92, "gridY": 16 },
+          { "gridX": 111, "gridY": 19 },
+          { "gridX": 128, "gridY": 17 },
+          { "gridX": 148, "gridY": 14 },
+          { "gridX": 166, "gridY": 16 },
+          { "gridX": 185, "gridY": 20 },
+          { "gridX": 205, "gridY": 18 },
+          { "gridX": 222, "gridY": 16 },
+          { "gridX": 250, "gridY": 14 }
+        ]
+      },
+      {
+        "id": "cp1-combat-chamber",
+        "radiusCells": 5.6,
+        "points": [
+          { "gridX": 34, "gridY": 22 },
+          { "gridX": 44, "gridY": 20 },
+          { "gridX": 54, "gridY": 19 }
+        ]
+      },
+      {
+        "id": "cp4-rage-chamber",
+        "radiusCells": 5.8,
+        "points": [
+          { "gridX": 136, "gridY": 15 },
+          { "gridX": 148, "gridY": 14 },
+          { "gridX": 160, "gridY": 15 }
+        ]
+      },
+      {
+        "id": "cp5-defense-chamber",
+        "radiusCells": 6,
+        "points": [
+          { "gridX": 193, "gridY": 19 },
+          { "gridX": 205, "gridY": 18 },
+          { "gridX": 218, "gridY": 17 }
+        ]
+      },
+      {
+        "id": "final-extraction-chamber",
+        "radiusCells": 5.5,
+        "points": [
+          { "gridX": 246, "gridY": 14 },
+          { "gridX": 248, "gridY": 14 },
+          { "gridX": 252, "gridY": 14 }
+        ]
+      }
+    ]
+  },
   "balanceReferenceDurationSec": 300,
   "objective": "advance",
   "respawnsPerPlayer": 100,
@@ -22,8 +85,8 @@
       "hpMax": 12000,
       "anchor": {
         "kind": "grid",
-        "gridX": 128,
-        "gridY": 20
+        "gridX": 220,
+        "gridY": 14
       },
       "shape": {
         "kind": "rectangle",
@@ -36,62 +99,62 @@
   "rockWalls": [
     {
       "id": "utility-wall",
-      "gridX": 60,
+      "gridX": 86,
       "gridY": 0,
       "widthCells": 1,
-      "heightCells": 44
+      "heightCells": 33
     },
     {
       "id": "burrow-wall",
-      "gridX": 76,
+      "gridX": 120,
       "gridY": 0,
       "widthCells": 1,
-      "heightCells": 44
+      "heightCells": 33
     }
   ],
   "missionProgress": {
     "startArea": {
       "gridX": 10,
-      "gridY": 34,
-      "radiusCells": 6
+      "gridY": 23,
+      "radiusCells": 5
     },
     "checkpoints": [
       {
         "id": "cp1-adrenaline",
-        "gridX": 36,
-        "gridY": 30,
+        "gridX": 44,
+        "gridY": 20,
         "radiusCells": 4
       },
       {
         "id": "cp2-utility",
-        "gridX": 54,
-        "gridY": 24,
+        "gridX": 78,
+        "gridY": 15,
         "radiusCells": 4
       },
       {
         "id": "cp3-burrow",
-        "gridX": 70,
-        "gridY": 22,
+        "gridX": 111,
+        "gridY": 19,
         "radiusCells": 4
       },
       {
         "id": "cp4-rage",
-        "gridX": 98,
-        "gridY": 22,
+        "gridX": 148,
+        "gridY": 14,
         "radiusCells": 5,
         "setRespawn": true
       },
       {
         "id": "cp5-base-defense",
-        "gridX": 120,
-        "gridY": 22,
+        "gridX": 205,
+        "gridY": 18,
         "radiusCells": 5
       },
       {
         "id": "final-extraction",
-        "gridX": 152,
-        "gridY": 22,
-        "radiusCells": 4
+        "gridX": 248,
+        "gridY": 14,
+        "radiusCells": 5
       }
     ],
     "mandatoryDefenses": [
@@ -104,184 +167,83 @@
     ],
     "barriers": [
       {
+        "id": "rage-gate",
+        "cells": [
+          { "gridX": 178, "gridY": 0 },
+          { "gridX": 178, "gridY": 1 },
+          { "gridX": 178, "gridY": 2 },
+          { "gridX": 178, "gridY": 3 },
+          { "gridX": 178, "gridY": 4 },
+          { "gridX": 178, "gridY": 5 },
+          { "gridX": 178, "gridY": 6 },
+          { "gridX": 178, "gridY": 7 },
+          { "gridX": 178, "gridY": 8 },
+          { "gridX": 178, "gridY": 9 },
+          { "gridX": 178, "gridY": 10 },
+          { "gridX": 178, "gridY": 11 },
+          { "gridX": 178, "gridY": 12 },
+          { "gridX": 178, "gridY": 13 },
+          { "gridX": 178, "gridY": 14 },
+          { "gridX": 178, "gridY": 15 },
+          { "gridX": 178, "gridY": 16 },
+          { "gridX": 178, "gridY": 17 },
+          { "gridX": 178, "gridY": 18 },
+          { "gridX": 178, "gridY": 19 },
+          { "gridX": 178, "gridY": 20 },
+          { "gridX": 178, "gridY": 21 },
+          { "gridX": 178, "gridY": 22 },
+          { "gridX": 178, "gridY": 23 },
+          { "gridX": 178, "gridY": 24 },
+          { "gridX": 178, "gridY": 25 },
+          { "gridX": 178, "gridY": 26 },
+          { "gridX": 178, "gridY": 27 },
+          { "gridX": 178, "gridY": 28 },
+          { "gridX": 178, "gridY": 29 },
+          { "gridX": 178, "gridY": 30 },
+          { "gridX": 178, "gridY": 31 },
+          { "gridX": 178, "gridY": 32 }
+        ],
+        "openOn": {
+          "type": "after-encounter",
+          "encounterId": "cp4-pressure"
+        }
+      },
+      {
         "id": "extraction-gate",
         "cells": [
-          {
-            "gridX": 138,
-            "gridY": 0
-          },
-          {
-            "gridX": 138,
-            "gridY": 1
-          },
-          {
-            "gridX": 138,
-            "gridY": 2
-          },
-          {
-            "gridX": 138,
-            "gridY": 3
-          },
-          {
-            "gridX": 138,
-            "gridY": 4
-          },
-          {
-            "gridX": 138,
-            "gridY": 5
-          },
-          {
-            "gridX": 138,
-            "gridY": 6
-          },
-          {
-            "gridX": 138,
-            "gridY": 7
-          },
-          {
-            "gridX": 138,
-            "gridY": 8
-          },
-          {
-            "gridX": 138,
-            "gridY": 9
-          },
-          {
-            "gridX": 138,
-            "gridY": 10
-          },
-          {
-            "gridX": 138,
-            "gridY": 11
-          },
-          {
-            "gridX": 138,
-            "gridY": 12
-          },
-          {
-            "gridX": 138,
-            "gridY": 13
-          },
-          {
-            "gridX": 138,
-            "gridY": 14
-          },
-          {
-            "gridX": 138,
-            "gridY": 15
-          },
-          {
-            "gridX": 138,
-            "gridY": 16
-          },
-          {
-            "gridX": 138,
-            "gridY": 17
-          },
-          {
-            "gridX": 138,
-            "gridY": 18
-          },
-          {
-            "gridX": 138,
-            "gridY": 19
-          },
-          {
-            "gridX": 138,
-            "gridY": 20
-          },
-          {
-            "gridX": 138,
-            "gridY": 21
-          },
-          {
-            "gridX": 138,
-            "gridY": 22
-          },
-          {
-            "gridX": 138,
-            "gridY": 23
-          },
-          {
-            "gridX": 138,
-            "gridY": 24
-          },
-          {
-            "gridX": 138,
-            "gridY": 25
-          },
-          {
-            "gridX": 138,
-            "gridY": 26
-          },
-          {
-            "gridX": 138,
-            "gridY": 27
-          },
-          {
-            "gridX": 138,
-            "gridY": 28
-          },
-          {
-            "gridX": 138,
-            "gridY": 29
-          },
-          {
-            "gridX": 138,
-            "gridY": 30
-          },
-          {
-            "gridX": 138,
-            "gridY": 31
-          },
-          {
-            "gridX": 138,
-            "gridY": 32
-          },
-          {
-            "gridX": 138,
-            "gridY": 33
-          },
-          {
-            "gridX": 138,
-            "gridY": 34
-          },
-          {
-            "gridX": 138,
-            "gridY": 35
-          },
-          {
-            "gridX": 138,
-            "gridY": 36
-          },
-          {
-            "gridX": 138,
-            "gridY": 37
-          },
-          {
-            "gridX": 138,
-            "gridY": 38
-          },
-          {
-            "gridX": 138,
-            "gridY": 39
-          },
-          {
-            "gridX": 138,
-            "gridY": 40
-          },
-          {
-            "gridX": 138,
-            "gridY": 41
-          },
-          {
-            "gridX": 138,
-            "gridY": 42
-          },
-          {
-            "gridX": 138,
-            "gridY": 43
-          }
+          { "gridX": 242, "gridY": 0 },
+          { "gridX": 242, "gridY": 1 },
+          { "gridX": 242, "gridY": 2 },
+          { "gridX": 242, "gridY": 3 },
+          { "gridX": 242, "gridY": 4 },
+          { "gridX": 242, "gridY": 5 },
+          { "gridX": 242, "gridY": 6 },
+          { "gridX": 242, "gridY": 7 },
+          { "gridX": 242, "gridY": 8 },
+          { "gridX": 242, "gridY": 9 },
+          { "gridX": 242, "gridY": 10 },
+          { "gridX": 242, "gridY": 11 },
+          { "gridX": 242, "gridY": 12 },
+          { "gridX": 242, "gridY": 13 },
+          { "gridX": 242, "gridY": 14 },
+          { "gridX": 242, "gridY": 15 },
+          { "gridX": 242, "gridY": 16 },
+          { "gridX": 242, "gridY": 17 },
+          { "gridX": 242, "gridY": 18 },
+          { "gridX": 242, "gridY": 19 },
+          { "gridX": 242, "gridY": 20 },
+          { "gridX": 242, "gridY": 21 },
+          { "gridX": 242, "gridY": 22 },
+          { "gridX": 242, "gridY": 23 },
+          { "gridX": 242, "gridY": 24 },
+          { "gridX": 242, "gridY": 25 },
+          { "gridX": 242, "gridY": 26 },
+          { "gridX": 242, "gridY": 27 },
+          { "gridX": 242, "gridY": 28 },
+          { "gridX": 242, "gridY": 29 },
+          { "gridX": 242, "gridY": 30 },
+          { "gridX": 242, "gridY": 31 },
+          { "gridX": 242, "gridY": 32 }
         ],
         "openOn": {
           "type": "after-encounter",
@@ -293,27 +255,33 @@
   "tutorialSteps": [
     {
       "id": "map01-adrenaline",
-      "checkpointId": "cp1-adrenaline"
+      "checkpointId": "cp1-adrenaline",
+      "anchor": { "gridX": 44, "gridY": 25 }
     },
     {
       "id": "map01-utility",
-      "checkpointId": "cp2-utility"
+      "checkpointId": "cp2-utility",
+      "anchor": { "gridX": 78, "gridY": 1 }
     },
     {
       "id": "map01-burrow",
-      "checkpointId": "cp3-burrow"
+      "checkpointId": "cp3-burrow",
+      "anchor": { "gridX": 111, "gridY": 25 }
     },
     {
       "id": "map01-rage",
-      "checkpointId": "cp4-rage"
+      "checkpointId": "cp4-rage",
+      "anchor": { "gridX": 148, "gridY": 1 }
     },
     {
       "id": "map01-base-defense",
-      "checkpointId": "cp5-base-defense"
+      "checkpointId": "cp5-base-defense",
+      "anchor": { "gridX": 205, "gridY": 25 }
     },
     {
       "id": "map01-extraction",
-      "checkpointId": "final-extraction"
+      "checkpointId": "final-extraction",
+      "anchor": { "gridX": 245, "gridY": 1 }
     }
   ],
   "secondaryObjectives": [
@@ -349,10 +317,10 @@
           "count": 4,
           "spawnStaggerMs": 1600,
           "spawnArea": {
-            "gridX": 42,
-            "gridY": 22,
-            "widthCells": 12,
-            "heightCells": 18
+            "gridX": 47,
+            "gridY": 14,
+            "widthCells": 18,
+            "heightCells": 12
           }
         }
       ]
@@ -369,10 +337,10 @@
           "count": 6,
           "spawnStaggerMs": 1600,
           "spawnArea": {
-            "gridX": 104,
-            "gridY": 10,
-            "widthCells": 12,
-            "heightCells": 24
+            "gridX": 151,
+            "gridY": 8,
+            "widthCells": 20,
+            "heightCells": 16
           }
         },
         {
@@ -381,10 +349,10 @@
           "delayMs": 6000,
           "spawnStaggerMs": 1600,
           "spawnArea": {
-            "gridX": 88,
-            "gridY": 8,
-            "widthCells": 10,
-            "heightCells": 28
+            "gridX": 132,
+            "gridY": 5,
+            "widthCells": 20,
+            "heightCells": 24
           }
         }
       ]
@@ -401,10 +369,10 @@
           "count": 6,
           "spawnStaggerMs": 1800,
           "spawnArea": {
-            "gridX": 116,
-            "gridY": 1,
-            "widthCells": 20,
-            "heightCells": 5
+            "gridX": 192,
+            "gridY": 10,
+            "widthCells": 25,
+            "heightCells": 9
           }
         }
       ]
@@ -422,10 +390,10 @@
           "delayMs": 4000,
           "spawnStaggerMs": 1800,
           "spawnArea": {
-            "gridX": 116,
-            "gridY": 1,
-            "widthCells": 20,
-            "heightCells": 5
+            "gridX": 192,
+            "gridY": 10,
+            "widthCells": 25,
+            "heightCells": 9
           }
         },
         {
@@ -434,10 +402,10 @@
           "delayMs": 7000,
           "spawnStaggerMs": 1800,
           "spawnArea": {
-            "gridX": 116,
-            "gridY": 38,
-            "widthCells": 20,
-            "heightCells": 5
+            "gridX": 192,
+            "gridY": 14,
+            "widthCells": 25,
+            "heightCells": 9
           }
         }
       ]

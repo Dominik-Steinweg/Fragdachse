@@ -640,6 +640,8 @@ export interface CoopDefenseMapTutorialAnchorConfig {
 export interface CoopDefenseMapTutorialStepConfig {
   readonly id: string;
   readonly checkpointId: string;
+  /** Weltposition des Step-Fensters; der Checkpoint bleibt ausschließlich sein Trigger. */
+  readonly anchor?: CoopDefenseMapTutorialAnchorConfig;
   readonly durationMs?: number;
 }
 
@@ -1112,6 +1114,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     mapConfig.mapId,
     mapConfig.tutorialSteps,
     missionProgress,
+    arenaWidthCells,
+    arenaHeightCells,
   );
   return {
     mapId: mapConfig.mapId,
@@ -3021,6 +3025,8 @@ function normalizeTutorialSteps(
   mapId: string,
   steps: readonly CoopDefenseMapTutorialStepConfig[] | undefined,
   missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
 ): readonly ResolvedCoopDefenseMapTutorialStepConfig[] | undefined {
   if (steps === undefined) return undefined;
   if (!Array.isArray(steps)) {
@@ -3048,7 +3054,18 @@ function normalizeTutorialSteps(
     if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) {
       throw new Error(`[coopDefenseMaps] Tutorial step ${mapId}:${id} needs a positive durationMs`);
     }
-    return { id, checkpointId, durationMs: Math.floor(durationMs) };
+    const anchor = normalizeTutorialAnchor(
+      mapId,
+      step.anchor,
+      arenaWidthCells,
+      arenaHeightCells,
+    );
+    return {
+      id,
+      checkpointId,
+      ...(anchor ? { anchor } : {}),
+      durationMs: Math.floor(durationMs),
+    };
   });
 }
 

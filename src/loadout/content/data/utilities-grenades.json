@@ -13,9 +13,10 @@
       "projectileSize": 10,
       "fuseTime": 1000,
       "maxBounces": 3,
-      "aoeRadius": 120,
+      "aoeRadius": 140,
       "aoeDamage": 60,
       "baseDamageMult": 2.0,
+      "rockDamageMult": 3.0,
       "damageFalloff": {
         "minDamage": 10
       },

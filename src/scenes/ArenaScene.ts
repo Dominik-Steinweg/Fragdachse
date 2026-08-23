@@ -3934,7 +3934,7 @@ export class ArenaScene extends Phaser.Scene {
       if (this.tutorialStepState.activeStepId !== null) {
         this.tutorialStepState = createCoopDefenseTutorialStepState();
       }
-      this.ctx.centerHUD.updateTutorialHint(null);
+      this.ctx.centerHUD.updateTutorialStep(null);
       return;
     }
 
@@ -3959,8 +3959,12 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     const visibleStepId = getVisibleCoopDefenseTutorialStepId(this.tutorialStepState, nowMs);
-    this.ctx.centerHUD.updateTutorialHint(
-      visibleStepId === null ? null : getMapTutorialStep(visibleStepId, getLocale()) ?? null,
+    const visibleStep = visibleStepId === null
+      ? null
+      : steps.find((step) => step.id === visibleStepId) ?? null;
+    this.ctx.centerHUD.updateTutorialStep(
+      visibleStep === null ? null : getMapTutorialStep(visibleStep.id, getLocale()) ?? null,
+      visibleStep?.anchor,
     );
   }
 

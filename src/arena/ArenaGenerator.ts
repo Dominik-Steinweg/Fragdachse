@@ -212,6 +212,9 @@ export class ArenaGenerator {
           coopMapConfig.tutorialShowControls === true,
           coopBaseSpecs,
           coopMapConfig.tutorialAnchor,
+          coopMapConfig.tutorialSteps?.flatMap((step) => (
+            step.anchor ? [step.anchor] : []
+          )),
         );
       }
 
@@ -952,24 +955,36 @@ export class ArenaGenerator {
     tutorialShowControls: boolean,
     coopBaseSpecs?: readonly BaseSpec[],
     tutorialAnchor?: CoopDefenseMapTutorialAnchorConfig,
+    tutorialStepAnchors: readonly CoopDefenseMapTutorialAnchorConfig[] = [],
   ): Set<string> {
     const tutorialRockCells = new Set<string>();
-    // Gemeinsamer Generator; die Lobby-Felslandschaft unter dem Mittelpanel benutzt ihn mit
-    // eigener Region und eigenem Randverlauf.
-    const cells = generateSolidRockFormation(rng, {
-      region: getCoopDefenseTutorialRockRegion(tutorialShowControls, tutorialAnchor),
-      haloCells: COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
-      haloFillChance: [0.72],
-      outerHaloFillChance: 0.36,
-      gridCols: GRID_COLS,
-      gridRows: GRID_ROWS,
-      isBlockedCell: (gx, gy) => (
-        trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
-      ),
-    });
-    for (const { gridX, gridY } of cells) {
-      map[gridY][gridX] = true;
-      tutorialRockCells.add(`${gridX}_${gridY}`);
+    // Gemeinsamer Generator; das Starttutorial behält seine bisherige Formation samt
+    // Tutorial-Rüstungsdrop-Marker. Neue lokale Steps bekommen denselben World-Space-Unterbau,
+    // aber ausschließlich normale Felsen ohne Sondermarker.
+    const anchors = [
+      { anchor: tutorialAnchor, markAsStartTutorial: true },
+      ...tutorialStepAnchors.map((anchor) => ({ anchor, markAsStartTutorial: false })),
+    ];
+    const seenAnchors = new Set<string>();
+    for (const { anchor, markAsStartTutorial } of anchors) {
+      const anchorKey = anchor ? `${anchor.gridX}_${anchor.gridY}` : 'default';
+      if (seenAnchors.has(anchorKey)) continue;
+      seenAnchors.add(anchorKey);
+      const cells = generateSolidRockFormation(rng, {
+        region: getCoopDefenseTutorialRockRegion(tutorialShowControls, anchor),
+        haloCells: COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
+        haloFillChance: [0.72],
+        outerHaloFillChance: 0.36,
+        gridCols: GRID_COLS,
+        gridRows: GRID_ROWS,
+        isBlockedCell: (gx, gy) => (
+          trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
+        ),
+      });
+      for (const { gridX, gridY } of cells) {
+        map[gridY][gridX] = true;
+        if (markAsStartTutorial) tutorialRockCells.add(`${gridX}_${gridY}`);
+      }
     }
     return tutorialRockCells;
   }

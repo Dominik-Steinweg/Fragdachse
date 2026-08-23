@@ -17,6 +17,7 @@ import {
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
+import { getCoopDefenseTutorialRockRegion } from '../src/config/coopDefenseTutorial';
 import { getMapTutorial, getMapTutorialStep } from '../src/i18n/contentPresentation';
 import { CoopDefenseMissionProgressSystem } from '../src/systems/CoopDefenseMissionProgressSystem';
 import { CoopDefenseRoundStateSystem } from '../src/systems/CoopDefenseRoundStateSystem';
@@ -59,10 +60,10 @@ describe('Map 1 as the guided advance tutorial', () => {
 
   it('is a productive advance map that is clearly larger than the old tutorial arena', () => {
     expect(MAP.objective).toBe('advance');
-    expect(MAP.arenaWidthCells).toBe(160);
-    expect(MAP.arenaHeightCells).toBe(44);
-    // Deutlich groesser als die bisherige 60x33-Feuertaufe und laenglich statt quadratisch.
-    expect(MAP.arenaWidthCells!).toBeGreaterThan(MAP.arenaHeightCells! * 3);
+    expect(MAP.arenaWidthCells).toBe(260);
+    expect(MAP.arenaHeightCells).toBe(33);
+    expect(MAP.rockField).toBeDefined();
+    expect(MAP.arenaWidthCells!).toBeGreaterThan(MAP.arenaHeightCells! * 7);
     expect(MAP.respawnsPerPlayer).toBe(100);
     expect(MAP.surviveDurationSec).toBeUndefined();
   });
@@ -73,7 +74,7 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(MAP.tutorialPersistent).toBe(true);
     expect(MAP.tutorialShowControls).toBe(true);
     // Das Fenster folgt dem authored Anker in den Startbereich statt in die Arenamitte.
-    expect(MAP.tutorialAnchor).toEqual({ gridX: 15, gridY: 7 });
+    expect(MAP.tutorialAnchor).toEqual({ gridX: 15, gridY: 1 });
 
     const steps = resolveCoopDefenseMapTutorialSteps(MAP);
     expect(steps.map((step) => step.id)).toEqual([
@@ -89,6 +90,26 @@ describe('Map 1 as the guided advance tutorial', () => {
       expect(MISSION.checkpoints.some(({ id }) => id === step.checkpointId), step.id).toBe(true);
       expect(getMapTutorialStep(step.id, 'de'), step.id).toBeTruthy();
       expect(getMapTutorialStep(step.id, 'en'), step.id).toBeTruthy();
+      expect(step.anchor, step.id).toBeDefined();
+    }
+  });
+
+  it('places each step window on deterministic ordinary rock banks', () => {
+    applyMapMetrics();
+    const steps = resolveCoopDefenseMapTutorialSteps(MAP);
+    const layout = ArenaGenerator.generate(42_424, MAP);
+    const trackColumns = new Set(layout.tracks.flatMap(({ gridX }) => [gridX, gridX + 1]));
+    for (const step of steps) {
+      const region = getCoopDefenseTutorialRockRegion(false, step.anchor);
+      const rocksUnderPanel = layout.rocks.filter((rock) => (
+        rock.gridX >= region.minGridX
+        && rock.gridX <= region.maxGridX
+        && rock.gridY >= region.minGridY
+        && rock.gridY <= region.maxGridY
+        && !trackColumns.has(rock.gridX)
+      ));
+      expect(rocksUnderPanel.length, step.id).toBeGreaterThan(0);
+      expect(rocksUnderPanel.every((rock) => rock.armorDropMult === undefined), step.id).toBe(true);
     }
   });
 
@@ -143,8 +164,10 @@ describe('Map 1 as the guided advance tutorial', () => {
         expect(rock.armorDropMult).toBeUndefined();
       }
       // Reservierte Barrierezellen bleiben frei von generiertem Fels.
-      for (const cell of MISSION.barriers[0].cells) {
-        expect(rocks.has(`${cell.gridX}:${cell.gridY}`), `${seed} barrier`).toBe(false);
+      for (const barrier of MISSION.barriers) {
+        for (const cell of barrier.cells) {
+          expect(rocks.has(`${cell.gridX}:${cell.gridY}`), `${seed} ${barrier.id}`).toBe(false);
+        }
       }
     }
   });
@@ -233,8 +256,8 @@ describe('Map 1 as the guided advance tutorial', () => {
   });
 
   it('locks the extraction route behind the completed two-wave defence', () => {
-    const barrier = MISSION.barriers[0];
-    expect(MISSION.barriers).toHaveLength(1);
+    const barrier = MISSION.barriers.find(({ id }) => id === 'extraction-gate')!;
+    expect(MISSION.barriers).toHaveLength(2);
     expect(barrier.openOn).toEqual({ type: 'after-encounter', encounterId: 'cp5-wave-2' });
     expect(barrier.cells).toHaveLength(MAP.arenaHeightCells);
     const extraction = MISSION.checkpoints[MISSION.checkpoints.length - 1];
@@ -249,6 +272,15 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(hold?.type).toBe('hold');
     expect(hold?.holdUntil).toEqual({ type: 'after-encounter', encounterId: 'cp5-wave-2' });
     expect(hold?.targets).toEqual(['tutorial-outpost']);
+  });
+
+  it('locks the CP4-to-CP5 route behind the ordinary rage encounter', () => {
+    const barrier = MISSION.barriers.find(({ id }) => id === 'rage-gate')!;
+    expect(barrier.cells).toHaveLength(MAP.arenaHeightCells);
+    expect(barrier.openOn).toEqual({ type: 'after-encounter', encounterId: 'cp4-pressure' });
+    expect(MISSION.mandatoryDefenses).toHaveLength(1);
+    expect(MISSION.mandatoryDefenses[0].checkpointId).toBe('cp5-base-defense');
+    expect(MAP.secondaryObjectives?.some((objective) => objective.id === 'cp4-pressure')).toBe(false);
   });
 
   it('opens the barrier only once the second wave is cleared', () => {
