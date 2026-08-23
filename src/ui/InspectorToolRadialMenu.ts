@@ -8,6 +8,7 @@ import type { LoadoutToolRef } from '../types';
 import { getInspectorToolRadialSegmentIndex } from './InspectorToolRadialGeometry';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { formatNumber, getLocale, t } from '../i18n';
+import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 
 const INNER_RADIUS = 34;
 const OUTER_RADIUS = 112;
@@ -154,8 +155,11 @@ export class InspectorToolRadialMenu {
       const labelX = LABEL_RADIUS * Math.cos(center);
       const labelY = LABEL_RADIUS * Math.sin(center);
       if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
-        const icon = this.scene.add.image(labelX, labelY - 8, entry.textureKey)
-          .setDisplaySize(28, 28)
+        const icon = fitLoadoutIcon(
+          this.scene.add.image(labelX, labelY - 8, getLoadoutIconTextureKey(this.scene, entry.textureKey)),
+          28,
+          28,
+        )
           .setAlpha(contentAlpha);
         this.container.add(icon);
       }

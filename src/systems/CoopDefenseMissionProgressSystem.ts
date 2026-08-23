@@ -116,6 +116,14 @@ export class CoopDefenseMissionProgressSystem {
     return this.resolvedDefenses.has(id);
   }
 
+  /** Semantische Naht fuer das Objective-System: nur die aktuell route-lockende Defense priorisiert ihr Hold. */
+  isMandatoryDefenseObjectivePrioritized(objectiveId: string): boolean {
+    if (this.routeLockDefenseId === null) return false;
+    return this.config.mandatoryDefenses.some((defense) => (
+      defense.id === this.routeLockDefenseId && defense.objectiveId === objectiveId
+    ));
+  }
+
   getDefenseOutcome(id: string): CoopDefenseMissionDefenseOutcome | null {
     return this.resolvedDefenses.get(id)?.outcome ?? null;
   }

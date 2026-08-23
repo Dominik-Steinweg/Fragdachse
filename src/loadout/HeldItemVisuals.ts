@@ -87,7 +87,7 @@ const GENERIC_THROWABLE = sprite('generic_throwable', 2.5, 4.5);
 /** Bilder mit eigener Gestaltung, geschluesselt auf die Loadout-Item-ID. */
 export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.freeze({
   GLOCK: sprite('GLOCK', 4.5, 9.5, 3.5, 0),
-  ASMD_PRIM: sprite('ASMD_PRIM', 4.5, 10.5),
+  ASMD_PRIM: sprite('ASMD_PRIM', 4.5, 14.5),
   PLASMA: sprite('PLASMA', 3.5, 11.5),
   HYDRA: sprite('HYDRA', 4.5, 13.5),
   XBOW: sprite('XBOW', 4.5, 13.5),

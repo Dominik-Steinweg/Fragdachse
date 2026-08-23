@@ -75,6 +75,28 @@ const PALETTE = {
   z: [142, 56, 24],             // dunkles Orange fuer Flammenwerfer-/Holzakzente
   Z: [232, 126, 38],            // helles Orange fuer Flammenwerfer-/Holzakzente
   b: [198, 124, 44],          // warmes Kennband der Splittergranate
+  // Neue ASMD-Held-Texturen: identische Metallbasis, getrennte Energiepaletten.
+  a: [21, 29, 40],             // ASMD-Kontur
+  q: [32, 46, 55],             // ASMD dunkles Metall
+  v: [57, 74, 80],             // ASMD mittleres Metall
+  L: [87, 114, 119],            // ASMD helles Metall
+  r: [37, 58, 94],             // ASMD-Primär dunkelblau
+  R: [79, 143, 186],            // ASMD-Primär blau
+  t: [60, 94, 139],             // ASMD-Primär blaugrau
+  E: [115, 190, 211],           // ASMD-Primär Energiekern
+  i: [64, 39, 81],              // ASMD-Sekundär dunkellila
+  I: [122, 54, 123],            // ASMD-Sekundär lila
+  J: [162, 62, 140],            // ASMD-Sekundär heller Energiekern
+  // Manuell angepasste Langwaffen-Paletten.
+  A: [25, 51, 45],              // AWP dunkles Grün
+  B: [37, 86, 46],              // AWP Grün
+  D: [70, 130, 50],             // AWP helles Grün
+  Y: [117, 167, 67],            // AWP Akzentgrün
+  U: [168, 202, 88],            // AWP Spitzlicht
+  Q: [96, 44, 44],              // Shotgun dunkles Rotbraun
+  W: [136, 75, 43],             // Shotgun Rotbraun
+  j: [122, 72, 65],             // Shotgun helles Rotbraun
+  K: [77, 43, 50],              // Shotgun dunkler Schaft
 };
 
 /**
@@ -144,22 +166,25 @@ const ITEMS = [
   },
   {
     file: 'ASMD_PRIM.png',
-    grip: { x: 4.5, y: 10.5 },
-    // Kompakte Energieseitenwaffe: breiter als die Glock und mit symmetrischem Kern.
+    grip: { x: 4.5, y: 14.5 },
+    // ASMD-Primär: dieselbe 9x16-Silhouette wie die Sekundärwaffe, nur blau eingefärbt.
     pixels: [
-      '....k....',
-      '...ddd...',
-      '..dpppd..',
-      '.dppPppd.',
-      'dppPCPPpd',
-      'dppPPPPpd',
-      '.dppPPpd.',
-      'dppPPPPpd',
-      '.dppPppd.',
-      '..dpppd..',
-      '..dpppd..',
-      '...ddd...',
-      '....d....',
+      '....r....',
+      '....R....',
+      '....R....',
+      '....R....',
+      '....R....',
+      '....t....',
+      '....t....',
+      '...vrv...',
+      '...vLv...',
+      '...qLq...',
+      '...aLa...',
+      '..qqRqq..',
+      '..qRRRq..',
+      '..qRERq..',
+      '..qqtqq..',
+      '...aaa...',
     ],
   },
   {
@@ -337,50 +362,50 @@ const ITEMS = [
     file: 'SHOTGUN.png',
     grip: { x: 5.5, y: 17.5 },
     muzzle: { x: 4.5, y: 0 },
-    // Doppelläufige Schrotflinte: zwei getrennte Konturpunkte an der Mündung.
+    // Manuell angepasste Doppelläufige Schrotflinte mit rotbrauner Schaft-/Gehäusepalette.
     pixels: [
-      '...k...k...',
-      '...d...d...',
-      '...d...d...',
-      '...d...d...',
-      '...d...d...',
-      '...dmmmd...',
-      '..dmmHmmmd.',
-      '..dmmHmmmd.',
-      '..dmmhmmd..',
-      '...dmmmd...',
-      '...dmmmd...',
-      '...dmmmH...',
-      '...dmmmH...',
-      '...dmmmH...',
-      '....dmmH...',
-      '....dmmH...',
-      '....dmmH...',
-      '.....dd....',
-      '.....d.....',
+      '...aaqaa...',
+      '...aqLqa...',
+      '...qLLLq...',
+      '...qvLvq...',
+      '...qvvvq...',
+      '...QWjWQ...',
+      '..QWjdjWQ..',
+      '..QWjdjWQ..',
+      '..QWjdjWQ..',
+      '...QWLWQ...',
+      '...aqLqa...',
+      '...aqvqa...',
+      '...aqjqa...',
+      '...ajWja...',
+      '...KWWWK...',
+      '...KWjWK...',
+      '...KKjKK...',
+      '....KKK....',
+      '...........',
     ],
   },
   {
     file: 'ASMD_SEC.png',
     grip: { x: 4.5, y: 14.5 },
-    // Sekundär-Emitter: längere Energiewaffe mit hellem Doppelkanal.
+    // ASMD-Sekundär: dieselbe 9x16-Silhouette wie die Primärwaffe, nur violett eingefärbt.
     pixels: [
-      '...k.k...',
-      '..dmmmd..',
-      'dmmcFcmmd',
-      'dmmcCcmmd',
-      '.dmmcFmmd',
-      'dmmcCcmmd',
-      '.dmmcFmmd',
-      '.dmmcCmm.',
-      '..dmmmd..',
-      '..dmmmd..',
-      '...dmd...',
-      '...dmd...',
-      '...dmd...',
-      '...ddd...',
-      '...ddd...',
-      '....d....',
+      '....i....',
+      '....I....',
+      '....I....',
+      '....I....',
+      '....I....',
+      '....J....',
+      '....J....',
+      '...viv...',
+      '...vLv...',
+      '...qLq...',
+      '...aLa...',
+      '..qqIqq..',
+      '..qIJIq..',
+      '..qIJIq..',
+      '..qqIqq..',
+      '...aaa...',
     ],
   },
   {
@@ -439,35 +464,35 @@ const ITEMS = [
     file: 'AWP.png',
     grip: { x: 4.5, y: 26.5 },
     muzzle: { x: 4.5, y: 0 },
-    // Präzisionsgewehr: die längste, bewusst sehr schmale Silhouette im Satz.
+    // Manuell angepasste Präzisionswaffe: die längste, bewusst sehr schmale Silhouette im Satz.
     pixels: [
       '....k....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '....o....',
-      '...eoe...',
-      '...eoe...',
-      '..oOooO..',
-      '..oOoOO..',
-      '..oOoOO..',
-      '..oooOO..',
-      '..ooooo..',
-      '...oooO..',
-      '...oooO..',
-      '...oooO..',
-      '...oooO..',
-      '...oooO..',
-      '...oooO..',
-      '...ddd...',
+      '....v....',
+      '....L....',
+      '....L....',
+      '....B....',
+      '....B....',
+      '....B....',
+      '....B....',
+      '....A....',
+      '....A....',
+      '....A....',
+      '....A....',
+      '...vAv...',
+      '..vvovv..',
+      '...vov...',
+      '...DUD...',
+      '...DYD...',
+      '...DYD...',
+      '...BYB...',
+      '...BYB...',
+      '...BYB...',
+      '..BDYDB..',
+      '..ABYBA..',
+      '..ABUBA..',
+      '...AUA...',
+      '...vvv...',
+      '...qvq...',
       '....d....',
     ],
   },

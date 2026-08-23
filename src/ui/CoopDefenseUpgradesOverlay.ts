@@ -48,6 +48,7 @@ import {
   type LoadoutPickerGroup,
 } from './LoadoutSlotPicker';
 import { createLoadoutSlotControl } from './LoadoutSlotControl';
+import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 import { getClassDescription, getClassName, getClassRole, getClassTooltipLines } from '../i18n/contentPresentation';
 import { getLocale, t } from '../i18n';
 import { getUpgradeCategoryName, getUpgradeDescriptionSegments } from '../i18n/upgradePresentation';
@@ -1952,8 +1953,12 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     if (hasIcon && iconKey !== null) {
-      const icon = this.scene.add.image(0, 0, iconKey)
-        .setDisplaySize(ICON_SIZE, ICON_SIZE)
+      const uiIconKey = getLoadoutIconTextureKey(this.scene, iconKey);
+      const icon = fitLoadoutIcon(
+        this.scene.add.image(0, 0, uiIconKey),
+        ICON_SIZE,
+        ICON_SIZE,
+      )
         .setScrollFactor(0)
         .setAlpha(isLocked ? 0.4 : 1);
       nodeGroup.add(icon);

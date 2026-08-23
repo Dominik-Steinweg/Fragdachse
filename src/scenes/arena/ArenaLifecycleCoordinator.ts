@@ -1238,6 +1238,9 @@ export class ArenaLifecycleCoordinator {
         : null;
       this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
         ? new CoopDefenseSecondaryObjectiveSystem(coopDefenseSecondaryObjectiveConfigs, {
+          isObjectivePriorityRequested: (objectiveId) => (
+            this.ctx.coopDefenseMissionProgressSystem?.isMandatoryDefenseObjectivePrioritized(objectiveId) ?? false
+          ),
           isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
           isExternalTriggerSatisfied: (trigger) => {
             if (trigger.type === 'after-checkpoint') {

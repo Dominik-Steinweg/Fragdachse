@@ -4,6 +4,7 @@ import type { LoadoutItemPresentation } from '../loadout/LoadoutCatalog';
 import { ensureRoundedTexture, lerpColor } from './uiTextures';
 import { MOTION, TEXT, textStyle } from './uiTheme';
 import { t } from '../i18n';
+import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 
 export interface LoadoutSlotControlOptions {
   readonly x: number;
@@ -152,11 +153,15 @@ export function createLoadoutSlotControl(
   const hoverKey = options.hoverKey ?? `${options.x}:${options.y}`;
   let applyHoverState: ((state: LoadoutHoverState) => void) | null = null;
   if (presentation?.textureKey && scene.textures.exists(presentation.textureKey)) {
+    const textureKey = getLoadoutIconTextureKey(scene, presentation.textureKey);
     if (options.hoverGroup) {
-      const mutedIcon = createMutedIcon(scene, iconX, iconSize, presentation.textureKey);
-      const blockIcon = createBlockHoverIcon(scene, iconX, iconSize, presentation.textureKey);
-      const colorIcon = scene.add.image(iconX, 0, presentation.textureKey)
-        .setDisplaySize(iconSize, iconSize)
+      const mutedIcon = createMutedIcon(scene, iconX, iconSize, textureKey);
+      const blockIcon = createBlockHoverIcon(scene, iconX, iconSize, textureKey);
+      const colorIcon = fitLoadoutIcon(
+        scene.add.image(iconX, 0, textureKey),
+        iconSize,
+        iconSize,
+      )
         .setAlpha(0)
         .setScrollFactor(0);
       root.add([mutedIcon, blockIcon, colorIcon]);
@@ -185,8 +190,11 @@ export function createLoadoutSlotControl(
         });
       };
     } else {
-      root.add(scene.add.image(iconX, 0, presentation.textureKey)
-        .setDisplaySize(iconSize, iconSize)
+      root.add(fitLoadoutIcon(
+        scene.add.image(iconX, 0, textureKey),
+        iconSize,
+        iconSize,
+      )
         .setScrollFactor(0));
     }
   } else if (options.compact) {
@@ -425,8 +433,7 @@ function createMutedIcon(
   size: number,
   textureKey: string,
 ): Phaser.GameObjects.Image {
-  const icon = scene.add.image(x, 0, textureKey)
-    .setDisplaySize(size, size)
+  const icon = fitLoadoutIcon(scene.add.image(x, 0, textureKey), size, size)
     .setScrollFactor(0);
 
   icon.enableFilters();
@@ -446,8 +453,7 @@ function createBlockHoverIcon(
   size: number,
   textureKey: string,
 ): Phaser.GameObjects.Image {
-  const icon = scene.add.image(x, 0, textureKey)
-    .setDisplaySize(size, size)
+  const icon = fitLoadoutIcon(scene.add.image(x, 0, textureKey), size, size)
     .setAlpha(0)
     .setScrollFactor(0);
 

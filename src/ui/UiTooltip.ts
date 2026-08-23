@@ -3,6 +3,7 @@ import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { ensureFlatPanelTexture } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
+import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 
 /**
  * Geteilter Hover-Tooltip fuer Overlays: dunkle Flaeche, farbiger Titel, Trennlinie und darunter
@@ -131,7 +132,10 @@ export class UiTooltip {
         cursorY += SPACER_H;
         return;
       }
-      const icon = line.textureKey && this.scene.textures.exists(line.textureKey)
+      const iconTextureKey = line.textureKey && this.scene.textures.exists(line.textureKey)
+        ? getLoadoutIconTextureKey(this.scene, line.textureKey)
+        : null;
+      const icon = iconTextureKey
         ? this.lineIcons[index]
         : null;
       const textX = PADDING + (icon ? ICON_SIZE + ICON_GAP : 0);
@@ -144,8 +148,8 @@ export class UiTooltip {
         .setVisible(true);
       if (icon) {
         icon
-          .setTexture(line.textureKey!)
-          .setDisplaySize(ICON_SIZE, ICON_SIZE)
+          .setTexture(iconTextureKey!);
+        fitLoadoutIcon(icon, ICON_SIZE, ICON_SIZE)
           .setPosition(PADDING + ICON_SIZE / 2, cursorY + text.height / 2)
           .setVisible(true);
       } else {

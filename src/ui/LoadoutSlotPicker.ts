@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { ensureFlatPanelTexture, lerpColor } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
+import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 
 /** Ein waehlbarer Eintrag im Auswahl-Popup. */
 export interface LoadoutPickerEntry {
@@ -210,8 +211,12 @@ export class LoadoutSlotPicker {
     children.push(background);
 
     if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
-      children.push(this.scene.add.image(x + 6 + ICON_SIZE / 2, y + ENTRY_H / 2, entry.textureKey)
-        .setDisplaySize(ICON_SIZE, ICON_SIZE)
+      const textureKey = getLoadoutIconTextureKey(this.scene, entry.textureKey);
+      children.push(fitLoadoutIcon(
+        this.scene.add.image(x + 6 + ICON_SIZE / 2, y + ENTRY_H / 2, textureKey),
+        ICON_SIZE,
+        ICON_SIZE,
+      )
         .setScrollFactor(0)
         .setAlpha(entry.disabled ? 0.45 : 1));
     }

@@ -12,6 +12,8 @@ export interface CoopDefenseSecondaryObjectiveSystemOptions {
   /** Einzige Completion-Naht fuer authored Vollabschluss-Rewards. */
   readonly onObjectiveCompleted?: (objectiveId: string) => void;
   readonly onHoldFailed?: (objectiveId: string) => void;
+  /** Meldet, ob ein dormant Objective aktuell den HUD-Fokus priorisiert übernehmen muss. */
+  readonly isObjectivePriorityRequested?: (objectiveId: string) => boolean;
   /** Liefert ausschließlich den semantischen Clear-Zustand des Encounter-Owners. */
   readonly isEncounterCleared?: (encounterId: string) => boolean;
   /** Semantische Lifecycle-Naht fuer bewusst kleine externe Trigger wie Checkpoint/Defense. */
@@ -59,6 +61,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
   private readonly onObjectiveCompleted: ((objectiveId: string) => void) | null;
   private readonly onHoldFailed: ((objectiveId: string) => void) | null;
   private readonly onHoldCompleted: ((objectiveId: string) => void) | null;
+  private readonly isObjectivePriorityRequested: ((objectiveId: string) => boolean) | null;
   private readonly objectiveStates: SecondaryObjectiveRuntimeState[];
 
   constructor(
@@ -71,6 +74,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     this.onObjectiveCompleted = options.onObjectiveCompleted ?? null;
     this.onHoldFailed = options.onHoldFailed ?? null;
     this.onHoldCompleted = options.onHoldCompleted ?? null;
+    this.isObjectivePriorityRequested = options.isObjectivePriorityRequested ?? null;
     this.objectiveStates = objectives.map((config) => ({
       config,
       resolvedTargetIds: new Set<string>(),
@@ -96,6 +100,21 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (this.focusedObjectiveIndex !== null) {
       this.updateFocusedObjective();
     }
+
+    // Eine aktuell verpflichtende Defense darf den Fokus eines optionalen Objectives übernehmen,
+    // bleibt aber an ihr eigenes authored Start-Trigger gebunden. Das verdrängte Objective bleibt
+    // aktiv und damit als Hintergrund-Objective weiter zählbar.
+    const prioritizedIndex = this.findPrioritizedDormantObjective();
+    if (prioritizedIndex !== null) {
+      const focusedState = this.focusedObjectiveIndex === null
+        ? null
+        : this.objectiveStates[this.focusedObjectiveIndex] ?? null;
+      if (focusedState && this.isObjectivePriorityRequested?.(focusedState.config.id) === true) return;
+      this.focusedObjectiveIndex = null;
+      this.activateObjective(prioritizedIndex);
+      return;
+    }
+
     if (this.focusedObjectiveIndex !== null) {
       return;
     }
@@ -270,6 +289,19 @@ export class CoopDefenseSecondaryObjectiveSystem {
 
   private getHoldSurvivorCount(state: SecondaryObjectiveRuntimeState): number {
     return state.config.targets.length - state.destroyedTargetIds.size;
+  }
+
+  private findPrioritizedDormantObjective(): number | null {
+    if (!this.isObjectivePriorityRequested) return null;
+    for (let index = 0; index < this.objectiveStates.length; index += 1) {
+      const state = this.objectiveStates[index];
+      if (state.state !== 'dormant'
+        || state.config.type !== 'hold'
+        || !this.isObjectivePriorityRequested(state.config.id)
+        || !this.isTriggerSatisfied(state.config.start)) continue;
+      return index;
+    }
+    return null;
   }
 
   private activateObjective(index: number): void {
