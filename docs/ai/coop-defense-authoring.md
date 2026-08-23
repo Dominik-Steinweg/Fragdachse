@@ -11,7 +11,7 @@ CoopDefenseMapConfig bündelt Layout und Round-Inhalt:
 - sichtbare vertikale Gleise werden über `trackPosition` authored: `left`, `center`, `right` oder `{ kind: "grid", gridX }`; `gridX` bezeichnet die linke Spalte des zweispaltigen Gleis-Fußabdrucks. Der Standard ist `center`, und jede Position muss den bestehenden Basisabstand einhalten;
 - bases, powerUps, persistentSpawns und endliche encounters;
 - optionale secondaryObjectives, boss und mapEvents;
-- genau ein Objective: repel-assault, survive, defeat-boss oder destroy-hostile-bases.
+- genau ein Objective: repel-assault, survive, defeat-boss, destroy-hostile-bases oder advance.
 - Der Boss-Slot authoriert nur Boss-ID und Spawnzeit; Bosswerte bleiben zentral in `coopDefenseEnemies.json`.
 - Die Kampagnenregistry enthält Sandbox 00 sowie genau die Kampagnenmaps 01 bis 17; Map 9 ist basisloses Survival, Map 14 Survival mit Stellung, Map 16 repel-assault und Map 17 destroy-hostile-bases mit optionalem Carry.
 - Klassenfreischaltungen sind pro Klasse über `unlockAfterMapId` authoriert; der Fortschritt speichert die freigeschalteten Klassen-IDs und leitet keine alten globalen Map-5-Freischaltungen mehr ab.
@@ -56,7 +56,15 @@ Der optionale `missionProgress`-Block beschreibt ausschließlich geordneten Rout
 
 `barriers` reservieren stabile Grid-Zellen und öffnen einmalig über die kleine `openOn`-Union `after-checkpoint`, `after-defense` oder `after-encounter`. Reservierte Zellen bleiben frei von generierten Felsen, Bäumen, Podesten und Hazards. Geschlossene Barrieren blockieren Placement und Tunnel. Laufzeitseitig bleiben ihre Rect-Proxies stabil indexiert; beim Öffnen wechseln nur `active`, Arcade-Body, Flowfield-Belegung und Light-Occluder. Im ObstacleIndex haben sie einen eigenen Treffertyp, im Flowfield verwenden sie ohne neuen Cell-Code die bestehende nicht-destruktible Hard-Wall-Semantik. Gameplay-State und Geometrie besitzen keine Visuals; Checkpoints und Tore rendert ausschließlich der MissionProgressRenderer aus Konfiguration und repliziertem Zustand.
 
-`CoopDefenseMissionProgressSystem.isRouteComplete()` wird wahr, sobald der finale Checkpoint aktiviert ist und keine dort oder davor ausgelöste Mandatory Defense ungelöst bleibt. Dieser Zustand ist vorbereitet, aber noch keine Map-Siegbedingung.
+`CoopDefenseMissionProgressSystem.isRouteComplete()` wird wahr, sobald der finale Checkpoint aktiviert ist und keine dort oder davor ausgelöste Mandatory Defense ungelöst bleibt. Für `advance` ist genau dieser Zustand die host-autoritative Siegbedingung.
+
+## Objective advance
+
+`advance` (Vorstoß) besitzt keine eigene Routen-, Respawn- oder Encounter-Architektur: der authored `missionProgress` *ist* die Route, sein letzter Checkpoint die Extraktion. Die Normalisierung verlangt deshalb einen `missionProgress`-Block mit mindestens einem Checkpoint, fordert im Gegenzug aber keine Friendly Main Base und erlaubt weder `surviveDurationSec` noch `surviveRespawnsPerPlayer`; Respawn-Verhalten wird ausschließlich über `setRespawn` an Checkpoints authoriert.
+
+`CoopDefenseRoundStateSystem` erhält für `advance` nur zwei semantische Callbacks. `isAdvanceComplete` liest `isRouteComplete()`; da nur lebende, berechtigte Round-Participants Checkpoints auslösen, genügt ein einziger lebender Spieler an der Extraktion für den Teamsieg. `isAdvanceTeamDefeated` liest `isRoundTeamPermanentlyDown` aus der bestehenden Participation-/Respawn-Policy: verloren ist erst, wenn kein verbundener, aktiver Teilnehmer mehr lebt **und** keiner mehr respawnen darf. Ein momentaner Team-Wipe mit laufenden Respawn-Timern ist damit kein Defeat; eine gefallene optionale Basis beendet die Mission nicht. Bei gleichzeitigem Signal hat die Niederlage Vorrang.
+
+Ohne gültiges Basisziel – der Regelfall auf einer basislosen Vorstoß-Map – lesen basisorientierte Gegner das vorhandene Spieler-Flowfield statt des zielleeren Basisfelds. Das gilt für Bewegung und Spawnplatzierung gleichermaßen und ist bewusst als Feld-Auswahl umgesetzt, nicht als zweite Navigation.
 
 ## Zeitbasis
 

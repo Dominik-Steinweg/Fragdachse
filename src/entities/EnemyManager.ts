@@ -289,6 +289,11 @@ export class EnemyManager {
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
+    // Basislose Vorstoss-Karten haben kein gueltiges Basisziel. Basisorientierte Gegner folgen
+    // dann dem vorhandenen Spieler-Flowfield; eine zweite Navigation entsteht dabei nicht.
+    const baseTargetFlowFieldService = baseFlowFieldService?.hasGoalCells() === false
+      ? playerFlowFieldService ?? baseFlowFieldService
+      : baseFlowFieldService;
 
     for (const enemy of this.enemies.values()) {
       if (enemy.faction === 'allied') continue;
@@ -302,12 +307,12 @@ export class EnemyManager {
       // Unter der Erde ist der Zug keine Gefahr – die Gleis-KI bleibt dann komplett aussen vor.
       const activeTrainAwareness = isBurrowed ? null : trainAwarenessSystem;
       const primaryFlowFieldService = config.movementTarget === 'players-and-armed-constructs'
-        ? strategicFlowFieldService ?? playerFlowFieldService ?? baseFlowFieldService
+        ? strategicFlowFieldService ?? playerFlowFieldService ?? baseTargetFlowFieldService
         : config.isBoss
-          ? bossFlowFieldService ?? baseFlowFieldService
+          ? bossFlowFieldService ?? baseTargetFlowFieldService
           : config.movementTarget === 'players'
-          ? playerFlowFieldService ?? baseFlowFieldService
-          : baseFlowFieldService;
+          ? playerFlowFieldService ?? baseTargetFlowFieldService
+          : baseTargetFlowFieldService;
 
       if (movementLocked) {
         enemy.stopMovement();
@@ -401,11 +406,11 @@ export class EnemyManager {
       let integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
       if (
         config.isBoss
-        && flowFieldService !== baseFlowFieldService
-        && baseFlowFieldService
+        && flowFieldService !== baseTargetFlowFieldService
+        && baseTargetFlowFieldService
         && integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY
       ) {
-        flowFieldService = baseFlowFieldService;
+        flowFieldService = baseTargetFlowFieldService;
         integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
       }
 

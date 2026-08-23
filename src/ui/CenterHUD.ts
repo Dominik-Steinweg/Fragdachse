@@ -7,7 +7,8 @@
 import * as Phaser from 'phaser';
 import { ARMOR_COLOR, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
-import type { CoopDefenseEncounterPresentationState, CoopDefenseSurvivalPlayerState } from '../types';
+import type { CoopDefenseEncounterPresentationState } from '../types';
+import type { CoopDefenseLifeStatusViewModel } from './coopDefenseLifeStatusModel';
 import {
   rgbStr,
   type LivingBarPalette,
@@ -1021,26 +1022,22 @@ export class CenterHUD {
     }
   }
 
-  /** Kompakter Hinweis nur fuer bewusst migrierte Survival-Maps mit begrenzten Respawns. */
-  updateSurvivalStatus(status: CoopDefenseSurvivalPlayerState | null): void {
-    if (!status) {
+  /**
+   * Kompakte Lebens-/Rueckkehrzeile neben dem Timer. Survival zeigt sein Respawn-Budget,
+   * Vorstoss nur den aktiven Missions-Respawnpunkt; das Anzeigemodell entscheidet.
+   */
+  updateLifeStatus(model: CoopDefenseLifeStatusViewModel | null): void {
+    if (!model) {
       if (this.survivalText.visible) this.survivalText.setVisible(false);
       this.lastSurvivalText = null;
       return;
     }
 
-    const nextText = status.eliminated
-      ? 'AUSGESCHIEDEN'
-      : status.alive && status.remainingRespawns === 0
-        ? 'LETZTES LEBEN'
-        : `RESPAWNS: ${status.remainingRespawns}`;
-    if (nextText !== this.lastSurvivalText) {
-      this.survivalText.setText(nextText);
-      this.lastSurvivalText = nextText;
+    if (model.text !== this.lastSurvivalText) {
+      this.survivalText.setText(model.text);
+      this.lastSurvivalText = model.text;
     }
-    this.survivalText
-      .setColor(status.eliminated ? '#ff5555' : status.alive && status.remainingRespawns === 0 ? '#ffb347' : '#ffd166')
-      .setVisible(true);
+    this.survivalText.setColor(model.color).setVisible(true);
   }
 
   updateMainObjectivePresentation(model: MainObjectiveViewModel | null): void {

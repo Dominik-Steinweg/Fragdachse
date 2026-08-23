@@ -81,6 +81,7 @@ import { CenterHUD }             from '../ui/CenterHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../ui/CoopDefenseObjectiveAnnouncement';
 import { CoopDefenseMapEventAnnouncementPresenter } from '../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
+import { buildCoopDefenseLifeStatusViewModel } from '../ui/coopDefenseLifeStatusModel';
 import { buildMainObjectiveViewModel } from '../ui/coopDefenseMainObjectiveModel';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen }             from '../ui/BootScreen';
@@ -1801,11 +1802,15 @@ export class ArenaScene extends Phaser.Scene {
         secs,
         activeMapConfig === null || activeMapConfig.objective === 'survive',
       );
-      this.ctx.centerHUD.updateSurvivalStatus(
-        activeMapConfig?.objective === 'survive'
-          ? bridge.getLocalCoopDefenseSurvivalState()
-          : null,
-      );
+      const localPlayerId = bridge.getLocalPlayerId();
+      this.ctx.centerHUD.updateLifeStatus(buildCoopDefenseLifeStatusViewModel({
+        objective: activeMapConfig?.objective ?? null,
+        survival: bridge.getLocalCoopDefenseSurvivalState(),
+        missionRespawnActive: bridge.getCoopDefenseMissionProgressPresentationState()
+          ?.respawnCheckpointId != null,
+        alive: this.ctx.combatSystem.isAlive(localPlayerId),
+        canRespawn: bridge.canPlayerRespawn(localPlayerId),
+      }));
       const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
       const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
       // `tutorialPersistent` blendet das Fenster über die gesamte Rundendauer ein.
@@ -1995,6 +2000,9 @@ export class ArenaScene extends Phaser.Scene {
         && enemy.getHp() > 0
       ))
       : undefined;
+    const missionProgressPresentation = coopDefensePresentationActive
+      ? bridge.getCoopDefenseMissionProgressPresentationState()
+      : null;
     const mainObjective = presentationMapConfig
       ? buildMainObjectiveViewModel({
         mapId: presentationMapConfig.mapId,
@@ -2010,6 +2018,15 @@ export class ArenaScene extends Phaser.Scene {
             maxHp: hostileMainBases.reduce((sum, base) => sum + base.getMaxHp(), 0),
             remaining: hostileMainBases.filter((base) => !base.isDestroyed()).length,
             total: hostileMainBases.length,
+          }
+          : null,
+        // Vorstoss liest denselben replizierten MissionProgress-Snapshot wie die Weltmarker.
+        advance: presentationMapConfig.objective === 'advance'
+          ? {
+            activatedCheckpoints: missionProgressPresentation?.activatedCheckpoints.length ?? 0,
+            totalCheckpoints: resolveCoopDefenseMapMissionProgress(presentationMapConfig)
+              ?.checkpoints.length ?? 0,
+            routeComplete: missionProgressPresentation?.routeComplete === true,
           }
           : null,
       })
@@ -2042,7 +2059,7 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.renderers.missionProgress.sync(
       presentationMapConfig ? resolveCoopDefenseMapMissionProgress(presentationMapConfig) : undefined,
-      coopDefensePresentationActive ? bridge.getCoopDefenseMissionProgressPresentationState() : null,
+      missionProgressPresentation,
       coopDefensePresentationActive,
     );
     this.renderers.carryZones.sync(

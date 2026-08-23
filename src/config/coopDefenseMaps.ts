@@ -385,10 +385,16 @@ export interface CoopDefenseDynamicTimeOfDayConfig {
  * Siegbedingung der Map.
  *
  * Jede Map hat genau ein Ziel: einen endlichen Assault abwehren, Zeit ueberleben, den Boss
- * besiegen oder alle feindlichen Basen zerstoeren. Verloren wird in allen Faellen ueber die
- * eigenen Basen.
+ * besiegen, alle feindlichen Basen zerstoeren oder die authored Route bis zur Extraktion
+ * durchqueren. Verloren wird ueber die eigenen Basen; `survive` und `advance` verlieren
+ * stattdessen ueber den endgueltigen Team-Wipe.
  */
-export type CoopDefenseMapObjective = 'repel-assault' | 'survive' | 'defeat-boss' | 'destroy-hostile-bases';
+export type CoopDefenseMapObjective =
+  | 'repel-assault'
+  | 'survive'
+  | 'defeat-boss'
+  | 'destroy-hostile-bases'
+  | 'advance';
 
 /**
  * Belohnt einen Sieg auf dieser Map mit einem Item-Angebot. Bewusst pro Map konfigurierbar und
@@ -920,7 +926,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, boss);
   const persistentSpawns = Array.isArray(mapConfig.persistentSpawns) ? mapConfig.persistentSpawns : [];
   validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters);
-  if (objective !== 'survive') validateFriendlyMainBase(mapConfig.mapId, bases);
+  // Vorstoss besitzt keine Basis-Niederlage und braucht deshalb wie survive keine eigene Basis.
+  if (objective !== 'survive' && objective !== 'advance') validateFriendlyMainBase(mapConfig.mapId, bases);
   const surviveDurationSec = normalizeSurviveDurationSec(mapConfig.mapId, objective, mapConfig.surviveDurationSec);
   const balanceReferenceDurationSec = normalizeBalanceReferenceDurationSec(
     mapConfig.mapId,
@@ -973,6 +980,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     secondaryObjectives ?? [],
     missionProgress,
   );
+  validateAdvanceRoute(mapConfig.mapId, objective, missionProgress);
   return {
     mapId: mapConfig.mapId,
     arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
@@ -1021,6 +1029,21 @@ function validateMapSpawnModel(
   if (objective !== 'repel-assault') return;
   if (!Array.isArray(encounters) || encounters.length === 0) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} with repel-assault needs at least one encounter`);
+  }
+}
+
+/**
+ * Vorstoss fuehrt keine eigene Routenkonfiguration: die authored Checkpoint-Reihenfolge des
+ * Missionsfortschritts *ist* die Route, ihr letzter Checkpoint die Extraktion.
+ */
+function validateAdvanceRoute(
+  mapId: string,
+  objective: CoopDefenseMapObjective,
+  missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+): void {
+  if (objective !== 'advance') return;
+  if (!missionProgress || missionProgress.checkpoints.length === 0) {
+    throw new Error(`[coopDefenseMaps] Advance map ${mapId} needs missionProgress with at least one checkpoint`);
   }
 }
 
@@ -1090,6 +1113,7 @@ function normalizeObjective(
     && objective !== 'survive'
     && objective !== 'defeat-boss'
     && objective !== 'destroy-hostile-bases'
+    && objective !== 'advance'
   ) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs a valid explicit objective`);
   }
@@ -1106,6 +1130,8 @@ function normalizeObjective(
   }
   if (normalizedObjective === 'repel-assault') return normalizedObjective;
   if (normalizedObjective === 'survive') return normalizedObjective;
+  // Der Vorstoss gewinnt ueber die Route und verliert ueber den Team-Wipe: keine Basispflicht.
+  if (normalizedObjective === 'advance') return normalizedObjective;
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
   if (!bases.some((baseConfig) => baseConfig.faction === 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} wants destroy-hostile-bases but declares no hostile main base`);

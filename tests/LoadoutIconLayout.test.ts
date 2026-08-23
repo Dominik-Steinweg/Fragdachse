@@ -1,29 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => ({
+  Textures: { FilterMode: { NEAREST: 'NEAREST' } },
+}));
+
 import {
-  ASMD_LOADOUT_ICON_SCALE,
   fitLoadoutIcon,
   getLoadoutIconDisplaySize,
+  getLoadoutIconTextureKey,
 } from '../src/ui/LoadoutIconLayout';
 
 describe('loadout icon layout', () => {
-  it('adds the ASMD safety inset while keeping the icon centered and square', () => {
-    const size = getLoadoutIconDisplaySize('ASMD_PRIM', 32, 32, 32, 32);
-
-    expect(size.width).toBeCloseTo(32 * ASMD_LOADOUT_ICON_SCALE);
-    expect(size.height).toBeCloseTo(32 * ASMD_LOADOUT_ICON_SCALE);
-  });
-
-  it('applies the same ASMD inset to the secondary icon', () => {
-    expect(getLoadoutIconDisplaySize('ASMD_SEC', 32, 32, 44, 44)).toEqual({
-      width: 44 * ASMD_LOADOUT_ICON_SCALE,
-      height: 44 * ASMD_LOADOUT_ICON_SCALE,
+  it('fits the primary ASMD icon to the original 32px box', () => {
+    expect(getLoadoutIconDisplaySize('ASMD_PRIM', 32, 32, 32, 32)).toEqual({
+      width: 32,
+      height: 32,
     });
   });
 
-  it.each([
-    '__ui_loadout_icon_ASMD_PRIM_padded',
-    '__ui_loadout_icon_ASMD_SEC_padded',
-  ])('applies the ASMD inset to the padded runtime texture key %s', (textureKey) => {
+  it('fits the secondary ASMD icon without an additional scale', () => {
+    expect(getLoadoutIconDisplaySize('ASMD_SEC', 32, 32, 44, 44)).toEqual({
+      width: 44,
+      height: 44,
+    });
+  });
+
+  it.each(['ASMD_PRIM', 'ASMD_SEC'])('uses the normal runtime fit for the original %s texture', (textureKey) => {
     const image = {
       texture: { key: textureKey },
       frame: { width: 32, height: 32 },
@@ -32,10 +34,35 @@ describe('loadout icon layout', () => {
 
     fitLoadoutIcon(image as Parameters<typeof fitLoadoutIcon>[0], 32, 32);
 
-    expect(image.setDisplaySize).toHaveBeenCalledWith(
-      32 * ASMD_LOADOUT_ICON_SCALE,
-      32 * ASMD_LOADOUT_ICON_SCALE,
-    );
+    expect(image.setDisplaySize).toHaveBeenCalledWith(32, 32);
+  });
+
+  it.each(['ASMD_PRIM', 'ASMD_SEC'])('keeps the original %s key and uses NEAREST filtering', (textureKey) => {
+    const setFilter = vi.fn();
+    const scene = {
+      textures: {
+        exists: vi.fn(() => true),
+        get: vi.fn(() => ({ setFilter })),
+      },
+    };
+
+    expect(getLoadoutIconTextureKey(scene as Parameters<typeof getLoadoutIconTextureKey>[0], textureKey))
+      .toBe(textureKey);
+    expect(setFilter).toHaveBeenCalledWith('NEAREST');
+  });
+
+  it('does not change filtering for standard icons', () => {
+    const setFilter = vi.fn();
+    const scene = {
+      textures: {
+        exists: vi.fn(() => true),
+        get: vi.fn(() => ({ setFilter })),
+      },
+    };
+
+    expect(getLoadoutIconTextureKey(scene as Parameters<typeof getLoadoutIconTextureKey>[0], 'P90'))
+      .toBe('P90');
+    expect(setFilter).not.toHaveBeenCalled();
   });
 
   it('keeps standard icons at their existing maximum size', () => {

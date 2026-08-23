@@ -171,6 +171,11 @@ export class CoopDefenseSpawnExecutor {
     if (movementTarget === 'players') {
       return this.playerFlowFieldService ?? this.flowFieldService;
     }
+    // Basislose Vorstoss-Karten: ohne Basisziel gaebe es im Basisfeld keine erreichbare
+    // Spawnzelle. Die Spawnfront bleibt dieselbe, nur das gelesene Feld wechselt.
+    if (!this.flowFieldService.hasGoalCells() && this.playerFlowFieldService) {
+      return this.playerFlowFieldService;
+    }
     return this.flowFieldService;
   }
 

@@ -14,6 +14,13 @@ export interface MainObjectiveBaseProgress {
   readonly total: number;
 }
 
+/** Vorstoss: die authored Checkpoint-Reihenfolge ist die Route, ihr letzter Punkt die Extraktion. */
+export interface MainObjectiveAdvanceProgress {
+  readonly activatedCheckpoints: number;
+  readonly totalCheckpoints: number;
+  readonly routeComplete: boolean;
+}
+
 export interface MainObjectiveModelInput {
   readonly mapId: string;
   readonly objective: CoopDefenseMapObjective;
@@ -23,6 +30,7 @@ export interface MainObjectiveModelInput {
   readonly encounter: CoopDefenseEncounterPresentationState | null;
   readonly boss: MainObjectiveBossProgress | null;
   readonly hostileBases: MainObjectiveBaseProgress | null;
+  readonly advance?: MainObjectiveAdvanceProgress | null;
 }
 
 export interface MainObjectiveViewModel {
@@ -67,6 +75,22 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
         ? `${formatNumber(Math.ceil(Math.max(0, boss.currentHp)), getLocale(), { useGrouping: false })} / ${formatNumber(Math.ceil(Math.max(1, boss.maxHp)), getLocale(), { useGrouping: false })} HP`
         : t('ui.mainObjective.bossAppears'),
       progress: boss ? clamp01(boss.currentHp / Math.max(1, boss.maxHp)) : 0,
+    };
+  }
+
+  if (input.objective === 'advance') {
+    const total = Math.max(1, Math.floor(input.advance?.totalCheckpoints ?? 0));
+    const activated = Math.max(0, Math.min(total, Math.floor(input.advance?.activatedCheckpoints ?? 0)));
+    // Der letzte Checkpoint ist die Extraktion; sie wird ab dem finalen Abschnitt mitgenannt.
+    const onFinalLeg = input.advance?.routeComplete === true || activated >= total - 1;
+    const progressLabel = `${formatNumber(activated, getLocale())} / ${formatNumber(total, getLocale())}`;
+    return {
+      id,
+      title: t('ui.mainObjective.advance'),
+      progressLabel: onFinalLeg
+        ? `${progressLabel} · ${t('ui.mainObjective.extraction')}`
+        : progressLabel,
+      progress: clamp01(activated / total),
     };
   }
 

@@ -12,15 +12,20 @@ export interface CoopDefenseRoundStateSystemOptions {
   readonly isAssaultRepelled?: () => boolean;
   /** `survive`: true, sobald kein relevanter Teilnehmer mehr kaempfen oder respawnen kann. */
   readonly isSurvivalTeamWiped?: () => boolean;
+  /** `advance`: host-autoritatives `isRouteComplete()` des Missionsfortschritts. */
+  readonly isAdvanceComplete?: () => boolean;
+  /** `advance`: true, sobald kein relevanter Teilnehmer mehr lebt oder regulaer zurueckkehren kann. */
+  readonly isAdvanceTeamDefeated?: () => boolean;
 }
 
 /**
  * Entscheidet host-autoritativ ueber Sieg und Niederlage einer Coop-Defense-Runde.
  *
- * Verloren wird bei Survival ausschliesslich ueber einen vollstaendigen Spielerwipe, sonst ueber
- * die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
- * Abwehren des Assaults (`repel-assault`), das Zeitlimit (`survive`), den Boss (`defeat-boss`)
- * oder die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`).
+ * Verloren wird bei Survival und Vorstoss ausschliesslich ueber einen endgueltigen Spielerwipe,
+ * sonst ueber die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
+ * Abwehren des Assaults (`repel-assault`), das Zeitlimit (`survive`), den Boss (`defeat-boss`),
+ * die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`) oder die vollstaendig
+ * durchquerte Route bis zur Extraktion (`advance`).
  */
 export class CoopDefenseRoundStateSystem {
   private concluded = false;
@@ -30,6 +35,8 @@ export class CoopDefenseRoundStateSystem {
   private readonly isBossDefeated: () => boolean;
   private readonly isAssaultRepelled: () => boolean;
   private readonly isSurvivalTeamWiped: () => boolean;
+  private readonly isAdvanceComplete: () => boolean;
+  private readonly isAdvanceTeamDefeated: () => boolean;
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
@@ -38,6 +45,8 @@ export class CoopDefenseRoundStateSystem {
     this.isBossDefeated = options.isBossDefeated ?? (() => false);
     this.isAssaultRepelled = options.isAssaultRepelled ?? (() => false);
     this.isSurvivalTeamWiped = options.isSurvivalTeamWiped ?? (() => false);
+    this.isAdvanceComplete = options.isAdvanceComplete ?? (() => false);
+    this.isAdvanceTeamDefeated = options.isAdvanceTeamDefeated ?? (() => false);
   }
 
   update(): RoundOutcome | null {
@@ -45,7 +54,11 @@ export class CoopDefenseRoundStateSystem {
 
     // Nur eigene Basen zaehlen: sonst waere mit gefallener Gegnerbasis auch die Niederlage
     // ausgeloest oder – schlimmer – gar nicht mehr moeglich.
-    if (this.objective !== 'survive' && this.getTotalMainBaseHp('friendly') <= 0) {
+    // `advance` kennt keine Basis-Niederlage: eine optionale Basis darf fallen, ohne die Mission
+    // zu beenden.
+    if (this.objective !== 'survive'
+      && this.objective !== 'advance'
+      && this.getTotalMainBaseHp('friendly') <= 0) {
       this.concluded = true;
       return 'defeat';
     }
@@ -70,6 +83,20 @@ export class CoopDefenseRoundStateSystem {
 
     if (this.objective === 'repel-assault') {
       if (this.isAssaultRepelled()) {
+        this.concluded = true;
+        return 'victory';
+      }
+      return null;
+    }
+
+    if (this.objective === 'advance') {
+      // Die endgueltige Niederlage hat Vorrang, falls beide Signale im selben Host-Tick anliegen.
+      // Ein momentaner Wipe mit laufenden Respawn-Timern ist ausdruecklich kein Defeat.
+      if (this.isAdvanceTeamDefeated()) {
+        this.concluded = true;
+        return 'defeat';
+      }
+      if (this.isAdvanceComplete()) {
         this.concluded = true;
         return 'victory';
       }

@@ -276,6 +276,14 @@ export class EnemyFlowFieldService {
     return cells;
   }
 
+  /**
+   * Zielloses Feld. Basisorientierte Verbraucher weichen damit auf ein vorhandenes anderes Feld
+   * aus, statt auf einer basislosen Karte ohne Route stehen zu bleiben.
+   */
+  hasGoalCells(): boolean {
+    return (this.view.snapshot()?.goalIndexes.length ?? 0) > 0;
+  }
+
   isGoalCell(gridX: number, gridY: number): boolean {
     const snapshot = this.view.snapshot();
     if (!snapshot || !this.isInBounds(gridX, gridY)) return false;

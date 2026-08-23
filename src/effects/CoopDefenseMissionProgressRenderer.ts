@@ -4,7 +4,7 @@ import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../config/coop
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
 import { registerGraphicsObject } from './EffectUtils';
 
-/** Rein prozedurale Weltpresentation fuer Checkpoints und Missionstore. */
+/** Rein prozedurale Weltpresentation fuer Checkpoints, Extraktion und Missionstore. */
 export class CoopDefenseMissionProgressRenderer {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private signature = '';
@@ -29,16 +29,23 @@ export class CoopDefenseMissionProgressRenderer {
     this.graphics.clear().setVisible(true);
 
     const activated = new Set(state.activatedCheckpoints.map(({ checkpointId }) => checkpointId));
+    // Der letzte Checkpoint der authored Route ist die Extraktion; ein zweiter Marker-Vertrag
+    // entsteht dafuer nicht.
+    const extractionId = config.checkpoints[config.checkpoints.length - 1]?.id ?? null;
     for (const checkpoint of config.checkpoints) {
       const x = ARENA_OFFSET_X + (checkpoint.gridX + 0.5) * CELL_SIZE;
       const y = ARENA_OFFSET_Y + (checkpoint.gridY + 0.5) * CELL_SIZE;
       const radius = checkpoint.radiusCells * CELL_SIZE;
       const isNext = state.nextCheckpointId === checkpoint.id;
       const isActive = activated.has(checkpoint.id);
-      const color = isNext ? COLORS.GOLD_1 : isActive ? COLORS.BLUE_3 : COLORS.BLUE_4;
-      const alpha = isNext ? 0.95 : isActive ? 0.34 : 0.16;
+      const isExtraction = checkpoint.id === extractionId;
+      const color = isExtraction
+        ? (isActive ? COLORS.GREEN_2 : COLORS.GREEN_3)
+        : isNext ? COLORS.GOLD_1 : isActive ? COLORS.BLUE_3 : COLORS.BLUE_4;
+      const alpha = isNext ? 0.95 : isActive ? 0.34 : isExtraction ? 0.45 : 0.16;
       this.graphics.fillStyle(color, alpha * 0.16).fillCircle(x, y, radius);
       this.graphics.lineStyle(isNext ? 3 : 2, color, alpha).strokeCircle(x, y, radius);
+      if (isExtraction) this.drawExtractionMarker(x, y, radius, color, alpha);
       if (isNext) {
         this.graphics.lineStyle(1, COLORS.GREY_1, 0.72).strokeCircle(x, y, Math.max(6, radius - 5));
         this.graphics.fillStyle(COLORS.GOLD_1, 0.9).fillTriangle(x, y - 13, x - 7, y - 2, x + 7, y - 2);
@@ -60,6 +67,31 @@ export class CoopDefenseMissionProgressRenderer {
 
   destroy(): void {
     this.graphics.destroy();
+  }
+
+  /** Vier nach innen zeigende Keile: die Extraktion sammelt ein, statt weiterzuweisen. */
+  private drawExtractionMarker(x: number, y: number, radius: number, color: number, alpha: number): void {
+    const outer = Math.max(10, radius);
+    const inner = Math.max(5, outer - 9);
+    this.graphics.lineStyle(2, color, Math.min(1, alpha + 0.25)).strokeCircle(x, y, inner);
+    this.graphics.fillStyle(color, Math.min(1, alpha + 0.35));
+    for (let index = 0; index < 4; index += 1) {
+      const angle = (Math.PI / 2) * index;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      const tipX = x + dirX * (inner - 2);
+      const tipY = y + dirY * (inner - 2);
+      const baseX = x + dirX * (outer + 3);
+      const baseY = y + dirY * (outer + 3);
+      this.graphics.fillTriangle(
+        tipX,
+        tipY,
+        baseX - dirY * 5,
+        baseY + dirX * 5,
+        baseX + dirY * 5,
+        baseY - dirX * 5,
+      );
+    }
   }
 
   private drawClosedGateCell(gridX: number, gridY: number): void {

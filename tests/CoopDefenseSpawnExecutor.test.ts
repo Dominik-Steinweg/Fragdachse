@@ -46,6 +46,8 @@ function createExecutor(
   const flowField = {
     isTraversableAt,
     getIntegrationValueAt,
+    // Erreichbare Integrationswerte bedeuten ein Feld mit Zielen; nur die Zellform bleibt leer.
+    hasGoalCells: () => true,
     getGoalCells: () => [],
     gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
   } as unknown as EnemyFlowFieldService;

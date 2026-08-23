@@ -60,6 +60,7 @@ import {
   enterRoundSpectator,
   getRoundPlayerRole,
   getRoundResultEligibleIds,
+  isRoundTeamPermanentlyDown as isRoundTeamPermanentlyDownByPolicy,
   markRoundLateJoiner,
 } from '../scenes/arena/RoundParticipationPolicy';
 import {
@@ -1652,6 +1653,19 @@ export class NetworkBridge {
 
   canPlayerReceiveRoundRewards(playerId: string): boolean {
     return canRoundPlayerReceiveRewards(this.getRoundParticipation(), playerId);
+  }
+
+  /**
+   * Endgueltiger Team-Wipe nach der bestehenden Participation-/Respawn-Policy. Ein momentaner
+   * Wipe mit noch zulaessigen Respawns bleibt bewusst `false`.
+   */
+  isRoundTeamPermanentlyDown(isAlive: (playerId: string) => boolean): boolean {
+    return isRoundTeamPermanentlyDownByPolicy(
+      this.getRoundParticipation(),
+      this.getConnectedPlayerIds(),
+      isAlive,
+      (playerId) => this.canPlayerRespawn(playerId),
+    );
   }
 
   getRoundResultEligiblePlayerIds(): string[] {

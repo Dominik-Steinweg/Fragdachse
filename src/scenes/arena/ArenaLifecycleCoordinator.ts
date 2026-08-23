@@ -987,6 +987,12 @@ export class ArenaLifecycleCoordinator {
             bridge.getRoundParticipation()?.spectatorIds ?? [],
           );
         },
+        // Vorstoss setzt Sieg und Niederlage rein semantisch aus vorhandenen Systemen zusammen:
+        // die Route gehoert dem MissionProgress, die Rueckkehrfrage der Respawn-Policy.
+        isAdvanceComplete: () => this.ctx.coopDefenseMissionProgressSystem?.isRouteComplete() ?? false,
+        isAdvanceTeamDefeated: () => bridge.isRoundTeamPermanentlyDown(
+          (playerId) => this.ctx.combatSystem.isAlive(playerId),
+        ),
       })
       : null;
     const baseManager = this.ctx.baseManager;
