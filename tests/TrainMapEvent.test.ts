@@ -70,7 +70,8 @@ const ENCOUNTER_TRIGGERED_TRAIN = {
 describe('Train as a standalone map event', () => {
   it('migrates the train rhythm on every rails map of the campaign', () => {
     const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
-      map.trackMode === 'rails' && !['0', '2', '11'].includes(map.mapId)
+      // Map 1 fuehrt als gefuehrte Tutorial-Route bewusst keinen Zug.
+      map.trackMode === 'rails' && !['0', '1', '2', '11'].includes(map.mapId)
     ));
     expect(railsMaps.length).toBeGreaterThan(0);
 
@@ -99,17 +100,23 @@ describe('Train as a standalone map event', () => {
     expect(trainEvent?.repeatAfterExitMs).toBeUndefined();
   });
 
-  it('announces Map 1 train traffic from round start without changing its first arrival time', () => {
-    const map = getCoopDefenseMapConfig('1');
+  it('announces Map 3 train traffic on a repeating rhythm', () => {
+    const map = getCoopDefenseMapConfig('3');
     const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
 
     expect(trainEvent).toMatchObject({
       id: 'train-rhythm',
       type: 'train',
-      start: { type: 'time', atMs: 0 },
-      delayMs: 10_000,
-      repeatAfterExitMs: 10_000,
+      start: { type: 'time', atMs: 10_000 },
     });
+    expect(trainEvent?.repeatAfterExitMs).toBeGreaterThan(0);
+  });
+
+  it('keeps the guided Map 1 tutorial route free of unexplained train traffic', () => {
+    const map = getCoopDefenseMapConfig('1');
+
+    expect(map.trackMode).toBe('rails');
+    expect(map.mapEvents?.some((event) => event.type === 'train')).toBe(false);
   });
 
   it('allows rails without a train', () => {

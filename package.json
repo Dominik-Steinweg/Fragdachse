@@ -22,7 +22,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "deploy:current": "npm run build && gh-pages -d dist -e current"
+    "deploy:current": "npm run build && gh-pages -d dist -e current --add"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

@@ -17,6 +17,12 @@ export interface CoopDefenseRoundStateSystemOptions {
   readonly isTeamWipedOut?: () => boolean;
   /** `advance`: host-autoritatives `isRouteComplete()` des Missionsfortschritts. */
   readonly isAdvanceComplete?: () => boolean;
+  /**
+   * `advance`: host-autoritatives `isMissionFailed()` des Missionsfortschritts. Wahr, sobald eine
+   * als `failureEndsMission` authorierte Mandatory Defense gescheitert ist – die Route bliebe dann
+   * zwar begehbar, die Mission aber sinnlos.
+   */
+  readonly isAdvanceFailed?: () => boolean;
 }
 
 /**
@@ -37,6 +43,7 @@ export class CoopDefenseRoundStateSystem {
   private readonly isAssaultRepelled: () => boolean;
   private readonly isTeamWipedOut: () => boolean;
   private readonly isAdvanceComplete: () => boolean;
+  private readonly isAdvanceFailed: () => boolean;
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
@@ -46,6 +53,7 @@ export class CoopDefenseRoundStateSystem {
     this.isAssaultRepelled = options.isAssaultRepelled ?? (() => false);
     this.isTeamWipedOut = options.isTeamWipedOut ?? (() => false);
     this.isAdvanceComplete = options.isAdvanceComplete ?? (() => false);
+    this.isAdvanceFailed = options.isAdvanceFailed ?? (() => false);
   }
 
   update(): RoundOutcome | null {
@@ -90,8 +98,13 @@ export class CoopDefenseRoundStateSystem {
 
     // `survive` und `advance` verlieren beide ueber denselben endgueltigen Team-Wipe; nur die
     // Siegbedingung dahinter unterscheidet sich. Ein momentaner Wipe mit noch freiem
-    // Respawn-Budget ist ausdruecklich kein Defeat.
+    // Respawn-Budget ist ausdruecklich kein Defeat. Der Vorstoss kennt zusaetzlich die authored
+    // Missionsniederlage einer unverzichtbaren Stellung; wie der Wipe hat sie Vorrang vor dem Sieg.
     if (this.objective === 'survive' || this.objective === 'advance') {
+      if (this.objective === 'advance' && this.isAdvanceFailed()) {
+        this.concluded = true;
+        return 'defeat';
+      }
       if (this.isTeamWipedOut()) {
         this.concluded = true;
         return 'defeat';

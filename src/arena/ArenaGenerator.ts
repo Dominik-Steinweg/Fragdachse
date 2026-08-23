@@ -12,6 +12,8 @@ import type {
   CoopDefenseMapGroundHazardEventConfig,
   CoopDefenseMapPowerUpConfig,
   CoopDefenseMapRockFieldConfig,
+  CoopDefenseMapRockWallConfig,
+  CoopDefenseMapTutorialAnchorConfig,
   CoopDefensePowerUpRegion,
   CoopDefenseMapTrackPosition,
 } from '../config/coopDefenseMaps';
@@ -130,6 +132,10 @@ export class ArenaGenerator {
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
     );
+    // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
+    // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
+    // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
+    const authoredRockWallCells = ArenaGenerator.collectRockWallCells(coopMapConfig?.rockWalls);
 
     for (let attempt = 0; attempt < 100; attempt++) {
       const rng = ArenaGenerator.makePrng(seed + attempt);
@@ -205,6 +211,7 @@ export class ArenaGenerator {
           rng,
           coopMapConfig.tutorialShowControls === true,
           coopBaseSpecs,
+          coopMapConfig.tutorialAnchor,
         );
       }
 
@@ -257,6 +264,7 @@ export class ArenaGenerator {
           !trackCols.has(gx) &&
           !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs) &&
           !missionBarrierCells.has(`${gx}_${gy}`) &&
+          !authoredRockWallCells.has(`${gx}_${gy}`) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -311,6 +319,16 @@ export class ArenaGenerator {
         // keine authored Spawn-Ziele in eine lange notwendige Gleisfahrt.
         continue;
       }
+
+      ArenaGenerator.applyAuthoredRockWalls(
+        blocked,
+        rocks,
+        trees,
+        authoredRockWallCells,
+        trackCols,
+        missionBarrierCells,
+        coopBaseSpecs,
+      );
 
       // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
       const dirtSet = new Set<number>(); // gy * GRID_COLS + gx
@@ -592,7 +610,12 @@ export class ArenaGenerator {
     const sourceGroups: Array<Array<{ gridX: number; gridY: number }>> = [];
     const fronts = new Set<SpawnFront>();
     for (const encounter of mapConfig.encounters ?? []) {
-      for (const group of encounter.groups) fronts.add(group.front ?? DEFAULT_SPAWN_FRONT);
+      for (const group of encounter.groups) {
+        // Eine Gruppe mit authored Bereich startet nie am Randband; geprueft wird dann genau
+        // der Bereich, aus dem sie wirklich kommt.
+        if (group.spawnArea) sourceGroups.push(ArenaGenerator.getSpawnAreaCells(group.spawnArea, blocked, baseCells));
+        else fronts.add(group.front ?? DEFAULT_SPAWN_FRONT);
+      }
     }
     for (const spawn of mapConfig.persistentSpawns ?? []) {
       const sourceConfig = spawn.source;
@@ -659,6 +682,23 @@ export class ArenaGenerator {
           ? (front === 'west' ? gridX <= depthX : gridX >= GRID_COLS - depthX - 1)
           : (front === 'north' ? gridY <= depthY : gridY >= GRID_ROWS - depthY - 1);
         if (!onFrontBand || blocked[gridY][gridX] || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))) continue;
+        cells.push({ gridX, gridY });
+      }
+    }
+    return cells;
+  }
+
+  private static getSpawnAreaCells(
+    area: { gridX: number; gridY: number; widthCells: number; heightCells: number },
+    blocked: boolean[][],
+    baseCells: ReadonlySet<number>,
+  ): Array<{ gridX: number; gridY: number }> {
+    const cells: Array<{ gridX: number; gridY: number }> = [];
+    const maxGridX = Math.min(GRID_COLS - 1, area.gridX + area.widthCells - 1);
+    const maxGridY = Math.min(GRID_ROWS - 1, area.gridY + area.heightCells - 1);
+    for (let gridY = Math.max(0, area.gridY); gridY <= maxGridY; gridY += 1) {
+      for (let gridX = Math.max(0, area.gridX); gridX <= maxGridX; gridX += 1) {
+        if (blocked[gridY][gridX] || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))) continue;
         cells.push({ gridX, gridY });
       }
     }
@@ -859,18 +899,65 @@ export class ArenaGenerator {
     }
   }
 
+  /** Zellschlüssel aller authored Felsbänder; leer, solange die Map keine authoriert. */
+  private static collectRockWallCells(
+    rockWalls: readonly CoopDefenseMapRockWallConfig[] | undefined,
+  ): Set<string> {
+    const cells = new Set<string>();
+    for (const wall of rockWalls ?? []) {
+      const maxGridX = Math.min(GRID_COLS - 1, wall.gridX + wall.widthCells - 1);
+      const maxGridY = Math.min(GRID_ROWS - 1, wall.gridY + wall.heightCells - 1);
+      for (let gridY = Math.max(0, wall.gridY); gridY <= maxGridY; gridY += 1) {
+        for (let gridX = Math.max(0, wall.gridX); gridX <= maxGridX; gridX += 1) {
+          cells.add(`${gridX}_${gridY}`);
+        }
+      }
+    }
+    return cells;
+  }
+
+  /**
+   * Stempelt die authored Bänder als ganz normale Felsen ein. Reservierte Flächen bleiben frei:
+   * Gleisspalten, Basisreservierungen, Barrierezellen und bereits gesetzte Bäume.
+   */
+  private static applyAuthoredRockWalls(
+    blocked: boolean[][],
+    rocks: RockCell[],
+    trees: readonly TreeCell[],
+    wallCells: ReadonlySet<string>,
+    trackCols: ReadonlySet<number>,
+    missionBarrierCells: ReadonlySet<string>,
+    coopBaseSpecs?: readonly BaseSpec[],
+  ): void {
+    if (wallCells.size === 0) return;
+    const treeCells = new Set(trees.map((tree) => `${tree.gridX}_${tree.gridY}`));
+    for (const key of wallCells) {
+      const [gridXText, gridYText] = key.split('_');
+      const gridX = Number(gridXText);
+      const gridY = Number(gridYText);
+      if (blocked[gridY][gridX]) continue;
+      if (trackCols.has(gridX)) continue;
+      if (missionBarrierCells.has(key)) continue;
+      if (treeCells.has(key)) continue;
+      if (isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)) continue;
+      blocked[gridY][gridX] = true;
+      rocks.push({ gridX, gridY });
+    }
+  }
+
   private static applyTutorialRockFormation(
     map: boolean[][],
     trackCols: ReadonlySet<number>,
     rng: () => number,
     tutorialShowControls: boolean,
     coopBaseSpecs?: readonly BaseSpec[],
+    tutorialAnchor?: CoopDefenseMapTutorialAnchorConfig,
   ): Set<string> {
     const tutorialRockCells = new Set<string>();
     // Gemeinsamer Generator; die Lobby-Felslandschaft unter dem Mittelpanel benutzt ihn mit
     // eigener Region und eigenem Randverlauf.
     const cells = generateSolidRockFormation(rng, {
-      region: getCoopDefenseTutorialRockRegion(tutorialShowControls),
+      region: getCoopDefenseTutorialRockRegion(tutorialShowControls, tutorialAnchor),
       haloCells: COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
       haloFillChance: [0.72],
       outerHaloFillChance: 0.36,

@@ -336,7 +336,13 @@ describe('Coop defense secondary objectives', () => {
     expect(normalized.secondaryObjectives?.[0]).toMatchObject({ holdDurationMs: 2_500 });
     expect(normalized.missionProgress).toEqual({
       checkpoints: [{ id: 'gate', gridX: 3, gridY: 4, radiusCells: 1, setRespawn: true }],
-      mandatoryDefenses: [{ id: 'defend', checkpointId: 'gate', objectiveId: 'hold-gate' }],
+      // Ohne authored Flag bleibt die bisherige Semantik: `failed` gibt die Route frei.
+      mandatoryDefenses: [{
+        id: 'defend',
+        checkpointId: 'gate',
+        objectiveId: 'hold-gate',
+        failureEndsMission: false,
+      }],
       barriers: [{
         id: 'door',
         cells: [{ gridX: 5, gridY: 4 }],

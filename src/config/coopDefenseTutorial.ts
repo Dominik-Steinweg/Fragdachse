@@ -9,12 +9,26 @@ import {
 import { HELP_CONTROLS } from './helpControls';
 
 export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 60_000;
+/** Standard-Standzeit eines lokalen Tutorial-Hinweises entlang der Route. */
+export const COOP_DEFENSE_TUTORIAL_STEP_DEFAULT_DURATION_MS = 14_000;
 
 /** Feste Weltposition des Tutorials, unabhängig vom Screen-Space-HUD. */
 const COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y = 7 * CELL_SIZE;
 
-export function getCoopDefenseTutorialPanelTopY(): number {
-  return ARENA_OFFSET_Y + COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y;
+/**
+ * Authored Ankerzelle des Tutorial-Fensters. `gridX` ist seine Mittelspalte, `gridY` seine
+ * obere Zeile. Ohne Anker bleibt das Fenster in der Arenamitte auf der bisherigen Höhe – auf
+ * einer Routenkarte läge diese Mitte aber weit weg vom Startbereich.
+ */
+export interface CoopDefenseTutorialAnchor {
+  readonly gridX: number;
+  readonly gridY: number;
+}
+
+export function getCoopDefenseTutorialPanelTopY(anchor?: CoopDefenseTutorialAnchor): number {
+  return anchor
+    ? ARENA_OFFSET_Y + anchor.gridY * CELL_SIZE
+    : ARENA_OFFSET_Y + COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y;
 }
 export const COOP_DEFENSE_TUTORIAL_PANEL_WIDTH = 840;
 export const COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT = 168;
@@ -38,8 +52,10 @@ export const COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X = 180;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X = 400;
 
 /** Weltmitte der aktuell aktiven Arena; folgt den pro Map angewendeten Arena-Metriken. */
-export function getCoopDefenseTutorialPanelCenterX(): number {
-  return ARENA_OFFSET_X + ARENA_WIDTH / 2;
+export function getCoopDefenseTutorialPanelCenterX(anchor?: CoopDefenseTutorialAnchor): number {
+  return anchor
+    ? ARENA_OFFSET_X + (anchor.gridX + 0.5) * CELL_SIZE
+    : ARENA_OFFSET_X + ARENA_WIDTH / 2;
 }
 
 /**
@@ -56,15 +72,18 @@ export function getCoopDefenseTutorialPanelHeight(showControls: boolean): number
     + COOP_DEFENSE_TUTORIAL_CONTROLS_PAD_BOTTOM;
 }
 
-export function getCoopDefenseTutorialRockRegion(showControls = false): {
+export function getCoopDefenseTutorialRockRegion(
+  showControls = false,
+  anchor?: CoopDefenseTutorialAnchor,
+): {
   minGridX: number;
   maxGridX: number;
   minGridY: number;
   maxGridY: number;
 } {
-  const left = getCoopDefenseTutorialPanelCenterX() - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
+  const left = getCoopDefenseTutorialPanelCenterX(anchor) - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
   const right = left + COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-  const top = getCoopDefenseTutorialPanelTopY();
+  const top = getCoopDefenseTutorialPanelTopY(anchor);
   const bottom = top + getCoopDefenseTutorialPanelHeight(showControls);
   return {
     minGridX: Math.max(0, Math.floor((left - ARENA_OFFSET_X) / CELL_SIZE)),

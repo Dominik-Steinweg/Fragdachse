@@ -32,6 +32,7 @@ import {
   getCoopDefenseTutorialPanelCenterX,
   getCoopDefenseTutorialPanelHeight,
   getCoopDefenseTutorialPanelTopY,
+  type CoopDefenseTutorialAnchor,
 } from '../config/coopDefenseTutorial';
 import { HELP_CONTROLS } from '../config/helpControls';
 import { ensureFlatPanelTexture, roundRectPath } from './uiTextures';
@@ -90,6 +91,17 @@ const TUTORIAL_ACCENT     = COLORS.GOLD_2;
 const TUTORIAL_CONTROLS_TOP    = TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H + COOP_DEFENSE_TUTORIAL_CONTROLS_BODY_H;
 const TUTORIAL_CONTROLS_ROWS_Y = TUTORIAL_CONTROLS_TOP + COOP_DEFENSE_TUTORIAL_CONTROLS_HEADING_H;
 const TUTORIAL_CONTROLS_SEP_Y  = TUTORIAL_CONTROLS_TOP + 26;
+
+// ── Tutorial-Hinweis entlang der Route ───────────────────────────────────────
+// Bewusst dieselbe Bildsprache wie das Tutorial-Fenster, aber screen-space: Der Hinweis
+// gehört zum Spieler, nicht zu einer Felsformation, und muss ihn über die ganze Route
+// begleiten. Er bleibt rein lokal und trägt keinen Rundenzustand.
+const TUTORIAL_HINT_W          = 760;
+const TUTORIAL_HINT_PAD_X      = 24;
+const TUTORIAL_HINT_PAD_TOP    = 14;
+const TUTORIAL_HINT_TITLE_H    = 22;
+const TUTORIAL_HINT_PAD_BOTTOM = 16;
+const TUTORIAL_HINT_CENTER_Y   = GAME_HEIGHT - 250;
 
 const ANNOUNCEMENT_Y          = GAME_HEIGHT / 2;
 const ANNOUNCEMENT_MAX_TEXT_W = 560;
@@ -289,6 +301,15 @@ const TUTORIAL_BODY_FONT = {
   fontSize: '19px', fontFamily: 'monospace', color: '#f1f4f6', align: 'center' as const,
   lineSpacing: 5,
   wordWrap: { width: COOP_DEFENSE_TUTORIAL_PANEL_WIDTH - TUTORIAL_PAD_X * 2 },
+};
+const TUTORIAL_HINT_TITLE_FONT = {
+  fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(TUTORIAL_ACCENT),
+  letterSpacing: 3,
+};
+const TUTORIAL_HINT_BODY_FONT = {
+  fontSize: '18px', fontFamily: 'monospace', color: '#f1f4f6', align: 'center' as const,
+  lineSpacing: 5,
+  wordWrap: { width: TUTORIAL_HINT_W - TUTORIAL_HINT_PAD_X * 2 },
 };
 const TUTORIAL_CONTROLS_KEY_FONT = {
   fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
@@ -499,6 +520,13 @@ export class CenterHUD {
   private readonly tutorialOcclusionFade = createHudOcclusionFadeState();
   private tutorialValue: string | null = null;
   private tutorialControlsValue = false;
+  private tutorialHintContainer!: Phaser.GameObjects.Container;
+  private tutorialHintGraphics!: Phaser.GameObjects.Graphics;
+  private tutorialHintTitle!: Phaser.GameObjects.Text;
+  private tutorialHintBody!: Phaser.GameObjects.Text;
+  private tutorialHintTween: Phaser.Tweens.Tween | null = null;
+  private tutorialHintValue: string | null = null;
+  private tutorialHintHeight = 0;
   private announcementContainer!: Phaser.GameObjects.Container;
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
@@ -613,6 +641,7 @@ export class CenterHUD {
     this.buildMainObjectivePanel();
     this.buildEncounterPanel();
     this.buildTutorialPanel();
+    this.buildTutorialHintPanel();
     this.buildAnnouncementOverlay();
     this.buildTrainWidget();
     this.buildBottomStack();
@@ -845,6 +874,88 @@ export class CenterHUD {
       .setAlpha(1);
   }
 
+  private buildTutorialHintPanel(): void {
+    this.tutorialHintGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'gameplayHud', this.tutorialHintGraphics);
+    this.tutorialHintTitle = this.scene.add.text(0, 0, t('ui.help.hint'), TUTORIAL_HINT_TITLE_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.tutorialHintBody = this.scene.add.text(0, 0, '', TUTORIAL_HINT_BODY_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.tutorialHintContainer = this.scene.add.container(CENTER_X, TUTORIAL_HINT_CENTER_Y, [
+      this.tutorialHintGraphics,
+      this.tutorialHintTitle,
+      this.tutorialHintBody,
+    ]).setScrollFactor(0).setVisible(false).setAlpha(0);
+    this.container.add(this.tutorialHintContainer);
+  }
+
+  /**
+   * Lokaler Tutorial-Hinweis. `null` blendet ihn aus; identischer Text laesst das laufende
+   * Fenster unveraendert stehen.
+   */
+  updateTutorialHint(text: string | null): void {
+    const nextText = text?.trim() || null;
+    if (nextText === this.tutorialHintValue) return;
+    this.tutorialHintValue = nextText;
+    this.tutorialHintTween?.destroy();
+    this.tutorialHintTween = null;
+
+    if (!nextText) {
+      this.hideTutorialHint(false);
+      return;
+    }
+
+    this.tutorialHintBody.setText(nextText);
+    const height = TUTORIAL_HINT_PAD_TOP
+      + TUTORIAL_HINT_TITLE_H
+      + this.tutorialHintBody.height
+      + TUTORIAL_HINT_PAD_BOTTOM;
+    this.tutorialHintHeight = height;
+    const top = -height / 2;
+    const left = -TUTORIAL_HINT_W / 2;
+    this.tutorialHintTitle.setY(top + TUTORIAL_HINT_PAD_TOP);
+    this.tutorialHintBody.setY(top + TUTORIAL_HINT_PAD_TOP + TUTORIAL_HINT_TITLE_H);
+
+    this.tutorialHintGraphics.clear();
+    this.tutorialHintGraphics.fillStyle(0x000000, 0.24);
+    this.tutorialHintGraphics.fillRoundedRect(left + 4, top + 4, TUTORIAL_HINT_W, height, 12);
+    this.tutorialHintGraphics.fillStyle(TUTORIAL_BG_COLOR, 0.82);
+    this.tutorialHintGraphics.fillRoundedRect(left, top, TUTORIAL_HINT_W, height, 12);
+    this.tutorialHintGraphics.lineStyle(2, TUTORIAL_ACCENT, 0.72);
+    this.tutorialHintGraphics.strokeRoundedRect(left, top, TUTORIAL_HINT_W, height, 12);
+
+    this.tutorialHintContainer.setVisible(true).setAlpha(0);
+    this.tutorialHintTween = this.scene.tweens.add({
+      targets: this.tutorialHintContainer,
+      alpha: 1,
+      duration: TUTORIAL_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => { this.tutorialHintTween = null; },
+    });
+  }
+
+  private hideTutorialHint(immediate: boolean): void {
+    this.tutorialHintTween?.destroy();
+    this.tutorialHintTween = null;
+    this.tutorialHintValue = null;
+    if (immediate || !this.tutorialHintContainer?.visible) {
+      this.tutorialHintContainer?.setVisible(false).setAlpha(0);
+      return;
+    }
+    this.tutorialHintTween = this.scene.tweens.add({
+      targets: this.tutorialHintContainer,
+      alpha: 0,
+      duration: TUTORIAL_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tutorialHintTween = null;
+        this.tutorialHintContainer.setVisible(false).setAlpha(0);
+      },
+    });
+  }
+
   private buildAnnouncementOverlay(): void {
     this.announcementBg = this.scene.add.rectangle(CENTER_X, ANNOUNCEMENT_Y, ANNOUNCEMENT_MIN_W, ANNOUNCEMENT_MIN_H, PANEL_BG_COL, PANEL_BG_ALPHA)
       .setScrollFactor(0)
@@ -981,6 +1092,7 @@ export class CenterHUD {
     this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
     this.hideTutorial(true);
+    this.hideTutorialHint(true);
     this.hideTrainWidget();
     this.hideLowerSection(this.armorSection);
     this.hideLowerSection(this.utilitySection);
@@ -1185,6 +1297,7 @@ export class CenterHUD {
 
     addPanelRect(this.mainObjectivePanel, MAIN_PANEL_W, MAIN_PANEL_H);
     addPanelRect(this.encounterPanel, ENCOUNTER_PANEL_W, ENCOUNTER_PANEL_H);
+    addPanelRect(this.tutorialHintContainer, TUTORIAL_HINT_W, this.tutorialHintHeight);
     return rects;
   }
 
@@ -1547,10 +1660,14 @@ export class CenterHUD {
    * @param showControls True: Unter dem Fließtext erscheint die Steuerungstabelle des
    *   Hilfe-Fensters; das Fenster wächst entsprechend (Einstiegs-Map).
    */
-  updateTutorial(text: string | null, showControls = false): void {
+  updateTutorial(
+    text: string | null,
+    showControls = false,
+    anchor?: CoopDefenseTutorialAnchor,
+  ): void {
     this.tutorialContainer.setPosition(
-      getCoopDefenseTutorialPanelCenterX(),
-      getCoopDefenseTutorialPanelTopY(),
+      getCoopDefenseTutorialPanelCenterX(anchor),
+      getCoopDefenseTutorialPanelTopY(anchor),
     );
     const nextText = text?.trim() || null;
     if (nextText === this.tutorialValue && showControls === this.tutorialControlsValue) return;

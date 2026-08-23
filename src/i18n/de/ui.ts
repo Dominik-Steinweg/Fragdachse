@@ -95,6 +95,7 @@ export const deUi = {
   "ui.options.musicFailed": "LOBBY-MUSIK KONNTE NICHT GELADEN WERDEN",
   "ui.help.title": "HILFE",
   "ui.help.heading": "STEUERUNG",
+  "ui.help.hint": "TUTORIAL",
   "ui.help.closeHint": "[ Klick oder Taste zum Schließen ]",
   "ui.help.move": "Bewegen",
   "ui.help.dash": "Dash",

@@ -6,6 +6,7 @@ import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyKind,
 } from '../config/coopDefenseEnemies';
+import type { CoopDefenseMapSpawnAreaConfig } from '../config/coopDefenseMaps';
 import type { SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
@@ -42,6 +43,7 @@ export class CoopDefenseSpawnExecutor {
     count: number,
     originId?: string,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
+    spawnArea?: CoopDefenseMapSpawnAreaConfig,
   ): readonly string[] {
     return this.spawnArenaGroup(
       kind,
@@ -49,6 +51,7 @@ export class CoopDefenseSpawnExecutor {
       { ...(originId ? { originId } : {}), spawnFront: front },
       front,
       this.resolveSpawnFlowField(kind),
+      spawnArea,
     );
   }
 
@@ -99,10 +102,11 @@ export class CoopDefenseSpawnExecutor {
     spawnOptions: EnemySpawnOptions,
     front: SpawnFront,
     flowFieldService: EnemyFlowFieldService,
+    spawnArea?: CoopDefenseMapSpawnAreaConfig,
   ): string[] {
     const spawnedEnemyIds: string[] = [];
     if (count <= 0) return spawnedEnemyIds;
-    const candidatesAll = this.collectCandidates(kind, front, flowFieldService);
+    const candidatesAll = this.collectCandidates(kind, front, flowFieldService, spawnArea);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
       return spawnedEnemyIds;
@@ -134,6 +138,7 @@ export class CoopDefenseSpawnExecutor {
     kind: CoopDefenseEnemyKind,
     front: SpawnFront,
     flowFieldService: EnemyFlowFieldService,
+    spawnArea?: CoopDefenseMapSpawnAreaConfig,
   ): SpawnCell[] {
     if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
       return this.collectEdgeBurrowCandidates(kind, front, flowFieldService);
@@ -142,7 +147,7 @@ export class CoopDefenseSpawnExecutor {
     const enemies = this.enemyManager.getAllEnemies();
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
     const cells: SpawnCell[] = [];
-    const edgeBand = this.getEdgeBand(front);
+    const edgeBand = spawnArea ? this.getAuthoredBand(spawnArea) : this.getEdgeBand(front);
     const allowPlayerTargetWithoutGoals = this.isPlayerTarget(kind)
       && (flowFieldService.getGoalCells?.().length ?? 0) === 0;
     for (let gridX = edgeBand.minGridX; gridX <= edgeBand.maxGridX; gridX += 1) {
@@ -237,6 +242,21 @@ export class CoopDefenseSpawnExecutor {
     }
     const gridY = front === 'north' ? 0 : GRID_ROWS - 1;
     return Array.from({ length: GRID_COLS }, (_, gridX) => ({ gridX, gridY }));
+  }
+
+  /**
+   * Authored Spawnbereich statt Randband. Die Auswahl innerhalb bleibt identisch – der Bereich
+   * verschiebt nur, wo ueberhaupt gesucht wird.
+   */
+  private getAuthoredBand(
+    area: CoopDefenseMapSpawnAreaConfig,
+  ): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {
+    return {
+      minGridX: Math.max(0, area.gridX),
+      maxGridX: Math.min(GRID_COLS - 1, area.gridX + area.widthCells - 1),
+      minGridY: Math.max(0, area.gridY),
+      maxGridY: Math.min(GRID_ROWS - 1, area.gridY + area.heightCells - 1),
+    };
   }
 
   private getEdgeBand(front: SpawnFront): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {

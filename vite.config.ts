@@ -12,11 +12,11 @@ export default defineConfig(() => {
   // Der Flowfield-Worker wird als ES-Modul geladen (`new Worker(..., { type: 'module' })`).
   // Rollups Default für Worker ist IIFE und würde dessen Imports brechen.
   worker: {
-    format: 'es',
+    format: 'es' as const,
   },
   build: {
     target: 'es2020',
-    chunkSizeWarningLimit: 3000,
+    chunkSizeWarningLimit: 5000,
     // Ohne Source-Maps lösen Chrome-Profile und die Long-Animation-Frame-Attribution des
     // eigenen Profilers nur bis zum minifizierten Bundle auf ("vendor-*.js", leerer
     // Funktionsname) und sind damit für die Ursachensuche wertlos. Die .map-Dateien werden

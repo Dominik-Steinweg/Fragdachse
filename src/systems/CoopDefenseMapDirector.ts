@@ -1,5 +1,6 @@
 import type {
   CoopDefenseMapEncounterStart,
+  CoopDefenseMapSpawnAreaConfig,
   ResolvedCoopDefenseMapEncounterConfig,
   ResolvedCoopDefenseMapEncounterGroupConfig,
 } from '../config/coopDefenseMaps';
@@ -17,6 +18,7 @@ export type CoopDefenseEncounterSpawnHandler = (
   count: number,
   originId?: string,
   front?: SpawnFront,
+  spawnArea?: CoopDefenseMapSpawnAreaConfig,
 ) => readonly string[] | void;
 
 const DEFAULT_SPAWN_BACKSTOP_MS = 30_000;
@@ -749,9 +751,13 @@ export class CoopDefenseMapDirector {
     // EnemyManager path returns IDs and therefore uses the individual staggered calls below.
     const spawnCount = staggerMs > 0 ? 1 : remainingCount;
     const front = group.front ?? DEFAULT_SPAWN_FRONT;
-    const spawnResult = front === DEFAULT_SPAWN_FRONT
-      ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId)
-      : this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front);
+    // Ein authored Spawnbereich ersetzt das Frontband; ohne ihn bleibt der bestehende
+    // Aufrufpfad inklusive des Weglassens der Standardfront unveraendert.
+    const spawnResult = group.spawnArea
+      ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front, group.spawnArea)
+      : front === DEFAULT_SPAWN_FRONT
+        ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId)
+        : this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front);
     // Older scheduled callbacks were void-returning. Preserve their once-only semantics while
     // treating an explicit [] as a real zero-spawn result that remains retryable.
     if (spawnResult === undefined) {

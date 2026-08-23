@@ -1,73 +1,444 @@
 {
   "mapId": "1",
-  "arenaWidthCells": 60,
+  "arenaWidthCells": 160,
+  "arenaHeightCells": 44,
   "timeOfDay": "12:00",
   "tutorialShowControls": true,
   "tutorialPersistent": true,
-  "rockFillRatio": 0.3,
+  "tutorialAnchor": {
+    "gridX": 15,
+    "gridY": 7
+  },
+  "rockFillRatio": 0.22,
   "trackPosition": "center",
-  "mapEvents": [{
-    "id": "train-rhythm",
-    "type": "train",
-    "start": { "type": "time", "atMs": 0 },
-    "delayMs": 10000,
-    "repeatAfterExitMs": 10000
-  }],
-  "balanceReferenceDurationSec": 45,
-  "objective": "repel-assault",
+  "balanceReferenceDurationSec": 300,
+  "objective": "advance",
+  "respawnsPerPlayer": 100,
   "bases": [
     {
-      "id": "coop-base-rear",
-      "hpMax": 2000,
+      "id": "tutorial-outpost",
+      "role": "outpost",
+      "dormant": true,
+      "hpMax": 12000,
       "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
+        "kind": "grid",
+        "gridX": 128,
+        "gridY": 20
       },
       "shape": {
         "kind": "rectangle",
-        "widthCells": 3,
-        "heightCells": 3
+        "widthCells": 4,
+        "heightCells": 4
       }
     }
   ],
   "powerUps": [],
+  "rockWalls": [
+    {
+      "id": "utility-wall",
+      "gridX": 60,
+      "gridY": 0,
+      "widthCells": 1,
+      "heightCells": 44
+    },
+    {
+      "id": "burrow-wall",
+      "gridX": 76,
+      "gridY": 0,
+      "widthCells": 1,
+      "heightCells": 44
+    }
+  ],
+  "missionProgress": {
+    "startArea": {
+      "gridX": 10,
+      "gridY": 34,
+      "radiusCells": 6
+    },
+    "checkpoints": [
+      {
+        "id": "cp1-adrenaline",
+        "gridX": 36,
+        "gridY": 30,
+        "radiusCells": 4
+      },
+      {
+        "id": "cp2-utility",
+        "gridX": 54,
+        "gridY": 24,
+        "radiusCells": 4
+      },
+      {
+        "id": "cp3-burrow",
+        "gridX": 70,
+        "gridY": 22,
+        "radiusCells": 4
+      },
+      {
+        "id": "cp4-rage",
+        "gridX": 98,
+        "gridY": 22,
+        "radiusCells": 5,
+        "setRespawn": true
+      },
+      {
+        "id": "cp5-base-defense",
+        "gridX": 120,
+        "gridY": 22,
+        "radiusCells": 5
+      },
+      {
+        "id": "final-extraction",
+        "gridX": 152,
+        "gridY": 22,
+        "radiusCells": 4
+      }
+    ],
+    "mandatoryDefenses": [
+      {
+        "id": "defense-tutorial-outpost",
+        "checkpointId": "cp5-base-defense",
+        "objectiveId": "hold-tutorial-outpost",
+        "failureEndsMission": true
+      }
+    ],
+    "barriers": [
+      {
+        "id": "extraction-gate",
+        "cells": [
+          {
+            "gridX": 138,
+            "gridY": 0
+          },
+          {
+            "gridX": 138,
+            "gridY": 1
+          },
+          {
+            "gridX": 138,
+            "gridY": 2
+          },
+          {
+            "gridX": 138,
+            "gridY": 3
+          },
+          {
+            "gridX": 138,
+            "gridY": 4
+          },
+          {
+            "gridX": 138,
+            "gridY": 5
+          },
+          {
+            "gridX": 138,
+            "gridY": 6
+          },
+          {
+            "gridX": 138,
+            "gridY": 7
+          },
+          {
+            "gridX": 138,
+            "gridY": 8
+          },
+          {
+            "gridX": 138,
+            "gridY": 9
+          },
+          {
+            "gridX": 138,
+            "gridY": 10
+          },
+          {
+            "gridX": 138,
+            "gridY": 11
+          },
+          {
+            "gridX": 138,
+            "gridY": 12
+          },
+          {
+            "gridX": 138,
+            "gridY": 13
+          },
+          {
+            "gridX": 138,
+            "gridY": 14
+          },
+          {
+            "gridX": 138,
+            "gridY": 15
+          },
+          {
+            "gridX": 138,
+            "gridY": 16
+          },
+          {
+            "gridX": 138,
+            "gridY": 17
+          },
+          {
+            "gridX": 138,
+            "gridY": 18
+          },
+          {
+            "gridX": 138,
+            "gridY": 19
+          },
+          {
+            "gridX": 138,
+            "gridY": 20
+          },
+          {
+            "gridX": 138,
+            "gridY": 21
+          },
+          {
+            "gridX": 138,
+            "gridY": 22
+          },
+          {
+            "gridX": 138,
+            "gridY": 23
+          },
+          {
+            "gridX": 138,
+            "gridY": 24
+          },
+          {
+            "gridX": 138,
+            "gridY": 25
+          },
+          {
+            "gridX": 138,
+            "gridY": 26
+          },
+          {
+            "gridX": 138,
+            "gridY": 27
+          },
+          {
+            "gridX": 138,
+            "gridY": 28
+          },
+          {
+            "gridX": 138,
+            "gridY": 29
+          },
+          {
+            "gridX": 138,
+            "gridY": 30
+          },
+          {
+            "gridX": 138,
+            "gridY": 31
+          },
+          {
+            "gridX": 138,
+            "gridY": 32
+          },
+          {
+            "gridX": 138,
+            "gridY": 33
+          },
+          {
+            "gridX": 138,
+            "gridY": 34
+          },
+          {
+            "gridX": 138,
+            "gridY": 35
+          },
+          {
+            "gridX": 138,
+            "gridY": 36
+          },
+          {
+            "gridX": 138,
+            "gridY": 37
+          },
+          {
+            "gridX": 138,
+            "gridY": 38
+          },
+          {
+            "gridX": 138,
+            "gridY": 39
+          },
+          {
+            "gridX": 138,
+            "gridY": 40
+          },
+          {
+            "gridX": 138,
+            "gridY": 41
+          },
+          {
+            "gridX": 138,
+            "gridY": 42
+          },
+          {
+            "gridX": 138,
+            "gridY": 43
+          }
+        ],
+        "openOn": {
+          "type": "after-encounter",
+          "encounterId": "cp5-wave-2"
+        }
+      }
+    ]
+  },
+  "tutorialSteps": [
+    {
+      "id": "map01-adrenaline",
+      "checkpointId": "cp1-adrenaline"
+    },
+    {
+      "id": "map01-utility",
+      "checkpointId": "cp2-utility"
+    },
+    {
+      "id": "map01-burrow",
+      "checkpointId": "cp3-burrow"
+    },
+    {
+      "id": "map01-rage",
+      "checkpointId": "cp4-rage"
+    },
+    {
+      "id": "map01-base-defense",
+      "checkpointId": "cp5-base-defense"
+    },
+    {
+      "id": "map01-extraction",
+      "checkpointId": "final-extraction"
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "hold-tutorial-outpost",
+      "type": "hold",
+      "start": {
+        "type": "after-checkpoint",
+        "checkpointId": "cp5-base-defense"
+      },
+      "holdUntil": {
+        "type": "after-encounter",
+        "encounterId": "cp5-wave-2"
+      },
+      "targets": [
+        "tutorial-outpost"
+      ],
+      "rewards": {
+        "repairTargetOnComplete": true
+      }
+    }
+  ],
   "encounters": [
     {
-      "id": "opening-assault",
+      "id": "cp1-first-contact",
       "start": {
-        "type": "time",
-        "atMs": 0
+        "type": "after-checkpoint",
+        "checkpointId": "cp1-adrenaline"
       },
-      "restAfterMs": 5000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 5
+          "count": 4,
+          "spawnStaggerMs": 1600,
+          "spawnArea": {
+            "gridX": 42,
+            "gridY": 22,
+            "widthCells": 12,
+            "heightCells": 18
+          }
         }
       ]
     },
     {
-      "id": "second-assault",
+      "id": "cp4-pressure",
       "start": {
-        "type": "after-previous"
+        "type": "after-checkpoint",
+        "checkpointId": "cp4-rage"
       },
-      "restAfterMs": 5000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 7
+          "count": 6,
+          "spawnStaggerMs": 1600,
+          "spawnArea": {
+            "gridX": 104,
+            "gridY": 10,
+            "widthCells": 12,
+            "heightCells": 24
+          }
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 3,
+          "delayMs": 6000,
+          "spawnStaggerMs": 1600,
+          "spawnArea": {
+            "gridX": 88,
+            "gridY": 8,
+            "widthCells": 10,
+            "heightCells": 28
+          }
         }
       ]
     },
     {
-      "id": "final-assault",
+      "id": "cp5-wave-1",
       "start": {
-        "type": "after-previous"
+        "type": "after-checkpoint",
+        "checkpointId": "cp5-base-defense"
       },
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 8
+          "count": 6,
+          "spawnStaggerMs": 1800,
+          "spawnArea": {
+            "gridX": 116,
+            "gridY": 1,
+            "widthCells": 20,
+            "heightCells": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "cp5-wave-2",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "cp5-wave-1"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 4000,
+          "spawnStaggerMs": 1800,
+          "spawnArea": {
+            "gridX": 116,
+            "gridY": 1,
+            "widthCells": 20,
+            "heightCells": 5
+          }
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 4,
+          "delayMs": 7000,
+          "spawnStaggerMs": 1800,
+          "spawnArea": {
+            "gridX": 116,
+            "gridY": 38,
+            "widthCells": 20,
+            "heightCells": 5
+          }
         }
       ]
     }

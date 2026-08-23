@@ -95,6 +95,7 @@ export const enUi = {
   "ui.options.musicFailed": "LOBBY MUSIC COULD NOT BE LOADED",
   "ui.help.title": "HELP",
   "ui.help.heading": "CONTROLS",
+  "ui.help.hint": "TUTORIAL",
   "ui.help.closeHint": "[ Click or press any key to close ]",
   "ui.help.move": "Move",
   "ui.help.dash": "Dash",

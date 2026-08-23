@@ -136,6 +136,18 @@ export class CoopDefenseMissionProgressSystem {
     return this.routeComplete;
   }
 
+  /**
+   * Eine Mandatory Defense, die als `failureEndsMission` authoriert ist, kippt die Mission beim
+   * Scheitern. Ohne dieses authored Flag bleibt es bei der bisherigen Semantik: `failed` ist ein
+   * aufgeloester Zustand, der die Route ohne Reward freigibt.
+   */
+  isMissionFailed(): boolean {
+    return this.config.mandatoryDefenses.some((defense) => (
+      defense.failureEndsMission === true
+      && this.resolvedDefenses.get(defense.id)?.outcome === 'failed'
+    ));
+  }
+
   isBarrierOpen(id: string): boolean {
     return this.barrierOpen.get(id) === true;
   }

@@ -166,17 +166,22 @@ import {
   type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
+import {
+  advanceCoopDefenseTutorialSteps,
+  createCoopDefenseTutorialStepState,
+  getVisibleCoopDefenseTutorialStepId,
+} from '../ui/coopDefenseTutorialStepModel';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
-import { getMapName, getMapTutorial } from '../i18n/contentPresentation';
+import { getMapName, getMapTutorial, getMapTutorialStep } from '../i18n/contentPresentation';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
@@ -360,6 +365,12 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseHasPendingItemReward = false;
   private coopDefenseHasUnseenItems = false;
   private lastObservedGamePhase: GamePhase | null = null;
+  /**
+   * Lokaler Tutorial-Fortschritt entlang der Route. Er ist reine Praesentation: kein
+   * Rundenzustand, keine Replikation. Eine neue Runde (`roundRevision`) setzt ihn zurueck.
+   */
+  private tutorialStepState = createCoopDefenseTutorialStepState();
+  private tutorialStepRoundStartTime: number | null = null;
   private matchResultsPending = false;
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
   /**
@@ -979,6 +990,9 @@ export class ArenaScene extends Phaser.Scene {
       const respawnCheckpoint = missionConfig?.checkpoints.find(
         ({ id }) => id === missionState?.respawnCheckpointId,
       );
+      // Ohne aktivierten Respawn-Checkpoint bleibt der authored Startbereich der Fokus. Auf einer
+      // langen Routenkarte waere der Initialspawn sonst ueber die gesamte Arena verteilt.
+      const spawnFocusCell = respawnCheckpoint ?? missionConfig?.startArea;
       const runtimePlaceables = this.ctx.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
       const turretRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
 
@@ -1043,10 +1057,10 @@ export class ArenaScene extends Phaser.Scene {
           });
         })(),
         livingCoopBaseIds: this.ctx.baseManager?.getActiveMainBaseIds('friendly'),
-        preferredSpawnFocus: respawnCheckpoint
+        preferredSpawnFocus: spawnFocusCell
           ? {
-            x: ARENA_OFFSET_X + (respawnCheckpoint.gridX + 0.5) * CELL_SIZE,
-            y: ARENA_OFFSET_Y + (respawnCheckpoint.gridY + 0.5) * CELL_SIZE,
+            x: ARENA_OFFSET_X + (spawnFocusCell.gridX + 0.5) * CELL_SIZE,
+            y: ARENA_OFFSET_Y + (spawnFocusCell.gridY + 0.5) * CELL_SIZE,
           }
           : undefined,
         isRelevantOpponent: (otherPlayerId) => playerId === null
@@ -1819,7 +1833,9 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.centerHUD.updateTutorial(
         tutorialVisible ? tutorialText! : null,
         activeMapConfig?.tutorialShowControls === true,
+        activeMapConfig?.tutorialAnchor,
       );
+      this.updateCoopDefenseTutorialSteps(activeMapConfig);
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
       // Gleisen ohne Zug und Runden ohne weitere Einfahrt haben schlicht kein Event.
@@ -3906,6 +3922,48 @@ export class ArenaScene extends Phaser.Scene {
    * Aktueller Zugzustand für Schatten und Licht. Bevorzugt den interpolierten Stand des
    * Renderers, damit beide nicht am Netz-Tick kleben.
    */
+  /**
+   * Lokale Tutorial-Hinweise entlang der Route. Rein darstellend: Ausgewertet wird nur die
+   * Position des eigenen Spielers gegen die vorhandene Checkpoint-Geometrie, es entsteht kein
+   * Rundenzustand und nichts davon wird repliziert. Ein vorauslaufender Mitspieler loest hier
+   * nichts aus; eine neue Runde beginnt mit frischem Zustand.
+   */
+  private updateCoopDefenseTutorialSteps(activeMapConfig: CoopDefenseMapConfig | null): void {
+    const steps = activeMapConfig ? resolveCoopDefenseMapTutorialSteps(activeMapConfig) : [];
+    if (activeMapConfig === null || steps.length === 0) {
+      if (this.tutorialStepState.activeStepId !== null) {
+        this.tutorialStepState = createCoopDefenseTutorialStepState();
+      }
+      this.ctx.centerHUD.updateTutorialHint(null);
+      return;
+    }
+
+    // Rundenidentitaet reicht als Reset-Signal; der Tutorial-Fortschritt ist rein lokal.
+    const roundStartTime = bridge.getRoundState()?.roundStartTime ?? null;
+    if (roundStartTime !== this.tutorialStepRoundStartTime) {
+      this.tutorialStepRoundStartTime = roundStartTime;
+      this.tutorialStepState = createCoopDefenseTutorialStepState();
+    }
+
+    const localPlayerId = bridge.getLocalPlayerId();
+    const localSprite = this.ctx.playerManager.getPlayer(localPlayerId)?.sprite ?? null;
+    const localPlayer = localSprite?.active && this.ctx.combatSystem.isAlive(localPlayerId)
+      ? { x: localSprite.x, y: localSprite.y }
+      : null;
+    const nowMs = this.time.now;
+    this.tutorialStepState = advanceCoopDefenseTutorialSteps(this.tutorialStepState, {
+      steps,
+      checkpoints: resolveCoopDefenseMapMissionProgress(activeMapConfig)?.checkpoints ?? [],
+      localPlayer,
+      nowMs,
+    });
+
+    const visibleStepId = getVisibleCoopDefenseTutorialStepId(this.tutorialStepState, nowMs);
+    this.ctx.centerHUD.updateTutorialHint(
+      visibleStepId === null ? null : getMapTutorialStep(visibleStepId, getLocale()) ?? null,
+    );
+  }
+
   private resolveTrainState(): SyncedTrainState | null {
     return this.renderers.train?.getShadowState()
       ?? (bridge.isHost()

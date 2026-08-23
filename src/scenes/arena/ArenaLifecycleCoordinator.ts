@@ -991,6 +991,7 @@ export class ArenaLifecycleCoordinator {
         },
         // Der Vorstoss-Sieg gehoert vollstaendig dem Missionsfortschritt.
         isAdvanceComplete: () => this.ctx.coopDefenseMissionProgressSystem?.isRouteComplete() ?? false,
+        isAdvanceFailed: () => this.ctx.coopDefenseMissionProgressSystem?.isMissionFailed() ?? false,
       })
       : null;
     const baseManager = this.ctx.baseManager;
@@ -1175,7 +1176,8 @@ export class ArenaLifecycleCoordinator {
         if (coopDefenseEncounterConfigs.length > 0) {
           this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
             coopDefenseEncounterConfigs,
-            (enemyKind, count, originId, front) => this.ctx.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(enemyKind, count, originId, front),
+            (enemyKind, count, originId, front, spawnArea) => this.ctx.coopDefenseSpawnExecutor
+              ?.hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
             {
               mode: coopDefenseMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
               showComplete: coopDefenseMapConfig?.objective === 'repel-assault',

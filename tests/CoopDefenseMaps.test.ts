@@ -165,6 +165,7 @@ describe('Coop defense map progression', () => {
       || objective === 'survive'
       || objective === 'defeat-boss'
       || objective === 'destroy-hostile-bases'
+      || objective === 'advance'
     ))).toBe(true);
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
       expect(getLocalizedMapObjectiveLabel(map.objective, 'de').trim().length).toBeGreaterThan(0);
@@ -199,16 +200,18 @@ describe('Coop defense map progression', () => {
     expect(getCoopDefenseMapScheduledXp(finiteEmptyMap)).toBe(0);
   });
 
-  it('keeps Map 1 as the simple west-only repel-assault campaign reference with readable rests', () => {
+  it('keeps Map 1 as the guided advance tutorial with a finite respawn budget', () => {
     const map = getCoopDefenseMapConfig('1');
-    expect(map.objective).toBe('repel-assault');
+    expect(map.objective).toBe('advance');
+    expect(map.respawnsPerPlayer).toBe(100);
     expect(map.persistentSpawns).toEqual([]);
     expect(map.encounters?.length).toBeGreaterThan(0);
-    const openingRests = map.encounters?.slice(0, 2).map((encounter) => encounter.restAfterMs) ?? [];
-    expect(openingRests.length).toBeGreaterThan(0);
-    expect(openingRests.every((restAfterMs) => restAfterMs >= 0)).toBe(true);
+    const rests = map.encounters?.map((encounter) => encounter.restAfterMs) ?? [];
+    expect(rests.length).toBeGreaterThan(0);
+    expect(rests.every((restAfterMs) => restAfterMs >= 0)).toBe(true);
     expect(map.boss).toBeUndefined();
     expect(map.bases.some((base) => base.role === 'spawn-point')).toBe(false);
+    expect(map.bases.every((base) => (base.role ?? 'main') !== 'main')).toBe(true);
   });
 
   it('migrates Map 11 and Map 15 to finite encounter content with semantic triggers', () => {
@@ -250,9 +253,11 @@ describe('Coop defense map progression', () => {
     ))).toBe(true);
   });
 
-  it('authors A9 front variation while keeping Map 1 as the west-only reference', () => {
+  it('authors A9 front variation while keeping Map 1 on authored spawn areas', () => {
     const map1 = getCoopDefenseMapConfig('1');
-    expect(map1.encounters?.flatMap((encounter) => encounter.groups).every((group) => group.front === 'west')).toBe(true);
+    // Auf der Routenkarte liegt jedes Randband im falschen Abschnitt: Map 1 authoriert Bereiche.
+    expect(map1.encounters?.flatMap((encounter) => encounter.groups)
+      .every((group) => group.spawnArea !== undefined)).toBe(true);
 
     const map2 = getCoopDefenseMapConfig('2');
     expect(map2.persistentSpawns).toEqual([]);
@@ -350,7 +355,10 @@ describe('Coop defense map progression', () => {
     const resolvedMultiplayerGroups = resolveCoopDefenseMapEncounterConfigs(map, 2)
       .flatMap((encounter) => encounter.groups);
     expect(singlePlayerXp).toBeGreaterThan(0);
-    expect(multiplayerXp).toBe(resolvedMultiplayerGroups.reduce((sum, group) => sum + group.count, 0));
+    expect(multiplayerXp).toBe(resolvedMultiplayerGroups.reduce(
+      (sum, group) => sum + group.count * getCoopDefenseEnemyConfig(group.enemyKind).xp,
+      0,
+    ));
   });
 
   it('keeps Maps 1 to 4 schedulable without snapshotting their balance totals', () => {
@@ -676,11 +684,12 @@ describe('Coop defense map progression', () => {
     expect(map.mapEvents.some((event) => event.type === 'ground-hazard')).toBe(true);
   });
 
-  it('keeps the four campaign secondary objectives on their authored maps', () => {
+  it('keeps the campaign secondary objectives on their authored maps', () => {
     const campaignObjectives = COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.mapId !== '0')
       .flatMap((map) => map.secondaryObjectives ?? []);
     expect(campaignObjectives.map((objective) => `${objective.type}:${objective.id}`)).toEqual([
+      'hold:hold-tutorial-outpost',
       'hold:hold-dimension-bastion',
       'destroy:destroy-brutbomben-front',
       'hold:hold-zeitzunder-middle-outpost',

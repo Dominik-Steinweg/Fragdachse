@@ -58,6 +58,14 @@ describe('Coop defense tutorial arena formation', () => {
 
   it('fills the tutorial footprint and grows an irregular halo on all four sides', () => {
     const mapConfig = getCoopDefenseMapConfig('1');
+    // Der Generator liest GRID_COLS/GRID_ROWS; ohne die Map-Metriken laege die authored
+    // Geometrie der Karte teilweise ausserhalb des Rasters.
+    applyArenaMetricsForMode(
+      COOP_DEFENSE_MODE,
+      'ARENA',
+      mapConfig.arenaWidthCells,
+      mapConfig.arenaHeightCells,
+    );
     const layout = ArenaGenerator.generate(42_424, mapConfig);
     const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
     const tutorialRocks = layout.rocks.filter((rock) => rock.armorDropMult !== undefined);
@@ -66,7 +74,7 @@ describe('Coop defense tutorial arena formation', () => {
       trackColumns.add(track.gridX);
       trackColumns.add(track.gridX + 1);
     }
-    const region = getCoopDefenseTutorialRockRegion(true);
+    const region = getCoopDefenseTutorialRockRegion(true, mapConfig.tutorialAnchor);
     for (let gy = region.minGridY; gy <= region.maxGridY; gy++) {
       for (let gx = region.minGridX; gx <= region.maxGridX; gx++) {
         if (!trackColumns.has(gx)) expect(rocks.has(`${gx}:${gy}`)).toBe(true);
@@ -93,16 +101,20 @@ describe('Coop defense tutorial arena formation', () => {
       .toBeGreaterThanOrEqual(region.minGridY - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS);
   });
 
-  it('keeps panel and rocks world-centered on 60- and 120-cell arenas while the camera moves', () => {
+  it('keeps panel and rocks aligned on wide arenas while the camera moves', () => {
     const cameraScrolls = [0, 320, 960];
     for (const mapId of ['1', '13']) {
       const mapConfig = getCoopDefenseMapConfig(mapId);
       applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', mapConfig.arenaWidthCells);
 
-      const panelWorldCenterX = getCoopDefenseTutorialPanelCenterX();
-      expect(panelWorldCenterX).toBe(ARENA_OFFSET_X + ARENA_WIDTH / 2);
+      // Ohne Anker bleibt das Fenster in der Arenamitte; ein authored Anker verschiebt Fenster
+      // und Felsformation gemeinsam.
+      const panelWorldCenterX = getCoopDefenseTutorialPanelCenterX(mapConfig.tutorialAnchor);
+      expect(panelWorldCenterX).toBe(mapConfig.tutorialAnchor
+        ? ARENA_OFFSET_X + (mapConfig.tutorialAnchor.gridX + 0.5) * CELL_SIZE
+        : ARENA_OFFSET_X + ARENA_WIDTH / 2);
 
-      const region = getCoopDefenseTutorialRockRegion(mapConfig.tutorialShowControls);
+      const region = getCoopDefenseTutorialRockRegion(mapConfig.tutorialShowControls, mapConfig.tutorialAnchor);
       const rockWorldCenterX = ARENA_OFFSET_X
         + (region.minGridX + region.maxGridX + 1) * CELL_SIZE / 2;
       expect(rockWorldCenterX).toBe(panelWorldCenterX);
@@ -124,7 +136,7 @@ describe('Coop defense tutorial arena formation', () => {
         map.arenaHeightCells,
       );
 
-      const region = getCoopDefenseTutorialRockRegion(map.tutorialShowControls);
+      const region = getCoopDefenseTutorialRockRegion(map.tutorialShowControls, map.tutorialAnchor);
       const bases = resolveCoopDefenseBases(map);
       for (const base of bases) {
         expect(

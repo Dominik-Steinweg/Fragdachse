@@ -64,6 +64,12 @@ export function getMapTutorial(id: string, locale: Locale): string | undefined {
   return getDomainCatalog('en', 'content')[key] === undefined ? undefined : translate(locale, key);
 }
 
+/** Text eines lokalen Tutorial-Schritts; die Map authoriert nur seine ID. */
+export function getMapTutorialStep(id: string, locale: Locale): string | undefined {
+  const key = `map.tutorialStep.${id}`;
+  return getDomainCatalog('en', 'content')[key] === undefined ? undefined : translate(locale, key);
+}
+
 export function getSecondaryObjectiveTitle(id: string, locale: Locale): string | undefined {
   const key = `map.secondaryObjective.${id}.title`;
   return getDomainCatalog('en', 'content')[key] === undefined ? undefined : translate(locale, key);

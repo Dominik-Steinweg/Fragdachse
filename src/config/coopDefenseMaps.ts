@@ -16,6 +16,7 @@ import {
   normalizeCoopDefenseArenaWidthCells,
   ROCK_FILL_RATIO,
 } from '../config';
+import { COOP_DEFENSE_TUTORIAL_STEP_DEFAULT_DURATION_MS } from './coopDefenseTutorial';
 import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '../effects/TimeOfDay';
 import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
@@ -147,6 +148,21 @@ export interface ResolvedCoopDefenseMapPersistentSpawnConfig {
   readonly front?: SpawnFront;
 }
 
+/**
+ * Rechteckiger Spawnbereich in Arenazellen.
+ *
+ * Eine Spawnfront ist ein Randband der ganzen Arena. Auf einer langen Routenkarte liegt dieses
+ * Band fast immer im falschen Abschnitt, deshalb darf eine Gruppe ihren Bereich stattdessen
+ * ausdruecklich authoren. Die Auswahl innerhalb des Bereichs bleibt die bestehende: begehbar,
+ * erreichbar und nicht in einem anderen Gegner.
+ */
+export interface CoopDefenseMapSpawnAreaConfig {
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly widthCells: number;
+  readonly heightCells: number;
+}
+
 /** Eine endliche Gegnergruppe innerhalb eines Encounters. */
 export interface CoopDefenseMapEncounterGroupConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
@@ -156,6 +172,8 @@ export interface CoopDefenseMapEncounterGroupConfig {
   /** Maximales Zeitfenster fuer zufaellig versetzte Einzelspawns; Standard 1,5 Sekunden. */
   readonly spawnStaggerMs?: number;
   readonly front?: SpawnFront;
+  /** Ersetzt das Frontband durch einen authored Bereich; schliesst `front` aus. */
+  readonly spawnArea?: CoopDefenseMapSpawnAreaConfig;
 }
 
 /** Kleine, bewusst typisierte Startbedingungen fuer einen endlichen Encounter. */
@@ -185,6 +203,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
   /** Effektives Einzelspawn-Fenster; fehlt nur bei Legacy-Aufrufern ausserhalb der Map-Aufloesung. */
   readonly spawnStaggerMs?: number;
   readonly front?: SpawnFront;
+  readonly spawnArea?: CoopDefenseMapSpawnAreaConfig;
 }
 
 export interface ResolvedCoopDefenseMapEncounterConfig {
@@ -338,18 +357,47 @@ export interface CoopDefenseMapMandatoryDefenseConfig {
   readonly id: string;
   readonly checkpointId: string;
   readonly objectiveId: string;
+  /**
+   * Gesetzt: Ein gescheitertes Hold beendet die Mission als Niederlage, statt die Route nur
+   * ohne Reward freizugeben. Gedacht fuer Stellungen, ohne die der Vorstoss keinen Sinn mehr
+   * ergibt. Ohne Angabe bleibt es bei der bestehenden Semantik `failed` = aufgeloest.
+   */
+  readonly failureEndsMission?: boolean;
+}
+
+export interface ResolvedCoopDefenseMapMandatoryDefenseConfig extends CoopDefenseMapMandatoryDefenseConfig {
+  readonly failureEndsMission: boolean;
+}
+
+/**
+ * Bevorzugter Startbereich der Route. Er ersetzt keine Spawnzelle, sondern gibt der
+ * vorhandenen sicheren Spawnbewertung denselben Fokus, den spaeter ein aktivierter
+ * `setRespawn`-Checkpoint uebernimmt. Ohne ihn waere der Initialspawn einer langen
+ * Routenkarte ueber die gesamte Arena verteilt.
+ */
+export interface CoopDefenseMapMissionStartAreaConfig {
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly radiusCells?: number;
+}
+
+export interface ResolvedCoopDefenseMapMissionStartAreaConfig
+  extends CoopDefenseMapMissionStartAreaConfig {
+  readonly radiusCells: number;
 }
 
 export interface CoopDefenseMapMissionProgressConfig {
   readonly checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[];
   readonly barriers?: readonly CoopDefenseMapMissionBarrierConfig[];
   readonly mandatoryDefenses?: readonly CoopDefenseMapMandatoryDefenseConfig[];
+  readonly startArea?: CoopDefenseMapMissionStartAreaConfig;
 }
 
 export interface ResolvedCoopDefenseMapMissionProgressConfig {
   readonly checkpoints: readonly ResolvedCoopDefenseMapMissionCheckpointConfig[];
   readonly barriers: readonly CoopDefenseMapMissionBarrierConfig[];
-  readonly mandatoryDefenses: readonly CoopDefenseMapMandatoryDefenseConfig[];
+  readonly mandatoryDefenses: readonly ResolvedCoopDefenseMapMandatoryDefenseConfig[];
+  readonly startArea?: ResolvedCoopDefenseMapMissionStartAreaConfig;
 }
 
 export interface CoopDefenseMapBossConfig {
@@ -566,11 +614,44 @@ export interface CoopDefenseMapRockFieldConfig {
   readonly corridors: readonly CoopDefenseMapCorridorConfig[];
 }
 
+/**
+ * Ein authored Band aus regulaeren zerstoerbaren Felsen. Es ist keine Missionsbarriere: Es
+ * blockiert nur so lange, wie es steht, und jede vorhandene Zerstoerungs- oder
+ * Bewegungsmechanik loest es auf dieselbe Weise auf wie generierten Fels.
+ */
+export interface CoopDefenseMapRockWallConfig {
+  readonly id: string;
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly widthCells: number;
+  readonly heightCells: number;
+}
+
+/** Authored Position des Tutorial-Fensters; `gridX` ist seine Mittelspalte. */
+export interface CoopDefenseMapTutorialAnchorConfig {
+  readonly gridX: number;
+  readonly gridY: number;
+}
+
+/**
+ * Ein lokaler Tutorial-Hinweis. Ausgeloest wird er, sobald der eigene Spieler den Bereich
+ * seines Checkpoints erreicht; ein vorauslaufender Mitspieler loest ihn nicht mit aus.
+ */
+export interface CoopDefenseMapTutorialStepConfig {
+  readonly id: string;
+  readonly checkpointId: string;
+  readonly durationMs?: number;
+}
+
+export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMapTutorialStepConfig {
+  readonly durationMs: number;
+}
+
 export interface CoopDefenseMapConfig {
   readonly mapId: string;
   /**
    * Horizontale Arenabreite im 32-px-Raster. Standard sind 60 Zellen; Werte werden auf
-   * die gemeinsame CTB-Maximalbreite von 135 Zellen begrenzt.
+   * `MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS` begrenzt.
    */
   readonly arenaWidthCells?: number;
   /** Vertikale Arenahoehe im 32-px-Raster; ohne Angabe bleibt die bestehende Hoehe aktiv. */
@@ -597,6 +678,25 @@ export interface CoopDefenseMapConfig {
   readonly rockFillRatio?: number;
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
+  /**
+   * Authored Felsbaender aus ganz normalen zerstoerbaren Felsen. Sie werden erst nach
+   * Konnektivitaets-, Baum- und Routenpruefung gestempelt: Der Generator soll ein bewusst
+   * gesetztes Band nicht als abgeschnuertes Gebiet auffassen und wieder aufschneiden.
+   * Gleisspalten, Basisreservierungen und Barrierezellen bleiben frei.
+   */
+  readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
+  /**
+   * Verschiebt Tutorial-Fenster und die Felsformation darunter an eine authored Zelle.
+   * `gridX` ist die Mittelspalte des Fensters, `gridY` seine obere Zeile. Ohne Angabe bleibt
+   * das Fenster in der Arenamitte auf der bisherigen Hoehe.
+   */
+  readonly tutorialAnchor?: CoopDefenseMapTutorialAnchorConfig;
+  /**
+   * Rein lokale Tutorial-Hinweise entlang der Route. Sie besitzen keine Gameplay-Autoritaet,
+   * werden nicht repliziert und loesen pro Spieler und Runde genau einmal aus.
+   */
+  readonly tutorialSteps?: readonly ResolvedCoopDefenseMapTutorialStepConfig[]
+  | readonly CoopDefenseMapTutorialStepConfig[];
   /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
   readonly trackMode?: CoopDefenseMapTrackMode;
   /** Position der zweispaltigen Gleise; Standard `center`. `gridX` bezeichnet die linke Spalte. */
@@ -675,6 +775,13 @@ export function resolveCoopDefenseMapMissionProgress(
   mapConfig: CoopDefenseMapConfig,
 ): ResolvedCoopDefenseMapMissionProgressConfig | undefined {
   return mapConfig.missionProgress as ResolvedCoopDefenseMapMissionProgressConfig | undefined;
+}
+
+/** Lokale Tutorial-Schritte der Map; leer, solange keine authoriert sind. */
+export function resolveCoopDefenseMapTutorialSteps(
+  mapConfig: CoopDefenseMapConfig,
+): readonly ResolvedCoopDefenseMapTutorialStepConfig[] {
+  return (mapConfig.tutorialSteps ?? []) as readonly ResolvedCoopDefenseMapTutorialStepConfig[];
 }
 
 interface CoopDefenseMapRegistryFile {
@@ -797,6 +904,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
         delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
         spawnStaggerMs: group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
         front: group.front ?? DEFAULT_SPAWN_FRONT,
+        ...(group.spawnArea ? { spawnArea: { ...group.spawnArea } } : {}),
       };
     }),
   }));
@@ -812,6 +920,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
+    ...(objective.holdDurationMs === undefined ? {} : { holdDurationMs: objective.holdDurationMs }),
     ...(objective.requiredSurvivors === undefined ? {} : { requiredSurvivors: objective.requiredSurvivors }),
     targets: [...(objective.targets ?? [])],
     targetGoal: objective.targetGoal ?? (objective.type === 'carry' && objective.carry
@@ -939,7 +1048,12 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   const arenaHeightCells = normalizeCoopDefenseArenaHeightCells(
     mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   );
-  const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, { bases, boss });
+  const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
+    bases,
+    boss,
+    arenaWidthCells,
+    arenaHeightCells,
+  });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
   const trackPosition = normalizeTrackPosition(
     mapConfig.mapId,
@@ -981,6 +1095,24 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     missionProgress,
   );
   validateAdvanceRoute(mapConfig.mapId, objective, missionProgress);
+  const rockWalls = normalizeRockWallConfigs(
+    mapConfig.mapId,
+    mapConfig.rockWalls,
+    arenaWidthCells,
+    arenaHeightCells,
+    missionProgress,
+  );
+  const tutorialAnchor = normalizeTutorialAnchor(
+    mapConfig.mapId,
+    mapConfig.tutorialAnchor,
+    arenaWidthCells,
+    arenaHeightCells,
+  );
+  const tutorialSteps = normalizeTutorialSteps(
+    mapConfig.mapId,
+    mapConfig.tutorialSteps,
+    missionProgress,
+  );
   return {
     mapId: mapConfig.mapId,
     arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
@@ -996,6 +1128,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     tutorialShowControls: mapConfig.tutorialShowControls === true,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
+    rockWalls,
+    tutorialAnchor,
+    tutorialSteps,
     trackMode,
     trackPosition,
     mapEvents,
@@ -1177,7 +1312,7 @@ function normalizeEncounterConfigs(
       id,
       start: normalizeEncounterStart(mapId, id, encounter.start, encounterIndex, context),
       restAfterMs: normalizeNonNegativeMilliseconds(encounter.restAfterMs),
-      groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group)),
+      groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group, context)),
     };
   });
 }
@@ -1823,6 +1958,8 @@ function validateSecondaryObjectiveWindows(
 interface EncounterTriggerNormalizationContext {
   readonly bases: readonly CoopBaseConfig[];
   readonly boss: CoopDefenseMapBossConfig | undefined;
+  readonly arenaWidthCells: number;
+  readonly arenaHeightCells: number;
 }
 
 function normalizeEncounterStart(
@@ -1914,6 +2051,7 @@ function normalizeEncounterGroup(
   mapId: string,
   encounterId: string,
   group: CoopDefenseMapEncounterGroupConfig,
+  context: EncounterTriggerNormalizationContext,
 ): ResolvedCoopDefenseMapEncounterGroupConfig {
   if (!hasCoopDefenseEnemyKind(group.enemyKind)) {
     throw new Error(
@@ -1935,6 +2073,13 @@ function normalizeEncounterGroup(
     );
   }
 
+  if (group.spawnArea !== undefined && group.front !== undefined) {
+    throw new Error(
+      `[coopDefenseMaps] Encounter ${mapId}:${encounterId} must not combine front and spawnArea`,
+    );
+  }
+  const spawnArea = normalizeSpawnArea(mapId, encounterId, group.spawnArea, context);
+
   return {
     enemyKind: group.enemyKind,
     count: Math.floor(group.count),
@@ -1943,6 +2088,31 @@ function normalizeEncounterGroup(
       group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
     ),
     front: normalizeSpawnFront(mapId, encounterId, group.front),
+    ...(spawnArea ? { spawnArea } : {}),
+  };
+}
+
+function normalizeSpawnArea(
+  mapId: string,
+  ownerId: string,
+  area: CoopDefenseMapSpawnAreaConfig | undefined,
+  context: EncounterTriggerNormalizationContext,
+): CoopDefenseMapSpawnAreaConfig | undefined {
+  if (area === undefined) return undefined;
+  const values = [area.gridX, area.gridY, area.widthCells, area.heightCells];
+  if (values.some((value) => !Number.isInteger(value))) {
+    throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} has a non-integer spawnArea`);
+  }
+  if (area.gridX < 0 || area.gridY < 0 || area.widthCells < 1 || area.heightCells < 1
+    || area.gridX + area.widthCells > context.arenaWidthCells
+    || area.gridY + area.heightCells > context.arenaHeightCells) {
+    throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} has an out-of-bounds spawnArea`);
+  }
+  return {
+    gridX: area.gridX,
+    gridY: area.gridY,
+    widthCells: area.widthCells,
+    heightCells: area.heightCells,
   };
 }
 
@@ -1998,7 +2168,12 @@ function normalizeMapEvents(
       throw new Error(`[coopDefenseMaps] Duplicate map event id in map ${mapId}: ${event.id}`);
     }
     eventIds.add(event.id);
-    const start = normalizeMapEventStart(mapId, event.id, event.start, encounters, { bases, boss });
+    const start = normalizeMapEventStart(mapId, event.id, event.start, encounters, {
+      bases,
+      boss,
+      arenaWidthCells,
+      arenaHeightCells,
+    });
     const delayMs = normalizeMapEventMilliseconds(mapId, event.id, event.delayMs ?? 0, 'delayMs');
     if (event.type === 'train') {
       if (trackMode !== 'rails') {
@@ -2729,7 +2904,7 @@ function normalizeMissionProgressConfig(
         `[coopDefenseMaps] Mandatory defense ${mapId}:${id} hold ${objectiveId} must start after checkpoint ${checkpointId}`,
       );
     }
-    return { id, checkpointId, objectiveId };
+    return { id, checkpointId, objectiveId, failureEndsMission: defense.failureEndsMission === true };
   });
 
   const barrierIds = new Set<string>();
@@ -2763,7 +2938,137 @@ function normalizeMissionProgressConfig(
     return { id, cells, openOn };
   });
 
-  return { checkpoints, barriers, mandatoryDefenses };
+  const startArea = normalizeMissionStartArea(
+    mapId,
+    config.startArea,
+    arenaWidthCells,
+    arenaHeightCells,
+  );
+
+  return { checkpoints, barriers, mandatoryDefenses, ...(startArea ? { startArea } : {}) };
+}
+
+function normalizeRockWallConfigs(
+  mapId: string,
+  rockWalls: readonly CoopDefenseMapRockWallConfig[] | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+  missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+): readonly CoopDefenseMapRockWallConfig[] | undefined {
+  if (rockWalls === undefined) return undefined;
+  if (!Array.isArray(rockWalls)) {
+    throw new Error(`[coopDefenseMaps] Rock walls on map ${mapId} must be an array`);
+  }
+  const barrierCells = new Set(
+    (missionProgress?.barriers ?? []).flatMap((barrier) => (
+      barrier.cells.map((cell) => `${cell.gridX},${cell.gridY}`)
+    )),
+  );
+  const wallIds = new Set<string>();
+  return rockWalls.map((wall) => {
+    const id = normalizeRequiredId(
+      wall.id,
+      `[coopDefenseMaps] Rock wall on map ${mapId} needs a non-empty id`,
+    );
+    if (wallIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate rock wall id on map ${mapId}: ${id}`);
+    }
+    wallIds.add(id);
+    const values = [wall.gridX, wall.gridY, wall.widthCells, wall.heightCells];
+    if (values.some((value) => !Number.isInteger(value))) {
+      throw new Error(`[coopDefenseMaps] Rock wall ${mapId}:${id} has a non-integer bound`);
+    }
+    if (wall.gridX < 0 || wall.gridY < 0 || wall.widthCells < 1 || wall.heightCells < 1
+      || wall.gridX + wall.widthCells > arenaWidthCells
+      || wall.gridY + wall.heightCells > arenaHeightCells) {
+      throw new Error(`[coopDefenseMaps] Rock wall ${mapId}:${id} is outside the arena`);
+    }
+    for (let gridY = wall.gridY; gridY < wall.gridY + wall.heightCells; gridY += 1) {
+      for (let gridX = wall.gridX; gridX < wall.gridX + wall.widthCells; gridX += 1) {
+        if (barrierCells.has(`${gridX},${gridY}`)) {
+          throw new Error(
+            `[coopDefenseMaps] Rock wall ${mapId}:${id} overlaps a reserved mission barrier cell`,
+          );
+        }
+      }
+    }
+    return {
+      id,
+      gridX: wall.gridX,
+      gridY: wall.gridY,
+      widthCells: wall.widthCells,
+      heightCells: wall.heightCells,
+    };
+  });
+}
+
+function normalizeTutorialAnchor(
+  mapId: string,
+  anchor: CoopDefenseMapTutorialAnchorConfig | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): CoopDefenseMapTutorialAnchorConfig | undefined {
+  if (anchor === undefined) return undefined;
+  if (!Number.isInteger(anchor.gridX) || !Number.isInteger(anchor.gridY)
+    || anchor.gridX < 0 || anchor.gridX >= arenaWidthCells
+    || anchor.gridY < 0 || anchor.gridY >= arenaHeightCells) {
+    throw new Error(`[coopDefenseMaps] Tutorial anchor on map ${mapId} is outside the arena`);
+  }
+  return { gridX: anchor.gridX, gridY: anchor.gridY };
+}
+
+function normalizeTutorialSteps(
+  mapId: string,
+  steps: readonly CoopDefenseMapTutorialStepConfig[] | undefined,
+  missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+): readonly ResolvedCoopDefenseMapTutorialStepConfig[] | undefined {
+  if (steps === undefined) return undefined;
+  if (!Array.isArray(steps)) {
+    throw new Error(`[coopDefenseMaps] Tutorial steps on map ${mapId} must be an array`);
+  }
+  const checkpointIds = new Set((missionProgress?.checkpoints ?? []).map((checkpoint) => checkpoint.id));
+  const stepIds = new Set<string>();
+  return steps.map((step) => {
+    const id = normalizeRequiredId(
+      step.id,
+      `[coopDefenseMaps] Tutorial step on map ${mapId} needs a non-empty id`,
+    );
+    if (stepIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate tutorial step id on map ${mapId}: ${id}`);
+    }
+    stepIds.add(id);
+    const checkpointId = normalizeRequiredId(
+      step.checkpointId,
+      `[coopDefenseMaps] Tutorial step ${mapId}:${id} needs a checkpointId`,
+    );
+    if (!checkpointIds.has(checkpointId)) {
+      throw new Error(`[coopDefenseMaps] Tutorial step ${mapId}:${id} references unknown checkpoint: ${checkpointId}`);
+    }
+    const durationMs = step.durationMs ?? COOP_DEFENSE_TUTORIAL_STEP_DEFAULT_DURATION_MS;
+    if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) {
+      throw new Error(`[coopDefenseMaps] Tutorial step ${mapId}:${id} needs a positive durationMs`);
+    }
+    return { id, checkpointId, durationMs: Math.floor(durationMs) };
+  });
+}
+
+function normalizeMissionStartArea(
+  mapId: string,
+  startArea: CoopDefenseMapMissionStartAreaConfig | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): ResolvedCoopDefenseMapMissionStartAreaConfig | undefined {
+  if (startArea === undefined) return undefined;
+  if (!Number.isInteger(startArea.gridX) || !Number.isInteger(startArea.gridY)
+    || startArea.gridX < 0 || startArea.gridX >= arenaWidthCells
+    || startArea.gridY < 0 || startArea.gridY >= arenaHeightCells) {
+    throw new Error(`[coopDefenseMaps] Mission start area on map ${mapId} is outside the arena`);
+  }
+  const radiusCells = startArea.radiusCells ?? 4;
+  if (typeof radiusCells !== 'number' || !Number.isFinite(radiusCells) || radiusCells <= 0) {
+    throw new Error(`[coopDefenseMaps] Mission start area on map ${mapId} needs a positive radiusCells`);
+  }
+  return { gridX: startArea.gridX, gridY: startArea.gridY, radiusCells };
 }
 
 function normalizeMissionBarrierTrigger(
