@@ -154,10 +154,10 @@ describe('gpu vfx render lanes', () => {
     expect(effect('entityburn.spark').lane).toBe(GpuVfxLaneId.EntityBurn);
   });
 
-  it('keeps every GroundFire flame layer on the shared cloud motif', () => {
-    // Alle Flammenschichten teilen sich dieselbe konturlose Wolke. Ein Zwischenstand hat jeder
-    // Schicht eine eigene Silhouette gegeben – additiv gestapelt blieb die als Einzelkoerper
-    // sichtbar und die Flaeche zerfiel in Keile. Trails und EntityBurn behalten ihre FlameJet-Frames.
+  it('keeps every GroundFire flame layer on the shared organic motif family', () => {
+    // Das Manifest setzt fuer die Flaechenschichten die jeweilige erste organische Variante.
+    // Der Renderer waehlt zur Laufzeit seed-deterministisch aus der Familie; Trails und EntityBurn
+    // behalten ihre FlameJet-Frames.
     const flameFrames = new Set<number>([
       GpuVfxFrameId.FlameCore, GpuVfxFrameId.FlameOuter, GpuVfxFrameId.FlameSpark,
     ]);
@@ -170,7 +170,7 @@ describe('gpu vfx render lanes', () => {
       const effect = GPU_VFX_EFFECTS.find((candidate) => candidate.label === label)!;
       expect(effect.frame, label).toBe(GpuVfxFrameId.GroundFireSurface);
     }
-    // Nur die flaechige Grundglut hat ein eigenes Motiv: eine Kuppel statt eines Wolkenfelds.
+    // Die flaechige Grundglut besitzt eine eigene, breitere Motivfamilie.
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.heat-body')!.frame)
       .toBe(GpuVfxFrameId.GroundFireBed);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.spark')!.frame)

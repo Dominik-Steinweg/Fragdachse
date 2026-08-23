@@ -90,6 +90,22 @@ describe('GroundFire GPU particles', () => {
     expect(lane.size).toBe(6144);
   });
 
+  it('mixes every organic surface and bed motif instead of repeating one circle', () => {
+    const { system, renderer, lane } = setup();
+    renderer.syncGround({ cells: cells(12, 8) }, 0);
+    for (let frame = 0; frame < 240; frame += 1) system.update(16);
+
+    const frames = new Set(lane.members.map(member => member.frame));
+    const required = [
+      'ground-fire-surface',
+      'ground-fire-surface-b',
+      'ground-fire-surface-c',
+      'ground-fire-bed',
+      'ground-fire-bed-b',
+    ];
+    expect(required.every(frame => frames.has(frame))).toBe(true);
+  });
+
   it('turns an impact into four bright sparks and one stretched outlier', () => {
     const { renderer, lane } = setup();
     renderer.spawnImpact(160, 192, 'normal');

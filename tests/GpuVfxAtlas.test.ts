@@ -53,7 +53,7 @@ describe('gpu vfx atlas', () => {
     const layout = packGpuVfxAtlas();
     // Die Groesse steht nicht im Code, sie ergibt sich aus dem Manifest.
     expect(layout.size & (layout.size - 1)).toBe(0);
-    // 256 seit den vier 64-px-GroundFire-Motiven; 128 reicht dafuer nicht mehr.
+    // Die organischen 64-px-GroundFire-Varianten bleiben gemeinsam im bestehenden 256er Atlas.
     expect(layout.size).toBe(256);
     expect(layout.rects.length).toBe(GPU_VFX_ATLAS.length);
   });
@@ -151,6 +151,9 @@ describe('gpu vfx atlas', () => {
     expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionStreak).name).toBe('explosion-streak');
     expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionChunk).name).toBe('explosion-chunk');
     expect(getGpuVfxFrame(GpuVfxFrameId.ExplosionRing).name).toBe('explosion-ring');
+    expect(getGpuVfxFrame(GpuVfxFrameId.GroundFireSurfaceB).name).toBe('ground-fire-surface-b');
+    expect(getGpuVfxFrame(GpuVfxFrameId.GroundFireSurfaceC).name).toBe('ground-fire-surface-c');
+    expect(getGpuVfxFrame(GpuVfxFrameId.GroundFireBedB).name).toBe('ground-fire-bed-b');
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
 

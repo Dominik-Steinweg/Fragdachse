@@ -2,11 +2,11 @@ import type Phaser from 'phaser';
 import { ensureCanvasTexture } from './EffectUtils';
 
 /**
- * Die zwei Motive des Bodenfeuers. Beide sind **weiss**: die Farbe kommt erst aus dem
- * Multiply-Tint, damit dasselbe Frame den normalen wie den Void-Stil traegt.
+ * Die Motivfamilien des Bodenfeuers. Alle sind **weiss**: die Farbe kommt erst aus dem
+ * Multiply-Tint, damit dieselben Frames den normalen wie den Void-Stil tragen.
  *
- * - `surface` – das organische Wolkenfeld, das *alle* Flammenschichten benutzen.
- * - `bed` – eine weiche Kuppel mit unregelmaessigem Rand fuer die flaechige Grundglut.
+ * - `surface` – drei organische Wolkenfelder, die *alle* Flammenschichten benutzen.
+ * - `bed` – zwei breite, asymmetrische Formen fuer die flaechige Grundglut.
  *
  * ## Warum ein Wolkenfeld und keine Flammensilhouette
  *
@@ -24,7 +24,17 @@ import { ensureCanvasTexture } from './EffectUtils';
  */
 
 export const TEX_GROUND_FIRE_SURFACE = '__ground_fire_surface';
+export const TEX_GROUND_FIRE_SURFACE_B = '__ground_fire_surface_b';
+export const TEX_GROUND_FIRE_SURFACE_C = '__ground_fire_surface_c';
 export const TEX_GROUND_FIRE_BED     = '__ground_fire_bed';
+export const TEX_GROUND_FIRE_BED_B   = '__ground_fire_bed_b';
+
+export const GROUND_FIRE_SURFACE_TEXTURES = [
+  TEX_GROUND_FIRE_SURFACE,
+  TEX_GROUND_FIRE_SURFACE_B,
+  TEX_GROUND_FIRE_SURFACE_C,
+] as const;
+export const GROUND_FIRE_BED_TEXTURES = [TEX_GROUND_FIRE_BED, TEX_GROUND_FIRE_BED_B] as const;
 
 /**
  * Native Kantenlaengen. Der Atlas und der Renderer lesen sie hier, damit Frame-Groesse und
@@ -35,6 +45,8 @@ export const TEX_GROUND_FIRE_BED     = '__ground_fire_bed';
  */
 export const GROUND_FIRE_SURFACE_SIZE = 64;
 export const GROUND_FIRE_BED_SIZE     = 64;
+export const GROUND_FIRE_SURFACE_VARIANT_COUNT = GROUND_FIRE_SURFACE_TEXTURES.length;
+export const GROUND_FIRE_BED_VARIANT_COUNT = GROUND_FIRE_BED_TEXTURES.length;
 
 /** Deterministischer Hash; die Motive muessen ueber Builds und Clients identisch sein. */
 function hashUnit(ix: number, iy: number, seed: number): number {
@@ -120,83 +132,179 @@ function paintAlphaField(
   ctx.putImageData(image, 0, 0);
 }
 
-/** Erzeugt beide GroundFire-Motive. Idempotent; `ensureCanvasTexture` prueft den Schluessel. */
+/** Erzeugt alle GroundFire-Motive. Idempotent; `ensureCanvasTexture` prueft den Schluessel. */
 export function ensureGroundFireTextures(scene: Phaser.Scene): void {
   const textures = scene.textures;
 
-  ensureGroundFireSurface(textures);
-  ensureGroundFireBed(textures);
+  for (let variant = 0; variant < GROUND_FIRE_SURFACE_TEXTURES.length; variant += 1) {
+    ensureGroundFireSurface(textures, GROUND_FIRE_SURFACE_TEXTURES[variant], variant);
+  }
+  for (let variant = 0; variant < GROUND_FIRE_BED_TEXTURES.length; variant += 1) {
+    ensureGroundFireBed(textures, GROUND_FIRE_BED_TEXTURES[variant], variant);
+  }
 }
 
 /**
- * Die Wolkenlappen des Flaechenfelds, in normierten Koordinaten (-1 bis 1): Mittelpunkt,
- * Halbachsen, Alpha, Drehung. Uebernommen aus dem urspruenglichen 32-px-Motiv – die Verteilung
- * hat sich bewaehrt, nur ihr Rand war abgeschnitten.
+ * Organisches Flaechenmotiv. Ein asymmetrischer, gewellter Grundkoerper haelt die Deckung hoch;
+ * seed-deterministische Lappen und Einbuchtungen brechen Kreis und Wiederholungsmuster auf.
+ * Alle Varianten bleiben weich und konturlos, damit sie additiv miteinander verschmelzen.
  */
-const SURFACE_LOBES: readonly (readonly [number, number, number, number, number, number])[] = [
-  [-0.56, -0.31, 0.34, 0.16, 0.20, -0.35],
-  [0.06, -0.56, 0.31, 0.16, 0.22, 0.18],
-  [0.63, -0.25, 0.25, 0.19, 0.18, 0.55],
-  [-0.50, 0.25, 0.34, 0.19, 0.19, 0.20],
-  [0.25, 0.19, 0.38, 0.19, 0.22, -0.30],
-  [0.69, 0.50, 0.22, 0.16, 0.16, 0.42],
-  [-0.06, 0.69, 0.28, 0.13, 0.14, -0.12],
-];
+export function sampleGroundFireSurfaceAlpha(variantIndex: number, u: number, v: number): number {
+  const variant = normalizeVariant(variantIndex, GROUND_FIRE_SURFACE_VARIANT_COUNT);
+  const seed = 4271 + variant * 3253;
+  const window = frameEdgeWindow(u, v);
+  if (window <= 0) return 0;
+
+  const rotation = hashUnit(variant, 1, seed) * Math.PI * 2;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const aspectX = 0.78 + hashUnit(variant, 2, seed) * 0.28;
+  const aspectY = 0.68 + hashUnit(variant, 3, seed) * 0.24;
+  const offsetX = (hashUnit(variant, 4, seed) - 0.5) * 0.16;
+  const offsetY = (hashUnit(variant, 5, seed) - 0.5) * 0.16;
+  const dx = u - offsetX;
+  const dy = v - offsetY;
+  const localX = (dx * cos - dy * sin) / aspectX;
+  const localY = (dx * sin + dy * cos) / aspectY;
+  const radius = Math.hypot(localX, localY);
+  const angle = Math.atan2(localY, localX);
+  const rimNoise = fbm(
+    Math.cos(angle) * 1.9 + variant * 2.7,
+    Math.sin(angle) * 1.9 - variant * 1.8,
+    seed + 211,
+    3,
+  );
+  const rim = 0.90
+    + (rimNoise - 0.5) * 0.34
+    + Math.sin(angle * 3 + variant * 1.7) * 0.075
+    + Math.sin(angle * 5 - variant * 0.9) * 0.045;
+  let value = 0.43 * falloff(radius / rim, 0.42, 1) ** 0.72;
+
+  for (let lobe = 0; lobe < 7; lobe += 1) {
+    const lobeAngle = hashUnit(lobe, variant, seed + 307) * Math.PI * 2;
+    const lobeRadius = 0.20 + hashUnit(lobe, variant, seed + 401) * 0.52;
+    const cx = Math.cos(lobeAngle) * lobeRadius + offsetX * 0.35;
+    const cy = Math.sin(lobeAngle) * lobeRadius + offsetY * 0.35;
+    const lobeRotation = lobeAngle + (hashUnit(lobe, variant, seed + 503) - 0.5) * 1.5;
+    const lobeCos = Math.cos(-lobeRotation);
+    const lobeSin = Math.sin(-lobeRotation);
+    const lobeDx = u - cx;
+    const lobeDy = v - cy;
+    const rx = 0.18 + hashUnit(lobe, variant, seed + 601) * 0.18;
+    const ry = 0.09 + hashUnit(lobe, variant, seed + 701) * 0.13;
+    const lobeX = (lobeDx * lobeCos - lobeDy * lobeSin) / rx;
+    const lobeY = (lobeDx * lobeSin + lobeDy * lobeCos) / ry;
+    const alpha = 0.12 + hashUnit(lobe, variant, seed + 809) * 0.14;
+    value += alpha * bell(Math.hypot(lobeX, lobeY), 1.7);
+  }
+
+  // Zwei weiche Kerben erzeugen konkave Zwischenraeume, ohne eine harte Flammensilhouette.
+  for (let notch = 0; notch < 2; notch += 1) {
+    const notchAngle = hashUnit(notch, variant, seed + 907) * Math.PI * 2;
+    const notchRadius = 0.48 + hashUnit(notch, variant, seed + 1009) * 0.18;
+    const notchX = u - Math.cos(notchAngle) * notchRadius;
+    const notchY = v - Math.sin(notchAngle) * notchRadius;
+    value -= (0.08 + hashUnit(notch, variant, seed + 1103) * 0.07)
+      * bell(Math.hypot(notchX / 0.22, notchY / 0.14), 1.8);
+  }
+
+  const grain = 0.86 + 0.18 * fbm(u * 3.3 + variant * 4.1, v * 3.3 - variant * 2.9, seed + 1201, 3);
+  return Math.max(0, value) * grain * window;
+}
 
 /**
- * Flaechenfeld: der breite Grundverlauf des alten Motivs plus seine sieben Wolkenlappen, aber
- * mit einer Flanke, die *innerhalb* des Frames auf null laeuft.
+ * Flaechenfeld: ein breiter organischer Grundkoerper mit seed-festen Ausbuchtungen, weichen
+ * Einschnitten und feiner Binnenstruktur. Die drei Varianten halten eine vergleichbare Deckung,
+ * besitzen aber keine gemeinsame Kreis- oder Lappensilhouette.
  *
- * Der Grundverlauf traegt den Grossteil der Deckung; ohne ihn bliebe nur ein sparsames
- * Lappenmuster uebrig und die Flaeche waere trotz hoher Partikelzahl blass. Genau das war der
- * Fehler eines Zwischenstands, der ihn durch reines Rauschen ersetzt hatte.
+ * Der Grundkoerper traegt den Grossteil der Deckung; ohne ihn bliebe nur ein sparsames
+ * Rauschmuster uebrig und die Flaeche waere trotz hoher Partikelzahl blass. Das Randfenster
+ * sichert lediglich transparente Framekanten und darf selbst keine radiale Form vorgeben.
  */
-function ensureGroundFireSurface(textures: Phaser.Textures.TextureManager): void {
+function ensureGroundFireSurface(
+  textures: Phaser.Textures.TextureManager,
+  textureKey: string,
+  variant: number,
+): void {
   const size = GROUND_FIRE_SURFACE_SIZE;
-  ensureCanvasTexture(textures, TEX_GROUND_FIRE_SURFACE, size, size, (ctx) => {
-    paintAlphaField(ctx, size, (u, v) => {
-      const radius = Math.hypot(u, v);
-      const window = falloff(radius, 0.86, 1);
-      if (window <= 0) return 0;
-      // Breites Plateau, dann eine kurze Flanke. Das alte Motiv war bis an seine Bildkante hell
-      // und wurde dort abgeschnitten; ein weicher Verlauf ueber den ganzen Radius haette
-      // dieselbe Partikelzahl deutlich blasser gemacht.
-      let value = 0.50 * falloff(radius, 0.58, 0.99) ** 0.7;
-      for (const [cx, cy, rx, ry, alpha, rotation] of SURFACE_LOBES) {
-        const dx = u - cx;
-        const dy = v - cy;
-        const cos = Math.cos(-rotation);
-        const sin = Math.sin(-rotation);
-        const localX = (dx * cos - dy * sin) / rx;
-        const localY = (dx * sin + dy * cos) / ry;
-        value += alpha * bell(Math.hypot(localX, localY), 2.2);
-      }
-      const grain = 0.88 + 0.16 * fbm(u * 3.1 + 5.5, v * 3.1 - 2.7, 4271, 3);
-      return value * grain * window;
-    });
+  ensureCanvasTexture(textures, textureKey, size, size, (ctx) => {
+    paintAlphaField(ctx, size, (u, v) => sampleGroundFireSurfaceAlpha(variant, u, v));
   });
 }
 
 /**
- * Glutbett: eine weiche Kuppel mit unregelmaessigem Rand.
+ * Glutbett: eine breite asymmetrische Form mit unregelmaessigem Rand.
  *
- * Sie traegt keine eigene Silhouette – sie deckt eine Flaeche. Der verrauschte Rand verhindert,
- * dass sich der Kreis des Motivs bei wenigen gleichzeitigen Partikeln abzeichnet, und die breite
- * Flanke haelt die Deckung hoch, ohne einen Ring an ihrem Ansatz zu ziehen.
+ * Sie traegt keine harte Silhouette – sie deckt eine Flaeche. Aspekt, versetzter Mittelpunkt,
+ * Lappen und Kerben verhindern den wiederkehrenden Kreis; die breite Flanke haelt die Deckung.
  */
-function ensureGroundFireBed(textures: Phaser.Textures.TextureManager): void {
+export function sampleGroundFireBedAlpha(variantIndex: number, u: number, v: number): number {
+  const variant = normalizeVariant(variantIndex, GROUND_FIRE_BED_VARIANT_COUNT);
+  const seed = 5501 + variant * 4211;
+  const window = frameEdgeWindow(u, v);
+  if (window <= 0) return 0;
+
+  const rotation = hashUnit(variant, 11, seed) * Math.PI * 2;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const offsetX = (hashUnit(variant, 13, seed) - 0.5) * 0.18;
+  const offsetY = (hashUnit(variant, 17, seed) - 0.5) * 0.18;
+  const dx = u - offsetX;
+  const dy = v - offsetY;
+  const localX = (dx * cos - dy * sin) / (0.82 + hashUnit(variant, 19, seed) * 0.24);
+  const localY = (dx * sin + dy * cos) / (0.70 + hashUnit(variant, 23, seed) * 0.22);
+  const radius = Math.hypot(localX, localY);
+  const angle = Math.atan2(localY, localX);
+  const rimNoise = fbm(
+    Math.cos(angle) * 1.6 + variant * 3.1,
+    Math.sin(angle) * 1.6 - variant * 2.3,
+    seed + 127,
+    3,
+  );
+  const rim = 0.92
+    + (rimNoise - 0.5) * 0.38
+    + Math.sin(angle * 2 + variant * 0.8) * 0.08
+    + Math.sin(angle * 3 + variant * 1.6) * 0.09
+    + Math.sin(angle * 4 - variant * 1.3) * 0.05;
+  let value = 0.54 * falloff(radius / rim, 0.40, 1) ** 0.76;
+
+  for (let lobe = 0; lobe < 3; lobe += 1) {
+    const lobeAngle = hashUnit(lobe, variant, seed + 233) * Math.PI * 2;
+    const lobeRadius = 0.28 + hashUnit(lobe, variant, seed + 337) * 0.38;
+    const lobeX = (u - Math.cos(lobeAngle) * lobeRadius) / (0.24 + hashUnit(lobe, variant, seed + 431) * 0.14);
+    const lobeY = (v - Math.sin(lobeAngle) * lobeRadius) / (0.16 + hashUnit(lobe, variant, seed + 541) * 0.12);
+    value += (0.08 + hashUnit(lobe, variant, seed + 647) * 0.08)
+      * bell(Math.hypot(lobeX, lobeY), 1.55);
+  }
+
+  const notchAngle = hashUnit(variant, 29, seed + 751) * Math.PI * 2;
+  const notchX = (u - Math.cos(notchAngle) * 0.62) / 0.25;
+  const notchY = (v - Math.sin(notchAngle) * 0.62) / 0.18;
+  value -= 0.11 * bell(Math.hypot(notchX, notchY), 1.7);
+
+  const grain = 0.84 + 0.18 * fbm(u * 3.1 - variant * 4.7, v * 3.1 + variant * 3.5, seed + 857, 3);
+  return Math.max(0, value) * grain * window;
+}
+
+function ensureGroundFireBed(
+  textures: Phaser.Textures.TextureManager,
+  textureKey: string,
+  variant: number,
+): void {
   const size = GROUND_FIRE_BED_SIZE;
-  ensureCanvasTexture(textures, TEX_GROUND_FIRE_BED, size, size, (ctx) => {
-    paintAlphaField(ctx, size, (u, v) => {
-      const radius = Math.hypot(u, v);
-      if (radius >= 1) return 0;
-      const angle = Math.atan2(v, u);
-      // Rein winkelabhaengiges Rauschen: der Rand wellt sich, ohne dass Loecher entstehen.
-      const rim = 1 + (fbm(Math.cos(angle) * 1.7 + 3.3, Math.sin(angle) * 1.7 - 2.1, 5501, 3) - 0.5) * 0.26;
-      const dome = falloff(radius / rim, 0.52, 0.96) ** 0.7 * falloff(radius, 0.90, 0.995);
-      if (dome <= 0) return 0;
-      const grain = 0.84 + 0.16 * fbm(u * 3.4 - 9.1, v * 3.4 + 6.3, 8117, 3);
-      return dome * grain * 0.58;
-    });
+  ensureCanvasTexture(textures, textureKey, size, size, (ctx) => {
+    paintAlphaField(ctx, size, (u, v) => sampleGroundFireBedAlpha(variant, u, v));
   });
+}
+
+function normalizeVariant(index: number, count: number): number {
+  return ((index | 0) % count + count) % count;
+}
+
+/**
+ * Reine Sicherheitsblende an den vier Frame-Kanten. Anders als ein radialer Kreis bestimmt sie
+ * nicht die sichtbare Silhouette; die kommt ausschliesslich aus dem organischen Motiv selbst.
+ */
+function frameEdgeWindow(u: number, v: number): number {
+  return falloff(Math.max(Math.abs(u), Math.abs(v)), 0.86, 0.995);
 }

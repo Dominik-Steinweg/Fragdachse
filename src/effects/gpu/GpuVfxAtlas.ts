@@ -38,7 +38,10 @@ import {
   GROUND_FIRE_BED_SIZE,
   GROUND_FIRE_SURFACE_SIZE,
   TEX_GROUND_FIRE_BED,
+  TEX_GROUND_FIRE_BED_B,
   TEX_GROUND_FIRE_SURFACE,
+  TEX_GROUND_FIRE_SURFACE_B,
+  TEX_GROUND_FIRE_SURFACE_C,
   ensureGroundFireTextures,
 } from '../GroundFireTextures';
 import {
@@ -109,10 +112,7 @@ export const GpuVfxFrameId = {
   FlameTongue:     16,
   ExplosionSpark:  17,
   ExplosionEmber:  18,
-  /**
-   * Die zwei Motive des Bodenfeuers; beide weiss und rein ueber Tint gefaerbt. Alle
-   * Flammenschichten teilen sich `GroundFireSurface` – Begruendung in `GroundFireTextures.ts`.
-   */
+  /** Default-Motive des Bodenfeuers; weitere organische Varianten stehen am Manifestende. */
   GroundFireSurface: 19,
   GroundFireBed:     20,
   ExplosionFireballA: 21,
@@ -122,6 +122,9 @@ export const GpuVfxFrameId = {
   ExplosionStreak:    25,
   ExplosionChunk:     26,
   ExplosionRing:      27,
+  GroundFireSurfaceB: 28,
+  GroundFireSurfaceC: 29,
+  GroundFireBedB:     30,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -253,6 +256,21 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.ExplosionRing, frame: 'explosion-ring',
     sourceTextureKey: TEX_EXPLOSION_RING, width: 64, height: 64, ensure: ensureExplosionRingTexture,
+  },
+  {
+    id: GpuVfxFrameId.GroundFireSurfaceB, frame: 'ground-fire-surface-b',
+    sourceTextureKey: TEX_GROUND_FIRE_SURFACE_B,
+    width: GROUND_FIRE_SURFACE_SIZE, height: GROUND_FIRE_SURFACE_SIZE, ensure: ensureGroundFireTextures,
+  },
+  {
+    id: GpuVfxFrameId.GroundFireSurfaceC, frame: 'ground-fire-surface-c',
+    sourceTextureKey: TEX_GROUND_FIRE_SURFACE_C,
+    width: GROUND_FIRE_SURFACE_SIZE, height: GROUND_FIRE_SURFACE_SIZE, ensure: ensureGroundFireTextures,
+  },
+  {
+    id: GpuVfxFrameId.GroundFireBedB, frame: 'ground-fire-bed-b',
+    sourceTextureKey: TEX_GROUND_FIRE_BED_B,
+    width: GROUND_FIRE_BED_SIZE, height: GROUND_FIRE_BED_SIZE, ensure: ensureGroundFireTextures,
   },
 ];
 

@@ -26,6 +26,15 @@ import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 
 const TWO_PI = Math.PI * 2;
 const CELL = GROUND_FIRE_CELL_SIZE;
+const GROUND_FIRE_SURFACE_FRAMES: readonly GpuVfxFrameId[] = [
+  GpuVfxFrameId.GroundFireSurface,
+  GpuVfxFrameId.GroundFireSurfaceB,
+  GpuVfxFrameId.GroundFireSurfaceC,
+];
+const GROUND_FIRE_BED_FRAMES: readonly GpuVfxFrameId[] = [
+  GpuVfxFrameId.GroundFireBed,
+  GpuVfxFrameId.GroundFireBedB,
+];
 
 /**
  * Temperaturbaender. Kein Band enthaelt reines Weiss: additiv summierte weisse Beitraege heben
@@ -243,19 +252,17 @@ const MOTION: GroundFireMotionSample = { x: 0, y: 0, heat: 0 };
  * walks its own deterministic cell permutation, so coverage follows the area without a raster
  * sweep or synchronized layers. Four stacked surface layers build the fire from the ground up.
  *
- * ## Warum vier Schichten mit *unterschiedlichen* Motiven
+ * ## Warum vier Schichten mit einer organischen Motivfamilie
  *
- * - **Glutbett** (`GroundFireHeatBody`, Plateau-Motiv): breite, langsame Grundhelligkeit.
- * - **Flaechenfeld** (`GroundFireOuter`, Wolken-Motiv): die organische, additive Grundmaske mit
- *   grosser Ueberlappung und ohne eigene Flammensilhouette.
- * - **Zungen** (`GroundFireCore`, gerichtetes Flammen-Motiv): die eigentliche Flammenform,
- *   ausgerichtet auf das Konvektionsfeld und laenger als breit.
- * - **Glutnester** (`GroundFireEmber`, kleiner steilflankiger Kern): kurzlebige helle Punkte.
+ * - **Glutbett** (`GroundFireHeatBody`, zwei breite Varianten): langsame Grundhelligkeit.
+ * - **Flaechenfeld** (`GroundFireOuter`, drei organische Varianten): die additive Grundmaske mit
+ *   grosser Ueberlappung und ohne wiederkehrende Kreis- oder Flammensilhouette.
+ * - **Kern** (`GroundFireCore`, dieselben drei Varianten): kleiner, heisser und heller.
+ * - **Glutnester** (`GroundFireEmber`, dieselben drei Varianten): kurzlebige helle Akzente.
  *
- * Solange alle Schichten dasselbe weiche Wolkenmotiv trugen, addierten sie sich zu *einer*
- * niedrigen Ortsfrequenz – die Flaeche las sich als beleuchteter Dunst. Erst die Trennung in
- * flaechige Schichten (niedrige Alpha, grosse Deckung) und schmale Schichten (hohe Alpha, kleine
- * Deckung) gibt der Flaeche den lokalen Kontrast, an dem Feuer erkannt wird.
+ * Die seed-deterministische Variantenwahl verbindet sich mit Rotation und Streckung. Dadurch
+ * bleibt die gemeinsame weiche Formensprache erhalten, ohne dass einzelne Exemplare als
+ * wiederholtes Muster lesbar werden.
  *
  * ## Warum die Bewegung ein Feld ist und kein Zufall je Partikel
  *
@@ -871,6 +878,7 @@ export class GroundFireClusterRenderer {
     const spec = this.bedSpec;
     const system = this.gpuVfx;
     if (!spec || !system) return;
+    spec.frame = this.pickFrame(GROUND_FIRE_BED_FRAMES, seed, 89);
     spec.lifeMs = this.seededRange(seed, 97, GROUND_FIRE_BED_LIFESPAN.min, GROUND_FIRE_BED_LIFESPAN.max);
     spec.x = x;
     spec.y = y;
@@ -904,6 +912,7 @@ export class GroundFireClusterRenderer {
     const spec = this.fieldSpec;
     const system = this.gpuVfx;
     if (!spec || !system) return;
+    spec.frame = this.pickFrame(GROUND_FIRE_SURFACE_FRAMES, seed, 97);
     spec.lifeMs = this.seededRange(seed, 101, GROUND_FIRE_FIELD_LIFESPAN.min, GROUND_FIRE_FIELD_LIFESPAN.max);
     spec.x = x;
     spec.y = y;
@@ -922,7 +931,7 @@ export class GroundFireClusterRenderer {
     system.spawn(spec, this.source, nowMs);
   }
 
-  /** Das Heissfeld: dieselbe Wolke wie das Flaechenfeld, kleiner, heisser und heller. */
+  /** Das Heissfeld: dieselbe organische Motivfamilie wie das Flaechenfeld, kleiner und heller. */
   private spawnCoreAt(
     x: number,
     y: number,
@@ -938,6 +947,7 @@ export class GroundFireClusterRenderer {
     const spec = this.coreSpec;
     const system = this.gpuVfx;
     if (!spec || !system) return;
+    spec.frame = this.pickFrame(GROUND_FIRE_SURFACE_FRAMES, seed, 101);
     spec.lifeMs = this.seededRange(seed, 109, GROUND_FIRE_CORE_LIFESPAN.min, GROUND_FIRE_CORE_LIFESPAN.max);
     spec.x = x;
     spec.y = y;
@@ -973,6 +983,7 @@ export class GroundFireClusterRenderer {
     const spec = this.emberSpec;
     const system = this.gpuVfx;
     if (!spec || !system) return;
+    spec.frame = this.pickFrame(GROUND_FIRE_SURFACE_FRAMES, seed, 41);
     const scale = sizeCells * CELL / GROUND_FIRE_SURFACE_SIZE;
     spec.lifeMs = this.seededRange(seed, 43, GROUND_FIRE_EMBER_LIFESPAN.min, GROUND_FIRE_EMBER_LIFESPAN.max);
     spec.x = x;
@@ -1225,6 +1236,10 @@ export class GroundFireClusterRenderer {
 
   private seededRange(seed: number, salt: number, min: number, max: number): number {
     return min + this.seededUnit(seed, salt) * (max - min);
+  }
+
+  private pickFrame(frames: readonly GpuVfxFrameId[], seed: number, salt: number): GpuVfxFrameId {
+    return frames[Math.floor(this.seededUnit(seed, salt) * frames.length)];
   }
 
   private seededUnit(seed: number, salt: number): number {
