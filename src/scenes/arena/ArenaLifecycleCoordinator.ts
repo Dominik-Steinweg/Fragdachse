@@ -2773,8 +2773,10 @@ export class ArenaLifecycleCoordinator {
             coopDefenseMapEvents,
             mapEventHandlers,
             {
-              isTriggerSatisfied: (start) => start.type === 'after-encounter'
-                ? (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false)
+              isTriggerSatisfied: (start) => start.type === 'after-checkpoint'
+                ? (this.ctx.coopDefenseMissionProgressSystem?.isCheckpointActivated(start.checkpointId) ?? false)
+                : start.type === 'after-encounter'
+                  ? (this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false)
                 : start.type === 'after-event'
                   ? (this.ctx.coopDefenseMapEventDirector?.isEventCompleted(start.eventId) ?? false)
                 : start.type === 'boss-phase'

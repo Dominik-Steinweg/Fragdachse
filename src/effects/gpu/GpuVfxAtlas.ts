@@ -17,6 +17,8 @@ import {
   TEX_EXPLOSION_STREAK,
   TEX_EXPLOSION_CHUNK,
   TEX_EXPLOSION_RING,
+  TEX_DEATH_FRAGMENT,
+  TEX_DEATH_GLOW,
   ensureAirstrikeBombTexture,
   ensureAirstrikeSparkTexture,
   ensureRocketExhaustTexture,
@@ -33,7 +35,15 @@ import {
   ensureExplosionStreakTexture,
   ensureExplosionChunkTexture,
   ensureExplosionRingTexture,
+  ensureDeathFragmentTexture,
+  ensureDeathGlowTexture,
 } from './GpuVfxSourceTextures';
+import {
+  TEX_BLOOD_DROPLET,
+  TEX_BLOOD_STAIN,
+  TEX_BLOOD_STREAK,
+  ensureBloodHitTextures,
+} from '../BloodEffectShared';
 import {
   GROUND_FIRE_BED_SIZE,
   GROUND_FIRE_SURFACE_SIZE,
@@ -125,6 +135,11 @@ export const GpuVfxFrameId = {
   GroundFireSurfaceB: 28,
   GroundFireSurfaceC: 29,
   GroundFireBedB:     30,
+  DeathFragment:      31,
+  DeathGlow:          32,
+  BloodStreak:        33,
+  BloodDroplet:       34,
+  BloodStain:         35,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -271,6 +286,26 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
     id: GpuVfxFrameId.GroundFireBedB, frame: 'ground-fire-bed-b',
     sourceTextureKey: TEX_GROUND_FIRE_BED_B,
     width: GROUND_FIRE_BED_SIZE, height: GROUND_FIRE_BED_SIZE, ensure: ensureGroundFireTextures,
+  },
+  {
+    id: GpuVfxFrameId.DeathFragment, frame: 'death-fragment',
+    sourceTextureKey: TEX_DEATH_FRAGMENT, width: 4, height: 4, ensure: ensureDeathFragmentTexture,
+  },
+  {
+    id: GpuVfxFrameId.DeathGlow, frame: 'death-glow',
+    sourceTextureKey: TEX_DEATH_GLOW, width: 24, height: 24, ensure: ensureDeathGlowTexture,
+  },
+  {
+    id: GpuVfxFrameId.BloodStreak, frame: 'blood-streak',
+    sourceTextureKey: TEX_BLOOD_STREAK, width: 36, height: 16, ensure: ensureBloodHitTextures,
+  },
+  {
+    id: GpuVfxFrameId.BloodDroplet, frame: 'blood-droplet',
+    sourceTextureKey: TEX_BLOOD_DROPLET, width: 14, height: 14, ensure: ensureBloodHitTextures,
+  },
+  {
+    id: GpuVfxFrameId.BloodStain, frame: 'blood-stain',
+    sourceTextureKey: TEX_BLOOD_STAIN, width: 42, height: 42, ensure: ensureBloodHitTextures,
   },
 ];
 

@@ -29,6 +29,28 @@ export const TEX_EXPLOSION_SMOKE = '__explosion_smoke';
 export const TEX_EXPLOSION_STREAK = '__explosion_streak';
 export const TEX_EXPLOSION_CHUNK = '__explosion_chunk';
 export const TEX_EXPLOSION_RING = '__explosion_ring';
+export const TEX_DEATH_FRAGMENT = '__death_fragment';
+export const TEX_DEATH_GLOW = '__death_glow';
+
+/** Weisses Fragmentquadrat: Farbe, Groesse und Streckung kommen aus dem GPU-Member. */
+export function ensureDeathFragmentTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_FRAGMENT, 4, 4, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.fillRect(0, 0, 4, 4);
+  });
+}
+
+/** Weicher Additive-Glow fuer wenige helle Disintegrationssplitter. */
+export function ensureDeathGlowTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_GLOW, 24, 24, (ctx) => {
+    const gradient = ctx.createRadialGradient(12, 12, 1, 12, 12, 12);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.55, 'rgba(255,255,255,0.52)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 24, 24);
+  });
+}
 
 /** Weicher Funkenpunkt fuer die Explosionen. */
 export function ensureExplosionSparkTexture(scene: Phaser.Scene): void {

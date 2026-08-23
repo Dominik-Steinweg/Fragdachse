@@ -530,7 +530,6 @@ export class ArenaScene extends Phaser.Scene {
     for (const imageKey of enemyImageKeys) {
       this.load.image(imageKey, `./assets/sprites/enemies/${imageKey}.png`);
     }
-    this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
 
     // Katalogmetadaten bestimmen explizit Auswahlreihenfolge und vorhandene Icons.
     const queuedLoadoutIcons = new Set<string>();
@@ -686,17 +685,6 @@ export class ArenaScene extends Phaser.Scene {
       this.runtimeProfiler = null;
     });
 
-    this.anims.create({
-      key:       'player_death',
-      frames:    this.anims.generateFrameNames('dachs_death', {
-        prefix:  'Animation test (Dachs tot) (geist dunkler fade)-NEU ',
-        suffix:  '.aseprite',
-        start:   0,
-        end:     37,
-      }),
-      frameRate: 60,
-      repeat:    0,
-    });
     registerBadgerAnimations(this.anims);
 
     bridge.clearPlayerCallbacks();
@@ -1085,6 +1073,7 @@ export class ArenaScene extends Phaser.Scene {
       this.runtimeProfiler?.setGpuVfxSource(null);
       this.renderers?.gpuVfx.setDiagnosticEventSink(null);
       this.renderers?.explosionGpu.clearPending();
+      this.renderers?.combatGoreGpu.destroy();
       this.renderers?.gpuVfx.destroy();
     });
     this.runtimeProfiler.subscribeDiagnostics((enabled) => {

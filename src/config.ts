@@ -381,7 +381,6 @@ export const DEATH_DISINTEGRATION_VFX = {
   alpha: 0.96,
   auraTintMix: 0.18,
   maxChunksPerEffect: 64,
-  maxActiveChunks: 480,
   glowCount: 8,
   glowTravelMinPx: 26,
   glowTravelMaxPx: 118,

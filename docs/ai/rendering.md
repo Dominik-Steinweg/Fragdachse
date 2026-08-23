@@ -188,7 +188,7 @@ persistent/eventgetrieben hier (`tests/PersistentGpuWorldSystem.test.ts`).
 
 ### Logischer Effekt und physische Render-Lane sind zwei verschiedene Dinge
 
-Ein **logischer Effekt** (`GpuVfxEffects.ts`) traegt Semantik: Motiv, Qualitaetsklasse, Source-Lifecycle, eigene Zeile im Profiler. Eine **Render-Lane** (`GpuVfxRenderLanes.ts`) ist genau ein `SpriteGPULayer`. Mehrere Effekte duerfen sich eine Lane teilen, und derselbe Effekt darf je Variante die Lane wechseln. Ohne diese Trennung waechst die Layerzahl mit der Effektzahl – genau das verhindert die Architektur. Heute: 23 logische Effekte auf 14 Lanes.
+Ein **logischer Effekt** (`GpuVfxEffects.ts`) traegt Semantik: Motiv, Qualitaetsklasse, Source-Lifecycle, eigene Zeile im Profiler. Eine **Render-Lane** (`GpuVfxRenderLanes.ts`) ist genau ein `SpriteGPULayer`. Mehrere Effekte duerfen sich eine Lane teilen, und derselbe Effekt darf je Variante die Lane wechseln. Ohne diese Trennung waechst die Layerzahl mit der Effektzahl – genau das verhindert die Architektur. Der aktuelle Manifeststand umfasst 49 logische Effekte auf 29 Lanes.
 
 Eine gemeinsame Lane setzt Gleichheit in allem *layerglobalen* voraus – Depth, Blend-Mode, Textur, Scroll-/Kamera-Verhalten, Lighting. Alles, was pro Member existiert (Position, Frame, Rotation, Scale, Alpha, Tint, Lebenszeit, Creation Time), ist kein Trennkriterium.
 
@@ -205,7 +205,26 @@ Hinreichend ist Gleichheit im Layerglobalen aber nicht:
 
 Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen zusammenfaellt) und ihre `capacityRationale`. `tests/GpuVfxRenderLanes.test.ts` laesst keine zwei Lanes mit identischen layerglobalen Eigenschaften zu.
 
-### Die 13 Lanes
+### Combat-Gore auf dem gemeinsamen Backend
+
+`CombatGoreGpuRenderer` ist nur ein Controller auf `GpuVfxSystem`: Death-Fragmente, DeathGlow,
+BloodCore, BloodStreak, BloodDroplet und BloodMicroDroplet teilen sich die beiden physischen
+Lanes `gore-normal` und `gore-add`. Death-/Hit-Events spawnen mit
+`GPU_VFX_NO_SOURCE_HANDLE`; Fragmentbewegung, Rotation, Scale, Alpha und Lifetime bleiben damit
+vollstaendig im GPU-Member statt eigene GameObjects, Tweens oder Pools anzulegen.
+
+Die `DeathFragmentTemplateCache` analysiert einen Sprite ausschliesslich unter
+`textureKey + frame`. Sie croppt den tatsaechlich sichtbaren Frame, ignoriert Transparenz,
+mittelt die Blockfarbe und speichert Offsets/Groessen normalisiert. Display-Groesse, aktuelle
+Rotation, Sprite-Tint, Aura-Tint und Seed sind Spawnparameter und loesen keine neue Pixelauswertung
+aus. Death-Visualdaten muessen deshalb vor dem Entity-Destroy erfasst werden; Fragmentspezifische
+Netzwerkdaten werden nicht repliziert.
+
+`GpuVfxSpawnSpec.positionEase` ist die gemeinsame Positionskurve fuer lineare X-/Y-Bewegung.
+Combat-Gore verwendet zunaechst die vorgewaermte `QuadOut`-Kurve. Persistente Blood-Stains
+bleiben wegen ihres Fade-In/Hold/Fade-Out/FIFO-Lifecycles CPU-Decals.
+
+### Auszug der Lanes
 
 | Lane | Depth | Blend | Kapazitaet | Logische Effekte | Warum getrennt |
 |---|---|---|---|---|---|
@@ -224,7 +243,7 @@ Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen
 | `projectile-burn` | `PROJECTILES+0.34` (15.34) | ADD | 2048 | `projburn.outer`, `projburn.core`, `projburn.spark` (je normal und void) | eigenes Tiefenband ueber den Projektilkoerpern; `gravity = -30`, Outer skaliert auf 0.8 |
 | `world-debris` | `FIRE+0.075` (16.075) | NORMAL | 2048 | `leaf.debris`, `leafblower.dust` | gemeinsame geordnete Lane fuer Blaetter und Terrain-Staub; explizit zwischen FlameCore und FlameSpark |
 
-Summe 26 112 vorgehaltene Member; der Instance-Buffer belegt damit rund 4,4 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 256×256 RGBA (256 KB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, dazu kommen `ground-fire-smoke`, `leaf-blower-dust`, die beiden Jet-Motive `flame-billow` und `flame-tongue` sowie fuenf eigene Bodenfeuer-Motive: drei `ground-fire-surface`- und zwei `ground-fire-bed`-Varianten. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
+Summe 66 560 vorgehaltene Member; der Instance-Buffer belegt damit rund 11,2 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 512×512 RGBA (1 MB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, dazu kommen `ground-fire-smoke`, `leaf-blower-dust`, die beiden Jet-Motive `flame-billow` und `flame-tongue`, fuenf eigene Bodenfeuer-Motive sowie die Death-/Blood-Motive des gemeinsamen Gore-Controllers. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
 
 Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 16.92 damageAura, 16.96 reactionPulse, 17.0 Container mit Haze und Blobs, 17.02 `stink-normal`, 17.03 Spawn-Flash (ADD), 17.04 `stink-add`, 17.05 Spawn-Burst-Emitter (ADD), 17.1 Fairness-Kreis (ADD). **Dokumentierte Abweichung der Zusammenlegung:** die additive `inner`-Variante wandert von 17.001 auf 17.04 und kreuzt dabei `stink-normal`. Der Fehler ist das Produkt aus der plume-Partikelalpha (≤ 0.029) und dem additiven Beitrag, also ≤ 3 %, und tritt nur dort auf, wo sich Wolken *unterschiedlicher* Variante ueberlappen. `inner` und `plume` untereinander auf der NORMAL-Lane liegen bei ≈ 0.0016.
 

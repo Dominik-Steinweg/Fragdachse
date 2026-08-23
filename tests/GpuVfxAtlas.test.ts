@@ -53,8 +53,8 @@ describe('gpu vfx atlas', () => {
     const layout = packGpuVfxAtlas();
     // Die Groesse steht nicht im Code, sie ergibt sich aus dem Manifest.
     expect(layout.size & (layout.size - 1)).toBe(0);
-    // Die organischen 64-px-GroundFire-Varianten bleiben gemeinsam im bestehenden 256er Atlas.
-    expect(layout.size).toBe(256);
+    // Der gemeinsame Atlas waechst fuer die Gore-Motive, bleibt aber weit unter der WebGL2-Grenze.
+    expect(layout.size).toBe(512);
     expect(layout.rects.length).toBe(GPU_VFX_ATLAS.length);
   });
 

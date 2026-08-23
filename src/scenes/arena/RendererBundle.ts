@@ -51,6 +51,7 @@ import { CoopDefenseCarryZoneRenderer } from '../../effects/CoopDefenseCarryZone
 import { Ak47StrategicTargetRenderer } from '../../effects/Ak47StrategicTargetRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ExplosionGpuRenderer } from '../../effects/ExplosionGpuRenderer';
+import { CombatGoreGpuRenderer } from '../../effects/CombatGoreGpuRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { LightingSystem }      from '../../effects/LightingSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
@@ -95,6 +96,7 @@ export interface RendererBundle {
   rocket:              RocketRenderer;
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
   gpuVfx:              GpuVfxSystem;
+  combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   explosionGpu:        ExplosionGpuRenderer;
   fireball:            FireballRenderer;
@@ -134,6 +136,8 @@ export function createRendererBundle(
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
   // melden sich hier an, statt je Brand eigene Emitter oder Callbacks zu erzeugen.
   const entityBurnGpu = new EntityBurnGpuController(gpuVfx);
+  const combatGoreGpu = new CombatGoreGpuRenderer(scene);
+  combatGoreGpu.registerGpuVfx(gpuVfx);
   const explosionGpu = new ExplosionGpuRenderer();
   explosionGpu.registerGpuVfx(gpuVfx);
 
@@ -306,6 +310,7 @@ export function createRendererBundle(
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     gpuVfx,
+    combatGoreGpu,
     entityBurnGpu,
     explosionGpu,
     train: null,
@@ -385,6 +390,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.airstrike.setEffectSystem(effectSystem);
   effectSystem.setLightingSystem(bundle.lighting);
   effectSystem.setExplosionGpuRenderer(bundle.explosionGpu);
+  effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
 }
 
 /**

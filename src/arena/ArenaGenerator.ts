@@ -10,6 +10,7 @@ import type {
   CoopDefenseMapConfig,
   CoopDefenseMapCorridorPoint,
   CoopDefenseMapGroundHazardEventConfig,
+  CoopDefenseMapMissionCheckpointConfig,
   CoopDefenseMapPowerUpConfig,
   CoopDefenseMapRockFieldConfig,
   CoopDefenseMapRockWallConfig,
@@ -37,6 +38,8 @@ const CORRIDOR_RADIUS_STEP = 0.22;
 const CORRIDOR_TAPER_CELLS = 3;
 /** Harte Untergrenze des Aushubradius, damit nie eine unpassierbare Engstelle entsteht. */
 const MIN_CARVED_RADIUS_CELLS = 1.05;
+/** Map 1 darf auch bei einer später enger authorierten Varianz keinen Ein-Zellen-Gang bekommen. */
+const MIN_MAP1_CORRIDOR_RADIUS_CELLS = 1.1;
 
 function updateFingerprintHash(hash: number, value: string): number {
   for (let index = 0; index < value.length; index += 1) {
@@ -96,7 +99,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 2;
+export const ARENA_GENERATOR_VERSION = 3;
 
 // Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin und wird auch von der Lobby-Vorschau
 // verwendet; die Arena behält hier nur ihre eigene Reserveflaechen- und Wachstumslogik.
@@ -131,6 +134,9 @@ export class ArenaGenerator {
       (coopMapConfig?.missionProgress?.barriers ?? []).flatMap((barrier) => (
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
+    );
+    const missionCheckpointCells = ArenaGenerator.collectMissionCheckpointCells(
+      coopMapConfig?.missionProgress?.checkpoints,
     );
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
@@ -202,7 +208,12 @@ export class ArenaGenerator {
       // bereits erfüllt.
       let tutorialRockCells: Set<string> | null = null;
       if (coopMapConfig?.rockField) {
-        ArenaGenerator.applyRockField(map, coopMapConfig.rockField, rng);
+        ArenaGenerator.applyRockField(
+          map,
+          coopMapConfig.rockField,
+          rng,
+          coopMapConfig.mapId === '1' ? MIN_MAP1_CORRIDOR_RADIUS_CELLS : MIN_CARVED_RADIUS_CELLS,
+        );
       }
       if (coopMapConfig && getMapTutorial(coopMapConfig.mapId, 'de')) {
         tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(
@@ -217,6 +228,14 @@ export class ArenaGenerator {
           )),
         );
       }
+      // Checkpoint-Kreise sind authored Lauf- und Triggerflächen. Der Kern wird garantiert
+      // freigeschnitten; ein unregelmäßiger Rand hält die Felsformation organisch statt ein
+      // künstliches Quadrat um jeden Marker zu erzeugen.
+      ArenaGenerator.carveOrganicCheckpointClearances(
+        map,
+        coopMapConfig?.missionProgress?.checkpoints ?? [],
+        rng,
+      );
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
       //    Gleis-Spalten bleiben frei (trackCols sind begehbar)
@@ -268,6 +287,7 @@ export class ArenaGenerator {
           !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs) &&
           !missionBarrierCells.has(`${gx}_${gy}`) &&
           !authoredRockWallCells.has(`${gx}_${gy}`) &&
+          !missionCheckpointCells.has(`${gx}_${gy}`) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -330,6 +350,7 @@ export class ArenaGenerator {
         authoredRockWallCells,
         trackCols,
         missionBarrierCells,
+        missionCheckpointCells,
         coopBaseSpecs,
       );
 
@@ -784,6 +805,7 @@ export class ArenaGenerator {
     map: boolean[][],
     rockField: CoopDefenseMapRockFieldConfig,
     rng: () => number,
+    minimumCorridorRadiusCells = MIN_CARVED_RADIUS_CELLS,
   ): void {
     for (let gy = 0; gy < GRID_ROWS; gy++) {
       for (let gx = 0; gx < GRID_COLS; gx++) {
@@ -792,7 +814,13 @@ export class ArenaGenerator {
     }
 
     for (const corridor of rockField.corridors) {
-      ArenaGenerator.carveOrganicCorridor(map, corridor, rockField, rng);
+      ArenaGenerator.carveOrganicCorridor(
+        map,
+        corridor,
+        rockField,
+        rng,
+        minimumCorridorRadiusCells,
+      );
     }
   }
 
@@ -810,6 +838,7 @@ export class ArenaGenerator {
     corridor: CoopDefenseMapRockFieldConfig['corridors'][number],
     rockField: CoopDefenseMapRockFieldConfig,
     rng: () => number,
+    minimumCorridorRadiusCells: number,
   ): void {
     const points = ArenaGenerator.jitterCorridorWaypoints(corridor.points, rockField.waypointJitterCells, rng);
     const baseRadius = corridor.radiusCells ?? rockField.corridorRadiusCells;
@@ -845,7 +874,7 @@ export class ArenaGenerator {
         );
         const offset = wander * rockField.corridorWanderCells * Math.max(0, taper);
         const radius = Math.max(
-          MIN_CARVED_RADIUS_CELLS,
+          minimumCorridorRadiusCells,
           baseRadius + radiusOffset * rockField.corridorRadiusVarianceCells,
         );
 
@@ -858,6 +887,48 @@ export class ArenaGenerator {
       }
 
       travelled += segmentLength;
+    }
+  }
+
+  /**
+   * Schneidet um jeden authored Checkpoint einen garantierten freien Kern und einen kleinen,
+   * deterministisch welligen Übergangsring. Der Kern nutzt dieselbe Zellmittelpunkt-Geometrie
+   * wie die Laufzeitprüfung; der Ring lockert nur die Felskante auf und ersetzt keinen Gang.
+   */
+  private static carveOrganicCheckpointClearances(
+    map: boolean[][],
+    checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[],
+    rng: () => number,
+  ): void {
+    for (const checkpoint of checkpoints) {
+      const radiusCells = checkpoint.radiusCells ?? 1;
+      const centerX = checkpoint.gridX + 0.5;
+      const centerY = checkpoint.gridY + 0.5;
+      ArenaGenerator.carveCellCenteredDisc(map, centerX, centerY, radiusCells);
+
+      const haloWidth = Math.max(1.25, Math.min(2.5, radiusCells * 0.35));
+      const phase = rng() * Math.PI * 2;
+      const minGridX = Math.max(0, Math.ceil(centerX - radiusCells - haloWidth - 0.5));
+      const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells + haloWidth - 0.5));
+      const minGridY = Math.max(0, Math.ceil(centerY - radiusCells - haloWidth - 0.5));
+      const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells + haloWidth - 0.5));
+
+      for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
+        for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
+          const dx = gridX + 0.5 - centerX;
+          const dy = gridY + 0.5 - centerY;
+          const distance = Math.hypot(dx, dy);
+          if (distance <= radiusCells) continue;
+
+          const angle = Math.atan2(dy, dx);
+          const edgeVariation = 0.52
+            + 0.22 * Math.sin(angle * 3 + phase)
+            + 0.12 * Math.sin(angle * 5 - phase * 0.7);
+          if (distance <= radiusCells + haloWidth * edgeVariation) {
+            map[gridY][gridX] = false;
+          }
+        }
+      }
     }
   }
 
@@ -902,6 +973,28 @@ export class ArenaGenerator {
     }
   }
 
+  /** Variante der Kreisfräse für authored Flächen, deren Mittelpunkt auf einer Zellmitte liegt. */
+  private static carveCellCenteredDisc(
+    map: boolean[][],
+    centerX: number,
+    centerY: number,
+    radiusCells: number,
+  ): void {
+    const minGridX = Math.max(0, Math.ceil(centerX - radiusCells - 0.5));
+    const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells - 0.5));
+    const minGridY = Math.max(0, Math.ceil(centerY - radiusCells - 0.5));
+    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells - 0.5));
+    const radiusSq = radiusCells * radiusCells;
+
+    for (let gy = minGridY; gy <= maxGridY; gy += 1) {
+      for (let gx = minGridX; gx <= maxGridX; gx += 1) {
+        const dx = gx + 0.5 - centerX;
+        const dy = gy + 0.5 - centerY;
+        if (dx * dx + dy * dy <= radiusSq) map[gy][gx] = false;
+      }
+    }
+  }
+
   /** Zellschlüssel aller authored Felsbänder; leer, solange die Map keine authoriert. */
   private static collectRockWallCells(
     rockWalls: readonly CoopDefenseMapRockWallConfig[] | undefined,
@@ -919,6 +1012,32 @@ export class ArenaGenerator {
     return cells;
   }
 
+  /** Zellschlüssel aller authored Checkpoint-Kerne, die bei Fels- und Baum-Placement frei bleiben. */
+  private static collectMissionCheckpointCells(
+    checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[] | undefined,
+  ): Set<string> {
+    const cells = new Set<string>();
+    for (const checkpoint of checkpoints ?? []) {
+      const radiusCells = checkpoint.radiusCells ?? 1;
+      const centerX = checkpoint.gridX + 0.5;
+      const centerY = checkpoint.gridY + 0.5;
+      const minGridX = Math.max(0, Math.ceil(centerX - radiusCells - 0.5));
+      const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells - 0.5));
+      const minGridY = Math.max(0, Math.ceil(centerY - radiusCells - 0.5));
+      const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells - 0.5));
+      const radiusSq = radiusCells * radiusCells;
+
+      for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
+        for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
+          const dx = gridX + 0.5 - centerX;
+          const dy = gridY + 0.5 - centerY;
+          if (dx * dx + dy * dy <= radiusSq) cells.add(`${gridX}_${gridY}`);
+        }
+      }
+    }
+    return cells;
+  }
+
   /**
    * Stempelt die authored Bänder als ganz normale Felsen ein. Reservierte Flächen bleiben frei:
    * Gleisspalten, Basisreservierungen, Barrierezellen und bereits gesetzte Bäume.
@@ -930,6 +1049,7 @@ export class ArenaGenerator {
     wallCells: ReadonlySet<string>,
     trackCols: ReadonlySet<number>,
     missionBarrierCells: ReadonlySet<string>,
+    missionCheckpointCells: ReadonlySet<string>,
     coopBaseSpecs?: readonly BaseSpec[],
   ): void {
     if (wallCells.size === 0) return;
@@ -941,6 +1061,7 @@ export class ArenaGenerator {
       if (blocked[gridY][gridX]) continue;
       if (trackCols.has(gridX)) continue;
       if (missionBarrierCells.has(key)) continue;
+      if (missionCheckpointCells.has(key)) continue;
       if (treeCells.has(key)) continue;
       if (isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)) continue;
       blocked[gridY][gridX] = true;

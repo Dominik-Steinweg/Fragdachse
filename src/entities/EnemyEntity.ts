@@ -298,7 +298,6 @@ export class EnemyEntity {
     if (((this.faction === 'allied' || !this.config.isBoss) && this.currentHp >= this.maxHp) || this.currentHp <= 0) {
       this.destroyHpBars();
     }
-    if (this.currentHp <= 0) this.syncWalkingAnimation();
   }
 
   getHp(): number {

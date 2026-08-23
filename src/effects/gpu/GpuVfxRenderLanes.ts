@@ -75,6 +75,8 @@ export const GpuVfxLaneId = {
   ExplosionNukeFallout: 24,
   ExplosionRegeneration: 25,
   ExplosionSmoke:       26,
+  GoreNormal:            27,
+  GoreAdd:               28,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -605,5 +607,42 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     capacityRationale:
       'Bis zu 20 Rauchmember je normale Explosion beziehungsweise 160 je Nuke ergeben selbst '
       + 'bei zwoelf ueberlappenden Grossdetonationen weniger als 2048 lebende Member.',
+  },
+  {
+    id: GpuVfxLaneId.GoreNormal,
+    label: 'gore-normal',
+    depth: DEPTH_FX - 0.1,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 4096,
+    maxLifetimeMs: 900,
+    order: 'ordered',
+    reserveCritical: 512,
+    rationale:
+      'Gemeinsames normales Gore-Band fuer Death-Fragmente und den kurzlebigen Blutkern. '
+      + 'Streaks und Tropfen bleiben untereinander bewusst reihenfolgearm; eine zweite Lane '
+      + 'fuer minimale Depth-Unterschiede wuerde nur GPU-Kapazitaet duplizieren.',
+    capacityRationale:
+      'Worst Case: rund 48 gleichzeitige Gegner-/Spieler-Todesfaelle mit bis zu 64 Hauptfragmenten '
+      + 'plus ueberlappendem schwerem Blut-Spray. 4096 bleibt ein begrenzter Pool und reserviert '
+      + '512 Slots fuer Hauptfragmente und Hauptspray gegen dekorative Mikrodetails.',
+  },
+  {
+    id: GpuVfxLaneId.GoreAdd,
+    label: 'gore-add',
+    depth: DEPTH_FX + 0.05,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 1024,
+    maxLifetimeMs: 900,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Additive Ebene ausschliesslich fuer DeathGlow. Die Hauptfragmente bleiben dominant im '
+      + 'Normal-Band; minimale Tiefenunterschiede rechtfertigen keine weiteren GPU-Layer.',
+    capacityRationale:
+      'Bei 48 gleichzeitigen Todesfaellen mit hoechstens acht kleinen Glows und kurzer Lebenszeit '
+      + 'bleiben deutlich unter 1024 Slots lebendig; die Lane wird bei Ueberlast zuerst qualitativ '
+      + 'reduziert, nicht vergroessert.',
   },
 ];

@@ -634,6 +634,15 @@ export interface SyncedDeathEffect {
   targetColor?: number;
   rotation:    number;
   seed:        number;
+  /** Sprite-Visualdaten des letzten sichtbaren Frames; fehlen nur bei alten/externen Peers. */
+  textureKey?: string;
+  frame?: string;
+  displayWidth?: number;
+  displayHeight?: number;
+  tint?: number;
+  /** Optionaler Impuls des tödlichen Treffers; radialer Fallback bleibt gültig. */
+  dirX?: number;
+  dirY?: number;
 }
 
 export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;

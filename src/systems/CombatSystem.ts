@@ -796,7 +796,11 @@ export class CombatSystem {
       ));
     }
 
-    if (newHp === 0) this.handleDeath(targetId, x, y, this.nextEffectSeed());
+    if (newHp === 0) {
+      const deathSeed = this.nextEffectSeed();
+      const deathDirection = this.resolveDamageDirection(targetId, attackerId, visualContext, deathSeed, x, y);
+      this.handleDeath(targetId, x, y, deathSeed, deathDirection);
+    }
   }
 
   applyBurnHit(
@@ -3309,16 +3313,33 @@ export class CombatSystem {
     };
   }
 
-  private buildDeathEffect(playerId: string, x: number, y: number, seed: number): SyncedDeathEffect {
+  private buildDeathEffect(
+    playerId: string,
+    x: number,
+    y: number,
+    seed: number,
+    direction?: { dirX: number; dirY: number },
+  ): SyncedDeathEffect {
     const player = this.playerManager.getPlayer(playerId);
+    const sprite = player?.sprite;
+    const textureKey = sprite?.texture?.key;
+    const frame = sprite?.frame?.name;
     return {
       type: 'death',
       x,
       y,
       targetId: playerId,
       targetColor: player?.color,
-      rotation: player?.sprite.rotation ?? 0,
+      rotation: sprite?.rotation ?? 0,
       seed,
+      ...(textureKey && frame ? {
+        textureKey,
+        frame,
+        displayWidth: sprite.displayWidth,
+        displayHeight: sprite.displayHeight,
+        tint: sprite.tint,
+      } : {}),
+      ...(direction ? { dirX: direction.dirX, dirY: direction.dirY } : {}),
     };
   }
 
@@ -3790,8 +3811,17 @@ export class CombatSystem {
           y,
           targetId,
           targetColor: COLORS.RED_2,
-          rotation: 0,
+          rotation: result.death?.rotation ?? 0,
           seed: this.nextEffectSeed(),
+          ...(result.death ? {
+            textureKey: result.death.textureKey,
+            frame: result.death.frame,
+            displayWidth: result.death.displayWidth,
+            displayHeight: result.death.displayHeight,
+            tint: result.death.tint,
+            dirX: direction.dirX,
+            dirY: direction.dirY,
+          } : {}),
         });
       }
 
@@ -3830,10 +3860,18 @@ export class CombatSystem {
     }
   }
 
-  private handleDeath(playerId: string, x: number, y: number, seed: number): void {
+  private handleDeath(
+    playerId: string,
+    x: number,
+    y: number,
+    seed: number,
+    direction?: { dirX: number; dirY: number },
+  ): void {
     this.alive.set(playerId, false);
     this.armor.set(playerId, 0);
     this.clearBurnForPlayer(playerId);
+    // Capture the current animation frame before any death callback hides or changes the Sprite.
+    const deathEffect = this.buildDeathEffect(playerId, x, y, seed, direction);
     this.onDeathCb?.(playerId, x, y);
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
@@ -3846,7 +3884,7 @@ export class CombatSystem {
     const player = this.playerManager.getPlayer(playerId);
     if (player) player.body.enable = false;
 
-    this.bridge.broadcastEffect(this.buildDeathEffect(playerId, x, y, seed));
+    this.bridge.broadcastEffect(deathEffect);
 
     // Kill-Callback auslösen (Host-only, kein Selbstkill)
     const killerId = this.lastAttacker.get(playerId);

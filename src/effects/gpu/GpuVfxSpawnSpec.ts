@@ -38,6 +38,8 @@ export interface GpuVfxSpawnSpec {
   /** Geschwindigkeit in px/s; das Backend rechnet daraus die Amplitude ueber die Lebenszeit. */
   vx: number;
   vy: number;
+  /** Positionskurve fuer X/Y. Gravity bleibt das separate Y-Bewegungsmodell. */
+  positionEase: GpuVfxEase;
   /**
    * Bewegungsmodell der Y-Achse. `Gravity` benutzt `vy` als Anfangsgeschwindigkeit und die
    * layerglobale `gravity` der Lane; Phaser kodiert diese Geschwindigkeit ganzzahlig.

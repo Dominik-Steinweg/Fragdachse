@@ -38,6 +38,21 @@ const SEPARATION_STRENGTH = 0.6;
 const WALL_ADJACENT_SEPARATION_MULTIPLIER = 0.1;
 const NO_SEPARATION = { x: 0, y: 0 } as const;
 
+function captureEnemyDeathVisual(enemy: EnemyEntity): Pick<
+  EnemyDeathInfo,
+  'textureKey' | 'frame' | 'displayWidth' | 'displayHeight' | 'rotation' | 'tint'
+> {
+  const sprite = enemy.sprite;
+  return {
+    textureKey: sprite.texture?.key ?? '',
+    frame: sprite.frame?.name ?? '__BASE',
+    displayWidth: Number.isFinite(sprite.displayWidth) ? sprite.displayWidth : Math.max(1, enemy.getSize()),
+    displayHeight: Number.isFinite(sprite.displayHeight) ? sprite.displayHeight : Math.max(1, enemy.getSize()),
+    rotation: Number.isFinite(sprite.rotation) ? sprite.rotation : 0,
+    tint: sprite.tint ?? 0xffffff,
+  };
+}
+
 export interface EnemyDeathInfo {
   readonly id: string;
   readonly kind: CoopDefenseEnemyKind;
@@ -47,6 +62,13 @@ export interface EnemyDeathInfo {
   readonly size: number;
   readonly faction: EnemyFaction;
   readonly ownerId?: string;
+  /** Vollstaendige visuelle Identitaet des letzten sichtbaren Frames vor dem Destroy. */
+  readonly textureKey: string;
+  readonly frame: string;
+  readonly displayWidth: number;
+  readonly displayHeight: number;
+  readonly rotation: number;
+  readonly tint: number;
 }
 
 /**
@@ -885,6 +907,7 @@ export class EnemyManager {
   hostRemoveWithoutKill(id: string): EnemyDeathInfo | null {
     const enemy = this.enemies.get(id);
     if (!enemy) return null;
+    const visual = captureEnemyDeathVisual(enemy);
     const death: EnemyDeathInfo = {
       id: enemy.id,
       kind: enemy.kind,
@@ -893,6 +916,7 @@ export class EnemyManager {
       size: enemy.getSize(),
       faction: enemy.faction,
       ownerId: enemy.ownerId,
+      ...visual,
     };
     this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
     this.netSnapshotCache.delete(id);
@@ -919,6 +943,7 @@ export class EnemyManager {
       return { died: false, remainingHp: 0 };
     }
 
+    const visual = captureEnemyDeathVisual(enemy);
     const deathX = enemy.sprite.x;
     const deathY = enemy.sprite.y;
     const death: EnemyDeathInfo = {
@@ -929,6 +954,7 @@ export class EnemyManager {
       size: enemy.getSize(),
       faction: enemy.faction,
       ownerId: enemy.ownerId,
+      ...visual,
     };
     const deathSpawns = enemy.faction === 'hostile' ? (this.resolvedConfigs[enemy.kind].deathSpawns ?? []) : [];
     this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);

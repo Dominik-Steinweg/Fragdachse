@@ -77,8 +77,8 @@ describe('gpu vfx render lanes', () => {
   it('never grows the lane count with the effect count', () => {
     // Der eigentliche Architekturvertrag: mehr logische Effekte auf weniger physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
-    // Moderne Explosionen fuegen genau eine inkompatible NORMAL-Lane fuer Rauch hinzu.
-    expect(GPU_VFX_LANES.length).toBe(27);
+    // Explosionen und Combat-Gore fuegen je nur die layerglobal inkompatiblen Lanes hinzu.
+    expect(GPU_VFX_LANES.length).toBe(29);
   });
 
   it('keeps leaf debris in an explicit ordered world lane', () => {

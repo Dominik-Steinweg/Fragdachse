@@ -140,6 +140,7 @@ export class GpuVfxSystem {
       frame: spec.frame,
       lifeMs: 0,
       x: 0, y: 0, vx: 0, vy: 0,
+      positionEase: 0,
       yMode: 0, gravityFactor: 1,
       rotation: 0, angularVelocity: 0,
       scaleStart: 1, scaleEnd: 1, scaleEase: 0,

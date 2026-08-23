@@ -113,6 +113,57 @@ describe('Map 1 as the guided advance tutorial', () => {
     }
   });
 
+  it('keeps every authored checkpoint core free of rocks and trees', () => {
+    applyMapMetrics();
+    for (const seed of [1, 42, 4242]) {
+      const layout = ArenaGenerator.generate(seed, MAP);
+      const rocks = new Set(layout.rocks.map(({ gridX, gridY }) => `${gridX}:${gridY}`));
+      const trees = new Set(layout.trees.map(({ gridX, gridY }) => `${gridX}:${gridY}`));
+
+      for (const checkpoint of MISSION.checkpoints) {
+        const centerX = checkpoint.gridX + 0.5;
+        const centerY = checkpoint.gridY + 0.5;
+        const radiusSq = checkpoint.radiusCells * checkpoint.radiusCells;
+        for (
+          let gridY = Math.max(0, Math.floor(centerY - checkpoint.radiusCells - 0.5));
+          gridY <= Math.min(GRID_ROWS - 1, Math.ceil(centerY + checkpoint.radiusCells - 0.5));
+          gridY += 1
+        ) {
+          for (
+            let gridX = Math.max(0, Math.floor(centerX - checkpoint.radiusCells - 0.5));
+            gridX <= Math.min(GRID_COLS - 1, Math.ceil(centerX + checkpoint.radiusCells - 0.5));
+            gridX += 1
+          ) {
+            const dx = gridX + 0.5 - centerX;
+            const dy = gridY + 0.5 - centerY;
+            if (dx * dx + dy * dy > radiusSq) continue;
+            expect(rocks.has(`${gridX}:${gridY}`), `${seed} ${checkpoint.id} rock`).toBe(false);
+            expect(trees.has(`${gridX}:${gridY}`), `${seed} ${checkpoint.id} tree`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('keeps Map 1 authored corridors at least two grid cells wide', () => {
+    const rockField = MAP.rockField!;
+    const narrowestAuthoredRadius = Math.min(
+      rockField.corridorRadiusCells,
+      ...rockField.corridors.map((corridor) => corridor.radiusCells ?? rockField.corridorRadiusCells),
+    ) - rockField.corridorRadiusVarianceCells;
+    expect(narrowestAuthoredRadius).toBeGreaterThanOrEqual(1.1);
+  });
+
+  it('starts the burrow train five seconds after checkpoint 3 and repeats every ten seconds', () => {
+    expect(MAP.mapEvents).toEqual([{
+      id: 'burrow-train',
+      type: 'train',
+      start: { type: 'after-checkpoint', checkpointId: 'cp3-burrow' },
+      delayMs: 5_000,
+      repeatAfterExitMs: 10_000,
+    }]);
+  });
+
   it('orders the route from the western start area to the eastern extraction', () => {
     const checkpoints = MISSION.checkpoints;
     expect(checkpoints.map(({ id }) => id)).toEqual([
@@ -128,8 +179,11 @@ describe('Map 1 as the guided advance tutorial', () => {
       expect(checkpoints[index].gridX, checkpoints[index].id)
         .toBeGreaterThan(checkpoints[index - 1].gridX);
     }
-    // Nur CP4 muss den Respawn-Fokus setzen; alles davor bleibt der authored Startbereich.
-    expect(checkpoints.filter(({ setRespawn }) => setRespawn).map(({ id }) => id)).toEqual(['cp4-rage']);
+    // Jeder erreichte Checkpoint wird zum neuen Respawn-Fokus; CP3 ist damit z. B. der
+    // Wiedereinstiegspunkt für den Einbuddeln-Abschnitt.
+    expect(checkpoints.filter(({ setRespawn }) => setRespawn).map(({ id }) => id)).toEqual(
+      checkpoints.map(({ id }) => id),
+    );
   });
 
   it('authors both learning walls as ordinary destructible rock, one cell thick', () => {

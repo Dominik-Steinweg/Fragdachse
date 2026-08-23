@@ -426,6 +426,37 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
 });
 
 describe('Coop Defense map-event trigger chains', () => {
+  it('schedules a map event after a checkpoint through the generic director', () => {
+    const handler = fakeHandler('train');
+    let checkpointReached = false;
+    let director!: CoopDefenseMapEventDirector;
+    director = new CoopDefenseMapEventDirector([
+      {
+        id: 'burrow-train',
+        type: 'train' as const,
+        start: { type: 'after-checkpoint', checkpointId: 'cp3-burrow' },
+        delayMs: 5_000,
+      },
+    ], [handler], {
+      isTriggerSatisfied: (start) => start.type === 'after-checkpoint'
+        && checkpointReached
+        && start.checkpointId === 'cp3-burrow',
+    });
+
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.[0].state).toBe('dormant');
+
+    checkpointReached = true;
+    director.hostUpdate(1_000, false);
+    expect(director.getPresentationState()?.[0]).toMatchObject({
+      state: 'scheduled',
+      nextActionAtMs: 6_000,
+    });
+
+    director.hostUpdate(5_000, false);
+    expect(director.getPresentationState()?.[0].state).toBe('active');
+  });
+
   it('runs Event→Event→Event through the generic director lifecycle', () => {
     const handlers = {
       train: fakeHandler('train'),

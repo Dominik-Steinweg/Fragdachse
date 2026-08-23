@@ -86,9 +86,8 @@ export class PlayerEntity {
   /** Für die an dieser Entity hängenden Lichtquellen (Brand, Spawn-Blitz). */
   private lighting: LightingSystem | null = null;
 
-  // Sterbeanimation
-  private deathSprite: Phaser.GameObjects.Sprite | null = null;
-  private isAliveVisual = true; // verfolgt Übergang alive→dead für einmaligen Animationsstart
+  // Visueller Tod wird durch den gemeinsamen GPU-Gore-Renderer repliziert.
+  private isAliveVisual = true;
   private baseVisible = true;
   private walkingRequested = false;
 
@@ -268,12 +267,6 @@ export class PlayerEntity {
 
     this.syncBar();
 
-    // Sterbe-Sprite (zunächst ausgeblendet; Tiefe leicht unter Spielern)
-    // Origin (0.5, 1) = untere Mitte → Animation wächst nach oben
-    this.deathSprite = scene.add.sprite(x, y, 'dachs_death');
-    this.deathSprite.setOrigin(0.5, 1);
-    this.deathSprite.setDepth(DEPTH.PLAYERS - 1);
-    this.deathSprite.setVisible(false);
   }
 
   get body(): Phaser.Physics.Arcade.Body {
@@ -487,24 +480,11 @@ export class PlayerEntity {
     this.applyDisplayVisibility();
 
     if (!visible && this.isAliveVisual) {
-      // Übergang alive → dead: Sterbeanimation starten
+      // Übergang alive → dead: der Death-Event enthält den bereits erfassten Sprite-Frame.
       this.isAliveVisual = false;
-      if (this.deathSprite) {
-        // Unterkante des 32×64-Frames bündig mit Sprite-Unterkante (wächst nach oben)
-        this.deathSprite.setPosition(this.sprite.x, this.sprite.y + PLAYER_SIZE / 2);
-        this.deathSprite.setVisible(true);
-        this.deathSprite.play('player_death');
-        this.deathSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-          this.deathSprite?.setVisible(false);
-        });
-      }
     } else if (visible && !this.isAliveVisual) {
-      // Übergang dead → alive (Respawn): Animation abbrechen + Spawn-Effekt
+      // Übergang dead → alive (Respawn): Spawn-Effekt
       this.isAliveVisual = true;
-      if (this.deathSprite) {
-        this.deathSprite.stop();
-        this.deathSprite.setVisible(false);
-      }
       this.playSpawnEffect();
     } else if (visible) {
       this.isAliveVisual = true;
@@ -1014,7 +994,6 @@ export class PlayerEntity {
     this.spawnShine?.destroy();
     this.stealthShell?.destroy();
     this.stealthScan?.destroy();
-    this.deathSprite?.destroy();
     this.nameLabel?.destroy();
   }
 }

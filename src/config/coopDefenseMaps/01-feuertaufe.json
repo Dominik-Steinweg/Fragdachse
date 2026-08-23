@@ -10,6 +10,13 @@
     "gridY": 1
   },
   "trackPosition": "center",
+  "mapEvents": [{
+    "id": "burrow-train",
+    "type": "train",
+    "start": { "type": "after-checkpoint", "checkpointId": "cp3-burrow" },
+    "delayMs": 5000,
+    "repeatAfterExitMs": 10000
+  }],
   "rockField": {
     "corridorRadiusCells": 3.8,
     "corridorRadiusVarianceCells": 0.9,
@@ -123,19 +130,22 @@
         "id": "cp1-adrenaline",
         "gridX": 44,
         "gridY": 20,
-        "radiusCells": 4
+        "radiusCells": 4,
+        "setRespawn": true
       },
       {
         "id": "cp2-utility",
         "gridX": 78,
         "gridY": 15,
-        "radiusCells": 4
+        "radiusCells": 4,
+        "setRespawn": true
       },
       {
         "id": "cp3-burrow",
         "gridX": 111,
         "gridY": 19,
-        "radiusCells": 4
+        "radiusCells": 4,
+        "setRespawn": true
       },
       {
         "id": "cp4-rage",
@@ -148,13 +158,15 @@
         "id": "cp5-base-defense",
         "gridX": 205,
         "gridY": 18,
-        "radiusCells": 5
+        "radiusCells": 5,
+        "setRespawn": true
       },
       {
         "id": "final-extraction",
         "gridX": 248,
         "gridY": 14,
-        "radiusCells": 5
+        "radiusCells": 5,
+        "setRespawn": true
       }
     ],
     "mandatoryDefenses": [

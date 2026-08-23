@@ -70,7 +70,7 @@ const ENCOUNTER_TRIGGERED_TRAIN = {
 describe('Train as a standalone map event', () => {
   it('migrates the train rhythm on every rails map of the campaign', () => {
     const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
-      // Map 1 fuehrt als gefuehrte Tutorial-Route bewusst keinen Zug.
+      // Map 1 verwendet einen eigenen Checkpoint-Trigger statt des standardmäßigen Zeitrhythmus.
       map.trackMode === 'rails' && !['0', '1', '2', '11'].includes(map.mapId)
     ));
     expect(railsMaps.length).toBeGreaterThan(0);
@@ -112,11 +112,18 @@ describe('Train as a standalone map event', () => {
     expect(trainEvent?.repeatAfterExitMs).toBeGreaterThan(0);
   });
 
-  it('keeps the guided Map 1 tutorial route free of unexplained train traffic', () => {
+  it('starts Map 1 train traffic after the burrow checkpoint', () => {
     const map = getCoopDefenseMapConfig('1');
+    const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
 
     expect(map.trackMode).toBe('rails');
-    expect(map.mapEvents?.some((event) => event.type === 'train')).toBe(false);
+    expect(trainEvent).toMatchObject({
+      id: 'burrow-train',
+      type: 'train',
+      start: { type: 'after-checkpoint', checkpointId: 'cp3-burrow' },
+      delayMs: 5_000,
+      repeatAfterExitMs: 10_000,
+    });
   });
 
   it('allows rails without a train', () => {

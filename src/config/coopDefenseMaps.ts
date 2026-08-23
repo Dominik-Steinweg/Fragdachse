@@ -472,14 +472,14 @@ export type CoopDefenseMapTrackPosition =
   | { readonly kind: 'grid'; readonly gridX: number };
 
 /**
- * Startbedingung der ersten Zugeinfahrt. Bewusst als getaggte Union wie
- * {@link CoopDefenseMapEncounterStart}, damit später semantische Auslöser (`boss-phase`,
- * `base-destroyed`) ergänzt werden können – ohne dafür jetzt eine allgemeine Trigger-Engine
- * zu bauen.
+ * Startbedingung eines Map-Events. Bewusst als getaggte Union wie
+ * {@link CoopDefenseMapEncounterStart}, damit semantische Auslöser ohne eine allgemeine
+ * Trigger-Engine authoriert werden können.
  */
 /** Kleine Triggerunion fuer alle C-Events. */
 export type CoopDefenseMapEventStart =
   | { readonly type: 'time'; readonly atMs: number }
+  | { readonly type: 'after-checkpoint'; readonly checkpointId: string }
   | { readonly type: 'after-encounter'; readonly encounterId: string }
   | { readonly type: 'after-event'; readonly eventId: string }
   | { readonly type: 'boss-phase'; readonly phase: number }
@@ -1071,6 +1071,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     trackMode,
     arenaWidthCells,
     arenaHeightCells,
+    new Set(mapConfig.missionProgress?.checkpoints.map((checkpoint) => checkpoint.id) ?? []),
   );
   const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
@@ -1964,6 +1965,7 @@ interface EncounterTriggerNormalizationContext {
   readonly boss: CoopDefenseMapBossConfig | undefined;
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
+  readonly checkpointIds?: ReadonlySet<string>;
 }
 
 function normalizeEncounterStart(
@@ -2154,6 +2156,7 @@ function normalizeMapEvents(
   trackMode: CoopDefenseMapTrackMode,
   arenaWidthCells: number,
   arenaHeightCells: number,
+  checkpointIds: ReadonlySet<string>,
 ): readonly ResolvedCoopDefenseMapEventConfig[] {
   if (events === undefined) return [];
   if (!Array.isArray(events)) {
@@ -2177,6 +2180,7 @@ function normalizeMapEvents(
       boss,
       arenaWidthCells,
       arenaHeightCells,
+      checkpointIds,
     });
     const delayMs = normalizeMapEventMilliseconds(mapId, event.id, event.delayMs ?? 0, 'delayMs');
     if (event.type === 'train') {
@@ -2502,6 +2506,18 @@ function normalizeMapEventStart(
       atMs: normalizeMapEventMilliseconds(mapId, eventId, start.atMs, 'time trigger'),
     };
   }
+  if (start.type === 'after-checkpoint') {
+    if (typeof start.checkpointId !== 'string' || start.checkpointId.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs a checkpoint id`);
+    }
+    const checkpointId = start.checkpointId.trim();
+    if (!context.checkpointIds?.has(checkpointId)) {
+      throw new Error(
+        `[coopDefenseMaps] Map event ${mapId}:${eventId} references unknown checkpoint: ${checkpointId}`,
+      );
+    }
+    return { type: 'after-checkpoint', checkpointId };
+  }
   if (start.type === 'after-encounter') {
     if (typeof start.encounterId !== 'string' || start.encounterId.trim().length === 0) {
       throw new Error(`[coopDefenseMaps] Map event ${mapId}:${eventId} needs an encounter id`);
@@ -2670,6 +2686,15 @@ function validateMissionDependencyGraph(
   for (const event of events) {
     const dependent = `event:${event.id}` as const;
     addNode(dependent);
+    if (event.start.type === 'after-checkpoint') {
+      if (!checkpointIds.has(event.start.checkpointId)) {
+        throw new Error(
+          `[coopDefenseMaps] Map event ${mapId}:${event.id} references unknown checkpoint: ${event.start.checkpointId}`,
+        );
+      }
+      addDependency(`checkpoint:${event.start.checkpointId}`, dependent);
+      continue;
+    }
     if (event.start.type === 'after-encounter') {
       if (!encounterIds.has(event.start.encounterId)) {
         throw new Error(

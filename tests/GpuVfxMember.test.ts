@@ -144,3 +144,27 @@ describe('gpu vfx member: Streckung und Tint-Blend', () => {
     expect(tintBlend.duration).toBe(400);
   });
 });
+
+describe('gpu vfx member: position ease', () => {
+  it('applies the generic position ease to both linear axes', () => {
+    const member = writeGpuVfxMember(
+      spec({
+        positionEase: GpuVfxEase.QuadOut,
+        yMode: GpuVfxEase.Linear,
+        x: 12,
+        y: 34,
+        vx: 80,
+        vy: -40,
+        lifeMs: 500,
+      }),
+      FRAME,
+    );
+    const x = member.x as { ease: string; amplitude: number };
+    const y = member.y as { ease: string; amplitude: number };
+
+    expect(x.ease).toBe('Quad.easeOut');
+    expect(y.ease).toBe('Quad.easeOut');
+    expect(x.amplitude).toBeCloseTo(40, 6);
+    expect(y.amplitude).toBeCloseTo(-20, 6);
+  });
+});

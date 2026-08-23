@@ -91,10 +91,9 @@ const MEMBER: GpuVfxMember = {
 export function writeGpuVfxMember(spec: GpuVfxSpawnSpec, frame: Phaser.Textures.Frame): GpuVfxMember {
   const life  = spec.lifeMs;
   const lifeS = life / 1000;
+  const positionEase = spec.positionEase ?? GpuVfxEase.Linear;
 
-  animX.base      = spec.x;
-  animX.amplitude = spec.vx * lifeS;
-  animX.duration  = life;
+  writeCurve(animX, spec.x, spec.x + spec.vx * lifeS, positionEase, life);
 
   if (spec.yMode === GpuVfxEase.Gravity) {
     animYGravity.base = spec.y;
@@ -104,9 +103,7 @@ export function writeGpuVfxMember(spec: GpuVfxSpawnSpec, frame: Phaser.Textures.
     animYGravity.duration = life;
     MEMBER.y = animYGravity;
   } else {
-    animYLinear.base      = spec.y;
-    animYLinear.amplitude = spec.vy * lifeS;
-    animYLinear.duration  = life;
+    writeCurve(animYLinear, spec.y, spec.y + spec.vy * lifeS, positionEase, life);
     MEMBER.y = animYLinear;
   }
 

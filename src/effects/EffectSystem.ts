@@ -2,20 +2,17 @@ import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import {
-  TEX_BLOOD_DROPLET,
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
   TEX_BLOOD_EDGE_RIGHT,
   TEX_BLOOD_EDGE_TOP,
-  TEX_BLOOD_STAIN,
-  TEX_BLOOD_STREAK,
   ensureBloodEdgeTextures,
   ensureBloodHitTextures,
   spawnBloodStain,
 } from './BloodEffectShared';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
+import { circleZone, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import {
   ensureFlameTextures,
 } from './FlameShared';
@@ -59,6 +56,7 @@ import {
   getExplosionLightDurationMs,
 } from './LightingConfig';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
+import type { BloodStainSink, CombatGoreGpuRenderer } from './CombatGoreGpuRenderer';
 import {
   TEX_EXPLOSION_SPARK,
   ensureExplosionEmberTexture,
@@ -79,23 +77,12 @@ const MAX_HITSCAN_LIGHTS = 4;
 
 const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
-const TEX_DEATH_PIXEL_GLOW = '__death_pixel_glow';
-
 const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.05;
 const DEPTH_DAMAGE_VIGNETTE = DEPTH.OVERLAY - 1;
 
 interface BurrowEmitterVisual {
   dirt: Phaser.GameObjects.Particles.ParticleEmitter;
   dust: Phaser.GameObjects.Particles.ParticleEmitter;
-}
-
-interface DeathPixelChunk {
-  offsetX: number;
-  offsetY: number;
-  width: number;
-  height: number;
-  color: number;
-  brightness: number;
 }
 
 /**
@@ -120,13 +107,15 @@ export class EffectSystem implements EnemyVisualSink {
   private spawnEffectRenderer: SpawnEffectRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private explosionGpuRenderer: ExplosionGpuRenderer | null = null;
+  private combatGoreGpuRenderer: CombatGoreGpuRenderer | null = null;
+  private readonly scheduleBloodStainSink: BloodStainSink = (...args) => {
+    this.scheduleBloodStain(...args);
+  };
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
   private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
   private damageVignetteLeft:   Phaser.GameObjects.Image | null = null;
   private damageVignetteRight:  Phaser.GameObjects.Image | null = null;
-  private deathPixelChunks: DeathPixelChunk[] | null = null;
-  private activeDeathPixelRectangles = 0;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -195,6 +184,10 @@ export class EffectSystem implements EnemyVisualSink {
     this.explosionGpuRenderer = renderer;
   }
 
+  setCombatGoreGpuRenderer(renderer: CombatGoreGpuRenderer | null): void {
+    this.combatGoreGpuRenderer = renderer;
+  }
+
   playLocalShotAudio(key: string | undefined): void {
     this.audioSystem?.playLocalSound(key);
   }
@@ -208,8 +201,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.damageVignetteBottom = null;
     this.damageVignetteLeft   = null;
     this.damageVignetteRight  = null;
-    this.deathPixelChunks = null;
-    this.activeDeathPixelRectangles = 0;
+    this.combatGoreGpuRenderer = null;
   }
 
   /** Erzeugt kleine Canvas-Texturen für Explosions-Partikel (einmalig). */
@@ -254,14 +246,6 @@ export class EffectSystem implements EnemyVisualSink {
     // verschiedene rote Rahmen.
     ensureBloodEdgeTextures(this.scene);
 
-    ensureCanvasTexture(this.scene.textures, TEX_DEATH_PIXEL_GLOW, 24, 24, (ctx) => {
-      const gradient = ctx.createRadialGradient(12, 12, 1, 12, 12, 12);
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.55, 'rgba(255,255,255,0.52)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 24, 24);
-    });
   }
 
   private playTrainExplosionEffect(x: number, y: number, radius: number, color?: number): void {
@@ -381,30 +365,7 @@ export class EffectSystem implements EnemyVisualSink {
 
   private playHitEffect(effect: SyncedHitEffect): void {
     this.ensureTextures();
-
-    const rng = createSeededRandom(effect.seed);
-    const band = this.getBloodBand(effect.totalDamage);
-    const damageScale = effect.isKill ? BLOOD_HIT_VFX.killshotMultiplier : 1;
-    const baseAngle = Math.atan2(effect.dirY, effect.dirX);
-    const originX = effect.x + effect.dirX * BLOOD_HIT_VFX.spawnPushPx;
-    const originY = effect.y + effect.dirY * BLOOD_HIT_VFX.spawnPushPx;
-    const coreTint = this.pickBloodTint(rng);
-    const coreSplash = this.scene.add.image(originX, originY, TEX_BLOOD_STAIN)
-      .setDepth(DEPTH_FX - 0.2)
-      .setTint(coreTint)
-      .setAlpha(BLOOD_HIT_VFX.coreSplashAlpha)
-      .setScale(BLOOD_HIT_VFX.coreSplashScale * damageScale)
-      .setRotation((rng() - 0.5) * 0.4);
-
-    this.scene.tweens.add({
-      targets: coreSplash,
-      alpha: 0,
-      scaleX: BLOOD_HIT_VFX.coreSplashScale * damageScale * 1.28,
-      scaleY: BLOOD_HIT_VFX.coreSplashScale * damageScale * 1.28,
-      duration: BLOOD_HIT_VFX.coreSplashDurationMs,
-      ease: 'Cubic.easeOut',
-      onComplete: () => coreSplash.destroy(),
-    });
+    this.combatGoreGpuRenderer?.playHit(effect, this.scheduleBloodStainSink);
 
     if (effect.isCritical) {
       const criticalRing = this.scene.add.circle(effect.x, effect.y, 9, 0xffd15c, 0.2)
@@ -441,83 +402,6 @@ export class EffectSystem implements EnemyVisualSink {
       });
     }
 
-    const streakCount = this.randomInt(rng, band.streakCountMin, band.streakCountMax);
-    const dropletCount = this.randomInt(rng, band.dropletCountMin, band.dropletCountMax);
-    const stainCount = this.randomInt(rng, band.stainCountMin, band.stainCountMax);
-    let stainsCreated = 0;
-
-    for (let i = 0; i < streakCount; i++) {
-      const angle = baseAngle + Phaser.Math.DegToRad((rng() - 0.5) * band.spreadDeg * 2);
-      const directionX = Math.cos(angle);
-      const directionY = Math.sin(angle);
-      const lateralX = -directionY;
-      const lateralY = directionX;
-      const lateral = (rng() - 0.5) * BLOOD_HIT_VFX.lateralJitterPx;
-      const startX = originX + lateralX * lateral;
-      const startY = originY + lateralY * lateral;
-      const travel = this.randomBetween(rng, band.travelMinPx, band.travelMaxPx) * damageScale;
-      const endX = startX + directionX * travel + lateralX * (rng() - 0.5) * 14;
-      const endY = startY + directionY * travel + lateralY * (rng() - 0.5) * 14;
-      const scale = this.randomBetween(rng, band.streakScaleMin, band.streakScaleMax) * damageScale;
-      const tint = this.pickBloodTint(rng);
-      const streak = this.scene.add.image(startX, startY, TEX_BLOOD_STREAK)
-        .setDepth(DEPTH_FX)
-        .setTint(tint)
-        .setRotation(angle)
-        .setScale(scale)
-        .setAlpha(0.84);
-
-      const duration = this.randomBetween(rng, band.flightMinMs, band.flightMaxMs);
-      const leaveStain = stainsCreated < stainCount && (i < stainCount || rng() > 0.45);
-      if (leaveStain) stainsCreated += 1;
-
-      this.scene.tweens.add({
-        targets: streak,
-        x: endX,
-        y: endY,
-        alpha: 0,
-        duration,
-        ease: 'Cubic.easeOut',
-        onComplete: () => {
-          streak.destroy();
-          if (leaveStain) {
-            this.spawnBloodStain(
-              endX,
-              endY,
-              this.randomBetween(rng, band.stainScaleMin, band.stainScaleMax) * damageScale,
-              band.stainAlpha,
-              band.stainFadeMs,
-              tint,
-              (rng() - 0.5) * Math.PI,
-            );
-          }
-        },
-      });
-    }
-
-    for (let i = 0; i < dropletCount; i++) {
-      const angle = baseAngle + Phaser.Math.DegToRad((rng() - 0.5) * Math.max(14, band.spreadDeg * 1.35) * 2);
-      const directionX = Math.cos(angle);
-      const directionY = Math.sin(angle);
-      const travel = this.randomBetween(rng, band.travelMinPx * 0.5, band.travelMaxPx * 0.75) * damageScale;
-      const startX = effect.x + directionX * BLOOD_HIT_VFX.spawnPushPx * 0.7;
-      const startY = effect.y + directionY * BLOOD_HIT_VFX.spawnPushPx * 0.7;
-      const droplet = this.scene.add.image(startX, startY, TEX_BLOOD_DROPLET)
-        .setDepth(DEPTH_FX + 0.05)
-        .setTint(this.pickBloodTint(rng))
-        .setScale(this.randomBetween(rng, band.dropletScaleMin, band.dropletScaleMax) * damageScale)
-        .setAlpha(0.74);
-
-      this.scene.tweens.add({
-        targets: droplet,
-        x: startX + directionX * travel,
-        y: startY + directionY * travel,
-        alpha: 0,
-        duration: this.randomBetween(rng, band.flightMinMs, band.flightMaxMs) * 0.85,
-        ease: 'Quad.easeOut',
-        onComplete: () => droplet.destroy(),
-      });
-    }
   }
 
   // ── Dash-Trail-Effekt ─────────────────────────────────────────────────────
@@ -1656,6 +1540,22 @@ export class EffectSystem implements EnemyVisualSink {
     });
   }
 
+  /** Die dauerhafte Decal-Lifecycle bleibt CPU-seitig; nur ihr Eintreffen wird vom GPU-Flug terminiert. */
+  private scheduleBloodStain(
+    x: number,
+    y: number,
+    scale: number,
+    alpha: number,
+    fadeMs: number,
+    tint: number,
+    rotation: number,
+    flightDelayMs: number,
+  ): void {
+    this.scene.time.delayedCall(Math.max(0, flightDelayMs), () => {
+      this.spawnBloodStain(x, y, scale, alpha, fadeMs, tint, rotation);
+    });
+  }
+
   private ensureDamageVignette(): void {
     if (
       this.damageVignetteTop?.scene &&
@@ -1751,181 +1651,11 @@ export class EffectSystem implements EnemyVisualSink {
     return Phaser.Math.Linear(DAMAGE_VIGNETTE_VFX.alphaMid, DAMAGE_VIGNETTE_VFX.alphaMax, t);
   }
 
-  private getBloodBand(totalDamage: number) {
-    if (totalDamage <= BLOOD_HIT_VFX.bands.light.maxDamage) return BLOOD_HIT_VFX.bands.light;
-    if (totalDamage <= BLOOD_HIT_VFX.bands.medium.maxDamage) return BLOOD_HIT_VFX.bands.medium;
-    return BLOOD_HIT_VFX.bands.heavy;
-  }
-
-  private pickBloodTint(rng: () => number): number {
-    const idx = Math.min(BLOOD_HIT_VFX.palette.length - 1, Math.floor(rng() * BLOOD_HIT_VFX.palette.length));
-    return BLOOD_HIT_VFX.palette[idx] ?? BLOOD_HIT_VFX.palette[0];
-  }
-
-  private randomBetween(rng: () => number, min: number, max: number): number {
-    return Phaser.Math.Linear(min, max, rng());
-  }
-
-  private randomInt(rng: () => number, min: number, max: number): number {
-    return Math.floor(min + rng() * (max - min + 1));
-  }
-
-  // ── Todes-Effekt: Pixel-Disintegration statt Ring-Explosion ──────────────
+  // ── Todes-Effekt: GPU-Pixel-Disintegration ───────────────────────────────
 
   private playDeathEffect(effect: SyncedDeathEffect): void {
     this.ensureTextures();
-
-    const chunks = this.getDeathPixelChunks();
-    if (chunks.length === 0) return;
-
-    const availableChunkBudget = Math.max(0, DEATH_DISINTEGRATION_VFX.maxActiveChunks - this.activeDeathPixelRectangles);
-    const chunkSpawnCount = Math.min(
-      chunks.length,
-      DEATH_DISINTEGRATION_VFX.maxChunksPerEffect,
-      availableChunkBudget,
-    );
-    if (chunkSpawnCount <= 0) return;
-
-    const rng = createSeededRandom(effect.seed);
-    const auraColor = effect.targetColor ?? COLORS.GREY_2;
-    const cos = Math.cos(effect.rotation);
-    const sin = Math.sin(effect.rotation);
-
-    const chunkIndices = Phaser.Utils.Array.NumberArrayStep(0, chunks.length - 1, Math.max(1, chunks.length / chunkSpawnCount));
-    let spawnedChunks = 0;
-
-    for (const chunkIndex of chunkIndices) {
-      if (spawnedChunks >= chunkSpawnCount) break;
-      const chunk = chunks[Math.floor(chunkIndex)];
-      if (!chunk) continue;
-      const rx = chunk.offsetX * cos - chunk.offsetY * sin;
-      const ry = chunk.offsetX * sin + chunk.offsetY * cos;
-      const radialAngle = Math.hypot(rx, ry) > 0.15 ? Math.atan2(ry, rx) : rng() * Math.PI * 2;
-      const angle = radialAngle + (rng() - 0.5) * 1.2;
-      const travel = this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.travelMinPx, DEATH_DISINTEGRATION_VFX.travelMaxPx);
-      const endX = effect.x + rx * 1.15 + Math.cos(angle) * travel + (rng() - 0.5) * DEATH_DISINTEGRATION_VFX.jitterPx;
-      const endY = effect.y + ry * 1.15 + Math.sin(angle) * travel + (rng() - 0.5) * DEATH_DISINTEGRATION_VFX.jitterPx;
-      const tintedColor = mixColors(
-        chunk.color,
-        auraColor,
-        DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness),
-      );
-      const pixel = this.scene.add.rectangle(effect.x + rx, effect.y + ry, chunk.width, chunk.height, tintedColor, DEATH_DISINTEGRATION_VFX.alpha)
-        .setDepth(DEPTH_FX - 0.1)
-        .setOrigin(0.5)
-        .setScale(DEATH_DISINTEGRATION_VFX.scaleStart);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', pixel);
-      this.activeDeathPixelRectangles += 1;
-      spawnedChunks += 1;
-
-      this.scene.tweens.add({
-        targets: pixel,
-        x: endX,
-        y: endY,
-        angle: (rng() - 0.5) * DEATH_DISINTEGRATION_VFX.rotationMaxDeg,
-        alpha: 0,
-        scaleX: DEATH_DISINTEGRATION_VFX.scaleEnd,
-        scaleY: DEATH_DISINTEGRATION_VFX.scaleEnd,
-        duration: DEATH_DISINTEGRATION_VFX.durationMs,
-        ease: 'Cubic.easeOut',
-        onComplete: () => {
-          this.activeDeathPixelRectangles = Math.max(0, this.activeDeathPixelRectangles - 1);
-          pixel.destroy();
-        },
-      });
-    }
-
-    const glowSpawnCount = Math.max(2, Math.round(DEATH_DISINTEGRATION_VFX.glowCount * (chunkSpawnCount / chunks.length)));
-    for (let i = 0; i < glowSpawnCount; i++) {
-      const angle = rng() * Math.PI * 2;
-      const travel = this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.glowTravelMinPx, DEATH_DISINTEGRATION_VFX.glowTravelMaxPx);
-      const glow = this.scene.add.image(effect.x, effect.y, TEX_DEATH_PIXEL_GLOW)
-        .setDepth(DEPTH_FX + 0.05)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(auraColor)
-        .setAlpha(DEATH_DISINTEGRATION_VFX.glowAlpha)
-        .setScale(this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.glowScaleMin, DEATH_DISINTEGRATION_VFX.glowScaleMax));
-
-      this.scene.tweens.add({
-        targets: glow,
-        x: effect.x + Math.cos(angle) * travel,
-        y: effect.y + Math.sin(angle) * travel,
-        alpha: 0,
-        duration: DEATH_DISINTEGRATION_VFX.durationMs,
-        ease: 'Sine.easeOut',
-        onComplete: () => glow.destroy(),
-      });
-    }
-  }
-
-  private getDeathPixelChunks(): DeathPixelChunk[] {
-    if (this.deathPixelChunks) return this.deathPixelChunks;
-    if (!this.scene.textures.exists('badger')) {
-      this.deathPixelChunks = [];
-      return this.deathPixelChunks;
-    }
-
-    const texture = this.scene.textures.get('badger');
-    const sourceImage = texture.getSourceImage() as CanvasImageSource & { width?: number; height?: number };
-    const width = Math.max(1, Number(sourceImage?.width) || PLAYER_SIZE);
-    const height = Math.max(1, Number(sourceImage?.height) || PLAYER_SIZE);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) {
-      this.deathPixelChunks = [];
-      return this.deathPixelChunks;
-    }
-
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(sourceImage, 0, 0, width, height);
-    const imageData = ctx.getImageData(0, 0, width, height).data;
-    const scaleX = PLAYER_SIZE / width;
-    const scaleY = PLAYER_SIZE / height;
-    const chunkSize = DEATH_DISINTEGRATION_VFX.chunkSizePx;
-    const chunks: DeathPixelChunk[] = [];
-
-    for (let py = 0; py < height; py += chunkSize) {
-      for (let px = 0; px < width; px += chunkSize) {
-        let weightSum = 0;
-        let red = 0;
-        let green = 0;
-        let blue = 0;
-        const blockWidth = Math.min(chunkSize, width - px);
-        const blockHeight = Math.min(chunkSize, height - py);
-
-        for (let sy = 0; sy < blockHeight; sy++) {
-          for (let sx = 0; sx < blockWidth; sx++) {
-            const idx = ((py + sy) * width + (px + sx)) * 4;
-            const alpha = imageData[idx + 3] / 255;
-            if (alpha <= 0.08) continue;
-            weightSum += alpha;
-            red += imageData[idx] * alpha;
-            green += imageData[idx + 1] * alpha;
-            blue += imageData[idx + 2] * alpha;
-          }
-        }
-
-        if (weightSum <= 0.01) continue;
-
-        const avgRed = Math.round(red / weightSum);
-        const avgGreen = Math.round(green / weightSum);
-        const avgBlue = Math.round(blue / weightSum);
-        chunks.push({
-          offsetX: (px + blockWidth / 2 - width / 2) * scaleX,
-          offsetY: (py + blockHeight / 2 - height / 2) * scaleY,
-          width: Math.max(1, blockWidth * scaleX),
-          height: Math.max(1, blockHeight * scaleY),
-          color: (avgRed << 16) | (avgGreen << 8) | avgBlue,
-          brightness: (avgRed + avgGreen + avgBlue) / (255 * 3),
-        });
-      }
-    }
-
-    this.deathPixelChunks = chunks;
-    return chunks;
+    this.combatGoreGpuRenderer?.playDeath(effect);
   }
 
   private strokeTracer(

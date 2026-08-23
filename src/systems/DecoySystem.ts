@@ -424,14 +424,24 @@ export class DecoySystem {
   }
 
   private buildDeathEffect(decoy: HostDecoy): SyncedDeathEffect {
+    const sprite = decoy.entity.sprite;
+    const textureKey = sprite.texture?.key;
+    const frame = sprite.frame?.name;
     return {
       type: 'death',
-      x: decoy.entity.sprite.x,
-      y: decoy.entity.sprite.y,
+      x: sprite.x,
+      y: sprite.y,
       targetId: `decoy_${decoy.id}`,
       targetColor: decoy.color,
-      rotation: decoy.entity.sprite.rotation,
+      rotation: sprite.rotation,
       seed: this.nextEffectSeed(),
+      ...(textureKey && frame ? {
+        textureKey,
+        frame,
+        displayWidth: sprite.displayWidth,
+        displayHeight: sprite.displayHeight,
+        tint: sprite.tint,
+      } : {}),
     };
   }
 
