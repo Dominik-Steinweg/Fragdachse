@@ -6,6 +6,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { ShadowSystem } from '../src/effects/ShadowSystem';
+import { SHADOW_CASTERS } from '../src/effects/ShadowConfig';
 import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../src/config';
 import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
 import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
@@ -43,12 +44,18 @@ interface TextureEvent {
   cameraScrolls: Array<{ x: number; y: number }>;
 }
 
+interface GraphicsEvent {
+  depth: number;
+  clears: number;
+  fillPoints: Array<Array<{ x: number; y: number }>>;
+}
+
 function makeScene() {
   const textures: TextureEvent[] = [];
-  const graphicsLog: Array<{ depth: number; clears: number }> = [];
+  const graphicsLog: GraphicsEvent[] = [];
 
   const makeGraphics = () => {
-    const state = { depth: 0, clears: 0 };
+    const state: GraphicsEvent = { depth: 0, clears: 0, fillPoints: [] };
     graphicsLog.push(state);
     const g: Record<string, unknown> = {};
     for (const name of ['fillStyle', 'fillEllipse', 'fillCircle', 'fillRect', 'fillPoints',
@@ -56,6 +63,10 @@ function makeScene() {
       'setMask', 'clearMask', 'destroy', 'lineStyle', 'strokePath']) {
       g[name] = () => g;
     }
+    g.fillPoints = (points: Array<{ x: number; y: number }>) => {
+      state.fillPoints.push(points.map(({ x, y }) => ({ x, y })));
+      return g;
+    };
     g.setDepth = (d: number) => { state.depth = d; return g; };
     g.clear = () => { state.clears += 1; return g; };
     return g;
@@ -173,6 +184,21 @@ function drain(scene: object): void {
 }
 
 describe('static shadow baking', () => {
+  it('bakes a far-right lobby rock through the public layout path', () => {
+    const { scene, graphicsLog } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: 1_920, maxY: 1_080 });
+
+    shadows.rebuildStaticLayoutShadows({
+      rocks: [{ gridX: 50, gridY: 1 }],
+      trees: [],
+    } as unknown as ArenaLayout, { offsetX: 0, offsetY: 0 });
+    drain(scene);
+
+    const rockGraphics = graphicsLog.find((entry) => entry.depth === SHADOW_CASTERS.rock.layerDepth);
+    expect(rockGraphics?.fillPoints.some((points) => points.some(({ x }) => x > 1_500))).toBe(true);
+  });
+
   it('never allocates a render target that scales with the arena', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);

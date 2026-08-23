@@ -324,9 +324,9 @@ export class ShadowSystem {
     layout: ArenaLayout | null,
     options: StaticShadowLayoutBuildOptions = {},
   ): void {
-    this.lastStaticLayout = layout;
-    this.lastStaticOptions = options;
     if (!layout) {
+      this.lastStaticLayout = null;
+      this.lastStaticOptions = options;
       this.clearStatic();
       this.lastBakedProfile = null;
       return;

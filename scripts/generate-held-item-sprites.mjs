@@ -97,6 +97,43 @@ const PALETTE = {
   W: [136, 75, 43],             // Shotgun Rotbraun
   j: [122, 72, 65],             // Shotgun helles Rotbraun
   K: [77, 43, 50],              // Shotgun dunkler Schaft
+  // Weitere manuell angepasste Held-Texturen.
+  '0': [164, 221, 219],         // Laubblaeser heller Kopf
+  '1': [173, 119, 87],           // AK47 Holz-Highlight
+  '2': [232, 193, 112],         // Raketenwerfer Gold-Highlight
+  '3': [222, 158, 65],          // Raketenwerfer Gold
+  '4': [207, 87, 60],            // Raketenwerfer/Flammenwerfer Rot
+  '5': [165, 48, 48],            // Raketenwerfer Rot
+  '6': [16, 20, 31],             // Raketenwerfer tiefe Kontur
+  '7': [128, 146, 88],           // Raketenwerfer Oliv
+  '8': [152, 165, 124],          // Raketenwerfer helles Oliv
+  '9': [218, 134, 62],           // Raketenwerfer/Flammenwerfer Orange
+  '!': [129, 151, 150],          // Mini-Raketenwerfer helles Metall
+  '@': [218, 145, 50],           // Flammenwerfer Flammenkern
+  '#': [217, 146, 51],           // Flammenwerfer Flammenfarbe
+  '$': [217, 148, 51],           // Flammenwerfer Flammenfarbe
+  '%': [217, 149, 53],           // Flammenwerfer Flammenfarbe
+  '&': [217, 150, 54],           // Flammenwerfer Flammenfarbe
+  '*': [216, 153, 56],           // Flammenwerfer Flammenfarbe
+  '+': [218, 144, 50],           // Flammenwerfer Flammenfarbe
+  '-': [221, 141, 48],           // Flammenwerfer Flammenfarbe
+  '=': [221, 138, 46],           // Flammenwerfer Flammenfarbe
+  '?': [222, 138, 46],           // Flammenwerfer Flammenfarbe
+  ':': [222, 137, 46],           // Flammenwerfer Flammenfarbe
+  ';': [222, 133, 43],           // Flammenwerfer Flammenfarbe
+  ',': [225, 129, 41],           // Flammenwerfer Flammenfarbe
+  '/': [221, 127, 40],           // Flammenwerfer Flammenfarbe
+  '|': [220, 126, 40],           // Flammenwerfer Flammenfarbe
+  '~': [224, 126, 40],           // Flammenwerfer Flammenfarbe
+  '^': [214, 119, 38],           // Flammenwerfer Flammenfarbe
+  '<': [209, 115, 38],           // Flammenwerfer Flammenfarbe
+  '>': [206, 113, 38],           // Flammenwerfer Flammenfarbe
+  '_': [207, 114, 38],           // Flammenwerfer Flammenfarbe
+  '(': [111, 63, 30],            // Flammenwerfer dunkle Flamme
+  ')': [152, 86, 37],            // Flammenwerfer Flamme
+  '[': [157, 88, 38],            // Flammenwerfer Flamme
+  ']': [38, 65, 7],              // Negev Gruen
+  '{': [112, 146, 72],           // Negev helles Gruen
 };
 
 /**
@@ -133,7 +170,7 @@ const ITEMS = [
     // Breite PDW mit zentralem Gehaeuse, dunklem Rahmen und blauem Magazin.
     pixels: [
       '....k....',
-      '....d....',
+      '....k....',
       '....d....',
       '...kmk...',
       '...nun...',
@@ -254,24 +291,24 @@ const ITEMS = [
   {
     file: 'LAUBBLAESER.png',
     grip: { x: 5.5, y: 13.5 },
-    // Laubbläser: große Düse vorne, danach ein langer, schlanker Griffkörper.
+    // Manuell angepasster Laubbläser mit heller Düse und grünem Griffkörper.
     pixels: [
-      '...k.....',
-      '..dGd....',
-      '.dGGGd...',
-      'dGGGGGd..',
-      'dGgGGu...',
-      '.dGGGuu..',
-      '.dGGGuu..',
-      '..dGGuu..',
-      '..dGGuu..',
-      '..dGGuu..',
-      '..dGGuu..',
-      '...dGuu..',
-      '...dGuu..',
-      '...ddd...',
-      '....d....',
-      '....d....',
+      '..00000..',
+      '...000...',
+      '..qR0Rq..',
+      '..qqLqq..',
+      '...qLq...',
+      '...qLq...',
+      '...qLq...',
+      '...qLq...',
+      '..qRRRq..',
+      '..qELEq..',
+      '.qEULUEq.',
+      '.qUYLYUq.',
+      '.qYYLYYq.',
+      '.qqDDDqq.',
+      '..qqDqq..',
+      '...qqq...',
     ],
   },
   {
@@ -332,30 +369,30 @@ const ITEMS = [
   {
     file: 'AK47.png',
     grip: { x: 4.5, y: 20.5 },
-    // Langes Sturmgewehr mit gleichmäßiger, schwerer Schulterpartie.
+    // Manuell angepasstes Sturmgewehr mit gerader Schulterpartie und Holzschaft.
     pixels: [
+      '.........',
       '....k....',
-      '....d....',
-      '...dmd...',
-      '...dmd...',
-      '..dmmmd..',
-      '.dmmmmmd.',
-      'dmmHmmmd.',
-      '.dmmHmmmd',
-      '.dmmHmmmd',
-      '.dmmHmmmd',
-      '.dmmHmmmd',
-      '..dmmmd..',
-      '..dmmmd..',
-      '..dmmhd..',
-      '..dmmhd..',
-      '...dmm...',
-      '...dmm...',
-      '...dmm...',
-      '...dmm...',
-      '...ddd...',
-      '...ddd...',
-      '....d....',
+      '....a....',
+      '....a....',
+      '...qaq...',
+      '...qqq...',
+      '...qqq...',
+      '..qmvmq..',
+      '..qjjjq..',
+      '..hj1jh..',
+      '..hj1jh..',
+      '..ajjja..',
+      '..amvma..',
+      '..amvma..',
+      '..ajjja..',
+      '..Qj1jQ..',
+      '..Qj1jQ..',
+      '..Qj1jQ..',
+      '..Qj1jQ..',
+      '..aj1ja..',
+      '...qKq...',
+      '...qaq...',
     ],
   },
   {
@@ -412,52 +449,52 @@ const ITEMS = [
     file: 'ROCKET_LAUNCHER.png',
     grip: { x: 6.5, y: 19.5 },
     muzzle: { x: 5.5, y: 0 },
-    // Schweres Raketenrohr: breite Mündung, dicker Körper, kurzes Heck.
+    // Manuell angepasster Raketenwerfer mit goldener Mündung und olivem Rohrkörper.
     pixels: [
-      '...kOOOk.....',
-      '..kOmmmOkk...',
-      '.kOmmmmOkk...',
-      '.kOmmmmOkk...',
-      '..kOmmmOkk...',
-      '..dOmmmOkk...',
-      '...dmmmmOkk..',
-      '...dmmmOOO...',
-      '...dmmmOOO...',
-      '...dmmOyyO...',
-      '...dmmOyyO...',
-      '....dmmOO....',
-      '....dmmOO....',
-      '....dmmOO....',
-      '....dmmOO....',
-      '....dmmOO....',
-      '.....dmOO....',
-      '.....dmOO....',
-      '.....dmmm....',
-      '.....dmmm....',
-      '.....ddd.....',
-      '......dd.....',
+      '......2......',
+      '...qq333qq...',
+      '..qaq454qaq..',
+      '..6amqqqma6..',
+      '...aammmaa...',
+      '...BB787BB...',
+      '..mBB787BBm..',
+      '..mB77877Bm..',
+      '..mB77877Bm..',
+      '...B7qqq7B...',
+      '...B7mqm7B...',
+      '...B7mqm7B...',
+      '...B7mqm7B...',
+      '...B7qqq7B...',
+      '..mB77877Bm..',
+      '..mB73837Bm..',
+      '..mB32223Bm..',
+      '...BB333BB...',
+      '..qqq777qqq..',
+      '..qmmmmmmmq..',
+      '..qqmmmmmqq..',
+      '...aaqqqaa...',
     ],
   },
   {
     file: 'MINI_ROCKET_LAUNCHER.png',
     grip: { x: 4.5, y: 12.5 },
     muzzle: { x: 4.5, y: 0 },
-    // Kürzere Raketenvariante, mit hellem Kern zur schnellen Unterscheidung.
+    // Manuell angepasste kurze Raketenvariante mit roter Mündung und cyanfarbenem Kern.
     pixels: [
-      '..k.k.k..',
-      '.nmmnmmn.',
-      'nmmcCcmmn',
-      'nmmcCcmmn',
-      '.nmmnmmu.',
-      '.nmmnmmu.',
-      '..nmmmu..',
-      '..nmmmu..',
-      '..nmmmu..',
-      '...nmmu..',
-      '...nmmu..',
-      '...ddd...',
-      '...ddd...',
-      '....d....',
+      '..54545..',
+      '.5494945.',
+      'kvL!!!Lvk',
+      'kvcEEEcvk',
+      'kqccEccqk',
+      'kqucccuqk',
+      'kqqucuqqk',
+      '.kquuuqk.',
+      '.kqmumqk.',
+      '.kqmLmqk.',
+      '.kqmLmqk.',
+      '.kqqLqqk.',
+      '.kkqqqkk.',
+      '..kkkkk..',
     ],
   },
   {
@@ -500,55 +537,55 @@ const ITEMS = [
     file: 'FLAMETHROWER.png',
     grip: { x: 5.5, y: 15.5 },
     muzzle: { x: 4.5, y: 0 },
-    // Flammenwerfer: schwere Düse und kurzer, kompakter Tankkörper.
+    // Manuell angepasster Flammenwerfer mit heißer Mündung und kompakter Tankbasis.
     pixels: [
-      '....k......',
-      '...dmmmm...',
-      '..dmmmmm...',
-      '.dmmhHhmmd.',
-      'dmmZyZmmmd.',
-      '.dmmhHhmmd.',
-      '.dmmmmmmmd.',
-      '..dmmmmd...',
-      '..dmmZmd...',
-      '..dmmZmd...',
-      '..dmmmmd...',
-      '..dmmmmd...',
-      '...dmmmm...',
-      '...dmmmZ...',
-      '...dmmmZ...',
-      '....ddd....',
-      '.....d.....',
+      '@#$%&*&%$#@',
+      '+--=?:?=--+',
+      '.;,/|~|/,;.',
+      '..^<>_><^..',
+      '...()[)(...',
+      '..aahhhaa..',
+      '.aavLLLvaa.',
+      '.avLL4LLva.',
+      '.avL949Lva.',
+      '.avL444Lva.',
+      '.avL454Lva.',
+      '.avL949Lva.',
+      '.qvLL4LLvq.',
+      '..qvLLLvq..',
+      '...qLLLq...',
+      '...qLLLq...',
+      '...qqqqq...',
     ],
   },
   {
     file: 'NEGEV.png',
     grip: { x: 6.5, y: 20.5 },
     muzzle: { x: 5.5, y: 0 },
-    // Ikonreferenz: breites dunkles MG mit olivgrünen Markierungen und schwerem Gehäuse.
+    // Manuell angepasstes MG mit dunkler Kontur und olivgrünen Markierungen.
     pixels: [
-      '.....k.......',
-      '.....d.......',
-      '....dmd......',
-      '....dmm......',
-      '...dmmmdd....',
-      '..dmmmmdd....',
-      '..dmmmGGdd...',
-      '..dmmmGGddd..',
-      '..dmmmGGddd..',
-      '..dmmmGGddd..',
-      '...dmmmGGdd..',
-      '...dmmmGGdd..',
-      '...dmmmGGdd..',
-      '...dmmmGGdd..',
-      '...dmmmGGdd..',
-      '...dmmmmdd...',
-      '...dmmmmdd...',
-      '...dmmmmdd...',
-      '...dmmmmdd...',
-      '...dmmmmdd...',
-      '....dmmmm....',
+      '......k......',
+      '......k......',
+      '.....kkk.....',
+      '.....kdk.....',
+      '....mdddm....',
+      '...mdddddm...',
+      '....mdddm....',
       '.....ddd.....',
+      '.....ddd.....',
+      '....ddmdd....',
+      '...dmm]mmd...',
+      '...dm]{]md...',
+      '...d]{{{]d...',
+      '...d]{{{]d...',
+      '..md]{{{]dm..',
+      '.mdd]{{{]ddm.',
+      '..md]{{{]dm..',
+      '...dm]]]md...',
+      '...dmm]mmd...',
+      '...k]]]]]k...',
+      '....k{{{k....',
+      '.....kkk.....',
     ],
   },
   {
