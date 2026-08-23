@@ -21,7 +21,13 @@ import {
   ensureExplosionSparkTexture,
   ensureExplosionEmberTexture,
 } from './GpuVfxSourceTextures';
-import { TEX_GROUND_FIRE_SURFACE, ensureGroundFireTextures } from '../GroundFireTextures';
+import {
+  GROUND_FIRE_BED_SIZE,
+  GROUND_FIRE_SURFACE_SIZE,
+  TEX_GROUND_FIRE_BED,
+  TEX_GROUND_FIRE_SURFACE,
+  ensureGroundFireTextures,
+} from '../GroundFireTextures';
 import {
   TEX_FLAME_BILLOW,
   TEX_FLAME_CORE,
@@ -90,8 +96,12 @@ export const GpuVfxFrameId = {
   FlameTongue:     16,
   ExplosionSpark:  17,
   ExplosionEmber:  18,
-  /** Flaechendeckendes Glutbett des Bodenfeuers; ebenfalls weiss und rein ueber Tint gefaerbt. */
-  FlameBed:        19,
+  /**
+   * Die zwei Motive des Bodenfeuers; beide weiss und rein ueber Tint gefaerbt. Alle
+   * Flammenschichten teilen sich `GroundFireSurface` – Begruendung in `GroundFireTextures.ts`.
+   */
+  GroundFireSurface: 19,
+  GroundFireBed:     20,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -187,8 +197,14 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
     sourceTextureKey: TEX_EXPLOSION_EMBER, width: 4, height: 4, ensure: ensureExplosionEmberTexture,
   },
   {
-    id: GpuVfxFrameId.FlameBed, frame: 'flame-bed',
-    sourceTextureKey: TEX_GROUND_FIRE_SURFACE, width: 32, height: 32, ensure: ensureGroundFireTextures,
+    id: GpuVfxFrameId.GroundFireSurface, frame: 'ground-fire-surface',
+    sourceTextureKey: TEX_GROUND_FIRE_SURFACE,
+    width: GROUND_FIRE_SURFACE_SIZE, height: GROUND_FIRE_SURFACE_SIZE, ensure: ensureGroundFireTextures,
+  },
+  {
+    id: GpuVfxFrameId.GroundFireBed, frame: 'ground-fire-bed',
+    sourceTextureKey: TEX_GROUND_FIRE_BED,
+    width: GROUND_FIRE_BED_SIZE, height: GROUND_FIRE_BED_SIZE, ensure: ensureGroundFireTextures,
   },
 ];
 

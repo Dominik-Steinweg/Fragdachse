@@ -216,6 +216,9 @@ export interface FakeCanvasContext {
   drawImage(source: { key?: string }, x: number, y: number): void;
   createRadialGradient(...args: number[]): { addColorStop(): void };
   createLinearGradient(...args: number[]): { addColorStop(): void };
+  /** Die GroundFire-Motive werden pixelweise geschrieben und brauchen einen echten Puffer. */
+  createImageData(width: number, height: number): { width: number; height: number; data: Uint8ClampedArray };
+  putImageData(image: { data: Uint8ClampedArray }, x: number, y: number): void;
   /** Alle uebrigen Canvas-Methoden sind No-Ops (siehe Proxy in `makeFakeCanvasTexture`). */
   [method: string]: unknown;
 }
@@ -252,6 +255,12 @@ function makeFakeCanvasTexture(key: string, width: number, height: number): Fake
       },
       createRadialGradient: () => gradient,
       createLinearGradient: () => gradient,
+      createImageData: (width: number, height: number) => ({
+        width,
+        height,
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+      putImageData: () => {},
     } as Record<string, unknown>, {
       get: (target, key: string) => (key in target ? target[key] : noop),
     }) as unknown as FakeCanvasContext,

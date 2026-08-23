@@ -48,6 +48,7 @@ export const GpuVfxEffectId = {
   ExplosionNukePlume:  34,
   ExplosionNukeFallout: 35,
   ExplosionRegeneration: 36,
+  GroundFireEmber:    37,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -173,7 +174,7 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.GroundFireOuter,
     label: 'groundfire.outer',
     lane: GpuVfxLaneId.GroundFire,
-    frame: GpuVfxFrameId.FlameBed,
+    frame: GpuVfxFrameId.GroundFireSurface,
     importance: 'standard',
     release: 'linger',
   },
@@ -181,7 +182,7 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.GroundFireCore,
     label: 'groundfire.core',
     lane: GpuVfxLaneId.GroundFire,
-    frame: GpuVfxFrameId.FlameBed,
+    frame: GpuVfxFrameId.GroundFireSurface,
     importance: 'standard',
     release: 'linger',
   },
@@ -273,7 +274,7 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.GroundFireHeatBody,
     label: 'groundfire.heat-body',
     lane: GpuVfxLaneId.GroundFire,
-    frame: GpuVfxFrameId.FlameBed,
+    frame: GpuVfxFrameId.GroundFireBed,
     importance: 'standard',
     release: 'linger',
   },
@@ -378,6 +379,17 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     label: 'explosion.regeneration',
     lane: GpuVfxLaneId.ExplosionRegeneration,
     frame: GpuVfxFrameId.ExplosionSpark,
+    importance: 'standard',
+    release: 'linger',
+  },
+  {
+    // Die hellen Glutnester der Brandflaeche. Eigener Effekt statt einer Variante des Heissfelds:
+    // sie tragen eine andere Lebensdauer und eine eigene Dichte, und der Profiler soll ihren
+    // Anteil an der Lane getrennt ausweisen. Das Motiv ist dasselbe Wolkenfeld, nur klein.
+    id: GpuVfxEffectId.GroundFireEmber,
+    label: 'groundfire.ember',
+    lane: GpuVfxLaneId.GroundFire,
+    frame: GpuVfxFrameId.GroundFireSurface,
     importance: 'standard',
     release: 'linger',
   },

@@ -218,13 +218,13 @@ Jede Lane traegt im Manifest ihre `rationale` (warum sie nicht mit einer anderen
 | `flame-outer` | `FIRE` (16) | ADD | 3072 | `flame.outer` | eigenes additives Flammenband auf DEPTH.FIRE, unter Core und Spark |
 | `flame-core` | `FIRE+0.05` (16.05) | ADD | 2304 | `flame.core` | eigenes additives Flammenband ueber Outer |
 | `flame-spark` | `FIRE+0.1` (16.1) | ADD | 512 | `flame.spark` | eigenes additives Spark-Band ueber Core; `gravity = -30` |
-| `ground-fire` | `ROCKS+0.2` (9.2) | ADD | 1536 | `groundfire.outer`, `groundfire.core`, `groundfire.spark` (je normal und void) | eigenes Tiefenband zwischen Felsen und Spielern; `gravity = -36`, die drei Motive skalieren sie ueber `gravityFactor` |
+| `ground-fire` | `ROCKS+0.2` (9.2) | ADD | 6144 | `groundfire.heat-body`, `groundfire.outer`, `groundfire.core`, `groundfire.ember`, `groundfire.spark` (je normal und void) | eigenes Tiefenband zwischen Felsen und Spielern; `gravity = -36`, die Motive skalieren sie ueber `gravityFactor`. Kapazitaet = Dichte je Rasterzelle (0.70 + 1.30 + 0.85 + 0.40 + 0.06) x 320 gedeckelte Zellen x rund fuenf gleichzeitig sichtbare Grossflaechen |
 | `ground-fire-smoke` | `ROCKS+0.12` (9.12) | NORMAL | 128 | `groundfire.smoke` | einziger nicht-additiver Teil des Bodenfeuers, muss unter den Flammen liegen |
 | `entity-burn` | `PLAYERS+0.23` (10.23) | ADD | 2048 | `entityburn.core`, `entityburn.outer`, `entityburn.spark` | eigenes Tiefenband ueber den Spielern; `gravity = -34` nur fuer die Funken |
 | `projectile-burn` | `PROJECTILES+0.34` (15.34) | ADD | 2048 | `projburn.outer`, `projburn.core`, `projburn.spark` (je normal und void) | eigenes Tiefenband ueber den Projektilkoerpern; `gravity = -30`, Outer skaliert auf 0.8 |
 | `world-debris` | `FIRE+0.075` (16.075) | NORMAL | 2048 | `leaf.debris`, `leafblower.dust` | gemeinsame geordnete Lane fuer Blaetter und Terrain-Staub; explizit zwischen FlameCore und FlameSpark |
 
-Summe 23 040 vorgehaltene Member; der Instance-Buffer belegt damit rund 3,8 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 128×128 RGBA (64 KB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, dazu kommen `ground-fire-smoke`, `leaf-blower-dust` sowie die beiden Jet-Motive `flame-billow` und `flame-tongue`. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
+Summe 26 112 vorgehaltene Member; der Instance-Buffer belegt damit rund 4,4 MB (Stride zur Laufzeit ueber `layer.getDataByteSize()`, aktuell 42 Words). Der Atlas ist 256×256 RGBA (256 KB) und traegt alle Motive; die Feuerfamilien teilen sich die vorhandenen Flame-Frames in beiden Stilen, dazu kommen `ground-fire-smoke`, `leaf-blower-dust`, die beiden Jet-Motive `flame-billow` und `flame-tongue` sowie die beiden eigenen Bodenfeuer-Motive `ground-fire-surface` und `ground-fire-bed`. Die Kapazitaeten der zusammengelegten Lanes sind bewusst die Summen der fruehreren Einzelpools; reduziert wird erst gegen gemessenes `peakLive`/`capacityDrops` aus dem Performance-Export, nicht gegen die Schaetzung. `entity-burn` ist dabei die erste Obergrenze ueberhaupt fuer diesen Effekt – vorher hatte jede brennende Entity drei eigene, unbegrenzte Emitter.
 
 Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 16.92 damageAura, 16.96 reactionPulse, 17.0 Container mit Haze und Blobs, 17.02 `stink-normal`, 17.03 Spawn-Flash (ADD), 17.04 `stink-add`, 17.05 Spawn-Burst-Emitter (ADD), 17.1 Fairness-Kreis (ADD). **Dokumentierte Abweichung der Zusammenlegung:** die additive `inner`-Variante wandert von 17.001 auf 17.04 und kreuzt dabei `stink-normal`. Der Fehler ist das Produkt aus der plume-Partikelalpha (≤ 0.029) und dem additiven Beitrag, also ≤ 3 %, und tritt nur dort auf, wo sich Wolken *unterschiedlicher* Variante ueberlappen. `inner` und `plume` untereinander auf der NORMAL-Lane liegen bei ≈ 0.0016.
 
@@ -239,6 +239,18 @@ Im Tiefenband 16.8…17.2 liegt ausser der Stinkwolke nichts: 16.88 groundGlow, 
 
 Die Einzeltexturen bleiben bestehen – `stink_puff` benutzt weiterhin der klassische Spawn-Burst-Emitter.
 
+#### Motive fuer additiv gestapelte Flaechen
+
+Drei Regeln gelten fuer jedes Frame, das in grosser Zahl additiv uebereinanderliegt (Bodenfeuer, Flammenwerfer, Wolken). Alle drei sind an sichtbaren Fehlern verifiziert:
+
+- **Die Alpha muss am Frame-Rand exakt 0 sein.** Ein Verlauf, dessen Radius groesser ist als die halbe Kantenlaenge, steht an der Bildkante noch mit merklicher Alpha und wird dort hart abgeschnitten – beim urspruenglichen Bodenfeuer-Motiv mit 0.23. Hochskaliert und additiv gestapelt zeichnet jedes Exemplar dann seine Frame-Kante nach: die Flaeche bekommt eckige Kanten. Jede Motivfunktion multipliziert deshalb ein Fenster auf, das vor der Kante auf null laeuft.
+- **Ein Motiv, das verschmelzen soll, darf keine Silhouette haben.** Eine Flanke mit definiertem Nullpunkt gibt ihm eine Kontur, und die bleibt auch additiv als Einzelkoerper erkennbar: eine zur Spitze verjuengte Flammenzunge las sich als Stapel harter Keile, die Flaeche wirkte zerissen und hektisch. Alle Flammenschichten des Bodenfeuers teilen sich deshalb *ein* konturloses Wolkenmotiv und unterscheiden sich nur in Groesse, Alpha und Lebensdauer.
+- **Der Grossteil der Deckung kommt aus dem breiten Grundverlauf, nicht aus der Struktur.** Ein Motiv aus reinem Rauschen bzw. aus lauter schmalen Glocken hat ein niedriges Mittelalpha (gemessen 0.19 statt 0.30) und macht die Flaeche trotz gleicher Partikelzahl blass. Das Mittelalpha des Motivs geht linear in die Flaechenhelligkeit ein und gehoert deshalb zu den Groessen, die man misst statt schaetzt.
+
+Die Flaechenhelligkeit einer Schicht ist `Dichte je Rasterzelle x Motiv-Mittelalpha x Startalpha x 0.567 x Motivflaeche in Zellen`; der Faktor 0.567 ist das Integral aus linear ausblendender Alpha und ueber die Lebenszeit wachsender Flaeche. Fuer das Bodenfeuer summieren sich die vier Schichten auf rund 0.97 – das urspruengliche lag bei 0.56 und wirkte genau deshalb zu blass.
+
+Ruhe ist eine Frage der Lebensdauer, nicht der Partikelzahl: bei fester Ziel-Lebendzahl ist die Spawnrate `Lebendzahl / Lebensdauer`. Kurze Motive tauschen die Flaeche staendig aus und lassen sie flimmern; ein Bodenfeuer steht, seine Bewegung kommt aus dem langsam wandernden Konvektions- und Temperaturfeld.
+
 ### Ein Strahl aus einzelnen Hitboxen
 
 Der Flammenwerfer ist netzseitig eine Kette einzelner Projektile, und die liegen weder aufeinander noch auf einer Linie: Waffenstreuung (8-12°), Spielerbewegung und Zielrichtungswechsel faechern sie auf. Wer jede Hitbox fuer sich zeichnet – egal wie dicht – bekommt deshalb parallele Einzelbahnen mit Luecken dazwischen. Die Platzierung, nicht die Partikelmenge, entscheidet ueber den zusammenhaengenden Strahl:
@@ -251,7 +263,7 @@ Der Flammenwerfer ist netzseitig eine Kette einzelner Projektile, und die liegen
 - **Ausdehnung und Streckung.** Flammenballen wachsen ueber ihre Lebenszeit, verlieren dabei ihre Streckung und verblassen. An der Stroemung ausgerichtet und in ihre Richtung gestreckt ueberlappen sie entlang des Strahls, statt als runde Tupfen nebeneinanderzuliegen.
 - **Licht.** Jede n-te Projektil-Id traegt ein Licht (`FLAME_LIGHT_ID_STRIDE`), zusaetzlich haengt an jedem `chainKey` ein Muendungslicht an der juengsten Hitbox: die Wurzel des Strahls ist sein hellster Punkt und darf nicht davon abhaengen, ob gerade eine passende Id faellt. Es wandert mit der Duese, statt beim Weiterruecken der Kette zu springen, und wird mit dem letzten Kettenglied freigegeben.
 
-Die Jet-Frames `flame-billow` und `flame-tongue` sind bewusst **weiss**: erst dadurch ergibt der Multiply-Tint exakt die Temperaturfarbe, und dasselbe Frame traegt den normalen wie den Void-Stil. Die aelteren `TEX_FLAME_*`-Texturen behalten ihre eingebackene Farbe, weil Bodenfeuer, EntityBurn und Fireball auf ihnen stehen.
+Die Jet-Frames `flame-billow` und `flame-tongue` sind bewusst **weiss**: erst dadurch ergibt der Multiply-Tint exakt die Temperaturfarbe, und dasselbe Frame traegt den normalen wie den Void-Stil. Die aelteren `TEX_FLAME_*`-Texturen behalten ihre eingebackene Farbe, weil EntityBurn und Fireball auf ihnen stehen; das Bodenfeuer hat seit der Ueberarbeitung eigene, ebenfalls weisse Motive.
 
 ### Slot-Verwaltung: Ring-Cursor, kein Free-List
 

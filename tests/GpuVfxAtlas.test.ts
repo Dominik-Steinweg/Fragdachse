@@ -46,7 +46,8 @@ describe('gpu vfx atlas', () => {
     const layout = packGpuVfxAtlas();
     // Die Groesse steht nicht im Code, sie ergibt sich aus dem Manifest.
     expect(layout.size & (layout.size - 1)).toBe(0);
-    expect(layout.size).toBe(128);
+    // 256 seit den vier 64-px-GroundFire-Motiven; 128 reicht dafuer nicht mehr.
+    expect(layout.size).toBe(256);
     expect(layout.rects.length).toBe(GPU_VFX_ATLAS.length);
   });
 

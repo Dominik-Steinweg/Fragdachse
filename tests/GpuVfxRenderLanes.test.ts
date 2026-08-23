@@ -124,7 +124,7 @@ describe('gpu vfx render lanes', () => {
     expect(projectileBurn.gravity).toBe(-30);
     expect(groundSmoke.gravity).toBeUndefined();
 
-    expect(groundFire.capacity).toBe(3072);
+    expect(groundFire.capacity).toBe(6144);
     expect(groundSmoke.capacity).toBe(128);
     expect(entityBurn.capacity).toBe(2048);
     expect(projectileBurn.capacity).toBe(2048);
@@ -139,6 +139,8 @@ describe('gpu vfx render lanes', () => {
     expect(effect('groundfire.outer').lane).toBe(GpuVfxLaneId.GroundFire);
     expect(effect('groundfire.core').lane).toBe(GpuVfxLaneId.GroundFire);
     expect(effect('groundfire.spark').lane).toBe(GpuVfxLaneId.GroundFire);
+    expect(effect('groundfire.heat-body').lane).toBe(GpuVfxLaneId.GroundFire);
+    expect(effect('groundfire.ember').lane).toBe(GpuVfxLaneId.GroundFire);
     expect(effect('groundfire.smoke').lane).toBe(GpuVfxLaneId.GroundFireSmoke);
 
     expect(effect('projburn.outer').lane).toBe(GpuVfxLaneId.ProjectileBurn);
@@ -150,9 +152,10 @@ describe('gpu vfx render lanes', () => {
     expect(effect('entityburn.spark').lane).toBe(GpuVfxLaneId.EntityBurn);
   });
 
-  it('uses a dedicated organic surface frame for GroundFire and keeps other fire effects stable', () => {
-    // GroundFire nutzt eine eigene, flaechige Maske; Trails und EntityBurn behalten ihre bisherigen
-    // FlameJet-Frames. Alle Motive liegen bereits im gemeinsamen Atlas.
+  it('keeps every GroundFire flame layer on the shared cloud motif', () => {
+    // Alle Flammenschichten teilen sich dieselbe konturlose Wolke. Ein Zwischenstand hat jeder
+    // Schicht eine eigene Silhouette gegeben – additiv gestapelt blieb die als Einzelkoerper
+    // sichtbar und die Flaeche zerfiel in Keile. Trails und EntityBurn behalten ihre FlameJet-Frames.
     const flameFrames = new Set<number>([
       GpuVfxFrameId.FlameCore, GpuVfxFrameId.FlameOuter, GpuVfxFrameId.FlameSpark,
     ]);
@@ -161,12 +164,13 @@ describe('gpu vfx render lanes', () => {
       const effect = GPU_VFX_EFFECTS.find((candidate) => candidate.label === label)!;
       expect(flameFrames.has(effect.frame), label).toBe(true);
     }
-    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.outer')!.frame)
-      .toBe(GpuVfxFrameId.FlameBed);
-    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.core')!.frame)
-      .toBe(GpuVfxFrameId.FlameBed);
+    for (const label of ['groundfire.outer', 'groundfire.core', 'groundfire.ember']) {
+      const effect = GPU_VFX_EFFECTS.find((candidate) => candidate.label === label)!;
+      expect(effect.frame, label).toBe(GpuVfxFrameId.GroundFireSurface);
+    }
+    // Nur die flaechige Grundglut hat ein eigenes Motiv: eine Kuppel statt eines Wolkenfelds.
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.heat-body')!.frame)
-      .toBe(GpuVfxFrameId.FlameBed);
+      .toBe(GpuVfxFrameId.GroundFireBed);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.spark')!.frame)
       .toBe(GpuVfxFrameId.FlameSpark);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.smoke')!.frame)

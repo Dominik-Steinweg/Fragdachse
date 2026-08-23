@@ -312,21 +312,25 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     // Outer mit 10/36 (-10 px/s²).
     gravity: -36,
     eases: [GpuVfxEase.Linear, GpuVfxEase.Gravity],
-    capacity: 3072,
-    maxLifetimeMs: 1400,
+    capacity: 6144,
+    // Das Glutbett lebt bis zu 1900 ms: lange Lebensdauern halten die Flaeche ruhig, weil die
+    // Spawnrate `Lebendzahl / Lebensdauer` ist und kurze Motive die Flaeche flimmern lassen.
+    maxLifetimeMs: 1900,
     order: 'add-over-opaque',
     reserveCritical: 0,
     rationale:
       'Eigenes additives Tiefenband knapp ueber den Felsen und unter den Spielern; der Bodenrauch '
-      + 'liegt als NORMAL-Lane darunter. Traegt outer, core und spark in beiden Stilen – ihre '
-      + 'abweichenden Beschleunigungen laufen ueber `gravityFactor` und trennen keine Lanes mehr.',
+      + 'liegt als NORMAL-Lane darunter. Traegt Bett, Flaechenfeld, Heissfeld, Glutnester und '
+      + 'Funken in beiden Stilen – ihre abweichenden Beschleunigungen laufen ueber `gravityFactor` '
+      + 'und trennen keine Lanes mehr.',
     capacityRationale:
       'GroundFire emittiert flaechendeckend: die Lebendzahl je Cluster ist eine Dichte *pro '
-      + 'Rasterzelle* (Bett 0.40, Billow 0.85, Zunge 0.38, dazu Funken), damit eine Brandflaeche '
-      + 'als geschlossene Flaeche liest statt als Perlenkette. Die Zellzahl geht dabei nur bis 140 '
-      + 'voll ein und ist bei 320 gedeckelt, ein Cluster kostet also hoechstens rund 540 Member. '
-      + 'Vier gleichzeitig sichtbare Grossflaechen passen damit in 3072 Slots. Der Deckel im '
-      + 'Renderer ist der Wert, der bei gemessenen capacityDrops zuerst zurueckgeht.',
+      + 'Rasterzelle* (Bett 0.70, Flaechenfeld 1.30, Heissfeld 0.85, Glutnest 0.40, Funken 0.06), '
+      + 'damit eine Brandflaeche als geschlossene Flaeche liest statt als Perlenkette. Die '
+      + 'Zellzahl geht dabei nur bis 140 voll ein und ist bei 320 gedeckelt, ein Cluster kostet '
+      + 'also hoechstens rund 1060 Member. Fuenf gleichzeitig sichtbare Grossflaechen passen damit '
+      + 'in 6144 Slots. Die Dichten im Renderer sind die Werte, die bei gemessenen capacityDrops '
+      + 'zuerst zurueckgehen.',
   },
   {
     id: GpuVfxLaneId.GroundFireSmoke,
