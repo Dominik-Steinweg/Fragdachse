@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="./assets/sprites/32x32dachs.png" />
+  <title>FRAGDACHSE</title>
+  <!--
+    Die UI-Schriften werden vorgeladen, weil Phaser-Text seine Glyphen beim Anlegen einmalig
+    rastert: was beim ersten `setText` nicht da ist, bleibt im Fallback stehen. Details und die
+    Nachrasterung: src/ui/uiFonts.ts.
+  -->
+  <link rel="preload" href="./assets/fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/chakra-petch-500.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/jetbrains-mono-variable.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    /*
+      Beide Familien stehen unter SIL OFL 1.1; die Lizenztexte liegen neben den Dateien in
+      public/assets/fonts/. `unicode-range` entfaellt bewusst - es wird nur das Latin-Subset
+      ausgeliefert, das die deutschen Umlaute und das Eszett bereits enthaelt.
+    */
+    @font-face {
+      font-family: 'Chakra Petch';
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url('./assets/fonts/chakra-petch-500.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Chakra Petch';
+      font-style: normal;
+      font-weight: 700;
+      font-display: block;
+      src: url('./assets/fonts/chakra-petch-700.woff2') format('woff2');
+    }
+    /* Variabler Schnitt: eine Datei bedient die gesamte Gewichtsachse. */
+    @font-face {
+      font-family: 'JetBrains Mono';
+      font-style: normal;
+      font-weight: 100 800;
+      font-display: block;
+      src: url('./assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
+    }
+
+    * { margin: 0; padding: 0; }
+    body { background: #000; overflow: hidden; }
+    /*
+      Bewusst kein `image-rendering: pixelated` auf der Canvas. Das Spiel laeuft mit
+      `smoothPixelArt`, dessen Shader blockige Pixel bereits im Renderer erhaelt und nur
+      deren Kanten glaettet; eine zusaetzliche Nearest-Neighbor-Skalierung im Browser
+      wuerde das wieder zunichte machen. Vor allem aber ist die Canvas-Aufloesung an die
+      dargestellte Flaeche gekoppelt (siehe src/graphics/RenderResolution.ts) - der Browser
+      skaliert also im Regelfall gar nicht mehr, und wo doch, sind krumme Faktoren
+      gefiltert deutlich sauberer als hart gerastert.
+    */
+
+    /* ── Initialer DOM-Bootscreen ────────────────────────────────── */
+    .boot-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #090a14;
+      opacity: 1;
+      transition: opacity 0.25s ease-out;
+      pointer-events: auto;
+    }
+    .boot-screen.boot-screen-fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .boot-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+      user-select: none;
+    }
+    .boot-title {
+      font-family: 'Chakra Petch', 'Segoe UI', system-ui, monospace;
+      font-weight: 700;
+      font-size: 32px;
+      letter-spacing: 6px;
+      color: #e8c170;
+      text-shadow: 0 0 24px rgba(232, 193, 112, 0.25);
+    }
+    .boot-bar-wrap {
+      width: 280px;
+      height: 6px;
+      background: #151d28;
+      border: 1px solid #394a50;
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .boot-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #be772b 0%, #e8c170 50%, #be772b 100%);
+      background-size: 200% 100%;
+      animation: boot-shimmer 2s linear infinite;
+      border-radius: 1px;
+      transition: width 0.12s ease-out;
+    }
+    .boot-bar-fill.boot-bar-indeterminate {
+      width: 35% !important;
+      animation: boot-indeterminate 1.4s ease-in-out infinite alternate, boot-shimmer 2s linear infinite;
+    }
+    .boot-status {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px;
+      font-weight: 500;
+      color: #c7cfcc;
+      min-height: 18px;
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+    @keyframes boot-indeterminate {
+      0% { transform: translateX(0%); }
+      100% { transform: translateX(185%); }
+    }
+    @keyframes boot-shimmer {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+  </style>
+  <script type="module" crossorigin src="./assets/index-CNMYhiTe.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-BQPYObqX.js">
+</head>
+<body>
+  <div id="game-container">
+    <div id="boot-screen" class="boot-screen" aria-live="polite">
+      <div class="boot-content">
+        <div class="boot-title">FRAGDACHSE</div>
+        <div class="boot-bar-wrap">
+          <div id="boot-bar-fill" class="boot-bar-fill boot-bar-indeterminate"></div>
+        </div>
+        <div id="boot-status" class="boot-status">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
