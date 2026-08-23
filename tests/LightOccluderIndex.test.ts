@@ -66,6 +66,33 @@ function collectExposedEdges(
 type AnyBox = any;
 
 describe('LightOccluderIndex', () => {
+  it('führt eine monotone Revision für abgeleitete Occlusion-Caches', () => {
+    const index = new LightOccluderIndex({
+      rocks: () => null,
+      trunks: () => null,
+      baseCells: () => null,
+      baseGeneration: () => 0,
+    });
+
+    const initial = index.getRevision();
+    index.markDirty();
+    expect(index.getRevision()).toBeGreaterThan(initial);
+  });
+
+  it('erkennt eine geänderte Basisgeneration auch ohne markDirty', () => {
+    let generation = 0;
+    const index = new LightOccluderIndex({
+      rocks: () => null,
+      trunks: () => null,
+      baseCells: () => null,
+      baseGeneration: () => generation,
+    });
+
+    const initial = index.getRevision();
+    generation += 1;
+    expect(index.getRevision()).toBeGreaterThan(initial);
+  });
+
   it('meldet jeden Occluder pro Abfrage genau einmal, auch über Bucket-Grenzen hinweg', () => {
     const spot = worldPosition(5, 5);
     // Eine Basis ist deutlich größer als ein Bucket und liegt damit in mehreren.

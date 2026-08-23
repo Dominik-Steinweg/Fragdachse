@@ -39,6 +39,16 @@ describe('particle flow scheduler', () => {
     expect(flow.tick(20)).toBe(1);
   });
 
+  it('can prime the next emission without changing the active frequency', () => {
+    const flow = new ParticleFlowScheduler(800);
+    flow.setFrequency(80);
+    flow.primeForImmediateEmission();
+
+    expect(flow.tick(0)).toBe(1);
+    expect(flow.getFrequency()).toBe(80);
+    expect(flow.getCounter()).toBe(80);
+  });
+
   it('emits every due particle within one large delta', () => {
     const flow = new ParticleFlowScheduler(80);
     flow.setFrequency(20);

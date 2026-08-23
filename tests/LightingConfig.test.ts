@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EXPLOSION_OCCLUSION_REFRESH_MS,
   getExplosionLightDurationMs,
   LIGHT_PRESETS,
 } from '../src/effects/LightingConfig';
@@ -16,6 +17,11 @@ describe('Explosionsbeleuchtung', () => {
     expect(getExplosionLightDurationMs(2000)).toBe(5000);
     expect(LIGHT_PRESETS.explosion.decayExponent).toBeGreaterThanOrEqual(0.9);
     expect(LIGHT_PRESETS.explosion.decayExponent).toBeLessThanOrEqual(1);
+  });
+
+  it('aktualisiert bewegliche Occluder in stationären Explosionslichtern mit 10 Hz', () => {
+    expect(EXPLOSION_OCCLUSION_REFRESH_MS).toBe(100);
+    expect(LIGHT_PRESETS.explosion.occludes).toBe(true);
   });
 
   it('hält das BFG-Licht kompakt, aber klar BFG-grün und verdeckend', () => {

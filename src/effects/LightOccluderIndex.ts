@@ -92,13 +92,32 @@ export class LightOccluderIndex {
 
   private dirty = true;
   private builtBaseGeneration = -1;
+  private observedBaseGeneration = -1;
+  private revision = 0;
   /** Lazy vom ersten Occluder erzeugt, danach wiederverwendet (siehe `writeRect`). */
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
-  constructor(private readonly sources: LightOccluderSources) {}
+  constructor(private readonly sources: LightOccluderSources) {
+    this.observedBaseGeneration = sources.baseGeneration();
+  }
 
   markDirty(): void {
     this.dirty = true;
+    this.revision += 1;
+  }
+
+  /**
+   * Änderungsnummer für Konsumenten, die ihre eigene abgeleitete Geometrie cachen.
+   * Eine geänderte Basisgeneration wird auch ohne explizites `markDirty()` erkannt.
+   */
+  getRevision(): number {
+    const baseGeneration = this.sources.baseGeneration();
+    if (baseGeneration !== this.observedBaseGeneration) {
+      this.observedBaseGeneration = baseGeneration;
+      this.dirty = true;
+      this.revision += 1;
+    }
+    return this.revision;
   }
 
   /**
@@ -159,6 +178,7 @@ export class LightOccluderIndex {
   private rebuild(): void {
     this.dirty = false;
     this.builtBaseGeneration = this.sources.baseGeneration();
+    this.observedBaseGeneration = this.builtBaseGeneration;
     this.collectOccluders();
     this.buildExposedEdges();
     this.buildBuckets();

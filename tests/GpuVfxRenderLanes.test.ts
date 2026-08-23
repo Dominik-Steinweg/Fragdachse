@@ -150,9 +150,9 @@ describe('gpu vfx render lanes', () => {
     expect(effect('entityburn.spark').lane).toBe(GpuVfxLaneId.EntityBurn);
   });
 
-  it('uses the white FlameJet primitives for GroundFire and keeps other fire effects stable', () => {
-    // GroundFire nutzt die tintbaren Jet-Motive; Trails und EntityBurn behalten ihre bisherigen
-    // Frames. Alle Motive liegen bereits im gemeinsamen Atlas.
+  it('uses a dedicated organic surface frame for GroundFire and keeps other fire effects stable', () => {
+    // GroundFire nutzt eine eigene, flaechige Maske; Trails und EntityBurn behalten ihre bisherigen
+    // FlameJet-Frames. Alle Motive liegen bereits im gemeinsamen Atlas.
     const flameFrames = new Set<number>([
       GpuVfxFrameId.FlameCore, GpuVfxFrameId.FlameOuter, GpuVfxFrameId.FlameSpark,
     ]);
@@ -162,9 +162,11 @@ describe('gpu vfx render lanes', () => {
       expect(flameFrames.has(effect.frame), label).toBe(true);
     }
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.outer')!.frame)
-      .toBe(GpuVfxFrameId.FlameBillow);
+      .toBe(GpuVfxFrameId.FlameBed);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.core')!.frame)
-      .toBe(GpuVfxFrameId.FlameTongue);
+      .toBe(GpuVfxFrameId.FlameBed);
+    expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.heat-body')!.frame)
+      .toBe(GpuVfxFrameId.FlameBed);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.spark')!.frame)
       .toBe(GpuVfxFrameId.FlameSpark);
     expect(GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'groundfire.smoke')!.frame)

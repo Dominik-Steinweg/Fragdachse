@@ -46,6 +46,15 @@ export class ParticleFlowScheduler {
   }
 
   /**
+   * Macht den naechsten Tick sofort faellig, ohne das aktuelle Emissionsintervall zu aendern.
+   * Das ist fuer neu entstandene Effekte gedacht, die im ersten Render-Frame sichtbar sein
+   * sollen, danach aber in ihren normalen Flow zurueckkehren.
+   */
+  primeForImmediateEmission(): void {
+    this.counterMs = 0;
+  }
+
+  /**
    * Ein Frame Fortschritt. Rueckgabe ist die Zahl der jetzt faelligen Partikel; nach jedem
    * davon wird die gueltige Frequenz aufaddiert, wie in Phasers `flow`. `frequencyMs` ist
    * immer >= 1, die Schleife terminiert daher auch bei grossen Deltas.

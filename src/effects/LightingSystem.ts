@@ -9,6 +9,7 @@ import type { DynamicLightOccluderSource } from './DynamicLightOccluders';
 import type { LightOccluderIndex } from './LightOccluderIndex';
 import {
   GLOBAL_LIGHT_INTENSITY_MULT,
+  EXPLOSION_OCCLUSION_REFRESH_MS,
   LIGHT_PRESETS,
   MAX_OCCLUDING_LIGHT_RADIUS,
   OCCLUDER_SCRATCH_SIZE,
@@ -91,6 +92,7 @@ interface ActiveLight {
   releasedAt: number;
   /** Pro Frame neu berechnet: Intensität inklusive Profil, Abkling- und Flackerterm. */
   effectiveIntensity: number;
+  occlusionCache: OcclusionCache | null;
 }
 
 export interface LightOverrides {
@@ -106,6 +108,23 @@ interface OccluderSlot {
   readonly renderTexture: Phaser.GameObjects.RenderTexture;
   readonly image: Phaser.GameObjects.Image;
   readonly graphics: Phaser.GameObjects.Graphics;
+}
+
+interface OcclusionCache {
+  readonly renderTexture: Phaser.GameObjects.RenderTexture;
+  readonly image: Phaser.GameObjects.Image;
+  readonly graphics: Phaser.GameObjects.Graphics;
+  readonly staticCore: ShadowQuadBuffer;
+  readonly staticFalloff: ShadowQuadBuffer;
+  valid: boolean;
+  lastStaticRevision: number;
+  lastDynamicOccluderPresence: boolean;
+  sourceX: number;
+  sourceY: number;
+  sourceRadiusPx: number;
+  sourceOccludes: boolean;
+  lastRefreshAt: number;
+  nextRefreshAt: number;
 }
 
 export interface LightingPerformanceMetrics {
@@ -127,6 +146,13 @@ export interface LightingPerformanceMetrics {
   falloffQuads: number;
   dynamicOccluderTests: number;
   dynamicOccluderHits: number;
+  occlusionRefreshes: number;
+  occlusionCacheHits: number;
+  activeExplosionCaches: number;
+  explosionOcclusionRefreshes: number;
+  staticOcclusionRefreshes: number;
+  dynamicOcclusionRefreshes: number;
+  maxOcclusionCacheAgeMs: number;
   commandCount: number;
   lightMapPixels: number;
   scratchPixels: number;
@@ -139,6 +165,9 @@ function emptyPerformanceMetrics(): LightingPerformanceMetrics {
     shadowGeometryMs: 0, activeLights: 0, renderedLights: 0, directLights: 0,
     occludingLights: 0, fallbackOccludingLights: 0, radialLights: 0, coneLights: 0,
     shadowQuads: 0, falloffQuads: 0, dynamicOccluderTests: 0, dynamicOccluderHits: 0,
+    occlusionRefreshes: 0, occlusionCacheHits: 0, activeExplosionCaches: 0,
+    explosionOcclusionRefreshes: 0, staticOcclusionRefreshes: 0,
+    dynamicOcclusionRefreshes: 0, maxOcclusionCacheAgeMs: 0,
     commandCount: 0, lightMapPixels: 0, scratchPixels: 0,
     presetCounts: {},
   };
@@ -172,6 +201,8 @@ export class LightingSystem {
 
   private lightMap: Phaser.GameObjects.RenderTexture | null = null;
   private readonly slots: OccluderSlot[] = [];
+  private readonly occlusionCachePool: OcclusionCache[] = [];
+  private activeExplosionCacheCount = 0;
 
   private readonly lights: ActiveLight[] = [];
   private readonly pool: ActiveLight[] = [];
@@ -185,6 +216,19 @@ export class LightingSystem {
   private lastDynamicOccluderTests = 0;
   private lastDynamicOccluderHits = 0;
   private readonly coneTextureKeys = new Map<number, string>();
+  private frameOcclusionRefreshes = 0;
+  private frameOcclusionCacheHits = 0;
+  private frameExplosionOcclusionRefreshes = 0;
+  private frameStaticOcclusionRefreshes = 0;
+  private frameDynamicOcclusionRefreshes = 0;
+  private frameMaxOcclusionCacheAgeMs = 0;
+  private frameOcclusionRefreshMs = 0;
+  private frameShadowGeometryMs = 0;
+  private frameOcclusionRefreshCommands = 0;
+  private frameRefreshShadowQuads = 0;
+  private frameRefreshFalloffQuads = 0;
+  private frameRefreshDynamicTests = 0;
+  private frameRefreshDynamicHits = 0;
 
   private enabled = false;
   private compositeSuppressed = false;
@@ -361,7 +405,10 @@ export class LightingSystem {
 
   /** Gibt alle Lichter frei, ohne die Texturen zu zerstören. */
   clear(): void {
-    for (const light of this.lights) this.pool.push(light);
+    for (const light of this.lights) {
+      this.releaseExplosionCache(light);
+      this.pool.push(light);
+    }
     this.lights.length = 0;
     this.keyed.clear();
     this.syncOverlayVisibility();
@@ -382,6 +429,10 @@ export class LightingSystem {
   }
 
   private destroyRenderTargets(): void {
+    for (const light of this.lights) this.releaseExplosionCache(light);
+    for (const cache of this.occlusionCachePool) this.destroyOcclusionCache(cache);
+    this.occlusionCachePool.length = 0;
+    this.activeExplosionCacheCount = 0;
     this.lightMap?.destroy();
     this.lightMap = null;
     // Die neue Textur startet leer, das gemerkte Ambient gilt nicht mehr.
@@ -486,6 +537,20 @@ export class LightingSystem {
     this.collectRenderQueue(now, scrollX, scrollY);
     const queueMs = metricsEnabled ? performance.now() - queueStartedAt : 0;
 
+    this.frameOcclusionRefreshes = 0;
+    this.frameOcclusionCacheHits = 0;
+    this.frameExplosionOcclusionRefreshes = 0;
+    this.frameStaticOcclusionRefreshes = 0;
+    this.frameDynamicOcclusionRefreshes = 0;
+    this.frameMaxOcclusionCacheAgeMs = 0;
+    this.frameOcclusionRefreshMs = 0;
+    this.frameShadowGeometryMs = 0;
+    this.frameOcclusionRefreshCommands = 0;
+    this.frameRefreshShadowQuads = 0;
+    this.frameRefreshFalloffQuads = 0;
+    this.frameRefreshDynamicTests = 0;
+    this.frameRefreshDynamicHits = 0;
+
     const ambientColor = this.sky.ambientColor;
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
     const queueEmpty = this.renderQueue.length === 0;
@@ -548,6 +613,16 @@ export class LightingSystem {
     // Richtung No-Op – der kostenlose Weg zu einer globalen Lichtstärke.
     overlay.fill(ambientColor, 1);
 
+    const staticOccluderRevision = this.vectorSuppressed
+      ? 0
+      : (this.occluders?.getRevision() ?? 0);
+    this.prepareExplosionOcclusionCaches(
+      now,
+      staticOccluderRevision,
+      metricsEnabled,
+      countMetrics,
+    );
+
     let occludingUsed = 0;
     let directLights = 0;
     let fallbackOccludingLights = 0;
@@ -568,22 +643,30 @@ export class LightingSystem {
         if (light.shape === 'radial') radialLights += 1;
         else coneLights += 1;
       }
+      const stationaryExplosion = this.isStationaryExplosion(light);
       const useOcclusion = light.occludes
         && !this.vectorSuppressed
         && occludingUsed < this.quality.maxOccludingLightsPerFrame
         && occludingUsed < this.slots.length
+        && (!stationaryExplosion || light.occlusionCache?.valid === true)
         && (this.occluders !== null || this.dynamicOccluders?.hasOccluders() === true);
 
       if (useOcclusion) {
         const occlusionStartedAt = metricsEnabled ? performance.now() : 0;
-        const geometry = this.renderOccludingLight(
-          light,
-          this.slots[occludingUsed],
-          scrollX,
-          scrollY,
-          metricsEnabled,
-          countMetrics,
-        );
+        const geometry = stationaryExplosion
+          ? this.renderCachedExplosionLight(
+            light,
+            scrollX,
+            scrollY,
+          )
+          : this.renderOccludingLight(
+            light,
+            this.slots[occludingUsed],
+            scrollX,
+            scrollY,
+            metricsEnabled,
+            countMetrics,
+          );
         if (countMetrics && geometry) {
           if (metricsEnabled) occlusionMs += performance.now() - occlusionStartedAt;
           shadowGeometryMs += geometry.durationMs;
@@ -614,6 +697,15 @@ export class LightingSystem {
       }
     }
 
+    occlusionMs += this.frameOcclusionRefreshMs;
+    shadowGeometryMs += this.frameShadowGeometryMs;
+    shadowQuads += this.frameRefreshShadowQuads;
+    falloffQuads += this.frameRefreshFalloffQuads;
+    dynamicOccluderTests += this.frameRefreshDynamicTests;
+    dynamicOccluderHits += this.frameRefreshDynamicHits;
+    commandCount += this.frameOcclusionRefreshCommands;
+    commandCount += this.frameOcclusionCacheHits;
+
     if (semanticMetricsEnabled) {
       this.recordAttributionMetrics(
         this.lights.length,
@@ -624,6 +716,8 @@ export class LightingSystem {
         falloffQuads,
         dynamicOccluderTests,
         dynamicOccluderHits,
+        this.frameOcclusionCacheHits,
+        this.frameOcclusionRefreshes,
       );
     }
     if (!metricsEnabled) return;
@@ -648,6 +742,13 @@ export class LightingSystem {
       falloffQuads,
       dynamicOccluderTests,
       dynamicOccluderHits,
+      occlusionRefreshes: this.frameOcclusionRefreshes,
+      occlusionCacheHits: this.frameOcclusionCacheHits,
+      activeExplosionCaches: this.activeExplosionCacheCount,
+      explosionOcclusionRefreshes: this.frameExplosionOcclusionRefreshes,
+      staticOcclusionRefreshes: this.frameStaticOcclusionRefreshes,
+      dynamicOcclusionRefreshes: this.frameDynamicOcclusionRefreshes,
+      maxOcclusionCacheAgeMs: this.frameMaxOcclusionCacheAgeMs,
       commandCount,
       lightMapPixels: Math.ceil((GAME_WIDTH + overscanX * 2) * this.quality.lightMapScale)
         * Math.ceil((GAME_HEIGHT + overscanY * 2) * this.quality.lightMapScale),
@@ -687,6 +788,7 @@ export class LightingSystem {
       touchedAt: 0,
       releasedAt: 0,
       effectiveIntensity: 0,
+      occlusionCache: null,
     };
   }
 
@@ -750,6 +852,7 @@ export class LightingSystem {
 
       if (!expired) continue;
       if (light.key !== null) this.keyed.delete(light.key);
+      this.releaseExplosionCache(light);
       this.lights[index] = this.lights[this.lights.length - 1];
       this.lights.pop();
       this.pool.push(light);
@@ -798,17 +901,229 @@ export class LightingSystem {
 
   // ── Intern: Zeichnen ───────────────────────────────────────────────────────
 
+  private isStationaryExplosion(light: ActiveLight): boolean {
+    return light.key === null
+      && light.presetKey === 'explosion'
+      && light.shape === 'radial'
+      && light.occludes;
+  }
+
+  private getMaxCachedExplosionLights(): number {
+    return this.quality.maxOccludingLightsPerFrame * 2;
+  }
+
+  private prepareExplosionOcclusionCaches(
+    now: number,
+    staticRevision: number,
+    collectMetrics: boolean,
+    collectCounts: boolean,
+  ): void {
+    if (this.vectorSuppressed || this.getMaxCachedExplosionLights() <= 0) return;
+    if (this.occluders === null && this.dynamicOccluders?.hasOccluders() !== true) return;
+
+    const candidates: Array<{ light: ActiveLight; cache: OcclusionCache }> = [];
+    const dynamicOccluderPresence = this.dynamicOccluders?.hasOccluders() === true;
+    let occludingCandidates = 0;
+    for (const light of this.renderQueue) {
+      if (!light.occludes) continue;
+      if (occludingCandidates >= this.quality.maxOccludingLightsPerFrame) break;
+      occludingCandidates += 1;
+      if (!this.isStationaryExplosion(light)) continue;
+
+      const cache = this.ensureExplosionCache(light);
+      if (!cache) continue;
+      const lightGeometryChanged = cache.sourceX !== light.x
+        || cache.sourceY !== light.y
+        || cache.sourceRadiusPx !== light.radiusPx
+        || cache.sourceOccludes !== light.occludes;
+      const staticGeometryChanged = !cache.valid || cache.lastStaticRevision !== staticRevision;
+      const dynamicPresenceChanged = cache.lastDynamicOccluderPresence !== dynamicOccluderPresence;
+      if (staticGeometryChanged || lightGeometryChanged || dynamicPresenceChanged) {
+        this.refreshExplosionCache(
+          light,
+          cache,
+          now,
+          staticRevision,
+          staticGeometryChanged || lightGeometryChanged,
+          collectMetrics,
+          collectCounts,
+        );
+        continue;
+      }
+      if (now >= cache.nextRefreshAt) candidates.push({ light, cache });
+    }
+
+    // Deterministic oldest-first order prevents a barrage of explosions from refreshing
+    // all cached textures in the same timer tick.
+    candidates.sort((left, right) => left.cache.lastRefreshAt - right.cache.lastRefreshAt);
+    const refreshBudget = this.quality.level === 'high' ? 2 : 1;
+    for (const candidate of candidates.slice(0, refreshBudget)) {
+      this.refreshExplosionCache(
+        candidate.light,
+        candidate.cache,
+        now,
+        staticRevision,
+        false,
+        collectMetrics,
+        collectCounts,
+      );
+    }
+  }
+
+  private ensureExplosionCache(light: ActiveLight): OcclusionCache | null {
+    if (light.occlusionCache) return light.occlusionCache;
+    if (this.activeExplosionCacheCount >= this.getMaxCachedExplosionLights()) return null;
+
+    const cache = this.occlusionCachePool.pop() ?? this.createOcclusionCache();
+    cache.valid = false;
+    cache.lastStaticRevision = -1;
+    cache.lastDynamicOccluderPresence = false;
+    cache.sourceX = 0;
+    cache.sourceY = 0;
+    cache.sourceRadiusPx = 0;
+    cache.sourceOccludes = false;
+    cache.lastRefreshAt = 0;
+    cache.nextRefreshAt = 0;
+    cache.image.setAlpha(1).setTint(0xffffff).setVisible(true);
+    light.occlusionCache = cache;
+    this.activeExplosionCacheCount += 1;
+    return cache;
+  }
+
+  private refreshExplosionCache(
+    light: ActiveLight,
+    cache: OcclusionCache,
+    now: number,
+    staticRevision: number,
+    refreshStatic: boolean,
+    collectMetrics: boolean,
+    collectCounts: boolean,
+  ): void {
+    const center = OCCLUDER_SCRATCH_SIZE * 0.5;
+    const refreshStartedAt = collectMetrics ? performance.now() : 0;
+    if (refreshStatic) {
+      cache.staticCore.reset();
+      cache.staticFalloff.reset();
+      this.projectStaticShadowGeometry(
+        light,
+        cache.staticCore,
+        cache.staticFalloff,
+      );
+    }
+
+    const geometryStartedAt = collectMetrics ? performance.now() : 0;
+    this.shadowQuads.reset();
+    this.falloffQuads.reset();
+    const dynamic = this.projectDynamicShadowGeometry(
+      light,
+      this.shadowQuads,
+      this.falloffQuads,
+      collectCounts,
+    );
+
+    cache.renderTexture.clear();
+    this.stampLight(cache.renderTexture, light, center, center, 1, 0xffffff);
+    cache.graphics.clear();
+    cache.graphics.fillStyle(0xffffff, 1);
+    this.fillShadowQuads(cache.graphics, cache.staticCore, light, center);
+    this.fillFalloffQuads(cache.graphics, cache.staticFalloff, light, center);
+    this.fillShadowQuads(cache.graphics, this.shadowQuads, light, center);
+    this.fillFalloffQuads(cache.graphics, this.falloffQuads, light, center);
+    const graphicsCommands = cache.graphics.commandBuffer.length;
+    if (cache.staticCore.length > 0 || cache.staticFalloff.length > 0
+      || this.shadowQuads.length > 0 || this.falloffQuads.length > 0) {
+      cache.renderTexture.erase([cache.graphics]);
+    }
+    cache.renderTexture.render();
+
+    cache.valid = true;
+    cache.lastStaticRevision = staticRevision;
+    cache.lastDynamicOccluderPresence = this.dynamicOccluders?.hasOccluders() === true;
+    cache.sourceX = light.x;
+    cache.sourceY = light.y;
+    cache.sourceRadiusPx = light.radiusPx;
+    cache.sourceOccludes = light.occludes;
+    cache.lastRefreshAt = now;
+    cache.nextRefreshAt = now + EXPLOSION_OCCLUSION_REFRESH_MS;
+
+    this.frameOcclusionRefreshes += 1;
+    this.frameExplosionOcclusionRefreshes += 1;
+    if (refreshStatic && this.occluders !== null) {
+      this.frameStaticOcclusionRefreshes += 1;
+    }
+    if (this.dynamicOccluders?.hasOccluders() === true) {
+      this.frameDynamicOcclusionRefreshes += 1;
+    }
+    this.frameRefreshShadowQuads += cache.staticCore.length + this.shadowQuads.length;
+    this.frameRefreshFalloffQuads += cache.staticFalloff.length + this.falloffQuads.length;
+    this.frameRefreshDynamicTests += dynamic.tests;
+    this.frameRefreshDynamicHits += dynamic.hits;
+    this.frameOcclusionRefreshCommands += 4 + graphicsCommands;
+    if (collectMetrics) {
+      this.frameOcclusionRefreshMs += performance.now() - refreshStartedAt;
+      this.frameShadowGeometryMs += performance.now() - geometryStartedAt;
+    }
+  }
+
+  private renderCachedExplosionLight(
+    light: ActiveLight,
+    scrollX: number,
+    scrollY: number,
+  ): {
+    durationMs: number;
+    shadowQuads: number;
+    falloffQuads: number;
+    dynamicOccluderTests: number;
+    dynamicOccluderHits: number;
+    graphicsCommands: number;
+  } | null {
+    const cache = light.occlusionCache;
+    if (!cache || !cache.valid) {
+      // Pool-/Qualitäts-Fallback: das Licht bleibt sichtbar, aber erzeugt keinen
+      // zusätzlichen Schatten-Renderpass. Der normale Update-Pfad entscheidet
+      // bereits vorher, dass dafür kein Occlusion-Slot verbraucht wird.
+      const scale = this.quality.lightMapScale;
+      this.stampLight(
+        this.lightMap!,
+        light,
+        (light.x - scrollX + this.getLightMapOverscanPx(GAME_WIDTH)) * scale,
+        (light.y - scrollY + this.getLightMapOverscanPx(GAME_HEIGHT)) * scale,
+      );
+      return null;
+    }
+
+    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
+    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
+    cache.image
+      .setPosition(
+        (light.x - scrollX + overscanX) * this.quality.lightMapScale,
+        (light.y - scrollY + overscanY) * this.quality.lightMapScale,
+      )
+      .setAlpha(light.effectiveIntensity)
+      .setTint(light.color);
+    this.lightMap?.draw([cache.image]);
+
+    this.frameOcclusionCacheHits += 1;
+    this.frameMaxOcclusionCacheAgeMs = Math.max(
+      this.frameMaxOcclusionCacheAgeMs,
+      Math.max(0, this.now() - cache.lastRefreshAt),
+    );
+    return null;
+  }
+
   private stampLight(
     target: Phaser.GameObjects.RenderTexture,
     light: ActiveLight,
     x: number,
     y: number,
+    alpha = light.effectiveIntensity,
+    tint = light.color,
   ): void {
     const radiusLm = light.radiusPx * this.quality.lightMapScale;
     if (light.shape === 'cone') {
       target.stamp(this.ensureConeTexture(light.coneAngle), undefined, x, y, {
-        alpha: light.effectiveIntensity,
-        tint: light.color,
+        alpha,
+        tint,
         rotation: light.angle,
         scale: radiusLm / CONE_TEX_WIDTH,
         originX: 0,
@@ -819,8 +1134,8 @@ export class LightingSystem {
     }
 
     target.stamp(TEX_LIGHT_RADIAL, undefined, x, y, {
-      alpha: light.effectiveIntensity,
-      tint: light.color,
+      alpha,
+      tint,
       scale: radiusLm / (RADIAL_TEX_SIZE * 0.5),
       blendMode: Phaser.BlendModes.ADD,
     });
@@ -852,6 +1167,7 @@ export class LightingSystem {
     const shadowQuads = collectCounts ? this.shadowQuads.length : 0;
     const falloffQuads = collectCounts ? this.falloffQuads.length : 0;
     slot.renderTexture.erase([slot.graphics]);
+    this.frameOcclusionRefreshes += 1;
 
     slot.image.setPosition(
       (light.x - scrollX + this.getLightMapOverscanPx(GAME_WIDTH)) * this.quality.lightMapScale,
@@ -889,20 +1205,27 @@ export class LightingSystem {
     collectCounts: boolean,
   ): void {
     graphics.clear();
-    if (collectCounts) {
-      this.lastDynamicOccluderTests = 0;
-      this.lastDynamicOccluderHits = 0;
-    }
-    const index = this.occluders;
-    const dynamic = this.dynamicOccluders;
-
     const core = this.shadowQuads;
     const falloff = this.falloffQuads;
     core.reset();
     falloff.reset();
+    this.projectStaticShadowGeometry(light, core, falloff);
+    this.projectDynamicShadowGeometry(light, core, falloff, collectCounts);
+
+    if (core.length === 0 && falloff.length === 0) return;
+
+    graphics.fillStyle(0xffffff, 1);
+    this.fillShadowQuads(graphics, core, light, center);
+    this.fillFalloffQuads(graphics, falloff, light, center);
+  }
+
+  private projectStaticShadowGeometry(
+    light: ActiveLight,
+    core: ShadowQuadBuffer,
+    falloff: ShadowQuadBuffer,
+  ): void {
     const extendPx = light.radiusPx * SHADOW_EXTEND_FACTOR;
     const falloffPx = OCCLUDER_SHADE_FALLOFF_PX;
-
     const projectRect = (
       left: number,
       top: number,
@@ -936,7 +1259,7 @@ export class LightingSystem {
       );
     };
 
-    index?.queryCircle(
+    this.occluders?.queryCircle(
       light.x,
       light.y,
       light.radiusPx,
@@ -946,23 +1269,52 @@ export class LightingSystem {
         projectCircleShadowQuad(core, light.x, light.y, centerX, centerY, radius, falloffPx, extendPx);
       },
     );
+  }
 
-    this.lastDynamicOccluderTests = dynamic?.queryCircle(
+  private projectDynamicShadowGeometry(
+    light: ActiveLight,
+    core: ShadowQuadBuffer,
+    falloff: ShadowQuadBuffer,
+    collectCounts: boolean,
+  ): { tests: number; hits: number } {
+    let hits = 0;
+    const extendPx = light.radiusPx * SHADOW_EXTEND_FACTOR;
+    const falloffPx = OCCLUDER_SHADE_FALLOFF_PX;
+    const tests = this.dynamicOccluders?.queryCircle(
       light.x,
       light.y,
       light.radiusPx,
       (left, top, right, bottom, exposedEdges) => {
-        if (collectCounts) this.lastDynamicOccluderHits += 1;
-        projectRect(left, top, right, bottom, exposedEdges);
+        if (collectCounts) hits += 1;
+        projectRectShadowQuads(
+          falloff,
+          light.x,
+          light.y,
+          left,
+          top,
+          right,
+          bottom,
+          0,
+          falloffPx,
+          exposedEdges,
+        );
+        projectRectShadowQuads(
+          core,
+          light.x,
+          light.y,
+          left,
+          top,
+          right,
+          bottom,
+          falloffPx,
+          extendPx,
+          exposedEdges,
+        );
       },
     ) ?? 0;
-    if (!collectCounts) this.lastDynamicOccluderTests = 0;
-
-    if (core.length === 0 && falloff.length === 0) return;
-
-    graphics.fillStyle(0xffffff, 1);
-    this.fillShadowQuads(graphics, core, light, center);
-    this.fillFalloffQuads(graphics, falloff, light, center);
+    this.lastDynamicOccluderTests = collectCounts ? tests : 0;
+    this.lastDynamicOccluderHits = collectCounts ? hits : 0;
+    return { tests, hits };
   }
 
   private recordAttributionMetrics(
@@ -974,6 +1326,8 @@ export class LightingSystem {
     falloffQuads: number,
     dynamicOccluderTests: number,
     dynamicOccluderHits: number,
+    cacheHits = 0,
+    cacheRefreshes = 0,
   ): void {
     const collector = this.attributionCollector;
     if (!collector?.isActive()) return;
@@ -997,6 +1351,8 @@ export class LightingSystem {
       maxFalloffQuadsPerFrame: falloffQuads,
       dynamicOccluderTests,
       dynamicOccluderHits,
+      cacheHits,
+      cacheRefreshes,
     });
   }
 
@@ -1125,6 +1481,55 @@ export class LightingSystem {
     const graphics = this.scene.make.graphics({}, false);
 
     return { renderTexture, image, graphics };
+  }
+
+  private createOcclusionCache(): OcclusionCache {
+    const renderTexture = this.scene.add
+      .renderTexture(0, 0, OCCLUDER_SCRATCH_SIZE, OCCLUDER_SCRATCH_SIZE)
+      .setOrigin(0, 0)
+      .setVisible(false)
+      .setScrollFactor(0)
+      .setRenderMode('render');
+    const image = new Phaser.GameObjects.Image(this.scene, 0, 0, renderTexture.texture.key)
+      .setOrigin(0.5, 0.5)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(1)
+      .setTint(0xffffff);
+    const graphics = this.scene.make.graphics({}, false);
+
+    return {
+      renderTexture,
+      image,
+      graphics,
+      staticCore: new ShadowQuadBuffer(),
+      staticFalloff: new ShadowQuadBuffer(),
+      valid: false,
+      lastStaticRevision: -1,
+      lastDynamicOccluderPresence: false,
+      sourceX: 0,
+      sourceY: 0,
+      sourceRadiusPx: 0,
+      sourceOccludes: false,
+      lastRefreshAt: 0,
+      nextRefreshAt: 0,
+    };
+  }
+
+  private releaseExplosionCache(light: ActiveLight): void {
+    const cache = light.occlusionCache;
+    if (!cache) return;
+    light.occlusionCache = null;
+    cache.valid = false;
+    cache.graphics.clear();
+    cache.image.setAlpha(1).setTint(0xffffff).setVisible(false);
+    this.occlusionCachePool.push(cache);
+    this.activeExplosionCacheCount = Math.max(0, this.activeExplosionCacheCount - 1);
+  }
+
+  private destroyOcclusionCache(cache: OcclusionCache): void {
+    cache.renderTexture.destroy();
+    cache.image.destroy();
+    cache.graphics.destroy();
   }
 
   private ensureTextures(): void {

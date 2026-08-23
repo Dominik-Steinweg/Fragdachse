@@ -21,6 +21,9 @@ export const OCCLUDER_SCRATCH_SIZE = 512;
 /** Maximaler Weltradius, den ein verdeckendes Licht haben darf (Scratch-Grenze). */
 export const MAX_OCCLUDING_LIGHT_RADIUS = (OCCLUDER_SCRATCH_SIZE / LIGHTMAP_SCALE) * 0.5;
 
+/** Aktualisierungsintervall der beweglichen Occluder in stationären Explosionscaches. */
+export const EXPLOSION_OCCLUSION_REFRESH_MS = 100;
+
 export const MAX_LIGHTS_PER_FRAME = 48;
 /**
  * Jeder Slot kostet eine eigene Scratch-Textur und einen Renderpass. Sechs reichen für

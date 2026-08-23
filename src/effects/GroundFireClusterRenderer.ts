@@ -1,14 +1,6 @@
 import * as Phaser from 'phaser';
 import type { GroundFireVisualStyle, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
 import {
-  FLAME_JET_TINTS_COOL,
-  FLAME_JET_TINTS_HOT,
-  FLAME_JET_TINTS_MID,
-  VOID_JET_TINTS_COOL,
-  VOID_JET_TINTS_HOT,
-  VOID_JET_TINTS_MID,
-} from './FlameShared';
-import {
   buildGroundFireClusterLayouts,
   groundFireCellsSignature,
   type GroundFireClusterLayout,
@@ -25,6 +17,14 @@ import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 
 const TWO_PI = Math.PI * 2;
 const CELL = GROUND_FIRE_CELL_SIZE;
+const GROUND_FIRE_SURFACE_SIZE = 32;
+
+const GROUND_FIRE_TINTS_HOT = [0xffffc15a, 0xffff9e22, 0xffff7b0b, 0xffff5b05] as const;
+const GROUND_FIRE_TINTS_MID = [0xffff7b0b, 0xfff44905, 0xffdd2105, 0xffc41504] as const;
+const GROUND_FIRE_TINTS_COOL = [0xffbc1707, 0xff971006, 0xff760806, 0xff560306] as const;
+const GROUND_FIRE_VOID_TINTS_HOT = [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff] as const;
+const GROUND_FIRE_VOID_TINTS_MID = [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff] as const;
+const GROUND_FIRE_VOID_TINTS_COOL = [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4] as const;
 
 const GROUND_FIRE_BED_LIFESPAN = { min: 900, max: 1400 };
 const GROUND_FIRE_BILLOW_LIFESPAN = { min: 620, max: 1000 };
@@ -45,9 +45,9 @@ const GROUND_FIRE_FADE_MS = 450;
  * Die Werte sind ein additives Helligkeitsbudget: Dichte x mittlere Alpha x Flaeche des Motivs.
  * Wer hier dreht, dreht die Helligkeit der Brandflaeche.
  */
-const BED_DENSITY_PER_CELL = 0.4;
-const BILLOW_DENSITY_PER_CELL = 0.85;
-const TONGUE_DENSITY_PER_CELL = 0.38;
+const BED_DENSITY_PER_CELL = 0.58;
+const BILLOW_DENSITY_PER_CELL = 0.95;
+const TONGUE_DENSITY_PER_CELL = 0.42;
 const SPARK_DENSITY_PER_CELL = 0.05;
 /** Rauch bleibt ein sparsamer Accent; eigene Lane mit nur 128 Slots. */
 const SMOKE_DENSITY_PER_CELL = 0.02;
@@ -68,9 +68,9 @@ const GROUND_FIRE_MAX_FRAME_BURST = 48;
  * Motivgroessen als Vielfaches der Rasterzelle. Ueber 1 gewaehlt, damit sich die Motive
  * benachbarter Zellen ueberlappen: erst die Ueberlappung macht aus Einzelpartikeln eine Flaeche.
  */
-const BED_SIZE_CELLS = 2.1;
-const BILLOW_SIZE_CELLS = 1.75;
-const TONGUE_SIZE_CELLS = 1.15;
+const BED_SIZE_CELLS = 2.55;
+const BILLOW_SIZE_CELLS = 2.75;
+const TONGUE_SIZE_CELLS = 2.05;
 
 /** Geschwindigkeit des gemeinsamen Konvektionsfeldes in px/s. */
 const BED_DRIFT_SPEED = 3;
@@ -148,13 +148,11 @@ const DRIFT = { x: 0, y: 0 };
  *
  * ## Warum drei Schichten
  *
- * - **Glutbett** (`GroundFireHeatBody`, Frame `FlameBed`): breite, langsame, dunkle Scheiben mit
- *   Plateau. Sie tragen keine Silhouette, sondern schliessen die Flaeche – ohne sie zerfaellt
- *   jede Brandflaeche in einzelne Flammen, egal wie dicht die Flammen liegen.
- * - **Billows** (`GroundFireOuter`): der Flammenkoerper, entlang der lokalen Stroemung gestreckt
- *   und gedreht. Die Streckung ist es, die benachbarte Ballen ineinanderlaufen laesst – dasselbe
- *   Mittel, das den Flammenwerferstrahl zusammenhaengend macht.
- * - **Zungen** (`GroundFireCore`): die heissen Lecken, bevorzugt auf Zellen mit hoher `coreness`.
+ * - **Glutbett** (`GroundFireHeatBody`): breite, langsame Grundhelligkeit.
+ * - **Flaechenfeld** (`GroundFireOuter`): die organische, additive Grundmaske mit grosser
+ *   Ueberlappung und ohne eigene Flammensilhouette.
+ * - **Heissfeld** (`GroundFireCore`): dieselbe Maske mit kleinerer, variabler Dichte und hoeherer
+ *   Temperatur; es setzt Glutnester, keine separaten Zungen.
  *
  * ## Warum die Bewegung ein Feld ist und kein Zufall je Partikel
  *
@@ -199,20 +197,20 @@ export class GroundFireClusterRenderer {
     this.bedSpec = bed;
 
     const billow = system.createSpec(GpuVfxEffectId.GroundFireOuter);
-    billow.frame = GpuVfxFrameId.FlameBillow;
+    billow.frame = GpuVfxFrameId.FlameBed;
     billow.yMode = GpuVfxEase.Linear;
     billow.scaleEase = GpuVfxEase.QuadOut;
     billow.alphaEnd = 0;
-    billow.tintBlendStart = 0.94;
+    billow.tintBlendStart = 0.96;
     billow.tintBlendEnd = 1;
     this.billowSpec = billow;
 
     const tongue = system.createSpec(GpuVfxEffectId.GroundFireCore);
-    tongue.frame = GpuVfxFrameId.FlameTongue;
+    tongue.frame = GpuVfxFrameId.FlameBed;
     tongue.yMode = GpuVfxEase.Linear;
     tongue.scaleEase = GpuVfxEase.QuadOut;
     tongue.alphaEnd = 0;
-    tongue.tintBlendStart = 0.74;
+    tongue.tintBlendStart = 0.86;
     tongue.tintBlendEnd = 1;
     this.tongueSpec = tongue;
 
@@ -272,11 +270,22 @@ export class GroundFireClusterRenderer {
     const dirX = DRIFT.x;
     const dirY = DRIFT.y;
     this.spawnBedAt(x, y, 1, 0.34, visualStyle, seed, nowMs, dirX, dirY, 1);
-    this.spawnBillowAt(x, y, BILLOW_SIZE_CELLS * CELL / 32, 0.7, visualStyle, seed, nowMs, dirX, dirY, 1);
+    this.spawnBillowAt(x, y, BILLOW_SIZE_CELLS * CELL / GROUND_FIRE_SURFACE_SIZE, 0.7, visualStyle, seed, nowMs, dirX, dirY, 1);
     this.spawnBillowAt(
-      x + 4, y - 2, BILLOW_SIZE_CELLS * CELL / 32 * 0.82, 0.6, visualStyle, seed ^ 0x41, nowMs, dirX, dirY, 0.9,
+      x + 4, y - 2, BILLOW_SIZE_CELLS * CELL / GROUND_FIRE_SURFACE_SIZE * 0.82, 0.6, visualStyle, seed ^ 0x41, nowMs, dirX, dirY, 0.9,
     );
-    this.spawnTongueAt(x, y, TONGUE_SIZE_CELLS, 0.92, visualStyle, seed ^ 0x83, nowMs, dirX, dirY, 1);
+    this.spawnTongueAt(
+      x,
+      y,
+      TONGUE_SIZE_CELLS * (0.72 + this.seededUnit(seed, 85) * 0.6),
+      0.92,
+      visualStyle,
+      seed ^ 0x83,
+      nowMs,
+      dirX,
+      dirY,
+      1,
+    );
     this.spawnSparkAt(x, y, 0.9, visualStyle, seed ^ 0xc7, nowMs);
   }
 
@@ -356,7 +365,20 @@ export class GroundFireClusterRenderer {
     // behaelt ihre Zellen), deshalb wird das Feld immer aufgefrischt und nur die teure
     // Randdistanz an die Form gebunden.
     this.refreshFieldValues(cluster);
-    if (shapeChanged || cluster.field.length !== layout.cells.length) this.rebuildField(cluster);
+    if (shapeChanged || cluster.field.length !== layout.cells.length) {
+      this.rebuildField(cluster);
+      if (shapeChanged) this.primeClusterEmission(cluster);
+    }
+  }
+
+  /** Neue Feuerflaechen muessen im ersten GPU-Tick lesbar sein, statt auf die erste
+   * lebensdauerbasierte Flow-Periode zu warten. */
+  private primeClusterEmission(cluster: GroundFireCluster): void {
+    cluster.bedFlow.primeForImmediateEmission();
+    cluster.billowFlow.primeForImmediateEmission();
+    cluster.tongueFlow.primeForImmediateEmission();
+    cluster.sparkFlow.primeForImmediateEmission();
+    cluster.smokeFlow.primeForImmediateEmission();
   }
 
   /**
@@ -543,7 +565,7 @@ export class GroundFireClusterRenderer {
     const dirX = DRIFT.x;
     const dirY = DRIFT.y;
     const size = BILLOW_SIZE_CELLS * CELL * (0.86 + this.seededUnit(seed, 23) * 0.3)
-      * (0.94 + intensity * 0.08) / 32;
+      * (0.94 + intensity * 0.08) / GROUND_FIRE_SURFACE_SIZE;
     this.spawnBillowAt(
       cell.x + (this.seededUnit(seed, 67) - 0.5) * CELL,
       cell.y + (this.seededUnit(seed, 71) - 0.5) * CELL,
@@ -574,7 +596,7 @@ export class GroundFireClusterRenderer {
     this.spawnTongueAt(
       cell.x + (this.seededUnit(seed, 73) - 0.5) * CELL * 0.8,
       cell.y + (this.seededUnit(seed, 79) - 0.5) * CELL * 0.8,
-      TONGUE_SIZE_CELLS * (0.86 + this.seededUnit(seed, 83) * 0.28) * (0.9 + intensity * 0.16),
+      TONGUE_SIZE_CELLS * (0.58 + this.seededUnit(seed, 83) * 0.92) * (0.84 + intensity * 0.24),
       Math.max(0.42, this.heatAt(cluster, cell, nowMs, intensity) + 0.12),
       cluster.visualStyle,
       seed,
@@ -636,15 +658,15 @@ export class GroundFireClusterRenderer {
     spec.y = y;
     spec.vx = dirX * BED_DRIFT_SPEED;
     spec.vy = dirY * BED_DRIFT_SPEED;
-    spec.rotation = Math.atan2(dirY, dirX);
-    spec.angularVelocity = 0;
-    spec.scaleStart = BED_SIZE_CELLS * CELL * size / 32;
+    spec.rotation = this.seededUnit(seed, 95) * TWO_PI;
+    spec.angularVelocity = (this.seededUnit(seed, 96) - 0.5) * 0.24;
+    spec.scaleStart = BED_SIZE_CELLS * CELL * size / GROUND_FIRE_SURFACE_SIZE;
     // Die Glut breitet sich kaum aus; ein wachsendes Bett wuerde ueber die Brandflaeche
     // hinauslaufen und ihre Kante ausfransen.
     spec.scaleEnd = spec.scaleStart * 1.05;
-    spec.stretchStart = 1.14;
-    spec.stretchEnd = 1;
-    spec.alphaStart = 0.16 * fade;
+    spec.stretchStart = 0.92 + this.seededUnit(seed, 98) * 0.32;
+    spec.stretchEnd = 0.96;
+    spec.alphaStart = 0.18 * fade;
     spec.tint = this.pickHeatTint(style, heat, seed, 103);
     system.spawn(spec, this.source, nowMs);
   }
@@ -669,15 +691,15 @@ export class GroundFireClusterRenderer {
     spec.y = y;
     spec.vx = dirX * BILLOW_DRIFT_SPEED;
     spec.vy = dirY * BILLOW_DRIFT_SPEED;
-    // An der Stroemung ausgerichtet und in ihre Richtung gestreckt: benachbarte Ballen ueberlappen
-    // dadurch entlang derselben Achse, statt als runde Tupfen nebeneinanderzuliegen.
-    spec.rotation = Math.atan2(dirY, dirX) + (this.seededUnit(seed, 99) - 0.5) * 0.5;
-    spec.angularVelocity = (this.seededUnit(seed, 100) - 0.5) * 0.35;
+    // Die Flaechenmaske ist rotationssymmetrisch genug fuer ein freies Drehen; dadurch entstehen
+    // keine wiedererkennbaren, gleich ausgerichteten Einzelmotive im Raster.
+    spec.rotation = this.seededUnit(seed, 99) * TWO_PI;
+    spec.angularVelocity = (this.seededUnit(seed, 100) - 0.5) * 0.42;
     spec.scaleStart = size;
-    spec.scaleEnd = spec.scaleStart * (1.24 + this.seededUnit(seed, 102) * 0.16);
-    spec.stretchStart = 1.42 + this.seededUnit(seed, 105) * 0.26;
-    spec.stretchEnd = 1.05;
-    spec.alphaStart = 0.3 * fade;
+    spec.scaleEnd = spec.scaleStart * (1.08 + this.seededUnit(seed, 102) * 0.22);
+    spec.stretchStart = 0.9 + this.seededUnit(seed, 105) * 0.48;
+    spec.stretchEnd = 0.96 + this.seededUnit(seed, 106) * 0.18;
+    spec.alphaStart = 0.28 * fade;
     spec.tint = this.pickHeatTint(style, heat, seed, 107);
     system.spawn(spec, this.source, nowMs);
   }
@@ -702,13 +724,13 @@ export class GroundFireClusterRenderer {
     spec.y = y;
     spec.vx = dirX * TONGUE_DRIFT_SPEED;
     spec.vy = dirY * TONGUE_DRIFT_SPEED;
-    spec.rotation = Math.atan2(dirY, dirX) + (this.seededUnit(seed, 111) - 0.5) * 0.7;
-    spec.angularVelocity = (this.seededUnit(seed, 112) - 0.5) * 0.8;
-    spec.scaleStart = size * CELL / 32;
-    spec.scaleEnd = spec.scaleStart * 1.18;
-    spec.stretchStart = 1.55 + this.seededUnit(seed, 113) * 0.45;
-    spec.stretchEnd = 1;
-    spec.alphaStart = 0.46 * fade;
+    spec.rotation = this.seededUnit(seed, 111) * TWO_PI;
+    spec.angularVelocity = (this.seededUnit(seed, 112) - 0.5) * 0.7;
+    spec.scaleStart = size * CELL / GROUND_FIRE_SURFACE_SIZE;
+    spec.scaleEnd = spec.scaleStart * (1.04 + this.seededUnit(seed, 114) * 0.22);
+    spec.stretchStart = 0.84 + this.seededUnit(seed, 113) * 0.72;
+    spec.stretchEnd = 0.94 + this.seededUnit(seed, 115) * 0.22;
+    spec.alphaStart = 0.34 * fade;
     spec.tint = this.pickHeatTint(style, Math.max(heat, 0.48), seed, 127);
     system.spawn(spec, this.source, nowMs);
   }
@@ -921,8 +943,8 @@ export class GroundFireClusterRenderer {
 
   private pickHeatTint(style: GroundFireVisualStyle, heat: number, seed: number, salt: number): number {
     const palette = style === 'void'
-      ? (heat > 0.62 ? VOID_JET_TINTS_HOT : heat > 0.28 ? VOID_JET_TINTS_MID : VOID_JET_TINTS_COOL)
-      : (heat > 0.62 ? FLAME_JET_TINTS_HOT : heat > 0.28 ? FLAME_JET_TINTS_MID : FLAME_JET_TINTS_COOL);
+      ? (heat > 0.62 ? GROUND_FIRE_VOID_TINTS_HOT : heat > 0.28 ? GROUND_FIRE_VOID_TINTS_MID : GROUND_FIRE_VOID_TINTS_COOL)
+      : (heat > 0.62 ? GROUND_FIRE_TINTS_HOT : heat > 0.28 ? GROUND_FIRE_TINTS_MID : GROUND_FIRE_TINTS_COOL);
     return palette[Math.floor(this.seededUnit(seed, salt) * palette.length)];
   }
 

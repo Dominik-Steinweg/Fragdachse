@@ -149,6 +149,8 @@ export interface GraphicsWorkCounters {
   maxDynamicPrimitivesPerFrame?: number;
   dynamicOccluderTests?: number;
   dynamicOccluderHits?: number;
+  cacheHits?: number;
+  cacheRefreshes?: number;
 }
 
 export interface ArenaVisualAttributionSample {

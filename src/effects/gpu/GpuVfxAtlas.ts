@@ -21,8 +21,8 @@ import {
   ensureExplosionSparkTexture,
   ensureExplosionEmberTexture,
 } from './GpuVfxSourceTextures';
+import { TEX_GROUND_FIRE_SURFACE, ensureGroundFireTextures } from '../GroundFireTextures';
 import {
-  TEX_FLAME_BED,
   TEX_FLAME_BILLOW,
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
@@ -188,7 +188,7 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   },
   {
     id: GpuVfxFrameId.FlameBed, frame: 'flame-bed',
-    sourceTextureKey: TEX_FLAME_BED, width: 32, height: 32, ensure: ensureFlameJetTextures,
+    sourceTextureKey: TEX_GROUND_FIRE_SURFACE, width: 32, height: 32, ensure: ensureGroundFireTextures,
   },
 ];
 
