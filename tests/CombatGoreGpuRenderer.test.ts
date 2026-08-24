@@ -17,9 +17,10 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 }));
 
 import { CombatGoreGpuRenderer } from '../src/effects/CombatGoreGpuRenderer';
+import { BLOOD_HIT_VFX } from '../src/config';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
-import { findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 interface CanvasStats {
   drawCalls: number;
@@ -60,9 +61,15 @@ function setup() {
   return { scene, renderer, stats, gpu };
 }
 
-function addVisualTexture(scene: ReturnType<typeof makeFakeGpuVfxScene>, key: string, frame = '__BASE') {
-  const texture = scene.textures.createCanvas(key, 64, 64);
-  if (frame !== '__BASE') texture.add(frame, 0, 0, 0, 64, 64);
+function addVisualTexture(
+  scene: ReturnType<typeof makeFakeGpuVfxScene>,
+  key: string,
+  frame = '__BASE',
+  width = 64,
+  height = 64,
+) {
+  const texture = scene.textures.createCanvas(key, width, height);
+  if (frame !== '__BASE') texture.add(frame, 0, 0, 0, width, height);
   return texture;
 }
 
@@ -179,5 +186,102 @@ describe('combat gore gpu renderer', () => {
     expect(main.spawns).toBeGreaterThan(0);
     expect(micro.qualityDrops).toBeGreaterThan(0);
     expect(glow.qualityDrops).toBeGreaterThan(0);
+  });
+
+  it('keeps the complete death silhouette distributed when quality reduces main fragments', () => {
+    qualityFactors.critical = 0.35;
+    qualityFactors.standard = 0;
+    qualityFactors.decorative = 0;
+    const { scene, renderer, gpu } = setup();
+    addVisualTexture(scene, 'full_animated_badger', 'walk-1', 64, 64);
+
+    renderer.playDeath({
+      ...death,
+      textureKey: 'full_animated_badger',
+      frame: 'walk-1',
+      displayWidth: 32,
+      displayHeight: 32,
+      rotation: 0,
+    });
+
+    const report = gpu.buildReport();
+    const main = report.effects.find((effect) => effect.label === 'death.fragment')!;
+    const members = findFakeLane(scene, 'gore-normal').members.slice(0, main.spawns);
+    const xRange = Math.max(...members.map((member) => member.x.base))
+      - Math.min(...members.map((member) => member.x.base));
+    const yRange = Math.max(...members.map((member) => member.y.base))
+      - Math.min(...members.map((member) => member.y.base));
+
+    expect(main.spawns).toBeGreaterThan(0);
+    expect(xRange).toBeGreaterThan(20);
+    expect(yRange).toBeGreaterThan(20);
+  });
+
+  it('applies the lethal hit direction to both death fragments and glow', () => {
+    const directed = setup();
+    const radial = setup();
+    const radialDeath = { ...death, dirX: 0, dirY: 0 };
+
+    directed.renderer.playDeath(death);
+    radial.renderer.playDeath(radialDeath);
+
+    const directedMain = directed.gpu.buildReport().effects
+      .find((effect) => effect.label === 'death.fragment')!.spawns;
+    const directedFragments = findFakeLane(directed.scene, 'gore-normal').members.slice(0, directedMain);
+    const radialFragments = findFakeLane(radial.scene, 'gore-normal').members.slice(0, directedMain);
+    const mainImpulse = directedFragments.reduce(
+      (sum, member, index) => sum + member.x.amplitude - radialFragments[index]!.x.amplitude,
+      0,
+    ) / directedFragments.length;
+
+    const directedGlow = findFakeLane(directed.scene, 'gore-add').members;
+    const radialGlow = findFakeLane(radial.scene, 'gore-add').members;
+    const glowImpulse = directedGlow.reduce(
+      (sum, member, index) => sum + member.x.amplitude - radialGlow[index]!.x.amplitude,
+      0,
+    ) / directedGlow.length;
+
+    expect(mainImpulse).toBeGreaterThan(20);
+    expect(glowImpulse).toBeGreaterThan(20);
+  });
+
+  it('restores aggressive killshot scale, travel and high-quality stain count', () => {
+    const normal = setup();
+    const killshot = setup();
+    const normalStains: number[] = [];
+    const killshotStains: number[] = [];
+    const hit = {
+      type: 'hit' as const,
+      x: 100,
+      y: 120,
+      targetId: 'enemy-1',
+      totalDamage: 52,
+      hpLost: 52,
+      armorLost: 0,
+      isKill: false,
+      isCritical: true,
+      dirX: 1,
+      dirY: 0,
+      seed: 0xdecafbad,
+    };
+
+    normal.renderer.playHit(hit, (...args) => normalStains.push(args[2]));
+    killshot.renderer.playHit({ ...hit, isKill: true }, (...args) => killshotStains.push(args[2]));
+
+    const normalMembers = findFakeLane(normal.scene, 'gore-normal').members;
+    const killshotMembers = findFakeLane(killshot.scene, 'gore-normal').members;
+    const normalCoreScale = evaluateFakeAnimation(normalMembers[0]!.scaleY, 0);
+    const killshotCoreScale = evaluateFakeAnimation(killshotMembers[0]!.scaleY, 0);
+    const normalStreakScale = evaluateFakeAnimation(normalMembers[1]!.scaleY, 0);
+    const killshotStreakScale = evaluateFakeAnimation(killshotMembers[1]!.scaleY, 0);
+    const normalStreakTravel = Math.hypot(normalMembers[1]!.x.amplitude, normalMembers[1]!.y.amplitude);
+    const killshotStreakTravel = Math.hypot(killshotMembers[1]!.x.amplitude, killshotMembers[1]!.y.amplitude);
+
+    expect(killshotCoreScale / normalCoreScale).toBeGreaterThanOrEqual(2.2);
+    expect(killshotStreakScale / normalStreakScale).toBeGreaterThanOrEqual(1.6);
+    expect(killshotStreakTravel / normalStreakTravel).toBeGreaterThanOrEqual(2.0);
+    expect(killshotStains.length).toBeGreaterThanOrEqual(normalStains.length);
+    expect(killshotStains.length).toBeGreaterThanOrEqual(BLOOD_HIT_VFX.bands.heavy.stainCountMin);
+    expect(killshotStains[0]).toBeGreaterThan(normalStains[0]! * 1.8);
   });
 });

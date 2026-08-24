@@ -293,6 +293,15 @@ export const BLOOD_HIT_VFX = {
   spawnPushPx: PLAYER_SIZE * 0.18,
   lateralJitterPx: 8,
   killshotMultiplier: 2.5,
+  /** Aggressive Killshot-Tuningwerte; normale Treffer bleiben beim GPU-Basisstil. */
+  killshot: {
+    streakTravelScale: 2.25,
+    streakScale: 1.8,
+    dropletTravelScale: 2.05,
+    dropletScale: 1.55,
+    stainScale: 2.0,
+    microDropletScale: 1.25,
+  },
   maxActiveStains: 500,
   palette: [0x3c070b, 0x5b0d12, 0x76171b, 0x8d2429] as const,
   coreSplashScale: 1.52,
@@ -378,6 +387,12 @@ export const DEATH_DISINTEGRATION_VFX = {
   rotationMaxDeg: 180,
   scaleStart: 1.55,
   scaleEnd: 0.42,
+  /** Sichtbarer Zuschlag fuer die Hauptmasse; basiert weiterhin auf der World-Display-Groesse. */
+  mainFragmentScaleBoost: 1.35,
+  /** Hit-Impuls als Vielfaches des radialen Fragment-Reisewegs. */
+  mainHitImpulse: 1.65,
+  microHitImpulse: 1.85,
+  glowHitImpulse: 1.6,
   alpha: 1,
   auraTintMix: 0.26,
   maxChunksPerEffect: 64,

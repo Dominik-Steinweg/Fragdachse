@@ -108,10 +108,12 @@ export class CombatGoreGpuRenderer {
 
     const mainCount = this.scaleBurst(GpuVfxEffectId.DeathFragment, profile.main);
     for (let index = 0; index < mainCount; index += 1) {
-      // Direct index selection keeps the silhouette distributed without a temporary index list.
+      // Die Qualitaet darf die tatsaechliche Silhouettenabdeckung nicht auf den Anfang der
+      // Chunk-Liste zusammenschieben: mainCount ist die Zahl der wirklich emittierten
+      // Hauptfragmente, ueber die deshalb gleichmaessig verteilt wird.
       const chunk = template.chunks[Math.min(
         template.chunks.length - 1,
-        Math.floor(index * template.chunks.length / Math.max(1, profile.main)),
+        Math.floor(index * template.chunks.length / Math.max(1, mainCount)),
       )];
       if (!chunk) continue;
       this.spawnDeathFragment(
@@ -166,12 +168,15 @@ export class CombatGoreGpuRenderer {
         DEATH_DISINTEGRATION_VFX.glowTravelMinPx,
         DEATH_DISINTEGRATION_VFX.glowTravelMaxPx,
       ) * profile.travelScale;
+      const hitImpulse = hitLength > 0.0001
+        ? travel * DEATH_DISINTEGRATION_VFX.glowHitImpulse
+        : 0;
       const lifeMs = randomBetween(rng, 430, 760);
       glowSpec.lifeMs = lifeMs;
       glowSpec.x = effect.x;
       glowSpec.y = effect.y;
-      glowSpec.vx = Math.cos(angle) * travel * 1000 / lifeMs;
-      glowSpec.vy = Math.sin(angle) * travel * 1000 / lifeMs;
+      glowSpec.vx = (Math.cos(angle) * travel + normalizedHitX * hitImpulse) * 1000 / lifeMs;
+      glowSpec.vy = (Math.sin(angle) * travel + normalizedHitY * hitImpulse) * 1000 / lifeMs;
       glowSpec.positionEase = GpuVfxEase.QuadOut;
       glowSpec.yMode = GpuVfxEase.Linear;
       glowSpec.gravityFactor = 1;
@@ -219,7 +224,7 @@ export class CombatGoreGpuRenderer {
     const nowMs = gpu.now();
     const coreTint = pickBloodTint(rng);
     const coreIntensity = killshot
-      ? 1 + (BLOOD_HIT_VFX.killshotMultiplier - 1) * 0.45
+      ? BLOOD_HIT_VFX.killshotMultiplier
       : (effect.isCritical ? 1.1 : 1);
 
     if (this.scaleBurst(GpuVfxEffectId.BloodCore, 1) > 0) {
@@ -267,7 +272,9 @@ export class CombatGoreGpuRenderer {
       const startX = originX + lateralX * lateral;
       const startY = originY + lateralY * lateral;
       const travel = randomBetween(rng, band.travelMinPx, band.travelMaxPx)
-        * (killshot ? 1.24 : effect.isCritical ? 1.08 : 1);
+        * (killshot
+          ? BLOOD_HIT_VFX.killshot.streakTravelScale
+          : effect.isCritical ? 1.08 : 1);
       const endX = startX + direction.x * travel + lateralX * (rng() - 0.5) * (killshot ? 20 : 14);
       const endY = startY + direction.y * travel + lateralY * (rng() - 0.5) * (killshot ? 20 : 14);
       const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
@@ -275,7 +282,7 @@ export class CombatGoreGpuRenderer {
       const speed = Math.hypot(endX - startX, endY - startY) * 1000 / Math.max(1, duration);
       const scale = randomBetween(rng, band.streakScaleMin, band.streakScaleMax)
         * 1.1
-        * (killshot ? 1.06 : 1);
+        * (killshot ? BLOOD_HIT_VFX.killshot.streakScale : 1);
       const stretchStart = clamp(0.98 + speed / 115, 1, killshot ? 2.9 : 2.55);
       const leaveStain = stainsCreated < stainCount && (index < stainCount || rng() > 0.45);
       if (leaveStain) stainsCreated += 1;
@@ -307,7 +314,8 @@ export class CombatGoreGpuRenderer {
         onBloodStain(
           endX,
           endY,
-          randomBetween(rng, band.stainScaleMin, band.stainScaleMax) * (killshot ? 1.16 : 1),
+          randomBetween(rng, band.stainScaleMin, band.stainScaleMax)
+            * (killshot ? BLOOD_HIT_VFX.killshot.stainScale : 1),
           band.stainAlpha,
           band.stainFadeMs,
           streakSpec.tint,
@@ -324,7 +332,7 @@ export class CombatGoreGpuRenderer {
       );
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
       const travel = randomBetween(rng, band.travelMinPx * 0.5, band.travelMaxPx * 0.75)
-        * (killshot ? 1.18 : 1);
+        * (killshot ? BLOOD_HIT_VFX.killshot.dropletTravelScale : 1);
       const startX = effect.x + direction.x * BLOOD_HIT_VFX.spawnPushPx * 0.7;
       const startY = effect.y + direction.y * BLOOD_HIT_VFX.spawnPushPx * 0.7;
       const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs) * 0.82;
@@ -343,7 +351,7 @@ export class CombatGoreGpuRenderer {
       dropletSpec.angularVelocity = (rng() - 0.5) * (killshot ? 4.4 : 3.1);
       dropletSpec.scaleStart = randomBetween(rng, band.dropletScaleMin, band.dropletScaleMax)
         * 1.1
-        * (killshot ? 1.08 : 1);
+        * (killshot ? BLOOD_HIT_VFX.killshot.dropletScale : 1);
       dropletSpec.scaleEnd = dropletSpec.scaleStart * 0.42;
       dropletSpec.scaleEase = GpuVfxEase.QuadOut;
       dropletSpec.stretchStart = 1;
@@ -380,7 +388,8 @@ export class CombatGoreGpuRenderer {
       microSpec.gravityFactor = 1;
       microSpec.rotation = angle + (rng() - 0.5) * 1.5;
       microSpec.angularVelocity = (rng() - 0.5) * 7.5;
-      microSpec.scaleStart = randomBetween(rng, 0.22, 0.42) * (killshot ? 1.08 : 1);
+      microSpec.scaleStart = randomBetween(rng, 0.22, 0.42)
+        * (killshot ? BLOOD_HIT_VFX.killshot.microDropletScale : 1);
       microSpec.scaleEnd = microSpec.scaleStart * 0.28;
       microSpec.scaleEase = GpuVfxEase.QuadOut;
       microSpec.stretchStart = rng() < 0.28 ? randomBetween(rng, 1.1, 1.7) : 1;
@@ -447,23 +456,30 @@ export class CombatGoreGpuRenderer {
     const jitter = DEATH_DISINTEGRATION_VFX.jitterPx * (micro ? 1.4 : 1);
     const startX = rotatedX + 0;
     const startY = rotatedY + 0;
+    const hitImpulse = hasHitDirection
+      ? travel * (micro
+        ? DEATH_DISINTEGRATION_VFX.microHitImpulse
+        : DEATH_DISINTEGRATION_VFX.mainHitImpulse)
+      : 0;
     const endX = startX
       + Math.cos(angle) * travel
       + (rng() - 0.5) * jitter
-      + (hasHitDirection ? hitX * travel * 0.18 : 0);
+      + hitX * hitImpulse;
     const endY = startY
       + Math.sin(angle) * travel
       + (rng() - 0.5) * jitter
-      + (hasHitDirection ? hitY * travel * 0.18 : 0);
+      + hitY * hitImpulse;
     const lifeMs = randomBetween(
       rng,
-      micro ? 230 : 520,
-      micro ? 430 : DEATH_DISINTEGRATION_VFX.durationMs + 80,
+      micro ? 230 : Math.max(620, DEATH_DISINTEGRATION_VFX.durationMs - 80),
+      micro ? 430 : Math.min(900, DEATH_DISINTEGRATION_VFX.durationMs + 180),
     );
     const width = Math.max(0.8, chunk.width * displayWidth);
     const height = Math.max(0.8, chunk.height * displayHeight);
     const baseScale = clamp(
-      height / DEATH_FRAGMENT_TEXTURE_SIZE * DEATH_DISINTEGRATION_VFX.scaleStart,
+      height / DEATH_FRAGMENT_TEXTURE_SIZE
+        * DEATH_DISINTEGRATION_VFX.scaleStart
+        * (micro ? 1 : DEATH_DISINTEGRATION_VFX.mainFragmentScaleBoost),
       0.2,
       16,
     );
@@ -484,7 +500,9 @@ export class CombatGoreGpuRenderer {
     spec.y = originY + startY;
     spec.vx = (endX - startX) * 1000 / lifeMs;
     spec.vy = (endY - startY) * 1000 / lifeMs;
-    spec.positionEase = GpuVfxEase.QuadOut;
+    // Hauptfragmente halten die Silhouette in den ersten 100–200 ms; Mikrofragmente duerfen
+    // weiterhin aggressiver ausbrechen.
+    spec.positionEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
     spec.yMode = GpuVfxEase.Linear;
     spec.gravityFactor = 1;
     spec.rotation = entityRotation + (rng() - 0.5) * (micro ? 2.6 : 1.7);
@@ -492,12 +510,12 @@ export class CombatGoreGpuRenderer {
     spec.angularVelocity = (rng() - 0.5) * (micro ? 14 : DEATH_DISINTEGRATION_VFX.rotationMaxDeg * Math.PI / 180 * 2.2) * rotationFactor;
     spec.scaleStart = baseScale;
     spec.scaleEnd = baseScale * (largeMass ? 0.5 : micro ? 0.24 : DEATH_DISINTEGRATION_VFX.scaleEnd);
-    spec.scaleEase = GpuVfxEase.QuadOut;
+    spec.scaleEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
     spec.stretchStart = stretch;
     spec.stretchEnd = Math.max(0.72, stretch * (smallMass ? 0.68 : 0.84));
     spec.alphaStart = Math.min(1, DEATH_DISINTEGRATION_VFX.alpha * randomBetween(rng, 0.98, 1.08));
     spec.alphaEnd = 0;
-    spec.alphaEase = GpuVfxEase.QuadOut;
+    spec.alphaEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
     spec.tint = tint;
     spec.tintBlendStart = 1;
     spec.tintBlendEnd = 1;
