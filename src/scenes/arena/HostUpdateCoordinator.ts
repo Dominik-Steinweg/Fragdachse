@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
+import { EMPTY_FULL_PROJECTILE_SNAPSHOT } from '../../network/projectileSnapshotCodec';
 import {
   ENEMY_FLOW_FIELD_IDS,
   type FlowFieldCoordinator,
@@ -1034,6 +1035,7 @@ export class HostUpdateCoordinator {
       this.ctx.rockRegistry?.requestFullNetSnapshot();
       this.ctx.powerUpSystem?.requestFullNetSnapshot();
       this.ctx.enemyManager?.requestFullNetSnapshot();
+      this.ctx.projectileManager.requestFullNetSnapshot();
     }
 
     for (const expiredRock of this.ctx.placementSystem?.update(now) ?? []) {
@@ -1141,9 +1143,11 @@ export class HostUpdateCoordinator {
     }
 
     this.renderers.flamethrowerUpgrades.syncRings(players);
+    // Waehrend des Countdowns gibt es keine Projektile; der als "voll" markierte Leer-Snapshot
+    // raeumt einen etwaigen Client-Statikcache ab, statt ihn unveraendert stehen zu lassen.
     const projectiles = countdownActive
-      ? []
-      : this.ctx.projectileManager.getHostSyncSnapshot();
+      ? EMPTY_FULL_PROJECTILE_SNAPSHOT
+      : this.ctx.projectileManager.getNetSnapshot();
     const remoteControlTurrets = this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlSnapshot(
       this.ctx.playerManager.getAllPlayers().map((player) => player.id),
       this.ctx.turretSystem?.getTurrets() ?? [],
@@ -1193,7 +1197,13 @@ export class HostUpdateCoordinator {
       ? Math.max(0, performance.now() - snapshotBuildStartedAt)
       : 0;
 
-    if (projectiles.some(p => p.style === 'bfg')) {
+    // Direkt an den Physik-Projektilen statt am Wire-Snapshot: der Rumble ist reine Host-Praesentation
+    // und haengt nicht davon ab, was in diesem Tick tatsaechlich uebertragen wurde.
+    let bfgInFlight = false;
+    for (const projectile of this.ctx.projectileManager.getActiveProjectiles()) {
+      if (projectile.projectileStyle === 'bfg') { bfgInFlight = true; break; }
+    }
+    if (bfgInFlight) {
       this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
     if (metrics) {

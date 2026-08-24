@@ -23,6 +23,14 @@ function formatBytes(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Aggregat aus `NetworkBridge.getProjectileSyncMetrics()`; nur auf dem Host und nur mit Debug-Flag. */
+interface ProjectileSyncMetrics {
+  avgCharsPerTick: number;
+  maxCharsPerTick: number;
+  avgActiveCount: number;
+  estimatedKbPerSec: number;
+}
+
 function describePath(diagnostics: LinkDiagnostics): string {
   const local = diagnostics.localCandidateType ?? '?';
   const remote = diagnostics.remoteCandidateType ?? '?';
@@ -39,6 +47,7 @@ export class NetDebugOverlay {
     private readonly getDiagnostics: () => LinkDiagnostics[],
     private readonly getRoomCode: () => string,
     private readonly getLocalRole: () => string,
+    private readonly getProjectileSyncMetrics: () => ProjectileSyncMetrics | null = () => null,
   ) {}
 
   toggle(): void {
@@ -102,6 +111,17 @@ export class NetDebugOverlay {
       'Ping = Netzwerk-RTT (STUN, bildratenunabhängig) · Reaktion = Umlauf durch beide Spielschleifen',
       '',
     ];
+
+    const projectileSync = this.getProjectileSyncMetrics();
+    if (projectileSync) {
+      lines.push(
+        `Projektile  ${projectileSync.avgActiveCount.toFixed(1)} aktiv`
+          + `  ⌀${projectileSync.avgCharsPerTick.toFixed(0)} Z/Tick`
+          + `  Max ${projectileSync.maxCharsPerTick} Z`
+          + `  ≈${projectileSync.estimatedKbPerSec.toFixed(1)} KB/s je Empfänger`,
+        '',
+      );
+    }
 
     if (diagnostics.length === 0) {
       lines.push('Keine Mitspieler verbunden.');

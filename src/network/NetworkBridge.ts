@@ -26,11 +26,13 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
   NET_TICK_RATE_HZ,
+  NET_DEBUG_PROJECTILE_SYNC_METRICS,
+  NET_DEBUG_PROJECTILE_SYNC_METRICS_WINDOW_MS,
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
@@ -39,6 +41,11 @@ import {
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
+import {
+  EMPTY_FULL_PROJECTILE_SNAPSHOT,
+  applyProjectileSnapshot,
+  countProjectileDynamics,
+} from './projectileSnapshotCodec';
 import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { canJoinLobbyTeam, LOBBY_TEAM_CAPACITY, pickAutomaticTeam } from '../lobby/LobbyRosterLayout';
@@ -114,7 +121,6 @@ function getState(key: string): unknown {
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
 const KEY_INPUT        = 'inp';
 const KEY_PLAYERS      = 'plr';
-const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_ARENA_LOAD_READY = 'alr'; // per-player reliable: ArenaLoadReadyState
 const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
@@ -286,7 +292,7 @@ export interface GameState {
 interface OutboundGameState {
   roundStartTime: number;
   players:      Record<string, PlayerNetState>;
-  projectiles:  SyncedProjectile[];
+  projectiles:  SyncedProjectileSnapshot | null;
   enemies:      SyncedEnemySnapshot | null;
   rocks:        SyncedRockSnapshot | null;
   placeableRocks: SyncedPlaceableRock[];
@@ -2070,6 +2076,12 @@ export class NetworkBridge {
   private publishSeq = 0;
   private burningGroundPublishTicks = 0;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
+  // Client-seitiger Statik-Cache der Projektile. Nur die Statik wird gecacht – die Dynamik kommt
+  // jeden Tick vollstaendig, weshalb es keinen SyncedProjectile-Cache braucht.
+  private readonly projectileStaticCache = new Map<number, SyncedProjectileStatic>();
+  // Debug-only, hinter NET_DEBUG_PROJECTILE_SYNC_METRICS: rollierendes Fenster ueber die Groesse
+  // des `j`-Slices, damit sich der Effekt der Kompaktierung im Netz-Overlay (Taste P) ablesen laesst.
+  private readonly projectileSyncSamples: Array<{ at: number; chars: number; count: number }> = [];
   // Client-seitig: zuletzt gesehene Sequenznummer für Change-Detection
   private lastSeenSeq = -1;
   // Monoton steigender Zähler: wird nur bei tatsächlich neuem Server-State inkrementiert
@@ -2088,6 +2100,7 @@ export class NetworkBridge {
     this.lastSeenSeq = -1;
     this.burningGroundPublishTicks = 0;
     this.lastPublishedBurningGround.clear();
+    this.projectileStaticCache.clear();
     this.mapEventPresentationCache = null;
     this.secondaryObjectivePresentationCache = null;
   }
@@ -2104,7 +2117,9 @@ export class NetworkBridge {
     }
     const payload: Record<string, unknown> = { p: encodePlayerStates(state.players), _s: ++this.publishSeq };
     payload.rt = state.roundStartTime;
-    if (state.projectiles.length > 0)  payload.j = state.projectiles;
+    // Fehlender Schluessel heisst hier "keine aktiven Projektile": der Dynamik-Strom fuehrt jeden
+    // Tick alle aktiven Projektile, ein leerer Snapshot kann also nur eine leere Arena bedeuten.
+    if (state.projectiles)             payload.j = state.projectiles;
     if (state.enemies)                 payload.e = state.enemies;
     if (state.rocks)                   payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
@@ -2143,7 +2158,58 @@ export class NetworkBridge {
     // Unlike delta-friendly world slices, Carry must publish an empty array after delivery so
     // a completed item cannot survive in a client's merge cache.
     payload.cc = state.coopDefenseCarry;
+    this.sampleProjectileSyncPayload(state.projectiles);
     setState(KEY_GAME_STATE, payload, false);
+  }
+
+  /**
+   * Debug-only: misst die tatsaechliche Groesse des Projektil-Slices auf dem Draht.
+   *
+   * Das `JSON.stringify` hier ist der Grund fuer das Flag – es ist die einzige Stelle, an der die
+   * Messung Rechenzeit kostet, und sie laeuft nur, wenn jemand die Zahl wirklich sehen will.
+   */
+  private sampleProjectileSyncPayload(snapshot: SyncedProjectileSnapshot | null): void {
+    if (!NET_DEBUG_PROJECTILE_SYNC_METRICS) return;
+    const now = Date.now();
+    this.projectileSyncSamples.push({
+      at: now,
+      chars: snapshot ? JSON.stringify(snapshot).length : 0,
+      count: snapshot ? countProjectileDynamics(snapshot.u) : 0,
+    });
+    const cutoff = now - NET_DEBUG_PROJECTILE_SYNC_METRICS_WINDOW_MS;
+    while (this.projectileSyncSamples.length > 0 && this.projectileSyncSamples[0].at < cutoff) {
+      this.projectileSyncSamples.shift();
+    }
+  }
+
+  /**
+   * Aggregierte Projektil-Sync-Metriken fuer das Netz-Overlay. `null`, solange das Debug-Flag aus
+   * ist oder noch kein Tick gemessen wurde – dann blendet das Overlay die Zeile aus.
+   */
+  getProjectileSyncMetrics(): {
+    avgCharsPerTick: number;
+    maxCharsPerTick: number;
+    avgActiveCount: number;
+    estimatedKbPerSec: number;
+  } | null {
+    const samples = this.projectileSyncSamples;
+    if (!NET_DEBUG_PROJECTILE_SYNC_METRICS || samples.length === 0) return null;
+    let totalChars = 0;
+    let maxChars = 0;
+    let totalCount = 0;
+    for (const sample of samples) {
+      totalChars += sample.chars;
+      totalCount += sample.count;
+      if (sample.chars > maxChars) maxChars = sample.chars;
+    }
+    const avgCharsPerTick = totalChars / samples.length;
+    return {
+      avgCharsPerTick,
+      maxCharsPerTick: maxChars,
+      avgActiveCount: totalCount / samples.length,
+      // Grobe Schaetzung je Empfaenger: ein Zeichen entspricht im JSON-Transport einem Byte.
+      estimatedKbPerSec: (avgCharsPerTick * NET_TICK_RATE_HZ) / 1024,
+    };
   }
 
   /** Baut einen vollstaendigen Bootstrap-Payload und veroeffentlicht ihn reliable. */
@@ -2153,7 +2219,7 @@ export class NetworkBridge {
       _s: ++this.publishSeq,
       _full: true,
       rt: state.roundStartTime,
-      j: state.projectiles,
+      j: state.projectiles ?? EMPTY_FULL_PROJECTILE_SNAPSHOT,
       e: state.enemies,
       r: state.rocks ?? { full: true, count: 0, upserts: [], removals: [] } satisfies SyncedRockSnapshot,
       br: state.placeableRocks,
@@ -2185,6 +2251,7 @@ export class NetworkBridge {
       cb: state.captureTheBeer,
       cc: state.coopDefenseCarry,
     };
+    this.sampleProjectileSyncPayload(state.projectiles);
     // Die unreliable Kopie hält bereits verbundene Clients aktuell; der reliable Key ist der
     // Bootstrap für neue Teilnehmer und bleibt bis zum nächsten Full-Resync erhalten.
     setState(KEY_GAME_STATE, payload, false);
@@ -2255,7 +2322,10 @@ export class NetworkBridge {
     const state: GameState = {
       roundStartTime,
       players:       decodePlayerStates(raw.p as Parameters<typeof decodePlayerStates>[0]),
-      projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
+      projectiles:   applyProjectileSnapshot(
+        this.projectileStaticCache,
+        raw.j as SyncedProjectileSnapshot | undefined,
+      ),
       enemies:       (raw.e as SyncedEnemySnapshot | undefined) ?? null,
       rocks:         nextRocks,
       rockRemovals:  rockSnapshot?.removals ?? [],

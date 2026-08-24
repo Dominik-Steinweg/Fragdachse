@@ -1024,12 +1024,27 @@ export const ENEMY_NET_REMOVAL_RESEND_TICKS = 10;
 export const POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Statische Rocks senden normalerweise nur HP-Änderungen und Zerstörungen; Full-Resync korrigiert verlorene Frames. */
 export const ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
-/** Debug-only: Host loggt aggregierte Enemy-Sync-Payload-Metriken ins Dev-Console. */
-export const NET_DEBUG_ENEMY_SYNC_METRICS = (
-  import.meta as ImportMeta & { env?: { DEV?: boolean } }
-).env?.DEV === true;
-/** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
-export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
+/**
+ * Anzahl aufeinanderfolgender Ticks, in denen der Statik-Block eines neuen Projektils wiederholt
+ * gesendet wird. Die Statik ist die einzige Verluststelle der Projektil-Sync: geht sie verloren,
+ * kann der Client den Dynamik-Eintrag nicht rendern (er kennt Stil und Farbe nicht) und würde ihn
+ * für die restliche Lebensdauer verwerfen. Die Dynamik selbst braucht keinen Resend, weil sie
+ * jeden Tick vollständig übertragen wird.
+ */
+export const PROJECTILE_NET_STATIC_RESEND_TICKS = 3;
+/**
+ * Langlebige Projektile (Granaten, Raketen, Translocator-Pucks) frischen ihren Statik-Block
+ * rollierend über diesen Zyklus auf. Backstop hinter [[PROJECTILE_NET_STATIC_RESEND_TICKS]] für
+ * den Fall, dass mehrere Fast-Pakete am Stück verloren gehen: ein sekundenlang unsichtbares
+ * Wurfgeschoss ist ein echter Fehler, ein kurz fehlendes Bullet nur ein Blinzeln.
+ */
+export const PROJECTILE_NET_REFRESH_CYCLE_TICKS = NET_TICK_RATE_HZ * 2;
+/** Ab diesem Alter nimmt ein Projektil am rollierenden Statik-Refresh teil. */
+export const PROJECTILE_NET_LONG_LIVED_AGE_MS = 1000;
+/** Debug-only: Host misst die Größe des Projektil-Slices pro Tick für das Netz-Overlay (Taste P). */
+export const NET_DEBUG_PROJECTILE_SYNC_METRICS = false;
+/** Aggregationsfenster für die Projektil-Sync-Metriken. */
+export const NET_DEBUG_PROJECTILE_SYNC_METRICS_WINDOW_MS = 2000;
 /** Debug-only: Lokale Laufzeitmetriken fuer Host-/Client-Frames, unabhaengig vom Netzwerkpayload. */
 export const DEBUG_RUNTIME_PERF_METRICS = false;
 /** Aggregationsfenster fuer lokale Laufzeitmetriken. */

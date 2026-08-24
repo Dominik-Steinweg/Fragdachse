@@ -46,6 +46,8 @@ Bei Delta-Slices bedeutet ein fehlendes Feld „unverändert“, nicht „leer�
 
 Spielerzustände werden vollständig pro Tick durch playerStateCodec.ts kompakt kodiert. Gegner nutzen enemySnapshotCodec.ts mit Full-/Delta-Upserts und Removals. Weitere Slices dürfen eigene Delta-/Full-Regeln haben; neue Daten zuerst auf Häufigkeit und Lebenszyklus prüfen, statt automatisch den heißen Enemy-Codec zu erweitern.
 
+Ein Delta-Slice darf den zuletzt gesendeten Wert nur dann als Host-Baseline cachen, wenn ein Refresh- oder Resend-Zyklus innerhalb der Lebensdauer des Objekts garantiert greift. Sonst hält der Host einen einmaligen Wechsel für zugestellt, den ein verlorenes fast-Paket geschluckt hat, und der Zustand bleibt bis zum Lebensende falsch. Kurzlebige Objekte tragen deshalb ihren veränderlichen Teil vollständig pro Tick; gecacht wird nur, was sich über die Lebensdauer nicht ändert. projectileSnapshotCodec.ts trennt genau danach: Statik einmalig mit Resend, Dynamik jeden Tick vollständig — und weil dadurch jeder Tick alle aktiven Projektile führt, bleibt Despawn ohne Removal-Liste allein über Abwesenheit korrekt.
+
 Zeitlich begrenzte replizierte Zustände tragen einen absoluten Ablaufzeitpunkt, nicht nur eine Restdauer. Clients können zwischen Snapshots lokal herunterzählen, ohne beim Ablauf ein weiteres Netzwerkereignis zu benötigen.
 
 Replizierte Listen je Entität brauchen einen stabilen Identitätsschlüssel, sobald der Client daran Zustand hängt. Position und Typ allein reichen nicht: ein Renderer, der Einträge positionsweise dem Array-Index zuordnet, springt bei jeder Umsortierung sichtbar um. Der Host führt die Identität selbst und schickt sie mit, zusammen mit der fachlichen Slot-Nummer, wenn die Reihenfolge Bedeutung trägt (`SyncedTeslaDomeTarget.targetKey`/`slotIndex`).
@@ -71,6 +73,6 @@ Netzwerk-RTT und Anwendungsreaktion sind getrennte Messgrößen. RTT kommt aus d
 - Fachliche Grenze und Wire-Keys: src/network/NetworkBridge.ts
 - Peer-Schichten: src/network/peer/PeerRoom.ts, PeerLink.ts, PeerJsTransport.ts, PeerSignaling.ts, protocol.ts
 - Baseline: src/network/FullGameStateBootstrap.ts
-- Codecs: src/network/playerStateCodec.ts, src/network/enemySnapshotCodec.ts
+- Codecs: src/network/playerStateCodec.ts, src/network/enemySnapshotCodec.ts, src/network/projectileSnapshotCodec.ts
 - Host/Client: src/scenes/arena/HostUpdateCoordinator.ts, src/scenes/arena/ClientUpdateCoordinator.ts
-- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts
+- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts

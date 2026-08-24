@@ -577,16 +577,71 @@ export interface SyncedProjectile {
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
   shotAudioKey?: ShotAudioKey;
   suppressSpawnFx?: boolean;
-  penetrationCount?: number;
-  penetrationDamageRetention?: number;
-  reflected?: boolean;
-  gaussChainRadius?: number;
-  gaussChainDamageFactor?: number;
   miniRocketPhase?: MiniRocketFlightPhase;
   miniRocketCascadeStage?: number;
   projectileBurnVisualStyle?: GroundFireVisualStyle;
   /** Aktiver Brand auf dem Projektil (Waffen-Upgrade oder Feuerflaechen-Imbue). */
   burning?: boolean;
+}
+
+/**
+ * Unveraenderlicher Teil eines Projektils. Wird beim Spawn einmal uebertragen und clientseitig
+ * gecacht; siehe `src/network/projectileSnapshotCodec.ts`. Ein Eintrag ersetzt den statischen Teil
+ * IMMER vollstaendig – ein fehlendes Feld heisst `undefined`, nicht "unveraendert".
+ */
+export interface SyncedProjectileStatic {
+  id:      number;
+  ownerId: string;
+  color?:  number;
+  allowTeamDamage?: boolean;
+  ownerColor?: number;
+  visualMuzzleOrigin?: { x: number; y: number };
+  projectileVisualScale?: number;
+  smokeTrailColor?: number;
+  style?:  ProjectileStyle;
+  sporeVisualVariant?: 'spore' | 'spore_void';
+  bulletVisualPreset?: BulletVisualPreset;
+  grenadeVisualPreset?: GrenadeVisualPreset;
+  energyBallVariant?: EnergyBallVariant;
+  velocityDecay?: number;
+  tracer?: TracerConfig;
+  shotAudioKey?: ShotAudioKey;
+  suppressSpawnFx?: boolean;
+}
+
+/**
+ * Veraenderlicher Teil eines Projektils. Wird fuer JEDES aktive Projektil in JEDEM Netzwerk-Tick
+ * vollstaendig uebertragen – es gibt bewusst keinen Host-Cache und keine Dead-Zone, damit die
+ * Extrapolation exakt dieselben Werte sieht wie vor der Kompaktierung und ein verlorenes Paket
+ * genau einen Tick kostet statt einen Wert dauerhaft zu verschlucken.
+ */
+export interface SyncedProjectileDynamic {
+  id:   number;
+  x:    number;
+  y:    number;
+  vx:   number;
+  vy:   number;
+  size: number;
+  miniRocketPhase?: MiniRocketFlightPhase;
+  miniRocketCascadeStage?: number;
+  projectileBurnVisualStyle?: GroundFireVisualStyle;
+  burning?: boolean;
+}
+
+/**
+ * Wire-Format des Projektil-Slices (`j` im GameState).
+ *
+ * `s` traegt nur neu gespawnte Projektile, deren Resends und den rollierenden Refresh; `u` traegt
+ * jeden Tick alle aktiven Projektile. Despawn wird daher – wie vor der Kompaktierung – rein ueber
+ * die Abwesenheit aus `u` synchronisiert; es gibt keine Removal-Liste und keine Phantome.
+ */
+export interface SyncedProjectileSnapshot {
+  /** Statik-Strom, siehe `encodeProjectileStatic`. */
+  s: Array<number | string>;
+  /** Dynamik-Strom, siehe `encodeProjectileDynamic`. */
+  u: Array<number | string>;
+  /** Nur bei einem echten Full-Snapshot gesetzt: Client verwirft seinen Statik-Cache vorher. */
+  f?: 1;
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */

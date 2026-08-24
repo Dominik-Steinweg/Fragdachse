@@ -142,25 +142,3 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
   }
   return result;
 }
-
-/** Zählt die Upsert-Einträge im Strom, ohne Objekte zu allozieren (nur für Telemetrie). */
-export function countEnemyUpserts(stream: readonly (number | string)[]): number {
-  let count = 0;
-  let i = 0;
-  while (i + 1 < stream.length) {
-    const mask = stream[i + 1] as number;
-    i += 2;
-    if (mask & FIELD_POS) i += 2;
-    if (mask & FIELD_ROT) i += 1;
-    if (mask & FIELD_HP) i += 2;
-    if (mask & FIELD_KIND) i += 1;
-    if (mask & FIELD_BURN) i += 1;
-    if (mask & FIELD_FACTION) i += 3;
-    if (mask & FIELD_BURROW) i += 1;
-    if (mask & FIELD_DASH) i += 1;
-    if (mask & FIELD_SPECIAL) i += 4;
-    if (mask & FIELD_PLASMA_CHARGE) i += 1;
-    count += 1;
-  }
-  return count;
-}

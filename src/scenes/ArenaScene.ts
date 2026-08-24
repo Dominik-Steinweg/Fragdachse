@@ -828,6 +828,7 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getTransportDiagnostics(),
       () => bridge.getRoomCode(),
       () => (bridge.isHost() ? `Host ${bridge.getLocalPlayerId()}` : `Client ${bridge.getLocalPlayerId()}`),
+      () => bridge.getProjectileSyncMetrics(),
     );
     this.events.once('shutdown', () => this.netDebugOverlay?.destroy());
     this.coopDefenseBalanceTracker = new CoopDefenseBalanceTracker();
