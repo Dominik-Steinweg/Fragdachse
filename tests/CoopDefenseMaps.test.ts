@@ -559,13 +559,13 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('keeps dynamic time authored only on the Void-Hunter map', () => {
+  it('keeps dynamic time authored on the stress and Void-Hunter maps', () => {
     const dynamicMaps = COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.dynamicTimeOfDay !== undefined)
       .map((map) => map.mapId);
-    // Map 0 ist seit Block A eine reine Stressarena mit fester Uhrzeit; die laufende Tageszeit
-    // gehoert damit nur noch dem Leerenjaeger.
-    expect(dynamicMaps).toEqual(['15']);
+    // Map 0 ist die Stressarena mit laufender Tageszeit; Map 15 nutzt zusaetzlich
+    // ereignisgebundene Uebergaenge fuer den Leerenjaeger.
+    expect(dynamicMaps).toEqual(['0', '15']);
 
     const voidMap = getCoopDefenseMapConfig('15');
     expect(voidMap.dynamicTimeOfDay?.transitions).toEqual([
