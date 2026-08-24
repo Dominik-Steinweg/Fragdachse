@@ -89,6 +89,7 @@ export const deContent = {
   "powerup.HOLY_HAND_GRENADE.name": "Heilige Handgranate",
   "powerup.BFG.name": "BFG",
   "map.0.name": "Map 0 – Testmap",
+  "map.weapon-balance-lab.name": "Schießstand – Balance Lab",
   "map.1.name": "Map 1 – Feuertaufe",
   "map.2.name": "Map 2 – Zweite Front",
   "map.3.name": "Map 3 – Rastlos",

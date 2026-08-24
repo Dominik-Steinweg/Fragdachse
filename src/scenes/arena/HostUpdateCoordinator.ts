@@ -17,7 +17,7 @@ import { dequantizeAngle }   from '../../utils/angle';
 import { computeProjectileExplosionDamage, computeRadialDamage, resolveProjectileExplosionFalloff } from '../../utils/radialDamage';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
-import { getCoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
 import { buildCountdownGroundFirePreview } from '../../effects/CountdownGroundFirePreview';
 import type { ArenaContext }      from './ArenaContext';
 import type { LocalPlayerState }  from './LocalPlayerState';
@@ -203,6 +203,9 @@ export class HostUpdateCoordinator {
     // publish/render presentation state; every authoritative system below keeps its own gameplay
     // gate via countdownActive.
     const countdownActive = bridge.isArenaCountdownActive();
+    const weaponBalanceLabActive = isWeaponBalanceLabMapId(
+      bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
+    );
     if (!bridge.isArenaStarted() && !countdownActive) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
@@ -236,7 +239,7 @@ export class HostUpdateCoordinator {
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
     this.ctx.coopDefenseMissionProgressSystem?.hostUpdate(
       delta,
-      countdownActive,
+      countdownActive || weaponBalanceLabActive,
       this.ctx.playerManager.getAllPlayers().map((player) => ({
         playerId: player.id,
         x: player.sprite.x,
@@ -276,7 +279,7 @@ export class HostUpdateCoordinator {
       this.ctx.enemyPlayerFlowFieldService,
       this.ctx.enemyStrategicFlowFieldService,
       this.ctx.enemyBossFlowFieldService,
-      countdownActive,
+      countdownActive || weaponBalanceLabActive,
       now,
       delta,
       this.ctx.fireSystem,
@@ -288,7 +291,7 @@ export class HostUpdateCoordinator {
       this.ctx.smokeSystem,
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
-    if (!countdownActive) {
+    if (!countdownActive && !weaponBalanceLabActive) {
       this.ctx.coopDefenseVoidHunterSystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);

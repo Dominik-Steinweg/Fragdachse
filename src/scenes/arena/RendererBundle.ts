@@ -277,6 +277,7 @@ export function createRendererBundle(
   rockDestruction.generateTextures();
 
   const powerUp = new PowerUpRenderer(scene);
+  powerUp.registerGpuVfx(gpuVfx);
   const shadow = new ShadowSystem(scene);
 
   // Dynamische Beleuchtung: scene-lifetime wie der Schatten. Die Lichtquellen melden

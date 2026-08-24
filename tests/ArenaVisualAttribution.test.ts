@@ -312,7 +312,7 @@ describe('ArenaVisualAttributionCollector', () => {
   it('keeps the trace blind spots on concrete object registrations', () => {
     const sources = readTypeScriptSources(resolve(process.cwd(), 'src'));
     const expected = [
-      ['PowerUpRenderer', 'powerUpEffects', ['shadow', 'base', 'plate', 'core', 'ringOuter', 'ringInner', 'ownerRing']],
+      ['PowerUpRenderer', 'powerUpEffects', ['graphic']],
       ['ArenaVisualFactory', 'treeTrunks', ['trunk']],
       ['ProjectileManager', 'projectileShapes', ['sprite']],
       ['EnemyEntity', 'enemyStatus', ['ring', 'this.voidMolotovWindupRing']],

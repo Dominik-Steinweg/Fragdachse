@@ -1,4 +1,5 @@
 import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
+import rawWeaponBalanceLabMap from './coopDefenseMaps/weapon-balance-lab.internal.json';
 import {
   getCoopDefenseEnemyConfig,
   hasCoopDefenseEnemyKind,
@@ -634,8 +635,8 @@ export interface CoopDefenseMapTutorialAnchorConfig {
 }
 
 /**
- * Ein lokaler Tutorial-Hinweis. Ausgeloest wird er, sobald der eigene Spieler den Bereich
- * seines Checkpoints erreicht; ein vorauslaufender Mitspieler loest ihn nicht mit aus.
+ * Ein gemeinsamer Tutorial-Hinweis. Ausgeloest wird er, sobald der hostautoritative
+ * Missionszustand den zugehoerigen Checkpoint aktiviert; danach sehen ihn alle Clients.
  */
 export interface CoopDefenseMapTutorialStepConfig {
   readonly id: string;
@@ -678,6 +679,8 @@ export interface CoopDefenseMapConfig {
    * `rockField.rockDensityScale` die Fülle über die Gangbreite.
    */
   readonly rockFillRatio?: number;
+  /** Authored Baumzahl; ohne Angabe gilt der globale Arena-Standard. */
+  readonly treeCount?: number;
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /**
@@ -694,8 +697,8 @@ export interface CoopDefenseMapConfig {
    */
   readonly tutorialAnchor?: CoopDefenseMapTutorialAnchorConfig;
   /**
-   * Rein lokale Tutorial-Hinweise entlang der Route. Sie besitzen keine Gameplay-Autoritaet,
-   * werden nicht repliziert und loesen pro Spieler und Runde genau einmal aus.
+   * Gemeinsame Tutorial-Hinweise entlang der Route. Sie besitzen keine Gameplay-Autoritaet;
+   * ihre Sichtbarkeit leitet sich aus den replizierten Checkpoint-Aktivierungen ab.
    */
   readonly tutorialSteps?: readonly ResolvedCoopDefenseMapTutorialStepConfig[]
   | readonly CoopDefenseMapTutorialStepConfig[];
@@ -779,7 +782,7 @@ export function resolveCoopDefenseMapMissionProgress(
   return mapConfig.missionProgress as ResolvedCoopDefenseMapMissionProgressConfig | undefined;
 }
 
-/** Lokale Tutorial-Schritte der Map; leer, solange keine authoriert sind. */
+/** Gemeinsame Tutorial-Schritte der Map; leer, solange keine authoriert sind. */
 export function resolveCoopDefenseMapTutorialSteps(
   mapConfig: CoopDefenseMapConfig,
 ): readonly ResolvedCoopDefenseMapTutorialStepConfig[] {
@@ -795,11 +798,24 @@ const NORMALIZED_COOP_DEFENSE_MAP_REGISTRY = normalizeMapRegistry(
   COOP_DEFENSE_MAP_REGISTRY as CoopDefenseMapRegistryFile,
 );
 
+/** Interne Debug-Map; bewusst nicht Teil der auswählbaren Kampagnenregistry. */
+export const WEAPON_BALANCE_LAB_MAP_ID = 'weapon-balance-lab';
+const WEAPON_BALANCE_LAB_MAP_CONFIG = normalizeCoopDefenseMapConfig(
+  rawWeaponBalanceLabMap as CoopDefenseMapConfig,
+);
+
+export function isWeaponBalanceLabMapId(mapId: string | null | undefined): boolean {
+  return mapId === WEAPON_BALANCE_LAB_MAP_ID;
+}
+
 export const COOP_DEFENSE_MAP_CONFIGS = NORMALIZED_COOP_DEFENSE_MAP_REGISTRY.maps;
 export const DEFAULT_COOP_DEFENSE_MAP_ID = NORMALIZED_COOP_DEFENSE_MAP_REGISTRY.defaultMapId;
 
 const MAPS_BY_ID = new Map<string, CoopDefenseMapConfig>(
-  COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, mapConfig]),
+  [
+    ...COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, mapConfig] as const),
+    [WEAPON_BALANCE_LAB_MAP_CONFIG.mapId, WEAPON_BALANCE_LAB_MAP_CONFIG] as const,
+  ],
 );
 
 export function getCoopDefenseMapConfig(mapId: string): CoopDefenseMapConfig {
@@ -1132,6 +1148,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     tutorialPersistent: mapConfig.tutorialPersistent === true,
     tutorialShowControls: mapConfig.tutorialShowControls === true,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
+    treeCount: normalizeTreeCount(mapConfig.treeCount),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     rockWalls,
     tutorialAnchor,
@@ -3234,6 +3251,11 @@ function clampCorridorRadius(radiusCells: number): number {
 function normalizeRockFillRatio(rockFillRatio: number | undefined): number {
   if (typeof rockFillRatio !== 'number' || !Number.isFinite(rockFillRatio)) return ROCK_FILL_RATIO;
   return Math.max(0, Math.min(MAX_ROCK_FILL_RATIO, rockFillRatio));
+}
+
+function normalizeTreeCount(treeCount: number | undefined): number | undefined {
+  if (treeCount === undefined || !Number.isFinite(treeCount)) return undefined;
+  return Math.max(0, Math.floor(treeCount));
 }
 
 function normalizeTutorialRockArmorDropMult(mult: number | undefined): number {

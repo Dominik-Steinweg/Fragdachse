@@ -171,7 +171,9 @@ export class ArenaGenerator {
       );
 
       // 2. Smoothing-Steps
-      for (let step = 0; step < CA_SMOOTHING_STEPS; step++) {
+      // Explizite 0 bedeutet eine wirklich leere authored Flaeche. Die uebliche Randbehandlung
+      // der CA wuerde sonst selbst aus komplett leerem Noise vier Eckfelsen erzeugen.
+      for (let step = 0; rockFillRatio > 0 && step < CA_SMOOTHING_STEPS; step++) {
         const newMap: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
           new Array(GRID_COLS).fill(false),
         );
@@ -297,8 +299,9 @@ export class ArenaGenerator {
       // Mindestabstand zwischen Bäumen: 4 Felder in alle Richtungen (Chebyshev-Distanz ≥ 4).
       // Entspricht 4 × 32 px = 128 px – verhindert das Überdecken von Stämmen und Kronen.
       const TREE_MIN_SPACING = 4;
+      const treeCount = coopMapConfig?.treeCount ?? TREE_COUNT;
       for (const { gx, gy } of shuffledForTrees) {
-        if (trees.length >= TREE_COUNT) break;
+        if (trees.length >= treeCount) break;
         // Prüfe Chebyshev-Abstand zu allen bereits platzierten Bäumen
         const tooClose = trees.some(
           t => Math.max(Math.abs(gx - t.gridX), Math.abs(gy - t.gridY)) < TREE_MIN_SPACING,

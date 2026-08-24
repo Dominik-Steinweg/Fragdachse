@@ -78,6 +78,36 @@ Projektilflug-Sondermechaniken wie Homing, Explosionen, Piercing, Splits und Det
 nicht im Headless-Pfad nachgebaut; der Capability-Katalog klassifiziert sie für relevante
 Szenarien fail-closed als `unsupported_relevant`.
 
+## Balance Lab 2.0 – interner Runtime-Schießstand
+
+Der Runtime-Schießstand ist eine bewusst manuell bediente Zwischenstufe neben dem Headless-Lab.
+`weapon-balance-lab` wird als interne Coop-Defense-Map aufgelöst, bleibt aber aus
+`COOP_DEFENSE_MAP_CONFIGS`, Kampagnen-Audit, Freischaltungen und normaler Map-Auswahl ausgeschlossen.
+Ein Solo-Host öffnet die Steuerung in der Coop-Lobby mit `F8`; der Start läuft über den normalen
+Ready-, Arena-Build- und Round-Lifecycle. Nach der Messung wird die Diagnose-Runde ohne Ergebnis,
+Fortschritt oder Raumstatistik verworfen und die vorher ausgewählte Map wiederhergestellt.
+
+`WeaponBalanceLabRuntime` ist nur Szenario- und Input-Controller. Es setzt Spieler und unsterbliche,
+statische `zombie-badger`-Targets, ruft den echten `LoadoutManager.use`-Pfad auf und lässt
+Projectile-, Combat-, Burn-, Spezialwaffen- und Resource-Systeme unverändert arbeiten. Normale
+Waves, Mission-Fortschritt, Gegnerbewegung und Gegnerangriffe bleiben auf der internen Map
+angehalten. Der Mess-Build behält ausschließlich den gewählten W1- oder W2-Upgrade-Ast; Klasse,
+Items, allgemeine Upgrades, Werkzeuge und der ungemessene Loadout-Teil bleiben neutral.
+
+Die auswählbaren ST-/5T-Runs dieser Zwischenstufe verwenden eine manuelle Distanz und eine feste
+Runtime-Formation. Sie tragen deshalb noch keinen automatischen Paritätsanspruch zu
+`single_target_static.v1` beziehungsweise `five_target_static.v1`; ein solcher Vergleich muss
+Distanz, Geometrie, Zeitfenster und Trigger-Policy explizit angleichen.
+
+Der primäre Runtime-Zeitraum ist ebenfalls halboffen: `[warmupMs, warmupMs + measurementMs)`.
+Passive Observer an `CombatSystem` und `ResourceSystem` erfassen tatsächlich verlorene HP,
+Damage-Kind, Crit-Ereignisse sowie tatsächlich gutgeschriebenes oder abgezogenes Adrenalin.
+Settle-Schaden bleibt separat; noch aktive eigene Projektile oder Brandquellen markieren den Tail
+als `truncated`. Ergebnisse werden lokal als versionierte Runtime-Runs gespeichert und als JSON
+oder CSV exportiert. Die UI gruppiert nur unmittelbar vergleichbare Runs nach Waffe, Slot,
+Szenario, Zielzahl, Distanz, Messdauer und Build und bezeichnet den höchsten Messwert ausdrücklich
+als `Best observed`, nicht als `provenMaximum`.
+
 ## Sichere nächste Erweiterungen
 
 Als Nächstes können reine Domain-Resolver für `RadialDamageResolver`, Penetration, Homing oder

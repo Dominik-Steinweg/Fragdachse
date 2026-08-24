@@ -9,7 +9,7 @@ import {
 import { HELP_CONTROLS } from './helpControls';
 
 export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 60_000;
-/** Standard-Standzeit eines lokalen Tutorial-Hinweises entlang der Route. */
+/** Standard-Standzeit eines gemeinsamen Tutorial-Hinweises entlang der Route. */
 export const COOP_DEFENSE_TUTORIAL_STEP_DEFAULT_DURATION_MS = 14_000;
 
 /** Feste Weltposition des Tutorials, unabhängig vom Screen-Space-HUD. */

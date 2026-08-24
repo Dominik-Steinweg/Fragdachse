@@ -182,13 +182,20 @@ Pages, Segmente, Sparse-/Full-Uploads und geschaetzte Bytes sowie Page-Sichtbark
 Bufferbelegung. `GpuVfxSystem` bleibt davon getrennt: transient/emissionsgetrieben dort,
 persistent/eventgetrieben hier (`tests/PersistentGpuWorldSystem.test.ts`).
 
+Power-Up-Pedestals folgen derselben Trennung. `PowerUpPedestalGpuSystem` haelt Sockel,
+Besitzerring und additive Glows in drei szenenlebenslangen `SpriteGPULayer`-Instanzen. Slots
+bleiben bis zur Entfernung stabil und werden danach wiederverwendet; Snapshot-Updates schreiben
+nur bei Position, Typ, Besitzerfarbe oder Darstellungsmodus. Atem- und Respawn-Pulse laufen als
+GPU-Member-Animationen. Ambient-Motes und Spawn-Bursts bleiben kurzlebige, gepoolte Effekte im
+`GpuVfxSystem` und teilen eine kompakte additive Lane im Pedestal-Tiefenband.
+
 ## SpriteGPULayer-Partikel
 
 `Phaser.GameObjects.SpriteGPULayer` traegt Partikel als Member mit GPU-Animationen; nach dem Spawn braucht ein Member kein CPU-Update. Das gesamte Backend liegt in `src/effects/gpu/`; ein Effektcontroller legt weder Layer noch Pool an und sieht keine Phaser-GPU-Interna mehr.
 
 ### Logischer Effekt und physische Render-Lane sind zwei verschiedene Dinge
 
-Ein **logischer Effekt** (`GpuVfxEffects.ts`) traegt Semantik: Motiv, Qualitaetsklasse, Source-Lifecycle, eigene Zeile im Profiler. Eine **Render-Lane** (`GpuVfxRenderLanes.ts`) ist genau ein `SpriteGPULayer`. Mehrere Effekte duerfen sich eine Lane teilen, und derselbe Effekt darf je Variante die Lane wechseln. Ohne diese Trennung waechst die Layerzahl mit der Effektzahl – genau das verhindert die Architektur. Der aktuelle Manifeststand umfasst 49 logische Effekte auf 29 Lanes.
+Ein **logischer Effekt** (`GpuVfxEffects.ts`) traegt Semantik: Motiv, Qualitaetsklasse, Source-Lifecycle, eigene Zeile im Profiler. Eine **Render-Lane** (`GpuVfxRenderLanes.ts`) ist genau ein `SpriteGPULayer`. Mehrere Effekte duerfen sich eine Lane teilen, und derselbe Effekt darf je Variante die Lane wechseln. Ohne diese Trennung waechst die Layerzahl mit der Effektzahl – genau das verhindert die Architektur. Der aktuelle Manifeststand umfasst 52 logische Effekte auf 30 Lanes.
 
 Eine gemeinsame Lane setzt Gleichheit in allem *layerglobalen* voraus – Depth, Blend-Mode, Textur, Scroll-/Kamera-Verhalten, Lighting. Alles, was pro Member existiert (Position, Frame, Rotation, Scale, Alpha, Tint, Lebenszeit, Creation Time), ist kein Trennkriterium.
 

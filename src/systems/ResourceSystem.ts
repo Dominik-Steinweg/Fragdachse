@@ -25,6 +25,16 @@ export class ResourceSystem {
   private adrenalineGainMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineCostMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineSpawnFullResolver: ((id: string) => boolean) | null = null;
+  private readonly adrenalineDrainObservers = new Set<(
+    playerId: string,
+    requestedAmount: number,
+    drainedAmount: number,
+  ) => void>();
+  private readonly adrenalineGainObservers = new Set<(
+    playerId: string,
+    requestedAmount: number,
+    gainedAmount: number,
+  ) => void>();
 
   setPowerUpSystem(ps: PowerUpSystemType | null): void { this.powerUpSystem = ps; }
   setAdrenalineMaxResolver(resolver: ((id: string) => number) | null): void { this.adrenalineMaxResolver = resolver; }
@@ -34,6 +44,22 @@ export class ResourceSystem {
   setAdrenalineGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineGainMultiplierResolver = resolver; }
   setAdrenalineCostMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineCostMultiplierResolver = resolver; }
   setAdrenalineSpawnFullResolver(resolver: ((id: string) => boolean) | null): void { this.adrenalineSpawnFullResolver = resolver; }
+  addAdrenalineDrainObserver(observer: (
+    playerId: string,
+    requestedAmount: number,
+    drainedAmount: number,
+  ) => void): () => void {
+    this.adrenalineDrainObservers.add(observer);
+    return () => { this.adrenalineDrainObservers.delete(observer); };
+  }
+  addAdrenalineGainObserver(observer: (
+    playerId: string,
+    requestedAmount: number,
+    gainedAmount: number,
+  ) => void): () => void {
+    this.adrenalineGainObservers.add(observer);
+    return () => { this.adrenalineGainObservers.delete(observer); };
+  }
 
   /** Adrenalin-Wert fuer (Wieder-)Belebung: Maximum bei aktivem "Adrenalinschub"-Upgrade, sonst ADRENALINE_START. */
   private getSpawnAdrenaline(id: string): number {
@@ -84,8 +110,13 @@ export class ResourceSystem {
    */
   addAdrenaline(id: string, amount: number): void {
     const adjustedAmount = amount > 0 ? amount * Math.max(0, this.adrenalineGainMultiplierResolver?.(id) ?? 1) : amount;
-    const cur = Math.min(this.getMaxAdrenaline(id), (this.adrenaline.get(id) ?? 0) + adjustedAmount);
+    const previous = this.adrenaline.get(id) ?? 0;
+    const cur = Math.min(this.getMaxAdrenaline(id), previous + adjustedAmount);
     this.adrenaline.set(id, cur);
+    const gainedAmount = cur - previous;
+    for (const observer of this.adrenalineGainObservers) {
+      observer(id, amount, gainedAmount);
+    }
   }
 
   /** Berechnet die tatsaechlichen Kosten inklusive spielerweiter Verbrauchsmodifikatoren. */
@@ -108,8 +139,13 @@ export class ResourceSystem {
    */
   drainAdrenaline(id: string, amount: number): void {
     const adjustedAmount = this.resolveAdrenalineCost(id, amount);
-    const cur = Math.max(0, (this.adrenaline.get(id) ?? 0) - adjustedAmount);
+    const previous = this.adrenaline.get(id) ?? 0;
+    const cur = Math.max(0, previous - adjustedAmount);
     this.adrenaline.set(id, cur);
+    const drainedAmount = previous - cur;
+    for (const observer of this.adrenalineDrainObservers) {
+      observer(id, amount, drainedAmount);
+    }
     // Regen-Pause nicht setzen, wenn Adrenalinspritze aktiv ist
     if ((this.powerUpSystem?.getRegenMultiplier(id) ?? 1) === 1) {
       this.regenPausedUntil.set(id, Date.now() + ADRENALINE_REGEN_PAUSE_MS);

@@ -99,7 +99,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -663,6 +663,26 @@ export class ArenaLifecycleCoordinator {
   hostAbortRound(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     this.hostCompleteRound('aborted');
+  }
+
+  /**
+   * Beendet eine interne Diagnose-Runde ohne Ergebnis, Fortschritt oder Raumstatistik.
+   * Der regulaere Teardown bleibt am normalen ARENA→LOBBY-Phasenwechsel haengen.
+   */
+  hostDiscardRound(): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
+    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    if (!isWeaponBalanceLabMapId(mapId)) return;
+    bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseMapEventPresentationState(null);
+    bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
+    bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishRoundState(null);
+    bridge.publishRoundResults([]);
+    bridge.publishCoopDefenseRespawnBudgetState(null);
+    bridge.hostResetRoundParticipation();
+    bridge.hostResetAllLobbyReady();
+    bridge.setGamePhase('LOBBY');
   }
 
   /** True, wenn der lokale Spieler die laufende Partie gerade abbrechen darf. */

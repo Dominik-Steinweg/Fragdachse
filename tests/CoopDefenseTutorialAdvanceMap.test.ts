@@ -23,8 +23,6 @@ import { CoopDefenseMissionProgressSystem } from '../src/systems/CoopDefenseMiss
 import { CoopDefenseRoundStateSystem } from '../src/systems/CoopDefenseRoundStateSystem';
 import type { BaseManager } from '../src/entities/BaseManager';
 import {
-  advanceCoopDefenseTutorialSteps,
-  createCoopDefenseTutorialStepState,
   getVisibleCoopDefenseTutorialStepId,
 } from '../src/ui/coopDefenseTutorialStepModel';
 
@@ -409,44 +407,22 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(system.isMissionFailed()).toBe(false);
   });
 
-  it('shows each local tutorial step once and only for the player who reaches the checkpoint', () => {
+  it('shows a tutorial step for every player from the shared checkpoint activation', () => {
     applyMapMetrics();
     const steps = resolveCoopDefenseMapTutorialSteps(MAP);
-    const input = { steps, checkpoints: MISSION.checkpoints };
-    let state = createCoopDefenseTutorialStepState();
+    const activatedCheckpoints = [{ checkpointId: 'cp1-adrenaline', activatedAtRoundMs: 1_000 }];
 
-    const away = worldCenterOf(MISSION.startArea!.gridX, MISSION.startArea!.gridY);
-    state = advanceCoopDefenseTutorialSteps(state, { ...input, localPlayer: away, nowMs: 0 });
-    expect(getVisibleCoopDefenseTutorialStepId(state, 0)).toBeNull();
-
-    const atCp1 = worldCenterOf(MISSION.checkpoints[0].gridX, MISSION.checkpoints[0].gridY);
-    state = advanceCoopDefenseTutorialSteps(state, { ...input, localPlayer: atCp1, nowMs: 1_000 });
-    expect(getVisibleCoopDefenseTutorialStepId(state, 1_000)).toBe('map01-adrenaline');
+    // Keine lokale Spielerposition ist Teil der Projektion: alle Clients erhalten denselben Text.
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 999)).toBeNull();
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000)).toBe('map01-adrenaline');
 
     // Standzeit laeuft ab; danach wird nichts mehr angezeigt.
     const durationMs = steps[0].durationMs;
-    state = advanceCoopDefenseTutorialSteps(state, {
-      ...input,
-      localPlayer: null,
-      nowMs: 1_000 + durationMs,
-    });
-    expect(getVisibleCoopDefenseTutorialStepId(state, 1_000 + durationMs)).toBeNull();
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000 + durationMs)).toBeNull();
 
-    // Erneutes Betreten desselben Checkpoints wiederholt den Hinweis nicht.
-    state = advanceCoopDefenseTutorialSteps(state, {
-      ...input,
-      localPlayer: atCp1,
-      nowMs: 60_000,
-    });
-    expect(getVisibleCoopDefenseTutorialStepId(state, 60_000)).toBeNull();
-
-    // Eine neue Runde beginnt mit frischem lokalem Zustand.
-    const freshRound = advanceCoopDefenseTutorialSteps(createCoopDefenseTutorialStepState(), {
-      ...input,
-      localPlayer: atCp1,
-      nowMs: 0,
-    });
-    expect(getVisibleCoopDefenseTutorialStepId(freshRound, 0)).toBe('map01-adrenaline');
+    // Der naechste gemeinsame Checkpoint uebernimmt die Anzeige, sobald er aktiviert wurde.
+    activatedCheckpoints.push({ checkpointId: 'cp2-utility', activatedAtRoundMs: 20_000 });
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 20_001)).toBe('map01-utility');
   });
 
   it('rejects tutorial steps and spawn areas that the map cannot back', () => {

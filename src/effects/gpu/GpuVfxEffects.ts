@@ -60,6 +60,9 @@ export const GpuVfxEffectId = {
   BloodStreak: 46,
   BloodDroplet: 47,
   BloodMicroDroplet: 48,
+  PowerUpPedestalAmbient: 49,
+  PowerUpPedestalSpark: 50,
+  PowerUpPedestalBurst: 51,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -491,5 +494,29 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.BloodDroplet,
     importance: 'decorative',
     release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.PowerUpPedestalAmbient,
+    label: 'powerup.pedestal-ambient',
+    lane: GpuVfxLaneId.PowerUpPedestal,
+    frame: GpuVfxFrameId.DeathGlow,
+    importance: 'standard',
+    release: 'kill-with-source',
+  },
+  {
+    id: GpuVfxEffectId.PowerUpPedestalSpark,
+    label: 'powerup.pedestal-spark',
+    lane: GpuVfxLaneId.PowerUpPedestal,
+    frame: GpuVfxFrameId.DeathFragment,
+    importance: 'standard',
+    release: 'kill-with-source',
+  },
+  {
+    id: GpuVfxEffectId.PowerUpPedestalBurst,
+    label: 'powerup.pedestal-burst',
+    lane: GpuVfxLaneId.PowerUpPedestal,
+    frame: GpuVfxFrameId.DeathGlow,
+    importance: 'standard',
+    release: 'kill-with-source',
   },
 ];

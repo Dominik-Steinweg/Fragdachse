@@ -15,7 +15,8 @@ src/network/NetworkBridge.ts zeigt die fachliche API; src/network/peer/PeerRoom.
 - src/effects/AsmdPrimaryRenderer.ts: komponierte Hitscan-Sequenz mit Mündung, Impact und Cleanup.
 - src/effects/EffectSystem.ts: gemeinsame Explosionseffekte und Übergabe an zentrale Kamera-/Lichtregie.
 - src/effects/RocketRenderer.ts: kontinuierliches Projektil mit Create/Update/Destroy und Richtungsvektor.
-- src/powerups/PowerUpRenderer.ts: repliziertes Weltobjekt mit vorhandenen Assets und sauberem Container-Lifecycle.
+- src/powerups/PowerUpRenderer.ts und src/powerups/PowerUpPedestalGpuSystem.ts: replizierte
+  Power-Ups sowie persistente GPU-Pedestals mit getrennter transienter GPU-Emission.
 
 Layer, Partikelmengen und Filterkosten nicht blind übernehmen; siehe visual-guidelines.md und performance.md.
 

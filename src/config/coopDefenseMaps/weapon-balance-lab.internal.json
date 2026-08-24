@@ -1,0 +1,19 @@
+{
+  "mapId": "weapon-balance-lab",
+  "arenaWidthCells": 60,
+  "arenaHeightCells": 33,
+  "timeOfDay": "12:00",
+  "rockFillRatio": 0,
+  "treeCount": 0,
+  "trackMode": "rails",
+  "trackPosition": { "kind": "grid", "gridX": 15 },
+  "surviveDurationSec": 3600,
+  "balanceReferenceDurationSec": 3600,
+  "objective": "survive",
+  "respawnsPerPlayer": 0,
+  "bases": [],
+  "powerUps": [],
+  "encounters": [],
+  "persistentSpawns": [],
+  "mapEvents": []
+}

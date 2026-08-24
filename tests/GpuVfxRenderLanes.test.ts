@@ -78,7 +78,7 @@ describe('gpu vfx render lanes', () => {
     // Der eigentliche Architekturvertrag: mehr logische Effekte auf weniger physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
     // Explosionen und Combat-Gore fuegen je nur die layerglobal inkompatiblen Lanes hinzu.
-    expect(GPU_VFX_LANES.length).toBe(29);
+    expect(GPU_VFX_LANES.length).toBe(30);
   });
 
   it('keeps leaf debris in an explicit ordered world lane', () => {
@@ -100,6 +100,22 @@ describe('gpu vfx render lanes', () => {
     expect(dust.frame).toBe(GpuVfxFrameId.LeafBlowerDust);
     expect(dust.release).toBe('linger');
     expect(lane.capacityRationale).toContain('Staub');
+  });
+
+  it('keeps all transient pedestal effects on one dedicated compact lane', () => {
+    const lane = GPU_VFX_LANES[GpuVfxLaneId.PowerUpPedestal];
+    const effects = [
+      'powerup.pedestal-ambient',
+      'powerup.pedestal-spark',
+      'powerup.pedestal-burst',
+    ].map((label) => GPU_VFX_EFFECTS.find((effect) => effect.label === label)!);
+
+    expect(lane.depth).toBe(DEPTH.PLAYERS - 2.05);
+    expect(lane.blendMode).toBe(1);
+    expect(lane.capacity).toBe(1024);
+    expect(lane.maxLifetimeMs).toBe(1100);
+    expect(effects.every((effect) => effect.lane === GpuVfxLaneId.PowerUpPedestal)).toBe(true);
+    expect(new Set(effects.map((effect) => effect.id)).size).toBe(3);
   });
 
   it('keeps the migrated fire families on one lane per depth band', () => {

@@ -89,6 +89,7 @@ export const enContent = {
   "powerup.HOLY_HAND_GRENADE.name": "Holy Hand Grenade",
   "powerup.BFG.name": "BFG",
   "map.0.name": "Map 0 – Test Range",
+  "map.weapon-balance-lab.name": "Firing Range – Balance Lab",
   "map.1.name": "Map 1 – Baptism by Fire",
   "map.2.name": "Map 2 – Second Front",
   "map.3.name": "Map 3 – No Rest for the Badger",

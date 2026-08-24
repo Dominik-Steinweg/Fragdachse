@@ -77,6 +77,7 @@ export const GpuVfxLaneId = {
   ExplosionSmoke:       26,
   GoreNormal:            27,
   GoreAdd:               28,
+  PowerUpPedestal:       29,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -644,5 +645,22 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       'Bei 48 gleichzeitigen Todesfaellen mit hoechstens acht kleinen Glows und kurzer Lebenszeit '
       + 'bleiben deutlich unter 1024 Slots lebendig; die Lane wird bei Ueberlast zuerst qualitativ '
       + 'reduziert, nicht vergroessert.',
+  },
+  {
+    id: GpuVfxLaneId.PowerUpPedestal,
+    label: 'powerup-pedestal',
+    depth: DEPTH.PLAYERS - 2.05,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear],
+    capacity: 1024,
+    maxLifetimeMs: 1100,
+    order: 'add-over-opaque',
+    reserveCritical: 0,
+    rationale:
+      'Ambient-Motes, Funken und Spawn-Bursts teilen das additive Pedestal-Tiefenband. Die '
+      + 'dauerhafte Co-Activity bleibt getrennt von den nur waehrend Airstrikes sichtbaren Lanes.',
+    capacityRationale:
+      'Die groesste authored Map besitzt 18 Pedestals mit rund 13 lebenden Flow-Membern je '
+      + 'Sockel. 1024 laesst mehrere gleichzeitige 19-Member-Spawn-Bursts und Konstruktionen zu.',
   },
 ];

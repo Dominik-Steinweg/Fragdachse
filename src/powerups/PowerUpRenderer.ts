@@ -11,17 +11,25 @@ import {
   setCircleEmitZone,
 } from '../effects/EffectUtils';
 import { mixColors } from '../effects/EffectUtils';
+import { GpuVfxEffectId } from '../effects/gpu/GpuVfxEffects';
+import type { GpuVfxSpawnSpec } from '../effects/gpu/GpuVfxSpawnSpec';
+import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
+import { ParticleFlowScheduler } from '../effects/gpu/ParticleFlowScheduler';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE } from './PowerUpConfig';
+import {
+  PowerUpPedestalGpuSystem,
+  resolvePowerUpPedestalGpuMode,
+  type PowerUpPedestalGpuMode,
+} from './PowerUpPedestalGpuSystem';
 
-const TEX_POWERUP_PEDESTAL_OUTER_GLOW = '__powerup_pedestal_outer_glow';
-const TEX_POWERUP_PEDESTAL_GLOW      = '__powerup_pedestal_glow';
 const TEX_POWERUP_PEDESTAL_PARTICLE  = '__powerup_pedestal_particle';
 const TEX_POWERUP_PEDESTAL_PIXEL     = '__powerup_pedestal_pixel';
 const TEX_POWERUP_PEDESTAL_FLASH     = '__powerup_pedestal_flash';
 const MISSION_REWARD_COLOR           = 0x22d7e8;
 const MISSION_REWARD_PEDESTAL_SIZE   = 38;
 const MISSION_REWARD_PICKUP_SIZE     = 14;
+const PEDESTAL_SPAWN_POINT = { x: 0, y: 0 };
 
 interface ItemVisual {
   container: Phaser.GameObjects.Container;
@@ -32,18 +40,14 @@ interface ItemVisual {
 }
 
 interface PedestalVisual {
-  container: Phaser.GameObjects.Container;
-  outerGlow: Phaser.GameObjects.Image;
-  glow: Phaser.GameObjects.Image;
-  aura: Phaser.GameObjects.Image;
-  ringOuter: Phaser.GameObjects.Arc;
-  ringInner: Phaser.GameObjects.Arc;
-  ownerRing: Phaser.GameObjects.Arc;
-  core: Phaser.GameObjects.Arc;
-  ambientEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   state: SyncedPowerUpPedestal;
   lastHasPowerUp: boolean;
+  mode: PowerUpPedestalGpuMode;
+  ambientFrequency: number;
+  sparkFrequency: number;
+  readonly ambientFlow: ParticleFlowScheduler;
+  readonly sparkFlow: ParticleFlowScheduler;
+  readonly source: number;
 }
 
 /**
@@ -56,14 +60,43 @@ interface PedestalVisual {
 export class PowerUpRenderer {
   private sprites = new Map<number, ItemVisual>();
   private pedestals = new Map<number, PedestalVisual>();
+  private readonly activePedestals: PedestalVisual[] = [];
+  private readonly pedestalGpu: PowerUpPedestalGpuSystem;
   private lighting: LightingSystem | null = null;
+  private gpuVfx: GpuVfxSystem | null = null;
+  private ambientSpec: GpuVfxSpawnSpec | null = null;
+  private sparkSpec: GpuVfxSpawnSpec | null = null;
+  private burstSpec: GpuVfxSpawnSpec | null = null;
 
   constructor(private scene: Phaser.Scene) {
     this.ensureTextures();
+    this.pedestalGpu = new PowerUpPedestalGpuSystem(scene);
   }
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+  }
+
+  registerGpuVfx(system: GpuVfxSystem): void {
+    if (this.gpuVfx) return;
+    this.gpuVfx = system;
+
+    this.ambientSpec = system.createSpec(GpuVfxEffectId.PowerUpPedestalAmbient);
+    this.ambientSpec.scaleStart = 0.38;
+    this.ambientSpec.scaleEnd = 0;
+    this.ambientSpec.alphaStart = 0.28;
+    this.ambientSpec.alphaEnd = 0;
+
+    this.sparkSpec = system.createSpec(GpuVfxEffectId.PowerUpPedestalSpark);
+    this.sparkSpec.scaleStart = 1.5;
+    this.sparkSpec.scaleEnd = 0.3;
+    this.sparkSpec.alphaStart = 0.75;
+    this.sparkSpec.alphaEnd = 0;
+
+    this.burstSpec = system.createSpec(GpuVfxEffectId.PowerUpPedestalBurst);
+    this.burstSpec.alphaEnd = 0;
+
+    system.registerEmission((deltaMs, nowMs) => this.emitPedestalParticles(deltaMs, nowMs));
   }
 
   /**
@@ -183,112 +216,42 @@ export class PowerUpRenderer {
       const existing = this.pedestals.get(pedestal.id);
       if (existing) {
         if (!existing.lastHasPowerUp && pedestal.hasPowerUp) {
-          this.playPedestalSpawnBurst(pedestal.x, pedestal.y, POWERUP_DEFS[pedestal.defId]?.color ?? 0xffffff);
+          this.playPedestalSpawnBurst(
+            pedestal.x,
+            pedestal.y,
+            POWERUP_DEFS[pedestal.defId]?.color ?? 0xffffff,
+            existing.source,
+          );
         }
         existing.state = pedestal;
-        existing.container.setPosition(pedestal.x, pedestal.y);
-        existing.ambientEmitter.setPosition(pedestal.x, pedestal.y);
-        existing.sparkEmitter.setPosition(pedestal.x, pedestal.y);
         existing.lastHasPowerUp = pedestal.hasPowerUp;
         continue;
       }
 
-      const def = POWERUP_DEFS[pedestal.defId];
-      const glowColor = def?.color ?? 0xffffff;
-      const container = this.scene.add.container(pedestal.x, pedestal.y);
-      container.setDepth(DEPTH.PLAYERS - 2);
-
-      const outerGlow = configureAdditiveImage(
-        this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_OUTER_GLOW),
-        DEPTH.PLAYERS - 2.35,
-        0.0,
-        glowColor,
-      );
-
-      const shadow = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 6, 0x04070c, 0.42);
-      registerGraphicsObject(this.scene, 'powerUpEffects', shadow);
-      const base = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius, 0x0c121c, 0.96)
-        .setStrokeStyle(2, 0x25313c, 0.95);
-      registerGraphicsObject(this.scene, 'powerUpEffects', base);
-      const plate = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderInnerRadius, 0x121b27, 0.94)
-        .setStrokeStyle(2, glowColor, 0.42);
-      registerGraphicsObject(this.scene, 'powerUpEffects', plate);
-      const core = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderCoreRadius, glowColor, 0.2)
-        .setStrokeStyle(1.5, 0xffffff, 0.14);
-      registerGraphicsObject(this.scene, 'powerUpEffects', core);
-      const ringOuter = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 1)
-        .setStrokeStyle(2, glowColor, 0.75);
-      registerGraphicsObject(this.scene, 'powerUpEffects', ringOuter);
-      const ringInner = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderInnerRadius - 2)
-        .setStrokeStyle(2, 0xffffff, 0.18);
-      registerGraphicsObject(this.scene, 'powerUpEffects', ringInner);
-      const ownerRing = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius - 2)
-        .setStrokeStyle(1.5, pedestal.ownerColor ?? 0xffffff, pedestal.ownerColor === undefined ? 0 : 0.78);
-      registerGraphicsObject(this.scene, 'powerUpEffects', ownerRing);
-      const glow = configureAdditiveImage(
-        this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_GLOW),
-        DEPTH.PLAYERS - 2.2,
-        0.38,
-        glowColor,
-      ).setScale(0.84);
-      const aura = configureAdditiveImage(
-        this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_FLASH),
-        DEPTH.PLAYERS - 2.1,
-        0.22,
-        glowColor,
-      ).setScale(0.56);
-
-      const ambientEmitter = createEmitter(this.scene, pedestal.x, pedestal.y, TEX_POWERUP_PEDESTAL_PARTICLE, {
-        lifespan: { min: 500, max: 1100 },
-        frequency: 120,
-        quantity: 1,
-        speedX: { min: -10, max: 10 },
-        speedY: { min: -10, max: 10 },
-        scale: { start: 0.46, end: 0 },
-        alpha: { start: 0.28, end: 0 },
-        tint: [glowColor, 0xffffff],
-        blendMode: Phaser.BlendModes.ADD,
-        emitting: true,
-      }, DEPTH.PLAYERS - 2.15, 'standard', 'powerUp');
-      setCircleEmitZone(ambientEmitter, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 8, 2, true);
-
-      const sparkEmitter = createEmitter(this.scene, pedestal.x, pedestal.y, TEX_POWERUP_PEDESTAL_PIXEL, {
-        lifespan: { min: 180, max: 320 },
-        frequency: 200,
-        quantity: 1,
-        speedX: { min: -20, max: 20 },
-        speedY: { min: -20, max: 20 },
-        scale: { start: 1.0, end: 0.2 },
-        alpha: { start: 0.75, end: 0 },
-        tint: [0xffffff, glowColor],
-        blendMode: Phaser.BlendModes.ADD,
-        emitting: true,
-      }, DEPTH.PLAYERS - 2.05, 'standard', 'powerUp');
-      setCircleEmitZone(sparkEmitter, POWERUP_PEDESTAL_CONFIG.renderInnerRadius + 3, 1, true);
-
-      container.add([outerGlow, glow, aura, shadow, base, plate, core, ringOuter, ringInner, ownerRing]);
-      this.pedestals.set(pedestal.id, {
-        container,
-        outerGlow,
-        glow,
-        aura,
-        ringOuter,
-        ringInner,
-        ownerRing,
-        core,
-        ambientEmitter,
-        sparkEmitter,
+      const mode: PowerUpPedestalGpuMode = pedestal.hasPowerUp ? 'ready' : 'idle';
+      const visual: PedestalVisual = {
         state: pedestal,
         lastHasPowerUp: pedestal.hasPowerUp,
-      });
+        mode,
+        ambientFrequency: pedestal.hasPowerUp ? 95 : 135,
+        sparkFrequency: pedestal.hasPowerUp ? 150 : 220,
+        ambientFlow: new ParticleFlowScheduler(120),
+        sparkFlow: new ParticleFlowScheduler(200),
+        source: this.gpuVfx?.createSource(GpuVfxEffectId.PowerUpPedestalAmbient)
+          ?? GPU_VFX_NO_SOURCE_HANDLE,
+      };
+      this.pedestals.set(pedestal.id, visual);
+      this.activePedestals.push(visual);
+      this.pedestalGpu.upsert(pedestal, mode);
     }
 
     for (const [id, visual] of this.pedestals) {
       if (!activeIds.has(id)) {
         this.lighting?.releaseLight(pedestalLightKey(id));
-        destroyEmitter(visual.ambientEmitter);
-        destroyEmitter(visual.sparkEmitter);
-        visual.container.destroy(true);
+        this.pedestalGpu.remove(id);
+        this.gpuVfx?.releaseSource(visual.source);
+        const index = this.activePedestals.indexOf(visual);
+        if (index >= 0) this.activePedestals.splice(index, 1);
         this.pedestals.delete(id);
       }
     }
@@ -296,84 +259,21 @@ export class PowerUpRenderer {
 
   updatePedestals(now: number): void {
     for (const [id, visual] of this.pedestals) {
-      const phase   = now / 1000 + id * 0.37;
-      const breath  = 0.5 + 0.5 * Math.sin(phase * 2.2);
-      // Zweite schnellere Welle – Schwebung mit breath erzeugt das Wabern
-      const shimmer = 0.5 + 0.5 * Math.sin(phase * 5.8 + id * 1.3);
-      const hasPowerUp = visual.state.hasPowerUp;
-      const timeUntilRespawn = visual.state.nextRespawnAt > 0 ? visual.state.nextRespawnAt - now : Number.POSITIVE_INFINITY;
-      const isAnnouncing = !hasPowerUp && Number.isFinite(timeUntilRespawn) && timeUntilRespawn > 0 && timeUntilRespawn <= POWERUP_PEDESTAL_CONFIG.announceLeadMs;
+      const mode = resolvePowerUpPedestalGpuMode(visual.state, now);
+      if (mode !== visual.mode) visual.mode = mode;
+      this.pedestalGpu.upsert(visual.state, mode);
+      visual.ambientFrequency = mode === 'ready' ? 95 : mode === 'announcing' ? 80 : 135;
+      visual.sparkFrequency = mode === 'ready' ? 150 : mode === 'announcing' ? 95 : 220;
 
-      let outerGlowAlpha = 0.26 + breath * 0.14;
-      let outerGlowScale = 0.86 + breath * 0.17;
-      let glowAlpha = 0.18 + breath * 0.08;
-      let glowScale = 0.82 + breath * 0.06;
-      let auraAlpha = 0.14 + breath * 0.06;
-      let auraScale = 0.56 + breath * 0.04;
-      let ringOuterAlpha = 0.52 + breath * 0.1;
-      let ringInnerAlpha = 0.12 + breath * 0.06;
-      let coreAlpha = 0.12 + breath * 0.08;
-      let ringPulse = 1 + breath * 0.03;
-      let sparkFrequency = 220;
-      let ambientFrequency = 135;
-
-      if (hasPowerUp) {
-        // Schwebungseffekt: breath (2.2 Hz) + shimmer (5.8 Hz) → Beat ~0.57 Hz
-        outerGlowAlpha = 0.28 + breath * 0.20 + shimmer * 0.12;
-        outerGlowScale = 0.90 + breath * 0.18 + shimmer * 0.08;
-        glowAlpha = 0.34 + breath * 0.14;
-        glowScale = 0.92 + breath * 0.11;
-        auraAlpha = 0.22 + breath * 0.1;
-        auraScale = 0.64 + breath * 0.08;
-        ringOuterAlpha = 0.76 + breath * 0.14;
-        ringInnerAlpha = 0.2 + breath * 0.08;
-        coreAlpha = 0.24 + breath * 0.15;
-        ringPulse = 1.02 + breath * 0.045;
-        sparkFrequency = 150;
-        ambientFrequency = 95;
-      } else if (isAnnouncing) {
-        const blink = 0.5 + 0.5 * Math.sin(now / 90 + id * 1.7);
-        const progress = 1 - (timeUntilRespawn / POWERUP_PEDESTAL_CONFIG.announceLeadMs);
-        outerGlowAlpha = 0.12 + blink * (0.26 + progress * 0.16);
-        outerGlowScale = 0.88 + blink * 0.20 + progress * 0.10;
-        glowAlpha = 0.24 + blink * (0.28 + progress * 0.14);
-        glowScale = 0.88 + blink * 0.16 + progress * 0.12;
-        auraAlpha = 0.18 + blink * 0.2;
-        auraScale = 0.58 + blink * 0.11 + progress * 0.06;
-        ringOuterAlpha = 0.54 + blink * 0.36;
-        ringInnerAlpha = 0.16 + blink * 0.2;
-        coreAlpha = 0.12 + blink * 0.18;
-        ringPulse = 1.04 + blink * 0.08;
-        sparkFrequency = 95;
-        ambientFrequency = 80;
-      }
-
-      visual.container.setScale(ringPulse);
-      visual.outerGlow.setAlpha(outerGlowAlpha).setScale(outerGlowScale);
-      visual.glow.setAlpha(glowAlpha).setScale(glowScale);
-      visual.aura.setAlpha(auraAlpha).setScale(auraScale);
-      visual.ringOuter.setAlpha(ringOuterAlpha).setScale(ringPulse);
-      visual.ringInner.setAlpha(ringInnerAlpha).setScale(1 + breath * 0.02);
-      visual.ownerRing
-        .setStrokeStyle(1.5, visual.state.ownerColor ?? 0xffffff, visual.state.ownerColor === undefined ? 0 : 0.78)
-        .setAlpha(visual.state.ownerColor === undefined ? 0 : 0.72 + breath * 0.12)
-        .setScale(1 + breath * 0.025);
-      visual.core.setAlpha(coreAlpha).setScale(1 + breath * 0.05);
-      visual.ambientEmitter.frequency = ambientFrequency;
-      visual.sparkEmitter.frequency = sparkFrequency;
-
-      // `outerGlowAlpha` trägt bereits den kompletten Zustand des Podests – belegt,
-      // leer, oder blinkend kurz vor dem Respawn. Das Licht hängt sich daran, statt
-      // die drei Fälle ein zweites Mal auszuformulieren.
       this.lighting?.setLight(
         pedestalLightKey(id),
         'pickupGlow',
-        visual.container.x,
-        visual.container.y,
+        visual.state.x,
+        visual.state.y,
         {
           radiusPx: POWERUP_PEDESTAL_CONFIG.renderBaseRadius * 3.4,
           color: mixColors(POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff, 0xffffff, 0.55),
-          intensity: Phaser.Math.Clamp(outerGlowAlpha * 1.1, 0, 0.6),
+          intensity: mode === 'ready' ? 0.54 : mode === 'announcing' ? 0.5 : 0.4,
         },
       );
     }
@@ -388,31 +288,17 @@ export class PowerUpRenderer {
     this.sprites.clear();
     for (const [id, visual] of this.pedestals) {
       this.lighting?.releaseLight(pedestalLightKey(id));
-      destroyEmitter(visual.ambientEmitter);
-      destroyEmitter(visual.sparkEmitter);
-      visual.container.destroy(true);
+      this.gpuVfx?.releaseSource(visual.source);
     }
     this.pedestals.clear();
+    this.activePedestals.length = 0;
+    this.pedestalGpu.clear();
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.PowerUpPedestalAmbient);
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.PowerUpPedestalSpark);
+    this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.PowerUpPedestalBurst);
   }
 
   private ensureTextures(): void {
-    // Großes weiches Außenleuchten – wird per Tint in die Power-Up-Farbe eingefärbt
-    fillRadialGradientTexture(this.scene.textures, TEX_POWERUP_PEDESTAL_OUTER_GLOW, 160, [
-      [0,    'rgba(255,255,255,0.92)'],
-      [0.14, 'rgba(255,255,255,0.60)'],
-      [0.35, 'rgba(255,255,255,0.22)'],
-      [0.62, 'rgba(255,255,255,0.06)'],
-      [0.85, 'rgba(255,255,255,0.01)'],
-      [1,    'rgba(255,255,255,0.00)'],
-    ]);
-
-    fillRadialGradientTexture(this.scene.textures, TEX_POWERUP_PEDESTAL_GLOW, POWERUP_PEDESTAL_CONFIG.renderGlowSize, [
-      [0, 'rgba(255,255,255,0.92)'],
-      [0.22, 'rgba(255,255,255,0.34)'],
-      [0.55, 'rgba(170,220,255,0.12)'],
-      [1, 'rgba(0,0,0,0.0)'],
-    ]);
-
     fillRadialGradientTexture(this.scene.textures, TEX_POWERUP_PEDESTAL_PARTICLE, 20, [
       [0, 'rgba(255,255,255,0.95)'],
       [0.36, 'rgba(255,255,255,0.4)'],
@@ -432,38 +318,101 @@ export class PowerUpRenderer {
     });
   }
 
-  private playPedestalSpawnBurst(x: number, y: number, color: number): void {
-    const flash = configureAdditiveImage(
-      this.scene.add.image(x, y, TEX_POWERUP_PEDESTAL_FLASH),
-      DEPTH.PLAYERS - 1.05,
-      0.78,
-      color,
-    ).setScale(0.38);
+  private playPedestalSpawnBurst(x: number, y: number, color: number, source: number): void {
+    const system = this.gpuVfx;
+    const burst = this.burstSpec;
+    if (!system || !burst) return;
+    const nowMs = system.now();
 
-    this.scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scaleX: 1.45,
-      scaleY: 1.45,
-      duration: 180,
-      ease: 'Quad.easeOut',
-      onComplete: () => flash.destroy(),
-    });
+    burst.lifeMs = 180;
+    burst.x = x;
+    burst.y = y;
+    burst.vx = 0;
+    burst.vy = 0;
+    burst.scaleStart = 0.64;
+    burst.scaleEnd = 2.4;
+    burst.alphaStart = 0.78;
+    burst.tint = color;
+    system.spawn(burst, source, nowMs);
 
-    const burst = createEmitter(this.scene, x, y, TEX_POWERUP_PEDESTAL_PARTICLE, {
-      lifespan: { min: 220, max: 420 },
-      frequency: -1,
-      quantity: 1,
-      speedX: { min: -95, max: 95 },
-      speedY: { min: -95, max: 95 },
-      scale: { start: 0.75, end: 0 },
-      alpha: { start: 0.9, end: 0 },
-      tint: [0xffffff, color],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    }, DEPTH.PLAYERS - 0.95, 'standard', 'powerUp');
-    burst.explode(18);
-    this.scene.time.delayedCall(450, () => destroyEmitter(burst));
+    const motes = system.quality.scaleBurst(GpuVfxEffectId.PowerUpPedestalBurst, 18);
+    for (let index = 0; index < motes; index += 1) {
+      burst.lifeMs = Phaser.Math.FloatBetween(220, 420);
+      burst.x = x;
+      burst.y = y;
+      burst.vx = Phaser.Math.FloatBetween(-95, 95);
+      burst.vy = Phaser.Math.FloatBetween(-95, 95);
+      burst.scaleStart = 0.62;
+      burst.scaleEnd = 0;
+      burst.alphaStart = 0.9;
+      burst.tint = Math.random() < 0.5 ? 0xffffff : color;
+      system.spawn(burst, source, nowMs);
+    }
+  }
+
+  private emitPedestalParticles(deltaMs: number, nowMs: number): void {
+    const system = this.gpuVfx;
+    const ambient = this.ambientSpec;
+    const spark = this.sparkSpec;
+    if (!system || !ambient || !spark) return;
+
+    for (let index = 0; index < this.activePedestals.length; index += 1) {
+      const visual = this.activePedestals[index];
+      const ambientFrequency = system.quality.scaleFrequency(
+        visual.ambientFrequency,
+        GpuVfxEffectId.PowerUpPedestalAmbient,
+      );
+      if (ambientFrequency > 0) {
+        visual.ambientFlow.setFrequency(ambientFrequency);
+        const due = visual.ambientFlow.tick(deltaMs);
+        for (let spawn = 0; spawn < due; spawn += 1) this.spawnAmbient(visual, ambient, nowMs);
+      }
+
+      const sparkFrequency = system.quality.scaleFrequency(
+        visual.sparkFrequency,
+        GpuVfxEffectId.PowerUpPedestalSpark,
+      );
+      if (sparkFrequency > 0) {
+        visual.sparkFlow.setFrequency(sparkFrequency);
+        const due = visual.sparkFlow.tick(deltaMs);
+        for (let spawn = 0; spawn < due; spawn += 1) this.spawnSpark(visual, spark, nowMs);
+      }
+    }
+  }
+
+  private spawnAmbient(visual: PedestalVisual, spec: GpuVfxSpawnSpec, nowMs: number): void {
+    const system = this.gpuVfx;
+    if (!system) return;
+    randomPointInCircle(POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 8, PEDESTAL_SPAWN_POINT);
+    spec.lifeMs = Phaser.Math.FloatBetween(500, 1100);
+    spec.x = visual.state.x + PEDESTAL_SPAWN_POINT.x;
+    spec.y = visual.state.y + PEDESTAL_SPAWN_POINT.y;
+    spec.vx = Phaser.Math.FloatBetween(-10, 10);
+    spec.vy = Phaser.Math.FloatBetween(-10, 10);
+    spec.scaleStart = 0.38;
+    spec.scaleEnd = 0;
+    spec.alphaStart = 0.28;
+    spec.tint = Math.random() < 0.5
+      ? (POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff)
+      : 0xffffff;
+    system.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnSpark(visual: PedestalVisual, spec: GpuVfxSpawnSpec, nowMs: number): void {
+    const system = this.gpuVfx;
+    if (!system) return;
+    randomPointInCircle(POWERUP_PEDESTAL_CONFIG.renderInnerRadius + 3, PEDESTAL_SPAWN_POINT);
+    const color = POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff;
+    spec.lifeMs = Phaser.Math.FloatBetween(180, 320);
+    spec.x = visual.state.x + PEDESTAL_SPAWN_POINT.x;
+    spec.y = visual.state.y + PEDESTAL_SPAWN_POINT.y;
+    spec.vx = Phaser.Math.FloatBetween(-20, 20);
+    spec.vy = Phaser.Math.FloatBetween(-20, 20);
+    spec.scaleStart = 1.5;
+    spec.scaleEnd = 0.3;
+    spec.alphaStart = 0.75;
+    spec.tint = Math.random() < 0.5 ? 0xffffff : color;
+    system.spawn(spec, visual.source, nowMs);
   }
 
   private playMaterializeEffect(
@@ -551,4 +500,11 @@ function itemLightKey(uid: number): string {
 
 function pedestalLightKey(id: number): string {
   return `pedestal:${id}`;
+}
+
+function randomPointInCircle(radius: number, out: { x: number; y: number }): void {
+  const angle = Math.random() * Math.PI * 2;
+  const distance = Math.sqrt(Math.random()) * radius;
+  out.x = Math.cos(angle) * distance;
+  out.y = Math.sin(angle) * distance;
 }

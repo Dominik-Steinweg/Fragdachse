@@ -71,6 +71,8 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
 
   it('1. Delegiert Brandtreffer, Schadensbeiträge und Abfragen 1:1 an die BurnStateMachine', () => {
     const { cs, damageCalls } = createTestSetup();
+    const observedDamage = vi.fn();
+    const unsubscribe = cs.addDamageDealtObserver(observedDamage);
 
     cs.applyBurnHit('p_target', 'p1', 2000, 5, 'glock', 'weapon.GLOCK', 'generic', 'normal');
 
@@ -94,6 +96,15 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
     expect(damageCalls[0].damage).toBe(5);
     expect(damageCalls[0].attackerId).toBe('p1');
     expect(damageCalls[0].damageKind).toBe('burn');
+    expect(observedDamage).toHaveBeenCalledWith(expect.objectContaining({
+      targetType: 'player',
+      targetId: 'p_target',
+      attackerId: 'p1',
+      damage: 5,
+      damageKind: 'burn',
+    }));
+
+    unsubscribe();
   });
 
   it('2. Stackt zwei Treffer derselben Quelle und summiert den Schaden korrekt', () => {

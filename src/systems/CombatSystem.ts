@@ -134,6 +134,17 @@ interface DamageApplicationOptions {
   skipLifeLeech?: boolean;
 }
 
+/** Passiver, autoritativer Messpunkt nach tatsaechlich verlorenem HP/Armor. */
+export interface CombatDamageObservation {
+  readonly targetType: CombatDamageTargetType;
+  readonly targetId: string;
+  readonly attackerId: string | undefined;
+  readonly damage: number;
+  readonly damageKind: CombatDamageKind;
+  readonly sourceSlot: LoadoutSlot | undefined;
+  readonly isCritical: boolean;
+}
+
 interface DamageVisualContext {
   sourceX?: number;
   sourceY?: number;
@@ -374,6 +385,7 @@ export class CombatSystem {
     damage: number,
     damageKind: CombatDamageKind,
   ) => void) | null = null;
+  private readonly damageDealtObservers = new Set<(event: CombatDamageObservation) => void>();
   private onHealingReceived: ((playerId: string, amount: number) => void) | null = null;
   private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
 
@@ -477,6 +489,21 @@ export class CombatSystem {
   /** Meldet nach der Zielverteilung nur tatsächlich verlorene HP/Rüstung bzw. Gegner-HP. */
   setDamageDealtHandler(handler: ((targetType: CombatDamageTargetType, targetId: string, attackerId: string | undefined, damage: number, damageKind: CombatDamageKind) => void) | null): void {
     this.onDamageDealt = handler;
+  }
+  /** Diagnosebeobachter laufen zusaetzlich zum regulaeren Raumstatistik-Handler. */
+  addDamageDealtObserver(observer: (event: CombatDamageObservation) => void): () => void {
+    this.damageDealtObservers.add(observer);
+    return () => { this.damageDealtObservers.delete(observer); };
+  }
+  private notifyDamageDealt(event: CombatDamageObservation): void {
+    this.onDamageDealt?.(
+      event.targetType,
+      event.targetId,
+      event.attackerId,
+      event.damage,
+      event.damageKind,
+    );
+    for (const observer of this.damageDealtObservers) observer(event);
   }
   setHealingReceivedHandler(handler: ((playerId: string, amount: number) => void) | null): void {
     this.onHealingReceived = handler;
@@ -772,13 +799,15 @@ export class CombatSystem {
         armorLost,
         options?.damageKind ?? 'direct',
       );
-      this.onDamageDealt?.(
-        'player',
+      this.notifyDamageDealt({
+        targetType: 'player',
         targetId,
-        this.resolveDamageOwner(attackerId),
-        totalDamage,
-        options?.damageKind ?? 'direct',
-      );
+        attackerId: this.resolveDamageOwner(attackerId),
+        damage: totalDamage,
+        damageKind: options?.damageKind ?? 'direct',
+        sourceSlot: options?.sourceSlot,
+        isCritical: outgoing.isCritical,
+      });
       this.applyLifeLeech(attackerId, targetId, totalDamage);
       const hitSeed = this.nextEffectSeed();
       this.bridge.broadcastEffect(this.buildHitEffect(
@@ -3754,13 +3783,15 @@ export class CombatSystem {
 
     const hpLost = previousHp - result.remainingHp;
     if (hpLost <= 0) return;
-    this.onDamageDealt?.(
-      'enemy',
+    this.notifyDamageDealt({
+      targetType: 'enemy',
       targetId,
-      this.resolveDamageOwner(attackerId),
-      hpLost,
-      options?.damageKind ?? 'direct',
-    );
+      attackerId: this.resolveDamageOwner(attackerId),
+      damage: hpLost,
+      damageKind: options?.damageKind ?? 'direct',
+      sourceSlot: options?.sourceSlot,
+      isCritical: outgoing.isCritical,
+    });
     if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
 
     // Trefferabhaengige Primaerwaffen-Affixe. Erst hier, damit sie nur bei einem Treffer

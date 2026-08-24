@@ -46,6 +46,13 @@ import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
 import { CoopDefenseBalanceReportOverlay } from '../ui/CoopDefenseBalanceReportOverlay';
 import { CoopDefenseBalanceTracker, buildBalanceBuildSnapshot } from '../debug/coopDefenseBalance/tracker';
+import {
+  WeaponBalanceLabRuntime,
+  buildNeutralWeaponBenchmarkCommit,
+} from '../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
+import type { RuntimeBenchmarkRequest } from '../debug/coopDefenseBalance/runtimeBenchmarkTypes';
+import { storeRuntimeBenchmarkResult } from '../debug/coopDefenseBalance/runtimeBenchmarkStorage';
+import { WeaponBalanceLabOverlay, type WeaponBalanceLabStartResult } from '../ui/WeaponBalanceLabOverlay';
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
 import { DEFAULT_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
 import type { WorldGradeInputs } from '../effects/postfx/worldGrade';
@@ -166,18 +173,14 @@ import {
   type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
-import {
-  advanceCoopDefenseTutorialSteps,
-  createCoopDefenseTutorialStepState,
-  getVisibleCoopDefenseTutorialStepId,
-} from '../ui/coopDefenseTutorialStepModel';
+import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -337,6 +340,7 @@ export class ArenaScene extends Phaser.Scene {
   private arenaPanelsHeld = false;
   private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private weaponBalanceLabHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private netDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private performanceHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private timeOfDayHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
@@ -348,6 +352,9 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
   private coopDefenseBalanceTracker!: CoopDefenseBalanceTracker;
   private coopDefenseBalanceReportOverlay: CoopDefenseBalanceReportOverlay | null = null;
+  private weaponBalanceLabOverlay: WeaponBalanceLabOverlay | null = null;
+  private weaponBalanceLabRuntime!: WeaponBalanceLabRuntime;
+  private weaponBalanceLabPreviousMapId: string | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private matchResultsOverlay: MatchResultsOverlay | null = null;
   private roomStatisticsOverlay: RoomStatisticsOverlay | null = null;
@@ -365,12 +372,6 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseHasPendingItemReward = false;
   private coopDefenseHasUnseenItems = false;
   private lastObservedGamePhase: GamePhase | null = null;
-  /**
-   * Lokaler Tutorial-Fortschritt entlang der Route. Er ist reine Praesentation: kein
-   * Rundenzustand, keine Replikation. Eine neue Runde (`roundRevision`) setzt ihn zurueck.
-   */
-  private tutorialStepState = createCoopDefenseTutorialStepState();
-  private tutorialStepRoundStartTime: number | null = null;
   private matchResultsPending = false;
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
   /**
@@ -1554,6 +1555,30 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.setRuntimeDiagnosticEventSink((type, fields) => {
       this.runtimeProfiler?.recordSemanticEvent(type, fields);
     });
+    this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(
+      () => this.ctx,
+      (result) => {
+        storeRuntimeBenchmarkResult(result);
+        console.info(
+          `[WeaponBalanceLab] ${result.weaponId} ${result.scenario} ${result.dps.toFixed(2)} DPS`,
+          result,
+        );
+      },
+      () => {
+        // Nicht mitten im Host-Update abbauen: Der naechste Scene-Tick sieht bereits LOBBY
+        // und laeuft durch den regulaeren ARENA→LOBBY-Teardown.
+        this.time.delayedCall(0, () => this.lifecycle.hostDiscardRound());
+      },
+    );
+    this.weaponBalanceLabOverlay = new WeaponBalanceLabOverlay(
+      () => ({
+        weapon1: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'weapon1')
+          ?? DEFAULT_LOADOUT.weapon1.id,
+        weapon2: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'weapon2')
+          ?? DEFAULT_LOADOUT.weapon2.id,
+      }),
+      (request) => this.startWeaponBalanceLab(request),
+    );
     this.rpcCoordinator.setLifecycle(this.lifecycle);
     this.rpcCoordinator.registerAll();
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
@@ -1628,13 +1653,17 @@ export class ArenaScene extends Phaser.Scene {
     const networkUpdateMs = diagnosticsActive ? performance.now() - networkUpdateStartMs : 0;
 
     const phase           = bridge.getGamePhase();
-    const deferArenaExit  = this.syncArenaExitFade(phase);
+    const deferArenaExit  = this.weaponBalanceLabPreviousMapId === null
+      && this.syncArenaExitFade(phase);
     this.lifecycle.detectPhaseChange(deferArenaExit);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     this.syncArenaMetrics(deferArenaExit ? 'ARENA' : phase);
     const enteredLobbyFromArena = !deferArenaExit
       && this.lastObservedGamePhase === 'ARENA'
       && phase === 'LOBBY';
+    const returningFromWeaponBalanceLab = enteredLobbyFromArena
+      && this.weaponBalanceLabPreviousMapId !== null;
+    if (returningFromWeaponBalanceLab) this.restoreMapAfterWeaponBalanceLab();
     const inGame          = phase === 'ARENA';
     const countdownVisible = bridge.isArenaCountdownVisible();
     const arenaLoading    = bridge.isArenaLoading();
@@ -1643,6 +1672,9 @@ export class ArenaScene extends Phaser.Scene {
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
     const gameplayActive  = inGame && arenaStarted && !terminated;
+    const weaponBalanceLabArena = inGame && isWeaponBalanceLabMapId(
+      bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
+    );
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
@@ -1703,11 +1735,11 @@ export class ArenaScene extends Phaser.Scene {
       // radial menu available so the pre-round presentation remains interactive.
       const countdownInputAllowed = countdownActive && !optionsOpen && !spectator;
       this.ctx.inputSystem.setAimEnabled(
-        (gameplayActive || countdownActive) && !optionsOpen && !spectator,
+        (gameplayActive || countdownActive) && !optionsOpen && !spectator && !weaponBalanceLabArena,
       );
       this.ctx.inputSystem.setInputEnabled(
-        gameplayActive && !optionsOpen && !spectator,
-        gameplayActive && !optionsOpen && !spectator || countdownInputAllowed,
+        gameplayActive && !optionsOpen && !spectator && !weaponBalanceLabArena,
+        (gameplayActive && !optionsOpen && !spectator && !weaponBalanceLabArena) || countdownInputAllowed,
       );
       this.ctx.inputSystem.update();
       if (countdownActive) this.syncCountdownPlayerPresentation();
@@ -1722,7 +1754,7 @@ export class ArenaScene extends Phaser.Scene {
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
       const lobbyUiStartedAt = diagnosticsActive ? performance.now() : 0;
-      if (enteredLobbyFromArena) this.beginMatchResults();
+      if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
       this.lifecycle.syncLobbyTimeOfDay();
       this.menuArenaPreview?.setTreeTint(this.renderers.lighting.resolveCanopyTint(0, 0));
@@ -1845,6 +1877,7 @@ export class ArenaScene extends Phaser.Scene {
 
       if (bridge.isHost()) {
         const hostStepStartMs = diagnosticsActive ? performance.now() : 0;
+        this.weaponBalanceLabRuntime.update(phase, gameplayActive, delta);
         if (isCoopDefenseMode(bridge.getGameMode())
           && this.coopDefenseDebugDamageKey
           && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
@@ -2857,6 +2890,51 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── Lobby callbacks ───────────────────────────────────────────────────────
 
+  private startWeaponBalanceLab(request: RuntimeBenchmarkRequest): WeaponBalanceLabStartResult {
+    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) {
+      return { ok: false, message: 'Der Schießstand kann nur in der Coop-Defense-Lobby starten.' };
+    }
+    if (!bridge.isHost()) return { ok: false, message: 'Nur der Host kann den Schießstand starten.' };
+    if (bridge.getConnectedPlayers().length !== 1) {
+      return { ok: false, message: 'Balance Lab 2.0 ist zunächst ausschließlich für Solo-Hosts verfügbar.' };
+    }
+    if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) {
+      return { ok: false, message: 'Vor dem Schießstand muss der Spieler nicht bereit sein.' };
+    }
+    if (this.roomQualityMonitor.shouldBlockStart()) {
+      return { ok: false, message: 'Der normale Startschutz blockiert den Rundenstart momentan.' };
+    }
+
+    try {
+      const build = buildNeutralWeaponBenchmarkCommit(
+        this.buildLocalCommittedLoadoutSnapshot(),
+        request.slot,
+      );
+      const previousMapId = bridge.getCoopDefenseMapId();
+      if (!isWeaponBalanceLabMapId(previousMapId)) this.weaponBalanceLabPreviousMapId = previousMapId;
+      this.weaponBalanceLabRuntime.arm(request, build);
+      bridge.setCoopDefenseMapId(WEAPON_BALANCE_LAB_MAP_ID);
+      bridge.setLocalReadyWithCommittedLoadout(build.commit);
+      this.lifecycle.setIsLocalReady(true);
+      return { ok: true };
+    } catch (error) {
+      this.weaponBalanceLabRuntime.cancel();
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : 'Der neutrale Waffen-Build ist ungültig.',
+      };
+    }
+  }
+
+  private restoreMapAfterWeaponBalanceLab(): void {
+    const previousMapId = this.weaponBalanceLabPreviousMapId;
+    this.weaponBalanceLabPreviousMapId = null;
+    this.weaponBalanceLabRuntime.cancel();
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    if (previousMapId && bridge.isHost()) bridge.setCoopDefenseMapId(previousMapId);
+  }
+
   private onReadyToggled(): void {
     const nowReady = !this.lifecycle.getIsLocalReady();
     if (nowReady) {
@@ -2876,6 +2954,9 @@ export class ArenaScene extends Phaser.Scene {
       bridge.setLocalReadyWithCommittedLoadout(this.buildLocalCommittedLoadoutSnapshot());
     } else {
       bridge.setLocalReady(false);
+      if (this.weaponBalanceLabRuntime.isActive() && isWeaponBalanceLabMapId(bridge.getCoopDefenseMapId())) {
+        this.restoreMapAfterWeaponBalanceLab();
+      }
     }
     this.lifecycle.setIsLocalReady(nowReady);
   }
@@ -3502,6 +3583,7 @@ export class ArenaScene extends Phaser.Scene {
       if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
       if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
       if (this.coopDefenseXpDebugOverlay?.isOpen()) return;
+      if (this.weaponBalanceLabOverlay?.isOpen()) return;
 
       this.ctx.leftPanel.toggleOptionsOverlay();
     };
@@ -3522,11 +3604,28 @@ export class ArenaScene extends Phaser.Scene {
       if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
       if (this.ctx.leftPanel.isOptionsOverlayOpen()) return;
       if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
+      if (this.weaponBalanceLabOverlay?.isOpen()) return;
 
       this.coopDefenseXpDebugOverlay?.toggle();
     };
 
     keyboard.on('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
+
+    if (this.weaponBalanceLabHotkeyHandler) {
+      keyboard.off('keydown-F8', this.weaponBalanceLabHotkeyHandler);
+      this.weaponBalanceLabHotkeyHandler = null;
+    }
+    this.weaponBalanceLabHotkeyHandler = (event: KeyboardEvent) => {
+      if (event.repeat || !this.ctx) return;
+      if (bridge.getGamePhase() !== 'LOBBY' || this.lifecycle.isMatchTerminated()) return;
+      if (!isCoopDefenseMode(bridge.getGameMode())) return;
+      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
+      if (this.ctx.leftPanel.isHelpOverlayOpen() || this.ctx.leftPanel.isOptionsOverlayOpen()) return;
+      if (this.coopDefenseUpgradesOverlay?.isOpen() || this.coopDefenseXpDebugOverlay?.isOpen()) return;
+      event.preventDefault();
+      this.weaponBalanceLabOverlay?.toggle();
+    };
+    keyboard.on('keydown-F8', this.weaponBalanceLabHotkeyHandler);
 
     if (this.netDebugHotkeyHandler) {
       keyboard.off('keydown-P', this.netDebugHotkeyHandler);
@@ -3587,6 +3686,13 @@ export class ArenaScene extends Phaser.Scene {
         keyboard.off('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
         this.coopDefenseXpDebugHotkeyHandler = null;
       }
+      if (this.weaponBalanceLabHotkeyHandler) {
+        keyboard.off('keydown-F8', this.weaponBalanceLabHotkeyHandler);
+        this.weaponBalanceLabHotkeyHandler = null;
+      }
+      this.weaponBalanceLabRuntime?.cancel();
+      this.weaponBalanceLabOverlay?.destroy();
+      this.weaponBalanceLabOverlay = null;
       this.coopDefenseXpDebugOverlay?.destroy();
       this.coopDefenseXpDebugOverlay = null;
       this.coopDefenseUpgradesOverlay?.destroy();
@@ -3912,42 +4018,26 @@ export class ArenaScene extends Phaser.Scene {
    * Renderers, damit beide nicht am Netz-Tick kleben.
    */
   /**
-   * Lokale Tutorial-Hinweise entlang der Route. Rein darstellend: Ausgewertet wird nur die
-   * Position des eigenen Spielers gegen die vorhandene Checkpoint-Geometrie, es entsteht kein
-   * Rundenzustand und nichts davon wird repliziert. Ein vorauslaufender Mitspieler loest hier
-   * nichts aus; eine neue Runde beginnt mit frischem Zustand.
+   * Gemeinsame Tutorial-Hinweise entlang der Route. Die Aktivierung kommt aus dem bereits
+   * replizierten, hostautoritativen Missions-Presentation-State; alle Clients projizieren daraus
+   * denselben World-Space-Hinweis. Der Step selbst bleibt reine Darstellung.
    */
   private updateCoopDefenseTutorialSteps(activeMapConfig: CoopDefenseMapConfig | null): void {
     const steps = activeMapConfig ? resolveCoopDefenseMapTutorialSteps(activeMapConfig) : [];
     if (activeMapConfig === null || steps.length === 0) {
-      if (this.tutorialStepState.activeStepId !== null) {
-        this.tutorialStepState = createCoopDefenseTutorialStepState();
-      }
       this.ctx.centerHUD.updateTutorialStep(null);
       return;
     }
 
-    // Rundenidentitaet reicht als Reset-Signal; der Tutorial-Fortschritt ist rein lokal.
-    const roundStartTime = bridge.getRoundState()?.roundStartTime ?? null;
-    if (roundStartTime !== this.tutorialStepRoundStartTime) {
-      this.tutorialStepRoundStartTime = roundStartTime;
-      this.tutorialStepState = createCoopDefenseTutorialStepState();
-    }
-
-    const localPlayerId = bridge.getLocalPlayerId();
-    const localSprite = this.ctx.playerManager.getPlayer(localPlayerId)?.sprite ?? null;
-    const localPlayer = localSprite?.active && this.ctx.combatSystem.isAlive(localPlayerId)
-      ? { x: localSprite.x, y: localSprite.y }
-      : null;
-    const nowMs = this.time.now;
-    this.tutorialStepState = advanceCoopDefenseTutorialSteps(this.tutorialStepState, {
-      steps,
-      checkpoints: resolveCoopDefenseMapMissionProgress(activeMapConfig)?.checkpoints ?? [],
-      localPlayer,
-      nowMs,
-    });
-
-    const visibleStepId = getVisibleCoopDefenseTutorialStepId(this.tutorialStepState, nowMs);
+    const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
+    const roundElapsedMs = Math.max(0, bridge.getSynchronizedNow() - bridge.getArenaStartTime());
+    const visibleStepId = missionState === null
+      ? null
+      : getVisibleCoopDefenseTutorialStepId(
+        steps,
+        missionState.activatedCheckpoints,
+        roundElapsedMs,
+      );
     const visibleStep = visibleStepId === null
       ? null
       : steps.find((step) => step.id === visibleStepId) ?? null;
