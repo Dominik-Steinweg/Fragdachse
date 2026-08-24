@@ -9,7 +9,12 @@ import {
   getStoredCoopDefenseItemsUnlocked,
   getStoredCoopDefenseProgress,
   getStoredEquippedCoopDefenseItems,
+  getStoredPendingCoopDefenseItemRewards,
   getStoredPendingCoopDefenseItemReward,
+  importStoredGameProgressJson,
+  exportStoredGameProgressJson,
+  invalidateLocalStorageCache,
+  LOCAL_PROGRESS_STORAGE_KEY,
   markStoredCoopDefenseItemsSeen,
   resetStoredCoopDefenseCharacter,
   salvageStoredCoopDefenseItem,
@@ -63,7 +68,7 @@ describe('coop-defense item persistence', () => {
     expect(progress.itemsUnlocked).toBe(false);
     expect(progress.items).toEqual([]);
     expect(progress.equippedItemIds).toEqual({});
-    expect(progress.pendingItemReward).toBeNull();
+    expect(progress.pendingItemRewards).toEqual([]);
   });
 
   it('unlocks only on the configured map victory', () => {
@@ -81,12 +86,13 @@ describe('coop-defense item persistence', () => {
     expect(addStoredCoopDefenseItem(item({ uid: 'armor-1' }))).toBe(true);
     expect(addStoredCoopDefenseItem(item({ uid: 'boots-1', slot: 'boots', baseValue: 0.05 }))).toBe(true);
     expect(equipStoredCoopDefenseItem('armor-1')).toBe(true);
-    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 42, offers: [item({ uid: 'offer-1' })] });
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 42, mapId: '10', offers: [item({ uid: 'offer-1' })] });
 
     expect(getStoredCoopDefenseItems().map((entry) => entry.uid)).toEqual(['armor-1', 'boots-1']);
     expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'armor-1' });
     expect(getStoredEquippedCoopDefenseItems().map((entry) => entry.uid)).toEqual(['armor-1']);
     expect(getStoredPendingCoopDefenseItemReward()?.roundEndedAt).toBe(42);
+    expect(getStoredPendingCoopDefenseItemReward()?.mapId).toBe('10');
 
     expect(unequipStoredCoopDefenseItem('armor')).toBe(true);
     expect(getStoredCoopDefenseEquippedItemIds()).toEqual({});
@@ -310,7 +316,58 @@ describe('coop-defense item persistence', () => {
     expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('first');
 
     expect(setStoredPendingCoopDefenseItemReward({ roundEndedAt: 8, offers: [item({ uid: 'third' })] })).toBe(true);
-    expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('third');
+    expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.offers[0].uid)).toEqual([
+      'first', 'third',
+    ]);
+  });
+
+  it('appends multiple rewards without overwriting older open rewards', () => {
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'old' })] });
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 8, offers: [item({ uid: 'new' })] });
+
+    expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.roundEndedAt)).toEqual([7, 8]);
+    expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.offers[0].uid)).toEqual(['old', 'new']);
+  });
+
+  it('migrates a valid legacy single-reward save into the queue and exports the queue', () => {
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'legacy' })] });
+    const exported = JSON.parse(exportStoredGameProgressJson()) as {
+      progress: { coopDefense: Record<string, unknown> };
+    };
+    const coop = exported.progress.coopDefense;
+    coop.pendingItemReward = (coop.pendingItemRewards as unknown[])[0];
+    delete coop.pendingItemRewards;
+    window.localStorage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(exported.progress));
+    invalidateLocalStorageCache();
+
+    expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.offers[0].uid)).toEqual(['legacy']);
+
+    const queueExport = exportStoredGameProgressJson();
+    expect(JSON.parse(queueExport).progress.coopDefense.pendingItemRewards).toHaveLength(1);
+    expect(JSON.parse(queueExport).progress.coopDefense.pendingItemReward).toBeUndefined();
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(queueExport).ok).toBe(true);
+    expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.offers[0].uid)).toEqual(['legacy']);
+  });
+
+  it('claims exactly the addressed reward and leaves other queue entries untouched', () => {
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'old' })] });
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 8, offers: [item({ uid: 'new', slot: 'boots', baseValue: 0.05 })] });
+
+    expect(claimStoredPendingCoopDefenseItemReward(999, 'new')).toBeNull();
+    expect(getStoredPendingCoopDefenseItemRewards()).toHaveLength(2);
+
+    expect(claimStoredPendingCoopDefenseItemReward(8, 'new')?.acquired?.uid).toBe('new');
+    expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.roundEndedAt)).toEqual([7]);
+  });
+
+  it('does not change the queue when a player decides later', () => {
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'old' })] });
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 8, offers: [item({ uid: 'new', slot: 'boots', baseValue: 0.05 })] });
+    const before = getStoredPendingCoopDefenseItemRewards();
+
+    // "Später entscheiden" ist bewusst nur ein Overlay-/Navigationsereignis: kein Claim.
+    expect(getStoredPendingCoopDefenseItemRewards()).toEqual(before);
   });
 
   it('wipes items when the character is reset', () => {
@@ -325,7 +382,7 @@ describe('coop-defense item persistence', () => {
     expect(progress.itemsUnlocked).toBe(false);
     expect(progress.items).toEqual([]);
     expect(progress.equippedItemIds).toEqual({});
-    expect(progress.pendingItemReward).toBeNull();
+    expect(progress.pendingItemRewards).toEqual([]);
     expect(progress.unseenItems).toBe(false);
   });
 

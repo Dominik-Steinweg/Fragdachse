@@ -136,6 +136,7 @@ import {
   claimStoredPendingCoopDefenseItemReward,
   equipStoredCoopDefenseItem,
   getStoredCoopDefenseItemsUnlocked,
+  getStoredPendingCoopDefenseItemRewards,
   salvageStoredCoopDefenseItem,
   setStoredPendingCoopDefenseItemReward,
   unequipStoredCoopDefenseItem,
@@ -175,7 +176,7 @@ import {
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
@@ -369,8 +370,10 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private coopDefenseHighestUnlockedMapId: string = INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
   private coopDefenseItemsUnlocked = false;
-  private coopDefenseHasPendingItemReward = false;
+  private coopDefensePendingItemRewardCount = 0;
   private coopDefenseHasUnseenItems = false;
+  /** Nur das Angebot der gerade abgeschlossenen Runde darf automatisch erscheinen. */
+  private coopDefenseMatchItemReward: CoopDefensePendingItemReward | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
   private matchResultsPending = false;
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
@@ -892,7 +895,7 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay.build();
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
       this,
-      (offerUid, salvageUid, action) => this.claimItemReward(offerUid, salvageUid, action),
+      (roundEndedAt, offerUid, salvageUid, action) => this.claimItemReward(roundEndedAt, offerUid, salvageUid, action),
       () => this.buildItemRewardPresentation(),
       () => {
         this.lobbyOverlay.setReadyButtonState(false);
@@ -914,8 +917,9 @@ export class ArenaScene extends Phaser.Scene {
       // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
       // vorbereitete Lobby frei; Ready bleibt durch den Host-Reset weiterhin false.
       this.lobbyOverlay.setReadyButtonState(false);
-      // Eine offene Belohnung folgt direkt auf die Auswertung; sie bleibt sonst in der Lobby liegen.
-      this.openItemRewardOverlay();
+      // Nur der Reward dieser Runde folgt direkt auf die Auswertung. Altbestand bleibt bewusst
+      // im Item-Menue und wird nicht nach einem Match ohne neuen Drop aufgezwungen.
+      this.openItemRewardOverlay(this.lastMatchResultsPresentation?.itemReward?.roundEndedAt, true);
     }, () => this.openBalanceFeedback());
     this.matchResultsOverlay.build();
     this.roomStatisticsOverlay = new RoomStatisticsOverlay(this);
@@ -2996,7 +3000,7 @@ export class ArenaScene extends Phaser.Scene {
     return {
       items: progress.items,
       equippedItemIds: progress.equippedItemIds,
-      hasPendingReward: progress.pendingItemReward !== null,
+      pendingRewardCount: progress.pendingItemRewards.length,
     };
   }
 
@@ -3012,7 +3016,7 @@ export class ArenaScene extends Phaser.Scene {
   private refreshCoopDefenseItemsButton(): void {
     this.lobbyOverlay.setCoopDefenseItemsState(
       isCoopDefenseMode(bridge.getGameMode()) && this.coopDefenseItemsUnlocked,
-      this.coopDefenseHasPendingItemReward,
+      this.coopDefensePendingItemRewardCount,
       this.coopDefenseHasUnseenItems,
     );
   }
@@ -4604,7 +4608,7 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
     this.coopDefenseItemsUnlocked = stored.itemsUnlocked;
-    this.coopDefenseHasPendingItemReward = stored.pendingItemReward !== null;
+    this.coopDefensePendingItemRewardCount = stored.pendingItemRewards.length;
     this.coopDefenseHasUnseenItems = stored.unseenItems;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
     const loadoutProjectionChanged = this.hasCoopDefenseLoadoutProjectionChanged(
@@ -4807,6 +4811,7 @@ export class ArenaScene extends Phaser.Scene {
     // Die Auswertung darf nicht aus der vorherigen Runde als Replay in den neuen Lobby-Frame
     // hineinragen, insbesondere nicht bei einem Latejoiner/Spectator.
     this.lastMatchResultsPresentation = null;
+    this.coopDefenseMatchItemReward = null;
     const existingResults = bridge.getRoundResults();
     if (existingResults && !bridge.isLocalRoundResultEligible(existingResults)) {
       this.matchResultsPending = false;
@@ -4877,7 +4882,9 @@ export class ArenaScene extends Phaser.Scene {
       leaderboard: sortMatchLeaderboard(results),
       progress,
       technicalMessage: null,
-      itemReward: isCoopDefenseMode(mode) ? this.buildItemRewardPresentation() : null,
+      itemReward: isCoopDefenseMode(mode) && this.coopDefenseMatchItemReward
+        ? this.buildItemRewardPresentation(this.coopDefenseMatchItemReward.roundEndedAt)
+        : null,
     };
     this.lastMatchResultsPresentation = presentation;
     this.matchResultsOverlay?.setBalanceFeedbackVisible(
@@ -4914,21 +4921,32 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseBalanceReportOverlay?.showFeedback(roundEndedAt);
   }
 
-  /** Zeigt eine offene Belohnung. No-op, wenn keine offen ist oder der Layer schon sichtbar ist. */
-  private openItemRewardOverlay(): void {
+  /**
+   * Zeigt entweder den aeltesten offenen Reward (Item-Menue) oder gezielt den Reward der
+   * aktuellen Runde (Weiter nach dem Ergebnis). Ohne `automaticRoundEndedAt` gibt es keinen
+   * automatischen Fallback auf alte Rewards.
+   */
+  private openItemRewardOverlay(automaticRoundEndedAt?: number, automatic = false): void {
     if (this.itemRewardOverlay?.isVisible()) return;
-    const presentation = this.buildItemRewardPresentation();
+    if (automatic && automaticRoundEndedAt === undefined) return;
+    const presentation = this.buildItemRewardPresentation(automaticRoundEndedAt);
     if (!presentation) return;
-    this.itemRewardOverlay?.show(presentation);
+    this.itemRewardOverlay?.show(presentation, automatic);
   }
 
-  /** Liest das offene Angebot frisch aus der Persistenz und baut die Auswahlansicht dazu. */
-  private buildItemRewardPresentation(): MatchItemRewardPresentation | null {
+  /** Liest die Queue frisch aus der Persistenz und baut die Auswahlansicht dazu. */
+  private buildItemRewardPresentation(roundEndedAt?: number): MatchItemRewardPresentation | null {
     const progress = getStoredCoopDefenseProgress();
+    const pendingRewards = progress.pendingItemRewards;
+    const index = roundEndedAt === undefined
+      ? 0
+      : pendingRewards.findIndex((reward) => reward.roundEndedAt === roundEndedAt);
+    const pending = index >= 0 ? pendingRewards[index] : null;
     return createMatchItemRewardPresentation(
-      progress.pendingItemReward,
+      pending,
       progress.items,
       progress.equippedItemIds,
+      { index: index >= 0 ? index : 0, size: Math.max(1, pendingRewards.length) },
     );
   }
 
@@ -4937,16 +4955,19 @@ export class ArenaScene extends Phaser.Scene {
    * offen (volle Kategorie ohne Zerlege-Ziel), passiert nichts und der Screen fragt weiter.
    */
   private claimItemReward(
+    roundEndedAt: number,
     offerUid: string,
     salvageUid?: string,
     action: CoopDefenseItemRewardAction = 'take',
   ): boolean {
-    if (!claimStoredPendingCoopDefenseItemReward(offerUid, salvageUid, action)) return false;
+    if (!claimStoredPendingCoopDefenseItemReward(roundEndedAt, offerUid, salvageUid, action)) return false;
     this.refreshStoredCoopDefenseProgress();
     if (this.lastMatchResultsPresentation) {
       this.lastMatchResultsPresentation = {
         ...this.lastMatchResultsPresentation,
-        itemReward: this.buildItemRewardPresentation(),
+        itemReward: this.lastMatchResultsPresentation.itemReward?.roundEndedAt === roundEndedAt
+          ? null
+          : this.lastMatchResultsPresentation.itemReward,
       };
     }
     this.lobbyOverlay.setCoopDefenseProgress(
@@ -4968,6 +4989,8 @@ export class ArenaScene extends Phaser.Scene {
     const endedAt = roundState?.endedAt ?? null;
     if (!roundState || !endedAt || !results?.length) return null;
     if (!bridge.isLocalRoundResultEligible(results)) return null;
+
+    this.coopDefenseMatchItemReward = null;
 
     if (this.coopDefenseLastProcessedRoundEndedAt !== null && this.coopDefenseLastProcessedRoundEndedAt >= endedAt) {
       return createMatchProgressDelta(before, this.coopDefenseProgress, 0, null);
@@ -5005,11 +5028,17 @@ export class ArenaScene extends Phaser.Scene {
           ?.coopDefenseClassId ?? null;
         const epicGuaranteeCount = resolveCoopDefenseEpicGuaranteeCount(results, roundState);
         const offers = rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel, playedClassId);
-        setStoredPendingCoopDefenseItemReward({
+        const reward: CoopDefensePendingItemReward = {
           roundEndedAt: endedAt,
+          mapId: completedMapId,
           epicGuaranteeCount,
           offers: applyCoopDefenseEpicGuarantee(offers, epicGuaranteeCount, playedClassId),
-        });
+        };
+        setStoredPendingCoopDefenseItemReward(reward);
+        // Bei einem Retry derselben Runde kann die Queue bereits existieren. Dann wird genau
+        // dieser vorhandene Reward wieder als Match-Reward markiert, ohne neu zu wuerfeln.
+        this.coopDefenseMatchItemReward = getStoredPendingCoopDefenseItemRewards()
+          .find((entry) => entry.roundEndedAt === endedAt) ?? null;
       }
     }
 

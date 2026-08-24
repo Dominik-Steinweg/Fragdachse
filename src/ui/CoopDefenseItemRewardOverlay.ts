@@ -29,6 +29,7 @@ import {
 import { BORDER, INTENT, SURFACE, TEXT, textStyle } from './uiTheme';
 import { getLocale, t } from '../i18n';
 import { getItemRarityName, getItemSlotName } from '../i18n/itemPresentation';
+import { getMapName } from '../i18n/contentPresentation';
 
 /**
  * Auswahl der Item-Belohnung nach einem Sieg.
@@ -155,11 +156,13 @@ export class CoopDefenseItemRewardOverlay {
   private presentation: MatchItemRewardPresentation | null = null;
   private salvageOption: MatchItemRewardOption | null = null;
   private salvageAction: CoopDefenseItemRewardAction = 'take';
+  private closeAfterClaim = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
     /** Uebernimmt ein Angebot; `action` entscheidet zwischen Stash und Ausruesten. */
     private readonly onClaim: (
+      roundEndedAt: number,
       offerUid: string,
       salvageUid?: string,
       action?: CoopDefenseItemRewardAction,
@@ -252,9 +255,10 @@ export class CoopDefenseItemRewardOverlay {
     promoteToClarityCamera(this.scene, this.container);
   }
 
-  show(presentation: MatchItemRewardPresentation): void {
+  show(presentation: MatchItemRewardPresentation, closeAfterClaim = false): void {
     if (!this.container) this.build();
     this.presentation = presentation;
+    this.closeAfterClaim = closeAfterClaim;
     this.visible = true;
     this.container!.setVisible(true);
     this.showOffers();
@@ -269,6 +273,7 @@ export class CoopDefenseItemRewardOverlay {
     this.presentation = null;
     this.salvageOption = null;
     this.salvageAction = 'take';
+    this.closeAfterClaim = false;
     this.tooltip?.hide();
     this.container?.setVisible(false);
   }
@@ -290,6 +295,7 @@ export class CoopDefenseItemRewardOverlay {
     this.visible = false;
     this.presentation = null;
     this.salvageOption = null;
+    this.closeAfterClaim = false;
   }
 
   // ── Aufbau ────────────────────────────────────────────────────────────────
@@ -664,7 +670,13 @@ export class CoopDefenseItemRewardOverlay {
     salvageUid?: string,
     action: CoopDefenseItemRewardAction = 'take',
   ): void {
-    if (!this.onClaim(offerUid, salvageUid, action)) return;
+    const roundEndedAt = this.presentation?.roundEndedAt;
+    if (roundEndedAt === undefined || !this.onClaim(roundEndedAt, offerUid, salvageUid, action)) return;
+    if (this.closeAfterClaim) {
+      this.hide();
+      this.onClosed();
+      return;
+    }
     const next = this.getPresentation();
     if (!next) {
       this.hide();
@@ -682,10 +694,19 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   private buildOfferSubtitle(instruction: string): string {
+    const presentation = this.presentation;
+    const queue = presentation
+      ? t('ui.items.rewardQueuePosition', {
+        current: presentation.queueIndex,
+        total: presentation.queueSize,
+      })
+      : '';
+    const origin = presentation?.mapId
+      ? t('ui.items.rewardOrigin', { map: getMapName(presentation.mapId, getLocale()) })
+      : '';
     const count = this.presentation?.epicGuaranteeCount ?? 0;
-    return count > 0
-      ? `MINDESTENS ${count} VON 3 EPISCH GARANTIERT · ${instruction}`
-      : instruction;
+    const guarantee = count > 0 ? `MINDESTENS ${count} VON 3 EPISCH GARANTIERT` : '';
+    return [queue, origin, guarantee, instruction].filter(Boolean).join(' · ');
   }
 
   private describeItemLines(item: CoopDefenseItem): string {

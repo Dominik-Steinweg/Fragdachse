@@ -958,12 +958,13 @@ export class LobbyOverlay {
    */
   setCoopDefenseItemsState(
     unlocked: boolean,
-    hasPendingReward: boolean,
+    pendingRewardCount: number,
     hasUnseenItems: boolean,
   ): void {
     if (!this.coopItemsBtn) return;
 
-    const signature = `${unlocked}|${hasPendingReward}|${hasUnseenItems}|${this.visible}`;
+    const openCount = Math.max(0, Math.floor(pendingRewardCount));
+    const signature = `${unlocked}|${openCount}|${hasUnseenItems}|${this.visible}`;
     if (signature === this.coopItemsSignature) return;
     this.coopItemsSignature = signature;
     this.coopItemsUnlocked = unlocked;
@@ -973,8 +974,8 @@ export class LobbyOverlay {
     this.updateCoopDefenseMenuButtons();
     // Das Schloss traegt die Sperre; freigeschaltet braucht der Button kein Symbol mehr.
     this.coopItemsBtn.setIcon(unlocked ? null : 'lock');
-    const needsAttention = unlocked && (hasPendingReward || hasUnseenItems);
-    this.coopItemsBtn.setBadge(null);
+    const needsAttention = unlocked && (openCount > 0 || hasUnseenItems);
+    this.coopItemsBtn.setBadge(unlocked && openCount > 0 ? openCount : null);
     this.coopItemsBtn.setIntent(needsAttention ? 'attention' : 'neutral');
     if (needsAttention && this.visible) {
       this.itemsBtnEffect?.setFilledWidth(COOP_BTN_W);

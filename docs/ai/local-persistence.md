@@ -12,8 +12,16 @@ Der alte kombinierte Key wird nur für den einmaligen Alpha-Schnitt der Settings
 
 Progress-Dokumente müssen exakt die aktuelle Schema-Version und die aktuellen Content-/ID-Verträge
 erfüllen; es gibt keine Migration alter Progress-Schemata oder deutscher Vor-Translation-IDs.
-Unbekannte, zukünftige oder strukturell ungültige Dokumente werden abgelehnt. Derselbe Decoder gilt
-für localStorage und Dateiimport; vor einem Write muss das vollständige Dokument validiert sein.
+Die innerhalb von Schema 2 eingeführte `pendingItemRewards`-Queue ist eine gezielte Ausnahme:
+ein gültiges Legacy-Feld `pendingItemReward` wird beim Decode verlustfrei als einzelner Queue-Eintrag
+übernommen. Unbekannte, zukünftige oder strukturell ungültige Dokumente werden abgelehnt. Derselbe
+Decoder gilt für localStorage und Dateiimport; vor einem Write muss das vollständige Dokument
+validiert sein.
+
+Offene Coop-Defense-Item-Belohnungen werden als FIFO-Queue persistiert. Neue Einträge werden über
+`roundEndedAt` dedupliziert und angehängt; ein Claim adressiert immer genau Runde und Angebot.
+Neue Exporte enthalten ausschließlich `pendingItemRewards`, sodass die gesamte Queue Reload sowie
+Export/Import überlebt.
 
 Gespeichert werden stabile Eingaben und abgeleitete Progressionsdaten. Upgrade-Profile dürfen Defaults implizit aus den aktuellen Definitionen ableiten; JSON nicht unnötig mit Level-0-Knoten duplizieren. Laufzeit-Round-State gehört nicht in Storage.
 

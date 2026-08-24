@@ -53,7 +53,7 @@ import { getItemSlotName } from '../i18n/itemPresentation';
 export interface CoopDefenseItemsOverlayState {
   readonly items: readonly CoopDefenseItem[];
   readonly equippedItemIds: CoopDefenseEquippedItemIds;
-  readonly hasPendingReward: boolean;
+  readonly pendingRewardCount: number;
 }
 
 const CX = GAME_WIDTH / 2;
@@ -214,7 +214,7 @@ export class CoopDefenseItemsOverlay {
     })).setOrigin(0.5).setScrollFactor(0).setInteractive({ useHandCursor: true });
     this.rewardHint.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
-      if (this.getState().hasPendingReward) this.onOpenPendingReward();
+      if (this.getState().pendingRewardCount > 0) this.onOpenPendingReward();
     });
     objects.push(this.rewardHint);
 
@@ -269,7 +269,11 @@ export class CoopDefenseItemsOverlay {
     if (!this.visible) return;
     const state = this.getState();
 
-    this.rewardHint?.setText(state.hasPendingReward ? t('ui.items.openReward') : '');
+    this.rewardHint?.setText(state.pendingRewardCount === 1
+      ? t('ui.items.openReward')
+      : state.pendingRewardCount > 1
+        ? t('ui.items.openRewards', { count: state.pendingRewardCount })
+        : '');
     this.sortLabel?.setText(this.sortMode === 'rarity' ? t('ui.items.sortRarity') : t('ui.items.sortLevel'));
 
     const columns = buildCoopDefenseInventoryGrid(state.items, state.equippedItemIds, this.sortMode);

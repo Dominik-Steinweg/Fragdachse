@@ -736,6 +736,13 @@ export function sanitizeCoopDefensePendingItemReward(raw: unknown): CoopDefenseP
     : 0;
   if (roundEndedAt <= 0) return null;
 
+  const mapId = raw.mapId === undefined
+    ? undefined
+    : typeof raw.mapId === 'string' && raw.mapId.trim().length > 0 && raw.mapId.length <= 64
+      ? raw.mapId
+      : null;
+  if (mapId === null) return null;
+
   const offers = Array.isArray(raw.offers)
     ? raw.offers
       .map((entry) => sanitizeCoopDefenseItem(entry))
@@ -745,8 +752,23 @@ export function sanitizeCoopDefensePendingItemReward(raw: unknown): CoopDefenseP
   if (offers.length === 0) return null;
   const epicGuaranteeCount = normalizeCoopDefenseEpicGuaranteeCount(raw.epicGuaranteeCount);
   return epicGuaranteeCount > 0
-    ? { roundEndedAt, offers, epicGuaranteeCount }
-    : { roundEndedAt, offers };
+    ? { roundEndedAt, ...(mapId ? { mapId } : {}), offers, epicGuaranteeCount }
+    : { roundEndedAt, ...(mapId ? { mapId } : {}), offers };
+}
+
+/** Sanitizeiert eine persistierte FIFO-Queue und behält pro Runde nur den ersten Eintrag. */
+export function sanitizeCoopDefensePendingItemRewards(raw: unknown): CoopDefensePendingItemReward[] | null {
+  if (!Array.isArray(raw)) return null;
+  const seenRounds = new Set<number>();
+  const rewards: CoopDefensePendingItemReward[] = [];
+  for (const entry of raw) {
+    const reward = sanitizeCoopDefensePendingItemReward(entry);
+    if (!reward) return null;
+    if (seenRounds.has(reward.roundEndedAt)) continue;
+    seenRounds.add(reward.roundEndedAt);
+    rewards.push(reward);
+  }
+  return rewards;
 }
 
 /** Für Tests und Diagnose: alle Affix-IDs, die eine Kategorie tragen kann. */

@@ -50,6 +50,10 @@ export interface MatchItemRewardOption {
 
 export interface MatchItemRewardPresentation {
   readonly roundEndedAt: number;
+  readonly mapId?: string;
+  /** Position in der persistenten Queue (1-basiert fuer die Anzeige). */
+  readonly queueIndex: number;
+  readonly queueSize: number;
   /** Beim Würfeln angewandte Mindestanzahl epischer Optionen. */
   readonly epicGuaranteeCount: number;
   readonly options: readonly MatchItemRewardOption[];
@@ -149,16 +153,21 @@ export function createMatchProgressDelta(
 export function createMatchItemRewardPresentation(
   pending: {
     roundEndedAt: number;
+    mapId?: string;
     offers: readonly CoopDefenseItem[];
     epicGuaranteeCount?: number;
   } | null,
   ownedItems: readonly CoopDefenseItem[],
   equippedItemIds: CoopDefenseEquippedItemIds,
+  queuePosition: { index: number; size: number } = { index: 0, size: 1 },
 ): MatchItemRewardPresentation | null {
   if (!pending || pending.offers.length === 0) return null;
 
   return {
     roundEndedAt: pending.roundEndedAt,
+    ...(pending.mapId ? { mapId: pending.mapId } : {}),
+    queueIndex: Math.max(1, Math.floor(queuePosition.index) + 1),
+    queueSize: Math.max(1, Math.floor(queuePosition.size)),
     epicGuaranteeCount: normalizeCoopDefenseEpicGuaranteeCount(pending.epicGuaranteeCount),
     options: pending.offers.map((item) => {
       const equipped = getEquippedCoopDefenseItem(ownedItems, equippedItemIds, item.slot as CoopDefenseItemSlot);

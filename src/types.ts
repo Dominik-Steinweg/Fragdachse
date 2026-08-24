@@ -847,6 +847,8 @@ export interface CoopDefenseItem {
 /** Offenes Belohnungsangebot nach einem Sieg. Ueberlebt Reload und Rejoin. */
 export interface CoopDefensePendingItemReward {
   readonly roundEndedAt: number;
+  /** Map, auf der das Angebot verdient wurde; ältere Saves dürfen dieses Feld auslassen. */
+  readonly mapId?: string;
   readonly offers: readonly CoopDefenseItem[];
   /** Bereits beim Würfeln angewandte autoritative B8-Epic-Garantie; 0/undefined = keine. */
   readonly epicGuaranteeCount?: number;

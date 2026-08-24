@@ -29,6 +29,7 @@ import {
   sanitizeCoopDefenseEquippedItemIds,
   sanitizeCoopDefenseItems,
   sanitizeCoopDefensePendingItemReward,
+  sanitizeCoopDefensePendingItemRewards,
   type CoopDefenseEquippedItemIds,
 } from './coopDefenseItems';
 import {
@@ -98,10 +99,10 @@ export interface CoopDefenseProgressPreferences {
   items: CoopDefenseItem[];
   equippedItemIds: CoopDefenseEquippedItemIds;
   /**
-   * Offenes Belohnungsangebot. Bewusst persistent: so ueberlebt es Reload und Verbindungsabbruch
-   * waehrend der Auswahl und geht nie verloren.
+   * FIFO-Queue offener Belohnungsangebote. Jedes Angebot ueberlebt Reload und Verbindungsabbruch
+   * waehrend der Auswahl und wird nie durch ein spaeteres Angebot ueberschrieben.
    */
-  pendingItemReward: CoopDefensePendingItemReward | null;
+  pendingItemRewards: CoopDefensePendingItemReward[];
   /**
    * Ein neu erhaltenes Teil liegt im Inventar, ohne dass der Spieler das Item-Menue seitdem
    * geoeffnet hat. Treibt den Hinweis am Items-Button und wird beim Oeffnen zurueckgesetzt.
@@ -167,7 +168,9 @@ export interface LocalProgressDocument {
     itemsUnlocked: boolean;
     items: CoopDefenseItem[];
     equippedItemIds: CoopDefenseEquippedItemIds;
-    pendingItemReward: CoopDefensePendingItemReward | null;
+    pendingItemRewards: CoopDefensePendingItemReward[];
+    /** Legacy-Feld in alten Schema-2-Saves; wird beim Dekodieren in die Queue migriert. */
+    pendingItemReward?: CoopDefensePendingItemReward | null;
     unseenItems: boolean;
   };
 }
@@ -213,7 +216,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   itemsUnlocked: false,
   items: [],
   equippedItemIds: {},
-  pendingItemReward: null,
+  pendingItemRewards: [],
   unseenItems: false,
 };
 
@@ -224,14 +227,15 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
 function cloneCoopDefenseItemState(progress: CoopDefenseProgressPreferences): {
   items: CoopDefenseItem[];
   equippedItemIds: CoopDefenseEquippedItemIds;
-  pendingItemReward: CoopDefensePendingItemReward | null;
+  pendingItemRewards: CoopDefensePendingItemReward[];
 } {
   return {
     items: [...progress.items],
     equippedItemIds: { ...progress.equippedItemIds },
-    pendingItemReward: progress.pendingItemReward
-      ? { ...progress.pendingItemReward, offers: [...progress.pendingItemReward.offers] }
-      : null,
+    pendingItemRewards: progress.pendingItemRewards.map((reward) => ({
+      ...reward,
+      offers: [...reward.offers],
+    })),
   };
 }
 
@@ -702,7 +706,9 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.itemsUnlocked !== 'boolean'
     || !Array.isArray(coop.items)
     || !isRecord(coop.equippedItemIds)
-    || (coop.pendingItemReward !== null && !isRecord(coop.pendingItemReward))
+    || (coop.pendingItemRewards !== undefined && !Array.isArray(coop.pendingItemRewards))
+    || (coop.pendingItemReward !== undefined
+      && coop.pendingItemReward !== null && !isRecord(coop.pendingItemReward))
     || typeof coop.unseenItems !== 'boolean') return null;
 
   const loadout = sanitizeStoredLoadout(document.loadout);
@@ -760,9 +766,19 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   const items = sanitizeCoopDefenseItems(coop.items, equippedCandidates);
   if (items.length !== coop.items.length) return null;
   const equippedItemIds = sanitizeCoopDefenseEquippedItemIds(equippedCandidates, items);
-  const pendingItemReward = coop.pendingItemReward === null
-    ? null : sanitizeCoopDefensePendingItemReward(coop.pendingItemReward);
-  if (coop.pendingItemReward !== null && !pendingItemReward) return null;
+  const pendingItemRewards = coop.pendingItemRewards === undefined
+    ? []
+    : sanitizeCoopDefensePendingItemRewards(coop.pendingItemRewards);
+  if (!pendingItemRewards) return null;
+  // Schema-2-Saves enthielten noch ein einzelnes Feld. Auch wenn ein Export versehentlich
+  // beide Formen enthält, wird der Legacy-Eintrag verlustfrei ergänzt und nicht überschrieben.
+  if (coop.pendingItemReward !== undefined && coop.pendingItemReward !== null) {
+    const legacyReward = sanitizeCoopDefensePendingItemReward(coop.pendingItemReward);
+    if (!legacyReward) return null;
+    if (!pendingItemRewards.some((reward) => reward.roundEndedAt === legacyReward.roundEndedAt)) {
+      pendingItemRewards.unshift(legacyReward);
+    }
+  }
   return {
     profile: {
       playerName: typeof document.profile.playerName === 'string'
@@ -787,7 +803,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         ),
         items,
         equippedItemIds,
-        pendingItemReward,
+        pendingItemRewards,
         unseenItems: coop.unseenItems && items.length > 0,
       },
     },
@@ -847,8 +863,10 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       itemsUnlocked: progress.itemsUnlocked,
       items: [...progress.items],
       equippedItemIds: { ...progress.equippedItemIds },
-      pendingItemReward: progress.pendingItemReward
-        ? { ...progress.pendingItemReward, offers: [...progress.pendingItemReward.offers] } : null,
+      pendingItemRewards: progress.pendingItemRewards.map((reward) => ({
+        ...reward,
+        offers: [...reward.offers],
+      })),
       unseenItems: progress.unseenItems,
     },
   };
@@ -1730,19 +1748,31 @@ export function salvageStoredCoopDefenseItem(uid: string): number {
   return xp;
 }
 
-export function getStoredPendingCoopDefenseItemReward(): CoopDefensePendingItemReward | null {
-  const pending = readPreferences().progression.coopDefense.pendingItemReward;
-  return pending ? { ...pending, offers: [...pending.offers] } : null;
+function clonePendingItemReward(reward: CoopDefensePendingItemReward): CoopDefensePendingItemReward {
+  return { ...reward, offers: [...reward.offers] };
+}
+
+/** Gibt die offene FIFO-Queue als defensive Kopie zurueck. */
+export function getStoredPendingCoopDefenseItemRewards(): CoopDefensePendingItemReward[] {
+  return readPreferences().progression.coopDefense.pendingItemRewards.map(clonePendingItemReward);
 }
 
 /**
- * Legt ein Angebot ab. Ein bereits offenes Angebot derselben Runde bleibt bestehen, damit eine
+ * Kompatibilitaets-Getter fuer alte Aufrufer: liefert den aeltesten offenen Reward.
+ * Neue Flows sollen die pluralische Queue-API verwenden.
+ */
+export function getStoredPendingCoopDefenseItemReward(): CoopDefensePendingItemReward | null {
+  return getStoredPendingCoopDefenseItemRewards()[0] ?? null;
+}
+
+/**
+ * Haengt ein Angebot an. Ein bereits offenes Angebot derselben Runde bleibt bestehen, damit eine
  * wiederholte Auswertung derselben Runde die bereits gezeigten Items nicht austauscht.
  */
 export function setStoredPendingCoopDefenseItemReward(reward: CoopDefensePendingItemReward): boolean {
   const current = readPreferences();
   const progress = current.progression.coopDefense;
-  if (progress.pendingItemReward?.roundEndedAt === reward.roundEndedAt) return false;
+  if (progress.pendingItemRewards.some((entry) => entry.roundEndedAt === reward.roundEndedAt)) return false;
 
   writePreferences({
     ...current,
@@ -1750,21 +1780,30 @@ export function setStoredPendingCoopDefenseItemReward(reward: CoopDefensePending
       ...current.progression,
       coopDefense: {
         ...progress,
-        pendingItemReward: { ...reward, offers: [...reward.offers] },
+        pendingItemRewards: [
+          ...progress.pendingItemRewards,
+          clonePendingItemReward(reward),
+        ],
       },
     },
   });
   return true;
 }
 
-export function clearStoredPendingCoopDefenseItemReward(): void {
+/** Entfernt alle offenen Rewards; fuer einen einzelnen Claim wird die Claim-API verwendet. */
+export function clearStoredPendingCoopDefenseItemRewards(): void {
   updatePreferences((current) => ({
     ...current,
     progression: {
       ...current.progression,
-      coopDefense: { ...current.progression.coopDefense, pendingItemReward: null },
+      coopDefense: { ...current.progression.coopDefense, pendingItemRewards: [] },
     },
   }));
+}
+
+/** Legacy-Alias: bewusst weiterhin "alles leeren" fuer bestehende Reset-/Test-Aufrufer. */
+export function clearStoredPendingCoopDefenseItemReward(): void {
+  clearStoredPendingCoopDefenseItemRewards();
 }
 
 export interface CoopDefenseItemRewardClaim {
@@ -1784,13 +1823,45 @@ export interface CoopDefenseItemRewardClaim {
  * gesamte Transaktion unveraendert.
  */
 export function claimStoredPendingCoopDefenseItemReward(
+  roundEndedAt: number,
   offerUid: string,
   salvageUid?: string,
+  action?: CoopDefenseItemRewardAction,
+): CoopDefenseItemRewardClaim | null;
+/** @deprecated Nur fuer alte Aufrufer; bei mehreren gleichen offerUid ist der Claim bewusst ungueltig. */
+export function claimStoredPendingCoopDefenseItemReward(
+  offerUid: string,
+  salvageUid?: string,
+  action?: CoopDefenseItemRewardAction,
+): CoopDefenseItemRewardClaim | null;
+export function claimStoredPendingCoopDefenseItemReward(
+  roundEndedAtOrOfferUid: number | string,
+  offerUidOrSalvageUid?: string,
+  salvageUidOrAction?: string | CoopDefenseItemRewardAction,
   action: CoopDefenseItemRewardAction = 'take',
 ): CoopDefenseItemRewardClaim | null {
   const current = readPreferences();
   const progress = current.progression.coopDefense;
-  const offer = progress.pendingItemReward?.offers.find((entry) => entry.uid === offerUid);
+  const isExplicitRewardClaim = typeof roundEndedAtOrOfferUid === 'number';
+  const requestedRoundEndedAt = isExplicitRewardClaim ? roundEndedAtOrOfferUid : null;
+  const offerUid = isExplicitRewardClaim ? offerUidOrSalvageUid : roundEndedAtOrOfferUid;
+  if (!offerUid) return null;
+
+  const salvageUid = isExplicitRewardClaim
+    ? (salvageUidOrAction as string | undefined)
+    : offerUidOrSalvageUid;
+  const resolvedAction = isExplicitRewardClaim
+    ? action
+    : (salvageUidOrAction as CoopDefenseItemRewardAction | undefined) ?? 'take';
+  const matchingRewards = progress.pendingItemRewards.filter((reward) => (
+    (requestedRoundEndedAt === null || reward.roundEndedAt === requestedRoundEndedAt)
+      && reward.offers.some((entry) => entry.uid === offerUid)
+  ));
+  // Der alte offerUid-only Aufruf darf niemals bei doppelten IDs willkuerlich einen Reward
+  // entfernen. Der aktuelle Flow gibt immer roundEndedAt + offerUid an.
+  if (matchingRewards.length !== 1) return null;
+  const pendingReward = matchingRewards[0];
+  const offer = pendingReward.offers.find((entry) => entry.uid === offerUid);
   if (!offer) return null;
 
   const commit = (
@@ -1808,7 +1879,9 @@ export function claimStoredPendingCoopDefenseItemReward(
           totalXp: sanitizeStoredXp(progress.totalXp + salvagedXp),
           items,
           equippedItemIds,
-          pendingItemReward: null,
+          pendingItemRewards: progress.pendingItemRewards.filter(
+            (reward) => reward !== pendingReward,
+          ),
           // Nur ein uebernommenes Teil ist neu; ein direkt zerlegtes Angebot landet nie im
           // Inventar und darf den Hinweis am Button deshalb nicht ausloesen.
           unseenItems: progress.unseenItems || acquired !== null,
@@ -1846,7 +1919,7 @@ export function claimStoredPendingCoopDefenseItemReward(
   const salvagedXp = salvaged ? getCoopDefenseItemSalvageXp(salvaged) : 0;
   const items = addCoopDefenseItem(remaining, offer);
   const acquired = items[items.length - 1];
-  const equippedItemIds = slotIsEmpty || action === 'equip'
+  const equippedItemIds = slotIsEmpty || resolvedAction === 'equip'
     ? { ...progress.equippedItemIds, [offer.slot]: acquired.uid }
     : progress.equippedItemIds;
   return commit(items, salvagedXp, acquired, equippedItemIds);
