@@ -23,6 +23,9 @@ import {
   TEX_EXPLOSION_RING,
   TEX_EXPLOSION_SPARK,
   TEX_STINK_PUFF,
+  TEX_MUZZLE_FLASH,
+  TEX_MUZZLE_ENERGY,
+  TEX_MUZZLE_SPARK,
 } from '../src/effects/gpu/GpuVfxSourceTextures';
 import {
   TEX_FLAME_CORE,
@@ -130,6 +133,9 @@ describe('gpu vfx atlas', () => {
     expect(scene.textures.exists(TEX_VOID_FLAME_CORE)).toBe(true);
     expect(scene.textures.exists(TEX_VOID_FLAME_EMBER)).toBe(true);
     expect(scene.textures.exists(TEX_VOID_FLAME_SPARK)).toBe(true);
+    expect(scene.textures.exists(TEX_MUZZLE_FLASH)).toBe(true);
+    expect(scene.textures.exists(TEX_MUZZLE_ENERGY)).toBe(true);
+    expect(scene.textures.exists(TEX_MUZZLE_SPARK)).toBe(true);
   });
 
   it('resolves every manifest id to its own frame', () => {
@@ -154,6 +160,9 @@ describe('gpu vfx atlas', () => {
     expect(getGpuVfxFrame(GpuVfxFrameId.GroundFireSurfaceB).name).toBe('ground-fire-surface-b');
     expect(getGpuVfxFrame(GpuVfxFrameId.GroundFireSurfaceC).name).toBe('ground-fire-surface-c');
     expect(getGpuVfxFrame(GpuVfxFrameId.GroundFireBedB).name).toBe('ground-fire-bed-b');
+    expect(getGpuVfxFrame(GpuVfxFrameId.MuzzleFlash).name).toBe('muzzle-flash');
+    expect(getGpuVfxFrame(GpuVfxFrameId.MuzzleEnergy).name).toBe('muzzle-energy');
+    expect(getGpuVfxFrame(GpuVfxFrameId.MuzzleSpark).name).toBe('muzzle-spark');
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
 

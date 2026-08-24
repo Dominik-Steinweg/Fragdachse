@@ -1,13 +1,15 @@
 import * as Phaser from 'phaser';
-import { DEPTH, VOID_FIRE_COLOR } from '../config';
+import { VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors, recordParticleSpawn } from './EffectUtils';
+import { mixColors } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
-
-const TEX_FLASH = '__muzzle_flash';
-const TEX_SPARK = '__muzzle_spark';
-const TEX_ENERGY = '__muzzle_energy';
+import { ensureMuzzleFlashTextures } from './gpu/GpuVfxSourceTextures';
+import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
+import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
+import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 
 type MuzzleFlashPreset =
   | 'glock'
@@ -57,6 +59,9 @@ const FLASH_PRESETS: Record<MuzzleFlashPreset, FlashPresetConfig> = {
 
 export class MuzzleFlashRenderer {
   private lighting: LightingSystem | null = null;
+  private gpuVfx: GpuVfxSystem | null = null;
+  private bodySpec: GpuVfxSpawnSpec | null = null;
+  private sparkSpec: GpuVfxSpawnSpec | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -65,54 +70,35 @@ export class MuzzleFlashRenderer {
   }
 
   generateTextures(): void {
-    const textures = this.scene.textures;
+    ensureMuzzleFlashTextures(this.scene);
+  }
 
-    if (!textures.exists(TEX_FLASH)) {
-      ensureCanvasTexture(textures, TEX_FLASH, 32, 18, (ctx) => {
-        const grad = ctx.createRadialGradient(10, 9, 0, 10, 9, 14);
-        grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-        grad.addColorStop(0.28, 'rgba(255,236,180,0.96)');
-        grad.addColorStop(0.6, 'rgba(255,170,88,0.44)');
-        grad.addColorStop(1, 'rgba(255,128,48,0.0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.moveTo(2, 9);
-        ctx.lineTo(29, 2);
-        ctx.lineTo(23, 9);
-        ctx.lineTo(29, 16);
-        ctx.closePath();
-        ctx.fill();
-      });
-    }
+  /** Meldet die eventgetriebenen One-Shot-Effekte beim gemeinsamen GPU-VFX-Backend an. */
+  registerGpuVfx(system: GpuVfxSystem): void {
+    if (this.gpuVfx) return;
+    this.gpuVfx = system;
 
-    if (!textures.exists(TEX_SPARK)) {
-      ensureCanvasTexture(textures, TEX_SPARK, 8, 8, (ctx) => {
-        const grad = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
-        grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-        grad.addColorStop(0.45, 'rgba(255,220,160,0.72)');
-        grad.addColorStop(1, 'rgba(255,120,40,0.0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 8, 8);
-      });
-    }
+    this.bodySpec = system.createSpec(GpuVfxEffectId.MuzzleFlashBody);
+    this.bodySpec.positionEase = GpuVfxEase.Linear;
+    this.bodySpec.yMode = GpuVfxEase.Linear;
+    this.bodySpec.scaleEase = GpuVfxEase.QuadOut;
+    this.bodySpec.alphaEase = GpuVfxEase.QuadOut;
+    this.bodySpec.angularVelocity = 0;
+    this.bodySpec.gravityFactor = 1;
+    this.bodySpec.tintBlendStart = 1;
+    this.bodySpec.tintBlendEnd = 1;
 
-    if (!textures.exists(TEX_ENERGY)) {
-      ensureCanvasTexture(textures, TEX_ENERGY, 36, 24, (ctx) => {
-        const grad = ctx.createRadialGradient(11, 12, 0, 11, 12, 15);
-        grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-        grad.addColorStop(0.35, 'rgba(212,248,255,0.92)');
-        grad.addColorStop(0.68, 'rgba(115,190,211,0.32)');
-        grad.addColorStop(1, 'rgba(115,190,211,0.0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.moveTo(3, 12);
-        ctx.lineTo(33, 4);
-        ctx.lineTo(25, 12);
-        ctx.lineTo(33, 20);
-        ctx.closePath();
-        ctx.fill();
-      });
-    }
+    this.sparkSpec = system.createSpec(GpuVfxEffectId.MuzzleFlashSpark);
+    this.sparkSpec.positionEase = GpuVfxEase.Linear;
+    this.sparkSpec.yMode = GpuVfxEase.Linear;
+    this.sparkSpec.scaleEase = GpuVfxEase.Linear;
+    this.sparkSpec.alphaEase = GpuVfxEase.Linear;
+    this.sparkSpec.angularVelocity = 0;
+    this.sparkSpec.gravityFactor = 1;
+    this.sparkSpec.stretchStart = 1;
+    this.sparkSpec.stretchEnd = 1;
+    this.sparkSpec.tintBlendStart = 1;
+    this.sparkSpec.tintBlendEnd = 1;
   }
 
   playProjectileFlash(
@@ -166,44 +152,61 @@ export class MuzzleFlashRenderer {
       intensity: Phaser.Math.Clamp(cfg.alpha * 1.35, 0.45, 1),
     });
 
-    // x, y is already the muzzle origin – callers compute it before passing here
-    const texture = cfg.useEnergyCore ? TEX_ENERGY : TEX_FLASH;
-    const flash = this.scene.add.image(x, y, texture)
-      .setDepth(DEPTH.PROJECTILES + 2)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(color ?? cfg.tint)
-      .setAlpha(emissiveAlpha(cfg.alpha))
-      .setRotation(angle)
-      .setScale(cfg.scaleX, cfg.scaleY);
+    const system = this.gpuVfx;
+    const bodySpec = this.bodySpec;
+    const sparkSpec = this.sparkSpec;
+    if (!system || !bodySpec || !sparkSpec) return;
 
-    this.scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scaleX: cfg.scaleX * 1.25,
-      scaleY: cfg.scaleY * 1.25,
-      duration: cfg.duration,
-      ease: 'Quad.easeOut',
-      onComplete: () => flash.destroy(),
-    });
+    const nowMs = system.now();
 
-    const emitter = createEmitter(this.scene, x, y, TEX_SPARK, {
-      lifespan: { min: Math.max(cfg.duration * 1.1, 50), max: cfg.duration * 2 },
-      quantity: cfg.sparkCount,
-      frequency: -1,
-      angle: { min: Phaser.Math.RadToDeg(angle) - cfg.sparkSpread, max: Phaser.Math.RadToDeg(angle) + cfg.sparkSpread },
-      speed: { min: cfg.sparkSpeed * 0.35, max: cfg.sparkSpeed },
-      scale: { start: 0.6, end: 0.04 },
-      // Emitter pro Schuss, nicht geteilt: der Faktor darf hier bei der Erzeugung wirken.
-      alpha: { start: emissiveAlpha(0.82), end: 0 },
-      tint: isVoidFlame
-        ? [0xffffff, mixColors(color, 0xffffff, 0.58), color]
-        : [...cfg.sparkTints],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    }, DEPTH.PROJECTILES + 1.5, undefined, 'muzzleFlash');
-    emitter.explode(cfg.sparkCount);
-    recordParticleSpawn(this.scene, 'muzzleFlash', cfg.sparkCount);
-    this.scene.time.delayedCall(cfg.duration * 2 + 40, () => destroyEmitter(emitter));
+    // `scale` drives the old Y axis, while `stretch` carries the independent X axis. This keeps
+    // the exact cfg.scaleX/cfg.scaleY start values and grows both axes by exactly 1.25.
+    bodySpec.lifeMs = cfg.duration;
+    bodySpec.x = x;
+    bodySpec.y = y;
+    bodySpec.vx = 0;
+    bodySpec.vy = 0;
+    bodySpec.rotation = angle;
+    bodySpec.scaleStart = cfg.scaleY;
+    bodySpec.scaleEnd = cfg.scaleY * 1.25;
+    bodySpec.stretchStart = cfg.scaleX / cfg.scaleY;
+    bodySpec.stretchEnd = bodySpec.stretchStart;
+    bodySpec.alphaStart = emissiveAlpha(cfg.alpha);
+    bodySpec.alphaEnd = 0;
+    bodySpec.tint = color ?? cfg.tint;
+    bodySpec.frame = cfg.useEnergyCore ? GpuVfxFrameId.MuzzleEnergy : GpuVfxFrameId.MuzzleFlash;
+    // The body is critical and is intentionally not passed through scaleBurst: it must remain
+    // visible even when standard spark quality is reduced.
+    system.spawn(bodySpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+
+    const sparkCount = system.quality.scaleBurst(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount);
+    if (sparkCount < cfg.sparkCount) {
+      system.recordQualityDrop(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount - sparkCount);
+    }
+
+    sparkSpec.lifeMs = 0;
+    sparkSpec.x = x;
+    sparkSpec.y = y;
+    sparkSpec.scaleStart = 0.6;
+    sparkSpec.scaleEnd = 0.04;
+    sparkSpec.alphaStart = emissiveAlpha(0.82);
+    sparkSpec.alphaEnd = 0;
+    sparkSpec.rotation = 0;
+    sparkSpec.tintBlendStart = 1;
+    sparkSpec.tintBlendEnd = 1;
+
+    const sparkTints = isVoidFlame
+      ? [0xffffff, mixColors(color, 0xffffff, 0.58), color]
+      : cfg.sparkTints;
+    for (let index = 0; index < sparkCount; index += 1) {
+      sparkSpec.lifeMs = Phaser.Math.FloatBetween(Math.max(cfg.duration * 1.1, 50), cfg.duration * 2);
+      const sparkAngle = angle + Phaser.Math.FloatBetween(-cfg.sparkSpread, cfg.sparkSpread) * Math.PI / 180;
+      const speed = Phaser.Math.FloatBetween(cfg.sparkSpeed * 0.35, cfg.sparkSpeed);
+      sparkSpec.vx = Math.cos(sparkAngle) * speed;
+      sparkSpec.vy = Math.sin(sparkAngle) * speed;
+      sparkSpec.tint = sparkTints[Math.floor(Phaser.Math.FloatBetween(0, sparkTints.length)) % sparkTints.length];
+      system.spawn(sparkSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+    }
   }
 
   private resolveProjectilePreset(

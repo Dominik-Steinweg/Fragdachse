@@ -32,7 +32,6 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   honeyBadgerRage: ['HoneyBadgerRageRenderer'],
   hydra: ['HydraRenderer'],
   meteor: ['MeteorRenderer'],
-  muzzleFlash: ['MuzzleFlashRenderer'],
   nuke: ['NukeRenderer'],
   plasmaBurner: ['PlasmaBurnerRenderer'],
   plasmaCharge: ['PlasmaChargeRenderer'],

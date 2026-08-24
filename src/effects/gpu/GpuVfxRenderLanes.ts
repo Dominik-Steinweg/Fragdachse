@@ -78,6 +78,7 @@ export const GpuVfxLaneId = {
   GoreNormal:            27,
   GoreAdd:               28,
   PowerUpPedestal:       29,
+  MuzzleFlash:           30,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -662,5 +663,25 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     capacityRationale:
       'Die groesste authored Map besitzt 18 Pedestals mit rund 13 lebenden Flow-Membern je '
       + 'Sockel. 1024 laesst mehrere gleichzeitige 19-Member-Spawn-Bursts und Konstruktionen zu.',
+  },
+  {
+    id: GpuVfxLaneId.MuzzleFlash,
+    label: 'muzzle-flash',
+    depth: DEPTH.PROJECTILES + 2,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 512,
+    maxLifetimeMs: 236,
+    order: 'add-over-opaque',
+    reserveCritical: 64,
+    rationale:
+      'Body und Sparks bleiben in einer gemeinsamen additiven Lane auf PROJECTILES + 2. Der Body '
+      + 'behaelt seine bisherige Tiefe; die Sparks wandern von + 1.5 auf + 2.0. ADD ueber opaker '
+      + 'Geometrie ist reihenfolgeunkritisch, und Linear/QuadOut decken alle Member-Animationen ab.',
+    capacityRationale:
+      '12 Spieler x 16.7 Negev-Schuesse/s x 5 Sparks x 80 ms ergeben rund 80 lebende Sparks; '
+      + '236 ms decken den laengsten Muzzle-Lebenszyklus mit reichlich Burst- und Turret-Reserve. '
+      + '512 Slots begrenzen die Lane belastbar fuer Multiplayer-Spitzen, waehrend 64 kritische '
+      + 'Reserveplaetze den stets sichtbaren Body gegen Spark-Ueberlast schuetzen.',
   },
 ];

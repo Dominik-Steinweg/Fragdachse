@@ -63,6 +63,8 @@ export const GpuVfxEffectId = {
   PowerUpPedestalAmbient: 49,
   PowerUpPedestalSpark: 50,
   PowerUpPedestalBurst: 51,
+  MuzzleFlashBody: 52,
+  MuzzleFlashSpark: 53,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -518,5 +520,21 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathGlow,
     importance: 'standard',
     release: 'kill-with-source',
+  },
+  {
+    id: GpuVfxEffectId.MuzzleFlashBody,
+    label: 'muzzleFlash.body',
+    lane: GpuVfxLaneId.MuzzleFlash,
+    frame: GpuVfxFrameId.MuzzleFlash,
+    importance: 'critical',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.MuzzleFlashSpark,
+    label: 'muzzleFlash.spark',
+    lane: GpuVfxLaneId.MuzzleFlash,
+    frame: GpuVfxFrameId.MuzzleSpark,
+    importance: 'standard',
+    release: 'linger',
   },
 ];

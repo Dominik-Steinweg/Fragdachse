@@ -78,7 +78,28 @@ describe('gpu vfx render lanes', () => {
     // Der eigentliche Architekturvertrag: mehr logische Effekte auf weniger physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
     // Explosionen und Combat-Gore fuegen je nur die layerglobal inkompatiblen Lanes hinzu.
-    expect(GPU_VFX_LANES.length).toBe(30);
+    expect(GPU_VFX_LANES.length).toBe(31);
+  });
+
+  it('keeps MuzzleFlash body and sparks on one compatible additive lane', () => {
+    const lane = GPU_VFX_LANES[GpuVfxLaneId.MuzzleFlash];
+    const body = GPU_VFX_EFFECTS.find((effect) => effect.label === 'muzzleFlash.body')!;
+    const sparks = GPU_VFX_EFFECTS.find((effect) => effect.label === 'muzzleFlash.spark')!;
+
+    expect(lane.label).toBe('muzzle-flash');
+    expect(lane.depth).toBe(DEPTH.PROJECTILES + 2);
+    expect(lane.blendMode).toBe(1);
+    expect(lane.order).toBe('add-over-opaque');
+    expect(lane.eases).toEqual([GpuVfxEase.Linear, GpuVfxEase.QuadOut]);
+    expect(lane.capacity).toBe(512);
+    expect(lane.maxLifetimeMs).toBe(236);
+    expect(lane.reserveCritical).toBe(64);
+    expect(body.lane).toBe(GpuVfxLaneId.MuzzleFlash);
+    expect(sparks.lane).toBe(GpuVfxLaneId.MuzzleFlash);
+    expect(body.importance).toBe('critical');
+    expect(sparks.importance).toBe('standard');
+    expect(body.frame).toBe(GpuVfxFrameId.MuzzleFlash);
+    expect(sparks.frame).toBe(GpuVfxFrameId.MuzzleSpark);
   });
 
   it('keeps leaf debris in an explicit ordered world lane', () => {

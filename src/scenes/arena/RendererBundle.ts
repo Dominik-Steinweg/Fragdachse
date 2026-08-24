@@ -248,6 +248,7 @@ export function createRendererBundle(
   const tracer = new TracerRenderer(scene);
 
   const muzzleFlash = new MuzzleFlashRenderer(scene);
+  muzzleFlash.registerGpuVfx(gpuVfx);
   muzzleFlash.generateTextures();
 
   const nuke = new NukeRenderer(scene);

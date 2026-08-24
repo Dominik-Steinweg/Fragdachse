@@ -31,6 +31,9 @@ export const TEX_EXPLOSION_CHUNK = '__explosion_chunk';
 export const TEX_EXPLOSION_RING = '__explosion_ring';
 export const TEX_DEATH_FRAGMENT = '__death_fragment';
 export const TEX_DEATH_GLOW = '__death_glow';
+export const TEX_MUZZLE_FLASH = '__muzzle_flash';
+export const TEX_MUZZLE_ENERGY = '__muzzle_energy';
+export const TEX_MUZZLE_SPARK = '__muzzle_spark';
 
 /** Weisses Fragmentquadrat: Farbe, Groesse und Streckung kommen aus dem GPU-Member. */
 export function ensureDeathFragmentTexture(scene: Phaser.Scene): void {
@@ -50,6 +53,63 @@ export function ensureDeathGlowTexture(scene: Phaser.Scene): void {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 24, 24);
   });
+}
+
+/** Bestehendes Muzzle-Flash-Motiv; die Zeichenwerte bleiben pixelgleich zum alten Renderer. */
+export function ensureMuzzleFlashTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_MUZZLE_FLASH, 32, 18, (ctx) => {
+    const grad = ctx.createRadialGradient(10, 9, 0, 10, 9, 14);
+    grad.addColorStop(0, 'rgba(255,255,255,1.0)');
+    grad.addColorStop(0.28, 'rgba(255,236,180,0.96)');
+    grad.addColorStop(0.6, 'rgba(255,170,88,0.44)');
+    grad.addColorStop(1, 'rgba(255,128,48,0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(2, 9);
+    ctx.lineTo(29, 2);
+    ctx.lineTo(23, 9);
+    ctx.lineTo(29, 16);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+/** Bestehendes Muzzle-Spark-Motiv; die Zeichenwerte bleiben pixelgleich zum alten Renderer. */
+export function ensureMuzzleSparkTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_MUZZLE_SPARK, 8, 8, (ctx) => {
+    const grad = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
+    grad.addColorStop(0, 'rgba(255,255,255,1.0)');
+    grad.addColorStop(0.45, 'rgba(255,220,160,0.72)');
+    grad.addColorStop(1, 'rgba(255,120,40,0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 8, 8);
+  });
+}
+
+/** Bestehendes Energy-Core-Motiv; die Zeichenwerte bleiben pixelgleich zum alten Renderer. */
+export function ensureMuzzleEnergyTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_MUZZLE_ENERGY, 36, 24, (ctx) => {
+    const grad = ctx.createRadialGradient(11, 12, 0, 11, 12, 15);
+    grad.addColorStop(0, 'rgba(255,255,255,1.0)');
+    grad.addColorStop(0.35, 'rgba(212,248,255,0.92)');
+    grad.addColorStop(0.68, 'rgba(115,190,211,0.32)');
+    grad.addColorStop(1, 'rgba(115,190,211,0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(3, 12);
+    ctx.lineTo(33, 4);
+    ctx.lineTo(25, 12);
+    ctx.lineTo(33, 20);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+/** Erzeugt alle Muzzle-Quellen gemeinsam, damit der Atlas sie vor den Lanes vorfindet. */
+export function ensureMuzzleFlashTextures(scene: Phaser.Scene): void {
+  ensureMuzzleFlashTexture(scene);
+  ensureMuzzleEnergyTexture(scene);
+  ensureMuzzleSparkTexture(scene);
 }
 
 /** Weicher Funkenpunkt fuer die Explosionen. */

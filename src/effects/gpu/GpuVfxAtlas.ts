@@ -19,6 +19,9 @@ import {
   TEX_EXPLOSION_RING,
   TEX_DEATH_FRAGMENT,
   TEX_DEATH_GLOW,
+  TEX_MUZZLE_FLASH,
+  TEX_MUZZLE_ENERGY,
+  TEX_MUZZLE_SPARK,
   ensureAirstrikeBombTexture,
   ensureAirstrikeSparkTexture,
   ensureRocketExhaustTexture,
@@ -37,6 +40,9 @@ import {
   ensureExplosionRingTexture,
   ensureDeathFragmentTexture,
   ensureDeathGlowTexture,
+  ensureMuzzleFlashTexture,
+  ensureMuzzleEnergyTexture,
+  ensureMuzzleSparkTexture,
 } from './GpuVfxSourceTextures';
 import {
   TEX_BLOOD_DROPLET,
@@ -140,6 +146,9 @@ export const GpuVfxFrameId = {
   BloodStreak:        33,
   BloodDroplet:       34,
   BloodStain:         35,
+  MuzzleFlash:         36,
+  MuzzleEnergy:        37,
+  MuzzleSpark:         38,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -306,6 +315,18 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.BloodStain, frame: 'blood-stain',
     sourceTextureKey: TEX_BLOOD_STAIN, width: 42, height: 42, ensure: ensureBloodHitTextures,
+  },
+  {
+    id: GpuVfxFrameId.MuzzleFlash, frame: 'muzzle-flash',
+    sourceTextureKey: TEX_MUZZLE_FLASH, width: 32, height: 18, ensure: ensureMuzzleFlashTexture,
+  },
+  {
+    id: GpuVfxFrameId.MuzzleEnergy, frame: 'muzzle-energy',
+    sourceTextureKey: TEX_MUZZLE_ENERGY, width: 36, height: 24, ensure: ensureMuzzleEnergyTexture,
+  },
+  {
+    id: GpuVfxFrameId.MuzzleSpark, frame: 'muzzle-spark',
+    sourceTextureKey: TEX_MUZZLE_SPARK, width: 8, height: 8, ensure: ensureMuzzleSparkTexture,
   },
 ];
 
