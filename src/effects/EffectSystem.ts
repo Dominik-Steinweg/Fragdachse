@@ -14,6 +14,9 @@ import {
 } from './BloodEffectShared';
 import { circleZone, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import {
+  FLAME_JET_TINTS_COOL,
+  FLAME_JET_TINTS_HOT,
+  FLAME_JET_TINTS_MID,
   ensureFlameTextures,
 } from './FlameShared';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
@@ -67,6 +70,7 @@ import {
   type ExplosionCombatPalette,
   type ExplosionGpuRenderer,
 } from './ExplosionGpuRenderer';
+import { isThermalExplosionStyle } from './ExplosionVisualProfiles';
 
 const HITSCAN_TRACER_FADE_MS = 320;
 const MELEE_SWING_FADE_MS    = 220;
@@ -1019,12 +1023,17 @@ export class EffectSystem implements EnemyVisualSink {
     const energyLike = style === 'energy' || style === 'timebomb' || style === 'timebomb_pop' || style === 'lightning';
     const voidLike = style === 'void_nuke';
     const holyLike = style === 'holy';
+    const thermalLike = isThermalExplosionStyle(style);
     const palette: ExplosionCombatPalette = {
-      core: coreColor,
-      hot: hotColor,
-      body: bodyColor,
-      outer: this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),
-      ember: this.mixColor(bodyColor, holyLike ? 0x7a4610 : (voidLike ? 0x160c22 : (energyLike ? 0x20345b : 0x61200d)), 0.62),
+      core: thermalLike ? 0xfff2d0 : coreColor,
+      hot: thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
+      body: thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
+      outer: thermalLike
+        ? FLAME_JET_TINTS_COOL[0]
+        : this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),
+      ember: thermalLike
+        ? FLAME_JET_TINTS_COOL[3]
+        : this.mixColor(bodyColor, holyLike ? 0x7a4610 : (voidLike ? 0x160c22 : (energyLike ? 0x20345b : 0x61200d)), 0.62),
       smoke: this.mixColor(bodyColor, voidLike ? 0x130f1d : (energyLike ? 0x17223a : 0x282528), 0.82),
     };
     this.explosionGpuRenderer.spawnCombatExplosion({ x, y, radius, style, palette });

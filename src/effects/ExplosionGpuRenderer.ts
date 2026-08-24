@@ -2,12 +2,8 @@ import * as Phaser from 'phaser';
 import type { ExplosionVisualStyle } from '../types';
 import { emissiveAlpha } from './EmissiveScale';
 import {
-  FLAME_COLORS_CORE,
-  FLAME_COLORS_OUTER,
-  FLAME_COLORS_SPARK,
-} from './FlameShared';
-import {
   getCombatExplosionProfile,
+  isThermalExplosionStyle,
   type CombatExplosionVisualStyle,
   type ExplosionVisualProfile,
 } from './ExplosionVisualProfiles';
@@ -199,7 +195,9 @@ export class ExplosionGpuRenderer {
         scaleEase: GpuVfxEase.QuadOut,
         alphaStart: index === 0 ? 0.96 : 0.72,
         tint: index === 0 ? palette.core : palette.hot,
-        tintBlendStart: 0,
+        // Ein einziger kleiner Kern darf als Weissglut starten; der zweite Kern ist
+        // bereits fast voll eingefärbt, damit die grosse Body-Fläche nicht weiss bleibt.
+        tintBlendStart: isThermalExplosionStyle(request.style) ? (index === 0 ? 0 : 0.84) : 0,
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionCore,
         rotation: Phaser.Math.FloatBetween(0, TWO_PI),
@@ -237,7 +235,7 @@ export class ExplosionGpuRenderer {
         scaleEase: GpuVfxEase.QuadOut,
         alphaStart: alpha,
         tint: pickGpuVfxTint([palette.hot, palette.body, palette.outer]),
-        tintBlendStart: 0.08,
+        tintBlendStart: isThermalExplosionStyle(request.style) ? 0.88 : 0.08,
         tintBlendEnd: 1,
         frame: index % 2 === 0 ? GpuVfxFrameId.ExplosionFireballA : GpuVfxFrameId.ExplosionFireballB,
         rotation: Phaser.Math.FloatBetween(0, TWO_PI),
@@ -275,8 +273,8 @@ export class ExplosionGpuRenderer {
       : profile.family === 'lightning'
         ? GpuVfxEffectId.ExplosionLightningSpark
         : GpuVfxEffectId.ExplosionSpark;
-    const tints = profile.family === 'train'
-      ? [0xffffff, ...FLAME_COLORS_SPARK, palette.body]
+    const tints = isThermalExplosionStyle(request.style)
+      ? [palette.hot, palette.body, palette.outer]
       : [palette.core, palette.hot, palette.body, palette.outer];
 
     this.spawnBurst(effect, count, (spec) => {
@@ -293,7 +291,7 @@ export class ExplosionGpuRenderer {
         scaleEnd: 0,
         alphaStart: profile.family === 'train' ? emissiveAlpha(1) : 0.94,
         tint: pickGpuVfxTint(tints),
-        tintBlendStart: 0,
+        tintBlendStart: isThermalExplosionStyle(request.style) ? 0.9 : 0,
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionStreak,
         rotation: angle,
@@ -324,7 +322,7 @@ export class ExplosionGpuRenderer {
         scaleEnd: 0.08,
         alphaStart: 0.74,
         tint: pickGpuVfxTint([palette.hot, palette.ember, palette.outer]),
-        tintBlendStart: 0.05,
+        tintBlendStart: isThermalExplosionStyle(request.style) ? 1 : 0.05,
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionChunk,
         rotation: Phaser.Math.FloatBetween(0, TWO_PI),
@@ -356,8 +354,8 @@ export class ExplosionGpuRenderer {
         scaleStart: 0.9,
         scaleEnd: 0,
         alphaStart: 0.78,
-        tint: pickGpuVfxTint([palette.core, palette.hot, palette.body]),
-        tintBlendStart: 0,
+        tint: pickGpuVfxTint([palette.hot, palette.body, palette.outer]),
+        tintBlendStart: 0.9,
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionStreak,
         rotation: angle,
@@ -436,8 +434,8 @@ export class ExplosionGpuRenderer {
         scaleStart: 0.85,
         scaleEnd: 0.04,
         alphaStart: emissiveAlpha(0.96),
-        tint: pickGpuVfxTint([0xffffff, ...FLAME_COLORS_CORE, ...FLAME_COLORS_OUTER, palette.body]),
-        tintBlendStart: 0,
+        tint: pickGpuVfxTint([palette.hot, palette.body, palette.outer, palette.ember]),
+        tintBlendStart: 1,
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionChunk,
         yMode: GpuVfxEase.Gravity,
@@ -460,8 +458,8 @@ export class ExplosionGpuRenderer {
         scaleStart: 0.72,
         scaleEnd: 0.04,
         alphaStart: emissiveAlpha(0.84),
-        tint: pickGpuVfxTint([palette.core, palette.hot, palette.body]),
-        tintBlendStart: 0,
+        tint: pickGpuVfxTint([palette.hot, palette.body]),
+        tintBlendStart: 0.9,
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionFireballA,
         yMode: GpuVfxEase.Gravity,
@@ -487,8 +485,12 @@ export class ExplosionGpuRenderer {
         scaleEnd: Phaser.Math.FloatBetween(1.4, 2.8),
         scaleEase: GpuVfxEase.QuadOut,
         alphaStart: 0.56,
-        tint: pickGpuVfxTint([palette.core, palette.hot, palette.body, palette.outer]),
-        tintBlendStart: 0,
+        tint: pickGpuVfxTint(
+          isThermalExplosionStyle(request.style)
+            ? [palette.hot, palette.body, palette.outer]
+            : [palette.core, palette.hot, palette.body, palette.outer],
+        ),
+        tintBlendStart: isThermalExplosionStyle(request.style) ? 0.88 : 0,
         tintBlendEnd: 1,
         frame: index % 2 === 0 ? GpuVfxFrameId.ExplosionFireballA : GpuVfxFrameId.ExplosionFireballB,
         yMode: GpuVfxEase.Gravity,
@@ -513,7 +515,7 @@ export class ExplosionGpuRenderer {
         scaleEase: GpuVfxEase.QuadOut,
         alphaStart: 0.48,
         tint: pickGpuVfxTint([palette.hot, palette.body, palette.outer, palette.smoke]),
-        tintBlendStart: 0.12,
+        tintBlendStart: isThermalExplosionStyle(request.style) ? 0.86 : 0.12,
         tintBlendEnd: 1,
         frame: index % 2 === 0 ? GpuVfxFrameId.ExplosionFireballA : GpuVfxFrameId.ExplosionFireballB,
         yMode: GpuVfxEase.Gravity,

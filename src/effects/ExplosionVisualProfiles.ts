@@ -76,6 +76,15 @@ export function getCombatExplosionProfile(style: ExplosionVisualStyle): Explosio
   return EXPLOSION_VISUAL_PROFILES[style];
 }
 
+export function isThermalExplosionStyle(style: ExplosionVisualStyle): boolean {
+  return style === 'default'
+    || style === 'rocket'
+    || style === 'mini_rocket'
+    || style === 'mini_rocket_cascade'
+    || style === 'train'
+    || style === 'nuke';
+}
+
 export function isCombatExplosionStyle(style: ExplosionVisualStyle): style is CombatExplosionVisualStyle {
   return EXPLOSION_VISUAL_PROFILES[style] !== null;
 }
