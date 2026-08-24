@@ -420,7 +420,12 @@ export const DEATH_DISINTEGRATION_VFX = {
   glowTravelMaxPx: 118,
   glowScaleMin: 0.34,
   glowScaleMax: 0.96,
-  glowAlpha: 0.48,
+  glowAlpha: 0.78,
+  /** Zusaetzliche Player-Farbsaeume pro Death-Burst; wird ueber die Standard-Quality skaliert. */
+  playerFragmentGlowRatio: 0.25,
+  playerFragmentGlowMaxCount: 12,
+  playerFragmentGlowScale: 1.44,
+  playerFragmentGlowAlpha: 0.95,
 } as const;
 
 /**

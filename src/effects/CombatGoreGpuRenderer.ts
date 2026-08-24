@@ -49,6 +49,7 @@ export class CombatGoreGpuRenderer {
   private deathFragmentSpec: GpuVfxSpawnSpec | null = null;
   private deathMicroFragmentSpec: GpuVfxSpawnSpec | null = null;
   private deathGlowSpec: GpuVfxSpawnSpec | null = null;
+  private deathFragmentGlowSpec: GpuVfxSpawnSpec | null = null;
   private bloodCoreSpec: GpuVfxSpawnSpec | null = null;
   private bloodStreakSpec: GpuVfxSpawnSpec | null = null;
   private bloodDropletSpec: GpuVfxSpawnSpec | null = null;
@@ -65,6 +66,7 @@ export class CombatGoreGpuRenderer {
     this.deathFragmentSpec = system.createSpec(GpuVfxEffectId.DeathFragment);
     this.deathMicroFragmentSpec = system.createSpec(GpuVfxEffectId.DeathMicroFragment);
     this.deathGlowSpec = system.createSpec(GpuVfxEffectId.DeathGlow);
+    this.deathFragmentGlowSpec = system.createSpec(GpuVfxEffectId.DeathFragmentGlow);
     this.bloodCoreSpec = system.createSpec(GpuVfxEffectId.BloodCore);
     this.bloodStreakSpec = system.createSpec(GpuVfxEffectId.BloodStreak);
     this.bloodDropletSpec = system.createSpec(GpuVfxEffectId.BloodDroplet);
@@ -76,11 +78,12 @@ export class CombatGoreGpuRenderer {
    * erfundenen Badger-Fallback: alte oder unvollstaendige Peers bekommen schlicht keinen
    * Disintegration-Burst.
    */
-  playDeath(effect: SyncedDeathEffect): void {
+  playDeath(effect: SyncedDeathEffect, isPlayerDeath = false): void {
     const gpu = this.gpu;
     const mainSpec = this.deathFragmentSpec;
     const microSpec = this.deathMicroFragmentSpec;
     const glowSpec = this.deathGlowSpec;
+    const fragmentGlowSpec = this.deathFragmentGlowSpec;
     const displayWidth = effect.displayWidth ?? 0;
     const displayHeight = effect.displayHeight ?? 0;
     if (
@@ -98,7 +101,8 @@ export class CombatGoreGpuRenderer {
     const rng = createSeededRandom(effect.seed);
     const entityTint = effect.tint ?? 0xffffff;
     const auraColor = effect.targetColor ?? COLORS.GREY_2;
-    const neutralTargetColorBoost = entityTint === 0xffffff && effect.targetColor !== undefined
+    const neutralTargetColorBoost = !isPlayerDeath
+      && entityTint === 0xffffff && effect.targetColor !== undefined
       ? DEATH_DISINTEGRATION_VFX.neutralTargetColorBoost
       : 0;
     const rotation = Number.isFinite(effect.rotation) ? effect.rotation : 0;
@@ -110,6 +114,19 @@ export class CombatGoreGpuRenderer {
     const nowMs = gpu.now();
 
     const mainCount = this.scaleBurst(GpuVfxEffectId.DeathFragment, profile.main);
+    const requestedFragmentGlowCount = isPlayerDeath && fragmentGlowSpec
+      ? Math.min(
+        mainCount,
+        Math.min(
+          DEATH_DISINTEGRATION_VFX.playerFragmentGlowMaxCount,
+          Math.max(1, Math.round(profile.main * DEATH_DISINTEGRATION_VFX.playerFragmentGlowRatio)),
+        ),
+      )
+      : 0;
+    const fragmentGlowCount = requestedFragmentGlowCount > 0
+      ? this.scaleBurst(GpuVfxEffectId.DeathFragmentGlow, requestedFragmentGlowCount)
+      : 0;
+    let nextFragmentGlowIndex = 0;
     for (let index = 0; index < mainCount; index += 1) {
       // Die Qualitaet darf die tatsaechliche Silhouettenabdeckung nicht auf den Anfang der
       // Chunk-Liste zusammenschieben: mainCount ist die Zahl der wirklich emittierten
@@ -119,6 +136,9 @@ export class CombatGoreGpuRenderer {
         Math.floor(index * template.chunks.length / Math.max(1, mainCount)),
       )];
       if (!chunk) continue;
+      const selectedForFragmentGlow = fragmentGlowCount > 0
+        && nextFragmentGlowIndex < fragmentGlowCount
+        && index >= Math.floor(nextFragmentGlowIndex * mainCount / fragmentGlowCount);
       this.spawnDeathFragment(
         mainSpec,
         chunk,
@@ -132,6 +152,7 @@ export class CombatGoreGpuRenderer {
         entityTint,
         auraColor,
         neutralTargetColorBoost,
+        isPlayerDeath,
         normalizedHitX,
         normalizedHitY,
         hitLength > 0.0001,
@@ -139,7 +160,9 @@ export class CombatGoreGpuRenderer {
         profile.travelScale,
         false,
         nowMs,
+        selectedForFragmentGlow ? fragmentGlowSpec : null,
       );
+      if (selectedForFragmentGlow) nextFragmentGlowIndex += 1;
     }
 
     const microCount = this.scaleBurst(GpuVfxEffectId.DeathMicroFragment, profile.micro);
@@ -159,6 +182,7 @@ export class CombatGoreGpuRenderer {
         entityTint,
         auraColor,
         neutralTargetColorBoost,
+        isPlayerDeath,
         normalizedHitX,
         normalizedHitY,
         hitLength > 0.0001,
@@ -166,6 +190,7 @@ export class CombatGoreGpuRenderer {
         profile.travelScale * 1.16,
         true,
         nowMs,
+        null,
       );
     }
 
@@ -439,6 +464,7 @@ export class CombatGoreGpuRenderer {
     entityTint: number,
     auraColor: number,
     targetColorBoost: number,
+    playerDeath: boolean,
     hitX: number,
     hitY: number,
     hasHitDirection: boolean,
@@ -446,6 +472,7 @@ export class CombatGoreGpuRenderer {
     travelScale: number,
     micro: boolean,
     nowMs: number,
+    fragmentGlowSpec: GpuVfxSpawnSpec | null,
   ): void {
     const gpu = this.gpu;
     if (!gpu) return;
@@ -511,11 +538,13 @@ export class CombatGoreGpuRenderer {
     const stretch = smallMass && rng() < 0.24
       ? aspect * randomBetween(rng, 1.15, 1.8)
       : aspect;
-    const auraMix = Math.min(
-      1,
-      DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness)
-        + targetColorBoost,
-    );
+    const auraMix = playerDeath
+      ? 0
+      : Math.min(
+        1,
+        DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness)
+          + targetColorBoost,
+      );
     const tint = mixColors(
       multiplyColors(chunk.color, entityTint),
       auraColor,
@@ -550,6 +579,34 @@ export class CombatGoreGpuRenderer {
     spec.tintBlendStart = 1;
     spec.tintBlendEnd = 1;
     gpu.spawn(spec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+
+    if (fragmentGlowSpec) {
+      const glowScaleStart = baseScale
+        * DEATH_FRAGMENT_TEXTURE_SIZE / DEATH_GLOW_TEXTURE_SIZE
+        * DEATH_DISINTEGRATION_VFX.playerFragmentGlowScale;
+      fragmentGlowSpec.lifeMs = lifeMs;
+      fragmentGlowSpec.x = spec.x;
+      fragmentGlowSpec.y = spec.y;
+      fragmentGlowSpec.vx = spec.vx;
+      fragmentGlowSpec.vy = spec.vy;
+      fragmentGlowSpec.positionEase = spec.positionEase;
+      fragmentGlowSpec.yMode = spec.yMode;
+      fragmentGlowSpec.gravityFactor = spec.gravityFactor;
+      fragmentGlowSpec.rotation = spec.rotation;
+      fragmentGlowSpec.angularVelocity = spec.angularVelocity;
+      fragmentGlowSpec.scaleStart = glowScaleStart;
+      fragmentGlowSpec.scaleEnd = glowScaleStart * (largeMass ? 0.5 : DEATH_DISINTEGRATION_VFX.scaleEnd);
+      fragmentGlowSpec.scaleEase = spec.scaleEase;
+      fragmentGlowSpec.stretchStart = spec.stretchStart;
+      fragmentGlowSpec.stretchEnd = spec.stretchEnd;
+      fragmentGlowSpec.alphaStart = DEATH_DISINTEGRATION_VFX.playerFragmentGlowAlpha;
+      fragmentGlowSpec.alphaEnd = 0;
+      fragmentGlowSpec.alphaEase = spec.alphaEase;
+      fragmentGlowSpec.tint = auraColor;
+      fragmentGlowSpec.tintBlendStart = 1;
+      fragmentGlowSpec.tintBlendEnd = 1;
+      gpu.spawn(fragmentGlowSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+    }
   }
 }
 

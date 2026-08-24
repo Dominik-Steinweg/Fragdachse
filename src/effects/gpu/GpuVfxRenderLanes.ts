@@ -640,12 +640,13 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     order: 'add-over-opaque',
     reserveCritical: 0,
     rationale:
-      'Additive Ebene ausschliesslich fuer DeathGlow. Die Hauptfragmente bleiben dominant im '
-      + 'Normal-Band; minimale Tiefenunterschiede rechtfertigen keine weiteren GPU-Layer.',
+      'Additive Ebene fuer DeathGlow und ausgewaehlte farbige Player-Fragment-Saeume. Die '
+      + 'Hauptfragmente bleiben dominant im Normal-Band; minimale Tiefenunterschiede '
+      + 'rechtfertigen keine weiteren GPU-Layer.',
     capacityRationale:
-      'Bei 48 gleichzeitigen Todesfaellen mit hoechstens acht kleinen Glows und kurzer Lebenszeit '
-      + 'bleiben deutlich unter 1024 Slots lebendig; die Lane wird bei Ueberlast zuerst qualitativ '
-      + 'reduziert, nicht vergroessert.',
+      'Bei 48 gleichzeitigen Todesfaellen mit bis zu acht DeathGlows plus zwoelf kleinen '
+      + 'Player-Saeumen und kurzer Lebenszeit bleiben die Spawns innerhalb der 1024 Slots; die '
+      + 'Lane wird bei Ueberlast zuerst qualitativ reduziert, nicht vergroessert.',
   },
   {
     id: GpuVfxLaneId.PowerUpPedestal,

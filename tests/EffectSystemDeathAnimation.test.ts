@@ -87,7 +87,7 @@ describe('EffectSystem player death animation', () => {
 
     internals.playDeathEffect(effect);
 
-    expect(gpu.playDeath).toHaveBeenCalledWith(effect);
+    expect(gpu.playDeath).toHaveBeenCalledWith(effect, true);
     expect(scene.add.sprite).toHaveBeenCalledWith(320, 240, 'dachs_death');
     expect(sprites[0]!.setOrigin).toHaveBeenCalledWith(0.5, 1);
     expect(sprites[0]!.setPosition).toHaveBeenCalledWith(320, 256);
@@ -102,7 +102,7 @@ describe('EffectSystem player death animation', () => {
 
     internals.playDeathEffect(makeEffect('enemy-1'));
 
-    expect(gpu.playDeath).toHaveBeenCalledOnce();
+    expect(gpu.playDeath).toHaveBeenCalledWith(expect.objectContaining({ targetId: 'enemy-1' }), false);
     expect(scene.add.sprite).not.toHaveBeenCalled();
   });
 

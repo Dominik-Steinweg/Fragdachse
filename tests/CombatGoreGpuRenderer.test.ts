@@ -77,6 +77,7 @@ function playFullDeath(
   sourceSize: number,
   displaySize = 32,
   overrides: Partial<typeof death> = {},
+  isPlayerDeath = false,
 ) {
   const { scene, renderer, gpu } = setup();
   const textureKey = `full_death_${sourceSize}_${displaySize}`;
@@ -91,15 +92,16 @@ function playFullDeath(
     dirX: 0,
     dirY: 0,
     ...overrides,
-  });
+  }, isPlayerDeath);
 
   const report = gpu.buildReport();
   const mainCount = report.effects.find((effect) => effect.label === 'death.fragment')!.spawns;
   const microCount = report.effects.find((effect) => effect.label === 'death.micro-fragment')!.spawns;
+  const fragmentGlow = report.effects.find((effect) => effect.label === 'death.fragment-glow')!;
   const main = findFakeLane(scene, 'gore-normal').members.slice(0, mainCount);
   const glow = findFakeLane(scene, 'gore-add').members;
   const template = renderer.fragmentTemplateCache.get(textureKey, 'walk-1');
-  return { displaySize, glow, main, mainCount, microCount, renderer, template };
+  return { displaySize, fragmentGlow, glow, main, mainCount, microCount, renderer, report, template };
 }
 
 const death = {
@@ -358,6 +360,65 @@ describe('combat gore gpu renderer', () => {
       evaluateFakeAnimation(enemy.glow[0]!.scaleY, 0),
       10,
     );
+  });
+
+  it('keeps player material fragments natural while targetColor changes only the glow layer', () => {
+    const neutralTarget = playFullDeath(64, 32, {
+      targetId: 'player-neutral',
+      targetColor: 0xffffff,
+      tint: 0xffffff,
+    }, true);
+    const coloredTarget = playFullDeath(64, 32, {
+      targetId: 'player-colored',
+      targetColor: COLORS.BLUE_2,
+      tint: 0xffffff,
+    }, true);
+
+    expect(coloredTarget.main[0]!.tint).toBe(neutralTarget.main[0]!.tint);
+    expect(coloredTarget.fragmentGlow.spawns).toBeGreaterThanOrEqual(8);
+    expect(coloredTarget.fragmentGlow.spawns).toBeLessThanOrEqual(12);
+    expect(coloredTarget.fragmentGlow.laneLabel).toBe('gore-add');
+    expect(coloredTarget.report.lanes.filter((lane) => lane.label === 'gore-add')).toHaveLength(1);
+    expect(coloredTarget.glow[0]!.tint).toBe(COLORS.BLUE_2);
+
+    const selectedMainIndex = 0;
+    const material = coloredTarget.main[selectedMainIndex]!;
+    const colorGlow = coloredTarget.glow[0]!;
+    expect(colorGlow.x.base).toBeCloseTo(material.x.base, 10);
+    expect(colorGlow.y.base).toBeCloseTo(material.y.base, 10);
+    expect(colorGlow.x.amplitude).toBeCloseTo(material.x.amplitude, 10);
+    expect(colorGlow.y.amplitude).toBeCloseTo(material.y.amplitude, 10);
+    expect(colorGlow.rotation.base).toBeCloseTo(material.rotation.base, 10);
+    expect(colorGlow.alpha.base).toBeCloseTo(DEATH_DISINTEGRATION_VFX.playerFragmentGlowAlpha, 10);
+    expect(colorGlow.scaleY.base * 24).toBeGreaterThan(material.scaleY.base * 4);
+  });
+
+  it('does not add player fragment glows to enemy deaths and keeps enemy tinting', () => {
+    const neutral = playFullDeath(64, 32, {
+      targetColor: 0xffffff,
+      tint: 0xffffff,
+    });
+    const colored = playFullDeath(64, 32, {
+      targetColor: COLORS.RED_2,
+      tint: 0xffffff,
+    });
+
+    expect(neutral.fragmentGlow.spawns).toBe(0);
+    expect(colored.fragmentGlow.spawns).toBe(0);
+    expect(colored.main[0]!.tint).not.toBe(neutral.main[0]!.tint);
+  });
+
+  it('quality-scales the additional player glow without exceeding the selected main fragments', () => {
+    qualityFactors.standard = 0.35;
+    const sample = playFullDeath(64, 32, {
+      targetId: 'player-quality',
+      targetColor: COLORS.BLUE_2,
+      tint: 0xffffff,
+    }, true);
+
+    expect(sample.fragmentGlow.spawns).toBeGreaterThan(0);
+    expect(sample.fragmentGlow.spawns).toBeLessThan(10);
+    expect(sample.fragmentGlow.capacityDrops).toBe(0);
   });
 
   it('keeps targetColor influence measurable for neutral sprite tint', () => {

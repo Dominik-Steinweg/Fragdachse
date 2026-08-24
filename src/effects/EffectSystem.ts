@@ -1671,8 +1671,9 @@ export class EffectSystem implements EnemyVisualSink {
 
   private playDeathEffect(effect: SyncedDeathEffect): void {
     this.ensureTextures();
-    this.combatGoreGpuRenderer?.playDeath(effect);
-    if (this.playerDeathResolver?.(effect.targetId) === true) {
+    const isPlayerDeath = this.playerDeathResolver?.(effect.targetId) === true;
+    this.combatGoreGpuRenderer?.playDeath(effect, isPlayerDeath);
+    if (isPlayerDeath) {
       this.playPlayerDeathAnimation(effect.x, effect.y);
     }
   }
@@ -1680,7 +1681,7 @@ export class EffectSystem implements EnemyVisualSink {
   private playPlayerDeathAnimation(x: number, y: number): void {
     const sprite = this.scene.add.sprite(x, y, 'dachs_death');
     sprite.setOrigin(0.5, 1);
-    sprite.setDepth(DEPTH.PLAYERS - 1);
+    sprite.setDepth(DEPTH_FX + 0.1);
     sprite.setPosition(x, y + PLAYER_SIZE / 2);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy());
     sprite.play('player_death');
