@@ -330,7 +330,8 @@ const PROJECTILE_CONTEXT_FIELDS = new Set([
   'ak47ShotId', 'ak47DamageMultiplier',
 ]);
 const HITSCAN_FIELDS = new Set([
-  'shooterId', 'startX', 'startY', 'angle', 'range', 'damage', 'traceThickness',
+  'shooterId', 'shooterX', 'shooterY', 'startX', 'startY', 'angle', 'range',
+  'rangeLimitToCursor', 'targetX', 'targetY', 'damage', 'traceThickness',
   'adrenalinGain', 'sourceId', 'burnOnHit', 'color', 'visualPreset', 'shotAudioKey',
   'visualMuzzleOrigin', 'sourceSlot', 'shotId', 'rockDamageMult', 'trainDamageMult',
   'baseDamageMult', 'detonator', 'chainLightning', 'supportEffect',

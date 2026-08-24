@@ -39,6 +39,7 @@ import {
   HITSCAN_FAVOR_THE_SHOOTER_MS,
   PLAYER_SIZE,
   RAGE_PER_DAMAGE,
+  type MuzzleOrigin,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode } from '../gameModes';
@@ -66,6 +67,7 @@ import type { TargetStatusTarget } from './TargetStatusSystem';
 
 /** Für Abfragen, die nur Rechteck-Hindernisse auswerten (Baumstämme nehmen keinen Schaden). */
 const IGNORE_CIRCLE_OBSTACLES: ObstacleCircleVisitor = () => false;
+const HITSCAN_MUZZLE_EPSILON = 0.25;
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
@@ -2045,6 +2047,32 @@ export class CombatSystem {
     }
 
     return bestDistance;
+  }
+
+  /**
+   * Verschiebt einen gewünschten Gameplay-Hitscanstart nur bis unmittelbar vor den ersten
+   * Umweltblocker. Die eigentliche Hitscan-Linie und ihr Winkel bleiben unverändert.
+   */
+  resolveSafeHitscanStart(
+    shooterX: number,
+    shooterY: number,
+    desiredMuzzleX: number,
+    desiredMuzzleY: number,
+  ): MuzzleOrigin {
+    const dx = desiredMuzzleX - shooterX;
+    const dy = desiredMuzzleY - shooterY;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= 0.0001) return { x: desiredMuzzleX, y: desiredMuzzleY };
+
+    this.hitscanLine.setTo(shooterX, shooterY, desiredMuzzleX, desiredMuzzleY);
+    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine);
+    if (!obstacleHit) return { x: desiredMuzzleX, y: desiredMuzzleY };
+
+    const safeDistance = Math.max(0, obstacleHit.distance - HITSCAN_MUZZLE_EPSILON);
+    return {
+      x: shooterX + (dx / distance) * safeDistance,
+      y: shooterY + (dy / distance) * safeDistance,
+    };
   }
 
   resolveHitscanShot(

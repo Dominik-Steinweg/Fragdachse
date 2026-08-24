@@ -53,8 +53,9 @@ const CHARGE_BAR_WIDTH = 52;
 const CHARGE_BAR_HEIGHT = 8;
 const CHARGE_BAR_START_X = CHARGE_ANCHOR_OFFSET_X + CHARGE_STEM_LENGTH + CHARGE_BAR_GAP;
 
-function usesGameplayProjectileMuzzle(config: WeaponConfig): boolean {
+function usesGameplayMuzzle(config: WeaponConfig): boolean {
   return config.fire.type === 'projectile'
+    || config.fire.type === 'hitscan'
     || config.fire.type === 'flamethrower'
     || config.fire.type === 'leaf_blower'
     || config.fire.type === 'reinforcement_matrix'
@@ -192,7 +193,7 @@ export class AimSystem {
     const nx = dist > 0 ? dx / dist : 1;
     const ny = dist > 0 ? dy / dist : 0;
     const aimAngle = dist > 0 ? Math.atan2(dy, dx) : 0;
-    const gameplayAimMuzzle = usesGameplayProjectileMuzzle(cfg)
+    const gameplayAimMuzzle = usesGameplayMuzzle(cfg)
       ? getHeldWeaponGameplayMuzzleOrigin(
         cfg.id,
         sx,

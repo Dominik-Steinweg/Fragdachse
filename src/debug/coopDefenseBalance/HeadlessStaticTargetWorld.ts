@@ -5,6 +5,7 @@ import type {
   MeleeSwingRequest,
   WeaponFireSink,
 } from '../../loadout/WeaponFireExecutor';
+import { getHitscanRequestRange } from '../../loadout/WeaponFireExecutor';
 import {
   checkHitscanRayCircleHit,
   checkMeleeArcHit,
@@ -408,6 +409,7 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
 
     // Zweite Sicherheitsgrenze auf empfangene Hitscan-Payloads
     validateHitscanShotPayload(request, this.scenario);
+    const range = getHitscanRequestRange(request, request.startX, request.startY, request.angle);
 
     let bestHit: { readonly target: HeadlessTarget; readonly distance: number; readonly x: number; readonly y: number } | undefined;
     for (const target of this.targets) {
@@ -415,7 +417,7 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
         request.startX,
         request.startY,
         request.angle,
-        request.range,
+        range,
         request.traceThickness,
         target.x,
         target.y,

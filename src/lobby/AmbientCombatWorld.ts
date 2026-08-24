@@ -15,6 +15,7 @@ import type {
   MeleeSwingRequest,
   WeaponFireSink,
 } from '../loadout/WeaponFireExecutor';
+import { getHitscanRequestRange } from '../loadout/WeaponFireExecutor';
 import type { EffectSystem } from '../effects/EffectSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { wireProjectileRenderers, type RendererBundle } from '../scenes/arena/RendererBundle';
@@ -132,12 +133,13 @@ export class AmbientCombatWorld implements WeaponFireSink {
     const shooter = this.deps.actors.get(request.shooterId);
     const dirX = Math.cos(request.angle);
     const dirY = Math.sin(request.angle);
-    const endX = request.startX + dirX * request.range;
-    const endY = request.startY + dirY * request.range;
+    const range = getHitscanRequestRange(request, request.startX, request.startY, request.angle);
+    const endX = request.startX + dirX * range;
+    const endY = request.startY + dirY * range;
     const line = this.scratchLine.setTo(request.startX, request.startY, endX, endY);
 
     const obstacleHit = this.geometry.nearestObstacleHit(line);
-    let closest = obstacleHit?.distance ?? request.range;
+    let closest = obstacleHit?.distance ?? range;
     let hitActor: LobbyAmbientActor | null = null;
 
     for (const target of this.deps.actors.all()) {

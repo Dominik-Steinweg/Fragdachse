@@ -41,7 +41,7 @@ import { COLORS, type MuzzleOrigin } from '../config';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 import { resolveShotPlan } from './ShotPlanResolver';
-import { WeaponFireExecutor, type WeaponFireOptions } from './WeaponFireExecutor';
+import { getHitscanRequestRange, WeaponFireExecutor, type WeaponFireOptions } from './WeaponFireExecutor';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
@@ -120,7 +120,8 @@ export interface NegevKillstreakExplosionEvent {
   fireChunkBurnDamagePerTick: number;
 }
 
-type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
+type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>
+  & Partial<Pick<CombatSystem, 'resolveSafeHitscanStart'>>;
 type PhysicsSystemType  = {
   addRecoil(id: string, vx: number, vy: number, durationMs?: number): void;
   applyRadialImpulse(x: number, y: number, radius: number, force: number, ownerId?: string, selfMultiplier?: number, durationMs?: number): void;
@@ -191,30 +192,42 @@ export class LoadoutManager {
     spawnProjectile: (x, y, angle, ownerId, cfg) => {
       this.projectileManager.spawnProjectile(x, y, angle, ownerId, cfg);
     },
-    resolveHitscan: (request) => this.combatSystem?.resolveHitscanShot(
-      request.shooterId,
-      request.startX,
-      request.startY,
-      request.angle,
-      request.range,
-      request.damage,
-      request.traceThickness,
-      request.color,
-      request.adrenalinGain,
-      request.sourceId,
-      request.visualPreset,
-      request.shotAudioKey,
-      request.sourceSlot,
-      request.shotId,
-      request.detonator,
-      request.rockDamageMult,
-      request.trainDamageMult,
-      request.chainLightning,
-      request.burnOnHit,
-      request.supportEffect,
-      request.visualMuzzleOrigin,
-      request.baseDamageMult,
-    ) ?? false,
+    resolveHitscan: (request) => {
+      const combat = this.combatSystem;
+      if (!combat) return false;
+
+      const shooterX = request.shooterX ?? request.startX;
+      const shooterY = request.shooterY ?? request.startY;
+      const resolvedStart = combat.resolveSafeHitscanStart
+        ? combat.resolveSafeHitscanStart(shooterX, shooterY, request.startX, request.startY)
+        : { x: request.startX, y: request.startY };
+      const resolvedRange = getHitscanRequestRange(request, resolvedStart.x, resolvedStart.y, request.angle);
+
+      return combat.resolveHitscanShot(
+        request.shooterId,
+        resolvedStart.x,
+        resolvedStart.y,
+        request.angle,
+        resolvedRange,
+        request.damage,
+        request.traceThickness,
+        request.color,
+        request.adrenalinGain,
+        request.sourceId,
+        request.visualPreset,
+        request.shotAudioKey,
+        request.sourceSlot,
+        request.shotId,
+        request.detonator,
+        request.rockDamageMult,
+        request.trainDamageMult,
+        request.chainLightning,
+        request.burnOnHit,
+        request.supportEffect,
+        request.visualMuzzleOrigin,
+        request.baseDamageMult,
+      );
+    },
     resolveMelee: (request) => this.combatSystem?.resolveMeleeSwing(
       request.shooterId,
       request.x,
@@ -2154,7 +2167,7 @@ export class LoadoutManager {
         return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin, gameplayMuzzleOrigin);
 
       case 'hitscan':
-        return this.fireHitscanWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin);
+        return this.fireHitscanWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin, gameplayMuzzleOrigin);
 
       case 'melee':
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
@@ -2465,6 +2478,7 @@ export class LoadoutManager {
     sourceSlot:  WeaponSlot | undefined,
     shotId?:     number,
     visualMuzzleOrigin?: MuzzleOrigin,
+    gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     void fireConfig;
     return this.weaponFire.fire(config, {
@@ -2473,6 +2487,7 @@ export class LoadoutManager {
       ownerColor: playerColor,
       sourceSlot,
       shotId,
+      gameplayMuzzleOrigin,
       visualMuzzleOrigin,
     });
   }

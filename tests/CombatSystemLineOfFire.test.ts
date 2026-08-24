@@ -164,3 +164,22 @@ describe('CombatSystem.hasClearLineOfFire', () => {
     expect(system.hasClearLineOfFire(300, 300, 700, 300)).toBe(true);
   });
 });
+
+describe('CombatSystem.resolveSafeHitscanStart', () => {
+  it('keeps a free gameplay muzzle exactly at the desired point', () => {
+    const system = makeCombatSystem();
+
+    expect(system.resolveSafeHitscanStart(300, 300, 400, 300)).toEqual({ x: 400, y: 300 });
+  });
+
+  it('stops immediately before the train without changing the hitscan direction', () => {
+    const system = makeCombatSystem();
+    system.setTrainSegments([makeSegment(300)]);
+
+    const resolved = system.resolveSafeHitscanStart(300, 300, 520, 300);
+
+    // Zugkante: 500 - 22. Der Resolver zieht nur sein kleines Epsilon ab, keine doppelte Body-Clearance.
+    expect(resolved.x).toBeCloseTo(477.75, 6);
+    expect(resolved.y).toBe(300);
+  });
+});

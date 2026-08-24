@@ -55,16 +55,25 @@ der aktuellen Itemgröße. Der Gameplay-Aimwinkel wird über die zentrale
 autoritative initiale Projektilposition. Physics-Body, Renderer, Tracer, Time-Bubble-Abfrage,
 `lastX/lastY` und replizierte Projektilposition starten dort.
 
+Direkte Spieler-Hitscans verwenden denselben getrennten Gameplay-Muzzle-Punkt. Ihr interner
+Hitscan-Auftrag führt `shooterX/shooterY` als ursprünglichen Fire-Request-Ursprung und
+`startX/startY` als gewünschte Gameplay-Mündung; der autoritative `CombatSystem` löst daraus
+`resolvedHitscanStart` nur auf dem kurzen Shooter-Mündung-Segment auf. Der Hitscan-Trace, der
+Host-Trefferpfad und die replizierte Trace-Position beginnen an diesem aufgelösten Startpunkt.
+Hitscans verwenden dabei keine Projektilkörper-Clearance; bei einem Umweltblocker wird nur ein
+kleines Epsilon entgegen der Segmentrichtung zurückgesetzt. Der Muzzle-Resolver verändert weder
+Winkel noch Treffer-/Bounce-Semantik.
+
 Der Safe-Muzzle-Resolver verwendet den bestehenden `ArenaObstacleIndex`/`CombatGeometry`-Pfad.
 Die Körper-Clearance wird vor der Body-Erzeugung mit demselben Body-Profil wie beim Arcade-Body
 abgeleitet. `nearestObstacleHit(..., { clearanceRadius })` bläst die Hindernisgeometrie bereits
 auf; vom Trefferpunkt wird deshalb nur ein kleines Epsilon entgegen der Segmentrichtung abgezogen.
 Reichweitenbudgets, Bounce, Penetration und das Netzwerk-Wire-Format ändern sich nicht.
 
-Für direkte Projektilwaffen beginnen Aim-Beam und maximale Reichweitenmarke am normalen
-Gameplay-Muzzle und verwenden weiterhin den bestehenden Gameplay-Aim-Winkel. Innerhalb der
-Waffenreichweite endet der Beam weiterhin auf Cursorhöhe; der Range-Tick erscheint erst außerhalb
-der Reichweite. Waffen ohne sinnvollen Gameplay-Muzzle sowie Hitscan und Melee behalten ihren
+Für direkte Projektil- und Hitscanwaffen beginnen Aim-Beam und maximale Reichweitenmarke am
+normalen Gameplay-Muzzle und verwenden weiterhin den bestehenden Gameplay-Aim-Winkel. Innerhalb
+der Waffenreichweite endet der Beam weiterhin auf Cursorhöhe; der Range-Tick erscheint erst
+außerhalb der Reichweite. Waffen ohne sinnvollen Gameplay-Muzzle sowie Melee behalten ihren
 bisherigen Ursprung.
 
 Lange Waffen dürfen bis zu 32 Pixel hoch sein. Die frühere Bindung an die halbe Spielerhöhe und

@@ -8,7 +8,7 @@ import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefe
 import { createCoopDefensePlaceablePedestalUtility } from '../../loadout/CoopDefenseMissionUtility';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import { getHitscanRangeToCursor } from '../../loadout/WeaponFireExecutor';
-import { getHeldWeaponMuzzleOrigin } from '../../loadout/HeldItemVisuals';
+import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../../loadout/HeldItemVisuals';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -988,23 +988,35 @@ export class ClientUpdateCoordinator {
     if (!localPlayer) return undefined;
 
     const shotId = this.nextPredictedHitscanShotId++;
-    const gameplayMuzzleOrigin = getTopDownMuzzleOrigin(localPlayer.sprite.x, localPlayer.sprite.y, angle);
+    const desiredGameplayMuzzle = getHeldWeaponGameplayMuzzleOrigin(
+      config.id,
+      localPlayer.sprite.x,
+      localPlayer.sprite.y,
+      angle,
+      localPlayer.sprite.displayWidth,
+    ) ?? getTopDownMuzzleOrigin(localPlayer.sprite.x, localPlayer.sprite.y, angle);
+    const resolvedStart = this.ctx.combatSystem.resolveSafeHitscanStart(
+      localPlayer.sprite.x,
+      localPlayer.sprite.y,
+      desiredGameplayMuzzle.x,
+      desiredGameplayMuzzle.y,
+    );
     const visualMuzzleOrigin = getHeldWeaponMuzzleOrigin(
       config.id,
       localPlayer.sprite.x,
       localPlayer.sprite.y,
       localPlayer.sprite.rotation,
       localPlayer.sprite.displayWidth,
-    ) ?? gameplayMuzzleOrigin;
+    ) ?? desiredGameplayMuzzle;
     const trace  = this.ctx.combatSystem.traceHitscan({
       shooterId:  bridge.getLocalPlayerId(),
-      startX:     gameplayMuzzleOrigin.x,
-      startY:     gameplayMuzzleOrigin.y,
+      startX:     resolvedStart.x,
+      startY:     resolvedStart.y,
       angle,
       range:      getHitscanRangeToCursor(
         config,
-        gameplayMuzzleOrigin.x,
-        gameplayMuzzleOrigin.y,
+        resolvedStart.x,
+        resolvedStart.y,
         angle,
         targetX,
         targetY,

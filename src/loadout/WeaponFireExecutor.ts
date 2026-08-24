@@ -39,10 +39,19 @@ export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
 /** Normalisierter Hitscan-Schuss – frei von Waffen-, Ressourcen- und Netzwerkwissen. */
 export interface HitscanShotRequest {
   shooterId:       string;
+  /** Ursprünglicher Fire-Request-Ursprung; fehlt bei rein lokalen Ambient-/Headless-Aufträgen. */
+  shooterX?:        number;
+  shooterY?:        number;
+  /** Gewünschter Gameplay-Start; der Host kann ihn vor dem Trace sicher auflösen. */
   startX:          number;
   startY:          number;
   angle:           number;
+  /** Authorisierte Maximalreichweite vor einer optionalen Cursorbegrenzung. */
   range:           number;
+  /** Nur für Cursor-begrenzte direkte Hitscan-Waffen wie den Plasmabrenner. */
+  rangeLimitToCursor?: boolean;
+  targetX?:         number;
+  targetY?:         number;
   damage:          number;
   traceThickness:  number;
   color:           number;
@@ -146,7 +155,7 @@ export interface WeaponFireParams {
  * their authored range unchanged.
  */
 export function getHitscanRangeToCursor(
-  config: WeaponConfig,
+  config: Pick<WeaponConfig, 'id' | 'range'>,
   startX: number,
   startY: number,
   angle: number,
@@ -162,6 +171,26 @@ export function getHitscanRangeToCursor(
     (targetX - startX) * directionX + (targetY - startY) * directionY,
   );
   return Math.min(config.range, cursorDistance);
+}
+
+/** Ermittelt die effektive Reichweite eines internen Hitscan-Auftrags ab einem konkreten Start. */
+export function getHitscanRequestRange(
+  request: Pick<HitscanShotRequest, 'sourceId' | 'range' | 'rangeLimitToCursor' | 'targetX' | 'targetY'>,
+  startX: number,
+  startY: number,
+  angle: number,
+): number {
+  if (!request.rangeLimitToCursor || request.targetX === undefined || request.targetY === undefined) {
+    return request.range;
+  }
+  return getHitscanRangeToCursor(
+    { id: request.sourceId, range: request.range },
+    startX,
+    startY,
+    angle,
+    request.targetX,
+    request.targetY,
+  );
 }
 
 /**
@@ -344,20 +373,20 @@ export class WeaponFireExecutor {
     fireConfig: HitscanWeaponFireConfig,
     params: WeaponFireParams,
   ): boolean {
-    const gameplayMuzzleOrigin = getTopDownMuzzleOrigin(params.x, params.y, params.angle);
+    const desiredGameplayMuzzle = params.gameplayMuzzleOrigin
+      ?? getTopDownMuzzleOrigin(params.x, params.y, params.angle);
+    const hasGameplayMuzzle = params.gameplayMuzzleOrigin !== undefined;
     return this.sink.resolveHitscan({
       shooterId:       params.ownerId,
-      startX:          gameplayMuzzleOrigin.x,
-      startY:          gameplayMuzzleOrigin.y,
+      shooterX:        hasGameplayMuzzle ? params.x : undefined,
+      shooterY:        hasGameplayMuzzle ? params.y : undefined,
+      startX:          desiredGameplayMuzzle.x,
+      startY:          desiredGameplayMuzzle.y,
       angle:           params.angle,
-      range:           getHitscanRangeToCursor(
-        config,
-        gameplayMuzzleOrigin.x,
-        gameplayMuzzleOrigin.y,
-        params.angle,
-        params.targetX,
-        params.targetY,
-      ),
+      range:           config.range,
+      rangeLimitToCursor: config.id === 'PLASMA_BURNER' ? true : undefined,
+      targetX:         config.id === 'PLASMA_BURNER' ? params.targetX : undefined,
+      targetY:         config.id === 'PLASMA_BURNER' ? params.targetY : undefined,
       damage:          config.damage,
       traceThickness:  fireConfig.traceThickness,
       color:           params.ownerColor,
