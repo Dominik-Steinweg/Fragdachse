@@ -435,7 +435,7 @@ export class DecoySystem {
       targetColor: decoy.color,
       rotation: sprite.rotation,
       seed: this.nextEffectSeed(),
-      ...(textureKey && frame ? {
+      ...(textureKey && frame != null ? {
         textureKey,
         frame,
         displayWidth: sprite.displayWidth,

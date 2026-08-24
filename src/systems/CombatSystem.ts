@@ -3389,7 +3389,7 @@ export class CombatSystem {
       targetColor: player?.color,
       rotation: sprite?.rotation ?? 0,
       seed,
-      ...(textureKey && frame ? {
+      ...(textureKey && frame != null ? {
         textureKey,
         frame,
         displayWidth: sprite.displayWidth,

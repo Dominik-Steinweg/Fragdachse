@@ -524,6 +524,7 @@ export class ArenaScene extends Phaser.Scene {
     // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes
     // Bild; `32x32dachsweapon01.png` mit den braunen Platzhalterpixeln wird nicht mehr geladen.
     this.load.image('badger',      './assets/sprites/32x32dachs.png');
+    this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
@@ -689,6 +690,19 @@ export class ArenaScene extends Phaser.Scene {
       this.runtimeProfiler = null;
     });
 
+    if (!this.anims.exists('player_death')) {
+      this.anims.create({
+        key:       'player_death',
+        frames:    this.anims.generateFrameNames('dachs_death', {
+          prefix:  'Animation test (Dachs tot) (geist dunkler fade)-NEU ',
+          suffix:  '.aseprite',
+          start:   0,
+          end:     37,
+        }),
+        frameRate: 60,
+        repeat:    0,
+      });
+    }
     registerBadgerAnimations(this.anims);
 
     bridge.clearPlayerCallbacks();
@@ -713,6 +727,7 @@ export class ArenaScene extends Phaser.Scene {
     const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
     const decoySystem      = new DecoySystem(this, playerManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
+    effectSystem.setPlayerDeathResolver((targetId) => playerManager.getPlayer(targetId) !== undefined);
     const gameAudioSystem  = new GameAudioSystem(
       this,
       () => bridge.getLocalPlayerId(),

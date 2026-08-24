@@ -176,6 +176,34 @@ describe('combat gore gpu renderer', () => {
     expect(scene.objects).toHaveLength(0);
   });
 
+  it('renders both idle frame 0 and a running frame through the death burst path', () => {
+    for (const sample of [
+      { frame: 0, textureFrame: '0' },
+      { frame: 'walk-4', textureFrame: 'walk-4' },
+    ] as const) {
+      const { scene, renderer, gpu } = setup();
+      const textureKey = `player_death_${sample.textureFrame}`;
+      addVisualTexture(scene, textureKey, sample.textureFrame, 64, 64);
+
+      renderer.playDeath({
+        ...death,
+        targetId: `player-${sample.textureFrame}`,
+        textureKey,
+        frame: sample.frame,
+        displayWidth: 32,
+        displayHeight: 32,
+        rotation: 0,
+      });
+
+      const report = gpu.buildReport();
+      expect(report.effects.find((effect) => effect.label === 'death.fragment')!.spawns)
+        .toBeGreaterThan(0);
+      expect(report.effects.find((effect) => effect.label === 'death.glow')!.spawns)
+        .toBeGreaterThan(0);
+      expect(renderer.fragmentTemplateCache.size).toBe(1);
+    }
+  });
+
   it('keeps blood deterministic and separates killshot details through the shared lanes', () => {
     const { scene, renderer } = setup();
     const stains: number[] = [];

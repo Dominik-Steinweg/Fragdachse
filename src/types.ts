@@ -692,7 +692,7 @@ export interface SyncedDeathEffect {
   seed:        number;
   /** Sprite-Visualdaten des letzten sichtbaren Frames; fehlen nur bei alten/externen Peers. */
   textureKey?: string;
-  frame?: string;
+  frame?: string | number;
   displayWidth?: number;
   displayHeight?: number;
   tint?: number;

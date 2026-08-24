@@ -112,6 +112,7 @@ export class EffectSystem implements EnemyVisualSink {
   private audioSystem: GameAudioSystem | null = null;
   private explosionGpuRenderer: ExplosionGpuRenderer | null = null;
   private combatGoreGpuRenderer: CombatGoreGpuRenderer | null = null;
+  private playerDeathResolver: ((targetId: string) => boolean) | null = null;
   private readonly scheduleBloodStainSink: BloodStainSink = (...args) => {
     this.scheduleBloodStain(...args);
   };
@@ -192,6 +193,11 @@ export class EffectSystem implements EnemyVisualSink {
     this.combatGoreGpuRenderer = renderer;
   }
 
+  /** Resolves player deaths without putting an entity-kind flag on the replicated effect. */
+  setPlayerDeathResolver(resolver: ((targetId: string) => boolean) | null): void {
+    this.playerDeathResolver = resolver;
+  }
+
   playLocalShotAudio(key: string | undefined): void {
     this.audioSystem?.playLocalSound(key);
   }
@@ -206,6 +212,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.damageVignetteLeft   = null;
     this.damageVignetteRight  = null;
     this.combatGoreGpuRenderer = null;
+    this.playerDeathResolver = null;
   }
 
   /** Erzeugt kleine Canvas-Texturen für Explosions-Partikel (einmalig). */
@@ -1665,6 +1672,18 @@ export class EffectSystem implements EnemyVisualSink {
   private playDeathEffect(effect: SyncedDeathEffect): void {
     this.ensureTextures();
     this.combatGoreGpuRenderer?.playDeath(effect);
+    if (this.playerDeathResolver?.(effect.targetId) === true) {
+      this.playPlayerDeathAnimation(effect.x, effect.y);
+    }
+  }
+
+  private playPlayerDeathAnimation(x: number, y: number): void {
+    const sprite = this.scene.add.sprite(x, y, 'dachs_death');
+    sprite.setOrigin(0.5, 1);
+    sprite.setDepth(DEPTH.PLAYERS - 1);
+    sprite.setPosition(x, y + PLAYER_SIZE / 2);
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy());
+    sprite.play('player_death');
   }
 
   private strokeTracer(

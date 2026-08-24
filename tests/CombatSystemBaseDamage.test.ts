@@ -74,7 +74,12 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
-import type { HitscanSupportEffect, ProjectileExplosionConfig, TrackedProjectile } from '../src/types';
+import type {
+  HitscanSupportEffect,
+  ProjectileExplosionConfig,
+  SyncedDeathEffect,
+  TrackedProjectile,
+} from '../src/types';
 
 function makeCombatHarness() {
   const base = {
@@ -327,6 +332,67 @@ describe('CombatSystem base damage routing', () => {
 
     expect(enemyDamage.mock.calls.map(([, amount]) => amount)).toEqual([10, 10]);
     expect(baseDamage.mock.calls.map(([, amount]) => amount)).toEqual([10, 20]);
+  });
+});
+
+describe('CombatSystem death visual snapshots', () => {
+  function buildSnapshot(frame: string | number): SyncedDeathEffect {
+    const player = {
+      id: 'player-1',
+      color: 0x55cc88,
+      sprite: {
+        x: 320,
+        y: 240,
+        rotation: 0.25,
+        texture: { key: 'badger_walking' },
+        frame: { name: frame },
+        displayWidth: 32,
+        displayHeight: 32,
+        tint: 0xffffff,
+      },
+    };
+    const combat = new CombatSystem(
+      {
+        getAllPlayers: () => [player],
+        getPlayer: (id: string) => id === player.id ? player : undefined,
+      } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      {} as NetworkBridge,
+    );
+    const internals = combat as unknown as {
+      buildDeathEffect: (
+        playerId: string,
+        x: number,
+        y: number,
+        seed: number,
+      ) => SyncedDeathEffect;
+    };
+
+    return internals.buildDeathEffect(player.id, player.sprite.x, player.sprite.y, 42);
+  }
+
+  it('keeps a complete visual snapshot for idle frame 0', () => {
+    const effect = buildSnapshot(0);
+
+    expect(effect).toMatchObject({
+      textureKey: 'badger_walking',
+      frame: 0,
+      displayWidth: 32,
+      displayHeight: 32,
+      tint: 0xffffff,
+    });
+  });
+
+  it('keeps a complete visual snapshot for a running frame', () => {
+    const effect = buildSnapshot('walk-4');
+
+    expect(effect).toMatchObject({
+      textureKey: 'badger_walking',
+      frame: 'walk-4',
+      displayWidth: 32,
+      displayHeight: 32,
+      tint: 0xffffff,
+    });
   });
 });
 
