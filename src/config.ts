@@ -299,7 +299,7 @@ export const BLOOD_HIT_VFX = {
     streakScale: 1.8,
     dropletTravelScale: 2.05,
     dropletScale: 1.55,
-    stainScale: 2.0,
+    stainScale: 2.5,
     microDropletScale: 1.25,
   },
   maxActiveStains: 500,
@@ -390,7 +390,7 @@ export const DEATH_DISINTEGRATION_VFX = {
   /** Sichtbarer Zuschlag fuer die Hauptmasse; basiert weiterhin auf der World-Display-Groesse. */
   mainFragmentScaleBoost: 2.0,
   /** Anteil eines hellen Kontrast-Lifts fuer die dominante Fragment-Ebene. */
-  mainFragmentContrast: 0.5,
+  mainFragmentContrast: 0.1,
   /** Hit-Impuls als Vielfaches des radialen Fragment-Reisewegs. */
   mainHitImpulse: 1.9,
   microHitImpulse: 1.85,
