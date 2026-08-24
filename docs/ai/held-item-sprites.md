@@ -44,8 +44,26 @@ semantische Materialfarbe. Form und Farbgruppe bilden gemeinsam die Waffenidenti
 
 Die Spezifikation enthält neben dem Griffpunkt auch `muzzleX`/`muzzleY` auf der Pixelkarte.
 `getHeldWeaponMuzzleOrigin` transformiert diesen Punkt mit derselben Rotation und Skalierung wie
-das sichtbare `HeldItemVisual`. Gameplay darf den alten autoritativen Ursprung behalten; nur
-Mündungsfeuer, Projektil-/Beam-Start und räumliches Schuss-Audio verwenden den visuellen Punkt.
+das sichtbare `HeldItemVisual` und bleibt der reine Render-/VFX-/Audio-Ursprung.
+
+Direkte Spieler-Projektilaktionen berechnen optional über `getHeldWeaponGameplayMuzzleOrigin` einen
+separaten `gameplayMuzzleOrigin` aus dem konkreten Fire-Request-Ursprung `x/y`, dessen Winkel und
+der aktuellen Itemgröße. `x/y` bleibt damit der Shooter-/Fire-Request-Ursprung; der
+`ProjectileManager` löst den kurzen Weg zur Mündung sicher auf und verwendet `resolvedSpawn` als
+autoritative initiale Projektilposition. Physics-Body, Renderer, Tracer, Time-Bubble-Abfrage,
+`lastX/lastY` und replizierte Projektilposition starten dort.
+
+Der Safe-Muzzle-Resolver verwendet den bestehenden `ArenaObstacleIndex`/`CombatGeometry`-Pfad.
+Die Körper-Clearance wird vor der Body-Erzeugung mit demselben Body-Profil wie beim Arcade-Body
+abgeleitet. `nearestObstacleHit(..., { clearanceRadius })` bläst die Hindernisgeometrie bereits
+auf; vom Trefferpunkt wird deshalb nur ein kleines Epsilon entgegen der Segmentrichtung abgezogen.
+Reichweitenbudgets, Bounce, Penetration und das Netzwerk-Wire-Format ändern sich nicht.
+
+Für direkte Projektilwaffen beginnen Aim-Beam und maximale Reichweitenmarke am normalen
+Gameplay-Muzzle und verwenden weiterhin den bestehenden Gameplay-Aim-Winkel. Innerhalb der
+Waffenreichweite endet der Beam weiterhin auf Cursorhöhe; der Range-Tick erscheint erst außerhalb
+der Reichweite. Waffen ohne sinnvollen Gameplay-Muzzle sowie Hitscan und Melee behalten ihren
+bisherigen Ursprung.
 
 Lange Waffen dürfen bis zu 32 Pixel hoch sein. Die frühere Bindung an die halbe Spielerhöhe und
 an `MUZZLE_FORWARD_OFFSET` ist keine gültige Sprite-Regel mehr.

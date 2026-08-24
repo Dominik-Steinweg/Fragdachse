@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, HELD_ITEM_TEXTURE_SIZE, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE } from '../src/config';
-import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
+import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
 import {
   DEFAULT_LOADOUT,
@@ -129,6 +129,14 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
     const anchor = getHeldItemAnchor(100, 200, Math.PI / 2, scale);
     expect(anchor.x).toBeCloseTo(100 - HELD_ITEM_ANCHOR_Y * scale, 6);
     expect(anchor.y).toBeCloseTo(200, 6);
+  });
+
+  it('berechnet die Gameplay-Mündung mit Fire-Request-Ursprung und -Winkel', () => {
+    const gameplay = getHeldWeaponGameplayMuzzleOrigin('AWP', 300, 400, Math.PI / 2, PLAYER_SIZE);
+    const expected = getHeldWeaponMuzzleOrigin('AWP', 300, 400, Math.PI / 2, PLAYER_SIZE);
+    const interpolatedRenderPose = getHeldWeaponMuzzleOrigin('AWP', 900, 100, 0, PLAYER_SIZE);
+    expect(gameplay).toEqual(expected);
+    expect(gameplay).not.toEqual(interpolatedRenderPose);
   });
 
   it('skaliert mit der Anzeigegroesse der Figur, etwa fuer die groessere Lobby-Vorschau', () => {

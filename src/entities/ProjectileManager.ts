@@ -16,6 +16,13 @@ import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, Pl
 import { ProjectileHomingController } from './ProjectileHomingController';
 import type { HomingTargetProvider, HomingTargetValidityChecker } from './ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import { CombatGeometry } from '../systems/CombatGeometry';
+import {
+  LEAF_BLOWER_OBSTACLE_BODY_SCALE,
+  MIN_BODY_LEN,
+  resolveProjectileBodyProfile,
+  resolveSafeMuzzleSpawn,
+} from '../systems/ProjectileSpawnResolver';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { type GeometryHit, findNearestRectangleHit as geomNearestRectangleHit } from '../utils/geometry';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
@@ -35,12 +42,6 @@ import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
 import { registerGraphicsObject } from '../effects/EffectUtils';
-
-/** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
-const MIN_BODY_LEN = 10;
-
-/** Leaf-Blower-Hinderniskörper kleiner als die Treffer-/Visualfläche halten. */
-const LEAF_BLOWER_OBSTACLE_BODY_SCALE = 0.6;
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -167,9 +168,12 @@ export class ProjectileManager {
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   /** Geteilte räumliche Vorauswahl aus dem `CombatSystem` (siehe `setObstacleIndex`). */
   private obstacleIndex: ArenaObstacleIndex | null = null;
+  /** Gemeinsame Segmentgeometrie über demselben Index; kein eigener Spatial Index. */
+  private obstacleGeometry: CombatGeometry | null = null;
   /** Ziel der Kandidaten-Bounds bzw. des bislang besten Treffers (keine Allokation pro Fels). */
   private readonly scratchObstacleRect = new Phaser.Geom.Rectangle();
   private readonly bestRockRect        = new Phaser.Geom.Rectangle();
+  private readonly scratchTrainBounds  = new Phaser.Geom.Rectangle();
   /**
    * Coop-Defense-Basis-Gruppe. Wird vom ProjectileManager wie trunkGroup
    * behandelt: physische Kollision/Impact; direkter Schaden wird über den
@@ -211,6 +215,7 @@ export class ProjectileManager {
    */
   setObstacleIndex(index: ArenaObstacleIndex | null): void {
     this.obstacleIndex = index;
+    this.obstacleGeometry = index ? new CombatGeometry(index) : null;
   }
 
   /**
@@ -281,6 +286,32 @@ export class ProjectileManager {
    */
   setTrainGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void {
     this.trainGroup = group;
+  }
+
+  /** Liefert die bereits für Projektilpfade relevante, aktive Gesamtfläche des Zugs. */
+  private getActiveTrainBounds(): Phaser.Geom.Rectangle | null {
+    if (!this.trainGroup) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const child of this.trainGroup.getChildren()) {
+      const segment = child as Phaser.GameObjects.Rectangle;
+      if (!segment.active) continue;
+      const body = segment.body as Phaser.Physics.Arcade.StaticBody | null;
+      if (body && !body.enable) continue;
+
+      const halfWidth = segment.displayWidth * 0.5;
+      const halfHeight = segment.displayHeight * 0.5;
+      minX = Math.min(minX, segment.x - halfWidth);
+      maxX = Math.max(maxX, segment.x + halfWidth);
+      minY = Math.min(minY, segment.y - halfHeight);
+      maxY = Math.max(maxY, segment.y + halfHeight);
+    }
+
+    if (!Number.isFinite(minX)) return null;
+    return this.scratchTrainBounds.setTo(minX, minY, maxX - minX, maxY - minY);
   }
 
   /**
@@ -578,18 +609,30 @@ export class ProjectileManager {
     const isEnergyBall = cfg.projectileStyle === 'energy_ball';
     const isHydra = cfg.projectileStyle === 'hydra';
     const isSpore = cfg.projectileStyle === 'spore';
-    const isFlame  = cfg.projectileStyle === 'flame';
-    const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
-    const isBfg    = cfg.projectileStyle === 'bfg';
-    const isGauss  = cfg.projectileStyle === 'gauss';
+    const bodyProfile = resolveProjectileBodyProfile(cfg, angle);
+    const resolvedSpawn = cfg.gameplayMuzzleOrigin
+      ? resolveSafeMuzzleSpawn(
+        x,
+        y,
+        cfg.gameplayMuzzleOrigin,
+        angle,
+        cfg,
+        {
+          geometry: this.obstacleGeometry,
+          trainBounds: this.getActiveTrainBounds(),
+          worldBounds: this.scene.physics.world.bounds,
+        },
+        bodyProfile,
+      )
+      : { x, y };
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isHydra || isSpore)
-      ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
-      : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
+      ? this.scene.add.circle(resolvedSpawn.x, resolvedSpawn.y, cfg.size / 2, cfg.color)
+      : this.scene.add.rectangle(resolvedSpawn.x, resolvedSpawn.y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
 
-    this.createSpawnRendererVisuals(id, sprite, x, y, cfg);
+    this.createSpawnRendererVisuals(id, sprite, resolvedSpawn.x, resolvedSpawn.y, cfg);
     // Renderer-übernommene Hitbox-Shapes sind bereits unsichtbar und werden nicht attribuiert.
     // Sichtbare Host-Fallbacks (z. B. Ball/Shape ohne Spezialrenderer) bleiben messbar.
     if (sprite.visible !== false && sprite.alpha !== 0) {
@@ -605,35 +648,26 @@ export class ProjectileManager {
       Math.sin(angle) * cfg.speed,
     );
 
-    const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(x, y, Date.now(), ownerId) ?? 1;
+    const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(
+      resolvedSpawn.x,
+      resolvedSpawn.y,
+      Date.now(),
+      ownerId,
+    ) ?? 1;
     if (initialTimeBubbleFactor < 0.999) {
       body.setVelocity(body.velocity.x * initialTimeBubbleFactor, body.velocity.y * initialTimeBubbleFactor);
     }
 
-    // Anti-Tunneling: Body in Flugrichtung verlängern (proportional zur
-    // Geschwindigkeitskomponente je Achse). Verhindert, dass kleine Projektile
-    // an Nahtstellen zwischen benachbarten 32×32-Fels-Bodies durchrutschen.
-    if (!isFlame && !isLeafBlower && !isBfg && !cfg.isGrenade && cfg.size < MIN_BODY_LEN) {
-      const vx = Math.abs(Math.cos(angle));
-      const vy = Math.abs(Math.sin(angle));
-      const bodyW = Math.max(cfg.size, vx * MIN_BODY_LEN);
-      const bodyH = Math.max(cfg.size, vy * MIN_BODY_LEN);
-      body.setSize(bodyW, bodyH);
-      body.setOffset((cfg.size - bodyW) / 2, (cfg.size - bodyH) / 2);
-    }
-
-    if (isLeafBlower) {
-      const obstacleBodySize = Math.max(cfg.size * LEAF_BLOWER_OBSTACLE_BODY_SCALE, 10);
-      body.setSize(obstacleBodySize, obstacleBodySize);
-      body.setOffset((cfg.size - obstacleBodySize) / 2, (cfg.size - obstacleBodySize) / 2);
-    }
+    // Body-Profil und Safe-Muzzle verwenden dieselben Maße, bevor der Body existiert.
+    body.setSize(bodyProfile.width, bodyProfile.height);
+    body.setOffset(bodyProfile.offsetX, bodyProfile.offsetY);
 
     const tracked: TrackedProjectile = {
       id,
       sprite,
       body,
-      lastX:          x,
-      lastY:          y,
+      lastX:          resolvedSpawn.x,
+      lastY:          resolvedSpawn.y,
       bounceCount:    cfg.initialBounceCount ?? 0,
       createdAt:      Date.now(),
       ownerId,
@@ -777,7 +811,12 @@ export class ProjectileManager {
       lastProximityPulseAt: (cfg.proximityPulse?.radius ?? 0) > 0
         && (cfg.proximityPulse?.damage ?? 0) > 0 ? 0 : undefined,
       // Anti-Tunneling
-      originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isLeafBlower && !isBfg && !isGauss && !cfg.isGrenade
+      originalBodySize: cfg.size < MIN_BODY_LEN
+        && cfg.projectileStyle !== 'flame'
+        && cfg.projectileStyle !== 'leaf_blower'
+        && cfg.projectileStyle !== 'bfg'
+        && cfg.projectileStyle !== 'gauss'
+        && !cfg.isGrenade
         ? cfg.size : undefined,
 
       // Erweiterte Flugphysik
@@ -805,11 +844,17 @@ export class ProjectileManager {
       }
     }
 
-    this.setupProjectileColliders(id, x, y, sprite, body, tracked, cfg);
+    this.setupProjectileColliders(id, resolvedSpawn.x, resolvedSpawn.y, sprite, body, tracked, cfg);
 
     // Tracer-Leuchtlinie (optional, data-driven via tracerConfig)
     if (cfg.tracerConfig && this.tracerRenderer) {
-      this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
+      this.tracerRenderer.createTracer(
+        id,
+        resolvedSpawn.x,
+        resolvedSpawn.y,
+        cfg.tracerConfig,
+        cfg.ownerColor ?? cfg.color,
+      );
     }
 
     if (!cfg.suppressSpawnFx) {

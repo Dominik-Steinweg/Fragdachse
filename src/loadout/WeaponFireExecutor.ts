@@ -124,6 +124,8 @@ export interface WeaponFireParams {
   targetY:     number;
   ownerId:     string;
   ownerColor:  number;
+  /** Gewünschter physischer Muzzle-Punkt; der ProjectileManager löst ihn sicher auf. */
+  gameplayMuzzleOrigin?: MuzzleOrigin;
   /** Visueller Mündungsursprung; verschiebt niemals den Gameplay-Spawn. */
   visualMuzzleOrigin?: MuzzleOrigin;
   sourceSlot?: LoadoutSlot;
@@ -195,7 +197,19 @@ export class WeaponFireExecutor {
     fireConfig: ProjectileWeaponFireConfig,
     params: WeaponFireParams,
   ): boolean {
-    const { x, y, angle, targetX, targetY, ownerId, ownerColor, sourceSlot, options, visualMuzzleOrigin } = params;
+    const {
+      x,
+      y,
+      angle,
+      targetX,
+      targetY,
+      ownerId,
+      ownerColor,
+      sourceSlot,
+      options,
+      gameplayMuzzleOrigin,
+      visualMuzzleOrigin,
+    } = params;
     const cursorRange = Math.hypot(targetX - x, targetY - y);
     const effectiveRange = fireConfig.limitRangeToCursor
       ? Math.min(config.range, cursorRange)
@@ -219,6 +233,7 @@ export class WeaponFireExecutor {
       damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? ownerColor,  // Waffen-eigene Farbe hat Vorrang
       ownerColor,
+      gameplayMuzzleOrigin,
       visualMuzzleOrigin,
       projectileVisualScale: config.projectileVisualScale,
       smokeTrailColor: config.rocketSmokeTrailColor ?? ownerColor,

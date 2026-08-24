@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import type { MuzzleOrigin } from './config';
 
 /** Authored edge from which a Coop-Defense attack enters the arena. */
 export type SpawnFront = 'west' | 'north' | 'east' | 'south';
@@ -563,7 +564,7 @@ export interface SyncedProjectile {
   color:   number;  // hex
   allowTeamDamage?: boolean;
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
-  /** Reiner VFX-Ursprung; der autoritative Projektilpunkt bleibt x/y. */
+  /** Reiner VFX-Ursprung; x/y ist hier die replizierte tatsächliche Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
@@ -1006,7 +1007,9 @@ export interface ProjectileSpawnConfig {
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
   color:           number;        // hex
-  /** Reiner VFX-Ursprung; der Gameplay-Spawn bleibt der x/y-Parameter von spawnProjectile. */
+  /** Gewünschter physischer Muzzle-Punkt; der ProjectileManager löst ihn sicher auf. */
+  gameplayMuzzleOrigin?: MuzzleOrigin;
+  /** Reiner VFX-Ursprung; x/y bleibt Fire-Request-Ursprung, resolvedSpawn wird die initiale Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };
   allowTeamDamage?: boolean;
   ownerColor?:     number;        // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX

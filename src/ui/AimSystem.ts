@@ -10,6 +10,7 @@ import {
   DEPTH_AIM,
   getTopDownMuzzleOrigin,
 } from '../config';
+import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
 import { LivingBarEffect, paletteFromColor } from './LivingBarEffect';
 import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 
@@ -51,6 +52,14 @@ const CHARGE_BAR_GAP = 6;
 const CHARGE_BAR_WIDTH = 52;
 const CHARGE_BAR_HEIGHT = 8;
 const CHARGE_BAR_START_X = CHARGE_ANCHOR_OFFSET_X + CHARGE_STEM_LENGTH + CHARGE_BAR_GAP;
+
+function usesGameplayProjectileMuzzle(config: WeaponConfig): boolean {
+  return config.fire.type === 'projectile'
+    || config.fire.type === 'flamethrower'
+    || config.fire.type === 'leaf_blower'
+    || config.fire.type === 'reinforcement_matrix'
+    || config.fire.type === 'energy_injector';
+}
 
 /**
  * Zielhilfe des lokalen Spielers. Diese Klasse rechnet nur noch: Spread, Richtung, Reichweite,
@@ -182,22 +191,36 @@ export class AimSystem {
     const dist = Math.sqrt(dx * dx + dy * dy);
     const nx = dist > 0 ? dx / dist : 1;
     const ny = dist > 0 ? dy / dist : 0;
-    const rangeDist = Math.min(dist, cfg.range);
-    const ex = sx + nx * rangeDist;
-    const ey = sy + ny * rangeDist;
+    const aimAngle = dist > 0 ? Math.atan2(dy, dx) : 0;
+    const gameplayAimMuzzle = usesGameplayProjectileMuzzle(cfg)
+      ? getHeldWeaponGameplayMuzzleOrigin(
+        cfg.id,
+        sx,
+        sy,
+        aimAngle,
+        sprite.displayWidth,
+      )
+      : null;
+    const beamOrigin = gameplayAimMuzzle ?? { x: sx, y: sy };
+    const cursorForwardDistance = gameplayAimMuzzle
+      ? Math.max(0, (px - beamOrigin.x) * nx + (py - beamOrigin.y) * ny)
+      : dist;
+    const beamLength = Math.min(cursorForwardDistance, cfg.range);
+    const ex = beamOrigin.x + nx * beamLength;
+    const ey = beamOrigin.y + ny * beamLength;
 
-    const { x: cx, y: cy } = this.clipToArena(sx, sy, ex, ey);
+    const { x: cx, y: cy } = this.clipToArena(beamOrigin.x, beamOrigin.y, ex, ey);
     const tx = this.snap(cx);
     const ty = this.snap(cy);
 
     const accentColor = this.getAccentColor();
 
     if (cfg.showCrosshair !== false && this.scopeProgress < 0.1) {
-      this.visuals.showBeam(sx, sy, tx, ty, palette, frac);
+      this.visuals.showBeam(this.snap(beamOrigin.x), this.snap(beamOrigin.y), tx, ty, palette, frac);
 
-      if (dist > cfg.range) {
-        const rx = sx + nx * cfg.range;
-        const ry = sy + ny * cfg.range;
+      if (cursorForwardDistance > cfg.range) {
+        const rx = beamOrigin.x + nx * cfg.range;
+        const ry = beamOrigin.y + ny * cfg.range;
         if (
           rx >= ARENA_OFFSET_X
           && rx <= ARENA_OFFSET_X + ARENA_WIDTH

@@ -179,6 +179,20 @@ export function getHeldWeaponMuzzleOrigin(
     : null;
 }
 
+/**
+ * Gameplay-Mündung eines Fire-Requests. Im Gegensatz zur visuellen Variante kommen Ursprung
+ * und Winkel vollständig aus dem konkreten Gameplay-Request, nicht aus der Render-Spritepose.
+ */
+export function getHeldWeaponGameplayMuzzleOrigin(
+  itemId: string | null | undefined,
+  gameplayX: number,
+  gameplayY: number,
+  aimAngle: number,
+  displaySize: number,
+): MuzzleOrigin | null {
+  return getHeldWeaponMuzzleOrigin(itemId, gameplayX, gameplayY, aimAngle, displaySize);
+}
+
 /** Stellt jede getragene Textur genau einmal in die Ladeschlange. */
 export function preloadHeldItemAssets(loader: Phaser.Loader.LoaderPlugin): void {
   const queued = new Set<string>();
