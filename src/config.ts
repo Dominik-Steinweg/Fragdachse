@@ -393,6 +393,8 @@ export const BLOOD_HIT_VFX = {
 
 export const DEATH_DISINTEGRATION_VFX = {
   durationMs: 900,
+  /** Display-Groesse, auf die `chunkSizePx` als World-Space-Fragmentmass kalibriert ist. */
+  referenceDisplaySizePx: 32,
   chunkSizePx: 4,
   travelMinPx: 22,
   travelMaxPx: 104,
@@ -410,6 +412,8 @@ export const DEATH_DISINTEGRATION_VFX = {
   glowHitImpulse: 1.8,
   alpha: 1,
   auraTintMix: 0.26,
+  /** Sekundaerer Ziel-Farbzuschlag fuer visuell neutrale Sprites wie den Player-Glow-Pfad. */
+  neutralTargetColorBoost: 0.08,
   maxChunksPerEffect: 64,
   glowCount: 8,
   glowTravelMinPx: 26,

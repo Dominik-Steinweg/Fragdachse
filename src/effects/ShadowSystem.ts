@@ -278,6 +278,7 @@ export class ShadowSystem {
       this.lastStaticOptions,
       this.profile,
       nowMs,
+      true,
     );
     return true;
   }
@@ -348,6 +349,7 @@ export class ShadowSystem {
     options: StaticShadowLayoutBuildOptions,
     profile: ShadowProfile,
     bakedAtMs = Number.NEGATIVE_INFINITY,
+    preserveVisible = false,
   ): void {
     if (this.lastStaticLayout !== layout) {
       // Neues Layout heisst neuer Felsbestand: Der raeumliche Index muss von vorn beginnen,
@@ -362,7 +364,7 @@ export class ShadowSystem {
     const { surface, created } = this.ensureStaticSurface();
     // Ein frisch erzeugter Chunk hat seine 128-px-Regionen bereits im gemeinsamen Scheduler;
     // ein zweiter Voll-Plan waere beim Rundenstart doppelte Arbeit.
-    if (!created) surface.refreshAll();
+    if (!created) surface.refreshAll({ preserveVisible });
     this.syncStaticSurfaceVisibility();
     this.lastBakedProfile = { ...profile };
     this.lastStaticProfileBakeAtMs = bakedAtMs;

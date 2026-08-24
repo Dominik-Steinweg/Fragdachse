@@ -105,6 +105,11 @@ export interface ChunkedRenderSurfaceOptions {
   readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
 }
 
+export interface ChunkedRenderSurfaceRefreshOptions {
+  /** Keeps already-ready resident chunks visible while their regions are rebuilt. */
+  readonly preserveVisible?: boolean;
+}
+
 /**
  * Ueberstand je Chunkseite, der gebacken und gesampelt, aber nie composited wird.
  *
@@ -264,16 +269,21 @@ export class ChunkedRenderSurface {
 
   /**
    * Plant alle 128-px-Regionen residenter Chunks neu. Der Aufruf selbst bleibt billig; die
-   * tatsaechlichen RenderTexture-Flushes teilen sich das Frame-Budget mit Acquisition.
+   * tatsaechlichen RenderTexture-Flushes teilen sich das Frame-Budget mit Acquisition. Mit
+   * `preserveVisible` bleiben bereits fertige Chunks sichtbar und werden Region fuer Region
+   * ersetzt; der Standardpfad bleibt ein atomarer visueller Austausch je Chunk.
    */
-  refreshAll(): void {
+  refreshAll(options: ChunkedRenderSurfaceRefreshOptions = {}): void {
     if (this.destroyed) return;
+    const preserveVisible = options.preserveVisible === true;
     for (const chunk of this.resident.values()) {
-      // A full refresh is an atomic visual replacement per chunk. Keep the old frame hidden until
-      // all 128-px regions have been rebuilt; otherwise a large update briefly shows a checkerboard
-      // of old and new world state.
-      chunk.ready = false;
-      this.syncChunkVisibility(chunk);
+      if (!preserveVisible) {
+        // A full refresh is an atomic visual replacement per chunk. Keep the old frame hidden until
+        // all 128-px regions have been rebuilt; otherwise a large update briefly shows a checkerboard
+        // of old and new world state.
+        chunk.ready = false;
+        this.syncChunkVisibility(chunk);
+      }
       for (const region of this.grid.dirtyRegionsOf(chunk.coord)) this.scheduleRegion(chunk, region, true);
     }
   }

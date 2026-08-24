@@ -208,6 +208,53 @@ describe('chunked render surface', () => {
     expect(surface.isReady(baked.chunk.cx, baked.chunk.cy)).toBe(true);
   });
 
+  it('keeps a normal full refresh atomic until all regions are baked', () => {
+    const { surface, regions, scene } = createSurface();
+    updateSurface(surface, scene, VIEW);
+    regions.length = 0;
+
+    const target = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    expect(surface.isReady(0, 0)).toBe(true);
+    expect(target.visible).toBe(true);
+
+    surface.refreshAll();
+
+    expect(surface.isReady(0, 0)).toBe(false);
+    expect(target.visible).toBe(false);
+    expect(surface.getStats().pendingRegions).toBeGreaterThan(0);
+
+    drain(scene);
+
+    expect(regions.length).toBeGreaterThan(0);
+    expect(surface.isReady(0, 0)).toBe(true);
+    expect(target.visible).toBe(true);
+  });
+
+  it('keeps ready chunks visible while a full refresh rebakes regions and gutters', () => {
+    const { surface, regions, scene } = createSurface();
+    updateSurface(surface, scene, VIEW);
+    const fullBakeRegionCount = regions.length;
+    regions.length = 0;
+
+    const source = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    const neighbour = surface.getChunkTexture('a', 1, 0) as unknown as FakeRenderTexture;
+    neighbour.writes.length = 0;
+
+    surface.refreshAll({ preserveVisible: true });
+
+    expect(surface.isReady(0, 0)).toBe(true);
+    expect(source.visible).toBe(true);
+    expect(surface.getStats().pendingRegions).toBeGreaterThan(0);
+    expect(surface.isReadyForView(VIEW, false)).toBe(false);
+
+    drain(scene);
+
+    expect(regions).toHaveLength(fullBakeRegionCount);
+    expect(neighbour.writes.some((write) => write.content === source.texture.key)).toBe(true);
+    expect(source.visible).toBe(true);
+    expect(surface.isReadyForView(VIEW, false)).toBe(true);
+  });
+
   it('bakes every acquired chunk once, at full chunk size', () => {
     FakeRenderTexture.created = 0;
     const { surface, regions, scene } = createSurface();

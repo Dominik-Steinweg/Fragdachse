@@ -17,7 +17,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 }));
 
 import { CombatGoreGpuRenderer } from '../src/effects/CombatGoreGpuRenderer';
-import { BLOOD_HIT_VFX, DEATH_DISINTEGRATION_VFX } from '../src/config';
+import { BLOOD_HIT_VFX, COLORS, DEATH_DISINTEGRATION_VFX } from '../src/config';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
@@ -71,6 +71,35 @@ function addVisualTexture(
   const texture = scene.textures.createCanvas(key, width, height);
   if (frame !== '__BASE') texture.add(frame, 0, 0, 0, width, height);
   return texture;
+}
+
+function playFullDeath(
+  sourceSize: number,
+  displaySize = 32,
+  overrides: Partial<typeof death> = {},
+) {
+  const { scene, renderer, gpu } = setup();
+  const textureKey = `full_death_${sourceSize}_${displaySize}`;
+  addVisualTexture(scene, textureKey, 'walk-1', sourceSize, sourceSize);
+  renderer.playDeath({
+    ...death,
+    textureKey,
+    frame: 'walk-1',
+    displayWidth: displaySize,
+    displayHeight: displaySize,
+    rotation: 0,
+    dirX: 0,
+    dirY: 0,
+    ...overrides,
+  });
+
+  const report = gpu.buildReport();
+  const mainCount = report.effects.find((effect) => effect.label === 'death.fragment')!.spawns;
+  const microCount = report.effects.find((effect) => effect.label === 'death.micro-fragment')!.spawns;
+  const main = findFakeLane(scene, 'gore-normal').members.slice(0, mainCount);
+  const glow = findFakeLane(scene, 'gore-add').members;
+  const template = renderer.fragmentTemplateCache.get(textureKey, 'walk-1');
+  return { displaySize, glow, main, mainCount, microCount, renderer, template };
 }
 
 const death = {
@@ -217,34 +246,106 @@ describe('combat gore gpu renderer', () => {
     expect(yRange).toBeGreaterThan(20);
   });
 
-  it('gives the primary death fragments an unmistakable size, contrast and readable window', () => {
-    const { scene, renderer, gpu } = setup();
-    addVisualTexture(scene, 'full_death_badger', 'walk-1', 64, 64);
-
-    renderer.playDeath({
-      ...death,
-      textureKey: 'full_death_badger',
-      frame: 'walk-1',
-      displayWidth: 32,
-      displayHeight: 32,
-      rotation: 0,
-    });
-
-    const mainCount = gpu.buildReport().effects
-      .find((effect) => effect.label === 'death.fragment')!.spawns;
-    const main = findFakeLane(scene, 'gore-normal').members.slice(0, mainCount);
-    const primary = main[0]!;
-    const tint = primary.tint;
-    const luminance = 0.299 * ((tint >> 16) & 0xff)
-      + 0.587 * ((tint >> 8) & 0xff)
-      + 0.114 * (tint & 0xff);
+  it('keeps primary death fragments large and readable without an absolute luminance gate', () => {
+    const sample = playFullDeath(64);
+    const primary = sample.main[0]!;
 
     expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeGreaterThan(1.4);
     expect(primary.scaleY.duration).toBeGreaterThanOrEqual(
       DEATH_DISINTEGRATION_VFX.durationMs - 80,
     );
     expect(primary.alpha.ease).toBe('Linear');
-    expect(luminance).toBeGreaterThan(100);
+  });
+
+  it('keeps the template analysis on fixed 4x4 source blocks', () => {
+    const { scene, renderer } = setup();
+
+    for (const sourceSize of [32, 64, 128]) {
+      const textureKey = `analysis_${sourceSize}`;
+      addVisualTexture(scene, textureKey, 'walk-1', sourceSize, sourceSize);
+      const template = renderer.fragmentTemplateCache.get(textureKey, 'walk-1');
+      const first = template.chunks[0]!;
+
+      expect(template.chunks).toHaveLength((sourceSize / 4) ** 2);
+      expect(first.offsetX).toBeCloseTo(2 / sourceSize - 0.5, 10);
+      expect(first.offsetY).toBeCloseTo(2 / sourceSize - 0.5, 10);
+      expect(first.width).toBeCloseTo(4 / sourceSize, 10);
+      expect(first.height).toBeCloseTo(4 / sourceSize, 10);
+      expect(first.color).toBe(0x78281e);
+      expect(first.brightness).toBeCloseTo((120 + 40 + 30) / (255 * 3), 10);
+    }
+  });
+
+  it('normalizes visible fragment size across 32x32, 64x64 and 128x128 sources', () => {
+    const samples = [32, 64, 128].map((sourceSize) => playFullDeath(sourceSize));
+    const reference = samples[0]!;
+    const referenceHeight = evaluateFakeAnimation(reference.main[0]!.scaleY, 0);
+    const referenceWidth = evaluateFakeAnimation(reference.main[0]!.scaleX, 0);
+
+    for (const sample of samples) {
+      expect(sample.mainCount).toBe(reference.mainCount);
+      expect(sample.microCount).toBe(reference.microCount);
+      expect(evaluateFakeAnimation(sample.main[0]!.scaleY, 0)).toBeCloseTo(referenceHeight, 10);
+      expect(evaluateFakeAnimation(sample.main[0]!.scaleX, 0)).toBeCloseTo(referenceWidth, 10);
+      expect(sample.main[0]!.x.base).toBeCloseTo(
+        death.x + sample.template.chunks[0]!.offsetX * sample.displaySize,
+        10,
+      );
+      expect(sample.main[0]!.y.base).toBeCloseTo(
+        death.y + sample.template.chunks[0]!.offsetY * sample.displaySize,
+        10,
+      );
+    }
+  });
+
+  it('scales normalized fragments with the actual display size', () => {
+    const fullSize = playFullDeath(64, 32);
+    const compact = playFullDeath(64, 24);
+    const fullHeight = evaluateFakeAnimation(fullSize.main[0]!.scaleY, 0);
+    const compactHeight = evaluateFakeAnimation(compact.main[0]!.scaleY, 0);
+
+    expect(compactHeight / fullHeight).toBeCloseTo(24 / 32, 10);
+  });
+
+  it('keeps equal-size player and enemy deaths equally present', () => {
+    const player = playFullDeath(64, 32, {
+      targetId: 'player-1',
+      targetColor: COLORS.GREEN_2,
+      tint: 0xffffff,
+    });
+    const enemy = playFullDeath(32, 32, {
+      targetId: 'enemy-1',
+      targetColor: COLORS.GREEN_2,
+      tint: 0xffffff,
+    });
+
+    expect(player.mainCount).toBe(enemy.mainCount);
+    expect(player.microCount).toBe(enemy.microCount);
+    expect(evaluateFakeAnimation(player.main[0]!.scaleY, 0)).toBeCloseTo(
+      evaluateFakeAnimation(enemy.main[0]!.scaleY, 0),
+      10,
+    );
+    expect(player.glow).toHaveLength(enemy.glow.length);
+    expect(evaluateFakeAnimation(player.glow[0]!.scaleY, 0)).toBeCloseTo(
+      evaluateFakeAnimation(enemy.glow[0]!.scaleY, 0),
+      10,
+    );
+  });
+
+  it('keeps targetColor influence measurable for neutral sprite tint', () => {
+    const neutral = playFullDeath(64, 32, {
+      targetColor: 0xffffff,
+      tint: 0xffffff,
+    });
+    const colored = playFullDeath(64, 32, {
+      targetColor: COLORS.RED_2,
+      tint: 0xffffff,
+    });
+
+    expect((colored.main[0]!.tint >> 8) & 0xff)
+      .toBeLessThan((neutral.main[0]!.tint >> 8) & 0xff);
+    expect(colored.main[0]!.tint & 0xff)
+      .toBeLessThan(neutral.main[0]!.tint & 0xff);
   });
 
   it('applies the lethal hit direction to both death fragments and glow', () => {

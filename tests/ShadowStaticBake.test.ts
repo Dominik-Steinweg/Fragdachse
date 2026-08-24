@@ -349,9 +349,12 @@ describe('static shadow baking', () => {
     shadows.rebuildStaticLayoutShadows(layout(3, 2));
     drain(scene);
     const initialDraws = totalDraws(textures);
+    const initiallyVisible = visibleChunkTargets(textures).length;
 
     shadows.setTimeOfDay(19 * 60 + 45);
     expect(shadows.syncStaticProfile(1_000)).toBe(true);
+    expect(visibleChunkTargets(textures)).toHaveLength(initiallyVisible);
+    expect(shadows.getStaticSurfaceStats()?.pendingRegions).toBeGreaterThan(0);
     drain(scene);
     const firstProfileDraws = totalDraws(textures);
     expect(firstProfileDraws).toBeGreaterThan(initialDraws);

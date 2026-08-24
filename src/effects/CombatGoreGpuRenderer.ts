@@ -98,6 +98,9 @@ export class CombatGoreGpuRenderer {
     const rng = createSeededRandom(effect.seed);
     const entityTint = effect.tint ?? 0xffffff;
     const auraColor = effect.targetColor ?? COLORS.GREY_2;
+    const neutralTargetColorBoost = entityTint === 0xffffff && effect.targetColor !== undefined
+      ? DEATH_DISINTEGRATION_VFX.neutralTargetColorBoost
+      : 0;
     const rotation = Number.isFinite(effect.rotation) ? effect.rotation : 0;
     const hitX = effect.dirX ?? 0;
     const hitY = effect.dirY ?? 0;
@@ -121,11 +124,14 @@ export class CombatGoreGpuRenderer {
         chunk,
         displayWidth,
         displayHeight,
+        template.sourceWidth,
+        template.sourceHeight,
         effect.x,
         effect.y,
         rotation,
         entityTint,
         auraColor,
+        neutralTargetColorBoost,
         normalizedHitX,
         normalizedHitY,
         hitLength > 0.0001,
@@ -145,11 +151,14 @@ export class CombatGoreGpuRenderer {
         chunk,
         displayWidth,
         displayHeight,
+        template.sourceWidth,
+        template.sourceHeight,
         effect.x,
         effect.y,
         rotation,
         entityTint,
         auraColor,
+        neutralTargetColorBoost,
         normalizedHitX,
         normalizedHitY,
         hitLength > 0.0001,
@@ -422,11 +431,14 @@ export class CombatGoreGpuRenderer {
     chunk: DeathFragmentTemplateChunk,
     displayWidth: number,
     displayHeight: number,
+    sourceWidth: number,
+    sourceHeight: number,
     originX: number,
     originY: number,
     entityRotation: number,
     entityTint: number,
     auraColor: number,
+    targetColorBoost: number,
     hitX: number,
     hitY: number,
     hasHitDirection: boolean,
@@ -474,8 +486,18 @@ export class CombatGoreGpuRenderer {
       micro ? 230 : Math.max(620, DEATH_DISINTEGRATION_VFX.durationMs - 80),
       micro ? 430 : Math.min(900, DEATH_DISINTEGRATION_VFX.durationMs + 180),
     );
-    const width = Math.max(0.8, chunk.width * displayWidth);
-    const height = Math.max(0.8, chunk.height * displayHeight);
+    // The template deliberately stays on the fixed 4x4 source-pixel analysis grid. Convert
+    // only the visible chunk size here so a source block occupies the same World-space size
+    // across 32x32, 64x64 and higher-resolution frames. Chunk offsets remain normalized and
+    // therefore keep the existing silhouette positions and sampling order.
+    const width = Math.max(
+      0.8,
+      chunk.width * displayWidth * sourceWidth / DEATH_DISINTEGRATION_VFX.referenceDisplaySizePx,
+    );
+    const height = Math.max(
+      0.8,
+      chunk.height * displayHeight * sourceHeight / DEATH_DISINTEGRATION_VFX.referenceDisplaySizePx,
+    );
     const baseScale = clamp(
       height / DEATH_FRAGMENT_TEXTURE_SIZE
         * DEATH_DISINTEGRATION_VFX.scaleStart
@@ -489,10 +511,15 @@ export class CombatGoreGpuRenderer {
     const stretch = smallMass && rng() < 0.24
       ? aspect * randomBetween(rng, 1.15, 1.8)
       : aspect;
+    const auraMix = Math.min(
+      1,
+      DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness)
+        + targetColorBoost,
+    );
     const tint = mixColors(
       multiplyColors(chunk.color, entityTint),
       auraColor,
-      DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness),
+      auraMix,
     );
     const visibleTint = micro
       ? tint
