@@ -52,6 +52,10 @@ export interface PeerRoomOptions {
    * voller Lobby den Großteil des Relay-Verkehrs.
    */
   hostOnlyPlayerKeys?: readonly string[];
+  /** Per-Spieler-Keys, die nie in einen Welcome-/Resume-Snapshot gehören. */
+  welcomeExcludedPlayerKeys?: readonly string[];
+  /** Per-Spieler-Keys, die ein Client nur für seine eigene Spieler-ID schreiben darf. */
+  clientOwnedPlayerKeys?: readonly string[];
   /** Stable per-room client token used only for the short resume window. */
   resumeToken?: string;
   onPayloadDiagnostics?: ((info: PeerPayloadDiagnostics) => void) | null;
@@ -113,9 +117,12 @@ export class PeerRoom {
   private readonly fastReceiveSequences = new Map<PeerLinkLike, number>();
   private readonly globalState = new Map<string, unknown>();
   private readonly playerStates = new Map<string, Map<string, unknown>>();
+  private readonly playerStateUpdatedAt = new Map<string, Map<string, number>>();
   private readonly playerHandles = new Map<string, PeerPlayerHandle>();
   private readonly quitCallbacks = new Map<string, Array<() => void>>();
   private readonly hostOnlyPlayerKeys: ReadonlySet<string>;
+  private readonly welcomeExcludedPlayerKeys: ReadonlySet<string>;
+  private readonly clientOwnedPlayerKeys: ReadonlySet<string>;
   private readonly resumeToken: string;
   private onPayloadDiagnostics: ((info: PeerPayloadDiagnostics) => void) | null;
   private readonly resumeSlots = new Map<string, ResumeSlot>();
@@ -148,6 +155,8 @@ export class PeerRoom {
 
   constructor(private readonly transport: PeerRoomTransport, options: PeerRoomOptions = {}) {
     this.hostOnlyPlayerKeys = new Set(options.hostOnlyPlayerKeys ?? []);
+    this.welcomeExcludedPlayerKeys = new Set(options.welcomeExcludedPlayerKeys ?? []);
+    this.clientOwnedPlayerKeys = new Set(options.clientOwnedPlayerKeys ?? []);
     this.resumeToken = options.resumeToken ?? `temporary-client-token-${++temporaryResumeTokenSequence}`;
     this.onPayloadDiagnostics = options.onPayloadDiagnostics ?? null;
     this.transport.setHandlers({
@@ -169,6 +178,7 @@ export class PeerRoom {
       this.localPlayerId = 'p0';
       this.hostPlayerId = 'p0';
       this.playerStates.set('p0', new Map());
+      this.playerStateUpdatedAt.set('p0', new Map());
       await this.transport.start();
       this.emitJoin('p0');
       return;
@@ -308,6 +318,11 @@ export class PeerRoom {
     return this.playerStates.get(playerId)?.get(key);
   }
 
+  /** Lokaler Empfangszeitpunkt eines per-player-Updates, nicht Teil des Wire-States. */
+  getPlayerStateUpdatedAt(playerId: string, key: string): number | undefined {
+    return this.playerStateUpdatedAt.get(playerId)?.get(key);
+  }
+
   setPlayerState(playerId: string, key: string, value: unknown, reliable = false): void {
     this.applyPlayerState(playerId, key, value);
     if (this.isSuppressedRelayKey(key)) {
@@ -360,6 +375,12 @@ export class PeerRoom {
       this.playerStates.set(playerId, state);
     }
     state.set(key, value);
+    let timestamps = this.playerStateUpdatedAt.get(playerId);
+    if (!timestamps) {
+      timestamps = new Map();
+      this.playerStateUpdatedAt.set(playerId, timestamps);
+    }
+    timestamps.set(key, Date.now());
   }
 
   private isSuppressedRelayKey(key: string): boolean {
@@ -456,8 +477,9 @@ export class PeerRoom {
         this.handleExplicitLeave(link);
         return;
       case 'b':
-        this.applyBatch(message);
-        this.relayBatch(message, link, channel);
+        const accepted = this.filterClientOwnedWrites(message, link.playerId);
+        this.applyBatch(accepted);
+        this.relayBatch(accepted, link, channel);
         return;
       case 'rpc':
         this.handleHostRpc(link, message.c, message.n, message.d, channel);
@@ -482,6 +504,7 @@ export class PeerRoom {
         return;
       case 'join':
         this.playerStates.set(message.id, new Map(Object.entries(message.s)));
+        this.playerStateUpdatedAt.set(message.id, new Map(Object.keys(message.s).map(key => [key, Date.now()])));
         this.emitJoin(message.id);
         return;
       case 'quit':
@@ -563,6 +586,7 @@ export class PeerRoom {
     const playerId = this.allocatePlayerId();
     link.playerId = playerId;
     this.playerStates.set(playerId, new Map());
+    this.playerStateUpdatedAt.set(playerId, new Map());
     this.resumeSlots.set(resumeToken, { playerId, link, expiryTimer: null });
     this.linkResumeTokens.set(link, resumeToken);
 
@@ -577,6 +601,10 @@ export class PeerRoom {
 
   private sendWelcome(link: PeerLinkLike, playerId: string): void {
     const roster: RosterEntry[] = this.getPlayerIds().map((id) => ({ id }));
+    const playerStates = Object.fromEntries([...this.playerStates].map(([id, state]) => [
+      id,
+      Object.fromEntries([...state].filter(([key]) => !this.welcomeExcludedPlayerKeys.has(key))),
+    ]));
     link.send({
       t: 'welcome',
       v: PEER_PROTOCOL_VERSION,
@@ -584,7 +612,7 @@ export class PeerRoom {
       h: this.hostPlayerId,
       roster,
       g: Object.fromEntries(this.globalState),
-      p: Object.fromEntries([...this.playerStates].map(([id, state]) => [id, Object.fromEntries(state)])),
+      p: playerStates,
     }, 'rel');
   }
 
@@ -610,10 +638,16 @@ export class PeerRoom {
       if (!incomingPlayerIds.has(playerId)) this.removePlayer(playerId);
     }
     this.playerStates.clear();
+    this.playerStateUpdatedAt.clear();
+    const receivedAt = Date.now();
     for (const [playerId, state] of Object.entries(message.p)) {
       this.playerStates.set(playerId, new Map(Object.entries(state)));
+      this.playerStateUpdatedAt.set(playerId, new Map(Object.keys(state).map(key => [key, receivedAt])));
     }
-    if (!this.playerStates.has(message.id)) this.playerStates.set(message.id, new Map());
+    if (!this.playerStates.has(message.id)) {
+      this.playerStates.set(message.id, new Map());
+      this.playerStateUpdatedAt.set(message.id, new Map());
+    }
 
     for (const entry of message.roster) this.emitJoin(entry.id);
     this.emitJoin(message.id);
@@ -628,6 +662,17 @@ export class PeerRoom {
   private applyBatch(message: BatchMessage): void {
     for (const [key, value] of message.g ?? []) this.globalState.set(key, value);
     for (const [playerId, key, value] of message.p ?? []) this.applyPlayerState(playerId, key, value);
+  }
+
+  private filterClientOwnedWrites(message: BatchMessage, originPlayerId: string): BatchMessage {
+    const players = (message.p ?? []).filter(([playerId, key]) => (
+      !this.clientOwnedPlayerKeys.has(key) || playerId === originPlayerId
+    ));
+    const accepted: BatchMessage = { t: 'b' };
+    if (message.q !== undefined) accepted.q = message.q;
+    if (message.g) accepted.g = message.g;
+    if (players.length > 0) accepted.p = players;
+    return accepted;
   }
 
   private relayBatch(message: BatchMessage, origin: PeerLinkLike, channel: PeerChannelKind): void {
@@ -847,6 +892,7 @@ export class PeerRoom {
     if (!hadPlayer) return false;
     this.playerHandles.delete(playerId);
     this.playerStates.delete(playerId);
+    this.playerStateUpdatedAt.delete(playerId);
     for (const callback of this.quitCallbacks.get(playerId) ?? []) callback();
     this.quitCallbacks.delete(playerId);
     for (const callback of this.playerQuitCallbacks) callback(playerId);

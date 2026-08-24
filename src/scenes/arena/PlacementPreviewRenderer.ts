@@ -196,7 +196,7 @@ export class PlacementPreviewRenderer {
     const activeIds = new Set<string>();
     for (const playerId of bridge.getConnectedPlayerIds()) {
       if (playerId === bridge.getLocalPlayerId()) continue;
-      const preview = bridge.getPlayerInput(playerId)?.placementPreview as PlacementPreviewNetState | undefined;
+      const preview = bridge.getPlayerPlacementPreview(playerId);
       if (!preview?.active) continue;
       activeIds.add(playerId);
       const ownerColor = bridge.getPlayerColor(playerId) ?? COLORS.GREY_3;

@@ -26,7 +26,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
@@ -120,6 +120,7 @@ function getState(key: string): unknown {
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
 const KEY_INPUT        = 'inp';
+const KEY_PLACEMENT_PREVIEW = 'ppv';
 const KEY_PLAYERS      = 'plr';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_ARENA_LOAD_READY = 'alr'; // per-player reliable: ArenaLoadReadyState
@@ -189,10 +190,12 @@ export type KickPlayerResult = { ok: true } | { ok: false; reason: KickPlayerFai
  * Per-Spieler-Keys, die ausschliesslich der Host liest. Der Host reicht sie nicht an die
  * uebrigen Clients weiter, was bei voller Lobby den Grossteil des Relay-Verkehrs spart.
  *
- * KEY_INPUT steht bewusst NICHT hier: PlacementPreviewRenderer liest `placementPreview` aus
- * dem Input fremder Spieler und laeuft auch auf Clients.
+ * KEY_INPUT wird ausschließlich vom Host gelesen. Die visuelle Platzierungsvorschau nutzt
+ * den separaten, relaybaren KEY_PLACEMENT_PREVIEW.
  */
-const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE];
+const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE, KEY_INPUT];
+const WELCOME_EXCLUDED_PLAYER_KEYS: readonly string[] = [KEY_INPUT, KEY_PLACEMENT_PREVIEW];
+const CLIENT_OWNED_PLAYER_KEYS: readonly string[] = [KEY_PLACEMENT_PREVIEW];
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -476,17 +479,33 @@ function defaultPlayerName(playerId: string): string {
 
 /** Spaetestens nach dieser Zeit wird die Eingabe auch unveraendert erneut gesendet. */
 const NET_INPUT_KEEPALIVE_MS = 100;
+const NET_PLACEMENT_PREVIEW_REFRESH_MS = 150;
+const NET_PLACEMENT_PREVIEW_TTL_MS = 600;
 
 function isSamePlacementPreview(
-  left: PlayerInput['placementPreview'],
-  right: PlayerInput['placementPreview'],
+  left: PlacementPreviewNetState | null,
+  right: PlacementPreviewNetState | null,
 ): boolean {
   if (!left || !right) return !left && !right;
   return left.active === right.active
     && left.kind === right.kind
     && left.gridX === right.gridX
     && left.gridY === right.gridY
+    && left.x === right.x
+    && left.y === right.y
+    && left.isValid === right.isValid
+    && left.frame === right.frame
+    && left.stage === right.stage
+    && left.anchorGridX === right.anchorGridX
+    && left.anchorGridY === right.anchorGridY
+    && left.anchorX === right.anchorX
+    && left.anchorY === right.anchorY
+    && left.constructionId === right.constructionId
     && left.powerUpDefId === right.powerUpDefId;
+}
+
+function normalizePlacementPreview(preview: PlacementPreviewNetState | null): PlacementPreviewNetState | null {
+  return preview?.active ? preview : null;
 }
 
 function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): boolean {
@@ -494,8 +513,7 @@ function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): bo
   return input.dx === previous.dx
     && input.dy === previous.dy
     && input.aim === previous.aim
-    && input.dashHeld === previous.dashHeld
-    && isSamePlacementPreview(input.placementPreview, previous.placementPreview);
+    && input.dashHeld === previous.dashHeld;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -683,6 +701,8 @@ export class NetworkBridge {
   private kickedCbs: Array<() => void> = [];
   private lastSentInput: PlayerInput | null = null;
   private lastInputSentAtMs = 0;
+  private lastSentPlacementPreview: PlacementPreviewNetState | null = null;
+  private lastPlacementPreviewSentAtMs = 0;
   private lastObservedRttSampleCount = 0;
   private publishedPingSequence = 0;
   private fullGameStateRequested = false;
@@ -745,10 +765,14 @@ export class NetworkBridge {
     const session = roomCode === null
       ? await createHostSession({
         hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
+        welcomeExcludedPlayerKeys: WELCOME_EXCLUDED_PLAYER_KEYS,
+        clientOwnedPlayerKeys: CLIENT_OWNED_PLAYER_KEYS,
         onPayloadDiagnostics: null,
       })
       : await joinHostSession(roomCode, {
         hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
+        welcomeExcludedPlayerKeys: WELCOME_EXCLUDED_PLAYER_KEYS,
+        clientOwnedPlayerKeys: CLIENT_OWNED_PLAYER_KEYS,
         resumeToken: getOrCreateRoomResumeToken(roomCode),
         onPayloadDiagnostics: null,
       });
@@ -819,6 +843,8 @@ export class NetworkBridge {
         this.lastObservedRttSampleCount = 0;
         this.lastSentInput = null;
         this.lastInputSentAtMs = 0;
+        this.lastSentPlacementPreview = null;
+        this.lastPlacementPreviewSentAtMs = 0;
         for (const state of this.playerStateMap.values()) {
           this.connectedPlayers.set(state.id, this.extractProfile(state));
         }
@@ -826,12 +852,12 @@ export class NetworkBridge {
       }
       if (status.state === 'player-disconnected' && isHost()) {
         const previous = requireRoom().getPlayerState(status.playerId, KEY_INPUT) as PlayerInput | undefined;
+        requireRoom().setPlayerState(status.playerId, KEY_PLACEMENT_PREVIEW, null, false);
         requireRoom().setPlayerState(status.playerId, KEY_INPUT, {
           dx: 0,
           dy: 0,
           aim: previous?.aim ?? 0,
           dashHeld: false,
-          placementPreview: null,
         } satisfies PlayerInput, true);
       }
       for (const callback of this.reconnectStatusCbs) callback(status);
@@ -1313,15 +1339,14 @@ export class NetworkBridge {
    * verzoegert, was sich anfuehlbar auswirken koennte.
    */
   sendLocalInput(input: PlayerInput): void {
-    // Spectatoren koennen auch bei manipuliertem Client keinen alten Bewegungs-/Preview-State
-    // weiter an den Host schreiben.
+    // Spectatoren koennen auch bei manipuliertem Client keinen alten Bewegungs-State weiter an
+    // den Host schreiben. Die separate Preview wird in sendLocalPlacementPreview() behandelt.
     if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
       input = {
         dx: 0,
         dy: 0,
         aim: input.aim,
         dashHeld: false,
-        placementPreview: null,
       } satisfies PlayerInput;
     }
     const now = Date.now();
@@ -1333,8 +1358,35 @@ export class NetworkBridge {
     myPlayer().setState(KEY_INPUT, input);
   }
 
+  /** Sendet den rein visuellen Placement-Presence-State über den ersetzbaren Kanal. */
+  sendLocalPlacementPreview(preview: PlacementPreviewNetState | null): void {
+    let next = normalizePlacementPreview(preview);
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) next = null;
+
+    const now = Date.now();
+    const changed = !isSamePlacementPreview(next, this.lastSentPlacementPreview);
+    const refreshDue = next !== null
+      && now - this.lastPlacementPreviewSentAtMs >= NET_PLACEMENT_PREVIEW_REFRESH_MS;
+    if (!changed && !refreshDue) return;
+
+    this.lastSentPlacementPreview = next;
+    this.lastPlacementPreviewSentAtMs = now;
+    myPlayer().setState(KEY_PLACEMENT_PREVIEW, next, false);
+  }
+
   getPlayerInput(playerId: string): PlayerInput | undefined {
     return this.playerStateMap.get(playerId)?.getState(KEY_INPUT) as PlayerInput | undefined;
+  }
+
+  getPlayerPlacementPreview(playerId: string): PlacementPreviewNetState | null {
+    const preview = this.playerStateMap.get(playerId)?.getState(KEY_PLACEMENT_PREVIEW) as
+      PlacementPreviewNetState | null | undefined;
+    if (!preview?.active) return null;
+    if (playerId === this.getLocalPlayerId()) return preview;
+
+    const receivedAt = requireRoom().getPlayerStateUpdatedAt(playerId, KEY_PLACEMENT_PREVIEW);
+    if (receivedAt === undefined || Date.now() - receivedAt > NET_PLACEMENT_PREVIEW_TTL_MS) return null;
+    return preview;
   }
 
   // ── Anzeigename: pro Spieler ──────────────────────────────────────────────
@@ -1576,12 +1628,12 @@ export class NetworkBridge {
     setState(KEY_ROUND_PARTICIPATION, enterRoundSpectator(current, playerId), true);
     const player = this.playerStateMap.get(playerId);
     const previous = player?.getState(KEY_INPUT) as PlayerInput | undefined;
+    player?.setState(KEY_PLACEMENT_PREVIEW, null, false);
     player?.setState(KEY_INPUT, {
       dx: 0,
       dy: 0,
       aim: previous?.aim ?? 0,
       dashHeld: false,
-      placementPreview: null,
     } satisfies PlayerInput, false);
     for (const callback of this.spectatorEnteredCbs) callback(playerId);
     return true;

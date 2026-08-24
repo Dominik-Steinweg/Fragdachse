@@ -25,7 +25,7 @@ Fachliche RPCs werden in RpcCoordinator registriert und über Methoden von Netwo
 
 ## Store- und Snapshot-Semantik
 
-Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, den kleinen Arena-Descriptor, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen Input, Ping und KEY_GAME_STATE. Reliable-/Raw-Sends protokollieren auffällig große Payloads und geschlossene Verbindungen, statt Fehler still zu verschlucken.
+Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, den kleinen Arena-Descriptor, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen `KEY_INPUT`, `KEY_PLACEMENT_PREVIEW`, Ping und `KEY_GAME_STATE`; `KEY_INPUT` wird ausschließlich an den Host zugestellt, `KEY_PLACEMENT_PREVIEW` wird als visueller Presence-State an die übrigen Clients relayed. Reliable-/Raw-Sends protokollieren auffällig große Payloads und geschlossene Verbindungen, statt Fehler still zu verschlucken.
 
 Der reliable `RoundState` traegt neben dem Rundenstart nur seltene Zeitanker: Ein erfolgreicher Coop-Boss-Spawn schreibt `coopDefenseBossSpawnedAtMs` genau einmal. Kontinuierliche Arena-Tageszeit wird daraus und aus dem synchronisierten Jetzt lokal rekonstruiert und nie pro Tick repliziert.
 
@@ -54,7 +54,9 @@ Replizierte Listen je Entität brauchen einen stabilen Identitätsschlüssel, so
 
 Wiederkehrende hostseitige Ereignisse werden über einen monoton steigenden Zähler repliziert, nicht über eine aus der Aktivierungsdauer abgeleitete Stufe. Der Client löst seine Darstellung beim Anstieg des Zählers aus und bleibt damit auch bei Paketverlust und schwankender Snapshot-Rate synchron (`SyncedTeslaDome.pulseSequence`).
 
-Der Host relayt Store-Schreibvorgänge, aber nicht blind jeden Key: HOST_ONLY_PLAYER_KEYS bleiben hostlokal. KEY_INPUT ist bewusst kein solcher Key, weil PlacementPreviewRenderer die Vorschau anderer Spieler lesen muss. Neue Keys zuerst nach Besitzer, Kanal, Änderungsfrequenz und Latejoin-Baseline klassifizieren.
+Der Host relayt Store-Schreibvorgänge, aber nicht blind jeden Key: `HOST_ONLY_PLAYER_KEYS` bleiben hostlokal. Ein Client darf den per-player-Key `KEY_PLACEMENT_PREVIEW` nur für seine eigene `originLink.playerId` schreiben; der Host darf ihn weiterhin für andere Spieler löschen oder setzen. `KEY_INPUT` und `KEY_PLACEMENT_PREVIEW` fehlen in Welcome-/Resume-Snapshots. Neue Keys zuerst nach Besitzer, Kanal, Änderungsfrequenz und Latejoin-Baseline klassifizieren.
+
+`KEY_PLACEMENT_PREVIEW` ist ein ephemerer Presence-State ohne Revision, Generation oder Reliable-Clear. Aktive Zustände werden bei Änderung sofort und danach ungefähr alle 150 ms über `fast` wiederholt. Ein `null` beendet die Preview best-effort ebenfalls über `fast`; Remote-Clients verwerfen aktive Previews nach 600 ms ohne lokales Empfangsupdate automatisch. Disconnect, Quit, Spectator-Wechsel und Verlust der Handlungsberechtigung löschen die lokale Preview beziehungsweise senden best-effort `null`. Ein Resume führt keine Store-Reconciliation durch: Eine lokal aktive Preview wird beim nächsten Update erneut gesendet, eine inaktive Preview darf über die TTL auslaufen.
 
 Power-up-Pickups laufen als Request/ACK. Ein Client darf aus einer replizierten Definition keinen Effekt lokal anwenden; der Host prüft UID, Reichweite und Spielerzustand und wendet den Effekt im PowerUpSystem an. Temporäre Utility-Overrides werden als reliable UtilityOverrideDescriptor repliziert und beim Default-Loadout, beim Spielerabgang und vor Round-Teardown zentral entfernt.
 

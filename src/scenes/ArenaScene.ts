@@ -3456,12 +3456,13 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncCountdownPlayerPresentation(): void {
     const localId = bridge.getLocalPlayerId();
+    const playerStates = bridge.getLatestGameState()?.players;
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       player.setHeldItemId(bridge.getPlayerHeldItemId(player.id));
-      const input = bridge.getPlayerInput(player.id);
+      const netState = playerStates?.[player.id];
       const aim = player.id === localId
         ? this.ctx.inputSystem.getAimAngle()
-        : input ? dequantizeAngle(input.aim) : player.getAimAngle();
+        : netState ? dequantizeAngle(netState.rot) : player.getAimAngle();
       player.setRotation(aim);
     }
   }

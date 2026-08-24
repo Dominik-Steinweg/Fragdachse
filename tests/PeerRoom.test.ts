@@ -182,7 +182,12 @@ async function startRoom(
   hostOnlyPlayerKeys: string[],
   resumeToken?: string,
 ): Promise<TestRoom> {
-  const room = new PeerRoom(transport, { hostOnlyPlayerKeys, resumeToken });
+  const room = new PeerRoom(transport, {
+    hostOnlyPlayerKeys,
+    welcomeExcludedPlayerKeys: ['inp', 'ppv'],
+    clientOwnedPlayerKeys: ['ppv'],
+    resumeToken,
+  });
   const testRoom: TestRoom = { room, transport, joined: [], quit: [], kicked: 0, fatals: [] };
   room.onPlayerJoin((handle) => testRoom.joined.push(handle.id));
   room.onPlayerQuit((id) => testRoom.quit.push(id));
@@ -460,6 +465,37 @@ describe('PeerRoom replicated state', () => {
     expect(second.room.getPlayerState('p1', 'inp')).toBeUndefined();
   });
 
+  it('relays a client-owned placement preview but rejects a foreign player id', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network, ['inp']);
+    const first = await addClientRoom(network, ['inp']);
+    const second = await addClientRoom(network, ['inp']);
+    const preview = {
+      active: true,
+      kind: 'turret',
+      gridX: 3,
+      gridY: 4,
+      x: 224,
+      y: 288,
+      isValid: true,
+      frame: 1,
+    } as const;
+
+    first.room.setPlayerState('p1', 'ppv', preview, false);
+    first.room.update();
+    host.room.update();
+
+    expect(host.room.getPlayerState('p1', 'ppv')).toEqual(preview);
+    expect(second.room.getPlayerState('p1', 'ppv')).toEqual(preview);
+
+    first.room.setPlayerState('p0', 'ppv', preview, false);
+    first.room.update();
+    host.room.update();
+
+    expect(host.room.getPlayerState('p0', 'ppv')).toBeUndefined();
+    expect(second.room.getPlayerState('p0', 'ppv')).toBeUndefined();
+  });
+
   it('hands a late joiner the complete current state', async () => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network);
@@ -467,12 +503,18 @@ describe('PeerRoom replicated state', () => {
 
     host.room.setGlobal('gmd', 'deathmatch', true);
     host.room.setPlayerState('p0', 'pnm', 'Host', true);
+    host.room.setPlayerState('p0', 'inp', { dx: 1, dy: 0 }, false);
+    host.room.setPlayerState('p0', 'ppv', { active: true }, false);
     first.room.setPlayerState('p1', 'pnm', 'Erster', true);
+    first.room.setPlayerState('p1', 'ppv', { active: true }, false);
 
     const late = await addClientRoom(network);
     expect(late.room.getGlobal('gmd')).toBe('deathmatch');
     expect(late.room.getPlayerState('p0', 'pnm')).toBe('Host');
     expect(late.room.getPlayerState('p1', 'pnm')).toBe('Erster');
+    expect(late.room.getPlayerState('p0', 'inp')).toBeUndefined();
+    expect(late.room.getPlayerState('p0', 'ppv')).toBeUndefined();
+    expect(late.room.getPlayerState('p1', 'ppv')).toBeUndefined();
   });
 
   it('lets the host write state that belongs to another player', async () => {
@@ -858,6 +900,60 @@ describe('arena loading barrier', () => {
       expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
     } finally {
       clearActiveSession();
+    }
+  });
+});
+
+describe('NetworkBridge placement preview presence', () => {
+  it('sends changes immediately, refreshes active previews, and expires remote state', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = new FakeNetwork();
+      const host = await createHostRoom(network, ['inp']);
+      const senderRoom = await addClientRoom(network, ['inp']);
+      const observerRoom = await addClientRoom(network, ['inp']);
+      const preview = {
+        active: true,
+        kind: 'turret',
+        gridX: 3,
+        gridY: 4,
+        x: 224,
+        y: 288,
+        isValid: true,
+        frame: 1,
+      } as const;
+      const sender = new NetworkBridge();
+      setActiveSession({ room: senderRoom.room, transport: senderRoom.transport, roomCode: 'ABC123' });
+      sender.activate();
+
+      sender.sendLocalPlacementPreview(preview);
+      senderRoom.room.update();
+      host.room.update();
+      expect(observerRoom.room.getPlayerState('p1', 'ppv')).toEqual(preview);
+
+      senderRoom.transport.links[0].sent.length = 0;
+      sender.sendLocalPlacementPreview(preview);
+      senderRoom.room.update();
+      expect(senderRoom.transport.links[0].sent.some(entry => entry.message.t === 'b')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(150);
+      sender.sendLocalPlacementPreview(preview);
+      senderRoom.room.update();
+      host.room.update();
+      expect(senderRoom.transport.links[0].sent.some(entry => entry.message.t === 'b')).toBe(true);
+
+      const observer = new NetworkBridge();
+      setActiveSession({ room: observerRoom.room, transport: observerRoom.transport, roomCode: 'ABC123' });
+      observer.activate();
+      expect(observer.getPlayerPlacementPreview('p1')).toEqual(preview);
+
+      await vi.advanceTimersByTimeAsync(599);
+      expect(observer.getPlayerPlacementPreview('p1')).toEqual(preview);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(observer.getPlayerPlacementPreview('p1')).toBeNull();
+    } finally {
+      clearActiveSession();
+      vi.useRealTimers();
     }
   });
 });
