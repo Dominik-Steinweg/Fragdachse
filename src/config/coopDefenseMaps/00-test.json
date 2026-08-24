@@ -3,6 +3,9 @@
   "arenaWidthCells": 400,
   "arenaHeightCells": 80,
   "timeOfDay": "12:00",
+  "dynamicTimeOfDay": {
+    "minutesPerSecond": 24
+  },
   "trackMode": "void-fire",
   "trackPosition": "center",
   "rockField": {

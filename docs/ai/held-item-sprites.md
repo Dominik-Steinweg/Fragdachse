@@ -48,7 +48,9 @@ das sichtbare `HeldItemVisual` und bleibt der reine Render-/VFX-/Audio-Ursprung.
 
 Direkte Spieler-Projektilaktionen berechnen optional über `getHeldWeaponGameplayMuzzleOrigin` einen
 separaten `gameplayMuzzleOrigin` aus dem konkreten Fire-Request-Ursprung `x/y`, dessen Winkel und
-der aktuellen Itemgröße. `x/y` bleibt damit der Shooter-/Fire-Request-Ursprung; der
+der aktuellen Itemgröße. Der Gameplay-Aimwinkel wird über die zentrale
+`getPlayerSpriteRotationFromAimAngle`-Konvention in die erwartete Sprite-Rotation überführt.
+`x/y` bleibt damit der Shooter-/Fire-Request-Ursprung; der
 `ProjectileManager` löst den kurzen Weg zur Mündung sicher auf und verwendet `resolvedSpawn` als
 autoritative initiale Projektilposition. Physics-Body, Renderer, Tracer, Time-Bubble-Abfrage,
 `lastX/lastY` und replizierte Projektilposition starten dort.

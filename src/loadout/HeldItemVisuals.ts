@@ -23,7 +23,12 @@
  * Klauen sind die Waffe.
  */
 import type * as Phaser from 'phaser';
-import { HELD_ITEM_TEXTURE_SIZE, transformHeldItemPoint, type MuzzleOrigin } from '../config';
+import {
+  getPlayerSpriteRotationFromAimAngle,
+  HELD_ITEM_TEXTURE_SIZE,
+  transformHeldItemPoint,
+  type MuzzleOrigin,
+} from '../config';
 import { findUtilityConfig, findWeaponConfig, getUtilityBaseId } from './LoadoutConfig';
 
 export interface HeldItemSpriteSpec {
@@ -190,7 +195,13 @@ export function getHeldWeaponGameplayMuzzleOrigin(
   aimAngle: number,
   displaySize: number,
 ): MuzzleOrigin | null {
-  return getHeldWeaponMuzzleOrigin(itemId, gameplayX, gameplayY, aimAngle, displaySize);
+  return getHeldWeaponMuzzleOrigin(
+    itemId,
+    gameplayX,
+    gameplayY,
+    getPlayerSpriteRotationFromAimAngle(aimAngle),
+    displaySize,
+  );
 }
 
 /** Stellt jede getragene Textur genau einmal in die Ladeschlange. */

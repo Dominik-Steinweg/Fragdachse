@@ -21,6 +21,8 @@ import {
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
+  getAimAngleFromPlayerSpriteRotation,
+  getPlayerSpriteRotationFromAimAngle,
 } from '../config';
 
 /**
@@ -59,8 +61,6 @@ export class PlayerEntity {
   private targetX = 0;
   private targetY = 0;
 
-  // Rotation: Bild zeigt nach Norden (up = -π/2 in Phaser), Offset +π/2 nötig
-  private static readonly ROTATION_OFFSET = Math.PI / 2;
   private targetRotation = 0;
 
   // Glow-Aura für Spielerfarbe
@@ -364,7 +364,7 @@ export class PlayerEntity {
 
   /** Sprite-Rotation direkt setzen (lokaler Spieler, jeden Frame). */
   setRotation(aimAngle: number): void {
-    this.sprite.rotation = aimAngle + PlayerEntity.ROTATION_OFFSET;
+    this.sprite.rotation = getPlayerSpriteRotationFromAimAngle(aimAngle);
     this.syncOverlays();
   }
 
@@ -379,14 +379,14 @@ export class PlayerEntity {
    * wird, ohne den Sprite-Offset weiterzureichen (z. B. der Taschenlampenkegel).
    */
   getAimAngle(): number {
-    return this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;
+    return getAimAngleFromPlayerSpriteRotation(this.sprite.rotation);
   }
 
   /** Rotation smooth zum Ziel interpolieren (Shortest-Path). */
   private lerpRotation(factor: number): void {
-    const current = this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;
+    const current = getAimAngleFromPlayerSpriteRotation(this.sprite.rotation);
     const diff = Phaser.Math.Angle.Wrap(this.targetRotation - current);
-    this.sprite.rotation = (current + diff * factor) + PlayerEntity.ROTATION_OFFSET;
+    this.sprite.rotation = getPlayerSpriteRotationFromAimAngle(current + diff * factor);
     this.syncOverlays();
   }
 

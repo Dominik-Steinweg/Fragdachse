@@ -133,10 +133,31 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
 
   it('berechnet die Gameplay-Mündung mit Fire-Request-Ursprung und -Winkel', () => {
     const gameplay = getHeldWeaponGameplayMuzzleOrigin('AWP', 300, 400, Math.PI / 2, PLAYER_SIZE);
-    const expected = getHeldWeaponMuzzleOrigin('AWP', 300, 400, Math.PI / 2, PLAYER_SIZE);
+    const expected = getHeldWeaponMuzzleOrigin('AWP', 300, 400, Math.PI / 2 + Math.PI / 2, PLAYER_SIZE);
     const interpolatedRenderPose = getHeldWeaponMuzzleOrigin('AWP', 900, 100, 0, PLAYER_SIZE);
     expect(gameplay).toEqual(expected);
     expect(gameplay).not.toEqual(interpolatedRenderPose);
+  });
+
+  it('richtet die lange AWP-Mündung in allen vier Gameplay-Hauptrichtungen aus', () => {
+    const origin = { x: 300, y: 400 };
+    const right = getHeldWeaponGameplayMuzzleOrigin('AWP', origin.x, origin.y, 0, PLAYER_SIZE);
+    if (!right) throw new Error('AWP benötigt eine Gameplay-Mündung');
+    const reach = Math.hypot(right.x - origin.x, right.y - origin.y);
+
+    const cases = [
+      { angle: 0, expectedX: origin.x + reach, expectedY: origin.y },
+      { angle: Math.PI / 2, expectedX: origin.x, expectedY: origin.y + reach },
+      { angle: Math.PI, expectedX: origin.x - reach, expectedY: origin.y },
+      { angle: -Math.PI / 2, expectedX: origin.x, expectedY: origin.y - reach },
+    ];
+
+    for (const testCase of cases) {
+      const muzzle = getHeldWeaponGameplayMuzzleOrigin('AWP', origin.x, origin.y, testCase.angle, PLAYER_SIZE);
+      expect(muzzle).not.toBeNull();
+      expect(muzzle!.x).toBeCloseTo(testCase.expectedX, 6);
+      expect(muzzle!.y).toBeCloseTo(testCase.expectedY, 6);
+    }
   });
 
   it('skaliert mit der Anzeigegroesse der Figur, etwa fuer die groessere Lobby-Vorschau', () => {

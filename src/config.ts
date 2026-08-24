@@ -264,6 +264,19 @@ export const PLAYER_SIZE  = 32;
 export const PLAYER_SPEED = 200;
 export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
 export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
+
+/** Held-Item-/Spielertexturen zeigen nach Norden; Gameplay-Aimwinkel zeigen nach rechts. */
+export const PLAYER_SPRITE_ROTATION_OFFSET = Math.PI / 2;
+
+/** Überführt den Gameplay-Aimwinkel in die Rotation der nach Norden ausgerichteten Sprite-Textur. */
+export function getPlayerSpriteRotationFromAimAngle(aimAngle: number): number {
+  return aimAngle + PLAYER_SPRITE_ROTATION_OFFSET;
+}
+
+/** Inverse der Spieler-Sprite-Konvention für bereits vorhandene Sprite-Rotation. */
+export function getAimAngleFromPlayerSpriteRotation(spriteRotation: number): number {
+  return spriteRotation - PLAYER_SPRITE_ROTATION_OFFSET;
+}
 /**
  * Authoring-/Referenzraster der getragenen Items. Dieses Raster ist unabhaengig von der
  * Source-/Frame-Aufloesung animierter Charakter-Sprites.
