@@ -239,7 +239,7 @@ bleiben wegen ihres Fade-In/Hold/Fade-Out/FIFO-Lifecycles CPU-Decals.
 | `airstrike-bomb` | `PLAYERS+ε` (10.001) | ADD | 1024 | `airstrike.bomb` | eigenes Tiefenband ueber den Spielern; `layer.gravity = 30` ist layerglobal |
 | `rocket-exhaust` | `PROJECTILES+ε` (15.001) | ADD | 2048 | `rocket.exhaust` | eigenes Tiefenband ueber den Projektilkoerpern, unter dem Accent |
 | `rocket-smoke` | `FIRE` (16) | NORMAL | 640 | `rocket.smoke` | NORMAL bei Alpha 0.95: die Reihenfolge ist sichtbar, teilen darf sich die Lane niemand. Kapazitaet bildet den alten `maxAliveParticles: 640` nach |
-| `muzzle-flash` | `PROJECTILES+2` (17) | ADD | 512 | `muzzleFlash.body`, `muzzleFlash.spark` | Body und Sparks teilen die Lane, weil ADD ueber opaker Geometrie reihenfolgeunkritisch ist; `reserveCritical: 64` schuetzt den immer sichtbaren Body |
+| `muzzle-flash` | `PROJECTILES+2+ε` (17.001) | ADD | 512 | `muzzleFlash.body`, `muzzleFlash.spark` | Der ε-Versatz bildet die Laufzeit-Reihenfolge des alten Emitters auf der persistenten Lane nach; ADD ueber opaker Geometrie bleibt reihenfolgeunkritisch, `reserveCritical: 64` schuetzt den Body |
 | `stink-normal` | `STINK+0.02` (17.02) | NORMAL | 1280 | `stink.inner`, `stink.plume` (nicht-additive Varianten) | NORMAL-Blend, muss ueber dem Haze/Blob-Container auf 17.0 liegen |
 | `stink-add` | `STINK+0.04` (17.04) | ADD | 3328 | `stink.inner`, `stink.plume` (additive Varianten), `stink.accent`, `stink.edge` | ADD ueber opakem Boden und damit reihenfolgeunabhaengig; getrennt von `stink-normal`, weil der Blend-Mode layerglobal ist |
 | `flame-outer` | `FIRE` (16) | ADD | 3072 | `flame.outer` | eigenes additives Flammenband auf DEPTH.FIRE, unter Core und Spark |

@@ -68,6 +68,18 @@ describe('gpu vfx quality', () => {
     expect(emitted).toEqual([0, 1, 0, 1, 0, 1]);
   });
 
+  it('rounds discrete bursts independently without carrying between shots', () => {
+    qualityFactors.standard = 0.35;
+    const policy = quality();
+    expect(policy.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, 2)).toBe(1);
+    expect(policy.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, 2)).toBe(1);
+    expect(policy.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, 2)).toBe(1);
+
+    qualityFactors.standard = 0;
+    const disabled = quality();
+    expect(disabled.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, 5)).toBe(0);
+  });
+
   it('keeps the carry of two effects apart and resets it on teardown', () => {
     qualityFactors.standard = 0.5;
     const policy = quality();

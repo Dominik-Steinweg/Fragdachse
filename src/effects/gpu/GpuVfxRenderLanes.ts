@@ -667,7 +667,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
   {
     id: GpuVfxLaneId.MuzzleFlash,
     label: 'muzzle-flash',
-    depth: DEPTH.PROJECTILES + 2,
+    depth: DEPTH.PROJECTILES + 2 + GPU_VFX_DEPTH_EPSILON,
     blendMode: Phaser.BlendModes.ADD,
     eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
     capacity: 512,
@@ -675,9 +675,10 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     order: 'add-over-opaque',
     reserveCritical: 64,
     rationale:
-      'Body und Sparks bleiben in einer gemeinsamen additiven Lane auf PROJECTILES + 2. Der Body '
-      + 'behaelt seine bisherige Tiefe; die Sparks wandern von + 1.5 auf + 2.0. ADD ueber opaker '
-      + 'Geometrie ist reihenfolgeunkritisch, und Linear/QuadOut decken alle Member-Animationen ab.',
+      'Body und Sparks bleiben in einer gemeinsamen additiven Lane auf PROJECTILES + 2 + epsilon. '
+      + 'Der epsilon-Versatz bildet die Laufzeit-Reihenfolge des alten Emitters auf der persistenten '
+      + 'Lane nach; die Sparks wandern dabei von + 1.5 auf + 2.001. ADD ueber opaker Geometrie ist '
+      + 'reihenfolgeunkritisch, und Linear/QuadOut decken alle Member-Animationen ab.',
     capacityRationale:
       '12 Spieler x 16.7 Negev-Schuesse/s x 5 Sparks x 80 ms ergeben rund 80 lebende Sparks; '
       + '236 ms decken den laengsten Muzzle-Lebenszyklus mit reichlich Burst- und Turret-Reserve. '

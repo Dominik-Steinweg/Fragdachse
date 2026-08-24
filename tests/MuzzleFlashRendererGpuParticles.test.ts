@@ -17,11 +17,12 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
   }),
 }));
 
-import { VOID_FIRE_COLOR } from '../src/config';
+import { DEPTH, VOID_FIRE_COLOR } from '../src/config';
 import { setEmissiveScale } from '../src/effects/EmissiveScale';
 import { MuzzleFlashRenderer } from '../src/effects/MuzzleFlashRenderer';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
+import { GPU_VFX_DEPTH_EPSILON } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
@@ -71,7 +72,7 @@ describe('muzzle flash renderer gpu particles', () => {
     renderer.playProjectileFlash(100, 120, 0, 1, 'bullet', 'p90');
 
     const body = lane.members[0];
-    expect(lane.depth).toBe(17);
+    expect(lane.depth).toBe(DEPTH.PROJECTILES + 2 + GPU_VFX_DEPTH_EPSILON);
     expect(lane.blendMode).toBe(1);
     expect(lane.enabledEases).toEqual(expect.arrayContaining(['Linear', 'Quad.easeOut']));
     expect(body.frame).toBe('muzzle-flash');
@@ -168,6 +169,20 @@ describe('muzzle flash renderer gpu particles', () => {
     expect(report.effects.find((effect) => effect.label === 'muzzleFlash.body')?.spawns).toBe(1);
     expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.spawns).toBe(0);
     expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.qualityDrops).toBe(4);
+  });
+
+  it('uses discrete burst rounding without carrying quality between shots', () => {
+    const { system, renderer, lane } = setup();
+    qualityFactors.standard = 0.35;
+    renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
+    renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
+
+    // round(4 * 0.35) = 1 for each independent explode-style burst; no second shot inherits a
+    // fractional remainder from the first one.
+    expect(lane.members).toHaveLength(4);
+    const report = system.buildReport();
+    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.spawns).toBe(2);
+    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.qualityDrops).toBe(6);
   });
 
   it('keeps body and sparks as separate profiler effects on one lane', () => {

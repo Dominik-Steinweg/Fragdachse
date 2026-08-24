@@ -18,6 +18,9 @@ import { GPU_VFX_EFFECTS, type GpuVfxEffectId, type GpuVfxImportance } from './G
  *   Faktor quadratisch ein.
  * - **Burst skalieren** (`scaleBurst`) – die Semantik des `emitParticleAt`-Wrappers, mit
  *   Bruchteil-Uebertrag je Effekt, damit auch Faktor 0.35 nicht jeden zweiten Burst verschluckt.
+ * - **Diskrete Bursts skalieren** (`scaleDiscreteBurst`) – die Semantik von
+ *   `ParticleEmitter.explode(count)`: jeder Burst wird unabhaengig gerundet und hat keinen
+ *   Uebertrag in den naechsten Schuss.
  *
  * Das Backend veraendert bewusst *nicht* selbst die Frequenzen: die Effekte haben
  * unterschiedliche Scheduler-Semantik (die Wolke setzt ihren Countdown pro Frame zurueck, der
@@ -73,6 +76,16 @@ export class GpuVfxQuality {
     const emitted = Math.floor(total);
     this.carry[effect] = total - emitted;
     return emitted;
+  }
+
+  /**
+   * Diskreter Burst wie `ParticleEmitter.explode(count)`: kein Fraction-Carry zwischen Events,
+   * sondern mindestens ein Partikel bei jedem positiven Quality-Faktor.
+   */
+  scaleDiscreteBurst(effect: GpuVfxEffectId, count: number): number {
+    const factor = this.getEmissionFactor(effect);
+    if (factor <= 0) return 0;
+    return Math.max(1, Math.round(count * factor));
   }
 
   /** Beim Teardown: ein halber Burst darf nicht in die naechste Runde uebertragen werden. */

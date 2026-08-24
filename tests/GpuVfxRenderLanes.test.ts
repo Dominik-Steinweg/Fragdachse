@@ -5,7 +5,7 @@ vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
 import { GPU_VFX_ATLAS, GpuVfxFrameId } from '../src/effects/gpu/GpuVfxAtlas';
 import { GPU_VFX_EFFECTS } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
-import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
+import { GPU_VFX_DEPTH_EPSILON, GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { DEPTH } from '../src/config';
 
 /** Die layerglobalen Eigenschaften – nur sie duerfen eine eigene Lane rechtfertigen. */
@@ -87,7 +87,7 @@ describe('gpu vfx render lanes', () => {
     const sparks = GPU_VFX_EFFECTS.find((effect) => effect.label === 'muzzleFlash.spark')!;
 
     expect(lane.label).toBe('muzzle-flash');
-    expect(lane.depth).toBe(DEPTH.PROJECTILES + 2);
+    expect(lane.depth).toBe(DEPTH.PROJECTILES + 2 + GPU_VFX_DEPTH_EPSILON);
     expect(lane.blendMode).toBe(1);
     expect(lane.order).toBe('add-over-opaque');
     expect(lane.eases).toEqual([GpuVfxEase.Linear, GpuVfxEase.QuadOut]);

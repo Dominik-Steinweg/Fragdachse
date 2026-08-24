@@ -179,7 +179,7 @@ export class MuzzleFlashRenderer {
     // visible even when standard spark quality is reduced.
     system.spawn(bodySpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
 
-    const sparkCount = system.quality.scaleBurst(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount);
+    const sparkCount = system.quality.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount);
     if (sparkCount < cfg.sparkCount) {
       system.recordQualityDrop(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount - sparkCount);
     }
