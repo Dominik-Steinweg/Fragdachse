@@ -224,27 +224,38 @@ export function ensureExplosionRingTexture(scene: Phaser.Scene): void {
 function drawExplosionBlob(scene: Phaser.Scene, key: string, radii: readonly number[]): void {
   const size = 48;
   const half = size / 2;
+  const safeRadius = half - 3.5;
+
   ensureCanvasTexture(scene.textures, key, size, size, (ctx) => {
-    ctx.save();
-    ctx.beginPath();
-    for (let index = 0; index < radii.length; index += 1) {
-      const angle = (index / radii.length) * Math.PI * 2;
-      const radius = half * 0.82 * radii[index];
-      const x = half + Math.cos(angle) * radius;
-      const y = half + Math.sin(angle) * radius;
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.clip();
-    const gradient = ctx.createRadialGradient(half - 3, half - 4, 2, half, half, half - 2);
-    gradient.addColorStop(0, 'rgba(255,255,255,0.96)');
-    gradient.addColorStop(0.38, 'rgba(255,255,255,0.78)');
-    gradient.addColorStop(0.74, 'rgba(255,255,255,0.34)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gradient;
+    // Eine breite Grundwolke hält die Mitte geschlossen. Sie läuft vor dem Sicherheitsrand
+    // aus, damit die Frame-Kante auch beim additiven Stapeln unsichtbar bleibt.
+    const body = ctx.createRadialGradient(half - 2.5, half - 3, 0, half - 1, half - 1.5, safeRadius * 0.72);
+    body.addColorStop(0, 'rgba(255,255,255,0.78)');
+    body.addColorStop(0.34, 'rgba(255,255,255,0.7)');
+    body.addColorStop(0.68, 'rgba(255,255,255,0.42)');
+    body.addColorStop(0.9, 'rgba(255,255,255,0.1)');
+    body.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = body;
     ctx.fillRect(0, 0, size, size);
-    ctx.restore();
+
+    // Die ueberlappenden, weich auslaufenden Lobes ersetzen die alte harte Polygon-Clipmaske.
+    // Die leicht unterschiedlichen Radien bleiben die authored Silhouettenvariation von A/B.
+    for (let index = 0; index < radii.length; index += 1) {
+      const lobeScale = radii[index];
+      const angle = (index / radii.length) * Math.PI * 2 + (lobeScale - 0.85) * 0.18;
+      const centerRadius = safeRadius * (0.15 + (1 - lobeScale) * 0.12);
+      const lobeRadius = safeRadius * (0.58 + lobeScale * 0.24);
+      const x = half + Math.cos(angle) * centerRadius;
+      const y = half + Math.sin(angle) * centerRadius;
+      const lobe = ctx.createRadialGradient(x, y, 0, x, y, lobeRadius);
+      lobe.addColorStop(0, 'rgba(255,255,255,0.5)');
+      lobe.addColorStop(0.38, 'rgba(255,255,255,0.42)');
+      lobe.addColorStop(0.72, 'rgba(255,255,255,0.2)');
+      lobe.addColorStop(0.92, 'rgba(255,255,255,0.035)');
+      lobe.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = lobe;
+      ctx.fillRect(x - lobeRadius, y - lobeRadius, lobeRadius * 2, lobeRadius * 2);
+    }
   });
 }
 
