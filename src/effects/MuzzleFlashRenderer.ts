@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
 import { mixColors } from './EffectUtils';
-import { emissiveAlpha } from './EmissiveScale';
+import { getEmissiveScale } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 import { ensureMuzzleFlashTextures } from './gpu/GpuVfxSourceTextures';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
@@ -41,28 +41,38 @@ interface FlashPresetConfig {
 }
 
 const FLASH_PRESETS: Record<MuzzleFlashPreset, FlashPresetConfig> = {
-  default: { tint: 0xffd794, alpha: 0.7, scaleX: 0.9, scaleY: 0.7, duration: 64, sparkCount: 5, sparkSpeed: 60, sparkSpread: 18, sparkTints: [0xffffff, 0xffd48d, 0xff8c42] },
-  glock: { tint: 0xffe0b2, alpha: 0.55, scaleX: 0.75, scaleY: 0.56, duration: 60, sparkCount: 4, sparkSpeed: 52, sparkSpread: 14, sparkTints: [0xffffff, 0xffdb9b, 0xff9a4d] },
+  default: { tint: 0xffd794, alpha: 0.84, scaleX: 0.9, scaleY: 0.7, duration: 64, sparkCount: 5, sparkSpeed: 60, sparkSpread: 18, sparkTints: [0xffffff, 0xffd48d, 0xff8c42] },
+  glock: { tint: 0xffe0b2, alpha: 0.7, scaleX: 0.75, scaleY: 0.56, duration: 60, sparkCount: 4, sparkSpeed: 52, sparkSpread: 14, sparkTints: [0xffffff, 0xffdb9b, 0xff9a4d] },
   xbow: { tint: 0xe8dcc2, alpha: 0.26, scaleX: 0.7, scaleY: 0.28, duration: 48, sparkCount: 2, sparkSpeed: 36, sparkSpread: 10, sparkTints: [0xfef8e9, 0xd2c09d] },
-  p90: { tint: 0xffd183, alpha: 0.58, scaleX: 0.95, scaleY: 0.58, duration: 60, sparkCount: 6, sparkSpeed: 80, sparkSpread: 14, sparkTints: [0xffffff, 0xffe5a4, 0xffa04e] },
-  ak47: { tint: 0xffc46e, alpha: 0.68, scaleX: 1.08, scaleY: 0.62, duration: 70, sparkCount: 8, sparkSpeed: 86, sparkSpread: 17, sparkTints: [0xffffff, 0xffd28f, 0xff8e35] },
-  shotgun: { tint: 0xffe6b3, alpha: 0.76, scaleX: 1.22, scaleY: 0.9, duration: 96, sparkCount: 10, sparkSpeed: 96, sparkSpread: 26, sparkTints: [0xffffff, 0xffdf9e, 0xff9145] },
-  awp: { tint: 0xfff3c2, alpha: 0.82, scaleX: 1.35, scaleY: 0.62, duration: 108, sparkCount: 11, sparkSpeed: 110, sparkSpread: 14, sparkTints: [0xffffff, 0xfff0c8, 0xffb35f] },
-  gauss: { tint: 0xbef4ff, alpha: 0.95, scaleX: 1.65, scaleY: 1.02, duration: 110, sparkCount: 12, sparkSpeed: 96, sparkSpread: 20, sparkTints: [0xffffff, 0xcff8ff, 0x78d6ff], useEnergyCore: true },
-  negev: { tint: 0xffcc74, alpha: 0.62, scaleX: 1.0, scaleY: 0.58, duration: 60, sparkCount: 7, sparkSpeed: 90, sparkSpread: 20, sparkTints: [0xffffff, 0xffd98d, 0xff8f2e] },
-  rocket: { tint: 0xffa247, alpha: 0.72, scaleX: 1.12, scaleY: 0.76, duration: 100, sparkCount: 8, sparkSpeed: 72, sparkSpread: 16, sparkTints: [0xffffff, 0xffc475, 0xff7131] },
+  p90: { tint: 0xffd183, alpha: 0.75, scaleX: 0.95, scaleY: 0.58, duration: 60, sparkCount: 6, sparkSpeed: 80, sparkSpread: 14, sparkTints: [0xffffff, 0xffe5a4, 0xffa04e] },
+  ak47: { tint: 0xffc46e, alpha: 0.84, scaleX: 1.08, scaleY: 0.62, duration: 70, sparkCount: 8, sparkSpeed: 86, sparkSpread: 17, sparkTints: [0xffffff, 0xffd28f, 0xff8e35] },
+  shotgun: { tint: 0xffe6b3, alpha: 0.84, scaleX: 1.22, scaleY: 0.9, duration: 96, sparkCount: 10, sparkSpeed: 96, sparkSpread: 26, sparkTints: [0xffffff, 0xffdf9e, 0xff9145] },
+  awp: { tint: 0xfff3c2, alpha: 0.88, scaleX: 1.35, scaleY: 0.62, duration: 108, sparkCount: 11, sparkSpeed: 110, sparkSpread: 14, sparkTints: [0xffffff, 0xfff0c8, 0xffb35f] },
+  gauss: { tint: 0xbef4ff, alpha: 0.98, scaleX: 1.65, scaleY: 1.02, duration: 110, sparkCount: 12, sparkSpeed: 96, sparkSpread: 20, sparkTints: [0xffffff, 0xcff8ff, 0x78d6ff], useEnergyCore: true },
+  negev: { tint: 0xffcc74, alpha: 0.8, scaleX: 1.0, scaleY: 0.58, duration: 60, sparkCount: 7, sparkSpeed: 90, sparkSpread: 20, sparkTints: [0xffffff, 0xffd98d, 0xff8f2e] },
+  rocket: { tint: 0xffa247, alpha: 0.8, scaleX: 1.12, scaleY: 0.76, duration: 100, sparkCount: 8, sparkSpeed: 72, sparkSpread: 16, sparkTints: [0xffffff, 0xffc475, 0xff7131] },
   flame: { tint: 0xff8c34, alpha: 0.42, scaleX: 0.95, scaleY: 0.62, duration: 54, sparkCount: 5, sparkSpeed: 48, sparkSpread: 22, sparkTints: [0xffffff, 0xffcf6f, 0xff6326] },
-  energy: { tint: 0xc8f7ff, alpha: 0.66, scaleX: 1.0, scaleY: 0.82, duration: 96, sparkCount: 8, sparkSpeed: 64, sparkSpread: 24, sparkTints: [0xffffff, 0xc8f7ff, 0x73bed3], useEnergyCore: true },
-  plasma: { tint: 0xf1f1f1, alpha: 0.6, scaleX: 0.92, scaleY: 0.78, duration: 84, sparkCount: 8, sparkSpeed: 54, sparkSpread: 24, sparkTints: [0xffffff, 0xdedede, 0x9ea4a8], useEnergyCore: true },
-  asmd_primary: { tint: 0xd7fbff, alpha: 0.92, scaleX: 1.42, scaleY: 1.04, duration: 118, sparkCount: 14, sparkSpeed: 104, sparkSpread: 22, sparkTints: [0xffffff, 0xdaf9ff, 0x9de7ff, 0x73bed3], useEnergyCore: true },
+  energy: { tint: 0xc8f7ff, alpha: 0.76, scaleX: 1.0, scaleY: 0.82, duration: 96, sparkCount: 8, sparkSpeed: 64, sparkSpread: 24, sparkTints: [0xffffff, 0xc8f7ff, 0x73bed3], useEnergyCore: true },
+  plasma: { tint: 0xf1f1f1, alpha: 0.7, scaleX: 0.92, scaleY: 0.78, duration: 84, sparkCount: 8, sparkSpeed: 54, sparkSpread: 24, sparkTints: [0xffffff, 0xdedede, 0x9ea4a8], useEnergyCore: true },
+  asmd_primary: { tint: 0xd7fbff, alpha: 0.96, scaleX: 1.42, scaleY: 1.04, duration: 118, sparkCount: 14, sparkSpeed: 104, sparkSpread: 22, sparkTints: [0xffffff, 0xdaf9ff, 0x9de7ff, 0x73bed3], useEnergyCore: true },
 };
 
 const CORE_SCALE_END_MULTIPLIER = 1.35;
 const OUTER_SCALE_START_MULTIPLIER = 1.35;
 const OUTER_SCALE_END_MULTIPLIER = 1.12;
 const OUTER_LIFETIME_MULTIPLIER = 1.2;
-const OUTER_ALPHA_MULTIPLIER = 0.48;
+const OUTER_ALPHA_MULTIPLIER = 0.68;
 const OUTER_TINT_BLEND_START = 0.42;
+const MUZZLE_EMISSIVE_FLOOR = 0.7;
+
+/**
+ * Muzzle flashes sit above the world grade on an additive lane. Keep their local daylight
+ * floor high enough to read over bright floors without changing the shared emissive balance.
+ * At the night end (scale 1) this returns the exact authored alpha.
+ */
+function muzzleEmissiveAlpha(alpha: number): number {
+  return alpha * (MUZZLE_EMISSIVE_FLOOR + getEmissiveScale() * (1 - MUZZLE_EMISSIVE_FLOOR));
+}
 
 export class MuzzleFlashRenderer {
   private lighting: LightingSystem | null = null;
@@ -195,7 +205,7 @@ export class MuzzleFlashRenderer {
     coreSpec.scaleEnd = cfg.scaleY * CORE_SCALE_END_MULTIPLIER;
     coreSpec.stretchStart = bodyStretch;
     coreSpec.stretchEnd = bodyStretch;
-    coreSpec.alphaStart = emissiveAlpha(cfg.alpha);
+    coreSpec.alphaStart = muzzleEmissiveAlpha(cfg.alpha);
     coreSpec.alphaEnd = 0;
     coreSpec.tint = color ?? cfg.tint;
     coreSpec.frame = frame;
@@ -213,7 +223,7 @@ export class MuzzleFlashRenderer {
     outerSpec.scaleEnd = cfg.scaleY * OUTER_SCALE_START_MULTIPLIER * OUTER_SCALE_END_MULTIPLIER;
     outerSpec.stretchStart = bodyStretch;
     outerSpec.stretchEnd = bodyStretch;
-    outerSpec.alphaStart = emissiveAlpha(cfg.alpha * OUTER_ALPHA_MULTIPLIER);
+    outerSpec.alphaStart = muzzleEmissiveAlpha(cfg.alpha * OUTER_ALPHA_MULTIPLIER);
     outerSpec.alphaEnd = 0;
     outerSpec.tint = color ?? cfg.tint;
     outerSpec.frame = frame;
@@ -229,7 +239,7 @@ export class MuzzleFlashRenderer {
     sparkSpec.y = y;
     sparkSpec.scaleStart = 0.6;
     sparkSpec.scaleEnd = 0.04;
-    sparkSpec.alphaStart = emissiveAlpha(0.82);
+    sparkSpec.alphaStart = muzzleEmissiveAlpha(0.82);
     sparkSpec.alphaEnd = 0;
     sparkSpec.rotation = 0;
     sparkSpec.stretchStart = 1;

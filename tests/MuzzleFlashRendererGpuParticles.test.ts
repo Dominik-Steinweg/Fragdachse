@@ -87,19 +87,34 @@ describe('muzzle flash renderer gpu particles', () => {
     expect(core.scaleX.base).toBeCloseTo(0.95, 10);
     expect(core.scaleX.amplitude).toBeCloseTo(0.95 * 0.35, 10);
     expect(core.scaleY.ease).toBe('Quad.easeOut');
-    expect(evaluateFakeAnimation(core.alpha, 0)).toBeCloseTo(0.58, 10);
-    expect(core.alpha.amplitude).toBeCloseTo(-0.58, 10);
+    expect(evaluateFakeAnimation(core.alpha, 0)).toBeCloseTo(0.75, 10);
+    expect(core.alpha.amplitude).toBeCloseTo(-0.75, 10);
     expect(core.alpha.ease).toBe('Quad.easeOut');
     expect(outer.scaleY.base).toBeCloseTo(0.58 * 1.35, 10);
     expect(outer.scaleY.amplitude).toBeCloseTo(0.58 * 1.35 * 0.12, 10);
     expect(outer.scaleX.base).toBeCloseTo(0.95 * 1.35, 10);
     expect(outer.scaleX.amplitude).toBeCloseTo(0.95 * 1.35 * 0.12, 10);
     expect(outer.scaleY.ease).toBe('Linear');
-    expect(outer.alpha.base).toBeCloseTo(0.58 * 0.48, 10);
-    expect(outer.alpha.amplitude).toBeCloseTo(-0.58 * 0.48, 10);
+    expect(outer.alpha.base).toBeCloseTo(0.75 * 0.68, 10);
+    expect(outer.alpha.amplitude).toBeCloseTo(-0.75 * 0.68, 10);
     expect(outer.alpha.ease).toBe('Linear');
     expect(outer.tintBlend.base).toBeCloseTo(0.42, 10);
     expect(outer.tintBlend.amplitude).toBeCloseTo(0.58, 10);
+  });
+
+  it('keeps the muzzle readable in daylight with a local correction while preserving the night alpha', () => {
+    const { renderer, lane } = setup();
+    setEmissiveScale(0);
+    renderer.playProjectileFlash(100, 120, 1, 0, 'bullet', 'p90');
+
+    const core = lane.members[0];
+    const outer = lane.members[1];
+    expect(evaluateFakeAnimation(core.alpha, 0)).toBeCloseTo(0.75 * 0.7, 10);
+    expect(outer.alpha.base).toBeCloseTo(0.75 * 0.68 * 0.7, 10);
+
+    setEmissiveScale(1);
+    renderer.playProjectileFlash(100, 120, 1, 0, 'bullet', 'p90');
+    expect(evaluateFakeAnimation(lane.members[8].alpha, 0)).toBeCloseTo(0.75, 10);
   });
 
   it('selects the old flash and energy motifs for every public preset path', () => {

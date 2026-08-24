@@ -55,13 +55,14 @@ export function ensureDeathGlowTexture(scene: Phaser.Scene): void {
   });
 }
 
-/** Bestehendes Muzzle-Flash-Motiv; die Zeichenwerte bleiben pixelgleich zum alten Renderer. */
+/** Bestehendes Muzzle-Flash-Motiv mit etwas dichterem, weiterhin weich auslaufendem Mittelbereich. */
 export function ensureMuzzleFlashTexture(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, TEX_MUZZLE_FLASH, 32, 18, (ctx) => {
     const grad = ctx.createRadialGradient(10, 9, 0, 10, 9, 14);
     grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-    grad.addColorStop(0.28, 'rgba(255,236,180,0.96)');
-    grad.addColorStop(0.6, 'rgba(255,170,88,0.44)');
+    grad.addColorStop(0.27, 'rgba(255,238,190,0.98)');
+    grad.addColorStop(0.52, 'rgba(255,188,102,0.62)');
+    grad.addColorStop(0.78, 'rgba(255,138,50,0.18)');
     grad.addColorStop(1, 'rgba(255,128,48,0.0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
@@ -86,13 +87,14 @@ export function ensureMuzzleSparkTexture(scene: Phaser.Scene): void {
   });
 }
 
-/** Bestehendes Energy-Core-Motiv; die Zeichenwerte bleiben pixelgleich zum alten Renderer. */
+/** Bestehendes Energy-Core-Motiv mit analog verdichtetem, weich auslaufendem Mittelbereich. */
 export function ensureMuzzleEnergyTexture(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, TEX_MUZZLE_ENERGY, 36, 24, (ctx) => {
     const grad = ctx.createRadialGradient(11, 12, 0, 11, 12, 15);
     grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-    grad.addColorStop(0.35, 'rgba(212,248,255,0.92)');
-    grad.addColorStop(0.68, 'rgba(115,190,211,0.32)');
+    grad.addColorStop(0.32, 'rgba(218,250,255,0.96)');
+    grad.addColorStop(0.58, 'rgba(115,196,220,0.46)');
+    grad.addColorStop(0.82, 'rgba(105,177,204,0.12)');
     grad.addColorStop(1, 'rgba(115,190,211,0.0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
