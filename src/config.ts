@@ -379,7 +379,7 @@ export const BLOOD_HIT_VFX = {
 } as const;
 
 export const DEATH_DISINTEGRATION_VFX = {
-  durationMs: 700,
+  durationMs: 900,
   chunkSizePx: 4,
   travelMinPx: 22,
   travelMaxPx: 104,
@@ -388,11 +388,13 @@ export const DEATH_DISINTEGRATION_VFX = {
   scaleStart: 1.55,
   scaleEnd: 0.42,
   /** Sichtbarer Zuschlag fuer die Hauptmasse; basiert weiterhin auf der World-Display-Groesse. */
-  mainFragmentScaleBoost: 1.35,
+  mainFragmentScaleBoost: 2.0,
+  /** Anteil eines hellen Kontrast-Lifts fuer die dominante Fragment-Ebene. */
+  mainFragmentContrast: 0.5,
   /** Hit-Impuls als Vielfaches des radialen Fragment-Reisewegs. */
-  mainHitImpulse: 1.65,
+  mainHitImpulse: 1.9,
   microHitImpulse: 1.85,
-  glowHitImpulse: 1.6,
+  glowHitImpulse: 1.8,
   alpha: 1,
   auraTintMix: 0.26,
   maxChunksPerEffect: 64,

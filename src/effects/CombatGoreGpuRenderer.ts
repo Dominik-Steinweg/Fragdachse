@@ -494,6 +494,9 @@ export class CombatGoreGpuRenderer {
       auraColor,
       DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness),
     );
+    const visibleTint = micro
+      ? tint
+      : mixColors(tint, COLORS.GREY_1, DEATH_DISINTEGRATION_VFX.mainFragmentContrast);
 
     spec.lifeMs = lifeMs;
     spec.x = originX + startX;
@@ -516,7 +519,7 @@ export class CombatGoreGpuRenderer {
     spec.alphaStart = Math.min(1, DEATH_DISINTEGRATION_VFX.alpha * randomBetween(rng, 0.98, 1.08));
     spec.alphaEnd = 0;
     spec.alphaEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
-    spec.tint = tint;
+    spec.tint = visibleTint;
     spec.tintBlendStart = 1;
     spec.tintBlendEnd = 1;
     gpu.spawn(spec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);

@@ -17,7 +17,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 }));
 
 import { CombatGoreGpuRenderer } from '../src/effects/CombatGoreGpuRenderer';
-import { BLOOD_HIT_VFX } from '../src/config';
+import { BLOOD_HIT_VFX, DEATH_DISINTEGRATION_VFX } from '../src/config';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
@@ -215,6 +215,36 @@ describe('combat gore gpu renderer', () => {
     expect(main.spawns).toBeGreaterThan(0);
     expect(xRange).toBeGreaterThan(20);
     expect(yRange).toBeGreaterThan(20);
+  });
+
+  it('gives the primary death fragments an unmistakable size, contrast and readable window', () => {
+    const { scene, renderer, gpu } = setup();
+    addVisualTexture(scene, 'full_death_badger', 'walk-1', 64, 64);
+
+    renderer.playDeath({
+      ...death,
+      textureKey: 'full_death_badger',
+      frame: 'walk-1',
+      displayWidth: 32,
+      displayHeight: 32,
+      rotation: 0,
+    });
+
+    const mainCount = gpu.buildReport().effects
+      .find((effect) => effect.label === 'death.fragment')!.spawns;
+    const main = findFakeLane(scene, 'gore-normal').members.slice(0, mainCount);
+    const primary = main[0]!;
+    const tint = primary.tint;
+    const luminance = 0.299 * ((tint >> 16) & 0xff)
+      + 0.587 * ((tint >> 8) & 0xff)
+      + 0.114 * (tint & 0xff);
+
+    expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeGreaterThan(1.4);
+    expect(primary.scaleY.duration).toBeGreaterThanOrEqual(
+      DEATH_DISINTEGRATION_VFX.durationMs - 80,
+    );
+    expect(primary.alpha.ease).toBe('Linear');
+    expect(luminance).toBeGreaterThan(100);
   });
 
   it('applies the lethal hit direction to both death fragments and glow', () => {
