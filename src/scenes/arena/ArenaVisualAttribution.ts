@@ -97,7 +97,7 @@ export const GRAPHICS_FAMILIES = {
   biteEffects: ['BiteRenderer'],
   zeusTaserEffects: ['ZeusTaserRenderer'],
   baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator'],
-  placementPreview: ['PlacementPreviewRenderer'],
+  placementPreview: ['PlacementPreviewRenderer', 'PersistentBaseVisuals'],
   rockTools: ['RockVisualHelper'],
   gameplayHud: ['ArenaHUD', 'CenterHUD', 'CoopDefenseSecondaryObjectiveHud'],
 } as const;

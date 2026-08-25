@@ -22,6 +22,7 @@ import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '..
 import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
+import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
@@ -646,6 +647,10 @@ export interface CoopDefenseMapTutorialStepConfig {
   readonly durationMs?: number;
 }
 
+export interface CoopDefenseMapPersistentBaseConfig {
+  readonly baseId: string;
+}
+
 export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMapTutorialStepConfig {
   readonly durationMs: number;
 }
@@ -749,6 +754,8 @@ export interface CoopDefenseMapConfig {
   readonly respawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
+  /** Reuses the authored friendly main base as the persistent anchor. */
+  readonly persistentBase?: CoopDefenseMapPersistentBaseConfig;
 }
 
 /** Maschinenlesbarer Kampagnen-Audit fuer das GDD-Review und Balancing-Tools. */
@@ -1031,8 +1038,8 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefense
   }
   const campaignIds = maps.filter((mapConfig) => mapConfig.mapId !== '0').map((mapConfig) => mapConfig.mapId);
   const expectedCampaignIds = campaignIds.map((_, index) => String(index + 1));
-  if (campaignIds.length !== 17 || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
-    throw new Error('[coopDefenseMaps] Campaign registry must contain exactly maps 1 through 17 in order');
+  if (campaignIds.length !== 19 || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
+    throw new Error('[coopDefenseMaps] Campaign registry must contain exactly maps 1 through 19 in order');
   }
   return {
     defaultMapId: registry.defaultMapId,
@@ -1065,6 +1072,13 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   );
   const arenaHeightCells = normalizeCoopDefenseArenaHeightCells(
     mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+  );
+  const persistentBase = normalizePersistentBaseConfig(
+    mapConfig.mapId,
+    mapConfig.persistentBase,
+    bases,
+    arenaWidthCells,
+    arenaHeightCells,
   );
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
     bases,
@@ -1175,6 +1189,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
       mapConfig.respawnsPerPlayer,
     ),
     itemDrop,
+    persistentBase,
   };
 }
 
@@ -1207,6 +1222,83 @@ function validateAdvanceRoute(
 function validateFriendlyMainBase(mapId: string, bases: readonly CoopBaseConfig[]): void {
   if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly main base`);
+  }
+}
+
+function normalizePersistentBaseConfig(
+  mapId: string,
+  config: CoopDefenseMapPersistentBaseConfig | undefined,
+  bases: readonly CoopBaseConfig[],
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): CoopDefenseMapPersistentBaseConfig | undefined {
+  if (config === undefined) return undefined;
+  if (typeof config.baseId !== 'string' || config.baseId.trim().length === 0) {
+    throw new Error(`[coopDefenseMaps] Persistent base on map ${mapId} needs a non-empty baseId`);
+  }
+  const baseId = config.baseId.trim();
+  const base = bases.find((candidate) => candidate.id === baseId);
+  if (!base) throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} references an unknown base`);
+  if (base.faction === 'hostile' || (base.role ?? 'main') !== 'main') {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} must reference a friendly main base`);
+  }
+
+  const dimensions = getBaseShapeDimensions(base.shape);
+  const origin = getBaseOriginForArena(base.anchor, dimensions.width, dimensions.height, arenaWidthCells, arenaHeightCells);
+  const anchorGridX = origin.gridX + Math.floor((dimensions.width - 1) / 2);
+  const anchorGridY = origin.gridY + Math.floor((dimensions.height - 1) / 2);
+  const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
+  if (
+    anchorGridX - reservationRadius < 0
+    || anchorGridX + reservationRadius >= arenaWidthCells
+    || anchorGridY - reservationRadius < 0
+    || anchorGridY + reservationRadius >= arenaHeightCells
+  ) {
+    throw new Error(
+      `[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs ${reservationRadius} free cells around its anchor`,
+    );
+  }
+  return { baseId };
+}
+
+function getBaseShapeDimensions(shape: CoopBaseShape): { width: number; height: number } {
+  if (shape.kind === 'rectangle') {
+    return { width: Math.max(1, shape.widthCells), height: Math.max(1, shape.heightCells) };
+  }
+  let width = 1;
+  let height = 1;
+  for (const cell of shape.cells) {
+    width = Math.max(width, cell.gridX + 1);
+    height = Math.max(height, cell.gridY + 1);
+  }
+  return { width, height };
+}
+
+function getBaseOriginForArena(
+  anchor: CoopBaseAnchor,
+  width: number,
+  height: number,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): { gridX: number; gridY: number } {
+  switch (anchor.kind) {
+    case 'right-center':
+      return {
+        gridX: arenaWidthCells - width - Math.max(0, anchor.edgeInsetCells),
+        gridY: Math.floor((arenaHeightCells - height) / 2),
+      };
+    case 'left-center':
+      return {
+        gridX: Math.max(0, anchor.edgeInsetCells),
+        gridY: Math.floor((arenaHeightCells - height) / 2),
+      };
+    case 'center-offset':
+      return {
+        gridX: Math.floor((arenaWidthCells - width) / 2) + anchor.dxCells,
+        gridY: Math.floor((arenaHeightCells - height) / 2) + anchor.dyCells,
+      };
+    case 'grid':
+      return { gridX: anchor.gridX, gridY: anchor.gridY };
   }
 }
 

@@ -1,5 +1,5 @@
 import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
+import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isPersistentBaseReservationCell, isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
@@ -154,7 +154,8 @@ export class ArenaGenerator {
         rng,
         // Void-fire keeps its authored centered hazard corridor even though no train track is
         // rendered. All other Coop maps keep a free cell between the railway and every base.
-        coopMapConfig?.trackMode === 'void-fire' || coopMapConfig === undefined
+        coopMapConfig?.trackMode === 'void-fire' && !coopMapConfig.persistentBase
+          || coopMapConfig === undefined
           ? []
           : coopBaseSpecs ?? [],
         coopMapConfig?.trackPosition,
@@ -597,6 +598,7 @@ export class ArenaGenerator {
     bases: readonly BaseSpec[],
     reservationBaseSpecs?: readonly BaseSpec[],
   ): boolean {
+    if (isReservedBaseObstacleCell(gridX, gridY, bases.length > 0 ? bases : reservationBaseSpecs)) return true;
     if (bases.length === 0) {
       return isReservedBaseObstacleCell(gridX, gridY, reservationBaseSpecs);
     }
@@ -640,7 +642,12 @@ export class ArenaGenerator {
       for (const group of encounter.groups) {
         // Eine Gruppe mit authored Bereich startet nie am Randband; geprueft wird dann genau
         // der Bereich, aus dem sie wirklich kommt.
-        if (group.spawnArea) sourceGroups.push(ArenaGenerator.getSpawnAreaCells(group.spawnArea, blocked, baseCells));
+        if (group.spawnArea) sourceGroups.push(ArenaGenerator.getSpawnAreaCells(
+          group.spawnArea,
+          blocked,
+          baseCells,
+          bases,
+        ));
         else fronts.add(group.front ?? DEFAULT_SPAWN_FRONT);
       }
     }
@@ -654,7 +661,7 @@ export class ArenaGenerator {
     }
     if (mapConfig.boss) fronts.add(DEFAULT_SPAWN_FRONT);
     for (const front of fronts) {
-      sourceGroups.push(ArenaGenerator.getSpawnFrontCells(front, blocked, baseCells));
+      sourceGroups.push(ArenaGenerator.getSpawnFrontCells(front, blocked, baseCells, bases));
     }
 
     for (const sources of sourceGroups) {
@@ -695,6 +702,7 @@ export class ArenaGenerator {
     front: SpawnFront,
     blocked: boolean[][],
     baseCells: ReadonlySet<number>,
+    bases: readonly BaseSpec[] = [],
   ): Array<{ gridX: number; gridY: number }> {
     const depthX = Math.min(Math.max(2, Math.floor(GRID_COLS * 0.15)), GRID_COLS - 1);
     const depthY = Math.min(Math.max(2, Math.floor(GRID_ROWS * 0.15)), GRID_ROWS - 1);
@@ -708,7 +716,12 @@ export class ArenaGenerator {
         const onFrontBand = front === 'west' || front === 'east'
           ? (front === 'west' ? gridX <= depthX : gridX >= GRID_COLS - depthX - 1)
           : (front === 'north' ? gridY <= depthY : gridY >= GRID_ROWS - depthY - 1);
-        if (!onFrontBand || blocked[gridY][gridX] || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))) continue;
+        if (
+          !onFrontBand
+          || blocked[gridY][gridX]
+          || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))
+          || isReservedBaseObstacleCell(gridX, gridY, bases)
+        ) continue;
         cells.push({ gridX, gridY });
       }
     }
@@ -719,13 +732,18 @@ export class ArenaGenerator {
     area: { gridX: number; gridY: number; widthCells: number; heightCells: number },
     blocked: boolean[][],
     baseCells: ReadonlySet<number>,
+    bases: readonly BaseSpec[] = [],
   ): Array<{ gridX: number; gridY: number }> {
     const cells: Array<{ gridX: number; gridY: number }> = [];
     const maxGridX = Math.min(GRID_COLS - 1, area.gridX + area.widthCells - 1);
     const maxGridY = Math.min(GRID_ROWS - 1, area.gridY + area.heightCells - 1);
     for (let gridY = Math.max(0, area.gridY); gridY <= maxGridY; gridY += 1) {
       for (let gridX = Math.max(0, area.gridX); gridX <= maxGridX; gridX += 1) {
-        if (blocked[gridY][gridX] || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))) continue;
+        if (
+          blocked[gridY][gridX]
+          || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))
+          || isReservedBaseObstacleCell(gridX, gridY, bases)
+        ) continue;
         cells.push({ gridX, gridY });
       }
     }
@@ -793,6 +811,10 @@ export class ArenaGenerator {
   private static isTrackColumnClearOfBases(col: number, bases: readonly BaseSpec[]): boolean {
     const trackMinX = col;
     const trackMaxX = col + 1;
+    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+      if (isPersistentBaseReservationCell(trackMinX, gridY, bases)
+        || isPersistentBaseReservationCell(trackMaxX, gridY, bases)) return false;
+    }
     return bases.every((base) => (
       trackMaxX < base.region.minGridX - COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS
       || trackMinX > base.region.maxGridX + COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS
@@ -1506,6 +1528,7 @@ export class ArenaGenerator {
         blocked[gridY][gridX]
         || occupied.has(key)
         || isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)
+        || isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)
         || (avoidVoidTrackCorridor && trackCols.has(gridX))
       ) return false;
       return baseCells.every((baseCell) => (

@@ -15,10 +15,16 @@ CoopDefenseMapConfig bündelt Layout und Round-Inhalt:
 - optionale secondaryObjectives, boss und mapEvents;
 - genau ein Objective: repel-assault, survive, defeat-boss, destroy-hostile-bases oder advance.
 - Der Boss-Slot authoriert nur Boss-ID und Spawnzeit; Bosswerte bleiben zentral in `coopDefenseEnemies.json`.
-- Die Kampagnenregistry enthält Sandbox 00 sowie genau die Kampagnenmaps 01 bis 17; Map 1 ist die geführte Vorstoß-Tutorialroute, Map 9 basisloses Survival, Map 14 Survival mit Stellung, Map 16 repel-assault und Map 17 destroy-hostile-bases mit optionalem Carry.
+- Die Kampagnenregistry enthält Sandbox 00 sowie genau die Kampagnenmaps 01 bis 19; Map 1 ist die geführte Vorstoß-Tutorialroute, Map 9 basisloses Survival, Map 14 Survival mit Stellung, Map 16 repel-assault, Map 17 destroy-hostile-bases mit optionalem Carry und Map 18/19 die einfachen Persistent-Base-Foundation-Routen.
 - Klassenfreischaltungen sind pro Klasse über `unlockAfterMapId` authoriert; der Fortschritt speichert die freigeschalteten Klassen-IDs und leitet keine alten globalen Map-5-Freischaltungen mehr ab.
 
 Die Map-ID ist der gemeinsame Schlüssel. Alles, was beide Peers deterministisch aus der Map auflösen können, braucht keinen eigenen Netzwerk-Key. Dynamische Änderungen wie HP, aktive Lebenszyklen oder Carry-Positionen werden dagegen über die bestehenden Round-/Game-State-Verträge repliziert.
+
+## Persistente Basis
+
+Maps mit `persistentBase.baseId` verwenden die vorhandene authored Friendly-Main-Base als stabilen Anker; eine zweite persistente Basis wird nicht erzeugt. Der Fortschritt liegt ausschließlich im V3-Progress-Dokument als map-relative Blueprints. Der Host lädt, validiert, plant und materialisiert diese Blueprints zu Rundenbeginn und commitet Änderungen erst nach einem Sieg.
+
+Die aktive Zone wird aus dem gespeicherten Radius und dem gemeinsamen Anker-Grid berechnet. Der Generator reserviert unabhängig vom aktuellen Radius immer den maximalen Radius plus Clearance für Felsen, Bäume, Tracks, Hazards, Spawns und andere authored/prozedurale Hindernisse. Die Karten 18 und 19 authorieren deshalb unterschiedliche Anker und Arenaabmessungen, aber denselben deterministischen Persistent-Base-Vertrag.
 
 ## Encounters und Druckquellen
 

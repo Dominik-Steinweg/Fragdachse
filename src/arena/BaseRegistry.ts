@@ -26,6 +26,8 @@ import {
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMaps';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
+import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../config/persistentBase';
+import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
 
 export interface BaseTurretSpec {
   readonly id: string;
@@ -62,6 +64,11 @@ export interface BaseSpec {
   readonly id: string;
   readonly cells: readonly { gridX: number; gridY: number }[];
   readonly region: ArenaGridRegion;
+  /** Stable geometric anchor used by map-relative persistent constructions. */
+  readonly anchorGridX?: number;
+  readonly anchorGridY?: number;
+  /** Set only on the authored persistent friendly main base. */
+  readonly persistentReservationRadiusCells?: number;
   readonly hpMax: number;
   /**
    * Authored Start-HP (Standard: `hpMax`). Beide Peers loesen ihn deterministisch aus der Map auf,
@@ -315,11 +322,21 @@ export function resolveCoopDefenseBases(
     if (objective.type === 'carry' && objective.carry !== undefined) continue;
     for (const baseId of objective.targets) objectiveByBaseId.set(baseId, objective.id);
   }
-  return mapConfig.bases.map((baseConfig) => resolveBaseSpec(
+  const resolved = mapConfig.bases.map((baseConfig) => resolveBaseSpec(
     baseConfig,
     humanPlayerCount,
     baseConfig.dormant === true ? objectiveByBaseId.get(baseConfig.id) : undefined,
   ));
+  const persistentBaseId = mapConfig.persistentBase?.baseId;
+  if (!persistentBaseId) return resolved;
+  return resolved.map((base) => base.id === persistentBaseId
+    ? {
+      ...base,
+      anchorGridX: Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
+      anchorGridY: Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
+      persistentReservationRadiusCells: MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS,
+    }
+    : base);
 }
 
 function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {
@@ -480,7 +497,24 @@ export function isReservedBaseObstacleCell(
 ): boolean {
   if (isCaptureTheBeerBaseCell(gx, gy)) return true;
   if (isCoopDefenseBaseObstacleClearanceCell(gx, gy, bases)) return true;
-  return false;
+  return isPersistentBaseReservationCell(gx, gy, bases);
+}
+
+export function isPersistentBaseReservationCell(
+  gx: number,
+  gy: number,
+  bases?: readonly BaseSpec[],
+): boolean {
+  return bases?.some((base) => base.persistentReservationRadiusCells !== undefined && (
+    isCellInsidePersistentBaseReservation(
+      gx,
+      gy,
+      {
+        gridX: base.anchorGridX ?? Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
+        gridY: base.anchorGridY ?? Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
+      },
+    )
+  )) ?? false;
 }
 
 /**

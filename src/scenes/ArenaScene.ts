@@ -182,6 +182,7 @@ import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { resolveCoopDefenseBases } from '../arena/BaseRegistry';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -191,6 +192,7 @@ import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
 import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { TunnelRenderer } from './arena/TunnelRenderer';
+import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
 import { PerformanceAblationController } from './arena/PerformanceAblation';
@@ -317,6 +319,7 @@ export class ArenaScene extends Phaser.Scene {
   private activeProjectileLightIds = new Set<number>();
   private projectileLightScratch = new Set<number>();
   private placementPreview!: PlacementPreviewRenderer;
+  private persistentBaseVisuals!: PersistentBaseVisuals;
   private tunnelRenderer!: TunnelRenderer;
   private gaussWarning!: GaussWarningRenderer;
   private hostUpdate!: HostUpdateCoordinator;
@@ -498,7 +501,10 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
+    // The alternate dirt sheet was retired; the base dirt blob remains the deterministic
+    // fallback mottle source for existing maps.
+    this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('kies', './assets/sprites/kies47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
     // Rote Variante fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
@@ -974,7 +980,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseSession: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -1221,6 +1227,7 @@ export class ArenaScene extends Phaser.Scene {
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this, this.objectiveAnnouncements!);
     this.secondaryObjectiveHud.build();
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
+    this.persistentBaseVisuals = new PersistentBaseVisuals(this);
     this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(
       this,
@@ -2202,6 +2209,29 @@ export class ArenaScene extends Phaser.Scene {
       ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
       : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
+    const persistentMapConfig = inArena && isCoopDefenseMode(bridge.getGameMode())
+      ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+      : undefined;
+    const persistentHumanPlayerCount = Math.max(
+      1,
+      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
+    );
+    const persistentBases = persistentMapConfig
+      ? resolveCoopDefenseBases(persistentMapConfig, persistentHumanPlayerCount)
+      : [];
+    const persistentRadiusCells = bridge.getRoundState()?.persistentBaseRadiusCells
+      ?? getStoredCoopDefenseProgress().persistentBase.radiusCells;
+    this.persistentBaseVisuals.sync(
+      persistentMapConfig?.persistentBase,
+      persistentBases,
+      persistentRadiusCells,
+      inArena
+        && !spectator
+        && (
+          this.ctx.inputSystem.isUtilityPlacementActive()
+          || this.ctx.inputSystem.isInspectorConstructionPlacementActive()
+        ),
+    );
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
     const showAim = inArena
       && !optionsOpen
@@ -3685,6 +3715,7 @@ export class ArenaScene extends Phaser.Scene {
     keyboard.on('keydown-M', this.timeOfDayHotkeyHandler);
 
     this.events.once('shutdown', () => {
+      this.persistentBaseVisuals?.destroy();
       if (this.timeOfDayHotkeyHandler) {
         keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
         this.timeOfDayHotkeyHandler = null;

@@ -245,6 +245,8 @@ export interface RoundState {
   /** Einmaliger reliable Anker des tatsaechlich erfolgreichen Coop-Boss-Spawns. */
   coopDefenseBossSpawnedAtMs?: number;
   coopDefenseHumanPlayerCount?: number;
+  /** Host-authoritative active persistent-base radius for the round. */
+  persistentBaseRadiusCells?: number;
   // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der
   // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel
   // abzuwarten (sonst kann eine Basis beim Client fehlen, wenn der Key später als die Phase ankommt).

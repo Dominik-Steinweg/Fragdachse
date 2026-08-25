@@ -18,6 +18,7 @@ import type {
   LoadoutSlot,
 } from '../types';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
+import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../config/coopDefenseConstructions';
 import {
   addCoopDefenseItem,
   getCoopDefenseItemSalvageXp,
@@ -62,15 +63,21 @@ import {
   COOP_DEFENSE_BALANCE_STORAGE_KEY,
   COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION,
 } from '../debug/coopDefenseBalance/types';
+import {
+  clonePersistentBaseState,
+  DEFAULT_PERSISTENT_BASE_STATE,
+  sanitizePersistentBaseState,
+  type PersistentBaseState,
+} from '../persistentBase/PersistentBaseTypes';
 
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
-export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v2';
+export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v3';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
-export const LOCAL_PROGRESS_SCHEMA_VERSION = 2;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 3;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 2;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 3;
 export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
 export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
@@ -108,6 +115,8 @@ export interface CoopDefenseProgressPreferences {
    * geoeffnet hat. Treibt den Hinweis am Items-Button und wird beim Oeffnen zurueckgesetzt.
    */
   unseenItems: boolean;
+  /** Committed, map-relative Inspector constructions. */
+  persistentBase: PersistentBaseState;
 }
 
 interface LocalPreferences {
@@ -151,7 +160,7 @@ interface LocalSettingsDocumentV2 {
 }
 
 export interface LocalProgressDocument {
-  schemaVersion: 2;
+  schemaVersion: 3;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
   coopDefense: {
@@ -172,6 +181,7 @@ export interface LocalProgressDocument {
     /** Legacy-Feld in alten Schema-2-Saves; wird beim Dekodieren in die Queue migriert. */
     pendingItemReward?: CoopDefensePendingItemReward | null;
     unseenItems: boolean;
+    persistentBase: PersistentBaseState;
   };
 }
 
@@ -218,6 +228,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   equippedItemIds: {},
   pendingItemRewards: [],
   unseenItems: false,
+  persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
 };
 
 /**
@@ -670,7 +681,7 @@ function sanitizeCompactProfile(raw: unknown): CompactUpgradeProfile | null {
     if (value.kind !== 'construction' && value.kind !== 'utility') return null;
     if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 128) return null;
     if (value.kind === 'construction') {
-      if (!['rocket_turret', 'machine_gun_turret', 'flame_turret'].includes(value.id)) return null;
+      if (!COOP_DEFENSE_CONSTRUCTION_IDS.includes(value.id as ConstructionId)) return null;
       return { kind: 'construction', id: value.id as ConstructionId };
     }
     return { kind: 'utility', id: value.id };
@@ -714,6 +725,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   const loadout = sanitizeStoredLoadout(document.loadout);
   const unlockedClassIds = sanitizeStoredUnlockedClassIds(coop.unlockedClassIds);
   if (unlockedClassIds === null) return null;
+  const persistentBase = sanitizePersistentBaseState(coop.persistentBase);
+  if (!persistentBase) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
@@ -805,6 +818,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         equippedItemIds,
         pendingItemRewards,
         unseenItems: coop.unseenItems && items.length > 0,
+        persistentBase,
       },
     },
   };
@@ -868,6 +882,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
         offers: [...reward.offers],
       })),
       unseenItems: progress.unseenItems,
+      persistentBase: clonePersistentBaseState(progress.persistentBase),
     },
   };
 }
@@ -1271,6 +1286,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     profilesByClass: cloneProfilesByClass(progress.profilesByClass),
     itemsUnlocked: progress.itemsUnlocked,
     unseenItems: progress.unseenItems,
+    persistentBase: clonePersistentBaseState(progress.persistentBase),
     ...cloneCoopDefenseItemState(progress),
   };
 }
@@ -1289,7 +1305,29 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(progress.profilesByClass),
+        persistentBase: clonePersistentBaseState(progress.persistentBase),
         ...cloneCoopDefenseItemState(progress),
+      },
+    },
+  }));
+}
+
+/** Typed persistence port used by the persistent-base domain; no caller needs LocalStorage. */
+export function getStoredPersistentBaseState(): PersistentBaseState {
+  return clonePersistentBaseState(readPreferences().progression.coopDefense.persistentBase);
+}
+
+/** Atomically replaces only the committed persistent-base value inside the V3 progress document. */
+export function setStoredPersistentBaseState(state: PersistentBaseState): void {
+  const sanitized = sanitizePersistentBaseState(state);
+  if (!sanitized) return;
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        persistentBase: sanitized,
       },
     },
   }));
@@ -1311,6 +1349,7 @@ export function resetStoredCoopDefenseCharacter(): void {
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
+        persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
         ...cloneCoopDefenseItemState(DEFAULT_COOP_DEFENSE_PROGRESS),
       },
     },

@@ -16,6 +16,8 @@ import map14 from './14-brandschneise.json';
 import map15 from './15-leerenjaeger.json';
 import map16 from './16-zeitzuender.json';
 import map17 from './17-bierrettung.json';
+import map18 from './18-foundation.json';
+import map19 from './19-grundstein.json';
 
 /** Statische Kampagnenregistry; die Reihenfolge ist fachlich relevant. */
 export const COOP_DEFENSE_MAP_REGISTRY = {
@@ -39,5 +41,7 @@ export const COOP_DEFENSE_MAP_REGISTRY = {
     map15,
     map16,
     map17,
+    map18,
+    map19,
   ],
 } as const;

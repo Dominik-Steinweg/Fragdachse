@@ -250,10 +250,83 @@ export class PlacementSystem {
       expiresAt: 0,
       warningStartsAt: 0,
       angle: preview.angle,
+      toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
       turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
       energyInjectorEffect: cfg.energyInjectorEffect,
     };
+    this.runtimeRocks.set(rock.id, rock);
+    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    return { ...rock };
+  }
+
+  /**
+   * Host-only restore path. It deliberately skips player range/occupancy checks but reuses the
+   * normal grid, static geometry, hazard and barrier collision contract and creates the same
+   * RuntimeRock model as a regular placement.
+   */
+  materializePersistentPlaceable(
+    cfg: CoopDefenseConstructionDefinition | PlaceableUtilityConfig,
+    gridX: number,
+    gridY: number,
+    angle: number,
+    playerId: string,
+    ownerColor: number,
+  ): SyncedPlaceableRock | null {
+    const isConstruction = 'capacityCost' in cfg;
+    const footprint = isConstruction ? [{ dx: 0, dy: 0 }] : cfg.placeable.footprint;
+    if (!this.canPlaceCells(footprint, gridX, gridY, false)) return null;
+
+    const safeAngle = Number.isFinite(angle) ? angle : 0;
+    const rock: RuntimeRockRecord = isConstruction
+      ? {
+        id: this.nextRockId++,
+        kind: cfg.kind,
+        constructionId: cfg.id,
+        gridX,
+        gridY,
+        hp: Math.max(1, cfg.maxHp),
+        maxHp: Math.max(1, cfg.maxHp),
+        ownerId: playerId,
+        ownerColor,
+        expiresAt: 0,
+        warningStartsAt: 0,
+        angle: safeAngle,
+        targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
+        turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
+        energyInjectorEffect: cfg.energyInjectorEffect,
+        toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
+      }
+      : {
+        id: this.nextRockId++,
+        kind: cfg.placeable.kind,
+        gridX,
+        gridY,
+        hp: Math.max(1, cfg.placeable.maxHp),
+        maxHp: Math.max(1, cfg.placeable.maxHp),
+        ownerId: playerId,
+        ownerColor,
+        expiresAt: 0,
+        warningStartsAt: 0,
+        angle: safeAngle,
+        indestructible: cfg.placeable.indestructible,
+        toolRef: { kind: 'utility', id: cfg.id } satisfies LoadoutToolRef,
+        enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock'
+          ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
+        enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock'
+          ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
+        enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock'
+          ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
+        secondProjectileDamageFactor: cfg.placeable.kind === 'turret'
+          ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
+        targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
+        turretWeaponId: cfg.placeable.kind === 'turret'
+          && (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
+          ? 'SPORE_TURRET_PLASMA' : undefined,
+        energyInjectorEffect: cfg.placeable.kind === 'turret'
+          ? cfg.placeable.energyInjectorEffect : undefined,
+      };
+
     this.runtimeRocks.set(rock.id, rock);
     this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
     return { ...rock };
@@ -493,6 +566,14 @@ export class PlacementSystem {
     return this.canPlaceCells([{ dx: 0, dy: 0 }], gx, gy);
   }
 
+  canMaterializeCells(
+    footprint: readonly { readonly dx: number; readonly dy: number }[],
+    gridX: number,
+    gridY: number,
+  ): boolean {
+    return this.canPlaceCells(footprint, gridX, gridY, false);
+  }
+
   getClampedTargetCell(
     originX: number,
     originY: number,
@@ -555,7 +636,12 @@ export class PlacementSystem {
     return this.canPlaceCells(cfg.placeable.footprint, gx, gy);
   }
 
-  private canPlaceCells(footprint: readonly { dx: number; dy: number }[], gx: number, gy: number): boolean {
+  private canPlaceCells(
+    footprint: readonly { dx: number; dy: number }[],
+    gx: number,
+    gy: number,
+    checkPlayers = true,
+  ): boolean {
     for (const cell of footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
@@ -566,7 +652,7 @@ export class PlacementSystem {
       if (this.pedestalCells.has(this.key(tx, ty))) return false;
       if (this.isHazardCellLocked(this.key(tx, ty))) return false;
       if (this.isClosedBarrierCell(tx, ty)) return false;
-      if (this.isPlayerOccupyingCell(tx, ty)) return false;
+      if (checkPlayers && this.isPlayerOccupyingCell(tx, ty)) return false;
     }
 
     return true;

@@ -5,6 +5,7 @@ import {
   LOCAL_PROGRESS_STORAGE_KEY,
   LOCAL_SETTINGS_STORAGE_KEY,
   exportStoredGameProgressJson,
+  getStoredPersistentBaseState,
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
@@ -14,6 +15,7 @@ import {
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseTotalXp,
+  setStoredPersistentBaseState,
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
   setStoredMasterVolume,
@@ -21,6 +23,7 @@ import {
 } from '../src/utils/localPreferences';
 import { resolveBrowserLocale } from '../src/i18n/types';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
+import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 
 class MemoryStorage implements Storage {
   readonly values = new Map<string, string>();
@@ -80,6 +83,88 @@ describe('local progress generation', () => {
 
     invalidateLocalStorageCache();
     expect(getStoredCoopDefenseProgress().totalXp).toBe(77);
+  });
+
+  it('stores the V3 persistent base in the progress document and restores it through export/import', () => {
+    const state: PersistentBaseState = {
+      schemaVersion: 1,
+      radiusCells: 7,
+      revision: 4,
+      constructions: [{
+        persistentId: 'pb-test-1',
+        tool: { kind: 'construction', id: 'rocket_turret' },
+        relativeGridX: 2,
+        relativeGridY: -1,
+        angle: 0.5,
+        placementOrder: 0,
+      }],
+    };
+    setStoredPersistentBaseState(state);
+    expect(getStoredPersistentBaseState()).toEqual(state);
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    expect(exported.progress.schemaVersion).toBe(LOCAL_PROGRESS_SCHEMA_VERSION);
+    expect(exported.progress.coopDefense.persistentBase).toEqual(state);
+
+    setStoredPersistentBaseState({ schemaVersion: 1, radiusCells: 5, revision: 0, constructions: [] });
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredPersistentBaseState()).toEqual(state);
+  });
+
+  it('rejects V2 progress exports, duplicate persistent IDs and corrupt persistent-base data', () => {
+    const envelope = JSON.parse(exportStoredGameProgressJson());
+
+    const v2 = { ...envelope, formatVersion: 2 };
+    expect(importStoredGameProgressJson(JSON.stringify(v2))).toEqual({
+      ok: false,
+      messageKey: 'ui.lobby.saveIncompatible',
+    });
+
+    const duplicate = structuredClone(envelope);
+    duplicate.progress.coopDefense.persistentBase.constructions = [
+      {
+        persistentId: 'duplicate',
+        tool: { kind: 'construction', id: 'rocket_turret' },
+        relativeGridX: 0,
+        relativeGridY: 0,
+        angle: 0,
+        placementOrder: 0,
+      },
+      {
+        persistentId: 'duplicate',
+        tool: { kind: 'utility', id: 'ROCK_BARRIER' },
+        relativeGridX: 1,
+        relativeGridY: 0,
+        angle: 0,
+        placementOrder: 1,
+      },
+    ];
+    expect(importStoredGameProgressJson(JSON.stringify(duplicate))).toEqual({
+      ok: false,
+      messageKey: 'ui.lobby.saveInvalid',
+    });
+
+    const corrupt = structuredClone(envelope);
+    corrupt.progress.coopDefense.persistentBase = { schemaVersion: 1, radiusCells: 99, revision: 0, constructions: [] };
+    expect(importStoredGameProgressJson(JSON.stringify(corrupt))).toEqual({
+      ok: false,
+      messageKey: 'ui.lobby.saveInvalid',
+    });
+  });
+
+  it('resets the persistent base with the character progress', () => {
+    setStoredPersistentBaseState({
+      schemaVersion: 1,
+      radiusCells: 8,
+      revision: 3,
+      constructions: [],
+    });
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredPersistentBaseState()).toEqual({
+      schemaVersion: 1,
+      radiusCells: 5,
+      revision: 0,
+      constructions: [],
+    });
   });
 
   it('ignores progress under the previous storage key and preserves settings', () => {
