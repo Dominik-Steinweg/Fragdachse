@@ -4001,7 +4001,7 @@ export class ArenaLifecycleCoordinator {
       targetX,
       targetY,
     );
-    if (!construction) return { ok: false, reason: 'blocked' };
+    if (!construction) return { ok: false, reason: 'placement' };
 
     if (definition.kind === 'pedestal') {
       const world = this.rockVisualHelper.gridToWorld(construction.gridX, construction.gridY);
@@ -4014,7 +4014,7 @@ export class ArenaLifecycleCoordinator {
       ) ?? false;
       if (!registered) {
         this.ctx.placementSystem?.removeRock(construction.id);
-        return { ok: false, reason: 'blocked' };
+        return { ok: false, reason: 'placement' };
       }
     }
 

@@ -1292,6 +1292,7 @@ export class InputSystem {
 
     // BFG charge sound (charged_gate utilities)
     const utCfg = this.getChargeableUtilityConfig();
+    const inspectorTool = this.getInspectorUtilityParams()?.toolRef;
     if (utCfg) {
       const actionId = this.createHeldActionId(utCfg.activation.type);
       this.activeHeldActionId = actionId;
@@ -1299,6 +1300,7 @@ export class InputSystem {
         actionId,
         utCfg.activation.type,
         utCfg.activation.fullChargeDuration,
+        inspectorTool,
       );
     }
     if (utCfg?.activation.type === 'charged_gate') {

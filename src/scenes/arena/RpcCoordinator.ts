@@ -5,7 +5,8 @@ import type { RendererBundle }      from './RendererBundle';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
-import type { ExplosionVisualStyle } from '../../types';
+import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
+import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 
 // SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
@@ -34,6 +35,46 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
     case 'brood_hatch': return { key: 'shot_throw', scale: 1 };
     default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
+}
+
+type ChargeableUtilityConfig = UtilityConfig & {
+  activation: Extract<UtilityConfig['activation'], { type: 'charged_throw' | 'charged_gate' }>;
+};
+
+type HostChargeValidation =
+  | { ok: true; authoritativeParams?: LoadoutUseParams }
+  | { ok: false; reason: 'blocked' };
+
+function isChargeableUtilityConfig(config: UtilityConfig | undefined): config is ChargeableUtilityConfig {
+  return config?.activation.type === 'charged_throw' || config?.activation.type === 'charged_gate';
+}
+
+/** Consumes the host-held action only for a utility that actually requires one. */
+function validateHostUtilityCharge(
+  ctx: ArenaContext,
+  senderId: string,
+  utility: UtilityConfig | undefined,
+  params?: LoadoutUseParams,
+): HostChargeValidation {
+  if (!isChargeableUtilityConfig(utility)) return { ok: true, authoritativeParams: params };
+
+  const held = ctx.hostHeldActionSystem?.consume(
+    senderId,
+    params?.heldActionId,
+    utility.activation.type,
+    utility.activation.fullChargeDuration,
+    Date.now(),
+  );
+  if (!held || (utility.activation.type === 'charged_gate' && held.chargeFraction < 1)) {
+    return { ok: false, reason: 'blocked' };
+  }
+  return {
+    ok: true,
+    authoritativeParams: {
+      ...(params ?? {}),
+      utilityChargeFraction: held.chargeFraction,
+    },
+  };
 }
 
 /**
@@ -119,7 +160,7 @@ export class RpcCoordinator {
   }
 
   private registerHeldActionHandler(): void {
-    bridge.registerHeldActionHandler((playerId, operation, actionId, kind) => {
+    bridge.registerHeldActionHandler((playerId, operation, actionId, kind, _durationMs, toolRef) => {
       if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return false;
       const system = this.ctx.hostHeldActionSystem;
       if (!system) return false;
@@ -133,10 +174,21 @@ export class RpcCoordinator {
         || this.ctx.burrowSystem?.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
-        if (bridge.getPlayerCommittedLoadout(playerId)?.coopDefenseClassId !== 'inspector_gadachs') return false;
+        if (toolRef || bridge.getPlayerCommittedLoadout(playerId)?.coopDefenseClassId !== 'inspector_gadachs') return false;
         return system.start(playerId, actionId, kind, 1_000, Date.now());
       }
-      const utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
+      let utility: UtilityConfig | undefined;
+      if (toolRef) {
+        const committed = bridge.getPlayerCommittedLoadout(playerId);
+        if (
+          toolRef.kind !== 'utility'
+          || committed?.coopDefenseClassId !== 'inspector_gadachs'
+          || !(committed.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id)
+        ) return false;
+        utility = getUtilityConfigForMode(toolRef.id, bridge.getGameMode());
+      } else {
+        utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
+      }
       if (!utility || utility.activation.type !== kind) return false;
       return system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
     });
@@ -149,28 +201,6 @@ export class RpcCoordinator {
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
       let authoritativeParams = params;
-      if (slot === 'utility') {
-        const utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(senderId);
-        const activation = utility?.activation;
-        const isTranslocatorRecall = utility?.type === 'translocator'
-          && this.ctx.translocatorSystem?.getActivePuckId(senderId) !== undefined;
-        if (isTranslocatorRecall) this.ctx.hostHeldActionSystem?.clearPlayer(senderId);
-        if (!params?.globalDismantle
-          && activation && (activation.type === 'charged_throw' || activation.type === 'charged_gate')
-          && !isTranslocatorRecall) {
-          const held = this.ctx.hostHeldActionSystem?.consume(
-            senderId,
-            params?.heldActionId,
-            activation.type,
-            activation.fullChargeDuration,
-            Date.now(),
-          );
-          if (!held || (activation.type === 'charged_gate' && held.chargeFraction < 1)) {
-            return { ok: false, reason: 'blocked' };
-          }
-          authoritativeParams = { ...params, utilityChargeFraction: held.chargeFraction };
-        }
-      }
       if (committed?.coopDefenseClassId === 'inspector_gadachs') {
         if (params?.globalDismantle) {
           if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle) {
@@ -219,7 +249,12 @@ export class RpcCoordinator {
             targetY,
           ) ?? { ok: false, reason: 'blocked' };
         }
+        if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
         if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
+        const inspectorUtility = getUtilityConfigForMode(params.toolRef.id, bridge.getGameMode());
+        if (!inspectorUtility) return { ok: false, reason: 'invalid' };
+        const charge = validateHostUtilityCharge(this.ctx, senderId, inspectorUtility, params);
+        if (!charge.ok) return charge;
         return this.lifecycle?.useInspectorUtility(
           senderId,
           params.toolRef,
@@ -227,8 +262,20 @@ export class RpcCoordinator {
           targetX,
           targetY,
           Date.now(),
-          params,
+          charge.authoritativeParams,
         ) ?? { ok: false, reason: 'blocked' };
+      }
+      if (slot === 'utility') {
+        const utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(senderId);
+        const isTranslocatorRecall = utility?.type === 'translocator'
+          && this.ctx.translocatorSystem?.getActivePuckId(senderId) !== undefined;
+        if (isTranslocatorRecall) {
+          this.ctx.hostHeldActionSystem?.clearPlayer(senderId);
+        } else {
+          const charge = validateHostUtilityCharge(this.ctx, senderId, utility, params);
+          if (!charge.ok) return charge;
+          authoritativeParams = charge.authoritativeParams;
+        }
       }
       // Legacy construction packets from older clients remain accepted during
       // the migration, but still pass through the same host validation.

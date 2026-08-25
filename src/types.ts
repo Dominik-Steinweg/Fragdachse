@@ -931,7 +931,7 @@ export interface LoadoutUseParams {
 
 export type HostHeldActionKind = 'charged_throw' | 'charged_gate' | 'global_dismantle';
 
-export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity';
+export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity' | 'placement';
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
 
 export interface LoadoutUseResult {

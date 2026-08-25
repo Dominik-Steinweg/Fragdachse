@@ -664,6 +664,7 @@ export class NetworkBridge {
     actionId: string,
     kind?: HostHeldActionKind,
     durationMs?: number,
+    toolRef?: LoadoutToolRef,
   ) => boolean) | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private slimeBloomEffectHandler: SlimeBloomEffectHandler | null = null;
@@ -2525,12 +2526,12 @@ export class NetworkBridge {
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
-  sendHeldActionStart(actionId: string, kind: HostHeldActionKind, durationMs: number): void {
+  sendHeldActionStart(actionId: string, kind: HostHeldActionKind, durationMs: number, toolRef?: LoadoutToolRef): void {
     if (isHost()) {
-      this.heldActionHandler?.(myPlayer().id, 'start', actionId, kind, durationMs);
+      this.heldActionHandler?.(myPlayer().id, 'start', actionId, kind, durationMs, toolRef);
       return;
     }
-    this.sendHostRpc('hact', { op: 'start', aid: actionId, kind, dur: durationMs });
+    this.sendHostRpc('hact', { op: 'start', aid: actionId, kind, dur: durationMs, toolRef });
   }
 
   sendHeldActionCancel(actionId: string): void {
@@ -2548,18 +2549,32 @@ export class NetworkBridge {
       actionId: string,
       kind?: HostHeldActionKind,
       durationMs?: number,
+      toolRef?: LoadoutToolRef,
     ) => boolean,
   ): void {
     this.heldActionHandler = handler;
     this.registerHostRpcHandler('hact', (data: unknown, caller: PlayerState): boolean => {
       if (!isHost() || !isRecord(data)) return false;
-      const { op, aid, kind, dur } = data as { op?: unknown; aid?: unknown; kind?: unknown; dur?: unknown };
+      const { op, aid, kind, dur, toolRef: rawToolRef } = data as {
+        op?: unknown;
+        aid?: unknown;
+        kind?: unknown;
+        dur?: unknown;
+        toolRef?: unknown;
+      };
       if ((op !== 'start' && op !== 'cancel')
         || typeof aid !== 'string' || aid.length === 0 || aid.length > 80 || aid.trim() !== aid) return false;
       if (op === 'cancel') return this.heldActionHandler?.(caller.id, op, aid) === true;
       if ((kind !== 'charged_throw' && kind !== 'charged_gate' && kind !== 'global_dismantle')
         || !isFiniteNumber(dur) || dur <= 0 || dur > 30_000) return false;
-      return this.heldActionHandler?.(caller.id, op, aid, kind, dur) === true;
+      if (rawToolRef !== undefined
+        && (!isRecord(rawToolRef) || rawToolRef.kind !== 'utility' || typeof rawToolRef.id !== 'string')) {
+        return false;
+      }
+      const toolRef = rawToolRef === undefined
+        ? undefined
+        : { kind: 'utility' as const, id: (rawToolRef as { id: string }).id };
+      return this.heldActionHandler?.(caller.id, op, aid, kind, dur, toolRef) === true;
     });
   }
 

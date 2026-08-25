@@ -1448,6 +1448,14 @@ export class ArenaScene extends Phaser.Scene {
         handleLocalFailureFeedback(slot, result.reason, inputStarted, result.resourceKind);
       }
     };
+    const getInspectorConstructionFailureMessage = (reason: LoadoutUseResult['reason']): string => {
+      switch (reason) {
+        case 'capacity': return t('ui.errors.capacity');
+        case 'cooldown': return t('ui.errors.cooldown');
+        case 'placement': return t('ui.errors.placement');
+        default: return t('ui.errors.blocked');
+      }
+    };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (!bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
@@ -1527,7 +1535,13 @@ export class ArenaScene extends Phaser.Scene {
             this.placementPreview.showPlacementError(t('ui.errors.dismantleFailed'));
             return;
           }
-          if (isUtilityPlacementAction || isUltimatePlacementAction || isInspectorConstructionAction) {
+          if (isInspectorConstructionAction) {
+            this.placementPreview.showPlacementError(
+              getInspectorConstructionFailureMessage(result?.reason),
+            );
+            return;
+          }
+          if (isUtilityPlacementAction || isUltimatePlacementAction) {
             this.placementPreview.showPlacementError(
               result?.reason === 'capacity' ? t('ui.errors.capacity') : t('ui.errors.buildFailed'),
             );
@@ -1535,7 +1549,9 @@ export class ArenaScene extends Phaser.Scene {
           }
           handleLocalLoadoutFailure(slot, result, inputStarted);
         }).catch(() => {
-          if (isUtilityPlacementAction || isUltimatePlacementAction || isInspectorConstructionAction) {
+          if (isInspectorConstructionAction) {
+            this.placementPreview.showPlacementError(t('ui.errors.blocked'));
+          } else if (isUtilityPlacementAction || isUltimatePlacementAction) {
             this.placementPreview.showPlacementError(t('ui.errors.buildFailed'));
           }
         });
