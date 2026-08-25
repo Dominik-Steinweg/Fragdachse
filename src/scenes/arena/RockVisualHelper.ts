@@ -75,8 +75,59 @@ export class RockVisualHelper {
   }
 
   materializePlaceableRock(rock: SyncedPlaceableRock, playSpawnFx: boolean): void {
+    this.materializePlaceableRockBatch([rock], playSpawnFx);
+  }
+
+  /**
+   * Materialisiert eine Snapshot-Aenderungswelle in zwei Phasen: erst werden alle Layout- und
+   * Laufzeit-Slots angelegt, danach alle Hindernis-Gitterzellen und erst dann die eigentlichen
+   * Koerper/VisualStates. So sieht der erste Spawn eines Client-Batches denselben vollstaendigen
+   * Nachbarschaftsbestand wie der letzte Spawn.
+   */
+  materializePlaceableRockBatch(
+    rocks: readonly SyncedPlaceableRock[],
+    playSpawnFx: boolean,
+  ): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
-    this.ensureRuntimeRockSlot(rock);
+
+    const materialization = rocks.filter((rock) => rock.kind !== 'pedestal');
+    for (const rock of rocks) this.ensureRuntimeRockSlot(rock);
+    for (const rock of materialization) {
+      this.ctx.arenaResult.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    }
+
+    let refreshStaticShadows = false;
+    let requiresObstacleIndexRebuild = false;
+    const dirtyRockIds = new Set<number>();
+    for (const rock of rocks) {
+      const effects = this.materializePlaceableRockInternal(rock, playSpawnFx);
+      refreshStaticShadows ||= effects.refreshStaticShadows;
+      requiresObstacleIndexRebuild ||= effects.requiresObstacleIndexRebuild;
+      if (effects.refreshStaticShadows || effects.hasStalePedestalProxy) dirtyRockIds.add(rock.id);
+    }
+
+    if (refreshStaticShadows) {
+      this.markObstaclesDirtyBatch(dirtyRockIds, requiresObstacleIndexRebuild);
+    } else if (dirtyRockIds.size > 0) {
+      this.markObstaclesDirtyBatch(dirtyRockIds, false);
+    }
+  }
+
+  private materializePlaceableRockInternal(
+    rock: SyncedPlaceableRock,
+    playSpawnFx: boolean,
+  ): {
+    refreshStaticShadows: boolean;
+    requiresObstacleIndexRebuild: boolean;
+    hasStalePedestalProxy: boolean;
+  } {
+    if (!this.ctx.arenaResult || !this.ctx.currentLayout) {
+      return {
+        refreshStaticShadows: false,
+        requiresObstacleIndexRebuild: false,
+        hasStalePedestalProxy: false,
+      };
+    }
 
     // Power-up-Podeste werden vollständig vom PowerUpRenderer visualisiert und sind wie
     // feste Arena-Podeste begehbar. Der Runtime-Rock bleibt trotzdem im PlacementSystem,
@@ -85,14 +136,17 @@ export class RockVisualHelper {
       const staleProxy = this.ctx.arenaResult.rockPhysicsProxies[rock.id];
       if (staleProxy) {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
-        this.markObstaclesDirty(rock.id, false);
       }
       this.destroyTurretVisual(rock.id);
       if (playSpawnFx) {
         const world = this.gridToWorld(rock.gridX, rock.gridY);
         this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
       }
-      return;
+      return {
+        refreshStaticShadows: false,
+        requiresObstacleIndexRebuild: false,
+        hasStalePedestalProxy: Boolean(staleProxy),
+      };
     }
 
     let refreshStaticShadows = false;
@@ -127,7 +181,6 @@ export class RockVisualHelper {
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
-    if (refreshStaticShadows) this.markObstaclesDirty(rock.id);
 
     if (playSpawnFx) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
@@ -158,6 +211,12 @@ export class RockVisualHelper {
         });
       }
     }
+
+    return {
+      refreshStaticShadows,
+      requiresObstacleIndexRebuild: refreshStaticShadows,
+      hasStalePedestalProxy: false,
+    };
   }
 
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
@@ -585,15 +644,22 @@ export class RockVisualHelper {
    * wuerde den Schatten sichtbar laenger stehen lassen als den zerstoerten Fels.
    */
   private markObstaclesDirty(rockId?: number, requiresIndexRebuild = true): void {
+    this.markObstaclesDirtyBatch(rockId === undefined ? undefined : [rockId], requiresIndexRebuild);
+  }
+
+  private markObstaclesDirtyBatch(
+    rockIds: ReadonlySet<number> | readonly number[] | undefined,
+    requiresIndexRebuild = true,
+  ): void {
     // Ein neu gesetzter Fels muss noch im selben Frame blockieren. Entfernte Felsen brauchen
     // dagegen keinen Rebuild: ArenaObstacleIndex liest `active` live und ueberspringt das
     // zerstoerte Quellobjekt sofort. Das vermeidet einen Vollaufbau zwischen Shotgun-Pellets.
     if (requiresIndexRebuild) this.ctx.combatSystem.invalidateObstacleIndex();
-    if (rockId === undefined) {
+    if (rockIds === undefined) {
       this.obstacleVisualsRequireFullRefresh = true;
       this.dirtyRockIds.clear();
     } else if (!this.obstacleVisualsRequireFullRefresh) {
-      this.dirtyRockIds.add(rockId);
+      for (const rockId of rockIds) this.dirtyRockIds.add(rockId);
     }
     if (this.obstaclesDirty) return;
     this.obstaclesDirty = true;

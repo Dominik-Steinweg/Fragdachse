@@ -35,7 +35,7 @@ export interface PersistentBaseGravelDecorationConfig {
 export const PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG: PersistentBaseGravelDecorationConfig = {
   coveragePercent: 100,
   maxOffsetCells: 0.26,
-  maxOverhangCells: 0.75,
+  maxOverhangCells: 2.75,
   minSizeCells: 1.10,
   maxSizeCells: 3.9,
   sizeBias: 1.2,

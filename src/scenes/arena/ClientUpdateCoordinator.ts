@@ -302,8 +302,8 @@ export class ClientUpdateCoordinator {
 
       if (this.ctx.placementSystem) {
         const placementChanges = this.ctx.placementSystem.syncFromSnapshot(state.placeableRocks ?? []);
+        this.rockVisualHelper.materializePlaceableRockBatch(placementChanges.added, true);
         for (const rock of placementChanges.added) {
-          this.rockVisualHelper.materializePlaceableRock(rock, true);
           emitArenaMapGridChanged(this.scene.game.events, {
             reason: 'placeable_added',
             source: rock.kind === 'rock'
