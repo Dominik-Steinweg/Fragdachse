@@ -10,13 +10,17 @@ import { TRAIN } from '../train/TrainConfig';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedTrainState } from '../types';
 import {
   getProjectileShadowConfig,
+  MAX_STRUCTURE_FOOTPRINT_REACH_PX,
+  resolvePlaceableShadowCasters,
   SHADOW_CASTERS,
   SHADOW_PROFILES,
+  SINGLE_CELL_SHADOW_FOOTPRINT,
   type ShadowCasterConfig,
   type ShadowProfile,
   type ShadowProjectileSample,
   WORLD_SHADOW_CONFIG,
 } from './ShadowConfig';
+import type { BaseShadowCasters } from '../entities/BaseManager';
 import type { ArenaVisualAttributionCollector } from '../scenes/arena/ArenaVisualAttribution';
 import {
   getGraphicsQualityController,
@@ -47,7 +51,7 @@ interface StaticShadowLayoutBuildOptions {
 }
 
 /** Welche Quelle die statischen Footprints einer Ebene liefert – bestimmt, wann neu gebacken wird. */
-type StaticShadowGroup = 'rocks' | 'trees';
+type StaticShadowGroup = 'rocks' | 'trees' | 'bases';
 
 interface ShadowLayerBucket {
   /**
@@ -84,6 +88,8 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
   { config: SHADOW_CASTERS.turret, group: 'rocks' },
   { config: SHADOW_CASTERS.trunk, group: 'trees' },
   { config: SHADOW_CASTERS.canopy, group: 'trees' },
+  { config: SHADOW_CASTERS.base, group: 'bases' },
+  { config: SHADOW_CASTERS.baseTurret, group: 'bases' },
 ];
 /** Leere Kandidatenliste ohne Layout – spart eine Allokation je Region. */
 const EMPTY_INDEX_LIST: readonly number[] = [];
@@ -108,12 +114,46 @@ function getStaticShadowReachPx(preset: ShadowCasterConfig, profile: ShadowProfi
   ) + radius;
 }
 
+/**
+ * Suchradius des Kandidatenindex.
+ *
+ * Der Index kennt nur die Ankerzelle eines Bauwerks. Ein mehrzelliges Konstrukt kann mit seiner
+ * Ankerzelle knapp ausserhalb der Region liegen und trotzdem hineinragen – deshalb kommt der
+ * groesste authored Footprint-Ueberstand oben drauf.
+ */
 function getMaxStaticShadowReachPx(profile: ShadowProfile): number {
   let reach = 0;
   for (const { config } of STATIC_SHADOW_CASTERS) {
     reach = Math.max(reach, getStaticShadowReachPx(config, profile));
   }
-  return reach;
+  return reach + MAX_STRUCTURE_FOOTPRINT_REACH_PX;
+}
+
+/**
+ * Zellversaetze, ueber die ein Bauwerk seinen Koerperschatten wirft.
+ *
+ * `footprint` ist bereits Teil des replizierten `SyncedPlaceableRock`-Vertrags – Host und Client
+ * zeichnen daraus dieselben Zellen, ohne dass der Schatten eine eigene Quelle braucht.
+ */
+function getShadowFootprint(
+  rock: SyncedPlaceableRock | undefined,
+): readonly { readonly dx: number; readonly dy: number }[] {
+  const footprint = rock?.footprint;
+  return footprint && footprint.length > 0 ? footprint : SINGLE_CELL_SHADOW_FOOTPRINT;
+}
+
+/** Mittelpunkt des Footprints in Zellen, relativ zur Ankerzelle. */
+function getShadowFootprintCenter(
+  rock: SyncedPlaceableRock | undefined,
+): { readonly dx: number; readonly dy: number } {
+  const footprint = getShadowFootprint(rock);
+  let dx = 0;
+  let dy = 0;
+  for (const offset of footprint) {
+    dx += offset.dx;
+    dy += offset.dy;
+  }
+  return { dx: dx / footprint.length, dy: dy / footprint.length };
 }
 
 const STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS = 600;
@@ -180,6 +220,20 @@ export class ShadowSystem {
   /** Wiederverwendete Puffer – eine Allokation je Region weniger. */
   private readonly staticRockCandidates: number[] = [];
   private readonly staticRuntimeById = new Map<number, SyncedPlaceableRock>();
+  /**
+   * Quelle der Basis-Schattenwerfer. Als Provider statt als Parameter, damit die drei bestehenden
+   * `rebuild*`-Signaturen unveraendert bleiben – dasselbe Muster nutzt `LightOccluderIndex`.
+   */
+  private baseShadowSource: (() => BaseShadowCasters | null) | null = null;
+  /** Raeumlicher Index ueber die Basiszellen; Basen koennen viele Zellen haben. */
+  private staticBaseIndex = new ArenaCellBucketIndex(1);
+  /**
+   * Zellliste, fuer die `staticBaseIndex` gebaut wurde. `ArenaCellBucketIndex.sync()` haengt nur an
+   * und kann nicht schrumpfen, deshalb wird der Index bei neuer Array-Identitaet verworfen – die
+   * Identitaet wechselt genau dann, wenn `BaseManager` seinen Cache neu aufbaut.
+   */
+  private staticBaseIndexSource: readonly { readonly gridX: number; readonly gridY: number }[] | null = null;
+  private readonly staticBaseCandidates: number[] = [];
   private attributionCollector: ArenaVisualAttributionCollector | null = null;
 
   // Reusable point buffers — mutated in-place each draw call to avoid
@@ -219,6 +273,17 @@ export class ShadowSystem {
 
   setAttributionCollector(collector: ArenaVisualAttributionCollector | null): void {
     this.attributionCollector = collector;
+  }
+
+  /**
+   * Verbindet die Coop-Defense-Basen als statische Schattenwerfer.
+   *
+   * Muss vor dem ersten `rebuildArenaStaticShadows()` einer Runde stehen und im Teardown auf `null`
+   * zurueckgesetzt werden, sonst zeigte die Quelle auf den `BaseManager` der Vorrunde.
+   */
+  setBaseShadowSource(source: (() => BaseShadowCasters | null) | null): void {
+    this.baseShadowSource = source;
+    this.staticBaseIndexSource = null;
   }
 
   /** Startup barrier for the static-shadow working set. */
@@ -545,6 +610,19 @@ export class ShadowSystem {
     runtimeById.clear();
     for (const rock of options.runtimeRocks ?? []) runtimeById.set(rock.id, rock);
 
+    // Basen laufen ueber einen eigenen Index: Eine Basis kann hunderte Zellen haben, waehrend ihre
+    // Tuerme eine Handvoll bleiben und wie Baeume ungefiltert durchlaufen.
+    const baseCasters = this.baseShadowSource?.() ?? null;
+    const baseCandidates = baseCasters
+      ? this.syncBaseIndex(baseCasters.cells).collect(
+        localX,
+        localY,
+        region.size,
+        reachPx,
+        this.staticBaseCandidates,
+      )
+      : EMPTY_INDEX_LIST;
+
     for (const [key, bucket] of this.layers) {
       if (!bucket.group) continue;
       const depth = Number(key);
@@ -557,13 +635,36 @@ export class ShadowSystem {
           for (const id of rockCandidates) {
             const cell = layout.rocks[id];
             if (!cell || !rockVisible(id)) continue;
+            // Welche Caster ein Bauwerk stellt, entscheidet die Config – ebenerdige Strukturen
+            // (Podeste, Dachsbau) liefern hier `null` und fallen damit ohne Sonderzweig heraus.
+            const { body, mount } = resolvePlaceableShadowCasters(runtimeById.get(id));
             const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
             const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-            if (drawsRock) {
-              this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.rock, regionBounds, profile);
+            if (drawsRock && body) {
+              // Der Layout-Eintrag fuehrt nur die Ankerzelle; ein mehrzelliges Bauwerk warf ohne
+              // diese Schleife den Schatten einer einzigen Zelle.
+              for (const offset of getShadowFootprint(runtimeById.get(id))) {
+                this.drawStaticFootprintInRegion(
+                  bucket,
+                  worldX + offset.dx * CELL_SIZE,
+                  worldY + offset.dy * CELL_SIZE,
+                  body,
+                  regionBounds,
+                  profile,
+                );
+              }
             }
-            if (drawsTurret && runtimeById.get(id)?.kind === 'turret') {
-              this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.turret, regionBounds, profile);
+            if (drawsTurret && mount) {
+              // Der Aufsatz sitzt einmal mittig auf dem Bauwerk, nicht auf jeder Zelle.
+              const center = getShadowFootprintCenter(runtimeById.get(id));
+              this.drawStaticFootprintInRegion(
+                bucket,
+                worldX + center.dx * CELL_SIZE,
+                worldY + center.dy * CELL_SIZE,
+                mount,
+                regionBounds,
+                profile,
+              );
             }
           }
         }
@@ -585,6 +686,38 @@ export class ShadowSystem {
         }
       }
 
+      if (baseCasters) {
+        const drawsBase = SHADOW_CASTERS.base.layerDepth === depth;
+        const drawsBaseTurret = SHADOW_CASTERS.baseTurret.layerDepth === depth;
+        if (drawsBase) {
+          for (const index of baseCandidates) {
+            const cell = baseCasters.cells[index];
+            if (!cell) continue;
+            this.drawStaticFootprintInRegion(
+              bucket,
+              offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2,
+              offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2,
+              SHADOW_CASTERS.base,
+              regionBounds,
+              profile,
+            );
+          }
+        }
+        if (drawsBaseTurret) {
+          // Basistuerme tragen bereits Weltkoordinaten (`BaseTurretSpec.x/y`), nicht Gitterzellen.
+          for (const turret of baseCasters.turrets) {
+            this.drawStaticFootprintInRegion(
+              bucket,
+              turret.x,
+              turret.y,
+              SHADOW_CASTERS.baseTurret,
+              regionBounds,
+              profile,
+            );
+          }
+        }
+      }
+
       const scratch = this.staticScratch.get('staticShadow', region.size);
       scratch.camera.setScroll(region.worldX, region.worldY);
       scratch.clear();
@@ -598,6 +731,26 @@ export class ShadowSystem {
 
       sink.blit(key, scratch);
     }
+  }
+
+  /**
+   * Haelt den Basis-Index an der aktuellen Zellliste.
+   *
+   * `ArenaCellBucketIndex.sync()` haengt nur neue Eintraege an – eine zerstoerte Basis laesst die
+   * Liste schrumpfen, deshalb wird der Index bei neuer Array-Identitaet verworfen statt
+   * nachgefuehrt. `BaseManager` gibt genau dann ein neues Array heraus, wenn sich sein
+   * Hindernis-Generationszaehler bewegt hat.
+   */
+  private syncBaseIndex(
+    cells: readonly { readonly gridX: number; readonly gridY: number }[],
+  ): ArenaCellBucketIndex {
+    if (this.staticBaseIndexSource !== cells) {
+      const bounds = this.getStaticWorldBounds();
+      this.staticBaseIndex = new ArenaCellBucketIndex(Math.max(1, bounds.maxX - bounds.minX));
+      this.staticBaseIndexSource = cells;
+    }
+    this.staticBaseIndex.sync(cells);
+    return this.staticBaseIndex;
   }
 
   private drawStaticFootprintInRegion(
@@ -623,22 +776,34 @@ export class ShadowSystem {
   ): ShadowDirtyChunk[] {
     const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
     const chunks = new Map<string, ShadowDirtyChunk>();
+    // Bewusst eine eigene Map statt `staticRuntimeById`: Der Bake haelt dort den Stand *seiner*
+    // Region, und diese Methode laeuft zwischen zwei Bakes.
+    const runtimeById = new Map<number, SyncedPlaceableRock>();
+    for (const rock of this.lastStaticOptions.runtimeRocks ?? []) runtimeById.set(rock.id, rock);
     for (const id of dirtyRockIds) {
       const cell = layout.rocks[id];
       if (!cell) continue;
-      const x = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const y = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      for (const preset of [SHADOW_CASTERS.rock, SHADOW_CASTERS.turret]) {
-        const casterBounds = this.getShadowBounds(x, y, preset, profile);
-        const minChunkX = Math.floor((Math.max(bounds.minX, casterBounds.minX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
-        const minChunkY = Math.floor((Math.max(bounds.minY, casterBounds.minY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
-        const maxChunkX = Math.floor((Math.min(bounds.maxX - 1, casterBounds.maxX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
-        const maxChunkY = Math.floor((Math.min(bounds.maxY - 1, casterBounds.maxY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
-        for (let cy = minChunkY; cy <= maxChunkY; cy += 1) {
-          for (let cx = minChunkX; cx <= maxChunkX; cx += 1) {
-            const chunkX = bounds.minX + cx * SHADOW_DIRTY_CHUNK_SIZE;
-            const chunkY = bounds.minY + cy * SHADOW_DIRTY_CHUNK_SIZE;
-            chunks.set(`${chunkX}:${chunkY}`, { x: chunkX, y: chunkY });
+      const anchorX = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const anchorY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+      // Der Dirty-Bereich muss den gesamten Footprint abdecken; ein 2x2-Bauwerk liess sonst die
+      // Schatten seiner drei Nachbarzellen als Geisterbild stehen. Bewusst ohne
+      // `resolvePlaceableShadowCasters()`: Auch ein Bauwerk, das gerade **keinen** Schatten mehr
+      // wirft, muss seine alten Chunks neu backen lassen.
+      for (const offset of getShadowFootprint(runtimeById.get(id))) {
+        const x = anchorX + offset.dx * CELL_SIZE;
+        const y = anchorY + offset.dy * CELL_SIZE;
+        for (const preset of [SHADOW_CASTERS.rock, SHADOW_CASTERS.turret]) {
+          const casterBounds = this.getShadowBounds(x, y, preset, profile);
+          const minChunkX = Math.floor((Math.max(bounds.minX, casterBounds.minX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
+          const minChunkY = Math.floor((Math.max(bounds.minY, casterBounds.minY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
+          const maxChunkX = Math.floor((Math.min(bounds.maxX - 1, casterBounds.maxX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
+          const maxChunkY = Math.floor((Math.min(bounds.maxY - 1, casterBounds.maxY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
+          for (let cy = minChunkY; cy <= maxChunkY; cy += 1) {
+            for (let cx = minChunkX; cx <= maxChunkX; cx += 1) {
+              const chunkX = bounds.minX + cx * SHADOW_DIRTY_CHUNK_SIZE;
+              const chunkY = bounds.minY + cy * SHADOW_DIRTY_CHUNK_SIZE;
+              chunks.set(`${chunkX}:${chunkY}`, { x: chunkX, y: chunkY });
+            }
           }
         }
       }
@@ -771,6 +936,7 @@ export class ShadowSystem {
     this.lastStaticOptions = {};
     this.lastBakedProfile = null;
     this.lastStaticProfileBakeAtMs = Number.NEGATIVE_INFINITY;
+    this.staticBaseIndexSource = null;
   }
 
   destroy(): void {
@@ -787,6 +953,8 @@ export class ShadowSystem {
     this.lastStaticOptions = {};
     this.lastBakedProfile = null;
     this.lastStaticProfileBakeAtMs = Number.NEGATIVE_INFINITY;
+    this.baseShadowSource = null;
+    this.staticBaseIndexSource = null;
   }
 
   /**

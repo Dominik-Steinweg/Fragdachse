@@ -10,8 +10,13 @@ import {
   PLAYER_SIZE,
   TRUNK_RADIUS,
 } from '../config';
+import { COOP_DEFENSE_CONSTRUCTIONS } from '../config/coopDefenseConstructions';
+import {
+  getPersistentBaseRewardDefinition,
+  PERSISTENT_BASE_REWARD_DEFINITIONS,
+} from '../config/persistentBaseRewards';
 import { TRAIN } from '../train/TrainConfig';
-import type { ProjectileStyle } from '../types';
+import type { ProjectileStyle, SyncedPlaceableRock } from '../types';
 
 export type ShadowShape = 'cell' | 'circle' | 'ellipse' | 'capsule';
 
@@ -147,6 +152,40 @@ export const SHADOW_CASTERS = {
     footprintWidthPx: CELL_SIZE * 0.8,
     footprintHeightPx: CELL_SIZE * 0.8,
   },
+  /**
+   * Coop-Defense-Basiszellen. Tiefe und Form spiegeln den Fels-Caster, nur auf die Basis-Ebene
+   * versetzt: Der Schattenlayer liegt **unter** den Basiskacheln, deshalb verdecken die Kacheln
+   * die Schatten der Innenzellen von selbst und nur der Rand tritt aus. Genau die Mechanik, die
+   * bei Fels-Clustern schon greift – eine zusammenhaengende Flaeche braucht keine Sonderregel.
+   * Mauerwerk liest sich hoeher als ein Fels, daher `castHeightPx` ueber dem Fels-Wert.
+   */
+  base: {
+    enabled: true,
+    layerDepth: DEPTH.BASES - 0.35,
+    castHeightPx: 12,
+    opacity: 0.72,
+    softnessPx: 4,
+    blurLayers: 8,
+    stretch: 0.8,
+    inflatePx: 1,
+    shape: 'cell',
+    footprintWidthPx: CELL_SIZE * 0.85,
+    footprintHeightPx: CELL_SIZE * 0.85,
+  },
+  /** Basistuerme: derselbe Aufsatz-Schatten wie platzierte Tuerme, auf die Basis-Ebene versetzt. */
+  baseTurret: {
+    enabled: true,
+    layerDepth: DEPTH.BASES + 0.12,
+    castHeightPx: 4,
+    opacity: 0.26,
+    softnessPx: 6,
+    blurLayers: 1,
+    stretch: 1,
+    inflatePx: 0,
+    shape: 'circle',
+    footprintWidthPx: CELL_SIZE * 0.8,
+    footprintHeightPx: CELL_SIZE * 0.8,
+  },
   trainLoco: {
     enabled: true,
     layerDepth: DEPTH.TRAIN - 0.08,
@@ -253,3 +292,64 @@ export function getProjectileShadowConfig(style?: ProjectileStyle): ShadowCaster
       return null;
   }
 }
+/**
+ * Welche Caster ein platziertes Bauwerk stellt.
+ *
+ * Haelt das Wissen ueber Konstrukt- und Reward-Identitaeten aus `ShadowSystem` heraus: Der Bake
+ * fragt nur nach `body` (Zellprojektion je Footprint-Zelle) und `mount` (Aufsatz-Kreis, einmal auf
+ * dem Footprint-Schwerpunkt) und muss keine IDs kennen.
+ */
+export interface PlaceableShadowCasters {
+  readonly body: ShadowCasterConfig | null;
+  readonly mount: ShadowCasterConfig | null;
+}
+
+const NO_SHADOW_CASTERS: PlaceableShadowCasters = { body: null, mount: null };
+const ROCK_SHADOW_CASTERS: PlaceableShadowCasters = { body: SHADOW_CASTERS.rock, mount: null };
+const TURRET_SHADOW_CASTERS: PlaceableShadowCasters = {
+  body: SHADOW_CASTERS.rock,
+  mount: SHADOW_CASTERS.turret,
+};
+
+export function resolvePlaceableShadowCasters(
+  rock: Pick<SyncedPlaceableRock, 'kind' | 'persistentRewardId'> | undefined,
+): PlaceableShadowCasters {
+  if (!rock) return ROCK_SHADOW_CASTERS;
+  // Podeste sind begehbar und liegen eben auf dem Boden – wie die ebenerdigen Rewards werfen sie
+  // keinen Wurfschatten. Sie erreichen `layout.rocks` ohnehin nie, der Zweig ist die explizite
+  // Regel dazu.
+  if (rock.kind === 'pedestal') return NO_SHADOW_CASTERS;
+  const reward = rock.persistentRewardId
+    ? getPersistentBaseRewardDefinition(rock.persistentRewardId)
+    : null;
+  if (reward?.groundFlush) return NO_SHADOW_CASTERS;
+  return rock.kind === 'turret' ? TURRET_SHADOW_CASTERS : ROCK_SHADOW_CASTERS;
+}
+
+/** Ein Bauwerk ohne repliziertem Footprint belegt genau seine Ankerzelle. */
+export const SINGLE_CELL_SHADOW_FOOTPRINT: readonly { readonly dx: number; readonly dy: number }[] =
+  Object.freeze([{ dx: 0, dy: 0 }]);
+
+/**
+ * Wie weit der Footprint des groessten authored Bauwerks ueber seine Ankerzelle hinausragt.
+ *
+ * Der Kandidatenindex des statischen Bakes sucht ueber die Ankerzelle; ohne diesen Zuschlag fiele
+ * ein 2x2-Bauwerk knapp ausserhalb einer Region aus der Kandidatenliste, obwohl seine hintere
+ * Zelle hineinragt. Aus den Daten abgeleitet, damit ein spaeteres 3x3 den Wert nicht still
+ * ungueltig macht.
+ */
+export const MAX_STRUCTURE_FOOTPRINT_REACH_PX = (() => {
+  let maxCells = 0;
+  const consider = (footprint: readonly { readonly dx: number; readonly dy: number }[]) => {
+    for (const { dx, dy } of footprint) {
+      maxCells = Math.max(maxCells, Math.abs(dx), Math.abs(dy));
+    }
+  };
+  for (const definition of Object.values(PERSISTENT_BASE_REWARD_DEFINITIONS)) {
+    consider(definition.footprint);
+  }
+  for (const definition of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
+    consider(definition.footprint);
+  }
+  return maxCells * CELL_SIZE;
+})();

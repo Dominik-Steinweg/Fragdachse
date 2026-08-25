@@ -400,6 +400,11 @@ export class ArenaScene extends Phaser.Scene {
   private timeOfDayHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
   private forceStaticTimeOfDayBake = false;
+  /**
+   * Zuletzt in die statischen Schatten gebackener Basis-Hindernisstand. `-1` erzwingt keinen
+   * Rebuild – der Rundenaufbau backt bereits mit Generation 0; erst eine Aenderung zaehlt.
+   */
+  private lastShadowBaseGeneration = 0;
   private netDebugOverlay: NetDebugOverlay | null = null;
   private performanceDiagnosticsOverlay: PerformanceDiagnosticsOverlay | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
@@ -4518,8 +4523,24 @@ export class ArenaScene extends Phaser.Scene {
   private syncWorldShadows(inArena: boolean, trainState: SyncedTrainState | null): void {
     if (!inArena || !this.ctx.currentLayout || !this.ctx.arenaResult) {
       this.forceStaticTimeOfDayBake = false;
+      // Der Zaehler gehoert dem BaseManager der Runde und beginnt jede Runde wieder bei 0.
+      this.lastShadowBaseGeneration = 0;
       this.renderers.shadow.clear();
       return;
+    }
+
+    // Basen aendern sich seltener und gruendlicher als Felsen: Zerstoerung und Dormanz-Aktivierung
+    // sind Einzelereignisse, die derselbe Zaehler meldet, den auch die Lichtverdeckung liest. Der
+    // Vollpfad ist hier angemessen; er respektiert ueber `sameLayout` weiterhin das bereits
+    // gebackene Profil und eilt keinem ausstehenden Tageszeitwechsel voraus.
+    const baseGeneration = this.ctx.baseManager?.getObstacleGeneration() ?? 0;
+    if (baseGeneration !== this.lastShadowBaseGeneration) {
+      this.lastShadowBaseGeneration = baseGeneration;
+      this.renderers.shadow.rebuildArenaStaticShadows(
+        this.ctx.currentLayout,
+        this.ctx.arenaResult,
+        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+      );
     }
 
     this.renderers.shadow.syncStaticProfile(

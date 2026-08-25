@@ -217,6 +217,26 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(enemy1.setVelocity).toHaveBeenCalledWith(25, 12.5);
   });
 
+  it('skips grid corner assistance while a player is burrowed', () => {
+    const { system, players } = createHarness();
+    const player = createMockPlayer('player-1', 200, 200);
+    players.set(player.id, player);
+    const blockedCellResolver = vi.fn(() => true);
+
+    system.setMovementBlockedCellResolver(blockedCellResolver);
+    system.setBurrowSystem({
+      isBurrowed: () => true,
+      isStunned: () => false,
+      isDashBlocked: () => false,
+      getMovementSpeedFactor: () => 1,
+    });
+
+    system.update(false);
+
+    expect(blockedCellResolver).not.toHaveBeenCalled();
+    expect(player.setVelocity).toHaveBeenCalledWith(200, 0);
+  });
+
   it('correctly handles recoil impulses and forced movement', () => {
     const { system, players } = createHarness();
     const player1 = createMockPlayer('player-1', 100, 100);

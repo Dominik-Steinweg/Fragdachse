@@ -12,6 +12,15 @@ import {
   type BaseDestructionHooks,
 } from '../effects/BaseDestructionRenderer';
 
+/**
+ * Statische Schattenwerfer der Basen: Zellen als Zellprojektion, Tuerme als Aufsatz-Kreis.
+ * Bewusst rohe Koordinaten statt GameObjects – der Bake laeuft ohne Szenenbezug.
+ */
+export interface BaseShadowCasters {
+  readonly cells: readonly { readonly gridX: number; readonly gridY: number }[];
+  readonly turrets: readonly { readonly x: number; readonly y: number }[];
+}
+
 /** Aufgehellte Teamfarbe der Basis: als Licht braucht es alle drei Kanäle. */
 const BASE_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.5);
 /** Basistürme lesen sich mit einem helleren, konzentrierteren Kern klar vom Sockel ab. */
@@ -56,6 +65,9 @@ export class BaseManager {
   private lighting: LightingSystem | null = null;
   private readonly litBaseKeys = new Set<string>();
   private readonly destructionRenderer: BaseDestructionRenderer;
+  /** An `obstacleGeneration` gebundener Cache der Schattenwerfer; siehe `getShadowCasters()`. */
+  private shadowCasters: BaseShadowCasters | null = null;
+  private shadowCastersGeneration = -1;
 
   constructor(
     scene: Phaser.Scene,
@@ -166,6 +178,17 @@ export class BaseManager {
     return this.group;
   }
 
+  /** Live grid query for movement assistance; dormant and destroyed bases are not blockers. */
+  isMovementBlockedCell(gridX: number, gridY: number): boolean {
+    for (const entity of this.entities) {
+      if (entity.isInert()) continue;
+      for (const cell of entity.getSpec().cells) {
+        if (cell.gridX === gridX && cell.gridY === gridY) return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Liefert die Per-Zell-Rectangles aller noch lebenden Basen als
    * Hitscan-/LoS-Hindernisse (CombatSystem). Flach gemerged über alle Basen.
@@ -187,6 +210,31 @@ export class BaseManager {
    */
   getObstacleGeneration(): number {
     return this.obstacleGeneration;
+  }
+
+  /**
+   * Zellen und Turmpositionen aller noch stehenden Basen als statische Schattenwerfer.
+   *
+   * Liest dieselbe Quelle und dasselbe Gate wie {@link getObstacleRectangles} (`isInert()` deckt
+   * "existiert noch nicht" und "zerstoert" gemeinsam ab) – der Schatten kann damit nicht von der
+   * Kollision abweichen. Das Ergebnis wird an {@link getObstacleGeneration} gebunden gecacht: Der
+   * Bake fragt einmal je Region, und die aufrufende Seite erkennt an der Array-Identitaet, dass
+   * ihr raeumlicher Index neu aufgebaut werden muss.
+   */
+  getShadowCasters(): BaseShadowCasters {
+    if (this.shadowCasters && this.shadowCastersGeneration === this.obstacleGeneration) {
+      return this.shadowCasters;
+    }
+    const cells: { gridX: number; gridY: number }[] = [];
+    const turrets: { x: number; y: number }[] = [];
+    for (const entity of this.entities) {
+      if (entity.isInert()) continue;
+      for (const cell of entity.spec.cells) cells.push(cell);
+      for (const turret of entity.getTurrets()) turrets.push({ x: turret.x, y: turret.y });
+    }
+    this.shadowCasters = { cells, turrets };
+    this.shadowCastersGeneration = this.obstacleGeneration;
+    return this.shadowCasters;
   }
 
   getBases(): readonly BaseEntity[] {

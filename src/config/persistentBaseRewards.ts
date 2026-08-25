@@ -13,6 +13,14 @@ export interface PersistentBaseRewardDefinition {
   readonly kind: PlaceableKind;
   readonly capacityCost: number;
   readonly indestructible?: boolean;
+  /**
+   * Ebenerdige Struktur: wirft keinen Wurfschatten.
+   *
+   * Sie liegt bündig auf dem Boden und blockiert auch die Spielerbewegung nicht – ein Wurfschatten
+   * würde ihr eine Höhe zusprechen, die sie weder optisch noch im Gameplay hat. Gelesen von
+   * `resolvePlaceableShadowCasters()` in `effects/ShadowConfig.ts`.
+   */
+  readonly groundFlush?: true;
   readonly powerUpDefId?: 'HOLY_HAND_GRENADE';
   readonly weaponRangeMultiplier?: number;
   readonly adrenalineRegenMultiplier?: number;
@@ -52,6 +60,7 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: Readonly<Record<PersistentBaseR
     kind: 'pedestal',
     capacityCost: 0,
     indestructible: true,
+    groundFlush: true,
     powerUpDefId: 'HOLY_HAND_GRENADE',
   },
   burrow: {
@@ -65,6 +74,7 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: Readonly<Record<PersistentBaseR
     maxHp: 2_000,
     kind: 'rock',
     capacityCost: 0,
+    groundFlush: true,
   },
 });
 

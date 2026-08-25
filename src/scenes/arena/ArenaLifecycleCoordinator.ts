@@ -2203,6 +2203,13 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.trunkGroup,
     );
     this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
+    this.ctx.hostPhysics.setMovementBlockedCellResolver((gridX, gridY) => {
+      const arenaResult = this.ctx.arenaResult;
+      const rockId = arenaResult?.rockGrid.getIndex(gridX, gridY) ?? -1;
+      if (rockId >= 0 && arenaResult?.rockPhysicsProxies[rockId]?.active === true) return true;
+      if (this.ctx.baseManager?.isMovementBlockedCell(gridX, gridY) === true) return true;
+      return this.ctx.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false;
+    });
     this.ctx.hostPhysics.setEnemyManager(this.ctx.enemyManager);
     this.ctx.hostPhysics.setRunSpeedResolver((playerId) => {
       const base = this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
@@ -3207,6 +3214,12 @@ export class ArenaLifecycleCoordinator {
       }).minutes;
     this.appliedRuntimeTimeOfDayMinutes = runtimeTimeOfDayMinutes;
     this.renderers.shadow.setTimeOfDay(runtimeTimeOfDayMinutes);
+    // Vor dem Aufbau: Basiszellen und Basistürme sind reguläre statische Caster und müssen im
+    // ersten Bake der Runde bereits mitlaufen. Dieselbe Quelle und dasselbe Gate wie die
+    // Lichtverdeckung weiter unten – der Schatten kann nicht von der Kollision abweichen.
+    this.renderers.shadow.setBaseShadowSource(
+      () => this.ctx.baseManager?.getShadowCasters() ?? null,
+    );
     this.renderers.shadow.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,
@@ -3386,6 +3399,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
     this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
     this.ctx.hostPhysics.setPlayerMovementAllowedResolver(null);
+    this.ctx.hostPhysics.setMovementBlockedCellResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.combatSystem.setEnemyDeathCallback(null);
     this.ctx.combatSystem.setPlayerMaxHpResolver(null);
@@ -3612,6 +3626,9 @@ export class ArenaLifecycleCoordinator {
     this.renderers.train = null;
     this.renderers.beer.clear();
     this.renderers.shadow.clear();
+    // Der ShadowSystem lebt über die Szene, der BaseManager nur über die Runde: Ohne Lösen zeigte
+    // die Quelle auf die Basen der Vorrunde. Gleiche Begründung wie `setOccluderIndex(null)`.
+    this.renderers.shadow.setBaseShadowSource(null);
     this.renderers.lighting.setActive(false);
     this.renderers.lighting.setOccluderIndex(null);
     this.ctx.lightOccluderIndex = null;

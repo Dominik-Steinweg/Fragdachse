@@ -278,6 +278,7 @@ describe('Coop-Defense dormant mission structures', () => {
     const manager = new BaseManager(scene, [active]);
 
     manager.applyDamage(active.id, active.hpMax);
+    expect(manager.isMovementBlockedCell(active.cells[0].gridX, active.cells[0].gridY)).toBe(false);
 
     const snapshot = manager.getNetSnapshot();
     expect(snapshot).toHaveLength(1);
@@ -318,11 +319,15 @@ describe('Coop-Defense dormant mission structures', () => {
   it('keeps dormant structures out of world state until the objective activates', () => {
     const { scene } = makeScene();
     const active = makeBaseSpec('active-outpost', { turret: true });
-    const dormant = makeBaseSpec('dormant-outpost', {
-      dormant: true,
-      dormantObjectiveId: 'reveal-outpost',
-      turret: true,
-    });
+    const dormant = {
+      ...makeBaseSpec('dormant-outpost', {
+        dormant: true,
+        dormantObjectiveId: 'reveal-outpost',
+        turret: true,
+      }),
+      cells: [{ gridX: 11, gridY: 10 }],
+      region: { minGridX: 11, maxGridX: 11, minGridY: 10, maxGridY: 10 },
+    } satisfies BaseSpec;
     const manager = new BaseManager(scene, [active, dormant]);
     const dormantEntity = manager.getBase(dormant.id)!;
 
@@ -333,6 +338,8 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(dormantEntity.getLightSpots()).toHaveLength(0);
     expect(manager.getObstacleRectangles()).toHaveLength(1);
     expect(manager.getActiveBaseIds()).toEqual(new Set([active.id]));
+    expect(manager.isMovementBlockedCell(active.cells[0].gridX, active.cells[0].gridY)).toBe(true);
+    expect(manager.isMovementBlockedCell(dormant.cells[0].gridX, dormant.cells[0].gridY)).toBe(false);
     expect(manager.getNetSnapshot().map((entry) => entry.id)).toEqual([active.id]);
 
     const lighting = {
@@ -364,6 +371,7 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.getObstacleGeneration()).toBe(1);
     expect(manager.getObstacleRectangles()).toHaveLength(1);
     expect(manager.getActiveBaseIds()).toEqual(new Set([dormant.id]));
+    expect(manager.isMovementBlockedCell(dormant.cells[0].gridX, dormant.cells[0].gridY)).toBe(true);
     expect(manager.getBase(dormant.id)!.getTurrets()).toHaveLength(1);
     expect(manager.getTurrets()[0]?.id).toBe('dormant-outpost-turret');
     expect(groupObjects).toHaveLength(1);

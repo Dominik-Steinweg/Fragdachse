@@ -6,8 +6,9 @@ vi.mock('phaser', () => ({
 }));
 
 import { ShadowSystem } from '../src/effects/ShadowSystem';
-import { SHADOW_CASTERS } from '../src/effects/ShadowConfig';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../src/config';
+import { MAX_STRUCTURE_FOOTPRINT_REACH_PX, SHADOW_CASTERS } from '../src/effects/ShadowConfig';
+import { PERSISTENT_BASE_REWARD_DEFINITIONS } from '../src/config/persistentBaseRewards';
+import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, CELL_SIZE } from '../src/config';
 import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
 import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ArenaLayout } from '../src/types';
@@ -48,6 +49,8 @@ interface GraphicsEvent {
   depth: number;
   clears: number;
   fillPoints: Array<Array<{ x: number; y: number }>>;
+  /** Kreis-Caster (Stamm, Turmaufsatz) zeichnen nicht ueber `fillPoints`. */
+  fillCircles: Array<{ x: number; y: number; radius: number }>;
 }
 
 function makeScene() {
@@ -55,7 +58,7 @@ function makeScene() {
   const graphicsLog: GraphicsEvent[] = [];
 
   const makeGraphics = () => {
-    const state: GraphicsEvent = { depth: 0, clears: 0, fillPoints: [] };
+    const state: GraphicsEvent = { depth: 0, clears: 0, fillPoints: [], fillCircles: [] };
     graphicsLog.push(state);
     const g: Record<string, unknown> = {};
     for (const name of ['fillStyle', 'fillEllipse', 'fillCircle', 'fillRect', 'fillPoints',
@@ -65,6 +68,10 @@ function makeScene() {
     }
     g.fillPoints = (points: Array<{ x: number; y: number }>) => {
       state.fillPoints.push(points.map(({ x, y }) => ({ x, y })));
+      return g;
+    };
+    g.fillCircle = (x: number, y: number, radius: number) => {
+      state.fillCircles.push({ x, y, radius });
       return g;
     };
     g.setDepth = (d: number) => { state.depth = d; return g; };
@@ -181,6 +188,30 @@ function totalDraws(textures: TextureEvent[]): number {
 
 function drain(scene: object): void {
   ChunkedRenderSurface.drainBakeQueue(scene as never);
+}
+
+/**
+ * Wieviele **verschiedene** Footprints eine Ebene gezeichnet hat.
+ *
+ * Ein Footprint besteht aus mehreren aufgeblasenen Lagen (`blurLayers`) und wird zusaetzlich in
+ * jeder Region wiederholt, die seine Schattenhuelle beruehrt. Beides sagt nichts ueber die Anzahl
+ * der Schattenwerfer aus – der Mittelpunkt schon.
+ */
+function footprintCenters(entry: GraphicsEvent | undefined): Set<string> {
+  const centers = new Set<string>();
+  for (const points of entry?.fillPoints ?? []) {
+    let x = 0;
+    let y = 0;
+    for (const point of points) {
+      x += point.x;
+      y += point.y;
+    }
+    centers.add(`${Math.round(x / points.length)}:${Math.round(y / points.length)}`);
+  }
+  for (const circle of entry?.fillCircles ?? []) {
+    centers.add(`${Math.round(circle.x)}:${Math.round(circle.y)}`);
+  }
+  return centers;
 }
 
 describe('static shadow baking', () => {
@@ -387,5 +418,116 @@ describe('static shadow baking', () => {
     shadows.updateStaticResidency({ x: ARENA_OFFSET_X, y: ARENA_OFFSET_Y, width: 200, height: 200 });
     drain(scene);
     expect(visibleChunkTargets(textures).length).toBeLessThan(fullyResident);
+  });
+
+  it('casts base cells and base turrets through the same static caster path', () => {
+    const { scene, graphicsLog } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaResult = { rockPhysicsProxies: [] } as never;
+    const cells = [{ gridX: 4, gridY: 4 }, { gridX: 5, gridY: 4 }];
+    const turrets = [{
+      x: ARENA_OFFSET_X + 4 * CELL_SIZE + CELL_SIZE / 2,
+      y: ARENA_OFFSET_Y + 4 * CELL_SIZE + CELL_SIZE / 2,
+    }];
+
+    shadows.setBaseShadowSource(() => ({ cells, turrets }));
+    shadows.rebuildArenaStaticShadows(layout(0, 0), arenaResult);
+    drain(scene);
+
+    const baseGraphics = graphicsLog.find((entry) => entry.depth === SHADOW_CASTERS.base.layerDepth);
+    // Je Zelle eine Zellprojektion – die Kacheln decken die Innenraender selbst ab.
+    expect(footprintCenters(baseGraphics).size).toBe(cells.length);
+    const turretGraphics = graphicsLog.find(
+      (entry) => entry.depth === SHADOW_CASTERS.baseTurret.layerDepth,
+    );
+    expect(footprintCenters(turretGraphics).size).toBe(turrets.length);
+  });
+
+  it('drops base shadows as soon as the base stops reporting its cells', () => {
+    const { scene, graphicsLog } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaResult = { rockPhysicsProxies: [] } as never;
+    // Zwei Basen, weit auseinander: die vordere faellt weg, die hintere rueckt im Array nach vorn.
+    const survivingCell = { gridX: 30, gridY: 4 };
+    const survivingWorldX = ARENA_OFFSET_X + survivingCell.gridX * CELL_SIZE + CELL_SIZE / 2;
+    let casters: { cells: { gridX: number; gridY: number }[]; turrets: { x: number; y: number }[] } = {
+      cells: [{ gridX: 4, gridY: 4 }, { gridX: 5, gridY: 4 }, survivingCell],
+      turrets: [],
+    };
+
+    shadows.setBaseShadowSource(() => casters);
+    shadows.rebuildArenaStaticShadows(layout(0, 0), arenaResult);
+    drain(scene);
+    const baseGraphics = graphicsLog.find((entry) => entry.depth === SHADOW_CASTERS.base.layerDepth);
+    expect(footprintCenters(baseGraphics).size).toBe(3);
+    baseGraphics!.fillPoints.length = 0;
+
+    // Eine zerstoerte oder dormante Basis faellt aus `getShadowCasters()` heraus; die verbleibenden
+    // Zellen ruecken dabei auf andere Array-Positionen. `ArenaCellBucketIndex.sync()` haengt nur an
+    // und wuerde die alten Positionen weiterfuehren – dann suchte die Region der ueberlebenden
+    // Basis unter einem Index, der noch in den Buckets der zerstoerten steckt, und ihr Schatten
+    // verschwaende mit.
+    casters = { cells: [survivingCell], turrets: [] };
+    shadows.rebuildArenaStaticShadows(layout(0, 0), arenaResult);
+    drain(scene);
+    const remaining = [...footprintCenters(baseGraphics)];
+    expect(remaining).toHaveLength(1);
+    // Der Zentroid der Zellprojektion liegt bewusst in Schattenrichtung versetzt; entscheidend ist,
+    // dass es die ueberlebende Zelle ist und nicht eine der beiden weit links entfernten.
+    const [remainingX] = remaining[0].split(':').map(Number);
+    expect(Math.abs(remainingX - survivingWorldX)).toBeLessThan(CELL_SIZE);
+  });
+
+  it('casts one shadow per footprint cell of a multi-cell structure', () => {
+    const { scene, graphicsLog } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaResult = { rockPhysicsProxies: [{ active: true }] } as never;
+    const watchtower = PERSISTENT_BASE_REWARD_DEFINITIONS.watchtower;
+
+    shadows.rebuildArenaStaticShadows(layout(1, 0), arenaResult, [{
+      id: 0,
+      kind: watchtower.kind,
+      gridX: 1,
+      gridY: 1,
+      persistentRewardId: watchtower.id,
+      footprint: watchtower.footprint,
+    } as never]);
+    drain(scene);
+
+    const rockGraphics = graphicsLog.find((entry) => entry.depth === SHADOW_CASTERS.rock.layerDepth);
+    // Vier Zellen, nicht nur die Ankerzelle.
+    expect(footprintCenters(rockGraphics).size).toBe(watchtower.footprint.length);
+    // Der Aufsatz sitzt genau einmal mittig, nicht auf jeder Zelle.
+    const turretGraphics = graphicsLog.find(
+      (entry) => entry.depth === SHADOW_CASTERS.turret.layerDepth,
+    );
+    expect(footprintCenters(turretGraphics).size).toBe(1);
+  });
+
+  it('gives ground-flush structures no cast shadow at all', () => {
+    const { scene, graphicsLog } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaResult = { rockPhysicsProxies: [{ active: true }] } as never;
+    const burrow = PERSISTENT_BASE_REWARD_DEFINITIONS.burrow;
+    expect(burrow.groundFlush).toBe(true);
+
+    shadows.rebuildArenaStaticShadows(layout(1, 0), arenaResult, [{
+      id: 0,
+      kind: burrow.kind,
+      gridX: 1,
+      gridY: 1,
+      persistentRewardId: burrow.id,
+      footprint: burrow.footprint,
+    } as never]);
+    drain(scene);
+
+    const rockGraphics = graphicsLog.find((entry) => entry.depth === SHADOW_CASTERS.rock.layerDepth);
+    expect(rockGraphics?.fillPoints ?? []).toEqual([]);
+  });
+
+  it('reaches far enough to find a multi-cell structure anchored outside the region', () => {
+    // Der Kandidatenindex sucht ueber die Ankerzelle; ohne den Footprint-Zuschlag fiele ein
+    // Bauwerk heraus, dessen hintere Zelle noch hineinragt.
+    expect(MAX_STRUCTURE_FOOTPRINT_REACH_PX).toBeGreaterThanOrEqual(CELL_SIZE);
   });
 });
