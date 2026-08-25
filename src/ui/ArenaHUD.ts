@@ -264,7 +264,7 @@ export interface ArenaHUDData {
   activePowerUps?:          ActivePowerUpInfo[];
   shieldBuff?:              ShieldBuffHudState;
   weapon2AdrenalineCost?:   number;
-  /** Nur beim Ingenieur gesetzt; `constructionCapacityMax = 0` blendet die Leiste aus. */
+  /** Nur bei einem aktuell aktiven Construction Tool gesetzt; 0 blendet die Leiste aus. */
   constructionCapacityUsed?: number;
   constructionCapacityMax?:  number;
 }

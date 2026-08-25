@@ -703,11 +703,6 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'ROCK_BARRIER',
     targets: [{ path: ['placeable', 'maxHp'], formula: 'scale' }],
   },
-  'utility.ROCK_BARRIER.placeable.lifetimeMs': {
-    kind: 'utility',
-    itemId: 'ROCK_BARRIER',
-    targets: [{ path: ['placeable', 'lifetimeMs'], formula: 'scale' }],
-  },
   'utility.SPORE_TURRET.placeable.maxHp': {
     kind: 'utility',
     itemId: 'SPORE_TURRET',

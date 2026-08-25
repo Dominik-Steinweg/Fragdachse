@@ -23,6 +23,9 @@ export type InspectorRadialSelection =
   | { kind: 'dismantle' }
   | { kind: 'global-dismantle' };
 
+/** Phase-2 neutral names. The Inspector export remains as a source-compatible alias. */
+export type ConstructionRadialSelection = InspectorRadialSelection;
+
 interface RadialEntry {
   readonly selection: InspectorRadialSelection;
   readonly displayName: string;
@@ -243,3 +246,6 @@ function cloneSelection(selection: InspectorRadialSelection): InspectorRadialSel
   if (selection.kind === 'global-dismantle') return { kind: 'global-dismantle' };
   return { kind: 'tool', tool: { ...selection.tool } };
 }
+
+/** Shared construction radial; kept as an alias so existing HUD imports do not fork the menu. */
+export const ConstructionToolRadialMenu = InspectorToolRadialMenu;

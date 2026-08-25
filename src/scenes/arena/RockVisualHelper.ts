@@ -25,6 +25,7 @@ interface TurretVisualState {
   hpBarBg:   Phaser.GameObjects.Rectangle;
   hpBarFg:   Phaser.GameObjects.Rectangle;
   constructionId?: SyncedPlaceableRock['constructionId'];
+  turretWeaponId?: SyncedPlaceableRock['turretWeaponId'];
 }
 
 const TEX_TURRET_AURA = '__placeable_turret_aura';
@@ -133,7 +134,7 @@ export class RockVisualHelper {
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
         this.ctx.gameAudioSystem.playSound(
-          rock.constructionId ? 'sfx_place_rock' : 'sfx_place_spore_turret',
+          rock.turretWeaponId === 'TURRET_SPORES' ? 'sfx_place_spore_turret' : 'sfx_place_rock',
           world.x,
           world.y,
           rock.ownerId,
@@ -362,7 +363,15 @@ export class RockVisualHelper {
       registerGraphicsObject(this.scene, 'rockTools', hpBarBg);
       registerGraphicsObject(this.scene, 'rockTools', hpBarFg);
 
-      visual = { image, aura, rangeCircle, hpBarBg, hpBarFg, constructionId: rock.constructionId };
+      visual = {
+        image,
+        aura,
+        rangeCircle,
+        hpBarBg,
+        hpBarFg,
+        constructionId: rock.constructionId,
+        turretWeaponId: rock.turretWeaponId,
+      };
       this.turretVisuals.set(rock.id, visual);
     }
 
@@ -382,6 +391,7 @@ export class RockVisualHelper {
       .setTint(rock.ownerColor)
       .setVisible(visual.image.visible);
     visual.constructionId = rock.constructionId;
+    visual.turretWeaponId = rock.turretWeaponId;
     visual.rangeCircle.clear();
     visual.rangeCircle.lineStyle(1.4, rock.ownerColor, 0.48);
     if (rock.kind === 'turret') {
@@ -391,7 +401,7 @@ export class RockVisualHelper {
         rock.targetRange ?? this.getPlaceableTurretConfig(rock).placeable.targetRange,
       );
     }
-    visual.rangeCircle.setVisible(!rock.constructionId);
+    visual.rangeCircle.setVisible(!rock.constructionId || rock.turretWeaponId === 'TURRET_SPORES');
 
     visual.hpBarBg.setPosition(world.x, world.y + 22).setVisible(!indestructible && ratio < 1);
     visual.hpBarFg
@@ -428,7 +438,7 @@ export class RockVisualHelper {
         this.lighting.releaseLight(key);
         continue;
       }
-      if (visual.constructionId) {
+      if (visual.constructionId && visual.turretWeaponId !== 'TURRET_SPORES') {
         this.lighting.releaseLight(key);
       } else {
         this.lighting.setLight(key, 'spore_turret', visual.image.x, visual.image.y);
@@ -459,7 +469,7 @@ export class RockVisualHelper {
   }
 
   spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
-    if (rock.kind !== 'turret' || rock.constructionId) return;
+    if (rock.kind !== 'turret' || (rock.constructionId && rock.turretWeaponId !== 'TURRET_SPORES')) return;
     const turretCfg = this.getPlaceableTurretConfig(rock);
     const weaponCfg = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
     if (weaponCfg.fire.type !== 'projectile' || !weaponCfg.fire.impactCloud) return;

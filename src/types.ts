@@ -174,6 +174,10 @@ export interface PlayerInput {
 
 export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
 
+/** Ownership of a normal construction runtime. Phase-3 base ownership is reserved here so the
+ * dismantle/restore paths do not need a second identity model later. */
+export type ConstructionOwnership = 'host-persistent' | 'guest-session' | 'base-owned';
+
 export interface PlacementPreviewNetState {
   active: boolean;
   kind: PlaceableKind;
@@ -862,6 +866,8 @@ export type CoopDefenseItemRewardAction = 'take' | 'equip';
 
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId =
+  | 'rock_barrier'
+  | 'spore_turret'
   | 'rocket_turret'
   | 'machine_gun_turret'
   | 'flame_turret'
@@ -1753,6 +1759,8 @@ export interface SyncedPlaceableRock {
   targetRange?: number;
   turretWeaponId?: TurretWeaponId;
   constructionId?: ConstructionId;
+  /** Explicit lifetime owner; absent on unrelated temporary placeables and authored scenery. */
+  ownership?: ConstructionOwnership;
   /** Beim Platzieren eingefrorene, typisierte Energieinjektor-Wirkung. */
   energyInjectorEffect?: EnergyInjectorConstructionEffect;
   toolRef?: LoadoutToolRef;

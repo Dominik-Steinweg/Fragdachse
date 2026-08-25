@@ -13,9 +13,11 @@ import {
   clipPointToArenaRay,
   isPointInsideArena,
 } from '../config';
-import type { ArenaLayout, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
+import type { ArenaLayout, ConstructionOwnership, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 import {
   getCoopDefenseConstructionDefinition,
+  getConstructionIdForUtility,
+  normalizeConstructionId,
   sumPlaceableCapacity,
   type CoopDefenseConstructionDefinition,
 } from '../config/coopDefenseConstructions';
@@ -145,6 +147,7 @@ export class PlacementSystem {
   update(now: number): SyncedPlaceableRock[] {
     const expired: SyncedPlaceableRock[] = [];
     for (const rock of this.runtimeRocks.values()) {
+      if (normalizeConstructionId(rock.constructionId) || normalizeConstructionId(rock.toolRef?.id)) continue;
       if (rock.expiresAt <= 0) continue;
       if (now < rock.expiresAt) continue;
       this.runtimeRocks.delete(rock.id);
@@ -203,10 +206,18 @@ export class PlacementSystem {
    * Owner-Pruefung bleibt an derselben Datenquelle wie beim Einzelrueckbau; statische
    * Felsen und nicht als Konstruktion markierte Runtime-Objekte sind ausgeschlossen.
    */
-  removeOwnedConstructions(ownerId: string): SyncedPlaceableRock[] {
+  removeOwnedConstructions(
+    ownerId: string,
+    expectedOwnership?: ConstructionOwnership,
+  ): SyncedPlaceableRock[] {
     const removed: SyncedPlaceableRock[] = [];
     for (const rock of this.getOwnedConstructions(ownerId)) {
-      if (rock.ownerId !== ownerId || rock.constructionId === undefined) continue;
+      if (
+        rock.ownerId !== ownerId
+        || rock.constructionId === undefined
+        || rock.ownership === 'base-owned'
+        || (expectedOwnership !== undefined && rock.ownership !== expectedOwnership)
+      ) continue;
       const result = this.removeRock(rock.id);
       if (result) removed.push(result);
     }
@@ -223,13 +234,23 @@ export class PlacementSystem {
   }
 
   /** Rueckbau: entfernt ein Konstrukt nur, wenn es dem anfragenden Spieler gehoert. */
-  removeRockAt(gridX: number, gridY: number, ownerId: string): SyncedPlaceableRock | undefined {
+  removeRockAt(
+    gridX: number,
+    gridY: number,
+    ownerId: string,
+    expectedOwnership?: ConstructionOwnership,
+  ): SyncedPlaceableRock | undefined {
     // Der Grid-Index fuehrt statische Layout-Felsen und platzierte Objekte gemeinsam; nur
     // Letztere stehen in `runtimeRocks` und sind damit ueberhaupt rueckbaubar.
     const id = this.rockGrid.getIndex(gridX, gridY);
     if (id < 0) return undefined;
     const rock = this.runtimeRocks.get(id);
-    if (!rock || rock.ownerId !== ownerId) return undefined;
+    if (
+      !rock
+      || rock.ownerId !== ownerId
+      || rock.ownership === 'base-owned'
+      || (expectedOwnership !== undefined && rock.ownership !== expectedOwnership)
+    ) return undefined;
     return this.removeRock(id);
   }
 
@@ -242,6 +263,7 @@ export class PlacementSystem {
     originY: number,
     targetX: number,
     targetY: number,
+    ownership: ConstructionOwnership = 'host-persistent',
   ): SyncedPlaceableRock | null {
     const preview = this.getConstructionPlacementPreview(cfg, originX, originY, targetX, targetY);
     if (!preview?.isValid) return null;
@@ -259,6 +281,7 @@ export class PlacementSystem {
       expiresAt: 0,
       warningStartsAt: 0,
       angle: preview.angle,
+      ownership,
       toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
       turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
@@ -281,9 +304,11 @@ export class PlacementSystem {
     angle: number,
     playerId: string,
     ownerColor: number,
+    ownership: ConstructionOwnership = 'host-persistent',
   ): SyncedPlaceableRock | null {
     const isConstruction = 'capacityCost' in cfg;
-    const footprint = isConstruction ? [{ dx: 0, dy: 0 }] : cfg.placeable.footprint;
+    const utilityConstructionId = isConstruction ? null : getConstructionIdForUtility(cfg.id);
+    const footprint = isConstruction ? cfg.footprint : cfg.placeable.footprint;
     if (!this.canPlaceCells(footprint, gridX, gridY, false)) return null;
 
     const safeAngle = Number.isFinite(angle) ? angle : 0;
@@ -301,10 +326,44 @@ export class PlacementSystem {
         expiresAt: 0,
         warningStartsAt: 0,
         angle: safeAngle,
+        ownership,
         targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
         turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
         energyInjectorEffect: cfg.energyInjectorEffect,
         toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
+      }
+      : utilityConstructionId
+        ? {
+        id: this.nextRockId++,
+        kind: cfg.placeable.kind,
+        constructionId: utilityConstructionId,
+        gridX,
+        gridY,
+        hp: Math.max(1, cfg.placeable.maxHp),
+        maxHp: Math.max(1, cfg.placeable.maxHp),
+        ownerId: playerId,
+        ownerColor,
+        expiresAt: 0,
+        warningStartsAt: 0,
+        angle: safeAngle,
+        ownership,
+        toolRef: { kind: 'construction', id: utilityConstructionId } satisfies LoadoutToolRef,
+        enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock'
+          ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
+        enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock'
+          ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
+        enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock'
+          ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
+        secondProjectileDamageFactor: cfg.placeable.kind === 'turret'
+          ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
+        targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
+        turretWeaponId: cfg.placeable.kind === 'turret'
+          ? (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
+            ? 'SPORE_TURRET_PLASMA'
+            : cfg.type === 'placeable_turret' ? cfg.weaponId as SyncedPlaceableRock['turretWeaponId'] : undefined
+          : undefined,
+        energyInjectorEffect: cfg.placeable.kind === 'turret'
+          ? cfg.placeable.energyInjectorEffect : undefined,
       }
       : {
         id: this.nextRockId++,
@@ -361,11 +420,11 @@ export class PlacementSystem {
       targetY: targetWorld.y,
       gridX: targetCell.gridX,
       gridY: targetCell.gridY,
-      isValid: this.canPlaceSingleCell(targetCell.gridX, targetCell.gridY),
+      isValid: this.canPlaceCells(cfg.footprint, targetCell.gridX, targetCell.gridY),
       frame: cfg.kind === 'turret' ? AutoTiler.getFrame(mask, ROCK_AUTOTILE) : 0,
       range: cfg.placementRange,
       kind: cfg.kind,
-      sourceSlot: 'weapon2',
+      sourceSlot: 'utility',
       constructionId: cfg.id,
     };
   }
@@ -408,13 +467,15 @@ export class PlacementSystem {
     targetX: number,
     targetY: number,
     now: number,
+    ownership?: ConstructionOwnership,
   ): SyncedPlaceableRock | null {
     const preview = this.getPlacementPreview(cfg, originX, originY, targetX, targetY);
     if (!preview || !preview.isValid) return null;
 
     // `lifetimeMs <= 0` kennzeichnet dauerhafte Konstrukte (Mauer, Fliegenpilz). `update()`
     // ueberspringt `expiresAt <= 0` bereits, deshalb genuegt hier die Null.
-    const isPermanent = cfg.placeable.lifetimeMs <= 0;
+    const constructionId = getConstructionIdForUtility(cfg.id);
+    const isPermanent = constructionId !== null || cfg.placeable.lifetimeMs <= 0;
     const rock: RuntimeRockRecord = {
       id: this.nextRockId++,
       kind: cfg.placeable.kind,
@@ -429,15 +490,21 @@ export class PlacementSystem {
         ? 0
         : now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
       angle: preview.angle,
+      constructionId: constructionId ?? undefined,
+      ownership: constructionId ? (ownership ?? 'host-persistent') : undefined,
       indestructible: cfg.placeable.indestructible,
-      toolRef: { kind: 'utility', id: cfg.id } satisfies LoadoutToolRef,
+      toolRef: constructionId
+        ? { kind: 'construction', id: constructionId }
+        : { kind: 'utility', id: cfg.id } satisfies LoadoutToolRef,
       enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
       enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
       enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
       secondProjectileDamageFactor: cfg.placeable.kind === 'turret' ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
       targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
-      turretWeaponId: cfg.placeable.kind === 'turret' && (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
-        ? 'SPORE_TURRET_PLASMA'
+      turretWeaponId: cfg.placeable.kind === 'turret'
+        ? (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
+          ? 'SPORE_TURRET_PLASMA'
+          : cfg.type === 'placeable_turret' ? cfg.weaponId as SyncedPlaceableRock['turretWeaponId'] : undefined
         : undefined,
       energyInjectorEffect: cfg.placeable.kind === 'turret'
         ? cfg.placeable.energyInjectorEffect
@@ -450,8 +517,9 @@ export class PlacementSystem {
   }
 
   syncFromSnapshot(snapshot: readonly SyncedPlaceableRock[]): PlacementSyncResult {
+    const normalizedSnapshot = snapshot.map(normalizeRockSnapshot);
     const next = new Map<number, SyncedPlaceableRock>();
-    for (const rock of snapshot) {
+    for (const rock of normalizedSnapshot) {
       next.set(rock.id, rock);
     }
 
@@ -466,7 +534,7 @@ export class PlacementSystem {
       removed.push({ ...existing });
     }
 
-    for (const incoming of snapshot) {
+    for (const incoming of normalizedSnapshot) {
       const current = this.runtimeRocks.get(incoming.id);
       if (!current) {
         this.runtimeRocks.set(incoming.id, { ...incoming });
@@ -488,6 +556,7 @@ export class PlacementSystem {
         || current.angle !== incoming.angle
         || current.indestructible !== incoming.indestructible
         || current.constructionId !== incoming.constructionId
+        || current.ownership !== incoming.ownership
         || current.toolRef?.kind !== incoming.toolRef?.kind
         || current.toolRef?.id !== incoming.toolRef?.id
         || current.turretWeaponId !== incoming.turretWeaponId
@@ -534,6 +603,7 @@ export class PlacementSystem {
       kind: cfg.placeable.kind,
       sourceSlot: 'utility',
       powerUpDefId: cfg.type === 'placeable_pedestal' ? cfg.powerUpDefId : undefined,
+      constructionId: getConstructionIdForUtility(cfg.id) ?? undefined,
     };
   }
 
@@ -736,4 +806,18 @@ function segmentIntersectsGridCell(
     if (minT > maxT) return false;
   }
   return true;
+}
+
+function normalizeRockSnapshot(rock: SyncedPlaceableRock): SyncedPlaceableRock {
+  const constructionId = normalizeConstructionId(rock.constructionId)
+    ?? normalizeConstructionId(rock.toolRef?.id);
+  if (!constructionId) return { ...rock };
+  return {
+    ...rock,
+    constructionId,
+    expiresAt: 0,
+    warningStartsAt: 0,
+    ownership: rock.ownership ?? 'host-persistent',
+    toolRef: { kind: 'construction', id: constructionId },
+  };
 }

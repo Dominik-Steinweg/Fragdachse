@@ -20,10 +20,9 @@ export const DEFAULT_LOADOUT = built.defaultLoadout;
 export const LOADOUT_CATALOG_ENTRIES = built.catalog;
 export const UTILITY_CONFIG_LINEAGES: RegistryLineage = built.lineages.utility;
 
-/** Mode mapping only selects an inherited config; it does not contain balance values. */
-export const COOP_DEFENSE_UTILITY_VARIANTS: Readonly<Record<string, string>> = Object.freeze({
-  ROCK_BARRIER: 'ROCK_BARRIER_COOP',
-  SPORE_TURRET: 'SPORE_TURRET_COOP',
+const LEGACY_COOP_UTILITY_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  ROCK_BARRIER_COOP: 'ROCK_BARRIER',
+  SPORE_TURRET_COOP: 'SPORE_TURRET',
 });
 
 export function findWeaponConfig(id: string | null | undefined): WeaponConfig | undefined {
@@ -51,6 +50,8 @@ export function getUtilityConfigLineage(id: string): readonly string[] {
 }
 
 export function getUtilityBaseId(id: string): string | undefined {
+  const legacyBaseId = LEGACY_COOP_UTILITY_ALIASES[id];
+  if (legacyBaseId) return legacyBaseId;
   const lineage = getUtilityConfigLineage(id);
   return lineage.length > 0 ? lineage[lineage.length - 1] : undefined;
 }
@@ -58,9 +59,9 @@ export function getUtilityBaseId(id: string): string | undefined {
 export function resolveUtilityIdForMode(id: string, mode: GameMode): string | undefined {
   const baseId = getUtilityBaseId(id) ?? id;
   if (!UTILITY_CONFIGS[baseId]) return undefined;
-  if (mode !== 'coop_defense') return baseId;
-  const variantId = COOP_DEFENSE_UTILITY_VARIANTS[baseId];
-  return variantId && UTILITY_CONFIGS[variantId] ? variantId : baseId;
+  // The normal placeables are permanent constructions in every mode. There is no Coop-only
+  // lifetime/config variant; legacy IDs have already been normalized above.
+  return baseId;
 }
 
 export function getUtilityConfigForMode(

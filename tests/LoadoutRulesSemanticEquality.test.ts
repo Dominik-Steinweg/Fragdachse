@@ -25,11 +25,11 @@ describe('mode-specific weapon availability', () => {
 
   it('commits concrete inherited utility IDs per mode', () => {
     const coop = resolveLoadoutSelectionIds({ utility: UTILITY_CONFIGS.ROCK_BARRIER }, 'coop_defense');
-    const normal = resolveLoadoutSelectionIds({ utility: UTILITY_CONFIGS.ROCK_BARRIER_COOP }, 'deathmatch');
+    const normal = resolveLoadoutSelectionIds({ utility: UTILITY_CONFIGS.ROCK_BARRIER }, 'deathmatch');
     const coopTurret = resolveLoadoutSelectionIds({ utility: UTILITY_CONFIGS.SPORE_TURRET }, 'coop_defense');
 
-    expect(coop.utility).toBe('ROCK_BARRIER_COOP');
+    expect(coop.utility).toBe('ROCK_BARRIER');
     expect(normal.utility).toBe('ROCK_BARRIER');
-    expect(coopTurret.utility).toBe('SPORE_TURRET_COOP');
+    expect(coopTurret.utility).toBe('SPORE_TURRET');
   });
 });

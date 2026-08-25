@@ -166,7 +166,6 @@ import {
   getCoopDefenseUpgradeLoadoutSelection,
   getCoopDefenseUpgradeTextureKey,
   hasCoopDefenseDedicatedUpgradeIcon,
-  getUnlockedCoopDefenseConstructionIds,
   getUnlockedLoadoutToolRefs,
   getCoopDefenseToolCapacity,
   setLoadoutToolSlots,
@@ -177,7 +176,7 @@ import {
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { ConstructionId, CoopDefenseClassId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
@@ -191,7 +190,7 @@ import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName, getMapTutorial, getMapTutorialStep } from '../i18n/contentPresentation';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
@@ -1258,7 +1257,13 @@ export class ArenaScene extends Phaser.Scene {
       );
     });
     inputSystem.setupInspectorToolProvider(
-      () => this.clientUpdate.getLocalInspectorTools(),
+      () => {
+        const localId = bridge.getLocalPlayerId();
+        const committed = bridge.getPlayerCommittedLoadout(localId);
+        return committed?.coopDefenseClassId === 'inspector_gadachs'
+          ? this.clientUpdate.getLocalInspectorTools()
+          : this.lifecycle?.getActiveConstructionToolsForPlayer(localId) ?? [];
+      },
       () => this.clientUpdate.getLocalInspectorSelectedTool(),
       (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
       () => bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
@@ -1270,7 +1275,10 @@ export class ArenaScene extends Phaser.Scene {
       // Host-Gate anschliessend ablehnt.
       () => ({
         used: this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
-        max: this.clientUpdate.getLocalConstructionCapacity(),
+        max: bridge.isHost()
+          ? this.lifecycle?.getConstructionCapacityForPlayer(bridge.getLocalPlayerId())
+            ?? this.clientUpdate.getLocalConstructionCapacity()
+          : this.clientUpdate.getLocalConstructionCapacity(),
       }),
       () => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
@@ -1386,14 +1394,9 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupConstructionProviders(
       () => {
         if (bridge.getGamePhase() !== 'ARENA') return [];
-        const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
-        if (
-          committed?.coopDefenseClassId !== 'inspector_gadachs'
-          || !committed.coopDefenseProfile
-        ) {
-          return [];
-        }
-        return getUnlockedCoopDefenseConstructionIds(committed.coopDefenseProfile);
+        return this.lifecycle?.getActiveConstructionToolsForPlayer(bridge.getLocalPlayerId())
+          .filter((tool): tool is { kind: 'construction'; id: ConstructionId } => tool.kind === 'construction')
+          .map((tool) => tool.id) ?? [];
       },
       (constructionId) => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
@@ -1650,6 +1653,9 @@ export class ArenaScene extends Phaser.Scene {
     this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
       if (status.state === 'reconnecting' || status.state === 'resumed') {
         this.mapEventAnnouncementPresenter?.resetForHydration();
+      }
+      if (status.state === 'player-expired') {
+        this.lifecycle.handleGuestSessionOwnerRemoved(status.playerId);
       }
     });
     // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
@@ -2961,6 +2967,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private onPlayerLeft(id: string): void {
     if (bridge.isHost()) bridge.hostReclaimColor(id);
+    this.lifecycle.handleGuestSessionOwnerRemoved(id);
     if (this.ctx.playerManager.hasPlayer(id)) {
       this.lifecycle.removePlayerFromActiveRound(id);
     }

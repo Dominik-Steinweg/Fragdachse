@@ -1,5 +1,5 @@
 import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
-import type { ConstructionId, EnergyInjectorConstructionEffect, PlaceableKind, TurretWeaponId } from '../types';
+import type { ConstructionId, ConstructionOwnership, CoopDefenseClassId, EnergyInjectorConstructionEffect, GameMode, PlaceableKind, TurretWeaponId } from '../types';
 
 interface RawCoopDefenseConstructionCooldownDefinition {
   readonly buildCooldownMs?: unknown;
@@ -19,8 +19,15 @@ interface CoopDefenseConstructionBaseDefinition {
   /** Anteil an der festen Konstruktionskapazitaet, solange das Konstrukt steht. */
   readonly capacityCost: number;
   readonly color: number;
+  /** Shared footprint contract used by placement, restore and collision checks. */
+  readonly footprint: readonly { readonly dx: number; readonly dy: number }[];
   /** Typisierte Wirkung des Energieinjektors; Felsen/Mauern besitzen keine Definition. */
-  readonly energyInjectorEffect: EnergyInjectorConstructionEffect;
+  readonly energyInjectorEffect?: EnergyInjectorConstructionEffect;
+}
+
+export interface CoopDefenseBarrierConstructionDefinition extends CoopDefenseConstructionBaseDefinition {
+  readonly kind: 'rock';
+  readonly indestructible?: false;
 }
 
 export interface CoopDefenseWeaponConstructionDefinition extends CoopDefenseConstructionBaseDefinition {
@@ -38,10 +45,13 @@ export interface CoopDefensePowerUpPedestalDefinition extends CoopDefenseConstru
 }
 
 export type CoopDefenseConstructionDefinition =
+  | CoopDefenseBarrierConstructionDefinition
   | CoopDefenseWeaponConstructionDefinition
   | CoopDefensePowerUpPedestalDefinition;
 
 export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
+  'rock_barrier',
+  'spore_turret',
   'rocket_turret',
   'machine_gun_turret',
   'flame_turret',
@@ -63,6 +73,39 @@ export const DEFAULT_COOP_DEFENSE_CONSTRUCTION_ID: ConstructionId = 'rocket_turr
  * es {@link getCoopDefenseConstructionCapacity}.
  */
 export const COOP_DEFENSE_CONSTRUCTION_CAPACITY = 100;
+export const COOP_DEFENSE_NON_INSPECTOR_CONSTRUCTION_CAPACITY = 30;
+
+/** Configured personal base capacities for every supported mode. */
+export const CONSTRUCTION_CAPACITY_BY_GAME_MODE: Readonly<Record<GameMode, number>> = Object.freeze({
+  deathmatch: COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+  team_deathmatch: COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+  capture_the_beer: COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+  coop_defense: COOP_DEFENSE_NON_INSPECTOR_CONSTRUCTION_CAPACITY,
+});
+
+export interface ConstructionCapacityResolverInput {
+  readonly gameMode: GameMode;
+  readonly classId: CoopDefenseClassId | null | undefined;
+  /** Additive item/upgrade modifiers; malformed values are treated as zero. */
+  readonly modifiers?: number | { readonly capacityBonus?: number } | null;
+}
+
+/**
+ * Single capacity resolver for placement, preview, HUD, radial and restore. Capacity is personal
+ * and never inferred from the number of players in the room.
+ */
+export function resolveConstructionCapacity(input: ConstructionCapacityResolverInput): number {
+  const base = input.gameMode === 'coop_defense' && input.classId !== 'inspector_gadachs'
+      ? COOP_DEFENSE_NON_INSPECTOR_CONSTRUCTION_CAPACITY
+      : input.gameMode === 'coop_defense'
+        ? COOP_DEFENSE_CONSTRUCTION_CAPACITY
+      : CONSTRUCTION_CAPACITY_BY_GAME_MODE[input.gameMode] ?? 0;
+  const rawBonus = typeof input.modifiers === 'number'
+    ? input.modifiers
+    : input.modifiers?.capacityBonus ?? 0;
+  const bonus = Number.isFinite(rawBonus) ? rawBonus : 0;
+  return Math.max(0, base + bonus);
+}
 
 /**
  * Persoenliches Kapazitaetsmaximum eines Spielers.
@@ -74,8 +117,11 @@ export const COOP_DEFENSE_CONSTRUCTION_CAPACITY = 100;
  * spielerunabhaengig.
  */
 export function getCoopDefenseConstructionCapacity(bonus: number): number {
-  const safeBonus = Number.isFinite(bonus) ? bonus : 0;
-  return Math.max(0, COOP_DEFENSE_CONSTRUCTION_CAPACITY + safeBonus);
+  return resolveConstructionCapacity({
+    gameMode: 'coop_defense',
+    classId: 'inspector_gadachs',
+    modifiers: bonus,
+  });
 }
 
 /** Stat-Schluessel des Kapazitaetsbonus im gemeinsamen Upgrade-/Item-Bucket. */
@@ -86,14 +132,7 @@ const COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS = loadConstructionBuildCooldowns
 /** Reichweite, in der eigene Konstrukte zurueckgebaut werden koennen. */
 export const COOP_DEFENSE_DISMANTLE_RANGE = 320;
 
-/**
- * Kapazitaetskosten der platzierbaren Utilities. Bewusst hier statt in `LoadoutConfig`,
- * damit die Kapazitaetsaufloesung ohne Import der Loadout-Configs auskommt.
- */
-export const COOP_DEFENSE_UTILITY_CAPACITY_COSTS: Readonly<Record<string, number>> = Object.freeze({
-  ROCK_BARRIER: 1,
-  SPORE_TURRET: 15,
-});
+const SINGLE_CELL_FOOTPRINT = Object.freeze([{ dx: 0, dy: 0 }]);
 
 export const COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS = 3;
 export const COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS = 6;
@@ -134,6 +173,34 @@ function loadConstructionBuildCooldowns(): Readonly<Record<ConstructionId, numbe
 
 export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDefenseConstructionDefinition>> =
   Object.freeze({
+    rock_barrier: {
+      kind: 'rock',
+      id: 'rock_barrier',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.rock_barrier,
+      iconKey: null,
+      unlockUpgradeId: 'unlock_rock_barrier',
+      maxHp: 200,
+      placementRange: 160,
+      capacityCost: 1,
+      color: 0x92705a,
+      footprint: SINGLE_CELL_FOOTPRINT,
+    },
+    spore_turret: {
+      kind: 'turret',
+      id: 'spore_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.spore_turret,
+      weaponId: 'TURRET_SPORES',
+      iconKey: null,
+      unlockUpgradeId: 'unlock_spore_turret',
+      maxHp: 50,
+      targetRange: 280,
+      placementRange: 240,
+      muzzleOffset: 26,
+      capacityCost: 15,
+      color: 0x9b65d8,
+      footprint: SINGLE_CELL_FOOTPRINT,
+      energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
+    },
     rocket_turret: {
       kind: 'turret',
       id: 'rocket_turret',
@@ -147,6 +214,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 18,
       capacityCost: 30,
       color: 0xff8a3d,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
     },
     machine_gun_turret: {
@@ -162,6 +230,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 17,
       capacityCost: 10,
       color: 0xd8b46b,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
     },
     flame_turret: {
@@ -177,6 +246,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 16,
       capacityCost: 20,
       color: 0xff5f28,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
     },
     tesla_turret: {
@@ -192,6 +262,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 0,
       capacityCost: 25,
       color: 0x9ae7ff,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
     },
     gravity_turret: {
@@ -207,6 +278,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 16,
       capacityCost: 25,
       color: 0xa755ff,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'gravity_pull', pullStrengthMultiplier: 1.5 },
     },
     slow_bubble_turret: {
@@ -222,6 +294,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 16,
       capacityCost: 20,
       color: 0x8edcff,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'slow_bubble', slowStrengthMultiplier: 1.5 },
     },
     medic_pedestal: {
@@ -235,6 +308,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       placementRange: 320,
       capacityCost: 30,
       color: 0x52d273,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'powerup_cooldown', respawnTimeMultiplier: 0.5 },
       indestructible: true,
     },
@@ -249,14 +323,53 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       placementRange: 320,
       capacityCost: 25,
       color: 0x5aa9ff,
+      footprint: SINGLE_CELL_FOOTPRINT,
       energyInjectorEffect: { type: 'powerup_cooldown', respawnTimeMultiplier: 0.5 },
       indestructible: true,
     },
   });
 
+/** @deprecated Compatibility view for presentation code; values are derived from the shared registry. */
+export const COOP_DEFENSE_UTILITY_CAPACITY_COSTS: Readonly<Record<string, number>> = Object.freeze({
+  ROCK_BARRIER: COOP_DEFENSE_CONSTRUCTIONS.rock_barrier.capacityCost,
+  SPORE_TURRET: COOP_DEFENSE_CONSTRUCTIONS.spore_turret.capacityCost,
+});
+
 export function isConstructionId(value: unknown): value is ConstructionId {
   return typeof value === 'string'
     && COOP_DEFENSE_CONSTRUCTION_IDS.includes(value as ConstructionId);
+}
+
+/**
+ * Canonical construction identity boundary. Historical utility IDs and their old Coop-only
+ * lifetime variants are accepted only here; every runtime, snapshot and persistent blueprint
+ * uses the returned lower-case construction ID.
+ */
+export function normalizeConstructionId(value: unknown): ConstructionId | null {
+  if (typeof value !== 'string') return null;
+  switch (value) {
+    case 'rock_barrier':
+    case 'ROCK_BARRIER':
+    case 'ROCK_BARRIER_COOP':
+      return 'rock_barrier';
+    case 'spore_turret':
+    case 'SPORE_TURRET':
+    case 'SPORE_TURRET_COOP':
+      return 'spore_turret';
+    default:
+      return isConstructionId(value) ? value : null;
+  }
+}
+
+export function getConstructionIdForUtility(value: unknown): ConstructionId | null {
+  const id = normalizeConstructionId(value);
+  return id === 'rock_barrier' || id === 'spore_turret' ? id : null;
+}
+
+export function getUtilityIdForConstruction(constructionId: ConstructionId): string | null {
+  if (constructionId === 'rock_barrier') return 'ROCK_BARRIER';
+  if (constructionId === 'spore_turret') return 'SPORE_TURRET';
+  return null;
 }
 
 export function getCoopDefenseConstructionDefinition(
@@ -272,11 +385,17 @@ export function getCoopDefenseConstructionDefinition(
  * Deshalb duerfen Kapazitaetskosten auch nicht spielerabhaengig modifiziert werden.
  */
 export function getPlaceableCapacityCost(
-  rock: { readonly kind: PlaceableKind; readonly constructionId?: ConstructionId },
+  rock: {
+    readonly kind: PlaceableKind;
+    readonly constructionId?: ConstructionId | string;
+    readonly ownership?: ConstructionOwnership;
+    readonly toolRef?: { readonly kind: 'construction' | 'utility'; readonly id: string };
+  },
 ): number {
-  if (rock.constructionId) return COOP_DEFENSE_CONSTRUCTIONS[rock.constructionId]?.capacityCost ?? 0;
-  if (rock.kind === 'rock') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.ROCK_BARRIER;
-  if (rock.kind === 'turret') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.SPORE_TURRET;
+  if (rock.ownership === 'base-owned') return 0;
+  const constructionId = normalizeConstructionId(rock.constructionId)
+    ?? normalizeConstructionId(rock.toolRef?.id);
+  if (constructionId) return COOP_DEFENSE_CONSTRUCTIONS[constructionId].capacityCost;
   return 0;
 }
 
@@ -285,7 +404,13 @@ export function getPlaceableCapacityCost(
  * reine Funktion: Host, Client und Tests rechnen damit identisch, ohne Phaser-Abhaengigkeit.
  */
 export function sumPlaceableCapacity(
-  rocks: Iterable<{ readonly ownerId: string; readonly kind: PlaceableKind; readonly constructionId?: ConstructionId }>,
+  rocks: Iterable<{
+    readonly ownerId: string;
+    readonly kind: PlaceableKind;
+    readonly constructionId?: ConstructionId | string;
+    readonly ownership?: ConstructionOwnership;
+    readonly toolRef?: { readonly kind: 'construction' | 'utility'; readonly id: string };
+  }>,
   ownerId: string,
 ): number {
   let used = 0;
@@ -298,7 +423,6 @@ export function sumPlaceableCapacity(
 
 /** Kapazitaetskosten eines noch nicht gebauten Werkzeugs aus dem Radialmenue. */
 export function getToolCapacityCost(tool: { kind: 'construction' | 'utility'; id: string }): number {
-  return tool.kind === 'construction'
-    ? COOP_DEFENSE_CONSTRUCTIONS[tool.id as ConstructionId]?.capacityCost ?? 0
-    : COOP_DEFENSE_UTILITY_CAPACITY_COSTS[tool.id] ?? 0;
+  const constructionId = normalizeConstructionId(tool.id);
+  return constructionId ? COOP_DEFENSE_CONSTRUCTIONS[constructionId].capacityCost : 0;
 }

@@ -7,6 +7,7 @@ import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
 import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
 import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
+import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 
 // SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
@@ -174,12 +175,13 @@ export class RpcCoordinator {
         || this.ctx.burrowSystem?.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
-        if (toolRef || bridge.getPlayerCommittedLoadout(playerId)?.coopDefenseClassId !== 'inspector_gadachs') return false;
+        if (toolRef || !this.hasActiveConstructionTool(playerId)) return false;
         return system.start(playerId, actionId, kind, 1_000, Date.now());
       }
       let utility: UtilityConfig | undefined;
       if (toolRef) {
         const committed = bridge.getPlayerCommittedLoadout(playerId);
+        if (toolRef.kind === 'construction') return false;
         if (
           toolRef.kind !== 'utility'
           || committed?.coopDefenseClassId !== 'inspector_gadachs'
@@ -201,45 +203,43 @@ export class RpcCoordinator {
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
       let authoritativeParams = params;
-      if (committed?.coopDefenseClassId === 'inspector_gadachs') {
-        if (params?.globalDismantle) {
-          if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle) {
-            return { ok: false, reason: 'invalid' };
-          }
-          const held = this.ctx.hostHeldActionSystem?.consume(
-            senderId,
-            params.heldActionId,
-            'global_dismantle',
-            1_000,
-            Date.now(),
-          );
-          if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
-          return this.lifecycle?.dismantleAllInspectorConstructions(senderId)
-            ?? { ok: false, reason: 'blocked' };
+      if (params?.globalDismantle) {
+        if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle
+          || !this.hasActiveConstructionTool(senderId)) {
+          return { ok: false, reason: 'invalid' };
         }
-        // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
-        if (params?.dismantle) {
-          if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined) {
-            return { ok: false, reason: 'invalid' };
-          }
-          return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)
-            ?? { ok: false, reason: 'blocked' };
+        const held = this.ctx.hostHeldActionSystem?.consume(
+          senderId,
+          params.heldActionId,
+          'global_dismantle',
+          1_000,
+          Date.now(),
+        );
+        if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
+        return this.lifecycle?.dismantleAllInspectorConstructions(senderId)
+          ?? { ok: false, reason: 'blocked' };
+      }
+      // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
+      if (params?.dismantle) {
+        if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined
+          || !this.hasActiveConstructionTool(senderId)) {
+          return { ok: false, reason: 'invalid' };
         }
-        // A regular utility packet is only valid for a temporary special-pickup
-        // override; normal Inspector utilities must carry their typed ref.
-        if (slot === 'utility' && !params?.toolRef
-          && bridge.getPlayerUtilityOverrideId(senderId) === '') {
-          return { ok: false, reason: 'blocked' };
-        }
-      } else if (params?.dismantle || params?.globalDismantle) {
-        return { ok: false, reason: 'invalid' };
+        return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)
+          ?? { ok: false, reason: 'blocked' };
+      }
+      if (committed?.coopDefenseClassId === 'inspector_gadachs'
+        && slot === 'utility' && !params?.toolRef
+        && bridge.getPlayerUtilityOverrideId(senderId) === '') {
+        return { ok: false, reason: 'blocked' };
       }
       if (params?.toolRef) {
-        if (slot !== 'utility' || committed?.coopDefenseClassId !== 'inspector_gadachs') {
+        if (slot !== 'utility') {
           return { ok: false, reason: 'invalid' };
         }
         if (params.toolRef.kind === 'construction') {
-          if (!params.constructionId || params.toolRef.id !== params.constructionId) {
+          if (!params.constructionId
+            || normalizeConstructionId(params.toolRef.id) !== normalizeConstructionId(params.constructionId)) {
             return { ok: false, reason: 'invalid' };
           }
           return this.lifecycle?.placeInspectorConstruction(
@@ -250,6 +250,7 @@ export class RpcCoordinator {
           ) ?? { ok: false, reason: 'blocked' };
         }
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
+        if (committed?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };
         if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
         const inspectorUtility = getUtilityConfigForMode(params.toolRef.id, bridge.getGameMode());
         if (!inspectorUtility) return { ok: false, reason: 'invalid' };
@@ -290,6 +291,19 @@ export class RpcCoordinator {
       return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, authoritativeParams, clientX, clientY)
         ?? { ok: false, reason: 'blocked' };
     });
+  }
+
+  private hasActiveConstructionTool(playerId: string): boolean {
+    const lifecycle = this.lifecycle as unknown as {
+      getActiveConstructionToolsForPlayer?: (id: string) => readonly unknown[];
+    } | null;
+    if (typeof lifecycle?.getActiveConstructionToolsForPlayer === 'function') {
+      return lifecycle.getActiveConstructionToolsForPlayer(playerId).length > 0;
+    }
+    // Compatibility for focused RPC tests/older scene doubles that predate the shared resolver.
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    return committed?.coopDefenseClassId === 'inspector_gadachs'
+      && (committed.tools ?? []).some((tool) => tool.kind === 'construction');
   }
 
   private registerCaptureTheBeerFxHandler(): void {

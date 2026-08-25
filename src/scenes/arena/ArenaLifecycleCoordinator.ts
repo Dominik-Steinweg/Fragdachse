@@ -95,7 +95,7 @@ import { FireObstacleIndex } from '../../effects/FireObstacleIndex';
 import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
-import { getUtilityBaseId, getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
+import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases, type BaseSpec } from '../../arena/BaseRegistry';
@@ -133,26 +133,29 @@ import {
   COOP_DEFENSE_CONSTRUCTION_IDS,
   COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
-  getCoopDefenseConstructionCapacity,
   getCoopDefenseConstructionDefinition,
+  getConstructionIdForUtility,
+  getUtilityIdForConstruction,
   getToolCapacityCost,
-  isConstructionId,
+  normalizeConstructionId,
+  resolveConstructionCapacity,
 } from '../../config/coopDefenseConstructions';
-import { getUnlockedCoopDefenseConstructionIds, getUnlockedLoadoutToolRefs } from '../../utils/coopDefenseUpgrades';
-import type { ConstructionId, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock } from '../../types';
+import type { ConstructionId, ConstructionOwnership, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock } from '../../types';
+import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveConstructionAccess } from '../../systems/ConstructionAccessResolver';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveArenaLoadProgress } from './ArenaLoadProgress';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import { getStoredPersistentBaseState } from '../../utils/localPreferences';
 import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRepository';
 import { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
+import { PersistentBaseRoomState, type GuestPersistentConstruction } from '../../persistentBase/PersistentBaseRoomState';
 import {
   planPersistentBaseRestore,
   type PersistentRestoreCandidate,
   type PersistentRestoreToolDefinition,
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
-import type { PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
+import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -206,6 +209,11 @@ export class ArenaLifecycleCoordinator {
     readonly direction: 1 | -1;
     readonly plan: TrainEventPlan;
   } | null = null;
+  /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
+  private readonly persistentBaseRoomState = new PersistentBaseRoomState();
+  private persistentBaseSession: PersistentBaseSession | null = null;
+  private persistentBaseAnchor: PersistentBaseAnchor | null = null;
+  private persistentBaseRadiusCells = 0;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
 
   constructor(
@@ -636,7 +644,7 @@ export class ArenaLifecycleCoordinator {
   hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
-    const persistentSession = this.ctx.persistentBaseSession;
+    const persistentSession = this.persistentBaseSession ?? this.ctx.persistentBaseSession;
     if (persistentSession) {
       if (roundConclusion === 'victory') {
         persistentSession.commit((runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true);
@@ -645,6 +653,16 @@ export class ArenaLifecycleCoordinator {
         persistentSession.discard();
       }
     }
+    if (this.persistentBaseRoomState.hasActiveMission) {
+      if (roundConclusion === 'victory') {
+        this.persistentBaseRoomState.commit((runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true);
+      } else {
+        this.persistentBaseRoomState.rollback();
+      }
+    }
+    // A new round must load the repository's newly committed baseline. During an in-round map
+    // transition the field remains alive; it is cleared only after the round outcome is decided.
+    this.persistentBaseSession = null;
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
@@ -759,12 +777,56 @@ export class ArenaLifecycleCoordinator {
   /** Host callback fuer den atomaren Rollenwechsel; kein CombatSystem-Tod. */
   handleSpectatorEntered(playerId: string): void {
     if (bridge.getGamePhase() !== 'ARENA') return;
+    this.removeGuestSessionOwner(playerId);
     this.removePlayerFromActiveRound(playerId);
     if (playerId === bridge.getLocalPlayerId()) {
       this.localPlayerState.spectator = true;
       this.localPlayerState.alive = false;
       this.localPlayerState.burrowed = false;
       this.localPlayerState.overlayTrackedAlive = null;
+    }
+  }
+
+  /** Final owner-removal hook for explicit leave, expiry and spectator promotion. */
+  handleGuestSessionOwnerRemoved(playerId: string): void {
+    this.removeGuestSessionOwner(playerId);
+  }
+
+  getActiveConstructionToolsForPlayer(playerId: string): readonly LoadoutToolRef[] {
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    return getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed));
+  }
+
+  getConstructionCapacityForPlayer(playerId: string): number {
+    return this.getConstructionCapacity(playerId);
+  }
+
+  private removeGuestSessionOwner(playerId: string): void {
+    if (!bridge.isHost() || playerId === bridge.getLocalPlayerId()) return;
+    const runtimeIds = this.persistentBaseRoomState.removeGuestSessionOwner(playerId);
+    let removedCount = 0;
+    for (const runtimeId of runtimeIds) {
+      const removed = this.ctx.placementSystem?.removeRock(runtimeId);
+      if (!removed) continue;
+      this.finalizeDismantledConstruction(removed, false);
+      removedCount += 1;
+    }
+    // Guest constructions outside a persistent base are still round-owned runtime objects and
+    // must not survive the owner's final leave/spectator transition.
+    for (const construction of this.ctx.placementSystem?.getOwnedConstructions(playerId) ?? []) {
+      // Older snapshots may not carry the explicit ownership field yet. The owner identity still
+      // makes this a guest-owned runtime; only authored base-owned objects stay reserved.
+      if (construction.ownership === 'base-owned') continue;
+      const removed = this.ctx.placementSystem?.removeRock(construction.id);
+      if (!removed) continue;
+      this.finalizeDismantledConstruction(removed, false);
+      removedCount += 1;
+    }
+    if (removedCount > 0) {
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeables_batch_removed',
+        source: 'placeable_rock',
+      });
     }
   }
 
@@ -800,6 +862,14 @@ export class ArenaLifecycleCoordinator {
     this.matchTerminated = true;
     this.arenaBuilt = false;
     this.arenaEnteredAt = 0;
+
+    // A technical abort can happen before the normal round-conclusion path runs. Never carry a
+    // half-written mission working state into a later round in the same room.
+    if (bridge.isHost()) {
+      this.persistentBaseSession?.discard();
+      this.persistentBaseRoomState.rollback();
+      this.persistentBaseSession = null;
+    }
 
     this.isLocalReady = false;
     bridge.setLocalReady(false);
@@ -966,17 +1036,30 @@ export class ArenaLifecycleCoordinator {
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on map ${coopDefenseMapConfig.mapId}`,
         );
       }
-      const repository = new PersistentBaseRepository();
-      const committedState = repository.load();
-      this.ctx.persistentBaseSession = new PersistentBaseSession(
-        repository,
-        {
-          anchor: getPersistentBaseAnchor(anchorBase),
-          activeRadiusCells: committedState.radiusCells,
-          ownerId: bridge.getLocalPlayerId(),
-        },
-        committedState,
+      if (!this.persistentBaseSession) {
+        const repository = new PersistentBaseRepository();
+        const committedState = repository.load();
+        this.persistentBaseSession = new PersistentBaseSession(
+          repository,
+          {
+            anchor: getPersistentBaseAnchor(anchorBase),
+            activeRadiusCells: committedState.radiusCells,
+            ownerId: bridge.getLocalPlayerId(),
+          },
+          committedState,
+        );
+      }
+      this.persistentBaseSession.rebindArena(
+        getPersistentBaseAnchor(anchorBase),
+        persistentBaseGravelRadius,
       );
+      this.ctx.persistentBaseSession = this.persistentBaseSession;
+      this.persistentBaseAnchor = getPersistentBaseAnchor(anchorBase);
+      this.persistentBaseRadiusCells = this.persistentBaseSession.radiusCells;
+      this.persistentBaseRoomState.beginMission();
+    } else {
+      this.persistentBaseAnchor = null;
+      this.persistentBaseRadiusCells = 0;
     }
     this.ctx.coopDefenseMissionBarrierManager = missionProgressConfig
       ? new CoopDefenseMissionBarrierManager(this.scene, missionProgressConfig, {
@@ -3077,7 +3160,13 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
-    this.ctx.persistentBaseSession?.discard();
+    const detachedPlacementSystem = this.ctx.placementSystem;
+    this.persistentBaseSession?.detachRuntimeObjects(
+      (runtimeId) => detachedPlacementSystem?.hasRuntimeRock(runtimeId) === true,
+    );
+    this.persistentBaseRoomState.detachRuntimeObjects(
+      (runtimeId) => detachedPlacementSystem?.hasRuntimeRock(runtimeId) === true,
+    );
     this.ctx.persistentBaseSession = null;
     this.ctx.placementSystem = null;
     this.ctx.turretSystem?.setTurretDamageBuffProvider(null);
@@ -3281,15 +3370,11 @@ export class ArenaLifecycleCoordinator {
     const hostId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(hostId);
     const tools = this.buildPersistentRestoreTools(hostId, committed?.coopDefenseProfile ?? null);
-    const capacityBonus = this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
-      hostId,
-      COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
-    ) ?? 0;
-    const capacityMax = getCoopDefenseConstructionCapacity(capacityBonus);
+    const capacityMax = this.getConstructionCapacity(hostId);
     if (!anchorBase) return;
 
     const plan = planPersistentBaseRestore({
-      state: session.committedState,
+      state: session.workingState,
       anchor: getPersistentBaseAnchor(anchorBase),
       activeRadiusCells: session.radiusCells,
       capacityUsed: this.ctx.placementSystem.getUsedCapacity(hostId),
@@ -3304,18 +3389,10 @@ export class ArenaLifecycleCoordinator {
 
     const ownerColor = bridge.getPlayerColor(hostId) ?? PLAYER_COLORS[0];
     for (const candidate of plan.active) {
-      const runtime = this.materializePersistentRestoreCandidate(candidate, hostId, ownerColor);
+      const runtime = this.materializePersistentRestoreCandidate(candidate, hostId, ownerColor, 'host-persistent');
       if (!runtime) continue;
       session.registerRestored(candidate.blueprint, runtime.id);
-      emitArenaMapGridChanged(this.scene.game.events, {
-        reason: 'placeable_added',
-        source: runtime.kind === 'pedestal'
-          ? 'placeable_pedestal'
-          : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
-        obstacleId: runtime.id,
-        gridX: runtime.gridX,
-        gridY: runtime.gridY,
-      });
+      this.emitPersistentRestoreAdded(runtime);
     }
     if (plan.dormant.length > 0) {
       this.runtimeDiagnosticEventSink?.('persistent-base:restore-dormant', {
@@ -3323,22 +3400,68 @@ export class ArenaLifecycleCoordinator {
         count: plan.dormant.length,
       });
     }
+
+    // Guest blueprints are planned in one deterministic owner/order sequence after the host. The
+    // placement grid is the shared collision authority, so a host object always wins a cell race.
+    const guestBlueprints = [...this.persistentBaseRoomState.getWorkingBlueprints()]
+      .sort(compareGuestRestoreBlueprints);
+    for (const blueprint of guestBlueprints) {
+      const guestCommitted = bridge.getPlayerCommittedLoadout(blueprint.ownerId);
+      const guestTools = this.buildPersistentRestoreTools(
+        blueprint.ownerId,
+        guestCommitted?.coopDefenseProfile ?? null,
+      );
+      const guestPlan = planPersistentBaseRestore({
+        state: {
+          schemaVersion: session.workingState.schemaVersion,
+          radiusCells: session.workingState.radiusCells,
+          revision: session.workingState.revision,
+          constructions: [blueprint],
+        },
+        anchor: getPersistentBaseAnchor(anchorBase),
+        activeRadiusCells: session.radiusCells,
+        capacityUsed: this.ctx.placementSystem.getUsedCapacity(blueprint.ownerId),
+        capacityMax: this.getConstructionCapacity(blueprint.ownerId),
+        tools: guestTools,
+        isCellBlocked: (gridX, gridY) => !this.ctx.placementSystem!.canMaterializeCells(
+          [{ dx: 0, dy: 0 }],
+          gridX,
+          gridY,
+        ),
+      });
+      const guestColor = bridge.getPlayerColor(blueprint.ownerId) ?? PLAYER_COLORS[0];
+      for (const candidate of guestPlan.active) {
+        const runtime = this.materializePersistentRestoreCandidate(
+          candidate,
+          blueprint.ownerId,
+          guestColor,
+          'guest-session',
+        );
+        if (!runtime) continue;
+        this.persistentBaseRoomState.registerRestored(blueprint, runtime.id);
+        this.emitPersistentRestoreAdded(runtime);
+      }
+    }
+  }
+
+  private emitPersistentRestoreAdded(runtime: SyncedPlaceableRock): void {
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_added',
+      source: runtime.kind === 'pedestal'
+        ? 'placeable_pedestal'
+        : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      obstacleId: runtime.id,
+      gridX: runtime.gridX,
+      gridY: runtime.gridY,
+    });
   }
 
   private buildPersistentRestoreTools(
     playerId: string,
     profile: NonNullable<LoadoutCommitSnapshot['coopDefenseProfile']> | null,
   ): PersistentRestoreToolDefinition[] {
-    const classId = bridge.getPlayerCommittedLoadout(playerId)?.coopDefenseClassId;
-    const isInspector = classId === 'inspector_gadachs' && profile !== null;
-    const unlockedConstructionIds = new Set(
-      profile ? getUnlockedCoopDefenseConstructionIds(profile) : [],
-    );
-    const unlockedToolKeys = new Set(
-      profile
-        ? getUnlockedLoadoutToolRefs(profile).map((tool) => `${tool.kind}:${tool.id}`)
-        : [],
-    );
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    const accessContext = getConstructionAccessContext(bridge.getGameMode(), committed);
     const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
     const constructionHpMultiplier = 1 + (
       this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
@@ -3347,36 +3470,34 @@ export class ArenaLifecycleCoordinator {
 
     for (const constructionId of COOP_DEFENSE_CONSTRUCTION_IDS) {
       const definition = getCoopDefenseConstructionDefinition(constructionId);
+      const access = resolveConstructionAccess(constructionId, accessContext);
+      const utilityId = getUtilityIdForConstruction(constructionId);
+      let footprint = definition.footprint;
+      let maxHp = definition.maxHp;
+      if (utilityId) {
+        const config = getUtilityConfigForMode(utilityId, bridge.getGameMode());
+        if (config && 'placeable' in config) {
+          const effectiveConfig = modifiers
+            ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, {
+              additive: modifiers.additiveStats,
+              percentage: modifiers.percentageStats,
+            }) as PlaceableUtilityConfig
+            : config as PlaceableUtilityConfig;
+          footprint = effectiveConfig.placeable.footprint;
+          maxHp = effectiveConfig.placeable.maxHp;
+        }
+      }
       tools.push({
         kind: 'construction',
         id: constructionId,
-        footprint: [{ dx: 0, dy: 0 }],
+        footprint,
         capacityCost: definition.capacityCost,
-        maxHp: definition.maxHp * (definition.indestructible ? 1 : constructionHpMultiplier),
-        unlocked: isInspector
-          && unlockedConstructionIds.has(constructionId)
-          && unlockedToolKeys.has(`construction:${constructionId}`),
-      });
-    }
-
-    for (const baseId of ['ROCK_BARRIER', 'SPORE_TURRET'] as const) {
-      const config = getUtilityConfigForMode(baseId, 'coop_defense');
-      if (!config || !('placeable' in config) || config.placeable.lifetimeMs > 0) continue;
-      const placeableConfig = config as PlaceableUtilityConfig;
-      const effectiveConfig = modifiers
-        ? applyCoopDefenseModifiersToUtilityConfig(placeableConfig, {
-          additive: modifiers.additiveStats,
-          percentage: modifiers.percentageStats,
-        })
-        : placeableConfig;
-      const effectivePlaceableConfig = effectiveConfig as PlaceableUtilityConfig;
-      tools.push({
-        kind: 'utility',
-        id: baseId,
-        footprint: effectivePlaceableConfig.placeable.footprint,
-        capacityCost: getToolCapacityCost({ kind: 'utility', id: baseId }),
-        maxHp: effectivePlaceableConfig.placeable.maxHp,
-        unlocked: isInspector && unlockedToolKeys.has(`utility:${baseId}`),
+        maxHp: utilityId ? maxHp : maxHp * (definition.indestructible ? 1 : constructionHpMultiplier),
+        unlocked: access.unlocked,
+        active: access.active,
+        unavailableReason: access.reason === 'class-not-allowed' || access.reason === 'mode-not-allowed'
+          ? access.reason
+          : undefined,
       });
     }
     return tools;
@@ -3386,10 +3507,46 @@ export class ArenaLifecycleCoordinator {
     candidate: PersistentRestoreCandidate,
     ownerId: string,
     ownerColor: number,
+    ownership: ConstructionOwnership,
   ): SyncedPlaceableRock | null {
     if (!this.ctx.placementSystem) return null;
-    if (candidate.tool.kind === 'construction') {
-      const definition = getCoopDefenseConstructionDefinition(candidate.tool.id as ConstructionId);
+    const constructionId = normalizeConstructionId(candidate.tool.id);
+    if (constructionId) {
+      const utilityId = getUtilityIdForConstruction(constructionId);
+      if (utilityId) {
+        const config = getUtilityConfigForMode(utilityId, bridge.getGameMode());
+        if (!config || !('placeable' in config)) return null;
+        const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(ownerId);
+        const modifiedConfig = modifiers
+          ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, {
+            additive: modifiers.additiveStats,
+            percentage: modifiers.percentageStats,
+          }) as PlaceableUtilityConfig
+          : config as PlaceableUtilityConfig;
+        const effectiveConfig = {
+          ...modifiedConfig,
+          id: utilityId,
+          placeable: {
+            ...modifiedConfig.placeable,
+            lifetimeMs: 0,
+            maxHp: candidate.tool.maxHp,
+          },
+        } as PlaceableUtilityConfig;
+        const runtime = this.ctx.placementSystem.materializePersistentPlaceable(
+          effectiveConfig,
+          candidate.gridX,
+          candidate.gridY,
+          candidate.blueprint.angle,
+          ownerId,
+          ownerColor,
+          ownership,
+        );
+        if (!runtime) return null;
+        this.rockVisualHelper.materializePlaceableRock(runtime, false);
+        return runtime;
+      }
+
+      const definition = getCoopDefenseConstructionDefinition(constructionId);
       const effectiveDefinition = {
         ...definition,
         maxHp: candidate.tool.maxHp,
@@ -3401,6 +3558,7 @@ export class ArenaLifecycleCoordinator {
         candidate.blueprint.angle,
         ownerId,
         ownerColor,
+        ownership,
       );
       if (!runtime) return null;
       if (definition.kind === 'pedestal') {
@@ -3420,36 +3578,7 @@ export class ArenaLifecycleCoordinator {
       this.rockVisualHelper.materializePlaceableRock(runtime, false);
       return runtime;
     }
-
-    const config = getUtilityConfigForMode(candidate.tool.id, 'coop_defense');
-    if (!config || !('placeable' in config) || config.placeable.lifetimeMs > 0) return null;
-    const baseConfig = config as PlaceableUtilityConfig;
-    const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(ownerId);
-    const modifiedConfig = modifiers
-      ? applyCoopDefenseModifiersToUtilityConfig(baseConfig, {
-        additive: modifiers.additiveStats,
-        percentage: modifiers.percentageStats,
-      }) as PlaceableUtilityConfig
-      : baseConfig;
-    const effectiveConfig = {
-      ...modifiedConfig,
-      placeable: {
-        ...modifiedConfig.placeable,
-        lifetimeMs: 0,
-        maxHp: candidate.tool.maxHp,
-      },
-    } as PlaceableUtilityConfig;
-    const runtime = this.ctx.placementSystem.materializePersistentPlaceable(
-      effectiveConfig,
-      candidate.gridX,
-      candidate.gridY,
-      candidate.blueprint.angle,
-      ownerId,
-      ownerColor,
-    );
-    if (!runtime) return null;
-    this.rockVisualHelper.materializePlaceableRock(runtime, false);
-    return runtime;
+    return null;
   }
 
   private registerNewPersistentPlaceable(
@@ -3457,9 +3586,22 @@ export class ArenaLifecycleCoordinator {
     tool: PersistentToolRef,
     footprint: readonly { readonly dx: number; readonly dy: number }[],
   ): void {
-    const normalizedTool: PersistentToolRef = tool.kind === 'utility'
-      ? { kind: 'utility', id: getUtilityBaseId(tool.id) ?? tool.id }
+    const constructionId = normalizeConstructionId(runtime.constructionId) ?? normalizeConstructionId(tool.id);
+    const normalizedTool: PersistentToolRef = constructionId
+      ? { kind: 'construction', id: constructionId }
       : { ...tool };
+    if (!this.persistentBaseAnchor || this.persistentBaseRadiusCells <= 0) return;
+    if (runtime.ownership === 'guest-session') {
+      this.persistentBaseRoomState.registerNew(
+        runtime,
+        runtime.ownerId,
+        normalizedTool,
+        footprint,
+        this.persistentBaseAnchor,
+        this.persistentBaseRadiusCells,
+      );
+      return;
+    }
     this.ctx.persistentBaseSession?.registerNew(runtime, normalizedTool, footprint);
   }
 
@@ -3948,12 +4090,31 @@ export class ArenaLifecycleCoordinator {
       return true;
     }
 
-    const rock = this.ctx.placementSystem?.tryPlaceRock(cfg, playerId, playerColor, originX, originY, targetX, targetY, now);
+    const constructionId = getConstructionIdForUtility(cfg.id);
+    if (constructionId) {
+      const committed = bridge.getPlayerCommittedLoadout(playerId);
+      const access = resolveConstructionAccess(
+        constructionId,
+        getConstructionAccessContext(bridge.getGameMode(), committed),
+      );
+      if (!access.allowed || !this.hasFreeConstructionCapacity(playerId, access.definition?.capacityCost ?? 0)) return false;
+    }
+    const rock = this.ctx.placementSystem?.tryPlaceRock(
+      cfg,
+      playerId,
+      playerColor,
+      originX,
+      originY,
+      targetX,
+      targetY,
+      now,
+      constructionId ? this.getConstructionOwnership(playerId) : undefined,
+    );
     if (!rock) return false;
     this.rockVisualHelper.materializePlaceableRock(rock, true);
     this.registerNewPersistentPlaceable(
       rock,
-      { kind: 'utility', id: cfg.id },
+      constructionId ? { kind: 'construction', id: constructionId } : { kind: 'utility', id: cfg.id },
       cfg.placeable.footprint,
     );
     emitArenaMapGridChanged(this.scene.game.events, {
@@ -3972,23 +4133,15 @@ export class ArenaLifecycleCoordinator {
     targetX: number,
     targetY: number,
   ): LoadoutUseResult {
-    if (!bridge.isHost() || !isConstructionId(constructionId)) {
-      return { ok: false, reason: 'invalid' };
-    }
+    const canonicalConstructionId = normalizeConstructionId(constructionId);
+    if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
+    constructionId = canonicalConstructionId;
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (
-      !committed
-      || committed.coopDefenseClassId !== 'inspector_gadachs'
-      || !committed.coopDefenseProfile
-    ) {
-      return { ok: false, reason: 'blocked' };
-    }
-    if (!getUnlockedCoopDefenseConstructionIds(committed.coopDefenseProfile).includes(constructionId)) {
-      return { ok: false, reason: 'invalid' };
-    }
-    if (!(committed.tools ?? []).some((tool) => tool.kind === 'construction' && tool.id === constructionId)) {
-      return { ok: false, reason: 'blocked' };
-    }
+    const access = resolveConstructionAccess(
+      constructionId,
+      getConstructionAccessContext(bridge.getGameMode(), committed),
+    );
+    if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
@@ -4010,16 +4163,32 @@ export class ArenaLifecycleCoordinator {
       : 1 + (
         this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
       );
-    const construction = this.ctx.placementSystem?.tryPlaceConstruction(
-      definition,
-      definition.maxHp * hpMultiplier,
-      playerId,
-      player.color,
-      player.sprite.x,
-      player.sprite.y,
-      targetX,
-      targetY,
-    );
+    const ownership = this.getConstructionOwnership(playerId);
+    const utilityId = getUtilityIdForConstruction(constructionId);
+    const utilityConfig = utilityId ? this.getEffectiveConstructionUtilityConfig(playerId, constructionId) : null;
+    const construction = utilityConfig
+      ? this.ctx.placementSystem?.tryPlaceRock(
+        utilityConfig,
+        playerId,
+        player.color,
+        player.sprite.x,
+        player.sprite.y,
+        targetX,
+        targetY,
+        Date.now(),
+        ownership,
+      )
+      : this.ctx.placementSystem?.tryPlaceConstruction(
+        definition,
+        definition.maxHp * hpMultiplier,
+        playerId,
+        player.color,
+        player.sprite.x,
+        player.sprite.y,
+        targetX,
+        targetY,
+        ownership,
+      );
     if (!construction) return { ok: false, reason: 'placement' };
 
     if (definition.kind === 'pedestal') {
@@ -4046,7 +4215,7 @@ export class ArenaLifecycleCoordinator {
     this.registerNewPersistentPlaceable(
       construction,
       { kind: 'construction', id: constructionId },
-      [{ dx: 0, dy: 0 }],
+      definition.footprint,
     );
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',
@@ -4057,6 +4226,19 @@ export class ArenaLifecycleCoordinator {
     });
     bridge.recordConstructionBuilt(playerId);
     return { ok: true };
+  }
+
+  /** Neutral Phase-2 name; the Inspector method remains a compatibility wrapper for callers. */
+  placeConstruction(
+    playerId: string,
+    constructionId: string,
+    targetX: number,
+    targetY: number,
+  ): LoadoutUseResult {
+    const canonical = normalizeConstructionId(constructionId);
+    return canonical
+      ? this.placeInspectorConstruction(playerId, canonical, targetX, targetY)
+      : { ok: false, reason: 'invalid' };
   }
 
   useInspectorUtility(
@@ -4073,11 +4255,21 @@ export class ArenaLifecycleCoordinator {
     if (!committed || committed.coopDefenseClassId !== 'inspector_gadachs') {
       return { ok: false, reason: 'blocked' };
     }
-    if (!(committed.tools ?? []).some((entry) => entry.kind === 'utility' && entry.id === tool.id)) {
+    if (!(committed.tools ?? []).some((entry) => (
+      entry.kind === 'utility' && (entry.id === tool.id || normalizeConstructionId(entry.id) === normalizeConstructionId(tool.id))
+    ))) {
       return { ok: false, reason: 'blocked' };
     }
     const config = getUtilityConfigForMode(tool.id, bridge.getGameMode()) as UtilityConfig | undefined;
     if (!config) return { ok: false, reason: 'invalid' };
+    const constructionId = getConstructionIdForUtility(tool.id);
+    if (constructionId) {
+      const access = resolveConstructionAccess(
+        constructionId,
+        getConstructionAccessContext(bridge.getGameMode(), committed),
+      );
+      if (!access.allowed) return { ok: false, reason: 'blocked' };
+    }
     // Platzierbare Utilities (Mauer, Fliegenpilz) sind Konstrukte und belegen Kapazitaet;
     // Granaten und andere Utilities nicht.
     const capacityCost = getToolCapacityCost(tool);
@@ -4133,12 +4325,44 @@ export class ArenaLifecycleCoordinator {
 
   /** Persoenliches Kapazitaetsmaximum inklusive Item-Boni. Host-Autoritaet fuer das Bau-Gate. */
   private getConstructionCapacity(playerId: string): number {
-    return getCoopDefenseConstructionCapacity(
-      this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    return resolveConstructionCapacity({
+      gameMode: bridge.getGameMode(),
+      classId: committed?.coopDefenseClassId,
+      modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
         playerId,
         COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
       ) ?? 0,
-    );
+    });
+  }
+
+  private getConstructionOwnership(playerId: string): ConstructionOwnership {
+    return playerId === bridge.getLocalPlayerId() ? 'host-persistent' : 'guest-session';
+  }
+
+  private getEffectiveConstructionUtilityConfig(
+    playerId: string,
+    constructionId: ConstructionId,
+  ): PlaceableUtilityConfig | null {
+    const utilityId = getUtilityIdForConstruction(constructionId);
+    if (!utilityId) return null;
+    const base = getUtilityConfigForMode(utilityId, bridge.getGameMode());
+    if (!base || !('placeable' in base)) return null;
+    const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
+    const effective = modifiers
+      ? applyCoopDefenseModifiersToUtilityConfig(base as PlaceableUtilityConfig, {
+        additive: modifiers.additiveStats,
+        percentage: modifiers.percentageStats,
+      }) as PlaceableUtilityConfig
+      : base as PlaceableUtilityConfig;
+    return {
+      ...effective,
+      id: utilityId,
+      placeable: {
+        ...effective.placeable,
+        lifetimeMs: 0,
+      },
+    } as PlaceableUtilityConfig;
   }
 
   /**
@@ -4152,7 +4376,7 @@ export class ArenaLifecycleCoordinator {
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (!committed || committed.coopDefenseClassId !== 'inspector_gadachs') {
+    if (getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed)).length === 0) {
       return { ok: false, reason: 'blocked' };
     }
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -4172,7 +4396,12 @@ export class ArenaLifecycleCoordinator {
       COOP_DEFENSE_DISMANTLE_RANGE,
     );
     if (!cell) return { ok: false, reason: 'blocked' };
-    const removed = this.ctx.placementSystem?.removeRockAt(cell.gridX, cell.gridY, playerId);
+    const removed = this.ctx.placementSystem?.removeRockAt(
+      cell.gridX,
+      cell.gridY,
+      playerId,
+      this.getConstructionOwnership(playerId),
+    );
     if (!removed) return { ok: false, reason: 'blocked' };
 
     this.finalizeDismantledConstruction(removed, true);
@@ -4194,14 +4423,17 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (committed?.coopDefenseClassId !== 'inspector_gadachs'
+    if (getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed)).length === 0
       || !player?.sprite.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
     }
 
-    const removed = this.ctx.placementSystem?.removeOwnedConstructions(playerId) ?? [];
+    const removed = this.ctx.placementSystem?.removeOwnedConstructions(
+      playerId,
+      this.getConstructionOwnership(playerId),
+    ) ?? [];
     for (const construction of removed) {
       // Die visuellen Einzelobjekte muessen verschwinden; deren teure Schatten-/Occluder-
       // Aktualisierung wird vom RockVisualHelper auf genau einen POST_UPDATE-Flush gebuendelt.
@@ -4406,6 +4638,15 @@ export class ArenaLifecycleCoordinator {
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
     }, bridge.getGameMode());
   }
+}
+
+function compareGuestRestoreBlueprints(
+  left: GuestPersistentConstruction,
+  right: GuestPersistentConstruction,
+): number {
+  return left.placementOrder - right.placementOrder
+    || (left.ownerId < right.ownerId ? -1 : left.ownerId > right.ownerId ? 1 : 0)
+    || (left.persistentId < right.persistentId ? -1 : left.persistentId > right.persistentId ? 1 : 0);
 }
 
 /**

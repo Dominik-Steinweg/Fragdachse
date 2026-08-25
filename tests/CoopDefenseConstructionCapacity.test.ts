@@ -21,8 +21,8 @@ const OTHER_OWNER = 'nukem';
 
 const turret = (constructionId: ConstructionId, ownerId = OWNER): PlacedStub =>
   ({ ownerId, kind: 'turret', constructionId });
-const wall = (ownerId = OWNER): PlacedStub => ({ ownerId, kind: 'rock' });
-const mushroom = (ownerId = OWNER): PlacedStub => ({ ownerId, kind: 'turret' });
+const wall = (ownerId = OWNER): PlacedStub => ({ ownerId, kind: 'rock', constructionId: 'rock_barrier' });
+const mushroom = (ownerId = OWNER): PlacedStub => ({ ownerId, kind: 'turret', constructionId: 'spore_turret' });
 
 describe('construction capacity costs', () => {
   it('assigns the intended cost per construct type', () => {
@@ -45,10 +45,8 @@ describe('construction capacity costs', () => {
     // Snapshot ableitbar sein, sonst kostet jede Mauer ein Feld pro Objekt.
     expect(getPlaceableCapacityCost({ kind: 'turret', constructionId: 'rocket_turret' }))
       .toBe(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost);
-    expect(getPlaceableCapacityCost({ kind: 'turret' }))
-      .toBe(getToolCapacityCost({ kind: 'utility', id: 'SPORE_TURRET' }));
-    expect(getPlaceableCapacityCost({ kind: 'rock' }))
-      .toBe(getToolCapacityCost({ kind: 'utility', id: 'ROCK_BARRIER' }));
+    expect(getPlaceableCapacityCost({ kind: 'turret' })).toBe(0);
+    expect(getPlaceableCapacityCost({ kind: 'rock' })).toBe(0);
     expect(getPlaceableCapacityCost({ kind: 'tunnel' })).toBe(0);
   });
 
@@ -58,17 +56,13 @@ describe('construction capacity costs', () => {
     }
     expect((UTILITY_CONFIGS.ROCK_BARRIER as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
     expect((UTILITY_CONFIGS.SPORE_TURRET as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.ROCK_BARRIER_COOP as PlaceableUtilityConfig).cooldown)
-      .toBeGreaterThanOrEqual(0);
-    expect((UTILITY_CONFIGS.SPORE_TURRET_COOP as PlaceableUtilityConfig).cooldown)
-      .toBeGreaterThanOrEqual(0);
   });
 
-  it('keeps normal placeables finite and Coop placeables permanent', () => {
-    expect((UTILITY_CONFIGS.ROCK_BARRIER as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.SPORE_TURRET as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
-    expect((UTILITY_CONFIGS.ROCK_BARRIER_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
-    expect((UTILITY_CONFIGS.SPORE_TURRET_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+  it('keeps normal construction placeables permanent without mode variants', () => {
+    expect((UTILITY_CONFIGS.ROCK_BARRIER as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+    expect((UTILITY_CONFIGS.SPORE_TURRET as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+    expect(UTILITY_CONFIGS.ROCK_BARRIER_COOP).toBeUndefined();
+    expect(UTILITY_CONFIGS.SPORE_TURRET_COOP).toBeUndefined();
   });
 
   it('no longer charges adrenaline for any utility', () => {

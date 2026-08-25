@@ -27,7 +27,8 @@ import {
 } from '../../utils/localPreferences';
 import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItemEffects';
 import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
-import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
+import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { getLocale } from '../../i18n';
 import { getHudBuffValueText } from '../../i18n/hudPresentation';
@@ -417,6 +418,13 @@ export class ClientUpdateCoordinator {
         ? null
         : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
       const selectedInspectorTool = inspectorUtilityAction ? null : this.getLocalInspectorSelectedTool();
+      const committedLoadout = bridge.getPlayerCommittedLoadout(localId2);
+      const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
+        ? selectedInspectorTool
+        : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          ? null
+          : getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committedLoadout))
+            .find((tool) => tool.kind === 'construction') ?? null;
       const inspectorConfig = selectedInspectorTool?.kind === 'utility'
         ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
         : undefined;
@@ -425,7 +433,7 @@ export class ClientUpdateCoordinator {
         : undefined;
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
-      const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
+      const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
       const baseUtilityId = inspectorUtilityAction
         ? undefined
         : overrideId
@@ -467,7 +475,9 @@ export class ClientUpdateCoordinator {
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
         weapon2AdrenalineCost:   fireSuperiorityAvailable ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
-        constructionCapacityMax:  bridge.getPlayerCommittedLoadout(localId2)?.coopDefenseClassId === 'inspector_gadachs'
+        constructionCapacityMax:  getActiveConstructionToolRefs(
+          getConstructionAccessContext(bridge.getGameMode(), committedLoadout),
+        ).length > 0
           ? this.getLocalConstructionCapacity()
           : 0,
       });
@@ -753,9 +763,13 @@ export class ClientUpdateCoordinator {
    * nicht verfuegbar, deshalb laeuft es hier ueber dieselben Effekt-Summen.
    */
   getLocalConstructionCapacity(): number {
-    return getCoopDefenseConstructionCapacity(
-      this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
-    );
+    const localId = bridge.getLocalPlayerId();
+    const committed = bridge.getPlayerCommittedLoadout(localId);
+    return resolveConstructionCapacity({
+      gameMode: bridge.getGameMode(),
+      classId: committed?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
+      modifiers: this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
+    });
   }
 
   /** Reiner Speicherzugriff auf den vor Rundenbeginn geladenen Fallback. */
@@ -786,10 +800,15 @@ export class ClientUpdateCoordinator {
 
   getLocalInspectorSelectedTool(): LoadoutToolRef | null {
     const tools = this.getLocalInspectorTools();
+    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
+    if (committed?.coopDefenseClassId !== 'inspector_gadachs') {
+      return getActiveConstructionToolRefs(
+        getConstructionAccessContext(bridge.getGameMode(), committed),
+      ).find((tool) => tool.kind === 'construction') ?? null;
+    }
     if (this.inspectorSelectedTool && tools.some((tool) => (
       tool.kind === this.inspectorSelectedTool?.kind && tool.id === this.inspectorSelectedTool?.id
     ))) return this.inspectorSelectedTool;
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
     const profileSelected = committed?.coopDefenseProfile?.selectedTool;
     const selected = profileSelected && tools.some((tool) => tool.kind === profileSelected.kind && tool.id === profileSelected.id)
       ? profileSelected

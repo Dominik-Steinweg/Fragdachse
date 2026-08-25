@@ -62,42 +62,19 @@ describe('loadout content loader', () => {
     expect(Object.isFrozen(built.weapons.ROCKET_LAUNCHER.fire)).toBe(true);
     expect(Object.isFrozen(built.catalog)).toBe(true);
     expect(Object.isFrozen(built.lineages.utility)).toBe(true);
-    expect(built.lineages.utility.ROCK_BARRIER_COOP).toEqual(['ROCK_BARRIER_COOP', 'ROCK_BARRIER']);
-    expect(built.lineages.utility.SPORE_TURRET_COOP).toEqual(['SPORE_TURRET_COOP', 'SPORE_TURRET']);
+    expect(built.lineages.utility.ROCK_BARRIER).toEqual(['ROCK_BARRIER']);
+    expect(built.lineages.utility.SPORE_TURRET).toEqual(['SPORE_TURRET']);
     expect(typeof built.weapons.GLOCK.projectileColor).toBe('number');
   });
 
-  it('keeps placeable Coop variants limited to their explicit mode overrides', () => {
+  it('keeps canonical construction placeables permanent without mode variants', () => {
     const built = buildLoadoutRegistries(clonedSources());
     const normalRock = built.utilities.ROCK_BARRIER as Record<string, unknown>;
-    const coopRock = built.utilities.ROCK_BARRIER_COOP as Record<string, unknown>;
     const normalTurret = built.utilities.SPORE_TURRET as Record<string, unknown>;
-    const coopTurret = built.utilities.SPORE_TURRET_COOP as Record<string, unknown>;
-    const coopRockPlaceable = coopRock.placeable as Record<string, unknown>;
-    const coopTurretPlaceable = coopTurret.placeable as Record<string, unknown>;
-
-    expect(coopRock.cooldown).toBe(coopTurret.cooldown);
-    expect(coopRockPlaceable).toMatchObject({ lifetimeMs: expect.any(Number) });
-    expect(coopTurretPlaceable).toMatchObject({ lifetimeMs: expect.any(Number) });
-    expect(coopRockPlaceable.lifetimeMs).toBe(coopTurretPlaceable.lifetimeMs);
-    expect(coopRock).toEqual({
-      ...normalRock,
-      id: 'ROCK_BARRIER_COOP',
-      cooldown: coopRock.cooldown,
-      placeable: {
-        ...(normalRock.placeable as Record<string, unknown>),
-        lifetimeMs: coopRockPlaceable.lifetimeMs,
-      },
-    });
-    expect(coopTurret).toEqual({
-      ...normalTurret,
-      id: 'SPORE_TURRET_COOP',
-      cooldown: coopTurret.cooldown,
-      placeable: {
-        ...(normalTurret.placeable as Record<string, unknown>),
-        lifetimeMs: coopTurretPlaceable.lifetimeMs,
-      },
-    });
+    expect(built.utilities.ROCK_BARRIER_COOP).toBeUndefined();
+    expect(built.utilities.SPORE_TURRET_COOP).toBeUndefined();
+    expect((normalRock.placeable as Record<string, unknown>).lifetimeMs).toBe(0);
+    expect((normalTurret.placeable as Record<string, unknown>).lifetimeMs).toBe(0);
   });
 
   it('is deterministic across source order and source renames', () => {

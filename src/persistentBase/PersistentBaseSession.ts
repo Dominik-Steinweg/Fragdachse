@@ -7,6 +7,7 @@ import {
   type PersistentConstruction,
   type PersistentRuntimeMetadata,
   type PersistentToolRef,
+  normalizePersistentToolRef,
 } from './PersistentBaseTypes';
 import { isPersistentFootprintInsideZone } from './PersistentBaseZone';
 
@@ -22,11 +23,13 @@ export interface PersistentBaseSessionOptions {
  */
 export class PersistentBaseSession {
   private readonly baseline: PersistentBaseState;
-  private readonly anchor: PersistentBaseAnchor;
-  private readonly activeRadiusCells: number;
+  private anchor: PersistentBaseAnchor;
+  private activeRadiusCells: number;
   private readonly ownerId: string;
   private readonly baselineRuntimeIds = new Map<string, number>();
   private readonly runtimeBlueprints = new Map<number, PersistentConstruction>();
+  private readonly detachedRuntimeIds = new Set<number>();
+  private readonly removedBaselineIds = new Set<string>();
   private nextPlacementOrder: number;
   private newIdCounter = 0;
 
@@ -49,12 +52,37 @@ export class PersistentBaseSession {
     return clonePersistentBaseState(this.baseline);
   }
 
+  /** Working state used when a round crosses a map boundary before its outcome is known. */
+  get workingState(): PersistentBaseState {
+    const byId = new Map<string, PersistentConstruction>();
+    for (const blueprint of this.baseline.constructions) {
+      if (!this.removedBaselineIds.has(blueprint.persistentId)) byId.set(blueprint.persistentId, blueprint);
+    }
+    for (const blueprint of this.runtimeBlueprints.values()) {
+      if (!this.baselineRuntimeIds.has(blueprint.persistentId)) byId.set(blueprint.persistentId, blueprint);
+    }
+    const constructions = [...byId.values()].sort(comparePersistentConstructions);
+    return { ...this.baseline, constructions: constructions.map((entry) => ({ ...entry, tool: { ...entry.tool } })) };
+  }
+
   get radiusCells(): number {
     return this.activeRadiusCells;
   }
 
+  rebindArena(anchor: PersistentBaseAnchor, activeRadiusCells: number): void {
+    this.anchor = { ...anchor };
+    this.activeRadiusCells = activeRadiusCells;
+  }
+
   registerRestored(blueprint: PersistentConstruction, runtimeId: number): void {
-    this.baselineRuntimeIds.set(blueprint.persistentId, runtimeId);
+    for (const [existingRuntimeId, existing] of this.runtimeBlueprints) {
+      if (existing.persistentId !== blueprint.persistentId) continue;
+      this.runtimeBlueprints.delete(existingRuntimeId);
+      this.detachedRuntimeIds.delete(existingRuntimeId);
+    }
+    if (this.baseline.constructions.some((entry) => entry.persistentId === blueprint.persistentId)) {
+      this.baselineRuntimeIds.set(blueprint.persistentId, runtimeId);
+    }
     this.runtimeBlueprints.set(runtimeId, blueprint);
   }
 
@@ -84,7 +112,7 @@ export class PersistentBaseSession {
     }
     const blueprint: PersistentConstruction = {
       persistentId,
-      tool: { ...tool },
+      tool: normalizePersistentToolRef(tool),
       relativeGridX: runtimeRock.gridX - this.anchor.gridX,
       relativeGridY: runtimeRock.gridY - this.anchor.gridY,
       angle: Number.isFinite(runtimeRock.angle) ? runtimeRock.angle : 0,
@@ -107,15 +135,18 @@ export class PersistentBaseSession {
   commit(isRuntimeObjectAlive: (runtimeId: number) => boolean): PersistentBaseState {
     const constructions: PersistentConstruction[] = [];
     for (const blueprint of this.baseline.constructions) {
+      if (this.removedBaselineIds.has(blueprint.persistentId)) continue;
       const runtimeId = this.baselineRuntimeIds.get(blueprint.persistentId);
       // Entries that were dormant at mission start have no runtime ID and survive unchanged.
-      if (runtimeId === undefined || isRuntimeObjectAlive(runtimeId)) {
+      if (runtimeId === undefined || this.detachedRuntimeIds.has(runtimeId) || isRuntimeObjectAlive(runtimeId)) {
         constructions.push({ ...blueprint, tool: { ...blueprint.tool } });
       }
     }
     for (const [runtimeId, blueprint] of this.runtimeBlueprints) {
       if (this.baselineRuntimeIds.has(blueprint.persistentId)) continue;
-      if (isRuntimeObjectAlive(runtimeId)) constructions.push({ ...blueprint, tool: { ...blueprint.tool } });
+      if (this.detachedRuntimeIds.has(runtimeId) || isRuntimeObjectAlive(runtimeId)) {
+        constructions.push({ ...blueprint, tool: { ...blueprint.tool } });
+      }
     }
     constructions.sort((left, right) => (
       left.placementOrder - right.placementOrder
@@ -133,7 +164,32 @@ export class PersistentBaseSession {
   discard(): void {
     this.baselineRuntimeIds.clear();
     this.runtimeBlueprints.clear();
+    this.detachedRuntimeIds.clear();
+    this.removedBaselineIds.clear();
   }
+
+  /** Detaches live runtime IDs while preserving the mission working copy for another map. */
+  detachRuntimeObjects(isRuntimeObjectAlive: (runtimeId: number) => boolean): void {
+    for (const [persistentId, runtimeId] of this.baselineRuntimeIds) {
+      if (isRuntimeObjectAlive(runtimeId)) this.detachedRuntimeIds.add(runtimeId);
+      else {
+        this.baselineRuntimeIds.delete(persistentId);
+        this.removedBaselineIds.add(persistentId);
+      }
+    }
+    for (const [runtimeId, blueprint] of this.runtimeBlueprints) {
+      if (this.baselineRuntimeIds.get(blueprint.persistentId) === runtimeId) continue;
+      if (isRuntimeObjectAlive(runtimeId)) this.detachedRuntimeIds.add(runtimeId);
+      else {
+        this.runtimeBlueprints.delete(runtimeId);
+        this.detachedRuntimeIds.delete(runtimeId);
+      }
+    }
+  }
+}
+
+function comparePersistentConstructions(left: PersistentConstruction, right: PersistentConstruction): number {
+  return left.placementOrder - right.placementOrder || comparePersistentIds(left.persistentId, right.persistentId);
 }
 
 function comparePersistentIds(left: string, right: string): number {

@@ -9,6 +9,8 @@ import {
   COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS,
   COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID,
   COOP_DEFENSE_CONSTRUCTIONS,
+  getUtilityIdForConstruction,
+  normalizeConstructionId,
 } from '../config/coopDefenseConstructions';
 import {
   isUltimateAllowedInMode,
@@ -216,6 +218,10 @@ const COOP_DEFENSE_UPGRADE_DEPENDENTS = buildDependentMap(COOP_DEFENSE_UPGRADE_R
 const COOP_DEFENSE_UPGRADES_BY_CATEGORY = new Map<CoopDefenseUpgradeCategoryId, readonly CoopDefenseUpgradeDefinition[]>(
   COOP_DEFENSE_UPGRADE_CATEGORIES.map((category) => [category.id, category.upgrades]),
 );
+const SHARED_CONSTRUCTION_UPGRADE_IDS = collectUpgradeAndDependentIds([
+  COOP_DEFENSE_CONSTRUCTIONS.rock_barrier.unlockUpgradeId,
+  COOP_DEFENSE_CONSTRUCTIONS.spore_turret.unlockUpgradeId,
+]);
 const COOP_DEFENSE_LOADOUT_UNLOCKS = new Map<string, string>();
 const INSPECTOR_CONSTRUCTION_BY_UNLOCK_UPGRADE_ID = new Map<string, ConstructionId>(
   COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => [COOP_DEFENSE_CONSTRUCTIONS[id].unlockUpgradeId, id]),
@@ -313,7 +319,9 @@ function getUnavailableUpgradeIds(classId: CoopDefenseClassId): ReadonlySet<stri
   if (classId !== 'inspector_gadachs') {
     const excluded = collectUpgradeAndDependentIds(INSPECTOR_UPGRADE_ROOT_IDS);
     for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
-      if (definition.categoryId === 'construction') excluded.add(definition.id);
+      if (definition.categoryId === 'construction' && !SHARED_CONSTRUCTION_UPGRADE_IDS.has(definition.id)) {
+        excluded.add(definition.id);
+      }
     }
     return excluded;
   }
@@ -416,7 +424,8 @@ function sanitizeToolLoadout(
     const id = (value as { id?: unknown }).id;
     if (kind !== 'construction' && kind !== 'utility') continue;
     if (typeof id !== 'string') continue;
-    append({ kind, id } as LoadoutToolRef);
+    const constructionId = normalizeConstructionId(id);
+    append(constructionId ? { kind: 'construction', id: constructionId } : { kind, id } as LoadoutToolRef);
   }
   // Neue Freischaltungen werden deterministisch bis zur freien Kapazitaet angehaengt.
   for (const tool of autoEquipTools ?? (rawTools === undefined ? unlocked : [])) append(tool);
@@ -508,12 +517,18 @@ export function getCoopDefenseUpgradeCategories(
 ): readonly CoopDefenseUpgradeCategoryDefinition[] {
   return COOP_DEFENSE_UPGRADE_CATEGORIES
     .filter((category) => classId === 'inspector_gadachs' || category.id !== 'construction')
-    .map((category) => ({
-      ...category,
-      upgrades: category.upgrades.filter((definition) => (
-        isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
-      )),
-    }));
+    .map((category) => {
+      const shared = classId !== 'inspector_gadachs' && category.id === 'utility'
+        ? (COOP_DEFENSE_UPGRADES_BY_CATEGORY.get('construction') ?? [])
+          .filter((definition) => SHARED_CONSTRUCTION_UPGRADE_IDS.has(definition.id))
+        : [];
+      return {
+        ...category,
+        upgrades: [...category.upgrades, ...shared].filter((definition) => (
+          isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
+        )),
+      };
+    });
 }
 
 /**
@@ -531,7 +546,12 @@ export function getCoopDefenseUpgradeDefinitionsForCategory(
   categoryId: CoopDefenseUpgradeCategoryId,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
 ): readonly CoopDefenseUpgradeDefinition[] {
-  return (COOP_DEFENSE_UPGRADES_BY_CATEGORY.get(categoryId) ?? []).filter((definition) => (
+  if (classId !== 'inspector_gadachs' && categoryId === 'construction') return [];
+  const shared = classId !== 'inspector_gadachs' && categoryId === 'utility'
+    ? (COOP_DEFENSE_UPGRADES_BY_CATEGORY.get('construction') ?? [])
+      .filter((definition) => SHARED_CONSTRUCTION_UPGRADE_IDS.has(definition.id))
+    : [];
+  return [...(COOP_DEFENSE_UPGRADES_BY_CATEGORY.get(categoryId) ?? []), ...shared].filter((definition) => (
     isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
   ));
 }
@@ -565,7 +585,11 @@ export function getCoopDefenseUpgradeLoadoutSelection(
 }
 
 export function getCoopDefenseLoadoutUnlockUpgradeId(slot: LoadoutSlot, itemId: string): string | null {
-  return COOP_DEFENSE_LOADOUT_UNLOCKS.get(getLoadoutUnlockKey(slot, itemId)) ?? null;
+  const constructionId = normalizeConstructionId(itemId);
+  const canonicalItemId = constructionId
+    ? getUtilityIdForConstruction(constructionId) ?? itemId
+    : itemId;
+  return COOP_DEFENSE_LOADOUT_UNLOCKS.get(getLoadoutUnlockKey(slot, canonicalItemId)) ?? null;
 }
 
 export function isCoopDefenseLoadoutItemUnlocked(

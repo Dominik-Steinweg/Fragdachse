@@ -13,7 +13,6 @@ import {
 } from '../CoopDefenseLoadoutModifiers';
 import {
   DEFAULT_LOADOUT,
-  COOP_DEFENSE_UTILITY_VARIANTS,
   getUtilityConfigLineage,
   LOADOUT_CATALOG_ENTRIES,
   ULTIMATE_CONFIGS,
@@ -114,7 +113,8 @@ export function validateGameContentReferences(): void {
   for (const construction of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
     if (construction.kind === 'turret') {
       if (!WEAPON_CONFIGS[construction.weaponId]) issues.push(`construction:${construction.id}: unbekannte Waffe ${construction.weaponId}`);
-    } else if (!POWERUP_DEFS[construction.powerUpDefId] || !TIMED_POWERUP_PEDESTAL_CONFIGS[construction.powerUpDefId]) {
+    } else if (construction.kind === 'pedestal'
+      && (!POWERUP_DEFS[construction.powerUpDefId] || !TIMED_POWERUP_PEDESTAL_CONFIGS[construction.powerUpDefId])) {
       issues.push(`construction:${construction.id}: unbekanntes Podest-Power-up ${construction.powerUpDefId}`);
     }
   }
@@ -194,22 +194,13 @@ export function validateGameContentReferences(): void {
 
   const requiredWeapons = ['SPORES', 'BASE_SPORES', 'TURRET_SPORES'];
   const requiredUtilities = [
-    'HE_GRENADE', 'SPORE_TURRET', 'SPORE_TURRET_COOP', 'ROCK_BARRIER', 'ROCK_BARRIER_COOP',
+    'HE_GRENADE', 'SPORE_TURRET', 'ROCK_BARRIER',
     'BFG', 'NUKE', 'HOLY_HAND_GRENADE',
   ];
   const requiredUltimates = ['ARMAGEDDON', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL', 'VOID_HUNTER_GAUSS'];
   for (const id of requiredWeapons) if (!WEAPON_CONFIGS[id]) issues.push(`system-fallback: fehlende Waffe ${id}`);
   for (const id of requiredUtilities) if (!UTILITY_CONFIGS[id]) issues.push(`system-fallback: fehlendes Utility ${id}`);
   for (const id of requiredUltimates) if (!ULTIMATE_CONFIGS[id]) issues.push(`system-fallback: fehlendes Ultimate ${id}`);
-
-  for (const [baseId, variantId] of Object.entries(COOP_DEFENSE_UTILITY_VARIANTS)) {
-    const base = UTILITY_CONFIGS[baseId];
-    const variant = UTILITY_CONFIGS[variantId];
-    if (!base || !variant || !getUtilityConfigLineage(variantId).includes(baseId)) {
-      issues.push(`utility:${variantId}: muss von ${baseId} erben`);
-      continue;
-    }
-  }
 
   if (DEFAULT_LOADOUT.weapon1 !== WEAPON_CONFIGS[DEFAULT_LOADOUT.weapon1.id]
     || DEFAULT_LOADOUT.weapon2 !== WEAPON_CONFIGS[DEFAULT_LOADOUT.weapon2.id]

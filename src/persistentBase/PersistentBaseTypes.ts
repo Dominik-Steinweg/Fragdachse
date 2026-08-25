@@ -3,6 +3,7 @@ import {
   MAX_PERSISTENT_BASE_RADIUS_CELLS,
   PERSISTENT_BASE_STATE_SCHEMA_VERSION,
 } from '../config/persistentBase';
+import { normalizeConstructionId } from '../config/coopDefenseConstructions';
 
 export type PersistentToolKind = 'construction' | 'utility';
 
@@ -35,6 +36,12 @@ export interface PersistentRuntimeMetadata {
   readonly origin: PersistentPlacementOrigin;
 }
 
+/** Normalizes historical utility/Coop aliases at the persistence boundary only. */
+export function normalizePersistentToolRef(tool: PersistentToolRef): PersistentToolRef {
+  const constructionId = normalizeConstructionId(tool.id);
+  return constructionId ? { kind: 'construction', id: constructionId } : { ...tool };
+}
+
 export interface PersistentBaseAnchor {
   readonly gridX: number;
   readonly gridY: number;
@@ -54,7 +61,7 @@ export function clonePersistentBaseState(state: PersistentBaseState): Persistent
     revision: state.revision,
     constructions: state.constructions.map((construction) => ({
       persistentId: construction.persistentId,
-      tool: { ...construction.tool },
+      tool: normalizePersistentToolRef(construction.tool),
       relativeGridX: construction.relativeGridX,
       relativeGridY: construction.relativeGridY,
       angle: construction.angle,
@@ -96,7 +103,7 @@ export function sanitizePersistentBaseState(value: unknown): PersistentBaseState
     seenIds.add(rawConstruction.persistentId);
     constructions.push({
       persistentId: rawConstruction.persistentId,
-      tool: { ...rawConstruction.tool },
+      tool: normalizePersistentToolRef(rawConstruction.tool),
       relativeGridX: rawConstruction.relativeGridX,
       relativeGridY: rawConstruction.relativeGridY,
       angle: rawConstruction.angle,
@@ -130,4 +137,3 @@ function isSafeIntegerInRange(value: unknown, min: number, max: number): value i
 function isRecord(value: unknown): value is Record<string, any> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
-

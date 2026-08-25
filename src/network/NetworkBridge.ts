@@ -50,10 +50,10 @@ import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { canJoinLobbyTeam, LOBBY_TEAM_CAPACITY, pickAutomaticTeam } from '../lobby/LobbyRosterLayout';
 import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
-import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import { getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
@@ -3454,11 +3454,18 @@ export class NetworkBridge {
       : null;
     const tools = classId === 'inspector_gadachs'
       ? preview.tools
-        .filter((tool) => tool.kind === 'construction'
-          ? isConstructionId(tool.id)
-          : typeof tool.id === 'string' && UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] !== undefined)
+        .map((tool): LoadoutToolRef | null => {
+          if (tool.kind === 'construction') {
+            const id = normalizeConstructionId(tool.id);
+            return id ? { kind: 'construction', id } : null;
+          }
+          const id = getUtilityBaseId(tool.id) ?? tool.id;
+          return UTILITY_CONFIGS[id as keyof typeof UTILITY_CONFIGS] !== undefined
+            ? { kind: 'utility', id }
+            : null;
+        })
+        .filter((tool): tool is LoadoutToolRef => tool !== null)
         .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS)
-        .map((tool) => ({ kind: tool.kind, id: tool.id }))
       : [];
     const next = { c: classId, t: tools };
     const current = myPlayer().getState(KEY_LOBBY_LOADOUT_PREVIEW);
@@ -3484,13 +3491,18 @@ export class NetworkBridge {
           || (tool as { kind?: unknown }).kind === 'utility')
         && typeof (tool as { id?: unknown }).id === 'string'
       ))
-      .filter((tool) => tool.kind === 'construction'
-        ? isConstructionId(tool.id)
-        : UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] !== undefined)
-      .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS)
-      .map((tool): LoadoutToolRef => tool.kind === 'construction' && isConstructionId(tool.id)
-        ? { kind: 'construction', id: tool.id }
-        : { kind: 'utility', id: tool.id });
+      .map((tool): LoadoutToolRef | null => {
+        if (tool.kind === 'construction') {
+          const id = normalizeConstructionId(tool.id);
+          return id ? { kind: 'construction', id } : null;
+        }
+        const id = getUtilityBaseId(tool.id) ?? tool.id;
+        return UTILITY_CONFIGS[id as keyof typeof UTILITY_CONFIGS] !== undefined
+          ? { kind: 'utility', id }
+          : null;
+      })
+      .filter((tool): tool is LoadoutToolRef => tool !== null)
+      .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS);
     return { coopDefenseClassId: classId, tools };
   }
 

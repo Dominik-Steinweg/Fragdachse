@@ -24,7 +24,7 @@
           }
         ],
         "maxHp": 200,
-        "lifetimeMs": 60000,
+        "lifetimeMs": 0,
         "previewAlpha": 0.5,
         "ownerTintStrength": 0.85,
         "warningPulseMs": 3500,
@@ -57,7 +57,7 @@
           }
         ],
         "maxHp": 50,
-        "lifetimeMs": 10000,
+        "lifetimeMs": 0,
         "previewAlpha": 0.55,
         "ownerTintStrength": 0.72,
         "warningPulseMs": 3500,
@@ -70,24 +70,6 @@
           "type": "damage_turret",
           "damageMultiplier": 1.25
         }
-      }
-    },
-    "ROCK_BARRIER_COOP": {
-      "id": "ROCK_BARRIER_COOP",
-      "baseId": "ROCK_BARRIER",
-      "_notes": "Coop-Defense variant keeps a permanent runtime lifetime; its cooldown is configured here per item.",
-      "cooldown": 100,
-      "placeable": {
-        "lifetimeMs": 0
-      }
-    },
-    "SPORE_TURRET_COOP": {
-      "id": "SPORE_TURRET_COOP",
-      "baseId": "SPORE_TURRET",
-      "_notes": "Coop-Defense variant keeps a permanent runtime lifetime; its cooldown is configured here per item.",
-      "cooldown": 100,
-      "placeable": {
-        "lifetimeMs": 0
       }
     }
   }

@@ -8,7 +8,8 @@ import {
 import { goalCellsToIndexes } from '../../systems/flowfield/FlowFieldSources';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE, ARENA_OFFSET_X, ARENA_OFFSET_Y } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
-import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
+import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -929,10 +930,16 @@ export class HostUpdateCoordinator {
       const selectedInspectorConstruction = selectedInspectorTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
         : undefined;
+      const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
+        ? selectedInspectorTool
+        : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          ? null
+          : getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committedLoadout))
+            .find((tool) => tool.kind === 'construction') ?? null;
       const utilCfg   = selectedInspectorUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
-      const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
+      const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
       const utilityId = inspectorUtilityAction
         ? undefined
         : selectedInspectorConstruction
@@ -983,13 +990,17 @@ export class HostUpdateCoordinator {
           ? 0
           : (weapon2Cfg?.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
-        constructionCapacityMax:  committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
-          ? getCoopDefenseConstructionCapacity(
-            this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
+        constructionCapacityMax:  getActiveConstructionToolRefs(
+          getConstructionAccessContext(bridge.getGameMode(), committedLoadout),
+        ).length > 0
+          ? resolveConstructionCapacity({
+            gameMode: bridge.getGameMode(),
+            classId: committedLoadout?.coopDefenseClassId,
+            modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
               localId,
               COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
             ) ?? 0,
-          )
+          })
           : 0,
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);

@@ -6,7 +6,7 @@ import {
   clampPointToArena,
   COLORS,
 } from '../config';
-import { COOP_DEFENSE_CONSTRUCTION_CAPACITY } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { InspectorToolRadialMenu, type InspectorRadialSelection } from '../ui/InspectorToolRadialMenu';
@@ -228,10 +228,47 @@ export class InputSystem {
     return this.inspectorGetTools?.() ?? [];
   }
 
+  private getConstructionToolRefs(): readonly LoadoutToolRef[] {
+    const source = this.isInspectorMode()
+      ? this.getInspectorTools()
+      : (() => {
+        const constructionId = getConstructionIdForUtility(this.getLocalUtilityConfig?.()?.id);
+        return constructionId ? [{ kind: 'construction', id: constructionId } satisfies LoadoutToolRef] : [];
+      })();
+    const result: LoadoutToolRef[] = [];
+    const seen = new Set<ConstructionId>();
+    for (const tool of source) {
+      const constructionId = normalizeConstructionId(tool.id);
+      if (!constructionId || seen.has(constructionId)) continue;
+      seen.add(constructionId);
+      result.push({ kind: 'construction', id: constructionId });
+    }
+    return result;
+  }
+
+  private hasActiveConstructionTools(): boolean {
+    return this.getConstructionToolRefs().length > 0;
+  }
+
+  private getSelectedConstructionToolRef(): LoadoutToolRef | null {
+    const selected = this.getSelectedInspectorTool();
+    const selectedId = selected ? normalizeConstructionId(selected.id) : null;
+    if (selectedId && this.getConstructionToolRefs().some((tool) => tool.id === selectedId)) {
+      return { kind: 'construction', id: selectedId };
+    }
+    const available = this.getConstructionToolRefs();
+    return available[0] ? { ...available[0] } : null;
+  }
+
   private getSelectedInspectorTool(): LoadoutToolRef | null {
     return this.inspectorDismantleSelected || this.inspectorGlobalDismantleSelected
       ? null
-      : (this.inspectorGetSelectedTool?.() ?? null);
+      : (this.inspectorGetSelectedTool?.()
+        ?? (this.isInspectorMode()
+          ? null
+          : this.getConstructionToolRefs().find((tool) => tool.id === normalizeConstructionId(this.selectedConstructionId))
+            ?? this.getConstructionToolRefs()[0]
+          ));
   }
 
   getSelectedInspectorToolForHud(): LoadoutToolRef | null {
@@ -240,7 +277,7 @@ export class InputSystem {
 
   /** Liefert die festen Rueckbau-Eintraege fuer die HUD-Anzeige separat vom Loadout-Tool. */
   getSelectedInspectorUtilityActionForHud(): InspectorUtilityAction | null {
-    if (!this.isInspectorMode()) return null;
+    if (!this.isInspectorMode() && !this.hasActiveConstructionTools()) return null;
     if (this.inspectorDismantleSelected) return 'dismantle';
     if (this.inspectorGlobalDismantleSelected) return 'global-dismantle';
     return null;
@@ -248,13 +285,13 @@ export class InputSystem {
 
   /** Ist aktuell der Rueckbau statt eines Werkzeugs im Rad gewaehlt? */
   isInspectorDismantleSelected(): boolean {
-    return this.isInspectorMode() && this.inspectorDismantleSelected;
+    return (this.isInspectorMode() || this.hasActiveConstructionTools()) && this.inspectorDismantleSelected;
   }
 
   private getSelectedInspectorRadialSelection(): InspectorRadialSelection | null {
     if (this.inspectorDismantleSelected) return { kind: 'dismantle' };
     if (this.inspectorGlobalDismantleSelected) return { kind: 'global-dismantle' };
-    const tool = this.inspectorGetSelectedTool?.() ?? null;
+    const tool = this.getSelectedConstructionToolRef();
     return tool ? { kind: 'tool', tool } : null;
   }
 
@@ -271,7 +308,11 @@ export class InputSystem {
     }
     this.inspectorDismantleSelected = false;
     this.inspectorGlobalDismantleSelected = false;
-    this.inspectorSetSelectedTool?.(selection.tool);
+    if (this.isInspectorMode()) this.inspectorSetSelectedTool?.(selection.tool);
+    else {
+      const constructionId = normalizeConstructionId(selection.tool.id);
+      if (constructionId) this.selectedConstructionId = constructionId;
+    }
   }
 
   /**
@@ -279,7 +320,7 @@ export class InputSystem {
    * Countdown bedienbar, ohne dass dadurch Bewegung, Waffen oder Bauaktionen frei werden.
    */
   private updateInspectorRadialMenu(): boolean {
-    if (!this.inspectorRadialEnabled || !this.isInspectorMode()) {
+    if (!this.inspectorRadialEnabled || !this.hasActiveConstructionTools()) {
       if (!this.inspectorRadialEnabled) this.inspectorRadialMenu?.close();
       return false;
     }
@@ -297,7 +338,7 @@ export class InputSystem {
       this.inspectorRadialMenu?.open(
         pointer.x,
         pointer.y,
-        this.getInspectorTools(),
+        this.getConstructionToolRefs(),
         this.getSelectedInspectorRadialSelection(),
         capacity?.used ?? 0,
         capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
@@ -315,13 +356,19 @@ export class InputSystem {
   }
 
   private getInspectorUtilityParams(): LoadoutUseParams | undefined {
-    const tool = this.getSelectedInspectorTool();
+    const tool = this.isInspectorMode()
+      ? this.getSelectedInspectorTool()
+      : this.getSelectedConstructionToolRef();
     // A special pickup temporarily replaces E; let it use the normal utility
     // slot and restore the Inspector selection afterwards.
     const activeConfig = this.getLocalUtilityConfig?.();
     const resolvedToolConfig = tool?.kind === 'utility'
       ? getUtilityConfigForMode(tool.id, this.bridge.getGameMode())
       : undefined;
+    const activeConstructionId = getConstructionIdForUtility(activeConfig?.id);
+    if (tool?.kind === 'construction' && activeConstructionId === tool.id && !this.isInspectorUtilityOverrideActive()) {
+      return { toolRef: tool };
+    }
     return this.isInspectorMode() && tool?.kind === 'utility'
       // Coop commits the concrete `*_COOP` variant while the Inspector keeps
       // the user-facing base ID. Treat both IDs as the same tool, but keep
@@ -341,23 +388,23 @@ export class InputSystem {
   }
 
   isInspectorConstructionPlacementActive(): boolean {
-    return this.isInspectorMode()
+    return this.hasActiveConstructionTools()
       && this.inspectorConstructionPlacementActive
       && !this.isInspectorUtilityOverrideActive();
   }
 
   isInspectorDismantlePlacementActive(): boolean {
-    return this.isInspectorMode()
+    return this.hasActiveConstructionTools()
       && this.inspectorDismantlePlacementActive
       && !this.isInspectorUtilityOverrideActive();
   }
 
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
     if (this.isInspectorDismantlePlacementActive()) return this.getDismantlePreviewProvider?.();
-    if (this.isInspectorMode() && !this.isInspectorConstructionPlacementActive()) return undefined;
-    const inspectorTool = this.getSelectedInspectorTool();
-    if (inspectorTool?.kind === 'construction') {
-      return this.getConstructionPlacementPreviewProvider?.(inspectorTool.id);
+    if (this.hasActiveConstructionTools() && !this.isInspectorConstructionPlacementActive()) return undefined;
+    const constructionTool = this.getSelectedConstructionToolRef();
+    if (constructionTool?.kind === 'construction') {
+      return this.getConstructionPlacementPreviewProvider?.(constructionTool.id);
     }
     const available = this.getAvailableConstructionIds?.() ?? [];
     if (available.length === 0) return undefined;
@@ -731,9 +778,9 @@ export class InputSystem {
     // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
-    const selectedInspectorTool = this.getSelectedInspectorTool();
-    const constructionPreview = this.isInspectorMode()
-      && ((this.isInspectorConstructionPlacementActive() && selectedInspectorTool?.kind === 'construction')
+    const selectedConstructionTool = this.getSelectedConstructionToolRef();
+    const constructionPreview = this.hasActiveConstructionTools()
+      && ((this.isInspectorConstructionPlacementActive() && selectedConstructionTool?.kind === 'construction')
         || this.isInspectorDismantlePlacementActive())
       ? this.getConstructionPlacementPreviewState()
       : undefined;
@@ -845,7 +892,7 @@ export class InputSystem {
       }
     }
 
-    if (this.isInspectorMode() && this.inspectorDismantlePlacementActive) {
+    if (this.hasActiveConstructionTools() && this.inspectorDismantlePlacementActive) {
       const preview = constructionPreview;
       this.syncPlacementPreviewState(preview);
       if (!preview) {
@@ -866,7 +913,7 @@ export class InputSystem {
       return;
     }
 
-    if (this.isInspectorMode() && this.inspectorConstructionPlacementActive) {
+    if (this.hasActiveConstructionTools() && this.inspectorConstructionPlacementActive) {
       const preview = constructionPreview;
       this.syncPlacementPreviewState(preview);
       if (!preview) {
@@ -876,7 +923,7 @@ export class InputSystem {
       if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
         if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
         if (preview.isValid) {
-          const tool = this.getSelectedInspectorTool();
+          const tool = this.getSelectedConstructionToolRef();
           if (tool?.kind === 'construction') {
             this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, {
               inputStarted: true,
@@ -1093,7 +1140,7 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      if (this.isInspectorMode() && this.inspectorGlobalDismantleSelected && !this.isInspectorUtilityOverrideActive()) {
+      if (this.hasActiveConstructionTools() && this.inspectorGlobalDismantleSelected && !this.isInspectorUtilityOverrideActive()) {
         this.cancelUtilityInteraction();
         const actionId = this.createHeldActionId('global-dismantle');
         this.activeHeldActionId = actionId;
@@ -1101,15 +1148,15 @@ export class InputSystem {
         this.bridge.sendHeldActionStart(actionId, 'global_dismantle', 1_000);
         return;
       }
-      if (this.isInspectorDismantleSelected() && !this.isInspectorUtilityOverrideActive()) {
+      if (this.hasActiveConstructionTools() && this.isInspectorDismantleSelected() && !this.isInspectorUtilityOverrideActive()) {
         this.cancelUtilityInteraction();
         this.inspectorDismantlePlacementActive = true;
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
-      const inspectorTool = this.getSelectedInspectorTool();
-      if (this.isInspectorMode() && !inspectorTool) return;
-      if (this.isInspectorMode()
+      const inspectorTool = this.getSelectedConstructionToolRef();
+      if (this.hasActiveConstructionTools() && !inspectorTool) return;
+      if (this.hasActiveConstructionTools()
         && inspectorTool?.kind === 'construction'
         && !this.isInspectorUtilityOverrideActive()) {
         this.cancelUtilityInteraction();
@@ -1462,7 +1509,9 @@ export class InputSystem {
   }
 
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
-    if ((!this.utilityPlacementActive && !this.inspectorConstructionPlacementActive) || !preview) {
+    if ((!this.utilityPlacementActive
+      && !this.inspectorConstructionPlacementActive
+      && !this.inspectorDismantlePlacementActive) || !preview) {
       this.placementPreviewState = null;
       return;
     }

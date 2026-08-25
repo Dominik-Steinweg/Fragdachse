@@ -1,5 +1,6 @@
 import type { PersistentBaseAnchor, PersistentBaseState, PersistentConstruction, PersistentToolKind } from './PersistentBaseTypes';
 import { isPersistentFootprintInsideZone } from './PersistentBaseZone';
+import { normalizeConstructionId } from '../config/coopDefenseConstructions';
 
 export interface PersistentRestoreToolDefinition {
   readonly kind: PersistentToolKind;
@@ -8,11 +9,17 @@ export interface PersistentRestoreToolDefinition {
   readonly capacityCost: number;
   readonly maxHp: number;
   readonly unlocked: boolean;
+  /** An unlocked tool may remain dormant while it is not in the current loadout. */
+  readonly active?: boolean;
+  readonly unavailableReason?: PersistentDormantReason;
 }
 
 export type PersistentDormantReason =
   | 'unknown-tool'
   | 'locked'
+  | 'not-in-loadout'
+  | 'class-not-allowed'
+  | 'mode-not-allowed'
   | 'outside-zone'
   | 'collision'
   | 'capacity';
@@ -62,13 +69,21 @@ export function planPersistentBaseRestore(input: PersistentRestorePlannerInput):
   let usedCapacity = Math.max(0, input.capacityUsed);
 
   for (const blueprint of ordered) {
-    const tool = tools.get(`${blueprint.tool.kind}:${blueprint.tool.id}`);
+    const tool = resolveRestoreTool(blueprint, tools);
     if (!tool) {
       dormant.push({ blueprint, reason: 'unknown-tool' });
       continue;
     }
+    if (tool.unavailableReason) {
+      dormant.push({ blueprint, reason: tool.unavailableReason });
+      continue;
+    }
     if (!tool.unlocked) {
       dormant.push({ blueprint, reason: 'locked' });
+      continue;
+    }
+    if (tool.active === false) {
+      dormant.push({ blueprint, reason: 'not-in-loadout' });
       continue;
     }
     if (!isPersistentFootprintInsideZone(
@@ -114,4 +129,14 @@ function cellKey(gridX: number, gridY: number): string {
 function comparePersistentIds(left: string, right: string): number {
   if (left === right) return 0;
   return left < right ? -1 : 1;
+}
+
+function resolveRestoreTool(
+  blueprint: PersistentConstruction,
+  tools: ReadonlyMap<string, PersistentRestoreToolDefinition>,
+): PersistentRestoreToolDefinition | undefined {
+  const direct = tools.get(`${blueprint.tool.kind}:${blueprint.tool.id}`);
+  if (direct) return direct;
+  const canonicalId = normalizeConstructionId(blueprint.tool.id);
+  return canonicalId ? tools.get(`construction:${canonicalId}`) : undefined;
 }

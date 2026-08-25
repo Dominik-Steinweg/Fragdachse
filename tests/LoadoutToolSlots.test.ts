@@ -67,7 +67,7 @@ describe('shared tool slots', () => {
     expect(construction?.upgrades.find((node) => node.id === 'unlock_rocket_turret')?.toolRef)
       .toEqual({ kind: 'construction', id: 'rocket_turret' });
     expect(construction?.upgrades.find((node) => node.id === 'unlock_rock_barrier')?.toolRef)
-      .toEqual({ kind: 'utility', id: 'ROCK_BARRIER' });
+      .toEqual({ kind: 'construction', id: 'rock_barrier' });
     expect(utility?.upgrades.find((node) => node.id === 'unlock_he_grenade')?.toolRef)
       .toEqual({ kind: 'utility', id: 'HE_GRENADE' });
   });
