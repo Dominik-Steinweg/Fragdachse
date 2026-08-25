@@ -264,6 +264,8 @@ const STACK_REVEAL_MS  = 500;
 const ULTIMATE_REVEAL_MS = 850;
 const STACK_FADE_MS    = 100;
 const STACK_CORE_TEX   = '_center_core';
+const STRUCTURE_HINT_COLOR = toCssColor(COLORS.GREY_2);
+const STRUCTURE_HINT_OFFSET_Y = 24;
 
 const ARM_BAR_TEX      = '_center_arm_fg';
 const UTIL_BAR_TEX     = '_center_util_fg';
@@ -546,6 +548,7 @@ export class CenterHUD {
   private utilitySection!: LowerBarSection;
   private armorSection!: LowerBarSection;
   private ultimateSection!: LowerBarSection;
+  private structureInteractionHintText!: Phaser.GameObjects.Text;
   private puContainerRef: Phaser.GameObjects.Container | null = null;
 
   private lastTimerText: string | null = null;
@@ -625,6 +628,14 @@ export class CenterHUD {
     this.buildAnnouncementOverlay();
     this.buildTrainWidget();
     this.buildBottomStack();
+    this.structureInteractionHintText = this.scene.add.text(CENTER_X, 0, '', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      color: STRUCTURE_HINT_COLOR,
+      align: 'center',
+    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.container.add(this.structureInteractionHintText);
   }
 
   private buildTimer(): void {
@@ -1008,6 +1019,7 @@ export class CenterHUD {
 
   transitionToLobby(): void {
     this.container.setVisible(false);
+    this.setStructureInteractionHint(null);
     this.objectiveAnnouncements?.reset();
     this.announcedEncounterStarts.clear();
     this.announcedEncounterResults.clear();
@@ -1037,6 +1049,16 @@ export class CenterHUD {
 
   setPuContainer(c: Phaser.GameObjects.Container): void {
     this.puContainerRef = c;
+  }
+
+  /** Shows the contextual SHIFT action without coupling HUD rendering to occupancy rules. */
+  setStructureInteractionHint(text: string | null): void {
+    if (!this.structureInteractionHintText) return;
+    const value = text ?? '';
+    const hasText = value.length > 0;
+    if (this.structureInteractionHintText.text !== value) this.structureInteractionHintText.setText(value);
+    this.structureInteractionHintText.setY(this.getStructureHintY());
+    this.structureInteractionHintText.setVisible(hasText && this.container.visible);
   }
 
   updateTimer(secs: number, visible = true): void {
@@ -1221,7 +1243,24 @@ export class CenterHUD {
 
     addPanelRect(this.mainObjectivePanel, MAIN_PANEL_W, MAIN_PANEL_H);
     addPanelRect(this.encounterPanel, ENCOUNTER_PANEL_W, ENCOUNTER_PANEL_H);
+    if (this.structureInteractionHintText?.visible) {
+      rects.push({
+        left: this.structureInteractionHintText.x - this.structureInteractionHintText.width / 2,
+        right: this.structureInteractionHintText.x + this.structureInteractionHintText.width / 2,
+        top: this.structureInteractionHintText.y - this.structureInteractionHintText.height / 2,
+        bottom: this.structureInteractionHintText.y + this.structureInteractionHintText.height / 2,
+      });
+    }
     return rects;
+  }
+
+  private getStructureHintY(): number {
+    const visibleSections = [this.ultimateSection, this.utilitySection, this.armorSection]
+      .filter((section) => section?.container.visible);
+    const stackTop = visibleSections.length > 0
+      ? Math.min(...visibleSections.map((section) => section.container.y))
+      : GAME_HEIGHT - STACK_MARGIN;
+    return stackTop - STRUCTURE_HINT_OFFSET_Y;
   }
 
   /**

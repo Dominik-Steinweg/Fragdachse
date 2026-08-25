@@ -35,6 +35,8 @@ const FIRST_LEVEL_UP_XP = 10;
 const XP_INCREASE_PER_LEVEL = 25;
 
 export interface CoopDefenseProgressSnapshot {
+  /** Persisted campaign position used by lobby unlock affordances. */
+  highestUnlockedMapId?: string;
   classId: CoopDefenseClassId;
   classesUnlocked: boolean;
   unlockedClassIds: readonly CoopDefenseClassId[];

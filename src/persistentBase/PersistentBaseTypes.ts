@@ -1,6 +1,7 @@
 import {
   DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
   MAX_PERSISTENT_BASE_RADIUS_CELLS,
+  PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
   PERSISTENT_BASE_STATE_SCHEMA_VERSION,
 } from '../config/persistentBase';
 import { normalizeConstructionId } from '../config/coopDefenseConstructions';
@@ -19,6 +20,10 @@ export interface PersistentConstruction {
   readonly relativeGridY: number;
   readonly angle: number;
   readonly placementOrder: number;
+  /** Stable owner on composite states; personal contributions carry it at the envelope level. */
+  readonly ownerId?: string;
+  /** Present only for host-owned persistent rewards. */
+  readonly rewardId?: string;
 }
 
 export interface PersistentBaseState {
@@ -27,6 +32,21 @@ export interface PersistentBaseState {
   readonly revision: number;
   readonly constructions: readonly PersistentConstruction[];
 }
+
+/** Device-local, host-independent contribution used by the Phase-3 composite merge. */
+export interface PersistentPlayerBaseContribution {
+  readonly schemaVersion: typeof PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION;
+  readonly ownerId: string;
+  readonly revision: number;
+  readonly constructions: readonly PersistentConstruction[];
+}
+
+export const DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION: PersistentPlayerBaseContribution = Object.freeze({
+  schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+  ownerId: '',
+  revision: 0,
+  constructions: Object.freeze([]),
+});
 
 export type PersistentPlacementOrigin = 'restored' | 'new';
 
@@ -66,7 +86,82 @@ export function clonePersistentBaseState(state: PersistentBaseState): Persistent
       relativeGridY: construction.relativeGridY,
       angle: construction.angle,
       placementOrder: construction.placementOrder,
+      ...(construction.ownerId ? { ownerId: construction.ownerId } : {}),
+      ...(construction.rewardId ? { rewardId: construction.rewardId } : {}),
     })),
+  };
+}
+
+export function clonePersistentPlayerBaseContribution(
+  contribution: PersistentPlayerBaseContribution,
+): PersistentPlayerBaseContribution {
+  return {
+    schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+    ownerId: contribution.ownerId,
+    revision: contribution.revision,
+    constructions: contribution.constructions.map((construction) => ({
+      persistentId: construction.persistentId,
+      tool: normalizePersistentToolRef(construction.tool),
+      relativeGridX: construction.relativeGridX,
+      relativeGridY: construction.relativeGridY,
+      angle: construction.angle,
+      placementOrder: construction.placementOrder,
+      ...(construction.ownerId ? { ownerId: construction.ownerId } : {}),
+      ...(construction.rewardId ? { rewardId: construction.rewardId } : {}),
+    })),
+  };
+}
+
+export function sanitizePersistentPlayerBaseContribution(
+  value: unknown,
+): PersistentPlayerBaseContribution | null {
+  if (!isRecord(value)
+    || value.schemaVersion !== PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION
+    || typeof value.ownerId !== 'string'
+    || value.ownerId.trim().length === 0
+    || value.ownerId.length > 128
+    || !isSafeIntegerInRange(value.revision, 0, Number.MAX_SAFE_INTEGER)
+    || !Array.isArray(value.constructions)
+    || value.constructions.length > 512) {
+    return null;
+  }
+  const seenIds = new Set<string>();
+  const constructions: PersistentConstruction[] = [];
+  for (const rawConstruction of value.constructions) {
+    if (!isRecord(rawConstruction)
+      || typeof rawConstruction.persistentId !== 'string'
+      || rawConstruction.persistentId.trim().length === 0
+      || rawConstruction.persistentId.length > 128
+      || seenIds.has(rawConstruction.persistentId)
+      || !isPersistentToolRef(rawConstruction.tool)
+      || !isSafeIntegerInRange(rawConstruction.relativeGridX, -1_000_000, 1_000_000)
+      || !isSafeIntegerInRange(rawConstruction.relativeGridY, -1_000_000, 1_000_000)
+      || typeof rawConstruction.angle !== 'number'
+      || !Number.isFinite(rawConstruction.angle)
+      || !isSafeIntegerInRange(rawConstruction.placementOrder, 0, Number.MAX_SAFE_INTEGER)) {
+      return null;
+    }
+    if (rawConstruction.ownerId !== undefined
+      && (typeof rawConstruction.ownerId !== 'string' || rawConstruction.ownerId.length > 128)) return null;
+    if (rawConstruction.rewardId !== undefined
+      && (typeof rawConstruction.rewardId !== 'string' || rawConstruction.rewardId.length > 128)) return null;
+    seenIds.add(rawConstruction.persistentId);
+    constructions.push({
+      persistentId: rawConstruction.persistentId,
+      tool: normalizePersistentToolRef(rawConstruction.tool),
+      relativeGridX: rawConstruction.relativeGridX,
+      relativeGridY: rawConstruction.relativeGridY,
+      angle: rawConstruction.angle,
+      placementOrder: rawConstruction.placementOrder,
+      ...(typeof rawConstruction.ownerId === 'string' ? { ownerId: rawConstruction.ownerId } : {}),
+      ...(typeof rawConstruction.rewardId === 'string' ? { rewardId: rawConstruction.rewardId } : {}),
+    });
+  }
+  return {
+    schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+    ownerId: value.ownerId,
+    revision: value.revision,
+    constructions,
   };
 }
 

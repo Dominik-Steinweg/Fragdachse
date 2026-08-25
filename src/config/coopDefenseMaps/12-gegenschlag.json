@@ -1,5 +1,6 @@
 {
   "mapId": "12",
+  "persistentBase": { "baseId": "coop-base-rear" },
   "arenaWidthCells": 112,
   "arenaHeightCells": 41,
   "timeOfDay": "19:30",
@@ -25,7 +26,7 @@
       "hpMax": 2800,
       "anchor": {
         "kind": "right-center",
-        "edgeInsetCells": 0
+        "edgeInsetCells": 10
       },
       "shape": {
         "kind": "cells",
@@ -317,9 +318,6 @@
       "spawnOnArenaStart": false
     }
   ],
-  "itemDrop": {
-    "itemLevel": 2
-  },
   "persistentSpawns": [
     {
       "id": "map-12-pressure-0",

@@ -5,10 +5,16 @@ import { toDesignSpace } from '../graphics/RenderResolution';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
 import type { LoadoutToolRef } from '../types';
+import type { PersistentBaseRewardId } from '../types';
+import type { PersistentBaseRewardRuntimeState } from '../config/persistentBaseRewards';
 import { getInspectorToolRadialSegmentIndex } from './InspectorToolRadialGeometry';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { formatNumber, getLocale, t } from '../i18n';
 import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
+import {
+  resolvePersistentBaseRewardRadialAvailability,
+  type RadialAvailabilityState,
+} from './RadialAvailability';
 
 const INNER_RADIUS = 34;
 const OUTER_RADIUS = 112;
@@ -20,6 +26,8 @@ const LABEL_RADIUS = 76;
  */
 export type InspectorRadialSelection =
   | { kind: 'tool'; tool: LoadoutToolRef }
+  | { kind: 'reward'; rewardId: PersistentBaseRewardId }
+  | { kind: 'move' }
   | { kind: 'dismantle' }
   | { kind: 'global-dismantle' };
 
@@ -36,6 +44,8 @@ interface RadialEntry {
   readonly cooldownMs: number;
   /** false = passt aktuell nicht mehr in die freie Baukapazitaet. */
   readonly affordable: boolean;
+  readonly cooldownFraction: number;
+  readonly availabilityReason?: 'available' | 'locked' | 'placed' | 'cooldown' | 'capacity';
 }
 
 export function isSameInspectorRadialSelection(
@@ -43,6 +53,10 @@ export function isSameInspectorRadialSelection(
   right: InspectorRadialSelection | null,
 ): boolean {
   if (!left || !right) return left === right;
+  if (left.kind === 'reward' || right.kind === 'reward') {
+    return left.kind === 'reward' && right.kind === 'reward' && left.rewardId === right.rewardId;
+  }
+  if (left.kind === 'move' || right.kind === 'move') return left.kind === right.kind;
   if (left.kind !== 'tool' || right.kind !== 'tool') return left.kind === right.kind;
   return left.tool.kind === right.tool.kind && left.tool.id === right.tool.id;
 }
@@ -71,9 +85,11 @@ export class InspectorToolRadialMenu {
     // Bewusst ohne Default: ein stiller Rueckfall auf die Grundkapazitaet wuerde Item-Boni
     // verschlucken und Bauplaetze als nicht bezahlbar anzeigen, die der Host akzeptiert.
     capacityMax: number,
+    rewards: readonly PersistentBaseRewardRuntimeState[] = [],
+    getToolAvailability?: (tool: LoadoutToolRef, capacityAvailable: boolean) => RadialAvailabilityState,
   ): void {
     this.close();
-    this.entries = buildEntries(tools, usedCapacity, capacityMax);
+    this.entries = buildEntries(tools, usedCapacity, capacityMax, rewards, getToolAvailability);
     if (this.entries.length === 0) return;
     this.origin = {
       x: toDesignSpace(this.scene.scale, originX),
@@ -111,7 +127,10 @@ export class InspectorToolRadialMenu {
   close(pointerX?: number, pointerY?: number): InspectorRadialSelection | null {
     if (pointerX !== undefined && pointerY !== undefined) this.update(pointerX, pointerY);
     const entry = this.hoveredIndex >= 0 ? this.entries[this.hoveredIndex] : undefined;
-    const selection = entry ? cloneSelection(entry.selection) : null;
+    // Unbezahlbare/cooldown-belegte Segmente bleiben sichtbar, dürfen aber beim Loslassen
+    // keinen neuen Auswahlzustand setzen. Das hält Kapazität und Cooldown als reine
+    // Availability-Sperren getrennt vom eigentlichen Tool-Selection-State.
+    const selection = entry?.affordable ? cloneSelection(entry.selection) : null;
     this.container?.destroy(true);
     this.container = null;
     this.graphics = null;
@@ -153,6 +172,17 @@ export class InspectorToolRadialMenu {
       this.graphics.closePath();
       this.graphics.fillPath();
       this.graphics.strokePath();
+      if (entry.cooldownFraction > 0) {
+        const maskTo = from + (to - from) * entry.cooldownFraction;
+        this.graphics.fillStyle(COLORS.GREY_9, 0.58);
+        this.graphics.beginPath();
+        this.graphics.moveTo(INNER_RADIUS * Math.cos(from), INNER_RADIUS * Math.sin(from));
+        this.graphics.arc(0, 0, OUTER_RADIUS - 2, from, maskTo, false);
+        this.graphics.lineTo(INNER_RADIUS * Math.cos(maskTo), INNER_RADIUS * Math.sin(maskTo));
+        this.graphics.arc(0, 0, INNER_RADIUS, maskTo, from, true);
+        this.graphics.closePath();
+        this.graphics.fillPath();
+      }
 
       const center = start + (index + 0.5) * step;
       const labelX = LABEL_RADIUS * Math.cos(center);
@@ -202,46 +232,90 @@ function buildEntries(
   tools: readonly LoadoutToolRef[],
   usedCapacity: number,
   capacityMax: number,
+  rewards: readonly PersistentBaseRewardRuntimeState[],
+  getToolAvailability?: (tool: LoadoutToolRef, capacityAvailable: boolean) => RadialAvailabilityState,
 ): RadialEntry[] {
   const free = Math.max(0, capacityMax - usedCapacity);
   const entries: RadialEntry[] = tools.map((tool) => {
     const presentation = describeLoadoutTool(tool);
     const capacityCost = getToolCapacityCost(tool);
+    const capacityAvailable = capacityCost <= free;
+    const availability = getToolAvailability?.(tool, capacityAvailable)
+      ?? {
+        available: capacityAvailable,
+        reason: capacityAvailable ? 'available' : 'capacity',
+        cooldownRemainingMs: 0,
+        cooldownTotalMs: 0,
+        cooldownFraction: 0,
+      } satisfies RadialAvailabilityState;
     return {
       selection: { kind: 'tool', tool },
       displayName: presentation.displayName,
       textureKey: presentation.textureKey,
       accentColor: presentation.accentColor,
       capacityCost,
-      cooldownMs: tool.kind === 'construction'
+      cooldownMs: availability.cooldownTotalMs > 0
+        ? availability.cooldownTotalMs
+        : tool.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(tool.id).buildCooldownMs
         : UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0,
-      affordable: capacityCost <= free,
+      affordable: availability.available && capacityAvailable,
+      cooldownFraction: availability.cooldownFraction,
+      availabilityReason: availability.reason,
     };
   });
-  if (entries.length === 0) return entries;
-  entries.push({
-    selection: { kind: 'dismantle' },
-    displayName: t('ui.radial.dismantle'),
-    textureKey: null,
-    accentColor: COLORS.GREY_3,
-    capacityCost: 0,
-    cooldownMs: 0,
-    affordable: true,
-  });
-  entries.push({
-    selection: { kind: 'global-dismantle' },
-    displayName: t('ui.radial.dismantleAll'),
-    textureKey: null,
-    accentColor: COLORS.GOLD_2,
-    capacityCost: 0,
-    cooldownMs: 1_000,
-    affordable: true,
-  });
+  if (entries.length > 0) {
+    entries.push({
+      selection: { kind: 'move' },
+      displayName: t('ui.radial.move'),
+      textureKey: null,
+      accentColor: COLORS.BLUE_3,
+      capacityCost: 0,
+      cooldownMs: 0,
+      affordable: true,
+      cooldownFraction: 0,
+    });
+    entries.push({
+      selection: { kind: 'dismantle' },
+      displayName: t('ui.radial.dismantle'),
+      textureKey: null,
+      accentColor: COLORS.GREY_3,
+      capacityCost: 0,
+      cooldownMs: 0,
+      affordable: true,
+      cooldownFraction: 0,
+    });
+    entries.push({
+      selection: { kind: 'global-dismantle' },
+      displayName: t('ui.radial.dismantleAll'),
+      textureKey: null,
+      accentColor: COLORS.GOLD_2,
+      capacityCost: 0,
+      cooldownMs: 1_000,
+      affordable: true,
+      cooldownFraction: 0,
+    });
+  }
+  for (const state of rewards) {
+    const availability = resolvePersistentBaseRewardRadialAvailability(state);
+    entries.push({
+      selection: { kind: 'reward', rewardId: state.rewardId },
+      displayName: state.rewardId.replace(/_/g, ' ').toUpperCase(),
+      textureKey: null,
+      accentColor: COLORS.GOLD_2,
+      capacityCost: 0,
+      cooldownMs: state.cooldownTotalMs,
+      affordable: availability.available,
+      cooldownFraction: availability.cooldownFraction,
+      availabilityReason: availability.reason,
+    });
+  }
   return entries;
 }
 
 function cloneSelection(selection: InspectorRadialSelection): InspectorRadialSelection {
+  if (selection.kind === 'reward') return { kind: 'reward', rewardId: selection.rewardId };
+  if (selection.kind === 'move') return { kind: 'move' };
   if (selection.kind === 'dismantle') return { kind: 'dismantle' };
   if (selection.kind === 'global-dismantle') return { kind: 'global-dismantle' };
   return { kind: 'tool', tool: { ...selection.tool } };

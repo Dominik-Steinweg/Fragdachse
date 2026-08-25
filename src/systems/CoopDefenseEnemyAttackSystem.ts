@@ -9,6 +9,7 @@ import type { CoopDefenseEnemyTrainAwarenessSystem } from './CoopDefenseEnemyTra
 import type { PlacementSystem } from './PlacementSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
+import { isPersistentBaseRewardEnemyTarget } from '../config/persistentBaseRewards';
 import { COLORS, PLAYER_SIZE } from '../config';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 
@@ -615,7 +616,10 @@ export class CoopDefenseEnemyAttackSystem {
     const rockObjects = this.getRockObjects() ?? [];
     let best: EnemyAttackCandidate | null = null;
     for (const construction of this.placementSystem?.getAllRuntimeRocks() ?? []) {
-      if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+      if (construction.hp <= 0
+        || (construction.kind !== 'turret'
+          && (!construction.persistentRewardId
+            || !isPersistentBaseRewardEnemyTarget(construction.persistentRewardId)))) continue;
       const obstacle = rockObjects[construction.id];
       if (!obstacle?.active) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
@@ -682,6 +686,13 @@ export class CoopDefenseEnemyAttackSystem {
     if (!obstacle.active) return null;
     const index = knownIndex ?? rockObjects.indexOf(obstacle);
     if (index < 0) return null;
+
+    // The Holy-Hand pedestal is a persistent reward, not an enemy target.  It is
+    // represented by the same physics proxy as other placeable rocks, so filter it
+    // before the generic obstacle fallback can select it.
+    const runtime = this.placementSystem?.getRuntimeRock(index);
+    if (runtime?.persistentRewardId
+      && !isPersistentBaseRewardEnemyTarget(runtime.persistentRewardId)) return null;
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
     if (distance > range) return null;

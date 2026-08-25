@@ -38,10 +38,11 @@ describe('Coop defense map unlocks', () => {
     expect(sanitizeHighestUnlockedCoopDefenseMapId(undefined)).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
   });
 
-  it('keeps map 19 as the final campaign map', () => {
-    expect(LAST_MAP_ID).toBe('19');
-    expect(sanitizeHighestUnlockedCoopDefenseMapId('19')).toBe('19');
-    expect(getCoopDefenseMapUnlockedByVictoryOn('19')).toBeNull();
+  it('keeps map 17 as the final campaign map after removing technical maps 18 and 19', () => {
+    expect(LAST_MAP_ID).toBe('17');
+    expect(sanitizeHighestUnlockedCoopDefenseMapId('17')).toBe('17');
+    expect(sanitizeHighestUnlockedCoopDefenseMapId('19')).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
+    expect(getCoopDefenseMapUnlockedByVictoryOn('17')).toBeNull();
   });
 
   it('unlocks every earlier map once a late map is reached', () => {

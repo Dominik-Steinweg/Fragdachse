@@ -116,7 +116,9 @@ describe('Map 14 rock field', () => {
       // The taller authored arena can expose one additional run at this probe column.
       expect(countOpenRuns(blocked, 15)).toBeGreaterThanOrEqual(3);
       expect(countOpenRuns(blocked, 15)).toBeLessThanOrEqual(5);
-      expect(countOpenRuns(blocked, 48)).toBe(2);
+      // The max-radius reservation around the new rear persistent base intentionally merges
+      // the two authored rear approaches at this probe column into one protected run.
+      expect(countOpenRuns(blocked, 48)).toBe(1);
     }
   });
 

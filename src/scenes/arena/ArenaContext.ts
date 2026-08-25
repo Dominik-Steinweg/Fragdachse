@@ -80,6 +80,7 @@ import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService'
 import type { FlowFieldCoordinator } from '../../systems/flowfield/FlowFieldCoordinator';
 import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
 import type { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
+import type { StructureOccupancySystem } from '../../systems/StructureOccupancySystem';
 
 interface PlayerStatusRingLike {
   setActive(active: boolean): void;
@@ -123,6 +124,7 @@ export interface ArenaContext {
   currentLayout:     ArenaLayout        | null;
   placementSystem:   PlacementSystem    | null;
   persistentBaseSession: PersistentBaseSession | null;
+  structureOccupancySystem: StructureOccupancySystem | null;
   reinforcementMatrixSystem: ReinforcementMatrixSystem | null;
   energyInjectorSystem: EnergyInjectorSystem | null;
   targetStatusSystem: TargetStatusSystem | null;

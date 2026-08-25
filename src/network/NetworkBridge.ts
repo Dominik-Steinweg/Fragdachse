@@ -29,6 +29,10 @@ import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQu
 import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
+import { sanitizePersistentPlayerBaseContribution, type PersistentPlayerBaseContribution } from '../persistentBase/PersistentBaseTypes';
+import type { PersistentBaseCompositeSnapshot } from '../persistentBase/PersistentBaseEditorState';
+import type { PersistentBaseRewardRuntimeState } from '../config/persistentBaseRewards';
+import type { StructureOccupancySnapshot } from '../systems/StructureOccupancySystem';
 import {
   NET_TICK_RATE_HZ,
   NET_DEBUG_PROJECTILE_SYNC_METRICS,
@@ -154,6 +158,11 @@ const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROOM_STATS   = 'rst';   // global reliable: kompakter, kumulierter Raum-Statistik-Snapshot
 const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
+const KEY_PERSISTENT_BASE_CONTRIBUTION = 'pbc'; // per-player reliable V4 personal base contribution
+const KEY_PERSISTENT_BASE_EDITOR = 'pbe'; // global reliable shared editor submode
+const KEY_PERSISTENT_BASE_COMPOSITE = 'pbcx'; // global reliable host-resolved composite snapshot
+const KEY_STRUCTURE_OCCUPANCY = 'soc'; // global reliable occupancy snapshot
+const KEY_PERSISTENT_BASE_REWARDS = 'pbr'; // global reliable host reward availability
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
 const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
@@ -185,6 +194,27 @@ export interface NetworkPingSample {
 
 export type KickPlayerFailure = 'host-only' | 'lobby-only' | 'self' | 'unknown-player' | 'not-connected';
 export type KickPlayerResult = { ok: true } | { ok: false; reason: KickPlayerFailure };
+
+export type PersistentBaseMutationOperation = 'place' | 'remove' | 'reposition' | 'reward-place' | 'reward-unplace';
+
+export interface PersistentBaseMutationRequest {
+  readonly requestId: string;
+  readonly revision: number;
+  readonly persistentId?: string;
+  readonly rewardId?: string;
+  readonly relativeGridX?: number;
+  readonly relativeGridY?: number;
+  readonly angle?: number;
+  readonly toolRef?: LoadoutToolRef;
+  /** Optional client hint; the host resolves the real stable owner from its player state. */
+  readonly ownerId?: string;
+}
+
+export interface StructureOccupancyRequest {
+  readonly requestId: string;
+  readonly structureId?: string;
+  readonly aimAngle?: number;
+}
 
 /**
  * Per-Spieler-Keys, die ausschliesslich der Host liest. Der Host reicht sie nicht an die
@@ -681,6 +711,11 @@ export class NetworkBridge {
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
+  private persistentBaseMutationHandler: ((playerId: string, operation: PersistentBaseMutationOperation, request: PersistentBaseMutationRequest) => void) | null = null;
+  private structureEnterHandler: ((playerId: string, request: StructureOccupancyRequest) => void) | null = null;
+  private structureExitHandler: ((playerId: string, request: StructureOccupancyRequest) => void) | null = null;
+  private persistentBaseEditorOpenHandler: ((playerId: string) => void) | null = null;
+  private persistentBaseEditorCloseHandler: ((playerId: string) => void) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
   private trainBurrowSparksHandler: TrainBurrowSparksHandler | null = null;
   private burrowVisualHandler: BurrowVisualHandler | null = null;
@@ -3185,6 +3220,157 @@ export class NetworkBridge {
     });
   }
 
+  // ── Persistent-base mutations: Client → Host ────────────────────────────
+
+  sendPersistentBaseMutationRequest(
+    operation: PersistentBaseMutationOperation,
+    request: PersistentBaseMutationRequest,
+  ): void {
+    if (isHost()) {
+      this.persistentBaseMutationHandler?.(myPlayer().id, operation, request);
+      return;
+    }
+    this.sendHostRpc('pbm', { op: operation, ...request });
+  }
+
+  sendPersistentBasePlaceRequest(request: PersistentBaseMutationRequest): void {
+    this.sendPersistentBaseMutationRequest('place', request);
+  }
+
+  sendPersistentBaseRemoveRequest(request: PersistentBaseMutationRequest): void {
+    this.sendPersistentBaseMutationRequest('remove', request);
+  }
+
+  sendPersistentBaseRepositionRequest(request: PersistentBaseMutationRequest): void {
+    this.sendPersistentBaseMutationRequest('reposition', request);
+  }
+
+  sendPersistentBaseRewardPlaceRequest(request: PersistentBaseMutationRequest): void {
+    this.sendPersistentBaseMutationRequest('reward-place', request);
+  }
+
+  sendPersistentBaseRewardUnplaceRequest(request: PersistentBaseMutationRequest): void {
+    this.sendPersistentBaseMutationRequest('reward-unplace', request);
+  }
+
+  registerPersistentBaseMutationHandler(
+    handler: (playerId: string, operation: PersistentBaseMutationOperation, request: PersistentBaseMutationRequest) => void,
+  ): void {
+    this.persistentBaseMutationHandler = handler;
+    this.registerHostRpcHandler('pbm', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost() || !isRecord(data)) return undefined;
+      const operation = data.op;
+      if (operation !== 'place' && operation !== 'remove' && operation !== 'reposition'
+        && operation !== 'reward-place' && operation !== 'reward-unplace') return undefined;
+      const request = data as unknown as PersistentBaseMutationRequest;
+      if (typeof request.requestId !== 'string' || request.requestId.length === 0
+        || typeof request.revision !== 'number' || !Number.isSafeInteger(request.revision)) return undefined;
+      this.persistentBaseMutationHandler?.(caller.id, operation, request);
+      return undefined;
+    });
+  }
+
+  sendStructureEnterRequest(request: StructureOccupancyRequest): void {
+    if (isHost()) {
+      this.structureEnterHandler?.(myPlayer().id, request);
+      return;
+    }
+    this.sendHostRpc('stent', request);
+  }
+
+  sendStructureExitRequest(request: StructureOccupancyRequest): void {
+    if (isHost()) {
+      this.structureExitHandler?.(myPlayer().id, request);
+      return;
+    }
+    this.sendHostRpc('stext', request);
+  }
+
+  registerStructureOccupancyHandlers(
+    onEnter: (playerId: string, request: StructureOccupancyRequest) => void,
+    onExit: (playerId: string, request: StructureOccupancyRequest) => void,
+  ): void {
+    this.structureEnterHandler = onEnter;
+    this.structureExitHandler = onExit;
+    this.registerHostRpcHandler('stent', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost() || !isRecord(data) || typeof data.requestId !== 'string') return undefined;
+      this.structureEnterHandler?.(caller.id, data as unknown as StructureOccupancyRequest);
+      return undefined;
+    });
+    this.registerHostRpcHandler('stext', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost() || !isRecord(data) || typeof data.requestId !== 'string') return undefined;
+      this.structureExitHandler?.(caller.id, data as unknown as StructureOccupancyRequest);
+      return undefined;
+    });
+  }
+
+  isPersistentBaseEditorOpen(): boolean {
+    return getState(KEY_PERSISTENT_BASE_EDITOR) === true;
+  }
+
+  hostSetPersistentBaseEditorOpen(open: boolean): void {
+    if (!isHost()) return;
+    setState(KEY_PERSISTENT_BASE_EDITOR, open === true, true);
+  }
+
+  requestPersistentBaseEditorOpen(): void {
+    if (isHost()) this.persistentBaseEditorOpenHandler?.(myPlayer().id);
+    else this.sendHostRpc('pbe-open', {});
+  }
+
+  requestPersistentBaseEditorClose(): void {
+    if (isHost()) this.persistentBaseEditorCloseHandler?.(myPlayer().id);
+    else this.sendHostRpc('pbe-close', {});
+  }
+
+  registerPersistentBaseEditorHandlers(
+    onOpen: (playerId: string) => void,
+    onClose: (playerId: string) => void,
+  ): void {
+    this.persistentBaseEditorOpenHandler = onOpen;
+    this.persistentBaseEditorCloseHandler = onClose;
+    this.registerHostRpcHandler('pbe-open', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (isHost()) this.persistentBaseEditorOpenHandler?.(caller.id);
+      return undefined;
+    });
+    this.registerHostRpcHandler('pbe-close', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (isHost()) this.persistentBaseEditorCloseHandler?.(caller.id);
+      return undefined;
+    });
+  }
+
+  setPersistentBaseCompositeSnapshot(snapshot: PersistentBaseCompositeSnapshot | null): void {
+    if (!isHost()) return;
+    setState(KEY_PERSISTENT_BASE_COMPOSITE, snapshot, true);
+  }
+
+  getPersistentBaseCompositeSnapshot(): PersistentBaseCompositeSnapshot | null {
+    const raw = getState(KEY_PERSISTENT_BASE_COMPOSITE);
+    if (!raw || typeof raw !== 'object') return null;
+    return raw as PersistentBaseCompositeSnapshot;
+  }
+
+  setStructureOccupancySnapshot(snapshot: StructureOccupancySnapshot | null): void {
+    if (!isHost()) return;
+    setState(KEY_STRUCTURE_OCCUPANCY, snapshot, true);
+  }
+
+  getStructureOccupancySnapshot(): StructureOccupancySnapshot | null {
+    const raw = getState(KEY_STRUCTURE_OCCUPANCY);
+    if (!raw || typeof raw !== 'object') return null;
+    return raw as StructureOccupancySnapshot;
+  }
+
+  setPersistentBaseRewardRuntimeStates(states: readonly PersistentBaseRewardRuntimeState[] | null): void {
+    if (!isHost()) return;
+    setState(KEY_PERSISTENT_BASE_REWARDS, states, true);
+  }
+
+  getPersistentBaseRewardRuntimeStates(): readonly PersistentBaseRewardRuntimeState[] {
+    const raw = getState(KEY_PERSISTENT_BASE_REWARDS);
+    return Array.isArray(raw) ? raw as PersistentBaseRewardRuntimeState[] : [];
+  }
+
   // ── Schockwellen-Effekt: Host → Alle ─────────────────────────────────────
 
   broadcastShockwaveEffect(x: number, y: number): void {
@@ -3832,6 +4018,31 @@ export class NetworkBridge {
   setLocalCoopDefenseTotalXp(totalXp: number): void {
     const nextTotalXp = Math.max(0, Math.floor(totalXp));
     myPlayer().setState(KEY_COOP_XP, nextTotalXp, true);
+  }
+
+  /** Publishes the device-local contribution; the host may inspect it but clients cannot write
+   * another player's value because the underlying state is per-player. */
+  setLocalPersistentBaseContribution(contribution: PersistentPlayerBaseContribution): void {
+    myPlayer().setState(KEY_PERSISTENT_BASE_CONTRIBUTION, contribution, true);
+  }
+
+  hostSetPlayerPersistentBaseContribution(
+    playerId: string,
+    contribution: PersistentPlayerBaseContribution,
+  ): void {
+    if (!isHost()) return;
+    const sanitized = sanitizePersistentPlayerBaseContribution(contribution);
+    if (!sanitized) return;
+    this.playerStateMap.get(playerId)?.setState(KEY_PERSISTENT_BASE_CONTRIBUTION, sanitized, true);
+  }
+
+  getPlayerPersistentBaseContribution(playerId: string): PersistentPlayerBaseContribution | null {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_PERSISTENT_BASE_CONTRIBUTION);
+    return sanitizePersistentPlayerBaseContribution(raw);
+  }
+
+  getLocalPersistentBaseContribution(): PersistentPlayerBaseContribution | null {
+    return this.getPlayerPersistentBaseContribution(this.getLocalPlayerId());
   }
 
   getPlayerCoopDefenseTotalXp(playerId: string): number {

@@ -1,5 +1,6 @@
 {
   "mapId": "14",
+  "persistentBase": { "baseId": "coop-base-rear" },
   "arenaWidthCells": 60,
   "arenaHeightCells": 42,
   "timeOfDay": "20:30",
@@ -178,7 +179,7 @@
       "hpMax": 3200,
       "anchor": {
         "kind": "right-center",
-        "edgeInsetCells": 0
+        "edgeInsetCells": 10
       },
       "shape": {
         "kind": "cells",
@@ -398,9 +399,6 @@
     }
   ],
   "powerUps": [],
-  "itemDrop": {
-    "itemLevel": 3
-  },
   "encounters": [
     {
       "id": "front-opening",

@@ -43,6 +43,8 @@ import { UiTooltip } from '../ui/UiTooltip';
 import { UiContextMenu } from '../ui/UiContextMenu';
 import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
+import { PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID } from '../config/persistentBase';
+import { getCoopDefenseMapUnlockedByVictoryOn, isCoopDefenseMapUnlocked, INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import {
   describeLoadoutItem,
@@ -121,11 +123,12 @@ const COOP_LABEL_Y = COOP_BAND_TOP + 26;
 const COOP_BAR_Y = COOP_BAND_TOP + 58;
 const COOP_BAR_H = 12;
 const COOP_BTN_Y = COOP_BAND_TOP + 100;
-const COOP_BTN_W = 190;
+const COOP_BTN_W = 178;
 const COOP_BTN_H = 44;
 const COOP_BTN_GAP = SPACE.lg;
-const COOP_UPGRADE_BTN_X = PANEL_CX - (COOP_BTN_W + COOP_BTN_GAP) / 2;
-const COOP_ITEMS_BTN_X = PANEL_CX + (COOP_BTN_W + COOP_BTN_GAP) / 2;
+const COOP_UPGRADE_BTN_X = PANEL_CX - (COOP_BTN_W + COOP_BTN_GAP);
+const COOP_BASE_BTN_X = PANEL_CX;
+const COOP_ITEMS_BTN_X = PANEL_CX + (COOP_BTN_W + COOP_BTN_GAP);
 const COOP_BAR_TEX_KEY = '_lobby_coop_xpbar';
 
 // ── Handlungsaufruf ──────────────────────────────────────────────────────────
@@ -248,12 +251,14 @@ export class LobbyOverlay {
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
   private coopBarEffect: LivingBarEffect | null = null;
   private coopUpgradesBtn: UiButton | null = null;
+  private coopBaseBtn: UiButton | null = null;
   private coopItemsBtn: UiButton | null = null;
   private coopProgressPointsText: Phaser.GameObjects.Text | null = null;
   private upgradeBtnEffect: LivingBarEffect | null = null;
   private itemsBtnEffect: LivingBarEffect | null = null;
   private itemsTooltip: UiTooltip | null = null;
   private coopItemsUnlocked = false;
+  private coopBaseUnlocked = false;
   private coopItemsSignature: string | null = null;
   private visible         = false;
   private btnLocked       = false;
@@ -278,6 +283,7 @@ export class LobbyOverlay {
     private onShowHelp: () => void,
     private onShowOptions: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
+    private onOpenPersistentBase: () => void,
     private onOpenCoopDefenseItems: () => void,
   ) {}
 
@@ -538,7 +544,20 @@ export class LobbyOverlay {
       onClick: () => this.onOpenCoopDefenseUpgrades(),
     });
 
-    // Items bleiben bis zum Sieg auf Map 10 gesperrt: `disabled` statt einer eigenen Farbe.
+    this.coopBaseBtn = new UiButton(this.scene, {
+      x: COOP_BASE_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
+      label: t('ui.lobby.base'),
+      intent: 'neutral',
+      icon: 'lock',
+      iconSize: 16,
+      onClick: () => {
+        if (!this.coopBaseUnlocked) return;
+        this.onOpenPersistentBase();
+      },
+    });
+    this.coopBaseBtn.setEnabled(false);
+
+    // Items bleiben bis zum Sieg auf Map 15 gesperrt: `disabled` statt einer eigenen Farbe.
     this.coopItemsBtn = new UiButton(this.scene, {
       x: COOP_ITEMS_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
       label: t('ui.lobby.items'),
@@ -561,6 +580,7 @@ export class LobbyOverlay {
       barBg,
       this.coopProgressBarFill,
       this.coopUpgradesBtn.getRoot(),
+      this.coopBaseBtn.getRoot(),
       this.coopItemsBtn.getRoot(),
     ]).setScrollFactor(0).setVisible(false);
     objects.push(this.coopBand);
@@ -688,8 +708,10 @@ export class LobbyOverlay {
     this.optionsBtn?.destroy();
     this.fullscreenBtn?.destroy();
     this.coopUpgradesBtn?.destroy();
+    this.coopBaseBtn?.destroy();
     this.coopItemsBtn?.destroy();
     this.coopUpgradesBtn = null;
+    this.coopBaseBtn = null;
     this.coopItemsBtn = null;
 
     if (this.container) {
@@ -901,6 +923,7 @@ export class LobbyOverlay {
         progress.availableUpgradePoints,
         progress.availableBossPoints,
         progress.earnedBossPoints,
+        progress.highestUnlockedMapId,
       ].join('|')
       : 'none';
     const shouldBeVisible = this.visible && progress !== null;
@@ -911,6 +934,8 @@ export class LobbyOverlay {
     this.coopProgressSignature = signature;
 
     if (!progress) {
+      this.coopBaseUnlocked = false;
+      this.coopBaseBtn?.setIcon('lock');
       this.coopBand.setVisible(false);
       this.upgradeBtnEffect?.stop();
       this.coopBarEffect?.stop();
@@ -921,6 +946,13 @@ export class LobbyOverlay {
     this.coopBand.setVisible(this.visible);
     if (bandVisibilityChanged) this.layoutList();
     this.coopProgressLevelText.setText(`${t('ui.lobby.level')} ${progress.level}`);
+
+    this.coopBaseUnlocked = isCoopDefenseMapUnlocked(
+      getCoopDefenseMapUnlockedByVictoryOn(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID) ?? '',
+      progress.highestUnlockedMapId ?? INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
+    );
+    this.coopBaseBtn?.setIcon(this.coopBaseUnlocked ? null : 'lock');
+    this.coopBaseBtn?.setEnabled(!this.isReady && !this.connectionEnded && this.coopBaseUnlocked);
 
     const barW = CONTENT_W - SPACE.lg * 2;
     const fillW = Math.max(0.001, barW * progress.levelProgressFraction);
@@ -1011,6 +1043,7 @@ export class LobbyOverlay {
   private updateCoopDefenseMenuButtons(): void {
     const enabled = !this.isReady && !this.connectionEnded;
     this.coopUpgradesBtn?.setEnabled(enabled);
+    this.coopBaseBtn?.setEnabled(enabled && this.coopBaseUnlocked);
     this.coopItemsBtn?.setEnabled(enabled && this.coopItemsUnlocked);
   }
 

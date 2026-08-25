@@ -134,6 +134,8 @@ interface DamageApplicationOptions {
    * Lifeleech und keine schadensabhaengigen Folgeeffekte ausloesen.
    */
   skipLifeLeech?: boolean;
+  /** Allows host-owned destruction to resolve a protected occupant exactly once. */
+  ignoreDirectDamageProtection?: boolean;
 }
 
 /** Passiver, autoritativer Messpunkt nach tatsaechlich verlorenem HP/Armor. */
@@ -364,6 +366,7 @@ export class CombatSystem {
   private onRespawnCb: ((playerId: string) => boolean | void) | null = null;
   private onAuthoritativePositionReset: ((playerId: string, x: number, y: number) => void) | null = null;
   private playerActionAllowedResolver: ((playerId: string) => boolean) | null = null;
+  private playerDirectDamageAllowedResolver: ((playerId: string) => boolean) | null = null;
   private onDirectPrimaryHit: ((
     attackerId: string,
     enemyId: string,
@@ -473,6 +476,9 @@ export class CombatSystem {
     this.onAuthoritativePositionReset = cb;
   }
   setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
+  setPlayerDirectDamageAllowedResolver(resolver: ((playerId: string) => boolean) | null): void {
+    this.playerDirectDamageAllowedResolver = resolver;
+  }
   /**
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
    * Ausschliesslich `damageKind === 'direct'` und `sourceSlot === 'weapon1'`.
@@ -734,6 +740,8 @@ export class CombatSystem {
     if (amount <= 0) return;
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
     if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
+    if (!options?.ignoreDirectDamageProtection
+      && !(this.playerDirectDamageAllowedResolver?.(targetId) ?? true)) return;
     this.decoySystem?.breakStealth(targetId, Date.now());
     const outgoing = this.playerOutgoingDamageResolver?.(
       attackerId,

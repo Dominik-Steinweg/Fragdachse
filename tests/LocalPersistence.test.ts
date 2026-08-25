@@ -5,6 +5,10 @@ import {
   LOCAL_PROGRESS_STORAGE_KEY,
   LOCAL_SETTINGS_STORAGE_KEY,
   exportStoredGameProgressJson,
+  getStoredPersistentBaseOwnerId,
+  getStoredPersistentBaseContribution,
+  getStoredPersistentBaseRewardPlacements,
+  getStoredPersistentBaseRadiusCells,
   getStoredPersistentBaseState,
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
@@ -16,6 +20,9 @@ import {
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseTotalXp,
   setStoredPersistentBaseState,
+  setStoredPersistentBaseContribution,
+  setStoredPersistentBaseRewardPlacements,
+  unlockStoredPersistentBaseRadiusAfterVictory,
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
   setStoredMasterVolume,
@@ -85,7 +92,7 @@ describe('local progress generation', () => {
     expect(getStoredCoopDefenseProgress().totalXp).toBe(77);
   });
 
-  it('stores the V3 persistent base in the progress document and restores it through export/import', () => {
+  it('stores the V4 radius and personal contribution in the progress document and restores them through export/import', () => {
     const state: PersistentBaseState = {
       schemaVersion: 1,
       radiusCells: 7,
@@ -103,11 +110,59 @@ describe('local progress generation', () => {
     expect(getStoredPersistentBaseState()).toEqual(state);
     const exported = JSON.parse(exportStoredGameProgressJson());
     expect(exported.progress.schemaVersion).toBe(LOCAL_PROGRESS_SCHEMA_VERSION);
-    expect(exported.progress.coopDefense.persistentBase).toEqual(state);
+    expect(exported.progress.coopDefense.persistentBaseRadiusCells).toBe(state.radiusCells);
+    expect(exported.progress.coopDefense.personalBaseContribution.constructions).toHaveLength(1);
+    expect(exported.progress.coopDefense.persistentBase).toBeUndefined();
 
     setStoredPersistentBaseState({ schemaVersion: 1, radiusCells: 5, revision: 0, constructions: [] });
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
     expect(getStoredPersistentBaseState()).toEqual(state);
+  });
+
+  it('keeps the V4 owner stable and projects confirmed personal contributions into the mission adapter', () => {
+    const ownerId = getStoredPersistentBaseOwnerId();
+    expect(ownerId).toBe(getStoredPersistentBaseOwnerId());
+    const contribution = {
+      schemaVersion: 4 as const,
+      ownerId,
+      revision: 3,
+      constructions: [{
+        persistentId: 'personal-v4',
+        tool: { kind: 'construction' as const, id: 'rocket_turret' as const },
+        relativeGridX: 1,
+        relativeGridY: -2,
+        angle: 0.25,
+        placementOrder: 4,
+        ownerId,
+      }],
+    };
+    setStoredPersistentBaseContribution(contribution);
+    expect(getStoredPersistentBaseContribution()).toEqual(contribution);
+    expect(getStoredPersistentBaseState().constructions).toEqual(contribution.constructions.map((construction) => {
+      const { ownerId: _ownerId, ...withoutOwner } = construction;
+      return withoutOwner;
+    }));
+    expect(JSON.parse(exportStoredGameProgressJson()).progress.coopDefense.personalBaseContribution)
+      .toEqual(contribution);
+  });
+
+  it('commits radius progression separately and stores host-owned reward placements', () => {
+    expect(getStoredPersistentBaseRadiusCells()).toBe(5);
+    expect(unlockStoredPersistentBaseRadiusAfterVictory('13')).toBe(false);
+    expect(unlockStoredPersistentBaseRadiusAfterVictory('14')).toBe(true);
+    expect(getStoredPersistentBaseRadiusCells()).toBe(7);
+    expect(unlockStoredPersistentBaseRadiusAfterVictory('14')).toBe(false);
+
+    const placement = {
+      rewardId: 'watchtower' as const,
+      persistentId: 'reward-watchtower',
+      relativeGridX: 2,
+      relativeGridY: 0,
+      angle: 0,
+      placementOrder: 0,
+    };
+    setStoredPersistentBaseRewardPlacements([placement]);
+    expect(getStoredPersistentBaseRewardPlacements()).toEqual([placement]);
   });
 
   it('rejects V2 progress exports, duplicate persistent IDs and corrupt persistent-base data', () => {
@@ -120,7 +175,7 @@ describe('local progress generation', () => {
     });
 
     const duplicate = structuredClone(envelope);
-    duplicate.progress.coopDefense.persistentBase.constructions = [
+    duplicate.progress.coopDefense.personalBaseContribution.constructions = [
       {
         persistentId: 'duplicate',
         tool: { kind: 'construction', id: 'rocket_turret' },
@@ -144,7 +199,7 @@ describe('local progress generation', () => {
     });
 
     const corrupt = structuredClone(envelope);
-    corrupt.progress.coopDefense.persistentBase = { schemaVersion: 1, radiusCells: 99, revision: 0, constructions: [] };
+    corrupt.progress.coopDefense.persistentBaseRadiusCells = 99;
     expect(importStoredGameProgressJson(JSON.stringify(corrupt))).toEqual({
       ok: false,
       messageKey: 'ui.lobby.saveInvalid',

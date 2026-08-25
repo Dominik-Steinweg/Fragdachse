@@ -101,9 +101,6 @@
     "enemyKind": "inferno-colossus",
     "spawnAtMs": 6000
   },
-  "itemDrop": {
-    "itemLevel": 1
-  },
   "encounters": [
     {
       "id": "inferno-opening-support",

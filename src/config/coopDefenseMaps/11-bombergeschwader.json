@@ -1,5 +1,6 @@
 {
   "mapId": "11",
+  "persistentBase": { "baseId": "coop-base-middle" },
   "arenaWidthCells": 60,
   "arenaHeightCells": 39,
   "timeOfDay": "10:30",
@@ -270,8 +271,5 @@
         }
       ]
     }
-  ],
-  "itemDrop": {
-    "itemLevel": 1
-  }
+  ]
 }

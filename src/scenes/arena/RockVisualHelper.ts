@@ -340,7 +340,14 @@ export class RockVisualHelper {
         this.spawnTurretDeathCloud(runtimeRock);
       }
       if (runtimeRock.kind === 'pedestal') {
-        this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
+        if (runtimeRock.persistentId) {
+          this.ctx.powerUpSystem?.unregisterPersistentPedestal(runtimeRock.persistentId);
+        } else {
+          this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
+        }
+      }
+      if (runtimeRock.persistentRewardId) {
+        this.ctx.placementSystem?.notifyPersistentRewardDestroyed(runtimeRock);
       }
       if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
         const world = { x: ARENA_OFFSET_X + runtimeRock.gridX * CELL_SIZE + CELL_SIZE / 2, y: ARENA_OFFSET_Y + runtimeRock.gridY * CELL_SIZE + CELL_SIZE / 2 };

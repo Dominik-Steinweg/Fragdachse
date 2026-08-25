@@ -14,6 +14,7 @@ import {
   isPointInsideArena,
 } from '../config';
 import type { ArenaLayout, ConstructionOwnership, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
+import type { PersistentBaseRewardDefinition } from '../config/persistentBaseRewards';
 import {
   getCoopDefenseConstructionDefinition,
   getConstructionIdForUtility,
@@ -44,6 +45,7 @@ export class PlacementSystem {
   /** Vorbereitete Gefahrenzellen je authored Event; gesperrt wird erst ab der Ankuendigung. */
   private readonly hazardCellEventIds = new Map<string, string>();
   private isHazardEventArmed: ((eventId: string) => boolean) | null = null;
+  private persistentRewardDestroyedHandler: ((rock: SyncedPlaceableRock) => void) | null = null;
   private nextRockId: number;
 
   constructor(
@@ -118,6 +120,14 @@ export class PlacementSystem {
     this.isHazardEventArmed = resolver;
   }
 
+  setPersistentRewardDestroyedHandler(handler: ((rock: SyncedPlaceableRock) => void) | null): void {
+    this.persistentRewardDestroyedHandler = handler;
+  }
+
+  notifyPersistentRewardDestroyed(rock: SyncedPlaceableRock): void {
+    if (rock.persistentRewardId) this.persistentRewardDestroyedHandler?.({ ...rock });
+  }
+
   private isHazardCellLocked(cellKey: string): boolean {
     const eventId = this.hazardCellEventIds.get(cellKey);
     if (eventId === undefined) return false;
@@ -128,6 +138,11 @@ export class PlacementSystem {
 
   getRuntimeRock(id: number): SyncedPlaceableRock | undefined {
     return this.runtimeRocks.get(id);
+  }
+
+  getRuntimeRockAt(gridX: number, gridY: number): SyncedPlaceableRock | undefined {
+    const id = this.rockGrid.getIndex(gridX, gridY);
+    return id >= 0 ? this.runtimeRocks.get(id) : undefined;
   }
 
   getAllRuntimeRocks(): readonly SyncedPlaceableRock[] {
@@ -151,7 +166,7 @@ export class PlacementSystem {
       if (rock.expiresAt <= 0) continue;
       if (now < rock.expiresAt) continue;
       this.runtimeRocks.delete(rock.id);
-      this.rockGrid.remove(rock.gridX, rock.gridY);
+      this.removeRockFootprint(rock);
       expired.push({ ...rock });
     }
     return expired;
@@ -161,7 +176,7 @@ export class PlacementSystem {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
     this.runtimeRocks.delete(id);
-    this.rockGrid.remove(rock.gridX, rock.gridY);
+    this.removeRockFootprint(rock);
     return { ...rock };
   }
 
@@ -286,9 +301,10 @@ export class PlacementSystem {
       targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
       turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
       energyInjectorEffect: cfg.energyInjectorEffect,
+      footprint: cfg.footprint,
     };
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.setRockFootprint(rock);
     return { ...rock };
   }
 
@@ -395,9 +411,101 @@ export class PlacementSystem {
           ? cfg.placeable.energyInjectorEffect : undefined,
       };
 
+    rock.footprint = footprint;
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.setRockFootprint(rock);
     return { ...rock };
+  }
+
+  materializePersistentReward(
+    definition: PersistentBaseRewardDefinition,
+    gridX: number,
+    gridY: number,
+    angle: number,
+    hostOwnerId: string,
+    ownerColor: number,
+    persistentId: string,
+  ): SyncedPlaceableRock | null {
+    if (!this.canPlaceCells(definition.footprint, gridX, gridY, false)) return null;
+    const rock: RuntimeRockRecord = {
+      id: this.nextRockId++,
+      kind: definition.kind,
+      gridX,
+      gridY,
+      hp: definition.maxHp,
+      maxHp: definition.maxHp,
+      ownerId: hostOwnerId,
+      ownerColor,
+      expiresAt: 0,
+      warningStartsAt: 0,
+      angle: Number.isFinite(angle) ? angle : 0,
+      ownership: 'base-owned',
+      indestructible: definition.indestructible === true,
+      persistentRewardId: definition.id,
+      persistentId,
+      footprint: definition.footprint,
+      ...(definition.constructionType === 'watchtower'
+        ? { targetRange: 800 }
+        : {}),
+    };
+    this.runtimeRocks.set(rock.id, rock);
+    this.setRockFootprint(rock);
+    return { ...rock };
+  }
+
+  /**
+   * Atomically moves a runtime object while preserving its runtime ID, HP and all metadata.
+   * The caller supplies the authored footprint so the same primitive works for constructions
+   * and base-owned rewards.
+   */
+  repositionRuntimeRock(
+    id: number,
+    gridX: number,
+    gridY: number,
+    footprint: readonly { readonly dx: number; readonly dy: number }[],
+    angle: number,
+  ): SyncedPlaceableRock | null {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock) return null;
+    const previousCells = footprint.map((cell) => ({ gridX: rock.gridX + cell.dx, gridY: rock.gridY + cell.dy }));
+    for (const cell of previousCells) {
+      if (this.rockGrid.getIndex(cell.gridX, cell.gridY) === id) this.rockGrid.remove(cell.gridX, cell.gridY);
+    }
+    if (!this.canPlaceCells(footprint, gridX, gridY, false)) {
+      for (const cell of previousCells) this.rockGrid.set(cell.gridX, cell.gridY, id);
+      return null;
+    }
+    rock.gridX = gridX;
+    rock.gridY = gridY;
+    rock.angle = Number.isFinite(angle) ? angle : rock.angle;
+    for (const cell of footprint) this.rockGrid.set(gridX + cell.dx, gridY + cell.dy, id);
+    return { ...rock };
+  }
+
+  /**
+   * Validates a move against the current grid while treating the source footprint as empty.
+   * This is intentionally the same collision primitive used by the host's atomic reposition,
+   * exposed separately so the local preview cannot advertise a target the host will reject.
+   */
+  canRepositionCells(
+    id: number,
+    gridX: number,
+    gridY: number,
+    footprint: readonly { readonly dx: number; readonly dy: number }[],
+  ): boolean {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock) return false;
+    const sourceFootprint = footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }];
+    const previousCells = sourceFootprint.map((cell) => ({
+      gridX: rock.gridX + cell.dx,
+      gridY: rock.gridY + cell.dy,
+    }));
+    for (const cell of previousCells) {
+      if (this.rockGrid.getIndex(cell.gridX, cell.gridY) === id) this.rockGrid.remove(cell.gridX, cell.gridY);
+    }
+    const valid = this.canPlaceCells(sourceFootprint, gridX, gridY, false);
+    for (const cell of previousCells) this.rockGrid.set(cell.gridX, cell.gridY, id);
+    return valid;
   }
 
   getConstructionPlacementPreview(
@@ -509,10 +617,11 @@ export class PlacementSystem {
       energyInjectorEffect: cfg.placeable.kind === 'turret'
         ? cfg.placeable.energyInjectorEffect
         : undefined,
+      footprint: cfg.placeable.footprint,
     };
 
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.setRockFootprint(rock);
     return { ...rock };
   }
 
@@ -530,7 +639,7 @@ export class PlacementSystem {
     for (const [id, existing] of this.runtimeRocks) {
       if (next.has(id)) continue;
       this.runtimeRocks.delete(id);
-      this.rockGrid.remove(existing.gridX, existing.gridY);
+      this.removeRockFootprint(existing);
       removed.push({ ...existing });
     }
 
@@ -538,7 +647,7 @@ export class PlacementSystem {
       const current = this.runtimeRocks.get(incoming.id);
       if (!current) {
         this.runtimeRocks.set(incoming.id, { ...incoming });
-        this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
+        this.setRockFootprint(incoming);
         this.nextRockId = Math.max(this.nextRockId, incoming.id + 1);
         added.push({ ...incoming });
         continue;
@@ -561,11 +670,13 @@ export class PlacementSystem {
         || current.toolRef?.id !== incoming.toolRef?.id
         || current.turretWeaponId !== incoming.turretWeaponId
         || current.targetRange !== incoming.targetRange
+        || current.persistentRewardId !== incoming.persistentRewardId
+        || current.persistentId !== incoming.persistentId
       ) {
         this.runtimeRocks.set(incoming.id, { ...incoming });
         if (current.gridX !== incoming.gridX || current.gridY !== incoming.gridY) {
-          this.rockGrid.remove(current.gridX, current.gridY);
-          this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
+          this.removeRockFootprint(current);
+          this.setRockFootprint(incoming);
         }
         updated.push({ ...incoming });
       }
@@ -776,6 +887,20 @@ export class PlacementSystem {
 
   private key(gx: number, gy: number): string {
     return `${gx}_${gy}`;
+  }
+
+  private setRockFootprint(rock: SyncedPlaceableRock): void {
+    for (const cell of rock.footprint ?? [{ dx: 0, dy: 0 }]) {
+      this.rockGrid.set(rock.gridX + cell.dx, rock.gridY + cell.dy, rock.id);
+    }
+  }
+
+  private removeRockFootprint(rock: SyncedPlaceableRock): void {
+    for (const cell of rock.footprint ?? [{ dx: 0, dy: 0 }]) {
+      const gridX = rock.gridX + cell.dx;
+      const gridY = rock.gridY + cell.dy;
+      if (this.rockGrid.getIndex(gridX, gridY) === rock.id) this.rockGrid.remove(gridX, gridY);
+    }
   }
 }
 

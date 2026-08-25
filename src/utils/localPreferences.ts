@@ -20,6 +20,10 @@ import type {
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../config/coopDefenseConstructions';
 import {
+  getPersistentBaseRewardDefinition,
+  type PersistentBaseRewardPlacement,
+} from '../config/persistentBaseRewards';
+import {
   addCoopDefenseItem,
   getCoopDefenseItemSalvageXp,
   getEquippedCoopDefenseItem,
@@ -47,6 +51,13 @@ import {
   maxHighestUnlockedCoopDefenseMapId,
   sanitizeHighestUnlockedCoopDefenseMapId,
 } from '../config/coopDefenseMapUnlocks';
+import {
+  DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
+  MAX_PERSISTENT_BASE_RADIUS_CELLS,
+  PERSISTENT_BASE_RADIUS_AFTER_UPGRADE,
+  PERSISTENT_BASE_RADIUS_UPGRADE_AFTER_MAP_ID,
+  PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
+} from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 import { isLocale, resolveBrowserLocale, type Locale } from '../i18n/types';
@@ -65,19 +76,22 @@ import {
 } from '../debug/coopDefenseBalance/types';
 import {
   clonePersistentBaseState,
-  DEFAULT_PERSISTENT_BASE_STATE,
+  clonePersistentPlayerBaseContribution,
+  DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION,
   sanitizePersistentBaseState,
+  sanitizePersistentPlayerBaseContribution,
+  type PersistentPlayerBaseContribution,
   type PersistentBaseState,
 } from '../persistentBase/PersistentBaseTypes';
 
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
-export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v3';
+export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v4';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
-export const LOCAL_PROGRESS_SCHEMA_VERSION = 3;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 4;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 3;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 4;
 export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
 export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
@@ -95,7 +109,7 @@ export interface CoopDefenseProgressPreferences {
   defaultProfile: CoopDefenseUpgradeProfile;
   selectedClassId: CoopDefenseClassId;
   profilesByClass: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
-  /** Das Item-System bleibt bis zum Sieg auf Map 10 verborgen. */
+  /** Das Item-System bleibt bis zum Sieg auf Map 15 verborgen. */
   itemsUnlocked: boolean;
   /**
    * Gesamter Item-Besitz inklusive der ausgeruesteten Teile. Eine einzige Liste plus
@@ -115,8 +129,12 @@ export interface CoopDefenseProgressPreferences {
    * geoeffnet hat. Treibt den Hinweis am Items-Button und wird beim Oeffnen zurueckgesetzt.
    */
   unseenItems: boolean;
-  /** Committed, map-relative Inspector constructions. */
-  persistentBase: PersistentBaseState;
+  /** Campaign-owned build radius; placements live only in the V4 contribution/reward fields. */
+  persistentBaseRadiusCells: number;
+  /** Device-local contribution offered to the current room host. */
+  personalBaseContribution: PersistentPlayerBaseContribution;
+  /** Host-campaign-owned permanent reward placements. Unlocks are derived from map progress. */
+  persistentBaseRewards: PersistentBaseRewardPlacement[];
 }
 
 interface LocalPreferences {
@@ -128,6 +146,8 @@ interface LocalPreferences {
   };
   profile: {
     playerName: string | null;
+    /** Stable device/profile owner identity; never derived from a room peer ID. */
+    ownerId: string;
   };
   loadout: Partial<Record<LoadoutSlot, string>>;
   loadoutByClass: Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>>;
@@ -160,7 +180,7 @@ interface LocalSettingsDocumentV2 {
 }
 
 export interface LocalProgressDocument {
-  schemaVersion: 3;
+  schemaVersion: 4;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
   coopDefense: {
@@ -181,7 +201,9 @@ export interface LocalProgressDocument {
     /** Legacy-Feld in alten Schema-2-Saves; wird beim Dekodieren in die Queue migriert. */
     pendingItemReward?: CoopDefensePendingItemReward | null;
     unseenItems: boolean;
-    persistentBase: PersistentBaseState;
+    persistentBaseRadiusCells: number;
+    personalBaseContribution: PersistentPlayerBaseContribution;
+    persistentBaseRewards: PersistentBaseRewardPlacement[];
   };
 }
 
@@ -228,8 +250,20 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   equippedItemIds: {},
   pendingItemRewards: [],
   unseenItems: false,
-  persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
+  persistentBaseRadiusCells: DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
+  personalBaseContribution: clonePersistentPlayerBaseContribution(DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION),
+  persistentBaseRewards: [],
 };
+
+function createStableOwnerId(): string {
+  try {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (uuid) return `owner-${uuid}`;
+  } catch { /* Browser crypto can be unavailable in test/private contexts. */ }
+  return `owner-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+}
+
+const DEFAULT_LOCAL_OWNER_ID = createStableOwnerId();
 
 /**
  * Items sind unveraenderliche Wertobjekte; nur die Huellen (Liste, Slot-Zuordnung) muessen
@@ -259,6 +293,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   },
   profile: {
     playerName: null,
+    ownerId: DEFAULT_LOCAL_OWNER_ID,
   },
   loadout: {},
   loadoutByClass: {},
@@ -381,6 +416,10 @@ function buildDefaultPreferences(): LocalPreferences {
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
+        personalBaseContribution: {
+          ...clonePersistentPlayerBaseContribution(DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION),
+          ownerId: DEFAULT_LOCAL_OWNER_ID,
+        },
         ...cloneCoopDefenseItemState(DEFAULT_COOP_DEFENSE_PROGRESS),
       },
     },
@@ -395,6 +434,43 @@ function sanitizeStoredUnlockedClassIds(value: unknown): CoopDefenseClassId[] | 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizePersistentBaseRewardPlacements(value: unknown): PersistentBaseRewardPlacement[] | null {
+  if (!Array.isArray(value) || value.length > 16) return null;
+  const seenRewardIds = new Set<string>();
+  const seenPersistentIds = new Set<string>();
+  const placements: PersistentBaseRewardPlacement[] = [];
+  for (const raw of value) {
+    if (!isRecord(raw)
+      || typeof raw.rewardId !== 'string'
+      || !getPersistentBaseRewardDefinition(raw.rewardId)
+      || seenRewardIds.has(raw.rewardId)
+      || typeof raw.persistentId !== 'string'
+      || raw.persistentId.length === 0
+      || raw.persistentId.length > 128
+      || seenPersistentIds.has(raw.persistentId)
+      || typeof raw.relativeGridX !== 'number'
+      || !Number.isSafeInteger(raw.relativeGridX)
+      || typeof raw.relativeGridY !== 'number'
+      || !Number.isSafeInteger(raw.relativeGridY)
+      || typeof raw.angle !== 'number'
+      || !Number.isFinite(raw.angle)
+      || typeof raw.placementOrder !== 'number'
+      || !Number.isSafeInteger(raw.placementOrder)
+      || raw.placementOrder < 0) return null;
+    seenRewardIds.add(raw.rewardId);
+    seenPersistentIds.add(raw.persistentId);
+    placements.push({
+      rewardId: raw.rewardId as PersistentBaseRewardPlacement['rewardId'],
+      persistentId: raw.persistentId,
+      relativeGridX: raw.relativeGridX,
+      relativeGridY: raw.relativeGridY,
+      angle: raw.angle,
+      placementOrder: raw.placementOrder,
+    });
+  }
+  return placements;
 }
 
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
@@ -706,7 +782,9 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (!document || !isRecord(document.profile) || !isValidLoadoutRecord(document.loadout)
     || !isRecord(document.coopDefense)) return null;
   const coop = document.coopDefense as unknown as Record<string, unknown>;
-  if ((document.profile.playerName !== null && typeof document.profile.playerName !== 'string')
+  if (typeof document.profile.ownerId !== 'string' || document.profile.ownerId.trim().length === 0
+    || document.profile.ownerId.length > 128
+    || (document.profile.playerName !== null && typeof document.profile.playerName !== 'string')
     || typeof coop.totalXp !== 'number' || !Number.isFinite(coop.totalXp)
     || (coop.lastProcessedRoundEndedAt !== null
       && (typeof coop.lastProcessedRoundEndedAt !== 'number' || !Number.isFinite(coop.lastProcessedRoundEndedAt)))
@@ -720,13 +798,21 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || (coop.pendingItemRewards !== undefined && !Array.isArray(coop.pendingItemRewards))
     || (coop.pendingItemReward !== undefined
       && coop.pendingItemReward !== null && !isRecord(coop.pendingItemReward))
-    || typeof coop.unseenItems !== 'boolean') return null;
+    || typeof coop.unseenItems !== 'boolean'
+    || typeof coop.persistentBaseRadiusCells !== 'number'
+    || !Number.isSafeInteger(coop.persistentBaseRadiusCells)
+    || coop.persistentBaseRadiusCells < 0
+    || coop.persistentBaseRadiusCells > MAX_PERSISTENT_BASE_RADIUS_CELLS
+    || coop.persistentBaseRewards !== undefined && !Array.isArray(coop.persistentBaseRewards)) return null;
 
   const loadout = sanitizeStoredLoadout(document.loadout);
   const unlockedClassIds = sanitizeStoredUnlockedClassIds(coop.unlockedClassIds);
   if (unlockedClassIds === null) return null;
-  const persistentBase = sanitizePersistentBaseState(coop.persistentBase);
-  if (!persistentBase) return null;
+  const persistentBaseRadiusCells = coop.persistentBaseRadiusCells;
+  const personalBaseContribution = sanitizePersistentPlayerBaseContribution(coop.personalBaseContribution);
+  if (!personalBaseContribution || personalBaseContribution.ownerId !== document.profile.ownerId) return null;
+  const persistentBaseRewards = sanitizePersistentBaseRewardPlacements(coop.persistentBaseRewards ?? []);
+  if (!persistentBaseRewards) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
@@ -796,6 +882,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     profile: {
       playerName: typeof document.profile.playerName === 'string'
         ? sanitizePlayerName(document.profile.playerName) || null : null,
+      ownerId: document.profile.ownerId,
     },
     loadout,
     loadoutByClass,
@@ -810,15 +897,16 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         defaultProfile,
         selectedClassId,
         profilesByClass,
-        itemsUnlocked: coop.itemsUnlocked || isCoopDefenseMapUnlocked(
-          COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID,
-          highestUnlockedMapId,
-        ),
+        // Unlocks are victory events, not an inferred side effect of a map selector. This keeps
+        // Map 10–14 victories from leaking item access into the Phase-3 save.
+        itemsUnlocked: coop.itemsUnlocked,
         items,
         equippedItemIds,
         pendingItemRewards,
         unseenItems: coop.unseenItems && items.length > 0,
-        persistentBase,
+        persistentBaseRadiusCells,
+        personalBaseContribution: clonePersistentPlayerBaseContribution(personalBaseContribution),
+        persistentBaseRewards,
       },
     },
   };
@@ -882,7 +970,12 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
         offers: [...reward.offers],
       })),
       unseenItems: progress.unseenItems,
-      persistentBase: clonePersistentBaseState(progress.persistentBase),
+      persistentBaseRadiusCells: progress.persistentBaseRadiusCells,
+      personalBaseContribution: clonePersistentPlayerBaseContribution({
+        ...progress.personalBaseContribution,
+        ownerId: preferences.profile.ownerId,
+      }),
+      persistentBaseRewards: progress.persistentBaseRewards.map((placement) => ({ ...placement })),
     },
   };
 }
@@ -1286,7 +1379,9 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     profilesByClass: cloneProfilesByClass(progress.profilesByClass),
     itemsUnlocked: progress.itemsUnlocked,
     unseenItems: progress.unseenItems,
-    persistentBase: clonePersistentBaseState(progress.persistentBase),
+    persistentBaseRadiusCells: progress.persistentBaseRadiusCells,
+    personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
+    persistentBaseRewards: progress.persistentBaseRewards.map((placement) => ({ ...placement })),
     ...cloneCoopDefenseItemState(progress),
   };
 }
@@ -1305,7 +1400,9 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(progress.profilesByClass),
-        persistentBase: clonePersistentBaseState(progress.persistentBase),
+        persistentBaseRadiusCells: progress.persistentBaseRadiusCells,
+        personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
+        persistentBaseRewards: progress.persistentBaseRewards.map((placement) => ({ ...placement })),
         ...cloneCoopDefenseItemState(progress),
       },
     },
@@ -1314,10 +1411,59 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
 
 /** Typed persistence port used by the persistent-base domain; no caller needs LocalStorage. */
 export function getStoredPersistentBaseState(): PersistentBaseState {
-  return clonePersistentBaseState(readPreferences().progression.coopDefense.persistentBase);
+  const progress = readPreferences().progression.coopDefense;
+  return {
+    schemaVersion: 1,
+    radiusCells: progress.persistentBaseRadiusCells,
+    revision: progress.personalBaseContribution.revision,
+    constructions: progress.personalBaseContribution.constructions.map((construction) => {
+      const { ownerId: _ownerId, rewardId: _rewardId, ...withoutV4Metadata } = construction;
+      return { ...withoutV4Metadata, tool: { ...withoutV4Metadata.tool } };
+    }),
+  };
 }
 
-/** Atomically replaces only the committed persistent-base value inside the V3 progress document. */
+/** The editor unlock is a campaign event, represented by the first production map after Map 10. */
+export function isStoredPersistentBaseUnlocked(): boolean {
+  return isCoopDefenseMapUnlocked(
+    getCoopDefenseMapUnlockedByVictoryOn(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID) ?? '',
+    readPreferences().progression.coopDefense.highestUnlockedMapId,
+  );
+}
+
+export function getStoredPersistentBaseRadiusCells(): number {
+  return readPreferences().progression.coopDefense.persistentBaseRadiusCells;
+}
+
+/** Radius is campaign state and never changes while a mission is running. */
+export function setStoredPersistentBaseRadiusCells(radiusCells: number): boolean {
+  const nextRadius = Math.max(
+    DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
+    Math.min(PERSISTENT_BASE_RADIUS_AFTER_UPGRADE, Math.floor(radiusCells)),
+  );
+  const current = readPreferences();
+  const currentRadius = current.progression.coopDefense.persistentBaseRadiusCells;
+  if (currentRadius === nextRadius) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        persistentBaseRadiusCells: nextRadius,
+      },
+    },
+  });
+  return true;
+}
+
+/** Idempotent campaign reward hook for the first radius expansion. */
+export function unlockStoredPersistentBaseRadiusAfterVictory(completedMapId: string): boolean {
+  if (completedMapId.trim() !== PERSISTENT_BASE_RADIUS_UPGRADE_AFTER_MAP_ID) return false;
+  return setStoredPersistentBaseRadiusCells(PERSISTENT_BASE_RADIUS_AFTER_UPGRADE);
+}
+
+/** Atomically replaces the host campaign projection and the local personal contribution. */
 export function setStoredPersistentBaseState(state: PersistentBaseState): void {
   const sanitized = sanitizePersistentBaseState(state);
   if (!sanitized) return;
@@ -1327,7 +1473,17 @@ export function setStoredPersistentBaseState(state: PersistentBaseState): void {
       ...current.progression,
       coopDefense: {
         ...current.progression.coopDefense,
-        persistentBase: sanitized,
+        persistentBaseRadiusCells: sanitized.radiusCells,
+        personalBaseContribution: {
+          schemaVersion: 4,
+          ownerId: current.profile.ownerId,
+          revision: sanitized.revision,
+          constructions: sanitized.constructions.map((construction) => ({
+            ...construction,
+            ownerId: current.profile.ownerId,
+            tool: { ...construction.tool },
+          })),
+        },
       },
     },
   }));
@@ -1349,7 +1505,14 @@ export function resetStoredCoopDefenseCharacter(): void {
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
-        persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
+        persistentBaseRadiusCells: DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
+        personalBaseContribution: {
+          schemaVersion: 4,
+          ownerId: current.profile.ownerId,
+          revision: 0,
+          constructions: [],
+        },
+        persistentBaseRewards: [],
         ...cloneCoopDefenseItemState(DEFAULT_COOP_DEFENSE_PROGRESS),
       },
     },
@@ -1836,6 +1999,61 @@ export function clearStoredPendingCoopDefenseItemRewards(): void {
     progression: {
       ...current.progression,
       coopDefense: { ...current.progression.coopDefense, pendingItemRewards: [] },
+    },
+  }));
+}
+
+/** Stable identity used for personal persistent-base ownership across rooms and hosts. */
+export function getStoredPersistentBaseOwnerId(): string {
+  return readPreferences().profile.ownerId;
+}
+
+/** Reads only the device-local personal contribution offered to a room host. */
+export function getStoredPersistentBaseContribution(): PersistentPlayerBaseContribution {
+  return clonePersistentPlayerBaseContribution(
+    readPreferences().progression.coopDefense.personalBaseContribution,
+  );
+}
+
+/**
+ * Stores a host-confirmed personal contribution. Untrusted client data must pass the same
+ * boundary sanitizer as imported progress before it can reach local storage.
+ */
+export function setStoredPersistentBaseContribution(
+  contribution: PersistentPlayerBaseContribution,
+): void {
+  const sanitized = sanitizePersistentPlayerBaseContribution(contribution);
+  if (!sanitized || sanitized.ownerId !== getStoredPersistentBaseOwnerId()) return;
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        personalBaseContribution: sanitized,
+      },
+    },
+  }));
+}
+
+export function getStoredPersistentBaseRewardPlacements(): PersistentBaseRewardPlacement[] {
+  return readPreferences().progression.coopDefense.persistentBaseRewards
+    .map((placement) => ({ ...placement }));
+}
+
+export function setStoredPersistentBaseRewardPlacements(
+  placements: readonly PersistentBaseRewardPlacement[],
+): void {
+  const sanitized = sanitizePersistentBaseRewardPlacements(placements);
+  if (!sanitized) return;
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        persistentBaseRewards: sanitized,
+      },
     },
   }));
 }

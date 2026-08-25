@@ -178,6 +178,9 @@ export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
  * dismantle/restore paths do not need a second identity model later. */
 export type ConstructionOwnership = 'host-persistent' | 'guest-session' | 'base-owned';
 
+/** Central identity of the Phase-3 permanent base rewards. */
+export type PersistentBaseRewardId = 'watchtower' | 'holy_hand_pedestal' | 'burrow';
+
 export interface PlacementPreviewNetState {
   active: boolean;
   kind: PlaceableKind;
@@ -930,6 +933,8 @@ export interface LoadoutUseParams {
   tunnelStartGridY?: number;
   constructionId?: ConstructionId;
   toolRef?: LoadoutToolRef;
+  /** Host-authoritative placement request for a class-independent persistent-base reward. */
+  persistentRewardId?: PersistentBaseRewardId;
   /** Rueckbau eines eigenen Konstrukts; belegt keinen Ausruestungsplatz. */
   dismantle?: boolean;
   /** Finaler Commit einer zuvor auf dem Host gestarteten Hold-Aktion. */
@@ -1761,6 +1766,12 @@ export interface SyncedPlaceableRock {
   constructionId?: ConstructionId;
   /** Explicit lifetime owner; absent on unrelated temporary placeables and authored scenery. */
   ownership?: ConstructionOwnership;
+  /** Stable identity of a permanent base reward, independent of the runtime rock ID. */
+  persistentRewardId?: PersistentBaseRewardId;
+  /** Stable map-relative identity used by atomic reposition and occupancy. */
+  persistentId?: string;
+  /** Footprint is replicated so multi-cell structures keep grid occupancy across snapshots. */
+  footprint?: readonly { readonly dx: number; readonly dy: number }[];
   /** Beim Platzieren eingefrorene, typisierte Energieinjektor-Wirkung. */
   energyInjectorEffect?: EnergyInjectorConstructionEffect;
   toolRef?: LoadoutToolRef;

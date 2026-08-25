@@ -102,7 +102,7 @@ import {
   ACTIVE_ARENA_METRICS_PROFILE,
   applyArenaMetricsForMode,
 } from '../config';
-import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
 import { preloadTrainMaterialAssets } from '../train/TrainRenderer';
 import {
@@ -117,6 +117,12 @@ import { coversDesignSpace } from './arena/ArenaClipPolicy';
 import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
+  getStoredPersistentBaseOwnerId,
+  getStoredPersistentBaseContribution,
+  getStoredPersistentBaseRewardPlacements,
+  getStoredHighestUnlockedCoopDefenseMapId,
+  getStoredPersistentBaseRadiusCells,
+  isStoredPersistentBaseUnlocked,
   getStoredEffectsVolume,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
@@ -144,6 +150,9 @@ import {
   unlockStoredCoopDefenseClassesAfterVictory,
   unlockStoredCoopDefenseItemsAfterVictory,
   unlockStoredCoopDefenseMapAfterVictory,
+  unlockStoredPersistentBaseRadiusAfterVictory,
+  setStoredPersistentBaseContribution,
+  setStoredPersistentBaseRewardPlacements,
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
 import {
@@ -183,14 +192,18 @@ import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveCoopDefenseBases } from '../arena/BaseRegistry';
-import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
+import { getPersistentBaseAnchor, isPersistentFootprintInsideZone } from '../persistentBase/PersistentBaseZone';
+import { PersistentBaseEditorState, type PersistentBaseEditorMutation } from '../persistentBase/PersistentBaseEditorState';
+import { PersistentBaseEditorOverlay } from '../ui/PersistentBaseEditorOverlay';
+import { getPersistentBaseRewardDefinition, type PersistentBaseRewardId, type PersistentBaseRewardRuntimeState } from '../config/persistentBaseRewards';
+import type { PersistentToolRef } from '../persistentBase/PersistentBaseTypes';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName, getMapTutorial, getMapTutorialStep } from '../i18n/contentPresentation';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../config/coopDefenseConstructions';
 import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
@@ -203,6 +216,37 @@ import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
 import type { FlowFieldDiagnostics } from '../systems/flowfield/FlowFieldCoordinator';
 import type { PersistentGpuWorldDiagnostics } from '../arena/rocks/PersistentGpuWorldSystem';
+
+type PersistentBaseEditorMutationRequest =
+  | {
+    readonly operation: 'place';
+    readonly tool: LoadoutToolRef;
+    readonly relativeGridX: number;
+    readonly relativeGridY: number;
+    readonly angle?: number;
+  }
+  | {
+    readonly operation: 'remove';
+    readonly persistentId: string;
+  }
+  | {
+    readonly operation: 'reposition';
+    readonly persistentId: string;
+    readonly relativeGridX: number;
+    readonly relativeGridY: number;
+    readonly angle?: number;
+  }
+  | {
+    readonly operation: 'reward-place';
+    readonly rewardId: PersistentBaseRewardId;
+    readonly relativeGridX: number;
+    readonly relativeGridY: number;
+    readonly angle?: number;
+  }
+  | {
+    readonly operation: 'reward-unplace';
+    readonly rewardId: PersistentBaseRewardId;
+  };
 
 import {
   type ArenaContext,
@@ -330,6 +374,11 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
+  private persistentBaseEditorOverlay: PersistentBaseEditorOverlay | null = null;
+  private persistentBaseEditorState: PersistentBaseEditorState | null = null;
+  private readonly persistentBaseEditorRequestIds = new Set<string>();
+  private persistentBaseEditorRequestCounter = 0;
+  private lastStructureOccupancyRevision = -1;
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private lastCameraScrollX = 0;
@@ -963,6 +1012,8 @@ export class ArenaScene extends Phaser.Scene {
       this.roomStatisticsOverlay = null;
       this.itemRewardOverlay?.destroy();
       this.itemsOverlay?.destroy();
+      this.persistentBaseEditorOverlay?.destroy();
+      this.persistentBaseEditorOverlay = null;
     });
 
     const arenaCountdown = new ArenaCountdownOverlay(
@@ -982,7 +1033,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseSession: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseSession: null, structureOccupancySystem: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -1295,6 +1346,22 @@ export class ArenaScene extends Phaser.Scene {
         );
       },
     );
+    inputSystem.setupStructureOccupancyProvider(
+      (aimAngle) => this.ctx.structureOccupancySystem?.selectStructure(
+        bridge.getLocalPlayerId(),
+        aimAngle,
+      ) ?? null,
+      () => this.ctx.structureOccupancySystem?.getStructureForPlayer(bridge.getLocalPlayerId()) ?? null,
+    );
+    inputSystem.setupPersistentBaseRewardProviders(
+      () => this.getLocalPersistentBaseRewardStates(),
+      (rewardId) => this.getLocalPersistentBaseRewardPlacementPreview(rewardId),
+    );
+    inputSystem.setupPersistentBaseRepositionProviders(
+      () => this.getLocalPersistentBaseRepositionSource(),
+      (persistentId) => this.getLocalPersistentBaseRepositionPreview(persistentId),
+      (persistentId, preview) => this.requestPersistentBaseReposition(persistentId, preview),
+    );
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
 
@@ -1465,6 +1532,10 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (!bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
+      if (slot === 'utility' && params?.persistentRewardId) {
+        this.requestPersistentBaseRewardPlacement(params.persistentRewardId, targetX, targetY, angle);
+        return;
+      }
 
       let shotId: number | undefined;
       const inputStarted = params?.inputStarted === true;
@@ -1575,6 +1646,7 @@ export class ArenaScene extends Phaser.Scene {
       () => leftPanel.showHelpOverlay(),
       () => leftPanel.showOptionsOverlay(),
       () => this.openCoopDefenseUpgradesOverlay(),
+      () => this.openPersistentBaseEditor(),
       () => this.openCoopDefenseItemsOverlay(),
     );
     this.lobbyOverlay.build();
@@ -1604,6 +1676,45 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.setRuntimeDiagnosticEventSink((type, fields) => {
       this.runtimeProfiler?.recordSemanticEvent(type, fields);
     });
+    this.persistentBaseEditorOverlay = new PersistentBaseEditorOverlay(this, {
+      getLocalOwnerId: () => getStoredPersistentBaseOwnerId(),
+      getTools: () => {
+        const progress = getStoredCoopDefenseProgress();
+        const profile = progress.profilesByClass.inspector_gadachs;
+        return getUnlockedLoadoutToolRefs(profile);
+      },
+      onClose: () => bridge.requestPersistentBaseEditorClose(),
+      onPlace: (tool, relativeGridX, relativeGridY) => this.requestPersistentBaseEditorMutation({
+        operation: 'place',
+        tool,
+        relativeGridX,
+        relativeGridY,
+        angle: 0,
+      }),
+      onPlaceReward: (rewardId, relativeGridX, relativeGridY) => this.requestPersistentBaseEditorMutation({
+        operation: 'reward-place',
+        rewardId,
+        relativeGridX,
+        relativeGridY,
+        angle: 0,
+      }),
+      onRemove: (persistentId) => this.requestPersistentBaseEditorMutation({
+        operation: 'remove',
+        persistentId,
+      }),
+      onReposition: (persistentId, relativeGridX, relativeGridY) => this.requestPersistentBaseEditorMutation({
+        operation: 'reposition',
+        persistentId,
+        relativeGridX,
+        relativeGridY,
+        angle: 0,
+      }),
+      onUnplaceReward: (rewardId) => this.requestPersistentBaseEditorMutation({
+        operation: 'reward-unplace',
+        rewardId,
+      }),
+    });
+    this.persistentBaseEditorOverlay.build();
     this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(
       () => this.ctx,
       (result) => {
@@ -1630,6 +1741,18 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.rpcCoordinator.setLifecycle(this.lifecycle);
     this.rpcCoordinator.registerAll();
+    bridge.registerPersistentBaseMutationHandler((playerId, operation, request) => {
+      if (bridge.isPersistentBaseEditorOpen()) this.handlePersistentBaseEditorMutation(playerId, operation, request);
+      else this.lifecycle.handlePersistentBaseMutation(playerId, operation, request);
+    });
+    bridge.registerStructureOccupancyHandlers(
+      (playerId, request) => this.lifecycle.handleStructureEnterRequest(playerId, request),
+      (playerId, request) => this.lifecycle.handleStructureExitRequest(playerId, request),
+    );
+    bridge.registerPersistentBaseEditorHandlers(
+      (playerId) => this.handlePersistentBaseEditorOpenRequest(playerId),
+      (playerId) => this.handlePersistentBaseEditorCloseRequest(playerId),
+    );
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
     leftPanel.setAbortMatchBinding({
       canAbort: () => this.lifecycle.canHostAbortRound(),
@@ -1705,6 +1828,19 @@ export class ArenaScene extends Phaser.Scene {
     const networkUpdateMs = diagnosticsActive ? performance.now() - networkUpdateStartMs : 0;
 
     const phase           = bridge.getGamePhase();
+    const persistentBaseEditorOpen = phase === 'LOBBY' && bridge.isPersistentBaseEditorOpen();
+    this.syncConfirmedPersistentBaseContribution();
+    this.lifecycle?.syncPersistentBaseRewardOccupancy();
+    const occupancySnapshot = bridge.getStructureOccupancySnapshot();
+    if (occupancySnapshot && occupancySnapshot.revision !== this.lastStructureOccupancyRevision) {
+      this.ctx?.structureOccupancySystem?.applySnapshot(occupancySnapshot);
+      this.lastStructureOccupancyRevision = occupancySnapshot.revision;
+    }
+    this.persistentBaseEditorOverlay?.setVisible(persistentBaseEditorOpen);
+    if (persistentBaseEditorOpen) {
+      this.lobbyOverlay.hide();
+      this.persistentBaseEditorOverlay?.setSnapshot(bridge.getPersistentBaseCompositeSnapshot());
+    }
     const deferArenaExit  = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.lifecycle.detectPhaseChange(deferArenaExit);
@@ -1775,7 +1911,7 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPanelsHeld = false;
     }
 
-    const lobbyVisible = phase === 'LOBBY' && !deferArenaExit;
+    const lobbyVisible = phase === 'LOBBY' && !deferArenaExit && !persistentBaseEditorOpen;
     this.menuArenaPreview?.setVisible(lobbyVisible);
     // Muss vor allem Arena-Aufbau laufen: `setActive(false)` räumt synchron und vollständig
     // auf, damit kein Ambient-Zustand in eine Runde hinüberlebt.
@@ -1794,17 +1930,19 @@ export class ArenaScene extends Phaser.Scene {
         (gameplayActive && !optionsOpen && !spectator && !weaponBalanceLabArena) || countdownInputAllowed,
       );
       this.ctx.inputSystem.update();
+      this.syncStructureInteractionHint(inGame && !terminated && !spectator && !weaponBalanceLabArena);
       if (countdownActive) this.syncCountdownPlayerPresentation();
     } else {
       this.ctx.inputSystem.setAimEnabled(false);
       this.ctx.inputSystem.setInputEnabled(false);
+      this.syncStructureInteractionHint(false);
     }
     if (diagnosticsActive) {
       inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
     }
 
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
-    if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
+    if (!terminated && phase === 'LOBBY' && !deferArenaExit && !persistentBaseEditorOpen) {
       const lobbyUiStartedAt = diagnosticsActive ? performance.now() : 0;
       if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
@@ -2248,7 +2386,7 @@ export class ArenaScene extends Phaser.Scene {
       ? persistentBases.find((base) => base.id === persistentMapConfig.persistentBase!.baseId)
       : undefined;
     const persistentRadiusCells = bridge.getRoundState()?.persistentBaseRadiusCells
-      ?? getStoredCoopDefenseProgress().persistentBase.radiusCells;
+      ?? getStoredCoopDefenseProgress().persistentBaseRadiusCells;
     this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
       persistentBaseTerrain && this.ctx.currentLayout
         ? {
@@ -3535,6 +3673,239 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private syncStructureInteractionHint(visible: boolean): void {
+    const occupancy = this.ctx.structureOccupancySystem;
+    if (!visible || !occupancy) {
+      this.ctx.centerHUD.setStructureInteractionHint(null);
+      return;
+    }
+
+    const localId = bridge.getLocalPlayerId();
+    const occupiedStructureId = occupancy.getStructureForPlayer(localId);
+    const structureId = occupiedStructureId
+      ?? occupancy.selectStructure(localId, this.ctx.inputSystem.getAimAngle());
+    if (!structureId) {
+      this.ctx.centerHUD.setStructureInteractionHint(null);
+      return;
+    }
+    const definition = occupancy.getDefinition(structureId);
+    if (!definition) {
+      this.ctx.centerHUD.setStructureInteractionHint(null);
+      return;
+    }
+    const name = t(definition.kind === 'watchtower'
+      ? 'ui.structure.watchtower'
+      : 'ui.structure.burrow');
+    this.ctx.centerHUD.setStructureInteractionHint(t(
+      occupiedStructureId ? 'ui.structure.exitHint' : 'ui.structure.enterHint',
+      { name },
+    ));
+  }
+
+  private getLocalPersistentBaseRewardStates(): readonly PersistentBaseRewardRuntimeState[] {
+    if (bridge.getGamePhase() !== 'ARENA' || !isCoopDefenseMode(bridge.getGameMode())) return [];
+    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    if (!mapConfig?.persistentBase) return [];
+    return this.lifecycle.getPersistentBaseRewardRuntimeStates();
+  }
+
+  private getLocalPersistentBaseRewardPlacementPreview(
+    rewardId: PersistentBaseRewardId,
+  ) {
+    const state = this.getLocalPersistentBaseRewardStates().find((candidate) => candidate.rewardId === rewardId);
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const placementSystem = this.ctx.placementSystem;
+    if (!state || state.availability !== 'available' || !definition || !sprite || !placementSystem) return undefined;
+    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    if (!mapConfig?.persistentBase) return undefined;
+    const base = resolveCoopDefenseBases(mapConfig, 1)
+      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
+    if (!base) return undefined;
+    const anchor = getPersistentBaseAnchor(base);
+    const pointer = this.getPointerWorldPoint();
+    const target = placementSystem.getClampedTargetCell(
+      sprite.x,
+      sprite.y,
+      pointer.x,
+      pointer.y,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+    );
+    if (!target) return undefined;
+    const inZone = isPersistentFootprintInsideZone(
+      target.gridX,
+      target.gridY,
+      definition.footprint,
+      anchor,
+      bridge.getRoundState()?.persistentBaseRadiusCells ?? getStoredPersistentBaseRadiusCells(),
+    );
+    return {
+      angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
+      targetX: target.x,
+      targetY: target.y,
+      gridX: target.gridX,
+      gridY: target.gridY,
+      isValid: inZone && placementSystem.canMaterializeCells(definition.footprint, target.gridX, target.gridY),
+      frame: 0,
+      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      kind: definition.kind,
+      sourceSlot: 'utility' as const,
+      powerUpDefId: definition.powerUpDefId,
+    };
+  }
+
+  private getCurrentPersistentBasePlacementContext(): {
+    readonly anchor: ReturnType<typeof getPersistentBaseAnchor>;
+    readonly radiusCells: number;
+  } | null {
+    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    if (!mapConfig?.persistentBase) return null;
+    const base = resolveCoopDefenseBases(mapConfig, 1)
+      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
+    if (!base) return null;
+    return {
+      anchor: getPersistentBaseAnchor(base),
+      radiusCells: bridge.getRoundState()?.persistentBaseRadiusCells ?? getStoredPersistentBaseRadiusCells(),
+    };
+  }
+
+  private canLocallyRepositionPersistentRuntime(runtime: {
+    readonly persistentId?: string;
+    readonly persistentRewardId?: PersistentBaseRewardId;
+    readonly ownerId: string;
+  }): boolean {
+    if (!runtime.persistentId) return false;
+    if (runtime.persistentRewardId) return bridge.isHost();
+    const localPlayerId = bridge.getLocalPlayerId();
+    const localOwnerId = getStoredPersistentBaseOwnerId();
+    return runtime.ownerId === localPlayerId || runtime.ownerId === localOwnerId;
+  }
+
+  private getLocalPersistentBaseRepositionSource(): {
+    readonly persistentId: string;
+    readonly preview: ReturnType<ArenaScene['getLocalPersistentBaseRepositionPreview']> & object;
+  } | undefined {
+    const placementSystem = this.ctx.placementSystem;
+    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const context = this.getCurrentPersistentBasePlacementContext();
+    if (bridge.getGamePhase() !== 'ARENA' || !isCoopDefenseMode(bridge.getGameMode())
+      || !placementSystem || !sprite || !context) return undefined;
+    const pointer = this.getPointerWorldPoint();
+    const target = placementSystem.getClampedTargetCell(
+      sprite.x,
+      sprite.y,
+      pointer.x,
+      pointer.y,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+    );
+    if (!target) return undefined;
+    const runtime = placementSystem.getRuntimeRockAt(target.gridX, target.gridY);
+    if (!runtime || !runtime.persistentId || !this.canLocallyRepositionPersistentRuntime(runtime)) return undefined;
+    if (!this.ctx.structureOccupancySystem?.canMoveStructure(runtime.persistentId)) return undefined;
+    const definition = runtime.persistentRewardId
+      ? getPersistentBaseRewardDefinition(runtime.persistentRewardId)
+      : undefined;
+    const footprint = runtime.footprint ?? definition?.footprint ?? [{ dx: 0, dy: 0 }];
+    const preview = {
+      angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
+      targetX: target.x,
+      targetY: target.y,
+      gridX: target.gridX,
+      gridY: target.gridY,
+      isValid: true,
+      frame: 0,
+      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      kind: runtime.kind,
+      sourceSlot: 'utility' as const,
+      constructionId: runtime.constructionId,
+      powerUpDefId: definition?.powerUpDefId,
+      footprint,
+    };
+    return { persistentId: runtime.persistentId, preview };
+  }
+
+  private getLocalPersistentBaseRepositionPreview(persistentId: string) {
+    const placementSystem = this.ctx.placementSystem;
+    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const context = this.getCurrentPersistentBasePlacementContext();
+    if (bridge.getGamePhase() !== 'ARENA' || !isCoopDefenseMode(bridge.getGameMode())
+      || !placementSystem || !sprite || !context) return undefined;
+    const runtime = placementSystem.getAllRuntimeRocks()
+      .find((candidate) => candidate.persistentId === persistentId);
+    if (!runtime || !this.canLocallyRepositionPersistentRuntime(runtime)) return undefined;
+    const definition = runtime.persistentRewardId
+      ? getPersistentBaseRewardDefinition(runtime.persistentRewardId)
+      : undefined;
+    const footprint = runtime.footprint ?? definition?.footprint ?? [{ dx: 0, dy: 0 }];
+    if (!this.ctx.structureOccupancySystem?.canMoveStructure(persistentId)) return undefined;
+    const pointer = this.getPointerWorldPoint();
+    const target = placementSystem.getClampedTargetCell(
+      sprite.x,
+      sprite.y,
+      pointer.x,
+      pointer.y,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+    );
+    if (!target) return undefined;
+    const inZone = isPersistentFootprintInsideZone(
+      target.gridX,
+      target.gridY,
+      footprint,
+      context.anchor,
+      context.radiusCells,
+    );
+    return {
+      angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
+      targetX: target.x,
+      targetY: target.y,
+      gridX: target.gridX,
+      gridY: target.gridY,
+      isValid: inZone && placementSystem.canRepositionCells(runtime.id, target.gridX, target.gridY, footprint),
+      frame: 0,
+      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      kind: runtime.kind,
+      sourceSlot: 'utility' as const,
+      constructionId: runtime.constructionId,
+      powerUpDefId: definition?.powerUpDefId,
+      footprint,
+    };
+  }
+
+  private requestPersistentBaseReposition(
+    persistentId: string,
+    preview: { readonly gridX: number; readonly gridY: number; readonly angle: number },
+  ): void {
+    if (bridge.getGamePhase() !== 'ARENA' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    const placementSystem = this.ctx.placementSystem;
+    const context = this.getCurrentPersistentBasePlacementContext();
+    const runtime = placementSystem?.getAllRuntimeRocks()
+      .find((candidate) => candidate.persistentId === persistentId);
+    if (!runtime || !context || !this.canLocallyRepositionPersistentRuntime(runtime)) return;
+    const footprint = runtime.footprint
+      ?? (runtime.persistentRewardId ? getPersistentBaseRewardDefinition(runtime.persistentRewardId)?.footprint : undefined)
+      ?? [{ dx: 0, dy: 0 }];
+    if (!isPersistentFootprintInsideZone(
+      preview.gridX,
+      preview.gridY,
+      footprint,
+      context.anchor,
+      context.radiusCells,
+    ) || !placementSystem?.canRepositionCells(runtime.id, preview.gridX, preview.gridY, footprint)) return;
+    if (!this.ctx.structureOccupancySystem?.canMoveStructure(persistentId)) return;
+    const contribution = bridge.getLocalPersistentBaseContribution() ?? getStoredPersistentBaseContribution();
+    bridge.sendPersistentBaseRepositionRequest({
+      requestId: `pb-move-${Date.now().toString(36)}-${this.persistentBaseEditorRequestCounter++}`,
+      revision: contribution.revision,
+      persistentId,
+      relativeGridX: preview.gridX - context.anchor.gridX,
+      relativeGridY: preview.gridY - context.anchor.gridY,
+      angle: Number.isFinite(preview.angle) ? preview.angle : 0,
+    });
+  }
+
   private getLocalPlacementPreview() {
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     const cfg = this.clientUpdate.getLocalUtilityConfig();
@@ -4667,6 +5038,244 @@ export class ArenaScene extends Phaser.Scene {
     this.roomQualitySnapshot = this.roomQualityMonitor.update(now, players);
   }
 
+  private openPersistentBaseEditor(): void {
+    bridge.requestPersistentBaseEditorOpen();
+  }
+
+  private requestPersistentBaseRewardPlacement(
+    rewardId: PersistentBaseRewardId,
+    targetX: number,
+    targetY: number,
+    angle: number,
+  ): void {
+    if (bridge.getGamePhase() !== 'ARENA' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    if (!this.getLocalPersistentBaseRewardStates().some((state) => (
+      state.rewardId === rewardId && state.availability === 'available'
+    ))) return;
+    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    if (!mapConfig?.persistentBase) return;
+    const base = resolveCoopDefenseBases(mapConfig, 1)
+      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    if (!base || !definition) return;
+    const anchor = getPersistentBaseAnchor(base);
+    const gridX = Math.floor((targetX - ARENA_OFFSET_X) / CELL_SIZE);
+    const gridY = Math.floor((targetY - ARENA_OFFSET_Y) / CELL_SIZE);
+    if (!isPersistentFootprintInsideZone(
+      gridX,
+      gridY,
+      definition.footprint,
+      anchor,
+      bridge.getRoundState()?.persistentBaseRadiusCells ?? getStoredPersistentBaseRadiusCells(),
+    )) return;
+    const contribution = bridge.getLocalPersistentBaseContribution() ?? getStoredPersistentBaseContribution();
+    bridge.sendPersistentBaseRewardPlaceRequest({
+      requestId: `pb-reward-${Date.now().toString(36)}-${this.persistentBaseEditorRequestCounter++}`,
+      revision: contribution.revision,
+      rewardId,
+      relativeGridX: gridX - anchor.gridX,
+      relativeGridY: gridY - anchor.gridY,
+      angle: Number.isFinite(angle) ? angle : 0,
+    });
+  }
+
+  private handlePersistentBaseEditorOpenRequest(playerId: string): void {
+    if (!bridge.isHost()
+      || bridge.getGamePhase() !== 'LOBBY'
+      || bridge.getPlayerReady(playerId)
+      || !isCoopDefenseMode(bridge.getGameMode())
+      || !isStoredPersistentBaseUnlocked()) return;
+    if (!this.persistentBaseEditorState) this.buildPersistentBaseEditorState();
+    if (!this.persistentBaseEditorState) return;
+    this.persistentBaseEditorRequestIds.clear();
+    bridge.hostSetPersistentBaseEditorOpen(true);
+    bridge.setPersistentBaseCompositeSnapshot(this.persistentBaseEditorState.getSnapshot());
+  }
+
+  private handlePersistentBaseEditorCloseRequest(_playerId: string): void {
+    if (!bridge.isHost()) return;
+    bridge.hostSetPersistentBaseEditorOpen(false);
+    bridge.setPersistentBaseCompositeSnapshot(null);
+    this.persistentBaseEditorState = null;
+    this.persistentBaseEditorRequestIds.clear();
+  }
+
+  private buildPersistentBaseEditorState(): void {
+    const mapId = bridge.getCoopDefenseMapId();
+    const selectedMap = getCoopDefenseMapConfig(mapId);
+    const mapConfig = selectedMap?.persistentBase
+      ? selectedMap
+      : getCoopDefenseMapConfig('11');
+    if (!mapConfig?.persistentBase) return;
+    const base = resolveCoopDefenseBases(mapConfig, 1)
+      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
+    if (!base) return;
+    const localOwnerId = getStoredPersistentBaseOwnerId();
+    const localContribution = getStoredPersistentBaseContribution();
+    const contributions = [localContribution];
+    for (const player of bridge.getConnectedPlayers()) {
+      if (player.id === bridge.getLocalPlayerId()) continue;
+      const contribution = bridge.getPlayerPersistentBaseContribution(player.id);
+      if (contribution && contribution.ownerId !== localOwnerId) contributions.push(contribution);
+    }
+    const capacityMaxByOwner = new Map<string, number>();
+    for (const contribution of contributions) {
+      const peer = bridge.getConnectedPlayers().find((candidate) => (
+        bridge.getPlayerPersistentBaseContribution(candidate.id)?.ownerId === contribution.ownerId
+      ));
+      const profile = peer?.id === bridge.getLocalPlayerId()
+        ? getStoredCoopDefenseProgress().profilesByClass.inspector_gadachs
+        : peer ? bridge.getPlayerCommittedLoadout(peer.id)?.coopDefenseProfile : null;
+      if (profile) capacityMaxByOwner.set(contribution.ownerId, getCoopDefenseToolCapacity(profile));
+    }
+    const authoredCells = new Set(base.cells.map((cell) => `${cell.gridX}:${cell.gridY}`));
+    this.persistentBaseEditorState = new PersistentBaseEditorState({
+      ownerId: localOwnerId,
+      anchor: getPersistentBaseAnchor(base),
+      radiusCells: getStoredPersistentBaseRadiusCells(),
+      highestUnlockedMapId: getStoredHighestUnlockedCoopDefenseMapId(),
+      contributions,
+      rewardPlacements: getStoredPersistentBaseRewardPlacements(),
+      capacityMaxByOwner,
+      authoredCells,
+      resolveTool: (tool: PersistentToolRef) => {
+        if (tool.kind === 'construction') {
+          try {
+            const definition = getCoopDefenseConstructionDefinition(tool.id as ConstructionId);
+            return { footprint: definition.footprint, capacityCost: definition.capacityCost };
+          } catch {
+            return null;
+          }
+        }
+        const config = getUtilityConfigForMode(tool.id, bridge.getGameMode());
+        if (!config || !('placeable' in config)) return null;
+        return {
+          footprint: config.placeable.footprint,
+          capacityCost: getToolCapacityCost({ kind: 'utility', id: tool.id }),
+        };
+      },
+    });
+  }
+
+  private requestPersistentBaseEditorMutation(
+    mutation: PersistentBaseEditorMutationRequest,
+  ): void {
+    const contribution = bridge.getLocalPersistentBaseContribution() ?? getStoredPersistentBaseContribution();
+    const requestId = `pb-editor-${Date.now().toString(36)}-${this.persistentBaseEditorRequestCounter++}`;
+    const request: import('../network/NetworkBridge').PersistentBaseMutationRequest = {
+      requestId,
+      revision: contribution.revision,
+      ...(mutation.operation === 'place' ? {
+        toolRef: mutation.tool,
+        relativeGridX: mutation.relativeGridX,
+        relativeGridY: mutation.relativeGridY,
+        angle: mutation.angle,
+      } : {}),
+      ...(mutation.operation === 'reposition' ? {
+        persistentId: mutation.persistentId,
+        relativeGridX: mutation.relativeGridX,
+        relativeGridY: mutation.relativeGridY,
+        angle: mutation.angle,
+      } : {}),
+      ...(mutation.operation === 'remove' ? { persistentId: mutation.persistentId } : {}),
+      ...(mutation.operation === 'reward-place' ? {
+        rewardId: mutation.rewardId,
+        relativeGridX: mutation.relativeGridX,
+        relativeGridY: mutation.relativeGridY,
+        angle: mutation.angle,
+      } : {}),
+      ...(mutation.operation === 'reward-unplace' ? { rewardId: mutation.rewardId } : {}),
+    };
+    bridge.sendPersistentBaseMutationRequest(mutation.operation, request);
+  }
+
+  private handlePersistentBaseEditorMutation(
+    playerId: string,
+    operation: import('../network/NetworkBridge').PersistentBaseMutationOperation,
+    request: import('../network/NetworkBridge').PersistentBaseMutationRequest,
+  ): void {
+    if (!bridge.isHost() || !bridge.isPersistentBaseEditorOpen() || !this.persistentBaseEditorState) return;
+    if (this.persistentBaseEditorRequestIds.has(request.requestId)) return;
+    this.persistentBaseEditorRequestIds.add(request.requestId);
+    const ownerId = playerId === bridge.getLocalPlayerId()
+      ? getStoredPersistentBaseOwnerId()
+      : bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId;
+    if (!ownerId) return;
+    let mutation: PersistentBaseEditorMutation | null = null;
+    if (operation === 'place' && request.toolRef
+      && request.relativeGridX !== undefined && request.relativeGridY !== undefined) {
+      mutation = {
+        operation,
+        ownerId,
+        revision: request.revision,
+        tool: request.toolRef,
+        relativeGridX: request.relativeGridX,
+        relativeGridY: request.relativeGridY,
+        angle: request.angle ?? 0,
+      };
+    } else if ((operation === 'remove' || operation === 'reposition') && request.persistentId) {
+      mutation = operation === 'remove'
+        ? { operation, ownerId, revision: request.revision, persistentId: request.persistentId }
+        : request.relativeGridX !== undefined && request.relativeGridY !== undefined
+          ? {
+            operation,
+            ownerId,
+            revision: request.revision,
+            persistentId: request.persistentId,
+            relativeGridX: request.relativeGridX,
+            relativeGridY: request.relativeGridY,
+            angle: request.angle ?? 0,
+          }
+          : null;
+    } else if (operation === 'reward-place' && request.rewardId
+      && request.relativeGridX !== undefined && request.relativeGridY !== undefined
+      && getPersistentBaseRewardDefinition(request.rewardId)) {
+      mutation = {
+        operation,
+        ownerId,
+        revision: request.revision,
+        rewardId: request.rewardId as PersistentBaseRewardId,
+        relativeGridX: request.relativeGridX,
+        relativeGridY: request.relativeGridY,
+        angle: request.angle ?? 0,
+      };
+    } else if (operation === 'reward-unplace' && request.rewardId
+      && getPersistentBaseRewardDefinition(request.rewardId)) {
+      mutation = {
+        operation,
+        ownerId,
+        revision: request.revision,
+        rewardId: request.rewardId as PersistentBaseRewardId,
+      };
+    }
+    if (!mutation) return;
+    const result = this.persistentBaseEditorState.apply(mutation);
+    if (!result.accepted) return;
+    if (result.contribution) {
+      if (ownerId === getStoredPersistentBaseOwnerId()) {
+        setStoredPersistentBaseContribution(result.contribution);
+        bridge.setLocalPersistentBaseContribution(result.contribution);
+      } else {
+        bridge.hostSetPlayerPersistentBaseContribution(playerId, result.contribution);
+      }
+    }
+    if (operation === 'reward-place' || operation === 'reward-unplace') {
+      setStoredPersistentBaseRewardPlacements(this.persistentBaseEditorState.getRewardState().getPlacements());
+    }
+    bridge.setPersistentBaseCompositeSnapshot(result.snapshot);
+    this.persistentBaseEditorOverlay?.setSnapshot(result.snapshot);
+  }
+
+  private syncConfirmedPersistentBaseContribution(): void {
+    if (bridge.isHost()) return;
+    const confirmed = bridge.getLocalPersistentBaseContribution();
+    if (!confirmed) return;
+    const local = getStoredPersistentBaseContribution();
+    if (confirmed.ownerId !== local.ownerId || confirmed.revision < local.revision) return;
+    if (confirmed.revision !== local.revision) setStoredPersistentBaseContribution(confirmed);
+  }
+
   private refreshStoredCoopDefenseProgress(options: {
     stored?: CoopDefenseProgressPreferences;
     refreshOverlay?: boolean;
@@ -4682,20 +5291,24 @@ export class ArenaScene extends Phaser.Scene {
     const activeProfile = classesUnlocked
       ? stored.profilesByClass[stored.selectedClassId]
       : stored.defaultProfile;
-    this.coopDefenseProgress = getCoopDefenseProgressSnapshot(
+    this.coopDefenseProgress = {
+      ...getCoopDefenseProgressSnapshot(
       stored.totalXp,
       activeProfile,
       stored.completedBossMapIds.length,
       activeClassId,
       classesUnlocked,
       stored.unlockedClassIds,
-    );
+      ),
+      highestUnlockedMapId: stored.highestUnlockedMapId,
+    };
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
     this.coopDefenseItemsUnlocked = stored.itemsUnlocked;
     this.coopDefensePendingItemRewardCount = stored.pendingItemRewards.length;
     this.coopDefenseHasUnseenItems = stored.unseenItems;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
+    bridge.setLocalPersistentBaseContribution(getStoredPersistentBaseContribution());
     const loadoutProjectionChanged = this.hasCoopDefenseLoadoutProjectionChanged(
       previousProgress,
       this.coopDefenseProgress,
@@ -5101,6 +5714,7 @@ export class ArenaScene extends Phaser.Scene {
       unlockStoredCoopDefenseClassesAfterVictory(completedMapId);
       unlockedItems = unlockStoredCoopDefenseItemsAfterVictory(completedMapId);
       unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
+      unlockStoredPersistentBaseRadiusAfterVictory(completedMapId);
 
       // Jeder Spieler wuerfelt sein eigenes Angebot lokal; der Sieg steht bereits reliable im
       // RoundState, deshalb braucht die Belohnung keinen Netzwerkpfad. Persistiert, damit sie

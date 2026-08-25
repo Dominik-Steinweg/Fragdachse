@@ -1038,8 +1038,8 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefense
   }
   const campaignIds = maps.filter((mapConfig) => mapConfig.mapId !== '0').map((mapConfig) => mapConfig.mapId);
   const expectedCampaignIds = campaignIds.map((_, index) => String(index + 1));
-  if (campaignIds.length !== 19 || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
-    throw new Error('[coopDefenseMaps] Campaign registry must contain exactly maps 1 through 19 in order');
+  if (campaignIds.length !== 17 || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
+    throw new Error('[coopDefenseMaps] Campaign registry must contain exactly maps 1 through 17 in order');
   }
   return {
     defaultMapId: registry.defaultMapId,

@@ -40,7 +40,7 @@ describe('Coop defense map progression', () => {
     const mapIds = COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId);
     expect(mapIds).toEqual([
       '0', '1', '2', '3', '4', '5', '6', '7', '8',
-      '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+      '9', '10', '11', '12', '13', '14', '15', '16', '17',
     ]);
     expect(DEFAULT_COOP_DEFENSE_MAP_ID).toBe('1');
     expect(mapIds.every((mapId) => mapId.trim().length > 0)).toBe(true);
@@ -56,21 +56,46 @@ describe('Coop defense map progression', () => {
     expect(getCoopDefenseMapConfig('1').arenaHeightCells).toBeGreaterThanOrEqual(DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS);
   });
 
-  it('validates persistent anchors and resolves map-relative reservation geometry', () => {
-    const map18 = getCoopDefenseMapConfig('18');
-    const map19 = getCoopDefenseMapConfig('19');
-    expect(map18.persistentBase).toEqual({ baseId: 'foundation-main' });
-    expect(map19.persistentBase).toEqual({ baseId: 'cornerstone-main' });
+  it('validates persistent anchors and resolves map-relative reservation geometry on maps 11 to 14', () => {
+    const map11 = getCoopDefenseMapConfig('11');
+    const map12 = getCoopDefenseMapConfig('12');
+    const map13 = getCoopDefenseMapConfig('13');
+    const map14 = getCoopDefenseMapConfig('14');
+    expect(map11.persistentBase).toEqual({ baseId: 'coop-base-middle' });
+    expect(map12.persistentBase).toEqual({ baseId: 'coop-base-rear' });
+    expect(map13.persistentBase).toEqual({ baseId: 'coop-base-rear' });
+    expect(map14.persistentBase).toEqual({ baseId: 'coop-base-rear' });
 
-    const anchor18 = resolveCoopDefenseBases(map18).find((base) => base.id === 'foundation-main');
-    const anchor19 = resolveCoopDefenseBases(map19).find((base) => base.id === 'cornerstone-main');
-    expect(anchor18).toMatchObject({ anchorGridX: 24, anchorGridY: 19 });
-    expect(anchor19).toMatchObject({ anchorGridX: 31, anchorGridY: 20 });
-    expect(anchor18 && isPersistentBaseReservationCell(36, 19, [anchor18])).toBe(true);
-    expect(anchor18 && isPersistentBaseReservationCell(37, 19, [anchor18])).toBe(false);
+    const anchor11 = resolveCoopDefenseBases(map11).find((base) => base.id === 'coop-base-middle');
+    const anchor12 = resolveCoopDefenseBases(map12).find((base) => base.id === 'coop-base-rear');
+    const anchor13 = resolveCoopDefenseBases(map13).find((base) => base.id === 'coop-base-rear');
+    const anchor14 = resolveCoopDefenseBases(map14).find((base) => base.id === 'coop-base-rear');
+    expect(anchor11?.anchorGridX).toEqual(expect.any(Number));
+    for (const anchor of [anchor12, anchor13, anchor14]) {
+      expect(anchor).toMatchObject({
+        anchorGridX: expect.any(Number),
+        anchorGridY: expect.any(Number),
+        persistentReservationRadiusCells: expect.any(Number),
+      });
+      expect(anchor && isPersistentBaseReservationCell(
+        anchor.anchorGridX,
+        anchor.anchorGridY,
+        [anchor],
+      )).toBe(true);
+    }
+    expect(anchor12 && isPersistentBaseReservationCell(
+      anchor12.anchorGridX + anchor12.persistentReservationRadiusCells,
+      anchor12.anchorGridY,
+      [anchor12],
+    )).toBe(true);
+    expect(anchor12 && isPersistentBaseReservationCell(
+      anchor12.anchorGridX + anchor12.persistentReservationRadiusCells + 1,
+      anchor12.anchorGridY,
+      [anchor12],
+    )).toBe(false);
 
     expect(() => normalizeCoopDefenseMapConfig({
-      ...map18,
+      ...map11,
       mapId: 'persistent-anchor-validation',
       persistentBase: { baseId: 'missing-main' },
     })).toThrow(/unknown base/);
@@ -82,10 +107,8 @@ describe('Coop defense map progression', () => {
     expect(getCoopDefenseMapConfig('6').trackPosition).toBe('left');
     expect(getCoopDefenseMapConfig('7').trackPosition).toBe('right');
     expect(getCoopDefenseMapConfig('8').trackPosition).toBe('left');
-    expect(COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'void-fire' && !['18', '19'].includes(map.mapId))
+    expect(COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'void-fire')
       .every((map) => map.trackPosition === 'center')).toBe(true);
-    expect(getCoopDefenseMapConfig('18').trackPosition).toEqual({ kind: 'grid', gridX: 4 });
-    expect(getCoopDefenseMapConfig('19').trackPosition).toEqual({ kind: 'grid', gridX: 48 });
 
     const base = {
       mapId: 'track-position-test',
@@ -120,6 +143,15 @@ describe('Coop defense map progression', () => {
     }
   });
 
+  it('starts item rewards on map 15 and keeps the Phase-3 level curve', () => {
+    for (const mapId of ['10', '11', '12', '13', '14']) {
+      expect(getCoopDefenseMapConfig(mapId).itemDrop, mapId).toBeUndefined();
+    }
+    expect(getCoopDefenseMapConfig('15').itemDrop?.itemLevel).toBe(1);
+    expect(getCoopDefenseMapConfig('16').itemDrop?.itemLevel).toBe(1);
+    expect(getCoopDefenseMapConfig('17').itemDrop?.itemLevel).toBe(2);
+  });
+
   it('keeps the B8 Carry reward observable without changing item unlock progression', () => {
     // Kampagnen-Map statt Testarena: Map 0 ist seit Block A eine loeschbare Stressarena und
     // darf keine Regression mehr tragen.
@@ -150,10 +182,10 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('exposes the complete Map 0-19 campaign audit and key GDD semantics', () => {
+  it('exposes the complete Map 0-17 campaign audit and key GDD semantics', () => {
     const audit = getCoopDefenseCampaignAudit();
     expect(audit.map((entry) => entry.mapId)).toEqual([
-      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
     ]);
     expect(audit.find((entry) => entry.mapId === '9')).toMatchObject({
       objective: 'survive',
@@ -364,7 +396,7 @@ describe('Coop defense map progression', () => {
 
   it('requires the bounded survival contract on every survival map', () => {
     const survivalMaps = COOP_DEFENSE_MAP_CONFIGS.filter(({ objective }) => objective === 'survive');
-    expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9', '14', '18', '19']);
+    expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9', '14']);
     for (const map of survivalMaps) {
       expect(map.surviveDurationSec).toBeGreaterThan(0);
       expect(map.respawnsPerPlayer).toBeGreaterThanOrEqual(0);

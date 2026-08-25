@@ -38,6 +38,7 @@ interface WorldItem {
 interface PedestalRuntime {
   id: number;
   constructionId?: number;
+  persistentId?: string;
   def: PowerUpDef;
   x: number;
   y: number;
@@ -131,6 +132,7 @@ export class PowerUpSystem {
   private pedestals   = new Map<number, PedestalRuntime>();
   private itemToPedestal = new Map<number, number>();
   private readonly constructionPedestalIds = new Map<number, number>();
+  private readonly persistentPedestalIds = new Map<string, number>();
   private nextDynamicPedestalId = 0;
   private nextUid     = 1;
   private nextNukeId  = 1;
@@ -180,6 +182,8 @@ export class PowerUpSystem {
       this.pedestals.delete(pedestalId);
     }
     this.constructionPedestalIds.clear();
+    for (const pedestalId of this.persistentPedestalIds.values()) this.pedestals.delete(pedestalId);
+    this.persistentPedestalIds.clear();
     this.nextDynamicPedestalId = this.getInitialDynamicPedestalId();
     this.nextUid = 1;
     this.nextNukeId = 1;
@@ -227,6 +231,41 @@ export class PowerUpSystem {
     const existingId = this.constructionPedestalIds.get(constructionId);
     if (existingId !== undefined) return this.pedestals.has(existingId);
 
+    return this.registerPedestal(defId, x, y, ownerColor, { constructionId });
+  }
+
+  /** Persistent base-owned pedestal variant; it has no construction-capacity identity. */
+  registerPersistentPedestal(
+    persistentId: string,
+    defId: string,
+    x: number,
+    y: number,
+    ownerColor?: number,
+  ): boolean {
+    const existingId = this.persistentPedestalIds.get(persistentId);
+    if (existingId !== undefined) return this.pedestals.has(existingId);
+    const registered = this.registerPedestal(defId, x, y, ownerColor, { persistentId });
+    if (registered) {
+      const pedestalId = this.nextDynamicPedestalId - 1;
+      this.persistentPedestalIds.set(persistentId, pedestalId);
+    }
+    return registered;
+  }
+
+  unregisterPersistentPedestal(persistentId: string): boolean {
+    const pedestalId = this.persistentPedestalIds.get(persistentId);
+    if (pedestalId === undefined) return false;
+    this.persistentPedestalIds.delete(persistentId);
+    return this.removePedestal(pedestalId);
+  }
+
+  private registerPedestal(
+    defId: string,
+    x: number,
+    y: number,
+    ownerColor: number | undefined,
+    identity: { readonly constructionId?: number; readonly persistentId?: string },
+  ): boolean {
     const def = POWERUP_DEFS[defId];
     const cfg = TIMED_POWERUP_PEDESTAL_CONFIGS[defId];
     if (!def || !cfg) return false;
@@ -235,7 +274,8 @@ export class PowerUpSystem {
     const pedestalId = this.nextDynamicPedestalId++;
     const pedestal: PedestalRuntime = {
       id: pedestalId,
-      constructionId,
+      constructionId: identity.constructionId,
+      persistentId: identity.persistentId,
       def,
       x,
       y,
@@ -246,7 +286,7 @@ export class PowerUpSystem {
       nextRespawnAt: 0,
     };
     this.pedestals.set(pedestalId, pedestal);
-    this.constructionPedestalIds.set(constructionId, pedestalId);
+    if (identity.constructionId !== undefined) this.constructionPedestalIds.set(identity.constructionId, pedestalId);
     this.pendingPedestalRemovalIds.delete(pedestalId);
     this.spawnPedestalItem(pedestal);
     return true;

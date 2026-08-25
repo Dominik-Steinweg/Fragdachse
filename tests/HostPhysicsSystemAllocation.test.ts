@@ -244,6 +244,18 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(call[1]).toBeGreaterThan(-50);
   });
 
+  it('keeps players stationary while a structure occupancy lock is active', () => {
+    const { system, players } = createHarness();
+    const player1 = createMockPlayer('player-1', 100, 100);
+    players.set('player-1', player1);
+
+    system.setPlayerMovementAllowedResolver(() => false);
+    system.addRecoil('player-1', 200, 100, 1000);
+    system.update(false);
+
+    expect(player1.setVelocity).toHaveBeenCalledWith(0, 0);
+  });
+
   it('does not call enemy.syncBar() during update – visual sync is deferred to EnemyManager.syncHostVisuals()', () => {
     const { system, enemies } = createHarness();
     const enemy1 = createMockEnemy('enemy-1', 100, 100, 40, 30);
@@ -265,4 +277,3 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(enemy2.syncBar).not.toHaveBeenCalled();
   });
 });
-

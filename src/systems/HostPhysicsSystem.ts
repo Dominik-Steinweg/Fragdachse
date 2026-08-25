@@ -115,6 +115,7 @@ export class HostPhysicsSystem {
   private dashGroundFireHandler: DashGroundFireHandler | null = null;
   private dashHoldEnabledResolver: ((playerId: string) => boolean) | null = null;
   private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
+  private playerMovementAllowedResolver: ((playerId: string) => boolean) | null = null;
   private enemyRockContactCallback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
@@ -161,6 +162,9 @@ export class HostPhysicsSystem {
   setDashGroundFireHandler(handler: DashGroundFireHandler | null): void { this.dashGroundFireHandler = handler; }
   setDashHoldEnabledResolver(resolver: ((playerId: string) => boolean) | null): void { this.dashHoldEnabledResolver = resolver; }
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
+  setPlayerMovementAllowedResolver(resolver: ((playerId: string) => boolean) | null): void {
+    this.playerMovementAllowedResolver = resolver;
+  }
   setEnemyRockContactCallback(
     callback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null,
   ): void {
@@ -327,6 +331,7 @@ export class HostPhysicsSystem {
   handleDashRPC(playerId: string, dx: number, dy: number): void {
     if (!this.bridge.canPlayerAct(playerId)) return;
     if (!this.combatSystem.isAlive(playerId)) return;
+    if (this.playerMovementAllowedResolver?.(playerId) === false) return;
     if (this.burrowSystem?.isDashBlocked(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
 
@@ -555,6 +560,14 @@ export class HostPhysicsSystem {
 
       const impulse = this.consumeImpulseVelocity(player.id, now);
       const forcedMovement = this.forcedMovement.get(player.id);
+
+      if (this.playerMovementAllowedResolver?.(player.id) === false) {
+        // Besetzte Strukturen sperren Bewegung einschließlich externem Rückstoß.
+        // Der Impuls wurde oben bewusst konsumiert, damit er nach dem Verlassen
+        // nicht verspätet auf den Spieler angewendet wird.
+        playerBody.setVelocity(0, 0);
+        continue;
+      }
 
       if (movementLocked) {
         const factor = this.getTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, now);

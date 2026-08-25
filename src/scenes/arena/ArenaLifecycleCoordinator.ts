@@ -145,7 +145,14 @@ import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveCon
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveArenaLoadProgress } from './ArenaLoadProgress';
 import { resolveArenaStartTime } from './ArenaStartTiming';
-import { getStoredPersistentBaseState } from '../../utils/localPreferences';
+import {
+  getStoredHighestUnlockedCoopDefenseMapId,
+  getStoredPersistentBaseOwnerId,
+  getStoredPersistentBaseRewardPlacements,
+  getStoredPersistentBaseState,
+  setStoredPersistentBaseContribution,
+  setStoredPersistentBaseRewardPlacements,
+} from '../../utils/localPreferences';
 import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRepository';
 import { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
 import { PersistentBaseRoomState, type GuestPersistentConstruction } from '../../persistentBase/PersistentBaseRoomState';
@@ -154,8 +161,22 @@ import {
   type PersistentRestoreCandidate,
   type PersistentRestoreToolDefinition,
 } from '../../persistentBase/PersistentBaseRestorePlanner';
-import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
+import { getPersistentBaseAnchor, isPersistentFootprintInsideZone } from '../../persistentBase/PersistentBaseZone';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
+import { PersistentBaseRewardState } from '../../persistentBase/PersistentBaseRewardState';
+import {
+  getPersistentBaseRewardDefinition,
+  type PersistentBaseRewardId,
+} from '../../config/persistentBaseRewards';
+import type {
+  PersistentBaseMutationOperation,
+  PersistentBaseMutationRequest,
+  StructureOccupancyRequest,
+} from '../../network/NetworkBridge';
+import {
+  StructureOccupancySystem,
+  type StructureOccupancyDefinition,
+} from '../../systems/StructureOccupancySystem';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -214,6 +235,9 @@ export class ArenaLifecycleCoordinator {
   private persistentBaseSession: PersistentBaseSession | null = null;
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
   private persistentBaseRadiusCells = 0;
+  private persistentBaseRewardState: PersistentBaseRewardState | null = null;
+  private readonly persistentBaseMutationRequests = new Map<string, Set<string>>();
+  private readonly persistentRewardOccupancyIds = new Set<string>();
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
 
   constructor(
@@ -234,6 +258,132 @@ export class ArenaLifecycleCoordinator {
 
   setRuntimeDiagnosticEventSink(sink: RuntimeDiagnosticEventSink | null): void {
     this.runtimeDiagnosticEventSink = sink;
+  }
+
+  getPersistentBaseRewardRuntimeStates(): readonly import('../../config/persistentBaseRewards').PersistentBaseRewardRuntimeState[] {
+    return this.persistentBaseRewardState?.getRuntimeStates(
+      getStoredHighestUnlockedCoopDefenseMapId(),
+      Date.now(),
+    ) ?? bridge.getPersistentBaseRewardRuntimeStates();
+  }
+
+  /** Host endpoint for editor/mission mutation requests registered by ArenaScene. */
+  handlePersistentBaseMutation(
+    playerId: string,
+    operation: PersistentBaseMutationOperation,
+    request: PersistentBaseMutationRequest,
+  ): void {
+    if (!bridge.isHost() || !request.requestId || !Number.isSafeInteger(request.revision)) return;
+    const seen = this.persistentBaseMutationRequests.get(playerId) ?? new Set<string>();
+    if (seen.has(request.requestId)) return;
+    seen.add(request.requestId);
+    this.persistentBaseMutationRequests.set(playerId, seen);
+
+    if (operation === 'reposition' || operation === 'remove') {
+      this.handleMissionPersistentConstructionMutation(playerId, operation, request);
+      return;
+    }
+    if (operation !== 'reward-place' && operation !== 'reward-unplace') return;
+    if (bridge.getGamePhase() !== 'ARENA' || !this.persistentBaseRewardState || !this.persistentBaseAnchor) return;
+    if (!this.ctx.placementSystem) return;
+
+    const rewardId = request.rewardId as PersistentBaseRewardId | undefined;
+    if (!rewardId) return;
+    const definition = rewardId ? getPersistentBaseRewardDefinition(rewardId) : null;
+    if (!definition) return;
+    const highestUnlockedMapId = getStoredHighestUnlockedCoopDefenseMapId();
+    const placement = this.persistentBaseRewardState.getPlacement(rewardId);
+    if (operation === 'reward-unplace') {
+      if (playerId !== bridge.getHostPlayerId() || !placement) return;
+      const runtime = this.findPersistentRewardRuntime(placement.persistentId);
+      if (!runtime || !this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
+      if (runtime && !this.ctx.structureOccupancySystem?.canMoveStructure(runtime.persistentId ?? '')) return;
+      if (!this.persistentBaseRewardState.unplace(rewardId, highestUnlockedMapId)) return;
+      if (runtime) this.removePersistentRewardRuntime(runtime);
+      this.publishPersistentBaseRewards();
+      return;
+    }
+    if (placement || request.relativeGridX === undefined || request.relativeGridY === undefined
+      || !Number.isSafeInteger(request.relativeGridX)
+      || !Number.isSafeInteger(request.relativeGridY)) return;
+    if (this.persistentBaseRewardState.getRuntimeState(rewardId, highestUnlockedMapId).availability !== 'available') return;
+    const gridX = this.persistentBaseAnchor.gridX + request.relativeGridX;
+    const gridY = this.persistentBaseAnchor.gridY + request.relativeGridY;
+    if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)) return;
+    if (!this.ctx.placementSystem.canMaterializeCells(definition.footprint, gridX, gridY)) return;
+    const runtime = this.ctx.placementSystem.materializePersistentReward(
+      definition,
+      gridX,
+      gridY,
+      request.angle ?? 0,
+      bridge.getHostPlayerId(),
+      bridge.getPlayerColor(bridge.getHostPlayerId()) ?? PLAYER_COLORS[0],
+      `reward-${rewardId}`,
+    );
+    if (!runtime) return;
+    const accepted = this.persistentBaseRewardState.place(rewardId, {
+      rewardId,
+      persistentId: runtime.persistentId ?? `reward-${rewardId}`,
+      relativeGridX: request.relativeGridX,
+      relativeGridY: request.relativeGridY,
+      angle: request.angle ?? 0,
+      placementOrder: this.nextPersistentRewardPlacementOrder(),
+    }, highestUnlockedMapId);
+    if (!accepted) {
+      this.ctx.placementSystem.removeRock(runtime.id);
+      return;
+    }
+    this.rockVisualHelper.materializePlaceableRock(runtime, true);
+    this.registerPersistentRewardOccupancy(runtime);
+    this.publishPersistentBaseRewards();
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_added',
+      source: runtime.kind === 'pedestal' ? 'placeable_pedestal' : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      obstacleId: runtime.id,
+      gridX: runtime.gridX,
+      gridY: runtime.gridY,
+    });
+  }
+
+  handleStructureEnterRequest(playerId: string, request: StructureOccupancyRequest): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA' || !this.ctx.structureOccupancySystem) return;
+    if (!request.requestId || (request.aimAngle !== undefined && !Number.isFinite(request.aimAngle))) return;
+    if (!bridge.canPlayerAct(playerId) || !this.ctx.combatSystem.isAlive(playerId)) return;
+    const aimAngle = request.aimAngle ?? 0;
+    const structureId = this.ctx.structureOccupancySystem.selectStructure(playerId, aimAngle);
+    if (request.structureId !== undefined && request.structureId !== structureId) return;
+    if (!structureId) return;
+    this.ctx.structureOccupancySystem.enter(playerId, structureId);
+    bridge.setStructureOccupancySnapshot(this.ctx.structureOccupancySystem.getSnapshot());
+  }
+
+  handleStructureExitRequest(playerId: string, _request: StructureOccupancyRequest): void {
+    if (!bridge.isHost() || !this.ctx.structureOccupancySystem) return;
+    if (!_request.requestId) return;
+    this.ctx.structureOccupancySystem.exit(playerId);
+    bridge.setStructureOccupancySnapshot(this.ctx.structureOccupancySystem.getSnapshot());
+  }
+
+  /** Keeps the generic occupancy registry aligned with reliable placeable-rock snapshots. */
+  syncPersistentBaseRewardOccupancy(): void {
+    const occupancy = this.ctx.structureOccupancySystem;
+    const placementSystem = this.ctx.placementSystem;
+    if (!occupancy || !placementSystem) return;
+    const liveIds = new Set<string>();
+    for (const runtime of placementSystem.getAllRuntimeRocks()) {
+      if (!runtime.persistentRewardId || !runtime.persistentId) continue;
+      liveIds.add(runtime.persistentId);
+      if (!this.persistentRewardOccupancyIds.has(runtime.persistentId)) {
+        this.registerPersistentRewardOccupancy(runtime);
+      }
+    }
+    for (const structureId of [...this.persistentRewardOccupancyIds]) {
+      if (liveIds.has(structureId)) continue;
+      occupancy.unregisterStructure(structureId);
+      this.persistentRewardOccupancyIds.delete(structureId);
+    }
+    const snapshot = bridge.getStructureOccupancySnapshot();
+    if (snapshot) occupancy.applySnapshot(snapshot);
   }
 
   /**
@@ -647,7 +797,21 @@ export class ArenaLifecycleCoordinator {
     const persistentSession = this.persistentBaseSession ?? this.ctx.persistentBaseSession;
     if (persistentSession) {
       if (roundConclusion === 'victory') {
-        persistentSession.commit((runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true);
+        const committed = persistentSession.commit(
+          (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+        );
+        const contribution = {
+          schemaVersion: 4 as const,
+          ownerId: getStoredPersistentBaseOwnerId(),
+          revision: committed.revision,
+          constructions: committed.constructions.map((construction) => ({
+            ...construction,
+            ownerId: construction.ownerId ?? getStoredPersistentBaseOwnerId(),
+            tool: { ...construction.tool },
+          })),
+        };
+        setStoredPersistentBaseContribution(contribution);
+        bridge.setLocalPersistentBaseContribution(contribution);
       } else {
         // Defeat, abort and non-Coop completion discard the round-local working copy.
         persistentSession.discard();
@@ -656,13 +820,28 @@ export class ArenaLifecycleCoordinator {
     if (this.persistentBaseRoomState.hasActiveMission) {
       if (roundConclusion === 'victory') {
         this.persistentBaseRoomState.commit((runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true);
+        for (const entry of this.persistentBaseRoomState.getCommittedPersonalContributionsByPlayer()) {
+          if (entry.playerId === bridge.getLocalPlayerId()) continue;
+          bridge.hostSetPlayerPersistentBaseContribution(entry.playerId, entry.contribution);
+        }
       } else {
         this.persistentBaseRoomState.rollback();
       }
     }
+    if (this.persistentBaseRewardState) {
+      if (roundConclusion === 'victory') {
+        this.persistentBaseRewardState.commitMission();
+        setStoredPersistentBaseRewardPlacements(this.persistentBaseRewardState.getPlacements());
+      } else {
+        this.persistentBaseRewardState.rollbackMission();
+      }
+      this.publishPersistentBaseRewards();
+      this.persistentBaseRewardState = null;
+    }
     // A new round must load the repository's newly committed baseline. During an in-round map
     // transition the field remains alive; it is cleared only after the round outcome is decided.
     this.persistentBaseSession = null;
+    this.persistentRewardOccupancyIds.clear();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
@@ -803,6 +982,7 @@ export class ArenaLifecycleCoordinator {
 
   private removeGuestSessionOwner(playerId: string): void {
     if (!bridge.isHost() || playerId === bridge.getLocalPlayerId()) return;
+    this.ctx.structureOccupancySystem?.onPlayerDisconnect(playerId);
     const runtimeIds = this.persistentBaseRoomState.removeGuestSessionOwner(playerId);
     let removedCount = 0;
     for (const runtimeId of runtimeIds) {
@@ -839,6 +1019,7 @@ export class ArenaLifecycleCoordinator {
     // Deshalb muessen sie auch beim Disconnect/Spectator-Wechsel vor dem naechsten Snapshot
     // entfernt werden.
     this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
+    this.ctx.structureOccupancySystem?.onPlayerDisconnect(playerId);
     this.ctx.energyInjectorSystem?.removeOwner(playerId);
     if (bridge.isHost()) {
       this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
@@ -1044,7 +1225,7 @@ export class ArenaLifecycleCoordinator {
           {
             anchor: getPersistentBaseAnchor(anchorBase),
             activeRadiusCells: committedState.radiusCells,
-            ownerId: bridge.getLocalPlayerId(),
+          ownerId: getStoredPersistentBaseOwnerId(),
           },
           committedState,
         );
@@ -1056,7 +1237,24 @@ export class ArenaLifecycleCoordinator {
       this.ctx.persistentBaseSession = this.persistentBaseSession;
       this.persistentBaseAnchor = getPersistentBaseAnchor(anchorBase);
       this.persistentBaseRadiusCells = this.persistentBaseSession.radiusCells;
+      if (!this.persistentBaseRewardState) {
+        this.persistentBaseRewardState = new PersistentBaseRewardState({
+          placements: getStoredPersistentBaseRewardPlacements(),
+          nowMs: Date.now(),
+        });
+        this.persistentBaseRewardState.beginMission();
+      }
+      this.persistentBaseRoomState.hydratePersonalContributions(
+        bridge.getConnectedPlayerIds()
+          .filter((playerId) => playerId !== bridge.getLocalPlayerId())
+          .map((playerId) => ({
+            playerId,
+            contribution: bridge.getPlayerPersistentBaseContribution(playerId),
+          }))
+          .filter((entry): entry is { playerId: string; contribution: import('../../persistentBase/PersistentBaseTypes').PersistentPlayerBaseContribution } => entry.contribution !== null),
+      );
       this.persistentBaseRoomState.beginMission();
+      this.publishPersistentBaseRewards();
     } else {
       this.persistentBaseAnchor = null;
       this.persistentBaseRadiusCells = 0;
@@ -1697,6 +1895,15 @@ export class ArenaLifecycleCoordinator {
       this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
     });
     this.ctx.combatSystem.setPlayerActionAllowedResolver((playerId) => bridge.canPlayerAct(playerId));
+    this.ctx.loadoutManager?.setPlayerWeaponRangeMultiplierResolver((playerId) => (
+      this.ctx.structureOccupancySystem?.getPlayerModifiers(playerId).weaponRangeMultiplier ?? 1
+    ));
+    this.ctx.combatSystem.setPlayerDirectDamageAllowedResolver((playerId) => (
+      this.ctx.structureOccupancySystem?.isPlayerProtectedFromDirectDamage(playerId) !== true
+    ));
+    this.ctx.hostPhysics.setPlayerMovementAllowedResolver((playerId) => (
+      this.ctx.structureOccupancySystem?.isActionAllowed(playerId, 'move') !== false
+    ));
     this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
       // Waffen- und Item-Reduktion addieren sich. Die Summe bleibt hier ungedeckelt; das
       // `CombatSystem` klemmt den fertigen Anteil auf [0,1], damit Schaden nicht negativ wird.
@@ -1976,6 +2183,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
+      this.ctx.structureOccupancySystem?.onPlayerDeath(playerId);
       bridge.recordPlayerDeath(playerId);
       this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
       this.ctx.coopDefenseRespawnBudgetSystem?.handlePlayerDeath(playerId);
@@ -2043,7 +2251,9 @@ export class ArenaLifecycleCoordinator {
           bridge.canPlayerReceiveRoundRewards(playerId),
           this.ctx.combatSystem.isAlive(playerId),
         ) ?? 1;
-        return base * itemMultiplier * teamMultiplier;
+        const occupancyMultiplier = this.ctx.structureOccupancySystem?.getPlayerModifiers(playerId)
+          .adrenalineRegenMultiplier ?? 1;
+        return base * itemMultiplier * teamMultiplier * occupancyMultiplier;
       });
       this.ctx.resourceSystem.setRageMaxResolver((playerId) => {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'ultimate.maxRage', 600) ?? 600;
@@ -2087,7 +2297,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.turretSystem.setTurretProvider(
         () => {
           const placeableTurrets = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
-            .filter((rock) => rock.kind === 'turret')
+            .filter((rock) => rock.kind === 'turret' && rock.persistentRewardId === undefined)
             .map((rock) => ({
               id: rock.id,
               x: ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
@@ -2145,9 +2355,10 @@ export class ArenaLifecycleCoordinator {
       this.ctx.teslaDomeSystem.setConstructionSourceProvider(
         () => {
           const turrets = this.ctx.turretSystem?.getTurrets() ?? [];
-          return (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
+            return (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
             .filter(rock => (
               rock.kind === 'turret'
+              && rock.persistentRewardId === undefined
               && rock.constructionId === 'tesla_turret'
               && rock.turretWeaponId === 'TURRET_TESLA'
               && rock.hp > 0
@@ -2202,7 +2413,7 @@ export class ArenaLifecycleCoordinator {
       );
       this.ctx.teslaDomeSystem.setTurretCallbacks(
         () => (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
-          .filter(r => r.kind === 'turret')
+          .filter(r => r.kind === 'turret' && r.persistentRewardId === undefined)
           .map(r => ({
             id: r.id,
             x: ARENA_OFFSET_X + r.gridX * CELL_SIZE + CELL_SIZE / 2,
@@ -2597,6 +2808,9 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!bridge.canPlayerAct(playerId)) return true;
         if (!this.ctx.combatSystem.isAlive(playerId)) return true;
+        const occupancyAction = slot === 'weapon1' || slot === 'weapon2' ? 'weapon'
+          : slot === 'utility' || slot === 'ultimate' ? 'utility' : null;
+        if (occupancyAction && this.ctx.structureOccupancySystem?.isActionAllowed(playerId, occupancyAction) === false) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
           if (this.ctx.burrowSystem?.isWeaponBlocked(playerId)) return true;
         }
@@ -2617,6 +2831,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.energyShieldSystem?.setBaseManager(this.ctx.baseManager);
       this.ctx.energyShieldSystem?.setWeaponUsageBlockedChecker((playerId) => {
         if (!this.ctx.combatSystem.isAlive(playerId)) return true;
+        if (this.ctx.structureOccupancySystem?.isActionAllowed(playerId, 'weapon') === false) return true;
         if (this.ctx.burrowSystem?.isWeaponBlocked(playerId)) return true;
         if (this.ctx.hostPhysics?.isDashBurst(playerId)) return true;
         return false;
@@ -3014,6 +3229,44 @@ export class ArenaLifecycleCoordinator {
     // Ambient gar nicht erfasst; über hellem Boden brennen sie ohne diese Dämpfung aus.
     setEmissiveScale(resolveSkyState(runtimeTimeOfDayMinutes).emissiveScale);
 
+    this.ctx.structureOccupancySystem = new StructureOccupancySystem({
+      getPlayerPosition: (playerId) => {
+        const player = this.ctx.playerManager.getPlayer(playerId);
+        return player ? { x: player.sprite.x, y: player.sprite.y } : null;
+      },
+      getStructurePosition: (structureId) => {
+        const runtime = this.ctx.placementSystem?.getAllRuntimeRocks()
+          .find((candidate) => candidate.persistentId === structureId);
+        if (!runtime) return null;
+        return this.rockVisualHelper.gridToWorld(runtime.gridX, runtime.gridY);
+      },
+      getTeamPlayerIds: () => bridge.getConnectedPlayerIds(),
+      onPlayerLockChanged: () => {
+        if (bridge.isHost()) bridge.setStructureOccupancySnapshot(this.ctx.structureOccupancySystem?.getSnapshot() ?? null);
+      },
+      onStructureDestroyed: (_structureId, occupants) => {
+        if (!bridge.isHost()) return;
+        for (const playerId of occupants) {
+          this.ctx.combatSystem.applyDamage(
+            playerId,
+            Number.MAX_SAFE_INTEGER,
+            true,
+            undefined,
+            'persistent-base.structure-destroyed',
+            undefined,
+            { allowTeamDamage: true, ignoreDirectDamageProtection: true, damageKind: 'explosion' },
+          );
+        }
+        bridge.setStructureOccupancySnapshot(this.ctx.structureOccupancySystem?.getSnapshot() ?? null);
+      },
+    });
+    if (bridge.isHost()) {
+      this.ctx.structureOccupancySystem.applySnapshot(bridge.getStructureOccupancySnapshot());
+    }
+    this.ctx.placementSystem?.setPersistentRewardDestroyedHandler(
+      bridge.isHost() ? (runtime) => this.handlePersistentRewardDestroyed(runtime) : null,
+    );
+
     // Reset per-round state in coordinators
     this.hostUpdate.resetPerRound();
     this.clientUpdate.resetPerRound();
@@ -3132,6 +3385,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseRespawnBudgetSystem = null;
     this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
     this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
+    this.ctx.hostPhysics.setPlayerMovementAllowedResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.combatSystem.setEnemyDeathCallback(null);
     this.ctx.combatSystem.setPlayerMaxHpResolver(null);
@@ -3140,6 +3394,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setRespawnCallback(null);
     this.ctx.combatSystem.setAuthoritativePositionResetCallback(null);
     this.ctx.combatSystem.setPlayerActionAllowedResolver(null);
+    this.ctx.loadoutManager?.setPlayerWeaponRangeMultiplierResolver(null);
+    this.ctx.combatSystem.setPlayerDirectDamageAllowedResolver(null);
     this.ctx.combatSystem.setPlayerDamageReductionResolver(null);
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
     this.ctx.combatSystem.setPlayerMaxArmorResolver(null);
@@ -3169,6 +3425,13 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.persistentBaseSession = null;
     this.ctx.placementSystem = null;
+    this.ctx.structureOccupancySystem?.onMapChange();
+    for (const structureId of this.persistentRewardOccupancyIds) {
+      this.ctx.structureOccupancySystem?.unregisterStructure(structureId);
+    }
+    this.persistentRewardOccupancyIds.clear();
+    if (bridge.isHost()) bridge.setStructureOccupancySnapshot(null);
+    this.ctx.structureOccupancySystem = null;
     this.ctx.turretSystem?.setTurretDamageBuffProvider(null);
     this.ctx.turretSystem?.setTurretDamageMultiplierProvider(null);
     this.ctx.turretSystem?.setFocusTargetProvider(null);
@@ -3364,14 +3627,52 @@ export class ArenaLifecycleCoordinator {
     bases: readonly BaseSpec[],
   ): void {
     const session = this.ctx.persistentBaseSession;
-    if (!session || !mapConfig?.persistentBase || !this.ctx.placementSystem) return;
+    if (!mapConfig?.persistentBase || !this.ctx.placementSystem) return;
 
     const anchorBase = bases.find((base) => base.id === mapConfig.persistentBase!.baseId);
     const hostId = bridge.getLocalPlayerId();
+    if (!anchorBase) return;
+
+    if (bridge.isHost() && this.persistentBaseRewardState) {
+      for (const placement of this.persistentBaseRewardState.getPlacements()) {
+        const definition = getPersistentBaseRewardDefinition(placement.rewardId);
+        const availability = this.persistentBaseRewardState.getRuntimeState(
+          placement.rewardId,
+          getStoredHighestUnlockedCoopDefenseMapId(),
+        ).availability;
+        if (!definition || availability !== 'placed') continue;
+        const gridX = getPersistentBaseAnchor(anchorBase).gridX + placement.relativeGridX;
+        const gridY = getPersistentBaseAnchor(anchorBase).gridY + placement.relativeGridY;
+        const runtime = this.ctx.placementSystem.materializePersistentReward(
+          definition,
+          gridX,
+          gridY,
+          placement.angle,
+          hostId,
+          bridge.getPlayerColor(hostId) ?? PLAYER_COLORS[0],
+          placement.persistentId,
+        );
+        if (!runtime) continue;
+        this.rockVisualHelper.materializePlaceableRock(runtime, false);
+        if (definition.powerUpDefId) {
+          const world = this.rockVisualHelper.gridToWorld(runtime.gridX, runtime.gridY);
+          this.ctx.powerUpSystem?.registerPersistentPedestal(
+            placement.persistentId,
+            definition.powerUpDefId,
+            world.x,
+            world.y,
+            runtime.ownerColor,
+          );
+        }
+        this.registerPersistentRewardOccupancy(runtime);
+        this.emitPersistentRestoreAdded(runtime);
+      }
+      this.publishPersistentBaseRewards();
+    }
+    if (!session) return;
     const committed = bridge.getPlayerCommittedLoadout(hostId);
     const tools = this.buildPersistentRestoreTools(hostId, committed?.coopDefenseProfile ?? null);
     const capacityMax = this.getConstructionCapacity(hostId);
-    if (!anchorBase) return;
 
     const plan = planPersistentBaseRestore({
       state: session.workingState,
@@ -3442,6 +3743,226 @@ export class ArenaLifecycleCoordinator {
         this.emitPersistentRestoreAdded(runtime);
       }
     }
+  }
+
+  private handleMissionPersistentConstructionMutation(
+    playerId: string,
+    operation: 'remove' | 'reposition',
+    request: PersistentBaseMutationRequest,
+  ): void {
+    if (bridge.getGamePhase() !== 'ARENA' || !this.ctx.placementSystem || !this.persistentBaseAnchor) return;
+    if (!request.persistentId) return;
+    const runtime = this.ctx.placementSystem.getAllRuntimeRocks()
+      .find((candidate) => candidate.persistentId === request.persistentId);
+    if (!runtime) return;
+    const contributionOwnerId = bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId;
+    const ownsRuntime = runtime.ownerId === playerId
+      || (contributionOwnerId !== undefined && runtime.ownerId === contributionOwnerId);
+    if (!this.ctx.structureOccupancySystem?.canMoveStructure(request.persistentId)) return;
+
+    const footprint = this.getPersistentRuntimeFootprint(runtime);
+    if (!footprint) return;
+    if (operation === 'remove') {
+      if (runtime.persistentRewardId) {
+        if (playerId !== bridge.getHostPlayerId() || !this.persistentBaseRewardState) return;
+        if (!this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
+        const rewardId = runtime.persistentRewardId;
+        if (!this.persistentBaseRewardState.unplace(rewardId, getStoredHighestUnlockedCoopDefenseMapId())) return;
+        this.removePersistentRewardRuntime(runtime);
+        this.publishPersistentBaseRewards();
+        return;
+      }
+      if (!ownsRuntime) return;
+      if (!this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
+      const removed = this.ctx.placementSystem.removeRock(runtime.id);
+      if (!removed) return;
+      this.finalizeDismantledConstruction(removed, false);
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeable_removed',
+        source: removed.kind === 'rock' ? 'placeable_rock' : removed.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
+        obstacleId: removed.id,
+        gridX: removed.gridX,
+        gridY: removed.gridY,
+      });
+      return;
+    }
+
+    if (request.relativeGridX === undefined || request.relativeGridY === undefined
+      || !Number.isSafeInteger(request.relativeGridX)
+      || !Number.isSafeInteger(request.relativeGridY)
+      || request.angle === undefined
+      || !Number.isFinite(request.angle)) return;
+    const angle = request.angle;
+    const gridX = this.persistentBaseAnchor.gridX + request.relativeGridX;
+    const gridY = this.persistentBaseAnchor.gridY + request.relativeGridY;
+    if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)) return;
+    if (!isPersistentFootprintInsideZone(
+      gridX,
+      gridY,
+      footprint,
+      this.persistentBaseAnchor,
+      this.persistentBaseRadiusCells,
+    )) return;
+    if (runtime.persistentRewardId && playerId !== bridge.getHostPlayerId()) return;
+    if (!runtime.persistentRewardId && !ownsRuntime) return;
+    const previous = { ...runtime };
+    const moved = this.ctx.placementSystem.repositionRuntimeRock(
+      runtime.id,
+      gridX,
+      gridY,
+      footprint,
+      angle,
+    );
+    if (!moved) return;
+    // Rebuild the physics proxy as well as the visual. This preserves the runtime ID and all
+    // metadata while ensuring a 2x2 or rotated object cannot leave a stale collision body behind.
+    this.rockVisualHelper.removePlaceableRockVisual(previous, false);
+    this.rockVisualHelper.materializePlaceableRock(moved, false);
+    if (runtime.persistentRewardId) {
+      const placement = this.persistentBaseRewardState?.getPlacement(runtime.persistentRewardId);
+      if (!placement || !this.persistentBaseRewardState?.reposition(
+        runtime.persistentRewardId,
+        {
+          ...placement,
+          relativeGridX: request.relativeGridX,
+          relativeGridY: request.relativeGridY,
+          angle,
+        },
+        getStoredHighestUnlockedCoopDefenseMapId(),
+      )) {
+        // The runtime move was already validated against the same target. Restore the exact
+        // source if the persistent state unexpectedly rejects it.
+        this.ctx.placementSystem.repositionRuntimeRock(runtime.id, previous.gridX, previous.gridY, footprint, previous.angle);
+        this.rockVisualHelper.removePlaceableRockVisual(moved, false);
+        this.rockVisualHelper.materializePlaceableRock(previous, false);
+        return;
+      }
+    } else if (runtime.ownership === 'guest-session') {
+      this.persistentBaseRoomState.updateRuntimePlacement(
+        runtime.id,
+        gridX,
+        gridY,
+        angle,
+        this.persistentBaseAnchor,
+      );
+    } else {
+      this.persistentBaseSession?.updateRuntimePlacement(runtime.id, gridX, gridY, angle);
+    }
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_removed',
+      source: previous.kind === 'rock' ? 'placeable_rock' : previous.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
+      obstacleId: previous.id,
+      gridX: previous.gridX,
+      gridY: previous.gridY,
+    });
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_added',
+      source: moved.kind === 'rock' ? 'placeable_rock' : moved.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
+      obstacleId: moved.id,
+      gridX: moved.gridX,
+      gridY: moved.gridY,
+    });
+  }
+
+  private isPersistentBaseMutationInRange(playerId: string, gridX: number, gridY: number): boolean {
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    const placementSystem = this.ctx.placementSystem;
+    if (!player || !placementSystem || !player.sprite.active || !this.ctx.combatSystem.isAlive(playerId)) return false;
+    const target = placementSystem.getWorldPointForCell(gridX, gridY);
+    return Math.hypot(player.sprite.x - target.x, player.sprite.y - target.y) <= COOP_DEFENSE_DISMANTLE_RANGE;
+  }
+
+  private getPersistentRuntimeFootprint(
+    runtime: SyncedPlaceableRock,
+  ): readonly { readonly dx: number; readonly dy: number }[] | null {
+    if (runtime.persistentRewardId) {
+      return getPersistentBaseRewardDefinition(runtime.persistentRewardId)?.footprint ?? null;
+    }
+    if (runtime.footprint && runtime.footprint.length > 0) return runtime.footprint;
+    if (runtime.constructionId) {
+      return getCoopDefenseConstructionDefinition(runtime.constructionId).footprint;
+    }
+    if (runtime.toolRef?.kind === 'utility') {
+      const config = getUtilityConfigForMode(runtime.toolRef.id, bridge.getGameMode());
+      if (config && 'placeable' in config) return config.placeable.footprint;
+    }
+    return null;
+  }
+
+  private findPersistentRewardRuntime(persistentId: string): SyncedPlaceableRock | null {
+    return this.ctx.placementSystem?.getAllRuntimeRocks()
+      .find((runtime) => runtime.persistentId === persistentId && runtime.persistentRewardId !== undefined) ?? null;
+  }
+
+  private removePersistentRewardRuntime(runtime: SyncedPlaceableRock): void {
+    if (runtime.persistentId) {
+      this.ctx.structureOccupancySystem?.unregisterStructure(runtime.persistentId);
+      this.persistentRewardOccupancyIds.delete(runtime.persistentId);
+    }
+    if (runtime.persistentId) this.ctx.powerUpSystem?.unregisterPersistentPedestal(runtime.persistentId);
+    this.ctx.placementSystem?.removeRock(runtime.id);
+    this.rockVisualHelper.removePlaceableRockVisual(runtime, false);
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_removed',
+      source: runtime.kind === 'pedestal' ? 'placeable_pedestal' : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      obstacleId: runtime.id,
+      gridX: runtime.gridX,
+      gridY: runtime.gridY,
+    });
+  }
+
+  private handlePersistentRewardDestroyed(runtime: SyncedPlaceableRock): void {
+    if (!bridge.isHost() || !runtime.persistentRewardId || !this.persistentBaseRewardState) return;
+    const persistentId = runtime.persistentId;
+    if (persistentId) this.ctx.structureOccupancySystem?.onStructureDestroyed(persistentId);
+    const changed = this.persistentBaseRewardState.markRuntimeDestroyed(
+      runtime.persistentRewardId,
+      getStoredHighestUnlockedCoopDefenseMapId(),
+      Date.now(),
+    );
+    if (changed) this.publishPersistentBaseRewards();
+  }
+
+  private nextPersistentRewardPlacementOrder(): number {
+    return (this.persistentBaseRewardState?.getPlacements() ?? [])
+      .reduce((max, placement) => Math.max(max, placement.placementOrder), -1) + 1;
+  }
+
+  private publishPersistentBaseRewards(): void {
+    if (!bridge.isHost()) return;
+    const state = this.persistentBaseRewardState;
+    if (!state) {
+      bridge.setPersistentBaseRewardRuntimeStates(null);
+      return;
+    }
+    state.setNow(Date.now());
+    bridge.setPersistentBaseRewardRuntimeStates(
+      state.getRuntimeStates(getStoredHighestUnlockedCoopDefenseMapId(), Date.now()),
+    );
+  }
+
+  private registerPersistentRewardOccupancy(runtime: SyncedPlaceableRock): void {
+    const occupancy = this.ctx.structureOccupancySystem;
+    const persistentId = runtime.persistentId;
+    const rewardId = runtime.persistentRewardId;
+    if (!occupancy || !persistentId || !rewardId) return;
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    if (!definition || (definition.constructionType !== 'watchtower' && definition.constructionType !== 'burrow')) return;
+    occupancy.registerStructure({
+      id: persistentId,
+      kind: definition.constructionType,
+      capacity: definition.constructionType === 'watchtower' ? 4 : 'team',
+      interactionRange: CELL_SIZE * 1.5,
+      movementLocked: true,
+      weaponsAllowed: definition.constructionType === 'watchtower',
+      utilityAllowed: definition.constructionType === 'watchtower',
+      dashAllowed: false,
+      constructionAllowed: false,
+      directDamageImmune: definition.constructionType === 'burrow',
+      weaponRangeMultiplier: definition.weaponRangeMultiplier,
+      adrenalineRegenMultiplier: definition.adrenalineRegenMultiplier,
+    } satisfies StructureOccupancyDefinition);
+    this.persistentRewardOccupancyIds.add(persistentId);
   }
 
   private emitPersistentRestoreAdded(runtime: SyncedPlaceableRock): void {
@@ -3599,6 +4120,7 @@ export class ArenaLifecycleCoordinator {
         footprint,
         this.persistentBaseAnchor,
         this.persistentBaseRadiusCells,
+        bridge.getPlayerPersistentBaseContribution(runtime.ownerId)?.ownerId ?? runtime.ownerId,
       );
       return;
     }
@@ -4506,6 +5028,10 @@ export class ArenaLifecycleCoordinator {
   /** Gemeinsamer externer Hindernisschaden fuer Projektile und Gegner-Spezialeffekte. */
   private resolveObstacleDamage(index: number, damage: number, attackerId: string): number {
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(index);
+    if (runtimeRock?.persistentRewardId) {
+      const reward = getPersistentBaseRewardDefinition(runtimeRock.persistentRewardId);
+      if (reward?.runtimeDestructible !== true) return 0;
+    }
     return this.ctx.combatSystem.resolveExternalTargetDamage(
       {
         targetType: runtimeRock?.constructionId ? 'construction' : 'rock',

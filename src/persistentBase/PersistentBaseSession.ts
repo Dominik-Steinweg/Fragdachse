@@ -2,9 +2,11 @@ import type { SyncedPlaceableRock } from '../types';
 import type { PersistentBaseRepositoryPort } from './PersistentBaseRepository';
 import {
   clonePersistentBaseState,
+  clonePersistentPlayerBaseContribution,
   type PersistentBaseAnchor,
   type PersistentBaseState,
   type PersistentConstruction,
+  type PersistentPlayerBaseContribution,
   type PersistentRuntimeMetadata,
   type PersistentToolRef,
   normalizePersistentToolRef,
@@ -69,6 +71,39 @@ export class PersistentBaseSession {
     return this.activeRadiusCells;
   }
 
+  getPersonalContribution(ownerId = this.ownerId): PersistentPlayerBaseContribution {
+    return clonePersistentPlayerBaseContribution({
+      schemaVersion: 4,
+      ownerId,
+      revision: this.baseline.revision,
+      constructions: this.workingState.constructions.map((entry) => ({
+        ...entry,
+        ownerId: entry.ownerId ?? ownerId,
+        tool: { ...entry.tool },
+      })),
+    });
+  }
+
+  getRuntimeIdForPersistentId(persistentId: string): number | null {
+    return this.baselineRuntimeIds.get(persistentId)
+      ?? [...this.runtimeBlueprints.entries()].find(([, blueprint]) => blueprint.persistentId === persistentId)?.[0]
+      ?? null;
+  }
+
+  /** Updates the mission working copy only after the caller has validated the atomic move. */
+  updateRuntimePlacement(runtimeId: number, gridX: number, gridY: number, angle: number): boolean {
+    const current = this.runtimeBlueprints.get(runtimeId);
+    if (!current) return false;
+    const next = {
+      ...current,
+      relativeGridX: gridX - this.anchor.gridX,
+      relativeGridY: gridY - this.anchor.gridY,
+      angle: Number.isFinite(angle) ? angle : current.angle,
+    };
+    this.runtimeBlueprints.set(runtimeId, next);
+    return true;
+  }
+
   rebindArena(anchor: PersistentBaseAnchor, activeRadiusCells: number): void {
     this.anchor = { ...anchor };
     this.activeRadiusCells = activeRadiusCells;
@@ -83,7 +118,11 @@ export class PersistentBaseSession {
     if (this.baseline.constructions.some((entry) => entry.persistentId === blueprint.persistentId)) {
       this.baselineRuntimeIds.set(blueprint.persistentId, runtimeId);
     }
-    this.runtimeBlueprints.set(runtimeId, blueprint);
+    this.runtimeBlueprints.set(runtimeId, {
+      ...blueprint,
+      ownerId: blueprint.ownerId ?? this.ownerId,
+      tool: { ...blueprint.tool },
+    });
   }
 
   registerNew(
@@ -117,6 +156,7 @@ export class PersistentBaseSession {
       relativeGridY: runtimeRock.gridY - this.anchor.gridY,
       angle: Number.isFinite(runtimeRock.angle) ? runtimeRock.angle : 0,
       placementOrder,
+      ownerId: this.ownerId,
     };
     this.runtimeBlueprints.set(runtimeRock.id, blueprint);
     return { persistentId, placementOrder, origin: 'new' };

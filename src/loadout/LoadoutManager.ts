@@ -153,6 +153,7 @@ export class LoadoutManager {
   private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
   private decoySystem: import('../systems/DecoySystem').DecoySystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
+  private playerWeaponRangeMultiplierResolver: ((playerId: string) => number) | null = null;
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
@@ -658,6 +659,11 @@ export class LoadoutManager {
   /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
   setActionBlockedChecker(checker: ((playerId: string, slot: LoadoutSlot) => boolean) | null): void {
     this.actionBlockedChecker = checker;
+  }
+
+  /** Extensible player-side weapon modifier, e.g. a persistent-base watchtower bonus. */
+  setPlayerWeaponRangeMultiplierResolver(resolver: ((playerId: string) => number) | null): void {
+    this.playerWeaponRangeMultiplierResolver = resolver;
   }
 
   setPlaceableRockHandler(handler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null): void {
@@ -1693,6 +1699,10 @@ export class LoadoutManager {
     let shotCfg = (cfg.warmupBurnThreshold ?? 0) > 0 && warmupFraction < (cfg.warmupBurnThreshold ?? 0)
       ? { ...cfg, burnOnHit: undefined }
       : cfg;
+    const weaponRangeMultiplier = Math.max(0, this.playerWeaponRangeMultiplierResolver?.(playerId) ?? 1);
+    if (weaponRangeMultiplier !== 1) {
+      shotCfg = { ...shotCfg, range: shotCfg.range * weaponRangeMultiplier };
+    }
     if (cfg.id === 'AWP' && cfg.awpCharge) {
       const chargeProgress = Phaser.Math.Clamp(params?.scopeChargeProgress ?? 0, 0, 1);
       const fullyCharged = chargeProgress >= 0.999;

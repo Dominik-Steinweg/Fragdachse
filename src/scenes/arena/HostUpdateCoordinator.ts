@@ -40,6 +40,10 @@ import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../sy
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
+import {
+  getPersistentBaseRewardDefinition,
+  isPersistentBaseRewardEnemyTarget,
+} from '../../config/persistentBaseRewards';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -1794,6 +1798,10 @@ export class HostUpdateCoordinator {
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */
   private resolveObstacleDamage(index: number, damage: number, attackerId: string): number {
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(index);
+    if (runtimeRock?.persistentRewardId) {
+      const reward = getPersistentBaseRewardDefinition(runtimeRock.persistentRewardId);
+      if (reward?.runtimeDestructible !== true) return 0;
+    }
     return this.ctx.combatSystem.resolveExternalTargetDamage(
       {
         targetType: runtimeRock?.constructionId ? 'construction' : 'rock',
@@ -2269,6 +2277,7 @@ export class HostUpdateCoordinator {
             player.sprite.active
             && this.ctx.combatSystem.isAlive(player.id)
             && !(this.ctx.burrowSystem?.isBurrowed(player.id) ?? false)
+            && (this.ctx.structureOccupancySystem?.isPlayerTargetableToEnemies(player.id) ?? true)
             && !this.ctx.decoySystem.isStealthed(player.id)
           ),
         });
@@ -2294,7 +2303,10 @@ export class HostUpdateCoordinator {
 
       if (strategicFlowFieldService) {
         for (const construction of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-          if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+          if (construction.hp <= 0
+            || (construction.kind !== 'turret'
+              && (!construction.persistentRewardId
+                || !isPersistentBaseRewardEnemyTarget(construction.persistentRewardId)))) continue;
           const world = strategicFlowFieldService.gridToWorld(construction.gridX, construction.gridY);
           if (!world) continue;
           candidates.push({
