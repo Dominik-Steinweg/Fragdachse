@@ -6,7 +6,7 @@
  */
 import * as Phaser from 'phaser';
 import { ARMOR_COLOR, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
-import type { ArenaHUDData } from './ArenaHUD';
+import { getUtilityHudDisplayName, type ArenaHUDData } from './ArenaHUD';
 import type { CoopDefenseEncounterPresentationState } from '../types';
 import type { CoopDefenseLifeStatusViewModel } from './coopDefenseLifeStatusModel';
 import {
@@ -1788,6 +1788,7 @@ export class CenterHUD {
     }
 
     const showUtility = utilityHeld
+      || data.utilityAction !== undefined
       || data.utilityCooldownFrac > 0.001
       || now < this.utilityRevealUntil
       || (data.isUtilityOverridden ?? false);
@@ -1815,7 +1816,7 @@ export class CenterHUD {
     if (showUtility) {
       this.showLowerSection(
         this.utilitySection,
-        t('ui.hud.utility', { name: data.utilityId ? getContentDisplayName(data.utilityId, getLocale()) : t('ui.common.unknown') }),
+        t('ui.hud.utility', { name: getUtilityHudDisplayName(data.utilityId, data.utilityAction) }),
         Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
         CENTER_X,
         nextBottom - BOTTOM_STACK_TOTAL_H,

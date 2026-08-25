@@ -4351,6 +4351,7 @@ export class ArenaLifecycleCoordinator {
 
   private resetLocalArenaHudState(): void {
     const config = this.clientUpdate.getLocalUltimateConfig();
+    const inspectorUtilityAction = this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
     const hudData = buildInitialLocalArenaHudData({
       maxArmor: this.clientUpdate.getLocalMaxArmor(),
       maxAdrenaline: this.clientUpdate.getLocalMaxAdrenaline(),
@@ -4358,7 +4359,8 @@ export class ArenaLifecycleCoordinator {
       ultimateRequiredRage: config.rageRequired,
       ultimateThresholds:   this.clientUpdate.getLocalUltimateThresholds(),
       ultimateId:            config.id,
-      utilityId:             this.clientUpdate.getLocalUtilityConfig().id,
+      utilityId:             inspectorUtilityAction ? undefined : this.clientUpdate.getLocalUtilityConfig().id,
+      utilityAction:         inspectorUtilityAction ?? undefined,
       weapon2AdrenalineCost: this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
     });
     this.ctx.leftPanel.updateArenaHUD(hudData);

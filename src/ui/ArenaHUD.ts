@@ -22,7 +22,7 @@ import {
   COLORS, toCssColor, GAME_HEIGHT,
 } from '../config';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
-import type { ShieldBuffHudState } from '../types';
+import type { InspectorUtilityAction, ShieldBuffHudState } from '../types';
 import {
   type LivingBarPalette,
   rgbStr, createGradientTexture,
@@ -257,6 +257,7 @@ export interface ArenaHUDData {
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
   utilityId?:               string;
+  utilityAction?:           InspectorUtilityAction;
   utilityCapacityCost?:     number;
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?:     boolean;
@@ -266,6 +267,15 @@ export interface ArenaHUDData {
   /** Nur beim Ingenieur gesetzt; `constructionCapacityMax = 0` blendet die Leiste aus. */
   constructionCapacityUsed?: number;
   constructionCapacityMax?:  number;
+}
+
+export function getUtilityHudDisplayName(
+  utilityId: string | undefined,
+  utilityAction: InspectorUtilityAction | undefined,
+): string {
+  if (utilityAction === 'dismantle') return t('ui.radial.dismantle');
+  if (utilityAction === 'global-dismantle') return t('ui.radial.dismantleAll');
+  return utilityId ? getContentDisplayName(utilityId, getLocale()) : t('ui.common.unknown');
 }
 
 // ── Class ───────────────────────────────────────────────────────────────────
@@ -597,8 +607,8 @@ export class ArenaHUD {
       this.setAdrenalinTickCost(data.weapon2AdrenalineCost ?? 0);
     }
 
-    if (data.utilityId) {
-      const utilityName = getContentDisplayName(data.utilityId, getLocale());
+    if (data.utilityId || data.utilityAction) {
+      const utilityName = getUtilityHudDisplayName(data.utilityId, data.utilityAction);
       const capacitySuffix = (data.utilityCapacityCost ?? 0) > 0
         ? ` · ${t('ui.hud.capacityCost', { cost: data.utilityCapacityCost ?? 0 })}`
         : '';

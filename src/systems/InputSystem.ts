@@ -1,9 +1,10 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ConstructionId, LoadoutToolRef, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, ConstructionId, InspectorUtilityAction, LoadoutToolRef, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
+  COLORS,
 } from '../config';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY } from '../config/coopDefenseConstructions';
 import { quantizeAngle } from '../utils/angle';
@@ -235,6 +236,14 @@ export class InputSystem {
 
   getSelectedInspectorToolForHud(): LoadoutToolRef | null {
     return this.getSelectedInspectorTool();
+  }
+
+  /** Liefert die festen Rueckbau-Eintraege fuer die HUD-Anzeige separat vom Loadout-Tool. */
+  getSelectedInspectorUtilityActionForHud(): InspectorUtilityAction | null {
+    if (!this.isInspectorMode()) return null;
+    if (this.inspectorDismantleSelected) return 'dismantle';
+    if (this.inspectorGlobalDismantleSelected) return 'global-dismantle';
+    return null;
   }
 
   /** Ist aktuell der Rueckbau statt eines Werkzeugs im Rad gewaehlt? */
@@ -508,16 +517,22 @@ export class InputSystem {
   getAimAngle(): number { return this.currentAimAngle; }
 
   isUtilityPreviewActive(): boolean {
-    return this.utilityHoldActive;
+    return this.utilityHoldActive || this.globalDismantleHoldStartedAt !== null;
   }
 
   isUtilityHudDisplayActive(): boolean {
     if (!this.inputEnabled) return false;
-    return !!this.keyE?.isDown || this.utilityHoldActive || this.utilityTargetingActive || this.utilityPlacementActive;
+    return !!this.keyE?.isDown
+      || this.utilityHoldActive
+      || this.utilityTargetingActive
+      || this.utilityPlacementActive
+      || this.globalDismantleHoldStartedAt !== null
+      || this.inspectorConstructionPlacementActive
+      || this.inspectorDismantlePlacementActive;
   }
 
   isUtilityChargePreviewActive(): boolean {
-    return this.utilityHoldActive;
+    return this.utilityHoldActive || this.globalDismantleHoldStartedAt !== null;
   }
 
   isUtilityTargetingActive(): boolean {
@@ -592,6 +607,23 @@ export class InputSystem {
   }
 
   getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
+    if (this.globalDismantleHoldStartedAt !== null) {
+      const sprite = this.getLocalSprite();
+      if (!sprite) return undefined;
+      const pointer = this.scene.input.activePointer;
+      const pointerWorld = this.getPointerWorldPoint(pointer);
+      const clampedTarget = clampPointToArena(pointerWorld.x, pointerWorld.y);
+      return {
+        angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y),
+        chargeFraction: Math.min(1, Math.max(0, (Date.now() - this.globalDismantleHoldStartedAt) / 1_000)),
+        cooldownFrac: 0,
+        isBlocked: false,
+        minThrowSpeed: 0,
+        maxThrowSpeed: 0,
+        isGateCharge: true,
+        colorOverride: COLORS.GOLD_2,
+      };
+    }
     if (!this.utilityHoldActive) return undefined;
     const sprite = this.getLocalSprite();
     const cfg = this.getChargeableUtilityConfig();

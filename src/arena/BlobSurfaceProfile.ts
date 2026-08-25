@@ -251,8 +251,8 @@ export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
 
 /**
  * Subtiles Profil fuer den Kies-Blob. Das authored `kies`-Sheet traegt bereits sein eigenes
- * Mikrodetail; deshalb bekommt der Kies keine Dirt-Mottle-Passes, wohl aber dieselbe
- * deterministische Corner-Shading-Regel fuer weiche, chunkstabile Materialvariation.
+ * Mikrodetail; die zusaetzlichen, weich gekappten Mottle-Passes brechen die sichtbare
+ * Rasterphase auf und bleiben farblich beim Kiesmaterial.
  */
 export const GRAVEL_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   id: 'persistentGravel',
@@ -271,10 +271,30 @@ export const GRAVEL_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
     textureSize: CELL_SIZE,
     blend: 'normal',
     materialMode: 'native',
-    passes: [],
+    passes: [
+      // Viele kleine, nicht zellzentrierte Stamps brechen die wiederkehrende Blob-Textur.
+      { perCell: 1.5, minScale: 0.58, maxScale: 1.7, alpha: 0.48 },
+      // Wenige groessere Formen verbinden benachbarte Zellen, ohne den Zonenrand zu verwischen.
+      { perCell: 0.28, minScale: 2.2, maxScale: 4.0, alpha: 0.5 },
+    ],
     falloff: [
       [0, 'rgba(0,0,0,0)'],
       [1, 'rgba(0,0,0,1)'],
     ],
   },
+  additionalMottleLayers: [{
+    // A darker native pass restores material depth after the normal replacement pass and makes
+    // the phase break readable against the otherwise cool, low-contrast gravel sheet.
+    textureSize: CELL_SIZE,
+    blend: 'multiply',
+    materialMode: 'native',
+    passes: [
+      { perCell: 1.35, minScale: 0.66, maxScale: 1.8, alpha: 0.42 },
+      { perCell: 0.24, minScale: 2.3, maxScale: 4.2, alpha: 0.48 },
+    ],
+    falloff: [
+      [0, 'rgba(0,0,0,0)'],
+      [1, 'rgba(0,0,0,1)'],
+    ],
+  }],
 };

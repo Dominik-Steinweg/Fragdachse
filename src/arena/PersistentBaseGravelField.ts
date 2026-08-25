@@ -111,6 +111,7 @@ export function createPersistentBaseGravelState(
     options.seed,
     options.anchor,
     cells,
+    radiusCells,
     options.frame,
     options.config ?? PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG,
   );
@@ -138,8 +139,9 @@ export function getPersistentBaseGravelDecorationReachPx(
 
 function createPersistentBaseGravelDecorations(
   seed: number,
-  _anchor: PersistentBaseAnchor,
+  anchor: PersistentBaseAnchor,
   cells: readonly PersistentBaseGravelCell[],
+  radiusCells: number,
   frame: PersistentBaseGravelFrame,
   config: PersistentBaseGravelDecorationConfig,
 ): PersistentBaseGravelDecoration[] {
@@ -160,6 +162,13 @@ function createPersistentBaseGravelDecorations(
     const offsetY = (hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.offsetY) - 0.5)
       * 2 * config.maxOffsetCells;
     const sizeRoll = hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.size) ** config.sizeBias;
+    const sizeCells = config.minSizeCells + (config.maxSizeCells - config.minSizeCells) * sizeRoll;
+    const centerDistance = Math.hypot(
+      cell.gridX + offsetX - anchor.gridX,
+      cell.gridY + offsetY - anchor.gridY,
+    );
+    const rotatedStampRadius = sizeCells * Math.SQRT2 * 0.5;
+    if (centerDistance + rotatedStampRadius > radiusCells + config.maxOverhangCells) continue;
     const alphaRoll = hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.alpha);
     decorations.push({
       gridX: cell.gridX,
@@ -167,7 +176,7 @@ function createPersistentBaseGravelDecorations(
       textureKey: getPersistentBaseGravelTextureKey(picked.fileName),
       worldX: frame.offsetX + (cell.gridX + 0.5 + offsetX) * CELL_SIZE,
       worldY: frame.offsetY + (cell.gridY + 0.5 + offsetY) * CELL_SIZE,
-      sizePx: CELL_SIZE * (config.minSizeCells + (config.maxSizeCells - config.minSizeCells) * sizeRoll),
+      sizePx: CELL_SIZE * sizeCells,
       rotation: hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.rotation) * Math.PI * 2,
       alpha: config.minAlpha + (config.maxAlpha - config.minAlpha) * alphaRoll,
       mirrorX: hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.mirrorX) < 0.5,

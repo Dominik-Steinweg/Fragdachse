@@ -915,7 +915,10 @@ export class HostUpdateCoordinator {
       const now = Date.now();
       const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
-      const selectedInspectorTool = hasUtilityOverride ? undefined
+      const inspectorUtilityAction = hasUtilityOverride
+        ? null
+        : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
+      const selectedInspectorTool = hasUtilityOverride || inspectorUtilityAction ? undefined
         : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? committedLoadout?.coopDefenseProfile?.selectedTool);
       const selectedInspectorUtilityBase = selectedInspectorTool?.kind === 'utility'
         ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
@@ -930,9 +933,11 @@ export class HostUpdateCoordinator {
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
       const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
-      const utilityId = selectedInspectorConstruction
-        ? `construction.${selectedInspectorConstruction.id}`
-        : utilCfg?.id;
+      const utilityId = inspectorUtilityAction
+        ? undefined
+        : selectedInspectorConstruction
+          ? `construction.${selectedInspectorConstruction.id}`
+          : utilCfg?.id;
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = [
@@ -964,6 +969,7 @@ export class HostUpdateCoordinator {
         weapon2CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
         utilityId,
+        utilityAction:            inspectorUtilityAction ?? undefined,
         utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideId(localId) !== '',
@@ -2390,6 +2396,7 @@ export class HostUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId);
     const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
+    if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud() !== null) return 0;
     const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()
       ?? committed?.coopDefenseProfile?.selectedTool);
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die

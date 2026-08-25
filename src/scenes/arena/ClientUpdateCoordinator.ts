@@ -412,7 +412,11 @@ export class ClientUpdateCoordinator {
       const localUltimateConfig = this.getLocalUltimateConfig();
       const ultimateThresholds  = this.getLocalUltimateThresholds();
       const overrideId = bridge.getPlayerUtilityOverrideId(localId2);
-      const selectedInspectorTool = this.getLocalInspectorSelectedTool();
+      const hasUtilityOverride = overrideId !== '' || this.clientUtilityOverride !== null;
+      const inspectorUtilityAction = hasUtilityOverride
+        ? null
+        : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
+      const selectedInspectorTool = inspectorUtilityAction ? null : this.getLocalInspectorSelectedTool();
       const inspectorConfig = selectedInspectorTool?.kind === 'utility'
         ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
         : undefined;
@@ -422,11 +426,13 @@ export class ClientUpdateCoordinator {
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
       const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
-      const baseUtilityId = overrideId
-        || this.clientUtilityOverride?.id
-        || (inspectorConstruction ? `construction.${inspectorConstruction.id}` : undefined)
-        || inspectorConfig?.id
-        || localUtilityConfig.id;
+      const baseUtilityId = inspectorUtilityAction
+        ? undefined
+        : overrideId
+          || this.clientUtilityOverride?.id
+          || (inspectorConstruction ? `construction.${inspectorConstruction.id}` : undefined)
+          || inspectorConfig?.id
+          || localUtilityConfig.id;
       const activePowerUps = bridge.getPlayerActiveBuffs(localId2).map((buff) => ({
         ...buff,
         valueText: getHudBuffValueText(buff, getLocale()),
@@ -453,6 +459,7 @@ export class ClientUpdateCoordinator {
         weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
         utilityId:               baseUtilityId,
+        utilityAction:            inspectorUtilityAction ?? undefined,
         utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
         isUtilityOverridden:     overrideId !== '' || this.clientUtilityOverride !== null,
@@ -697,9 +704,10 @@ export class ClientUpdateCoordinator {
 
   getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
+    const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUtilityOverride !== null;
+    if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud() !== null) return 0;
     const selected = this.getLocalInspectorSelectedTool();
     const config = this.getLocalUtilityConfig();
-    const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUtilityOverride !== null;
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
     const isConstruction = selected?.kind === 'construction' && !hasOverride;

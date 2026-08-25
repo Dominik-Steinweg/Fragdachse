@@ -18,6 +18,7 @@ import {
   getPersistentBaseGravelCells,
   persistentBaseGravelCellKey,
 } from '../src/arena/PersistentBaseGravelField';
+import { GRAVEL_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { isCellInsidePersistentBaseZone } from '../src/persistentBase/PersistentBaseZone';
 import {
   PERSISTENT_BASE_GRAVEL_ASSET_PATH,
@@ -125,6 +126,19 @@ describe('persistent-base gravel field', () => {
 
     expect(first.decorations).not.toHaveLength(0);
     expect(first.decorations).toEqual(reload.decorations);
+    expect(GRAVEL_BLOB_SURFACE_PROFILE.mottle.passes.length).toBeGreaterThan(0);
+    for (const decoration of first.decorations) {
+      expect(decoration.sizePx / CELL_SIZE).toBeGreaterThanOrEqual(config.minSizeCells);
+      expect(decoration.sizePx / CELL_SIZE).toBeLessThanOrEqual(config.maxSizeCells);
+      expect(decoration.alpha).toBeGreaterThanOrEqual(config.minAlpha);
+      expect(decoration.alpha).toBeLessThanOrEqual(config.maxAlpha);
+
+      const centerGridX = (decoration.worldX - options.frame.offsetX) / CELL_SIZE - 0.5;
+      const centerGridY = (decoration.worldY - options.frame.offsetY) / CELL_SIZE - 0.5;
+      const stampRadius = decoration.sizePx / CELL_SIZE * Math.SQRT2 * 0.5;
+      expect(Math.hypot(centerGridX - options.anchor.gridX, centerGridY - options.anchor.gridY) + stampRadius)
+        .toBeLessThanOrEqual(3 + config.maxOverhangCells + 1e-9);
+    }
     for (const decoration of first.decorations) {
       expect(expandedByCell.get(persistentBaseGravelCellKey(decoration.gridX, decoration.gridY))).toEqual(decoration);
     }

@@ -2,7 +2,11 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH, GRID_COLS, GRID_ROWS } from '../../config';
 import type { ArenaLayout, DecalCell, DirtCell } from '../../types';
 import { ArenaVisualFactory, DIRT_FRINGE_OVERHANG_PX } from '../ArenaVisualFactory';
-import { DIRT_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleReachPx } from '../BlobSurfaceProfile';
+import {
+  DIRT_BLOB_SURFACE_PROFILE,
+  getBlobSurfaceMottleReachPx,
+  GRAVEL_BLOB_SURFACE_PROFILE,
+} from '../BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../BlobSurfaceMottle';
 import { DECAL_SIZE } from '../DecalConfig';
 import { getGroundCoverPlacementRadiusPx, stampGroundCover } from '../GroundCoverLayer';
@@ -105,11 +109,17 @@ export class GroundSurfaceStreamer {
   private persistentBaseGravelDecorationQueryRadius = 0;
   private readonly persistentBaseGravelCandidateIds: number[] = [];
   private readonly persistentBaseGravelVisibleCells: PersistentBaseGravelCell[] = [];
+  private readonly persistentBaseGravelMottleCandidateIds: number[] = [];
+  private readonly persistentBaseGravelMottleSourceCells: PersistentBaseGravelCell[] = [];
   private readonly persistentBaseGravelDecorationCandidateIds: number[] = [];
   private readonly persistentBaseGravelDecorationCandidates: PersistentBaseGravelDecoration[] = [];
   private readonly mottleConfigs = [
     DIRT_BLOB_SURFACE_PROFILE.mottle,
     ...(DIRT_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
+  ];
+  private readonly persistentBaseGravelMottleConfigs = [
+    GRAVEL_BLOB_SURFACE_PROFILE.mottle,
+    ...(GRAVEL_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
   ];
   private readonly scratch: ChunkScratchPool;
   private readonly surface: ChunkedRenderSurface;
@@ -187,6 +197,10 @@ export class GroundSurfaceStreamer {
     this.scratch.preallocate('groundDecal', scratchSize);
     if (this.persistentBaseGravelEnabled) {
       this.scratch.preallocate('persistentBaseGravel', scratchSize);
+      this.scratch.preallocate('persistentBaseGravelCutout', scratchSize, 'redraw');
+      for (let index = 0; index < this.persistentBaseGravelMottleConfigs.length; index += 1) {
+        this.scratch.preallocate(`persistentBaseGravelMottle${index}`, scratchSize);
+      }
       this.scratch.preallocate('persistentBaseGravelDecoration', scratchSize);
       if (options.persistentBaseGravel) this.setPersistentBaseGravel(options.persistentBaseGravel);
     }
@@ -532,13 +546,15 @@ export class GroundSurfaceStreamer {
     }
     if (changedCells.size === 0) return;
 
-    // Retiling needs one cell of complete 8-neighbour context. Decorations reach several cells,
-    // so invalidate those surrounding cell regions as well; the surface itself deduplicates the
-    // resulting 128-px dirty work units and leaves non-resident chunks untouched.
-    const decorationReachCells = Math.ceil(
-      getPersistentBaseGravelDecorationReachPx() / CELL_SIZE,
-    ) + 1;
-    const reachCells = Math.max(1, decorationReachCells);
+    // Retiling needs one cell of complete 8-neighbour context. Decorations and the material
+    // mottle reach several cells, so invalidate the larger surrounding region as well; the
+    // surface itself deduplicates the resulting 128-px dirty work units.
+    const decorationReachPx = getPersistentBaseGravelDecorationReachPx();
+    const mottleReachPx = getBlobSurfaceMottleReachPx(GRAVEL_BLOB_SURFACE_PROFILE);
+    const reachCells = Math.max(
+      1,
+      Math.ceil(Math.max(decorationReachPx, mottleReachPx) / CELL_SIZE) + 1,
+    );
     const cols = Math.ceil(this.frame.width / CELL_SIZE);
     const rows = Math.ceil(this.frame.height / CELL_SIZE);
     const invalidated = new Set<string>();
@@ -699,7 +715,9 @@ export class GroundSurfaceStreamer {
     const { size } = region;
     const maxX = region.localX + size;
     const maxY = region.localY + size;
+    const mottleReach = getBlobSurfaceMottleReachPx(GRAVEL_BLOB_SURFACE_PROFILE);
     this.persistentBaseGravelVisibleCells.length = 0;
+    this.persistentBaseGravelMottleSourceCells.length = 0;
     const candidateIds = this.persistentBaseGravelIndex.collect(
       region.localX,
       region.localY,
@@ -718,11 +736,32 @@ export class GroundSurfaceStreamer {
         this.persistentBaseGravelVisibleCells.push(cell);
       }
     }
+    const mottleCandidateIds = this.persistentBaseGravelIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      mottleReach,
+      this.persistentBaseGravelMottleCandidateIds,
+    );
+    mottleCandidateIds.sort(compareNumbers);
+    for (const id of mottleCandidateIds) {
+      const cell = this.persistentBaseGravelCells[id];
+      if (!cell) continue;
+      const cellMinX = cell.gridX * CELL_SIZE;
+      const cellMinY = cell.gridY * CELL_SIZE;
+      const cellMaxX = cellMinX + CELL_SIZE;
+      const cellMaxY = cellMinY + CELL_SIZE;
+      if (cellMaxX + mottleReach > region.localX && cellMinX - mottleReach < maxX
+        && cellMaxY + mottleReach > region.localY && cellMinY - mottleReach < maxY) {
+        this.persistentBaseGravelMottleSourceCells.push(cell);
+      }
+    }
 
     const target = this.scratch.get('persistentBaseGravel', size);
     target.clear();
+    let images: Phaser.GameObjects.Image[] = [];
     if (this.persistentBaseGravelVisibleCells.length > 0) {
-      const images = ArenaVisualFactory.createGravelImagesFromGrid(
+      images = ArenaVisualFactory.createGravelImagesFromGrid(
         this.scene,
         this.persistentBaseGravelVisibleCells,
         (gridX, gridY) => this.persistentBaseGravelCellKeys.has(persistentBaseGravelCellKey(gridX, gridY)),
@@ -734,11 +773,40 @@ export class GroundSurfaceStreamer {
         },
       );
       if (images.length > 0) target.draw(images);
-      target.render();
-      for (const image of images) image.destroy();
-    } else {
-      target.render();
     }
+    target.render();
+
+    if (images.length > 0 && this.persistentBaseGravelMottleSourceCells.length > 0) {
+      const cutout = this.scratch.get('persistentBaseGravelCutout', size, 'redraw');
+      cutout.clear();
+      cutout.fill(0x000000, 1);
+      cutout.erase(images);
+      cutout.render();
+
+      for (let index = 0; index < this.persistentBaseGravelMottleConfigs.length; index += 1) {
+        const mottle = this.persistentBaseGravelMottleConfigs[index];
+        const layer = this.scratch.get(`persistentBaseGravelMottle${index}`, size);
+        layer.setBlendMode(mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL);
+        layer.clear();
+        stampBlobSurfaceMottle(
+          this.scene,
+          layer,
+          GRAVEL_BLOB_SURFACE_PROFILE,
+          mottle,
+          this.persistentBaseGravelMottleSourceCells,
+          index,
+          -region.localX,
+          -region.localY,
+        );
+        layer.render();
+        eraseChunkScratch(layer, cutout, size);
+        layer.render();
+        target.draw(layer);
+        target.render();
+      }
+    }
+
+    for (const image of images) image.destroy();
     sink.blit(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, target);
   }
 
