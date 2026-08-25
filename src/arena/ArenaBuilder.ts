@@ -30,6 +30,7 @@ import { generateRockVegetationPlacements } from './RockVegetationField';
 import type { RockVegetationPlacement } from './RockVegetationField';
 import { RockGridIndex } from './RockGridIndex';
 import { GroundSurfaceStreamer } from './chunks/GroundSurfaceStreamer';
+import type { GroundSurfacePersistentBaseGravelZone } from './chunks/GroundSurfaceStreamer';
 import { RockOverlayStreamer } from './chunks/RockOverlayStreamer';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { createRockPhysicsProxy, type RockPhysicsProxy } from './rocks/RockPhysicsProxy';
@@ -88,10 +89,10 @@ export interface ArenaBuilderResult {
   /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
   trackObjects: Phaser.GameObjects.TileSprite[];
   /**
-   * Die gestreamten statischen Bodenbaender: Dirt samt eingebackener Materialstoerung, Ground
-   * Cover und die statischen Decals.
+   * Die gestreamten statischen Bodenbaender: Dirt samt eingebackener Materialstoerung, optionaler
+   * Persistent-Base-Kies, Ground Cover und die statischen Decals.
    *
-   * Alle drei lagen frueher in je einer arenagrossen RenderTexture. Sie liegen jetzt in
+   * Alle Schichten lagen frueher in je einer arenagrossen RenderTexture. Sie liegen jetzt in
    * Render-Chunks, von denen nur die kameranahen existieren – die GPU-Kosten folgen damit dem
    * sichtbaren Ausschnitt statt der Weltflaeche (siehe {@link ./chunks/GroundSurfaceStreamer}).
    */
@@ -128,6 +129,13 @@ export interface ArenaBuilderResult {
    * und die uebrige Matte Pixel fuer Pixel stehen laesst.
    */
   rockVegetationPlacements: RockVegetationPlacement[];
+}
+
+export interface ArenaBuilderDynamicOptions {
+  /** Nur Maps mit Persistent-Base-Konfiguration bekommen die Gravel-Renderziele. */
+  readonly enablePersistentBaseGravel?: boolean;
+  /** Optionaler Zustand fuer den ersten Chunk-Bake. */
+  readonly persistentBaseGravel?: GroundSurfacePersistentBaseGravelZone;
 }
 
 export class ArenaBuilder {
@@ -206,7 +214,7 @@ export class ArenaBuilder {
    * Wird pro Runde einmalig aufgerufen. Rückgabe muss in ArenaScene
    * gespeichert werden; `destroy()` räumt alles wieder auf.
    */
-  buildDynamic(layout: ArenaLayout): ArenaBuilderResult {
+  buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions = {}): ArenaBuilderResult {
     const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
     const rockGroup    = this.scene.physics.add.staticGroup();
     const frame        = getArenaRockWorldFrame();
@@ -327,6 +335,8 @@ export class ArenaBuilder {
       frame,
       layout,
       groundCoverPlacements,
+      enablePersistentBaseGravel: options.enablePersistentBaseGravel === true,
+      persistentBaseGravel: options.persistentBaseGravel,
     });
     // Erst nach dem Erzeugen der Live-Felsen, damit der Streamer beim ersten Bake exakt die
     // aktiven Fels-IDs sieht.

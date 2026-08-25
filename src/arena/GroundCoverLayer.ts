@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import type { GroundCoverPlacement } from './GroundCoverField';
+import type { GroundCoverPlacement, GroundCoverStampPlacement } from './GroundCoverField';
 
 /**
  * Geometrie eines gebackenen Stempels.
@@ -53,7 +53,7 @@ export interface GroundCoverBakeResult {
 export function stampGroundCover(
   scene: Phaser.Scene,
   layer: Phaser.GameObjects.RenderTexture,
-  placements: readonly GroundCoverPlacement[],
+  placements: readonly GroundCoverStampPlacement[],
   drawOffsetX: number,
   drawOffsetY: number,
   layerAlpha = 1,
@@ -73,7 +73,7 @@ export function stampGroundCover(
 }
 
 /** Groesste Ausdehnung einer Platzierung ueber ihren Mittelpunkt hinaus. */
-export function getGroundCoverPlacementRadiusPx(placement: GroundCoverPlacement): number {
+export function getGroundCoverPlacementRadiusPx(placement: GroundCoverStampPlacement): number {
   return placement.sizePx * Math.SQRT1_2;
 }
 

@@ -248,3 +248,33 @@ export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
     ],
   }],
 };
+
+/**
+ * Subtiles Profil fuer den Kies-Blob. Das authored `kies`-Sheet traegt bereits sein eigenes
+ * Mikrodetail; deshalb bekommt der Kies keine Dirt-Mottle-Passes, wohl aber dieselbe
+ * deterministische Corner-Shading-Regel fuer weiche, chunkstabile Materialvariation.
+ */
+export const GRAVEL_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
+  id: 'persistentGravel',
+  textureKey: 'kies',
+  materialFrame: 12,
+  seedSalt: 0x2e71,
+  shading: {
+    baseLevel: 0.98,
+    washValueAmount: 0.035,
+    washValuePeriods: [11, 4.75],
+    washHueAmount: 0.04,
+    washHuePeriod: 17,
+    washHues: [0xc2a17e, 0xa88e74, 0xd0b997],
+  },
+  mottle: {
+    textureSize: CELL_SIZE,
+    blend: 'normal',
+    materialMode: 'native',
+    passes: [],
+    falloff: [
+      [0, 'rgba(0,0,0,0)'],
+      [1, 'rgba(0,0,0,1)'],
+    ],
+  },
+};

@@ -185,7 +185,9 @@ export class TerrainColorSnapshotBuilder {
 
     const groundSurface = arenaResult.groundSurface;
     groundSurface?.renderSnapshotDirt(this.scratch, region, renderScale);
+    groundSurface?.renderSnapshotPersistentBaseGravel(this.scratch, region, renderScale);
     groundSurface?.renderSnapshotGroundCover(this.scratch, region, renderScale);
+    groundSurface?.renderSnapshotPersistentBaseGravelDecoration(this.scratch, region, renderScale);
     this.renderTracks(layout, region);
     this.renderStaticBases(region);
     groundSurface?.renderSnapshotDecals(this.scratch, region, renderScale);

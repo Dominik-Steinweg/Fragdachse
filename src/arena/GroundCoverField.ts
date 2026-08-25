@@ -21,7 +21,8 @@ import type { GroundCoverAnchor, GroundCoverLayerConfig } from './GroundCoverCon
  * sich nichts.
  */
 
-export interface GroundCoverPlacement {
+/** Gemeinsame Geometrie fuer alle deterministischen Texture-Stamps im Ground-Surface-Bake. */
+export interface GroundCoverStampPlacement {
   textureKey: string;
   worldX: number;
   worldY: number;
@@ -31,6 +32,9 @@ export interface GroundCoverPlacement {
   alpha: number;
   mirrorX: boolean;
   mirrorY: boolean;
+}
+
+export interface GroundCoverPlacement extends GroundCoverStampPlacement {
   /** Ankerklasse der Platzierung. Nur fuer Tests und Diagnose. */
   anchor: GroundCoverAnchor;
 }

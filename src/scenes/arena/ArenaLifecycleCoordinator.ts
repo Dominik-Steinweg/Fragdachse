@@ -933,7 +933,21 @@ export class ArenaLifecycleCoordinator {
     }
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
-    this.ctx.arenaResult = builder.buildDynamic(layout);
+    const persistentBaseAnchorBase = coopDefenseMapConfig?.persistentBase
+      ? coopDefenseBases.find((base) => base.id === coopDefenseMapConfig.persistentBase!.baseId)
+      : undefined;
+    const persistentBaseGravelRadius = roundState?.persistentBaseRadiusCells
+      ?? getStoredPersistentBaseState().radiusCells;
+    this.ctx.arenaResult = builder.buildDynamic(layout, {
+      enablePersistentBaseGravel: Boolean(coopDefenseMapConfig?.persistentBase),
+      persistentBaseGravel: persistentBaseAnchorBase
+        ? {
+          seed: descriptor.seed,
+          anchor: getPersistentBaseAnchor(persistentBaseAnchorBase),
+          radiusCells: persistentBaseGravelRadius,
+        }
+        : undefined,
+    });
     bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
@@ -941,7 +955,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
     this.ctx.persistentBaseSession = null;
     if (bridge.isHost() && coopDefenseMapConfig?.persistentBase) {
-      const anchorBase = coopDefenseBases.find((base) => base.id === coopDefenseMapConfig.persistentBase!.baseId);
+      const anchorBase = persistentBaseAnchorBase;
       if (!anchorBase || anchorBase.faction !== 'friendly' || anchorBase.role !== 'main') {
         throw new Error(
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on map ${coopDefenseMapConfig.mapId}`,

@@ -13,12 +13,12 @@ import {
 import type { DecalCell, DirtCell, TrackCell, TreeCell } from '../types';
 import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
-import { AutoTiler, DIRT_AUTOTILE } from './AutoTiler';
+import { AutoTiler, DIRT_AUTOTILE, GRAVEL_AUTOTILE } from './AutoTiler';
 import { hashCell01 } from './CellHash';
 import { RockGridIndex } from './RockGridIndex';
 import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
 import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } from './RockVegetationConfig';
-import { DIRT_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
+import { DIRT_BLOB_SURFACE_PROFILE, GRAVEL_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { registerGraphicsObject } from '../effects/EffectUtils';
@@ -286,6 +286,40 @@ export class ArenaVisualFactory {
     }
 
     return { fringe, surface };
+  }
+
+  /**
+   * Erzeugt die aktuellen Persistent-Base-Kieszellen aus demselben 47-Blob-/Corner-Tint-Pfad wie
+   * Dirt. Der vollstaendige Nachbar-Lookup wird vom Aufrufer geliefert, damit Chunkgrenzen nicht
+   * als kuenstliche Aussengrenze erscheinen.
+   */
+  static createGravelImagesFromGrid(
+    scene: Phaser.Scene,
+    gravelCells: readonly { gridX: number; gridY: number }[],
+    isOccupied: (gx: number, gy: number) => boolean,
+    metrics?: ArenaVisualGridMetrics,
+  ): Phaser.GameObjects.Image[] {
+    if (gravelCells.length === 0) return [];
+
+    const gridMetrics = getMetrics(metrics);
+    const result: Phaser.GameObjects.Image[] = [];
+    for (const { gridX, gridY } of gravelCells) {
+      const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
+      const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
+      const frame = AutoTiler.getFrame(mask, GRAVEL_AUTOTILE);
+      const image = new Phaser.GameObjects.Image(scene, worldX, worldY, 'kies', frame);
+      image.setDisplaySize(CELL_SIZE, CELL_SIZE);
+      image.setDepth(DEPTH.PERSISTENT_BASE_GRAVEL);
+      image.setTint(...resolveBlobSurfaceCornerTints(
+        GRAVEL_BLOB_SURFACE_PROFILE,
+        gridX,
+        gridY,
+        isOccupied,
+      ));
+      result.push(image);
+    }
+    return result;
   }
 
   static createDecals(

@@ -12,6 +12,7 @@ import { CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS } from '../arena/chunks/ChunkBakeSch
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
+import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
@@ -183,6 +184,7 @@ import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveCoopDefenseBases } from '../arena/BaseRegistry';
+import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -511,6 +513,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
     preloadGroundCoverAssets(this.load);
+    preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationAssets(this.load);
     preloadTurretVisualAssets(this.load);
@@ -2235,8 +2238,20 @@ export class ArenaScene extends Phaser.Scene {
     const persistentBases = persistentMapConfig
       ? resolveCoopDefenseBases(persistentMapConfig, persistentHumanPlayerCount)
       : [];
+    const persistentBaseTerrain = persistentMapConfig?.persistentBase
+      ? persistentBases.find((base) => base.id === persistentMapConfig.persistentBase!.baseId)
+      : undefined;
     const persistentRadiusCells = bridge.getRoundState()?.persistentBaseRadiusCells
       ?? getStoredCoopDefenseProgress().persistentBase.radiusCells;
+    this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
+      persistentBaseTerrain && this.ctx.currentLayout
+        ? {
+          seed: this.ctx.currentLayout.seed,
+          anchor: getPersistentBaseAnchor(persistentBaseTerrain),
+          radiusCells: persistentRadiusCells,
+        }
+        : null,
+    );
     this.persistentBaseVisuals.sync(
       persistentMapConfig?.persistentBase,
       persistentBases,

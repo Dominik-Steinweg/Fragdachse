@@ -234,6 +234,11 @@ export const DIRT_AUTOTILE: AutoTileConfig = {
   bitmaskToFrame: BLOB47_TABLE,
 };
 
+/** AutoTile-Konfiguration fuer den Persistent-Base-Kies (gleiches 47-Blob-Raster). */
+export const GRAVEL_AUTOTILE: AutoTileConfig = {
+  bitmaskToFrame: BLOB47_TABLE,
+};
+
 /** AutoTile-Konfiguration für das Base-47-Blob-Tileset (gleiche Tile-Anordnung wie Rocks). */
 export const BASE_AUTOTILE: AutoTileConfig = {
   bitmaskToFrame: BLOB47_TABLE,

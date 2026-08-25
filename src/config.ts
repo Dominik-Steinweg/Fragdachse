@@ -95,6 +95,9 @@ export const DEPTH = {
    * und den kleinen Decals – Gameplay-Markierungen bleiben damit unverdeckt.
    */
   GROUND_COVER: 2.5,
+  /** Aktueller Persistent-Base-Kies liegt ueber Dirt, aber unter seinen grossen Dekorstempeln. */
+  PERSISTENT_BASE_GRAVEL: 2.04,
+  PERSISTENT_BASE_GRAVEL_DECORATION: 2.7,
   TRACKS: 3,
   BASES: 4,
   DECALS: 5,

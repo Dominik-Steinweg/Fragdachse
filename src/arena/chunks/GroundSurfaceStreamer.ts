@@ -7,6 +7,18 @@ import { stampBlobSurfaceMottle } from '../BlobSurfaceMottle';
 import { DECAL_SIZE } from '../DecalConfig';
 import { getGroundCoverPlacementRadiusPx, stampGroundCover } from '../GroundCoverLayer';
 import type { GroundCoverPlacement } from '../GroundCoverField';
+import {
+  createPersistentBaseGravelState,
+  getPersistentBaseGravelDecorationReachPx,
+  getPersistentBaseGravelStateKey,
+  persistentBaseGravelCellKey,
+} from '../PersistentBaseGravelField';
+import type {
+  PersistentBaseGravelCell,
+  PersistentBaseGravelDecoration,
+  PersistentBaseGravelState,
+} from '../PersistentBaseGravelField';
+import type { PersistentBaseAnchor } from '../../persistentBase/PersistentBaseTypes';
 import { RockGridIndex } from '../RockGridIndex';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
@@ -17,10 +29,10 @@ import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
 
 /**
- * Gestreamte statische Bodenbaender: Dirt samt eingebackener Materialstoerung, Ground Cover und
- * die statischen Decals.
+ * Gestreamte statische Bodenbaender: Dirt samt eingebackener Materialstoerung, optionaler
+ * Persistent-Base-Kies, Ground Cover und die statischen Decals.
  *
- * Alle drei aendern sich zur Laufzeit nicht. Frueher war das der Grund, sie genau einmal je Runde
+ * Diese Schichten aendern sich zur Laufzeit nicht. Frueher war das der Grund, sie genau einmal je Runde
  * in je eine arenagrosse RenderTexture zu backen; bei 400 x 80 Zellen waeren das 12 800 x 2 560 px
  * je Band. Jetzt gilt dieselbe Ueberlegung je Render-Chunk: Ein Chunk wird beim Sichtbarwerden
  * einmal gebacken und danach nur noch gezeichnet.
@@ -33,14 +45,26 @@ import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
  */
 
 export const GROUND_DIRT_LAYER_ID = 'dirt';
+export const GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID = 'persistentBaseGravel';
+export const GROUND_PERSISTENT_BASE_GRAVEL_DECORATION_LAYER_ID = 'persistentBaseGravelDecoration';
 export const GROUND_COVER_LAYER_ID = 'groundCover';
 export const GROUND_DECAL_LAYER_ID = 'groundDecals';
+
+export interface GroundSurfacePersistentBaseGravelZone {
+  readonly seed: number;
+  readonly anchor: PersistentBaseAnchor;
+  readonly radiusCells: number;
+}
 
 export interface GroundSurfaceStreamerOptions {
   readonly scene: Phaser.Scene;
   readonly frame: ChunkWorldFrame;
   readonly layout: ArenaLayout;
   readonly groundCoverPlacements: readonly GroundCoverPlacement[];
+  /** Nur Persistent-Base-Maps reservieren die zusaetzlichen Gravel-Layer. */
+  readonly enablePersistentBaseGravel?: boolean;
+  /** Optionaler Initialzustand, damit der erste Chunk bereits mit Kies gebacken wird. */
+  readonly persistentBaseGravel?: GroundSurfacePersistentBaseGravelZone;
   readonly chunkSize?: number;
 }
 
@@ -70,6 +94,19 @@ export class GroundSurfaceStreamer {
   private readonly groundDecalCandidateIds: number[] = [];
   private readonly groundDecalCandidates: DecalCell[] = [];
   private readonly groundCoverQueryRadius: number;
+  private readonly persistentBaseGravelEnabled: boolean;
+  private persistentBaseGravelState: PersistentBaseGravelState | null = null;
+  private persistentBaseGravelKey = 'none';
+  private persistentBaseGravelCells: readonly PersistentBaseGravelCell[] = [];
+  private persistentBaseGravelCellKeys: ReadonlySet<string> = new Set();
+  private persistentBaseGravelDecorations: readonly PersistentBaseGravelDecoration[] = [];
+  private readonly persistentBaseGravelIndex: ArenaCellBucketIndex;
+  private readonly persistentBaseGravelDecorationIndex: ArenaPointBucketIndex<PersistentBaseGravelDecoration>;
+  private persistentBaseGravelDecorationQueryRadius = 0;
+  private readonly persistentBaseGravelCandidateIds: number[] = [];
+  private readonly persistentBaseGravelVisibleCells: PersistentBaseGravelCell[] = [];
+  private readonly persistentBaseGravelDecorationCandidateIds: number[] = [];
+  private readonly persistentBaseGravelDecorationCandidates: PersistentBaseGravelDecoration[] = [];
   private readonly mottleConfigs = [
     DIRT_BLOB_SURFACE_PROFILE.mottle,
     ...(DIRT_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
@@ -99,6 +136,12 @@ export class GroundSurfaceStreamer {
     );
     this.groundCoverIndex.sync(this.groundCoverPlacements);
     this.groundCoverQueryRadius = maxGroundCoverRadius(this.groundCoverPlacements);
+    this.persistentBaseGravelEnabled = options.enablePersistentBaseGravel === true;
+    this.persistentBaseGravelIndex = new ArenaCellBucketIndex(options.frame.width);
+    this.persistentBaseGravelDecorationIndex = new ArenaPointBucketIndex(
+      options.frame,
+      (placement) => ({ x: placement.worldX, y: placement.worldY }),
+    );
     this.groundDecalIndex = new ArenaPointBucketIndex(
       options.frame,
       (decal) => ({
@@ -111,6 +154,15 @@ export class GroundSurfaceStreamer {
 
     const layers: ChunkedSurfaceLayerSpec[] = [
       { id: GROUND_DIRT_LAYER_ID, depth: DEPTH.DIRT },
+      ...(this.persistentBaseGravelEnabled
+        ? [
+          { id: GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, depth: DEPTH.PERSISTENT_BASE_GRAVEL },
+          {
+            id: GROUND_PERSISTENT_BASE_GRAVEL_DECORATION_LAYER_ID,
+            depth: DEPTH.PERSISTENT_BASE_GRAVEL_DECORATION,
+          },
+        ]
+        : []),
       { id: GROUND_COVER_LAYER_ID, depth: DEPTH.GROUND_COVER },
       { id: GROUND_DECAL_LAYER_ID, depth: DEPTH.DECALS },
     ];
@@ -133,6 +185,11 @@ export class GroundSurfaceStreamer {
     }
     this.scratch.preallocate('groundCover', scratchSize);
     this.scratch.preallocate('groundDecal', scratchSize);
+    if (this.persistentBaseGravelEnabled) {
+      this.scratch.preallocate('persistentBaseGravel', scratchSize);
+      this.scratch.preallocate('persistentBaseGravelDecoration', scratchSize);
+      if (options.persistentBaseGravel) this.setPersistentBaseGravel(options.persistentBaseGravel);
+    }
   }
 
   updateResidency(view: ChunkWorldRect): void {
@@ -171,6 +228,50 @@ export class GroundSurfaceStreamer {
   /** Renderziel einer Ebene in einem residenten Chunk – fuer Diagnose und Tests. */
   getChunkTexture(layerId: string, cx: number, cy: number): Phaser.GameObjects.RenderTexture | null {
     return this.surface.getChunkTexture(layerId, cx, cy);
+  }
+
+  /**
+   * Aktualisiert die sichtbare Persistent Zone. Die Szene ruft diesen Setter aus ihrem normalen
+   * Round-State-Sync auf; der State-Key verhindert jede Arbeit, solange Anchor, Radius und Seed
+   * unveraendert sind.
+   */
+  setPersistentBaseGravel(zone: GroundSurfacePersistentBaseGravelZone | null): boolean {
+    if (!this.persistentBaseGravelEnabled) return false;
+
+    const radiusCells = normalizeRadiusCells(zone?.radiusCells);
+    const nextKey = zone
+      ? getPersistentBaseGravelStateKey(zone.seed, zone.anchor, radiusCells)
+      : 'none';
+    if (nextKey === this.persistentBaseGravelKey) return false;
+
+    const previousState = this.persistentBaseGravelState;
+    const nextState = zone
+      ? createPersistentBaseGravelState({
+        seed: zone.seed >>> 0,
+        anchor: zone.anchor,
+        radiusCells,
+        frame: this.frame,
+      })
+      : null;
+    this.persistentBaseGravelState = nextState;
+    this.persistentBaseGravelKey = nextKey;
+    this.persistentBaseGravelCells = nextState?.cells ?? [];
+    this.persistentBaseGravelCellKeys = nextState?.cellKeys ?? new Set();
+    this.persistentBaseGravelDecorations = nextState?.decorations ?? [];
+    this.persistentBaseGravelDecorationQueryRadius = nextState
+      ? getPersistentBaseGravelDecorationReachPx()
+      : 0;
+
+    this.persistentBaseGravelIndex.clear();
+    this.persistentBaseGravelIndex.sync(this.persistentBaseGravelCells);
+    this.persistentBaseGravelDecorationIndex.clear();
+    this.persistentBaseGravelDecorationIndex.sync(this.persistentBaseGravelDecorations);
+    this.invalidatePersistentBaseGravelDelta(previousState, nextState);
+    return true;
+  }
+
+  getPersistentBaseGravelState(): PersistentBaseGravelState | null {
+    return this.persistentBaseGravelState;
   }
 
   /**
@@ -223,6 +324,82 @@ export class GroundSurfaceStreamer {
           clearRegion: () => {},
           fillRegion: () => {},
         });
+      }
+    }
+  }
+
+  /** Snapshot-Gegenstueck zu den sichtbaren Gravel-Layern, ohne ein zweites Renderziel anzulegen. */
+  renderSnapshotPersistentBaseGravel(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+  ): void {
+    this.renderSnapshotPersistentBaseGravelLayers(target, region, renderScale, true, false);
+  }
+
+  /** Snapshot-Gegenstueck fuer die grossen authored Gravel-Dekorstempel. */
+  renderSnapshotPersistentBaseGravelDecoration(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+  ): void {
+    this.renderSnapshotPersistentBaseGravelLayers(target, region, renderScale, false, true);
+  }
+
+  private renderSnapshotPersistentBaseGravelLayers(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+    includeGravel: boolean,
+    includeDecoration: boolean,
+  ): void {
+    if (!this.persistentBaseGravelEnabled || !this.persistentBaseGravelState) return;
+
+    const bakeSize = ROCK_OVERLAY_CHUNK_SIZE;
+    const regionRight = region.worldX + region.width;
+    const regionBottom = region.worldY + region.height;
+    for (let worldY = region.worldY; worldY < regionBottom; worldY += bakeSize) {
+      for (let worldX = region.worldX; worldX < regionRight; worldX += bakeSize) {
+        const localX = worldX - this.frame.offsetX;
+        const localY = worldY - this.frame.offsetY;
+        const bakeRegion: ChunkBakeRegion = {
+          chunk: { cx: 0, cy: 0, localX, localY },
+          localX,
+          localY,
+          size: bakeSize,
+          worldX,
+          worldY,
+          gutterPx: 0,
+        };
+        const blitSnapshot = (_layerId: string, scratch: Phaser.GameObjects.RenderTexture): void => {
+          target.stamp(
+            scratch.texture.key,
+            undefined,
+            (worldX - region.worldX) * renderScale,
+            (worldY - region.worldY) * renderScale,
+            {
+              originX: 0,
+              originY: 0,
+              scaleX: renderScale,
+              scaleY: renderScale,
+            },
+          );
+          target.render();
+        };
+        if (includeGravel) {
+          this.bakePersistentBaseGravelRegion(bakeRegion, {
+            blit: blitSnapshot,
+            clearRegion: () => {},
+            fillRegion: () => {},
+          });
+        }
+        if (includeDecoration) {
+          this.bakePersistentBaseGravelDecorationRegion(bakeRegion, {
+            blit: blitSnapshot,
+            clearRegion: () => {},
+            fillRegion: () => {},
+          });
+        }
       }
     }
   }
@@ -314,12 +491,76 @@ export class GroundSurfaceStreamer {
     this.dirtIndex.clear();
     this.groundCoverIndex.clear();
     this.groundDecalIndex.clear();
+    this.persistentBaseGravelIndex.clear();
+    this.persistentBaseGravelDecorationIndex.clear();
+    this.persistentBaseGravelState = null;
+    this.persistentBaseGravelCells = [];
+    this.persistentBaseGravelCellKeys = new Set();
+    this.persistentBaseGravelDecorations = [];
   }
 
   // ── Bake ───────────────────────────────────────────────────────────────────
 
+  private invalidatePersistentBaseGravelDelta(
+    previous: PersistentBaseGravelState | null,
+    next: PersistentBaseGravelState | null,
+  ): void {
+    if (!this.persistentBaseGravelEnabled) return;
+
+    const previousKeys = previous?.cellKeys ?? new Set<string>();
+    const nextKeys = next?.cellKeys ?? new Set<string>();
+    const changedCells = new Map<string, PersistentBaseGravelCell>();
+    for (const cell of previous?.cells ?? []) {
+      const key = persistentBaseGravelCellKey(cell.gridX, cell.gridY);
+      if (!nextKeys.has(key)) changedCells.set(key, cell);
+    }
+    for (const cell of next?.cells ?? []) {
+      const key = persistentBaseGravelCellKey(cell.gridX, cell.gridY);
+      if (!previousKeys.has(key)) changedCells.set(key, cell);
+    }
+    const sourceChanged = previous && next
+      && (previous.seed !== next.seed
+        || previous.anchor.gridX !== next.anchor.gridX
+        || previous.anchor.gridY !== next.anchor.gridY);
+    if (sourceChanged) {
+      for (const cell of previous.cells) {
+        changedCells.set(persistentBaseGravelCellKey(cell.gridX, cell.gridY), cell);
+      }
+      for (const cell of next.cells) {
+        changedCells.set(persistentBaseGravelCellKey(cell.gridX, cell.gridY), cell);
+      }
+    }
+    if (changedCells.size === 0) return;
+
+    // Retiling needs one cell of complete 8-neighbour context. Decorations reach several cells,
+    // so invalidate those surrounding cell regions as well; the surface itself deduplicates the
+    // resulting 128-px dirty work units and leaves non-resident chunks untouched.
+    const decorationReachCells = Math.ceil(
+      getPersistentBaseGravelDecorationReachPx() / CELL_SIZE,
+    ) + 1;
+    const reachCells = Math.max(1, decorationReachCells);
+    const cols = Math.ceil(this.frame.width / CELL_SIZE);
+    const rows = Math.ceil(this.frame.height / CELL_SIZE);
+    const invalidated = new Set<string>();
+    for (const cell of changedCells.values()) {
+      for (let dy = -reachCells; dy <= reachCells; dy += 1) {
+        for (let dx = -reachCells; dx <= reachCells; dx += 1) {
+          const gridX = cell.gridX + dx;
+          const gridY = cell.gridY + dy;
+          if (gridX < 0 || gridY < 0 || gridX >= cols || gridY >= rows) continue;
+          const key = persistentBaseGravelCellKey(gridX, gridY);
+          if (invalidated.has(key)) continue;
+          invalidated.add(key);
+          this.surface.refreshRegion(gridX * CELL_SIZE, gridY * CELL_SIZE, CELL_SIZE);
+        }
+      }
+    }
+  }
+
   private bakeRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
     this.bakeDirtRegion(region, sink);
+    this.bakePersistentBaseGravelRegion(region, sink);
+    this.bakePersistentBaseGravelDecorationRegion(region, sink);
     this.bakeGroundCoverRegion(region, sink);
     this.bakeDecalRegion(region, sink);
   }
@@ -452,6 +693,97 @@ export class GroundSurfaceStreamer {
     sink.blit(GROUND_DIRT_LAYER_ID, target);
   }
 
+  private bakePersistentBaseGravelRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
+    if (!this.persistentBaseGravelEnabled) return;
+
+    const { size } = region;
+    const maxX = region.localX + size;
+    const maxY = region.localY + size;
+    this.persistentBaseGravelVisibleCells.length = 0;
+    const candidateIds = this.persistentBaseGravelIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      0,
+      this.persistentBaseGravelCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    for (const id of candidateIds) {
+      const cell = this.persistentBaseGravelCells[id];
+      if (!cell) continue;
+      const cellMinX = cell.gridX * CELL_SIZE;
+      const cellMinY = cell.gridY * CELL_SIZE;
+      if (cellMinX + CELL_SIZE > region.localX && cellMinX < maxX
+        && cellMinY + CELL_SIZE > region.localY && cellMinY < maxY) {
+        this.persistentBaseGravelVisibleCells.push(cell);
+      }
+    }
+
+    const target = this.scratch.get('persistentBaseGravel', size);
+    target.clear();
+    if (this.persistentBaseGravelVisibleCells.length > 0) {
+      const images = ArenaVisualFactory.createGravelImagesFromGrid(
+        this.scene,
+        this.persistentBaseGravelVisibleCells,
+        (gridX, gridY) => this.persistentBaseGravelCellKeys.has(persistentBaseGravelCellKey(gridX, gridY)),
+        {
+          offsetX: -region.localX,
+          offsetY: -region.localY,
+          gridCols: Math.ceil(this.frame.width / CELL_SIZE),
+          gridRows: Math.ceil(this.frame.height / CELL_SIZE),
+        },
+      );
+      if (images.length > 0) target.draw(images);
+      target.render();
+      for (const image of images) image.destroy();
+    } else {
+      target.render();
+    }
+    sink.blit(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, target);
+  }
+
+  private bakePersistentBaseGravelDecorationRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
+    if (!this.persistentBaseGravelEnabled) return;
+
+    const { size } = region;
+    const maxX = region.localX + size;
+    const maxY = region.localY + size;
+    const candidateIds = this.persistentBaseGravelDecorationIndex.collect(
+      region.localX,
+      region.localY,
+      size,
+      this.persistentBaseGravelDecorationQueryRadius,
+      this.persistentBaseGravelDecorationCandidateIds,
+    );
+    candidateIds.sort(compareNumbers);
+    this.persistentBaseGravelDecorationCandidates.length = 0;
+    for (const id of candidateIds) {
+      const placement = this.persistentBaseGravelDecorations[id];
+      if (!placement) continue;
+      const radius = getGroundCoverPlacementRadiusPx(placement);
+      const localX = placement.worldX - this.frame.offsetX;
+      const localY = placement.worldY - this.frame.offsetY;
+      if (localX + radius > region.localX && localX - radius < maxX
+        && localY + radius > region.localY && localY - radius < maxY) {
+        this.persistentBaseGravelDecorationCandidates.push(placement);
+      }
+    }
+
+    const target = this.scratch.get('persistentBaseGravelDecoration', size);
+    target.clear();
+    if (this.persistentBaseGravelDecorationCandidates.length > 0) {
+      stampGroundCover(
+        this.scene,
+        target,
+        this.persistentBaseGravelDecorationCandidates,
+        -region.worldX,
+        -region.worldY,
+      );
+    }
+    target.render();
+    sink.blit(GROUND_PERSISTENT_BASE_GRAVEL_DECORATION_LAYER_ID, target);
+  }
+
   private bakeGroundCoverRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
     const { size } = region;
     const maxX = region.localX + size;
@@ -537,4 +869,10 @@ function maxGroundCoverRadius(placements: readonly GroundCoverPlacement[]): numb
     maxRadius = Math.max(maxRadius, getGroundCoverPlacementRadiusPx(placement));
   }
   return maxRadius;
+}
+
+function normalizeRadiusCells(radiusCells: number | undefined): number {
+  return typeof radiusCells === 'number' && Number.isFinite(radiusCells) && radiusCells >= 0
+    ? radiusCells
+    : 0;
 }
