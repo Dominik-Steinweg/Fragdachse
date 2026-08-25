@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
+import { isCoopDefenseBaseCell, type BaseSpec } from '../arena/BaseRegistry';
 import { RockGridIndex } from '../arena/RockGridIndex';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlaceableUtilityConfig, TunnelUltimateConfig } from '../loadout/LoadoutConfig';
@@ -30,6 +31,8 @@ export interface PlacementSyncResult {
 export class PlacementSystem {
   private readonly layout: ArenaLayout;
   private readonly rockGrid: RockGridIndex;
+  /** Authored Coop-Defense base footprint; empty outside the mode or without bases. */
+  private readonly coopDefenseBases: readonly BaseSpec[];
   private closedBarrierCellResolver: ((gridX: number, gridY: number) => boolean) | null = null;
   private readonly playerManager: PlayerManager;
   private readonly runtimeRocks = new Map<number, RuntimeRockRecord>();
@@ -41,10 +44,16 @@ export class PlacementSystem {
   private isHazardEventArmed: ((eventId: string) => boolean) | null = null;
   private nextRockId: number;
 
-  constructor(layout: ArenaLayout, rockGrid: RockGridIndex, playerManager: PlayerManager) {
+  constructor(
+    layout: ArenaLayout,
+    rockGrid: RockGridIndex,
+    playerManager: PlayerManager,
+    coopDefenseBases: readonly BaseSpec[] = [],
+  ) {
     this.layout = layout;
     this.rockGrid = rockGrid;
     this.playerManager = playerManager;
+    this.coopDefenseBases = coopDefenseBases;
     this.nextRockId = layout.rocks.length;
 
     for (const tree of layout.trees) {
@@ -646,6 +655,7 @@ export class PlacementSystem {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
       if (tx < 0 || tx >= GRID_COLS || ty < 0 || ty >= GRID_ROWS) return false;
+      if (isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
       if (this.rockGrid.isOccupied(tx, ty)) return false;
       if (this.treeCells.has(this.key(tx, ty))) return false;
       if (this.trackCells.has(this.key(tx, ty))) return false;

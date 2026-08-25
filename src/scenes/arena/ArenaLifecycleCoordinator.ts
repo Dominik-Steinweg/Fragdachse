@@ -952,7 +952,12 @@ export class ArenaLifecycleCoordinator {
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
     ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
-    this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
+    this.ctx.placementSystem = new PlacementSystem(
+      layout,
+      this.ctx.arenaResult.rockGrid,
+      this.ctx.playerManager,
+      coopDefenseBases,
+    );
     this.ctx.persistentBaseSession = null;
     if (bridge.isHost() && coopDefenseMapConfig?.persistentBase) {
       const anchorBase = persistentBaseAnchorBase;
