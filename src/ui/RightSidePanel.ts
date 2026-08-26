@@ -179,6 +179,7 @@ export class RightSidePanel {
   private roomStatsViewContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
   private arenaOverlayVisible = false;
+  private panelSuppressed = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
   // ── Killfeed ──────────────────────────────────────────────────────────────
@@ -358,6 +359,21 @@ export class RightSidePanel {
 
   isArenaOverlayVisible(): boolean {
     return this.arenaOverlayVisible;
+  }
+
+  /**
+   * Blendet das gesamte Panel aus, ohne seinen Lobby-/Arena-Zustand anzufassen.
+   * Genutzt von der Persistent-Base-Editor-Runtime, die eine eigene, minimale Oberfläche zeigt.
+   */
+  setPanelSuppressed(suppressed: boolean): void {
+    if (this.panelSuppressed === suppressed) return;
+    this.panelSuppressed = suppressed;
+    this.lobbyContainer.setVisible(!suppressed).setActive(!suppressed);
+    if (suppressed) {
+      this.gameContainer.setVisible(false).setActive(false);
+    } else if (this.arenaOverlayVisible) {
+      this.gameContainer.setVisible(true).setActive(true);
+    }
   }
 
   // ── Daten-Updates ──────────────────────────────────────────────────────────

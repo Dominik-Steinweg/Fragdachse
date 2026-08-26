@@ -133,11 +133,11 @@ export class ClientUpdateCoordinator {
   }
 
   runClientUpdate(delta: number): void {
-    const countdownActive = bridge.isArenaCountdownActive();
-    const persistentBaseRuntime = bridge.getGamePhase() === 'LOBBY'
-      && bridge.isLocalPersistentBaseEditorActive()
-      && this.ctx.placementSystem !== null;
-    if (!bridge.isArenaStarted() && !countdownActive && !persistentBaseRuntime) {
+    // Gleicher Vertrag wie im Host-Tick: das Profil der aufgebauten Welt entscheidet, ob dieser
+    // Tick überhaupt an einen Rundenstart gebunden ist.
+    const profile = this.ctx.runtimeProfile;
+    const countdownActive = (profile?.roundLifecycle ?? false) && bridge.isArenaCountdownActive();
+    if (!profile || (profile.roundLifecycle && !bridge.isArenaStarted() && !countdownActive)) {
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -421,7 +421,7 @@ export class ClientUpdateCoordinator {
         ? null
         : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
       const selectedInspectorTool = inspectorUtilityAction ? null : this.getLocalInspectorSelectedTool();
-      const committedLoadout = bridge.getPlayerCommittedLoadout(localId2);
+      const committedLoadout = bridge.getPlayerRuntimeLoadout(localId2);
       const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
         ? selectedInspectorTool
         : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
@@ -767,7 +767,7 @@ export class ClientUpdateCoordinator {
    */
   getLocalConstructionCapacity(): number {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId);
+    const committed = bridge.getPlayerRuntimeLoadout(localId);
     return resolveConstructionCapacity({
       gameMode: bridge.getGameMode(),
       classId: committed?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
@@ -778,7 +778,7 @@ export class ClientUpdateCoordinator {
   /** Reiner Speicherzugriff auf den vor Rundenbeginn geladenen Fallback. */
   private getLocalCoopDefenseProfile() {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile;
+    const committed = bridge.getPlayerRuntimeLoadout(localId)?.coopDefenseProfile;
     if (committed) return committed;
     return this.storedProfileFallback;
   }
@@ -789,13 +789,13 @@ export class ClientUpdateCoordinator {
    * kurzzeitig zu niedrige Maxima. Die Referenz wird gehalten, damit der Totals-Cache greift.
    */
   private getLocalCoopDefenseItems(): readonly CoopDefenseItem[] {
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.equippedItems;
+    const committed = bridge.getPlayerRuntimeLoadout(bridge.getLocalPlayerId())?.equippedItems;
     if (committed) return committed;
     return this.storedItemsFallback ?? [];
   }
 
   getLocalInspectorTools(): readonly LoadoutToolRef[] {
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
+    const committed = bridge.getPlayerRuntimeLoadout(bridge.getLocalPlayerId());
     return committed?.coopDefenseClassId === 'inspector_gadachs'
       ? (committed.tools ?? committed.coopDefenseProfile?.toolLoadout ?? [])
       : [];
@@ -803,7 +803,7 @@ export class ClientUpdateCoordinator {
 
   getLocalInspectorSelectedTool(): LoadoutToolRef | null {
     const tools = this.getLocalInspectorTools();
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
+    const committed = bridge.getPlayerRuntimeLoadout(bridge.getLocalPlayerId());
     if (committed?.coopDefenseClassId !== 'inspector_gadachs') {
       return getActiveConstructionToolRefs(
         getConstructionAccessContext(bridge.getGameMode(), committed),
@@ -851,7 +851,7 @@ export class ClientUpdateCoordinator {
 
   private getLocalCoopDefenseClassId() {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId);
+    const committed = bridge.getPlayerRuntimeLoadout(localId);
     if (committed) return committed.coopDefenseClassId;
     return this.storedClassIdFallback;
   }

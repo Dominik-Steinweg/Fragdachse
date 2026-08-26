@@ -98,14 +98,23 @@ import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases, type BaseSpec } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases, setActiveCoopDefenseBases, type BaseSpec } from '../../arena/BaseRegistry';
+import { getCoopDefenseMapConfig, getPersistentBaseEditorMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
+import {
+  getArenaRuntimeProfile,
+  type ArenaRuntimeProfile,
+} from './ArenaRuntimeProfile';
+import {
+  toMissionWorldDescriptor,
+  toPersistentBaseEditorWorldDescriptor,
+  type ArenaWorldDescriptor,
+} from './ArenaWorldDescriptor';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
 import type { RockVisualHelper }      from './RockVisualHelper';
@@ -113,7 +122,7 @@ import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaDescriptor, ArenaLayout, GameMode, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
+import type { ArenaDescriptor, ArenaLayout, GameMode, LoadoutCommitSnapshot, LoadoutUseParams, PersistentBaseEditorWorld, PlayerProfile, RoomQualitySnapshot } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -157,6 +166,7 @@ import {
   setStoredPersistentBaseRewardPlacements,
 } from '../../utils/localPreferences';
 import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRepository';
+import { PERSISTENT_BASE_CORE_ID, type PersistentBaseSiteView } from '../../persistentBase/PersistentBaseSite';
 import { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
 import { PersistentBaseRoomState, type GuestPersistentConstruction } from '../../persistentBase/PersistentBaseRoomState';
 import {
@@ -229,7 +239,7 @@ export class ArenaLifecycleCoordinator {
   private terrainSnapshotReady = false;
   private terrainSnapshotGenerationId = 0;
   private hostStartupCachesPrepared = false;
-  private preparedRoundLayout: { descriptor: ArenaDescriptor; layout: ArenaLayout } | null = null;
+  private preparedWorldLayout: { world: ArenaWorldDescriptor; layout: ArenaLayout } | null = null;
   private pendingHostArenaGeneration: {
     readonly roundRevision: number;
     readonly gameMode: GameMode;
@@ -251,7 +261,10 @@ export class ArenaLifecycleCoordinator {
   private persistentBaseRadiusCells = 0;
   private persistentBaseRewardState: PersistentBaseRewardState | null = null;
   private persistentBaseCompositeService: PersistentBaseCompositeService | null = null;
-  private persistentBaseRuntimeMode: 'mission' | 'persistent-base-editor' | null = null;
+  /** Profil der aktuell aufgebauten Welt; `null` bedeutet: keine Welt aufgebaut. */
+  private runtimeProfile: ArenaRuntimeProfile | null = null;
+  /** Nur die Editor-Runtime; die Mission-Ladebarriere hängt weiterhin an `arenaBuilt`. */
+  private editorWorldRevision = 0;
   private readonly persistentBaseMutationRequests = new Map<string, Set<string>>();
   private readonly persistentRewardOccupancyIds = new Set<string>();
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
@@ -272,8 +285,9 @@ export class ArenaLifecycleCoordinator {
 
   isMatchTerminated(): boolean { return this.matchTerminated; }
 
-  isPersistentBaseRuntimeActive(): boolean {
-    return this.persistentBaseRuntimeMode === 'persistent-base-editor';
+  /** True, sobald lokal eine Persistent-Base-Editor-Welt aufgebaut ist. */
+  isPersistentBaseEditorRuntimeActive(): boolean {
+    return this.runtimeProfile?.kind === 'persistent-base-editor';
   }
 
   getPersistentBaseCompositeSnapshot(): PersistentBaseCompositeSnapshot | null {
@@ -284,73 +298,106 @@ export class ArenaLifecycleCoordinator {
     return this.persistentBaseRadiusCells > 0
       ? this.persistentBaseRadiusCells
       : bridge.getPersistentBaseCompositeSnapshot()?.radiusCells
-        ?? bridge.getArenaDescriptor()?.persistentBaseRadiusCells
+        ?? bridge.getPersistentBaseEditorWorld()?.radiusCells
         ?? getStoredPersistentBaseRadiusCells();
   }
 
-  /** Host entry point; all connected editor participants share this one world/runtime. */
-  startPersistentBaseRuntime(): void {
-    if (!bridge.isHost() || bridge.getGamePhase() !== 'LOBBY'
-      || !bridge.hasPersistentBaseEditorParticipant()) return;
-    if (this.isPersistentBaseRuntimeActive()) {
-      this.syncPersistentBaseRuntimePlayers();
-      return;
-    }
-    const mapId = this.resolvePersistentBaseRuntimeMapId();
-    const mapConfig = getCoopDefenseMapConfig(mapId);
-    if (!mapConfig.persistentBase) return;
-    const editorMapConfig = this.createPersistentBaseEditorMapConfig(mapConfig);
-    const seed = Math.max(Date.now(), this.lastRoundRevision + 1);
-    const layout = ArenaGenerator.generate(seed, editorMapConfig);
-    const descriptor: ArenaDescriptor = {
-      roundRevision: seed,
-      gameMode: bridge.getGameMode(),
-      mapId: mapConfig.mapId,
-      seed,
-      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
-      layoutFingerprint: ArenaGenerator.fingerprint(layout),
-      runtimeMode: 'persistent-base-editor',
-      persistentBaseRadiusCells: getStoredPersistentBaseRadiusCells(),
-    };
-    this.lastRoundRevision = seed;
-    this.preparedRoundLayout = { descriptor, layout };
-    bridge.publishArenaDescriptor(descriptor);
-    this.buildPersistentBaseRuntime(descriptor);
+  /**
+   * Die eine aufgelöste Site der gerade aufgebauten Welt. Kies, Bauzone, Zonenvorschau und
+   * Platzierungsprüfung lesen ausschließlich diese Instanz.
+   */
+  getPersistentBaseSite(): PersistentBaseSiteView | null {
+    const anchor = this.persistentBaseAnchor;
+    if (!anchor || this.persistentBaseRadiusCells <= 0) return null;
+    return { anchor, radiusCells: this.persistentBaseRadiusCells };
   }
 
-  /** Called by the scene while LOBBY remains global and each player owns only their presence. */
-  syncPersistentBaseRuntime(): void {
-    if (bridge.getGamePhase() !== 'LOBBY') return;
-    const hasParticipants = bridge.hasPersistentBaseEditorParticipant();
-    if (!hasParticipants) {
-      this.stopPersistentBaseRuntimeIfUnused();
+  /**
+   * Spawn-Fokus der Editor-Runtime. Mission und Editor benutzen denselben
+   * Player-Runtime-Aktivierungspfad; der Fokus ist der einzige Unterschied.
+   */
+  getPersistentBaseEditorSpawnFocusCell(): { readonly gridX: number; readonly gridY: number } | null {
+    return this.isPersistentBaseEditorRuntimeActive() ? this.persistentBaseAnchor : null;
+  }
+
+  /**
+   * Einziger Einstiegspunkt der Editor-Runtime, pro Frame aus der Lobby gerufen.
+   *
+   * Host: hält die Welt, solange mindestens ein Teilnehmer existiert.
+   * Client: baut die Welt ausschließlich, wenn der lokale Spieler selbst teilnimmt.
+   * Alle übrigen Clients bleiben vollständig in der Lobby.
+   */
+  syncPersistentBaseEditorRuntime(): void {
+    if (bridge.getGamePhase() !== 'LOBBY') {
+      // In ARENA besitzt allein die Mission den Lifecycle. Ein Editor-Rest darf hier nicht
+      // aufräumen und damit den Missionsaufbau anfassen.
       return;
     }
-    const descriptor = bridge.getArenaDescriptor();
-    if (!descriptor || descriptor.runtimeMode !== 'persistent-base-editor') return;
-    if (!this.isPersistentBaseRuntimeActive() || this.lastRoundRevision !== descriptor.roundRevision) {
+    if (bridge.isHost()) this.hostPublishPersistentBaseEditorWorld();
+
+    const world = bridge.getPersistentBaseEditorWorld();
+    const shouldHoldWorld = world !== null && (bridge.isHost()
+      ? bridge.hasPersistentBaseEditorParticipant()
+      : bridge.isLocalPersistentBaseEditorActive());
+    if (!shouldHoldWorld) {
+      this.tearDownPersistentBaseEditorRuntime();
+      return;
+    }
+    if (!this.isPersistentBaseEditorRuntimeActive() || this.editorWorldRevision !== world.revision) {
       try {
-        this.buildPersistentBaseRuntime(descriptor);
+        this.buildPersistentBaseEditorWorld(world);
       } catch (error) {
-        console.error('[ArenaLifecycleCoordinator] Persistent-base runtime could not be built:', error);
-        this.stopPersistentBaseRuntimeIfUnused();
+        console.error('[ArenaLifecycleCoordinator] Persistent-base editor world could not be built:', error);
+        this.tearDownPersistentBaseEditorRuntime();
         return;
       }
     }
-    this.syncPersistentBaseRuntimePlayers();
+    this.syncPersistentBaseEditorPlayers();
   }
 
-  stopPersistentBaseRuntimeIfUnused(): void {
-    if (!this.isPersistentBaseRuntimeActive() || bridge.hasPersistentBaseEditorParticipant()) return;
-    this.arenaBuilt = false;
+  /** Host-autoritativer Welt-Snapshot; er lebt ausschließlich, solange jemand editiert. */
+  private hostPublishPersistentBaseEditorWorld(): void {
+    if (!bridge.hasPersistentBaseEditorParticipant()) {
+      if (bridge.getPersistentBaseEditorWorld()) bridge.publishPersistentBaseEditorWorld(null);
+      return;
+    }
+    if (bridge.getPersistentBaseEditorWorld()) return;
+
+    const mapConfig = getPersistentBaseEditorMapConfig();
+    const seed = Date.now();
+    this.applyWorldArenaMetrics(bridge.getGameMode(), mapConfig);
+    const layout = ArenaGenerator.generate(seed, mapConfig);
+    bridge.publishPersistentBaseEditorWorld({
+      revision: seed,
+      gameMode: bridge.getGameMode(),
+      seed,
+      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+      layoutFingerprint: ArenaGenerator.fingerprint(layout),
+      radiusCells: getStoredPersistentBaseRadiusCells(),
+    });
+  }
+
+  private buildPersistentBaseEditorWorld(world: PersistentBaseEditorWorld): void {
+    this.applyWorldArenaMetrics(world.gameMode, getPersistentBaseEditorMapConfig());
+    this.buildArena(toPersistentBaseEditorWorldDescriptor(world));
+    this.editorWorldRevision = world.revision;
+    // Der Host-Tick repliziert Spieler und Placeables. Alles Missionshafte ist bereits über das
+    // Runtime-Profil abgeschaltet, deshalb braucht es hier keine weiteren Sonderfälle.
+    this.hostUpdate.setActive(true);
+    if (bridge.isHost()) {
+      bridge.setPersistentBaseCompositeSnapshot(this.getPersistentBaseCompositeSnapshot());
+    }
+  }
+
+  /** Räumt ausschließlich Editor-Zustand ab; der Mission-Lifecycle bleibt unberührt. */
+  tearDownPersistentBaseEditorRuntime(): void {
+    if (!this.isPersistentBaseEditorRuntimeActive()) return;
     for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
-      if (bridge.isHost()) this.ctx.combatSystem.removePlayer(player.id);
-      this.ctx.hostPhysics.removePlayer(player.id);
-      this.ctx.playerManager.removePlayer(player.id);
+      this.deactivatePlayerRuntime(player.id);
     }
     this.hostUpdate.setActive(false);
     this.tearDownArena();
-    this.persistentBaseRuntimeMode = null;
+    this.editorWorldRevision = 0;
     this.persistentBaseCompositeService = null;
     this.persistentBaseRewardState = null;
     this.persistentBaseAnchor = null;
@@ -361,66 +408,22 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  private resolvePersistentBaseRuntimeMapId(): string {
-    const selected = getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
-    return selected.persistentBase ? selected.mapId : '11';
-  }
-
-  private createPersistentBaseEditorMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConfig {
-    return {
-      ...mapConfig,
-      bases: mapConfig.bases.filter((base) => base.faction === 'friendly' && base.role === 'main'),
-      powerUps: [],
-      persistentSpawns: [],
-      encounters: undefined,
-      secondaryObjectives: undefined,
-      missionProgress: undefined,
-      boss: undefined,
-      mapEvents: [],
-      objective: 'survive',
-      surviveDurationSec: undefined,
-      respawnsPerPlayer: undefined,
-    };
-  }
-
-  private buildPersistentBaseRuntime(descriptor: ArenaDescriptor): void {
-    this.lastRoundRevision = descriptor.roundRevision;
+  /** Einzige Stelle, an der die globale Arena-Metrik an eine aufgebaute Welt gebunden wird. */
+  private applyWorldArenaMetrics(gameMode: GameMode, mapConfig: CoopDefenseMapConfig | null): void {
     applyArenaMetricsForMode(
-      descriptor.gameMode,
-      'LOBBY',
-      getCoopDefenseMapConfig(descriptor.mapId ?? this.resolvePersistentBaseRuntimeMapId()).arenaWidthCells,
-      getCoopDefenseMapConfig(descriptor.mapId ?? this.resolvePersistentBaseRuntimeMapId()).arenaHeightCells,
+      gameMode,
+      'ARENA',
+      mapConfig?.arenaWidthCells,
+      mapConfig?.arenaHeightCells,
     );
-    this.buildArena(descriptor);
-    this.arenaBuilt = true;
-    this.persistentBaseRuntimeMode = 'persistent-base-editor';
-    this.localArenaLoadReady = true;
-    this.terrainSnapshotReady = true;
-    // The peaceful mode still uses the normal host tick to replicate players and placeables;
-    // its content-free map/configuration is what disables mission simulation.
-    this.hostUpdate.setActive(true);
-    this.syncPersistentBaseRuntimePlayers();
-    if (bridge.isHost()) {
-      bridge.setPersistentBaseCompositeSnapshot(this.getPersistentBaseCompositeSnapshot());
-    }
   }
 
-  private syncPersistentBaseRuntimePlayers(): void {
-    if (!this.isPersistentBaseRuntimeActive() || !this.ctx.currentLayout) return;
+  private syncPersistentBaseEditorPlayers(): void {
+    if (!this.isPersistentBaseEditorRuntimeActive() || !this.ctx.currentLayout) return;
     const activeIds = new Set(bridge.getPersistentBaseEditorPlayerIds());
     const connectedIds = new Set(bridge.getConnectedPlayerIds());
     for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
-      if (!activeIds.has(player.id)) {
-        if (bridge.isHost()) {
-          this.ctx.combatSystem.removePlayer(player.id);
-          this.ctx.resourceSystem?.removePlayer(player.id);
-          this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(player.id);
-          this.ctx.burrowSystem?.removePlayer(player.id);
-          this.ctx.loadoutManager?.removePlayer(player.id);
-        }
-        this.ctx.hostPhysics.removePlayer(player.id);
-        this.ctx.playerManager.removePlayer(player.id);
-      }
+      if (!activeIds.has(player.id)) this.deactivatePlayerRuntime(player.id);
     }
     for (const runtime of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
       if (runtime.persistentRewardId || connectedIds.has(runtime.ownerId)) continue;
@@ -430,33 +433,14 @@ export class ArenaLifecycleCoordinator {
       this.emitPersistentRestoreRemoved(removed);
     }
     for (const profile of bridge.getConnectedPlayers()) {
-      if (!activeIds.has(profile.id) || this.ctx.playerManager.hasPlayer(profile.id)) continue;
-      this.ctx.playerManager.addPlayer(profile);
-      const player = this.ctx.playerManager.getPlayer(profile.id);
-      if (!player) continue;
-      if (bridge.isHost()) {
-        this.ctx.combatSystem.initPlayer(profile.id);
-        this.ctx.resourceSystem?.initPlayer(profile.id);
-        this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
-        this.ctx.burrowSystem?.initPlayer(profile.id);
-        this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
-      }
-      this.ensureAllyFlowField(profile.id);
-      const anchor = this.persistentBaseAnchor;
-      if (anchor && this.ctx.placementSystem) {
-        const point = this.ctx.placementSystem.getWorldPointForCell(anchor.gridX, anchor.gridY);
-        player.sprite.setPosition(point.x, point.y);
-      }
+      if (!activeIds.has(profile.id)) continue;
+      this.activatePlayerRuntime(profile);
     }
     this.syncPersistentBaseRuntimeContributions(connectedIds);
-    if (activeIds.has(bridge.getLocalPlayerId())) {
-      this.localPlayerState.alive = true;
-      this.localPlayerState.spectator = false;
-    } else {
-      this.localPlayerState.alive = false;
-      this.localPlayerState.spectator = false;
-      this.localPlayerState.burrowed = false;
-    }
+    const localParticipates = activeIds.has(bridge.getLocalPlayerId());
+    this.localPlayerState.alive = localParticipates;
+    this.localPlayerState.spectator = false;
+    if (!localParticipates) this.localPlayerState.burrowed = false;
   }
 
   private syncPersistentBaseRuntimeContributions(connectedIds: ReadonlySet<string>): void {
@@ -545,11 +529,12 @@ export class ArenaLifecycleCoordinator {
   }
 
   private createPersistentBaseCompositeService(
-    editorRuntime: boolean,
+    profile: ArenaRuntimeProfile,
     anchorBase: BaseSpec,
   ): void {
     if (!bridge.isHost() || !this.persistentBaseAnchor || !this.persistentBaseRewardState) return;
 
+    const editorRuntime = !profile.missionPersistentBaseSession;
     const localContribution = editorRuntime
       ? getStoredPersistentBaseContribution()
       : this.persistentBaseSession?.getPersonalContribution() ?? getStoredPersistentBaseContribution();
@@ -615,14 +600,14 @@ export class ArenaLifecycleCoordinator {
     seen.add(request.requestId);
     this.persistentBaseMutationRequests.set(playerId, seen);
 
-    const editorRuntime = bridge.getGamePhase() === 'LOBBY'
-      && bridge.isPlayerPersistentBaseEditorActive(playerId);
-    const missionRuntime = bridge.getGamePhase() === 'ARENA'
-      && isCoopDefenseMode(bridge.getGameMode())
-      && this.persistentBaseAnchor !== null;
-    if ((editorRuntime || missionRuntime) && this.persistentBaseCompositeService) {
-      this.handlePersistentBaseRuntimeMutation(playerId, operation, request, editorRuntime);
-    }
+    // Das Profil der aufgebauten Welt entscheidet, welcher Persistenzpfad gilt – nicht die
+    // Kombination aus Phase und Spielerpräsenz.
+    const profile = this.runtimeProfile;
+    if (!profile || !this.persistentBaseAnchor || !this.persistentBaseCompositeService) return;
+    const editorRuntime = !profile.missionPersistentBaseSession;
+    if (editorRuntime && !bridge.isPlayerPersistentBaseEditorActive(playerId)) return;
+    if (!editorRuntime && (bridge.getGamePhase() !== 'ARENA' || !isCoopDefenseMode(bridge.getGameMode()))) return;
+    this.handlePersistentBaseRuntimeMutation(playerId, operation, request, editorRuntime);
   }
 
   handleStructureEnterRequest(playerId: string, request: StructureOccupancyRequest): void {
@@ -807,6 +792,9 @@ export class ArenaLifecycleCoordinator {
     // Autoritativen Lobby-Snapshot final aktualisieren, damit der Stand, mit dem gestartet wird,
     // exakt dem entspricht, gegen den die Clients beim "Bereit" geprüft haben.
     bridge.publishLobbySync();
+    // Der Editor-Welt-Kanal ist reliable und global. Er wird beim Rundenstart aktiv geleert,
+    // damit kein Editor-Zustand als alter globaler Wert in die Mission hineinreicht.
+    bridge.publishPersistentBaseEditorWorld(null);
     bridge.setMatchHostId();
     bridge.resetAllFrags();
     bridge.resetCoopDefenseRoundXp();
@@ -966,26 +954,58 @@ export class ArenaLifecycleCoordinator {
         // Waffe gestartet"). Das Match startet ohnehin erst, wenn alle committed sind (areAllPlayersReady),
         // daher verzögert das den Spawn höchstens um wenige Frames im Countdown.
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
-        this.ctx.playerManager.addPlayer(profile);
-        if (reconnectAfterDeath) {
-          if (!this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id)) {
-            this.ctx.playerManager.removePlayer(profile.id);
-            continue;
-          }
-        } else {
-          this.ctx.combatSystem.initPlayer(profile.id);
-          this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
-        }
-        // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
-        // Arenaaufbau existierten sie noch nicht.
-        this.ensureAllyFlowField(profile.id);
-        this.ctx.resourceSystem?.initPlayer(profile.id);
-        this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
-        this.ctx.burrowSystem?.initPlayer(profile.id);
-        this.ctx.loadoutManager?.resetUltimateState(profile.id);
-        this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+        this.activatePlayerRuntime(profile, { reconnectAfterDeath });
       }
     }
+  }
+
+  /**
+   * Gemeinsamer Player-Runtime-Aktivierungspfad von Mission und Editor.
+   *
+   * Entity, Combat, Ressourcen, Items, Burrow, Ally-Flowfield und Loadout entstehen für beide
+   * Laufzeiten in derselben Reihenfolge. Den Unterschied macht ausschließlich der Spawnpunkt,
+   * den der PlayerManager über den Spawn-Fokus der jeweiligen Welt auflöst.
+   */
+  private activatePlayerRuntime(
+    profile: PlayerProfile,
+    options: { readonly reconnectAfterDeath?: boolean } = {},
+  ): boolean {
+    if (this.ctx.playerManager.hasPlayer(profile.id)) return false;
+    this.ctx.playerManager.addPlayer(profile);
+    if (!this.ctx.playerManager.getPlayer(profile.id)) return false;
+    if (bridge.isHost()) {
+      if (options.reconnectAfterDeath) {
+        if (!this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id)) {
+          this.ctx.playerManager.removePlayer(profile.id);
+          return false;
+        }
+      } else {
+        this.ctx.combatSystem.initPlayer(profile.id);
+        this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
+      }
+      this.ctx.resourceSystem?.initPlayer(profile.id);
+      this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
+      this.ctx.burrowSystem?.initPlayer(profile.id);
+      this.ctx.loadoutManager?.resetUltimateState(profile.id);
+      this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveRuntimeLoadoutSelection(profile.id));
+    }
+    // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
+    // Arenaaufbau existierten sie noch nicht.
+    this.ensureAllyFlowField(profile.id);
+    return true;
+  }
+
+  /** Gegenstück zu {@link activatePlayerRuntime}; identisch für Mission und Editor. */
+  private deactivatePlayerRuntime(playerId: string): void {
+    if (bridge.isHost()) {
+      this.ctx.combatSystem.removePlayer(playerId);
+      this.ctx.resourceSystem?.removePlayer(playerId);
+      this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
+      this.ctx.burrowSystem?.removePlayer(playerId);
+      this.ctx.loadoutManager?.removePlayer(playerId);
+    }
+    this.ctx.hostPhysics.removePlayer(playerId);
+    this.ctx.playerManager.removePlayer(playerId);
   }
 
   private prepareHostStartupCaches(now: number): boolean {
@@ -1251,15 +1271,16 @@ export class ArenaLifecycleCoordinator {
     this.removeGuestSessionOwner(playerId);
   }
 
+  /**
+   * Persönliche Konstruktionen unterliegen im Editor exakt denselben Klassen-, Unlock- und
+   * Tool-Regeln wie in der Mission. Der Editor ersetzt nur die Quelle des Snapshots (Editor-Build
+   * statt Ready-Commit) – er überspringt die Prüfung nicht.
+   */
   getActiveConstructionToolsForPlayer(playerId: string): readonly LoadoutToolRef[] {
-    if (bridge.getGamePhase() === 'LOBBY' && bridge.isPlayerPersistentBaseEditorActive(playerId)) {
-      // The peaceful editor deliberately has no ready/loadout snapshot. The host campaign is the
-      // authority for editor access, so a guest's missing local progress must not hide tools or
-      // block the canonical editor contribution.
-      return COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => ({ kind: 'construction', id }));
-    }
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    return getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed));
+    return getActiveConstructionToolRefs(getConstructionAccessContext(
+      bridge.getGameMode(),
+      bridge.getPlayerRuntimeLoadout(playerId),
+    ));
   }
 
   getConstructionCapacityForPlayer(playerId: string): number {
@@ -1373,17 +1394,22 @@ export class ArenaLifecycleCoordinator {
 
   // ── Arena build / teardown ────────────────────────────────────────────────
 
-  buildArena(descriptor: ArenaDescriptor): void {
-    if (descriptor.arenaGeneratorVersion !== ARENA_GENERATOR_VERSION) {
+  /**
+   * ArenaWorld-Core. Baut Layout, Rendering, Placement und die Spieler-Runtime für jede
+   * Laufzeit gleich; alles Missionsspezifische hängt an genau einem Flag des Runtime-Profils.
+   */
+  buildArena(world: ArenaWorldDescriptor): void {
+    if (world.arenaGeneratorVersion !== ARENA_GENERATOR_VERSION) {
       throw new Error(
-        `[ArenaLifecycleCoordinator] Unsupported arena generator version ${descriptor.arenaGeneratorVersion}; expected ${ARENA_GENERATOR_VERSION}`,
+        `[ArenaLifecycleCoordinator] Unsupported arena generator version ${world.arenaGeneratorVersion}; expected ${ARENA_GENERATOR_VERSION}`,
       );
     }
 
-    const prepared = this.preparedRoundLayout;
-    const persistentBaseEditorRuntime = descriptor.runtimeMode === 'persistent-base-editor';
+    const prepared = this.preparedWorldLayout;
+    const profile = getArenaRuntimeProfile(world.runtimeKind);
     this.tearDownArena();
-    this.persistentBaseRuntimeMode = persistentBaseEditorRuntime ? 'persistent-base-editor' : 'mission';
+    this.runtimeProfile = profile;
+    this.ctx.runtimeProfile = profile;
 
     // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
@@ -1392,32 +1418,31 @@ export class ArenaLifecycleCoordinator {
     // Map-ID bevorzugt aus dem (gegateten) RoundState lesen – derselbe reliable-Snapshot, der auch die
     // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
     // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
-    const roundState = bridge.getRoundState();
-    const authoredCoopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
-      ? getCoopDefenseMapConfig(descriptor.mapId ?? roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
-      : null;
-    const coopDefenseMapConfig = persistentBaseEditorRuntime && authoredCoopDefenseMapConfig
-      ? this.createPersistentBaseEditorMapConfig(authoredCoopDefenseMapConfig)
-      : authoredCoopDefenseMapConfig;
-    const coopDefenseHumanPlayerCount = isCoopDefenseMode(descriptor.gameMode)
+    const roundState = profile.roundLifecycle ? bridge.getRoundState() : null;
+    // Der Weltinhalt hängt am Runtime-Profil, nicht an Sonderfällen: Die Mission löst ihre
+    // Kampagnenkarte auf, der Editor seine eigene, kartenunabhängige Welt.
+    const coopDefenseMapConfig = resolveWorldMapConfig(world, roundState?.coopDefenseMapId);
+    const coopDefenseHumanPlayerCount = isCoopDefenseMode(world.gameMode)
       ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
-    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode) && !persistentBaseEditorRuntime
+    const coopDefenseEnemyConfigs = isCoopDefenseMode(world.gameMode) && profile.enemies
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
     const coopDefenseBases = coopDefenseMapConfig
       ? getCoopDefenseBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
+    // Ab hier ist das die eine Basenmenge der Welt; alle argumentlosen Leser sehen genau sie.
+    setActiveCoopDefenseBases(coopDefenseBases);
     const locallyGeneratedLayout = prepared
-      && prepared.descriptor.roundRevision === descriptor.roundRevision
-      && prepared.descriptor.seed === descriptor.seed
-      && prepared.descriptor.layoutFingerprint === descriptor.layoutFingerprint
+      && prepared.world.revision === world.revision
+      && prepared.world.seed === world.seed
+      && prepared.world.layoutFingerprint === world.layoutFingerprint
       ? prepared.layout
-      : ArenaGenerator.generate(descriptor.seed, coopDefenseMapConfig ?? undefined);
+      : ArenaGenerator.generate(world.seed, coopDefenseMapConfig ?? undefined);
     const actualFingerprint = ArenaGenerator.fingerprint(locallyGeneratedLayout);
-    if (actualFingerprint !== descriptor.layoutFingerprint) {
+    if (actualFingerprint !== world.layoutFingerprint) {
       throw new Error(
-        `[ArenaLifecycleCoordinator] Arena fingerprint mismatch: expected ${descriptor.layoutFingerprint}, got ${actualFingerprint}`,
+        `[ArenaLifecycleCoordinator] Arena fingerprint mismatch: expected ${world.layoutFingerprint}, got ${actualFingerprint}`,
       );
     }
     const layout = locallyGeneratedLayout;
@@ -1425,8 +1450,9 @@ export class ArenaLifecycleCoordinator {
       layout,
       coopDefenseBases.flatMap((base) => base.cells),
     );
-    this.preparedRoundLayout = null;
-    bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 35, 'building');
+    this.preparedWorldLayout = null;
+    // Die Ladebarriere gehört ausschließlich der Mission; der Editor darf sie nicht anfassen.
+    if (profile.roundLifecycle) bridge.setLocalArenaLoadProgress(world.revision, 35, 'building');
     const coopDefensePersistentSpawnConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapPersistentSpawnConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
@@ -1454,7 +1480,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
     if (bridge.isHost()) {
-      if (!persistentBaseEditorRuntime
+      if (profile.roundConclusion
         && coopDefenseMapConfig
         && objectiveUsesRespawnBudget(coopDefenseMapConfig.objective)) {
         const respawnsPerPlayer = coopDefenseMapConfig.respawnsPerPlayer;
@@ -1477,26 +1503,25 @@ export class ArenaLifecycleCoordinator {
     }
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
-    const persistentBaseAnchorBase = coopDefenseMapConfig?.persistentBase
-      ? coopDefenseBases.find((base) => base.id === coopDefenseMapConfig.persistentBase!.baseId)
-      : undefined;
-    const persistentBaseGravelRadius = persistentBaseEditorRuntime
-      ? descriptor.persistentBaseRadiusCells
+    const persistentBaseAnchorBase = coopDefenseBases
+      .find((base) => base.id === PERSISTENT_BASE_CORE_ID);
+    const persistentBaseGravelRadius = profile.roundLifecycle
+      ? roundState?.persistentBaseRadiusCells
+        ?? getStoredPersistentBaseState().radiusCells
+      : world.persistentBaseRadiusCells
         ?? bridge.getPersistentBaseCompositeSnapshot()?.radiusCells
-        ?? getStoredPersistentBaseRadiusCells()
-      : roundState?.persistentBaseRadiusCells
-        ?? getStoredPersistentBaseState().radiusCells;
+        ?? getStoredPersistentBaseRadiusCells();
     this.ctx.arenaResult = builder.buildDynamic(layout, {
       enablePersistentBaseGravel: Boolean(coopDefenseMapConfig?.persistentBase),
       persistentBaseGravel: persistentBaseAnchorBase
         ? {
-          seed: descriptor.seed,
+          seed: world.seed,
           anchor: getPersistentBaseAnchor(persistentBaseAnchorBase),
           radiusCells: persistentBaseGravelRadius,
         }
         : undefined,
     });
-    bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 60, 'building');
+    if (profile.roundLifecycle) bridge.setLocalArenaLoadProgress(world.revision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
     ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
@@ -1517,7 +1542,7 @@ export class ArenaLifecycleCoordinator {
       }
       this.persistentBaseAnchor = getPersistentBaseAnchor(anchorBase);
       this.persistentBaseRadiusCells = persistentBaseGravelRadius;
-      if (bridge.isHost() && !persistentBaseEditorRuntime && !this.persistentBaseSession) {
+      if (bridge.isHost() && profile.missionPersistentBaseSession && !this.persistentBaseSession) {
         const repository = new PersistentBaseRepository();
         const committedState = repository.load();
         this.persistentBaseSession = new PersistentBaseSession(
@@ -1537,19 +1562,15 @@ export class ArenaLifecycleCoordinator {
         );
         this.ctx.persistentBaseSession = this.persistentBaseSession;
       }
-      if (bridge.isHost() && persistentBaseEditorRuntime && !this.persistentBaseRewardState) {
+      if (bridge.isHost() && !this.persistentBaseRewardState) {
         this.persistentBaseRewardState = new PersistentBaseRewardState({
           placements: getStoredPersistentBaseRewardPlacements(),
           nowMs: Date.now(),
         });
-      } else if (bridge.isHost() && !this.persistentBaseRewardState) {
-        this.persistentBaseRewardState = new PersistentBaseRewardState({
-          placements: getStoredPersistentBaseRewardPlacements(),
-          nowMs: Date.now(),
-        });
-        this.persistentBaseRewardState.beginMission();
+        // Nur die Mission verbraucht Belohnungs-Cooldowns; der Editor plant sie nur um.
+        if (profile.missionPersistentBaseSession) this.persistentBaseRewardState.beginMission();
       }
-      if (bridge.isHost() && !persistentBaseEditorRuntime) this.persistentBaseRoomState.hydratePersonalContributions(
+      if (bridge.isHost() && profile.missionPersistentBaseSession) this.persistentBaseRoomState.hydratePersonalContributions(
         bridge.getConnectedPlayerIds()
           .filter((playerId) => playerId !== bridge.getLocalPlayerId())
           .map((playerId) => ({
@@ -1558,10 +1579,10 @@ export class ArenaLifecycleCoordinator {
           }))
           .filter((entry): entry is { playerId: string; contribution: import('../../persistentBase/PersistentBaseTypes').PersistentPlayerBaseContribution } => entry.contribution !== null),
       );
-      if (bridge.isHost() && !persistentBaseEditorRuntime) this.persistentBaseRoomState.beginMission();
-      if (bridge.isHost()) this.createPersistentBaseCompositeService(persistentBaseEditorRuntime, anchorBase);
+      if (bridge.isHost() && profile.missionPersistentBaseSession) this.persistentBaseRoomState.beginMission();
+      if (bridge.isHost()) this.createPersistentBaseCompositeService(profile, anchorBase);
       if (bridge.isHost()) this.publishPersistentBaseRewards();
-      if (!bridge.isHost() && persistentBaseEditorRuntime) {
+      if (!bridge.isHost() && !profile.missionPersistentBaseSession) {
         const snapshot = bridge.getPersistentBaseCompositeSnapshot();
         if (snapshot) this.restorePersistentBaseComposite(snapshot, anchorBase);
       }
@@ -1646,7 +1667,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
       && this.ctx.baseManager
       && isCoopDefenseMode(bridge.getGameMode())
-      && !persistentBaseEditorRuntime
+      && profile.roundConclusion
       && coopDefenseMapConfig
       ? new CoopDefenseRoundStateSystem({
         baseManager: this.ctx.baseManager,
@@ -1968,7 +1989,7 @@ export class ArenaLifecycleCoordinator {
         : null;
       this.ctx.coopDefenseMissionProgressSystem = bridge.isHost() && missionProgressConfig
         ? new CoopDefenseMissionProgressSystem(missionProgressConfig, {
-          roundRevision: descriptor.roundRevision,
+          roundRevision: world.revision,
           getDefenseObjectiveState: (objectiveId) => (
             this.ctx.coopDefenseSecondaryObjectiveSystem?.getObjectiveState(objectiveId) ?? null
           ),
@@ -3156,7 +3177,9 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.combatSystem.setDecoySystem(this.ctx.decoySystem);
 
-      this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
+      // Power-Ups, Pedestals und Nuke-Overrides gehören zu den Weltereignissen der Mission. Ohne
+      // sie existiert das System gar nicht erst, statt inert mitzulaufen.
+      this.ctx.powerUpSystem = !profile.worldEvents ? null : new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
         onPickupCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
         onNukePickup: (playerId) => {
           return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1) ?? false;
@@ -3203,21 +3226,22 @@ export class ArenaLifecycleCoordinator {
         ),
         isLinkedBaseActive: (baseId) => this.ctx.baseManager?.getActiveBaseIds().has(baseId) ?? false,
       });
-      this.ctx.powerUpSystem.setConstructionRespawnMultiplierProvider((constructionId) => {
+      this.ctx.powerUpSystem?.setConstructionRespawnMultiplierProvider((constructionId) => {
         const rock = this.ctx.placementSystem?.getRuntimeRock(constructionId);
         if (!rock) return 1;
         const world = this.rockVisualHelper.gridToWorld(rock.gridX, rock.gridY);
         return this.ctx.energyInjectorSystem?.getPowerUpRespawnMultiplierAt(world.x, world.y) ?? 1;
       });
-      this.ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
+      this.ctx.powerUpSystem?.setArenaStartTime(bridge.getArenaStartTime());
       this.ctx.combatSystem.setPowerUpSystem(this.ctx.powerUpSystem);
       this.ctx.resourceSystem.setPowerUpSystem(this.ctx.powerUpSystem);
 
       this.ctx.detonationSystem = new DetonationSystem(this.ctx.projectileManager);
       this.ctx.combatSystem.setDetonationSystem(this.ctx.detonationSystem);
 
-      this.ctx.armageddonSystem = new ArmageddonSystem();
-      this.ctx.armageddonSystem.setRockGrid(this.ctx.arenaResult.rockGrid);
+      // Armageddon ist eine Ultimate-Wirkung; ohne Kampfsimulation gibt es sie nicht.
+      this.ctx.armageddonSystem = profile.combatSimulation ? new ArmageddonSystem() : null;
+      this.ctx.armageddonSystem?.setRockGrid(this.ctx.arenaResult.rockGrid);
       this.ctx.loadoutManager.setArmageddonSystem(this.ctx.armageddonSystem);
       if (
         this.ctx.enemyManager
@@ -3262,6 +3286,8 @@ export class ArenaLifecycleCoordinator {
         this.ctx.enemyManager
         && this.ctx.coopDefenseEnemyBurrowSystem
         && this.ctx.flamethrowerUpgradeSystem
+        && this.ctx.powerUpSystem
+        && this.ctx.armageddonSystem
       ) {
         this.ctx.coopDefenseVoidHunterSystem = new CoopDefenseVoidHunterSystem(
           this.ctx.enemyManager,
@@ -3603,7 +3629,7 @@ export class ArenaLifecycleCoordinator {
     this.cancelPendingHostArenaGeneration();
     this.localArenaLoadReady = false;
     this.hostStartupCachesPrepared = false;
-    this.preparedRoundLayout = null;
+    this.preparedWorldLayout = null;
     this.boundRoundStartTime = 0;
     this.pendingClassicTrainEvent = null;
     this.cancelTrainExplosionTimers();
@@ -3948,7 +3974,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTrainHitCallback(null);
     this.ctx.centerHUD.hideTrainWidget();
     this.clientUpdate.clientUtilityOverride = null;
-    this.persistentBaseRuntimeMode = null;
+    setActiveCoopDefenseBases(null);
+    this.runtimeProfile = null;
+    this.ctx.runtimeProfile = null;
   }
 
   private restorePersistentBase(
@@ -3958,7 +3986,7 @@ export class ArenaLifecycleCoordinator {
     const session = this.ctx.persistentBaseSession;
     if (!mapConfig?.persistentBase || !this.ctx.placementSystem) return;
 
-    const anchorBase = bases.find((base) => base.id === mapConfig.persistentBase!.baseId);
+    const anchorBase = bases.find((base) => base.id === PERSISTENT_BASE_CORE_ID);
     const hostId = bridge.getLocalPlayerId();
     if (!anchorBase) return;
 
@@ -4142,8 +4170,7 @@ export class ArenaLifecycleCoordinator {
     const placementSystem = this.ctx.placementSystem;
     const anchor = this.persistentBaseAnchor;
     if (!service || !placementSystem || !anchor
-      || (!editorRuntime && bridge.getGamePhase() !== 'ARENA')
-      || (editorRuntime && !this.isPersistentBaseRuntimeActive())) return;
+      || (editorRuntime ? bridge.getGamePhase() !== 'LOBBY' : bridge.getGamePhase() !== 'ARENA')) return;
 
     const ownerId = this.getPersistentBaseMutationOwnerId(playerId);
     const revision = editorRuntime
@@ -4426,7 +4453,8 @@ export class ArenaLifecycleCoordinator {
     const footprint = this.getPersistentRuntimeFootprint(runtime);
     const anchor = this.persistentBaseAnchor;
     if (!footprint || !anchor) return false;
-    if (this.isPersistentBaseRuntimeActive()) return true;
+    // Ohne Missions-Session gibt es keine Runden-Buchführung, die etwas übernehmen könnte.
+    if (!this.runtimeProfile?.missionPersistentBaseSession) return true;
     if (runtime.ownership === 'guest-session') {
       return this.persistentBaseRoomState.registerAccepted(
         runtime,
@@ -4441,11 +4469,12 @@ export class ArenaLifecycleCoordinator {
     return this.persistentBaseSession?.registerAccepted(runtime, blueprint, footprint) !== null;
   }
 
+  /** Mission und Editor teilen denselben Persistent-Base-Runtime-Pfad, sobald er aufgebaut ist. */
   private isSharedPersistentBaseRuntime(): boolean {
-    return this.persistentBaseCompositeService !== null
-      && this.persistentBaseAnchor !== null
-      && ((bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
-        || (bridge.getGamePhase() === 'LOBBY' && this.isPersistentBaseRuntimeActive()));
+    if (this.persistentBaseCompositeService === null || this.persistentBaseAnchor === null) return false;
+    return this.runtimeProfile?.missionPersistentBaseSession
+      ? bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode())
+      : bridge.getGamePhase() === 'LOBBY';
   }
 
   private acceptPersistentConstructionPlacement(
@@ -4548,7 +4577,7 @@ export class ArenaLifecycleCoordinator {
   private updateAcceptedPersistentRuntime(runtime: SyncedPlaceableRock, playerId: string): boolean {
     const anchor = this.persistentBaseAnchor;
     if (!anchor) return false;
-    if (this.isPersistentBaseRuntimeActive()) return true;
+    if (!this.runtimeProfile?.missionPersistentBaseSession) return true;
     if (runtime.ownership === 'guest-session') {
       return this.persistentBaseRoomState.updateRuntimePlacement(
         runtime.id,
@@ -4611,10 +4640,10 @@ export class ArenaLifecycleCoordinator {
   private isPersistentBaseMutationInRange(playerId: string, gridX: number, gridY: number): boolean {
     const player = this.ctx.playerManager.getPlayer(playerId);
     const placementSystem = this.ctx.placementSystem;
-    const peacefulRuntime = bridge.getGamePhase() === 'LOBBY'
-      && bridge.isPlayerPersistentBaseEditorActive(playerId);
+    // Ohne Kampfsimulation gibt es keinen Lebenszustand, gegen den geprüft werden könnte.
+    const requiresAliveCheck = this.runtimeProfile?.combatSimulation ?? true;
     if (!player || !placementSystem || !player.sprite.active
-      || (!peacefulRuntime && !this.ctx.combatSystem.isAlive(playerId))) return false;
+      || (requiresAliveCheck && !this.ctx.combatSystem.isAlive(playerId))) return false;
     const target = placementSystem.getWorldPointForCell(gridX, gridY);
     return Math.hypot(player.sprite.x - target.x, player.sprite.y - target.y) <= COOP_DEFENSE_DISMANTLE_RANGE;
   }
@@ -4945,7 +4974,7 @@ export class ArenaLifecycleCoordinator {
           arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
           layoutFingerprint: ArenaGenerator.fingerprint(layout),
         };
-        this.preparedRoundLayout = { descriptor, layout };
+        this.preparedWorldLayout = { world: toMissionWorldDescriptor(descriptor), layout };
         bridge.publishArenaDescriptor(descriptor);
         this.onTransitionToArena();
       } catch (error) {
@@ -5011,7 +5040,7 @@ export class ArenaLifecycleCoordinator {
       coopDefenseArenaHeightCells,
     );
     try {
-      this.buildArena(descriptor);
+      this.buildArena(toMissionWorldDescriptor(descriptor));
     } catch (error) {
       console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
       this.terminateMatch('Lokale Arena-Erzeugung fehlgeschlagen (Generator/Fingerprint abweichend).');
@@ -5025,18 +5054,8 @@ export class ArenaLifecycleCoordinator {
     for (const profile of bridge.getConnectedPlayers()) {
       const canCreatePlayer = bridge.canPlayerSpawnOrRespawn(profile.id)
         && (!bridge.isHost() || bridge.canPlayerInitialSpawn(profile.id));
-      if (canCreatePlayer
-        && bridge.getPlayerReady(profile.id)
-        && !this.ctx.playerManager.hasPlayer(profile.id)) {
-        this.ctx.playerManager.addPlayer(profile);
-        if (bridge.isHost()) {
-          this.ctx.combatSystem.initPlayer(profile.id);
-          this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
-          this.ctx.resourceSystem?.initPlayer(profile.id);
-          this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
-          this.ctx.burrowSystem?.initPlayer(profile.id);
-          this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
-        }
+      if (canCreatePlayer && bridge.getPlayerReady(profile.id)) {
+        this.activatePlayerRuntime(profile);
       }
     }
 
@@ -5392,16 +5411,11 @@ export class ArenaLifecycleCoordinator {
 
     const constructionId = getConstructionIdForUtility(cfg.id);
     if (constructionId) {
-      const committed = bridge.getPlayerCommittedLoadout(playerId);
-      const editorRuntime = bridge.getGamePhase() === 'LOBBY'
-        && bridge.isPlayerPersistentBaseEditorActive(playerId);
-      if (!editorRuntime) {
-        const access = resolveConstructionAccess(
-          constructionId,
-          getConstructionAccessContext(bridge.getGameMode(), committed),
-        );
-        if (!access.allowed) return false;
-      }
+      const access = resolveConstructionAccess(
+        constructionId,
+        getConstructionAccessContext(bridge.getGameMode(), bridge.getPlayerRuntimeLoadout(playerId)),
+      );
+      if (!access.allowed) return false;
       if (!this.hasFreeConstructionCapacity(
         playerId,
         getCoopDefenseConstructionDefinition(constructionId).capacityCost,
@@ -5452,16 +5466,11 @@ export class ArenaLifecycleCoordinator {
     const canonicalConstructionId = normalizeConstructionId(constructionId);
     if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
     constructionId = canonicalConstructionId;
-    const editorRuntime = bridge.getGamePhase() === 'LOBBY'
-      && bridge.isPlayerPersistentBaseEditorActive(playerId);
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (!editorRuntime) {
-      const access = resolveConstructionAccess(
-        constructionId,
-        getConstructionAccessContext(bridge.getGameMode(), committed),
-      );
-      if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
-    }
+    const access = resolveConstructionAccess(
+      constructionId,
+      getConstructionAccessContext(bridge.getGameMode(), bridge.getPlayerRuntimeLoadout(playerId)),
+    );
+    if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
@@ -5648,10 +5657,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Persoenliches Kapazitaetsmaximum inklusive Item-Boni. Host-Autoritaet fuer das Bau-Gate. */
   private getConstructionCapacity(playerId: string): number {
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (bridge.getGamePhase() === 'LOBBY'
-      && bridge.isPlayerPersistentBaseEditorActive(playerId)
-      && !committed) return COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS;
+    const committed = bridge.getPlayerRuntimeLoadout(playerId);
     return resolveConstructionCapacity({
       gameMode: bridge.getGameMode(),
       classId: committed?.coopDefenseClassId,
@@ -5956,8 +5962,24 @@ export class ArenaLifecycleCoordinator {
     );
   }
 
+  /**
+   * Einziger Loadout-Auflöser der Player-Runtime. Mission liest den Ready-Snapshot, der Editor
+   * seinen Editor-Snapshot; beide durchlaufen dieselbe Effektivauflösung.
+   */
+  private resolveRuntimeLoadoutSelection(playerId: string): LoadoutSelection {
+    return bridge.isPlayerPersistentBaseEditorActive(playerId)
+      ? this.resolveLoadoutSnapshotSelection(playerId, bridge.getPlayerPersistentBaseEditorLoadout(playerId))
+      : this.resolveCommittedLoadoutSelection(playerId);
+  }
+
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    return this.resolveLoadoutSnapshotSelection(playerId, bridge.getPlayerCommittedLoadout(playerId));
+  }
+
+  private resolveLoadoutSnapshotSelection(
+    playerId: string,
+    committed: LoadoutCommitSnapshot | null,
+  ): LoadoutSelection {
     if (!committed) {
       // Nach dem Spawn-Gate (hostHasCommittedLoadoutForSpawn) sollte das nicht mehr vorkommen.
       // Tritt es doch auf, ist die eingefrorene Auswahl noch nicht da → Live-Slot-Fallback (Risiko
@@ -5987,6 +6009,21 @@ export class ArenaLifecycleCoordinator {
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
     }, bridge.getGameMode());
   }
+}
+
+/**
+ * Weltinhalt einer aufgebauten Welt.
+ *
+ * Der Editor überspringt Missionssysteme nicht per Sonderfall – seine Welt enthält schlicht
+ * nichts, woraus Gegner, Ziele, Events oder eine Rundenauswertung entstehen könnten.
+ */
+export function resolveWorldMapConfig(
+  world: ArenaWorldDescriptor,
+  roundStateMapId?: string,
+): CoopDefenseMapConfig | null {
+  if (world.runtimeKind === 'persistent-base-editor') return getPersistentBaseEditorMapConfig();
+  if (!isCoopDefenseMode(world.gameMode)) return null;
+  return getCoopDefenseMapConfig(world.mapId ?? roundStateMapId ?? bridge.getCoopDefenseMapId());
 }
 
 function compareGuestRestoreBlueprints(

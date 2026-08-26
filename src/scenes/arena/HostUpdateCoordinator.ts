@@ -208,14 +208,18 @@ export class HostUpdateCoordinator {
     // Loading is still inert. During the synchronized countdown we run this coordinator only to
     // publish/render presentation state; every authoritative system below keeps its own gameplay
     // gate via countdownActive.
-    const persistentBaseRuntime = bridge.getGamePhase() === 'LOBBY'
-      && bridge.hasPersistentBaseEditorParticipant()
-      && this.ctx.placementSystem !== null;
-    const countdownActive = persistentBaseRuntime ? false : bridge.isArenaCountdownActive();
+    // Ohne aufgebaute Welt gibt es nichts zu simulieren. Countdown und Startzeitpunkt gehören
+    // ausschliesslich der Mission; das Runtime-Profil entscheidet das, keine Einzelabfrage.
+    const profile = this.ctx.runtimeProfile;
+    if (!profile) {
+      this.lastPerformance = emptyHostUpdatePerformanceMetrics();
+      return;
+    }
+    const countdownActive = profile.roundLifecycle && bridge.isArenaCountdownActive();
     const weaponBalanceLabActive = isWeaponBalanceLabMapId(
       bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
     );
-    if (!bridge.isArenaStarted() && !countdownActive && !persistentBaseRuntime) {
+    if (profile.roundLifecycle && !bridge.isArenaStarted() && !countdownActive) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
@@ -921,7 +925,7 @@ export class HostUpdateCoordinator {
       );
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const now = Date.now();
-      const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
+      const committedLoadout = bridge.getPlayerRuntimeLoadout(localId);
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
       const inspectorUtilityAction = hasUtilityOverride
         ? null
@@ -2420,7 +2424,7 @@ export class HostUpdateCoordinator {
 
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId);
+    const committed = bridge.getPlayerRuntimeLoadout(localId);
     const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
     if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud() !== null) return 0;
     const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()

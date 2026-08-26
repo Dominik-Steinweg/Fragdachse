@@ -40,10 +40,23 @@ export interface ArenaDescriptor {
   seed: number;
   arenaGeneratorVersion: number;
   layoutFingerprint: string;
-  /** The normal arena infrastructure can also host a peaceful persistent-base runtime. */
-  runtimeMode?: 'mission' | 'persistent-base-editor';
-  /** Host-authoritative persistent-base radius for peaceful runtime construction and previews. */
-  persistentBaseRadiusCells?: number;
+}
+
+/**
+ * Eigener Welt-Snapshot der Persistent-Base-Editor-Runtime.
+ *
+ * Bewusst getrennt vom {@link ArenaDescriptor}: Der Editor lebt in der LOBBY-Phase und darf den
+ * Mission-Descriptor weder überschreiben noch als veralteter globaler Zustand zurückbleiben.
+ */
+export interface PersistentBaseEditorWorld {
+  /** Welt-Revision; identifiziert genau eine aufgebaute Editor-Welt. */
+  revision: number;
+  gameMode: GameMode;
+  seed: number;
+  arenaGeneratorVersion: number;
+  layoutFingerprint: string;
+  /** Host-autoritativer Persistent-Base-Radius für Bau und Vorschau im Editor. */
+  radiusCells: number;
 }
 
 /** Reliable, low-frequency per-player status of the local arena build. */

@@ -5,12 +5,18 @@ import {
   getCoopDefenseMapConfig,
   getCoopDefenseCampaignAudit,
   getCoopDefenseMapScheduledXp,
+  getPersistentBaseEditorMapConfig,
   getCoopDefenseMapXpReference,
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapEncounterConfigs,
   type CoopBaseShape,
+  type CoopDefenseMapConfig,
   resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../src/config/coopDefenseMaps';
+import {
+  PERSISTENT_BASE_CORE_ID,
+  PERSISTENT_BASE_CORE_SIZE_CELLS,
+} from '../src/persistentBase/PersistentBaseSite';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import {
   isCoopDefenseBaseObstacleClearanceCell,
@@ -61,16 +67,33 @@ describe('Coop defense map progression', () => {
     const map12 = getCoopDefenseMapConfig('12');
     const map13 = getCoopDefenseMapConfig('13');
     const map14 = getCoopDefenseMapConfig('14');
-    expect(map11.persistentBase).toEqual({ baseId: 'coop-base-middle' });
-    expect(map12.persistentBase).toEqual({ baseId: 'coop-base-rear' });
-    expect(map13.persistentBase).toEqual({ baseId: 'coop-base-rear' });
-    expect(map14.persistentBase).toEqual({ baseId: 'coop-base-rear' });
+    // Die Karte autort ausschließlich die Platzierung; der Kern selbst ist kampagnenweit gleich.
+    for (const mapConfig of [map11, map12, map13, map14]) {
+      expect(mapConfig.persistentBase).toMatchObject({
+        anchorGridX: expect.any(Number),
+        anchorGridY: expect.any(Number),
+      });
+    }
 
-    const anchor11 = resolveCoopDefenseBases(map11).find((base) => base.id === 'coop-base-middle');
-    const anchor12 = resolveCoopDefenseBases(map12).find((base) => base.id === 'coop-base-rear');
-    const anchor13 = resolveCoopDefenseBases(map13).find((base) => base.id === 'coop-base-rear');
-    const anchor14 = resolveCoopDefenseBases(map14).find((base) => base.id === 'coop-base-rear');
-    expect(anchor11?.anchorGridX).toEqual(expect.any(Number));
+    const findCore = (mapConfig: CoopDefenseMapConfig) => resolveCoopDefenseBases(mapConfig)
+      .find((base) => base.id === PERSISTENT_BASE_CORE_ID);
+    const anchor11 = findCore(map11);
+    const anchor12 = findCore(map12);
+    const anchor13 = findCore(map13);
+    const anchor14 = findCore(map14);
+    for (const core of [anchor11, anchor12, anchor13, anchor14]) {
+      // Immer 3x3, freundliche Hauptbasis, ohne Türme und ohne Power-Up-Podeste.
+      expect(core?.cells).toHaveLength(PERSISTENT_BASE_CORE_SIZE_CELLS * PERSISTENT_BASE_CORE_SIZE_CELLS);
+      expect(core?.faction).toBe('friendly');
+      expect(core?.role).toBe('main');
+      expect(core?.turrets).toEqual([]);
+      expect(core?.powerUpPedestals).toEqual([]);
+    }
+    // Der Kern sitzt genau auf dem normalisierten Zonenmittelpunkt der Karte.
+    for (const [mapConfig, core] of [[map11, anchor11], [map12, anchor12], [map13, anchor13], [map14, anchor14]] as const) {
+      expect(core?.anchorGridX).toBe(mapConfig.persistentBase?.anchorGridX);
+      expect(core?.anchorGridY).toBe(mapConfig.persistentBase?.anchorGridY);
+    }
     for (const anchor of [anchor12, anchor13, anchor14]) {
       expect(anchor).toMatchObject({
         anchorGridX: expect.any(Number),
@@ -97,8 +120,18 @@ describe('Coop defense map progression', () => {
     expect(() => normalizeCoopDefenseMapConfig({
       ...map11,
       mapId: 'persistent-anchor-validation',
-      persistentBase: { baseId: 'missing-main' },
-    })).toThrow(/unknown base/);
+      persistentBase: { anchor: { kind: 'grid', gridX: 0, gridY: 0 } },
+    })).toThrow(/free cells around its anchor/);
+
+    // Die Editor-Welt ist keine Kampagnenkarte: leeres Gelände, Basiskern exakt in der Mitte.
+    const editorWorld = getPersistentBaseEditorMapConfig();
+    expect(COOP_DEFENSE_MAP_CONFIGS).not.toContain(editorWorld);
+    expect(editorWorld.bases).toEqual([]);
+    expect(editorWorld.powerUps).toEqual([]);
+    expect(editorWorld.persistentBase?.anchorGridX)
+      .toBe(Math.floor((editorWorld.arenaWidthCells! - PERSISTENT_BASE_CORE_SIZE_CELLS) / 2) + 1);
+    expect(editorWorld.persistentBase?.anchorGridY)
+      .toBe(Math.floor((editorWorld.arenaHeightCells! - PERSISTENT_BASE_CORE_SIZE_CELLS) / 2) + 1);
   });
 
   it('authors explicit rail positions while keeping the legacy center default', () => {
@@ -273,24 +306,10 @@ describe('Coop defense map progression', () => {
     const bomberMap = getCoopDefenseMapConfig('11');
     expect(bomberMap.objective).toBe('repel-assault');
     expect(bomberMap.persistentSpawns).toEqual([]);
-    expect(bomberMap.bases).toHaveLength(1);
-    expect(bomberMap.bases[0]?.id).toBe('coop-base-middle');
-    expect(bomberMap.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: -4, dyCells: 2 });
-    expect(getShapeBounds(bomberMap.bases[0]!.shape)).toEqual({ width: 5, height: 5 });
-    expect(bomberMap.bases[0]?.turrets?.map((turret) => ({
-      weaponId: turret.weaponId,
-      cellOffset: turret.cellOffset,
-    }))).toEqual([
-      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 0, gridY: 4 } },
-      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 4, gridY: 4 } },
-    ]);
-    expect(bomberMap.bases[0]?.powerUpPedestals?.map((pedestal) => ({
-      defId: pedestal.defId,
-      cellOffset: pedestal.cellOffset,
-    }))).toEqual([
-      { defId: 'HEALTH_PACK', cellOffset: { gridX: 0, gridY: 2 } },
-      { defId: 'ADRENALINE', cellOffset: { gridX: 4, gridY: 2 } },
-    ]);
+    // Die freundliche Hauptbasis der Karte ist der zentrale persistente Basiskern; die Karte
+    // autort dafür nur noch die Platzierung.
+    expect(bomberMap.bases).toHaveLength(0);
+    expect(bomberMap.persistentBase?.anchor).toEqual({ kind: 'center-offset', dxCells: -4, dyCells: 2 });
     expect(bomberMap.mapEvents?.some((event) => event.type === 'train')).toBe(false);
     expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',

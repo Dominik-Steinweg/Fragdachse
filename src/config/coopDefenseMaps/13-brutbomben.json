@@ -1,153 +1,30 @@
 {
   "mapId": "13",
-  "persistentBase": { "baseId": "coop-base-rear" },
+  "persistentBase": {
+    "anchor": {
+      "kind": "right-center",
+      "edgeInsetCells": 11
+    }
+  },
   "arenaWidthCells": 135,
   "arenaHeightCells": 42,
   "timeOfDay": "18:45",
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
   "trackPosition": "center",
-  "mapEvents": [{
-    "id": "train-rhythm",
-    "type": "train",
-    "start": { "type": "time", "atMs": 20000 },
-    "repeatAfterExitMs": 20000
-  }],
+  "mapEvents": [
+    {
+      "id": "train-rhythm",
+      "type": "train",
+      "start": {
+        "type": "time",
+        "atMs": 20000
+      },
+      "repeatAfterExitMs": 20000
+    }
+  ],
   "balanceReferenceDurationSec": 200,
   "bases": [
-    {
-      "id": "coop-base-rear",
-      "hpMax": 3300,
-      "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 10
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 3,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 3,
-            "gridY": 3
-          },
-          {
-            "gridX": 0,
-            "gridY": 4
-          },
-          {
-            "gridX": 1,
-            "gridY": 4
-          },
-          {
-            "gridX": 2,
-            "gridY": 4
-          },
-          {
-            "gridX": 3,
-            "gridY": 4
-          }
-        ]
-      },
-      "turrets": [
-        {
-          "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 4
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        }
-      ],
-      "powerUpPedestals": [
-        {
-          "id": "health-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "armor-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
-          "defId": "ARMOR",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "adrenaline-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
-          },
-          "defId": "ADRENALINE",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        }
-      ]
-    },
     {
       "id": "coop-base-middle",
       "hpMax": 1400,
@@ -673,7 +550,10 @@
     {
       "id": "destroy-brutbomben-front",
       "type": "destroy",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
       "targets": [
         "spawn-point-zombie-badger",
         "spawn-point-demon-badger",

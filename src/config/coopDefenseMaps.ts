@@ -1,5 +1,6 @@
 import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import rawWeaponBalanceLabMap from './coopDefenseMaps/weapon-balance-lab.internal.json';
+import rawPersistentBaseEditorMap from './coopDefenseMaps/persistent-base-editor.internal.json';
 import {
   getCoopDefenseEnemyConfig,
   hasCoopDefenseEnemyKind,
@@ -23,6 +24,7 @@ import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
+import { PERSISTENT_BASE_CORE_ID, PERSISTENT_BASE_CORE_SIZE_CELLS } from '../persistentBase/PersistentBaseSite';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
@@ -647,8 +649,21 @@ export interface CoopDefenseMapTutorialStepConfig {
   readonly durationMs?: number;
 }
 
+/**
+ * Platzierung des persistenten Bereichs auf einer Karte.
+ *
+ * Eine Karte legt ausschließlich fest, *wo* der Bereich liegt. Der Basiskern selbst – Größe,
+ * Form, HP, keine Türme, keine Power-Ups – kommt aus `persistentBase/PersistentBaseSite.ts`
+ * und ist auf jeder Karte und im Editor identisch.
+ */
 export interface CoopDefenseMapPersistentBaseConfig {
-  readonly baseId: string;
+  readonly anchor: CoopBaseAnchor;
+}
+
+/** Beim Laden aufgelöst: der konkrete Zonenmittelpunkt in Rasterkoordinaten. */
+export interface ResolvedCoopDefenseMapPersistentBaseConfig extends CoopDefenseMapPersistentBaseConfig {
+  readonly anchorGridX: number;
+  readonly anchorGridY: number;
 }
 
 export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMapTutorialStepConfig {
@@ -754,8 +769,8 @@ export interface CoopDefenseMapConfig {
   readonly respawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
-  /** Reuses the authored friendly main base as the persistent anchor. */
-  readonly persistentBase?: CoopDefenseMapPersistentBaseConfig;
+  /** Platzierung des persistenten Bereichs; beim Laden zur `Resolved…`-Form normalisiert. */
+  readonly persistentBase?: CoopDefenseMapPersistentBaseConfig | ResolvedCoopDefenseMapPersistentBaseConfig;
 }
 
 /** Maschinenlesbarer Kampagnen-Audit fuer das GDD-Review und Balancing-Tools. */
@@ -811,6 +826,22 @@ const WEAPON_BALANCE_LAB_MAP_CONFIG = normalizeCoopDefenseMapConfig(
   rawWeaponBalanceLabMap as CoopDefenseMapConfig,
 );
 
+/**
+ * Eigene Welt des Basis-Editors.
+ *
+ * Sie ist bewusst keine Kampagnenkarte: leeres, ebenes Gelände mit dem persistenten Bereich
+ * genau in der Mitte. Dadurch ist das Basisbau-Menü der Lobby von der Kartenauswahl vollständig
+ * unabhängig und zeigt immer dieselbe Welt.
+ */
+export const PERSISTENT_BASE_EDITOR_MAP_ID = 'persistent-base-editor';
+const PERSISTENT_BASE_EDITOR_MAP_CONFIG = normalizeCoopDefenseMapConfig(
+  rawPersistentBaseEditorMap as CoopDefenseMapConfig,
+);
+
+export function getPersistentBaseEditorMapConfig(): CoopDefenseMapConfig {
+  return PERSISTENT_BASE_EDITOR_MAP_CONFIG;
+}
+
 export function isWeaponBalanceLabMapId(mapId: string | null | undefined): boolean {
   return mapId === WEAPON_BALANCE_LAB_MAP_ID;
 }
@@ -822,6 +853,7 @@ const MAPS_BY_ID = new Map<string, CoopDefenseMapConfig>(
   [
     ...COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, mapConfig] as const),
     [WEAPON_BALANCE_LAB_MAP_CONFIG.mapId, WEAPON_BALANCE_LAB_MAP_CONFIG] as const,
+    [PERSISTENT_BASE_EDITOR_MAP_CONFIG.mapId, PERSISTENT_BASE_EDITOR_MAP_CONFIG] as const,
   ],
 );
 
@@ -1061,7 +1093,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   const persistentSpawns = Array.isArray(mapConfig.persistentSpawns) ? mapConfig.persistentSpawns : [];
   validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters);
   // Vorstoss besitzt keine Basis-Niederlage und braucht deshalb wie survive keine eigene Basis.
-  if (objective !== 'survive' && objective !== 'advance') validateFriendlyMainBase(mapConfig.mapId, bases);
+  if (objective !== 'survive' && objective !== 'advance') {
+    validateFriendlyMainBase(mapConfig.mapId, bases, mapConfig.persistentBase !== undefined);
+  }
   const surviveDurationSec = normalizeSurviveDurationSec(mapConfig.mapId, objective, mapConfig.surviveDurationSec);
   const balanceReferenceDurationSec = normalizeBalanceReferenceDurationSec(
     mapConfig.mapId,
@@ -1219,7 +1253,14 @@ function validateAdvanceRoute(
   }
 }
 
-function validateFriendlyMainBase(mapId: string, bases: readonly CoopBaseConfig[]): void {
+function validateFriendlyMainBase(
+  mapId: string,
+  bases: readonly CoopBaseConfig[],
+  hasPersistentBase: boolean,
+): void {
+  // Der persistente Basiskern ist eine vollwertige freundliche Hauptbasis; er wird beim Auflösen
+  // der Karte ergänzt und zählt deshalb hier bereits mit.
+  if (hasPersistentBase) return;
   if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly main base`);
   }
@@ -1231,22 +1272,18 @@ function normalizePersistentBaseConfig(
   bases: readonly CoopBaseConfig[],
   arenaWidthCells: number,
   arenaHeightCells: number,
-): CoopDefenseMapPersistentBaseConfig | undefined {
+): ResolvedCoopDefenseMapPersistentBaseConfig | undefined {
   if (config === undefined) return undefined;
-  if (typeof config.baseId !== 'string' || config.baseId.trim().length === 0) {
-    throw new Error(`[coopDefenseMaps] Persistent base on map ${mapId} needs a non-empty baseId`);
-  }
-  const baseId = config.baseId.trim();
-  const base = bases.find((candidate) => candidate.id === baseId);
-  if (!base) throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} references an unknown base`);
-  if (base.faction === 'hostile' || (base.role ?? 'main') !== 'main') {
-    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} must reference a friendly main base`);
+  if (!config.anchor || typeof config.anchor.kind !== 'string') {
+    throw new Error(`[coopDefenseMaps] Persistent base on map ${mapId} needs an anchor`);
   }
 
-  const dimensions = getBaseShapeDimensions(base.shape);
-  const origin = getBaseOriginForArena(base.anchor, dimensions.width, dimensions.height, arenaWidthCells, arenaHeightCells);
-  const anchorGridX = origin.gridX + Math.floor((dimensions.width - 1) / 2);
-  const anchorGridY = origin.gridY + Math.floor((dimensions.height - 1) / 2);
+  // Der Kern ist ein ungerades Quadrat; sein Ursprung ergibt sich aus derselben Ankerlogik wie
+  // bei jeder authored Basis, damit Autoren nur eine Platzierungssprache lernen müssen.
+  const size = PERSISTENT_BASE_CORE_SIZE_CELLS;
+  const origin = getBaseOriginForArena(config.anchor, size, size, arenaWidthCells, arenaHeightCells);
+  const anchorGridX = origin.gridX + Math.floor((size - 1) / 2);
+  const anchorGridY = origin.gridY + Math.floor((size - 1) / 2);
   const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
   if (
     anchorGridX - reservationRadius < 0
@@ -1255,10 +1292,15 @@ function normalizePersistentBaseConfig(
     || anchorGridY + reservationRadius >= arenaHeightCells
   ) {
     throw new Error(
-      `[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs ${reservationRadius} free cells around its anchor`,
+      `[coopDefenseMaps] Persistent base on map ${mapId} needs ${reservationRadius} free cells around its anchor`,
     );
   }
-  return { baseId };
+  if (bases.some((base) => base.id === PERSISTENT_BASE_CORE_ID)) {
+    throw new Error(
+      `[coopDefenseMaps] Map ${mapId} must not author a base with the reserved id ${PERSISTENT_BASE_CORE_ID}`,
+    );
+  }
+  return { anchor: config.anchor, anchorGridX, anchorGridY };
 }
 
 function getBaseShapeDimensions(shape: CoopBaseShape): { width: number; height: number } {

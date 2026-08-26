@@ -23,11 +23,14 @@ import {
   type CoopBaseRole,
   type CoopBaseTurretWeaponId,
   type CoopDefenseMapConfig,
+  type ResolvedCoopDefenseMapPersistentBaseConfig,
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMaps';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../config/persistentBase';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
+import { createPersistentBaseCoreConfig } from '../persistentBase/PersistentBaseSite';
+import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 
 export interface BaseTurretSpec {
   readonly id: string;
@@ -303,12 +306,30 @@ function resolveBaseTurretSpec(
 
 // ── Öffentliche API ────────────────────────────────────────────────────────
 
-/** Aktive Coop-Basen für die laufende Runde. Leeres Array außerhalb des Coop-Modus. */
+/**
+ * Basen der aktuell aufgebauten Welt.
+ *
+ * `buildArena()` hinterlegt sie hier, `tearDownArena()` löscht sie wieder. Ohne diese Bindung
+ * lösten Aufrufer ohne Argumente die *ausgewählte Kampagnenkarte* neu auf – auf einer anderen
+ * Welt (Basis-Editor) oder mit einer anderen Spielerzahl ergab das andere Basen als die, die
+ * tatsächlich stehen.
+ */
+let activeCoopDefenseBases: readonly BaseSpec[] | null = null;
+
+export function setActiveCoopDefenseBases(bases: readonly BaseSpec[] | null): void {
+  activeCoopDefenseBases = bases;
+}
+
+/** Aktive Coop-Basen für die laufende Welt. Leeres Array außerhalb des Coop-Modus. */
 export function getCoopDefenseBases(
-  mapConfig: CoopDefenseMapConfig = resolveActiveCoopDefenseMapConfig(),
+  mapConfig?: CoopDefenseMapConfig,
   humanPlayerCount = 1,
 ): readonly BaseSpec[] {
   if (!isCoopDefenseBasesActive()) return [];
+  if (mapConfig === undefined) {
+    return activeCoopDefenseBases
+      ?? resolveCoopDefenseBases(resolveActiveCoopDefenseMapConfig(), humanPlayerCount);
+  }
   return resolveCoopDefenseBases(mapConfig, humanPlayerCount);
 }
 
@@ -327,16 +348,28 @@ export function resolveCoopDefenseBases(
     humanPlayerCount,
     baseConfig.dormant === true ? objectiveByBaseId.get(baseConfig.id) : undefined,
   ));
-  const persistentBaseId = mapConfig.persistentBase?.baseId;
-  if (!persistentBaseId) return resolved;
-  return resolved.map((base) => base.id === persistentBaseId
-    ? {
-      ...base,
-      anchorGridX: Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
-      anchorGridY: Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
+  const site = resolvePersistentBaseSiteAnchor(mapConfig);
+  if (!site) return resolved;
+  // Der Kern wird ergänzt, nicht aus den authored Basen ausgewählt: Er ist kampagnenweit
+  // dieselbe Struktur und läuft trotzdem durch denselben resolveBaseSpec-Pfad.
+  return [
+    ...resolved,
+    {
+      ...resolveBaseSpec(createPersistentBaseCoreConfig(site), humanPlayerCount),
+      anchorGridX: site.gridX,
+      anchorGridY: site.gridY,
       persistentReservationRadiusCells: MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS,
-    }
-    : base);
+    },
+  ];
+}
+
+/** Zonenmittelpunkt der Karte, oder `null`, wenn sie keinen persistenten Bereich trägt. */
+export function resolvePersistentBaseSiteAnchor(
+  mapConfig: CoopDefenseMapConfig,
+): PersistentBaseAnchor | null {
+  const config = mapConfig.persistentBase as ResolvedCoopDefenseMapPersistentBaseConfig | undefined;
+  if (!config || !Number.isInteger(config.anchorGridX) || !Number.isInteger(config.anchorGridY)) return null;
+  return { gridX: config.anchorGridX, gridY: config.anchorGridY };
 }
 
 function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {

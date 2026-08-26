@@ -1,3 +1,4 @@
+import { PERSISTENT_BASE_CORE_ID } from '../src/persistentBase/PersistentBaseSite';
 import { describe, expect, it } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
@@ -143,6 +144,11 @@ describe('coop-defense hostile bases', () => {
     for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
       const specs = resolveCoopDefenseBases(mapConfig);
       for (const spec of specs) {
+        // Der persistente Basiskern ist nicht authored; er wird zentral ergänzt.
+        if (spec.id === PERSISTENT_BASE_CORE_ID) {
+          expect(spec.faction).toBe('friendly');
+          continue;
+        }
         expect(spec.faction).toBe(mapConfig.bases.find((base) => base.id === spec.id)?.faction);
       }
     }

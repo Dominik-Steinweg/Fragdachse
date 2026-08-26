@@ -66,6 +66,37 @@ src/scenes/arena/ArenaContext.ts ist der Vertrag:
 
 Round-Systeme werden nur für den aktiven Modus bzw. die Host-Rolle erzeugt. Host-only-Systeme bleiben auf Clients null; Client-Code muss aus replizierten Zuständen arbeiten.
 
+## ArenaWorld-Core, MissionRuntime und PersistentBaseEditorRuntime
+
+`buildArena()` ist der gemeinsame ArenaWorld-Core beider Laufzeiten. Er nimmt ausschließlich einen generischen `ArenaWorldDescriptor` (src/scenes/arena/ArenaWorldDescriptor.ts) entgegen, nie einen Netzwerk-Descriptor direkt:
+
+- Die MissionRuntime speist ihn über `toMissionWorldDescriptor()` aus dem replizierten `ArenaDescriptor`.
+- Die PersistentBaseEditorRuntime speist ihn über `toPersistentBaseEditorWorldDescriptor()` aus `PersistentBaseEditorWorld`, einem eigenen global-reliable Kanal. Der `ArenaDescriptor` trägt deshalb keinen Laufzeitmodus, und ein verlassener Editor kann keinen alten globalen Zustand in der Lobby-/Mission-Auflösung hinterlassen.
+
+`ArenaRuntimeProfile` (src/scenes/arena/ArenaRuntimeProfile.ts) ist der einzige Vertrag, an dem Missionsanteile hängen: `enemies`, `objectives`, `roundConclusion`, `worldEvents`, `combatSimulation`, `roundLifecycle`, `missionPersistentBaseSession`. `buildArena()` schreibt das Profil nach `ArenaContext.runtimeProfile`; Host- und Client-Tick lesen es dort und leiten daraus ab, ob dieser Tick überhaupt an Countdown und Rundenstart gebunden ist. Neue laufzeitabhängige Unterschiede gehören als Profilflag hierher, nicht als zusätzliche Phasen-/Präsenzabfrage.
+
+Weitere dauerhafte Regeln:
+
+- Die Ladebarriere (`setLocalArenaLoadProgress`, `arenaBuilt`, Terrain-Snapshot, Countdown) gehört ausschließlich zur MissionRuntime und wird nur unter `profile.roundLifecycle` berührt. Der Ladeschleier hängt an der ARENA-Phase, nicht an der Sichtbarkeit der Welt: Während des Ladens existiert noch kein Countdown-Zeitpunkt.
+- Kamera und Surface-Residency laufen, sobald eine Welt lokal aufgebaut ist – auch während die Missionswelt noch hinter dem Ladeschleier verborgen ist. Ohne das erreicht die Ladebarriere nie ihren Bereitzustand.
+- Mission und Editor benutzen denselben Player-Runtime-Aktivierungspfad (`activatePlayerRuntime`/`deactivatePlayerRuntime`) und dieselbe Loadout-Auflösung. Der einzige Unterschied ist der Spawn-Fokus, den der `PlayerManager`-Spawn-Kontext liefert.
+- Die Editor-Welt benutzt die Arena-Metrik ihrer Karte (`applyArenaMetricsForMode(..., 'ARENA', ...)`), nicht das Lobby-Vollbildmaß. `ArenaGenerator` liest `GRID_COLS`/`GRID_ROWS` global; mit Lobby-Metrik lägen authored Basiszellen außerhalb des Rasters.
+- Der Host hält die Editor-Runtime, solange mindestens ein Teilnehmer existiert; ein Client baut sie nur, wenn er selbst teilnimmt. Solange lokal eine Welt steht, weichen Lobby-Vorschau und Ambiente ihr, weil beide auf denselben Bodentiefen liegen.
+- Bau-Zugriff und Baukapazität laufen in beiden Laufzeiten über `resolveConstructionAccess`/`resolveConstructionCapacity`. Der Editor ersetzt nur die Snapshot-Quelle (`NetworkBridge.getPlayerRuntimeLoadout`: Editor-Build statt Ready-Commit) und überspringt die Prüfung nicht. Klassenunabhängig sind allein base-owned Rewards.
+
+## Persistente Basis: kartenunabhängiger Grundriss
+
+`persistentBase/PersistentBaseSite.ts` ist die einzige Quelle des Basiskerns: immer `PERSISTENT_BASE_CORE_SIZE_CELLS`×`PERSISTENT_BASE_CORE_SIZE_CELLS`, freundliche Hauptbasis unter der reservierten Id `PERSISTENT_BASE_CORE_ID`, ohne Türme und ohne Power-Up-Podeste. Eine Karte autort ausschließlich die *Platzierung* (`persistentBase.anchor`, beim Laden zu `anchorGridX/anchorGridY` normalisiert); sie nominiert keine ihrer eigenen Basen mehr. `resolveCoopDefenseBases()` ergänzt den Kern über denselben `resolveBaseSpec`-Pfad wie jede authored Basis – es gibt keinen zweiten Geometriecode.
+
+Der Basis-Editor läuft auf `persistent-base-editor.internal.json`: eine eigene, ebene Welt mit dem Bereich exakt in der Mitte, registriert wie die Balance-Lab-Map neben der Kampagnenregistry. Das Basisbau-Menü der Lobby ist damit von der Kartenauswahl unabhängig.
+
+Zwei Regeln, deren Verletzung sich als „Spieler unsichtbar / Basis an falscher Stelle“ zeigte:
+
+- **Eine Welt, eine Metrik.** `ArenaGenerator`, der `PlayerManager`-Spawn und alle Rasterprüfungen lesen `GRID_COLS`/`GRID_ROWS` global. Die Metrik MUSS zu der Welt gehören, die gerade steht – auch in der LOBBY-Phase (Editor). Läuft sie gegen eine andere Karte, liegt der Spawn außerhalb des Rasters.
+- **Eine Welt, eine Basenmenge.** `buildArena()` hinterlegt sie über `setActiveCoopDefenseBases()`; `tearDownArena()` löscht sie. Argumentlose `getCoopDefenseBases()`-Leser bekommen genau diese Menge, statt die ausgewählte Kampagnenkarte neu aufzulösen. Ebenso liest jeder Konsument des persistenten Bereichs (Kies, Bauzone, Zonenvorschau, Platzierungsprüfung) `ArenaLifecycleCoordinator.getPersistentBaseSite()` – ein zweites Auflösen aus Map-Konfiguration und Spielerzahl ist die Ursache dafür gewesen, dass Kiesfläche und Basiskern auseinanderliefen.
+
+Bildschirmfeste UI-Wurzeln neben den Panel-Containern (`badgerPreview`, der Power-Up-/Baukapazitäts-Stapel, der Loadout-Picker) werden von `LeftSidePanel.setPanelSuppressed()` mit ausgeblendet; der Stapel zeigt sich bei jedem HUD-Update selbst wieder an und wird deshalb in `ArenaHUD.setSuppressed()` gesperrt statt nachträglich versteckt.
+
 ## Zeit und deterministische Quellen
 
 Authoring und Round-Systeme verwenden die von den jeweiligen Directors weitergereichte Rundenuhr aus Frame-Deltas. Date.now() ist keine allgemeine Round-Uhr: absolute Zeitstempel sind nur dort erlaubt, wo sie ausdrücklich als replizierter Vertrag definiert sind. Neue zeitbasierte Fachlogik muss sich an den bestehenden Director-/System-Lifecycle anschließen und darf nicht nebenher eine zweite Uhr starten.

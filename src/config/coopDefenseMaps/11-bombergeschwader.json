@@ -1,6 +1,12 @@
 {
   "mapId": "11",
-  "persistentBase": { "baseId": "coop-base-middle" },
+  "persistentBase": {
+    "anchor": {
+      "kind": "center-offset",
+      "dxCells": -4,
+      "dyCells": 2
+    }
+  },
   "arenaWidthCells": 60,
   "arenaHeightCells": 39,
   "timeOfDay": "10:30",
@@ -8,102 +14,31 @@
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "tutorialRockArmorDropMult": 0.02,
-  "mapEvents": [{
-    "id": "opening-barrage",
-    "type": "airstrike",
-    "start": { "type": "time", "atMs": 0 },
-    "delayMs": 8200,
-    "pattern": "tutorial-sweep"
-  }, {
-    "id": "player-hunt",
-    "type": "airstrike",
-    "start": { "type": "time", "atMs": 20000 },
-    "pattern": "player-hunt",
-    "intervalMs": 10000
-  }],
-  "balanceReferenceDurationSec": 160,
-  "objective": "repel-assault",
-  "bases": [
+  "mapEvents": [
     {
-      "id": "coop-base-middle",
-      "hpMax": 4000,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": 2
+      "id": "opening-barrage",
+      "type": "airstrike",
+      "start": {
+        "type": "time",
+        "atMs": 0
       },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          { "gridX": 0, "gridY": 0 },
-          { "gridX": 1, "gridY": 0 },
-          { "gridX": 2, "gridY": 0 },
-          { "gridX": 3, "gridY": 0 },
-          { "gridX": 4, "gridY": 0 },
-          { "gridX": 0, "gridY": 1 },
-          { "gridX": 1, "gridY": 1 },
-          { "gridX": 2, "gridY": 1 },
-          { "gridX": 3, "gridY": 1 },
-          { "gridX": 4, "gridY": 1 },
-          { "gridX": 1, "gridY": 2 },
-          { "gridX": 2, "gridY": 2 },
-          { "gridX": 3, "gridY": 2 },
-          { "gridX": 0, "gridY": 3 },
-          { "gridX": 1, "gridY": 3 },
-          { "gridX": 2, "gridY": 3 },
-          { "gridX": 3, "gridY": 3 },
-          { "gridX": 4, "gridY": 3 },
-          { "gridX": 0, "gridY": 4 },
-          { "gridX": 1, "gridY": 4 },
-          { "gridX": 2, "gridY": 4 },
-          { "gridX": 3, "gridY": 4 },
-          { "gridX": 4, "gridY": 4 }
-        ]
+      "delayMs": 8200,
+      "pattern": "tutorial-sweep"
+    },
+    {
+      "id": "player-hunt",
+      "type": "airstrike",
+      "start": {
+        "type": "time",
+        "atMs": 20000
       },
-      "turrets": [
-        {
-          "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 4
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 4,
-            "gridY": 4
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        }
-      ],
-      "powerUpPedestals": [
-        {
-          "id": "health-station-left",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "adrenaline-station-right",
-          "cellOffset": {
-            "gridX": 4,
-            "gridY": 2
-          },
-          "defId": "ADRENALINE",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        }
-      ]
+      "pattern": "player-hunt",
+      "intervalMs": 10000
     }
   ],
+  "balanceReferenceDurationSec": 160,
+  "objective": "repel-assault",
+  "bases": [],
   "powerUps": [
     {
       "defId": "ARMOR",
@@ -228,7 +163,7 @@
           "front": "north"
         }
       ]
-    },    
+    },
     {
       "id": "final-bombing-run",
       "start": {

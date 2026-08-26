@@ -1,6 +1,11 @@
 {
   "mapId": "14",
-  "persistentBase": { "baseId": "coop-base-rear" },
+  "persistentBase": {
+    "anchor": {
+      "kind": "right-center",
+      "edgeInsetCells": 11
+    }
+  },
   "arenaWidthCells": 60,
   "arenaHeightCells": 42,
   "timeOfDay": "20:30",
@@ -9,7 +14,10 @@
     {
       "id": "brandschneise-void-corridor",
       "type": "ground-hazard",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
       "area": {
         "type": "rectangle",
         "gridX": 29,
@@ -133,21 +141,51 @@
       {
         "id": "north-approach",
         "points": [
-          { "gridX": 30, "gridY": 0 },
-          { "gridX": 32, "gridY": 7 },
-          { "gridX": 38, "gridY": 13 },
-          { "gridX": 47, "gridY": 16 },
-          { "gridX": 55, "gridY": 16 }
+          {
+            "gridX": 30,
+            "gridY": 0
+          },
+          {
+            "gridX": 32,
+            "gridY": 7
+          },
+          {
+            "gridX": 38,
+            "gridY": 13
+          },
+          {
+            "gridX": 47,
+            "gridY": 16
+          },
+          {
+            "gridX": 55,
+            "gridY": 16
+          }
         ]
       },
       {
         "id": "south-approach",
         "points": [
-          { "gridX": 30, "gridY": 39 },
-          { "gridX": 32, "gridY": 32 },
-          { "gridX": 38, "gridY": 26 },
-          { "gridX": 47, "gridY": 23 },
-          { "gridX": 55, "gridY": 23 }
+          {
+            "gridX": 30,
+            "gridY": 39
+          },
+          {
+            "gridX": 32,
+            "gridY": 32
+          },
+          {
+            "gridX": 38,
+            "gridY": 26
+          },
+          {
+            "gridX": 47,
+            "gridY": 23
+          },
+          {
+            "gridX": 55,
+            "gridY": 23
+          }
         ]
       },
       {
@@ -174,133 +212,6 @@
     ]
   },
   "bases": [
-    {
-      "id": "coop-base-rear",
-      "hpMax": 3200,
-      "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 10
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 3,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 3,
-            "gridY": 3
-          },
-          {
-            "gridX": 0,
-            "gridY": 4
-          },
-          {
-            "gridX": 1,
-            "gridY": 4
-          },
-          {
-            "gridX": 2,
-            "gridY": 4
-          },
-          {
-            "gridX": 3,
-            "gridY": 4
-          }
-        ]
-      },
-      "turrets": [
-        {
-          "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 4
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        }
-      ],
-      "powerUpPedestals": [
-        {
-          "id": "health-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "adrenaline-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
-          },
-          "defId": "ADRENALINE",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        }
-      ]
-    },
     {
       "id": "coop-base-middle",
       "hpMax": 1300,
@@ -402,49 +313,120 @@
   "encounters": [
     {
       "id": "front-opening",
-      "start": { "type": "time", "atMs": 10000 },
+      "start": {
+        "type": "time",
+        "atMs": 10000
+      },
       "restAfterMs": 9000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 3, "delayMs": 500, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 2000, "front": "west" }
+        {
+          "enemyKind": "demon-badger",
+          "count": 3,
+          "delayMs": 500,
+          "front": "west"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 4,
+          "delayMs": 2000,
+          "front": "west"
+        }
       ]
     },
     {
       "id": "two-front-pyro",
-      "start": { "type": "time", "atMs": 25000 },
+      "start": {
+        "type": "time",
+        "atMs": 25000
+      },
       "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 1, "front": "north" },
-        { "enemyKind": "pyro-badger", "count": 1, "front": "south" }
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "front": "north"
+        },
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "front": "south"
+        }
       ]
     },
     {
       "id": "mass-pressure-west",
-      "start": { "type": "time", "atMs": 45000 },
+      "start": {
+        "type": "time",
+        "atMs": 45000
+      },
       "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "alien-badger", "count": 3, "front": "west" },
-        { "enemyKind": "void-stalker", "count": 1, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" }
+        {
+          "enemyKind": "alien-badger",
+          "count": 3,
+          "front": "west"
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 1,
+          "front": "west"
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "front": "west"
+        }
       ]
     },
     {
       "id": "three-front-pyro2",
-      "start": { "type": "time", "atMs": 75000 },
+      "start": {
+        "type": "time",
+        "atMs": 75000
+      },
       "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 1, "front": "north" },
-        { "enemyKind": "pyro-badger", "count": 1, "front": "south" },
-        { "enemyKind": "pyro-badger", "count": 1, "front": "west" }
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "front": "north"
+        },
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "front": "south"
+        },
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "front": "west"
+        }
       ]
     },
     {
       "id": "three-front-finale",
-      "start": { "type": "time", "atMs": 100000 },
+      "start": {
+        "type": "time",
+        "atMs": 100000
+      },
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 1, "front": "north" },
-        { "enemyKind": "pyro-badger", "count": 1, "delayMs": 7500, "front": "south" },
-        { "enemyKind": "demon-badger", "count": 16, "delayMs": 500, "front": "west" }
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "front": "north"
+        },
+        {
+          "enemyKind": "pyro-badger",
+          "count": 1,
+          "delayMs": 7500,
+          "front": "south"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 16,
+          "delayMs": 500,
+          "front": "west"
+        }
       ]
     }
   ],
@@ -455,7 +437,9 @@
       "intervalMs": 5000,
       "countPerTick": 4,
       "startAtMs": 0,
-      "source": { "type": "map" },
+      "source": {
+        "type": "map"
+      },
       "front": "west"
     },
     {
@@ -464,7 +448,9 @@
       "intervalMs": 10000,
       "countPerTick": 1,
       "startAtMs": 0,
-      "source": { "type": "map" },
+      "source": {
+        "type": "map"
+      },
       "front": "west"
     },
     {
@@ -473,7 +459,9 @@
       "intervalMs": 2000,
       "countPerTick": 1,
       "startAtMs": 100000,
-      "source": { "type": "map" },
+      "source": {
+        "type": "map"
+      },
       "front": "west"
     }
   ],

@@ -40,6 +40,8 @@ import { GameAudioSystem }        from '../audio/GameAudioSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay, type ArenaLoadingScreenState } from '../ui/ArenaCountdownOverlay';
+import { PersistentBaseEditorHud } from '../ui/PersistentBaseEditorHud';
+import type { PersistentBaseSiteView } from '../persistentBase/PersistentBaseSite';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { HostileBaseIndicator, getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { countSceneDisplayObjects, forEachSceneDisplayObject } from './arena/sceneDisplayObjects';
@@ -190,9 +192,8 @@ import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { resolveCoopDefenseBases } from '../arena/BaseRegistry';
-import { getPersistentBaseAnchor, isPersistentFootprintInsideZone } from '../persistentBase/PersistentBaseZone';
+import { getCoopDefenseMapConfig, getPersistentBaseEditorMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { isPersistentFootprintInsideZone } from '../persistentBase/PersistentBaseZone';
 import { getPersistentBaseRewardDefinition, type PersistentBaseRewardId, type PersistentBaseRewardRuntimeState } from '../config/persistentBaseRewards';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
@@ -353,6 +354,8 @@ export class ArenaScene extends Phaser.Scene {
   private spectatorCameraUpKey: Phaser.Input.Keyboard.Key | null = null;
   private spectatorCameraDownKey: Phaser.Input.Keyboard.Key | null = null;
   private persistentBaseLeaveKey: Phaser.Input.Keyboard.Key | null = null;
+  private persistentBaseEditorHud: PersistentBaseEditorHud | null = null;
+  private persistentBaseEditorUiActive = false;
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
   private coopDefenseDebugDamageKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
@@ -1000,7 +1003,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseSession: null, structureOccupancySystem: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, runtimeProfile: null, placementSystem: null, persistentBaseSession: null, structureOccupancySystem: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -1020,14 +1023,17 @@ export class ArenaScene extends Phaser.Scene {
       const latestState = bridge.getLatestGameState();
       const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
       const missionConfig = resolveCoopDefenseMapMissionProgress(
-        getCoopDefenseMapConfig(this.resolveCurrentCoopDefenseMapId()),
+        this.resolveCurrentWorldMapConfig(),
       );
       const respawnCheckpoint = missionConfig?.checkpoints.find(
         ({ id }) => id === missionState?.respawnCheckpointId,
       );
       // Ohne aktivierten Respawn-Checkpoint bleibt der authored Startbereich der Fokus. Auf einer
       // langen Routenkarte waere der Initialspawn sonst ueber die gesamte Arena verteilt.
-      const spawnFocusCell = respawnCheckpoint ?? missionConfig?.startArea;
+      // Mission und Editor teilen den Aktivierungspfad; nur der Spawn-Fokus unterscheidet sich.
+      const spawnFocusCell = this.lifecycle?.getPersistentBaseEditorSpawnFocusCell()
+        ?? respawnCheckpoint
+        ?? missionConfig?.startArea;
       const runtimePlaceables = this.ctx.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
       const turretRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
 
@@ -1277,18 +1283,16 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupInspectorToolProvider(
       () => {
         const localId = bridge.getLocalPlayerId();
-        if (bridge.isLocalPersistentBaseEditorActive()) {
-          return this.lifecycle?.getActiveConstructionToolsForPlayer(localId) ?? [];
-        }
-        const committed = bridge.getPlayerCommittedLoadout(localId);
-        return committed?.coopDefenseClassId === 'inspector_gadachs'
+        // Mission und Editor lesen denselben Runtime-Build; der Editor bekommt keine
+        // Sonderfreigabe, sondern nur eine andere Snapshot-Quelle.
+        return bridge.getPlayerRuntimeLoadout(localId)?.coopDefenseClassId === 'inspector_gadachs'
           ? this.clientUpdate.getLocalInspectorTools()
           : this.lifecycle?.getActiveConstructionToolsForPlayer(localId) ?? [];
       },
       () => this.clientUpdate.getLocalInspectorSelectedTool(),
       (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
-      () => bridge.isLocalPersistentBaseEditorActive()
-        || bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
+      () => (this.lifecycle?.getActiveConstructionToolsForPlayer(bridge.getLocalPlayerId()).length ?? 0) > 0
+        || bridge.getPlayerRuntimeLoadout(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
       () => bridge.getPlayerUtilityOverrideId(bridge.getLocalPlayerId()) !== ''
         || this.clientUpdate.clientUtilityOverride !== null,
       // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
@@ -1431,12 +1435,7 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUltimatePlacementPreviewProvider(() => this.getLocalUltimatePlacementPreview());
     inputSystem.setupConstructionProviders(
       () => {
-        if (bridge.getGamePhase() !== 'ARENA' && !bridge.isLocalPersistentBaseEditorActive()) return [];
-        if (bridge.isLocalPersistentBaseEditorActive()) {
-          return (this.lifecycle?.getActiveConstructionToolsForPlayer(bridge.getLocalPlayerId()) ?? [])
-            .filter((tool): tool is { kind: 'construction'; id: ConstructionId } => tool.kind === 'construction')
-            .map((tool) => tool.id);
-        }
+        if (bridge.getGamePhase() !== 'ARENA' && !this.isLocalPersistentBaseEditorWorldActive()) return [];
         return this.lifecycle?.getActiveConstructionToolsForPlayer(bridge.getLocalPlayerId())
           .filter((tool): tool is { kind: 'construction'; id: ConstructionId } => tool.kind === 'construction')
           .map((tool) => tool.id) ?? [];
@@ -1454,9 +1453,7 @@ export class ArenaScene extends Phaser.Scene {
           pointer.y,
         );
         if (!preview) return undefined;
-        const persistentRuntime = (bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
-          || (bridge.getGamePhase() === 'LOBBY' && bridge.isLocalPersistentBaseEditorActive());
-        if (!persistentRuntime) return preview;
+        if (!this.isMissionOrEditorRuntimeActive()) return preview;
         const context = this.getCurrentPersistentBasePlacementContext();
         const footprint = getCoopDefenseConstructionDefinition(constructionId).footprint;
         return context
@@ -1526,7 +1523,9 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (!bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
-      if (bridge.isLocalPersistentBaseEditorActive()
+      // Im Editor sind ausschließlich Bau, Belohnungsplatzierung und Rückbau erlaubt – keine
+      // Waffen, Utilities oder Ultimates.
+      if (this.isLocalPersistentBaseEditorWorldActive()
         && params?.persistentRewardId === undefined
         && params?.toolRef?.kind !== 'construction'
         && params?.dismantle !== true) return;
@@ -1649,11 +1648,17 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
+    this.persistentBaseEditorHud = new PersistentBaseEditorHud(
+      this,
+      () => this.leavePersistentBaseRuntime(),
+    );
+    this.persistentBaseEditorHud.build();
     leftPanel.setLocaleSelectionBinding({
       canChange: () => bridge.getGamePhase() === 'LOBBY',
       onChanged: () => {
         this.lobbyOverlay?.build();
         this.lobbyOverlay?.show();
+        this.persistentBaseEditorHud?.refreshLocale();
         leftPanel.refreshLocale();
         rightPanel.refreshLocale();
         this.roomStatisticsOverlay?.refreshLocale();
@@ -1708,7 +1713,7 @@ export class ArenaScene extends Phaser.Scene {
       (playerId, request) => this.lifecycle.handleStructureExitRequest(playerId, request),
     );
     bridge.registerPersistentBaseEditorPresenceHandlers(
-      (playerId) => this.handlePersistentBaseEditorEnterRequest(playerId),
+      (playerId, loadout) => this.handlePersistentBaseEditorEnterRequest(playerId, loadout),
       (playerId) => this.handlePersistentBaseEditorLeaveRequest(playerId),
     );
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
@@ -1786,12 +1791,12 @@ export class ArenaScene extends Phaser.Scene {
     const networkUpdateMs = diagnosticsActive ? performance.now() - networkUpdateStartMs : 0;
 
     const phase           = bridge.getGamePhase();
-    this.lifecycle?.syncPersistentBaseRuntime();
+    this.lifecycle?.syncPersistentBaseEditorRuntime();
     const persistentBaseEditorActive = phase === 'LOBBY'
       && bridge.isLocalPersistentBaseEditorActive();
     if (persistentBaseEditorActive && this.persistentBaseLeaveKey
       && Phaser.Input.Keyboard.JustDown(this.persistentBaseLeaveKey)) {
-      bridge.requestPersistentBaseEditorLeave();
+      this.leavePersistentBaseRuntime();
     }
     this.syncConfirmedPersistentBaseContribution();
     this.lifecycle?.syncPersistentBaseRewardOccupancy();
@@ -1800,12 +1805,16 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx?.structureOccupancySystem?.applySnapshot(occupancySnapshot);
       this.lastStructureOccupancyRevision = occupancySnapshot.revision;
     }
-    if (persistentBaseEditorActive) this.lobbyOverlay.hide();
+    this.syncPersistentBaseEditorUi(persistentBaseEditorActive);
     const deferArenaExit  = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.lifecycle.detectPhaseChange(deferArenaExit);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
-    this.syncArenaMetrics(deferArenaExit ? 'ARENA' : phase);
+    // Die Editor-Welt benutzt die Arena-Maße ihrer Karte. Sonst laufen Raster, Basiszellen und
+    // Spawn gegen das Lobby-Vollbildmaß auseinander und der Spieler landet außerhalb des Rasters.
+    this.syncArenaMetrics(
+      deferArenaExit || this.isPersistentBaseEditorWorldBuilt() ? 'ARENA' : phase,
+    );
     const enteredLobbyFromArena = !deferArenaExit
       && this.lastObservedGamePhase === 'ARENA'
       && phase === 'LOBBY';
@@ -1854,18 +1863,27 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    const persistentBaseWorldActive = persistentBaseEditorActive
-      && this.lifecycle.isPersistentBaseRuntimeActive();
-    const worldVisible = inArena || persistentBaseWorldActive;
+    // Der Editor besitzt eine eigene Welt. Die Missionswelt bleibt exakt an
+    // `inGame && !terminated` gebunden – inklusive der noch verdeckten Ladephase.
+    //
+    // `persistentBaseWorldBuilt` gilt auch für einen Host, der die Welt nur autoritativ hält:
+    // Sie ist dann trotzdem lokal aufgebaut und muss gestreamt und gezeigt werden, sonst stünden
+    // ihre Felsen und Basen ungerendert über der Lobby-Vorschau.
+    const persistentBaseWorldBuilt = phase === 'LOBBY'
+      && this.lifecycle.isPersistentBaseEditorRuntimeActive();
+    const persistentBaseWorldActive = persistentBaseEditorActive && persistentBaseWorldBuilt;
+    const missionWorldActive = inGame && !terminated;
+    const worldActive = missionWorldActive || persistentBaseWorldBuilt;
+    const worldVisible = inArena || persistentBaseWorldBuilt;
 
     // The camera must already be positioned while the world is hidden, because its initial view
     // defines the startup working set that the load barrier waits for.
-    this.syncMainCamera(delta, worldVisible);
+    this.syncMainCamera(delta, worldActive);
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
-    if (worldVisible && !terminated) {
+    if (worldActive) {
       const worldView = getVisibleWorldView(this.cameras.main);
       ArenaBuilder.updateSurfaceResidency(this.ctx?.arenaResult ?? null, worldView);
       this.renderers?.shadow.updateStaticResidency(worldView);
@@ -1876,7 +1894,9 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPanelsHeld = false;
     }
 
-    const lobbyVisible = phase === 'LOBBY' && !deferArenaExit && !persistentBaseEditorActive;
+    // Vorschau und Ambiente der Lobby weichen jeder lokal aufgebauten Welt – sie liegen auf
+    // denselben Bodentiefen und würden sich sonst mit ihr überlagern.
+    const lobbyVisible = phase === 'LOBBY' && !deferArenaExit && !persistentBaseWorldBuilt;
     this.menuArenaPreview?.setVisible(lobbyVisible);
     // Muss vor allem Arena-Aufbau laufen: `setActive(false)` räumt synchron und vollständig
     // auf, damit kein Ambient-Zustand in eine Runde hinüberlebt.
@@ -1898,16 +1918,17 @@ export class ArenaScene extends Phaser.Scene {
       this.syncStructureInteractionHint(inGame && !terminated && !spectator && !weaponBalanceLabArena);
       if (countdownActive) this.syncCountdownPlayerPresentation();
     } else if (persistentBaseWorldActive) {
+      // Lokal teilnehmender Editor: Bewegung und Bau-Eingabe sind frei, Missionssysteme laufen
+      // dank Runtime-Profil gar nicht erst mit.
       this.ctx.inputSystem.setAimEnabled(!optionsOpen);
       this.ctx.inputSystem.setInputEnabled(!optionsOpen, !optionsOpen);
       this.ctx.inputSystem.update();
       this.syncStructureInteractionHint(false);
       if (bridge.isHost()) this.hostUpdate.runHostUpdate(delta);
       else this.clientUpdate.runClientUpdate(delta);
-    } else if (phase === 'LOBBY' && this.lifecycle.isPersistentBaseRuntimeActive() && bridge.isHost()) {
-      // A host may remain in the lobby while another player edits the shared world. The host
-      // keeps the authoritative tick/replication alive without exposing editor input or visuals
-      // to the non-participating host player.
+    } else if (bridge.isHost() && this.lifecycle.isPersistentBaseEditorRuntimeActive()) {
+      // Der Host haelt die Editor-Welt, solange irgendein Spieler editiert – auch wenn er selbst
+      // in der Lobby bleibt. Er tickt dann autoritativ weiter, ohne Editor-Eingabe oder -Sicht.
       this.ctx.inputSystem.setAimEnabled(false);
       this.ctx.inputSystem.setInputEnabled(false);
       this.syncStructureInteractionHint(false);
@@ -2001,7 +2022,7 @@ export class ArenaScene extends Phaser.Scene {
       const arenaHudStartedAt = diagnosticsActive ? performance.now() : 0;
       const secs = bridge.computeSecondsLeft();
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
-        ? getCoopDefenseMapConfig(this.resolveCurrentCoopDefenseMapId())
+        ? this.resolveCurrentWorldMapConfig()
         : null;
       this.ctx.centerHUD.updateTimer(
         secs,
@@ -2076,7 +2097,7 @@ export class ArenaScene extends Phaser.Scene {
         const countdownGround = countdownActive
           ? buildCountdownGroundFirePreview(
             this.ctx.currentLayout,
-            getCoopDefenseMapConfig(this.resolveCurrentCoopDefenseMapId()),
+            this.resolveCurrentWorldMapConfig(),
             bridge.getArenaStartTime(),
           )
           : { cells: [] };
@@ -2174,10 +2195,10 @@ export class ArenaScene extends Phaser.Scene {
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
-    this.syncMainCamera(spectator ? 0 : delta, worldVisible || deferArenaExit);
+    this.syncMainCamera(spectator ? 0 : delta, worldActive || deferArenaExit);
     const coopDefensePresentationActive = inArena && isCoopDefenseMode(bridge.getGameMode());
     const presentationMapConfig = coopDefensePresentationActive
-      ? getCoopDefenseMapConfig(this.resolveCurrentCoopDefenseMapId())
+      ? this.resolveCurrentWorldMapConfig()
       : null;
     const encounterPresentation = coopDefensePresentationActive
       ? bridge.getCoopDefenseEncounterPresentationState()
@@ -2297,7 +2318,9 @@ export class ArenaScene extends Phaser.Scene {
     }
     // Loading uses the full-screen veil even though the arena itself is still hidden; once the
     // authoritative countdown timestamp exists, the same overlay switches to 3 → 2 → 1.
-    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
+    // Der Ladeschleier gehört zur ARENA-Phase, nicht zur Sichtbarkeit der Welt: Während des
+    // Ladens gibt es noch keinen Countdown-Zeitpunkt, `inArena` ist deshalb zwangsläufig false.
+    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
     const visualCameraEndMs = diagnosticsActive ? performance.now() : 0;
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
@@ -2351,33 +2374,20 @@ export class ArenaScene extends Phaser.Scene {
       ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
       : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
-    const persistentMapConfig = worldVisible && isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(this.resolveCurrentCoopDefenseMapId())
-      : undefined;
-    const persistentHumanPlayerCount = Math.max(
-      1,
-      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
-    );
-    const persistentBases = persistentMapConfig
-      ? resolveCoopDefenseBases(persistentMapConfig, persistentHumanPlayerCount)
-      : [];
-    const persistentBaseTerrain = persistentMapConfig?.persistentBase
-      ? persistentBases.find((base) => base.id === persistentMapConfig.persistentBase!.baseId)
-      : undefined;
-    const persistentRadiusCells = this.lifecycle.getPersistentBaseRadiusCells();
+    // Genau die Site, mit der die Welt gebaut wurde. Kies, Bauzone und Basiskern kommen damit
+    // per Konstruktion aus derselben Quelle und können nicht mehr auseinanderlaufen.
+    const persistentBaseSite = worldVisible ? this.lifecycle.getPersistentBaseSite() : null;
     this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
-      persistentBaseTerrain && this.ctx.currentLayout
+      persistentBaseSite && this.ctx.currentLayout
         ? {
           seed: this.ctx.currentLayout.seed,
-          anchor: getPersistentBaseAnchor(persistentBaseTerrain),
-          radiusCells: persistentRadiusCells,
+          anchor: persistentBaseSite.anchor,
+          radiusCells: persistentBaseSite.radiusCells,
         }
         : null,
     );
     this.persistentBaseVisuals.sync(
-      persistentMapConfig?.persistentBase,
-      persistentBases,
-      persistentRadiusCells,
+      persistentBaseSite,
       worldVisible
         && !spectator
         && (
@@ -2478,7 +2488,8 @@ export class ArenaScene extends Phaser.Scene {
     const trainState = inArena ? this.resolveTrainState() : null;
     // Keep round-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
-    const shadowArenaActive = worldVisible || (inGame && !terminated);
+    // Dasselbe gilt während der Arena-Ausblendung, in der die Phase bereits LOBBY ist.
+    const shadowArenaActive = worldActive || inArena;
     this.syncWorldShadows(shadowArenaActive, trainState);
     const shadowStepMs = diagnosticsActive ? performance.now() - shadowStepStartMs : 0;
     this.syncWorldLighting(worldVisible, trainState);
@@ -3682,7 +3693,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private getLocalPersistentBaseRewardStates(): readonly PersistentBaseRewardRuntimeState[] {
     const missionRuntime = bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode());
-    const peacefulRuntime = bridge.getGamePhase() === 'LOBBY' && bridge.isLocalPersistentBaseEditorActive();
+    const peacefulRuntime = this.isLocalPersistentBaseEditorWorldActive();
     if (!missionRuntime && !peacefulRuntime) return [];
     const mapId = this.resolveCurrentCoopDefenseMapId();
     const mapConfig = getCoopDefenseMapConfig(mapId);
@@ -3697,14 +3708,9 @@ export class ArenaScene extends Phaser.Scene {
     const definition = getPersistentBaseRewardDefinition(rewardId);
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     const placementSystem = this.ctx.placementSystem;
-    if (!state || state.availability !== 'available' || !definition || !sprite || !placementSystem) return undefined;
-    const mapId = this.resolveCurrentCoopDefenseMapId();
-    const mapConfig = getCoopDefenseMapConfig(mapId);
-    if (!mapConfig?.persistentBase) return undefined;
-    const base = resolveCoopDefenseBases(mapConfig, 1)
-      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
-    if (!base) return undefined;
-    const anchor = getPersistentBaseAnchor(base);
+    const site = this.lifecycle.getPersistentBaseSite();
+    if (!state || state.availability !== 'available' || !definition || !sprite || !placementSystem || !site) return undefined;
+    const anchor = site.anchor;
     const pointer = this.getPointerWorldPoint();
     const target = placementSystem.getClampedTargetCell(
       sprite.x,
@@ -3719,7 +3725,7 @@ export class ArenaScene extends Phaser.Scene {
       target.gridY,
       definition.footprint,
       anchor,
-      this.lifecycle.getPersistentBaseRadiusCells(),
+      site.radiusCells,
     );
     return {
       angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
@@ -3736,30 +3742,50 @@ export class ArenaScene extends Phaser.Scene {
     };
   }
 
-  private getCurrentPersistentBasePlacementContext(): {
-    readonly anchor: ReturnType<typeof getPersistentBaseAnchor>;
-    readonly radiusCells: number;
-  } | null {
-    const mapId = this.resolveCurrentCoopDefenseMapId();
-    const mapConfig = getCoopDefenseMapConfig(mapId);
-    if (!mapConfig?.persistentBase) return null;
-    const base = resolveCoopDefenseBases(mapConfig, 1)
-      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
-    if (!base) return null;
-    return {
-      anchor: getPersistentBaseAnchor(base),
-      radiusCells: this.lifecycle.getPersistentBaseRadiusCells(),
-    };
+  private getCurrentPersistentBasePlacementContext(): PersistentBaseSiteView | null {
+    return this.lifecycle.getPersistentBaseSite();
   }
 
+  /**
+   * Map-Identität der lokal aufgebauten Welt. Die Editor-Welt wird nur berücksichtigt, wenn sie
+   * lokal auch wirklich läuft – sonst würde der Editor eines Mitspielers die Lobby-Auflösung
+   * anderer Clients verschieben.
+   */
+  /**
+   * Weltkonfiguration, aus der die lokal aufgebaute Welt entstanden ist.
+   *
+   * Solange lokal eine Editor-Welt steht, ist sie die Wahrheit über Gelände und Arena-Maße –
+   * auch auf einem Host, der die Welt nur autoritativ hält, ohne selbst zu editieren.
+   */
+  private resolveCurrentWorldMapConfig(): CoopDefenseMapConfig {
+    return this.isPersistentBaseEditorWorldBuilt()
+      ? getPersistentBaseEditorMapConfig()
+      : this.resolveCurrentWorldMapConfig();
+  }
+
+  /** Kampagnenkarte der laufenden bzw. gewählten Runde. Der Editor hat bewusst keine. */
   private resolveCurrentCoopDefenseMapId(): string {
-    const descriptor = bridge.getArenaDescriptor();
-    if (bridge.getGamePhase() === 'LOBBY'
-      && descriptor?.runtimeMode === 'persistent-base-editor'
-      && descriptor.mapId) {
-      return descriptor.mapId;
-    }
     return bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+  }
+
+  /** True, sobald lokal eine Editor-Welt aufgebaut ist – unabhängig von eigener Teilnahme. */
+  private isPersistentBaseEditorWorldBuilt(): boolean {
+    return bridge.getGamePhase() === 'LOBBY'
+      && (this.lifecycle?.isPersistentBaseEditorRuntimeActive() ?? false);
+  }
+
+  /** True nur für den lokal teilnehmenden Spieler mit aufgebauter Editor-Welt. */
+  private isLocalPersistentBaseEditorWorldActive(): boolean {
+    return this.isPersistentBaseEditorWorldBuilt() && bridge.isLocalPersistentBaseEditorActive();
+  }
+
+  /**
+   * Gemeinsames Gate aller Persistent-Base-Interaktionen: laufende Coop-Mission oder die lokal
+   * aufgebaute Editor-Welt. Beide benutzen denselben Placement-/Runtime-Pfad.
+   */
+  private isMissionOrEditorRuntimeActive(): boolean {
+    return (bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
+      || this.isLocalPersistentBaseEditorWorldActive();
   }
 
   private canLocallyRepositionPersistentRuntime(runtime: {
@@ -3781,8 +3807,7 @@ export class ArenaScene extends Phaser.Scene {
     const placementSystem = this.ctx.placementSystem;
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     const context = this.getCurrentPersistentBasePlacementContext();
-    const runtimeActive = (bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
-      || (bridge.getGamePhase() === 'LOBBY' && bridge.isLocalPersistentBaseEditorActive());
+    const runtimeActive = this.isMissionOrEditorRuntimeActive();
     if (!runtimeActive || !placementSystem || !sprite || !context) return undefined;
     const pointer = this.getPointerWorldPoint();
     const target = placementSystem.getClampedTargetCell(
@@ -3822,8 +3847,7 @@ export class ArenaScene extends Phaser.Scene {
     const placementSystem = this.ctx.placementSystem;
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     const context = this.getCurrentPersistentBasePlacementContext();
-    const runtimeActive = (bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
-      || (bridge.getGamePhase() === 'LOBBY' && bridge.isLocalPersistentBaseEditorActive());
+    const runtimeActive = this.isMissionOrEditorRuntimeActive();
     if (!runtimeActive || !placementSystem || !sprite || !context) return undefined;
     const runtime = placementSystem.getAllRuntimeRocks()
       .find((candidate) => candidate.persistentId === persistentId);
@@ -3870,8 +3894,7 @@ export class ArenaScene extends Phaser.Scene {
     persistentId: string,
     preview: { readonly gridX: number; readonly gridY: number; readonly angle: number },
   ): void {
-    const runtimeActive = (bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
-      || (bridge.getGamePhase() === 'LOBBY' && bridge.isLocalPersistentBaseEditorActive());
+    const runtimeActive = this.isMissionOrEditorRuntimeActive();
     if (!runtimeActive) return;
     const placementSystem = this.ctx.placementSystem;
     const context = this.getCurrentPersistentBasePlacementContext();
@@ -4120,6 +4143,8 @@ export class ArenaScene extends Phaser.Scene {
 
     this.events.once('shutdown', () => {
       this.persistentBaseVisuals?.destroy();
+      this.persistentBaseEditorHud?.destroy();
+      this.persistentBaseEditorHud = null;
       if (this.timeOfDayHotkeyHandler) {
         keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
         this.timeOfDayHotkeyHandler = null;
@@ -4450,18 +4475,28 @@ export class ArenaScene extends Phaser.Scene {
 
   private resolveCoopDefenseArenaWidthCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(bridge.getGameMode())) return undefined;
-    const mapId = phase === 'ARENA'
-      ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
-      : this.resolveCurrentCoopDefenseMapId();
-    return getCoopDefenseMapConfig(mapId).arenaWidthCells;
+    return this.resolveArenaMetricsMapConfig(phase).arenaWidthCells;
   }
 
   private resolveCoopDefenseArenaHeightCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(bridge.getGameMode())) return undefined;
-    const mapId = phase === 'ARENA'
-      ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
-      : this.resolveCurrentCoopDefenseMapId();
-    return getCoopDefenseMapConfig(mapId).arenaHeightCells;
+    return this.resolveArenaMetricsMapConfig(phase).arenaHeightCells;
+  }
+
+  /**
+   * Maßgebende Welt der globalen Arena-Metrik.
+   *
+   * Sie MUSS dieselbe sein, aus der die aufgebaute Welt entstanden ist: `ArenaGenerator`,
+   * `PlayerManager`-Spawn und alle Rasterprüfungen lesen `GRID_COLS`/`GRID_ROWS` global. Läuft
+   * die Metrik einer anderen Karte, liegt der Spawn außerhalb des Rasters und der Spieler ist
+   * weder sichtbar noch steuerbar.
+   */
+  private resolveArenaMetricsMapConfig(phase: GamePhase): CoopDefenseMapConfig {
+    if (this.isPersistentBaseEditorWorldBuilt()) return getPersistentBaseEditorMapConfig();
+    if (phase === 'ARENA') {
+      return getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId());
+    }
+    return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
   }
 
   private getPointerWorldPoint(): Phaser.Math.Vector2 {
@@ -5049,8 +5084,47 @@ export class ArenaScene extends Phaser.Scene {
     this.roomQualitySnapshot = this.roomQualityMonitor.update(now, players);
   }
 
+  /**
+   * Der Editor-Eintritt trägt den aktuellen Lobby-Build mit. Er ersetzt dort den Ready-Snapshot,
+   * damit die normalen Klassen-/Unlock-/Tool-Regeln auch ohne "Bereit" greifen.
+   */
   private openPersistentBaseRuntime(): void {
-    bridge.requestPersistentBaseEditorEnter();
+    bridge.requestPersistentBaseEditorEnter(this.buildLocalCommittedLoadoutSnapshot());
+  }
+
+  private leavePersistentBaseRuntime(): void {
+    if (!bridge.isLocalPersistentBaseEditorActive()) return;
+    bridge.requestPersistentBaseEditorLeave();
+  }
+
+  /**
+   * Vollständiger Oberflächenwechsel der Editor-Runtime: Lobby-Overlay, beide Seitenpanels und
+   * das Lobby-Ambiente aus, dafür das kleine Editor-HUD mit sichtbarem Ausstieg an.
+   */
+  private syncPersistentBaseEditorUi(editorActive: boolean): void {
+    if (editorActive === this.persistentBaseEditorUiActive) {
+      if (editorActive) this.persistentBaseEditorHud?.setStatus(this.resolvePersistentBaseEditorStatus());
+      return;
+    }
+    this.persistentBaseEditorUiActive = editorActive;
+    this.ctx?.leftPanel.setPanelSuppressed(editorActive);
+    this.ctx?.rightPanel.setPanelSuppressed(editorActive);
+    if (editorActive) {
+      this.lobbyOverlay.hide();
+      this.persistentBaseEditorHud?.setStatus(this.resolvePersistentBaseEditorStatus());
+      this.persistentBaseEditorHud?.setVisible(true);
+      return;
+    }
+    this.persistentBaseEditorHud?.setVisible(false);
+    if (bridge.getGamePhase() === 'LOBBY') {
+      this.lobbyOverlay.setReadyButtonState(false);
+      this.lobbyOverlay.show();
+    }
+  }
+
+  /** Statuszeile des Editor-HUD; Platz für die spätere Konfliktinfo. */
+  private resolvePersistentBaseEditorStatus(): string | null {
+    return this.lifecycle?.isPersistentBaseEditorRuntimeActive() === true ? null : t('ui.common.loading');
   }
 
   private requestPersistentBaseRewardPlacement(
@@ -5059,19 +5133,14 @@ export class ArenaScene extends Phaser.Scene {
     targetY: number,
     angle: number,
   ): void {
-    if (!((bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
-      || (bridge.getGamePhase() === 'LOBBY' && bridge.isLocalPersistentBaseEditorActive()))) return;
+    if (!(this.isMissionOrEditorRuntimeActive())) return;
     if (!this.getLocalPersistentBaseRewardStates().some((state) => (
       state.rewardId === rewardId && state.availability === 'available'
     ))) return;
-    const mapId = this.resolveCurrentCoopDefenseMapId();
-    const mapConfig = getCoopDefenseMapConfig(mapId);
-    if (!mapConfig?.persistentBase) return;
-    const base = resolveCoopDefenseBases(mapConfig, 1)
-      .find((candidate) => candidate.id === mapConfig.persistentBase?.baseId);
+    const site = this.lifecycle.getPersistentBaseSite();
     const definition = getPersistentBaseRewardDefinition(rewardId);
-    if (!base || !definition) return;
-    const anchor = getPersistentBaseAnchor(base);
+    if (!site || !definition) return;
+    const anchor = site.anchor;
     const gridX = Math.floor((targetX - ARENA_OFFSET_X) / CELL_SIZE);
     const gridY = Math.floor((targetY - ARENA_OFFSET_Y) / CELL_SIZE);
     if (!isPersistentFootprintInsideZone(
@@ -5079,7 +5148,7 @@ export class ArenaScene extends Phaser.Scene {
       gridY,
       definition.footprint,
       anchor,
-      this.lifecycle.getPersistentBaseRadiusCells(),
+      site.radiusCells,
     )) return;
     const contribution = bridge.getLocalPersistentBaseContribution() ?? getStoredPersistentBaseContribution();
     bridge.sendPersistentBaseRewardPlaceRequest({
@@ -5092,7 +5161,14 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  private handlePersistentBaseEditorEnterRequest(playerId: string): void {
+  /**
+   * Host-Gate des Editor-Eintritts. Die Host-Kampagne entscheidet, ob die Persistent Base
+   * überhaupt verfügbar ist; die persönlichen Bau-Regeln bleiben am Build des Spielers.
+   */
+  private handlePersistentBaseEditorEnterRequest(
+    playerId: string,
+    loadout: LoadoutCommitSnapshot | null,
+  ): void {
     if (!bridge.isHost()
       || bridge.getGamePhase() !== 'LOBBY'
       || bridge.getPlayerReady(playerId)
@@ -5100,14 +5176,14 @@ export class ArenaScene extends Phaser.Scene {
       || !isCoopDefenseMode(bridge.getGameMode())
       || !isStoredPersistentBaseUnlocked()) return;
     bridge.hostSetPlayerPersistentBaseEditorActive(playerId, true);
-    this.lifecycle.startPersistentBaseRuntime();
+    bridge.hostSetPlayerPersistentBaseEditorLoadout(playerId, loadout);
+    // Der Welt-Aufbau selbst läuft im normalen Editor-Sync des nächsten Frames.
   }
 
   private handlePersistentBaseEditorLeaveRequest(playerId: string): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'LOBBY'
       || !bridge.isPlayerPersistentBaseEditorActive(playerId)) return;
     bridge.hostSetPlayerPersistentBaseEditorActive(playerId, false);
-    this.lifecycle.stopPersistentBaseRuntimeIfUnused();
   }
 
   private syncConfirmedPersistentBaseContribution(): void {

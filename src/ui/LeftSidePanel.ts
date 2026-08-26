@@ -208,6 +208,7 @@ export class LeftSidePanel {
   private puContainer!:    Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
   private arenaOverlayVisible = false;
+  private panelSuppressed = false;
   private localNameText!:  Phaser.GameObjects.Text;
   private playerLabelText!: Phaser.GameObjects.Text;
   private gameModeLabelText!: Phaser.GameObjects.Text;
@@ -755,6 +756,33 @@ export class LeftSidePanel {
   isArenaOverlayVisible(): boolean {
     return this.arenaOverlayVisible;
   }
+
+  /**
+   * Blendet das gesamte Panel aus, ohne seinen Lobby-/Arena-Zustand anzufassen.
+   * Genutzt von der Persistent-Base-Editor-Runtime, die eine eigene, minimale Oberfläche zeigt.
+   */
+  setPanelSuppressed(suppressed: boolean): void {
+    if (this.panelSuppressed === suppressed) return;
+    this.panelSuppressed = suppressed;
+    this.lobbyContainer.setVisible(!suppressed).setActive(!suppressed);
+    if (suppressed) {
+      this.closeColorPicker();
+      this.closeNameEditPopup();
+      this.loadoutPicker?.close();
+      this.gameContainer.setVisible(false).setActive(false);
+      // Vorschau, Power-Up-Stapel und Loadout-Auswahl sind bewusst eigene Wurzeln und keine
+      // Kinder von `lobbyContainer`; ohne diesen Zweig blieben sie über dem Editor stehen.
+      this.badgerPreview?.setVisible(false);
+      this.arenaHUD.setSuppressed(true);
+      this.pickerContainer.setVisible(false);
+      return;
+    }
+    this.arenaHUD.setSuppressed(false);
+    this.badgerPreview?.setVisible(true);
+    if (this.arenaOverlayVisible) this.gameContainer.setVisible(true).setActive(true);
+  }
+
+  isPanelSuppressed(): boolean { return this.panelSuppressed; }
 
   // ── Daten-Updates (von ArenaScene.update() aufgerufen) ────────────────────
 

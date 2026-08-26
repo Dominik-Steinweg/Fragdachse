@@ -289,6 +289,12 @@ export class ArenaHUD {
   private w2!:      BarBundle;
   private util!:    BarBundle;
   private presentationActive = true;
+  /**
+   * Der Power-Up-/Baukapazitäts-Stapel ist eine eigene Wurzel neben den Panel-Containern und
+   * zeigt sich bei jedem Update selbst wieder an. Solange das Panel unterdrückt ist (Basis-Editor),
+   * bleibt er deshalb hier gesperrt statt jeden Frame nachträglich versteckt zu werden.
+   */
+  private suppressed = false;
   private loadoutNames = { weapon1: '', weapon2: '', utility: '', ultimate: '' };
 
   // Name
@@ -645,6 +651,17 @@ export class ArenaHUD {
       ...(data.activePowerUps ?? []),
       ...constructionCapacity,
     ]);
+  }
+
+  /** Sperrt den bildschirmfesten Stapel, solange das Panel als Ganzes ausgeblendet ist. */
+  setSuppressed(suppressed: boolean): void {
+    if (this.suppressed === suppressed) return;
+    this.suppressed = suppressed;
+    this.puFadeTween?.destroy();
+    this.puFadeTween = null;
+    this.puContainer.setVisible(false).setAlpha(1);
+    // Beim Aufheben bleibt der Stapel bewusst versteckt: Er gehört zur laufenden Welt und wird
+    // vom nächsten HUD-Update wieder aufgebaut, sobald es wirklich eine gibt.
   }
 
   /** Fully suspends the expensive, normally hidden TAB-HUD presentation. */
@@ -1155,7 +1172,7 @@ export class ArenaHUD {
     }
 
     const n = this.puOrder.length;
-    if (n > 0) {
+    if (n > 0 && !this.suppressed) {
       const totalH = getBottomStackHeight(n);
       this.puContainer.setData('stackHeight', totalH);
       this.puContainer.setY(GAME_HEIGHT - 20 - totalH);

@@ -1,3 +1,4 @@
+import type { ArenaRuntimeProfile } from './ArenaRuntimeProfile';
 import type { PlayerManager }       from '../../entities/PlayerManager';
 import type { ProjectileManager }   from '../../entities/ProjectileManager';
 import type { CombatSystem }        from '../../systems/CombatSystem';
@@ -122,6 +123,11 @@ export interface ArenaContext {
   // ── Round-scoped (null outside a round; managed by ArenaLifecycleCoordinator) ──
   arenaResult:       ArenaBuilderResult | null;
   currentLayout:     ArenaLayout        | null;
+  /**
+   * Profil der aktuell aufgebauten Welt. `null` heißt: keine Welt. Host- und Client-Tick lesen
+   * ausschließlich dieses Profil, statt Mission und Editor an einzelnen Bridge-Flags zu erraten.
+   */
+  runtimeProfile:    ArenaRuntimeProfile | null;
   placementSystem:   PlacementSystem    | null;
   persistentBaseSession: PersistentBaseSession | null;
   structureOccupancySystem: StructureOccupancySystem | null;

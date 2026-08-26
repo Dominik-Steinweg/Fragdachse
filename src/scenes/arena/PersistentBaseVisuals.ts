@@ -1,8 +1,7 @@
 import * as Phaser from 'phaser';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, DEPTH, GRID_COLS, GRID_ROWS } from '../../config';
-import type { BaseSpec } from '../../arena/BaseRegistry';
-import type { CoopDefenseMapPersistentBaseConfig } from '../../config/coopDefenseMaps';
-import { getPersistentBaseAnchor, isCellInsidePersistentBaseZone } from '../../persistentBase/PersistentBaseZone';
+import { isCellInsidePersistentBaseZone } from '../../persistentBase/PersistentBaseZone';
+import type { PersistentBaseSiteView } from '../../persistentBase/PersistentBaseSite';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
 
 /** Opt-in construction-zone guide for the active persistent base; persistent terrain is streamed elsewhere. */
@@ -15,18 +14,17 @@ export class PersistentBaseVisuals {
     registerGraphicsObject(scene, 'placementPreview', this.overlay);
   }
 
-  sync(
-    config: CoopDefenseMapPersistentBaseConfig | undefined,
-    bases: readonly BaseSpec[],
-    radiusCells: number,
-    showOverlay: boolean,
-  ): void {
-    const base = config ? bases.find((candidate) => candidate.id === config.baseId) : undefined;
-    if (!base || !Number.isFinite(radiusCells) || radiusCells < 0) {
+  /**
+   * Nimmt genau die Site, mit der die Welt gebaut wurde. Ein zweites Auflösen aus Map-Konfig
+   * und Spielerzahl hatte Zone und Basiskern auseinanderlaufen lassen.
+   */
+  sync(site: PersistentBaseSiteView | null, showOverlay: boolean): void {
+    if (!site || !Number.isFinite(site.radiusCells) || site.radiusCells < 0) {
       this.clear();
       return;
     }
-    const anchor = getPersistentBaseAnchor(base);
+    const anchor = site.anchor;
+    const radiusCells = site.radiusCells;
     const zoneKey = `${anchor.gridX}:${anchor.gridY}:${radiusCells}`;
 
     const overlayKey = `${zoneKey}:${showOverlay ? 'on' : 'off'}`;

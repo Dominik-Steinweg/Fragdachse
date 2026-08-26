@@ -26,7 +26,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, PersistentBaseEditorWorld, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import { sanitizePersistentPlayerBaseContribution, type PersistentPlayerBaseContribution } from '../persistentBase/PersistentBaseTypes';
@@ -160,6 +160,8 @@ const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_PERSISTENT_BASE_CONTRIBUTION = 'pbc'; // per-player reliable V4 personal base contribution
 const KEY_PERSISTENT_BASE_EDITOR_ACTIVE = 'pbea'; // per-player reliable peaceful-base presence
+const KEY_PERSISTENT_BASE_EDITOR_WORLD = 'pbew'; // global reliable: PersistentBaseEditorWorld | null
+const KEY_PERSISTENT_BASE_EDITOR_LOADOUT = 'pbel'; // per-player reliable editor loadout snapshot
 const KEY_PERSISTENT_BASE_COMPOSITE = 'pbcx'; // global reliable host-resolved composite snapshot
 const KEY_STRUCTURE_OCCUPANCY = 'soc'; // global reliable occupancy snapshot
 const KEY_PERSISTENT_BASE_REWARDS = 'pbr'; // global reliable host reward availability
@@ -647,6 +649,11 @@ export class NetworkBridge {
     raw: Partial<LoadoutCommitSnapshot> | null | undefined;
     value: LoadoutCommitSnapshot | null;
   }>();
+  /** Derselbe Referenz-Cache für den Editor-Snapshot; er wird ebenso oft pro Frame gelesen. */
+  private editorLoadoutCache = new Map<string, {
+    raw: Partial<LoadoutCommitSnapshot> | null | undefined;
+    value: LoadoutCommitSnapshot | null;
+  }>();
   /**
    * Derselbe Referenz-Cache für {@link getCoopDefenseSecondaryObjectivePresentationState}. Der
    * Zustand wird pro Frame mehrfach gelesen – HUD, Weltmarkierung und das Dormanz-Gate jeder
@@ -714,7 +721,7 @@ export class NetworkBridge {
   private persistentBaseMutationHandler: ((playerId: string, operation: PersistentBaseMutationOperation, request: PersistentBaseMutationRequest) => void) | null = null;
   private structureEnterHandler: ((playerId: string, request: StructureOccupancyRequest) => void) | null = null;
   private structureExitHandler: ((playerId: string, request: StructureOccupancyRequest) => void) | null = null;
-  private persistentBaseEditorEnterHandler: ((playerId: string) => void) | null = null;
+  private persistentBaseEditorEnterHandler: ((playerId: string, loadout: LoadoutCommitSnapshot | null) => void) | null = null;
   private persistentBaseEditorLeaveHandler: ((playerId: string) => void) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
   private trainBurrowSparksHandler: TrainBurrowSparksHandler | null = null;
@@ -2158,12 +2165,36 @@ export class NetworkBridge {
       seed: raw.seed,
       arenaGeneratorVersion: raw.arenaGeneratorVersion,
       layoutFingerprint: raw.layoutFingerprint,
-      runtimeMode: raw.runtimeMode === 'persistent-base-editor' ? 'persistent-base-editor' : 'mission',
-      ...(raw.persistentBaseRadiusCells !== undefined
-        && Number.isSafeInteger(raw.persistentBaseRadiusCells)
-        && raw.persistentBaseRadiusCells > 0
-        ? { persistentBaseRadiusCells: raw.persistentBaseRadiusCells }
-        : {}),
+    };
+  }
+
+  // ── Persistent-Base-Editor-Welt: Host → Alle (global, reliable) ────────────
+
+  /**
+   * Eigener Welt-Kanal des Editors. Er liegt bewusst neben dem Mission-Descriptor, damit ein
+   * verlassener Editor keinen `runtimeMode`-Zustand in der Lobby-/Mission-Auflösung hinterlässt.
+   */
+  publishPersistentBaseEditorWorld(world: PersistentBaseEditorWorld | null): void {
+    if (!isHost()) return;
+    setState(KEY_PERSISTENT_BASE_EDITOR_WORLD, world, true);
+  }
+
+  getPersistentBaseEditorWorld(): PersistentBaseEditorWorld | null {
+    const raw = getState(KEY_PERSISTENT_BASE_EDITOR_WORLD) as Partial<PersistentBaseEditorWorld> | null | undefined;
+    if (!raw || typeof raw !== 'object') return null;
+    if (!isFiniteNumber(raw.revision) || !Number.isSafeInteger(raw.revision) || raw.revision <= 0) return null;
+    if (typeof raw.gameMode !== 'string') return null;
+    if (!isFiniteNumber(raw.seed) || !Number.isSafeInteger(raw.seed)) return null;
+    if (!isFiniteNumber(raw.arenaGeneratorVersion) || !Number.isSafeInteger(raw.arenaGeneratorVersion)) return null;
+    if (typeof raw.layoutFingerprint !== 'string' || raw.layoutFingerprint.length === 0) return null;
+    if (!isFiniteNumber(raw.radiusCells) || !Number.isSafeInteger(raw.radiusCells) || raw.radiusCells <= 0) return null;
+    return {
+      revision: raw.revision,
+      gameMode: raw.gameMode as GameMode,
+      seed: raw.seed,
+      arenaGeneratorVersion: raw.arenaGeneratorVersion,
+      layoutFingerprint: raw.layoutFingerprint,
+      radiusCells: raw.radiusCells,
     };
   }
 
@@ -3336,11 +3367,49 @@ export class NetworkBridge {
     state.setState(KEY_PERSISTENT_BASE_EDITOR_ACTIVE, active === true, true);
     state.setState(KEY_READY, false, true);
     state.setState(KEY_LOADOUT_COMMITTED, null, true);
+    // Der Editor-Snapshot gehört ausschließlich zur Editor-Sitzung des Spielers.
+    if (!active) state.setState(KEY_PERSISTENT_BASE_EDITOR_LOADOUT, null, true);
   }
 
-  requestPersistentBaseEditorEnter(): void {
-    if (isHost()) this.persistentBaseEditorEnterHandler?.(myPlayer().id);
-    else this.sendHostRpc('pbe-enter', {});
+  /**
+   * Jeder Editor-Teilnehmer veröffentlicht beim Eintritt seinen aktuellen Lobby-Build. Der
+   * Editor hat kein Ready-Commit, aber dieselben Klassen-/Unlock-/Tool-Regeln müssen gelten –
+   * deshalb ersetzt dieser Snapshot dort den Ready-Snapshot statt die Prüfung zu überspringen.
+   */
+  hostSetPlayerPersistentBaseEditorLoadout(
+    playerId: string,
+    snapshot: LoadoutCommitSnapshot | null,
+  ): void {
+    if (!isHost()) return;
+    this.playerStateMap.get(playerId)?.setState(KEY_PERSISTENT_BASE_EDITOR_LOADOUT, snapshot, true);
+  }
+
+  getPlayerPersistentBaseEditorLoadout(playerId: string): LoadoutCommitSnapshot | null {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_PERSISTENT_BASE_EDITOR_LOADOUT) as Partial<LoadoutCommitSnapshot> | null | undefined;
+    const cached = this.editorLoadoutCache.get(playerId);
+    if (cached && cached.raw === raw) return cached.value;
+    const value = this.buildCommittedLoadout(raw);
+    this.editorLoadoutCache.set(playerId, { raw, value });
+    return value;
+  }
+
+  /**
+   * Einziger Loadout-Vertrag für laufende Runtime-Regeln (Bau-Zugriff, Kapazität, HUD).
+   * Mission liest den Ready-Snapshot, der Editor seinen Editor-Snapshot.
+   */
+  getPlayerRuntimeLoadout(playerId: string): LoadoutCommitSnapshot | null {
+    return this.isPlayerPersistentBaseEditorActive(playerId)
+      ? this.getPlayerPersistentBaseEditorLoadout(playerId)
+      : this.getPlayerCommittedLoadout(playerId);
+  }
+
+  /**
+   * Der Editor-Build reist im Aufruf mit, statt separat als per-player-State zu rennen. So kann
+   * das Bau-Gate des Hosts nie einen Frame lang ohne Loadout entscheiden.
+   */
+  requestPersistentBaseEditorEnter(loadout: LoadoutCommitSnapshot): void {
+    if (isHost()) this.persistentBaseEditorEnterHandler?.(myPlayer().id, loadout);
+    else this.sendHostRpc('pbe-enter', { loadout });
   }
 
   requestPersistentBaseEditorLeave(): void {
@@ -3349,13 +3418,18 @@ export class NetworkBridge {
   }
 
   registerPersistentBaseEditorPresenceHandlers(
-    onEnter: (playerId: string) => void,
+    onEnter: (playerId: string, loadout: LoadoutCommitSnapshot | null) => void,
     onLeave: (playerId: string) => void,
   ): void {
     this.persistentBaseEditorEnterHandler = onEnter;
     this.persistentBaseEditorLeaveHandler = onLeave;
-    this.registerHostRpcHandler('pbe-enter', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
-      if (isHost()) this.persistentBaseEditorEnterHandler?.(caller.id);
+    this.registerHostRpcHandler('pbe-enter', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      const raw = isRecord(data) ? data.loadout : null;
+      this.persistentBaseEditorEnterHandler?.(
+        caller.id,
+        this.buildCommittedLoadout(raw as Partial<LoadoutCommitSnapshot> | null | undefined),
+      );
       return undefined;
     });
     this.registerHostRpcHandler('pbe-leave', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
