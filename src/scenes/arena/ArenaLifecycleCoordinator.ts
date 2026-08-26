@@ -159,6 +159,7 @@ import {
   type PersistentRestoreToolDefinition,
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
+import { nextMonotonicRevision } from '../../world/WorldRevision';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
@@ -405,7 +406,7 @@ export class ArenaLifecycleCoordinator {
     // the later authoritative gameplay start timestamp.
     // Keep the revision monotone even when an abort/restart happens within the same millisecond;
     // a stale reliable acknowledgement must never be able to match a new round by coincidence.
-    const roundRevision = Math.max(Date.now(), this.lastRoundRevision + 1);
+    const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
     bridge.setArenaStartTime(0);

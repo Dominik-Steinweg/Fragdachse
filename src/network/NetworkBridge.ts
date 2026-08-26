@@ -12,6 +12,7 @@
  * Der Transport liegt darunter in `src/network/peer/`: direkte WebRTC-Verbindungen
  * zwischen Client und Host, PeerJS ausschließlich als Signaling-Broker.
  */
+import { isWorldLoadStage, normalizeWorldLoadProgress } from '../world/WorldLoadReady';
 import {
   createHostSession,
   joinHostSession,
@@ -591,14 +592,6 @@ function isValidMissionId(value: unknown): value is string {
 
 function isValidNullableMissionId(value: unknown): value is string | null {
   return value === null || isValidMissionId(value);
-}
-
-function isArenaLoadStage(value: unknown): value is ArenaLoadStage {
-  return value === 'generating' || value === 'building' || value === 'rendering' || value === 'ready';
-}
-
-function normalizeArenaLoadProgress(value: unknown): number {
-  return isFiniteNumber(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0;
 }
 
 const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
@@ -1555,7 +1548,7 @@ export class NetworkBridge {
   ): void {
     const normalizedProgress = ready || stage === 'ready'
       ? 100
-      : Math.min(95, Math.floor(normalizeArenaLoadProgress(progress) / 5) * 5);
+      : Math.min(95, Math.floor(normalizeWorldLoadProgress(progress) / 5) * 5);
     const normalizedReady = ready === true && normalizedProgress >= 100 && stage === 'ready';
     const stateKey = `${roundRevision}|${stage}|${normalizedProgress}|${normalizedReady}`;
     if (this.lastLocalArenaLoadStateKey === stateKey) return;
@@ -1580,8 +1573,8 @@ export class NetworkBridge {
   getPlayerArenaLoadState(playerId: string, roundRevision: number): ArenaLoadReadyState | null {
     const raw = this.playerStateMap.get(playerId)?.getState(KEY_ARENA_LOAD_READY) as
       Partial<ArenaLoadReadyState> | undefined;
-    if (!raw || raw.roundRevision !== roundRevision || !isArenaLoadStage(raw.stage)) return null;
-    const progress = normalizeArenaLoadProgress(raw.progress);
+    if (!raw || raw.roundRevision !== roundRevision || !isWorldLoadStage(raw.stage)) return null;
+    const progress = normalizeWorldLoadProgress(raw.progress);
     return {
       roundRevision,
       progress,

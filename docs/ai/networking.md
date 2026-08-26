@@ -70,6 +70,14 @@ Kick ist ein Lobby-RPC. Der Host prüft Rolle, Phase und Ziel erneut, sendet dem
 
 Netzwerk-RTT und Anwendungsreaktion sind getrennte Messgrößen. RTT kommt aus dem gewählten ICE-Kandidatenpaar; die Anwendungs-Ping-Schleife enthält zusätzlich beide Spielschleifen und dient der Zeitsynchronisation. Ein gültiger RTT-Wert von 0 ms darf nicht als „noch nicht gemessen“ verworfen werden. Raumqualitäts- und UI-Code dürfen diese Werte nicht vermischen.
 
+## World- und Activity-Identität
+
+Die kanonischen Replikationsverträge der World-Schicht liegen unter src/world/. `WorldDescriptor` trägt ausschließlich World-Identität und -Konfiguration (worldRevision, definitionId, seed, generatorVersion, layoutFingerprint, parameters); `ActivityDescriptor` trägt activityRevision, worldRevision, kind und definitionId und dupliziert die World-Identität nicht. Objective, Rolle, Siegbedingung, Respawn-Budget und GameMode gehören nie in den WorldDescriptor. `definitionId` ist dieselbe ID wie im Authoring (src/config/authoring/), damit World-Identität über Authoring und Replikation hinweg eindeutig bleibt.
+
+`worldRevision` und `activityRevision` dürfen aus derselben monotonen Quelle stammen (`nextMonotonicRevision`), sind aber verschiedene Identitäten. Eine Nachricht der World-Revision N darf niemals auf eine andere angewendet werden; die Regel steht zentral in `acceptWorldScoped`/`isCurrentWorldRevision`, nicht an den Aufrufstellen. Die Ladestufen (`isWorldLoadStage`, `normalizeWorldLoadProgress`) gehören zur World-Ladebarriere und sind dort die einzige Quelle.
+
+Repliziert wird vorerst weiter der bestehende `ArenaDescriptor`. arenaDescriptorAdapter.ts ist der einzige Ort, der ihn in beide Richtungen auf World/Activity abbildet; der Round-Trip ist verlustfrei bis auf `WorldDescriptor.parameters` (der persistente Basisradius reist bis zum World-Kanal weiter im `RoundState`).
+
 ## Referenzen
 
 - Fachliche Grenze und Wire-Keys: src/network/NetworkBridge.ts
@@ -77,5 +85,6 @@ Netzwerk-RTT und Anwendungsreaktion sind getrennte Messgrößen. RTT kommt aus d
 - Baseline: src/network/FullGameStateBootstrap.ts
 - Codecs: src/network/playerStateCodec.ts, src/network/enemySnapshotCodec.ts, src/network/projectileSnapshotCodec.ts
 - Host/Client: src/scenes/arena/HostUpdateCoordinator.ts, src/scenes/arena/ClientUpdateCoordinator.ts
-- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts, tests/MissionLifecycleContracts.test.ts
+- World-/Activity-Identität: src/world/WorldDescriptor.ts, ActivityDescriptor.ts, WorldRevision.ts, WorldLoadReady.ts, arenaDescriptorAdapter.ts
+- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts, tests/MissionLifecycleContracts.test.ts, tests/WorldDescriptorContracts.test.ts
 - Test-Harness: tests/fakePeerNetwork.ts verdrahtet mehrere PeerRoom-Instanzen ohne WebRTC durch echte Kodierung und Validierung. Multiplayer-Contract-Tests bauen darauf auf, statt einen zweiten In-Memory-Transport anzulegen.

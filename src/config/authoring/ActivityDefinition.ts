@@ -25,7 +25,19 @@ import type {
  */
 export type ActivityDefinition = CoopMissionDefinition;
 
-export type ActivityKind = ActivityDefinition['kind'];
+/**
+ * Kanonisches Vokabular aller Activity-Arten – die einzige Quelle sowohl fuer authored
+ * Definitionen als auch fuer den replizierten `ActivityDescriptor`.
+ *
+ * Nur `coop-mission` besitzt heute eine eigene {@link ActivityDefinition}; die PvP-Modi sind
+ * bislang rein durch ihren Modus beschrieben. Die Arten stehen trotzdem hier, damit World- und
+ * Activity-Schicht nicht mit zwei verschiedenen Aufzaehlungen arbeiten.
+ */
+export type ActivityKind =
+  | 'coop-mission'
+  | 'deathmatch'
+  | 'team-deathmatch'
+  | 'capture-the-beer';
 
 export interface CoopMissionDefinition {
   readonly kind: 'coop-mission';
