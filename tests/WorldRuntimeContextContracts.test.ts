@@ -1,0 +1,217 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import * as config from '../src/config';
+import { applyArenaMetricsForMode, getArenaMetricsProfile } from '../src/config';
+import { getCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { NetworkBridge } from '../src/network/NetworkBridge';
+import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
+import type { GameMode } from '../src/types';
+import type { WorldDescriptor } from '../src/world/WorldDescriptor';
+import { isCellInsideWorld, resolveWorldMetrics, worldCellOrigin } from '../src/world/WorldMetrics';
+import {
+  createWorldRuntimeContext,
+  findWorldBase,
+  isValidPersistentBaseSite,
+} from '../src/world/WorldRuntimeContext';
+import { createHostRoom, FakeNetwork } from './fakePeerNetwork';
+
+/**
+ * Der kanonische Kontext einer World-Instanz.
+ *
+ * Zwei Aussagen tragen diesen Schritt: die World-Metrik ist derselbe Wert, den die heutigen
+ * globalen Arena-Variablen fuehren – nur an eine World gebunden statt global – und die
+ * world-scoped Ableitungen (Basen, persistente Basisstelle) haengen an der World, nicht an der
+ * in der Lobby gewaehlten Map.
+ */
+
+const GAME_MODES: readonly GameMode[] = ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'];
+
+function descriptorFor(definitionId: string, overrides: Partial<WorldDescriptor> = {}): WorldDescriptor {
+  return {
+    worldRevision: 12,
+    definitionId,
+    seed: 4242,
+    generatorVersion: 3,
+    layoutFingerprint: 'deadbeef',
+    ...overrides,
+  };
+}
+
+function contextForMap(mapId: string, overrides: Partial<WorldDescriptor> = {}) {
+  const mapConfig = getCoopDefenseMapConfig(mapId);
+  return createWorldRuntimeContext({
+    descriptor: descriptorFor(`world:coop-defense:${mapId}`, overrides),
+    metricsProfile: getArenaMetricsProfile(
+      'coop_defense',
+      'ARENA',
+      mapConfig.arenaWidthCells,
+      mapConfig.arenaHeightCells,
+    ),
+    mapConfig,
+    humanPlayerCount: 1,
+    fallbackPersistentBaseRadiusCells: 4,
+  });
+}
+
+describe('WorldMetrics – derselbe Wert, nur an eine World gebunden', () => {
+  it('stimmt fuer jeden Modus und jede authored Map mit den globalen Arena-Variablen ueberein', () => {
+    const cases: Array<{ mode: GameMode; widthCells?: number; heightCells?: number; label: string }> = [];
+    for (const mode of GAME_MODES) {
+      if (mode !== 'coop_defense') {
+        cases.push({ mode, label: mode });
+        continue;
+      }
+      for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
+        cases.push({
+          mode,
+          widthCells: mapConfig.arenaWidthCells,
+          heightCells: mapConfig.arenaHeightCells,
+          label: `${mode}/${mapConfig.mapId}`,
+        });
+      }
+    }
+
+    for (const testCase of cases) {
+      const profile = getArenaMetricsProfile(testCase.mode, 'ARENA', testCase.widthCells, testCase.heightCells);
+      const metrics = resolveWorldMetrics(profile);
+      // Die globale Variante ist weiterhin die Laufzeitquelle; sie muss denselben Wert ergeben.
+      applyArenaMetricsForMode(testCase.mode, 'ARENA', testCase.widthCells, testCase.heightCells);
+      expect(metrics, testCase.label).toEqual({
+        widthPx: config.ARENA_WIDTH,
+        heightPx: config.ARENA_HEIGHT,
+        offsetX: config.ARENA_OFFSET_X,
+        offsetY: config.ARENA_OFFSET_Y,
+        maxX: config.ARENA_MAX_X,
+        maxY: config.ARENA_MAX_Y,
+        viewportWidth: config.ARENA_VIEWPORT_WIDTH,
+        viewportHeight: config.ARENA_VIEWPORT_HEIGHT,
+        gridCols: config.GRID_COLS,
+        gridRows: config.GRID_ROWS,
+        usesDynamicCamera: profile.usesDynamicCamera,
+        showStaticFrames: config.ARENA_STATIC_FRAMES_VISIBLE,
+      });
+    }
+    // Die Lobby-Metrik zurueckstellen, damit kein Test einen fremden Weltzustand erbt.
+    applyArenaMetricsForMode('deathmatch', 'LOBBY');
+  });
+
+  it('beschreibt zwei Worlds gleichzeitig, was eine globale Metrik nicht kann', () => {
+    const small = contextForMap('1');
+    const large = contextForMap('18');
+    expect(small.metrics).not.toEqual(large.metrics);
+    // Beide Werte bleiben gueltig; keiner ueberschreibt den anderen.
+    expect(small.metrics.gridCols).toBe(getCoopDefenseMapConfig('1').arenaWidthCells);
+    expect(large.metrics.gridCols).toBe(getCoopDefenseMapConfig('18').arenaWidthCells);
+  });
+
+  it('rechnet Rasterzellen gegen die eigene World, nicht gegen eine globale Arena', () => {
+    const world = contextForMap('18');
+    const origin = worldCellOrigin(world.metrics, 2, 3);
+    expect(origin).toEqual({
+      x: world.metrics.offsetX + 2 * config.CELL_SIZE,
+      y: world.metrics.offsetY + 3 * config.CELL_SIZE,
+    });
+    expect(isCellInsideWorld(world.metrics, 0, 0)).toBe(true);
+    expect(isCellInsideWorld(world.metrics, world.metrics.gridCols - 1, world.metrics.gridRows - 1)).toBe(true);
+    expect(isCellInsideWorld(world.metrics, world.metrics.gridCols, 0)).toBe(false);
+    expect(isCellInsideWorld(world.metrics, -1, 0)).toBe(false);
+    expect(isCellInsideWorld(world.metrics, 1.5, 0)).toBe(false);
+  });
+});
+
+describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
+  it('bindet Identitaet, Definition und Basen an dieselbe World', () => {
+    const world = contextForMap('18');
+    expect(world.descriptor.definitionId).toBe('world:coop-defense:18');
+    expect(world.definition?.sourceMapId).toBe('18');
+    expect(world.bases.map((base) => base.id)).toEqual(['foundation-main']);
+    expect(findWorldBase(world, 'foundation-main')?.id).toBe('foundation-main');
+    expect(findWorldBase(world, 'does-not-exist')).toBeNull();
+  });
+
+  it('loest die persistente Basisstelle aus den eigenen Basen und dem World-Parameter auf', () => {
+    const withParameter = contextForMap('18', { parameters: { persistentBaseRadiusCells: 7 } });
+    expect(withParameter.persistentBaseSite).toMatchObject({
+      baseId: 'foundation-main',
+      radiusCells: 7,
+    });
+    expect(withParameter.persistentBaseSite?.anchor).toEqual({ gridX: 24, gridY: 19 });
+    expect(isValidPersistentBaseSite(withParameter.persistentBaseSite)).toBe(true);
+
+    // Ohne replizierten Parameter greift der uebergebene Fallback, nicht ein globaler Zustand.
+    expect(contextForMap('18').persistentBaseSite?.radiusCells).toBe(4);
+    // Eine World ohne authored Stelle hat auch keine.
+    expect(contextForMap('1').persistentBaseSite).toBeNull();
+    expect(isValidPersistentBaseSite(null)).toBe(false);
+  });
+
+  it('erkennt eine Basisstelle, die keine eigene Hauptbasis ist', () => {
+    const world = contextForMap('18');
+    const site = world.persistentBaseSite!;
+    expect(isValidPersistentBaseSite({ ...site, base: { ...site.base, faction: 'hostile' } })).toBe(false);
+    expect(isValidPersistentBaseSite({ ...site, base: { ...site.base, role: 'outpost' } })).toBe(false);
+  });
+
+  it('beschreibt eine prozedurale Arena ohne authored Definition', () => {
+    const world = createWorldRuntimeContext({
+      descriptor: descriptorFor('world:procedural-arena'),
+      metricsProfile: getArenaMetricsProfile('deathmatch', 'ARENA'),
+      mapConfig: null,
+      humanPlayerCount: 1,
+      fallbackPersistentBaseRadiusCells: 4,
+    });
+    expect(world.definition).toBeNull();
+    expect(world.bases).toEqual([]);
+    expect(world.persistentBaseSite).toBeNull();
+  });
+});
+
+describe('WorldRuntimeContext – Unabhaengigkeit von der Lobby', () => {
+  it('loest Basen aus der eigenen World auf, nicht aus der gewaehlten Lobby-Map', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+    const bridge = new NetworkBridge();
+    bridge.activate();
+    try {
+      // Lobby steht auf Map 19, die aktive World ist Map 18.
+      bridge.setCoopDefenseMapId('19');
+      applyArenaMetricsForMode('coop_defense', 'ARENA');
+      expect(bridge.getCoopDefenseMapId()).toBe('19');
+      expect(getCoopDefenseBases().map((base) => base.id)).toEqual(['cornerstone-main']);
+
+      const world = contextForMap('18');
+      expect(world.bases.map((base) => base.id)).toEqual(['foundation-main']);
+      expect(world.persistentBaseSite?.baseId).toBe('foundation-main');
+    } finally {
+      applyArenaMetricsForMode('deathmatch', 'LOBBY');
+      clearActiveSession();
+    }
+  });
+});
+
+describe('WorldRuntimeContext – kein neuer God-Context', () => {
+  it('nimmt keine Activity-Systeme als Felder auf', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldRuntimeContext.ts'), 'utf8');
+    const start = source.indexOf('export interface WorldRuntimeContext {');
+    expect(start, 'WorldRuntimeContext interface must exist').toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('\n}', start));
+    const fields = [...body.matchAll(/^ {2}readonly ([a-zA-Z][a-zA-Z0-9]*)[?]?:/gm)].map((match) => match[1]);
+    expect(fields.sort()).toEqual(['bases', 'definition', 'descriptor', 'metrics', 'persistentBaseSite']);
+
+    // Missionssysteme existieren nicht, weil keine Activity laeuft – nicht, weil hier ein Feld
+    // auf null steht.
+    const forbidden = [
+      'enemy', 'boss', 'objective', 'mission', 'encounter', 'respawn',
+      'round', 'activity', 'spawnExecutor', 'director', 'powerUp',
+    ];
+    for (const field of fields) {
+      for (const term of forbidden) {
+        expect(field.toLowerCase().includes(term.toLowerCase()), `WorldRuntimeContext.${field} is activity state`)
+          .toBe(false);
+      }
+    }
+  });
+});

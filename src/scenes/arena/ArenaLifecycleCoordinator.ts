@@ -98,10 +98,10 @@ import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, getCoopDefenseBases, type BaseSpec } from '../../arena/BaseRegistry';
+import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, type BaseSpec } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -160,7 +160,8 @@ import {
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
-import { toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
+import { toWorldAndActivityDescriptors, toWorldDescriptor } from '../../world/arenaDescriptorAdapter';
+import { createWorldRuntimeContext, isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 
@@ -939,9 +940,22 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
-    const coopDefenseBases = coopDefenseMapConfig
-      ? getCoopDefenseBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
-      : [];
+    // Kanonischer Kontext dieser World-Instanz. Metrik, Basen und die persistente Basisstelle
+    // haengen ab hier an der World, nicht an der Lobby-Auswahl oder an globalen Variablen.
+    this.ctx.world = createWorldRuntimeContext({
+      descriptor: bridge.getWorldDescriptor() ?? toWorldDescriptor(descriptor),
+      metricsProfile: getArenaMetricsProfile(
+        descriptor.gameMode,
+        'ARENA',
+        coopDefenseMapConfig?.arenaWidthCells,
+        coopDefenseMapConfig?.arenaHeightCells,
+      ),
+      mapConfig: coopDefenseMapConfig,
+      humanPlayerCount: coopDefenseHumanPlayerCount,
+      fallbackPersistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells,
+    });
+    const world = this.ctx.world;
+    const coopDefenseBases = world.bases;
     const locallyGeneratedLayout = prepared
       && prepared.descriptor.roundRevision === descriptor.roundRevision
       && prepared.descriptor.seed === descriptor.seed
@@ -1009,18 +1023,14 @@ export class ArenaLifecycleCoordinator {
     }
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
-    const persistentBaseAnchorBase = coopDefenseMapConfig?.persistentBase
-      ? coopDefenseBases.find((base) => base.id === coopDefenseMapConfig.persistentBase!.baseId)
-      : undefined;
-    const persistentBaseGravelRadius = bridge.getWorldDescriptor()?.parameters?.persistentBaseRadiusCells
-      ?? getStoredPersistentBaseState().radiusCells;
+    const persistentBaseSite = world.persistentBaseSite;
     this.ctx.arenaResult = builder.buildDynamic(layout, {
-      enablePersistentBaseGravel: Boolean(coopDefenseMapConfig?.persistentBase),
-      persistentBaseGravel: persistentBaseAnchorBase
+      enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
+      persistentBaseGravel: persistentBaseSite
         ? {
           seed: descriptor.seed,
-          anchor: getPersistentBaseAnchor(persistentBaseAnchorBase),
-          radiusCells: persistentBaseGravelRadius,
+          anchor: persistentBaseSite.anchor,
+          radiusCells: persistentBaseSite.radiusCells,
         }
         : undefined,
     });
@@ -1035,11 +1045,10 @@ export class ArenaLifecycleCoordinator {
       coopDefenseBases,
     );
     this.ctx.persistentBaseSession = null;
-    if (bridge.isHost() && coopDefenseMapConfig?.persistentBase) {
-      const anchorBase = persistentBaseAnchorBase;
-      if (!anchorBase || anchorBase.faction !== 'friendly' || anchorBase.role !== 'main') {
+    if (bridge.isHost() && world.definition?.persistentBaseSite) {
+      if (!isValidPersistentBaseSite(persistentBaseSite)) {
         throw new Error(
-          `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on map ${coopDefenseMapConfig.mapId}`,
+          `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on world ${world.descriptor.definitionId}`,
         );
       }
       if (!this.persistentBaseSession) {
@@ -1048,19 +1057,16 @@ export class ArenaLifecycleCoordinator {
         this.persistentBaseSession = new PersistentBaseSession(
           repository,
           {
-            anchor: getPersistentBaseAnchor(anchorBase),
+            anchor: persistentBaseSite.anchor,
             activeRadiusCells: committedState.radiusCells,
             ownerId: bridge.getLocalPlayerId(),
           },
           committedState,
         );
       }
-      this.persistentBaseSession.rebindArena(
-        getPersistentBaseAnchor(anchorBase),
-        persistentBaseGravelRadius,
-      );
+      this.persistentBaseSession.rebindArena(persistentBaseSite.anchor, persistentBaseSite.radiusCells);
       this.ctx.persistentBaseSession = this.persistentBaseSession;
-      this.persistentBaseAnchor = getPersistentBaseAnchor(anchorBase);
+      this.persistentBaseAnchor = persistentBaseSite.anchor;
       this.persistentBaseRadiusCells = this.persistentBaseSession.radiusCells;
       this.persistentBaseRoomState.beginMission();
     } else {
@@ -3164,6 +3170,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setHealingReceivedHandler(null);
     this.ctx.combatSystem.setArmorReceivedHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
+    this.ctx.world          = null;
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     const detachedPlacementSystem = this.ctx.placementSystem;

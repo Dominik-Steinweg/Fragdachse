@@ -80,6 +80,7 @@ import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService'
 import type { FlowFieldCoordinator } from '../../systems/flowfield/FlowFieldCoordinator';
 import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
 import type { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
+import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 
 interface PlayerStatusRingLike {
   setActive(active: boolean): void;
@@ -119,6 +120,12 @@ export interface ArenaContext {
   readonly playerStatusRing:  PlayerStatusRingLike | null;
 
   // ── Round-scoped (null outside a round; managed by ArenaLifecycleCoordinator) ──
+  /**
+   * Kanonischer Kontext der laufenden World-Instanz: Identitaet, Metrik, Basen und die
+   * persistente Basisstelle. World-scoped Zustand wird hierueber gelesen, nicht aus mutablen
+   * Modulvariablen oder erneut aus der Lobby-Auswahl.
+   */
+  world:             WorldRuntimeContext | null;
   arenaResult:       ArenaBuilderResult | null;
   currentLayout:     ArenaLayout        | null;
   placementSystem:   PlacementSystem    | null;

@@ -66,6 +66,16 @@ src/scenes/arena/ArenaContext.ts ist der Vertrag:
 
 Round-Systeme werden nur für den aktiven Modus bzw. die Host-Rolle erzeugt. Host-only-Systeme bleiben auf Clients null; Client-Code muss aus replizierten Zuständen arbeiten.
 
+## World-Kontext
+
+`ArenaContext.world` trägt den `WorldRuntimeContext` der laufenden World-Instanz (src/world/WorldRuntimeContext.ts): Descriptor, authored `WorldDefinition` (null für die prozedurale Arena), `WorldMetrics`, Basen und die aufgelöste `persistentBaseSite` mit Anker und Radius. Er wird in buildArena() erzeugt und im Teardown wie jede andere Round-Referenz auf null gesetzt.
+
+Verbindlich: Daten, die zu genau einer World gehören, werden über diese World gebunden. Der Kontext ist kein zweiter God-Context — Activity-Systeme (Gegner, Boss, Missionsziele, Encounter, Respawn-Budget) gehören nicht hinein, und ein Test hält die Feldmenge klein.
+
+`WorldMetrics` ist die unveränderliche Metrik einer World. Sie wird über `resolveWorldMetrics(getArenaMetricsProfile(...))` abgeleitet und ist wertgleich mit den mutablen Globals in src/config.ts (`ARENA_WIDTH`, `ARENA_OFFSET_X`, `GRID_COLS`, …), die weiterhin die Laufzeitquelle sind — die Äquivalenz ist für jeden Modus und jede authored Map getestet. Zwei Worlds können so gleichzeitig existieren, was eine einzelne globale Metrik nicht kann.
+
+Basen und die persistente Basisstelle löst der Kontext aus der eigenen Map auf (`resolveCoopDefenseBases`), nie über den Lobby-Fallback von `getCoopDefenseBases()`. Ein aktives World-System darf die in der Lobby gewählte Map nicht erneut aus NetworkBridge lesen.
+
 ## Zeit und deterministische Quellen
 
 Authoring und Round-Systeme verwenden die von den jeweiligen Directors weitergereichte Rundenuhr aus Frame-Deltas. Date.now() ist keine allgemeine Round-Uhr: absolute Zeitstempel sind nur dort erlaubt, wo sie ausdrücklich als replizierter Vertrag definiert sind. Neue zeitbasierte Fachlogik muss sich an den bestehenden Director-/System-Lifecycle anschließen und darf nicht nebenher eine zweite Uhr starten.
