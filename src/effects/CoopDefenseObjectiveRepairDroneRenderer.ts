@@ -11,6 +11,7 @@
  * unterschieden sind sie über den fehlenden Besitzer-Tint und den Formationsflug statt eines Orbits
  * um einen Spieler.
  */
+import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import {
   COOP_DEFENSE_OBJECTIVE_REPAIR_CONFIG,
@@ -172,7 +173,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
         if (jobs.length >= MAX_JOBS) return jobs;
         const base = baseManager.getBase(targetId);
         if (!base || base.isDormant() || base.isDestroyed()) continue;
-        const bounds = getBaseWorldBounds(base.spec.region);
+        const bounds = getBaseWorldBounds(base.spec.region, resolveActiveArenaWorldMetrics());
         const centerX = bounds.x + bounds.width * 0.5;
         const centerY = bounds.y + bounds.height * 0.5;
         jobs.push({
@@ -198,7 +199,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
   private getEntryAngle(baseManager: BaseManager, centerX: number, centerY: number): number {
     for (const base of baseManager.getBasesByFaction('friendly')) {
       if (base.role !== 'main' || base.isInert()) continue;
-      const bounds = getBaseWorldBounds(base.spec.region);
+      const bounds = getBaseWorldBounds(base.spec.region, resolveActiveArenaWorldMetrics());
       return Math.atan2(
         bounds.y + bounds.height * 0.5 - centerY,
         bounds.x + bounds.width * 0.5 - centerX,

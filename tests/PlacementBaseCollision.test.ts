@@ -21,6 +21,7 @@ import type { PlayerManager } from '../src/entities/PlayerManager';
 import { getUtilityConfigForMode } from '../src/loadout/LoadoutConfig';
 import { planPersistentBaseRestore, type PersistentRestoreToolDefinition } from '../src/persistentBase/PersistentBaseRestorePlanner';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { ArenaLayout } from '../src/types';
 
@@ -60,7 +61,7 @@ function makeBase(
 }
 
 function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
-  return new PlacementSystem(layout, new RockGridIndex(layout.rocks), noPlayers, bases);
+  return new PlacementSystem(layout, new RockGridIndex(layout.rocks), noPlayers, resolveActiveArenaWorldMetrics(), bases);
 }
 
 function world(gridX: number, gridY: number): { x: number; y: number } {

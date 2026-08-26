@@ -1,3 +1,4 @@
+import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import type {
   ArenaLayout,
@@ -550,7 +551,7 @@ export class PlayerManager implements OwnerVisualSource {
 
     let coopBaseDistance = Number.POSITIVE_INFINITY;
     if (coopDefenseBase) {
-      const bounds = getBaseWorldBounds(coopDefenseBase.region);
+      const bounds = getBaseWorldBounds(coopDefenseBase.region, resolveActiveArenaWorldMetrics());
       const bx = bounds.x + bounds.width / 2;
       const by = bounds.y + bounds.height / 2;
       coopBaseDistance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);

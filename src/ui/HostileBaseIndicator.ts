@@ -1,3 +1,4 @@
+import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
 import { COLORS, DEPTH } from '../config';
 import { getBaseWorldBounds } from '../arena/BaseRegistry';
 import type { BaseManager } from '../entities/BaseManager';
@@ -147,7 +148,7 @@ export class HostileBaseIndicator {
     if (active && mapConfig?.objective === 'destroy-hostile-bases') {
       const target = baseManager?.getActiveMainBase('hostile');
       if (target) {
-        const bounds = getBaseWorldBounds(target.spec.region);
+        const bounds = getBaseWorldBounds(target.spec.region, resolveActiveArenaWorldMetrics());
         targetX = bounds.x + bounds.width * 0.5;
         targetY = bounds.y + bounds.height * 0.5;
         worldArrowY = bounds.y - 22;

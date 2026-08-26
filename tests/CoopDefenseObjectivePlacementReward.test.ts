@@ -1,3 +1,4 @@
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => vi.restoreAllMocks());
@@ -151,7 +152,7 @@ describe('B6 objective placement rewards', () => {
     expect(supplyBase).toBeDefined();
     if (!objective || !supplyBase) return;
 
-    const position = getBaseRewardPickupWorldPosition(supplyBase, bases);
+    const position = getBaseRewardPickupWorldPosition(supplyBase, resolveActiveArenaWorldMetrics(), bases);
     expect(position).not.toBeNull();
     if (!position) return;
     const gridX = Math.floor((position.x - ARENA_OFFSET_X) / CELL_SIZE);

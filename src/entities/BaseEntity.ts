@@ -1,3 +1,4 @@
+import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import {
   ARENA_OFFSET_X,
@@ -97,7 +98,7 @@ export class BaseEntity {
     this.dormant = spec.dormant === true;
     const hostile = spec.faction === 'hostile';
     this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;
-    const bounds = getBaseWorldBounds(spec.region);
+    const bounds = getBaseWorldBounds(spec.region, resolveActiveArenaWorldMetrics());
     this.hpBarWidth = bounds.width;
     this.lightSpots = BaseEntity.buildLightSpots(bounds);
     if (!this.dormant) this.createWorldRepresentation();
@@ -172,7 +173,7 @@ export class BaseEntity {
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
-    const bounds = getBaseWorldBounds(this.spec.region);
+    const bounds = getBaseWorldBounds(this.spec.region, resolveActiveArenaWorldMetrics());
     const centerX = bounds.x + bounds.width / 2;
     const hpBarY = bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
     const hpBarBg = this.scene.add.rectangle(
@@ -246,7 +247,7 @@ export class BaseEntity {
       return;
     }
     if (this.vulnerableMarker || this.isInert()) return;
-    const bounds = getBaseWorldBounds(this.spec.region);
+    const bounds = getBaseWorldBounds(this.spec.region, resolveActiveArenaWorldMetrics());
     const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 5);
     registerGraphicsObject(this.scene, 'baseMarkers', marker);
     marker.lineStyle(3, VULNERABLE_MARKER_COLOR, 0.88);

@@ -78,6 +78,10 @@ Basen und die persistente Basisstelle löst der Kontext aus der eigenen Map auf 
 
 `createWorldRuntimeContext()` erzwingt beides: die übergebene Map muss zur `definitionId` des Descriptors gehören, sonst wirft der Aufbau. Das ist nötig, weil `getCoopDefenseMapConfig()` bei unbekannter ID still die Default-Map liefert — ohne die Prüfung entstünde eine World, die eine fremde Map behauptet. Der aktive Persistent-Base-Radius kommt ausschließlich aus `descriptor.parameters`; ein lokaler Ersatzwert wäre pro Peer verschieden und würde aus einem Übertragungsfehler still zwei verschiedene Welten machen.
 
+Migrierte world-scoped Aufloeser lesen keine mutable Arena-Variable mehr: `resolveCoopDefenseBases()` leitet die Metrik aus den authored Zellmassen der Map ab (`resolveCoopDefenseWorldMetrics`), `PlacementSystem` bekommt `WorldMetrics` im Konstruktor. tests/WorldMetricsScopeContracts.test.ts haelt die Liste der migrierten Module und prueft, dass keines `GRID_COLS`, `ARENA_OFFSET_*` und Verwandte importiert.
+
+Vorher hing Basisgeometrie am zuletzt global gesetzten Raster — die Lobby-Vorschau loeste dieselbe Map deshalb anders auf als die Runde, und Basiszellen ausserhalb des gerade aktiven Rasters wurden still verworfen. Rendering, Generator, Physik und Effekte lesen die Globals weiterhin; `resolveActiveArenaWorldMetrics()` ist die Uebergangshilfe fuer diese Aufrufer und ausdruecklich nichts fuer World-Simulation.
+
 ## Zeit und deterministische Quellen
 
 Authoring und Round-Systeme verwenden die von den jeweiligen Directors weitergereichte Rundenuhr aus Frame-Deltas. Date.now() ist keine allgemeine Round-Uhr: absolute Zeitstempel sind nur dort erlaubt, wo sie ausdrücklich als replizierter Vertrag definiert sind. Neue zeitbasierte Fachlogik muss sich an den bestehenden Director-/System-Lifecycle anschließen und darf nicht nebenher eine zweite Uhr starten.

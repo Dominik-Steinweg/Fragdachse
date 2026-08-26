@@ -27,6 +27,7 @@ import {
 } from '../src/loadout/LoadoutConfig';
 import { POWERUP_DEFS, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../src/powerups/PowerUpConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import { TurretSystem } from '../src/systems/TurretSystem';
@@ -442,6 +443,7 @@ describe('dynamic construction pedestals', () => {
       layout,
       rockGrid,
       { getAllPlayers: () => [] } as unknown as PlayerManager,
+      resolveActiveArenaWorldMetrics(),
     );
     const originX = ARENA_OFFSET_X + CELL_SIZE * 3.5;
     const originY = ARENA_OFFSET_Y + CELL_SIZE * 3.5;
@@ -471,6 +473,7 @@ describe('dynamic construction pedestals', () => {
       layout,
       rockGrid,
       { getAllPlayers: () => [] } as unknown as PlayerManager,
+      resolveActiveArenaWorldMetrics(),
     );
     const world = (gridX: number, gridY: number) => ({
       x: ARENA_OFFSET_X + CELL_SIZE * (gridX + 0.5),
@@ -519,6 +522,7 @@ describe('dynamic construction pedestals', () => {
       layout,
       new RockGridIndex(layout.rocks),
       { getAllPlayers: () => [] } as unknown as PlayerManager,
+      resolveActiveArenaWorldMetrics(),
     );
     placement.setClosedBarrierCellResolver((gridX, gridY) => gridX === 2 && gridY === 0);
 
@@ -535,6 +539,7 @@ describe('dynamic construction pedestals', () => {
       connectedLayout,
       rockGrid,
       { getAllPlayers: () => [] } as unknown as PlayerManager,
+      resolveActiveArenaWorldMetrics(),
     );
     const originX = ARENA_OFFSET_X + CELL_SIZE * 3.5;
     const originY = ARENA_OFFSET_Y + CELL_SIZE * 3.5;

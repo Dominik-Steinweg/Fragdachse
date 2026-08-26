@@ -5,14 +5,16 @@ import { RockGridIndex } from '../arena/RockGridIndex';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlaceableUtilityConfig, TunnelUltimateConfig } from '../loadout/LoadoutConfig';
 import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
   CELL_SIZE,
-  GRID_COLS,
-  GRID_ROWS,
   clipPointToArenaRay,
   isPointInsideArena,
 } from '../config';
+import {
+  worldCellCenter,
+  worldPositionToCell,
+  worldPositionToNearestCell,
+  type WorldMetrics,
+} from '../world/WorldMetrics';
 import type { ArenaLayout, ConstructionOwnership, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 import {
   getCoopDefenseConstructionDefinition,
@@ -46,12 +48,17 @@ export class PlacementSystem {
   private isHazardEventArmed: ((eventId: string) => boolean) | null = null;
   private nextRockId: number;
 
+  /** Raeumliche Grundlage dieser Runde; Placement rechnet ausschliesslich gegen diese World. */
+  private readonly metrics: WorldMetrics;
+
   constructor(
     layout: ArenaLayout,
     rockGrid: RockGridIndex,
     playerManager: PlayerManager,
+    metrics: WorldMetrics,
     coopDefenseBases: readonly BaseSpec[] = [],
   ) {
+    this.metrics = metrics;
     this.layout = layout;
     this.rockGrid = rockGrid;
     this.playerManager = playerManager;
@@ -94,9 +101,9 @@ export class PlacementSystem {
     const endX = endGridX + 0.5;
     const endY = endGridY + 0.5;
     const minGridX = Math.max(0, Math.floor(Math.min(startX, endX)));
-    const maxGridX = Math.min(GRID_COLS - 1, Math.floor(Math.max(startX, endX)));
+    const maxGridX = Math.min(this.metrics.gridCols - 1, Math.floor(Math.max(startX, endX)));
     const minGridY = Math.max(0, Math.floor(Math.min(startY, endY)));
-    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(Math.max(startY, endY)));
+    const maxGridY = Math.min(this.metrics.gridRows - 1, Math.floor(Math.max(startY, endY)));
     for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
       for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
         if (!this.isClosedBarrierCell(gridX, gridY)) continue;
@@ -693,8 +700,8 @@ export class PlacementSystem {
     const radiusCells = Math.ceil(range / CELL_SIZE) + 1;
     const originCell = this.snapWorldToGrid(originX, originY);
 
-    for (let gy = Math.max(0, originCell.gridY - radiusCells); gy <= Math.min(GRID_ROWS - 1, originCell.gridY + radiusCells); gy += 1) {
-      for (let gx = Math.max(0, originCell.gridX - radiusCells); gx <= Math.min(GRID_COLS - 1, originCell.gridX + radiusCells); gx += 1) {
+    for (let gy = Math.max(0, originCell.gridY - radiusCells); gy <= Math.min(this.metrics.gridRows - 1, originCell.gridY + radiusCells); gy += 1) {
+      for (let gx = Math.max(0, originCell.gridX - radiusCells); gx <= Math.min(this.metrics.gridCols - 1, originCell.gridX + radiusCells); gx += 1) {
         const world = this.gridToWorld(gx, gy);
         const offsetX = world.x - originX;
         const offsetY = world.y - originY;
@@ -724,7 +731,7 @@ export class PlacementSystem {
     for (const cell of footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
-      if (tx < 0 || tx >= GRID_COLS || ty < 0 || ty >= GRID_ROWS) return false;
+      if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return false;
       if (isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
       if (this.rockGrid.isOccupied(tx, ty)) return false;
       if (this.treeCells.has(this.key(tx, ty))) return false;
@@ -748,30 +755,15 @@ export class PlacementSystem {
   }
 
   private snapWorldToGrid(x: number, y: number): { gridX: number; gridY: number } {
-    const gridX = Phaser.Math.Clamp(
-      Math.round((x - ARENA_OFFSET_X - CELL_SIZE * 0.5) / CELL_SIZE),
-      0,
-      GRID_COLS - 1,
-    );
-    const gridY = Phaser.Math.Clamp(
-      Math.round((y - ARENA_OFFSET_Y - CELL_SIZE * 0.5) / CELL_SIZE),
-      0,
-      GRID_ROWS - 1,
-    );
-    return { gridX, gridY };
+    return worldPositionToNearestCell(this.metrics, x, y);
   }
 
   private worldToGrid(x: number, y: number): { gridX: number; gridY: number } {
-    const gridX = Phaser.Math.Clamp(Math.floor((x - ARENA_OFFSET_X) / CELL_SIZE), 0, GRID_COLS - 1);
-    const gridY = Phaser.Math.Clamp(Math.floor((y - ARENA_OFFSET_Y) / CELL_SIZE), 0, GRID_ROWS - 1);
-    return { gridX, gridY };
+    return worldPositionToCell(this.metrics, x, y);
   }
 
   private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
-    return {
-      x: ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE * 0.5,
-    };
+    return worldCellCenter(this.metrics, gridX, gridY);
   }
 
   private key(gx: number, gy: number): string {

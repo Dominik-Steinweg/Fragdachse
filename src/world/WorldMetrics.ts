@@ -1,4 +1,5 @@
-import { CELL_SIZE, type ArenaMetricsProfile } from '../config';
+import { ACTIVE_ARENA_METRICS_PROFILE, CELL_SIZE, getArenaMetricsProfile, type ArenaMetricsProfile } from '../config';
+import { COOP_DEFENSE_MODE } from '../gameModes';
 
 /**
  * Raeumliche Grundlage genau einer World-Instanz.
@@ -51,6 +52,30 @@ export function resolveWorldMetrics(profile: ArenaMetricsProfile): WorldMetrics 
   };
 }
 
+/**
+ * Metrik einer authored Coop-World allein aus ihren eigenen Zellmassen.
+ *
+ * Damit haengt world-scoped Geometrie nicht mehr davon ab, welche Arena gerade global aktiv
+ * ist: dieselbe Map ergibt in Lobby, Host und Client dieselbe Metrik.
+ */
+export function resolveCoopDefenseWorldMetrics(
+  widthCells: number | undefined,
+  heightCells: number | undefined,
+): WorldMetrics {
+  return resolveWorldMetrics(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA', widthCells, heightCells));
+}
+
+/**
+ * Metrik der derzeit global aktiven Arena.
+ *
+ * Uebergangshilfe fuer Aufrufer, die noch nicht an einer World haengen – vor allem Tests und
+ * Praesentationscode. Sie ist ausdruecklich kein Default irgendeiner World-API: wer eine World
+ * besitzt, nimmt deren Metrik. World-Simulation darf sie nicht verwenden.
+ */
+export function resolveActiveArenaWorldMetrics(): WorldMetrics {
+  return resolveWorldMetrics(ACTIVE_ARENA_METRICS_PROFILE);
+}
+
 /** Weltposition der linken oberen Ecke einer Rasterzelle dieser World. */
 export function worldCellOrigin(
   metrics: WorldMetrics,
@@ -71,4 +96,44 @@ export function isCellInsideWorld(metrics: WorldMetrics, gridX: number, gridY: n
     && gridY >= 0
     && gridX < metrics.gridCols
     && gridY < metrics.gridRows;
+}
+
+/** Weltposition der Zellmitte. */
+export function worldCellCenter(
+  metrics: WorldMetrics,
+  gridX: number,
+  gridY: number,
+): { readonly x: number; readonly y: number } {
+  return {
+    x: metrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
+    y: metrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
+  };
+}
+
+/** Rasterzelle einer Weltposition, auf die World begrenzt. */
+export function worldPositionToCell(
+  metrics: WorldMetrics,
+  x: number,
+  y: number,
+): { readonly gridX: number; readonly gridY: number } {
+  return {
+    gridX: clamp(Math.floor((x - metrics.offsetX) / CELL_SIZE), 0, metrics.gridCols - 1),
+    gridY: clamp(Math.floor((y - metrics.offsetY) / CELL_SIZE), 0, metrics.gridRows - 1),
+  };
+}
+
+/** Naechstgelegene Zellmitte einer Weltposition, auf die World begrenzt. */
+export function worldPositionToNearestCell(
+  metrics: WorldMetrics,
+  x: number,
+  y: number,
+): { readonly gridX: number; readonly gridY: number } {
+  return {
+    gridX: clamp(Math.round((x - metrics.offsetX - CELL_SIZE * 0.5) / CELL_SIZE), 0, metrics.gridCols - 1),
+    gridY: clamp(Math.round((y - metrics.offsetY - CELL_SIZE * 0.5) / CELL_SIZE), 0, metrics.gridRows - 1),
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }

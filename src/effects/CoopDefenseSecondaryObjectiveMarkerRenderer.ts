@@ -16,6 +16,7 @@
  * ihre bloße Anwesenheit erklären, trägt jede ihre Kategoriefarbe (§`MarkerCategory`): dieselbe
  * Blaustufe wie die zugehörige Zeile im Nebenziel-Panel.
  */
+import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, COLORS, DEPTH, toCssColor } from '../config';
 import { getBaseWorldBounds } from '../arena/BaseRegistry';
@@ -267,7 +268,7 @@ export class CoopDefenseSecondaryObjectiveMarkerRenderer {
       if (targets.length >= MAX_MARKERS) return;
       const base = baseManager.getBase(targetId);
       if (!base || base.isDormant() || base.isDestroyed()) continue;
-      const bounds = getBaseWorldBounds(base.spec.region);
+      const bounds = getBaseWorldBounds(base.spec.region, resolveActiveArenaWorldMetrics());
       targets.push({
         x: bounds.x + bounds.width * 0.5,
         y: bounds.y + bounds.height * 0.5,

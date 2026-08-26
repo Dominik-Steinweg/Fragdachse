@@ -1,9 +1,5 @@
 import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
   CELL_SIZE,
-  GRID_COLS,
-  GRID_ROWS,
   isCaptureTheBeerBaseCell,
   isCaptureTheBeerBaseModeActive,
   isCoopDefenseBasesActive,
@@ -28,6 +24,12 @@ import {
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../config/persistentBase';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
+import {
+  resolveCoopDefenseWorldMetrics,
+  worldCellCenter,
+  worldCellOrigin,
+  type WorldMetrics,
+} from '../world/WorldMetrics';
 
 export interface BaseTurretSpec {
   readonly id: string;
@@ -121,26 +123,31 @@ function resolveShape(shape: CoopBaseShape): {
   return { cells: shape.cells, width: maxX + 1, height: maxY + 1 };
 }
 
-function resolveAnchorOrigin(anchor: CoopBaseAnchor, width: number, height: number): {
+function resolveAnchorOrigin(
+  anchor: CoopBaseAnchor,
+  width: number,
+  height: number,
+  metrics: WorldMetrics,
+): {
   minGridX: number;
   minGridY: number;
 } {
   switch (anchor.kind) {
     case 'right-center': {
       const inset = Math.max(0, anchor.edgeInsetCells);
-      const minGridX = GRID_COLS - width - inset;
-      const minGridY = Math.floor((GRID_ROWS - height) / 2);
+      const minGridX = metrics.gridCols - width - inset;
+      const minGridY = Math.floor((metrics.gridRows - height) / 2);
       return { minGridX, minGridY };
     }
     case 'left-center': {
       const inset = Math.max(0, anchor.edgeInsetCells);
       const minGridX = inset;
-      const minGridY = Math.floor((GRID_ROWS - height) / 2);
+      const minGridY = Math.floor((metrics.gridRows - height) / 2);
       return { minGridX, minGridY };
     }
     case 'center-offset': {
-      const minGridX = Math.floor((GRID_COLS - width) / 2) + anchor.dxCells;
-      const minGridY = Math.floor((GRID_ROWS - height) / 2) + anchor.dyCells;
+      const minGridX = Math.floor((metrics.gridCols - width) / 2) + anchor.dxCells;
+      const minGridY = Math.floor((metrics.gridRows - height) / 2) + anchor.dyCells;
       return { minGridX, minGridY };
     }
     case 'grid':
@@ -148,27 +155,35 @@ function resolveAnchorOrigin(anchor: CoopBaseAnchor, width: number, height: numb
   }
 }
 
-function clampOriginToGrid(originX: number, originY: number, width: number, height: number): {
+function clampOriginToGrid(
+  originX: number,
+  originY: number,
+  width: number,
+  height: number,
+  metrics: WorldMetrics,
+): {
   minGridX: number;
   minGridY: number;
 } {
-  const minGridX = Math.max(0, Math.min(originX, GRID_COLS - width));
-  const minGridY = Math.max(0, Math.min(originY, GRID_ROWS - height));
+  const minGridX = Math.max(0, Math.min(originX, metrics.gridCols - width));
+  const minGridY = Math.max(0, Math.min(originY, metrics.gridRows - height));
   return { minGridX, minGridY };
 }
 
 function resolveBaseSpec(
   config: CoopBaseConfig,
   humanPlayerCount: number,
+  metrics: WorldMetrics,
   dormantObjectiveId?: string,
 ): BaseSpec {
   const { cells: relativeCells, width, height } = resolveShape(config.shape);
-  const origin = resolveAnchorOrigin(config.anchor, width, height);
-  const { minGridX, minGridY } = clampOriginToGrid(origin.minGridX, origin.minGridY, width, height);
+  const origin = resolveAnchorOrigin(config.anchor, width, height, metrics);
+  const { minGridX, minGridY } = clampOriginToGrid(origin.minGridX, origin.minGridY, width, height, metrics);
 
   const absoluteCells = relativeCells
     .map((cell) => ({ gridX: minGridX + cell.gridX, gridY: minGridY + cell.gridY }))
-    .filter((cell) => cell.gridX >= 0 && cell.gridX < GRID_COLS && cell.gridY >= 0 && cell.gridY < GRID_ROWS);
+    .filter((cell) => cell.gridX >= 0 && cell.gridX < metrics.gridCols
+      && cell.gridY >= 0 && cell.gridY < metrics.gridRows);
 
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -203,11 +218,12 @@ function resolveBaseSpec(
     if (absoluteCells.some((cell) => cell.gridX === centerGridX && cell.gridY === centerGridY)) {
       throw new Error(`[BaseRegistry] Spawn point ${config.id} needs a free spawnCenter cell`);
     }
+    const centerPosition = worldCellCenter(metrics, centerGridX, centerGridY);
     spawnCenter = {
       gridX: centerGridX,
       gridY: centerGridY,
-      x: ARENA_OFFSET_X + centerGridX * CELL_SIZE + CELL_SIZE / 2,
-      y: ARENA_OFFSET_Y + centerGridY * CELL_SIZE + CELL_SIZE / 2,
+      x: centerPosition.x,
+      y: centerPosition.y,
     };
   }
 
@@ -216,6 +232,7 @@ function resolveBaseSpec(
     turret,
     minGridX,
     minGridY,
+    metrics,
   ));
   const powerUpPedestals = (config.powerUpPedestals ?? []).map((pedestal) => resolveBasePowerUpPedestalSpec(
     config.id,
@@ -223,6 +240,7 @@ function resolveBaseSpec(
     minGridX,
     minGridY,
     absoluteCells,
+    metrics,
   ));
   const faction = config.faction ?? 'friendly';
   const hpFactor = config.playerScaling?.maxHpFactorPerAdditionalPlayer
@@ -256,10 +274,11 @@ function resolveBasePowerUpPedestalSpec(
   baseMinGridX: number,
   baseMinGridY: number,
   baseCells: readonly { gridX: number; gridY: number }[],
+  metrics: WorldMetrics,
 ): BasePowerUpPedestalSpec {
   const gridX = baseMinGridX + config.cellOffset.gridX;
   const gridY = baseMinGridY + config.cellOffset.gridY;
-  if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) {
+  if (gridX < 0 || gridX >= metrics.gridCols || gridY < 0 || gridY >= metrics.gridRows) {
     throw new Error(`[BaseRegistry] Power-up pedestal ${baseId}:${config.id} is outside the arena grid`);
   }
   if (baseCells.some((cell) => cell.gridX === gridX && cell.gridY === gridY)) {
@@ -282,9 +301,15 @@ function resolveBaseTurretSpec(
   config: CoopBaseTurretConfig,
   baseMinGridX: number,
   baseMinGridY: number,
+  metrics: WorldMetrics,
 ): BaseTurretSpec {
-  const cellCenterX = ARENA_OFFSET_X + (baseMinGridX + config.cellOffset.gridX) * CELL_SIZE + CELL_SIZE / 2;
-  const cellCenterY = ARENA_OFFSET_Y + (baseMinGridY + config.cellOffset.gridY) * CELL_SIZE + CELL_SIZE / 2;
+  const cellCenter = worldCellCenter(
+    metrics,
+    baseMinGridX + config.cellOffset.gridX,
+    baseMinGridY + config.cellOffset.gridY,
+  );
+  const cellCenterX = cellCenter.x;
+  const cellCenterY = cellCenter.y;
   // Der Turm sitzt optisch exakt auf der konfigurierten Basiszelle. Sichtlinie und
   // Projektil beginnen erst an seiner Mündung (siehe TurretSystem), damit der
   // darunterliegende Basis-Collider den Turm nicht selbst blockiert.
@@ -317,6 +342,9 @@ export function resolveCoopDefenseBases(
   mapConfig: CoopDefenseMapConfig,
   humanPlayerCount = 1,
 ): readonly BaseSpec[] {
+  // Die Geometrie folgt der Metrik dieser Map, nicht der gerade global aktiven Arena. Sonst
+  // haenge die Lage einer Basis davon ab, welche Arena zufaellig zuletzt gesetzt wurde.
+  const metrics = resolveCoopDefenseWorldMetrics(mapConfig.arenaWidthCells, mapConfig.arenaHeightCells);
   const objectiveByBaseId = new Map<string, string>();
   for (const objective of mapConfig.secondaryObjectives ?? []) {
     if (objective.type === 'carry' && objective.carry !== undefined) continue;
@@ -325,6 +353,7 @@ export function resolveCoopDefenseBases(
   const resolved = mapConfig.bases.map((baseConfig) => resolveBaseSpec(
     baseConfig,
     humanPlayerCount,
+    metrics,
     baseConfig.dormant === true ? objectiveByBaseId.get(baseConfig.id) : undefined,
   ));
   const persistentBaseId = mapConfig.persistentBase?.baseId;
@@ -343,16 +372,17 @@ function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {
   return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
 }
 
-/** Pixel-Bounds einer Basis-Region (Bounding-Box) anhand der aktiven Arena-Metriken. */
-export function getBaseWorldBounds(region: ArenaGridRegion): {
+/** Pixel-Bounds einer Basis-Region (Bounding-Box) in der Metrik der uebergebenen World. */
+export function getBaseWorldBounds(region: ArenaGridRegion, metrics: WorldMetrics): {
   x: number;
   y: number;
   width: number;
   height: number;
 } {
+  const origin = worldCellOrigin(metrics, region.minGridX, region.minGridY);
   return {
-    x: ARENA_OFFSET_X + region.minGridX * CELL_SIZE,
-    y: ARENA_OFFSET_Y + region.minGridY * CELL_SIZE,
+    x: origin.x,
+    y: origin.y,
     width: (region.maxGridX - region.minGridX + 1) * CELL_SIZE,
     height: (region.maxGridY - region.minGridY + 1) * CELL_SIZE,
   };
@@ -364,6 +394,7 @@ export function getBaseWorldBounds(region: ArenaGridRegion): {
  */
 export function getBaseRewardPickupWorldPosition(
   base: Pick<BaseSpec, 'cells' | 'region'>,
+  metrics: WorldMetrics,
   bases: readonly Pick<BaseSpec, 'cells' | 'region'>[] = [base],
 ): { x: number; y: number } | null {
   if (base.cells.length === 0) return null;
@@ -390,18 +421,15 @@ export function getBaseRewardPickupWorldPosition(
 
   // The immediate ring is the authored "at the base" position. Larger rings only handle maps
   // where another structure occupies part of the first ring or the base touches the arena edge.
-  for (let distance = 1; distance <= Math.max(GRID_COLS, GRID_ROWS); distance += 1) {
+  for (let distance = 1; distance <= Math.max(metrics.gridCols, metrics.gridRows); distance += 1) {
     addRing(distance);
     for (const candidate of candidates) {
       if (
-        candidate.gridX < 0 || candidate.gridX >= GRID_COLS
-        || candidate.gridY < 0 || candidate.gridY >= GRID_ROWS
+        candidate.gridX < 0 || candidate.gridX >= metrics.gridCols
+        || candidate.gridY < 0 || candidate.gridY >= metrics.gridRows
         || occupied.has(`${candidate.gridX}:${candidate.gridY}`)
       ) continue;
-      return {
-        x: ARENA_OFFSET_X + candidate.gridX * CELL_SIZE + CELL_SIZE / 2,
-        y: ARENA_OFFSET_Y + candidate.gridY * CELL_SIZE + CELL_SIZE / 2,
-      };
+      return worldCellCenter(metrics, candidate.gridX, candidate.gridY);
     }
     candidates.length = 0;
   }

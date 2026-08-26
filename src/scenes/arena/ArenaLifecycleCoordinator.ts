@@ -1045,6 +1045,7 @@ export class ArenaLifecycleCoordinator {
       layout,
       this.ctx.arenaResult.rockGrid,
       this.ctx.playerManager,
+      world.metrics,
       coopDefenseBases,
     );
     this.ctx.persistentBaseSession = null;
@@ -1409,6 +1410,7 @@ export class ArenaLifecycleCoordinator {
             if (!base) return null;
             return getBaseRewardPickupWorldPosition(
               base.getSpec(),
+              world.metrics,
               baseManager.getBases().map((entry) => entry.getSpec()),
             );
           },
@@ -2785,7 +2787,7 @@ export class ArenaLifecycleCoordinator {
           isProtectedBasePoint: (x, y) => isPointNearBaseRegion(
             x,
             y,
-            coopDefenseBases.map((base) => getBaseWorldBounds(base.region)),
+            coopDefenseBases.map((base) => getBaseWorldBounds(base.region, world.metrics)),
           ),
           playStrikeAudio: (x, y) => {
             this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);

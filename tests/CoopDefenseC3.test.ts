@@ -26,6 +26,7 @@ import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, applyArenaMetricsForMode } from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import type { PlayerManager } from '../src/entities/PlayerManager';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { ArenaLayout } from '../src/types';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
@@ -329,6 +330,7 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
         hazardLayout,
         new RockGridIndex([]),
         { getAllPlayers: () => [] } as unknown as PlayerManager,
+        resolveActiveArenaWorldMetrics(),
       );
       if (armed !== null) placement.setHazardEventArmedResolver(() => armed);
       return placement.tryPlaceConstruction(
