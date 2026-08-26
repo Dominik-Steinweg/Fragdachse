@@ -8,7 +8,7 @@ import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import type { GameMode } from '../src/types';
-import type { WorldDescriptor } from '../src/world/WorldDescriptor';
+import { PROCEDURAL_ARENA_WORLD_DEFINITION_ID, type WorldDescriptor } from '../src/world/WorldDescriptor';
 import { isCellInsideWorld, resolveWorldMetrics, worldCellOrigin } from '../src/world/WorldMetrics';
 import {
   createWorldRuntimeContext,
@@ -42,7 +42,12 @@ function descriptorFor(definitionId: string, overrides: Partial<WorldDescriptor>
 function contextForMap(mapId: string, overrides: Partial<WorldDescriptor> = {}) {
   const mapConfig = getCoopDefenseMapConfig(mapId);
   return createWorldRuntimeContext({
-    descriptor: descriptorFor(`world:coop-defense:${mapId}`, overrides),
+    descriptor: descriptorFor(`world:coop-defense:${mapId}`, {
+      // Eine World mit persistenter Basis fuehrt ihren Radius selbst; ohne ihn schlaegt der
+      // Aufbau bewusst fehl (siehe eigener Test).
+      ...(mapConfig.persistentBase ? { parameters: { persistentBaseRadiusCells: 4 } } : {}),
+      ...overrides,
+    }),
     metricsProfile: getArenaMetricsProfile(
       'coop_defense',
       'ARENA',
@@ -51,7 +56,6 @@ function contextForMap(mapId: string, overrides: Partial<WorldDescriptor> = {}) 
     ),
     mapConfig,
     humanPlayerCount: 1,
-    fallbackPersistentBaseRadiusCells: 4,
   });
 }
 
@@ -140,7 +144,6 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     expect(withParameter.persistentBaseSite?.anchor).toEqual({ gridX: 24, gridY: 19 });
     expect(isValidPersistentBaseSite(withParameter.persistentBaseSite)).toBe(true);
 
-    // Ohne replizierten Parameter greift der uebergebene Fallback, nicht ein globaler Zustand.
     expect(contextForMap('18').persistentBaseSite?.radiusCells).toBe(4);
     // Eine World ohne authored Stelle hat auch keine.
     expect(contextForMap('1').persistentBaseSite).toBeNull();
@@ -156,15 +159,45 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
 
   it('beschreibt eine prozedurale Arena ohne authored Definition', () => {
     const world = createWorldRuntimeContext({
-      descriptor: descriptorFor('world:procedural-arena'),
+      descriptor: descriptorFor(PROCEDURAL_ARENA_WORLD_DEFINITION_ID),
       metricsProfile: getArenaMetricsProfile('deathmatch', 'ARENA'),
       mapConfig: null,
       humanPlayerCount: 1,
-      fallbackPersistentBaseRadiusCells: 4,
     });
     expect(world.definition).toBeNull();
     expect(world.bases).toEqual([]);
     expect(world.persistentBaseSite).toBeNull();
+  });
+});
+
+describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
+  it('weist eine Map ab, die nicht zu dieser World-Identitaet gehoert', () => {
+    // Genau der Fehler, den die Lobby-Kopplung erzeugen wuerde: die World meint Map 18, der
+    // Aufbau brachte Map 19 mit.
+    expect(() => createWorldRuntimeContext({
+      descriptor: descriptorFor('world:coop-defense:18', { parameters: { persistentBaseRadiusCells: 4 } }),
+      metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
+      mapConfig: getCoopDefenseMapConfig('19'),
+      humanPlayerCount: 1,
+    })).toThrow(/cannot be built from/);
+
+    expect(() => createWorldRuntimeContext({
+      descriptor: descriptorFor(PROCEDURAL_ARENA_WORLD_DEFINITION_ID),
+      metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
+      mapConfig: getCoopDefenseMapConfig('1'),
+      humanPlayerCount: 1,
+    })).toThrow(/cannot be built from/);
+  });
+
+  it('erfindet keinen lokalen Radius, wenn die World keinen replizierten mitbringt', () => {
+    // Ein Ersatzwert aus dem lokalen Speicher waere pro Peer verschieden – aus einem
+    // Uebertragungsfehler wuerden still zwei verschiedene Welten.
+    expect(() => createWorldRuntimeContext({
+      descriptor: descriptorFor('world:coop-defense:18'),
+      metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
+      mapConfig: getCoopDefenseMapConfig('18'),
+      humanPlayerCount: 1,
+    })).toThrow(/no replicated radius/);
   });
 });
 

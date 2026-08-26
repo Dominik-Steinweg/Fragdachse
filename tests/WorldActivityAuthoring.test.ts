@@ -7,7 +7,11 @@ import {
   getCoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import type { AuthoredScenario } from '../src/config/authoring/AuthoredScenario';
-import { hasAuthoredActivity } from '../src/config/authoring/AuthoredScenario';
+import {
+  createAuthoredScenario,
+  hasAuthoredActivity,
+  isActivityOfWorldDefinition,
+} from '../src/config/authoring/AuthoredScenario';
 import {
   COOP_MISSION_BASE_FIELDS,
   COOP_MISSION_SOURCE_FIELDS,
@@ -177,6 +181,21 @@ describe('World-/Activity-Authoring – Compatibility-Adapter', () => {
   it('verlangt eine normalisierte Map, statt eigene Defaults zu erfinden', () => {
     const raw = { ...getCoopDefenseMapConfig('1'), timeOfDay: undefined };
     expect(() => toWorldDefinition(raw)).toThrow(/normalizeCoopDefenseMapConfig/);
+  });
+
+  it('laesst World und Activity zweier verschiedener Worlds nicht kombinieren', () => {
+    const first = toAuthoredScenario(getCoopDefenseMapConfig('18'));
+    const second = toAuthoredScenario(getCoopDefenseMapConfig('19'));
+    expect(isActivityOfWorldDefinition(first.activity!, first.world)).toBe(true);
+    expect(isActivityOfWorldDefinition(second.activity!, first.world)).toBe(false);
+
+    // Die Paarung wird zentral gebildet, damit ein falsches Paar nicht erst weit spaeter
+    // als Mischkonfiguration auffaellt.
+    expect(() => createAuthoredScenario(first.world, second.activity)).toThrow(/belongs to world/);
+    expect(() => toCoopDefenseMapConfig({ world: first.world, activity: second.activity }))
+      .toThrow(/belongs to world/);
+    // Eine World ohne Activity bleibt gueltig.
+    expect(createAuthoredScenario(first.world, null).activity).toBeNull();
   });
 
   it('haelt Registry und Adapter deckungsgleich', () => {

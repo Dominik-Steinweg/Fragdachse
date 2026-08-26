@@ -9,7 +9,7 @@ import type {
   CoopMissionDefinition,
   CoopMissionTutorialDefinition,
 } from './ActivityDefinition';
-import type { AuthoredScenario } from './AuthoredScenario';
+import { createAuthoredScenario, isActivityOfWorldDefinition, type AuthoredScenario } from './AuthoredScenario';
 import type { WorldBaseDefinition, WorldDefinition } from './WorldDefinition';
 
 /**
@@ -166,10 +166,7 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
 }
 
 export function toAuthoredScenario(mapConfig: CoopDefenseMapConfig): AuthoredScenario {
-  return {
-    world: toWorldDefinition(mapConfig),
-    activity: toCoopMissionDefinition(mapConfig),
-  };
+  return createAuthoredScenario(toWorldDefinition(mapConfig), toCoopMissionDefinition(mapConfig));
 }
 
 /**
@@ -184,6 +181,12 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
   if (activity?.kind !== 'coop-mission') {
     throw new Error(
       `[coopDefenseAuthoringAdapter] World ${world.id} has no coop mission activity; there is no CoopDefenseMapConfig for it`,
+    );
+  }
+  // Beide Haelften muessen dieselbe World meinen, sonst entstuende hier eine Mischkonfiguration.
+  if (!isActivityOfWorldDefinition(activity, world)) {
+    throw new Error(
+      `[coopDefenseAuthoringAdapter] Activity ${activity.id} belongs to world ${activity.worldDefinitionId}, not ${world.id}`,
     );
   }
   const { tutorial } = activity;

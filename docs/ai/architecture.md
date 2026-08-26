@@ -76,6 +76,8 @@ Verbindlich: Daten, die zu genau einer World gehören, werden über diese World 
 
 Basen und die persistente Basisstelle löst der Kontext aus der eigenen Map auf (`resolveCoopDefenseBases`), nie über den Lobby-Fallback von `getCoopDefenseBases()`. Ein aktives World-System darf die in der Lobby gewählte Map nicht erneut aus NetworkBridge lesen.
 
+`createWorldRuntimeContext()` erzwingt beides: die übergebene Map muss zur `definitionId` des Descriptors gehören, sonst wirft der Aufbau. Das ist nötig, weil `getCoopDefenseMapConfig()` bei unbekannter ID still die Default-Map liefert — ohne die Prüfung entstünde eine World, die eine fremde Map behauptet. Der aktive Persistent-Base-Radius kommt ausschließlich aus `descriptor.parameters`; ein lokaler Ersatzwert wäre pro Peer verschieden und würde aus einem Übertragungsfehler still zwei verschiedene Welten machen.
+
 ## Zeit und deterministische Quellen
 
 Authoring und Round-Systeme verwenden die von den jeweiligen Directors weitergereichte Rundenuhr aus Frame-Deltas. Date.now() ist keine allgemeine Round-Uhr: absolute Zeitstempel sind nur dort erlaubt, wo sie ausdrücklich als replizierter Vertrag definiert sind. Neue zeitbasierte Fachlogik muss sich an den bestehenden Director-/System-Lifecycle anschließen und darf nicht nebenher eine zweite Uhr starten.

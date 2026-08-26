@@ -13,7 +13,11 @@
 export interface WorldDescriptor {
   /** Identitaet genau einer World-Instanz. Eine neue World erhaelt immer eine neue Revision. */
   readonly worldRevision: number;
-  /** Verweist auf die authored WorldDefinition, z. B. `world:coop-defense:7`. */
+  /**
+   * Verweist auf die authored WorldDefinition, z. B. `world:coop-defense:7`. Sie loest im
+   * Authoring-Registry auf – ausser bei einer prozeduralen World, die keine authored Grundlage
+   * besitzt; dafuer gilt {@link isProceduralWorldDefinitionId}.
+   */
   readonly definitionId: string;
   readonly seed: number;
   readonly generatorVersion: number;
@@ -34,8 +38,22 @@ export interface WorldParameters {
   readonly persistentBaseRadiusCells?: number;
 }
 
-/** WorldDefinition-ID einer prozedural erzeugten Arena ohne authored Map. */
+/**
+ * WorldDefinition-ID einer prozedural erzeugten Arena. Sie besitzt bewusst keine authored
+ * WorldDefinition: ihre Grundlage ist der Generator, nicht eine Datei.
+ */
 export const PROCEDURAL_ARENA_WORLD_DEFINITION_ID = 'world:procedural-arena';
+
+/** True, wenn zu dieser World-ID grundsaetzlich keine authored WorldDefinition existiert. */
+export function isProceduralWorldDefinitionId(definitionId: string): boolean {
+  return definitionId === PROCEDURAL_ARENA_WORLD_DEFINITION_ID;
+}
+
+/**
+ * Felder, die eine World-Instanz konfigurieren. Sie sind Teil ihrer Identitaet: zwei Peers mit
+ * unterschiedlichen Parametern haben nicht dieselbe World gebaut.
+ */
+export const WORLD_PARAMETER_FIELDS = ['persistentBaseRadiusCells'] as const satisfies readonly (keyof WorldParameters)[];
 
 /**
  * Netzwerkgrenze fuer eingehende World-Identitaeten. Ungueltige Nutzlast wird verworfen statt
@@ -62,14 +80,23 @@ export function parseWorldDescriptor(raw: unknown): WorldDescriptor | null {
 
 /**
  * True, wenn beide Descriptoren dieselbe World-Instanz meinen. Die Revision allein genuegt
- * nicht: zwei Peers muessen auch dasselbe Layout reproduziert haben.
+ * nicht: zwei Peers muessen auch dasselbe Layout und dieselbe World-Konfiguration haben.
  */
 export function isSameWorldInstance(left: WorldDescriptor, right: WorldDescriptor): boolean {
   return left.worldRevision === right.worldRevision
     && left.definitionId === right.definitionId
     && left.seed === right.seed
     && left.generatorVersion === right.generatorVersion
-    && left.layoutFingerprint === right.layoutFingerprint;
+    && left.layoutFingerprint === right.layoutFingerprint
+    && haveSameWorldParameters(left.parameters, right.parameters);
+}
+
+/** Feldweiser Vergleich, damit ein neuer World-Parameter nicht still aus der Identitaet faellt. */
+export function haveSameWorldParameters(
+  left: WorldParameters | undefined,
+  right: WorldParameters | undefined,
+): boolean {
+  return WORLD_PARAMETER_FIELDS.every((field) => (left?.[field] ?? null) === (right?.[field] ?? null));
 }
 
 function parseWorldParameters(raw: unknown): WorldParameters | null {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { getWorldDefinition } from '../src/config/authoring/authoredScenarios';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { getActivityDefinition as getAuthoredActivity, getWorldDefinition } from '../src/config/authoring/authoredScenarios';
 import {
   getCoopMissionDefinitionId,
   getWorldDefinitionId,
@@ -23,6 +25,8 @@ import {
 } from '../src/world/arenaDescriptorAdapter';
 import {
   PROCEDURAL_ARENA_WORLD_DEFINITION_ID,
+  WORLD_PARAMETER_FIELDS,
+  isProceduralWorldDefinitionId,
   isSameWorldInstance,
   parseWorldDescriptor,
   type WorldDescriptor,
@@ -82,14 +86,60 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(world.definitionId).toBe(PROCEDURAL_ARENA_WORLD_DEFINITION_ID);
     expect(toMapId(world.definitionId)).toBeNull();
     expect(toWorldDefinitionId(null)).toBe(PROCEDURAL_ARENA_WORLD_DEFINITION_ID);
+    expect(isProceduralWorldDefinitionId(world.definitionId)).toBe(true);
+    expect(isProceduralWorldDefinitionId(getWorldDefinitionId('7'))).toBe(false);
   });
 
-  it('erkennt dieselbe World-Instanz nur bei gleicher Identitaet und gleichem Layout', () => {
+  it('erzeugt nur IDs, die entweder authored aufloesen oder ausdruecklich prozedural sind', () => {
+    for (const gameMode of GAME_MODES) {
+      for (const mapId of [null, '0', '18', 'weapon-balance-lab']) {
+        const descriptor = arenaDescriptor({ gameMode, mapId });
+        const { world, activity } = toWorldAndActivityDescriptors(descriptor);
+        const label = `${gameMode}/${mapId}`;
+
+        if (isProceduralWorldDefinitionId(world.definitionId)) {
+          expect(getWorldDefinition(world.definitionId), label).toBeNull();
+        } else {
+          expect(getWorldDefinition(world.definitionId)?.id, label).toBe(world.definitionId);
+        }
+
+        // Nur Coop-Missionen sind heute authoriert; PvP-Activities tragen bewusst eine
+        // ID ohne Definition, aber in stabiler Form.
+        if (activity.kind === 'coop-mission' && mapId !== null) {
+          expect(getAuthoredActivity(activity.id)?.id, label).toBe(activity.id);
+        } else {
+          expect(getAuthoredActivity(activity.id), label).toBeNull();
+          expect(activity.definitionId, label).toBe(`activity:${activity.kind}`);
+        }
+      }
+    }
+  });
+
+  it('erkennt dieselbe World-Instanz nur bei gleicher Identitaet, Layout und Konfiguration', () => {
     const world = toWorldDescriptor(arenaDescriptor());
     expect(isSameWorldInstance(world, { ...world })).toBe(true);
     expect(isSameWorldInstance(world, { ...world, worldRevision: world.worldRevision + 1 })).toBe(false);
     expect(isSameWorldInstance(world, { ...world, layoutFingerprint: 'other' })).toBe(false);
     expect(isSameWorldInstance(world, { ...world, seed: world.seed + 1 })).toBe(false);
+
+    // World-Parameter sind Teil der Instanz: zwei Peers mit verschiedenem Radius haben nicht
+    // dieselbe World gebaut.
+    const withRadius = { ...world, parameters: { persistentBaseRadiusCells: 6 } };
+    expect(isSameWorldInstance(withRadius, { ...withRadius })).toBe(true);
+    expect(isSameWorldInstance(withRadius, world)).toBe(false);
+    expect(isSameWorldInstance(withRadius, { ...world, parameters: { persistentBaseRadiusCells: 7 } })).toBe(false);
+    expect(isSameWorldInstance(world, { ...world, parameters: {} })).toBe(true);
+  });
+
+  it('vergleicht jeden deklarierten World-Parameter', () => {
+    // Sonst faellt ein neu ergaenzter Parameter still aus der Instanzidentitaet heraus.
+    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldDescriptor.ts'), 'utf8');
+    const start = source.indexOf('export interface WorldParameters {');
+    expect(start).toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('\n}', start));
+    const declared = [...body.matchAll(/^ {2}readonly ([a-zA-Z][a-zA-Z0-9]*)[?]?:/gm)].map((match) => match[1]);
+    expect(declared.length).toBeGreaterThan(0);
+    expect([...WORLD_PARAMETER_FIELDS].sort()).toEqual(declared.sort());
   });
 
   it('verwirft unvollstaendige World-Nutzlast an der Netzwerkgrenze', () => {

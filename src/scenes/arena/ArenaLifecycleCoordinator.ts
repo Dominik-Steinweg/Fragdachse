@@ -160,7 +160,7 @@ import {
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
-import { toWorldAndActivityDescriptors, toWorldDescriptor } from '../../world/arenaDescriptorAdapter';
+import { toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
 import { createWorldRuntimeContext, isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -942,8 +942,12 @@ export class ArenaLifecycleCoordinator {
       : null;
     // Kanonischer Kontext dieser World-Instanz. Metrik, Basen und die persistente Basisstelle
     // haengen ab hier an der World, nicht an der Lobby-Auswahl oder an globalen Variablen.
+    const worldDescriptor = bridge.getWorldDescriptor();
+    if (!worldDescriptor) {
+      throw new Error(`[ArenaLifecycleCoordinator] No replicated world for round ${descriptor.roundRevision}`);
+    }
     this.ctx.world = createWorldRuntimeContext({
-      descriptor: bridge.getWorldDescriptor() ?? toWorldDescriptor(descriptor),
+      descriptor: worldDescriptor,
       metricsProfile: getArenaMetricsProfile(
         descriptor.gameMode,
         'ARENA',
@@ -952,7 +956,6 @@ export class ArenaLifecycleCoordinator {
       ),
       mapConfig: coopDefenseMapConfig,
       humanPlayerCount: coopDefenseHumanPlayerCount,
-      fallbackPersistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells,
     });
     const world = this.ctx.world;
     const coopDefenseBases = world.bases;

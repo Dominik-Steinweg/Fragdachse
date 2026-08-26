@@ -5,6 +5,7 @@ import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
+import { toWorldDefinitionId } from './arenaDescriptorAdapter';
 import type { WorldDescriptor } from './WorldDescriptor';
 import { resolveWorldMetrics, type WorldMetrics } from './WorldMetrics';
 
@@ -53,8 +54,6 @@ export interface WorldRuntimeContextInput {
    * lange durchgereicht, bis Basisgeometrie und Rundenskalierung getrennt sind.
    */
   readonly humanPlayerCount: number;
-  /** Radius, solange die World-Instanz keinen replizierten Parameter mitbringt. */
-  readonly fallbackPersistentBaseRadiusCells: number;
 }
 
 /**
@@ -66,17 +65,21 @@ export interface WorldRuntimeContextInput {
  */
 export function createWorldRuntimeContext(input: WorldRuntimeContextInput): WorldRuntimeContext {
   const { descriptor, mapConfig } = input;
+  // Die Map muss die Map dieser World sein. Ohne diese Pruefung koennte ein Aufrufer die
+  // Lobby-Auswahl in eine fremde World-Identitaet hineinbauen.
+  const expectedDefinitionId = toWorldDefinitionId(mapConfig?.mapId ?? null);
+  if (expectedDefinitionId !== descriptor.definitionId) {
+    throw new Error(
+      `[WorldRuntimeContext] World ${descriptor.definitionId} cannot be built from ${expectedDefinitionId}`,
+    );
+  }
   const bases = mapConfig ? resolveCoopDefenseBases(mapConfig, input.humanPlayerCount) : [];
   return {
     descriptor,
     definition: mapConfig ? toWorldDefinition(mapConfig) : null,
     metrics: resolveWorldMetrics(input.metricsProfile),
     bases,
-    persistentBaseSite: resolvePersistentBaseSite(
-      mapConfig,
-      bases,
-      descriptor.parameters?.persistentBaseRadiusCells ?? input.fallbackPersistentBaseRadiusCells,
-    ),
+    persistentBaseSite: resolvePersistentBaseSite(descriptor, mapConfig, bases),
   };
 }
 
@@ -93,13 +96,25 @@ export function isValidPersistentBaseSite(site: WorldPersistentBaseSite | null):
   return site !== null && site.base.faction === 'friendly' && site.base.role === 'main';
 }
 
+/**
+ * Der aktive Radius ist host-autoritative World-Konfiguration und kommt ausschliesslich aus
+ * dem Descriptor. Ein lokaler Ersatzwert waere pro Peer verschieden und wuerde aus einem
+ * Uebertragungsfehler still zwei verschiedene Welten machen – deshalb schlaegt der Aufbau hier
+ * fehl, statt zu raten.
+ */
 function resolvePersistentBaseSite(
+  descriptor: WorldDescriptor,
   mapConfig: CoopDefenseMapConfig | null,
   bases: readonly BaseSpec[],
-  radiusCells: number,
 ): WorldPersistentBaseSite | null {
   const baseId = mapConfig?.persistentBase?.baseId;
   if (!baseId) return null;
+  const radiusCells = descriptor.parameters?.persistentBaseRadiusCells;
+  if (radiusCells === undefined) {
+    throw new Error(
+      `[WorldRuntimeContext] World ${descriptor.definitionId} has a persistent base site but no replicated radius`,
+    );
+  }
   const base = bases.find((candidate) => candidate.id === baseId);
   if (!base) return null;
   return { baseId, base, anchor: getPersistentBaseAnchor(base), radiusCells };
