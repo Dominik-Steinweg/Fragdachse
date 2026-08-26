@@ -1,5 +1,10 @@
 import type {
-  CoopBaseConfig,
+  CoopBaseAnchor,
+  CoopBaseCellOffset,
+  CoopBaseFaction,
+  CoopBaseRole,
+  CoopBaseShape,
+  CoopBaseTurretConfig,
   CoopDefenseMapRockFieldConfig,
   CoopDefenseMapRockWallConfig,
   CoopDefenseMapTrackMode,
@@ -29,8 +34,8 @@ export interface WorldDefinition {
   readonly sourceMapId?: string;
   readonly metrics: WorldMetricsDefinition;
   readonly terrain: WorldTerrainDefinition;
-  /** Statische Strukturen der Welt inklusive ihrer Tuerme und Podeste. */
-  readonly bases: readonly CoopBaseConfig[];
+  /** Statische Strukturen der Welt. Ihre missionsabhaengigen Anteile liegen in der Activity. */
+  readonly bases: readonly WorldBaseDefinition[];
   readonly tracks: WorldTrackDefinition;
   /** Gesetzt: Diese World traegt eine persistente Basis an einer authored Stelle. */
   readonly persistentBaseSite?: WorldPersistentBaseSiteDefinition;
@@ -55,13 +60,38 @@ export interface WorldTrackDefinition {
   readonly position: CoopDefenseMapTrackPosition;
 }
 
+/**
+ * Eine Struktur der Welt: Lage, Form, Fraktion, Rolle, Grunddauerhaftigkeit und fest verbaute
+ * Tuerme. All das steht auch dann in der Welt, wenn keine Mission laeuft.
+ *
+ * Ausdruecklich nicht hier: der angeschlagene Startzustand einer Runde, die Skalierung nach
+ * Spielerzahl, der Dormant-Zustand eines Missionsziels und die Power-up-Podeste mit ihren
+ * Respawn-Regeln. Das sind Eigenschaften eines Durchlaufs, nicht des Bauwerks – sie liegen in
+ * {@link import('./ActivityDefinition').CoopMissionBaseOverlay}.
+ *
+ * Dass ein Turm *schiesst*, ist Activity-Verhalten; dass er montiert ist, ist Weltgeometrie.
+ * Deshalb bleibt {@link WorldBaseDefinition.turrets} hier.
+ */
+export interface WorldBaseDefinition {
+  readonly id: string;
+  /** Grunddauerhaftigkeit der Struktur; die Skalierung nach Spielerzahl gehoert zur Activity. */
+  readonly hpMax: number;
+  readonly faction?: CoopBaseFaction;
+  readonly role?: CoopBaseRole;
+  readonly anchor: CoopBaseAnchor;
+  readonly shape: CoopBaseShape;
+  readonly turrets?: readonly CoopBaseTurretConfig[];
+  /** Freie Zelle innerhalb der Shape, an der die strukturgebundene Quelle erscheint. */
+  readonly spawnCenter?: CoopBaseCellOffset;
+}
+
 /** Verweist auf eine Basis derselben WorldDefinition, die als persistenter Anker dient. */
 export interface WorldPersistentBaseSiteDefinition {
   readonly baseId: string;
 }
 
 /** Loest den Ankerbau einer persistenten Basis innerhalb ihrer eigenen World auf. */
-export function resolveWorldPersistentBaseAnchorBase(world: WorldDefinition): CoopBaseConfig | null {
+export function resolveWorldPersistentBaseAnchorBase(world: WorldDefinition): WorldBaseDefinition | null {
   const baseId = world.persistentBaseSite?.baseId;
   if (!baseId) return null;
   return world.bases.find((base) => base.id === baseId) ?? null;

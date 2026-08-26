@@ -9,8 +9,12 @@ import {
 import type { AuthoredScenario } from '../src/config/authoring/AuthoredScenario';
 import { hasAuthoredActivity } from '../src/config/authoring/AuthoredScenario';
 import {
+  COOP_MISSION_BASE_FIELDS,
   COOP_MISSION_SOURCE_FIELDS,
+  SHARED_BASE_FIELDS,
   SHARED_SOURCE_FIELDS,
+  SPLIT_SOURCE_FIELDS,
+  WORLD_BASE_FIELDS,
   WORLD_SOURCE_FIELDS,
   getCoopMissionDefinitionId,
   getWorldDefinitionId,
@@ -43,45 +47,100 @@ const ALL_MAP_CONFIGS = [
   getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID),
 ];
 
-/** Feldnamen aus dem `CoopDefenseMapConfig`-Interface – die Quelle, die aufgeteilt wird. */
-function collectMapConfigFields(): string[] {
+/** Feldnamen eines authored Interfaces – die Quelle, die aufgeteilt wird. */
+function collectInterfaceFields(interfaceName: string): string[] {
   const source = readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMaps.ts'), 'utf8');
-  const start = source.indexOf('export interface CoopDefenseMapConfig {');
-  expect(start, 'CoopDefenseMapConfig interface must exist').toBeGreaterThan(0);
+  const start = source.indexOf(`export interface ${interfaceName} {`);
+  expect(start, `${interfaceName} interface must exist`).toBeGreaterThan(0);
   const end = source.indexOf('\n}', start);
   const body = source.slice(start, end);
   return [...new Set([...body.matchAll(/^ {2}readonly ([a-zA-Z][a-zA-Z0-9]*)\??:/gm)].map((match) => match[1]))];
+}
+
+function collectMapConfigFields(): string[] {
+  return collectInterfaceFields('CoopDefenseMapConfig');
+}
+
+/** Prueft, dass die Listen sich nicht ueberschneiden und die deklarierten Felder genau abdecken. */
+function expectExactPartition(
+  declared: readonly string[],
+  groups: Readonly<Record<string, readonly string[]>>,
+  label: string,
+): void {
+  const entries = Object.entries(groups);
+  const seen = new Map<string, string>();
+  for (const [groupName, fields] of entries) {
+    for (const field of fields) {
+      const owner = seen.get(field);
+      expect(owner, `${label}: ${field} is claimed by both ${owner} and ${groupName}`).toBeUndefined();
+      seen.set(field, groupName);
+    }
+  }
+  // Vollstaendig: ein neues Feld erzwingt eine Entscheidung, statt still zu verschwinden.
+  expect(declared.filter((field) => !seen.has(field)), `${label}: unassigned fields`).toEqual([]);
+  expect([...seen.keys()].filter((field) => !declared.includes(field)), `${label}: stale assignments`).toEqual([]);
 }
 
 describe('World-/Activity-Authoring – Partition', () => {
   it('ordnet jedes Map-Feld genau einer Seite zu', () => {
     const declared = collectMapConfigFields();
     expect(declared.length).toBeGreaterThan(20);
+    expectExactPartition(declared, {
+      world: WORLD_SOURCE_FIELDS,
+      activity: COOP_MISSION_SOURCE_FIELDS,
+      shared: SHARED_SOURCE_FIELDS,
+      // `bases` mischt beide Ebenen selbst und wird deshalb feldweise aufgeteilt.
+      split: SPLIT_SOURCE_FIELDS,
+    }, 'CoopDefenseMapConfig');
+  });
 
-    const world = new Set<string>(WORLD_SOURCE_FIELDS);
-    const activity = new Set<string>(COOP_MISSION_SOURCE_FIELDS);
-    const shared = new Set<string>(SHARED_SOURCE_FIELDS);
-
-    // Disjunkt: kein Feld darf doppelt beansprucht werden.
-    expect([...world].filter((field) => activity.has(field) || shared.has(field))).toEqual([]);
-    expect([...activity].filter((field) => shared.has(field))).toEqual([]);
-
-    // Vollstaendig: ein neues Map-Feld erzwingt eine Entscheidung, statt still zu verschwinden.
-    const claimed = new Set([...world, ...activity, ...shared]);
-    expect(declared.filter((field) => !claimed.has(field)), 'unassigned CoopDefenseMapConfig fields').toEqual([]);
-    expect([...claimed].filter((field) => !declared.includes(field)), 'stale field assignments').toEqual([]);
+  it('ordnet auch jedes Feld einer Basis genau einer Seite zu', () => {
+    // Ohne diese zweite Ebene wuerde `bases` als World gelten und dabei `dormant`,
+    // `playerScaling`, `startHpFactor` und die Podest-Respawnregeln mit hineintragen.
+    const declared = collectInterfaceFields('CoopBaseConfig');
+    expect(declared.length).toBeGreaterThan(8);
+    expectExactPartition(declared, {
+      world: WORLD_BASE_FIELDS,
+      activity: COOP_MISSION_BASE_FIELDS,
+      shared: SHARED_BASE_FIELDS,
+    }, 'CoopBaseConfig');
   });
 
   it('haelt Sieg-, Niederlage- und Missionsbegriffe aus jeder WorldDefinition heraus', () => {
+    const forbidden = [
+      ...COOP_MISSION_SOURCE_FIELDS,
+      ...COOP_MISSION_BASE_FIELDS,
+      // Spawn-Regeln der Power-up-Podeste, die frueher ueber `bases` in die World gerieten.
+      'respawnMs',
+      'spawnOnArenaStart',
+      'defId',
+    ];
     for (const mapConfig of ALL_MAP_CONFIGS) {
       const world = toWorldDefinition(mapConfig);
       const serialized = JSON.stringify(world);
-      for (const missionField of COOP_MISSION_SOURCE_FIELDS) {
+      for (const missionField of forbidden) {
         expect(serialized.includes(`"${missionField}"`), `${world.id} leaks ${missionField}`).toBe(false);
       }
       expect(Object.keys(world).sort()).toEqual([
         'bases', 'id', 'initialTimeOfDay', 'metrics', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks',
       ]);
+      for (const base of world.bases) {
+        expect(Object.keys(base).sort(), `${world.id}/${base.id}`).toEqual([
+          'anchor', 'faction', 'hpMax', 'id', 'role', 'shape', 'spawnCenter', 'turrets',
+        ]);
+      }
+    }
+  });
+
+  it('adressiert jeden Missionsanteil einer Basis ueber eine Basis derselben World', () => {
+    for (const mapConfig of ALL_MAP_CONFIGS) {
+      const { world, activity } = toAuthoredScenario(mapConfig);
+      const baseIds = new Set(world.bases.map((base) => base.id));
+      const overlays = activity?.kind === 'coop-mission' ? activity.baseOverlays ?? [] : [];
+      for (const overlay of overlays) {
+        expect(baseIds.has(overlay.baseId), `${world.id} overlay for unknown base ${overlay.baseId}`).toBe(true);
+      }
+      expect(new Set(overlays.map((overlay) => overlay.baseId)).size).toBe(overlays.length);
     }
   });
 
@@ -106,6 +165,12 @@ describe('World-/Activity-Authoring – Compatibility-Adapter', () => {
       // von `undefined` nicht zu unterscheiden.
       expect(Object.keys(restored).sort(), `round trip keys for map ${mapConfig.mapId}`)
         .toEqual(Object.keys(mapConfig).sort());
+      // Basen werden aus zwei Haelften wieder zusammengesetzt; auch dort darf kein Feld
+      // stillschweigend entstehen oder verschwinden.
+      restored.bases.forEach((base, index) => {
+        expect(Object.keys(base).sort(), `round trip base keys for ${mapConfig.mapId}/${base.id}`)
+          .toEqual(Object.keys(mapConfig.bases[index]!).sort());
+      });
     }
   });
 
@@ -138,7 +203,16 @@ describe('World-/Activity-Authoring – World ohne Activity', () => {
     });
     expect(scenario.world.persistentBaseSite).toEqual({ baseId: 'foundation-main' });
     expect(scenario.world.initialTimeOfDay).toBe(mapConfig.timeOfDay);
-    expect(scenario.world.bases).toEqual(mapConfig.bases);
+    // Das Bauwerk bleibt vollstaendig, sein Missionsanteil faellt mit der Activity weg.
+    expect(scenario.world.bases.map((base) => base.id)).toEqual(mapConfig.bases.map((base) => base.id));
+    expect(scenario.world.bases[0]).toMatchObject({
+      hpMax: mapConfig.bases[0]!.hpMax,
+      anchor: mapConfig.bases[0]!.anchor,
+      shape: mapConfig.bases[0]!.shape,
+    });
+    for (const missionField of COOP_MISSION_BASE_FIELDS) {
+      expect(missionField in scenario.world.bases[0]!, `world base still carries ${missionField}`).toBe(false);
+    }
 
     // Der Anker loest innerhalb derselben World auf – ohne Umweg ueber Mission oder Lobby.
     const anchorBase = resolveWorldPersistentBaseAnchorBase(scenario.world);

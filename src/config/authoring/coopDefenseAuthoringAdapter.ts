@@ -1,11 +1,16 @@
 import type {
+  CoopBaseConfig,
   CoopDefenseMapConfig,
   CoopDefenseMapTrackMode,
   CoopDefenseMapTrackPosition,
 } from '../coopDefenseMaps';
-import type { CoopMissionDefinition, CoopMissionTutorialDefinition } from './ActivityDefinition';
+import type {
+  CoopMissionBaseOverlay,
+  CoopMissionDefinition,
+  CoopMissionTutorialDefinition,
+} from './ActivityDefinition';
 import type { AuthoredScenario } from './AuthoredScenario';
-import type { WorldDefinition } from './WorldDefinition';
+import type { WorldBaseDefinition, WorldDefinition } from './WorldDefinition';
 
 /**
  * Compatibility-Adapter der Uebergangsphase.
@@ -36,9 +41,39 @@ export const WORLD_SOURCE_FIELDS = [
   'trackMode',
   'trackPosition',
   'timeOfDay',
-  'bases',
   'persistentBase',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
+
+/**
+ * Map-Felder, die selbst noch beide Ebenen mischen und deshalb feldweise aufgeteilt werden.
+ *
+ * `bases` beschreibt Bauwerke (World) und zugleich, was eine laufende Mission aus ihnen macht
+ * (Activity). Die Aufteilung steht in {@link WORLD_BASE_FIELDS} und
+ * {@link COOP_MISSION_BASE_FIELDS}.
+ */
+export const SPLIT_SOURCE_FIELDS = ['bases'] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
+
+/** Felder einer Basis, die das Bauwerk selbst beschreiben. */
+export const WORLD_BASE_FIELDS = [
+  'hpMax',
+  'faction',
+  'role',
+  'anchor',
+  'shape',
+  'turrets',
+  'spawnCenter',
+] as const satisfies readonly (keyof CoopBaseConfig)[];
+
+/** Felder einer Basis, die erst durch eine laufende Mission entstehen. */
+export const COOP_MISSION_BASE_FIELDS = [
+  'startHpFactor',
+  'playerScaling',
+  'dormant',
+  'powerUpPedestals',
+] as const satisfies readonly (keyof CoopBaseConfig)[];
+
+/** Gemeinsamer Schluessel beider Basis-Seiten; er ist Identitaet, nicht Inhalt. */
+export const SHARED_BASE_FIELDS = ['id'] as const satisfies readonly (keyof CoopBaseConfig)[];
 
 /** Map-Felder, die zur Coop-Mission-Activity gehoeren. */
 export const COOP_MISSION_SOURCE_FIELDS = [
@@ -89,7 +124,7 @@ export function toWorldDefinition(mapConfig: CoopDefenseMapConfig): WorldDefinit
       rockField: mapConfig.rockField,
       rockWalls: mapConfig.rockWalls,
     },
-    bases: mapConfig.bases,
+    bases: mapConfig.bases.map(toWorldBaseDefinition),
     tracks: {
       mode: resolved.trackMode,
       position: resolved.trackPosition,
@@ -115,6 +150,7 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
     secondaryObjectives: mapConfig.secondaryObjectives,
     missionProgress: mapConfig.missionProgress as CoopMissionDefinition['missionProgress'],
     boss: mapConfig.boss,
+    baseOverlays: mapConfig.bases.map(toCoopMissionBaseOverlay),
     powerUps: mapConfig.powerUps,
     itemDrop: mapConfig.itemDrop,
     dynamicTimeOfDay: mapConfig.dynamicTimeOfDay,
@@ -151,6 +187,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     );
   }
   const { tutorial } = activity;
+  const overlaysByBaseId = new Map((activity.baseOverlays ?? []).map((overlay) => [overlay.baseId, overlay]));
   return {
     mapId: world.sourceMapId ?? world.id,
     arenaWidthCells: world.metrics.widthCells,
@@ -167,12 +204,13 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     trackMode: world.tracks.mode,
     trackPosition: world.tracks.position,
     mapEvents: activity.mapEvents,
+    // Nur hier setzt sich eine Basis wieder aus Bauwerk und Missionsanteil zusammen.
     timeOfDay: world.initialTimeOfDay,
     dynamicTimeOfDay: activity.dynamicTimeOfDay,
     tutorialRockArmorDropMult: tutorial?.rockArmorDropMult,
     surviveDurationSec: activity.surviveDurationSec,
     balanceReferenceDurationSec: activity.balanceReferenceDurationSec,
-    bases: world.bases,
+    bases: world.bases.map((base) => toCoopBaseConfig(base, overlaysByBaseId.get(base.id))),
     powerUps: activity.powerUps,
     persistentSpawns: activity.persistentSpawns,
     encounters: activity.encounters,
@@ -184,6 +222,53 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     itemDrop: activity.itemDrop,
     persistentBase: world.persistentBaseSite,
   };
+}
+
+function toWorldBaseDefinition(base: CoopBaseConfig): WorldBaseDefinition {
+  return {
+    id: base.id,
+    hpMax: base.hpMax,
+    faction: base.faction,
+    role: base.role,
+    anchor: base.anchor,
+    shape: base.shape,
+    turrets: base.turrets,
+    spawnCenter: base.spawnCenter,
+  };
+}
+
+function toCoopMissionBaseOverlay(base: CoopBaseConfig): CoopMissionBaseOverlay {
+  const overlay: CoopMissionBaseOverlay = {
+    baseId: base.id,
+    playerScaling: base.playerScaling,
+    dormant: base.dormant,
+    powerUpPedestals: base.powerUpPedestals,
+  };
+  // `startHpFactor` ist das einzige Basisfeld, dessen blosse Anwesenheit die Normalisierung
+  // unterscheidet. Es darf deshalb nicht als `undefined` wieder auftauchen.
+  return base.startHpFactor === undefined ? overlay : { ...overlay, startHpFactor: base.startHpFactor };
+}
+
+function toCoopBaseConfig(
+  base: WorldBaseDefinition,
+  overlay: CoopMissionBaseOverlay | undefined,
+): CoopBaseConfig {
+  const restored: CoopBaseConfig = {
+    id: base.id,
+    hpMax: base.hpMax,
+    playerScaling: overlay?.playerScaling,
+    faction: base.faction,
+    role: base.role,
+    dormant: overlay?.dormant,
+    anchor: base.anchor,
+    shape: base.shape,
+    turrets: base.turrets,
+    powerUpPedestals: overlay?.powerUpPedestals,
+    spawnCenter: base.spawnCenter,
+  };
+  return overlay?.startHpFactor === undefined
+    ? restored
+    : { ...restored, startHpFactor: overlay.startHpFactor };
 }
 
 interface NormalizedWorldFields {

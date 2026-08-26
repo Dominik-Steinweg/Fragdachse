@@ -1,4 +1,6 @@
 import type {
+  CoopBasePlayerScaling,
+  CoopBasePowerUpPedestalConfig,
   CoopDefenseDynamicTimeOfDayConfig,
   CoopDefenseMapBossConfig,
   CoopDefenseMapEncounterConfig,
@@ -63,6 +65,11 @@ export interface CoopMissionDefinition {
   readonly secondaryObjectives?: readonly CoopDefenseMapSecondaryObjectiveConfig[];
   readonly missionProgress?: ResolvedCoopDefenseMapMissionProgressConfig;
   readonly boss?: CoopDefenseMapBossConfig;
+  /**
+   * Missionsabhaengige Anteile der Weltstrukturen, adressiert ueber ihre Basis-ID. Die Struktur
+   * selbst steht in der World; hier steht nur, was dieser Durchlauf aus ihr macht.
+   */
+  readonly baseOverlays?: readonly CoopMissionBaseOverlay[];
 
   // ── Belohnung und Nachschub ───────────────────────────────────────────────
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
@@ -75,6 +82,24 @@ export interface CoopMissionDefinition {
   readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   /** Onboarding dieser Mission; eine World ohne Activity hat kein Tutorial. */
   readonly tutorial?: CoopMissionTutorialDefinition;
+}
+
+/**
+ * Was eine laufende Mission aus einer Weltstruktur macht.
+ *
+ * Jedes Feld hier haengt an einem Durchlauf und nicht am Bauwerk: `startHpFactor` ist ein
+ * angeschlagener Rundenstart, `playerScaling` haengt an der Spielerzahl der Runde, `dormant`
+ * beschreibt ein Missionsziel, das erst durch seinen Objective-Fortschritt erwacht, und
+ * Power-up-Podeste sind mit `respawnMs` und `spawnOnArenaStart` Spawn-Regeln – dieselbe
+ * Begruendung wie fuer {@link CoopMissionDefinition.powerUps}.
+ */
+export interface CoopMissionBaseOverlay {
+  /** Verweist auf {@link import('./WorldDefinition').WorldBaseDefinition.id} derselben World. */
+  readonly baseId: string;
+  readonly startHpFactor?: number;
+  readonly playerScaling?: CoopBasePlayerScaling;
+  readonly dormant?: boolean;
+  readonly powerUpPedestals?: readonly CoopBasePowerUpPedestalConfig[];
 }
 
 export interface CoopMissionTutorialDefinition {
