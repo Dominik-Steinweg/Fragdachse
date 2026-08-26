@@ -23,6 +23,14 @@ Upgrade-IDs bleiben auch beim inhaltlichen Umbau eines Upgrades stabil: Icon-Auf
 
 Diese Dateien enthalten sowohl Balance als auch technische Verträge. Balance darf sich ändern; IDs, Discriminators, Referenzpfade und die Bedeutung von Feldern sind Stabilitätsverträge und werden von Normalisierern/Validatoren geschützt.
 
+## World- und Activity-Authoring
+
+Die Zustaendigkeiten des authored Coop-Contents sind in zwei Vertraege getrennt: `WorldDefinition` beschreibt, was ohne laufende Mission existiert (Metriken, Terrain, Basen, Gleise, Persistent-Base-Site, Start-Uhrzeit), `ActivityDefinition` beschreibt, was es nur waehrend einer Mission gibt (Objective, Dauer, Respawns, Encounter, Events, Nebenziele, Boss, Power-ups, Item-Drop, Uhrverlauf, Tutorial). Beide liegen unter src/config/authoring/; `AuthoredScenario` erlaubt ausdruecklich `activity: null` – eine Welt ohne Mission braucht kein Pseudo-Objective und keinen Dummy-Timer.
+
+Die Datenquelle bleibt vorerst src/config/coopDefenseMaps/*.json. coopDefenseAuthoringAdapter.ts projiziert eine bereits normalisierte `CoopDefenseMapConfig` in beide Richtungen und trifft dabei keine eigenen Defaults; unnormalisierte Maps lehnt er ab. Jedes Feld der Map gehoert genau einer Seite (`WORLD_SOURCE_FIELDS`, `COOP_MISSION_SOURCE_FIELDS`, `SHARED_SOURCE_FIELDS`); ein neues Map-Feld erzwingt eine Zuordnung. Der Round-Trip ist verlustfrei und in tests/WorldActivityAuthoring.test.ts abgesichert.
+
+`normalizeCoopDefenseMapConfig()` ist nicht idempotent: sie leitet u. a. `spawnArea` aus `front` ab und lehnt beides gemeinsam ab. Normalisierte Configs deshalb nie erneut normalisieren.
+
 ## Referenzintegrität
 
 Beim Hinzufügen von Content immer prüfen:
