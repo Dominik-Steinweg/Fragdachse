@@ -3,10 +3,9 @@ import type { ArenaLoadStage } from '../types';
 /**
  * World-Ladebarriere.
  *
- * Das heutige `ArenaLoadReadyState` haengt ueber `roundRevision` an einer Runde. Die
- * grundlegende Barriere gehoert jedoch zur World: auch eine World ohne Activity muss geladen
- * sein, bevor jemand in ihr handeln darf. Eine Activity kann anschliessend zusaetzliche
- * Startbedingungen besitzen.
+ * Die Barriere haengt an der World-Instanz, nicht an der Runde: auch eine World ohne Activity
+ * muss geladen sein, bevor jemand in ihr handeln darf. Eine Activity kann anschliessend
+ * zusaetzliche Startbedingungen besitzen.
  *
  * Das Stufenvokabular bleibt bewusst dasselbe wie heute – die Stufen beschreiben den lokalen
  * Aufbau, nicht die Runde.

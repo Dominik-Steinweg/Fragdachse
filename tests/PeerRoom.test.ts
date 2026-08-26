@@ -656,38 +656,46 @@ describe('arena loading barrier', () => {
     try {
       host.room.setGlobal('gph', 'ARENA', true);
       bridge.hostStartRoundParticipants(['p0', 'p1'], 0, 42);
-      bridge.setLocalArenaLoadProgress(42, 20, 'building');
-      expect(bridge.getPlayerArenaLoadState('p0', 42)).toEqual({
-        roundRevision: 42,
+      bridge.setLocalWorldLoadProgress(42, 20, 'building');
+      expect(bridge.getPlayerWorldLoadState('p0', 42)).toEqual({
+        worldRevision: 42,
         progress: 20,
         stage: 'building',
         ready: false,
       });
-      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(false);
+      expect(bridge.areRoundParticipantsWorldLoadReady()).toBe(false);
 
-      host.room.setPlayerState('p1', 'alr', {
-        roundRevision: 42,
+      host.room.setPlayerState('p1', 'wlr', {
+        worldRevision: 42,
         progress: 100,
         stage: 'ready',
         ready: true,
       }, true);
-      bridge.setLocalArenaLoadReady(42);
-      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
+      bridge.setLocalWorldLoadReady(42);
+      expect(bridge.areRoundParticipantsWorldLoadReady()).toBe(true);
 
-      bridge.publishArenaDescriptor({
-        roundRevision: 42,
-        gameMode: 'coop_defense',
-        mapId: '0',
-        seed: 123,
-        arenaGeneratorVersion: 1,
-        layoutFingerprint: 'deadbeef',
-      });
-      expect(JSON.stringify(participant.room.getGlobal('ard')).length).toBeLessThan(1024);
-      expect(lateJoiner.room.getGlobal('ard')).toEqual(host.room.getGlobal('ard'));
+      bridge.publishWorldAndActivity(
+        {
+          worldRevision: 42,
+          definitionId: 'world:coop-defense:0',
+          seed: 123,
+          generatorVersion: 1,
+          layoutFingerprint: 'deadbeef',
+        },
+        {
+          activityRevision: 42,
+          worldRevision: 42,
+          kind: 'coop-mission',
+          definitionId: 'activity:coop-mission:0',
+        },
+      );
+      expect(JSON.stringify(participant.room.getGlobal('wld')).length).toBeLessThan(1024);
+      expect(lateJoiner.room.getGlobal('wld')).toEqual(host.room.getGlobal('wld'));
+      expect(lateJoiner.room.getGlobal('act')).toEqual(host.room.getGlobal('act'));
       expect(host.room.getGlobal('aly')).toBeUndefined();
 
       bridge.hostEnterSpectator('p1');
-      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
+      expect(bridge.areRoundParticipantsWorldLoadReady()).toBe(true);
     } finally {
       clearActiveSession();
     }
@@ -702,8 +710,8 @@ describe('arena loading barrier', () => {
     try {
       host.room.setGlobal('gph', 'ARENA', true);
       bridge.hostStartRoundParticipants(['p0'], 0, 7);
-      bridge.setLocalArenaLoadProgress(7, 100, 'ready', true);
-      expect(bridge.areRoundParticipantsArenaLoadReady()).toBe(true);
+      bridge.setLocalWorldLoadProgress(7, 100, 'ready', true);
+      expect(bridge.areRoundParticipantsWorldLoadReady()).toBe(true);
     } finally {
       clearActiveSession();
     }

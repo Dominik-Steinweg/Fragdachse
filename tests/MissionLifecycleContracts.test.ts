@@ -33,9 +33,25 @@ function hostStartMission(host: NetworkBridge, roundRevision: number): void {
   host.hostStartRoundParticipants(host.getConnectedPlayerIds(), 0, roundRevision);
   host.setArenaStartTime(0);
   host.setRoundEndTime(0);
-  // Der aktive Persistent-Base-Radius gehoert zum reliablen RoundState. Clients duerfen ihn nicht
-  // aus ihrem eigenen lokalen Speicher ableiten, sonst baut jeder Peer eine andere Zone.
-  host.publishRoundState({ status: 'active', roundStartTime: 0, persistentBaseRadiusCells: 6 });
+  host.publishRoundState({ status: 'active', roundStartTime: 0 });
+  // Der aktive Persistent-Base-Radius ist ein World-Parameter. Clients duerfen ihn nicht aus
+  // ihrem eigenen lokalen Speicher ableiten, sonst baut jeder Peer eine andere Zone.
+  host.publishWorldAndActivity(
+    {
+      worldRevision: roundRevision,
+      definitionId: 'world:coop-defense:1',
+      seed: 99,
+      generatorVersion: 1,
+      layoutFingerprint: 'cafebabe',
+      parameters: { persistentBaseRadiusCells: 6 },
+    },
+    {
+      activityRevision: roundRevision,
+      worldRevision: roundRevision,
+      kind: 'coop-mission',
+      definitionId: 'activity:coop-mission:1',
+    },
+  );
   host.setGamePhase('ARENA');
 }
 
@@ -51,6 +67,8 @@ function hostCompleteMission(host: NetworkBridge, conclusion: RoundConclusion, e
   });
   host.hostResetRoundParticipation();
   host.hostResetAllLobbyReady();
+  // Mit der Runde endet auch die World-Instanz.
+  host.clearWorldAndActivity();
   host.setGamePhase('LOBBY');
 }
 
@@ -60,6 +78,7 @@ function hostCompleteMission(host: NetworkBridge, conclusion: RoundConclusion, e
  */
 function hostTerminateMatch(host: NetworkBridge): void {
   host.hostResetAllLobbyReady();
+  host.clearWorldAndActivity();
   host.setGamePhase('LOBBY');
 }
 
@@ -89,7 +108,13 @@ describe('mission lifecycle – Start und Freigabe', () => {
         participantIds: ['p0', 'p1'],
         spectatorIds: [],
       });
-      expect(client.getRoundState()).toMatchObject({ status: 'active', persistentBaseRadiusCells: 6 });
+      expect(client.getRoundState()).toMatchObject({ status: 'active' });
+      expect(client.getWorldDescriptor()).toMatchObject({
+        worldRevision: 4711,
+        definitionId: 'world:coop-defense:1',
+        parameters: { persistentBaseRadiusCells: 6 },
+      });
+      expect(client.getActivityDescriptor()?.kind).toBe('coop-mission');
       expect(client.getMatchHostId()).toBe('p0');
       // Der Endstand der Vorrunde ist beim Start atomar geleert.
       expect(client.getRoundResults()).toEqual([]);
@@ -109,15 +134,15 @@ describe('mission lifecycle – Start und Freigabe', () => {
       expect(host.getArenaStartTime()).toBe(0);
       expect(host.isArenaLoading(1_000)).toBe(true);
       expect(host.isArenaStarted(1_000)).toBe(false);
-      expect(host.areRoundParticipantsArenaLoadReady()).toBe(false);
+      expect(host.areRoundParticipantsWorldLoadReady()).toBe(false);
 
-      host.setLocalArenaLoadReady(4712);
-      expect(host.areRoundParticipantsArenaLoadReady()).toBe(false);
+      host.setLocalWorldLoadReady(4712);
+      expect(host.areRoundParticipantsWorldLoadReady()).toBe(false);
 
       setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
-      client.setLocalArenaLoadReady(4712);
+      client.setLocalWorldLoadReady(4712);
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
-      expect(host.areRoundParticipantsArenaLoadReady()).toBe(true);
+      expect(host.areRoundParticipantsWorldLoadReady()).toBe(true);
 
       const now = 1_000_000;
       const arenaStartTime = resolveArenaStartTime(now);
@@ -137,27 +162,27 @@ describe('mission lifecycle – Start und Freigabe', () => {
       const client = bridgeFor(clientRoom);
       const host = bridgeFor(hostRoom);
       hostStartMission(host, 4713);
-      host.setLocalArenaLoadReady(4713);
+      host.setLocalWorldLoadReady(4713);
       setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
-      client.setLocalArenaLoadReady(4713);
+      client.setLocalWorldLoadReady(4713);
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
-      expect(host.areRoundParticipantsArenaLoadReady()).toBe(true);
+      expect(host.areRoundParticipantsWorldLoadReady()).toBe(true);
 
       hostCompleteMission(host, 'victory', 2_000);
       hostStartMission(host, 4714);
-      host.setLocalArenaLoadReady(4714);
+      host.setLocalWorldLoadReady(4714);
 
       // Verspaetetes reliable Paket der Vorrunde – direkt auf dem Draht, damit es die lokale
-      // Entprellung von setLocalArenaLoadProgress() umgeht und der Host es wirklich sieht.
-      clientRoom.room.setPlayerState('p1', 'alr', {
-        roundRevision: 4713,
+      // Entprellung von setLocalWorldLoadProgress() umgeht und der Host es wirklich sieht.
+      clientRoom.room.setPlayerState('p1', 'wlr', {
+        worldRevision: 4713,
         progress: 100,
         stage: 'ready',
         ready: true,
       }, true);
-      expect(hostRoom.room.getPlayerState('p1', 'alr')).toMatchObject({ roundRevision: 4713, ready: true });
-      expect(host.getPlayerArenaLoadState('p1', 4714)).toBeNull();
-      expect(host.areRoundParticipantsArenaLoadReady()).toBe(false);
+      expect(hostRoom.room.getPlayerState('p1', 'wlr')).toMatchObject({ worldRevision: 4713, ready: true });
+      expect(host.getPlayerWorldLoadState('p1', 4714)).toBeNull();
+      expect(host.areRoundParticipantsWorldLoadReady()).toBe(false);
     } finally {
       clearActiveSession();
     }
@@ -197,6 +222,9 @@ describe('mission lifecycle – Abschluss und Rueckkehr in die Lobby', () => {
           expect(client.canPlayerReceiveRoundRewards(playerId)).toBe(false);
         }
         expect(client.isArenaStarted(20_000)).toBe(false);
+        // Keine Runde, keine World: der replizierte Weltzustand endet mit der Mission.
+        expect(client.getWorldDescriptor()).toBeNull();
+        expect(client.getActivityDescriptor()).toBeNull();
       } finally {
         clearActiveSession();
       }
@@ -226,6 +254,7 @@ describe('mission lifecycle – Abschluss und Rueckkehr in die Lobby', () => {
       }
       expect(client.isArenaStarted(20_000)).toBe(false);
       expect(client.isArenaCountdownVisible(20_000)).toBe(false);
+      expect(client.getWorldDescriptor()).toBeNull();
       // Stehengebliebene Ready-Flags duerfen keine neue Runde ausloesen.
       expect(client.getPlayerReady('p1')).toBe(false);
       expect(client.areAllPlayersReady()).toBe(false);

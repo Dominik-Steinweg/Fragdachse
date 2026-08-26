@@ -160,6 +160,8 @@ import {
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
+import { toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
+import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
@@ -205,6 +207,8 @@ export class ArenaLifecycleCoordinator {
     readonly gameMode: GameMode;
     readonly mapConfig: CoopDefenseMapConfig | null;
     readonly seed: number;
+    /** World-Parameter dieser Instanz; sie reisen im WorldDescriptor, nicht im RoundState. */
+    readonly worldParameters: WorldParameters | undefined;
   } | null = null;
   private runtimeDiagnosticEventSink: RuntimeDiagnosticEventSink | null = null;
   private hostArenaGenerationTimer: Phaser.Time.TimerEvent | null = null;
@@ -422,6 +426,9 @@ export class ArenaLifecycleCoordinator {
       gameMode: bridge.getGameMode(),
       mapConfig: coopDefenseMapConfig,
       seed,
+      worldParameters: coopDefenseMapConfig?.persistentBase
+        ? { persistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells }
+        : undefined,
     };
     const roundState: RoundState = {
       status: 'active',
@@ -432,9 +439,6 @@ export class ArenaLifecycleCoordinator {
         : undefined,
       coopDefenseMapId: isCoopDefenseMode(bridge.getGameMode())
         ? bridge.getCoopDefenseMapId()
-        : undefined,
-      persistentBaseRadiusCells: coopDefenseMapConfig?.persistentBase
-        ? getStoredPersistentBaseState().radiusCells
         : undefined,
     };
     bridge.publishRoundState(roundState);
@@ -468,7 +472,7 @@ export class ArenaLifecycleCoordinator {
       + (rockStats?.residentChunks ?? 0)
       + (shadowStats?.residentChunks ?? 0);
     const loadProgress = resolveArenaLoadProgress(pending, resident, localRenderReady, hostStartupReady);
-    bridge.setLocalArenaLoadProgress(
+    bridge.setLocalWorldLoadProgress(
       roundRevision,
       loadProgress.progress,
       loadProgress.stage,
@@ -481,7 +485,7 @@ export class ArenaLifecycleCoordinator {
 
   private tryScheduleArenaStart(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
-    if (bridge.getArenaStartTime() > 0 || !bridge.areRoundParticipantsArenaLoadReady()) return;
+    if (bridge.getArenaStartTime() > 0 || !bridge.areRoundParticipantsWorldLoadReady()) return;
 
     const arenaStartTime = resolveArenaStartTime(Date.now());
     bridge.setArenaStartTime(arenaStartTime);
@@ -672,7 +676,6 @@ export class ArenaLifecycleCoordinator {
         coopDefenseBossSpawnedAtMs: currentRoundState?.coopDefenseBossSpawnedAtMs,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
-        persistentBaseRadiusCells: currentRoundState?.persistentBaseRadiusCells,
         resultEligiblePlayerIds: bridge.getRoundResultEligiblePlayerIds(),
         endedAt: roundEndedAt,
       });
@@ -682,6 +685,9 @@ export class ArenaLifecycleCoordinator {
 
     this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
     bridge.publishCoopDefenseRespawnBudgetState(null);
+    // Mit der Runde endet auch die World-Instanz. Ohne Phase, Runde und World bleibt kein
+    // replizierter Weltzustand stehen, den eine spaetere Instanz faelschlich uebernehmen koennte.
+    bridge.clearWorldAndActivity();
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -717,6 +723,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishRoundState(null);
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseRespawnBudgetState(null);
+    bridge.clearWorldAndActivity();
     bridge.hostResetRoundParticipation();
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
@@ -894,6 +901,7 @@ export class ArenaLifecycleCoordinator {
     this.hostUpdate.setActive(false);
 
     if (bridge.isHost()) {
+      bridge.clearWorldAndActivity();
       bridge.setGamePhase('LOBBY');
     }
 
@@ -952,7 +960,7 @@ export class ArenaLifecycleCoordinator {
       coopDefenseBases.flatMap((base) => base.cells),
     );
     this.preparedRoundLayout = null;
-    bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 35, 'building');
+    bridge.setLocalWorldLoadProgress(descriptor.roundRevision, 35, 'building');
     const coopDefensePersistentSpawnConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapPersistentSpawnConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
@@ -1004,7 +1012,7 @@ export class ArenaLifecycleCoordinator {
     const persistentBaseAnchorBase = coopDefenseMapConfig?.persistentBase
       ? coopDefenseBases.find((base) => base.id === coopDefenseMapConfig.persistentBase!.baseId)
       : undefined;
-    const persistentBaseGravelRadius = roundState?.persistentBaseRadiusCells
+    const persistentBaseGravelRadius = bridge.getWorldDescriptor()?.parameters?.persistentBaseRadiusCells
       ?? getStoredPersistentBaseState().radiusCells;
     this.ctx.arenaResult = builder.buildDynamic(layout, {
       enablePersistentBaseGravel: Boolean(coopDefenseMapConfig?.persistentBase),
@@ -1016,7 +1024,7 @@ export class ArenaLifecycleCoordinator {
         }
         : undefined,
     });
-    bridge.setLocalArenaLoadProgress(descriptor.roundRevision, 60, 'building');
+    bridge.setLocalWorldLoadProgress(descriptor.roundRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
     ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
@@ -3617,6 +3625,7 @@ export class ArenaLifecycleCoordinator {
     readonly gameMode: GameMode;
     readonly mapConfig: CoopDefenseMapConfig | null;
     readonly seed: number;
+    readonly worldParameters: WorldParameters | undefined;
   }): void {
     if (this.hostArenaGenerationTimer) return;
 
@@ -3633,7 +3642,7 @@ export class ArenaLifecycleCoordinator {
       // phase/overlay was already committed in the preceding frame; this callback is the only
       // place that performs the host's layout work for the new round.
       this.pendingHostArenaGeneration = null;
-      bridge.setLocalArenaLoadProgress(request.roundRevision, 10, 'generating');
+      bridge.setLocalWorldLoadProgress(request.roundRevision, 10, 'generating');
       try {
         applyArenaMetricsForMode(
           request.gameMode,
@@ -3651,7 +3660,10 @@ export class ArenaLifecycleCoordinator {
           layoutFingerprint: ArenaGenerator.fingerprint(layout),
         };
         this.preparedRoundLayout = { descriptor, layout };
-        bridge.publishArenaDescriptor(descriptor);
+        // Der eine World-Kanal: Weltidentitaet und Activity gehen gemeinsam raus, abgeleitet
+        // aus derselben lokal erzeugten Runde.
+        const { world, activity } = toWorldAndActivityDescriptors(descriptor, request.worldParameters);
+        bridge.publishWorldAndActivity(world, activity);
         this.onTransitionToArena();
       } catch (error) {
         console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
@@ -3771,7 +3783,7 @@ export class ArenaLifecycleCoordinator {
       && bridge.getRoundParticipation()?.roundRevision === roundRevision
     );
 
-    bridge.setLocalArenaLoadProgress(roundRevision, 70, 'rendering');
+    bridge.setLocalWorldLoadProgress(roundRevision, 70, 'rendering');
     let build: Promise<import('../../arena/TerrainColorSnapshot').TerrainColorSnapshot>;
     try {
       build = new TerrainColorSnapshotBuilder({

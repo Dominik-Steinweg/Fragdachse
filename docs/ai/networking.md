@@ -76,7 +76,9 @@ Die kanonischen Replikationsverträge der World-Schicht liegen unter src/world/.
 
 `worldRevision` und `activityRevision` dürfen aus derselben monotonen Quelle stammen (`nextMonotonicRevision`), sind aber verschiedene Identitäten. Eine Nachricht der World-Revision N darf niemals auf eine andere angewendet werden; die Regel steht zentral in `acceptWorldScoped`/`isCurrentWorldRevision`, nicht an den Aufrufstellen. Die Ladestufen (`isWorldLoadStage`, `normalizeWorldLoadProgress`) gehören zur World-Ladebarriere und sind dort die einzige Quelle.
 
-Repliziert wird vorerst weiter der bestehende `ArenaDescriptor`. arenaDescriptorAdapter.ts ist der einzige Ort, der ihn in beide Richtungen auf World/Activity abbildet; der Round-Trip ist verlustfrei bis auf `WorldDescriptor.parameters` (der persistente Basisradius reist bis zum World-Kanal weiter im `RoundState`).
+Auf dem Draht gibt es genau einen World-Kanal: `wld` traegt `WorldDescriptor | null`, `act` daneben `ActivityDescriptor | null`. Beide sind host-autoritativ (`publishWorldAndActivity`, `clearWorldAndActivity`) und werden gemeinsam gesetzt, damit nie eine Activity ohne ihre World steht; `activity: null` ist ein regulaerer Zustand. Eine Activity, die auf eine andere World-Revision zeigt, verwirft `getActivityDescriptor()` zentral. Die World endet mit der Runde – Rundenabschluss, Diagnose-Abbruch und technischer Abbruch raeumen den Kanal ab.
+
+`getArenaDescriptor()` ist nur noch eine abgeleitete Kompatibilitaetssicht auf beide Kanaele, kein eigener Wire-Key. Der persistente Basisradius steht als `WorldDescriptor.parameters.persistentBaseRadiusCells` im World-Kanal und nicht mehr im `RoundState`. Die Ladebarriere `wlr` traegt `WorldLoadReadyState` mit `worldRevision`.
 
 ## Referenzen
 
@@ -86,5 +88,5 @@ Repliziert wird vorerst weiter der bestehende `ArenaDescriptor`. arenaDescriptor
 - Codecs: src/network/playerStateCodec.ts, src/network/enemySnapshotCodec.ts, src/network/projectileSnapshotCodec.ts
 - Host/Client: src/scenes/arena/HostUpdateCoordinator.ts, src/scenes/arena/ClientUpdateCoordinator.ts
 - World-/Activity-Identität: src/world/WorldDescriptor.ts, ActivityDescriptor.ts, WorldRevision.ts, WorldLoadReady.ts, arenaDescriptorAdapter.ts
-- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts, tests/MissionLifecycleContracts.test.ts, tests/WorldDescriptorContracts.test.ts
+- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts, tests/MissionLifecycleContracts.test.ts, tests/WorldDescriptorContracts.test.ts, tests/WorldChannelContracts.test.ts
 - Test-Harness: tests/fakePeerNetwork.ts verdrahtet mehrere PeerRoom-Instanzen ohne WebRTC durch echte Kodierung und Validierung. Multiplayer-Contract-Tests bauen darauf auf, statt einen zweiten In-Memory-Transport anzulegen.

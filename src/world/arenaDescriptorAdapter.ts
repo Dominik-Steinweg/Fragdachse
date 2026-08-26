@@ -3,9 +3,8 @@ import {
   getCoopMissionDefinitionId,
   getWorldDefinitionId,
 } from '../config/authoring/coopDefenseAuthoringAdapter';
-import type { ArenaDescriptor, ArenaLoadReadyState, GameMode } from '../types';
+import type { ArenaDescriptor, GameMode } from '../types';
 import type { ActivityDescriptor } from './ActivityDescriptor';
-import type { WorldLoadReadyState } from './WorldLoadReady';
 import {
   PROCEDURAL_ARENA_WORLD_DEFINITION_ID,
   type WorldDescriptor,
@@ -138,22 +137,4 @@ export function toWorldParameters(
 ): WorldParameters | undefined {
   const radiusCells = roundState?.persistentBaseRadiusCells;
   return radiusCells === undefined ? undefined : { persistentBaseRadiusCells: radiusCells };
-}
-
-export function toWorldLoadReadyState(state: ArenaLoadReadyState): WorldLoadReadyState {
-  return {
-    worldRevision: state.roundRevision,
-    progress: state.progress,
-    stage: state.stage,
-    ready: state.ready,
-  };
-}
-
-export function toArenaLoadReadyState(state: WorldLoadReadyState): ArenaLoadReadyState {
-  return {
-    roundRevision: state.worldRevision,
-    progress: state.progress,
-    stage: state.stage,
-    ready: state.ready,
-  };
 }

@@ -12,7 +12,15 @@
  * Der Transport liegt darunter in `src/network/peer/`: direkte WebRTC-Verbindungen
  * zwischen Client und Host, PeerJS ausschließlich als Signaling-Broker.
  */
-import { isWorldLoadStage, normalizeWorldLoadProgress } from '../world/WorldLoadReady';
+import { isActivityOfWorld, parseActivityDescriptor, type ActivityDescriptor } from '../world/ActivityDescriptor';
+import { toArenaDescriptor } from '../world/arenaDescriptorAdapter';
+import {
+  normalizeWorldLoadProgress,
+  parseWorldLoadReadyState,
+  type WorldLoadReadyState,
+  type WorldLoadStage,
+} from '../world/WorldLoadReady';
+import { parseWorldDescriptor, type WorldDescriptor } from '../world/WorldDescriptor';
 import {
   createHostSession,
   joinHostSession,
@@ -27,7 +35,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { ArenaDescriptor, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
@@ -124,7 +132,7 @@ const KEY_INPUT        = 'inp';
 const KEY_PLACEMENT_PREVIEW = 'ppv';
 const KEY_PLAYERS      = 'plr';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
-const KEY_ARENA_LOAD_READY = 'alr'; // per-player reliable: ArenaLoadReadyState
+const KEY_WORLD_LOAD_READY = 'wlr'; // per-player reliable: WorldLoadReadyState
 const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
@@ -133,7 +141,8 @@ const KEY_TIME_OF_DAY  = 'tod';   // global reliable: number (Lobby-Uhrzeit in M
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
-const KEY_ARENA_DESCRIPTOR = 'ard'; // global: small deterministic round descriptor
+const KEY_WORLD_DESCRIPTOR = 'wld'; // global reliable: WorldDescriptor | null (der eine World-Kanal)
+const KEY_ACTIVITY_DESCRIPTOR = 'act'; // global reliable: ActivityDescriptor | null
 const KEY_ROCK_HP      = 'rck';   // global: RockNetState[] (unreliable, Delta-Snapshot)
 const KEY_AVAIL_COLORS = 'avc';   // global: number[] (verfügbarer Farbpool, reliable)
 const KEY_PLAYER_COLOR = 'clr';   // per-player: number (benutzerdefinierte Spielerfarbe)
@@ -246,8 +255,6 @@ export interface RoundState {
   /** Einmaliger reliable Anker des tatsaechlich erfolgreichen Coop-Boss-Spawns. */
   coopDefenseBossSpawnedAtMs?: number;
   coopDefenseHumanPlayerCount?: number;
-  /** Host-authoritative active persistent-base radius for the round. */
-  persistentBaseRadiusCells?: number;
   // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der
   // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel
   // abzuwarten (sonst kann eine Basis beim Client fehlen, wenn der Key später als die Phase ankommt).
@@ -636,7 +643,7 @@ export class NetworkBridge {
   private connectedPlayers = new Map<string, PlayerProfile>();
   private cachedConnectedPlayers: PlayerProfile[] = [];
   private connectedPlayersCacheDirty = true;
-  private lastLocalArenaLoadStateKey: string | null = null;
+  private lastLocalWorldLoadStateKey: string | null = null;
 
   private joinCbs: Array<(profile: PlayerProfile) => void> = [];
   private quitCbs: Array<(id: string) => void>             = [];
@@ -1526,85 +1533,81 @@ export class NetworkBridge {
       participation,
       true,
     );
-    // This is deliberately a separate technical state from Lobby Ready. The revision binding
-    // makes a late reliable packet from the previous round harmless.
+    // Die Ladebarriere haengt an der World-Instanz, nicht an der Runde. Solange beide aus
+    // derselben monotonen Quelle stammen, ist die Rundenrevision zugleich die World-Revision;
+    // die Bindung macht ein verspaetetes reliable Paket der Vorinstanz harmlos.
+    const worldRevision = roundRevision;
     for (const playerId of participation.participantIds) {
-      this.playerStateMap.get(playerId)?.setState(KEY_ARENA_LOAD_READY, {
-        roundRevision,
+      this.playerStateMap.get(playerId)?.setState(KEY_WORLD_LOAD_READY, {
+        worldRevision,
         progress: 0,
         stage: 'generating',
         ready: false,
-      } satisfies ArenaLoadReadyState, true);
+      } satisfies WorldLoadReadyState, true);
     }
-    this.lastLocalArenaLoadStateKey = null;
+    this.lastLocalWorldLoadStateKey = null;
   }
 
-  /** Publishes only stage changes or meaningful progress steps for the current round. */
-  setLocalArenaLoadProgress(
-    roundRevision: number,
+  /** Publishes only stage changes or meaningful progress steps for the current world. */
+  setLocalWorldLoadProgress(
+    worldRevision: number,
     progress: number,
-    stage: ArenaLoadStage,
+    stage: WorldLoadStage,
     ready = stage === 'ready',
   ): void {
     const normalizedProgress = ready || stage === 'ready'
       ? 100
       : Math.min(95, Math.floor(normalizeWorldLoadProgress(progress) / 5) * 5);
     const normalizedReady = ready === true && normalizedProgress >= 100 && stage === 'ready';
-    const stateKey = `${roundRevision}|${stage}|${normalizedProgress}|${normalizedReady}`;
-    if (this.lastLocalArenaLoadStateKey === stateKey) return;
-    this.lastLocalArenaLoadStateKey = stateKey;
-    myPlayer().setState(KEY_ARENA_LOAD_READY, {
-      roundRevision,
+    const stateKey = `${worldRevision}|${stage}|${normalizedProgress}|${normalizedReady}`;
+    if (this.lastLocalWorldLoadStateKey === stateKey) return;
+    this.lastLocalWorldLoadStateKey = stateKey;
+    myPlayer().setState(KEY_WORLD_LOAD_READY, {
+      worldRevision,
       progress: normalizedProgress,
       stage,
       ready: normalizedReady,
-    } satisfies ArenaLoadReadyState, true);
+    } satisfies WorldLoadReadyState, true);
   }
 
-  /** Local peer acknowledgement that its current arena working set is complete. */
-  setLocalArenaLoadReady(roundRevision: number, ready = true): void {
+  /** Local peer acknowledgement that its current world working set is complete. */
+  setLocalWorldLoadReady(worldRevision: number, ready = true): void {
     if (ready) {
-      this.setLocalArenaLoadProgress(roundRevision, 100, 'ready', true);
+      this.setLocalWorldLoadProgress(worldRevision, 100, 'ready', true);
       return;
     }
-    this.setLocalArenaLoadProgress(roundRevision, 0, 'generating', false);
+    this.setLocalWorldLoadProgress(worldRevision, 0, 'generating', false);
   }
 
-  getPlayerArenaLoadState(playerId: string, roundRevision: number): ArenaLoadReadyState | null {
-    const raw = this.playerStateMap.get(playerId)?.getState(KEY_ARENA_LOAD_READY) as
-      Partial<ArenaLoadReadyState> | undefined;
-    if (!raw || raw.roundRevision !== roundRevision || !isWorldLoadStage(raw.stage)) return null;
-    const progress = normalizeWorldLoadProgress(raw.progress);
-    return {
-      roundRevision,
-      progress,
-      stage: raw.stage,
-      ready: raw.ready === true && raw.stage === 'ready' && progress >= 100,
-    };
+  getPlayerWorldLoadState(playerId: string, worldRevision: number): WorldLoadReadyState | null {
+    return parseWorldLoadReadyState(
+      this.playerStateMap.get(playerId)?.getState(KEY_WORLD_LOAD_READY),
+      worldRevision,
+    );
   }
 
-  getPlayerArenaLoadReady(playerId: string, roundRevision: number): boolean {
-    return this.getPlayerArenaLoadState(playerId, roundRevision)?.ready === true;
+  getPlayerWorldLoadReady(playerId: string, worldRevision: number): boolean {
+    return this.getPlayerWorldLoadState(playerId, worldRevision)?.ready === true;
   }
 
-  isLocalArenaLoadReady(roundRevision: number): boolean {
-    return this.getPlayerArenaLoadReady(this.getLocalPlayerId(), roundRevision);
+  isLocalWorldLoadReady(worldRevision: number): boolean {
+    return this.getPlayerWorldLoadReady(this.getLocalPlayerId(), worldRevision);
   }
 
   /**
    * Host barrier: only currently connected, still participating peers count. Late joiners and
    * spectators are intentionally outside this snapshot and cannot reset a prepared start.
    */
-  areRoundParticipantsArenaLoadReady(): boolean {
+  areRoundParticipantsWorldLoadReady(): boolean {
     if (!isHost()) return false;
     const participation = this.getRoundParticipation();
     if (!participation || participation.roundRevision <= 0) return false;
-    if (!this.isLocalArenaLoadReady(participation.roundRevision)) return false;
+    if (!this.isLocalWorldLoadReady(participation.roundRevision)) return false;
     const connected = new Set([...this.connectedPlayers.keys(), this.getLocalPlayerId()]);
     const spectators = new Set(participation.spectatorIds);
     const participants = participation.participantIds.filter((id) => connected.has(id) && !spectators.has(id));
     if (participants.length === 0) return false;
-    return participants.every((id) => this.getPlayerArenaLoadReady(id, participation.roundRevision));
+    return participants.every((id) => this.getPlayerWorldLoadReady(id, participation.roundRevision));
   }
 
   /** Host-only: setzt einen spaeter beigetretenen Roster-Eintrag auf Spectator. */
@@ -2092,28 +2095,58 @@ export class NetworkBridge {
     return (getState(KEY_HOST_ID) as string | undefined) ?? null;
   }
 
-  // ── Arena descriptor: Host → Alle (global, reliable, einmalig pro Runde) ────
-  publishArenaDescriptor(descriptor: ArenaDescriptor): void {
-    setState(KEY_ARENA_DESCRIPTOR, descriptor, true);
+  // ── World-Kanal: Host → Alle (global, reliable, einmalig pro World-Instanz) ──
+  /**
+   * Der eine kanonische World-Kanal. Mission, PvP und jede spaetere friedliche World
+   * beschreiben ihre Welt hierueber – es gibt keinen zweiten World-Vertrag daneben.
+   *
+   * World und Activity werden gemeinsam gesetzt, damit auf dem Draht nie eine Activity ohne
+   * ihre World steht. `activity = null` ist dabei ein regulaerer Zustand: eine World ohne
+   * laufende Activity.
+   */
+  publishWorldAndActivity(world: WorldDescriptor, activity: ActivityDescriptor | null): void {
+    if (!isHost()) return;
+    if (activity && activity.worldRevision !== world.worldRevision) {
+      throw new Error(
+        `[NetworkBridge] Activity ${activity.definitionId} belongs to world revision `
+        + `${activity.worldRevision}, not ${world.worldRevision}`,
+      );
+    }
+    setState(KEY_WORLD_DESCRIPTOR, world, true);
+    setState(KEY_ACTIVITY_DESCRIPTOR, activity, true);
   }
 
+  /** Beendet die replizierte World-Instanz; danach existiert weltweit keine mehr. */
+  clearWorldAndActivity(): void {
+    if (!isHost()) return;
+    setState(KEY_ACTIVITY_DESCRIPTOR, null, true);
+    setState(KEY_WORLD_DESCRIPTOR, null, true);
+  }
+
+  getWorldDescriptor(): WorldDescriptor | null {
+    return parseWorldDescriptor(getState(KEY_WORLD_DESCRIPTOR));
+  }
+
+  /**
+   * Die Activity gilt nur zusammen mit ihrer World. Ein Descriptor, der auf eine andere
+   * World-Instanz zeigt, ist ein verspaetetes Paket und wird hier zentral verworfen.
+   */
+  getActivityDescriptor(): ActivityDescriptor | null {
+    const world = this.getWorldDescriptor();
+    if (!world) return null;
+    const activity = parseActivityDescriptor(getState(KEY_ACTIVITY_DESCRIPTOR));
+    return activity && isActivityOfWorld(activity, world) ? activity : null;
+  }
+
+  /**
+   * Kompatibilitaetssicht auf den World-Kanal, solange Generator und Arena-Aufbau den
+   * gemischten `ArenaDescriptor` lesen. Sie ist abgeleitet, kein eigener Kanal.
+   */
   getArenaDescriptor(): ArenaDescriptor | null {
-    const raw = getState(KEY_ARENA_DESCRIPTOR) as Partial<ArenaDescriptor> | null | undefined;
-    if (!raw || typeof raw !== 'object') return null;
-    if (!isFiniteNumber(raw.roundRevision) || !Number.isSafeInteger(raw.roundRevision) || raw.roundRevision <= 0) return null;
-    if (typeof raw.gameMode !== 'string') return null;
-    if (raw.mapId !== null && typeof raw.mapId !== 'string') return null;
-    if (!isFiniteNumber(raw.seed) || !Number.isSafeInteger(raw.seed)) return null;
-    if (!isFiniteNumber(raw.arenaGeneratorVersion) || !Number.isSafeInteger(raw.arenaGeneratorVersion)) return null;
-    if (typeof raw.layoutFingerprint !== 'string' || raw.layoutFingerprint.length === 0) return null;
-    return {
-      roundRevision: raw.roundRevision,
-      gameMode: raw.gameMode as GameMode,
-      mapId: raw.mapId ?? null,
-      seed: raw.seed,
-      arenaGeneratorVersion: raw.arenaGeneratorVersion,
-      layoutFingerprint: raw.layoutFingerprint,
-    };
+    const world = this.getWorldDescriptor();
+    const activity = this.getActivityDescriptor();
+    if (!world || !activity) return null;
+    return toArenaDescriptor(world, activity);
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

@@ -14,13 +14,11 @@ import {
   toActivityDescriptor,
   toActivityKind,
   toArenaDescriptor,
-  toArenaLoadReadyState,
   toGameMode,
   toMapId,
   toWorldAndActivityDescriptors,
   toWorldDefinitionId,
   toWorldDescriptor,
-  toWorldLoadReadyState,
   toWorldParameters,
 } from '../src/world/arenaDescriptorAdapter';
 import {
@@ -35,9 +33,10 @@ import { acceptWorldScoped, isCurrentWorldRevision, nextMonotonicRevision, world
 /**
  * Kanonische World- und Activity-Identitaet.
  *
- * Der replizierte Vertrag ist heute noch `ArenaDescriptor`; diese Tests halten fest, dass die
- * kanonische Aufteilung existiert, verlustfrei ist, World- und Activity-Identitaet trennt und
- * eine zentrale Verwerfungsregel fuer fremde World-Instanzen besitzt.
+ * Repliziert wird ueber den World-Kanal (siehe tests/WorldChannelContracts.test.ts). Diese Tests
+ * halten die Vertraege selbst fest: World- und Activity-Identitaet sind getrennt, die Abbildung
+ * auf den alten `ArenaDescriptor` ist verlustfrei, und fremde World-Instanzen werden zentral
+ * verworfen.
  */
 
 const GAME_MODES: readonly GameMode[] = ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'];
@@ -178,11 +177,8 @@ describe('Compatibility-Adapter zum bestehenden ArenaDescriptor', () => {
     expect(toArenaDescriptor(world, toActivityDescriptor(arenaDescriptor()))).toEqual(arenaDescriptor());
   });
 
-  it('bildet die Ladebarriere world-scoped ab', () => {
-    const arenaState = { roundRevision: 42, progress: 100, stage: 'ready' as const, ready: true };
-    const worldState = toWorldLoadReadyState(arenaState);
-    expect(worldState).toEqual({ worldRevision: 42, progress: 100, stage: 'ready', ready: true });
-    expect(toArenaLoadReadyState(worldState)).toEqual(arenaState);
+  it('bindet die Ladebarriere an die World-Instanz', () => {
+    const worldState = { worldRevision: 42, progress: 100, stage: 'ready' as const, ready: true };
 
     expect(parseWorldLoadReadyState(worldState, 42)).toEqual(worldState);
     // Stand einer anderen World-Instanz wird verworfen, nicht umgerechnet.

@@ -183,6 +183,7 @@ import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveCoopDefenseBases } from '../arena/BaseRegistry';
+import { toMapId } from '../world/arenaDescriptorAdapter';
 import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
@@ -2247,7 +2248,7 @@ export class ArenaScene extends Phaser.Scene {
     const persistentBaseTerrain = persistentMapConfig?.persistentBase
       ? persistentBases.find((base) => base.id === persistentMapConfig.persistentBase!.baseId)
       : undefined;
-    const persistentRadiusCells = bridge.getRoundState()?.persistentBaseRadiusCells
+    const persistentRadiusCells = bridge.getWorldDescriptor()?.parameters?.persistentBaseRadiusCells
       ?? getStoredCoopDefenseProgress().persistentBase.radiusCells;
     this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
       persistentBaseTerrain && this.ctx.currentLayout
@@ -3491,17 +3492,15 @@ export class ArenaScene extends Phaser.Scene {
 
   private getArenaLoadingScreenState(): ArenaLoadingScreenState {
     const participation = bridge.getRoundParticipation();
-    const descriptor = bridge.getArenaDescriptor();
     const spectatorIds = new Set(participation?.spectatorIds ?? []);
     const participantIds = new Set(participation?.participantIds ?? []);
+    // Die Ladeanzeige liest den World-Ladezustand; ohne aktive World gibt es keinen.
+    const worldRevision = participation?.roundRevision ?? bridge.getWorldDescriptor()?.worldRevision ?? 0;
     const players = bridge.getConnectedPlayers()
       .filter((profile) => participantIds.has(profile.id) && !spectatorIds.has(profile.id))
       .map((profile) => {
-        const state = bridge.getPlayerArenaLoadState(
-          profile.id,
-          participation?.roundRevision ?? descriptor?.roundRevision ?? 0,
-        ) ?? {
-          roundRevision: participation?.roundRevision ?? descriptor?.roundRevision ?? 0,
+        const state = bridge.getPlayerWorldLoadState(profile.id, worldRevision) ?? {
+          worldRevision,
           progress: 0,
           stage: 'generating' as const,
           ready: false,
@@ -3516,9 +3515,10 @@ export class ArenaScene extends Phaser.Scene {
         };
       });
     const modeLabel = getLocalizedGameModeLabel(bridge.getGameMode());
-    const mapLabel = descriptor?.mapId
-      ? getMapName(descriptor.mapId, getLocale())
-      : modeLabel;
+    // Der Kartenname gehoert zur World, nicht zur Runde: er kommt aus der WorldDefinition.
+    const worldDefinitionId = bridge.getWorldDescriptor()?.definitionId;
+    const mapId = worldDefinitionId ? toMapId(worldDefinitionId) : null;
+    const mapLabel = mapId ? getMapName(mapId, getLocale()) : modeLabel;
     return { mapLabel, modeLabel, players };
   }
 

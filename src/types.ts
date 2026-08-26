@@ -42,13 +42,6 @@ export interface ArenaDescriptor {
   layoutFingerprint: string;
 }
 
-/** Reliable, low-frequency per-player status of the local arena build. */
-export interface ArenaLoadReadyState {
-  roundRevision: number;
-  progress: number;
-  stage: ArenaLoadStage;
-  ready: boolean;
-}
 
 /** Host-autoritärer, replizierter Lebenszustand einer Runde mit authored Respawn-Budget. */
 export interface CoopDefenseRespawnBudgetPlayerState {
