@@ -158,8 +158,50 @@ export class PersistentBaseSession {
       placementOrder,
       ownerId: this.ownerId,
     };
-    this.runtimeBlueprints.set(runtimeRock.id, blueprint);
-    return { persistentId, placementOrder, origin: 'new' };
+    return this.registerAccepted(runtimeRock, blueprint, footprint);
+  }
+
+  registerAccepted(
+    runtimeRock: SyncedPlaceableRock,
+    blueprint: PersistentConstruction,
+    footprint: readonly { readonly dx: number; readonly dy: number }[],
+  ): PersistentRuntimeMetadata | null {
+    if (runtimeRock.expiresAt > 0
+      || !isPersistentFootprintInsideZone(
+        runtimeRock.gridX,
+        runtimeRock.gridY,
+        footprint,
+        this.anchor,
+        this.activeRadiusCells,
+      )
+      || this.baseline.constructions.some((entry) => entry.persistentId === blueprint.persistentId)
+      || [...this.runtimeBlueprints.values()].some((entry) => entry.persistentId === blueprint.persistentId)) {
+      return null;
+    }
+    const normalized = {
+      ...blueprint,
+      ownerId: blueprint.ownerId ?? this.ownerId,
+      tool: { ...blueprint.tool },
+    };
+    this.nextPlacementOrder = Math.max(this.nextPlacementOrder, normalized.placementOrder + 1);
+    this.runtimeBlueprints.set(runtimeRock.id, normalized);
+    return {
+      persistentId: normalized.persistentId,
+      placementOrder: normalized.placementOrder,
+      origin: 'new',
+    };
+  }
+
+  removeRuntimePlacement(runtimeId: number): boolean {
+    const blueprint = this.runtimeBlueprints.get(runtimeId);
+    if (!blueprint) return false;
+    this.runtimeBlueprints.delete(runtimeId);
+    this.detachedRuntimeIds.delete(runtimeId);
+    if (this.baselineRuntimeIds.get(blueprint.persistentId) === runtimeId) {
+      this.baselineRuntimeIds.delete(blueprint.persistentId);
+      this.removedBaselineIds.add(blueprint.persistentId);
+    }
+    return true;
   }
 
   getRuntimeMetadata(runtimeId: number): PersistentRuntimeMetadata | null {

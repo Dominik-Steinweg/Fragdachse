@@ -30,7 +30,7 @@ import type { ArenaDescriptor, ArenaLoadReadyState, ArenaLoadStage, BurrowPhase,
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import { sanitizePersistentPlayerBaseContribution, type PersistentPlayerBaseContribution } from '../persistentBase/PersistentBaseTypes';
-import type { PersistentBaseCompositeSnapshot } from '../persistentBase/PersistentBaseEditorState';
+import type { PersistentBaseCompositeSnapshot } from '../persistentBase/PersistentBaseCompositeService';
 import type { PersistentBaseRewardRuntimeState } from '../config/persistentBaseRewards';
 import type { StructureOccupancySnapshot } from '../systems/StructureOccupancySystem';
 import {
@@ -159,7 +159,7 @@ const KEY_ROOM_STATS   = 'rst';   // global reliable: kompakter, kumulierter Rau
 const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_PERSISTENT_BASE_CONTRIBUTION = 'pbc'; // per-player reliable V4 personal base contribution
-const KEY_PERSISTENT_BASE_EDITOR = 'pbe'; // global reliable shared editor submode
+const KEY_PERSISTENT_BASE_EDITOR_ACTIVE = 'pbea'; // per-player reliable peaceful-base presence
 const KEY_PERSISTENT_BASE_COMPOSITE = 'pbcx'; // global reliable host-resolved composite snapshot
 const KEY_STRUCTURE_OCCUPANCY = 'soc'; // global reliable occupancy snapshot
 const KEY_PERSISTENT_BASE_REWARDS = 'pbr'; // global reliable host reward availability
@@ -714,8 +714,8 @@ export class NetworkBridge {
   private persistentBaseMutationHandler: ((playerId: string, operation: PersistentBaseMutationOperation, request: PersistentBaseMutationRequest) => void) | null = null;
   private structureEnterHandler: ((playerId: string, request: StructureOccupancyRequest) => void) | null = null;
   private structureExitHandler: ((playerId: string, request: StructureOccupancyRequest) => void) | null = null;
-  private persistentBaseEditorOpenHandler: ((playerId: string) => void) | null = null;
-  private persistentBaseEditorCloseHandler: ((playerId: string) => void) | null = null;
+  private persistentBaseEditorEnterHandler: ((playerId: string) => void) | null = null;
+  private persistentBaseEditorLeaveHandler: ((playerId: string) => void) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
   private trainBurrowSparksHandler: TrainBurrowSparksHandler | null = null;
   private burrowVisualHandler: BurrowVisualHandler | null = null;
@@ -1379,7 +1379,7 @@ export class NetworkBridge {
   sendLocalInput(input: PlayerInput): void {
     // Spectatoren koennen auch bei manipuliertem Client keinen alten Bewegungs-State weiter an
     // den Host schreiben. Die separate Preview wird in sendLocalPlacementPreview() behandelt.
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
+    if (!this.canPlayerAct(this.getLocalPlayerId())) {
       input = {
         dx: 0,
         dy: 0,
@@ -1398,8 +1398,7 @@ export class NetworkBridge {
 
   /** Sendet den rein visuellen Placement-Presence-State über den ersetzbaren Kanal. */
   sendLocalPlacementPreview(preview: PlacementPreviewNetState | null): void {
-    let next = normalizePlacementPreview(preview);
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) next = null;
+    const next = normalizePlacementPreview(preview);
 
     const now = Date.now();
     const changed = !isSamePlacementPreview(next, this.lastSentPlacementPreview);
@@ -1436,6 +1435,7 @@ export class NetworkBridge {
 
   // ── Bereitschaftsstatus: pro Spieler ──────────────────────────────────────
   setLocalReady(ready: boolean): void {
+    if (ready && this.isLocalPersistentBaseEditorActive()) return;
     if (!ready) {
       myPlayer().setState(KEY_READY, false);
       myPlayer().setState(KEY_LOADOUT_COMMITTED, null, true);
@@ -1449,6 +1449,7 @@ export class NetworkBridge {
    * Die Reihenfolge ist bewusst: erst Snapshot, dann Ready-Flag.
    */
   setLocalReadyWithCommittedLoadout(snapshot: LoadoutCommitSnapshot): void {
+    if (this.isLocalPersistentBaseEditorActive()) return;
     myPlayer().setState(KEY_LOADOUT_COMMITTED, snapshot, true);
     myPlayer().setState(KEY_READY, true);
   }
@@ -1527,6 +1528,7 @@ export class NetworkBridge {
     const mode = this.getGameMode();
     const ids = [...this.connectedPlayers.keys()];
     if (ids.length < getMinPlayersForMode(mode)) return false;
+    if (ids.some((id) => this.isPlayerPersistentBaseEditorActive(id))) return false;
     const requiresCoopDefenseProfile = isCoopDefenseMode(mode);
     return ids.every((id) => (
       this.getPlayerReady(id)
@@ -1742,6 +1744,7 @@ export class NetworkBridge {
   }
 
   canPlayerAct(playerId: string): boolean {
+    if (this.getGamePhase() === 'LOBBY') return this.isPlayerPersistentBaseEditorActive(playerId);
     if (!this.canPlayerSpawnOrRespawn(playerId)) return false;
     return this.getCoopDefenseRespawnBudgetState()?.players[playerId]?.eliminated !== true;
   }
@@ -2155,6 +2158,12 @@ export class NetworkBridge {
       seed: raw.seed,
       arenaGeneratorVersion: raw.arenaGeneratorVersion,
       layoutFingerprint: raw.layoutFingerprint,
+      runtimeMode: raw.runtimeMode === 'persistent-base-editor' ? 'persistent-base-editor' : 'mission',
+      ...(raw.persistentBaseRadiusCells !== undefined
+        && Number.isSafeInteger(raw.persistentBaseRadiusCells)
+        && raw.persistentBaseRadiusCells > 0
+        ? { persistentBaseRadiusCells: raw.persistentBaseRadiusCells }
+        : {}),
     };
   }
 
@@ -3304,37 +3313,53 @@ export class NetworkBridge {
     });
   }
 
-  isPersistentBaseEditorOpen(): boolean {
-    return getState(KEY_PERSISTENT_BASE_EDITOR) === true;
+  isPlayerPersistentBaseEditorActive(playerId: string): boolean {
+    return this.playerStateMap.get(playerId)?.getState(KEY_PERSISTENT_BASE_EDITOR_ACTIVE) === true;
   }
 
-  hostSetPersistentBaseEditorOpen(open: boolean): void {
+  isLocalPersistentBaseEditorActive(): boolean {
+    return this.isPlayerPersistentBaseEditorActive(this.getLocalPlayerId());
+  }
+
+  getPersistentBaseEditorPlayerIds(): string[] {
+    return this.getConnectedPlayerIds().filter((playerId) => this.isPlayerPersistentBaseEditorActive(playerId));
+  }
+
+  hasPersistentBaseEditorParticipant(): boolean {
+    return this.getPersistentBaseEditorPlayerIds().length > 0;
+  }
+
+  hostSetPlayerPersistentBaseEditorActive(playerId: string, active: boolean): void {
     if (!isHost()) return;
-    setState(KEY_PERSISTENT_BASE_EDITOR, open === true, true);
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    state.setState(KEY_PERSISTENT_BASE_EDITOR_ACTIVE, active === true, true);
+    state.setState(KEY_READY, false, true);
+    state.setState(KEY_LOADOUT_COMMITTED, null, true);
   }
 
-  requestPersistentBaseEditorOpen(): void {
-    if (isHost()) this.persistentBaseEditorOpenHandler?.(myPlayer().id);
-    else this.sendHostRpc('pbe-open', {});
+  requestPersistentBaseEditorEnter(): void {
+    if (isHost()) this.persistentBaseEditorEnterHandler?.(myPlayer().id);
+    else this.sendHostRpc('pbe-enter', {});
   }
 
-  requestPersistentBaseEditorClose(): void {
-    if (isHost()) this.persistentBaseEditorCloseHandler?.(myPlayer().id);
-    else this.sendHostRpc('pbe-close', {});
+  requestPersistentBaseEditorLeave(): void {
+    if (isHost()) this.persistentBaseEditorLeaveHandler?.(myPlayer().id);
+    else this.sendHostRpc('pbe-leave', {});
   }
 
-  registerPersistentBaseEditorHandlers(
-    onOpen: (playerId: string) => void,
-    onClose: (playerId: string) => void,
+  registerPersistentBaseEditorPresenceHandlers(
+    onEnter: (playerId: string) => void,
+    onLeave: (playerId: string) => void,
   ): void {
-    this.persistentBaseEditorOpenHandler = onOpen;
-    this.persistentBaseEditorCloseHandler = onClose;
-    this.registerHostRpcHandler('pbe-open', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
-      if (isHost()) this.persistentBaseEditorOpenHandler?.(caller.id);
+    this.persistentBaseEditorEnterHandler = onEnter;
+    this.persistentBaseEditorLeaveHandler = onLeave;
+    this.registerHostRpcHandler('pbe-enter', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (isHost()) this.persistentBaseEditorEnterHandler?.(caller.id);
       return undefined;
     });
-    this.registerHostRpcHandler('pbe-close', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
-      if (isHost()) this.persistentBaseEditorCloseHandler?.(caller.id);
+    this.registerHostRpcHandler('pbe-leave', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (isHost()) this.persistentBaseEditorLeaveHandler?.(caller.id);
       return undefined;
     });
   }

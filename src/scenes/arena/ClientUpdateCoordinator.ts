@@ -134,7 +134,10 @@ export class ClientUpdateCoordinator {
 
   runClientUpdate(delta: number): void {
     const countdownActive = bridge.isArenaCountdownActive();
-    if (!bridge.isArenaStarted() && !countdownActive) {
+    const persistentBaseRuntime = bridge.getGamePhase() === 'LOBBY'
+      && bridge.isLocalPersistentBaseEditorActive()
+      && this.ctx.placementSystem !== null;
+    if (!bridge.isArenaStarted() && !countdownActive && !persistentBaseRuntime) {
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,

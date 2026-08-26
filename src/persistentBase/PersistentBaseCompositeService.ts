@@ -22,7 +22,8 @@ import {
 } from './PersistentBaseComposite';
 import { PersistentBaseRewardState } from './PersistentBaseRewardState';
 
-export interface PersistentBaseEditorOptions {
+/** The host-resolved persistent-base state shared by mission and peaceful runtime modes. */
+export interface PersistentBaseCompositeServiceOptions {
   readonly ownerId: string;
   readonly anchor: PersistentBaseAnchor;
   readonly radiusCells: number;
@@ -35,6 +36,13 @@ export interface PersistentBaseEditorOptions {
   readonly highestUnlockedMapId: string;
   readonly contributions?: readonly PersistentPlayerBaseContribution[];
   readonly rewardPlacements?: readonly PersistentBaseRewardPlacement[];
+  readonly rewardState?: PersistentBaseRewardState;
+}
+
+export interface PersistentBaseCompositeCheckpoint {
+  readonly contributions: readonly PersistentPlayerBaseContribution[];
+  readonly rewardPlacements: readonly PersistentBaseRewardPlacement[];
+  readonly revision: number;
 }
 
 export interface PersistentBaseCompositeSnapshot {
@@ -48,7 +56,7 @@ export interface PersistentBaseCompositeSnapshot {
   readonly rewards: readonly PersistentBaseRewardRuntimeState[];
 }
 
-export type PersistentBaseEditorMutation =
+export type PersistentBaseMutation =
   | {
     readonly operation: 'place';
     readonly ownerId: string;
@@ -59,13 +67,19 @@ export type PersistentBaseEditorMutation =
     readonly angle: number;
   }
   | {
-    readonly operation: 'remove' | 'reposition';
+    readonly operation: 'remove';
     readonly ownerId: string;
     readonly revision: number;
     readonly persistentId: string;
-    readonly relativeGridX?: number;
-    readonly relativeGridY?: number;
-    readonly angle?: number;
+  }
+  | {
+    readonly operation: 'reposition';
+    readonly ownerId: string;
+    readonly revision: number;
+    readonly persistentId: string;
+    readonly relativeGridX: number;
+    readonly relativeGridY: number;
+    readonly angle: number;
   }
   | {
     readonly operation: 'reward-place';
@@ -83,40 +97,45 @@ export type PersistentBaseEditorMutation =
     readonly rewardId: PersistentBaseRewardId;
   };
 
-export interface PersistentBaseEditorMutationResult {
+export type PersistentBaseMutationFailure =
+  | 'locked'
+  | 'stale-revision'
+  | 'not-owner'
+  | 'not-found'
+  | 'conflict'
+  | 'occupied'
+  | 'cooldown'
+  | 'host-only'
+  | 'invalid';
+
+export interface PersistentBaseMutationResult {
   readonly accepted: boolean;
-  readonly reason?:
-    | 'locked'
-    | 'stale-revision'
-    | 'not-owner'
-    | 'not-found'
-    | 'conflict'
-    | 'occupied'
-    | 'cooldown'
-    | 'host-only'
-    | 'invalid';
+  readonly reason?: PersistentBaseMutationFailure;
   readonly contribution?: PersistentPlayerBaseContribution;
   readonly snapshot: PersistentBaseCompositeSnapshot;
 }
 
 /**
- * Host-owned editor model. It uses the same composite merge and tool resolver as mission restore,
- * while keeping editor mutations immediately committed and completely independent from mission
- * rollback state.
+ * Single deterministic composite and mutation path for persistent-base blueprints.
+ *
+ * This service deliberately has no Phaser or UI dependency. Runtime adapters validate the
+ * same footprint against PlacementSystem before calling it and materialize the accepted result.
+ * It is therefore usable for transactional mission working state as well as immediately
+ * persisted peaceful-base changes.
  */
-export class PersistentBaseEditorState {
+export class PersistentBaseCompositeService {
   private readonly contributions = new Map<string, PersistentPlayerBaseContribution>();
   private readonly rewardState: PersistentBaseRewardState;
-  private readonly options: PersistentBaseEditorOptions;
+  private readonly options: PersistentBaseCompositeServiceOptions;
   private revision = 0;
 
-  constructor(options: PersistentBaseEditorOptions) {
+  constructor(options: PersistentBaseCompositeServiceOptions) {
     this.options = options;
     for (const contribution of options.contributions ?? []) {
       this.contributions.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
       this.revision = Math.max(this.revision, contribution.revision);
     }
-    this.rewardState = new PersistentBaseRewardState({ placements: options.rewardPlacements });
+    this.rewardState = options.rewardState ?? new PersistentBaseRewardState({ placements: options.rewardPlacements });
     this.revision = Math.max(this.revision, this.rewardState.getPlacements().length);
   }
 
@@ -135,15 +154,51 @@ export class PersistentBaseEditorState {
     return this.rewardState;
   }
 
+  getRevision(): number {
+    return this.revision;
+  }
+
+  /** Captures all mutable domain state so a runtime materialization can be rolled back atomically. */
+  createCheckpoint(): PersistentBaseCompositeCheckpoint {
+    return {
+      contributions: this.getContributions(),
+      rewardPlacements: this.rewardState.getPlacements(),
+      revision: this.revision,
+    };
+  }
+
+  restoreCheckpoint(checkpoint: PersistentBaseCompositeCheckpoint): void {
+    this.contributions.clear();
+    for (const contribution of checkpoint.contributions) {
+      this.contributions.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
+    }
+    const currentRewardIds = this.rewardState.getPlacements().map((placement) => placement.rewardId);
+    for (const rewardId of currentRewardIds) {
+      this.rewardState.unplace(rewardId, this.options.highestUnlockedMapId);
+    }
+    for (const placement of checkpoint.rewardPlacements) {
+      this.rewardState.place(placement.rewardId, placement, this.options.highestUnlockedMapId);
+    }
+    this.revision = checkpoint.revision;
+  }
+
+  /** Replaces a personal contribution after a reconnect or a host-side working-state update. */
+  setContribution(contribution: PersistentPlayerBaseContribution): void {
+    this.contributions.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
+    this.revision = Math.max(this.revision, contribution.revision);
+  }
+
   getComposite(): PersistentBaseCompositeMergeResult {
     const host = this.contributions.get(this.options.ownerId) ?? null;
-    const guests = [...this.contributions.values()].filter((entry) => entry.ownerId !== this.options.ownerId);
+    const guests = [...this.contributions.values()]
+      .filter((entry) => entry.ownerId !== this.options.ownerId);
     const rewardCandidates = this.rewardState.getPlacements()
       .filter((placement) => this.rewardState.getRuntimeState(
         placement.rewardId,
         this.options.highestUnlockedMapId,
       ).availability === 'placed')
       .map((placement) => this.rewardCandidate(placement));
+
     return mergePersistentBaseComposite({
       anchor: this.options.anchor,
       radiusCells: this.options.radiusCells,
@@ -179,7 +234,7 @@ export class PersistentBaseEditorState {
     return this.getComposite().conflictsByOwner.get(ownerId)?.map((conflict) => ({ ...conflict })) ?? [];
   }
 
-  apply(mutation: PersistentBaseEditorMutation): PersistentBaseEditorMutationResult {
+  apply(mutation: PersistentBaseMutation): PersistentBaseMutationResult {
     const before = this.getSnapshot();
     if (!mutation.ownerId || !Number.isSafeInteger(mutation.revision) || mutation.revision < 0) {
       return { accepted: false, reason: 'invalid', snapshot: before };
@@ -188,58 +243,21 @@ export class PersistentBaseEditorState {
       return { accepted: false, reason: 'host-only', snapshot: before };
     }
 
-    const contribution = this.contributions.get(mutation.ownerId)
-      ?? emptyContribution(mutation.ownerId);
+    const contribution = this.contributions.get(mutation.ownerId) ?? emptyContribution(mutation.ownerId);
     if (mutation.revision !== contribution.revision) {
       return { accepted: false, reason: 'stale-revision', snapshot: before };
     }
-
     if (mutation.operation === 'reward-place' || mutation.operation === 'reward-unplace') {
       return this.applyRewardMutation(mutation, before);
     }
-
     if (mutation.operation === 'reposition') {
       const rewardPlacement = this.rewardState.getPlacements()
         .find((placement) => placement.persistentId === mutation.persistentId);
-      if (rewardPlacement) {
-        if (mutation.ownerId !== this.options.ownerId) {
-          return { accepted: false, reason: 'not-owner', snapshot: before };
-        }
-        if (!Number.isSafeInteger(mutation.relativeGridX)
-          || !Number.isSafeInteger(mutation.relativeGridY)
-          || !Number.isFinite(mutation.angle)) {
-          return { accepted: false, reason: 'invalid', snapshot: before };
-        }
-        const relativeGridX = mutation.relativeGridX as number;
-        const relativeGridY = mutation.relativeGridY as number;
-        const angle = mutation.angle as number;
-        const nextPlacement: PersistentBaseRewardPlacement = {
-          ...rewardPlacement,
-          relativeGridX,
-          relativeGridY,
-          angle,
-        };
-        if (!this.rewardState.reposition(
-          rewardPlacement.rewardId,
-          nextPlacement,
-          this.options.highestUnlockedMapId,
-        )) return { accepted: false, reason: 'not-found', snapshot: before };
-        const after = this.getComposite();
-        const active = after.active.some((entry) => entry.blueprint.persistentId === mutation.persistentId);
-        if (!active) {
-          this.rewardState.reposition(
-            rewardPlacement.rewardId,
-            rewardPlacement,
-            this.options.highestUnlockedMapId,
-          );
-          return { accepted: false, reason: 'conflict', snapshot: before };
-        }
-        this.revision += 1;
-        return { accepted: true, snapshot: this.getSnapshot() };
-      }
+      if (rewardPlacement) return this.applyRewardReposition(mutation, rewardPlacement, before);
     }
 
-    const nextConstructions = contribution.constructions.map((entry) => ({ ...entry, tool: { ...entry.tool } }));
+    const nextConstructions = contribution.constructions
+      .map((entry) => ({ ...entry, tool: { ...entry.tool } }));
     if (mutation.operation === 'place') {
       const resolved = this.options.resolveTool(mutation.tool);
       if (!resolved
@@ -249,13 +267,16 @@ export class PersistentBaseEditorState {
         return { accepted: false, reason: 'invalid', snapshot: before };
       }
       const persistentId = this.createPersistentId(mutation.ownerId, nextConstructions);
-      const placementOrder = nextConstructions.reduce((max, entry) => Math.max(max, entry.placementOrder), -1) + 1;
+      const placementOrder = nextConstructions.reduce(
+        (max, entry) => Math.max(max, entry.placementOrder),
+        -1,
+      ) + 1;
       nextConstructions.push({
         persistentId,
         tool: { ...mutation.tool },
         relativeGridX: mutation.relativeGridX,
         relativeGridY: mutation.relativeGridY,
-        angle: Number.isFinite(mutation.angle) ? mutation.angle : 0,
+        angle: mutation.angle,
         placementOrder,
         ownerId: mutation.ownerId,
       });
@@ -274,9 +295,9 @@ export class PersistentBaseEditorState {
           || !Number.isFinite(mutation.angle)) {
           return { accepted: false, reason: 'invalid', snapshot: before };
         }
-        const relativeGridX = mutation.relativeGridX as number;
-        const relativeGridY = mutation.relativeGridY as number;
-        const angle = mutation.angle as number;
+        const relativeGridX = mutation.relativeGridX;
+        const relativeGridY = mutation.relativeGridY;
+        const angle = mutation.angle;
         nextConstructions[index] = {
           ...nextConstructions[index],
           relativeGridX,
@@ -296,7 +317,9 @@ export class PersistentBaseEditorState {
     const changedId = mutation.operation === 'place'
       ? nextConstructions[nextConstructions.length - 1]?.persistentId
       : mutation.persistentId;
-    const changedActive = changedId ? after.active.some((entry) => entry.blueprint.persistentId === changedId) : true;
+    const changedActive = changedId
+      ? after.active.some((entry) => entry.blueprint.persistentId === changedId)
+      : true;
     if (!changedActive && mutation.operation !== 'remove') {
       this.contributions.set(mutation.ownerId, contribution);
       return { accepted: false, reason: 'conflict', snapshot: before };
@@ -309,40 +332,93 @@ export class PersistentBaseEditorState {
     };
   }
 
-  private applyRewardMutation(
-    mutation: Extract<PersistentBaseEditorMutation, { operation: 'reward-place' | 'reward-unplace' }>,
+  private applyRewardReposition(
+    mutation: Extract<PersistentBaseMutation, { operation: 'reposition' }>,
+    rewardPlacement: PersistentBaseRewardPlacement,
     before: PersistentBaseCompositeSnapshot,
-  ): PersistentBaseEditorMutationResult {
-    const rewardId = mutation.rewardId;
-    const definition = getPersistentBaseRewardDefinition(rewardId);
+  ): PersistentBaseMutationResult {
+    if (mutation.ownerId !== this.options.ownerId
+      || !Number.isSafeInteger(mutation.relativeGridX)
+      || !Number.isSafeInteger(mutation.relativeGridY)
+      || !Number.isFinite(mutation.angle)) {
+      return {
+        accepted: false,
+        reason: mutation.ownerId === this.options.ownerId ? 'invalid' : 'not-owner',
+        snapshot: before,
+      };
+    }
+    const nextPlacement: PersistentBaseRewardPlacement = {
+      ...rewardPlacement,
+      relativeGridX: mutation.relativeGridX as number,
+      relativeGridY: mutation.relativeGridY as number,
+      angle: mutation.angle as number,
+    };
+    if (!this.rewardState.reposition(
+      rewardPlacement.rewardId,
+      nextPlacement,
+      this.options.highestUnlockedMapId,
+    )) return { accepted: false, reason: 'not-found', snapshot: before };
+    const active = this.getComposite().active.some(
+      (entry) => entry.blueprint.persistentId === mutation.persistentId,
+    );
+    if (!active) {
+      this.rewardState.reposition(
+        rewardPlacement.rewardId,
+        rewardPlacement,
+        this.options.highestUnlockedMapId,
+      );
+      return { accepted: false, reason: 'conflict', snapshot: before };
+    }
+    this.revision += 1;
+    return { accepted: true, snapshot: this.getSnapshot() };
+  }
+
+  private applyRewardMutation(
+    mutation: Extract<PersistentBaseMutation, { operation: 'reward-place' | 'reward-unplace' }>,
+    before: PersistentBaseCompositeSnapshot,
+  ): PersistentBaseMutationResult {
+    const definition = getPersistentBaseRewardDefinition(mutation.rewardId);
     if (!definition) return { accepted: false, reason: 'invalid', snapshot: before };
     if (mutation.operation === 'reward-unplace') {
-      if (!this.rewardState.unplace(rewardId, this.options.highestUnlockedMapId)) {
+      if (!this.rewardState.unplace(mutation.rewardId, this.options.highestUnlockedMapId)) {
         return { accepted: false, reason: 'not-found', snapshot: before };
       }
       this.revision += 1;
       return { accepted: true, snapshot: this.getSnapshot() };
     }
-    if (!Number.isSafeInteger(mutation.relativeGridX) || !Number.isSafeInteger(mutation.relativeGridY)
+    if (!Number.isSafeInteger(mutation.relativeGridX)
+      || !Number.isSafeInteger(mutation.relativeGridY)
       || !Number.isFinite(mutation.angle)) {
       return { accepted: false, reason: 'invalid', snapshot: before };
     }
     const placement: PersistentBaseRewardPlacement = {
-      rewardId,
-      persistentId: `reward-${rewardId}`,
+      rewardId: mutation.rewardId,
+      persistentId: `reward-${mutation.rewardId}`,
       relativeGridX: mutation.relativeGridX,
       relativeGridY: mutation.relativeGridY,
       angle: mutation.angle,
       placementOrder: this.nextRewardOrder(),
     };
-    if (!this.rewardState.place(rewardId, placement, this.options.highestUnlockedMapId)) {
-      const runtime = this.rewardState.getRuntimeState(rewardId, this.options.highestUnlockedMapId);
-      return { accepted: false, reason: runtime.availability === 'reconstruction-cooldown' ? 'cooldown' : 'locked', snapshot: before };
+    if (!this.rewardState.place(
+      mutation.rewardId,
+      placement,
+      this.options.highestUnlockedMapId,
+    )) {
+      const runtime = this.rewardState.getRuntimeState(
+        mutation.rewardId,
+        this.options.highestUnlockedMapId,
+      );
+      return {
+        accepted: false,
+        reason: runtime.availability === 'reconstruction-cooldown' ? 'cooldown' : 'locked',
+        snapshot: before,
+      };
     }
-    const after = this.getComposite();
-    const active = after.active.some((entry) => entry.blueprint.rewardId === rewardId);
+    const active = this.getComposite().active.some(
+      (entry) => entry.blueprint.rewardId === mutation.rewardId,
+    );
     if (!active) {
-      this.rewardState.unplace(rewardId, this.options.highestUnlockedMapId);
+      this.rewardState.unplace(mutation.rewardId, this.options.highestUnlockedMapId);
       return { accepted: false, reason: 'conflict', snapshot: before };
     }
     this.revision += 1;
@@ -373,13 +449,16 @@ export class PersistentBaseEditorState {
   }
 
   private nextRewardOrder(): number {
-    return this.rewardState.getPlacements().reduce((max, placement) => Math.max(max, placement.placementOrder), -1) + 1;
+    return this.rewardState.getPlacements()
+      .reduce((max, placement) => Math.max(max, placement.placementOrder), -1) + 1;
   }
 
   private createPersistentId(ownerId: string, constructions: readonly PersistentConstruction[]): string {
     let order = constructions.length;
     let persistentId = `pb-${ownerId}-${order}`;
-    while ([...this.contributions.values()].some((entry) => entry.constructions.some((item) => item.persistentId === persistentId))) {
+    while ([...this.contributions.values()].some((entry) => (
+      entry.constructions.some((item) => item.persistentId === persistentId)
+    ))) {
       order += 1;
       persistentId = `pb-${ownerId}-${order}`;
     }
@@ -392,7 +471,11 @@ function emptyContribution(ownerId: string): PersistentPlayerBaseContribution {
 }
 
 function cloneActiveEntry(entry: PersistentCompositeActiveEntry): PersistentCompositeActiveEntry {
-  return { ...entry, blueprint: { ...entry.blueprint, tool: { ...entry.blueprint.tool } }, footprint: entry.footprint.map((cell) => ({ ...cell })) };
+  return {
+    ...entry,
+    blueprint: { ...entry.blueprint, tool: { ...entry.blueprint.tool } },
+    footprint: entry.footprint.map((cell) => ({ ...cell })),
+  };
 }
 
 function compareOwnerIds(left: string, right: string): number {

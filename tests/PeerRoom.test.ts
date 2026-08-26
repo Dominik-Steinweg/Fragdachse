@@ -904,6 +904,41 @@ describe('arena loading barrier', () => {
   });
 });
 
+describe('NetworkBridge persistent-base editor presence', () => {
+  it('keeps editor presence per player and blocks ready while allowing editor actions', async () => {
+    try {
+      const network = new FakeNetwork();
+      const host = await createHostRoom(network);
+      await addClientRoom(network);
+      const bridge = new NetworkBridge();
+      setActiveSession({
+        room: host.room,
+        transport: host.transport as never,
+        roomCode: 'ABC123',
+      });
+      bridge.activate();
+
+      bridge.hostSetPlayerPersistentBaseEditorActive('p1', true);
+      expect(bridge.getPersistentBaseEditorPlayerIds()).toEqual(['p1']);
+      expect(bridge.canPlayerAct('p1')).toBe(true);
+      expect(bridge.areAllPlayersReady()).toBe(false);
+
+      bridge.hostSetPlayerPersistentBaseEditorActive('p0', true);
+      bridge.setLocalReady(true);
+      expect(bridge.getPlayerReady('p0')).toBe(false);
+      expect(bridge.canPlayerAct('p0')).toBe(true);
+
+      bridge.hostSetPlayerPersistentBaseEditorActive('p0', false);
+      bridge.hostSetPlayerPersistentBaseEditorActive('p1', false);
+      expect(bridge.getPersistentBaseEditorPlayerIds()).toEqual([]);
+      expect(bridge.canPlayerAct('p0')).toBe(false);
+      expect(bridge.canPlayerAct('p1')).toBe(false);
+    } finally {
+      clearActiveSession();
+    }
+  });
+});
+
 describe('NetworkBridge placement preview presence', () => {
   it('sends changes immediately, refreshes active previews, and expires remote state', async () => {
     vi.useFakeTimers();

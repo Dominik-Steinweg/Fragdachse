@@ -40,6 +40,10 @@ export interface ArenaDescriptor {
   seed: number;
   arenaGeneratorVersion: number;
   layoutFingerprint: string;
+  /** The normal arena infrastructure can also host a peaceful persistent-base runtime. */
+  runtimeMode?: 'mission' | 'persistent-base-editor';
+  /** Host-authoritative persistent-base radius for peaceful runtime construction and previews. */
+  persistentBaseRadiusCells?: number;
 }
 
 /** Reliable, low-frequency per-player status of the local arena build. */

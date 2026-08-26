@@ -208,11 +208,14 @@ export class HostUpdateCoordinator {
     // Loading is still inert. During the synchronized countdown we run this coordinator only to
     // publish/render presentation state; every authoritative system below keeps its own gameplay
     // gate via countdownActive.
-    const countdownActive = bridge.isArenaCountdownActive();
+    const persistentBaseRuntime = bridge.getGamePhase() === 'LOBBY'
+      && bridge.hasPersistentBaseEditorParticipant()
+      && this.ctx.placementSystem !== null;
+    const countdownActive = persistentBaseRuntime ? false : bridge.isArenaCountdownActive();
     const weaponBalanceLabActive = isWeaponBalanceLabMapId(
       bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
     );
-    if (!bridge.isArenaStarted() && !countdownActive) {
+    if (!bridge.isArenaStarted() && !countdownActive && !persistentBaseRuntime) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }

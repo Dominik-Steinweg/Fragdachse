@@ -130,6 +130,7 @@ import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../..
 import { ARENA_MAP_GRID_CHANGED_EVENT, emitArenaMapGridChanged, type ArenaMapGridChangedEvent } from './ArenaEvents';
 import {
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
+  COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS,
   COOP_DEFENSE_CONSTRUCTION_IDS,
   COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
@@ -148,7 +149,9 @@ import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
   getStoredHighestUnlockedCoopDefenseMapId,
   getStoredPersistentBaseOwnerId,
+  getStoredPersistentBaseContribution,
   getStoredPersistentBaseRewardPlacements,
+  getStoredPersistentBaseRadiusCells,
   getStoredPersistentBaseState,
   setStoredPersistentBaseContribution,
   setStoredPersistentBaseRewardPlacements,
@@ -165,6 +168,12 @@ import { getPersistentBaseAnchor, isPersistentFootprintInsideZone } from '../../
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 import { PersistentBaseRewardState } from '../../persistentBase/PersistentBaseRewardState';
 import {
+  PersistentBaseCompositeService,
+  type PersistentBaseCompositeCheckpoint,
+  type PersistentBaseCompositeSnapshot,
+  type PersistentBaseMutation,
+} from '../../persistentBase/PersistentBaseCompositeService';
+import {
   getPersistentBaseRewardDefinition,
   type PersistentBaseRewardId,
 } from '../../config/persistentBaseRewards';
@@ -179,6 +188,11 @@ import {
 } from '../../systems/StructureOccupancySystem';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
+
+type PersistentConstructionRemovalAcceptance = {
+  readonly accepted: boolean;
+  readonly checkpoint: PersistentBaseCompositeCheckpoint | null;
+};
 
 /**
  * Manages the arena round lifecycle.
@@ -236,6 +250,8 @@ export class ArenaLifecycleCoordinator {
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
   private persistentBaseRadiusCells = 0;
   private persistentBaseRewardState: PersistentBaseRewardState | null = null;
+  private persistentBaseCompositeService: PersistentBaseCompositeService | null = null;
+  private persistentBaseRuntimeMode: 'mission' | 'persistent-base-editor' | null = null;
   private readonly persistentBaseMutationRequests = new Map<string, Set<string>>();
   private readonly persistentRewardOccupancyIds = new Set<string>();
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
@@ -255,6 +271,326 @@ export class ArenaLifecycleCoordinator {
   // ── Public state accessors ────────────────────────────────────────────────
 
   isMatchTerminated(): boolean { return this.matchTerminated; }
+
+  isPersistentBaseRuntimeActive(): boolean {
+    return this.persistentBaseRuntimeMode === 'persistent-base-editor';
+  }
+
+  getPersistentBaseCompositeSnapshot(): PersistentBaseCompositeSnapshot | null {
+    return this.persistentBaseCompositeService?.getSnapshot() ?? bridge.getPersistentBaseCompositeSnapshot();
+  }
+
+  getPersistentBaseRadiusCells(): number {
+    return this.persistentBaseRadiusCells > 0
+      ? this.persistentBaseRadiusCells
+      : bridge.getPersistentBaseCompositeSnapshot()?.radiusCells
+        ?? bridge.getArenaDescriptor()?.persistentBaseRadiusCells
+        ?? getStoredPersistentBaseRadiusCells();
+  }
+
+  /** Host entry point; all connected editor participants share this one world/runtime. */
+  startPersistentBaseRuntime(): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'LOBBY'
+      || !bridge.hasPersistentBaseEditorParticipant()) return;
+    if (this.isPersistentBaseRuntimeActive()) {
+      this.syncPersistentBaseRuntimePlayers();
+      return;
+    }
+    const mapId = this.resolvePersistentBaseRuntimeMapId();
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    if (!mapConfig.persistentBase) return;
+    const editorMapConfig = this.createPersistentBaseEditorMapConfig(mapConfig);
+    const seed = Math.max(Date.now(), this.lastRoundRevision + 1);
+    const layout = ArenaGenerator.generate(seed, editorMapConfig);
+    const descriptor: ArenaDescriptor = {
+      roundRevision: seed,
+      gameMode: bridge.getGameMode(),
+      mapId: mapConfig.mapId,
+      seed,
+      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+      layoutFingerprint: ArenaGenerator.fingerprint(layout),
+      runtimeMode: 'persistent-base-editor',
+      persistentBaseRadiusCells: getStoredPersistentBaseRadiusCells(),
+    };
+    this.lastRoundRevision = seed;
+    this.preparedRoundLayout = { descriptor, layout };
+    bridge.publishArenaDescriptor(descriptor);
+    this.buildPersistentBaseRuntime(descriptor);
+  }
+
+  /** Called by the scene while LOBBY remains global and each player owns only their presence. */
+  syncPersistentBaseRuntime(): void {
+    if (bridge.getGamePhase() !== 'LOBBY') return;
+    const hasParticipants = bridge.hasPersistentBaseEditorParticipant();
+    if (!hasParticipants) {
+      this.stopPersistentBaseRuntimeIfUnused();
+      return;
+    }
+    const descriptor = bridge.getArenaDescriptor();
+    if (!descriptor || descriptor.runtimeMode !== 'persistent-base-editor') return;
+    if (!this.isPersistentBaseRuntimeActive() || this.lastRoundRevision !== descriptor.roundRevision) {
+      try {
+        this.buildPersistentBaseRuntime(descriptor);
+      } catch (error) {
+        console.error('[ArenaLifecycleCoordinator] Persistent-base runtime could not be built:', error);
+        this.stopPersistentBaseRuntimeIfUnused();
+        return;
+      }
+    }
+    this.syncPersistentBaseRuntimePlayers();
+  }
+
+  stopPersistentBaseRuntimeIfUnused(): void {
+    if (!this.isPersistentBaseRuntimeActive() || bridge.hasPersistentBaseEditorParticipant()) return;
+    this.arenaBuilt = false;
+    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+      if (bridge.isHost()) this.ctx.combatSystem.removePlayer(player.id);
+      this.ctx.hostPhysics.removePlayer(player.id);
+      this.ctx.playerManager.removePlayer(player.id);
+    }
+    this.hostUpdate.setActive(false);
+    this.tearDownArena();
+    this.persistentBaseRuntimeMode = null;
+    this.persistentBaseCompositeService = null;
+    this.persistentBaseRewardState = null;
+    this.persistentBaseAnchor = null;
+    this.persistentBaseRadiusCells = 0;
+    if (bridge.isHost()) {
+      bridge.setPersistentBaseCompositeSnapshot(null);
+      bridge.setPersistentBaseRewardRuntimeStates(null);
+    }
+  }
+
+  private resolvePersistentBaseRuntimeMapId(): string {
+    const selected = getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
+    return selected.persistentBase ? selected.mapId : '11';
+  }
+
+  private createPersistentBaseEditorMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConfig {
+    return {
+      ...mapConfig,
+      bases: mapConfig.bases.filter((base) => base.faction === 'friendly' && base.role === 'main'),
+      powerUps: [],
+      persistentSpawns: [],
+      encounters: undefined,
+      secondaryObjectives: undefined,
+      missionProgress: undefined,
+      boss: undefined,
+      mapEvents: [],
+      objective: 'survive',
+      surviveDurationSec: undefined,
+      respawnsPerPlayer: undefined,
+    };
+  }
+
+  private buildPersistentBaseRuntime(descriptor: ArenaDescriptor): void {
+    this.lastRoundRevision = descriptor.roundRevision;
+    applyArenaMetricsForMode(
+      descriptor.gameMode,
+      'LOBBY',
+      getCoopDefenseMapConfig(descriptor.mapId ?? this.resolvePersistentBaseRuntimeMapId()).arenaWidthCells,
+      getCoopDefenseMapConfig(descriptor.mapId ?? this.resolvePersistentBaseRuntimeMapId()).arenaHeightCells,
+    );
+    this.buildArena(descriptor);
+    this.arenaBuilt = true;
+    this.persistentBaseRuntimeMode = 'persistent-base-editor';
+    this.localArenaLoadReady = true;
+    this.terrainSnapshotReady = true;
+    // The peaceful mode still uses the normal host tick to replicate players and placeables;
+    // its content-free map/configuration is what disables mission simulation.
+    this.hostUpdate.setActive(true);
+    this.syncPersistentBaseRuntimePlayers();
+    if (bridge.isHost()) {
+      bridge.setPersistentBaseCompositeSnapshot(this.getPersistentBaseCompositeSnapshot());
+    }
+  }
+
+  private syncPersistentBaseRuntimePlayers(): void {
+    if (!this.isPersistentBaseRuntimeActive() || !this.ctx.currentLayout) return;
+    const activeIds = new Set(bridge.getPersistentBaseEditorPlayerIds());
+    const connectedIds = new Set(bridge.getConnectedPlayerIds());
+    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+      if (!activeIds.has(player.id)) {
+        if (bridge.isHost()) {
+          this.ctx.combatSystem.removePlayer(player.id);
+          this.ctx.resourceSystem?.removePlayer(player.id);
+          this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(player.id);
+          this.ctx.burrowSystem?.removePlayer(player.id);
+          this.ctx.loadoutManager?.removePlayer(player.id);
+        }
+        this.ctx.hostPhysics.removePlayer(player.id);
+        this.ctx.playerManager.removePlayer(player.id);
+      }
+    }
+    for (const runtime of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+      if (runtime.persistentRewardId || connectedIds.has(runtime.ownerId)) continue;
+      const removed = this.ctx.placementSystem?.removeRock(runtime.id);
+      if (!removed) continue;
+      this.rockVisualHelper.removePlaceableRockVisual(removed, false);
+      this.emitPersistentRestoreRemoved(removed);
+    }
+    for (const profile of bridge.getConnectedPlayers()) {
+      if (!activeIds.has(profile.id) || this.ctx.playerManager.hasPlayer(profile.id)) continue;
+      this.ctx.playerManager.addPlayer(profile);
+      const player = this.ctx.playerManager.getPlayer(profile.id);
+      if (!player) continue;
+      if (bridge.isHost()) {
+        this.ctx.combatSystem.initPlayer(profile.id);
+        this.ctx.resourceSystem?.initPlayer(profile.id);
+        this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
+        this.ctx.burrowSystem?.initPlayer(profile.id);
+        this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
+      }
+      this.ensureAllyFlowField(profile.id);
+      const anchor = this.persistentBaseAnchor;
+      if (anchor && this.ctx.placementSystem) {
+        const point = this.ctx.placementSystem.getWorldPointForCell(anchor.gridX, anchor.gridY);
+        player.sprite.setPosition(point.x, point.y);
+      }
+    }
+    this.syncPersistentBaseRuntimeContributions(connectedIds);
+    if (activeIds.has(bridge.getLocalPlayerId())) {
+      this.localPlayerState.alive = true;
+      this.localPlayerState.spectator = false;
+    } else {
+      this.localPlayerState.alive = false;
+      this.localPlayerState.spectator = false;
+      this.localPlayerState.burrowed = false;
+    }
+  }
+
+  private syncPersistentBaseRuntimeContributions(connectedIds: ReadonlySet<string>): void {
+    const service = this.persistentBaseCompositeService;
+    if (!bridge.isHost() || !service) return;
+    for (const playerId of connectedIds) {
+      const contribution = bridge.getPlayerPersistentBaseContribution(playerId);
+      if (!contribution) continue;
+      const existing = service.getContribution(contribution.ownerId);
+      if (!existing || contribution.revision >= existing.revision) service.setContribution(contribution);
+    }
+
+    const snapshot = service.getSnapshot();
+    const activeById = new Map(snapshot.active.map((entry) => [entry.blueprint.persistentId, entry]));
+    for (const runtime of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+      if (runtime.persistentRewardId || !runtime.persistentId) continue;
+      if (!activeById.has(runtime.persistentId) || !connectedIds.has(runtime.ownerId)) {
+        const removed = this.ctx.placementSystem?.removeRock(runtime.id);
+        if (removed) {
+          this.rockVisualHelper.removePlaceableRockVisual(removed, false);
+          this.emitPersistentRestoreRemoved(removed);
+        }
+      }
+    }
+    for (const entry of snapshot.active) {
+      const ownerId = entry.ownerId === getStoredPersistentBaseOwnerId()
+        ? bridge.getHostPlayerId()
+        : bridge.getConnectedPlayerIds().find((playerId) => (
+          bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId === entry.ownerId
+        ));
+      if (!ownerId || !connectedIds.has(ownerId)) continue;
+      const existing = this.ctx.placementSystem?.getAllRuntimeRocks()
+        .find((runtime) => runtime.persistentId === entry.blueprint.persistentId);
+      if (existing) {
+        if (existing.gridX === entry.gridX && existing.gridY === entry.gridY
+          && existing.angle === entry.blueprint.angle) continue;
+        const footprint = this.getPersistentRuntimeFootprint(existing);
+        if (footprint) {
+          const previous = { ...existing };
+          const moved = this.ctx.placementSystem?.repositionRuntimeRock(
+            existing.id,
+            entry.gridX,
+            entry.gridY,
+            footprint,
+            entry.blueprint.angle,
+          );
+          if (moved) {
+            this.rockVisualHelper.removePlaceableRockVisual(previous, false);
+            this.rockVisualHelper.materializePlaceableRock(moved, false);
+            this.emitPersistentRestoreRemoved(previous);
+            this.emitPersistentRestoreAdded(moved);
+          }
+        }
+        continue;
+      }
+      if (entry.blueprint.rewardId) {
+        const definition = getPersistentBaseRewardDefinition(entry.blueprint.rewardId);
+        if (!definition) continue;
+        const runtime = this.ctx.placementSystem?.materializePersistentReward(
+          definition,
+          entry.gridX,
+          entry.gridY,
+          entry.blueprint.angle,
+          bridge.getHostPlayerId(),
+          bridge.getPlayerColor(ownerId) ?? PLAYER_COLORS[0],
+          entry.blueprint.persistentId,
+        );
+        if (runtime) {
+          this.rockVisualHelper.materializePlaceableRock(runtime, false);
+          this.registerPersistentRewardOccupancy(runtime);
+          this.emitPersistentRestoreAdded(runtime);
+        }
+        continue;
+      }
+      const tool = this.buildPersistentCompositeRestoreTool(entry.blueprint.tool);
+      if (!tool) continue;
+      const runtime = this.materializePersistentRestoreCandidate(
+        { blueprint: entry.blueprint, tool, gridX: entry.gridX, gridY: entry.gridY },
+        ownerId,
+        bridge.getPlayerColor(ownerId) ?? PLAYER_COLORS[0],
+        ownerId === bridge.getHostPlayerId() ? 'host-persistent' : 'guest-session',
+      );
+      if (runtime) this.emitPersistentRestoreAdded(runtime);
+    }
+    bridge.setPersistentBaseCompositeSnapshot(snapshot);
+  }
+
+  private createPersistentBaseCompositeService(
+    editorRuntime: boolean,
+    anchorBase: BaseSpec,
+  ): void {
+    if (!bridge.isHost() || !this.persistentBaseAnchor || !this.persistentBaseRewardState) return;
+
+    const localContribution = editorRuntime
+      ? getStoredPersistentBaseContribution()
+      : this.persistentBaseSession?.getPersonalContribution() ?? getStoredPersistentBaseContribution();
+    const contributions = new Map<string, import('../../persistentBase/PersistentBaseTypes').PersistentPlayerBaseContribution>();
+    contributions.set(localContribution.ownerId, localContribution);
+
+    if (editorRuntime) {
+      for (const playerId of bridge.getConnectedPlayerIds()) {
+        const contribution = bridge.getPlayerPersistentBaseContribution(playerId);
+        if (contribution) contributions.set(contribution.ownerId, contribution);
+      }
+    } else {
+      for (const entry of this.persistentBaseRoomState.getWorkingPersonalContributionsByPlayer()) {
+        contributions.set(entry.contribution.ownerId, entry.contribution);
+      }
+    }
+
+    const capacityMaxByOwner = new Map<string, number>();
+    for (const contribution of contributions.values()) {
+      const playerId = bridge.getConnectedPlayerIds().find((candidate) => (
+        bridge.getPlayerPersistentBaseContribution(candidate)?.ownerId === contribution.ownerId
+      )) ?? (contribution.ownerId === localContribution.ownerId ? bridge.getLocalPlayerId() : undefined);
+      capacityMaxByOwner.set(
+        contribution.ownerId,
+        playerId ? this.getConstructionCapacity(playerId) : COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS,
+      );
+    }
+
+    this.persistentBaseCompositeService = new PersistentBaseCompositeService({
+      ownerId: getStoredPersistentBaseOwnerId(),
+      anchor: this.persistentBaseAnchor,
+      radiusCells: this.persistentBaseRadiusCells,
+      highestUnlockedMapId: getStoredHighestUnlockedCoopDefenseMapId(),
+      contributions: [...contributions.values()],
+      rewardState: this.persistentBaseRewardState,
+      capacityMaxByOwner,
+      authoredCells: new Set(anchorBase.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
+      resolveTool: (tool) => this.resolvePersistentTool(tool),
+    });
+    this.persistentBaseRewardState = this.persistentBaseCompositeService.getRewardState();
+  }
 
   setRuntimeDiagnosticEventSink(sink: RuntimeDiagnosticEventSink | null): void {
     this.runtimeDiagnosticEventSink = sink;
@@ -279,70 +615,14 @@ export class ArenaLifecycleCoordinator {
     seen.add(request.requestId);
     this.persistentBaseMutationRequests.set(playerId, seen);
 
-    if (operation === 'reposition' || operation === 'remove') {
-      this.handleMissionPersistentConstructionMutation(playerId, operation, request);
-      return;
+    const editorRuntime = bridge.getGamePhase() === 'LOBBY'
+      && bridge.isPlayerPersistentBaseEditorActive(playerId);
+    const missionRuntime = bridge.getGamePhase() === 'ARENA'
+      && isCoopDefenseMode(bridge.getGameMode())
+      && this.persistentBaseAnchor !== null;
+    if ((editorRuntime || missionRuntime) && this.persistentBaseCompositeService) {
+      this.handlePersistentBaseRuntimeMutation(playerId, operation, request, editorRuntime);
     }
-    if (operation !== 'reward-place' && operation !== 'reward-unplace') return;
-    if (bridge.getGamePhase() !== 'ARENA' || !this.persistentBaseRewardState || !this.persistentBaseAnchor) return;
-    if (!this.ctx.placementSystem) return;
-
-    const rewardId = request.rewardId as PersistentBaseRewardId | undefined;
-    if (!rewardId) return;
-    const definition = rewardId ? getPersistentBaseRewardDefinition(rewardId) : null;
-    if (!definition) return;
-    const highestUnlockedMapId = getStoredHighestUnlockedCoopDefenseMapId();
-    const placement = this.persistentBaseRewardState.getPlacement(rewardId);
-    if (operation === 'reward-unplace') {
-      if (playerId !== bridge.getHostPlayerId() || !placement) return;
-      const runtime = this.findPersistentRewardRuntime(placement.persistentId);
-      if (!runtime || !this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
-      if (runtime && !this.ctx.structureOccupancySystem?.canMoveStructure(runtime.persistentId ?? '')) return;
-      if (!this.persistentBaseRewardState.unplace(rewardId, highestUnlockedMapId)) return;
-      if (runtime) this.removePersistentRewardRuntime(runtime);
-      this.publishPersistentBaseRewards();
-      return;
-    }
-    if (placement || request.relativeGridX === undefined || request.relativeGridY === undefined
-      || !Number.isSafeInteger(request.relativeGridX)
-      || !Number.isSafeInteger(request.relativeGridY)) return;
-    if (this.persistentBaseRewardState.getRuntimeState(rewardId, highestUnlockedMapId).availability !== 'available') return;
-    const gridX = this.persistentBaseAnchor.gridX + request.relativeGridX;
-    const gridY = this.persistentBaseAnchor.gridY + request.relativeGridY;
-    if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)) return;
-    if (!this.ctx.placementSystem.canMaterializeCells(definition.footprint, gridX, gridY)) return;
-    const runtime = this.ctx.placementSystem.materializePersistentReward(
-      definition,
-      gridX,
-      gridY,
-      request.angle ?? 0,
-      bridge.getHostPlayerId(),
-      bridge.getPlayerColor(bridge.getHostPlayerId()) ?? PLAYER_COLORS[0],
-      `reward-${rewardId}`,
-    );
-    if (!runtime) return;
-    const accepted = this.persistentBaseRewardState.place(rewardId, {
-      rewardId,
-      persistentId: runtime.persistentId ?? `reward-${rewardId}`,
-      relativeGridX: request.relativeGridX,
-      relativeGridY: request.relativeGridY,
-      angle: request.angle ?? 0,
-      placementOrder: this.nextPersistentRewardPlacementOrder(),
-    }, highestUnlockedMapId);
-    if (!accepted) {
-      this.ctx.placementSystem.removeRock(runtime.id);
-      return;
-    }
-    this.rockVisualHelper.materializePlaceableRock(runtime, true);
-    this.registerPersistentRewardOccupancy(runtime);
-    this.publishPersistentBaseRewards();
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'placeable_added',
-      source: runtime.kind === 'pedestal' ? 'placeable_pedestal' : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
-      obstacleId: runtime.id,
-      gridX: runtime.gridX,
-      gridY: runtime.gridY,
-    });
   }
 
   handleStructureEnterRequest(playerId: string, request: StructureOccupancyRequest): void {
@@ -972,6 +1252,12 @@ export class ArenaLifecycleCoordinator {
   }
 
   getActiveConstructionToolsForPlayer(playerId: string): readonly LoadoutToolRef[] {
+    if (bridge.getGamePhase() === 'LOBBY' && bridge.isPlayerPersistentBaseEditorActive(playerId)) {
+      // The peaceful editor deliberately has no ready/loadout snapshot. The host campaign is the
+      // authority for editor access, so a guest's missing local progress must not hide tools or
+      // block the canonical editor contribution.
+      return COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => ({ kind: 'construction', id }));
+    }
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     return getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed));
   }
@@ -1095,7 +1381,9 @@ export class ArenaLifecycleCoordinator {
     }
 
     const prepared = this.preparedRoundLayout;
+    const persistentBaseEditorRuntime = descriptor.runtimeMode === 'persistent-base-editor';
     this.tearDownArena();
+    this.persistentBaseRuntimeMode = persistentBaseEditorRuntime ? 'persistent-base-editor' : 'mission';
 
     // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
@@ -1105,13 +1393,16 @@ export class ArenaLifecycleCoordinator {
     // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
     // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
     const roundState = bridge.getRoundState();
-    const coopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
+    const authoredCoopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
       ? getCoopDefenseMapConfig(descriptor.mapId ?? roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : null;
+    const coopDefenseMapConfig = persistentBaseEditorRuntime && authoredCoopDefenseMapConfig
+      ? this.createPersistentBaseEditorMapConfig(authoredCoopDefenseMapConfig)
+      : authoredCoopDefenseMapConfig;
     const coopDefenseHumanPlayerCount = isCoopDefenseMode(descriptor.gameMode)
       ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
-    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
+    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode) && !persistentBaseEditorRuntime
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
     const coopDefenseBases = coopDefenseMapConfig
@@ -1163,7 +1454,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseObjectivePlacementRewardSystem = null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
     if (bridge.isHost()) {
-      if (coopDefenseMapConfig && objectiveUsesRespawnBudget(coopDefenseMapConfig.objective)) {
+      if (!persistentBaseEditorRuntime
+        && coopDefenseMapConfig
+        && objectiveUsesRespawnBudget(coopDefenseMapConfig.objective)) {
         const respawnsPerPlayer = coopDefenseMapConfig.respawnsPerPlayer;
         if (respawnsPerPlayer === undefined) {
           throw new Error(`[ArenaLifecycleCoordinator] Map ${coopDefenseMapConfig.mapId} has no respawnsPerPlayer`);
@@ -1187,8 +1480,12 @@ export class ArenaLifecycleCoordinator {
     const persistentBaseAnchorBase = coopDefenseMapConfig?.persistentBase
       ? coopDefenseBases.find((base) => base.id === coopDefenseMapConfig.persistentBase!.baseId)
       : undefined;
-    const persistentBaseGravelRadius = roundState?.persistentBaseRadiusCells
-      ?? getStoredPersistentBaseState().radiusCells;
+    const persistentBaseGravelRadius = persistentBaseEditorRuntime
+      ? descriptor.persistentBaseRadiusCells
+        ?? bridge.getPersistentBaseCompositeSnapshot()?.radiusCells
+        ?? getStoredPersistentBaseRadiusCells()
+      : roundState?.persistentBaseRadiusCells
+        ?? getStoredPersistentBaseState().radiusCells;
     this.ctx.arenaResult = builder.buildDynamic(layout, {
       enablePersistentBaseGravel: Boolean(coopDefenseMapConfig?.persistentBase),
       persistentBaseGravel: persistentBaseAnchorBase
@@ -1210,14 +1507,17 @@ export class ArenaLifecycleCoordinator {
       coopDefenseBases,
     );
     this.ctx.persistentBaseSession = null;
-    if (bridge.isHost() && coopDefenseMapConfig?.persistentBase) {
+    this.persistentBaseCompositeService = null;
+    if (coopDefenseMapConfig?.persistentBase) {
       const anchorBase = persistentBaseAnchorBase;
       if (!anchorBase || anchorBase.faction !== 'friendly' || anchorBase.role !== 'main') {
         throw new Error(
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on map ${coopDefenseMapConfig.mapId}`,
         );
       }
-      if (!this.persistentBaseSession) {
+      this.persistentBaseAnchor = getPersistentBaseAnchor(anchorBase);
+      this.persistentBaseRadiusCells = persistentBaseGravelRadius;
+      if (bridge.isHost() && !persistentBaseEditorRuntime && !this.persistentBaseSession) {
         const repository = new PersistentBaseRepository();
         const committedState = repository.load();
         this.persistentBaseSession = new PersistentBaseSession(
@@ -1230,21 +1530,26 @@ export class ArenaLifecycleCoordinator {
           committedState,
         );
       }
-      this.persistentBaseSession.rebindArena(
-        getPersistentBaseAnchor(anchorBase),
-        persistentBaseGravelRadius,
-      );
-      this.ctx.persistentBaseSession = this.persistentBaseSession;
-      this.persistentBaseAnchor = getPersistentBaseAnchor(anchorBase);
-      this.persistentBaseRadiusCells = this.persistentBaseSession.radiusCells;
-      if (!this.persistentBaseRewardState) {
+      if (bridge.isHost() && this.persistentBaseSession) {
+        this.persistentBaseSession.rebindArena(
+          getPersistentBaseAnchor(anchorBase),
+          persistentBaseGravelRadius,
+        );
+        this.ctx.persistentBaseSession = this.persistentBaseSession;
+      }
+      if (bridge.isHost() && persistentBaseEditorRuntime && !this.persistentBaseRewardState) {
+        this.persistentBaseRewardState = new PersistentBaseRewardState({
+          placements: getStoredPersistentBaseRewardPlacements(),
+          nowMs: Date.now(),
+        });
+      } else if (bridge.isHost() && !this.persistentBaseRewardState) {
         this.persistentBaseRewardState = new PersistentBaseRewardState({
           placements: getStoredPersistentBaseRewardPlacements(),
           nowMs: Date.now(),
         });
         this.persistentBaseRewardState.beginMission();
       }
-      this.persistentBaseRoomState.hydratePersonalContributions(
+      if (bridge.isHost() && !persistentBaseEditorRuntime) this.persistentBaseRoomState.hydratePersonalContributions(
         bridge.getConnectedPlayerIds()
           .filter((playerId) => playerId !== bridge.getLocalPlayerId())
           .map((playerId) => ({
@@ -1253,8 +1558,13 @@ export class ArenaLifecycleCoordinator {
           }))
           .filter((entry): entry is { playerId: string; contribution: import('../../persistentBase/PersistentBaseTypes').PersistentPlayerBaseContribution } => entry.contribution !== null),
       );
-      this.persistentBaseRoomState.beginMission();
-      this.publishPersistentBaseRewards();
+      if (bridge.isHost() && !persistentBaseEditorRuntime) this.persistentBaseRoomState.beginMission();
+      if (bridge.isHost()) this.createPersistentBaseCompositeService(persistentBaseEditorRuntime, anchorBase);
+      if (bridge.isHost()) this.publishPersistentBaseRewards();
+      if (!bridge.isHost() && persistentBaseEditorRuntime) {
+        const snapshot = bridge.getPersistentBaseCompositeSnapshot();
+        if (snapshot) this.restorePersistentBaseComposite(snapshot, anchorBase);
+      }
     } else {
       this.persistentBaseAnchor = null;
       this.persistentBaseRadiusCells = 0;
@@ -1336,6 +1646,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
       && this.ctx.baseManager
       && isCoopDefenseMode(bridge.getGameMode())
+      && !persistentBaseEditorRuntime
       && coopDefenseMapConfig
       ? new CoopDefenseRoundStateSystem({
         baseManager: this.ctx.baseManager,
@@ -3637,6 +3948,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTrainHitCallback(null);
     this.ctx.centerHUD.hideTrainWidget();
     this.clientUpdate.clientUtilityOverride = null;
+    this.persistentBaseRuntimeMode = null;
   }
 
   private restorePersistentBase(
@@ -3649,6 +3961,17 @@ export class ArenaLifecycleCoordinator {
     const anchorBase = bases.find((base) => base.id === mapConfig.persistentBase!.baseId);
     const hostId = bridge.getLocalPlayerId();
     if (!anchorBase) return;
+
+    // The shared composite service also gates mission mutations, but mission restoration must
+    // still register runtime IDs in the transaction session/room state. Only the peaceful mode,
+    // which has no mission session, uses the composite restore adapter here.
+    if (this.persistentBaseCompositeService && !session) {
+      this.restorePersistentBaseComposite(
+        this.persistentBaseCompositeService.getSnapshot(),
+        anchorBase,
+      );
+      return;
+    }
 
     if (bridge.isHost() && this.persistentBaseRewardState) {
       for (const placement of this.persistentBaseRewardState.getPlacements()) {
@@ -3762,129 +4085,536 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  private handleMissionPersistentConstructionMutation(
-    playerId: string,
-    operation: 'remove' | 'reposition',
-    request: PersistentBaseMutationRequest,
+  private restorePersistentBaseComposite(
+    snapshot: PersistentBaseCompositeSnapshot,
+    anchorBase: BaseSpec,
   ): void {
-    if (bridge.getGamePhase() !== 'ARENA' || !this.ctx.placementSystem || !this.persistentBaseAnchor) return;
-    if (!request.persistentId) return;
-    const runtime = this.ctx.placementSystem.getAllRuntimeRocks()
-      .find((candidate) => candidate.persistentId === request.persistentId);
-    if (!runtime) return;
-    const contributionOwnerId = bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId;
-    const ownsRuntime = runtime.ownerId === playerId
-      || (contributionOwnerId !== undefined && runtime.ownerId === contributionOwnerId);
-    if (!this.ctx.structureOccupancySystem?.canMoveStructure(request.persistentId)) return;
+    if (!this.ctx.placementSystem) return;
+    const hostId = bridge.getLocalPlayerId();
+    for (const entry of snapshot.active) {
+      const ownerId = entry.ownerId === getStoredPersistentBaseOwnerId()
+        ? hostId
+        : bridge.getConnectedPlayerIds().find((playerId) => (
+          bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId === entry.ownerId
+        )) ?? hostId;
+      const ownerColor = bridge.getPlayerColor(ownerId) ?? PLAYER_COLORS[0];
+      if (entry.blueprint.rewardId) {
+        const definition = getPersistentBaseRewardDefinition(entry.blueprint.rewardId);
+        if (!definition) continue;
+        const runtime = this.ctx.placementSystem.materializePersistentReward(
+          definition,
+          entry.gridX,
+          entry.gridY,
+          entry.blueprint.angle,
+          hostId,
+          ownerColor,
+          entry.blueprint.persistentId,
+        );
+        if (!runtime) continue;
+        this.rockVisualHelper.materializePlaceableRock(runtime, false);
+        this.registerPersistentRewardOccupancy(runtime);
+        this.emitPersistentRestoreAdded(runtime);
+        continue;
+      }
+      const tool = this.buildPersistentCompositeRestoreTool(entry.blueprint.tool);
+      if (!tool) continue;
+      const runtime = this.materializePersistentRestoreCandidate(
+        { blueprint: entry.blueprint, tool, gridX: entry.gridX, gridY: entry.gridY },
+        ownerId,
+        ownerColor,
+        ownerId === hostId ? 'host-persistent' : 'guest-session',
+      );
+      if (runtime) this.emitPersistentRestoreAdded(runtime);
+    }
+    if (bridge.isHost()) {
+      bridge.setPersistentBaseCompositeSnapshot(snapshot);
+      this.publishPersistentBaseRewards();
+    }
+  }
 
-    const footprint = this.getPersistentRuntimeFootprint(runtime);
-    if (!footprint) return;
-    if (operation === 'remove') {
-      if (runtime.persistentRewardId) {
-        if (playerId !== bridge.getHostPlayerId() || !this.persistentBaseRewardState) return;
+  private handlePersistentBaseRuntimeMutation(
+    playerId: string,
+    operation: PersistentBaseMutationOperation,
+    request: PersistentBaseMutationRequest,
+    editorRuntime: boolean,
+  ): void {
+    const service = this.persistentBaseCompositeService;
+    const placementSystem = this.ctx.placementSystem;
+    const anchor = this.persistentBaseAnchor;
+    if (!service || !placementSystem || !anchor
+      || (!editorRuntime && bridge.getGamePhase() !== 'ARENA')
+      || (editorRuntime && !this.isPersistentBaseRuntimeActive())) return;
+
+    const ownerId = this.getPersistentBaseMutationOwnerId(playerId);
+    const revision = editorRuntime
+      ? request.revision
+      : service.getContribution(ownerId)?.revision ?? request.revision;
+    const angle = request.angle ?? 0;
+    let mutation: PersistentBaseMutation | null = null;
+
+    if (operation === 'place' && request.toolRef
+      && Number.isSafeInteger(request.relativeGridX)
+      && Number.isSafeInteger(request.relativeGridY)
+      && Number.isFinite(angle)) {
+      const resolved = this.resolvePersistentTool(request.toolRef);
+      if (!resolved) return;
+      const relativeGridX = request.relativeGridX as number;
+      const relativeGridY = request.relativeGridY as number;
+      const gridX = anchor.gridX + relativeGridX;
+      const gridY = anchor.gridY + relativeGridY;
+      if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)
+        || !isPersistentFootprintInsideZone(gridX, gridY, resolved.footprint, anchor, this.persistentBaseRadiusCells)
+        || !placementSystem.canMaterializeCells(resolved.footprint, gridX, gridY)) return;
+      mutation = {
+        operation,
+        ownerId,
+        revision,
+        tool: request.toolRef,
+        relativeGridX,
+        relativeGridY,
+        angle,
+      };
+    } else if ((operation === 'remove' || operation === 'reposition') && request.persistentId) {
+      const runtime = placementSystem.getAllRuntimeRocks()
+        .find((candidate) => candidate.persistentId === request.persistentId);
+      if (!runtime || !this.canPersistentRuntimeOwnerMutate(playerId, runtime)) return;
+      if (!this.ctx.structureOccupancySystem?.canMoveStructure(request.persistentId)) return;
+      if (operation === 'remove') {
         if (!this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
-        const rewardId = runtime.persistentRewardId;
-        if (!this.persistentBaseRewardState.unplace(rewardId, getStoredHighestUnlockedCoopDefenseMapId())) return;
-        this.removePersistentRewardRuntime(runtime);
-        this.publishPersistentBaseRewards();
+        if (runtime.persistentRewardId) {
+          mutation = {
+            operation: 'reward-unplace',
+            ownerId,
+            revision,
+            rewardId: runtime.persistentRewardId,
+          };
+        } else {
+          mutation = { operation, ownerId, revision, persistentId: request.persistentId };
+        }
+      } else if (Number.isSafeInteger(request.relativeGridX)
+        && Number.isSafeInteger(request.relativeGridY)
+        && Number.isFinite(angle)) {
+        const footprint = this.getPersistentRuntimeFootprint(runtime);
+        if (!footprint) return;
+        const relativeGridX = request.relativeGridX as number;
+        const relativeGridY = request.relativeGridY as number;
+        const gridX = anchor.gridX + relativeGridX;
+        const gridY = anchor.gridY + relativeGridY;
+        if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)
+          || !isPersistentFootprintInsideZone(gridX, gridY, footprint, anchor, this.persistentBaseRadiusCells)
+          || !placementSystem.canRepositionCells(runtime.id, gridX, gridY, footprint)) return;
+        mutation = {
+          operation,
+          ownerId,
+          revision,
+          persistentId: request.persistentId,
+          relativeGridX,
+          relativeGridY,
+          angle,
+        };
+      }
+    } else if (operation === 'reward-place' && request.rewardId
+      && Number.isSafeInteger(request.relativeGridX)
+      && Number.isSafeInteger(request.relativeGridY)) {
+      const rewardId = request.rewardId as PersistentBaseRewardId;
+      const definition = getPersistentBaseRewardDefinition(rewardId);
+      if (!definition || service.getRewardState().getPlacement(rewardId)) return;
+      const relativeGridX = request.relativeGridX as number;
+      const relativeGridY = request.relativeGridY as number;
+      const gridX = anchor.gridX + relativeGridX;
+      const gridY = anchor.gridY + relativeGridY;
+      if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)
+        || !isPersistentFootprintInsideZone(gridX, gridY, definition.footprint, anchor, this.persistentBaseRadiusCells)
+        || !placementSystem.canMaterializeCells(definition.footprint, gridX, gridY)) return;
+      mutation = {
+        operation,
+        ownerId,
+        revision,
+        rewardId,
+        relativeGridX,
+        relativeGridY,
+        angle,
+      };
+    } else if (operation === 'reward-unplace' && request.rewardId) {
+      if (playerId !== bridge.getHostPlayerId()) return;
+      const placement = service.getRewardState().getPlacement(request.rewardId as PersistentBaseRewardId);
+      const runtime = placement
+        ? placementSystem.getAllRuntimeRocks().find((candidate) => candidate.persistentId === placement.persistentId)
+        : undefined;
+      if (!placement || !runtime || !this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
+      mutation = {
+        operation,
+        ownerId,
+        revision,
+        rewardId: request.rewardId as PersistentBaseRewardId,
+      };
+    }
+    if (!mutation) return;
+
+    const checkpoint = service.createCheckpoint();
+    const result = service.apply(mutation);
+    if (!result.accepted) return;
+
+    if (mutation.operation === 'place' && result.contribution) {
+      const blueprint = result.contribution.constructions[result.contribution.constructions.length - 1];
+      const active = blueprint
+        ? result.snapshot.active.find((entry) => entry.blueprint.persistentId === blueprint.persistentId)
+        : undefined;
+      const tool = blueprint ? this.buildPersistentCompositeRestoreTool(blueprint.tool) : null;
+      if (!active || !tool) {
+        service.restoreCheckpoint(checkpoint);
         return;
       }
-      if (!ownsRuntime) return;
-      if (!this.isPersistentBaseMutationInRange(playerId, runtime.gridX, runtime.gridY)) return;
-      const removed = this.ctx.placementSystem.removeRock(runtime.id);
-      if (!removed) return;
-      this.finalizeDismantledConstruction(removed, false);
-      emitArenaMapGridChanged(this.scene.game.events, {
-        reason: 'placeable_removed',
-        source: removed.kind === 'rock' ? 'placeable_rock' : removed.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
-        obstacleId: removed.id,
-        gridX: removed.gridX,
-        gridY: removed.gridY,
-      });
+      const runtime = this.materializePersistentRestoreCandidate(
+        { blueprint: active.blueprint, tool, gridX: active.gridX, gridY: active.gridY },
+        playerId,
+        bridge.getPlayerColor(playerId) ?? PLAYER_COLORS[0],
+        playerId === bridge.getHostPlayerId() ? 'host-persistent' : 'guest-session',
+      );
+      if (!runtime || !this.registerAcceptedPersistentRuntime(
+        runtime,
+        active.blueprint,
+        playerId,
+        ownerId,
+      )) {
+        if (runtime) {
+          if (runtime.kind === 'pedestal') this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtime.id);
+          placementSystem.removeRock(runtime.id);
+          this.rockVisualHelper.removePlaceableRockVisual(runtime, false);
+        }
+        service.restoreCheckpoint(checkpoint);
+        return;
+      }
+      this.emitPersistentRestoreAdded(runtime);
+    } else if (mutation.operation === 'reward-place') {
+      const rewardMutation = mutation;
+      const placement = service.getRewardState().getPlacement(rewardMutation.rewardId);
+      const definition = placement ? getPersistentBaseRewardDefinition(placement.rewardId) : null;
+      if (placement && definition) {
+        const runtime = placementSystem.materializePersistentReward(
+          definition,
+          anchor.gridX + placement.relativeGridX,
+          anchor.gridY + placement.relativeGridY,
+          placement.angle,
+          bridge.getHostPlayerId(),
+          bridge.getPlayerColor(bridge.getHostPlayerId()) ?? PLAYER_COLORS[0],
+          placement.persistentId,
+        );
+        if (runtime) {
+          this.rockVisualHelper.materializePlaceableRock(runtime, false);
+          this.registerPersistentRewardOccupancy(runtime);
+          this.emitPersistentRestoreAdded(runtime);
+        } else {
+          service.restoreCheckpoint(checkpoint);
+          return;
+        }
+      } else {
+        service.restoreCheckpoint(checkpoint);
+        return;
+      }
+    } else if (mutation.operation === 'remove' || mutation.operation === 'reposition' || mutation.operation === 'reward-unplace') {
+      const rewardMutation = mutation.operation === 'reward-unplace'
+        ? mutation as Extract<PersistentBaseMutation, { operation: 'reward-unplace' }>
+        : null;
+      const repositionMutation = mutation.operation === 'reposition'
+        ? mutation as Extract<PersistentBaseMutation, { operation: 'reposition' }>
+        : null;
+      const runtime = request.persistentId
+        ? placementSystem.getAllRuntimeRocks().find((candidate) => candidate.persistentId === request.persistentId)
+        : rewardMutation
+          ? placementSystem.getAllRuntimeRocks().find((candidate) => candidate.persistentRewardId === rewardMutation.rewardId)
+          : undefined;
+      if (runtime && (mutation.operation === 'remove' || mutation.operation === 'reward-unplace')) {
+        if (runtime.persistentRewardId) {
+          if (!this.removePersistentRewardRuntime(runtime)) {
+            service.restoreCheckpoint(checkpoint);
+            return;
+          }
+        } else {
+          const removed = placementSystem.removeRock(runtime.id);
+          if (removed) {
+            this.removeAcceptedPersistentRuntime(removed, playerId);
+            this.finalizeDismantledConstruction(removed, false);
+            this.emitPersistentRestoreRemoved(removed);
+          } else {
+            service.restoreCheckpoint(checkpoint);
+            return;
+          }
+        }
+      } else if (runtime && mutation.operation === 'reposition') {
+        const previous = { ...runtime };
+        const footprint = this.getPersistentRuntimeFootprint(runtime);
+        if (footprint && repositionMutation) {
+          const moved = placementSystem.repositionRuntimeRock(
+            runtime.id,
+            anchor.gridX + repositionMutation.relativeGridX,
+            anchor.gridY + repositionMutation.relativeGridY,
+            footprint,
+            repositionMutation.angle ?? 0,
+          );
+          if (moved) {
+            if (!this.updateAcceptedPersistentRuntime(moved, playerId)) {
+              const restored = placementSystem.repositionRuntimeRock(
+                moved.id,
+                previous.gridX,
+                previous.gridY,
+                footprint,
+                previous.angle,
+              );
+              if (restored) {
+                this.rockVisualHelper.removePlaceableRockVisual(moved, false);
+                this.rockVisualHelper.materializePlaceableRock(restored, false);
+              }
+              service.restoreCheckpoint(checkpoint);
+              return;
+            }
+            this.rockVisualHelper.removePlaceableRockVisual(previous, false);
+            this.rockVisualHelper.materializePlaceableRock(moved, false);
+            this.emitPersistentRestoreRemoved(previous);
+            this.emitPersistentRestoreAdded(moved);
+          } else {
+            service.restoreCheckpoint(checkpoint);
+            return;
+          }
+        } else {
+          service.restoreCheckpoint(checkpoint);
+          return;
+        }
+      } else {
+        service.restoreCheckpoint(checkpoint);
+        return;
+      }
+    }
+
+    // Persist only after the runtime adapter has accepted/materialized the mutation. A failed
+    // materialization restores the service checkpoint and must not leave a half-committed
+    // contribution in local storage or in the reliable per-player snapshot.
+    if (result.contribution && editorRuntime) {
+      if (ownerId === getStoredPersistentBaseOwnerId()) {
+        setStoredPersistentBaseContribution(result.contribution);
+        bridge.setLocalPersistentBaseContribution(result.contribution);
+      } else {
+        bridge.hostSetPlayerPersistentBaseContribution(playerId, result.contribution);
+      }
+    }
+    if (editorRuntime && (
+      mutation.operation === 'reward-place'
+      || mutation.operation === 'reward-unplace'
+      || (mutation.operation === 'reposition'
+        && service.getRewardState().getPlacements().some((placement) => (
+          placement.persistentId === mutation.persistentId
+        )))
+    )) {
+      setStoredPersistentBaseRewardPlacements(service.getRewardState().getPlacements());
+    }
+    bridge.setPersistentBaseCompositeSnapshot(result.snapshot);
+    this.publishPersistentBaseRewards();
+  }
+
+  private getPersistentBaseMutationOwnerId(playerId: string): string {
+    return playerId === bridge.getLocalPlayerId()
+      ? getStoredPersistentBaseOwnerId()
+      : bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId ?? playerId;
+  }
+
+  private registerAcceptedPersistentRuntime(
+    runtime: SyncedPlaceableRock,
+    blueprint: import('../../persistentBase/PersistentBaseTypes').PersistentConstruction,
+    playerId: string,
+    ownerId: string,
+  ): boolean {
+    const footprint = this.getPersistentRuntimeFootprint(runtime);
+    const anchor = this.persistentBaseAnchor;
+    if (!footprint || !anchor) return false;
+    if (this.isPersistentBaseRuntimeActive()) return true;
+    if (runtime.ownership === 'guest-session') {
+      return this.persistentBaseRoomState.registerAccepted(
+        runtime,
+        blueprint,
+        playerId,
+        ownerId,
+        footprint,
+        anchor,
+        this.persistentBaseRadiusCells,
+      ) !== null;
+    }
+    return this.persistentBaseSession?.registerAccepted(runtime, blueprint, footprint) !== null;
+  }
+
+  private isSharedPersistentBaseRuntime(): boolean {
+    return this.persistentBaseCompositeService !== null
+      && this.persistentBaseAnchor !== null
+      && ((bridge.getGamePhase() === 'ARENA' && isCoopDefenseMode(bridge.getGameMode()))
+        || (bridge.getGamePhase() === 'LOBBY' && this.isPersistentBaseRuntimeActive()));
+  }
+
+  private acceptPersistentConstructionPlacement(
+    playerId: string,
+    runtime: SyncedPlaceableRock,
+    constructionId: ConstructionId,
+  ): boolean {
+    const service = this.persistentBaseCompositeService;
+    const anchor = this.persistentBaseAnchor;
+    if (!service || !anchor) return false;
+    const checkpoint = service.createCheckpoint();
+    const ownerId = this.getPersistentBaseMutationOwnerId(playerId);
+    const contribution = service.getContribution(ownerId);
+    const result = service.apply({
+      operation: 'place',
+      ownerId,
+      revision: contribution?.revision ?? 0,
+      tool: { kind: 'construction', id: constructionId },
+      relativeGridX: runtime.gridX - anchor.gridX,
+      relativeGridY: runtime.gridY - anchor.gridY,
+      angle: Number.isFinite(runtime.angle) ? runtime.angle : 0,
+    });
+    if (!result.accepted || !result.contribution) return false;
+    const blueprint = result.contribution.constructions[result.contribution.constructions.length - 1];
+    const active = blueprint
+      ? result.snapshot.active.find((entry) => entry.blueprint.persistentId === blueprint.persistentId)
+      : undefined;
+    if (!blueprint || !active || !this.ctx.placementSystem?.setPersistentId(runtime.id, blueprint.persistentId)) {
+      service.restoreCheckpoint(checkpoint);
+      return false;
+    }
+    if (!this.registerAcceptedPersistentRuntime(runtime, active.blueprint, playerId, ownerId)) {
+      this.ctx.placementSystem?.removeRock(runtime.id);
+      service.restoreCheckpoint(checkpoint);
+      return false;
+    }
+    if (bridge.getGamePhase() === 'LOBBY') {
+      if (ownerId === getStoredPersistentBaseOwnerId()) {
+        setStoredPersistentBaseContribution(result.contribution);
+        bridge.setLocalPersistentBaseContribution(result.contribution);
+      } else {
+        bridge.hostSetPlayerPersistentBaseContribution(playerId, result.contribution);
+      }
+    }
+    bridge.setPersistentBaseCompositeSnapshot(result.snapshot);
+    this.publishPersistentBaseRewards();
+    return true;
+  }
+
+  private acceptPersistentConstructionRemoval(
+    playerId: string,
+    runtime: SyncedPlaceableRock,
+  ): PersistentConstructionRemovalAcceptance {
+    if (!this.isSharedPersistentBaseRuntime()) return { accepted: true, checkpoint: null };
+    const service = this.persistentBaseCompositeService;
+    if (!service || !runtime.persistentId) return { accepted: false, checkpoint: null };
+    const ownerId = this.getPersistentBaseMutationOwnerId(playerId);
+    const contribution = service.getContribution(ownerId);
+    const checkpoint = service.createCheckpoint();
+    const mutation: PersistentBaseMutation = runtime.persistentRewardId
+      ? {
+        operation: 'reward-unplace',
+        ownerId,
+        revision: contribution?.revision ?? 0,
+        rewardId: runtime.persistentRewardId,
+      }
+      : {
+        operation: 'remove',
+        ownerId,
+        revision: contribution?.revision ?? 0,
+        persistentId: runtime.persistentId,
+      };
+    const result = service.apply(mutation);
+    return result.accepted
+      ? { accepted: true, checkpoint }
+      : { accepted: false, checkpoint: null };
+  }
+
+  private publishPersistentBaseMutationState(): void {
+    const service = this.persistentBaseCompositeService;
+    if (!service) return;
+    if (bridge.getGamePhase() === 'LOBBY') {
+      setStoredPersistentBaseRewardPlacements(service.getRewardState().getPlacements());
+    }
+    bridge.setPersistentBaseCompositeSnapshot(service.getSnapshot());
+    this.publishPersistentBaseRewards();
+  }
+
+  private removeAcceptedPersistentRuntime(runtime: SyncedPlaceableRock, playerId: string): void {
+    if (runtime.ownership === 'guest-session') {
+      this.persistentBaseRoomState.removeRuntimePlacement(runtime.id);
       return;
     }
-
-    if (request.relativeGridX === undefined || request.relativeGridY === undefined
-      || !Number.isSafeInteger(request.relativeGridX)
-      || !Number.isSafeInteger(request.relativeGridY)
-      || request.angle === undefined
-      || !Number.isFinite(request.angle)) return;
-    const angle = request.angle;
-    const gridX = this.persistentBaseAnchor.gridX + request.relativeGridX;
-    const gridY = this.persistentBaseAnchor.gridY + request.relativeGridY;
-    if (!this.isPersistentBaseMutationInRange(playerId, gridX, gridY)) return;
-    if (!isPersistentFootprintInsideZone(
-      gridX,
-      gridY,
-      footprint,
-      this.persistentBaseAnchor,
-      this.persistentBaseRadiusCells,
-    )) return;
-    if (runtime.persistentRewardId && playerId !== bridge.getHostPlayerId()) return;
-    if (!runtime.persistentRewardId && !ownsRuntime) return;
-    const previous = { ...runtime };
-    const moved = this.ctx.placementSystem.repositionRuntimeRock(
-      runtime.id,
-      gridX,
-      gridY,
-      footprint,
-      angle,
-    );
-    if (!moved) return;
-    // Rebuild the physics proxy as well as the visual. This preserves the runtime ID and all
-    // metadata while ensuring a 2x2 or rotated object cannot leave a stale collision body behind.
-    this.rockVisualHelper.removePlaceableRockVisual(previous, false);
-    this.rockVisualHelper.materializePlaceableRock(moved, false);
-    if (runtime.persistentRewardId) {
-      const placement = this.persistentBaseRewardState?.getPlacement(runtime.persistentRewardId);
-      if (!placement || !this.persistentBaseRewardState?.reposition(
-        runtime.persistentRewardId,
-        {
-          ...placement,
-          relativeGridX: request.relativeGridX,
-          relativeGridY: request.relativeGridY,
-          angle,
-        },
-        getStoredHighestUnlockedCoopDefenseMapId(),
-      )) {
-        // The runtime move was already validated against the same target. Restore the exact
-        // source if the persistent state unexpectedly rejects it.
-        this.ctx.placementSystem.repositionRuntimeRock(runtime.id, previous.gridX, previous.gridY, footprint, previous.angle);
-        this.rockVisualHelper.removePlaceableRockVisual(moved, false);
-        this.rockVisualHelper.materializePlaceableRock(previous, false);
-        return;
-      }
-    } else if (runtime.ownership === 'guest-session') {
-      this.persistentBaseRoomState.updateRuntimePlacement(
-        runtime.id,
-        gridX,
-        gridY,
-        angle,
-        this.persistentBaseAnchor,
-      );
-    } else {
-      this.persistentBaseSession?.updateRuntimePlacement(runtime.id, gridX, gridY, angle);
+    this.persistentBaseSession?.removeRuntimePlacement(runtime.id);
+    if (playerId !== bridge.getHostPlayerId()) {
+      this.persistentBaseRoomState.removeRuntimePlacement(runtime.id);
     }
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'placeable_removed',
-      source: previous.kind === 'rock' ? 'placeable_rock' : previous.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
-      obstacleId: previous.id,
-      gridX: previous.gridX,
-      gridY: previous.gridY,
-    });
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'placeable_added',
-      source: moved.kind === 'rock' ? 'placeable_rock' : moved.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
-      obstacleId: moved.id,
-      gridX: moved.gridX,
-      gridY: moved.gridY,
-    });
+  }
+
+  private updateAcceptedPersistentRuntime(runtime: SyncedPlaceableRock, playerId: string): boolean {
+    const anchor = this.persistentBaseAnchor;
+    if (!anchor) return false;
+    if (this.isPersistentBaseRuntimeActive()) return true;
+    if (runtime.ownership === 'guest-session') {
+      return this.persistentBaseRoomState.updateRuntimePlacement(
+        runtime.id,
+        runtime.gridX,
+        runtime.gridY,
+        runtime.angle,
+        anchor,
+      );
+    }
+    if (!this.persistentBaseSession?.updateRuntimePlacement(
+      runtime.id,
+      runtime.gridX,
+      runtime.gridY,
+      runtime.angle,
+    )) return false;
+    if (playerId !== bridge.getHostPlayerId()) {
+      if (!this.persistentBaseRoomState.updateRuntimePlacement(
+        runtime.id,
+        runtime.gridX,
+        runtime.gridY,
+        runtime.angle,
+        anchor,
+      )) return false;
+    }
+    return true;
+  }
+
+  private canPersistentRuntimeOwnerMutate(playerId: string, runtime: SyncedPlaceableRock): boolean {
+    if (runtime.persistentRewardId) return playerId === bridge.getHostPlayerId();
+    if (runtime.ownerId === playerId) return true;
+    return runtime.ownerId === bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId;
+  }
+
+  private buildPersistentCompositeRestoreTool(tool: PersistentToolRef): PersistentRestoreToolDefinition | null {
+    const resolved = this.resolvePersistentTool(tool);
+    if (!resolved) return null;
+    let maxHp = 1;
+    if (tool.kind === 'construction') {
+      try {
+        maxHp = getCoopDefenseConstructionDefinition(tool.id as ConstructionId).maxHp;
+      } catch {
+        return null;
+      }
+    } else {
+      const config = getUtilityConfigForMode(tool.id, bridge.getGameMode());
+      if (!config || !('placeable' in config)) return null;
+      maxHp = config.placeable.maxHp;
+    }
+    return {
+      kind: tool.kind,
+      id: tool.id,
+      footprint: resolved.footprint,
+      capacityCost: resolved.capacityCost ?? 0,
+      maxHp,
+      unlocked: true,
+      active: true,
+    };
   }
 
   private isPersistentBaseMutationInRange(playerId: string, gridX: number, gridY: number): boolean {
     const player = this.ctx.playerManager.getPlayer(playerId);
     const placementSystem = this.ctx.placementSystem;
-    if (!player || !placementSystem || !player.sprite.active || !this.ctx.combatSystem.isAlive(playerId)) return false;
+    const peacefulRuntime = bridge.getGamePhase() === 'LOBBY'
+      && bridge.isPlayerPersistentBaseEditorActive(playerId);
+    if (!player || !placementSystem || !player.sprite.active
+      || (!peacefulRuntime && !this.ctx.combatSystem.isAlive(playerId))) return false;
     const target = placementSystem.getWorldPointForCell(gridX, gridY);
     return Math.hypot(player.sprite.x - target.x, player.sprite.y - target.y) <= COOP_DEFENSE_DISMANTLE_RANGE;
   }
@@ -3911,13 +4641,14 @@ export class ArenaLifecycleCoordinator {
       .find((runtime) => runtime.persistentId === persistentId && runtime.persistentRewardId !== undefined) ?? null;
   }
 
-  private removePersistentRewardRuntime(runtime: SyncedPlaceableRock): void {
+  private removePersistentRewardRuntime(runtime: SyncedPlaceableRock): boolean {
+    const removed = this.ctx.placementSystem?.removeRock(runtime.id);
+    if (!removed) return false;
     if (runtime.persistentId) {
       this.ctx.structureOccupancySystem?.unregisterStructure(runtime.persistentId);
       this.persistentRewardOccupancyIds.delete(runtime.persistentId);
     }
     if (runtime.persistentId) this.ctx.powerUpSystem?.unregisterPersistentPedestal(runtime.persistentId);
-    this.ctx.placementSystem?.removeRock(runtime.id);
     this.rockVisualHelper.removePlaceableRockVisual(runtime, false);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_removed',
@@ -3926,6 +4657,7 @@ export class ArenaLifecycleCoordinator {
       gridX: runtime.gridX,
       gridY: runtime.gridY,
     });
+    return true;
   }
 
   private handlePersistentRewardDestroyed(runtime: SyncedPlaceableRock): void {
@@ -3938,11 +4670,6 @@ export class ArenaLifecycleCoordinator {
       Date.now(),
     );
     if (changed) this.publishPersistentBaseRewards();
-  }
-
-  private nextPersistentRewardPlacementOrder(): number {
-    return (this.persistentBaseRewardState?.getPlacements() ?? [])
-      .reduce((max, placement) => Math.max(max, placement.placementOrder), -1) + 1;
   }
 
   private publishPersistentBaseRewards(): void {
@@ -3985,6 +4712,18 @@ export class ArenaLifecycleCoordinator {
   private emitPersistentRestoreAdded(runtime: SyncedPlaceableRock): void {
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',
+      source: runtime.kind === 'pedestal'
+        ? 'placeable_pedestal'
+        : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      obstacleId: runtime.id,
+      gridX: runtime.gridX,
+      gridY: runtime.gridY,
+    });
+  }
+
+  private emitPersistentRestoreRemoved(runtime: SyncedPlaceableRock): void {
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_removed',
       source: runtime.kind === 'pedestal'
         ? 'placeable_pedestal'
         : runtime.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
@@ -4078,6 +4817,7 @@ export class ArenaLifecycleCoordinator {
           ownerId,
           ownerColor,
           ownership,
+          candidate.blueprint.persistentId,
         );
         if (!runtime) return null;
         this.rockVisualHelper.materializePlaceableRock(runtime, false);
@@ -4097,6 +4837,7 @@ export class ArenaLifecycleCoordinator {
         ownerId,
         ownerColor,
         ownership,
+        candidate.blueprint.persistentId,
       );
       if (!runtime) return null;
       if (definition.kind === 'pedestal') {
@@ -4142,6 +4883,26 @@ export class ArenaLifecycleCoordinator {
       return;
     }
     this.ctx.persistentBaseSession?.registerNew(runtime, normalizedTool, footprint);
+  }
+
+  private resolvePersistentTool(tool: PersistentToolRef): {
+    readonly footprint: readonly { readonly dx: number; readonly dy: number }[];
+    readonly capacityCost?: number;
+  } | null {
+    if (tool.kind === 'construction') {
+      try {
+        const definition = getCoopDefenseConstructionDefinition(tool.id as ConstructionId);
+        return { footprint: definition.footprint, capacityCost: definition.capacityCost };
+      } catch {
+        return null;
+      }
+    }
+    const config = getUtilityConfigForMode(tool.id, bridge.getGameMode());
+    if (!config || !('placeable' in config)) return null;
+    return {
+      footprint: config.placeable.footprint,
+      capacityCost: getToolCapacityCost({ kind: 'utility', id: tool.id }),
+    };
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
@@ -4632,11 +5393,19 @@ export class ArenaLifecycleCoordinator {
     const constructionId = getConstructionIdForUtility(cfg.id);
     if (constructionId) {
       const committed = bridge.getPlayerCommittedLoadout(playerId);
-      const access = resolveConstructionAccess(
-        constructionId,
-        getConstructionAccessContext(bridge.getGameMode(), committed),
-      );
-      if (!access.allowed || !this.hasFreeConstructionCapacity(playerId, access.definition?.capacityCost ?? 0)) return false;
+      const editorRuntime = bridge.getGamePhase() === 'LOBBY'
+        && bridge.isPlayerPersistentBaseEditorActive(playerId);
+      if (!editorRuntime) {
+        const access = resolveConstructionAccess(
+          constructionId,
+          getConstructionAccessContext(bridge.getGameMode(), committed),
+        );
+        if (!access.allowed) return false;
+      }
+      if (!this.hasFreeConstructionCapacity(
+        playerId,
+        getCoopDefenseConstructionDefinition(constructionId).capacityCost,
+      )) return false;
     }
     const rock = this.ctx.placementSystem?.tryPlaceRock(
       cfg,
@@ -4650,12 +5419,20 @@ export class ArenaLifecycleCoordinator {
       constructionId ? this.getConstructionOwnership(playerId) : undefined,
     );
     if (!rock) return false;
+    const sharedPersistentBase = constructionId !== null && this.isSharedPersistentBaseRuntime();
+    if (sharedPersistentBase && !this.acceptPersistentConstructionPlacement(playerId, rock, constructionId)) {
+      this.ctx.placementSystem?.removeRock(rock.id);
+      this.rockVisualHelper.removePlaceableRockVisual(rock, false);
+      return false;
+    }
     this.rockVisualHelper.materializePlaceableRock(rock, true);
-    this.registerNewPersistentPlaceable(
-      rock,
-      constructionId ? { kind: 'construction', id: constructionId } : { kind: 'utility', id: cfg.id },
-      cfg.placeable.footprint,
-    );
+    if (!sharedPersistentBase) {
+      this.registerNewPersistentPlaceable(
+        rock,
+        constructionId ? { kind: 'construction', id: constructionId } : { kind: 'utility', id: cfg.id },
+        cfg.placeable.footprint,
+      );
+    }
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',
       source: rock.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
@@ -4675,12 +5452,16 @@ export class ArenaLifecycleCoordinator {
     const canonicalConstructionId = normalizeConstructionId(constructionId);
     if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
     constructionId = canonicalConstructionId;
+    const editorRuntime = bridge.getGamePhase() === 'LOBBY'
+      && bridge.isPlayerPersistentBaseEditorActive(playerId);
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    const access = resolveConstructionAccess(
-      constructionId,
-      getConstructionAccessContext(bridge.getGameMode(), committed),
-    );
-    if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
+    if (!editorRuntime) {
+      const access = resolveConstructionAccess(
+        constructionId,
+        getConstructionAccessContext(bridge.getGameMode(), committed),
+      );
+      if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
+    }
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
@@ -4745,17 +5526,33 @@ export class ArenaLifecycleCoordinator {
       }
     }
 
+    const sharedPersistentBase = this.isSharedPersistentBaseRuntime();
+    if (sharedPersistentBase && !this.acceptPersistentConstructionPlacement(
+      playerId,
+      construction,
+      constructionId,
+    )) {
+      if (definition.kind === 'pedestal') {
+        this.ctx.powerUpSystem?.unregisterConstructionPedestal(construction.id);
+      }
+      this.ctx.placementSystem?.removeRock(construction.id);
+      this.rockVisualHelper.removePlaceableRockVisual(construction, false);
+      return { ok: false, reason: 'placement' };
+    }
+
     const placedAt = Date.now();
     this.ctx.loadoutManager?.markConstructionUsed(playerId, constructionId, placedAt);
     // Ueber denselben Kanal wie Utility-Cooldowns, damit auch Clients den Bau-Cooldown
     // des gewaehlten Konstrukts im HUD sehen.
     bridge.publishUtilityCooldownUntil(playerId, placedAt + definition.buildCooldownMs, constructionId);
     this.rockVisualHelper.materializePlaceableRock(construction, true);
-    this.registerNewPersistentPlaceable(
-      construction,
-      { kind: 'construction', id: constructionId },
-      definition.footprint,
-    );
+    if (!sharedPersistentBase) {
+      this.registerNewPersistentPlaceable(
+        construction,
+        { kind: 'construction', id: constructionId },
+        definition.footprint,
+      );
+    }
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',
       source: 'placeable_turret',
@@ -4765,19 +5562,6 @@ export class ArenaLifecycleCoordinator {
     });
     bridge.recordConstructionBuilt(playerId);
     return { ok: true };
-  }
-
-  /** Neutral Phase-2 name; the Inspector method remains a compatibility wrapper for callers. */
-  placeConstruction(
-    playerId: string,
-    constructionId: string,
-    targetX: number,
-    targetY: number,
-  ): LoadoutUseResult {
-    const canonical = normalizeConstructionId(constructionId);
-    return canonical
-      ? this.placeInspectorConstruction(playerId, canonical, targetX, targetY)
-      : { ok: false, reason: 'invalid' };
   }
 
   useInspectorUtility(
@@ -4865,6 +5649,9 @@ export class ArenaLifecycleCoordinator {
   /** Persoenliches Kapazitaetsmaximum inklusive Item-Boni. Host-Autoritaet fuer das Bau-Gate. */
   private getConstructionCapacity(playerId: string): number {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
+    if (bridge.getGamePhase() === 'LOBBY'
+      && bridge.isPlayerPersistentBaseEditorActive(playerId)
+      && !committed) return COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS;
     return resolveConstructionCapacity({
       gameMode: bridge.getGameMode(),
       classId: committed?.coopDefenseClassId,
@@ -4914,8 +5701,7 @@ export class ArenaLifecycleCoordinator {
     targetY: number,
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed)).length === 0) {
+    if (this.getActiveConstructionToolsForPlayer(playerId).length === 0) {
       return { ok: false, reason: 'blocked' };
     }
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -4935,15 +5721,23 @@ export class ArenaLifecycleCoordinator {
       COOP_DEFENSE_DISMANTLE_RANGE,
     );
     if (!cell) return { ok: false, reason: 'blocked' };
-    const removed = this.ctx.placementSystem?.removeRockAt(
-      cell.gridX,
-      cell.gridY,
-      playerId,
-      this.getConstructionOwnership(playerId),
-    );
-    if (!removed) return { ok: false, reason: 'blocked' };
+    const candidate = this.ctx.placementSystem?.getRuntimeRockAt(cell.gridX, cell.gridY);
+    if (!candidate || candidate.constructionId === undefined
+      || candidate.ownerId !== playerId
+      || candidate.ownership === 'base-owned') return { ok: false, reason: 'blocked' };
+    const removal = this.acceptPersistentConstructionRemoval(playerId, candidate);
+    if (!removal.accepted) {
+      return { ok: false, reason: 'blocked' };
+    }
+    const removed = this.ctx.placementSystem?.removeRock(candidate.id);
+    if (!removed) {
+      if (removal.checkpoint) this.persistentBaseCompositeService?.restoreCheckpoint(removal.checkpoint);
+      return { ok: false, reason: 'blocked' };
+    }
 
+    this.removeAcceptedPersistentRuntime(removed, playerId);
     this.finalizeDismantledConstruction(removed, true);
+    if (removal.checkpoint) this.publishPersistentBaseMutationState();
     this.ctx.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_removed',
@@ -4960,19 +5754,30 @@ export class ArenaLifecycleCoordinator {
   /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
   dismantleAllInspectorConstructions(playerId: string): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed)).length === 0
+    if (this.getActiveConstructionToolsForPlayer(playerId).length === 0
       || !player?.sprite.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
     }
 
-    const removed = this.ctx.placementSystem?.removeOwnedConstructions(
-      playerId,
-      this.getConstructionOwnership(playerId),
-    ) ?? [];
+    const removed: SyncedPlaceableRock[] = [];
+    let acceptedPersistentMutation = false;
+    for (const candidate of this.ctx.placementSystem?.getOwnedConstructions(playerId) ?? []) {
+      if (!candidate.constructionId || candidate.ownership === 'base-owned'
+        || candidate.ownership !== this.getConstructionOwnership(playerId)) continue;
+      const removal = this.acceptPersistentConstructionRemoval(playerId, candidate);
+      if (!removal.accepted) continue;
+      const runtime = this.ctx.placementSystem?.removeRock(candidate.id);
+      if (runtime) {
+        this.removeAcceptedPersistentRuntime(runtime, playerId);
+        removed.push(runtime);
+        acceptedPersistentMutation = acceptedPersistentMutation || removal.checkpoint !== null;
+      } else if (removal.checkpoint) {
+        this.persistentBaseCompositeService?.restoreCheckpoint(removal.checkpoint);
+      }
+    }
     for (const construction of removed) {
       // Die visuellen Einzelobjekte muessen verschwinden; deren teure Schatten-/Occluder-
       // Aktualisierung wird vom RockVisualHelper auf genau einen POST_UPDATE-Flush gebuendelt.
@@ -4986,6 +5791,7 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.gameAudioSystem.playSound('sfx_place_rock', player.sprite.x, player.sprite.y, playerId);
     }
+    if (acceptedPersistentMutation) this.publishPersistentBaseMutationState();
     return { ok: true };
   }
 

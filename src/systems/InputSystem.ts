@@ -890,7 +890,7 @@ export class InputSystem {
     // Die Scene schaltet den lokalen Input zusaetzlich ab; dieser Rollencheck verhindert, dass
     // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
     // erzeugen, bevor der naechste Snapshot die Entity entfernt.
-    if (this.bridge.getGamePhase() === 'ARENA' && !this.bridge.canPlayerAct(this.bridge.getLocalPlayerId())) {
+    if (!this.bridge.canPlayerAct(this.bridge.getLocalPlayerId())) {
       this.placementPreviewState = null;
       this.bridge.sendLocalInput({
         dx: 0,

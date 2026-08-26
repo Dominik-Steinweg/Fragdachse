@@ -321,6 +321,7 @@ export class PlacementSystem {
     playerId: string,
     ownerColor: number,
     ownership: ConstructionOwnership = 'host-persistent',
+    persistentId?: string,
   ): SyncedPlaceableRock | null {
     const isConstruction = 'capacityCost' in cfg;
     const utilityConstructionId = isConstruction ? null : getConstructionIdForUtility(cfg.id);
@@ -412,8 +413,18 @@ export class PlacementSystem {
       };
 
     rock.footprint = footprint;
+    if (persistentId) rock.persistentId = persistentId;
     this.runtimeRocks.set(rock.id, rock);
     this.setRockFootprint(rock);
+    return { ...rock };
+  }
+
+  /** Assigns the stable persistent identity after a normal, range-checked placement. */
+  setPersistentId(id: number, persistentId: string): SyncedPlaceableRock | null {
+    if (!persistentId) return null;
+    const rock = this.runtimeRocks.get(id);
+    if (!rock) return null;
+    rock.persistentId = persistentId;
     return { ...rock };
   }
 

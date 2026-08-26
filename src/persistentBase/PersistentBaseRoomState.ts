@@ -154,11 +154,77 @@ export class PersistentBaseRoomState {
       placementOrder,
       stableOwnerId,
     };
+    return this.registerAccepted(
+      runtimeRock,
+      blueprint,
+      ownerId,
+      stableOwnerId,
+      footprint,
+      anchor,
+      activeRadiusCells,
+    );
+  }
+
+  registerAccepted(
+    runtimeRock: SyncedPlaceableRock,
+    blueprint: PersistentConstruction,
+    ownerId: string,
+    stableOwnerId: string,
+    footprint: readonly { readonly dx: number; readonly dy: number }[],
+    anchor: PersistentBaseAnchor,
+    activeRadiusCells: number,
+  ): GuestPersistentConstruction | null {
+    if (!this.working
+      || !ownerId
+      || runtimeRock.ownerId !== ownerId
+      || runtimeRock.expiresAt > 0
+      || !isPersistentFootprintInsideZone(
+        runtimeRock.gridX,
+        runtimeRock.gridY,
+        footprint,
+        anchor,
+        activeRadiusCells,
+      )
+      || this.hasPersistentId(blueprint.persistentId)) return null;
+    const accepted: GuestPersistentConstruction = {
+      ...blueprint,
+      ownerId,
+      stableOwnerId,
+      tool: normalizePersistentToolRef(blueprint.tool),
+    };
     const ownerBlueprints = this.working.get(ownerId) ?? [];
-    ownerBlueprints.push(blueprint);
+    ownerBlueprints.push(accepted);
     this.working.set(ownerId, ownerBlueprints);
-    this.runtimeBlueprints.set(runtimeRock.id, cloneGuestBlueprint(blueprint));
-    return cloneGuestBlueprint(blueprint);
+    this.nextPlacementOrder = Math.max(this.nextPlacementOrder, accepted.placementOrder + 1);
+    this.runtimeBlueprints.set(runtimeRock.id, cloneGuestBlueprint(accepted));
+    return cloneGuestBlueprint(accepted);
+  }
+
+  removeRuntimePlacement(runtimeId: number): boolean {
+    const blueprint = this.runtimeBlueprints.get(runtimeId);
+    if (!blueprint) return false;
+    this.runtimeBlueprints.delete(runtimeId);
+    removeBlueprint(this.working ?? this.committed, blueprint);
+    return true;
+  }
+
+  getWorkingPersonalContributionsByPlayer(): readonly {
+    readonly playerId: string;
+    readonly contribution: PersistentPlayerBaseContribution;
+  }[] {
+    return [...(this.working ?? this.committed).entries()].map(([playerId, blueprints]) => ({
+      playerId,
+      contribution: {
+        schemaVersion: 4,
+        ownerId: this.committedOwnerIds.get(playerId) ?? blueprints[0]?.stableOwnerId ?? playerId,
+        revision: this.committedRevisions.get(playerId) ?? 0,
+        constructions: blueprints.map(({ ownerId: _ownerId, stableOwnerId: _stableOwnerId, ...blueprint }) => ({
+          ...blueprint,
+          ownerId: this.committedOwnerIds.get(playerId) ?? blueprints[0]?.stableOwnerId ?? playerId,
+          tool: { ...blueprint.tool },
+        })),
+      },
+    }));
   }
 
   /**
