@@ -76,6 +76,18 @@ describe('Coop defense map progression', () => {
     })).toThrow(/unknown base/);
   });
 
+  it('gives every persistent-base map an anchor that the mission lifecycle can resolve', () => {
+    const persistentMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.persistentBase);
+    expect(persistentMaps.length).toBeGreaterThan(0);
+    for (const map of persistentMaps) {
+      const anchorBase = resolveCoopDefenseBases(map).find((base) => base.id === map.persistentBase!.baseId);
+      // ArenaLifecycleCoordinator.buildArena() wirft, wenn der Anker keine eigene Hauptbasis ist.
+      expect(anchorBase, map.mapId).toBeDefined();
+      expect(anchorBase!.faction, map.mapId).toBe('friendly');
+      expect(anchorBase!.role, map.mapId).toBe('main');
+    }
+  });
+
   it('authors explicit rail positions while keeping the legacy center default', () => {
     const railMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode !== 'void-fire');
     expect(railMaps.filter((map) => !['6', '7', '8'].includes(map.mapId)).every((map) => map.trackPosition === 'center')).toBe(true);

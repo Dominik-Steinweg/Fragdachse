@@ -150,6 +150,10 @@ import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRep
 import { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
 import { PersistentBaseRoomState, type GuestPersistentConstruction } from '../../persistentBase/PersistentBaseRoomState';
 import {
+  applyPersistentBaseRoundOutcome,
+  resolvePersistentBaseRoundOutcome,
+} from '../../persistentBase/PersistentBaseRoundOutcome';
+import {
   planPersistentBaseRestore,
   type PersistentRestoreCandidate,
   type PersistentRestoreToolDefinition,
@@ -644,22 +648,12 @@ export class ArenaLifecycleCoordinator {
   hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
-    const persistentSession = this.persistentBaseSession ?? this.ctx.persistentBaseSession;
-    if (persistentSession) {
-      if (roundConclusion === 'victory') {
-        persistentSession.commit((runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true);
-      } else {
-        // Defeat, abort and non-Coop completion discard the round-local working copy.
-        persistentSession.discard();
-      }
-    }
-    if (this.persistentBaseRoomState.hasActiveMission) {
-      if (roundConclusion === 'victory') {
-        this.persistentBaseRoomState.commit((runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true);
-      } else {
-        this.persistentBaseRoomState.rollback();
-      }
-    }
+    // Defeat, abort and non-Coop completion discard the round-local working copy.
+    applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
+      session: this.persistentBaseSession ?? this.ctx.persistentBaseSession,
+      roomState: this.persistentBaseRoomState,
+      isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+    });
     // A new round must load the repository's newly committed baseline. During an in-round map
     // transition the field remains alive; it is cleared only after the round outcome is decided.
     this.persistentBaseSession = null;
@@ -866,8 +860,11 @@ export class ArenaLifecycleCoordinator {
     // A technical abort can happen before the normal round-conclusion path runs. Never carry a
     // half-written mission working state into a later round in the same room.
     if (bridge.isHost()) {
-      this.persistentBaseSession?.discard();
-      this.persistentBaseRoomState.rollback();
+      applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(null), {
+        session: this.persistentBaseSession,
+        roomState: this.persistentBaseRoomState,
+        isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+      });
       this.persistentBaseSession = null;
     }
 
@@ -3307,6 +3304,13 @@ export class ArenaLifecycleCoordinator {
     this.renderers.leafBlower.setTerrainMaterialLayout(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
+    // Der Translocator haelt Puck-IDs der Runde. Ohne Entkopplung meldete er in der Lobby und in
+    // der naechsten Runde noch Pucks, deren Projektile hier laengst zerstoert wurden.
+    this.ctx.translocatorSystem?.setTrainManager(null);
+    this.ctx.translocatorSystem?.setUseCallback(null);
+    this.ctx.translocatorSystem?.setRadialImpulseCallback(null);
+    this.ctx.translocatorSystem?.setPositionResetCallback(null);
+    this.ctx.translocatorSystem = null;
     this.ctx.coopDefenseRoundStateSystem = null;
 
     this.renderers.powerUp.clear();

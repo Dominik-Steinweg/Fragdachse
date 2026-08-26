@@ -77,4 +77,5 @@ Netzwerk-RTT und Anwendungsreaktion sind getrennte Messgrößen. RTT kommt aus d
 - Baseline: src/network/FullGameStateBootstrap.ts
 - Codecs: src/network/playerStateCodec.ts, src/network/enemySnapshotCodec.ts, src/network/projectileSnapshotCodec.ts
 - Host/Client: src/scenes/arena/HostUpdateCoordinator.ts, src/scenes/arena/ClientUpdateCoordinator.ts
-- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts
+- Tests: tests/PeerLink.test.ts, tests/PeerRoom.test.ts, tests/PeerProtocol.test.ts, tests/FullGameStateBootstrap.test.ts, tests/ProjectileSnapshotCodec.test.ts, tests/MissionLifecycleContracts.test.ts
+- Test-Harness: tests/fakePeerNetwork.ts verdrahtet mehrere PeerRoom-Instanzen ohne WebRTC durch echte Kodierung und Validierung. Multiplayer-Contract-Tests bauen darauf auf, statt einen zweiten In-Memory-Transport anzulegen.
