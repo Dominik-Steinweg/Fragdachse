@@ -1,3 +1,4 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Der Generator fragt die aktive Map über die Netzwerk-Bridge ab (Basis-Schutzradien).
@@ -6,7 +7,6 @@ vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '14' },
 }));
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { applyArenaMetricsForMode, GRID_COLS, GRID_ROWS } from '../src/config';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
@@ -22,7 +22,7 @@ function buildBlockedGrid(seed: number): boolean[][] {
   const cached = blockedGridBySeed.get(seed);
   if (cached) return cached;
 
-  const layout = ArenaGenerator.generate(seed, getCoopDefenseMapConfig(MAP_14));
+  const layout = generateArenaWithActiveMetrics(seed, getCoopDefenseMapConfig(MAP_14));
   const blocked = Array.from({ length: GRID_ROWS }, () => new Array<boolean>(GRID_COLS).fill(false));
   for (const rock of layout.rocks) blocked[rock.gridY][rock.gridX] = true;
   for (const tree of layout.trees) blocked[tree.gridY][tree.gridX] = true;

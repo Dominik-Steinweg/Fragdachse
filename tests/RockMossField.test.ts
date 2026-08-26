@@ -1,10 +1,10 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Jimp } from 'jimp';
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { generateRockMossPlacements } from '../src/arena/RockMossField';
 import {
   getRockMossPlacementBudget,
@@ -58,13 +58,13 @@ describe('Rock moss field', () => {
   });
 
   it('is deterministic for a seed and varies between seeds', () => {
-    const layout = ArenaGenerator.generate(81_000);
+    const layout = generateArenaWithActiveMetrics(81_000);
     expect(placementsFor(layout.seed, layout.rocks)).toStrictEqual(placementsFor(layout.seed, layout.rocks));
     expect(placementsFor(layout.seed, layout.rocks)).not.toStrictEqual(placementsFor(layout.seed + 1, layout.rocks));
   });
 
   it('does not depend on the order of the rock list', () => {
-    const layout = ArenaGenerator.generate(81_001);
+    const layout = generateArenaWithActiveMetrics(81_001);
     const shuffled = [...layout.rocks].reverse();
     expect(placementsFor(layout.seed, shuffled)).toStrictEqual(placementsFor(layout.seed, layout.rocks));
   });
@@ -73,7 +73,7 @@ describe('Rock moss field', () => {
     // Der Vertrag der Schicht: Sichtbarkeit regelt die Stanzform, nicht die Platzierung. Wer
     // stattdessen den lebenden Bestand einsetzt, wuerfelt bei jeder Zerstoerung alles neu aus –
     // dieser Test haelt beide Haelften der Aussage fest.
-    const layout = ArenaGenerator.generate(81_002);
+    const layout = generateArenaWithActiveMetrics(81_002);
     const full = placementsFor(layout.seed, layout.rocks);
     expect(placementsFor(layout.seed, layout.rocks)).toStrictEqual(full);
 
@@ -84,7 +84,7 @@ describe('Rock moss field', () => {
 
   it('anchors every patch on a rock cell', () => {
     for (let index = 0; index < 10; index += 1) {
-      const layout = ArenaGenerator.generate(82_000 + index);
+      const layout = generateArenaWithActiveMetrics(82_000 + index);
       const rockKeys = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
       for (const placement of placementsFor(layout.seed, layout.rocks)) {
         const gridX = Math.floor((placement.worldX - ARENA_OFFSET_X) / CELL_SIZE);
@@ -97,7 +97,7 @@ describe('Rock moss field', () => {
   it('never lands on the cell grid', () => {
     const octiles = new Set<number>();
     for (let index = 0; index < 10; index += 1) {
-      const layout = ArenaGenerator.generate(83_000 + index);
+      const layout = generateArenaWithActiveMetrics(83_000 + index);
       for (const placement of placementsFor(layout.seed, layout.rocks)) {
         const localX = placement.worldX - ARENA_OFFSET_X;
         const localY = placement.worldY - ARENA_OFFSET_Y;
@@ -111,7 +111,7 @@ describe('Rock moss field', () => {
 
   it('keeps size, alpha and texture inside the configured bounds', () => {
     const known = new Set(ROCK_MOSS_CONFIG.variants.map((variant) => getRockMossTextureKey(variant.fileName)));
-    const layout = ArenaGenerator.generate(84_000);
+    const layout = generateArenaWithActiveMetrics(84_000);
     const placements = placementsFor(layout.seed, layout.rocks);
     expect(placements.length).toBeGreaterThan(0);
     for (const placement of placements) {
@@ -126,7 +126,7 @@ describe('Rock moss field', () => {
   it('stays inside the placement budget', () => {
     const blocks = Math.ceil(GRID_COLS / ROCK_MOSS_CONFIG.blockCells) * Math.ceil(GRID_ROWS / ROCK_MOSS_CONFIG.blockCells);
     for (let index = 0; index < 10; index += 1) {
-      const layout = ArenaGenerator.generate(85_000 + index);
+      const layout = generateArenaWithActiveMetrics(85_000 + index);
       const placements = placementsFor(layout.seed, layout.rocks);
       expect(placements.length).toBeLessThanOrEqual(getRockMossPlacementBudget(GRID_COLS, GRID_ROWS));
       expect(placements.length).toBeLessThanOrEqual(blocks * ROCK_MOSS_CONFIG.maxPerBlock);

@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
-import { ArenaGenerator, ARENA_GENERATOR_VERSION } from '../../arena/ArenaGenerator';
+import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../../arena/ArenaGenerator';
 import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
@@ -162,6 +162,7 @@ import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import { toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
 import { createWorldRuntimeContext, isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
+import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 
@@ -964,7 +965,11 @@ export class ArenaLifecycleCoordinator {
       && prepared.descriptor.seed === descriptor.seed
       && prepared.descriptor.layoutFingerprint === descriptor.layoutFingerprint
       ? prepared.layout
-      : ArenaGenerator.generate(descriptor.seed, coopDefenseMapConfig ?? undefined);
+      : ArenaGenerator.generate(
+        descriptor.seed,
+        resolveArenaGenerationInput(descriptor.gameMode, world.metrics),
+        coopDefenseMapConfig ?? undefined,
+      );
     const actualFingerprint = ArenaGenerator.fingerprint(locallyGeneratedLayout);
     if (actualFingerprint !== descriptor.layoutFingerprint) {
       throw new Error(
@@ -3662,7 +3667,17 @@ export class ArenaLifecycleCoordinator {
           request.mapConfig?.arenaWidthCells,
           request.mapConfig?.arenaHeightCells,
         );
-        const layout = ArenaGenerator.generate(request.seed, request.mapConfig ?? undefined);
+        const worldMetrics = resolveWorldMetrics(getArenaMetricsProfile(
+          request.gameMode,
+          'ARENA',
+          request.mapConfig?.arenaWidthCells,
+          request.mapConfig?.arenaHeightCells,
+        ));
+        const layout = ArenaGenerator.generate(
+          request.seed,
+          resolveArenaGenerationInput(request.gameMode, worldMetrics),
+          request.mapConfig ?? undefined,
+        );
         const descriptor: ArenaDescriptor = {
           roundRevision: request.roundRevision,
           gameMode: request.gameMode,

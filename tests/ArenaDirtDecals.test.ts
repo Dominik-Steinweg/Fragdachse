@@ -1,6 +1,6 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, getDecalTextureKey } from '../src/arena/DecalConfig';
 import { applyArenaMetricsForMode } from '../src/config';
 
@@ -19,7 +19,7 @@ describe('Arena dirt decals', () => {
     const underlayKeys = new Set(
       DIRT_ROCK_UNDERLAY_DECAL_CONFIG.variants.map((variant) => getDecalTextureKey(variant.fileName)),
     );
-    const layouts = Array.from({ length: 20 }, (_, index) => ArenaGenerator.generate(74_000 + index));
+    const layouts = Array.from({ length: 20 }, (_, index) => generateArenaWithActiveMetrics(74_000 + index));
     let underlayCount = 0;
 
     for (const layout of layouts) {

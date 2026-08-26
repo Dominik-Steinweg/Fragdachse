@@ -1,5 +1,5 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
@@ -95,7 +95,7 @@ describe('Map 1 as the guided advance tutorial', () => {
   it('places each step window on deterministic ordinary rock banks', () => {
     applyMapMetrics();
     const steps = resolveCoopDefenseMapTutorialSteps(MAP);
-    const layout = ArenaGenerator.generate(42_424, MAP);
+    const layout = generateArenaWithActiveMetrics(42_424, MAP);
     const trackColumns = new Set(layout.tracks.flatMap(({ gridX }) => [gridX, gridX + 1]));
     for (const step of steps) {
       const region = getCoopDefenseTutorialRockRegion(false, step.anchor);
@@ -114,7 +114,7 @@ describe('Map 1 as the guided advance tutorial', () => {
   it('keeps every authored checkpoint core free of rocks and trees', () => {
     applyMapMetrics();
     for (const seed of [1, 42, 4242]) {
-      const layout = ArenaGenerator.generate(seed, MAP);
+      const layout = generateArenaWithActiveMetrics(seed, MAP);
       const rocks = new Set(layout.rocks.map(({ gridX, gridY }) => `${gridX}:${gridY}`));
       const trees = new Set(layout.trees.map(({ gridX, gridY }) => `${gridX}:${gridY}`));
 
@@ -202,7 +202,7 @@ describe('Map 1 as the guided advance tutorial', () => {
   it('stamps the authored walls as complete rock bands without cutting them open again', () => {
     applyMapMetrics();
     for (const seed of [1, 42, 4242]) {
-      const layout = ArenaGenerator.generate(seed, MAP);
+      const layout = generateArenaWithActiveMetrics(seed, MAP);
       const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
       for (const wall of MAP.rockWalls ?? []) {
         for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
@@ -227,7 +227,7 @@ describe('Map 1 as the guided advance tutorial', () => {
   it('keeps every route stage and authored spawn area walkable', () => {
     applyMapMetrics();
     for (const seed of [1, 42, 4242]) {
-      const layout = ArenaGenerator.generate(seed, MAP);
+      const layout = generateArenaWithActiveMetrics(seed, MAP);
       const blocked = new Set<string>([
         ...layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`),
         ...layout.trees.map((tree) => `${tree.gridX}:${tree.gridY}`),

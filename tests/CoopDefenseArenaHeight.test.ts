@@ -1,9 +1,9 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '8' },
 }));
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import {
   ARENA_HEIGHT,
@@ -38,7 +38,7 @@ describe('Coop defense arena height', () => {
     expect(ARENA_HEIGHT).toBe(MAP_8.arenaHeightCells * CELL_SIZE);
     expect(ARENA_MAX_Y).toBe(ARENA_OFFSET_Y + ARENA_HEIGHT);
 
-    const layout = ArenaGenerator.generate(81_008, MAP_8);
+    const layout = generateArenaWithActiveMetrics(81_008, MAP_8);
     for (const cell of [
       ...layout.rocks,
       ...layout.trees,

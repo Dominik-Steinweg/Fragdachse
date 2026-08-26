@@ -1,10 +1,10 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '16' },
 }));
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../src/config';
 import {
@@ -48,8 +48,8 @@ describe('Map 16 - Zeitzünder', () => {
 
   it('generates deterministic prebuilt void-fire fields and no train', () => {
     const map = getCoopDefenseMapConfig('16');
-    const first = ArenaGenerator.generate(71_516, map);
-    const repeated = ArenaGenerator.generate(71_516, map);
+    const first = generateArenaWithActiveMetrics(71_516, map);
+    const repeated = generateArenaWithActiveMetrics(71_516, map);
     const hazardEvents = map.mapEvents?.filter((event) => event.type === 'ground-hazard') ?? [];
 
     expect(first.tracks).toEqual([]);

@@ -1,3 +1,4 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { describe, expect, it, vi } from 'vitest';
 
 // Der Generator fragt die aktive Map ueber die Netzwerk-Bridge ab (Basis-Schutzradien). Ohne
@@ -15,7 +16,6 @@ import {
   LARGE_ARENA_BENCHMARK_WIDTH_CELLS,
   runArenaGenerationBenchmark,
 } from '../src/arena/diagnostics/LargeArenaBenchmark';
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import {
   applyArenaMetricsForMode,
   DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
@@ -74,7 +74,7 @@ describe('large arena generation', () => {
       expect(GRID_COLS).toBe(LARGE_ARENA_BENCHMARK_WIDTH_CELLS);
       expect(GRID_ROWS).toBe(LARGE_ARENA_BENCHMARK_HEIGHT_CELLS);
 
-      const layout = ArenaGenerator.generate(4711, createSyntheticLargeArenaMapConfig());
+      const layout = generateArenaWithActiveMetrics(4711, createSyntheticLargeArenaMapConfig());
       for (const cell of [...layout.rocks, ...layout.dirt, ...layout.trees]) {
         expect(cell.gridX).toBeGreaterThanOrEqual(0);
         expect(cell.gridX).toBeLessThan(LARGE_ARENA_BENCHMARK_WIDTH_CELLS);

@@ -1,13 +1,9 @@
-import {
-  applyArenaMetricsForMode,
-  CELL_SIZE,
-  DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
-  DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
-} from '../../config';
+import { CELL_SIZE } from '../../config';
 import { COOP_DEFENSE_MODE } from '../../gameModes';
 import type { CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import type { ArenaDescriptor, ArenaLayout } from '../../types';
-import { ArenaGenerator, ARENA_GENERATOR_VERSION } from '../ArenaGenerator';
+import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../ArenaGenerator';
+import { resolveCoopDefenseWorldMetrics } from '../../world/WorldMetrics';
 
 /**
  * Mess- und Diagnoseharness fuer grosse Arenen.
@@ -126,61 +122,53 @@ export function runArenaGenerationBenchmark(
   const now = options.now ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
   const mapConfig = createSyntheticLargeArenaMapConfig(widthCells, heightCells);
 
-  // Die globalen Arena-Metriken sind Modulzustand; der Harness leiht sie sich und gibt sie
-  // danach an die Standard-Coop-Groesse zurueck, damit kein anderer Test sie geerbt bekommt.
-  applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', widthCells, heightCells);
-  try {
-    const samples: ArenaGenerationSample[] = [];
-    let deterministic = true;
+  const generationInput = resolveArenaGenerationInput(
+    COOP_DEFENSE_MODE,
+    resolveCoopDefenseWorldMetrics(widthCells, heightCells),
+  );
+  const samples: ArenaGenerationSample[] = [];
+  let deterministic = true;
 
-    for (const seed of seeds) {
-      const startedAt = now();
-      const layout = ArenaGenerator.generate(seed, mapConfig);
-      const durationMs = now() - startedAt;
+  for (const seed of seeds) {
+    const startedAt = now();
+    const layout = ArenaGenerator.generate(seed, generationInput, mapConfig);
+    const durationMs = now() - startedAt;
 
-      const descriptor: ArenaDescriptor = {
-        roundRevision: 1,
-        gameMode: COOP_DEFENSE_MODE,
-        mapId: mapConfig.mapId,
-        seed,
-        arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
-        layoutFingerprint: ArenaGenerator.fingerprint(layout),
-      };
-      samples.push({
-        seed,
-        durationMs,
-        rockCount: layout.rocks.length,
-        dirtCount: layout.dirt.length,
-        decalCount: layout.decals?.length ?? 0,
-        treeCount: layout.trees.length,
-        descriptorBytes: measureJsonBytes(descriptor),
-      });
-
-      if (options.checkDeterminism !== false) {
-        const repeat = ArenaGenerator.generate(seed, mapConfig);
-        if (!layoutsEqual(layout, repeat)) deterministic = false;
-      }
-    }
-
-    const durations = samples.map((sample) => sample.durationMs).sort((a, b) => a - b);
-    return {
-      widthCells,
-      heightCells,
-      samples,
-      minMs: durations[0] ?? 0,
-      medianMs: percentile(durations, 0.5),
-      p95Ms: percentile(durations, 0.95),
-      maxMs: durations[durations.length - 1] ?? 0,
-      deterministic,
+    const descriptor: ArenaDescriptor = {
+      roundRevision: 1,
+      gameMode: COOP_DEFENSE_MODE,
+      mapId: mapConfig.mapId,
+      seed,
+      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+      layoutFingerprint: ArenaGenerator.fingerprint(layout),
     };
-  } finally {
-    applyArenaMetricsForMode(
-      COOP_DEFENSE_MODE,
-      'ARENA',
-      DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
-      DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
-    );
+    samples.push({
+      seed,
+      durationMs,
+      rockCount: layout.rocks.length,
+      dirtCount: layout.dirt.length,
+      decalCount: layout.decals?.length ?? 0,
+      treeCount: layout.trees.length,
+      descriptorBytes: measureJsonBytes(descriptor),
+    });
+
+    if (options.checkDeterminism !== false) {
+      const repeat = ArenaGenerator.generate(seed, generationInput, mapConfig);
+      if (!layoutsEqual(layout, repeat)) deterministic = false;
+    }
   }
+
+  const durations = samples.map((sample) => sample.durationMs).sort((a, b) => a - b);
+  return {
+    widthCells,
+    heightCells,
+    samples,
+    minMs: durations[0] ?? 0,
+    medianMs: percentile(durations, 0.5),
+    p95Ms: percentile(durations, 0.95),
+    maxMs: durations[durations.length - 1] ?? 0,
+    deterministic,
+  };
 }
 
 /** Menschenlesbare Zusammenfassung – die Form, in der die Messung dokumentiert wird. */

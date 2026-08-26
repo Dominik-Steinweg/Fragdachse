@@ -1,3 +1,4 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -21,7 +22,6 @@ import {
   type CoopDefenseMapConfig,
   type CoopDefenseMapGroundHazardEventConfig,
 } from '../src/config/coopDefenseMaps';
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, applyArenaMetricsForMode } from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
@@ -186,7 +186,7 @@ describe('Coop Defense C3 configuration', () => {
       ],
     });
 
-    const layout = ArenaGenerator.generate(73_000, withUnreachableHazard);
+    const layout = generateArenaWithActiveMetrics(73_000, withUnreachableHazard);
     expect(layout.groundHazardZones?.some((zone) => zone.eventId === 'unreachable')).toBe(false);
     expect(layout.groundHazardZones?.length).toBeGreaterThan(0);
   });
@@ -194,11 +194,11 @@ describe('Coop Defense C3 configuration', () => {
   it('prebuilds every authored hazard event from the selected arena seed', () => {
     const map = getCoopDefenseMapConfig('16');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
-    const layout = ArenaGenerator.generate(73_000, map);
+    const layout = generateArenaWithActiveMetrics(73_000, map);
     const eventIds = new Set(map.mapEvents?.map((event) => event.id));
     expect(layout.groundHazardZones?.length).toBeGreaterThan(0);
     expect(layout.groundHazardZones?.every((zone) => eventIds.has(zone.eventId))).toBe(true);
-    expect(ArenaGenerator.generate(73_000, map).groundHazardZones).toEqual(layout.groundHazardZones);
+    expect(generateArenaWithActiveMetrics(73_000, map).groundHazardZones).toEqual(layout.groundHazardZones);
   });
 });
 

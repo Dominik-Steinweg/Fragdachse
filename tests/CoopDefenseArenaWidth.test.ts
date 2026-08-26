@@ -1,10 +1,10 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '0' },
 }));
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { applyArenaMetricsForMode, GRID_COLS, GRID_ROWS } from '../src/config';
 import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
@@ -27,7 +27,7 @@ describe('Coop defense arena width', () => {
   // das Zeitlimit ist deshalb bewusst grosszuegig.
   it('generates the configured test map inside its column grid', () => {
     expect(GRID_COLS).toBe(TEST_MAP.arenaWidthCells);
-    const layout = ArenaGenerator.generate(47_110, TEST_MAP);
+    const layout = generateArenaWithActiveMetrics(47_110, TEST_MAP);
     const cells = [
       ...layout.rocks,
       ...layout.trees,

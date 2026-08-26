@@ -21,10 +21,43 @@ import {
   normalizeCoopDefenseArenaHeightCells,
   normalizeCoopDefenseArenaWidthCells,
   applyArenaMetricsForMode,
+  applyArenaActivityValuesForMode,
+  applyArenaModeFlags,
+  applyArenaWorldMetrics,
+  ARENA_DURATION_SEC,
+  CAPTURE_THE_BEER_ARENA_DURATION_SEC,
+  CAPTURE_THE_BEER_BASES_ACTIVE,
+  CAPTURE_THE_BEER_TREE_COUNT,
+  COOP_DEFENSE_BASES_ACTIVE,
+  DEFAULT_ARENA_DURATION_SEC,
+  DEFAULT_TREE_COUNT,
+  TREE_COUNT,
 } from '../src/config';
 import { CAPTURE_THE_BEER_MODE, COOP_DEFENSE_MODE } from '../src/gameModes';
 
 describe('Arena metrics profiles', () => {
+  it('applies world metrics, Activity values and mode flags independently', () => {
+    applyArenaMetricsForMode('deathmatch', 'LOBBY');
+
+    applyArenaWorldMetrics(getArenaMetricsProfile(CAPTURE_THE_BEER_MODE, 'ARENA'));
+    expect(GRID_COLS).toBe(CAPTURE_THE_BEER_ARENA_WIDTH / CELL_SIZE);
+    expect(TREE_COUNT).toBe(DEFAULT_TREE_COUNT);
+    expect(ARENA_DURATION_SEC).toBe(DEFAULT_ARENA_DURATION_SEC);
+    expect(CAPTURE_THE_BEER_BASES_ACTIVE).toBe(false);
+    expect(COOP_DEFENSE_BASES_ACTIVE).toBe(false);
+
+    applyArenaActivityValuesForMode(CAPTURE_THE_BEER_MODE);
+    expect(TREE_COUNT).toBe(CAPTURE_THE_BEER_TREE_COUNT);
+    expect(ARENA_DURATION_SEC).toBe(CAPTURE_THE_BEER_ARENA_DURATION_SEC);
+    expect(CAPTURE_THE_BEER_BASES_ACTIVE).toBe(false);
+
+    applyArenaModeFlags(CAPTURE_THE_BEER_MODE);
+    expect(CAPTURE_THE_BEER_BASES_ACTIVE).toBe(true);
+    expect(COOP_DEFENSE_BASES_ACTIVE).toBe(false);
+
+    applyArenaMetricsForMode('deathmatch', 'LOBBY');
+  });
+
   it('resolves default, intermediate and maximum Coop widths from grid cells', () => {
     expect(getArenaMetricsProfile(COOP_DEFENSE_MODE, 'ARENA')).toMatchObject({
       arenaWidth: FULL_ARENA_WIDTH,

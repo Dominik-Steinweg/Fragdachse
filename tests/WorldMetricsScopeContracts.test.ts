@@ -18,6 +18,7 @@ import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 /** Module, die ihre raeumliche Grundlage ausschliesslich aus einer World beziehen. */
 const WORLD_SCOPED_MODULES = [
+  'src/arena/ArenaGenerator.ts',
   'src/arena/BaseRegistry.ts',
   'src/systems/PlacementSystem.ts',
 ] as const;
@@ -33,6 +34,8 @@ const MUTABLE_ARENA_GLOBALS = [
   'ARENA_VIEWPORT_WIDTH',
   'ARENA_VIEWPORT_HEIGHT',
   'ACTIVE_ARENA_METRICS_PROFILE',
+  'TRACK_SPAWN_MIN_COL',
+  'TRACK_SPAWN_MAX_COL',
 ] as const;
 
 function read(path: string): string {
@@ -76,6 +79,14 @@ describe('World-scoped Metrik – migrierte Module', () => {
       }
     });
   }
+
+  it('bindet auch nicht-metrische Generatorparameter explizit', () => {
+    const source = read('src/arena/ArenaGenerator.ts');
+    const imported = collectConfigImports(source);
+    for (const ambient of ['TREE_COUNT', 'isCaptureTheBeerBaseModeActive', 'isCoopDefenseBasesActive']) {
+      expect(imported.includes(ambient), `ArenaGenerator still imports ${ambient}`).toBe(false);
+    }
+  });
 });
 
 describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {

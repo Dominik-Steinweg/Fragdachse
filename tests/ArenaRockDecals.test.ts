@@ -1,6 +1,6 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { ROCK_DECAL_CONFIG, ROCK_DECAL_LARGE_MAX_OFFSET_PX, ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE, ROCK_DECAL_VERY_LARGE_MAX_OFFSET_PX, ROCK_DECAL_VERY_LARGE_SIZE } from '../src/arena/DecalConfig';
 import { applyArenaMetricsForMode } from '../src/config';
 
@@ -18,8 +18,8 @@ describe('Arena rock decals', () => {
     expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_VERY_LARGE_SIZE)
       .every((variant) => variant.placement === 'core' && (variant.alpha ?? 1) < 0.7)).toBe(true);
 
-    const first = ArenaGenerator.generate(91_777);
-    const repeated = ArenaGenerator.generate(91_777);
+    const first = generateArenaWithActiveMetrics(91_777);
+    const repeated = generateArenaWithActiveMetrics(91_777);
     expect(first.decals).toEqual(repeated.decals);
 
     const rockDecals = first.decals!.filter((decal) => decal.surface === 'rock');
@@ -39,7 +39,7 @@ describe('Arena rock decals', () => {
   });
 
   it('can bind a decal conservatively to multiple touching rocks', () => {
-    const crossRockDecal = Array.from({ length: 30 }, (_, index) => ArenaGenerator.generate(92_100 + index))
+    const crossRockDecal = Array.from({ length: 30 }, (_, index) => generateArenaWithActiveMetrics(92_100 + index))
       .flatMap((layout) => layout.decals ?? [])
       .find((decal) => decal.surface === 'rock' && (decal.rockIds?.length ?? 0) > 1);
 
@@ -47,7 +47,7 @@ describe('Arena rock decals', () => {
   });
 
   it('uses tighter offsets for large decals so rotated bounds stay inside core rock groups', () => {
-    const rockDecals = Array.from({ length: 24 }, (_, index) => ArenaGenerator.generate(93_700 + index))
+    const rockDecals = Array.from({ length: 24 }, (_, index) => generateArenaWithActiveMetrics(93_700 + index))
       .flatMap((layout) => layout.decals ?? [])
       .filter((decal) => decal.surface === 'rock');
 

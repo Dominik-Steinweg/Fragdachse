@@ -1,10 +1,10 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Jimp } from 'jimp';
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import {
   generateRockVegetationPlacements,
   getRockVegetationPlacementBudget,
@@ -109,13 +109,13 @@ describe('Rock vegetation field', () => {
   });
 
   it('is deterministic for a seed and varies between seeds', () => {
-    const layout = ArenaGenerator.generate(91_000);
+    const layout = generateArenaWithActiveMetrics(91_000);
     expect(placementsFor(layout.seed, layout.rocks)).toStrictEqual(placementsFor(layout.seed, layout.rocks));
     expect(placementsFor(layout.seed, layout.rocks)).not.toStrictEqual(placementsFor(layout.seed + 1, layout.rocks));
   });
 
   it('does not depend on the order of the rock list', () => {
-    const layout = ArenaGenerator.generate(91_001);
+    const layout = generateArenaWithActiveMetrics(91_001);
     const shuffled = [...layout.rocks].reverse();
     expect(placementsFor(layout.seed, shuffled)).toStrictEqual(placementsFor(layout.seed, layout.rocks));
   });
@@ -125,7 +125,7 @@ describe('Rock vegetation field', () => {
     // und das regelt die Reichweitenmaske beim Backen – nicht die Platzierung. Wer stattdessen den
     // lebenden Bestand einsetzt, wuerfelt jede Matte neu aus und ordnet den Bewuchs der halben
     // Karte um. Dieser Test haelt beide Haelften der Aussage fest.
-    const layout = ArenaGenerator.generate(91_002);
+    const layout = generateArenaWithActiveMetrics(91_002);
     const full = placementsFor(layout.seed, layout.rocks);
     expect(placementsFor(layout.seed, layout.rocks)).toStrictEqual(full);
 
@@ -136,7 +136,7 @@ describe('Rock vegetation field', () => {
 
   it('anchors every mat on a run of rock cells that is free towards the mat', () => {
     for (let index = 0; index < 8; index += 1) {
-      const layout = ArenaGenerator.generate(92_000 + index);
+      const layout = generateArenaWithActiveMetrics(92_000 + index);
       const rockKeys = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
       const placements = placementsFor(layout.seed, layout.rocks);
       expect(placements.length).toBeGreaterThan(0);
@@ -153,7 +153,7 @@ describe('Rock vegetation field', () => {
   it('overhangs the rock edge without leaving the reach of the mask', () => {
     // Ragt die Matte weiter hinaus als die Maske reicht, schneidet die Stanzform genau den
     // Ueberhang wieder weg, um den es hier geht.
-    const layout = ArenaGenerator.generate(92_100);
+    const layout = generateArenaWithActiveMetrics(92_100);
     const { overhangPx, overhangJitterPx } = ROCK_VEGETATION_CONFIG;
     for (const placement of placementsFor(layout.seed, layout.rocks)) {
       const { across, line, quadrant } = describePlacement(placement);
@@ -170,7 +170,7 @@ describe('Rock vegetation field', () => {
   it('keeps size, alpha, rotation and texture inside the configured bounds', () => {
     const known = new Set(ROCK_VEGETATION_CONFIG.variants.flatMap((variant) =>
       ROCK_VEGETATION_CONFIG.classes.map((sizeClass) => getRockVegetationTextureKey(variant.index, sizeClass.name))));
-    const layout = ArenaGenerator.generate(93_000);
+    const layout = generateArenaWithActiveMetrics(93_000);
     const placements = placementsFor(layout.seed, layout.rocks);
     expect(placements.length).toBeGreaterThan(0);
     for (const placement of placements) {
@@ -194,7 +194,7 @@ describe('Rock vegetation field', () => {
 
   it('never grows more mats on a cell than the edge budget allows', () => {
     for (let index = 0; index < 6; index += 1) {
-      const layout = ArenaGenerator.generate(94_000 + index);
+      const layout = generateArenaWithActiveMetrics(94_000 + index);
       const load = new Map<string, number>();
       for (const placement of placementsFor(layout.seed, layout.rocks)) {
         for (const cell of describePlacement(placement).cells) {
@@ -240,7 +240,7 @@ describe('Rock vegetation field', () => {
 
   it('stays inside the placement budget', () => {
     for (let index = 0; index < 6; index += 1) {
-      const layout = ArenaGenerator.generate(97_000 + index);
+      const layout = generateArenaWithActiveMetrics(97_000 + index);
       expect(placementsFor(layout.seed, layout.rocks).length)
         .toBeLessThanOrEqual(getRockVegetationPlacementBudget(layout.rocks));
     }

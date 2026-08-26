@@ -1,8 +1,8 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { generateGroundCoverPlacements } from '../src/arena/GroundCoverField';
 import {
   getGroundCoverPlacementBudget,
@@ -62,7 +62,7 @@ describe('Ground cover field', () => {
   });
 
   it('is deterministic for a seed and varies between seeds', () => {
-    const layout = ArenaGenerator.generate(51_000);
+    const layout = generateArenaWithActiveMetrics(51_000);
     expect(placementsFor(layout.seed, layout.dirt)).toStrictEqual(placementsFor(layout.seed, layout.dirt));
     expect(placementsFor(layout.seed, layout.dirt)).not.toStrictEqual(placementsFor(layout.seed + 1, layout.dirt));
   });
@@ -70,7 +70,7 @@ describe('Ground cover field', () => {
   it('does not depend on the order of the dirt cell list', () => {
     // Host und Client leiten die Schicht unabhaengig voneinander ab. Haenge das Ergebnis an der
     // Listenreihenfolge, liefen beide Seiten auseinander, sobald die Liste anders sortiert ankommt.
-    const layout = ArenaGenerator.generate(51_001);
+    const layout = generateArenaWithActiveMetrics(51_001);
     const shuffled = [...layout.dirt].reverse();
     expect(placementsFor(layout.seed, shuffled)).toStrictEqual(placementsFor(layout.seed, layout.dirt));
   });
@@ -83,7 +83,7 @@ describe('Ground cover field', () => {
     let overGrass = 0;
 
     for (let index = 0; index < 20; index += 1) {
-      const layout = ArenaGenerator.generate(52_000 + index);
+      const layout = generateArenaWithActiveMetrics(52_000 + index);
       const keys = dirtKeys(layout.dirt);
       for (const placement of placementsFor(layout.seed, layout.dirt)) {
         if (placement.anchor === 'seam') seam += 1;
@@ -108,7 +108,7 @@ describe('Ground cover field', () => {
   it('never lands on the cell grid', () => {
     const octiles = new Set<number>();
     for (let index = 0; index < 10; index += 1) {
-      const layout = ArenaGenerator.generate(53_000 + index);
+      const layout = generateArenaWithActiveMetrics(53_000 + index);
       for (const placement of placementsFor(layout.seed, layout.dirt)) {
         const localX = placement.worldX - ARENA_OFFSET_X;
         const localY = placement.worldY - ARENA_OFFSET_Y;
@@ -124,7 +124,7 @@ describe('Ground cover field', () => {
 
   it('keeps size, alpha and texture inside the configured bounds', () => {
     const known = new Set(GROUND_COVER_CONFIG.variants.map((variant) => getGroundCoverTextureKey(variant.fileName)));
-    const layout = ArenaGenerator.generate(54_000);
+    const layout = generateArenaWithActiveMetrics(54_000);
     const placements = placementsFor(layout.seed, layout.dirt);
     expect(placements.length).toBeGreaterThan(0);
 
@@ -143,7 +143,7 @@ describe('Ground cover field', () => {
   it('stays inside the placement budget', () => {
     const blocks = Math.ceil(GRID_COLS / GROUND_COVER_CONFIG.blockCells) * Math.ceil(GRID_ROWS / GROUND_COVER_CONFIG.blockCells);
     for (let index = 0; index < 10; index += 1) {
-      const layout = ArenaGenerator.generate(55_000 + index);
+      const layout = generateArenaWithActiveMetrics(55_000 + index);
       const placements = placementsFor(layout.seed, layout.dirt);
       expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(GRID_COLS, GRID_ROWS));
       expect(placements.length).toBeLessThanOrEqual(blocks * GROUND_COVER_CONFIG.maxPerBlock);
@@ -168,7 +168,7 @@ describe('Ground cover field', () => {
   });
 
   it('honours the exclusion predicate', () => {
-    const layout = ArenaGenerator.generate(56_000);
+    const layout = generateArenaWithActiveMetrics(56_000);
     const placements = generateGroundCoverPlacements({
       seed: layout.seed,
       dirt: layout.dirt,

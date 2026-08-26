@@ -1,3 +1,4 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({}));
@@ -12,7 +13,6 @@ import {
   type CoopDefenseMapTrainEventConfig,
   type ResolvedCoopDefenseMapEventConfig,
 } from '../src/config/coopDefenseMaps';
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { applyArenaMetricsForMode } from '../src/config';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { FULL_GAME_STATE_SLICE_KEYS } from '../src/network/FullGameStateBootstrap';
@@ -235,7 +235,7 @@ describe('Coop Defense C4 campaign validation', () => {
           : map.mapId === '16'
             ? 71_516
             : 73_000 + Number(map.mapId) * 101;
-      const layout = ArenaGenerator.generate(seed, map);
+      const layout = generateArenaWithActiveMetrics(seed, map);
       const mapEventIds = new Set(map.mapEvents?.map((event) => event.id));
       expect(mapEventIds.size, `duplicate event id on map ${map.mapId}`).toBe(map.mapEvents?.length ?? 0);
       for (const event of map.mapEvents ?? []) {

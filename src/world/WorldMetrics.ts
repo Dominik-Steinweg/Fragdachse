@@ -23,6 +23,8 @@ export interface WorldMetrics {
   readonly viewportHeight: number;
   readonly gridCols: number;
   readonly gridRows: number;
+  readonly trackSpawnMinCol: number;
+  readonly trackSpawnMaxCol: number;
   readonly usesDynamicCamera: boolean;
   readonly showStaticFrames: boolean;
 }
@@ -36,6 +38,8 @@ export interface WorldMetrics {
  * statt es in globale Variablen zu schreiben.
  */
 export function resolveWorldMetrics(profile: ArenaMetricsProfile): WorldMetrics {
+  const gridCols = Math.floor(profile.arenaWidth / CELL_SIZE);
+  const gridRows = Math.floor(profile.arenaHeight / CELL_SIZE);
   return {
     widthPx: profile.arenaWidth,
     heightPx: profile.arenaHeight,
@@ -45,8 +49,10 @@ export function resolveWorldMetrics(profile: ArenaMetricsProfile): WorldMetrics 
     maxY: profile.arenaOffsetY + profile.arenaHeight,
     viewportWidth: profile.arenaViewportWidth,
     viewportHeight: profile.arenaViewportHeight,
-    gridCols: Math.floor(profile.arenaWidth / CELL_SIZE),
-    gridRows: Math.floor(profile.arenaHeight / CELL_SIZE),
+    gridCols,
+    gridRows,
+    trackSpawnMinCol: Math.floor(gridCols * 0.25),
+    trackSpawnMaxCol: Math.floor(gridCols * 0.75),
     usesDynamicCamera: profile.usesDynamicCamera,
     showStaticFrames: profile.showStaticArenaFrames,
   };

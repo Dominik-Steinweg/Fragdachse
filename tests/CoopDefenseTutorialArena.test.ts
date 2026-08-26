@@ -1,5 +1,5 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import {
@@ -66,7 +66,7 @@ describe('Coop defense tutorial arena formation', () => {
       mapConfig.arenaWidthCells,
       mapConfig.arenaHeightCells,
     );
-    const layout = ArenaGenerator.generate(42_424, mapConfig);
+    const layout = generateArenaWithActiveMetrics(42_424, mapConfig);
     const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
     const tutorialRocks = layout.rocks.filter((rock) => rock.armorDropMult !== undefined);
     const trackColumns = new Set<number>();

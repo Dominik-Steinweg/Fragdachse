@@ -1,10 +1,10 @@
+import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '15' },
 }));
 
-import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../src/config';
 import {
@@ -57,8 +57,8 @@ describe('Map 15 - Leerenjäger', () => {
 
   it('replaces rails with deterministic collision-free prebuilt void hazards', () => {
     const map = getCoopDefenseMapConfig('15');
-    const first = ArenaGenerator.generate(71_515, map);
-    const repeated = ArenaGenerator.generate(71_515, map);
+    const first = generateArenaWithActiveMetrics(71_515, map);
+    const repeated = generateArenaWithActiveMetrics(71_515, map);
     const hazardEvents = map.mapEvents?.filter((event) => event.type === 'ground-hazard') ?? [];
     expect(first.tracks).toEqual([]);
     expect(first.groundHazardZones).toEqual(repeated.groundHazardZones);

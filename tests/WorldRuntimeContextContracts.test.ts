@@ -80,7 +80,7 @@ describe('WorldMetrics – derselbe Wert, nur an eine World gebunden', () => {
     for (const testCase of cases) {
       const profile = getArenaMetricsProfile(testCase.mode, 'ARENA', testCase.widthCells, testCase.heightCells);
       const metrics = resolveWorldMetrics(profile);
-      // Die globale Variante ist weiterhin die Laufzeitquelle; sie muss denselben Wert ergeben.
+      // Der globale Kompatibilitaetsspiegel muss weiterhin denselben Wert ergeben.
       applyArenaMetricsForMode(testCase.mode, 'ARENA', testCase.widthCells, testCase.heightCells);
       expect(metrics, testCase.label).toEqual({
         widthPx: config.ARENA_WIDTH,
@@ -93,6 +93,8 @@ describe('WorldMetrics – derselbe Wert, nur an eine World gebunden', () => {
         viewportHeight: config.ARENA_VIEWPORT_HEIGHT,
         gridCols: config.GRID_COLS,
         gridRows: config.GRID_ROWS,
+        trackSpawnMinCol: config.TRACK_SPAWN_MIN_COL,
+        trackSpawnMaxCol: config.TRACK_SPAWN_MAX_COL,
         usesDynamicCamera: profile.usesDynamicCamera,
         showStaticFrames: config.ARENA_STATIC_FRAMES_VISIBLE,
       });

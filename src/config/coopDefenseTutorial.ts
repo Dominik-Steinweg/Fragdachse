@@ -7,6 +7,7 @@ import {
   GRID_ROWS,
 } from '../config';
 import { HELP_CONTROLS } from './helpControls';
+import type { WorldMetrics } from '../world/WorldMetrics';
 
 export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 60_000;
 /** Standard-Standzeit eines gemeinsamen Tutorial-Hinweises entlang der Route. */
@@ -75,20 +76,31 @@ export function getCoopDefenseTutorialPanelHeight(showControls: boolean): number
 export function getCoopDefenseTutorialRockRegion(
   showControls = false,
   anchor?: CoopDefenseTutorialAnchor,
+  metrics?: Pick<WorldMetrics, 'offsetX' | 'offsetY' | 'widthPx' | 'gridCols' | 'gridRows'>,
 ): {
   minGridX: number;
   maxGridX: number;
   minGridY: number;
   maxGridY: number;
 } {
-  const left = getCoopDefenseTutorialPanelCenterX(anchor) - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
+  const offsetX = metrics?.offsetX ?? ARENA_OFFSET_X;
+  const offsetY = metrics?.offsetY ?? ARENA_OFFSET_Y;
+  const panelCenterX = metrics
+    ? (anchor ? offsetX + (anchor.gridX + 0.5) * CELL_SIZE : offsetX + metrics.widthPx / 2)
+    : getCoopDefenseTutorialPanelCenterX(anchor);
+  const panelTopY = metrics
+    ? (anchor ? offsetY + anchor.gridY * CELL_SIZE : offsetY + COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y)
+    : getCoopDefenseTutorialPanelTopY(anchor);
+  const gridCols = metrics?.gridCols ?? GRID_COLS;
+  const gridRows = metrics?.gridRows ?? GRID_ROWS;
+  const left = panelCenterX - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
   const right = left + COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-  const top = getCoopDefenseTutorialPanelTopY(anchor);
+  const top = panelTopY;
   const bottom = top + getCoopDefenseTutorialPanelHeight(showControls);
   return {
-    minGridX: Math.max(0, Math.floor((left - ARENA_OFFSET_X) / CELL_SIZE)),
-    maxGridX: Math.min(GRID_COLS - 1, Math.ceil((right - ARENA_OFFSET_X) / CELL_SIZE) - 1),
-    minGridY: Math.max(0, Math.floor((top - ARENA_OFFSET_Y) / CELL_SIZE)),
-    maxGridY: Math.min(GRID_ROWS - 1, Math.ceil((bottom - ARENA_OFFSET_Y) / CELL_SIZE) - 1),
+    minGridX: Math.max(0, Math.floor((left - offsetX) / CELL_SIZE)),
+    maxGridX: Math.min(gridCols - 1, Math.ceil((right - offsetX) / CELL_SIZE) - 1),
+    minGridY: Math.max(0, Math.floor((top - offsetY) / CELL_SIZE)),
+    maxGridY: Math.min(gridRows - 1, Math.ceil((bottom - offsetY) / CELL_SIZE) - 1),
   };
 }

@@ -666,34 +666,41 @@ export function isGridCellInArenaRegion(region: ArenaGridRegion, gx: number, gy:
     && gy <= region.maxGridY;
 }
 
-function clampCaptureTheBeerRegionWidth(widthCells: number): number {
-  return Math.max(1, Math.min(widthCells, Math.max(1, GRID_COLS)));
+function clampCaptureTheBeerRegionWidth(widthCells: number, gridCols: number): number {
+  return Math.max(1, Math.min(widthCells, Math.max(1, gridCols)));
 }
 
-export function getCaptureTheBeerBaseRegion(teamId: TeamId): ArenaGridRegion {
-  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_BASE_WIDTH_CELLS);
+export function getCaptureTheBeerBaseRegion(
+  teamId: TeamId,
+  gridCols = GRID_COLS,
+  gridRows = GRID_ROWS,
+): ArenaGridRegion {
+  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_BASE_WIDTH_CELLS, gridCols);
   if (teamId === 'blue') {
-    return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+    return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: gridRows - 1 };
   }
-  return { minGridX: GRID_COLS - width, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+  return { minGridX: gridCols - width, maxGridX: gridCols - 1, minGridY: 0, maxGridY: gridRows - 1 };
 }
 
 export function getCaptureTheBeerTeamSpawnRegion(teamId: TeamId): ArenaGridRegion {
-  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS);
+  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS, GRID_COLS);
   if (teamId === 'blue') {
     return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
   }
   return { minGridX: GRID_COLS - width, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
 }
 
-export function getCaptureTheBeerMiddleThirdRegion(): ArenaGridRegion {
-  const width = Math.max(1, Math.floor(GRID_COLS / 3));
-  const minGridX = Math.floor((GRID_COLS - width) / 2);
+export function getCaptureTheBeerMiddleThirdRegion(
+  gridCols = GRID_COLS,
+  gridRows = GRID_ROWS,
+): ArenaGridRegion {
+  const width = Math.max(1, Math.floor(gridCols / 3));
+  const minGridX = Math.floor((gridCols - width) / 2);
   return {
     minGridX,
     maxGridX: minGridX + width - 1,
     minGridY: 0,
-    maxGridY: GRID_ROWS - 1,
+    maxGridY: gridRows - 1,
   };
 }
 
@@ -797,25 +804,41 @@ export function getArenaMetricsProfile(
   return FULL_WIDTH_ARENA_METRICS_PROFILE;
 }
 
-export function applyArenaMetricsForMode(
-  mode: GameMode,
-  phase: GamePhase,
-  coopDefenseArenaWidthCells?: number,
-  coopDefenseArenaHeightCells?: number,
-): void {
-  ACTIVE_ARENA_METRICS_PROFILE = getArenaMetricsProfile(
-    mode,
-    phase,
-    coopDefenseArenaWidthCells,
-    coopDefenseArenaHeightCells,
-  );
-  ARENA_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaWidth;
-  ARENA_OFFSET_X = ACTIVE_ARENA_METRICS_PROFILE.arenaOffsetX;
-  ARENA_VIEWPORT_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaViewportWidth;
-  ARENA_HEIGHT = ACTIVE_ARENA_METRICS_PROFILE.arenaHeight;
-  ARENA_OFFSET_Y = ACTIVE_ARENA_METRICS_PROFILE.arenaOffsetY;
-  ARENA_VIEWPORT_HEIGHT = ACTIVE_ARENA_METRICS_PROFILE.arenaViewportHeight;
-  ARENA_STATIC_FRAMES_VISIBLE = ACTIVE_ARENA_METRICS_PROFILE.showStaticArenaFrames;
+/** Activity-scoped compatibility values selected by the active game mode. */
+export interface ArenaActivityValues {
+  readonly treeCount: number;
+  readonly arenaDurationSec: number;
+}
+
+/** Mode switches that still feed legacy systems outside a World context. */
+export interface ArenaModeFlags {
+  readonly captureTheBeerBasesActive: boolean;
+  readonly coopDefenseBasesActive: boolean;
+}
+
+export function getArenaActivityValuesForMode(mode: GameMode): ArenaActivityValues {
+  return mode === CAPTURE_THE_BEER_MODE
+    ? { treeCount: CAPTURE_THE_BEER_TREE_COUNT, arenaDurationSec: CAPTURE_THE_BEER_ARENA_DURATION_SEC }
+    : { treeCount: DEFAULT_TREE_COUNT, arenaDurationSec: DEFAULT_ARENA_DURATION_SEC };
+}
+
+export function getArenaModeFlags(mode: GameMode): ArenaModeFlags {
+  return {
+    captureTheBeerBasesActive: mode === CAPTURE_THE_BEER_MODE,
+    coopDefenseBasesActive: mode === COOP_DEFENSE_MODE,
+  };
+}
+
+/** Applies only the mutable compatibility mirror of one arena/world metric profile. */
+export function applyArenaWorldMetrics(profile: ArenaMetricsProfile): void {
+  ACTIVE_ARENA_METRICS_PROFILE = profile;
+  ARENA_WIDTH = profile.arenaWidth;
+  ARENA_OFFSET_X = profile.arenaOffsetX;
+  ARENA_VIEWPORT_WIDTH = profile.arenaViewportWidth;
+  ARENA_HEIGHT = profile.arenaHeight;
+  ARENA_OFFSET_Y = profile.arenaOffsetY;
+  ARENA_VIEWPORT_HEIGHT = profile.arenaViewportHeight;
+  ARENA_STATIC_FRAMES_VISIBLE = profile.showStaticArenaFrames;
   ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
   ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
   SHOT_AUDIO_REMOTE_MAX_DISTANCE = ARENA_WIDTH;
@@ -824,10 +847,40 @@ export function applyArenaMetricsForMode(
   GRID_ROWS = Math.floor(ARENA_HEIGHT / CELL_SIZE);
   TRACK_SPAWN_MIN_COL = Math.floor(GRID_COLS * 0.25);
   TRACK_SPAWN_MAX_COL = Math.floor(GRID_COLS * 0.75);
-  CAPTURE_THE_BEER_BASES_ACTIVE = mode === CAPTURE_THE_BEER_MODE;
-  COOP_DEFENSE_BASES_ACTIVE = mode === COOP_DEFENSE_MODE;
-  TREE_COUNT = mode === CAPTURE_THE_BEER_MODE ? CAPTURE_THE_BEER_TREE_COUNT : DEFAULT_TREE_COUNT;
-  ARENA_DURATION_SEC = mode === CAPTURE_THE_BEER_MODE ? CAPTURE_THE_BEER_ARENA_DURATION_SEC : DEFAULT_ARENA_DURATION_SEC;
+}
+
+/** Applies only Activity-scoped compatibility values. */
+export function applyArenaActivityValuesForMode(mode: GameMode): void {
+  const values = getArenaActivityValuesForMode(mode);
+  TREE_COUNT = values.treeCount;
+  ARENA_DURATION_SEC = values.arenaDurationSec;
+}
+
+/** Applies only legacy mode switches. */
+export function applyArenaModeFlags(mode: GameMode): void {
+  const flags = getArenaModeFlags(mode);
+  CAPTURE_THE_BEER_BASES_ACTIVE = flags.captureTheBeerBasesActive;
+  COOP_DEFENSE_BASES_ACTIVE = flags.coopDefenseBasesActive;
+}
+
+/**
+ * Compatibility facade for callers that still maintain the single active arena mirror.
+ * World simulation resolves and retains its own profile instead of reading these globals.
+ */
+export function applyArenaMetricsForMode(
+  mode: GameMode,
+  phase: GamePhase,
+  coopDefenseArenaWidthCells?: number,
+  coopDefenseArenaHeightCells?: number,
+): void {
+  applyArenaWorldMetrics(getArenaMetricsProfile(
+    mode,
+    phase,
+    coopDefenseArenaWidthCells,
+    coopDefenseArenaHeightCells,
+  ));
+  applyArenaActivityValuesForMode(mode);
+  applyArenaModeFlags(mode);
 }
 
 // ---- Felsen HP ----

@@ -1,5 +1,5 @@
-import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isPersistentBaseReservationCell, isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
+import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, getArenaActivityValuesForMode, getArenaModeFlags, getCaptureTheBeerBaseRegion, getCaptureTheBeerMiddleThirdRegion, isGridCellInArenaRegion } from '../config';
+import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
@@ -25,6 +25,8 @@ import {
 import { getMapTutorial } from '../i18n/contentPresentation';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
+import type { GameMode } from '../types';
+import type { WorldMetrics } from '../world/WorldMetrics';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
 /** Abtastschritt entlang eines Gangs in Zellen; kleiner = glattere Wand, mehr Rechenaufwand. */
@@ -101,6 +103,25 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 /** Increment whenever deterministic generation changes in a wire-visible way. */
 export const ARENA_GENERATOR_VERSION = 3;
 
+/** Immutable inputs that previously leaked in through mutable config module variables. */
+export interface ArenaGenerationInput {
+  readonly metrics: WorldMetrics;
+  readonly treeCount: number;
+  readonly captureTheBeerBasesActive: boolean;
+  readonly coopDefenseBasesActive: boolean;
+}
+
+/** Composes existing mode resolvers with the metrics of one concrete World. */
+export function resolveArenaGenerationInput(mode: GameMode, metrics: WorldMetrics): ArenaGenerationInput {
+  const flags = getArenaModeFlags(mode);
+  return {
+    metrics,
+    treeCount: getArenaActivityValuesForMode(mode).treeCount,
+    captureTheBeerBasesActive: flags.captureTheBeerBasesActive,
+    coopDefenseBasesActive: flags.coopDefenseBasesActive,
+  };
+}
+
 // Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin und wird auch von der Lobby-Vorschau
 // verwendet; die Arena behält hier nur ihre eigene Reserveflaechen- und Wachstumslogik.
 function clampToUnitRange(value: number): number {
@@ -114,6 +135,12 @@ function clampToUnitRange(value: number): number {
  * miteinander verbunden sind (keine eingesperrten Bereiche).
  */
 export class ArenaGenerator {
+  private constructor(private readonly input: ArenaGenerationInput) {}
+
+  private get metrics(): WorldMetrics {
+    return this.input.metrics;
+  }
+
   /** Compact deterministic fingerprint for host/client generation diagnostics. */
   static fingerprint(layout: ArenaLayout): string {
     const hash = updateJsonFingerprintHash(layout, 0x811c9dc5);
@@ -124,7 +151,15 @@ export class ArenaGenerator {
    * Generiert ein ArenaLayout für den gegebenen Seed.
    * Versucht bis zu 100 Mal einen konnektiven Layout zu erzeugen.
    */
-  static generate(seed: number, coopMapConfig?: CoopDefenseMapConfig): ArenaLayout {
+  static generate(
+    seed: number,
+    input: ArenaGenerationInput,
+    coopMapConfig?: CoopDefenseMapConfig,
+  ): ArenaLayout {
+    return new ArenaGenerator(input).generateLayout(seed, coopMapConfig);
+  }
+
+  private generateLayout(seed: number, coopMapConfig?: CoopDefenseMapConfig): ArenaLayout {
     // Die Basisgeometrie hängt nur von Map-Konfiguration und aktuellen Arena-Metriken ab,
     // nicht vom Retry-Seed. Bei expliziten Coop-Maps wird sie deshalb einmal pro Generate-Aufruf
     // aufgelöst und an alle Zellprüfungen weitergereicht. Ohne Map-Konfiguration bleibt
@@ -135,22 +170,22 @@ export class ArenaGenerator {
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
     );
-    const missionCheckpointCells = ArenaGenerator.collectMissionCheckpointCells(
+    const missionCheckpointCells = this.collectMissionCheckpointCells(
       coopMapConfig?.missionProgress?.checkpoints,
     );
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
     // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
-    const authoredRockWallCells = ArenaGenerator.collectRockWallCells(coopMapConfig?.rockWalls);
+    const authoredRockWallCells = this.collectRockWallCells(coopMapConfig?.rockWalls);
 
     for (let attempt = 0; attempt < 100; attempt++) {
-      const rng = ArenaGenerator.makePrng(seed + attempt);
-      const blocked: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
-        new Array(GRID_COLS).fill(false),
+      const rng = this.makePrng(seed + attempt);
+      const blocked: boolean[][] = Array.from({ length: this.metrics.gridRows }, () =>
+        new Array(this.metrics.gridCols).fill(false),
       );
 
       // --- Gleise zuerst generieren (vor Felsen) ---
-      const generatedTrackLayout = ArenaGenerator.generateTracks(
+      const generatedTrackLayout = this.generateTracks(
         rng,
         // Void-fire keeps its authored centered hazard corridor even though no train track is
         // rendered. All other Coop maps keep a free cell between the railway and every base.
@@ -167,19 +202,19 @@ export class ArenaGenerator {
 
       // 1. Initialer Noise
       const rockFillRatio = coopMapConfig?.rockFillRatio ?? ROCK_FILL_RATIO;
-      let map: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
-        Array.from({ length: GRID_COLS }, () => rng() < rockFillRatio),
+      let map: boolean[][] = Array.from({ length: this.metrics.gridRows }, () =>
+        Array.from({ length: this.metrics.gridCols }, () => rng() < rockFillRatio),
       );
 
       // 2. Smoothing-Steps
       // Explizite 0 bedeutet eine wirklich leere authored Flaeche. Die uebliche Randbehandlung
       // der CA wuerde sonst selbst aus komplett leerem Noise vier Eckfelsen erzeugen.
       for (let step = 0; rockFillRatio > 0 && step < CA_SMOOTHING_STEPS; step++) {
-        const newMap: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
-          new Array(GRID_COLS).fill(false),
+        const newMap: boolean[][] = Array.from({ length: this.metrics.gridRows }, () =>
+          new Array(this.metrics.gridCols).fill(false),
         );
-        for (let gy = 0; gy < GRID_ROWS; gy++) {
-          for (let gx = 0; gx < GRID_COLS; gx++) {
+        for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+          for (let gx = 0; gx < this.metrics.gridCols; gx++) {
             // Zähle Fels-Nachbarn in 8 umliegenden Zellen (Rand = Fels)
             let rockNeighbors = 0;
             for (let dy = -1; dy <= 1; dy++) {
@@ -187,7 +222,7 @@ export class ArenaGenerator {
                 if (dx === 0 && dy === 0) continue;
                 const nx = gx + dx;
                 const ny = gy + dy;
-                if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) {
+                if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) {
                   rockNeighbors++; // Rand gilt als Fels
                 } else if (map[ny][nx]) {
                   rockNeighbors++;
@@ -211,7 +246,7 @@ export class ArenaGenerator {
       // bereits erfüllt.
       let tutorialRockCells: Set<string> | null = null;
       if (coopMapConfig?.rockField) {
-        ArenaGenerator.applyRockField(
+        this.applyRockField(
           map,
           coopMapConfig.rockField,
           rng,
@@ -219,7 +254,7 @@ export class ArenaGenerator {
         );
       }
       if (coopMapConfig && getMapTutorial(coopMapConfig.mapId, 'de')) {
-        tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(
+        tutorialRockCells = this.applyTutorialRockFormation(
           map,
           trackCols,
           rng,
@@ -234,7 +269,7 @@ export class ArenaGenerator {
       // Checkpoint-Kreise sind authored Lauf- und Triggerflächen. Der Kern wird garantiert
       // freigeschnitten; ein unregelmäßiger Rand hält die Felsformation organisch statt ein
       // künstliches Quadrat um jeden Marker zu erzeugen.
-      ArenaGenerator.carveOrganicCheckpointClearances(
+      this.carveOrganicCheckpointClearances(
         map,
         coopMapConfig?.missionProgress?.checkpoints ?? [],
         rng,
@@ -244,12 +279,12 @@ export class ArenaGenerator {
       //    Gleis-Spalten bleiben frei (trackCols sind begehbar)
       const tutorialRockArmorDropMult = coopMapConfig?.tutorialRockArmorDropMult;
       const rocks: RockCell[] = [];
-      for (let gy = 0; gy < GRID_ROWS; gy++) {
-        for (let gx = 0; gx < GRID_COLS; gx++) {
+      for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+        for (let gx = 0; gx < this.metrics.gridCols; gx++) {
           if (
             map[gy][gx]
             && !trackCols.has(gx)
-            && !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
+            && !this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
             && !missionBarrierCells.has(`${gx}_${gy}`)
           ) {
             blocked[gy][gx] = true;
@@ -265,8 +300,8 @@ export class ArenaGenerator {
 
       // allCells für Baum-Platzierung aufbauen
       const allCells: Array<{ gx: number; gy: number }> = [];
-      for (let gy = 0; gy < GRID_ROWS; gy++) {
-        for (let gx = 0; gx < GRID_COLS; gx++) {
+      for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+        for (let gx = 0; gx < this.metrics.gridCols; gx++) {
           allCells.push({ gx, gy });
         }
       }
@@ -274,7 +309,7 @@ export class ArenaGenerator {
       // Konnektivität sicherstellen: Statt bei einer abgeschnürten Tasche den kompletten Versuch
       // zu verwerfen (was bei höherem rockFillRatio schnell alle 100 Versuche verbraucht und in
       // einer Exception endet), wird die günstigste Verbindung zwischen den Regionen nachgefräst.
-      ArenaGenerator.ensureConnected(blocked, rocks);
+      this.ensureConnected(blocked, rocks);
 
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
@@ -287,20 +322,20 @@ export class ArenaGenerator {
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
-          !isReservedBaseObstacleCell(gx, gy, coopBaseSpecs) &&
+          !this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs) &&
           !missionBarrierCells.has(`${gx}_${gy}`) &&
           !authoredRockWallCells.has(`${gx}_${gy}`) &&
           !missionCheckpointCells.has(`${gx}_${gy}`) &&
-          gx >= treeMargin && gx < GRID_COLS - treeMargin &&
-          gy >= treeMargin && gy < GRID_ROWS - treeMargin,
+          gx >= treeMargin && gx < this.metrics.gridCols - treeMargin &&
+          gy >= treeMargin && gy < this.metrics.gridRows - treeMargin,
       );
       // Nochmals shuffeln für unabhängige Baumpositionierung
-      ArenaGenerator.shuffle(shuffledForTrees, rng);
+      this.shuffle(shuffledForTrees, rng);
 
       // Mindestabstand zwischen Bäumen: 4 Felder in alle Richtungen (Chebyshev-Distanz ≥ 4).
       // Entspricht 4 × 32 px = 128 px – verhindert das Überdecken von Stämmen und Kronen.
       const TREE_MIN_SPACING = 4;
-      const treeCount = coopMapConfig?.treeCount ?? TREE_COUNT;
+      const treeCount = coopMapConfig?.treeCount ?? this.input.treeCount;
       for (const { gx, gy } of shuffledForTrees) {
         if (trees.length >= treeCount) break;
         // Prüfe Chebyshev-Abstand zu allen bereits platzierten Bäumen
@@ -311,7 +346,7 @@ export class ArenaGenerator {
         // Ein Baum darf keine Engstelle komplett zustellen – notfalls wird nur dieser eine
         // Baum übersprungen statt den ganzen (bereits konnektiven) Versuch zu verwerfen.
         blocked[gy][gx] = true;
-        if (!ArenaGenerator.isConnected(blocked)) {
+        if (!this.isConnected(blocked)) {
           blocked[gy][gx] = false;
           continue;
         }
@@ -322,7 +357,7 @@ export class ArenaGenerator {
       // Gleisen fern: Links und rechts bleibt genug Raum, um die Gleise zu verlassen oder zu
       // queren. Das Entfernen ist gezielt und betrifft nur die ohnehin reservierte Gleisnaehe.
       if (tracks.length > 0) {
-        ArenaGenerator.ensureTrackCrossingOptions(
+        this.ensureTrackCrossingOptions(
           blocked,
           rocks,
           trees,
@@ -335,7 +370,7 @@ export class ArenaGenerator {
       if (
         coopMapConfig
         && tracks.length > 0
-        && !ArenaGenerator.hasAcceptableSpawnToBaseRoutes(
+        && !this.hasAcceptableSpawnToBaseRoutes(
           blocked,
           tracks,
           coopMapConfig,
@@ -347,7 +382,7 @@ export class ArenaGenerator {
         continue;
       }
 
-      ArenaGenerator.applyAuthoredRockWalls(
+      this.applyAuthoredRockWalls(
         blocked,
         rocks,
         trees,
@@ -359,19 +394,19 @@ export class ArenaGenerator {
       );
 
       // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
-      const dirtSet = new Set<number>(); // gy * GRID_COLS + gx
+      const dirtSet = new Set<number>(); // gy * this.metrics.gridCols + gx
       const marginSources: Array<{ gridX: number; gridY: number }> = [...rocks];
       // Felsen- und Gleis-Positionen + 1-Zellen-Rand drumherum. Gleise belegen zwei Spalten.
       for (const { gridX, gridY } of tracks) {
         marginSources.push({ gridX, gridY }, { gridX: gridX + 1, gridY });
       }
       for (const cell of createOrganicDirtMargin(marginSources, {
-        maxCols: GRID_COLS,
-        maxRows: GRID_ROWS,
+        maxCols: this.metrics.gridCols,
+        maxRows: this.metrics.gridRows,
         rng,
-        isReservedCell: (gridX, gridY) => isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs),
+        isReservedCell: (gridX, gridY) => this.isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs),
       })) {
-        dirtSet.add(cell.gridY * GRID_COLS + cell.gridX);
+        dirtSet.add(cell.gridY * this.metrics.gridCols + cell.gridX);
       }
       // 3. Zufällige Flecken – nur an Nachbarzellen von bestehendem Dirt (zusammenhängend)
       //    Mehrere Passes, damit das Netz organisch wächst.
@@ -379,16 +414,16 @@ export class ArenaGenerator {
       for (let p = 0; p < passes; p++) {
         const frontier: number[] = [];
         for (const key of dirtSet) {
-          const gx = key % GRID_COLS;
-          const gy = Math.floor(key / GRID_COLS);
+          const gx = key % this.metrics.gridCols;
+          const gy = Math.floor(key / this.metrics.gridCols);
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
               if (dx === 0 && dy === 0) continue;
               const nx = gx + dx;
               const ny = gy + dy;
-              if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-              if (isReservedBaseSurfaceCell(nx, ny, coopBaseSpecs)) continue;
-              const nk = ny * GRID_COLS + nx;
+              if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) continue;
+              if (this.isReservedBaseSurfaceCell(nx, ny, coopBaseSpecs)) continue;
+              const nk = ny * this.metrics.gridCols + nx;
               if (!dirtSet.has(nk)) frontier.push(nk);
             }
           }
@@ -399,19 +434,19 @@ export class ArenaGenerator {
       }
       const dirt: DirtCell[] = [];
       for (const key of dirtSet) {
-        dirt.push({ gridX: key % GRID_COLS, gridY: Math.floor(key / GRID_COLS) });
+        dirt.push({ gridX: key % this.metrics.gridCols, gridY: Math.floor(key / this.metrics.gridCols) });
       }
 
       // Geschlossene Tore zaehlen fuer Podeste und Hazards als reservierte Geometrie, ohne die
       // zuvor gepruefte permanente Fels-Konnektivitaet kuenstlich zu beeinflussen.
       for (const key of missionBarrierCells) {
         const [gridX, gridY] = key.split('_').map(Number);
-        if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS) blocked[gridY][gridX] = true;
+        if (gridX >= 0 && gridX < this.metrics.gridCols && gridY >= 0 && gridY < this.metrics.gridRows) blocked[gridY][gridX] = true;
       }
 
       const powerUpPedestals = coopMapConfig === undefined
-        ? ArenaGenerator.generateRandomPowerUpPedestals(rng, blocked, trackCols, coopBaseSpecs)
-        : ArenaGenerator.generateCoopPowerUpPedestals(
+        ? this.generateRandomPowerUpPedestals(rng, blocked, trackCols, coopBaseSpecs)
+        : this.generateCoopPowerUpPedestals(
           rng,
           blocked,
           trackCols,
@@ -422,7 +457,7 @@ export class ArenaGenerator {
       // prozedurale Versuch in einem Bereich keinen freien Platz lässt, wird die Arena
       // mit dem nächsten Seed-Versuch neu erzeugt.
       if (powerUpPedestals === null) continue;
-      const groundHazardZones = ArenaGenerator.generateGroundHazardZones(
+      const groundHazardZones = this.generateGroundHazardZones(
         rng,
         blocked,
         trees,
@@ -437,8 +472,8 @@ export class ArenaGenerator {
       // fallen dagegen ohne Layout-Retry aus (siehe generateGroundHazardZones) -- ein
       // ungluecklich gesetztes Rechteck darf die Runde nicht am Start hindern.
       if (groundHazardZones === null) continue;
-      const decals = ArenaGenerator.generateDecals(
-        ArenaGenerator.makeDecalPrng(seed + attempt),
+      const decals = this.generateDecals(
+        this.makeDecalPrng(seed + attempt),
         rocks,
         trees,
         tracks,
@@ -465,25 +500,58 @@ export class ArenaGenerator {
     );
   }
 
+  private isCaptureTheBeerBaseCell(gridX: number, gridY: number): boolean {
+    if (!this.input.captureTheBeerBasesActive) return false;
+    return isGridCellInArenaRegion(
+      getCaptureTheBeerBaseRegion('blue', this.metrics.gridCols, this.metrics.gridRows),
+      gridX,
+      gridY,
+    ) || isGridCellInArenaRegion(
+      getCaptureTheBeerBaseRegion('red', this.metrics.gridCols, this.metrics.gridRows),
+      gridX,
+      gridY,
+    );
+  }
+
+  private isReservedBaseObstacleCell(
+    gridX: number,
+    gridY: number,
+    bases?: readonly BaseSpec[],
+  ): boolean {
+    const worldBases = bases ?? [];
+    return this.isCaptureTheBeerBaseCell(gridX, gridY)
+      || isCoopDefenseBaseObstacleClearanceCell(gridX, gridY, worldBases)
+      || isPersistentBaseReservationCell(gridX, gridY, worldBases);
+  }
+
+  private isReservedBaseSurfaceCell(
+    gridX: number,
+    gridY: number,
+    bases?: readonly BaseSpec[],
+  ): boolean {
+    return this.isCaptureTheBeerBaseCell(gridX, gridY)
+      || isCoopDefenseBaseCell(gridX, gridY, bases ?? []);
+  }
+
   /**
    * Generiert TRACK_COUNT zufällige vertikale Gleis-Spalten in der mittleren
-   * Hälfte der Arena (TRACK_SPAWN_MIN_COL … TRACK_SPAWN_MAX_COL).
+   * Hälfte der Arena (this.metrics.trackSpawnMinCol … this.metrics.trackSpawnMaxCol).
    * Gibt die Set der gewählten Spalten zurück (für Felsen/Baum-Filter)
    * sowie alle TrackCells (jede Zelle einer Gleis-Spalte).
    */
-  private static generateTracks(
+  private generateTracks(
     rng: () => number,
     bases: readonly BaseSpec[] = [],
     trackPosition?: CoopDefenseMapTrackPosition,
   ): { trackCols: Set<number>; tracks: TrackCell[] } {
-    const candidateColumns = Array.from({ length: Math.max(0, GRID_COLS - 1) }, (_, col) => col)
-      .filter((col) => ArenaGenerator.isTrackColumnClearOfBases(col, bases));
+    const candidateColumns = Array.from({ length: Math.max(0, this.metrics.gridCols - 1) }, (_, col) => col)
+      .filter((col) => this.isTrackColumnClearOfBases(col, bases));
 
     if (candidateColumns.length === 0) {
       throw new Error('[ArenaGenerator] Keine Gleisspalte mit ausreichendem Abstand zu den Basen verfügbar');
     }
 
-    const authoredPosition = trackPosition ?? (usesCenteredTrackSpawn() ? 'center' : undefined);
+    const authoredPosition = trackPosition ?? ((this.input.captureTheBeerBasesActive || this.input.coopDefenseBasesActive) ? 'center' : undefined);
     if (typeof authoredPosition === 'object' && authoredPosition.kind === 'grid') {
       const col = authoredPosition.gridX;
       if (!candidateColumns.includes(col)) {
@@ -491,11 +559,11 @@ export class ArenaGenerator {
           `[ArenaGenerator] Authored trackPosition gridX ${col} overlaps a base or its clearance on the current map`,
         );
       }
-      return ArenaGenerator.buildTrackLayout(col);
+      return this.buildTrackLayout(col);
     }
 
     if (authoredPosition === 'left' || authoredPosition === 'right') {
-      const available = ArenaGenerator.getMiddleTrackColumns(candidateColumns);
+      const available = this.getMiddleTrackColumns(candidateColumns);
       if (available.length === 0) {
         throw new Error(
           `[ArenaGenerator] No safe ${authoredPosition} track position is available within the authored middle zone`,
@@ -504,33 +572,33 @@ export class ArenaGenerator {
       const col = authoredPosition === 'left'
         ? available[0]
         : available[available.length - 1];
-      return ArenaGenerator.buildTrackLayout(col);
+      return this.buildTrackLayout(col);
     }
 
     if (authoredPosition === 'center') {
       // CTB & Coop-Defense: Gleise bevorzugt in die Mitte der Arena setzen (2 Spalten zentriert).
       // Wenn dort eine Basis liegt, wird die nächstgelegene sichere Spalte verwendet.
-      const centeredCol = Math.floor((GRID_COLS - 2) / 2);
+      const centeredCol = Math.floor((this.metrics.gridCols - 2) / 2);
       const col = candidateColumns.reduce((best, candidate) => (
         Math.abs(candidate - centeredCol) < Math.abs(best - centeredCol) ? candidate : best
       ), candidateColumns[0]);
-      return ArenaGenerator.buildTrackLayout(col);
+      return this.buildTrackLayout(col);
     }
 
-    const available = ArenaGenerator.getAvailableTrackColumns(candidateColumns);
-    ArenaGenerator.shuffle(available, rng);
+    const available = this.getAvailableTrackColumns(candidateColumns);
+    this.shuffle(available, rng);
 
-    return ArenaGenerator.buildTrackLayout(available[0]);
+    return this.buildTrackLayout(available[0]);
   }
 
-  private static getAvailableTrackColumns(candidateColumns: readonly number[]): number[] {
-    const available = ArenaGenerator.getMiddleTrackColumns(candidateColumns);
+  private getAvailableTrackColumns(candidateColumns: readonly number[]): number[] {
+    const available = this.getMiddleTrackColumns(candidateColumns);
     return available.length > 0 ? available : [...candidateColumns];
   }
 
-  private static getMiddleTrackColumns(candidateColumns: readonly number[]): number[] {
+  private getMiddleTrackColumns(candidateColumns: readonly number[]): number[] {
     return candidateColumns.filter((col) => (
-      col >= TRACK_SPAWN_MIN_COL && col <= TRACK_SPAWN_MAX_COL
+      col >= this.metrics.trackSpawnMinCol && col <= this.metrics.trackSpawnMaxCol
     ));
   }
 
@@ -539,7 +607,7 @@ export class ArenaGenerator {
    * erst nach der Baumplatzierung gesichert, damit auch Baumkronen-/Stammzellen nicht als
    * scheinbare Ausweichroute uebrig bleiben.
    */
-  private static ensureTrackCrossingOptions(
+  private ensureTrackCrossingOptions(
     blocked: boolean[][],
     rocks: RockCell[],
     trees: TreeCell[],
@@ -555,12 +623,12 @@ export class ArenaGenerator {
 
     for (
       let startY = 1;
-      startY < GRID_ROWS;
+      startY < this.metrics.gridRows;
       startY += COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS
     ) {
       for (
         let offsetY = 0;
-        offsetY < COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS && startY + offsetY < GRID_ROWS;
+        offsetY < COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS && startY + offsetY < this.metrics.gridRows;
         offsetY += 1
       ) {
         const gridY = startY + offsetY;
@@ -571,8 +639,8 @@ export class ArenaGenerator {
         ) {
           if (
             gridX < 0
-            || gridX >= GRID_COLS
-            || ArenaGenerator.isTrackCrossingProtectedCell(
+            || gridX >= this.metrics.gridCols
+            || this.isTrackCrossingProtectedCell(
               gridX,
               gridY,
               bases,
@@ -582,25 +650,25 @@ export class ArenaGenerator {
           ) continue;
           if (!blocked[gridY][gridX]) continue;
           blocked[gridY][gridX] = false;
-          removed.add(ArenaGenerator.cellKey(gridX, gridY));
+          removed.add(this.cellKey(gridX, gridY));
         }
       }
     }
 
     if (removed.size === 0) return;
-    rocks.splice(0, rocks.length, ...rocks.filter((rock) => !removed.has(ArenaGenerator.cellKey(rock.gridX, rock.gridY))));
-    trees.splice(0, trees.length, ...trees.filter((tree) => !removed.has(ArenaGenerator.cellKey(tree.gridX, tree.gridY))));
+    rocks.splice(0, rocks.length, ...rocks.filter((rock) => !removed.has(this.cellKey(rock.gridX, rock.gridY))));
+    trees.splice(0, trees.length, ...trees.filter((tree) => !removed.has(this.cellKey(tree.gridX, tree.gridY))));
   }
 
-  private static isTrackCrossingProtectedCell(
+  private isTrackCrossingProtectedCell(
     gridX: number,
     gridY: number,
     bases: readonly BaseSpec[],
     reservationBaseSpecs?: readonly BaseSpec[],
   ): boolean {
-    if (isReservedBaseObstacleCell(gridX, gridY, bases.length > 0 ? bases : reservationBaseSpecs)) return true;
+    if (this.isReservedBaseObstacleCell(gridX, gridY, bases.length > 0 ? bases : reservationBaseSpecs)) return true;
     if (bases.length === 0) {
-      return isReservedBaseObstacleCell(gridX, gridY, reservationBaseSpecs);
+      return this.isReservedBaseObstacleCell(gridX, gridY, reservationBaseSpecs);
     }
     return bases.some((base) => (
       gridX >= base.region.minGridX - COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS
@@ -616,25 +684,25 @@ export class ArenaGenerator {
    * nicht ueberschreiten. Damit wird nicht jede theoretische Randzelle zur Map-Regel, sondern
    * nur ein realer Spawn muss die freundlichen Zielbasen sinnvoll erreichen koennen.
    */
-  private static hasAcceptableSpawnToBaseRoutes(
+  private hasAcceptableSpawnToBaseRoutes(
     blocked: boolean[][],
     tracks: readonly TrackCell[],
     mapConfig: CoopDefenseMapConfig,
     bases: readonly BaseSpec[],
   ): boolean {
-    const targetCells = ArenaGenerator.getFriendlyBaseGoalCells(blocked, bases);
+    const targetCells = this.getFriendlyBaseGoalCells(blocked, bases);
     if (targetCells.size === 0) return true;
 
     const trackCells = new Set<number>();
     for (const track of tracks) {
-      trackCells.add(ArenaGenerator.cellKey(track.gridX, track.gridY));
-      if (track.gridX + 1 < GRID_COLS) {
-        trackCells.add(ArenaGenerator.cellKey(track.gridX + 1, track.gridY));
+      trackCells.add(this.cellKey(track.gridX, track.gridY));
+      if (track.gridX + 1 < this.metrics.gridCols) {
+        trackCells.add(this.cellKey(track.gridX + 1, track.gridY));
       }
     }
 
     const baseCells = new Set<number>(bases.flatMap((base) => (
-      base.cells.map((cell) => ArenaGenerator.cellKey(cell.gridX, cell.gridY))
+      base.cells.map((cell) => this.cellKey(cell.gridX, cell.gridY))
     )));
     const sourceGroups: Array<Array<{ gridX: number; gridY: number }>> = [];
     const fronts = new Set<SpawnFront>();
@@ -642,7 +710,7 @@ export class ArenaGenerator {
       for (const group of encounter.groups) {
         // Eine Gruppe mit authored Bereich startet nie am Randband; geprueft wird dann genau
         // der Bereich, aus dem sie wirklich kommt.
-        if (group.spawnArea) sourceGroups.push(ArenaGenerator.getSpawnAreaCells(
+        if (group.spawnArea) sourceGroups.push(this.getSpawnAreaCells(
           group.spawnArea,
           blocked,
           baseCells,
@@ -661,23 +729,23 @@ export class ArenaGenerator {
     }
     if (mapConfig.boss) fronts.add(DEFAULT_SPAWN_FRONT);
     for (const front of fronts) {
-      sourceGroups.push(ArenaGenerator.getSpawnFrontCells(front, blocked, baseCells, bases));
+      sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
     }
 
     for (const sources of sourceGroups) {
       if (sources.length === 0) return false;
-      if (!ArenaGenerator.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells)) return false;
+      if (!this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells)) return false;
     }
     return true;
   }
 
-  private static getFriendlyBaseGoalCells(
+  private getFriendlyBaseGoalCells(
     blocked: boolean[][],
     bases: readonly BaseSpec[],
   ): Set<number> {
     const targetCells = new Set<number>();
     const baseCells = new Set<number>(bases.flatMap((base) => (
-      base.cells.map((cell) => ArenaGenerator.cellKey(cell.gridX, cell.gridY))
+      base.cells.map((cell) => this.cellKey(cell.gridX, cell.gridY))
     )));
     for (const base of bases) {
       if (base.faction === 'hostile' || base.role === 'spawn-point') continue;
@@ -687,40 +755,40 @@ export class ArenaGenerator {
           const gridX = cell.gridX + dx;
           const gridY = cell.gridY + dy;
           if (
-            gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS
+            gridX < 0 || gridX >= this.metrics.gridCols || gridY < 0 || gridY >= this.metrics.gridRows
             || blocked[gridY][gridX]
-            || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))
+            || baseCells.has(this.cellKey(gridX, gridY))
           ) continue;
-          targetCells.add(ArenaGenerator.cellKey(gridX, gridY));
+          targetCells.add(this.cellKey(gridX, gridY));
         }
       }
     }
     return targetCells;
   }
 
-  private static getSpawnFrontCells(
+  private getSpawnFrontCells(
     front: SpawnFront,
     blocked: boolean[][],
     baseCells: ReadonlySet<number>,
     bases: readonly BaseSpec[] = [],
   ): Array<{ gridX: number; gridY: number }> {
-    const depthX = Math.min(Math.max(2, Math.floor(GRID_COLS * 0.15)), GRID_COLS - 1);
-    const depthY = Math.min(Math.max(2, Math.floor(GRID_ROWS * 0.15)), GRID_ROWS - 1);
-    const minGridX = front === 'east' ? GRID_COLS - depthX - 1 : 0;
-    const maxGridX = front === 'west' ? depthX : GRID_COLS - 1;
-    const minGridY = front === 'south' ? GRID_ROWS - depthY - 1 : 0;
-    const maxGridY = front === 'north' ? depthY : GRID_ROWS - 1;
+    const depthX = Math.min(Math.max(2, Math.floor(this.metrics.gridCols * 0.15)), this.metrics.gridCols - 1);
+    const depthY = Math.min(Math.max(2, Math.floor(this.metrics.gridRows * 0.15)), this.metrics.gridRows - 1);
+    const minGridX = front === 'east' ? this.metrics.gridCols - depthX - 1 : 0;
+    const maxGridX = front === 'west' ? depthX : this.metrics.gridCols - 1;
+    const minGridY = front === 'south' ? this.metrics.gridRows - depthY - 1 : 0;
+    const maxGridY = front === 'north' ? depthY : this.metrics.gridRows - 1;
     const cells: Array<{ gridX: number; gridY: number }> = [];
     for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
       for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
         const onFrontBand = front === 'west' || front === 'east'
-          ? (front === 'west' ? gridX <= depthX : gridX >= GRID_COLS - depthX - 1)
-          : (front === 'north' ? gridY <= depthY : gridY >= GRID_ROWS - depthY - 1);
+          ? (front === 'west' ? gridX <= depthX : gridX >= this.metrics.gridCols - depthX - 1)
+          : (front === 'north' ? gridY <= depthY : gridY >= this.metrics.gridRows - depthY - 1);
         if (
           !onFrontBand
           || blocked[gridY][gridX]
-          || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))
-          || isReservedBaseObstacleCell(gridX, gridY, bases)
+          || baseCells.has(this.cellKey(gridX, gridY))
+          || this.isReservedBaseObstacleCell(gridX, gridY, bases)
         ) continue;
         cells.push({ gridX, gridY });
       }
@@ -728,21 +796,21 @@ export class ArenaGenerator {
     return cells;
   }
 
-  private static getSpawnAreaCells(
+  private getSpawnAreaCells(
     area: { gridX: number; gridY: number; widthCells: number; heightCells: number },
     blocked: boolean[][],
     baseCells: ReadonlySet<number>,
     bases: readonly BaseSpec[] = [],
   ): Array<{ gridX: number; gridY: number }> {
     const cells: Array<{ gridX: number; gridY: number }> = [];
-    const maxGridX = Math.min(GRID_COLS - 1, area.gridX + area.widthCells - 1);
-    const maxGridY = Math.min(GRID_ROWS - 1, area.gridY + area.heightCells - 1);
+    const maxGridX = Math.min(this.metrics.gridCols - 1, area.gridX + area.widthCells - 1);
+    const maxGridY = Math.min(this.metrics.gridRows - 1, area.gridY + area.heightCells - 1);
     for (let gridY = Math.max(0, area.gridY); gridY <= maxGridY; gridY += 1) {
       for (let gridX = Math.max(0, area.gridX); gridX <= maxGridX; gridX += 1) {
         if (
           blocked[gridY][gridX]
-          || baseCells.has(ArenaGenerator.cellKey(gridX, gridY))
-          || isReservedBaseObstacleCell(gridX, gridY, bases)
+          || baseCells.has(this.cellKey(gridX, gridY))
+          || this.isReservedBaseObstacleCell(gridX, gridY, bases)
         ) continue;
         cells.push({ gridX, gridY });
       }
@@ -750,19 +818,19 @@ export class ArenaGenerator {
     return cells;
   }
 
-  private static canReachTrackSafeGoal(
+  private canReachTrackSafeGoal(
     sources: readonly { gridX: number; gridY: number }[],
     targets: ReadonlySet<number>,
     blocked: boolean[][],
     trackCells: ReadonlySet<number>,
   ): boolean {
     const runWidth = COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS + 1;
-    const totalCells = GRID_COLS * GRID_ROWS;
+    const totalCells = this.metrics.gridCols * this.metrics.gridRows;
     const visited = new Uint8Array(totalCells * runWidth);
     const queue = new Int32Array(totalCells * runWidth);
     let queueEnd = 0;
     for (const source of sources) {
-      const index = ArenaGenerator.cellKey(source.gridX, source.gridY);
+      const index = this.cellKey(source.gridX, source.gridY);
       const run = trackCells.has(index) ? 1 : 0;
       const state = index * runWidth + run;
       if (visited[state] === 1) continue;
@@ -776,16 +844,16 @@ export class ArenaGenerator {
       const index = Math.floor(state / runWidth);
       const currentRun = state % runWidth;
       if (targets.has(index)) return true;
-      const gridX = index % GRID_COLS;
-      const gridY = Math.floor(index / GRID_COLS);
+      const gridX = index % this.metrics.gridCols;
+      const gridY = Math.floor(index / this.metrics.gridCols);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
         const nextX = gridX + dx;
         const nextY = gridY + dy;
         if (
-          nextX < 0 || nextX >= GRID_COLS || nextY < 0 || nextY >= GRID_ROWS
+          nextX < 0 || nextX >= this.metrics.gridCols || nextY < 0 || nextY >= this.metrics.gridRows
           || blocked[nextY][nextX]
         ) continue;
-        const nextIndex = ArenaGenerator.cellKey(nextX, nextY);
+        const nextIndex = this.cellKey(nextX, nextY);
         const nextRun = trackCells.has(nextIndex) ? currentRun + 1 : 0;
         if (nextRun > COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS) continue;
         const nextState = nextIndex * runWidth + nextRun;
@@ -798,20 +866,20 @@ export class ArenaGenerator {
     return false;
   }
 
-  private static buildTrackLayout(col: number): { trackCols: Set<number>; tracks: TrackCell[] } {
+  private buildTrackLayout(col: number): { trackCols: Set<number>; tracks: TrackCell[] } {
     const trackCols = new Set([col, col + 1]);
     const tracks: TrackCell[] = [];
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
+    for (let gy = 0; gy < this.metrics.gridRows; gy++) {
       tracks.push({ gridX: col, gridY: gy });
     }
     return { trackCols, tracks };
   }
 
   /** Der Gleis-Fußabdruck umfasst zwei Rasterspalten; dazwischen bleibt eine freie Zelle. */
-  private static isTrackColumnClearOfBases(col: number, bases: readonly BaseSpec[]): boolean {
+  private isTrackColumnClearOfBases(col: number, bases: readonly BaseSpec[]): boolean {
     const trackMinX = col;
     const trackMaxX = col + 1;
-    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+    for (let gridY = 0; gridY < this.metrics.gridRows; gridY += 1) {
       if (isPersistentBaseReservationCell(trackMinX, gridY, bases)
         || isPersistentBaseReservationCell(trackMaxX, gridY, bases)) return false;
     }
@@ -826,20 +894,20 @@ export class ArenaGenerator {
    * Gleisspalten und die Schutzradien der Basen werden erst beim Übertragen nach `blocked`
    * ausgenommen (siehe generate()) und brauchen hier keine Sonderbehandlung.
    */
-  private static applyRockField(
+  private applyRockField(
     map: boolean[][],
     rockField: CoopDefenseMapRockFieldConfig,
     rng: () => number,
     minimumCorridorRadiusCells = MIN_CARVED_RADIUS_CELLS,
   ): void {
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
+    for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+      for (let gx = 0; gx < this.metrics.gridCols; gx++) {
         map[gy][gx] = true;
       }
     }
 
     for (const corridor of rockField.corridors) {
-      ArenaGenerator.carveOrganicCorridor(
+      this.carveOrganicCorridor(
         map,
         corridor,
         rockField,
@@ -858,16 +926,16 @@ export class ArenaGenerator {
    * ergeben sich Bögen statt Zickzack. Zum Anfang und Ende hin läuft der Versatz auf 0 aus, damit
    * der Gang exakt an seinem Start- und Zielpunkt ankommt (Spawnrand bzw. Basis-Schutzradius).
    */
-  private static carveOrganicCorridor(
+  private carveOrganicCorridor(
     map: boolean[][],
     corridor: CoopDefenseMapRockFieldConfig['corridors'][number],
     rockField: CoopDefenseMapRockFieldConfig,
     rng: () => number,
     minimumCorridorRadiusCells: number,
   ): void {
-    const points = ArenaGenerator.jitterCorridorWaypoints(corridor.points, rockField.waypointJitterCells, rng);
+    const points = this.jitterCorridorWaypoints(corridor.points, rockField.waypointJitterCells, rng);
     const baseRadius = corridor.radiusCells ?? rockField.corridorRadiusCells;
-    const totalLength = ArenaGenerator.measurePathLength(points);
+    const totalLength = this.measurePathLength(points);
     if (totalLength <= 0) return;
 
     let wander = 0;
@@ -903,7 +971,7 @@ export class ArenaGenerator {
           baseRadius + radiusOffset * rockField.corridorRadiusVarianceCells,
         );
 
-        ArenaGenerator.carveDisc(
+        this.carveDisc(
           map,
           from.x + dirX * alongSegment - dirY * offset,
           from.y + dirY * alongSegment + dirX * offset,
@@ -920,7 +988,7 @@ export class ArenaGenerator {
    * deterministisch welligen Übergangsring. Der Kern nutzt dieselbe Zellmittelpunkt-Geometrie
    * wie die Laufzeitprüfung; der Ring lockert nur die Felskante auf und ersetzt keinen Gang.
    */
-  private static carveOrganicCheckpointClearances(
+  private carveOrganicCheckpointClearances(
     map: boolean[][],
     checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[],
     rng: () => number,
@@ -929,14 +997,14 @@ export class ArenaGenerator {
       const radiusCells = checkpoint.radiusCells ?? 1;
       const centerX = checkpoint.gridX + 0.5;
       const centerY = checkpoint.gridY + 0.5;
-      ArenaGenerator.carveCellCenteredDisc(map, centerX, centerY, radiusCells);
+      this.carveCellCenteredDisc(map, centerX, centerY, radiusCells);
 
       const haloWidth = Math.max(1.25, Math.min(2.5, radiusCells * 0.35));
       const phase = rng() * Math.PI * 2;
       const minGridX = Math.max(0, Math.ceil(centerX - radiusCells - haloWidth - 0.5));
-      const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells + haloWidth - 0.5));
+      const maxGridX = Math.min(this.metrics.gridCols - 1, Math.floor(centerX + radiusCells + haloWidth - 0.5));
       const minGridY = Math.max(0, Math.ceil(centerY - radiusCells - haloWidth - 0.5));
-      const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells + haloWidth - 0.5));
+      const maxGridY = Math.min(this.metrics.gridRows - 1, Math.floor(centerY + radiusCells + haloWidth - 0.5));
 
       for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
         for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
@@ -958,7 +1026,7 @@ export class ArenaGenerator {
   }
 
   /** Verschiebt die Zwischenpunkte zufällig; Start und Ende bleiben als Andockstellen unangetastet. */
-  private static jitterCorridorWaypoints(
+  private jitterCorridorWaypoints(
     points: readonly CoopDefenseMapCorridorPoint[],
     jitterCells: number,
     rng: () => number,
@@ -973,7 +1041,7 @@ export class ArenaGenerator {
     });
   }
 
-  private static measurePathLength(points: readonly { x: number; y: number }[]): number {
+  private measurePathLength(points: readonly { x: number; y: number }[]): number {
     let length = 0;
     for (let index = 1; index < points.length; index++) {
       length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
@@ -982,11 +1050,11 @@ export class ArenaGenerator {
   }
 
   /** Räumt alle Zellen frei, deren Mittelpunkt im Radius um (centerX, centerY) liegt. */
-  private static carveDisc(map: boolean[][], centerX: number, centerY: number, radiusCells: number): void {
+  private carveDisc(map: boolean[][], centerX: number, centerY: number, radiusCells: number): void {
     const minGridX = Math.max(0, Math.ceil(centerX - radiusCells));
-    const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells));
+    const maxGridX = Math.min(this.metrics.gridCols - 1, Math.floor(centerX + radiusCells));
     const minGridY = Math.max(0, Math.ceil(centerY - radiusCells));
-    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells));
+    const maxGridY = Math.min(this.metrics.gridRows - 1, Math.floor(centerY + radiusCells));
     const radiusSq = radiusCells * radiusCells;
 
     for (let gy = minGridY; gy <= maxGridY; gy++) {
@@ -999,16 +1067,16 @@ export class ArenaGenerator {
   }
 
   /** Variante der Kreisfräse für authored Flächen, deren Mittelpunkt auf einer Zellmitte liegt. */
-  private static carveCellCenteredDisc(
+  private carveCellCenteredDisc(
     map: boolean[][],
     centerX: number,
     centerY: number,
     radiusCells: number,
   ): void {
     const minGridX = Math.max(0, Math.ceil(centerX - radiusCells - 0.5));
-    const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells - 0.5));
+    const maxGridX = Math.min(this.metrics.gridCols - 1, Math.floor(centerX + radiusCells - 0.5));
     const minGridY = Math.max(0, Math.ceil(centerY - radiusCells - 0.5));
-    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells - 0.5));
+    const maxGridY = Math.min(this.metrics.gridRows - 1, Math.floor(centerY + radiusCells - 0.5));
     const radiusSq = radiusCells * radiusCells;
 
     for (let gy = minGridY; gy <= maxGridY; gy += 1) {
@@ -1021,13 +1089,13 @@ export class ArenaGenerator {
   }
 
   /** Zellschlüssel aller authored Felsbänder; leer, solange die Map keine authoriert. */
-  private static collectRockWallCells(
+  private collectRockWallCells(
     rockWalls: readonly CoopDefenseMapRockWallConfig[] | undefined,
   ): Set<string> {
     const cells = new Set<string>();
     for (const wall of rockWalls ?? []) {
-      const maxGridX = Math.min(GRID_COLS - 1, wall.gridX + wall.widthCells - 1);
-      const maxGridY = Math.min(GRID_ROWS - 1, wall.gridY + wall.heightCells - 1);
+      const maxGridX = Math.min(this.metrics.gridCols - 1, wall.gridX + wall.widthCells - 1);
+      const maxGridY = Math.min(this.metrics.gridRows - 1, wall.gridY + wall.heightCells - 1);
       for (let gridY = Math.max(0, wall.gridY); gridY <= maxGridY; gridY += 1) {
         for (let gridX = Math.max(0, wall.gridX); gridX <= maxGridX; gridX += 1) {
           cells.add(`${gridX}_${gridY}`);
@@ -1038,7 +1106,7 @@ export class ArenaGenerator {
   }
 
   /** Zellschlüssel aller authored Checkpoint-Kerne, die bei Fels- und Baum-Placement frei bleiben. */
-  private static collectMissionCheckpointCells(
+  private collectMissionCheckpointCells(
     checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[] | undefined,
   ): Set<string> {
     const cells = new Set<string>();
@@ -1047,9 +1115,9 @@ export class ArenaGenerator {
       const centerX = checkpoint.gridX + 0.5;
       const centerY = checkpoint.gridY + 0.5;
       const minGridX = Math.max(0, Math.ceil(centerX - radiusCells - 0.5));
-      const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells - 0.5));
+      const maxGridX = Math.min(this.metrics.gridCols - 1, Math.floor(centerX + radiusCells - 0.5));
       const minGridY = Math.max(0, Math.ceil(centerY - radiusCells - 0.5));
-      const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells - 0.5));
+      const maxGridY = Math.min(this.metrics.gridRows - 1, Math.floor(centerY + radiusCells - 0.5));
       const radiusSq = radiusCells * radiusCells;
 
       for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
@@ -1067,7 +1135,7 @@ export class ArenaGenerator {
    * Stempelt die authored Bänder als ganz normale Felsen ein. Reservierte Flächen bleiben frei:
    * Gleisspalten, Basisreservierungen, Barrierezellen und bereits gesetzte Bäume.
    */
-  private static applyAuthoredRockWalls(
+  private applyAuthoredRockWalls(
     blocked: boolean[][],
     rocks: RockCell[],
     trees: readonly TreeCell[],
@@ -1088,13 +1156,13 @@ export class ArenaGenerator {
       if (missionBarrierCells.has(key)) continue;
       if (missionCheckpointCells.has(key)) continue;
       if (treeCells.has(key)) continue;
-      if (isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)) continue;
+      if (this.isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)) continue;
       blocked[gridY][gridX] = true;
       rocks.push({ gridX, gridY });
     }
   }
 
-  private static applyTutorialRockFormation(
+  private applyTutorialRockFormation(
     map: boolean[][],
     trackCols: ReadonlySet<number>,
     rng: () => number,
@@ -1117,14 +1185,14 @@ export class ArenaGenerator {
       if (seenAnchors.has(anchorKey)) continue;
       seenAnchors.add(anchorKey);
       const cells = generateSolidRockFormation(rng, {
-        region: getCoopDefenseTutorialRockRegion(tutorialShowControls, anchor),
+        region: getCoopDefenseTutorialRockRegion(tutorialShowControls, anchor, this.metrics),
         haloCells: COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
         haloFillChance: [0.72],
         outerHaloFillChance: 0.36,
-        gridCols: GRID_COLS,
-        gridRows: GRID_ROWS,
+        gridCols: this.metrics.gridCols,
+        gridRows: this.metrics.gridRows,
         isBlockedCell: (gx, gy) => (
-          trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
+          trackCols.has(gx) || this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
         ),
       });
       for (const { gridX, gridY } of cells) {
@@ -1135,7 +1203,7 @@ export class ArenaGenerator {
     return tutorialRockCells;
   }
 
-  private static generateRandomPowerUpPedestals(
+  private generateRandomPowerUpPedestals(
     rng: () => number,
     blocked: boolean[][],
     trackCols: Set<number>,
@@ -1143,23 +1211,25 @@ export class ArenaGenerator {
   ) {
     const candidates: Array<{ gx: number; gy: number }> = [];
     const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
-    const middleThirdRegion = isCaptureTheBeerBaseModeActive() ? getCaptureTheBeerMiddleThirdRegion() : null;
+    const middleThirdRegion = this.input.captureTheBeerBasesActive
+      ? getCaptureTheBeerMiddleThirdRegion(this.metrics.gridCols, this.metrics.gridRows)
+      : null;
 
-    for (let gy = margin; gy < GRID_ROWS - margin; gy++) {
-      for (let gx = margin; gx < GRID_COLS - margin; gx++) {
+    for (let gy = margin; gy < this.metrics.gridRows - margin; gy++) {
+      for (let gx = margin; gx < this.metrics.gridCols - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
+        if (this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
         if (middleThirdRegion && !isGridCellInArenaRegion(middleThirdRegion, gx, gy)) continue;
         candidates.push({ gx, gy });
       }
     }
 
     const pedestals: ArenaLayout['powerUpPedestals'] = [];
-    const selectedCells = ArenaGenerator.pickDistributedPedestalCells(rng, candidates, TIMED_POWERUP_PEDESTAL_COUNT);
+    const selectedCells = this.pickDistributedPedestalCells(rng, candidates, TIMED_POWERUP_PEDESTAL_COUNT);
     for (let i = 0; i < selectedCells.length; i++) {
       const cell = selectedCells[i];
-      const defId = ArenaGenerator.pickWeightedPedestalDef(rng);
+      const defId = this.pickWeightedPedestalDef(rng);
       if (!defId) break;
       pedestals.push({ id: i + 1, defId, gridX: cell.gx, gridY: cell.gy });
     }
@@ -1167,7 +1237,7 @@ export class ArenaGenerator {
     return pedestals;
   }
 
-  private static generateConfiguredPowerUpPedestals(
+  private generateConfiguredPowerUpPedestals(
     rng: () => number,
     blocked: boolean[][],
     trackCols: Set<number>,
@@ -1181,12 +1251,12 @@ export class ArenaGenerator {
       ['rear', []],
     ]);
 
-    for (let gy = margin; gy < GRID_ROWS - margin; gy++) {
-      for (let gx = margin; gx < GRID_COLS - margin; gx++) {
+    for (let gy = margin; gy < this.metrics.gridRows - margin; gy++) {
+      for (let gx = margin; gx < this.metrics.gridCols - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
-        candidatesByRegion.get(ArenaGenerator.getPowerUpRegion(gx))!.push({ gx, gy });
+        if (this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
+        candidatesByRegion.get(this.getPowerUpRegion(gx))!.push({ gx, gy });
       }
     }
 
@@ -1198,7 +1268,7 @@ export class ArenaGenerator {
       const available = candidates.filter(
         (candidate) => !selected.some((cell) => cell.gx === candidate.gx && cell.gy === candidate.gy),
       );
-      const cell = ArenaGenerator.pickConfiguredPedestalCell(rng, available, selected);
+      const cell = this.pickConfiguredPedestalCell(rng, available, selected);
       if (!cell) return null;
 
       selected.push(cell);
@@ -1215,14 +1285,14 @@ export class ArenaGenerator {
     return pedestals;
   }
 
-  private static generateCoopPowerUpPedestals(
+  private generateCoopPowerUpPedestals(
     rng: () => number,
     blocked: boolean[][],
     trackCols: Set<number>,
     mapConfig: CoopDefenseMapConfig,
     coopBaseSpecs: readonly BaseSpec[],
   ): ArenaLayout['powerUpPedestals'] | null {
-    const pedestals = ArenaGenerator.generateConfiguredPowerUpPedestals(
+    const pedestals = this.generateConfiguredPowerUpPedestals(
       rng,
       blocked,
       trackCols,
@@ -1231,10 +1301,10 @@ export class ArenaGenerator {
     );
     if (pedestals === null) return null;
 
-    const occupied = new Set(pedestals.map((pedestal) => ArenaGenerator.cellKey(pedestal.gridX, pedestal.gridY)));
+    const occupied = new Set(pedestals.map((pedestal) => this.cellKey(pedestal.gridX, pedestal.gridY)));
     for (const base of coopBaseSpecs) {
       for (const config of base.powerUpPedestals) {
-        const key = ArenaGenerator.cellKey(config.gridX, config.gridY);
+        const key = this.cellKey(config.gridX, config.gridY);
         if (trackCols.has(config.gridX)) {
           throw new Error(`[ArenaGenerator] Linked pedestal ${config.id} overlaps the railway`);
         }
@@ -1261,14 +1331,14 @@ export class ArenaGenerator {
   }
 
   /** Linkes, mittleres bzw. rechtes Drittel der Coop-Arena. */
-  private static getPowerUpRegion(gx: number): CoopDefensePowerUpRegion {
-    const third = GRID_COLS / 3;
+  private getPowerUpRegion(gx: number): CoopDefensePowerUpRegion {
+    const third = this.metrics.gridCols / 3;
     if (gx < third) return 'front';
     if (gx < third * 2) return 'middle';
     return 'rear';
   }
 
-  private static pickConfiguredPedestalCell(
+  private pickConfiguredPedestalCell(
     rng: () => number,
     candidates: readonly { gx: number; gy: number }[],
     selected: readonly { gx: number; gy: number }[],
@@ -1286,7 +1356,7 @@ export class ArenaGenerator {
         minDistanceSq = Math.min(minDistanceSq, dx * dx + dy * dy);
       }
       // Weit auseinander, aber mit kleinem Seed-Jitter für abwechslungsreiche Layouts.
-      const score = minDistanceSq + ArenaGenerator.distanceToArenaEdge(candidate.gx, candidate.gy) * 0.12 + rng() * 0.025;
+      const score = minDistanceSq + this.distanceToArenaEdge(candidate.gx, candidate.gy) * 0.12 + rng() * 0.025;
       if (score > bestScore) {
         bestScore = score;
         best = candidate;
@@ -1295,7 +1365,7 @@ export class ArenaGenerator {
     return best;
   }
 
-  private static generateDecals(
+  private generateDecals(
     rng: () => number,
     rocks: readonly RockCell[],
     trees: readonly TreeCell[],
@@ -1307,37 +1377,37 @@ export class ArenaGenerator {
   ): DecalCell[] {
     const blockedCells = new Set<number>();
     for (const { gridX, gridY } of rocks) {
-      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+      blockedCells.add(this.cellKey(gridX, gridY));
     }
     for (const { gridX, gridY } of trees) {
-      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+      blockedCells.add(this.cellKey(gridX, gridY));
     }
     for (const { gridX, gridY } of tracks) {
-      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
-      if (gridX + 1 < GRID_COLS) {
-        blockedCells.add(ArenaGenerator.cellKey(gridX + 1, gridY));
+      blockedCells.add(this.cellKey(gridX, gridY));
+      if (gridX + 1 < this.metrics.gridCols) {
+        blockedCells.add(this.cellKey(gridX + 1, gridY));
       }
     }
     for (const { gridX, gridY } of powerUpPedestals) {
-      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+      blockedCells.add(this.cellKey(gridX, gridY));
     }
     for (const zone of groundHazardZones) {
       for (const { gridX, gridY } of zone.cells) {
-        blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+        blockedCells.add(this.cellKey(gridX, gridY));
       }
     }
 
     const decals: DecalCell[] = [];
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
-        const key = ArenaGenerator.cellKey(gx, gy);
-        if (blockedCells.has(key) || isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)) continue;
+    for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+      for (let gx = 0; gx < this.metrics.gridCols; gx++) {
+        const key = this.cellKey(gx, gy);
+        if (blockedCells.has(key) || this.isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)) continue;
 
         const terrain: DecalTerrainLayer = dirtSet.has(key) ? 'dirt' : 'grass';
         const layerConfig = ARENA_DECAL_CONFIG[terrain];
-        if (!ArenaGenerator.rollPercent(rng, layerConfig.coveragePercent)) continue;
+        if (!this.rollPercent(rng, layerConfig.coveragePercent)) continue;
 
-        const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, layerConfig.variants);
+        const textureKey = this.pickWeightedDecalKey(rng, layerConfig.variants);
         if (!textureKey) continue;
 
         const maxOffsetX = clampDecalOffsetPx(layerConfig.maxOffsetX);
@@ -1346,11 +1416,11 @@ export class ArenaGenerator {
           gridX: gx,
           gridY: gy,
           textureKey,
-          offsetX: ArenaGenerator.randomOffset(rng, maxOffsetX),
-          offsetY: ArenaGenerator.randomOffset(rng, maxOffsetY),
+          offsetX: this.randomOffset(rng, maxOffsetX),
+          offsetY: this.randomOffset(rng, maxOffsetY),
           terrain,
           surface: 'ground',
-          rotation: ArenaGenerator.randomRotation(rng),
+          rotation: this.randomRotation(rng),
         });
       }
     }
@@ -1361,21 +1431,21 @@ export class ArenaGenerator {
     const underRockMaxOffsetX = clampDecalOffsetPx(DIRT_ROCK_UNDERLAY_DECAL_CONFIG.maxOffsetX);
     const underRockMaxOffsetY = clampDecalOffsetPx(DIRT_ROCK_UNDERLAY_DECAL_CONFIG.maxOffsetY);
     for (const { gridX, gridY } of rocks) {
-      const key = ArenaGenerator.cellKey(gridX, gridY);
-      if (!dirtSet.has(key) || isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)) continue;
-      if (!ArenaGenerator.rollPercent(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.coveragePercent)) continue;
+      const key = this.cellKey(gridX, gridY);
+      if (!dirtSet.has(key) || this.isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)) continue;
+      if (!this.rollPercent(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.coveragePercent)) continue;
 
-      const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.variants);
+      const textureKey = this.pickWeightedDecalKey(rng, DIRT_ROCK_UNDERLAY_DECAL_CONFIG.variants);
       if (!textureKey) continue;
       decals.push({
         gridX,
         gridY,
         textureKey,
-        offsetX: ArenaGenerator.randomOffset(rng, underRockMaxOffsetX),
-        offsetY: ArenaGenerator.randomOffset(rng, underRockMaxOffsetY),
+        offsetX: this.randomOffset(rng, underRockMaxOffsetX),
+        offsetY: this.randomOffset(rng, underRockMaxOffsetY),
         terrain: 'dirt',
         surface: 'ground',
-        rotation: ArenaGenerator.randomRotation(rng),
+        rotation: this.randomRotation(rng),
       });
     }
 
@@ -1385,27 +1455,27 @@ export class ArenaGenerator {
     // einzelne Risse/Moosflaechen ueber Zellgrenzen laufen, ohne nach einer Zerstoerung
     // als schwebender Rest auf dem Nachbarfelsen zu bleiben.
     const rockIndexByKey = new Map<number, number>();
-    rocks.forEach((rock, index) => rockIndexByKey.set(ArenaGenerator.cellKey(rock.gridX, rock.gridY), index));
+    rocks.forEach((rock, index) => rockIndexByKey.set(this.cellKey(rock.gridX, rock.gridY), index));
     for (let rockId = 0; rockId < rocks.length; rockId += 1) {
       const rock = rocks[rockId];
-      const placement = ArenaGenerator.resolveRockDecalPlacement(rock, rockIndexByKey);
+      const placement = this.resolveRockDecalPlacement(rock, rockIndexByKey);
       const coveragePercent = placement === 'edge'
         ? ROCK_DECAL_CONFIG.edgeCoveragePercent
         : ROCK_DECAL_CONFIG.interiorCoveragePercent;
-      if (!ArenaGenerator.rollPercent(rng, coveragePercent)) continue;
+      if (!this.rollPercent(rng, coveragePercent)) continue;
 
-      const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, getRockDecalVariantsForPlacement(placement));
+      const textureKey = this.pickWeightedDecalKey(rng, getRockDecalVariantsForPlacement(placement));
       if (!textureKey) continue;
       const variant = getRockDecalVariant(textureKey);
       const displaySize = variant?.displaySize ?? ROCK_DECAL_SIZE;
       const maxOffset = getRockDecalMaxOffsetPx(displaySize);
 
-      const offsetX = ArenaGenerator.randomOffset(rng, maxOffset);
-      const offsetY = ArenaGenerator.randomOffset(rng, maxOffset);
-      const rotation = ArenaGenerator.randomRotation(rng);
+      const offsetX = this.randomOffset(rng, maxOffset);
+      const offsetY = this.randomOffset(rng, maxOffset);
+      const rotation = this.randomRotation(rng);
       const centerX = rock.gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
       const centerY = rock.gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
-      const rockIds = ArenaGenerator.getRockIdsTouchedByDecal(
+      const rockIds = this.getRockIdsTouchedByDecal(
         rocks,
         rockIndexByKey,
         centerX,
@@ -1436,11 +1506,11 @@ export class ArenaGenerator {
    * Lage einer Felszelle im Verbund. Der Rand der Arena zaehlt bewusst **nicht** als Fels:
    * dort liegt die Silhouette wirklich frei, und genau dort soll auch Bewuchs sitzen.
    */
-  private static resolveRockDecalPlacement(
+  private resolveRockDecalPlacement(
     rock: RockCell,
     rockIndexByKey: ReadonlyMap<number, number>,
   ): DecalPlacement {
-    const isRock = (gridX: number, gridY: number) => rockIndexByKey.has(ArenaGenerator.cellKey(gridX, gridY));
+    const isRock = (gridX: number, gridY: number) => rockIndexByKey.has(this.cellKey(gridX, gridY));
     const { gridX, gridY } = rock;
 
     if (!isRock(gridX, gridY - 1) || !isRock(gridX, gridY + 1)
@@ -1454,7 +1524,7 @@ export class ArenaGenerator {
     return 'core';
   }
 
-  private static getRockIdsTouchedByDecal(
+  private getRockIdsTouchedByDecal(
     rocks: readonly RockCell[],
     rockIndexByKey: ReadonlyMap<number, number>,
     centerX: number,
@@ -1466,14 +1536,14 @@ export class ArenaGenerator {
     const halfExtentX = Math.abs(Math.cos(rotation)) * halfSize + Math.abs(Math.sin(rotation)) * halfSize;
     const halfExtentY = Math.abs(Math.sin(rotation)) * halfSize + Math.abs(Math.cos(rotation)) * halfSize;
     const minGridX = Math.max(0, Math.floor((centerX - halfExtentX) / CELL_SIZE));
-    const maxGridX = Math.min(GRID_COLS - 1, Math.floor((centerX + halfExtentX - 0.001) / CELL_SIZE));
+    const maxGridX = Math.min(this.metrics.gridCols - 1, Math.floor((centerX + halfExtentX - 0.001) / CELL_SIZE));
     const minGridY = Math.max(0, Math.floor((centerY - halfExtentY) / CELL_SIZE));
-    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor((centerY + halfExtentY - 0.001) / CELL_SIZE));
+    const maxGridY = Math.min(this.metrics.gridRows - 1, Math.floor((centerY + halfExtentY - 0.001) / CELL_SIZE));
     const touched: number[] = [];
 
     for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
       for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
-        const id = rockIndexByKey.get(ArenaGenerator.cellKey(gridX, gridY));
+        const id = rockIndexByKey.get(this.cellKey(gridX, gridY));
         if (id !== undefined) touched.push(id);
       }
     }
@@ -1489,7 +1559,7 @@ export class ArenaGenerator {
    * kollisionsfreie 32px-Zellen auf. Die Rueckgabe ist absichtlich nur Layoutdaten: Feuer,
    * Burn und Visuals entstehen erst, wenn der typisierte Event-Handler die Zellen aktiviert.
    */
-  private static generateGroundHazardZones(
+  private generateGroundHazardZones(
     rng: () => number,
     blocked: readonly boolean[][],
     trees: readonly TreeCell[],
@@ -1506,13 +1576,13 @@ export class ArenaGenerator {
     if (events.length === 0) return [];
 
     const occupied = new Set<number>();
-    for (const tree of trees) occupied.add(ArenaGenerator.cellKey(tree.gridX, tree.gridY));
+    for (const tree of trees) occupied.add(this.cellKey(tree.gridX, tree.gridY));
     for (const track of tracks) {
-      occupied.add(ArenaGenerator.cellKey(track.gridX, track.gridY));
-      occupied.add(ArenaGenerator.cellKey(track.gridX + 1, track.gridY));
+      occupied.add(this.cellKey(track.gridX, track.gridY));
+      occupied.add(this.cellKey(track.gridX + 1, track.gridY));
     }
     for (const pedestal of powerUpPedestals) {
-      occupied.add(ArenaGenerator.cellKey(pedestal.gridX, pedestal.gridY));
+      occupied.add(this.cellKey(pedestal.gridX, pedestal.gridY));
     }
 
     const baseCells = coopBaseSpecs.flatMap((base) => base.cells);
@@ -1522,13 +1592,13 @@ export class ArenaGenerator {
       baseClearanceCells: number,
       avoidVoidTrackCorridor = false,
     ): boolean => {
-      if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) return false;
-      const key = ArenaGenerator.cellKey(gridX, gridY);
+      if (gridX < 0 || gridX >= this.metrics.gridCols || gridY < 0 || gridY >= this.metrics.gridRows) return false;
+      const key = this.cellKey(gridX, gridY);
       if (
         blocked[gridY][gridX]
         || occupied.has(key)
-        || isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)
-        || isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)
+        || this.isReservedBaseSurfaceCell(gridX, gridY, coopBaseSpecs)
+        || this.isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs)
         || (avoidVoidTrackCorridor && trackCols.has(gridX))
       ) return false;
       return baseCells.every((baseCell) => (
@@ -1574,24 +1644,24 @@ export class ArenaGenerator {
         for (let attempt = 0; attempt < 120 && selected === null; attempt += 1) {
           const radius = area.minPatchRadiusCells
             + rng() * (area.maxPatchRadiusCells - area.minPatchRadiusCells);
-          const centerX = Math.floor(rng() * GRID_COLS);
-          const centerY = Math.floor(rng() * GRID_ROWS);
+          const centerX = Math.floor(rng() * this.metrics.gridCols);
+          const centerY = Math.floor(rng() * this.metrics.gridRows);
           const radiusSq = radius * radius;
           const cells: ArenaGroundHazardZone['cells'] = [];
           for (
             let gridY = Math.max(0, Math.floor(centerY - radius));
-            gridY <= Math.min(GRID_ROWS - 1, Math.ceil(centerY + radius));
+            gridY <= Math.min(this.metrics.gridRows - 1, Math.ceil(centerY + radius));
             gridY += 1
           ) {
             for (
               let gridX = Math.max(0, Math.floor(centerX - radius));
-              gridX <= Math.min(GRID_COLS - 1, Math.ceil(centerX + radius));
+              gridX <= Math.min(this.metrics.gridCols - 1, Math.ceil(centerX + radius));
               gridX += 1
             ) {
               const dx = gridX - centerX;
               const dy = gridY - centerY;
               if (dx * dx + dy * dy > radiusSq) continue;
-              const key = ArenaGenerator.cellKey(gridX, gridY);
+              const key = this.cellKey(gridX, gridY);
               if (
                 !usedInEvent.has(key)
                 && isValidCell(gridX, gridY, baseClearanceCells, avoidVoidTrackCorridor)
@@ -1604,7 +1674,7 @@ export class ArenaGenerator {
         }
         if (selected === null) continue;
         selectedPatchCount += 1;
-        for (const cell of selected) usedInEvent.add(ArenaGenerator.cellKey(cell.gridX, cell.gridY));
+        for (const cell of selected) usedInEvent.add(this.cellKey(cell.gridX, cell.gridY));
         zones.push(makeZone(event, `${event.id}:patch-${patchIndex + 1}`, selected));
       }
       if (selectedPatchCount === 0) return null;
@@ -1612,7 +1682,7 @@ export class ArenaGenerator {
     return zones;
   }
 
-  private static pickDistributedPedestalCells(
+  private pickDistributedPedestalCells(
     rng: () => number,
     candidates: Array<{ gx: number; gy: number }>,
     requestedCount: number,
@@ -1620,7 +1690,7 @@ export class ArenaGenerator {
     if (candidates.length === 0 || requestedCount <= 0) return [];
 
     const pool = [...candidates];
-    ArenaGenerator.shuffle(pool, rng);
+    this.shuffle(pool, rng);
 
     const selected: Array<{ gx: number; gy: number }> = [pool.shift()!];
     const targetCount = Math.min(requestedCount, candidates.length);
@@ -1642,7 +1712,7 @@ export class ArenaGenerator {
         }
 
         const spacingBonus = Math.min(minDistSq, minSpacingSq) / minSpacingSq;
-        const edgeBias = ArenaGenerator.distanceToArenaEdge(candidate.gx, candidate.gy) * 0.12;
+        const edgeBias = this.distanceToArenaEdge(candidate.gx, candidate.gy) * 0.12;
         const jitter = rng() * 0.025;
         const score = minDistSq + spacingBonus + edgeBias + jitter;
         if (score > bestScore) {
@@ -1677,15 +1747,15 @@ export class ArenaGenerator {
     return selected;
   }
 
-  private static distanceToArenaEdge(gx: number, gy: number): number {
+  private distanceToArenaEdge(gx: number, gy: number): number {
     const distLeft = gx;
-    const distRight = GRID_COLS - 1 - gx;
+    const distRight = this.metrics.gridCols - 1 - gx;
     const distTop = gy;
-    const distBottom = GRID_ROWS - 1 - gy;
+    const distBottom = this.metrics.gridRows - 1 - gy;
     return Math.min(distLeft, distRight, distTop, distBottom);
   }
 
-  private static pickWeightedPedestalDef(rng: () => number): string | null {
+  private pickWeightedPedestalDef(rng: () => number): string | null {
     const entries = Object.values(TIMED_POWERUP_PEDESTAL_CONFIGS).filter(cfg => cfg.weight > 0);
     if (entries.length === 0) return null;
 
@@ -1699,7 +1769,7 @@ export class ArenaGenerator {
     return entries[entries.length - 1].defId;
   }
 
-  private static pickWeightedDecalKey(
+  private pickWeightedDecalKey(
     rng: () => number,
     entries: ReadonlyArray<{ fileName: string; frequencyPercent: number }>,
   ): DecalCell['textureKey'] | null {
@@ -1719,41 +1789,41 @@ export class ArenaGenerator {
     return getDecalTextureKey(weightedEntries[weightedEntries.length - 1].fileName);
   }
 
-  private static rollPercent(rng: () => number, percent: number): boolean {
+  private rollPercent(rng: () => number, percent: number): boolean {
     return rng() * 100 < clampDecalPercent(percent);
   }
 
-  private static randomOffset(rng: () => number, maxOffset: number): number {
+  private randomOffset(rng: () => number, maxOffset: number): number {
     if (maxOffset <= 0) return 0;
     return Math.floor(rng() * (maxOffset * 2 + 1)) - maxOffset;
   }
 
-  private static randomRotation(rng: () => number): number {
+  private randomRotation(rng: () => number): number {
     return rng() * Math.PI * 2;
   }
 
-  private static cellKey(gx: number, gy: number): number {
-    return gy * GRID_COLS + gx;
+  private cellKey(gx: number, gy: number): number {
+    return gy * this.metrics.gridCols + gx;
   }
 
   /**
    * BFS-Konnektivitätsprüfung (4-connected).
    * Gibt true zurück, wenn alle nicht-blockierten Zellen erreichbar sind.
    */
-  private static isConnected(blocked: boolean[][]): boolean {
+  private isConnected(blocked: boolean[][]): boolean {
     // Erste freie Zelle als BFS-Startpunkt finden
     let startGx = -1;
     let startGy = -1;
-    outer: for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
+    outer: for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+      for (let gx = 0; gx < this.metrics.gridCols; gx++) {
         if (!blocked[gy][gx]) { startGx = gx; startGy = gy; break outer; }
       }
     }
     if (startGx === -1) return false; // Komplett blockiert
 
     // BFS
-    const visited = Array.from({ length: GRID_ROWS }, () =>
-      new Array(GRID_COLS).fill(false),
+    const visited = Array.from({ length: this.metrics.gridRows }, () =>
+      new Array(this.metrics.gridCols).fill(false),
     );
     const queue: Array<[number, number]> = [[startGx, startGy]];
     visited[startGy][startGx] = true;
@@ -1765,7 +1835,7 @@ export class ArenaGenerator {
       for (const [dx, dy] of DIRS) {
         const nx = cx + dx;
         const ny = cy + dy;
-        if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+        if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) continue;
         if (visited[ny][nx] || blocked[ny][nx]) continue;
         visited[ny][nx] = true;
         visitedCount++;
@@ -1775,8 +1845,8 @@ export class ArenaGenerator {
 
     // Zähle alle freien Zellen
     let freeCells = 0;
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
+    for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+      for (let gx = 0; gx < this.metrics.gridCols; gx++) {
         if (!blocked[gy][gx]) freeCells++;
       }
     }
@@ -1792,32 +1862,32 @@ export class ArenaGenerator {
    * Nachfräsen würde `generate()` dafür alle 100 Versuche verbrauchen und mit einer Exception
    * abbrechen.
    */
-  private static ensureConnected(blocked: boolean[][], rocks: RockCell[]): void {
+  private ensureConnected(blocked: boolean[][], rocks: RockCell[]): void {
     const rockIndexByKey = new Map<number, number>();
-    rocks.forEach((rock, index) => rockIndexByKey.set(ArenaGenerator.cellKey(rock.gridX, rock.gridY), index));
+    rocks.forEach((rock, index) => rockIndexByKey.set(this.cellKey(rock.gridX, rock.gridY), index));
 
     // Obergrenze schützt vor einer Endlosschleife; jede Iteration verschmilzt mindestens zwei
-    // Regionen zu einer, mehr als GRID_ROWS * GRID_COLS Regionen kann es nie geben.
-    for (let guard = 0; guard < GRID_ROWS * GRID_COLS; guard++) {
-      const components = ArenaGenerator.findFreeComponents(blocked);
+    // Regionen zu einer, mehr als this.metrics.gridRows * this.metrics.gridCols Regionen kann es nie geben.
+    for (let guard = 0; guard < this.metrics.gridRows * this.metrics.gridCols; guard++) {
+      const components = this.findFreeComponents(blocked);
       if (components.length <= 1) return;
 
       components.sort((a, b) => b.length - a.length);
       const main = components[0];
       const other = components[1];
-      const path = ArenaGenerator.findCheapestPath(blocked, other, main);
+      const path = this.findCheapestPath(blocked, other, main);
 
       for (const [gx, gy] of path) {
         if (!blocked[gy][gx]) continue;
         blocked[gy][gx] = false;
 
-        const key = ArenaGenerator.cellKey(gx, gy);
+        const key = this.cellKey(gx, gy);
         const index = rockIndexByKey.get(key);
         if (index === undefined) continue;
         const lastIndex = rocks.length - 1;
         const lastRock = rocks[lastIndex];
         rocks[index] = lastRock;
-        rockIndexByKey.set(ArenaGenerator.cellKey(lastRock.gridX, lastRock.gridY), index);
+        rockIndexByKey.set(this.cellKey(lastRock.gridX, lastRock.gridY), index);
         rocks.pop();
         rockIndexByKey.delete(key);
       }
@@ -1825,13 +1895,13 @@ export class ArenaGenerator {
   }
 
   /** Alle zusammenhängenden Regionen freier (nicht blockierter) Zellen (4-connected). */
-  private static findFreeComponents(blocked: boolean[][]): Array<Array<[number, number]>> {
-    const visited = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(false));
+  private findFreeComponents(blocked: boolean[][]): Array<Array<[number, number]>> {
+    const visited = Array.from({ length: this.metrics.gridRows }, () => new Array(this.metrics.gridCols).fill(false));
     const components: Array<Array<[number, number]>> = [];
     const DIRS: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
+    for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+      for (let gx = 0; gx < this.metrics.gridCols; gx++) {
         if (blocked[gy][gx] || visited[gy][gx]) continue;
 
         const component: Array<[number, number]> = [];
@@ -1843,7 +1913,7 @@ export class ArenaGenerator {
           for (const [dx, dy] of DIRS) {
             const nx = cx + dx;
             const ny = cy + dy;
-            if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+            if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) continue;
             if (visited[ny][nx] || blocked[ny][nx]) continue;
             visited[ny][nx] = true;
             queue.push([nx, ny]);
@@ -1861,15 +1931,15 @@ export class ArenaGenerator {
    * am wenigsten zusätzlichen Fels wegfräst – meist eine einzelne, natürlich wirkende Engstelle
    * statt eines langen geraden Tunnels.
    */
-  private static findCheapestPath(
+  private findCheapestPath(
     blocked: boolean[][],
     sourceCells: ReadonlyArray<[number, number]>,
     targetCells: ReadonlyArray<[number, number]>,
   ): Array<[number, number]> {
-    const targetSet = new Set(targetCells.map(([gx, gy]) => ArenaGenerator.cellKey(gx, gy)));
-    const dist: number[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(Infinity));
-    const prevX: number[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(-1));
-    const prevY: number[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(-1));
+    const targetSet = new Set(targetCells.map(([gx, gy]) => this.cellKey(gx, gy)));
+    const dist: number[][] = Array.from({ length: this.metrics.gridRows }, () => new Array(this.metrics.gridCols).fill(Infinity));
+    const prevX: number[][] = Array.from({ length: this.metrics.gridRows }, () => new Array(this.metrics.gridCols).fill(-1));
+    const prevY: number[][] = Array.from({ length: this.metrics.gridRows }, () => new Array(this.metrics.gridCols).fill(-1));
     const DIRS: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     const deque: Array<[number, number, number]> = [];
 
@@ -1885,7 +1955,7 @@ export class ArenaGenerator {
     while (deque.length > 0) {
       const [cx, cy, d] = deque.shift()!;
       if (d > dist[cy][cx]) continue; // veralteter Queue-Eintrag, bereits verbessert
-      if (targetSet.has(ArenaGenerator.cellKey(cx, cy))) {
+      if (targetSet.has(this.cellKey(cx, cy))) {
         targetX = cx;
         targetY = cy;
         break;
@@ -1893,7 +1963,7 @@ export class ArenaGenerator {
       for (const [dx, dy] of DIRS) {
         const nx = cx + dx;
         const ny = cy + dy;
-        if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+        if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) continue;
         const weight = blocked[ny][nx] ? 1 : 0;
         const nextDist = d + weight;
         if (nextDist < dist[ny][nx]) {
@@ -1924,7 +1994,7 @@ export class ArenaGenerator {
   /**
    * Fisher-Yates-Shuffle mit seeded PRNG.
    */
-  private static shuffle<T>(arr: T[], rng: () => number): void {
+  private shuffle<T>(arr: T[], rng: () => number): void {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -1935,7 +2005,7 @@ export class ArenaGenerator {
    * Mulberry32 – schneller, seeded PRNG.
    * Gibt eine Funktion zurück, die bei jedem Aufruf eine Zahl in [0, 1) liefert.
    */
-  private static makePrng(seed: number): () => number {
+  private makePrng(seed: number): () => number {
     let s = seed >>> 0;
     return () => {
       s  += 0x6d2b79f5;
@@ -1946,7 +2016,7 @@ export class ArenaGenerator {
     };
   }
 
-  private static makeDecalPrng(seed: number): () => number {
-    return ArenaGenerator.makePrng((seed ^ 0x9e3779b9) >>> 0);
+  private makeDecalPrng(seed: number): () => number {
+    return this.makePrng((seed ^ 0x9e3779b9) >>> 0);
   }
 }
