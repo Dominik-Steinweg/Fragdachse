@@ -61,6 +61,8 @@ export class ActivityLifecycle {
         `[ActivityLifecycle] Activity ${activity.definitionId} needs an active world instance`,
       );
     }
+    if (this.currentDescriptor && isSameActivity(this.currentDescriptor, activity)) return;
+    if (this.currentDescriptor) this.end();
     this.currentDescriptor = activity;
     this.currentPhase = 'creating';
   }
@@ -73,6 +75,7 @@ export class ActivityLifecycle {
         `[ActivityLifecycle] Activity ${this.currentDescriptor.definitionId} lost its world instance`,
       );
     }
+    if (this.currentPhase === 'active') return;
     this.currentPhase = 'active';
     this.sink.attach(this.currentDescriptor);
   }
@@ -93,4 +96,11 @@ export class ActivityLifecycle {
     if (wasActive) this.sink.detach();
     this.currentPhase = 'none';
   }
+}
+
+function isSameActivity(left: ActivityDescriptor, right: ActivityDescriptor): boolean {
+  return left.activityRevision === right.activityRevision
+    && left.worldRevision === right.worldRevision
+    && left.kind === right.kind
+    && left.definitionId === right.definitionId;
 }

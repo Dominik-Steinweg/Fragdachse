@@ -44,6 +44,8 @@ export class WorldLifecycle {
    * World endet erst mit {@link endInstance}, nicht mit dem Fall ihrer Runtime.
    */
   private instanceDescriptor: WorldDescriptor | null = null;
+  /** Highest revision that was completely ended on this local lifecycle. */
+  private lastEndedWorldRevision = 0;
 
   /**
    * Die Activity dieser World. Eigener Lebenszyklus, weil eine World ohne Activity bestehen
@@ -81,6 +83,21 @@ export class WorldLifecycle {
    * dabei zuerst beendet – zwei gleichzeitige Instanzen gibt es nicht.
    */
   beginCreate(world: WorldDescriptor, activity: ActivityDescriptor | null): void {
+    assertActivityBelongsToWorld(world, activity);
+    if (world.worldRevision <= this.lastEndedWorldRevision) {
+      throw new Error(
+        `[WorldLifecycle] Cannot recreate ended world revision ${world.worldRevision}; `
+        + `latest ended revision is ${this.lastEndedWorldRevision}`,
+      );
+    }
+
+    // Two admission requests for the same first World are one transition, not two instances.
+    // A changed Activity may still be attached to the already existing World below.
+    if (this.instanceDescriptor && isSameWorldInstance(this.instanceDescriptor, world)) {
+      this.syncActivity(activity, this.currentContext !== null, true);
+      return;
+    }
+
     // Die Activity der alten Instanz endet vollstaendig – sonst erbte eine World ohne Activity
     // die Mission der Vorgaengerin.
     this.activity.end();
@@ -101,11 +118,21 @@ export class WorldLifecycle {
    * uebergibt die beobachtete Activity deshalb hier.
    */
   attachRuntime(context: WorldRuntimeContext, observedActivity: ActivityDescriptor | null = null): void {
+    assertActivityBelongsToWorld(context.descriptor, observedActivity);
     if (this.instanceDescriptor && !isSameWorldInstance(this.instanceDescriptor, context.descriptor)) {
       throw new Error(
         `[WorldLifecycle] Runtime for world ${context.descriptor.definitionId}`
         + ` does not match the created instance ${this.instanceDescriptor.definitionId}`,
       );
+    }
+    if (!this.instanceDescriptor && context.descriptor.worldRevision <= this.lastEndedWorldRevision) {
+      throw new Error(
+        `[WorldLifecycle] Ignoring stale runtime for ended world revision ${context.descriptor.worldRevision}`,
+      );
+    }
+    if (this.currentContext && isSameWorldInstance(this.currentContext.descriptor, context.descriptor)) {
+      this.syncActivity(observedActivity, true, false);
+      return;
     }
     if (this.currentContext) this.detachRuntime();
     // Ein Client beobachtet die Instanz nur; fuer ihn beginnt sie mit seiner Runtime.
@@ -115,7 +142,7 @@ export class WorldLifecycle {
     this.sink.attach(context);
     // Erst steht die World, dann ihre Activity – nie umgekehrt. Ein Client eroeffnet die
     // beobachtete Activity hier, weil er sie nicht selbst erzeugt hat.
-    if (observedActivity && !this.activity.descriptor) this.activity.begin(observedActivity);
+    this.syncActivity(observedActivity, false, false);
     this.activity.activate();
   }
 
@@ -140,14 +167,56 @@ export class WorldLifecycle {
    * damit Rundenabschluss, Diagnose-Abbruch und technischer Abbruch denselben Weg nehmen koennen.
    */
   endInstance(): void {
+    if (!this.instanceDescriptor && !this.currentContext && this.currentPhase === 'none') return;
+    const endedRevision = this.instanceDescriptor?.worldRevision ?? 0;
     this.currentPhase = 'destroying';
     // Mit der World endet zwingend auch ihre Activity.
     this.activity.end();
     const hadContext = this.currentContext !== null;
     this.currentContext = null;
     this.instanceDescriptor = null;
+    this.lastEndedWorldRevision = Math.max(this.lastEndedWorldRevision, endedRevision);
     if (hadContext) this.sink.detach();
     this.sink.clear();
     this.currentPhase = 'none';
   }
+
+  private syncActivity(
+    observedActivity: ActivityDescriptor | null,
+    runtimeAttached: boolean,
+    nullMeansNoActivity: boolean,
+  ): void {
+    if (observedActivity) {
+      if (!this.activity.descriptor || !isSameActivity(this.activity.descriptor, observedActivity)) {
+        this.activity.end();
+        this.activity.begin(observedActivity);
+      }
+      if (runtimeAttached) this.activity.activate();
+      return;
+    }
+    // `null` means a World without Activity. A local host-created Activity is not removed by a
+    // runtime attach without an observation; only an explicit null on the same World ends it.
+    if (nullMeansNoActivity && this.activity.descriptor) {
+      this.activity.end();
+    }
+  }
+}
+
+function assertActivityBelongsToWorld(
+  world: WorldDescriptor,
+  activity: ActivityDescriptor | null,
+): void {
+  if (activity && activity.worldRevision !== world.worldRevision) {
+    throw new Error(
+      `[WorldLifecycle] Activity ${activity.definitionId} belongs to world revision `
+      + `${activity.worldRevision}, not ${world.worldRevision}`,
+    );
+  }
+}
+
+function isSameActivity(left: ActivityDescriptor, right: ActivityDescriptor): boolean {
+  return left.activityRevision === right.activityRevision
+    && left.worldRevision === right.worldRevision
+    && left.kind === right.kind
+    && left.definitionId === right.definitionId;
 }

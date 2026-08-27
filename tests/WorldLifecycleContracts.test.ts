@@ -144,8 +144,9 @@ describe('WorldLifecycle – Teardown und Instanzende sind verschieden', () => {
     lifecycle.endInstance();
     expect(lifecycle.phase).toBe('none');
     expect(lifecycle.context).toBeNull();
-    // Zweimaliges Beenden loest genau einmal die Runtime, raeumt den Kanal aber erneut ab.
-    expect(sink.calls).toEqual(['publish:12', 'attach:12', 'detach', 'clear', 'clear']);
+    // Zweimaliges Beenden ist vollstaendig idempotent: weder Runtime noch Kanal werden doppelt
+    // abgebaut.
+    expect(sink.calls).toEqual(['publish:12', 'attach:12', 'detach', 'clear']);
   });
 
   it('ersetzt eine laufende Instanz, statt zwei gleichzeitig zu fuehren', () => {

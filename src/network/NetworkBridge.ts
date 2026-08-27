@@ -2703,13 +2703,27 @@ export class NetworkBridge {
     clientNow?: number,
     awaitResult = false,
   ): Promise<LoadoutUseResult | null> {
+    const worldRevision = this.getWorldDescriptor()?.worldRevision;
     if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
       return { ok: false, reason: 'blocked' };
     }
     if (isHost()) {
       return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
-    const payload = { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow };
+    const payload = {
+      slot,
+      angle,
+      tx: targetX,
+      ty: targetY,
+      sid: shotId,
+      prm: params,
+      px: clientX,
+      py: clientY,
+      ts: clientNow,
+      // Every client action is bound to the World it was created in. The host rejects it if the
+      // World was restarted while the RPC was in flight.
+      wr: worldRevision,
+    };
     if (!awaitResult) {
       this.sendHostRpc('lu', payload);
       return null;
@@ -2738,7 +2752,7 @@ export class NetworkBridge {
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
       if (!isRecord(data)) return { ok: false, reason: 'invalid' };
-      const { slot, angle, tx, ty, sid, prm, px, py, ts } = data as {
+      const { slot, angle, tx, ty, sid, prm, px, py, ts, wr } = data as {
         slot: LoadoutSlot;
         angle: number;
         tx: number;
@@ -2748,6 +2762,7 @@ export class NetworkBridge {
         px?: number;
         py?: number;
         ts?: number;
+        wr?: number;
       };
       if (!['weapon1', 'weapon2', 'utility', 'ultimate'].includes(slot)
         || !isFiniteNumber(angle)
@@ -2757,8 +2772,14 @@ export class NetworkBridge {
         || (px !== undefined && !isFiniteNumber(px))
         || (py !== undefined && !isFiniteNumber(py))
         || (ts !== undefined && !isFiniteNumber(ts))
+        || (wr !== undefined && (!Number.isSafeInteger(wr) || wr <= 0))
         || (prm !== undefined && !isRecord(prm))) {
         return { ok: false, reason: 'invalid' };
+      }
+      const currentWorldRevision = this.getWorldDescriptor()?.worldRevision;
+      if (currentWorldRevision !== undefined && wr !== currentWorldRevision) {
+        // A placement or combat action from a previous World must never mutate the new one.
+        return { ok: false, reason: 'blocked' };
       }
       // Verwende Client-Timestamp für Cooldown-Tracking (verhindert Schussverlust bei variierender RPC-Latenz).
       // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
