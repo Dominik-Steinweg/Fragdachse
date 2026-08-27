@@ -1,8 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { getArenaMetricsProfile } from '../src/config';
+import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
+import { toMapId, toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
+import { createWorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import { resolveInputPolicy } from '../src/world/InputPolicy';
 import { resolvePlayerCapabilities } from '../src/world/PlayerCapabilities';
 import { resolvePresentationPolicy } from '../src/world/PresentationPolicy';
@@ -142,6 +147,72 @@ describe('Shared World ohne Activity – Aufbau und Teilnahme', () => {
   });
 });
 
+describe('Shared World ohne Activity – Admission statt Raum-Mitgliedschaft', () => {
+  it('laesst einen dritten Peer im Raum, ohne ihn in die World zu nehmen', async () => {
+    const [hostRoom, clientARoom, clientBRoom] = await createRoom(3);
+    try {
+      const host = bridgeFor(hostRoom);
+      const clientB = bridgeFor(clientBRoom);
+      useRoom(hostRoom);
+      hostOpenSharedWorld(host);
+
+      // Alle drei stehen im selben Raum.
+      expect(host.getConnectedPlayerIds().sort()).toEqual(['p0', 'p1', 'p2']);
+      // In der World steht nur, wer aufgenommen wurde.
+      expect(host.getWorldParticipants()).toEqual(['p1']);
+      expect(host.getWorldParticipation('p1')).toBe('interactive');
+      expect(host.getWorldParticipation('p2')).toBe('none');
+      expect(host.getLocalWorldParticipation()).toBe('none');
+
+      // Und der nicht aufgenommene Peer stellt die World auch nicht dar.
+      useRoom(clientBRoom);
+      expect(clientB.getLocalWorldParticipation()).toBe('none');
+      expect(resolveWorldPresentation({
+        participation: clientB.getLocalWorldParticipation(),
+        worldActive: clientB.getWorldDescriptor() !== null,
+      }).required).toBe(false);
+
+      // Erst der ausdrueckliche Eintritt bringt ihn hinein - das ist ein echtes Join.
+      useRoom(hostRoom);
+      host.hostPublishWorldParticipation({ p1: 'interactive', p2: 'interactive' });
+      expect(host.getWorldParticipants()).toEqual(['p1', 'p2']);
+
+      // Und ein echtes Leave bringt ihn zurueck in die Lobby.
+      host.hostPublishWorldParticipation({ p1: 'interactive' });
+      expect(host.getWorldParticipation('p2')).toBe('none');
+      expect(clientARoom.room.getGlobal('wpp')).toEqual(hostRoom.room.getGlobal('wpp'));
+    } finally {
+      clearActiveSession();
+    }
+  });
+
+  it('leitet Mitgliedschaft aus der Admission ab, nicht aus dem Raum', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const start = source.indexOf('  hostSyncWorldParticipation(): void {');
+    expect(start, 'host must author the participation').toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('\n  }', start));
+
+    // Genau eine Quelle der Mitgliedschaft: die Admission.
+    expect(body).toContain('const member = this.admittedToWorld.has(profile.id);');
+    // Und ausdruecklich nicht mehr die blosse Anwesenheit im Raum.
+    expect(
+      body.includes('profile.id !== localId || this.hostParticipatesInWorld'),
+      'room membership still implies world membership',
+    ).toBe(false);
+
+    // Eintritt und Austritt sind echte, benannte Vorgaenge.
+    expect(source).toContain('hostAdmitToWorld(playerId: string): void {');
+    expect(source).toContain('hostRemoveFromWorld(playerId: string): void {');
+    // Eine laufende Activity nimmt ihre eigene Besetzung auf - das ist der einzige Automatismus.
+    expect(body).toContain('if (activityRunning) this.admitActivityRoster();');
+    // Mit der World endet jede Aufnahme.
+    expect(source).toContain('private clearWorldAdmission(): void {');
+  });
+});
+
 describe('Shared World ohne Activity – Laden ohne Runde', () => {
   it('oeffnet die Ladebarriere ueber die World-Revision statt ueber eine Rundenrevision', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
@@ -261,6 +332,96 @@ describe('Shared World ohne Activity – Presentation und Input folgen der Teiln
   });
 });
 
+describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
+  function read(path: string): string {
+    return readFileSync(resolve(process.cwd(), path), 'utf8');
+  }
+
+  it('baut eine authored Coop-World auch ohne laufende Mission auf', () => {
+    // Genau der Fall des Persistent-Base-Editors: dieselbe authored Map, aber keine Runde.
+    // Frueher kam die Map aus der Activity - ohne Mission blieb sie `null`, und der Kontext
+    // scheiterte an seiner eigenen Zusicherung, dass Map und Weltidentitaet zusammenpassen.
+    const mapConfig = getCoopDefenseMapConfig('0');
+    const descriptor = {
+      worldRevision: 900,
+      definitionId: toWorldDefinitionId(mapConfig.mapId),
+      seed: 11,
+      generatorVersion: 1,
+      layoutFingerprint: 'editorworld',
+    };
+
+    const world = createWorldRuntimeContext({
+      descriptor,
+      metricsProfile: getArenaMetricsProfile(
+        COOP_DEFENSE_MODE,
+        'ARENA',
+        mapConfig.arenaWidthCells,
+        mapConfig.arenaHeightCells,
+      ),
+      mapConfig,
+      humanPlayerCount: 1,
+    });
+
+    expect(world.descriptor.definitionId).toBe(descriptor.definitionId);
+    expect(world.definition).not.toBeNull();
+    expect(world.metrics.gridCols).toBeGreaterThan(0);
+    expect(world.bases.length).toBeGreaterThan(0);
+
+    // Und die Map wird wirklich aus der Weltidentitaet aufgeloest.
+    expect(toMapId(descriptor.definitionId)).toBe(mapConfig.mapId);
+  });
+
+  it('nimmt die World entgegen und die Activity nur optional', () => {
+    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    // Der Aufbau kennt keinen ArenaDescriptor mehr.
+    expect(source).toContain(
+      'buildWorld(worldDescriptor: WorldDescriptor, activityDescriptor: ActivityDescriptor | null): void {',
+    );
+    const start = source.indexOf('  buildWorld(worldDescriptor: WorldDescriptor');
+    const body = source.slice(start, source.indexOf('\n  tearDownArena(): void {', start));
+    for (const roundBound of ['ArenaDescriptor', 'getArenaDescriptor', 'descriptor.gameMode', 'getGamePhase()']) {
+      expect(body.includes(roundBound), `world build still depends on the round: ${roundBound}`).toBe(false);
+    }
+
+    // Die authored Map gehoert der World; Missionssysteme tragen eine eigene Activity-Sicht.
+    expect(source).toContain('const mapId = toMapId(world.definitionId);');
+    expect(body).toContain('const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;');
+  });
+
+  it('gattert den Uebergang ueber die World, den Rundenzustand nur mit Activity', () => {
+    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const start = source.indexOf('  private onTransitionToArena(): void {');
+    expect(start).toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('\n  }', start));
+
+    // Ohne Activity gibt es keinen Rundenzustand, auf den zu warten waere.
+    expect(body).toContain('const activityReady = activityDescriptor === null');
+    expect(body).toContain('if (!worldDescriptor || !activityReady) {');
+    expect(body.includes('bridge.getArenaDescriptor()'), 'transition still gates on the round view')
+      .toBe(false);
+
+    // Und die World baut sich am eigenen Kanal auf, nicht am Phasenwechsel.
+    expect(source).toContain('detectWorldChange(): void {');
+    expect(source).toContain('if (this.arenaBuilt || bridge.getActivityDescriptor() !== null) return;');
+  });
+
+  it('laesst die Lobby stehen, wenn dieser Peer die World nicht betritt', () => {
+    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const start = source.indexOf('  private onTransitionToArena(): void {');
+    const body = source.slice(start, source.indexOf('\n  }', start));
+
+    // Ladeschirm, Lobby-Overlay, HUD und Arenamusik gehoeren zur lokalen World-Presentation.
+    expect(body).toContain('const entersWorld = bridge.getActivityDescriptor() !== null');
+    expect(body).toContain('|| requiresLocalWorldPresentation(bridge.getLocalWorldParticipation());');
+    expect(body).toContain('if (entersWorld) {');
+    expect(body).toContain('this.ctx.gameAudioSystem.playMusic(\'music_arena\');');
+
+    // Ohne Activity entscheidet die World-Teilnahme, wer eine Figur bekommt.
+    expect(body).toContain('const canCreatePlayer = activityDescriptor !== null');
+    expect(body).toContain(': hasWorldRuntimeEntry(participation) || participation === \'joining\';');
+  });
+});
+
 describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () => {
   function read(path: string): string {
     return readFileSync(resolve(process.cwd(), path), 'utf8');
@@ -308,9 +469,7 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
     );
     // Und die Teilnahme des Hosts ist eine echte Entscheidung, kein fester Wert.
     expect(coordinator).toContain('setHostParticipatesInWorld(participates: boolean): void {');
-    expect(coordinator).toContain(
-      'const member = profile.id !== localId || this.hostParticipatesInWorld;',
-    );
+    expect(coordinator).toContain('const member = this.admittedToWorld.has(profile.id);');
   });
 
   it('laedt ohne lokale Darstellung sofort fertig, statt auf Flaechen zu warten', () => {

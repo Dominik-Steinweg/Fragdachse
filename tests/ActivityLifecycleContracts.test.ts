@@ -153,14 +153,14 @@ describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Fla
       resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
     );
-    const start = source.indexOf('  buildArena(descriptor: ArenaDescriptor): void {');
+    const start = source.indexOf('  buildWorld(worldDescriptor: WorldDescriptor, activityDescriptor: ActivityDescriptor | null): void {');
     const end = source.indexOf('  tearDownArena(): void {');
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const body = source.slice(start, end);
 
-    // Eine Entscheidung, viele Verbraucher.
-    expect(body).toContain("const activityDescriptor = bridge.getActivityDescriptor();");
+    // Eine Entscheidung, viele Verbraucher. Die Activity kommt als Parameter herein: der Aufbau
+    // gehoert der World, die Activity ist ausdruecklich optional.
     expect(body).toContain("const isCoopMission = activityDescriptor?.kind === 'coop-mission';");
     expect([...body.matchAll(/const isCoopMission =/g)]).toHaveLength(1);
     expect([...body.matchAll(/\bisCoopMission\b/g)].length).toBeGreaterThan(10);
@@ -168,7 +168,7 @@ describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Fla
     // Und keine verstreute Modus-Abfrage mehr im Aufbau der Runtime.
     expect(
       body.includes('isCoopDefenseMode(descriptor.gameMode)'),
-      'buildArena still gates activity systems on the game mode',
+      'buildWorld still gates activity systems on the game mode',
     ).toBe(false);
   });
 });

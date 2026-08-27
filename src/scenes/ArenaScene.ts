@@ -1710,6 +1710,9 @@ export class ArenaScene extends Phaser.Scene {
     const deferArenaExit  = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.lifecycle.detectPhaseChange(deferArenaExit);
+    // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
+    // ihrem eigenen Kanal.
+    this.lifecycle.detectWorldChange();
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
     this.syncArenaMetrics(configuredPhase);

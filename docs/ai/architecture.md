@@ -116,7 +116,9 @@ Sie beantwortet die weltbezogenen Fragen über kleine Prädikate: `hasWorldRunti
 
 Sie ist ein **eigener replizierter World-Kanal** (`wpp`, `WorldParticipationState`), an `WorldDescriptor.worldRevision` gebunden: der Host leitet sie in `hostSyncWorldParticipation()` genau einmal aus seinem autoritativen Zustand ab, alle Peers lesen über `bridge.getWorldParticipation()` denselben Wert. Sie wird nirgends aus `canPlayerAct()`, `canPlayerSpawnOrRespawn()` oder `GamePhase` rekonstruiert — sonst hinge eine World ohne Runde an einer Runde. Eine neue World-Instanz startet ohne Teilnehmer; ein verspätetes Paket der Vorinstanz wird beim Lesen verworfen.
 
-Mitgliedschaft und Handlungsrecht sind getrennt: wer im Raum steht, während die World läuft, ist in ihr — auch ein Zuschauer und ein später Beigetretener. Was jemand darf, entscheidet die Activity; läuft keine, handelt jedes Mitglied. Einzige Ausnahme ist der Host: `setHostParticipatesInWorld(false)` lässt ihn eine Shared World autoritativ simulieren, ohne selbst in ihr zu stehen.
+Raum-Mitgliedschaft ist **keine** World-Mitgliedschaft. Wer in der Lobby steht, während eine Shared World läuft, bleibt außerhalb, bis er wirklich eintritt — nur so gibt es überhaupt ein Join und ein Leave. Die Aufnahme liegt host-seitig in `admittedToWorld` und ändert sich ausschließlich über `hostAdmitToWorld()` / `hostRemoveFromWorld()`; `hostSyncWorldParticipation()` liest sie, erfindet aber keine. Mit der World-Instanz endet jede Aufnahme.
+
+Der einzige Automatismus ist die Activity: eine laufende Runde nimmt ihre eigene Besetzung auf (`admitActivityRoster()`, Teilnehmer **und** Zuschauer). Was ein Mitglied darf, entscheidet danach die Activity; läuft keine, handelt jedes aufgenommene Mitglied. `setHostParticipatesInWorld(false)` ist zugleich der Austritt des Hosts — er simuliert die Shared World, ohne in ihr zu stehen.
 
 Die Rundenrolle bleibt getrennt: ein Missions-Spectator ist in der World `observer` und in der Runde `spectator`. `RoundParticipationPolicy` bleibt die Quelle für Spawn-, Handlungs- und Belohnungsrechte der Runde; World Participation ersetzt sie nicht.
 
@@ -129,6 +131,18 @@ Die Teilnahme speist den Player-Lifecycle: `resolvePlayerRuntimeFeatures()` nimm
 Der Attach ist atomar: lehnt ein Modul ab (`run` liefert `false`) oder wirft es, werden die bereits angehängten Module in umgekehrter Reihenfolge zurückgenommen — ein Spieler bleibt nie halb initialisiert. Der Detach läuft über dieselbe Feature-Entscheidung und ist deshalb auch für Spieler gültig, die diese Runtime nie selbst angehängt hat (Client-Pfad).
 
 Spawn, Respawn, Spectator-Wechsel, Disconnect und Rundenende nehmen alle diesen Weg. Verbleibende Ausnahme: `onTransitionToArena()` legt die Spielfiguren der Startbesetzung noch selbst an — auf Clients der einzige Weg, auf dem Host ohne Ally-Flowfield und ohne Ultimate-Reset. Das ist in tests/PlayerWorldRuntimeContracts.test.ts festgehalten.
+
+## World-Aufbau ohne Runde
+
+Der Aufbau gehört der World. `buildWorld(worldDescriptor, activityDescriptor | null)` nimmt keinen `ArenaDescriptor` mehr entgegen und liest weder `GamePhase` noch `getArenaDescriptor()`: Generatorversion, Seed, Fingerprint und Ladefortschritt kommen aus dem `WorldDescriptor`, die Metrik aus `resolveWorldLayout()`. Eine Activity ist ein optionaler Parameter, der nur ihre eigenen Systeme anhängt.
+
+`resolveWorldLayout(world, activity)` ist die eine Ableitung von Modus und authored Map. Die Map gehört **immer** der World (`toMapId(world.definitionId)`) — eine Coop-World ohne Mission bleibt eine Coop-World. Das ist die Voraussetzung dafür, dass `WorldRuntimeContext` seine Zusicherung halten kann, dass Map und `definitionId` zusammenpassen. Den Modus leitet eine laufende Activity ab; ohne Activity antwortet die World aus ihrer eigenen Identität (authored Map → `coop_defense`, sonst `deathmatch`).
+
+Weil die Map jetzt auch ohne Activity aufgelöst wird, trägt `missionMapConfig = isCoopMission ? coopDefenseMapConfig : null` die Activity-Sicht auf dieselbe Map. Ohne diese Trennung würde eine Coop-World ohne Runde Bosse, Missionsziele, Encounter und Respawn-Budgets aufbauen, für die es keine Runde gibt.
+
+`onTransitionToArena()` gattert entsprechend zweistufig: die World ist die Bedingung, `activityReady` ist ohne Activity trivial erfüllt. Ausgelöst wird der Aufbau einer World **mit** Activity weiterhin vom Rundenwechsel (ihre Besetzung und ihr Startzeitpunkt kommen aus der Runde); eine World **ohne** Activity entsteht und vergeht mit ihrem eigenen Kanal über `detectWorldChange()`.
+
+Die lokalen Presentation-Schritte des Übergangs — Ladeschirm, Lobby-Overlay, HUD-Wechsel, Arenamusik — hängen an `entersWorld`. Eine Runde nimmt jeden Teilnehmer mit hinein; ohne Activity betritt die World nur, wer aufgenommen wurde. Ein nur simulierender Host behält Lobby, Lobby-HUD und Lobby-Musik. Ebenso entscheidet ohne Activity die World-Teilnahme darüber, wer eine Spielfigur bekommt — `canPlayerSpawnOrRespawn()` verlangt eine Runde und kann eine World ohne Runde nicht beantworten.
 
 ## World Loading und Round Loading
 

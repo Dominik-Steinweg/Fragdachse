@@ -191,7 +191,7 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
 describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
   it('baut World-Systeme ausschliesslich aus Descriptor und WorldRuntimeContext', () => {
     const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const start = source.indexOf('  buildArena(descriptor: ArenaDescriptor): void {');
+    const start = source.indexOf('  private resolveWorldLayout(');
     const end = source.indexOf('\n  tearDownArena(): void {', start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
@@ -201,7 +201,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
     expect(buildArena).not.toContain('bridge.getCoopDefenseMapId()');
     expect(buildArena).not.toContain('roundState?.coopDefenseMapId');
     expect(buildArena).not.toMatch(/\b(?:GRID_COLS|GRID_ROWS|ARENA_OFFSET_X|ARENA_OFFSET_Y|ARENA_WIDTH|ARENA_HEIGHT)\b/);
-    expect(buildArena).toContain('const worldMapId = toMapId(worldDescriptor.definitionId)');
+    expect(buildArena).toContain('const mapId = toMapId(world.definitionId);');
     expect(buildArena).toContain('cols: world.metrics.gridCols');
     expect(buildArena).toContain('worldOriginX: world.metrics.offsetX');
   });
