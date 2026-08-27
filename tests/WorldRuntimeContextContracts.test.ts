@@ -168,6 +168,51 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
   });
 });
 
+describe('WorldRuntimeContext – eine Metrikquelle', () => {
+  it('loest Basisgeometrie gegen dieselbe Metrik auf, die der Kontext fuehrt', () => {
+    const mapConfig = getCoopDefenseMapConfig('18');
+    const world = contextForMap('18');
+    // Der Kontext leitet die Metrik einmal ab und reicht sie an die Basisaufloesung weiter.
+    // Wuerde die Aufloesung ihre eigene ableiten, koennten beide auseinanderlaufen.
+    for (const base of world.bases) {
+      for (const cell of base.cells) {
+        expect(isCellInsideWorld(world.metrics, cell.gridX, cell.gridY), base.id).toBe(true);
+      }
+    }
+    expect(world.metrics.gridCols).toBe(mapConfig.arenaWidthCells);
+    expect(world.metrics.gridRows).toBe(mapConfig.arenaHeightCells);
+
+    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldRuntimeContext.ts'), 'utf8');
+    const factoryStart = source.indexOf('export function createWorldRuntimeContext(');
+    const factory = source.slice(factoryStart, source.indexOf('\n}', factoryStart));
+    expect(factory).toContain('resolveCoopDefenseBases(mapConfig, input.humanPlayerCount, metrics)');
+    expect((factory.match(/resolveWorldMetrics\(/g) ?? []).length).toBe(1);
+  });
+});
+
+describe('WorldRuntimeContext – bekannte World-/Activity-Vermischung', () => {
+  it('haelt fest, welche Felder von `bases` noch aktivitaetsabhaengig sind', () => {
+    // Im Authoring liegen diese Anteile bereits in `CoopMissionBaseOverlay`. Zur Laufzeit sind
+    // sie weiterhin in `BaseSpec` eingebacken; die Trennung gehoert zum Loesen der Activity
+    // Runtime aus der World Runtime und nicht in diesen Schritt.
+    const source = readFileSync(resolve(process.cwd(), 'src/arena/BaseRegistry.ts'), 'utf8');
+    const start = source.indexOf('export interface BaseSpec {');
+    const body = source.slice(start, source.indexOf('\n}', start));
+    const fields = [...body.matchAll(/^ {2}readonly ([a-zA-Z][a-zA-Z0-9]*)[?]?:/gm)].map((m) => m[1]);
+
+    // World-Anteil: Geometrie und Struktur.
+    for (const worldField of ['id', 'cells', 'region', 'hpMax', 'faction', 'role', 'turrets']) {
+      expect(fields, `BaseSpec lost world field ${worldField}`).toContain(worldField);
+    }
+    // Activity-Anteil: entsteht erst durch eine laufende Mission.
+    for (const activityField of ['startHp', 'dormant', 'dormantObjectiveId', 'powerUpPedestals']) {
+      expect(fields, `BaseSpec lost known activity field ${activityField}`).toContain(activityField);
+    }
+    // Und `hpMax` traegt die Rundenskalierung nach Spielerzahl.
+    const scaled = contextForMap('18', {});
+    expect(scaled.bases[0]!.hpMax).toBeGreaterThan(0);
+  });
+});
 describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
   it('weist eine Map ab, die nicht zu dieser World-Identitaet gehoert', () => {
     // Genau der Fehler, den die Lobby-Kopplung erzeugen wuerde: die World meint Map 18, der

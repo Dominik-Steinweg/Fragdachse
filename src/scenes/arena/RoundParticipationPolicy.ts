@@ -85,11 +85,23 @@ export function canRoundPlayerReceiveRewards(
   return isRoundParticipant(state, playerId);
 }
 
-export function getRoundResultEligibleIds(
+/**
+ * Verbundene Spieler, die in dieser Runde aktiv teilnehmen. Gemeinsame Quelle fuer die
+ * Ergebnisberechtigung und fuer die host-lokale Startbedingung der Runde.
+ */
+export function getActiveRoundParticipantIds(
   state: RoundParticipationState | null | undefined,
   connectedIds: readonly string[],
 ): string[] {
   if (!state) return [];
   const connected = new Set(connectedIds);
   return state.participantIds.filter((id) => connected.has(id) && isRoundParticipant(state, id));
+}
+
+/** Ergebnis-/XP-/Freischaltungsberechtigung ist identisch mit der aktiven Teilnahme. */
+export function getRoundResultEligibleIds(
+  state: RoundParticipationState | null | undefined,
+  connectedIds: readonly string[],
+): string[] {
+  return getActiveRoundParticipantIds(state, connectedIds);
 }

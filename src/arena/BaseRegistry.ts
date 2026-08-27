@@ -1,6 +1,5 @@
 import {
   CELL_SIZE,
-  isCaptureTheBeerBaseCell,
   isGridCellInArenaRegion,
   type ArenaGridRegion,
 } from '../config';
@@ -328,10 +327,12 @@ function resolveBaseTurretSpec(
 export function resolveCoopDefenseBases(
   mapConfig: CoopDefenseMapConfig,
   humanPlayerCount = 1,
+  worldMetrics?: WorldMetrics,
 ): readonly BaseSpec[] {
-  // Die Geometrie folgt der Metrik dieser Map, nicht der gerade global aktiven Arena. Sonst
-  // haenge die Lage einer Basis davon ab, welche Arena zufaellig zuletzt gesetzt wurde.
-  const metrics = resolveCoopDefenseWorldMetrics(mapConfig.arenaWidthCells, mapConfig.arenaHeightCells);
+  // Die Geometrie folgt der Metrik dieser World, nicht der gerade global aktiven Arena. Ohne
+  // uebergebene Metrik ist die Map selbst die Quelle – nie der globale Zustand.
+  const metrics = worldMetrics
+    ?? resolveCoopDefenseWorldMetrics(mapConfig.arenaWidthCells, mapConfig.arenaHeightCells);
   const objectiveByBaseId = new Map<string, string>();
   for (const objective of mapConfig.secondaryObjectives ?? []) {
     if (objective.type === 'carry' && objective.carry !== undefined) continue;
@@ -426,7 +427,7 @@ export function getBaseRewardPickupWorldPosition(
  * Elemente platziert werden (Felsen, Bäume, Power-Up-Podeste).
  *
  * Dirt und Decals sind rein visuell und blockieren die Bewegung nicht; sie
- * dürfen weiterhin im Schutz-Radius erscheinen (siehe `isReservedBaseSurfaceCell`).
+ * dürfen weiterhin im Schutz-Radius erscheinen (siehe ArenaGenerator.isReservedBaseSurfaceCell).
  */
 export const COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS = 5;
 /** Zwischen einer Coop-Basis und dem zweizelligen Gleis-Fußabdruck bleibt eine freie Zelle. */
@@ -496,22 +497,6 @@ export function isCoopDefenseBaseObstacleClearanceCell(
   );
 }
 
-/**
- * Aggregator: vom Generator zu reservierende Zelle für **bewegungs-blockierende**
- * Elemente (Felsen, Bäume, Power-Up-Podeste).
- * - CTB: exakte Basis-Zelle.
- * - Coop: Bounding-Box + 5-Zellen-Schutz-Radius.
- */
-export function isReservedBaseObstacleCell(
-  gx: number,
-  gy: number,
-  bases: readonly BaseSpec[],
-): boolean {
-  if (isCaptureTheBeerBaseCell(gx, gy)) return true;
-  if (isCoopDefenseBaseObstacleClearanceCell(gx, gy, bases)) return true;
-  return isPersistentBaseReservationCell(gx, gy, bases);
-}
-
 export function isPersistentBaseReservationCell(
   gx: number,
   gy: number,
@@ -527,23 +512,6 @@ export function isPersistentBaseReservationCell(
       },
     )
   ));
-}
-
-/**
- * Aggregator: vom Generator zu reservierende Zelle für **rein visuelle**
- * Oberflächen-Elemente (Dirt, Decals).
- * - CTB: exakte Basis-Zelle.
- * - Coop: exakte Basis-Zelle (konkavitätsbewusst – Lücken bleiben begehbar
- *   und dürfen Dirt/Decals tragen).
- */
-export function isReservedBaseSurfaceCell(
-  gx: number,
-  gy: number,
-  bases: readonly BaseSpec[],
-): boolean {
-  if (isCaptureTheBeerBaseCell(gx, gy)) return true;
-  if (isCoopDefenseBaseCell(gx, gy, bases)) return true;
-  return false;
 }
 
 /**

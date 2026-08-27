@@ -46,6 +46,23 @@ const MUTABLE_ARENA_GLOBALS = [
   'TRACK_SPAWN_MAX_COL',
 ] as const;
 
+/**
+ * Config-Funktionen, die die mutablen Arena-Variablen intern lesen.
+ *
+ * Sie sind die stille Luecke der reinen Variablenpruefung: ein Modul kann laengst
+ * `WorldMetrics` fuehren und trotzdem ueber einen solchen Helfer an der global aktiven Arena
+ * haengen.
+ */
+const AMBIENT_ARENA_HELPERS = [
+  'isPointInsideArena',
+  'clampPointToArena',
+  'clipPointToArenaRay',
+  'isCaptureTheBeerBaseCell',
+  'isCaptureTheBeerBaseModeActive',
+  'isCoopDefenseBasesActive',
+  'getCaptureTheBeerBaseWorldBounds',
+] as const;
+
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
 }
@@ -84,6 +101,10 @@ describe('World-scoped Metrik – migrierte Module', () => {
       // `ARENA_OFFSET_X/Y` sind ebenfalls mutabel; sie duerfen nur als Wort im Kommentar stehen.
       for (const offset of ['ARENA_OFFSET_X', 'ARENA_OFFSET_Y']) {
         expect(imported.includes(offset), `${path} still imports ${offset}`).toBe(false);
+      }
+      // Und nicht ueber Config-Helfer, die dieselben Variablen intern lesen.
+      for (const helper of AMBIENT_ARENA_HELPERS) {
+        expect(imported.includes(helper), `${path} still imports ambient helper ${helper}`).toBe(false);
       }
     });
   }

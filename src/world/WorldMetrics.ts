@@ -140,6 +140,38 @@ export function worldPositionToNearestCell(
   };
 }
 
+/** True, solange die Weltposition innerhalb dieser World liegt. */
+export function isPointInsideWorld(metrics: WorldMetrics, x: number, y: number): boolean {
+  return x >= metrics.offsetX && x <= metrics.maxX && y >= metrics.offsetY && y <= metrics.maxY;
+}
+
+/**
+ * Beschneidet einen Strahl an den Grenzen dieser World. Gegenstueck zu
+ * `clipPointToArenaRay()`, das dieselbe Rechnung gegen die global aktive Arena ausfuehrt.
+ */
+export function clipPointToWorldRay(
+  metrics: WorldMetrics,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): { x: number; y: number; inside: boolean } {
+  if (isPointInsideWorld(metrics, endX, endY)) return { x: endX, y: endY, inside: true };
+
+  const dx = endX - startX;
+  const dy = endY - startY;
+  let t = 1;
+
+  if (dx > 0) t = Math.min(t, (metrics.maxX - startX) / dx);
+  else if (dx < 0) t = Math.min(t, (metrics.offsetX - startX) / dx);
+
+  if (dy > 0) t = Math.min(t, (metrics.maxY - startY) / dy);
+  else if (dy < 0) t = Math.min(t, (metrics.offsetY - startY) / dy);
+
+  t = Math.max(0, Math.min(1, t));
+  return { x: startX + dx * t, y: startY + dy * t, inside: false };
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

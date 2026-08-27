@@ -4,12 +4,10 @@ import { isCoopDefenseBaseCell, type BaseSpec } from '../arena/BaseRegistry';
 import { RockGridIndex } from '../arena/RockGridIndex';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlaceableUtilityConfig, TunnelUltimateConfig } from '../loadout/LoadoutConfig';
+import { CELL_SIZE } from '../config';
 import {
-  CELL_SIZE,
-  clipPointToArenaRay,
-  isPointInsideArena,
-} from '../config';
-import {
+  clipPointToWorldRay,
+  isPointInsideWorld,
   worldCellCenter,
   worldPositionToCell,
   worldPositionToNearestCell,
@@ -683,18 +681,18 @@ export class PlacementSystem {
     const distance = Math.hypot(dx, dy);
     const dirX = distance > 0.0001 ? dx / distance : 1;
     const dirY = distance > 0.0001 ? dy / distance : 0;
-    const pointerInside = isPointInsideArena(pointerX, pointerY) && distance <= range;
+    const pointerInside = isPointInsideWorld(this.metrics, pointerX, pointerY) && distance <= range;
 
     if (pointerInside) {
       const snapped = this.snapWorldToGrid(pointerX, pointerY);
       const snappedWorld = this.gridToWorld(snapped.gridX, snapped.gridY);
       const withinRange = Phaser.Math.Distance.Between(originX, originY, snappedWorld.x, snappedWorld.y) <= range;
-      if (withinRange && isPointInsideArena(snappedWorld.x, snappedWorld.y)) {
+      if (withinRange && isPointInsideWorld(this.metrics, snappedWorld.x, snappedWorld.y)) {
         return snapped;
       }
     }
 
-    const clipped = clipPointToArenaRay(originX, originY, originX + dirX * range, originY + dirY * range);
+    const clipped = clipPointToWorldRay(this.metrics, originX, originY, originX + dirX * range, originY + dirY * range);
     const maxProjection = Phaser.Math.Distance.Between(originX, originY, clipped.x, clipped.y);
     let best: { gridX: number; gridY: number; projection: number } | null = null;
     const radiusCells = Math.ceil(range / CELL_SIZE) + 1;
@@ -708,7 +706,7 @@ export class PlacementSystem {
         const projection = offsetX * dirX + offsetY * dirY;
         if (projection < -0.01 || projection > maxProjection + 0.01) continue;
         if (Phaser.Math.Distance.Between(originX, originY, world.x, world.y) > range) continue;
-        if (!isPointInsideArena(world.x, world.y)) continue;
+        if (!isPointInsideWorld(this.metrics, world.x, world.y)) continue;
         if (!best || projection > best.projection) {
           best = { gridX: gx, gridY: gy, projection };
         }

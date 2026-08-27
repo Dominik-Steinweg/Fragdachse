@@ -66,6 +66,12 @@ src/scenes/arena/ArenaContext.ts ist der Vertrag:
 
 Round-Systeme werden nur für den aktiven Modus bzw. die Host-Rolle erzeugt. Host-only-Systeme bleiben auf Clients null; Client-Code muss aus replizierten Zuständen arbeiten.
 
+## World Loading und Round Loading
+
+Beides sind getrennte Bedingungen. Die replizierte Ladebarriere (`wlr`, `resolveWorldLoadProgress`) beantwortet ausschließlich, ob die lokale World gebaut und darstellbar ist — bei jedem Peer, Host wie Client. Ob eine Runde starten darf, entscheidet zusätzlich `prepareRoundStart()` host-lokal: alle aktiven Teilnehmer stehen wirklich in der Welt und der Host-Tick hat seine Caches aufgebaut. `tryScheduleArenaStart()` prüft erst die World-Barriere, dann das Round-Gate.
+
+Steckten beide in einem Flag, könnte eine World ohne Activity nie „fertig geladen" melden, und ein Client könnte nicht unterscheiden, ob der Host noch lädt oder auf die Runde wartet. Wer aktiv an der Runde teilnimmt, kommt aus `getActiveRoundParticipantIds()` — dieselbe Regel, die auch die Ergebnisberechtigung trägt.
+
 ## World-Kontext
 
 `ArenaContext.world` trägt den `WorldRuntimeContext` der laufenden World-Instanz (src/world/WorldRuntimeContext.ts): Descriptor, authored `WorldDefinition` (null für die prozedurale Arena), `WorldMetrics`, Basen und die aufgelöste `persistentBaseSite` mit Anker und Radius. Er wird in buildArena() erzeugt und im Teardown wie jede andere Round-Referenz auf null gesetzt.
@@ -79,6 +85,8 @@ Basen und die persistente Basisstelle löst der Kontext aus der eigenen Map auf 
 `createWorldRuntimeContext()` erzwingt beides: die übergebene Map muss zur `definitionId` des Descriptors gehören, sonst wirft der Aufbau. Das ist nötig, weil `getCoopDefenseMapConfig()` bei unbekannter ID still die Default-Map liefert — ohne die Prüfung entstünde eine World, die eine fremde Map behauptet. Der aktive Persistent-Base-Radius kommt ausschließlich aus `descriptor.parameters`; ein lokaler Ersatzwert wäre pro Peer verschieden und würde aus einem Übertragungsfehler still zwei verschiedene Welten machen.
 
 Migrierte world-scoped Aufloeser lesen keine mutable Arena-Variable mehr: `resolveCoopDefenseBases()` leitet die Metrik aus den authored Zellmassen der Map ab (`resolveCoopDefenseWorldMetrics`), `PlacementSystem`, `BaseManager`/`BaseEntity`, `PlayerManager`, `CombatSystem`, `ArenaLifecycleCoordinator`, `HostUpdateCoordinator`, `RockVisualHelper` und `PersistentBaseVisuals` bekommen ihre konkrete `WorldMetrics`; `ArenaGenerator.generate()` erhält sie als Teil von `ArenaGenerationInput`. Baumzahl und Base-Modus-Flags werden ebenfalls als unveränderliche Generatorparameter gebunden. Der gemeinsame `ArenaObstacleIndex` erhält seine Bounds explizit vom Besitzer: im Match aus `CombatSystem`/`WorldMetrics`, in der Lobby aus dem eigenen `RockWorldFrame`. tests/WorldMetricsScopeContracts.test.ts haelt die Liste der migrierten Module und prueft, dass keines `GRID_COLS`, `ARENA_OFFSET_*` und Verwandte importiert. Runtime-Pfade wählen den aktiven Modus aus dem kanonischen Arena-/Activity-Snapshot vor dem Lobby-Wert; die Lobby bleibt nur vor der World-Erzeugung die Authoring-Quelle.
+
+Die Prüfung gilt auch für Config-*Funktionen*, die dieselben Variablen intern lesen (`isPointInsideArena`, `clipPointToArenaRay`, `isCaptureTheBeerBaseCell` …) — sonst hängt ein Modul mit eigener `WorldMetrics` weiter still an der aktiven Arena. `createWorldRuntimeContext()` leitet die Metrik genau einmal ab und reicht sie an `resolveCoopDefenseBases()` weiter; eine zweite Ableitung dort könnte bei unpassendem Profil still von `world.metrics` abweichen.
 
 Vorher hingen Basisgeometrie und Generator am zuletzt global gesetzten Raster — die Lobby-Vorschau konnte dieselbe Map deshalb anders auflösen als die Runde. Rendering und Effekte lesen die Globals teilweise weiterhin; `resolveActiveArenaWorldMetrics()` ist die Uebergangshilfe fuer diese Aufrufer und ausdruecklich nichts fuer World-Simulation.
 

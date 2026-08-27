@@ -143,7 +143,8 @@ import {
 import type { ConstructionId, ConstructionOwnership, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock } from '../../types';
 import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveConstructionAccess } from '../../systems/ConstructionAccessResolver';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
-import { resolveArenaLoadProgress } from './ArenaLoadProgress';
+import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
+import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import { getStoredPersistentBaseState } from '../../utils/localPreferences';
 import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRepository';
@@ -205,7 +206,7 @@ export class ArenaLifecycleCoordinator {
   private localArenaLoadReady = false;
   private terrainSnapshotReady = false;
   private terrainSnapshotGenerationId = 0;
-  private hostStartupCachesPrepared = false;
+  private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: ArenaDescriptor; layout: ArenaLayout } | null = null;
   private pendingHostArenaGeneration: {
     readonly roundRevision: number;
@@ -458,9 +459,6 @@ export class ArenaLifecycleCoordinator {
     const roundRevision = participation?.roundRevision ?? 0;
     if (roundRevision <= 0 || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
 
-    const hostStartupReady = bridge.isHost()
-      ? this.prepareHostStartupCaches(Date.now())
-      : true;
     const renderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
       && this.renderers.shadow.isStaticReadyForView(view, true);
     const localRenderReady = renderReady && this.terrainSnapshotReady;
@@ -476,7 +474,7 @@ export class ArenaLifecycleCoordinator {
     const resident = (groundStats?.residentChunks ?? 0)
       + (rockStats?.residentChunks ?? 0)
       + (shadowStats?.residentChunks ?? 0);
-    const loadProgress = resolveArenaLoadProgress(pending, resident, localRenderReady, hostStartupReady);
+    const loadProgress = resolveWorldLoadProgress(pending, resident, localRenderReady);
     bridge.setLocalWorldLoadProgress(
       roundRevision,
       loadProgress.progress,
@@ -488,9 +486,19 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost()) this.tryScheduleArenaStart();
   }
 
+  /**
+   * World Loading und Round Loading sind getrennte Bedingungen.
+   *
+   * Die replizierte Ladebarriere beantwortet nur: steht die World bei allen Teilnehmern? Ob die
+   * Runde starten darf, entscheidet zusaetzlich der host-lokale Rundenaufbau – Spawns und
+   * Startup-Caches. Eine World ohne Activity waere fertig geladen, ohne dass je eine Runde
+   * beginnt; genau deshalb duerfen beide Bedingungen nicht in einem Flag stecken.
+   */
   private tryScheduleArenaStart(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
-    if (bridge.getArenaStartTime() > 0 || !bridge.areRoundParticipantsWorldLoadReady()) return;
+    if (bridge.getArenaStartTime() > 0) return;
+    if (!bridge.areRoundParticipantsWorldLoadReady()) return;
+    if (!this.prepareRoundStart(Date.now())) return;
 
     const arenaStartTime = resolveArenaStartTime(Date.now());
     bridge.setArenaStartTime(arenaStartTime);
@@ -572,8 +580,14 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  private prepareHostStartupCaches(now: number): boolean {
-    if (!bridge.isHost() || this.hostStartupCachesPrepared) return this.hostStartupCachesPrepared;
+  /**
+   * Round Loading: die host-lokale Startbedingung der Runde, unabhaengig vom World-Ladezustand.
+   *
+   * Sie ist erfuellt, wenn jeder aktive Rundenteilnehmer wirklich in der Welt steht und der
+   * Host-Tick seine Caches aufgebaut hat.
+   */
+  private prepareRoundStart(now: number): boolean {
+    if (!bridge.isHost() || this.roundStartPrepared) return this.roundStartPrepared;
 
     // A reconnect or a delayed committed-loadout snapshot can make the initial spawn arrive one
     // or more frames after the arena itself. Keep the cache gate behind the actual spawn state.
@@ -581,10 +595,11 @@ export class ArenaLifecycleCoordinator {
     const participation = bridge.getRoundParticipation();
     if (!participation || participation.roundRevision <= 0) return false;
 
-    const connected = new Set([...bridge.getConnectedPlayerIds(), bridge.getLocalPlayerId()]);
-    const requiredIds = participation.participantIds.filter((id) => (
-      connected.has(id) && !participation.spectatorIds.includes(id)
-    ));
+    // Wer aktiv teilnimmt, entscheidet die Teilnahme-Policy – nicht eine zweite Filterregel hier.
+    const requiredIds = getActiveRoundParticipantIds(
+      participation,
+      [...bridge.getConnectedPlayerIds(), bridge.getLocalPlayerId()],
+    );
     if (requiredIds.length === 0) return false;
     const allInitialPlayersSpawned = requiredIds.every((id) => {
       const player = this.ctx.playerManager.getPlayer(id);
@@ -593,7 +608,7 @@ export class ArenaLifecycleCoordinator {
     if (!allInitialPlayersSpawned) return false;
 
     this.hostUpdate.prepareStartupCaches(now);
-    this.hostStartupCachesPrepared = true;
+    this.roundStartPrepared = true;
     return true;
   }
 
@@ -840,7 +855,7 @@ export class ArenaLifecycleCoordinator {
   /** Gemeinsamer Entkopplungspfad fuer Spectator, Disconnect und Arena-Teardown. */
   removePlayerFromActiveRound(playerId: string): void {
     if (bridge.isHost() && bridge.isArenaLoading() && bridge.getArenaStartTime() <= 0) {
-      this.hostStartupCachesPrepared = false;
+      this.roundStartPrepared = false;
     }
     // Zielstatus und Injector-Fokus gehoeren zur laufenden Runde, nicht zur Lobby-Persona.
     // Deshalb muessen sie auch beim Disconnect/Spectator-Wechsel vor dem naechsten Snapshot
@@ -3063,7 +3078,7 @@ export class ArenaLifecycleCoordinator {
     this.terrainSnapshotReady = false;
     this.cancelPendingHostArenaGeneration();
     this.localArenaLoadReady = false;
-    this.hostStartupCachesPrepared = false;
+    this.roundStartPrepared = false;
     this.preparedRoundLayout = null;
     this.boundRoundStartTime = 0;
     this.pendingClassicTrainEvent = null;

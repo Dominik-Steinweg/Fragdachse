@@ -72,11 +72,14 @@ export function createWorldRuntimeContext(input: WorldRuntimeContextInput): Worl
       `[WorldRuntimeContext] World ${descriptor.definitionId} cannot be built from ${expectedDefinitionId}`,
     );
   }
-  const bases = mapConfig ? resolveCoopDefenseBases(mapConfig, input.humanPlayerCount) : [];
+  // Genau eine Metrikquelle fuer diese World. Wuerde die Basisaufloesung ihre eigene ableiten,
+  // koennten Geometrie und `metrics` bei einem unpassenden Profil still auseinanderlaufen.
+  const metrics = resolveWorldMetrics(input.metricsProfile);
+  const bases = mapConfig ? resolveCoopDefenseBases(mapConfig, input.humanPlayerCount, metrics) : [];
   return {
     descriptor,
     definition: mapConfig ? toWorldDefinition(mapConfig) : null,
-    metrics: resolveWorldMetrics(input.metricsProfile),
+    metrics,
     bases,
     persistentBaseSite: resolvePersistentBaseSite(descriptor, mapConfig, bases),
   };

@@ -55,3 +55,35 @@ export function normalizeWorldLoadProgress(progress: unknown): number {
   if (typeof progress !== 'number' || !Number.isFinite(progress)) return 0;
   return Math.max(0, Math.min(100, Math.round(progress)));
 }
+
+/** Grob gerasterter, netzsparsamer Ladefortschritt einer World. */
+export interface WorldLoadProgressResult {
+  readonly progress: number;
+  readonly stage: WorldLoadStage;
+  readonly ready: boolean;
+}
+
+/**
+ * Uebersetzt die Chunk-Statistik des lokalen World-Aufbaus in den replizierten Fortschritt.
+ *
+ * Sie beschreibt ausschliesslich die World: ist die lokale Welt gebaut und darstellbar? Ob eine
+ * Runde starten darf, ist eine davon getrennte Frage – eine World ohne Activity ist fertig
+ * geladen, ohne dass jemals eine Runde beginnt.
+ */
+export function resolveWorldLoadProgress(
+  pendingWork: number,
+  residentWork: number,
+  localWorldReady: boolean,
+): WorldLoadProgressResult {
+  if (localWorldReady) return { progress: 100, stage: 'ready', ready: true };
+  const pending = Math.max(0, pendingWork);
+  const resident = Math.max(0, residentWork);
+  const renderProgress = pending <= 0
+    ? 100
+    : Math.max(0, Math.min(99, Math.round((resident / Math.max(1, resident + pending)) * 100)));
+  return {
+    progress: 70 + Math.round(renderProgress * 0.25),
+    stage: 'rendering',
+    ready: false,
+  };
+}
