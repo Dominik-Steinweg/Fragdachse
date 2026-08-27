@@ -78,6 +78,12 @@ Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none 
 
 Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
 
+## Presentation- und Input-Policy
+
+Die Scene interpretiert Zustandskombinationen nicht mehr selbst. `resolvePresentationPolicy()` (src/world/PresentationPolicy.ts) leitet `showLobby`, `showWorld`, `showHud`, `useWorldCamera` und `useSpectatorCamera` aus Raumzustand, `WorldPresentationRequirement`, Sichtbarkeit, Gameplay-Zustand, Rundenrolle und Abbruchzustand ab. `resolveInputPolicy()` (src/world/InputPolicy.ts) leitet `movement`, `combat`, `placement`, `worldInteraction`, `cameraNavigation` und `aim` aus den `PlayerCapabilities`, dem Gameplay-/Countdown-Zustand, dem UI-Zustand und der Diagnose-Arena ab.
+
+Beide sind rein und rein lokal: sie steuern Darstellung und Eingabe-UX. Ob eine Handlung zählt, entscheidet weiterhin der Host über dieselben Capabilities. Der Countdown hält Bewegung an, lässt Zielen und Weltinteraktion aber offen; die Diagnose-Arena sperrt das laufende Gameplay, nicht ihre Countdown-Interaktion.
+
 ## World Simulation und World Presentation
 
 `resolveWorldPresentation({ participation, worldActive })` (src/world/WorldPresentation.ts) entscheidet, ob ein Peer die laufende World lokal darstellt. Ohne Teilnahme entsteht **keine** Darstellungsfläche — der Zielzustand ist: Shared World aktiv, Host simuliert autoritativ, Host stellt nichts dar. „Host bleibt in der Lobby" heißt weder, die World vollständig zu rendern und die Lobby darüberzulegen, noch einen unsichtbaren World-Render-Tree zu halten.

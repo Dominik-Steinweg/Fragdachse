@@ -184,6 +184,8 @@ import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { toGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import { allowsWorldPresentationSurface } from '../world/WorldPresentation';
+import { resolvePlayerCapabilities } from '../world/PlayerCapabilities';
+import { resolveInputPolicy } from '../world/InputPolicy';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -1790,15 +1792,20 @@ export class ArenaScene extends Phaser.Scene {
 
     if (inGame) {
       // Loading blocks input, while the countdown intentionally keeps aiming and the Inspector
-      // radial menu available so the pre-round presentation remains interactive.
-      const countdownInputAllowed = countdownActive && !optionsOpen && !spectator;
-      this.ctx.inputSystem.setAimEnabled(
-        (gameplayActive || countdownActive) && !optionsOpen && !spectator && !weaponBalanceLabArena,
-      );
-      this.ctx.inputSystem.setInputEnabled(
-        gameplayActive && !optionsOpen && !spectator && !weaponBalanceLabArena,
-        (gameplayActive && !optionsOpen && !spectator && !weaponBalanceLabArena) || countdownInputAllowed,
-      );
+      // radial menu available so the pre-round presentation remains interactive. Die Kombination
+      // steht in der Input Policy, nicht in der Scene.
+      const inputPolicy = resolveInputPolicy({
+        capabilities: resolvePlayerCapabilities({
+          participation: spectator ? 'observer' : 'interactive',
+          activityKind: bridge.getActivityDescriptor()?.kind ?? null,
+        }),
+        gameplayActive,
+        countdownActive,
+        uiBlocking: optionsOpen,
+        diagnosticsArena: weaponBalanceLabArena,
+      });
+      this.ctx.inputSystem.setAimEnabled(inputPolicy.aim);
+      this.ctx.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);
       this.ctx.inputSystem.update();
       if (countdownActive) this.syncCountdownPlayerPresentation();
     } else {
