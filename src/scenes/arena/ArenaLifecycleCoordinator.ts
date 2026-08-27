@@ -113,7 +113,7 @@ import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaDescriptor, ArenaLayout, GameMode, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
+import type { ArenaDescriptor, ArenaLayout, GameMode, LoadoutCommitSnapshot, LoadoutUseParams, PlayerProfile, RoomQualitySnapshot } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -731,10 +731,7 @@ export class ArenaLifecycleCoordinator {
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
         // Ein Weg hinein: der gemeinsame Player-Lifecycle. Lehnt ein Modul ab, bleibt der Spieler
         // unberuehrt statt halb initialisiert.
-        this.playerRuntime.attach(
-          { profile, reconnectAfterDeath },
-          this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
-        );
+        this.attachPlayerToWorld(profile, reconnectAfterDeath);
       }
     }
     // Ein neuer Runtime-Eintrag verschiebt die Teilnahme von `joining` auf `interactive`.
@@ -1023,7 +1020,7 @@ export class ArenaLifecycleCoordinator {
     }
     // Der Abbau raeumt immer den vollen Anteil ab – unabhaengig davon, wie weit der Spieler
     // gekommen war. Sonst bliebe von einem Beobachter Kampfzustand stehen.
-    this.playerRuntime.detach(playerId, this.resolvePlayerFeatures('interactive'));
+    this.detachPlayerFromWorld(playerId);
   }
 
   /**
@@ -1191,6 +1188,19 @@ export class ArenaLifecycleCoordinator {
     });
   }
 
+  /** Einziger Attach-Pfad fuer Host und Client; WorldParticipation liefert den Kontext. */
+  attachPlayerToWorld(profile: PlayerProfile, reconnectAfterDeath = false): boolean {
+    return this.playerRuntime.attach(
+      { profile, reconnectAfterDeath },
+      this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
+    );
+  }
+
+  /** Einziger Detach-Pfad fuer Host und Client; der volle Abbau bleibt idempotent. */
+  detachPlayerFromWorld(playerId: string): void {
+    this.playerRuntime.detach(playerId, this.resolvePlayerFeatures('interactive'));
+  }
+
   terminateMatch(reason?: string): void {
     if (this.matchTerminated) return;
     this.matchTerminated = true;
@@ -1322,9 +1332,10 @@ export class ArenaLifecycleCoordinator {
     // Die World laeuft ab hier. Wer an ihr teilnimmt, entscheidet der Host sofort - sonst
     // haette die neue Instanz einen Frame lang gar keinen Teilnahmestand.
     this.hostSyncWorldParticipation();
+    const presentation = this.getLocalWorldPresentation().required;
     // Figuren entstehen nur sichtbar, wenn dieser Peer die World ueberhaupt darstellt.
     this.ctx.playerManager.setVisualsEnabledResolver(
-      () => this.getLocalWorldPresentation().required,
+      () => presentation,
     );
     this.ctx.combatSystem.setWorldMetrics(world.metrics);
     this.scene.physics.world.setBounds(
@@ -1412,7 +1423,7 @@ export class ArenaLifecycleCoordinator {
     const persistentBaseSite = world.persistentBaseSite;
     this.ctx.arenaResult = builder.buildDynamic(layout, {
       // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
-      presentation: this.getLocalWorldPresentation().required,
+      presentation,
       enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
       persistentBaseGravel: persistentBaseSite
         ? {
@@ -3376,10 +3387,10 @@ export class ArenaLifecycleCoordinator {
     }
 
     // Round-scoped renderers (all clients)
-    this.renderers.train = new TrainRenderer(this.scene);
-    this.renderers.train.setAudioSystem(this.ctx.gameAudioSystem);
-    this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
-    this.renderers.translocatorTeleport.setLightingSystem(this.renderers.lighting);
+    this.renderers.train = presentation ? new TrainRenderer(this.scene) : null;
+    this.renderers.train?.setAudioSystem(this.ctx.gameAudioSystem);
+    this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.scene) : null;
+    this.renderers.translocatorTeleport?.setLightingSystem(this.renderers.lighting);
     // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
     // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
     const timeOfDayMinutes = roundState?.timeOfDayMinutes
@@ -3397,20 +3408,22 @@ export class ArenaLifecycleCoordinator {
       }).minutes;
     this.appliedRuntimeTimeOfDayMinutes = runtimeTimeOfDayMinutes;
     this.renderers.shadow.setTimeOfDay(runtimeTimeOfDayMinutes);
-    this.renderers.shadow.rebuildArenaStaticShadows(
-      this.ctx.currentLayout,
-      this.ctx.arenaResult,
-      this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
-    );
+    if (presentation) {
+      this.renderers.shadow.rebuildArenaStaticShadows(
+        this.ctx.currentLayout,
+        this.ctx.arenaResult,
+        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+      );
+    }
     // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
     // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
-    this.ctx.lightOccluderIndex = new LightOccluderIndex({
+    this.ctx.lightOccluderIndex = presentation ? new LightOccluderIndex({
       rocks: () => this.ctx.arenaResult?.rockPhysicsProxies ?? null,
       trunks: () => this.ctx.arenaResult?.trunkBodies ?? null,
       baseCells: () => this.ctx.baseManager?.getObstacleRectangles() ?? null,
       barrierCells: () => this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
-    });
+    }) : null;
     this.restorePersistentBase(world.persistentBaseSite, world.definition?.sourceMapId ?? null);
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
     this.renderers.lighting.setTimeOfDay(runtimeTimeOfDayMinutes);
@@ -4151,7 +4164,11 @@ export class ArenaLifecycleCoordinator {
     this.arenaBuilt = true;
     this.localArenaLoadReady = false;
     this.terrainSnapshotReady = false;
-    this.startTerrainSnapshotBuild(worldDescriptor.worldRevision);
+    if (this.getLocalWorldPresentation().required) {
+      this.startTerrainSnapshotBuild(worldDescriptor.worldRevision);
+    } else {
+      this.terrainSnapshotReady = true;
+    }
 
     for (const profile of bridge.getConnectedPlayers()) {
       // Mit Activity entscheidet deren Zulassung, ohne sie allein die World-Teilnahme. Eine
@@ -4164,15 +4181,7 @@ export class ArenaLifecycleCoordinator {
       if (canCreatePlayer
         && (activityDescriptor === null || bridge.getPlayerReady(profile.id))
         && !this.ctx.playerManager.hasPlayer(profile.id)) {
-        this.ctx.playerManager.addPlayer(profile);
-        if (bridge.isHost()) {
-          this.ctx.combatSystem.initPlayer(profile.id);
-          this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
-          this.ctx.resourceSystem?.initPlayer(profile.id);
-          this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
-          this.ctx.burrowSystem?.initPlayer(profile.id);
-          this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
-        }
+        this.attachPlayerToWorld(profile);
       }
     }
 
@@ -4188,8 +4197,9 @@ export class ArenaLifecycleCoordinator {
     this.syncHostLoadoutsFromCommittedSelections();
     this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
-    // Round systems exist locally, but simulation stays inert until the common start timestamp.
-    this.hostUpdate.setActive(false);
+    // Eine Activity wartet auf ihren gemeinsamen Startzeitpunkt. Eine World ohne Activity
+    // laeuft sofort; sie besitzt keinen Round-Timestamp, auf den sie warten koennte.
+    this.hostUpdate.setActive(activityDescriptor === null);
   }
 
   private startTerrainSnapshotBuild(worldRevision: number): void {
@@ -4578,6 +4588,7 @@ export class ArenaLifecycleCoordinator {
   ): LoadoutUseResult {
     const canonicalConstructionId = normalizeConstructionId(constructionId);
     if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
+    if (!this.getPlayerCapabilities(playerId).canPlace) return { ok: false, reason: 'blocked' };
     constructionId = canonicalConstructionId;
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     const access = resolveConstructionAccess(
@@ -4818,6 +4829,7 @@ export class ArenaLifecycleCoordinator {
     targetY: number,
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
+    if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0) {
       return { ok: false, reason: 'blocked' };
@@ -4864,6 +4876,7 @@ export class ArenaLifecycleCoordinator {
   /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
   dismantleAllInspectorConstructions(playerId: string): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
+    if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0

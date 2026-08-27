@@ -78,7 +78,7 @@ export interface ArenaBuilderResult {
   /** Rendererunabhaengige Source of Truth samt dedupliziertem Dirty-Trichter. */
   rockVisualStates: RockVisualStateStore;
   /** Umschaltbarer Classic-/SpriteGPU-Consumer der Visual States. */
-  rockVisualSystem: RockVisualSystem;
+  rockVisualSystem: RockVisualSystem | null;
   /** Spatial Index für Grid-basierte Nachbar-Lookups (Autotiling) */
   rockGrid:     RockGridIndex;
   /** StaticGroup mit nicht rendernden Baumstamm-Proxies. */
@@ -167,8 +167,6 @@ export class ArenaBuilder {
   /** Zeichnet Sidebars, Gras und setzt die Physics-Bounds.
    *  Wird einmalig in ArenaScene.create() aufgerufen, nie zerstört. */
   buildStatic(mode: GameMode, phase: GamePhase): void {
-    this.ensureSidebars();
-    this.ensureArenaBackground();
     this.ensureLobbyBackground();
     this.syncStaticBackdrop(mode, phase);
     this.setPhysicsBounds();
@@ -176,6 +174,12 @@ export class ArenaBuilder {
 
   syncStaticBackdrop(mode: GameMode, phase: GamePhase): void {
     const inArena = phase === 'ARENA';
+    // World-Surfaces entstehen lazy. Ein Peer, der nur die Lobby zeigt und eine Shared World
+    // ohne eigene Presentation simuliert, besitzt damit auch keinen unsichtbaren Ground-Tree.
+    if (inArena) {
+      this.ensureSidebars();
+      this.ensureArenaBackground();
+    }
     const showFrames = inArena && ARENA_STATIC_FRAMES_VISIBLE && ARENA_OFFSET_X > 0;
 
     if (this.leftSidebar) {
@@ -227,7 +231,7 @@ export class ArenaBuilder {
    */
   buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions = {}): ArenaBuilderResult {
     const presentation = options.presentation !== false;
-    const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
+    const baseZoneObjects = presentation ? this.buildCaptureTheBeerBaseZones() : [];
     const rockGroup    = this.scene.physics.add.staticGroup();
     const frame        = getArenaRockWorldFrame();
     const trunkGroup   = this.scene.physics.add.staticGroup();
@@ -242,7 +246,7 @@ export class ArenaBuilder {
     const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
 
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
-    const trackObjects = this.buildTracks(layout.tracks ?? []);
+    const trackObjects = presentation ? this.buildTracks(layout.tracks ?? []) : [];
 
     // Ground-Cover-Platzierungen entstehen genau einmal je Runde und bleiben danach
     // unveraendert; sie sind die Quelle jedes Chunk-Bakes dieser Schicht.
@@ -305,13 +309,15 @@ export class ArenaBuilder {
       }
     }
 
-    const rockVisualSystem = new RockVisualSystem(
-      this.scene,
-      frame,
-      rockVisualStates,
-      getRockRendererMode(),
-      getRockGpuPageSize(),
-    );
+    const rockVisualSystem = presentation
+      ? new RockVisualSystem(
+        this.scene,
+        frame,
+        rockVisualStates,
+        getRockRendererMode(),
+        getRockGpuPageSize(),
+      )
+      : null;
     const result: ArenaBuilderResult = {
       baseZoneObjects,
       rockGroup,
@@ -346,26 +352,28 @@ export class ArenaBuilder {
     // wird: Sie entscheidet, welche Flecken ueberhaupt entstehen (siehe `RockOverlayRegions`).
     syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
 
-    result.groundSurface = new GroundSurfaceStreamer({
-      scene: this.scene,
-      frame,
-      layout,
-      groundCoverPlacements,
-      enablePersistentBaseGravel: options.enablePersistentBaseGravel === true,
-      persistentBaseGravel: options.persistentBaseGravel,
-    });
-    // Erst nach dem Erzeugen der Live-Felsen, damit der Streamer beim ersten Bake exakt die
-    // aktiven Fels-IDs sieht.
-    result.rockOverlaySurface = new RockOverlayStreamer({
-      scene: this.scene,
-      frame,
-      layout,
-      rockPhysicsProxies,
-      rockVisualStates: rockVisualStates.states,
-      overlaySource: result.rockOverlaySource,
-      mossPlacements: result.rockMossPlacements,
-      vegetationPlacements: result.rockVegetationPlacements,
-    });
+    if (presentation) {
+      result.groundSurface = new GroundSurfaceStreamer({
+        scene: this.scene,
+        frame,
+        layout,
+        groundCoverPlacements,
+        enablePersistentBaseGravel: options.enablePersistentBaseGravel === true,
+        persistentBaseGravel: options.persistentBaseGravel,
+      });
+      // Erst nach dem Erzeugen der Live-Felsen, damit der Streamer beim ersten Bake exakt die
+      // aktiven Fels-IDs sieht.
+      result.rockOverlaySurface = new RockOverlayStreamer({
+        scene: this.scene,
+        frame,
+        layout,
+        rockPhysicsProxies,
+        rockVisualStates: rockVisualStates.states,
+        overlaySource: result.rockOverlaySource,
+        mossPlacements: result.rockMossPlacements,
+        vegetationPlacements: result.rockVegetationPlacements,
+      });
+    }
     return result;
   }
 
@@ -380,7 +388,7 @@ export class ArenaBuilder {
     if (!result) return;
     result.groundSurface?.updateResidency(view);
     result.rockOverlaySurface?.updateResidency(view);
-    result.rockVisualSystem.updateVisibility(view);
+    result.rockVisualSystem?.updateVisibility(view);
   }
 
   /**
@@ -691,7 +699,7 @@ export class ArenaBuilder {
     result.baseZoneObjects.length = 0;
 
     // Felsen: Visuals und Physics haben getrennte Besitzer.
-    result.rockVisualSystem.destroy();
+    result.rockVisualSystem?.destroy();
     for (const proxy of result.rockPhysicsProxies) {
       if (proxy?.active) proxy.destroy();
     }

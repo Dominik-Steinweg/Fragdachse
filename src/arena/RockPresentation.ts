@@ -65,10 +65,10 @@ export class RockPresentation {
     const layout = this.sources.getLayout();
     if (!result || !layout) return false;
     const proxy = result.rockPhysicsProxies[id];
-    const snapshot = result.rockVisualSystem.getDestructionSnapshot(id);
-    if (!proxy?.active || !snapshot) return false;
+    if (!proxy?.active) return false;
+    const snapshot = result.rockVisualSystem?.getDestructionSnapshot(id) ?? null;
 
-    this.destructionRenderer.playDestruction(snapshot);
+    if (snapshot) this.destructionRenderer.playDestruction(snapshot);
     ArenaBuilder.destroyRockAndRetile(result, layout.rocks, id);
     return true;
   }

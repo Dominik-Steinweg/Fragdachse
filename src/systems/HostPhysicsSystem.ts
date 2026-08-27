@@ -116,6 +116,7 @@ export class HostPhysicsSystem {
   private dashHoldEnabledResolver: ((playerId: string) => boolean) | null = null;
   private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
   private enemyRockContactCallback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null = null;
+  private canMoveResolver: ((playerId: string) => boolean) | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -152,6 +153,7 @@ export class HostPhysicsSystem {
     return this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
   }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
+  setCanMoveResolver(resolver: ((playerId: string) => boolean) | null): void { this.canMoveResolver = resolver; }
   setRunSpeedResolver(resolver: ((playerId: string) => number) | null): void { this.runSpeedResolver = resolver; }
   setDashRangeMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.dashRangeMultiplierResolver = resolver; }
   setDashRecoveryDurationResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryDurationResolver = resolver; }
@@ -325,7 +327,7 @@ export class HostPhysicsSystem {
    * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
-    if (!this.bridge.canPlayerAct(playerId)) return;
+    if (!(this.canMoveResolver?.(playerId) ?? this.bridge.canPlayerAct(playerId))) return;
     if (!this.combatSystem.isAlive(playerId)) return;
     if (this.burrowSystem?.isDashBlocked(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
@@ -555,6 +557,11 @@ export class HostPhysicsSystem {
 
       const impulse = this.consumeImpulseVelocity(player.id, now);
       const forcedMovement = this.forcedMovement.get(player.id);
+
+      if (!(this.canMoveResolver?.(player.id) ?? this.bridge.canPlayerAct(player.id))) {
+        playerBody.setVelocity(impulse.vx, impulse.vy);
+        continue;
+      }
 
       if (movementLocked) {
         const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);

@@ -219,12 +219,11 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
     );
     const spawnStart = source.indexOf('  spawnReadyPlayers(): void {');
     const spawnBody = source.slice(spawnStart, source.indexOf('\n  }', spawnStart));
-    expect(spawnBody).toContain('this.playerRuntime.attach(');
-    expect(spawnBody).toContain('this.resolvePlayerFeatures(this.getWorldParticipation(profile.id))');
+    expect(spawnBody).toContain('this.attachPlayerToWorld(profile, reconnectAfterDeath)');
 
     const removeStart = source.indexOf('  removePlayerFromActiveRound(playerId: string): void {');
     const removeBody = source.slice(removeStart, source.indexOf('\n  }', removeStart));
-    expect(removeBody).toContain('this.playerRuntime.detach(');
+    expect(removeBody).toContain('this.detachPlayerFromWorld(playerId)');
 
     // Der Abbau steht nur noch an einer Stelle; Spawn und Respawn teilen sich dieselbe Liste.
     for (const call of [
@@ -240,11 +239,7 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
     expect(source).toContain('activityKind: this.worldLifecycle.activity.kind');
   });
 
-  it('haelt den verbliebenen zweiten Attach-Pfad sichtbar', () => {
-    // `onTransitionToArena()` legt die Spielfiguren der Startbesetzung noch selbst an. Auf Clients
-    // ist das der einzige Weg; auf dem Host weicht er in zwei Punkten vom gemeinsamen Lifecycle
-    // ab: kein Ally-Flowfield und kein Ultimate-Reset. Beides anzugleichen aendert Gegner-
-    // Navigation und Ultimate-Zustand und gehoert deshalb nicht in diesen Schritt.
+  it('fuehrt auch Startbesetzung und Client-Roster ueber denselben Lifecycle', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
@@ -252,8 +247,16 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
     const start = source.indexOf('  private onTransitionToArena(): void {');
     expect(start).toBeGreaterThan(0);
     const body = source.slice(start, source.indexOf('\n  private ', start + 10));
-    expect(body).toContain('this.ctx.playerManager.addPlayer(profile);');
-    expect(body.includes('this.ensureAllyFlowField('), 'second path gained navigation').toBe(false);
-    expect(body.includes('resetUltimateState('), 'second path gained the ultimate reset').toBe(false);
+    expect(body).toContain('this.attachPlayerToWorld(profile);');
+    expect(body).not.toContain('this.ctx.playerManager.addPlayer(profile);');
+
+    const client = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ClientUpdateCoordinator.ts'),
+      'utf8',
+    );
+    expect(client).not.toContain('this.ctx.playerManager.addPlayer(');
+    expect(client).not.toContain('this.ctx.playerManager.removePlayer(');
+    expect(client).toContain('this.attachPlayerToWorld?.(profile)');
+    expect(client).toContain('this.detachPlayerFromWorld?.(player.id)');
   });
 });

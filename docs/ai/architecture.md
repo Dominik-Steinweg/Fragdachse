@@ -98,7 +98,7 @@ Kollisionen registrieren auf `player.physicsProxy`, nicht auf dem Bild. Der Tref
 
 Bäume: `trunkBodies` (`TreePhysicsProxy`, zugleich `ObstacleCircleBody`) ist die Runtime; `trunkVisuals` und `canopyObjects` sind Darstellung und entstehen nur mit `options.presentation`. Hindernis- und Lichtindex lesen die Körper.
 
-Ohne lokale World-Presentation entstehen weder Stämme und Kronen noch Figur-Sprites: `ArenaBuilder` bekommt `presentation`, `PlayerManager` einen `setVisualsEnabledResolver()`, beide gespeist aus `getLocalWorldPresentation().required`. Die Runtime bleibt davon unberührt — der Host simuliert identisch.
+Ohne lokale World-Presentation entstehen weder Ground-/Rock-Streamer, Rock-Renderer, Gleise, CTB-Zonen, Stämme und Kronen noch Figur-Sprites: `ArenaBuilder` bekommt `presentation`, `PlayerManager` einen `setVisualsEnabledResolver()`, beide gespeist aus `getLocalWorldPresentation().required`. Die Runtime-Proxies und der rendererunabhängige Felszustand bleiben davon unberührt — der Host simuliert identisch.
 
 Eine bewusste Folge: der Kollisionsradius skaliert nicht mehr implizit mit dem Sprite mit. Er wird ausschließlich explizit gesetzt (`setCollisionRadius()`), so wie `HostPhysicsSystem` ihn für den Dash ohnehin schon führt.
 
@@ -146,7 +146,7 @@ Die Teilnahme speist den Player-Lifecycle: `resolvePlayerRuntimeFeatures()` nimm
 
 Der Attach ist atomar: lehnt ein Modul ab (`run` liefert `false`) oder wirft es, werden die bereits angehängten Module in umgekehrter Reihenfolge zurückgenommen — ein Spieler bleibt nie halb initialisiert. Der Detach läuft über dieselbe Feature-Entscheidung und ist deshalb auch für Spieler gültig, die diese Runtime nie selbst angehängt hat (Client-Pfad).
 
-Spawn, Respawn, Spectator-Wechsel, Disconnect und Rundenende nehmen alle diesen Weg. Verbleibende Ausnahme: `onTransitionToArena()` legt die Spielfiguren der Startbesetzung noch selbst an — auf Clients der einzige Weg, auf dem Host ohne Ally-Flowfield und ohne Ultimate-Reset. Das ist in tests/PlayerWorldRuntimeContracts.test.ts festgehalten.
+Spawn, Respawn, Startbesetzung, clientseitige Snapshot-Reconciliation, Spectator-Wechsel, Disconnect und Rundenende nehmen alle diesen Weg. `ClientUpdateCoordinator` besitzt keinen konkurrierenden `PlayerManager.addPlayer()`-/`removePlayer()`-Rosterpfad; `WorldParticipation` entscheidet, welche Snapshot-Spieler über den gemeinsamen Lifecycle attached oder detached werden.
 
 ## World-Aufbau ohne Runde
 

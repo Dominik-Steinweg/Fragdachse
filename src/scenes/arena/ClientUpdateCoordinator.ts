@@ -16,7 +16,7 @@ import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, PlayerProfile, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
@@ -100,6 +100,8 @@ export class ClientUpdateCoordinator {
   private inspectorSelectedTool: LoadoutToolRef | null = null;
 
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
+  private attachPlayerToWorld: ((profile: PlayerProfile) => boolean) | null = null;
+  private detachPlayerFromWorld: ((playerId: string) => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -118,6 +120,15 @@ export class ClientUpdateCoordinator {
     this.refreshStoredProgressFallback();
   }
 
+  /** Verbindet den Client-Snapshot mit demselben PlayerWorldRuntime wie Host-Spawns. */
+  setPlayerWorldRuntime(
+    attach: (profile: PlayerProfile) => boolean,
+    detach: (playerId: string) => void,
+  ): void {
+    this.attachPlayerToWorld = attach;
+    this.detachPlayerFromWorld = detach;
+  }
+
   setPerformanceMetricsEnabled(enabled: boolean): void {
     if (this.coarsePerformanceMetricsEnabled === enabled) return;
     this.coarsePerformanceMetricsEnabled = enabled;
@@ -134,7 +145,7 @@ export class ClientUpdateCoordinator {
 
   runClientUpdate(delta: number): void {
     const countdownActive = bridge.isArenaCountdownActive();
-    if (!bridge.isArenaStarted() && !countdownActive) {
+    if (!this.ctx.world || bridge.getLocalWorldParticipation() === 'none') {
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -178,40 +189,31 @@ export class ClientUpdateCoordinator {
     let playersMs = 0;
     let projectilesEffectsMs = 0;
     let worldStateMs = 0;
-    const participationKnown = bridge.getRoundParticipation() !== null;
+    const participationKnown = bridge.getWorldParticipationState() !== null;
 
     // Rollenwechsel und Latejoiner duerfen nicht auf den naechsten Delta-Tick warten. Die
-    // Teilnehmerliste ist ein eigener reliable Snapshot; sobald sie bekannt ist, gilt sie als
-    // Render-Roster fuer alle PlayerEntities.
+    // WorldParticipation ist ein eigener reliable Snapshot; sobald sie bekannt ist, ist sie die
+    // kanonische Rosterquelle fuer alle PlayerRuntimes.
     if (participationKnown) {
       for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
-        if (bridge.canPlayerSpawnOrRespawn(player.id)) continue;
-        this.ctx.effectSystem.clearBurrowState(player.id);
-        this.removeBurrowPhase(player.id);
-        this.ctx.playerManager.removePlayer(player.id);
+        if (bridge.getWorldParticipation(player.id) === 'interactive') continue;
+        this.detachPlayerFromWorld?.(player.id);
       }
     }
 
     for (const id of Object.keys(state.players)) {
-      if (participationKnown && !bridge.canPlayerSpawnOrRespawn(id)) continue;
+      if (participationKnown && bridge.getWorldParticipation(id) !== 'interactive') continue;
       if (this.ctx.playerManager.hasPlayer(id)) continue;
       const profile = bridge.getConnectedPlayers().find((p) => p.id === id);
-      if (profile) this.ctx.playerManager.addPlayer(profile);
+      if (profile) this.attachPlayerToWorld?.(profile);
     }
 
     if (isNewData) {
       const playersStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
       const localId = bridge.getLocalPlayerId();
       for (const [id, ps] of Object.entries(state.players)) {
-        if (participationKnown && !bridge.canPlayerSpawnOrRespawn(id)) continue;
-        let player = this.ctx.playerManager.getPlayer(id);
-        if (!player) {
-          const profile = bridge.getConnectedPlayers().find(p => p.id === id);
-          if (profile) {
-            this.ctx.playerManager.addPlayer(profile);
-            player = this.ctx.playerManager.getPlayer(id);
-          }
-        }
+        if (participationKnown && bridge.getWorldParticipation(id) !== 'interactive') continue;
+        const player = this.ctx.playerManager.getPlayer(id);
         if (!player) continue;
 
         const wasAlive = this.prevAliveStates.get(id) ?? false;
@@ -546,8 +548,6 @@ export class ClientUpdateCoordinator {
     void targetY;
 
     if (slot !== 'weapon1' && slot !== 'weapon2') return undefined;
-    if (bridge.getGamePhase() === 'ARENA' && !bridge.canPlayerAct(bridge.getLocalPlayerId())) return undefined;
-
     const now = Date.now();
     const lastFired = this.weaponLastFired[slot];
     const wepConfig = this.getLocalWeaponConfig(slot);
@@ -584,7 +584,6 @@ export class ClientUpdateCoordinator {
   }
 
   notifyUtilityFired(): void {
-    if (bridge.getGamePhase() === 'ARENA' && !bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
     // The host clears the descriptor only after the use is accepted. This keeps every temporary
     // utility, including mission placement rewards, authoritative across rejected uses.
     this.ctx.leftPanel.flashSlot('utility');

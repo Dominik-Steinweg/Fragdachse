@@ -202,7 +202,13 @@ export class RpcCoordinator {
   private registerLoadoutUseHandler(): void {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
-      if (!bridge.canPlayerAct(senderId)) return { ok: false, reason: 'blocked' };
+      const capabilities = typeof this.lifecycle?.getPlayerCapabilities === 'function'
+        ? this.lifecycle.getPlayerCapabilities(senderId)
+        : {
+          canInteract: bridge.canPlayerAct(senderId),
+          canUseCombat: bridge.canPlayerAct(senderId),
+        };
+      if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
       let authoritativeParams = params;
@@ -294,6 +300,7 @@ export class RpcCoordinator {
           targetY,
         ) ?? { ok: false, reason: 'blocked' };
       }
+      if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
       return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, authoritativeParams, clientX, clientY)
         ?? { ok: false, reason: 'blocked' };
     });

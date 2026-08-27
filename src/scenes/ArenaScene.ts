@@ -180,11 +180,12 @@ import type { ConstructionId, CoopDefenseClassId, CoopDefenseItemRewardAction, C
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
-import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
+import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { toGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import { allowsWorldPresentationSurface } from '../world/WorldPresentation';
 import { resolveInputPolicy } from '../world/InputPolicy';
+import { resolvePresentationPolicy } from '../world/PresentationPolicy';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -663,9 +664,9 @@ export class ArenaScene extends Phaser.Scene {
           chunkSampling: this.renderers?.shadow?.getSamplingMode()
             ?? this.ctx?.arenaResult?.groundSurface?.getSamplingMode()
             ?? 'default',
-          rockRenderer: this.ctx?.arenaResult?.rockVisualSystem.getMode() ?? getRockRendererMode(),
-          rockGpuPageSize: this.ctx?.arenaResult?.rockVisualSystem.getPageSize() ?? getRockGpuPageSize(),
-          rockGpu: this.ctx?.arenaResult?.rockVisualSystem.getGpuDiagnostics() ?? null,
+          rockRenderer: this.ctx?.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
+          rockGpuPageSize: this.ctx?.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
+          rockGpu: this.ctx?.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
         }),
         setStaticShadowsVisible: (visible) => this.renderers?.shadow?.setStaticVisible(visible),
         setGroundSurfaceVisible: (visible) => this.ctx?.arenaResult?.groundSurface?.setVisible(visible),
@@ -677,11 +678,11 @@ export class ArenaScene extends Phaser.Scene {
         },
         setRockRenderer: (mode) => {
           setRockRendererMode(mode);
-          this.ctx?.arenaResult?.rockVisualSystem.setMode(mode);
+          this.ctx?.arenaResult?.rockVisualSystem?.setMode(mode);
         },
         setRockGpuPageSize: (size) => {
           setRockGpuPageSize(size);
-          this.ctx?.arenaResult?.rockVisualSystem.setPageSize(size);
+          this.ctx?.arenaResult?.rockVisualSystem?.setPageSize(size);
         },
       },
       () => this.renderers?.gpuVfx.getStats() ?? null,
@@ -1395,7 +1396,7 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUltimatePlacementPreviewProvider(() => this.getLocalUltimatePlacementPreview());
     inputSystem.setupConstructionProviders(
       () => {
-        if (bridge.getGamePhase() !== 'ARENA') return [];
+        if (!this.lifecycle?.getPlayerCapabilities(bridge.getLocalPlayerId()).canPlace) return [];
         return this.lifecycle?.getActiveConstructionToolsForPlayer(bridge.getLocalPlayerId())
           .filter((tool): tool is { kind: 'construction'; id: ConstructionId } => tool.kind === 'construction')
           .map((tool) => tool.id) ?? [];
@@ -1465,7 +1466,14 @@ export class ArenaScene extends Phaser.Scene {
       }
     };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
-      if (!bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
+      const capabilities = this.lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId());
+      if (!capabilities.canInteract) return;
+      const dismantleAction = params?.dismantle === true || params?.globalDismantle === true;
+      const constructionAction = params?.constructionId !== undefined
+        || params?.toolRef?.kind === 'construction';
+      if (dismantleAction ? !capabilities.canDismantle
+        : constructionAction ? !capabilities.canPlace
+        : !capabilities.canUseCombat) return;
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
 
       let shotId: number | undefined;
@@ -1603,6 +1611,16 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay, this.hostUpdate, this.clientUpdate,
       this.roomQualityMonitor,
     );
+    this.clientUpdate.setPlayerWorldRuntime(
+      (profile) => this.lifecycle.attachPlayerToWorld(profile),
+      (playerId) => this.lifecycle.detachPlayerFromWorld(playerId),
+    );
+    this.hostUpdate.setPlayerCapabilitiesResolver(
+      (playerId) => this.lifecycle.getPlayerCapabilities(playerId),
+    );
+    this.ctx.hostPhysics.setCanMoveResolver(
+      (playerId) => this.lifecycle.getPlayerCapabilities(playerId).canMove,
+    );
     this.lifecycle.setRuntimeDiagnosticEventSink((type, fields) => {
       this.runtimeProfiler?.recordSemanticEvent(type, fields);
     });
@@ -1715,7 +1733,6 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.detectWorldChange();
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
-    this.syncArenaMetrics(configuredPhase);
     const configuredGameMode = this.resolveConfiguredGameMode(configuredPhase);
     const configuredCoopDefenseMapId = isCoopDefenseMode(configuredGameMode)
       ? this.resolveConfiguredCoopDefenseMapId(configuredPhase)
@@ -1743,6 +1760,19 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.hostSyncWorldParticipation();
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
+    const worldActive = this.ctx?.world !== null && this.ctx?.world !== undefined;
+    const activityActive = bridge.getActivityDescriptor() !== null;
+    const localWorldPresentation = this.lifecycle.getLocalWorldPresentation();
+    const presentationPolicy = resolvePresentationPolicy({
+      inLobby: phase === 'LOBBY' && !deferArenaExit,
+      worldPresentation: localWorldPresentation,
+      worldVisible: worldActive && (!activityActive || arenaVisible),
+      gameplayActive: worldActive && (!activityActive || gameplayActive),
+      roundRole: spectator ? 'spectator' : 'participant',
+      matchTerminated: terminated,
+      spectatorPanAvailable: true,
+    });
+    this.syncArenaMetrics(configuredPhase, presentationPolicy.showWorld);
 
     if (phase === 'LOBBY' && !deferArenaExit) {
       this.clearDebugModes();
@@ -1772,12 +1802,12 @@ export class ArenaScene extends Phaser.Scene {
 
     // The camera must already be positioned while the world is hidden, because its initial view
     // defines the startup working set that the load barrier waits for.
-    this.syncMainCamera(delta, inGame && !terminated);
+    this.syncMainCamera(delta, presentationPolicy.showWorld);
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
-    if (inGame && !terminated) {
+    if (presentationPolicy.showWorld) {
       const worldView = getVisibleWorldView(this.cameras.main);
       ArenaBuilder.updateSurfaceResidency(this.ctx?.arenaResult ?? null, worldView);
       this.renderers?.shadow.updateStaticResidency(worldView);
@@ -1788,14 +1818,14 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPanelsHeld = false;
     }
 
-    const lobbyVisible = phase === 'LOBBY' && !deferArenaExit;
+    const lobbyVisible = presentationPolicy.showLobby;
     this.menuArenaPreview?.setVisible(lobbyVisible);
     // Muss vor allem Arena-Aufbau laufen: `setActive(false)` räumt synchron und vollständig
     // auf, damit kein Ambient-Zustand in eine Runde hinüberlebt.
     this.lobbyAmbient?.setActive(lobbyVisible);
     if (lobbyVisible) this.lobbyAmbient?.update(delta);
 
-    if (inGame) {
+    if (worldActive && localWorldPresentation.required) {
       // Loading blocks input, while the countdown intentionally keeps aiming and the Inspector
       // radial menu available so the pre-round presentation remains interactive. Die Kombination
       // steht in der Input Policy, nicht in der Scene.
@@ -1803,7 +1833,7 @@ export class ArenaScene extends Phaser.Scene {
         // Die kanonischen Capabilities dieses Spielers - aus seiner echten, replizierten
         // World-Teilnahme, nicht aus einem lokal nachgebauten Rollenzustand.
         capabilities: this.lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId()),
-        gameplayActive,
+        gameplayActive: worldActive && (!activityActive || gameplayActive),
         countdownActive,
         uiBlocking: optionsOpen,
         diagnosticsArena: weaponBalanceLabArena,
@@ -1895,6 +1925,13 @@ export class ArenaScene extends Phaser.Scene {
     const sceneStateMs = diagnosticsActive
       ? sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs)
       : 0;
+
+    if (worldActive && !activityActive && !terminated) {
+      const worldStepStartMs = diagnosticsActive ? performance.now() : 0;
+      if (bridge.isHost()) this.hostUpdate.runHostUpdate(delta);
+      else this.clientUpdate.runClientUpdate(delta);
+      if (diagnosticsActive) primaryStepMs += performance.now() - worldStepStartMs;
+    }
 
     if ((gameplayActive || countdownActive) && !terminated) {
       const arenaHudStartedAt = diagnosticsActive ? performance.now() : 0;
@@ -2058,7 +2095,7 @@ export class ArenaScene extends Phaser.Scene {
     // Renderer-Syncs nur mit frischem Netzzustand, die bisherigen Emitter liefen dagegen
     // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
     this.renderers.gpuVfx.update(delta);
-    const inArena = arenaVisible && !terminated;
+    const inArena = presentationPolicy.showWorld;
     const strategicTargets = bridge.isHost()
       ? (this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
       : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
@@ -2074,7 +2111,7 @@ export class ArenaScene extends Phaser.Scene {
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
-    this.syncMainCamera(spectator ? 0 : delta, (inGame && !terminated) || deferArenaExit);
+    this.syncMainCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
     const coopDefensePresentationActive = inArena && isCoopDefenseMode(configuredGameMode);
     const presentationMapConfig = coopDefensePresentationActive
       ? getCoopDefenseMapConfig(configuredCoopDefenseMapId!)
@@ -2916,8 +2953,8 @@ export class ArenaScene extends Phaser.Scene {
         ultimateId: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'ultimate') ?? null,
       },
       diagnosticContext: {
-        rockRenderer: this.ctx.arenaResult?.rockVisualSystem.getMode() ?? getRockRendererMode(),
-        rockGpuPageSize: this.ctx.arenaResult?.rockVisualSystem.getPageSize() ?? getRockGpuPageSize(),
+        rockRenderer: this.ctx.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
+        rockGpuPageSize: this.ctx.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
       },
     });
     // Delta-derived subsystem values belong to this sample only. Gauges above remain live on
@@ -3892,17 +3929,17 @@ export class ArenaScene extends Phaser.Scene {
     mask.attachToCamera(this.cameras.main);
   }
 
-  private syncArenaMetrics(phase = bridge.getGamePhase()): void {
+  private syncArenaMetrics(phase = bridge.getGamePhase(), showWorld = phase === 'ARENA'): void {
     const mode = this.resolveConfiguredGameMode(phase);
+    const worldMetrics = this.ctx?.world?.metrics ?? null;
     applyArenaMetricsForMode(
       mode,
-      phase,
+      worldMetrics ? 'ARENA' : phase,
       this.resolveCoopDefenseArenaWidthCells(phase),
       this.resolveCoopDefenseArenaHeightCells(phase),
     );
-    this.arenaBuilder?.syncStaticBackdrop(mode, phase);
+    this.arenaBuilder?.syncStaticBackdrop(mode, showWorld ? 'ARENA' : 'LOBBY');
     this.syncArenaClipMask();
-    const worldMetrics = phase === 'ARENA' ? this.ctx?.world?.metrics ?? null : null;
     this.physics.world.setBounds(
       worldMetrics?.offsetX ?? ARENA_OFFSET_X,
       worldMetrics?.offsetY ?? ARENA_OFFSET_Y,
@@ -4101,28 +4138,29 @@ export class ArenaScene extends Phaser.Scene {
 
   private resolveCoopDefenseArenaWidthCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
-    if (phase === 'ARENA' && this.ctx?.world) return this.ctx.world.metrics.gridCols;
+    if (this.ctx?.world) return this.ctx.world.metrics.gridCols;
     return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaWidthCells;
   }
 
   private resolveCoopDefenseArenaHeightCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
-    if (phase === 'ARENA' && this.ctx?.world) return this.ctx.world.metrics.gridRows;
+    if (this.ctx?.world) return this.ctx.world.metrics.gridRows;
     return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaHeightCells;
   }
 
   /** Active Activities use their immutable descriptor; the Lobby value is pre-World only. */
   private resolveConfiguredGameMode(phase = bridge.getGamePhase()): GameMode {
-    if (phase === 'ARENA') {
+    if (this.ctx?.world || phase === 'ARENA') {
       const activity = bridge.getActivityDescriptor();
       if (activity) return toGameMode(activity.kind);
+      if (this.ctx?.world?.definition) return COOP_DEFENSE_MODE;
     }
     return bridge.getGameMode();
   }
 
   /** Active Worlds use their definition id; the Lobby map is only a creation input. */
   private resolveConfiguredCoopDefenseMapId(phase = bridge.getGamePhase()): string {
-    if (phase === 'ARENA') {
+    if (this.ctx?.world || phase === 'ARENA') {
       const descriptor = this.ctx?.world?.descriptor ?? bridge.getWorldDescriptor();
       if (descriptor) {
         const mapId = toMapId(descriptor.definitionId);
@@ -4687,9 +4725,9 @@ export class ArenaScene extends Phaser.Scene {
       hardwareConcurrency: nav?.hardwareConcurrency ?? null,
       deviceMemoryGb: nav?.deviceMemory ?? null,
       rockRendering: {
-        mode: this.ctx?.arenaResult?.rockVisualSystem.getMode() ?? getRockRendererMode(),
-        pageSize: this.ctx?.arenaResult?.rockVisualSystem.getPageSize() ?? getRockGpuPageSize(),
-        gpu: this.ctx?.arenaResult?.rockVisualSystem.getGpuDiagnostics() ?? null,
+        mode: this.ctx?.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
+        pageSize: this.ctx?.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
+        gpu: this.ctx?.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
       },
     };
   }

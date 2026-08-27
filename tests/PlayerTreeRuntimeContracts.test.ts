@@ -244,6 +244,7 @@ describe('Baeume – Runtime und Darstellung getrennt', () => {
 
   it('gattert die Baumdarstellung an der lokalen World-Presentation', () => {
     const coordinator = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    expect(coordinator).toContain('presentation: this.getLocalWorldPresentation().required,');
+    expect(coordinator).toContain('const presentation = this.getLocalWorldPresentation().required;');
+    expect(coordinator).toContain('presentation,');
   });
 });

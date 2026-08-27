@@ -439,6 +439,23 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
     expect(source).toContain('return this.presentationActive ? this.ctx.gameAudioSystem : null;');
   });
 
+  it('baut ohne Presentation keine dynamischen World-Flaechen', () => {
+    const builder = read('src/arena/ArenaBuilder.ts');
+    expect(builder).toContain('const baseZoneObjects = presentation ? this.buildCaptureTheBeerBaseZones() : [];');
+    expect(builder).toContain('const trackObjects = presentation ? this.buildTracks(layout.tracks ?? []) : [];');
+    expect(builder).toContain('const rockVisualSystem = presentation');
+    expect(builder).toContain('if (presentation) {\n      result.groundSurface = new GroundSurfaceStreamer');
+  });
+
+  it('laesst den World-Tick ohne Round-Start laufen', () => {
+    const host = read('src/scenes/arena/HostUpdateCoordinator.ts');
+    const client = read('src/scenes/arena/ClientUpdateCoordinator.ts');
+    expect(host).not.toContain('if (!bridge.isArenaStarted() && !countdownActive)');
+    expect(host).toContain('if (!this.ctx.world) {');
+    expect(client).not.toContain('if (!bridge.isArenaStarted() && !countdownActive)');
+    expect(client).toContain("if (!this.ctx.world || bridge.getLocalWorldParticipation() === 'none')");
+  });
+
   it('greift im autoritativen Pfad nirgends unbedingt auf Darstellung zu', () => {
     const source = read('src/scenes/arena/HostUpdateCoordinator.ts');
     // Die Getter selbst sind die einzige Stelle, die die konkreten Anbindungen nennt.

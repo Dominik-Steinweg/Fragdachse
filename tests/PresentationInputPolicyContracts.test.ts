@@ -79,8 +79,12 @@ describe('Presentation Policy', () => {
     });
   });
 
-  it('zeigt die Lobby genau im Raumzustand Lobby', () => {
-    expect(resolvePresentationPolicy(presentation({ inLobby: true })).showLobby).toBe(true);
+  it('zeigt die Lobby nur im Raumzustand Lobby ohne sichtbare World', () => {
+    expect(resolvePresentationPolicy(presentation({
+      inLobby: true,
+      worldPresentation: NO_PRESENTATION,
+    })).showLobby).toBe(true);
+    expect(resolvePresentationPolicy(presentation({ inLobby: true })).showLobby).toBe(false);
     expect(resolvePresentationPolicy(presentation({ inLobby: false })).showLobby).toBe(false);
   });
 });

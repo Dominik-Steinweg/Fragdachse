@@ -49,7 +49,9 @@ export function resolvePresentationPolicy(input: PresentationPolicyInput): Prese
   const showWorld = input.worldVisible && input.worldPresentation.required;
   const spectator = input.roundRole === 'spectator';
   return {
-    showLobby: input.inLobby,
+    // Eine World ohne Activity kann bei unveraenderter Room-Phase sichtbar sein. In diesem Fall
+    // ersetzt ihre Presentation die Lobby; ein nicht teilnehmender Host behaelt dagegen die Lobby.
+    showLobby: input.inLobby && !showWorld,
     showWorld,
     showHud: showWorld && input.gameplayActive,
     // Die Weltkamera ist selbst eine Darstellungsflaeche; ohne sie folgt nichts dem Spieler.

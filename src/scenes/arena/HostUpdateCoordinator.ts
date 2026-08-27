@@ -41,6 +41,7 @@ import { resolveDetonations, type DetonationEffectSink } from '../../systems/Det
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 import { toMapId } from '../../world/arenaDescriptorAdapter';
+import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -126,6 +127,7 @@ export class HostUpdateCoordinator {
   private lastPerformance = emptyHostUpdatePerformanceMetrics();
   private performanceMetricsEnabled = false;
   private coarsePerformanceMetricsEnabled = false;
+  private playerCapabilitiesResolver: ((playerId: string) => PlayerCapabilities) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -147,6 +149,10 @@ export class HostUpdateCoordinator {
   }
 
   setActive(v: boolean): void { this.active = v; }
+
+  setPlayerCapabilitiesResolver(resolver: (playerId: string) => PlayerCapabilities): void {
+    this.playerCapabilitiesResolver = resolver;
+  }
 
   /**
    * Ob dieser Peer die World lokal darstellt.
@@ -237,7 +243,7 @@ export class HostUpdateCoordinator {
     // Activity-Systeme werden durch die Activity aktiviert und gruppiert – nicht durch
     // verstreute Nullable-Abfragen. Diese eine Entscheidung traegt beide Activity-Phasen.
     const coopMission = bridge.getActivityDescriptor()?.kind === 'coop-mission';
-    if (!bridge.isArenaStarted() && !countdownActive) {
+    if (!this.ctx.world) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
@@ -258,7 +264,7 @@ export class HostUpdateCoordinator {
           heldActions.clearPlayer(player.id);
         }
         this.heldActionUtilityIds.set(player.id, utilityId);
-        if (!bridge.canPlayerAct(player.id)
+        if (!(this.playerCapabilitiesResolver?.(player.id).canInteract ?? bridge.canPlayerAct(player.id))
           || !this.ctx.combatSystem.isAlive(player.id)
           || this.ctx.burrowSystem?.isBurrowed(player.id)
           || this.ctx.burrowSystem?.isStunned(player.id)) {
@@ -1245,7 +1251,8 @@ export class HostUpdateCoordinator {
         playerId: player.id,
         x: player.x,
         y: player.y,
-        eligible: bridge.canPlayerAct(player.id) && this.ctx.combatSystem.isAlive(player.id),
+        eligible: (this.playerCapabilitiesResolver?.(player.id).canUseMissionActions
+          ?? bridge.canPlayerAct(player.id)) && this.ctx.combatSystem.isAlive(player.id),
       })),
     );
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);

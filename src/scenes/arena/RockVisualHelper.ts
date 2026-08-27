@@ -128,6 +128,7 @@ export class RockVisualHelper {
         hasStalePedestalProxy: false,
       };
     }
+    const presentation = this.ctx.arenaResult.rockVisualSystem !== null;
 
     // Power-up-Podeste werden vollständig vom PowerUpRenderer visualisiert und sind wie
     // feste Arena-Podeste begehbar. Der Runtime-Rock bleibt trotzdem im PlacementSystem,
@@ -138,7 +139,7 @@ export class RockVisualHelper {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
       }
       this.destroyTurretVisual(rock.id);
-      if (playSpawnFx) {
+      if (playSpawnFx && presentation) {
         const world = this.gridToWorld(rock.gridX, rock.gridY);
         this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
       }
@@ -174,15 +175,15 @@ export class RockVisualHelper {
         rock.hp,
         rock.maxHp,
       );
-      this.createOrUpdateTurretVisual(rock);
+      if (presentation) this.createOrUpdateTurretVisual(rock);
       refreshStaticShadows = true;
     } else if (rock.kind === 'turret') {
-      this.createOrUpdateTurretVisual(rock);
+      if (presentation) this.createOrUpdateTurretVisual(rock);
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
 
-    if (playSpawnFx) {
+    if (playSpawnFx && presentation) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
@@ -235,7 +236,7 @@ export class RockVisualHelper {
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
       } else if (currentProxy?.active) {
-        const snapshot = this.ctx.arenaResult.rockVisualSystem.getDestructionSnapshot(rock.id);
+        const snapshot = this.ctx.arenaResult.rockVisualSystem?.getDestructionSnapshot(rock.id);
         if (snapshot) this.rockDestructionRenderer.playDestruction(snapshot);
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
