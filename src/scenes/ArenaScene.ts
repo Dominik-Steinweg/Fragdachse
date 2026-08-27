@@ -183,6 +183,7 @@ import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { toGameMode, toMapId } from '../world/arenaDescriptorAdapter';
+import { allowsWorldPresentationSurface } from '../world/WorldPresentation';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -3970,7 +3971,11 @@ export class ArenaScene extends Phaser.Scene {
     const canSpectatorPanX = arenaWidth > ARENA_VIEWPORT_WIDTH;
     const canSpectatorPanY = arenaHeight > ARENA_VIEWPORT_HEIGHT;
     const canSpectatorPan = canSpectatorPanX || canSpectatorPanY;
-    if (!inArena || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
+    // Die Weltkamera ist World-Presentation: ohne lokale Darstellung dieser World gibt es sie
+    // nicht, auch wenn die Simulation weiterlaeuft.
+    const worldCamera = allowsWorldPresentationSurface(this.lifecycle.getLocalWorldPresentation(), 'worldCamera');
+    if (!inArena || !worldCamera
+      || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
       this.lastCameraScrollX = 0;
       this.lastCameraScrollY = 0;
       this.spectatorCameraScrollX = 0;

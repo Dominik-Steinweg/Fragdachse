@@ -78,6 +78,14 @@ Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none 
 
 Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
 
+## World Simulation und World Presentation
+
+`resolveWorldPresentation({ participation, worldActive })` (src/world/WorldPresentation.ts) entscheidet, ob ein Peer die laufende World lokal darstellt. Ohne Teilnahme entsteht **keine** Darstellungsfläche — der Zielzustand ist: Shared World aktiv, Host simuliert autoritativ, Host stellt nichts dar. „Host bleibt in der Lobby" heißt weder, die World vollständig zu rendern und die Lobby darüberzulegen, noch einen unsichtbaren World-Render-Tree zu halten.
+
+`WORLD_PRESENTATION_SURFACES` benennt, was dazugehört: Terrain-Surfaces, World-Sprites, Weltkamera, World-HUD, Aim, World-Overlays, lokale Player-Visuals. Nicht-rendernde Infrastruktur, die die Simulation technisch braucht, darf bestehen — Physikdaten dürfen Phaser-gebunden bleiben, solange daraus keine Darstellung entsteht.
+
+Presentation darf Simulation beobachten, aber nie deren Voraussetzung sein. tests/WorldPresentationContracts.test.ts hält die Abhängigkeitsrichtung fest: kein Simulationsmodul (Placement, Combat, Physics, PlayerManager, die World-Schicht) hat eine Wertabhängigkeit auf `effects/`, `ui/`, `RendererBundle` oder `scenes/`, und die Darstellungssenken der Player-Runtime bleiben nullable.
+
 ## World Update und Activity Update
 
 Der Host-Tick trifft die Activity-Entscheidung einmal (`bridge.getActivityDescriptor()?.kind === 'coop-mission'`) und aktiviert damit zwei benannte Gruppen: `runCoopMissionProgressPhase()` (Boss, Missionsfortschritt, Map-/Event-Direktoren, Nebenziele, Dormant-Sync, Objective-Repair, Dauerdruck) und `runCoopMissionCombatPhase()` (Timebomb, Enemy-Burrow, Gefechtsposition, Gegnerbewegung, Nekromantie, Void-Hunter, Fähigkeiten, Angriff).

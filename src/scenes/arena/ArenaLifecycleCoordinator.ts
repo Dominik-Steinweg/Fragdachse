@@ -178,6 +178,7 @@ import {
   type WorldParticipation,
 } from '../../world/WorldParticipation';
 import { resolvePlayerCapabilities, type PlayerCapabilities } from '../../world/PlayerCapabilities';
+import { resolveWorldPresentation, type WorldPresentationRequirement } from '../../world/WorldPresentation';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -995,6 +996,19 @@ export class ArenaLifecycleCoordinator {
       admitted: bridge.canPlayerSpawnOrRespawn(playerId),
       hasRuntimeEntry: this.ctx.playerManager.hasPlayer(playerId),
       mayAct: bridge.canPlayerAct(playerId),
+    });
+  }
+
+  /**
+   * Ob dieser Peer die laufende World lokal darstellt.
+   *
+   * Die Simulation haengt nicht davon ab: ein Host kann eine Shared World autoritativ simulieren,
+   * ohne selbst an ihr teilzunehmen – dann entsteht bei ihm keine World-Presentation.
+   */
+  getLocalWorldPresentation(): WorldPresentationRequirement {
+    return resolveWorldPresentation({
+      participation: this.getWorldParticipation(bridge.getLocalPlayerId()),
+      worldActive: this.worldLifecycle.isActive(),
     });
   }
 
