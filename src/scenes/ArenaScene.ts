@@ -504,9 +504,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
-    // The alternate dirt sheet was retired; the base dirt blob remains the deterministic
-    // fallback mottle source for existing maps.
-    this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob_mottle.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('kies', './assets/sprites/kies47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
     // Rote Variante fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
