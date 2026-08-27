@@ -76,6 +76,14 @@ Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none 
 
 Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
 
+## Player-Lifecycle
+
+`PlayerWorldRuntime` (src/world/PlayerWorldRuntime.ts) ist der gemeinsame Weg hinein und hinaus — kein getrennter Mission-, Editor- oder PvP-Pfad. Welche Module laufen, entscheidet `resolvePlayerRuntimeFeatures({ activityKind, isHost })`: Rolle und laufende Activity, nicht „welches System ist gerade nicht null". Eine World ohne Coop-Mission führt keinen missionsgebundenen Spielerzustand; ein Client führt keine autoritative Simulation, aber seine Spielfigur.
+
+Der Attach ist atomar: lehnt ein Modul ab (`run` liefert `false`) oder wirft es, werden die bereits angehängten Module in umgekehrter Reihenfolge zurückgenommen — ein Spieler bleibt nie halb initialisiert. Der Detach läuft über dieselbe Feature-Entscheidung und ist deshalb auch für Spieler gültig, die diese Runtime nie selbst angehängt hat (Client-Pfad).
+
+Spawn, Respawn, Spectator-Wechsel, Disconnect und Rundenende nehmen alle diesen Weg. Verbleibende Ausnahme: `onTransitionToArena()` legt die Spielfiguren der Startbesetzung noch selbst an — auf Clients der einzige Weg, auf dem Host ohne Ally-Flowfield und ohne Ultimate-Reset. Das ist in tests/PlayerWorldRuntimeContracts.test.ts festgehalten.
+
 ## World Loading und Round Loading
 
 Beides sind getrennte Bedingungen. Die replizierte Ladebarriere (`wlr`, `resolveWorldLoadProgress`) beantwortet ausschließlich, ob die lokale World gebaut und darstellbar ist — bei jedem Peer, Host wie Client. Ob eine Runde starten darf, entscheidet zusätzlich `prepareRoundStart()` host-lokal: alle aktiven Teilnehmer stehen wirklich in der Welt und der Host-Tick hat seine Caches aufgebaut. `tryScheduleArenaStart()` prüft erst die World-Barriere, dann das Round-Gate.

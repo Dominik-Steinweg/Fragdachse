@@ -167,6 +167,11 @@ import {
   type WorldPersistentBaseSite,
 } from '../../world/WorldRuntimeContext';
 import { WorldLifecycle } from '../../world/WorldLifecycle';
+import {
+  PlayerWorldRuntime,
+  resolvePlayerRuntimeFeatures,
+  type PlayerRuntimeFeatures,
+} from '../../world/PlayerWorldRuntime';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -234,6 +239,116 @@ export class ArenaLifecycleCoordinator {
     clear: () => bridge.clearWorldAndActivity(),
     attach: (context) => { this.ctx.world = context; },
     detach: () => { this.ctx.world = null; },
+  });
+  /**
+   * Gemeinsamer Player-Lifecycle dieser World. Es gibt genau einen Weg hinein und einen hinaus;
+   * welche Module laufen, entscheidet {@link resolvePlayerRuntimeFeatures} aus Rolle und Activity.
+   */
+  private readonly playerRuntime = new PlayerWorldRuntime({
+    attach: [
+      {
+        id: 'player-entity',
+        feature: 'entity',
+        run: ({ profile }) => { this.ctx.playerManager.addPlayer(profile); },
+        rollback: ({ profile }) => { this.ctx.playerManager.removePlayer(profile.id); },
+      },
+      {
+        id: 'combat-state',
+        feature: 'combat',
+        run: ({ profile, reconnectAfterDeath }) => {
+          if (reconnectAfterDeath) return this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id);
+          this.ctx.combatSystem.initPlayer(profile.id);
+          return true;
+        },
+      },
+      {
+        id: 'respawn-budget',
+        feature: 'missionStatus',
+        run: ({ profile, reconnectAfterDeath }) => {
+          if (!reconnectAfterDeath) this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
+        },
+      },
+      {
+        // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
+        // Arenaaufbau existierten sie noch nicht.
+        id: 'ally-flow-field',
+        feature: 'navigation',
+        run: ({ profile }) => { this.ensureAllyFlowField(profile.id); },
+      },
+      {
+        id: 'combat-resources',
+        feature: 'combatResources',
+        run: ({ profile }) => { this.ctx.resourceSystem?.initPlayer(profile.id); },
+      },
+      {
+        id: 'mission-items',
+        feature: 'missionStatus',
+        run: ({ profile }) => { this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id); },
+      },
+      {
+        id: 'burrow-state',
+        feature: 'combatResources',
+        run: ({ profile }) => { this.ctx.burrowSystem?.initPlayer(profile.id); },
+      },
+      {
+        id: 'loadout',
+        feature: 'loadoutTools',
+        run: ({ profile }) => {
+          this.ctx.loadoutManager?.resetUltimateState(profile.id);
+          this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+        },
+      },
+    ],
+    detach: [
+      {
+        // Zielstatus und Injector-Fokus gehoeren zur laufenden Runde, nicht zur Lobby-Persona.
+        id: 'world-targeting',
+        feature: 'worldTargeting',
+        run: (playerId) => {
+          this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
+          this.ctx.energyInjectorSystem?.removeOwner(playerId);
+        },
+      },
+      {
+        id: 'mission-objectives',
+        feature: 'missionStatus',
+        run: (playerId) => {
+          this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
+          this.ctx.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
+        },
+      },
+      { id: 'combat-state', feature: 'combat', run: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); } },
+      {
+        id: 'combat-resources',
+        feature: 'combatResources',
+        run: (playerId) => { this.ctx.resourceSystem?.removePlayer(playerId); },
+      },
+      {
+        id: 'mission-items',
+        feature: 'missionStatus',
+        run: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId); },
+      },
+      { id: 'burrow-state', feature: 'combatResources', run: (playerId) => { this.ctx.burrowSystem?.removePlayer(playerId); } },
+      {
+        id: 'loadout',
+        feature: 'loadoutTools',
+        run: (playerId) => {
+          this.ctx.loadoutManager?.removePlayer(playerId);
+          this.ctx.powerUpSystem?.removePlayer(playerId);
+          this.ctx.tunnelSystem?.removePlayer(playerId);
+        },
+      },
+      {
+        id: 'player-entity',
+        feature: 'entity',
+        run: (playerId) => {
+          this.ctx.effectSystem.clearBurrowState(playerId);
+          this.clientUpdate.removeBurrowPhase(playerId);
+          this.ctx.hostPhysics.removePlayer(playerId);
+          this.ctx.playerManager.removePlayer(playerId);
+        },
+      },
+    ],
   });
   /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
   private readonly persistentBaseRoomState = new PersistentBaseRoomState();
@@ -569,24 +684,9 @@ export class ArenaLifecycleCoordinator {
         // Waffe gestartet"). Das Match startet ohnehin erst, wenn alle committed sind (areAllPlayersReady),
         // daher verzögert das den Spawn höchstens um wenige Frames im Countdown.
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
-        this.ctx.playerManager.addPlayer(profile);
-        if (reconnectAfterDeath) {
-          if (!this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id)) {
-            this.ctx.playerManager.removePlayer(profile.id);
-            continue;
-          }
-        } else {
-          this.ctx.combatSystem.initPlayer(profile.id);
-          this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
-        }
-        // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
-        // Arenaaufbau existierten sie noch nicht.
-        this.ensureAllyFlowField(profile.id);
-        this.ctx.resourceSystem?.initPlayer(profile.id);
-        this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
-        this.ctx.burrowSystem?.initPlayer(profile.id);
-        this.ctx.loadoutManager?.resetUltimateState(profile.id);
-        this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+        // Ein Weg hinein: der gemeinsame Player-Lifecycle. Lehnt ein Modul ab, bleibt der Spieler
+        // unberuehrt statt halb initialisiert.
+        this.playerRuntime.attach({ profile, reconnectAfterDeath }, this.resolvePlayerFeatures());
       }
     }
   }
@@ -864,30 +964,23 @@ export class ArenaLifecycleCoordinator {
   }
 
   /** Gemeinsamer Entkopplungspfad fuer Spectator, Disconnect und Arena-Teardown. */
+  /** Ein Weg hinaus: derselbe Lifecycle, gefiltert ueber denselben Kontext. */
   removePlayerFromActiveRound(playerId: string): void {
     if (bridge.isHost() && bridge.isArenaLoading() && bridge.getArenaStartTime() <= 0) {
       this.roundStartPrepared = false;
     }
-    // Zielstatus und Injector-Fokus gehoeren zur laufenden Runde, nicht zur Lobby-Persona.
-    // Deshalb muessen sie auch beim Disconnect/Spectator-Wechsel vor dem naechsten Snapshot
-    // entfernt werden.
-    this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
-    this.ctx.energyInjectorSystem?.removeOwner(playerId);
-    if (bridge.isHost()) {
-      this.ctx.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
-      this.ctx.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
-      this.ctx.combatSystem.removePlayer(playerId);
-      this.ctx.resourceSystem?.removePlayer(playerId);
-      this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
-      this.ctx.burrowSystem?.removePlayer(playerId);
-      this.ctx.loadoutManager?.removePlayer(playerId);
-      this.ctx.powerUpSystem?.removePlayer(playerId);
-      this.ctx.tunnelSystem?.removePlayer(playerId);
-    }
-    this.ctx.effectSystem.clearBurrowState(playerId);
-    this.clientUpdate.removeBurrowPhase(playerId);
-    this.ctx.hostPhysics.removePlayer(playerId);
-    this.ctx.playerManager.removePlayer(playerId);
+    this.playerRuntime.detach(playerId, this.resolvePlayerFeatures());
+  }
+
+  /**
+   * Kontext des Player-Lifecycles: Rolle und laufende Activity dieser World. Er entscheidet,
+   * welche Runtime-Module ein Spieler ueberhaupt bekommt.
+   */
+  private resolvePlayerFeatures(): PlayerRuntimeFeatures {
+    return resolvePlayerRuntimeFeatures({
+      activityKind: this.worldLifecycle.activity.kind,
+      isHost: bridge.isHost(),
+    });
   }
 
   terminateMatch(reason?: string): void {
@@ -913,15 +1006,10 @@ export class ArenaLifecycleCoordinator {
     this.roundStartPending = false;
     this.ctx.arenaCountdown?.clear();
 
+    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus.
+    const playerFeatures = this.resolvePlayerFeatures();
     for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
-      if (bridge.isHost()) {
-        this.ctx.combatSystem.removePlayer(p.id);
-        this.ctx.resourceSystem?.removePlayer(p.id);
-        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(p.id);
-        this.ctx.burrowSystem?.removePlayer(p.id);
-        this.ctx.loadoutManager?.removePlayer(p.id);
-      }
-      this.ctx.playerManager.removePlayer(p.id);
+      this.playerRuntime.detach(p.id, playerFeatures);
     }
 
     this.tearDownArena();
@@ -3899,15 +3987,10 @@ export class ArenaLifecycleCoordinator {
     this.resetLocalArenaHudState();
     this.ctx.gameAudioSystem.playMusic('music_lobby');
 
+    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus.
+    const playerFeatures = this.resolvePlayerFeatures();
     for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
-      if (bridge.isHost()) {
-        this.ctx.combatSystem.removePlayer(p.id);
-        this.ctx.resourceSystem?.removePlayer(p.id);
-        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(p.id);
-        this.ctx.burrowSystem?.removePlayer(p.id);
-        this.ctx.loadoutManager?.removePlayer(p.id);
-      }
-      this.ctx.playerManager.removePlayer(p.id);
+      this.playerRuntime.detach(p.id, playerFeatures);
     }
 
     this.tearDownArena();
