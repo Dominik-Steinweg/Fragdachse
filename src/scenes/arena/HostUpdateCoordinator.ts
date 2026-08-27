@@ -209,6 +209,9 @@ export class HostUpdateCoordinator {
     const worldMapId = this.ctx.world ? toMapId(this.ctx.world.descriptor.definitionId) : null;
     const activeMapConfig = worldMapId === null ? null : getCoopDefenseMapConfig(worldMapId);
     const weaponBalanceLabActive = worldMapId !== null && isWeaponBalanceLabMapId(worldMapId);
+    // Activity-Systeme werden durch die Activity aktiviert und gruppiert – nicht durch
+    // verstreute Nullable-Abfragen. Diese eine Entscheidung traegt beide Activity-Phasen.
+    const coopMission = bridge.getActivityDescriptor()?.kind === 'coop-mission';
     if (!bridge.isArenaStarted() && !countdownActive) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
@@ -239,31 +242,8 @@ export class HostUpdateCoordinator {
       }
     }
 
-    this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
-    this.ctx.coopDefenseMissionProgressSystem?.hostUpdate(
-      delta,
-      countdownActive || weaponBalanceLabActive,
-      this.ctx.playerManager.getAllPlayers().map((player) => ({
-        playerId: player.id,
-        x: player.sprite.x,
-        y: player.sprite.y,
-        eligible: bridge.canPlayerAct(player.id) && this.ctx.combatSystem.isAlive(player.id),
-      })),
-    );
-    this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
-    this.ctx.coopDefenseMapEventDirector?.hostUpdate(delta, countdownActive);
-    this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);
-    this.publishCoopDefenseEncounterPresentation();
-    this.publishCoopDefenseMapEventPresentation();
-    this.publishCoopDefenseSecondaryObjectivePresentation();
-    // The objective snapshot is now current; activate prebuilt mission structures before
-    // flow-field refresh and enemy movement in this same host frame.
-    this.ctx.baseManager?.syncDormantStates();
-    // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
-    this.ctx.coopDefenseObjectiveRepairSystem?.hostUpdate(delta, countdownActive);
-    // Read active structure sources after the objective transition so pressure starts in the same
-    // host frame in which its linked dormant base becomes active.
-    this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
+    // Activity: Missionsfortschritt, Ziele und der daraus folgende Druck.
+    if (coopMission) this.runCoopMissionProgressPhase(delta, now, countdownActive, weaponBalanceLabActive);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     const navStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     this.updateEnemyFlowFields(now, delta);
@@ -271,34 +251,8 @@ export class HostUpdateCoordinator {
       metrics.navFlowFieldMs = performance.now() - navStartedAt;
       metrics.navWorkerComputeMs = this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0;
     }
-    if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
-    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
-    if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
-    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
-    // Wegfindung im selben Frame.
-    if (!countdownActive) this.ctx.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
-    this.ctx.enemyManager?.hostUpdateMovement(
-      this.ctx.enemyFlowFieldService,
-      this.ctx.enemyPlayerFlowFieldService,
-      this.ctx.enemyStrategicFlowFieldService,
-      this.ctx.enemyBossFlowFieldService,
-      countdownActive || weaponBalanceLabActive,
-      now,
-      delta,
-      this.ctx.fireSystem,
-      (enemyId, at) => this.ctx.combatSystem.getActiveBurnSources(enemyId, at),
-      this.ctx.coopDefenseEnemyTrainAwarenessSystem,
-      this.ctx.coopDefenseEnemyBurrowSystem,
-      this.ctx.coopDefenseEnemyCombatPositioningSystem,
-      this.ctx.coopDefenseTimebombSystem,
-      this.ctx.smokeSystem,
-    );
-    if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
-    if (!countdownActive && !weaponBalanceLabActive) {
-      this.ctx.coopDefenseVoidHunterSystem?.hostUpdate(now);
-      this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
-      this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
-    }
+    // Activity: Gegner-Navigation, Bewegung und Kampf.
+    if (coopMission) this.runCoopMissionCombatPhase(delta, now, countdownActive, weaponBalanceLabActive);
     if (metrics) metrics.enemyAiMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
@@ -1239,6 +1193,82 @@ export class HostUpdateCoordinator {
         snapshotBuildMs,
         navWorkerComputeMs: this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0,
       };
+    }
+  }
+
+  /**
+   * Activity Update – Missionsfortschritt und Ziele.
+   *
+   * Position und Reihenfolge im Host-Tick sind unveraendert; neu ist allein, dass die Gruppe
+   * durch die laufende Activity aktiviert wird statt durch die Nullbarkeit ihrer Systeme.
+   */
+  private runCoopMissionProgressPhase(
+    delta: number,
+    now: number,
+    countdownActive: boolean,
+    weaponBalanceLabActive: boolean,
+  ): void {
+    this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
+    this.ctx.coopDefenseMissionProgressSystem?.hostUpdate(
+      delta,
+      countdownActive || weaponBalanceLabActive,
+      this.ctx.playerManager.getAllPlayers().map((player) => ({
+        playerId: player.id,
+        x: player.sprite.x,
+        y: player.sprite.y,
+        eligible: bridge.canPlayerAct(player.id) && this.ctx.combatSystem.isAlive(player.id),
+      })),
+    );
+    this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseMapEventDirector?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);
+    this.publishCoopDefenseEncounterPresentation();
+    this.publishCoopDefenseMapEventPresentation();
+    this.publishCoopDefenseSecondaryObjectivePresentation();
+    // The objective snapshot is now current; activate prebuilt mission structures before
+    // flow-field refresh and enemy movement in this same host frame.
+    this.ctx.baseManager?.syncDormantStates();
+    // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
+    this.ctx.coopDefenseObjectiveRepairSystem?.hostUpdate(delta, countdownActive);
+    // Read active structure sources after the objective transition so pressure starts in the same
+    // host frame in which its linked dormant base becomes active.
+    this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
+  }
+
+  /** Activity Update – Gegner-Navigation, Bewegung und Kampf. */
+  private runCoopMissionCombatPhase(
+    delta: number,
+    now: number,
+    countdownActive: boolean,
+    weaponBalanceLabActive: boolean,
+  ): void {
+    if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
+    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
+    if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
+    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
+    // Wegfindung im selben Frame.
+    if (!countdownActive) this.ctx.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
+    this.ctx.enemyManager?.hostUpdateMovement(
+      this.ctx.enemyFlowFieldService,
+      this.ctx.enemyPlayerFlowFieldService,
+      this.ctx.enemyStrategicFlowFieldService,
+      this.ctx.enemyBossFlowFieldService,
+      countdownActive || weaponBalanceLabActive,
+      now,
+      delta,
+      this.ctx.fireSystem,
+      (enemyId, at) => this.ctx.combatSystem.getActiveBurnSources(enemyId, at),
+      this.ctx.coopDefenseEnemyTrainAwarenessSystem,
+      this.ctx.coopDefenseEnemyBurrowSystem,
+      this.ctx.coopDefenseEnemyCombatPositioningSystem,
+      this.ctx.coopDefenseTimebombSystem,
+      this.ctx.smokeSystem,
+    );
+    if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
+    if (!countdownActive && !weaponBalanceLabActive) {
+      this.ctx.coopDefenseVoidHunterSystem?.hostUpdate(now);
+      this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
+      this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
     }
   }
 

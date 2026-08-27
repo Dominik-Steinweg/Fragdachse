@@ -78,6 +78,12 @@ Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none 
 
 Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
 
+## World Update und Activity Update
+
+Der Host-Tick trifft die Activity-Entscheidung einmal (`bridge.getActivityDescriptor()?.kind === 'coop-mission'`) und aktiviert damit zwei benannte Gruppen: `runCoopMissionProgressPhase()` (Boss, Missionsfortschritt, Map-/Event-Direktoren, Nebenziele, Dormant-Sync, Objective-Repair, Dauerdruck) und `runCoopMissionCombatPhase()` (Timebomb, Enemy-Burrow, Gefechtsposition, Gegnerbewegung, Nekromantie, Void-Hunter, Fähigkeiten, Angriff).
+
+Verbindlich ist nicht ein grober `world.update(); activity.update();`-Block, sondern dass Activity-Systeme durch die Activity aktiviert und gruppiert werden statt durch verstreute Nullable-Abfragen. Die bestehende Simulationsreihenfolge bleibt unangetastet: Weltanteile wie `decoySystem.hostUpdateLifecycle()`, die Flowfield-Aktualisierung und die Messpunkte stehen weiterhin zwischen den beiden Phasen und dürfen nicht mitgegattert werden. Die Phasen selbst entscheiden nicht erneut über ihre eigene Aktivierung.
+
 ## Capability Policy
 
 `resolvePlayerCapabilities({ participation, activityKind })` (src/world/PlayerCapabilities.ts) ersetzt die universelle Freigabe `canPlayerAct()` durch spezifische Rechte: `canMove`, `canUseCombat`, `canPlace`, `canDismantle`, `canInteract`, `canUseMissionActions`, `canControlCamera`. Eine World ohne Activity erlaubt Bauen ohne Kampf; ein Beobachter führt nur die Kamera; ohne Teilnahme gibt es gar nichts.
