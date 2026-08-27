@@ -228,24 +228,24 @@ export class CoopDefenseEnemyDodgeSystem {
     let best: { x: number; y: number } | null = null;
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
+      if (!player.active || !this.combatSystem.isAlive(player.id)) continue;
       if (this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
 
       const distance = Phaser.Math.Distance.Between(
         enemy.sprite.x,
         enemy.sprite.y,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
       );
       if (distance < dodge.approachMinDistancePx || distance > dodge.approachMaxDistancePx) continue;
       if (distance >= bestDistance) continue;
-      if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)) continue;
+      if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.x, player.y)) continue;
 
       bestDistance = distance;
       best = {
-        x: (player.sprite.x - enemy.sprite.x) / distance,
-        y: (player.sprite.y - enemy.sprite.y) / distance,
+        x: (player.x - enemy.sprite.x) / distance,
+        y: (player.y - enemy.sprite.y) / distance,
       };
     }
 

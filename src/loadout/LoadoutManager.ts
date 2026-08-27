@@ -37,7 +37,7 @@ import type {
   WeaponConfig,
 } from './LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
-import { COLORS, type MuzzleOrigin } from '../config';
+import { COLORS, PLAYER_SIZE, type MuzzleOrigin } from '../config';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 import { resolveShotPlan } from './ShotPlanResolver';
@@ -776,8 +776,8 @@ export class LoadoutManager {
 
     // Inspector actions are host-authoritative: the client may submit an aim
     // target, but never its own origin for range or spawn validation.
-    const x = player.sprite.x;
-    const y = player.sprite.y;
+    const x = player.x;
+    const y = player.y;
     const didUse = this.useUtility(utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
     if (!didUse) return { ok: false, reason: 'blocked' };
     this.heldItemSlots.noteUtilityUsed(playerId, now);
@@ -909,8 +909,8 @@ export class LoadoutManager {
     if (!player) return { ok: false, reason: 'invalid' };
     // Client-Position verwenden falls vorhanden (kompensiert Netzwerk-Tick-Latenz),
     // sonst Fallback auf autoritative Host-Position.
-    const x = clientX ?? player.sprite.x;
-    const y = clientY ?? player.sprite.y;
+    const x = clientX ?? player.x;
+    const y = clientY ?? player.y;
 
     // Schießen während Dash-Phase 1 (Burst) blockiert
     if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return { ok: false, reason: 'blocked' };
@@ -985,7 +985,7 @@ export class LoadoutManager {
             const pm = this.playerManager;
             this.armageddonSystem.activate(playerId, cfg.armageddon, () => {
               const p = pm.getPlayer(playerId);
-              return p ? { x: p.sprite.x, y: p.sprite.y } : null;
+              return p ? { x: p.x, y: p.y } : null;
             });
           }
           this.ultimateUsedObserver?.(playerId, cfg.type);
@@ -1072,7 +1072,7 @@ export class LoadoutManager {
             if (owner) {
               for (const ally of this.playerManager.getAllPlayers()) {
                 if (ally.id === playerId || this.bridge.isEnemyPair(playerId, ally.id)) continue;
-                if (Phaser.Math.Distance.Between(owner.sprite.x, owner.sprite.y, ally.sprite.x, ally.sprite.y) <= aura.radius) {
+                if (Phaser.Math.Distance.Between(owner.x, owner.y, ally.x, ally.y) <= aura.radius) {
                   this.combatSystem.addArmor(ally.id, aura.allyArmorPerTick ?? 0);
                 }
               }
@@ -1088,8 +1088,8 @@ export class LoadoutManager {
         while (state.nextAuraTickAt > 0 && state.nextAuraTickAt <= now && state.nextAuraTickAt <= endTime) {
           if (auraOwner) {
             this.combatSystem.applyAoeDamage(
-              auraOwner.sprite.x,
-              auraOwner.sprite.y,
+              auraOwner.x,
+              auraOwner.y,
               aura.radius,
               aura.damagePerTick,
               playerId,
@@ -1195,7 +1195,7 @@ export class LoadoutManager {
       if (!state.active && state.auraLingerUntil < now) continue;
       if (this.bridge.isEnemyPair(ownerId, playerId)) continue;
       const owner = this.playerManager.getPlayer(ownerId);
-      if (!owner || Phaser.Math.Distance.Between(owner.sprite.x, owner.sprite.y, target.sprite.x, target.sprite.y) > state.config.aura.radius) continue;
+      if (!owner || Phaser.Math.Distance.Between(owner.x, owner.y, target.x, target.y) > state.config.aura.radius) continue;
       multiplier *= kind === 'speed'
         ? (state.config.aura.allySpeedMultiplier ?? 1)
         : (state.config.aura.allyDamageMultiplier ?? 1);
@@ -1508,19 +1508,19 @@ export class LoadoutManager {
     const damage = kills * streak.explosionDamagePerKill;
     const knockback = streak.explosionBaseKnockback + kills * streak.explosionKnockbackPerKill;
     if (damage > 0 && radius > 0) {
-      this.combatSystem?.applyAoeDamage(player.sprite.x, player.sprite.y, radius, damage, playerId, false, {
+      this.combatSystem?.applyAoeDamage(player.x, player.y, radius, damage, playerId, false, {
         category: 'explosion',
         sourceId: 'weapon.NEGEV.killstreak',
         sourceSlot: 'weapon2',
       });
     }
     if (knockback > 0 && radius > 0) {
-      this.physicsSystem?.applyRadialImpulse(player.sprite.x, player.sprite.y, radius, knockback, playerId, 0);
+      this.physicsSystem?.applyRadialImpulse(player.x, player.y, radius, knockback, playerId, 0);
     }
     this.negevKillstreakExplosionHandler?.({
       ownerId: playerId,
-      x: player.sprite.x,
-      y: player.sprite.y,
+      x: player.x,
+      y: player.y,
       kills,
       radius,
       damage,
@@ -2211,10 +2211,10 @@ export class LoadoutManager {
     if (!player) return undefined;
     return getHeldWeaponMuzzleOrigin(
       itemId,
-      player.sprite.x,
-      player.sprite.y,
-      player.sprite.rotation,
-      player.sprite.displayWidth,
+      player.x,
+      player.y,
+      player.rotation,
+      player.displayObject?.displayWidth ?? PLAYER_SIZE,
     ) ?? undefined;
   }
 
@@ -2232,7 +2232,7 @@ export class LoadoutManager {
       gameplayX,
       gameplayY,
       angle,
-      player.sprite.displayWidth,
+      player.displayObject?.displayWidth ?? PLAYER_SIZE,
     ) ?? undefined;
   }
 

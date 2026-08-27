@@ -78,8 +78,8 @@ export class TranslocatorSystem {
     }
 
     const playerExtents = 16;
-    const spawnX = player.sprite.x + Math.cos(angle) * playerExtents;
-    const spawnY = player.sprite.y + Math.sin(angle) * playerExtents;
+    const spawnX = player.x + Math.cos(angle) * playerExtents;
+    const spawnY = player.y + Math.sin(angle) * playerExtents;
 
     const projId = this.projectileManager.spawnProjectile(spawnX, spawnY, angle, playerId, {
       speed: throwSpeed,
@@ -119,12 +119,10 @@ export class TranslocatorSystem {
     const playerColor = bridge.getPlayerColor(playerId) ?? 0xffffff;
 
     // 2. Start-VFX RPC senden 
-    bridge.broadcastTranslocatorFlash(player.sprite.x, player.sprite.y, playerColor, 'start', playerId);
+    bridge.broadcastTranslocatorFlash(player.x, player.y, playerColor, 'start', playerId);
 
     // 3. Teleport durchführen
-    player.sprite.x = targetX;
-    player.sprite.y = targetY;
-    player.body.reset(targetX, targetY);
+    player.setPosition(targetX, targetY);
     this.positionResetCb?.(playerId, targetX, targetY);
 
     // 4. Ziel-VFX RPC senden
@@ -155,7 +153,7 @@ export class TranslocatorSystem {
       if (!this.combatSystem.isAlive(otherPlayer.id)) continue;
       // Burrowed Spieler können auch getelefragged werden? Ja, Translocator überschreibt alles.
 
-      const otherBounds = otherPlayer.sprite.getBounds();
+      const otherBounds = otherPlayer.getBounds();
       if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, otherBounds)) {
         // Telefrag! Mache extrem hohen Schaden
         this.combatSystem.applyDamage(otherPlayer.id, 9999, true, playerId, 'Translocator', {

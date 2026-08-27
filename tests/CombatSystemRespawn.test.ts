@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -40,12 +41,8 @@ describe('CombatSystem respawn lifecycle', () => {
   it('does not consume budget during repeated gate checks and consumes once at actual respawn', () => {
     vi.useFakeTimers();
     try {
-      const player = {
-        id: 'p1',
-        sprite: { x: 100, y: 100 },
-        body: { enable: true },
-        setPosition: vi.fn(),
-      };
+      const player = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true },
+        setPosition: vi.fn() });
       const playerManager = {
         getPlayer: (id: string) => id === player.id ? player : undefined,
         getAllPlayers: () => [player],

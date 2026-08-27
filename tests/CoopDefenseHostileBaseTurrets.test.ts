@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -38,9 +39,9 @@ describe('hostile base turrets', () => {
   it('multiplies both automated projectile variants with the selected construct bonus', () => {
     const playerManager = {
       getAllPlayers: () => [
-        { id: 'owner', sprite: { x: 0, y: 0, active: true } },
-        { id: 'target', sprite: { x: 100, y: 0, active: true } },
-        { id: 'target-2', sprite: { x: 120, y: 0, active: true } },
+        fakeEntity({ id: 'owner', x: 0, y: 0, active: true }),
+        fakeEntity({ id: 'target', x: 100, y: 0, active: true }),
+        fakeEntity({ id: 'target-2', x: 120, y: 0, active: true }),
       ],
     } as unknown as PlayerManager;
     const combatSystem = {
@@ -76,10 +77,7 @@ describe('hostile base turrets', () => {
 
     it('targets a living player instead of a closer zombie and fires BASE_SPORES', () => {
     const playerManager = {
-      getAllPlayers: () => [{
-        id: 'player-a',
-        sprite: { x: 100, y: 0, active: true },
-      }],
+      getAllPlayers: () => [fakeEntity({ id: 'player-a', x: 100, y: 0, active: true })],
     } as unknown as PlayerManager;
     const combatSystem = {
       isAlive: () => true,
@@ -116,10 +114,7 @@ describe('hostile base turrets', () => {
 
   it('marks base-mounted turrets as exempt from base line-of-fire blockers', () => {
     const playerManager = {
-      getAllPlayers: () => [{
-        id: 'player-a',
-        sprite: { x: 100, y: 0, active: true },
-      }],
+      getAllPlayers: () => [fakeEntity({ id: 'player-a', x: 100, y: 0, active: true })],
     } as unknown as PlayerManager;
     const combatSystem = {
       isAlive: () => true,

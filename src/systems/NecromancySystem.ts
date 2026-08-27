@@ -133,7 +133,7 @@ export class NecromancySystem {
    */
   captureAlly(ownerId: string, x: number, y: number, kind: CoopDefenseEnemyKind): EnemyEntity | null {
     const owner = this.playerManager.getPlayer(ownerId);
-    if (!owner?.sprite.active || !this.combatSystem.isAlive(ownerId)) return null;
+    if (!owner?.active || !this.combatSystem.isAlive(ownerId)) return null;
     const cfg = this.resolveConfig(ownerId);
     return this.enemyManager.hostSpawnAllyAtWorld(x, y, kind, ownerId, owner.color, cfg.hpMultiplier);
   }
@@ -146,7 +146,7 @@ export class NecromancySystem {
 
     for (const player of this.playerManager.getAllPlayers()) {
       const cfg = this.resolveConfig(player.id);
-      const alive = player.sprite.active && this.combatSystem.isAlive(player.id);
+      const alive = player.active && this.combatSystem.isAlive(player.id);
       // Auch ohne Nekromantie-Upgrade werden bereits übernommene Verbündete weiter gesteuert –
       // sonst würden an der Kuppel abgefangene Dachse sofort wieder verschwinden.
       const hasAllies = this.enemyManager.getAlliedEnemies(player.id).length > 0;
@@ -160,31 +160,31 @@ export class NecromancySystem {
       this.owners.set(player.id, owner);
 
       if (cfg.enabled && now >= owner.nextRaiseAt
-        && this.raiseForOwner(player.id, player.color, player.sprite.x, player.sprite.y, cfg)) {
+        && this.raiseForOwner(player.id, player.color, player.x, player.y, cfg)) {
         owner.nextRaiseAt = now + cfg.intervalMs;
       }
 
       const allies = this.enemyManager.getAlliedEnemies(player.id);
       for (const ally of allies) {
         knownAllyIds.add(ally.id);
-        this.prepareAlly(ally, player.id, player.sprite.x, player.sprite.y, cfg, deltaMs);
+        this.prepareAlly(ally, player.id, player.x, player.y, cfg, deltaMs);
       }
       for (const ally of this.selectStrongestAllies(allies, cfg.undyingCount)) {
         this.undyingAllyIds.add(ally.id);
       }
 
-      const target = this.findTarget(player.sprite.x, player.sprite.y, cfg.targetRadius);
+      const target = this.findTarget(player.x, player.y, cfg.targetRadius);
       const targetInLeash = target
-        && Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, player.sprite.x, player.sprite.y) <= cfg.leashRadius;
+        && Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, player.x, player.y) <= cfg.leashRadius;
       // Ein Flowfield wird pro Besitzer geteilt. Wenn auch nur ein Mitglied der
       // Gruppe die Leash verlassen hat, kehrt deshalb die ganze Gruppe kurz zum
       // Besitzer zurueck. So zeigen Navigation und tatsaechliches Ziel immer auf
       // dieselbe Position.
       const returningHome = !targetInLeash || allies.some((ally) => (
-        Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, player.sprite.x, player.sprite.y) > cfg.leashRadius
+        Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, player.x, player.y) > cfg.leashRadius
       ));
       const destination = returningHome
-        ? { x: player.sprite.x, y: player.sprite.y, target: undefined }
+        ? { x: player.x, y: player.y, target: undefined }
         : { x: target.sprite.x, y: target.sprite.y, target };
 
       this.updateFlowFieldGoal(player.id, destination.x, destination.y);

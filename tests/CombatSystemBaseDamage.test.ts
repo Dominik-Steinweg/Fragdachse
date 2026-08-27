@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -122,9 +123,9 @@ function makeCombatHarness() {
 
 function makeSupportCombatHarness() {
   const players = [
-    { id: 'shooter', color: 0xffffff, sprite: { x: 0, y: 0, rotation: 0 } },
-    { id: 'ally', color: 0x55cc88, sprite: { x: 100, y: 0, rotation: 0 } },
-    { id: 'victim', color: 0xcc5555, sprite: { x: 100, y: 20, rotation: 0 } },
+    fakeEntity({ id: 'shooter', color: 0xffffff, x: 0, y: 0, rotation: 0 }),
+    fakeEntity({ id: 'ally', color: 0x55cc88, x: 100, y: 0, rotation: 0 }),
+    fakeEntity({ id: 'victim', color: 0xcc5555, x: 100, y: 20, rotation: 0 }),
   ];
   const bridge = {
     isHost: vi.fn(() => true),
@@ -162,7 +163,7 @@ describe('CombatSystem base damage routing', () => {
   });
 
   it('applies general vulnerability to player damage as well', () => {
-    const player = { id: 'victim', color: 0xffffff, sprite: { x: 100, y: 100, rotation: 0 } };
+    const player = fakeEntity({ id: 'victim', color: 0xffffff, x: 100, y: 100, rotation: 0 });
     const bridge = {
       isHost: vi.fn(() => true),
       getPlayerProfile: vi.fn(() => undefined),
@@ -290,15 +291,11 @@ describe('CombatSystem base damage routing', () => {
 
   it('keeps baseDamageMult out of ordinary enemy damage while preserving it for clusters', () => {
     const enemyDamage = vi.fn((_id: string, amount: number) => ({ died: false, remainingHp: 100 - amount }));
-    const enemy = {
-      id: 'enemy',
-      faction: 'hostile' as const,
-      sprite: { x: 100, y: 0 },
-      isBurrowed: () => false,
+    const enemy = fakeEntity({ id: 'enemy',
+      faction: 'hostile' as const, x: 100, y: 0, isBurrowed: () => false,
       getHp: () => 100,
       getMaxHp: () => 100,
-      isBoss: () => false,
-    };
+      isBoss: () => false });
     const bridge = {
       isHost: vi.fn(() => true),
       getPlayerProfile: vi.fn(() => undefined),
@@ -337,20 +334,15 @@ describe('CombatSystem base damage routing', () => {
 
 describe('CombatSystem death visual snapshots', () => {
   function buildSnapshot(frame: string | number): SyncedDeathEffect {
-    const player = {
-      id: 'player-1',
-      color: 0x55cc88,
-      sprite: {
-        x: 320,
+    const player = fakeEntity({ id: 'player-1',
+      color: 0x55cc88, x: 320,
         y: 240,
         rotation: 0.25,
         texture: { key: 'badger_walking' },
         frame: { name: frame },
         displayWidth: 32,
         displayHeight: 32,
-        tint: 0xffffff,
-      },
-    };
+        tint: 0xffffff });
     const combat = new CombatSystem(
       {
         getAllPlayers: () => [player],
@@ -398,15 +390,11 @@ describe('CombatSystem death visual snapshots', () => {
 
 describe('CombatSystem actual damage callbacks', () => {
   it('reports clamped hostile-enemy damage without overkill', () => {
-    const enemy = {
-      id: 'zombie',
+    const enemy = fakeEntity({ id: 'zombie',
       kind: 'zombie-badger',
-      faction: 'hostile' as const,
-      sprite: { x: 10, y: 20 },
-      isBurrowed: () => false,
+      faction: 'hostile' as const, x: 10, y: 20, isBurrowed: () => false,
       getHp: () => 10,
-      getMaxHp: () => 10,
-    };
+      getMaxHp: () => 10 });
     let hp = 10;
     const bridge = {
       isHost: vi.fn(() => true),
@@ -439,7 +427,7 @@ describe('CombatSystem actual damage callbacks', () => {
   });
 
   it('reports player damage after armor/HP clamping and only one death', () => {
-    const victim = { id: 'victim', body: { enable: true }, sprite: { x: 10, y: 20 } };
+    const victim = fakeEntity({ id: 'victim', body: { enable: true }, x: 10, y: 20 });
     const bridge = {
       isHost: vi.fn(() => true),
       areTeammates: vi.fn(() => false),
@@ -471,7 +459,7 @@ describe('CombatSystem actual damage callbacks', () => {
   });
 
   it('reports only effective healing and armor gains, including capped regen', () => {
-    const player = { id: 'player', body: { enable: true }, sprite: { x: 10, y: 20 } };
+    const player = fakeEntity({ id: 'player', body: { enable: true }, x: 10, y: 20 });
     const bridge = {
       isHost: vi.fn(() => true),
       areTeammates: vi.fn(() => false),
@@ -526,17 +514,12 @@ describe('Plasmabrenner hitscan support impact', () => {
   };
 
   it('does not rewind the shooter into its own support trace while moving backwards', () => {
-    const shooter = {
-      id: 'shooter',
-      color: 0xffffff,
-      sprite: {
-        x: 0,
+    const shooter = fakeEntity({ id: 'shooter',
+      color: 0xffffff, x: 0,
         y: 0,
         displayWidth: 40,
         displayHeight: 40,
-        body: { velocity: { x: -240, y: 0 } },
-      },
-    };
+        body: { velocity: { x: -240, y: 0 } } });
     const bridge = {
       isHost: vi.fn(() => true),
       getLatestGameState: vi.fn(() => undefined),
@@ -571,9 +554,10 @@ describe('Plasmabrenner hitscan support impact', () => {
       includeShooter: true,
     });
 
+    // Das Ziel ist die kanonische Position samt Trefferradius - kein Sprite und keine Entity.
     expect(internals.getHitscanTargetHitDistance).toHaveBeenCalledWith(
       expect.anything(),
-      shooter,
+      expect.objectContaining({ x: shooter.x, y: shooter.y, hitRadius: expect.any(Number) }),
       5,
       false,
     );

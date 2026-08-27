@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -17,7 +18,7 @@ import type { CombatSystem } from '../src/systems/CombatSystem';
 describe('configured Nuke variants', () => {
   it('snapshots the fixed Void target and leaves normal player Nukes normal', () => {
     const players = {
-      getPlayer: () => ({ id: 'p1', sprite: { x: 100, y: 100 } }),
+      getPlayer: () => (fakeEntity({ id: 'p1', x: 100, y: 100 })),
     };
     const combat = {
       isAlive: () => true,

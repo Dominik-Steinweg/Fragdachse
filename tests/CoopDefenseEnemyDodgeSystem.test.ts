@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -14,26 +15,18 @@ import type { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
 import type { TrackedProjectile } from '../src/types';
 
 function buildSystem(projectileX: number) {
-  const enemy = {
-    id: 'enemy-1',
+  const enemy = fakeEntity({ id: 'enemy-1',
     kind: 'pyro-badger',
-    faction: 'hostile',
-    sprite: { active: true, x: 255, y: 100 },
-    getHp: () => 10,
+    faction: 'hostile', active: true, x: 255, y: 100, getHp: () => 10,
     getMaxHp: () => 100,
     getCollisionRadius: () => 16,
     getMoveSpeed: () => 100,
     getSpecialAction: () => 'none',
-    isBurrowed: () => false,
-  } as unknown as EnemyEntity;
-  const projectile = {
-    ownerId: 'player-1',
-    sprite: { active: true, x: projectileX, y: 100 },
-    body: { velocity: { x: -200, y: 0 } },
+    isBurrowed: () => false }) as unknown as EnemyEntity;
+  const projectile = fakeEntity({ ownerId: 'player-1', active: true, x: projectileX, y: 100, body: { velocity: { x: -200, y: 0 } },
     isGrenade: false,
     isFlame: false,
-    allowTeamDamage: false,
-  } as unknown as TrackedProjectile;
+    allowTeamDamage: false }) as unknown as TrackedProjectile;
   const startEnemyDash = vi.fn(() => true);
   const system = new CoopDefenseEnemyDodgeSystem(
     {

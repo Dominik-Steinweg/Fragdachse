@@ -741,7 +741,7 @@ export class ArenaScene extends Phaser.Scene {
       this,
       () => bridge.getLocalPlayerId(),
       () => {
-        const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+        const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
         return sprite ? { x: sprite.x, y: sprite.y } : null;
       },
       getStoredMasterVolume(),
@@ -757,7 +757,7 @@ export class ArenaScene extends Phaser.Scene {
     const stinkCloudSystem = new StinkCloudSystem(this);
     const hostPhysics      = new HostPhysicsSystem(this, playerManager, bridge, combatSystem);
     const inputSystem      = new InputSystem(
-      this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
     );
     this.spectatorCameraLeftKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A, false) ?? null;
     this.spectatorCameraRightKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, false) ?? null;
@@ -768,7 +768,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.visualFeedback = new VisualFeedbackDirector(this, {
       getListener: () => {
-        const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+        const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
         return sprite ? { x: sprite.x, y: sprite.y } : null;
       },
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
@@ -781,9 +781,9 @@ export class ArenaScene extends Phaser.Scene {
     // und muss zum Aufrufzeitpunkt gelesen werden (siehe ArenaContext-Vertrag).
     this.visualFeedback.setSilhouetteProvider((targetId) => {
       const player = playerManager.getPlayer(targetId);
-      if (player) {
+      if (player?.displayObject) {
         return {
-          sprite: player.sprite,
+          sprite: player.displayObject,
           materialColor: player.color,
           knockbackFactor: 1,
           isLocalPlayer: targetId === bridge.getLocalPlayerId(),
@@ -826,7 +826,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const aimSystem = new AimSystem(
       this,
-      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       (slot) => this.clientUpdate.getLocalWeaponConfig(slot),
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
@@ -836,17 +836,17 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.utilityChargeIndicator = new UtilityChargeIndicator(
       this,
-      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
     this.ultimateChargeIndicator = new UtilityChargeIndicator(
       this,
-      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
     this.playerStatusRing = new PlayerStatusRing(
       this,
-      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       () => this.localPlayerState?.alive ?? false,
       () => this.localPlayerState?.burrowed ?? false,
     );
@@ -968,7 +968,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
-      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       this.visualFeedback.postFx,
     );
     arenaCountdown.setAudioSystem(gameAudioSystem);
@@ -1182,12 +1182,12 @@ export class ArenaScene extends Phaser.Scene {
       }
       for (const player of playerManager.getAllPlayers()) {
         if (player.id === ownerId) continue;
-        if (!player.sprite.active) continue;
-        if (!inRange(player.sprite.x, player.sprite.y)) continue;
+        if (!player.active) continue;
+        if (!inRange(player.x, player.y)) continue;
         if (!combatSystem.isAlive(player.id)) continue;
         if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
         if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
-        emit(player.id, 'players', player.sprite.x, player.sprite.y);
+        emit(player.id, 'players', player.x, player.y);
       }
       if (config.targetTypes?.includes('decoys')) {
         for (const decoy of this.ctx.decoySystem.getHostTargets()) {
@@ -1289,8 +1289,8 @@ export class ArenaScene extends Phaser.Scene {
         const pointer = this.getPointerWorldPoint();
         return placementSystem.getDismantlePreview(
           bridge.getLocalPlayerId(),
-          player.sprite.x,
-          player.sprite.y,
+          player.x,
+          player.y,
           pointer.x,
           pointer.y,
           COOP_DEFENSE_DISMANTLE_RANGE,
@@ -1407,8 +1407,8 @@ export class ArenaScene extends Phaser.Scene {
         const pointer = this.getPointerWorldPoint();
         return placementSystem.getConstructionPlacementPreview(
           getCoopDefenseConstructionDefinition(constructionId),
-          player.sprite.x,
-          player.sprite.y,
+          player.x,
+          player.y,
           pointer.x,
           pointer.y,
         );
@@ -1512,7 +1512,7 @@ export class ArenaScene extends Phaser.Scene {
         this.clientUpdate.notifyUtilityFired();
       }
 
-      const localSprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+      const localSprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
       const isUtilityPlacementAction = slot === 'utility'
         && inputSystem.isUtilityPlacementActive()
         && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode';
@@ -2036,7 +2036,7 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if (this.ctx.arenaResult) {
-        const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
+        const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null;
         ArenaBuilder.updateCanopyTransparency(
           this.ctx.arenaResult.canopyObjects,
           localSprite,
@@ -3539,7 +3539,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getLocalPlacementPreview() {
-    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
     const cfg = this.clientUpdate.getLocalUtilityConfig();
     if (!sprite || !this.ctx.placementSystem || !this.ctx.inputSystem.isUtilityPlacementActive()) return undefined;
     if (cfg.activation.type !== 'placement_mode') return undefined;
@@ -3548,7 +3548,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getLocalUltimatePlacementPreview() {
-    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
     const cfg = this.clientUpdate.getLocalUltimateConfig();
     if (!sprite || !this.ctx.placementSystem || !this.ctx.inputSystem.isUltimatePlacementActive()) return undefined;
     if (cfg.type !== 'tunnel') return undefined;
@@ -3625,8 +3625,8 @@ export class ArenaScene extends Phaser.Scene {
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       if (player.id === localId) continue;
 
-      const sprite = player.sprite;
-      if (!sprite.active || !sprite.visible) continue;
+      const sprite = player.displayObject;
+      if (!sprite || !sprite.active || !sprite.visible) continue;
 
       const dx = pointer.x - sprite.x;
       const dy = pointer.y - sprite.y;
@@ -4022,7 +4022,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
     const preparedStartFocus = bridge.isArenaLoading() || bridge.isArenaCountdownActive();
     if (!localSprite?.active || (!this.localPlayerState.alive && !preparedStartFocus)) {
       camera.scrollX = this.lastCameraScrollX;
@@ -4219,7 +4219,7 @@ export class ArenaScene extends Phaser.Scene {
     if (artificialLights) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         const key = `flashlight:${player.id}`;
-        const sprite = player.sprite;
+        const sprite = player.displayObject;
         const burrowPhase = player.getBurrowPhase();
         // Exakt dieselben Sichtbarkeitsbedingungen wie beim dynamischen Schatten: wer
         // nicht sichtbar auf dem Feld steht, leuchtet auch nicht.
@@ -4229,7 +4229,8 @@ export class ArenaScene extends Phaser.Scene {
         // Spieler tot und keine Taschenlampe sichtbar. Der Lebendzustand steckt ohnehin
         // schon in `sprite.visible` – beide Seiten setzen ihn beim Tod (siehe
         // HostUpdateCoordinator und ClientUpdateCoordinator).
-        const visible = sprite.active
+        const visible = sprite !== null
+          && sprite.active
           && sprite.visible
           && !player.isDecoyStealthedVisual()
           && burrowPhase !== 'underground'

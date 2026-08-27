@@ -105,8 +105,8 @@ export class DecoySystem {
       this.scene,
       id,
       playerId,
-      owner.sprite.x,
-      owner.sprite.y,
+      owner.x,
+      owner.y,
       playerColor,
       this.bridge.isEnemyPair(this.bridge.getLocalPlayerId(), playerId),
       true,
@@ -462,8 +462,8 @@ export class DecoySystem {
     if (Math.hypot(dirX, dirY) <= 0.0001 && attackerId) {
       const attacker = this.playerManager.getPlayer(attackerId);
       if (attacker) {
-        dirX = decoy.entity.sprite.x - attacker.sprite.x;
-        dirY = decoy.entity.sprite.y - attacker.sprite.y;
+        dirX = decoy.entity.sprite.x - attacker.x;
+        dirY = decoy.entity.sprite.y - attacker.y;
       }
     }
 

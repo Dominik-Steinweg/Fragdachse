@@ -80,8 +80,8 @@ export function isHudRectOccluded(
   // `visible` statt nur `active`: Tote und eingegrabene Figuren behalten ihren aktiven Sprite,
   // sind aber ausgeblendet – die Spalte soll nicht über einer Leiche durchsichtig bleiben.
   for (const player of playerManager?.getAllPlayers() ?? []) {
-    if (!player.sprite.active || !player.sprite.visible) continue;
-    if (isPointNearRect(player.sprite.x, player.sprite.y, worldRect, HUD_OCCLUSION_ENTITY_MARGIN_PX)) {
+    if (!player.active || !player.displayObject?.visible) continue;
+    if (isPointNearRect(player.x, player.y, worldRect, HUD_OCCLUSION_ENTITY_MARGIN_PX)) {
       return true;
     }
   }

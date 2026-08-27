@@ -86,6 +86,22 @@ Die Scene interpretiert Zustandskombinationen nicht mehr selbst. `resolvePresent
 
 Beide sind rein und rein lokal: sie steuern Darstellung und Eingabe-UX. Ob eine Handlung zählt, entscheidet weiterhin der Host über dieselben Capabilities. Der Countdown hält Bewegung an, lässt Zielen und Weltinteraktion aber offen; die Diagnose-Arena sperrt das laufende Gameplay, nicht ihre Countdown-Interaktion.
 
+## Entity-Runtime und Entity-Presentation
+
+Figuren und Bäume folgen demselben Muster wie die Felsen: **die Runtime ist die kanonische Quelle, die Darstellung ein optionaler Verbraucher.**
+
+`PlayerBody` (src/entities/PlayerBody.ts) trägt Position, Ausrichtung, Aktivität, Bounds und den Arcade-Körper einer Figur — an einer nicht rendernden `Zone`, wie `RockPhysicsProxy` und `TreePhysicsProxy`. `PlayerEntity` hält sie als `runtime` und beantwortet `x`, `y`, `rotation`, `active`, `getBounds()` und `body` daraus. Das Sprite ist **privat** und `null`-fähig; Simulation und Systeme können es nicht mehr erreichen. Für echte Darstellungszugriffe (Effekte, Schatten, Tweens) gibt es den benannten `displayObject`-Zugang, für den replizierten Todeseffekt `getDeathVisual()`.
+
+Kollisionen registrieren auf `player.physicsProxy`, nicht auf dem Bild. Der Trefferradius kommt aus `getHitRadius()` statt aus `displayWidth` — sonst entschiede die Darstellung über Treffer. `HitscanTarget` trägt entsprechend nur noch Position und Radius.
+
+**Die Darstellung wird jeden Frame an die Runtime nachgezogen** — `syncBar()` ruft dafür `syncVisualPosition()`. Das ist derselbe Hook, der schon immer „jeden Frame, wenn Physik die Figur bewegt hat" bedeutete. Fehlt er, bewegt die Physik die Runtime, während das Bild am Spawnpunkt stehen bleibt; Position, Mündungspunkt und Zielen laufen dann auseinander. Der Mündungspunkt liest deshalb ebenfalls die Runtime, nicht das Bild.
+
+Bäume: `trunkBodies` (`TreePhysicsProxy`, zugleich `ObstacleCircleBody`) ist die Runtime; `trunkVisuals` und `canopyObjects` sind Darstellung und entstehen nur mit `options.presentation`. Hindernis- und Lichtindex lesen die Körper.
+
+Ohne lokale World-Presentation entstehen weder Stämme und Kronen noch Figur-Sprites: `ArenaBuilder` bekommt `presentation`, `PlayerManager` einen `setVisualsEnabledResolver()`, beide gespeist aus `getLocalWorldPresentation().required`. Die Runtime bleibt davon unberührt — der Host simuliert identisch.
+
+Eine bewusste Folge: der Kollisionsradius skaliert nicht mehr implizit mit dem Sprite mit. Er wird ausschließlich explizit gesetzt (`setCollisionRadius()`), so wie `HostPhysicsSystem` ihn für den Dash ohnehin schon führt.
+
 ## World Simulation und World Presentation
 
 `resolveWorldPresentation({ participation, worldActive })` (src/world/WorldPresentation.ts) entscheidet, ob ein Peer die laufende World lokal darstellt. Ohne Teilnahme entsteht **keine** Darstellungsfläche — der Zielzustand ist: Shared World aktiv, Host simuliert autoritativ, Host stellt nichts dar. „Host bleibt in der Lobby" heißt weder, die World vollständig zu rendern und die Lobby darüberzulegen, noch einen unsichtbaren World-Render-Tree zu halten.

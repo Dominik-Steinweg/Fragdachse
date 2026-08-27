@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -28,7 +29,7 @@ describe('targeted AI versus untargeted effects', () => {
     Object.assign(system as unknown as Record<string, unknown>, {
       lastMiniDomeTickAt: new Map([['enemy-1', 0]]),
       playerManager: {
-        getAllPlayers: () => [{ id: 'player-1', sprite: { x: 20, y: 0, active: true } }],
+        getAllPlayers: () => [fakeEntity({ id: 'player-1', x: 20, y: 0, active: true })],
       },
       combatSystem: {
         isAlive: () => true,
@@ -41,11 +42,8 @@ describe('targeted AI versus untargeted effects', () => {
       targetCatalog: new EnemyAiTargetCatalog(),
     });
 
-    const enemy = {
-      id: 'enemy-1',
-      faction: 'hostile',
-      sprite: { x: 0, y: 0, active: true },
-    } as unknown as EnemyEntity;
+    const enemy = fakeEntity({ id: 'enemy-1',
+      faction: 'hostile', x: 0, y: 0, active: true }) as unknown as EnemyEntity;
     const weapon = { id: 'MINI_TESLA_DOME' } as WeaponConfig;
     const fire = {
       type: 'tesla_dome',
@@ -71,17 +69,13 @@ describe('targeted AI versus untargeted effects', () => {
 
   it('computes the Void Hunter nuke center from real players, excluding catalog decoys', () => {
     const config = getCoopDefenseEnemyConfig('void-hunter');
-    const enemy = {
-      id: 'void-1',
+    const enemy = fakeEntity({ id: 'void-1',
       kind: 'void-hunter',
-      faction: 'hostile',
-      sprite: { x: 0, y: 0, active: true },
-      getHp: () => config.maxHp * config.voidHunterBoss!.phaseTwoHpRatio * 0.5,
+      faction: 'hostile', x: 0, y: 0, active: true, getHp: () => config.maxHp * config.voidHunterBoss!.phaseTwoHpRatio * 0.5,
       getMaxHp: () => config.maxHp,
       setMoveSpeedMultiplier: vi.fn(),
       setSpecialAction: vi.fn(),
-      stopMovement: vi.fn(),
-    } as unknown as EnemyEntity;
+      stopMovement: vi.fn() }) as unknown as EnemyEntity;
     const scheduleNuke = vi.fn();
     const targetCatalog = new EnemyAiTargetCatalog();
     targetCatalog.updateTargets([{
@@ -93,8 +87,8 @@ describe('targeted AI versus untargeted effects', () => {
     }]);
     const playerManager = {
       getAllPlayers: () => [
-        { id: 'player-1', sprite: { x: 300, y: 200, active: true } },
-        { id: 'player-2', sprite: { x: 400, y: 200, active: true } },
+        fakeEntity({ id: 'player-1', x: 300, y: 200, active: true }),
+        fakeEntity({ id: 'player-2', x: 400, y: 200, active: true }),
       ],
     };
 

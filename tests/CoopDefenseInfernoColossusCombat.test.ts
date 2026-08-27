@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 // Phaser braucht ein DOM; fuer Zielauswahl, Wurfballistik und Pausenlogik reichen die Helfer.
@@ -214,7 +215,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
 
   it('nutzt im Nahbereich den Hoellenwerfer und laeuft dabei mit 75 % weiter', () => {
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [{ id: 'p1', sprite: { x: 300, y: 100, active: true } }]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 300, y: 100, active: true })]);
 
     system.hostUpdate(16, 1_000);
 
@@ -227,7 +228,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
 
   it('feuert ab 450 px Void-Raketen und bewegt sich dabei ungebremst', () => {
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [{ id: 'p1', sprite: { x: 600, y: 100, active: true } }]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })]);
 
     system.hostUpdate(16, 1_000);
 
@@ -241,7 +242,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
   it('haelt die Raketen unter ihrer Mindestdistanz zurueck und laeuft stattdessen weiter', () => {
     // 400 px: zu weit fuer den Hoellenwerfer (350), zu nah fuer die Raketen (450).
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [{ id: 'p1', sprite: { x: 500, y: 100, active: true } }]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 500, y: 100, active: true })]);
 
     runAttackFrames(system, 1_000, 2_000);
 
@@ -251,7 +252,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
 
   it('feuert genau zehn Raketen und pausiert danach acht Sekunden', () => {
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [{ id: 'p1', sprite: { x: 800, y: 100, active: true } }]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 800, y: 100, active: true })]);
 
     // Eine volle Salve braucht 10 × Salventakt; grosszuegig darueber hinaus takten.
     const salvoWindowMs = SALVO.intervalMs * 14;
@@ -269,7 +270,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
   });
 
   it('wechselt mitten in der Salve auf den Hoellenwerfer, wenn ein Spieler heranrueckt', () => {
-    const player = { id: 'p1', sprite: { x: 800, y: 100, active: true } };
+    const player = fakeEntity({ id: 'p1', x: 800, y: 100, active: true });
     const enemy = createColossus();
     const { system, shots } = createAttackSystem(enemy, [player]);
 
@@ -299,8 +300,8 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     const system = new CoopDefenseEnemyAttackSystem(
       enemyManager,
       {
-        getAllPlayers: () => [{ id: 'p1', sprite: { x: 800, y: 100, active: true } }],
-        getPlayer: () => ({ id: 'p1', sprite: { x: 800, y: 100, active: true } }),
+        getAllPlayers: () => [fakeEntity({ id: 'p1', x: 800, y: 100, active: true })],
+        getPlayer: () => (fakeEntity({ id: 'p1', x: 800, y: 100, active: true })),
       } as unknown as PlayerManager,
       { getBases: () => [], getBasesByFaction: () => [] } as unknown as BaseManager,
       {
@@ -363,7 +364,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
   it('haelt den Boss fuer die Ausholzeit an und wirft danach lila Void-Feuer', () => {
     const enemy = createColossus();
     const { system, spawnProjectile } = createAbilitySystem(enemy, [
-      { id: 'p1', sprite: { x: 600, y: 100, active: true } },
+      fakeEntity({ id: 'p1', x: 600, y: 100, active: true }),
     ]);
 
     // Erster Takt setzt nur die Anfangspause.
@@ -415,7 +416,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
     for (const playerX of [100 + VOID_MOLOTOV.minRange, 100 + 480, 100 + VOID_MOLOTOV.maxRange]) {
       const enemy = createColossus();
       const { system, spawnProjectile } = createAbilitySystem(enemy, [
-        { id: 'p1', sprite: { x: playerX, y: 100, active: true } },
+        fakeEntity({ id: 'p1', x: playerX, y: 100, active: true }),
       ]);
       const readyAt = 1_000 + VOID_MOLOTOV.cooldownMs;
       system.hostUpdate(1_000);
@@ -432,7 +433,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
 
   it('haelt den Boss waehrend der Ausholzeit vollstaendig an', () => {
     const enemy = createColossus();
-    const { system } = createAbilitySystem(enemy, [{ id: 'p1', sprite: { x: 600, y: 100, active: true } }]);
+    const { system } = createAbilitySystem(enemy, [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })]);
 
     system.hostUpdate(1_000);
     const readyAt = 1_000 + VOID_MOLOTOV.cooldownMs;
@@ -444,7 +445,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
 
   it('hat im Ueberlappungsbereich Vorrang vor den Raketen und weicht im Cooldown auf sie aus', () => {
     // 500 px liegt in beiden Baendern (Molotov 350–600, Raketen ab 450).
-    const players = [{ id: 'p1', sprite: { x: 600, y: 100, active: true } }];
+    const players = [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })];
     const enemy = createColossus();
     const ability = createAbilitySystem(enemy, players);
     const attack = createAttackSystem(enemy, players);
@@ -469,13 +470,13 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
 
   it('wirft nur innerhalb seines Einsatzbandes', () => {
     const nearEnemy = createColossus();
-    const near = createAbilitySystem(nearEnemy, [{ id: 'p1', sprite: { x: 300, y: 100, active: true } }]);
+    const near = createAbilitySystem(nearEnemy, [fakeEntity({ id: 'p1', x: 300, y: 100, active: true })]);
     near.system.hostUpdate(1_000);
     near.system.hostUpdate(1_000 + VOID_MOLOTOV.cooldownMs);
     expect(near.system.blocksRegularAttacks(nearEnemy.id)).toBe(false);
 
     const farEnemy = createColossus();
-    const far = createAbilitySystem(farEnemy, [{ id: 'p1', sprite: { x: 900, y: 100, active: true } }]);
+    const far = createAbilitySystem(farEnemy, [fakeEntity({ id: 'p1', x: 900, y: 100, active: true })]);
     far.system.hostUpdate(1_000);
     far.system.hostUpdate(1_000 + VOID_MOLOTOV.cooldownMs);
     expect(far.system.blocksRegularAttacks(farEnemy.id)).toBe(false);
@@ -490,7 +491,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         getEnemy: () => enemy,
         getHostileEnemies: () => [],
       } as unknown as EnemyManager,
-      { getAllPlayers: () => [{ id: 'p1', sprite: { x: 600, y: 100, active: true } }] } as unknown as PlayerManager,
+      { getAllPlayers: () => [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })] } as unknown as PlayerManager,
       { spawnProjectile } as unknown as ProjectileManager,
       {
         isAlive: () => true,

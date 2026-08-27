@@ -7,6 +7,7 @@ import {
   BADGER_WALKING_TEXTURE_KEY,
   syncBadgerWalkingAnimation,
 } from '../animations/BadgerAnimations';
+import { PlayerBody } from './PlayerBody';
 import { HeldItemVisual } from './HeldItemVisual';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
@@ -30,7 +31,24 @@ import {
  * Aufbauten, die einen echten Matchzustand voraussetzen (Name, HP-/Rüstungsbalken). Er
  * traegt die Ambient-Dachse der Lobby, die weder Spieleridentitaet noch HUD besitzen.
  */
+/** Darstellungsanteil des replizierten Todeseffekts. */
+export interface PlayerDeathVisual {
+  readonly textureKey: string | undefined;
+  readonly frame: string | number | undefined;
+  readonly rotation: number;
+  readonly displayWidth: number;
+  readonly displayHeight: number;
+  readonly tint: number;
+}
+
 export interface PlayerEntityOptions {
+  /**
+   * Ob diese Figur ueberhaupt sichtbar entsteht.
+   *
+   * Ohne Darstellung existiert nur die Runtime: Position, Ausrichtung und Koerper. Ein Host,
+   * der eine World simuliert ohne sie darzustellen, baut so keinen Figur-Render-Tree auf.
+   */
+  visuals?: boolean;
   /** Ohne Namensschild und Welt-Balken; Sprite, Glow, Held Item und VFX bleiben identisch. */
   presentation?: boolean;
   /** Materialisierungs-Effekt beim Anlegen. Im Presentation-Modus standardmaessig aus. */
@@ -39,19 +57,28 @@ export interface PlayerEntityOptions {
 
 export class PlayerEntity {
   readonly id:     string;
-  readonly sprite: Phaser.GameObjects.Sprite;
+  /**
+   * Kanonische Runtime dieser Figur: Position, Ausrichtung, Aktivitaet, Bounds und Physik.
+   * Alles Fachliche liest hier - das Sprite ist Darstellung und folgt ihr.
+   */
+  private readonly runtime: PlayerBody;
+  /**
+   * Sichtbare Figur. Bewusst privat: Position, Aktivitaet und Bounds sind keine Sprite-Fragen
+   * mehr, sondern werden von dieser Entity aus der Runtime beantwortet.
+   */
+  private readonly sprite: Phaser.GameObjects.Sprite | null;
 
   private readonly colorHex: number;
   private readonly isEnemy: boolean;
   /** Reine Darstellung ohne Matchzustand; unterdrueckt Name und Welt-Balken dauerhaft. */
   private readonly presentation: boolean;
   private displayName: string;
-  private readonly nameLabel: Phaser.GameObjects.Text | null;
+  private readonly nameLabel: Phaser.GameObjects.Text | null = null;
   private nameLabelVisible = false;
-  private hpBarBg:  Phaser.GameObjects.Rectangle | null;
-  private hpBarFg:  Phaser.GameObjects.Rectangle | null;
-  private armorBarBg: Phaser.GameObjects.Rectangle | null;
-  private armorBarFg: Phaser.GameObjects.Rectangle | null;
+  private hpBarBg:  Phaser.GameObjects.Rectangle | null = null;
+  private hpBarFg:  Phaser.GameObjects.Rectangle | null = null;
+  private armorBarBg: Phaser.GameObjects.Rectangle | null = null;
+  private armorBarFg: Phaser.GameObjects.Rectangle | null = null;
   private currentHp = HP_MAX;
   private maxHp = HP_MAX;
   private currentArmor = 0;
@@ -80,7 +107,7 @@ export class PlayerEntity {
   private burnGpu: EntityBurnGpuController | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
   /** Getragenes Loadout-Item; liegt knapp ueber der Figur, aber unter Spawn- und Stealth-Ebenen. */
-  private readonly heldItem: HeldItemVisual;
+  private readonly heldItem: HeldItemVisual | null = null;
   private burnStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
   /** Für die an dieser Entity hängenden Lichtquellen (Brand, Spawn-Blitz). */
@@ -131,153 +158,212 @@ export class PlayerEntity {
     this.colorHex = profile.colorHex;
     this.isEnemy  = isEnemy;
     this.presentation = options.presentation === true;
+    const visuals = options.visuals !== false;
     this.displayName = profile.name;
     this.targetX  = x;
     this.targetY  = y;
 
     // Spieler-Sprite: der statische Frame 0 ist die wiederverwendbare Idle-Darstellung;
     // die Laufzeit schaltet bei Bewegung auf die globale Phaser-Walking-Animation um.
-    this.sprite = scene.add.sprite(x, y, BADGER_WALKING_TEXTURE_KEY, BADGER_IDLE_FRAME);
-    this.sprite.setOrigin(0.5, 0.5);
-    this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
-    this.sprite.setDepth(DEPTH.PLAYERS);
-    scene.physics.add.existing(this.sprite);
-    // Arcade interprets the radius in source-texture pixels and applies the Sprite scale
-    // afterwards. The walking sheet uses 64-px frames while the gameplay figure is 32 px wide,
-    // so passing the display radius directly would make the physical body half as large as the
-    // visible player.
-    this.setCollisionRadius(PLAYER_SIZE / 2);
-    // Eine Match-Figur bleibt im Spielfeld. Eine Presentation-Figur nicht: Sie betritt die
-    // Bühne von ausserhalb der Arenakante und verlässt sie ebenso. Die Weltgrenze würde sie
-    // dabei am Rand festklemmen. Ihre Eingrenzung leistet die Navigation, nicht die Physik –
-    // für Projektile und alles andere bleibt die Weltgrenze unverändert bestehen.
-    this.body.setCollideWorldBounds(!this.presentation);
+    // Erst die Runtime: sie traegt Position und Koerper. Eine Match-Figur bleibt im Spielfeld.
+    // Eine Presentation-Figur nicht: Sie betritt die Bühne von ausserhalb der Arenakante und
+    // verlässt sie ebenso. Die Weltgrenze würde sie dabei am Rand festklemmen. Ihre Eingrenzung
+    // leistet die Navigation, nicht die Physik – für Projektile und alles andere bleibt die
+    // Weltgrenze unverändert bestehen.
+    this.runtime = new PlayerBody(scene, x, y, !this.presentation);
 
-    // Dieselbe bewährte Internal-Glow-Kette wie in BadgerPreview verwenden. Der Filter
-    // expandiert den Sprite korrekt über die Padding-Grenze hinaus und bleibt an der
-    // tatsächlichen Spielertextur ausgerichtet.
-    setInternalFxPadding(this.sprite, 20);
-    // Die Spieler-Silhouette bleibt bewusst auf der alten internen Phaser-Glow-Kette: Sie
-    // liefert die enge, gepaddete Kontur, die fuer die unmittelbare Lesbarkeit der Figur
-    // wichtiger ist als die letzte Reduktion eines einzelnen kritischen Filters.
-    this.glowFx = addInternalGlowLegacy(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
-    this.startDefaultGlowTween();
+    // Das Sprite traegt keinen Koerper mehr; es folgt der Runtime.
+    this.sprite = visuals
+      ? scene.add.sprite(x, y, BADGER_WALKING_TEXTURE_KEY, BADGER_IDLE_FRAME)
+      : null;
+    if (this.sprite) {
+      this.sprite.setOrigin(0.5, 0.5);
+      this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.sprite.setDepth(DEPTH.PLAYERS);
 
-    this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);
+      // Dieselbe bewährte Internal-Glow-Kette wie in BadgerPreview verwenden. Der Filter
+      // expandiert den Sprite korrekt über die Padding-Grenze hinaus und bleibt an der
+      // tatsächlichen Spielertextur ausgerichtet.
+      setInternalFxPadding(this.sprite, 20);
+      // Die Spieler-Silhouette bleibt bewusst auf der alten internen Phaser-Glow-Kette: Sie
+      // liefert die enge, gepaddete Kontur, die fuer die unmittelbare Lesbarkeit der Figur
+      // wichtiger ist als die letzte Reduktion eines einzelnen kritischen Filters.
+      this.glowFx = addInternalGlowLegacy(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
+      this.startDefaultGlowTween();
 
-    this.spawnShine = scene.add.image(x, y, 'badger');
-    this.spawnShine.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
-    this.spawnShine.setDepth(DEPTH.PLAYERS + 0.05);
-    this.spawnShine.setTint(0xfff1bf);
-    this.spawnShine.setBlendMode(Phaser.BlendModes.ADD);
-    this.spawnShine.setVisible(false);
+      this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);
 
-    // Spawn-Animation beim ersten Erscheinen
-    if (options.spawnEffect ?? !this.presentation) this.playSpawnEffect();
+      this.spawnShine = scene.add.image(x, y, 'badger');
+      this.spawnShine.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.spawnShine.setDepth(DEPTH.PLAYERS + 0.05);
+      this.spawnShine.setTint(0xfff1bf);
+      this.spawnShine.setBlendMode(Phaser.BlendModes.ADD);
+      this.spawnShine.setVisible(false);
 
-    this.stealthShell = scene.add.image(x, y, 'badger');
-    this.stealthShell.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
-    this.stealthShell.setDepth(DEPTH.PLAYERS + 0.03);
-    this.stealthShell.setTint(profile.colorHex);
-    this.stealthShell.setBlendMode(Phaser.BlendModes.ADD);
-    this.stealthShell.setVisible(false);
+      // Spawn-Animation beim ersten Erscheinen
+      if (options.spawnEffect ?? !this.presentation) this.playSpawnEffect();
 
-    this.stealthScan = scene.add.image(x, y, 'badger');
-    this.stealthScan.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
-    this.stealthScan.setDepth(DEPTH.PLAYERS + 0.04);
-    this.stealthScan.setTint(profile.colorHex);
-    this.stealthScan.setBlendMode(Phaser.BlendModes.ADD);
-    this.stealthScan.setVisible(false);
+      this.stealthShell = scene.add.image(x, y, 'badger');
+      this.stealthShell.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.stealthShell.setDepth(DEPTH.PLAYERS + 0.03);
+      this.stealthShell.setTint(profile.colorHex);
+      this.stealthShell.setBlendMode(Phaser.BlendModes.ADD);
+      this.stealthShell.setVisible(false);
 
-    this.stealthAmbientParticles = scene.add.particles(x, y, '_living_blob', {
-      lifespan: { min: 260, max: 520 },
-      frequency: 110,
-      quantity: 1,
-      speed: { min: 4, max: 18 },
-      scale: { start: 0.3, end: 0.02 },
-      alpha: { start: 0.14, end: 0 },
-      tint: [profile.colorHex],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    });
-    registerParticleEmitter(scene, 'playerStealth', this.stealthAmbientParticles);
-    this.stealthAmbientParticles.setDepth(DEPTH.PLAYERS + 0.01);
-    this.stealthAmbientParticles.startFollow(this.sprite, 0, 0, false);
+      this.stealthScan = scene.add.image(x, y, 'badger');
+      this.stealthScan.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.stealthScan.setDepth(DEPTH.PLAYERS + 0.04);
+      this.stealthScan.setTint(profile.colorHex);
+      this.stealthScan.setBlendMode(Phaser.BlendModes.ADD);
+      this.stealthScan.setVisible(false);
 
-    this.stealthTrailParticles = scene.add.particles(x, y, '_living_blob', {
-      lifespan: { min: 220, max: 460 },
-      frequency: 55,
-      quantity: 1,
-      speedX: { min: -8, max: 8 },
-      speedY: { min: -8, max: 8 },
-      scale: { start: 0.22, end: 0.01 },
-      alpha: { start: 0.1, end: 0 },
-      tint: [profile.colorHex],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    });
-    registerParticleEmitter(scene, 'playerStealth', this.stealthTrailParticles);
-    this.stealthTrailParticles.setDepth(DEPTH.PLAYERS);
-    this.stealthTrailParticles.startFollow(this.sprite, 0, 0, false);
+      this.stealthAmbientParticles = scene.add.particles(x, y, '_living_blob', {
+        lifespan: { min: 260, max: 520 },
+        frequency: 110,
+        quantity: 1,
+        speed: { min: 4, max: 18 },
+        scale: { start: 0.3, end: 0.02 },
+        alpha: { start: 0.14, end: 0 },
+        tint: [profile.colorHex],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      registerParticleEmitter(scene, 'playerStealth', this.stealthAmbientParticles);
+      this.stealthAmbientParticles.setDepth(DEPTH.PLAYERS + 0.01);
+      this.stealthAmbientParticles.startFollow(this.sprite, 0, 0, false);
 
-    // Namensschild und Welt-Balken setzen einen echten Matchzustand voraus. Im
-    // Presentation-Modus entstehen sie deshalb gar nicht erst, statt dauerhaft unsichtbar in
-    // der Display-Liste zu liegen.
-    if (this.presentation) {
-      this.hpBarBg = null;
-      this.hpBarFg = null;
-      this.armorBarBg = null;
-      this.armorBarFg = null;
-      this.nameLabel = null;
-      this.worldBarsVisible = false;
-    } else {
-      // HP-Balken Hintergrund (dunkelgrau, zentriert)
-      this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
-      this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
-      registerGraphicsObject(scene, 'playerStatus', this.hpBarBg);
+      this.stealthTrailParticles = scene.add.particles(x, y, '_living_blob', {
+        lifespan: { min: 220, max: 460 },
+        frequency: 55,
+        quantity: 1,
+        speedX: { min: -8, max: 8 },
+        speedY: { min: -8, max: 8 },
+        scale: { start: 0.22, end: 0.01 },
+        alpha: { start: 0.1, end: 0 },
+        tint: [profile.colorHex],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      registerParticleEmitter(scene, 'playerStealth', this.stealthTrailParticles);
+      this.stealthTrailParticles.setDepth(DEPTH.PLAYERS);
+      this.stealthTrailParticles.startFollow(this.sprite, 0, 0, false);
 
-      // HP-Balken Vordergrund (farbig, links ausgerichtet)
-      this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
-      this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
-      this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
-      registerGraphicsObject(scene, 'playerStatus', this.hpBarFg);
+      // Namensschild und Welt-Balken setzen einen echten Matchzustand voraus. Im
+      // Presentation-Modus entstehen sie deshalb gar nicht erst, statt dauerhaft unsichtbar in
+      // der Display-Liste zu liegen.
+      if (this.presentation) {
+        this.hpBarBg = null;
+        this.hpBarFg = null;
+        this.armorBarBg = null;
+        this.armorBarFg = null;
+        this.nameLabel = null;
+        this.worldBarsVisible = false;
+      } else {
+        // HP-Balken Hintergrund (dunkelgrau, zentriert)
+        this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
+        this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
+        registerGraphicsObject(scene, 'playerStatus', this.hpBarBg);
 
-      this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
-      this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
-      this.armorBarBg.setVisible(false);
-      registerGraphicsObject(scene, 'playerStatus', this.armorBarBg);
+        // HP-Balken Vordergrund (farbig, links ausgerichtet)
+        this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
+        this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
+        this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+        registerGraphicsObject(scene, 'playerStatus', this.hpBarFg);
 
-      this.armorBarFg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
-      this.armorBarFg.setOrigin(0, 0.5);
-      this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
-      this.armorBarFg.setVisible(false);
-      registerGraphicsObject(scene, 'playerStatus', this.armorBarFg);
+        this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
+        this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
+        this.armorBarBg.setVisible(false);
+        registerGraphicsObject(scene, 'playerStatus', this.armorBarBg);
 
-      this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
-        fontSize: '12px',
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
-        color: toCssColor(this.colorHex),
-        stroke: '#050709',
-        strokeThickness: 3,
-      }).setOrigin(0.5, 1)
-        .setDepth(DEPTH.PLAYERS + 3)
-        .setVisible(false);
+        this.armorBarFg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
+        this.armorBarFg.setOrigin(0, 0.5);
+        this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
+        this.armorBarFg.setVisible(false);
+        registerGraphicsObject(scene, 'playerStatus', this.armorBarFg);
+
+        this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          fontStyle: 'bold',
+          color: toCssColor(this.colorHex),
+          stroke: '#050709',
+          strokeThickness: 3,
+        }).setOrigin(0.5, 1)
+          .setDepth(DEPTH.PLAYERS + 3)
+          .setVisible(false);
+      }
+
     }
-
     this.syncBar();
 
   }
 
-  get body(): Phaser.Physics.Arcade.Body {
-    return this.sprite.body as Phaser.Physics.Arcade.Body;
+  /**
+   * Textur und Frame fuer den replizierten Todeseffekt.
+   *
+   * Der Host repliziert sie, damit alle Clients dieselbe Leiche zeichnen. Die Entity antwortet
+   * selbst - die Simulation greift dafuer auf kein Sprite zu.
+   */
+  getDeathVisual(): PlayerDeathVisual {
+    return {
+      textureKey: this.sprite?.texture?.key,
+      frame: this.sprite?.frame?.name,
+      rotation: this.runtime.rotation,
+      displayWidth: this.sprite?.displayWidth ?? PLAYER_SIZE,
+      displayHeight: this.sprite?.displayHeight ?? PLAYER_SIZE,
+      tint: this.sprite?.tint ?? 0xffffff,
+    };
   }
 
-  /** Sets the body's radius in display/world pixels, compensating for the source-texture scale. */
+  /**
+   * Sichtbare Figur - ausschliesslich fuer Darstellung: Effekte, Schatten, Tweens, Partikel.
+   *
+   * Ausdruecklich kein Runtime-Zugriff. Position, Ausrichtung, Aktivitaet und Bounds beantwortet
+   * die Entity aus ihrer Runtime; wer hier zugreift, stellt dar.
+   */
+  get displayObject(): Phaser.GameObjects.Sprite | null {
+    return this.sprite;
+  }
+
+  get body(): Phaser.Physics.Arcade.Body {
+    return this.runtime.body;
+  }
+
+  /** Der Koerper dieser Figur - Ziel jeder Kollisionsregistrierung. */
+  get physicsProxy(): Phaser.GameObjects.Zone {
+    return this.runtime.proxy;
+  }
+
+  get x(): number { return this.runtime.x; }
+  get y(): number { return this.runtime.y; }
+
+  /** Sprite-Rotation in Phaser-Konvention; fuer Blickrichtung `getAimAngle()` benutzen. */
+  get rotation(): number { return this.runtime.rotation; }
+
+  /** Solange die Runtime existiert, steht die Figur in der World. */
+  get active(): boolean { return this.runtime.active; }
+
+  getBounds(output?: Phaser.Geom.Rectangle): Phaser.Geom.Rectangle {
+    return this.runtime.getBounds(output);
+  }
+
+  /** Kollisionsradius in Weltpixeln. */
   setCollisionRadius(displayRadius: number): void {
-    const displayScale = Math.abs(this.sprite.scaleX);
-    if (displayScale <= Number.EPSILON) return;
-    this.body.setCircle(displayRadius / displayScale);
+    this.runtime.setCollisionRadius(displayRadius);
+  }
+
+  /**
+   * Trefferradius in Weltpixeln.
+   *
+   * Kanonisch aus der Runtime, nicht aus dem Anzeigemass: sonst entschiede die Darstellung
+   * darueber, ob ein Schuss trifft.
+   */
+  getHitRadius(): number {
+    return this.runtime.getCollisionRadius();
+  }
+
+  getCollisionRadius(): number {
+    return this.runtime.getCollisionRadius();
   }
 
   get color(): number {
@@ -304,18 +390,21 @@ export class PlayerEntity {
    * Darf jeden Frame gerufen werden; ein unveraenderter Wert kostet nichts.
    */
   setHeldItemId(itemId: string | null): void {
-    this.heldItem.setItem(itemId);
+    this.heldItem?.setItem(itemId);
     this.syncHeldItem();
   }
 
   /** Weltkoordinate des registrierten Waffen-Mündungs-Punkts, sofern das Item einen Sprite hat. */
   getHeldItemMuzzleOrigin(): { x: number; y: number } | null {
-    return this.heldItem.getMuzzleOrigin(
-      this.sprite.x,
-      this.sprite.y,
-      this.sprite.rotation,
+    if (!this.sprite) return null;
+    // Position und Ausrichtung kommen aus der Runtime, nicht aus dem Bild: sonst haengt der
+    // Muendungspunkt an der Nachfuehrung der Darstellung statt am tatsaechlichen Ort.
+    return this.heldItem?.getMuzzleOrigin(
+      this.runtime.x,
+      this.runtime.y,
+      this.runtime.rotation,
       this.sprite.displayWidth,
-    );
+    ) ?? null;
   }
 
   setWorldBarsVisible(visible: boolean): void {
@@ -335,10 +424,18 @@ export class PlayerEntity {
   setPosition(x: number, y: number): void {
     this.targetX = x;
     this.targetY = y;
-    this.sprite.setPosition(x, y);
-    this.body.reset(x, y);
+    this.runtime.setPosition(x, y);
+    this.syncVisualPosition();
     this.syncBar();
     this.syncOverlays();
+  }
+
+  /** Zieht die Darstellung an die Runtime nach. Ohne Sprite gibt es nichts nachzuziehen. */
+  private syncVisualPosition(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
+    this.sprite.setPosition(this.runtime.x, this.runtime.y);
+    this.sprite.rotation = this.runtime.rotation;
   }
 
   /**
@@ -356,15 +453,19 @@ export class PlayerEntity {
    * @param factor Interpolationsfaktor 0–1 (z. B. 0.2 für weiche Bewegung)
    */
   lerpStep(factor: number): void {
-    this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
-    this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
+    this.runtime.moveTo(
+      Phaser.Math.Linear(this.runtime.x, this.targetX, factor),
+      Phaser.Math.Linear(this.runtime.y, this.targetY, factor),
+    );
     this.lerpRotation(factor);
+    this.syncVisualPosition();
     this.syncBar();
   }
 
   /** Sprite-Rotation direkt setzen (lokaler Spieler, jeden Frame). */
   setRotation(aimAngle: number): void {
-    this.sprite.rotation = getPlayerSpriteRotationFromAimAngle(aimAngle);
+    this.runtime.rotation = getPlayerSpriteRotationFromAimAngle(aimAngle);
+    if (this.sprite) this.sprite.rotation = this.runtime.rotation;
     this.syncOverlays();
   }
 
@@ -379,14 +480,15 @@ export class PlayerEntity {
    * wird, ohne den Sprite-Offset weiterzureichen (z. B. der Taschenlampenkegel).
    */
   getAimAngle(): number {
-    return getAimAngleFromPlayerSpriteRotation(this.sprite.rotation);
+    return getAimAngleFromPlayerSpriteRotation(this.runtime.rotation);
   }
 
   /** Rotation smooth zum Ziel interpolieren (Shortest-Path). */
   private lerpRotation(factor: number): void {
-    const current = getAimAngleFromPlayerSpriteRotation(this.sprite.rotation);
+    const current = getAimAngleFromPlayerSpriteRotation(this.runtime.rotation);
     const diff = Phaser.Math.Angle.Wrap(this.targetRotation - current);
-    this.sprite.rotation = getPlayerSpriteRotationFromAimAngle(current + diff * factor);
+    this.runtime.rotation = getPlayerSpriteRotationFromAimAngle(current + diff * factor);
+    if (this.sprite) this.sprite.rotation = this.runtime.rotation;
     this.syncOverlays();
   }
 
@@ -395,14 +497,17 @@ export class PlayerEntity {
    * Jeden Frame aufrufen wenn Sprite durch Physik bewegt wurde.
    */
   syncBar(): void {
-    const x = this.sprite.x;
-    const hpY = this.sprite.y + HP_BAR_OFFSET_Y;
-    const armorY = this.sprite.y + ARMOR_BAR_OFFSET_Y;
+    // Die Physik bewegt die Runtime, nicht das Bild. Hier wird das Bild nachgezogen - dieselbe
+    // Stelle, die schon immer der Frame-Hook fuer physikbewegte Figuren war.
+    this.syncVisualPosition();
+    const x = this.runtime.x;
+    const hpY = this.runtime.y + HP_BAR_OFFSET_Y;
+    const armorY = this.runtime.y + ARMOR_BAR_OFFSET_Y;
     this.hpBarBg?.setPosition(x, hpY);
     this.hpBarFg?.setPosition(x - HP_BAR_WIDTH / 2, hpY);
     this.armorBarBg?.setPosition(x, armorY);
     this.armorBarFg?.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
-    this.nameLabel?.setPosition(x, this.sprite.y - PLAYER_SIZE * 0.72);
+    this.nameLabel?.setPosition(x, this.runtime.y - PLAYER_SIZE * 0.72);
     this.syncAttachedEffects();
     this.syncOverlays();
     this.syncWalkingAnimation();
@@ -427,6 +532,8 @@ export class PlayerEntity {
   }
 
   updateArmor(armor: number): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     this.currentArmor = Math.max(0, Math.min(ARMOR_MAX, armor));
     if (!this.armorBarFg || !this.armorBarBg) return;
     const ratio = this.currentArmor / ARMOR_MAX;
@@ -449,7 +556,7 @@ export class PlayerEntity {
     }
 
     if (!this.burnRenderer) {
-      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene, this.burnGpu);
+      this.burnRenderer = new EntityBurnRenderer(this.sprite!.scene, this.burnGpu);
       this.burnRenderer.setLightingSystem(this.lighting, `entityburn:player:${this.id}`);
     }
 
@@ -496,6 +603,8 @@ export class PlayerEntity {
   /** Spawn-/Respawn-Effekt: Sprite materialisiert sich, Welt-Effekte werden abgespielt.
    *  Wird beim initialen Spawn (Constructor) und bei jedem Respawn aufgerufen. */
   playSpawnEffect(): void {
+    // Ohne Sprite gibt es keinen Materialisierungseffekt.
+    if (!this.sprite) return;
     const scene = this.sprite.scene;
 
     // Sprite kurz auf Scale/Alpha 0 setzen und dann animiert einblenden
@@ -561,7 +670,7 @@ export class PlayerEntity {
     // World-Space-Effekte (Ringe, Partikel, Lichtstrahl, Kern-Flash)
     const spawnEffect = new SpawnEffectRenderer(scene);
     spawnEffect.setLightingSystem(this.lighting);
-    spawnEffect.play(this.sprite.x, this.sprite.y, this.colorHex);
+    spawnEffect.play(this.runtime.x, this.runtime.y, this.colorHex);
   }
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite), 1 = normale Spielergroesse. */
@@ -602,6 +711,8 @@ export class PlayerEntity {
 
   /** Ultimate-Rage-Tint setzen (Spieler leuchtet rot). */
   setRageTint(active: boolean): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     if (this.isRagingVisual === active) {
       this.resolveVisual();
       return;
@@ -645,7 +756,7 @@ export class PlayerEntity {
       this.stealthShellScaleY = state.shellScaleY;
       this.stealthShellRotation = state.shellRotation;
       this.stealthScanProgress = 0;
-      this.stealthTween = this.sprite.scene.tweens.add({
+      this.stealthTween = this.sprite!.scene.tweens.add({
         targets: state,
         alpha: 0.045,
         glow: 0.42,
@@ -668,7 +779,7 @@ export class PlayerEntity {
           this.resolveVisual();
         },
       });
-      this.stealthScanTween = this.sprite.scene.tweens.add({
+      this.stealthScanTween = this.sprite!.scene.tweens.add({
         targets: this,
         stealthScanProgress: 1,
         duration: 1650,
@@ -716,6 +827,8 @@ export class PlayerEntity {
    * Burrow arbeitet primär über Sichtbarkeit/Tweening, Rage nur noch über Glow.
    */
   private resolveVisual(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     this.sprite.setAlpha(alpha);
     if (this.glowFx && this.isDecoyStealthed) {
@@ -743,9 +856,11 @@ export class PlayerEntity {
   }
 
   private syncHeldItem(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     // `displayWidth` statt `PLAYER_SIZE`: Spawn-, Dash- und Burrow-Tweens skalieren den Sprite,
     // das getragene Item muss diese Skalierung mitmachen statt in voller Groesse stehenzubleiben.
-    this.heldItem.sync(
+    this.heldItem?.sync(
       this.sprite.x,
       this.sprite.y,
       this.sprite.rotation,
@@ -756,6 +871,8 @@ export class PlayerEntity {
   }
 
   private syncSpawnShine(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     if (!this.spawnShine) return;
 
     const visible = this.sprite.visible && this.spawnShineAlpha > 0.001;
@@ -797,6 +914,8 @@ export class PlayerEntity {
   }
 
   private playWindUpTween(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     this.stopBurrowTween(false);
     this.sprite.setVisible(this.baseVisible);
     this.applySpriteScale(1, 1);
@@ -822,6 +941,8 @@ export class PlayerEntity {
   }
 
   private playPopOutTween(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     this.stopBurrowTween(false);
     this.sprite.setVisible(this.baseVisible);
     const state = { scaleX: 0.72, scaleY: 1.28, alpha: 0.55 };
@@ -854,6 +975,8 @@ export class PlayerEntity {
   }
 
   private applyDisplayVisibility(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
     const visible = this.baseVisible && !hiddenByBurrow;
     const barsVisible = visible && this.worldBarsVisible && !this.isDecoyStealthed;
@@ -879,6 +1002,8 @@ export class PlayerEntity {
    * davon, in welcher Aufloesung die Charaktertextur authored ist.
    */
   private applySpriteScale(factorX: number, factorY: number = factorX): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     this.sprite.setScale(this.spriteBaseScaleX * factorX, this.spriteBaseScaleY * factorY);
   }
 
@@ -887,14 +1012,16 @@ export class PlayerEntity {
    * 32-px-Raster und muessen den Feedback-Faktor uebernehmen, nicht die rohe Texturskalierung.
    */
   private get spriteScaleFactorX(): number {
-    return (this.sprite.scaleX || this.spriteBaseScaleX) / this.spriteBaseScaleX;
+    return (this.sprite?.scaleX || this.spriteBaseScaleX) / this.spriteBaseScaleX;
   }
 
   private get spriteScaleFactorY(): number {
-    return (this.sprite.scaleY || this.spriteBaseScaleY) / this.spriteBaseScaleY;
+    return (this.sprite?.scaleY || this.spriteBaseScaleY) / this.spriteBaseScaleY;
   }
 
   private syncWalkingAnimation(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
     syncBadgerWalkingAnimation(
       this.sprite,
@@ -907,6 +1034,8 @@ export class PlayerEntity {
   }
 
   private syncStealthOverlay(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     if (!this.stealthShell || !this.stealthScan) return;
 
     const visible = this.sprite.visible && this.isDecoyStealthed;
@@ -949,6 +1078,8 @@ export class PlayerEntity {
   }
 
   private startDefaultGlowTween(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     if (!this.glowFx || this.isRagingVisual || this.isDecoyStealthed) return;
     this.glowTween?.stop();
     this.glowTween = this.sprite.scene.tweens.add({
@@ -962,6 +1093,8 @@ export class PlayerEntity {
   }
 
   private syncAttachedEffects(): void {
+    // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
+    if (!this.sprite) return;
     this.burnRenderer?.sync(
       this.sprite.x,
       this.sprite.y,
@@ -983,14 +1116,15 @@ export class PlayerEntity {
     this.stealthTrailParticles?.destroy();
     this.burnRenderer?.destroy();
     this.rageRenderer?.destroy();
-    this.heldItem.destroy();
+    this.heldItem?.destroy();
     this.hpBarBg?.destroy();
     this.hpBarFg?.destroy();
     this.armorBarBg?.destroy();
     this.armorBarFg?.destroy();
-    removeInternalFx(this.sprite, this.glowFx);
+    if (this.sprite) removeInternalFx(this.sprite, this.glowFx);
     this.glowFx = null;
-    this.sprite.destroy();
+    this.sprite?.destroy();
+    this.runtime.destroy();
     this.spawnShine?.destroy();
     this.stealthShell?.destroy();
     this.stealthScan?.destroy();

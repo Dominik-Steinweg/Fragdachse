@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it } from 'vitest';
 import { COOP_DEFENSE_AFFIX_RULES } from '../src/config/coopDefenseItems';
 import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRuntimeSystem';
@@ -289,7 +290,7 @@ describe('Neue Positions-Affixe', () => {
     const system = build();
     let enemyVisits = 0;
     system.updateSurroundedPlayers(
-      [{ id: 'p', sprite: { x: 0, y: 0 } }],
+      [fakeEntity({ id: 'p', x: 0, y: 0 })],
       { forEachEnemy: () => { enemyVisits += 1; } },
       () => true,
       () => true,
@@ -300,15 +301,12 @@ describe('Neue Positions-Affixe', () => {
 
   it('verwendet fuer mehrere Traeger nur einen gemeinsamen Gegner-Scan', () => {
     const system = build({ affixes: { surrounded: 0.12 } });
-    const enemies = Array.from({ length: COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount }, (_, index) => ({
-      id: `e${index}`,
-      sprite: { active: true, x: index * 8, y: 0 },
-    }));
+    const enemies = Array.from({ length: COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount }, (_, index) => (fakeEntity({ id: `e${index}`, active: true, x: index * 8, y: 0 })));
     let enemyVisits = 0;
     system.updateSurroundedPlayers(
       [
-        { id: 'p0', sprite: { x: 0, y: 0 } },
-        { id: 'p1', sprite: { x: 24, y: 0 } },
+        fakeEntity({ id: 'p0', x: 0, y: 0 }),
+        fakeEntity({ id: 'p1', x: 24, y: 0 }),
       ],
       {
         forEachEnemy: (visit) => {

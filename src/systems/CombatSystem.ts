@@ -18,6 +18,7 @@ import {
   ArenaObstacleIndex,
   OBSTACLE_ROCK,
   type ObstacleCircleVisitor,
+  type ObstacleCircleBody,
   type ObstacleRectBody,
 } from './ArenaObstacleIndex';
 import { CombatGeometry } from './CombatGeometry';
@@ -235,9 +236,35 @@ export interface HitscanSupportImpact {
   readonly y: number;
 }
 
-interface HitscanSpriteTarget {
-  sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Arc;
-  body: { velocity: { x: number; y: number } } | null;
+/**
+ * Trefferziel eines Hitscans: kanonische Position und Trefferradius.
+ *
+ * Frueher stand hier ein Sprite, aus dessen Anzeigemass der Radius abgeleitet wurde - damit
+ * haette die Darstellung ueber Treffer entschieden. Der Radius kommt jetzt von der Runtime.
+ */
+interface HitscanTarget {
+  readonly x: number;
+  readonly y: number;
+  /** Trefferradius in Weltpixeln. */
+  readonly hitRadius: number;
+  readonly body: { velocity: { x: number; y: number } } | null;
+}
+
+/**
+ * Trefferziel eines noch sprite-gefuehrten Gegners oder Koeders.
+ *
+ * Bewusst genau eine Stelle: solange Gegner ihren Radius aus dem Anzeigemass ableiten, steht
+ * diese Ableitung hier und nicht verstreut an jedem Aufruf.
+ */
+function toSpriteHitscanTarget(
+  sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Arc,
+): HitscanTarget {
+  return {
+    x: sprite.x,
+    y: sprite.y,
+    hitRadius: Math.max(sprite.displayWidth, sprite.displayHeight) * 0.5,
+    body: sprite.body as { velocity: { x: number; y: number } } | null,
+  };
 }
 
 type SweptProjectileHit =
@@ -320,7 +347,7 @@ export class CombatSystem {
   private enemyManager:     EnemyManager | null = null;
   private baseManager:      BaseManager | null = null;
   private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null = null;
-  private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
+  private trunkObjects: readonly ObstacleCircleBody[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
    * Direkter Schaden läuft über den zentralen Basisschadenspfad; die Rechtecke wirken
@@ -556,7 +583,7 @@ export class CombatSystem {
   }
   setArenaObstacles(
     rockObjects: readonly (RockPhysicsProxy | null)[] | null,
-    trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
+    trunkObjects: readonly ObstacleCircleBody[] | null,
   ): void {
     this.rockObjects = rockObjects;
     this.trunkObjects = trunkObjects;
@@ -786,8 +813,8 @@ export class CombatSystem {
     }
 
     const player = this.playerManager.getPlayer(targetId);
-    const x = player?.sprite.x ?? 0;
-    const y = player?.sprite.y ?? 0;
+    const x = player?.x ?? 0;
+    const y = player?.y ?? 0;
 
     // Energie-Kuppel: Liegt der Schadenspunkt in einer verbündeten Kuppel, wird der Schaden
     // vollständig abgewehrt (jeder abdeckende Kuppel-Besitzer erhält den Schadensbonus).
@@ -958,7 +985,7 @@ export class CombatSystem {
         false,
         contribution.attackerId,
         contribution.sourceId,
-        attacker ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y } : undefined,
+        attacker ? { sourceX: attacker.x, sourceY: attacker.y } : undefined,
         { allowCritical: false, damageKind: 'burn' },
       );
     }
@@ -985,7 +1012,7 @@ export class CombatSystem {
       if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
       if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage)) continue;
-      const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
+      const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > radius) continue;
 
       let appliedDamage = computeRadialDamage(dist, radius, runtimeDamage, options?.damageFalloff);
@@ -1094,7 +1121,7 @@ export class CombatSystem {
     for (const player of damagePlayers ? this.playerManager.getAllPlayers() : []) {
       if (!this.isAlive(player.id)) continue;
 
-      const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
+      const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > effect.radius) continue;
 
       let damage = computeProjectileExplosionDamage(dist, effect)
@@ -1527,13 +1554,13 @@ export class CombatSystem {
       if (this.burrowSystem?.isBurrowed(player.id))     continue;
       if (proj.multiExplosionExcludedTargetKeys?.has(`players:${player.id}`)) continue;
 
-      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.sprite.getBounds())) {
+      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.getBounds())) {
         const actualDamage = this.computeProjectileDamage(proj);
         const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
         if (!canDealDamage) continue;
 
         if (proj.energyInjectorPayload) {
-          this.onEnergyInjectorTargetHit?.('player', player.id, player.sprite.x, player.sprite.y, proj);
+          this.onEnergyInjectorTargetHit?.('player', player.id, player.x, player.y, proj);
           this.projectileManager.destroyProjectile(proj.id);
           return true;
         }
@@ -1543,7 +1570,7 @@ export class CombatSystem {
           if (reflectionFactor > 0) {
             const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
             const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
-            this.projectileManager.spawnProjectile(player.sprite.x, player.sprite.y, angle, player.id, {
+            this.projectileManager.spawnProjectile(player.x, player.y, angle, player.id, {
               ...this.inheritedProjectileEffects(proj),
               speed,
               size: Math.max(1, proj.sprite.displayWidth),
@@ -1880,8 +1907,8 @@ export class CombatSystem {
          startY: line.y1,
          endX: line.x2,
          endY: line.y2,
-         targetX: player.sprite.x,
-         targetY: player.sprite.y,
+         targetX: player.x,
+         targetY: player.y,
          radius: PLAYER_SIZE * 0.5 + projectileRadius,
          ignoreStartingOverlap: true,
        });
@@ -2454,8 +2481,8 @@ export class CombatSystem {
             candidates.push({
               id: `player:${player.id}`,
               kind: 'player',
-              x: player.sprite.x,
-              y: player.sprite.y,
+              x: player.x,
+              y: player.y,
             });
           }
         }
@@ -2646,8 +2673,8 @@ export class CombatSystem {
     for (const player of canDamageKind('players') ? this.playerManager.getAllPlayers() : []) {
       if (!this.isMeleeTargetCandidate(player.id, shooterId)) continue;
 
-      const dx   = player.sprite.x - x;
-      const dy   = player.sprite.y - y;
+      const dx   = player.x - x;
+      const dy   = player.y - y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       // Reichweite – Spieler-Radius als Toleranz hinzurechnen
@@ -2657,7 +2684,7 @@ export class CombatSystem {
       if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
 
       // Hindernischeck: liegt ein Fels/Stamm zwischen Schütze und Ziel?
-      this.meleeLine.setTo(x, y, player.sprite.x, player.sprite.y);
+      this.meleeLine.setTo(x, y, player.x, player.y);
       if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
 
       const loadoutMult  = sourceSlot
@@ -2678,8 +2705,8 @@ export class CombatSystem {
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
-        impactX = player.sprite.x;
-        impactY = player.sprite.y;
+        impactX = player.x;
+        impactY = player.y;
       }
 
       if (canDealDamage && adrenalinGain > 0) {
@@ -2784,7 +2811,7 @@ export class CombatSystem {
         let best = chain.radius;
         const candidates = [
           ...(canDamageKind('players')
-            ? this.playerManager.getAllPlayers().map(player => ({ id: player.id, x: player.sprite.x, y: player.sprite.y }))
+            ? this.playerManager.getAllPlayers().map(player => ({ id: player.id, x: player.x, y: player.y }))
             : []),
           ...(canDamageKind('enemies')
             ? (this.enemyManager?.getAllEnemies() ?? []).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y }))
@@ -3056,7 +3083,7 @@ export class CombatSystem {
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        player,
+        { x: player.x, y: player.y, hitRadius: player.getHitRadius(), body: player.body },
         traceThickness,
         // Support-Hitscans duerfen den Schuetzen als Heilziel einbeziehen. Seine eigene
         // Lag-Kompensation darf die Trefferkapsel beim Rueckwaertslaufen jedoch nicht vor
@@ -3077,7 +3104,7 @@ export class CombatSystem {
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        { sprite: enemy.sprite, body: enemy.sprite.body as Phaser.Physics.Arcade.Body | null },
+        toSpriteHitscanTarget(enemy.sprite),
         traceThickness,
         applyFavorTheShooter,
       );
@@ -3094,7 +3121,7 @@ export class CombatSystem {
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        decoy,
+        toSpriteHitscanTarget(decoy.sprite),
         traceThickness,
         applyFavorTheShooter,
       );
@@ -3251,7 +3278,7 @@ export class CombatSystem {
 
   private getHitscanTargetHitDistance(
     line: Phaser.Geom.Line,
-    target: HitscanSpriteTarget,
+    target: HitscanTarget,
     traceThickness: number,
     applyFavorTheShooter: boolean,
   ): number | null {
@@ -3259,8 +3286,8 @@ export class CombatSystem {
       return this.getFavorTheShooterHitDistance(line, target, traceThickness);
     }
 
-    const baseRadius = Math.max(target.sprite.displayWidth, target.sprite.displayHeight) * 0.5 + traceThickness * 0.5;
-    return this.findNearestCircleHit(line, target.sprite.x, target.sprite.y, baseRadius)?.distance ?? null;
+    const baseRadius = target.hitRadius + traceThickness * 0.5;
+    return this.findNearestCircleHit(line, target.x, target.y, baseRadius)?.distance ?? null;
   }
 
   private findNearestObstacleHit(
@@ -3287,14 +3314,14 @@ export class CombatSystem {
 
   private getFavorTheShooterHitDistance(
     line: Phaser.Geom.Line,
-    target: HitscanSpriteTarget,
+    target: HitscanTarget,
     traceThickness: number,
   ): number | null {
-    const baseRadius = Math.max(target.sprite.displayWidth, target.sprite.displayHeight) * 0.5 + traceThickness * 0.5;
+    const baseRadius = target.hitRadius + traceThickness * 0.5;
     const velocity = target.body?.velocity ?? { x: 0, y: 0 };
     return this.geometry.sweptCircleHitDistance(
       line,
-      target.sprite.x, target.sprite.y,
+      target.x, target.y,
       velocity.x, velocity.y,
       baseRadius,
       HITSCAN_FAVOR_THE_SHOOTER_MS,
@@ -3404,23 +3431,23 @@ export class CombatSystem {
     direction?: { dirX: number; dirY: number },
   ): SyncedDeathEffect {
     const player = this.playerManager.getPlayer(playerId);
-    const sprite = player?.sprite;
-    const textureKey = sprite?.texture?.key;
-    const frame = sprite?.frame?.name;
+    const visual = player?.getDeathVisual();
+    const textureKey = visual?.textureKey;
+    const frame = visual?.frame;
     return {
       type: 'death',
       x,
       y,
       targetId: playerId,
       targetColor: player?.color,
-      rotation: sprite?.rotation ?? 0,
+      rotation: visual?.rotation ?? 0,
       seed,
       ...(textureKey && frame != null ? {
         textureKey,
         frame,
-        displayWidth: sprite.displayWidth,
-        displayHeight: sprite.displayHeight,
-        tint: sprite.tint,
+        displayWidth: visual!.displayWidth,
+        displayHeight: visual!.displayHeight,
+        tint: visual!.tint,
       } : {}),
       ...(direction ? { dirX: direction.dirX, dirY: direction.dirY } : {}),
     };
@@ -3446,8 +3473,8 @@ export class CombatSystem {
       const attacker = this.playerManager.getPlayer(attackerId);
       const enemyAttacker = this.enemyManager?.getEnemy(attackerId);
       if (attacker) {
-        dirX = targetX - attacker.sprite.x;
-        dirY = targetY - attacker.sprite.y;
+        dirX = targetX - attacker.x;
+        dirY = targetY - attacker.y;
       } else if (enemyAttacker) {
         dirX = targetX - enemyAttacker.sprite.x;
         dirY = targetY - enemyAttacker.sprite.y;
@@ -3737,8 +3764,8 @@ export class CombatSystem {
 
     const player = this.playerManager.getPlayer(targetId);
     const enemy = this.enemyManager?.getEnemy(targetId);
-    const targetX = player?.sprite.x ?? enemy?.sprite.x ?? projectile.sprite.x;
-    const targetY = player?.sprite.y ?? enemy?.sprite.y ?? projectile.sprite.y;
+    const targetX = player?.x ?? enemy?.sprite.x ?? projectile.sprite.x;
+    const targetY = player?.y ?? enemy?.sprite.y ?? projectile.sprite.y;
     const fallbackDx = targetX - projectile.sprite.x;
     const fallbackDy = targetY - projectile.sprite.y;
     const velocityLen = Math.hypot(projectile.body.velocity.x, projectile.body.velocity.y);

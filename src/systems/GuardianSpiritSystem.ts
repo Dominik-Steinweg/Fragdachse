@@ -75,7 +75,7 @@ export class GuardianSpiritSystem {
         this.owners.set(player.id, ownerState);
       }
 
-      this.updateOwnerSpirits(player.id, player.color, player.sprite.x, player.sprite.y, cfg, ownerState, now, deltaSeconds);
+      this.updateOwnerSpirits(player.id, player.color, player.x, player.y, cfg, ownerState, now, deltaSeconds);
     }
 
     for (const ownerId of [...this.owners.keys()]) {

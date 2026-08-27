@@ -13,11 +13,9 @@ const CARRY_ITEM_HALF_SIZE = CARRY_ITEM_SIZE * 0.5;
 export interface CoopDefenseCarryPlayerLike {
   readonly id: string;
   readonly body: { readonly enable: boolean };
-  readonly sprite: {
-    readonly x: number;
-    readonly y: number;
-    getBounds(): CarryBounds;
-  };
+  readonly x: number;
+  readonly y: number;
+  getBounds(): CarryBounds;
 }
 
 export interface CarryBounds {
@@ -135,8 +133,8 @@ export class CoopDefenseCarrySystem {
       const player = this.playerManager.getPlayer(playerId);
       this.dropItem(
         item,
-        Number.isFinite(x) ? x as number : player?.sprite.x ?? item.spawnX,
-        Number.isFinite(y) ? y as number : player?.sprite.y ?? item.spawnY,
+        Number.isFinite(x) ? x as number : player?.x ?? item.spawnX,
+        Number.isFinite(y) ? y as number : player?.y ?? item.spawnY,
         playerId,
       );
     }
@@ -176,8 +174,8 @@ export class CoopDefenseCarrySystem {
 
       this.dropItem(
         item,
-        player?.sprite.x ?? item.spawnX,
-        player?.sprite.y ?? item.spawnY,
+        player?.x ?? item.spawnX,
+        player?.y ?? item.spawnY,
         null,
       );
     }
@@ -188,8 +186,8 @@ export class CoopDefenseCarrySystem {
       if (item.state !== 'carried' || !item.holderId) continue;
       const player = this.playerManager.getPlayer(item.holderId);
       if (!player) continue;
-      item.x = player.sprite.x;
-      item.y = player.sprite.y;
+      item.x = player.x;
+      item.y = player.y;
     }
   }
 
@@ -220,13 +218,13 @@ export class CoopDefenseCarrySystem {
       for (const player of players) {
         if (carryingPlayers.has(player.id)) continue;
         if (item.pickupBlockedByPlayerId === player.id) continue;
-        if (!this.isPlayerTouchingItem(player.sprite.getBounds(), item)) continue;
+        if (!this.isPlayerTouchingItem(player.getBounds(), item)) continue;
 
         item.holderId = player.id;
         item.state = 'carried';
         item.pickupBlockedByPlayerId = null;
-        item.x = player.sprite.x;
-        item.y = player.sprite.y;
+        item.x = player.x;
+        item.y = player.y;
         carryingPlayers.add(player.id);
         break;
       }
@@ -243,14 +241,14 @@ export class CoopDefenseCarrySystem {
       if (!player || !config?.carry || !this.isPlayerAlive(item.holderId)) continue;
       const deliveryZone = getCoopDefenseMapObjectiveZoneWorldRect(config.carry.deliveryZone);
       if (
-        player.sprite.x < deliveryZone.x
-        || player.sprite.x > deliveryZone.x + deliveryZone.width
-        || player.sprite.y < deliveryZone.y
-        || player.sprite.y > deliveryZone.y + deliveryZone.height
+        player.x < deliveryZone.x
+        || player.x > deliveryZone.x + deliveryZone.width
+        || player.y < deliveryZone.y
+        || player.y > deliveryZone.y + deliveryZone.height
       ) continue;
       if (!this.options.onDelivered(item.objectiveId, item.id, item.holderId)) continue;
       this.items.delete(item.id);
-      this.options.onDeliveredFx?.(player.sprite.x, player.sprite.y);
+      this.options.onDeliveredFx?.(player.x, player.y);
     }
   }
 
@@ -266,7 +264,7 @@ export class CoopDefenseCarrySystem {
     for (const item of this.items.values()) {
       if (!item.pickupBlockedByPlayerId) continue;
       const player = this.playerManager.getPlayer(item.pickupBlockedByPlayerId);
-      if (!player || !this.isPlayerTouchingItem(player.sprite.getBounds(), item)) {
+      if (!player || !this.isPlayerTouchingItem(player.getBounds(), item)) {
         item.pickupBlockedByPlayerId = null;
       }
     }

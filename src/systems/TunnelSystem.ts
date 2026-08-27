@@ -133,8 +133,8 @@ export class TunnelSystem {
     }
     this.reentryBlockedUntil.set(playerId, {
       blockedUntil: Date.now() + REENTRY_BLOCK_MS,
-      exitX: player.sprite.x,
-      exitY: player.sprite.y,
+      exitX: player.x,
+      exitY: player.y,
     });
   }
 
@@ -153,8 +153,7 @@ export class TunnelSystem {
 
       const elapsed = now - transit.startAt;
       if (elapsed >= transit.durationMs) {
-        player.sprite.setPosition(transit.destination.x, transit.destination.y);
-        player.body.reset(transit.destination.x, transit.destination.y);
+        player.setPosition(transit.destination.x, transit.destination.y);
         this.onPositionReset?.(playerId, transit.destination.x, transit.destination.y);
         this.hostPhysics.clearForcedMovement(playerId);
         this.burrowSystem.completeTunnelTransit(playerId);
@@ -174,13 +173,13 @@ export class TunnelSystem {
       const reentryGate = this.reentryBlockedUntil.get(player.id);
       if (reentryGate) {
         if (now < reentryGate.blockedUntil) continue;
-        if (!this.hasMovedAwayFromExit(player.sprite.x, player.sprite.y, reentryGate)) continue;
+        if (!this.hasMovedAwayFromExit(player.x, player.y, reentryGate)) continue;
         this.reentryBlockedUntil.delete(player.id);
       }
       if (this.burrowSystem.getPhase(player.id) !== 'idle') continue;
 
       for (const tunnel of this.tunnels.values()) {
-        const source = this.resolveEntryTouch(player.sprite.x, player.sprite.y, tunnel);
+        const source = this.resolveEntryTouch(player.x, player.y, tunnel);
         if (!source) continue;
 
         const destination = source === 'A' ? tunnel.entranceB : tunnel.entranceA;
@@ -191,8 +190,8 @@ export class TunnelSystem {
           destination.gridX,
           destination.gridY,
         )) continue;
-        const dx = destination.x - player.sprite.x;
-        const dy = destination.y - player.sprite.y;
+        const dx = destination.x - player.x;
+        const dy = destination.y - player.y;
         const distance = Math.hypot(dx, dy);
         if (distance < 1) continue;
 
@@ -202,7 +201,7 @@ export class TunnelSystem {
           tunnel.config.travelMaxDurationMs,
         );
 
-        this.onTunnelEnter?.(player.id, player.sprite.x, player.sprite.y);
+        this.onTunnelEnter?.(player.id, player.x, player.y);
         this.burrowSystem.startTunnelTransit(player.id);
         this.activeTransitByPlayer.set(player.id, {
           playerId: player.id,

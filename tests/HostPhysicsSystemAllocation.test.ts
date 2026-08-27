@@ -53,7 +53,9 @@ function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
 
 function createMockPlayer(id: string, x = 200, y = 200) {
   const setVelocity = vi.fn();
-  const sprite = {
+  // Die Figur traegt Position, Aktivitaet und Koerper selbst - kein Sprite mehr dazwischen.
+  const player = {
+    id,
     active: true,
     x,
     y,
@@ -61,15 +63,13 @@ function createMockPlayer(id: string, x = 200, y = 200) {
       velocity: { x: 0, y: 0 },
       setVelocity,
     },
-  };
-
-  return {
-    id,
-    sprite,
     setDashScale: vi.fn(),
     setCollisionRadius: vi.fn(),
     setVelocity,
   } as unknown as PlayerEntity & { setVelocity: typeof setVelocity };
+  // Der Koerper ist derselbe, egal ueber welchen Weg er gelesen wird.
+  (player as unknown as { physicsProxy: unknown }).physicsProxy = player;
+  return player;
 }
 
 function createHarness() {

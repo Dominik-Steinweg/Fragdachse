@@ -34,6 +34,7 @@ import type { GroundSurfacePersistentBaseGravelZone } from './chunks/GroundSurfa
 import { RockOverlayStreamer } from './chunks/RockOverlayStreamer';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { createRockPhysicsProxy, type RockPhysicsProxy } from './rocks/RockPhysicsProxy';
+import { createTreePhysicsProxy, type TreePhysicsProxy } from './trees/TreePhysicsProxy';
 import { RockVisualStateStore, type RockVisualState } from './rocks/RockVisualState';
 import { RockVisualSystem } from './rocks/RockVisualSystem';
 import { getRockGpuPageSize, getRockRendererMode } from './rocks/RockRendererSettings';
@@ -80,11 +81,16 @@ export interface ArenaBuilderResult {
   rockVisualSystem: RockVisualSystem;
   /** Spatial Index für Grid-basierte Nachbar-Lookups (Autotiling) */
   rockGrid:     RockGridIndex;
-  /** StaticGroup mit Baumstümpfen (Kreis-Körper, keine HP) */
+  /** StaticGroup mit nicht rendernden Baumstamm-Proxies. */
   trunkGroup:   Phaser.Physics.Arcade.StaticGroup;
-  /** Baumstumpf-Objekte für Hitscan-/Melee-Sweeps */
-  trunkObjects: Phaser.GameObjects.Arc[];
-  /** Baumkronen-Sprites für Transparenz-Update */
+  /**
+   * Kanonische Runtime der Baeume: Position, Radius und Kollision. Hitscan-, Melee- und
+   * Hindernisabfragen lesen ausschliesslich hier - nie am sichtbaren Stamm.
+   */
+  trunkBodies: TreePhysicsProxy[];
+  /** Sichtbare Staemme; reine Darstellung ueber der Runtime und ohne sie entbehrlich. */
+  trunkVisuals: Phaser.GameObjects.Arc[];
+  /** Baumkronen-Sprites für Transparenz-Update; ebenfalls reine Darstellung. */
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>;
   /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
   trackObjects: Phaser.GameObjects.TileSprite[];
@@ -132,6 +138,11 @@ export interface ArenaBuilderResult {
 }
 
 export interface ArenaBuilderDynamicOptions {
+  /**
+   * Ob dieser Peer die World darstellt. Ohne Darstellung entstehen Staemme und Kronen gar
+   * nicht erst - die Runtime der Baeume bleibt davon unberuehrt.
+   */
+  readonly presentation?: boolean;
   /** Nur Maps mit Persistent-Base-Konfiguration bekommen die Gravel-Renderziele. */
   readonly enablePersistentBaseGravel?: boolean;
   /** Optionaler Zustand fuer den ersten Chunk-Bake. */
@@ -215,13 +226,15 @@ export class ArenaBuilder {
    * gespeichert werden; `destroy()` räumt alles wieder auf.
    */
   buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions = {}): ArenaBuilderResult {
+    const presentation = options.presentation !== false;
     const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
     const rockGroup    = this.scene.physics.add.staticGroup();
     const frame        = getArenaRockWorldFrame();
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockPhysicsProxies: (RockPhysicsProxy | null)[] = [];
     const rockVisualStates = new RockVisualStateStore();
-    const trunkObjects: Phaser.GameObjects.Arc[] = [];
+    const trunkBodies: TreePhysicsProxy[] = [];
+    const trunkVisuals: Phaser.GameObjects.Arc[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
 
     // Spatial Index für Autotiling
@@ -277,17 +290,19 @@ export class ArenaBuilder {
       const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
 
-      // Trunk (Kollision)
-      const trunk = this.createTrunkVisual(worldX, worldY);
+      // Runtime: der nicht rendernde Koerper ist die kanonische Quelle des Baums.
+      const trunk = createTreePhysicsProxy(this.scene, worldX, worldY);
       trunkGroup.add(trunk);
       const trunkBody = trunk.body as Phaser.Physics.Arcade.StaticBody;
       trunkBody.setCircle(TRUNK_RADIUS);
       trunkBody.updateFromGameObject();
-      trunkObjects.push(trunk);
+      trunkBodies.push(trunk);
 
-      // Canopy (nur visuell)
-      const gfx = this.createCanopyVisual(worldX, worldY);
-      canopyObjects.push({ gfx, worldX, worldY });
+      // Presentation: Stamm und Krone setzen darauf auf und entfallen ohne Darstellung.
+      if (presentation) {
+        trunkVisuals.push(this.createTrunkVisual(worldX, worldY));
+        canopyObjects.push({ gfx: this.createCanopyVisual(worldX, worldY), worldX, worldY });
+      }
     }
 
     const rockVisualSystem = new RockVisualSystem(
@@ -305,7 +320,8 @@ export class ArenaBuilder {
       rockVisualSystem,
       rockGrid,
       trunkGroup,
-      trunkObjects,
+      trunkBodies,
+      trunkVisuals,
       canopyObjects,
       trackObjects,
       groundSurface: null,
@@ -682,11 +698,15 @@ export class ArenaBuilder {
     result.rockPhysicsProxies.length = 0;
     result.rockGroup.destroy(true);
 
-    // Trunks
-    for (const trunk of result.trunkObjects) {
+    // Trunks: erst die Darstellung, dann die Runtime.
+    for (const trunk of result.trunkVisuals) {
       if (trunk.active) trunk.destroy();
     }
-    result.trunkObjects.length = 0;
+    result.trunkVisuals.length = 0;
+    for (const trunk of result.trunkBodies) {
+      if (trunk.active) trunk.destroy();
+    }
+    result.trunkBodies.length = 0;
     result.trunkGroup.destroy(true);
 
     // Canopies

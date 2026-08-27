@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -21,18 +22,14 @@ describe('Decoy death visual snapshots', () => {
     const decoy = {
       id: 7,
       color: 0x55cc88,
-      entity: {
-        sprite: {
-          x: 480,
+      entity: fakeEntity({ x: 480,
           y: 288,
           rotation: 0.5,
           texture: { key: 'badger_walking' },
           frame: { name: 0 },
           displayWidth: 32,
           displayHeight: 32,
-          tint: 0xffffff,
-        },
-      },
+          tint: 0xffffff }),
     };
     const internals = system as unknown as {
       buildDeathEffect: (value: typeof decoy) => SyncedDeathEffect;

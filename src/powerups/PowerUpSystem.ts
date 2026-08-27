@@ -775,9 +775,9 @@ export class PowerUpSystem {
     }
 
     for (const p of this.playerManager.getAllPlayers()) {
-      if (!p.sprite.active) continue;
-      const gx = Math.floor((p.sprite.x - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((p.sprite.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      if (!p.active) continue;
+      const gx = Math.floor((p.x - ARENA_OFFSET_X) / CELL_SIZE);
+      const gy = Math.floor((p.y - ARENA_OFFSET_Y) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 

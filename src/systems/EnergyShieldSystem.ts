@@ -163,11 +163,11 @@ export class EnergyShieldSystem {
     if (!shield.config.fire.blockableCategories.includes(attempt.category)) return false;
 
     const player = this.playerManager.getPlayer(attempt.targetId);
-    if (!player?.sprite.active) return false;
+    if (!player?.active) return false;
 
-    const aimAngle = this.getAimAngle(attempt.targetId, player.sprite.rotation);
-    const dx = attempt.sourceX - player.sprite.x;
-    const dy = attempt.sourceY - player.sprite.y;
+    const aimAngle = this.getAimAngle(attempt.targetId, player.rotation);
+    const dx = attempt.sourceX - player.x;
+    const dy = attempt.sourceY - player.y;
     if (dx === 0 && dy === 0) return false;
 
     const sourceAngle = Math.atan2(dy, dx);
@@ -196,9 +196,9 @@ export class EnergyShieldSystem {
         && !this.bridge.areTeammates(ownerId, victimPlayerId)) continue;
 
       const owner = this.playerManager.getPlayer(ownerId);
-      if (!owner || !owner.sprite.active) continue;
+      if (!owner || !owner.active) continue;
       const radius = shield.config.fire.domeRadius;
-      if (Phaser.Math.Distance.Between(impactX, impactY, owner.sprite.x, owner.sprite.y) > radius) continue;
+      if (Phaser.Math.Distance.Between(impactX, impactY, owner.x, owner.y) > radius) continue;
 
       shield.flashUntil = Math.max(shield.flashUntil, now + shield.config.fire.flashDurationMs);
       this.shieldBuffSystem.addBlockedDamage(ownerId, damage, shield.config.fire, now);
@@ -213,11 +213,11 @@ export class EnergyShieldSystem {
     for (const [ownerId, shield] of this.activeShields) {
       if (shield.config.fire.domeEnabled <= 0) continue;
       const owner = this.playerManager.getPlayer(ownerId);
-      if (!owner || !owner.sprite.active) continue;
+      if (!owner || !owner.active) continue;
       result.push({
         ownerId,
-        x: owner.sprite.x,
-        y: owner.sprite.y,
+        x: owner.x,
+        y: owner.y,
         radius: shield.config.fire.domeRadius,
         color: shield.color,
         reflect: shield.config.fire.domeReflectProjectiles > 0,
@@ -248,7 +248,7 @@ export class EnergyShieldSystem {
       }
 
       const player = this.playerManager.getPlayer(ownerId);
-      if (!player || !player.sprite.active) {
+      if (!player || !player.active) {
         this.forceOff(ownerId);
         continue;
       }
@@ -277,20 +277,20 @@ export class EnergyShieldSystem {
       }
 
       if (isDome && fire.domeHealPerSecond > 0) {
-        this.applyDomeHeal(ownerId, player.sprite.x, player.sprite.y, shield, now);
+        this.applyDomeHeal(ownerId, player.x, player.y, shield, now);
       } else {
         shield.lastHealAt = now;
       }
 
-      const aimAngle = this.getAimAngle(ownerId, player.sprite.rotation);
+      const aimAngle = this.getAimAngle(ownerId, player.rotation);
       const flashRemaining = Math.max(0, shield.flashUntil - now);
       const flashFrac = fire.flashDurationMs > 0 ? flashRemaining / fire.flashDurationMs : 0;
 
       if (isDome) {
         synced.push({
           ownerId,
-          x: Math.round(player.sprite.x),
-          y: Math.round(player.sprite.y),
+          x: Math.round(player.x),
+          y: Math.round(player.y),
           angle: aimAngle,
           anchorDistance: 0,
           radius: Math.round(fire.domeRadius),
@@ -304,8 +304,8 @@ export class EnergyShieldSystem {
         continue;
       }
 
-      const anchorX = player.sprite.x + Math.cos(aimAngle) * fire.anchorDistance;
-      const anchorY = player.sprite.y + Math.sin(aimAngle) * fire.anchorDistance;
+      const anchorX = player.x + Math.cos(aimAngle) * fire.anchorDistance;
+      const anchorY = player.y + Math.sin(aimAngle) * fire.anchorDistance;
       synced.push({
         ownerId,
         x: Math.round(anchorX),
@@ -335,10 +335,10 @@ export class EnergyShieldSystem {
     const radius = shield.config.fire.domeRadius;
 
     for (const p of this.playerManager.getAllPlayers()) {
-      if (!p.sprite.active) continue;
+      if (!p.active) continue;
       if (p.id !== ownerId && !this.bridge.areTeammates(ownerId, p.id)) continue;
       if (this.combatSystem && !this.combatSystem.isAlive(p.id)) continue;
-      if (Phaser.Math.Distance.Between(cx, cy, p.sprite.x, p.sprite.y) > radius) continue;
+      if (Phaser.Math.Distance.Between(cx, cy, p.x, p.y) > radius) continue;
       this.combatSystem?.heal(p.id, amount);
     }
 

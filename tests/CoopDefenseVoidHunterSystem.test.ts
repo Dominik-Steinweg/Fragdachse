@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -49,10 +50,7 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     setMoveSpeedMultiplier: vi.fn(),
     setSpecialAction: vi.fn(),
   };
-  const players = playerPositions.map((position, index) => ({
-    id: `p${index + 1}`,
-    sprite: { ...position, active: true },
-  }));
+  const players = playerPositions.map((position, index) => (fakeEntity({ id: `p${index + 1}`, ...position, active: true })));
   const enemyManager = {
     getAllEnemies: () => [enemy],
     getEnemy: (id: string) => id === enemy.id ? enemy : undefined,

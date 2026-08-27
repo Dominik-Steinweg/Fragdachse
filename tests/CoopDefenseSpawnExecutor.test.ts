@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -36,11 +37,7 @@ function createExecutor(
       options: EnemySpawnOptions = {},
     ) => {
       records.push({ gridX, gridY, options });
-      return {
-        id: `spawn-${records.length}`,
-        sprite: { x: gridX * 32, y: gridY * 32 },
-        getCollisionRadius: () => 12,
-      } as unknown as EnemyEntity;
+      return fakeEntity({ id: `spawn-${records.length}`, x: gridX * 32, y: gridY * 32, getCollisionRadius: () => 12 }) as unknown as EnemyEntity;
     },
   } as unknown as EnemyManager;
   const flowField = {

@@ -30,7 +30,7 @@ export class RepairDroneSystem {
 
     for (const player of this.playerManager.getAllPlayers()) {
       if (
-        !player.sprite.active
+        !player.active
         || !this.combatSystem.isAlive(player.id)
         || !this.hasUpgrade(player.id)
       ) {
@@ -40,8 +40,8 @@ export class RepairDroneSystem {
       const drone = this.drones.get(player.id) ?? this.createDrone(
         player.id,
         player.color,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
       );
       drone.ownerColor = player.color;
       drone.orbitAngle = wrapAngle(
@@ -51,12 +51,12 @@ export class RepairDroneSystem {
       const currentTarget = drone.targetConstructionId === undefined
         ? undefined
         : this.placementSystem.getRuntimeRock(drone.targetConstructionId);
-      const validTarget = this.isValidTarget(player.sprite.x, player.sprite.y, player.id, currentTarget)
+      const validTarget = this.isValidTarget(player.x, player.y, player.id, currentTarget)
         ? currentTarget
         : undefined;
       const target = validTarget ?? this.findNearestTarget(
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         player.id,
       );
 
@@ -85,8 +85,8 @@ export class RepairDroneSystem {
 
       drone.targetConstructionId = undefined;
       const orbit = this.getOrbitPoint(
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         drone.orbitAngle,
       );
       if (drone.phase === 'orbiting') {

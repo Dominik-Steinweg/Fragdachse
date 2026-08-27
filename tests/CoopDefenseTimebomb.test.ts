@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
@@ -37,16 +38,12 @@ describe('Zeitbombendachs', () => {
     let enemyActive = true;
     const setSpecialAction = vi.fn();
     const stopMovement = vi.fn();
-    const enemy = {
-      id: 'e1',
+    const enemy = fakeEntity({ id: 'e1',
       kind: 'timebomb-badger',
-      faction: 'hostile',
-      sprite: { active: true, x: 0, y: 0 },
-      getHp: () => 45,
+      faction: 'hostile', active: true, x: 0, y: 0, getHp: () => 45,
       getMoveSpeed: () => 112,
       setSpecialAction,
-      stopMovement,
-    } as unknown as EnemyEntity;
+      stopMovement }) as unknown as EnemyEntity;
     const hostRemoveWithoutKill = vi.fn(() => {
       enemyActive = false;
       return null;
@@ -98,7 +95,7 @@ describe('Zeitbombendachs', () => {
       fireChunks,
       { playExplosion, applyRadialImpulse, damageConstruction: vi.fn(), sound },
       {
-        getHostTargets: () => [{ id: 7, sprite: { active: true, x: 60, y: 0 } }],
+        getHostTargets: () => [fakeEntity({ id: 7, active: true, x: 60, y: 0 })],
         applyDamage: decoyDamage,
       },
     );
@@ -143,16 +140,12 @@ describe('Zeitbombendachs', () => {
     const lineOfSightDurationMs = getCoopDefenseEnemyConfig('timebomb-badger').timebomb!.lineOfSightDurationMs;
     let selectedTargetId = 'p0';
     const setSpecialAction = vi.fn();
-    const enemy = {
-      id: 'e-lock',
+    const enemy = fakeEntity({ id: 'e-lock',
       kind: 'timebomb-badger',
-      faction: 'hostile',
-      sprite: { active: true, x: 0, y: 0 },
-      getHp: () => 45,
+      faction: 'hostile', active: true, x: 0, y: 0, getHp: () => 45,
       getMoveSpeed: () => 112,
       setSpecialAction,
-      stopMovement: vi.fn(),
-    } as unknown as EnemyEntity;
+      stopMovement: vi.fn() }) as unknown as EnemyEntity;
     const system = new CoopDefenseTimebombSystem(
       {
         getHostileEnemies: () => [enemy],
@@ -203,16 +196,12 @@ describe('Zeitbombendachs', () => {
 
   it('replaces stale chase waypoints instead of briefly steering backwards', () => {
     let hasDirectPath = false;
-    const enemy = {
-      id: 'e-path',
+    const enemy = fakeEntity({ id: 'e-path',
       kind: 'timebomb-badger',
-      faction: 'hostile',
-      sprite: { active: true, x: 0, y: 0 },
-      getHp: () => 45,
+      faction: 'hostile', active: true, x: 0, y: 0, getHp: () => 45,
       getMoveSpeed: () => 112,
       setSpecialAction: vi.fn(),
-      stopMovement: vi.fn(),
-    } as unknown as EnemyEntity;
+      stopMovement: vi.fn() }) as unknown as EnemyEntity;
     const findNextWorldPositionTowards = vi.fn((fromGridX: number) => ({
       x: (fromGridX + 1) * 10 + 5,
       y: 5,
@@ -268,17 +257,13 @@ describe('Zeitbombendachs', () => {
   });
 
   it('caches radius-aware direct chase checks until a cell or repath interval changes', () => {
-    const enemy = {
-      id: 'e-cache',
+    const enemy = fakeEntity({ id: 'e-cache',
       kind: 'timebomb-badger',
-      faction: 'hostile',
-      sprite: { active: true, x: 0, y: 0 },
-      getHp: () => 45,
+      faction: 'hostile', active: true, x: 0, y: 0, getHp: () => 45,
       getMoveSpeed: () => 112,
       getCollisionRadius: () => 12,
       setSpecialAction: vi.fn(),
-      stopMovement: vi.fn(),
-    } as unknown as EnemyEntity;
+      stopMovement: vi.fn() }) as unknown as EnemyEntity;
     const hasWalkableCircleLine = vi.fn(() => true);
     const system = new CoopDefenseTimebombSystem(
       {
@@ -324,7 +309,7 @@ describe('Zeitbombendachs', () => {
     const system = new CoopDefenseTimebombSystem(
       {} as EnemyManager,
       {
-        getAllPlayers: () => [{ id: 'p0', sprite: { active: true, x: 0, y: 0 } }],
+        getAllPlayers: () => [fakeEntity({ id: 'p0', active: true, x: 0, y: 0 })],
       } as unknown as PlayerManager,
       {} as BaseManager,
       {} as PlacementSystem,

@@ -224,8 +224,8 @@ export class HostPhysicsSystem {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.combatSystem.isAlive(player.id)) continue;
 
-      const dx = player.sprite.x - x;
-      const dy = player.sprite.y - y;
+      const dx = player.x - x;
+      const dy = player.y - y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > radius) continue;
 
@@ -347,8 +347,8 @@ export class HostPhysicsSystem {
       dirY:    dy / len,
       vNorm,
       hitIds: new Set(),
-      lastGroundX: player.sprite.x,
-      lastGroundY: player.sprite.y,
+      lastGroundX: player.x,
+      lastGroundY: player.y,
     });
     this.dashBurstPlayers.add(playerId);
   }
@@ -515,14 +515,14 @@ export class HostPhysicsSystem {
 
     for (const player of this.playerManager.getAllPlayers()) {
       // Entity kann während Round-/Scene-Teardown noch im Manager stehen,
-      // obwohl Phaser den Sprite bzw. dessen Arcade-Body bereits entfernt hat.
-      const playerBody = player.sprite.body as Phaser.Physics.Arcade.Body | null;
-      if (!player.sprite.active || !playerBody) continue;
+      // obwohl Phaser den Koerper bereits entfernt hat.
+      const playerBody = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
+      if (!player.active || !playerBody) continue;
 
       // Lazy: Collider mit Felsen anlegen
       if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.sprite, this.rockGroup);
+        const c = this.scene.physics.add.collider(player.physicsProxy, this.rockGroup);
         // Wenn Spieler bereits burrowed ist → sofort deaktivieren
         if (this.burrowedPlayers.has(player.id)) c.active = false;
         existing.push(c);
@@ -533,7 +533,7 @@ export class HostPhysicsSystem {
       // Lazy: Collider mit Baumstümpfen anlegen
       if (this.trunkGroup && !this.trunkCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.sprite, this.trunkGroup);
+        const c = this.scene.physics.add.collider(player.physicsProxy, this.trunkGroup);
         if (this.burrowedPlayers.has(player.id)) c.active = false;
         existing.push(c);
         this.playerColliders.set(player.id, existing);
@@ -543,7 +543,7 @@ export class HostPhysicsSystem {
       // Lazy: Collider mit Coop-Defense-Basen anlegen
       if (this.baseGroup && !this.baseCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.sprite, this.baseGroup);
+        const c = this.scene.physics.add.collider(player.physicsProxy, this.baseGroup);
         if (this.burrowedPlayers.has(player.id)) c.active = false;
         existing.push(c);
         this.playerColliders.set(player.id, existing);
@@ -557,7 +557,7 @@ export class HostPhysicsSystem {
       const forcedMovement = this.forcedMovement.get(player.id);
 
       if (movementLocked) {
-        const factor = this.getTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, now);
+        const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);
         playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
         continue;
       }
@@ -565,8 +565,8 @@ export class HostPhysicsSystem {
       if (forcedMovement) {
         const factor = this.getTimeBubbleFactor(
           player.id,
-          player.sprite.x,
-          player.sprite.y,
+          player.x,
+          player.y,
           now,
         );
         playerBody.setVelocity(
@@ -578,7 +578,7 @@ export class HostPhysicsSystem {
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {
-        const factor = this.getTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, now);
+        const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);
         playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
         continue;
       }
@@ -626,22 +626,22 @@ export class HostPhysicsSystem {
               `dash:${player.id}:${dash.startMs}`,
               dash.lastGroundX,
               dash.lastGroundY,
-              player.sprite.x,
-              player.sprite.y,
+              player.x,
+              player.y,
               groundFireDurationMs,
               now,
             );
-            dash.lastGroundX = player.sprite.x;
-            dash.lastGroundY = player.sprite.y;
+            dash.lastGroundX = player.x;
+            dash.lastGroundY = player.y;
           }
           const impactDamage = this.dashImpactDamageResolver?.(player.id) ?? 0;
           const impactKnockback = this.dashImpactKnockbackResolver?.(player.id) ?? 0;
           if (impactDamage > 0) {
             for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
               if (dash.hitIds.has(enemy.id) || !enemy.sprite.active) continue;
-              if (Phaser.Math.Distance.Between(player.sprite.x, player.sprite.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
+              if (Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
               dash.hitIds.add(enemy.id);
-              this.combatSystem.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.sprite.x, sourceY: player.sprite.y });
+              this.combatSystem.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.x, sourceY: player.y });
               this.addRecoil(enemy.id, dirX * impactKnockback, dirY * impactKnockback, 180, player.id);
             }
           }
@@ -675,8 +675,8 @@ export class HostPhysicsSystem {
           baseVy = dirY * dash.vNorm * speedFactor;
           const factor = this.getTimeBubbleFactor(
             player.id,
-            player.sprite.x,
-            player.sprite.y,
+            player.x,
+            player.y,
             now,
           );
           playerBody.setVelocity(
@@ -714,8 +714,8 @@ export class HostPhysicsSystem {
 
       const factor = this.getTimeBubbleFactor(
         player.id,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         now,
       );
       playerBody.setVelocity(

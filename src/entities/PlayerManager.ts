@@ -152,6 +152,19 @@ export class PlayerManager implements OwnerVisualSource {
     this.localPlayerId = id;
   }
 
+  /**
+   * Ob neue Figuren ueberhaupt sichtbar entstehen.
+   *
+   * Ohne lokale World-Presentation bekommt eine Figur nur ihre Runtime - Position,
+   * Ausrichtung und Koerper. Ein Host, der eine Shared World simuliert ohne sie darzustellen,
+   * baut so keinen Figur-Render-Tree auf.
+   */
+  private resolveVisualsEnabled: () => boolean = () => true;
+
+  setVisualsEnabledResolver(resolve: () => boolean): void {
+    this.resolveVisualsEnabled = resolve;
+  }
+
   /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Entities durch. */
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
@@ -210,6 +223,7 @@ export class PlayerManager implements OwnerVisualSource {
       spawn.y,
       this.localPlayerId !== null && this.resolveIsEnemy(profile.id),
       this.lighting,
+      { visuals: this.resolveVisualsEnabled() },
     );
     // Die Beleuchtung geht ueber den Konstruktor, der Brandcontroller ueber den Setter – beide
     // sind scene-lifetime und muessen auch bei spaeter dazukommenden Spielern anliegen.
@@ -252,7 +266,7 @@ export class PlayerManager implements OwnerVisualSource {
   getOwnerVisualState(ownerId: string): OwnerVisualState | null {
     const player = this.players.get(ownerId);
     if (!player) return null;
-    return { x: player.sprite.x, y: player.sprite.y, color: player.color, visible: player.sprite.visible };
+    return { x: player.x, y: player.y, color: player.color, visible: player.displayObject?.visible ?? false };
   }
 
   /**
@@ -399,10 +413,10 @@ export class PlayerManager implements OwnerVisualSource {
     // dieselbe Spawn-Zelle wählen. Team-Filterung gehört nur ins Scoring
     // (Distanz zu Gegnern in evaluateSpawnCandidate), nicht in die Hartsperre.
     for (const p of this.players.values()) {
-      if (!p.sprite.active) continue;
+      if (!p.active) continue;
       if (requestingPlayerId && p.id === requestingPlayerId) continue;
-      const gx = Math.floor((p.sprite.x - this.metrics.offsetX) / CELL_SIZE);
-      const gy = Math.floor((p.sprite.y - this.metrics.offsetY) / CELL_SIZE);
+      const gx = Math.floor((p.x - this.metrics.offsetX) / CELL_SIZE);
+      const gy = Math.floor((p.y - this.metrics.offsetY) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 
@@ -555,9 +569,9 @@ export class PlayerManager implements OwnerVisualSource {
     let nearestOpponentDistance = Number.POSITIVE_INFINITY;
     for (const player of this.players.values()) {
       if (requestingPlayerId && player.id === requestingPlayerId) continue;
-      if (!player.sprite.active) continue;
+      if (!player.active) continue;
       if (spawnContext.isRelevantOpponent && !spawnContext.isRelevantOpponent(player.id)) continue;
-      const distance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, player.sprite.x, player.sprite.y);
+      const distance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, player.x, player.y);
       nearestOpponentDistance = Math.min(nearestOpponentDistance, distance);
     }
 

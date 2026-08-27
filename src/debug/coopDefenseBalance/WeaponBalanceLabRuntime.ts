@@ -254,7 +254,7 @@ export class WeaponBalanceLabRuntime {
     const player = ctx.playerManager.getPlayer(playerId);
     const target = [...this.targetPositions.values()][Math.floor(this.targetPositions.size / 2)];
     if (!active || !player || !target || !ctx.loadoutManager) return;
-    const angle = Math.atan2(target.y - player.sprite.y, target.x - player.sprite.x);
+    const angle = Math.atan2(target.y - player.y, target.x - player.x);
     const result = ctx.loadoutManager.use(
       active.request.slot,
       playerId,
@@ -264,8 +264,8 @@ export class WeaponBalanceLabRuntime {
       Date.now(),
       this.shotSequence++,
       { inputStarted: !this.hasFired },
-      player.sprite.x,
-      player.sprite.y,
+      player.x,
+      player.y,
     );
     if (result.ok) {
       this.hasFired = true;

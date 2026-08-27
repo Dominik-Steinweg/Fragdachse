@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -28,14 +29,14 @@ describe('CombatSystem Chain Lightning – Runtime/Shared Resolver Parity', () =
   it('keeps primary exclusion, nearest-first tie order, 1-based falloff, chain damage kind and resources', () => {
     const enemyManager = {
       getAllEnemies: () => [
-        { id: 'primary', sprite: { x: 10, y: 0 } },
-        { id: 'enemy_next', sprite: { x: 35, y: 0 } },
+        fakeEntity({ id: 'primary', x: 10, y: 0 }),
+        fakeEntity({ id: 'enemy_next', x: 35, y: 0 }),
       ],
       getEnemy: () => undefined,
       hasEnemy: () => false,
     };
     const playerManager = {
-      getAllPlayers: () => [{ id: 'player_equal', sprite: { x: 35, y: 0 } }],
+      getAllPlayers: () => [fakeEntity({ id: 'player_equal', x: 35, y: 0 })],
     };
     const projectileManager = { getActiveProjectiles: () => [] };
     const bridge = {

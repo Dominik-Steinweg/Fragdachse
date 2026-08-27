@@ -439,7 +439,7 @@ export class CoopDefenseItemRuntimeSystem {
    * Spieler das Affix, wird der Gegner-Iterator gar nicht aufgerufen.
    */
   updateSurroundedPlayers(
-    players: readonly { id: string; sprite: { x: number; y: number } }[],
+    players: readonly { id: string; x: number; y: number }[],
     enemies: CoopDefenseSurroundedEnemySource | null,
     isPlayerAlive: (playerId: string) => boolean,
     isEnemyAlive: (enemyId: string) => boolean,
@@ -472,8 +472,8 @@ export class CoopDefenseItemRuntimeSystem {
         for (let index = 0; index < players.length; index += 1) {
           if (this.surroundedEligible[index] === 0 || this.surroundedCounts[index] >= requiredCount) continue;
           const player = players[index];
-          const dx = enemy.sprite.x - player.sprite.x;
-          const dy = enemy.sprite.y - player.sprite.y;
+          const dx = enemy.sprite.x - player.x;
+          const dy = enemy.sprite.y - player.y;
           if (dx * dx + dy * dy <= radiusSq) this.surroundedCounts[index] += 1;
         }
       });

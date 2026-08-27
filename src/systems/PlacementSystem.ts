@@ -745,8 +745,8 @@ export class PlacementSystem {
 
   private isPlayerOccupyingCell(gx: number, gy: number): boolean {
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active) continue;
-      const cell = this.worldToGrid(player.sprite.x, player.sprite.y);
+      if (!player.active) continue;
+      const cell = this.worldToGrid(player.x, player.y);
       if (cell.gridX === gx && cell.gridY === gy) return true;
     }
     return false;

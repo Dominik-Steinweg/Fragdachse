@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -42,15 +43,11 @@ describe('Inferno Colossus void fire chunks', () => {
     const sampledInterval = ability.intervalMinMs
       + Math.floor(0.5 * (ability.intervalMaxMs - ability.intervalMinMs + 1));
     const firstBurstAt = 1_000 + sampledInterval;
-    const enemy = {
-      id: 'boss-1',
+    const enemy = fakeEntity({ id: 'boss-1',
       kind: 'inferno-colossus',
-      faction: 'hostile',
-      sprite: { active: true, x: 520, y: 360 },
-      getHp: () => 1_200,
+      faction: 'hostile', active: true, x: 520, y: 360, getHp: () => 1_200,
       getCollisionRadius: () => 34,
-      isBurrowed: () => false,
-    } as unknown as EnemyEntity;
+      isBurrowed: () => false }) as unknown as EnemyEntity;
     const enemyManager = {
       getAllEnemies: () => [enemy],
     } as unknown as EnemyManager;

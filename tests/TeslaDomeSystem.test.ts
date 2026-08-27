@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -66,7 +67,7 @@ function makeTurretConfig(targetTypes: readonly TeslaDomeTargetType[]): TeslaCon
 }
 
 function makeSystem(bases: readonly TestBase[] = []) {
-  const owner = { id: 'player-1', sprite: { x: 0, y: 0, active: true } };
+  const owner = fakeEntity({ id: 'player-1', x: 0, y: 0, active: true });
   const enemies: { id: string; x: number; y: number }[] = [];
   const damageHandler = vi.fn();
   const lineOfSight = vi.fn(() => true);

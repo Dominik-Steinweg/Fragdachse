@@ -96,8 +96,8 @@ export class CaptureTheBeerSystem {
       const carrier = this.playerManager.getPlayer(playerId);
       beer.holderId = null;
       beer.state = 'dropped';
-      beer.x = x ?? carrier?.sprite.x ?? beer.x;
-      beer.y = y ?? carrier?.sprite.y ?? beer.y;
+      beer.x = x ?? carrier?.x ?? beer.x;
+      beer.y = y ?? carrier?.y ?? beer.y;
       beer.pickupBlockedByPlayerId = playerId;
       this.emitFx({
         kind: 'drop',
@@ -165,7 +165,7 @@ export class CaptureTheBeerSystem {
     for (const beer of this.state.beers) {
       if (!beer.pickupBlockedByPlayerId) continue;
       const player = this.playerManager.getPlayer(beer.pickupBlockedByPlayerId);
-      if (!player || !this.isPlayerTouchingBeer(player.sprite.getBounds(), beer)) {
+      if (!player || !this.isPlayerTouchingBeer(player.getBounds(), beer)) {
         beer.pickupBlockedByPlayerId = null;
       }
     }
@@ -187,7 +187,7 @@ export class CaptureTheBeerSystem {
       if (beer.state !== 'carried' || !beer.holderId) continue;
       const carrier = this.playerManager.getPlayer(beer.holderId);
       if (!carrier) continue;
-      const position = this.resolveCarrierPosition(carrier.sprite.x, carrier.sprite.y);
+      const position = this.resolveCarrierPosition(carrier.x, carrier.y);
       beer.x = position.x;
       beer.y = position.y;
     }
@@ -203,7 +203,7 @@ export class CaptureTheBeerSystem {
         if (!player.body.enable) continue;
         if (!this.canPlayerInteract(player.id)) continue;
         if (beer.pickupBlockedByPlayerId === player.id) continue;
-        if (!this.isPlayerTouchingBeer(player.sprite.getBounds(), beer)) continue;
+        if (!this.isPlayerTouchingBeer(player.getBounds(), beer)) continue;
 
         const teamId = bridge.getPlayerTeam(player.id);
         if (!teamId) continue;
@@ -216,7 +216,7 @@ export class CaptureTheBeerSystem {
           beer.holderId = player.id;
           beer.state = 'carried';
           beer.pickupBlockedByPlayerId = null;
-          const position = this.resolveCarrierPosition(player.sprite.x, player.sprite.y);
+          const position = this.resolveCarrierPosition(player.x, player.y);
           beer.x = position.x;
           beer.y = position.y;
         }
@@ -290,10 +290,10 @@ export class CaptureTheBeerSystem {
     if (!player || !player.body.enable) return false;
 
     const bounds = getCaptureTheBeerBaseWorldBounds(teamId);
-    return player.sprite.x >= bounds.x
-      && player.sprite.x <= bounds.x + bounds.width
-      && player.sprite.y >= bounds.y
-      && player.sprite.y <= bounds.y + bounds.height;
+    return player.x >= bounds.x
+      && player.x <= bounds.x + bounds.width
+      && player.y >= bounds.y
+      && player.y <= bounds.y + bounds.height;
   }
 
   private emitFx(event: CaptureTheBeerFxEvent): void {

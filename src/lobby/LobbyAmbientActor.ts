@@ -127,15 +127,15 @@ export class LobbyAmbientActor {
   }
 
   get x(): number {
-    return this.badger?.sprite.x ?? this.enemy?.sprite.x ?? 0;
+    return this.badger?.x ?? this.enemy?.sprite.x ?? 0;
   }
 
   get y(): number {
-    return this.badger?.sprite.y ?? this.enemy?.sprite.y ?? 0;
+    return this.badger?.y ?? this.enemy?.sprite.y ?? 0;
   }
 
   get visible(): boolean {
-    return this.badger?.sprite.visible ?? this.enemy?.sprite.visible ?? false;
+    return this.badger?.displayObject?.visible ?? this.enemy?.sprite.visible ?? false;
   }
 
   /** Neutraler Glow beziehungsweise Tint – speist die geteilte Renderkette. */
@@ -184,7 +184,7 @@ export class LobbyAmbientActor {
    * Actor ausserhalb der Arena noch nicht zu sehen ist.
    */
   setStageVisible(visible: boolean): void {
-    this.badger?.sprite.setVisible(visible);
+    this.badger?.displayObject?.setVisible(visible);
     this.badger?.syncBar();
     this.enemy?.sprite.setVisible(visible);
   }

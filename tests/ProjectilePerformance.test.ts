@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -213,12 +214,9 @@ describe('projectile performance paths', () => {
       setVelocity: vi.fn(),
       enable: true,
     } as unknown as Phaser.Physics.Arcade.Body;
-    const tracked = {
-      ignoreRockIndex: 0,
+    const tracked = fakeEntity({ ignoreRockIndex: 0,
       lastX: 1,
-      lastY: 16,
-      sprite: { x: 2, y: 16, displayWidth: 5 },
-      body,
+      lastY: 16, x: 2, y: 16, displayWidth: 5, body,
       bounceCount: 0,
       maxBounces: 0,
       damage: 7,
@@ -231,8 +229,7 @@ describe('projectile performance paths', () => {
       isGrenade: false,
       isFlame: false,
       isBfg: false,
-      colliders: [],
-    } as unknown as TrackedProjectile;
+      colliders: [] }) as unknown as TrackedProjectile;
     const rockHits: number[] = [];
     manager.setRockHitCallback((rockId) => rockHits.push(rockId));
 
@@ -249,15 +246,11 @@ describe('projectile performance paths', () => {
       physics: { world: { off: vi.fn() } },
     } as unknown as Phaser.Scene;
     const manager = new ProjectileManager(scene);
-    const tracked = {
-      id: 1,
-      sprite: { x: 0, y: 0, displayWidth: 16, destroy: vi.fn() },
-      body: {},
+    const tracked = fakeEntity({ id: 1, x: 0, y: 0, displayWidth: 16, destroy: vi.fn(), body: {},
       boundsListener: vi.fn(),
       colliders: [],
       hitObstacleIds: new Set([4]),
-      hitBaseIds: new Set(['enemy-base']),
-    } as unknown as TrackedProjectile;
+      hitBaseIds: new Set(['enemy-base']) }) as unknown as TrackedProjectile;
 
     (manager as unknown as { destroyTrackedProjectile: (projectile: TrackedProjectile) => void })
       .destroyTrackedProjectile(tracked);
@@ -333,18 +326,12 @@ describe('projectile performance paths', () => {
       activeProjectiles: Set<TrackedProjectile>;
       projectilesById: Map<number, TrackedProjectile>;
     };
-    const sprites = [7, 8].map((id) => ({
-      id,
-      sprite: {
-        x: 10,
+    const sprites = [7, 8].map((id) => (fakeEntity({ id, x: 10,
         y: 20,
         displayWidth: 8,
-        destroy: vi.fn(),
-      },
-      body: {},
+        destroy: vi.fn(), body: {},
       boundsListener: vi.fn(),
-      colliders: [],
-    } as unknown as TrackedProjectile));
+      colliders: [] }) as unknown as TrackedProjectile));
     for (const tracked of sprites) {
       internals.projectiles.push(tracked);
       internals.activeProjectiles.add(tracked);

@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -38,7 +39,7 @@ function makeCoordinator(): ClientUpdateCoordinator & {
   coordinator.clientUtilityOverride = null;
   coordinator.ctx = {
     playerManager: {
-      getPlayer: () => ({ sprite: { active: true, x: 0, y: 0 } }),
+      getPlayer: () => (fakeEntity({ active: true, x: 0, y: 0 })),
     },
     burrowSystem: null,
     leftPanel: { flashSlot: vi.fn() },

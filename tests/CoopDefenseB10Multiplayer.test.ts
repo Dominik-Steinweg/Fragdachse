@@ -19,17 +19,16 @@ interface FakePlayer extends CoopDefenseCarryPlayerLike {
 }
 
 function makePlayer(id: string, x = 0, y = 0): FakePlayer {
+  // Die Figur beantwortet Position und Bounds selbst; ein Sprite kommt darin nicht mehr vor.
   const player = {
     id,
     body: { enable: true },
-    sprite: {
-      x,
-      y,
-      getBounds: () => ({ x: player.sprite.x - 6, y: player.sprite.y - 6, width: 12, height: 12 }),
-    },
+    x,
+    y,
+    getBounds: () => ({ x: player.x - 6, y: player.y - 6, width: 12, height: 12 }),
     setPosition(nextX: number, nextY: number) {
-      player.sprite.x = nextX;
-      player.sprite.y = nextY;
+      player.x = nextX;
+      player.y = nextY;
     },
   } as FakePlayer;
   return player;

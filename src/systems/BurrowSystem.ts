@@ -216,7 +216,7 @@ export class BurrowSystem {
       const damage = Math.floor(state.stuckDamageAccum);
       const player = this.playerMgr.getPlayer(id);
       this.combat.applyDamage(id, damage, true, undefined, undefined, player
-        ? { sourceX: player.sprite.x, sourceY: player.sprite.y - PLAYER_SIZE }
+        ? { sourceX: player.x, sourceY: player.y - PLAYER_SIZE }
         : undefined);
       state.stuckDamageAccum -= damage;
     }
@@ -343,7 +343,7 @@ export class BurrowSystem {
     const player = this.playerMgr.getPlayer(id);
     if (!player) return false;
 
-    const bounds = player.sprite.getBounds();
+    const bounds = player.getBounds();
 
     // Felsen-Overlap (Rechteck-Bounds)
     if (this.rockGroup) {
@@ -361,8 +361,8 @@ export class BurrowSystem {
       for (const child of this.trunkGroup.getChildren()) {
         if (!child.active) continue;
         const trunk = child as Phaser.GameObjects.Arc;
-        const dx    = player.sprite.x - trunk.x;
-        const dy    = player.sprite.y - trunk.y;
+        const dx    = player.x - trunk.x;
+        const dy    = player.y - trunk.y;
         if (Math.sqrt(dx * dx + dy * dy) < TRUNK_RADIUS + PLAYER_SIZE / 2) {
           return true;
         }
@@ -390,8 +390,8 @@ export class BurrowSystem {
     const origin = this.playerMgr.getPlayer(id);
     if (!origin) return;
 
-    const ox = origin.sprite.x;
-    const oy = origin.sprite.y;
+    const ox = origin.x;
+    const oy = origin.y;
     const shockwaveRadius = this.shockwaveRadiusResolver?.(id) ?? SHOCKWAVE_RADIUS;
     const shockwaveDamage = this.shockwaveDamageResolver?.(id) ?? SHOCKWAVE_DAMAGE;
 
@@ -408,8 +408,8 @@ export class BurrowSystem {
       if (other.id === id) continue;
       if (!this.combat.isAlive(other.id)) continue;
 
-      const dx   = other.sprite.x - ox;
-      const dy   = other.sprite.y - oy;
+      const dx   = other.x - ox;
+      const dy   = other.y - oy;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist < shockwaveRadius && dist > 0) {

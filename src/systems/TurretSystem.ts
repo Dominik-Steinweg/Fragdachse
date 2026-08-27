@@ -304,16 +304,16 @@ export class TurretSystem {
     };
 
     if (turret.targetMode !== 'enemies') for (const player of this.playerManager.getAllPlayers()) {
-      if (excluded && player.sprite.x === excluded.x && player.sprite.y === excluded.y) continue;
+      if (excluded && player.x === excluded.x && player.y === excluded.y) continue;
       if (player.id === turret.ownerId) continue;
-      if (!player.sprite.active) continue;
+      if (!player.active) continue;
       if (!this.combatSystem.isAlive(player.id)) continue;
       if (this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(turret.ownerId, player.id)) continue;
 
       // Fokusziele werden nur priorisiert; Reichweite und Sichtlinie bleiben verbindlich.
       consider(
-        { x: player.sprite.x, y: player.sprite.y },
+        { x: player.x, y: player.y },
         focus?.targetType === 'enemy' && focus.targetId === player.id ? 0 : 1,
       );
     }

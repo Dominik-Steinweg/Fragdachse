@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it } from 'vitest';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 import { COOP_DEFENSE_CLASS_DEFINITIONS, getCoopDefenseClassDefinition } from '../src/config/coopDefenseClasses';
@@ -259,11 +260,8 @@ describe('Inspector repair drone', () => {
     };
     const system = new RepairDroneSystem(
       {
-        getAllPlayers: () => [{
-          id: 'inspector',
-          color: 0x55ff99,
-          sprite: { active: true, x: 0, y: 0 },
-        }],
+        getAllPlayers: () => [fakeEntity({ id: 'inspector',
+          color: 0x55ff99, active: true, x: 0, y: 0 })],
       } as never,
       { isAlive: () => true } as never,
       placement as never,

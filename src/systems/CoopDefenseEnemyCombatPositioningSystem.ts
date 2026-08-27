@@ -105,16 +105,16 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
       });
     } else {
       for (const player of this.playerManager.getAllPlayers()) {
-        if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
+        if (!player.active || !this.combatSystem.isAlive(player.id)) continue;
         if (this.combatSystem.isBurrowed(player.id)) continue;
         if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-        const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+        const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
         if (best && distance >= best.distance) continue;
         if (
           positioning.requireLineOfSight
-          && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)
+          && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.x, player.y)
         ) continue;
-        best = { x: player.sprite.x, y: player.sprite.y, distance };
+        best = { x: player.x, y: player.y, distance };
       }
     }
 

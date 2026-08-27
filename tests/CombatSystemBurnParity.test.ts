@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -30,7 +31,7 @@ import { CombatSystem } from '../src/systems/CombatSystem';
 describe('CombatSystem & BurnStateMachine Parity', () => {
   function createTestSetup() {
     const playerManagerMock: any = {
-      getPlayer: vi.fn().mockReturnValue({ sprite: { x: 0, y: 0 }, body: { enable: true } }),
+      getPlayer: vi.fn().mockReturnValue(fakeEntity({ x: 0, y: 0, body: { enable: true } })),
       getAllPlayers: vi.fn().mockReturnValue([]),
     };
     const projectileManagerMock: any = {

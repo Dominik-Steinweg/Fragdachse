@@ -296,13 +296,13 @@ export class HostUpdateCoordinator {
       );
       for (const player of players) {
         const alive = this.ctx.combatSystem.isAlive(player.id);
-        const glutwandererBursts = runtime.trackMovement(player.id, player.sprite.x, player.sprite.y);
-        if (glutwandererBursts <= 0 || !alive || !player.sprite.active) continue;
+        const glutwandererBursts = runtime.trackMovement(player.id, player.x, player.y);
+        if (glutwandererBursts <= 0 || !alive || !player.active) continue;
         for (let burstIndex = 0; burstIndex < glutwandererBursts; burstIndex += 1) {
           this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
             player.id,
-            player.sprite.x,
-            player.sprite.y,
+            player.x,
+            player.y,
             {
               count: runtime.getGlutwandererChunkCount(player.id),
               searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
@@ -572,8 +572,8 @@ export class HostUpdateCoordinator {
           if (player) {
             const profile = bridge.getConnectedPlayers().find(p => p.id === id);
             return {
-              x:        player.sprite.x,
-              y:        player.sprite.y,
+              x:        player.x,
+              y:        player.y,
               alive:    this.ctx.combatSystem.isAlive(id),
               burrowed: this.ctx.burrowSystem?.isBurrowed(id) ?? false,
               color:    profile?.colorHex ?? 0xffffff,
@@ -607,8 +607,8 @@ export class HostUpdateCoordinator {
     if (fireDamageTick) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         if (!this.ctx.combatSystem.isAlive(player.id)) continue;
-        const radius = Math.max(player.sprite.displayWidth, player.sprite.displayHeight) * 0.5;
-        for (const contact of this.ctx.fireSystem.collectContacts(player.sprite.x, player.sprite.y, radius, now)) {
+        const radius = player.getHitRadius();
+        for (const contact of this.ctx.fireSystem.collectContacts(player.x, player.y, radius, now)) {
           if (contact.damageTarget === 'enemies') continue;
           if (contact.damagePerTick > 0 && player.id !== contact.ownerId) {
             this.ctx.combatSystem.applyDamage(
@@ -784,7 +784,7 @@ export class HostUpdateCoordinator {
       const alive    = this.ctx.combatSystem.isAlive(player.id);
       const wasAlive = this.prevAliveStates.get(player.id) ?? false;
       if (alive && !wasAlive && !countdownActive) {
-        this.audio?.playSound('sfx_player_spawn', player.sprite.x, player.sprite.y, player.id);
+        this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);
       }
       if (!countdownActive) this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp, maxHp);
@@ -797,7 +797,7 @@ export class HostUpdateCoordinator {
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const wasStealthed = this.prevStealthStates.get(player.id) ?? false;
       if (isStealthed !== wasStealthed) {
-        this.effects?.playStealthTransitionEffect(player.sprite.x, player.sprite.y, !isStealthed, player.color);
+        this.effects?.playStealthTransitionEffect(player.x, player.y, !isStealthed, player.color);
       }
       player.setDecoyStealth(isStealthed);
       this.prevStealthStates.set(player.id, isStealthed);
@@ -810,7 +810,7 @@ export class HostUpdateCoordinator {
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
       const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;
       if (dashPhase === 1 && prevDashPhase === 0) {
-        this.audio?.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
+        this.audio?.playSound('sfx_dash', player.x, player.y, player.id);
       }
       // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
       // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
@@ -1114,8 +1114,8 @@ export class HostUpdateCoordinator {
 
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
-        x: Math.round(player.sprite.x),
-        y: Math.round(player.sprite.y),
+        x: Math.round(player.x),
+        y: Math.round(player.y),
         rot: playerInput?.aim ?? 0,
         hp,
         maxHp,
@@ -1243,8 +1243,8 @@ export class HostUpdateCoordinator {
       countdownActive || weaponBalanceLabActive,
       this.ctx.playerManager.getAllPlayers().map((player) => ({
         playerId: player.id,
-        x: player.sprite.x,
-        y: player.sprite.y,
+        x: player.x,
+        y: player.y,
         eligible: bridge.canPlayerAct(player.id) && this.ctx.combatSystem.isAlive(player.id),
       })),
     );
@@ -1769,8 +1769,8 @@ export class HostUpdateCoordinator {
       if (player.id === proj.ownerId) continue;
       if (!this.ctx.combatSystem.isAlive(player.id)) continue;
       if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
-      if (Phaser.Math.Distance.Squared(originX, originY, player.sprite.x, player.sprite.y) > radiusSquared) continue;
-      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, player.sprite.x, player.sprite.y)) continue;
+      if (Phaser.Math.Distance.Squared(originX, originY, player.x, player.y) > radiusSquared) continue;
+      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, player.x, player.y)) continue;
       if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
       if (this.ctx.energyShieldSystem?.tryBlockDamage({
         targetId: player.id,
@@ -1788,7 +1788,7 @@ export class HostUpdateCoordinator {
         allowTeamDamage: proj.allowTeamDamage,
         damageKind: 'direct',
       });
-      lines.push({ sx: originX, sy: originY, ex: player.sprite.x, ey: player.sprite.y });
+      lines.push({ sx: originX, sy: originY, ex: player.x, ey: player.y });
     }
     return lines;
   }
@@ -2023,7 +2023,7 @@ export class HostUpdateCoordinator {
 
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       if (!this.ctx.combatSystem.isAlive(player.id)) continue;
-      const bounds = player.sprite.getBounds();
+      const bounds = player.getBounds();
       applyFromFootprint(
         { targetType: 'player', targetId: player.id },
         { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height },
@@ -2239,7 +2239,7 @@ export class HostUpdateCoordinator {
       const now = this.scene.time.now;
       const nextGhost = this.dashTrailTimers.get(id) ?? 0;
       if (now >= nextGhost) {
-        this.effects?.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5, player.sprite.rotation);
+        this.effects?.playDashTrailGhost(player.x, player.y, player.color, 0.5, player.rotation);
         this.dashTrailTimers.set(id, now + 50);
       }
     } else if (curPhase === 2) {
@@ -2263,32 +2263,32 @@ export class HostUpdateCoordinator {
 
     // Burrow loop: start when entering underground, stop when leaving
     if (phase === 'underground' && previousPhase !== 'underground') {
-      const handle = this.audio?.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, player.id);
+      const handle = this.audio?.startLoop('sfx_burrowed', player.x, player.y, player.id);
       if (handle) this.burrowLoopHandles.set(player.id, handle);
     } else if (phase !== 'underground' && previousPhase === 'underground') {
       const handle = this.burrowLoopHandles.get(player.id);
       if (handle) { this.audio?.stopLoop(handle); this.burrowLoopHandles.delete(player.id); }
     } else if (phase === 'underground') {
       const handle = this.burrowLoopHandles.get(player.id);
-      if (handle) this.audio?.updateLoopPosition(handle, player.sprite.x, player.sprite.y, player.id);
+      if (handle) this.audio?.updateLoopPosition(handle, player.x, player.y, player.id);
     }
 
     if (shouldAnimate) {
-      this.effects?.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);
+      this.effects?.playBurrowPhaseEffect(player.x, player.y, phase);
     }
     player.setBurrowPhase(phase, shouldAnimate);
-    this.effects?.syncBurrowState(player.id, phase, player.sprite);
+    if (player.displayObject) this.effects?.syncBurrowState(player.id, phase, player.displayObject);
     this.prevBurrowPhases.set(player.id, phase);
   }
 
   private checkLocalPickup(powerups: import('../../types').SyncedPowerUp[]): void {
     const localId = bridge.getLocalPlayerId();
     const player  = this.ctx.playerManager.getPlayer(localId);
-    if (!player || !player.sprite.active) return;
+    if (!player || !player.active) return;
     if (this.ctx.burrowSystem?.isBurrowed(localId)) return;
 
-    const px = player.sprite.x;
-    const py = player.sprite.y;
+    const px = player.x;
+    const py = player.y;
 
     for (const pu of powerups) {
       if (pu.pickupKind === 'objective-marker') continue;
@@ -2319,19 +2319,19 @@ export class HostUpdateCoordinator {
     if (targetCatalog) {
       const candidates: EnemyAiTargetCandidate[] = [];
       for (const player of this.ctx.playerManager.getAllPlayers()) {
-        const goal = strategicGrid?.worldToGrid(player.sprite.x, player.sprite.y);
+        const goal = strategicGrid?.worldToGrid(player.x, player.y);
         candidates.push({
           kind: 'player',
           id: player.id,
-          x: player.sprite.x,
-          y: player.sprite.y,
+          x: player.x,
+          y: player.y,
           goalCells: goal ? [goal] : [],
           resolvePosition: () => {
             const current = this.ctx.playerManager.getPlayer(player.id);
-            return current ? { x: current.sprite.x, y: current.sprite.y } : null;
+            return current ? { x: current.x, y: current.y } : null;
           },
           isTargetable: () => (
-            player.sprite.active
+            player.active
             && this.ctx.combatSystem.isAlive(player.id)
             && !(this.ctx.burrowSystem?.isBurrowed(player.id) ?? false)
             && !this.ctx.decoySystem.isStealthed(player.id)
@@ -2420,11 +2420,11 @@ export class HostUpdateCoordinator {
       });
     } else {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
-        if (!player.sprite.active) continue;
+        if (!player.active) continue;
         if (!this.ctx.combatSystem.isAlive(player.id)) continue;
         if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
         if (this.ctx.decoySystem.isStealthed(player.id)) continue;
-        const goalCell = playerFlowFieldService.worldToGrid(player.sprite.x, player.sprite.y);
+        const goalCell = playerFlowFieldService.worldToGrid(player.x, player.y);
         if (!goalCell) continue;
         playerGoalCells.push(goalCell);
       }

@@ -764,7 +764,7 @@ export class ArenaLifecycleCoordinator {
     if (requiredIds.length === 0) return false;
     const allInitialPlayersSpawned = requiredIds.every((id) => {
       const player = this.ctx.playerManager.getPlayer(id);
-      return player?.sprite.active === true && this.ctx.combatSystem.isAlive(id);
+      return player?.active === true && this.ctx.combatSystem.isAlive(id);
     });
     if (!allInitialPlayersSpawned) return false;
 
@@ -1322,6 +1322,10 @@ export class ArenaLifecycleCoordinator {
     // Die World laeuft ab hier. Wer an ihr teilnimmt, entscheidet der Host sofort - sonst
     // haette die neue Instanz einen Frame lang gar keinen Teilnahmestand.
     this.hostSyncWorldParticipation();
+    // Figuren entstehen nur sichtbar, wenn dieser Peer die World ueberhaupt darstellt.
+    this.ctx.playerManager.setVisualsEnabledResolver(
+      () => this.getLocalWorldPresentation().required,
+    );
     this.ctx.combatSystem.setWorldMetrics(world.metrics);
     this.scene.physics.world.setBounds(
       world.metrics.offsetX,
@@ -1407,6 +1411,8 @@ export class ArenaLifecycleCoordinator {
     const builder = new ArenaBuilder(this.scene);
     const persistentBaseSite = world.persistentBaseSite;
     this.ctx.arenaResult = builder.buildDynamic(layout, {
+      // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
+      presentation: this.getLocalWorldPresentation().required,
       enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
       persistentBaseGravel: persistentBaseSite
         ? {
@@ -1581,7 +1587,7 @@ export class ArenaLifecycleCoordinator {
           ),
           getPlayerPosition: (playerId) => {
             const player = this.ctx.playerManager.getPlayer(playerId);
-            return player ? { x: player.sprite.x, y: player.sprite.y } : null;
+            return player ? { x: player.x, y: player.y } : null;
           },
           getPlayerClassId: (playerId) => this.ctx.coopDefensePlayerModifierSystem?.getClassId(playerId) ?? null,
         })
@@ -1871,8 +1877,8 @@ export class ArenaLifecycleCoordinator {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(
           player.id,
-          player.sprite.x,
-          player.sprite.y,
+          player.x,
+          player.y,
         );
       }
       bridge.publishCoopDefenseMissionProgressPresentationState(
@@ -1986,7 +1992,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.rockGroup,
       this.ctx.arenaResult.trunkGroup,
     );
-    this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockPhysicsProxies, this.ctx.arenaResult.trunkObjects);
+    this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockPhysicsProxies, this.ctx.arenaResult.trunkBodies);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
     this.ctx.combatSystem.setBarrierObstacles(this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null);
     // Dieselbe Index-Instanz, damit Sichtlinie und Projektil-Kollision denselben Stand sehen.
@@ -2018,7 +2024,7 @@ export class ArenaLifecycleCoordinator {
       for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
         if (rock.kind !== 'pedestal') fireObstacleIndex.addPlaceableRock(rock.id, rock.gridX, rock.gridY);
       }
-      for (const trunk of this.ctx.arenaResult?.trunkObjects ?? []) {
+      for (const trunk of this.ctx.arenaResult?.trunkBodies ?? []) {
         if (trunk?.active) fireObstacleIndex.addLineOfSightBounds(trunk.getBounds());
       }
       for (const base of this.ctx.baseManager?.getBases() ?? []) {
@@ -2656,8 +2662,8 @@ export class ArenaLifecycleCoordinator {
         if (hit.knockback <= 0) return;
         if (hit.type !== 'enemies' && hit.type !== 'players') return;
         const dome = this.ctx.playerManager.getPlayer(hit.ownerId);
-        const dirX = hit.x - (dome?.sprite.x ?? hit.x);
-        const dirY = hit.y - (dome?.sprite.y ?? hit.y);
+        const dirX = hit.x - (dome?.x ?? hit.x);
+        const dirY = hit.y - (dome?.y ?? hit.y);
         const length = Math.hypot(dirX, dirY);
         const nx = length > 0.001 ? dirX / length : 0;
         const ny = length > 0.001 ? dirY / length : -1;
@@ -2853,7 +2859,7 @@ export class ArenaLifecycleCoordinator {
         if (utilityType === 'decoy') {
           this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
           const player = this.ctx.playerManager.getPlayer(playerId);
-          if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
+          if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.x, player.y, playerId);
         }
       });
       this.ctx.loadoutManager.setUtilityUsedObserver((playerId, utilityType) => {
@@ -3165,7 +3171,7 @@ export class ArenaLifecycleCoordinator {
           ) ?? false,
           getAlivePlayerPositions: () => this.ctx.playerManager.getAllPlayers()
             .filter((player) => this.ctx.combatSystem.isAlive(player.id))
-            .map((player) => ({ x: player.sprite.x, y: player.sprite.y })),
+            .map((player) => ({ x: player.x, y: player.y })),
           isProtectedBasePoint: (x, y) => isPointNearBaseRegion(
             x,
             y,
@@ -3400,7 +3406,7 @@ export class ArenaLifecycleCoordinator {
     // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
     this.ctx.lightOccluderIndex = new LightOccluderIndex({
       rocks: () => this.ctx.arenaResult?.rockPhysicsProxies ?? null,
-      trunks: () => this.ctx.arenaResult?.trunkObjects ?? null,
+      trunks: () => this.ctx.arenaResult?.trunkBodies ?? null,
       baseCells: () => this.ctx.baseManager?.getObstacleRectangles() ?? null,
       barrierCells: () => this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
@@ -4582,7 +4588,7 @@ export class ArenaLifecycleCoordinator {
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
-      || !player.sprite.active
+      || !player.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)
     ) {
@@ -4608,8 +4614,8 @@ export class ArenaLifecycleCoordinator {
         utilityConfig,
         playerId,
         player.color,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         targetX,
         targetY,
         Date.now(),
@@ -4620,8 +4626,8 @@ export class ArenaLifecycleCoordinator {
         definition.maxHp * hpMultiplier,
         playerId,
         player.color,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         targetX,
         targetY,
         ownership,
@@ -4819,15 +4825,15 @@ export class ArenaLifecycleCoordinator {
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
-      || !player.sprite.active
+      || !player.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)
     ) {
       return { ok: false, reason: 'blocked' };
     }
     const cell = this.ctx.placementSystem?.getClampedTargetCell(
-      player.sprite.x,
-      player.sprite.y,
+      player.x,
+      player.y,
       targetX,
       targetY,
       COOP_DEFENSE_DISMANTLE_RANGE,
@@ -4861,7 +4867,7 @@ export class ArenaLifecycleCoordinator {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0
-      || !player?.sprite.active
+      || !player?.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
@@ -4882,7 +4888,7 @@ export class ArenaLifecycleCoordinator {
         reason: 'placeables_batch_removed',
         source: 'placeable_rock',
       });
-      this.ctx.gameAudioSystem.playSound('sfx_place_rock', player.sprite.x, player.sprite.y, playerId);
+      this.ctx.gameAudioSystem.playSound('sfx_place_rock', player.x, player.y, playerId);
     }
     return { ok: true };
   }
@@ -4957,8 +4963,8 @@ export class ArenaLifecycleCoordinator {
   private getTargetFootprint(target: TargetStatusTarget): TargetFootprint | null {
     if (target.targetType === 'player') {
       const player = this.ctx.playerManager.getPlayer(target.targetId);
-      if (!player?.sprite.active) return null;
-      const bounds = player.sprite.getBounds();
+      if (!player?.active) return null;
+      const bounds = player.getBounds();
       return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
     }
     if (target.targetType === 'enemy') {

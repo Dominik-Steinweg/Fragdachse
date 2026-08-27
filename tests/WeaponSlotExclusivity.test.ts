@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -16,11 +17,8 @@ import { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 const PLAYER_ID = 'player-1';
 
 function createManager(weapon1: WeaponConfig, weapon2: WeaponConfig) {
-  const player = {
-    id: PLAYER_ID,
-    color: 0xffffff,
-    sprite: { x: 0, y: 0, active: true },
-  };
+  const player = fakeEntity({ id: PLAYER_ID,
+    color: 0xffffff, x: 0, y: 0, active: true });
   const playerManager = { getPlayer: vi.fn(() => player) };
   const resourceSystem = { getAdrenaline: vi.fn(() => 100) };
   const manager = new LoadoutManager(
@@ -86,11 +84,8 @@ describe('host-authoritative weapon slot exclusivity', () => {
   });
 
   it('does not let an explicit autonomous energy-dome toggle get treated as a hold channel', () => {
-    const player = {
-      id: PLAYER_ID,
-      color: 0xffffff,
-      sprite: { x: 0, y: 0, active: true },
-    };
+    const player = fakeEntity({ id: PLAYER_ID,
+      color: 0xffffff, x: 0, y: 0, active: true });
     const playerManager = { getPlayer: vi.fn(() => player) };
     const resourceSystem = { getAdrenaline: vi.fn(() => 100) };
     const energyShield = new EnergyShieldSystem(

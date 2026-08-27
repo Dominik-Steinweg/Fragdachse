@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
@@ -52,20 +53,14 @@ import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { TrackedProjectile } from '../src/types';
 
 function makeEnemy(id: string, x: number) {
-  return {
-    id,
-    sprite: {
-      active: true,
+  return fakeEntity({ id, active: true,
       x,
       y: 0,
-      getBounds: () => new Phaser.Geom.Rectangle(x - 8, -8, 16, 16),
-    },
-  };
+      getBounds: () => new Phaser.Geom.Rectangle(x - 8, -8, 16, 16) });
 }
 
 function makeProjectile(piercesTargets: boolean): TrackedProjectile {
-  return {
-    id: 1,
+  return fakeEntity({ id: 1,
     ownerId: 'player-1',
     sourceId: 'TESLA_DOME',
     sourceSlot: 'weapon2',
@@ -75,15 +70,10 @@ function makeProjectile(piercesTargets: boolean): TrackedProjectile {
     piercesTargets,
     piercingHitIds: piercesTargets ? new Set<string>() : undefined,
     lastX: 0,
-    lastY: 0,
-    sprite: {
-      x: 0,
+    lastY: 0, x: 0,
       y: 0,
       // Ein bewusst breites Projektil, damit beide Gegner in einem Frame überlappen.
-      getBounds: () => new Phaser.Geom.Rectangle(-20, -6, 40, 12),
-    },
-    body: { velocity: { x: 100, y: 0 } },
-  } as unknown as TrackedProjectile;
+      getBounds: () => new Phaser.Geom.Rectangle(-20, -6, 40, 12), body: { velocity: { x: 100, y: 0 } } }) as unknown as TrackedProjectile;
 }
 
 function makeSystem(proj: TrackedProjectile, enemies: ReturnType<typeof makeEnemy>[]) {

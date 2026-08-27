@@ -783,9 +783,9 @@ export class CoopDefenseEnemyAttackSystem {
       return {
         kind: 'player',
         priority: 2,
-        distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y),
-        targetX: player.sprite.x,
-        targetY: player.sprite.y,
+        distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y),
+        targetX: player.x,
+        targetY: player.y,
         targetId: player.id,
         targetRef,
       };
@@ -833,15 +833,15 @@ export class CoopDefenseEnemyAttackSystem {
 
   private isValidPlayerTarget(enemy: EnemyEntity, playerId: string, range: number): boolean {
     const player = this.playerManager.getPlayer(playerId);
-    if (!player?.sprite.active) return false;
+    if (!player?.active) return false;
     if (!this.combatSystem.isAlive(player.id)) return false;
     if (this.combatSystem.isBurrowed(player.id)) return false;
     if (this.targetCatalog?.isTargetValid({ kind: 'player', id: playerId }) === false) return false;
     if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) return false;
 
-    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
     if (distance > range + PLAYER_SIZE * 0.5) return false;
-    return this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+    return this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
   }
 
   private findTrainTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {

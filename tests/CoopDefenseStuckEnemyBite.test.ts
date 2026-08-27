@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 // Phaser braucht ein DOM; für die reine Zielauswahl reichen die beiden Geometrie-Helfer.
@@ -97,7 +98,7 @@ function createStuckEnemy(
 function createSystem(
   enemy: EnemyEntity,
   rock: { x: number; y: number; active: boolean },
-  players: readonly TestPlayer[] = [{ id: 'p1', sprite: { x: 400, y: 100, active: true } }],
+  players: readonly TestPlayer[] = [fakeEntity({ id: 'p1', x: 400, y: 100, active: true })],
 ) {
   const firedWeaponIds: string[] = [];
   const firedTargetPositions: Array<{ x: number; y: number }> = [];
@@ -197,8 +198,8 @@ describe('Enemy stuck in a rock', () => {
   it('keeps a player target for two seconds even when another player becomes closer', () => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
     const players: TestPlayer[] = [
-      { id: 'p1', sprite: { x: 220, y: 100, active: true } },
-      { id: 'p2', sprite: { x: 240, y: 100, active: true } },
+      fakeEntity({ id: 'p1', x: 220, y: 100, active: true }),
+      fakeEntity({ id: 'p2', x: 240, y: 100, active: true }),
     ];
     const { system, firedTargetPositions } = createSystem(
       enemy,
@@ -221,8 +222,8 @@ describe('Enemy stuck in a rock', () => {
   it('drops the player target lock when the locked player is no longer valid', () => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false });
     const players: TestPlayer[] = [
-      { id: 'p1', sprite: { x: 220, y: 100, active: true } },
-      { id: 'p2', sprite: { x: 240, y: 100, active: true } },
+      fakeEntity({ id: 'p1', x: 220, y: 100, active: true }),
+      fakeEntity({ id: 'p2', x: 240, y: 100, active: true }),
     ];
     const { system, firedTargetPositions } = createSystem(
       enemy,

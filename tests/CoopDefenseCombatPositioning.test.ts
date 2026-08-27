@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 // Phaser braucht ein DOM; für Abstands- und Winkelrechnung reichen diese Helfer.
@@ -22,15 +23,11 @@ import type { CombatSystem } from '../src/systems/CombatSystem';
 const MOVE_SPEED = 175;
 
 function createSystem(playerX: number, isFreeGround: () => boolean = () => true) {
-  const enemy = {
-    id: 'e1',
+  const enemy = fakeEntity({ id: 'e1',
     kind: 'pyro-badger',
-    faction: 'hostile',
-    sprite: { x: 0, y: 0, active: true },
-    isBurrowed: () => false,
+    faction: 'hostile', x: 0, y: 0, active: true, isBurrowed: () => false,
     getMoveSpeed: () => MOVE_SPEED,
-    getCollisionRadius: () => 15,
-  } as unknown as EnemyEntity;
+    getCollisionRadius: () => 15 }) as unknown as EnemyEntity;
 
   const system = new CoopDefenseEnemyCombatPositioningSystem(
     {
@@ -38,7 +35,7 @@ function createSystem(playerX: number, isFreeGround: () => boolean = () => true)
       isEnemyPanicking: () => false,
     } as unknown as EnemyManager,
     {
-      getAllPlayers: () => [{ id: 'p1', sprite: { x: playerX, y: 0, active: true } }],
+      getAllPlayers: () => [fakeEntity({ id: 'p1', x: playerX, y: 0, active: true })],
     } as unknown as PlayerManager,
     {
       isAlive: () => true,

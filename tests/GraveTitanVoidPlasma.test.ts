@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -175,8 +176,8 @@ describe('Grufttitan Void-Plasma', () => {
 
   it('waits outside the range band, then fires the balanced salvo over multiple players', () => {
     const players = [
-      { id: 'p1', sprite: { x: 500, y: 100, active: true } },
-      { id: 'p2', sprite: { x: 700, y: 100, active: true } },
+      fakeEntity({ id: 'p1', x: 500, y: 100, active: true }),
+      fakeEntity({ id: 'p2', x: 700, y: 100, active: true }),
     ];
     const enemy = createTitan();
     const { system, shots } = createAttackSystem(enemy, players);
@@ -197,7 +198,7 @@ describe('Grufttitan Void-Plasma', () => {
   });
 
   it('does not target players inside 200 px, including during an active salvo', () => {
-    const players = [{ id: 'p1', sprite: { x: 250, y: 100, active: true } }];
+    const players = [fakeEntity({ id: 'p1', x: 250, y: 100, active: true })];
     const enemy = createTitan();
     const { system, shots } = createAttackSystem(enemy, players);
 
@@ -214,7 +215,7 @@ describe('Grufttitan Void-Plasma', () => {
   });
 
   it('greift eine erreichbare Basis waehrend des Plasma-Cooldowns an und setzt Plasma danach fort', () => {
-    const players = [{ id: 'p1', sprite: { x: 500, y: 100, active: true } }];
+    const players = [fakeEntity({ id: 'p1', x: 500, y: 100, active: true })];
     const bases: TestBase[] = [{
       faction: 'friendly',
       role: 'main',

@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it } from 'vitest';
 import { WeaponUpgradeSystem } from '../src/systems/WeaponUpgradeSystem';
 import type { EnemyManager } from '../src/entities/EnemyManager';
@@ -14,29 +15,25 @@ interface RecoilCall { targetId: string; vx: number; vy: number; atMs: number }
  * innerhalb der Schneisenbreite.
  */
 function corridorProjectile(overrides: Partial<TrackedProjectile> = {}): TrackedProjectile {
-  return {
-    id: 1,
+  return fakeEntity({ id: 1,
     ownerId: 'shooter',
     projectileStyle: 'awp',
     lastX: 0,
-    lastY: 0,
-    sprite: { x: 200, y: 0 },
-    awpCorridorHalfWidth: 56,
+    lastY: 0, x: 200, y: 0, awpCorridorHalfWidth: 56,
     awpCorridorDamage: 40,
     awpCorridorDotDurationMs: 500,
     awpCorridorDotTickIntervalMs: 100,
     awpCorridorKnockback: 900,
     awpCorridorKnockbackDurationMs: 260,
     awpCorridorHitIds: new Set<string>(),
-    ...overrides,
-  } as unknown as TrackedProjectile;
+    ...overrides }) as unknown as TrackedProjectile;
 }
 
 function buildSystem(projectiles: TrackedProjectile[]) {
   const damageCalls: DamageCall[] = [];
   const recoilCalls: RecoilCall[] = [];
   const enemies = new Map<string, { id: string; sprite: { x: number; y: number }; getCollisionRadius(): number }>([
-    ['enemy-1', { id: 'enemy-1', sprite: { x: 100, y: 30 }, getCollisionRadius: () => 12 }],
+    ['enemy-1', fakeEntity({ id: 'enemy-1', x: 100, y: 30, getCollisionRadius: () => 12 })],
   ]);
   let now = 0;
 

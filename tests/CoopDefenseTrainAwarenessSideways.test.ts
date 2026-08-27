@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it } from 'vitest';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../src/systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
@@ -8,14 +9,10 @@ const TRACK_X = 960;
 const MOVE_SPEED = 175;
 
 function createEnemy(x: number): EnemyEntity {
-  return {
-    id: 'e1',
+  return fakeEntity({ id: 'e1',
     // Der Alien-Dachs hat eine trainAwareness-Konfiguration; ohne die greift die Gleis-KI nicht.
-    kind: 'alien-badger',
-    sprite: { x, y: 100, active: true },
-    getCollisionRadius: () => 15,
-    getMoveSpeed: () => MOVE_SPEED,
-  } as unknown as EnemyEntity;
+    kind: 'alien-badger', x, y: 100, active: true, getCollisionRadius: () => 15,
+    getMoveSpeed: () => MOVE_SPEED }) as unknown as EnemyEntity;
 }
 
 /**

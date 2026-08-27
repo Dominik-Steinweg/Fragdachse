@@ -155,8 +155,8 @@ export class SlimeTrailSystem {
         continue;
       }
 
-      const gridX = Math.floor(player.sprite.x / config.cellSize);
-      const gridY = Math.floor(player.sprite.y / config.cellSize);
+      const gridX = Math.floor(player.x / config.cellSize);
+      const gridY = Math.floor(player.y / config.cellSize);
       const previous = this.lastOwnerCells.get(player.id);
       if (previous && previous.size === config.cellSize) {
         this.stampGridLine(previous.gridX, previous.gridY, gridX, gridY, player.id, config, now);

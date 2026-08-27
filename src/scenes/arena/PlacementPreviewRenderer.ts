@@ -103,7 +103,7 @@ export class PlacementPreviewRenderer {
       this.hideTunnelPreview(this.localTunnelPreview);
       this.drawDismantleMarker(preview);
       this.rangeGraphics.lineStyle(2, ownerColor, 0.5);
-      this.rangeGraphics.strokeCircle(localPlayer.sprite.x, localPlayer.sprite.y, preview.range);
+      this.rangeGraphics.strokeCircle(localPlayer.x, localPlayer.y, preview.range);
       return;
     }
     if (preview.kind === 'tunnel') {
@@ -145,7 +145,7 @@ export class PlacementPreviewRenderer {
     }
 
     this.rangeGraphics.lineStyle(2, ownerColor, 0.5);
-    this.rangeGraphics.strokeCircle(localPlayer.sprite.x, localPlayer.sprite.y, preview.range);
+    this.rangeGraphics.strokeCircle(localPlayer.x, localPlayer.y, preview.range);
 
     if (!preview.isValid) {
       const radius = CELL_SIZE * 0.36;

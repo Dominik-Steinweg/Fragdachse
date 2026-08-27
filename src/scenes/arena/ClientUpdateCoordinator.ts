@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
 import { dequantizeAngle } from '../../utils/angle';
-import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
+import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, PLAYER_SIZE, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
@@ -216,7 +216,7 @@ export class ClientUpdateCoordinator {
 
         const wasAlive = this.prevAliveStates.get(id) ?? false;
         if (ps.alive && !wasAlive && !countdownActive) {
-          player.sprite.setPosition(ps.x, ps.y);
+          player.setPosition(ps.x, ps.y);
           this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);
         }
         if (!countdownActive) this.prevAliveStates.set(id, ps.alive);
@@ -234,7 +234,7 @@ export class ClientUpdateCoordinator {
         const isStealthed = ps.isDecoyStealthed ?? false;
         const wasStealthed = this.prevStealthStates.get(id) ?? false;
         if (isStealthed !== wasStealthed) {
-          this.ctx.effectSystem.playStealthTransitionEffect(player.sprite.x, player.sprite.y, !isStealthed, player.color);
+          this.ctx.effectSystem.playStealthTransitionEffect(player.x, player.y, !isStealthed, player.color);
         }
         player.setDecoyStealth(isStealthed);
         this.prevStealthStates.set(id, isStealthed);
@@ -242,7 +242,7 @@ export class ClientUpdateCoordinator {
 
         const curPhase = ps.dashPhase ?? 0;
         if (curPhase === 1 && (this.prevDashPhases.get(id) ?? 0) === 0) {
-          this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, id);
+          this.ctx.gameAudioSystem.playSound('sfx_dash', player.x, player.y, id);
         }
         if (curPhase === 2 && (this.prevDashPhases.get(id) ?? 0) !== 2) {
           this.dashPhase2StartTimes.set(id, this.scene.time.now);
@@ -599,7 +599,7 @@ export class ClientUpdateCoordinator {
     if (phase === 'underground' && previousPhase !== 'underground') {
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (player) {
-        const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, playerId);
+        const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, playerId);
         if (handle) this.burrowLoopHandles.set(playerId, handle);
       }
     } else if (phase !== 'underground' && previousPhase === 'underground') {
@@ -914,7 +914,7 @@ export class ClientUpdateCoordinator {
       const now = this.scene.time.now;
       const nextGhost = this.dashTrailTimers.get(id) ?? 0;
       if (now >= nextGhost) {
-        this.ctx.effectSystem.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5, player.sprite.rotation);
+        this.ctx.effectSystem.playDashTrailGhost(player.x, player.y, player.color, 0.5, player.rotation);
         this.dashTrailTimers.set(id, now + 50);
       }
     } else if (curPhase === 2) {
@@ -934,21 +934,21 @@ export class ClientUpdateCoordinator {
 
     // Burrow loop: start when entering underground, stop when leaving
     if (phase === 'underground' && previousPhase !== 'underground') {
-      const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, player.id);
+      const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, player.id);
       if (handle) this.burrowLoopHandles.set(player.id, handle);
     } else if (phase !== 'underground' && previousPhase === 'underground') {
       const handle = this.burrowLoopHandles.get(player.id);
       if (handle) { this.ctx.gameAudioSystem.stopLoop(handle); this.burrowLoopHandles.delete(player.id); }
     } else if (phase === 'underground') {
       const handle = this.burrowLoopHandles.get(player.id);
-      if (handle) this.ctx.gameAudioSystem.updateLoopPosition(handle, player.sprite.x, player.sprite.y, player.id);
+      if (handle) this.ctx.gameAudioSystem.updateLoopPosition(handle, player.x, player.y, player.id);
     }
 
     if (shouldAnimate) {
-      this.ctx.effectSystem.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);
+      this.ctx.effectSystem.playBurrowPhaseEffect(player.x, player.y, phase);
     }
     player.setBurrowPhase(phase, shouldAnimate);
-    this.ctx.effectSystem.syncBurrowState(player.id, phase, player.sprite);
+    if (player.displayObject) this.ctx.effectSystem.syncBurrowState(player.id, phase, player.displayObject);
     this.prevBurrowPhases.set(player.id, phase);
   }
 
@@ -958,11 +958,11 @@ export class ClientUpdateCoordinator {
 
     const localId = bridge.getLocalPlayerId();
     const player  = this.ctx.playerManager.getPlayer(localId);
-    if (!player || !player.sprite.active) return;
+    if (!player || !player.active) return;
     if (this.ctx.burrowSystem?.isBurrowed(localId)) return;
 
-    const px = player.sprite.x;
-    const py = player.sprite.y;
+    const px = player.x;
+    const py = player.y;
 
     for (const pu of powerups) {
       if (pu.pickupKind === 'objective-marker') continue;
@@ -1035,23 +1035,23 @@ export class ClientUpdateCoordinator {
     const shotId = this.nextPredictedHitscanShotId++;
     const desiredGameplayMuzzle = getHeldWeaponGameplayMuzzleOrigin(
       config.id,
-      localPlayer.sprite.x,
-      localPlayer.sprite.y,
+      localPlayer.x,
+      localPlayer.y,
       angle,
-      localPlayer.sprite.displayWidth,
-    ) ?? getTopDownMuzzleOrigin(localPlayer.sprite.x, localPlayer.sprite.y, angle);
+      localPlayer.displayObject?.displayWidth ?? PLAYER_SIZE,
+    ) ?? getTopDownMuzzleOrigin(localPlayer.x, localPlayer.y, angle);
     const resolvedStart = this.ctx.combatSystem.resolveSafeHitscanStart(
-      localPlayer.sprite.x,
-      localPlayer.sprite.y,
+      localPlayer.x,
+      localPlayer.y,
       desiredGameplayMuzzle.x,
       desiredGameplayMuzzle.y,
     );
     const visualMuzzleOrigin = getHeldWeaponMuzzleOrigin(
       config.id,
-      localPlayer.sprite.x,
-      localPlayer.sprite.y,
-      localPlayer.sprite.rotation,
-      localPlayer.sprite.displayWidth,
+      localPlayer.x,
+      localPlayer.y,
+      localPlayer.rotation,
+      localPlayer.displayObject?.displayWidth ?? PLAYER_SIZE,
     ) ?? desiredGameplayMuzzle;
     const trace  = this.ctx.combatSystem.traceHitscan({
       shooterId:  bridge.getLocalPlayerId(),

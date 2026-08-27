@@ -155,7 +155,7 @@ export class RpcCoordinator {
       if (bridge.getGamePhase() !== 'ARENA') return;
       if (!bridge.canPlayerAct(playerId)) return;
       const player = this.ctx.playerManager.getPlayer(playerId);
-      if (player) this.ctx.gameAudioSystem.playSound('sfx_decoy_reveal', player.sprite.x, player.sprite.y, playerId);
+      if (player) this.ctx.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
       this.ctx.decoySystem.breakStealth(playerId, Date.now());
     });
   }
@@ -424,10 +424,10 @@ export class RpcCoordinator {
       const entity = this.ctx.playerManager.getPlayer(playerId);
       if (!entity) return;
       if (phase === 'windup' || phase === 'recovery') {
-        this.ctx.effectSystem.playBurrowPhaseEffect(entity.sprite.x, entity.sprite.y, phase);
+        this.ctx.effectSystem.playBurrowPhaseEffect(entity.x, entity.y, phase);
       }
       entity.setBurrowPhase(phase, true);
-      this.ctx.effectSystem.syncBurrowState(playerId, phase, entity.sprite);
+      if (entity.displayObject) this.ctx.effectSystem.syncBurrowState(playerId, phase, entity.displayObject);
       // Keep client coordinator in sync so applyBurrowVisual() doesn't re-trigger
       this.clientUpdate.setBurrowPhase(playerId, phase);
     });
@@ -527,8 +527,8 @@ export class RpcCoordinator {
       if (!bridge.canPlayerAct(playerId)) return false;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (!player) return false;
-      const pickedUp = this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.sprite.x, player.sprite.y) ?? false;
-      if (pickedUp) this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.sprite.x, player.sprite.y, playerId);
+      const pickedUp = this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.x, player.y) ?? false;
+      if (pickedUp) this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);
       return pickedUp;
     });
   }

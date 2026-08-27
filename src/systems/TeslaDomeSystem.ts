@@ -308,13 +308,13 @@ export class TeslaDomeSystem {
       }
 
       const owner = this.playerManager.getPlayer(ownerId);
-      if (!owner || !owner.sprite.active || !this.combatSystem.isAlive(ownerId) || this.combatSystem.isBurrowed(ownerId)) {
+      if (!owner || !owner.active || !this.combatSystem.isAlive(ownerId) || this.combatSystem.isBurrowed(ownerId)) {
         this.activeDomes.delete(ownerId);
         continue;
       }
 
-      dome.x = owner.sprite.x;
-      dome.y = owner.sprite.y;
+      dome.x = owner.x;
+      dome.y = owner.y;
 
       if (this.resourceSystem.getAdrenaline(ownerId) <= 0) {
         this.activeDomes.delete(ownerId);
@@ -664,14 +664,14 @@ export class TeslaDomeSystem {
     if (fire.targetTypes.includes('players')) {
       for (const player of this.playerManager.getAllPlayers()) {
         if (player.id === dome.ownerId) continue;
-        if (!player.sprite.active) continue;
+        if (!player.active) continue;
         if (!this.combatSystem.isAlive(player.id)) continue;
         if (this.combatSystem.isBurrowed(player.id)) continue;
         if (!this.combatSystem.canDamageTarget(dome.ownerId, player.id)) continue;
-        const dist = Phaser.Math.Distance.Between(dome.x, dome.y, player.sprite.x, player.sprite.y);
+        const dist = Phaser.Math.Distance.Between(dome.x, dome.y, player.x, player.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, player.sprite.x, player.sprite.y, dome.skipRockIndex)) continue;
-        push('players', player.id, player.sprite.x, player.sprite.y, dist);
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, player.x, player.y, dome.skipRockIndex)) continue;
+        push('players', player.id, player.x, player.y, dist);
       }
     }
 
@@ -765,7 +765,7 @@ export class TeslaDomeSystem {
     if (playerTargets) {
       for (const player of this.playerManager.getAllPlayers()) {
         if (!playerTargets.has(player.id)) continue;
-        if (!player.sprite.active) continue;
+        if (!player.active) continue;
         if (!this.combatSystem.isAlive(player.id)) continue;
         if (this.combatSystem.isBurrowed(player.id)) continue;
         if (!this.combatSystem.canDamageTarget(dome.ownerId, player.id)) continue;

@@ -220,8 +220,8 @@ export class CoopDefenseVoidHunterSystem {
     enemy.setMoveSpeedMultiplier(config.phaseTwoSpeedMultiplier);
 
     const positions = this.playerManager.getAllPlayers()
-      .filter((player) => player.sprite.active && this.combatSystem.isAlive(player.id))
-      .map((player) => ({ x: player.sprite.x, y: player.sprite.y }));
+      .filter((player) => player.active && this.combatSystem.isAlive(player.id))
+      .map((player) => ({ x: player.x, y: player.y }));
     const target = computeVoidHunterNukeTarget(positions, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,
@@ -262,9 +262,9 @@ export class CoopDefenseVoidHunterSystem {
       if (tooClose) return false;
     } else {
       for (const player of this.playerManager.getAllPlayers()) {
-        if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
+        if (!player.active || !this.combatSystem.isAlive(player.id)) continue;
         if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-        if (checkTarget(player.sprite.x, player.sprite.y)) return false;
+        if (checkTarget(player.x, player.y)) return false;
       }
     }
     for (const ally of this.enemyManager.getAllEnemies()) {
@@ -321,8 +321,8 @@ export class CoopDefenseVoidHunterSystem {
         ?? (() => {
           if (gauss.targetRef.kind !== 'player') return null;
           const target = this.playerManager.getPlayer(gauss.targetRef.id);
-          return target?.sprite.active && this.combatSystem.isAlive(target.id)
-            ? { x: target.sprite.x, y: target.sprite.y }
+          return target?.active && this.combatSystem.isAlive(target.id)
+            ? { x: target.x, y: target.y }
             : null;
         })();
       if (targetPosition) {
@@ -408,10 +408,10 @@ export class CoopDefenseVoidHunterSystem {
       return best;
     }
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id) || !this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-      const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+      if (!player.active || !this.combatSystem.isAlive(player.id) || !this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
+      const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
       if (!best || distanceSq < best.distanceSq) {
-        best = { ref: { kind: 'player', id: player.id }, x: player.sprite.x, y: player.sprite.y, distanceSq };
+        best = { ref: { kind: 'player', id: player.id }, x: player.x, y: player.y, distanceSq };
       }
     }
     return best;

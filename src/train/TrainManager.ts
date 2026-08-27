@@ -434,10 +434,10 @@ export class TrainManager {
     const pr      = PLAYER_SIZE / 2;
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active) continue;
+      if (!player.active) continue;
       if (this.canHitPlayer && !this.canHitPlayer(player.id)) continue;
-      const px = player.sprite.x;
-      const py = player.sprite.y;
+      const px = player.x;
+      const py = player.y;
 
       for (let i = 0; i < ys.length; i++) {
         const halfH = heights[i] / 2;
@@ -463,11 +463,11 @@ export class TrainManager {
     const activeIds = new Set<string>();
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active) continue;
+      if (!player.active) continue;
       if (!this.isPlayerBurrowed(player.id)) continue;
 
-      const px = player.sprite.x;
-      const py = player.sprite.y;
+      const px = player.x;
+      const py = player.y;
       let underTrain = false;
       for (let i = 0; i < ys.length; i++) {
         if (

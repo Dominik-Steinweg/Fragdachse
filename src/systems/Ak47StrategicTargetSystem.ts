@@ -132,7 +132,7 @@ export class Ak47StrategicTargetSystem {
   private chooseTarget(playerId: string, prioritized: boolean): string | null {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return null;
-    const candidates = this.getCandidates(playerId, player.sprite.x, player.sprite.y, player.sprite.rotation);
+    const candidates = this.getCandidates(playerId, player.x, player.y, player.rotation);
     if (candidates.length === 0) return null;
 
     if (!prioritized) {

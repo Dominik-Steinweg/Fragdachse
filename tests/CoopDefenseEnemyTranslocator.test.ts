@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -28,19 +29,12 @@ function createSystem(
   hasClearLineOfFire: (...args: unknown[]) => boolean,
   kind = 'void-stalker',
 ) {
-  const enemy = {
-    id: 'void-stalker-1',
+  const enemy = fakeEntity({ id: 'void-stalker-1',
     kind,
-    faction: 'hostile',
-    sprite: { active: true, x: 400, y: 300 },
-    getHp: () => 160,
+    faction: 'hostile', active: true, x: 400, y: 300, getHp: () => 160,
     getCollisionRadius: () => 16,
-    isBurrowed: () => false,
-  } as unknown as EnemyEntity;
-  const player = {
-    id: 'player-1',
-    sprite: { active: true, x: 800, y: 300 },
-  };
+    isBurrowed: () => false }) as unknown as EnemyEntity;
+  const player = fakeEntity({ id: 'player-1', active: true, x: 800, y: 300 });
   const spawnProjectile = vi.fn().mockReturnValue(7);
   const enemyManager = {
     getAllEnemies: () => [enemy],

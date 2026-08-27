@@ -246,12 +246,12 @@ export class CoopDefenseEnemyAbilitySystem {
     }
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
+      if (!player.active || !this.combatSystem.isAlive(player.id)) continue;
       if (this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-      if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y) > fire.radius) continue;
+      if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y) > fire.radius) continue;
       if (fire.requireLineOfSight
-        && !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)) continue;
+        && !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.x, player.y)) continue;
       if (this.energyShieldSystem?.tryBlockDamage({
         targetId: player.id,
         category: 'tesla',
@@ -632,18 +632,18 @@ export class CoopDefenseEnemyAbilitySystem {
     if (this.targetCatalog) return this.findCatalogThrowTarget(enemy, minRange, maxRange, pathClearance);
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
+      if (!player.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
       if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) continue;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         { clearanceRadius: pathClearance },
       )) continue;
-      best = { x: player.sprite.x, y: player.sprite.y, distance };
+      best = { x: player.x, y: player.y, distance };
     }
 
     return best;
@@ -678,18 +678,18 @@ export class CoopDefenseEnemyAbilitySystem {
     }
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
+      if (!player.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
-      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
       if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
-        player.sprite.x,
-        player.sprite.y,
+        player.x,
+        player.y,
         { clearanceRadius: pathClearance },
       )) continue;
-      best = { x: player.sprite.x, y: player.sprite.y, distance };
+      best = { x: player.x, y: player.y, distance };
     }
 
     return best;
@@ -747,8 +747,8 @@ export class CoopDefenseEnemyAbilitySystem {
       return;
     }
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
-      if (Phaser.Math.Distance.Between(targetX, targetY, player.sprite.x, player.sprite.y) > telefragRadius) continue;
+      if (!player.active || !this.combatSystem.isAlive(player.id)) continue;
+      if (Phaser.Math.Distance.Between(targetX, targetY, player.x, player.y) > telefragRadius) continue;
       this.combatSystem.applyDamage(player.id, 9999, true, enemy.id, 'Telefrag', {
         sourceX: targetX,
         sourceY: targetY,

@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -174,10 +175,10 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
 function makeTargetFixture(focus: any) {
   let fullStacks = true;
   const enemies = [
-    { id: 'near', kind: 'zombie-badger', faction: 'hostile', sprite: { x: 1000, y: 0, rotation: 0, active: true }, getHp: () => 100, isBurrowed: () => false },
-    { id: 'far', kind: 'inferno-colossus', faction: 'hostile', sprite: { x: 300, y: 300, rotation: 0, active: true }, getHp: () => 100, isBurrowed: () => false },
+    fakeEntity({ id: 'near', kind: 'zombie-badger', faction: 'hostile', x: 1000, y: 0, rotation: 0, active: true, getHp: () => 100, isBurrowed: () => false }),
+    fakeEntity({ id: 'far', kind: 'inferno-colossus', faction: 'hostile', x: 300, y: 300, rotation: 0, active: true, getHp: () => 100, isBurrowed: () => false }),
   ] as any[];
-  const player = { id: 'p1', sprite: { x: 0, y: 0, rotation: 0 } } as any;
+  const player = fakeEntity({ id: 'p1', x: 0, y: 0, rotation: 0 }) as any;
   const enemyManager = {
     getAllEnemies: () => enemies,
     getEnemy: (id: string) => enemies.find(enemy => enemy.id === id),
@@ -366,11 +367,7 @@ describe('AK-47 Strategische Ziele', () => {
 
   it('only renders the local player strategic target and filters out foreign targets', () => {
     const { renderer, containers } = makeRendererFixture();
-    const enemy = {
-      id: 'e1',
-      sprite: { x: 350, y: 420, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32 },
-      getHp: () => 100,
-    };
+    const enemy = fakeEntity({ id: 'e1', x: 350, y: 420, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
     const enemyManager = {
       getEnemy: (id: string) => (id === 'e1' ? enemy : null),
     } as any;
@@ -414,11 +411,7 @@ describe('AK-47 Strategische Ziele', () => {
 
   it('shows hit confirmation graphics when confirmationUntil is active', () => {
     const { renderer, graphicsObjects } = makeRendererFixture();
-    const enemy = {
-      id: 'e1',
-      sprite: { x: 100, y: 100, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32 },
-      getHp: () => 100,
-    };
+    const enemy = fakeEntity({ id: 'e1', x: 100, y: 100, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
     const enemyManager = {
       getEnemy: (id: string) => (id === 'e1' ? enemy : null),
     } as any;

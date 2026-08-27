@@ -1,3 +1,4 @@
+import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 // Phaser importiert globale Browser-APIs; minimaler Mock reicht, weil unsere Test-Pfade
@@ -27,7 +28,7 @@ import { EnemyManager } from '../src/entities/EnemyManager';
 
 /** Baut ein minimales EnemyEntity-Stub mit den für das Grid nötigen Feldern. */
 function stubEnemy(id: string, x: number, y: number): EnemyEntity {
-  return { id, sprite: { x, y }, destroy() {} } as unknown as EnemyEntity;
+  return fakeEntity({ id, x, y, destroy() {} }) as unknown as EnemyEntity;
 }
 
 /**
