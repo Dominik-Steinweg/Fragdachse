@@ -36,6 +36,7 @@ import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespaw
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
+import { hasWorldFigure, type WorldParticipation } from '../src/world/WorldParticipation';
 
 describe('CombatSystem respawn lifecycle', () => {
   it('does not consume budget during repeated gate checks and consumes once at actual respawn', () => {
@@ -76,6 +77,72 @@ describe('CombatSystem respawn lifecycle', () => {
       });
       expect(player.setPosition).toHaveBeenCalledTimes(1);
       expect(player.setPosition).toHaveBeenCalledWith(260, 42);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * Tod und Respawn brauchen keine Runde.
+   *
+   * Beide Tore der `CombatSystem` sind reine Resolver. Ohne Activity beantwortet sie die
+   * World-Teilnahme, und der Respawn selbst liest ohnehin nur den World-Spawnpunkt – es gibt
+   * dafuer keinen zweiten, lobby-eigenen Pfad.
+   */
+  it('laesst eine World ohne Activity ueber die World-Teilnahme sterben und respawnen', () => {
+    vi.useFakeTimers();
+    try {
+      const player = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() });
+      const playerManager = {
+        getPlayer: (id: string) => id === player.id ? player : undefined,
+        getAllPlayers: () => [player],
+        getWorldSpawnPoint: () => ({ x: 512, y: 320 }),
+      } as unknown as PlayerManager;
+      const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
+      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+
+      // Genau die Aufloesung der LobbyWorld: keine Runde, nur Teilnahme.
+      combat.setInitialSpawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
+      combat.setRespawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
+      const participation = new Map<string, WorldParticipation>([['p1', 'joining']]);
+
+      combat.initPlayer('p1');
+      expect(combat.isAlive('p1')).toBe(true);
+
+      participation.set('p1', 'interactive');
+      (combat as unknown as { handleDeath: (id: string, x: number, y: number, seed: number) => void })
+        .handleDeath('p1', 100, 100, 1);
+      expect(combat.isAlive('p1')).toBe(false);
+
+      vi.advanceTimersByTime(5000);
+      expect(combat.isAlive('p1')).toBe(true);
+      expect(player.setPosition).toHaveBeenCalledWith(512, 320);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gibt einem Peer ausserhalb der World weder Figur noch Respawn', () => {
+    vi.useFakeTimers();
+    try {
+      const player = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() });
+      const playerManager = {
+        getPlayer: (id: string) => id === player.id ? player : undefined,
+        getAllPlayers: () => [player],
+        getWorldSpawnPoint: () => ({ x: 512, y: 320 }),
+      } as unknown as PlayerManager;
+      const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
+      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+
+      // `none` steht ausserhalb, `observer` steht drin – aber ohne Figur.
+      for (const outside of ['none', 'observer'] as const) {
+        combat.setInitialSpawnAllowedResolver(() => hasWorldFigure(outside));
+        combat.setRespawnAllowedResolver(() => hasWorldFigure(outside));
+        combat.initPlayer('p1');
+        expect(combat.isAlive('p1'), outside).toBe(false);
+      }
+      vi.advanceTimersByTime(5000);
+      expect(player.setPosition).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

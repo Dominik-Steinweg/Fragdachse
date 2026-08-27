@@ -127,6 +127,17 @@ export class RpcCoordinator {
     this.registerKillEventHandler();
     this.registerTrainDestroyedHandler();
     this.registerPickupPowerUpHandler();
+    this.registerWorldParticipationRequestHandler();
+  }
+
+  /**
+   * Eintritt und Austritt an der laufenden World. Der Host entscheidet; die Netzwerkgrenze
+   * prueft nur Absender und World-Revision, alle fachlichen Bedingungen stehen im Lifecycle.
+   */
+  private registerWorldParticipationRequestHandler(): void {
+    bridge.registerWorldParticipationRequestHandler((playerId, join) => {
+      return this.lifecycle?.hostHandleWorldParticipationRequest(playerId, join) === true;
+    });
   }
 
   private registerDashHandler(): void {

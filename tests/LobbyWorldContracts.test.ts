@@ -59,11 +59,13 @@ describe('LobbyWorld – Authoring', () => {
     expect(world.tracks).toBeUndefined();
     expect(world.persistentBaseSite).toBeUndefined();
 
-    // In L1 wird in der Lobby nicht gekaempft - ausdruecklich als World-Policy, nicht als
-    // Nebenwirkung einer fehlenden Activity.
-    expect(world.actionPolicy?.combat).toBe(false);
-    // Und sie ist der erste Fall, der ohne Teilnahme sichtbar sein darf.
+    // Kampf ist eine ausdrueckliche World-Policy, keine Nebenwirkung einer laufenden Activity.
+    expect(world.actionPolicy?.combat).toBe(true);
+    // Sie ist der erste Fall, der ohne Teilnahme sichtbar sein darf ...
     expect(world.presentationPolicy?.previewWithoutParticipation).toBe(true);
+    // ... und der erste, den Raum-Mitglieder von sich aus betreten duerfen: es gibt keine
+    // Activity, die ihre Besetzung taktet.
+    expect(world.participationPolicy?.selfAdmit).toBe(true);
   });
 
   it('traegt ihr Mass selbst und passt zur vollen Lobbyflaeche', () => {
@@ -364,8 +366,8 @@ describe('LobbyWorld – keine zweite Lobby-Simulation', () => {
   it('ersetzt den Systemcursor nur dort, wo es die Zielhilfe ueberhaupt gibt', () => {
     // In der Lobby steht der normale Cursor; das Fadenkreuz gehoert der Teilnahme.
     const scene = read('src/scenes/ArenaScene.ts');
-    expect(scene).toContain("const inRoundWorld = presentationPolicy.worldMode === 'interactive';");
-    expect(scene).toContain('inRoundWorld && !optionsOpen && !spectator,');
+    expect(scene).toContain("const worldInteractive = presentationPolicy.worldMode === 'interactive';");
+    expect(scene).toContain('worldInteractive && !optionsOpen && !spectator,');
   });
 
   it('laesst die Scene die Lobby ueber den World-Lifecycle bauen statt ueber eine Vorschau', () => {

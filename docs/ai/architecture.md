@@ -48,13 +48,27 @@ PlayerEntity kennt zusätzlich einen Presentation-Modus (PlayerEntityOptions.pre
 Die Lobby besitzt keine eigene Simulation mehr. Sie zeigt eine reguläre World: `world:lobby` ist eine authored `WorldDefinition` (src/config/authoring/lobbyWorld.ts) mit der Geometrie aus src/arena/LobbyWorldLayout.ts. Sie läuft über denselben World-Kanal, denselben `WorldLifecycle`, denselben `buildWorld()`-Pfad und dieselben Renderer wie eine Match-World.
 
 - Der Host hält während `GamePhase === 'LOBBY'` genau eine Instanz offen (`hostSyncLobbyWorld()`); ihre Neuerzeugung nach einer Runde ist zugleich ihr Reset. Der Matchstart beendet sie, bevor die Phase wechselt — sonst hielten Peers im Wartefenster bis zum Match-Descriptor die Lobby-Instanz für die Rundenwelt.
-- Sie hat **keine** Activity und **keine** Teilnehmer. `WorldParticipation` bleibt für alle `none`; es entsteht keine `PlayerWorldRuntime` und kein World-Input. RoundState, RoundParticipation und Match-Timer werden für sie nicht gebraucht.
+- Sie hat **keine** Activity. Wer nicht eingetreten ist, bleibt `WorldParticipation: none` — ohne `PlayerWorldRuntime` und ohne World-Input. RoundState, RoundParticipation und Match-Timer werden für sie nie gebraucht.
 - Sichtbar ist sie über `WorldDefinition.presentationPolicy.previewWithoutParticipation`. Nur diese Erlaubnis macht aus "keine Teilnahme" nicht mehr automatisch "unsichtbar"; sie wird nie aus Raumzustand, Phase oder fehlender Activity erschlossen.
 - Sie beschreibt keine Runde. `resolveConfiguredGameMode()`/`resolveConfiguredCoopDefenseMapId()` überspringen sie deshalb (`isLobbyWorldDefinitionId`) — während sie läuft, bleibt die Lobby-Auswahl die Quelle für Modus und Map.
-- `actionPolicy.combat = false`: in der Lobby wird nicht gekämpft. Der Felsrahmen ist authored geschützt (`RockCell.indestructible`), der FRAGDACHSE-Schriftzug ist gewöhnlicher, zerstörbarer Fels. Die Mittelfläche unter dem Lobby-Panel bleibt frei — dort erscheint später die persistente Basis; L1 implementiert sie ausdrücklich nicht.
+- Der Felsrahmen ist authored geschützt (`RockCell.indestructible`), der FRAGDACHSE-Schriftzug ist gewöhnlicher, zerstörbarer Fels. Die Mittelfläche unter dem Lobby-Panel bleibt frei — dort erscheint später die persistente Basis, die hier ausdrücklich nicht implementiert ist.
 - Ambient-Gegner gibt es nicht mehr und werden nicht ersetzt. Wenn die Lobby wieder Leben bekommt, dann über die normalen World-/Enemy-Systeme.
 
 `src/arena/LobbyWorldLayout.ts` ist reines Authoring (Phaser-frei) und trägt zusätzlich die Geometrie der Lobby-Oberfläche (`LOBBY_FRAME_BOUNDS`, `LOBBY_PANEL_WIDTH`, `LOBBY_UI_RESERVED_ZONES`), aus der Overlay und Seitenpanels ihre Kanten ableiten.
+
+## World betreten und verlassen
+
+Eine Activity taktet die Besetzung ihrer World selbst (`admitActivityRoster()`); daneben tritt niemand eigenmächtig ein oder aus. Eine World **ohne** Activity hat diesen Taktgeber nicht — erlaubt sie es über `WorldDefinition.participationPolicy.selfAdmit`, entscheidet jedes Raum-Mitglied selbst. Heute ist das die LobbyWorld ("Schießstand betreten").
+
+Der Weg ist der kanonische: `requestWorldParticipation()` trägt nur den Wunsch und die `worldRevision` (bewusst **kein** World-Input — wer eintreten will, nimmt noch nicht teil und dürfte gar nichts senden); der Host validiert in `hostHandleWorldParticipationRequest()` und ändert ausschließlich das Admission-Set. `hostSyncWorldMembers()` schließt daraufhin `joining → interactive` über denselben `PlayerWorldRuntime`-Attach ab, den auch eine Runde benutzt — nur ohne Ready, ohne committed Loadout und ohne Spawn-Berechtigung einer Runde. Beides ist idempotent; eine zweite Anfrage erzeugt keine zweite Runtime.
+
+Wer eine Spielfigur bekommt, beantwortet deshalb `hasWorldFigure()` aus der Teilnahme, sobald keine Activity läuft: `canPlayerInitialSpawn()`/`canPlayerRespawn()` verlangen ARENA-Phase und Rundenbesetzung und können eine World ohne Runde gar nicht beantworten. Tod und Respawn hängen an denselben Resolvern und funktionieren dadurch auch ohne Runde — der Respawn selbst liest ohnehin nur den World-Spawnpunkt.
+
+Der Spawn gehört ebenfalls der World: `WorldDefinition.spawnExclusionZones` benennt begehbare Flächen, die trotzdem kein Startpunkt sind (in der Lobby: alles unter Panel und Seitenmenüs). `PlayerWorldGeometry` reicht sie an dieselbe Spawn-Auswahl weiter, die auch eine Runde benutzt.
+
+Interaktiv heißt **nicht**, dass ein Match läuft. `PresentationPolicy.worldMode` trennt beides: nur `interactive` ersetzt die Lobby-Oberfläche (`syncLobbySurface()`) und schaltet Weltkamera, Zielhilfe und Systemcursor frei; Rundenpräsentation — Missionsansagen, Encounter, Zug, strategische Ziele — hängt zusätzlich an einer laufenden Activity. Ein Kampf in der Lobby erzeugt daher weder Score noch XP, Rewards, Missionsfortschritt oder Rundenergebnis.
+
+Mit der World fallen ihre Spieler: `tearDownArena()` löst jede Player-Runtime, bevor die Fachsysteme abgebaut werden, und der Matchstart schneidet die LobbyWorld samt Teilnehmern ab. Kein Lobby-Spielerzustand reist in die nächste Instanz mit.
 
 ## Scene- und Round-Lifetime
 
@@ -139,7 +153,7 @@ Sie ist ein **eigener replizierter World-Kanal** (`wpp`, `WorldParticipationStat
 
 Raum-Mitgliedschaft ist **keine** World-Mitgliedschaft. Wer in der Lobby steht, während eine Shared World läuft, bleibt außerhalb, bis er wirklich eintritt — nur so gibt es überhaupt ein Join und ein Leave. Die Aufnahme liegt host-seitig ausschließlich im Set `admittedToWorld`; `hostAdmitToWorld()` / `hostRemoveFromWorld()` und die Host-Projektion `setHostParticipatesInWorld()` ändern denselben Stand, `hostSyncWorldParticipation()` liest ihn nur. Mit der World-Instanz endet jede Aufnahme; es gibt kein zweites Host-Teilnahme-Flag.
 
-Der einzige Automatismus ist die Activity: eine laufende Runde nimmt ihre eigene Besetzung auf (`admitActivityRoster()`, Teilnehmer **und** Zuschauer). Was ein Mitglied darf, entscheidet danach die Activity; läuft keine, handelt jedes aufgenommene Mitglied. `setHostParticipatesInWorld(false)` ist zugleich der Austritt des Hosts — er simuliert die Shared World, ohne in ihr zu stehen.
+Der einzige Automatismus ist die Activity: eine laufende Runde nimmt ihre eigene Besetzung auf (`admitActivityRoster()`, Teilnehmer **und** Zuschauer). Was ein Mitglied darf, entscheidet danach die Activity; läuft keine, handelt jedes aufgenommene Mitglied. `setHostParticipatesInWorld(false)` ist zugleich der Austritt des Hosts — er simuliert die Shared World, ohne in ihr zu stehen. Ohne Activity entscheidet jedes Mitglied selbst über Eintritt und Austritt, sofern die World es erlaubt (siehe „World betreten und verlassen"); für den Host gilt dabei genau dieselbe Regel wie für jeden Client.
 
 Die Rundenrolle bleibt getrennt: ein Missions-Spectator ist in der World `observer` und in der Runde `spectator`. `RoundParticipationPolicy` bleibt die Quelle für Spawn-, Handlungs- und Belohnungsrechte der Runde; World Participation ersetzt sie nicht.
 

@@ -53,6 +53,16 @@ export function consumesWorldReplication(participation: WorldParticipation): boo
   return participation !== 'none';
 }
 
+/**
+ * Bekommt dieser Spieler eine eigene Spielfigur in dieser World?
+ *
+ * Ein Beobachter steht in der World, aber ohne Figur; wer draussen steht, erst recht nicht.
+ * `joining` zaehlt bereits dazu – genau in diesem Zustand entsteht die Figur.
+ */
+export function hasWorldFigure(participation: WorldParticipation): boolean {
+  return participation !== 'none' && participation !== 'observer';
+}
+
 /** Braucht dieser Peer eine lokale World-Presentation? */
 export function requiresLocalWorldPresentation(participation: WorldParticipation): boolean {
   return participation !== 'none';

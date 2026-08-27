@@ -1558,6 +1558,7 @@ export class ArenaScene extends Phaser.Scene {
       () => leftPanel.showOptionsOverlay(),
       () => this.openCoopDefenseUpgradesOverlay(),
       () => this.openCoopDefenseItemsOverlay(),
+      (enter) => this.lifecycle.requestLocalWorldParticipation(enter),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
@@ -1730,7 +1731,9 @@ export class ArenaScene extends Phaser.Scene {
       && isWeaponBalanceLabMapId(configuredCoopDefenseMapId);
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
     // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
-    // ausdruecklich vor und unabhaengig von der Rundenrolle.
+    // ausdruecklich vor und unabhaengig von der Rundenrolle. Ohne Activity taktet niemand den
+    // Eintritt: dort folgt die Runtime unmittelbar der Aufnahme.
+    this.lifecycle.hostSyncWorldMembers();
     this.lifecycle.hostSyncWorldParticipation();
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
@@ -1818,12 +1821,21 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
-    if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
+    // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer den
+    // Schiessstand betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
+    if (!terminated && phase === 'LOBBY' && !deferArenaExit) this.lifecycle.syncLobbyTimeOfDay();
+    // Die Oberflaeche folgt der Presentation. Ein technischer Abbruch fuehrt sie selbst zurueck
+    // und darf hier nicht ueberschrieben werden.
+    if (!terminated) this.lifecycle.syncLobbySurface(presentationPolicy.showLobby);
+    this.lobbyOverlay.setWorldEntryState(
+      this.lifecycle.canSelfAdmitToWorld()
+        ? { inside: this.lifecycle.isLocalWorldParticipant() }
+        : null,
+    );
+    if (!terminated && presentationPolicy.showLobby) {
       const lobbyUiStartedAt = diagnosticsActive ? performance.now() : 0;
       if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
-      this.lifecycle.syncLobbyTimeOfDay();
-      if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
       // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim
       // Rundenwechsel (oder bei Modus-/Map-Wechsel) den Spieler auf "nicht bereit", folgt hier sowohl
@@ -1873,12 +1885,6 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.leftPanel.updateLobby();
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
       if (diagnosticsActive) lobbyUiMs = performance.now() - lobbyUiStartedAt;
-    } else if (!terminated && this.lobbyOverlay.isVisible()) {
-      this.coopDefenseXpDebugOverlay?.hide();
-      this.coopDefenseUpgradesOverlay?.hide();
-      this.lobbyOverlay.setCoopDefenseProgress(null);
-      this.lastLobbySidebarSignature = null;
-      this.lobbyOverlay.hide();
     } else {
       this.coopDefenseXpDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
@@ -2062,10 +2068,13 @@ export class ArenaScene extends Phaser.Scene {
     // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
     this.renderers.gpuVfx.update(delta);
     const inArena = presentationPolicy.showWorld;
-    // Eine Preview zeigt die Welt, aber keine Runde. Alles, was eine Rundenwelt beschreibt -
-    // Missionsansagen, Encounter, Zug, strategische Ziele - haengt deshalb an der interaktiven
-    // Darstellung, nicht an der blossen Sichtbarkeit.
-    const inRoundWorld = presentationPolicy.worldMode === 'interactive';
+    // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor
+    // und Platzierungsvorschau gehoeren deshalb der interaktiven Darstellung, nicht der blossen
+    // Sichtbarkeit.
+    const worldInteractive = presentationPolicy.worldMode === 'interactive';
+    // Und Rundenpraesentation - Missionsansagen, Encounter, Zug, strategische Ziele - haengt
+    // zusaetzlich an der Activity: interaktiv zu spielen heisst nicht, dass eine Runde laeuft.
+    const inRoundWorld = worldInteractive && activityActive;
     const strategicTargets = bridge.isHost()
       ? (this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
       : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
@@ -2280,7 +2289,7 @@ export class ArenaScene extends Phaser.Scene {
         ),
     );
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
-    const showAim = inRoundWorld
+    const showAim = worldInteractive
       && !optionsOpen
       && !spectator
       && this.localPlayerState.alive
@@ -2300,7 +2309,7 @@ export class ArenaScene extends Phaser.Scene {
       (showAim || targetingForReticle !== undefined) && !optionsOpen && !spectator,
       // Das Fadenkreuz ersetzt den Systemcursor genau dort, wo es die Zielhilfe gibt. Eine
       // Preview hat keine: ueber der LobbyWorld bleibt der normale Cursor sichtbar.
-      inRoundWorld && !optionsOpen && !spectator,
+      worldInteractive && !optionsOpen && !spectator,
       delta,
       optionsOpen ? undefined : targetingForReticle,
       optionsOpen ? undefined : ultimatePreview,

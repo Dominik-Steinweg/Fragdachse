@@ -704,6 +704,7 @@ export class NetworkBridge {
   private coopDefenseXpPopupHandler: CoopDefenseXpPopupHandler | null = null;
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
+  private worldParticipationRequestHandler: ((playerId: string, join: boolean) => boolean) | null = null;
   private decoyStealthBreakHandler: DecoyStealthBreakHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
@@ -2261,6 +2262,40 @@ export class NetworkBridge {
     if (!current) return;
     if (readWorldParticipation(current, playerId) === participation) return;
     this.hostPublishWorldParticipation({ ...current.participants, [playerId]: participation });
+  }
+
+  /**
+   * Eintritts-/Austrittswunsch eines Spielers an der laufenden World.
+   *
+   * Er ist bewusst **kein** World-Input: wer eintreten will, nimmt noch nicht teil und koennte
+   * deshalb ueber `sendWorldRpc()` gar nichts senden. Die Bindung an die World bleibt trotzdem
+   * dieselbe – die Nutzlast traegt die `worldRevision`, und der Host verwirft ueber
+   * `acceptsWorldRpc()` jeden Wunsch, der zu einer anderen Instanz gehoert.
+   *
+   * Der Host entscheidet; die Antwort sagt nur, ob der Wunsch angenommen wurde.
+   */
+  async requestWorldParticipation(join: boolean): Promise<boolean> {
+    const world = this.getWorldDescriptor();
+    if (!world) return false;
+    if (isHost()) {
+      return this.worldParticipationRequestHandler?.(myPlayer().id, join) === true;
+    }
+    const result = await this
+      .callHostRpc('wpr', { join, wr: world.worldRevision }, 1_200)
+      .catch(() => false);
+    return result === true;
+  }
+
+  registerWorldParticipationRequestHandler(handler: (playerId: string, join: boolean) => boolean): void {
+    this.worldParticipationRequestHandler = handler;
+    this.registerHostRpcHandler('wpr', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data)) return false;
+      const { join } = data as { join?: unknown };
+      if (typeof join !== 'boolean') return false;
+      // Der Absender ist der Antragsteller. Eine Spieler-ID in der Nutzlast gaebe es nicht,
+      // gerade damit niemand fuer einen anderen eintreten oder ihn hinauswerfen kann.
+      return this.worldParticipationRequestHandler?.(caller.id, join) === true;
+    });
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

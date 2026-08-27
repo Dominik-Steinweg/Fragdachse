@@ -184,6 +184,7 @@ import {
   type PlayerRuntimeFeatures,
 } from '../../world/PlayerWorldRuntime';
 import {
+  hasWorldFigure,
   hasWorldRuntimeEntry,
   maySendWorldInput,
   requiresLocalWorldPresentation,
@@ -234,6 +235,8 @@ export class ArenaLifecycleCoordinator {
    * eine neue Instanz muss deshalb auch dann erkannt werden, wenn schon eine gebaut ist.
    */
   private builtWorldRevision = 0;
+  /** Letzter angewandter Stand der Lobby-Oberflaeche; sie wird nur bei echtem Wechsel umgebaut. */
+  private lobbySurfaceShown = true;
   /**
    * Eine gemeinsame monotone Quelle fuer jede vom Host eroeffnete Instanz.
    *
@@ -629,7 +632,9 @@ export class ArenaLifecycleCoordinator {
     // Keep the revision monotone even when an abort/restart happens within the same millisecond;
     // a stale reliable acknowledgement must never be able to match a new round by coincidence.
     // Die LobbyWorld endet mit dem Matchstart. Ohne diesen Schnitt haelten Host und Clients im
-    // Wartefenster bis zum Match-Descriptor die Lobby-Instanz fuer die Rundenwelt.
+    // Wartefenster bis zum Match-Descriptor die Lobby-Instanz fuer die Rundenwelt. Ihre
+    // Teilnehmer fallen mit ihr - kein Schiessstand-Spieler reist in die Match-World mit.
+    this.detachAllWorldPlayers();
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
@@ -1119,6 +1124,82 @@ export class ArenaLifecycleCoordinator {
     return this.admittedToWorld.has(playerId);
   }
 
+  /**
+   * Ob diese World Eintritt und Austritt aus eigenem Entschluss zulaesst.
+   *
+   * Eine Activity taktet ihre Besetzung selbst ({@link admitActivityRoster}); daneben tritt
+   * niemand eigenmaechtig ein oder aus. Ohne Activity fehlt dieser Taktgeber - dann entscheidet
+   * die World selbst, ob ihre Tuer offensteht. Waehrend Aufbau, Abbruch und Matchstart bleibt
+   * sie zu, damit keine Runtime in eine gerade endende Instanz faellt.
+   */
+  canSelfAdmitToWorld(): boolean {
+    return this.worldLifecycle.isActive()
+      && this.arenaBuilt
+      && !this.matchTerminated
+      && !this.roundStartPending
+      && !this.worldLifecycle.activity.isActive()
+      && this.ctx.world?.definition?.participationPolicy?.selfAdmit === true;
+  }
+
+  /**
+   * Host-only: nimmt den Eintritts-/Austrittswunsch genau eines Spielers entgegen.
+   *
+   * Idempotent - Aufnahme und Entlassung aendern nur einen Set-Eintrag, und ein Wunsch, der den
+   * Stand schon erfuellt, gilt trotzdem als erfuellt. Ein zweites Join erzeugt deshalb keine
+   * zweite Runtime, ein zweites Leave keinen zweiten Abbau.
+   */
+  hostHandleWorldParticipationRequest(playerId: string, join: boolean): boolean {
+    if (!bridge.isHost() || !this.canSelfAdmitToWorld()) return false;
+    if (!bridge.getConnectedPlayerIds().includes(playerId)) return false;
+    if (join) this.hostAdmitToWorld(playerId);
+    else this.hostRemoveFromWorld(playerId);
+    // Aufnahme und Runtime gehoeren zum selben Schritt: erst danach steht `interactive`.
+    this.hostSyncWorldMembers();
+    return true;
+  }
+
+  /** Der lokale Wunsch. Der Host entscheidet - auch dann, wenn er selbst der Antragsteller ist. */
+  requestLocalWorldParticipation(join: boolean): void {
+    void bridge.requestWorldParticipation(join);
+  }
+
+  /** True, solange der lokale Spieler in der laufenden World steht. */
+  isLocalWorldParticipant(): boolean {
+    return hasWorldRuntimeEntry(this.getWorldParticipation(bridge.getLocalPlayerId()));
+  }
+
+  /**
+   * Host-only: schliesst `joining → interactive` ab und raeumt `leaving → none` auf.
+   *
+   * Eine Runde taktet den Eintritt ihrer Besetzung ueber {@link spawnReadyPlayers} - mit
+   * Ready, committed Loadout und Spawn-Berechtigung. Eine World ohne Activity hat diesen Takt
+   * nicht: dort folgt die Runtime unmittelbar der Aufnahme, ueber denselben gemeinsamen
+   * Player-Lifecycle und ohne einen einzigen Rundenbegriff.
+   */
+  hostSyncWorldMembers(): void {
+    if (!bridge.isHost() || !this.arenaBuilt || this.matchTerminated) return;
+    if (!this.worldLifecycle.isActive() || this.worldLifecycle.activity.isActive()) return;
+
+    let changed = false;
+    for (const profile of bridge.getConnectedPlayers()) {
+      const admitted = this.isAdmittedToWorld(profile.id);
+      if (admitted === this.ctx.playerManager.hasPlayer(profile.id)) continue;
+      if (admitted) changed = this.attachPlayerToWorld(profile) || changed;
+      else {
+        this.detachPlayerFromWorld(profile.id);
+        changed = true;
+      }
+    }
+    // Wer den Raum verlassen hat, laesst keine Runtime zurueck - auch nicht mitten im Eintritt.
+    const connected = new Set(bridge.getConnectedPlayerIds());
+    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+      if (connected.has(player.id)) continue;
+      this.detachPlayerFromWorld(player.id);
+      changed = true;
+    }
+    if (changed) this.hostSyncWorldParticipation();
+  }
+
   /** Mit der World-Instanz endet jede Aufnahme in sie. */
   private clearWorldAdmission(): void {
     this.admittedToWorld.clear();
@@ -1194,6 +1275,30 @@ export class ArenaLifecycleCoordinator {
   }
 
   /**
+   * Die lokale Lobby-Oberflaeche: Panel, Seitenmenues und Lobby-HUD.
+   *
+   * Sie folgt der Presentation, nicht der Raumphase. Wer die LobbyWorld betritt, soll sie
+   * sehen – nicht das Panel darueber. Es ist derselbe Umschalter wie beim Rundenstart, nur
+   * ohne Runde: Rundenflaechen (Timer, Missionsziele, Ergebnis) bleiben aus, weil keine
+   * Activity laeuft, nicht weil hier eine zweite Regel sie ausblendet.
+   */
+  syncLobbySurface(showLobby: boolean): void {
+    if (this.lobbySurfaceShown === showLobby) return;
+    this.lobbySurfaceShown = showLobby;
+    if (showLobby) {
+      this.lobbyOverlay.show();
+      this.ctx.leftPanel.transitionToLobby();
+      this.ctx.rightPanel.transitionToLobby();
+      this.ctx.centerHUD.transitionToLobby();
+      return;
+    }
+    this.lobbyOverlay.hide();
+    this.ctx.leftPanel.transitionToGame();
+    this.ctx.rightPanel.transitionToGame();
+    this.ctx.centerHUD.transitionToGame();
+  }
+
+  /**
    * Was dieser Spieler in der laufenden World konkret darf.
    *
    * Der Host loest die Policy aus seinem eigenen autoritativen Zustand auf und validiert damit;
@@ -1233,6 +1338,19 @@ export class ArenaLifecycleCoordinator {
     this.playerRuntime.detach(playerId, this.resolvePlayerFeatures('interactive'));
   }
 
+  /**
+   * Loest jede Player-Runtime dieser World.
+   *
+   * Der Abbau laeuft bewusst immer mit dem vollen Modulanteil, damit von einem Beobachter kein
+   * Kampfzustand stehen bleibt. Idempotent, und fuer Host wie Client gueltig.
+   */
+  private detachAllWorldPlayers(): void {
+    const playerFeatures = this.resolvePlayerFeatures('interactive');
+    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+      this.playerRuntime.detach(player.id, playerFeatures);
+    }
+  }
+
   terminateMatch(reason?: string): void {
     if (this.matchTerminated) return;
     this.matchTerminated = true;
@@ -1257,17 +1375,11 @@ export class ArenaLifecycleCoordinator {
     this.roundStartPending = false;
     this.ctx.arenaCountdown?.clear();
 
-    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus.
-    const playerFeatures = this.resolvePlayerFeatures('interactive');
-    for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
-      this.playerRuntime.detach(p.id, playerFeatures);
-    }
-
+    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus; den Abbau der Spieler traegt der
+    // World-Teardown selbst.
     this.tearDownArena();
-    this.ctx.leftPanel.transitionToLobby();
+    this.syncLobbySurface(true);
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
-    this.ctx.rightPanel.transitionToLobby();
-    this.ctx.centerHUD.transitionToLobby();
     this.hostUpdate.setActive(false);
 
     // Die World-Instanz endet auf jedem Peer; den replizierten Kanal raeumt nur der Host.
@@ -1276,7 +1388,6 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost()) bridge.setGamePhase('LOBBY');
 
     this.lobbyOverlay.setReadyButtonState(false);
-    this.lobbyOverlay.show();
     this.lobbyOverlay.showHostDisconnectedMessage(reason);
   }
 
@@ -1403,6 +1514,8 @@ export class ArenaLifecycleCoordinator {
       metrics: world.metrics,
       bases: coopDefenseBases,
       captureTheBeerBasesActive: layoutMode === CAPTURE_THE_BEER_MODE,
+      // Authored Startverbot dieser World; begehbar bleibt die Flaeche trotzdem.
+      spawnExclusionZones: world.definition?.spawnExclusionZones,
     });
     const locallyGeneratedLayout = prepared
       && prepared.descriptor.seed === worldDescriptor.seed
@@ -2155,8 +2268,20 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
     });
-    this.ctx.combatSystem.setInitialSpawnAllowedResolver((playerId) => bridge.canPlayerInitialSpawn(playerId));
-    this.ctx.combatSystem.setRespawnAllowedResolver((playerId) => bridge.canPlayerRespawn(playerId));
+    // Wer in dieser World eine Spielfigur bekommt, entscheidet die Runde – solange es eine gibt.
+    // `canPlayerInitialSpawn()`/`canPlayerRespawn()` verlangen ARENA-Phase und Rundenbesetzung
+    // und koennen eine World ohne Activity gar nicht beantworten; dort traegt die World-Teilnahme
+    // die Antwort. Ohne diese Trennung bekaeme ein Schiessstand-Teilnehmer nie Leben.
+    this.ctx.combatSystem.setInitialSpawnAllowedResolver((playerId) => (
+      this.worldLifecycle.activity.isActive()
+        ? bridge.canPlayerInitialSpawn(playerId)
+        : hasWorldFigure(this.getWorldParticipation(playerId))
+    ));
+    this.ctx.combatSystem.setRespawnAllowedResolver((playerId) => (
+      this.worldLifecycle.activity.isActive()
+        ? bridge.canPlayerRespawn(playerId)
+        : hasWorldFigure(this.getWorldParticipation(playerId))
+    ));
     this.ctx.combatSystem.setRespawnCallback((playerId) => {
       const survival = this.ctx.coopDefenseRespawnBudgetSystem;
       if (!survival) return true;
@@ -3500,6 +3625,11 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
+    // Schiessstand-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
+    // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die
+    // Detach-Module genau diese Systeme noch brauchen.
+    this.detachAllWorldPlayers();
     this.terrainSnapshotGenerationId += 1;
     this.terrainSnapshotReady = false;
     this.cancelPendingHostArenaGeneration();
@@ -4257,9 +4387,7 @@ export class ArenaLifecycleCoordinator {
     // HUD-Flaechen und Arenamusik gehoeren zur lokalen World-Presentation. Wer die World nur
     // simuliert, behaelt Lobby-HUD und Lobby-Musik.
     if (entersWorld) {
-      this.ctx.leftPanel.transitionToGame();
-      this.ctx.rightPanel.transitionToGame();
-      this.ctx.centerHUD.transitionToGame();
+      this.syncLobbySurface(false);
       this.resetLocalArenaHudState();
       this.ctx.gameAudioSystem.playMusic('music_arena');
     }
@@ -4329,12 +4457,8 @@ export class ArenaLifecycleCoordinator {
     this.resetLocalArenaHudState();
     this.ctx.gameAudioSystem.playMusic('music_lobby');
 
-    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus.
-    const playerFeatures = this.resolvePlayerFeatures('interactive');
-    for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
-      this.playerRuntime.detach(p.id, playerFeatures);
-    }
-
+    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus; den Abbau der Spieler traegt der
+    // World-Teardown selbst.
     this.tearDownArena();
     // Mit der Rueckkehr in die Lobby endet die World-Instanz auch lokal – auf Clients ist das
     // der einzige Ort, an dem sie das erfahren.
@@ -4342,10 +4466,8 @@ export class ArenaLifecycleCoordinator {
     this.clearWorldAdmission();
     this.syncLobbyTimeOfDay();
 
-    this.ctx.leftPanel.transitionToLobby();
+    this.syncLobbySurface(true);
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
-    this.ctx.rightPanel.transitionToLobby();
-    this.ctx.centerHUD.transitionToLobby();
     const roundResults = bridge.getRoundResults();
     this.ctx.rightPanel.showRoomStatistics(bridge.getRoomPlayerStatistics());
     this.ctx.rightPanel.showRoundResults(
@@ -4353,7 +4475,6 @@ export class ArenaLifecycleCoordinator {
       bridge.getRoundState(),
     );
     this.lobbyOverlay.setReadyButtonState(false);
-    this.lobbyOverlay.show();
   }
 
   /** Liefert das gemeinsame Boden-/Flowfield-Raster fuer Gegner-Sonderbewegungen. */
@@ -5131,10 +5252,13 @@ export class ArenaLifecycleCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) {
-      // Nach dem Spawn-Gate (hostHasCommittedLoadoutForSpawn) sollte das nicht mehr vorkommen.
-      // Tritt es doch auf, ist die eingefrorene Auswahl noch nicht da → Live-Slot-Fallback (Risiko
-      // "falsche Waffe"); loggen, um den Fall im Realbetrieb zu erkennen.
-      console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
+      // Eingefroren wird eine Auswahl nur fuer eine Runde. Ohne Activity gibt es nichts
+      // einzufrieren – dort ist die laufende Lobby-Auswahl die richtige Quelle, kein Fehlerfall.
+      // Innerhalb einer Runde bleibt es der bekannte Risikofall ("falsche Waffe") und wird
+      // geloggt, damit er im Realbetrieb auffaellt.
+      if (this.worldLifecycle.activity.isActive()) {
+        console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
+      }
       return this.resolveLoadoutSelection(playerId);
     }
     return resolveEffectiveLoadoutSelection({

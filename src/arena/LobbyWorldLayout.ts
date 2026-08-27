@@ -4,6 +4,7 @@ import {
   DEFAULT_ARENA_HEIGHT,
   FULL_ARENA_WIDTH,
 } from '../config';
+import type { ArenaGridRegion } from '../config';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TreeCell } from '../types';
 import {
   ARENA_DECAL_CONFIG,
@@ -508,11 +509,25 @@ const LOBBY_UI_RESERVED_ZONES: readonly GridRect[] = [
  * Liegt die Zelle unter einer Oberflaechenflaeche?
  *
  * Zugleich die Zusicherung, die die Mittelflaeche fuer die spaetere persistente Basis
- * freihaelt: in diesen Zonen entsteht keine Geometrie. Erzeugt wird dort in L1 nichts.
+ * freihaelt: in diesen Zonen entsteht keine Geometrie.
  */
 export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
   return LOBBY_UI_RESERVED_ZONES.some((rect) => isInsideRect(gridX, gridY, rect));
 }
+
+/**
+ * Dieselben Flaechen als authored Spawn-Sperre der World.
+ *
+ * Sie sind begehbar – wer den Schiessstand betritt, darf dort laufen. Nur starten soll niemand
+ * unter dem Lobby-Panel oder hinter einem Seitenmenue, weil seine Figur dort verdeckt waere.
+ */
+export const LOBBY_SPAWN_EXCLUSION_ZONES: readonly ArenaGridRegion[] = LOBBY_UI_RESERVED_ZONES
+  .map((rect) => ({
+    minGridX: rect.minX,
+    maxGridX: rect.maxX,
+    minGridY: rect.minY,
+    maxGridY: rect.maxY,
+  }));
 
 // -- Authored Geometrie ------------------------------------------------------
 

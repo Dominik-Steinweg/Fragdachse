@@ -120,6 +120,11 @@ export interface PlayerWorldGeometry {
   readonly metrics: WorldMetrics;
   readonly bases: readonly BaseSpec[];
   readonly captureTheBeerBasesActive: boolean;
+  /**
+   * Authored Zellbereiche, in denen diese World keinen Startpunkt zulaesst. Sie bleiben
+   * begehbar; nur der Spawn meidet sie.
+   */
+  readonly spawnExclusionZones?: readonly ArenaGridRegion[];
 }
 
 const EMPTY_SPAWN_CONTEXT: SpawnContextSnapshot = {
@@ -391,6 +396,18 @@ export class PlayerManager implements OwnerVisualSource {
         blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
       }
       for (const key of this.getGroundHazardSpawnExclusionCells()) blocked.add(key);
+    }
+
+    // Authored Spawn-Sperren der World. Sie sind begehbar, taugen aber nicht als Startpunkt –
+    // in der LobbyWorld etwa die Flaechen unter Panel und Seitenmenues.
+    for (const zone of this.worldGeometry?.spawnExclusionZones ?? []) {
+      const minX = Math.max(0, zone.minGridX);
+      const maxX = Math.min(this.metrics.gridCols - 1, zone.maxGridX);
+      const minY = Math.max(0, zone.minGridY);
+      const maxY = Math.min(this.metrics.gridRows - 1, zone.maxGridY);
+      for (let gy = minY; gy <= maxY; gy++) {
+        for (let gx = minX; gx <= maxX; gx++) blocked.add(`${gx}_${gy}`);
+      }
     }
 
     // Coop-Defense: Spieler dürfen nicht auf der Basis oder am Rand spawnen –

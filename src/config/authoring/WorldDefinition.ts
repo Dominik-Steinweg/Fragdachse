@@ -1,3 +1,4 @@
+import type { ArenaGridRegion } from '../../config';
 import type {
   CoopBaseAnchor,
   CoopBaseCellOffset,
@@ -42,6 +43,15 @@ export interface WorldDefinition {
   readonly actionPolicy?: WorldActionPolicy;
   /** World-scoped presentation policy; sie gilt ebenfalls ohne laufende Activity. */
   readonly presentationPolicy?: WorldPresentationPolicy;
+  /** World-scoped participation policy; sie gilt ebenfalls ohne laufende Activity. */
+  readonly participationPolicy?: WorldParticipationPolicy;
+  /**
+   * Zellbereiche, die diese World nicht als Startpunkt zulaesst.
+   *
+   * Sie sind begehbar – nur kein Spawn. Die LobbyWorld haelt so die Flaechen frei, unter denen
+   * ihre Oberflaeche liegt; eine Figur dort waere hinter dem Panel unsichtbar.
+   */
+  readonly spawnExclusionZones?: readonly ArenaGridRegion[];
   /** Gesetzt: Diese World traegt eine persistente Basis an einer authored Stelle. */
   readonly persistentBaseSite?: WorldPersistentBaseSiteDefinition;
   /** Statische Arena-Uhrzeit als `"HH:MM"`. Laufzeitverlaeufe gehoeren zur Activity. */
@@ -63,6 +73,17 @@ export interface WorldActionPolicy {
  */
 export interface WorldPresentationPolicy {
   readonly previewWithoutParticipation: boolean;
+}
+
+/**
+ * Ob Raum-Mitglieder diese World von sich aus betreten und verlassen duerfen.
+ *
+ * Der Regelfall ist `false`: eine Match-World nimmt ausschliesslich auf, wen ihre Activity
+ * aufnimmt. Eine World ohne Activity hat dagegen niemanden, der ihre Besetzung taktet – erlaubt
+ * sie es ausdruecklich, entscheidet jeder Spieler selbst ueber Eintritt und Austritt.
+ */
+export interface WorldParticipationPolicy {
+  readonly selfAdmit: boolean;
 }
 
 export interface WorldMetricsDefinition {

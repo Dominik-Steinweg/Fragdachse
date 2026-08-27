@@ -165,6 +165,13 @@ const SYSTEM_BAR_Y = GAME_HEIGHT - SYSTEM_BAR_MARGIN - SYSTEM_BAR_H / 2;
 const FULLSCREEN_BTN_X = GAME_WIDTH - SYSTEM_BAR_MARGIN - FULLSCREEN_BTN_W / 2;
 const OPTIONS_BTN_X = FULLSCREEN_BTN_X - FULLSCREEN_BTN_W / 2 - SYSTEM_BAR_GAP - OPTIONS_BTN_W / 2;
 const HELP_BTN_X = OPTIONS_BTN_X - OPTIONS_BTN_W / 2 - SYSTEM_BAR_GAP - HELP_BTN_W / 2;
+/**
+ * Ein- und Austritt in die LobbyWorld sitzen an derselben Stelle wie die uebrigen
+ * Systemhandlungen. Der Button bleibt aber sichtbar, wenn das Lobby-Panel verschwindet – sonst
+ * gaebe es von innen keinen Weg mehr hinaus.
+ */
+const WORLD_ENTRY_BTN_W = 268;
+const WORLD_ENTRY_BTN_X = HELP_BTN_X - HELP_BTN_W / 2 - SYSTEM_BAR_GAP - WORLD_ENTRY_BTN_W / 2;
 const FULLSCREEN_HINT_MS = 2200;
 
 /**
@@ -215,6 +222,10 @@ type WaitingRow = {
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
   private systemBar:      Phaser.GameObjects.Container | null = null;
+  /** Ein-/Austritt der LobbyWorld; unabhaengig vom Lobby-Panel sichtbar. */
+  private worldEntryBar:  Phaser.GameObjects.Container | null = null;
+  private worldEntryBtn:  UiButton | null = null;
+  private worldEntryInside = false;
   private playerContextMenu: UiContextMenu | null = null;
   private loadoutTooltip: UiTooltip | null = null;
   private loadoutTooltipRoot: Phaser.GameObjects.Container | null = null;
@@ -279,6 +290,7 @@ export class LobbyOverlay {
     private onShowOptions: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
     private onOpenCoopDefenseItems: () => void,
+    private onToggleWorldEntry: (enter: boolean) => void,
   ) {}
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
@@ -480,6 +492,22 @@ export class LobbyOverlay {
     ]).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.systemBar);
     this.systemBar.setVisible(this.visible);
+
+    // Eigener Container: seine Sichtbarkeit folgt der World-Teilnahme, nicht dem Lobby-Panel.
+    this.worldEntryBtn = new UiButton(this.scene, {
+      x: WORLD_ENTRY_BTN_X, y: SYSTEM_BAR_Y, w: WORLD_ENTRY_BTN_W, h: SYSTEM_BAR_H,
+      label: t('ui.lobby.enterRange'),
+      labelRole: 'labelSm',
+      intent: 'secondary',
+      icon: 'chevron-right',
+      iconSize: 18,
+      onClick: () => this.onToggleWorldEntry(!this.worldEntryInside),
+    });
+    this.worldEntryBar = this.scene.add
+      .container(0, 0, [this.worldEntryBtn.getRoot()])
+      .setDepth(DEPTH.OVERLAY);
+    promoteToClarityCamera(this.scene, this.worldEntryBar);
+    this.worldEntryBar.setVisible(false);
 
     this.refreshHeader();
     this.updateRoomActionButtons();
@@ -687,6 +715,8 @@ export class LobbyOverlay {
     this.helpBtn?.destroy();
     this.optionsBtn?.destroy();
     this.fullscreenBtn?.destroy();
+    this.worldEntryBtn?.destroy();
+    this.worldEntryBtn = null;
     this.coopUpgradesBtn?.destroy();
     this.coopItemsBtn?.destroy();
     this.coopUpgradesBtn = null;
@@ -699,6 +729,10 @@ export class LobbyOverlay {
     if (this.systemBar) {
       this.systemBar.destroy(true);
       this.systemBar = null;
+    }
+    if (this.worldEntryBar) {
+      this.worldEntryBar.destroy(true);
+      this.worldEntryBar = null;
     }
     this.playerRows.clear();
     this.waitingRows = [];
@@ -716,6 +750,23 @@ export class LobbyOverlay {
     this.systemBar?.setVisible(true);
     if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
+  }
+
+  /**
+   * Ein- und Austritt der LobbyWorld.
+   *
+   * `null` bedeutet: diese World laesst niemanden von sich aus eintreten – dann gibt es die
+   * Handlung nicht. Der Button lebt bewusst ausserhalb des Panels: von innen ist er der einzige
+   * sichtbare Weg zurueck.
+   */
+  setWorldEntryState(state: { readonly inside: boolean } | null): void {
+    this.worldEntryInside = state?.inside === true;
+    this.worldEntryBar?.setVisible(state !== null);
+    if (!state) return;
+    this.worldEntryBtn
+      ?.setLabel(state.inside ? t('ui.lobby.leaveRange') : t('ui.lobby.enterRange'))
+      .setIcon(state.inside ? 'chevron-left' : 'chevron-right')
+      .setIntent(state.inside ? 'secondary' : 'neutral');
   }
 
   hide(): void {

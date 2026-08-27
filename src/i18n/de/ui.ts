@@ -24,6 +24,8 @@ export const deUi = {
   "ui.lobby.progress": "FORTSCHRITT",
   "ui.lobby.upgrades": "UPGRADES",
   "ui.lobby.items": "ITEMS",
+  "ui.lobby.enterRange": "SCHIESSSTAND BETRETEN",
+  "ui.lobby.leaveRange": "SCHIESSSTAND VERLASSEN",
   "ui.lobby.help": "HILFE",
   "ui.lobby.options": "OPTIONEN",
   "ui.lobby.fullscreen": "VOLLBILD",

@@ -1,4 +1,5 @@
 import {
+  LOBBY_SPAWN_EXCLUSION_ZONES,
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
 } from '../../arena/LobbyWorldLayout';
@@ -11,10 +12,13 @@ import type { WorldDefinition } from './WorldDefinition';
  * {@link WorldDefinition} wie jede Match-World, nur mit anderem Inhalt. Was sie besonders
  * macht, steht ausschliesslich in ihren Policies:
  *
- * - `actionPolicy.combat = false` – in L1 wird in der Lobby nicht gekaempft.
+ * - `actionPolicy.combat = true` – wer sie betritt, spielt mit dem normalen, von der Activity
+ *   unabhaengigen World-Gameplay. Ein Treffer hier ist trotzdem kein Rundenereignis: Score,
+ *   Rewards und Missionsfortschritt haengen an der Activity, nicht am Kampf.
  * - `presentationPolicy.previewWithoutParticipation = true` – sie ist sichtbar, ohne dass
- *   jemand an ihr teilnimmt. Das ist der einzige Grund, warum sie ueberhaupt eine eigene
- *   Policy braucht.
+ *   jemand an ihr teilnimmt.
+ * - `participationPolicy.selfAdmit = true` – sie hat keine Activity, die ihre Besetzung taktet;
+ *   deshalb entscheidet jeder Spieler selbst ueber Eintritt und Austritt.
  *
  * Ihre Geometrie liegt in `src/arena/LobbyWorldLayout.ts` und wird ueber die World-Layout-Quelle
  * aufgeloest, nicht ueber den prozeduralen Generator. Deshalb traegt diese Definition weder
@@ -36,8 +40,10 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
   bases: [],
-  actionPolicy: { combat: false },
+  actionPolicy: { combat: true },
   presentationPolicy: { previewWithoutParticipation: true },
+  participationPolicy: { selfAdmit: true },
+  spawnExclusionZones: LOBBY_SPAWN_EXCLUSION_ZONES,
   // Die tatsaechliche Lobby-Uhrzeit ist host-autoritativ und wird beim Aufbau gelesen; dieser
   // Wert ist nur die Grundstimmung der World selbst.
   initialTimeOfDay: '12:00',

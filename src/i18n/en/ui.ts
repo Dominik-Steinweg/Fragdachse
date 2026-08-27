@@ -24,6 +24,8 @@ export const enUi = {
   "ui.lobby.progress": "PROGRESS",
   "ui.lobby.upgrades": "UPGRADES",
   "ui.lobby.items": "ITEMS",
+  "ui.lobby.enterRange": "ENTER SHOOTING RANGE",
+  "ui.lobby.leaveRange": "LEAVE SHOOTING RANGE",
   "ui.lobby.help": "HELP",
   "ui.lobby.options": "OPTIONS",
   "ui.lobby.fullscreen": "FULLSCREEN",
