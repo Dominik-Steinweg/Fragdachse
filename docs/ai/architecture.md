@@ -43,17 +43,18 @@ Alle übrigen Fire-Typen (flamethrower, leaf_blower, tesla_dome, healing_aura, e
 
 PlayerEntity kennt zusätzlich einen Presentation-Modus (PlayerEntityOptions.presentation): Sprite, Rotation, Glow, Held Item und VFX bleiben identisch, Namensschild und Welt-Balken entstehen gar nicht erst.
 
-## Lobby-Inszenierung (src/lobby/)
+## LobbyWorld
 
-Die Lobby zeigt lokale Ambient-Gefechte. Verbindliche Grenzen:
+Die Lobby besitzt keine eigene Simulation mehr. Sie zeigt eine reguläre World: `world:lobby` ist eine authored `WorldDefinition` (src/config/authoring/lobbyWorld.ts) mit der Geometrie aus src/arena/LobbyWorldLayout.ts. Sie läuft über denselben World-Kanal, denselben `WorldLifecycle`, denselben `buildWorld()`-Pfad und dieselben Renderer wie eine Match-World.
 
-- Rein lokal: keine RPCs, kein Raumzustand, keine Host-Autorität. Clients dürfen unterschiedliche Sequenzen sehen.
-- Die Lobby-Phase benutzt dasselbe Arenamass wie Deathmatch (getArenaMetricsProfile). Weltgrenzen, Kameragrenzen, Audio-Panning und das Beschneiden von Effekten decken sich damit mit der Vorschaufläche.
-- Fels-Rollen aus MenuArenaPreviewConfig: structural (Felsschriftzug, Rahmen) ist unzerstörbar und löst nie Inspector-Arbeit aus; ambient trägt normale Landschaftsfels-HP.
-- Die Vorschau bleibt gebacken. Fels-Änderungen laufen über MenuArenaPreviewRenderer.setRockAlive und werden zu einem gebündelten Rebuild im POST_UPDATE zusammengefasst.
-- Kollisionskörper für Felsen entstehen nur pro Sequenzzone (LobbyRockBodyPool); Sichtlinie und Hitscan laufen über den kartenweiten ArenaObstacleIndex.
-- Der Inspector erscheint ausschliesslich nach echter Zerstörung, repariert nur Felsen mit HP > 0 und baut zerstörte einzeln sichtbar als neutrale Landschaftsfelsen neu auf.
-- LobbyAmbientRuntime.setActive(false) räumt synchron und vollständig auf; ein Fehler schaltet die Inszenierung ab, ohne den Matchstart zu blockieren.
+- Der Host hält während `GamePhase === 'LOBBY'` genau eine Instanz offen (`hostSyncLobbyWorld()`); ihre Neuerzeugung nach einer Runde ist zugleich ihr Reset. Der Matchstart beendet sie, bevor die Phase wechselt — sonst hielten Peers im Wartefenster bis zum Match-Descriptor die Lobby-Instanz für die Rundenwelt.
+- Sie hat **keine** Activity und **keine** Teilnehmer. `WorldParticipation` bleibt für alle `none`; es entsteht keine `PlayerWorldRuntime` und kein World-Input. RoundState, RoundParticipation und Match-Timer werden für sie nicht gebraucht.
+- Sichtbar ist sie über `WorldDefinition.presentationPolicy.previewWithoutParticipation`. Nur diese Erlaubnis macht aus "keine Teilnahme" nicht mehr automatisch "unsichtbar"; sie wird nie aus Raumzustand, Phase oder fehlender Activity erschlossen.
+- Sie beschreibt keine Runde. `resolveConfiguredGameMode()`/`resolveConfiguredCoopDefenseMapId()` überspringen sie deshalb (`isLobbyWorldDefinitionId`) — während sie läuft, bleibt die Lobby-Auswahl die Quelle für Modus und Map.
+- `actionPolicy.combat = false`: in der Lobby wird nicht gekämpft. Der Felsrahmen ist authored geschützt (`RockCell.indestructible`), der FRAGDACHSE-Schriftzug ist gewöhnlicher, zerstörbarer Fels. Die Mittelfläche unter dem Lobby-Panel bleibt frei — dort erscheint später die persistente Basis; L1 implementiert sie ausdrücklich nicht.
+- Ambient-Gegner gibt es nicht mehr und werden nicht ersetzt. Wenn die Lobby wieder Leben bekommt, dann über die normalen World-/Enemy-Systeme.
+
+`src/arena/LobbyWorldLayout.ts` ist reines Authoring (Phaser-frei) und trägt zusätzlich die Geometrie der Lobby-Oberfläche (`LOBBY_FRAME_BOUNDS`, `LOBBY_PANEL_WIDTH`, `LOBBY_UI_RESERVED_ZONES`), aus der Overlay und Seitenpanels ihre Kanten ableiten.
 
 ## Scene- und Round-Lifetime
 
@@ -106,7 +107,9 @@ Eine bewusste Folge: der Kollisionsradius skaliert nicht mehr implizit mit dem S
 
 ## World Simulation und World Presentation
 
-`resolveWorldPresentation({ participation, worldActive })` (src/world/WorldPresentation.ts) entscheidet, ob ein Peer die laufende World lokal darstellt. Ohne Teilnahme entsteht **keine** Darstellungsfläche — der Zielzustand ist: Shared World aktiv, Host simuliert autoritativ, Host stellt nichts dar. „Host bleibt in der Lobby" heißt weder, die World vollständig zu rendern und die Lobby darüberzulegen, noch einen unsichtbaren World-Render-Tree zu halten.
+`resolveWorldPresentation({ participation, worldActive, previewWithoutParticipation })` (src/world/WorldPresentation.ts) entscheidet, **ob und wie** ein Peer die laufende World lokal darstellt: `none`, `preview` oder `interactive`. Ohne Teilnahme entsteht standardmäßig **keine** Darstellungsfläche — der Zielzustand ist: Shared World aktiv, Host simuliert autoritativ, Host stellt nichts dar. „Host bleibt in der Lobby" heißt weder, die World vollständig zu rendern und die Lobby darüberzulegen, noch einen unsichtbaren World-Render-Tree zu halten.
+
+Die Ausnahme ist explizit und gehört der World, nicht dem Raumzustand: erlaubt ihre `WorldDefinition.presentationPolicy.previewWithoutParticipation`, entsteht ohne Teilnahme eine `preview` — Terrain, World-Sprites und World-Overlays, aber ausdrücklich **keine** Weltkamera, kein World-HUD, keine Zielhilfe und keine eigene Spielfigur. `PresentationPolicy.worldMode` trägt die Unterscheidung weiter: nur `interactive` ersetzt die Lobby, zeigt Runden-HUD und aktiviert die rundengebundene Präsentation (Missionsansagen, Encounter, Zug). Eine Preview ist damit keine zweite Darstellungshierarchie, sondern dieselbe Darstellung mit einer kleineren Flächenmenge.
 
 `WORLD_PRESENTATION_SURFACES` benennt, was dazugehört: Terrain-Surfaces, World-Sprites, Weltkamera, World-HUD, Aim, World-Overlays, lokale Player-Visuals. Nicht-rendernde Infrastruktur, die die Simulation technisch braucht, darf bestehen — Physikdaten dürfen Phaser-gebunden bleiben, solange daraus keine Darstellung entsteht.
 
@@ -154,7 +157,9 @@ Spawn, Respawn, Startbesetzung, clientseitige Snapshot-Reconciliation, Spectator
 
 Der Aufbau gehört der World. `buildWorld(worldDescriptor, activityDescriptor | null)` nimmt direkt die getrennten Descriptoren entgegen und liest weder `GamePhase` noch eine gemischte Arena-Sicht: Generatorversion, Seed, Fingerprint und Ladefortschritt kommen aus dem `WorldDescriptor`, die Metrik aus `resolveWorldLayout()`. Eine Activity ist ein optionaler Parameter, der nur ihre eigenen Systeme anhängt.
 
-`resolveWorldLayout(world, activity)` ist die eine Ableitung von authored Map und World-Metrik. Die Map gehört **immer** der World (`toMapId(world.definitionId)`) — eine Coop-World ohne Mission bleibt eine Coop-World. Das ist die Voraussetzung dafür, dass `WorldRuntimeContext` seine Zusicherung halten kann, dass Map und `definitionId` zusammenpassen. Der aktive Modus wird zur Laufzeit über Activity oder Lobby-Fallback gelesen; World-Geometrie und Generatorparameter bleiben davon getrennt.
+Die Geometrie selbst kommt aus `generateWorldLayout()` (src/world/WorldLayout.ts) — der einen Stelle, an der das `ArenaLayout` einer World entsteht. Die meisten Worlds werden prozedural erzeugt; eine World darf ihre Geometrie stattdessen vollständig authoren und steht dann in der Layout-Registry (heute: `world:lobby`). Beides bleibt derselbe Vertrag: Das Ergebnis hängt nur an World-Identität und Seed, und der `layoutFingerprint` prüft auf jedem Peer, dass wirklich dieselbe Geometrie entstanden ist. `createAuthoredWorldDescriptor()` bildet daraus die Identität einer neuen Instanz — zwei Instanzen derselben authored World unterscheiden sich ausschließlich in ihrer Revision. Jeder Aufruf liefert ein eigenes Layout: die Runtime schreibt platzierte Konstrukte als zusätzliche Felszellen hinein.
+
+`resolveWorldLayout(world, activity)` ist die eine Ableitung von authored World, Map und World-Metrik. Die Map gehört **immer** der World (`toMapId(world.definitionId)`) — eine Coop-World ohne Mission bleibt eine Coop-World. Das ist die Voraussetzung dafür, dass `WorldRuntimeContext` seine Zusicherung halten kann, dass Map und `definitionId` zusammenpassen. Der aktive Modus wird zur Laufzeit über Activity oder Lobby-Fallback gelesen; World-Geometrie und Generatorparameter bleiben davon getrennt.
 
 Weil die Map jetzt auch ohne Activity aufgelöst wird, trägt `missionMapConfig = isCoopMission ? coopDefenseMapConfig : null` die Activity-Sicht auf dieselbe Map. Ohne diese Trennung würde eine Coop-World ohne Runde Bosse, Missionsziele, Encounter und Respawn-Budgets aufbauen, für die es keine Runde gibt.
 
@@ -178,7 +183,7 @@ Steckten beide in einem Flag, könnte eine World ohne Activity nie „fertig gel
 
 Verbindlich: Daten, die zu genau einer World gehören, werden über diese World gebunden. Der Kontext ist kein zweiter God-Context — Activity-Systeme (Gegner, Boss, Missionsziele, Encounter, Respawn-Budget) gehören nicht hinein, und ein Test hält die Feldmenge klein.
 
-`WorldMetrics` ist die unveränderliche Metrik einer World. Sie wird über `resolveWorldMetrics(getArenaMetricsProfile(...))` abgeleitet und ist wertgleich mit den mutablen Kompatibilitäts-Globals in src/config.ts (`ARENA_WIDTH`, `ARENA_OFFSET_X`, `GRID_COLS`, …). Diese Globals bleiben ausschließlich für noch nicht migrierte Presentation-/Lobby-Aufrufer bestehen, aber nicht mehr als Quelle der World-Generierung oder World-Simulation. Zwei Worlds können so gleichzeitig existieren, was eine einzelne globale Metrik nicht kann.
+`WorldMetrics` ist die unveränderliche Metrik einer World. Eine **authored** World bringt ihr Maß selbst mit (`getAuthoredWorldMetricsProfile(definition.metrics)`); nur die prozedurale Arena leitet es noch aus dem Modus ab. Der mutable Kompatibilitätsspiegel folgt umgekehrt der laufenden World (`toArenaMetricsProfile()`), statt ihre Größe ein zweites Mal aus Modus und Lobby-Auswahl abzuleiten — sonst könnten LobbyWorld und Lobby-Kartenauswahl gleichzeitig zwei verschiedene Raster behaupten. Die Metrik ist wertgleich mit den mutablen Kompatibilitäts-Globals in src/config.ts (`ARENA_WIDTH`, `ARENA_OFFSET_X`, `GRID_COLS`, …). Diese Globals bleiben ausschließlich für noch nicht migrierte Presentation-/Lobby-Aufrufer bestehen, aber nicht mehr als Quelle der World-Generierung oder World-Simulation. Zwei Worlds können so gleichzeitig existieren, was eine einzelne globale Metrik nicht kann.
 
 Basen und die persistente Basisstelle löst der Kontext aus der eigenen Map auf (`resolveCoopDefenseBases`); die `BaseRegistry` besitzt keinen Lobby- oder Netzwerk-Fallback. `BaseManager`/`BaseEntity`, die Spawn-Geometrie des `PlayerManager`, der Persistent-Base-Restore und `PersistentBaseVisuals` erhalten Basen, Site und Metrik explizit aus diesem Kontext. Ein aktives World-System darf die in der Lobby gewählte Map nicht erneut aus NetworkBridge lesen.
 
@@ -188,7 +193,7 @@ Migrierte world-scoped Aufloeser lesen keine mutable Arena-Variable mehr: `resol
 
 Die Prüfung gilt auch für Config-*Funktionen*, die dieselben Variablen intern lesen (`isPointInsideArena`, `clipPointToArenaRay`, `isCaptureTheBeerBaseCell` …) — sonst hängt ein Modul mit eigener `WorldMetrics` weiter still an der aktiven Arena. `createWorldRuntimeContext()` leitet die Metrik genau einmal ab und reicht sie an `resolveWorldBases()` weiter; eine zweite Ableitung dort könnte bei unpassendem Profil still von `world.metrics` abweichen.
 
-Vorher hingen Basisgeometrie und Generator am zuletzt global gesetzten Raster — die Lobby-Vorschau konnte dieselbe Map deshalb anders auflösen als die Runde. Rendering und Effekte lesen die Globals teilweise weiterhin; `resolveActiveArenaWorldMetrics()` ist die Uebergangshilfe fuer diese Aufrufer und ausdruecklich nichts fuer World-Simulation.
+Vorher hingen Basisgeometrie und Generator am zuletzt global gesetzten Raster — die Lobby konnte dieselbe Map deshalb anders auflösen als die Runde. Rendering und Effekte lesen die Globals teilweise weiterhin; `resolveActiveArenaWorldMetrics()` ist die Uebergangshilfe fuer diese Aufrufer und ausdruecklich nichts fuer World-Simulation.
 
 ## Zeit und deterministische Quellen
 

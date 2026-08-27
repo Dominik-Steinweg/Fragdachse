@@ -36,9 +36,12 @@ export interface WorldDefinition {
   readonly terrain: WorldTerrainDefinition;
   /** Statische Strukturen der Welt. Ihre missionsabhaengigen Anteile liegen in der Activity. */
   readonly bases: readonly WorldBaseDefinition[];
-  readonly tracks: WorldTrackDefinition;
+  /** Gleisverlauf dieser Welt. Worlds ohne Gleise lassen das Feld weg. */
+  readonly tracks?: WorldTrackDefinition;
   /** World-scoped action policy; it remains valid even when no Activity is running. */
   readonly actionPolicy?: WorldActionPolicy;
+  /** World-scoped presentation policy; sie gilt ebenfalls ohne laufende Activity. */
+  readonly presentationPolicy?: WorldPresentationPolicy;
   /** Gesetzt: Diese World traegt eine persistente Basis an einer authored Stelle. */
   readonly persistentBaseSite?: WorldPersistentBaseSiteDefinition;
   /** Statische Arena-Uhrzeit als `"HH:MM"`. Laufzeitverlaeufe gehoeren zur Activity. */
@@ -48,6 +51,18 @@ export interface WorldDefinition {
 export interface WorldActionPolicy {
   /** Allows combat in this World without requiring an Activity. */
   readonly combat: boolean;
+}
+
+/**
+ * Ob diese World auch ohne Teilnahme lokal dargestellt werden darf.
+ *
+ * Der Regelfall bleibt: keine Teilnahme, keine Darstellung – ein Host, der eine Shared World
+ * nur simuliert, baut keine Darstellungsflaeche auf. Eine World kann das aber ausdruecklich
+ * erlauben; die LobbyWorld ist genau dieser Fall. Sie entsteht als Preview: sichtbar, aber ohne
+ * Spielfigur, ohne Weltkamera und ohne World-Input.
+ */
+export interface WorldPresentationPolicy {
+  readonly previewWithoutParticipation: boolean;
 }
 
 export interface WorldMetricsDefinition {

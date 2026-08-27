@@ -14,6 +14,10 @@ import {
  *
  * Nicht-rendernde Infrastruktur, die die Simulation technisch braucht, darf bestehen –
  * Physikdaten duerfen Phaser-gebunden bleiben, solange daraus keine Darstellung entsteht.
+ *
+ * Aus "keine Teilnahme" folgt trotzdem nicht "unsichtbar": eine World kann ihre Darstellung
+ * ohne Teilnahme ausdruecklich erlauben. Die LobbyWorld tut genau das – sie ist zu sehen,
+ * obwohl niemand in ihr steht.
  */
 
 /** Was zur lokalen Darstellung einer World gehoert und ohne Teilnahme nicht entsteht. */
@@ -36,32 +40,67 @@ export const WORLD_PRESENTATION_SURFACES: readonly WorldPresentationSurface[] = 
   'localPlayerVisuals',
 ];
 
+/**
+ * Wie dieser Peer die World lokal darstellt.
+ *
+ * `interactive` ist die Darstellung eines Teilnehmers: die vollstaendige Flaechenmenge
+ * einschliesslich Weltkamera, World-HUD, Zielhilfe und eigener Spielfigur. `preview` zeigt
+ * dieselbe World als Kulisse – Terrain, Weltobjekte und Overlays entstehen, aber der Peer steht
+ * nicht in ihr: keine Figur, keine Weltkamera, kein World-Input.
+ *
+ * Preview ist ausdruecklich keine zweite Darstellungshierarchie, sondern dieselbe Darstellung
+ * mit einer kleineren Flaechenmenge.
+ */
+export type WorldPresentationMode = 'none' | 'preview' | 'interactive';
+
+/** Flaechen einer Preview: die Welt ist zu sehen, aber niemand steht in ihr. */
+export const WORLD_PREVIEW_PRESENTATION_SURFACES: readonly WorldPresentationSurface[] = [
+  'terrainSurfaces',
+  'worldSprites',
+  'worldOverlays',
+];
+
 export interface WorldPresentationRequirement {
   /** True, solange dieser Peer die World ueberhaupt lokal darstellt. */
   readonly required: boolean;
-  /** Die Flaechen, die dafuer entstehen duerfen. Ohne Teilnahme ist die Liste leer. */
+  /** Art der Darstellung; sie unterscheidet Teilnahme von blosser Sicht. */
+  readonly mode: WorldPresentationMode;
+  /** Die Flaechen, die dafuer entstehen duerfen. Ohne Darstellung ist die Liste leer. */
   readonly surfaces: readonly WorldPresentationSurface[];
 }
 
-const NO_PRESENTATION: WorldPresentationRequirement = { required: false, surfaces: [] };
+const NO_PRESENTATION: WorldPresentationRequirement = { required: false, mode: 'none', surfaces: [] };
 
 export interface WorldPresentationInput {
   /** Teilnahme dieses Peers an der World. */
   readonly participation: WorldParticipation;
   /** Eine World-Instanz mit lokaler Runtime existiert. */
   readonly worldActive: boolean;
+  /**
+   * Diese World erlaubt ihre Darstellung ausdruecklich auch ohne Teilnahme
+   * ({@link import('../config/authoring/WorldDefinition').WorldPresentationPolicy}).
+   *
+   * Ohne diese Erlaubnis bleibt es beim Regelfall: keine Teilnahme, keine Darstellung. Sie wird
+   * nie aus Raumzustand, Phase oder Activity erschlossen – nur die World selbst gibt sie.
+   */
+  readonly previewWithoutParticipation?: boolean;
 }
 
 /**
- * Entscheidet, ob dieser Peer eine lokale World-Presentation besitzt.
+ * Entscheidet, ob und wie dieser Peer eine lokale World-Presentation besitzt.
  *
  * Die Simulation fragt hier nichts ab – sie laeuft unabhaengig davon weiter. Presentation darf
  * Simulation beobachten, aber nie deren Voraussetzung sein.
  */
 export function resolveWorldPresentation(input: WorldPresentationInput): WorldPresentationRequirement {
   if (!input.worldActive) return NO_PRESENTATION;
-  if (!requiresLocalWorldPresentation(input.participation)) return NO_PRESENTATION;
-  return { required: true, surfaces: WORLD_PRESENTATION_SURFACES };
+  if (requiresLocalWorldPresentation(input.participation)) {
+    return { required: true, mode: 'interactive', surfaces: WORLD_PRESENTATION_SURFACES };
+  }
+  if (input.previewWithoutParticipation === true) {
+    return { required: true, mode: 'preview', surfaces: WORLD_PREVIEW_PRESENTATION_SURFACES };
+  }
+  return NO_PRESENTATION;
 }
 
 /** True, wenn diese Flaeche fuer den gegebenen Zustand lokal entstehen darf. */

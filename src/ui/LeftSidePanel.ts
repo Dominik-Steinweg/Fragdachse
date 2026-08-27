@@ -66,7 +66,7 @@ import {
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { UiContextMenu } from './UiContextMenu';
-import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
+import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/LobbyWorldLayout';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';

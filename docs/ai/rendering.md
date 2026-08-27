@@ -98,13 +98,12 @@ Dieselbe Grenze gilt fuer die statischen Schatten: `ShadowSystem` liest die welt
 
 ## Lobby-Terrainparitaet
 
-Die Lobby-Vorschau verwendet fuer Gras, Dirt, Ground Cover, Decals, Felsen, Fels-Moos und
-Fels-Vegetation dieselben Texturpfade, `ArenaVisualFactory`, Blob-Surface-Profile und Bake-
-Helper wie die Arena. Die absichtlichen Unterschiede bleiben auf das authored Lobby-Layout
-beschraenkt: Felsschriftzug, Rahmen, UI-Reserveflaechen und die Ambient-Freiflaechen; Gleise und
-Baumstaemme sind in diesem Layout nicht belegt. Ambient-Felszerstoerung aktualisiert weiterhin
-den stabilen Felsbestand ueber `setRockAlive()` und backt die abhaengigen Baender gesammelt neu;
-der Teardown stellt den kanonischen Bestand wieder her und leert ihn vor dem Arena-Uebergang.
+Die Lobby ist eine echte World und wird deshalb ueber genau denselben Pfad gebaut wie eine
+Arena: `ArenaBuilder.buildDynamic()` mit dem authored Layout aus `LobbyWorldLayout.ts`. Gras,
+Dirt, Ground Cover, Decals, Felsen, Fels-Moos, Fels-Vegetation, Staemme und Kronen entstehen
+damit nicht aehnlich, sondern identisch. Es gibt keinen zweiten Lobby-Renderer und keinen
+zweiten Fels-Zustand mehr; die Unterschiede stehen ausschliesslich im authored Layout
+(Felsschriftzug, geschuetzter Rahmen, freie UI-Flaechen, keine Gleise).
 
 ## Lighting und Schatten
 
@@ -142,7 +141,7 @@ Die Anzeigegröße einer Figur ist PLAYER_SIZE und ist von der Authoring-Auflös
 
 src/animations/BadgerAnimations.ts ist die einzige Registry für Walking-Sheets: eine Zeile 64×64-Zellen mit nordgerichteten Frames, wie die statischen Einzeltexturen. Eine neue animierte Figur ist genau ein Eintrag in WALKING_SHEETS; Preload, Animationsregistrierung und syncBadgerWalkingAnimation() leiten sich daraus ab. Gegner lösen ihre animierte Variante über staticTextureKey aus ihrem authored imageKey auf, deshalb bleibt coopDefenseEnemies.json unverändert; die statische Textur wird weiter geladen und von Trail-Geistern verwendet.
 
-Der Laufzustand kommt aus genau einer Quelle je Kontext: Host aus der Körpergeschwindigkeit, Client aus dem offenen Interpolationsabstand zur replizierten Zielposition (EnemyEntity.syncWalkingFromInterpolation(), kein Wire-Feld), Lobby-Ambient explizit aus dem Bewegungswinkel. Die Entity sperrt die Wiedergabe zusätzlich bei eingebuddelt, unsichtbar oder tot. Kopien eines animierten Sprites müssen den aktuellen Frame mitgeben; ein Texturschlüssel ohne Frame liefert bei Spritesheets den kompletten Streifen.
+Der Laufzustand kommt aus genau einer Quelle je Kontext: Host aus der Körpergeschwindigkeit, Client aus dem offenen Interpolationsabstand zur replizierten Zielposition (EnemyEntity.syncWalkingFromInterpolation(), kein Wire-Feld). Die Entity sperrt die Wiedergabe zusätzlich bei eingebuddelt, unsichtbar oder tot. Kopien eines animierten Sprites müssen den aktuellen Frame mitgeben; ein Texturschlüssel ohne Frame liefert bei Spritesheets den kompletten Streifen.
 
 ## Koordinaten und Cleanup
 

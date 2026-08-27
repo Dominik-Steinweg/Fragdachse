@@ -16,9 +16,6 @@ import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravel
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
-import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
-import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
-import { LobbyAmbientRuntime } from '../lobby/LobbyAmbientRuntime';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { ProjectileManager }     from '../entities/ProjectileManager';
 import { InputSystem }           from '../systems/InputSystem';
@@ -100,7 +97,10 @@ import {
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_MAX_Y, ARENA_VIEWPORT_WIDTH, ARENA_VIEWPORT_HEIGHT, GAME_WIDTH, GAME_HEIGHT, CELL_SIZE, COLORS, DEPTH,
   NET_SMOOTH_TIME_MS,
   ACTIVE_ARENA_METRICS_PROFILE,
+  applyArenaActivityValuesForMode,
   applyArenaMetricsForMode,
+  applyArenaModeFlags,
+  applyArenaWorldMetrics,
 } from '../config';
 import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
@@ -183,6 +183,9 @@ import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { toGameMode, toMapId } from '../world/arenaDescriptorAdapter';
+import type { WorldDescriptor } from '../world/WorldDescriptor';
+import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
+import { toArenaMetricsProfile } from '../world/WorldMetrics';
 import { allowsWorldPresentationSurface } from '../world/WorldPresentation';
 import { resolveInputPolicy } from '../world/InputPolicy';
 import { resolvePresentationPolicy } from '../world/PresentationPolicy';
@@ -295,9 +298,6 @@ export class ArenaScene extends Phaser.Scene {
   private removeReconnectStatusListener: (() => void) | null = null;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
-  private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
-  /** Lokale Lobby-Inszenierung. Kein Netzwerkzustand, kein Einfluss auf den Matchstart. */
-  private lobbyAmbient: LobbyAmbientRuntime | null = null;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
   private visualFeedback: VisualFeedbackDirector | null = null;
   /**
@@ -721,13 +721,6 @@ export class ArenaScene extends Phaser.Scene {
     // ── Static arena (never destroyed) ────────────────────────────────────
     this.arenaBuilder = new ArenaBuilder(this);
     this.arenaBuilder.buildStatic(bridge.getGameMode(), bridge.getGamePhase());
-    this.menuArenaPreview = new MenuArenaPreviewRenderer(this, MENU_ARENA_PREVIEW_CONFIG);
-    this.menuArenaPreview.build();
-    this.menuArenaPreview.setVisible(bridge.getGamePhase() === 'LOBBY');
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.menuArenaPreview?.destroy();
-      this.menuArenaPreview = null;
-    });
     // ── Scene-lifetime systems ─────────────────────────────────────────────
     const playerManager    = new PlayerManager(this);
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
@@ -1127,25 +1120,6 @@ export class ArenaScene extends Phaser.Scene {
     stinkCloudSystem.setGpuVfxSystem(this.renderers.gpuVfx);
     smokeSystem.setLightingSystem(this.renderers.lighting);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
-    // Die Lobby-Inszenierung braucht die fertige Renderkette und entsteht deshalb hier,
-    // nicht schon beim Aufbau der Vorschau.
-    if (this.menuArenaPreview) {
-      this.lobbyAmbient = new LobbyAmbientRuntime({
-        scene: this,
-        preview: this.menuArenaPreview,
-        renderers: this.renderers,
-        effects: effectSystem,
-        audio: gameAudioSystem,
-        getSelectedWeaponIds: () => {
-          const selection = this.getLocalLoadoutSelection();
-          return [selection.weapon1, selection.weapon2];
-        },
-      });
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-        this.lobbyAmbient?.destroy();
-        this.lobbyAmbient = null;
-      });
-    }
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
     wireRenderersToCameraFeedback(this.renderers, this.visualFeedback.camera);
@@ -1729,7 +1703,9 @@ export class ArenaScene extends Phaser.Scene {
       && this.syncArenaExitFade(phase);
     this.lifecycle.detectPhaseChange(deferArenaExit);
     // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
-    // ihrem eigenen Kanal.
+    // ihrem eigenen Kanal. Der Host haelt waehrend der Lobby genau eine LobbyWorld offen; jeder
+    // Peer baut sie danach ueber denselben Kanal wie jede Match-World.
+    this.lifecycle.hostSyncLobbyWorld();
     this.lifecycle.detectWorldChange();
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
@@ -1818,13 +1794,6 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPanelsHeld = false;
     }
 
-    const lobbyVisible = presentationPolicy.showLobby;
-    this.menuArenaPreview?.setVisible(lobbyVisible);
-    // Muss vor allem Arena-Aufbau laufen: `setActive(false)` räumt synchron und vollständig
-    // auf, damit kein Ambient-Zustand in eine Runde hinüberlebt.
-    this.lobbyAmbient?.setActive(lobbyVisible);
-    if (lobbyVisible) this.lobbyAmbient?.update(delta);
-
     if (worldActive && localWorldPresentation.required) {
       // Loading blocks input, while the countdown intentionally keeps aiming and the Inspector
       // radial menu available so the pre-round presentation remains interactive. Die Kombination
@@ -1856,7 +1825,6 @@ export class ArenaScene extends Phaser.Scene {
       if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
       this.lifecycle.syncLobbyTimeOfDay();
-      this.menuArenaPreview?.setTreeTint(this.renderers.lighting.resolveCanopyTint(0, 0));
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
       // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim
@@ -2096,6 +2064,10 @@ export class ArenaScene extends Phaser.Scene {
     // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
     this.renderers.gpuVfx.update(delta);
     const inArena = presentationPolicy.showWorld;
+    // Eine Preview zeigt die Welt, aber keine Runde. Alles, was eine Rundenwelt beschreibt -
+    // Missionsansagen, Encounter, Zug, strategische Ziele - haengt deshalb an der interaktiven
+    // Darstellung, nicht an der blossen Sichtbarkeit.
+    const inRoundWorld = presentationPolicy.worldMode === 'interactive';
     const strategicTargets = bridge.isHost()
       ? (this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
       : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
@@ -2104,7 +2076,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.enemyManager,
       bridge.getLocalPlayerId(),
       bridge.getSynchronizedNow(),
-      inArena && isCoopDefenseMode(configuredGameMode),
+      inRoundWorld && isCoopDefenseMode(configuredGameMode),
     );
     // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
     // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
@@ -2112,7 +2084,7 @@ export class ArenaScene extends Phaser.Scene {
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
     this.syncMainCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
-    const coopDefensePresentationActive = inArena && isCoopDefenseMode(configuredGameMode);
+    const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
     const presentationMapConfig = coopDefensePresentationActive
       ? getCoopDefenseMapConfig(configuredCoopDefenseMapId!)
       : null;
@@ -2310,7 +2282,7 @@ export class ArenaScene extends Phaser.Scene {
         ),
     );
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
-    const showAim = inArena
+    const showAim = inRoundWorld
       && !optionsOpen
       && !spectator
       && this.localPlayerState.alive
@@ -2328,7 +2300,9 @@ export class ArenaScene extends Phaser.Scene {
     const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
     this.ctx.aimSystem?.update(
       (showAim || targetingForReticle !== undefined) && !optionsOpen && !spectator,
-      inArena && !optionsOpen && !spectator,
+      // Das Fadenkreuz ersetzt den Systemcursor genau dort, wo es die Zielhilfe gibt. Eine
+      // Preview hat keine: ueber der LobbyWorld bleibt der normale Cursor sichtbar.
+      inRoundWorld && !optionsOpen && !spectator,
       delta,
       optionsOpen ? undefined : targetingForReticle,
       optionsOpen ? undefined : ultimatePreview,
@@ -2399,7 +2373,7 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
 
     const shadowStepStartMs = diagnosticsActive ? visualsEndMs : 0;
-    const trainState = inArena ? this.resolveTrainState() : null;
+    const trainState = inRoundWorld ? this.resolveTrainState() : null;
     // Keep round-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
     const shadowArenaActive = inArena || (inGame && !terminated);
@@ -3932,12 +3906,21 @@ export class ArenaScene extends Phaser.Scene {
   private syncArenaMetrics(phase = bridge.getGamePhase(), showWorld = phase === 'ARENA'): void {
     const mode = this.resolveConfiguredGameMode(phase);
     const worldMetrics = this.ctx?.world?.metrics ?? null;
-    applyArenaMetricsForMode(
-      mode,
-      worldMetrics ? 'ARENA' : phase,
-      this.resolveCoopDefenseArenaWidthCells(phase),
-      this.resolveCoopDefenseArenaHeightCells(phase),
-    );
+    if (worldMetrics) {
+      // Der mutable Kompatibilitaetsspiegel folgt der laufenden World selbst. Ihn erneut aus dem
+      // konfigurierten Modus abzuleiten waere eine zweite Quelle - und die LobbyWorld traegt
+      // ohnehin ein anderes Mass als die in der Lobby gewaehlte Map.
+      applyArenaWorldMetrics(toArenaMetricsProfile(worldMetrics));
+      applyArenaActivityValuesForMode(mode);
+      applyArenaModeFlags(mode);
+    } else {
+      applyArenaMetricsForMode(
+        mode,
+        phase,
+        this.resolveCoopDefenseArenaWidthCells(phase),
+        this.resolveCoopDefenseArenaHeightCells(phase),
+      );
+    }
     this.arenaBuilder?.syncStaticBackdrop(mode, showWorld ? 'ARENA' : 'LOBBY');
     this.syncArenaClipMask();
     this.physics.world.setBounds(
@@ -4149,24 +4132,35 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /** Active Activities use their immutable descriptor; the Lobby value is pre-World only. */
+  /**
+   * Die World, die den Rundeninhalt beschreibt – oder `null`.
+   *
+   * Die LobbyWorld ist ausdruecklich keine: sie steht *neben* der Lobby-Auswahl, nicht an ihrer
+   * Stelle. Waehrend sie laeuft, beantworten Modus und Map weiterhin die Lobby.
+   */
+  private resolveRoundWorldDescriptor(phase = bridge.getGamePhase()): WorldDescriptor | null {
+    if (!this.ctx?.world && phase !== 'ARENA') return null;
+    const descriptor = this.ctx?.world?.descriptor ?? bridge.getWorldDescriptor();
+    if (!descriptor || isLobbyWorldDefinitionId(descriptor.definitionId)) return null;
+    return descriptor;
+  }
+
   private resolveConfiguredGameMode(phase = bridge.getGamePhase()): GameMode {
-    if (this.ctx?.world || phase === 'ARENA') {
-      const activity = bridge.getActivityDescriptor();
-      if (activity) return toGameMode(activity.kind);
-      if (this.ctx?.world?.definition) return COOP_DEFENSE_MODE;
-    }
+    const activity = bridge.getActivityDescriptor();
+    if (activity) return toGameMode(activity.kind);
+    // Eine authored Coop-World ohne Runde bleibt eine Coop-World.
+    const descriptor = this.resolveRoundWorldDescriptor(phase);
+    if (descriptor && toMapId(descriptor.definitionId) !== null) return COOP_DEFENSE_MODE;
     return bridge.getGameMode();
   }
 
   /** Active Worlds use their definition id; the Lobby map is only a creation input. */
   private resolveConfiguredCoopDefenseMapId(phase = bridge.getGamePhase()): string {
-    if (this.ctx?.world || phase === 'ARENA') {
-      const descriptor = this.ctx?.world?.descriptor ?? bridge.getWorldDescriptor();
-      if (descriptor) {
-        const mapId = toMapId(descriptor.definitionId);
-        if (mapId === null) throw new Error('[ArenaScene] Active World has no Coop-Defense map');
-        return mapId;
-      }
+    const descriptor = this.resolveRoundWorldDescriptor(phase);
+    if (descriptor) {
+      const mapId = toMapId(descriptor.definitionId);
+      if (mapId === null) throw new Error('[ArenaScene] Active World has no Coop-Defense map');
+      return mapId;
     }
     return bridge.getCoopDefenseMapId();
   }

@@ -266,6 +266,7 @@ describe('Shared World ohne Activity – Presentation und Input folgen der Teiln
       expect(policy).toEqual({
         showLobby: true,
         showWorld: false,
+        worldMode: 'none',
         showHud: false,
         useWorldCamera: false,
         useSpectatorCamera: false,

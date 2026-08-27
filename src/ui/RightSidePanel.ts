@@ -30,7 +30,7 @@ import {
 } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
 import { getPingColor, TEXT, textStyle } from './uiTheme';
-import { LOBBY_FRAME_BOUNDS } from '../arena/MenuArenaPreviewConfig';
+import { LOBBY_FRAME_BOUNDS } from '../arena/LobbyWorldLayout';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
 import { formatNumber, getLocale, t } from '../i18n';

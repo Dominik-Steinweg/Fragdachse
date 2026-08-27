@@ -1538,6 +1538,12 @@ export interface RockCell {
   gridY: number;
   /** Multiplikator (0…1) auf die Armor-Drop-Chance bei Zerstörung; fehlt = normale Chance. */
   armorDropMult?: number;
+  /**
+   * Authored Struktur statt Ziel: dieser Fels nimmt keinen Schaden und wird nicht zerstört.
+   * Die Regel liegt in `RockHpRegistry`, damit sie für jede Schadensquelle identisch gilt;
+   * ohne das Feld ist der Fels ein ganz normaler zerstörbarer Fels.
+   */
+  indestructible?: boolean;
 }
 
 export interface PlaceableFootprintCell {

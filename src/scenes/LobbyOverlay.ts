@@ -7,7 +7,7 @@
  * gehoert der Progression, Rot echten Fehlern, alles Uebrige ist neutral oder ghost. Die Rollen
  * kommen aus `ui/uiTheme`; dieser Datei gehoert keine eigene Farbtabelle mehr.
  *
- * Geometrie: das Panel liegt in der Freiflaeche, die `MenuArenaPreviewConfig` per
+ * Geometrie: das Panel liegt in der Freiflaeche, die `LobbyWorldLayout` per
  * `overlayClearZones` aus dem Felsrahmen ausspart. Wer PANEL_Y/PANEL_H aendert, muss die dortige
  * Zone auf dem 32-px-Raster nachziehen.
  */
@@ -49,7 +49,7 @@ import {
   describeLoadoutTool,
   type LoadoutItemPresentation,
 } from '../loadout/LoadoutCatalog';
-import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/MenuArenaPreviewConfig';
+import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/LobbyWorldLayout';
 import { promoteToClarityCamera } from './arena/ClarityCameraRegistry';
 import { buildLobbyRosterSlots } from '../lobby/LobbyRosterLayout';
 import { createLoadoutHoverGroup, createLoadoutSlotControl } from '../ui/LoadoutSlotControl';

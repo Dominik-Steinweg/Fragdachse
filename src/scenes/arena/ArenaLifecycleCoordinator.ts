@@ -101,7 +101,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, resolveCoopDefenseActivityBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, getAuthoredWorldMetricsProfile, type ArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -167,7 +167,11 @@ import {
   toMapId,
   toWorldDefinitionId,
 } from '../../world/arenaDescriptorAdapter';
-import { toWorldDefinition, toWorldGenerationConfig } from '../../config/authoring/coopDefenseAuthoringAdapter';
+import { toWorldGenerationConfig } from '../../config/authoring/coopDefenseAuthoringAdapter';
+import { getWorldDefinition } from '../../config/authoring/authoredScenarios';
+import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
+import type { WorldDefinition } from '../../config/authoring/WorldDefinition';
+import { createAuthoredWorldDescriptor, generateWorldLayout } from '../../world/WorldLayout';
 import {
   createWorldRuntimeContext,
   isValidPersistentBaseSite,
@@ -225,6 +229,18 @@ export class ArenaLifecycleCoordinator {
   private layoutRetryCount = 0;
   private arenaEnteredAt   = 0;
   private arenaBuilt       = false;
+  /**
+   * Revision der lokal gebauten World-Instanz. Der Aufbau folgt der Instanz, nicht der Phase –
+   * eine neue Instanz muss deshalb auch dann erkannt werden, wenn schon eine gebaut ist.
+   */
+  private builtWorldRevision = 0;
+  /**
+   * Eine gemeinsame monotone Quelle fuer jede vom Host eroeffnete Instanz.
+   *
+   * LobbyWorld und Match-World liegen unmittelbar hintereinander; zwei getrennte Zaehler koennten
+   * in derselben Millisekunde dieselbe Revision vergeben, und der World-Lifecycle wiese die
+   * zweite Instanz dann als bereits beendet zurueck.
+   */
   private lastRoundRevision = 0;
   private localArenaLoadReady = false;
   private terrainSnapshotReady = false;
@@ -537,8 +553,38 @@ export class ArenaLifecycleCoordinator {
       }
       return;
     }
+    // Eine neue Instanz derselben oder einer anderen World ersetzt die gebaute. Ohne diese
+    // Pruefung bliebe nach einem LobbyWorld-Reset die alte Runtime stehen: es gibt eine World,
+    // aber die lokal gebaute meint eine andere.
+    if (this.arenaBuilt && this.builtWorldRevision !== world.worldRevision) {
+      this.onTransitionToLobby();
+      return;
+    }
     if (this.arenaBuilt || bridge.getActivityDescriptor() !== null) return;
     this.onTransitionToArena();
+  }
+
+  /**
+   * Host-only: haelt waehrend der Lobby genau eine LobbyWorld offen.
+   *
+   * Sie ist eine gewoehnliche World ohne Activity und ohne Teilnehmer und laeuft ueber denselben
+   * World-Kanal wie jede Match-World. Ihre Neuerzeugung nach einer Runde ist zugleich ihr Reset;
+   * es gibt keinen zweiten Lobby-Lebenszyklus daneben.
+   */
+  hostSyncLobbyWorld(): void {
+    if (!bridge.isHost() || this.matchTerminated) return;
+    if (bridge.getGamePhase() !== 'LOBBY' || this.roundStartPending) return;
+    // Solange noch eine World-Runtime steht - etwa waehrend der Arena-Ausblendung nach dem
+    // Rundenende - entsteht keine neue Instanz. Sonst risse ihr Aufbau die noch sichtbare Arena
+    // mitten in der Blende weg.
+    if (this.worldLifecycle.descriptor !== null || this.arenaBuilt) return;
+
+    const worldRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
+    this.lastRoundRevision = worldRevision;
+    this.worldLifecycle.beginCreate(
+      createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, worldRevision),
+      null,
+    );
   }
 
   // ── Host helpers called from ArenaScene.update() ─────────────────────────
@@ -582,6 +628,10 @@ export class ArenaLifecycleCoordinator {
     // the later authoritative gameplay start timestamp.
     // Keep the revision monotone even when an abort/restart happens within the same millisecond;
     // a stale reliable acknowledgement must never be able to match a new round by coincidence.
+    // Die LobbyWorld endet mit dem Matchstart. Ohne diesen Schnitt haelten Host und Clients im
+    // Wartefenster bis zum Match-Descriptor die Lobby-Instanz fuer die Rundenwelt.
+    this.worldLifecycle.endInstance();
+    this.clearWorldAdmission();
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
@@ -1136,6 +1186,10 @@ export class ArenaLifecycleCoordinator {
     return resolveWorldPresentation({
       participation: this.getWorldParticipation(bridge.getLocalPlayerId()),
       worldActive: this.worldLifecycle.isActive(),
+      // Ob eine World auch ohne Teilnahme sichtbar sein darf, entscheidet ausschliesslich sie
+      // selbst. Aus Raumzustand oder fehlender Activity wird das nie erschlossen.
+      previewWithoutParticipation:
+        this.ctx.world?.definition?.presentationPolicy?.previewWithoutParticipation === true,
     });
   }
 
@@ -1183,6 +1237,7 @@ export class ArenaLifecycleCoordinator {
     if (this.matchTerminated) return;
     this.matchTerminated = true;
     this.arenaBuilt = false;
+    this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;
 
     // A technical abort can happen before the normal round-conclusion path runs. Never carry a
@@ -1244,14 +1299,29 @@ export class ArenaLifecycleCoordinator {
   private resolveWorldLayout(
     world: WorldDescriptor,
     activity: ActivityDescriptor | null,
-  ): { mode: GameMode; mapConfig: CoopDefenseMapConfig | null } {
+  ): {
+    mode: GameMode;
+    mapConfig: CoopDefenseMapConfig | null;
+    definition: WorldDefinition | null;
+    metricsProfile: ArenaMetricsProfile;
+  } {
     const mapId = toMapId(world.definitionId);
     const mapConfig = mapId !== null ? getCoopDefenseMapConfig(mapId) : null;
+    // Die authored World gehoert der World-Identitaet. Sie loest ueber dieselbe Registry auf,
+    // ob sie aus einer Coop-Map adaptiert wurde oder – wie die LobbyWorld – nativ authoriert ist.
+    const definition = getWorldDefinition(world.definitionId);
+    const mode: GameMode = activity
+      ? toGameMode(activity.kind)
+      : (mapConfig !== null ? COOP_DEFENSE_MODE : 'deathmatch');
     return {
-      mode: activity
-        ? toGameMode(activity.kind)
-        : (mapConfig !== null ? COOP_DEFENSE_MODE : 'deathmatch'),
+      mode,
       mapConfig,
+      definition,
+      // Eine authored World bringt ihr Mass selbst mit; nur die prozedurale Arena leitet es
+      // noch aus dem Modus ab.
+      metricsProfile: definition
+        ? getAuthoredWorldMetricsProfile(definition.metrics.widthCells, definition.metrics.heightCells)
+        : getArenaMetricsProfile(mode, 'ARENA'),
     };
   }
 
@@ -1272,8 +1342,12 @@ export class ArenaLifecycleCoordinator {
     // Activity-Systeme entstehen, weil eine Activity laeuft – nicht, weil ein Modus-Flag gesetzt
     // ist. Diese eine Entscheidung traegt alle Activity-Gates dieses Aufbaus.
     const isCoopMission = activityDescriptor?.kind === 'coop-mission';
-    const { mode: layoutMode, mapConfig: coopDefenseMapConfig } =
-      this.resolveWorldLayout(worldDescriptor, activityDescriptor);
+    const {
+      mode: layoutMode,
+      mapConfig: coopDefenseMapConfig,
+      definition: worldDefinition,
+      metricsProfile,
+    } = this.resolveWorldLayout(worldDescriptor, activityDescriptor);
     if (isCoopMission && coopDefenseMapConfig === null) {
       throw new Error(`[ArenaLifecycleCoordinator] Coop activity has no authored World map`);
     }
@@ -1295,13 +1369,8 @@ export class ArenaLifecycleCoordinator {
     // haengen ab hier an der World, nicht an der Lobby-Auswahl oder an globalen Variablen.
     const world = createWorldRuntimeContext({
       descriptor: worldDescriptor,
-      metricsProfile: getArenaMetricsProfile(
-        layoutMode,
-        'ARENA',
-        coopDefenseMapConfig?.arenaWidthCells,
-        coopDefenseMapConfig?.arenaHeightCells,
-      ),
-      definition: coopDefenseMapConfig ? toWorldDefinition(coopDefenseMapConfig) : null,
+      metricsProfile,
+      definition: worldDefinition,
     });
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
     // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
@@ -1339,11 +1408,12 @@ export class ArenaLifecycleCoordinator {
       && prepared.descriptor.seed === worldDescriptor.seed
       && prepared.descriptor.layoutFingerprint === worldDescriptor.layoutFingerprint
       ? prepared.layout
-      : ArenaGenerator.generate(
-        worldDescriptor.seed,
-        resolveArenaGenerationInput(layoutMode, world.metrics),
-        generationMapConfig,
-      );
+      : generateWorldLayout({
+        definitionId: worldDescriptor.definitionId,
+        seed: worldDescriptor.seed,
+        generation: resolveArenaGenerationInput(layoutMode, world.metrics),
+        mapConfig: generationMapConfig,
+      });
     const actualFingerprint = ArenaGenerator.fingerprint(locallyGeneratedLayout);
     if (actualFingerprint !== worldDescriptor.layoutFingerprint) {
       throw new Error(
@@ -4160,6 +4230,7 @@ export class ArenaLifecycleCoordinator {
       return;
     }
     this.arenaBuilt = true;
+    this.builtWorldRevision = worldDescriptor.worldRevision;
     this.localArenaLoadReady = false;
     this.terrainSnapshotReady = false;
     if (this.getLocalWorldPresentation().required) {
@@ -4246,6 +4317,7 @@ export class ArenaLifecycleCoordinator {
 
   private onTransitionToLobby(): void {
     this.arenaBuilt = false;
+    this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;
     this.isLocalReady = false;
     bridge.setLocalReady(false);
@@ -5100,7 +5172,11 @@ export class ArenaLifecycleCoordinator {
   /** World-first Map-Aufloesung; der Lobby-Wert ist nur vor der World-Erzeugung zulaessig. */
   private resolveConfiguredCoopDefenseMapId(): string {
     const descriptor = bridge.getWorldDescriptor();
-    if (!descriptor) return bridge.getCoopDefenseMapId();
+    // Die LobbyWorld beschreibt keine Runde. Sie traegt deshalb keine Coop-Map, und die
+    // Lobby-Auswahl bleibt weiterhin die Quelle - genau wie ohne laufende World.
+    if (!descriptor || isLobbyWorldDefinitionId(descriptor.definitionId)) {
+      return bridge.getCoopDefenseMapId();
+    }
     const mapId = toMapId(descriptor.definitionId);
     if (mapId === null) {
       throw new Error('[ArenaLifecycleCoordinator] Active World has no Coop-Defense map');

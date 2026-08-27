@@ -12,6 +12,14 @@ import type { ArenaLayout } from '../types';
 export class RockHpRegistry {
   /** rockIndex → aktueller HP-Wert + max HP */
   protected hpMap = new Map<number, { hp: number; maxHp: number }>();
+  /**
+   * Authored unzerstörbare Felsen dieses Bestands.
+   *
+   * Die Regel steht hier und nicht an den Schadensquellen: Projektil, Explosion, Melee und
+   * Umgebungsschaden laufen alle über `applyDamage`, und nur so gilt „geschützte Struktur"
+   * für jede von ihnen gleich – ohne dass eine neue Quelle sie erneut kennen muss.
+   */
+  private readonly indestructibleIds = new Set<number>();
 
   constructor(layout: ArenaLayout) {
     // Bewusst nicht über die überschreibbare `reset()`: Unterklassen-Felder existieren
@@ -26,9 +34,16 @@ export class RockHpRegistry {
 
   protected resetHpState(layout: ArenaLayout): void {
     this.hpMap.clear();
+    this.indestructibleIds.clear();
     for (let i = 0; i < layout.rocks.length; i++) {
       this.hpMap.set(i, { hp: ROCK_HP_MAX, maxHp: ROCK_HP_MAX });
+      if (layout.rocks[i].indestructible === true) this.indestructibleIds.add(i);
     }
+  }
+
+  /** True, wenn dieser Fels authored Struktur ist und deshalb keinen Schaden nimmt. */
+  isIndestructible(id: number): boolean {
+    return this.indestructibleIds.has(id);
   }
 
   register(id: number, maxHp: number): void {
@@ -51,6 +66,9 @@ export class RockHpRegistry {
   applyDamage(id: number, damage: number): number {
     const current = this.hpMap.get(id);
     if (current === undefined) return 0; // Bereits zerstört
+    // Geschützte Struktur bleibt unversehrt und meldet ihren vollen Stand zurück; der Treffer
+    // selbst (Aufprall, Effekt, Sound) bleibt davon unberührt.
+    if (this.indestructibleIds.has(id)) return current.hp;
     const newHp = Math.max(0, current.hp - damage);
     this.hpMap.set(id, { hp: newHp, maxHp: current.maxHp });
     return newHp;

@@ -224,16 +224,14 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
     expect(buildArena).toContain('worldOriginX: world.metrics.offsetX');
   });
 
-  it('bindet beide Nutzer des gemeinsamen Hindernisindex an ihre eigenen Bounds', () => {
+  it('bindet den gemeinsamen Hindernisindex an die Bounds seines Besitzers', () => {
     const index = read('src/systems/ArenaObstacleIndex.ts');
     const combat = read('src/systems/CombatSystem.ts');
-    const lobby = read('src/lobby/LobbyObstacleWorld.ts');
 
     expect(index).not.toMatch(/from ['"][^'"]*config['"]/);
     expect(index).toContain('readonly bounds: () => ArenaObstacleBounds');
     expect(combat).toContain('bounds: () => this.obstacleBounds');
     expect(combat).toContain('setWorldMetrics(metrics: WorldMetrics | null)');
-    expect(lobby).toContain('bounds: () => this.worldFrame');
   });
 
   it('loest den Respawn-Kontext der Arena aus der aktiven World auf', () => {

@@ -274,7 +274,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       expect(resolveWorldPresentation({
         participation: host.getLocalWorldParticipation(),
         worldActive: true,
-      })).toEqual({ required: false, surfaces: [] });
+      })).toEqual({ required: false, mode: 'none', surfaces: [] });
       useRoom(clientRoom);
       expect(client.getLocalWorldParticipation()).toBe('interactive');
 

@@ -59,6 +59,26 @@ export function resolveWorldMetrics(profile: ArenaMetricsProfile): WorldMetrics 
 }
 
 /**
+ * Rueckrichtung: das Arena-Profil genau dieser World.
+ *
+ * Sie existiert fuer den mutablen Kompatibilitaetsspiegel in `src/config.ts`. Er soll der
+ * laufenden World folgen, statt ihre Groesse ein zweites Mal aus Modus und Lobby-Auswahl
+ * abzuleiten – zwei Ableitungen koennen auseinanderlaufen, eine Umkehrung nicht.
+ */
+export function toArenaMetricsProfile(metrics: WorldMetrics): ArenaMetricsProfile {
+  return {
+    arenaWidth: metrics.widthPx,
+    arenaOffsetX: metrics.offsetX,
+    arenaViewportWidth: metrics.viewportWidth,
+    arenaHeight: metrics.heightPx,
+    arenaOffsetY: metrics.offsetY,
+    arenaViewportHeight: metrics.viewportHeight,
+    usesDynamicCamera: metrics.usesDynamicCamera,
+    showStaticArenaFrames: metrics.showStaticFrames,
+  };
+}
+
+/**
  * Metrik einer authored Coop-World allein aus ihren eigenen Zellmassen.
  *
  * Damit haengt world-scoped Geometrie nicht mehr davon ab, welche Arena gerade global aktiv

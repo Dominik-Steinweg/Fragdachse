@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { resolveInputPolicy, type InputPolicyInput } from '../src/world/InputPolicy';
 import { resolvePlayerCapabilities } from '../src/world/PlayerCapabilities';
 import { resolvePresentationPolicy, type PresentationPolicyInput } from '../src/world/PresentationPolicy';
-import { WORLD_PRESENTATION_SURFACES } from '../src/world/WorldPresentation';
+import {
+  WORLD_PRESENTATION_SURFACES,
+  WORLD_PREVIEW_PRESENTATION_SURFACES,
+} from '../src/world/WorldPresentation';
 
 /**
  * Presentation und Input werden zentral abgeleitet.
@@ -14,8 +17,17 @@ import { WORLD_PRESENTATION_SURFACES } from '../src/world/WorldPresentation';
  * die Zustaende, die das Konzept nennt.
  */
 
-const FULL_PRESENTATION = { required: true, surfaces: WORLD_PRESENTATION_SURFACES } as const;
-const NO_PRESENTATION = { required: false, surfaces: [] } as const;
+const FULL_PRESENTATION = {
+  required: true,
+  mode: 'interactive',
+  surfaces: WORLD_PRESENTATION_SURFACES,
+} as const;
+const PREVIEW_PRESENTATION = {
+  required: true,
+  mode: 'preview',
+  surfaces: WORLD_PREVIEW_PRESENTATION_SURFACES,
+} as const;
+const NO_PRESENTATION = { required: false, mode: 'none', surfaces: [] } as const;
 
 function presentation(overrides: Partial<PresentationPolicyInput> = {}): PresentationPolicyInput {
   return {
@@ -73,19 +85,35 @@ describe('Presentation Policy', () => {
     expect(terminated).toEqual({
       showLobby: false,
       showWorld: false,
+      worldMode: 'none',
       showHud: false,
       useWorldCamera: false,
       useSpectatorCamera: false,
     });
   });
 
-  it('zeigt die Lobby nur im Raumzustand Lobby ohne sichtbare World', () => {
+  it('zeigt die Lobby nur im Raumzustand Lobby ohne betretene World', () => {
     expect(resolvePresentationPolicy(presentation({
       inLobby: true,
       worldPresentation: NO_PRESENTATION,
     })).showLobby).toBe(true);
     expect(resolvePresentationPolicy(presentation({ inLobby: true })).showLobby).toBe(false);
     expect(resolvePresentationPolicy(presentation({ inLobby: false })).showLobby).toBe(false);
+  });
+
+  it('laesst die Lobby ueber ihrer eigenen World stehen', () => {
+    // Die LobbyWorld: sichtbar, aber niemand steht in ihr. Sie ersetzt die Lobby nicht, sie
+    // ist ihre Kulisse - und traegt deshalb weder Runden-HUD noch Weltkamera.
+    const preview = resolvePresentationPolicy(presentation({
+      inLobby: true,
+      worldPresentation: PREVIEW_PRESENTATION,
+    }));
+    expect(preview.showWorld).toBe(true);
+    expect(preview.worldMode).toBe('preview');
+    expect(preview.showLobby).toBe(true);
+    expect(preview.showHud).toBe(false);
+    expect(preview.useWorldCamera).toBe(false);
+    expect(preview.useSpectatorCamera).toBe(false);
   });
 });
 

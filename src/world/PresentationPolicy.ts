@@ -1,5 +1,5 @@
 import type { RoundPlayerRole } from '../types';
-import type { WorldPresentationRequirement } from './WorldPresentation';
+import type { WorldPresentationMode, WorldPresentationRequirement } from './WorldPresentation';
 import { allowsWorldPresentationSurface } from './WorldPresentation';
 
 /**
@@ -12,6 +12,12 @@ import { allowsWorldPresentationSurface } from './WorldPresentation';
 export interface PresentationPolicy {
   readonly showLobby: boolean;
   readonly showWorld: boolean;
+  /**
+   * Wie die sichtbare World dargestellt wird. `preview` bedeutet: die Welt ist zu sehen, aber
+   * dieser Peer steht nicht in ihr – die Lobby bleibt darueber stehen, und nichts, was eine
+   * Runde voraussetzt, wird gezeigt.
+   */
+  readonly worldMode: WorldPresentationMode;
   readonly showHud: boolean;
   readonly useWorldCamera: boolean;
   readonly useSpectatorCamera: boolean;
@@ -37,6 +43,7 @@ export interface PresentationPolicyInput {
 const NOTHING: PresentationPolicy = {
   showLobby: false,
   showWorld: false,
+  worldMode: 'none',
   showHud: false,
   useWorldCamera: false,
   useSpectatorCamera: false,
@@ -47,17 +54,22 @@ export function resolvePresentationPolicy(input: PresentationPolicyInput): Prese
   if (input.matchTerminated) return NOTHING;
 
   const showWorld = input.worldVisible && input.worldPresentation.required;
+  const worldMode = showWorld ? input.worldPresentation.mode : 'none';
+  // Nur wer in der World steht, verlaesst dafuer die Lobby. Eine Preview ersetzt sie nicht: die
+  // LobbyWorld ist die Kulisse der Lobby, nicht ihr Nachfolger.
+  const worldReplacesLobby = worldMode === 'interactive';
   const spectator = input.roundRole === 'spectator';
   return {
-    // Eine World ohne Activity kann bei unveraenderter Room-Phase sichtbar sein. In diesem Fall
-    // ersetzt ihre Presentation die Lobby; ein nicht teilnehmender Host behaelt dagegen die Lobby.
-    showLobby: input.inLobby && !showWorld,
+    // Eine World ohne Activity kann bei unveraenderter Room-Phase sichtbar sein. Betritt dieser
+    // Peer sie, ersetzt ihre Presentation die Lobby; ein nicht teilnehmender Host behaelt sie.
+    showLobby: input.inLobby && !worldReplacesLobby,
     showWorld,
-    showHud: showWorld && input.gameplayActive,
+    worldMode,
+    showHud: worldReplacesLobby && input.gameplayActive,
     // Die Weltkamera ist selbst eine Darstellungsflaeche; ohne sie folgt nichts dem Spieler.
     useWorldCamera: showWorld
       && allowsWorldPresentationSurface(input.worldPresentation, 'worldCamera')
       && !spectator,
-    useSpectatorCamera: showWorld && spectator && input.spectatorPanAvailable,
+    useSpectatorCamera: worldReplacesLobby && spectator && input.spectatorPanAvailable,
   };
 }

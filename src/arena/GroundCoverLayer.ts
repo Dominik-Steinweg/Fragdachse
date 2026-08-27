@@ -24,7 +24,7 @@ export interface DirtStamp {
 
 /**
  * Backt die Ground-Cover-Platzierungen in eine einzige RenderTexture – gemeinsame Grundlage von
- * Arena ({@link ./ArenaBuilder}) und Lobby-Vorschau ({@link ./MenuArenaPreviewRenderer}).
+ * Arena und LobbyWorld ({@link ./ArenaBuilder}); beide bauen dieselbe Schicht.
  */
 
 export interface GroundCoverBakeBounds {
@@ -97,7 +97,7 @@ export function bakeGroundCoverLayer(
     if (!frame) continue;
     const scale = placement.sizePx / Math.max(frame.width, frame.height);
     // Die Ebenendeckkraft geht auf jeden einzelnen Stempel, nie auf die fertige RenderTexture.
-    // Begruendung wie bei `MenuArenaPreviewRenderer.bakeLayer`: "over" ist assoziativ, pro Stempel
+    // Begruendung: "over" ist assoziativ, pro Stempel
     // bleibt das Ergebnis pixelgleich zum ungebackenen Zustand, waehrend eine Alpha auf dem Layer
     // genau die Ueberlappungen anders gewichten wuerde, auf die es hier ankommt.
     const alpha = placement.alpha * layerAlpha;

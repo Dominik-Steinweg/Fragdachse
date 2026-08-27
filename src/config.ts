@@ -762,6 +762,19 @@ export function normalizeCoopDefenseArenaHeightCells(heightCells: number | undef
   );
 }
 
+/**
+ * Metrikprofil einer authored World allein aus ihrem eigenen Zellmass.
+ *
+ * Es haengt ausdruecklich an keinem GameMode: eine World bringt ihre Groesse selbst mit. Die
+ * Coop-Maps benutzen dieselbe Ableitung, weil ihre Groesse ebenfalls authored ist.
+ */
+export function getAuthoredWorldMetricsProfile(
+  widthCells: number | undefined,
+  heightCells: number | undefined,
+): ArenaMetricsProfile {
+  return getCoopDefenseArenaMetricsProfile(widthCells, heightCells);
+}
+
 function getCoopDefenseArenaMetricsProfile(
   widthCells: number | undefined,
   heightCells: number | undefined,

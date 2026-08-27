@@ -6,6 +6,7 @@ import {
 import type { ActivityDefinition } from './ActivityDefinition';
 import type { AuthoredScenario } from './AuthoredScenario';
 import { getCoopMissionDefinitionId, getWorldDefinitionId, toAuthoredScenario } from './coopDefenseAuthoringAdapter';
+import { getLobbyWorldDefinition } from './lobbyWorld';
 import type { WorldDefinition } from './WorldDefinition';
 
 /**
@@ -35,8 +36,21 @@ export function getAuthoredScenarios(): readonly AuthoredScenario[] {
   return cachedScenarios;
 }
 
+/**
+ * Native WorldDefinitions ohne Map-Vorlage.
+ *
+ * Sie sind keine Szenarien: zu ihnen gehoert keine authored Activity, und sie entstehen nicht
+ * aus einer Coop-Map. Die LobbyWorld ist die erste davon.
+ */
+function getNativeWorldDefinitions(): readonly WorldDefinition[] {
+  return [getLobbyWorldDefinition()];
+}
+
 export function getAuthoredWorldDefinitions(): readonly WorldDefinition[] {
-  return getAuthoredScenarios().map((scenario) => scenario.world);
+  return [
+    ...getNativeWorldDefinitions(),
+    ...getAuthoredScenarios().map((scenario) => scenario.world),
+  ];
 }
 
 export function getAuthoredActivityDefinitions(): readonly ActivityDefinition[] {
