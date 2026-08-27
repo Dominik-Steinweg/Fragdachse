@@ -158,6 +158,8 @@ Der Aufbau gehört der World. `buildWorld(worldDescriptor, activityDescriptor | 
 
 Weil die Map jetzt auch ohne Activity aufgelöst wird, trägt `missionMapConfig = isCoopMission ? coopDefenseMapConfig : null` die Activity-Sicht auf dieselbe Map. Ohne diese Trennung würde eine Coop-World ohne Runde Bosse, Missionsziele, Encounter und Respawn-Budgets aufbauen, für die es keine Runde gibt.
 
+Der harte World-ohne-Activity-Proof steht in `tests/WorldWithoutActivityProof.test.ts`: Eine authored World wird ohne Activity und Runde eröffnet, ein Client erhält erst Descriptor, WorldDefinition, Baseline und Ladebestätigung, bevor er interaktiv wird. Danach laufen Client-Input, Host-Physics mit Runtime-Collider, Placement, Construction-Mutation, Snapshot-Replikation, Repositionierung, Rückbau, Player-Detach und World-Teardown; der Room bleibt dabei erhalten.
+
 `onTransitionToArena()` gattert entsprechend zweistufig: die World ist die Bedingung, `activityReady` ist ohne Activity trivial erfüllt. Ausgelöst wird der Aufbau einer World **mit** Activity weiterhin vom Rundenwechsel (ihre Besetzung und ihr Startzeitpunkt kommen aus der Runde); eine World **ohne** Activity entsteht und vergeht mit ihrem eigenen Kanal über `detectWorldChange()`.
 
 Die lokalen Presentation-Schritte des Übergangs — Ladeschirm, Lobby-Overlay, HUD-Wechsel, Arenamusik — hängen an `entersWorld`. Eine Runde nimmt jeden Teilnehmer mit hinein; ohne Activity betritt die World nur, wer aufgenommen wurde. Ein nur simulierender Host behält Lobby, Lobby-HUD und Lobby-Musik. Ebenso entscheidet ohne Activity die World-Teilnahme darüber, wer eine Spielfigur bekommt — `canPlayerSpawnOrRespawn()` verlangt eine Runde und kann eine World ohne Runde nicht beantworten.
