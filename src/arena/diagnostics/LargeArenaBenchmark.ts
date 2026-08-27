@@ -1,9 +1,12 @@
 import { CELL_SIZE } from '../../config';
 import { COOP_DEFENSE_MODE } from '../../gameModes';
 import type { CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
-import type { ArenaDescriptor, ArenaLayout } from '../../types';
+import type { ArenaLayout } from '../../types';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../ArenaGenerator';
 import { resolveCoopDefenseWorldMetrics } from '../../world/WorldMetrics';
+import { toActivityDefinitionId, toWorldDefinitionId } from '../../world/arenaDescriptorAdapter';
+import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
+import type { WorldDescriptor } from '../../world/WorldDescriptor';
 
 /**
  * Mess- und Diagnoseharness fuer grosse Arenen.
@@ -14,7 +17,7 @@ import { resolveCoopDefenseWorldMetrics } from '../../world/WorldMetrics';
  *
  * 1. Wie lange dauert die Generierung einer 400 x 80-Arena, im Median und im schlechten Fall?
  * 2. Ist derselbe Seed reproduzierbar?
- * 3. Wie klein bleibt der initiale Arena-Descriptor auf der Leitung?
+ * 3. Wie klein bleibt die initiale World-/Activity-Nutzlast auf der Leitung?
  *
  * Was er ausdruecklich **nicht** ist: ein Performance-Gate. Er liefert Zahlen, keine Grenzwerte.
  * Eine feste Millisekundenschwelle waere auf fremder Hardware und unter Last instabil und wuerde
@@ -89,6 +92,8 @@ export function createSyntheticLargeArenaMapConfig(
     arenaWidthCells: widthCells,
     arenaHeightCells: heightCells,
     trackMode: 'void-fire',
+    trackPosition: 'center',
+    timeOfDay: '12:00',
     rockField: {
       corridorRadiusCells: 3,
       corridorRadiusVarianceCells: 0.8,
@@ -134,13 +139,18 @@ export function runArenaGenerationBenchmark(
     const layout = ArenaGenerator.generate(seed, generationInput, mapConfig);
     const durationMs = now() - startedAt;
 
-    const descriptor: ArenaDescriptor = {
-      roundRevision: 1,
-      gameMode: COOP_DEFENSE_MODE,
-      mapId: mapConfig.mapId,
+    const world: WorldDescriptor = {
+      worldRevision: 1,
+      definitionId: toWorldDefinitionId(mapConfig.mapId),
       seed,
-      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+      generatorVersion: ARENA_GENERATOR_VERSION,
       layoutFingerprint: ArenaGenerator.fingerprint(layout),
+    };
+    const activity: ActivityDescriptor = {
+      activityRevision: 1,
+      worldRevision: world.worldRevision,
+      kind: 'coop-mission',
+      definitionId: toActivityDefinitionId('coop-mission', mapConfig.mapId),
     };
     samples.push({
       seed,
@@ -149,7 +159,7 @@ export function runArenaGenerationBenchmark(
       dirtCount: layout.dirt.length,
       decalCount: layout.decals?.length ?? 0,
       treeCount: layout.trees.length,
-      descriptorBytes: measureJsonBytes(descriptor),
+      descriptorBytes: measureJsonBytes({ world, activity }),
     });
 
     if (options.checkDeterminism !== false) {

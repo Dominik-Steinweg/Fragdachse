@@ -46,6 +46,8 @@ function createExecutor(
     // Erreichbare Integrationswerte bedeuten ein Feld mit Zielen; nur die Zellform bleibt leer.
     hasGoalCells: () => true,
     getGoalCells: () => [],
+    getCols: () => GRID_COLS,
+    getRows: () => GRID_ROWS,
     gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
   } as unknown as EnemyFlowFieldService;
   return new CoopDefenseSpawnExecutor(enemyManager, flowField, undefined, playerFlowFieldService);
@@ -125,6 +127,8 @@ describe('CoopDefenseSpawnExecutor fronts', () => {
       isTraversableAt: () => true,
       getIntegrationValueAt: () => 0,
       getGoalCells: () => [{ gridX: 25, gridY: 15 }],
+      getCols: () => GRID_COLS,
+      getRows: () => GRID_ROWS,
       gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
     } as unknown as EnemyFlowFieldService;
     const executor = createExecutor(
@@ -144,6 +148,8 @@ describe('CoopDefenseSpawnExecutor fronts', () => {
       isTraversableAt: () => true,
       getIntegrationValueAt: () => EnemyFlowFieldService.INTEGRATION_INFINITY,
       getGoalCells: () => [],
+      getCols: () => GRID_COLS,
+      getRows: () => GRID_ROWS,
       gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
     } as unknown as EnemyFlowFieldService;
     const executor = createExecutor(

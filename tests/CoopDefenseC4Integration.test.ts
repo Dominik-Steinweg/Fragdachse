@@ -59,6 +59,7 @@ import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventD
 import { CoopDefenseTrainEventHandler } from '../src/train/CoopDefenseTrainEventHandler';
 import { CoopDefenseMapEventAnnouncementPresenter } from '../src/ui/CoopDefenseMapEventAnnouncementPresenter';
 import type { CoopDefenseAnnouncementMessage } from '../src/ui/CoopDefenseObjectiveAnnouncement';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 
 const TRAIN_EVENT: CoopDefenseMapTrainEventConfig = {
   id: 'train',
@@ -205,6 +206,7 @@ describe('Coop Defense C4 active map-event integration', () => {
       playStrikeAudio: () => undefined,
       arenaWidthCells: 60,
       arenaHeightCells: 34,
+      worldMetrics: resolveActiveArenaWorldMetrics(),
       random: () => 0.5,
     });
     system.setResolvedCallback((resolution) => handler.handleStrikeResolved(resolution));
@@ -237,6 +239,7 @@ describe('Coop Defense C4 active map-event integration', () => {
         cells: [{ gridX: 4, gridY: 4 }],
       }],
       getNowMs: () => now,
+      worldMetrics: resolveActiveArenaWorldMetrics(),
     });
     const director = new CoopDefenseMapEventDirector([HAZARD_EVENT], [handler]);
 

@@ -153,6 +153,11 @@ describe('WorldParticipation – kanonisch repliziert', () => {
     // Ohne laufende Activity traegt allein die World-Mitgliedschaft.
     expect(body).toContain('const activityRunning = this.worldLifecycle.activity.isActive();');
 
+    // Der erste Activity-Sync darf die gerade entstehende Teilnahme nicht ueber ihre noch leere
+    // Replikation aufloesen - sonst wird ein aktiver Teilnehmer dauerhaft zum Observer.
+    expect(body).toContain("bridge.getRoundRole(profile.id) === 'participant'");
+    expect(body).not.toContain('this.getPlayerCapabilities(profile.id).canMove');
+
     // Der Attach fragt die Teilnahme; der Abbau raeumt bewusst immer den vollen Anteil ab.
     expect(source).toContain('this.resolvePlayerFeatures(this.getWorldParticipation(profile.id))');
     expect(source).toContain("this.resolvePlayerFeatures('interactive')");

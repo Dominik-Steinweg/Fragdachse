@@ -93,11 +93,6 @@ export class CoopDefenseRespawnBudgetSystem {
     return true;
   }
 
-  canPlayerAct(playerId: string): boolean {
-    const state = this.players.get(playerId);
-    return state === undefined || !state.eliminated;
-  }
-
   /**
    * Connected-/Participation-Listen bleiben die Quelle fuer die Relevanz. Damit kann ein
    * dauerhaft verlassener Teilnehmer mit Restbudget den Team-Wipe nicht blockieren; freiwillige

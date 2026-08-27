@@ -32,7 +32,7 @@ function presentation(overrides: Partial<PresentationPolicyInput> = {}): Present
 
 function inputPolicy(overrides: Partial<InputPolicyInput> = {}): InputPolicyInput {
   return {
-    capabilities: resolvePlayerCapabilities({ participation: 'interactive', activityKind: 'coop-mission' }),
+    capabilities: resolvePlayerCapabilities({ participation: 'interactive', activityKind: 'coop-mission', worldCombatAllowed: true }),
     gameplayActive: true,
     countdownActive: false,
     uiBlocking: false,
@@ -124,7 +124,7 @@ describe('Input Policy', () => {
 
   it('laesst einem Beobachter nur die Kamera', () => {
     const observer = resolveInputPolicy(inputPolicy({
-      capabilities: resolvePlayerCapabilities({ participation: 'observer', activityKind: 'coop-mission' }),
+      capabilities: resolvePlayerCapabilities({ participation: 'observer', activityKind: 'coop-mission', worldCombatAllowed: true }),
     }));
     expect(observer.cameraNavigation).toBe(true);
     expect(observer.movement).toBe(false);
@@ -134,7 +134,7 @@ describe('Input Policy', () => {
 
   it('kennt in einer World ohne Activity Bauen, aber keinen Kampf', () => {
     const editor = resolveInputPolicy(inputPolicy({
-      capabilities: resolvePlayerCapabilities({ participation: 'interactive', activityKind: null }),
+      capabilities: resolvePlayerCapabilities({ participation: 'interactive', activityKind: null, worldCombatAllowed: false }),
     }));
     expect(editor.movement).toBe(true);
     expect(editor.placement).toBe(true);

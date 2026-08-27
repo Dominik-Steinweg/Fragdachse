@@ -12,6 +12,7 @@ import {
 import { DEFAULT_LOADOUT, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../loadout/LoadoutConfig';
 import { resolveLoadoutSelectionIds } from '../../loadout/LoadoutRules';
 import { bridge } from '../../network/bridge';
+import { toMapId } from '../../world/arenaDescriptorAdapter';
 import type {
   RuntimeBenchmarkRequest,
   RuntimeBenchmarkResult,
@@ -159,7 +160,7 @@ export class WeaponBalanceLabRuntime {
 
   update(phase: GamePhase, gameplayActive: boolean, deltaMs: number): void {
     if (!this.armed) return;
-    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const mapId = toMapId(bridge.getWorldDescriptor()?.definitionId ?? '') ?? bridge.getCoopDefenseMapId();
     if (phase !== 'ARENA' || !isWeaponBalanceLabMapId(mapId)) return;
     if (!gameplayActive) return;
     if (!this.running && !this.beginRun()) return;

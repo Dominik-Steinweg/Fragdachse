@@ -4,7 +4,6 @@ import {
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_STATIC_FRAMES_VISIBLE,
   DEPTH, COLORS,
-  GRID_COLS, GRID_ROWS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
   CAPTURE_THE_BEER_BASE_TINT_ALPHA,
   CAPTURE_THE_BEER_BLUE_BASE_TINT,
@@ -14,6 +13,7 @@ import {
 } from '../config';
 import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { ArenaLayout, RockCell, TrackCell, GameMode, GamePhase } from '../types';
+import type { WorldMetrics } from '../world/WorldMetrics';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { registerGraphicsObject } from '../effects/EffectUtils';
@@ -138,6 +138,8 @@ export interface ArenaBuilderResult {
 }
 
 export interface ArenaBuilderDynamicOptions {
+  /** Die World-Metrik ist die einzige räumliche Quelle fuer den dynamischen Aufbau. */
+  readonly worldMetrics: WorldMetrics;
   /**
    * Ob dieser Peer die World darstellt. Ohne Darstellung entstehen Staemme und Kronen gar
    * nicht erst - die Runtime der Baeume bleibt davon unberuehrt.
@@ -229,11 +231,20 @@ export class ArenaBuilder {
    * Wird pro Runde einmalig aufgerufen. Rückgabe muss in ArenaScene
    * gespeichert werden; `destroy()` räumt alles wieder auf.
    */
-  buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions = {}): ArenaBuilderResult {
+  buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions): ArenaBuilderResult {
+    const worldMetrics = options.worldMetrics;
+    if (!worldMetrics) {
+      throw new Error('[ArenaBuilder] Dynamic world build requires WorldMetrics');
+    }
     const presentation = options.presentation !== false;
     const baseZoneObjects = presentation ? this.buildCaptureTheBeerBaseZones() : [];
     const rockGroup    = this.scene.physics.add.staticGroup();
-    const frame        = getArenaRockWorldFrame();
+    const frame: RockWorldFrame = {
+      offsetX: worldMetrics.offsetX,
+      offsetY: worldMetrics.offsetY,
+      width: worldMetrics.widthPx,
+      height: worldMetrics.heightPx,
+    };
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockPhysicsProxies: (RockPhysicsProxy | null)[] = [];
     const rockVisualStates = new RockVisualStateStore();
@@ -242,30 +253,28 @@ export class ArenaBuilder {
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
 
     // Spatial Index für Autotiling
-    const rockGrid = new RockGridIndex(layout.rocks);
+    const rockGrid = new RockGridIndex(layout.rocks, {
+      cols: worldMetrics.gridCols,
+      rows: worldMetrics.gridRows,
+    });
     const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
 
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
-    const trackObjects = presentation ? this.buildTracks(layout.tracks ?? []) : [];
+    const trackObjects = presentation ? this.buildTracks(layout.tracks ?? [], worldMetrics) : [];
 
     // Ground-Cover-Platzierungen entstehen genau einmal je Runde und bleiben danach
     // unveraendert; sie sind die Quelle jedes Chunk-Bakes dieser Schicht.
     const groundCoverPlacements = generateGroundCoverPlacements({
       seed: layout.seed,
       dirt: layout.dirt ?? [],
-      metrics: {
-        offsetX: ARENA_OFFSET_X,
-        offsetY: ARENA_OFFSET_Y,
-        gridCols: GRID_COLS,
-        gridRows: GRID_ROWS,
-      },
+      metrics: worldMetrics,
     });
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
       const { gridX, gridY } = layout.rocks[i];
-      const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
+      const worldX = worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = worldMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
       const autoTileFrame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
       rockVisualStates.add({
@@ -291,8 +300,8 @@ export class ArenaBuilder {
 
     // Bäume (Trunk + Canopy)
     for (const { gridX, gridY } of layout.trees) {
-      const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
+      const worldX = worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = worldMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
 
       // Runtime: der nicht rendernde Koerper ist die kanonische Quelle des Baums.
       const trunk = createTreePhysicsProxy(this.scene, worldX, worldY);
@@ -338,13 +347,13 @@ export class ArenaBuilder {
       rockMossPlacements: generateRockMossPlacements({
         seed: layout.seed,
         rocks: layout.rocks,
-        metrics: { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, gridCols: GRID_COLS, gridRows: GRID_ROWS },
+        metrics: worldMetrics,
       }),
       // Ebenfalls einmalig hier erzeugt und nie wieder: siehe `rockVegetationPlacements`.
       rockVegetationPlacements: generateRockVegetationPlacements({
         seed: layout.seed,
         rocks: layout.rocks,
-        metrics: { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, gridCols: GRID_COLS, gridRows: GRID_ROWS },
+        metrics: worldMetrics,
       }),
     };
 
@@ -800,8 +809,8 @@ export class ArenaBuilder {
    * Gruppiert TrackCells nach Spalte und erstellt pro Spalte einen TileSprite.
    * Gleise sind rein visuell (keine Physik-Gruppe), da sie begehbar sind.
    */
-  private buildTracks(tracks: TrackCell[]): Phaser.GameObjects.TileSprite[] {
-    return ArenaVisualFactory.createTracks(this.scene, tracks);
+  private buildTracks(tracks: TrackCell[], metrics: WorldMetrics): Phaser.GameObjects.TileSprite[] {
+    return ArenaVisualFactory.createTracks(this.scene, tracks, metrics);
   }
 
   /**

@@ -380,7 +380,7 @@ export class RockVisualHelper {
       });
     }
     this.markObstaclesDirty(rockId, false);
-    const dropsArmor = !isCoopDefenseMode(bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode())
+    const dropsArmor = !isCoopDefenseMode(bridge.getActiveGameMode())
       || (
         reason === 'damage'
         && this.ctx.coopDefensePlayerModifierSystem?.getClassId(attackerId ?? '') === 'dachs_of_steel'

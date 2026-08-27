@@ -1,8 +1,4 @@
-import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
-  CELL_SIZE,
-} from '../config';
+import { CELL_SIZE } from '../config';
 import type {
   ResolvedCoopDefenseMapEventConfig,
   CoopDefenseMapGroundHazardEventConfig,
@@ -16,6 +12,7 @@ import type {
   CoopDefenseMapEventCycleFinished,
   CoopDefenseMapEventHandler,
 } from './CoopDefenseMapEventDirector';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 /**
  * Abstand zwischen zwei Nachzuendeversuchen fuer Zellen, die beim Aktivieren von einem Bauwerk
@@ -45,6 +42,8 @@ export interface CoopDefenseGroundHazardEventHandlerDeps {
   readonly prebuiltZones: readonly ArenaGroundHazardZone[];
   /** Nur fuer die eigene, relative Brenndauer des FireSystems -- nie fuer Trigger oder Lifecycle. */
   readonly getNowMs: () => number;
+  /** World-Geometrie fuer die Aufteilung authored Zellen in FireSystem-Zellen. */
+  readonly worldMetrics?: WorldMetrics;
 }
 
 /**
@@ -136,13 +135,15 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
   private activate(occurrence: ScheduledGroundHazardOccurrence, roundTimeMs: number): void {
     const zones = this.getZonesForEvent(occurrence.event.id);
     if (zones.length === 0) return;
+    const worldMetrics = this.deps.worldMetrics
+      ?? resolveCoopDefenseWorldMetrics(undefined, undefined);
 
     occurrence.activatedAtRoundMs = roundTimeMs;
     occurrence.nextRetryAtRoundMs = roundTimeMs + BLOCKED_CELL_RETRY_INTERVAL_MS;
     for (const zone of zones) {
       for (const cell of zone.cells) {
-        const cellLeft = ARENA_OFFSET_X + cell.gridX * CELL_SIZE;
-        const cellTop = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE;
+        const cellLeft = worldMetrics.offsetX + cell.gridX * CELL_SIZE;
+        const cellTop = worldMetrics.offsetY + cell.gridY * CELL_SIZE;
         for (let subY = 0; subY < CELL_SIZE; subY += GROUND_FIRE_CELL_SIZE) {
           for (let subX = 0; subX < CELL_SIZE; subX += GROUND_FIRE_CELL_SIZE) {
             const pending: PendingHazardCell = {

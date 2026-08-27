@@ -1,5 +1,4 @@
 import * as Phaser from 'phaser';
-import { GRID_COLS, GRID_ROWS } from '../config';
 import type { EnemyManager, EnemySpawnOptions } from '../entities/EnemyManager';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import {
@@ -223,11 +222,13 @@ export class CoopDefenseSpawnExecutor {
     flowFieldService: EnemyFlowFieldService,
   ): number | null {
     const inward = getFrontInwardStep(front);
-    const maxDistance = front === 'west' || front === 'east' ? GRID_COLS : GRID_ROWS;
+    const cols = flowFieldService.getCols();
+    const rows = flowFieldService.getRows();
+    const maxDistance = front === 'west' || front === 'east' ? cols : rows;
     for (let distance = 0; distance < maxDistance; distance += 1) {
       const gridX = edgeCell.gridX + inward.x * distance;
       const gridY = edgeCell.gridY + inward.y * distance;
-      if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) break;
+      if (gridX < 0 || gridX >= cols || gridY < 0 || gridY >= rows) break;
       if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
       if (flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
       return distance;
@@ -236,12 +237,14 @@ export class CoopDefenseSpawnExecutor {
   }
 
   private getEdgeLine(front: SpawnFront): SpawnCell[] {
+    const cols = this.flowFieldService.getCols();
+    const rows = this.flowFieldService.getRows();
     if (front === 'west' || front === 'east') {
-      const gridX = front === 'west' ? 0 : GRID_COLS - 1;
-      return Array.from({ length: GRID_ROWS }, (_, gridY) => ({ gridX, gridY }));
+      const gridX = front === 'west' ? 0 : cols - 1;
+      return Array.from({ length: rows }, (_, gridY) => ({ gridX, gridY }));
     }
-    const gridY = front === 'north' ? 0 : GRID_ROWS - 1;
-    return Array.from({ length: GRID_COLS }, (_, gridX) => ({ gridX, gridY }));
+    const gridY = front === 'north' ? 0 : rows - 1;
+    return Array.from({ length: cols }, (_, gridX) => ({ gridX, gridY }));
   }
 
   /**
@@ -251,22 +254,26 @@ export class CoopDefenseSpawnExecutor {
   private getAuthoredBand(
     area: CoopDefenseMapSpawnAreaConfig,
   ): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {
+    const cols = this.flowFieldService.getCols();
+    const rows = this.flowFieldService.getRows();
     return {
       minGridX: Math.max(0, area.gridX),
-      maxGridX: Math.min(GRID_COLS - 1, area.gridX + area.widthCells - 1),
+      maxGridX: Math.min(cols - 1, area.gridX + area.widthCells - 1),
       minGridY: Math.max(0, area.gridY),
-      maxGridY: Math.min(GRID_ROWS - 1, area.gridY + area.heightCells - 1),
+      maxGridY: Math.min(rows - 1, area.gridY + area.heightCells - 1),
     };
   }
 
   private getEdgeBand(front: SpawnFront): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {
-    const depthX = Math.min(Math.max(2, Math.floor(GRID_COLS * EDGE_BAND_RATIO)), GRID_COLS - 1);
-    const depthY = Math.min(Math.max(2, Math.floor(GRID_ROWS * EDGE_BAND_RATIO)), GRID_ROWS - 1);
+    const cols = this.flowFieldService.getCols();
+    const rows = this.flowFieldService.getRows();
+    const depthX = Math.min(Math.max(2, Math.floor(cols * EDGE_BAND_RATIO)), cols - 1);
+    const depthY = Math.min(Math.max(2, Math.floor(rows * EDGE_BAND_RATIO)), rows - 1);
     switch (front) {
-      case 'west': return { minGridX: 0, maxGridX: depthX, minGridY: 0, maxGridY: GRID_ROWS - 1 };
-      case 'east': return { minGridX: GRID_COLS - 1 - depthX, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
-      case 'north': return { minGridX: 0, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: depthY };
-      case 'south': return { minGridX: 0, maxGridX: GRID_COLS - 1, minGridY: GRID_ROWS - 1 - depthY, maxGridY: GRID_ROWS - 1 };
+      case 'west': return { minGridX: 0, maxGridX: depthX, minGridY: 0, maxGridY: rows - 1 };
+      case 'east': return { minGridX: cols - 1 - depthX, maxGridX: cols - 1, minGridY: 0, maxGridY: rows - 1 };
+      case 'north': return { minGridX: 0, maxGridX: cols - 1, minGridY: 0, maxGridY: depthY };
+      case 'south': return { minGridX: 0, maxGridX: cols - 1, minGridY: rows - 1 - depthY, maxGridY: rows - 1 };
     }
   }
 

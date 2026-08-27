@@ -5,7 +5,7 @@ import {
   type CoopDefenseMapConfig,
   type ResolvedCoopDefenseMapEncounterConfig,
 } from '../../config/coopDefenseMaps';
-import { resolveCoopDefenseBases } from '../../arena/BaseRegistry';
+import { resolveCoopDefenseActivityBases } from '../../arena/BaseRegistry';
 import {
   getCoopDefenseEnemyConfig,
   resolveCoopDefenseEnemyConfigs,
@@ -221,7 +221,7 @@ function trackPositionLabel(value: CoopDefenseMapConfig['trackPosition']): strin
 function buildMapSignature(mapConfig: CoopDefenseMapConfig): string {
   const encounters = resolveCoopDefenseMapEncounterConfigs(mapConfig, 1);
   const persistentSpawns = resolveCoopDefenseMapPersistentSpawnConfigs(mapConfig, 1);
-  const bases = resolveCoopDefenseBases(mapConfig, 1);
+  const bases = resolveCoopDefenseActivityBases(mapConfig, 1);
   const enemyKinds = new Set<string>();
   for (const encounter of encounters) {
     for (const group of encounter.groups) enemyKinds.add(group.enemyKind);
@@ -365,7 +365,7 @@ export function buildCoopDefenseBalanceMapSnapshot(mapConfig: CoopDefenseMapConf
     });
   }
 
-  const bases = resolveCoopDefenseBases(mapConfig, 1);
+  const bases = resolveCoopDefenseActivityBases(mapConfig, 1);
   const sumBaseHp = (faction: 'friendly' | 'hostile', role: 'main' | 'outpost' | 'spawn-point'): number => (
     bases.filter((base) => base.faction === faction && base.role === role)
       .reduce((sum, base) => sum + Math.max(0, base.hpMax), 0)

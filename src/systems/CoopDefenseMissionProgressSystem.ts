@@ -1,4 +1,4 @@
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
+import { CELL_SIZE } from '../config';
 import type {
   CoopDefenseMapMissionBarrierOpenTrigger,
   ResolvedCoopDefenseMapMissionProgressConfig,
@@ -8,6 +8,7 @@ import type {
   CoopDefenseMissionProgressPresentationState,
   CoopDefenseSecondaryObjectiveState,
 } from '../types';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 export interface CoopDefenseMissionPlayerSample {
   readonly playerId: string;
@@ -23,6 +24,8 @@ export interface CoopDefenseMissionProgressSystemOptions {
   readonly isEncounterCleared?: (encounterId: string) => boolean;
   /** Reliable snapshot seam; wird nur bei semantischen Aenderungen aufgerufen. */
   readonly onPresentationChanged?: (state: CoopDefenseMissionProgressPresentationState) => void;
+  /** World-Geometrie fuer die authored Checkpoint-Koordinaten. */
+  readonly worldMetrics?: WorldMetrics;
 }
 
 interface PlayerPosition {
@@ -41,6 +44,7 @@ interface ResolvedDefenseState {
  * Routensperre und liest dessen terminalen Zustand ueber eine semantische Callback-Grenze.
  */
 export class CoopDefenseMissionProgressSystem {
+  private readonly worldMetrics: WorldMetrics;
   private elapsedRoundMs = 0;
   private missionRevision = 0;
   private nextCheckpointIndex = 0;
@@ -57,6 +61,8 @@ export class CoopDefenseMissionProgressSystem {
     private readonly config: ResolvedCoopDefenseMapMissionProgressConfig,
     private readonly options: CoopDefenseMissionProgressSystemOptions,
   ) {
+    this.worldMetrics = options.worldMetrics
+      ?? resolveCoopDefenseWorldMetrics(undefined, undefined);
     for (const barrier of config.barriers) this.barrierOpen.set(barrier.id, false);
   }
 
@@ -189,8 +195,8 @@ export class CoopDefenseMissionProgressSystem {
     while (this.routeLockDefenseId === null) {
       const checkpoint = this.config.checkpoints[this.nextCheckpointIndex];
       if (!checkpoint) break;
-      const centerX = ARENA_OFFSET_X + (checkpoint.gridX + 0.5) * CELL_SIZE;
-      const centerY = ARENA_OFFSET_Y + (checkpoint.gridY + 0.5) * CELL_SIZE;
+      const centerX = this.worldMetrics.offsetX + (checkpoint.gridX + 0.5) * CELL_SIZE;
+      const centerY = this.worldMetrics.offsetY + (checkpoint.gridY + 0.5) * CELL_SIZE;
       const radius = checkpoint.radiusCells * CELL_SIZE;
       if (!segmentTouchesCircle(from.x, from.y, to.x, to.y, centerX, centerY, radius)) break;
 

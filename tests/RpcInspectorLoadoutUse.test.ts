@@ -2,11 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const bridgeMock = vi.hoisted(() => ({
   isHost: vi.fn(() => true),
-  canPlayerAct: vi.fn(() => true),
   isArenaCountdownActive: vi.fn(() => false),
   getGamePhase: vi.fn(() => 'ARENA'),
   getGameMode: vi.fn(() => 'coop_defense'),
-  getArenaDescriptor: vi.fn(() => ({ gameMode: 'coop_defense' })),
+  getActiveGameMode: vi.fn(() => 'coop_defense'),
   getPlayerUtilityOverrideId: vi.fn(() => ''),
   getPlayerCommittedLoadout: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
@@ -74,6 +73,18 @@ function createFixture() {
     burrowSystem: { isBurrowed: vi.fn(() => false), isStunned: vi.fn(() => false) },
   };
   const lifecycle = {
+    getActiveConstructionToolsForPlayer: vi.fn(() => [
+      { kind: 'construction', id: 'rocket_turret' },
+    ]),
+    getPlayerCapabilities: vi.fn(() => ({
+      canMove: true,
+      canUseCombat: true,
+      canPlace: true,
+      canDismantle: true,
+      canInteract: true,
+      canUseMissionActions: true,
+      canControlCamera: true,
+    })),
     placeInspectorConstruction: vi.fn((): LoadoutUseResult => ({ ok: true })),
     useInspectorUtility: vi.fn((): LoadoutUseResult => ({ ok: true })),
     dismantleInspectorConstruction: vi.fn((): LoadoutUseResult => ({ ok: true })),
@@ -106,11 +117,9 @@ function registerHeldActionHandler(coordinator: RpcCoordinator): HeldActionHandl
 beforeEach(() => {
   vi.clearAllMocks();
   bridgeMock.isHost.mockReturnValue(true);
-  bridgeMock.canPlayerAct.mockReturnValue(true);
   bridgeMock.isArenaCountdownActive.mockReturnValue(false);
   bridgeMock.getGamePhase.mockReturnValue('ARENA');
   bridgeMock.getGameMode.mockReturnValue('coop_defense');
-  bridgeMock.getArenaDescriptor.mockReturnValue({ gameMode: 'coop_defense' });
   bridgeMock.getPlayerUtilityOverrideId.mockReturnValue('');
   bridgeMock.getPlayerCommittedLoadout.mockReturnValue(INSPECTOR_COMMITTED);
 });

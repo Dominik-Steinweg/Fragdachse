@@ -7,6 +7,7 @@ import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { toMapId, toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
+import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import { createWorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import { resolveInputPolicy } from '../src/world/InputPolicy';
 import { resolvePlayerCapabilities } from '../src/world/PlayerCapabilities';
@@ -58,8 +59,8 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 
 /**
  * Baut den Pflichtzustand auf: World ohne Activity, Host ohne Teilnahme, Client interaktiv.
- * Die Bridge-Aufrufe entsprechen hostSyncWorldParticipation() mit
- * hostParticipatesInWorld === false.
+ * Die Bridge-Aufrufe entsprechen hostSyncWorldParticipation() mit dem Host ausserhalb des
+ * kanonischen Admission-Sets.
  */
 function hostOpenSharedWorld(host: NetworkBridge): void {
   host.publishLobbySync();
@@ -89,7 +90,6 @@ describe('Shared World ohne Activity – Aufbau und Teilnahme', () => {
 
       // Die gemischte Kompatibilitaetssicht bleibt leer - sie beschreibt eine Runde, keine
       // World. Genau deshalb darf sie den Weltaufbau nicht torwaechtern.
-      expect(host.getArenaDescriptor()).toBeNull();
 
       // Der Client sieht dieselbe World-Instanz.
       useRoom(clientRoom);
@@ -198,10 +198,7 @@ describe('Shared World ohne Activity – Admission statt Raum-Mitgliedschaft', (
     // Genau eine Quelle der Mitgliedschaft: die Admission.
     expect(body).toContain('const member = this.admittedToWorld.has(profile.id);');
     // Und ausdruecklich nicht mehr die blosse Anwesenheit im Raum.
-    expect(
-      body.includes('profile.id !== localId || this.hostParticipatesInWorld'),
-      'room membership still implies world membership',
-    ).toBe(false);
+    expect(source).not.toContain('hostParticipatesInWorld');
 
     // Eintritt und Austritt sind echte, benannte Vorgaenge.
     expect(source).toContain('hostAdmitToWorld(playerId: string): void {');
@@ -279,6 +276,7 @@ describe('Shared World ohne Activity – Presentation und Input folgen der Teiln
         capabilities: resolvePlayerCapabilities({
           participation: host.getLocalWorldParticipation(),
           activityKind: host.getActivityDescriptor()?.kind ?? null,
+          worldCombatAllowed: false,
         }),
         gameplayActive: true,
         countdownActive: false,
@@ -316,6 +314,7 @@ describe('Shared World ohne Activity – Presentation und Input folgen der Teiln
         capabilities: resolvePlayerCapabilities({
           participation: client.getLocalWorldParticipation(),
           activityKind: client.getActivityDescriptor()?.kind ?? null,
+          worldCombatAllowed: false,
         }),
         gameplayActive: true,
         countdownActive: false,
@@ -358,8 +357,7 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
         mapConfig.arenaWidthCells,
         mapConfig.arenaHeightCells,
       ),
-      mapConfig,
-      humanPlayerCount: 1,
+      definition: toWorldDefinition(mapConfig),
     });
 
     expect(world.descriptor.definitionId).toBe(descriptor.definitionId);
@@ -373,7 +371,7 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
 
   it('nimmt die World entgegen und die Activity nur optional', () => {
     const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    // Der Aufbau kennt keinen ArenaDescriptor mehr.
+    // Der Aufbau kennt nur die kanonische World-/Activity-Sicht.
     expect(source).toContain(
       'buildWorld(worldDescriptor: WorldDescriptor, activityDescriptor: ActivityDescriptor | null): void {',
     );
@@ -442,7 +440,7 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
   it('baut ohne Presentation keine dynamischen World-Flaechen', () => {
     const builder = read('src/arena/ArenaBuilder.ts');
     expect(builder).toContain('const baseZoneObjects = presentation ? this.buildCaptureTheBeerBaseZones() : [];');
-    expect(builder).toContain('const trackObjects = presentation ? this.buildTracks(layout.tracks ?? []) : [];');
+    expect(builder).toContain('const trackObjects = presentation ? this.buildTracks(layout.tracks ?? [], worldMetrics) : [];');
     expect(builder).toContain('const rockVisualSystem = presentation');
     expect(builder).toContain('if (presentation) {\n      result.groundSurface = new GroundSurfaceStreamer');
   });
@@ -484,8 +482,9 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
     expect(coordinator).toContain(
       'this.hostUpdate.setPresentationActive(this.getLocalWorldPresentation().required);',
     );
-    // Und die Teilnahme des Hosts ist eine echte Entscheidung, kein fester Wert.
-    expect(coordinator).toContain('setHostParticipatesInWorld(participates: boolean): void {');
+    // Der Host nutzt denselben Admission-Lifecycle wie jeder andere Spieler.
+    expect(coordinator).not.toContain('setHostParticipatesInWorld');
+    expect(coordinator).toContain('hostAdmitToWorld(playerId: string): void {');
     expect(coordinator).toContain('const member = this.admittedToWorld.has(profile.id);');
   });
 

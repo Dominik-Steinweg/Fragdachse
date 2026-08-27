@@ -1,12 +1,11 @@
 import * as Phaser from 'phaser';
-import {
-  ARENA_OFFSET_Y, ARENA_HEIGHT, PLAYER_SIZE,
-} from '../config';
+import { PLAYER_SIZE } from '../config';
 import type { SyncedTrainState } from '../types';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import { TRAIN } from './TrainConfig';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 // ── Öffentliche Ergebnis-Typen ────────────────────────────────────────────────
 
@@ -84,6 +83,7 @@ export class TrainManager {
     private playerManager: PlayerManager,
     trackX:                number,
     direction:             1 | -1,
+    private readonly worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),
   ) {
     this.trackX    = trackX;
     this.direction = direction;
@@ -282,9 +282,9 @@ export class TrainManager {
    */
   private initialLocoY(): number {
     if (this.direction === 1) {
-      return ARENA_OFFSET_Y - TRAIN.LOCO_HEIGHT / 2 - 2;
+      return this.worldMetrics.offsetY - TRAIN.LOCO_HEIGHT / 2 - 2;
     }
-    return ARENA_OFFSET_Y + ARENA_HEIGHT + TRAIN.LOCO_HEIGHT / 2 + 2;
+    return this.worldMetrics.maxY + TRAIN.LOCO_HEIGHT / 2 + 2;
   }
 
   private getSpanEdges(locoY: number): { frontEdge: number; tailEdge: number } {
@@ -420,9 +420,9 @@ export class TrainManager {
     const heights = this.segHeights();
     const lastH  = heights[heights.length - 1];
     if (this.direction === 1) {
-      return lastY - lastH / 2 >= ARENA_OFFSET_Y + ARENA_HEIGHT;
+      return lastY - lastH / 2 >= this.worldMetrics.maxY;
     }
-    return lastY + lastH / 2 <= ARENA_OFFSET_Y;
+    return lastY + lastH / 2 <= this.worldMetrics.offsetY;
   }
 
   /** AABB-Overlap-Check zwischen allen Segmenten und allen aktiven Spielern. */

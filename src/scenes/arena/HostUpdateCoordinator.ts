@@ -264,7 +264,7 @@ export class HostUpdateCoordinator {
           heldActions.clearPlayer(player.id);
         }
         this.heldActionUtilityIds.set(player.id, utilityId);
-        if (!(this.playerCapabilitiesResolver?.(player.id).canInteract ?? bridge.canPlayerAct(player.id))
+        if (!(this.playerCapabilitiesResolver?.(player.id).canInteract ?? false)
           || !this.ctx.combatSystem.isAlive(player.id)
           || this.ctx.burrowSystem?.isBurrowed(player.id)
           || this.ctx.burrowSystem?.isStunned(player.id)) {
@@ -767,7 +767,7 @@ export class HostUpdateCoordinator {
     if (metrics) metrics.areaEffectsMs = performance.now() - phaseStartedAt;
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (!countdownActive
-      && !isCoopDefenseMode(bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode())
+      && !isCoopDefenseMode(bridge.getActiveGameMode())
       && this.ctx.trainManager) {
       if (!this.classicTrainSpawned) {
         const trainEvent = bridge.getTrainEvent();
@@ -903,7 +903,7 @@ export class HostUpdateCoordinator {
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const now = Date.now();
       const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
-      const gameMode = bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode();
+      const gameMode = bridge.getActiveGameMode();
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
       const inspectorUtilityAction = hasUtilityOverride
         ? null
@@ -1252,7 +1252,7 @@ export class HostUpdateCoordinator {
         x: player.x,
         y: player.y,
         eligible: (this.playerCapabilitiesResolver?.(player.id).canUseMissionActions
-          ?? bridge.canPlayerAct(player.id)) && this.ctx.combatSystem.isAlive(player.id),
+          ?? false) && this.ctx.combatSystem.isAlive(player.id),
       })),
     );
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
@@ -1358,7 +1358,7 @@ export class HostUpdateCoordinator {
     const signatureParts: string[] = [];
     const blueTeamScore = this.resolveTeamObjectiveScore('blue');
     const redTeamScore = this.resolveTeamObjectiveScore('red');
-    const gameMode = bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode();
+    const gameMode = bridge.getActiveGameMode();
     const sharedXp = isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined;
     if (blueTeamScore !== null || redTeamScore !== null) {
       signatureParts.push(`ctb:${blueTeamScore ?? 0}:${redTeamScore ?? 0}`);
@@ -1391,7 +1391,7 @@ export class HostUpdateCoordinator {
   }
 
   private resolveTeamObjectiveScore(teamId: TeamId): number | null {
-    if ((bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode()) !== CAPTURE_THE_BEER_MODE) return null;
+    if (bridge.getActiveGameMode() !== CAPTURE_THE_BEER_MODE) return null;
     if (bridge.isHost()) {
       return this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0;
     }
@@ -1403,7 +1403,7 @@ export class HostUpdateCoordinator {
     blueTeamScore: number | null,
     redTeamScore: number | null,
   ): number | undefined {
-    if ((bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode()) !== CAPTURE_THE_BEER_MODE) return undefined;
+    if (bridge.getActiveGameMode() !== CAPTURE_THE_BEER_MODE) return undefined;
     const teamId = bridge.getPlayerTeam(playerId);
     if (teamId === 'blue') return blueTeamScore ?? 0;
     if (teamId === 'red') return redTeamScore ?? 0;
@@ -2486,7 +2486,7 @@ export class HostUpdateCoordinator {
     // Bezugsdauer unterscheidet sich.
     const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
     const selectedConfigBase = selected?.kind === 'utility'
-      ? getUtilityConfigForMode(selected.id, bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode())
+      ? getUtilityConfigForMode(selected.id, bridge.getActiveGameMode())
       : undefined;
     const selectedConfig = selectedConfigBase
       ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedConfigBase) ?? selectedConfigBase

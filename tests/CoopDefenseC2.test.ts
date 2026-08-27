@@ -12,6 +12,7 @@ import {
   planTutorialSweep,
 } from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 
 function makeMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
   return {
@@ -314,6 +315,7 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
       playStrikeAudio: () => undefined,
       arenaWidthCells: 60,
       arenaHeightCells: 34,
+      worldMetrics: resolveActiveArenaWorldMetrics(),
       random: () => 0.5,
     });
     system.setResolvedCallback((resolution) => handler.handleStrikeResolved(resolution));
@@ -332,7 +334,14 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
 
   it('starts the Map 11 tutorial sweep three cells above the rock region', () => {
     const region = getCoopDefenseTutorialRockRegion(false);
-    const [point] = planTutorialSweep(60, 39, false, 1, () => 0);
+    const [point] = planTutorialSweep(
+      60,
+      39,
+      false,
+      1,
+      () => 0,
+      resolveActiveArenaWorldMetrics(),
+    );
 
     expect(point?.y).toBe(
       ARENA_OFFSET_Y + (region.minGridY - 3 + 0.2) * CELL_SIZE,

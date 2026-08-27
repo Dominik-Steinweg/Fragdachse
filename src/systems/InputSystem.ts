@@ -13,6 +13,7 @@ import { InspectorToolRadialMenu, type InspectorRadialSelection } from '../ui/In
 import type { CameraFeedbackController } from '../effects/camera/CameraFeedbackController';
 import { chargeRumble } from '../effects/camera/cameraFeedbackPresets';
 import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
+import { maySendWorldInput } from '../world/WorldParticipation';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
@@ -365,7 +366,7 @@ export class InputSystem {
     const resolvedToolConfig = tool?.kind === 'utility'
       ? getUtilityConfigForMode(
         tool.id,
-        this.bridge.getArenaDescriptor()?.gameMode ?? this.bridge.getGameMode(),
+        this.bridge.getActiveGameMode(),
       )
       : undefined;
     const activeConstructionId = getConstructionIdForUtility(activeConfig?.id);
@@ -762,7 +763,7 @@ export class InputSystem {
     // Die Scene schaltet den lokalen Input zusaetzlich ab; dieser Rollencheck verhindert, dass
     // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
     // erzeugen, bevor der naechste Snapshot die Entity entfernt.
-    if (this.bridge.getGamePhase() === 'ARENA' && !this.bridge.canPlayerAct(this.bridge.getLocalPlayerId())) {
+    if (this.bridge.getWorldDescriptor() && !maySendWorldInput(this.bridge.getLocalWorldParticipation())) {
       this.placementPreviewState = null;
       this.bridge.sendLocalInput({
         dx: 0,

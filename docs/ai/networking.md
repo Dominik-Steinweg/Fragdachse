@@ -17,7 +17,7 @@ Die ICE-Konfiguration wird in src/network/peer/PeerSignaling.ts explizit gesetzt
 
 ## Host-Autorität
 
-Der Host entscheidet Positionen, Treffer, Schaden, Ressourcen, Spawns, Gegner, Rundenzustand und Ergebnisse. Das Arena-Layout wird aus einem host-authored `ArenaDescriptor` (Round-Revision, Modus/Map, Seed, Generatorversion und Fingerprint) auf Host und Clients lokal deterministisch erzeugt; ein vollständiges `ArenaLayout` ist kein Wire-State. Clients senden Input oder Aktionsanforderungen. Prediction ist nur Feedback und darf keine autoritative Folge erzeugen. Clients sprechen nie direkt miteinander.
+Der Host entscheidet Positionen, Treffer, Schaden, Ressourcen, Spawns, Gegner, Rundenzustand und Ergebnisse. Das Arena-Layout wird aus einem host-authored `WorldDescriptor` (World-Revision, Definition, Seed, Generatorversion und Fingerprint) sowie einer optionalen `ActivityDescriptor` auf Host und Clients lokal deterministisch erzeugt; ein vollständiges `ArenaLayout` ist kein Wire-State. Clients senden World-Input oder Aktionsanforderungen. Prediction ist nur Feedback und darf keine autoritative Folge erzeugen. Clients sprechen nie direkt miteinander.
 
 In Modi mit wählbaren gegnerischen Teams (`hasTeamSelection`) begrenzt `NetworkBridge` jedes Team auf sechs Spieler. Neue Spieler gehen deterministisch ins kleinere Team, bei Gleichstand nach Blau; Teamwechsel in ein volles Zielteam werden hostseitig abgelehnt. Beim Wechsel aus einem Nicht-Team-Modus werden alle Spieler stabil neu verteilt, während TDM und Capture the Beer gültige Zuweisungen untereinander behalten. `PeerRoom` kennt weiterhin nur die globale Raumgrenze von zwölf Spielern.
 
@@ -25,7 +25,7 @@ Fachliche RPCs werden in RpcCoordinator registriert und über Methoden von Netwo
 
 ## Store- und Snapshot-Semantik
 
-Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, den kleinen Arena-Descriptor, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen `KEY_INPUT`, `KEY_PLACEMENT_PREVIEW`, Ping und `KEY_GAME_STATE`; `KEY_INPUT` wird ausschließlich an den Host zugestellt, `KEY_PLACEMENT_PREVIEW` wird als visueller Presence-State an die übrigen Clients relayed. Reliable-/Raw-Sends protokollieren auffällig große Payloads und geschlossene Verbindungen, statt Fehler still zu verschlucken.
+Der Peer-Store hat globale und per-player Keys. Lokales Schreiben wirkt sofort lokal und wird danach verteilt. Reliable Keys tragen Lobby-/Round-Baseline, `WorldDescriptor`/optionalen `ActivityDescriptor`, Zeitbasis, committed Loadouts, Participation, Ergebnisse und seltene Lebenszyklus-/Präsentationszustände. Fast Keys tragen `KEY_INPUT`, `KEY_PLACEMENT_PREVIEW`, Ping und `KEY_GAME_STATE`; `KEY_INPUT` wird ausschließlich an den Host zugestellt, `KEY_PLACEMENT_PREVIEW` wird als visueller Presence-State an die übrigen Clients relayed. Reliable-/Raw-Sends protokollieren auffällig große Payloads und geschlossene Verbindungen, statt Fehler still zu verschlucken.
 
 Der reliable `RoundState` traegt neben dem Rundenstart nur seltene Zeitanker: Ein erfolgreicher Coop-Boss-Spawn schreibt `coopDefenseBossSpawnedAtMs` genau einmal. Kontinuierliche Arena-Tageszeit wird daraus und aus dem synchronisierten Jetzt lokal rekonstruiert und nie pro Tick repliziert.
 
@@ -56,7 +56,7 @@ Wiederkehrende hostseitige Ereignisse werden über einen monoton steigenden Zäh
 
 Der Host relayt Store-Schreibvorgänge, aber nicht blind jeden Key: `HOST_ONLY_PLAYER_KEYS` bleiben hostlokal. Ein Client darf den per-player-Key `KEY_PLACEMENT_PREVIEW` nur für seine eigene `originLink.playerId` schreiben; der Host darf ihn weiterhin für andere Spieler löschen oder setzen. `KEY_INPUT` und `KEY_PLACEMENT_PREVIEW` fehlen in Welcome-/Resume-Snapshots. Neue Keys zuerst nach Besitzer, Kanal, Änderungsfrequenz und Latejoin-Baseline klassifizieren.
 
-`KEY_PLACEMENT_PREVIEW` ist ein ephemerer Presence-State ohne Revision, Generation oder Reliable-Clear. Aktive Zustände werden bei Änderung sofort und danach ungefähr alle 150 ms über `fast` wiederholt. Ein `null` beendet die Preview best-effort ebenfalls über `fast`; Remote-Clients verwerfen aktive Previews nach 600 ms ohne lokales Empfangsupdate automatisch. Disconnect, Quit, Spectator-Wechsel und Verlust der Handlungsberechtigung löschen die lokale Preview beziehungsweise senden best-effort `null`. Ein Resume führt keine Store-Reconciliation durch: Eine lokal aktive Preview wird beim nächsten Update erneut gesendet, eine inaktive Preview darf über die TTL auslaufen.
+`KEY_PLACEMENT_PREVIEW` ist ein ephemerer Presence-State mit der aktuellen `worldRevision`, aber ohne Generation oder Reliable-Clear. Aktive Zustände werden bei Änderung sofort und danach ungefähr alle 150 ms über `fast` wiederholt. Ein `null` beendet die Preview best-effort ebenfalls über `fast`; Remote-Clients verwerfen aktive Previews nach 600 ms ohne lokales Empfangsupdate automatisch oder wenn ihre Revision nicht zur aktuellen World passt. Disconnect, Quit, Spectator-Wechsel und Verlust der Handlungsberechtigung löschen die lokale Preview beziehungsweise senden best-effort `null`. Ein Resume führt keine Store-Reconciliation durch: Eine lokal aktive Preview wird beim nächsten Update erneut gesendet, eine inaktive Preview darf über die TTL auslaufen.
 
 Power-up-Pickups laufen als Request/ACK. Ein Client darf aus einer replizierten Definition keinen Effekt lokal anwenden; der Host prüft UID, Reichweite und Spielerzustand und wendet den Effekt im PowerUpSystem an. Temporäre Utility-Overrides werden als reliable UtilityOverrideDescriptor repliziert und beim Default-Loadout, beim Spielerabgang und vor Round-Teardown zentral entfernt.
 
@@ -80,7 +80,11 @@ Zur Instanzidentität gehören auch die `parameters`: `isSameWorldInstance()` ve
 
 Auf dem Draht gibt es genau einen World-Kanal: `wld` traegt `WorldDescriptor | null`, `act` daneben `ActivityDescriptor | null`. Beide sind host-autoritativ (`publishWorldAndActivity`, `clearWorldAndActivity`) und werden gemeinsam gesetzt, damit nie eine Activity ohne ihre World steht; `activity: null` ist ein regulaerer Zustand. Eine Activity, die auf eine andere World-Revision zeigt, verwirft `getActivityDescriptor()` zentral. Die World endet mit der Runde – Rundenabschluss, Diagnose-Abbruch und technischer Abbruch raeumen den Kanal ab.
 
-`getArenaDescriptor()` ist nur noch eine abgeleitete Kompatibilitaetssicht auf beide Kanaele, kein eigener Wire-Key. Der persistente Basisradius steht als `WorldDescriptor.parameters.persistentBaseRadiusCells` im World-Kanal und nicht mehr im `RoundState`. Die Ladebarriere `wlr` traegt `WorldLoadReadyState` mit `worldRevision`.
+Ein Activity-Wechsel innerhalb derselben World läuft über `publishActivity()` und verändert weder World-Revision noch World-Runtime. `WorldLifecycle.beginCreate()` erkennt diesen Fall ebenfalls und veröffentlicht nur den Activity-Kanal; `endInstance()` räumt weiterhin beide Kanäle gemeinsam ab.
+
+Runtime-Code liest den aktiven Modus über `getActiveGameMode()` aus Activity oder Lobby-Fallback. Der persistente Basisradius steht als `WorldDescriptor.parameters.persistentBaseRadiusCells` im World-Kanal und nicht mehr im `RoundState`. Die Ladebarriere `wlr` traegt `WorldLoadReadyState` mit `worldRevision`.
+
+World-Input und World-mutierende RPCs tragen ihre `worldRevision`. `NetworkBridge` verwirft fehlende oder veraltete Revisionen zentral, bevor Input-, Loadout-, Pickup-, Dash-, Burrow- oder Held-Action-Handler erreicht werden. Dadurch kann eine Nachricht aus der alten World nach einem schnellen Rebuild keine neue Runtime verändern.
 
 ## Referenzen
 

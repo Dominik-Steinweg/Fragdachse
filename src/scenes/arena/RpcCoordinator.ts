@@ -132,8 +132,7 @@ export class RpcCoordinator {
   private registerDashHandler(): void {
     bridge.registerDashHandler((playerId, dx, dy) => {
       if (!bridge.isHost()) return;
-      if (bridge.getGamePhase() !== 'ARENA') return;
-      if (!bridge.canPlayerAct(playerId)) return;
+      if (!this.lifecycle?.getPlayerCapabilities(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
       this.ctx.hostPhysics.handleDashRPC(playerId, dx, dy);
     });
@@ -142,8 +141,7 @@ export class RpcCoordinator {
   private registerBurrowRpcHandler(): void {
     bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
       if (!bridge.isHost()) return;
-      if (bridge.getGamePhase() !== 'ARENA') return;
-      if (!bridge.canPlayerAct(playerId)) return;
+      if (!this.lifecycle?.getPlayerCapabilities(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
       this.ctx.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
     });
@@ -152,8 +150,7 @@ export class RpcCoordinator {
   private registerDecoyStealthBreakHandler(): void {
     bridge.registerDecoyStealthBreakHandler((playerId) => {
       if (!bridge.isHost()) return;
-      if (bridge.getGamePhase() !== 'ARENA') return;
-      if (!bridge.canPlayerAct(playerId)) return;
+      if (!this.lifecycle?.getPlayerCapabilities(playerId).canUseCombat) return;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (player) this.ctx.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
       this.ctx.decoySystem.breakStealth(playerId, Date.now());
@@ -162,14 +159,14 @@ export class RpcCoordinator {
 
   private registerHeldActionHandler(): void {
     bridge.registerHeldActionHandler((playerId, operation, actionId, kind, _durationMs, toolRef) => {
-      if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return false;
+      if (!bridge.isHost()) return false;
       const system = this.ctx.hostHeldActionSystem;
       if (!system) return false;
       if (operation === 'cancel') {
         system.cancel(playerId, actionId);
         return true;
       }
-      if (!kind || !bridge.canPlayerAct(playerId) || bridge.isArenaCountdownActive()
+      if (!kind || !this.lifecycle?.getPlayerCapabilities(playerId).canInteract || bridge.isArenaCountdownActive()
         || !this.ctx.combatSystem.isAlive(playerId)
         || this.ctx.burrowSystem?.isBurrowed(playerId)
         || this.ctx.burrowSystem?.isStunned(playerId)) return false;
@@ -189,7 +186,7 @@ export class RpcCoordinator {
         ) return false;
         utility = getUtilityConfigForMode(
           toolRef.id,
-          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+          bridge.getActiveGameMode(),
         );
       } else {
         utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
@@ -202,12 +199,8 @@ export class RpcCoordinator {
   private registerLoadoutUseHandler(): void {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
-      const capabilities = typeof this.lifecycle?.getPlayerCapabilities === 'function'
-        ? this.lifecycle.getPlayerCapabilities(senderId)
-        : {
-          canInteract: bridge.canPlayerAct(senderId),
-          canUseCombat: bridge.canPlayerAct(senderId),
-        };
+      const capabilities = this.lifecycle?.getPlayerCapabilities(senderId);
+      if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
@@ -263,7 +256,7 @@ export class RpcCoordinator {
         if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
         const inspectorUtility = getUtilityConfigForMode(
           params.toolRef.id,
-          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+          bridge.getActiveGameMode(),
         );
         if (!inspectorUtility) return { ok: false, reason: 'invalid' };
         const charge = validateHostUtilityCharge(this.ctx, senderId, inspectorUtility, params);
@@ -290,16 +283,6 @@ export class RpcCoordinator {
           authoritativeParams = charge.authoritativeParams;
         }
       }
-      // Legacy construction packets from older clients remain accepted during
-      // the migration, but still pass through the same host validation.
-      if (slot === 'weapon2' && params?.constructionId) {
-        return this.lifecycle?.placeInspectorConstruction(
-          senderId,
-          params.constructionId,
-          targetX,
-          targetY,
-        ) ?? { ok: false, reason: 'blocked' };
-      }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
       return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, authoritativeParams, clientX, clientY)
         ?? { ok: false, reason: 'blocked' };
@@ -307,16 +290,7 @@ export class RpcCoordinator {
   }
 
   private hasActiveConstructionTool(playerId: string): boolean {
-    const lifecycle = this.lifecycle as unknown as {
-      getActiveConstructionToolsForPlayer?: (id: string) => readonly unknown[];
-    } | null;
-    if (typeof lifecycle?.getActiveConstructionToolsForPlayer === 'function') {
-      return lifecycle.getActiveConstructionToolsForPlayer(playerId).length > 0;
-    }
-    // Compatibility for focused RPC tests/older scene doubles that predate the shared resolver.
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    return committed?.coopDefenseClassId === 'inspector_gadachs'
-      && (committed.tools ?? []).some((tool) => tool.kind === 'construction');
+    return (this.lifecycle?.getActiveConstructionToolsForPlayer(playerId).length ?? 0) > 0;
   }
 
   private registerCaptureTheBeerFxHandler(): void {
@@ -531,7 +505,7 @@ export class RpcCoordinator {
   private registerPickupPowerUpHandler(): void {
     bridge.registerPickupPowerUpHandler((uid, playerId) => {
       if (bridge.isArenaCountdownActive()) return false;
-      if (!bridge.canPlayerAct(playerId)) return false;
+      if (!this.lifecycle?.getPlayerCapabilities(playerId).canInteract) return false;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (!player) return false;
       const pickedUp = this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.x, player.y) ?? false;

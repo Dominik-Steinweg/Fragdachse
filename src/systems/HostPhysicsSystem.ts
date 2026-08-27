@@ -13,6 +13,7 @@ import {
 import { TRAIN } from '../train/TrainConfig';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import { getDashBurstTiming } from '../utils/dashTiming';
+import { maySendWorldInput } from '../world/WorldParticipation';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
@@ -327,7 +328,8 @@ export class HostPhysicsSystem {
    * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
-    if (!(this.canMoveResolver?.(playerId) ?? this.bridge.canPlayerAct(playerId))) return;
+    if (!(this.canMoveResolver?.(playerId)
+      ?? maySendWorldInput(this.bridge.getWorldParticipation(playerId)))) return;
     if (!this.combatSystem.isAlive(playerId)) return;
     if (this.burrowSystem?.isDashBlocked(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
@@ -558,7 +560,8 @@ export class HostPhysicsSystem {
       const impulse = this.consumeImpulseVelocity(player.id, now);
       const forcedMovement = this.forcedMovement.get(player.id);
 
-      if (!(this.canMoveResolver?.(player.id) ?? this.bridge.canPlayerAct(player.id))) {
+      if (!(this.canMoveResolver?.(player.id)
+        ?? maySendWorldInput(this.bridge.getWorldParticipation(player.id)))) {
         playerBody.setVelocity(impulse.vx, impulse.vy);
         continue;
       }

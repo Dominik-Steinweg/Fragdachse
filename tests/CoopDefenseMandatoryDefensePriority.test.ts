@@ -6,6 +6,9 @@ import type {
 } from '../src/config/coopDefenseMaps';
 import { CoopDefenseMissionProgressSystem } from '../src/systems/CoopDefenseMissionProgressSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../src/systems/CoopDefenseSecondaryObjectiveSystem';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+
+const TEST_WORLD_METRICS = resolveActiveArenaWorldMetrics();
 
 function world(gridX: number, gridY = 2): { x: number; y: number } {
   return {
@@ -72,6 +75,7 @@ function makeSystems(optional: ResolvedCoopDefenseMapSecondaryObjectiveConfig) {
   missionProgress = new CoopDefenseMissionProgressSystem(missionConfig, {
     roundRevision: 1,
     getDefenseObjectiveState: (objectiveId) => objectiveSystem.getObjectiveState(objectiveId),
+    worldMetrics: TEST_WORLD_METRICS,
   });
   return { missionProgress, objectiveSystem };
 }

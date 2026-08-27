@@ -80,29 +80,6 @@ describe('World-Kanal – Replikation', () => {
       const client = bridgeFor(clientRoom);
       expect(client.getWorldDescriptor()).toEqual(world());
       expect(client.getActivityDescriptor()).toBeNull();
-      // Ohne Activity gibt es keine Runde – und damit auch keine Kompatibilitaetssicht.
-      expect(client.getArenaDescriptor()).toBeNull();
-    } finally {
-      clearActiveSession();
-    }
-  });
-
-  it('leitet die Kompatibilitaetssicht aus beiden Kanaelen ab, statt sie separat zu fuehren', async () => {
-    const [hostRoom, clientRoom] = await createRoom(2);
-    try {
-      const host = bridgeFor(hostRoom);
-      host.publishWorldAndActivity(world(), activity());
-
-      const client = bridgeFor(clientRoom);
-      expect(client.getArenaDescriptor()).toEqual({
-        // Die Runde behaelt ihre eigene Identitaet; die World bleibt Revision 12.
-        roundRevision: 31,
-        gameMode: 'coop_defense',
-        mapId: '7',
-        seed: 4242,
-        arenaGeneratorVersion: 3,
-        layoutFingerprint: 'deadbeef',
-      });
     } finally {
       clearActiveSession();
     }
@@ -115,7 +92,6 @@ describe('World-Kanal – Replikation', () => {
       host.publishWorldAndActivity(world(), activity());
       const expectedWorld = host.getWorldDescriptor();
       const expectedActivity = host.getActivityDescriptor();
-      const expectedArena = host.getArenaDescriptor();
 
       host.setCoopDefenseMapId('19');
       host.setGameMode('deathmatch');
@@ -124,7 +100,6 @@ describe('World-Kanal – Replikation', () => {
       expect(host.getGameMode()).toBe('deathmatch');
       expect(host.getWorldDescriptor()).toEqual(expectedWorld);
       expect(host.getActivityDescriptor()).toEqual(expectedActivity);
-      expect(host.getArenaDescriptor()).toEqual(expectedArena);
     } finally {
       clearActiveSession();
     }
@@ -140,7 +115,6 @@ describe('World-Kanal – Replikation', () => {
       const client = bridgeFor(clientRoom);
       expect(client.getWorldDescriptor()).toBeNull();
       expect(client.getActivityDescriptor()).toBeNull();
-      expect(client.getArenaDescriptor()).toBeNull();
     } finally {
       clearActiveSession();
     }
@@ -171,7 +145,6 @@ describe('World-Kanal – Host-Autoritaet und Verwerfungsregel', () => {
       const client = bridgeFor(clientRoom);
       expect(client.getWorldDescriptor()?.worldRevision).toBe(13);
       expect(client.getActivityDescriptor()).toBeNull();
-      expect(client.getArenaDescriptor()).toBeNull();
     } finally {
       clearActiveSession();
     }

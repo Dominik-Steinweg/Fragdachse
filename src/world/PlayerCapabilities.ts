@@ -31,6 +31,8 @@ export interface PlayerCapabilityInput {
   readonly participation: WorldParticipation;
   /** Activity dieser World; `null` fuer eine World ohne Mission. */
   readonly activityKind: ActivityKind | null;
+  /** Explizite World-Policy; Activity null darf Kampf erlauben oder verbieten. */
+  readonly worldCombatAllowed: boolean;
 }
 
 const NOTHING: PlayerCapabilities = {
@@ -44,7 +46,7 @@ const NOTHING: PlayerCapabilities = {
 };
 
 export function resolvePlayerCapabilities(input: PlayerCapabilityInput): PlayerCapabilities {
-  const { participation, activityKind } = input;
+  const { participation, activityKind, worldCombatAllowed } = input;
   // Wer nicht an der World teilnimmt, darf in ihr nichts – auch nicht zusehen.
   if (participation === 'none') return NOTHING;
   // Beobachten und Verlassen fuehren die Kamera, aber keine Handlung.
@@ -52,8 +54,8 @@ export function resolvePlayerCapabilities(input: PlayerCapabilityInput): PlayerC
 
   return {
     canMove: true,
-    // Eine World ohne Activity kennt keinen Kampf; sie wird gebaut, nicht bestritten.
-    canUseCombat: activityKind !== null,
+    // Kampf ist eine explizite World-Policy, nicht die blosse Anwesenheit einer Activity.
+    canUseCombat: worldCombatAllowed,
     canPlace: true,
     canDismantle: true,
     canInteract: true,

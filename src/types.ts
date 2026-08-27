@@ -32,17 +32,6 @@ export interface RoundParticipationState {
 
 export type ArenaLoadStage = 'generating' | 'building' | 'rendering' | 'ready';
 
-/** Small host-authored round identity used to reproduce the arena locally. */
-export interface ArenaDescriptor {
-  roundRevision: number;
-  gameMode: GameMode;
-  mapId: string | null;
-  seed: number;
-  arenaGeneratorVersion: number;
-  layoutFingerprint: string;
-}
-
-
 /** Host-autoritärer, replizierter Lebenszustand einer Runde mit authored Respawn-Budget. */
 export interface CoopDefenseRespawnBudgetPlayerState {
   remainingRespawns: number;
@@ -163,6 +152,8 @@ export interface PlayerInput {
   dy: number;  // -1 | 0 | 1
   aim: number; // Aim-Winkel quantisiert als uint8 (0-255 → 0-2π)
   dashHeld?: boolean;
+  /** World-Instanz, aus der dieser Input stammt; veraltete Inputs werden verworfen. */
+  worldRevision?: number;
 }
 
 export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
@@ -173,6 +164,8 @@ export type ConstructionOwnership = 'host-persistent' | 'guest-session' | 'base-
 
 export interface PlacementPreviewNetState {
   active: boolean;
+  /** World-Instanz der Vorschau; eine Vorschau darf nicht in eine neue World ueberlaufen. */
+  worldRevision?: number;
   kind: PlaceableKind;
   gridX: number;
   gridY: number;

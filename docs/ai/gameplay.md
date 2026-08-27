@@ -24,7 +24,7 @@ Gemeinsame Kernpfade für Spieler, Combat, Projektile, Ressourcen und Loadouts b
 
 ## Participation und Spectator
 
-NetworkBridge.hostStartRoundParticipants() friert die Teilnehmer beim Rundenstart ein. Später beitretende Spieler und Spieler nach freiwilligem Wechsel werden host-autoritativ Spectators. canPlayerSpawnOrRespawn(), canPlayerAct() und canPlayerReceiveRoundRewards() sind die gemeinsamen Gates.
+NetworkBridge.hostStartRoundParticipants() friert die Teilnehmer beim Rundenstart ein. Später beitretende Spieler und Spieler nach freiwilligem Wechsel werden host-autoritativ Spectators. `canPlayerSpawnOrRespawn()`, `canPlayerAct()` und `canPlayerReceiveRoundRewards()` sind ausschließlich Round-Gates; World-Handlungen werden über `WorldParticipation` und die spezifischen `PlayerCapabilities` geprüft.
 
 Die Participation-Revision und `arenaLoadReady` gehören zur technischen Startbarriere und ersetzen nicht das Lobby-Ready. Disconnects werden aus der aktuellen Teilnehmerprüfung entfernt; ein später beitretender Spectator setzt einen bereits geplanten Start nicht zurück. Ein vorbereiteter Rundenzustand bleibt bis zum gemeinsamen Startzeitpunkt verborgen.
 

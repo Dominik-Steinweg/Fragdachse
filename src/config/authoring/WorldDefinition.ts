@@ -37,10 +37,17 @@ export interface WorldDefinition {
   /** Statische Strukturen der Welt. Ihre missionsabhaengigen Anteile liegen in der Activity. */
   readonly bases: readonly WorldBaseDefinition[];
   readonly tracks: WorldTrackDefinition;
+  /** World-scoped action policy; it remains valid even when no Activity is running. */
+  readonly actionPolicy?: WorldActionPolicy;
   /** Gesetzt: Diese World traegt eine persistente Basis an einer authored Stelle. */
   readonly persistentBaseSite?: WorldPersistentBaseSiteDefinition;
   /** Statische Arena-Uhrzeit als `"HH:MM"`. Laufzeitverlaeufe gehoeren zur Activity. */
   readonly initialTimeOfDay: string;
+}
+
+export interface WorldActionPolicy {
+  /** Allows combat in this World without requiring an Activity. */
+  readonly combat: boolean;
 }
 
 export interface WorldMetricsDefinition {

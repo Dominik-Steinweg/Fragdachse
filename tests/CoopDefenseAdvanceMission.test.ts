@@ -12,6 +12,9 @@ import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespaw
 import { CoopDefenseRoundStateSystem } from '../src/systems/CoopDefenseRoundStateSystem';
 import { buildCoopDefenseLifeStatusViewModel } from '../src/ui/coopDefenseLifeStatusModel';
 import { buildMainObjectiveViewModel } from '../src/ui/coopDefenseMainObjectiveModel';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+
+const TEST_WORLD_METRICS = resolveActiveArenaWorldMetrics();
 
 function createBaseManager(friendlyHp: readonly number[]): BaseManager {
   const bases = friendlyHp.map((hp) => ({ hp, faction: 'friendly' as CoopBaseFaction }));
@@ -156,6 +159,7 @@ describe('advance extraction', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'completed',
+      worldMetrics: TEST_WORLD_METRICS,
     });
 
     // Ein toter oder als Spectator gefuehrter Spieler ist nicht berechtigt und extrahiert nicht.
@@ -177,6 +181,7 @@ describe('advance extraction', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'completed',
+      worldMetrics: TEST_WORLD_METRICS,
     });
     const downed = { playerId: 'downed', ...world(0), eligible: false };
     system.hostUpdate(0, false, [{ playerId: 'runner', ...world(0), eligible: true }, downed]);
@@ -193,6 +198,7 @@ describe('advance extraction', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => defenseState,
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.hostUpdate(0, false, [{ playerId: 'p1', ...world(0), eligible: true }]);
     system.hostUpdate(16, false, [{ playerId: 'p1', ...world(10), eligible: true }]);
@@ -218,6 +224,7 @@ describe('advance respawn focus', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'completed',
+      worldMetrics: TEST_WORLD_METRICS,
     });
     expect(system.getRespawnCheckpointId()).toBeNull();
 
@@ -243,6 +250,7 @@ describe('advance respawn focus', () => {
     const system = new CoopDefenseMissionProgressSystem(twoRespawns, {
       roundRevision: 1,
       getDefenseObjectiveState: () => null,
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.hostUpdate(0, false, [{ playerId: 'p1', ...world(0), eligible: true }]);
     system.hostUpdate(16, false, [{ playerId: 'p1', ...world(3), eligible: true }]);
@@ -256,6 +264,7 @@ describe('advance respawn focus', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'completed',
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.hostUpdate(0, false, [{ playerId: 'p1', ...world(0), eligible: true }]);
     system.hostUpdate(16, false, [{ playerId: 'p1', ...world(6), eligible: true }]);
@@ -286,6 +295,7 @@ describe('advance respawn focus', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'completed',
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.hostUpdate(0, false, [{ playerId: 'p1', ...world(0), eligible: true }]);
     const forward = world(9);

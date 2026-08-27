@@ -2,9 +2,10 @@ import * as Phaser from 'phaser';
 import type { DecoyUtilityConfig } from '../loadout/LoadoutConfig';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedDeathEffect, SyncedHitEffect } from '../types';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, ARMOR_MAX, COLORS } from '../config';
+import { ARMOR_MAX, COLORS } from '../config';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { DecoyEntity } from '../entities/DecoyEntity';
+import type { WorldMetrics } from '../world/WorldMetrics';
 
 type CombatStateReader = {
   getHP(playerId: string): number;
@@ -58,6 +59,7 @@ export class DecoySystem {
   private rockGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private explosionCallback: ((ownerId: string, x: number, y: number, radius: number, damage: number, knockback: number) => void) | null = null;
+  private worldMetrics: WorldMetrics | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -75,6 +77,9 @@ export class DecoySystem {
 
   setCooldownStarter(cb: ((playerId: string, utilityId: string, now: number) => void) | null): void {
     this.beginCooldown = cb;
+  }
+  setWorldMetrics(metrics: WorldMetrics | null): void {
+    this.worldMetrics = metrics;
   }
   setExplosionCallback(cb: ((ownerId: string, x: number, y: number, radius: number, damage: number, knockback: number) => void) | null): void { this.explosionCallback = cb; }
 
@@ -472,8 +477,12 @@ export class DecoySystem {
       return { dirX: dirX / len, dirY: dirY / len };
     }
 
-    const centerX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
-    const centerY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
+    const metrics = this.worldMetrics;
+    if (!metrics) {
+      throw new Error('DecoySystem requires WorldMetrics before resolving damage direction');
+    }
+    const centerX = metrics.offsetX + metrics.widthPx / 2;
+    const centerY = metrics.offsetY + metrics.heightPx / 2;
     const angle = Math.atan2(decoy.entity.sprite.y - centerY, decoy.entity.sprite.x - centerX) + (((seed >>> 5) % 41) - 20) * (Math.PI / 180);
     return { dirX: Math.cos(angle), dirY: Math.sin(angle) };
   }

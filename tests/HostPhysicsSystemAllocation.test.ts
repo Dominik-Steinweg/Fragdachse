@@ -90,7 +90,7 @@ function createHarness() {
 
   const bridge = {
     isHost: () => true,
-    canPlayerAct: () => true,
+    getWorldParticipation: () => 'interactive',
     getPlayerInput: () => ({ dx: 1, dy: 0 }),
   } as unknown as NetworkBridge;
 

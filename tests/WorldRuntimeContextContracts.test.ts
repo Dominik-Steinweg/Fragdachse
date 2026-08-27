@@ -5,6 +5,7 @@ import * as config from '../src/config';
 import { applyArenaMetricsForMode, getArenaMetricsProfile } from '../src/config';
 import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import type { GameMode } from '../src/types';
+import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import { PROCEDURAL_ARENA_WORLD_DEFINITION_ID, type WorldDescriptor } from '../src/world/WorldDescriptor';
 import { isCellInsideWorld, resolveWorldMetrics, worldCellOrigin } from '../src/world/WorldMetrics';
 import {
@@ -12,6 +13,7 @@ import {
   findWorldBase,
   isValidPersistentBaseSite,
 } from '../src/world/WorldRuntimeContext';
+import { resolveCoopDefenseActivityBases } from '../src/arena/BaseRegistry';
 
 /**
  * Der kanonische Kontext einer World-Instanz.
@@ -50,8 +52,7 @@ function contextForMap(mapId: string, overrides: Partial<WorldDescriptor> = {}) 
       mapConfig.arenaWidthCells,
       mapConfig.arenaHeightCells,
     ),
-    mapConfig,
-    humanPlayerCount: 1,
+    definition: toWorldDefinition(mapConfig),
   });
 }
 
@@ -159,8 +160,7 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     const world = createWorldRuntimeContext({
       descriptor: descriptorFor(PROCEDURAL_ARENA_WORLD_DEFINITION_ID),
       metricsProfile: getArenaMetricsProfile('deathmatch', 'ARENA'),
-      mapConfig: null,
-      humanPlayerCount: 1,
+      definition: null,
     });
     expect(world.definition).toBeNull();
     expect(world.bases).toEqual([]);
@@ -185,32 +185,25 @@ describe('WorldRuntimeContext – eine Metrikquelle', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/world/WorldRuntimeContext.ts'), 'utf8');
     const factoryStart = source.indexOf('export function createWorldRuntimeContext(');
     const factory = source.slice(factoryStart, source.indexOf('\n}', factoryStart));
-    expect(factory).toContain('resolveCoopDefenseBases(mapConfig, input.humanPlayerCount, metrics)');
+    expect(factory).toContain('resolveWorldBases(definition, metrics)');
+    expect(source).not.toContain('humanPlayerCount');
     expect((factory.match(/resolveWorldMetrics\(/g) ?? []).length).toBe(1);
   });
 });
 
-describe('WorldRuntimeContext – bekannte World-/Activity-Vermischung', () => {
-  it('haelt fest, welche Felder von `bases` noch aktivitaetsabhaengig sind', () => {
-    // Im Authoring liegen diese Anteile bereits in `CoopMissionBaseOverlay`. Zur Laufzeit sind
-    // sie weiterhin in `BaseSpec` eingebacken; die Trennung gehoert zum Loesen der Activity
-    // Runtime aus der World Runtime und nicht in diesen Schritt.
+describe('WorldRuntimeContext – World-Basen und Activity-Overlays', () => {
+  it('haelt Activity-Zustaende aus der World-Aufloesung heraus', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/arena/BaseRegistry.ts'), 'utf8');
-    const start = source.indexOf('export interface BaseSpec {');
-    const body = source.slice(start, source.indexOf('\n}', start));
-    const fields = [...body.matchAll(/^ {2}readonly ([a-zA-Z][a-zA-Z0-9]*)[?]?:/gm)].map((m) => m[1]);
+    expect(source).toContain('export function resolveWorldBases(');
+    expect(source).toContain('export function resolveCoopDefenseActivityBases(');
 
-    // World-Anteil: Geometrie und Struktur.
-    for (const worldField of ['id', 'cells', 'region', 'hpMax', 'faction', 'role', 'turrets']) {
-      expect(fields, `BaseSpec lost world field ${worldField}`).toContain(worldField);
-    }
-    // Activity-Anteil: entsteht erst durch eine laufende Mission.
-    for (const activityField of ['startHp', 'dormant', 'dormantObjectiveId', 'powerUpPedestals']) {
-      expect(fields, `BaseSpec lost known activity field ${activityField}`).toContain(activityField);
-    }
-    // Und `hpMax` traegt die Rundenskalierung nach Spielerzahl.
-    const scaled = contextForMap('18', {});
-    expect(scaled.bases[0]!.hpMax).toBeGreaterThan(0);
+    const world = contextForMap('18');
+    expect(world.bases[0]).not.toHaveProperty('startHp');
+    expect(world.bases[0]).not.toHaveProperty('dormant');
+    expect(world.bases[0]).not.toHaveProperty('dormantObjectiveId');
+    expect(world.bases[0]?.powerUpPedestals).toEqual([]);
+    expect(resolveCoopDefenseActivityBases(getCoopDefenseMapConfig('18'), 4)[0]?.hpMax)
+      .toBe(world.bases[0]?.hpMax);
   });
 });
 describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
@@ -220,15 +213,13 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     expect(() => createWorldRuntimeContext({
       descriptor: descriptorFor('world:coop-defense:18', { parameters: { persistentBaseRadiusCells: 4 } }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
-      mapConfig: getCoopDefenseMapConfig('19'),
-      humanPlayerCount: 1,
+      definition: toWorldDefinition(getCoopDefenseMapConfig('19')),
     })).toThrow(/cannot be built from/);
 
     expect(() => createWorldRuntimeContext({
       descriptor: descriptorFor(PROCEDURAL_ARENA_WORLD_DEFINITION_ID),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
-      mapConfig: getCoopDefenseMapConfig('1'),
-      humanPlayerCount: 1,
+      definition: toWorldDefinition(getCoopDefenseMapConfig('1')),
     })).toThrow(/cannot be built from/);
   });
 
@@ -238,8 +229,7 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     expect(() => createWorldRuntimeContext({
       descriptor: descriptorFor('world:coop-defense:18'),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
-      mapConfig: getCoopDefenseMapConfig('18'),
-      humanPlayerCount: 1,
+      definition: toWorldDefinition(getCoopDefenseMapConfig('18')),
     })).toThrow(/no replicated radius/);
   });
 });

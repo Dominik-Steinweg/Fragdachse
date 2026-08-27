@@ -29,6 +29,16 @@ const WORLD_SCOPED_MODULES = [
   'src/scenes/arena/RockVisualHelper.ts',
   'src/systems/CombatSystem.ts',
   'src/systems/PlacementSystem.ts',
+  'src/entities/EnemyManager.ts',
+  'src/powerups/PowerUpSystem.ts',
+  'src/train/TrainManager.ts',
+  'src/systems/CoopDefenseAirstrikeEventHandler.ts',
+  'src/systems/CoopDefenseGroundHazardEventHandler.ts',
+  'src/systems/CoopDefenseMissionBarrierManager.ts',
+  'src/systems/CoopDefenseMissionProgressSystem.ts',
+  'src/systems/CoopDefenseVoidHunterSystem.ts',
+  'src/systems/ArmageddonSystem.ts',
+  'src/systems/DecoySystem.ts',
 ] as const;
 
 /** Mutable Arena-Variablen aus `src/config.ts`; sie beschreiben immer nur eine aktive Arena. */
@@ -109,6 +119,14 @@ describe('World-scoped Metrik – migrierte Module', () => {
     });
   }
 
+  it('laesst auch den dimensionsgebundenen Spawn-Executor ohne globale Arenaquelle laufen', () => {
+    const source = read('src/systems/CoopDefenseSpawnExecutor.ts');
+    for (const global of MUTABLE_ARENA_GLOBALS) {
+      expect(source).not.toContain(global);
+    }
+    expect(source).not.toContain('resolveActiveArenaWorldMetrics');
+  });
+
   it('bindet auch nicht-metrische Generatorparameter explizit', () => {
     const source = read('src/arena/ArenaGenerator.ts');
     const imported = collectConfigImports(source);
@@ -137,7 +155,7 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
     }
 
     expect(lifecycle).toContain('new BaseManager(this.scene, coopDefenseBases, world.metrics');
-    expect(lifecycle).toContain('this.ctx.baseManager = isCoopMission');
+    expect(lifecycle).toContain('this.ctx.baseManager = coopDefenseBases.length > 0');
     expect(lifecycle).toContain('this.ctx.playerManager.setWorldGeometry({');
     expect(lifecycle).toContain('this.restorePersistentBase(world.persistentBaseSite');
     expect(lifecycle).not.toContain('getPersistentBaseAnchor');
@@ -231,7 +249,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
     expect(provider).not.toContain('getRoundState');
   });
 
-  it('laesst Host-Simulation und RPC-Pruefung den Activity-Snapshot vor der Lobby lesen', () => {
+  it('laesst Host-Simulation und RPC-Pruefung den aktiven Modus vor der Lobby lesen', () => {
     const hostUpdate = read('src/scenes/arena/HostUpdateCoordinator.ts');
     const rpc = read('src/scenes/arena/RpcCoordinator.ts');
     const combat = read('src/systems/CombatSystem.ts');
@@ -245,7 +263,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
       ['src/systems/CombatSystem.ts', combat],
       ['src/scenes/arena/RockVisualHelper.ts', rockVisuals],
     ] as const) {
-      expect(source, `${path} ignores the active Activity`).toContain('getArenaDescriptor()?.gameMode');
+      expect(source, `${path} must use the active Activity before the lobby fallback`).toContain('getActiveGameMode()');
     }
   });
 });

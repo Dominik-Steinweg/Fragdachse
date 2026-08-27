@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { resolveCoopDefenseActivityBases } from '../src/arena/BaseRegistry';
 import type { CoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 
 const C_SHAPE = {
@@ -77,7 +77,7 @@ const STRUCTURE_SCALING_MAP: CoopDefenseMapConfig = {
 };
 
 function resolvedById(playerCount: number): Map<string, number> {
-  return new Map(resolveCoopDefenseBases(STRUCTURE_SCALING_MAP, playerCount).map((base) => [base.id, base.hpMax]));
+  return new Map(resolveCoopDefenseActivityBases(STRUCTURE_SCALING_MAP, playerCount).map((base) => [base.id, base.hpMax]));
 }
 
 describe('Coop defense structure multiplayer scaling', () => {

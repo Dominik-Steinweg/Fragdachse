@@ -1,8 +1,6 @@
 import * as Phaser from 'phaser';
 import {
-  CELL_SIZE, GRID_COLS, GRID_ROWS,
-  ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH, ARENA_HEIGHT,
+  CELL_SIZE,
   POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
 } from '../config';
 import type { ArenaLayout, ExplosionDamageTarget, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
@@ -14,6 +12,7 @@ import {
   type PowerUpDef, type DropTable,
 } from './PowerUpConfig';
 import { getAdrenalineSyringeDropChance } from '../utils/adrenalineDrops';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 // ── Internes Tracking eines aktiven Buffs ──────────────────────────────────
 
@@ -150,6 +149,7 @@ export class PowerUpSystem {
     private combat:        PowerUpSystemDeps,
     private layout:        ArenaLayout,
     private options:       PowerUpSystemOptions = {},
+    private readonly worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),
   ) {
     this.buildPedestals();
   }
@@ -329,8 +329,8 @@ export class PowerUpSystem {
       y = fixedY;
     } else {
       const cell = this.getRandomFreeCell();
-      x = ARENA_OFFSET_X + cell.gx * CELL_SIZE + CELL_SIZE / 2;
-      y = ARENA_OFFSET_Y + cell.gy * CELL_SIZE + CELL_SIZE / 2;
+      x = this.cellToWorldX(cell.gx);
+      y = this.cellToWorldY(cell.gy);
     }
 
     this.spawnPowerUpDef(def, x, y);
@@ -357,8 +357,8 @@ export class PowerUpSystem {
   onRockDestroyed(rockId: number): void {
     const rock = this.layout.rocks[rockId];
     if (!rock) return;
-    const wx = ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2;
-    const wy = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE + CELL_SIZE / 2;
+    const wx = this.cellToWorldX(rock.gridX);
+    const wy = this.cellToWorldY(rock.gridY);
     this.spawnFromTable('ROCK_DESTROY', wx, wy, rock.armorDropMult ?? 1);
   }
 
@@ -756,8 +756,8 @@ export class PowerUpSystem {
 
   private clampNukePoint(x: number, y: number): { x: number; y: number } {
     return {
-      x: Phaser.Math.Clamp(x, ARENA_OFFSET_X, ARENA_OFFSET_X + ARENA_WIDTH),
-      y: Phaser.Math.Clamp(y, ARENA_OFFSET_Y, ARENA_OFFSET_Y + ARENA_HEIGHT),
+      x: Phaser.Math.Clamp(x, this.worldMetrics.offsetX, this.worldMetrics.maxX),
+      y: Phaser.Math.Clamp(y, this.worldMetrics.offsetY, this.worldMetrics.maxY),
     };
   }
 
@@ -776,31 +776,31 @@ export class PowerUpSystem {
 
     for (const p of this.playerManager.getAllPlayers()) {
       if (!p.active) continue;
-      const gx = Math.floor((p.x - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((p.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      const gx = Math.floor((p.x - this.worldMetrics.offsetX) / CELL_SIZE);
+      const gy = Math.floor((p.y - this.worldMetrics.offsetY) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 
     for (const item of this.worldItems.values()) {
-      const gx = Math.floor((item.x - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((item.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      const gx = Math.floor((item.x - this.worldMetrics.offsetX) / CELL_SIZE);
+      const gy = Math.floor((item.y - this.worldMetrics.offsetY) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 
     for (const strike of this.activeNukes.values()) {
-      const gx = Math.floor((strike.x - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((strike.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      const gx = Math.floor((strike.x - this.worldMetrics.offsetX) / CELL_SIZE);
+      const gy = Math.floor((strike.y - this.worldMetrics.offsetY) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 
-    const minX = ARENA_OFFSET_X + edgePaddingPx;
-    const maxX = ARENA_OFFSET_X + ARENA_WIDTH - edgePaddingPx;
-    const minY = ARENA_OFFSET_Y + edgePaddingPx;
-    const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT - edgePaddingPx;
+    const minX = this.worldMetrics.offsetX + edgePaddingPx;
+    const maxX = this.worldMetrics.maxX - edgePaddingPx;
+    const minY = this.worldMetrics.offsetY + edgePaddingPx;
+    const maxY = this.worldMetrics.maxY - edgePaddingPx;
 
     const free: Array<{ gx: number; gy: number }> = [];
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
+    for (let gy = 0; gy < this.worldMetrics.gridRows; gy++) {
+      for (let gx = 0; gx < this.worldMetrics.gridCols; gx++) {
         if (blocked.has(`${gx}_${gy}`)) continue;
 
         const wx = this.cellToWorldX(gx);
@@ -815,11 +815,11 @@ export class PowerUpSystem {
   }
 
   private cellToWorldX(gx: number): number {
-    return ARENA_OFFSET_X + gx * CELL_SIZE + CELL_SIZE / 2;
+    return this.worldMetrics.offsetX + gx * CELL_SIZE + CELL_SIZE / 2;
   }
 
   private cellToWorldY(gy: number): number {
-    return ARENA_OFFSET_Y + gy * CELL_SIZE + CELL_SIZE / 2;
+    return this.worldMetrics.offsetY + gy * CELL_SIZE + CELL_SIZE / 2;
   }
 
   private buildPedestals(): void {

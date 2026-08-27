@@ -426,14 +426,14 @@ export class ClientUpdateCoordinator {
         : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? null
           : getActiveConstructionToolRefs(getConstructionAccessContext(
-            bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+            bridge.getActiveGameMode(),
             committedLoadout,
           ))
             .find((tool) => tool.kind === 'construction') ?? null;
       const inspectorConfig = selectedInspectorTool?.kind === 'utility'
         ? getUtilityConfigForMode(
           selectedInspectorTool.id,
-          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+          bridge.getActiveGameMode(),
         )
         : undefined;
       const inspectorConstruction = selectedInspectorTool?.kind === 'construction'
@@ -485,7 +485,7 @@ export class ClientUpdateCoordinator {
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
           getConstructionAccessContext(
-            bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+            bridge.getActiveGameMode(),
             committedLoadout,
           ),
         ).length > 0
@@ -774,7 +774,7 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId);
     return resolveConstructionCapacity({
-      gameMode: bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+      gameMode: bridge.getActiveGameMode(),
       classId: committed?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
       modifiers: this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
     });
@@ -812,7 +812,7 @@ export class ClientUpdateCoordinator {
     if (committed?.coopDefenseClassId !== 'inspector_gadachs') {
       return getActiveConstructionToolRefs(
         getConstructionAccessContext(
-          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+          bridge.getActiveGameMode(),
           committed,
         ),
       ).find((tool) => tool.kind === 'construction') ?? null;
@@ -843,7 +843,7 @@ export class ClientUpdateCoordinator {
     if (tool?.kind !== 'utility') return undefined;
     const base = this.clientUtilityOverride ?? getUtilityConfigForMode(
       tool.id,
-      bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+      bridge.getActiveGameMode(),
     );
     if (!base) return undefined;
     const modified = applyCoopDefenseModifiersToUtilityConfig(base, this.getLocalEffectTotals());
@@ -991,7 +991,7 @@ export class ClientUpdateCoordinator {
     if (descriptor?.kind === 'utility') {
       const config = getUtilityConfigForMode(
         descriptor.utilityId,
-        bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+        bridge.getActiveGameMode(),
       );
       this.clientUtilityOverride = config ?? null;
       return;
@@ -1112,7 +1112,7 @@ export class ClientUpdateCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string) {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
-    const mode = bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode();
+    const mode = bridge.getActiveGameMode();
     const cached = this.committedSelectionCache;
     if (cached && cached.key === committed && cached.mode === mode && cached.playerId === playerId) {
       return cached.value;
@@ -1147,7 +1147,7 @@ export class ClientUpdateCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(), isLocalPlayer ? this.storedProfileFallback : null,
+    }, bridge.getActiveGameMode(), isLocalPlayer ? this.storedProfileFallback : null,
     isLocalPlayer ? this.storedClassIdFallback : null,
     // Referenzstabil ueber den memoisierten Zugriff, sonst greift der Cache dieser Aufloesung nie.
     isLocalPlayer ? this.getLocalCoopDefenseItems() : []);

@@ -6,22 +6,18 @@ import {
   getCoopMissionDefinitionId,
   getWorldDefinitionId,
 } from '../src/config/authoring/coopDefenseAuthoringAdapter';
-import type { ArenaDescriptor, GameMode } from '../src/types';
+import type { GameMode } from '../src/types';
 import {
   isActivityOfWorld,
   parseActivityDescriptor,
   type ActivityDescriptor,
 } from '../src/world/ActivityDescriptor';
 import {
-  toActivityDescriptor,
+  toActivityDefinitionId,
   toActivityKind,
-  toArenaDescriptor,
   toGameMode,
   toMapId,
-  toWorldAndActivityDescriptors,
   toWorldDefinitionId,
-  toWorldDescriptor,
-  toWorldParameters,
 } from '../src/world/arenaDescriptorAdapter';
 import {
   PROCEDURAL_ARENA_WORLD_DEFINITION_ID,
@@ -38,28 +34,36 @@ import { acceptWorldScoped, isCurrentWorldRevision, nextMonotonicRevision, world
  * Kanonische World- und Activity-Identitaet.
  *
  * Repliziert wird ueber den World-Kanal (siehe tests/WorldChannelContracts.test.ts). Diese Tests
- * halten die Vertraege selbst fest: World- und Activity-Identitaet sind getrennt, die Abbildung
- * auf den alten `ArenaDescriptor` ist verlustfrei, und fremde World-Instanzen werden zentral
- * verworfen.
+ * halten die Vertraege selbst fest: World- und Activity-Identitaet sind getrennt und fremde
+ * World-Instanzen werden zentral verworfen.
  */
 
 const GAME_MODES: readonly GameMode[] = ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'];
 
-function arenaDescriptor(overrides: Partial<ArenaDescriptor> = {}): ArenaDescriptor {
+function worldDescriptor(overrides: Partial<WorldDescriptor> = {}): WorldDescriptor {
   return {
-    roundRevision: 1_700_000_000_000,
-    gameMode: 'coop_defense',
-    mapId: '7',
+    worldRevision: 1_700_000_000_000,
+    definitionId: getWorldDefinitionId('7'),
     seed: 4242,
-    arenaGeneratorVersion: 3,
+    generatorVersion: 3,
     layoutFingerprint: 'deadbeef',
+    ...overrides,
+  };
+}
+
+function activityDescriptor(overrides: Partial<ActivityDescriptor> = {}): ActivityDescriptor {
+  return {
+    activityRevision: 1_700_000_000_000,
+    worldRevision: 1_700_000_000_000,
+    kind: 'coop-mission',
+    definitionId: getCoopMissionDefinitionId('7'),
     ...overrides,
   };
 }
 
 describe('WorldDescriptor – kanonische World-Identitaet', () => {
   it('traegt ausschliesslich World-Identitaet und World-Konfiguration', () => {
-    const world = toWorldDescriptor(arenaDescriptor(), { persistentBaseRadiusCells: 6 });
+    const world = worldDescriptor({ parameters: { persistentBaseRadiusCells: 6 } });
     expect(Object.keys(world).sort()).toEqual([
       'definitionId', 'generatorVersion', 'layoutFingerprint', 'parameters', 'seed', 'worldRevision',
     ]);
@@ -73,50 +77,51 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
 
   it('verweist auf genau die WorldDefinition aus dem Authoring', () => {
     for (const mapId of ['0', '7', '18', 'weapon-balance-lab']) {
-      const world = toWorldDescriptor(arenaDescriptor({ mapId }));
-      expect(world.definitionId).toBe(getWorldDefinitionId(mapId));
+      const definitionId = toWorldDefinitionId(mapId);
+      expect(definitionId).toBe(getWorldDefinitionId(mapId));
       // Eine kanonische Identitaet: dieselbe ID loest im Authoring-Registry auf.
-      expect(getWorldDefinition(world.definitionId)?.sourceMapId).toBe(mapId);
-      expect(toMapId(world.definitionId)).toBe(mapId);
+      expect(getWorldDefinition(definitionId)?.sourceMapId).toBe(mapId);
+      expect(toMapId(definitionId)).toBe(mapId);
     }
   });
 
   it('beschreibt eine Runde ohne authored Map als prozedurale Arena-World', () => {
-    const world = toWorldDescriptor(arenaDescriptor({ gameMode: 'deathmatch', mapId: null }));
-    expect(world.definitionId).toBe(PROCEDURAL_ARENA_WORLD_DEFINITION_ID);
-    expect(toMapId(world.definitionId)).toBeNull();
+    const definitionId = toWorldDefinitionId(null);
+    expect(definitionId).toBe(PROCEDURAL_ARENA_WORLD_DEFINITION_ID);
+    expect(toMapId(definitionId)).toBeNull();
     expect(toWorldDefinitionId(null)).toBe(PROCEDURAL_ARENA_WORLD_DEFINITION_ID);
-    expect(isProceduralWorldDefinitionId(world.definitionId)).toBe(true);
+    expect(isProceduralWorldDefinitionId(definitionId)).toBe(true);
     expect(isProceduralWorldDefinitionId(getWorldDefinitionId('7'))).toBe(false);
   });
 
   it('erzeugt nur IDs, die entweder authored aufloesen oder ausdruecklich prozedural sind', () => {
     for (const gameMode of GAME_MODES) {
       for (const mapId of [null, '0', '18', 'weapon-balance-lab']) {
-        const descriptor = arenaDescriptor({ gameMode, mapId });
-        const { world, activity } = toWorldAndActivityDescriptors(descriptor);
+        const worldDefinitionId = toWorldDefinitionId(mapId);
+        const kind = toActivityKind(gameMode);
+        const activityDefinitionId = toActivityDefinitionId(kind, mapId);
         const label = `${gameMode}/${mapId}`;
 
-        if (isProceduralWorldDefinitionId(world.definitionId)) {
-          expect(getWorldDefinition(world.definitionId), label).toBeNull();
+        if (isProceduralWorldDefinitionId(worldDefinitionId)) {
+          expect(getWorldDefinition(worldDefinitionId), label).toBeNull();
         } else {
-          expect(getWorldDefinition(world.definitionId)?.id, label).toBe(world.definitionId);
+          expect(getWorldDefinition(worldDefinitionId)?.id, label).toBe(worldDefinitionId);
         }
 
         // Nur Coop-Missionen sind heute authoriert; PvP-Activities tragen bewusst eine
         // ID ohne Definition, aber in stabiler Form.
-        if (activity.kind === 'coop-mission' && mapId !== null) {
-          expect(getAuthoredActivity(activity.id)?.id, label).toBe(activity.id);
+        if (kind === 'coop-mission' && mapId !== null) {
+          expect(getAuthoredActivity(activityDefinitionId)?.id, label).toBe(activityDefinitionId);
         } else {
-          expect(getAuthoredActivity(activity.id), label).toBeNull();
-          expect(activity.definitionId, label).toBe(`activity:${activity.kind}`);
+          expect(getAuthoredActivity(activityDefinitionId), label).toBeNull();
+          expect(activityDefinitionId, label).toBe(`activity:${kind}`);
         }
       }
     }
   });
 
   it('erkennt dieselbe World-Instanz nur bei gleicher Identitaet, Layout und Konfiguration', () => {
-    const world = toWorldDescriptor(arenaDescriptor());
+    const world = worldDescriptor();
     expect(isSameWorldInstance(world, { ...world })).toBe(true);
     expect(isSameWorldInstance(world, { ...world, worldRevision: world.worldRevision + 1 })).toBe(false);
     expect(isSameWorldInstance(world, { ...world, layoutFingerprint: 'other' })).toBe(false);
@@ -143,7 +148,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
   });
 
   it('verwirft unvollstaendige World-Nutzlast an der Netzwerkgrenze', () => {
-    const world = toWorldDescriptor(arenaDescriptor(), { persistentBaseRadiusCells: 6 });
+    const world = worldDescriptor({ parameters: { persistentBaseRadiusCells: 6 } });
     expect(parseWorldDescriptor(JSON.parse(JSON.stringify(world)))).toEqual(world);
     expect(parseWorldDescriptor(null)).toBeNull();
     expect(parseWorldDescriptor({ ...world, worldRevision: 0 })).toBeNull();
@@ -159,14 +164,13 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
 
 describe('ActivityDescriptor – getrennte Activity-Identitaet', () => {
   it('bindet jede Activity an eine World, ohne deren Identitaet zu duplizieren', () => {
-    const descriptor = arenaDescriptor();
-    const { world, activity } = toWorldAndActivityDescriptors(descriptor);
-    expect(Object.keys(activity).sort()).toEqual(['activityRevision', 'definitionId', 'kind', 'worldRevision']);
-    expect(activity.kind).toBe('coop-mission');
-    expect(activity.definitionId).toBe(getCoopMissionDefinitionId('7'));
-    expect(isActivityOfWorld(activity, world)).toBe(true);
+    const descriptor = activityDescriptor();
+    expect(Object.keys(descriptor).sort()).toEqual(['activityRevision', 'definitionId', 'kind', 'worldRevision']);
+    expect(descriptor.kind).toBe('coop-mission');
+    expect(descriptor.definitionId).toBe(getCoopMissionDefinitionId('7'));
+    expect(isActivityOfWorld(descriptor, worldDescriptor())).toBe(true);
     // Seed, Generator und Fingerprint stehen ausschliesslich in der World.
-    const serialized = JSON.stringify(activity);
+    const serialized = JSON.stringify(descriptor);
     for (const forbidden of ['seed', 'layoutFingerprint', 'generatorVersion']) {
       expect(serialized.includes(forbidden), `ActivityDescriptor duplicates ${forbidden}`).toBe(false);
     }
@@ -180,7 +184,7 @@ describe('ActivityDescriptor – getrennte Activity-Identitaet', () => {
   });
 
   it('verwirft unvollstaendige Activity-Nutzlast an der Netzwerkgrenze', () => {
-    const activity = toActivityDescriptor(arenaDescriptor());
+    const activity = activityDescriptor();
     expect(parseActivityDescriptor(JSON.parse(JSON.stringify(activity)))).toEqual(activity);
     expect(parseActivityDescriptor({ ...activity, kind: 'editor' })).toBeNull();
     expect(parseActivityDescriptor({ ...activity, worldRevision: 0 })).toBeNull();
@@ -189,44 +193,18 @@ describe('ActivityDescriptor – getrennte Activity-Identitaet', () => {
   });
 
   it('haelt World- und Activity-Revision als verschiedene Identitaeten auseinander', () => {
-    const world: WorldDescriptor = { ...toWorldDescriptor(arenaDescriptor()), worldRevision: 12 };
-    const activity: ActivityDescriptor = {
-      ...toActivityDescriptor(arenaDescriptor()),
-      worldRevision: 12,
-      activityRevision: 31,
-    };
+    const world: WorldDescriptor = { ...worldDescriptor(), worldRevision: 12 };
+    const activity: ActivityDescriptor = { ...activityDescriptor(), worldRevision: 12, activityRevision: 31 };
     expect(isActivityOfWorld(activity, world)).toBe(true);
     // Die Runde behaelt ihre eigene Identitaet, die World bleibt Revision 12.
-    expect(toArenaDescriptor(world, activity).roundRevision).toBe(31);
+    expect(activity.activityRevision).toBe(31);
 
     const foreign: ActivityDescriptor = { ...activity, worldRevision: 13 };
     expect(isActivityOfWorld(foreign, world)).toBe(false);
-    expect(() => toArenaDescriptor(world, foreign)).toThrow(/world revision/);
   });
 });
 
-describe('Compatibility-Adapter zum bestehenden ArenaDescriptor', () => {
-  it('bildet jede Kombination aus Modus und Map verlustfrei hin und zurueck ab', () => {
-    for (const gameMode of GAME_MODES) {
-      for (const mapId of [null, '0', '18', 'weapon-balance-lab']) {
-        const descriptor = arenaDescriptor({ gameMode, mapId });
-        const { world, activity } = toWorldAndActivityDescriptors(descriptor);
-        expect(toArenaDescriptor(world, activity), `${gameMode}/${mapId}`).toEqual(descriptor);
-      }
-    }
-  });
-
-  it('liest den persistenten Basisradius aus dem heutigen RoundState in die World-Parameter', () => {
-    expect(toWorldParameters({ persistentBaseRadiusCells: 6 })).toEqual({ persistentBaseRadiusCells: 6 });
-    expect(toWorldParameters({})).toBeUndefined();
-    expect(toWorldParameters(null)).toBeUndefined();
-
-    const world = toWorldDescriptor(arenaDescriptor(), toWorldParameters({ persistentBaseRadiusCells: 6 }));
-    expect(world.parameters).toEqual({ persistentBaseRadiusCells: 6 });
-    // Der alte Vertrag hat dafuer keinen Platz; der Wert reist dort weiter im RoundState.
-    expect(toArenaDescriptor(world, toActivityDescriptor(arenaDescriptor()))).toEqual(arenaDescriptor());
-  });
-
+describe('World-Ladebarriere', () => {
   it('bindet die Ladebarriere an die World-Instanz', () => {
     const worldState = { worldRevision: 42, progress: 100, stage: 'ready' as const, ready: true };
 

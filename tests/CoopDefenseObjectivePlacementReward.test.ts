@@ -19,7 +19,7 @@ import {
 } from '../src/config/coopDefenseMaps';
 import {
   getBaseRewardPickupWorldPosition,
-  resolveCoopDefenseBases,
+  resolveCoopDefenseActivityBases,
 } from '../src/arena/BaseRegistry';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../src/config';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
@@ -146,7 +146,7 @@ describe('B6 objective placement rewards', () => {
     const map = normalizeCoopDefenseMapConfig(REWARD_MAP);
     const objective = resolveCoopDefenseMapSecondaryObjectives(map)
       .find((entry) => entry.id === 'hold-supply-base');
-    const bases = resolveCoopDefenseBases(map, 1);
+    const bases = resolveCoopDefenseActivityBases(map, 1);
     const supplyBase = bases.find((base) => base.id === 'supply-base');
     expect(objective?.rewards?.placeablePedestalOnComplete?.powerUpDefId).toBe('HOLY_HAND_GRENADE');
     expect(supplyBase).toBeDefined();

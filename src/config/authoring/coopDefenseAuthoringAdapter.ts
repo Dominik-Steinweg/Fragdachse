@@ -4,6 +4,7 @@ import type {
   CoopDefenseMapTrackMode,
   CoopDefenseMapTrackPosition,
 } from '../coopDefenseMaps';
+import type { ArenaGenerationMapConfig } from '../../arena/ArenaGenerator';
 import type {
   CoopMissionBaseOverlay,
   CoopMissionDefinition,
@@ -109,7 +110,7 @@ export function getCoopMissionDefinitionId(mapId: string): string {
   return `activity:coop-mission:${mapId}`;
 }
 
-export function toWorldDefinition(mapConfig: CoopDefenseMapConfig): WorldDefinition {
+export function toWorldDefinition(mapConfig: ArenaGenerationMapConfig): WorldDefinition {
   const resolved = requireNormalizedWorldFields(mapConfig);
   return {
     id: getWorldDefinitionId(mapConfig.mapId),
@@ -129,8 +130,31 @@ export function toWorldDefinition(mapConfig: CoopDefenseMapConfig): WorldDefinit
       mode: resolved.trackMode,
       position: resolved.trackPosition,
     },
+    actionPolicy: { combat: false },
     persistentBaseSite: mapConfig.persistentBase,
     initialTimeOfDay: resolved.timeOfDay,
+  };
+}
+
+/**
+ * Projects a WorldDefinition into the generator's authoring boundary without reintroducing
+ * Activity data. The old map-shaped input remains available only when a live mission needs its
+ * barriers, hazards, pickups and other Activity-owned generation features.
+ */
+export function toWorldGenerationConfig(world: WorldDefinition): ArenaGenerationMapConfig {
+  return {
+    mapId: world.sourceMapId ?? world.id,
+    arenaWidthCells: world.metrics.widthCells,
+    arenaHeightCells: world.metrics.heightCells,
+    rockFillRatio: world.terrain.rockFillRatio,
+    treeCount: world.terrain.treeCount,
+    rockField: world.terrain.rockField,
+    rockWalls: world.terrain.rockWalls,
+    trackMode: world.tracks.mode,
+    trackPosition: world.tracks.position,
+    persistentBase: world.persistentBaseSite,
+    bases: world.bases.map((base) => toCoopBaseConfig(base, undefined)),
+    powerUps: [],
   };
 }
 
@@ -287,7 +311,7 @@ interface NormalizedWorldFields {
  * besitzen ihre Standardwerte in `normalizeCoopDefenseMapConfig()`; eine unnormalisierte Map
  * hier still aufzufuellen wuerde eine zweite Regelquelle schaffen.
  */
-function requireNormalizedWorldFields(mapConfig: CoopDefenseMapConfig): NormalizedWorldFields {
+function requireNormalizedWorldFields(mapConfig: ArenaGenerationMapConfig): NormalizedWorldFields {
   const { arenaWidthCells, arenaHeightCells, trackMode, trackPosition, timeOfDay } = mapConfig;
   if (arenaWidthCells === undefined
     || arenaHeightCells === undefined

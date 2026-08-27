@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { CELL_SIZE, DEPTH, GRID_COLS, GRID_ROWS } from '../../config';
+import { CELL_SIZE, DEPTH } from '../../config';
 import type { ArenaLayout, DecalCell, DirtCell } from '../../types';
 import { ArenaVisualFactory, DIRT_FRINGE_OVERHANG_PX } from '../ArenaVisualFactory';
 import {
@@ -83,6 +83,8 @@ export class GroundSurfaceStreamer {
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
   private readonly dirtCells: readonly DirtCell[];
+  private readonly gridCols: number;
+  private readonly gridRows: number;
   private readonly groundCoverPlacements: readonly GroundCoverPlacement[];
   private readonly groundDecals: readonly DecalCell[];
   private readonly dirtGrid: RockGridIndex;
@@ -127,6 +129,8 @@ export class GroundSurfaceStreamer {
   constructor(options: GroundSurfaceStreamerOptions) {
     this.scene = options.scene;
     this.frame = options.frame;
+    this.gridCols = Math.max(1, Math.floor(options.frame.width / CELL_SIZE));
+    this.gridRows = Math.max(1, Math.floor(options.frame.height / CELL_SIZE));
     this.dirtCells = options.layout.dirt ?? [];
     this.groundCoverPlacements = options.groundCoverPlacements;
     const groundDecals: DecalCell[] = [];
@@ -137,7 +141,7 @@ export class GroundSurfaceStreamer {
     this.scratch = new ChunkScratchPool(options.scene);
     // Der Index sieht den gesamten Dirt-Bestand. Ein chunklokaler Index liesse jede Chunkgrenze
     // wie eine Aussenkante des Bodens aussehen.
-    this.dirtGrid = new RockGridIndex(this.dirtCells, { cols: GRID_COLS, rows: GRID_ROWS });
+    this.dirtGrid = new RockGridIndex(this.dirtCells, { cols: this.gridCols, rows: this.gridRows });
     this.dirtIndex = new ArenaCellBucketIndex(options.frame.width);
     this.dirtIndex.sync(this.dirtCells);
     this.groundCoverIndex = new ArenaPointBucketIndex(
@@ -661,8 +665,8 @@ export class GroundSurfaceStreamer {
       {
         offsetX: -region.localX,
         offsetY: -region.localY,
-        gridCols: GRID_COLS,
-        gridRows: GRID_ROWS,
+        gridCols: this.gridCols,
+        gridRows: this.gridRows,
       },
     );
     if (fringe.length > 0) target.draw(fringe);

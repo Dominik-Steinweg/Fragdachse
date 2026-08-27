@@ -25,6 +25,9 @@ import {
   worldCellOrigin,
   type WorldMetrics,
 } from '../world/WorldMetrics';
+import type { WorldBaseDefinition, WorldDefinition } from '../config/authoring/WorldDefinition';
+import { toWorldDefinition } from '../config/authoring/coopDefenseAuthoringAdapter';
+import type { ArenaGenerationMapConfig } from './ArenaGenerator';
 
 export interface BaseTurretSpec {
   readonly id: string;
@@ -54,8 +57,8 @@ export interface BasePowerUpPedestalSpec {
  *  - `region` ist die abgeleitete achsenparallele Bounding-Box. Wird für
  *             HP-Bar-Positionierung, Pixel-Bounds und die konservativen
  *             Clearance-/Border-Tests des Generators verwendet.
- *  - `hpMax`  ist der aus dem Ein-Spieler-Basiswert und der beim Rundenstart festgelegten
- *             menschlichen Spielerzahl aufgeloeste Wert.
+ *  - `hpMax`  ist der World-Grundwert. Eine laufende Activity darf daraus ein eigenes,
+ *             spielerzahlabhaengiges Overlay aufloesen.
  */
 export interface BaseSpec {
   readonly id: string;
@@ -323,9 +326,39 @@ function resolveBaseTurretSpec(
 
 // ── Öffentliche API ────────────────────────────────────────────────────────
 
-/** Löst eine Map-Konfiguration unabhängig vom derzeit aktiven Spielmodus auf. */
+/**
+ * Löst die authored World-Basen einer Map unabhängig vom derzeit aktiven Spielmodus auf.
+ *
+ * Die Rueckgabe enthaelt bewusst keine Activity-Zustaende: keine Spielerzahl-Skalierung,
+ * keine angeschlagene Start-HP, keine Dormanz und keine Missions-Podeste.
+ */
 export function resolveCoopDefenseBases(
-  mapConfig: CoopDefenseMapConfig,
+  mapConfig: ArenaGenerationMapConfig,
+  worldMetrics?: WorldMetrics,
+): readonly BaseSpec[] {
+  const worldDefinition = toWorldDefinition(mapConfig);
+  const metrics = worldMetrics
+    ?? resolveCoopDefenseWorldMetrics(mapConfig.arenaWidthCells, mapConfig.arenaHeightCells);
+  return resolveWorldBases(worldDefinition, metrics);
+}
+
+/** Loest World-Basen direkt aus dem kanonischen authored World-Vertrag auf. */
+export function resolveWorldBases(
+  worldDefinition: WorldDefinition,
+  worldMetrics: WorldMetrics,
+): readonly BaseSpec[] {
+  const resolved = worldDefinition.bases.map((baseConfig) => resolveWorldBaseSpec(baseConfig, worldMetrics));
+  const persistentBaseId = worldDefinition.persistentBaseSite?.baseId;
+  if (!persistentBaseId) return resolved;
+  return addPersistentBaseReservation(resolved, persistentBaseId);
+}
+
+/**
+ * Loest die World-Basen plus die Activity-spezifischen Missions-Overlays auf.
+ * Spielerzahl, Start-HP, Dormanz und Podeste gehoeren ausschliesslich hierher.
+ */
+export function resolveCoopDefenseActivityBases(
+  mapConfig: ArenaGenerationMapConfig,
   humanPlayerCount = 1,
   worldMetrics?: WorldMetrics,
 ): readonly BaseSpec[] {
@@ -346,7 +379,31 @@ export function resolveCoopDefenseBases(
   ));
   const persistentBaseId = mapConfig.persistentBase?.baseId;
   if (!persistentBaseId) return resolved;
-  return resolved.map((base) => base.id === persistentBaseId
+  return addPersistentBaseReservation(resolved, persistentBaseId);
+}
+
+function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics): BaseSpec {
+  // Die bestehende Geometrie-/Turmaufloesung bleibt die eine Implementierung; die
+  // missionsgebundenen Felder werden danach bewusst nicht in die World-Spec uebernommen.
+  const resolved = resolveBaseSpec(config as CoopBaseConfig, 1, metrics);
+  return {
+    id: resolved.id,
+    cells: resolved.cells,
+    region: resolved.region,
+    hpMax: config.hpMax,
+    faction: config.faction ?? 'friendly',
+    role: config.role ?? 'main',
+    turrets: resolved.turrets,
+    powerUpPedestals: [],
+    spawnCenter: resolved.spawnCenter,
+  };
+}
+
+function addPersistentBaseReservation(
+  bases: readonly BaseSpec[],
+  persistentBaseId: string,
+): readonly BaseSpec[] {
+  return bases.map((base) => base.id === persistentBaseId
     ? {
       ...base,
       anchorGridX: Math.floor((base.region.minGridX + base.region.maxGridX) / 2),

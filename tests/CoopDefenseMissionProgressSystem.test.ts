@@ -3,6 +3,9 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../src/config';
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../src/config/coopDefenseMaps';
 import { CoopDefenseMissionProgressSystem } from '../src/systems/CoopDefenseMissionProgressSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+
+const TEST_WORLD_METRICS = resolveActiveArenaWorldMetrics();
 
 function world(gridX: number, gridY = 2): { x: number; y: number } {
   return {
@@ -42,6 +45,7 @@ describe('CoopDefenseMissionProgressSystem', () => {
     const system = new CoopDefenseMissionProgressSystem(fastRoute, {
       roundRevision: 1,
       getDefenseObjectiveState: () => null,
+      worldMetrics: TEST_WORLD_METRICS,
     });
 
     system.hostUpdate(0, false, [{ playerId: 'p1', ...world(0), eligible: true }]);
@@ -58,6 +62,7 @@ describe('CoopDefenseMissionProgressSystem', () => {
       roundRevision: 7,
       getDefenseObjectiveState: () => defenseState,
       onPresentationChanged: publish,
+      worldMetrics: TEST_WORLD_METRICS,
     });
     const before = world(0);
     const beyondEverything = world(10);
@@ -95,6 +100,7 @@ describe('CoopDefenseMissionProgressSystem', () => {
     const system = new CoopDefenseMissionProgressSystem(config(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => defenseState,
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.hostUpdate(1, false, [{ playerId: 'p1', ...world(2), eligible: true }]);
     defenseState = 'failed';
@@ -109,6 +115,7 @@ describe('CoopDefenseMissionProgressSystem', () => {
     const system = new CoopDefenseMissionProgressSystem(config(), {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'dormant',
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.resetPlayerPosition('spectator', world(0).x, world(0).y);
     system.hostUpdate(1, false, [{ playerId: 'spectator', ...world(4), eligible: false }]);

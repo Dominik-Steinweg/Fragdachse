@@ -20,6 +20,8 @@ export type WorldLifecyclePhase = 'none' | 'creating' | 'active' | 'destroying';
 export interface WorldLifecycleSink {
   /** Host-only: repliziert die neue World-Instanz. */
   readonly publish: (world: WorldDescriptor, activity: ActivityDescriptor | null) => void;
+  /** Host-only: ändert die Activity, ohne die laufende World neu zu erzeugen. */
+  readonly publishActivity?: (activity: ActivityDescriptor | null) => void;
   /** Host-only: beendet die replizierte World-Instanz. */
   readonly clear: () => void;
   /** Bindet die lokale World-Runtime an die laufende Instanz. */
@@ -94,6 +96,8 @@ export class WorldLifecycle {
     // Two admission requests for the same first World are one transition, not two instances.
     // A changed Activity may still be attached to the already existing World below.
     if (this.instanceDescriptor && isSameWorldInstance(this.instanceDescriptor, world)) {
+      const activityChanged = !sameActivityOrNull(this.activity.descriptor, activity);
+      if (activityChanged) this.sink.publishActivity?.(activity);
       this.syncActivity(activity, this.currentContext !== null, true);
       return;
     }
@@ -200,6 +204,14 @@ export class WorldLifecycle {
       this.activity.end();
     }
   }
+}
+
+function sameActivityOrNull(
+  left: ActivityDescriptor | null,
+  right: ActivityDescriptor | null,
+): boolean {
+  if (!left || !right) return left === right;
+  return isSameActivity(left, right);
 }
 
 function assertActivityBelongsToWorld(

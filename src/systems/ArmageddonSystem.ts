@@ -1,7 +1,8 @@
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, CELL_SIZE } from '../config';
+import { CELL_SIZE } from '../config';
 import type { ArmageddonMeteorConfig } from '../loadout/LoadoutConfig';
 import type { RockGridIndex } from '../arena/RockGridIndex';
 import type { FireChunkBurstConfig, RadialDamageFalloffConfig, SyncedMeteorStrike } from '../types';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 // ── Typen ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,10 @@ export class ArmageddonSystem {
   private meteors: ActiveMeteor[] = [];
   private nextMeteorId = 0;
   private rockGrid: RockGridIndex | null = null;
+
+  constructor(
+    private readonly worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),
+  ) {}
 
   setRockGrid(grid: RockGridIndex): void {
     this.rockGrid = grid;
@@ -191,10 +196,10 @@ export class ArmageddonSystem {
     if (!pos) return;
 
     const cfg = session.config;
-    const minX = ARENA_OFFSET_X;
-    const minY = ARENA_OFFSET_Y;
-    const maxX = ARENA_OFFSET_X + ARENA_WIDTH;
-    const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT;
+    const minX = this.worldMetrics.offsetX;
+    const minY = this.worldMetrics.offsetY;
+    const maxX = this.worldMetrics.maxX;
+    const maxY = this.worldMetrics.maxY;
 
     if (cfg.cometStormEnabled > 0) {
       this.spawnMeteor(
@@ -217,8 +222,8 @@ export class ArmageddonSystem {
       if (wx < minX || wx > maxX || wy < minY || wy > maxY) continue;
 
       // Grid-Belegung prüfen (Felsen)
-      const gx = Math.floor((wx - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((wy - ARENA_OFFSET_Y) / CELL_SIZE);
+      const gx = Math.floor((wx - this.worldMetrics.offsetX) / CELL_SIZE);
+      const gy = Math.floor((wy - this.worldMetrics.offsetY) / CELL_SIZE);
       if (this.rockGrid?.isOccupied(gx, gy)) continue;
 
       this.spawnMeteor(session, now, wx, wy);

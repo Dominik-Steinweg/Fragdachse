@@ -29,9 +29,8 @@ export interface WorldDescriptor {
 /**
  * Host-autoritative Parameter einer konkreten World-Instanz.
  *
- * Sie unterscheiden zwei Instanzen derselben WorldDefinition. Heute reist der persistente
- * Basisradius noch im `RoundState` mit – also in einem Activity-Vertrag. Der kanonische Platz
- * ist diese Struktur.
+ * Sie unterscheiden zwei Instanzen derselben WorldDefinition. Der persistente Basisradius ist
+ * eine World-Konfiguration und reist deshalb hier statt in einem Activity- oder Round-Vertrag.
  */
 export interface WorldParameters {
   /** Aktiver Radius der persistenten Basis dieser World-Instanz in Zellen. */
@@ -57,7 +56,7 @@ export const WORLD_PARAMETER_FIELDS = ['persistentBaseRadiusCells'] as const sat
 
 /**
  * Netzwerkgrenze fuer eingehende World-Identitaeten. Ungueltige Nutzlast wird verworfen statt
- * teilweise uebernommen – dieselbe Regel, nach der die Bridge heute den `ArenaDescriptor` prueft.
+ * teilweise uebernommen; die fruehere gemischte Arena-Identitaet ist dafuer keine Quelle mehr.
  */
 export function parseWorldDescriptor(raw: unknown): WorldDescriptor | null {
   if (!raw || typeof raw !== 'object') return null;

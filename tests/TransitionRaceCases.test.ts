@@ -59,6 +59,7 @@ function sink(): { calls: string[]; value: WorldLifecycleSink } {
   const calls: string[] = [];
   const value: WorldLifecycleSink = {
     publish: (descriptor) => { calls.push(`publish:${descriptor.worldRevision}`); },
+    publishActivity: (descriptor) => { calls.push(`activity:${descriptor?.activityRevision ?? 'none'}`); },
     clear: () => { calls.push('clear'); },
     attach: (context) => { calls.push(`attach:${context.descriptor.worldRevision}`); },
     detach: () => { calls.push('detach'); },
@@ -200,6 +201,44 @@ describe('Transition-/Race-Case-Tests', () => {
     expect(lifecycle.activity.phase).toBe('none');
   });
 
+  it('aktualisiert eine Activity derselben World ohne World-Teardown', () => {
+    const recorded = sink();
+    const lifecycle = new WorldLifecycle(recorded.value);
+    lifecycle.beginCreate(world(), null);
+
+    lifecycle.beginCreate(world(), activity());
+    lifecycle.beginCreate(world(), null);
+
+    expect(lifecycle.descriptor?.worldRevision).toBe(12);
+    expect(lifecycle.activity.descriptor).toBeNull();
+    expect(recorded.calls).toEqual(['publish:12', 'activity:31', 'activity:none']);
+  });
+
+  it('repliziert Activity-Wechsel innerhalb derselben World ohne neue World-Revision', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      const client = bridgeFor(clientRoom);
+
+      useRoom(hostRoom);
+      host.publishWorldAndActivity(world({ worldRevision: 12 }), null);
+      host.publishActivity(activity(12));
+      useRoom(clientRoom);
+      expect(client.getWorldDescriptor()?.worldRevision).toBe(12);
+      expect(client.getActivityDescriptor()?.activityRevision).toBe(31);
+
+      useRoom(hostRoom);
+      host.publishActivity(null);
+      useRoom(clientRoom);
+      expect(client.getWorldDescriptor()?.worldRevision).toBe(12);
+      expect(client.getActivityDescriptor()).toBeNull();
+    } finally {
+      clearActiveSession();
+    }
+  });
+
   it('wendet keine Baseline der alten World auf die neue Revision an', () => {
     const oldRevision = worldScoped(12, { playerId: 'p1', x: 10 });
     const newRevision = worldScoped(13, { playerId: 'p1', x: 90 });
@@ -228,7 +267,7 @@ describe('Transition-/Race-Case-Tests', () => {
     const registerBody = source.slice(registerStart);
     expect(sendBody).toContain('wr: worldRevision');
     expect(registerBody).toContain('const { slot, angle, tx, ty, sid, prm, px, py, ts, wr } = data');
-    expect(registerBody).toContain('currentWorldRevision !== undefined && wr !== currentWorldRevision');
+    expect(registerBody).toContain('this.acceptsWorldRpc(data)');
 
     // Der eigentliche Race-Schutz ist dieselbe zentrale Revisionserkennung wie bei Snapshots:
     // ein alter Request ist nicht „fast genug“, sondern gehoert schlicht nicht zur World.

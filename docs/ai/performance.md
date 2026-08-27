@@ -57,7 +57,7 @@ Coop-Arenen sind auf beiden Achsen bis 1024 Zellen konfigurierbar; die Grenze is
 Designentscheidung, sondern die Stelle, an der `rockCellKey` (Stride 65536), der
 `Int32Array`-Fels-Index und der zellbasierte Terrain-Lookup technisch enden. Kein sichtbares
 Renderziel skaliert mehr mit der Weltflaeche (siehe rendering.md); was mit ihr skaliert, sind
-Datenmengen: Fels-, Dirt- und Decal-Listen sowie Flow-Field-Raster; das initiale `ArenaLayout` wird nicht über WebRTC übertragen. Übertragen wird nur der kompakte `ArenaDescriptor`.
+Datenmengen: Fels-, Dirt- und Decal-Listen sowie Flow-Field-Raster; das initiale `ArenaLayout` wird nicht über WebRTC übertragen. Übertragen werden nur der kompakte `WorldDescriptor` und die optionale `ActivityDescriptor`.
 
 `src/arena/diagnostics/LargeArenaBenchmark.ts` ist der dauerhafte Messpunkt dafuer. Er baut sich
 seine Karte selbst und haengt bewusst an keiner authored Map, damit er das Loeschen einer

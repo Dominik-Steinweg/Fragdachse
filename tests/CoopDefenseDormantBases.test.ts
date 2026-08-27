@@ -11,7 +11,7 @@ import {
   normalizeCoopDefenseMapConfig,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
-import { resolveCoopDefenseBases, type BaseSpec } from '../src/arena/BaseRegistry';
+import { resolveCoopDefenseActivityBases, type BaseSpec } from '../src/arena/BaseRegistry';
 import { BaseManager } from '../src/entities/BaseManager';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
@@ -170,7 +170,7 @@ function makeScene(): { scene: any; groupObjects: any[] } {
 describe('Coop-Defense dormant mission structures', () => {
   it('resolves a dormant base with its single linked objective', () => {
     const map = makeDormantMap();
-    const spec = resolveCoopDefenseBases(map).find((base) => base.id === DORMANT_BASE_ID);
+    const spec = resolveCoopDefenseActivityBases(map).find((base) => base.id === DORMANT_BASE_ID);
 
     expect(spec).toMatchObject({
       dormant: true,
@@ -208,7 +208,7 @@ describe('Coop-Defense dormant mission structures', () => {
   });
 
   it('resolves an authored damaged start state without touching the maximum', () => {
-    const damaged = resolveCoopDefenseBases(withMapChanges({
+    const damaged = resolveCoopDefenseActivityBases(withMapChanges({
       bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID
         ? { ...base, startHpFactor: 0.25 }
         : base),
@@ -217,7 +217,7 @@ describe('Coop-Defense dormant mission structures', () => {
 
     // Untergrenze 1: Eine auf 0 aufgeloeste Struktur waere von Rundenbeginn an zerstoert und
     // koennte nie aktiviert werden.
-    const barely = resolveCoopDefenseBases(withMapChanges({
+    const barely = resolveCoopDefenseActivityBases(withMapChanges({
       bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID
         ? { ...base, hpMax: 10, startHpFactor: 0.0001 }
         : base),

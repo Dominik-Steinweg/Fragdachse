@@ -111,6 +111,13 @@ export interface ArenaGenerationInput {
   readonly coopDefenseBasesActive: boolean;
 }
 
+/**
+ * Authoring input for deterministic layout generation. Activity fields are optional so a
+ * World without Activity can provide only its terrain and static structure data.
+ */
+export type ArenaGenerationMapConfig = Pick<CoopDefenseMapConfig, 'mapId' | 'bases'>
+  & Partial<Omit<CoopDefenseMapConfig, 'mapId' | 'bases'>>;
+
 /** Composes existing mode resolvers with the metrics of one concrete World. */
 export function resolveArenaGenerationInput(mode: GameMode, metrics: WorldMetrics): ArenaGenerationInput {
   const flags = getArenaModeFlags(mode);
@@ -154,17 +161,17 @@ export class ArenaGenerator {
   static generate(
     seed: number,
     input: ArenaGenerationInput,
-    coopMapConfig?: CoopDefenseMapConfig,
+    coopMapConfig?: ArenaGenerationMapConfig,
   ): ArenaLayout {
     return new ArenaGenerator(input).generateLayout(seed, coopMapConfig);
   }
 
-  private generateLayout(seed: number, coopMapConfig?: CoopDefenseMapConfig): ArenaLayout {
+  private generateLayout(seed: number, coopMapConfig?: ArenaGenerationMapConfig): ArenaLayout {
     // Die Basisgeometrie hängt nur von Map-Konfiguration und aktuellen Arena-Metriken ab,
     // nicht vom Retry-Seed. Bei expliziten Coop-Maps wird sie deshalb einmal pro Generate-Aufruf
     // aufgelöst und an alle Zellprüfungen weitergereicht. Ohne Map-Konfiguration bleibt
     // `undefined` bewusst der Fallback auf die aktive Registry-Auflösung.
-    const coopBaseSpecs = coopMapConfig ? resolveCoopDefenseBases(coopMapConfig) : undefined;
+    const coopBaseSpecs = coopMapConfig ? resolveCoopDefenseBases(coopMapConfig, this.metrics) : undefined;
     const missionBarrierCells = new Set(
       (coopMapConfig?.missionProgress?.barriers ?? []).flatMap((barrier) => (
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
@@ -687,7 +694,7 @@ export class ArenaGenerator {
   private hasAcceptableSpawnToBaseRoutes(
     blocked: boolean[][],
     tracks: readonly TrackCell[],
-    mapConfig: CoopDefenseMapConfig,
+    mapConfig: ArenaGenerationMapConfig,
     bases: readonly BaseSpec[],
   ): boolean {
     const targetCells = this.getFriendlyBaseGoalCells(blocked, bases);
@@ -1289,14 +1296,14 @@ export class ArenaGenerator {
     rng: () => number,
     blocked: boolean[][],
     trackCols: Set<number>,
-    mapConfig: CoopDefenseMapConfig,
+    mapConfig: ArenaGenerationMapConfig,
     coopBaseSpecs: readonly BaseSpec[],
   ): ArenaLayout['powerUpPedestals'] | null {
     const pedestals = this.generateConfiguredPowerUpPedestals(
       rng,
       blocked,
       trackCols,
-      mapConfig.powerUps,
+      mapConfig.powerUps ?? [],
       coopBaseSpecs,
     );
     if (pedestals === null) return null;
@@ -1566,7 +1573,7 @@ export class ArenaGenerator {
     trackCols: ReadonlySet<number>,
     tracks: readonly TrackCell[],
     powerUpPedestals: ArenaLayout['powerUpPedestals'],
-    mapConfig?: CoopDefenseMapConfig,
+    mapConfig?: ArenaGenerationMapConfig,
     coopBaseSpecs: readonly BaseSpec[] = [],
   ): ArenaGroundHazardZone[] | null {
     if (!mapConfig) return [];

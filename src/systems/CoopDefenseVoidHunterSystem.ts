@@ -1,9 +1,5 @@
 import * as Phaser from 'phaser';
 import {
-  ARENA_HEIGHT,
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
-  ARENA_WIDTH,
   VOID_FIRE_COLOR,
 } from '../config';
 import {
@@ -22,6 +18,7 @@ import type { CombatSystem } from './CombatSystem';
 import type { CoopDefenseEnemyBurrowSystem } from './CoopDefenseEnemyBurrowSystem';
 import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 interface GaussChargeState {
   readonly targetRef: EnemyAiTargetRef;
@@ -60,6 +57,7 @@ export interface VoidHunterTargetPoint {
 export function computeVoidHunterNukeTarget(
   livingPlayerPositions: readonly VoidHunterTargetPoint[],
   fallback: VoidHunterTargetPoint,
+  worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),
 ): VoidHunterTargetPoint {
   const source = livingPlayerPositions.length > 0
     ? {
@@ -68,8 +66,8 @@ export function computeVoidHunterNukeTarget(
     }
     : fallback;
   return {
-    x: Phaser.Math.Clamp(source.x, ARENA_OFFSET_X, ARENA_OFFSET_X + ARENA_WIDTH),
-    y: Phaser.Math.Clamp(source.y, ARENA_OFFSET_Y, ARENA_OFFSET_Y + ARENA_HEIGHT),
+    x: Phaser.Math.Clamp(source.x, worldMetrics.offsetX, worldMetrics.maxX),
+    y: Phaser.Math.Clamp(source.y, worldMetrics.offsetY, worldMetrics.maxY),
   };
 }
 
@@ -92,6 +90,7 @@ export class CoopDefenseVoidHunterSystem {
     private readonly fireChunks: FlamethrowerUpgradeSystem,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
     private readonly onPhaseReached?: (phase: number) => void,
+    private readonly worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),
   ) {}
 
   hostUpdate(now: number): void {
@@ -225,7 +224,7 @@ export class CoopDefenseVoidHunterSystem {
     const target = computeVoidHunterNukeTarget(positions, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,
-    });
+    }, this.worldMetrics);
     state.emergeAt = now + config.nuke.countdownMs + config.nuke.emergeDelayMs;
     state.phaseTransitionEndsAt = state.emergeAt;
     enemy.stopMovement();

@@ -1,8 +1,6 @@
 import * as Phaser from 'phaser';
 import {
   ENEMY_NET_REFRESH_CYCLE_TICKS,
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
   CELL_SIZE,
   ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS,
   ENEMY_NET_POSITION_DELTA_PX,
@@ -29,6 +27,7 @@ import {
   type CoopDefenseEnemyKind,
   type ResolvedCoopDefenseEnemyConfigs,
 } from '../config/coopDefenseEnemies';
+import type { WorldMetrics } from '../world/WorldMetrics';
 
 const STEER_RESPONSIVENESS = 8;
 const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
@@ -157,6 +156,7 @@ export class EnemyManager {
   private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
+  private worldMetrics: WorldMetrics | null = null;
   /**
    * True, sobald der erste Snapshot verarbeitet wurde. Die Gegner daraus existieren beim Host
    * bereits seit Längerem – ein Client, der mitten in die Runde kommt, würde sonst für das
@@ -167,6 +167,10 @@ export class EnemyManager {
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
     this.resolvedConfigs = resolvedConfigs;
+  }
+
+  setWorldMetrics(metrics: WorldMetrics): void {
+    this.worldMetrics = metrics;
   }
 
   /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Gegner durch. */
@@ -1234,9 +1238,12 @@ export class EnemyManager {
   }
 
   private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
+    if (!this.worldMetrics) {
+      throw new Error('[EnemyManager] WorldMetrics must be assigned before spawning an enemy');
+    }
     return {
-      x: ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE * 0.5,
-      y: ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE * 0.5,
+      x: this.worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE * 0.5,
+      y: this.worldMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE * 0.5,
     };
   }
 }

@@ -4,7 +4,9 @@ import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { resolveWorldLoadProgress } from '../src/world/WorldLoadReady';
 import { resolveArenaStartTime } from '../src/scenes/arena/ArenaStartTiming';
-import type { ArenaDescriptor } from '../src/types';
+import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
+import type { WorldDescriptor } from '../src/world/WorldDescriptor';
+import { toActivityDefinitionId, toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 function legacyFingerprint(layout: unknown): string {
@@ -27,18 +29,23 @@ describe('arena loading contracts', () => {
     );
     const hostLayout = ArenaGenerator.generate(seed, input, map);
     const clientLayout = ArenaGenerator.generate(seed, input, map);
-    const descriptor: ArenaDescriptor = {
-      roundRevision: 42,
-      gameMode: COOP_DEFENSE_MODE,
-      mapId: map.mapId,
+    const world: WorldDescriptor = {
+      worldRevision: 42,
+      definitionId: toWorldDefinitionId(map.mapId),
       seed,
-      arenaGeneratorVersion: ARENA_GENERATOR_VERSION,
+      generatorVersion: ARENA_GENERATOR_VERSION,
       layoutFingerprint: ArenaGenerator.fingerprint(hostLayout),
     };
+    const activity: ActivityDescriptor = {
+      activityRevision: 42,
+      worldRevision: 42,
+      kind: 'coop-mission',
+      definitionId: toActivityDefinitionId('coop-mission', map.mapId),
+    };
 
-    expect(ArenaGenerator.fingerprint(clientLayout)).toBe(descriptor.layoutFingerprint);
+    expect(ArenaGenerator.fingerprint(clientLayout)).toBe(world.layoutFingerprint);
     expect(ArenaGenerator.fingerprint(hostLayout)).toBe(legacyFingerprint(hostLayout));
-    expect(JSON.stringify(descriptor).length).toBeLessThan(1024);
+    expect(JSON.stringify({ world, activity }).length).toBeLessThan(1024);
     expect(hostLayout.rocks.length).toBeGreaterThan(10_000);
   }, 120_000);
 

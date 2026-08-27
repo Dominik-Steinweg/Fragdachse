@@ -1,6 +1,4 @@
 import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
   CELL_SIZE,
 } from '../config';
 import { getCoopDefenseTutorialRockRegion } from '../config/coopDefenseTutorial';
@@ -18,6 +16,7 @@ import type {
   CoopDefenseMapEventCycleFinished,
   CoopDefenseMapEventHandler,
 } from './CoopDefenseMapEventDirector';
+import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 
 export const COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID = 'coop-zombie-bomber';
 
@@ -75,6 +74,8 @@ export interface CoopDefenseAirstrikeEventHandlerDeps {
   playStrikeAudio(x: number, y: number): void;
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
+  /** World-Grenzen fuer die Positionierung authored Ereignisse. */
+  readonly worldMetrics?: WorldMetrics;
   readonly tutorialShowControls?: boolean;
   readonly random?: AirstrikeRandom;
 }
@@ -211,6 +212,7 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
           this.deps.tutorialShowControls === true,
           event.strikeCount,
           random,
+          this.getWorldMetrics(),
         );
       case 'player-hunt': {
         const target = planPlayerHunt(
@@ -219,12 +221,24 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
           this.deps.arenaWidthCells,
           this.deps.arenaHeightCells,
           random,
+          this.getWorldMetrics(),
         );
         return target ? [{ ...target, launchOffsetMs: 0 }] : [];
       }
       case 'zone-barrage':
-        return planZoneBarrage(event.area!, event.strikeCount!, event.orderedSweep === true, random);
+        return planZoneBarrage(
+          event.area!,
+          event.strikeCount!,
+          event.orderedSweep === true,
+          random,
+          this.getWorldMetrics(),
+        );
     }
+  }
+
+  private getWorldMetrics(): WorldMetrics {
+    return this.deps.worldMetrics
+      ?? resolveCoopDefenseWorldMetrics(this.deps.arenaWidthCells, this.deps.arenaHeightCells);
   }
 
   private getStrikeConfig(pattern: CoopDefenseMapAirstrikeEventConfig['pattern']): AirstrikeUltimateConfig {
@@ -238,6 +252,7 @@ export function planTutorialSweep(
   showControls: boolean,
   authoredStrikeCount: number | undefined,
   random: AirstrikeRandom = Math.random,
+  worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(arenaWidthCells, arenaHeightCells),
 ): readonly PlannedAirstrikePoint[] {
   const region = getCoopDefenseTutorialRockRegion(showControls);
   const minGridX = Math.max(0, Math.min(arenaWidthCells - 1, region.minGridX - 1));
@@ -257,12 +272,12 @@ export function planTutorialSweep(
   for (let index = 0; index < strikeCount; index += 1) {
     const sweep = strikeCount > 1 ? index / (strikeCount - 1) : 0.5;
     const x = clamp(
-      ARENA_OFFSET_X + (minGridX + 0.5 + sweep * (maxGridX - minGridX)) * CELL_SIZE
+      worldMetrics.offsetX + (minGridX + 0.5 + sweep * (maxGridX - minGridX)) * CELL_SIZE
         + (sample(random) - 0.5) * CELL_SIZE * 2.5,
-      ARENA_OFFSET_X,
-      ARENA_OFFSET_X + arenaWidthCells * CELL_SIZE,
+      worldMetrics.offsetX,
+      worldMetrics.maxX,
     );
-    const y = ARENA_OFFSET_Y + (minGridY + 0.2 + sample(random) * 0.8 * (maxGridY - minGridY + 1)) * CELL_SIZE;
+    const y = worldMetrics.offsetY + (minGridY + 0.2 + sample(random) * 0.8 * (maxGridY - minGridY + 1)) * CELL_SIZE;
     points.push({ x, y, launchOffsetMs });
     launchOffsetMs += TUTORIAL_MIN_GAP_MS
       + sample(random) * (TUTORIAL_MAX_GAP_MS - TUTORIAL_MIN_GAP_MS);
@@ -275,14 +290,15 @@ export function planZoneBarrage(
   strikeCount: number,
   orderedSweep: boolean,
   random: AirstrikeRandom = Math.random,
+  worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),
 ): readonly PlannedAirstrikePoint[] {
   return Array.from({ length: strikeCount }, (_, index) => {
     const sweep = strikeCount > 1 ? index / (strikeCount - 1) : 0.5;
     const normalizedX = orderedSweep ? 0.08 + sweep * 0.84 : 0.08 + sample(random) * 0.84;
     const normalizedY = 0.08 + sample(random) * 0.84;
     return {
-      x: ARENA_OFFSET_X + (area.gridX + normalizedX * area.widthCells) * CELL_SIZE,
-      y: ARENA_OFFSET_Y + (area.gridY + normalizedY * area.heightCells) * CELL_SIZE,
+      x: worldMetrics.offsetX + (area.gridX + normalizedX * area.widthCells) * CELL_SIZE,
+      y: worldMetrics.offsetY + (area.gridY + normalizedY * area.heightCells) * CELL_SIZE,
       launchOffsetMs: orderedSweep ? index * ZONE_ORDERED_STRIKE_GAP_MS : 0,
     };
   });
@@ -294,6 +310,7 @@ export function planPlayerHunt(
   arenaWidthCells: number,
   arenaHeightCells: number,
   random: AirstrikeRandom = Math.random,
+  worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(arenaWidthCells, arenaHeightCells),
 ): { x: number; y: number } | null {
   if (players.length === 0) return null;
   const anchor = players[Math.min(players.length - 1, Math.floor(sample(random) * players.length))];
@@ -305,8 +322,7 @@ export function planPlayerHunt(
     candidate = clampPointToArena(
       anchor.x + Math.cos(angle) * distance,
       anchor.y + Math.sin(angle) * distance,
-      arenaWidthCells,
-      arenaHeightCells,
+      worldMetrics,
     );
     if (!isProtectedBasePoint(candidate.x, candidate.y)) return candidate;
   }
@@ -329,17 +345,17 @@ export function isPointNearBaseRegion(
   return false;
 }
 
-function clampPointToArena(x: number, y: number, arenaWidthCells: number, arenaHeightCells: number): { x: number; y: number } {
+function clampPointToArena(x: number, y: number, worldMetrics: WorldMetrics): { x: number; y: number } {
   return {
     x: clamp(
       x,
-      ARENA_OFFSET_X + ARENA_EDGE_MARGIN_PX,
-      ARENA_OFFSET_X + arenaWidthCells * CELL_SIZE - ARENA_EDGE_MARGIN_PX,
+      worldMetrics.offsetX + ARENA_EDGE_MARGIN_PX,
+      worldMetrics.maxX - ARENA_EDGE_MARGIN_PX,
     ),
     y: clamp(
       y,
-      ARENA_OFFSET_Y + ARENA_EDGE_MARGIN_PX,
-      ARENA_OFFSET_Y + arenaHeightCells * CELL_SIZE - ARENA_EDGE_MARGIN_PX,
+      worldMetrics.offsetY + ARENA_EDGE_MARGIN_PX,
+      worldMetrics.maxY - ARENA_EDGE_MARGIN_PX,
     ),
   };
 }

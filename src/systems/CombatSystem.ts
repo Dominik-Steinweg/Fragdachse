@@ -3951,7 +3951,7 @@ export class CombatSystem {
           ? this.bridge.canPlayerReceiveRoundRewards(effectiveKillerId as string)
           : killedByBaseTurret && this.bridge.getRoundResultEligiblePlayerIds().length > 0;
         if (xpSourceIsEligible
-          && isCoopDefenseMode(this.bridge.getArenaDescriptor()?.gameMode ?? this.bridge.getGameMode())) {
+          && isCoopDefenseMode(this.bridge.getActiveGameMode())) {
           if (enemyXp > 0) {
             this.bridge.addCoopDefenseRoundXp(enemyXp);
             this.bridge.broadcastCoopDefenseXpPopup(x, y, enemyXp);

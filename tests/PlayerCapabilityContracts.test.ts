@@ -20,7 +20,11 @@ const ALL_PARTICIPATIONS: readonly WorldParticipation[] =
   ['none', 'joining', 'interactive', 'observer', 'leaving'];
 
 function capabilities(participation: WorldParticipation, activityKind: ActivityKind | null): PlayerCapabilities {
-  return resolvePlayerCapabilities({ participation, activityKind });
+  return resolvePlayerCapabilities({
+    participation,
+    activityKind,
+    worldCombatAllowed: activityKind !== null,
+  });
 }
 
 function granted(value: PlayerCapabilities): string[] {
@@ -42,6 +46,14 @@ describe('Capability Policy – aus dem Runtime-State aufgeloest', () => {
     ]);
     expect(editor.canUseCombat).toBe(false);
     expect(editor.canUseMissionActions).toBe(false);
+  });
+
+  it('kann Kampf in einer World ohne Activity explizit erlauben', () => {
+    expect(resolvePlayerCapabilities({
+      participation: 'interactive',
+      activityKind: null,
+      worldCombatAllowed: true,
+    }).canUseCombat).toBe(true);
   });
 
   it('kennt in PvP Kampf, aber keine Missionsaktionen', () => {

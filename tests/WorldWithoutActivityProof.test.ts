@@ -17,6 +17,7 @@ import { getArenaMetricsProfile, PLAYER_SPEED } from '../src/config';
 import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBase';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
@@ -141,8 +142,7 @@ function createWorld(descriptor: WorldDescriptor): WorldRuntimeContext {
       mapConfig.arenaWidthCells,
       mapConfig.arenaHeightCells,
     ),
-    mapConfig,
-    humanPlayerCount: 1,
+    definition: toWorldDefinition(mapConfig),
   });
 }
 
@@ -359,7 +359,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       });
       expect(hostFeatures.missionStatus).toBe(false);
       expect(clientFeatures.missionStatus).toBe(false);
-      expect(resolvePlayerCapabilities({ participation: 'interactive', activityKind: null })).toMatchObject({
+      expect(resolvePlayerCapabilities({ participation: 'interactive', activityKind: null, worldCombatAllowed: false })).toMatchObject({
         canMove: true,
         canPlace: true,
         canDismantle: true,
@@ -397,6 +397,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       hostPhysics.setCanMoveResolver((id) => resolvePlayerCapabilities({
         participation: host.getWorldParticipation(id),
         activityKind: host.getActivityDescriptor()?.kind ?? null,
+        worldCombatAllowed: false,
       }).canMove);
       useRoom(clientRoom);
       client.sendLocalInput({ dx: 1, dy: 0, aim: 0, dashHeld: false });

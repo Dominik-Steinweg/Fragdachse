@@ -9,10 +9,10 @@ import {
 import type { ArenaLayout, GameMode } from '../types';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
-import type { ArenaBuilderResult } from './ArenaBuilder';
-import { getArenaRockWorldFrame } from './ArenaBuilder';
+import type { ArenaBuilderResult, RockWorldFrame } from './ArenaBuilder';
 import type { GroundSurfaceStreamer, GroundSnapshotRegion } from './chunks/GroundSurfaceStreamer';
 import { TerrainColorSnapshot } from './TerrainColorSnapshot';
+import type { WorldMetrics } from '../world/WorldMetrics';
 
 type SnapshotRepeatConfig = Phaser.Types.GameObjects.TileSprite.TileSpriteConfig & {
   tilePositionX: number;
@@ -29,6 +29,7 @@ export interface TerrainColorSnapshotBuildOptions {
   readonly mode: GameMode;
   readonly layout: ArenaLayout;
   readonly arenaResult: ArenaBuilderResult;
+  readonly worldMetrics: WorldMetrics;
 }
 
 export interface TerrainSnapshotRegion extends GroundSnapshotRegion {
@@ -74,18 +75,27 @@ export function getTerrainTexturePhase(worldPosition: number, worldOffset: numbe
 }
 
 export class TerrainColorSnapshotBuilder {
-  private readonly frame = getArenaRockWorldFrame();
-  private readonly width = Math.ceil(this.frame.width / TERRAIN_SNAPSHOT_SCALE);
-  private readonly height = Math.ceil(this.frame.height / TERRAIN_SNAPSHOT_SCALE);
-  private readonly regions = getTerrainSnapshotRegions(
-    this.frame.width,
-    this.frame.height,
-    this.frame.offsetX,
-    this.frame.offsetY,
-  );
+  private readonly frame: RockWorldFrame;
+  private readonly width: number;
+  private readonly height: number;
+  private readonly regions: TerrainSnapshotRegion[];
   private readonly scratch: Phaser.GameObjects.RenderTexture;
 
   constructor(private readonly options: TerrainColorSnapshotBuildOptions) {
+    this.frame = {
+      offsetX: options.worldMetrics.offsetX,
+      offsetY: options.worldMetrics.offsetY,
+      width: options.worldMetrics.widthPx,
+      height: options.worldMetrics.heightPx,
+    };
+    this.width = Math.ceil(this.frame.width / TERRAIN_SNAPSHOT_SCALE);
+    this.height = Math.ceil(this.frame.height / TERRAIN_SNAPSHOT_SCALE);
+    this.regions = getTerrainSnapshotRegions(
+      this.frame.width,
+      this.frame.height,
+      this.frame.offsetX,
+      this.frame.offsetY,
+    );
     this.scratch = options.scene.add.renderTexture(
       0,
       0,

@@ -1,7 +1,9 @@
 import * as Phaser from 'phaser';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
+import { CELL_SIZE } from '../config';
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
+import type { WorldMetrics } from '../world/WorldMetrics';
+import { worldCellCenter } from '../world/WorldMetrics';
 
 export interface MissionBarrierCellChange {
   readonly gridX: number;
@@ -33,6 +35,7 @@ export class CoopDefenseMissionBarrierManager {
   constructor(
     private readonly scene: Phaser.Scene,
     config: ResolvedCoopDefenseMapMissionProgressConfig,
+    private readonly worldMetrics: WorldMetrics,
     private readonly options: CoopDefenseMissionBarrierManagerOptions = {},
   ) {
     this.physicsGroup = options.physicsGroup ?? scene.physics.add.staticGroup();
@@ -40,9 +43,10 @@ export class CoopDefenseMissionBarrierManager {
     for (const barrier of config.barriers) {
       const bodies = barrier.cells.map((cell) => {
         this.reservedCells.add(cellKey(cell.gridX, cell.gridY));
+        const center = worldCellCenter(this.worldMetrics, cell.gridX, cell.gridY);
         const body = scene.add.rectangle(
-          ARENA_OFFSET_X + (cell.gridX + 0.5) * CELL_SIZE,
-          ARENA_OFFSET_Y + (cell.gridY + 0.5) * CELL_SIZE,
+          center.x,
+          center.y,
           CELL_SIZE,
           CELL_SIZE,
           0x000000,

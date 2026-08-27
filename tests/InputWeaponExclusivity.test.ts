@@ -36,6 +36,7 @@ function createInput(getWeapon2Config: () => typeof WEAPON_CONFIGS.TESLA_DOME | 
   const bridge = {
     getGamePhase: () => 'ARENA',
     canPlayerAct: () => true,
+    getWorldDescriptor: () => null,
     getLocalPlayerId: () => 'player-1',
     sendLocalInput: vi.fn(),
   };

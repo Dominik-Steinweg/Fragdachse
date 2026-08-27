@@ -1,12 +1,9 @@
-import { resolveCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
+import { resolveWorldBases, type BaseSpec } from '../arena/BaseRegistry';
 import type { ArenaMetricsProfile } from '../config';
-import { toWorldDefinition } from '../config/authoring/coopDefenseAuthoringAdapter';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
-import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
-import { toWorldDefinitionId } from './arenaDescriptorAdapter';
-import type { WorldDescriptor } from './WorldDescriptor';
+import { isProceduralWorldDefinitionId, type WorldDescriptor } from './WorldDescriptor';
 import { resolveWorldMetrics, type WorldMetrics } from './WorldMetrics';
 
 /**
@@ -47,41 +44,40 @@ export interface WorldRuntimeContextInput {
   readonly descriptor: WorldDescriptor;
   /** Bereits ausgewaehltes Arena-Profil dieser World; siehe `getArenaMetricsProfile()`. */
   readonly metricsProfile: ArenaMetricsProfile;
-  /** Authored Map dieser World; `null` fuer die prozedurale Arena. */
-  readonly mapConfig: CoopDefenseMapConfig | null;
-  /**
-   * Skalierung der Basen nach Spielerzahl. Fachlich ein Activity-Wert – er wird hier nur so
-   * lange durchgereicht, bis Basisgeometrie und Rundenskalierung getrennt sind.
-   */
-  readonly humanPlayerCount: number;
+  /** Authored World dieser Instanz; `null` fuer die prozedurale Arena. */
+  readonly definition: WorldDefinition | null;
 }
 
 /**
  * Baut den Kontext einer World-Instanz auf.
  *
- * Die Basen werden aus der uebergebenen Map aufgeloest, nicht aus der aktuell in der Lobby
- * gewaehlten. Die BaseRegistry bietet deshalb keinen impliziten Active-Map-Fallback mehr an.
+ * Die World-Geometrie wird aus der uebergebenen WorldDefinition aufgeloest, nicht aus der
+ * aktuell in der Lobby gewaehlten Map. Activity-Overlays werden ausserhalb dieses Kontextes
+ * aufgebaut.
  */
 export function createWorldRuntimeContext(input: WorldRuntimeContextInput): WorldRuntimeContext {
-  const { descriptor, mapConfig } = input;
-  // Die Map muss die Map dieser World sein. Ohne diese Pruefung koennte ein Aufrufer die
-  // Lobby-Auswahl in eine fremde World-Identitaet hineinbauen.
-  const expectedDefinitionId = toWorldDefinitionId(mapConfig?.mapId ?? null);
-  if (expectedDefinitionId !== descriptor.definitionId) {
+  const { descriptor, definition } = input;
+  // Die authored Definition muss genau die World-Identitaet tragen. Fuer prozedurale Worlds
+  // ist dagegen ausdruecklich keine Definition vorhanden.
+  const definitionMatches = definition
+    ? definition.id === descriptor.definitionId
+    : isProceduralWorldDefinitionId(descriptor.definitionId);
+  if (!definitionMatches) {
     throw new Error(
-      `[WorldRuntimeContext] World ${descriptor.definitionId} cannot be built from ${expectedDefinitionId}`,
+      `[WorldRuntimeContext] World ${descriptor.definitionId} cannot be built from `
+      + `${definition?.id ?? 'no authored definition'}`,
     );
   }
   // Genau eine Metrikquelle fuer diese World. Wuerde die Basisaufloesung ihre eigene ableiten,
   // koennten Geometrie und `metrics` bei einem unpassenden Profil still auseinanderlaufen.
   const metrics = resolveWorldMetrics(input.metricsProfile);
-  const bases = mapConfig ? resolveCoopDefenseBases(mapConfig, input.humanPlayerCount, metrics) : [];
+  const bases = definition ? resolveWorldBases(definition, metrics) : [];
   return {
     descriptor,
-    definition: mapConfig ? toWorldDefinition(mapConfig) : null,
+    definition,
     metrics,
     bases,
-    persistentBaseSite: resolvePersistentBaseSite(descriptor, mapConfig, bases),
+    persistentBaseSite: resolvePersistentBaseSite(descriptor, definition, bases),
   };
 }
 
@@ -106,10 +102,10 @@ export function isValidPersistentBaseSite(site: WorldPersistentBaseSite | null):
  */
 function resolvePersistentBaseSite(
   descriptor: WorldDescriptor,
-  mapConfig: CoopDefenseMapConfig | null,
+  definition: WorldDefinition | null,
   bases: readonly BaseSpec[],
 ): WorldPersistentBaseSite | null {
-  const baseId = mapConfig?.persistentBase?.baseId;
+  const baseId = definition?.persistentBaseSite?.baseId;
   if (!baseId) return null;
   const radiusCells = descriptor.parameters?.persistentBaseRadiusCells;
   if (radiusCells === undefined) {

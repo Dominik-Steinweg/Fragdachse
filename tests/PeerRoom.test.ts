@@ -739,6 +739,21 @@ describe('NetworkBridge placement preview presence', () => {
       const host = await createHostRoom(network, ['inp']);
       const senderRoom = await addClientRoom(network, ['inp']);
       const observerRoom = await addClientRoom(network, ['inp']);
+      const hostBridge = new NetworkBridge();
+      setActiveSession({ room: host.room, transport: host.transport, roomCode: 'ABC123' });
+      hostBridge.activate();
+      hostBridge.publishWorldAndActivity({
+        worldRevision: 11,
+        definitionId: 'world:test',
+        seed: 5,
+        generatorVersion: 1,
+        layoutFingerprint: 'feedface',
+      }, null);
+      hostBridge.hostPublishWorldParticipation({
+        p0: 'interactive',
+        p1: 'interactive',
+        p2: 'interactive',
+      });
       const preview = {
         active: true,
         kind: 'turret',
@@ -748,6 +763,7 @@ describe('NetworkBridge placement preview presence', () => {
         y: 288,
         isValid: true,
         frame: 1,
+        worldRevision: 11,
       } as const;
       const sender = new NetworkBridge();
       setActiveSession({ room: senderRoom.room, transport: senderRoom.transport, roomCode: 'ABC123' });

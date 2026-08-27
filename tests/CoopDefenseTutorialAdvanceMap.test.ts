@@ -25,9 +25,11 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import {
   getVisibleCoopDefenseTutorialStepId,
 } from '../src/ui/coopDefenseTutorialStepModel';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 const MAP = getCoopDefenseMapConfig('1');
 const MISSION = resolveCoopDefenseMapMissionProgress(MAP)!;
+const TEST_WORLD_METRICS = resolveCoopDefenseWorldMetrics(MAP.arenaWidthCells, MAP.arenaHeightCells);
 
 function applyMapMetrics(): void {
   applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', MAP.arenaWidthCells, MAP.arenaHeightCells);
@@ -341,6 +343,7 @@ describe('Map 1 as the guided advance tutorial', () => {
       roundRevision: 1,
       getDefenseObjectiveState: () => null,
       isEncounterCleared: (encounterId) => cleared.has(encounterId),
+      worldMetrics: TEST_WORLD_METRICS,
     });
     system.hostUpdate(16, false, []);
     expect(system.isBarrierOpen('extraction-gate')).toBe(false);
@@ -360,6 +363,7 @@ describe('Map 1 as the guided advance tutorial', () => {
       roundRevision: 1,
       getDefenseObjectiveState: () => objectiveState,
       isEncounterCleared: () => false,
+      worldMetrics: TEST_WORLD_METRICS,
     });
     applyMapMetrics();
     const start = worldCenterOf(MISSION.startArea!.gridX, MISSION.startArea!.gridY);
@@ -398,6 +402,7 @@ describe('Map 1 as the guided advance tutorial', () => {
       roundRevision: 1,
       getDefenseObjectiveState: () => 'failed',
       isEncounterCleared: () => false,
+      worldMetrics: TEST_WORLD_METRICS,
     });
     applyMapMetrics();
     const point = worldCenterOf(MISSION.checkpoints[4].gridX, MISSION.checkpoints[4].gridY);

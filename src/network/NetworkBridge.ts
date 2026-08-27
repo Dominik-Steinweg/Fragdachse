@@ -13,7 +13,7 @@
  * zwischen Client und Host, PeerJS ausschließlich als Signaling-Broker.
  */
 import { isActivityOfWorld, parseActivityDescriptor, type ActivityDescriptor } from '../world/ActivityDescriptor';
-import { toArenaDescriptor } from '../world/arenaDescriptorAdapter';
+import { toGameMode } from '../world/arenaDescriptorAdapter';
 import {
   normalizeWorldLoadProgress,
   parseWorldLoadReadyState,
@@ -24,11 +24,13 @@ import { parseWorldDescriptor, type WorldDescriptor } from '../world/WorldDescri
 import {
   encodeWorldParticipationState,
   listWorldParticipants,
+  maySendWorldInput,
   parseWorldParticipationState,
   readWorldParticipation,
   type WorldParticipation,
   type WorldParticipationState,
 } from '../world/WorldParticipation';
+import { isCurrentWorldRevision } from '../world/WorldRevision';
 import {
   createHostSession,
   joinHostSession,
@@ -43,7 +45,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { ArenaDescriptor, BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
@@ -264,9 +266,8 @@ export interface RoundState {
   /** Einmaliger reliable Anker des tatsaechlich erfolgreichen Coop-Boss-Spawns. */
   coopDefenseBossSpawnedAtMs?: number;
   coopDefenseHumanPlayerCount?: number;
-  // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der
-  // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel
-  // abzuwarten (sonst kann eine Basis beim Client fehlen, wenn der Key später als die Phase ankommt).
+  // Historischer Ergebnis-/Round-Snapshot. Der aktive World-Aufbau liest die Map aus dem
+  // WorldDescriptor; dieses Feld bleibt nur fuer Ergebnisdarstellung und Unlock-Auswertung.
   coopDefenseMapId?: string;
   /** Spieler, die beim Abschluss fuer Ergebnisse/Belohnungen qualifiziert waren. */
   resultEligiblePlayerIds?: string[];
@@ -507,6 +508,7 @@ function isSamePlacementPreview(
 ): boolean {
   if (!left || !right) return !left && !right;
   return left.active === right.active
+    && left.worldRevision === right.worldRevision
     && left.kind === right.kind
     && left.gridX === right.gridX
     && left.gridY === right.gridY
@@ -532,7 +534,8 @@ function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): bo
   return input.dx === previous.dx
     && input.dy === previous.dy
     && input.aim === previous.aim
-    && input.dashHeld === previous.dashHeld;
+    && input.dashHeld === previous.dashHeld
+    && input.worldRevision === previous.worldRevision;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -1106,6 +1109,12 @@ export class NetworkBridge {
     return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? COOP_DEFENSE_MODE;
   }
 
+  /** Runtime-Modus der aktiven Activity; vor einer World bleibt die Lobby-Auswahl massgeblich. */
+  getActiveGameMode(): GameMode {
+    const activity = this.getActivityDescriptor();
+    return activity ? toGameMode(activity.kind) : this.getGameMode();
+  }
+
   setGameMode(mode: GameMode): void {
     if (!isHost()) return;
     const previousMode = this.getGameMode();
@@ -1351,15 +1360,20 @@ export class NetworkBridge {
    * verzoegert, was sich anfuehlbar auswirken koennte.
    */
   sendLocalInput(input: PlayerInput): void {
-    // Spectatoren koennen auch bei manipuliertem Client keinen alten Bewegungs-State weiter an
-    // den Host schreiben. Die separate Preview wird in sendLocalPlacementPreview() behandelt.
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
+    // World-Input ist an die aktuelle World gebunden. Die World-Participation ist dabei die
+    // einzige lokale Eintrittsentscheidung; Round-Phase und Round-Eligibility sind dafuer
+    // keine Ersatzquelle.
+    const worldRevision = this.getWorldDescriptor()?.worldRevision;
+    if (worldRevision !== undefined && !maySendWorldInput(this.getLocalWorldParticipation())) {
       input = {
         dx: 0,
         dy: 0,
         aim: input.aim,
         dashHeld: false,
+        worldRevision,
       } satisfies PlayerInput;
+    } else if (worldRevision !== undefined) {
+      input = { ...input, worldRevision };
     }
     const now = Date.now();
     if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)) {
@@ -1373,7 +1387,9 @@ export class NetworkBridge {
   /** Sendet den rein visuellen Placement-Presence-State über den ersetzbaren Kanal. */
   sendLocalPlacementPreview(preview: PlacementPreviewNetState | null): void {
     let next = normalizePlacementPreview(preview);
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) next = null;
+    const world = this.getWorldDescriptor();
+    if (world && !maySendWorldInput(this.getLocalWorldParticipation())) next = null;
+    else if (world && next) next = { ...next, worldRevision: world.worldRevision };
 
     const now = Date.now();
     const changed = !isSamePlacementPreview(next, this.lastSentPlacementPreview);
@@ -1387,13 +1403,21 @@ export class NetworkBridge {
   }
 
   getPlayerInput(playerId: string): PlayerInput | undefined {
-    return this.playerStateMap.get(playerId)?.getState(KEY_INPUT) as PlayerInput | undefined;
+    const input = this.playerStateMap.get(playerId)?.getState(KEY_INPUT) as PlayerInput | undefined;
+    const world = this.getWorldDescriptor();
+    if (!world) return input?.worldRevision === undefined ? input : undefined;
+    return input?.worldRevision !== undefined
+      && isCurrentWorldRevision(world.worldRevision, input.worldRevision)
+      ? input
+      : undefined;
   }
 
   getPlayerPlacementPreview(playerId: string): PlacementPreviewNetState | null {
     const preview = this.playerStateMap.get(playerId)?.getState(KEY_PLACEMENT_PREVIEW) as
       PlacementPreviewNetState | null | undefined;
     if (!preview?.active) return null;
+    const world = this.getWorldDescriptor();
+    if (!world || preview.worldRevision !== world.worldRevision) return null;
     if (playerId === this.getLocalPlayerId()) return preview;
 
     const receivedAt = requireRoom().getPlayerStateUpdatedAt(playerId, KEY_PLACEMENT_PREVIEW);
@@ -2134,6 +2158,20 @@ export class NetworkBridge {
     }
   }
 
+  /** Host-only: ändert nur die Activity innerhalb der unveränderten World-Instanz. */
+  publishActivity(activity: ActivityDescriptor | null): void {
+    if (!isHost()) return;
+    const world = this.getWorldDescriptor();
+    if (!world) return;
+    if (activity && !isActivityOfWorld(activity, world)) {
+      throw new Error(
+        `[NetworkBridge] Activity ${activity.definitionId} belongs to world revision `
+        + `${activity.worldRevision}, not ${world.worldRevision}`,
+      );
+    }
+    setState(KEY_ACTIVITY_DESCRIPTOR, activity, true);
+  }
+
   /** Beendet die replizierte World-Instanz; danach existiert weltweit keine mehr. */
   clearWorldAndActivity(): void {
     if (!isHost()) return;
@@ -2155,17 +2193,6 @@ export class NetworkBridge {
     if (!world) return null;
     const activity = parseActivityDescriptor(getState(KEY_ACTIVITY_DESCRIPTOR));
     return activity && isActivityOfWorld(activity, world) ? activity : null;
-  }
-
-  /**
-   * Kompatibilitaetssicht auf den World-Kanal, solange Generator und Arena-Aufbau den
-   * gemischten `ArenaDescriptor` lesen. Sie ist abgeleitet, kein eigener Kanal.
-   */
-  getArenaDescriptor(): ArenaDescriptor | null {
-    const world = this.getWorldDescriptor();
-    const activity = this.getActivityDescriptor();
-    if (!world || !activity) return null;
-    return toArenaDescriptor(world, activity);
   }
 
   // -- World Participation: Host -> Alle (global, reliable, world-scoped) ----
@@ -2640,19 +2667,21 @@ export class NetworkBridge {
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
   sendHeldActionStart(actionId: string, kind: HostHeldActionKind, durationMs: number, toolRef?: LoadoutToolRef): void {
+    if (this.getWorldActionRevision() === null) return;
     if (isHost()) {
       this.heldActionHandler?.(myPlayer().id, 'start', actionId, kind, durationMs, toolRef);
       return;
     }
-    this.sendHostRpc('hact', { op: 'start', aid: actionId, kind, dur: durationMs, toolRef });
+    this.sendWorldRpc('hact', { op: 'start', aid: actionId, kind, dur: durationMs, toolRef });
   }
 
   sendHeldActionCancel(actionId: string): void {
+    if (this.getWorldActionRevision() === null) return;
     if (isHost()) {
       this.heldActionHandler?.(myPlayer().id, 'cancel', actionId);
       return;
     }
-    this.sendHostRpc('hact', { op: 'cancel', aid: actionId });
+    this.sendWorldRpc('hact', { op: 'cancel', aid: actionId });
   }
 
   registerHeldActionHandler(
@@ -2667,7 +2696,7 @@ export class NetworkBridge {
   ): void {
     this.heldActionHandler = handler;
     this.registerHostRpcHandler('hact', (data: unknown, caller: PlayerState): boolean => {
-      if (!isHost() || !isRecord(data)) return false;
+      if (!isHost() || !this.acceptsWorldRpc(data)) return false;
       const { op, aid, kind, dur, toolRef: rawToolRef } = data as {
         op?: unknown;
         aid?: unknown;
@@ -2703,10 +2732,8 @@ export class NetworkBridge {
     clientNow?: number,
     awaitResult = false,
   ): Promise<LoadoutUseResult | null> {
-    const worldRevision = this.getWorldDescriptor()?.worldRevision;
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
-      return { ok: false, reason: 'blocked' };
-    }
+    const worldRevision = this.getWorldActionRevision();
+    if (worldRevision === null) return { ok: false, reason: 'blocked' };
     if (isHost()) {
       return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
@@ -2751,7 +2778,7 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      if (!isRecord(data)) return { ok: false, reason: 'invalid' };
+      if (!this.acceptsWorldRpc(data)) return { ok: false, reason: 'blocked' };
       const { slot, angle, tx, ty, sid, prm, px, py, ts, wr } = data as {
         slot: LoadoutSlot;
         angle: number;
@@ -2772,14 +2799,8 @@ export class NetworkBridge {
         || (px !== undefined && !isFiniteNumber(px))
         || (py !== undefined && !isFiniteNumber(py))
         || (ts !== undefined && !isFiniteNumber(ts))
-        || (wr !== undefined && (!Number.isSafeInteger(wr) || wr <= 0))
         || (prm !== undefined && !isRecord(prm))) {
         return { ok: false, reason: 'invalid' };
-      }
-      const currentWorldRevision = this.getWorldDescriptor()?.worldRevision;
-      if (currentWorldRevision !== undefined && wr !== currentWorldRevision) {
-        // A placement or combat action from a previous World must never mutate the new one.
-        return { ok: false, reason: 'blocked' };
       }
       // Verwende Client-Timestamp für Cooldown-Tracking (verhindert Schussverlust bei variierender RPC-Latenz).
       // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
@@ -2792,11 +2813,12 @@ export class NetworkBridge {
   // ── Power-Up-Pickup-RPC: Client → Host ────────────────────────────────────
 
   async sendPickupPowerUp(uid: number): Promise<boolean> {
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return false;
+    const worldRevision = this.getWorldActionRevision();
+    if (worldRevision === null) return false;
     if (isHost()) {
       return this.powerUpPickupHandler?.(uid, myPlayer().id) === true;
     }
-    const result = await this.callHostRpc('pup', { uid }, 1_200).catch(() => false);
+    const result = await this.callHostRpc('pup', { uid, wr: worldRevision }, 1_200).catch(() => false);
     return result === true;
   }
 
@@ -2806,26 +2828,26 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const cb = this.powerUpPickupHandler;
       if (!cb) return undefined;
-      if (!isRecord(data)) return undefined;
-      const { uid } = data as { uid: number };
+      if (!this.acceptsWorldRpc(data)) return undefined;
+      const { uid } = data as { uid: number; wr: number };
       if (!Number.isSafeInteger(uid) || uid < 0) return undefined;
       return cb(uid, caller.id);
     });
   }
 
   sendDecoyStealthBreakRequest(): void {
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
+    if (this.getWorldActionRevision() === null) return;
     if (isHost()) {
       this.decoyStealthBreakHandler?.(myPlayer().id);
       return;
     }
-    this.sendHostRpc('dbr', {});
+    this.sendWorldRpc('dbr', {});
   }
 
   registerDecoyStealthBreakHandler(handler: (playerId: string) => void): void {
     this.decoyStealthBreakHandler = handler;
-    this.registerHostRpcHandler('dbr', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
-      if (!isHost()) return undefined;
+    this.registerHostRpcHandler('dbr', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost() || !this.acceptsWorldRpc(data)) return undefined;
       this.decoyStealthBreakHandler?.(caller.id);
       return undefined;
     });
@@ -3272,12 +3294,12 @@ export class NetworkBridge {
   // ── Dash-RPC: Client → Host ───────────────────────────────────────────────
 
   sendDash(dx: number, dy: number): void {
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
+    if (this.getWorldActionRevision() === null) return;
     if (isHost()) {
       this.dashHandler?.(myPlayer().id, dx, dy);
       return;
     }
-    this.sendHostRpc('dash', { dx, dy });
+    this.sendWorldRpc('dash', { dx, dy });
   }
 
   registerDashHandler(cb: (playerId: string, dx: number, dy: number) => void): void {
@@ -3286,8 +3308,8 @@ export class NetworkBridge {
       if (!isHost()) return;
       const dashHandler = this.dashHandler;
       if (!dashHandler) return undefined;
-      if (!isRecord(data)) return undefined;
-      const { dx, dy } = data as { dx: number; dy: number };
+      if (!this.acceptsWorldRpc(data)) return undefined;
+      const { dx, dy } = data as { dx: number; dy: number; wr: number };
       if (!isFiniteNumber(dx) || !isFiniteNumber(dy)) return undefined;
       dashHandler(caller.id, dx, dy);
       return undefined;
@@ -3297,12 +3319,12 @@ export class NetworkBridge {
   // ── Burrow-RPC: Client → Host ─────────────────────────────────────────────
 
   sendBurrowRequest(wantsBurrowed: boolean): void {
-    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
+    if (this.getWorldActionRevision() === null) return;
     if (isHost()) {
       this.burrowHandler?.(myPlayer().id, wantsBurrowed);
       return;
     }
-    this.sendHostRpc('burrow', { want: wantsBurrowed });
+    this.sendWorldRpc('burrow', { want: wantsBurrowed });
   }
 
   registerBurrowHandler(cb: (playerId: string, wantsBurrowed: boolean) => void): void {
@@ -3311,8 +3333,8 @@ export class NetworkBridge {
       if (!isHost()) return;
       const burrowHandler = this.burrowHandler;
       if (!burrowHandler) return undefined;
-      if (!isRecord(data)) return undefined;
-      const { want } = data as { want: boolean };
+      if (!this.acceptsWorldRpc(data)) return undefined;
+      const { want } = data as { want: boolean; wr: number };
       if (typeof want !== 'boolean') return undefined;
       burrowHandler(caller.id, want);
       return undefined;
@@ -4297,5 +4319,29 @@ export class NetworkBridge {
       if (this.getPlayerTeam(playerId) === teamId) count++;
     }
     return count;
+  }
+
+  /** Revision fuer jede World-Aktion; ohne interaktive Teilnahme gibt es keinen Versand. */
+  private getWorldActionRevision(): number | null {
+    const world = this.getWorldDescriptor();
+    if (!world || !maySendWorldInput(this.getLocalWorldParticipation())) return null;
+    return world.worldRevision;
+  }
+
+  private sendWorldRpc(type: string, payload: Readonly<Record<string, unknown>>): boolean {
+    const worldRevision = this.getWorldActionRevision();
+    if (worldRevision === null) return false;
+    this.sendHostRpc(type, { ...payload, wr: worldRevision });
+    return true;
+  }
+
+  /** Verwirft RPCs aus einer alten World, bevor Gameplay-Handler sie erreichen. */
+  private acceptsWorldRpc(payload: unknown): payload is Record<string, unknown> {
+    if (!isRecord(payload)) return false;
+    const world = this.getWorldDescriptor();
+    const worldRevision = payload.wr;
+    return world !== null
+      && Number.isSafeInteger(worldRevision)
+      && isCurrentWorldRevision(world.worldRevision, worldRevision);
   }
 }

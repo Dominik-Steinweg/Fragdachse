@@ -66,7 +66,7 @@ describe('CoopDefenseRespawnBudgetSystem', () => {
       alive: true,
       eliminated: false,
     });
-    expect(system.canPlayerAct('p1')).toBe(true);
+    expect(system.isPlayerEliminated('p1')).toBe(false);
     expect(system.isTeamWiped(['p1'])).toBe(false);
 
     system.handlePlayerDeath('p1');
@@ -76,7 +76,7 @@ describe('CoopDefenseRespawnBudgetSystem', () => {
       eliminated: true,
     });
     expect(system.canPlayerRespawn('p1')).toBe(false);
-    expect(system.canPlayerAct('p1')).toBe(false);
+    expect(system.isPlayerEliminated('p1')).toBe(true);
     expect(system.registerInitialSpawn('p1')).toBe(false);
   });
 
