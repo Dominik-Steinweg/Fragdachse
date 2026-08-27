@@ -442,7 +442,7 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
     expect(builder).toContain('const baseZoneObjects = presentation ? this.buildCaptureTheBeerBaseZones() : [];');
     expect(builder).toContain('const trackObjects = presentation ? this.buildTracks(layout.tracks ?? [], worldMetrics) : [];');
     expect(builder).toContain('const rockVisualSystem = presentation');
-    expect(builder).toContain('if (presentation) {\n      result.groundSurface = new GroundSurfaceStreamer');
+    expect(builder).toMatch(/if \(presentation\) \{\s+result\.groundSurface = new GroundSurfaceStreamer\(\{/);
   });
 
   it('laesst den World-Tick ohne Round-Start laufen', () => {

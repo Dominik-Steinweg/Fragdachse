@@ -53,20 +53,23 @@ export class BaseManager {
   private onBaseActivated: ((spec: BaseSpec) => void) | null = null;
   private getSecondaryObjectiveState: ((objectiveId: string) => CoopDefenseSecondaryObjectiveState | null) | null = null;
   private obstacleGeneration = 0;
+  private readonly presentation: boolean;
   private lighting: LightingSystem | null = null;
   private readonly litBaseKeys = new Set<string>();
-  private readonly destructionRenderer: BaseDestructionRenderer;
+  private readonly destructionRenderer: BaseDestructionRenderer | null;
 
   constructor(
     scene: Phaser.Scene,
     baseSpecs: readonly BaseSpec[],
     metrics: WorldMetrics,
     destructionHooks: BaseDestructionHooks = {},
+    presentation = true,
   ) {
+    this.presentation = presentation;
     this.group = scene.physics.add.staticGroup();
-    this.destructionRenderer = new BaseDestructionRenderer(scene, destructionHooks);
+    this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
     for (const spec of baseSpecs) {
-      const entity = new BaseEntity(scene, spec, metrics);
+      const entity = new BaseEntity(scene, spec, metrics, presentation);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);
@@ -124,7 +127,7 @@ export class BaseManager {
    */
   syncLights(): void {
     const lighting = this.lighting;
-    if (!lighting) return;
+    if (!this.presentation || !lighting) return;
 
     const seen = new Set<string>();
     for (const entity of this.entities) {
@@ -289,7 +292,7 @@ export class BaseManager {
 
   private handleBaseDestroyed(entity: BaseEntity): void {
     this.obstacleGeneration += 1;
-    this.destructionRenderer.play(
+    this.destructionRenderer?.play(
       entity.spec,
       (cellIndex) => entity.destroyCellVisual(cellIndex),
     );
@@ -340,7 +343,7 @@ export class BaseManager {
 
   destroy(): void {
     this.releaseLights();
-    this.destructionRenderer.destroy();
+    this.destructionRenderer?.destroy();
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();

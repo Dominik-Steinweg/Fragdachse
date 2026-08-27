@@ -35,11 +35,11 @@ export interface BaseTurretRuntimeState {
 }
 
 /**
- * Visuelle und logische Repräsentation einer einzelnen Coop-Defense-Basis.
+ * Logische und optionale visuelle Repräsentation einer einzelnen Coop-Defense-Basis.
  *
  * Owns:
- *   - Pro Basis-Zelle ein 47-Blob-Autotile-Sprite (statt früher: ein Tint-Rect).
- *   - Pro Basis-Zelle einen 32×32-StaticBody (alle in derselben StaticGroup),
+ *   - Pro Basis-Zelle optional ein 47-Blob-Autotile-Sprite (statt früher: ein Tint-Rect).
+ *   - Pro Basis-Zelle immer einen 32×32-StaticBody (alle in derselben StaticGroup),
  *     damit auch konkave Formen physikalisch korrekt abgedeckt werden.
  *   - Eine HP-Bar unter der Bounding-Box der gesamten Basis.
  *
@@ -58,6 +58,7 @@ export class BaseEntity {
 
   private readonly scene: Phaser.Scene;
   private readonly metrics: WorldMetrics;
+  private readonly presentation: boolean;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
@@ -84,9 +85,10 @@ export class BaseEntity {
   private onDestroyed: (() => void) | null = null;
   private vulnerableMarker: Phaser.GameObjects.Graphics | null = null;
 
-  constructor(scene: Phaser.Scene, spec: BaseSpec, metrics: WorldMetrics) {
+  constructor(scene: Phaser.Scene, spec: BaseSpec, metrics: WorldMetrics, presentation = true) {
     this.scene = scene;
     this.metrics = metrics;
+    this.presentation = presentation;
     this.id = spec.id;
     this.spec = spec;
     this.faction = spec.faction;
@@ -101,18 +103,38 @@ export class BaseEntity {
     const bounds = getBaseWorldBounds(spec.region, metrics);
     this.hpBarWidth = bounds.width;
     this.lightSpots = BaseEntity.buildLightSpots(bounds);
-    if (!this.dormant) this.createWorldRepresentation();
+    for (const turret of this.spec.turrets) this.turretAngles.set(turret.id, turret.initialAngle);
+    if (!this.dormant) {
+      this.createRuntimeRepresentation();
+      if (this.presentation) this.createPresentationRepresentation();
+    }
   }
 
-  /** Creates the complete gameplay/render representation exactly once. */
-  private createWorldRepresentation(): void {
-    if (!this.dormant && this.cellImages.length > 0) return;
+  /** Creates the collision/runtime representation exactly once. */
+  private createRuntimeRepresentation(): void {
+    if (this.cellBodies.length > 0) return;
+    for (const cell of this.spec.cells) {
+      const worldX = this.metrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = this.metrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+      const body = this.scene.add.rectangle(worldX, worldY, CELL_SIZE, CELL_SIZE, 0x000000, 0);
+      body.setData('baseId', this.spec.id);
+      this.scene.physics.add.existing(body, true);
+      const staticBody = body.body as Phaser.Physics.Arcade.StaticBody;
+      staticBody.setSize(CELL_SIZE, CELL_SIZE);
+      staticBody.updateFromGameObject();
+      this.cellBodies.push(body);
+    }
+  }
+
+  /** Creates the optional visual representation exactly once. */
+  private createPresentationRepresentation(): void {
+    if (this.cellImages.length > 0) return;
     const hostile = this.spec.faction === 'hostile';
     // Eigenes rotes Tileset statt Tint: das Basis-Tileset ist gesaettigt blau, ein Multiply-Tint
     // mit Rot ergibt nahezu Schwarz.
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
-    // ── 1) 47-Blob-Sprites + StaticBodies pro Zelle ────────────────────
+    // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     const cellKeySet = new Set<number>();
     const keyOf = (gx: number, gy: number) => gy * 100000 + gx;
     for (const cell of this.spec.cells) cellKeySet.add(keyOf(cell.gridX, cell.gridY));
@@ -127,14 +149,6 @@ export class BaseEntity {
       image.setDisplaySize(CELL_SIZE, CELL_SIZE);
       image.setDepth(DEPTH.BASES);
       this.cellImages.push(image);
-
-      const body = this.scene.add.rectangle(worldX, worldY, CELL_SIZE, CELL_SIZE, 0x000000, 0);
-      body.setData('baseId', this.spec.id);
-      this.scene.physics.add.existing(body, true);
-      const staticBody = body.body as Phaser.Physics.Arcade.StaticBody;
-      staticBody.setSize(CELL_SIZE, CELL_SIZE);
-      staticBody.updateFromGameObject();
-      this.cellBodies.push(body);
     }
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
@@ -146,7 +160,6 @@ export class BaseEntity {
         .setRotation(transform.rotation)
         .setDepth(DEPTH.BASES + 3);
       this.turretImages.set(turret.id, image);
-      this.turretAngles.set(turret.id, turret.initialAngle);
     }
 
     if (this.spec.role === 'spawn-point' && this.spec.spawnCenter) {
@@ -231,7 +244,7 @@ export class BaseEntity {
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
-    return this.isInert() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
+    return !this.presentation || this.isInert() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
   /** Liefert alle Zell-Kollisions-Rectangles (für StaticGroup-Aufnahme & LoS). */
@@ -246,7 +259,7 @@ export class BaseEntity {
       this.vulnerableMarker = null;
       return;
     }
-    if (this.vulnerableMarker || this.isInert()) return;
+    if (!this.presentation || this.vulnerableMarker || this.isInert()) return;
     const bounds = getBaseWorldBounds(this.spec.region, this.metrics);
     const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 5);
     registerGraphicsObject(this.scene, 'baseMarkers', marker);
@@ -367,7 +380,8 @@ export class BaseEntity {
   activate(): boolean {
     if (!this.dormant || this.isDestroyed()) return false;
     this.dormant = false;
-    this.createWorldRepresentation();
+    this.createRuntimeRepresentation();
+    if (this.presentation) this.createPresentationRepresentation();
     return true;
   }
 

@@ -135,13 +135,17 @@ function fakeGameObject(width = 32, height = 32): Record<string, any> {
   return object;
 }
 
-function makeScene(): { scene: any; groupObjects: any[] } {
+function makeScene(): { scene: any; groupObjects: any[]; presentationCalls: Record<string, number> } {
   const groupObjects: any[] = [];
+  const presentationCalls = { image: 0, rectangle: 0, graphics: 0, tween: 0 };
   const scene: any = {
     add: {
-      image: () => fakeGameObject(),
-      rectangle: (_x: number, _y: number, width: number, height: number) => fakeGameObject(width, height),
-      graphics: () => fakeGameObject(),
+      image: () => { presentationCalls.image += 1; return fakeGameObject(); },
+      rectangle: (_x: number, _y: number, width: number, height: number) => {
+        presentationCalls.rectangle += 1;
+        return fakeGameObject(width, height);
+      },
+      graphics: () => { presentationCalls.graphics += 1; return fakeGameObject(); },
     },
     physics: {
       add: {
@@ -158,16 +162,55 @@ function makeScene(): { scene: any; groupObjects: any[] } {
       },
     },
     tweens: {
-      add: () => ({ remove: vi.fn() }),
+      add: () => { presentationCalls.tween += 1; return { remove: vi.fn() }; },
     },
     time: {
       delayedCall: () => ({ remove: vi.fn() }),
     },
   };
-  return { scene, groupObjects };
+  return { scene, groupObjects, presentationCalls };
 }
 
 describe('Coop-Defense dormant mission structures', () => {
+  it('keeps an activity-free World base physical without creating Base presentation', () => {
+    const { scene, groupObjects, presentationCalls } = makeScene();
+    const worldBase: BaseSpec = {
+      ...makeBaseSpec('world-base-without-activity', { turret: true }),
+      role: 'spawn-point',
+      spawnCenter: { gridX: 10, gridY: 10, x: 336, y: 336 },
+    };
+    const manager = new BaseManager(scene, [worldBase], TEST_WORLD_METRICS, {}, false);
+    const entity = manager.getBase(worldBase.id)!;
+
+    expect(entity.getCellBodies()).toHaveLength(1);
+    expect(manager.getBaseGroup()).toBeDefined();
+    expect(groupObjects).toHaveLength(1);
+    expect(manager.getObstacleRectangles()).toHaveLength(1);
+    expect(entity.getTurrets()).toHaveLength(1);
+    expect(entity.getLightSpots()).toEqual([]);
+    expect(presentationCalls).toEqual({ image: 0, rectangle: 1, graphics: 0, tween: 0 });
+
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() } as unknown as LightingSystem;
+    manager.setLightingSystem(lighting);
+    manager.syncLights();
+    entity.setVulnerable(true);
+    expect(lighting.setLight).not.toHaveBeenCalled();
+    expect(presentationCalls).toEqual({ image: 0, rectangle: 1, graphics: 0, tween: 0 });
+
+    manager.setTurretAngle(`${worldBase.id}-turret`, 1.25);
+    manager.applyDamage(worldBase.id, 10);
+    expect(entity.getTurrets()[0]?.angle).toBe(1.25);
+    expect(entity.getHp()).toBe(90);
+    expect(manager.getNetSnapshot()).toMatchObject([{
+      id: worldBase.id,
+      hp: 90,
+      maxHp: worldBase.hpMax,
+    }]);
+
+    manager.applyDamage(worldBase.id, 90);
+    expect(presentationCalls).toEqual({ image: 0, rectangle: 1, graphics: 0, tween: 0 });
+  });
+
   it('resolves a dormant base with its single linked objective', () => {
     const map = makeDormantMap();
     const spec = resolveCoopDefenseActivityBases(map).find((base) => base.id === DORMANT_BASE_ID);

@@ -1519,7 +1519,7 @@ export class ArenaLifecycleCoordinator {
             }
           }
           : undefined,
-      })
+      }, presentation)
       : null;
     this.ctx.baseManager?.setLightingSystem(this.renderers.lighting);
     this.ctx.enemyManager = isCoopMission && coopDefenseEnemyConfigs
