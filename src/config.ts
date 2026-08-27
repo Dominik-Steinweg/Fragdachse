@@ -682,12 +682,16 @@ export function getCaptureTheBeerBaseRegion(
   return { minGridX: gridCols - width, maxGridX: gridCols - 1, minGridY: 0, maxGridY: gridRows - 1 };
 }
 
-export function getCaptureTheBeerTeamSpawnRegion(teamId: TeamId): ArenaGridRegion {
-  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS, GRID_COLS);
+export function getCaptureTheBeerTeamSpawnRegion(
+  teamId: TeamId,
+  gridCols = GRID_COLS,
+  gridRows = GRID_ROWS,
+): ArenaGridRegion {
+  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS, gridCols);
   if (teamId === 'blue') {
-    return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+    return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: gridRows - 1 };
   }
-  return { minGridX: GRID_COLS - width, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+  return { minGridX: gridCols - width, maxGridX: gridCols - 1, minGridY: 0, maxGridY: gridRows - 1 };
 }
 
 export function getCaptureTheBeerMiddleThirdRegion(

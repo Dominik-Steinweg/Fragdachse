@@ -1,4 +1,4 @@
-import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
+import type { WorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import type {
   ArenaLayout,
@@ -15,16 +15,12 @@ import type { OwnerVisualSource, OwnerVisualState } from './OwnerVisualSource';
 import type { LightingSystem } from '../effects/LightingSystem';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import {
-  ARENA_HEIGHT,
-  ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH,
-  CELL_SIZE, GRID_COLS, GRID_ROWS,
+  CELL_SIZE,
   type ArenaGridRegion,
   getCaptureTheBeerBaseRegion,
   getCaptureTheBeerTeamSpawnRegion,
-  isCaptureTheBeerBaseModeActive,
 } from '../config';
-import { getBaseWorldBounds, getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
+import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 
 const PREFERRED_OPPONENT_DISTANCE_PX = CELL_SIZE * 10;
 const MIN_OPPONENT_DISTANCE_PX = CELL_SIZE * 2;
@@ -119,6 +115,13 @@ interface SpawnEvaluation {
 
 type SpawnContextProvider = (playerId: string | null) => SpawnContextSnapshot | null;
 
+/** Raeumliche Grundlage der aktuell gebundenen World; ausserhalb einer World ist sie null. */
+export interface PlayerWorldGeometry {
+  readonly metrics: WorldMetrics;
+  readonly bases: readonly BaseSpec[];
+  readonly captureTheBeerBasesActive: boolean;
+}
+
 const EMPTY_SPAWN_CONTEXT: SpawnContextSnapshot = {
   fires: [],
   stinkClouds: [],
@@ -139,6 +142,7 @@ export class PlayerManager implements OwnerVisualSource {
   private teamResolver: ((playerId: string) => TeamId | null) | null = null;
   private lighting: LightingSystem | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
+  private worldGeometry: PlayerWorldGeometry | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -172,6 +176,21 @@ export class PlayerManager implements OwnerVisualSource {
     this.spawnContextProvider = provider;
   }
 
+  /** Bindet Spawn-, Grid- und Basisaufloesung an genau eine World-Instanz. */
+  setWorldGeometry(geometry: PlayerWorldGeometry | null): void {
+    this.worldGeometry = geometry;
+    if (geometry === null) this.layout = null;
+  }
+
+  private get metrics(): WorldMetrics {
+    if (!this.worldGeometry) throw new Error('[PlayerManager] Spawn requested without an active World geometry');
+    return this.worldGeometry.metrics;
+  }
+
+  private get coopDefenseBases(): readonly BaseSpec[] {
+    return this.worldGeometry?.bases ?? [];
+  }
+
   /**
    * Übergibt das aktuelle Arena-Layout.
    * Muss vor addPlayer() und vor Respawns aufgerufen werden.
@@ -184,11 +203,11 @@ export class PlayerManager implements OwnerVisualSource {
    *  Wird nur aufgerufen wenn isReady === true. */
   addPlayer(profile: PlayerProfile): void {
     if (this.players.has(profile.id)) return;
-    const spawn = this.getSpawnPoint(profile.id);
+    const spawn = this.getWorldSpawnPoint(profile.id);
     const entity = new PlayerEntity(
       this.scene, profile,
-      ARENA_OFFSET_X + spawn.x,
-      ARENA_OFFSET_Y + spawn.y,
+      spawn.x,
+      spawn.y,
       this.localPlayerId !== null && this.resolveIsEnemy(profile.id),
       this.lighting,
     );
@@ -242,9 +261,11 @@ export class PlayerManager implements OwnerVisualSource {
    * Wird sowohl für Initial-Spawn als auch für Respawns verwendet.
    */
   getSpawnPoint(requestingPlayerId: string | null = null): { x: number; y: number } {
+    const worldGeometry = this.worldGeometry;
+    if (!worldGeometry) throw new Error('[PlayerManager] Spawn requested without an active World geometry');
     const spawnContext = this.spawnContextProvider?.(requestingPlayerId) ?? EMPTY_SPAWN_CONTEXT;
 
-    if (isCaptureTheBeerBaseModeActive() && requestingPlayerId) {
+    if (worldGeometry.captureTheBeerBasesActive && requestingPlayerId) {
       const teamId = this.teamResolver?.(requestingPlayerId) ?? null;
       const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId);
       const baseSpawn = this.tryGetCaptureTheBeerSpawn(teamId, blockedForBaseSpawn);
@@ -281,6 +302,15 @@ export class PlayerManager implements OwnerVisualSource {
       ? null
       : this.pickSpawnWithFallbacks(evaluations);
     return globalChoice ?? this.getEmergencySpawnOutsideGroundHazard();
+  }
+
+  /** Weltkoordinaten eines Spawns, einschliesslich des Offsets der gebundenen World. */
+  getWorldSpawnPoint(requestingPlayerId: string | null = null): { x: number; y: number } {
+    const spawn = this.getSpawnPoint(requestingPlayerId);
+    return {
+      x: this.metrics.offsetX + spawn.x,
+      y: this.metrics.offsetY + spawn.y,
+    };
   }
 
   private pickSpawnWithFallbacks(
@@ -351,11 +381,11 @@ export class PlayerManager implements OwnerVisualSource {
 
     // Coop-Defense: Spieler dürfen nicht auf der Basis oder am Rand spawnen –
     // die Basis ist Verteidigungsobjekt, kein Spawn-Bereich.
-    for (const base of getCoopDefenseBases()) {
+    for (const base of this.coopDefenseBases) {
       const minX = Math.max(0, base.region.minGridX - 1);
-      const maxX = Math.min(GRID_COLS - 1, base.region.maxGridX + 1);
+      const maxX = Math.min(this.metrics.gridCols - 1, base.region.maxGridX + 1);
       const minY = Math.max(0, base.region.minGridY - 1);
-      const maxY = Math.min(GRID_ROWS - 1, base.region.maxGridY + 1);
+      const maxY = Math.min(this.metrics.gridRows - 1, base.region.maxGridY + 1);
       for (let gy = minY; gy <= maxY; gy++) {
         for (let gx = minX; gx <= maxX; gx++) {
           blocked.add(`${gx}_${gy}`);
@@ -371,8 +401,8 @@ export class PlayerManager implements OwnerVisualSource {
     for (const p of this.players.values()) {
       if (!p.sprite.active) continue;
       if (requestingPlayerId && p.id === requestingPlayerId) continue;
-      const gx = Math.floor((p.sprite.x - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((p.sprite.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      const gx = Math.floor((p.sprite.x - this.metrics.offsetX) / CELL_SIZE);
+      const gy = Math.floor((p.sprite.y - this.metrics.offsetY) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 
@@ -386,8 +416,8 @@ export class PlayerManager implements OwnerVisualSource {
    */
   private getEmergencySpawnOutsideGroundHazard(): { x: number; y: number } {
     const hazardCells = this.getGroundHazardSpawnExclusionCells();
-    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
-      for (let gridX = 0; gridX < GRID_COLS; gridX += 1) {
+    for (let gridY = 0; gridY < this.metrics.gridRows; gridY += 1) {
+      for (let gridX = 0; gridX < this.metrics.gridCols; gridX += 1) {
         if (hazardCells.has(`${gridX}_${gridY}`)) continue;
         return {
           x: gridX * CELL_SIZE + CELL_SIZE / 2,
@@ -421,7 +451,7 @@ export class PlayerManager implements OwnerVisualSource {
           ) {
             const gridX = cell.gridX + offsetX;
             const gridY = cell.gridY + offsetY;
-            if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) continue;
+            if (gridX < 0 || gridX >= this.metrics.gridCols || gridY < 0 || gridY >= this.metrics.gridRows) continue;
             excluded.add(`${gridX}_${gridY}`);
           }
         }
@@ -433,9 +463,9 @@ export class PlayerManager implements OwnerVisualSource {
   private collectFreeCells(blocked: ReadonlySet<string>, region?: ArenaGridRegion): SpawnCandidate[] {
     const free: SpawnCandidate[] = [];
     const minGridX = region?.minGridX ?? 0;
-    const maxGridX = region?.maxGridX ?? GRID_COLS - 1;
+    const maxGridX = region?.maxGridX ?? this.metrics.gridCols - 1;
     const minGridY = region?.minGridY ?? 0;
-    const maxGridY = region?.maxGridY ?? GRID_ROWS - 1;
+    const maxGridY = region?.maxGridY ?? this.metrics.gridRows - 1;
 
     for (let gy = minGridY; gy <= maxGridY; gy++) {
       for (let gx = minGridX; gx <= maxGridX; gx++) {
@@ -445,8 +475,8 @@ export class PlayerManager implements OwnerVisualSource {
           free.push({
             x,
             y,
-            worldX: ARENA_OFFSET_X + x,
-            worldY: ARENA_OFFSET_Y + y,
+            worldX: this.metrics.offsetX + x,
+            worldY: this.metrics.offsetY + y,
           });
         }
       }
@@ -461,12 +491,20 @@ export class PlayerManager implements OwnerVisualSource {
   ): { x: number; y: number } | null {
     if (!teamId) return null;
 
-    const baseCandidates = this.collectFreeCells(blocked, getCaptureTheBeerBaseRegion(teamId));
+    const baseCandidates = this.collectFreeCells(blocked, getCaptureTheBeerBaseRegion(
+      teamId,
+      this.metrics.gridCols,
+      this.metrics.gridRows,
+    ));
     if (baseCandidates.length > 0) {
       return this.pickRandomSpawn(baseCandidates);
     }
 
-    const teamZoneCandidates = this.collectFreeCells(blocked, getCaptureTheBeerTeamSpawnRegion(teamId));
+    const teamZoneCandidates = this.collectFreeCells(blocked, getCaptureTheBeerTeamSpawnRegion(
+      teamId,
+      this.metrics.gridCols,
+      this.metrics.gridRows,
+    ));
     if (teamZoneCandidates.length > 0) {
       return this.pickRandomSpawn(teamZoneCandidates);
     }
@@ -539,9 +577,9 @@ export class PlayerManager implements OwnerVisualSource {
 
     const edgeDistance = Math.min(
       candidate.x,
-      ARENA_WIDTH - candidate.x,
+      this.metrics.widthPx - candidate.x,
       candidate.y,
-      ARENA_HEIGHT - candidate.y,
+      this.metrics.heightPx - candidate.y,
     );
 
     let score = 0;
@@ -551,7 +589,7 @@ export class PlayerManager implements OwnerVisualSource {
 
     let coopBaseDistance = Number.POSITIVE_INFINITY;
     if (coopDefenseBase) {
-      const bounds = getBaseWorldBounds(coopDefenseBase.region, resolveActiveArenaWorldMetrics());
+      const bounds = getBaseWorldBounds(coopDefenseBase.region, this.metrics);
       const bx = bounds.x + bounds.width / 2;
       const by = bounds.y + bounds.height / 2;
       coopBaseDistance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);
@@ -606,7 +644,7 @@ export class PlayerManager implements OwnerVisualSource {
 
   private resolveCoopDefenseSpawnBase(spawnContext: SpawnContextSnapshot): BaseSpec | null {
     // Gespawnt wird an den eigenen Basen; an der Gegnerbasis waere es die schlechteste Wahl.
-    const coopBases = getCoopDefenseBases().filter((base) => base.faction !== 'hostile' && base.role !== 'outpost' && base.role !== 'spawn-point');
+    const coopBases = this.coopDefenseBases.filter((base) => base.faction !== 'hostile' && base.role !== 'outpost' && base.role !== 'spawn-point');
     if (coopBases.length === 0) return null;
 
     const livingIds = spawnContext.livingCoopBaseIds;

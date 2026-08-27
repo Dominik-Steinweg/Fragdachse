@@ -182,9 +182,7 @@ import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { resolveCoopDefenseBases } from '../arena/BaseRegistry';
 import { toMapId } from '../world/arenaDescriptorAdapter';
-import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
@@ -2235,34 +2233,20 @@ export class ArenaScene extends Phaser.Scene {
       ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
       : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
-    const persistentMapConfig = inArena && isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
-      : undefined;
-    const persistentHumanPlayerCount = Math.max(
-      1,
-      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
-    );
-    const persistentBases = persistentMapConfig
-      ? resolveCoopDefenseBases(persistentMapConfig, persistentHumanPlayerCount)
-      : [];
-    const persistentBaseTerrain = persistentMapConfig?.persistentBase
-      ? persistentBases.find((base) => base.id === persistentMapConfig.persistentBase!.baseId)
-      : undefined;
-    const persistentRadiusCells = bridge.getWorldDescriptor()?.parameters?.persistentBaseRadiusCells
-      ?? getStoredCoopDefenseProgress().persistentBase.radiusCells;
+    const activeWorld = inArena ? this.ctx.world : null;
+    const persistentBaseSite = activeWorld?.persistentBaseSite ?? null;
     this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
-      persistentBaseTerrain && this.ctx.currentLayout
+      persistentBaseSite && this.ctx.currentLayout
         ? {
           seed: this.ctx.currentLayout.seed,
-          anchor: getPersistentBaseAnchor(persistentBaseTerrain),
-          radiusCells: persistentRadiusCells,
+          anchor: persistentBaseSite.anchor,
+          radiusCells: persistentBaseSite.radiusCells,
         }
         : null,
     );
     this.persistentBaseVisuals.sync(
-      persistentMapConfig?.persistentBase,
-      persistentBases,
-      persistentRadiusCells,
+      persistentBaseSite,
+      activeWorld?.metrics ?? null,
       inArena
         && !spectator
         && (

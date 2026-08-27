@@ -98,7 +98,7 @@ import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, type BaseSpec } from '../../arena/BaseRegistry';
+import { getBaseRewardPickupWorldPosition, getBaseWorldBounds } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
@@ -158,10 +158,13 @@ import {
   type PersistentRestoreCandidate,
   type PersistentRestoreToolDefinition,
 } from '../../persistentBase/PersistentBaseRestorePlanner';
-import { getPersistentBaseAnchor } from '../../persistentBase/PersistentBaseZone';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import { toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
-import { createWorldRuntimeContext, isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
+import {
+  createWorldRuntimeContext,
+  isValidPersistentBaseSite,
+  type WorldPersistentBaseSite,
+} from '../../world/WorldRuntimeContext';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -960,6 +963,11 @@ export class ArenaLifecycleCoordinator {
     });
     const world = this.ctx.world;
     const coopDefenseBases = world.bases;
+    this.ctx.playerManager.setWorldGeometry({
+      metrics: world.metrics,
+      bases: world.bases,
+      captureTheBeerBasesActive: descriptor.gameMode === CAPTURE_THE_BEER_MODE,
+    });
     const locallyGeneratedLayout = prepared
       && prepared.descriptor.roundRevision === descriptor.roundRevision
       && prepared.descriptor.seed === descriptor.seed
@@ -1113,8 +1121,8 @@ export class ArenaLifecycleCoordinator {
     // Coop-Defense: BaseManager besitzt die Basis-Entities (Visual + Physik + HP + Sync).
     // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
     // HP-Werte fließen über GameState.bases (Host → Client).
-    this.ctx.baseManager = isCoopDefenseMode(bridge.getGameMode())
-      ? new BaseManager(this.scene, coopDefenseBases, {
+    this.ctx.baseManager = isCoopDefenseMode(descriptor.gameMode)
+      ? new BaseManager(this.scene, coopDefenseBases, world.metrics, {
         playExplosion: (x, y, radius, color) => {
           this.ctx.effectSystem.playExplosionEffect(x, y, radius, color);
         },
@@ -3028,7 +3036,7 @@ export class ArenaLifecycleCoordinator {
       barrierCells: () => this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
     });
-    this.restorePersistentBase(coopDefenseMapConfig, coopDefenseBases);
+    this.restorePersistentBase(world.persistentBaseSite, world.definition?.sourceMapId ?? null);
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
     this.renderers.lighting.setTimeOfDay(runtimeTimeOfDayMinutes);
     this.renderers.lighting.setActive(true);
@@ -3387,25 +3395,24 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTrainHitCallback(null);
     this.ctx.centerHUD.hideTrainWidget();
     this.clientUpdate.clientUtilityOverride = null;
+    this.ctx.playerManager.setWorldGeometry(null);
   }
 
   private restorePersistentBase(
-    mapConfig: CoopDefenseMapConfig | null,
-    bases: readonly BaseSpec[],
+    site: WorldPersistentBaseSite | null,
+    mapId: string | null,
   ): void {
     const session = this.ctx.persistentBaseSession;
-    if (!session || !mapConfig?.persistentBase || !this.ctx.placementSystem) return;
+    if (!session || !site || !this.ctx.placementSystem) return;
 
-    const anchorBase = bases.find((base) => base.id === mapConfig.persistentBase!.baseId);
     const hostId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(hostId);
     const tools = this.buildPersistentRestoreTools(hostId, committed?.coopDefenseProfile ?? null);
     const capacityMax = this.getConstructionCapacity(hostId);
-    if (!anchorBase) return;
 
     const plan = planPersistentBaseRestore({
       state: session.workingState,
-      anchor: getPersistentBaseAnchor(anchorBase),
+      anchor: site.anchor,
       activeRadiusCells: session.radiusCells,
       capacityUsed: this.ctx.placementSystem.getUsedCapacity(hostId),
       capacityMax,
@@ -3426,7 +3433,7 @@ export class ArenaLifecycleCoordinator {
     }
     if (plan.dormant.length > 0) {
       this.runtimeDiagnosticEventSink?.('persistent-base:restore-dormant', {
-        mapId: mapConfig.mapId,
+        mapId,
         count: plan.dormant.length,
       });
     }
@@ -3448,7 +3455,7 @@ export class ArenaLifecycleCoordinator {
           revision: session.workingState.revision,
           constructions: [blueprint],
         },
-        anchor: getPersistentBaseAnchor(anchorBase),
+        anchor: site.anchor,
         activeRadiusCells: session.radiusCells,
         capacityUsed: this.ctx.placementSystem.getUsedCapacity(blueprint.ownerId),
         capacityMax: this.getConstructionCapacity(blueprint.ownerId),

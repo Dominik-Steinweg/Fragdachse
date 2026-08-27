@@ -16,9 +16,11 @@ import { BaseManager } from '../src/entities/BaseManager';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 
 const DORMANT_BASE_ID = 'test-dormant-outpost';
 const DORMANT_OBJECTIVE_ID = 'test-dormant-objective';
+const TEST_WORLD_METRICS = resolveActiveArenaWorldMetrics();
 
 function makeDormantMap(): CoopDefenseMapConfig {
   return {
@@ -249,7 +251,7 @@ describe('Coop-Defense dormant mission structures', () => {
       dormant: true,
       dormantObjectiveId: 'reveal-outpost',
     }), startHp: 25 };
-    const manager = new BaseManager(scene, [damaged]);
+    const manager = new BaseManager(scene, [damaged], TEST_WORLD_METRICS);
     const entity = manager.getBase(damaged.id)!;
 
     expect(entity.getHp()).toBe(25);
@@ -275,7 +277,7 @@ describe('Coop-Defense dormant mission structures', () => {
   it('includes a destroyed active structure as an explicit zero-hp snapshot', () => {
     const { scene } = makeScene();
     const active = makeBaseSpec('destroyed-active-outpost');
-    const manager = new BaseManager(scene, [active]);
+    const manager = new BaseManager(scene, [active], TEST_WORLD_METRICS);
 
     manager.applyDamage(active.id, active.hpMax);
 
@@ -287,11 +289,11 @@ describe('Coop-Defense dormant mission structures', () => {
   it('applies an explicit zero-hp snapshot to the client as a destroyed state', () => {
     const { scene: hostScene } = makeScene();
     const active = makeBaseSpec('destroyed-active-outpost');
-    const host = new BaseManager(hostScene, [active]);
+    const host = new BaseManager(hostScene, [active], TEST_WORLD_METRICS);
     host.applyDamage(active.id, active.hpMax);
 
     const { scene: clientScene } = makeScene();
-    const client = new BaseManager(clientScene, [active]);
+    const client = new BaseManager(clientScene, [active], TEST_WORLD_METRICS);
     client.applySnapshot(host.getNetSnapshot());
 
     const clientBase = client.getBase(active.id)!;
@@ -302,11 +304,11 @@ describe('Coop-Defense dormant mission structures', () => {
   it('does not revive a client-destroyed structure when a later delta omits it', () => {
     const { scene: hostScene } = makeScene();
     const active = makeBaseSpec('destroyed-active-outpost');
-    const host = new BaseManager(hostScene, [active]);
+    const host = new BaseManager(hostScene, [active], TEST_WORLD_METRICS);
     host.applyDamage(active.id, active.hpMax);
 
     const { scene: clientScene } = makeScene();
-    const client = new BaseManager(clientScene, [active]);
+    const client = new BaseManager(clientScene, [active], TEST_WORLD_METRICS);
     client.applySnapshot(host.getNetSnapshot());
     client.applySnapshot([]);
 
@@ -323,7 +325,7 @@ describe('Coop-Defense dormant mission structures', () => {
       dormantObjectiveId: 'reveal-outpost',
       turret: true,
     });
-    const manager = new BaseManager(scene, [active, dormant]);
+    const manager = new BaseManager(scene, [active, dormant], TEST_WORLD_METRICS);
     const dormantEntity = manager.getBase(dormant.id)!;
 
     expect(dormantEntity.isDormant()).toBe(true);
@@ -352,7 +354,7 @@ describe('Coop-Defense dormant mission structures', () => {
       dormantObjectiveId: 'reveal-outpost',
       turret: true,
     });
-    const manager = new BaseManager(scene, [dormant]);
+    const manager = new BaseManager(scene, [dormant], TEST_WORLD_METRICS);
     const activated = vi.fn();
     manager.setOnBaseActivated(activated);
     const state: CoopDefenseSecondaryObjectiveState = 'active';

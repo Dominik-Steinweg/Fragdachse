@@ -660,9 +660,9 @@ export class CombatSystem {
 
     const player = this.playerManager.getPlayer(id)!;
     player.body.enable = true;
-    const spawn = this.playerManager.getSpawnPoint(id);
-    const spawnX = ARENA_OFFSET_X + spawn.x;
-    const spawnY = ARENA_OFFSET_Y + spawn.y;
+    const spawn = this.playerManager.getWorldSpawnPoint(id);
+    const spawnX = spawn.x;
+    const spawnY = spawn.y;
     player.setPosition(spawnX, spawnY);
     this.onAuthoritativePositionReset?.(id, spawnX, spawnY);
     return true;
@@ -4041,9 +4041,9 @@ export class CombatSystem {
     if (!player) return;
 
     player.body.enable = true;
-    const spawn = this.playerManager.getSpawnPoint(playerId);
-    const spawnX = ARENA_OFFSET_X + spawn.x;
-    const spawnY = ARENA_OFFSET_Y + spawn.y;
+    const spawn = this.playerManager.getWorldSpawnPoint(playerId);
+    const spawnX = spawn.x;
+    const spawnY = spawn.y;
     player.setPosition(spawnX, spawnY);
     this.onAuthoritativePositionReset?.(playerId, spawnX, spawnY);
   }

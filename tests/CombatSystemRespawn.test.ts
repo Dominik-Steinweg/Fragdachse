@@ -49,7 +49,7 @@ describe('CombatSystem respawn lifecycle', () => {
       const playerManager = {
         getPlayer: (id: string) => id === player.id ? player : undefined,
         getAllPlayers: () => [player],
-        getSpawnPoint: () => ({ x: 20, y: 30 }),
+        getWorldSpawnPoint: () => ({ x: 260, y: 42 }),
       } as unknown as PlayerManager;
       const bridge = {
         isHost: () => true,
@@ -78,6 +78,7 @@ describe('CombatSystem respawn lifecycle', () => {
         eliminated: false,
       });
       expect(player.setPosition).toHaveBeenCalledTimes(1);
+      expect(player.setPosition).toHaveBeenCalledWith(260, 42);
     } finally {
       vi.useRealTimers();
     }

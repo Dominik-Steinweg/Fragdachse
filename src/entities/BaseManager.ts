@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import type { SyncedBaseState } from '../types';
 import type { CoopBaseFaction } from '../config/coopDefenseMaps';
-import { getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
+import type { BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
 import { mixColors } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
@@ -11,6 +11,7 @@ import {
   BaseDestructionRenderer,
   type BaseDestructionHooks,
 } from '../effects/BaseDestructionRenderer';
+import type { WorldMetrics } from '../world/WorldMetrics';
 
 /** Aufgehellte Teamfarbe der Basis: als Licht braucht es alle drei Kanäle. */
 const BASE_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.5);
@@ -34,9 +35,8 @@ const HOSTILE_BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.72
  *   - Clients: applySnapshot() konsumiert per-Tick die HP-Werte vom Host.
  *
  * Skalierung:
- *   - Anzahl/Form/HP der Basen entsteht aus `getCoopDefenseBases()` (BaseRegistry,
- *     gespeist aus der datengetriebenen Coop-Defense-Map-Konfiguration). Keine Annahme über eine
- *     bestimmte Anzahl. Lookup by id O(1) via Map.
+ *   - Anzahl/Form/HP der Basen kommt aus `WorldRuntimeContext.bases`. Keine Annahme über eine
+ *     bestimmte Anzahl und kein Rueckgriff auf die aktive Lobby-Map. Lookup by id O(1) via Map.
  *
  * Zerstörung:
  *   - Beim ersten HP→0-Übergang einer Basis ruft die `BaseEntity` ihren Callback,
@@ -59,13 +59,14 @@ export class BaseManager {
 
   constructor(
     scene: Phaser.Scene,
-    baseSpecs: readonly BaseSpec[] = getCoopDefenseBases(),
+    baseSpecs: readonly BaseSpec[],
+    metrics: WorldMetrics,
     destructionHooks: BaseDestructionHooks = {},
   ) {
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = new BaseDestructionRenderer(scene, destructionHooks);
     for (const spec of baseSpecs) {
-      const entity = new BaseEntity(scene, spec);
+      const entity = new BaseEntity(scene, spec, metrics);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);

@@ -1,8 +1,6 @@
-import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
+import type { WorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
   CELL_SIZE,
   COLORS,
   COOP_DEFENSE_BASE_HP_BAR_FILL,
@@ -59,6 +57,7 @@ export class BaseEntity {
   readonly role: NonNullable<BaseSpec['role']>;
 
   private readonly scene: Phaser.Scene;
+  private readonly metrics: WorldMetrics;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
@@ -85,8 +84,9 @@ export class BaseEntity {
   private onDestroyed: (() => void) | null = null;
   private vulnerableMarker: Phaser.GameObjects.Graphics | null = null;
 
-  constructor(scene: Phaser.Scene, spec: BaseSpec) {
+  constructor(scene: Phaser.Scene, spec: BaseSpec, metrics: WorldMetrics) {
     this.scene = scene;
+    this.metrics = metrics;
     this.id = spec.id;
     this.spec = spec;
     this.faction = spec.faction;
@@ -98,7 +98,7 @@ export class BaseEntity {
     this.dormant = spec.dormant === true;
     const hostile = spec.faction === 'hostile';
     this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;
-    const bounds = getBaseWorldBounds(spec.region, resolveActiveArenaWorldMetrics());
+    const bounds = getBaseWorldBounds(spec.region, metrics);
     this.hpBarWidth = bounds.width;
     this.lightSpots = BaseEntity.buildLightSpots(bounds);
     if (!this.dormant) this.createWorldRepresentation();
@@ -119,8 +119,8 @@ export class BaseEntity {
     const isOccupied = (gx: number, gy: number) => cellKeySet.has(keyOf(gx, gy));
 
     for (const cell of this.spec.cells) {
-      const worldX = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+      const worldX = this.metrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = this.metrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask = AutoTiler.computeMask(cell.gridX, cell.gridY, isOccupied);
       const frame = AutoTiler.getFrame(mask, BASE_AUTOTILE);
       const image = this.scene.add.image(worldX, worldY, cellTexture, frame);
@@ -173,7 +173,7 @@ export class BaseEntity {
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
-    const bounds = getBaseWorldBounds(this.spec.region, resolveActiveArenaWorldMetrics());
+    const bounds = getBaseWorldBounds(this.spec.region, this.metrics);
     const centerX = bounds.x + bounds.width / 2;
     const hpBarY = bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
     const hpBarBg = this.scene.add.rectangle(
@@ -247,7 +247,7 @@ export class BaseEntity {
       return;
     }
     if (this.vulnerableMarker || this.isInert()) return;
-    const bounds = getBaseWorldBounds(this.spec.region, resolveActiveArenaWorldMetrics());
+    const bounds = getBaseWorldBounds(this.spec.region, this.metrics);
     const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 5);
     registerGraphicsObject(this.scene, 'baseMarkers', marker);
     marker.lineStyle(3, VULNERABLE_MARKER_COLOR, 0.88);
@@ -282,8 +282,8 @@ export class BaseEntity {
     let bestY = 0;
     let bestDistSq = Number.POSITIVE_INFINITY;
     for (const cell of this.spec.cells) {
-      const left = ARENA_OFFSET_X + cell.gridX * CELL_SIZE;
-      const top = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE;
+      const left = this.metrics.offsetX + cell.gridX * CELL_SIZE;
+      const top = this.metrics.offsetY + cell.gridY * CELL_SIZE;
       const right = left + CELL_SIZE;
       const bottom = top + CELL_SIZE;
       const cx = Math.min(Math.max(x, left), right);

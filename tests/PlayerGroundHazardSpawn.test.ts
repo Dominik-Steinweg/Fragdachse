@@ -20,6 +20,13 @@ vi.mock('../src/network/bridge', () => ({
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_COLS, GRID_ROWS } from '../src/config';
 import { PlayerManager } from '../src/entities/PlayerManager';
 import type { ArenaLayout } from '../src/types';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+
+const TEST_WORLD_GEOMETRY = {
+  metrics: resolveActiveArenaWorldMetrics(),
+  bases: [],
+  captureTheBeerBasesActive: false,
+} as const;
 
 describe('PlayerManager ground hazard spawns', () => {
   it('keeps one full grid cell between an initial or respawn position and a ground hazard', () => {
@@ -55,6 +62,7 @@ describe('PlayerManager ground hazard spawns', () => {
       }],
     };
     const manager = new PlayerManager({} as never);
+    manager.setWorldGeometry(TEST_WORLD_GEOMETRY);
     manager.setLayout(layout);
     const fireExclusion = (
       manager as unknown as { getGroundHazardSpawnExclusionCells(): Set<string> }
@@ -65,6 +73,10 @@ describe('PlayerManager ground hazard spawns', () => {
     expect(manager.getSpawnPoint('player-1')).toEqual({
       x: safeCell.gridX * CELL_SIZE + CELL_SIZE / 2,
       y: safeCell.gridY * CELL_SIZE + CELL_SIZE / 2,
+    });
+    expect(manager.getWorldSpawnPoint('player-1')).toEqual({
+      x: ARENA_OFFSET_X + safeCell.gridX * CELL_SIZE + CELL_SIZE / 2,
+      y: ARENA_OFFSET_Y + safeCell.gridY * CELL_SIZE + CELL_SIZE / 2,
     });
   });
 
@@ -79,6 +91,7 @@ describe('PlayerManager ground hazard spawns', () => {
       }
     }
     const manager = new PlayerManager({} as never);
+    manager.setWorldGeometry(TEST_WORLD_GEOMETRY);
     manager.setLayout({
       seed: 16,
       rocks,

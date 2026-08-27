@@ -1,9 +1,9 @@
 import * as Phaser from 'phaser';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, DEPTH, GRID_COLS, GRID_ROWS } from '../../config';
-import type { BaseSpec } from '../../arena/BaseRegistry';
-import type { CoopDefenseMapPersistentBaseConfig } from '../../config/coopDefenseMaps';
-import { getPersistentBaseAnchor, isCellInsidePersistentBaseZone } from '../../persistentBase/PersistentBaseZone';
+import { CELL_SIZE, DEPTH } from '../../config';
+import { isCellInsidePersistentBaseZone } from '../../persistentBase/PersistentBaseZone';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
+import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
+import type { WorldMetrics } from '../../world/WorldMetrics';
 
 /** Opt-in construction-zone guide for the active persistent base; persistent terrain is streamed elsewhere. */
 export class PersistentBaseVisuals {
@@ -16,23 +16,28 @@ export class PersistentBaseVisuals {
   }
 
   sync(
-    config: CoopDefenseMapPersistentBaseConfig | undefined,
-    bases: readonly BaseSpec[],
-    radiusCells: number,
+    site: WorldPersistentBaseSite | null,
+    metrics: WorldMetrics | null,
     showOverlay: boolean,
   ): void {
-    const base = config ? bases.find((candidate) => candidate.id === config.baseId) : undefined;
-    if (!base || !Number.isFinite(radiusCells) || radiusCells < 0) {
+    if (!site || !metrics || !Number.isFinite(site.radiusCells) || site.radiusCells < 0) {
       this.clear();
       return;
     }
-    const anchor = getPersistentBaseAnchor(base);
+    const { anchor, radiusCells } = site;
     const zoneKey = `${anchor.gridX}:${anchor.gridY}:${radiusCells}`;
 
-    const overlayKey = `${zoneKey}:${showOverlay ? 'on' : 'off'}`;
+    const overlayKey = [
+      zoneKey,
+      metrics.offsetX,
+      metrics.offsetY,
+      metrics.gridCols,
+      metrics.gridRows,
+      showOverlay ? 'on' : 'off',
+    ].join(':');
     if (overlayKey !== this.lastOverlayKey) {
       this.overlay.clear();
-      if (showOverlay) this.drawOverlay(anchor, radiusCells);
+      if (showOverlay) this.drawOverlay(anchor, radiusCells, metrics);
       this.overlay.setVisible(showOverlay);
       this.lastOverlayKey = overlayKey;
     }
@@ -48,15 +53,19 @@ export class PersistentBaseVisuals {
     this.overlay.destroy();
   }
 
-  private drawOverlay(anchor: { gridX: number; gridY: number }, radiusCells: number): void {
+  private drawOverlay(
+    anchor: { gridX: number; gridY: number },
+    radiusCells: number,
+    metrics: WorldMetrics,
+  ): void {
     const radius = Math.ceil(radiusCells);
     this.overlay.fillStyle(0x8fda83, 0.08);
     this.overlay.lineStyle(1, 0xb4ee9d, 0.42);
-    for (let gridY = Math.max(0, anchor.gridY - radius); gridY <= Math.min(GRID_ROWS - 1, anchor.gridY + radius); gridY += 1) {
-      for (let gridX = Math.max(0, anchor.gridX - radius); gridX <= Math.min(GRID_COLS - 1, anchor.gridX + radius); gridX += 1) {
+    for (let gridY = Math.max(0, anchor.gridY - radius); gridY <= Math.min(metrics.gridRows - 1, anchor.gridY + radius); gridY += 1) {
+      for (let gridX = Math.max(0, anchor.gridX - radius); gridX <= Math.min(metrics.gridCols - 1, anchor.gridX + radius); gridX += 1) {
         if (!isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, radiusCells)) continue;
-        const x = ARENA_OFFSET_X + gridX * CELL_SIZE;
-        const y = ARENA_OFFSET_Y + gridY * CELL_SIZE;
+        const x = metrics.offsetX + gridX * CELL_SIZE;
+        const y = metrics.offsetY + gridY * CELL_SIZE;
         this.overlay.fillRect(x, y, CELL_SIZE, CELL_SIZE);
         this.overlay.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
       }

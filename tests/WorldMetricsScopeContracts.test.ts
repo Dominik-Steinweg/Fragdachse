@@ -20,6 +20,10 @@ import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 const WORLD_SCOPED_MODULES = [
   'src/arena/ArenaGenerator.ts',
   'src/arena/BaseRegistry.ts',
+  'src/entities/BaseEntity.ts',
+  'src/entities/BaseManager.ts',
+  'src/entities/PlayerManager.ts',
+  'src/scenes/arena/PersistentBaseVisuals.ts',
   'src/systems/PlacementSystem.ts',
 ] as const;
 
@@ -90,6 +94,33 @@ describe('World-scoped Metrik – migrierte Module', () => {
 });
 
 describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
+  it('bindet aktive Basen und die persistente Basisstelle an den World-Kontext', () => {
+    const baseManager = read('src/entities/BaseManager.ts');
+    const playerManager = read('src/entities/PlayerManager.ts');
+    const persistentVisuals = read('src/scenes/arena/PersistentBaseVisuals.ts');
+    const combatSystem = read('src/systems/CombatSystem.ts');
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const arenaScene = read('src/scenes/ArenaScene.ts');
+
+    for (const [path, source] of [
+      ['src/entities/BaseManager.ts', baseManager],
+      ['src/entities/PlayerManager.ts', playerManager],
+      ['src/scenes/arena/PersistentBaseVisuals.ts', persistentVisuals],
+    ] as const) {
+      expect(source.includes('getCoopDefenseBases'), `${path} resolves bases from lobby state`).toBe(false);
+      expect(source.includes('resolveCoopDefenseBases'), `${path} re-resolves bases outside its World`).toBe(false);
+    }
+
+    expect(lifecycle).toContain('new BaseManager(this.scene, coopDefenseBases, world.metrics');
+    expect(lifecycle).toContain('this.ctx.baseManager = isCoopDefenseMode(descriptor.gameMode)');
+    expect(lifecycle).toContain('this.ctx.playerManager.setWorldGeometry({');
+    expect(lifecycle).toContain('this.restorePersistentBase(world.persistentBaseSite');
+    expect(lifecycle).not.toContain('getPersistentBaseAnchor');
+    expect(arenaScene).toContain('const persistentBaseSite = activeWorld?.persistentBaseSite ?? null');
+    expect(combatSystem).toContain('this.playerManager.getWorldSpawnPoint(');
+    expect(combatSystem).not.toMatch(/ARENA_OFFSET_[XY] \+ spawn\.[xy]/);
+  });
+
   it('loest jede authored Map unabhaengig von der gerade aktiven Arena identisch auf', () => {
     // Referenz: jede Map einmal aufloesen, waehrend eine fremde Arena global aktiv ist.
     applyArenaMetricsForMode('deathmatch', 'LOBBY');
