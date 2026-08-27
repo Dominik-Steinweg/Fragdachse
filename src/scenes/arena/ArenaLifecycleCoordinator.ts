@@ -166,6 +166,7 @@ import {
   isValidPersistentBaseSite,
   type WorldPersistentBaseSite,
 } from '../../world/WorldRuntimeContext';
+import { WorldLifecycle } from '../../world/WorldLifecycle';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -224,6 +225,16 @@ export class ArenaLifecycleCoordinator {
     readonly direction: 1 | -1;
     readonly plan: TrainEventPlan;
   } | null = null;
+  /**
+   * Besitzer der laufenden World-Instanz. Erzeugung, lokale Runtime und Ende laufen
+   * ausschliesslich hierueber; `ArenaContext.world` wird nur von diesem Sink geschrieben.
+   */
+  private readonly worldLifecycle = new WorldLifecycle({
+    publish: (world, activity) => bridge.publishWorldAndActivity(world, activity),
+    clear: () => bridge.clearWorldAndActivity(),
+    attach: (context) => { this.ctx.world = context; },
+    detach: () => { this.ctx.world = null; },
+  });
   /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
   private readonly persistentBaseRoomState = new PersistentBaseRoomState();
   private persistentBaseSession: PersistentBaseSession | null = null;
@@ -707,7 +718,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseRespawnBudgetState(null);
     // Mit der Runde endet auch die World-Instanz. Ohne Phase, Runde und World bleibt kein
     // replizierter Weltzustand stehen, den eine spaetere Instanz faelschlich uebernehmen koennte.
-    bridge.clearWorldAndActivity();
+    this.worldLifecycle.endInstance();
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -743,7 +754,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishRoundState(null);
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseRespawnBudgetState(null);
-    bridge.clearWorldAndActivity();
+    this.worldLifecycle.endInstance();
     bridge.hostResetRoundParticipation();
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
@@ -921,7 +932,7 @@ export class ArenaLifecycleCoordinator {
     this.hostUpdate.setActive(false);
 
     if (bridge.isHost()) {
-      bridge.clearWorldAndActivity();
+      this.worldLifecycle.endInstance();
       bridge.setGamePhase('LOBBY');
     }
 
@@ -966,7 +977,7 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
-    this.ctx.world = createWorldRuntimeContext({
+    const world = createWorldRuntimeContext({
       descriptor: worldDescriptor,
       metricsProfile: getArenaMetricsProfile(
         descriptor.gameMode,
@@ -977,7 +988,9 @@ export class ArenaLifecycleCoordinator {
       mapConfig: coopDefenseMapConfig,
       humanPlayerCount: coopDefenseHumanPlayerCount,
     });
-    const world = this.ctx.world;
+    // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
+    // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
+    this.worldLifecycle.attachRuntime(world);
     this.ctx.combatSystem.setWorldMetrics(world.metrics);
     this.scene.physics.world.setBounds(
       world.metrics.offsetX,
@@ -3211,7 +3224,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setHealingReceivedHandler(null);
     this.ctx.combatSystem.setArmorReceivedHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
-    this.ctx.world          = null;
+    this.worldLifecycle.detachRuntime();
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     const detachedPlacementSystem = this.ctx.placementSystem;
@@ -3721,7 +3734,7 @@ export class ArenaLifecycleCoordinator {
         // Der eine World-Kanal: Weltidentitaet und Activity gehen gemeinsam raus, abgeleitet
         // aus derselben lokal erzeugten Runde.
         const { world, activity } = toWorldAndActivityDescriptors(descriptor, request.worldParameters);
-        bridge.publishWorldAndActivity(world, activity);
+        this.worldLifecycle.beginCreate(world, activity);
         this.onTransitionToArena();
       } catch (error) {
         console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);

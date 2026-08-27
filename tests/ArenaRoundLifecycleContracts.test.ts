@@ -42,8 +42,18 @@ function readTearDownArenaBody(): string {
   return source.slice(start, end).replace(/[ \t]+/g, ' ');
 }
 
-/** Erlaubte Ruecksetzformen: Referenz loeschen, Liste leeren oder Sammlung leeren. */
+/**
+ * Felder mit eigenem Besitzer. Sie werden nicht direkt zugewiesen, sondern ueber genau einen
+ * Lifecycle zurueckgesetzt – der Aufruf steht stellvertretend fuer die Ruecksetzung.
+ */
+const OWNED_ROUND_FIELDS: Readonly<Record<string, string>> = {
+  world: 'this.worldLifecycle.detachRuntime()',
+};
+
+/** Erlaubte Ruecksetzformen: Referenz loeschen, Liste leeren, Sammlung leeren oder Besitzeraufruf. */
 function resetsField(body: string, field: string, receiver: string): boolean {
+  const owner = OWNED_ROUND_FIELDS[field];
+  if (owner) return body.includes(owner);
   return body.includes(`${receiver}.${field} = null`)
     || body.includes(`${receiver}.${field} = []`)
     || body.includes(`${receiver}.${field} = new Map()`)
