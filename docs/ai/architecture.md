@@ -72,9 +72,17 @@ Round-Systeme werden nur für den aktiven Modus bzw. die Host-Rolle erzeugt. Hos
 
 Instanz und lokale Realisierung sind zwei Schritte: `beginCreate()` eröffnet und repliziert die Instanz (host-only), `attachRuntime()` hängt die lokale Runtime daran und prüft über `isSameWorldInstance()`, dass beide dieselbe World meinen. `detachRuntime()` löst nur die lokale Runtime — ein Teardown mitten im Aufbau derselben Instanz darf sie nicht beenden. `endInstance()` beendet beides und ist idempotent, damit Rundenabschluss, Diagnose-Abbruch und technischer Abbruch denselben Weg nehmen.
 
+`detachRuntime()` fällt auf `creating` zurück, solange die Instanz existiert — es gibt eine World, nur keine lokale Runtime dafür; `descriptor` bleibt dabei gesetzt. Erst `endInstance()` macht daraus `none`. Jeder Peer beendet seine Instanz beim Rückweg in die Lobby; den replizierten Kanal räumt nur der Host.
+
 Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none → creating → active → ending`) und gehört der World: `worldLifecycle.activity`. Eine Activity setzt zwingend eine aktive World voraus — umgekehrt nicht. Sie steht erst nach ihrer World und fällt vor ihr; das Ende der World beendet sie zwingend mit. World und Activity gehen atomar auf den Draht, damit nie eine Activity ohne ihre World sichtbar wird; ihre Zustände bleiben trotzdem getrennt. Ein Client erzeugt keine Activity, sondern übergibt die beobachtete an `attachRuntime()`.
 
 Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
+
+## Capability Policy
+
+`resolvePlayerCapabilities({ participation, activityKind })` (src/world/PlayerCapabilities.ts) ersetzt die universelle Freigabe `canPlayerAct()` durch spezifische Rechte: `canMove`, `canUseCombat`, `canPlace`, `canDismantle`, `canInteract`, `canUseMissionActions`, `canControlCamera`. Eine World ohne Activity erlaubt Bauen ohne Kampf; ein Beobachter führt nur die Kamera; ohne Teilnahme gibt es gar nichts.
+
+Host und Client verwenden dieselbe reine Regel, aber mit getrennter Autorität: der Client leitet daraus nur Eingabe-UX, Vorschau und lokale Freigabe ab, der Host löst sie aus seinem eigenen Zustand erneut auf und validiert damit. Client-seitig übermittelte Capabilities besitzen keine Autorität.
 
 ## World Participation
 

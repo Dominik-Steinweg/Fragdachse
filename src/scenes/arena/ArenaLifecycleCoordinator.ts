@@ -172,7 +172,12 @@ import {
   resolvePlayerRuntimeFeatures,
   type PlayerRuntimeFeatures,
 } from '../../world/PlayerWorldRuntime';
-import { resolveWorldParticipation, type WorldParticipation } from '../../world/WorldParticipation';
+import {
+  maySendWorldInput,
+  resolveWorldParticipation,
+  type WorldParticipation,
+} from '../../world/WorldParticipation';
+import { resolvePlayerCapabilities, type PlayerCapabilities } from '../../world/PlayerCapabilities';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -874,7 +879,7 @@ export class ArenaLifecycleCoordinator {
     const localId = bridge.getLocalPlayerId();
     return bridge.getGamePhase() === 'ARENA'
       && !this.matchTerminated
-      && bridge.canPlayerAct(localId);
+      && maySendWorldInput(this.getWorldParticipation(localId));
   }
 
   /** Wird vom Optionsmenue nach der zweiten Bestaetigung aufgerufen. */
@@ -994,6 +999,19 @@ export class ArenaLifecycleCoordinator {
   }
 
   /**
+   * Was dieser Spieler in der laufenden World konkret darf.
+   *
+   * Der Host loest die Policy aus seinem eigenen autoritativen Zustand auf und validiert damit;
+   * ein Client benutzt dieselbe reine Regel nur fuer Eingabe-UX und Vorschau.
+   */
+  getPlayerCapabilities(playerId: string): PlayerCapabilities {
+    return resolvePlayerCapabilities({
+      participation: this.getWorldParticipation(playerId),
+      activityKind: this.worldLifecycle.activity.kind,
+    });
+  }
+
+  /**
    * Kontext des Player-Lifecycles: Rolle, laufende Activity und die Teilnahme dieses Spielers.
    * Er entscheidet, welche Runtime-Module ein Spieler ueberhaupt bekommt.
    */
@@ -1041,10 +1059,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.centerHUD.transitionToLobby();
     this.hostUpdate.setActive(false);
 
-    if (bridge.isHost()) {
-      this.worldLifecycle.endInstance();
-      bridge.setGamePhase('LOBBY');
-    }
+    // Die World-Instanz endet auf jedem Peer; den replizierten Kanal raeumt nur der Host.
+    this.worldLifecycle.endInstance();
+    if (bridge.isHost()) bridge.setGamePhase('LOBBY');
 
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
@@ -1264,7 +1281,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.reinforcementMatrixSystem = new ReinforcementMatrixSystem();
     this.ctx.energyInjectorSystem = new EnergyInjectorSystem();
     this.ctx.targetStatusSystem = new TargetStatusSystem();
-    this.ctx.captureTheBeerSystem = descriptor.gameMode === CAPTURE_THE_BEER_MODE
+    this.ctx.captureTheBeerSystem = activityDescriptor?.kind === 'capture-the-beer'
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
 
@@ -1876,7 +1893,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setAuthoritativePositionResetCallback((playerId, x, y) => {
       this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
     });
-    this.ctx.combatSystem.setPlayerActionAllowedResolver((playerId) => bridge.canPlayerAct(playerId));
+    // Kampfhandlungen haengen an der Kampf-Capability, nicht an einer universellen Freigabe.
+    this.ctx.combatSystem.setPlayerActionAllowedResolver(
+      (playerId) => this.getPlayerCapabilities(playerId).canUseCombat,
+    );
     this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
       // Waffen- und Item-Reduktion addieren sich. Die Summe bleibt hier ungedeckelt; das
       // `CombatSystem` klemmt den fertigen Anteil auf [0,1], damit Schaden nicht negativ wird.
@@ -2775,7 +2795,7 @@ export class ArenaLifecycleCoordinator {
         return this.placeTunnel(cfg, playerId, x, y, targetX, targetY, playerColor, params);
       });
       this.ctx.loadoutManager.setActionBlockedChecker((playerId, slot) => {
-        if (!bridge.canPlayerAct(playerId)) return true;
+        if (!this.getPlayerCapabilities(playerId).canInteract) return true;
         if (!this.ctx.combatSystem.isAlive(playerId)) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
           if (this.ctx.burrowSystem?.isWeaponBlocked(playerId)) return true;
@@ -4016,6 +4036,9 @@ export class ArenaLifecycleCoordinator {
     }
 
     this.tearDownArena();
+    // Mit der Rueckkehr in die Lobby endet die World-Instanz auch lokal – auf Clients ist das
+    // der einzige Ort, an dem sie das erfahren.
+    this.worldLifecycle.endInstance();
     this.syncLobbyTimeOfDay();
 
     this.ctx.leftPanel.transitionToLobby();

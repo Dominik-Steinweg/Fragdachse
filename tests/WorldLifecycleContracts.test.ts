@@ -121,9 +121,17 @@ describe('WorldLifecycle – Teardown und Instanzende sind verschieden', () => {
 
     lifecycle.attachRuntime(runtime(descriptor()));
     lifecycle.detachRuntime();
-    // Ohne offene Erzeugung endet der lokale Aufbau im Leerlauf – der Kanal bleibt unberuehrt.
-    expect(lifecycle.phase).toBe('none');
+    // Auch nach einem vollstaendigen lokalen Teardown existiert die Instanz weiter: es gibt eine
+    // World, nur keine Runtime dafuer. Der Kanal bleibt unberuehrt.
+    expect(lifecycle.phase).toBe('creating');
+    expect(lifecycle.descriptor?.worldRevision).toBe(12);
+    expect(lifecycle.context).toBeNull();
     expect(sink.calls).toEqual(['publish:12', 'attach:12', 'detach']);
+
+    // Und die Activity dieser Instanz bleibt ihr zugeordnet, statt verwaist stehenzubleiben.
+    lifecycle.endInstance();
+    expect(lifecycle.phase).toBe('none');
+    expect(lifecycle.descriptor).toBeNull();
   });
 
   it('beendet die Instanz idempotent und ohne beobachtbaren Reststand', () => {

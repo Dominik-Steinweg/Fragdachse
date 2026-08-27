@@ -39,8 +39,11 @@ const INERT_ACTIVITY_SINK: ActivityLifecycleSink = {
 export class WorldLifecycle {
   private currentPhase: WorldLifecyclePhase = 'none';
   private currentContext: WorldRuntimeContext | null = null;
-  /** Identitaet einer host-seitig eroeffneten Instanz, solange keine Runtime daran haengt. */
-  private pendingDescriptor: WorldDescriptor | null = null;
+  /**
+   * Identitaet der laufenden Instanz. Sie ueberlebt einen lokalen Teardown: die replizierte
+   * World endet erst mit {@link endInstance}, nicht mit dem Fall ihrer Runtime.
+   */
+  private instanceDescriptor: WorldDescriptor | null = null;
 
   /**
    * Die Activity dieser World. Eigener Lebenszyklus, weil eine World ohne Activity bestehen
@@ -66,7 +69,7 @@ export class WorldLifecycle {
 
   /** Identitaet der World, die gerade entsteht oder laeuft. */
   get descriptor(): WorldDescriptor | null {
-    return this.currentContext?.descriptor ?? this.pendingDescriptor;
+    return this.instanceDescriptor;
   }
 
   isActive(): boolean {
@@ -82,7 +85,7 @@ export class WorldLifecycle {
     // die Mission der Vorgaengerin.
     this.activity.end();
     if (this.currentContext) this.detachRuntime();
-    this.pendingDescriptor = world;
+    this.instanceDescriptor = world;
     this.currentPhase = 'creating';
     // World und Activity gehen atomar auf den Draht, damit nie eine Activity ohne ihre World
     // sichtbar wird. Ihre Lebenszyklen bleiben trotzdem getrennt.
@@ -98,14 +101,15 @@ export class WorldLifecycle {
    * uebergibt die beobachtete Activity deshalb hier.
    */
   attachRuntime(context: WorldRuntimeContext, observedActivity: ActivityDescriptor | null = null): void {
-    if (this.pendingDescriptor && !isSameWorldInstance(this.pendingDescriptor, context.descriptor)) {
+    if (this.instanceDescriptor && !isSameWorldInstance(this.instanceDescriptor, context.descriptor)) {
       throw new Error(
         `[WorldLifecycle] Runtime for world ${context.descriptor.definitionId}`
-        + ` does not match the created instance ${this.pendingDescriptor.definitionId}`,
+        + ` does not match the created instance ${this.instanceDescriptor.definitionId}`,
       );
     }
     if (this.currentContext) this.detachRuntime();
-    this.pendingDescriptor = null;
+    // Ein Client beobachtet die Instanz nur; fuer ihn beginnt sie mit seiner Runtime.
+    this.instanceDescriptor = context.descriptor;
     this.currentContext = context;
     this.currentPhase = 'active';
     this.sink.attach(context);
@@ -118,13 +122,16 @@ export class WorldLifecycle {
   /**
    * Loest die lokale World-Runtime. Die replizierte Instanz bleibt bestehen – ein Teardown
    * mitten im Aufbau derselben Instanz darf sie nicht beenden.
+   *
+   * Die Phase faellt deshalb auf `creating` zurueck, solange die Instanz existiert: es gibt eine
+   * World, nur noch keine lokale Runtime dafuer. Erst {@link endInstance} macht daraus `none`.
    */
   detachRuntime(): void {
     const hadContext = this.currentContext !== null;
     // Die Activity faellt vor ihrer World.
     this.activity.detachRuntime();
     this.currentContext = null;
-    this.currentPhase = this.pendingDescriptor ? 'creating' : 'none';
+    this.currentPhase = this.instanceDescriptor ? 'creating' : 'none';
     if (hadContext) this.sink.detach();
   }
 
@@ -138,7 +145,7 @@ export class WorldLifecycle {
     this.activity.end();
     const hadContext = this.currentContext !== null;
     this.currentContext = null;
-    this.pendingDescriptor = null;
+    this.instanceDescriptor = null;
     if (hadContext) this.sink.detach();
     this.sink.clear();
     this.currentPhase = 'none';
