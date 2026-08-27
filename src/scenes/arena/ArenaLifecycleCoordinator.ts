@@ -963,18 +963,22 @@ export class ArenaLifecycleCoordinator {
     if (!worldDescriptor) {
       throw new Error(`[ArenaLifecycleCoordinator] No replicated world for round ${descriptor.roundRevision}`);
     }
+    // Activity-Systeme entstehen, weil eine Activity laeuft – nicht, weil ein Modus-Flag gesetzt
+    // ist. Diese eine Entscheidung traegt alle Gates dieses Aufbaus.
+    const activityDescriptor = bridge.getActivityDescriptor();
+    const isCoopMission = activityDescriptor?.kind === 'coop-mission';
     const worldMapId = toMapId(worldDescriptor.definitionId);
-    if (isCoopDefenseMode(descriptor.gameMode) && worldMapId === null) {
+    if (isCoopMission && worldMapId === null) {
       throw new Error(`[ArenaLifecycleCoordinator] Coop activity has no authored World map`);
     }
-    const coopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
+    const coopDefenseMapConfig = isCoopMission
       ? getCoopDefenseMapConfig(worldMapId!)
       : null;
     const roundState = bridge.getRoundState();
-    const coopDefenseHumanPlayerCount = isCoopDefenseMode(descriptor.gameMode)
+    const coopDefenseHumanPlayerCount = isCoopMission
       ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
-    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
+    const coopDefenseEnemyConfigs = isCoopMission
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
     const world = createWorldRuntimeContext({
@@ -990,7 +994,7 @@ export class ArenaLifecycleCoordinator {
     });
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
     // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
-    this.worldLifecycle.attachRuntime(world);
+    this.worldLifecycle.attachRuntime(world, activityDescriptor);
     this.ctx.combatSystem.setWorldMetrics(world.metrics);
     this.scene.physics.world.setBounds(
       world.metrics.offsetX,
@@ -1157,7 +1161,7 @@ export class ArenaLifecycleCoordinator {
     // Coop-Defense: BaseManager besitzt die Basis-Entities (Visual + Physik + HP + Sync).
     // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
     // HP-Werte fließen über GameState.bases (Host → Client).
-    this.ctx.baseManager = isCoopDefenseMode(descriptor.gameMode)
+    this.ctx.baseManager = isCoopMission
       ? new BaseManager(this.scene, coopDefenseBases, world.metrics, {
         playExplosion: (x, y, radius, color) => {
           this.ctx.effectSystem.playExplosionEffect(x, y, radius, color);
@@ -1189,7 +1193,7 @@ export class ArenaLifecycleCoordinator {
       })
       : null;
     this.ctx.baseManager?.setLightingSystem(this.renderers.lighting);
-    this.ctx.enemyManager = isCoopDefenseMode(descriptor.gameMode) && coopDefenseEnemyConfigs
+    this.ctx.enemyManager = isCoopMission && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
     // Buddel- und Spawn-Visuals der Gegner laufen über dieselbe Effekt-Schicht wie die der
@@ -1202,7 +1206,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyManager?.setEntityBurnGpuController(this.renderers.entityBurnGpu);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
       && this.ctx.baseManager
-      && isCoopDefenseMode(descriptor.gameMode)
+      && isCoopMission
       && coopDefenseMapConfig
       ? new CoopDefenseRoundStateSystem({
         baseManager: this.ctx.baseManager,
@@ -1234,7 +1238,7 @@ export class ArenaLifecycleCoordinator {
       );
     };
     if (bridge.isHost()) {
-      this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(descriptor.gameMode)
+      this.ctx.coopDefensePlayerModifierSystem = isCoopMission
         ? new CoopDefensePlayerModifierSystem()
         : null;
       // Der lebende Affix-Zustand haengt am Modifier-System: ohne gerollte Affixwerte gibt es
@@ -1283,7 +1287,7 @@ export class ArenaLifecycleCoordinator {
 
       // Ein Coordinator fuer alle Runtime-Flowfields. Er haelt den Topologiespiegel, taktet die
       // Nav-Ticks und besitzt den Worker; die Services sind nur noch synchrone Lesefassaden.
-      if (isCoopDefenseMode(descriptor.gameMode)) {
+      if (isCoopMission) {
         const bossConfig = coopDefenseMapConfig?.boss
           ? getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind)
           : null;
@@ -1912,7 +1916,7 @@ export class ArenaLifecycleCoordinator {
       if (targetType === 'enemy') {
         if (this.ctx.enemyManager?.getEnemy(targetId)?.faction !== 'hostile') return;
       } else if (
-        isCoopDefenseMode(descriptor.gameMode)
+        isCoopMission
         || !bridge.isEnemyPair(attackerId, targetId)
       ) {
         return;
@@ -2821,7 +2825,7 @@ export class ArenaLifecycleCoordinator {
         bridge.broadcastExplosionEffect(x, y, radius, 0xff9933, 'nuke');
         this.hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, cfg, triggeredBy);
       });
-      const coopDefenseAirstrikeEventHandler = isCoopDefenseMode(descriptor.gameMode) && coopDefenseMapConfig
+      const coopDefenseAirstrikeEventHandler = isCoopMission && coopDefenseMapConfig
         ? new CoopDefenseAirstrikeEventHandler({
           scheduleStrike: (x, y, cfg, metadata) => this.ctx.airstrikeSystem?.scheduleStrike(
             COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
@@ -2846,7 +2850,7 @@ export class ArenaLifecycleCoordinator {
           tutorialShowControls: coopDefenseMapConfig.tutorialShowControls,
         })
         : null;
-      const coopDefenseGroundHazardEventHandler = isCoopDefenseMode(descriptor.gameMode) && coopDefenseMapConfig
+      const coopDefenseGroundHazardEventHandler = isCoopMission && coopDefenseMapConfig
         ? new CoopDefenseGroundHazardEventHandler({
           fireSystem: this.ctx.fireSystem,
           prebuiltZones: layout.groundHazardZones ?? [],
@@ -2895,7 +2899,7 @@ export class ArenaLifecycleCoordinator {
           }
         }
         this.ctx.loadoutManager?.handleKill(killerId, sourceId, x, y, source);
-        if (isCoopDefenseMode(descriptor.gameMode) && (source?.enemyXp ?? 0) > 0) {
+        if (isCoopMission && (source?.enemyXp ?? 0) > 0) {
           this.hostHandleCoopDefenseItemKill(killerId, victimId, x, y);
           this.ctx.powerUpSystem?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
           for (const profile of bridge.getConnectedPlayers()) {
@@ -2906,7 +2910,7 @@ export class ArenaLifecycleCoordinator {
             }
           }
         }
-        const allowKillDrop = !isCoopDefenseMode(descriptor.gameMode);
+        const allowKillDrop = !isCoopMission;
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
           if (allowKillDrop) {
             this.ctx.powerUpSystem?.onPlayerKilled(x, y);
@@ -2992,7 +2996,7 @@ export class ArenaLifecycleCoordinator {
       // Wiederholungsplanung; der bestehende Zug bleibt im typisierten Fachhandler.
       const trackCell = layout.tracks?.[0];
       const coopDefenseMapEvents = coopDefenseMapConfig?.mapEvents ?? [];
-      if (isCoopDefenseMode(descriptor.gameMode) && coopDefenseMapConfig) {
+      if (isCoopMission && coopDefenseMapConfig) {
         const mapEventHandlers: CoopDefenseMapEventHandler[] = [];
         if (trackCell !== undefined && coopDefenseMapEvents.some((event) => event.type === 'train')) {
           const trainHandler = this.setupCoopTrainEventHandler(trackCell.gridX);

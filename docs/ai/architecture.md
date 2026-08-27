@@ -72,6 +72,10 @@ Round-Systeme werden nur für den aktiven Modus bzw. die Host-Rolle erzeugt. Hos
 
 Instanz und lokale Realisierung sind zwei Schritte: `beginCreate()` eröffnet und repliziert die Instanz (host-only), `attachRuntime()` hängt die lokale Runtime daran und prüft über `isSameWorldInstance()`, dass beide dieselbe World meinen. `detachRuntime()` löst nur die lokale Runtime — ein Teardown mitten im Aufbau derselben Instanz darf sie nicht beenden. `endInstance()` beendet beides und ist idempotent, damit Rundenabschluss, Diagnose-Abbruch und technischer Abbruch denselben Weg nehmen.
 
+Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none → creating → active → ending`) und gehört der World: `worldLifecycle.activity`. Eine Activity setzt zwingend eine aktive World voraus — umgekehrt nicht. Sie steht erst nach ihrer World und fällt vor ihr; das Ende der World beendet sie zwingend mit. World und Activity gehen atomar auf den Draht, damit nie eine Activity ohne ihre World sichtbar wird; ihre Zustände bleiben trotzdem getrennt. Ein Client erzeugt keine Activity, sondern übergibt die beobachtete an `attachRuntime()`.
+
+Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
+
 ## World Loading und Round Loading
 
 Beides sind getrennte Bedingungen. Die replizierte Ladebarriere (`wlr`, `resolveWorldLoadProgress`) beantwortet ausschließlich, ob die lokale World gebaut und darstellbar ist — bei jedem Peer, Host wie Client. Ob eine Runde starten darf, entscheidet zusätzlich `prepareRoundStart()` host-lokal: alle aktiven Teilnehmer stehen wirklich in der Welt und der Host-Tick hat seine Caches aufgebaut. `tryScheduleArenaStart()` prüft erst die World-Barriere, dann das Round-Gate.

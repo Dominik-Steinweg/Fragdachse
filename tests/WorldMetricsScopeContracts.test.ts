@@ -137,7 +137,7 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
     }
 
     expect(lifecycle).toContain('new BaseManager(this.scene, coopDefenseBases, world.metrics');
-    expect(lifecycle).toContain('this.ctx.baseManager = isCoopDefenseMode(descriptor.gameMode)');
+    expect(lifecycle).toContain('this.ctx.baseManager = isCoopMission');
     expect(lifecycle).toContain('this.ctx.playerManager.setWorldGeometry({');
     expect(lifecycle).toContain('this.restorePersistentBase(world.persistentBaseSite');
     expect(lifecycle).not.toContain('getPersistentBaseAnchor');
