@@ -76,6 +76,16 @@ Die Activity hat ihren eigenen Lebenszyklus daneben (`ActivityLifecycle`, `none 
 
 Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein Modus-Flag gesetzt ist. `buildArena()` trifft die Entscheidung genau einmal (`activityDescriptor?.kind === 'coop-mission'`) statt sie sechzehnmal aus `descriptor.gameMode` abzuleiten. Eine World ohne Activity läuft mit `activity.phase === 'none'`, ohne dass irgendwo Missionssysteme „auf null" gesetzt werden müssten.
 
+## World Participation
+
+`WorldParticipation` (src/world/WorldParticipation.ts) ist ein eigener host-autoritärer Zustand je Spieler: `none | joining | interactive | observer | leaving`. `Lobby` ist ausdrücklich kein Participation-State — wer in der Lobby steht, nimmt an keiner World teil.
+
+Sie beantwortet die weltbezogenen Fragen über kleine Prädikate: `hasWorldRuntimeEntry()`, `maySendWorldInput()` (nur `interactive`), `consumesWorldReplication()` und `requiresLocalWorldPresentation()` (alles außer `none`). Abgeleitet wird sie aus laufender World-Instanz, host-autoritativer Zulassung, lokalem Runtime-Eintrag und Handlungsrecht — `WorldParticipationInput` kennt bewusst keinen Rundenbegriff.
+
+Die Rundenrolle bleibt getrennt: ein Missions-Spectator ist in der World `observer` und in der Runde `spectator`. `RoundParticipationPolicy` bleibt die Quelle für Spawn-, Handlungs- und Belohnungsrechte der Runde; World Participation ersetzt sie nicht.
+
+Die Teilnahme speist den Player-Lifecycle: `resolvePlayerRuntimeFeatures()` nimmt sie entgegen, und ein `observer` bekommt keine Kampf-, Ressourcen- oder Missionsmodule. Der Abbau läuft dagegen bewusst immer mit dem vollen Anteil, damit von einem Beobachter kein Kampfzustand stehen bleibt.
+
 ## Player-Lifecycle
 
 `PlayerWorldRuntime` (src/world/PlayerWorldRuntime.ts) ist der gemeinsame Weg hinein und hinaus — kein getrennter Mission-, Editor- oder PvP-Pfad. Welche Module laufen, entscheidet `resolvePlayerRuntimeFeatures({ activityKind, isHost })`: Rolle und laufende Activity, nicht „welches System ist gerade nicht null". Eine World ohne Coop-Mission führt keinen missionsgebundenen Spielerzustand; ein Client führt keine autoritative Simulation, aber seine Spielfigur.

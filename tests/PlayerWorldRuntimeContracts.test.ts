@@ -58,7 +58,11 @@ function detachStep(id: string, feature: PlayerRuntimeFeature, calls: string[]):
 
 describe('Player-Lifecycle – kontextgesteuerte Module', () => {
   it('leitet die Module aus Rolle und Activity ab', () => {
-    const hostMission = resolvePlayerRuntimeFeatures({ activityKind: 'coop-mission', isHost: true });
+    const hostMission = resolvePlayerRuntimeFeatures({
+      activityKind: 'coop-mission',
+      isHost: true,
+      participation: 'interactive',
+    });
     expect(hostMission).toEqual({
       entity: true,
       worldTargeting: true,
@@ -71,16 +75,39 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
 
     // Eine World ohne Activity fuehrt keinen missionsgebundenen Spielerzustand – der gemeinsame
     // Lifecycle initialisiert eben nicht automatisch den vollen Mission-Stack.
-    const hostPeacefulWorld = resolvePlayerRuntimeFeatures({ activityKind: null, isHost: true });
+    const hostPeacefulWorld = resolvePlayerRuntimeFeatures({
+      activityKind: null,
+      isHost: true,
+      participation: 'interactive',
+    });
     expect(hostPeacefulWorld.missionStatus).toBe(false);
     expect(hostPeacefulWorld.entity).toBe(true);
     expect(hostPeacefulWorld.combat).toBe(true);
 
     // PvP hat eine Activity, aber keine Mission.
-    expect(resolvePlayerRuntimeFeatures({ activityKind: 'deathmatch', isHost: true }).missionStatus).toBe(false);
+    expect(resolvePlayerRuntimeFeatures({
+      activityKind: 'deathmatch',
+      isHost: true,
+      participation: 'interactive',
+    }).missionStatus).toBe(false);
+
+    // Ein Beobachter steht in der World, simuliert darin aber nicht.
+    const observer = resolvePlayerRuntimeFeatures({
+      activityKind: 'coop-mission',
+      isHost: true,
+      participation: 'observer',
+    });
+    expect(observer.entity).toBe(true);
+    expect(observer.worldTargeting).toBe(true);
+    expect(observer.combat).toBe(false);
+    expect(observer.missionStatus).toBe(false);
 
     // Ein Client fuehrt keine autoritative Simulation, aber seine Spielfigur.
-    const client = resolvePlayerRuntimeFeatures({ activityKind: 'coop-mission', isHost: false });
+    const client = resolvePlayerRuntimeFeatures({
+      activityKind: 'coop-mission',
+      isHost: false,
+      participation: 'interactive',
+    });
     expect(client).toEqual({
       entity: true,
       worldTargeting: true,
@@ -193,7 +220,7 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
     const spawnStart = source.indexOf('  spawnReadyPlayers(): void {');
     const spawnBody = source.slice(spawnStart, source.indexOf('\n  }', spawnStart));
     expect(spawnBody).toContain('this.playerRuntime.attach(');
-    expect(spawnBody).toContain('this.resolvePlayerFeatures()');
+    expect(spawnBody).toContain('this.resolvePlayerFeatures(this.getWorldParticipation(profile.id))');
 
     const removeStart = source.indexOf('  removePlayerFromActiveRound(playerId: string): void {');
     const removeBody = source.slice(removeStart, source.indexOf('\n  }', removeStart));

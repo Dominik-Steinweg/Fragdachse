@@ -1,5 +1,6 @@
 import type { ActivityKind } from '../config/authoring/ActivityDefinition';
 import type { PlayerProfile } from '../types';
+import type { WorldParticipation } from './WorldParticipation';
 
 /**
  * Gemeinsamer Lebenszyklus der Player-Runtime innerhalb einer World.
@@ -36,6 +37,11 @@ export interface PlayerRuntimeContextInput {
   readonly activityKind: ActivityKind | null;
   /** Nur der Host fuehrt die autoritative Simulation eines Spielers. */
   readonly isHost: boolean;
+  /**
+   * Teilnahme dieses Spielers an der World. Sie beantwortet mit, welche Runtime-Module er
+   * ueberhaupt braucht: wer nur zusieht, fuehrt keine Kampfsimulation.
+   */
+  readonly participation: WorldParticipation;
 }
 
 /**
@@ -46,7 +52,9 @@ export interface PlayerRuntimeContextInput {
  * missionsgebundenen Spielerzustand, und ein Client fuehrt keine autoritative Simulation.
  */
 export function resolvePlayerRuntimeFeatures(input: PlayerRuntimeContextInput): PlayerRuntimeFeatures {
-  const simulation = input.isHost;
+  // Ein Beobachter steht in der World, handelt darin aber nicht – er braucht deshalb keine
+  // Kampf-, Ressourcen- oder Missionsmodule.
+  const simulation = input.isHost && input.participation !== 'observer';
   return {
     entity: true,
     worldTargeting: true,

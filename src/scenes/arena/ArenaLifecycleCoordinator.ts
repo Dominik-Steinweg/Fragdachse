@@ -172,6 +172,7 @@ import {
   resolvePlayerRuntimeFeatures,
   type PlayerRuntimeFeatures,
 } from '../../world/PlayerWorldRuntime';
+import { resolveWorldParticipation, type WorldParticipation } from '../../world/WorldParticipation';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import type { WorldParameters } from '../../world/WorldDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
@@ -686,7 +687,10 @@ export class ArenaLifecycleCoordinator {
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
         // Ein Weg hinein: der gemeinsame Player-Lifecycle. Lehnt ein Modul ab, bleibt der Spieler
         // unberuehrt statt halb initialisiert.
-        this.playerRuntime.attach({ profile, reconnectAfterDeath }, this.resolvePlayerFeatures());
+        this.playerRuntime.attach(
+          { profile, reconnectAfterDeath },
+          this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
+        );
       }
     }
   }
@@ -969,17 +973,35 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost() && bridge.isArenaLoading() && bridge.getArenaStartTime() <= 0) {
       this.roundStartPrepared = false;
     }
-    this.playerRuntime.detach(playerId, this.resolvePlayerFeatures());
+    // Der Abbau raeumt immer den vollen Anteil ab – unabhaengig davon, wie weit der Spieler
+    // gekommen war. Sonst bliebe von einem Beobachter Kampfzustand stehen.
+    this.playerRuntime.detach(playerId, this.resolvePlayerFeatures('interactive'));
   }
 
   /**
-   * Kontext des Player-Lifecycles: Rolle und laufende Activity dieser World. Er entscheidet,
-   * welche Runtime-Module ein Spieler ueberhaupt bekommt.
+   * Teilnahme eines Spielers an der laufenden World – eigener Zustand neben seiner Rundenrolle.
+   *
+   * Er wird host-autoritativ aus dem replizierten Rundenschnappschuss und dem lokalen
+   * Runtime-Eintrag abgeleitet; die Rundenrolle selbst bleibt davon unberuehrt.
    */
-  private resolvePlayerFeatures(): PlayerRuntimeFeatures {
+  getWorldParticipation(playerId: string): WorldParticipation {
+    return resolveWorldParticipation({
+      worldActive: this.worldLifecycle.isActive(),
+      admitted: bridge.canPlayerSpawnOrRespawn(playerId),
+      hasRuntimeEntry: this.ctx.playerManager.hasPlayer(playerId),
+      mayAct: bridge.canPlayerAct(playerId),
+    });
+  }
+
+  /**
+   * Kontext des Player-Lifecycles: Rolle, laufende Activity und die Teilnahme dieses Spielers.
+   * Er entscheidet, welche Runtime-Module ein Spieler ueberhaupt bekommt.
+   */
+  private resolvePlayerFeatures(participation: WorldParticipation): PlayerRuntimeFeatures {
     return resolvePlayerRuntimeFeatures({
       activityKind: this.worldLifecycle.activity.kind,
       isHost: bridge.isHost(),
+      participation,
     });
   }
 
@@ -1007,7 +1029,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.arenaCountdown?.clear();
 
     // Auch das Rundenende nimmt den gemeinsamen Weg hinaus.
-    const playerFeatures = this.resolvePlayerFeatures();
+    const playerFeatures = this.resolvePlayerFeatures('interactive');
     for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
       this.playerRuntime.detach(p.id, playerFeatures);
     }
@@ -3988,7 +4010,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.gameAudioSystem.playMusic('music_lobby');
 
     // Auch das Rundenende nimmt den gemeinsamen Weg hinaus.
-    const playerFeatures = this.resolvePlayerFeatures();
+    const playerFeatures = this.resolvePlayerFeatures('interactive');
     for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
       this.playerRuntime.detach(p.id, playerFeatures);
     }
