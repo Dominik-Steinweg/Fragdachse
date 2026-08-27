@@ -184,7 +184,6 @@ import { isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { toGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import { allowsWorldPresentationSurface } from '../world/WorldPresentation';
-import { resolvePlayerCapabilities } from '../world/PlayerCapabilities';
 import { resolveInputPolicy } from '../world/InputPolicy';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
@@ -1736,6 +1735,9 @@ export class ArenaScene extends Phaser.Scene {
       && configuredCoopDefenseMapId !== null
       && isWeaponBalanceLabMapId(configuredCoopDefenseMapId);
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
+    // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
+    // ausdruecklich vor und unabhaengig von der Rundenrolle.
+    this.lifecycle.hostSyncWorldParticipation();
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
 
@@ -1795,10 +1797,9 @@ export class ArenaScene extends Phaser.Scene {
       // radial menu available so the pre-round presentation remains interactive. Die Kombination
       // steht in der Input Policy, nicht in der Scene.
       const inputPolicy = resolveInputPolicy({
-        capabilities: resolvePlayerCapabilities({
-          participation: spectator ? 'observer' : 'interactive',
-          activityKind: bridge.getActivityDescriptor()?.kind ?? null,
-        }),
+        // Die kanonischen Capabilities dieses Spielers - aus seiner echten, replizierten
+        // World-Teilnahme, nicht aus einem lokal nachgebauten Rollenzustand.
+        capabilities: this.lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId()),
         gameplayActive,
         countdownActive,
         uiBlocking: optionsOpen,

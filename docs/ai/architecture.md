@@ -82,6 +82,8 @@ Activity-Systeme entstehen dadurch, weil eine Activity läuft — nicht weil ein
 
 Die Scene interpretiert Zustandskombinationen nicht mehr selbst. `resolvePresentationPolicy()` (src/world/PresentationPolicy.ts) leitet `showLobby`, `showWorld`, `showHud`, `useWorldCamera` und `useSpectatorCamera` aus Raumzustand, `WorldPresentationRequirement`, Sichtbarkeit, Gameplay-Zustand, Rundenrolle und Abbruchzustand ab. `resolveInputPolicy()` (src/world/InputPolicy.ts) leitet `movement`, `combat`, `placement`, `worldInteraction`, `cameraNavigation` und `aim` aus den `PlayerCapabilities`, dem Gameplay-/Countdown-Zustand, dem UI-Zustand und der Diagnose-Arena ab.
 
+`resolveInputPolicy()` wird ausschließlich aus den kanonischen `PlayerCapabilities` des lokalen Spielers gespeist (`lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId())`), also aus seiner echten replizierten `WorldParticipation` — nicht aus einem lokal nachgebauten Rollenzustand wie `spectator ? 'observer' : 'interactive'` und nicht aus einem parallelen `canPlayerAct()`-Gate.
+
 Beide sind rein und rein lokal: sie steuern Darstellung und Eingabe-UX. Ob eine Handlung zählt, entscheidet weiterhin der Host über dieselben Capabilities. Der Countdown hält Bewegung an, lässt Zielen und Weltinteraktion aber offen; die Diagnose-Arena sperrt das laufende Gameplay, nicht ihre Countdown-Interaktion.
 
 ## World Simulation und World Presentation
@@ -89,6 +91,8 @@ Beide sind rein und rein lokal: sie steuern Darstellung und Eingabe-UX. Ob eine 
 `resolveWorldPresentation({ participation, worldActive })` (src/world/WorldPresentation.ts) entscheidet, ob ein Peer die laufende World lokal darstellt. Ohne Teilnahme entsteht **keine** Darstellungsfläche — der Zielzustand ist: Shared World aktiv, Host simuliert autoritativ, Host stellt nichts dar. „Host bleibt in der Lobby" heißt weder, die World vollständig zu rendern und die Lobby darüberzulegen, noch einen unsichtbaren World-Render-Tree zu halten.
 
 `WORLD_PRESENTATION_SURFACES` benennt, was dazugehört: Terrain-Surfaces, World-Sprites, Weltkamera, World-HUD, Aim, World-Overlays, lokale Player-Visuals. Nicht-rendernde Infrastruktur, die die Simulation technisch braucht, darf bestehen — Physikdaten dürfen Phaser-gebunden bleiben, solange daraus keine Darstellung entsteht.
+
+Der autoritative Host-Tick führt deshalb **keine** Darstellung als Voraussetzung: `HostUpdateCoordinator` erreicht Renderer, Effekte und Audio nur über `visuals`, `effects` und `audio`, die alle an einer Entscheidung (`setPresentationActive()`) hängen und `null` sein dürfen; World-HUD, Kamera-Feedback und Gegner-Dash-Visuals stehen hinter derselben Bedingung. Der Coordinator bindet sie an die eigene Teilnahme (`setPresentationActive(getLocalWorldPresentation().required)`). Derselbe Tick simuliert also identisch, ob dieser Peer die World darstellt oder nicht.
 
 Presentation darf Simulation beobachten, aber nie deren Voraussetzung sein. tests/WorldPresentationContracts.test.ts hält die Abhängigkeitsrichtung fest: kein Simulationsmodul (Placement, Combat, Physics, PlayerManager, die World-Schicht) hat eine Wertabhängigkeit auf `effects/`, `ui/`, `RendererBundle` oder `scenes/`, und die Darstellungssenken der Player-Runtime bleiben nullable.
 
@@ -108,7 +112,11 @@ Host und Client verwenden dieselbe reine Regel, aber mit getrennter Autorität: 
 
 `WorldParticipation` (src/world/WorldParticipation.ts) ist ein eigener host-autoritärer Zustand je Spieler: `none | joining | interactive | observer | leaving`. `Lobby` ist ausdrücklich kein Participation-State — wer in der Lobby steht, nimmt an keiner World teil.
 
-Sie beantwortet die weltbezogenen Fragen über kleine Prädikate: `hasWorldRuntimeEntry()`, `maySendWorldInput()` (nur `interactive`), `consumesWorldReplication()` und `requiresLocalWorldPresentation()` (alles außer `none`). Abgeleitet wird sie aus laufender World-Instanz, host-autoritativer Zulassung, lokalem Runtime-Eintrag und Handlungsrecht — `WorldParticipationInput` kennt bewusst keinen Rundenbegriff.
+Sie beantwortet die weltbezogenen Fragen über kleine Prädikate: `hasWorldRuntimeEntry()`, `maySendWorldInput()` (nur `interactive`), `consumesWorldReplication()` und `requiresLocalWorldPresentation()` (alles außer `none`). `WorldParticipationInput` kennt bewusst keinen Rundenbegriff. Wer nicht handeln darf, ist `observer` — auch ohne eigenen Runtime-Eintrag, denn ein Zuschauer wartet auf keine Figur.
+
+Sie ist ein **eigener replizierter World-Kanal** (`wpp`, `WorldParticipationState`), an `WorldDescriptor.worldRevision` gebunden: der Host leitet sie in `hostSyncWorldParticipation()` genau einmal aus seinem autoritativen Zustand ab, alle Peers lesen über `bridge.getWorldParticipation()` denselben Wert. Sie wird nirgends aus `canPlayerAct()`, `canPlayerSpawnOrRespawn()` oder `GamePhase` rekonstruiert — sonst hinge eine World ohne Runde an einer Runde. Eine neue World-Instanz startet ohne Teilnehmer; ein verspätetes Paket der Vorinstanz wird beim Lesen verworfen.
+
+Mitgliedschaft und Handlungsrecht sind getrennt: wer im Raum steht, während die World läuft, ist in ihr — auch ein Zuschauer und ein später Beigetretener. Was jemand darf, entscheidet die Activity; läuft keine, handelt jedes Mitglied. Einzige Ausnahme ist der Host: `setHostParticipatesInWorld(false)` lässt ihn eine Shared World autoritativ simulieren, ohne selbst in ihr zu stehen.
 
 Die Rundenrolle bleibt getrennt: ein Missions-Spectator ist in der World `observer` und in der Runde `spectator`. `RoundParticipationPolicy` bleibt die Quelle für Spawn-, Handlungs- und Belohnungsrechte der Runde; World Participation ersetzt sie nicht.
 
@@ -125,6 +133,8 @@ Spawn, Respawn, Spectator-Wechsel, Disconnect und Rundenende nehmen alle diesen 
 ## World Loading und Round Loading
 
 Beides sind getrennte Bedingungen. Die replizierte Ladebarriere (`wlr`, `resolveWorldLoadProgress`) beantwortet ausschließlich, ob die lokale World gebaut und darstellbar ist — bei jedem Peer, Host wie Client. Ob eine Runde starten darf, entscheidet zusätzlich `prepareRoundStart()` host-lokal: alle aktiven Teilnehmer stehen wirklich in der Welt und der Host-Tick hat seine Caches aufgebaut. `tryScheduleArenaStart()` prüft erst die World-Barriere, dann das Round-Gate.
+
+Der Ladezustand hängt an `WorldDescriptor.worldRevision`, nicht an einer Rundenrevision, und `areWorldParticipantsLoadReady()` erwartet genau die Teilnehmer dieser World-Instanz — es gibt keine zweite, rundengebundene Barriere daneben. Wer keine lokale World-Presentation hat, meldet sofort fertig: ohne Darstellung gibt es nichts zu laden. Ein Host, der eine Shared World nur simuliert, wartet deshalb auf niemanden und lässt auch niemanden auf sich warten.
 
 Steckten beide in einem Flag, könnte eine World ohne Activity nie „fertig geladen" melden, und ein Client könnte nicht unterscheiden, ob der Host noch lädt oder auf die Runde wartet. Wer aktiv an der Runde teilnimmt, kommt aus `getActiveRoundParticipantIds()` — dieselbe Regel, die auch die Ergebnisberechtigung trägt.
 

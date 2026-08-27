@@ -22,6 +22,14 @@ import {
 } from '../world/WorldLoadReady';
 import { parseWorldDescriptor, type WorldDescriptor } from '../world/WorldDescriptor';
 import {
+  encodeWorldParticipationState,
+  listWorldParticipants,
+  parseWorldParticipationState,
+  readWorldParticipation,
+  type WorldParticipation,
+  type WorldParticipationState,
+} from '../world/WorldParticipation';
+import {
   createHostSession,
   joinHostSession,
   getActiveSession,
@@ -143,6 +151,7 @@ const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
 const KEY_WORLD_DESCRIPTOR = 'wld'; // global reliable: WorldDescriptor | null (der eine World-Kanal)
 const KEY_ACTIVITY_DESCRIPTOR = 'act'; // global reliable: ActivityDescriptor | null
+const KEY_WORLD_PARTICIPATION = 'wpp'; // global reliable: WorldParticipationState | null (world-scoped)
 const KEY_ROCK_HP      = 'rck';   // global: RockNetState[] (unreliable, Delta-Snapshot)
 const KEY_AVAIL_COLORS = 'avc';   // global: number[] (verfügbarer Farbpool, reliable)
 const KEY_PLAYER_COLOR = 'clr';   // per-player: number (benutzerdefinierte Spielerfarbe)
@@ -1595,19 +1604,19 @@ export class NetworkBridge {
   }
 
   /**
-   * Host barrier: only currently connected, still participating peers count. Late joiners and
-   * spectators are intentionally outside this snapshot and cannot reset a prepared start.
+   * World-Ladebarriere: jeder Teilnehmer dieser World-Instanz hat sie fertig geladen.
+   *
+   * Sie haengt an der World, nicht an der Runde - eine World ohne Activity laedt genauso. Wer
+   * nicht teilnimmt, laedt sie auch nicht und wird deshalb nicht erwartet.
    */
-  areRoundParticipantsWorldLoadReady(): boolean {
+  areWorldParticipantsLoadReady(): boolean {
     if (!isHost()) return false;
-    const participation = this.getRoundParticipation();
-    if (!participation || participation.roundRevision <= 0) return false;
-    if (!this.isLocalWorldLoadReady(participation.roundRevision)) return false;
+    const world = this.getWorldDescriptor();
+    if (!world) return false;
     const connected = new Set([...this.connectedPlayers.keys(), this.getLocalPlayerId()]);
-    const spectators = new Set(participation.spectatorIds);
-    const participants = participation.participantIds.filter((id) => connected.has(id) && !spectators.has(id));
+    const participants = this.getWorldParticipants().filter((id) => connected.has(id));
     if (participants.length === 0) return false;
-    return participants.every((id) => this.getPlayerWorldLoadReady(id, participation.roundRevision));
+    return participants.every((id) => this.getPlayerWorldLoadReady(id, world.worldRevision));
   }
 
   /** Host-only: setzt einen spaeter beigetretenen Roster-Eintrag auf Spectator. */
@@ -2112,8 +2121,17 @@ export class NetworkBridge {
         + `${activity.worldRevision}, not ${world.worldRevision}`,
       );
     }
+    const previous = this.getWorldDescriptor();
     setState(KEY_WORLD_DESCRIPTOR, world, true);
     setState(KEY_ACTIVITY_DESCRIPTOR, activity, true);
+    // Eine neue World-Instanz startet ohne Teilnehmer. Wer teilnimmt, entscheidet der Host
+    // danach ausdruecklich - Teilnahme wird nie aus einer Vorinstanz uebernommen.
+    if (previous?.worldRevision !== world.worldRevision) {
+      setState(KEY_WORLD_PARTICIPATION, encodeWorldParticipationState({
+        worldRevision: world.worldRevision,
+        participants: {},
+      }), true);
+    }
   }
 
   /** Beendet die replizierte World-Instanz; danach existiert weltweit keine mehr. */
@@ -2121,6 +2139,7 @@ export class NetworkBridge {
     if (!isHost()) return;
     setState(KEY_ACTIVITY_DESCRIPTOR, null, true);
     setState(KEY_WORLD_DESCRIPTOR, null, true);
+    setState(KEY_WORLD_PARTICIPATION, null, true);
   }
 
   getWorldDescriptor(): WorldDescriptor | null {
@@ -2147,6 +2166,74 @@ export class NetworkBridge {
     const activity = this.getActivityDescriptor();
     if (!world || !activity) return null;
     return toArenaDescriptor(world, activity);
+  }
+
+  // -- World Participation: Host -> Alle (global, reliable, world-scoped) ----
+
+  /**
+   * Der kanonische Teilnahmestand der laufenden World-Instanz.
+   *
+   * Er wird nicht aus Runden- oder Phasenzustaenden rekonstruiert: der Host schreibt ihn, alle
+   * Peers lesen denselben Wert. Ohne laufende World existiert keine Teilnahme.
+   */
+  getWorldParticipationState(): WorldParticipationState | null {
+    const world = this.getWorldDescriptor();
+    if (!world) return null;
+    return parseWorldParticipationState(getState(KEY_WORLD_PARTICIPATION), world.worldRevision);
+  }
+
+  /** Teilnahme eines Spielers an der laufenden World-Instanz. */
+  getWorldParticipation(playerId: string): WorldParticipation {
+    return readWorldParticipation(this.getWorldParticipationState(), playerId);
+  }
+
+  getLocalWorldParticipation(): WorldParticipation {
+    return this.getWorldParticipation(this.getLocalPlayerId());
+  }
+
+  /** Alle Spieler, die an der laufenden World teilnehmen. */
+  getWorldParticipants(): readonly string[] {
+    return listWorldParticipants(this.getWorldParticipationState());
+  }
+
+  /**
+   * Host-only: schreibt den Teilnahmestand der laufenden World-Instanz.
+   *
+   * Der Stand traegt die `worldRevision` seiner World. Ohne laufende World gibt es nichts zu
+   * beschreiben - der Aufruf wird dann verworfen, statt eine fremde Instanz zu bespielen.
+   */
+  hostPublishWorldParticipation(participants: Readonly<Record<string, WorldParticipation>>): void {
+    if (!isHost()) return;
+    const world = this.getWorldDescriptor();
+    if (!world) return;
+    const cleaned: Record<string, WorldParticipation> = {};
+    for (const [playerId, participation] of Object.entries(participants)) {
+      if (participation !== 'none') cleaned[playerId] = participation;
+    }
+    // Der Stand ist reliable. Ihn unveraendert erneut zu schreiben kostet Bandbreite, ohne
+    // etwas mitzuteilen - deshalb geht nur eine echte Aenderung raus.
+    const current = this.getWorldParticipationState();
+    if (current && current.worldRevision === world.worldRevision) {
+      const before = Object.keys(current.participants).sort();
+      const after = Object.keys(cleaned).sort();
+      if (before.length === after.length
+        && before.every((id, i) => id === after[i] && current.participants[id] === cleaned[id])) {
+        return;
+      }
+    }
+    setState(KEY_WORLD_PARTICIPATION, encodeWorldParticipationState({
+      worldRevision: world.worldRevision,
+      participants: cleaned,
+    }), true);
+  }
+
+  /** Host-only: setzt die Teilnahme genau eines Spielers. */
+  hostSetWorldParticipation(playerId: string, participation: WorldParticipation): void {
+    if (!isHost()) return;
+    const current = this.getWorldParticipationState();
+    if (!current) return;
+    if (readWorldParticipation(current, playerId) === participation) return;
+    this.hostPublishWorldParticipation({ ...current.participants, [playerId]: participation });
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

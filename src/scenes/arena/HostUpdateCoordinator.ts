@@ -148,6 +148,31 @@ export class HostUpdateCoordinator {
 
   setActive(v: boolean): void { this.active = v; }
 
+  /**
+   * Ob dieser Peer die World lokal darstellt.
+   *
+   * Die autoritative Simulation haengt nicht davon ab: ein Host kann eine Shared World
+   * fuehren, waehrend er selbst in der Lobby steht. Dann laeuft derselbe Tick ohne jede
+   * Renderer-, HUD-, Effekt- und Audioausgabe - Darstellung ist Ausgabe, nie Voraussetzung.
+   */
+  private presentationActive = true;
+
+  setPresentationActive(active: boolean): void { this.presentationActive = active; }
+
+  /** Renderer nur, solange dieser Peer die World darstellt. */
+  private get visuals(): RendererBundle | null {
+    return this.presentationActive ? this.renderers : null;
+  }
+
+  /** Effekt- und Audioausgabe folgen derselben Entscheidung. */
+  private get effects(): ArenaContext['effectSystem'] | null {
+    return this.presentationActive ? this.ctx.effectSystem : null;
+  }
+
+  private get audio(): ArenaContext['gameAudioSystem'] | null {
+    return this.presentationActive ? this.ctx.gameAudioSystem : null;
+  }
+
   setPerformanceMetricsEnabled(enabled: boolean): void {
     if (this.coarsePerformanceMetricsEnabled === enabled) return;
     this.coarsePerformanceMetricsEnabled = enabled;
@@ -170,12 +195,12 @@ export class HostUpdateCoordinator {
     this.prevDashPhases.clear();
     this.dashTrailTimers.clear();
     this.prevBurrowPhases.clear();
-    for (const h of this.burrowLoopHandles.values()) this.ctx.gameAudioSystem.stopLoop(h);
+    for (const h of this.burrowLoopHandles.values()) this.audio?.stopLoop(h);
     this.burrowLoopHandles.clear();
     this.prevStealthStates.clear();
     this.prevAliveStates.clear();
     this.heldActionUtilityIds.clear();
-    if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
+    if (this.moveLoopHandle) { this.audio?.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.classicTrainSpawned = false;
     this.lastEncounterPresentationSignature = null;
     this.lastMapEventPresentationState = undefined;
@@ -344,19 +369,19 @@ export class HostUpdateCoordinator {
     const guardianSpirits = countdownActive
       ? []
       : (this.ctx.guardianSpiritSystem?.hostUpdate(now, delta) ?? []);
-    this.renderers.guardianSpirit.syncVisuals(guardianSpirits);
+    this.visuals?.guardianSpirit.syncVisuals(guardianSpirits);
     if (!countdownActive) this.ctx.repairDroneSystem?.update(delta);
     const repairDrones = countdownActive
       ? []
       : (this.ctx.repairDroneSystem?.getSnapshot() ?? []);
-    this.renderers.repairDrone.syncVisuals(
+    this.visuals?.repairDrone.syncVisuals(
       repairDrones,
       this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
     );
     const slimeTrail = countdownActive
       ? { cells: [], affectedEnemies: [] }
       : (this.ctx.slimeTrailSystem?.hostUpdate(now) ?? { cells: [], affectedEnemies: [] });
-    this.renderers.slimeTrail.syncVisuals(slimeTrail);
+    this.visuals?.slimeTrail.syncVisuals(slimeTrail);
     if (!countdownActive) this.ctx.flamethrowerUpgradeSystem?.hostUpdate(now);
     if (metrics) metrics.combatProjectilesMs = performance.now() - phaseStartedAt;
 
@@ -385,7 +410,7 @@ export class HostUpdateCoordinator {
           now,
         );
         if (field) {
-          this.ctx.gameAudioSystem.playSound(
+          this.audio?.playSound(
             'sfx_place_spore_turret',
             field.x,
             field.y,
@@ -538,7 +563,7 @@ export class HostUpdateCoordinator {
         bridge.getArenaStartTime(),
       )
       : countdownActive ? { cells: [] } : liveBurningGround;
-    this.renderers.flamethrowerUpgrades.syncGround(burningGround, now);
+    this.visuals?.flamethrowerUpgrades.syncGround(burningGround, now);
 
     const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
       ? { synced: [], damageEvents: [] }
@@ -575,9 +600,9 @@ export class HostUpdateCoordinator {
 
     const teslaDomes = countdownActive ? [] : (this.ctx.teslaDomeSystem?.hostUpdate(Date.now()) ?? []);
     const energyShields = countdownActive ? [] : (this.ctx.energyShieldSystem?.hostUpdate(Date.now()) ?? []);
-    this.renderers.timeBubble.syncVisuals(timeBubbles);
-    this.renderers.teslaDome.syncVisuals(teslaDomes);
-    this.renderers.energyShield.syncVisuals(energyShields);
+    this.visuals?.timeBubble.syncVisuals(timeBubbles);
+    this.visuals?.teslaDome.syncVisuals(teslaDomes);
+    this.visuals?.energyShield.syncVisuals(energyShields);
 
     if (fireDamageTick) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -759,7 +784,7 @@ export class HostUpdateCoordinator {
       const alive    = this.ctx.combatSystem.isAlive(player.id);
       const wasAlive = this.prevAliveStates.get(player.id) ?? false;
       if (alive && !wasAlive && !countdownActive) {
-        this.ctx.gameAudioSystem.playSound('sfx_player_spawn', player.sprite.x, player.sprite.y, player.id);
+        this.audio?.playSound('sfx_player_spawn', player.sprite.x, player.sprite.y, player.id);
       }
       if (!countdownActive) this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp, maxHp);
@@ -772,7 +797,7 @@ export class HostUpdateCoordinator {
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const wasStealthed = this.prevStealthStates.get(player.id) ?? false;
       if (isStealthed !== wasStealthed) {
-        this.ctx.effectSystem.playStealthTransitionEffect(player.sprite.x, player.sprite.y, !isStealthed, player.color);
+        this.effects?.playStealthTransitionEffect(player.sprite.x, player.sprite.y, !isStealthed, player.color);
       }
       player.setDecoyStealth(isStealthed);
       this.prevStealthStates.set(player.id, isStealthed);
@@ -785,7 +810,7 @@ export class HostUpdateCoordinator {
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
       const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;
       if (dashPhase === 1 && prevDashPhase === 0) {
-        this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
+        this.audio?.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
       }
       // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
       // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
@@ -807,7 +832,7 @@ export class HostUpdateCoordinator {
         );
       }
       // Die Hitbox-Skalierung besorgt die Physik; hier fehlen nur Trail-Geister und Dash-Sound.
-      this.enemyDashVisuals.sync(enemy);
+      if (this.presentationActive) this.enemyDashVisuals.sync(enemy);
     }
 
     const powerups    = this.ctx.powerUpSystem?.getWorldItemSnapshot() ?? [];
@@ -821,15 +846,15 @@ export class HostUpdateCoordinator {
     this.ctx.coopDefenseCarryItems = coopDefenseCarry;
     const syncedNow = bridge.getSynchronizedNow();
 
-    this.renderers.train?.update(train);
-    this.renderers.beer.sync(captureTheBeer?.beers ?? []);
-    this.renderers.beer.syncCoopDefenseCarry(coopDefenseCarry);
-    this.renderers.powerUp.syncPedestals(pedestals);
-    this.renderers.powerUp.sync(powerups);
-    this.renderers.powerUp.updatePedestals(syncedNow);
-    this.renderers.nuke.sync(nukes);
-    this.renderers.airstrike.sync(airstrikes);
-    this.renderers.meteor.sync(meteors);
+    this.visuals?.train?.update(train);
+    this.visuals?.beer.sync(captureTheBeer?.beers ?? []);
+    this.visuals?.beer.syncCoopDefenseCarry(coopDefenseCarry);
+    this.visuals?.powerUp.syncPedestals(pedestals);
+    this.visuals?.powerUp.sync(powerups);
+    this.visuals?.powerUp.updatePedestals(syncedNow);
+    this.visuals?.nuke.sync(nukes);
+    this.visuals?.airstrike.sync(airstrikes);
+    this.visuals?.meteor.sync(meteors);
     if (!countdownActive) this.checkLocalPickup(powerups);
 
     const localId = bridge.getLocalPlayerId();
@@ -855,9 +880,9 @@ export class HostUpdateCoordinator {
       const localAlive = this.ctx.combatSystem.isAlive(localId);
       const localBurrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
       if (isMovingLocal && localAlive && !localBurrowed && !this.moveLoopHandle) {
-        this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;
+        this.moveLoopHandle = this.audio?.startLoop('sfx_player_move') ?? null;
       } else if ((!isMovingLocal || !localAlive || localBurrowed) && this.moveLoopHandle) {
-        this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
+        this.audio?.stopLoop(this.moveLoopHandle);
         this.moveLoopHandle = null;
       }
 
@@ -963,12 +988,16 @@ export class HostUpdateCoordinator {
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
       this.localPlayerState.burrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
-      this.ctx.leftPanel.updateArenaHUD(hudData);
-      this.ctx.centerHUD.updateBottomStatus(
-        hudData,
-        this.ctx.inputSystem.isUtilityHudDisplayActive(),
-      );
-      this.ctx.playerStatusRing?.update(hudData);
+      // Das World-HUD ist eine Darstellungsflaeche. Ohne lokale World-Presentation entsteht
+      // der Snapshot weiterhin - er wird nur nicht angezeigt.
+      if (this.presentationActive) {
+        this.ctx.leftPanel.updateArenaHUD(hudData);
+        this.ctx.centerHUD.updateBottomStatus(
+          hudData,
+          this.ctx.inputSystem.isUtilityHudDisplayActive(),
+        );
+        this.ctx.playerStatusRing?.update(hudData);
+      }
     }
 
     this.ctx.stinkCloudSystem.clientUpdate(delta);
@@ -1117,7 +1146,7 @@ export class HostUpdateCoordinator {
       };
     }
 
-    this.renderers.flamethrowerUpgrades.syncRings(players);
+    this.visuals?.flamethrowerUpgrades.syncRings(players);
     // Waehrend des Countdowns gibt es keine Projektile; der als "voll" markierte Leer-Snapshot
     // raeumt einen etwaigen Client-Statikcache ab, statt ihn unveraendert stehen zu lassen.
     const projectiles = countdownActive
@@ -1179,7 +1208,7 @@ export class HostUpdateCoordinator {
       if (projectile.projectileStyle === 'bfg') { bfgInFlight = true; break; }
     }
     if (bfgInFlight) {
-      this.ctx.visualFeedback.camera.request(bfgFlightRumble());
+      if (this.presentationActive) this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
     if (metrics) {
       metrics.snapshotBuildMs = snapshotBuildMs;
@@ -2210,7 +2239,7 @@ export class HostUpdateCoordinator {
       const now = this.scene.time.now;
       const nextGhost = this.dashTrailTimers.get(id) ?? 0;
       if (now >= nextGhost) {
-        this.ctx.effectSystem.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5, player.sprite.rotation);
+        this.effects?.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5, player.sprite.rotation);
         this.dashTrailTimers.set(id, now + 50);
       }
     } else if (curPhase === 2) {
@@ -2234,21 +2263,21 @@ export class HostUpdateCoordinator {
 
     // Burrow loop: start when entering underground, stop when leaving
     if (phase === 'underground' && previousPhase !== 'underground') {
-      const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, player.id);
+      const handle = this.audio?.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, player.id);
       if (handle) this.burrowLoopHandles.set(player.id, handle);
     } else if (phase !== 'underground' && previousPhase === 'underground') {
       const handle = this.burrowLoopHandles.get(player.id);
-      if (handle) { this.ctx.gameAudioSystem.stopLoop(handle); this.burrowLoopHandles.delete(player.id); }
+      if (handle) { this.audio?.stopLoop(handle); this.burrowLoopHandles.delete(player.id); }
     } else if (phase === 'underground') {
       const handle = this.burrowLoopHandles.get(player.id);
-      if (handle) this.ctx.gameAudioSystem.updateLoopPosition(handle, player.sprite.x, player.sprite.y, player.id);
+      if (handle) this.audio?.updateLoopPosition(handle, player.sprite.x, player.sprite.y, player.id);
     }
 
     if (shouldAnimate) {
-      this.ctx.effectSystem.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);
+      this.effects?.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);
     }
     player.setBurrowPhase(phase, shouldAnimate);
-    this.ctx.effectSystem.syncBurrowState(player.id, phase, player.sprite);
+    this.effects?.syncBurrowState(player.id, phase, player.sprite);
     this.prevBurrowPhases.set(player.id, phase);
   }
 

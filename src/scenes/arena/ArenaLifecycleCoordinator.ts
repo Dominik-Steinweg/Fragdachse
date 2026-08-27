@@ -586,11 +586,21 @@ export class ArenaLifecycleCoordinator {
 
   /** Called after the shared chunk scheduler has had its frame budget. */
   syncArenaLoadReady(view: WorldViewRect | null): void {
-    if (bridge.getGamePhase() !== 'ARENA' || this.matchTerminated || !this.arenaBuilt || !view) return;
+    if (this.matchTerminated || !this.arenaBuilt) return;
     this.syncAuthoritativeRoundStartAnchors();
-    const participation = bridge.getRoundParticipation();
-    const roundRevision = participation?.roundRevision ?? 0;
-    if (roundRevision <= 0 || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
+    // Der Ladezustand gehoert zur World-Instanz, nicht zur Runde.
+    const worldRevision = bridge.getWorldDescriptor()?.worldRevision ?? 0;
+    if (worldRevision <= 0) return;
+
+    // Ohne lokale World-Presentation gibt es nichts darzustellen und damit nichts zu laden.
+    // Ein Host, der eine Shared World nur simuliert, ist sofort bereit.
+    if (!this.getLocalWorldPresentation().required) {
+      bridge.setLocalWorldLoadReady(worldRevision, true);
+      this.localArenaLoadReady = true;
+      if (bridge.isHost()) this.tryScheduleArenaStart();
+      return;
+    }
+    if (!view || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
 
     const renderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
       && this.renderers.shadow.isStaticReadyForView(view, true);
@@ -609,7 +619,7 @@ export class ArenaLifecycleCoordinator {
       + (shadowStats?.residentChunks ?? 0);
     const loadProgress = resolveWorldLoadProgress(pending, resident, localRenderReady);
     bridge.setLocalWorldLoadProgress(
-      roundRevision,
+      worldRevision,
       loadProgress.progress,
       loadProgress.stage,
       loadProgress.ready,
@@ -630,7 +640,7 @@ export class ArenaLifecycleCoordinator {
   private tryScheduleArenaStart(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     if (bridge.getArenaStartTime() > 0) return;
-    if (!bridge.areRoundParticipantsWorldLoadReady()) return;
+    if (!bridge.areWorldParticipantsLoadReady()) return;
     if (!this.prepareRoundStart(Date.now())) return;
 
     const arenaStartTime = resolveArenaStartTime(Date.now());
@@ -678,6 +688,9 @@ export class ArenaLifecycleCoordinator {
     // The phase switches to ARENA before host generation now. Do not create round entities until
     // buildArena has installed the matching layout and round-scoped systems.
     if (!bridge.isHost() || !this.arenaBuilt) return;
+    // Die Features eines Spielers haengen an seiner Teilnahme. Sie muss aktuell sein, bevor
+    // hier jemand eintritt - sonst bekaeme ein frisch Zugelassener die Module von gestern.
+    this.hostSyncWorldParticipation();
     for (const profile of bridge.getConnectedPlayers()) {
       const canInitialSpawn = bridge.canPlayerInitialSpawn(profile.id);
       const reconnectAfterDeath = this.ctx.coopDefenseRespawnBudgetSystem !== null
@@ -699,6 +712,8 @@ export class ArenaLifecycleCoordinator {
         );
       }
     }
+    // Ein neuer Runtime-Eintrag verschiebt die Teilnahme von `joining` auf `interactive`.
+    this.hostSyncWorldParticipation();
   }
 
   /**
@@ -990,13 +1005,62 @@ export class ArenaLifecycleCoordinator {
    * Er wird host-autoritativ aus dem replizierten Rundenschnappschuss und dem lokalen
    * Runtime-Eintrag abgeleitet; die Rundenrolle selbst bleibt davon unberuehrt.
    */
+  /**
+   * Teilnahme eines Spielers an der laufenden World.
+   *
+   * Kanonisch repliziert: der Host leitet sie einmal aus seinem autoritativen Zustand ab, alle
+   * Peers lesen denselben Wert. Sie wird nirgends aus Runden- oder Phasenzustaenden
+   * rekonstruiert - sonst hinge eine World ohne Runde an einer Runde.
+   */
   getWorldParticipation(playerId: string): WorldParticipation {
-    return resolveWorldParticipation({
-      worldActive: this.worldLifecycle.isActive(),
-      admitted: bridge.canPlayerSpawnOrRespawn(playerId),
-      hasRuntimeEntry: this.ctx.playerManager.hasPlayer(playerId),
-      mayAct: bridge.canPlayerAct(playerId),
-    });
+    return bridge.getWorldParticipation(playerId);
+  }
+
+  /**
+   * Ob der Host selbst an der von ihm simulierten World teilnimmt.
+   *
+   * Simulation und Teilnahme sind zwei Dinge: der Host kann eine Shared World autoritativ
+   * fuehren und dabei in der Lobby stehen, ohne eine eigene Figur in ihr zu haben.
+   */
+  private hostParticipatesInWorld = true;
+
+  setHostParticipatesInWorld(participates: boolean): void {
+    if (this.hostParticipatesInWorld === participates) return;
+    this.hostParticipatesInWorld = participates;
+    this.hostSyncWorldParticipation();
+  }
+
+  isHostParticipatingInWorld(): boolean {
+    return this.hostParticipatesInWorld;
+  }
+
+  /**
+   * Host-only: leitet den Teilnahmestand der World ab und repliziert ihn.
+   *
+   * Die einzige Stelle, an der Teilnahme entsteht. Wer im Raum steht, waehrend die World
+   * laeuft, ist in ihr - auch ein Zuschauer und ein spaeter Beigetretener. Was jemand darf,
+   * entscheidet dagegen die Activity; laeuft keine, handelt jedes Mitglied.
+   */
+  hostSyncWorldParticipation(): void {
+    if (!bridge.isHost() || !this.worldLifecycle.isActive()) return;
+    const activityRunning = this.worldLifecycle.activity.isActive();
+    const localId = bridge.getLocalPlayerId();
+    const participants: Record<string, WorldParticipation> = {};
+    for (const profile of bridge.getConnectedPlayers()) {
+      // Einzige Ausnahme von der Mitgliedschaft ist der Host, der eine Shared World auch nur
+      // simulieren kann, ohne selbst in ihr zu stehen.
+      const member = profile.id !== localId || this.hostParticipatesInWorld;
+      participants[profile.id] = resolveWorldParticipation({
+        worldActive: true,
+        admitted: member,
+        hasRuntimeEntry: this.ctx.playerManager.hasPlayer(profile.id),
+        mayAct: member && (!activityRunning || bridge.canPlayerAct(profile.id)),
+      });
+    }
+    bridge.hostPublishWorldParticipation(participants);
+    // Die Ausgabe des Host-Ticks folgt seiner eigenen Teilnahme. Simuliert er eine World, an
+    // der er nicht teilnimmt, laeuft derselbe Tick ohne jede Darstellung.
+    this.hostUpdate.setPresentationActive(this.getLocalWorldPresentation().required);
   }
 
   /**
@@ -1136,6 +1200,9 @@ export class ArenaLifecycleCoordinator {
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
     // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
     this.worldLifecycle.attachRuntime(world, activityDescriptor);
+    // Die World laeuft ab hier. Wer an ihr teilnimmt, entscheidet der Host sofort - sonst
+    // haette die neue Instanz einen Frame lang gar keinen Teilnahmestand.
+    this.hostSyncWorldParticipation();
     this.ctx.combatSystem.setWorldMetrics(world.metrics);
     this.scene.physics.world.setBounds(
       world.metrics.offsetX,

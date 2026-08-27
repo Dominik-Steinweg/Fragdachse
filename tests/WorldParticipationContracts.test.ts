@@ -11,6 +11,10 @@ import {
   hasWorldRuntimeEntry,
   maySendWorldInput,
   requiresLocalWorldPresentation,
+  encodeWorldParticipationState,
+  listWorldParticipants,
+  parseWorldParticipationState,
+  readWorldParticipation,
   resolveWorldParticipation,
   type WorldParticipation,
   type WorldParticipationInput,
@@ -118,8 +122,8 @@ describe('WorldParticipation – Rundenrolle bleibt getrennt', () => {
   });
 });
 
-describe('WorldParticipation – im Koordinator gebunden', () => {
-  it('leitet die Teilnahme host-autoritativ ab und speist damit den Player-Lifecycle', () => {
+describe('WorldParticipation – kanonisch repliziert', () => {
+  it('liest die Teilnahme aus dem World-Kanal statt sie zu rekonstruieren', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
@@ -127,12 +131,54 @@ describe('WorldParticipation – im Koordinator gebunden', () => {
     const start = source.indexOf('  getWorldParticipation(playerId: string): WorldParticipation {');
     expect(start, 'coordinator must expose the world participation').toBeGreaterThan(0);
     const body = source.slice(start, source.indexOf('\n  }', start));
-    expect(body).toContain('worldActive: this.worldLifecycle.isActive()');
-    expect(body).toContain('hasRuntimeEntry: this.ctx.playerManager.hasPlayer(playerId)');
-    expect(body).toContain('mayAct: bridge.canPlayerAct(playerId)');
+    // Genau eine Quelle: der replizierte World-Kanal.
+    expect(body).toContain('return bridge.getWorldParticipation(playerId);');
+    // Und ausdruecklich keine Rekonstruktion aus Runden-/Phasenzustaenden mehr.
+    for (const reconstructed of ['canPlayerAct', 'canPlayerSpawnOrRespawn', 'getGamePhase']) {
+      expect(body.includes(reconstructed), `participation reconstructed from ${reconstructed}`)
+        .toBe(false);
+    }
+  });
+
+  it('leitet sie host-autoritativ genau einmal ab und repliziert sie', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const start = source.indexOf('  hostSyncWorldParticipation(): void {');
+    expect(start, 'host must author the participation').toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('\n  }', start));
+    expect(body).toContain('if (!bridge.isHost() || !this.worldLifecycle.isActive()) return;');
+    expect(body).toContain('bridge.hostPublishWorldParticipation(participants);');
+    // Ohne laufende Activity traegt allein die World-Mitgliedschaft.
+    expect(body).toContain('const activityRunning = this.worldLifecycle.activity.isActive();');
 
     // Der Attach fragt die Teilnahme; der Abbau raeumt bewusst immer den vollen Anteil ab.
     expect(source).toContain('this.resolvePlayerFeatures(this.getWorldParticipation(profile.id))');
     expect(source).toContain("this.resolvePlayerFeatures('interactive')");
+  });
+
+  it('bindet den Stand an die World-Instanz, aus der er stammt', () => {
+    const state = { r: 7, p: { a: 'interactive', b: 'observer' } };
+    expect(parseWorldParticipationState(state, 7)?.participants).toEqual({
+      a: 'interactive',
+      b: 'observer',
+    });
+    // Ein verspaetetes Paket der Vorinstanz beschreibt diese World nicht.
+    expect(parseWorldParticipationState(state, 8)).toBeNull();
+    expect(parseWorldParticipationState(null, 7)).toBeNull();
+
+    const parsed = parseWorldParticipationState(state, 7);
+    expect(readWorldParticipation(parsed, 'a')).toBe('interactive');
+    // Wer nicht eingetragen ist, nimmt nicht teil.
+    expect(readWorldParticipation(parsed, 'ghost')).toBe('none');
+    expect(readWorldParticipation(null, 'a')).toBe('none');
+    expect(listWorldParticipants(parsed)).toEqual(['a', 'b']);
+
+    // Der Round-Trip ueber den Draht ist verlustfrei.
+    expect(parseWorldParticipationState(
+      encodeWorldParticipationState({ worldRevision: 7, participants: { a: 'interactive' } }),
+      7,
+    )?.participants).toEqual({ a: 'interactive' });
   });
 });

@@ -52,6 +52,11 @@ function hostStartMission(host: NetworkBridge, roundRevision: number): void {
       definitionId: 'activity:coop-mission:1',
     },
   );
+  // Teilnahme ist ein eigener World-Kanal; der Host schreibt ihn wie in
+  // `ArenaLifecycleCoordinator.hostSyncWorldParticipation()`.
+  host.hostPublishWorldParticipation(Object.fromEntries(
+    host.getConnectedPlayerIds().map((id) => [id, 'interactive' as const]),
+  ));
   host.setGamePhase('ARENA');
 }
 
@@ -134,15 +139,15 @@ describe('mission lifecycle – Start und Freigabe', () => {
       expect(host.getArenaStartTime()).toBe(0);
       expect(host.isArenaLoading(1_000)).toBe(true);
       expect(host.isArenaStarted(1_000)).toBe(false);
-      expect(host.areRoundParticipantsWorldLoadReady()).toBe(false);
+      expect(host.areWorldParticipantsLoadReady()).toBe(false);
 
       host.setLocalWorldLoadReady(4712);
-      expect(host.areRoundParticipantsWorldLoadReady()).toBe(false);
+      expect(host.areWorldParticipantsLoadReady()).toBe(false);
 
       setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
       client.setLocalWorldLoadReady(4712);
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
-      expect(host.areRoundParticipantsWorldLoadReady()).toBe(true);
+      expect(host.areWorldParticipantsLoadReady()).toBe(true);
 
       const now = 1_000_000;
       const arenaStartTime = resolveArenaStartTime(now);
@@ -166,7 +171,7 @@ describe('mission lifecycle – Start und Freigabe', () => {
       setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
       client.setLocalWorldLoadReady(4713);
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
-      expect(host.areRoundParticipantsWorldLoadReady()).toBe(true);
+      expect(host.areWorldParticipantsLoadReady()).toBe(true);
 
       hostCompleteMission(host, 'victory', 2_000);
       hostStartMission(host, 4714);
@@ -182,7 +187,7 @@ describe('mission lifecycle – Start und Freigabe', () => {
       }, true);
       expect(hostRoom.room.getPlayerState('p1', 'wlr')).toMatchObject({ worldRevision: 4713, ready: true });
       expect(host.getPlayerWorldLoadState('p1', 4714)).toBeNull();
-      expect(host.areRoundParticipantsWorldLoadReady()).toBe(false);
+      expect(host.areWorldParticipantsLoadReady()).toBe(false);
     } finally {
       clearActiveSession();
     }

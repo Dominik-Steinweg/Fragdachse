@@ -65,9 +65,9 @@ describe('Round Loading – eigene Startbedingung hinter der World-Barriere', ()
     expect(start, 'tryScheduleArenaStart must exist').toBeGreaterThan(0);
     const body = source.slice(start, source.indexOf('\n  }', start));
     // Erst die World bei allen Teilnehmern, dann der host-lokale Rundenaufbau.
-    expect(body).toContain('bridge.areRoundParticipantsWorldLoadReady()');
+    expect(body).toContain('bridge.areWorldParticipantsLoadReady()');
     expect(body).toContain('this.prepareRoundStart(');
-    expect(body.indexOf('areRoundParticipantsWorldLoadReady'))
+    expect(body.indexOf('areWorldParticipantsLoadReady'))
       .toBeLessThan(body.indexOf('prepareRoundStart'));
 
     // Die publizierte World-Barriere darf den Rundenaufbau nicht mehr enthalten.
