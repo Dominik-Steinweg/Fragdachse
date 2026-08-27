@@ -5,7 +5,7 @@ import { UTILITY_CONFIGS }  from '../../loadout/LoadoutConfig';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig, PlaceableRockUtilityConfig } from '../../loadout/LoadoutConfig';
 import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
 import { bridge }           from '../../network/bridge';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, ROCK_HP_MAX } from '../../config';
+import { CELL_SIZE, COLORS, DEPTH, ROCK_HP_MAX } from '../../config';
 import { createEmitter, destroyEmitter, fillRadialGradientTexture, registerGraphicsObject } from '../../effects/EffectUtils';
 import type { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
@@ -343,7 +343,7 @@ export class RockVisualHelper {
         this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
       }
       if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
-        const world = { x: ARENA_OFFSET_X + runtimeRock.gridX * CELL_SIZE + CELL_SIZE / 2, y: ARENA_OFFSET_Y + runtimeRock.gridY * CELL_SIZE + CELL_SIZE / 2 };
+        const world = this.gridToWorld(runtimeRock.gridX, runtimeRock.gridY);
         this.ctx.combatSystem.applyAoeDamage(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionDamage ?? 0, runtimeRock.ownerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.rock_collapse', sourceSlot: 'utility' });
         this.ctx.hostPhysics.applyRadialImpulse(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionKnockback ?? 0, runtimeRock.ownerId, 0);
         bridge.broadcastExplosionEffect(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0);
@@ -379,7 +379,7 @@ export class RockVisualHelper {
       });
     }
     this.markObstaclesDirty(rockId, false);
-    const dropsArmor = !isCoopDefenseMode(bridge.getGameMode())
+    const dropsArmor = !isCoopDefenseMode(bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode())
       || (
         reason === 'damage'
         && this.ctx.coopDefensePlayerModifierSystem?.getClassId(attackerId ?? '') === 'dachs_of_steel'
@@ -566,9 +566,11 @@ export class RockVisualHelper {
   }
 
   gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
+    const metrics = this.ctx.world?.metrics;
+    if (!metrics) throw new Error('[RockVisualHelper] Cannot resolve a grid cell without an active World');
     return {
-      x: ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2,
-      y: ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2,
+      x: metrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
+      y: metrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
     };
   }
 

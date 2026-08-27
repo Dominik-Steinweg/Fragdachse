@@ -60,8 +60,7 @@ export interface WorldRuntimeContextInput {
  * Baut den Kontext einer World-Instanz auf.
  *
  * Die Basen werden aus der uebergebenen Map aufgeloest, nicht aus der aktuell in der Lobby
- * gewaehlten. Genau das unterscheidet World-scoped Zustand von der heutigen impliziten
- * Aufloesung ueber `getCoopDefenseBases()`.
+ * gewaehlten. Die BaseRegistry bietet deshalb keinen impliziten Active-Map-Fallback mehr an.
  */
 export function createWorldRuntimeContext(input: WorldRuntimeContextInput): WorldRuntimeContext {
   const { descriptor, mapConfig } = input;

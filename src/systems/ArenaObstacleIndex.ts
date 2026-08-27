@@ -1,7 +1,6 @@
 // Nur Typ-Import: dieses Modul soll ohne Phaser-Laufzeit (und damit ohne DOM) nutzbar
 // und testbar bleiben. Alle Phaser-Aufrufe laufen über die übergebenen Objekte.
 import type * as Phaser from 'phaser';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../config';
 
 const BUCKET_SIZE = 128;
 
@@ -30,6 +29,8 @@ export interface ObstacleCircleBody {
 }
 
 export interface ArenaObstacleSources {
+  /** Bounds genau der World, deren Hindernisse indiziert werden. */
+  readonly bounds: () => ArenaObstacleBounds;
   /** Paralleles Array zu `layout.rocks` – `null` bedeutet zerstört. */
   readonly rocks: () => readonly (ObstacleRectBody | null)[] | null;
   /** Baumstämme als Kreis-Hindernisse. */
@@ -38,6 +39,13 @@ export interface ArenaObstacleSources {
   readonly bases: () => readonly ObstacleRectBody[] | null;
   /** Stabile Missionsbarrieren; ihr active-Zustand wird live gelesen. */
   readonly barriers?: () => readonly ObstacleRectBody[] | null;
+}
+
+export interface ArenaObstacleBounds {
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 /**
@@ -158,6 +166,10 @@ export class ArenaObstacleIndex {
   private builtTrunkLength = -1;
   private builtBaseLength = -1;
   private builtBarrierLength = -1;
+  private builtBoundsOffsetX = Number.NaN;
+  private builtBoundsOffsetY = Number.NaN;
+  private builtBoundsWidth = Number.NaN;
+  private builtBoundsHeight = Number.NaN;
   /** Lazy vom ersten Hindernis erzeugt, danach wiederverwendet (siehe `writeRect`). */
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
@@ -269,6 +281,7 @@ export class ArenaObstacleIndex {
     const trunks = this.sources.trunks();
     const bases = this.sources.bases();
     const barriers = this.sources.barriers?.() ?? null;
+    const bounds = this.sources.bounds();
     return rocks !== this.builtRocks
       || trunks !== this.builtTrunks
       || bases !== this.builtBases
@@ -276,7 +289,11 @@ export class ArenaObstacleIndex {
       || (rocks?.length ?? -1) !== this.builtRockLength
       || (trunks?.length ?? -1) !== this.builtTrunkLength
       || (bases?.length ?? -1) !== this.builtBaseLength
-      || (barriers?.length ?? -1) !== this.builtBarrierLength;
+      || (barriers?.length ?? -1) !== this.builtBarrierLength
+      || bounds.offsetX !== this.builtBoundsOffsetX
+      || bounds.offsetY !== this.builtBoundsOffsetY
+      || bounds.width !== this.builtBoundsWidth
+      || bounds.height !== this.builtBoundsHeight;
   }
 
   private rebuild(): void {
@@ -373,14 +390,20 @@ export class ArenaObstacleIndex {
   }
 
   private buildBuckets(): void {
+    const bounds = this.sources.bounds();
+    this.builtBoundsOffsetX = bounds.offsetX;
+    this.builtBoundsOffsetY = bounds.offsetY;
+    this.builtBoundsWidth = bounds.width;
+    this.builtBoundsHeight = bounds.height;
     // Das Raster spannt die Arena **und** jedes tatsächlich vorhandene Hindernis auf.
-    // Nur die Arena zu nehmen wäre eine stille Falle: `ARENA_WIDTH` ist zur Laufzeit
-    // veränderlich (breite Coop-Karten), und ein Hindernis außerhalb des Rasters würde
-    // beim Einsortieren weggeklemmt – es verschwände lautlos aus jeder Kollisionsprüfung.
-    let minX = ARENA_OFFSET_X;
-    let minY = ARENA_OFFSET_Y;
-    let maxX = ARENA_OFFSET_X + ARENA_WIDTH;
-    let maxY = ARENA_OFFSET_Y + ARENA_HEIGHT;
+    // Nur die World-Bounds zu nehmen wäre eine stille Falle: Ein Hindernis außerhalb des
+    // authored Rasters würde beim Einsortieren weggeklemmt und verschwände lautlos aus jeder
+    // Kollisionsprüfung. Die Bounds kommen explizit vom Besitzer des Index; Arena und Lobby
+    // können deshalb gleichzeitig verschiedene räumliche Grundlagen halten.
+    let minX = bounds.offsetX;
+    let minY = bounds.offsetY;
+    let maxX = bounds.offsetX + bounds.width;
+    let maxY = bounds.offsetY + bounds.height;
     for (let rect = 0; rect < this.rectCount; rect += 1) {
       const offset = rect * 4;
       if (this.rectData[offset] < minX) minX = this.rectData[offset];

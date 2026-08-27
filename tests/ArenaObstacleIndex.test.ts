@@ -37,6 +37,13 @@ function worldPosition(gridX: number, gridY: number): { x: number; y: number } {
 /* eslint-disable @typescript-eslint/no-explicit-any -- FakeBox ersetzt Phaser-Objekte */
 type AnyBox = any;
 
+const TEST_BOUNDS = {
+  offsetX: ARENA_OFFSET_X,
+  offsetY: ARENA_OFFSET_Y,
+  width: ARENA_WIDTH,
+  height: ARENA_HEIGHT,
+};
+
 interface Visited {
   rockIndices: number[];
   baseCount: number;
@@ -90,10 +97,32 @@ function segmentHitsBox(
 }
 
 describe('ArenaObstacleIndex', () => {
+  it('bindet sein Bucket-Raster an explizite Bounds statt an die aktive globale Arena', () => {
+    const bounds = { offsetX: 100, offsetY: 200, width: 640, height: 480 };
+    const index = new ArenaObstacleIndex({
+      bounds: () => bounds,
+      rocks: () => null,
+      trunks: () => null,
+      bases: () => null,
+    });
+    const internals = index as unknown as { originX: number; originY: number };
+
+    index.prepare();
+    expect(internals.originX).toBe(bounds.offsetX - 128);
+    expect(internals.originY).toBe(bounds.offsetY - 128);
+
+    bounds.offsetX = 900;
+    bounds.offsetY = 700;
+    index.prepare();
+    expect(internals.originX).toBe(bounds.offsetX - 128);
+    expect(internals.originY).toBe(bounds.offsetY - 128);
+  });
+
   it('meldet jedes Hindernis pro Abfrage genau einmal, auch über Bucket-Grenzen hinweg', () => {
     const spot = worldPosition(5, 5);
     // Deutlich größer als ein Bucket (128 px) und damit in mehreren gleichzeitig.
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => null,
       trunks: () => null,
       bases: () => [new FakeBox(spot.x, spot.y, 320) as AnyBox],
@@ -107,6 +136,7 @@ describe('ArenaObstacleIndex', () => {
     const a = worldPosition(4, 4);
     const b = worldPosition(8, 4);
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       // Slot 1 ist zerstört – der Index von Fels `b` muss trotzdem 2 bleiben,
       // sonst trifft der Felsschaden den falschen Fels.
       rocks: () => [new FakeBox(a.x, a.y) as AnyBox, null, new FakeBox(b.x, b.y) as AnyBox],
@@ -123,6 +153,7 @@ describe('ArenaObstacleIndex', () => {
     const spot = worldPosition(6, 6);
     const rock = new FakeBox(spot.x, spot.y);
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => [rock as AnyBox],
       trunks: () => null,
       bases: () => null,
@@ -139,6 +170,7 @@ describe('ArenaObstacleIndex', () => {
     const spot = worldPosition(7, 7);
     const barrier = new FakeBox(spot.x, spot.y);
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => null,
       trunks: () => null,
       bases: () => null,
@@ -155,6 +187,7 @@ describe('ArenaObstacleIndex', () => {
     const placed = worldPosition(7, 6);
     const rocks: (FakeBox | null)[] = [new FakeBox(existing.x, existing.y), null];
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => rocks as AnyBox,
       trunks: () => null,
       bases: () => null,
@@ -175,6 +208,7 @@ describe('ArenaObstacleIndex', () => {
     const appended = worldPosition(9, 6);
     const rocks: (FakeBox | null)[] = [new FakeBox(base.x, base.y)];
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => rocks as AnyBox,
       trunks: () => null,
       bases: () => null,
@@ -190,6 +224,7 @@ describe('ArenaObstacleIndex', () => {
   it('führt Baumstämme als Kreis-Hindernisse', () => {
     const spot = worldPosition(3, 7);
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => null,
       trunks: () => [{ active: true, x: spot.x, y: spot.y, radius: 10 } as AnyBox],
       bases: () => null,
@@ -203,6 +238,7 @@ describe('ArenaObstacleIndex', () => {
     // it stays in the neighboring cell and is not visited by the y=140 segment.
     const rock = new FakeBox(500, 123);
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => [rock as AnyBox],
       trunks: () => null,
       bases: () => null,
@@ -215,6 +251,7 @@ describe('ArenaObstacleIndex', () => {
   it('bricht die Traversierung ab, sobald ein Besucher true meldet', () => {
     const positions = [worldPosition(4, 4), worldPosition(5, 4), worldPosition(6, 4)];
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => positions.map((p) => new FakeBox(p.x, p.y) as AnyBox),
       trunks: () => null,
       bases: () => null,
@@ -233,6 +270,7 @@ describe('ArenaObstacleIndex', () => {
     const rock = worldPosition(10, 10);
     const base = worldPosition(11, 10);
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => [new FakeBox(rock.x, rock.y) as AnyBox],
       trunks: () => null,
       bases: () => [new FakeBox(base.x, base.y) as AnyBox],
@@ -263,6 +301,7 @@ describe('ArenaObstacleIndex', () => {
     expect(rocks.length).toBeGreaterThan(200);
 
     const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
       rocks: () => rocks as AnyBox,
       trunks: () => null,
       bases: () => null,

@@ -23,7 +23,11 @@ const WORLD_SCOPED_MODULES = [
   'src/entities/BaseEntity.ts',
   'src/entities/BaseManager.ts',
   'src/entities/PlayerManager.ts',
+  'src/scenes/arena/ArenaLifecycleCoordinator.ts',
+  'src/scenes/arena/HostUpdateCoordinator.ts',
   'src/scenes/arena/PersistentBaseVisuals.ts',
+  'src/scenes/arena/RockVisualHelper.ts',
+  'src/systems/CombatSystem.ts',
   'src/systems/PlacementSystem.ts',
 ] as const;
 
@@ -160,5 +164,67 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
       }
     }
     applyArenaMetricsForMode('deathmatch', 'LOBBY');
+  });
+});
+
+describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
+  it('baut World-Systeme ausschliesslich aus Descriptor und WorldRuntimeContext', () => {
+    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const start = source.indexOf('  buildArena(descriptor: ArenaDescriptor): void {');
+    const end = source.indexOf('\n  tearDownArena(): void {', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const buildArena = source.slice(start, end);
+
+    expect(buildArena).not.toContain('bridge.getGameMode()');
+    expect(buildArena).not.toContain('bridge.getCoopDefenseMapId()');
+    expect(buildArena).not.toContain('roundState?.coopDefenseMapId');
+    expect(buildArena).not.toMatch(/\b(?:GRID_COLS|GRID_ROWS|ARENA_OFFSET_X|ARENA_OFFSET_Y|ARENA_WIDTH|ARENA_HEIGHT)\b/);
+    expect(buildArena).toContain('const worldMapId = toMapId(worldDescriptor.definitionId)');
+    expect(buildArena).toContain('cols: world.metrics.gridCols');
+    expect(buildArena).toContain('worldOriginX: world.metrics.offsetX');
+  });
+
+  it('bindet beide Nutzer des gemeinsamen Hindernisindex an ihre eigenen Bounds', () => {
+    const index = read('src/systems/ArenaObstacleIndex.ts');
+    const combat = read('src/systems/CombatSystem.ts');
+    const lobby = read('src/lobby/LobbyObstacleWorld.ts');
+
+    expect(index).not.toMatch(/from ['"][^'"]*config['"]/);
+    expect(index).toContain('readonly bounds: () => ArenaObstacleBounds');
+    expect(combat).toContain('bounds: () => this.obstacleBounds');
+    expect(combat).toContain('setWorldMetrics(metrics: WorldMetrics | null)');
+    expect(lobby).toContain('bounds: () => this.worldFrame');
+  });
+
+  it('loest den Respawn-Kontext der Arena aus der aktiven World auf', () => {
+    const source = read('src/scenes/ArenaScene.ts');
+    const start = source.indexOf('playerManager.setSpawnContextProvider');
+    const end = source.indexOf('\n    });', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const provider = source.slice(start, end);
+
+    expect(provider).toContain('toMapId(this.ctx.world.descriptor.definitionId)');
+    expect(provider).not.toContain('getCoopDefenseMapId');
+    expect(provider).not.toContain('getRoundState');
+  });
+
+  it('laesst Host-Simulation und RPC-Pruefung den Activity-Snapshot vor der Lobby lesen', () => {
+    const hostUpdate = read('src/scenes/arena/HostUpdateCoordinator.ts');
+    const rpc = read('src/scenes/arena/RpcCoordinator.ts');
+    const combat = read('src/systems/CombatSystem.ts');
+    const rockVisuals = read('src/scenes/arena/RockVisualHelper.ts');
+
+    expect(hostUpdate).not.toContain('getCoopDefenseMapId');
+    expect(hostUpdate).not.toContain('coopDefenseMapId');
+    for (const [path, source] of [
+      ['src/scenes/arena/HostUpdateCoordinator.ts', hostUpdate],
+      ['src/scenes/arena/RpcCoordinator.ts', rpc],
+      ['src/systems/CombatSystem.ts', combat],
+      ['src/scenes/arena/RockVisualHelper.ts', rockVisuals],
+    ] as const) {
+      expect(source, `${path} ignores the active Activity`).toContain('getArenaDescriptor()?.gameMode');
+    }
   });
 });

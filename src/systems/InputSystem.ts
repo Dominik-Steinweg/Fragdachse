@@ -363,7 +363,10 @@ export class InputSystem {
     // slot and restore the Inspector selection afterwards.
     const activeConfig = this.getLocalUtilityConfig?.();
     const resolvedToolConfig = tool?.kind === 'utility'
-      ? getUtilityConfigForMode(tool.id, this.bridge.getGameMode())
+      ? getUtilityConfigForMode(
+        tool.id,
+        this.bridge.getArenaDescriptor()?.gameMode ?? this.bridge.getGameMode(),
+      )
       : undefined;
     const activeConstructionId = getConstructionIdForUtility(activeConfig?.id);
     if (tool?.kind === 'construction' && activeConstructionId === tool.id && !this.isInspectorUtilityOverrideActive()) {

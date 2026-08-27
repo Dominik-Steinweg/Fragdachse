@@ -175,6 +175,7 @@ describe('B6 client mission reward reconciliation', () => {
     it.each(['BFG', 'HOLY_HAND_GRENADE'])('rekonstruiert %s erst aus dem Host-Descriptor', async (utilityId) => {
       vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
       vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      vi.spyOn(bridge, 'getArenaDescriptor').mockReturnValue(null);
       vi.spyOn(bridge, 'getGameMode').mockReturnValue('deathmatch');
       const ack = deferred<boolean>();
       vi.spyOn(bridge, 'sendPickupPowerUp').mockReturnValue(ack.promise);

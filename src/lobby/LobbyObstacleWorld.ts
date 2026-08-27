@@ -100,6 +100,7 @@ export class LobbyObstacleWorld {
     }
 
     this.obstacleIndex = new ArenaObstacleIndex({
+      bounds: () => this.worldFrame,
       rocks:  () => this.rockProxies,
       trunks: () => this.trunkProxies,
       bases:  () => null,

@@ -6,6 +6,7 @@ const bridgeMock = vi.hoisted(() => ({
   isArenaCountdownActive: vi.fn(() => false),
   getGamePhase: vi.fn(() => 'ARENA'),
   getGameMode: vi.fn(() => 'coop_defense'),
+  getArenaDescriptor: vi.fn(() => ({ gameMode: 'coop_defense' })),
   getPlayerUtilityOverrideId: vi.fn(() => ''),
   getPlayerCommittedLoadout: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
@@ -109,6 +110,7 @@ beforeEach(() => {
   bridgeMock.isArenaCountdownActive.mockReturnValue(false);
   bridgeMock.getGamePhase.mockReturnValue('ARENA');
   bridgeMock.getGameMode.mockReturnValue('coop_defense');
+  bridgeMock.getArenaDescriptor.mockReturnValue({ gameMode: 'coop_defense' });
   bridgeMock.getPlayerUtilityOverrideId.mockReturnValue('');
   bridgeMock.getPlayerCommittedLoadout.mockReturnValue(INSPECTOR_COMMITTED);
 });
@@ -155,6 +157,8 @@ describe('Inspector loadout-use RPC classification', () => {
   });
 
   it('validates an Inspector charged utility with the toolRef config', () => {
+    // Die mutable Lobby-Auswahl darf die laufende Coop-Activity nicht umkonfigurieren.
+    bridgeMock.getGameMode.mockReturnValue('deathmatch');
     const fixture = createFixture();
     fixture.consume.mockReturnValue({ elapsedMs: 900, chargeFraction: 1 });
     const handler = registerLoadoutHandler(fixture.coordinator);

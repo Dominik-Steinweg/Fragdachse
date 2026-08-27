@@ -413,6 +413,7 @@ describe('CombatSystem actual damage callbacks', () => {
       getPlayerProfile: vi.fn((id: string) => id === 'player' ? { id } : undefined),
       incrementPlayerFrags: vi.fn(),
       canPlayerReceiveRoundRewards: vi.fn(() => true),
+      getArenaDescriptor: vi.fn(() => null),
       getGameMode: vi.fn(() => 'deathmatch'),
       broadcastEffect: vi.fn(),
     } as unknown as NetworkBridge;

@@ -187,7 +187,10 @@ export class RpcCoordinator {
           || committed?.coopDefenseClassId !== 'inspector_gadachs'
           || !(committed.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id)
         ) return false;
-        utility = getUtilityConfigForMode(toolRef.id, bridge.getGameMode());
+        utility = getUtilityConfigForMode(
+          toolRef.id,
+          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+        );
       } else {
         utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
       }
@@ -252,7 +255,10 @@ export class RpcCoordinator {
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
         if (committed?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };
         if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
-        const inspectorUtility = getUtilityConfigForMode(params.toolRef.id, bridge.getGameMode());
+        const inspectorUtility = getUtilityConfigForMode(
+          params.toolRef.id,
+          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+        );
         if (!inspectorUtility) return { ok: false, reason: 'invalid' };
         const charge = validateHostUtilityCharge(this.ctx, senderId, inspectorUtility, params);
         if (!charge.ok) return charge;

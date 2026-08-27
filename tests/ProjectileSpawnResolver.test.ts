@@ -157,6 +157,7 @@ function geometryWith(
   barriers: readonly FakeBox[] | null = null,
 ): CombatGeometry {
   const index = new ArenaObstacleIndex({
+    bounds: () => ({ offsetX: 0, offsetY: 0, width: 1920, height: 1080 }),
     rocks: () => rocks,
     trunks: () => trunks,
     bases: () => bases,

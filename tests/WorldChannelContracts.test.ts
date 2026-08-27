@@ -108,6 +108,28 @@ describe('World-Kanal – Replikation', () => {
     }
   });
 
+  it('veraendert eine nachtraegliche Lobby-Auswahl die bestehende World und Activity nicht', async () => {
+    const [hostRoom] = await createRoom(1);
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), activity());
+      const expectedWorld = host.getWorldDescriptor();
+      const expectedActivity = host.getActivityDescriptor();
+      const expectedArena = host.getArenaDescriptor();
+
+      host.setCoopDefenseMapId('19');
+      host.setGameMode('deathmatch');
+
+      expect(host.getCoopDefenseMapId()).toBe('19');
+      expect(host.getGameMode()).toBe('deathmatch');
+      expect(host.getWorldDescriptor()).toEqual(expectedWorld);
+      expect(host.getActivityDescriptor()).toEqual(expectedActivity);
+      expect(host.getArenaDescriptor()).toEqual(expectedArena);
+    } finally {
+      clearActiveSession();
+    }
+  });
+
   it('beendet die World-Instanz vollstaendig', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     try {

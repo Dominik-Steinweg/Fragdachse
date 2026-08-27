@@ -3,10 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as config from '../src/config';
 import { applyArenaMetricsForMode, getArenaMetricsProfile } from '../src/config';
-import { getCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
-import { NetworkBridge } from '../src/network/NetworkBridge';
-import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import type { GameMode } from '../src/types';
 import { PROCEDURAL_ARENA_WORLD_DEFINITION_ID, type WorldDescriptor } from '../src/world/WorldDescriptor';
 import { isCellInsideWorld, resolveWorldMetrics, worldCellOrigin } from '../src/world/WorldMetrics';
@@ -15,7 +12,6 @@ import {
   findWorldBase,
   isValidPersistentBaseSite,
 } from '../src/world/WorldRuntimeContext';
-import { createHostRoom, FakeNetwork } from './fakePeerNetwork';
 
 /**
  * Der kanonische Kontext einer World-Instanz.
@@ -204,26 +200,33 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
 });
 
 describe('WorldRuntimeContext – Unabhaengigkeit von der Lobby', () => {
-  it('loest Basen aus der eigenen World auf, nicht aus der gewaehlten Lobby-Map', async () => {
-    const network = new FakeNetwork();
-    const hostRoom = await createHostRoom(network);
-    setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
-    const bridge = new NetworkBridge();
-    bridge.activate();
+  it('behaelt Metrik, Basen und Basisstelle trotz Aenderung des globalen Kompatibilitaetsspiegels', () => {
+    const world = contextForMap('18');
     try {
-      // Lobby steht auf Map 19, die aktive World ist Map 18.
-      bridge.setCoopDefenseMapId('19');
-      applyArenaMetricsForMode('coop_defense', 'ARENA');
-      expect(bridge.getCoopDefenseMapId()).toBe('19');
-      expect(getCoopDefenseBases().map((base) => base.id)).toEqual(['cornerstone-main']);
+      // Simuliert eine nachtraegliche Lobby-Auswahl mit inkompatibler Groesse. Die bereits
+      // erzeugte World behaelt ihre immutable Ableitungen.
+      const foreignMap = getCoopDefenseMapConfig('1');
+      applyArenaMetricsForMode(
+        'coop_defense',
+        'ARENA',
+        foreignMap.arenaWidthCells,
+        foreignMap.arenaHeightCells,
+      );
 
-      const world = contextForMap('18');
+      expect(world.metrics.gridCols).toBe(getCoopDefenseMapConfig('18').arenaWidthCells);
+      expect(world.metrics.widthPx).not.toBe(config.ARENA_WIDTH);
       expect(world.bases.map((base) => base.id)).toEqual(['foundation-main']);
       expect(world.persistentBaseSite?.baseId).toBe('foundation-main');
     } finally {
       applyArenaMetricsForMode('deathmatch', 'LOBBY');
-      clearActiveSession();
     }
+  });
+
+  it('verbietet der BaseRegistry einen Lobby- oder Netzwerk-Fallback', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/arena/BaseRegistry.ts'), 'utf8');
+    expect(source).not.toContain("../network/bridge");
+    expect(source).not.toContain('getCoopDefenseMapId');
+    expect(source).not.toContain('getCoopDefenseBases');
   });
 });
 

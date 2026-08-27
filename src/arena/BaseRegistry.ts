@@ -1,14 +1,10 @@
 import {
   CELL_SIZE,
   isCaptureTheBeerBaseCell,
-  isCaptureTheBeerBaseModeActive,
-  isCoopDefenseBasesActive,
   isGridCellInArenaRegion,
   type ArenaGridRegion,
 } from '../config';
-import { bridge } from '../network/bridge';
 import {
-  getCoopDefenseMapConfig,
   type CoopBaseAnchor,
   type CoopBaseCellOffset,
   type CoopBaseConfig,
@@ -328,15 +324,6 @@ function resolveBaseTurretSpec(
 
 // ── Öffentliche API ────────────────────────────────────────────────────────
 
-/** Aktive Coop-Basen für die laufende Runde. Leeres Array außerhalb des Coop-Modus. */
-export function getCoopDefenseBases(
-  mapConfig: CoopDefenseMapConfig = resolveActiveCoopDefenseMapConfig(),
-  humanPlayerCount = 1,
-): readonly BaseSpec[] {
-  if (!isCoopDefenseBasesActive()) return [];
-  return resolveCoopDefenseBases(mapConfig, humanPlayerCount);
-}
-
 /** Löst eine Map-Konfiguration unabhängig vom derzeit aktiven Spielmodus auf. */
 export function resolveCoopDefenseBases(
   mapConfig: CoopDefenseMapConfig,
@@ -366,10 +353,6 @@ export function resolveCoopDefenseBases(
       persistentReservationRadiusCells: MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS,
     }
     : base);
-}
-
-function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {
-  return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
 }
 
 /** Pixel-Bounds einer Basis-Region (Bounding-Box) in der Metrik der uebergebenen World. */
@@ -453,12 +436,10 @@ function isCoopDefenseBaseWithinBoundingBoxDistance(
   gx: number,
   gy: number,
   distance: number,
-  bases?: readonly BaseSpec[],
+  bases: readonly BaseSpec[],
 ): boolean {
-  if (!bases && !isCoopDefenseBasesActive()) return false;
-  const resolvedBases = bases ?? getCoopDefenseBases();
-  if (resolvedBases.length === 0) return false;
-  for (const base of resolvedBases) {
+  if (bases.length === 0) return false;
+  for (const base of bases) {
     if (
       gx >= base.region.minGridX - distance
       && gx <= base.region.maxGridX + distance
@@ -473,10 +454,9 @@ function isCoopDefenseBaseWithinBoundingBoxDistance(
 export function isCoopDefenseBaseCell(
   gx: number,
   gy: number,
-  bases?: readonly BaseSpec[],
+  bases: readonly BaseSpec[],
 ): boolean {
-  if (!bases && !isCoopDefenseBasesActive()) return false;
-  for (const base of bases ?? getCoopDefenseBases()) {
+  for (const base of bases) {
     for (const cell of base.cells) {
       if (cell.gridX === gx && cell.gridY === gy) return true;
     }
@@ -489,8 +469,12 @@ export function isCoopDefenseBaseCell(
  * drumherum liegt. Wird vom Spawn-System genutzt (Spieler sollen weder auf
  * noch direkt neben der Basis spawnen).
  */
-export function isCoopDefenseBaseOrBorderCell(gx: number, gy: number): boolean {
-  return isCoopDefenseBaseWithinBoundingBoxDistance(gx, gy, 1);
+export function isCoopDefenseBaseOrBorderCell(
+  gx: number,
+  gy: number,
+  bases: readonly BaseSpec[],
+): boolean {
+  return isCoopDefenseBaseWithinBoundingBoxDistance(gx, gy, 1, bases);
 }
 
 /**
@@ -502,7 +486,7 @@ export function isCoopDefenseBaseOrBorderCell(gx: number, gy: number): boolean {
 export function isCoopDefenseBaseObstacleClearanceCell(
   gx: number,
   gy: number,
-  bases?: readonly BaseSpec[],
+  bases: readonly BaseSpec[],
 ): boolean {
   return isCoopDefenseBaseWithinBoundingBoxDistance(
     gx,
@@ -521,7 +505,7 @@ export function isCoopDefenseBaseObstacleClearanceCell(
 export function isReservedBaseObstacleCell(
   gx: number,
   gy: number,
-  bases?: readonly BaseSpec[],
+  bases: readonly BaseSpec[],
 ): boolean {
   if (isCaptureTheBeerBaseCell(gx, gy)) return true;
   if (isCoopDefenseBaseObstacleClearanceCell(gx, gy, bases)) return true;
@@ -531,9 +515,9 @@ export function isReservedBaseObstacleCell(
 export function isPersistentBaseReservationCell(
   gx: number,
   gy: number,
-  bases?: readonly BaseSpec[],
+  bases: readonly BaseSpec[],
 ): boolean {
-  return bases?.some((base) => base.persistentReservationRadiusCells !== undefined && (
+  return bases.some((base) => base.persistentReservationRadiusCells !== undefined && (
     isCellInsidePersistentBaseReservation(
       gx,
       gy,
@@ -542,7 +526,7 @@ export function isPersistentBaseReservationCell(
         gridY: base.anchorGridY ?? Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
       },
     )
-  )) ?? false;
+  ));
 }
 
 /**
@@ -555,7 +539,7 @@ export function isPersistentBaseReservationCell(
 export function isReservedBaseSurfaceCell(
   gx: number,
   gy: number,
-  bases?: readonly BaseSpec[],
+  bases: readonly BaseSpec[],
 ): boolean {
   if (isCaptureTheBeerBaseCell(gx, gy)) return true;
   if (isCoopDefenseBaseCell(gx, gy, bases)) return true;
@@ -568,11 +552,4 @@ export function isReservedBaseSurfaceCell(
  */
 export function isCellInBaseRegion(spec: BaseSpec, gx: number, gy: number): boolean {
   return isGridCellInArenaRegion(spec.region, gx, gy);
-}
-
-/**
- * True wenn der aktive Modus den Zug-Gleis-Spawn zentriert (CTB & Coop).
- */
-export function usesCenteredTrackSpawn(): boolean {
-  return isCoopDefenseBasesActive() || isCaptureTheBeerBaseModeActive();
 }

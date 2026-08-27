@@ -6,6 +6,7 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
+import type { WorldMetrics } from '../world/WorldMetrics';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
@@ -26,15 +27,16 @@ import {
   type ChainLightningTarget,
 } from '../combat/rules/ChainLightningResolver';
 import {
-  ARENA_HEIGHT,
   ARMOR_MAX,
   BURN_TICK_INTERVAL_MS,
   COLORS,
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
   HP_MAX, RESPAWN_DELAY_MS,
-  ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH,
+  DEFAULT_ARENA_HEIGHT,
+  DEFAULT_ARENA_OFFSET_X,
+  DEFAULT_ARENA_OFFSET_Y,
+  DEFAULT_ARENA_WIDTH,
   HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET,
   HITSCAN_FAVOR_THE_SHOOTER_MS,
   PLAYER_SIZE,
@@ -256,7 +258,18 @@ export class CombatSystem {
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly lineOfFireLine    = new Phaser.Geom.Line();  // Scratch-Linie für die Blockerprüfung der Schusslinie
-  private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+  private readonly obstacleBounds = {
+    offsetX: DEFAULT_ARENA_OFFSET_X,
+    offsetY: DEFAULT_ARENA_OFFSET_Y,
+    width: DEFAULT_ARENA_WIDTH,
+    height: DEFAULT_ARENA_HEIGHT,
+  };
+  private readonly arenaBounds = new Phaser.Geom.Rectangle(
+    DEFAULT_ARENA_OFFSET_X,
+    DEFAULT_ARENA_OFFSET_Y,
+    DEFAULT_ARENA_WIDTH,
+    DEFAULT_ARENA_HEIGHT,
+  );
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
   /** Aufgeblasene Kopie der Zug-Bounds; die Quelle darf für den Korridor nicht verändert werden. */
   private readonly scratchLineOfFireRect = new Phaser.Geom.Rectangle();
@@ -266,6 +279,7 @@ export class CombatSystem {
    * `setBaseObstacles` setzen – es gibt keinen zweiten Bestand.
    */
   private readonly obstacleIndex = new ArenaObstacleIndex({
+    bounds: () => this.obstacleBounds,
     rocks:  () => this.rockObjects,
     trunks: () => this.trunkObjects,
     bases:  () => this.baseObstacles,
@@ -397,8 +411,20 @@ export class CombatSystem {
     private bridge:            NetworkBridge,
   ) {}
 
-  syncArenaBounds(): void {
-    this.arenaBounds.setTo(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+  /** Bindet Kollisions- und Spatial-Index-Bounds an genau eine World-Instanz. */
+  setWorldMetrics(metrics: WorldMetrics | null): void {
+    const resolved = metrics ?? {
+      offsetX: DEFAULT_ARENA_OFFSET_X,
+      offsetY: DEFAULT_ARENA_OFFSET_Y,
+      widthPx: DEFAULT_ARENA_WIDTH,
+      heightPx: DEFAULT_ARENA_HEIGHT,
+    };
+    this.obstacleBounds.offsetX = resolved.offsetX;
+    this.obstacleBounds.offsetY = resolved.offsetY;
+    this.obstacleBounds.width = resolved.widthPx;
+    this.obstacleBounds.height = resolved.heightPx;
+    this.arenaBounds.setTo(resolved.offsetX, resolved.offsetY, resolved.widthPx, resolved.heightPx);
+    this.obstacleIndex.markDirty();
   }
 
   // ── Referenz-Injection ────────────────────────────────────────────────────
@@ -3437,8 +3463,8 @@ export class CombatSystem {
   }
 
   private fallbackDamageDirection(targetX: number, targetY: number, seed: number): { dirX: number; dirY: number } {
-    const centerX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
-    const centerY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
+    const centerX = this.arenaBounds.x + this.arenaBounds.width / 2;
+    const centerY = this.arenaBounds.y + this.arenaBounds.height / 2;
     const baseAngle = Math.atan2(targetY - centerY, targetX - centerX);
     const jitterDeg = ((seed >>> 5) % 41) - 20;
     const angle = Number.isFinite(baseAngle)
@@ -3897,7 +3923,8 @@ export class CombatSystem {
         const xpSourceIsEligible = killedByPlayer
           ? this.bridge.canPlayerReceiveRoundRewards(effectiveKillerId as string)
           : killedByBaseTurret && this.bridge.getRoundResultEligiblePlayerIds().length > 0;
-        if (xpSourceIsEligible && isCoopDefenseMode(this.bridge.getGameMode())) {
+        if (xpSourceIsEligible
+          && isCoopDefenseMode(this.bridge.getArenaDescriptor()?.gameMode ?? this.bridge.getGameMode())) {
           if (enemyXp > 0) {
             this.bridge.addCoopDefenseRoundXp(enemyXp);
             this.bridge.broadcastCoopDefenseXpPopup(x, y, enemyXp);

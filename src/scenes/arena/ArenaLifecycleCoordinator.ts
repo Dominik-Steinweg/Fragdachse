@@ -101,7 +101,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseRewardPickupWorldPosition, getBaseWorldBounds } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -159,7 +159,7 @@ import {
   type PersistentRestoreToolDefinition,
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
-import { toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
+import { toGameMode, toMapId, toWorldAndActivityDescriptors } from '../../world/arenaDescriptorAdapter';
 import {
   createWorldRuntimeContext,
   isValidPersistentBaseSite,
@@ -521,10 +521,10 @@ export class ArenaLifecycleCoordinator {
   }
 
   private resolveRoundEndTime(arenaStartTime: number): number {
-    if (!isCoopDefenseMode(bridge.getGameMode())) {
+    if (!isCoopDefenseMode(this.resolveConfiguredGameMode())) {
       return arenaStartTime + ARENA_DURATION_SEC * 1000;
     }
-    const mapConfig = getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
+    const mapConfig = getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId());
     if (mapConfig?.objective !== 'survive') return 0;
     const surviveDurationSec = mapConfig.surviveDurationSec;
     if (surviveDurationSec === undefined) {
@@ -604,7 +604,7 @@ export class ArenaLifecycleCoordinator {
    */
   private hostHasCommittedLoadoutForSpawn(playerId: string): boolean {
     if (!bridge.hasCommittedLoadout(playerId)) return false;
-    if (isCoopDefenseMode(bridge.getGameMode()) && !bridge.hasCommittedCoopDefenseProfile(playerId)) return false;
+    if (isCoopDefenseMode(this.resolveConfiguredGameMode()) && !bridge.hasCommittedCoopDefenseProfile(playerId)) return false;
     return true;
   }
 
@@ -618,10 +618,10 @@ export class ArenaLifecycleCoordinator {
 
   hostSaveRoundResults(roundEndedAt = Date.now(), countPvpMatch = false): void {
     if (!bridge.isHost()) return;
-    const gameMode = bridge.getGameMode();
+    const gameMode = this.resolveConfiguredGameMode();
     const roundState = bridge.getRoundState();
     const mapName = isCoopDefenseMode(gameMode)
-      ? getMapName(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(), getLocale())
+      ? getMapName(this.resolveConfiguredCoopDefenseMapId(), getLocale())
       : 'Zufallsarena';
     const epicGuaranteeCount = isCoopDefenseMode(gameMode) && roundState?.status === 'victory'
       ? this.ctx.coopDefenseSecondaryObjectiveSystem?.getEpicGuaranteeCount() ?? 0
@@ -719,7 +719,7 @@ export class ArenaLifecycleCoordinator {
    */
   hostDiscardRound(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
-    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const mapId = this.resolveConfiguredCoopDefenseMapId();
     if (!isWeaponBalanceLabMapId(mapId)) return;
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
@@ -801,7 +801,7 @@ export class ArenaLifecycleCoordinator {
 
   getActiveConstructionToolsForPlayer(playerId: string): readonly LoadoutToolRef[] {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    return getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed));
+    return getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed));
   }
 
   getConstructionCapacityForPlayer(playerId: string): number {
@@ -931,25 +931,26 @@ export class ArenaLifecycleCoordinator {
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
     bridge.resetGameStateCache();
 
-    // Map-ID bevorzugt aus dem (gegateten) RoundState lesen – derselbe reliable-Snapshot, der auch die
-    // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
-    // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
-    const roundState = bridge.getRoundState();
-    const coopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
-      ? getCoopDefenseMapConfig(descriptor.mapId ?? roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
-      : null;
-    const coopDefenseHumanPlayerCount = isCoopDefenseMode(descriptor.gameMode)
-      ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
-      : 1;
-    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
-      ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
-      : null;
     // Kanonischer Kontext dieser World-Instanz. Metrik, Basen und die persistente Basisstelle
     // haengen ab hier an der World, nicht an der Lobby-Auswahl oder an globalen Variablen.
     const worldDescriptor = bridge.getWorldDescriptor();
     if (!worldDescriptor) {
       throw new Error(`[ArenaLifecycleCoordinator] No replicated world for round ${descriptor.roundRevision}`);
     }
+    const worldMapId = toMapId(worldDescriptor.definitionId);
+    if (isCoopDefenseMode(descriptor.gameMode) && worldMapId === null) {
+      throw new Error(`[ArenaLifecycleCoordinator] Coop activity has no authored World map`);
+    }
+    const coopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
+      ? getCoopDefenseMapConfig(worldMapId!)
+      : null;
+    const roundState = bridge.getRoundState();
+    const coopDefenseHumanPlayerCount = isCoopDefenseMode(descriptor.gameMode)
+      ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
+      : 1;
+    const coopDefenseEnemyConfigs = isCoopDefenseMode(descriptor.gameMode)
+      ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
+      : null;
     this.ctx.world = createWorldRuntimeContext({
       descriptor: worldDescriptor,
       metricsProfile: getArenaMetricsProfile(
@@ -962,6 +963,13 @@ export class ArenaLifecycleCoordinator {
       humanPlayerCount: coopDefenseHumanPlayerCount,
     });
     const world = this.ctx.world;
+    this.ctx.combatSystem.setWorldMetrics(world.metrics);
+    this.scene.physics.world.setBounds(
+      world.metrics.offsetX,
+      world.metrics.offsetY,
+      world.metrics.widthPx,
+      world.metrics.heightPx,
+    );
     const coopDefenseBases = world.bases;
     this.ctx.playerManager.setWorldGeometry({
       metrics: world.metrics,
@@ -1114,7 +1122,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.reinforcementMatrixSystem = new ReinforcementMatrixSystem();
     this.ctx.energyInjectorSystem = new EnergyInjectorSystem();
     this.ctx.targetStatusSystem = new TargetStatusSystem();
-    this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
+    this.ctx.captureTheBeerSystem = descriptor.gameMode === CAPTURE_THE_BEER_MODE
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
 
@@ -1153,7 +1161,7 @@ export class ArenaLifecycleCoordinator {
       })
       : null;
     this.ctx.baseManager?.setLightingSystem(this.renderers.lighting);
-    this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseEnemyConfigs
+    this.ctx.enemyManager = isCoopDefenseMode(descriptor.gameMode) && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
     // Buddel- und Spawn-Visuals der Gegner laufen über dieselbe Effekt-Schicht wie die der
@@ -1166,7 +1174,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyManager?.setEntityBurnGpuController(this.renderers.entityBurnGpu);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost()
       && this.ctx.baseManager
-      && isCoopDefenseMode(bridge.getGameMode())
+      && isCoopDefenseMode(descriptor.gameMode)
       && coopDefenseMapConfig
       ? new CoopDefenseRoundStateSystem({
         baseManager: this.ctx.baseManager,
@@ -1198,7 +1206,7 @@ export class ArenaLifecycleCoordinator {
       );
     };
     if (bridge.isHost()) {
-      this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(bridge.getGameMode())
+      this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(descriptor.gameMode)
         ? new CoopDefensePlayerModifierSystem()
         : null;
       // Der lebende Affix-Zustand haengt am Modifier-System: ohne gerollte Affixwerte gibt es
@@ -1238,16 +1246,16 @@ export class ArenaLifecycleCoordinator {
         return [...staticRockCells, ...runtimeRockCells];
       };
       const flowFieldMetrics = {
-        cols: GRID_COLS,
-        rows: GRID_ROWS,
+        cols: world.metrics.gridCols,
+        rows: world.metrics.gridRows,
         cellSize: CELL_SIZE,
-        arenaOffsetX: ARENA_OFFSET_X,
-        arenaOffsetY: ARENA_OFFSET_Y,
+        arenaOffsetX: world.metrics.offsetX,
+        arenaOffsetY: world.metrics.offsetY,
       };
 
       // Ein Coordinator fuer alle Runtime-Flowfields. Er haelt den Topologiespiegel, taktet die
       // Nav-Ticks und besitzt den Worker; die Services sind nur noch synchrone Lesefassaden.
-      if (isCoopDefenseMode(bridge.getGameMode())) {
+      if (isCoopDefenseMode(descriptor.gameMode)) {
         const bossConfig = coopDefenseMapConfig?.boss
           ? getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind)
           : null;
@@ -1633,11 +1641,11 @@ export class ArenaLifecycleCoordinator {
     }
     this.fireObstacleIndex?.reset();
     const fireObstacleIndex = new FireObstacleIndex({
-      width: Math.ceil((ARENA_OFFSET_X + ARENA_WIDTH) / GROUND_FIRE_CELL_SIZE),
-      height: Math.ceil((ARENA_OFFSET_Y + ARENA_HEIGHT) / GROUND_FIRE_CELL_SIZE),
+      width: Math.ceil((world.metrics.offsetX + world.metrics.widthPx) / GROUND_FIRE_CELL_SIZE),
+      height: Math.ceil((world.metrics.offsetY + world.metrics.heightPx) / GROUND_FIRE_CELL_SIZE),
       fireCellSize: GROUND_FIRE_CELL_SIZE,
-      worldOriginX: ARENA_OFFSET_X,
-      worldOriginY: ARENA_OFFSET_Y,
+      worldOriginX: world.metrics.offsetX,
+      worldOriginY: world.metrics.offsetY,
       worldCellSize: CELL_SIZE,
     });
     this.fireObstacleIndex = fireObstacleIndex;
@@ -1876,7 +1884,7 @@ export class ArenaLifecycleCoordinator {
       if (targetType === 'enemy') {
         if (this.ctx.enemyManager?.getEnemy(targetId)?.faction !== 'hostile') return;
       } else if (
-        isCoopDefenseMode(bridge.getGameMode())
+        isCoopDefenseMode(descriptor.gameMode)
         || !bridge.isEnemyPair(attackerId, targetId)
       ) {
         return;
@@ -2120,8 +2128,8 @@ export class ArenaLifecycleCoordinator {
             .filter((rock) => rock.kind === 'turret')
             .map((rock) => ({
               id: rock.id,
-              x: ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
-              y: ARENA_OFFSET_Y + rock.gridY * CELL_SIZE + CELL_SIZE / 2,
+              x: world.metrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
+              y: world.metrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2,
               ownerId: rock.ownerId,
               ownerColor: rock.ownerColor,
               skipRockIndex: rock.id,
@@ -2183,8 +2191,8 @@ export class ArenaLifecycleCoordinator {
               && rock.hp > 0
             ))
             .map(rock => {
-              const x = ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2;
-              const y = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE + CELL_SIZE / 2;
+              const x = world.metrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2;
+              const y = world.metrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2;
               const injectorMultiplier = this.ctx.energyInjectorSystem?.getTurretDamageMultiplierAt(x, y) ?? 1;
               const turret = turrets.find(candidate => String(candidate.id) === String(rock.id));
               const remoteControlMultiplier = turret
@@ -2235,8 +2243,8 @@ export class ArenaLifecycleCoordinator {
           .filter(r => r.kind === 'turret')
           .map(r => ({
             id: r.id,
-            x: ARENA_OFFSET_X + r.gridX * CELL_SIZE + CELL_SIZE / 2,
-            y: ARENA_OFFSET_Y + r.gridY * CELL_SIZE + CELL_SIZE / 2,
+            x: world.metrics.offsetX + r.gridX * CELL_SIZE + CELL_SIZE / 2,
+            y: world.metrics.offsetY + r.gridY * CELL_SIZE + CELL_SIZE / 2,
             ownerId: r.ownerId,
           })),
         (id, damage, ownerId) => this.hostUpdate.applyTeslaTurretDamage(id, damage, ownerId),
@@ -2785,7 +2793,7 @@ export class ArenaLifecycleCoordinator {
         bridge.broadcastExplosionEffect(x, y, radius, 0xff9933, 'nuke');
         this.hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, cfg, triggeredBy);
       });
-      const coopDefenseAirstrikeEventHandler = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig
+      const coopDefenseAirstrikeEventHandler = isCoopDefenseMode(descriptor.gameMode) && coopDefenseMapConfig
         ? new CoopDefenseAirstrikeEventHandler({
           scheduleStrike: (x, y, cfg, metadata) => this.ctx.airstrikeSystem?.scheduleStrike(
             COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
@@ -2805,12 +2813,12 @@ export class ArenaLifecycleCoordinator {
           playStrikeAudio: (x, y) => {
             this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);
           },
-          arenaWidthCells: coopDefenseMapConfig.arenaWidthCells ?? GRID_COLS,
-          arenaHeightCells: coopDefenseMapConfig.arenaHeightCells ?? GRID_ROWS,
+          arenaWidthCells: world.metrics.gridCols,
+          arenaHeightCells: world.metrics.gridRows,
           tutorialShowControls: coopDefenseMapConfig.tutorialShowControls,
         })
         : null;
-      const coopDefenseGroundHazardEventHandler = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig
+      const coopDefenseGroundHazardEventHandler = isCoopDefenseMode(descriptor.gameMode) && coopDefenseMapConfig
         ? new CoopDefenseGroundHazardEventHandler({
           fireSystem: this.ctx.fireSystem,
           prebuiltZones: layout.groundHazardZones ?? [],
@@ -2859,7 +2867,7 @@ export class ArenaLifecycleCoordinator {
           }
         }
         this.ctx.loadoutManager?.handleKill(killerId, sourceId, x, y, source);
-        if (isCoopDefenseMode(bridge.getGameMode()) && (source?.enemyXp ?? 0) > 0) {
+        if (isCoopDefenseMode(descriptor.gameMode) && (source?.enemyXp ?? 0) > 0) {
           this.hostHandleCoopDefenseItemKill(killerId, victimId, x, y);
           this.ctx.powerUpSystem?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
           for (const profile of bridge.getConnectedPlayers()) {
@@ -2870,7 +2878,7 @@ export class ArenaLifecycleCoordinator {
             }
           }
         }
-        const allowKillDrop = !isCoopDefenseMode(bridge.getGameMode());
+        const allowKillDrop = !isCoopDefenseMode(descriptor.gameMode);
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
           if (allowKillDrop) {
             this.ctx.powerUpSystem?.onPlayerKilled(x, y);
@@ -2956,7 +2964,7 @@ export class ArenaLifecycleCoordinator {
       // Wiederholungsplanung; der bestehende Zug bleibt im typisierten Fachhandler.
       const trackCell = layout.tracks?.[0];
       const coopDefenseMapEvents = coopDefenseMapConfig?.mapEvents ?? [];
-      if (isCoopDefenseMode(bridge.getGameMode()) && coopDefenseMapConfig) {
+      if (isCoopDefenseMode(descriptor.gameMode) && coopDefenseMapConfig) {
         const mapEventHandlers: CoopDefenseMapEventHandler[] = [];
         if (trackCell !== undefined && coopDefenseMapEvents.some((event) => event.type === 'train')) {
           const trainHandler = this.setupCoopTrainEventHandler(trackCell.gridX);
@@ -3260,6 +3268,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPowerUpSystem(null);
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);
+    this.ctx.combatSystem.setWorldMetrics(null);
     this.ctx.combatSystem.setBaseObstacles(null);
     this.ctx.combatSystem.setBarrierObstacles(null);
     this.ctx.combatSystem.setBaseManager(null);
@@ -3498,7 +3507,7 @@ export class ArenaLifecycleCoordinator {
     profile: NonNullable<LoadoutCommitSnapshot['coopDefenseProfile']> | null,
   ): PersistentRestoreToolDefinition[] {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    const accessContext = getConstructionAccessContext(bridge.getGameMode(), committed);
+    const accessContext = getConstructionAccessContext(this.resolveConfiguredGameMode(), committed);
     const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
     const constructionHpMultiplier = 1 + (
       this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
@@ -3512,7 +3521,7 @@ export class ArenaLifecycleCoordinator {
       let footprint = definition.footprint;
       let maxHp = definition.maxHp;
       if (utilityId) {
-        const config = getUtilityConfigForMode(utilityId, bridge.getGameMode());
+        const config = getUtilityConfigForMode(utilityId, this.resolveConfiguredGameMode());
         if (config && 'placeable' in config) {
           const effectiveConfig = modifiers
             ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, {
@@ -3551,7 +3560,7 @@ export class ArenaLifecycleCoordinator {
     if (constructionId) {
       const utilityId = getUtilityIdForConstruction(constructionId);
       if (utilityId) {
-        const config = getUtilityConfigForMode(utilityId, bridge.getGameMode());
+        const config = getUtilityConfigForMode(utilityId, this.resolveConfiguredGameMode());
         if (!config || !('placeable' in config)) return null;
         const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(ownerId);
         const modifiedConfig = modifiers
@@ -3737,7 +3746,7 @@ export class ArenaLifecycleCoordinator {
     if (!descriptor
       || !participation
       || descriptor.roundRevision !== participation.roundRevision
-      || descriptor.gameMode !== bridge.getGameMode()
+      || (isCoopDefenseMode(descriptor.gameMode) && descriptor.mapId === null)
       || !roundStateReady) {
       this.layoutRetryCount++;
       if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
@@ -3750,13 +3759,13 @@ export class ArenaLifecycleCoordinator {
     }
     this.layoutRetryCount = 0;
 
-    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(roundState.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+    const coopDefenseMapConfig = isCoopDefenseMode(descriptor.gameMode)
+      ? getCoopDefenseMapConfig(descriptor.mapId!)
       : null;
     const coopDefenseArenaWidthCells = coopDefenseMapConfig?.arenaWidthCells;
     const coopDefenseArenaHeightCells = coopDefenseMapConfig?.arenaHeightCells;
     applyArenaMetricsForMode(
-      bridge.getGameMode(),
+      descriptor.gameMode,
       'ARENA',
       coopDefenseArenaWidthCells,
       coopDefenseArenaHeightCells,
@@ -3822,7 +3831,7 @@ export class ArenaLifecycleCoordinator {
     try {
       build = new TerrainColorSnapshotBuilder({
         scene: this.scene,
-        mode: bridge.getGameMode(),
+        mode: this.resolveConfiguredGameMode(),
         layout,
         arenaResult,
       }).build();
@@ -3950,7 +3959,11 @@ export class ArenaLifecycleCoordinator {
     plan: TrainEventPlan | null,
     direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1,
   ): TrainManager {
-    const trackX     = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE;
+    const world = this.ctx.world;
+    if (!world) {
+      throw new Error('[ArenaLifecycleCoordinator] Cannot create a train without an active World');
+    }
+    const trackX     = world.metrics.offsetX + trackGridX * CELL_SIZE + CELL_SIZE;
     const arenaStartTime = bridge.getArenaStartTime();
     const spawnAt    = plan && arenaStartTime > 0
       ? arenaStartTime + plan.firstArrivalDelayMs
@@ -4042,8 +4055,8 @@ export class ArenaLifecycleCoordinator {
         latestWagonDelay + TRAIN.EXPLOSION_CENTER_DELAY_MS,
       );
 
-      const arenaTop    = ARENA_OFFSET_Y;
-      const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
+      const arenaTop    = world.metrics.offsetY;
+      const arenaBottom = world.metrics.offsetY + world.metrics.heightPx;
       const validSegs = result.segmentPositions.filter(seg => seg.y >= arenaTop && seg.y <= arenaBottom);
       const dropSegs  = validSegs.length > 0 ? validSegs : result.segmentPositions;
       for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
@@ -4146,7 +4159,7 @@ export class ArenaLifecycleCoordinator {
       const committed = bridge.getPlayerCommittedLoadout(playerId);
       const access = resolveConstructionAccess(
         constructionId,
-        getConstructionAccessContext(bridge.getGameMode(), committed),
+        getConstructionAccessContext(this.resolveConfiguredGameMode(), committed),
       );
       if (!access.allowed || !this.hasFreeConstructionCapacity(playerId, access.definition?.capacityCost ?? 0)) return false;
     }
@@ -4190,7 +4203,7 @@ export class ArenaLifecycleCoordinator {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     const access = resolveConstructionAccess(
       constructionId,
-      getConstructionAccessContext(bridge.getGameMode(), committed),
+      getConstructionAccessContext(this.resolveConfiguredGameMode(), committed),
     );
     if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -4311,13 +4324,13 @@ export class ArenaLifecycleCoordinator {
     ))) {
       return { ok: false, reason: 'blocked' };
     }
-    const config = getUtilityConfigForMode(tool.id, bridge.getGameMode()) as UtilityConfig | undefined;
+    const config = getUtilityConfigForMode(tool.id, this.resolveConfiguredGameMode()) as UtilityConfig | undefined;
     if (!config) return { ok: false, reason: 'invalid' };
     const constructionId = getConstructionIdForUtility(tool.id);
     if (constructionId) {
       const access = resolveConstructionAccess(
         constructionId,
-        getConstructionAccessContext(bridge.getGameMode(), committed),
+        getConstructionAccessContext(this.resolveConfiguredGameMode(), committed),
       );
       if (!access.allowed) return { ok: false, reason: 'blocked' };
     }
@@ -4378,7 +4391,7 @@ export class ArenaLifecycleCoordinator {
   private getConstructionCapacity(playerId: string): number {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     return resolveConstructionCapacity({
-      gameMode: bridge.getGameMode(),
+      gameMode: this.resolveConfiguredGameMode(),
       classId: committed?.coopDefenseClassId,
       modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
         playerId,
@@ -4397,7 +4410,7 @@ export class ArenaLifecycleCoordinator {
   ): PlaceableUtilityConfig | null {
     const utilityId = getUtilityIdForConstruction(constructionId);
     if (!utilityId) return null;
-    const base = getUtilityConfigForMode(utilityId, bridge.getGameMode());
+    const base = getUtilityConfigForMode(utilityId, this.resolveConfiguredGameMode());
     if (!base || !('placeable' in base)) return null;
     const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
     const effective = modifiers
@@ -4427,7 +4440,7 @@ export class ArenaLifecycleCoordinator {
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed)).length === 0) {
+    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0) {
       return { ok: false, reason: 'blocked' };
     }
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -4474,7 +4487,7 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committed)).length === 0
+    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0
       || !player?.sprite.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
@@ -4674,7 +4687,7 @@ export class ArenaLifecycleCoordinator {
         : undefined,
       utility:  UTILITY_CONFIGS[committed.utility  as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, bridge.getGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
+    }, this.resolveConfiguredGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
   }
 
   private resolveLoadoutSelection(playerId: string): LoadoutSelection {
@@ -4687,7 +4700,27 @@ export class ArenaLifecycleCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId  as keyof typeof UTILITY_CONFIGS]   : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getGameMode());
+    }, this.resolveConfiguredGameMode());
+  }
+
+  /**
+   * Waehrend einer aktiven Activity ist deren replizierter Descriptor die Quelle. Nur solange
+   * noch keine Activity existiert (Lobby/Startvorbereitung), gilt die Lobby-Auswahl.
+   */
+  private resolveConfiguredGameMode(): GameMode {
+    const activity = bridge.getActivityDescriptor();
+    return activity ? toGameMode(activity.kind) : bridge.getGameMode();
+  }
+
+  /** World-first Map-Aufloesung; der Lobby-Wert ist nur vor der World-Erzeugung zulaessig. */
+  private resolveConfiguredCoopDefenseMapId(): string {
+    const descriptor = bridge.getWorldDescriptor();
+    if (!descriptor) return bridge.getCoopDefenseMapId();
+    const mapId = toMapId(descriptor.definitionId);
+    if (mapId === null) {
+      throw new Error('[ArenaLifecycleCoordinator] Active World has no Coop-Defense map');
+    }
+    return mapId;
   }
 }
 

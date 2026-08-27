@@ -423,10 +423,16 @@ export class ClientUpdateCoordinator {
         ? selectedInspectorTool
         : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? null
-          : getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committedLoadout))
+          : getActiveConstructionToolRefs(getConstructionAccessContext(
+            bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+            committedLoadout,
+          ))
             .find((tool) => tool.kind === 'construction') ?? null;
       const inspectorConfig = selectedInspectorTool?.kind === 'utility'
-        ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
+        ? getUtilityConfigForMode(
+          selectedInspectorTool.id,
+          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+        )
         : undefined;
       const inspectorConstruction = selectedInspectorTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
@@ -476,7 +482,10 @@ export class ClientUpdateCoordinator {
         weapon2AdrenalineCost:   fireSuperiorityAvailable ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
-          getConstructionAccessContext(bridge.getGameMode(), committedLoadout),
+          getConstructionAccessContext(
+            bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+            committedLoadout,
+          ),
         ).length > 0
           ? this.getLocalConstructionCapacity()
           : 0,
@@ -766,7 +775,7 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId);
     return resolveConstructionCapacity({
-      gameMode: bridge.getGameMode(),
+      gameMode: bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
       classId: committed?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
       modifiers: this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
     });
@@ -803,7 +812,10 @@ export class ClientUpdateCoordinator {
     const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
     if (committed?.coopDefenseClassId !== 'inspector_gadachs') {
       return getActiveConstructionToolRefs(
-        getConstructionAccessContext(bridge.getGameMode(), committed),
+        getConstructionAccessContext(
+          bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+          committed,
+        ),
       ).find((tool) => tool.kind === 'construction') ?? null;
     }
     if (this.inspectorSelectedTool && tools.some((tool) => (
@@ -830,7 +842,10 @@ export class ClientUpdateCoordinator {
   getLocalInspectorUtilityConfig(): UtilityConfig | undefined {
     const tool = this.getLocalInspectorSelectedTool();
     if (tool?.kind !== 'utility') return undefined;
-    const base = this.clientUtilityOverride ?? getUtilityConfigForMode(tool.id, bridge.getGameMode());
+    const base = this.clientUtilityOverride ?? getUtilityConfigForMode(
+      tool.id,
+      bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+    );
     if (!base) return undefined;
     const modified = applyCoopDefenseModifiersToUtilityConfig(base, this.getLocalEffectTotals());
     return modified;
@@ -975,7 +990,10 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const descriptor = bridge.getPlayerUtilityOverrideDescriptor(localId);
     if (descriptor?.kind === 'utility') {
-      const config = getUtilityConfigForMode(descriptor.utilityId, bridge.getGameMode());
+      const config = getUtilityConfigForMode(
+        descriptor.utilityId,
+        bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(),
+      );
       this.clientUtilityOverride = config ?? null;
       return;
     }
@@ -1095,7 +1113,7 @@ export class ClientUpdateCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string) {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
-    const mode = bridge.getGameMode();
+    const mode = bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode();
     const cached = this.committedSelectionCache;
     if (cached && cached.key === committed && cached.mode === mode && cached.playerId === playerId) {
       return cached.value;
@@ -1130,7 +1148,7 @@ export class ClientUpdateCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getGameMode(), isLocalPlayer ? this.storedProfileFallback : null,
+    }, bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode(), isLocalPlayer ? this.storedProfileFallback : null,
     isLocalPlayer ? this.storedClassIdFallback : null,
     // Referenzstabil ueber den memoisierten Zugriff, sonst greift der Cache dieser Aufloesung nie.
     isLocalPlayer ? this.getLocalCoopDefenseItems() : []);

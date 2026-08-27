@@ -6,7 +6,7 @@ import {
   type FlowFieldCoordinator,
 } from '../../systems/flowfield/FlowFieldCoordinator';
 import { goalCellsToIndexes } from '../../systems/flowfield/FlowFieldSources';
-import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE, ARENA_OFFSET_X, ARENA_OFFSET_Y } from '../../config';
+import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
 import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
@@ -40,6 +40,7 @@ import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../sy
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
+import { toMapId } from '../../world/arenaDescriptorAdapter';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -205,9 +206,9 @@ export class HostUpdateCoordinator {
     // publish/render presentation state; every authoritative system below keeps its own gameplay
     // gate via countdownActive.
     const countdownActive = bridge.isArenaCountdownActive();
-    const weaponBalanceLabActive = isWeaponBalanceLabMapId(
-      bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
-    );
+    const worldMapId = this.ctx.world ? toMapId(this.ctx.world.descriptor.definitionId) : null;
+    const activeMapConfig = worldMapId === null ? null : getCoopDefenseMapConfig(worldMapId);
+    const weaponBalanceLabActive = worldMapId !== null && isWeaponBalanceLabMapId(worldMapId);
     if (!bridge.isArenaStarted() && !countdownActive) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
@@ -576,13 +577,13 @@ export class HostUpdateCoordinator {
     } = countdownActive
       ? { synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }
       : this.ctx.fireSystem.hostUpdate(now);
-    const burningGround = countdownActive
+    const burningGround = countdownActive && activeMapConfig
       ? buildCountdownGroundFirePreview(
         this.ctx.currentLayout,
-        getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()),
+        activeMapConfig,
         bridge.getArenaStartTime(),
       )
-      : liveBurningGround;
+      : countdownActive ? { cells: [] } : liveBurningGround;
     this.renderers.flamethrowerUpgrades.syncGround(burningGround, now);
 
     const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
@@ -780,7 +781,9 @@ export class HostUpdateCoordinator {
     if (metrics) metrics.explosionEventCount += meteorImpacts.length;
     if (metrics) metrics.areaEffectsMs = performance.now() - phaseStartedAt;
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-    if (!countdownActive && !isCoopDefenseMode(bridge.getGameMode()) && this.ctx.trainManager) {
+    if (!countdownActive
+      && !isCoopDefenseMode(bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode())
+      && this.ctx.trainManager) {
       if (!this.classicTrainSpawned) {
         const trainEvent = bridge.getTrainEvent();
         if (trainEvent && Date.now() >= trainEvent.spawnAt) {
@@ -915,6 +918,7 @@ export class HostUpdateCoordinator {
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const now = Date.now();
       const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
+      const gameMode = bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode();
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
       const inspectorUtilityAction = hasUtilityOverride
         ? null
@@ -922,7 +926,7 @@ export class HostUpdateCoordinator {
       const selectedInspectorTool = hasUtilityOverride || inspectorUtilityAction ? undefined
         : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? committedLoadout?.coopDefenseProfile?.selectedTool);
       const selectedInspectorUtilityBase = selectedInspectorTool?.kind === 'utility'
-        ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
+        ? getUtilityConfigForMode(selectedInspectorTool.id, gameMode)
         : undefined;
       const selectedInspectorUtility = selectedInspectorUtilityBase
         ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedInspectorUtilityBase) ?? selectedInspectorUtilityBase
@@ -934,7 +938,7 @@ export class HostUpdateCoordinator {
         ? selectedInspectorTool
         : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? null
-          : getActiveConstructionToolRefs(getConstructionAccessContext(bridge.getGameMode(), committedLoadout))
+          : getActiveConstructionToolRefs(getConstructionAccessContext(gameMode, committedLoadout))
             .find((tool) => tool.kind === 'construction') ?? null;
       const utilCfg   = selectedInspectorUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
@@ -991,10 +995,10 @@ export class HostUpdateCoordinator {
           : (weapon2Cfg?.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
-          getConstructionAccessContext(bridge.getGameMode(), committedLoadout),
+          getConstructionAccessContext(gameMode, committedLoadout),
         ).length > 0
           ? resolveConstructionCapacity({
-            gameMode: bridge.getGameMode(),
+            gameMode,
             classId: committedLoadout?.coopDefenseClassId,
             modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
               localId,
@@ -1288,7 +1292,8 @@ export class HostUpdateCoordinator {
     const signatureParts: string[] = [];
     const blueTeamScore = this.resolveTeamObjectiveScore('blue');
     const redTeamScore = this.resolveTeamObjectiveScore('red');
-    const sharedXp = isCoopDefenseMode(bridge.getGameMode()) ? bridge.getCoopDefenseRoundXp() : undefined;
+    const gameMode = bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode();
+    const sharedXp = isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined;
     if (blueTeamScore !== null || redTeamScore !== null) {
       signatureParts.push(`ctb:${blueTeamScore ?? 0}:${redTeamScore ?? 0}`);
     }
@@ -1296,7 +1301,7 @@ export class HostUpdateCoordinator {
       signatureParts.push(`cdxp:${sharedXp}`);
     }
     for (const playerId of playerIds) {
-      signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}:${isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) ?? 'none' : 'none'}`);
+      signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}:${isTeamGameMode(gameMode) ? bridge.getPlayerTeam(playerId) ?? 'none' : 'none'}`);
     }
     const nextSignature = signatureParts.join('|');
     if (nextSignature === this.leaderboardSignature) return this.cachedLeaderboardEntries;
@@ -1309,18 +1314,18 @@ export class HostUpdateCoordinator {
         // Das Leaderboard zeigt eine Zahl; solange nichts gemessen wurde, ist 0 die
         // ehrlichste Naeherung (der Host misst sich ohnehin nie selbst).
         ping:     bridge.getPlayerPing(playerId) ?? 0,
-        teamId:   isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) : null,
+        teamId:   isTeamGameMode(gameMode) ? bridge.getPlayerTeam(playerId) : null,
         teamScore: this.resolveEntryTeamScore(playerId, blueTeamScore, redTeamScore),
         sharedXp,
       }));
-    this.cachedLeaderboardEntries = isCoopDefenseMode(bridge.getGameMode())
+    this.cachedLeaderboardEntries = isCoopDefenseMode(gameMode)
       ? entries
       : entries.sort((a, b) => b.frags - a.frags);
     return this.cachedLeaderboardEntries;
   }
 
   private resolveTeamObjectiveScore(teamId: TeamId): number | null {
-    if (bridge.getGameMode() !== CAPTURE_THE_BEER_MODE) return null;
+    if ((bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode()) !== CAPTURE_THE_BEER_MODE) return null;
     if (bridge.isHost()) {
       return this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0;
     }
@@ -1332,7 +1337,7 @@ export class HostUpdateCoordinator {
     blueTeamScore: number | null,
     redTeamScore: number | null,
   ): number | undefined {
-    if (bridge.getGameMode() !== CAPTURE_THE_BEER_MODE) return undefined;
+    if ((bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode()) !== CAPTURE_THE_BEER_MODE) return undefined;
     const teamId = bridge.getPlayerTeam(playerId);
     if (teamId === 'blue') return blueTeamScore ?? 0;
     if (teamId === 'red') return redTeamScore ?? 0;
@@ -1352,13 +1357,14 @@ export class HostUpdateCoordinator {
     visit: (index: number, rock: RockPhysicsProxy) => void,
   ): void {
     const arenaResult = this.ctx.arenaResult;
-    if (!arenaResult) return;
+    const world = this.ctx.world;
+    if (!arenaResult || !world) return;
     arenaResult.rockGrid.forEachRockInRadius(
       x,
       y,
       radius,
-      ARENA_OFFSET_X,
-      ARENA_OFFSET_Y,
+      world.metrics.offsetX,
+      world.metrics.offsetY,
       CELL_SIZE,
       (index) => {
         const rock = arenaResult.rockPhysicsProxies[index];
@@ -2414,7 +2420,7 @@ export class HostUpdateCoordinator {
     // Bezugsdauer unterscheidet sich.
     const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
     const selectedConfigBase = selected?.kind === 'utility'
-      ? getUtilityConfigForMode(selected.id, bridge.getGameMode())
+      ? getUtilityConfigForMode(selected.id, bridge.getArenaDescriptor()?.gameMode ?? bridge.getGameMode())
       : undefined;
     const selectedConfig = selectedConfigBase
       ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedConfigBase) ?? selectedConfigBase
