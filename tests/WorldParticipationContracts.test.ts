@@ -7,7 +7,6 @@ import {
 } from '../src/scenes/arena/RoundParticipationPolicy';
 import type { RoundParticipationState } from '../src/types';
 import {
-  consumesWorldReplication,
   hasWorldRuntimeEntry,
   maySendWorldInput,
   requiresLocalWorldPresentation,
@@ -19,11 +18,13 @@ import {
   type WorldParticipation,
   type WorldParticipationInput,
 } from '../src/world/WorldParticipation';
+import { resolveWorldPresentation } from '../src/world/WorldPresentation';
+import { consumesWorldReplication } from '../src/world/WorldReplication';
 
 /**
  * World Participation als eigener Lebenszyklus.
  *
- * Sie beantwortet weltbezogene Fragen – Runtime-Eintrag, Input, Replikation, Presentation – und
+ * Sie beantwortet teilnahmebezogene Fragen – Runtime-Eintrag, Input und Presentation – und
  * ersetzt die Rundenrolle nicht. Beides zusammenzulegen wuerde eine World ohne Runde unmoeglich
  * machen.
  */
@@ -74,16 +75,14 @@ describe('WorldParticipation – Ableitung', () => {
   });
 });
 
-describe('WorldParticipation – beantwortet die weltbezogenen Fragen', () => {
-  it('unterscheidet Runtime-Eintrag, Input, Replikation und Presentation', () => {
+describe('WorldParticipation – beantwortet die teilnahmebezogenen Fragen', () => {
+  it('unterscheidet Runtime-Eintrag, Input und Presentation', () => {
     const runtimeEntry = ALL.filter(hasWorldRuntimeEntry);
     expect(runtimeEntry).toEqual(['interactive', 'observer', 'leaving']);
 
     // Nur eine vollwertige Teilnahme handelt.
     expect(ALL.filter(maySendWorldInput)).toEqual(['interactive']);
 
-    // Wer noch laedt oder nur zusieht, braucht den Weltzustand trotzdem.
-    expect(ALL.filter(consumesWorldReplication)).toEqual(['joining', 'interactive', 'observer', 'leaving']);
     expect(ALL.filter(requiresLocalWorldPresentation)).toEqual(['joining', 'interactive', 'observer', 'leaving']);
   });
 
@@ -91,8 +90,41 @@ describe('WorldParticipation – beantwortet die weltbezogenen Fragen', () => {
     const observer = resolveWorldParticipation(input({ mayAct: false }));
     expect(hasWorldRuntimeEntry(observer)).toBe(true);
     expect(maySendWorldInput(observer)).toBe(false);
-    expect(consumesWorldReplication(observer)).toBe(true);
     expect(requiresLocalWorldPresentation(observer)).toBe(true);
+  });
+});
+
+describe('WorldReplication – Participation und Presentation bleiben getrennt', () => {
+  const replicationFor = (participation: WorldParticipation, previewWithoutParticipation = false) => (
+    consumesWorldReplication({
+      worldActive: true,
+      participation,
+      presentation: resolveWorldPresentation({
+        participation,
+        worldActive: true,
+        previewWithoutParticipation,
+      }),
+    })
+  );
+
+  it('konsumiert fuer Teilnehmer und fuer eine sichtbare Preview', () => {
+    expect(ALL.filter((value) => replicationFor(value))).toEqual([
+      'joining', 'interactive', 'observer', 'leaving',
+    ]);
+    expect(replicationFor('none', true)).toBe(true);
+    expect(replicationFor('none', false)).toBe(false);
+  });
+
+  it('konsumiert ohne laufende World auch bei Preview-Erlaubnis nichts', () => {
+    expect(consumesWorldReplication({
+      worldActive: false,
+      participation: 'interactive',
+      presentation: resolveWorldPresentation({
+        participation: 'interactive',
+        worldActive: false,
+        previewWithoutParticipation: true,
+      }),
+    })).toBe(false);
   });
 });
 

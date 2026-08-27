@@ -452,7 +452,8 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
     expect(host).not.toContain('if (!bridge.isArenaStarted() && !countdownActive)');
     expect(host).toContain('if (!this.ctx.world) {');
     expect(client).not.toContain('if (!bridge.isArenaStarted() && !countdownActive)');
-    expect(client).toContain("if (!this.ctx.world || bridge.getLocalWorldParticipation() === 'none')");
+    expect(client).toContain('this.syncPlayerWorldRuntimes(state);');
+    expect(client).toContain('consumesWorldReplication({');
   });
 
   it('greift im autoritativen Pfad nirgends unbedingt auf Darstellung zu', () => {

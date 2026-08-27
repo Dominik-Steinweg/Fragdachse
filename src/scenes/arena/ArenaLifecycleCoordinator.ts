@@ -380,7 +380,7 @@ export class ArenaLifecycleCoordinator {
         feature: 'entity',
         run: (playerId) => {
           this.ctx.effectSystem.clearBurrowState(playerId);
-          this.clientUpdate.removeBurrowPhase(playerId);
+          this.clientUpdate.removePlayerState(playerId);
           this.ctx.hostPhysics.removePlayer(playerId);
           this.ctx.playerManager.removePlayer(playerId);
         },
@@ -1166,6 +1166,11 @@ export class ArenaLifecycleCoordinator {
   /** True, solange der lokale Spieler in der laufenden World steht. */
   isLocalWorldParticipant(): boolean {
     return hasWorldRuntimeEntry(this.getWorldParticipation(bridge.getLocalPlayerId()));
+  }
+
+  /** True, wenn der gemeinsame PlayerWorldRuntime-Lifecycle diesen Spieler wirklich traegt. */
+  isPlayerAttachedToWorld(playerId: string): boolean {
+    return this.playerRuntime.isAttached(playerId);
   }
 
   /**
@@ -3442,7 +3447,9 @@ export class ArenaLifecycleCoordinator {
             }
           }
         }
-        const allowKillDrop = !isCoopMission;
+        // Power-up-Drops sind eine Match-Konsequenz. Eine Activity-lose World fuehrt echten
+        // Combat aus, erzeugt daraus aber weder Belohnung noch einen impliziten Match-Loop.
+        const allowKillDrop = activityDescriptor !== null && !isCoopMission;
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
           if (allowKillDrop) {
             this.ctx.powerUpSystem?.onPlayerKilled(x, y);

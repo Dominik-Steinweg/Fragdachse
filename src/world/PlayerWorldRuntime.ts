@@ -130,12 +130,11 @@ export class PlayerWorldRuntime {
   }
 
   /**
-   * Loest einen Spieler von der World. Laeuft ueber dieselbe Feature-Entscheidung wie der
-   * Attach und ist damit auch fuer Spieler gueltig, die diese Runtime nie selbst angehaengt hat –
-   * ein Client entfernt so genau seinen Anteil.
+   * Loest einen Spieler genau einmal von der World. Wiederholtes Leave ist ein No-op; ein
+   * spaeterer Rejoin muss zuerst einen neuen erfolgreichen Attach durchlaufen.
    */
   detach(playerId: string, features: PlayerRuntimeFeatures): void {
-    this.attachedPlayers.delete(playerId);
+    if (!this.attachedPlayers.delete(playerId)) return;
     for (const step of this.steps.detach) {
       if (!features[step.feature]) continue;
       step.run(playerId);

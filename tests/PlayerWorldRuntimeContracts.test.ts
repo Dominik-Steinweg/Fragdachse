@@ -143,15 +143,14 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
     expect(calls).toEqual(['detach:combat', 'detach:entity']);
   });
 
-  it('entfernt auch einen Spieler, den diese Runtime nie angehaengt hat', () => {
-    // Der Client haengt Spieler nicht selbst an, muss seinen Anteil aber loesen koennen.
+  it('macht ein wiederholtes oder nie begonnenes Leave zum No-op', () => {
     const calls: string[] = [];
     const runtime = new PlayerWorldRuntime({
       attach: [],
       detach: [detachStep('entity', 'entity', calls), detachStep('combat', 'combat', calls)],
     });
     runtime.detach('p1', features({ combat: false }));
-    expect(calls).toEqual(['detach:entity']);
+    expect(calls).toEqual([]);
   });
 });
 
@@ -204,6 +203,7 @@ describe('Player-Lifecycle – atomarer Attach', () => {
     expect(runtime.attach(context, features())).toBe(true);
     expect(calls).toEqual(['attach:entity']);
 
+    runtime.detach('p1', features());
     runtime.detach('p1', features());
     expect(runtime.isAttached('p1')).toBe(false);
     expect(runtime.attach(context, features())).toBe(true);

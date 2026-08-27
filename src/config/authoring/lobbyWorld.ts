@@ -40,7 +40,7 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
   bases: [],
-  actionPolicy: { combat: true },
+  actionPolicy: { combat: true, playerRelationships: 'free-for-all' },
   presentationPolicy: { previewWithoutParticipation: true },
   participationPolicy: { selfAdmit: true },
   spawnExclusionZones: LOBBY_SPAWN_EXCLUSION_ZONES,

@@ -2,9 +2,8 @@
  * Teilnahme eines Spielers an einer World.
  *
  * Ein eigener host-autoritaerer Lebenszyklus neben der Rundenrolle. Er beantwortet
- * ausschliesslich weltbezogene Fragen: Besitzt der Spieler einen Runtime-Eintrag in dieser
- * World? Darf er World Input senden? Konsumiert er World Replication? Braucht er eine lokale
- * World-Presentation?
+ * ausschliesslich teilnahmebezogene Fragen: Besitzt der Spieler einen Runtime-Eintrag in dieser
+ * World? Darf er World Input senden? Braucht er eine lokale World-Presentation?
  *
  * `Lobby` ist ausdruecklich **kein** Participation-State: wer in der Lobby steht, nimmt an
  * keiner World teil – das ist `none`.
@@ -46,11 +45,6 @@ export function hasWorldRuntimeEntry(participation: WorldParticipation): boolean
 /** Darf der Spieler World Input senden? Nur eine vollwertige Teilnahme handelt. */
 export function maySendWorldInput(participation: WorldParticipation): boolean {
   return participation === 'interactive';
-}
-
-/** Konsumiert der Spieler World Replication? Auch wer noch laedt oder nur zusieht. */
-export function consumesWorldReplication(participation: WorldParticipation): boolean {
-  return participation !== 'none';
 }
 
 /**

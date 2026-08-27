@@ -38,6 +38,25 @@ type PlacementActivation = PlacementModeUtilityActivationConfig;
 
 type DebugHotkeyType = 'flowfield_bases' | 'flowfield_players';
 
+const PRIMARY_POINTER_BUTTON = 1;
+const SECONDARY_POINTER_BUTTON = 2;
+
+/**
+ * Filtert Pointerbuttons, die bereits die UI-Aktion des aktuellen Press/Release-Zyklus
+ * ausgeloest haben. Erst ihr Release entfernt sie aus der Consume-Maske; ein spaeterer neuer
+ * Press ist wieder Gameplay-Input.
+ */
+export function resolvePointerButtonHandoff(
+  heldButtons: number,
+  consumedButtons: number,
+): { readonly gameplayButtons: number; readonly consumedButtons: number } {
+  const stillConsumed = consumedButtons & heldButtons;
+  return {
+    gameplayButtons: heldButtons & ~stillConsumed,
+    consumedButtons: stillConsumed,
+  };
+}
+
 export class InputSystem {
   private scene:           Phaser.Scene;
   private bridge:          NetworkBridge;
@@ -86,6 +105,7 @@ export class InputSystem {
   private tunnelPlacementAnchor: { x: number; y: number; gridX: number; gridY: number } | null = null;
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
+  private consumedPointerButtons = 0;
   /** RMB pressed while LMB had priority; consume it only once Waffe 2 gets the turn. */
   private pendingRightInputStarted = false;
   private suppressWeapon1UntilLeftRelease = false;
@@ -532,8 +552,14 @@ export class InputSystem {
    * Aktion trotzdem aktiv bleiben, damit die Auswahl vor Rundenbeginn vorbereitet wird.
    */
   setInputEnabled(enabled: boolean, allowInspectorRadial = enabled): void {
+    const wasEnabled = this.inputEnabled;
     this.inputEnabled = enabled;
     this.inspectorRadialEnabled = allowInspectorRadial;
+    if (enabled && !wasEnabled) {
+      // Der Gesture, der die UI verlassen und Gameplay aktiviert hat, gehoert weiterhin der UI.
+      // Das gilt fuer alle aktuell gehaltenen Pointerbuttons, nicht nur fuer Waffe 1.
+      this.consumedPointerButtons = this.scene.input.activePointer?.buttons ?? 0;
+    }
     if (!enabled) {
       this.predictedUtilityCooldownUntil = 0;
       this.cancelUtilityInteraction();
@@ -849,8 +875,18 @@ export class InputSystem {
       return;
     }
 
-    const leftPointerDown = pointer.leftButtonDown();
-    const rightPointerDown = pointer.rightButtonDown();
+    const physicalLeftPointerDown = pointer.leftButtonDown();
+    const physicalRightPointerDown = pointer.rightButtonDown();
+    const heldPointerButtons = typeof pointer.buttons === 'number'
+      ? pointer.buttons
+      : (physicalLeftPointerDown ? PRIMARY_POINTER_BUTTON : 0)
+        | (physicalRightPointerDown ? SECONDARY_POINTER_BUTTON : 0);
+    const handoff = resolvePointerButtonHandoff(heldPointerButtons, this.consumedPointerButtons);
+    this.consumedPointerButtons = handoff.consumedButtons;
+    const leftPointerDown = physicalLeftPointerDown
+      && (handoff.gameplayButtons & PRIMARY_POINTER_BUTTON) !== 0;
+    const rightPointerDown = physicalRightPointerDown
+      && (handoff.gameplayButtons & SECONDARY_POINTER_BUTTON) !== 0;
     const leftInputStarted = leftPointerDown && !this.prevLeftPointerDown;
     const rightInputStarted = rightPointerDown && !this.prevRightPointerDown;
     this.prevLeftPointerDown = leftPointerDown;
@@ -950,7 +986,7 @@ export class InputSystem {
         const target = clampedTarget;
         const targetAngle = angle;
 
-        if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+        if (rightPointerDown || Phaser.Input.Keyboard.JustDown(this.keyE)) {
           this.cancelUtilityTargeting();
           return;
         }
@@ -983,7 +1019,7 @@ export class InputSystem {
           return;
         }
 
-        if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+        if (rightPointerDown || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
           this.ultimateTargetingActive = false;
           return;
         }
@@ -1008,7 +1044,7 @@ export class InputSystem {
         return;
       }
 
-      if (pointer.rightButtonDown()) {
+      if (rightPointerDown) {
         this.cancelUtilityPlacement();
         return;
       }
@@ -1036,7 +1072,7 @@ export class InputSystem {
         return;
       }
 
-      if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      if (rightPointerDown || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
         this.cancelUltimatePlacement();
         return;
       }

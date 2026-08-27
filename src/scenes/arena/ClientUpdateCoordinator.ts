@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
+import type { GameState }  from '../../network/NetworkBridge';
 import { dequantizeAngle } from '../../utils/angle';
 import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, PLAYER_SIZE, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
@@ -33,6 +34,8 @@ import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { getLocale } from '../../i18n';
 import { getHudBuffValueText } from '../../i18n/hudPresentation';
 import { emitArenaMapGridChanged } from './ArenaEvents';
+import type { WorldPresentationRequirement } from '../../world/WorldPresentation';
+import { consumesWorldReplication } from '../../world/WorldReplication';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
 const EMPTY_EFFECT_TOTALS = EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
@@ -102,6 +105,7 @@ export class ClientUpdateCoordinator {
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private attachPlayerToWorld: ((profile: PlayerProfile) => boolean) | null = null;
   private detachPlayerFromWorld: ((playerId: string) => void) | null = null;
+  private getWorldPresentation: (() => WorldPresentationRequirement) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -129,6 +133,11 @@ export class ClientUpdateCoordinator {
     this.detachPlayerFromWorld = detach;
   }
 
+  /** Verbindet Snapshot-Konsum mit derselben kanonischen Presentation wie die Scene. */
+  setWorldPresentationResolver(resolve: () => WorldPresentationRequirement): void {
+    this.getWorldPresentation = resolve;
+  }
+
   setPerformanceMetricsEnabled(enabled: boolean): void {
     if (this.coarsePerformanceMetricsEnabled === enabled) return;
     this.coarsePerformanceMetricsEnabled = enabled;
@@ -143,9 +152,56 @@ export class ClientUpdateCoordinator {
     }
   }
 
+  /**
+   * Gleicht den clientseitigen Entity-Lifecycle mit der autoritativen WorldParticipation ab.
+   *
+   * Der Abbau braucht keinen GameState: genau dadurch kann ein Leave verarbeitet werden, auch
+   * wenn anschliessend weder Gameplay noch eine lokale Player-Presentation aktiv ist. Fuer neue
+   * Entities bleibt der aktuelle World-Snapshot die zweite notwendige Quelle.
+   */
+  private syncPlayerWorldRuntimes(state: GameState | undefined): void {
+    const participationKnown = bridge.getWorldParticipationState() !== null;
+    if (!participationKnown) return;
+    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+      if (bridge.getWorldParticipation(player.id) === 'interactive') continue;
+      this.detachPlayerFromWorld?.(player.id);
+    }
+    if (!state) return;
+    for (const id of Object.keys(state.players)) {
+      if (bridge.getWorldParticipation(id) !== 'interactive') continue;
+      if (this.ctx.playerManager.hasPlayer(id)) continue;
+      const profile = bridge.getConnectedPlayers().find((candidate) => candidate.id === id);
+      if (profile) this.attachPlayerToWorld?.(profile);
+    }
+  }
+
   runClientUpdate(delta: number): void {
     const countdownActive = bridge.isArenaCountdownActive();
-    if (!this.ctx.world || bridge.getLocalWorldParticipation() === 'none') {
+    if (!this.ctx.world) {
+      this.lastPerformance = {
+        totalMs: 0,
+        snapshotMs: 0,
+        playersMs: 0,
+        projectilesEffectsMs: 0,
+        worldStateMs: 0,
+        interpolationMs: 0,
+        hudMs: 0,
+        postSyncMs: 0,
+        newSnapshot: false,
+      };
+      return;
+    }
+    const state = bridge.getLatestGameState();
+    // Participation-Transitions sind ein eigener reliable Kanal. Sie muessen vor jedem
+    // Replication-/Presentation-Gate laufen, damit insbesondere `interactive -> none` die lokale
+    // Runtime noch abbaut, bevor der Peer nur noch eine Preview konsumiert.
+    this.syncPlayerWorldRuntimes(state);
+    const presentation = this.getWorldPresentation?.();
+    if (!presentation || !consumesWorldReplication({
+      worldActive: true,
+      participation: bridge.getLocalWorldParticipation(),
+      presentation,
+    })) {
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -167,7 +223,6 @@ export class ClientUpdateCoordinator {
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.ctx.baseManager?.syncDormantStates();
-    const state = bridge.getLatestGameState();
     if (!state) {
       if (this.coarsePerformanceMetricsEnabled) {
         this.lastPerformance = {
@@ -190,23 +245,6 @@ export class ClientUpdateCoordinator {
     let projectilesEffectsMs = 0;
     let worldStateMs = 0;
     const participationKnown = bridge.getWorldParticipationState() !== null;
-
-    // Rollenwechsel und Latejoiner duerfen nicht auf den naechsten Delta-Tick warten. Die
-    // WorldParticipation ist ein eigener reliable Snapshot; sobald sie bekannt ist, ist sie die
-    // kanonische Rosterquelle fuer alle PlayerRuntimes.
-    if (participationKnown) {
-      for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
-        if (bridge.getWorldParticipation(player.id) === 'interactive') continue;
-        this.detachPlayerFromWorld?.(player.id);
-      }
-    }
-
-    for (const id of Object.keys(state.players)) {
-      if (participationKnown && bridge.getWorldParticipation(id) !== 'interactive') continue;
-      if (this.ctx.playerManager.hasPlayer(id)) continue;
-      const profile = bridge.getConnectedPlayers().find((p) => p.id === id);
-      if (profile) this.attachPlayerToWorld?.(profile);
-    }
 
     if (isNewData) {
       const playersStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
@@ -397,7 +435,9 @@ export class ClientUpdateCoordinator {
     const interpolationMs = this.performanceMetricsEnabled ? performance.now() - interpolationStartedAt : 0;
 
     const hudStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-    const localState = state.players[localId2];
+    const localState = bridge.getLocalWorldParticipation() === 'interactive'
+      ? state.players[localId2]
+      : undefined;
     if (localState) {
       this.ctx.aimSystem?.setAuthoritativeState(localState.aim);
       this.ctx.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase);
@@ -609,8 +649,32 @@ export class ClientUpdateCoordinator {
     this.prevBurrowPhases.set(playerId, phase);
   }
 
-  removeBurrowPhase(playerId: string): void {
+  removePlayerState(playerId: string): void {
+    const burrowLoop = this.burrowLoopHandles.get(playerId);
+    if (burrowLoop) this.ctx.gameAudioSystem.stopLoop(burrowLoop);
+    this.burrowLoopHandles.delete(playerId);
     this.prevBurrowPhases.delete(playerId);
+    this.prevAliveStates.delete(playerId);
+    this.prevDashPhases.delete(playerId);
+    this.prevStealthStates.delete(playerId);
+    this.dashPhase2StartTimes.delete(playerId);
+    this.dashTrailTimers.delete(playerId);
+    if (playerId !== bridge.getLocalPlayerId()) return;
+
+    if (this.moveLoopHandle) this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
+    this.moveLoopHandle = null;
+    this.weaponLastFired = { weapon1: 0, weapon2: 0 };
+    this.predictedHitscanCooldownUntil = { weapon1: 0, weapon2: 0 };
+    this.predictedLocalAdrenaline = null;
+    this.predictedLocalAdrenalineSnapshot = null;
+    this.predictedLocalAdrenalineSnapshotVersion = -1;
+    this.pickupCooldownUntil = 0;
+    this.pendingPickupUids.clear();
+    this.committedSelectionCache = null;
+    this.clientUtilityOverride = null;
+    this.inspectorSelectedTool = null;
+    this.localPlayerState.alive = false;
+    this.localPlayerState.burrowed = false;
   }
 
   weaponLastFiredRecord(): Record<'weapon1' | 'weapon2', number> {

@@ -122,6 +122,49 @@ describe('CombatSystem respawn lifecycle', () => {
     }
   });
 
+  it('laesst zwei interaktive Spieler ohne Activity gegenseitig kaempfen, sterben und respawnen', () => {
+    vi.useFakeTimers();
+    try {
+      const attacker = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() });
+      const victim = fakeEntity({ id: 'p2', x: 140, y: 100, body: { enable: true }, setPosition: vi.fn() });
+      const players = new Map([[attacker.id, attacker], [victim.id, victim]]);
+      const playerManager = {
+        getPlayer: (id: string) => players.get(id),
+        getAllPlayers: () => [...players.values()],
+        getWorldSpawnPoint: (id: string) => id === 'p1' ? { x: 512, y: 320 } : { x: 544, y: 320 },
+      } as unknown as PlayerManager;
+      const bridge = {
+        isHost: () => true,
+        broadcastEffect: vi.fn(),
+        getPlayerProfile: (id: string) => players.has(id) ? { id, name: id, colorHex: 0xffffff } : undefined,
+        areTeammates: () => false,
+      } as unknown as NetworkBridge;
+      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+      const participation = new Map<string, WorldParticipation>([
+        ['p1', 'interactive'],
+        ['p2', 'interactive'],
+      ]);
+      combat.setInitialSpawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
+      combat.setRespawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
+      combat.setPlayerActionAllowedResolver((id) => participation.get(id) === 'interactive');
+      const killed = vi.fn();
+      combat.setKillCallback(killed);
+      combat.initPlayer('p1');
+      combat.initPlayer('p2');
+
+      expect(combat.canDamageTarget('p1', 'p2')).toBe(true);
+      combat.applyDamage('p2', 9999, false, 'p1', 'GLOCK');
+      expect(combat.isAlive('p2')).toBe(false);
+      expect(killed).toHaveBeenCalledWith('p1', 'p2', 'GLOCK', victim.x, victim.y, undefined);
+
+      vi.advanceTimersByTime(5000);
+      expect(combat.isAlive('p2')).toBe(true);
+      expect(victim.setPosition).toHaveBeenCalledWith(544, 320);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('gibt einem Peer ausserhalb der World weder Figur noch Respawn', () => {
     vi.useFakeTimers();
     try {

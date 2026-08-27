@@ -72,6 +72,7 @@ import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoad
 import { getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getWorldDefinition } from '../config/authoring/authoredScenarios';
 import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
@@ -1252,7 +1253,7 @@ export class NetworkBridge {
   }
 
   getEffectivePlayerColor(playerId: string): number | undefined {
-    if (usesTeamColors(this.getGameMode())) {
+    if (!this.usesFreeForAllWorldRelationships() && usesTeamColors(this.getGameMode())) {
       const teamId = this.getPlayerTeam(playerId);
       if (teamId) return this.getTeamColor(teamId);
     }
@@ -1263,8 +1264,20 @@ export class NetworkBridge {
     return this.getStoredPlayerColor(playerId);
   }
 
+  /**
+   * Eine Activity besitzt ihre eigene Modus-/Teamsemantik. Ohne Activity darf dagegen die
+   * laufende World ihre Grundbeziehung authoren, ohne sie aus der Lobby-Auswahl abzuleiten.
+   */
+  private usesFreeForAllWorldRelationships(): boolean {
+    if (this.getActivityDescriptor() !== null) return false;
+    const definitionId = this.getWorldDescriptor()?.definitionId;
+    if (!definitionId) return false;
+    return getWorldDefinition(definitionId)?.actionPolicy?.playerRelationships === 'free-for-all';
+  }
+
   areTeammates(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return true;
+    if (this.usesFreeForAllWorldRelationships()) return false;
     if (!isTeamGameMode(this.getGameMode())) return false;
     if (isCoopDefenseMode(this.getGameMode())) {
       if (firstPlayerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) {
@@ -1281,6 +1294,7 @@ export class NetworkBridge {
 
   isEnemyPair(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return false;
+    if (this.usesFreeForAllWorldRelationships()) return true;
     if (!isTeamGameMode(this.getGameMode())) return true;
     const firstTeam = this.getPlayerTeam(firstPlayerId);
     const secondTeam = this.getPlayerTeam(secondPlayerId);

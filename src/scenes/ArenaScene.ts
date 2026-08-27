@@ -1588,6 +1588,9 @@ export class ArenaScene extends Phaser.Scene {
       (profile) => this.lifecycle.attachPlayerToWorld(profile),
       (playerId) => this.lifecycle.detachPlayerFromWorld(playerId),
     );
+    this.clientUpdate.setWorldPresentationResolver(
+      () => this.lifecycle.getLocalWorldPresentation(),
+    );
     this.hostUpdate.setPlayerCapabilitiesResolver(
       (playerId) => this.lifecycle.getPlayerCapabilities(playerId),
     );
@@ -1901,7 +1904,10 @@ export class ArenaScene extends Phaser.Scene {
     if (worldActive && !activityActive && !terminated) {
       const worldStepStartMs = diagnosticsActive ? performance.now() : 0;
       if (bridge.isHost()) this.hostUpdate.runHostUpdate(delta);
-      else this.clientUpdate.runClientUpdate(delta);
+      else {
+        this.clientUpdate.runClientUpdate(delta);
+        this.syncClientWorldSnapshotPresentation(delta, false, null);
+      }
       if (diagnosticsActive) primaryStepMs += performance.now() - worldStepStartMs;
     }
 
@@ -1980,53 +1986,7 @@ export class ArenaScene extends Phaser.Scene {
 
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
         const clientRendererSyncStartedAt = diagnosticsActive ? performance.now() : 0;
-        const state = bridge.getLatestGameState();
-        const countdownGround = countdownActive && activeMapConfig
-          ? buildCountdownGroundFirePreview(
-            this.ctx.currentLayout,
-            activeMapConfig,
-            bridge.getArenaStartTime(),
-          )
-          : { cells: [] };
-        const countdownPedestals = this.ctx.powerUpSystem?.getPedestalSnapshot() ?? [];
-        if (state) {
-          this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
-          this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
-          this.ctx.coopDefenseCarryItems = state.coopDefenseCarry ?? [];
-          this.renderers.beer.syncCoopDefenseCarry(this.ctx.coopDefenseCarryItems);
-          this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
-          this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
-          this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
-          this.renderers.guardianSpirit.syncVisuals(state.guardianSpirits ?? []);
-          this.renderers.repairDrone.syncVisuals(
-            state.repairDrones ?? [],
-            state.placeableRocks ?? [],
-          );
-          this.renderers.slimeTrail.syncVisuals(state.slimeTrail ?? { cells: [], affectedEnemies: [] });
-          this.renderers.flamethrowerUpgrades.syncGround(
-            countdownActive && (state.burningGround?.cells.length ?? 0) === 0
-              ? countdownGround
-              : state.burningGround ?? countdownGround,
-            bridge.getSynchronizedNow(),
-          );
-          this.renderers.flamethrowerUpgrades.syncRings(state.players);
-          this.renderers.train?.setTarget(state.train ?? null);
-          this.renderers.powerUp.syncPedestals(
-            countdownActive && (state.pedestals?.length ?? 0) === 0
-              ? countdownPedestals
-              : state.pedestals ?? countdownPedestals,
-          );
-          this.renderers.powerUp.sync(state.powerups ?? []);
-          this.renderers.nuke.sync(state.nukes ?? []);
-          this.renderers.airstrike.sync(state.airstrikes ?? []);
-          this.renderers.meteor.sync(state.meteors ?? []);
-        } else if (countdownActive) {
-          this.renderers.flamethrowerUpgrades.syncGround(countdownGround, bridge.getSynchronizedNow());
-          this.renderers.powerUp.syncPedestals(countdownPedestals);
-          this.renderers.powerUp.sync([]);
-        }
-        this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
-        this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
+        this.syncClientWorldSnapshotPresentation(delta, countdownActive, activeMapConfig);
         if (diagnosticsActive) {
           clientRendererSyncMs = performance.now() - clientRendererSyncStartedAt;
           primaryStepMs += performance.now() - clientStepStartMs;
@@ -2204,7 +2164,11 @@ export class ArenaScene extends Phaser.Scene {
     } else {
       this.hostileBaseIndicator?.clear();
     }
-    this.playerStatusRing?.setActive(inArena && !spectator);
+    const localPlayerVisuals = allowsWorldPresentationSurface(
+      this.lifecycle.getLocalWorldPresentation(),
+      'localPlayerVisuals',
+    ) && this.lifecycle.isPlayerAttachedToWorld(bridge.getLocalPlayerId());
+    this.playerStatusRing?.setActive(localPlayerVisuals && !spectator);
     this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
     if (inArena) {
       this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
@@ -3990,6 +3954,68 @@ export class ArenaScene extends Phaser.Scene {
       Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X) + pad * 2,
       Math.max(GAME_HEIGHT, ARENA_MAX_Y + ARENA_OFFSET_Y) + pad * 2,
     );
+  }
+
+  /**
+   * Gemeinsamer Client-Consumer der replizierten World-Presentation.
+   *
+   * Er laeuft fuer jede dargestellte World, nicht nur fuer eine Activity. Damit erhalten auch
+   * Preview-Peers dieselben Power-ups, Felder, Schilde und sonstigen World-Visuals wie ein
+   * interaktiver Client, ohne daraus PlayerRuntime oder Input abzuleiten.
+   */
+  private syncClientWorldSnapshotPresentation(
+    delta: number,
+    countdownActive: boolean,
+    activeMapConfig: CoopDefenseMapConfig | null,
+  ): void {
+    if (!this.lifecycle.getLocalWorldPresentation().required) return;
+    const state = bridge.getLatestGameState();
+    const countdownGround = countdownActive && activeMapConfig
+      ? buildCountdownGroundFirePreview(
+        this.ctx.currentLayout,
+        activeMapConfig,
+        bridge.getArenaStartTime(),
+      )
+      : { cells: [] };
+    const countdownPedestals = this.ctx.powerUpSystem?.getPedestalSnapshot() ?? [];
+    if (state) {
+      this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
+      this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
+      this.ctx.coopDefenseCarryItems = state.coopDefenseCarry ?? [];
+      this.renderers.beer.syncCoopDefenseCarry(this.ctx.coopDefenseCarryItems);
+      this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
+      this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
+      this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
+      this.renderers.guardianSpirit.syncVisuals(state.guardianSpirits ?? []);
+      this.renderers.repairDrone.syncVisuals(
+        state.repairDrones ?? [],
+        state.placeableRocks ?? [],
+      );
+      this.renderers.slimeTrail.syncVisuals(state.slimeTrail ?? { cells: [], affectedEnemies: [] });
+      this.renderers.flamethrowerUpgrades.syncGround(
+        countdownActive && (state.burningGround?.cells.length ?? 0) === 0
+          ? countdownGround
+          : state.burningGround ?? countdownGround,
+        bridge.getSynchronizedNow(),
+      );
+      this.renderers.flamethrowerUpgrades.syncRings(state.players);
+      this.renderers.train?.setTarget(state.train ?? null);
+      this.renderers.powerUp.syncPedestals(
+        countdownActive && (state.pedestals?.length ?? 0) === 0
+          ? countdownPedestals
+          : state.pedestals ?? countdownPedestals,
+      );
+      this.renderers.powerUp.sync(state.powerups ?? []);
+      this.renderers.nuke.sync(state.nukes ?? []);
+      this.renderers.airstrike.sync(state.airstrikes ?? []);
+      this.renderers.meteor.sync(state.meteors ?? []);
+    } else if (countdownActive) {
+      this.renderers.flamethrowerUpgrades.syncGround(countdownGround, bridge.getSynchronizedNow());
+      this.renderers.powerUp.syncPedestals(countdownPedestals);
+      this.renderers.powerUp.sync([]);
+    }
+    this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
+    this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
   }
 
   /**

@@ -61,6 +61,14 @@ export interface WorldDefinition {
 export interface WorldActionPolicy {
   /** Allows combat in this World without requiring an Activity. */
   readonly combat: boolean;
+  /**
+   * Grundbeziehung zwischen unterschiedlichen Spielern, solange keine Activity laeuft.
+   *
+   * Ohne Angabe bleibt die bisherige, vom ausgewaehlten Spielmodus abgeleitete Beziehung
+   * erhalten. `free-for-all` macht alle unterschiedlichen Spieler dieser World zu Gegnern,
+   * ohne dafuer eine Fake-Activity oder Lobby-Teams zu erzeugen.
+   */
+  readonly playerRelationships?: 'game-mode' | 'free-for-all';
 }
 
 /**
