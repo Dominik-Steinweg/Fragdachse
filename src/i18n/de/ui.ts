@@ -47,6 +47,7 @@ export const deUi = {
   "ui.lobby.arenaTransitionTimeout": "World-Descriptor oder Activity-Zustand wurde nicht rechtzeitig repliziert.",
   "ui.lobby.terrainSnapshotStartFailed": "Terrain-Farb-Snapshot konnte nicht gestartet werden.",
   "ui.lobby.terrainSnapshotCreateFailed": "Terrain-Farb-Snapshot konnte nicht erstellt werden.",
+  "ui.lobby.terrainSnapshotTimeoutFailed": "Terrain-Farb-Snapshot hat nicht rechtzeitig geantwortet.",
   "ui.lobby.arenaStartFailed": "Arena konnte nicht gestartet werden.",
   "ui.lobby.kickedFromRoom": "Du wurdest vom Host aus dem Raum entfernt.",
   "ui.lobby.kickPlayer": "Spieler entfernen",

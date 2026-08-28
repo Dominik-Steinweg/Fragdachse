@@ -281,6 +281,9 @@ export class ArenaLifecycleCoordinator {
   private localArenaLoadReady = false;
   private terrainSnapshotReady = false;
   private terrainSnapshotGenerationId = 0;
+  private terrainSnapshotRetryCount = 0;
+  /** Verhindert parallelen Re-Eintritt in `onTransitionToArena()` durch Timer-Retry und `detectWorldChange()`. */
+  private arenaTransitionInProgress = false;
   private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
   private pendingHostArenaGeneration: {
@@ -455,6 +458,8 @@ export class ArenaLifecycleCoordinator {
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
   private persistentBaseBuildArea: PersistentBaseBuildArea | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
+  private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;
+  private static readonly TERRAIN_SNAPSHOT_MAX_RETRIES = 1;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -1617,6 +1622,9 @@ export class ArenaLifecycleCoordinator {
   }
 
   terminateMatch(reason?: string): void {
+    // Ein Abbruch beendet auch einen laufenden Arena-Uebergang samt Retry-Kette; sonst bliebe
+    // der Re-Eintritts-Guard nach einem Abbruch im Retry-Fenster dauerhaft gesetzt.
+    this.arenaTransitionInProgress = false;
     if (this.matchTerminated) return;
     this.matchTerminated = true;
     this.arenaBuilt = false;
@@ -4818,6 +4826,11 @@ export class ArenaLifecycleCoordinator {
   }
 
   private onTransitionToArena(): void {
+    // Der Retry-Timer (delayedCall unten) und `detectWorldChange()` im Update-Loop koennen am
+    // selben Frame feuern. Ohne Guard wuerde ein doppelter Eintritt den laufenden Snapshot
+    // invalidieren und einen zweiten Build starten, der den ersten zerstoerten Scratch erbt.
+    if (this.arenaTransitionInProgress) return;
+    this.arenaTransitionInProgress = true;
     // Eine Runde nimmt jeden Teilnehmer mit hinein: dann verdeckt der unabhaengige Ladeschirm
     // die Arena, bevor der Descriptor da ist - ein Phasenwechsel darf sie im Wartefenster nie
     // zeigen. Eine World ohne Activity laesst die Lobby dagegen stehen: wer sie nicht betritt -
@@ -4850,6 +4863,7 @@ export class ArenaLifecycleCoordinator {
       && participation?.roundRevision === pendingHostGeneration.roundRevision
       && roundState?.status === 'active'
       && worldDescriptor?.worldRevision !== pendingHostGeneration.roundRevision) {
+      this.arenaTransitionInProgress = false;
       this.scheduleHostArenaGeneration(pendingHostGeneration);
       return;
     }
@@ -4860,7 +4874,13 @@ export class ArenaLifecycleCoordinator {
         this.terminateMatch(t('ui.lobby.arenaTransitionTimeout'));
         return;
       }
-      this.scene.time.delayedCall(16, () => this.onTransitionToArena());
+      // Der Guard bleibt ueber das Retry-Fenster gesetzt und faellt erst, wenn dieser Timer
+      // selbst wieder eintritt. So bleibt die Retry-Kette exklusiv: `detectWorldChange()` kann
+      // waehrenddessen keinen zweiten, konkurrierenden Uebergang starten.
+      this.scene.time.delayedCall(16, () => {
+        this.arenaTransitionInProgress = false;
+        this.onTransitionToArena();
+      });
       return;
     }
     this.layoutRetryCount = 0;
@@ -4893,6 +4913,7 @@ export class ArenaLifecycleCoordinator {
     this.localArenaLoadReady = false;
     this.terrainSnapshotReady = preserveTerrainSnapshot;
     if (this.getLocalWorldPresentation().required && !this.terrainSnapshotReady) {
+      this.terrainSnapshotRetryCount = 0;
       this.startTerrainSnapshotBuild(worldDescriptor.worldRevision);
     } else if (!this.getLocalWorldPresentation().required) {
       this.terrainSnapshotReady = true;
@@ -4926,13 +4947,27 @@ export class ArenaLifecycleCoordinator {
     // Eine Activity wartet auf ihren gemeinsamen Startzeitpunkt. Eine World ohne Activity
     // laeuft sofort; sie besitzt keinen Round-Timestamp, auf den sie warten koennte.
     this.hostUpdate.setActive(activityDescriptor === null);
+    this.arenaTransitionInProgress = false;
   }
 
+  /**
+   * Baut den Terrain-Farb-Snapshot der laufenden World-Instanz.
+   *
+   * Der Snapshot ist Teil der lokalen Ladebereitschaft: Ohne ihn bleibt der Ladeschirm stehen.
+   * Deshalb hat hier jeder Pfad ein definiertes Ende - Erfolg, Abbruch oder Watchdog-Timeout -
+   * und niemals einen stillen Early-Return ohne Nachfolger.
+   */
   private startTerrainSnapshotBuild(worldRevision: number): void {
     const layout = this.ctx.currentLayout;
     const arenaResult = this.ctx.arenaResult;
     const world = this.ctx.world;
-    if (!layout || !arenaResult || !world) return;
+    if (!layout || !arenaResult || !world) {
+      // Nach einem erfolgreichen Arenaaufbau muessen Layout, Arena-Ergebnis und World stehen.
+      // Fehlt eines davon, gibt es keinen Nachfolge-Build mehr: deterministisch abbrechen.
+      console.error('[ArenaLifecycleCoordinator] Terrain-Snapshot-Voraussetzungen fehlen nach Arena-Build.');
+      this.terminateMatch(t('ui.lobby.terrainSnapshotStartFailed'));
+      return;
+    }
 
     const generation = ++this.terrainSnapshotGenerationId;
     const isCurrent = (): boolean => (
@@ -4959,12 +4994,39 @@ export class ArenaLifecycleCoordinator {
       return;
     }
 
+    // Watchdog: Der Snapshot laeuft ueber einen Phaser-Renderer-Callback. Bleibt der aus, haengt
+    // die lokale Ladebereitschaft ohne Fehler. `settled` verriegelt Timeout und Promise
+    // gegeneinander, `isCurrent()` haelt verspaetete Ergebnisse von neueren Builds fern.
+    let settled = false;
+    const timeoutTimer = this.scene.time.delayedCall(
+      ArenaLifecycleCoordinator.TERRAIN_SNAPSHOT_TIMEOUT_MS,
+      () => {
+        if (settled || !isCurrent()) return;
+        settled = true;
+        if (this.terrainSnapshotRetryCount < ArenaLifecycleCoordinator.TERRAIN_SNAPSHOT_MAX_RETRIES) {
+          this.terrainSnapshotRetryCount += 1;
+          console.warn(
+            '[ArenaLifecycleCoordinator] Terrain-Snapshot-Timeout, starte Retry',
+            this.terrainSnapshotRetryCount,
+          );
+          this.startTerrainSnapshotBuild(worldRevision);
+          return;
+        }
+        console.error('[ArenaLifecycleCoordinator] Terrain-Snapshot-Timeout nach maximalem Retry.');
+        this.terminateMatch(t('ui.lobby.terrainSnapshotTimeoutFailed'));
+      },
+    );
+
     build.then((snapshot) => {
-      if (!isCurrent()) return;
+      if (settled || !isCurrent()) return;
+      settled = true;
+      timeoutTimer.remove(false);
       this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
     }).catch((error: unknown) => {
-      if (!isCurrent()) return;
+      if (settled || !isCurrent()) return;
+      settled = true;
+      timeoutTimer.remove(false);
       console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot fehlgeschlagen:', error);
       this.terminateMatch(t('ui.lobby.terrainSnapshotCreateFailed'));
     });
@@ -4990,6 +5052,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   private onTransitionToLobby(): void {
+    this.arenaTransitionInProgress = false;
     this.arenaBuilt = false;
     this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;

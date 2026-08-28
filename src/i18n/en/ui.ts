@@ -47,6 +47,7 @@ export const enUi = {
   "ui.lobby.arenaTransitionTimeout": "The world descriptor or activity state was not replicated in time.",
   "ui.lobby.terrainSnapshotStartFailed": "The terrain color snapshot could not be started.",
   "ui.lobby.terrainSnapshotCreateFailed": "The terrain color snapshot could not be created.",
+  "ui.lobby.terrainSnapshotTimeoutFailed": "The terrain color snapshot did not respond in time.",
   "ui.lobby.arenaStartFailed": "Could not start the arena.",
   "ui.lobby.kickedFromRoom": "You were removed from the room by the host.",
   "ui.lobby.kickPlayer": "Remove player",

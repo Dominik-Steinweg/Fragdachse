@@ -169,3 +169,126 @@ describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
     expect(source).not.toContain('Generator/Fingerprint abweichend');
   });
 });
+
+/**
+ * Der Terrain-Farb-Snapshot ist Teil der lokalen Ladebereitschaft: Bleibt er aus, haengt der
+ * Ladeschirm bei 95 %. Die Invarianten dieses Lifecycles werden hier ueber den Quelltext
+ * geprueft, weil der Koordinator ohne laufende Phaser-Szene nicht instanziierbar ist.
+ */
+describe('ArenaLifecycleCoordinator – TerrainSnapshotLifecycle', () => {
+  const NL = String.fromCharCode(10);
+  const source = readFileSync(
+    resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+    'utf8',
+  );
+
+  function section(startAnchor: string, endAnchor: string): string {
+    const start = source.indexOf(startAnchor);
+    const end = source.indexOf(endAnchor, start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  function snapshotBuildBody(): string {
+    return section(
+      '  private startTerrainSnapshotBuild(worldRevision: number): void {',
+      NL + '  private get localPlayerState()',
+    );
+  }
+
+  function transitionBody(): string {
+    return section(
+      '  private onTransitionToArena(): void {',
+      NL + '  /**' + NL + '   * Baut den Terrain-Farb-Snapshot',
+    );
+  }
+
+  it('setzt terrainSnapshotReady nur im Erfolgspfad des aktuellen Builds', () => {
+    const body = snapshotBuildBody();
+    expect(body).toContain('build.then((snapshot) => {');
+    expect(body).toContain('this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);');
+    // Der Erfolgspfad ist der einzige Ort, der die lokale Snapshot-Bereitschaft setzt.
+    expect(body.split('this.terrainSnapshotReady = true;')).toHaveLength(2);
+  });
+
+  it('bindet jeden Build an Generation, Layout, Arena-Ergebnis und World-Revision', () => {
+    const body = snapshotBuildBody();
+    expect(body).toContain('const generation = ++this.terrainSnapshotGenerationId;');
+    expect(body).toContain('generation === this.terrainSnapshotGenerationId');
+    expect(body).toContain('this.ctx.currentLayout === layout');
+    expect(body).toContain('this.ctx.arenaResult === arenaResult');
+    expect(body).toContain('bridge.getWorldDescriptor()?.worldRevision === worldRevision');
+    // Ein World-Teardown invalidiert laufende Builds ueber dieselbe Generation.
+    expect(source).toContain('this.terrainSnapshotGenerationId += 1;');
+  });
+
+  it('verriegelt verspaetete Callbacks gegen Watchdog und neuere Builds', () => {
+    const body = snapshotBuildBody();
+    expect(body).toContain('let settled = false;');
+    expect(body).toContain('build.then((snapshot) => {' + NL + '      if (settled || !isCurrent()) return;');
+    expect(body).toContain('}).catch((error: unknown) => {' + NL + '      if (settled || !isCurrent()) return;');
+    // Watchdog, Erfolg und Fehler verriegeln sich gegenseitig ueber dasselbe Flag.
+    expect(body.split('settled = true;')).toHaveLength(4);
+    expect(body.split('timeoutTimer.remove(false);')).toHaveLength(3);
+  });
+
+  it('beendet einen ausbleibenden Snapshot-Callback ueber Watchdog, Retry und Abbruch', () => {
+    const body = snapshotBuildBody();
+    expect(source).toContain('private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;');
+    expect(source).toContain('private static readonly TERRAIN_SNAPSHOT_MAX_RETRIES = 1;');
+    expect(body).toContain('ArenaLifecycleCoordinator.TERRAIN_SNAPSHOT_TIMEOUT_MS');
+    expect(body).toContain(
+      'this.terrainSnapshotRetryCount < ArenaLifecycleCoordinator.TERRAIN_SNAPSHOT_MAX_RETRIES',
+    );
+    expect(body).toContain('this.terrainSnapshotRetryCount += 1;');
+    expect(body).toContain('this.startTerrainSnapshotBuild(worldRevision);');
+    expect(body).toContain("this.terminateMatch(t('ui.lobby.terrainSnapshotTimeoutFailed'));");
+    // Der Retry-Zaehler gehoert zum jeweiligen Arenaaufbau, nicht zur Session.
+    expect(transitionBody()).toContain('this.terrainSnapshotRetryCount = 0;');
+  });
+
+  it('bricht fehlende Snapshot-Voraussetzungen ab, statt still zurueckzukehren', () => {
+    const body = snapshotBuildBody();
+    expect(body).not.toContain('if (!layout || !arenaResult || !world) return;');
+    expect(body).toContain('if (!layout || !arenaResult || !world) {');
+    expect(body).toContain("this.terminateMatch(t('ui.lobby.terrainSnapshotStartFailed'));");
+  });
+
+  it('haelt onTransitionToArena gegen Re-Eintritt aus Retry-Timer und detectWorldChange', () => {
+    const body = transitionBody();
+    expect(source).toContain('private arenaTransitionInProgress = false;');
+    expect(body.indexOf('if (this.arenaTransitionInProgress) return;'))
+      .toBeGreaterThan(-1);
+    expect(body.indexOf('if (this.arenaTransitionInProgress) return;'))
+      .toBeLessThan(body.indexOf('this.arenaTransitionInProgress = true;'));
+    // Der Retry haelt den Guard bis zum eigenen Feuern; jeder andere Ausgang gibt ihn frei.
+    expect(body).toContain([
+      'this.scene.time.delayedCall(16, () => {',
+      '        this.arenaTransitionInProgress = false;',
+      '        this.onTransitionToArena();',
+      '      });',
+    ].join(NL));
+    expect(body).toContain([
+      'this.hostUpdate.setActive(activityDescriptor === null);',
+      '    this.arenaTransitionInProgress = false;',
+    ].join(NL));
+    expect(source).toContain([
+      '      && worldDescriptor?.worldRevision !== pendingHostGeneration.roundRevision) {',
+      '      this.arenaTransitionInProgress = false;',
+    ].join(NL));
+  });
+
+  it('gibt den Guard auf jedem Ausstieg aus dem Arena-Uebergang frei', () => {
+    expect(source).toContain([
+      '  private onTransitionToLobby(): void {',
+      '    this.arenaTransitionInProgress = false;',
+    ].join(NL));
+    // terminateMatch loest den Guard vor dem eigenen Idempotenz-Guard: ein Abbruch im
+    // Retry-Fenster darf den Uebergang nicht dauerhaft verriegeln.
+    const terminate = section('  terminateMatch(reason?: string): void {', 'this.matchTerminated = true;');
+    expect(terminate).toContain('this.arenaTransitionInProgress = false;');
+    expect(terminate.indexOf('this.arenaTransitionInProgress = false;'))
+      .toBeLessThan(terminate.indexOf('if (this.matchTerminated) return;'));
+  });
+});
