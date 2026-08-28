@@ -18,7 +18,15 @@ import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 
 const DEATH_FRAGMENT_TEXTURE_SIZE = 4;
+/** Die authored Death-Morph-Quellen sind jetzt 24px statt 12px – gleicher World-Space-Footprint. */
+const DEATH_MORPH_SCALE_COMPENSATION = 0.5;
 const DEATH_GLOW_TEXTURE_SIZE = 24;
+
+const DEATH_DUST_MOTE_FRAMES = [
+  GpuVfxFrameId.DeathDustMoteA,
+  GpuVfxFrameId.DeathDustMoteB,
+  GpuVfxFrameId.DeathDustMoteC,
+] as const;
 
 /** Sink fuer den unveraenderten, persistenten Blood-Stain-Lifecycle. */
 export type BloodStainSink = (
@@ -541,6 +549,7 @@ export class CombatGoreGpuRenderer {
       0.2,
       16,
     );
+    const morphScale = baseScale * DEATH_MORPH_SCALE_COMPENSATION;
     const aspect = clamp(width / Math.max(0.8, height), 0.38, 3.2);
     const smallMass = micro || rng() > 0.72;
     const largeMass = !micro && rng() < 0.24;
@@ -565,7 +574,9 @@ export class CombatGoreGpuRenderer {
 
     spec.lifeMs = lifeMs;
     spec.frame = micro
-      ? (rng() < 0.58 ? GpuVfxFrameId.DeathMorphFineDust : GpuVfxFrameId.DeathMorphDust)
+      ? DEATH_DUST_MOTE_FRAMES[
+        Math.min(DEATH_DUST_MOTE_FRAMES.length - 1, Math.floor(rng() * DEATH_DUST_MOTE_FRAMES.length))
+      ]
       : GpuVfxFrameId.DeathMorphCompact;
     spec.frameAnimation = micro
       ? GPU_VFX_NO_FRAME_ANIMATION
@@ -585,10 +596,10 @@ export class CombatGoreGpuRenderer {
       * (micro ? 2.4 : DEATH_DISINTEGRATION_VFX.rotationMaxDeg * Math.PI / 180 * 2)
       * rotationFactor;
     spec.rotationEase = GpuVfxEase.CubicIn;
-    spec.scaleStart = baseScale * (micro ? 0.72 : 1);
+    spec.scaleStart = morphScale * (micro ? 0.72 : 1);
     spec.scaleEnd = micro
       ? spec.scaleStart * 0.62
-      : baseScale * DEATH_DISINTEGRATION_VFX.scaleEnd;
+      : morphScale * DEATH_DISINTEGRATION_VFX.scaleEnd;
     spec.scaleEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.CubicIn;
     spec.stretchStart = stretch;
     spec.stretchEnd = Math.max(0.72, stretch * (smallMass ? 0.68 : 0.84));

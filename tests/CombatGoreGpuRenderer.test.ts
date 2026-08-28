@@ -284,7 +284,10 @@ describe('combat gore gpu renderer', () => {
     const sample = playFullDeath(64);
     const primary = sample.main[0]!;
 
-    expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeGreaterThan(1.4);
+    // Die 24px-Morph-Quellen werden mit halber Member-Skala gezeichnet; ihre sichtbare Form
+    // bleibt dadurch gleich gross, obwohl die Authoring-Aufloesung verdoppelt wurde.
+    expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeGreaterThan(1);
+    expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeLessThan(1.4);
     expect(primary.scaleY.duration).toBeGreaterThanOrEqual(
       DEATH_DISINTEGRATION_VFX.durationMs - 80,
     );
@@ -327,7 +330,7 @@ describe('combat gore gpu renderer', () => {
     )).toBeLessThan(0.12);
   });
 
-  it('uses 32–48 dominant fragments and only decorative fine-dust accents', () => {
+  it('uses 32–48 dominant fragments and only decorative dust motes', () => {
     const normal = playFullDeath(64, 32);
     const large = playFullDeath(128, 72);
 
@@ -336,7 +339,9 @@ describe('combat gore gpu renderer', () => {
     expect(large.mainCount).toBe(48);
     expect(normal.micro.length).toBeGreaterThan(0);
     expect(normal.micro.every((member) => (
-      member.frame === 'death-morph-dust' || member.frame === 'death-morph-fine-dust'
+      member.frame === 'death-dust-mote-a'
+      || member.frame === 'death-dust-mote-b'
+      || member.frame === 'death-dust-mote-c'
     ))).toBe(true);
     expect(normal.micro.every((member) => member.frameAnimation === null)).toBe(true);
     expect(normal.micro.every((member) => evaluateFakeAnimation(member.alpha, 0) < 0.5)).toBe(true);

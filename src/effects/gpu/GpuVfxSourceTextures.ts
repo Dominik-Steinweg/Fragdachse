@@ -36,6 +36,9 @@ export const TEX_DEATH_MORPH_POROUS = '__death_morph_porous';
 export const TEX_DEATH_MORPH_FRAGMENTED = '__death_morph_fragmented';
 export const TEX_DEATH_MORPH_DUST = '__death_morph_dust';
 export const TEX_DEATH_MORPH_FINE_DUST = '__death_morph_fine_dust';
+export const TEX_DEATH_DUST_MOTE_A = '__death_dust_mote_a';
+export const TEX_DEATH_DUST_MOTE_B = '__death_dust_mote_b';
+export const TEX_DEATH_DUST_MOTE_C = '__death_dust_mote_c';
 export const TEX_DEATH_GLOW = '__death_glow';
 export const TEX_MUZZLE_FLASH = '__muzzle_flash';
 export const TEX_MUZZLE_ENERGY = '__muzzle_energy';
@@ -50,96 +53,173 @@ export function ensureDeathFragmentTexture(scene: Phaser.Scene): void {
 }
 
 /**
- * Sechs gleich grosse Alpha-Motive fuer den GPU-seitigen Death-Morph. Der gemeinsame 12px-Rahmen
+ * Sechs gleich grosse Alpha-Motive fuer den GPU-seitigen Death-Morph. Der gemeinsame 24px-Rahmen
  * verhindert Groessen-/Pivot-Spruenge beim Framewechsel; nur die belegte Materialform waechst von
- * einem kompakten 4px-Kern zu locker verteiltem Staub. Die Motive bleiben weiss, damit der pro
+ * einem kompakten 8px-Kern zu locker verteiltem Staub. Die Motive bleiben weiss, damit der pro
  * Sprite-Chunk analysierte Member-Tint ueber die gesamte Aufloesung erhalten bleibt.
  */
 export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_COMPACT, 12, 12, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_COMPACT, 24, 24, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,1)';
     ctx.beginPath();
-    ctx.moveTo(4, 3.75);
-    ctx.lineTo(8.25, 4);
-    ctx.lineTo(8, 8.25);
-    ctx.lineTo(3.75, 8);
+    ctx.moveTo(8, 7.5);
+    ctx.lineTo(16.5, 8);
+    ctx.lineTo(16, 16.5);
+    ctx.lineTo(7.5, 16);
     ctx.closePath();
     ctx.fill();
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAYED, 12, 12, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAYED, 24, 24, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     ctx.beginPath();
-    ctx.moveTo(4, 3.5);
-    ctx.lineTo(7.25, 3.75);
-    ctx.lineTo(8.6, 5.1);
-    ctx.lineTo(8, 8.2);
-    ctx.lineTo(5.2, 8.5);
-    ctx.lineTo(3.5, 7.1);
+    ctx.moveTo(8, 7);
+    ctx.lineTo(14.5, 7.5);
+    ctx.lineTo(17.2, 10.2);
+    ctx.lineTo(16, 16.4);
+    ctx.lineTo(10.4, 17);
+    ctx.lineTo(7, 14.2);
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.68)';
-    ctx.fillRect(8.5, 6.1, 1.1, 0.8);
-    ctx.fillRect(3, 4.4, 0.8, 1.3);
-    ctx.fillRect(5.2, 2.7, 1.2, 0.7);
+    ctx.fillRect(17, 12.2, 2.2, 1.6);
+    ctx.fillRect(6, 8.8, 1.6, 2.6);
+    ctx.fillRect(10.4, 5.4, 2.4, 1.4);
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 12, 12, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 24, 24, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(3.2, 3.6, 2.4, 2.1);
-    ctx.fillRect(5.9, 3.1, 2.6, 2.3);
-    ctx.fillRect(4, 6.1, 2.1, 2.6);
-    ctx.fillRect(6.5, 5.8, 2.4, 2.1);
+    ctx.fillRect(6.4, 7.2, 4.8, 4.2);
+    ctx.fillRect(11.8, 6.2, 5.2, 4.6);
+    ctx.fillRect(8, 12.2, 4.2, 5.2);
+    ctx.fillRect(13, 11.6, 4.8, 4.2);
     ctx.fillStyle = 'rgba(255,255,255,0.58)';
-    ctx.fillRect(8.9, 4.8, 1.2, 1.1);
-    ctx.fillRect(2.2, 6.7, 1.3, 0.9);
-    ctx.fillRect(6.1, 8.5, 0.9, 1.1);
+    ctx.fillRect(17.8, 9.6, 2.4, 2.2);
+    ctx.fillRect(4.4, 13.4, 2.6, 1.8);
+    ctx.fillRect(12.2, 17, 1.8, 2.2);
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAGMENTED, 12, 12, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAGMENTED, 24, 24, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.82)';
-    ctx.fillRect(2.5, 3.1, 2.3, 1.8);
-    ctx.fillRect(5.5, 2.2, 1.8, 2.4);
-    ctx.fillRect(7.6, 4.5, 2.1, 1.7);
-    ctx.fillRect(4.2, 5.3, 2.2, 2.2);
-    ctx.fillRect(6.7, 7, 1.8, 2);
+    ctx.fillRect(5, 6.2, 4.6, 3.6);
+    ctx.fillRect(11, 4.4, 3.6, 4.8);
+    ctx.fillRect(15.2, 9, 4.2, 3.4);
+    ctx.fillRect(8.4, 10.6, 4.4, 4.4);
+    ctx.fillRect(13.4, 14, 3.6, 4);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillRect(1.5, 6.3, 1.2, 1.1);
-    ctx.fillRect(4, 8.5, 1.1, 1.2);
-    ctx.fillRect(9.5, 7.1, 0.9, 1.3);
+    ctx.fillRect(3, 12.6, 2.4, 2.2);
+    ctx.fillRect(8, 17, 2.2, 2.4);
+    ctx.fillRect(19, 14.2, 1.8, 2.6);
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_DUST, 12, 12, (ctx) => {
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillRect(1.7, 3.3, 1.4, 1.1);
-    ctx.fillRect(4, 2, 1.1, 1.5);
-    ctx.fillRect(6.2, 3.4, 1.5, 1.2);
-    ctx.fillRect(8.6, 2.7, 0.9, 1.3);
-    ctx.fillRect(3, 6, 1.3, 1);
-    ctx.fillRect(5.5, 5.6, 0.9, 1.4);
-    ctx.fillRect(8.2, 6.2, 1.2, 0.9);
-    ctx.fillRect(6.6, 8.5, 1.1, 1);
-    ctx.fillStyle = 'rgba(255,255,255,0.38)';
-    ctx.fillRect(10.1, 5, 0.7, 0.9);
-    ctx.fillRect(2, 8.3, 0.8, 0.7);
-  });
+  drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_DUST, [
+    [3.7, 6.3, 1.45, 1.05, -0.3, 0.76],
+    [7.4, 3.9, 1.05, 1.42, 0.5, 0.63],
+    [11.9, 5.8, 1.4, 0.92, -0.4, 0.69],
+    [16.8, 4.3, 0.86, 1.12, 0.2, 0.54],
+    [20.2, 7.2, 1.08, 0.82, -0.5, 0.48],
+    [5.6, 11.4, 1.22, 0.92, 0.3, 0.62],
+    [9.6, 10.1, 0.78, 1.2, -0.6, 0.45],
+    [14.2, 9.5, 1.04, 0.74, 0.2, 0.57],
+    [18.2, 11.8, 1.25, 0.86, 0.55, 0.46],
+    [3.4, 16.5, 0.88, 1.08, -0.2, 0.44],
+    [7.3, 15.3, 1.16, 0.74, 0.5, 0.61],
+    [12.1, 14.9, 0.86, 1.12, -0.5, 0.39],
+    [16.1, 16.5, 1.08, 0.8, 0.3, 0.52],
+    [20.9, 15.5, 0.68, 0.98, -0.2, 0.34],
+    [9.6, 19.3, 0.92, 0.62, -0.3, 0.42],
+    [14.5, 19.6, 1.22, 0.7, 0.6, 0.47],
+    [18.7, 19.1, 0.62, 0.62, 0, 0.28],
+  ]);
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FINE_DUST, 12, 12, (ctx) => {
-    ctx.fillStyle = 'rgba(255,255,255,0.56)';
-    ctx.fillRect(1, 2.8, 0.8, 0.9);
-    ctx.fillRect(3.5, 1.3, 0.7, 1.1);
-    ctx.fillRect(6, 2.7, 0.9, 0.7);
-    ctx.fillRect(9.4, 1.9, 0.7, 1);
-    ctx.fillRect(2.2, 5.5, 0.8, 0.7);
-    ctx.fillRect(5, 5, 0.7, 1);
-    ctx.fillRect(8.1, 5.7, 0.9, 0.7);
-    ctx.fillRect(10.2, 7.6, 0.7, 0.9);
-    ctx.fillRect(4, 8.4, 0.8, 0.7);
-    ctx.fillRect(7, 9.6, 0.7, 0.8);
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.fillRect(0.6, 8.5, 0.6, 0.7);
-    ctx.fillRect(10.7, 4.1, 0.5, 0.8);
+  drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_FINE_DUST, [
+    [2.6, 4.4, 0.38, 0.52, -0.3, 0.47],
+    [5.5, 2.2, 0.3, 0.34, 0.1, 0.38],
+    [8.2, 5.1, 0.46, 0.3, 0.5, 0.31],
+    [11.7, 2.9, 0.34, 0.48, -0.5, 0.43],
+    [15.4, 4.1, 0.48, 0.3, 0.2, 0.34],
+    [19.3, 2.7, 0.3, 0.42, -0.1, 0.39],
+    [21.4, 6.5, 0.44, 0.32, 0.6, 0.26],
+    [4.4, 8.5, 0.42, 0.3, -0.2, 0.33],
+    [7.1, 10.5, 0.3, 0.5, 0.4, 0.42],
+    [10.2, 8.2, 0.48, 0.32, -0.6, 0.3],
+    [13.7, 10.9, 0.34, 0.46, 0.2, 0.37],
+    [17.2, 8.6, 0.46, 0.3, -0.4, 0.29],
+    [20.7, 11.3, 0.3, 0.42, 0.1, 0.35],
+    [2.8, 15.2, 0.34, 0.3, 0.2, 0.24],
+    [5.7, 18.3, 0.48, 0.32, -0.5, 0.34],
+    [9.3, 14.9, 0.3, 0.44, 0.6, 0.29],
+    [12.8, 17.4, 0.44, 0.3, -0.2, 0.36],
+    [16.3, 14.8, 0.3, 0.48, 0.4, 0.28],
+    [19.2, 18.7, 0.42, 0.3, -0.6, 0.31],
+    [22, 16.1, 0.28, 0.38, 0.1, 0.23],
+    [7.8, 21.2, 0.34, 0.28, 0.5, 0.22],
+    [14.5, 21.3, 0.3, 0.4, -0.3, 0.26],
+    [18.1, 21.1, 0.4, 0.26, 0.2, 0.2],
+  ]);
+}
+
+/** Kleine Einzelmoten fuer die letzten, statischen Micro-Fragmente. */
+export function ensureDeathDustMoteTextures(scene: Phaser.Scene): void {
+  drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_A, [
+    [12.1, 11.8, 2.1, 1.34, -0.28, 0.7],
+  ]);
+  drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_B, [
+    [8.8, 12.3, 1.28, 0.78, 0.34, 0.62],
+    [15.9, 10.1, 0.62, 1.05, -0.45, 0.42],
+  ]);
+  drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_C, [
+    [7.2, 8.4, 0.82, 0.56, -0.2, 0.5],
+    [12.8, 15.2, 0.58, 0.76, 0.5, 0.36],
+    [17.1, 7.6, 0.46, 0.46, -0.1, 0.3],
+  ]);
+}
+
+type DeathDustMoteSpec = readonly [
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+  rotation: number,
+  alpha: number,
+];
+
+function drawDeathMorphDustTexture(
+  scene: Phaser.Scene,
+  key: string,
+  motes: readonly DeathDustMoteSpec[],
+): void {
+  ensureCanvasTexture(scene.textures, key, 24, 24, (ctx) => {
+    for (const [x, y, radiusX, radiusY, rotation, alpha] of motes) {
+      drawSoftDeathMote(ctx, x, y, radiusX, radiusY, rotation, alpha);
+    }
   });
+}
+
+function drawSoftDeathMote(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+  rotation: number,
+  alpha: number,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.scale(radiusX, radiusY);
+
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+  gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  gradient.addColorStop(0.34, `rgba(255,255,255,${alpha * 0.72})`);
+  gradient.addColorStop(0.74, `rgba(255,255,255,${alpha * 0.22})`);
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(0, 0, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** Weicher Additive-Glow fuer wenige helle Disintegrationssplitter. */

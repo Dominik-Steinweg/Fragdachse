@@ -9,14 +9,17 @@ vi.mock('phaser', () => ({
 
 import {
   normalizeCoopDefenseMapConfig,
+  getCoopDefenseMapConfig,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
+import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaGenerator';
 import { resolveCoopDefenseActivityBases, type BaseSpec } from '../src/arena/BaseRegistry';
 import { BaseManager } from '../src/entities/BaseManager';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
-import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
+import { resolveActiveArenaWorldMetrics, resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 const DORMANT_BASE_ID = 'test-dormant-outpost';
 const DORMANT_OBJECTIVE_ID = 'test-dormant-objective';
@@ -452,5 +455,58 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(powerUps.getPedestalSnapshot()).toHaveLength(1);
     powerUps.activatePedestalsLinkedToBase('dormant-outpost');
     expect(powerUps.getPedestalSnapshot()).toHaveLength(1);
+  });
+
+  it('keeps authored pedestals of an active base through layout generation and arena start', () => {
+    const map = getCoopDefenseMapConfig('6');
+    const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
+    const layout = ArenaGenerator.generate(
+      6_003,
+      resolveArenaGenerationInput(COOP_DEFENSE_MODE, metrics),
+      map,
+    );
+    const authored = resolveCoopDefenseActivityBases(map, 1, metrics)
+      .find((base) => base.id === 'coop-base-rear')?.powerUpPedestals ?? [];
+    const linked = layout.powerUpPedestals.filter((pedestal) => pedestal.linkedBaseId === 'coop-base-rear');
+
+    expect(linked.map(({ defId, gridX, gridY, spawnOnArenaStart }) => ({
+      defId,
+      gridX,
+      gridY,
+      spawnOnArenaStart,
+    }))).toEqual(authored.map(({ defId, gridX, gridY, spawnOnArenaStart }) => ({
+      defId,
+      gridX,
+      gridY,
+      spawnOnArenaStart,
+    })));
+
+    const linkedIds = new Set(linked.map((pedestal) => pedestal.id));
+    const deps = {
+      healToFull: vi.fn(),
+      addArmor: vi.fn(),
+      isAlive: vi.fn(() => true),
+      isBurrowed: vi.fn(() => false),
+      applyDamage: vi.fn(),
+      applyExplosionDamage: vi.fn(),
+    } as any;
+    const powerUps = new PowerUpSystem(null as any, deps, layout, {
+      isLinkedBaseActive: (baseId) => baseId === 'coop-base-rear',
+    }, metrics);
+
+    expect(powerUps.getPedestalSnapshot().filter((pedestal) => linkedIds.has(pedestal.id))).toHaveLength(linked.length);
+    vi.useFakeTimers();
+    try {
+      const arenaStartTime = Date.now();
+      powerUps.setArenaStartTime(arenaStartTime);
+      powerUps.update(0);
+
+      const linkedAtStart = powerUps.getPedestalSnapshot().filter((pedestal) => linkedIds.has(pedestal.id));
+      expect(linkedAtStart.filter((pedestal) => pedestal.hasPowerUp)).toHaveLength(
+        authored.filter((pedestal) => pedestal.spawnOnArenaStart).length,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

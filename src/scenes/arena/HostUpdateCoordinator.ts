@@ -1741,7 +1741,7 @@ export class HostUpdateCoordinator {
         );
         if (resolvedDamage <= 0) return;
         const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, proj.ownerId);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
+        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage', proj.ownerId);
         lines.push(lineTo(rock.x, rock.y));
       });
     }
@@ -1805,14 +1805,14 @@ export class HostUpdateCoordinator {
     const resolvedDamage = this.resolveObstacleDamage(index, damage, ownerId);
     if (resolvedDamage <= 0) return;
     const newHp = this.rockVisualHelper.applyObstacleDamageById(index, resolvedDamage, ownerId);
-    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(index, 'damage');
+    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(index, 'damage', ownerId);
   }
 
   applyTeslaTurretDamage(id: number, damage: number, ownerId: string): void {
     const resolvedDamage = this.resolveObstacleDamage(id, damage, ownerId);
     if (resolvedDamage <= 0) return;
     const newHp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, ownerId);
-    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage');
+    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', ownerId);
   }
 
   /**
@@ -1860,7 +1860,7 @@ export class HostUpdateCoordinator {
     },
     resolveRockDamage: (index, damage, attackerId) => this.resolveObstacleDamage(index, damage, attackerId),
     applyRockDamage: (index, damage, attackerId) => this.rockVisualHelper.applyObstacleDamageById(index, damage, attackerId),
-    onRockDestroyed: (index) => this.rockVisualHelper.handleDestroyedRock(index, 'damage'),
+    onRockDestroyed: (index, attackerId) => this.rockVisualHelper.handleDestroyedRock(index, 'damage', attackerId),
   };
 
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */

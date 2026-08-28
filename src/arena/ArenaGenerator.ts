@@ -1,5 +1,5 @@
 import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, getArenaActivityValuesForMode, getArenaModeFlags, getCaptureTheBeerBaseRegion, getCaptureTheBeerMiddleThirdRegion, isGridCellInArenaRegion } from '../config';
-import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseBases } from './BaseRegistry';
+import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
@@ -1309,7 +1309,9 @@ export class ArenaGenerator {
     if (pedestals === null) return null;
 
     const occupied = new Set(pedestals.map((pedestal) => this.cellKey(pedestal.gridX, pedestal.gridY)));
-    for (const base of coopBaseSpecs) {
+    // Base geometry remains World-owned. Authored linked pedestals are Activity-owned and are
+    // deliberately stripped by resolveCoopDefenseBases, so resolve that overlay separately.
+    for (const base of resolveCoopDefenseActivityBases(mapConfig, 1, this.metrics)) {
       for (const config of base.powerUpPedestals) {
         const key = this.cellKey(config.gridX, config.gridY);
         if (trackCols.has(config.gridX)) {

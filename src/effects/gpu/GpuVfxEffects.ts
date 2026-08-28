@@ -454,7 +454,7 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.DeathMicroFragment,
     label: 'death.micro-fragment',
     lane: GpuVfxLaneId.GoreNormal,
-    frame: GpuVfxFrameId.DeathFragment,
+    frame: GpuVfxFrameId.DeathDustMoteA,
     importance: 'decorative',
     release: 'linger',
   },

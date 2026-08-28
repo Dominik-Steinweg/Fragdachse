@@ -40,7 +40,7 @@ export interface EnvironmentRockSink {
   /** Zieht den Schaden ab und liefert die verbleibenden HP. */
   applyRockDamage(index: number, damage: number, attackerId: string): number;
   /** Der Fels ist auf 0 HP gefallen. */
-  onRockDestroyed(index: number): void;
+  onRockDestroyed(index: number, attackerId: string): void;
 }
 
 /** Ergebnis eines Umgebungsschadens – die *tatsächlich* betroffenen Felsen. */
@@ -94,13 +94,13 @@ export function applyRadialEnvironmentDamage(
 
     const remainingHp = sink.applyRockDamage(index, resolvedDamage, attackerId);
     if (!collectResult) {
-      if (remainingHp <= 0) sink.onRockDestroyed(index);
+      if (remainingHp <= 0) sink.onRockDestroyed(index, attackerId);
       return;
     }
     result.damagedRockIndices.push(index);
     if (remainingHp <= 0) {
       result.destroyedRockIndices.push(index);
-      sink.onRockDestroyed(index);
+      sink.onRockDestroyed(index, attackerId);
     }
   };
 

@@ -77,6 +77,23 @@ describe('radial environment damage', () => {
     expect(result.damagedRockIndices).toEqual([]);
   });
 
+  it('keeps the attacker identity when a rock is destroyed', () => {
+    const sink = createSink([{ x: 0, y: 0, hp: 25 }]);
+    let destroyedBy: string | undefined;
+    sink.onRockDestroyed = (_index, attackerId) => {
+      destroyedBy = attackerId;
+    };
+
+    applyRadialEnvironmentDamage(
+      sink,
+      { x: 0, y: 0, radius: 100, damage: 25, rockDamageMult: 1 },
+      'dachs-player',
+      false,
+    );
+
+    expect(destroyedBy).toBe('dachs-player');
+  });
+
   it('never caps the number of affected rocks', () => {
     const rocks = Array.from({ length: 24 }, (_, index) => ({ x: index * 4, y: 0, hp: 100 }));
     const sink = createSink(rocks);
