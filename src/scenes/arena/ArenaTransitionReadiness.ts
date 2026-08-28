@@ -2,6 +2,10 @@ import type { GamePhase, RoundParticipationState } from '../../types';
 import type { RoundState } from '../../network/NetworkBridge';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
+import {
+  readWorldParticipation,
+  type WorldParticipationState,
+} from '../../world/WorldParticipation';
 
 export interface ArenaTransitionReadiness {
   readonly phase: GamePhase;
@@ -10,6 +14,8 @@ export interface ArenaTransitionReadiness {
   readonly roundState: RoundState | null;
   readonly arenaStartTime: number;
   readonly participation: RoundParticipationState | null;
+  readonly worldParticipationState: WorldParticipationState | null;
+  readonly localPlayerId: string;
 }
 
 /**
@@ -26,6 +32,8 @@ export function isArenaTransitionReady(state: ArenaTransitionReadiness): boolean
     roundState,
     arenaStartTime,
     participation,
+    worldParticipationState,
+    localPlayerId,
   } = state;
 
   if (!worldDescriptor) return false;
@@ -35,7 +43,13 @@ export function isArenaTransitionReady(state: ArenaTransitionReadiness): boolean
       && roundState?.status === 'active'
       && roundState.roundStartTime === arenaStartTime
       && participation !== null
-      && participation.roundRevision === activityDescriptor.activityRevision;
+      && participation.roundRevision === activityDescriptor.activityRevision
+      && isLocalWorldParticipationReady(
+        worldParticipationState,
+        worldDescriptor.worldRevision,
+        participation,
+        localPlayerId,
+      );
   }
 
   if (activityDescriptor === null) return true;
@@ -43,4 +57,30 @@ export function isArenaTransitionReady(state: ArenaTransitionReadiness): boolean
     && roundState.roundStartTime === arenaStartTime
     && participation !== null
     && participation.roundRevision === activityDescriptor.activityRevision;
+}
+
+/**
+ * Checks that the locally relevant World participation has converged with the accepted round
+ * snapshot before the World build chooses its presentation surfaces.
+ */
+function isLocalWorldParticipationReady(
+  worldParticipationState: WorldParticipationState | null,
+  worldRevision: number,
+  roundParticipation: RoundParticipationState,
+  localPlayerId: string,
+): boolean {
+  if (!worldParticipationState || worldParticipationState.worldRevision !== worldRevision) return false;
+
+  const localParticipation = readWorldParticipation(worldParticipationState, localPlayerId);
+  const isRoundSpectator = roundParticipation.spectatorIds.includes(localPlayerId);
+  const isRoundParticipant = roundParticipation.participantIds.includes(localPlayerId)
+    && !isRoundSpectator;
+
+  if (isRoundParticipant) {
+    return localParticipation === 'joining' || localParticipation === 'interactive';
+  }
+  if (isRoundSpectator) return localParticipation === 'observer';
+
+  // A player absent from both round lists is not meant to enter this Activity World.
+  return localParticipation === 'none';
 }

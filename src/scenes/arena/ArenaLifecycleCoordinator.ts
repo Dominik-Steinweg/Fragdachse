@@ -1575,9 +1575,12 @@ export class ArenaLifecycleCoordinator {
    * aufgenommene Mitglied.
    */
   hostSyncWorldParticipation(): void {
-    if (!bridge.isHost() || !this.worldLifecycle.isActive()) return;
-    const activityRunning = this.worldLifecycle.activity.isActive();
-    if (activityRunning) this.admitActivityRoster();
+    // The host publishes the initial `joining`/`observer` snapshot while the local World is
+    // still creating. Clients must wait for that snapshot before choosing their presentation.
+    if (!bridge.isHost()
+      || (this.worldLifecycle.phase !== 'active' && this.worldLifecycle.phase !== 'creating')) return;
+    const activityPresent = this.worldLifecycle.activity.descriptor !== null;
+    if (activityPresent) this.admitActivityRoster();
 
     const connected = bridge.getConnectedPlayers();
     const connectedIds = new Set(connected.map((profile) => profile.id));
@@ -1592,7 +1595,7 @@ export class ArenaLifecycleCoordinator {
       // Activity-Besetzung muss deshalb aus der autoritativen Rundenrolle kommen und darf nicht
       // ueber getPlayerCapabilities() den gerade zu erzeugenden World-Snapshot wieder einlesen:
       // sonst waere jeder neue Teilnehmer zunaechst `none`, danach dauerhaft `observer`.
-      const mayAct = member && (!activityRunning || bridge.getRoundRole(profile.id) === 'participant');
+      const mayAct = member && (!activityPresent || bridge.getRoundRole(profile.id) === 'participant');
       participants[profile.id] = resolveWorldParticipation({
         worldActive: true,
         admitted: member,
@@ -4945,6 +4948,11 @@ export class ArenaLifecycleCoordinator {
     const activityDescriptor = bridge.getActivityDescriptor();
     const roundState = bridge.getRoundState();
     const participation = bridge.getRoundParticipation();
+    if (bridge.isHost() && bridge.getGamePhase() === 'ARENA') {
+      // `publishWorldAndActivity()` intentionally published an empty participation snapshot.
+      // Fill it from the host's authoritative admission before the shared readiness barrier.
+      this.hostSyncWorldParticipation();
+    }
     const activityReady = isArenaTransitionReady({
       phase: bridge.getGamePhase(),
       worldDescriptor,
@@ -4952,6 +4960,8 @@ export class ArenaLifecycleCoordinator {
       roundState,
       arenaStartTime: bridge.getArenaStartTime(),
       participation,
+      worldParticipationState: bridge.getWorldParticipationState(),
+      localPlayerId: bridge.getLocalPlayerId(),
     });
     const pendingHostGeneration = this.pendingHostArenaGeneration;
     if (bridge.isHost()

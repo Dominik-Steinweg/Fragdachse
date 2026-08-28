@@ -5,6 +5,7 @@ import type { RoundParticipationState } from '../src/types';
 import type { RoundState } from '../src/network/NetworkBridge';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import type { WorldDescriptor } from '../src/world/WorldDescriptor';
+import type { WorldParticipation, WorldParticipationState } from '../src/world/WorldParticipation';
 import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import {
@@ -46,6 +47,16 @@ function participation(roundRevision: number): RoundParticipationState {
   };
 }
 
+function worldParticipation(
+  worldRevision: number,
+  localParticipation: WorldParticipation = 'joining',
+): WorldParticipationState {
+  return {
+    worldRevision,
+    participants: { p1: localParticipation },
+  };
+}
+
 function readiness(overrides: Partial<ArenaTransitionReadiness> = {}): ArenaTransitionReadiness {
   return {
     phase: 'ARENA',
@@ -54,6 +65,8 @@ function readiness(overrides: Partial<ArenaTransitionReadiness> = {}): ArenaTran
     roundState: roundState(),
     arenaStartTime: MATCH_START,
     participation: participation(19),
+    worldParticipationState: worldParticipation(19),
+    localPlayerId: 'p1',
     ...overrides,
   };
 }
@@ -75,7 +88,55 @@ describe('Arena-Transition-Bereitschaft', () => {
     expect(isArenaTransitionReady(readiness({
       activityDescriptor: activity(19, 31),
       participation: participation(31),
+      worldParticipationState: worldParticipation(19, 'interactive'),
     }))).toBe(true);
+  });
+
+  it('wartet bei leerem WorldParticipation-Snapshot auf die lokale Konvergenz', () => {
+    expect(isArenaTransitionReady(readiness({
+      worldParticipationState: { worldRevision: 19, participants: {} },
+    }))).toBe(false);
+  });
+
+  it.each(['joining', 'interactive'] as const)(
+    'erlaubt einen normalen Round-Teilnehmer mit WorldParticipation=%s',
+    (localParticipation) => {
+      expect(isArenaTransitionReady(readiness({
+        worldParticipationState: worldParticipation(19, localParticipation),
+      }))).toBe(true);
+    },
+  );
+
+  it('erlaubt einen Round-Spectator nur mit observer-Participation', () => {
+    const spectatorRound = participation(19);
+    spectatorRound.spectatorIds = ['p1'];
+    expect(isArenaTransitionReady(readiness({
+      participation: spectatorRound,
+      worldParticipationState: worldParticipation(19, 'observer'),
+    }))).toBe(true);
+    expect(isArenaTransitionReady(readiness({
+      participation: spectatorRound,
+      worldParticipationState: { worldRevision: 19, participants: {} },
+    }))).toBe(false);
+  });
+
+  it('wartet bei Round-Teilnehmer und none-Participation', () => {
+    expect(isArenaTransitionReady(readiness({
+      worldParticipationState: worldParticipation(19, 'none'),
+    }))).toBe(false);
+  });
+
+  it('akzeptiert none nur fuer einen Spieler ausserhalb des Round-Snapshots', () => {
+    expect(isArenaTransitionReady(readiness({
+      localPlayerId: 'p2',
+      worldParticipationState: { worldRevision: 19, participants: {} },
+    }))).toBe(true);
+  });
+
+  it('verwirft einen WorldParticipation-Snapshot fuer eine andere World-Revision', () => {
+    expect(isArenaTransitionReady(readiness({
+      worldParticipationState: worldParticipation(18),
+    }))).toBe(false);
   });
 
   it('erlaubt die Activity-lose LobbyWorld weiterhin', () => {
@@ -167,6 +228,24 @@ describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
     expect(source).toContain("this.terminateMatch(t('ui.lobby.terrainSnapshotCreateFailed'));");
     expect(source).not.toContain("this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');");
     expect(source).not.toContain('Generator/Fingerprint abweichend');
+  });
+
+  it('synchronisiert den Host vor dem Arena-Readiness-Gate und laesst Clients auf Replikation warten', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const transitionStart = source.indexOf('  private onTransitionToArena(): void {');
+    const transitionEnd = source.indexOf('\n  private startTerrainSnapshotBuild', transitionStart);
+    const transitionBody = source.slice(transitionStart, transitionEnd);
+    expect(transitionBody.indexOf('this.hostSyncWorldParticipation();'))
+      .toBeLessThan(transitionBody.indexOf('const activityReady = isArenaTransitionReady({'));
+    expect(transitionBody).toContain('worldParticipationState: bridge.getWorldParticipationState(),');
+    expect(transitionBody).toContain('localPlayerId: bridge.getLocalPlayerId(),');
+    expect(source).toContain(
+      "(this.worldLifecycle.phase !== 'active' && this.worldLifecycle.phase !== 'creating')",
+    );
+    expect(source).toContain('const activityPresent = this.worldLifecycle.activity.descriptor !== null;');
   });
 });
 

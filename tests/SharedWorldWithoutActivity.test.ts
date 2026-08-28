@@ -204,7 +204,7 @@ describe('Shared World ohne Activity – Admission statt Raum-Mitgliedschaft', (
     expect(source).toContain('hostAdmitToWorld(playerId: string): void {');
     expect(source).toContain('hostRemoveFromWorld(playerId: string): void {');
     // Eine laufende Activity nimmt ihre eigene Besetzung auf - das ist der einzige Automatismus.
-    expect(body).toContain('if (activityRunning) this.admitActivityRoster();');
+    expect(body).toContain('if (activityPresent) this.admitActivityRoster();');
     // Mit der World endet jede Aufnahme.
     expect(source).toContain('private clearWorldAdmission(): void {');
   });

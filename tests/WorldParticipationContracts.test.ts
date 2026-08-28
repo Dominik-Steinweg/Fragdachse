@@ -180,10 +180,12 @@ describe('WorldParticipation – kanonisch repliziert', () => {
     const start = source.indexOf('  hostSyncWorldParticipation(): void {');
     expect(start, 'host must author the participation').toBeGreaterThan(0);
     const body = source.slice(start, source.indexOf('\n  }', start));
-    expect(body).toContain('if (!bridge.isHost() || !this.worldLifecycle.isActive()) return;');
+    expect(body).toContain(
+      "(this.worldLifecycle.phase !== 'active' && this.worldLifecycle.phase !== 'creating')",
+    );
     expect(body).toContain('bridge.hostPublishWorldParticipation(participants);');
     // Ohne laufende Activity traegt allein die World-Mitgliedschaft.
-    expect(body).toContain('const activityRunning = this.worldLifecycle.activity.isActive();');
+    expect(body).toContain('const activityPresent = this.worldLifecycle.activity.descriptor !== null;');
 
     // Der erste Activity-Sync darf die gerade entstehende Teilnahme nicht ueber ihre noch leere
     // Replikation aufloesen - sonst wird ein aktiver Teilnehmer dauerhaft zum Observer.
