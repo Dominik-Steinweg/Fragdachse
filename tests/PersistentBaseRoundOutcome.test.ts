@@ -6,6 +6,7 @@ import {
 } from '../src/persistentBase/PersistentBaseRoundOutcome';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import type { SyncedPlaceableRock } from '../src/types';
+import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 
 /**
  * Phase 3B – der Rundenausgang entscheidet ueber alle persoenlichen Beitraege gemeinsam.
@@ -85,6 +86,36 @@ describe('persistent base round outcome', () => {
       expect(store.getCommittedContribution('owner-host'), String(conclusion)).toBeNull();
       expect(store.getCommittedContribution('owner-guest'), String(conclusion)).toBeNull();
       expect(store.hasActiveMission, String(conclusion)).toBe(false);
+    }
+  });
+
+  it('laesst bei Niederlage oder Abbruch einen zuvor in der Lobby committed Stand unveraendert', () => {
+    for (const conclusion of ['defeat', 'aborted', null] as const) {
+      const store = new PersistentBaseContributionStore();
+      store.offerContribution({
+        schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+        ownerId: 'owner-host',
+        revision: 7,
+        constructions: [{
+          persistentId: 'lobby-kept',
+          tool,
+          relativeGridX: 1,
+          relativeGridY: 0,
+          angle: 0,
+          placementOrder: 0,
+        }],
+      });
+      store.beginMission();
+      store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, anchor, buildArea);
+
+      expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
+        contributions: store,
+        isRuntimeObjectAlive: () => true,
+      })).toEqual([]);
+      expect(store.getCommittedContribution('owner-host')).toMatchObject({
+        revision: 7,
+        constructions: [expect.objectContaining({ persistentId: 'lobby-kept' })],
+      });
     }
   });
 

@@ -2359,9 +2359,10 @@ export class NetworkBridge {
   }
 
   /**
-   * Host-only: bestaetigt einem Spieler seinen fortgeschriebenen Beitrag nach einem Sieg.
+   * Host-only: bestaetigt einem Spieler seinen fortgeschriebenen Beitrag.
    *
-   * Das ist die einzige Quelle, aus der ein Client seinen persoenlichen Save fortschreiben darf.
+   * Das ist nach Lobby-Sofort-Commit oder Missionssieg die einzige Quelle, aus der ein Client
+   * seinen persoenlichen Save fortschreiben darf.
    * Ohne sie koennte ein manipulierter Client zwar Requests senden, aber nie seine eigene
    * Revision erhoehen und ungeprueftes Bauwerk dauerhaft in den autoritativen Fluss druecken.
    */

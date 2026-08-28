@@ -57,7 +57,7 @@ Simulation und Präsentation sind entkoppelt. World- und Player-Runtime müssen 
 - Renderer beobachten Runtime-Zustand und besitzen weder Treffer-, Ressourcen- noch Spawn-Autorität.
 - PlayerWorldRuntime beschreibt die gemeinsam benötigten Features und macht sichtbar, welche Simulation nur der Host ausführt. World-scoped Player-Build- oder Item-Zustände dürfen auch ohne Activity existieren; missionsgebundener Zustand bleibt Activity-spezifisch.
 
-Für PersistentBase trennt derselbe Vertrag die Ebenen: Die World bindet Site, Basiskern, Lage, Baubereich und World-Parameter; persönlicher Progress besitzt die dauerhaften Blueprints; Runtime/Working Copy materialisiert den aktuellen bearbeitbaren Zustand. Activity/Round kann den Arbeitsstand committen oder verwerfen. Der Host hat Authority über Materialisierung, Validierung, Merge und Simulation, ist dadurch aber nicht fachlicher Eigentümer der Konstruktionen.
+Für PersistentBase trennt derselbe Vertrag die Ebenen: Die World bindet Site, Basiskern, Lage, Baubereich und World-Parameter; persönlicher Progress besitzt die dauerhaften Blueprints; Runtime/Working Copy materialisiert den aktuellen bearbeitbaren Zustand. Ohne aktive Mission committed der Host validierte Änderungen sofort; eine Activity/Round kann ihren Working State committen oder verwerfen. Der Host hat Authority über Materialisierung, Validierung, Merge und Simulation, ist dadurch aber nicht fachlicher Eigentümer der Konstruktionen.
 
 Die Verträge sind in [PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts), [PlayerCapabilities.ts](../../src/world/PlayerCapabilities.ts) und den Tests [PlayerTreeRuntimeContracts.test.ts](../../tests/PlayerTreeRuntimeContracts.test.ts), [WorldPresentationContracts.test.ts](../../tests/WorldPresentationContracts.test.ts) und [WorldWithoutActivityProof.test.ts](../../tests/WorldWithoutActivityProof.test.ts) verankert.
 
@@ -74,7 +74,7 @@ Die Lobby ist ein normales authored World mit der Definition world:lobby. Sie nu
 Bei einem neuen Feature zuerst seinen Owner bestimmen:
 
 1. World-Identität, Layout, Metrics, Basis oder persistente Site gehören in World-Definition, WorldRuntimeContext oder WorldLifecycle.
-2. Dauerhafte Blueprint-Beiträge gehören in persönlichen Progress; materialisierte Konstruktionen und der bearbeitbare Arbeitsstand gehören in Runtime/Working Copy. Activity/Round liefert den Ausgang und die Commit-/Rollback-Entscheidung, nicht den dauerhaften Eigentümer.
+2. Dauerhafte Blueprint-Beiträge gehören in persönlichen Progress; materialisierte Konstruktionen und der bearbeitbare Zustand gehören in Runtime beziehungsweise Missions-Working-Copy. Eine persistente World ohne Mission committed host-validierte Änderungen sofort; Activity/Round liefert für ihren Working State den Ausgang und die Commit-/Rollback-Entscheidung, nicht den dauerhaften Eigentümer.
 3. Ziel, Timer, Gegner, Mission, Round-Events oder Aktivitätsprogress gehören in Activity-Definition und Activity-Systeme.
 4. Admission, Beobachten und World-Eingaben gehören in WorldParticipation, Capabilities und NetworkBridge.
 5. Sichtbarkeit, Kamera, FX und Overlay gehören in Presentation, Renderer oder Effects.

@@ -1924,19 +1924,19 @@ export class ArenaLifecycleCoordinator {
       coopDefenseBases,
     );
     this.ctx.persistentBaseContributions = null;
-    // Der Basiskern gehoert der World, die Konstruktionen darauf der Activity. Eine World ohne
-    // Activity - die LobbyWorld - materialisiert deshalb den Kern, oeffnet aber keine Working
-    // Copy: Es gibt dort nichts wiederherzustellen und nichts zu committen.
-    if (bridge.isHost() && activityDescriptor !== null && world.definition?.persistentBaseSite) {
+    // Der Basiskern und sein committed Contribution-State gehoeren zur persistenten World. Nur
+    // eine aktive Mission oeffnet zusaetzlich eine Working Copy; die LobbyWorld bearbeitet den
+    // committed Stand dagegen unmittelbar.
+    if (bridge.isHost() && persistentBaseSite !== null) {
       if (!isValidPersistentBaseSite(persistentBaseSite)) {
         throw new Error(
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on world ${world.descriptor.definitionId}`,
         );
       }
-      // Erst alle aktuell angebotenen Beitraege einsammeln, dann die Mission oeffnen: Der
-      // Arbeitsstand beginnt genau bei dem, was die anwesenden Spieler mitgebracht haben.
+      // Erst alle aktuell angebotenen Beitraege einsammeln. Eine Mission startet danach ihren
+      // Working State genau bei diesem committed Stand; ohne Activity bleibt er direkt editierbar.
       this.ingestOfferedPersistentBaseContributions();
-      this.persistentBaseContributions.beginMission();
+      if (activityDescriptor !== null) this.persistentBaseContributions.beginMission();
       this.ctx.persistentBaseContributions = this.persistentBaseContributions;
       this.persistentBaseAnchor = persistentBaseSite.anchor;
       this.persistentBaseBuildArea = persistentBaseSite.buildArea;
@@ -4081,6 +4081,10 @@ export class ArenaLifecycleCoordinator {
     this.persistentBaseContributions.detachRuntimeObjects(
       (runtimeId) => detachedPlacementSystem?.hasRuntimeRock(runtimeId) === true,
     );
+    // Der Lobby-Fast-Reinstance verwendet den authored RockGridIndex erneut. Runtime-Objekte
+    // muessen ihre Zellen deshalb vor dem Verwerfen des PlacementSystems freigeben; andernfalls
+    // kollidieren persistente Blueprints beim naechsten Coop-Aufbau mit ihren eigenen Altzellen.
+    detachedPlacementSystem?.clearRuntimeRocks();
     this.ctx.persistentBaseContributions = null;
     this.persistentBaseAnchor = null;
     this.persistentBaseBuildArea = null;
@@ -4657,7 +4661,8 @@ export class ArenaLifecycleCoordinator {
     // eine Frage der Besitzeridentitaet.
     const ownerId = this.resolveOwnerId(runtime.ownerId);
     if (!ownerId) return;
-    this.ctx.persistentBaseContributions?.registerNew(
+    const store = this.ctx.persistentBaseContributions;
+    const registered = store?.registerNew(
       ownerId,
       runtime,
       normalizedTool,
@@ -4665,6 +4670,15 @@ export class ArenaLifecycleCoordinator {
       this.persistentBaseAnchor,
       this.persistentBaseBuildArea,
     );
+    if (store && registered && !store.hasActiveMission) {
+      this.publishImmediatePersistentBaseContribution(ownerId);
+    }
+  }
+
+  /** Bestaetigt genau die bereits host-validierte Lobby-Aenderung ihres Besitzers. */
+  private publishImmediatePersistentBaseContribution(ownerId: string): void {
+    const confirmed = this.persistentBaseContributions.getCommittedContribution(ownerId);
+    if (confirmed) this.publishConfirmedPersistentBaseContributions([confirmed]);
   }
 
   /**
@@ -5574,7 +5588,13 @@ export class ArenaLifecycleCoordinator {
   private finalizeDismantledConstruction(removed: SyncedPlaceableRock, playDust: boolean): void {
     // Abriss gibt den Besitz auf. Ohne diesen Schritt bliebe der Blueprint als dormant stehen und
     // erschiene bei der naechsten Mission wieder - der Spieler koennte nichts dauerhaft abbauen.
-    this.ctx.persistentBaseContributions?.removeByRuntimeId(removed.id);
+    const store = this.ctx.persistentBaseContributions;
+    const ownerId = store?.getRuntimeBindings()
+      .find((binding) => binding.runtimeId === removed.id)?.ownerId;
+    const removedPersistentBlueprint = store?.removeByRuntimeId(removed.id) === true;
+    if (store && ownerId && removedPersistentBlueprint && !store.hasActiveMission) {
+      this.publishImmediatePersistentBaseContribution(ownerId);
+    }
     this.releasePlaceableRuntime(removed, playDust);
   }
 

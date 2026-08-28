@@ -39,10 +39,10 @@ Die persistente Base ist eine World-Site. Ihre sichtbare Runtime-Zusammensetzung
 
 - [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) definiert den persönlichen Beitrag samt Sanitizing für Speicher und Netzwerk.
 - [PersistentBaseComposite.ts](../../src/persistentBase/PersistentBaseComposite.ts) mischt authored Geometrie, Host-Beitrag und Gastbeiträge deterministisch zu einem reinen Ergebnis.
-- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) hält den host-seitigen Arbeitsstand aller Beiträge während eines laufenden Durchlaufs.
+- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) hält den host-seitigen Zustand aller Beiträge; in der Lobby als direkten committed Stand, in einer Mission als Working State.
 - [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) koppelt Sieg an Commit und Niederlage, Abbruch oder fehlendes Ergebnis an Rollback.
 
-Es gibt genau einen Besitzpfad: Der dauerhafte Blueprint-Besitz liegt im persönlichen Progress des jeweiligen Besitzers, unabhängig davon, ob dieser im aktuellen Raum Host oder Gast ist. Die Base-Site und die Activity besitzen keine persönlichen Konstruktionen. Der hostseitige Store beziehungsweise die Working Copy materialisiert und bearbeitet sie nur laufzeitbezogen. Freischaltung, Loadout und Kapazität gelten je Besitzer, nicht je Host und nicht als gemeinsamer Basis-Pool.
+Es gibt genau einen Besitzpfad: Der dauerhafte Blueprint-Besitz liegt im persönlichen Progress des jeweiligen Besitzers, unabhängig davon, ob dieser im aktuellen Raum Host oder Gast ist. Die Base-Site und die Activity besitzen keine persönlichen Konstruktionen. Der hostseitige Store materialisiert und bearbeitet sie laufzeitbezogen: ohne Mission mit sofortigem Commit, in einer Mission über die Working Copy. Freischaltung, Loadout und Kapazität gelten je Besitzer, nicht je Host und nicht als gemeinsamer Basis-Pool.
 
 Die Priorität des Merges ist authored Geometrie, dann der Beitrag des Raum-Hosts, dann Gastbeiträge; „Host-Beitrag“ bezeichnet dabei die aktuelle Raumrolle, nicht eine zusätzliche Besitzklasse. Gäste werden nach stabiler Besitzeridentität sortiert, damit die Beitrittsreihenfolge das Ergebnis nicht verändert. Ein Konflikt materialisiert nicht und löscht nichts: Der Blueprint bleibt im Beitrag seines Besitzers und kann in einem anderen Raum wieder erscheinen.
 

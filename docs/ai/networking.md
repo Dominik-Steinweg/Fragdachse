@@ -8,7 +8,7 @@ Gameplay spricht ausschließlich über [NetworkBridge](../../src/network/Network
 
 Der Host entscheidet World- und Activity-Zustand, Simulation, Treffer, Ressourcen, Spawns, Rundenzustand und Layout. Clients senden Eingaben oder Aktionen und visualisieren validierten Zustand. Ein Client darf lokale InputPolicy oder UI-Zustände nicht als Berechtigung behandeln.
 
-Bei PersistentBase-Daten entscheidet der Host über Materialisierung, Validierung, Merge-Ergebnis und laufende Runtime. Der dauerhafte Blueprint-Besitz bleibt im persönlichen Progress des jeweiligen Spielers; Host-Authority ist kein fachlicher Eigentumstitel. `ownerId` identifiziert diesen Besitz über Sessions hinweg, autorisiert aber keine eingehende Mutation. Netzwerkaktionen und Änderungen werden hostseitig unabhängig validiert.
+Bei PersistentBase-Daten entscheidet der Host über Materialisierung, Validierung, Merge-Ergebnis und laufende Runtime. Der dauerhafte Blueprint-Besitz bleibt im persönlichen Progress des jeweiligen Spielers; Host-Authority ist kein fachlicher Eigentumstitel. `ownerId` identifiziert diesen Besitz über Sessions hinweg, autorisiert aber keine eingehende Mutation. Netzwerkaktionen und Änderungen werden hostseitig unabhängig validiert. In einer persistenten World ohne Mission bestätigt der Host jede akzeptierte Änderung sofort; in einer Mission erst den Working State nach einem Sieg. In beiden Fällen erhält und speichert jeder Spieler ausschließlich seinen eigenen bestätigten Beitrag.
 
 PeerJS wird nur in [PeerJsTransport.ts](../../src/network/peer/PeerJsTransport.ts) importiert. [PeerRoom.ts](../../src/network/peer/PeerRoom.ts) kennt eine Transport-Schnittstelle; Gameplay kennt nur NetworkBridge.
 

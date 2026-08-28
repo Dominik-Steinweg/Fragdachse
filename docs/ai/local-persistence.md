@@ -25,7 +25,7 @@ Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save
 PersistentBase ist persönlicher Progress, nicht Activity-Runtime:
 
 - [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) sanitisiert den persönlichen Beitrag und prüft nur storage- und wire-lokale Form.
-- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) führt den host-seitigen Runtime-Arbeitsstand aller Beiträge mit Baseline, Commit oder Rollback.
+- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) führt den host-seitigen Runtime-Zustand aller Beiträge: Ohne aktive Mission werden host-validierte Änderungen sofort committed; eine Mission arbeitet weiterhin mit Baseline, Working State, Commit oder Rollback.
 - [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) wendet Commit oder Rollback auf alle Beiträge gemeinsam an.
 
 Persistiert wird der persönliche Beitrag eines Spielers, nicht der Zustand einer Basis: Jeder Spieler speichert ausschließlich seinen eigenen Beitrag auf seinem eigenen Gerät, unter einer dauerhaften Besitzeridentität, die niemals aus Peer-ID, Room-ID oder Session abgeleitet wird. `ownerId` identifiziert fachlichen Besitz über Sessions hinweg, beweist aber nicht, dass eine eingehende Mutation autorisiert ist. Der Host validiert Netzwerkaktionen und Änderungen unabhängig; eine übereinstimmende `ownerId` allein erteilt kein Änderungsrecht.
@@ -38,7 +38,7 @@ Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören
 
 Die Speicherfunktionen dürfen einen Cache verwenden, müssen ihn bei Schreib- oder Reset-Operationen gezielt invalidieren und dürfen fehlgeschlagene Persistenz nicht in einen unbrauchbaren In-Memory-Zustand überführen. Cache- und Save-Lifetime ist von ArenaScene-, World- und Activity-Lifetime getrennt.
 
-Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch und ist keine Persistenz- oder Besitzgrenze. Eine neue Working Copy startet vom zuletzt bestätigten beziehungsweise committed Beitrag. `committed` bezeichnet den zuletzt akzeptierten Stand, `baseline` den Ausgangsstand der aktuellen Working Copy und `working` den aktuellen bearbeitbaren Zustand. Ein Activity-/Round-Ausgang kann die Working Copy committen oder verwerfen; dauerhaft gespeichert bleibt ausschließlich der persönliche Beitrag seines Besitzers.
+Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch und ist keine Persistenz- oder Besitzgrenze. Eine persistente World ohne aktive Mission bearbeitet `committed` direkt und stellt jede host-bestätigte Änderung sofort dem jeweiligen Besitzer zu. Eine neue Missions-Working-Copy startet von diesem zuletzt bestätigten Beitrag. `committed` bezeichnet den zuletzt akzeptierten Stand, `baseline` den Ausgangsstand der aktuellen Working Copy und `working` den aktuellen bearbeitbaren Zustand. Ein Activity-/Round-Ausgang kann die Working Copy committen oder verwerfen; dauerhaft gespeichert bleibt ausschließlich der persönliche Beitrag seines Besitzers.
 
 ## Erweiterungsregeln
 

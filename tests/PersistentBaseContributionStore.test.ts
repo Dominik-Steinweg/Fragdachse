@@ -134,6 +134,64 @@ describe('PersistentBaseContributionStore – Verlassen und Wiederkommen', () =>
   });
 });
 
+describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
+  it('committed eine host-validierte Platzierung sofort und erhoeht die Revision', () => {
+    const store = new PersistentBaseContributionStore();
+    store.offerContribution(contribution('owner-a', [], 4));
+
+    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
+      .toMatchObject({ origin: 'new' });
+    expect(store.hasActiveMission).toBe(false);
+    expect(store.getCommittedContribution('owner-a')).toMatchObject({
+      ownerId: 'owner-a',
+      revision: 5,
+      constructions: [expect.objectContaining({ relativeGridX: 1 })],
+    });
+  });
+
+  it('committed den Abriss eines eigenen materialisierten Blueprints sofort', () => {
+    const store = new PersistentBaseContributionStore();
+    const restored = blueprint('lobby-object', 1);
+    store.offerContribution(contribution('owner-a', [restored], 5));
+    store.registerRestored('owner-a', restored, 12);
+
+    expect(store.removeByRuntimeId(12)).toBe(true);
+    expect(store.getCommittedContribution('owner-a')).toMatchObject({
+      ownerId: 'owner-a',
+      revision: 6,
+      constructions: [],
+    });
+  });
+
+  it('verwendet den bestaetigten Stand nach erneutem Betreten als neue Grundlage', () => {
+    const firstVisit = new PersistentBaseContributionStore();
+    firstVisit.offerContribution(contribution('owner-a', [], 2));
+    firstVisit.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    const confirmed = firstVisit.getCommittedContribution('owner-a')!;
+
+    const reload = new PersistentBaseContributionStore();
+    expect(reload.offerContribution(confirmed)).toBe(true);
+    expect(reload.getContribution('owner-a')).toEqual(confirmed);
+  });
+
+  it('schreibt eine Gastplatzierung nur in den Beitrag ihres Besitzers', () => {
+    const store = new PersistentBaseContributionStore();
+    store.offerContribution(contribution('owner-host', [blueprint('host-kept', 0)], 9));
+    store.offerContribution(contribution('owner-guest', [], 3));
+
+    store.registerNew('owner-guest', runtime(2, 11), tool, footprint, anchor, buildArea);
+
+    expect(store.getCommittedContribution('owner-host')).toEqual(
+      contribution('owner-host', [blueprint('host-kept', 0)], 9),
+    );
+    expect(store.getCommittedContribution('owner-guest')).toMatchObject({
+      ownerId: 'owner-guest',
+      revision: 4,
+      constructions: [expect.objectContaining({ relativeGridX: 1 })],
+    });
+  });
+});
+
 describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
   it('nimmt nur Neubauten innerhalb des Baubereichs auf', () => {
     const store = new PersistentBaseContributionStore();
@@ -147,9 +205,19 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     expect(store.getContribution('owner-a')?.constructions).toHaveLength(1);
   });
 
-  it('nimmt ausserhalb einer Mission nichts auf', () => {
+  it('laesst den committed Stand waehrend einer Mission bis zum Sieg unveraendert', () => {
     const store = new PersistentBaseContributionStore();
-    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea)).toBeNull();
+    store.offerContribution(contribution('owner-a', [blueprint('lobby-kept', 0)], 4));
+    store.beginMission();
+
+    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
+      .toMatchObject({ origin: 'new' });
+    expect(store.getContribution('owner-a')?.constructions).toHaveLength(2);
+    expect(store.getCommittedContribution('owner-a')).toEqual(
+      contribution('owner-a', [blueprint('lobby-kept', 0)], 4),
+    );
+
+    expect(store.commit(() => true)[0]).toMatchObject({ revision: 5 });
   });
 
   it('unterscheidet wiederhergestellte und neue Runtime-Objekte', () => {

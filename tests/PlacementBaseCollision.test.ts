@@ -65,6 +65,10 @@ function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
   return new PlacementSystem(layout, new RockGridIndex(layout.rocks), noPlayers, resolveActiveArenaWorldMetrics(), bases);
 }
 
+function createPlacementOnGrid(rockGrid: RockGridIndex): PlacementSystem {
+  return new PlacementSystem(layout, rockGrid, noPlayers, resolveActiveArenaWorldMetrics());
+}
+
 function world(gridX: number, gridY: number): { x: number; y: number } {
   return {
     x: ARENA_OFFSET_X + CELL_SIZE * (gridX + 0.5),
@@ -106,6 +110,19 @@ function blueprint(
 }
 
 describe('PlacementSystem Coop-Defense base collision contract', () => {
+  it('gibt Runtime-Zellen vor einem LobbyWorld-Reinstance vollstaendig frei', () => {
+    const sharedGrid = new RockGridIndex(layout.rocks);
+    const coopPlacement = createPlacementOnGrid(sharedGrid);
+    expect(placeRocketAt(coopPlacement, 11, 10)).toMatchObject({ gridX: 11, gridY: 10 });
+
+    expect(coopPlacement.clearRuntimeRocks()).toHaveLength(1);
+    expect(coopPlacement.getAllRuntimeRocks()).toEqual([]);
+
+    // Der Fast-Reinstance baut auf demselben authored Grid eine neue Placement-Runtime auf.
+    const rebuiltCoopPlacement = createPlacementOnGrid(sharedGrid);
+    expect(placeRocketAt(rebuiltCoopPlacement, 11, 10)).toMatchObject({ gridX: 11, gridY: 10 });
+  });
+
   it('blocks Inspector construction on exact base cells and allows a free adjacent cell', () => {
     const placement = createPlacement([
       makeBase('main', [{ gridX: 10, gridY: 10 }]),

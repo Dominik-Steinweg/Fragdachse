@@ -303,13 +303,16 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(lifecycle).toContain('this.lobbyWorldModeAtRevision !== currentMode');
   });
 
-  it('haelt Konstruktionen an der Activity, nicht an der World', () => {
-    // Die LobbyWorld traegt den Kern, hat aber keine Activity - und damit weder eine Working
-    // Copy noch einen Restore noch einen Commit. Ebenso wenig kennt ihre Struktur Schaden.
+  it('bindet Contributions an die persistente World und Working State nur an die Activity', () => {
+    // Eine freigeschaltete LobbyWorld materialisiert und editiert den committed Stand direkt.
+    // Erst eine echte Activity oeffnet den bestehenden Missions-Working-State. Die Struktur kennt
+    // ohne Activity weiterhin keinen Schaden.
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    expect(lifecycle).toContain(
-      "if (bridge.isHost() && activityDescriptor !== null && world.definition?.persistentBaseSite) {",
-    );
+    expect(lifecycle).toContain('if (bridge.isHost() && persistentBaseSite !== null) {');
+    expect(lifecycle).toContain('if (activityDescriptor !== null) this.persistentBaseContributions.beginMission();');
+    expect(lifecycle).toContain('if (store && registered && !store.hasActiveMission) {');
+    expect(lifecycle).toContain('if (store && ownerId && removedPersistentBlueprint && !store.hasActiveMission) {');
+    expect(lifecycle).toContain('detachedPlacementSystem?.clearRuntimeRocks();');
     expect(lifecycle).toContain('}, presentation, activityDescriptor !== null)');
   });
 });

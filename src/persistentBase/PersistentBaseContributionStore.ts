@@ -15,15 +15,16 @@ import {
 } from './PersistentBaseCore';
 
 /**
- * Host-seitiger Arbeitsstand aller persoenlichen Beitraege einer Mission.
+ * Host-seitiger Zustand aller persoenlichen Beitraege einer persistenten Basis.
  *
  * Verbindlicher Zweck: **Ein einziger Besitzpfad.** Ob ein Beitrag dem Host oder einem Gast
  * gehoert, ist hier nur noch eine Besitzeridentitaet - es gibt keine zweite Datenstruktur mehr,
  * die Gaeste anders behandelt als den Host.
  *
- * Der Store ist bewusst frei von Persistenz: Er haelt den Missionsarbeitsstand. Wer ihn
- * dauerhaft speichern darf, entscheidet der Rundenausgang, und speichern darf ihn ausschliesslich
- * der jeweilige Besitzer auf seinem eigenen Geraet.
+ * Der Store ist bewusst frei von lokaler Persistenz: Ohne aktive Mission schreibt eine vom Host
+ * akzeptierte Aenderung sofort den committed Stand fort. In einer Mission bleibt sie dagegen im
+ * Working State, bis der Rundenausgang ueber Commit oder Rollback entscheidet. Speichern darf den
+ * host-bestaetigten Stand ausschliesslich der jeweilige Besitzer auf seinem eigenen Geraet.
  */
 /** Ein materialisierter Blueprint und das Runtime-Objekt, das ihn gerade darstellt. */
 export interface PersistentRuntimeBinding {
@@ -100,7 +101,7 @@ export class PersistentBaseContributionStore {
     this.runtimeBlueprints.clear();
   }
 
-  /** Bindet ein materialisiertes Runtime-Objekt an seinen Blueprint. Rein missionslokal. */
+  /** Bindet ein materialisiertes Runtime-Objekt an seinen Blueprint. */
   registerRestored(ownerId: string, blueprint: PersistentConstruction, runtimeId: number): void {
     for (const [existingId, existing] of this.runtimeBlueprints) {
       if (existing.ownerId !== ownerId || existing.blueprint.persistentId !== blueprint.persistentId) continue;
@@ -110,7 +111,7 @@ export class PersistentBaseContributionStore {
   }
 
   /**
-   * Nimmt eine neu platzierte Konstruktion in den Arbeitsstand ihres Besitzers auf.
+   * Nimmt eine neu platzierte Konstruktion in den aktuellen Stand ihres Besitzers auf.
    *
    * Der Host ruft das erst, nachdem er die Platzierung selbst akzeptiert hat; die Pruefung hier
    * ist die letzte Zusicherung, dass nichts ausserhalb des Baubereichs persistent wird.
@@ -123,7 +124,7 @@ export class PersistentBaseContributionStore {
     anchor: PersistentBaseAnchor,
     buildArea: PersistentBaseBuildArea,
   ): PersistentRuntimeMetadata | null {
-    if (!this.working || !ownerId || runtime.expiresAt > 0) return null;
+    if (!ownerId || runtime.expiresAt > 0) return null;
     const inside = (footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }]).every((offset) => (
       isCellInsidePersistentBaseBuildArea(
         runtime.gridX + offset.dx - anchor.gridX,
@@ -133,7 +134,8 @@ export class PersistentBaseContributionStore {
     ));
     if (!inside) return null;
 
-    const current = this.working.get(ownerId)
+    const target = this.working ?? this.committed;
+    const current = target.get(ownerId)
       ?? emptyContribution(ownerId, this.committed.get(ownerId)?.revision ?? 0);
     const placementOrder = current.constructions.reduce(
       (max, entry) => Math.max(max, entry.placementOrder),
@@ -152,8 +154,11 @@ export class PersistentBaseContributionStore {
       angle: Number.isFinite(runtime.angle) ? runtime.angle : 0,
       placementOrder,
     };
-    this.working.set(ownerId, {
+    target.set(ownerId, {
       ...current,
+      // Lobby-Aenderungen sind bereits der host-bestaetigte Commit. Eine Mission erhoeht ihre
+      // Revision weiterhin erst gesammelt beim Victory-Commit.
+      revision: this.working ? current.revision : current.revision + 1,
       constructions: [...current.constructions, blueprint],
     });
     this.runtimeBlueprints.set(runtime.id, { ownerId, blueprint });
@@ -198,7 +203,7 @@ export class PersistentBaseContributionStore {
   }
 
   /**
-   * Entfernt die Konstruktion hinter einem Runtime-Objekt aus dem Arbeitsstand.
+   * Entfernt die Konstruktion hinter einem Runtime-Objekt aus dem aktuellen Stand.
    *
    * Das ist der Abriss und damit die einzige Stelle, an der ein Blueprint absichtlich
    * verschwindet. Er unterscheidet sich ausdruecklich vom Konflikt: Ein Konflikt laesst den
@@ -208,7 +213,7 @@ export class PersistentBaseContributionStore {
     const entry = this.runtimeBlueprints.get(runtimeId);
     if (!entry) return false;
     this.runtimeBlueprints.delete(runtimeId);
-    this.removeFromWorking(entry.ownerId, entry.blueprint.persistentId);
+    this.removeFromCurrent(entry.ownerId, entry.blueprint.persistentId);
     return true;
   }
 
@@ -240,7 +245,7 @@ export class PersistentBaseContributionStore {
     for (const [runtimeId, entry] of this.runtimeBlueprints) {
       if (isRuntimeObjectAlive(runtimeId)) continue;
       // Ein zerstoertes Objekt faellt aus dem Arbeitsstand; ein Sieg schreibt es dann nicht fort.
-      this.removeFromWorking(entry.ownerId, entry.blueprint.persistentId);
+      this.removeFromCurrent(entry.ownerId, entry.blueprint.persistentId);
     }
     this.runtimeBlueprints.clear();
   }
@@ -289,11 +294,13 @@ export class PersistentBaseContributionStore {
     this.runtimeBlueprints.clear();
   }
 
-  private removeFromWorking(ownerId: string, persistentId: string): void {
-    const current = this.working?.get(ownerId);
+  private removeFromCurrent(ownerId: string, persistentId: string): void {
+    const target = this.working ?? this.committed;
+    const current = target.get(ownerId);
     if (!current) return;
-    this.working!.set(ownerId, {
+    target.set(ownerId, {
       ...current,
+      revision: this.working ? current.revision : current.revision + 1,
       constructions: current.constructions.filter((entry) => entry.persistentId !== persistentId),
     });
   }

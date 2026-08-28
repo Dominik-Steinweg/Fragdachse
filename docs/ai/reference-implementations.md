@@ -30,7 +30,7 @@ Diese Seite nennt wenige konkrete Einstiegspunkte, die als Muster dienen. Sie er
 
 ## Persistenz
 
-- [src/persistentBase/PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) zeigt den mission-lokalen Arbeitsstand mehrerer Besitzer mit Commit/Rollback.
+- [src/persistentBase/PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) zeigt den gemeinsamen Contribution-State mehrerer Besitzer mit Lobby-Sofort-Commit und Missions-Commit/Rollback.
 - [src/persistentBase/PersistentBaseComposite.ts](../../src/persistentBase/PersistentBaseComposite.ts) zeigt eine reine, deterministische Merge-Autorität ohne Phaser- und Netzwerkbindung.
 - [src/utils/localPreferences.ts](../../src/utils/localPreferences.ts) ist die Validierungs- und Migrationsgrenze.
 - [tests/LocalPersistence.test.ts](../../tests/LocalPersistence.test.ts) prüft Import, Migration, Cache und Fehlerverhalten.

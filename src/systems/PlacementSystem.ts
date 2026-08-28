@@ -170,6 +170,16 @@ export class PlacementSystem {
     return { ...rock };
   }
 
+  /** Entfernt beim World-Teardown alle Runtime-Belegungen aus dem gemeinsam genutzten Grid. */
+  clearRuntimeRocks(): SyncedPlaceableRock[] {
+    const removed: SyncedPlaceableRock[] = [];
+    for (const id of [...this.runtimeRocks.keys()]) {
+      const rock = this.removeRock(id);
+      if (rock) removed.push(rock);
+    }
+    return removed;
+  }
+
   applyDamage(id: number, damage: number, attackerId?: string): SyncedPlaceableRock | undefined {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
