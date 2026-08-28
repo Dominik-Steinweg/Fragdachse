@@ -294,6 +294,31 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
     expect(lifecycle.slice(start, end)).toContain('this.hostRefreshPersistentBaseComposite();');
   });
 
+  it('reconciled nach einer relevanten Live-Build-Aenderung ohne die Loadout-Dormancy aufzuweichen', () => {
+    const syncStart = lifecycle.indexOf('  syncHostLoadoutsFromCommittedSelections(): void {');
+    const syncEnd = lifecycle.indexOf('\n  hostSaveRoundResults(', syncStart);
+    expect(syncStart).toBeGreaterThanOrEqual(0);
+    expect(syncEnd).toBeGreaterThan(syncStart);
+    expect(lifecycle.slice(syncStart, syncEnd)).toContain(
+      'this.hostRefreshPersistentBaseCompositeForRelevantBuildChanges();',
+    );
+
+    const refreshStart = lifecycle.indexOf(
+      '  private hostRefreshPersistentBaseCompositeForRelevantBuildChanges(): void {',
+    );
+    const refreshEnd = lifecycle.indexOf('\n  private materializePersistentBaseComposite(', refreshStart);
+    expect(refreshStart).toBeGreaterThanOrEqual(0);
+    expect(refreshEnd).toBeGreaterThan(refreshStart);
+    const refresh = lifecycle.slice(refreshStart, refreshEnd);
+    expect(refresh).toContain('capacityMax: this.getConstructionCapacity(playerId)');
+    expect(refresh).toContain('tools: this.buildPersistentRestoreTools(playerId)');
+    expect(refresh).toContain('if (changed) this.hostRefreshPersistentBaseComposite();');
+
+    // Die bestehende Zugriffsauflosung bleibt die Quelle fuer `active`; ein nicht ausgeruestetes
+    // Werkzeug wird daher weiter als dormant behandelt und nicht pauschal materialisiert.
+    expect(lifecycle).toContain('active: access.active');
+  });
+
   it('laesst eine Besitzeridentitaet nur einem Spieler des Raums', () => {
     expect(lifecycle).toContain('if (!this.canClaimPersistentBaseOwnerId(playerId, offered.ownerId)) continue;');
     expect(lifecycle).toContain(

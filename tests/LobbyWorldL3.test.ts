@@ -438,11 +438,32 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
     expect(cleared?.coopDefenseProfile).toBeNull();
     expect(cleared?.equippedItems).toEqual([]);
 
+    // Der Scene-Tick publiziert im Nicht-Coop-Modus einen leeren Live-Build. Beim Rueckwechsel
+    // kann die neue Coop-World bereits aufgebaut werden, bevor der Spieler seinen Coop-Build im
+    // spaeteren Teil desselben (oder eines folgenden) Ticks erneut angeboten hat.
+    useRoom(clientRoom);
+    client.setLocalLobbyLoadoutPreview({
+      coopDefenseClassId: null,
+      coopDefenseProfile: null,
+      equippedItems: [],
+      tools: [],
+    });
+
+    useRoom(hostRoom);
     host.setGameMode('coop_defense');
+    const staleAtWorldBuild = host.getPlayerCurrentLoadoutSnapshot('p1');
+    expect(staleAtWorldBuild?.coopDefenseClassId).toBeNull();
+    expect(staleAtWorldBuild?.tools ?? []).toEqual([]);
+
+    useRoom(clientRoom);
+    client.setLocalLobbyLoadoutPreview(livePreview);
+
+    useRoom(hostRoom);
     const restored = host.getPlayerCurrentLoadoutSnapshot('p1');
     expect(restored?.coopDefenseClassId).toBe('inspector_gadachs');
     expect(restored?.coopDefenseProfile).not.toBeNull();
     expect(restored?.equippedItems).toHaveLength(1);
+    expect(restored?.tools).toEqual([{ kind: 'construction', id: 'rock_barrier' }]);
   });
 
   it('schreibt ohne Activity weder Frags noch Room-Statistik und erzeugt keine Kill-Drops', async () => {

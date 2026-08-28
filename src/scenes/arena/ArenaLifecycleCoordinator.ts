@@ -450,6 +450,8 @@ export class ArenaLifecycleCoordinator {
    * Freischaltungen; die Besitzeridentitaet gilt fuer das Bauwerk und ueberlebt jeden Raum.
    */
   private readonly persistentBaseOwnerByPlayerId = new Map<string, string>();
+  /** Letzter fuer das Composite relevanter Live-Build je Besitzer. */
+  private readonly persistentBaseCompositeBuildSignatures = new Map<string, string>();
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
   private persistentBaseBuildArea: PersistentBaseBuildArea | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
@@ -1053,6 +1055,7 @@ export class ArenaLifecycleCoordinator {
   syncHostLoadoutsFromCommittedSelections(): void {
     if (!bridge.isHost()) return;
     this.syncHostCoopDefensePlayerModifiersFromCurrentBuild();
+    this.hostRefreshPersistentBaseCompositeForRelevantBuildChanges();
     if (!this.ctx.loadoutManager) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (!this.ctx.playerManager.hasPlayer(profile.id)) continue;
@@ -1924,6 +1927,7 @@ export class ArenaLifecycleCoordinator {
       coopDefenseBases,
     );
     this.ctx.persistentBaseContributions = null;
+    this.persistentBaseCompositeBuildSignatures.clear();
     // Der Basiskern und sein committed Contribution-State gehoeren zur persistenten World. Nur
     // eine aktive Mission oeffnet zusaetzlich eine Working Copy; die LobbyWorld bearbeitet den
     // committed Stand dagegen unmittelbar.
@@ -4378,6 +4382,45 @@ export class ArenaLifecycleCoordinator {
       this.ctx.world?.persistentBaseSite ?? null,
       this.ctx.world?.definition?.sourceMapId ?? null,
     );
+  }
+
+  /**
+   * Reconciled nur bei einer echten Aenderung der Sicht, die auch der Composite-Merge verwendet.
+   * Der separat replizierte Lobby-Build kann nach einem Moduswechsel spaeter als die World
+   * eintreffen; insbesondere `active: false` bleibt dabei weiterhin regulaere Dormancy.
+   */
+  private hostRefreshPersistentBaseCompositeForRelevantBuildChanges(): void {
+    const store = this.ctx.persistentBaseContributions;
+    if (!bridge.isHost() || !store) {
+      this.persistentBaseCompositeBuildSignatures.clear();
+      return;
+    }
+
+    const nextSignatures = new Map<string, string>();
+    for (const ownerId of store.ownerIds) {
+      const playerId = this.resolvePlayerIdForOwner(ownerId);
+      if (!playerId) continue;
+      nextSignatures.set(ownerId, JSON.stringify({
+        capacityMax: this.getConstructionCapacity(playerId),
+        tools: this.buildPersistentRestoreTools(playerId),
+      }));
+    }
+
+    let changed = nextSignatures.size !== this.persistentBaseCompositeBuildSignatures.size;
+    if (!changed) {
+      for (const [ownerId, signature] of nextSignatures) {
+        if (this.persistentBaseCompositeBuildSignatures.get(ownerId) !== signature) {
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    this.persistentBaseCompositeBuildSignatures.clear();
+    for (const [ownerId, signature] of nextSignatures) {
+      this.persistentBaseCompositeBuildSignatures.set(ownerId, signature);
+    }
+    if (changed) this.hostRefreshPersistentBaseComposite();
   }
 
   private materializePersistentBaseComposite(
