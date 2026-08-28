@@ -5,6 +5,7 @@ import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } 
 import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
+import type { ChunkedRenderWorkingSetStats } from '../../arena/chunks/ChunkedRenderSurface';
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { ReinforcementMatrixSystem, type TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
@@ -144,6 +145,11 @@ import type { ConstructionId, ConstructionOwnership, LoadoutToolRef, LoadoutUseR
 import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveConstructionAccess } from '../../systems/ConstructionAccessResolver';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
+import {
+  resolveWorldRenderWork,
+  WorldLoadStallWatchdog,
+  type WorldRenderWork,
+} from './WorldLoadDiagnostics';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
@@ -214,6 +220,7 @@ import type {
 import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
+type TerrainSnapshotDiagnosticState = 'idle' | 'building' | 'ready' | 'failed' | 'timed-out';
 
 /**
  * Manages the World and Activity lifecycles inside the arena scene.
@@ -280,8 +287,11 @@ export class ArenaLifecycleCoordinator {
   private pendingLobbyWorldReinstance = false;
   private localArenaLoadReady = false;
   private terrainSnapshotReady = false;
+  private terrainSnapshotState: TerrainSnapshotDiagnosticState = 'idle';
   private terrainSnapshotGenerationId = 0;
   private terrainSnapshotRetryCount = 0;
+  private lastArenaResidencyView: WorldViewRect | null = null;
+  private readonly worldLoadStallWatchdog = new WorldLoadStallWatchdog();
   /** Verhindert parallelen Re-Eintritt in `onTransitionToArena()` durch Timer-Retry und `detectWorldChange()`. */
   private arenaTransitionInProgress = false;
   private roundStartPrepared = false;
@@ -476,6 +486,11 @@ export class ArenaLifecycleCoordinator {
   // ── Public state accessors ────────────────────────────────────────────────
 
   isMatchTerminated(): boolean { return this.matchTerminated; }
+
+  /** Merkt den View des fruehen Residency-Passes fuer einen spaeteren Stall-Report. */
+  recordArenaResidencyView(view: WorldViewRect | null): void {
+    this.lastArenaResidencyView = view ? { ...view } : null;
+  }
 
   setRuntimeDiagnosticEventSink(sink: RuntimeDiagnosticEventSink | null): void {
     this.runtimeDiagnosticEventSink = sink;
@@ -741,6 +756,8 @@ export class ArenaLifecycleCoordinator {
     this.hostUpdate.setActive(false);
     this.localArenaLoadReady = false;
     this.terrainSnapshotReady = false;
+    this.terrainSnapshotState = 'idle';
+    this.resetWorldLoadStallWatchdog();
     this.roundStartPrepared = false;
     this.isLocalReady = false;
     bridge.setLocalReady(false);
@@ -860,10 +877,14 @@ export class ArenaLifecycleCoordinator {
     if (!this.getLocalWorldPresentation().required) {
       bridge.setLocalWorldLoadReady(worldRevision, true);
       this.localArenaLoadReady = true;
+      this.resetWorldLoadStallWatchdog();
       if (bridge.isHost()) this.tryScheduleArenaStart();
       return;
     }
-    if (!view || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
+    if (!view || !this.ctx.arenaResult || !this.ctx.currentLayout) {
+      this.resetWorldLoadStallWatchdog();
+      return;
+    }
 
     const work = this.collectWorldRenderWork(view);
     // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
@@ -877,6 +898,8 @@ export class ArenaLifecycleCoordinator {
       loadProgress.ready,
     );
     this.localArenaLoadReady = loadProgress.ready;
+    if (loadProgress.ready) this.resetWorldLoadStallWatchdog();
+    else this.observeWorldLoadStall(worldRevision, view, work, loadProgress);
 
     if (bridge.isHost()) this.tryScheduleArenaStart();
   }
@@ -885,26 +908,91 @@ export class ArenaLifecycleCoordinator {
    * Aufbauarbeit der lokal dargestellten World-Flaechen. Boden, Fels-Overlay und statische
    * Schatten teilen sich denselben Bake-Scheduler, deshalb zaehlt hier auch nur eine Summe.
    */
-  private collectWorldRenderWork(view: WorldViewRect): {
-    pending: number;
-    resident: number;
-    renderReady: boolean;
-  } {
-    const renderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
-      && this.renderers.shadow.isStaticReadyForView(view, true);
-    const groundStats = this.ctx.arenaResult?.groundSurface?.getStats();
-    const rockStats = this.ctx.arenaResult?.rockOverlaySurface?.getStats();
-    const shadowStats = this.renderers.shadow.getStaticSurfaceStats();
-    const pending = (groundStats?.pendingChunks ?? 0) + (groundStats?.pendingRegions ?? 0)
-      + (groundStats?.pendingTextureAcquisitions ?? 0)
-      + (rockStats?.pendingChunks ?? 0) + (rockStats?.pendingRegions ?? 0)
-      + (rockStats?.pendingTextureAcquisitions ?? 0)
-      + (shadowStats?.pendingChunks ?? 0) + (shadowStats?.pendingRegions ?? 0)
-      + (shadowStats?.pendingTextureAcquisitions ?? 0);
-    const resident = (groundStats?.residentChunks ?? 0)
-      + (rockStats?.residentChunks ?? 0)
-      + (shadowStats?.residentChunks ?? 0);
-    return { pending, resident, renderReady };
+  private collectWorldRenderWork(view: WorldViewRect): WorldRenderWork {
+    const groundStats = this.ctx.arenaResult?.groundSurface?.getWorkingSetStats(view, true) ?? null;
+    const rockOverlayStats = this.ctx.arenaResult?.rockOverlaySurface?.getWorkingSetStats(view, true) ?? null;
+    const shadowStats = this.renderers.shadow.getStaticSurfaceWorkingSetStats(view, true);
+    const work = resolveWorldRenderWork(groundStats, rockOverlayStats, shadowStats);
+    // Die bestehende Barrierensemantik bleibt die Authority; die getrennten Stats sind nur ihre
+    // erklaerende Projektion fuer Diagnose und Fortschritt.
+    return {
+      ...work,
+      renderReady: ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
+        && this.renderers.shadow.isStaticReadyForView(view, true),
+    };
+  }
+
+  private observeWorldLoadStall(
+    worldRevision: number,
+    readyView: WorldViewRect,
+    work: WorldRenderWork,
+    loadProgress: { readonly progress: number; readonly stage: string; readonly ready: boolean },
+  ): void {
+    if (!this.ctx.world || !this.getLocalWorldPresentation().required || loadProgress.ready) {
+      this.resetWorldLoadStallWatchdog();
+      return;
+    }
+
+    const terrainSnapshot = {
+      ready: this.terrainSnapshotReady,
+      state: this.terrainSnapshotState,
+      generation: this.terrainSnapshotGenerationId,
+      retryCount: this.terrainSnapshotRetryCount,
+    };
+    const signature = JSON.stringify({
+      progress: loadProgress.progress,
+      stage: loadProgress.stage,
+      renderReady: work.renderReady,
+      groundReady: work.groundReady,
+      rockOverlayReady: work.rockOverlayReady,
+      shadowReady: work.shadowReady,
+      ground: work.groundStats,
+      rockOverlay: work.rockOverlayStats,
+      shadow: work.shadowStats,
+      terrainSnapshot,
+    });
+    const report = {
+      role: bridge.isHost() ? 'host' : 'client',
+      localPlayerId: bridge.getLocalPlayerId(),
+      worldRevision,
+      builtWorldRevision: this.builtWorldRevision,
+      gamePhase: bridge.getGamePhase(),
+      arena: {
+        loading: bridge.isArenaLoading(),
+        countdownActive: bridge.isArenaCountdownActive(),
+        countdownVisible: bridge.isArenaCountdownVisible(),
+        started: bridge.isArenaStarted(),
+        startTime: bridge.getArenaStartTime(),
+      },
+      localWorldLoadReady: this.localArenaLoadReady,
+      progress: loadProgress.progress,
+      stage: loadProgress.stage,
+      ground: this.describeWorkingSet(work.groundStats, work.groundReady),
+      rockOverlay: this.describeWorkingSet(work.rockOverlayStats, work.rockOverlayReady),
+      shadow: this.describeWorkingSet(work.shadowStats, work.shadowReady),
+      terrainSnapshot,
+      residencyView: this.lastArenaResidencyView,
+      readyView: { ...readyView },
+    };
+    this.worldLoadStallWatchdog.observe(
+      worldRevision,
+      signature,
+      Date.now(),
+      () => console.warn('[WorldLoad] stalled', report),
+    );
+  }
+
+  private describeWorkingSet(
+    stats: ChunkedRenderWorkingSetStats | null,
+    gateReady: boolean,
+  ): Record<string, unknown> {
+    if (!stats) return { ready: gateReady, unavailable: true };
+    return { ...stats, ready: gateReady };
+  }
+
+  private resetWorldLoadStallWatchdog(): void {
+    this.worldLoadStallWatchdog.reset();
+    this.lastArenaResidencyView = null;
   }
 
   /**
@@ -1926,7 +2014,9 @@ export class ArenaLifecycleCoordinator {
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
-    ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, getVisibleWorldView(this.scene.cameras.main));
+    const initialResidencyView = getVisibleWorldView(this.scene.cameras.main);
+    this.recordArenaResidencyView(initialResidencyView);
+    ArenaBuilder.updateSurfaceResidency(this.ctx.arenaResult, initialResidencyView);
     this.ctx.placementSystem = new PlacementSystem(
       layout,
       this.ctx.arenaResult.rockGrid,
@@ -3958,7 +4048,13 @@ export class ArenaLifecycleCoordinator {
     this.detachAllWorldPlayers();
     this.terrainSnapshotGenerationId += 1;
     const preserveTerrainSnapshot = preserveAuthoredPresentation && this.terrainSnapshotReady;
-    if (!preserveTerrainSnapshot) this.terrainSnapshotReady = false;
+    if (!preserveTerrainSnapshot) {
+      this.terrainSnapshotReady = false;
+      this.terrainSnapshotState = 'idle';
+    } else {
+      this.terrainSnapshotState = 'ready';
+    }
+    this.resetWorldLoadStallWatchdog();
     this.cancelPendingHostArenaGeneration();
     this.localArenaLoadReady = false;
     this.roundStartPrepared = false;
@@ -4913,10 +5009,12 @@ export class ArenaLifecycleCoordinator {
     this.localArenaLoadReady = false;
     this.terrainSnapshotReady = preserveTerrainSnapshot;
     if (this.getLocalWorldPresentation().required && !this.terrainSnapshotReady) {
+      this.terrainSnapshotState = 'building';
       this.terrainSnapshotRetryCount = 0;
       this.startTerrainSnapshotBuild(worldDescriptor.worldRevision);
     } else if (!this.getLocalWorldPresentation().required) {
       this.terrainSnapshotReady = true;
+      this.terrainSnapshotState = 'ready';
     }
 
     for (const profile of bridge.getConnectedPlayers()) {
@@ -4964,11 +5062,13 @@ export class ArenaLifecycleCoordinator {
     if (!layout || !arenaResult || !world) {
       // Nach einem erfolgreichen Arenaaufbau muessen Layout, Arena-Ergebnis und World stehen.
       // Fehlt eines davon, gibt es keinen Nachfolge-Build mehr: deterministisch abbrechen.
+      this.terrainSnapshotState = 'failed';
       console.error('[ArenaLifecycleCoordinator] Terrain-Snapshot-Voraussetzungen fehlen nach Arena-Build.');
       this.terminateMatch(t('ui.lobby.terrainSnapshotStartFailed'));
       return;
     }
 
+    this.terrainSnapshotState = 'building';
     const generation = ++this.terrainSnapshotGenerationId;
     const isCurrent = (): boolean => (
       generation === this.terrainSnapshotGenerationId
@@ -5005,6 +5105,7 @@ export class ArenaLifecycleCoordinator {
         settled = true;
         if (this.terrainSnapshotRetryCount < ArenaLifecycleCoordinator.TERRAIN_SNAPSHOT_MAX_RETRIES) {
           this.terrainSnapshotRetryCount += 1;
+          this.terrainSnapshotState = 'building';
           console.warn(
             '[ArenaLifecycleCoordinator] Terrain-Snapshot-Timeout, starte Retry',
             this.terrainSnapshotRetryCount,
@@ -5012,6 +5113,7 @@ export class ArenaLifecycleCoordinator {
           this.startTerrainSnapshotBuild(worldRevision);
           return;
         }
+        this.terrainSnapshotState = 'timed-out';
         console.error('[ArenaLifecycleCoordinator] Terrain-Snapshot-Timeout nach maximalem Retry.');
         this.terminateMatch(t('ui.lobby.terrainSnapshotTimeoutFailed'));
       },
@@ -5023,10 +5125,12 @@ export class ArenaLifecycleCoordinator {
       timeoutTimer.remove(false);
       this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
+      this.terrainSnapshotState = 'ready';
     }).catch((error: unknown) => {
       if (settled || !isCurrent()) return;
       settled = true;
       timeoutTimer.remove(false);
+      this.terrainSnapshotState = 'failed';
       console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot fehlgeschlagen:', error);
       this.terminateMatch(t('ui.lobby.terrainSnapshotCreateFailed'));
     });

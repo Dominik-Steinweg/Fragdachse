@@ -26,7 +26,7 @@ import {
 import { resolveSkyState } from './TimeOfDay';
 import { registerGraphicsObject } from './EffectUtils';
 import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
-import type { ChunkedRenderSurfaceStats } from '../arena/chunks/ChunkedRenderSurface';
+import type { ChunkedRenderSurfaceStats, ChunkedRenderWorkingSetStats } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkWorldRect } from '../arena/chunks/ArenaChunkGrid';
@@ -1046,6 +1046,15 @@ export class ShadowSystem {
     const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, group };
     this.layers.set(key, bucket);
     return bucket;
+  }
+
+  /** Startup diagnostics for the same view-specific working set as the shadow barrier. */
+  getStaticSurfaceWorkingSetStats(
+    view: ChunkWorldRect,
+    includePrefetch = true,
+  ): ChunkedRenderWorkingSetStats | null {
+    if (!this.staticHasLayout || !this.staticSurface) return null;
+    return this.staticSurface.getWorkingSetStats(view, includePrefetch);
   }
 
   private isVisibleInArena(x: number, y: number, margin: number): boolean {

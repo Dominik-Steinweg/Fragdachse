@@ -28,6 +28,7 @@ import type { ChunkSamplingMode } from './ChunkedRenderSurface';
 import type {
   ChunkBakeRegion,
   ChunkBakeSink,
+  ChunkedRenderWorkingSetStats,
   ChunkedRenderSurfaceRefreshOptions,
   ChunkedSurfaceLayerSpec,
 } from './ChunkedRenderSurface';
@@ -232,6 +233,10 @@ export class RockOverlayStreamer {
 
   getStats() {
     return this.surface.getStats();
+  }
+
+  getWorkingSetStats(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSetStats {
+    return this.surface.getWorkingSetStats(view, includePrefetch);
   }
 
   /** Rastergeometrie der residenten Chunks – fuer Diagnose und Tests. */

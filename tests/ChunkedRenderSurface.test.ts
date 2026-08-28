@@ -187,6 +187,36 @@ describe('chunked render surface', () => {
     drain(scene);
     expect(surface.isReady(0, 0)).toBe(true);
     expect((surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture).visible).toBe(true);
+
+    const workingSet = surface.getWorkingSetStats(VIEW);
+    expect(workingSet.missingChunks).toBe(0);
+    expect(workingSet.notReadyChunks).toBe(0);
+    expect(workingSet.ready).toBe(true);
+  });
+
+  it('counts a required but completely missing chunk as pending working-set work', () => {
+    const { surface } = createSurface();
+
+    const workingSet = surface.getWorkingSetStats(VIEW, false);
+
+    expect(workingSet.requiredChunks).toBeGreaterThan(0);
+    expect(workingSet.residentChunks).toBe(0);
+    expect(workingSet.missingChunks).toBe(workingSet.requiredChunks);
+    expect(workingSet.pendingWork).toBeGreaterThan(0);
+    expect(workingSet.ready).toBe(false);
+  });
+
+  it('reports resident chunks with unfinished bake work separately', () => {
+    const { surface } = createSurface();
+    surface.updateResidency(VIEW);
+
+    const workingSet = surface.getWorkingSetStats(VIEW);
+
+    expect(workingSet.missingChunks).toBe(0);
+    expect(workingSet.notReadyChunks).toBeGreaterThan(0);
+    expect(workingSet.pendingRegions + workingSet.pendingTextureAcquisitions).toBeGreaterThan(0);
+    expect(workingSet.pendingWork).toBeGreaterThan(0);
+    expect(workingSet.ready).toBe(false);
   });
 
   it('requeues a dirty subregion when it changes during a pending acquisition', () => {
@@ -471,6 +501,20 @@ describe('chunked render surface', () => {
     updateSurface(surface, scene, { x: 0, y: 12, width: ARENA_RENDER_CHUNK_SIZE, height: 100 });
     // Der Chunk rechts daneben ist noch nicht im Bild, liegt aber im Erwerbsrand.
     expect(surface.isResident(1, 0)).toBe(true);
+  });
+
+  it('identifies a chunk required by a different ready view as missing', () => {
+    const { surface, scene } = createSurface();
+    updateSurface(surface, scene, VIEW);
+
+    const readyView = { x: 4_096, y: 12, width: 100, height: 100 };
+    const workingSet = surface.getWorkingSetStats(readyView);
+
+    expect(workingSet.requiredChunks).toBeGreaterThan(workingSet.residentChunks);
+    expect(workingSet.missingChunks).toBeGreaterThan(0);
+    expect(workingSet.missingChunkCoords.length).toBeGreaterThan(0);
+    expect(workingSet.missingChunkCoords.length).toBeLessThanOrEqual(16);
+    expect(workingSet.ready).toBe(false);
   });
 
   it('pads each render target by the gutter but composites only the logical chunk', () => {

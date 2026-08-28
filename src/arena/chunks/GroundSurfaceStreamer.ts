@@ -29,7 +29,12 @@ import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
 import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './ChunkedRenderSurface';
 import type { ChunkSamplingMode } from './ChunkedRenderSurface';
-import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from './ChunkedRenderSurface';
+import type {
+  ChunkBakeRegion,
+  ChunkBakeSink,
+  ChunkedRenderWorkingSetStats,
+  ChunkedSurfaceLayerSpec,
+} from './ChunkedRenderSurface';
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
 
@@ -237,6 +242,10 @@ export class GroundSurfaceStreamer {
 
   getStats() {
     return this.surface.getStats();
+  }
+
+  getWorkingSetStats(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSetStats {
+    return this.surface.getWorkingSetStats(view, includePrefetch);
   }
 
   /** Rastergeometrie der residenten Chunks – fuer Diagnose und Tests. */
