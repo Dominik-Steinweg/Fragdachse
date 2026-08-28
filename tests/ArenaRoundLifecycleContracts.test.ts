@@ -36,8 +36,8 @@ function readTearDownArenaBody(): string {
   const source = read(COORDINATOR_PATH);
   const start = source.indexOf('  tearDownArena(');
   expect(start, `${COORDINATOR_PATH} must declare tearDownArena()`).toBeGreaterThan(0);
-  const end = source.indexOf('\n  private restorePersistentBase(', start);
-  expect(end, `${COORDINATOR_PATH} must keep restorePersistentBase() after tearDownArena()`).toBeGreaterThan(start);
+  const end = source.indexOf('\n  private materializePersistentBaseComposite(', start);
+  expect(end, `${COORDINATOR_PATH} must keep materializePersistentBaseComposite() after tearDownArena()`).toBeGreaterThan(start);
   // Ausrichtungs-Leerzeichen im Quelltext duerfen die Zuweisungssuche nicht stoeren.
   return source.slice(start, end).replace(/[ \t]+/g, ' ');
 }
@@ -67,7 +67,7 @@ describe('arena round lifecycle contract', () => {
     // Reine Absicherung des Parsers: eine leere Liste wuerde die Pruefungen unten wertlos machen.
     expect(roundScopedFields.length).toBeGreaterThan(30);
     expect(roundScopedFields).toContain('arenaResult');
-    expect(roundScopedFields).toContain('persistentBaseSession');
+    expect(roundScopedFields).toContain('persistentBaseContributions');
     expect(roundScopedFields).toContain('coopDefenseRoundStateSystem');
     expect(roundScopedFields).not.toContain('playerManager');
     expect(roundScopedFields).not.toContain('combatSystem');
@@ -93,8 +93,8 @@ describe('arena round lifecycle contract', () => {
     const body = readTearDownArenaBody();
     // Die Mission-Session darf ihre Runtime-IDs verlieren, aber nicht ihren Arbeitsstand: der
     // Round-Teardown ist auch der Map-Wechsel innerhalb einer laufenden Mission.
-    expect(body).toContain('this.persistentBaseSession?.detachRuntimeObjects(');
-    expect(body).toContain('this.persistentBaseRoomState.detachRuntimeObjects(');
-    expect(body).toContain('this.ctx.persistentBaseSession = null');
+    expect(body).toContain('this.persistentBaseContributions.detachRuntimeObjects(');
+
+    expect(body).toContain('this.ctx.persistentBaseContributions = null');
   });
 });

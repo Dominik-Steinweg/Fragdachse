@@ -285,6 +285,18 @@ interface TransportPerformanceCounts {
   sampleMs: number;
 }
 
+/**
+ * Anteil des Bootscreen-Balkens, den der Asset-Preload einnimmt. Das restliche Fuenftel gehoert
+ * der Reveal-Barriere, damit der Balken ueber beide Phasen monoton bleibt.
+ */
+const BOOT_PRELOAD_PROGRESS_SHARE = 0.8;
+
+/**
+ * Notausgang der Reveal-Barriere. Ein Client, dessen World-Descriptor ausbleibt, soll nicht
+ * dauerhaft vor dem Bootscreen sitzen - nach dieser Zeit weicht er in jedem Fall.
+ */
+const BOOT_REVEAL_TIMEOUT_MS = 2500;
+
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
@@ -383,6 +395,9 @@ export class ArenaScene extends Phaser.Scene {
   /** Nur das Angebot der gerade abgeschlossenen Runde darf automatisch erscheinen. */
   private coopDefenseMatchItemReward: CoopDefensePendingItemReward | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
+  /** Solange gesetzt, deckt der Bootscreen die Lobby noch ab (siehe `syncBootReveal`). */
+  private bootRevealPending = true;
+  private bootRevealDeadlineMs = 0;
   private matchResultsPending = false;
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
   /**
@@ -481,7 +496,7 @@ export class ArenaScene extends Phaser.Scene {
     BootScreen.setProgress(0);
 
     const onProgress = (ratio: number) => {
-      BootScreen.setProgress(ratio);
+      BootScreen.setProgress(ratio * BOOT_PRELOAD_PROGRESS_SHARE);
     };
 
     const cleanupLoader = () => {
@@ -492,7 +507,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       cleanupLoader();
       BootScreen.setStatus(t('ui.boot.preparingLobby'));
-      BootScreen.setProgress(1);
+      BootScreen.setProgress(BOOT_PRELOAD_PROGRESS_SHARE);
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupLoader);
 
@@ -977,7 +992,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // World-/Activity-scoped (start null)
-      world: null, arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseSession: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      world: null, arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseContributions: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -1681,9 +1696,9 @@ export class ArenaScene extends Phaser.Scene {
     this.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
 
-    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => {
-      void BootScreen.fadeOut();
-    });
+    // Der Bootscreen weicht nicht dem ersten Frame, sondern der fertigen Lobby; `syncBootReveal`
+    // entscheidet das am Frame-Ende. Die Frist ist nur der Notausgang.
+    this.bootRevealDeadlineMs = this.time.now + BOOT_REVEAL_TIMEOUT_MS;
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       BootScreen.dismissImmediate();
     });
@@ -1716,6 +1731,9 @@ export class ArenaScene extends Phaser.Scene {
     // ihrem eigenen Kanal. Der Host haelt waehrend der Lobby genau eine LobbyWorld offen; jeder
     // Peer baut sie danach ueber denselben Kanal wie jede Match-World.
     this.lifecycle.hostSyncLobbyWorld();
+    // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
+    // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
+    this.lifecycle.syncPersistentBaseContributions();
     this.lifecycle.detectWorldChange();
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
@@ -2381,13 +2399,18 @@ export class ArenaScene extends Phaser.Scene {
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
+    // Das grosszuegige Budget gilt, solange ein deckender Ladescreen davor steht - in der Arena
+    // ihr eigener Schleier, beim Start der Bootscreen.
     ChunkedRenderSurface.flushBakeBudget(
       this,
-      arenaLoading ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,
+      arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,
     );
     if (inGame && !terminated) {
       this.lifecycle.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
     }
+    // Ganz am Ende des Frames: die Barriere sieht damit eine vollstaendig aufgebaute Lobby
+    // inklusive ihres UI-Durchlaufs, nicht einen halb aufgebauten Zwischenstand.
+    if (this.bootRevealPending) this.syncBootReveal(phase);
 
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
     // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
@@ -5011,6 +5034,33 @@ export class ArenaScene extends Phaser.Scene {
   private applyDefaultCoopDefenseMapSelection(): void {
     if (!bridge.isHost()) return;
     bridge.setCoopDefenseMapId(this.coopDefenseHighestUnlockedMapId);
+  }
+
+  /**
+   * Haelt den Bootscreen, bis die Lobby fertig ist.
+   *
+   * Beim ersten Frame existiert die LobbyWorld noch gar nicht - sie entsteht im ersten
+   * `update()`-Tick, und ihre Flaechen backen danach ueber mehrere Frames nach. Wer den
+   * Ladescreen schon vorher wegnimmt, zeigt eine Lobby, die sich vor den Augen des Spielers
+   * noch aufbaut. Erst wenn der sichtbare Ausschnitt vollstaendig steht, faellt der Bootscreen -
+   * und der Auftritt des Lobby-Panels beginnt danach, nicht in seinen Fade hinein.
+   */
+  private syncBootReveal(phase: GamePhase): void {
+    // Wer mitten in eine laufende Partie kommt, bekommt den eigenen Ladeschleier der Arena;
+    // die Lobby-Barriere hat dort nichts zu halten.
+    const reveal = phase === 'LOBBY'
+      ? this.lifecycle.getWorldRevealState(getVisibleWorldView(this.cameras.main))
+      : { ready: true, progress: 100 };
+    if (!reveal.ready && this.time.now < this.bootRevealDeadlineMs) {
+      const share = Phaser.Math.Clamp((reveal.progress - 70) / 30, 0, 1);
+      BootScreen.setProgress(
+        BOOT_PRELOAD_PROGRESS_SHARE + (1 - BOOT_PRELOAD_PROGRESS_SHARE) * share,
+      );
+      return;
+    }
+    this.bootRevealPending = false;
+    BootScreen.setProgress(1);
+    void BootScreen.fadeOut().then(() => this.lobbyOverlay?.playEntrance());
   }
 
   /**

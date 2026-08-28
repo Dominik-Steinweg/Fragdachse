@@ -1,29 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import type { PersistentBaseRepositoryPort } from '../src/persistentBase/PersistentBaseRepository';
-import { PersistentBaseRoomState } from '../src/persistentBase/PersistentBaseRoomState';
+import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
 import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
 } from '../src/persistentBase/PersistentBaseRoundOutcome';
-import { PersistentBaseSession } from '../src/persistentBase/PersistentBaseSession';
-import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import type { SyncedPlaceableRock } from '../src/types';
 
-class MemoryRepository implements PersistentBaseRepositoryPort {
-  state: PersistentBaseState = { schemaVersion: 1, radiusCells: 5, revision: 0, constructions: [] };
-  saves = 0;
-
-  load(): PersistentBaseState {
-    return structuredClone(this.state);
-  }
-
-  save(state: PersistentBaseState): void {
-    this.saves += 1;
-    this.state = structuredClone(state);
-  }
-}
+/**
+ * Phase 3B – der Rundenausgang entscheidet ueber alle persoenlichen Beitraege gemeinsam.
+ *
+ * Abgesicherter Pflichtzustand: Nur ein Sieg schreibt fort, und er tut es fuer jeden Besitzer
+ * gleichzeitig. Jeder andere Ausgang laesst den zuletzt bestaetigten Stand jedes Besitzers
+ * unveraendert - eine Runde kann nie halb fortgeschrieben werden.
+ */
 
 const anchor = { gridX: 10, gridY: 10 };
+const buildArea = DEFAULT_PERSISTENT_BASE_BUILD_AREA;
 const footprint = [{ dx: 0, dy: 0 }] as const;
 const tool = { kind: 'construction', id: 'rocket_turret' } as const;
 
@@ -44,17 +37,13 @@ function runtime(id: number, ownerId: string, gridX: number): SyncedPlaceableRoc
   };
 }
 
-/** Ein Missionsstart mit je einem host- und einem gastseitigen Neubau in der Zone. */
-function startMission(repository: MemoryRepository): {
-  session: PersistentBaseSession;
-  roomState: PersistentBaseRoomState;
-} {
-  const session = new PersistentBaseSession(repository, { anchor, activeRadiusCells: 5, ownerId: 'host' });
-  const roomState = new PersistentBaseRoomState();
-  roomState.beginMission();
-  session.registerNew(runtime(1, 'host', 11), tool, footprint);
-  roomState.registerNew(runtime(2, 'guest-a', 12), 'guest-a', tool, footprint, anchor, 5);
-  return { session, roomState };
+/** Ein Missionsstart mit je einem Neubau des Hosts und eines Gastes im Innenhof. */
+function startMission(): PersistentBaseContributionStore {
+  const store = new PersistentBaseContributionStore();
+  store.beginMission();
+  store.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, anchor, buildArea);
+  store.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, anchor, buildArea);
+  return store;
 }
 
 describe('persistent base round outcome', () => {
@@ -66,82 +55,81 @@ describe('persistent base round outcome', () => {
     expect(resolvePersistentBaseRoundOutcome(null)).toBe('rollback');
   });
 
-  it('uebernimmt bei Sieg host- und gastseitige Neubauten gemeinsam', () => {
-    const repository = new MemoryRepository();
-    const { session, roomState } = startMission(repository);
+  it('bestaetigt bei Sieg jedem Besitzer genau einen fortgeschriebenen Beitrag', () => {
+    const store = startMission();
 
-    applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
-      session,
-      roomState,
+    const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
+      contributions: store,
       isRuntimeObjectAlive: () => true,
     });
 
-    expect(repository.saves).toBe(1);
-    expect(repository.state.revision).toBe(1);
-    expect(repository.state.constructions.map((entry) => entry.relativeGridX)).toEqual([1]);
-    expect(roomState.getCommittedBlueprints().map((entry) => entry.ownerId)).toEqual(['guest-a']);
-    expect(roomState.hasActiveMission).toBe(false);
+    // Deterministisch nach Besitzeridentitaet, nicht nach Beitrittsreihenfolge.
+    expect(confirmed.map((entry) => entry.ownerId)).toEqual(['owner-guest', 'owner-host']);
+    expect(confirmed.every((entry) => entry.revision === 1)).toBe(true);
+    expect(confirmed.map((entry) => entry.constructions.length)).toEqual([1, 1]);
+    expect(store.hasActiveMission).toBe(false);
+    expect(store.getCommittedContribution('owner-guest')?.constructions).toHaveLength(1);
   });
 
-  it('verwirft bei Niederlage, Host-Abbruch und technischem Abbruch beide Arbeitsstaende', () => {
+  it('verwirft bei Niederlage, Host-Abbruch und technischem Abbruch alle Arbeitsstaende', () => {
     for (const conclusion of ['defeat', 'aborted', null] as const) {
-      const repository = new MemoryRepository();
-      const { session, roomState } = startMission(repository);
+      const store = startMission();
 
-      applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
-        session,
-        roomState,
+      const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
+        contributions: store,
         isRuntimeObjectAlive: () => true,
       });
 
-      expect(repository.saves, String(conclusion)).toBe(0);
-      expect(repository.state.constructions, String(conclusion)).toEqual([]);
-      expect(roomState.getCommittedBlueprints(), String(conclusion)).toEqual([]);
-      expect(roomState.hasActiveMission, String(conclusion)).toBe(false);
+      // Nichts wird bestaetigt, also darf auch niemand etwas lokal fortschreiben.
+      expect(confirmed, String(conclusion)).toEqual([]);
+      expect(store.getCommittedContribution('owner-host'), String(conclusion)).toBeNull();
+      expect(store.getCommittedContribution('owner-guest'), String(conclusion)).toBeNull();
+      expect(store.hasActiveMission, String(conclusion)).toBe(false);
     }
   });
 
   it('schreibt nur noch lebende Runtime-Objekte fort', () => {
-    const repository = new MemoryRepository();
-    const { session, roomState } = startMission(repository);
+    const store = startMission();
 
-    applyPersistentBaseRoundOutcome('commit', {
-      session,
-      roomState,
+    const confirmed = applyPersistentBaseRoundOutcome('commit', {
+      contributions: store,
       isRuntimeObjectAlive: (runtimeId) => runtimeId === 1,
     });
 
-    expect(repository.state.constructions).toHaveLength(1);
-    expect(roomState.getCommittedBlueprints()).toEqual([]);
+    const byOwner = new Map(confirmed.map((entry) => [entry.ownerId, entry]));
+    expect(byOwner.get('owner-host')?.constructions).toHaveLength(1);
+    expect(byOwner.get('owner-guest')?.constructions).toEqual([]);
   });
 
   it('laesst eine verworfene Runde nicht in den naechsten Lauf leaken', () => {
-    const repository = new MemoryRepository();
-    const first = startMission(repository);
+    const store = startMission();
     applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('defeat'), {
-      session: first.session,
-      roomState: first.roomState,
+      contributions: store,
       isRuntimeObjectAlive: () => true,
     });
 
-    // Der naechste Lauf baut seine Session neu aus dem Repository auf – so wie buildArena() es tut.
-    const second = new PersistentBaseSession(repository, { anchor, activeRadiusCells: 5, ownerId: 'host' });
-    expect(second.committedState.constructions).toEqual([]);
-    expect(second.workingState.constructions).toEqual([]);
-    expect(second.getRuntimeMetadata(1)).toBeNull();
-
-    // Auch der raumweite Gastzustand traegt nichts aus der verworfenen Runde weiter.
-    first.roomState.beginMission();
-    expect(first.roomState.getWorkingBlueprints()).toEqual([]);
+    // Der naechste Lauf beginnt beim zuletzt bestaetigten Stand - hier also beim leeren.
+    store.beginMission();
+    expect(store.getContributions()).toEqual([]);
+    expect(store.getRuntimeMetadata(1)).toBeNull();
 
     // Und ein Sieg im zweiten Lauf schreibt genau eine Revision fort, nicht zwei.
-    second.registerNew(runtime(3, 'host', 9), tool, footprint);
-    applyPersistentBaseRoundOutcome('commit', {
-      session: second,
-      roomState: first.roomState,
+    store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, anchor, buildArea);
+    const confirmed = applyPersistentBaseRoundOutcome('commit', {
+      contributions: store,
       isRuntimeObjectAlive: () => true,
     });
-    expect(repository.state.revision).toBe(1);
-    expect(repository.state.constructions.map((entry) => entry.relativeGridX)).toEqual([-1]);
+    expect(confirmed).toHaveLength(1);
+    expect(confirmed[0]).toMatchObject({ ownerId: 'owner-host', revision: 1 });
+    expect(confirmed[0]?.constructions.map((entry) => entry.relativeGridX)).toEqual([-1]);
+  });
+
+  it('ignoriert einen Ausgang, wenn gar keine Mission lief', () => {
+    const store = new PersistentBaseContributionStore();
+    expect(applyPersistentBaseRoundOutcome('commit', {
+      contributions: store,
+      isRuntimeObjectAlive: () => true,
+    })).toEqual([]);
+    expect(store.hasActiveMission).toBe(false);
   });
 });

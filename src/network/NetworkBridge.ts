@@ -47,6 +47,11 @@ import {
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
 import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
+import {
+  clonePersistentPlayerBaseContribution,
+  sanitizePersistentPlayerBaseContribution,
+  type PersistentPlayerBaseContribution,
+} from '../persistentBase/PersistentBaseTypes';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
   NET_TICK_RATE_HZ,
@@ -199,6 +204,8 @@ const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliabl
 const KEY_GAME_STATE_INITIAL = 'gsi'; // global reliable: vollstaendiger Bootstrap-Snapshot der laufenden Runde
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
+const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
+const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
 
 export interface NetworkPingSample {
   m: number;
@@ -2324,6 +2331,53 @@ export class NetworkBridge {
       // gerade damit niemand fuer einen anderen eintreten oder ihn hinauswerfen kann.
       return this.worldParticipationRequestHandler?.(caller.id, join) === true;
     });
+  }
+
+  // ── Persistente Basis: persoenliche Beitraege ─────────────────────────────
+
+  /**
+   * Bietet den eigenen persoenlichen Basisbeitrag im aktuellen Raum an.
+   *
+   * Bewusst ein per-player State und kein RPC: Der Beitrag ist ein Zustand, kein Ereignis, und
+   * ein spaeter beitretender Host liest ihn ohne Nachfrage. Weil jeder Peer ausschliesslich
+   * seinen eigenen per-player State schreiben kann, kann niemand fuer einen anderen anbieten.
+   *
+   * Angeboten wird nur - materialisiert wird nichts. Was davon in der Welt steht, entscheidet
+   * allein der Host.
+   */
+  offerPersistentBaseContribution(contribution: PersistentPlayerBaseContribution | null): void {
+    const next = contribution ? clonePersistentPlayerBaseContribution(contribution) : null;
+    const current = myPlayer().getState(KEY_PB_CONTRIBUTION);
+    if (JSON.stringify(current ?? null) === JSON.stringify(next)) return;
+    myPlayer().setState(KEY_PB_CONTRIBUTION, next, true);
+  }
+
+  /** Der von diesem Spieler angebotene Beitrag; ungueltige Nutzlast wird ganz verworfen. */
+  getPlayerPersistentBaseContribution(playerId: string): PersistentPlayerBaseContribution | null {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_PB_CONTRIBUTION);
+    return sanitizePersistentPlayerBaseContribution(raw);
+  }
+
+  /**
+   * Host-only: bestaetigt einem Spieler seinen fortgeschriebenen Beitrag nach einem Sieg.
+   *
+   * Das ist die einzige Quelle, aus der ein Client seinen persoenlichen Save fortschreiben darf.
+   * Ohne sie koennte ein manipulierter Client zwar Requests senden, aber nie seine eigene
+   * Revision erhoehen und ungeprueftes Bauwerk dauerhaft in den autoritativen Fluss druecken.
+   */
+  hostConfirmPersistentBaseContribution(
+    playerId: string,
+    contribution: PersistentPlayerBaseContribution,
+  ): void {
+    if (!isHost()) return;
+    const player = this.playerStateMap.get(playerId);
+    if (!player) return;
+    player.setState(KEY_PB_CONFIRMED, clonePersistentPlayerBaseContribution(contribution), true);
+  }
+
+  /** Der host-bestaetigte eigene Beitrag; nur er darf lokal persistiert werden. */
+  getConfirmedPersistentBaseContribution(): PersistentPlayerBaseContribution | null {
+    return sanitizePersistentPlayerBaseContribution(myPlayer().getState(KEY_PB_CONFIRMED));
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

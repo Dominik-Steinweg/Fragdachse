@@ -47,7 +47,10 @@ import {
   maxHighestUnlockedCoopDefenseMapId,
   sanitizeHighestUnlockedCoopDefenseMapId,
 } from '../config/coopDefenseMapUnlocks';
-import { PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID } from '../config/persistentBase';
+import {
+  PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
+  PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+} from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 import { isLocale, resolveBrowserLocale, type Locale } from '../i18n/types';
@@ -69,6 +72,11 @@ import {
   DEFAULT_PERSISTENT_BASE_STATE,
   sanitizePersistentBaseState,
   type PersistentBaseState,
+  clonePersistentPlayerBaseContribution,
+  isStableOwnerId,
+  sanitizePersistentPlayerBaseContribution,
+  DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION,
+  type PersistentPlayerBaseContribution,
 } from '../persistentBase/PersistentBaseTypes';
 
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
@@ -126,6 +134,14 @@ export interface CoopDefenseProgressPreferences {
   unseenItems: boolean;
   /** Committed, map-relative Inspector constructions. */
   persistentBase: PersistentBaseState;
+  /**
+   * Der persoenliche Beitrag dieses Spielers zur persistenten Basis.
+   *
+   * Genau ein Besitzpfad, egal ob der Spieler gerade Host oder Gast ist. Was davon in einem
+   * konkreten Raum tatsaechlich steht, entscheidet dort der Host; hier steht nur, was der
+   * Spieler besitzt.
+   */
+  personalBaseContribution: PersistentPlayerBaseContribution;
 }
 
 interface LocalPreferences {
@@ -137,6 +153,14 @@ interface LocalPreferences {
   };
   profile: {
     playerName: string | null;
+    /**
+     * Dauerhafte Besitzeridentitaet dieses Geraets/Profils.
+     *
+     * Sie ist die eine Antwort auf "wem gehoert diese Konstruktion" und ueberlebt Raumwechsel,
+     * Reconnects und Host-Wechsel. Bewusst nicht aus Peer-ID, Room-ID oder Anzeigename
+     * abgeleitet: Alle drei wechseln, waehrend der Besitz bestehen bleibt.
+     */
+    ownerId: string;
   };
   loadout: Partial<Record<LoadoutSlot, string>>;
   loadoutByClass: Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>>;
@@ -193,6 +217,8 @@ export interface LocalProgressDocument {
     pendingItemReward?: CoopDefensePendingItemReward | null;
     unseenItems: boolean;
     persistentBase: PersistentBaseState;
+    /** Fehlt in Saves vor den persoenlichen Beitraegen; der Decoder migriert sie dann. */
+    personalBaseContribution?: PersistentPlayerBaseContribution;
   };
 }
 
@@ -241,6 +267,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   pendingItemRewards: [],
   unseenItems: false,
   persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
+  personalBaseContribution: clonePersistentPlayerBaseContribution(DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION),
 };
 
 /**
@@ -271,6 +298,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   },
   profile: {
     playerName: null,
+    ownerId: '',
   },
   loadout: {},
   loadoutByClass: {},
@@ -376,11 +404,23 @@ function sanitizeCompletedBossMapIds(value: unknown): string[] {
  * Staende ohne gespeicherten Freischaltstand stammen aus der Zeit vor der Map-Freischaltung: dort
  * ist die Sieg-Historie der Bossmaps der einzige Beleg fuer bereits geschaffte Maps.
  */
+/**
+ * Erzeugt eine neue dauerhafte Besitzeridentitaet.
+ *
+ * Sie muss nur lokal eindeutig genug sein, um zwei Spieler in einem Raum zu unterscheiden; sie
+ * ist kein Sicherheitsmerkmal. Der Host prueft ohnehin jede Mutation selbst.
+ */
+function createStableOwnerId(): string {
+  const random = globalThis.crypto?.randomUUID?.();
+  if (typeof random === 'string' && random.length > 0) return `owner-${random}`;
+  return `owner-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 function buildDefaultPreferences(): LocalPreferences {
   return {
     ...DEFAULT_PREFERENCES,
     audio: { ...DEFAULT_PREFERENCES.audio },
-    profile: { ...DEFAULT_PREFERENCES.profile },
+    profile: { ...DEFAULT_PREFERENCES.profile, ownerId: createStableOwnerId() },
     loadout: {},
     loadoutByClass: {},
     graphics: { ...DEFAULT_PREFERENCES.graphics },
@@ -740,6 +780,24 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (unlockedClassIds === null) return null;
   const persistentBase = sanitizePersistentBaseState(coop.persistentBase);
   if (!persistentBase) return null;
+  const ownerId = isStableOwnerId(document.profile.ownerId)
+    ? document.profile.ownerId
+    : createStableOwnerId();
+  // Ein Save vor den persoenlichen Beitraegen fuehrt seine Konstruktionen noch im alten
+  // Einzelbesitzer-Zustand. Er wird hier einmalig unter die neue Besitzeridentitaet gehoben; ein
+  // ungueltiger Beitrag macht dagegen das ganze Dokument ungueltig, statt still zu leeren.
+  const migratedContribution = coop.personalBaseContribution === undefined;
+  const personalBaseContribution = migratedContribution
+    ? ({
+      schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+      ownerId,
+      revision: persistentBase.revision,
+      constructions: persistentBase.constructions,
+    } satisfies PersistentPlayerBaseContribution)
+    : sanitizePersistentPlayerBaseContribution(coop.personalBaseContribution);
+  // Der Beitrag gehoert genau diesem Profil. Eine fremde ownerId waere ein Save aus einem anderen
+  // Profil; sein Besitz darf nicht still uebernommen werden.
+  if (!personalBaseContribution || personalBaseContribution.ownerId !== ownerId) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
@@ -809,6 +867,10 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     profile: {
       playerName: typeof document.profile.playerName === 'string'
         ? sanitizePlayerName(document.profile.playerName) || null : null,
+      // Ein Save ohne Besitzeridentitaet stammt aus der Zeit vor den persoenlichen Beitraegen.
+      // Er bekommt jetzt eine und behaelt sie ab dann; ein spaeterer Wechsel wuerde den Besitz
+      // aller bereits gebauten Konstruktionen verlieren.
+      ownerId,
     },
     loadout,
     loadoutByClass,
@@ -836,7 +898,11 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         equippedItemIds,
         pendingItemRewards,
         unseenItems: coop.unseenItems && items.length > 0,
-        persistentBase,
+        // Nach der Migration traegt der alte Zustand nur noch den Progressionsradius. Seine
+        // Konstruktionen leben ab jetzt ausschliesslich im persoenlichen Beitrag; sie hier
+        // stehen zu lassen waere eine zweite, nie wieder gelesene Wahrheit ueber denselben Besitz.
+        persistentBase: migratedContribution ? { ...persistentBase, constructions: [] } : persistentBase,
+        personalBaseContribution: clonePersistentPlayerBaseContribution(personalBaseContribution),
       },
     },
   };
@@ -902,6 +968,10 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       })),
       unseenItems: progress.unseenItems,
       persistentBase: clonePersistentBaseState(progress.persistentBase),
+      personalBaseContribution: clonePersistentPlayerBaseContribution({
+        ...progress.personalBaseContribution,
+        ownerId: preferences.profile.ownerId,
+      }),
     },
   };
 }
@@ -1307,6 +1377,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     persistentBaseUnlocked: progress.persistentBaseUnlocked,
     unseenItems: progress.unseenItems,
     persistentBase: clonePersistentBaseState(progress.persistentBase),
+    personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
     ...cloneCoopDefenseItemState(progress),
   };
 }
@@ -1326,10 +1397,67 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
         ),
         profilesByClass: cloneProfilesByClass(progress.profilesByClass),
         persistentBase: clonePersistentBaseState(progress.persistentBase),
+        personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
         ...cloneCoopDefenseItemState(progress),
       },
     },
   }));
+}
+
+/**
+ * Die dauerhafte Besitzeridentitaet dieses Geraets.
+ *
+ * Sie entsteht beim ersten Lesen und aendert sich danach nie wieder. Jede persoenliche
+ * Konstruktion haengt an ihr, unabhaengig von Raum, Peer-ID und Anzeigename.
+ */
+export function getStoredLocalOwnerId(): string {
+  return readPreferences().profile.ownerId;
+}
+
+/** Der persoenliche Basisbeitrag dieses Spielers, immer unter der aktuellen Besitzeridentitaet. */
+export function getStoredPersonalBaseContribution(): PersistentPlayerBaseContribution {
+  const preferences = readPreferences();
+  return clonePersistentPlayerBaseContribution({
+    ...preferences.progression.coopDefense.personalBaseContribution,
+    ownerId: preferences.profile.ownerId,
+  });
+}
+
+/**
+ * Schreibt den persoenlichen Beitrag.
+ *
+ * Bewusst nur fuer einen Beitrag mit der eigenen Besitzeridentitaet und mit monoton wachsender
+ * Revision: Ein Client persistiert ausschliesslich, was der Host ihm bestaetigt hat, und eine
+ * verspaetet eintreffende alte Bestaetigung darf einen neueren Stand nicht zurueckdrehen.
+ */
+export function setStoredPersonalBaseContribution(contribution: PersistentPlayerBaseContribution): boolean {
+  const current = readPreferences();
+  const ownerId = current.profile.ownerId;
+  const sanitized = sanitizePersistentPlayerBaseContribution({ ...contribution, ownerId });
+  if (!sanitized) return false;
+  const stored = current.progression.coopDefense.personalBaseContribution;
+  if (sanitized.revision < stored.revision) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        personalBaseContribution: sanitized,
+      },
+    },
+  });
+  return true;
+}
+
+/**
+ * Der aktive Progressionsradius der persistenten Basis.
+ *
+ * Er beschreibt, wie weit die Basis ausgebaut ist, und ist ausdruecklich keine Aussage darueber,
+ * wem eine Konstruktion gehoert. Besitz steht ausschliesslich im persoenlichen Beitrag.
+ */
+export function getStoredPersistentBaseRadiusCells(): number {
+  return readPreferences().progression.coopDefense.persistentBase.radiusCells;
 }
 
 /** Typed persistence port used by the persistent-base domain; no caller needs LocalStorage. */

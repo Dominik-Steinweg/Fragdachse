@@ -157,7 +157,7 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
     expect(lifecycle).toContain('new BaseManager(this.scene, coopDefenseBases, world.metrics');
     expect(lifecycle).toContain('this.ctx.baseManager = coopDefenseBases.length > 0');
     expect(lifecycle).toContain('this.ctx.playerManager.setWorldGeometry({');
-    expect(lifecycle).toContain('this.restorePersistentBase(world.persistentBaseSite');
+    expect(lifecycle).toContain('this.materializePersistentBaseComposite(world.persistentBaseSite');
     expect(lifecycle).not.toContain('getPersistentBaseAnchor');
     expect(arenaScene).toContain('const persistentBaseSite = activeWorld?.persistentBaseSite ?? null');
     expect(combatSystem).toContain('this.playerManager.getWorldSpawnPoint(');

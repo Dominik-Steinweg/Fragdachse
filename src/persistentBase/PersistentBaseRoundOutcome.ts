@@ -1,6 +1,6 @@
 import type { RoundConclusion } from '../network/NetworkBridge';
-import type { PersistentBaseRoomState } from './PersistentBaseRoomState';
-import type { PersistentBaseSession } from './PersistentBaseSession';
+import type { PersistentBaseContributionStore } from './PersistentBaseContributionStore';
+import type { PersistentPlayerBaseContribution } from './PersistentBaseTypes';
 
 /**
  * Wie eine beendete Runde mit dem persistenten Arbeitsstand umgeht. Nur ein Sieg schreibt fort;
@@ -8,17 +8,17 @@ import type { PersistentBaseSession } from './PersistentBaseSession';
  */
 export type PersistentBaseRoundOutcome = 'commit' | 'rollback';
 
-/** Nur der Anteil der Mission-Session, den der Rundenabschluss braucht. */
-type PersistentBaseSessionLike = Pick<PersistentBaseSession, 'commit' | 'discard'>;
-
-/** Nur der Anteil des raumweiten Gastzustands, den der Rundenabschluss braucht. */
-type PersistentBaseRoomStateLike = Pick<PersistentBaseRoomState, 'hasActiveMission' | 'commit' | 'rollback'>;
+/** Nur der Anteil des Beitragsspeichers, den der Rundenabschluss braucht. */
+type PersistentBaseContributionStoreLike =
+  Pick<PersistentBaseContributionStore, 'hasActiveMission' | 'commit' | 'rollback'>;
 
 export interface PersistentBaseRoundTargets {
-  /** Host-eigene Mission-Session; `null`, wenn die Map keine persistente Basis besitzt. */
-  readonly session: PersistentBaseSessionLike | null;
-  /** Raumweiter Gastzustand; lebt laenger als eine Runde und wird deshalb immer uebergeben. */
-  readonly roomState: PersistentBaseRoomStateLike;
+  /**
+   * Host-seitiger Arbeitsstand aller Beitraege. Er lebt laenger als eine Runde - ein Gast bleibt
+   * ueber einen Kartenwechsel hinweg Besitzer seiner Konstruktionen - und wird deshalb immer
+   * uebergeben, auch wenn gerade keine Mission laeuft.
+   */
+  readonly contributions: PersistentBaseContributionStoreLike;
   /** Nur noch lebende Runtime-Objekte werden fortgeschrieben. */
   readonly isRuntimeObjectAlive: (runtimeId: number) => boolean;
 }
@@ -30,19 +30,19 @@ export function resolvePersistentBaseRoundOutcome(
 }
 
 /**
- * Wendet den Ausgang auf beide persistenten Zustaende an. Host-eigene Session und Gastzustand
- * folgen bewusst demselben Ausgang, damit eine Runde nie halb fortgeschrieben werden kann.
+ * Wendet den Ausgang auf alle persoenlichen Beitraege gemeinsam an.
+ *
+ * Ein Sieg liefert je Besitzer genau einen bestaetigten neuen Beitrag; der Aufrufer stellt ihn
+ * dem jeweiligen Besitzer zu, der ihn dann - und nur dann - lokal speichern darf. Jeder andere
+ * Ausgang liefert nichts: Der zuletzt bestaetigte Stand jedes Besitzers bleibt unveraendert.
  */
 export function applyPersistentBaseRoundOutcome(
   outcome: PersistentBaseRoundOutcome,
   targets: PersistentBaseRoundTargets,
-): void {
-  const { session, roomState, isRuntimeObjectAlive } = targets;
-  if (outcome === 'commit') {
-    session?.commit(isRuntimeObjectAlive);
-    if (roomState.hasActiveMission) roomState.commit(isRuntimeObjectAlive);
-    return;
-  }
-  session?.discard();
-  if (roomState.hasActiveMission) roomState.rollback();
+): readonly PersistentPlayerBaseContribution[] {
+  const { contributions, isRuntimeObjectAlive } = targets;
+  if (!contributions.hasActiveMission) return [];
+  if (outcome === 'commit') return contributions.commit(isRuntimeObjectAlive);
+  contributions.rollback();
+  return [];
 }

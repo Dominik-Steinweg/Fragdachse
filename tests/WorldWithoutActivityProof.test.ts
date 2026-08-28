@@ -27,7 +27,7 @@ import { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import { NetworkBridge as Bridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
-import { PersistentBaseSession } from '../src/persistentBase/PersistentBaseSession';
+import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRepositoryPort } from '../src/persistentBase/PersistentBaseRepository';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 import type { PlayerNetState, SyncedPlaceableRock } from '../src/types';
@@ -290,9 +290,10 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       expect(host.areWorldParticipantsLoadReady()).toBe(true);
 
       const anchor = hostWorldState.context!.persistentBaseSite!.anchor;
-      const originGrid = { gridX: anchor.gridX + 2, gridY: anchor.gridY };
-      const firstTargetGrid = { gridX: anchor.gridX + 3, gridY: anchor.gridY };
-      const secondTargetGrid = { gridX: anchor.gridX + 4, gridY: anchor.gridY };
+      // Gebaut wird im Innenhof: Er ist die einzige Flaeche, die der Baubereich zulaesst.
+      const originGrid = { gridX: anchor.gridX + 4, gridY: anchor.gridY };
+      const firstTargetGrid = { gridX: anchor.gridX + 1, gridY: anchor.gridY };
+      const secondTargetGrid = { gridX: anchor.gridX - 1, gridY: anchor.gridY };
       const origin = worldCellCenter(hostWorldState.context!.metrics, originGrid.gridX, originGrid.gridY);
       const firstTarget = worldCellCenter(hostWorldState.context!.metrics, firstTargetGrid.gridX, firstTargetGrid.gridY);
       const secondTarget = worldCellCenter(hostWorldState.context!.metrics, secondTargetGrid.gridX, secondTargetGrid.gridY);
@@ -445,15 +446,11 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       )).toMatchObject({ isValid: true, gridX: firstTargetGrid.gridX, gridY: firstTargetGrid.gridY });
 
       useRoom(hostRoom);
-      const repository = new MemoryRepository();
-      const persistentSession = new PersistentBaseSession(
-        repository,
-        {
-          anchor,
-          activeRadiusCells: hostWorldState.context!.persistentBaseSite!.radiusCells,
-          ownerId: clientId,
-        },
-      );
+      // Ein einziger Besitzpfad: Die Konstruktion des Gastes laeuft ueber denselben Beitragsspeicher
+      // wie die des Hosts, nur unter einer anderen Besitzeridentitaet.
+      const contributions = new PersistentBaseContributionStore();
+      const buildArea = hostWorldState.context!.persistentBaseSite!.buildArea;
+      contributions.beginMission();
       const placed = hostPlacement.tryPlaceConstruction(
         construction,
         construction.maxHp,
@@ -466,9 +463,18 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       );
       expect(placed).not.toBeNull();
       expect(hostPlacement.canPlaceSingleCell(firstTargetGrid.gridX, firstTargetGrid.gridY)).toBe(false);
-      expect(persistentSession.registerNew(placed!, construction, construction.footprint)).toMatchObject({ origin: 'new' });
-      expect(persistentSession.commit((id) => hostPlacement.hasRuntimeRock(id)).constructions).toHaveLength(1);
-      expect(repository.saves).toBe(1);
+      expect(contributions.registerNew(
+        'owner-guest',
+        placed!,
+        construction,
+        construction.footprint,
+        anchor,
+        buildArea,
+      )).toMatchObject({ origin: 'new' });
+      const confirmed = contributions.commit((id) => hostPlacement.hasRuntimeRock(id));
+      expect(confirmed).toHaveLength(1);
+      expect(confirmed[0]).toMatchObject({ ownerId: 'owner-guest', revision: 1 });
+      expect(confirmed[0]?.constructions).toHaveLength(1);
 
       // 6. Die Construction-Mutation wird als World-Snapshot repliziert, nicht als Activity-Zustand.
       useRoom(hostRoom);
@@ -494,8 +500,13 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
 
       // 7. Repositionieren erzeugt einen neuen autoritativen Runtime-Eintrag; der alte wird entfernt.
       useRoom(hostRoom);
+      // Die naechste Mission bindet den bestaetigten Blueprint wieder an sein Runtime-Objekt -
+      // genau das tut sonst der Composite-Merge. Erst dann ist ein Abriss ueberhaupt moeglich.
+      contributions.beginMission();
+      contributions.registerRestored('owner-guest', confirmed[0]!.constructions[0]!, placed!.id);
+      // Abriss gibt den Besitz auf; ein Konflikt haette den Blueprint dagegen stehen lassen.
       hostPlacement.removeRock(placed!.id);
-      persistentSession.detachRuntimeObjects((id) => hostPlacement.hasRuntimeRock(id));
+      expect(contributions.removeByRuntimeId(placed!.id)).toBe(true);
       const repositioned = hostPlacement.tryPlaceConstruction(
         construction,
         construction.maxHp,
@@ -507,10 +518,19 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
         secondTarget.y,
       );
       expect(repositioned).not.toBeNull();
-      expect(persistentSession.registerNew(repositioned!, construction, construction.footprint)).toMatchObject({ origin: 'new' });
-      expect(persistentSession.commit((id) => hostPlacement.hasRuntimeRock(id)).constructions[0]).toMatchObject({
-        relativeGridX: secondTargetGrid.gridX - anchor.gridX,
-      });
+      expect(contributions.registerNew(
+        'owner-guest',
+        repositioned!,
+        construction,
+        construction.footprint,
+        anchor,
+        buildArea,
+      )).toMatchObject({ origin: 'new' });
+      const repositionedConfirmed = contributions.commit((id) => hostPlacement.hasRuntimeRock(id));
+      // Die vorige Konstruktion ist entfernt; ihr Blueprint faellt mit ihrem Runtime-Objekt.
+      expect(repositionedConfirmed[0]?.constructions).toEqual([
+        expect.objectContaining({ relativeGridX: secondTargetGrid.gridX - anchor.gridX }),
+      ]);
       host.publishGameState(worldSnapshot({ [clientId]: playerState(hostPlayer.x, hostPlayer.y) }, hostPlacement.getNetSnapshot()), true);
       useRoom(clientRoom);
       replicated = client.getLatestGameState();
@@ -523,9 +543,15 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
 
       // 8. Dismantle, Player-Detach und World-Zerstoerung lassen den Room bestehen.
       useRoom(hostRoom);
+      contributions.beginMission();
+      contributions.registerRestored(
+        'owner-guest',
+        repositionedConfirmed[0]!.constructions[0]!,
+        repositioned!.id,
+      );
       hostPlacement.removeRock(repositioned!.id);
-      persistentSession.detachRuntimeObjects((id) => hostPlacement.hasRuntimeRock(id));
-      expect(persistentSession.commit((id) => hostPlacement.hasRuntimeRock(id)).constructions).toEqual([]);
+      expect(contributions.removeByRuntimeId(repositioned!.id)).toBe(true);
+      expect(contributions.commit((id) => hostPlacement.hasRuntimeRock(id))[0]?.constructions).toEqual([]);
       host.publishGameState(worldSnapshot({}, hostPlacement.getNetSnapshot()), true);
       hostPlayerRuntime.detach(clientId, hostFeatures);
       useRoom(clientRoom);

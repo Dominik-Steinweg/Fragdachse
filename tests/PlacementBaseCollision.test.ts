@@ -19,7 +19,8 @@ import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBa
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { getUtilityConfigForMode } from '../src/loadout/LoadoutConfig';
-import { planPersistentBaseRestore, type PersistentRestoreToolDefinition } from '../src/persistentBase/PersistentBaseRestorePlanner';
+import type { PersistentRestoreToolDefinition } from '../src/persistentBase/PersistentBaseTools';
+import { mergePersistentBaseComposite } from '../src/persistentBase/PersistentBaseComposite';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
@@ -208,13 +209,20 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
       ],
     };
     const materializeCheck = vi.spyOn(placement, 'canMaterializeCells');
-    const plan = planPersistentBaseRestore({
-      state,
+    const toolsById = new Map(tools.map((tool) => [tool.id, tool] as const));
+    const result = mergePersistentBaseComposite({
       anchor: { gridX: 10, gridY: 10 },
-      activeRadiusCells: 5,
-      capacityUsed: 0,
-      capacityMax: 20,
-      tools,
+      buildArea: { kind: 'radius', radiusCells: 5 },
+      hostContribution: {
+        schemaVersion: 1,
+        ownerId: 'owner-host',
+        revision: state.revision,
+        constructions: state.constructions,
+      },
+      resolveTool: (_ownerId, toolId) => {
+        const tool = toolsById.get(toolId);
+        return tool ? { footprint: tool.footprint, capacityCost: tool.capacityCost } : null;
+      },
       isCellBlocked: (gridX, gridY) => !placement.canMaterializeCells(
         [{ dx: 0, dy: 0 }],
         gridX,
@@ -223,17 +231,13 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
     });
 
     expect(materializeCheck).toHaveBeenCalled();
-    expect(plan.active.map((entry) => entry.blueprint.persistentId)).toEqual(['adjacent-cell']);
-    expect(plan.dormant.map((entry) => [entry.blueprint.persistentId, entry.reason])).toEqual([
-      ['base-cell', 'collision'],
-      ['crossing-footprint', 'collision'],
+    expect(result.active.map((entry) => entry.blueprint.persistentId)).toEqual(['adjacent-cell']);
+    expect(result.conflicts.map((entry) => [entry.persistentId, entry.reason])).toEqual([
+      ['base-cell', 'authored-collision'],
+      ['crossing-footprint', 'authored-collision'],
     ]);
-    // Planning leaves the committed save untouched; dormant blueprints remain available.
+    // Der Merge laesst den Besitz unangetastet; ein Konflikt loescht keinen Blueprint.
     expect(state.constructions).toHaveLength(3);
-    expect(plan.dormant.map((entry) => entry.blueprint.persistentId)).toEqual([
-      'base-cell',
-      'crossing-footprint',
-    ]);
 
     expect(placement.materializePersistentPlaceable(
       COOP_DEFENSE_CONSTRUCTIONS.rocket_turret,

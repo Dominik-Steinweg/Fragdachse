@@ -146,19 +146,28 @@ import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
-import { getStoredPersistentBaseState, getStoredPersistentBaseUnlocked } from '../../utils/localPreferences';
-import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRepository';
-import { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
-import { PersistentBaseRoomState, type GuestPersistentConstruction } from '../../persistentBase/PersistentBaseRoomState';
+import {
+  getStoredLocalOwnerId,
+  getStoredPersistentBaseRadiusCells,
+  getStoredPersistentBaseUnlocked,
+  getStoredPersonalBaseContribution,
+  setStoredPersonalBaseContribution,
+} from '../../utils/localPreferences';
+import { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
+import {
+  mergePersistentBaseComposite,
+  type PersistentCompositeActiveEntry,
+  type PersistentCompositeConflictReason,
+  type PersistentCompositeTool,
+} from '../../persistentBase/PersistentBaseComposite';
 import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
 } from '../../persistentBase/PersistentBaseRoundOutcome';
-import {
-  planPersistentBaseRestore,
-  type PersistentRestoreCandidate,
-  type PersistentRestoreToolDefinition,
-} from '../../persistentBase/PersistentBaseRestorePlanner';
+import type {
+  PersistentRestoreCandidate,
+  PersistentRestoreToolDefinition,
+} from '../../persistentBase/PersistentBaseTools';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import {
   resolveActiveGameMode,
@@ -197,7 +206,11 @@ import { resolveWorldPresentation, type WorldPresentationRequirement } from '../
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import { isSameWorldInstance, type WorldDescriptor, type WorldParameters } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
-import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
+import type {
+  PersistentBaseAnchor,
+  PersistentPlayerBaseContribution,
+  PersistentToolRef,
+} from '../../persistentBase/PersistentBaseTypes';
 import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
@@ -420,8 +433,23 @@ export class ArenaLifecycleCoordinator {
     ],
   });
   /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
-  private readonly persistentBaseRoomState = new PersistentBaseRoomState();
-  private persistentBaseSession: PersistentBaseSession | null = null;
+  /**
+   * Host-seitiger Arbeitsstand aller persoenlichen Beitraege dieses Raums.
+   *
+   * Genau ein Besitzpfad fuer Host und Gaeste. Er lebt laenger als eine Runde, weil ein Spieler
+   * ueber einen Kartenwechsel hinweg Besitzer seiner Konstruktionen bleibt, und stirbt mit dem
+   * Raum - nie mit einer Runde.
+   */
+  private readonly persistentBaseContributions = new PersistentBaseContributionStore();
+  /** Zuletzt angebotene Beitragsrevision je Spieler; verhindert wiederholtes Uebernehmen. */
+  private readonly ingestedContributionRevisions = new Map<string, number>();
+  /**
+   * Raum-Spieler-ID zu dauerhafter Besitzeridentitaet.
+   *
+   * Beides bleibt getrennt: Die Spieler-ID gilt fuer diesen Raum und bestimmt Farbe, Loadout und
+   * Freischaltungen; die Besitzeridentitaet gilt fuer das Bauwerk und ueberlebt jeden Raum.
+   */
+  private readonly persistentBaseOwnerByPlayerId = new Map<string, string>();
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
   private persistentBaseBuildArea: PersistentBaseBuildArea | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
@@ -793,7 +821,7 @@ export class ArenaLifecycleCoordinator {
       worldParameters: coopDefenseMapConfig?.persistentBase
         ? {
           persistentBaseUnlocked: true,
-          persistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells,
+          persistentBaseRadiusCells: getStoredPersistentBaseRadiusCells(),
         }
         : undefined,
     };
@@ -830,11 +858,35 @@ export class ArenaLifecycleCoordinator {
     }
     if (!view || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
 
+    const work = this.collectWorldRenderWork(view);
+    // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
+    // tut das ausdruecklich nicht (siehe getWorldRevealState).
+    const localRenderReady = work.renderReady && this.terrainSnapshotReady;
+    const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady);
+    bridge.setLocalWorldLoadProgress(
+      worldRevision,
+      loadProgress.progress,
+      loadProgress.stage,
+      loadProgress.ready,
+    );
+    this.localArenaLoadReady = loadProgress.ready;
+
+    if (bridge.isHost()) this.tryScheduleArenaStart();
+  }
+
+  /**
+   * Aufbauarbeit der lokal dargestellten World-Flaechen. Boden, Fels-Overlay und statische
+   * Schatten teilen sich denselben Bake-Scheduler, deshalb zaehlt hier auch nur eine Summe.
+   */
+  private collectWorldRenderWork(view: WorldViewRect): {
+    pending: number;
+    resident: number;
+    renderReady: boolean;
+  } {
     const renderReady = ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
       && this.renderers.shadow.isStaticReadyForView(view, true);
-    const localRenderReady = renderReady && this.terrainSnapshotReady;
-    const groundStats = this.ctx.arenaResult.groundSurface?.getStats();
-    const rockStats = this.ctx.arenaResult.rockOverlaySurface?.getStats();
+    const groundStats = this.ctx.arenaResult?.groundSurface?.getStats();
+    const rockStats = this.ctx.arenaResult?.rockOverlaySurface?.getStats();
     const shadowStats = this.renderers.shadow.getStaticSurfaceStats();
     const pending = (groundStats?.pendingChunks ?? 0) + (groundStats?.pendingRegions ?? 0)
       + (groundStats?.pendingTextureAcquisitions ?? 0)
@@ -845,16 +897,30 @@ export class ArenaLifecycleCoordinator {
     const resident = (groundStats?.residentChunks ?? 0)
       + (rockStats?.residentChunks ?? 0)
       + (shadowStats?.residentChunks ?? 0);
-    const loadProgress = resolveWorldLoadProgress(pending, resident, localRenderReady);
-    bridge.setLocalWorldLoadProgress(
-      worldRevision,
-      loadProgress.progress,
-      loadProgress.stage,
-      loadProgress.ready,
-    );
-    this.localArenaLoadReady = loadProgress.ready;
+    return { pending, resident, renderReady };
+  }
 
-    if (bridge.isHost()) this.tryScheduleArenaStart();
+  /**
+   * Darstellungszustand der lokalen World fuer den Boot-Reveal: steht die Welt so vollstaendig,
+   * dass ein deckender Ladescreen ihr weichen darf?
+   *
+   * Bewusst getrennt von der replizierten Ladebarriere - hier zaehlt allein, was der Spieler
+   * sieht. Der Terrain-Farb-Snapshot speist nur den Leaf-Blower, laeuft asynchron und darf den
+   * Reveal deshalb nicht aufhalten; Runden- und Netzbedingungen haben hier ohnehin keinen Platz.
+   */
+  getWorldRevealState(view: WorldViewRect | null): { ready: boolean; progress: number } {
+    // Ein technischer Abbruch zeigt seine eigene Meldung; der Ladescreen darf sie nicht verdecken.
+    if (this.matchTerminated) return { ready: true, progress: 100 };
+    // Wer nichts darstellt, hat nichts zu zeigen und damit nichts abzuwarten.
+    if (this.arenaBuilt && !this.getLocalWorldPresentation().required) {
+      return { ready: true, progress: 100 };
+    }
+    if (!this.arenaBuilt || !view || !this.ctx.arenaResult || !this.ctx.currentLayout) {
+      return { ready: false, progress: 0 };
+    }
+    const work = this.collectWorldRenderWork(view);
+    const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, work.renderReady);
+    return { ready: loadProgress.ready, progress: loadProgress.progress };
   }
 
   /**
@@ -1039,14 +1105,12 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
     // Defeat, abort and non-Coop completion discard the round-local working copy.
-    applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
-      session: this.persistentBaseSession ?? this.ctx.persistentBaseSession,
-      roomState: this.persistentBaseRoomState,
-      isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
-    });
-    // A new round must load the repository's newly committed baseline. During an in-round map
-    // transition the field remains alive; it is cleared only after the round outcome is decided.
-    this.persistentBaseSession = null;
+    this.publishConfirmedPersistentBaseContributions(
+      applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
+        contributions: this.persistentBaseContributions,
+        isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+      }),
+    );
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
@@ -1169,6 +1233,28 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
+  /**
+   * Haelt persoenlichen Beitrag und Host-Bestaetigung in Fluss.
+   *
+   * Beide Richtungen sind bewusst Zustand statt Ereignis: Ein spaeter beitretender Host liest den
+   * Beitrag ohne Nachfrage, und eine Bestaetigung erreicht ihren Besitzer auch dann noch, wenn
+   * sie waehrend eines Szenenwechsels ausgesprochen wurde.
+   */
+  syncPersistentBaseContributions(): void {
+    // Anbieten heisst nicht bauen: Der Host entscheidet, was davon in seiner Welt steht.
+    bridge.offerPersistentBaseContribution(getStoredPersonalBaseContribution());
+
+    // Nur ein host-bestaetigter Stand darf lokal fortgeschrieben werden. Ohne diese Regel koennte
+    // ein manipulierter Client seine eigene Revision erhoehen und ungeprueftes Bauwerk dauerhaft
+    // in den autoritativen Fluss druecken.
+    const confirmed = bridge.getConfirmedPersistentBaseContribution();
+    if (confirmed && confirmed.ownerId === getStoredLocalOwnerId()) {
+      setStoredPersonalBaseContribution(confirmed);
+    }
+
+    if (bridge.isHost()) this.ingestOfferedPersistentBaseContributions();
+  }
+
   /** Host callback fuer den atomaren Rollenwechsel; kein CombatSystem-Tod. */
   handleSpectatorEntered(playerId: string): void {
     if (bridge.getGamePhase() !== 'ARENA') return;
@@ -1198,7 +1284,8 @@ export class ArenaLifecycleCoordinator {
 
   private removeGuestSessionOwner(playerId: string): void {
     if (!bridge.isHost() || playerId === bridge.getLocalPlayerId()) return;
-    const runtimeIds = this.persistentBaseRoomState.removeGuestSessionOwner(playerId);
+    const runtimeIds = this.persistentBaseContributions.removeOwner(this.resolveOwnerId(playerId));
+    this.ingestedContributionRevisions.delete(playerId);
     let removedCount = 0;
     for (const runtimeId of runtimeIds) {
       const removed = this.ctx.placementSystem?.removeRock(runtimeId);
@@ -1534,11 +1621,9 @@ export class ArenaLifecycleCoordinator {
     // half-written mission working state into a later round in the same room.
     if (bridge.isHost()) {
       applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(null), {
-        session: this.persistentBaseSession,
-        roomState: this.persistentBaseRoomState,
+        contributions: this.persistentBaseContributions,
         isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
       });
-      this.persistentBaseSession = null;
     }
 
     this.isLocalReady = false;
@@ -1832,7 +1917,7 @@ export class ArenaLifecycleCoordinator {
       world.metrics,
       coopDefenseBases,
     );
-    this.ctx.persistentBaseSession = null;
+    this.ctx.persistentBaseContributions = null;
     // Der Basiskern gehoert der World, die Konstruktionen darauf der Activity. Eine World ohne
     // Activity - die LobbyWorld - materialisiert deshalb den Kern, oeffnet aber keine Working
     // Copy: Es gibt dort nichts wiederherzustellen und nichts zu committen.
@@ -1842,29 +1927,13 @@ export class ArenaLifecycleCoordinator {
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on world ${world.descriptor.definitionId}`,
         );
       }
-      if (!this.persistentBaseSession) {
-        const repository = new PersistentBaseRepository();
-        const committedState = repository.load();
-        this.persistentBaseSession = new PersistentBaseSession(
-          repository,
-          {
-            anchor: persistentBaseSite.anchor,
-            activeRadiusCells: committedState.radiusCells,
-            activeBuildArea: persistentBaseSite.buildArea,
-            ownerId: bridge.getLocalPlayerId(),
-          },
-          committedState,
-        );
-      }
-      this.persistentBaseSession.rebindArena(
-        persistentBaseSite.anchor,
-        persistentBaseSite.radiusCells,
-        persistentBaseSite.buildArea,
-      );
-      this.ctx.persistentBaseSession = this.persistentBaseSession;
+      // Erst alle aktuell angebotenen Beitraege einsammeln, dann die Mission oeffnen: Der
+      // Arbeitsstand beginnt genau bei dem, was die anwesenden Spieler mitgebracht haben.
+      this.ingestOfferedPersistentBaseContributions();
+      this.persistentBaseContributions.beginMission();
+      this.ctx.persistentBaseContributions = this.persistentBaseContributions;
       this.persistentBaseAnchor = persistentBaseSite.anchor;
       this.persistentBaseBuildArea = persistentBaseSite.buildArea;
-      this.persistentBaseRoomState.beginMission();
     } else {
       this.persistentBaseAnchor = null;
       this.persistentBaseBuildArea = null;
@@ -3841,7 +3910,7 @@ export class ArenaLifecycleCoordinator {
       barrierCells: () => this.ctx.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
     }) : null;
-    this.restorePersistentBase(world.persistentBaseSite, world.definition?.sourceMapId ?? null);
+    this.materializePersistentBaseComposite(world.persistentBaseSite, world.definition?.sourceMapId ?? null);
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
     this.renderers.lighting.setTimeOfDay(runtimeTimeOfDayMinutes);
     this.renderers.lighting.setActive(true);
@@ -4003,13 +4072,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     const detachedPlacementSystem = this.ctx.placementSystem;
-    this.persistentBaseSession?.detachRuntimeObjects(
+    this.persistentBaseContributions.detachRuntimeObjects(
       (runtimeId) => detachedPlacementSystem?.hasRuntimeRock(runtimeId) === true,
     );
-    this.persistentBaseRoomState.detachRuntimeObjects(
-      (runtimeId) => detachedPlacementSystem?.hasRuntimeRock(runtimeId) === true,
-    );
-    this.ctx.persistentBaseSession = null;
+    this.ctx.persistentBaseContributions = null;
     this.persistentBaseAnchor = null;
     this.persistentBaseBuildArea = null;
     this.ctx.placementSystem = null;
@@ -4214,25 +4280,119 @@ export class ArenaLifecycleCoordinator {
     this.ctx.playerManager.setWorldGeometry(null);
   }
 
-  private restorePersistentBase(
+  /**
+   * Uebernimmt die aktuell angebotenen Beitraege aller verbundenen Spieler.
+   *
+   * Ein Angebot ist nur ein Angebot: Der Host sanitisiert es an der Netzwerkgrenze und
+   * entscheidet erst beim Merge, was davon in der Welt steht. Eine bereits uebernommene Revision
+   * wird nicht erneut eingelesen, damit ein wiederholt gesendeter Zustand nichts anstoesst.
+   */
+  private ingestOfferedPersistentBaseContributions(): void {
+    if (!bridge.isHost()) return;
+    let ingestedSomething = false;
+    for (const playerId of bridge.getConnectedPlayerIds()) {
+      const offered = playerId === bridge.getLocalPlayerId()
+        ? getStoredPersonalBaseContribution()
+        : bridge.getPlayerPersistentBaseContribution(playerId);
+      if (!offered) continue;
+      if (this.ingestedContributionRevisions.get(playerId) === offered.revision) continue;
+      if (!this.persistentBaseContributions.offerContribution(offered)) continue;
+      this.ingestedContributionRevisions.set(playerId, offered.revision);
+      this.persistentBaseOwnerByPlayerId.set(playerId, offered.ownerId);
+      ingestedSomething = true;
+    }
+    // Ein waehrend der Mission eingetroffener Beitrag traegt sofort bei, statt bis zur naechsten
+    // World zu warten.
+    if (ingestedSomething && this.persistentBaseContributions.hasActiveMission) {
+      this.hostRefreshPersistentBaseComposite();
+    }
+  }
+
+  /** Die dauerhafte Besitzeridentitaet hinter einer Raum-Spieler-ID; leer, wenn keine bekannt ist. */
+  private resolveOwnerId(playerId: string): string {
+    if (playerId === bridge.getLocalPlayerId()) return getStoredLocalOwnerId();
+    return this.persistentBaseOwnerByPlayerId.get(playerId)
+      ?? bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId
+      ?? '';
+  }
+
+  /** Die Raum-Spieler-ID hinter einer Besitzeridentitaet; sie bestimmt Farbe und Berechtigungen. */
+  private resolvePlayerIdForOwner(ownerId: string): string | null {
+    if (ownerId === getStoredLocalOwnerId()) return bridge.getLocalPlayerId();
+    for (const [playerId, candidate] of this.persistentBaseOwnerByPlayerId) {
+      if (candidate === ownerId) return playerId;
+    }
+    return null;
+  }
+
+  /**
+   * Baut die sichtbare Basis aus allen persoenlichen Beitraegen auf.
+   *
+   * Der Merge selbst ist rein und deterministisch; hier wird nur materialisiert, was er
+   * freigegeben hat. Ein Konflikt bleibt genau das - er entfernt nichts aus dem Besitz seines
+   * Besitzers und erscheint im naechsten Raum moeglicherweise wieder.
+   */
+  /**
+   * Rechnet das Composite nach einem Beitritt neu und materialisiert, was neu dazugekommen ist.
+   *
+   * Der Merge ist deterministisch und liefert fuer bereits stehende Konstruktionen dasselbe
+   * Ergebnis wie zuvor; materialisiert wird deshalb nur, was noch kein Runtime-Objekt hat. So
+   * bleibt eine laufende Mission unberuehrt, waehrend der neue Spieler trotzdem sofort beitraegt.
+   */
+  private hostRefreshPersistentBaseComposite(): void {
+    if (!bridge.isHost() || !this.ctx.persistentBaseContributions) return;
+    this.materializePersistentBaseComposite(
+      this.ctx.world?.persistentBaseSite ?? null,
+      this.ctx.world?.definition?.sourceMapId ?? null,
+    );
+  }
+
+  private materializePersistentBaseComposite(
     site: WorldPersistentBaseSite | null,
     mapId: string | null,
   ): void {
-    const session = this.ctx.persistentBaseSession;
-    if (!session || !site || !this.ctx.placementSystem) return;
+    const store = this.ctx.persistentBaseContributions;
+    if (!store || !site || !this.ctx.placementSystem) return;
 
-    const hostId = bridge.getLocalPlayerId();
-    const tools = this.buildPersistentRestoreTools(hostId);
-    const capacityMax = this.getConstructionCapacity(hostId);
+    const hostOwnerId = getStoredLocalOwnerId();
+    const toolCache = new Map<string, ReadonlyMap<string, PersistentRestoreToolDefinition>>();
+    const resolveOwnerTools = (ownerId: string): ReadonlyMap<string, PersistentRestoreToolDefinition> => {
+      const cached = toolCache.get(ownerId);
+      if (cached) return cached;
+      // Freischaltung, Klasse und Loadout gehoeren dem Besitzer der Konstruktion, nicht dem Host:
+      // Ein Gast darf ein Werkzeug einsetzen, das der Host selbst nicht besitzt.
+      const playerId = this.resolvePlayerIdForOwner(ownerId);
+      const tools = new Map<string, PersistentRestoreToolDefinition>();
+      if (playerId) {
+        for (const tool of this.buildPersistentRestoreTools(playerId)) tools.set(tool.id, tool);
+      }
+      toolCache.set(ownerId, tools);
+      return tools;
+    };
 
-    const plan = planPersistentBaseRestore({
-      state: session.workingState,
+    const capacityMaxByOwner = new Map<string, number>();
+    for (const ownerId of store.ownerIds) {
+      const playerId = this.resolvePlayerIdForOwner(ownerId);
+      // Kapazitaet gilt pro Besitzer, nicht als gemeinsamer Basis-Pool.
+      if (playerId) capacityMaxByOwner.set(ownerId, this.getConstructionCapacity(playerId));
+    }
+
+    const result = mergePersistentBaseComposite({
       anchor: site.anchor,
-      activeRadiusCells: session.radiusCells,
-      activeBuildArea: session.buildArea,
-      capacityUsed: this.ctx.placementSystem.getUsedCapacity(hostId),
-      capacityMax,
-      tools,
+      buildArea: site.buildArea,
+      hostContribution: store.getContribution(hostOwnerId),
+      guestContributions: store.getContributions()
+        .filter((contribution) => contribution.ownerId !== hostOwnerId),
+      resolveTool: (ownerId, toolId): PersistentCompositeTool | null => {
+        const tool = resolveOwnerTools(ownerId).get(toolId);
+        if (!tool) return null;
+        return {
+          footprint: tool.footprint,
+          capacityCost: tool.capacityCost,
+          unavailableReason: resolveCompositeToolUnavailability(tool),
+        };
+      },
+      capacityMaxByOwner,
       isCellBlocked: (gridX, gridY) => !this.ctx.placementSystem!.canMaterializeCells(
         [{ dx: 0, dy: 0 }],
         gridX,
@@ -4240,57 +4400,46 @@ export class ArenaLifecycleCoordinator {
       ),
     });
 
-    const ownerColor = bridge.getPlayerColor(hostId) ?? PLAYER_COLORS[0];
-    for (const candidate of plan.active) {
-      const runtime = this.materializePersistentRestoreCandidate(candidate, hostId, ownerColor, 'host-persistent');
+    for (const entry of result.active) {
+      // Was bereits steht, bleibt stehen: Ein erneuter Merge nach einem Beitritt darf eine
+      // laufende Mission nicht neu aufbauen.
+      if (store.isMaterialized(entry.ownerId, entry.blueprint.persistentId)) continue;
+      const playerId = this.resolvePlayerIdForOwner(entry.ownerId);
+      const tool = resolveOwnerTools(entry.ownerId).get(entry.blueprint.tool.id);
+      if (!playerId || !tool) continue;
+      const runtime = this.materializePersistentRestoreCandidate(
+        { blueprint: entry.blueprint, tool, gridX: entry.gridX, gridY: entry.gridY },
+        playerId,
+        bridge.getPlayerColor(playerId) ?? PLAYER_COLORS[0],
+        this.getConstructionOwnership(playerId),
+      );
       if (!runtime) continue;
-      session.registerRestored(candidate.blueprint, runtime.id);
+      store.registerRestored(entry.ownerId, entry.blueprint, runtime.id);
       this.emitPersistentRestoreAdded(runtime);
     }
-    if (plan.dormant.length > 0) {
-      this.runtimeDiagnosticEventSink?.('persistent-base:restore-dormant', {
+    if (result.conflicts.length > 0) {
+      this.runtimeDiagnosticEventSink?.('persistent-base:composite-conflicts', {
         mapId,
-        count: plan.dormant.length,
+        count: result.conflicts.length,
       });
     }
+  }
 
-    // Guest blueprints are planned in one deterministic owner/order sequence after the host. The
-    // placement grid is the shared collision authority, so a host object always wins a cell race.
-    const guestBlueprints = [...this.persistentBaseRoomState.getWorkingBlueprints()]
-      .sort(compareGuestRestoreBlueprints);
-    for (const blueprint of guestBlueprints) {
-      const guestTools = this.buildPersistentRestoreTools(blueprint.ownerId);
-      const guestPlan = planPersistentBaseRestore({
-        state: {
-          schemaVersion: session.workingState.schemaVersion,
-          radiusCells: session.workingState.radiusCells,
-          revision: session.workingState.revision,
-          constructions: [blueprint],
-        },
-        anchor: site.anchor,
-        activeRadiusCells: session.radiusCells,
-        activeBuildArea: session.buildArea,
-        capacityUsed: this.ctx.placementSystem.getUsedCapacity(blueprint.ownerId),
-        capacityMax: this.getConstructionCapacity(blueprint.ownerId),
-        tools: guestTools,
-        isCellBlocked: (gridX, gridY) => !this.ctx.placementSystem!.canMaterializeCells(
-          [{ dx: 0, dy: 0 }],
-          gridX,
-          gridY,
-        ),
-      });
-      const guestColor = bridge.getPlayerColor(blueprint.ownerId) ?? PLAYER_COLORS[0];
-      for (const candidate of guestPlan.active) {
-        const runtime = this.materializePersistentRestoreCandidate(
-          candidate,
-          blueprint.ownerId,
-          guestColor,
-          'guest-session',
-        );
-        if (!runtime) continue;
-        this.persistentBaseRoomState.registerRestored(blueprint, runtime.id);
-        this.emitPersistentRestoreAdded(runtime);
+  /** Stellt jedem Besitzer seinen host-bestaetigten Beitrag zu und speichert den eigenen lokal. */
+  private publishConfirmedPersistentBaseContributions(
+    confirmed: readonly PersistentPlayerBaseContribution[],
+  ): void {
+    if (!bridge.isHost()) return;
+    const localOwnerId = getStoredLocalOwnerId();
+    for (const contribution of confirmed) {
+      if (contribution.ownerId === localOwnerId) {
+        setStoredPersonalBaseContribution(contribution);
+        continue;
       }
+      const playerId = this.resolvePlayerIdForOwner(contribution.ownerId);
+      // Ein bereits getrennter Gast bekommt nichts nachgeliefert: Sein voriger Stand bleibt auf
+      // seinem Geraet gueltig, und ein nachtraeglicher Zustellmechanismus gehoert nicht hierher.
+      if (playerId) bridge.hostConfirmPersistentBaseContribution(playerId, contribution);
     }
   }
 
@@ -4440,19 +4589,26 @@ export class ArenaLifecycleCoordinator {
       ? { kind: 'construction', id: constructionId }
       : { ...tool };
     if (!this.persistentBaseAnchor || !this.persistentBaseBuildArea) return;
-    if (runtime.ownership === 'guest-session') {
-      this.persistentBaseRoomState.registerNew(
-        runtime,
-        runtime.ownerId,
-        normalizedTool,
-        footprint,
-        this.persistentBaseAnchor,
-        this.persistentBaseBuildArea,
-      );
-      return;
-    }
-    this.ctx.persistentBaseSession?.registerNew(runtime, normalizedTool, footprint);
+    // Ein einziger Besitzpfad: Ob die Konstruktion dem Host oder einem Gast gehoert, ist nur noch
+    // eine Frage der Besitzeridentitaet.
+    const ownerId = this.resolveOwnerId(runtime.ownerId);
+    if (!ownerId) return;
+    this.ctx.persistentBaseContributions?.registerNew(
+      ownerId,
+      runtime,
+      normalizedTool,
+      footprint,
+      this.persistentBaseAnchor,
+      this.persistentBaseBuildArea,
+    );
   }
+
+  /**
+   * Uebersetzt die Verfuegbarkeit eines Werkzeugs in einen Konfliktgrund des Composites.
+   *
+   * Ein nicht verfuegbares Werkzeug ist kein Fehler des Blueprints: Sein Besitzer hat es gerade
+   * nicht ausgeruestet oder freigeschaltet, und derselbe Blueprint erscheint spaeter wieder.
+   */
 
   // ── Private ───────────────────────────────────────────────────────────────
 
@@ -5352,6 +5508,9 @@ export class ArenaLifecycleCoordinator {
   }
 
   private finalizeDismantledConstruction(removed: SyncedPlaceableRock, playDust: boolean): void {
+    // Abriss gibt den Besitz auf. Ohne diesen Schritt bliebe der Blueprint als dormant stehen und
+    // erschiene bei der naechsten Mission wieder - der Spieler koennte nichts dauerhaft abbauen.
+    this.ctx.persistentBaseContributions?.removeByRuntimeId(removed.id);
     this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
     this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
     if (removed.kind === 'pedestal') {
@@ -5593,14 +5752,6 @@ export class ArenaLifecycleCoordinator {
   }
 }
 
-function compareGuestRestoreBlueprints(
-  left: GuestPersistentConstruction,
-  right: GuestPersistentConstruction,
-): number {
-  return left.placementOrder - right.placementOrder
-    || (left.ownerId < right.ownerId ? -1 : left.ownerId > right.ownerId ? 1 : 0)
-    || (left.persistentId < right.persistentId ? -1 : left.persistentId > right.persistentId ? 1 : 0);
-}
 
 /**
  * Uhrzeit der laufenden Activity. Nur Coop-Defense-Maps setzen eine eigene; alle übrigen Modi bleiben
@@ -5609,6 +5760,22 @@ function compareGuestRestoreBlueprints(
  * nötig – das gilt auch für den lokalen Debug-Regler, der bewusst nur den eigenen Client
  * betrifft.
  */
+/**
+ * Uebersetzt die Verfuegbarkeit eines Werkzeugs in einen Konfliktgrund des Composites.
+ *
+ * Rein und ohne Weltzustand: Der Merge entscheidet damit fuer jeden Besitzer nach dessen eigenen
+ * Regeln, ohne dass die Tool-, Klassen- und Loadout-Semantik hier neu definiert wuerde.
+ */
+function resolveCompositeToolUnavailability(
+  tool: PersistentRestoreToolDefinition,
+): PersistentCompositeConflictReason | undefined {
+  if (tool.unavailableReason === 'class-not-allowed') return 'class-not-allowed';
+  if (tool.unavailableReason === 'mode-not-allowed') return 'mode-not-allowed';
+  if (!tool.unlocked) return 'locked';
+  if (tool.active === false) return 'not-in-loadout';
+  return undefined;
+}
+
 /**
  * World-Parameter der LobbyWorld.
  *
@@ -5620,7 +5787,7 @@ function resolveLobbyWorldParameters(persistentBaseUnlocked: boolean): WorldPara
   if (!persistentBaseUnlocked) return undefined;
   return {
     persistentBaseUnlocked: true,
-    persistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells,
+    persistentBaseRadiusCells: getStoredPersistentBaseRadiusCells(),
   };
 }
 

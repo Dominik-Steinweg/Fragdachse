@@ -35,15 +35,18 @@ Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zustän
 
 ## Persistente Base
 
-Die persistente Base ist eine World-Site mit mission-local working copy:
+Die persistente Base ist eine World-Site, deren sichtbarer Inhalt aus den persönlichen Beiträgen aller anwesenden Spieler zusammengesetzt wird:
 
-- [PersistentBaseRepository.ts](../../src/persistentBase/PersistentBaseRepository.ts) bildet die lokale Speicherung als Domänengrenze ab.
-- [PersistentBaseSession.ts](../../src/persistentBase/PersistentBaseSession.ts) lädt einen Baseline-Zustand, führt die missionslokale Arbeitskopie und entscheidet Commit oder Discard.
-- [PersistentBaseRoomState.ts](../../src/persistentBase/PersistentBaseRoomState.ts) hält host-authoritativen Guest-Zustand im Raum und nicht im LocalStorage.
+- [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) definiert den persönlichen Beitrag samt Sanitizing für Speicher und Netzwerk.
+- [PersistentBaseComposite.ts](../../src/persistentBase/PersistentBaseComposite.ts) mischt authored Geometrie, Host-Beitrag und Gastbeiträge deterministisch zu einem reinen Ergebnis.
+- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) hält den host-seitigen Arbeitsstand aller Beiträge einer Mission.
 - [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) koppelt Sieg an Commit und Niederlage, Abbruch oder fehlendes Ergebnis an Rollback.
-- [PersistentBaseRestorePlanner.ts](../../src/persistentBase/PersistentBaseRestorePlanner.ts) stellt Pläne deterministisch wieder her und behandelt gesperrte, unbekannte, außerhalb liegende oder kollidierende Einträge ohne stillen Weltumbau.
 
-Persistiert werden nur validierte, permanente host-owned Platzierungen. Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem PersistentBase-Blueprint heraus. Die authored Site liefert Radius und räumliche Bindung; der Laufzeitzustand gehört in die lokale Progress- und Room-Grenze.
+Es gibt genau einen Besitzpfad: Ob eine Konstruktion dem Host oder einem Gast gehört, ist ausschließlich eine Frage der dauerhaften Besitzeridentität. Die Basis selbst besitzt nichts. Freischaltung, Loadout und Kapazität gelten je Besitzer, nicht je Host und nicht als gemeinsamer Basis-Pool.
+
+Die Priorität des Merges ist authored Geometrie, dann Host-Beitrag, dann Gastbeiträge; Gäste werden nach stabiler Besitzeridentität sortiert, damit die Beitrittsreihenfolge das Ergebnis nicht verändert. Ein Konflikt materialisiert nicht und löscht nichts: Der Blueprint bleibt im Beitrag seines Besitzers und kann in einem anderen Raum wieder erscheinen.
+
+Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem Blueprint heraus. Die authored Site liefert Anker und Build Area; Generator-Reservation und Baurecht bleiben getrennte Begriffe.
 
 ## Erweiterung einer Mission
 
@@ -65,6 +68,6 @@ Neue Map-Geometrie in Activity-Systemen, lokale Mission-Uhren oder konkrete Test
 - [src/config/authoring/coopDefenseAuthoringAdapter.ts](../../src/config/authoring/coopDefenseAuthoringAdapter.ts)
 - [src/scenes/arena/ArenaLifecycleCoordinator.ts](../../src/scenes/arena/ArenaLifecycleCoordinator.ts)
 - [tests/WorldWithoutActivityProof.test.ts](../../tests/WorldWithoutActivityProof.test.ts)
-- [tests/PersistentBaseSession.test.ts](../../tests/PersistentBaseSession.test.ts)
+- [tests/PersistentBaseContributionStore.test.ts](../../tests/PersistentBaseContributionStore.test.ts)
 - [tests/PersistentBaseRoundOutcome.test.ts](../../tests/PersistentBaseRoundOutcome.test.ts)
-- [tests/PersistentBaseRestorePlanner.test.ts](../../tests/PersistentBaseRestorePlanner.test.ts)
+- [tests/PersistentBaseComposite.test.ts](../../tests/PersistentBaseComposite.test.ts)

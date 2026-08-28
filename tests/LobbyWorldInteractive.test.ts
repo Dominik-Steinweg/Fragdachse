@@ -458,6 +458,43 @@ describe('LobbyWorld – Teilnahme im Mehrspielerraum', () => {
   });
 });
 
+describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
+  it('haelt den Ladescreen bis zum gebackenen Weltausschnitt statt bis zum ersten Frame', () => {
+    const scene = read('src/scenes/ArenaScene.ts');
+    // Der erste Frame zeigt eine Lobby, deren World erst im ersten update()-Tick entsteht.
+    expect(scene.includes('Phaser.Core.Events.POST_RENDER')).toBe(false);
+    expect(scene).toContain('if (this.bootRevealPending) this.syncBootReveal(phase);');
+    expect(scene).toContain('this.lifecycle.getWorldRevealState(getVisibleWorldView(this.cameras.main))');
+    // Hinter einem deckenden Ladescreen darf das Backen dasselbe Budget nutzen wie in der Arena.
+    expect(scene).toContain(
+      'arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,',
+    );
+    // Und der Panel-Auftritt beginnt nach dem Fade, nicht in ihn hinein.
+    expect(scene).toContain('void BootScreen.fadeOut().then(() => this.lobbyOverlay?.playEntrance());');
+  });
+
+  it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const start = lifecycle.indexOf('  getWorldRevealState(view: WorldViewRect | null)');
+    expect(start).toBeGreaterThan(0);
+    // Bis zur Schlusszeile der Methode - sie ist zugleich die Aussage, die hier zaehlt.
+    const end = lifecycle.indexOf('return { ready: loadProgress.ready', start);
+    expect(end).toBeGreaterThan(start);
+    const body = lifecycle.slice(start, end);
+    // Der Terrain-Farb-Snapshot ist asynchron und beim Reveal unsichtbar; er darf nicht halten.
+    expect(body.includes('terrainSnapshotReady')).toBe(false);
+    expect(body.includes('bridge.')).toBe(false);
+    expect(body).toContain('resolveWorldLoadProgress(');
+  });
+
+  it('haelt den ersten Panel-Auftritt zurueck, bis der Reveal ihn ausloest', () => {
+    const overlay = read('src/scenes/LobbyOverlay.ts');
+    expect(overlay).toContain('private entranceHeld = true;');
+    expect(overlay).toContain('if (this.entranceHeld) this.container?.setAlpha(0).setY(ENTRANCE_OFFSET_Y);');
+    expect(overlay).toContain('  playEntrance(): void {');
+  });
+});
+
 describe('LobbyWorld – World-Ende raeumt ihre Teilnehmer', () => {
   it('loest jede Player-Runtime im World-Teardown, nicht erst beim Rundenende', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');

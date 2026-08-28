@@ -81,6 +81,9 @@ const CONTENT_L = PANEL_X + PAD;
 const CONTENT_R = PANEL_X + PANEL_W - PAD;
 const CONTENT_W = CONTENT_R - CONTENT_L;
 
+/** Startversatz des Panel-Auftritts; `show()` und `playEntrance()` teilen ihn sich. */
+const ENTRANCE_OFFSET_Y = 18;
+
 // ── Kopfzeile ────────────────────────────────────────────────────────────────
 // Zwei Zeilen: oben Partie und Raum, darunter der Verbindungszustand und – nur beim Host –
 // der Raumwechsel. Der Raumwechsel gehoert fachlich zum Raum, nicht zum Handlungsaufruf; unten
@@ -261,6 +264,12 @@ export class LobbyOverlay {
   private fullscreenHintEvent: Phaser.Time.TimerEvent | null = null;
   private fullscreenUnsubscribe: (() => void) | null = null;
   private entranceTween: Phaser.Tweens.Tween | null = null;
+  /**
+   * Der allererste Auftritt gehoert zum Boot-Reveal, nicht zum Aufbau: bis `playEntrance()`
+   * ihn freigibt, wartet das Panel unsichtbar hinter dem Bootscreen. Danach bleibt der Halt
+   * dauerhaft geloest, jeder spaetere `show()` spielt den Auftritt wie bisher.
+   */
+  private entranceHeld = true;
   private readyGlow: GlowHandle | null = null;
   private readyGlowTween: Phaser.Tweens.Tween | null = null;
   private coopBand: Phaser.GameObjects.Container | null = null;
@@ -785,7 +794,10 @@ export class LobbyOverlay {
     this.container?.setVisible(true);
     this.systemBar?.setVisible(true);
     this.updateWorldEntryButtons();
-    if (!wasVisible) this.playEntrance();
+    // Beim Start liegt das Panel hinter dem deckenden Bootscreen: es nimmt schon seine
+    // Auftrittsposition ein, laeuft aber erst los, wenn der Ladescreen ganz weg ist.
+    if (this.entranceHeld) this.container?.setAlpha(0).setY(ENTRANCE_OFFSET_Y);
+    else if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
   }
 
@@ -846,11 +858,15 @@ export class LobbyOverlay {
   /**
    * Auftritt des Panels. Bewusst nur `alpha` und `y`: die Kinder des Containers liegen auf
    * Bildschirmkoordinaten, ein `scale` zoege sie Richtung Bildschirmecke (0, 0).
+   *
+   * Oeffentlich, weil der erste Auftritt nicht zum Aufbau der Szene gehoert, sondern zum
+   * Reveal: die Scene loest ihn aus, sobald der Bootscreen vollstaendig ausgeblendet ist.
    */
-  private playEntrance(): void {
+  playEntrance(): void {
+    this.entranceHeld = false;
     if (!this.container) return;
     this.entranceTween?.remove();
-    this.container.setAlpha(0).setY(18);
+    this.container.setAlpha(0).setY(ENTRANCE_OFFSET_Y);
     this.entranceTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 1,

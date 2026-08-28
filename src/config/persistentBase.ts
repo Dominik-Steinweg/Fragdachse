@@ -13,3 +13,14 @@ export const PERSISTENT_BASE_CLEARANCE_CELLS = 2;
  * Nur so lassen sich Freischaltung und Kampagnenfortschritt spaeter unabhaengig veraendern.
  */
 export const PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID = '1';
+
+/**
+ * Schemaversion des persoenlichen Basisbeitrags.
+ *
+ * Er ist ein eigenes Subdokument neben dem uebrigen Fortschritt: Jeder Spieler nimmt genau diesen
+ * Beitrag zu jedem Host mit, unabhaengig davon, in wessen Raum er gerade spielt.
+ */
+export const PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION = 1;
+
+/** Obergrenze eines einzelnen Beitrags an der Speicher- und Netzwerkgrenze. */
+export const MAX_PERSISTENT_CONSTRUCTIONS_PER_CONTRIBUTION = 512;

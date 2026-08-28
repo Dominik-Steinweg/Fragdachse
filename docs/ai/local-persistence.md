@@ -24,14 +24,15 @@ Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save
 
 PersistentBase ist Progress-Domain, nicht Activity-Runtime:
 
-- [PersistentBaseRepository.ts](../../src/persistentBase/PersistentBaseRepository.ts) kapselt den lokalen Speicherzugriff.
-- [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) sanitisiert den speicherbaren Blueprint und prüft nur storage-lokale Form.
-- [PersistentBaseSession.ts](../../src/persistentBase/PersistentBaseSession.ts) führt eine missionslokale Working Copy mit Baseline, Commit oder Discard.
-- [PersistentBaseRoomState.ts](../../src/persistentBase/PersistentBaseRoomState.ts) hält host-authoritativen Guest-Zustand im Raum, nicht im lokalen Save.
-- [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) wendet Commit oder Rollback an.
-- [PersistentBaseRestorePlanner.ts](../../src/persistentBase/PersistentBaseRestorePlanner.ts) prüft beim Wiederherstellen aktuelle Tools, Unlocks, World-Geometrie, Kollision und Kapazität deterministisch.
+- [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) sanitisiert den persönlichen Beitrag und prüft nur storage- und wire-lokale Form.
+- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) führt den host-seitigen Arbeitsstand aller Beiträge mit Baseline, Commit oder Rollback.
+- [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) wendet Commit oder Rollback auf alle Beiträge gemeinsam an.
 
-Persistiert werden nur permanente, gültige, host-owned Platzierungen. Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören nicht in den Blueprint. Der WorldRuntimeContext liefert die authored Site; die lokale Progress-Grenze liefert den veränderlichen Zustand.
+Persistiert wird der persönliche Beitrag eines Spielers, nicht der Zustand einer Basis: Jeder Spieler speichert ausschließlich seinen eigenen Beitrag auf seinem eigenen Gerät, unter einer dauerhaften Besitzeridentität, die niemals aus Peer-ID, Room-ID oder Session abgeleitet wird.
+
+Ein Client darf nur einen host-bestätigten Beitrag speichern. Ohne diese Regel könnte ein manipulierter Client seine eigene Revision erhöhen und ungeprüftes Bauwerk dauerhaft in den autoritativen Fluss drücken. Die Revision des Beitrags ist ausdrücklich weder eine World- noch eine Activity-Revision; ein veralteter Stand wird abgelehnt, statt einen neueren zurückzudrehen.
+
+Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören nicht in den Blueprint. Der WorldRuntimeContext liefert die authored Site; die lokale Progress-Grenze liefert den veränderlichen Zustand.
 
 ## Cache, Fehler und Lebensdauer
 
@@ -51,7 +52,7 @@ Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch. Ein 
 
 - [src/utils/localPreferences.ts](../../src/utils/localPreferences.ts)
 - [src/persistentBase/PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts)
-- [src/persistentBase/PersistentBaseSession.ts](../../src/persistentBase/PersistentBaseSession.ts)
+- [src/persistentBase/PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts)
 - [tests/LocalPersistence.test.ts](../../tests/LocalPersistence.test.ts)
-- [tests/PersistentBaseSession.test.ts](../../tests/PersistentBaseSession.test.ts)
-- [tests/PersistentBaseRoomState.test.ts](../../tests/PersistentBaseRoomState.test.ts)
+- [tests/PersistentBaseContributionStore.test.ts](../../tests/PersistentBaseContributionStore.test.ts)
+- [tests/PersistentBaseContributionSync.test.ts](../../tests/PersistentBaseContributionSync.test.ts)

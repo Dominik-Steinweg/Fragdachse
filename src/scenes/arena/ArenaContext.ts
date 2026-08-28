@@ -79,7 +79,7 @@ import type { TimeBubbleSystem }    from '../../systems/TimeBubbleSystem';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { FlowFieldCoordinator } from '../../systems/flowfield/FlowFieldCoordinator';
 import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
-import type { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
+import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 
 interface PlayerStatusRingLike {
@@ -130,7 +130,7 @@ export interface ArenaContext {
   arenaResult:       ArenaBuilderResult | null;
   currentLayout:     ArenaLayout        | null;
   placementSystem:   PlacementSystem    | null;
-  persistentBaseSession: PersistentBaseSession | null;
+  persistentBaseContributions: PersistentBaseContributionStore | null;
   reinforcementMatrixSystem: ReinforcementMatrixSystem | null;
   energyInjectorSystem: EnergyInjectorSystem | null;
   targetStatusSystem: TargetStatusSystem | null;

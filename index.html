@@ -45,6 +45,13 @@
     * { margin: 0; padding: 0; }
     body { background: #000; overflow: hidden; }
     /*
+      Der ScaleManager misst genau diese Box. Ohne eigene Groesse haette sie vor dem Einhaengen
+      der Canvas die Hoehe 0, waehrend die Startaufloesung aus dem Fenster geschaetzt wird
+      (src/graphics/RenderResolution.ts) - die Korrektur direkt danach rastert jeden Text neu.
+      Dasselbe Element ist auch das Vollbildziel (src/ui/fullscreen.ts).
+    */
+    #game-container { position: fixed; inset: 0; }
+    /*
       Bewusst kein `image-rendering: pixelated` auf der Canvas. Das Spiel laeuft mit
       `smoothPixelArt`, dessen Shader blockige Pixel bereits im Renderer erhaelt und nur
       deren Kanten glaettet; eine zusaetzliche Nearest-Neighbor-Skalierung im Browser
