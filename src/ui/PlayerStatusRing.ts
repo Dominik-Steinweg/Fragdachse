@@ -8,6 +8,8 @@ import {
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { fillRadialGradientTexture, registerGraphicsObject } from '../effects/EffectUtils';
 import {
+  STATUS_RING_FILL_FRAGMENT_SOURCE,
+  STATUS_RING_FILL_SHADER_NAME,
   STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SEGMENT_COUNT,
   STATUS_RING_SHADER_NAME,
@@ -40,7 +42,7 @@ const RING_THICKNESS = 6;
 const RING_OUTER_RADIUS = PLAYER_SIZE / 2 + RING_GAP_PX + RING_THICKNESS;
 const RING_INNER_RADIUS = RING_OUTER_RADIUS - RING_THICKNESS;
 const ARMOR_RIM_THICKNESS = 3;
-const POLY_STEPS = 8;
+const POLY_STEPS = 32;
 const SHADOW_OFFSET = 0;
 const HP_TRAIL_DELAY_MS = 220;
 const HP_TRAIL_DURATION_MS = 420;
@@ -185,6 +187,11 @@ export class PlayerStatusRing {
    * `null`, wenn die Qualitaetsstufe ihn abschaltet oder kein WebGL-Renderer verfuegbar ist.
    */
   private livingQuad: Phaser.GameObjects.Shader | null = null;
+  /**
+   * Die normale Ringfuellung laeuft unabhaengig von `livingBarEffects` auf einem analytischen
+   * GPU-Quad. `null` bedeutet nur, dass der Renderer keinen Shader-Quad bereitstellen kann.
+   */
+  private fillQuad: Phaser.GameObjects.Shader | null = null;
   private livingEnabled = true;
   private unsubscribeQuality: (() => void) | null = null;
 
@@ -192,9 +199,12 @@ export class PlayerStatusRing {
   // Zustandsaenderung neu befuellt; der Shader liest sie bei jedem Renderschritt.
   private readonly segmentArc = new Float32Array(STATUS_RING_SEGMENT_COUNT * 4);
   private readonly segmentBand = new Float32Array(STATUS_RING_SEGMENT_COUNT * 4);
+  private readonly segmentFill = new Float32Array(STATUS_RING_SEGMENT_COUNT * 4);
   private readonly segmentTintMid = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
+  private readonly segmentTintLight = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
   private readonly segmentTintDark = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
   private livingElapsedSec = 0;
+  private ambientPulse = 1;
 
   private active = false;
   private latestData: LocalArenaHudData | null = null;
@@ -244,6 +254,9 @@ export class PlayerStatusRing {
     registerGraphicsObject(scene, 'playerStatus', this.glowGraphics);
     registerGraphicsObject(scene, 'playerStatus', this.fillGraphics);
 
+    // Die Basisdarstellung bleibt auch bei abgeschaltetem Living-Effekt aktiv.
+    this.fillQuad = this.createFillQuad();
+
     // Der Ring teilt sich den Qualitaetsschalter mit dem LivingBarEffect: beide zeigen dasselbe
     // lebendige Feld, nur in unterschiedlicher Geometrie.
     this.livingEnabled = getGraphicsQualityProfile(scene).livingBarEffects;
@@ -263,6 +276,7 @@ export class PlayerStatusRing {
 
     const children: Phaser.GameObjects.GameObject[] = [
       this.staticRing,
+      ...(this.fillQuad ? [this.fillQuad] : []),
       this.warningGraphics,
       this.glowGraphics,
       this.fillGraphics,
@@ -333,6 +347,7 @@ export class PlayerStatusRing {
   destroy(): void {
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
+    this.fillQuad = null;
     this.livingQuad = null;
     // `true` zerstoert auch die Kinder, den Shader-Quad eingeschlossen.
     this.container.destroy(true);
@@ -356,10 +371,13 @@ export class PlayerStatusRing {
         setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
           setUniform('uTime', this.livingElapsedSec);
           setUniform('uAlpha', LIVING_QUAD_ALPHA);
+          setUniform('uAmbientPulse', this.ambientPulse);
           setUniform('uSize', [STATUS_RING_TEXTURE_SIZE, STATUS_RING_TEXTURE_SIZE]);
           setUniform('uSegmentArc[0]', this.segmentArc);
           setUniform('uSegmentBand[0]', this.segmentBand);
+          setUniform('uSegmentFill[0]', this.segmentFill);
           setUniform('uSegmentTintMid[0]', this.segmentTintMid);
+          setUniform('uSegmentTintLight[0]', this.segmentTintLight);
           setUniform('uSegmentTintDark[0]', this.segmentTintDark);
         },
       },
@@ -370,6 +388,36 @@ export class PlayerStatusRing {
     );
     quad.setOrigin(0.5, 0.5);
     quad.setBlendMode(Phaser.BlendModes.ADD);
+    return quad;
+  }
+
+  private createFillQuad(): Phaser.GameObjects.Shader | null {
+    const renderer = this.scene.sys?.renderer as { gl?: WebGLRenderingContext } | undefined;
+    if (!renderer?.gl || typeof Phaser.GameObjects?.Shader !== 'function') return null;
+
+    const quad = new Phaser.GameObjects.Shader(
+      this.scene,
+      {
+        name: STATUS_RING_FILL_SHADER_NAME,
+        shaderName: STATUS_RING_FILL_SHADER_NAME,
+        fragmentSource: STATUS_RING_FILL_FRAGMENT_SOURCE,
+        setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
+          setUniform('uAlpha', 1);
+          setUniform('uSize', [STATUS_RING_TEXTURE_SIZE, STATUS_RING_TEXTURE_SIZE]);
+          setUniform('uSegmentArc[0]', this.segmentArc);
+          setUniform('uSegmentFill[0]', this.segmentFill);
+          setUniform('uSegmentTintMid[0]', this.segmentTintMid);
+          setUniform('uSegmentTintLight[0]', this.segmentTintLight);
+          setUniform('uSegmentTintDark[0]', this.segmentTintDark);
+        },
+      },
+      SHADOW_OFFSET,
+      SHADOW_OFFSET,
+      STATUS_RING_TEXTURE_SIZE,
+      STATUS_RING_TEXTURE_SIZE,
+    );
+    quad.setOrigin(0.5, 0.5);
+    quad.setBlendMode(Phaser.BlendModes.NORMAL);
     return quad;
   }
 
@@ -431,7 +479,7 @@ export class PlayerStatusRing {
     }
 
     this.syncSparks(now);
-    this.syncLivingSegments(now);
+    this.syncRingSegments(now);
   }
 
   private updateHpTrail(now: number): void {
@@ -456,16 +504,20 @@ export class PlayerStatusRing {
   }
 
   private drawEffectGlows(now: number, warningFrac: number, warningPulse: number, warningPunchFrac: number): void {
-    const ambientPulse = 0.88 + Math.sin(now * 0.0035) * 0.12;
-    this.drawAmbientResourceGlow(SEGMENTS[1], this.hpFrac, PAL_HP, ambientPulse);
-    this.drawAmbientResourceGlow(
-      SEGMENTS[0],
-      this.adrFrac,
-      this.isAdrenalineInsufficientForWeapon2() ? PAL_ADR_LOW : PAL_ADR,
-      ambientPulse,
-    );
-    this.drawAmbientResourceGlow(SEGMENTS[2], this.rageFrac, PAL_RAGE, ambientPulse);
-    this.drawAmbientArmorGlow(ambientPulse);
+    // Auf Canvas bzw. wenn Shader-Quads nicht verfuegbar sind, bleibt der bisherige
+    // Polygon-Fallback aktiv. Im WebGL-Pfad liegt der permanente Ambient-Glow im livingQuad.
+    if (!this.fillQuad) {
+      const ambientPulse = 0.88 + Math.sin(now * 0.0035) * 0.12;
+      this.drawAmbientResourceGlow(SEGMENTS[1], this.hpFrac, PAL_HP, ambientPulse);
+      this.drawAmbientResourceGlow(
+        SEGMENTS[0],
+        this.adrFrac,
+        this.isAdrenalineInsufficientForWeapon2() ? PAL_ADR_LOW : PAL_ADR,
+        ambientPulse,
+      );
+      this.drawAmbientResourceGlow(SEGMENTS[2], this.rageFrac, PAL_RAGE, ambientPulse);
+      this.drawAmbientArmorGlow(ambientPulse);
+    }
 
     const ragePulse = 0.45 + 0.55 * Math.sin(now * 0.008);
     const boostPulse = 0.45 + 0.55 * Math.sin(now * 0.01);
@@ -552,16 +604,20 @@ export class PlayerStatusRing {
       this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.hpTrailFrac, RING_INNER_RADIUS + 1.5, RING_INNER_RADIUS + RING_THICKNESS * 0.54, COLORS.RED_1, 0.18);
     }
 
-    this.drawResourceSegment(SEGMENTS[1], this.hpFrac, PAL_HP, 0.78, 0.58 + hpFlash * 0.22);
-    this.drawResourceSegment(SEGMENTS[0], this.adrFrac, adrenalinePalette, adrenalineMainAlpha, adrenalineHighlightAlpha);
+    if (!this.fillQuad) {
+      this.drawResourceSegment(SEGMENTS[1], this.hpFrac, PAL_HP, 0.78, 0.58 + hpFlash * 0.22);
+      this.drawResourceSegment(SEGMENTS[0], this.adrFrac, adrenalinePalette, adrenalineMainAlpha, adrenalineHighlightAlpha);
+    }
     if (adrenalineInsufficient) {
       this.drawSegmentLayer(this.fillGraphics, SEGMENTS[0], this.adrFrac, RING_INNER_RADIUS - 0.1, RING_OUTER_RADIUS + 0.2, COLORS.RED_3, 0.3);
       this.drawSegmentLayer(this.fillGraphics, SEGMENTS[0], this.adrFrac, RING_INNER_RADIUS + 1.0, RING_INNER_RADIUS + RING_THICKNESS * 0.58, COLORS.RED_1, 0.16);
     }
-    this.drawResourceSegment(SEGMENTS[2], this.rageFrac, PAL_RAGE, this.ultimateActive ? 0.92 : 0.8, this.rageReady ? 0.74 : 0.58);
+    if (!this.fillQuad) {
+      this.drawResourceSegment(SEGMENTS[2], this.rageFrac, PAL_RAGE, this.ultimateActive ? 0.92 : 0.8, this.rageReady ? 0.74 : 0.58);
 
-    this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, PAL_ARMOR.mid, 0.88);
-    this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS + 0.3, RING_OUTER_RADIUS, PAL_ARMOR.light, 0.42);
+      this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, PAL_ARMOR.mid, 0.88);
+      this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS + 0.3, RING_OUTER_RADIUS, PAL_ARMOR.light, 0.42);
+    }
   }
 
   private drawResourceSegment(
@@ -582,15 +638,18 @@ export class PlayerStatusRing {
     return data.weapon2AdrenalineCost > 0 && data.adrenaline < data.weapon2AdrenalineCost;
   }
 
-  /**
-   * Befuellt die Uniform-Puffer des lebendigen Quads. Ersetzt die frueheren acht
-   * `setPosition`/`setAlpha`/`setFrequency`-Aufrufe je Frame durch vier Pufferschreibvorgaenge
-   * auf genau einem Renderobjekt.
-   */
-  private syncLivingSegments(now: number): void {
-    const quad = this.livingQuad;
-    if (!quad) return;
+  /** Befuellt die gemeinsamen Segmentdaten fuer den Basis-Fill und den Living-/Glow-Quad. */
+  private syncRingSegments(now: number): void {
     this.livingElapsedSec = now / 1000;
+    this.ambientPulse = 0.88 + Math.sin(now * 0.0035) * 0.12;
+    const hpFlash = clamp01((this.hpFlashUntil - now) / FLASH_MS);
+    const adrenalineInsufficient = this.isAdrenalineInsufficientForWeapon2();
+    const adrenalineMainAlpha = adrenalineInsufficient
+      ? (this.adrenalineBoostActive ? 0.9 : 0.84)
+      : (this.adrenalineBoostActive ? 0.88 : 0.76);
+    const adrenalineHighlightAlpha = adrenalineInsufficient
+      ? (this.adrenalineBoostActive ? 0.76 : 0.66)
+      : (this.adrenalineBoostActive ? 0.72 : 0.56);
 
     const coreInner = RING_INNER_RADIUS + 0.8;
     const coreOuter = RING_INNER_RADIUS + RING_THICKNESS * 0.72;
@@ -602,15 +661,20 @@ export class PlayerStatusRing {
     // HP wurde frueher nur waehrend des Trefferblitzes dichter, Adrenalin bei aktiver Spritze,
     // Rage ab Ultimate-Bereitschaft. Armor kannte keine Umschaltung.
     this.writeSegment(0, SEGMENTS[1], this.hpFrac, PAL_HP, this.hpFlashUntil > now,
-      coreInner, coreOuter, bandInner, bandOuter);
+      coreInner, coreOuter, bandInner, bandOuter,
+      RING_INNER_RADIUS, RING_OUTER_RADIUS, 0.78, 0.58 + hpFlash * 0.22);
     this.writeSegment(1, SEGMENTS[0], this.adrFrac,
-      this.isAdrenalineInsufficientForWeapon2() ? PAL_ADR_LOW : PAL_ADR, this.adrenalineBoostActive,
-      coreInner, coreOuter, bandInner, bandOuter);
+      adrenalineInsufficient ? PAL_ADR_LOW : PAL_ADR, this.adrenalineBoostActive,
+      coreInner, coreOuter, bandInner, bandOuter,
+      RING_INNER_RADIUS, RING_OUTER_RADIUS, adrenalineMainAlpha, adrenalineHighlightAlpha);
     this.writeSegment(2, SEGMENTS[2], this.rageFrac, PAL_RAGE, this.rageReady,
-      coreInner, coreOuter, bandInner, bandOuter);
+      coreInner, coreOuter, bandInner, bandOuter,
+      RING_INNER_RADIUS, RING_OUTER_RADIUS,
+      this.ultimateActive ? 0.92 : 0.8, this.rageReady ? 0.74 : 0.58);
     // Armor folgt dem HP-Bogen, liegt aber auf dem Aussenrand.
     this.writeSegment(3, SEGMENTS[1], this.armorFrac, PAL_ARMOR, false,
-      rimInner, rimOuter, rimInner - 0.4, rimOuter + 0.8);
+      rimInner, rimOuter, rimInner - 0.4, rimOuter + 0.8,
+      RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, 0.88, 0.42);
   }
 
   private writeSegment(
@@ -623,16 +687,21 @@ export class PlayerStatusRing {
     coreOuter: number,
     bandInner: number,
     bandOuter: number,
+    fillInner: number,
+    fillOuter: number,
+    fillMainAlpha: number,
+    fillHighlightAlpha: number,
   ): void {
     const arcBase = index * 4;
     const bandBase = index * 4;
     const clamped = clamp01(fraction);
-    const section = this.livingEnabled && clamped > LIVING_MIN_FRACTION
-      ? this.getFilledSection(segment, clamped)
-      : null;
+    const section = this.getFilledSection(segment, clamped);
 
     if (!section) {
+      this.segmentArc[arcBase + 1] = 0;
       this.segmentBand[bandBase + 3] = 0;
+      this.segmentFill[bandBase + 2] = 0;
+      this.segmentFill[bandBase + 3] = 0;
       return;
     }
 
@@ -643,12 +712,20 @@ export class PlayerStatusRing {
     this.segmentArc[arcBase + 2] = coreInner;
     this.segmentArc[arcBase + 3] = coreOuter;
 
+    this.segmentFill[bandBase] = fillInner;
+    this.segmentFill[bandBase + 1] = fillOuter;
+    this.segmentFill[bandBase + 2] = fillMainAlpha;
+    this.segmentFill[bandBase + 3] = fillHighlightAlpha;
+
     this.segmentBand[bandBase] = bandInner;
     this.segmentBand[bandBase + 1] = bandOuter;
     this.segmentBand[bandBase + 2] = active ? 1 : 0;
-    this.segmentBand[bandBase + 3] = LIVING_ALPHA_SCALE * clamped;
+    this.segmentBand[bandBase + 3] = this.livingEnabled && clamped > LIVING_MIN_FRACTION
+      ? LIVING_ALPHA_SCALE * clamped
+      : 0;
 
     writeColor(this.segmentTintMid, index * 3, palette.mid);
+    writeColor(this.segmentTintLight, index * 3, palette.light);
     writeColor(this.segmentTintDark, index * 3, palette.dark);
   }
 

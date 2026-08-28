@@ -15,6 +15,7 @@ import { LIVING_FIELD_GLSL } from './livingFieldShader';
  */
 
 export const STATUS_RING_SHADER_NAME = 'FragdachseStatusRing';
+export const STATUS_RING_FILL_SHADER_NAME = 'FragdachseStatusRingFill';
 export const STATUS_RING_SEGMENT_COUNT = 4;
 
 // Kern- und Außenschicht, in lokalen Pixeln bzw. Sekunden. Übernommen aus den früheren
@@ -42,7 +43,24 @@ const CORE_INNER_FEATHER = 1.2;
 const CORE_OUTER_FEATHER = 1.6;
 const OUTER_INNER_FEATHER = 4.0;
 const OUTER_OUTER_FEATHER = 6.0;
-const SEGMENT_END_FEATHER_RAD = 0.12;
+const SEGMENT_END_FEATHER_RAD = 0.08;
+
+/** Schmale analytische Kanten fuer die normale Fuellung, ungefaehr ein sichtbarer Pixel. */
+const FILL_EDGE_FEATHER_PX = 0.75;
+const FILL_SEGMENT_END_FEATHER_RAD = 0.03;
+
+const RING_MASK_GLSL = [
+  'float bandMask(float radius, float inner, float outer, float innerFeather, float outerFeather) {',
+  '  float innerFade = smoothstep(inner - innerFeather, inner, radius);',
+  '  float outerFade = 1.0 - smoothstep(outer, outer + outerFeather, radius);',
+  '  return innerFade * outerFade;',
+  '}',
+  'float segmentMask(float rel, float width, float edge) {',
+  '  float startFade = smoothstep(-edge, 0.0, rel);',
+  '  float endFade = 1.0 - smoothstep(width, width + edge, rel);',
+  '  return startFade * endFade;',
+  '}',
+].join('\n');
 
 /**
  * Wie beim Balkenfeld trägt das Hash-Gitter weniger, dafür größere Blobs als die früheren
@@ -72,20 +90,14 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   // xy = Innen-/Aussenradius der Aussenschicht, z = Aktivitaet (0 oder 1), w = Alphaskalierung.
   // w == 0 schaltet das Segment vollstaendig ab.
   `uniform vec4 uSegmentBand[${STATUS_RING_SEGMENT_COUNT}];`,
+  // xy = normale Fill-Radien, z = Haupt-Alpha, w = Alpha des inneren Akzents.
+  `uniform vec4 uSegmentFill[${STATUS_RING_SEGMENT_COUNT}];`,
   `uniform vec3 uSegmentTintMid[${STATUS_RING_SEGMENT_COUNT}];`,
+  `uniform vec3 uSegmentTintLight[${STATUS_RING_SEGMENT_COUNT}];`,
   `uniform vec3 uSegmentTintDark[${STATUS_RING_SEGMENT_COUNT}];`,
   LIVING_FIELD_GLSL,
-  'float bandMask(float radius, float inner, float outer, float innerFeather, float outerFeather) {',
-  '  float innerFade = smoothstep(inner - innerFeather, inner, radius);',
-  '  float outerFade = 1.0 - smoothstep(outer, outer + outerFeather, radius);',
-  '  return innerFade * outerFade;',
-  '}',
-  'float segmentMask(float rel, float width) {',
-  `  float edge = ${SEGMENT_END_FEATHER_RAD.toFixed(4)};`,
-  '  float startFade = smoothstep(-edge, 0.0, rel);',
-  '  float endFade = 1.0 - smoothstep(width, width + edge, rel);',
-  '  return startFade * endFade;',
-  '}',
+  'uniform float uAmbientPulse;',
+  RING_MASK_GLSL,
   'void main () {',
   // ShaderQuad uses WebGL texture coordinates (y=1 at the visual top). Convert them to the
   // same screen-space axes as `degToRadFromTop` in PlayerStatusRing (x right, y down).
@@ -118,10 +130,30 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   // Auch knapp vor dem Startwinkel kann noch der weiche Blobrand liegen. In den signierten
   // Bereich zurueckfalten, damit segmentMask() beide Enden symmetrisch auslaufen laesst.
   '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
-  '    float sectorValue = segmentMask(signedRel, width);',
+  `    float sectorValue = segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
   '    if (sectorValue <= 0.0) continue;',
   `    float activity = 1.0 + band.z * ${(ACTIVE_GAIN - 1).toFixed(3)};`,
   `    float gain = ${FIELD_GAIN.toFixed(3)} * activity * band.w;`,
+  '    vec4 fill = uSegmentFill[i];',
+  // Der permanente Glow nutzt dieselben analytischen Radial- und Winkelmasken wie die Blobs.
+  '    float glowWide = i == 3',
+  '      ? bandMask(radius, fill.x - 2.4, fill.y + 3.2, 1.8, 2.2)',
+  '      : bandMask(radius, fill.x - 4.2, fill.y + 4.2, 2.4, 2.4);',
+  '    float glowMid = i == 3',
+  '      ? bandMask(radius, fill.x - 0.8, fill.y + 1.8, 1.2, 1.5)',
+  '      : bandMask(radius, fill.x - 2.4, fill.y + 2.4, 1.8, 1.8);',
+  '    float glowNear = i == 3',
+  '      ? 0.0',
+  '      : bandMask(radius, fill.x - 0.8, fill.y + 1.2, 1.0, 1.2);',
+  '    float glowWideAlpha = i == 3 ? 0.07 : 0.055;',
+  '    float glowMidAlpha = i == 3 ? 0.11 : 0.075;',
+  `    float glowSector = segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
+  '    float glowCoverage = (glowWide * glowWideAlpha + glowMid * glowMidAlpha + glowNear * 0.1)',
+  '      * glowSector * uAmbientPulse;',
+  '    accum += (uSegmentTintMid[i] * glowWide * glowWideAlpha',
+  '      + uSegmentTintLight[i] * (glowMid * glowMidAlpha + glowNear * 0.1))',
+  '      * glowSector * uAmbientPulse;',
+  '    coverage += glowCoverage;',
   `    float coreValue = core * bandMask(radius, arc.z, arc.w, ${CORE_INNER_FEATHER.toFixed(1)}, ${CORE_OUTER_FEATHER.toFixed(1)}) * gain * sectorValue;`,
   `    float outerValue = outerLayer * bandMask(radius, band.x, band.y, ${OUTER_INNER_FEATHER.toFixed(1)}, ${OUTER_OUTER_FEATHER.toFixed(1)}) * gain * sectorValue;`,
   // Die frueheren Tint-Listen waren [mid, dark, mid] fuer die Kern- und [dark, dark, mid] fuer
@@ -132,5 +164,61 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   '  }',
   // Vormultipliziert: `accum` ist bereits Farbe mal Deckung.
   '  gl_FragColor = vec4(clamp(accum, 0.0, 1.0) * uAlpha, clamp(coverage, 0.0, 1.0) * uAlpha);',
+  '}',
+].join('\n');
+
+/**
+ * Analytische Basisfuellung des Rings. Der Quad teilt sich die Winkelpuffer mit dem Living-Quad,
+ * bleibt aber unabhaengig von der Qualitaetsstufe des lebendigen Feldes aktiv.
+ */
+export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
+  '#pragma phaserTemplate(shaderName)',
+  '#ifdef GL_FRAGMENT_PRECISION_HIGH',
+  'precision highp float;',
+  '#else',
+  'precision mediump float;',
+  '#endif',
+  'varying vec2 outTexCoord;',
+  'uniform float uAlpha;',
+  'uniform vec2 uSize;',
+  `uniform vec4 uSegmentArc[${STATUS_RING_SEGMENT_COUNT}];`,
+  `uniform vec4 uSegmentFill[${STATUS_RING_SEGMENT_COUNT}];`,
+  `uniform vec3 uSegmentTintMid[${STATUS_RING_SEGMENT_COUNT}];`,
+  `uniform vec3 uSegmentTintLight[${STATUS_RING_SEGMENT_COUNT}];`,
+  `uniform vec3 uSegmentTintDark[${STATUS_RING_SEGMENT_COUNT}];`,
+  RING_MASK_GLSL,
+  'vec4 over(vec4 under, vec3 color, float alpha) {',
+  '  alpha = clamp(alpha, 0.0, 1.0);',
+  '  float remaining = 1.0 - under.a;',
+  '  return vec4(under.rgb + color * alpha * remaining, under.a + alpha * remaining);',
+  '}',
+  'void main () {',
+  // ShaderQuad uses WebGL texture coordinates (y=1 at the visual top). Keep the ring's
+  // screen-space convention identical to the living shader.
+  '  vec2 local = vec2(outTexCoord.x - 0.5, 0.5 - outTexCoord.y) * uSize;',
+  '  float radius = length(local);',
+  `  float angle = mod(atan(local.x, -local.y) + ${TAU}, ${TAU});`,
+  '  vec4 accum = vec4(0.0);',
+  `  for (int i = 0; i < ${STATUS_RING_SEGMENT_COUNT}; i++) {`,
+  '    vec4 arc = uSegmentArc[i];',
+  '    vec4 fill = uSegmentFill[i];',
+  '    float width = abs(arc.y);',
+  '    if (fill.z <= 0.0 || width < 0.0001) continue;',
+  `    float start = mod(arc.x + ${TAU}, ${TAU});`,
+  `    float rel = arc.y >= 0.0 ? mod(angle - start + ${TAU}, ${TAU}) : mod(start - angle + ${TAU}, ${TAU});`,
+  '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
+  `    float sector = segmentMask(signedRel, width, ${FILL_SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
+  '    if (sector <= 0.0) continue;',
+  // The small radial feather is deliberately close to one pixel: it removes polygon stair-steps
+  // while keeping the authored six-pixel ring crisp.
+  `    float ring = bandMask(radius, fill.x, fill.y, ${FILL_EDGE_FEATHER_PX.toFixed(2)}, ${FILL_EDGE_FEATHER_PX.toFixed(2)}) * sector;`,
+  `    float highlight = bandMask(radius, fill.x + 0.9, min(fill.x + 3.3, fill.y), ${FILL_EDGE_FEATHER_PX.toFixed(2)}, ${FILL_EDGE_FEATHER_PX.toFixed(2)}) * sector;`,
+  `    float darkEdge = bandMask(radius, fill.y - 1.4, fill.y, ${FILL_EDGE_FEATHER_PX.toFixed(2)}, ${FILL_EDGE_FEATHER_PX.toFixed(2)}) * sector;`,
+  '    accum = over(accum, uSegmentTintMid[i], ring * fill.z);',
+  '    accum = over(accum, uSegmentTintLight[i], highlight * fill.w);',
+  '    accum = over(accum, uSegmentTintDark[i], darkEdge * 0.24);',
+  '  }',
+  // Phaser's NORMAL blend uses ONE as source factor; keep the accumulated color premultiplied.
+  '  gl_FragColor = vec4(clamp(accum.rgb, 0.0, 1.0) * uAlpha, clamp(accum.a, 0.0, 1.0) * uAlpha);',
   '}',
 ].join('\n');
