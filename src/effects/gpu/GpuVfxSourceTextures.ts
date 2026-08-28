@@ -30,6 +30,12 @@ export const TEX_EXPLOSION_STREAK = '__explosion_streak';
 export const TEX_EXPLOSION_CHUNK = '__explosion_chunk';
 export const TEX_EXPLOSION_RING = '__explosion_ring';
 export const TEX_DEATH_FRAGMENT = '__death_fragment';
+export const TEX_DEATH_MORPH_COMPACT = '__death_morph_compact';
+export const TEX_DEATH_MORPH_FRAYED = '__death_morph_frayed';
+export const TEX_DEATH_MORPH_POROUS = '__death_morph_porous';
+export const TEX_DEATH_MORPH_FRAGMENTED = '__death_morph_fragmented';
+export const TEX_DEATH_MORPH_DUST = '__death_morph_dust';
+export const TEX_DEATH_MORPH_FINE_DUST = '__death_morph_fine_dust';
 export const TEX_DEATH_GLOW = '__death_glow';
 export const TEX_MUZZLE_FLASH = '__muzzle_flash';
 export const TEX_MUZZLE_ENERGY = '__muzzle_energy';
@@ -40,6 +46,99 @@ export function ensureDeathFragmentTexture(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, TEX_DEATH_FRAGMENT, 4, 4, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,1)';
     ctx.fillRect(0, 0, 4, 4);
+  });
+}
+
+/**
+ * Sechs gleich grosse Alpha-Motive fuer den GPU-seitigen Death-Morph. Der gemeinsame 12px-Rahmen
+ * verhindert Groessen-/Pivot-Spruenge beim Framewechsel; nur die belegte Materialform waechst von
+ * einem kompakten 4px-Kern zu locker verteiltem Staub. Die Motive bleiben weiss, damit der pro
+ * Sprite-Chunk analysierte Member-Tint ueber die gesamte Aufloesung erhalten bleibt.
+ */
+export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_COMPACT, 12, 12, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.beginPath();
+    ctx.moveTo(4, 3.75);
+    ctx.lineTo(8.25, 4);
+    ctx.lineTo(8, 8.25);
+    ctx.lineTo(3.75, 8);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAYED, 12, 12, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.beginPath();
+    ctx.moveTo(4, 3.5);
+    ctx.lineTo(7.25, 3.75);
+    ctx.lineTo(8.6, 5.1);
+    ctx.lineTo(8, 8.2);
+    ctx.lineTo(5.2, 8.5);
+    ctx.lineTo(3.5, 7.1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.68)';
+    ctx.fillRect(8.5, 6.1, 1.1, 0.8);
+    ctx.fillRect(3, 4.4, 0.8, 1.3);
+    ctx.fillRect(5.2, 2.7, 1.2, 0.7);
+  });
+
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 12, 12, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillRect(3.2, 3.6, 2.4, 2.1);
+    ctx.fillRect(5.9, 3.1, 2.6, 2.3);
+    ctx.fillRect(4, 6.1, 2.1, 2.6);
+    ctx.fillRect(6.5, 5.8, 2.4, 2.1);
+    ctx.fillStyle = 'rgba(255,255,255,0.58)';
+    ctx.fillRect(8.9, 4.8, 1.2, 1.1);
+    ctx.fillRect(2.2, 6.7, 1.3, 0.9);
+    ctx.fillRect(6.1, 8.5, 0.9, 1.1);
+  });
+
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAGMENTED, 12, 12, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';
+    ctx.fillRect(2.5, 3.1, 2.3, 1.8);
+    ctx.fillRect(5.5, 2.2, 1.8, 2.4);
+    ctx.fillRect(7.6, 4.5, 2.1, 1.7);
+    ctx.fillRect(4.2, 5.3, 2.2, 2.2);
+    ctx.fillRect(6.7, 7, 1.8, 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillRect(1.5, 6.3, 1.2, 1.1);
+    ctx.fillRect(4, 8.5, 1.1, 1.2);
+    ctx.fillRect(9.5, 7.1, 0.9, 1.3);
+  });
+
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_DUST, 12, 12, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(1.7, 3.3, 1.4, 1.1);
+    ctx.fillRect(4, 2, 1.1, 1.5);
+    ctx.fillRect(6.2, 3.4, 1.5, 1.2);
+    ctx.fillRect(8.6, 2.7, 0.9, 1.3);
+    ctx.fillRect(3, 6, 1.3, 1);
+    ctx.fillRect(5.5, 5.6, 0.9, 1.4);
+    ctx.fillRect(8.2, 6.2, 1.2, 0.9);
+    ctx.fillRect(6.6, 8.5, 1.1, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.fillRect(10.1, 5, 0.7, 0.9);
+    ctx.fillRect(2, 8.3, 0.8, 0.7);
+  });
+
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FINE_DUST, 12, 12, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.56)';
+    ctx.fillRect(1, 2.8, 0.8, 0.9);
+    ctx.fillRect(3.5, 1.3, 0.7, 1.1);
+    ctx.fillRect(6, 2.7, 0.9, 0.7);
+    ctx.fillRect(9.4, 1.9, 0.7, 1);
+    ctx.fillRect(2.2, 5.5, 0.8, 0.7);
+    ctx.fillRect(5, 5, 0.7, 1);
+    ctx.fillRect(8.1, 5.7, 0.9, 0.7);
+    ctx.fillRect(10.2, 7.6, 0.7, 0.9);
+    ctx.fillRect(4, 8.4, 0.8, 0.7);
+    ctx.fillRect(7, 9.6, 0.7, 0.8);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(0.6, 8.5, 0.6, 0.7);
+    ctx.fillRect(10.7, 4.1, 0.5, 0.8);
   });
 }
 

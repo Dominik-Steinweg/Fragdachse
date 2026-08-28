@@ -15,6 +15,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
+import { GpuVfxFrameAnimationId } from '../src/effects/gpu/GpuVfxFrameAnimations';
 import { GPU_VFX_EFFECTS, GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem';
@@ -81,6 +82,27 @@ describe('gpu vfx system: lanes', () => {
     }
     expect(findFakeLane(scene, 'rocket-smoke').enabledEases).toEqual(['Linear', 'Quad.easeOut']);
     expect(findFakeLane(scene, 'flame-spark').enabledEases).toEqual(['Linear', 'Gravity']);
+  });
+
+  it('registers death frame animation before primed members and nowhere else', () => {
+    const { scene } = setup();
+    const gore = findFakeLane(scene, 'gore-normal');
+
+    expect(GPU_VFX_LANES[GpuVfxLaneId.GoreNormal].frameAnimations)
+      .toEqual([GpuVfxFrameAnimationId.DeathDisintegration]);
+    expect(gore.frameAnimations).toEqual([{
+      name: 'death-disintegration',
+      frames: [
+        'death-morph-compact',
+        'death-morph-frayed',
+        'death-morph-porous',
+        'death-morph-fragmented',
+        'death-morph-dust',
+        'death-morph-fine-dust',
+      ],
+      duration: 1,
+    }]);
+    expect(scene.layers.filter((lane) => lane.frameAnimations.length > 0)).toEqual([gore]);
   });
 
   it('routes every lane through the shared atlas', () => {
@@ -240,6 +262,14 @@ describe('gpu vfx system: spawn spec', () => {
     expect(member.alpha.loop).toBe(false);
   });
 
+  it('leaves existing static effects unanimated', () => {
+    const { scene, system } = setup();
+    const spec = spawnSpec(system, GpuVfxEffectId.RocketExhaust);
+    system.spawn(spec, 0, 0);
+
+    expect(findFakeLane(scene, 'rocket-exhaust').members[0]!.frameAnimation).toBeNull();
+  });
+
   it('encodes gravity motion with an integer velocity', () => {
     const { scene, system } = setup();
     const spec = spawnSpec(system, GpuVfxEffectId.AirstrikeBomb);
@@ -318,6 +348,10 @@ describe('gpu vfx system: spawn spec', () => {
     const spec = system.createSpec(GpuVfxEffectId.RocketExhaust);
     spec.lifeMs = 100_000;
     for (let n = 0; n < 1000; n += 1) system.spawn(spec, 0, 0);
+    const death = system.createSpec(GpuVfxEffectId.DeathFragment);
+    death.frameAnimation = GpuVfxFrameAnimationId.DeathDisintegration;
+    death.lifeMs = 1350;
+    for (let n = 0; n < 1000; n += 1) system.spawn(death, 0, 0);
 
     expect(seen.size).toBe(1);
   });

@@ -2,6 +2,10 @@ import * as Phaser from 'phaser';
 import { GPU_VFX_ATLAS_KEY, buildGpuVfxAtlas, getGpuVfxFrame } from './GpuVfxAtlas';
 import { GPU_VFX_EASE_NAMES } from './GpuVfxEase';
 import { GPU_VFX_EFFECTS, type GpuVfxEffectId, type GpuVfxImportance } from './GpuVfxEffects';
+import {
+  GPU_VFX_NO_FRAME_ANIMATION,
+  getGpuVfxFrameAnimation,
+} from './GpuVfxFrameAnimations';
 import { GPU_VFX_DEAD_MEMBER, writeGpuVfxMember } from './GpuVfxMember';
 import { GPU_VFX_NO_SLOT, GpuVfxPool, type GpuVfxPoolStats } from './GpuVfxPool';
 import { GpuVfxProfiler, type GpuVfxCompanionCounters, type GpuVfxReport } from './GpuVfxProfiler';
@@ -114,6 +118,19 @@ export class GpuVfxSystem {
       // Ein erstmals auftauchender Ease-Typ laesst Shader und FrameData neu bauen; hier
       // vorgewaermt passiert das nie im Spielverlauf.
       for (const ease of spec.eases) layer.setAnimationEnabled(GPU_VFX_EASE_NAMES[ease], true);
+      if (spec.frameAnimations && spec.frameAnimations.length > 0) {
+        const animations: Phaser.Types.GameObjects.SpriteGPULayer.SetAnimation[] = [];
+        for (const animationId of spec.frameAnimations) {
+          const animation = getGpuVfxFrameAnimation(animationId);
+          animations.push({
+            name: animation.name,
+            frames: animation.frames.map((frameId) => getGpuVfxFrame(frameId).name),
+            // Spawn-Member ueberschreiben die Dauer mit ihrer Lifetime.
+            duration: 1,
+          });
+        }
+        layer.setAnimations(animations);
+      }
 
       const pool = new GpuVfxPool(layer, spec.capacity, spec.label, MAX_SOURCES);
       pool.prime(GPU_VFX_DEAD_MEMBER);
@@ -138,11 +155,12 @@ export class GpuVfxSystem {
       effect,
       lane: spec.lane,
       frame: spec.frame,
+      frameAnimation: GPU_VFX_NO_FRAME_ANIMATION,
       lifeMs: 0,
       x: 0, y: 0, vx: 0, vy: 0,
       positionEase: 0,
       yMode: 0, gravityFactor: 1,
-      rotation: 0, angularVelocity: 0,
+      rotation: 0, angularVelocity: 0, rotationEase: 0,
       scaleStart: 1, scaleEnd: 1, scaleEase: 0,
       // Neutral: uniforme Skalierung und voller Tint – exakt das Verhalten vor diesen Feldern.
       stretchStart: 1, stretchEnd: 1,
@@ -182,7 +200,19 @@ export class GpuVfxSystem {
       return false;
     }
 
-    lane.layer.editMember(slot, writeGpuVfxMember(spec, getGpuVfxFrame(spec.frame)));
+    const frameAnimation = spec.frameAnimation === GPU_VFX_NO_FRAME_ANIMATION
+      ? null
+      : getGpuVfxFrameAnimation(spec.frameAnimation);
+    lane.layer.editMember(
+      slot,
+      // Phaser 4.2.1 verarbeitet hier ein MemberAnimation-Objekt (SpriteGPULayer.js), waehrend
+      // seine d.ts fuer `animation` noch nur string|number nennt.
+      writeGpuVfxMember(
+        spec,
+        getGpuVfxFrame(spec.frame),
+        frameAnimation,
+      ) as unknown as Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>,
+    );
     this.profiler.recordSpawn(spec.effect);
     // Auch Spawns ausserhalb des Emissions-Ticks muessen ihre Lane sofort sichtbar machen,
     // sonst faellt das erste Partikel eines Bursts einen Frame lang aus.

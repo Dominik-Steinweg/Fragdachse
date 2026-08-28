@@ -37,6 +37,11 @@ export function evaluateFakeAnimation(anim: FakeGpuAnimation, t: number): number
     const repeats = loop ? 0 : Math.floor(amplitude);
     return base + amplitude * time * (2 - time) + repeats * amplitude;
   }
+  if (ease === 'Cubic.easeIn') {
+    const time = t % 1;
+    const repeats = loop ? 0 : Math.floor(amplitude);
+    return base + amplitude * time * time * time + repeats * amplitude;
+  }
   throw new Error(`Test-Helper kennt die Ease nicht: ${ease}`);
 }
 
@@ -50,6 +55,15 @@ export interface FakeGpuMemberSnapshot {
   rotation: FakeGpuAnimation;
   /** Frame-Name aus dem Atlas; `null`, wenn der Member gar keinen Frame gesetzt hat. */
   frame: string | null;
+  /** Optionale GPU-Framefolge; statische Member tragen null. */
+  frameAnimation: {
+    name: string;
+    amplitude: number;
+    duration: number;
+    ease: string;
+    loop: boolean;
+    yoyo: boolean;
+  } | null;
   tint: number;
   /** Konstante 1 oder der Verlauf, mit dem der Tint ueber die Lebenszeit einblendet. */
   tintBlend: FakeGpuAnimation;
@@ -84,6 +98,9 @@ function readFrameName(value: unknown): string | null {
  * bewusst wieder, ein Referenz-Mitschnitt waere also immer der letzte Spawn.
  */
 function snapshotMember(member: Record<string, unknown>): FakeGpuMemberSnapshot {
+  const frameAnimation = member.animation && typeof member.animation === 'object'
+    ? member.animation as Record<string, unknown>
+    : null;
   return {
     x: readAnimation(member.x),
     y: readAnimation(member.y),
@@ -92,6 +109,16 @@ function snapshotMember(member: Record<string, unknown>): FakeGpuMemberSnapshot 
     alpha: readAnimation(member.alpha),
     rotation: readAnimation(member.rotation),
     frame: readFrameName(member.frame),
+    frameAnimation: frameAnimation && typeof frameAnimation.base === 'string'
+      ? {
+        name: frameAnimation.base,
+        amplitude: (frameAnimation.amplitude as number) ?? 0,
+        duration: (frameAnimation.duration as number) ?? 0,
+        ease: (frameAnimation.ease as string) ?? 'None',
+        loop: (frameAnimation.loop as boolean) ?? true,
+        yoyo: (frameAnimation.yoyo as boolean) ?? true,
+      }
+      : null,
     tint: (member.tintTopLeft as number) ?? 0,
     tintBlend: readAnimation(member.tintBlend),
   };
@@ -111,6 +138,7 @@ export interface FakeGpuLayer {
   depth: number;
   blendMode: number;
   enabledEases: string[];
+  frameAnimations: { name: string; frames: (string | number)[]; duration: number }[];
   added: number;
   edited: number[];
   /** Mitschnitt der bespielten Member, in Spawn-Reihenfolge. */
@@ -124,6 +152,7 @@ export interface FakeGpuLayer {
   setDepth(depth: number): FakeGpuLayer;
   setBlendMode(mode: number): FakeGpuLayer;
   setAnimationEnabled(name: string, enabled: boolean): FakeGpuLayer;
+  setAnimations(animations: { name: string; frames: (string | number)[]; duration: number }[]): FakeGpuLayer;
 }
 
 export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
@@ -139,6 +168,7 @@ export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
     depth: 0,
     blendMode: 0,
     enabledEases: [],
+    frameAnimations: [],
     added: 0,
     edited: [],
     members: [],
@@ -164,6 +194,14 @@ export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
     setBlendMode: (mode) => { layer.blendMode = mode; return layer; },
     setAnimationEnabled: (name, enabled) => {
       if (enabled) layer.enabledEases.push(name);
+      return layer;
+    },
+    setAnimations: (animations) => {
+      layer.frameAnimations = animations.map((animation) => ({
+        name: animation.name,
+        frames: [...animation.frames],
+        duration: animation.duration,
+      }));
       return layer;
     },
   };

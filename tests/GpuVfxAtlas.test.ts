@@ -26,6 +26,12 @@ import {
   TEX_MUZZLE_FLASH,
   TEX_MUZZLE_ENERGY,
   TEX_MUZZLE_SPARK,
+  TEX_DEATH_MORPH_COMPACT,
+  TEX_DEATH_MORPH_FRAYED,
+  TEX_DEATH_MORPH_POROUS,
+  TEX_DEATH_MORPH_FRAGMENTED,
+  TEX_DEATH_MORPH_DUST,
+  TEX_DEATH_MORPH_FINE_DUST,
 } from '../src/effects/gpu/GpuVfxSourceTextures';
 import {
   TEX_FLAME_CORE,
@@ -136,6 +142,12 @@ describe('gpu vfx atlas', () => {
     expect(scene.textures.exists(TEX_MUZZLE_FLASH)).toBe(true);
     expect(scene.textures.exists(TEX_MUZZLE_ENERGY)).toBe(true);
     expect(scene.textures.exists(TEX_MUZZLE_SPARK)).toBe(true);
+    expect(scene.textures.exists(TEX_DEATH_MORPH_COMPACT)).toBe(true);
+    expect(scene.textures.exists(TEX_DEATH_MORPH_FRAYED)).toBe(true);
+    expect(scene.textures.exists(TEX_DEATH_MORPH_POROUS)).toBe(true);
+    expect(scene.textures.exists(TEX_DEATH_MORPH_FRAGMENTED)).toBe(true);
+    expect(scene.textures.exists(TEX_DEATH_MORPH_DUST)).toBe(true);
+    expect(scene.textures.exists(TEX_DEATH_MORPH_FINE_DUST)).toBe(true);
   });
 
   it('resolves every manifest id to its own frame', () => {
@@ -163,6 +175,15 @@ describe('gpu vfx atlas', () => {
     expect(getGpuVfxFrame(GpuVfxFrameId.MuzzleFlash).name).toBe('muzzle-flash');
     expect(getGpuVfxFrame(GpuVfxFrameId.MuzzleEnergy).name).toBe('muzzle-energy');
     expect(getGpuVfxFrame(GpuVfxFrameId.MuzzleSpark).name).toBe('muzzle-spark');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphCompact).name).toBe('death-morph-compact');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphFrayed).name).toBe('death-morph-frayed');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphPorous).name).toBe('death-morph-porous');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphFragmented).name)
+      .toBe('death-morph-fragmented');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphDust).name).toBe('death-morph-dust');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphFineDust).name)
+      .toBe('death-morph-fine-dust');
+    expect(GpuVfxFrameId.DeathMorphCompact).toBeGreaterThan(GpuVfxFrameId.MuzzleSpark);
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
 

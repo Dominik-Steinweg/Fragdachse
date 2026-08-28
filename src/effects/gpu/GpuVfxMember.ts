@@ -1,5 +1,6 @@
 import type * as Phaser from 'phaser';
 import { GPU_VFX_EASE_NAMES, GpuVfxEase, isLinearGpuVfxEase } from './GpuVfxEase';
+import type { GpuVfxFrameAnimationSpec } from './GpuVfxFrameAnimations';
 import type { GpuVfxSpawnSpec } from './GpuVfxSpawnSpec';
 
 /**
@@ -11,8 +12,15 @@ import type { GpuVfxSpawnSpec } from './GpuVfxSpawnSpec';
  * Basis-Korrektur nicht-linearer Eases.
  */
 
-export type GpuVfxMember          = Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>;
+type PhaserGpuVfxMember = Phaser.Types.GameObjects.SpriteGPULayer.Member;
 export type GpuVfxMemberAnimation = Phaser.Types.GameObjects.SpriteGPULayer.MemberAnimation;
+type GpuVfxFrameMemberAnimation = Omit<GpuVfxMemberAnimation, 'base'> & {
+  base: string | number;
+};
+export type GpuVfxMember = Omit<Partial<PhaserGpuVfxMember>, 'animation'> & {
+  /** Phaser akzeptiert hier zusaetzlich das dokumentierte MemberAnimation-Objekt. */
+  animation?: string | number | GpuVfxFrameMemberAnimation;
+};
 
 /** Gleiche Auswahl wie Phasers `EmitterOp.randomStaticValueEmit` fuer Tint-Arrays. */
 export function pickGpuVfxTint(tints: readonly number[]): number {
@@ -69,6 +77,9 @@ const animScale: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, e
 const animScaleX: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 const animAlpha: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 const animRotation: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
+const animFrame: GpuVfxFrameMemberAnimation = {
+  base: 0, amplitude: 0, duration: 0, delay: 0, ease: 'Linear', loop: false, yoyo: false,
+};
 /** Farbverlauf ueber die Lebenszeit; die vier Eckfarben selbst sind statisch. */
 const animTintBlend: GpuVfxMemberAnimation = { base: 0, amplitude: 0, duration: 0, ease: 'Linear', loop: false, yoyo: false };
 
@@ -88,7 +99,11 @@ const MEMBER: GpuVfxMember = {
  * Aufrufer reicht sie synchron an `editMember` weiter – `SpriteGPULayer` liest sie sofort aus,
  * eine Kopie waere eine Allokation pro Partikel.
  */
-export function writeGpuVfxMember(spec: GpuVfxSpawnSpec, frame: Phaser.Textures.Frame): GpuVfxMember {
+export function writeGpuVfxMember(
+  spec: GpuVfxSpawnSpec,
+  frame: Phaser.Textures.Frame,
+  frameAnimation: GpuVfxFrameAnimationSpec | null = null,
+): GpuVfxMember {
   const life  = spec.lifeMs;
   const lifeS = life / 1000;
   const positionEase = spec.positionEase ?? GpuVfxEase.Linear;
@@ -133,13 +148,28 @@ export function writeGpuVfxMember(spec: GpuVfxSpawnSpec, frame: Phaser.Textures.
   if (spec.angularVelocity === 0) {
     MEMBER.rotation = spec.rotation;
   } else {
-    animRotation.base      = spec.rotation;
-    animRotation.amplitude = spec.angularVelocity * lifeS;
-    animRotation.duration  = life;
+    writeCurve(
+      animRotation,
+      spec.rotation,
+      spec.rotation + spec.angularVelocity * lifeS,
+      spec.rotationEase,
+      life,
+    );
     MEMBER.rotation = animRotation;
   }
 
   MEMBER.frame = frame;
+  if (frameAnimation) {
+    animFrame.base = frameAnimation.name;
+    animFrame.amplitude = frameAnimation.frames.length;
+    // Phaser 4.2.1 laesst `loop` bei seiner internen Frame-Animation leider fallen. Ein um 1 ms
+    // laengerer GPU-Zyklus als der Pool-Member macht den One-Shot trotzdem sichtbar strikt
+    // vorwaerts: der Slot wird stillgelegt, bevor der Shader den Anfang wieder erreichen kann.
+    animFrame.duration = life + 1;
+    MEMBER.animation = animFrame;
+  } else {
+    MEMBER.animation = undefined;
+  }
   setGpuVfxTint(MEMBER, spec.tint);
   return MEMBER;
 }

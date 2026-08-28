@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
+import {
+  GpuVfxFrameAnimationId,
+  getGpuVfxFrameAnimation,
+} from '../src/effects/gpu/GpuVfxFrameAnimations';
 import { writeGpuVfxMember } from '../src/effects/gpu/GpuVfxMember';
 import type { GpuVfxSpawnSpec } from '../src/effects/gpu/GpuVfxSpawnSpec';
 
@@ -20,6 +24,7 @@ function spec(overrides: Partial<GpuVfxSpawnSpec> = {}): GpuVfxSpawnSpec {
     effect: 0,
     lane: 0,
     frame: 0,
+    frameAnimation: -1,
     lifeMs: 500,
     x: 0,
     y: 100,
@@ -29,6 +34,7 @@ function spec(overrides: Partial<GpuVfxSpawnSpec> = {}): GpuVfxSpawnSpec {
     gravityFactor: 1,
     rotation: 0,
     angularVelocity: 0,
+    rotationEase: GpuVfxEase.Linear,
     scaleStart: 1,
     scaleEnd: 0,
     scaleEase: GpuVfxEase.Linear,
@@ -166,5 +172,44 @@ describe('gpu vfx member: position ease', () => {
     expect(y.ease).toBe('Quad.easeOut');
     expect(x.amplitude).toBeCloseTo(40, 6);
     expect(y.amplitude).toBeCloseTo(-20, 6);
+  });
+
+  it('applies the release ease to rotation without changing the static path', () => {
+    const animated = writeGpuVfxMember(
+      spec({
+        rotation: 0.4,
+        angularVelocity: 2,
+        rotationEase: GpuVfxEase.CubicIn,
+        lifeMs: 500,
+      }),
+      FRAME,
+    );
+    const rotation = animated.rotation as { ease: string; duration: number; amplitude: number };
+
+    expect(rotation.ease).toBe('Cubic.easeIn');
+    expect(rotation.duration).toBe(500);
+    expect(rotation.amplitude).toBeCloseTo(1, 6);
+    expect(writeGpuVfxMember(spec({ rotation: 0.4 }), FRAME).rotation).toBe(0.4);
+  });
+});
+
+describe('gpu vfx member: frame animation', () => {
+  it('writes a deterministic one-shot without affecting static members', () => {
+    const animation = getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration);
+    const animated = writeGpuVfxMember(spec({ lifeMs: 1350 }), FRAME, animation);
+    const frame = animated.animation as {
+      base: string;
+      amplitude: number;
+      duration: number;
+      loop: boolean;
+      yoyo: boolean;
+    };
+
+    expect(frame.base).toBe('death-disintegration');
+    expect(frame.amplitude).toBe(6);
+    expect(frame.duration).toBe(1351);
+    expect(frame.loop).toBe(false);
+    expect(frame.yoyo).toBe(false);
+    expect(writeGpuVfxMember(spec(), FRAME).animation).toBeUndefined();
   });
 });

@@ -10,6 +10,10 @@ import {
 import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import {
+  GPU_VFX_NO_FRAME_ANIMATION,
+  GpuVfxFrameAnimationId,
+} from './gpu/GpuVfxFrameAnimations';
 import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 
@@ -493,8 +497,11 @@ export class CombatGoreGpuRenderer {
       DEATH_DISINTEGRATION_VFX.travelMaxPx * (micro ? 1.15 : 1),
     ) * travelScale;
     const jitter = DEATH_DISINTEGRATION_VFX.jitterPx * (micro ? 1.4 : 1);
-    const startX = rotatedX + 0;
-    const startY = rotatedY + 0;
+    const cohesionHitDrift = hasHitDirection
+      ? DEATH_DISINTEGRATION_VFX.cohesionHitDriftPx
+      : 0;
+    const startX = rotatedX + hitX * cohesionHitDrift;
+    const startY = rotatedY + hitY * cohesionHitDrift;
     const hitImpulse = hasHitDirection
       ? travel * (micro
         ? DEATH_DISINTEGRATION_VFX.microHitImpulse
@@ -510,8 +517,10 @@ export class CombatGoreGpuRenderer {
       + hitY * hitImpulse;
     const lifeMs = randomBetween(
       rng,
-      micro ? 230 : Math.max(620, DEATH_DISINTEGRATION_VFX.durationMs - 80),
-      micro ? 430 : Math.min(900, DEATH_DISINTEGRATION_VFX.durationMs + 180),
+      micro
+        ? DEATH_DISINTEGRATION_VFX.durationMs - 300
+        : DEATH_DISINTEGRATION_VFX.durationMs - DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
+      DEATH_DISINTEGRATION_VFX.durationMs + DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
     );
     // The template deliberately stays on the fixed 4x4 source-pixel analysis grid. Convert
     // only the visible chunk size here so a source block occupies the same World-space size
@@ -555,26 +564,41 @@ export class CombatGoreGpuRenderer {
       : mixColors(tint, COLORS.GREY_1, DEATH_DISINTEGRATION_VFX.mainFragmentContrast);
 
     spec.lifeMs = lifeMs;
+    spec.frame = micro
+      ? (rng() < 0.58 ? GpuVfxFrameId.DeathMorphFineDust : GpuVfxFrameId.DeathMorphDust)
+      : GpuVfxFrameId.DeathMorphCompact;
+    spec.frameAnimation = micro
+      ? GPU_VFX_NO_FRAME_ANIMATION
+      : GpuVfxFrameAnimationId.DeathDisintegration;
     spec.x = originX + startX;
     spec.y = originY + startY;
     spec.vx = (endX - startX) * 1000 / lifeMs;
     spec.vy = (endY - startY) * 1000 / lifeMs;
-    // Hauptfragmente halten die Silhouette in den ersten 100–200 ms; Mikrofragmente duerfen
-    // weiterhin aggressiver ausbrechen.
-    spec.positionEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
+    // Cubic-In haelt nach rund 400 ms erst wenige Prozent der Gesamtstrecke zurueck. Der kleine
+    // gemeinsame Startversatz oben reagiert trotzdem sofort auf die Treffer-Richtung.
+    spec.positionEase = GpuVfxEase.CubicIn;
     spec.yMode = GpuVfxEase.Linear;
     spec.gravityFactor = 1;
-    spec.rotation = entityRotation + (rng() - 0.5) * (micro ? 2.6 : 1.7);
+    spec.rotation = entityRotation + (rng() - 0.5) * (micro ? 1.2 : 0.18);
     const rotationFactor = largeMass ? 0.45 : smallMass ? 1.65 : 1;
-    spec.angularVelocity = (rng() - 0.5) * (micro ? 14 : DEATH_DISINTEGRATION_VFX.rotationMaxDeg * Math.PI / 180 * 2.2) * rotationFactor;
-    spec.scaleStart = baseScale;
-    spec.scaleEnd = baseScale * (largeMass ? 0.5 : micro ? 0.24 : DEATH_DISINTEGRATION_VFX.scaleEnd);
-    spec.scaleEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
+    spec.angularVelocity = (rng() - 0.5)
+      * (micro ? 2.4 : DEATH_DISINTEGRATION_VFX.rotationMaxDeg * Math.PI / 180 * 2)
+      * rotationFactor;
+    spec.rotationEase = GpuVfxEase.CubicIn;
+    spec.scaleStart = baseScale * (micro ? 0.72 : 1);
+    spec.scaleEnd = micro
+      ? spec.scaleStart * 0.62
+      : baseScale * DEATH_DISINTEGRATION_VFX.scaleEnd;
+    spec.scaleEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.CubicIn;
     spec.stretchStart = stretch;
     spec.stretchEnd = Math.max(0.72, stretch * (smallMass ? 0.68 : 0.84));
-    spec.alphaStart = Math.min(1, DEATH_DISINTEGRATION_VFX.alpha * randomBetween(rng, 0.98, 1.08));
+    spec.alphaStart = Math.min(
+      1,
+      DEATH_DISINTEGRATION_VFX.alpha
+        * randomBetween(rng, micro ? 0.3 : 0.98, micro ? 0.48 : 1.08),
+    );
     spec.alphaEnd = 0;
-    spec.alphaEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
+    spec.alphaEase = GpuVfxEase.CubicIn;
     spec.tint = visibleTint;
     spec.tintBlendStart = 1;
     spec.tintBlendEnd = 1;
@@ -585,6 +609,7 @@ export class CombatGoreGpuRenderer {
         * DEATH_FRAGMENT_TEXTURE_SIZE / DEATH_GLOW_TEXTURE_SIZE
         * DEATH_DISINTEGRATION_VFX.playerFragmentGlowScale;
       fragmentGlowSpec.lifeMs = lifeMs;
+      fragmentGlowSpec.frameAnimation = GPU_VFX_NO_FRAME_ANIMATION;
       fragmentGlowSpec.x = spec.x;
       fragmentGlowSpec.y = spec.y;
       fragmentGlowSpec.vx = spec.vx;
@@ -594,14 +619,15 @@ export class CombatGoreGpuRenderer {
       fragmentGlowSpec.gravityFactor = spec.gravityFactor;
       fragmentGlowSpec.rotation = spec.rotation;
       fragmentGlowSpec.angularVelocity = spec.angularVelocity;
+      fragmentGlowSpec.rotationEase = spec.rotationEase;
       fragmentGlowSpec.scaleStart = glowScaleStart;
-      fragmentGlowSpec.scaleEnd = glowScaleStart * (largeMass ? 0.5 : DEATH_DISINTEGRATION_VFX.scaleEnd);
-      fragmentGlowSpec.scaleEase = spec.scaleEase;
+      fragmentGlowSpec.scaleEnd = glowScaleStart * (largeMass ? 0.28 : 0.34);
+      fragmentGlowSpec.scaleEase = GpuVfxEase.QuadOut;
       fragmentGlowSpec.stretchStart = spec.stretchStart;
       fragmentGlowSpec.stretchEnd = spec.stretchEnd;
       fragmentGlowSpec.alphaStart = DEATH_DISINTEGRATION_VFX.playerFragmentGlowAlpha;
       fragmentGlowSpec.alphaEnd = 0;
-      fragmentGlowSpec.alphaEase = spec.alphaEase;
+      fragmentGlowSpec.alphaEase = GpuVfxEase.QuadOut;
       fragmentGlowSpec.tint = auraColor;
       fragmentGlowSpec.tintBlendStart = 1;
       fragmentGlowSpec.tintBlendEnd = 1;
@@ -614,10 +640,10 @@ function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathPro
   const profile = maxDimension <= 24
     ? { main: 24, micro: 3, glow: 2, travelScale: 0.78 }
     : maxDimension <= 36
-      ? { main: 40, micro: 6, glow: 3, travelScale: 0.94 }
+      ? { main: 36, micro: 6, glow: 3, travelScale: 0.94 }
       : maxDimension <= 64
-        ? { main: 56, micro: 10, glow: 5, travelScale: 1.14 }
-        : { main: 64, micro: 14, glow: 8, travelScale: 1.34 };
+        ? { main: 44, micro: 10, glow: 5, travelScale: 1.14 }
+        : { main: 48, micro: 14, glow: 8, travelScale: 1.34 };
   return {
     main: Math.min(chunkCount, Math.min(DEATH_DISINTEGRATION_VFX.maxChunksPerEffect, profile.main)),
     micro: Math.min(chunkCount, profile.micro),

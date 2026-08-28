@@ -16,6 +16,8 @@ export const GpuVfxEase = {
   QuadOut: 1,
   /** `0.5 * layer.gravity * gravityFactor * t^2`; nimmt `velocity` statt `amplitude`. */
   Gravity: 2,
+  /** `Cubic.In(v) = v^3`; haelt Cohesion lange und beschleunigt den spaeten Release. */
+  CubicIn: 3,
 } as const;
 
 export type GpuVfxEase = (typeof GpuVfxEase)[keyof typeof GpuVfxEase];
@@ -24,7 +26,9 @@ export type GpuVfxEase = (typeof GpuVfxEase)[keyof typeof GpuVfxEase];
  * Namen exakt aus Phasers Rueckwaertsabbildung `SpriteGPULayer.EASE_CODES`. Mehrere Aliase
  * teilen sich einen Code (`Power0` und `Linear` sind beide 1).
  */
-export const GPU_VFX_EASE_NAMES: readonly string[] = ['Linear', 'Quad.easeOut', 'Gravity'];
+export const GPU_VFX_EASE_NAMES: readonly string[] = [
+  'Linear', 'Quad.easeOut', 'Gravity', 'Cubic.easeIn',
+];
 
 /** Nur `Linear` rechnet ohne den `repeats`-Term des Shaders (siehe `gpuVfxEasedBase`). */
 export function isLinearGpuVfxEase(ease: GpuVfxEase): boolean {

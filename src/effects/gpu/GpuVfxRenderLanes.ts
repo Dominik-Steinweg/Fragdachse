@@ -1,6 +1,10 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_FX } from '../../config';
 import { GpuVfxEase } from './GpuVfxEase';
+import {
+  GpuVfxFrameAnimationId,
+  type GpuVfxFrameAnimationId as GpuVfxFrameAnimationIdType,
+} from './GpuVfxFrameAnimations';
 
 /**
  * GpuVfxRenderLanes – der Manifest aller physischen `SpriteGPULayer`.
@@ -103,6 +107,8 @@ export interface GpuVfxLaneSpec {
   readonly gravity?: number;
   /** Alle Eases, die Effekte auf dieser Lane benutzen duerfen; werden bei Init vorgewaermt. */
   readonly eases: readonly GpuVfxEase[];
+  /** Optionale GPU-Framefolgen; werden nach dem Atlasbau und vor dem ersten Member registriert. */
+  readonly frameAnimations?: readonly GpuVfxFrameAnimationIdType[];
   readonly capacity: number;
   readonly maxLifetimeMs: number;
   readonly order: GpuVfxOrderPolicy;
@@ -615,9 +621,10 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'gore-normal',
     depth: DEPTH_FX - 0.1,
     blendMode: Phaser.BlendModes.NORMAL,
-    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    frameAnimations: [GpuVfxFrameAnimationId.DeathDisintegration],
     capacity: 4096,
-    maxLifetimeMs: 900,
+    maxLifetimeMs: 1400,
     order: 'ordered',
     reserveCritical: 512,
     rationale:
@@ -625,18 +632,18 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'Streaks und Tropfen bleiben untereinander bewusst reihenfolgearm; eine zweite Lane '
       + 'fuer minimale Depth-Unterschiede wuerde nur GPU-Kapazitaet duplizieren.',
     capacityRationale:
-      'Worst Case: rund 48 gleichzeitige Gegner-/Spieler-Todesfaelle mit bis zu 64 Hauptfragmenten '
-      + 'plus ueberlappendem schwerem Blut-Spray. 4096 bleibt ein begrenzter Pool und reserviert '
-      + '512 Slots fuer Hauptfragmente und Hauptspray gegen dekorative Mikrodetails.',
+      'Die 1,4-s-Death-Lifetime erlaubt bei 48 Haupt- plus hoechstens 14 dekorativen Dust-Membern '
+      + 'rund 52 voll ueberlappende Todesfaelle neben schwerem Blut-Spray. 4096 bleibt begrenzt '
+      + 'und reserviert 512 Slots fuer Hauptfragmente und Hauptspray gegen Mikrodetails.',
   },
   {
     id: GpuVfxLaneId.GoreAdd,
     label: 'gore-add',
     depth: DEPTH_FX + 0.05,
     blendMode: Phaser.BlendModes.ADD,
-    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
     capacity: 1024,
-    maxLifetimeMs: 900,
+    maxLifetimeMs: 1400,
     order: 'add-over-opaque',
     reserveCritical: 0,
     rationale:
@@ -644,9 +651,9 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'Hauptfragmente bleiben dominant im Normal-Band; minimale Tiefenunterschiede '
       + 'rechtfertigen keine weiteren GPU-Layer.',
     capacityRationale:
-      'Bei 48 gleichzeitigen Todesfaellen mit bis zu acht DeathGlows plus zwoelf kleinen '
-      + 'Player-Saeumen und kurzer Lebenszeit bleiben die Spawns innerhalb der 1024 Slots; die '
-      + 'Lane wird bei Ueberlast zuerst qualitativ reduziert, nicht vergroessert.',
+      'Bei rund 52 voll ueberlappenden Todesfaellen mit bis zu acht DeathGlows und zwoelf kleinen '
+      + 'Player-Saeumen bleibt die Lane nahe ihrer 1024 Slots; Standard-Quality reduziert beide '
+      + 'dekorativen Schichten bei Ueberlast zuerst, statt die Lane zu vergroessern.',
   },
   {
     id: GpuVfxLaneId.PowerUpPedestal,

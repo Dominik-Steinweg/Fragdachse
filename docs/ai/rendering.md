@@ -36,6 +36,19 @@ Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../
 
 Player- und Tree-Runtime folgen demselben Prinzip: PlayerBody und TreePhysicsProxy sind Simulation; Sprite, Licht, Textur und Overlay sind Präsentation. Kollisionen werden aus expliziter Runtime-Geometrie abgeleitet, nicht aus Displaymaßen.
 
+## GPU-VFX-Framefolgen
+
+Ein `GpuVfxSpawnSpec` darf optional eine benannte One-Shot-Framefolge aus
+[`GpuVfxFrameAnimations.ts`](../../src/effects/gpu/GpuVfxFrameAnimations.ts) waehlen. Alle Frames
+liegen bereits beim Bau in [`GpuVfxAtlas.ts`](../../src/effects/gpu/GpuVfxAtlas.ts); die nutzende
+Render-Lane registriert ihre Folgen vor dem ersten geprimten Member. Ohne diese Option bleibt der
+statische Frame-Pfad unveraendert.
+
+Der Death-Disintegration-Effekt kombiniert auf der bestehenden Gore-Lane lange Cohesion mit einem
+GPU-seitigen Fragment-zu-Staub-Morph und einer spaet beschleunigenden Release-Bewegung. Farbe und
+Silhouette stammen weiterhin aus dem replizierten Texture-/Frame-Snapshot und dessen lokal
+analysierten Chunks; einzelne Fragmentzustaende werden nicht repliziert.
+
 ## Große World-Flächen
 
 Statische World-Flächen werden über Chunking und Streaming resident gehalten. [ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts), [GroundSurfaceStreamer.ts](../../src/arena/chunks/GroundSurfaceStreamer.ts) und [RockOverlayStreamer.ts](../../src/arena/chunks/RockOverlayStreamer.ts) begrenzen sichtbare Arbeit, recyceln Ressourcen und veröffentlichen neu gebackene Flächen atomar.

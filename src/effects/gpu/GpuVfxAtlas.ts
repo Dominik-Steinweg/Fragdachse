@@ -18,6 +18,12 @@ import {
   TEX_EXPLOSION_CHUNK,
   TEX_EXPLOSION_RING,
   TEX_DEATH_FRAGMENT,
+  TEX_DEATH_MORPH_COMPACT,
+  TEX_DEATH_MORPH_FRAYED,
+  TEX_DEATH_MORPH_POROUS,
+  TEX_DEATH_MORPH_FRAGMENTED,
+  TEX_DEATH_MORPH_DUST,
+  TEX_DEATH_MORPH_FINE_DUST,
   TEX_DEATH_GLOW,
   TEX_MUZZLE_FLASH,
   TEX_MUZZLE_ENERGY,
@@ -39,6 +45,7 @@ import {
   ensureExplosionChunkTexture,
   ensureExplosionRingTexture,
   ensureDeathFragmentTexture,
+  ensureDeathMorphTextures,
   ensureDeathGlowTexture,
   ensureMuzzleFlashTexture,
   ensureMuzzleEnergyTexture,
@@ -149,6 +156,13 @@ export const GpuVfxFrameId = {
   MuzzleFlash:         36,
   MuzzleEnergy:        37,
   MuzzleSpark:         38,
+  /** One-Shot-Death-Morph; neue IDs werden nur angehaengt, damit bestehende IDs stabil bleiben. */
+  DeathMorphCompact:    39,
+  DeathMorphFrayed:     40,
+  DeathMorphPorous:     41,
+  DeathMorphFragmented: 42,
+  DeathMorphDust:       43,
+  DeathMorphFineDust:   44,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -327,6 +341,30 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   {
     id: GpuVfxFrameId.MuzzleSpark, frame: 'muzzle-spark',
     sourceTextureKey: TEX_MUZZLE_SPARK, width: 8, height: 8, ensure: ensureMuzzleSparkTexture,
+  },
+  {
+    id: GpuVfxFrameId.DeathMorphCompact, frame: 'death-morph-compact',
+    sourceTextureKey: TEX_DEATH_MORPH_COMPACT, width: 12, height: 12, ensure: ensureDeathMorphTextures,
+  },
+  {
+    id: GpuVfxFrameId.DeathMorphFrayed, frame: 'death-morph-frayed',
+    sourceTextureKey: TEX_DEATH_MORPH_FRAYED, width: 12, height: 12, ensure: ensureDeathMorphTextures,
+  },
+  {
+    id: GpuVfxFrameId.DeathMorphPorous, frame: 'death-morph-porous',
+    sourceTextureKey: TEX_DEATH_MORPH_POROUS, width: 12, height: 12, ensure: ensureDeathMorphTextures,
+  },
+  {
+    id: GpuVfxFrameId.DeathMorphFragmented, frame: 'death-morph-fragmented',
+    sourceTextureKey: TEX_DEATH_MORPH_FRAGMENTED, width: 12, height: 12, ensure: ensureDeathMorphTextures,
+  },
+  {
+    id: GpuVfxFrameId.DeathMorphDust, frame: 'death-morph-dust',
+    sourceTextureKey: TEX_DEATH_MORPH_DUST, width: 12, height: 12, ensure: ensureDeathMorphTextures,
+  },
+  {
+    id: GpuVfxFrameId.DeathMorphFineDust, frame: 'death-morph-fine-dust',
+    sourceTextureKey: TEX_DEATH_MORPH_FINE_DUST, width: 12, height: 12, ensure: ensureDeathMorphTextures,
   },
 ];
 

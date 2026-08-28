@@ -1,6 +1,7 @@
 import { GpuVfxEase } from './GpuVfxEase';
 import type { GpuVfxFrameId } from './GpuVfxAtlas';
 import type { GpuVfxEffectId } from './GpuVfxEffects';
+import type { GpuVfxFrameAnimationId } from './GpuVfxFrameAnimations';
 import type { GpuVfxLaneId } from './GpuVfxRenderLanes';
 
 /**
@@ -31,6 +32,8 @@ export interface GpuVfxSpawnSpec {
   lane: GpuVfxLaneId;
   /** Motiv im geteilten Atlas. Vorbelegt aus dem Effekt-Manifest. */
   frame: GpuVfxFrameId;
+  /** Optionale, laneweit vorgewaermte GPU-One-Shot-Framefolge; -1 behaelt den statischen Frame. */
+  frameAnimation: GpuVfxFrameAnimationId | -1;
 
   lifeMs: number;
   x: number;
@@ -57,6 +60,8 @@ export interface GpuVfxSpawnSpec {
   rotation: number;
   /** Drehgeschwindigkeit in rad/s. 0 laesst die Rotation statisch – wie bei allen Piloten. */
   angularVelocity: number;
+  /** Kurve der Drehung; standardmaessig linear, beim Death-Release bewusst spaet. */
+  rotationEase: GpuVfxEase;
 
   /** Der gemeinsame Groessenverlauf. Ohne `stretch*` gilt er unveraendert fuer beide Achsen. */
   scaleStart: number;

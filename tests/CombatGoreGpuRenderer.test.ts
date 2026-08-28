@@ -98,10 +98,14 @@ function playFullDeath(
   const mainCount = report.effects.find((effect) => effect.label === 'death.fragment')!.spawns;
   const microCount = report.effects.find((effect) => effect.label === 'death.micro-fragment')!.spawns;
   const fragmentGlow = report.effects.find((effect) => effect.label === 'death.fragment-glow')!;
-  const main = findFakeLane(scene, 'gore-normal').members.slice(0, mainCount);
+  const gore = findFakeLane(scene, 'gore-normal').members;
+  const main = gore.slice(0, mainCount);
+  const micro = gore.slice(mainCount, mainCount + microCount);
   const glow = findFakeLane(scene, 'gore-add').members;
   const template = renderer.fragmentTemplateCache.get(textureKey, 'walk-1');
-  return { displaySize, fragmentGlow, glow, main, mainCount, microCount, renderer, report, template };
+  return {
+    displaySize, fragmentGlow, glow, main, mainCount, micro, microCount, renderer, report, template,
+  };
 }
 
 const death = {
@@ -266,10 +270,10 @@ describe('combat gore gpu renderer', () => {
     const report = gpu.buildReport();
     const main = report.effects.find((effect) => effect.label === 'death.fragment')!;
     const members = findFakeLane(scene, 'gore-normal').members.slice(0, main.spawns);
-    const xRange = Math.max(...members.map((member) => member.x.base))
-      - Math.min(...members.map((member) => member.x.base));
-    const yRange = Math.max(...members.map((member) => member.y.base))
-      - Math.min(...members.map((member) => member.y.base));
+    const xRange = Math.max(...members.map((member) => evaluateFakeAnimation(member.x, 0)))
+      - Math.min(...members.map((member) => evaluateFakeAnimation(member.x, 0)));
+    const yRange = Math.max(...members.map((member) => evaluateFakeAnimation(member.y, 0)))
+      - Math.min(...members.map((member) => evaluateFakeAnimation(member.y, 0)));
 
     expect(main.spawns).toBeGreaterThan(0);
     expect(xRange).toBeGreaterThan(20);
@@ -284,7 +288,75 @@ describe('combat gore gpu renderer', () => {
     expect(primary.scaleY.duration).toBeGreaterThanOrEqual(
       DEATH_DISINTEGRATION_VFX.durationMs - 80,
     );
-    expect(primary.alpha.ease).toBe('Linear');
+    expect(primary.alpha.ease).toBe('Cubic.easeIn');
+    expect(primary.frameAnimation).toMatchObject({
+      name: 'death-disintegration',
+      amplitude: 6,
+      loop: false,
+      yoyo: false,
+    });
+  });
+
+  it('holds cohesion through 400 ms, then accelerates into the directed release', () => {
+    const sample = playFullDeath(64, 32, { dirX: 1, dirY: 0 });
+    const primary = sample.main[0]!;
+    const lifeMs = primary.x.duration;
+    const at = (animation: typeof primary.x, ms: number) => (
+      evaluateFakeAnimation(animation, ms / lifeMs)
+    );
+    const startX = at(primary.x, 0);
+    const startY = at(primary.y, 0);
+    const cohesionTravel = Math.hypot(
+      at(primary.x, 400) - startX,
+      at(primary.y, 400) - startY,
+    );
+    const releaseTravel = Math.hypot(
+      at(primary.x, 900) - startX,
+      at(primary.y, 900) - startY,
+    );
+
+    expect(lifeMs).toBeGreaterThanOrEqual(1280);
+    expect(lifeMs).toBeLessThanOrEqual(1420);
+    expect(primary.x.ease).toBe('Cubic.easeIn');
+    expect(cohesionTravel).toBeLessThan(9);
+    expect(releaseTravel).toBeGreaterThan(cohesionTravel * 6);
+    expect(evaluateFakeAnimation(primary.alpha, 400 / lifeMs)).toBeGreaterThan(0.94);
+    expect(Math.abs(
+      evaluateFakeAnimation(primary.rotation, 400 / lifeMs)
+        - evaluateFakeAnimation(primary.rotation, 0),
+    )).toBeLessThan(0.12);
+  });
+
+  it('uses 32–48 dominant fragments and only decorative fine-dust accents', () => {
+    const normal = playFullDeath(64, 32);
+    const large = playFullDeath(128, 72);
+
+    expect(normal.mainCount).toBeGreaterThanOrEqual(32);
+    expect(normal.mainCount).toBeLessThanOrEqual(48);
+    expect(large.mainCount).toBe(48);
+    expect(normal.micro.length).toBeGreaterThan(0);
+    expect(normal.micro.every((member) => (
+      member.frame === 'death-morph-dust' || member.frame === 'death-morph-fine-dust'
+    ))).toBe(true);
+    expect(normal.micro.every((member) => member.frameAnimation === null)).toBe(true);
+    expect(normal.micro.every((member) => evaluateFakeAnimation(member.alpha, 0) < 0.5)).toBe(true);
+    expect(normal.micro.every((member) => member.alpha.duration >= 1050)).toBe(true);
+  });
+
+  it('keeps death morphing deterministic for seed, texture and frame', () => {
+    const first = playFullDeath(64, 32, { seed: 0xdecafbad, dirX: 0.8, dirY: -0.2 });
+    const second = playFullDeath(64, 32, { seed: 0xdecafbad, dirX: 0.8, dirY: -0.2 });
+    const summarize = (sample: typeof first) => sample.main.map((member) => ({
+      x: evaluateFakeAnimation(member.x, 0),
+      y: evaluateFakeAnimation(member.y, 0),
+      travelX: member.x.amplitude,
+      travelY: member.y.amplitude,
+      life: member.x.duration,
+      tint: member.tint,
+      animation: member.frameAnimation?.name,
+    }));
+
+    expect(summarize(first)).toEqual(summarize(second));
   });
 
   it('keeps the template analysis on fixed 4x4 source blocks', () => {
@@ -317,11 +389,11 @@ describe('combat gore gpu renderer', () => {
       expect(sample.microCount).toBe(reference.microCount);
       expect(evaluateFakeAnimation(sample.main[0]!.scaleY, 0)).toBeCloseTo(referenceHeight, 10);
       expect(evaluateFakeAnimation(sample.main[0]!.scaleX, 0)).toBeCloseTo(referenceWidth, 10);
-      expect(sample.main[0]!.x.base).toBeCloseTo(
+      expect(evaluateFakeAnimation(sample.main[0]!.x, 0)).toBeCloseTo(
         death.x + sample.template.chunks[0]!.offsetX * sample.displaySize,
         10,
       );
-      expect(sample.main[0]!.y.base).toBeCloseTo(
+      expect(evaluateFakeAnimation(sample.main[0]!.y, 0)).toBeCloseTo(
         death.y + sample.template.chunks[0]!.offsetY * sample.displaySize,
         10,
       );
@@ -384,13 +456,21 @@ describe('combat gore gpu renderer', () => {
     const selectedMainIndex = 0;
     const material = coloredTarget.main[selectedMainIndex]!;
     const colorGlow = coloredTarget.glow[0]!;
-    expect(colorGlow.x.base).toBeCloseTo(material.x.base, 10);
-    expect(colorGlow.y.base).toBeCloseTo(material.y.base, 10);
+    expect(evaluateFakeAnimation(colorGlow.x, 0)).toBeCloseTo(
+      evaluateFakeAnimation(material.x, 0),
+      10,
+    );
+    expect(evaluateFakeAnimation(colorGlow.y, 0)).toBeCloseTo(
+      evaluateFakeAnimation(material.y, 0),
+      10,
+    );
     expect(colorGlow.x.amplitude).toBeCloseTo(material.x.amplitude, 10);
     expect(colorGlow.y.amplitude).toBeCloseTo(material.y.amplitude, 10);
     expect(colorGlow.rotation.base).toBeCloseTo(material.rotation.base, 10);
-    expect(colorGlow.alpha.base).toBeCloseTo(DEATH_DISINTEGRATION_VFX.playerFragmentGlowAlpha, 10);
-    expect(colorGlow.scaleY.base * 24).toBeGreaterThan(material.scaleY.base * 4);
+    expect(evaluateFakeAnimation(colorGlow.alpha, 0))
+      .toBeCloseTo(DEATH_DISINTEGRATION_VFX.playerFragmentGlowAlpha, 10);
+    expect(evaluateFakeAnimation(colorGlow.scaleY, 0) * 24)
+      .toBeGreaterThan(evaluateFakeAnimation(material.scaleY, 0) * 4);
   });
 
   it('does not add player fragment glows to enemy deaths and keeps enemy tinting', () => {

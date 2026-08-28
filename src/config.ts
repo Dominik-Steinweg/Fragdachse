@@ -395,22 +395,25 @@ export const BLOOD_HIT_VFX = {
 } as const;
 
 export const DEATH_DISINTEGRATION_VFX = {
-  durationMs: 900,
+  durationMs: 1350,
+  lifetimeVarianceMs: 70,
+  /** Sofortiger gemeinsamer Treffer-Drift, bevor die spaete Cubic-In-Freigabe sichtbar wird. */
+  cohesionHitDriftPx: 1.6,
   /** Display-Groesse, auf die `chunkSizePx` als World-Space-Fragmentmass kalibriert ist. */
   referenceDisplaySizePx: 32,
   chunkSizePx: 4,
   travelMinPx: 22,
   travelMaxPx: 104,
   jitterPx: 18,
-  rotationMaxDeg: 180,
+  rotationMaxDeg: 58,
   scaleStart: 1.55,
-  scaleEnd: 0.42,
+  scaleEnd: 1.06,
   /** Sichtbarer Zuschlag fuer die Hauptmasse; basiert weiterhin auf der World-Display-Groesse. */
-  mainFragmentScaleBoost: 2.0,
+  mainFragmentScaleBoost: 1.5,
   /** Anteil eines hellen Kontrast-Lifts fuer die dominante Fragment-Ebene. */
   mainFragmentContrast: 0.1,
   /** Hit-Impuls als Vielfaches des radialen Fragment-Reisewegs. */
-  mainHitImpulse: 1.9,
+  mainHitImpulse: 1.78,
   microHitImpulse: 1.85,
   glowHitImpulse: 1.8,
   alpha: 1,
