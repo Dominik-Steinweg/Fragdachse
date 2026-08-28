@@ -3,6 +3,7 @@ import type { SyncedPlaceableRock } from '../src/types';
 import type { PersistentBaseRepositoryPort } from '../src/persistentBase/PersistentBaseRepository';
 import { PersistentBaseSession } from '../src/persistentBase/PersistentBaseSession';
 import type { PersistentBaseState, PersistentConstruction } from '../src/persistentBase/PersistentBaseTypes';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 
 class MemoryRepository implements PersistentBaseRepositoryPort {
   state: PersistentBaseState;
@@ -60,6 +61,27 @@ const anchor = { gridX: 10, gridY: 10 };
 const footprint = [{ dx: 0, dy: 0 }] as const;
 
 describe('persistent base session', () => {
+  it('limits the current build area to the nine cells of the fixed 3x3 courtyard', () => {
+    const repository = new MemoryRepository(stateWith());
+    const session = new PersistentBaseSession(repository, {
+      anchor,
+      activeRadiusCells: 5,
+      activeBuildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+      ownerId: 'host',
+    });
+
+    expect(session.registerNew(
+      runtime(10, 'host', 11, 11),
+      { kind: 'construction', id: 'rocket_turret' },
+      footprint,
+    )).not.toBeNull();
+    expect(session.registerNew(
+      runtime(11, 'host', 12, 10),
+      { kind: 'construction', id: 'rocket_turret' },
+      footprint,
+    )).toBeNull();
+  });
+
   it('records only permanent host-owned in-zone placements and commits them on victory', () => {
     const repository = new MemoryRepository(stateWith());
     const session = new PersistentBaseSession(repository, { anchor, activeRadiusCells: 5, ownerId: 'host' });

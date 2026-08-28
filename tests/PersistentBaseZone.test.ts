@@ -4,6 +4,7 @@ import {
   MAX_PERSISTENT_BASE_RADIUS_CELLS,
   PERSISTENT_BASE_CLEARANCE_CELLS,
 } from '../src/config/persistentBase';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import {
   isCellInsidePersistentBaseReservation,
   isCellInsidePersistentBaseZone,
@@ -35,6 +36,14 @@ describe('persistent base zone', () => {
       anchor,
       1,
     )).toBe(false);
+  });
+
+  it('supports the current fixed square and a future radius build area', () => {
+    expect(isCellInsidePersistentBaseZone(1, 1, DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
+    expect(isCellInsidePersistentBaseZone(1, -1, DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
+    expect(isCellInsidePersistentBaseZone(2, 0, DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(false);
+    expect(isCellInsidePersistentBaseZone(0, 2, DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(false);
+    expect(isCellInsidePersistentBaseZone(3, 4, { kind: 'radius', radiusCells: 5 })).toBe(true);
   });
 
   it('keeps the generator reservation at MAX plus clearance', () => {

@@ -156,9 +156,9 @@ export interface WorldBaseDefinition {
  *
  * Sie traegt bewusst keine Geometrie. Die Form des Kerns ist Code-Definition
  * ({@link import('../../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}),
- * die World steuert nur Lage, Ausrichtung und Grunddauerhaftigkeit bei. Die zugehoerige Basis
- * mit `baseId` wird daraus erzeugt und steht anschliessend als gewoehnlicher Eintrag in
- * {@link WorldDefinition.bases}.
+ * die World steuert nur Lage, Ausrichtung, Baubereich-Regel und Grunddauerhaftigkeit bei. Die
+ * zugehoerige Basis mit `baseId` wird daraus erzeugt und steht anschliessend als gewoehnlicher
+ * Eintrag in {@link WorldDefinition.bases}.
  */
 export type WorldPersistentBaseSiteDefinition = CoopDefenseMapPersistentBaseConfig;
 

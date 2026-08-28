@@ -198,6 +198,7 @@ import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import { isSameWorldInstance, type WorldDescriptor, type WorldParameters } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
+import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -421,7 +422,7 @@ export class ArenaLifecycleCoordinator {
   private readonly persistentBaseRoomState = new PersistentBaseRoomState();
   private persistentBaseSession: PersistentBaseSession | null = null;
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
-  private persistentBaseRadiusCells = 0;
+  private persistentBaseBuildArea: PersistentBaseBuildArea | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
 
   constructor(
@@ -1831,19 +1832,24 @@ export class ArenaLifecycleCoordinator {
           {
             anchor: persistentBaseSite.anchor,
             activeRadiusCells: committedState.radiusCells,
+            activeBuildArea: persistentBaseSite.buildArea,
             ownerId: bridge.getLocalPlayerId(),
           },
           committedState,
         );
       }
-      this.persistentBaseSession.rebindArena(persistentBaseSite.anchor, persistentBaseSite.radiusCells);
+      this.persistentBaseSession.rebindArena(
+        persistentBaseSite.anchor,
+        persistentBaseSite.radiusCells,
+        persistentBaseSite.buildArea,
+      );
       this.ctx.persistentBaseSession = this.persistentBaseSession;
       this.persistentBaseAnchor = persistentBaseSite.anchor;
-      this.persistentBaseRadiusCells = this.persistentBaseSession.radiusCells;
+      this.persistentBaseBuildArea = persistentBaseSite.buildArea;
       this.persistentBaseRoomState.beginMission();
     } else {
       this.persistentBaseAnchor = null;
-      this.persistentBaseRadiusCells = 0;
+      this.persistentBaseBuildArea = null;
     }
     this.ctx.coopDefenseMissionBarrierManager = missionProgressConfig
       ? new CoopDefenseMissionBarrierManager(this.scene, missionProgressConfig, world.metrics, {
@@ -3986,6 +3992,8 @@ export class ArenaLifecycleCoordinator {
       (runtimeId) => detachedPlacementSystem?.hasRuntimeRock(runtimeId) === true,
     );
     this.ctx.persistentBaseSession = null;
+    this.persistentBaseAnchor = null;
+    this.persistentBaseBuildArea = null;
     this.ctx.placementSystem = null;
     this.ctx.turretSystem?.setTurretDamageBuffProvider(null);
     this.ctx.turretSystem?.setTurretDamageMultiplierProvider(null);
@@ -4203,6 +4211,7 @@ export class ArenaLifecycleCoordinator {
       state: session.workingState,
       anchor: site.anchor,
       activeRadiusCells: session.radiusCells,
+      activeBuildArea: session.buildArea,
       capacityUsed: this.ctx.placementSystem.getUsedCapacity(hostId),
       capacityMax,
       tools,
@@ -4242,6 +4251,7 @@ export class ArenaLifecycleCoordinator {
         },
         anchor: site.anchor,
         activeRadiusCells: session.radiusCells,
+        activeBuildArea: session.buildArea,
         capacityUsed: this.ctx.placementSystem.getUsedCapacity(blueprint.ownerId),
         capacityMax: this.getConstructionCapacity(blueprint.ownerId),
         tools: guestTools,
@@ -4411,7 +4421,7 @@ export class ArenaLifecycleCoordinator {
     const normalizedTool: PersistentToolRef = constructionId
       ? { kind: 'construction', id: constructionId }
       : { ...tool };
-    if (!this.persistentBaseAnchor || this.persistentBaseRadiusCells <= 0) return;
+    if (!this.persistentBaseAnchor || !this.persistentBaseBuildArea) return;
     if (runtime.ownership === 'guest-session') {
       this.persistentBaseRoomState.registerNew(
         runtime,
@@ -4419,7 +4429,7 @@ export class ArenaLifecycleCoordinator {
         normalizedTool,
         footprint,
         this.persistentBaseAnchor,
-        this.persistentBaseRadiusCells,
+        this.persistentBaseBuildArea,
       );
       return;
     }

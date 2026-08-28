@@ -6,7 +6,10 @@ import {
   type PersistentConstruction,
   type PersistentToolRef,
 } from './PersistentBaseTypes';
-import { isPersistentFootprintInsideZone } from './PersistentBaseZone';
+import {
+  isPersistentFootprintInsideZone,
+  type PersistentBaseBuildAreaInput,
+} from './PersistentBaseZone';
 
 export interface GuestPersistentConstruction extends PersistentConstruction {
   readonly ownerId: string;
@@ -55,7 +58,7 @@ export class PersistentBaseRoomState {
     tool: PersistentToolRef,
     footprint: readonly { readonly dx: number; readonly dy: number }[],
     anchor: PersistentBaseAnchor,
-    activeRadiusCells: number,
+    areaOrRadius: PersistentBaseBuildAreaInput,
   ): GuestPersistentConstruction | null {
     if (!this.working
       || !ownerId
@@ -66,7 +69,7 @@ export class PersistentBaseRoomState {
         runtimeRock.gridY,
         footprint,
         anchor,
-        activeRadiusCells,
+        areaOrRadius,
       )) return null;
 
     const placementOrder = this.nextPlacementOrder++;

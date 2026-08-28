@@ -36,14 +36,85 @@ export type PersistentBaseCellDomain =
   | 'base-surface'
   /** Innenhof: die Flaeche fuer persistente Konstruktionen und frei platzierbare Rewards. */
   | 'courtyard-build-area'
-  /** Offener Zugang. Bleibt frei, damit die U-Form lesbar und der Hof erreichbar bleibt. */
+  /** Offener Zugang. Bleibt frei, damit der Hof von allen vier Seiten erreichbar bleibt. */
   | 'entrance';
+
+/**
+ * Regel, die den bebaubaren Bereich relativ zum persistenten Basisanker beschreibt.
+ *
+ * Der aktuelle Ausbau nutzt bewusst ein festes 3x3-Quadrat. Ein spaeterer Ausbau kann dieselbe
+ * Schnittstelle mit einer radiusgesteuerten Zone verwenden, ohne Platzierung, Restore und
+ * Darstellung erneut anpassen zu muessen.
+ */
+export type PersistentBaseBuildArea =
+  | { readonly kind: 'square'; readonly sizeCells: number }
+  | { readonly kind: 'radius'; readonly radiusCells: number };
+
+/** Aktueller Baubereich: genau die neun Innenhofzellen im 5x5-Kern. */
+export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
+  kind: 'square',
+  sizeCells: 3,
+} as const satisfies PersistentBaseBuildArea);
+
+/** Authoring-Grenze fuer Baubereiche; unbekannte Formen werden nicht still ersetzt. */
+export function isPersistentBaseBuildArea(value: unknown): value is PersistentBaseBuildArea {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as { kind?: unknown; sizeCells?: unknown; radiusCells?: unknown };
+  if (candidate.kind === 'square') {
+    return typeof candidate.sizeCells === 'number'
+      && Number.isSafeInteger(candidate.sizeCells)
+      && candidate.sizeCells > 0
+      && candidate.sizeCells % 2 === 1;
+  }
+  return candidate.kind === 'radius'
+    && typeof candidate.radiusCells === 'number'
+    && Number.isFinite(candidate.radiusCells)
+    && candidate.radiusCells >= 0;
+}
+
+/** Radius der Bounding-Box, die zum Iterieren ueber einen Baubereich benoetigt wird. */
+export function getPersistentBaseBuildAreaExtentCells(area: PersistentBaseBuildArea): number {
+  return area.kind === 'square' ? (area.sizeCells - 1) / 2 : Math.ceil(area.radiusCells);
+}
+
+/**
+ * Loest die authored Regel fuer eine World-Instanz auf.
+ *
+ * Ein authored Radius beschreibt nur die spaetere Regelart; sein aktiver Wert kommt aus dem
+ * replizierten Progressionsradius. Das feste Quadrat bleibt davon unberuehrt.
+ */
+export function resolvePersistentBaseBuildArea(
+  authoredBuildArea: PersistentBaseBuildArea | undefined,
+  activeRadiusCells: number,
+): PersistentBaseBuildArea {
+  const area = authoredBuildArea ?? DEFAULT_PERSISTENT_BASE_BUILD_AREA;
+  return area.kind === 'radius'
+    ? { kind: 'radius', radiusCells: activeRadiusCells }
+    : area;
+}
+
+/** True, wenn die relative Rasterzelle zum angegebenen Baubereich gehoert. */
+export function isCellInsidePersistentBaseBuildArea(
+  relativeGridX: number,
+  relativeGridY: number,
+  area: PersistentBaseBuildArea = DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+): boolean {
+  if (!isPersistentBaseBuildArea(area)
+    || !Number.isFinite(relativeGridX)
+    || !Number.isFinite(relativeGridY)) return false;
+  if (area.kind === 'square') {
+    const extent = (area.sizeCells - 1) / 2;
+    return Math.abs(relativeGridX) <= extent && Math.abs(relativeGridY) <= extent;
+  }
+  return relativeGridX * relativeGridX + relativeGridY * relativeGridY <= area.radiusCells * area.radiusCells;
+}
 
 /**
  * Ausrichtung des Kerns. `open-left` ist die kanonische Form und der Default jeder World.
  *
  * Die uebrigen drei existieren, damit eine Map aus Leveldesign-Gruenden eine gedrehte Basis
- * tragen kann, ohne dass Persistenz oder Authoring dafuer umgebaut werden muessten.
+ * tragen kann, ohne dass Persistenz oder Authoring dafuer umgebaut werden muessten. Die aktuelle
+ * vierseitige Kernform bleibt dabei unter jeder Vierteldrehung geometrisch gleich.
  */
 export type PersistentBaseOrientation = 'open-left' | 'open-up' | 'open-right' | 'open-down';
 
@@ -77,9 +148,15 @@ export interface PersistentBaseCoreWorldCell {
 }
 
 function resolveCanonicalDomain(relativeGridX: number, relativeGridY: number): PersistentBaseCellDomain {
-  if (Math.abs(relativeGridY) === CORE_EXTENT_CELLS) return 'base-surface';
-  if (relativeGridX === CORE_EXTENT_CELLS) return 'base-surface';
-  if (relativeGridX === -CORE_EXTENT_CELLS) return 'entrance';
+  const isBoundaryCell = Math.abs(relativeGridX) === CORE_EXTENT_CELLS
+    || Math.abs(relativeGridY) === CORE_EXTENT_CELLS;
+  const isCenteredSideCell = (
+    relativeGridX === 0 && Math.abs(relativeGridY) === CORE_EXTENT_CELLS
+  ) || (
+    relativeGridY === 0 && Math.abs(relativeGridX) === CORE_EXTENT_CELLS
+  );
+  if (isCenteredSideCell) return 'entrance';
+  if (isBoundaryCell) return 'base-surface';
   return 'courtyard-build-area';
 }
 
@@ -98,18 +175,18 @@ function buildCanonicalCells(): PersistentBaseCoreCell[] {
 }
 
 /**
- * Die kanonische Grundflaeche in `open-left`:
+ * Die kanonische 5x5-Grundflaeche (Default-Ausrichtung `open-left`):
  *
  * ```
- *   B B B B B      B = base-surface          (13 Zellen)
- *   E H H H B      H = courtyard-build-area  ( 9 Zellen)
- *   E H H H B      E = entrance              ( 3 Zellen)
- *   E H H H B
- *   B B B B B
+ *   B B E B B      B = base-surface          (12 Zellen)
+ *   B H H H B      H = courtyard-build-area  ( 9 Zellen)
+ *   E H H H E      E = entrance              ( 4 Zellen)
+ *   B H H H B
+ *   B B E B B
  * ```
  *
- * Feste Basisflaeche ist die komplette obere Kante, die komplette untere Kante und die komplette
- * rechte Kante; die linke Seite bleibt offen.
+ * Die vier mittleren Randzellen sind offene Eingaenge. Die Ecken und die uebrigen Randzellen
+ * bilden die feste Basisflaeche; der Innenhof ist der aktuelle Baubereich.
  */
 export const CANONICAL_PERSISTENT_BASE_CORE_CELLS: readonly PersistentBaseCoreCell[] =
   Object.freeze(buildCanonicalCells());
@@ -171,7 +248,7 @@ export function resolvePersistentBaseCoreCells(
  * Die feste Basisflaeche als Shape-Offsets, auf den Ursprung `(0, 0)` normalisiert.
  *
  * Das ist der Uebergang von der Kerngeometrie in den bestehenden Basisvertrag: `shape.kind`
- * `'cells'` traegt beliebige, auch konkave Formen, deshalb braucht die U-Form keinen neuen
+ * `'cells'` traegt beliebige, auch konkave Formen, deshalb braucht die Kernform keinen neuen
  * Shape-Typ.
  */
 export function getPersistentBaseCoreSurfaceOffsets(
@@ -190,6 +267,8 @@ export interface PersistentBaseCoreSite {
   readonly baseId: string;
   readonly anchor: PersistentBaseAnchor;
   readonly orientation?: PersistentBaseOrientation;
+  /** Ohne Angabe gilt der aktuelle 3x3-Innenhof; spaetere Stufen koennen einen Radius waehlen. */
+  readonly buildArea?: PersistentBaseBuildArea;
   readonly hpMax: number;
 }
 

@@ -144,6 +144,7 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     expect(withParameter.persistentBaseSite).toMatchObject({
       baseId: 'foundation-main',
       radiusCells: 7,
+      buildArea: { kind: 'square', sizeCells: 3 },
     });
     // Der Anker ist die Mittelzelle der kanonischen 5x5-Grundflaeche, also exakt der authored
     // Wert der Map – nicht die Mitte einer je Map beschriebenen Form.
@@ -152,9 +153,35 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     expect(isValidPersistentBaseSite(withParameter.persistentBaseSite)).toBe(true);
 
     expect(contextForMap('18').persistentBaseSite?.radiusCells).toBe(4);
+    expect(contextForMap('18').persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
     // Eine World ohne authored Stelle hat auch keine.
     expect(contextForMap('1').persistentBaseSite).toBeNull();
     expect(isValidPersistentBaseSite(null)).toBe(false);
+  });
+
+  it('kann eine spaetere radiusbasierte Baubereich-Regel an den replizierten Radius binden', () => {
+    const mapConfig = getCoopDefenseMapConfig('18');
+    const definition = toWorldDefinition({
+      ...mapConfig,
+      persistentBase: {
+        ...mapConfig.persistentBase!,
+        buildArea: { kind: 'radius', radiusCells: 2 },
+      },
+    });
+    const world = createWorldRuntimeContext({
+      descriptor: descriptorFor(definition.id, {
+        parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 7 },
+      }),
+      metricsProfile: getArenaMetricsProfile(
+        'coop_defense',
+        'ARENA',
+        mapConfig.arenaWidthCells,
+        mapConfig.arenaHeightCells,
+      ),
+      definition,
+    });
+
+    expect(world.persistentBaseSite?.buildArea).toEqual({ kind: 'radius', radiusCells: 7 });
   });
 
   it('traegt den Basiskern nur, wenn die World-Instanz ihn freigeschaltet mitbringt', () => {

@@ -3,14 +3,25 @@ import {
   PERSISTENT_BASE_CLEARANCE_CELLS,
 } from '../config/persistentBase';
 import type { BaseSpec } from '../arena/BaseRegistry';
+import {
+  isCellInsidePersistentBaseBuildArea,
+  type PersistentBaseBuildArea,
+} from './PersistentBaseCore';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
+
+/** Aktuelle feste Build-Area oder der historische Radiusvertrag. */
+export type PersistentBaseBuildAreaInput = PersistentBaseBuildArea | number;
 
 /** Kreisfoermige Zone in relativen Rasterkoordinaten; Randzellen sind eingeschlossen. */
 export function isCellInsidePersistentBaseZone(
   relativeGridX: number,
   relativeGridY: number,
-  radiusCells: number,
+  areaOrRadius: PersistentBaseBuildAreaInput,
 ): boolean {
+  if (typeof areaOrRadius !== 'number') {
+    return isCellInsidePersistentBaseBuildArea(relativeGridX, relativeGridY, areaOrRadius);
+  }
+  const radiusCells = areaOrRadius;
   if (!Number.isFinite(relativeGridX) || !Number.isFinite(relativeGridY)
     || !Number.isFinite(radiusCells) || radiusCells < 0) return false;
   const dx = relativeGridX;
@@ -22,12 +33,12 @@ export function isAbsoluteCellInsidePersistentBaseZone(
   gridX: number,
   gridY: number,
   anchor: PersistentBaseAnchor,
-  radiusCells: number,
+  areaOrRadius: PersistentBaseBuildAreaInput,
 ): boolean {
   return isCellInsidePersistentBaseZone(
     gridX - anchor.gridX,
     gridY - anchor.gridY,
-    radiusCells,
+    areaOrRadius,
   );
 }
 
@@ -36,13 +47,13 @@ export function isPersistentFootprintInsideZone(
   originGridY: number,
   footprint: readonly { readonly dx: number; readonly dy: number }[],
   anchor: PersistentBaseAnchor,
-  radiusCells: number,
+  areaOrRadius: PersistentBaseBuildAreaInput,
 ): boolean {
   return footprint.every((cell) => isAbsoluteCellInsidePersistentBaseZone(
     originGridX + cell.dx,
     originGridY + cell.dy,
     anchor,
-    radiusCells,
+    areaOrRadius,
   ));
 }
 

@@ -1,5 +1,8 @@
 import type { PersistentBaseAnchor, PersistentBaseState, PersistentConstruction, PersistentToolKind } from './PersistentBaseTypes';
-import { isPersistentFootprintInsideZone } from './PersistentBaseZone';
+import {
+  isPersistentFootprintInsideZone,
+  type PersistentBaseBuildAreaInput,
+} from './PersistentBaseZone';
 import { normalizeConstructionId } from '../config/coopDefenseConstructions';
 
 export interface PersistentRestoreToolDefinition {
@@ -45,7 +48,9 @@ export interface PersistentRestorePlan {
 export interface PersistentRestorePlannerInput {
   readonly state: PersistentBaseState;
   readonly anchor: PersistentBaseAnchor;
-  readonly activeRadiusCells: number;
+  /** Historischer Radiusweg; neue Aufrufer koennen eine feste oder radiusbasierte Area uebergeben. */
+  readonly activeRadiusCells?: number;
+  readonly activeBuildArea?: PersistentBaseBuildAreaInput;
   readonly capacityUsed: number;
   readonly capacityMax: number;
   readonly tools: readonly PersistentRestoreToolDefinition[];
@@ -91,7 +96,7 @@ export function planPersistentBaseRestore(input: PersistentRestorePlannerInput):
       input.anchor.gridY + blueprint.relativeGridY,
       tool.footprint,
       input.anchor,
-      input.activeRadiusCells,
+      input.activeBuildArea ?? input.activeRadiusCells ?? 0,
     )) {
       dormant.push({ blueprint, reason: 'outside-zone' });
       continue;

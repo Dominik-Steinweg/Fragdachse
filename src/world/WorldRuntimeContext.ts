@@ -2,6 +2,10 @@ import { resolveWorldBases, type BaseSpec } from '../arena/BaseRegistry';
 import type { ArenaMetricsProfile } from '../config';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
+import {
+  resolvePersistentBaseBuildArea,
+  type PersistentBaseBuildArea,
+} from '../persistentBase/PersistentBaseCore';
 import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
 import { isProceduralWorldDefinitionId, type WorldDescriptor } from './WorldDescriptor';
 import { resolveWorldMetrics, type WorldMetrics } from './WorldMetrics';
@@ -36,8 +40,10 @@ export interface WorldPersistentBaseSite {
   /** Die Basis dieser World, die als Anker dient. */
   readonly base: BaseSpec;
   readonly anchor: PersistentBaseAnchor;
-  /** Host-autoritativer aktiver Radius dieser Instanz. */
+  /** Host-autoritativer Progressionsradius; relevant fuer radiusbasierte Area-Regeln. */
   readonly radiusCells: number;
+  /** Aktuelle Regel fuer die bebaubare Flaeche dieser Instanz. */
+  readonly buildArea: PersistentBaseBuildArea;
 }
 
 export interface WorldRuntimeContextInput {
@@ -126,5 +132,9 @@ function resolvePersistentBaseSite(
   }
   const base = bases.find((candidate) => candidate.id === baseId);
   if (!base) return null;
-  return { baseId, base, anchor: getPersistentBaseAnchor(base), radiusCells };
+  const buildArea = resolvePersistentBaseBuildArea(
+    definition.persistentBaseSite?.buildArea,
+    radiusCells,
+  );
+  return { baseId, base, anchor: getPersistentBaseAnchor(base), radiusCells, buildArea };
 }

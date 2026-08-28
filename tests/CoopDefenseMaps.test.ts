@@ -79,14 +79,14 @@ describe('Coop defense map progression', () => {
     expect(anchor18 && isPersistentBaseReservationCell(36, 20, [anchor18])).toBe(true);
     expect(anchor18 && isPersistentBaseReservationCell(37, 20, [anchor18])).toBe(false);
 
-    // Die Kernzellen bilden das nach links geoeffnete U, nicht ein Rechteck.
-    expect(anchor18!.cells).toHaveLength(13);
+    // Die Kernzellen bilden die vierseitig offene Kernform, nicht ein Rechteck.
+    expect(anchor18!.cells).toHaveLength(12);
     expect(anchor18!.region).toEqual({
       minGridX: 22, maxGridX: 26, minGridY: 18, maxGridY: 22,
     });
-    // Der Eingang liegt links: die drei mittleren Zellen der linken Spalte bleiben frei.
-    for (const gridY of [19, 20, 21]) {
-      expect(anchor18!.cells.some((cell) => cell.gridX === 22 && cell.gridY === gridY)).toBe(false);
+    // Die vier mittleren Randzellen bleiben als je ein Rasterfeld grosser Eingang frei.
+    for (const [gridX, gridY] of [[24, 18], [22, 20], [26, 20], [24, 22]]) {
+      expect(anchor18!.cells.some((cell) => cell.gridX === gridX && cell.gridY === gridY)).toBe(false);
     }
 
     // Der Kern steht nach der Normalisierung als gewoehnliche Basis in `bases`; die Rohkarte

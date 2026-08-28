@@ -25,7 +25,9 @@ import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
 import {
   buildPersistentBaseCoreBaseConfig,
+  isPersistentBaseBuildArea,
   isPersistentBaseOrientation,
+  type PersistentBaseBuildArea,
   type PersistentBaseOrientation,
 } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
@@ -656,8 +658,9 @@ export interface CoopDefenseMapTutorialStepConfig {
 /**
  * Die persistente Basisstelle einer Map.
  *
- * Sie beschreibt ausschliesslich *wo* der Basiskern steht, nie *wie* er aussieht: Seine Form
- * kommt aus {@link import('../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}.
+ * Sie beschreibt ausschliesslich *wo* der Basiskern steht und welche Baubereich-Regel gilt, nie
+ * einzelne Kernzellen: Seine Form kommt aus
+ * {@link import('../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}.
  * Deshalb traegt keine Map eigene Basiszellen, und zwei Maps koennen ihre Basisdefinition nicht
  * auseinanderlaufen lassen. Die Normalisierung erzeugt aus diesem Block den `bases`-Eintrag mit
  * der angegebenen `baseId`; ein gleichnamiger authored Eintrag ist ein Fehler.
@@ -666,8 +669,10 @@ export interface CoopDefenseMapPersistentBaseConfig {
   readonly baseId: string;
   /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 5x5-Grundflaeche. */
   readonly anchor: PersistentBaseAnchor;
-  /** Ohne Angabe die kanonische, nach links geoeffnete Ausrichtung. */
+  /** Ohne Angabe die kanonische Ausrichtung. */
   readonly orientation?: PersistentBaseOrientation;
+  /** Ohne Angabe der aktuelle feste 3x3-Innenhof; spaetere Stufen koennen einen Radius nutzen. */
+  readonly buildArea?: PersistentBaseBuildArea;
   readonly hpMax: number;
 }
 
@@ -1287,6 +1292,9 @@ function normalizePersistentBaseConfig(
   if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an unknown orientation`);
   }
+  if (config.buildArea !== undefined && !isPersistentBaseBuildArea(config.buildArea)) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an invalid build area`);
+  }
   if (!Number.isFinite(config.hpMax) || config.hpMax <= 0) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs a positive hpMax`);
   }
@@ -1306,6 +1314,7 @@ function normalizePersistentBaseConfig(
     baseId,
     anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
     ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
+    ...(config.buildArea === undefined ? {} : { buildArea: config.buildArea }),
     hpMax: config.hpMax,
   };
   return { site, base: normalizeBaseConfig(buildPersistentBaseCoreBaseConfig(site)) };

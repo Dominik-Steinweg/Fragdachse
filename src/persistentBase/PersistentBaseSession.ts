@@ -9,11 +9,20 @@ import {
   type PersistentToolRef,
   normalizePersistentToolRef,
 } from './PersistentBaseTypes';
-import { isPersistentFootprintInsideZone } from './PersistentBaseZone';
+import {
+  isPersistentFootprintInsideZone,
+  type PersistentBaseBuildAreaInput,
+} from './PersistentBaseZone';
+import {
+  DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+  type PersistentBaseBuildArea,
+} from './PersistentBaseCore';
 
 export interface PersistentBaseSessionOptions {
   readonly anchor: PersistentBaseAnchor;
-  readonly activeRadiusCells: number;
+  /** Historischer Radiusweg; neue World-Sites uebergeben `activeBuildArea`. */
+  readonly activeRadiusCells?: number;
+  readonly activeBuildArea?: PersistentBaseBuildArea;
   readonly ownerId: string;
 }
 
@@ -25,6 +34,7 @@ export class PersistentBaseSession {
   private readonly baseline: PersistentBaseState;
   private anchor: PersistentBaseAnchor;
   private activeRadiusCells: number;
+  private activeBuildArea: PersistentBaseBuildAreaInput;
   private readonly ownerId: string;
   private readonly baselineRuntimeIds = new Map<string, number>();
   private readonly runtimeBlueprints = new Map<number, PersistentConstruction>();
@@ -40,7 +50,12 @@ export class PersistentBaseSession {
   ) {
     this.baseline = clonePersistentBaseState(committedState);
     this.anchor = { ...options.anchor };
-    this.activeRadiusCells = options.activeRadiusCells;
+    this.activeRadiusCells = options.activeRadiusCells
+      ?? (options.activeBuildArea?.kind === 'radius' ? options.activeBuildArea.radiusCells : 1);
+    this.activeBuildArea = options.activeBuildArea
+      ?? (options.activeRadiusCells === undefined
+        ? DEFAULT_PERSISTENT_BASE_BUILD_AREA
+        : { kind: 'radius', radiusCells: options.activeRadiusCells });
     this.ownerId = options.ownerId;
     this.nextPlacementOrder = this.baseline.constructions.reduce(
       (max, entry) => Math.max(max, entry.placementOrder),
@@ -69,9 +84,18 @@ export class PersistentBaseSession {
     return this.activeRadiusCells;
   }
 
-  rebindArena(anchor: PersistentBaseAnchor, activeRadiusCells: number): void {
+  get buildArea(): PersistentBaseBuildAreaInput {
+    return this.activeBuildArea;
+  }
+
+  rebindArena(
+    anchor: PersistentBaseAnchor,
+    activeRadiusCells: number,
+    activeBuildArea?: PersistentBaseBuildArea,
+  ): void {
     this.anchor = { ...anchor };
     this.activeRadiusCells = activeRadiusCells;
+    this.activeBuildArea = activeBuildArea ?? { kind: 'radius', radiusCells: activeRadiusCells };
   }
 
   registerRestored(blueprint: PersistentConstruction, runtimeId: number): void {
@@ -94,12 +118,12 @@ export class PersistentBaseSession {
     if (runtimeRock.ownerId !== this.ownerId
       || runtimeRock.expiresAt > 0
       || !isPersistentFootprintInsideZone(
-      runtimeRock.gridX,
-      runtimeRock.gridY,
-      footprint,
-      this.anchor,
-      this.activeRadiusCells,
-    )) return null;
+        runtimeRock.gridX,
+        runtimeRock.gridY,
+        footprint,
+        this.anchor,
+        this.activeBuildArea,
+      )) return null;
 
     const placementOrder = this.nextPlacementOrder++;
     let persistentId = `pb-${this.baseline.revision + 1}-${placementOrder}`;

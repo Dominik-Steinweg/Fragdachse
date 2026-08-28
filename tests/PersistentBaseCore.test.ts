@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CANONICAL_PERSISTENT_BASE_CORE_CELLS,
+  DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
   PERSISTENT_BASE_CORE_SIZE_CELLS,
   PERSISTENT_BASE_ORIENTATIONS,
@@ -8,6 +9,8 @@ import {
   getCanonicalPersistentBaseCoreCells,
   getPersistentBaseCoreOrigin,
   getPersistentBaseCoreSurfaceOffsets,
+  isCellInsidePersistentBaseBuildArea,
+  isPersistentBaseBuildArea,
   isPersistentBaseOrientation,
   resolvePersistentBaseCoreCells,
   type PersistentBaseCellDomain,
@@ -56,12 +59,12 @@ describe('PersistentBaseCore – kanonische Form', () => {
   });
 
   it('teilt die Flaeche in feste Basis, Innenhof und Eingang', () => {
-    expect(getCanonicalPersistentBaseCoreCells('base-surface')).toHaveLength(13);
+    expect(getCanonicalPersistentBaseCoreCells('base-surface')).toHaveLength(12);
     expect(getCanonicalPersistentBaseCoreCells('courtyard-build-area')).toHaveLength(9);
-    expect(getCanonicalPersistentBaseCoreCells('entrance')).toHaveLength(3);
+    expect(getCanonicalPersistentBaseCoreCells('entrance')).toHaveLength(4);
   });
 
-  it('bildet ein nach links geoeffnetes U', () => {
+  it('bildet vier mittige, ein Rasterfeld grosse Eingaenge', () => {
     const rows: string[] = [];
     for (let relativeGridY = -2; relativeGridY <= 2; relativeGridY += 1) {
       let row = '';
@@ -72,12 +75,31 @@ describe('PersistentBaseCore – kanonische Form', () => {
       rows.push(row);
     }
     expect(rows).toEqual([
-      'BBBBB',
-      'EHHHB',
-      'EHHHB',
-      'EHHHB',
-      'BBBBB',
+      'BBEBB',
+      'BHHHB',
+      'EHHHE',
+      'BHHHB',
+      'BBEBB',
     ]);
+  });
+
+  it('beschreibt den aktuellen Baubereich als genaues 3x3-Quadrat und erlaubt spaeter Radien', () => {
+    expect(DEFAULT_PERSISTENT_BASE_BUILD_AREA).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(isPersistentBaseBuildArea(DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
+    expect(isPersistentBaseBuildArea({ kind: 'square', sizeCells: 4 })).toBe(false);
+    expect(isPersistentBaseBuildArea({ kind: 'radius', radiusCells: 5 })).toBe(true);
+
+    for (let relativeGridY = -2; relativeGridY <= 2; relativeGridY += 1) {
+      for (let relativeGridX = -2; relativeGridX <= 2; relativeGridX += 1) {
+        const inside = isCellInsidePersistentBaseBuildArea(
+          relativeGridX,
+          relativeGridY,
+          DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+        );
+        expect(inside).toBe(Math.abs(relativeGridX) <= 1 && Math.abs(relativeGridY) <= 1);
+      }
+    }
+    expect(isCellInsidePersistentBaseBuildArea(3, 4, { kind: 'radius', radiusCells: 5 })).toBe(true);
   });
 });
 
@@ -97,9 +119,9 @@ describe('PersistentBaseCore – Ausrichtung', () => {
       expect(cells).toHaveLength(25);
       // Die Domainverteilung ist eine Eigenschaft der Form, nicht ihrer Lage im Raum.
       for (const [domain, count] of [
-        ['base-surface', 13],
+        ['base-surface', 12],
         ['courtyard-build-area', 9],
-        ['entrance', 3],
+        ['entrance', 4],
       ] as const) {
         expect(cells.filter((cell) => cell.domain === domain), orientation).toHaveLength(count);
       }
@@ -109,15 +131,19 @@ describe('PersistentBaseCore – Ausrichtung', () => {
     }
   });
 
-  it('legt den Eingang je Ausrichtung auf die passende Seite', () => {
+  it('haelt die vier mittigen Eingangsseiten je Ausrichtung frei', () => {
     const anchor = { gridX: 40, gridY: 40 };
     const entranceOf = (orientation: typeof PERSISTENT_BASE_ORIENTATIONS[number]) =>
       resolvePersistentBaseCoreCells(anchor, orientation).filter((cell) => cell.domain === 'entrance');
 
-    expect(entranceOf('open-left').every((cell) => cell.gridX === 38)).toBe(true);
-    expect(entranceOf('open-right').every((cell) => cell.gridX === 42)).toBe(true);
-    expect(entranceOf('open-up').every((cell) => cell.gridY === 38)).toBe(true);
-    expect(entranceOf('open-down').every((cell) => cell.gridY === 42)).toBe(true);
+    for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
+      expect(entranceOf(orientation).map((cell) => `${cell.gridX}:${cell.gridY}`).sort()).toEqual([
+        '38:40',
+        '40:38',
+        '40:42',
+        '42:40',
+      ]);
+    }
   });
 });
 
@@ -136,7 +162,7 @@ describe('PersistentBaseCore – dieselbe Basis an verschiedenen Ankern', () => 
     expect(getPersistentBaseCoreOrigin({ gridX: 24, gridY: 20 })).toEqual({ gridX: 22, gridY: 18 });
     // Die Shape-Offsets sind auf (0,0) normalisiert, damit sie zum Basisvertrag passen.
     const offsets = getPersistentBaseCoreSurfaceOffsets();
-    expect(offsets).toHaveLength(13);
+    expect(offsets).toHaveLength(12);
     expect(Math.min(...offsets.map((offset) => offset.gridX))).toBe(0);
     expect(Math.min(...offsets.map((offset) => offset.gridY))).toBe(0);
     expect(Math.max(...offsets.map((offset) => offset.gridX))).toBe(4);
@@ -176,7 +202,7 @@ describe('PersistentBaseCore – Uebergang in den Basisvertrag', () => {
     // Genau daran haengt, dass anker-relative Konstruktionen jede Map ueberleben.
     expect(resolved.region).toEqual({ minGridX: 28, maxGridX: 32, minGridY: 14, maxGridY: 18 });
     expect(getPersistentBaseAnchor(resolved)).toEqual(site.anchor);
-    expect(resolved.cells).toHaveLength(13);
+    expect(resolved.cells).toHaveLength(12);
     expect(resolved.persistentReservationRadiusCells).toBeGreaterThan(0);
   });
 

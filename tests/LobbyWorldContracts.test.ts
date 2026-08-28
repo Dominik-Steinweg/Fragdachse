@@ -253,8 +253,8 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       gridY: LOBBY_SPAWN_FOCUS_CELL.gridY,
     });
     expect(isValidPersistentBaseSite(world.persistentBaseSite)).toBe(true);
-    // Das nach links geoeffnete U: 13 feste Zellen, der Hof bleibt begehbar.
-    expect(world.bases[0]?.cells).toHaveLength(13);
+    // Die vierseitig offene Kernform: 12 feste Zellen, der Hof bleibt begehbar.
+    expect(world.bases[0]?.cells).toHaveLength(12);
     expect(world.bases[0]?.cells.some((cell) => (
       cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY
     ))).toBe(false);

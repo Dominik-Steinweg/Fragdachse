@@ -39,7 +39,7 @@ Die Lobby ist eine normale authored World mit world:lobby. Sie hat keine authore
 
 ## Persistent World-Sites
 
-Eine persistente Base-Site ist World-Konfiguration, während der veränderliche Bauzustand in der lokalen Progress-Grenze liegt. Sie trägt keine Geometrie: Die Form des Basiskerns ist kanonisch und mapunabhängig, die World steuert nur Anker, Ausrichtung und Grunddauerhaftigkeit bei. Die zugehörige Basis wird daraus erzeugt und darf nicht zusätzlich authored sein; Radius, Clearance und Arena-Grenzen werden durch den aktuellen Validator geprüft. Konkrete Base-IDs gehören in authored Daten und Tests, nicht in diese Übersicht.
+Eine persistente Base-Site ist World-Konfiguration, während der veränderliche Bauzustand in der lokalen Progress-Grenze liegt. Sie trägt keine einzelnen Kernzellen: Die Form des Basiskerns ist kanonisch und mapunabhängig, die World steuert Anker, Ausrichtung, Baubereich-Regel und Grunddauerhaftigkeit bei. Der aktuelle Default ist ein festes 3x3-Quadrat; eine spätere Ausbaustufe kann dieselbe Regel radiusbasiert auflösen. Die zugehörige Basis wird daraus erzeugt und darf nicht zusätzlich authored sein; Radius, Clearance und Arena-Grenzen werden durch den aktuellen Validator geprüft. Konkrete Base-IDs gehören in authored Daten und Tests, nicht in diese Übersicht.
 
 Ob eine World-Instanz ihren Basiskern tatsächlich trägt, ist keine Aussage der Definition, sondern ein host-autoritativer World-Parameter. Eine Definition beschreibt, was die World sein kann; die Progression entscheidet, was der Spieler besitzt. Der Kern gehört dabei der World, die Konstruktionen darauf der Activity: Eine World ohne Activity materialisiert ihn, führt aber weder Working Copy noch Commit noch Schadensmodell.
 

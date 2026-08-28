@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import { isCellInsidePersistentBaseZone } from '../../persistentBase/PersistentBaseZone';
+import { getPersistentBaseBuildAreaExtentCells } from '../../persistentBase/PersistentBaseCore';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import type { WorldMetrics } from '../../world/WorldMetrics';
@@ -20,12 +21,14 @@ export class PersistentBaseVisuals {
     metrics: WorldMetrics | null,
     showOverlay: boolean,
   ): void {
-    if (!site || !metrics || !Number.isFinite(site.radiusCells) || site.radiusCells < 0) {
+    if (!site || !metrics) {
       this.clear();
       return;
     }
-    const { anchor, radiusCells } = site;
-    const zoneKey = `${anchor.gridX}:${anchor.gridY}:${radiusCells}`;
+    const { anchor, buildArea } = site;
+    const zoneKey = buildArea.kind === 'square'
+      ? `${anchor.gridX}:${anchor.gridY}:square:${buildArea.sizeCells}`
+      : `${anchor.gridX}:${anchor.gridY}:radius:${buildArea.radiusCells}`;
 
     const overlayKey = [
       zoneKey,
@@ -37,7 +40,7 @@ export class PersistentBaseVisuals {
     ].join(':');
     if (overlayKey !== this.lastOverlayKey) {
       this.overlay.clear();
-      if (showOverlay) this.drawOverlay(anchor, radiusCells, metrics);
+      if (showOverlay) this.drawOverlay(anchor, buildArea, metrics);
       this.overlay.setVisible(showOverlay);
       this.lastOverlayKey = overlayKey;
     }
@@ -55,15 +58,15 @@ export class PersistentBaseVisuals {
 
   private drawOverlay(
     anchor: { gridX: number; gridY: number },
-    radiusCells: number,
+    buildArea: WorldPersistentBaseSite['buildArea'],
     metrics: WorldMetrics,
   ): void {
-    const radius = Math.ceil(radiusCells);
+    const extent = getPersistentBaseBuildAreaExtentCells(buildArea);
     this.overlay.fillStyle(0x8fda83, 0.08);
     this.overlay.lineStyle(1, 0xb4ee9d, 0.42);
-    for (let gridY = Math.max(0, anchor.gridY - radius); gridY <= Math.min(metrics.gridRows - 1, anchor.gridY + radius); gridY += 1) {
-      for (let gridX = Math.max(0, anchor.gridX - radius); gridX <= Math.min(metrics.gridCols - 1, anchor.gridX + radius); gridX += 1) {
-        if (!isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, radiusCells)) continue;
+    for (let gridY = Math.max(0, anchor.gridY - extent); gridY <= Math.min(metrics.gridRows - 1, anchor.gridY + extent); gridY += 1) {
+      for (let gridX = Math.max(0, anchor.gridX - extent); gridX <= Math.min(metrics.gridCols - 1, anchor.gridX + extent); gridX += 1) {
+        if (!isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, buildArea)) continue;
         const x = metrics.offsetX + gridX * CELL_SIZE;
         const y = metrics.offsetY + gridY * CELL_SIZE;
         this.overlay.fillRect(x, y, CELL_SIZE, CELL_SIZE);
