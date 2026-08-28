@@ -1286,6 +1286,9 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || playerId === bridge.getLocalPlayerId()) return;
     const runtimeIds = this.persistentBaseContributions.removeOwner(this.resolveOwnerId(playerId));
     this.ingestedContributionRevisions.delete(playerId);
+    // Mit dem Spieler faellt sein Anspruch auf die Besitzeridentitaet; ein spaeterer Beitritt
+    // darf sie wieder fuehren.
+    this.persistentBaseOwnerByPlayerId.delete(playerId);
     let removedCount = 0;
     for (const runtimeId of runtimeIds) {
       const removed = this.ctx.placementSystem?.removeRock(runtimeId);
@@ -1310,6 +1313,9 @@ export class ArenaLifecycleCoordinator {
         source: 'placeable_rock',
       });
     }
+    // Mit dem Verdraenger faellt der Grund: Ein zuvor unterdrueckter Blueprint eines anderen
+    // Besitzers darf jetzt wieder erscheinen.
+    this.hostRefreshPersistentBaseComposite();
   }
 
   /** Gemeinsamer Entkopplungspfad fuer Spectator, Disconnect und Arena-Teardown. */
@@ -4295,6 +4301,11 @@ export class ArenaLifecycleCoordinator {
         ? getStoredPersonalBaseContribution()
         : bridge.getPlayerPersistentBaseContribution(playerId);
       if (!offered) continue;
+      // Eine Besitzeridentitaet gehoert in diesem Raum genau einem Spieler. Zwei Spieler mit
+      // derselben - geklonter Speicherstand oder Manipulation - wuerden sonst gegenseitig ihre
+      // Beitraege ueberschreiben; wer die Identitaet des Hosts uebernaehme, koennte ihm sogar
+      // seinen eigenen Save ueberschreiben lassen. Der erste Anspruch gilt, jeder weitere nicht.
+      if (!this.canClaimPersistentBaseOwnerId(playerId, offered.ownerId)) continue;
       if (this.ingestedContributionRevisions.get(playerId) === offered.revision) continue;
       if (!this.persistentBaseContributions.offerContribution(offered)) continue;
       this.ingestedContributionRevisions.set(playerId, offered.revision);
@@ -4308,6 +4319,18 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
+  /**
+   * Ob dieser Spieler die angebotene Besitzeridentitaet in diesem Raum fuehren darf.
+   *
+   * Die Identitaet des Hosts ist dabei gesetzt, bevor irgendein Gast etwas anbieten kann: Sie
+   * kommt aus dem lokalen Profil und nicht aus dem Netz.
+   */
+  private canClaimPersistentBaseOwnerId(playerId: string, ownerId: string): boolean {
+    if (playerId !== bridge.getLocalPlayerId() && ownerId === getStoredLocalOwnerId()) return false;
+    const claimedBy = this.resolvePlayerIdForOwner(ownerId);
+    return claimedBy === null || claimedBy === playerId;
+  }
+
   /** Die dauerhafte Besitzeridentitaet hinter einer Raum-Spieler-ID; leer, wenn keine bekannt ist. */
   private resolveOwnerId(playerId: string): string {
     if (playerId === bridge.getLocalPlayerId()) return getStoredLocalOwnerId();
@@ -4316,11 +4339,17 @@ export class ArenaLifecycleCoordinator {
       ?? '';
   }
 
-  /** Die Raum-Spieler-ID hinter einer Besitzeridentitaet; sie bestimmt Farbe und Berechtigungen. */
+  /**
+   * Die Raum-Spieler-ID hinter einer Besitzeridentitaet; sie bestimmt Farbe und Berechtigungen.
+   *
+   * Nur der lokale Spieler leitet seine Identitaet aus dem eigenen Profil ab; jede andere kommt
+   * aus einem bereits angenommenen Angebot. Beides bleibt getrennt, damit eine Spieler-ID nie
+   * aus einer Besitzeridentitaet erraten wird.
+   */
   private resolvePlayerIdForOwner(ownerId: string): string | null {
     if (ownerId === getStoredLocalOwnerId()) return bridge.getLocalPlayerId();
     for (const [playerId, candidate] of this.persistentBaseOwnerByPlayerId) {
-      if (candidate === ownerId) return playerId;
+      if (candidate === ownerId && playerId !== bridge.getLocalPlayerId()) return playerId;
     }
     return null;
   }
@@ -4370,6 +4399,16 @@ export class ArenaLifecycleCoordinator {
       return tools;
     };
 
+    // Zellen, die bereits von persoenlichen Konstruktionen dieses Composites belegt sind.
+    const materializedCells = new Set<string>();
+    for (const binding of store.getRuntimeBindings()) {
+      const tool = resolveOwnerTools(binding.ownerId).get(binding.blueprint.tool.id);
+      const footprint = tool && tool.footprint.length > 0 ? tool.footprint : [{ dx: 0, dy: 0 }];
+      const gridX = site.anchor.gridX + binding.blueprint.relativeGridX;
+      const gridY = site.anchor.gridY + binding.blueprint.relativeGridY;
+      for (const offset of footprint) materializedCells.add(cellKey(gridX + offset.dx, gridY + offset.dy));
+    }
+
     const capacityMaxByOwner = new Map<string, number>();
     for (const ownerId of store.ownerIds) {
       const playerId = this.resolvePlayerIdForOwner(ownerId);
@@ -4393,16 +4432,41 @@ export class ArenaLifecycleCoordinator {
         };
       },
       capacityMaxByOwner,
-      isCellBlocked: (gridX, gridY) => !this.ctx.placementSystem!.canMaterializeCells(
-        [{ dx: 0, dy: 0 }],
-        gridX,
-        gridY,
-      ),
+      // Bereits materialisierte persoenliche Konstruktionen belegen ihre Zellen im
+      // PlacementSystem. Wuerde der Merge sie als statische Kollision lesen, kollidierte jede
+      // von ihnen bei einem erneuten Lauf mit sich selbst - und keine Prioritaet koennte je
+      // greifen. Der Merge entscheidet deshalb ueber diese Zellen selbst.
+      isCellBlocked: (gridX, gridY) => !materializedCells.has(cellKey(gridX, gridY))
+        && !this.ctx.placementSystem!.canMaterializeCells([{ dx: 0, dy: 0 }], gridX, gridY),
     });
 
+    // Was der Merge nicht mehr traegt, verlaesst die Welt: Ein spaeter beitretender Spieler mit
+    // hoeherer Prioritaet verdraengt sonst nichts, und ein Blueprint bliebe stehen, obwohl das
+    // Composite ihn nicht mehr enthaelt. Der Besitz bleibt dabei ausdruecklich unberuehrt.
+    const activeKeys = new Set(result.active.map(
+      (entry) => `${entry.ownerId} ${entry.blueprint.persistentId}`,
+    ));
+    let dematerializedCount = 0;
+    for (const binding of store.getRuntimeBindings()) {
+      if (activeKeys.has(`${binding.ownerId} ${binding.blueprint.persistentId}`)) continue;
+      // Erst die Bindung loesen, dann das Objekt entfernen: Der gemeinsame Abbaupfad wuerde den
+      // Blueprint sonst als Abriss werten und den Besitz loeschen.
+      store.releaseRuntimeBinding(binding.runtimeId);
+      const removed = this.ctx.placementSystem.removeRock(binding.runtimeId);
+      if (!removed) continue;
+      this.releasePlaceableRuntime(removed, false);
+      dematerializedCount += 1;
+    }
+    if (dematerializedCount > 0) {
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeables_batch_removed',
+        source: 'placeable_rock',
+      });
+    }
+
     for (const entry of result.active) {
-      // Was bereits steht, bleibt stehen: Ein erneuter Merge nach einem Beitritt darf eine
-      // laufende Mission nicht neu aufbauen.
+      // Was bereits steht, bleibt stehen: Ein erneuter Merge darf eine laufende Mission nicht
+      // neu aufbauen.
       if (store.isMaterialized(entry.ownerId, entry.blueprint.persistentId)) continue;
       const playerId = this.resolvePlayerIdForOwner(entry.ownerId);
       const tool = resolveOwnerTools(entry.ownerId).get(entry.blueprint.tool.id);
@@ -5511,6 +5575,16 @@ export class ArenaLifecycleCoordinator {
     // Abriss gibt den Besitz auf. Ohne diesen Schritt bliebe der Blueprint als dormant stehen und
     // erschiene bei der naechsten Mission wieder - der Spieler koennte nichts dauerhaft abbauen.
     this.ctx.persistentBaseContributions?.removeByRuntimeId(removed.id);
+    this.releasePlaceableRuntime(removed, playDust);
+  }
+
+  /**
+   * Raeumt das Runtime-Objekt einer Konstruktion ab, ohne ihren Besitz anzutasten.
+   *
+   * Der Unterschied zum Abriss ist der ganze Punkt: Eine durch einen Konflikt verdraengte
+   * Konstruktion verschwindet aus der Welt, bleibt aber im persoenlichen Beitrag ihres Besitzers.
+   */
+  private releasePlaceableRuntime(removed: SyncedPlaceableRock, playDust: boolean): void {
     this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
     this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
     if (removed.kind === 'pedestal') {
@@ -5766,6 +5840,11 @@ export class ArenaLifecycleCoordinator {
  * Rein und ohne Weltzustand: Der Merge entscheidet damit fuer jeden Besitzer nach dessen eigenen
  * Regeln, ohne dass die Tool-, Klassen- und Loadout-Semantik hier neu definiert wuerde.
  */
+/** Rasterschluessel fuer Zellmengen des Composites. */
+function cellKey(gridX: number, gridY: number): string {
+  return `${gridX}:${gridY}`;
+}
+
 function resolveCompositeToolUnavailability(
   tool: PersistentRestoreToolDefinition,
 ): PersistentCompositeConflictReason | undefined {

@@ -84,6 +84,17 @@ describe('PersistentBaseContributionStore – Angebot und Revision', () => {
     expect(store.offerContribution(contribution('owner-a', [blueprint('new', 0)], 5))).toBe(true);
   });
 
+  it('laesst dieselbe Revision keinen abweichenden Inhalt bedeuten', () => {
+    const store = new PersistentBaseContributionStore();
+    store.offerContribution(contribution('owner-a', [blueprint('original', 0)], 5));
+
+    // Sonst koennte ein Client einen bereits akzeptierten Stand still austauschen, ohne dass die
+    // Revision es je anzeigen wuerde.
+    expect(store.offerContribution(contribution('owner-a', [blueprint('swapped', 1)], 5))).toBe(false);
+    expect(store.getContribution('owner-a')?.constructions.map((entry) => entry.persistentId))
+      .toEqual(['original']);
+  });
+
   it('nimmt einen waehrend der Mission beitretenden Spieler auf, ohne laufende Staende zu ersetzen', () => {
     const store = new PersistentBaseContributionStore();
     store.offerContribution(contribution('owner-a', [blueprint('a-1', 0)]));
@@ -161,6 +172,22 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
 
     const confirmed = store.commit(() => false);
     expect(confirmed[0]?.constructions.map((entry) => entry.persistentId)).toEqual(['dormant']);
+  });
+
+  it('gibt beim Verdraengen nur die Runtime-Bindung auf, nicht den Besitz', () => {
+    const store = new PersistentBaseContributionStore();
+    store.offerContribution(contribution('owner-a', [blueprint('suppressed', 0)]));
+    store.beginMission();
+    store.registerRestored('owner-a', blueprint('suppressed', 0), 21);
+
+    expect(store.getRuntimeBindings().map((entry) => entry.runtimeId)).toEqual([21]);
+    expect(store.releaseRuntimeBinding(21)).toBe(true);
+    expect(store.releaseRuntimeBinding(21)).toBe(false);
+    expect(store.isMaterialized('owner-a', 'suppressed')).toBe(false);
+
+    // Der Blueprint ueberlebt die Verdraengung und wird bei Sieg unveraendert fortgeschrieben.
+    expect(store.commit(() => true)[0]?.constructions.map((entry) => entry.persistentId))
+      .toEqual(['suppressed']);
   });
 
   it('unterscheidet Abriss von Konflikt', () => {

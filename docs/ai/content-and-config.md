@@ -29,7 +29,7 @@ Definitionen werden über Registry- und Loader-Grenzen aufgelöst. Wire- und Rea
 
 ## Adapter für bestehendes Authoring
 
-Der [Coop-Defense-Adapter](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) nimmt den bereits normalisierten und validierten Map-Vertrag entgegen und projiziert ihn in World- und Activity-Besitz beziehungsweise wieder zurück. Er führt selbst keine fachliche Normalisierung durch, materialisiert keine Defaults und ersetzt keine Validierung; die Round-Trip-Tests schützen die verlustfreie Feldzuordnung. `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Bereits normalisierte Configs dürfen nicht erneut normalisiert werden.
+Der [Coop-Defense-Adapter](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) nimmt den bereits normalisierten und validierten Map-Vertrag entgegen und projiziert ihn in World- und Activity-Verträge beziehungsweise wieder zurück. Er führt selbst keine fachliche Normalisierung durch, materialisiert keine Defaults und ersetzt keine Validierung; die Round-Trip-Tests schützen die verlustfreie Feldzuordnung. `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Bereits normalisierte Configs dürfen nicht erneut normalisiert werden.
 
 Besonders wichtig ist die Base-Trennung: dauerhafte Geometrie, Fraktion, Rolle, Anker und Spawn-Zentrum sind World-Inhalt; Missionsfaktoren, Dormancy und Power-Up-Flächen sind Activity-Overlay. Neue Felder werden dem fachlichen Owner zugeordnet, nicht einfach in beide Modelle kopiert.
 
@@ -39,9 +39,9 @@ Die Lobby ist eine normale authored World mit world:lobby. Sie hat keine authore
 
 ## Persistent World-Sites
 
-Eine persistente Base-Site ist World-Konfiguration, während der veränderliche Bauzustand in der lokalen Progress-Grenze liegt. Sie trägt keine einzelnen Kernzellen: Die Form des Basiskerns ist kanonisch und mapunabhängig, die World steuert Anker, Ausrichtung, Baubereich-Regel und Grunddauerhaftigkeit bei. Der aktuelle Default ist ein festes 3x3-Quadrat; eine spätere Ausbaustufe kann dieselbe Regel radiusbasiert auflösen. Die zugehörige Basis wird daraus erzeugt und darf nicht zusätzlich authored sein; Radius, Clearance und Arena-Grenzen werden durch den aktuellen Validator geprüft. Konkrete Base-IDs gehören in authored Daten und Tests, nicht in diese Übersicht.
+Eine persistente Base-Site ist World-Inhalt: Die World bindet Site, kanonischen Basiskern, Lage, Ausrichtung, Baubereich-Regel, Grunddauerhaftigkeit und ihre World-Geometrie. Sie trägt keine einzelnen persönlichen Konstruktionen. Der Build-Area-Vertrag unterstützt `square` und `radius`; ohne explizite authored Regel gilt der definierte Default. Die zugehörige Basis wird aus der Site erzeugt und darf nicht zusätzlich authored sein; Radius, Clearance und Arena-Grenzen werden durch den Validator geprüft. Konkrete Base-IDs gehören in authored Daten und Tests, nicht in diese Übersicht.
 
-Ob eine World-Instanz ihren Basiskern tatsächlich trägt, ist keine Aussage der Definition, sondern ein host-autoritativer World-Parameter. Eine Definition beschreibt, was die World sein kann; die Progression entscheidet, was der Spieler besitzt. Der Kern gehört dabei der World, die Konstruktionen darauf der Activity: Eine World ohne Activity materialisiert ihn, führt aber weder Working Copy noch Commit noch Schadensmodell.
+Ob eine World-Instanz ihren Basiskern tatsächlich trägt, ist keine Aussage der Definition, sondern ein host-autoritativ gebundener World-Parameter. Die dauerhaften Blueprint-Konstruktionen gehören zum persönlichen Progress beziehungsweise Contribution des jeweiligen Besitzers. Eine Runtime oder Working Copy materialisiert und bearbeitet diesen Zustand nur für ihren aktuellen Lebenszyklus; ein Activity-/Round-Ausgang kann den Arbeitsstand committen oder verwerfen. Host-Authority über Materialisierung und Validierung ist kein fachlicher Besitz. Eine World ohne Activity kann den Basiskern und persönliche Konstruktionen daher weiterhin materialisieren oder bearbeiten, sofern ihr aktueller World-Runtime-Vertrag diese Aktion erlaubt.
 
 ## Erweiterungsregeln
 

@@ -2,7 +2,7 @@
 
 ## Geltungsbereich
 
-Rendering visualisiert World- und Activity-Zustand, besitzt aber keine Gameplay-Autorität. Die Darstellung darf fehlen, reduziert oder später angebunden werden, ohne dass Host-Simulation, World-Identity oder Physikverträge ungültig werden.
+Rendering visualisiert World- und Activity-Zustand, besitzt aber keine Gameplay-Autorität. Die Darstellung darf fehlen oder reduziert sein, ohne dass Host-Simulation, World-Identity oder Physikverträge ungültig werden.
 
 ## Eine Scene, mehrere Präsentationsflächen
 

@@ -15,7 +15,7 @@ Der Adapter normalisiert nicht erneut, materialisiert keine Defaults und ersetzt
 
 Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder activity-unabhängig resident gehalten werden.
 
-Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt die Stelle des Basiskerns sowie seine Baubereich-Regel: baseId, Anker, Ausrichtung, optional ein festes Quadrat oder eine radiusbasierte Area und Grunddauerhaftigkeit. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den bases-Eintrag und prüft die räumliche Reservierung. Ohne Angabe der Area gilt aktuell das feste 3x3-Quadrat des Innenhofs. Eine Map, die dieselbe baseId zusätzlich selbst in bases beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
+Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt die Stelle des Basiskerns sowie seine Baubereich-Regel: baseId, Anker, Ausrichtung, optional ein `square`- oder `radius`-Bereich und Grunddauerhaftigkeit. Ohne explizite authored Regel gilt der definierte Default. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
 
 **Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
@@ -27,7 +27,7 @@ Die dauerhafte Base-Konfiguration ist nicht mit dem laufenden HP- oder Cooldown-
 
 ## Mission und Zeit
 
-Der Host besitzt Objective, Pressure, Wellen, Gegner, Events, Missionsprogress und das Ergebnis. Clients visualisieren replizierte Activity-Daten und senden Aktionen; sie konstruieren keine Mission aus lokaler Uhr oder lokaler Presentation.
+Der Host hat die Authority über Objective, Pressure, Wellen, Gegner, Events, Missionsprogress und das Ergebnis. Clients visualisieren replizierte Activity-Daten und senden Aktionen; sie konstruieren keine Mission aus lokaler Uhr oder lokaler Presentation.
 
 Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zuständen. Date.now, lokale Renderzeit und Browser-Takt dürfen keine Entscheidungen über Sieg, Niederlage, Spawns oder Missionsfortschritt treffen. Darstellung darf zwischen validierten Zuständen interpolieren.
 
@@ -35,16 +35,18 @@ Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zustän
 
 ## Persistente Base
 
-Die persistente Base ist eine World-Site, deren sichtbarer Inhalt aus den persönlichen Beiträgen aller anwesenden Spieler zusammengesetzt wird:
+Die persistente Base ist eine World-Site. Ihre sichtbare Runtime-Zusammensetzung entsteht aus der authored Site und den persönlichen Beiträgen der anwesenden Spieler:
 
 - [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) definiert den persönlichen Beitrag samt Sanitizing für Speicher und Netzwerk.
 - [PersistentBaseComposite.ts](../../src/persistentBase/PersistentBaseComposite.ts) mischt authored Geometrie, Host-Beitrag und Gastbeiträge deterministisch zu einem reinen Ergebnis.
-- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) hält den host-seitigen Arbeitsstand aller Beiträge einer Mission.
+- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) hält den host-seitigen Arbeitsstand aller Beiträge während eines laufenden Durchlaufs.
 - [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) koppelt Sieg an Commit und Niederlage, Abbruch oder fehlendes Ergebnis an Rollback.
 
-Es gibt genau einen Besitzpfad: Ob eine Konstruktion dem Host oder einem Gast gehört, ist ausschließlich eine Frage der dauerhaften Besitzeridentität. Die Basis selbst besitzt nichts. Freischaltung, Loadout und Kapazität gelten je Besitzer, nicht je Host und nicht als gemeinsamer Basis-Pool.
+Es gibt genau einen Besitzpfad: Der dauerhafte Blueprint-Besitz liegt im persönlichen Progress des jeweiligen Besitzers, unabhängig davon, ob dieser im aktuellen Raum Host oder Gast ist. Die Base-Site und die Activity besitzen keine persönlichen Konstruktionen. Der hostseitige Store beziehungsweise die Working Copy materialisiert und bearbeitet sie nur laufzeitbezogen. Freischaltung, Loadout und Kapazität gelten je Besitzer, nicht je Host und nicht als gemeinsamer Basis-Pool.
 
-Die Priorität des Merges ist authored Geometrie, dann Host-Beitrag, dann Gastbeiträge; Gäste werden nach stabiler Besitzeridentität sortiert, damit die Beitrittsreihenfolge das Ergebnis nicht verändert. Ein Konflikt materialisiert nicht und löscht nichts: Der Blueprint bleibt im Beitrag seines Besitzers und kann in einem anderen Raum wieder erscheinen.
+Die Priorität des Merges ist authored Geometrie, dann der Beitrag des Raum-Hosts, dann Gastbeiträge; „Host-Beitrag“ bezeichnet dabei die aktuelle Raumrolle, nicht eine zusätzliche Besitzklasse. Gäste werden nach stabiler Besitzeridentität sortiert, damit die Beitrittsreihenfolge das Ergebnis nicht verändert. Ein Konflikt materialisiert nicht und löscht nichts: Der Blueprint bleibt im Beitrag seines Besitzers und kann in einem anderen Raum wieder erscheinen.
+
+Der Host hat die Authority über Materialisierung, Validierung, Merge-Ergebnis und laufende Simulation. Diese Authority macht ihn nicht zum fachlichen Eigentümer der Beiträge. Eine Activity oder Runde liefert nur Laufzeitregeln und kann den aktuellen Arbeitsstand committen oder verwerfen.
 
 Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem Blueprint heraus. Die authored Site liefert Anker und Build Area; Generator-Reservation und Baurecht bleiben getrennte Begriffe.
 

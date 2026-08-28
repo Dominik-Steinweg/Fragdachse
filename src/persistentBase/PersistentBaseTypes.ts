@@ -95,6 +95,31 @@ export function sanitizePersistentPlayerBaseContribution(
   };
 }
 
+/**
+ * True, wenn zwei Beitraege denselben Besitz beschreiben.
+ *
+ * Traegt den Revisionsvertrag: Dieselbe Revision darf denselben Inhalt beliebig oft wiederholen,
+ * aber niemals einen abweichenden Inhalt bedeuten.
+ */
+export function arePersistentContributionsEqual(
+  left: PersistentPlayerBaseContribution,
+  right: PersistentPlayerBaseContribution,
+): boolean {
+  if (left.ownerId !== right.ownerId
+    || left.revision !== right.revision
+    || left.constructions.length !== right.constructions.length) return false;
+  return left.constructions.every((entry, index) => {
+    const other = right.constructions[index]!;
+    return entry.persistentId === other.persistentId
+      && entry.tool.kind === other.tool.kind
+      && entry.tool.id === other.tool.id
+      && entry.relativeGridX === other.relativeGridX
+      && entry.relativeGridY === other.relativeGridY
+      && entry.angle === other.angle
+      && entry.placementOrder === other.placementOrder;
+  });
+}
+
 /** Eine Besitzeridentitaet ist ein nicht leerer, laengenbegrenzter String - sonst nichts. */
 export function isStableOwnerId(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= 128;

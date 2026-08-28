@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   mergePersistentBaseComposite,
@@ -209,5 +211,93 @@ describe('PersistentBaseComposite – Freischaltung und Kapazitaet gehoeren dem 
 
     expect(result.active).toEqual([]);
     expect(result.conflicts[0]?.reason).toBe('unknown-tool');
+  });
+});
+
+describe('PersistentBaseComposite – erneuter Merge auf einer laufenden Welt', () => {
+  const standing = contribution('owner-host', [blueprint('standing', 0, 0)]);
+
+  it('kollidiert mit sich selbst, wenn die eigenen Zellen als statisch gelten', () => {
+    // Genau der Fehlerfall, den der Aufrufer verhindern muss: Die bereits materialisierte
+    // Konstruktion belegt ihre Zelle im PlacementSystem. Reicht der Aufrufer das ungefiltert
+    // als statische Geometrie weiter, verdraengt sich jeder stehende Eintrag selbst - und keine
+    // Prioritaet koennte je greifen.
+    const result = merge({
+      hostContribution: standing,
+      isCellBlocked: (gridX, gridY) => gridX === anchor.gridX && gridY === anchor.gridY,
+    });
+
+    expect(result.active).toEqual([]);
+    expect(result.conflicts[0]).toMatchObject({ persistentId: 'standing', reason: 'authored-collision' });
+  });
+
+  it('liefert unveraendert dasselbe Ergebnis, wenn die eigenen Zellen ausgenommen sind', () => {
+    const ownCells = new Set([`${anchor.gridX}:${anchor.gridY}`]);
+    const result = merge({
+      hostContribution: standing,
+      isCellBlocked: (gridX, gridY) => !ownCells.has(`${gridX}:${gridY}`)
+        && gridX === anchor.gridX && gridY === anchor.gridY,
+    });
+
+    expect(result.active.map((entry) => entry.blueprint.persistentId)).toEqual(['standing']);
+    expect(result.conflicts).toEqual([]);
+  });
+
+  it('verdraengt einen stehenden Eintrag, sobald ein hoeher priorisierter Besitzer dazukommt', () => {
+    const ownCells = new Set([`${anchor.gridX}:${anchor.gridY}`]);
+    const isCellBlocked = (gridX: number, gridY: number): boolean => !ownCells.has(`${gridX}:${gridY}`);
+
+    // Erst steht nur der Gast auf der Zelle ...
+    const before = merge({ guestContributions: [contribution('owner-b', [blueprint('b-1', 0, 0)])], isCellBlocked });
+    expect(before.active.map((entry) => entry.blueprint.persistentId)).toEqual(['b-1']);
+
+    // ... dann betritt der Host den Raum und hat Vorrang.
+    const after = merge({
+      hostContribution: contribution('owner-host', [blueprint('host-1', 0, 0)]),
+      guestContributions: [contribution('owner-b', [blueprint('b-1', 0, 0)])],
+      isCellBlocked,
+    });
+    expect(after.active.map((entry) => entry.blueprint.persistentId)).toEqual(['host-1']);
+    expect(after.conflicts).toEqual([
+      { ownerId: 'owner-b', persistentId: 'b-1', toolId: 'rock_barrier', reason: 'collision' },
+    ]);
+  });
+});
+
+describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
+  const lifecycle = readFileSync(
+    resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+    'utf8',
+  );
+
+  it('nimmt bereits materialisierte Zellen aus der statischen Kollision heraus', () => {
+    expect(lifecycle).toContain('isCellBlocked: (gridX, gridY) => !materializedCells.has(cellKey(gridX, gridY))');
+  });
+
+  it('entmaterialisiert, was das Composite nicht mehr traegt, ohne den Besitz zu loeschen', () => {
+    // Die Reihenfolge ist der ganze Unterschied: Erst die Bindung loesen, dann abbauen. Sonst
+    // wertet der gemeinsame Abbaupfad die Verdraengung als Abriss und loescht den Blueprint.
+    expect(lifecycle).toContain('store.releaseRuntimeBinding(binding.runtimeId);');
+    const releaseAt = lifecycle.indexOf('store.releaseRuntimeBinding(binding.runtimeId);');
+    const removeAt = lifecycle.indexOf('const removed = this.ctx.placementSystem.removeRock(binding.runtimeId);');
+    expect(releaseAt).toBeGreaterThanOrEqual(0);
+    expect(removeAt).toBeGreaterThan(releaseAt);
+    // Der Konfliktpfad benutzt den besitzneutralen Abbau, nicht den Abriss.
+    expect(lifecycle).toContain('this.releasePlaceableRuntime(removed, false);');
+  });
+
+  it('rechnet nach einem Austritt neu, damit Unterdruecktes zurueckkommt', () => {
+    const start = lifecycle.indexOf('  private removeGuestSessionOwner(playerId: string): void {');
+    const end = lifecycle.indexOf('\n  /** Gemeinsamer Entkopplungspfad', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(lifecycle.slice(start, end)).toContain('this.hostRefreshPersistentBaseComposite();');
+  });
+
+  it('laesst eine Besitzeridentitaet nur einem Spieler des Raums', () => {
+    expect(lifecycle).toContain('if (!this.canClaimPersistentBaseOwnerId(playerId, offered.ownerId)) continue;');
+    expect(lifecycle).toContain(
+      "if (playerId !== bridge.getLocalPlayerId() && ownerId === getStoredLocalOwnerId()) return false;",
+    );
   });
 });

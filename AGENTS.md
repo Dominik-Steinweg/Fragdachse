@@ -39,7 +39,9 @@ Browserprüfung ist opt-in: Ohne ausdrückliche Aufforderung keinen Dev-Server, 
 
 ## Knowledge Writeback
 
-`docs/ai/` ist eine Wissensbasis für langlebige, systemübergreifende Projektinvarianten und keine Implementierungschronik. Eine neue Regel braucht einen positiven, im aktuellen Code und in den passenden Types/Tests verifizierten Grund. Das ist insbesondere der Fall, wenn:
+`docs/ai/` ist eine Wissensbasis für langlebige, systemübergreifende Projektinvarianten und keine Implementierungschronik. `architecture-principles.md` ist dabei die bewusst normative Ausnahme: Es hält ein beschlossenes Architektur-Leitbild fest, darf vom historisch gewachsenen Ist-Code abweichen und ist keine Behauptung vollständiger Umsetzung. Normale Knowledge-Writebacks betreffen verifizierte Ist-Verträge der Fachseiten; Änderungen am Leitbild benötigen eine explizite Architekturentscheidung und entstehen nicht automatisch aus einer einzelnen Implementierung.
+
+Eine neue Regel braucht einen positiven, im aktuellen Code und in den passenden Types/Tests verifizierten Grund. Das ist insbesondere der Fall, wenn:
 
 - mehrere Systeme dieselbe nicht offensichtliche Grenze kennen müssen;
 - eine lokale Implementierung die Architektur allein nicht vermittelt;

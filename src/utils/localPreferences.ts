@@ -1436,7 +1436,10 @@ export function setStoredPersonalBaseContribution(contribution: PersistentPlayer
   const sanitized = sanitizePersistentPlayerBaseContribution({ ...contribution, ownerId });
   if (!sanitized) return false;
   const stored = current.progression.coopDefense.personalBaseContribution;
-  if (sanitized.revision < stored.revision) return false;
+  // Nur ein echt neuerer Stand wird geschrieben. Der regelmaessige Sync sieht dieselbe
+  // Bestaetigung viele Frames lang; ohne diese Grenze schriebe er sie bei jedem Frame erneut.
+  // Zugleich der Revisionsvertrag: Dieselbe Revision ersetzt nie einen bestehenden Inhalt.
+  if (sanitized.revision <= stored.revision) return false;
   writePreferences({
     ...current,
     progression: {

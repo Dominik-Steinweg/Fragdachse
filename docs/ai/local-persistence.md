@@ -22,23 +22,23 @@ Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save
 
 ## PersistentBase
 
-PersistentBase ist Progress-Domain, nicht Activity-Runtime:
+PersistentBase ist persönlicher Progress, nicht Activity-Runtime:
 
 - [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) sanitisiert den persönlichen Beitrag und prüft nur storage- und wire-lokale Form.
-- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) führt den host-seitigen Arbeitsstand aller Beiträge mit Baseline, Commit oder Rollback.
+- [PersistentBaseContributionStore.ts](../../src/persistentBase/PersistentBaseContributionStore.ts) führt den host-seitigen Runtime-Arbeitsstand aller Beiträge mit Baseline, Commit oder Rollback.
 - [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) wendet Commit oder Rollback auf alle Beiträge gemeinsam an.
 
-Persistiert wird der persönliche Beitrag eines Spielers, nicht der Zustand einer Basis: Jeder Spieler speichert ausschließlich seinen eigenen Beitrag auf seinem eigenen Gerät, unter einer dauerhaften Besitzeridentität, die niemals aus Peer-ID, Room-ID oder Session abgeleitet wird.
+Persistiert wird der persönliche Beitrag eines Spielers, nicht der Zustand einer Basis: Jeder Spieler speichert ausschließlich seinen eigenen Beitrag auf seinem eigenen Gerät, unter einer dauerhaften Besitzeridentität, die niemals aus Peer-ID, Room-ID oder Session abgeleitet wird. `ownerId` identifiziert fachlichen Besitz über Sessions hinweg, beweist aber nicht, dass eine eingehende Mutation autorisiert ist. Der Host validiert Netzwerkaktionen und Änderungen unabhängig; eine übereinstimmende `ownerId` allein erteilt kein Änderungsrecht.
 
 Ein Client darf nur einen host-bestätigten Beitrag speichern. Ohne diese Regel könnte ein manipulierter Client seine eigene Revision erhöhen und ungeprüftes Bauwerk dauerhaft in den autoritativen Fluss drücken. Die Revision des Beitrags ist ausdrücklich weder eine World- noch eine Activity-Revision; ein veralteter Stand wird abgelehnt, statt einen neueren zurückzudrehen.
 
-Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören nicht in den Blueprint. Der WorldRuntimeContext liefert die authored Site; die lokale Progress-Grenze liefert den veränderlichen Zustand.
+Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören nicht in den Blueprint. Der WorldRuntimeContext liefert Site, Kern und World-Geometrie; die lokale Progress-Grenze liefert den dauerhaften Beitrag, und die Runtime/Working Copy den aktuellen bearbeitbaren Zustand.
 
 ## Cache, Fehler und Lebensdauer
 
 Die Speicherfunktionen dürfen einen Cache verwenden, müssen ihn bei Schreib- oder Reset-Operationen gezielt invalidieren und dürfen fehlgeschlagene Persistenz nicht in einen unbrauchbaren In-Memory-Zustand überführen. Cache- und Save-Lifetime ist von ArenaScene-, World- und Activity-Lifetime getrennt.
 
-Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch. Ein Activity-Ende entscheidet über PersistentBase-Commit oder Rollback; der nächste World-Aufbau liest nur den validierten Baseline-Zustand.
+Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch und ist keine Persistenz- oder Besitzgrenze. Eine neue Working Copy startet vom zuletzt bestätigten beziehungsweise committed Beitrag. `committed` bezeichnet den zuletzt akzeptierten Stand, `baseline` den Ausgangsstand der aktuellen Working Copy und `working` den aktuellen bearbeitbaren Zustand. Ein Activity-/Round-Ausgang kann die Working Copy committen oder verwerfen; dauerhaft gespeichert bleibt ausschließlich der persönliche Beitrag seines Besitzers.
 
 ## Erweiterungsregeln
 

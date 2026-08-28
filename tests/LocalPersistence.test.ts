@@ -5,7 +5,10 @@ import {
   LOCAL_PROGRESS_STORAGE_KEY,
   LOCAL_SETTINGS_STORAGE_KEY,
   exportStoredGameProgressJson,
+  getStoredLocalOwnerId,
   getStoredPersistentBaseState,
+  getStoredPersonalBaseContribution,
+  setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
@@ -109,6 +112,51 @@ describe('local progress generation', () => {
     setStoredPersistentBaseState({ schemaVersion: 1, radiusCells: 5, revision: 0, constructions: [] });
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
     expect(getStoredPersistentBaseState()).toEqual(state);
+  });
+
+  it('schreibt einen host-bestaetigten Beitrag nur, wenn er tatsaechlich neuer ist', () => {
+    const confirmed = {
+      schemaVersion: 1 as const,
+      ownerId: getStoredLocalOwnerId(),
+      revision: 3,
+      constructions: [],
+    };
+    expect(setStoredPersonalBaseContribution(confirmed)).toBe(true);
+    const writesAfterFirst = storage.writes;
+
+    // Der regelmaessige Sync sieht dieselbe Bestaetigung viele Frames lang. Ohne diese Grenze
+    // schriebe er sie bei jedem Frame erneut in den lokalen Speicher.
+    expect(setStoredPersonalBaseContribution(confirmed)).toBe(false);
+    expect(setStoredPersonalBaseContribution(confirmed)).toBe(false);
+    expect(storage.writes).toBe(writesAfterFirst);
+
+    // Dieselbe Revision ersetzt auch keinen abweichenden Inhalt.
+    expect(setStoredPersonalBaseContribution({
+      ...confirmed,
+      constructions: [{
+        persistentId: 'sneaked-in',
+        tool: { kind: 'construction' as const, id: 'rock_barrier' },
+        relativeGridX: 0,
+        relativeGridY: 0,
+        angle: 0,
+        placementOrder: 0,
+      }],
+    })).toBe(false);
+    expect(getStoredPersonalBaseContribution().constructions).toEqual([]);
+
+    // Ein echt neuerer Stand wird geschrieben.
+    expect(setStoredPersonalBaseContribution({ ...confirmed, revision: 4 })).toBe(true);
+    expect(getStoredPersonalBaseContribution().revision).toBe(4);
+    expect(storage.writes).toBeGreaterThan(writesAfterFirst);
+  });
+
+  it('bindet den persoenlichen Beitrag an eine dauerhafte Besitzeridentitaet', () => {
+    const ownerId = getStoredLocalOwnerId();
+    expect(ownerId.length).toBeGreaterThan(0);
+    // Sie ueberlebt einen Reload; sonst verloere der Spieler den Besitz an allem Gebauten.
+    invalidateLocalStorageCache();
+    expect(getStoredLocalOwnerId()).toBe(ownerId);
+    expect(getStoredPersonalBaseContribution().ownerId).toBe(ownerId);
   });
 
   it('carries the persistent-base entitlement through export and import', () => {

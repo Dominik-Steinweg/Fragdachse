@@ -1,4 +1,5 @@
 import {
+  arePersistentContributionsEqual,
   clonePersistentPlayerBaseContribution,
   normalizePersistentToolRef,
   type PersistentBaseAnchor,
@@ -24,6 +25,13 @@ import {
  * dauerhaft speichern darf, entscheidet der Rundenausgang, und speichern darf ihn ausschliesslich
  * der jeweilige Besitzer auf seinem eigenen Geraet.
  */
+/** Ein materialisierter Blueprint und das Runtime-Objekt, das ihn gerade darstellt. */
+export interface PersistentRuntimeBinding {
+  readonly runtimeId: number;
+  readonly ownerId: string;
+  readonly blueprint: PersistentConstruction;
+}
+
 export class PersistentBaseContributionStore {
   /** Vom Besitzer angebotener und vom Host akzeptierter Stand, ausserhalb einer Mission. */
   private readonly committed = new Map<string, PersistentPlayerBaseContribution>();
@@ -51,6 +59,11 @@ export class PersistentBaseContributionStore {
   offerContribution(contribution: PersistentPlayerBaseContribution): boolean {
     const stored = this.committed.get(contribution.ownerId);
     if (stored && contribution.revision < stored.revision) return false;
+    // Dieselbe Revision darf sich wiederholen, aber nicht ihren Inhalt aendern: Sonst koennte ein
+    // Client einen bereits akzeptierten Stand still gegen einen anderen austauschen.
+    if (stored && contribution.revision === stored.revision) {
+      return arePersistentContributionsEqual(stored, contribution);
+    }
     this.committed.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
     if (!this.working) return true;
     // Ein Beitrag, der waehrend der Mission neu dazukommt, gilt ab sofort mit; ein bereits
@@ -150,6 +163,26 @@ export class PersistentBaseContributionStore {
   /** True, wenn dieser Blueprint bereits ein Runtime-Objekt in der Welt hat. */
   isMaterialized(ownerId: string, persistentId: string): boolean {
     return this.findRuntimeId(ownerId, persistentId) !== undefined;
+  }
+
+  /** Alle aktuell materialisierten Blueprints samt ihrer Runtime-Bindung. */
+  getRuntimeBindings(): readonly PersistentRuntimeBinding[] {
+    return [...this.runtimeBlueprints.entries()].map(([runtimeId, entry]) => ({
+      runtimeId,
+      ownerId: entry.ownerId,
+      blueprint: entry.blueprint,
+    }));
+  }
+
+  /**
+   * Loest die Runtime-Bindung, ohne den Blueprint anzutasten.
+   *
+   * Das ist der Gegenbegriff zum Abriss: Wird eine Konstruktion durch einen Konflikt verdraengt,
+   * verschwindet nur ihr Objekt aus der Welt. Ihr Besitzer behaelt sie und sie erscheint wieder,
+   * sobald der Grund entfaellt.
+   */
+  releaseRuntimeBinding(runtimeId: number): boolean {
+    return this.runtimeBlueprints.delete(runtimeId);
   }
 
   getRuntimeMetadata(runtimeId: number): PersistentRuntimeMetadata | null {
