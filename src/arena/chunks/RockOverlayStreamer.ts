@@ -43,7 +43,7 @@ import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
  * Die beiden Regeln, an denen die Pixelstabilitaet haengt, bleiben unveraendert (siehe
  * {@link ../RockOverlayRegions}):
  *
- * 1. Die Materialquelle ist der **vollstaendige** Felsbestand der Runde und schrumpft nie.
+ * 1. Die Materialquelle ist der **vollstaendige** Felsbestand der World und schrumpft nie.
  * 2. Neu gebacken wird ausschliesslich der Schnitt auf den aktuell stehenden Bestand.
  */
 

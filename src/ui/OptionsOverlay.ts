@@ -131,6 +131,12 @@ export interface SpectatorMatchBinding {
   spectate: () => void;
 }
 
+/** Kontextabhaengige Rueckkehr aus einer interaktiven World ohne eigene Admission-Logik. */
+export interface WorldLeaveBinding {
+  canLeave: () => boolean;
+  leave: () => void;
+}
+
 export interface LocaleSelectionBinding {
   canChange: () => boolean;
   onChanged: (locale: Locale) => void;
@@ -219,11 +225,15 @@ export class OptionsOverlay {
   private unsubscribeMusicLoadState: (() => void) | null = null;
   private lastPreviewAt = -PREVIEW_COOLDOWN_MS;
   private spectatorBinding: SpectatorMatchBinding | null = null;
+  private worldLeaveBinding: WorldLeaveBinding | null = null;
   private abortBinding: AbortMatchBinding | null = null;
   private abortDivider: Phaser.GameObjects.Rectangle | null = null;
   private spectatorButton: Phaser.GameObjects.Image | null = null;
   private spectatorLabel: Phaser.GameObjects.Text | null = null;
   private spectatorHint: Phaser.GameObjects.Text | null = null;
+  private worldLeaveButton: Phaser.GameObjects.Image | null = null;
+  private worldLeaveLabel: Phaser.GameObjects.Text | null = null;
+  private worldLeaveHint: Phaser.GameObjects.Text | null = null;
   private spectatorConfirmPending = false;
   private spectatorConfirmTimer: Phaser.Time.TimerEvent | null = null;
   private abortButton: Phaser.GameObjects.Image | null = null;
@@ -248,6 +258,11 @@ export class OptionsOverlay {
 
   setSpectatorMatchBinding(binding: SpectatorMatchBinding | null): void {
     this.spectatorBinding = binding;
+    this.syncAbortSection();
+  }
+
+  setWorldLeaveBinding(binding: WorldLeaveBinding | null): void {
+    this.worldLeaveBinding = binding;
     this.syncAbortSection();
   }
 
@@ -283,6 +298,9 @@ export class OptionsOverlay {
     this.spectatorButton = null;
     this.spectatorLabel = null;
     this.spectatorHint = null;
+    this.worldLeaveButton = null;
+    this.worldLeaveLabel = null;
+    this.worldLeaveHint = null;
     this.abortButton = null;
     this.abortLabel = null;
     this.abortHint = null;
@@ -432,11 +450,15 @@ export class OptionsOverlay {
     this.spectatorConfirmTimer = null;
     this.spectatorConfirmPending = false;
     this.spectatorBinding = null;
+    this.worldLeaveBinding = null;
     this.abortBinding = null;
     this.abortDivider = null;
     this.spectatorButton = null;
     this.spectatorLabel = null;
     this.spectatorHint = null;
+    this.worldLeaveButton = null;
+    this.worldLeaveLabel = null;
+    this.worldLeaveHint = null;
     this.abortButton = null;
     this.abortLabel = null;
     this.abortHint = null;
@@ -718,6 +740,29 @@ export class OptionsOverlay {
     this.spectatorHint = this.scene.add.text(CX, SPECTATOR_HINT_Y, '', textStyle('caption'))
       .setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
+    this.worldLeaveButton = this.scene.add.image(
+      CX,
+      SPECTATOR_BUTTON_Y,
+      ensureGlossyButtonTexture(
+        this.scene,
+        `_options_world_leave_btn_${ABORT_BUTTON_W}x${ABORT_BUTTON_H}`,
+        ABORT_BUTTON_W,
+        ABORT_BUTTON_H,
+        INTENT.secondary.fill,
+        INTENT.secondary.stroke,
+      ),
+    ).setScrollFactor(0)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.onWorldLeaveButtonPressed());
+
+    this.worldLeaveLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', textStyle('label', {
+      color: INTENT.secondary.label,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+    this.worldLeaveHint = this.scene.add.text(CX, SPECTATOR_HINT_Y, '', textStyle('caption'))
+      .setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
     this.abortButton = this.scene.add.image(
       CX,
       ABORT_BUTTON_Y,
@@ -743,11 +788,15 @@ export class OptionsOverlay {
 
     attachHoverEffect(this.scene, this.abortButton, this.abortLabel);
     attachHoverEffect(this.scene, this.spectatorButton, this.spectatorLabel);
+    attachHoverEffect(this.scene, this.worldLeaveButton, this.worldLeaveLabel);
     objects.push(
       this.abortDivider,
       this.spectatorButton,
       this.spectatorLabel,
       this.spectatorHint,
+      this.worldLeaveButton,
+      this.worldLeaveLabel,
+      this.worldLeaveHint,
       this.abortButton,
       this.abortLabel,
       this.abortHint,
@@ -760,21 +809,34 @@ export class OptionsOverlay {
    * der uebrigen Optionen nicht veraendert.
    */
   private syncAbortSection(): void {
-    const spectatorAvailable = this.spectatorBinding?.canSpectate() === true;
-    const abortAvailable = this.abortBinding?.canAbort() === true;
+    const worldLeaveAvailable = this.worldLeaveBinding?.canLeave() === true;
+    const spectatorAvailable = !worldLeaveAvailable && this.spectatorBinding?.canSpectate() === true;
+    const abortAvailable = !worldLeaveAvailable && this.abortBinding?.canAbort() === true;
     // Der Hover-Effekt skaliert Button und Beschriftung; beim Aus-/Einblenden feuert kein
     // pointerout mehr, deshalb hier den Ruhezustand explizit wiederherstellen.
     this.scene.tweens.killTweensOf(
-      [this.spectatorButton, this.spectatorLabel, this.abortButton, this.abortLabel].filter((o) => !!o),
+      [
+        this.spectatorButton,
+        this.spectatorLabel,
+        this.worldLeaveButton,
+        this.worldLeaveLabel,
+        this.abortButton,
+        this.abortLabel,
+      ].filter((o) => !!o),
     );
     this.spectatorButton?.setScale(1);
     this.spectatorLabel?.setScale(1);
+    this.worldLeaveButton?.setScale(1);
+    this.worldLeaveLabel?.setScale(1);
     this.abortButton?.setScale(1);
     this.abortLabel?.setScale(1);
-    this.abortDivider?.setVisible(spectatorAvailable || abortAvailable);
+    this.abortDivider?.setVisible(worldLeaveAvailable || spectatorAvailable || abortAvailable);
     this.spectatorButton?.setVisible(spectatorAvailable);
     this.spectatorLabel?.setVisible(spectatorAvailable);
     this.spectatorHint?.setVisible(spectatorAvailable);
+    this.worldLeaveButton?.setVisible(worldLeaveAvailable);
+    this.worldLeaveLabel?.setVisible(worldLeaveAvailable);
+    this.worldLeaveHint?.setVisible(worldLeaveAvailable);
     this.abortButton?.setVisible(abortAvailable);
     this.abortLabel?.setVisible(abortAvailable);
     this.abortHint?.setVisible(abortAvailable);
@@ -791,20 +853,40 @@ export class OptionsOverlay {
           : t('ui.match.spectateHint'))
         .setColor(toCssColor(this.spectatorConfirmPending ? COLORS.BLUE_1 : COLORS.GREY_4));
     }
+    if (!worldLeaveAvailable) {
+      this.worldLeaveButton?.disableInteractive();
+    } else {
+      this.worldLeaveButton?.setInteractive({ useHandCursor: true });
+      this.worldLeaveLabel
+        ?.setText(t('ui.lobby.returnToLobby'))
+        .setColor(toCssColor(COLORS.GREY_1));
+      this.worldLeaveHint
+        ?.setText(t('ui.options.returnToLobbyHint'))
+        .setColor(toCssColor(COLORS.GREY_4));
+    }
     if (!abortAvailable) {
       this.abortButton?.disableInteractive();
+    } else {
+      this.abortButton?.setInteractive({ useHandCursor: true });
+      this.abortLabel
+        ?.setText(this.abortConfirmPending ? t('ui.match.abortConfirm') : t('ui.match.abort'))
+        .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_1));
+      this.abortHint
+        ?.setText(this.abortConfirmPending
+          ? t('ui.match.confirmHint')
+          : t('ui.match.abortHint'))
+        .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_4));
+    }
+  }
+
+  private onWorldLeaveButtonPressed(): void {
+    const binding = this.worldLeaveBinding;
+    if (!binding?.canLeave()) {
+      this.syncAbortSection();
       return;
     }
-
-    this.abortButton?.setInteractive({ useHandCursor: true });
-    this.abortLabel
-      ?.setText(this.abortConfirmPending ? t('ui.match.abortConfirm') : t('ui.match.abort'))
-      .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_1));
-    this.abortHint
-      ?.setText(this.abortConfirmPending
-        ? t('ui.match.confirmHint')
-        : t('ui.match.abortHint'))
-      .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_4));
+    this.hide();
+    binding.leave();
   }
 
   private onSpectatorButtonPressed(): void {

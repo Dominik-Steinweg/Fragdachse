@@ -35,7 +35,7 @@ export interface RockMossFieldOptions {
   seed: number;
   /** Alle Felsen des Layouts, einschliesslich bereits zerstoerter. Siehe Modulkommentar. */
   rocks: readonly RockCell[];
-  /** Rahmen und Gittergroesse. Ohne Angabe die laufenden Arena-Metriken. */
+  /** Rahmen und Gittergroesse. Ohne Angabe gilt der globale Kompatibilitaetsrahmen. */
   metrics?: ArenaVisualGridMetrics;
   config?: RockMossLayerConfig;
 }

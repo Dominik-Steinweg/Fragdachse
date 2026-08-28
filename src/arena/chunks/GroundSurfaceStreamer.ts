@@ -36,14 +36,14 @@ import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
  * Gestreamte statische Bodenbaender: Dirt samt eingebackener Materialstoerung, optionaler
  * Persistent-Base-Kies, Ground Cover und die statischen Decals.
  *
- * Diese Schichten aendern sich zur Laufzeit nicht. Frueher war das der Grund, sie genau einmal je Runde
+ * Diese Schichten aendern sich zur Laufzeit nicht. Frueher war das der Grund, sie genau einmal je World
  * in je eine arenagrosse RenderTexture zu backen; bei 400 x 80 Zellen waeren das 12 800 x 2 560 px
  * je Band. Jetzt gilt dieselbe Ueberlegung je Render-Chunk: Ein Chunk wird beim Sichtbarwerden
  * einmal gebacken und danach nur noch gezeichnet.
  *
  * Der Bake ist deterministisch, weil jede Quelle es ist: Dirt-Autotiling und Ecktints haengen an
  * der Zellbelegung, die Materialstoerung an Zellkoordinate und Seed, Ground-Cover-Platzierungen
- * werden einmal je Runde erzeugt und danach nur gefiltert, und Decals tragen ihre Drehung im
+ * werden einmal je World erzeugt und danach nur gefiltert, und Decals tragen ihre Drehung im
  * Layout beziehungsweise leiten sie aus ihrer Zelle ab. Ein wieder betretener Chunk sieht deshalb
  * aus wie zuvor.
  */

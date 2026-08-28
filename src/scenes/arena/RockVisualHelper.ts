@@ -41,10 +41,7 @@ export class RockVisualHelper {
   private obstaclesDirty = false;
   private obstacleVisualsRequireFullRefresh = false;
   private readonly dirtyRockIds = new Set<number>();
-  /**
-   * Gemeinsame Fels-Darstellung. Die Lobby führt ihren Ambient-Bestand mit derselben Klasse
-   * und demselben Ablauf, nur mit ihrem eigenen Weltrahmen.
-   */
+  /** Fels-Darstellung für die jeweils über den Context gebundene World-Geometrie. */
   private readonly rockPresentation: RockPresentation;
 
   constructor(

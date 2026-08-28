@@ -313,8 +313,8 @@ export class CombatSystem {
     barriers: () => this.barrierObstacles,
   });
   /**
-   * Gemeinsamer mathematischer Kern aller Segmentprüfungen. Dieselbe Klasse trägt die lokale
-   * Lobby-Inszenierung, damit Sichtlinie, Hitscan und Melee-Bogen dort identisch rechnen.
+   * Gemeinsamer mathematischer Kern aller Segmentprüfungen. Die gebundene World nutzt dieselbe
+   * Geometrie für Sichtlinie, Hitscan und Melee-Bogen; die Klasse hält nur den Rechenkern.
    */
   private readonly geometry = new CombatGeometry(this.obstacleIndex);
   private meleeSwingIdCounter = 0;
@@ -744,7 +744,7 @@ export class CombatSystem {
 
   /**
    * Reconciles live build-derived caps without recreating the player runtime. This is used when
-   * a World-only Coop build changes while the player is already in the shooting range.
+   * a World-only Coop build changes while the player is already in the test area.
    */
   reconcilePlayerRuntimeState(id: string): void {
     if (!this.hp.has(id) && !this.armor.has(id)) return;

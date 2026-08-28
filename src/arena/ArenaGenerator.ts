@@ -129,8 +129,8 @@ export function resolveArenaGenerationInput(mode: GameMode, metrics: WorldMetric
   };
 }
 
-// Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin und wird auch von der Lobby-Vorschau
-// verwendet; die Arena behält hier nur ihre eigene Reserveflaechen- und Wachstumslogik.
+// Die gemeinsame Dirt-Randregel liegt in OrganicDirtMargin; Generator und authored World-Layouts
+// verwenden sie, waehrend ihre eigene Reserveflaechen- und Wachstumslogik getrennt bleibt.
 function clampToUnitRange(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
@@ -167,7 +167,7 @@ export class ArenaGenerator {
   }
 
   private generateLayout(seed: number, coopMapConfig?: ArenaGenerationMapConfig): ArenaLayout {
-    // Die Basisgeometrie hängt nur von Map-Konfiguration und aktuellen Arena-Metriken ab,
+    // Die Basisgeometrie hängt nur von Map-Konfiguration und den übergebenen World-Metriken ab,
     // nicht vom Retry-Seed. Bei expliziten Coop-Maps wird sie deshalb einmal pro Generate-Aufruf
     // aufgelöst und an alle Zellprüfungen weitergereicht. Ohne Map-Konfiguration bleibt
     // `undefined` bewusst der Fallback auf die aktive Registry-Auflösung.

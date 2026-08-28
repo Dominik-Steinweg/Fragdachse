@@ -24,7 +24,13 @@ import {
   toCssColor,
 } from '../config';
 import { HelpOverlay } from './HelpOverlay';
-import { OptionsOverlay, type AbortMatchBinding, type LocaleSelectionBinding, type SpectatorMatchBinding } from './OptionsOverlay';
+import {
+  OptionsOverlay,
+  type AbortMatchBinding,
+  type LocaleSelectionBinding,
+  type SpectatorMatchBinding,
+  type WorldLeaveBinding,
+} from './OptionsOverlay';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import {
@@ -254,7 +260,7 @@ export class LeftSidePanel {
   // Gemeinsame Loadout-Slots und Auswahl-Popup
   private loadoutIndices:   Record<LoadoutSlot, number> = { weapon1: 0, weapon2: 0, utility: 0, ultimate: 0 };
   /**
-   * Slot, dessen Item die Lobby-Vorschau in den Pfoten zeigt: der zuletzt im Karussell geaenderte.
+   * Slot, dessen Item die Menü-Vorschau in den Pfoten zeigt: der zuletzt im Karussell geaenderte.
    * Das Ultimate zaehlt nicht mit – es ist keine Handwaffe und hat kein getragenes Bild.
    */
   private previewHeldSlot: HeldItemSlot = 'weapon1';
@@ -269,6 +275,7 @@ export class LeftSidePanel {
   // Wird vor dem Bau gesetzt, wenn der Lifecycle-Koordinator frueher fertig ist als das Panel.
   private abortMatchBinding: AbortMatchBinding | null = null;
   private spectatorMatchBinding: SpectatorMatchBinding | null = null;
+  private worldLeaveBinding: WorldLeaveBinding | null = null;
   private localeSelectionBinding: LocaleSelectionBinding | null = null;
 
   constructor(
@@ -579,6 +586,7 @@ export class LeftSidePanel {
     this.optionsOverlay.build();
     this.optionsOverlay.setAbortMatchBinding(this.abortMatchBinding);
     this.optionsOverlay.setSpectatorMatchBinding(this.spectatorMatchBinding);
+    this.optionsOverlay.setWorldLeaveBinding(this.worldLeaveBinding);
     this.optionsOverlay.setLocaleSelectionBinding(this.localeSelectionBinding);
     this.setLobbyFieldsLocked(false);
     this.refreshColorIndicator();
@@ -596,6 +604,12 @@ export class LeftSidePanel {
   setSpectatorMatchBinding(binding: SpectatorMatchBinding | null): void {
     this.spectatorMatchBinding = binding;
     this.optionsOverlay?.setSpectatorMatchBinding(binding);
+  }
+
+  /** Reicht die kontextabhaengige Rueckkehr aus der LobbyWorld weiter. */
+  setWorldLeaveBinding(binding: WorldLeaveBinding | null): void {
+    this.worldLeaveBinding = binding;
+    this.optionsOverlay?.setWorldLeaveBinding(binding);
   }
 
   toggleOptionsOverlay(): void {
@@ -628,6 +642,10 @@ export class LeftSidePanel {
 
   showHelpOverlay(): void {
     this.helpOverlay?.show();
+  }
+
+  hideHelpOverlay(): void {
+    this.helpOverlay?.hide();
   }
 
   hideOptionsOverlay(): void {

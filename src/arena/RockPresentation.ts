@@ -8,14 +8,14 @@ import type { RockPhysicsProxy } from './rocks/RockPhysicsProxy';
 /**
  * Woher der Felsbestand kommt, dessen Darstellung geführt wird.
  *
- * Bewusst Getter statt Referenzen: In der Arena sind Layout und Bauergebnis rundengebunden
- * und außerhalb einer Runde `null`; in der Lobby stehen sie über die gesamte Scene.
+ * Bewusst Getter statt Referenzen: Layout und Bauergebnis sind an die gebundene World gekoppelt
+ * und beim World-Teardown `null`; eine World kann ohne Activity bestehen.
  */
 export interface RockPresentationSources {
   readonly scene: Phaser.Scene;
   getResult(): ArenaBuilderResult | null;
   getLayout(): ArenaLayout | null;
-  /** Weltausschnitt des Bestands. Arena: laufende Metriken, Lobby: Vorschaurahmen. */
+  /** Weltausschnitt des Bestands in der gebundenen World. */
   getWorldFrame(): RockWorldFrame;
 }
 
@@ -23,7 +23,7 @@ export interface RockPresentationSources {
  * Gemeinsame Darstellung von Felsbau und Felszerstörung.
  *
  * Schaden, Zerstörung mit Trümmer-VFX, Neubau und der anschließende Overlay-/AutoTile-Neubau
- * laufen für Arena und Lobby über genau diese Abfolge. Autoritative Entscheidungen – wer
+ * laufen für jede gebundene World über genau diese Abfolge. Autoritative Entscheidungen – wer
  * wieviel Schaden verursacht, ob ein Fels überhaupt zerstörbar ist – gehören **nicht**
  * hierher; die trifft der jeweilige Aufrufer.
  */
@@ -138,5 +138,5 @@ export class RockPresentation {
   }
 }
 
-/** Rahmen-Getter für einen Bestand, der in der laufenden Arena liegt. */
+/** Kompatibilitätsrahmen des globalen Arena-Spiegels. */
 export const arenaWorldFrameSource = (): RockWorldFrame => getArenaRockWorldFrame();

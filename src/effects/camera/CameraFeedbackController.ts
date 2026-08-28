@@ -98,7 +98,7 @@ export class CameraFeedbackController {
     this.zoomPulseEnabled = enabled;
   }
 
-  /** Rundenende: alle laufenden Quellen fallen lassen, damit nichts in die Lobby überläuft. */
+  /** World-Teardown: alle laufenden Quellen fallen lassen, damit nichts in die nächste World überläuft. */
   reset(): void {
     this.model.clear();
     this.lastOutput = { ...this.lastOutput, offsetX: 0, offsetY: 0, zoomScale: 1, activeSources: 0 };

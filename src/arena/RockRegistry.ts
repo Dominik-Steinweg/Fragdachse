@@ -8,7 +8,7 @@ import { RockHpRegistry } from './RockHpRegistry';
  *
  * Der HP-Zustand selbst liegt in {@link RockHpRegistry} und ist netzfrei; diese Klasse
  * ergänzt ausschließlich die Delta-Snapshot-Schicht. Wer Fels-HP ohne Netzwerk braucht –
- * etwa die lokale Lobby-Inszenierung – benutzt die Basisklasse direkt statt eine zweite
+ * etwa ein lokaler oder Headless-Kontext – benutzt die Basisklasse direkt statt eine zweite
  * HP-Verwaltung zu bauen.
  */
 export class RockRegistry extends RockHpRegistry {

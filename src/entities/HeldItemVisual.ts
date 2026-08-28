@@ -81,7 +81,7 @@ export class HeldItemVisual {
 
   /**
    * Bild an die Figur angleichen. `displaySize` ist die Kantenlaenge, mit der die Figur gezeichnet
-   * wird – daraus folgt der Massstab der Waffentextur, sodass Arena und Lobby-Vorschau dieselbe
+   * wird – daraus folgt der Massstab der Waffentextur, sodass World-Darstellung und Menü-Vorschau dieselbe
    * Zuordnung mit unterschiedlichen Groessen verwenden koennen.
    */
   sync(

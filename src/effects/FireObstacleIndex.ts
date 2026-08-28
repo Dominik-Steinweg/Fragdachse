@@ -46,7 +46,7 @@ export class FireObstacleIndex {
     return this.obstacleRevision;
   }
 
-  /** Clears the round-scoped index during arena teardown. */
+  /** Clears the World-scoped index during World teardown. */
   reset(): void {
     this.blockedFireCells.fill(0);
     this.fireLineOfSightCells.fill(0);

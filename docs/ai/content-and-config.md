@@ -29,7 +29,7 @@ Definitionen werden über Registry- und Loader-Grenzen aufgelöst. Wire- und Rea
 
 ## Adapter für bestehendes Authoring
 
-Der [Coop-Defense-Adapter](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) normalisiert ein bestehendes Map-Format und teilt es in World- und Activity-Besitz. Er erzeugt keine fachlichen Defaults und ersetzt keine Validierung. Die Eingabe muss vor dem Adapter bereits normalisiert und validiert sein; die Round-Trip-Tests schützen die Feldzuordnung.
+Der [Coop-Defense-Adapter](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) nimmt den bereits normalisierten und validierten Map-Vertrag entgegen und projiziert ihn in World- und Activity-Besitz beziehungsweise wieder zurück. Er führt selbst keine fachliche Normalisierung durch, materialisiert keine Defaults und ersetzt keine Validierung; die Round-Trip-Tests schützen die verlustfreie Feldzuordnung. `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Bereits normalisierte Configs dürfen nicht erneut normalisiert werden.
 
 Besonders wichtig ist die Base-Trennung: dauerhafte Geometrie, Fraktion, Rolle, Anker und Spawn-Zentrum sind World-Inhalt; Missionsfaktoren, Dormancy und Power-Up-Flächen sind Activity-Overlay. Neue Felder werden dem fachlichen Owner zugeordnet, nicht einfach in beide Modelle kopiert.
 

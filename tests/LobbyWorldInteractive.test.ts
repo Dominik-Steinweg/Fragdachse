@@ -84,7 +84,7 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
     expect(hasWorldFigure('none')).toBe(false);
   });
 
-  it('haelt Eintritt und Austritt frei von Runden- und Ready-Begriffen', () => {
+  it('haelt die World-Self-Admit-Policy frei von Runden- und Ready-Begriffen', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     const start = lifecycle.indexOf('  canSelfAdmitToWorld(): boolean {');
     const end = lifecycle.indexOf('\n  /** Mit der World-Instanz endet jede Aufnahme in sie. */', start);
@@ -93,7 +93,7 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
     const joinPath = lifecycle.slice(start, end);
 
     for (const roundTerm of [
-      'getRoundParticipation', 'getRoundState', 'getPlayerReady', 'canPlayerInitialSpawn',
+      'getRoundParticipation', 'getRoundState', 'canPlayerInitialSpawn',
       'getArenaStartTime', 'isArenaCountdownActive', 'CommittedLoadout', 'this.spawnReadyPlayers(',
     ]) {
       expect(joinPath.includes(roundTerm), `Join/Leave darf ${roundTerm} nicht brauchen`).toBe(false);
@@ -107,6 +107,75 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
     for (const parallelState of ['inShootingRange', 'isLobbyPlayer', 'lobbyInteractive', 'shootingRangeState']) {
       expect(lifecycle.includes(parallelState), `${parallelState} waere eine zweite Teilnahmequelle`).toBe(false);
     }
+  });
+
+  it('sperrt nur den Join fuer bereite Spieler und laesst Leave/Ready getrennt', () => {
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const start = lifecycle.indexOf('  hostHandleWorldParticipationRequest(playerId: string, join: boolean): boolean {');
+    const end = lifecycle.indexOf('\n  /** Der lokale Wunsch. Der Host entscheidet', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const requestPath = lifecycle.slice(start, end);
+
+    expect(requestPath).toContain('if (join && bridge.getPlayerReady(playerId)) return false;');
+    expect(requestPath).toContain('if (join) this.hostAdmitToWorld(playerId);');
+    expect(requestPath).toContain('else this.hostRemoveFromWorld(playerId);');
+    expect(requestPath).not.toContain('setLocalReady');
+    expect(requestPath).not.toContain('hostSetPlayerReady');
+
+    const overlay = read('src/scenes/LobbyOverlay.ts');
+    expect(overlay).toContain('setEnabled(showEntry && this.worldEntryAvailable && this.worldEntryEnabled');
+    expect(overlay).not.toContain('ui.lobby.enterRange');
+    expect(overlay).not.toContain('ui.lobby.leaveRange');
+  });
+
+  it('nennt die World-Funktion Testgelaende und trennt Entry, Exit und Optionen', () => {
+    const overlay = read('src/scenes/LobbyOverlay.ts');
+    expect(overlay).toContain("label: t('ui.lobby.testArea')");
+    expect(overlay).toContain("label: t('ui.lobby.returnToLobby')");
+    expect(overlay).toContain('private testAreaBtn:');
+    expect(overlay).toContain('private worldExitBtn:');
+    expect(overlay).toContain('COOP_ACTION_ROW_W');
+    expect(overlay).toContain('const showEntry = this.visible && !this.worldEntryInside;');
+    expect(overlay).toContain('showEntry && this.worldEntryAvailable && this.worldEntryEnabled');
+    expect(overlay).toContain('const showExit = this.worldEntryAvailable && this.worldEntryInside;');
+    expect(read('src/scenes/ArenaScene.ts')).toContain(
+      'canEnter: bridge.getPlayerReady(bridge.getLocalPlayerId()) === false,',
+    );
+
+    for (const locale of ['de', 'en']) {
+      const ui = read(`src/i18n/${locale}/ui.ts`);
+      expect(ui).toContain('"ui.lobby.testArea"');
+      expect(ui).toContain('"ui.lobby.returnToLobby"');
+      expect(ui).toContain('"ui.options.returnToLobbyHint"');
+      expect(ui).not.toContain('ui.lobby.enterRange');
+      expect(ui).not.toContain('ui.lobby.leaveRange');
+    }
+
+    const options = read('src/ui/OptionsOverlay.ts');
+    expect(options).toContain('export interface WorldLeaveBinding');
+    expect(options).toContain('binding.leave();');
+    expect(options).not.toContain('NetworkBridge');
+  });
+
+  it('behandelt ESC modale Oberflaechen vor dem World-Leave', () => {
+    const scene = read('src/scenes/ArenaScene.ts');
+    const start = scene.indexOf('    this.escapeHotkeyHandler = (event: KeyboardEvent) => {');
+    const end = scene.indexOf("    keyboard.on('keydown-ESC', this.escapeHotkeyHandler);", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const escapePath = scene.slice(start, end);
+
+    expect(escapePath).toContain('this.ctx.leftPanel.hideOptionsOverlay();');
+    expect(escapePath).toContain('this.ctx.leftPanel.isHotkeyInputBlocked()');
+    expect(escapePath).toContain('this.canLeaveLocalLobbyWorld()');
+    expect(escapePath).toContain('this.requestLocalLobbyWorldLeave();');
+    expect(escapePath.indexOf('isOptionsOverlayOpen')).toBeLessThan(
+      escapePath.indexOf('this.requestLocalLobbyWorldLeave();'),
+    );
+    expect(scene).toContain('leave: () => this.requestLocalLobbyWorldLeave(),');
+    expect(scene).toContain(': this.requestLocalLobbyWorldLeave(),');
+    expect(scene).toContain('this.lifecycle.requestLocalWorldParticipation(false);');
   });
 
   it('bindet den Eintrittswunsch an die World-Revision statt an World-Input', () => {
@@ -273,7 +342,7 @@ describe('LobbyWorld – Spawn gehoert der World', () => {
         free += 1;
       }
     }
-    // Der Schiessstand braucht Platz; ein einzelner Restzipfel waere kein Startpunkt.
+    // Das Testgelaende braucht Platz; ein einzelner Restzipfel waere kein Startpunkt.
     expect(free).toBeGreaterThan(200);
   });
 

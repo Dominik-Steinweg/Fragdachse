@@ -76,7 +76,7 @@ export interface WorldActionPolicy {
  *
  * Der Regelfall bleibt: keine Teilnahme, keine Darstellung – ein Host, der eine Shared World
  * nur simuliert, baut keine Darstellungsflaeche auf. Eine World kann das aber ausdruecklich
- * erlauben; die LobbyWorld ist genau dieser Fall. Sie entsteht als Preview: sichtbar, aber ohne
+ * erlauben; die LobbyWorld ist genau dieser Fall. Ohne Participation ist sie sichtbar, aber ohne
  * Spielfigur, ohne Weltkamera und ohne World-Input.
  */
 export interface WorldPresentationPolicy {

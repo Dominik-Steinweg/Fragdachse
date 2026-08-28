@@ -4,9 +4,8 @@ import type { GroundCoverPlacement, GroundCoverStampPlacement } from './GroundCo
 /**
  * Geometrie eines gebackenen Stempels.
  *
- * Die Arena verwendet die Platzierungen sowohl fuer den normalen Chunk-Bake als auch fuer den
- * einmaligen regionierten TerrainColorSnapshot. Die Lobby-Vorschau backt dagegen weiterhin
- * einmalig in eine bildschirmgrosse Textur und gibt die Geometrie zurueck.
+ * Die Platzierungen gehen sowohl in Chunk-Bakes als auch in den regionierten
+ * TerrainColorSnapshot der gebundenen World ein.
  */
 export interface DirtStamp {
   textureKey: string;

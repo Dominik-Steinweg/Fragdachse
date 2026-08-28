@@ -364,7 +364,8 @@ export class EffectSystem implements EnemyVisualSink {
   /**
    * Spielt einen Treffer rein lokal ab – Blutspritzer, Zielreaktion und Trefferton.
    *
-   * Gedacht für Treffer ohne replizierte Quelle, etwa die Ambient-Inszenierung der Lobby.
+   * Gedacht für Treffer ohne replizierte Quelle, etwa lokale Praesentationseffekte in einer
+   * Activity-losen World.
    * Ausgelassen wird ausschliesslich, was einen echten lokalen Spieler voraussetzt: die
    * Schadensvignette und die Bestätigung des eigenen Treffers.
    */

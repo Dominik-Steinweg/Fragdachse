@@ -20,18 +20,18 @@ import type {
 import { getTopDownMuzzleOrigin, type MuzzleOrigin } from '../config';
 
 /**
- * Fire-Typen, die über einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch außerhalb
- * eines Matches (lokale Lobby-Inszenierung) benutzbar sind.
+ * Fire-Typen, die über einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch ohne
+ * Activity-spezifische Ressourcen- und Netzwerkvertraege benutzbar sind.
  *
  * Alle übrigen Typen – Flammenwerfer, Laubbläser, Tesla-Kuppel, Heilaura, Energieschild,
  * Verstärkungsmatrix, Energieinjektor – hängen an Ressourcen-, Runden- oder Netzwerkzustand.
- * Sie werden **nicht** vereinfacht nachgebaut; sie sind schlicht nicht Ambient-kompatibel.
+ * Sie laufen deshalb nicht über diesen zustandsarmen Pfad.
  */
 export const AMBIENT_COMPATIBLE_FIRE_TYPES = ['projectile', 'hitscan', 'melee'] as const;
 
 export type AmbientCompatibleFireType = typeof AMBIENT_COMPATIBLE_FIRE_TYPES[number];
 
-/** Ist der Fire-Typ dieser Waffe über den gemeinsamen Executor abbildbar? */
+/** Ist der Fire-Typ dieser Waffe über den gemeinsamen, zustandsarmen Executor abbildbar? */
 export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
   return (AMBIENT_COMPATIBLE_FIRE_TYPES as readonly string[]).includes(config.fire.type);
 }
@@ -39,7 +39,7 @@ export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
 /** Normalisierter Hitscan-Schuss – frei von Waffen-, Ressourcen- und Netzwerkwissen. */
 export interface HitscanShotRequest {
   shooterId:       string;
-  /** Ursprünglicher Fire-Request-Ursprung; fehlt bei rein lokalen Ambient-/Headless-Aufträgen. */
+  /** Ursprünglicher Fire-Request-Ursprung; fehlt bei rein lokalen oder Headless-Aufträgen. */
   shooterX?:        number;
   shooterY?:        number;
   /** Gewünschter Gameplay-Start; der Host kann ihn vor dem Trace sicher auflösen. */
@@ -100,9 +100,8 @@ export interface MeleeSwingRequest {
 /**
  * Ziel der drei gemeinsamen Fire-Pfade.
  *
- * Im Gameplay füllt der `LoadoutManager` diese Grenze mit `ProjectileManager` und
- * `CombatSystem`; in der Lobby liegt dahinter der lokale Ambient-Projektilmanager und ein
- * lokaler Treffer-Resolver. Der Executor selbst kennt keine der beiden Seiten.
+ * Der `LoadoutManager` füllt diese Grenze mit `ProjectileManager` und `CombatSystem`. Der
+ * Executor kennt weder deren Lifecycle noch die konkrete World-/Activity-Semantik.
  */
 export interface WeaponFireSink {
   spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): boolean | void;
@@ -142,7 +141,8 @@ export interface WeaponFireParams {
   options?:    WeaponFireOptions;
   /**
    * Bereits gezahlte Adrenalinkosten der Mini-Rakete. Wird nur für diese eine Waffe abgefragt,
-   * damit der Executor selbst keine Ressourcenverwaltung braucht. Ambient liefert nichts.
+   * damit der Executor selbst keine Ressourcenverwaltung braucht. Ein Aufruf ohne
+   * Ressourcen-Runtime liefert nichts.
    */
   resolvePaidAdrenalineCost?: () => number;
 }
@@ -194,12 +194,12 @@ export function getHitscanRequestRange(
 }
 
 /**
- * Zustandsarmer Fire-Dispatch für die Ambient-kompatiblen Waffentypen.
+ * Zustandsarmer Fire-Dispatch für die gemeinsamen Projektil-, Hitscan- und Melee-Pfade.
  *
  * Er übersetzt eine {@link WeaponConfig} in Projektil-, Hitscan- oder Melee-Aufträge und hält
  * dabei **keine** Ressourcenverwaltung, Progression, Items, Netzwerklogik oder Matchstatistik.
- * Genau diese Trennung erlaubt es der Lobby, echte Waffen zu zeigen, ohne eine zweite
- * Waffenmechanik zu bauen.
+ * Genau diese Trennung erlaubt es verschiedenen Aufrufern, dieselbe Waffenbeschreibung ohne
+ * eine zweite Waffenmechanik zu verwenden.
  */
 export class WeaponFireExecutor {
   constructor(private readonly sink: WeaponFireSink) {}

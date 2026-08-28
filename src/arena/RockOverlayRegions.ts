@@ -11,7 +11,7 @@ import { ROCK_VEGETATION_MASK_MARGIN_PX } from './RockVegetationConfig';
  * unveraenderter Felsflaechen haengt:
  *
  * 1. Die Materialquelle (welche Zellen Flecken, Moos und Matten erzeugen) ist der **vollstaendige**
- *    Felsbestand der Runde und schrumpft nie. Nur die aktuelle Silhouette entscheidet, was davon
+ *    Felsbestand der World und schrumpft nie. Nur die aktuelle Silhouette entscheidet, was davon
  *    sichtbar bleibt.
  * 2. Der Dirty-Bereich einer Aenderung ist die Reichweite der betroffenen *Masken*, nicht die
  *    Zelle selbst. Wer zu klein waehlt, hinterlaesst Saeume an den Chunkgrenzen; wer zu gross

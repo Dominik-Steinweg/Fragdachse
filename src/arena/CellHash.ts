@@ -17,7 +17,7 @@ export function hashCell01(gridX: number, gridY: number, salt: number): number {
 }
 
 /**
- * Seed-abhaengige Variante fuer Felder, die pro Runde anders aussehen sollen.
+ * Seed-abhaengige Variante fuer Felder, die pro World anders aussehen sollen.
  *
  * Der Seed laeuft durch eine eigene Avalanche-Runde, bevor er in den Salt eingeht. Eine blosse
  * Addition wuerde `seed + k` nicht von `(seed + 1) + (k - 1)` unterscheiden; benachbarte

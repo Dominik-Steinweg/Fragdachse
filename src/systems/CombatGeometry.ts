@@ -31,10 +31,10 @@ export interface ObstacleTraceOptions {
 /**
  * Gemeinsamer mathematischer Kern aller segmentbasierten Trefferprüfungen.
  *
- * Gameplay (`CombatSystem`) und die lokale Lobby-Inszenierung benutzen dieselbe Instanz-Art
+ * Gameplay (`CombatSystem`) und eigenständige oder Headless-Aufrufer benutzen dieselbe Instanz-Art
  * dieser Klasse: Sichtlinie, Hitscan-Hindernis, Melee-Bogen und Korridorfreiheit dürfen sich
- * zwischen Arena und Lobby nicht unterscheiden. Die Klasse hält ausschließlich Scratch-Objekte
- * – keinen Spiel-, Runden- oder Netzwerkzustand – und liest die Hindernisgeometrie über den
+ * nicht zwischen Aufrufern unterscheiden. Die Klasse hält ausschließlich Scratch-Objekte
+ * – keinen Spiel-, Activity-, Runden- oder Netzwerkzustand – und liest die Hindernisgeometrie über den
  * übergebenen {@link ArenaObstacleIndex}.
  *
  * Die Scratch-Objekte machen die Methoden bewusst nicht wiedereintrittsfähig: ein Ergebnis

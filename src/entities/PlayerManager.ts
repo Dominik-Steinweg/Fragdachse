@@ -264,9 +264,9 @@ export class PlayerManager implements OwnerVisualSource {
   }
 
   /**
-   * Besitzerzustand für Renderer und `ProjectileManager` ({@link OwnerVisualSource}). Der
-   * Gameplay-Zweig dieser Grenze; die Lobby liefert denselben Zustand aus ihrer
-   * Ambient-Actor-Registry.
+   * Besitzerzustand für Renderer und `ProjectileManager` ({@link OwnerVisualSource}) aus der
+   * zugehoerigen PlayerEntity und ihrer Runtime. Die Sichtbarkeit bleibt ein lokales
+   * Presentation-Merkmal.
    */
   getOwnerVisualState(ownerId: string): OwnerVisualState | null {
     const player = this.players.get(ownerId);

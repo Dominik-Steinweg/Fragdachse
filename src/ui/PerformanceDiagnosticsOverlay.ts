@@ -93,6 +93,10 @@ export class PerformanceDiagnosticsOverlay {
     else this.show();
   }
 
+  isOpen(): boolean {
+    return this.panel !== null;
+  }
+
   show(): void {
     if (this.panel || typeof document === 'undefined') return;
     const panel = document.createElement('div');

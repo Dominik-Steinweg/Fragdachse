@@ -197,7 +197,7 @@ export class ProjectileManager {
 
   /**
    * Setzt die Kollisions-Gruppen für Felsen und Trunks.
-   * Wird nach Arena-Aufbau aufgerufen; bei null (Lobby-Teardown) alles leeren.
+   * Wird nach World-Aufbau aufgerufen; bei null (World-Teardown) alles leeren.
    */
   setRockGroup(
     group:      Phaser.Physics.Arcade.StaticGroup | null,

@@ -137,7 +137,7 @@ export interface PerformanceAblationDeps {
   getQualityController: () => GraphicsQualityController | null;
   /**
    * Schatten haben eine eigene Sichtbarkeits-API, getrennt nach gebackenen statischen Layern
-   * und den pro Frame gezeichneten dynamischen. `null` ausserhalb einer Runde.
+   * und den pro Frame gezeichneten dynamischen. `null`, wenn kein World-Renderer gebunden ist.
    */
   getShadowSystem: () => {
     setStaticVisible(visible: boolean): void;
@@ -147,7 +147,7 @@ export interface PerformanceAblationDeps {
    * Das Lightmap-Composite braucht einen eigenen Schalter. Über den generischen Scan ist
    * es nicht abzuschalten: `LightingSystem.update()` setzt die Sichtbarkeit des Overlays
    * jeden Frame neu, ein `setVisible(false)` von aussen wäre einen Frame später wieder
-   * überschrieben und das Segment würde nichts messen. `null` ausserhalb einer Runde.
+   * überschrieben und das Segment würde nichts messen. `null`, wenn kein World-Renderer gebunden ist.
    */
   getLightingSystem: () => {
     setCompositeSuppressed(suppressed: boolean): void;

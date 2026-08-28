@@ -345,6 +345,7 @@ export class ArenaScene extends Phaser.Scene {
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
   private coopDefenseDebugDamageKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
+  private escapeHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private weaponBalanceLabHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
@@ -974,7 +975,7 @@ export class ArenaScene extends Phaser.Scene {
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
-      // Round-scoped (start null)
+      // World-/Activity-scoped (start null)
       world: null, arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseSession: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
@@ -1558,7 +1559,9 @@ export class ArenaScene extends Phaser.Scene {
       () => leftPanel.showOptionsOverlay(),
       () => this.openCoopDefenseUpgradesOverlay(),
       () => this.openCoopDefenseItemsOverlay(),
-      (enter) => this.lifecycle.requestLocalWorldParticipation(enter),
+      (enter) => enter
+        ? this.lifecycle.requestLocalWorldParticipation(true)
+        : this.requestLocalLobbyWorldLeave(),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
@@ -1634,6 +1637,10 @@ export class ArenaScene extends Phaser.Scene {
     leftPanel.setSpectatorMatchBinding({
       canSpectate: () => this.lifecycle.canEnterSpectatorMode(),
       spectate: () => this.lifecycle.enterSpectatorMode(),
+    });
+    leftPanel.setWorldLeaveBinding({
+      canLeave: () => this.canLeaveLocalLobbyWorld(),
+      leave: () => this.requestLocalLobbyWorldLeave(),
     });
 
     if (bridge.isHost()) {
@@ -1825,19 +1832,22 @@ export class ArenaScene extends Phaser.Scene {
 
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer den
-    // Schiessstand betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
+    // das Testgelaende betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
     if (!terminated && phase === 'LOBBY' && !deferArenaExit) this.lifecycle.syncLobbyTimeOfDay();
     // Die Oberflaeche folgt der Presentation. Ein technischer Abbruch fuehrt sie selbst zurueck
     // und darf hier nicht ueberschrieben werden.
     if (!terminated) this.lifecycle.syncLobbySurface(presentationPolicy.showLobby);
-    // Der Live-Build bleibt auch im interaktiven Schiessstand sichtbar. Er ist absichtlich kein
+    // Der Live-Build bleibt auch im interaktiven Testgelaende sichtbar. Er ist absichtlich kein
     // Ready-Commit und wird deshalb unabhaengig davon pro Lobby-Frame publiziert.
     if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
       bridge.setLocalLobbyLoadoutPreview(this.buildLocalLobbyLoadoutPreview());
     }
     this.lobbyOverlay.setWorldEntryState(
       this.lifecycle.canSelfAdmitToWorld()
-        ? { inside: this.lifecycle.isLocalWorldParticipant() }
+        ? {
+          inside: this.lifecycle.isLocalWorldParticipant(),
+          canEnter: bridge.getPlayerReady(bridge.getLocalPlayerId()) === false,
+        }
         : null,
     );
     if (!terminated && presentationPolicy.showLobby) {
@@ -2355,7 +2365,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const shadowStepStartMs = diagnosticsActive ? visualsEndMs : 0;
     const trainState = inRoundWorld ? this.resolveTrainState() : null;
-    // Keep round-scoped static shadows alive while the arena is hidden behind the loading veil;
+    // Keep World-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
     const shadowArenaActive = inArena || (inGame && !terminated);
     this.syncWorldShadows(shadowArenaActive, trainState);
@@ -2976,14 +2986,14 @@ export class ArenaScene extends Phaser.Scene {
 
   private startWeaponBalanceLab(request: RuntimeBenchmarkRequest): WeaponBalanceLabStartResult {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) {
-      return { ok: false, message: 'Der Schießstand kann nur in der Coop-Defense-Lobby starten.' };
+      return { ok: false, message: 'Das Testgelände kann nur in der Coop-Defense-Lobby starten.' };
     }
-    if (!bridge.isHost()) return { ok: false, message: 'Nur der Host kann den Schießstand starten.' };
+    if (!bridge.isHost()) return { ok: false, message: 'Nur der Host kann das Testgelände starten.' };
     if (bridge.getConnectedPlayers().length !== 1) {
       return { ok: false, message: 'Balance Lab 2.0 ist zunächst ausschließlich für Solo-Hosts verfügbar.' };
     }
     if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) {
-      return { ok: false, message: 'Vor dem Schießstand muss der Spieler nicht bereit sein.' };
+      return { ok: false, message: 'Vor dem Testgelände muss der Spieler nicht bereit sein.' };
     }
     if (this.roomQualityMonitor.shouldBlockStart()) {
       return { ok: false, message: 'Der normale Startschutz blockiert den Rundenstart momentan.' };
@@ -3659,6 +3669,85 @@ export class ArenaScene extends Phaser.Scene {
     // K bleibt fuer den optionalen Debug-Schaden abfragbar, darf aber kein DOM-Textfeld
     // blockieren, weil der Buchstabe auch in Spielernamen verwendet wird.
     this.coopDefenseDebugDamageKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K, false);
+    if (this.escapeHotkeyHandler) {
+      keyboard.off('keydown-ESC', this.escapeHotkeyHandler);
+      this.escapeHotkeyHandler = null;
+    }
+    this.escapeHotkeyHandler = (event: KeyboardEvent) => {
+      if (event.repeat || !this.ctx) return;
+
+      if (!this.canLeaveLocalLobbyWorld()) return;
+
+      // ESC schliesst immer zuerst die oberste UI-Schicht. Erst wenn keine modale oder
+      // eingabeblockierende Oberflaeche offen ist, darf es die World-Teilnahme verlassen.
+      if (this.ctx.leftPanel.isHelpOverlayOpen()) {
+        this.ctx.leftPanel.hideHelpOverlay();
+        event.preventDefault();
+        return;
+      }
+      if (this.ctx.leftPanel.isOptionsOverlayOpen()) {
+        this.ctx.leftPanel.hideOptionsOverlay();
+        event.preventDefault();
+        return;
+      }
+      if (this.coopDefenseUpgradesOverlay?.isOpen()) {
+        this.coopDefenseUpgradesOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.coopDefenseXpDebugOverlay?.isOpen()) {
+        this.coopDefenseXpDebugOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.itemsOverlay?.isOpen()) {
+        this.itemsOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.itemRewardOverlay?.isVisible()) {
+        this.itemRewardOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.matchResultsOverlay?.isVisible()) {
+        this.matchResultsOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.roomStatisticsOverlay?.isVisible()) {
+        this.roomStatisticsOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.weaponBalanceLabOverlay?.isOpen()) {
+        this.weaponBalanceLabOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.netDebugOverlay?.isOpen()) {
+        this.netDebugOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.performanceDiagnosticsOverlay?.isOpen()) {
+        this.performanceDiagnosticsOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.timeOfDayDebugOverlay?.isOpen()) {
+        this.timeOfDayDebugOverlay.hide();
+        event.preventDefault();
+        return;
+      }
+      if (this.ctx.leftPanel.isHotkeyInputBlocked()) {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      this.requestLocalLobbyWorldLeave();
+    };
+    keyboard.on('keydown-ESC', this.escapeHotkeyHandler);
     if (this.optionsHotkeyHandler) {
       keyboard.off('keydown-O', this.optionsHotkeyHandler);
       this.optionsHotkeyHandler = null;
@@ -3755,6 +3844,10 @@ export class ArenaScene extends Phaser.Scene {
 
     this.events.once('shutdown', () => {
       this.persistentBaseVisuals?.destroy();
+      if (this.escapeHotkeyHandler) {
+        keyboard.off('keydown-ESC', this.escapeHotkeyHandler);
+        this.escapeHotkeyHandler = null;
+      }
       if (this.timeOfDayHotkeyHandler) {
         keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
         this.timeOfDayHotkeyHandler = null;
@@ -3806,6 +3899,16 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers?.carryZones.clear();
       this.renderers?.objectiveRepairDrones.destroy();
     });
+  }
+
+  private canLeaveLocalLobbyWorld(): boolean {
+    return bridge.getGamePhase() === 'LOBBY'
+      && bridge.getActivityDescriptor() === null
+      && bridge.getLocalWorldParticipation() === 'interactive';
+  }
+
+  private requestLocalLobbyWorldLeave(): void {
+    this.lifecycle.requestLocalWorldParticipation(false);
   }
 
   /**

@@ -68,7 +68,7 @@ export class WeaponBalanceLabOverlay {
       background: 'rgba(18, 22, 17, 0.98)', boxShadow: '0 16px 48px rgba(0,0,0,.55)',
     });
     const title = document.createElement('h2');
-    title.textContent = 'Balance Lab 2.0 – Schießstand';
+    title.textContent = 'Balance Lab 2.0 – Testgelände';
     title.style.margin = '0 0 6px';
     const intro = document.createElement('p');
     intro.textContent = 'Startet eine frische interne Runde mit echtem Waffen-, Projektil-, Treffer- und Ressourcenpfad. Klasse, Items und allgemeine Upgrades bleiben neutral.';
@@ -97,7 +97,7 @@ export class WeaponBalanceLabOverlay {
     const buttons = document.createElement('div');
     Object.assign(buttons.style, { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' });
     const startButton = document.createElement('button');
-    startButton.textContent = 'Schießstand starten';
+    startButton.textContent = 'Testgelände starten';
     const closeButton = document.createElement('button'); closeButton.textContent = 'Schließen';
     const jsonButton = document.createElement('button'); jsonButton.textContent = 'JSON exportieren';
     const csvButton = document.createElement('button'); csvButton.textContent = 'CSV exportieren';
@@ -115,7 +115,7 @@ export class WeaponBalanceLabOverlay {
         settleMs: 2_000,
       });
       if (result.ok) this.hide();
-      else status.textContent = result.message ?? 'Der Schießstand konnte nicht gestartet werden.';
+      else status.textContent = result.message ?? 'Das Testgelände konnte nicht gestartet werden.';
     };
     closeButton.onclick = () => this.hide();
     jsonButton.onclick = () => download(

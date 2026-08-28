@@ -20,7 +20,7 @@ export interface OrganicDirtMarginOptions {
 /**
  * Erzeugt den ein-zelligen Dirt-Saum um Felsen, Gleise oder andere belegte Zellen.
  *
- * Die Funktion ist absichtlich geometrieunabhaengig: Arena-Generator und Lobby-Vorschau
+ * Die Funktion ist absichtlich geometrieunabhaengig: Generator und authored World-Layouts
  * verwenden exakt dieselbe Randregel, waehrend ihre Layout- und Reserveflaechen getrennt bleiben.
  */
 export function createOrganicDirtMargin(

@@ -48,10 +48,8 @@ import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 /**
  * Weltausschnitt, in dem ein Felsbestand liegt.
  *
- * Die Arena benutzt die aktiven Arena-Metriken; die Lobby-Vorschau spannt einen eigenen,
- * bildschirmbreiten Rahmen auf. Bau, Zerstörung und Overlay-Neubau der Felsen laufen deshalb
- * über diesen Parameter statt über die globalen `ARENA_*`-Werte – nur so kann die Lobby
- * denselben Darstellungspfad benutzen, statt einen zweiten zu bauen.
+ * World-Bau und -Darstellung reichen diesen Rahmen explizit weiter. Er darf nicht aus den globalen
+ * `ARENA_*`-Werten rekonstruiert werden, weil jede World eigene Metriken tragen kann.
  */
 export interface RockWorldFrame {
   offsetX: number;
@@ -60,16 +58,13 @@ export interface RockWorldFrame {
   height: number;
 }
 
-/**
- * Rahmen der laufenden Arena. Bewusst eine Funktion: `ARENA_*` sind zur Laufzeit
- * veränderlich (breite Coop-Karten, Capture the Beer).
- */
+/** Kompatibilitätsrahmen des globalen Arena-Spiegels; World-Aufrufer reichen ihren Rahmen explizit ein. */
 export function getArenaRockWorldFrame(): RockWorldFrame {
   return { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, width: ARENA_WIDTH, height: ARENA_HEIGHT };
 }
 
 export interface ArenaBuilderResult {
-  /** CTB-Basis-Tintflächen (round-scoped). Coop-Defense-Basen leben in BaseManager. */
+  /** CTB-Basis-Tintflächen dieser World (reine Presentation). Coop-Defense-Basen leben in BaseManager. */
   baseZoneObjects: Phaser.GameObjects.Rectangle[];
   /** StaticGroup mit nicht rendernden Fels-Proxies. */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
@@ -104,9 +99,9 @@ export interface ArenaBuilderResult {
    */
   groundSurface: GroundSurfaceStreamer | null;
   /**
-   * Die Ground-Cover-Platzierungen der Runde. Einmalig aus `layout.seed` und `layout.dirt`
+   * Die Ground-Cover-Platzierungen dieser World. Einmalig aus `layout.seed` und `layout.dirt`
    * erzeugt und danach unveraendert: Sie sind die Quelle jedes Chunk-Bakes und muessen deshalb
-   * ueber die gesamte Runde dieselben bleiben, sonst spraenge die Schicht beim Wiederbetreten.
+   * ueber die gesamte World-Lebensdauer dieselben bleiben, sonst spraenge die Schicht beim Wiederbetreten.
    */
   groundCoverPlacements: GroundCoverPlacement[];
   /**
@@ -115,21 +110,21 @@ export interface ArenaBuilderResult {
    */
   rockOverlaySurface: RockOverlayStreamer | null;
   /**
-   * Materialquelle aller felsgebundenen Overlays: jede Zelle, auf der in dieser Runde je ein Fels
+   * Materialquelle aller felsgebundenen Overlays: jede Zelle, auf der in dieser World je ein Fels
    * stand. Sie waechst mit gebauten Felsen und schrumpft nie – nur so bleiben Materialflecken,
    * Moos und Kantenmatten auf unbeteiligten Felsen nach einer Zerstoerung Pixel fuer Pixel stehen
    * (siehe {@link ./RockOverlayRegions}).
    */
   rockOverlaySource: RockOverlaySource;
   /**
-   * Die Moosflecken der Runde. Einmalig aus `layout.seed` und dem **vollstaendigen** Felsbestand
+   * Die Moosflecken dieser World. Einmalig aus `layout.seed` und dem **vollstaendigen** Felsbestand
    * erzeugt und danach unveraendert: Eine Zerstoerung darf die Platzierung nicht neu auswuerfeln,
    * sonst spraenge das Moos auf allen unbeteiligten Felsen. Sichtbar ist davon immer nur, was die
    * Stanzform des aktuellen Bestands durchlaesst.
    */
   rockMossPlacements: RockMossPlacement[];
   /**
-   * Die Kantenmatten der Runde. Einmalig aus `layout.seed` und dem **vollstaendigen** Felsbestand
+   * Die Kantenmatten dieser World. Einmalig aus `layout.seed` und dem **vollstaendigen** Felsbestand
    * erzeugt und danach unveraendert – dieselbe Regel wie bei `rockMossPlacements`, hier zusaetzlich
    * die Voraussetzung dafuer, dass eine Zerstoerung nur den Anteil des gefallenen Felsens entfernt
    * und die uebrige Matte Pixel fuer Pixel stehen laesst.
@@ -224,11 +219,11 @@ export class ArenaBuilder {
     }
   }
 
-  // ── Dynamische Teile (einmal pro Runde) ────────────────────────────────────
+  // ── Dynamische Teile (einmal pro World-Instanz) ────────────────────────────
 
   /**
    * Baut Felsen und Bäume anhand des übergebenen Layouts.
-   * Wird pro Runde einmalig aufgerufen. Rückgabe muss in ArenaScene
+   * Wird pro World-Instanz einmalig aufgerufen. Rückgabe muss in ArenaScene
    * gespeichert werden; `destroy()` räumt alles wieder auf.
    */
   buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions): ArenaBuilderResult {
@@ -261,7 +256,7 @@ export class ArenaBuilder {
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = presentation ? this.buildTracks(layout.tracks ?? [], worldMetrics) : [];
 
-    // Ground-Cover-Platzierungen entstehen genau einmal je Runde und bleiben danach
+    // Ground-Cover-Platzierungen entstehen genau einmal je World und bleiben danach
     // unveraendert; sie sind die Quelle jedes Chunk-Bakes dieser Schicht.
     const groundCoverPlacements = generateGroundCoverPlacements({
       seed: layout.seed,
@@ -762,7 +757,7 @@ export class ArenaBuilder {
    * ohnehin aus dem dann aktuellen Weltzustand.
    *
    * Alle vier Schichten folgen derselben Regel: Ihre Platzierung entsteht aus dem **vollstaendigen**
-   * Felsbestand der Runde und wird nie neu ausgewuerfelt; neu gebacken wird ausschliesslich der
+   * Felsbestand der World und wird nie neu ausgewuerfelt; neu gebacken wird ausschliesslich der
    * Schnitt auf den aktuellen Bestand. Ein zerstoerter Fels nimmt damit genau seinen eigenen Anteil
    * mit und laesst die uebrigen Flaechen Pixel fuer Pixel stehen.
    */

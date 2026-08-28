@@ -275,7 +275,7 @@ export class LightingSystem {
   }
 
   /**
-   * Uhrzeit der Runde. Ändert ausschließlich Werte, nie den Rechenweg – siehe
+   * Uhrzeit der aktuellen World-Darstellung. Ändert ausschließlich Werte, nie den Rechenweg – siehe
    * {@link resolveSkyState}. Vor `setActive(true)` setzen, damit der erste Frame schon
    * mit dem richtigen Ambient läuft.
    */

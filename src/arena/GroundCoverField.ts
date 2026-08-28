@@ -42,10 +42,10 @@ export interface GroundCoverPlacement extends GroundCoverStampPlacement {
 export interface GroundCoverFieldOptions {
   seed: number;
   dirt: readonly DirtCell[];
-  /** Rahmen und Gittergroesse. Ohne Angabe die laufenden Arena-Metriken. */
+  /** Rahmen und Gittergroesse. Ohne Angabe gilt der globale Kompatibilitaetsrahmen. */
   metrics?: ArenaVisualGridMetrics;
   config?: GroundCoverLayerConfig;
-  /** Zellen, auf denen kein Anker liegen darf (z. B. UI-Reservezonen der Lobby-Vorschau). */
+  /** Zellen, auf denen kein Anker liegen darf (z. B. UI-Reservezonen der LobbyWorld). */
   excludeCell?: (gridX: number, gridY: number) => boolean;
 }
 

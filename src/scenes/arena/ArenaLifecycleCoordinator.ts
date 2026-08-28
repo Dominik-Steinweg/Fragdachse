@@ -629,7 +629,7 @@ export class ArenaLifecycleCoordinator {
       return;
     }
 
-    // Solange noch eine Arena-Runtime steht - etwa waehrend der Lobby-Ausblendung nach dem
+    // Solange noch eine Match-World-Runtime steht - etwa waehrend der Lobby-Ausblendung nach dem
     // Rundenende - entsteht keine neue LobbyWorld. Sonst wuerde ihr Aufbau die alte Arena
     // mitten in der Transition ersetzen.
     if (this.arenaBuilt) return;
@@ -714,7 +714,7 @@ export class ArenaLifecycleCoordinator {
     // a stale reliable acknowledgement must never be able to match a new round by coincidence.
     // Die LobbyWorld endet mit dem Matchstart. Ohne diesen Schnitt haelten Host und Clients im
     // Wartefenster bis zum Match-Descriptor die Lobby-Instanz fuer die Rundenwelt. Ihre
-    // Teilnehmer fallen mit ihr - kein Schiessstand-Spieler reist in die Match-World mit.
+    // Teilnehmer fallen mit ihr - kein Testgelaende-Spieler reist in die Match-World mit.
     this.detachAllWorldPlayers();
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
@@ -1013,7 +1013,7 @@ export class ArenaLifecycleCoordinator {
 
     this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
     bridge.publishCoopDefenseRespawnBudgetState(null);
-    // Mit der Runde endet auch die World-Instanz. Ohne Phase, Runde und World bleibt kein
+    // Diese Match-World endet hier gemeinsam mit ihrem Durchlauf. Ohne Phase, Activity und World bleibt kein
     // replizierter Weltzustand stehen, den eine spaetere Instanz faelschlich uebernehmen koennte.
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
@@ -1147,7 +1147,7 @@ export class ArenaLifecycleCoordinator {
       this.finalizeDismantledConstruction(removed, false);
       removedCount += 1;
     }
-    // Guest constructions outside a persistent base are still round-owned runtime objects and
+    // Guest constructions outside a persistent base are still World-owned runtime objects and
     // must not survive the owner's final leave/spectator transition.
     for (const construction of this.ctx.placementSystem?.getOwnedConstructions(playerId) ?? []) {
       // Older snapshots may not carry the explicit ownership field yet. The owner identity still
@@ -1224,7 +1224,8 @@ export class ArenaLifecycleCoordinator {
    * sie zu, damit keine Runtime in eine gerade endende Instanz faellt.
    */
   canSelfAdmitToWorld(): boolean {
-    return this.worldLifecycle.isActive()
+    return bridge.getGamePhase() === 'LOBBY'
+      && this.worldLifecycle.isActive()
       && this.arenaBuilt
       && !this.matchTerminated
       && !this.roundStartPending
@@ -1242,6 +1243,10 @@ export class ArenaLifecycleCoordinator {
   hostHandleWorldParticipationRequest(playerId: string, join: boolean): boolean {
     if (!bridge.isHost() || !this.canSelfAdmitToWorld()) return false;
     if (!bridge.getConnectedPlayerIds().includes(playerId)) return false;
+    // Ready bedeutet abgeschlossene Vorbereitung. Ein bereit markierter Spieler darf daher
+    // nicht neu in die interaktive LobbyWorld aufgenommen werden; Leave bleibt unabhaengig
+    // davon moeglich und veraendert den Ready-State nicht.
+    if (join && bridge.getPlayerReady(playerId)) return false;
     if (join) this.hostAdmitToWorld(playerId);
     else this.hostRemoveFromWorld(playerId);
     // Aufnahme und Runtime gehoeren zum selben Schritt: erst danach steht `interactive`.
@@ -2397,7 +2402,7 @@ export class ArenaLifecycleCoordinator {
     // Wer in dieser World eine Spielfigur bekommt, entscheidet die Runde – solange es eine gibt.
     // `canPlayerInitialSpawn()`/`canPlayerRespawn()` verlangen ARENA-Phase und Rundenbesetzung
     // und koennen eine World ohne Activity gar nicht beantworten; dort traegt die World-Teilnahme
-    // die Antwort. Ohne diese Trennung bekaeme ein Schiessstand-Teilnehmer nie Leben.
+    // die Antwort. Ohne diese Trennung bekaeme ein Testgelaende-Teilnehmer nie Leben.
     this.ctx.combatSystem.setInitialSpawnAllowedResolver((playerId) => (
       this.worldLifecycle.activity.isActive()
         ? bridge.canPlayerInitialSpawn(playerId)
@@ -3754,7 +3759,7 @@ export class ArenaLifecycleCoordinator {
 
   tearDownArena(preserveAuthoredPresentation = false): void {
     // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
-    // Schiessstand-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
+    // Testgelaende-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
     // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die
     // Detach-Module genau diese Systeme noch brauchen.
     this.detachAllWorldPlayers();
@@ -3776,8 +3781,8 @@ export class ArenaLifecycleCoordinator {
     this.timeOfDayController = null;
     this.appliedRuntimeTimeOfDayMinutes = null;
     this.roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
-    // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurücksetzen, damit die
-    // Lobby nicht die Dämpfung der letzten Map erbt.
+    // Beim World-Teardown gibt es keinen gebundenen Runtime-Zustand; neutral zurücksetzen, damit
+    // die nächste World ihre Beleuchtung selbst setzt.
     setEmissiveScale(1);
     this.ctx.coopDefenseEnemyAbilitySystem?.clear();
     this.ctx.coopDefenseEnemyBurrowSystem?.clear();
@@ -5477,7 +5482,7 @@ function compareGuestRestoreBlueprints(
 }
 
 /**
- * Uhrzeit der Runde. Nur Coop-Defense-Maps setzen eine eigene; alle übrigen Modi bleiben
+ * Uhrzeit der laufenden Activity. Nur Coop-Defense-Maps setzen eine eigene; alle übrigen Modi bleiben
  * beim Mittag und damit exakt bei den bisherigen Kosten und der bisherigen Optik. Host
  * und Client lösen dieselbe Map-Konfiguration auf, deshalb ist kein eigener Netzwerkpfad
  * nötig – das gilt auch für den lokalen Debug-Regler, der bewusst nur den eigenen Client

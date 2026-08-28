@@ -62,7 +62,7 @@ import type { CameraFeedbackController } from '../../effects/camera/CameraFeedba
 import type { LocalDistortionComposer } from '../../effects/distortion/LocalDistortionComposer';
 import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 
-/** All visual renderers grouped together. Round-scoped renderers start as null. */
+/** All visual renderers grouped together. World-dependent renderers start as null. */
 export interface RendererBundle {
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
@@ -119,7 +119,7 @@ export interface RendererBundle {
   powerUp:             PowerUpRenderer;
   shadow:              ShadowSystem;
   lighting:            LightingSystem;
-  // Round-scoped: created in buildArena(), destroyed in tearDownArena()
+  // World-scoped presentation renderers: created when a World is built and cleared on World teardown.
   train:               TrainRenderer | null;
   translocatorTeleport: TranslocatorTeleportRenderer | null;
 }
@@ -324,9 +324,8 @@ export function createRendererBundle(
  * Verbindet einen ProjectileManager mit allen Projektil-Renderern.
  *
  * Bewusst getrennt von {@link wireRenderersToProjManager}: Diese Funktion berührt
- * ausschliesslich den übergebenen Manager. Der lokale Ambient-Manager der Lobby benutzt
- * dieselben Renderer, darf aber die *bundle-weiten* Provider des Gameplays nicht
- * überschreiben – sonst zeigte das Energieschild der Arena auf Lobby-Actors.
+ * ausschliesslich den übergebenen Manager und darf die *bundle-weiten* Provider des
+ * Gameplay-Managers nicht überschreiben.
  */
 export function wireProjectileRenderers(
   bundle: RendererBundle,

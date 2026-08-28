@@ -124,8 +124,10 @@ const COOP_BTN_Y = COOP_BAND_TOP + 100;
 const COOP_BTN_W = 190;
 const COOP_BTN_H = 44;
 const COOP_BTN_GAP = SPACE.lg;
-const COOP_UPGRADE_BTN_X = PANEL_CX - (COOP_BTN_W + COOP_BTN_GAP) / 2;
-const COOP_ITEMS_BTN_X = PANEL_CX + (COOP_BTN_W + COOP_BTN_GAP) / 2;
+const COOP_ACTION_ROW_W = COOP_BTN_W * 3 + COOP_BTN_GAP * 2;
+const COOP_UPGRADE_BTN_X = PANEL_CX - COOP_ACTION_ROW_W / 2 + COOP_BTN_W / 2;
+const COOP_TEST_AREA_BTN_X = PANEL_CX;
+const COOP_ITEMS_BTN_X = PANEL_CX + COOP_ACTION_ROW_W / 2 - COOP_BTN_W / 2;
 const COOP_BAR_TEX_KEY = '_lobby_coop_xpbar';
 
 // ── Handlungsaufruf ──────────────────────────────────────────────────────────
@@ -165,13 +167,9 @@ const SYSTEM_BAR_Y = GAME_HEIGHT - SYSTEM_BAR_MARGIN - SYSTEM_BAR_H / 2;
 const FULLSCREEN_BTN_X = GAME_WIDTH - SYSTEM_BAR_MARGIN - FULLSCREEN_BTN_W / 2;
 const OPTIONS_BTN_X = FULLSCREEN_BTN_X - FULLSCREEN_BTN_W / 2 - SYSTEM_BAR_GAP - OPTIONS_BTN_W / 2;
 const HELP_BTN_X = OPTIONS_BTN_X - OPTIONS_BTN_W / 2 - SYSTEM_BAR_GAP - HELP_BTN_W / 2;
-/**
- * Ein- und Austritt in die LobbyWorld sitzen an derselben Stelle wie die uebrigen
- * Systemhandlungen. Der Button bleibt aber sichtbar, wenn das Lobby-Panel verschwindet – sonst
- * gaebe es von innen keinen Weg mehr hinaus.
- */
-const WORLD_ENTRY_BTN_W = 268;
-const WORLD_ENTRY_BTN_X = HELP_BTN_X - HELP_BTN_W / 2 - SYSTEM_BAR_GAP - WORLD_ENTRY_BTN_W / 2;
+/** Der Exit bleibt auch bei ausgeblendetem Lobby-Panel im unteren Systembereich sichtbar. */
+const WORLD_EXIT_BTN_W = 268;
+const WORLD_EXIT_BTN_X = HELP_BTN_X - HELP_BTN_W / 2 - SYSTEM_BAR_GAP - WORLD_EXIT_BTN_W / 2;
 const FULLSCREEN_HINT_MS = 2200;
 
 /**
@@ -222,10 +220,14 @@ type WaitingRow = {
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
   private systemBar:      Phaser.GameObjects.Container | null = null;
-  /** Ein-/Austritt der LobbyWorld; unabhaengig vom Lobby-Panel sichtbar. */
-  private worldEntryBar:  Phaser.GameObjects.Container | null = null;
-  private worldEntryBtn:  UiButton | null = null;
+  /** Austritt aus dem Testgelaende; unabhaengig vom Lobby-Panel sichtbar. */
+  private worldExitBar:   Phaser.GameObjects.Container | null = null;
+  private worldExitBtn:   UiButton | null = null;
+  /** Entry sitzt im zentralen Vorbereitungspanel und ist vom Exit bewusst getrennt. */
+  private testAreaBtn:    UiButton | null = null;
   private worldEntryInside = false;
+  private worldEntryAvailable = false;
+  private worldEntryEnabled = false;
   private playerContextMenu: UiContextMenu | null = null;
   private loadoutTooltip: UiTooltip | null = null;
   private loadoutTooltipRoot: Phaser.GameObjects.Container | null = null;
@@ -474,6 +476,19 @@ export class LobbyOverlay {
 
     this.buildCoopBand(objects);
 
+    // Der Einstieg gehoert in die Vorbereitung, nicht in die allgemeine Systemleiste. Im Coop
+    // steht er mittig zwischen UPGRADES und ITEMS; ohne Coop-Fortschrittsband bleibt er derselbe
+    // einzelne, normal gewichtete Aktionsbutton.
+    this.testAreaBtn = new UiButton(this.scene, {
+      x: COOP_TEST_AREA_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
+      label: t('ui.lobby.testArea'),
+      intent: 'neutral',
+      onClick: () => {
+        if (!this.worldEntryInside) this.onToggleWorldEntry(true);
+      },
+    }).setVisible(false);
+    objects.push(this.testAreaBtn.getRoot());
+
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.container);
     this.playerContextMenu = new UiContextMenu(this.scene, this.container);
@@ -494,20 +509,22 @@ export class LobbyOverlay {
     this.systemBar.setVisible(this.visible);
 
     // Eigener Container: seine Sichtbarkeit folgt der World-Teilnahme, nicht dem Lobby-Panel.
-    this.worldEntryBtn = new UiButton(this.scene, {
-      x: WORLD_ENTRY_BTN_X, y: SYSTEM_BAR_Y, w: WORLD_ENTRY_BTN_W, h: SYSTEM_BAR_H,
-      label: t('ui.lobby.enterRange'),
+    this.worldExitBtn = new UiButton(this.scene, {
+      x: WORLD_EXIT_BTN_X, y: SYSTEM_BAR_Y, w: WORLD_EXIT_BTN_W, h: SYSTEM_BAR_H,
+      label: t('ui.lobby.returnToLobby'),
       labelRole: 'labelSm',
       intent: 'secondary',
-      icon: 'chevron-right',
+      icon: 'chevron-left',
       iconSize: 18,
-      onClick: () => this.onToggleWorldEntry(!this.worldEntryInside),
+      onClick: () => {
+        if (this.worldEntryInside) this.onToggleWorldEntry(false);
+      },
     });
-    this.worldEntryBar = this.scene.add
-      .container(0, 0, [this.worldEntryBtn.getRoot()])
+    this.worldExitBar = this.scene.add
+      .container(0, 0, [this.worldExitBtn.getRoot()])
       .setDepth(DEPTH.OVERLAY);
-    promoteToClarityCamera(this.scene, this.worldEntryBar);
-    this.worldEntryBar.setVisible(false);
+    promoteToClarityCamera(this.scene, this.worldExitBar);
+    this.worldExitBar.setVisible(false);
 
     this.refreshHeader();
     this.updateRoomActionButtons();
@@ -682,6 +699,9 @@ export class LobbyOverlay {
     this.stopReadyGlow();
     this.connectionEnded = false;
     this.isReady = false;
+    this.worldEntryInside = false;
+    this.worldEntryAvailable = false;
+    this.worldEntryEnabled = false;
     this.playerListSignature = null;
     this.roomQualitySignature = null;
     this.transportDiagnosticsSignature = null;
@@ -715,8 +735,10 @@ export class LobbyOverlay {
     this.helpBtn?.destroy();
     this.optionsBtn?.destroy();
     this.fullscreenBtn?.destroy();
-    this.worldEntryBtn?.destroy();
-    this.worldEntryBtn = null;
+    this.testAreaBtn?.destroy();
+    this.testAreaBtn = null;
+    this.worldExitBtn?.destroy();
+    this.worldExitBtn = null;
     this.coopUpgradesBtn?.destroy();
     this.coopItemsBtn?.destroy();
     this.coopUpgradesBtn = null;
@@ -730,9 +752,9 @@ export class LobbyOverlay {
       this.systemBar.destroy(true);
       this.systemBar = null;
     }
-    if (this.worldEntryBar) {
-      this.worldEntryBar.destroy(true);
-      this.worldEntryBar = null;
+    if (this.worldExitBar) {
+      this.worldExitBar.destroy(true);
+      this.worldExitBar = null;
     }
     this.playerRows.clear();
     this.waitingRows = [];
@@ -748,25 +770,33 @@ export class LobbyOverlay {
     this.visible = true;
     this.container?.setVisible(true);
     this.systemBar?.setVisible(true);
+    this.updateWorldEntryButtons();
     if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
   }
 
   /**
-   * Ein- und Austritt der LobbyWorld.
-   *
-   * `null` bedeutet: diese World laesst niemanden von sich aus eintreten – dann gibt es die
-   * Handlung nicht. Der Button lebt bewusst ausserhalb des Panels: von innen ist er der einzige
-   * sichtbare Weg zurueck.
+   * Synchronisiert die Teilnahme an der LobbyWorld. Der Entry sitzt im zentralen Lobby-Panel;
+   * der Exit bleibt davon getrennt unten rechts sichtbar, sobald der lokale Spieler interaktiv
+   * teilnimmt.
    */
-  setWorldEntryState(state: { readonly inside: boolean } | null): void {
+  setWorldEntryState(state: { readonly inside: boolean; readonly canEnter: boolean } | null): void {
     this.worldEntryInside = state?.inside === true;
-    this.worldEntryBar?.setVisible(state !== null);
-    if (!state) return;
-    this.worldEntryBtn
-      ?.setLabel(state.inside ? t('ui.lobby.leaveRange') : t('ui.lobby.enterRange'))
-      .setIcon(state.inside ? 'chevron-left' : 'chevron-right')
-      .setIntent(state.inside ? 'secondary' : 'neutral');
+    this.worldEntryAvailable = state !== null;
+    this.worldEntryEnabled = state?.canEnter === true;
+    this.updateWorldEntryButtons();
+  }
+
+  private updateWorldEntryButtons(): void {
+    const showEntry = this.visible && !this.worldEntryInside;
+    const showExit = this.worldEntryAvailable && this.worldEntryInside;
+
+    this.testAreaBtn
+      ?.setVisible(showEntry)
+      .setEnabled(showEntry && this.worldEntryAvailable && this.worldEntryEnabled
+        && !this.btnLocked && !this.connectionEnded);
+    this.worldExitBar?.setVisible(showExit);
+    this.worldExitBtn?.setEnabled(showExit && !this.connectionEnded);
   }
 
   hide(): void {
@@ -779,6 +809,7 @@ export class LobbyOverlay {
     this.stopReadyGlow();
     this.container?.setVisible(false);
     this.systemBar?.setVisible(false);
+    this.updateWorldEntryButtons();
     this.upgradeBtnEffect?.stop();
     this.itemsBtnEffect?.stop();
     this.itemsTooltip?.hide();
@@ -1716,6 +1747,7 @@ export class LobbyOverlay {
     this.infoBtn.setVisible(this.localIsHost && !this.connectionEnded);
     this.retryBtn.setVisible(showRetry).setEnabled(showRetry && !retryDisabled);
     this.inviteRow.setEnabled(!this.btnLocked && !this.connectionEnded);
+    this.updateWorldEntryButtons();
   }
 
   private formatRoomQualityText(): string {

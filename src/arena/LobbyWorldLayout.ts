@@ -518,7 +518,7 @@ export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
 /**
  * Dieselben Flaechen als authored Spawn-Sperre der World.
  *
- * Sie sind begehbar – wer den Schiessstand betritt, darf dort laufen. Nur starten soll niemand
+ * Sie sind begehbar – wer das Testgelaende betritt, darf dort laufen. Nur starten soll niemand
  * unter dem Lobby-Panel oder hinter einem Seitenmenue, weil seine Figur dort verdeckt waere.
  */
 export const LOBBY_SPAWN_EXCLUSION_ZONES: readonly ArenaGridRegion[] = LOBBY_UI_RESERVED_ZONES
@@ -654,7 +654,7 @@ const LOBBY_WORLD_LAYOUT: ArenaLayout = {
  *
  * Jeder Aufruf liefert eine **eigene** Kopie, genau wie der Generator. Die Runtime schreibt in
  * das Layout ihrer World – platzierte Konstrukte haengen sich als zusaetzliche Felszellen an –,
- * und eine geteilte Instanz wuerde diese Runden nacheinander uebereinander schichten.
+ * und eine geteilte Instanz wuerde diese World-Instanzen nacheinander uebereinander schichten.
  */
 export function buildLobbyWorldLayout(): ArenaLayout {
   return {

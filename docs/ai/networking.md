@@ -44,7 +44,7 @@ Participation wird host-authoritativ über den zuverlässigen World-Kanal veröf
 
 Die Zuverlässigkeit kommt vom Channel, nicht aus einem Payload-Feld. Fast-Nachrichten dürfen bei geschlossener Verbindung oder Überlast verworfen werden; ein Sender darf dort keinen dauerhaften Zustandsfortschritt voraussetzen.
 
-Game-State wird als vollständiger Bootstrap oder als Delta übertragen. Deltas lassen Slice-spezifisch unveränderte Werte aus; ein vollständiger Bootstrap muss alle erforderlichen Slices enthalten und wird durch [FullGameStateBootstrap.ts](../../src/network/FullGameStateBootstrap.ts) validiert. Nach World- oder Round-Wechsel wird der Delta-Cache zurückgesetzt.
+Game-State wird als vollständiger Bootstrap oder als Delta übertragen. Bei Deltas dürfen unveränderte Slices fehlen; ein vollständiger Bootstrap muss alle erforderlichen Slices enthalten und wird durch [FullGameStateBootstrap.ts](../../src/network/FullGameStateBootstrap.ts) validiert. Nach World- oder Round-Wechsel wird der Delta-Cache zurückgesetzt.
 
 Replizierte Entities und langlebige Zustände brauchen stabile Identitäten. Bei einem neuen Zustand sind Owner, Channel, Update-Frequenz, Lebensdauer und Baseline zu klären; ein Array-Index oder eine lokale Scene-Referenz ist keine Netzidentität.
 
@@ -54,7 +54,7 @@ Ein veränderlicher Zustand darf nicht nur einmal über den Fast-Kanal gesendet 
 
 Zeitlich begrenzte replizierte Zustände verwenden bevorzugt einen absoluten fachlichen Endzeitpunkt wie `expiresAt` statt ausschließlich einer Restdauer. Clients können daraus zwischen Snapshots herunterzählen, ohne dass Paketlatenz die Lebensdauer neu startet; das ist eine passende Option, kein Zwang für jeden Zustand.
 
-Wiederkehrende Host-Ereignisse tragen eine monotone Entitäts- oder Zustandsrevision, zum Beispiel `pulseSequence` beim Tesla-Dome. Renderer lösen den Effekt aus, wenn die Sequenz voranschreitet, nicht aus der lokalen Aktivierungsdauer; ein initialer Snapshot setzt nur die Baseline und spielt vergangene Pulse nicht nach.
+Wenn jede einzelne Auslösung eines wiederkehrenden Host-Ereignisses fachlich oder für die Presentation eindeutig erkannt werden muss, darf der Client sie nicht nur aus Dauer, Phase oder lokalem Timing rekonstruieren. In solchen Fällen ist eine monotone Sequence/Revision das bevorzugte Muster. Ein initialer Snapshot setzt typischerweise die aktuelle Baseline; vergangene Presentation-Ereignisse werden nicht automatisch nachgespielt. Das ist kein Zwang für rein kontinuierliche Zustände, bei denen nur der aktuelle Zustand zählt. Der Tesla-Dome nutzt dafür `pulseSequence`; sein Renderer löst Effekte nur bei fortschreitender Sequenz aus.
 
 ## Join, Resume und Sichtbarkeit
 

@@ -2,12 +2,12 @@ import { ROCK_HP_MAX } from '../config';
 import type { ArenaLayout } from '../types';
 
 /**
- * Reiner HP-Zustand eines Felsbestands – ohne Netzwerk, Runde oder Autorität.
+ * Reiner HP-Zustand eines Felsbestands – ohne Netzwerk, World-/Activity-Lifecycle oder Autorität.
  *
  * Der Gameplay-Bestand ({@link RockRegistry}) erweitert diese Klasse um die Snapshot-Schicht;
- * die lokale Lobby-Inszenierung benutzt sie direkt. Es gibt dadurch nur **eine**
+ * Ein lokaler oder Headless-Kontext benutzt sie direkt. Es gibt dadurch nur **eine**
  * Fels-HP-Implementierung: `applyDamage`, `getHP`, `getMaxHP`, `setHP`, `isDestroyed`,
- * `remove` und `register` verhalten sich in Arena und Lobby identisch.
+ * `remove` und `register` verhalten sich in allen World-Kontexten identisch.
  */
 export class RockHpRegistry {
   /** rockIndex → aktueller HP-Wert + max HP */

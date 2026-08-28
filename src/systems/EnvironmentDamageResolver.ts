@@ -16,9 +16,8 @@ export interface RadialEnvironmentDamageRequest {
 /**
  * Anbindung des Resolvers an einen konkreten Felsbestand.
  *
- * Gameplay reicht hier den runden-autoritativen Bestand samt Zielstatus-Trichter herein,
- * die Lobby ihren lokalen Ambient-Bestand. Der Resolver selbst kennt weder Netzwerk noch
- * Rundenzustand.
+ * Host-Gameplay reicht hier den World-Bestand samt Zielstatus-Trichter herein. Der Resolver
+ * selbst kennt weder Netzwerk noch Activity-/Rundenzustand.
  */
 export interface EnvironmentRockSink {
   /**

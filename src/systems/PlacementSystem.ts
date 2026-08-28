@@ -46,7 +46,7 @@ export class PlacementSystem {
   private isHazardEventArmed: ((eventId: string) => boolean) | null = null;
   private nextRockId: number;
 
-  /** Raeumliche Grundlage dieser Runde; Placement rechnet ausschliesslich gegen diese World. */
+  /** Raeumliche Grundlage dieser World; Placement rechnet ausschliesslich dagegen. */
   private readonly metrics: WorldMetrics;
 
   constructor(

@@ -53,7 +53,7 @@ export interface LoadoutSelection {
 
 /**
  * Zusatzangaben automatischer Feuerquellen. Der Vertrag liegt beim gemeinsamen
- * {@link WeaponFireExecutor}, damit Gameplay und Lobby dieselben Felder benutzen.
+ * {@link WeaponFireExecutor}, damit alle World-Aufrufer denselben Vertrag benutzen.
  */
 type AutomatedWeaponFireOptions = WeaponFireOptions;
 import { HeldItemSlotTracker, type HeldItemSlot } from './HeldItemSlotTracker';
@@ -182,7 +182,7 @@ export class LoadoutManager {
   /**
    * Gemeinsamer Fire-Dispatch für Projektil-, Hitscan- und Melee-Waffen. Der Manager liefert
    * hier nur die Gameplay-Senken; die Übersetzung von {@link WeaponConfig} in einen Schuss
-   * liegt im Executor und wird von der Lobby unverändert mitbenutzt.
+   * liegt im Executor, getrennt vom World-/Activity-Lifecycle.
    *
    * Beim ersten Zugriff erzeugt statt im Feldinitialisierer: die Senken lesen `this` erst beim
    * Schuss, und der Manager wird in Tests auch ohne Konstruktorlauf aufgebaut.

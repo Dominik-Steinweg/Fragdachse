@@ -171,7 +171,7 @@ export class ShadowSystem {
   private staticBakeProfile: ShadowProfile = SHADOW_PROFILES.day;
   /**
    * Zuletzt gemeldeter Kameraausschnitt. `null` heisst "kein Streaming" und macht den gesamten
-   * Rahmen resident – der Zustand der Lobby-Vorschau, deren Rahmen ohnehin bildschirmgross ist.
+   * Rahmen resident – passend etwa fuer eine kleine oder vollstaendig sichtbare World.
    */
   private staticResidencyView: ChunkWorldRect | null = null;
   private staticHasLayout = false;
@@ -209,7 +209,7 @@ export class ShadowSystem {
    * Meldet den sichtbaren Weltausschnitt fuer das Chunk-Streaming der gebackenen Schatten.
    *
    * Gehoert in denselben Frame-Abschnitt wie {@link ArenaBuilder.updateSurfaceResidency}. Wird der
-   * Aufruf nie gemacht – so wie in der Lobby-Vorschau – bleibt der gesamte Rahmen resident.
+   * Aufruf nie gemacht, bleibt der gesamte Rahmen resident.
    */
   updateStaticResidency(view: ChunkWorldRect | null): void {
     this.staticResidencyView = view;
@@ -233,7 +233,7 @@ export class ShadowSystem {
   }
 
   /**
-   * Setzt die Uhrzeit der Runde. Zur Nacht hin bleiben die Sonnenschatten erhalten,
+   * Setzt die Uhrzeit der aktuellen World-Darstellung. Zur Nacht hin bleiben die Sonnenschatten erhalten,
    * werden aber zu kurzen, weichen und blassen Mondschatten. Vor einem Rebuild der
    * statischen Layer setzen – dynamische Schatten übernehmen es ab dem nächsten Frame.
    */
@@ -575,7 +575,7 @@ export class ShadowSystem {
             }
           }
         }
-        // Baeume bleiben ungefiltert: Es sind eine Handvoll je Runde, ein Index waere teurer
+        // Baeume bleiben ungefiltert: Es sind eine Handvoll je World, ein Index waere teurer
         // als der Durchlauf.
         const drawsTrunk = SHADOW_CASTERS.trunk.layerDepth === depth;
         const drawsCanopy = SHADOW_CASTERS.canopy.layerDepth === depth;

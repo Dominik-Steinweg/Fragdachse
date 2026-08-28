@@ -98,8 +98,8 @@ export class ArenaVisualFactory {
      * Ziel-Anzeigeliste. Die Arena reicht hier die Ebene des Rasterchunks herein, in dem der Fels
      * liegt (siehe {@link ./chunks/RockLayerGrid}). Das haelt zweierlei klein: die Szenenliste,
      * in der `add()` und `destroy()` linear suchen, und die Kinderliste, die der Renderer je
-     * sichtbarer Ebene durchlaeuft. Ohne Ebene landet der Fels direkt in der Szenenliste – der
-     * Weg der Lobby-Vorschau, deren Bestand klein und immer vollstaendig sichtbar ist.
+    * sichtbarer Ebene durchlaeuft. Ohne Ebene landet der Fels direkt in der Szenenliste – ein
+    * Pfad fuer kleine, vollstaendig sichtbare Bestaende.
      */
     layer?: Phaser.GameObjects.Layer,
   ): Phaser.GameObjects.Image {
@@ -350,7 +350,7 @@ export class ArenaVisualFactory {
       //
       // Der Rueckfall haengt auf beiden Untergruenden an der Zelle statt am Zufallsgenerator.
       // Seit die sichtbaren Baender in Render-Chunks liegen, wird auch ein Bodenband nicht mehr
-      // genau einmal je Runde gebacken, sondern bei jedem Sichtbarwerden seines Chunks neu –
+      // genau einmal je World gebacken, sondern bei jedem Sichtbarwerden seines Chunks neu –
       // eine ausgewuerfelte Drehung liesse das Decal beim Wiederbetreten springen. Erzeugte
       // Layouts fuehren `rotation` ohnehin mit; das hier greift nur fuer Altbestand.
       img.setRotation(decal.rotation

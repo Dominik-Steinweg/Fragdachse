@@ -5,10 +5,9 @@ import type { DetonationEvent } from './DetonationSystem';
  * Wirkungen, die eine ausgelöste Detonation nach sich zieht.
  *
  * Das Gameplay füllt diese Grenze mit `CombatSystem`, `HostPhysicsSystem`, dem replizierten
- * Explosionskanal und dem Ressourcensystem; die lokale Lobby-Inszenierung mit ihren lokalen
- * Entsprechungen. Der Ablauf selbst – Reihenfolge, Verrechnung der optionalen Felder,
- * Farbwahl – liegt ausschließlich im Resolver, damit es keine zweite, lobbyeigene
- * Detonationsverarbeitung gibt.
+ * Explosionskanal und dem Ressourcensystem; der Ablauf selbst – Reihenfolge, Verrechnung der
+ * optionalen Felder und Farbwahl – liegt ausschließlich im Resolver, damit es keinen zweiten
+ * Detonationspfad mit abweichender Reihenfolge gibt.
  */
 export interface DetonationEffectSink {
   /** Adrenalin für den Besitzer des gezündeten Projektils. Ohne Ressourcensystem ein No-op. */
