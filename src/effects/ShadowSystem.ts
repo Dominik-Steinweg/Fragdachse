@@ -382,6 +382,7 @@ export class ShadowSystem {
     layout: ArenaLayout | null,
     arenaResult: ArenaBuilderResult | null,
     runtimeRocks: readonly SyncedPlaceableRock[] = [],
+    preserveVisible = false,
   ): void {
     if (!layout || !arenaResult) {
       this.clearStatic();
@@ -401,7 +402,13 @@ export class ShadowSystem {
     // als Geisterschatten stehen.
     const sameLayout = this.lastStaticLayout === layout;
     const staticProfile = sameLayout ? (this.lastBakedProfile ?? this.profile) : this.profile;
-    this.rebuildStaticLayoutShadowsWithProfile(layout, options, staticProfile);
+    this.rebuildStaticLayoutShadowsWithProfile(
+      layout,
+      options,
+      staticProfile,
+      Number.NEGATIVE_INFINITY,
+      preserveVisible,
+    );
   }
 
   /**

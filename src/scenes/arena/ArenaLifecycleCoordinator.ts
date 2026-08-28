@@ -3732,6 +3732,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.currentLayout,
         this.ctx.arenaResult,
         this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+        preserveLobbyPresentation,
       );
     }
     // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`

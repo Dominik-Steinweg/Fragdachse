@@ -270,6 +270,25 @@ describe('static shadow baking', () => {
     )).toBe(true);
   });
 
+  it('keeps finished chunks visible during a preserved full rebuild', () => {
+    const { scene, textures } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    const arenaLayout = layout(3, 2);
+    const arenaResult = { rockPhysicsProxies: Array.from({ length: 3 }, () => ({ active: true })) } as never;
+
+    shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult);
+    drain(scene);
+    const visibleBefore = visibleChunkTargets(textures);
+    expect(visibleBefore.length).toBeGreaterThan(0);
+
+    shadows.rebuildArenaStaticShadows(arenaLayout, arenaResult, [], true);
+
+    expect(visibleChunkTargets(textures)).toHaveLength(visibleBefore.length);
+    expect(shadows.getStaticSurfaceStats()?.pendingRegions).toBeGreaterThan(0);
+    drain(scene);
+    expect(visibleChunkTargets(textures)).toHaveLength(visibleBefore.length);
+  });
+
   it('blits a dirty shadow chunk in chunk-local coordinates, with a neutral target camera', () => {
     const { scene, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
