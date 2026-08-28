@@ -8,6 +8,7 @@ const bridgeMock = vi.hoisted(() => ({
   getActiveGameMode: vi.fn(() => 'coop_defense'),
   getPlayerUtilityOverrideId: vi.fn(() => ''),
   getPlayerCommittedLoadout: vi.fn(),
+  getPlayerCurrentLoadoutSnapshot: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
   registerHeldActionHandler: vi.fn(),
 }));
@@ -122,6 +123,7 @@ beforeEach(() => {
   bridgeMock.getGameMode.mockReturnValue('coop_defense');
   bridgeMock.getPlayerUtilityOverrideId.mockReturnValue('');
   bridgeMock.getPlayerCommittedLoadout.mockReturnValue(INSPECTOR_COMMITTED);
+  bridgeMock.getPlayerCurrentLoadoutSnapshot.mockImplementation(() => bridgeMock.getPlayerCommittedLoadout());
 });
 
 describe('Inspector loadout-use RPC classification', () => {

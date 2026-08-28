@@ -17,7 +17,7 @@ import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, PlayerProfile, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot, LoadoutToolRef, PlayerProfile, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
@@ -30,6 +30,7 @@ import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItem
 import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
 import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
+import { isCoopDefenseMode } from '../../gameModes';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { getLocale } from '../../i18n';
 import { getHudBuffValueText } from '../../i18n/hudPresentation';
@@ -460,14 +461,14 @@ export class ClientUpdateCoordinator {
         ? null
         : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
       const selectedInspectorTool = inspectorUtilityAction ? null : this.getLocalInspectorSelectedTool();
-      const committedLoadout = bridge.getPlayerCommittedLoadout(localId2);
+      const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId2);
       const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
         ? selectedInspectorTool
-        : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
+        : currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? null
           : getActiveConstructionToolRefs(getConstructionAccessContext(
             bridge.getActiveGameMode(),
-            committedLoadout,
+            currentLoadout,
           ))
             .find((tool) => tool.kind === 'construction') ?? null;
       const inspectorConfig = selectedInspectorTool?.kind === 'utility'
@@ -526,7 +527,7 @@ export class ClientUpdateCoordinator {
         constructionCapacityMax:  getActiveConstructionToolRefs(
           getConstructionAccessContext(
             bridge.getActiveGameMode(),
-            committedLoadout,
+            currentLoadout,
           ),
         ).length > 0
           ? this.getLocalConstructionCapacity()
@@ -822,10 +823,11 @@ export class ClientUpdateCoordinator {
    * Fallbacks unten stabil halten.
    */
   private getLocalEffectTotals() {
+    if (!isCoopDefenseMode(bridge.getActiveGameMode())) return EMPTY_EFFECT_TOTALS;
     const profile = this.getLocalCoopDefenseProfile();
     const items = this.getLocalCoopDefenseItems();
     if (!profile && items.length === 0) return EMPTY_EFFECT_TOTALS;
-    return getCoopDefenseCommittedEffectTotals(profile, this.getLocalCoopDefenseClassId(), items);
+    return getCoopDefenseCommittedEffectTotals(profile ?? null, this.getLocalCoopDefenseClassId(), items);
   }
 
   /**
@@ -836,19 +838,23 @@ export class ClientUpdateCoordinator {
    */
   getLocalConstructionCapacity(): number {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId);
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
     return resolveConstructionCapacity({
       gameMode: bridge.getActiveGameMode(),
-      classId: committed?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
+      classId: currentLoadout?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
       modifiers: this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
     });
   }
 
-  /** Reiner Speicherzugriff auf den vor Rundenbeginn geladenen Fallback. */
+  /** Liest den aktuellen Build; Commit und Lobby-Projektion bleiben getrennte Quellen. */
   private getLocalCoopDefenseProfile() {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile;
-    if (committed) return committed;
+    if (!isCoopDefenseMode(bridge.getActiveGameMode())) return null;
+    if (bridge.getActivityDescriptor() !== null) {
+      return bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile ?? this.storedProfileFallback;
+    }
+    const preview = bridge.getPlayerLobbyLoadoutPreview(localId);
+    if (preview) return preview.coopDefenseProfile;
     return this.storedProfileFallback;
   }
 
@@ -858,33 +864,52 @@ export class ClientUpdateCoordinator {
    * kurzzeitig zu niedrige Maxima. Die Referenz wird gehalten, damit der Totals-Cache greift.
    */
   private getLocalCoopDefenseItems(): readonly CoopDefenseItem[] {
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.equippedItems;
-    if (committed) return committed;
+    if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
+    const localId = bridge.getLocalPlayerId();
+    if (bridge.getActivityDescriptor() !== null) {
+      return bridge.getPlayerCommittedLoadout(localId)?.equippedItems ?? this.storedItemsFallback ?? [];
+    }
+    const preview = bridge.getPlayerLobbyLoadoutPreview(localId);
+    if (preview) return preview.equippedItems ?? [];
     return this.storedItemsFallback ?? [];
   }
 
   getLocalInspectorTools(): readonly LoadoutToolRef[] {
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
-    return committed?.coopDefenseClassId === 'inspector_gadachs'
-      ? (committed.tools ?? committed.coopDefenseProfile?.toolLoadout ?? [])
-      : [];
+    const localId = bridge.getLocalPlayerId();
+    const classId = this.getLocalCoopDefenseClassId();
+    if (classId !== 'inspector_gadachs') return [];
+    const current = bridge.getActivityDescriptor() !== null
+      ? bridge.getPlayerCurrentLoadoutSnapshot(localId)
+      : bridge.getPlayerLobbyLoadoutPreview(localId);
+    return current?.tools ?? this.getLocalCoopDefenseProfile()?.toolLoadout ?? [];
   }
 
   getLocalInspectorSelectedTool(): LoadoutToolRef | null {
     const tools = this.getLocalInspectorTools();
-    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
-    if (committed?.coopDefenseClassId !== 'inspector_gadachs') {
+    const localId = bridge.getLocalPlayerId();
+    const classId = this.getLocalCoopDefenseClassId();
+    const current = bridge.getPlayerCurrentLoadoutSnapshot(localId);
+    const resolvedLoadout: LoadoutCommitSnapshot | null = current
+      ? {
+        ...current,
+        coopDefenseClassId: classId,
+        coopDefenseProfile: this.getLocalCoopDefenseProfile() ?? null,
+        tools: [...this.getLocalInspectorTools()],
+        equippedItems: current.equippedItems ?? [],
+      }
+      : null;
+    if (classId !== 'inspector_gadachs') {
       return getActiveConstructionToolRefs(
         getConstructionAccessContext(
           bridge.getActiveGameMode(),
-          committed,
+          resolvedLoadout,
         ),
       ).find((tool) => tool.kind === 'construction') ?? null;
     }
     if (this.inspectorSelectedTool && tools.some((tool) => (
       tool.kind === this.inspectorSelectedTool?.kind && tool.id === this.inspectorSelectedTool?.id
     ))) return this.inspectorSelectedTool;
-    const profileSelected = committed?.coopDefenseProfile?.selectedTool;
+    const profileSelected = this.getLocalCoopDefenseProfile()?.selectedTool;
     const selected = profileSelected && tools.some((tool) => tool.kind === profileSelected.kind && tool.id === profileSelected.id)
       ? profileSelected
       : tools[0] ?? null;
@@ -926,8 +951,12 @@ export class ClientUpdateCoordinator {
 
   private getLocalCoopDefenseClassId() {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId);
-    if (committed) return committed.coopDefenseClassId;
+    if (!isCoopDefenseMode(bridge.getActiveGameMode())) return null;
+    if (bridge.getActivityDescriptor() !== null) {
+      return bridge.getPlayerCommittedLoadout(localId)?.coopDefenseClassId ?? this.storedClassIdFallback;
+    }
+    const preview = bridge.getPlayerLobbyLoadoutPreview(localId);
+    if (preview) return preview.coopDefenseClassId;
     return this.storedClassIdFallback;
   }
 
@@ -1202,6 +1231,7 @@ export class ClientUpdateCoordinator {
 
   private resolveLoadoutSelection(playerId: string) {
     const isLocalPlayer = playerId === bridge.getLocalPlayerId();
+    const preview = bridge.getPlayerLobbyLoadoutPreview(playerId);
     const w1Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon1');
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
@@ -1211,9 +1241,10 @@ export class ClientUpdateCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getActiveGameMode(), isLocalPlayer ? this.storedProfileFallback : null,
-    isLocalPlayer ? this.storedClassIdFallback : null,
+    }, bridge.getActiveGameMode(),
+    preview?.coopDefenseProfile ?? (isLocalPlayer ? this.storedProfileFallback : null),
+    preview?.coopDefenseClassId ?? (isLocalPlayer ? this.storedClassIdFallback : null),
     // Referenzstabil ueber den memoisierten Zugriff, sonst greift der Cache dieser Aufloesung nie.
-    isLocalPlayer ? this.getLocalCoopDefenseItems() : []);
+    preview ? preview.equippedItems : (isLocalPlayer ? this.getLocalCoopDefenseItems() : []));
   }
 }

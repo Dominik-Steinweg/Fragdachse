@@ -40,7 +40,9 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
   bases: [],
-  actionPolicy: { combat: true, playerRelationships: 'free-for-all' },
+  // Die LobbyWorld folgt dem aktuell gewaehlten Spielmodus. Sie ist damit im Deathmatch
+  // frei fuer alle, in Coop kooperativ und in Team-Modi teambezogen – ohne Fake-Activity.
+  actionPolicy: { combat: true, playerRelationships: 'game-mode' },
   presentationPolicy: { previewWithoutParticipation: true },
   participationPolicy: { selfAdmit: true },
   spawnExclusionZones: LOBBY_SPAWN_EXCLUSION_ZONES,

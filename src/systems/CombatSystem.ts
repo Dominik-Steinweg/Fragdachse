@@ -741,6 +741,23 @@ export class CombatSystem {
   getHP(id: string):    number  { return this.hp.get(id)    ?? this.getMaxHp(id); }
   getMaxHp(id: string): number  { return this.maxHp.get(id) ?? this.resolvePlayerMaxHp(id); }
   getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
+
+  /**
+   * Reconciles live build-derived caps without recreating the player runtime. This is used when
+   * a World-only Coop build changes while the player is already in the shooting range.
+   */
+  reconcilePlayerRuntimeState(id: string): void {
+    if (!this.hp.has(id) && !this.armor.has(id)) return;
+    const maxHp = this.resolvePlayerMaxHp(id);
+    this.maxHp.set(id, maxHp);
+    const currentHp = this.hp.get(id);
+    if (currentHp !== undefined && currentHp > maxHp) this.hp.set(id, maxHp);
+
+    const maxArmor = Math.max(0, this.playerMaxArmorResolver?.(id) ?? ARMOR_MAX);
+    const currentArmor = this.armor.get(id);
+    if (currentArmor !== undefined && currentArmor > maxArmor) this.armor.set(id, maxArmor);
+  }
+
   isAlive(id: string):  boolean { return (this.alive.get(id) ?? false) || this.enemyManager?.hasEnemy(id) === true; }
   isBurrowed(id: string): boolean {
     const enemy = this.enemyManager?.getEnemy(id);

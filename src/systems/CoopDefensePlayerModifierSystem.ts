@@ -54,13 +54,15 @@ const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {
 export class CoopDefensePlayerModifierSystem {
   private readonly committedProfiles = new Map<string, CoopDefenseUpgradeProfile>();
   private readonly runtimeModifiers = new Map<string, CoopDefensePlayerRuntimeModifiers>();
+  private readonly sourceSignatures = new Map<string, string>();
 
-  syncPlayers(entries: Iterable<readonly [string, LoadoutCommitSnapshot | null]>): void {
+  syncPlayers(entries: Iterable<readonly [string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null]>): readonly string[] {
     const nextPlayerIds = new Set<string>();
+    const changedPlayerIds = new Set<string>();
 
     for (const [playerId, snapshot] of entries) {
       nextPlayerIds.add(playerId);
-      this.syncPlayer(playerId, snapshot);
+      if (this.syncPlayer(playerId, snapshot)) changedPlayerIds.add(playerId);
     }
 
     for (const playerId of [...this.committedProfiles.keys()]) {
@@ -69,9 +71,22 @@ export class CoopDefensePlayerModifierSystem {
     for (const playerId of [...this.runtimeModifiers.keys()]) {
       if (!nextPlayerIds.has(playerId)) this.runtimeModifiers.delete(playerId);
     }
+    for (const playerId of [...this.sourceSignatures.keys()]) {
+      if (!nextPlayerIds.has(playerId)) {
+        this.sourceSignatures.delete(playerId);
+        changedPlayerIds.add(playerId);
+      }
+    }
+    return [...changedPlayerIds];
   }
 
-  syncPlayer(playerId: string, snapshot: LoadoutCommitSnapshot | null): void {
+  syncPlayer(
+    playerId: string,
+    snapshot: Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null,
+  ): boolean {
+    const signature = JSON.stringify(snapshot ?? null);
+    const changed = this.sourceSignatures.get(playerId) !== signature;
+    this.sourceSignatures.set(playerId, signature);
     const rawProfile = snapshot?.coopDefenseProfile;
     const classId = snapshot?.coopDefenseClassId ?? null;
     const items = snapshot?.equippedItems ?? EMPTY_ITEMS;
@@ -79,7 +94,7 @@ export class CoopDefensePlayerModifierSystem {
     if (!rawProfile && items.length === 0) {
       this.committedProfiles.delete(playerId);
       this.runtimeModifiers.delete(playerId);
-      return;
+      return changed;
     }
 
     const profile = rawProfile
@@ -91,6 +106,7 @@ export class CoopDefensePlayerModifierSystem {
       this.committedProfiles.delete(playerId);
     }
     this.runtimeModifiers.set(playerId, this.resolveRuntimeModifiers(profile, classId, items));
+    return changed;
   }
 
   getCommittedProfile(playerId: string): CoopDefenseUpgradeProfile | null {
@@ -186,6 +202,7 @@ export class CoopDefensePlayerModifierSystem {
   clear(): void {
     this.committedProfiles.clear();
     this.runtimeModifiers.clear();
+    this.sourceSignatures.clear();
   }
 
   private resolveRuntimeModifiers(

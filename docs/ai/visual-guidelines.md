@@ -1,29 +1,38 @@
 # Visuelle Leitlinien
 
-Diese Seite definiert Art Direction und Lesbarkeit. Für Kamera-, Lightmap- und Post-FX-Verträge rendering.md lesen.
+## Art Direction
 
-## Perspektive und Maßstab
+Fragdachse verwendet eine orthografische 90°-Top-down-Perspektive mit klarer Pixel-Art-Silhouette. World-Geometrie, Spieler, Gegner, Basen und Interactables müssen aus normaler Spielentfernung unterscheidbar bleiben; Mikrodetails sind nachgeordnet.
 
-Gameplay-Grafiken sind orthografisch aus 90° Top-down: keine Isometrie, Dreiviertelansicht, sichtbaren Objektseiten, Horizonte oder perspektivische Verjüngung. Spieler- und Gegnerbilder zeigen nach Norden; die Laufzeitrotation übernimmt die Ausrichtung. Bestehende Assets unter public/assets/ sind Maßstab- und Qualitätsreferenz.
+- Konturen und Wertkontraste definieren zuerst die Form.
+- Farbflächen tragen Fraktion, Zustand und Bedrohung, ohne die Lesbarkeit der World-Tiles zu überdecken.
+- Die Blickrichtung von Figuren und getragenen Items bleibt konsistent nach Norden ausgerichtet; Rotation kommt aus der gemeinsamen Pose.
+- World, Activity, Overlay und HUD erhalten eine eindeutige visuelle Hierarchie.
+- Text, Icons und wichtige Statussignale bleiben auch während Bewegung, FX und Camera-Feedback lesbar.
 
-Die Welt arbeitet im 32-px-Raster und mit klaren Tiefenbändern. Neue Assets müssen auf Gras, Dirt, Effekten und Teamfarben lesbar bleiben, transparente Kanten sauber halten und ihre native Pixelauflösung respektieren. Getragene Items bleiben im Raster der 32-px-Figur; Authoring steht in held-item-sprites.md.
+## Sichtbare Zustände
 
-## Lesbarkeit vor Dekoration
+Ein Gameplay-Effekt folgt einer lesbaren Ursache-Wirkungs-Kette: Ursprung, Bewegung oder Ausbreitung, Kontakt, Nachwirkung und Aufräumen. Schaden, Treffer, Heilung, Platzierung, Abbau, Explosion und Tod unterscheiden sich in Silhouette, Wert, Farbtemperatur oder Bewegungsrhythmus.
 
-- Telegraphen müssen Fläche, Zeitpunkt und Gefahr sofort erkennen lassen und auch auf niedriger Grafikqualität sichtbar bleiben.
-- Treffer, Projektilrichtung, Schaden, Heilung und Zustandsänderungen brauchen unterschiedliche Silhouetten/Farbsprache; Effekte dürfen Ziele nicht dauerhaft verdecken.
-- Pro Bildschirm nur einen primären gesättigten UI-Handlungsakzent verwenden. Gold steht für Progression, Rot für Gefahr/Destruktion, Blau im Gameplay für Nebenmissionen. Zustandsanzeige und Aktion eines Buttons nicht über dieselbe Farbe vermischen.
-- Neue UI-Texturen müssen alle darstellungsrelevanten Varianten im Cache-Schlüssel tragen. Icons werden gezeichnet oder als vorhandene Textur geladen, nicht als plattformabhängige Farb-Emojis gesetzt.
-- Self-hosted Schriften liegen unter public/assets/fonts/; Text darf nicht vom zufälligen System-Fallback abhängen.
+Telegraphen machen bevorstehende Gefahr, Interaktionsmöglichkeit und Wirkungsbereich vor dem Ergebnis lesbar.
 
-## Effekte
+Häufige Effekte dürfen nicht dauerhaft die Szene verstopfen. Partikel, Blitze, Dekals und temporäre Overlays besitzen eine begrenzte Lebensdauer, werden bei wiederholten Ereignissen gebündelt und lösen ihre Ressourcen beim Ende der World oder Scene.
 
-Eine Effektfamilie wird als zeitliche Sequenz entworfen: Antizipation/Flash, primäre Form, Impact, optionale Sekundärlayer und Residual/Cleanup. Layer nur hinzufügen, wenn sie Gameplay-Lesbarkeit oder Waffencharakter verbessern. Häufige Effekte benötigen begrenzte Emission, Wiederverwendung und vollständiges Cleanup von Emittern, Tweens, Timern, Filtern und Game Objects.
+## Kameraführung und Presentation
 
-Flächeneffekte (Bodenfeuer, Zonen) werden über eine Emissionsdichte *pro Rasterzelle* begrenzt, nicht über einen festen Node-Deckel je Fläche: ein Deckel lässt die Deckung mit wachsender Fläche gegen null gehen, und die Fläche zerfällt sichtbar in einzelne Partikelnester. Die Zellzahl geht dabei gedämpft und gedeckelt ein, damit die Lane-Kapazität endlich bleibt.
+World-Kamera, Clarity-Kamera und Presentation-Mode sind technische Mittel für Lesbarkeit, keine Gameplay-Rechte. Preview zeigt nur die dafür freigegebenen World-Flächen; interaktive Flächen erscheinen erst mit gültiger WorldParticipation.
 
-Kamera-Feedback und Trefferreaktionen bleiben zentral gesteuert. Kein globaler Hit-Stop und kein direktes cameras.main.shake(); die technische Regel und die vorhandene Feedback-Regie stehen in rendering.md.
+Camera-Feedback unterstützt Treffergewicht und Gefahr, darf aber Pointer-, Kollisions- oder Zielgeometrie nicht verschieben. Renderer und Effects beobachten replizierten beziehungsweise lokalen Runtime-Zustand; sie entscheiden keine Regeln.
 
-## Asset-Authoring
+## Authoring-Checkliste
 
-Vor einer neuen Grafik mindestens ein vergleichbares Asset und dessen Call-Site prüfen: Orientierung, native Auflösung, Tiefenband, Alpha, Besitz-/Fraktionsfarbe und Cleanup. Weltassets, UI-Icons und prozedurale Runtime-Texturen sind nicht austauschbar, nur weil sie ähnlich aussehen. Neue Gameplay-PNGs nur auf ausdrücklichen Auftrag erzeugen und gegen die 90°-Top-down-Regeln prüfen.
+Vor einem neuen visuellen Asset prüfen:
+
+1. Ist die Silhouette aus der tatsächlichen Spieldistanz lesbar?
+2. Bleibt die Perspektive orthografisch und der Anker im gemeinsamen Raster?
+3. Sind Fraktion, Zustand und Priorität ohne Text erkennbar?
+4. Passt das Asset in die bestehende Depth-, Clarity- und Cleanup-Logik?
+5. Gibt es einen klaren Runtime-Owner und einen klaren Renderer-Owner?
+6. Werden neue Werte in authored Daten oder einer vorhandenen Registry geführt statt im Renderer dupliziert?
+
+Für Kamera-, Auflösungs-, Chunk- oder FX-Verträge siehe [rendering.md](rendering.md) und [performance.md](performance.md).

@@ -1,45 +1,57 @@
-# Lokale Persistenz
+# Local Persistence
 
-src/utils/localPreferences.ts ist die einzige Storage-Grenze. Einstellungen und Spielfortschritt verwenden getrennte versionierte Dokumente:
+## Geltungsbereich
 
-- fragdachse_settings_v1 für Audio und Grafikqualität;
-- fragdachse_progress_v2 für Spielerprofil, Loadout und Coop-Fortschritt. Der Wechsel ist ein
-  bewusster Alpha-Break; der vorherige Progress-Key wird nicht gelesen.
+Lokale Speicherung ist eine validierte Domänengrenze für Geräteeinstellungen, Profil-/Progress-Dokumente, Balance-Lab-Daten und den PersistentBase-Fortschritt. World- und Activity-Runtime gehören nicht direkt in LocalStorage und dürfen nicht aus rohen Speicherwerten rekonstruiert werden.
 
-Der alte kombinierte Key wird nur für den einmaligen Alpha-Schnitt der Settings gelesen; Fortschritt wird daraus nicht still rekonstruiert.
+## Getrennte Dokumente
 
-## Migration und Sicherheit
+[src/utils/localPreferences.ts](../../src/utils/localPreferences.ts) trennt mindestens:
 
-Progress-Dokumente müssen exakt die aktuelle Schema-Version und die aktuellen Content-/ID-Verträge
-erfüllen; es gibt keine Migration alter Progress-Schemata oder deutscher Vor-Translation-IDs.
-Die innerhalb von Schema 2 eingeführte `pendingItemRewards`-Queue ist eine gezielte Ausnahme:
-ein gültiges Legacy-Feld `pendingItemReward` wird beim Decode verlustfrei als einzelner Queue-Eintrag
-übernommen. Unbekannte, zukünftige oder strukturell ungültige Dokumente werden abgelehnt. Derselbe
-Decoder gilt für localStorage und Dateiimport; vor einem Write muss das vollständige Dokument
-validiert sein.
+- Geräteeinstellungen wie Audio, Grafik und Locale;
+- Progress mit Profil, Loadout, Coop-Defense-Daten und PersistentBase-State;
+- optionale Debug- oder Balance-Lab-Dokumente.
 
-Offene Coop-Defense-Item-Belohnungen werden als FIFO-Queue persistiert. Neue Einträge werden über
-`roundEndedAt` dedupliziert und angehängt; ein Claim adressiert immer genau Runde und Angebot.
-Neue Exporte enthalten ausschließlich `pendingItemRewards`, sodass die gesamte Queue Reload sowie
-Export/Import überlebt.
+Jedes Dokument besitzt seinen eigenen Speicher-Key und Schema-/Exportvertrag. Die aktuellen Schema- und Exportkonstanten werden ausschließlich in localPreferences.ts und den zugehörigen Types gepflegt; diese Seite wiederholt keine Drift-anfälligen Versionsnummern.
 
-Gespeichert werden stabile Eingaben und abgeleitete Progressionsdaten. Upgrade-Profile dürfen Defaults implizit aus den aktuellen Definitionen ableiten; JSON nicht unnötig mit Level-0-Knoten duplizieren. Laufzeit-Round-State gehört nicht in Storage.
+## Lesen, Validieren und Migrieren
 
-## Cache und Import/Export
+Settings werden an der Speichergrenze sanitisiert. Ein ausdrücklich unterstützter älterer Settings-Stand darf dort in den aktuellen Dokumenttyp normalisiert werden. Progress- und Importdokumente werden gegen das aktuelle Format, alle erforderlichen Teilverträge und die Persistenz-Sanitizer geprüft; nicht erlaubte alte oder beschädigte Formate werden abgelehnt.
 
-Coop-Defense-Klassen werden als explizite `unlockedClassIds` persistiert. Ein leerer Satz bedeutet, dass keine Spezialisierung verfügbar ist; Unlocks werden nach dem Sieg der authorierten Map mit dem klassenweisen `unlockAfterMapId`-Vertrag vergeben.
+Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save ersetzt werden. Ein ungültiger Import verändert den gültigen Bestand nicht. Legacy-Migrationen gehören in den Decoder und werden nicht von Gameplay, UI oder einer World-Runtime nachgebaut.
 
-Die API hält den validierten Stand im Speicher. Getter lesen den Cache und geben für veränderbare Sammlungen Kopien aus; Setter aktualisieren den Cache synchron und behandeln Storage-/Quota-Fehler als nicht-fatal. Direkte externe Storage-Änderungen erfordern invalidateLocalStorageCache().
+## PersistentBase
 
-Der Client lädt seinen Round-Fallback beim Scene-Aufbau, Import und resetPerRound(), niemals in einem Frame-Getter. Export/Import verwendet das aktuelle, bewusst inkompatible Progress-Envelope ohne Audio-/Grafiksettings und ersetzt den vorhandenen Stand erst nach erfolgreicher Dekodierung.
+PersistentBase ist Progress-Domain, nicht Activity-Runtime:
 
-Das Balance-Lab-Dokument ist ein eigener Storage-Vertrag mit eigener Schema-Version und einer
-Obergrenze von 500 technischen Runden. Es speichert nur kompakte Zahlen, IDs, Build-Kontext und
-optional zwei Bewertungen; Storage-/Quota-Fehler bleiben non-fatal. Die Balance-Ruleset-Version
-ist davon getrennt und invalidiert alte Messungen global, während die Map-Balance-Signatur nur
-betroffene Maps veraltet macht. Der Key `fragdachse_balance_lab_v1` ist weder Bestandteil des
-Progress-Exports noch wird er durch `resetStoredCoopDefenseCharacter()` gelöscht.
+- [PersistentBaseRepository.ts](../../src/persistentBase/PersistentBaseRepository.ts) kapselt den lokalen Speicherzugriff.
+- [PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts) sanitisiert den speicherbaren Blueprint und prüft nur storage-lokale Form.
+- [PersistentBaseSession.ts](../../src/persistentBase/PersistentBaseSession.ts) führt eine missionslokale Working Copy mit Baseline, Commit oder Discard.
+- [PersistentBaseRoomState.ts](../../src/persistentBase/PersistentBaseRoomState.ts) hält host-authoritativen Guest-Zustand im Raum, nicht im lokalen Save.
+- [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) wendet Commit oder Rollback an.
+- [PersistentBaseRestorePlanner.ts](../../src/persistentBase/PersistentBaseRestorePlanner.ts) prüft beim Wiederherstellen aktuelle Tools, Unlocks, World-Geometrie, Kollision und Kapazität deterministisch.
 
-Balance-Signaturen kanonisieren reine Übersetzungs-/Identifier-Migrationen und akzeptieren bekannte
-Legacy-Hashes weiter; neue Balancewerte oder globale Ruleset-Änderungen bleiben dadurch weiterhin
-invalidierungswirksam.
+Persistiert werden nur permanente, gültige, host-owned Platzierungen. Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören nicht in den Blueprint. Der WorldRuntimeContext liefert die authored Site; die lokale Progress-Grenze liefert den veränderlichen Zustand.
+
+## Cache, Fehler und Lebensdauer
+
+Die Speicherfunktionen dürfen einen Cache verwenden, müssen ihn bei Schreib- oder Reset-Operationen gezielt invalidieren und dürfen fehlgeschlagene Persistenz nicht in einen unbrauchbaren In-Memory-Zustand überführen. Cache- und Save-Lifetime ist von ArenaScene-, World- und Activity-Lifetime getrennt.
+
+Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch. Ein Activity-Ende entscheidet über PersistentBase-Commit oder Rollback; der nächste World-Aufbau liest nur den validierten Baseline-Zustand.
+
+## Erweiterungsregeln
+
+- Neue persistente Daten erhalten einen eigenen validierten Dokument- oder Subdokumentvertrag.
+- Lesen, Sanitizing, Migration und Schreiben bleiben an der Persistenzgrenze.
+- Runtime-Systeme erhalten typisierte, validierte Werte und greifen nicht auf Speicher-Keys zu.
+- Import/Export verwendet denselben fachlichen Validator wie lokales Lesen.
+- Eine konkrete Version oder Legacy-Regel gehört nur hierher, wenn sie im aktuellen Decoder tatsächlich unterstützt und getestet ist.
+
+## Maßgebliche Quellen und Tests
+
+- [src/utils/localPreferences.ts](../../src/utils/localPreferences.ts)
+- [src/persistentBase/PersistentBaseTypes.ts](../../src/persistentBase/PersistentBaseTypes.ts)
+- [src/persistentBase/PersistentBaseSession.ts](../../src/persistentBase/PersistentBaseSession.ts)
+- [tests/LocalPersistence.test.ts](../../tests/LocalPersistence.test.ts)
+- [tests/PersistentBaseSession.test.ts](../../tests/PersistentBaseSession.test.ts)
+- [tests/PersistentBaseRoomState.test.ts](../../tests/PersistentBaseRoomState.test.ts)

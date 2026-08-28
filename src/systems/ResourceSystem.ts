@@ -100,6 +100,16 @@ export class ResourceSystem {
     return Math.max(0, this.rageMaxResolver?.(id) ?? RAGE_MAX);
   }
 
+  /** Klemmt laufende Ressourcen an neue live aus Build/Modus aufgeloeste Maxima. */
+  reconcilePlayerLimits(id: string): void {
+    if (this.adrenaline.has(id)) {
+      this.adrenaline.set(id, Math.min(this.getMaxAdrenaline(id), Math.max(0, this.adrenaline.get(id) ?? 0)));
+    }
+    if (this.rage.has(id)) {
+      this.rage.set(id, Math.min(this.getMaxRage(id), Math.max(0, this.rage.get(id) ?? 0)));
+    }
+  }
+
   setRage(id: string, value: number): void {
     this.rage.set(id, Math.max(0, Math.min(this.getMaxRage(id), value)));
   }

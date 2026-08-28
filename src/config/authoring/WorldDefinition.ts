@@ -64,9 +64,9 @@ export interface WorldActionPolicy {
   /**
    * Grundbeziehung zwischen unterschiedlichen Spielern, solange keine Activity laeuft.
    *
-   * Ohne Angabe bleibt die bisherige, vom ausgewaehlten Spielmodus abgeleitete Beziehung
-   * erhalten. `free-for-all` macht alle unterschiedlichen Spieler dieser World zu Gegnern,
-   * ohne dafuer eine Fake-Activity oder Lobby-Teams zu erzeugen.
+   * Ohne Angabe und bei `game-mode` bleibt die vom ausgewaehlten Spielmodus abgeleitete
+   * Beziehung erhalten. `free-for-all` ist nur fuer ausdruecklich authored Sonderwelten gedacht
+   * und macht dort alle unterschiedlichen Spieler zu Gegnern.
    */
   readonly playerRelationships?: 'game-mode' | 'free-for-all';
 }

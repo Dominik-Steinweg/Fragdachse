@@ -1,80 +1,35 @@
-# Getragene Item-Sprites
+# Held-Item-Sprites
 
-Der Authoring-Pfad besteht aus zwei synchron zu haltenden Einträgen:
+## Geltungsbereich
 
-1. Pixelkarte und PNG-Ausgabe in scripts/generate-held-item-sprites.mjs, Liste ITEMS.
-2. Griff-/Texture-Metadaten in src/loadout/HeldItemVisuals.ts, Registry HELD_ITEM_SPRITES.
+Getragene Items sind Presentation einer replizierten Loadout- oder Slot-Entscheidung. Der Slot ist Gameplay-Zustand; Textur, Griffpunkt und sichtbare Mündung sind visuelle Daten. Die Darstellung darf keine Schuss-, Treffer- oder Ressourcenentscheidung autorisieren.
 
-Nach Änderungen npm run sprites:held ausführen. Die Loadout-ID bleibt der gemeinsame Schlüssel; Varianten können den Sprite ihrer Basis erben.
+## Authoring-Vertrag
 
-## Dauerhafte Regeln
+[src/loadout/HeldItemVisuals.ts](../../src/loadout/HeldItemVisuals.ts) ist die zentrale Zuordnung von Loadout-Item-ID zu HeldItemSpriteSpec. [scripts/generate-held-item-sprites.mjs](../../scripts/generate-held-item-sprites.mjs) erzeugt die Pixel-Assets und hält die Pixelkarten.
 
-- Die Pixelkarte zeigt nach Norden; die Figur übernimmt Rotation und Physik.
-- Items verwenden das 32-px-Referenzraster (`HELD_ITEM_TEXTURE_SIZE`) und werden über den Griffpunkt am Figurenanker positioniert. Dieses Raster bleibt unabhängig von der Source-/Frame-Auflösung animierter Charakter-Sprites, z. B. 64x64.
-- Der Griffpunkt muss in Generator und Registry identisch sein. Die kanonische Laufzeitberechnung bleibt in src/config.ts.
-- Die Mündung wird als `muzzleX`/`muzzleY` mit derselben Bildtransformation wie das Held-Item
-  berechnet; Positionen für Projektil, Hitscan, Audio und Mündungsfeuer nicht separat erfinden.
-- Ein fehlender Eintrag nutzt die vorhandenen generischen Gun-/Throwable-Fallbacks, sofern das Item nicht ausdrücklich slotless ist.
+Für ein neues sichtbares Item gelten diese Invarianten:
 
-Prüfung: npm run sprites:held und npm test -- tests/HeldItemVisuals.test.ts. Der Generator schreibt
-zusätzlich `public/assets/sprites/held/previews/held-weapon-pilots.png`; dort stehen Glock, Negev
-und Rocket Launcher zeilenweise in den Rotationen 0, 90, 180 und 270 Grad.
+- Die Textur nutzt das 32-px-Referenzraster der getragenen Items; ihre Anzeigeskalierung wird aus der Figur abgeleitet.
+- Die Textur zeigt nach Norden. Die Figur liefert Rotation und Pose.
+- Grip- und Muzzle-Punkte liegen in Texturkoordinaten und werden mit derselben Transformation wie das Bild in den World Space übertragen.
+- Das Asset wird über die zentrale ID-Zuordnung geladen; keine zweite Renderer-eigene Item-Tabelle anlegen.
+- Slotlose Item-Arten liefern bewusst kein Bild. Unbekannte IDs liefern keinen erfundenen Fallback.
 
-Die Sichtpruefung nutzt ausserdem drei Vollpruefungstafeln unter
-`public/assets/sprites/held/previews/`: `held-weapons-all-01.png` bis
-`held-weapons-all-03.png`. Sie enthalten alle 18 Waffen zeilenweise in den Rotationen 0, 90,
-180 und 270 Grad.
+Generische Fallbacks für bekannte, bildfähige Gattungen sind ein Darstellungsvertrag der zentralen Zuordnung. Sie ersetzen keine fehlende authored ID und dürfen unbekannte Datenfehler nicht verdecken.
 
-## Groessenstaffelung und Farbzuordnung
+## Laufzeit
 
-Standardwaffen bleiben bewusst kompakt: Pistolen und Geraete liegen typischerweise bei 5-9 px
-Breite und 10-16 px Hoehe, Gewehre und schwere Waffen bei 7-13 px Breite und maximal 24 px Hoehe.
-Eine einzelne echte Langwaffe darf als Ausnahme bis 32 px in das 32-px-Raster hineinreichen;
-die AWP ist aktuell diese Ausnahme. Die Maximalgroesse ist kein Standardmass fuer neue Waffen.
+[HeldItemVisual.ts](../../src/entities/HeldItemVisual.ts) hält pro Figur ein eigenständiges Image. Ein Waffenwechsel tauscht die Textur und erzeugt kein neues Game Object pro Wechsel. Das Bild entsteht lazy beim ersten sichtbaren Item, wird mit der Figur synchronisiert und beim Teardown zerstört.
 
-Die Darstellung bleibt strikt orthografisch in 90-Grad-Top-Down-Ausrichtung nach Norden; die
-Rotation entsteht weiterhin erst an der Spielfigur. Silhouetten duerfen asymmetrisch sein, aber
-nur durch charakteristische Anbauteile wie Griff, Magazin, Munitionskasten, Visier oder Technikmodul.
-Es bleiben reine Rasterdarstellungen ohne Horizont, sichtbare Seitenflaechen, seitlich gehaltene
-Waffen oder 3/4-Perspektive.
-Die Farbakzente folgen dem zugeordneten Loadout-Icon; wo kein Icon vorliegt, nutzt die Waffe ihre
-semantische Materialfarbe. Form und Farbgruppe bilden gemeinsam die Waffenidentitaet.
+Das Image bleibt bewusst außerhalb des Player-Sprites: PlayerEntity.sprite ist Physik-, Treffer-, Beleuchtungs- und Clarity-Referenz. Der Held-Item-Renderer kann sein eigenes Clarity- oder Scroll-Verhalten erhalten, ohne den Player-Body in einen Container zu verschieben.
 
-## Verbindlicher Mündungs-Vertrag
+Die zentrale Asset-Preload-Funktion lädt jede verwendete Textur höchstens einmal. Ist ein Asset beim Setzen noch nicht resident, darf der nächste Sync-Versuch die Zuordnung erneut anbieten, statt ein dauerhaft leeres Item zu merken.
 
-Die Spezifikation enthält neben dem Griffpunkt auch `muzzleX`/`muzzleY` auf der Pixelkarte.
-`getHeldWeaponMuzzleOrigin` transformiert diesen Punkt mit derselben Rotation und Skalierung wie
-das sichtbare `HeldItemVisual` und bleibt der reine Render-/VFX-/Audio-Ursprung.
+## Mündung und Gameplay
 
-Direkte Spieler-Projektilaktionen berechnen optional über `getHeldWeaponGameplayMuzzleOrigin` einen
-separaten `gameplayMuzzleOrigin` aus dem konkreten Fire-Request-Ursprung `x/y`, dessen Winkel und
-der aktuellen Itemgröße. Der Gameplay-Aimwinkel wird über die zentrale
-`getPlayerSpriteRotationFromAimAngle`-Konvention in die erwartete Sprite-Rotation überführt.
-`x/y` bleibt damit der Shooter-/Fire-Request-Ursprung; der
-`ProjectileManager` löst den kurzen Weg zur Mündung sicher auf und verwendet `resolvedSpawn` als
-autoritative initiale Projektilposition. Physics-Body, Renderer, Tracer, Time-Bubble-Abfrage,
-`lastX/lastY` und replizierte Projektilposition starten dort.
+Die visuelle Mündung wird aus Bildpose, Grip und Muzzle-Punkt berechnet. Eine Gameplay-Mündung erhält dagegen Ursprung und Winkel aus dem konkreten Fire-Request und darf nicht von einer lokalen Renderpose abhängen. Beide Pfade dürfen dieselbe Geometrie-Hilfe verwenden, aber nicht ihre Autorität vermischen.
 
-Direkte Spieler-Hitscans verwenden denselben getrennten Gameplay-Muzzle-Punkt. Ihr interner
-Hitscan-Auftrag führt `shooterX/shooterY` als ursprünglichen Fire-Request-Ursprung und
-`startX/startY` als gewünschte Gameplay-Mündung; der autoritative `CombatSystem` löst daraus
-`resolvedHitscanStart` nur auf dem kurzen Shooter-Mündung-Segment auf. Der Hitscan-Trace, der
-Host-Trefferpfad und die replizierte Trace-Position beginnen an diesem aufgelösten Startpunkt.
-Hitscans verwenden dabei keine Projektilkörper-Clearance; bei einem Umweltblocker wird nur ein
-kleines Epsilon entgegen der Segmentrichtung zurückgesetzt. Der Muzzle-Resolver verändert weder
-Winkel noch Treffer-/Bounce-Semantik.
+## Änderungen prüfen
 
-Der Safe-Muzzle-Resolver verwendet den bestehenden `ArenaObstacleIndex`/`CombatGeometry`-Pfad.
-Die Körper-Clearance wird vor der Body-Erzeugung mit demselben Body-Profil wie beim Arcade-Body
-abgeleitet. `nearestObstacleHit(..., { clearanceRadius })` bläst die Hindernisgeometrie bereits
-auf; vom Trefferpunkt wird deshalb nur ein kleines Epsilon entgegen der Segmentrichtung abgezogen.
-Reichweitenbudgets, Bounce, Penetration und das Netzwerk-Wire-Format ändern sich nicht.
-
-Für direkte Projektil- und Hitscanwaffen beginnen Aim-Beam und maximale Reichweitenmarke am
-normalen Gameplay-Muzzle und verwenden weiterhin den bestehenden Gameplay-Aim-Winkel. Innerhalb
-der Waffenreichweite endet der Beam weiterhin auf Cursorhöhe; der Range-Tick erscheint erst
-außerhalb der Reichweite. Waffen ohne sinnvollen Gameplay-Muzzle sowie Melee behalten ihren
-bisherigen Ursprung.
-
-Lange Waffen dürfen bis zu 32 Pixel hoch sein. Die frühere Bindung an die halbe Spielerhöhe und
-an `MUZZLE_FORWARD_OFFSET` ist keine gültige Sprite-Regel mehr.
+Bei einer Änderung an Pixelkarte, Grip, Muzzle, Mapping oder Lazy-Lifetime den passenden Test [HeldItemVisuals.test.ts](../../tests/HeldItemVisuals.test.ts) und die vorhandenen Loadout-/Fire-Tests prüfen. Die Art-Direction-Regeln stehen in [visual-guidelines.md](visual-guidelines.md).

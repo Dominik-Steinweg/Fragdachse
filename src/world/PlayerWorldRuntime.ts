@@ -25,6 +25,8 @@ export type PlayerRuntimeFeature =
   | 'combatResources'
   /** Loadout, Werkzeuge und ihre Laufzeitzustaende. */
   | 'loadoutTools'
+  /** Coop-Build-Modifikatoren und Item-Laufzeitzustaende; auch ohne Activity erlaubt. */
+  | 'playerBuild'
   /** Zielmarkierung und Fokus – world-scoped Zustand ueber den Spieler als Ziel. */
   | 'worldTargeting'
   /** Missionsgebundener Spielerzustand: Respawn-Budget, Items, Missionsziele. */
@@ -62,6 +64,7 @@ export function resolvePlayerRuntimeFeatures(input: PlayerRuntimeContextInput): 
     combat: simulation,
     combatResources: simulation,
     loadoutTools: simulation,
+    playerBuild: simulation,
     missionStatus: simulation && input.activityKind === 'coop-mission',
   };
 }

@@ -902,14 +902,14 @@ export class HostUpdateCoordinator {
       );
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const now = Date.now();
-      const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
+      const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
       const gameMode = bridge.getActiveGameMode();
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
       const inspectorUtilityAction = hasUtilityOverride
         ? null
         : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
       const selectedInspectorTool = hasUtilityOverride || inspectorUtilityAction ? undefined
-        : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? committedLoadout?.coopDefenseProfile?.selectedTool);
+        : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? currentLoadout?.coopDefenseProfile?.selectedTool);
       const selectedInspectorUtilityBase = selectedInspectorTool?.kind === 'utility'
         ? getUtilityConfigForMode(selectedInspectorTool.id, gameMode)
         : undefined;
@@ -921,9 +921,9 @@ export class HostUpdateCoordinator {
         : undefined;
       const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
         ? selectedInspectorTool
-        : committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
+        : currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? null
-          : getActiveConstructionToolRefs(getConstructionAccessContext(gameMode, committedLoadout))
+          : getActiveConstructionToolRefs(getConstructionAccessContext(gameMode, currentLoadout))
             .find((tool) => tool.kind === 'construction') ?? null;
       const utilCfg   = selectedInspectorUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
@@ -980,11 +980,11 @@ export class HostUpdateCoordinator {
           : (weapon2Cfg?.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
-          getConstructionAccessContext(gameMode, committedLoadout),
+          getConstructionAccessContext(gameMode, currentLoadout),
         ).length > 0
           ? resolveConstructionCapacity({
             gameMode,
-            classId: committedLoadout?.coopDefenseClassId,
+            classId: currentLoadout?.coopDefenseClassId,
             modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
               localId,
               COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
@@ -2477,11 +2477,11 @@ export class HostUpdateCoordinator {
 
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(localId);
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
     const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
     if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud() !== null) return 0;
     const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()
-      ?? committed?.coopDefenseProfile?.selectedTool);
+      ?? currentLoadout?.coopDefenseProfile?.selectedTool);
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
     const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);

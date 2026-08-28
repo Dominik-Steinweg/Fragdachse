@@ -871,9 +871,17 @@ export type LoadoutToolRef =
   | { kind: 'construction'; id: ConstructionId }
   | { kind: 'utility'; id: string };
 
-/** Kleine, laufend aktualisierte Lobby-Vorschau fuer die sichtbare Inspector-Auswahl. */
+/**
+ * Kleine, laufend aktualisierte Live-Build-Projektion fuer eine Activity-lose World.
+ * Die laufenden Waffen-/Utility-/Ultimate-Slots bleiben im bestehenden Player-State und werden
+ * hier bewusst nicht dupliziert.
+ */
 export interface LobbyLoadoutPreviewState {
   coopDefenseClassId: CoopDefenseClassId | null;
+  /** Optional only for backwards-compatible reads from older peers. New writers always send it. */
+  coopDefenseProfile?: CoopDefenseUpgradeProfile | null;
+  /** Optional only for backwards-compatible reads from older peers. New writers always send it. */
+  equippedItems?: readonly CoopDefenseItem[];
   tools: LoadoutToolRef[];
 }
 

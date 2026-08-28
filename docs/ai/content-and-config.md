@@ -1,46 +1,60 @@
-# Content und Konfiguration
+# Content und Config
 
-Content ist authored Quelle, nicht eine zweite Implementierung in Markdown. Wenn ein Wert oder eine Liste zuverlässig aus JSON, Types oder einer Registry beantwortet wird, auf diese Quelle verweisen statt sie zu kopieren.
+## Geltungsbereich
 
-## Loadout-Authoring
+Authored Content ist die Quelle für World- und Activity-Definitionen. Resolver, Parser und Validatoren bilden daraus Laufzeitverträge; Scenes und Systems sollen keine konkurrierenden Defaults oder handcodierten Szenario-Kopien führen.
 
-Die familienweise JSON-Quelle liegt unter src/loadout/content/data/. ViteContentSource sammelt sie; LoadoutContentLoader und LoadoutSchemas parsen/prüfen; LoadoutRegistry veröffentlicht die gemeinsamen Weapon-, Utility- und Ultimate-Registries; LoadoutCatalog liefert die UI-Auswahl. GameContentValidation.validateGameContentReferences() prüft Querverweise, Audio-Keys, Unlocks, Modifier-Ziele und systemische Fallbacks.
+## World und Activity
 
-Netzwerk- und Ready-Snapshots führen Loadout-IDs und committed, sanitisierten Zustand. Sie übertragen keine vollständigen Config-Objekte. Modusfilter und Fallbacks laufen über isWeaponAllowedInMode(), sanitizeWeaponForMode(), sanitizeUltimateForMode() und die Utility-Resolver.
+[src/config/authoring/WorldDefinition.ts](../../src/config/authoring/WorldDefinition.ts) beschreibt World-eigene Inhalte:
 
-Varianten dürfen nur über die vorhandene Lineage-/Variantensystematik erben. Ein neuer Coop-Stat braucht einen expliziten Descriptor in src/loadout/CoopDefenseLoadoutModifiers.ts; ein JSON-Feld ohne Resolver ist keine implementierte Mechanik. Besitzerabhängige Werte platzierter Objekte müssen beim Platzieren in deren repliziertem Runtime-Zustand eingefroren werden, wenn der globale Config-Resolver sie später nicht mehr kennt.
+- World-Identität und optionale sourceMapId;
+- Metrics, Terrain, Basen, Tracks und World-Action-Policy;
+- Presentation- und Participation-Policy;
+- Spawn-Ausschlusszonen, persistente World-Sites und anfängliche World-Umgebung.
 
-## Coop-Content
+[src/config/authoring/ActivityDefinition.ts](../../src/config/authoring/ActivityDefinition.ts) beschreibt Activity-Inhalte:
 
-Map-Registry und Map-JSON sind in [coop-defense-authoring.md](coop-defense-authoring.md) beschrieben. Weitere authored Quellen sind:
+- Objective, Timing und Missionsprogress;
+- Respawns, Encounters, Events, Secondary Objectives und Boss;
+- Activity-spezifische Base-Overlays, Power-Ups, Item-Drops und Tutorials.
 
-- Gegner: src/config/coopDefenseEnemies.json und src/config/coopDefenseEnemies.ts;
-- Konstruktionen: src/config/coopDefenseConstructions.json und src/config/coopDefenseConstructions.ts;
-- Coop-Upgrades: src/config/coopDefenseUpgrades.json und src/utils/coopDefenseUpgrades.ts;
-- allgemeine Runtime-/Power-up-Definitionen: src/powerups/PowerUpConfig.ts und src/config/.
+ActivityDefinition besitzt eine worldDefinitionId und keine zweite Geometriequelle. Die gemeinsame Form [AuthoredScenario.ts](../../src/config/authoring/AuthoredScenario.ts) erlaubt deshalb ausdrücklich activity: null. World- und Activity-Definition müssen beim Auflösen dieselbe World-Identität referenzieren.
 
-Upgrade-IDs bleiben auch beim inhaltlichen Umbau eines Upgrades stabil: Icon-Auflösung (getCoopDefenseUpgradeTextureKey), gespeicherte Profile in src/utils/localPreferences.ts und die sprachgetrennten Presentation-Keys unter src/i18n/de/upgrades.ts sowie src/i18n/en/upgrades.ts hängen an der ID. Neue Anzeigenamen und Effekte werden über die Presentation- und Effektfelder geändert, nicht über eine neue ID.
+## IDs und Auflösung
 
-Diese Dateien enthalten sowohl Balance als auch technische Verträge. Balance darf sich ändern; IDs, Discriminators, Referenzpfade und die Bedeutung von Feldern sind Stabilitätsverträge und werden von Normalisierern/Validatoren geschützt.
+Definitionen werden über Registry- und Loader-Grenzen aufgelöst. Wire- und Ready-Snapshots führen IDs und vertraglich definierte Zustände; sie rekonstruieren keine zufällige Config aus lokalen Map- oder Balance-Defaults.
 
-## World- und Activity-Authoring
+[authoredScenarios.ts](../../src/config/authoring/authoredScenarios.ts) verbindet native authored Worlds mit Szenario-Adaptern. [WorldLayout.ts](../../src/world/WorldLayout.ts) entscheidet anschließend zwischen authored Layout und deterministischem Generator. Der resultierende WorldDescriptor bindet Definition, Seed, Generatorversion und Layout-Fingerprint an eine World-Revision.
 
-Die Zustaendigkeiten des authored Coop-Contents sind in zwei Vertraege getrennt: `WorldDefinition` beschreibt, was ohne laufende Mission existiert (Metriken, Terrain, Strukturen, Gleise, Persistent-Base-Site, Start-Uhrzeit), `ActivityDefinition` beschreibt, was es nur waehrend einer Mission gibt (Objective, Dauer, Respawns, Encounter, Events, Nebenziele, Boss, Power-ups, Item-Drop, Uhrverlauf, Tutorial). Beide liegen unter src/config/authoring/; `AuthoredScenario` erlaubt ausdruecklich `activity: null` – eine Welt ohne Mission braucht kein Pseudo-Objective und keinen Dummy-Timer. Die Paarung entsteht ueber `createAuthoredScenario()`, das eine Activity mit fremder `worldDefinitionId` abweist; `toCoopDefenseMapConfig()` prueft dieselbe Zugehoerigkeit erneut, bevor es beide Haelften zusammensetzt.
+## Adapter für bestehendes Authoring
 
-Die Trennung reicht bis in die Basen hinein: `WorldBaseDefinition` traegt nur das Bauwerk (id, hpMax, faction, role, anchor, shape, turrets, spawnCenter). `startHpFactor`, `playerScaling`, `dormant` und `powerUpPedestals` haengen an einem Durchlauf und liegen als `CoopMissionBaseOverlay` in der Activity, adressiert ueber die Basis-ID. Ein Turm gehoert zur Welt, weil er montiert ist; dass er schiesst, ist Activity-Verhalten.
+Der [Coop-Defense-Adapter](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) normalisiert ein bestehendes Map-Format und teilt es in World- und Activity-Besitz. Er erzeugt keine fachlichen Defaults und ersetzt keine Validierung. Die Eingabe muss vor dem Adapter bereits normalisiert und validiert sein; die Round-Trip-Tests schützen die Feldzuordnung.
 
-Die Datenquelle bleibt vorerst src/config/coopDefenseMaps/*.json. coopDefenseAuthoringAdapter.ts projiziert eine bereits normalisierte `CoopDefenseMapConfig` in beide Richtungen und trifft dabei keine eigenen Defaults; unnormalisierte Maps lehnt er ab. Jedes Feld der Map gehoert genau einer Seite (`WORLD_SOURCE_FIELDS`, `COOP_MISSION_SOURCE_FIELDS`, `SHARED_SOURCE_FIELDS`), und `bases` ist als `SPLIT_SOURCE_FIELDS` markiert, weil es selbst noch beide Ebenen mischt – seine Aufteilung steht in `WORLD_BASE_FIELDS`/`COOP_MISSION_BASE_FIELDS`/`SHARED_BASE_FIELDS`. Ein neues Feld auf beiden Ebenen erzwingt eine Zuordnung. Der Round-Trip ist verlustfrei und in tests/WorldActivityAuthoring.test.ts abgesichert.
+Besonders wichtig ist die Base-Trennung: dauerhafte Geometrie, Fraktion, Rolle, Anker und Spawn-Zentrum sind World-Inhalt; Missionsfaktoren, Dormancy und Power-Up-Flächen sind Activity-Overlay. Neue Felder werden dem fachlichen Owner zugeordnet, nicht einfach in beide Modelle kopiert.
 
-`normalizeCoopDefenseMapConfig()` ist nicht idempotent: sie leitet u. a. `spawnArea` aus `front` ab und lehnt beides gemeinsam ab. Normalisierte Configs deshalb nie erneut normalisieren.
+## Lobby
 
-## Referenzintegrität
+Die Lobby ist eine normale authored World mit world:lobby. Sie hat keine authored Activity, keine Sonder-Scene und keine Ambient-Simulationsarchitektur. World-Definition und Layout werden über die normalen Resolver und Renderer verarbeitet. Siehe [lobbyWorld.ts](../../src/config/authoring/lobbyWorld.ts) und [LobbyWorldLayout.ts](../../src/arena/LobbyWorldLayout.ts).
 
-Beim Hinzufügen von Content immer prüfen:
+## Persistent World-Sites
 
-- ID ist im passenden Registry-/Katalogpfad vorhanden;
-- jede weaponId, utilityId, ultimateId, baseId, eventId, encounterId und powerUpDefId verweist auf eine bekannte Quelle;
-- erlaubte Slots und Modi stimmen mit der Config überein;
-- neue Upgrade-/Item-Stats haben einen Descriptor und einen Verbraucher auf Host und Client;
-- authored Map-Graphen sind zyklusfrei und normalisieren in eine für beide Peers identische Runtime-Struktur.
+Eine persistente Base-Site ist World-Konfiguration, während der veränderliche Bauzustand in der lokalen Progress-Grenze liegt. Der authored Verweis persistentBase.baseId muss auf eine vorhandene freundliche Main-Base zeigen; Radius, Clearance und Arena-Grenzen werden durch den aktuellen Validator geprüft. Konkrete Base-IDs gehören in authored Daten und Tests, nicht in diese Übersicht.
 
-Keine Registry-Anzahlen, aktuellen HP-/Damage-/Cooldown-Werte oder einzelne Mapdaten in diese Wissensbasis übernehmen.
+## Erweiterungsregeln
+
+- Neue World-Geometrie gehört in WorldDefinition, authored Layout oder Generator.
+- Neue Ziele, Gegner, Timer oder Missionsprogress gehören in ActivityDefinition und Activity-Systeme.
+- Neue Stats oder Content-Verträge brauchen einen Descriptor, einen Resolver und einen Consumer; keine parallele Balance- oder Config-Kopie im Renderer.
+- Neue Präsentationsparameter bleiben Policy/Renderer-Input und werden nicht zu Gameplay-Autorität.
+- Registry- und Parser-Verträge müssen unbekannte oder inkonsistente IDs ablehnen.
+- Eine Änderung an authored Daten darf nicht durch einen stillen Laufzeit-Default kaschiert werden.
+
+## Maßgebliche Quellen
+
+- [src/config/authoring/WorldDefinition.ts](../../src/config/authoring/WorldDefinition.ts)
+- [src/config/authoring/ActivityDefinition.ts](../../src/config/authoring/ActivityDefinition.ts)
+- [src/config/authoring/AuthoredScenario.ts](../../src/config/authoring/AuthoredScenario.ts)
+- [src/config/authoring/coopDefenseAuthoringAdapter.ts](../../src/config/authoring/coopDefenseAuthoringAdapter.ts)
+- [src/config/coopDefenseMaps.ts](../../src/config/coopDefenseMaps.ts)
+- [tests/WorldRuntimeContextContracts.test.ts](../../tests/WorldRuntimeContextContracts.test.ts)

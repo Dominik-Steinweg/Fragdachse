@@ -174,6 +174,7 @@ describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
       combat: true,
       combatResources: true,
       loadoutTools: true,
+      playerBuild: true,
       // Kein Fake-Missionszustand, nur weil eine Figur existiert.
       missionStatus: false,
     });

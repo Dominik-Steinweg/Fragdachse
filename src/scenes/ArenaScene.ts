@@ -1234,14 +1234,14 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupInspectorToolProvider(
       () => {
         const localId = bridge.getLocalPlayerId();
-        const committed = bridge.getPlayerCommittedLoadout(localId);
-        return committed?.coopDefenseClassId === 'inspector_gadachs'
+        const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
+        return currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? this.clientUpdate.getLocalInspectorTools()
           : this.lifecycle?.getActiveConstructionToolsForPlayer(localId) ?? [];
       },
       () => this.clientUpdate.getLocalInspectorSelectedTool(),
       (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
-      () => bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
+      () => bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
       () => bridge.getPlayerUtilityOverrideId(bridge.getLocalPlayerId()) !== ''
         || this.clientUpdate.clientUtilityOverride !== null,
       // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
@@ -1830,6 +1830,11 @@ export class ArenaScene extends Phaser.Scene {
     // Die Oberflaeche folgt der Presentation. Ein technischer Abbruch fuehrt sie selbst zurueck
     // und darf hier nicht ueberschrieben werden.
     if (!terminated) this.lifecycle.syncLobbySurface(presentationPolicy.showLobby);
+    // Der Live-Build bleibt auch im interaktiven Schiessstand sichtbar. Er ist absichtlich kein
+    // Ready-Commit und wird deshalb unabhaengig davon pro Lobby-Frame publiziert.
+    if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
+      bridge.setLocalLobbyLoadoutPreview(this.buildLocalLobbyLoadoutPreview());
+    }
     this.lobbyOverlay.setWorldEntryState(
       this.lifecycle.canSelfAdmitToWorld()
         ? { inside: this.lifecycle.isLocalWorldParticipant() }
@@ -1851,7 +1856,6 @@ export class ArenaScene extends Phaser.Scene {
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
-      bridge.setLocalLobbyLoadoutPreview(this.buildLocalLobbyLoadoutPreview());
       this.lobbyOverlay.refreshPlayerList(players);
       const roundResults = bridge.getRoundResults();
       const roomStatistics = bridge.getRoomPlayerStatistics();
@@ -1900,6 +1904,12 @@ export class ArenaScene extends Phaser.Scene {
     const sceneStateMs = diagnosticsActive
       ? sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs)
       : 0;
+
+    // Live-Builds und Moduswechsel wirken in derselben World-Instanz. Der Host reconciled sie
+    // vor jedem Simulationspfad; dabei bleiben PlayerRuntime und Entity-Identitaet erhalten.
+    if (worldActive && bridge.isHost() && !terminated) {
+      this.lifecycle.syncHostLoadoutsFromCommittedSelections();
+    }
 
     if (worldActive && !activityActive && !terminated) {
       const worldStepStartMs = diagnosticsActive ? performance.now() : 0;
@@ -3556,13 +3566,27 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private buildLocalLobbyLoadoutPreview(): LobbyLoadoutPreviewState {
+    return this.buildLocalCoopDefenseBuild();
+  }
+
+  private buildLocalCoopDefenseBuild(): LobbyLoadoutPreviewState {
     const storedProgress = getStoredCoopDefenseProgress();
-    const classId = isCoopDefenseMode(bridge.getGameMode()) && storedProgress.classesUnlocked
+    const coopMode = isCoopDefenseMode(bridge.getGameMode());
+    const classId = coopMode && storedProgress.classesUnlocked
       ? storedProgress.selectedClassId
       : null;
-    const profile = classId ? storedProgress.profilesByClass[classId] : null;
+    const profile = coopMode
+      ? storedProgress.classesUnlocked
+        ? storedProgress.profilesByClass[storedProgress.selectedClassId]
+        : storedProgress.defaultProfile
+      : null;
+    const equippedItems = coopMode
+      ? getEquippedCoopDefenseItems(storedProgress.items, storedProgress.equippedItemIds)
+      : [];
     return {
       coopDefenseClassId: classId,
+      coopDefenseProfile: profile,
+      equippedItems,
       tools: classId === 'inspector_gadachs'
         ? (profile?.toolLoadout ?? []).map((tool) => ({ ...tool }))
         : [],
@@ -3571,17 +3595,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
     const localId = bridge.getLocalPlayerId();
-    const storedProgress = getStoredCoopDefenseProgress();
-    const coopDefenseClassId = storedProgress.classesUnlocked
-      ? storedProgress.selectedClassId
-      : null;
-    const coopDefenseProfile = storedProgress.classesUnlocked
-      ? storedProgress.profilesByClass[storedProgress.selectedClassId]
-      : storedProgress.defaultProfile;
+    const build = this.buildLocalCoopDefenseBuild();
     // Ausruestung wird hier eingefroren: ab "Bereit" gilt sie fuer das gesamte Match.
-    const equippedItems = isCoopDefenseMode(bridge.getGameMode())
-      ? getEquippedCoopDefenseItems(storedProgress.items, storedProgress.equippedItemIds)
-      : [];
     const committed = resolveLoadoutSelectionIds({
       weapon1:  (bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id) in WEAPON_CONFIGS
         ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id) as keyof typeof WEAPON_CONFIGS]
@@ -3595,7 +3610,8 @@ export class ArenaScene extends Phaser.Scene {
       ultimate: (bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) in ULTIMATE_CONFIGS
         ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
         : DEFAULT_LOADOUT.ultimate,
-    }, bridge.getGameMode(), coopDefenseProfile, coopDefenseClassId);
+    }, bridge.getGameMode(), build.coopDefenseProfile, build.coopDefenseClassId);
+    const equippedItems = build.equippedItems ?? [];
     return equippedItems.length > 0 ? { ...committed, equippedItems } : committed;
   }
 

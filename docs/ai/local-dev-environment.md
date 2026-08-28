@@ -1,20 +1,30 @@
 # Lokale Entwicklungsumgebung
 
-## Standard
+## Geltungsbereich
 
-Browser- und Sichtprüfung ist opt-in. Ohne ausdrückliche Aufforderung keinen Dev-Server starten, keinen Browser öffnen und keinen Screenshot versuchen. Für Dokumentations-/Codeprüfung reichen die proportionalen Repository-Checks.
+Verifikation bleibt proportional zur Änderung. Der Repository-Root [AGENTS.md](../../AGENTS.md) ist die operative Quelle für die Prüfmatrix und die Sicherheitsregeln.
 
-## Ports
+## Prüfpfade
 
-| Port | Verwendung | Start |
-|---|---|---|
-| 8080 | Mensch/normaler Vite-Server | npm run dev |
-| 8090 | Agenten-Browserprüfung | npm run dev:browser |
+- Kleine isolierte TypeScript-Änderungen: npm run typecheck.
+- Ein getestetes Modul: npm test -- tests/Name.test.ts.
+- Mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration: npm run check.
+- Sichtbare Phaser- oder UI-Änderungen: npm run build; der Build enthält TypeScript.
+- Änderungen an der bearbeitbaren AI-Skill-Quelle unter .ai/skills/ oder .ai/vendor/phaser-skills/: danach npm run ai:sync.
 
-Für eine verlangte Agentenprüfung immer http://127.0.0.1:8090/ verwenden. dev:browser setzt Host, Port und --strictPort; bei belegtem 8090 nicht auf einen anderen Server ausweichen. Einen fremden Prozess auf Port 8080 niemals beenden.
+Es gibt kein allgemeines Lint-Script. Neue Test-, Browser- oder CI-Infrastruktur gehört nicht in eine normale Featureänderung.
 
-Mehrere Prüf-Tabs müssen vom selben 8090-Server stammen; den zweiten Tab über den #r=-Raumlink des ersten öffnen. So testen beide dieselbe Build- und HMR-Version.
+## Browser ist opt-in
 
-## Sichtprüfung
+Ohne ausdrückliche Aufforderung keinen Dev-Server, Browser oder Screenshot starten. Wenn eine Browserprüfung beauftragt ist, den projektspezifischen Start npm run dev:browser verwenden, auf HTTP 200 unter http://127.0.0.1:8090/ warten und keinen fremden Prozess beenden. Scheitert die Sichtprüfung wegen eines verborgenen Browser-Panes, als nicht verifiziert melden.
 
-Nur nach ausdrücklicher Aufforderung npm run dev:browser starten und erst nach HTTP 200 laden. Wenn der In-App-Browser-Pane verborgen ist und keine Frames/Screenshot entstehen, ist das ein Umgebungszustand: nicht als bestandene Sichtprüfung melden, nicht wiederholt neu starten, sondern Konsole/Netzwerk/Codeargumentation prüfen und die visuelle Prüfung offen als nicht verifiziert ausweisen.
+## Dokumentationsänderungen
+
+Nach Markdown- oder Skill-Änderungen:
+
+1. relative Links, Pfade und Symbolnamen mit rg beziehungsweise Test-Path prüfen;
+2. veraltete Klassen, historische Versionsstände und konkrete Messwerte suchen;
+3. git diff --check ausführen;
+4. nur bei geänderten Skills die synchronisierten Spiegel prüfen.
+
+Produktionscode wird nicht verändert, um eine veraltete Dokumentationsaussage zu erfüllen. Bei Widersprüchen gilt Quellcode, Types/Validatoren, Tests, authored Daten, dann docs/ai.

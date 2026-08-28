@@ -38,4 +38,14 @@ Browserprüfung ist opt-in: Ohne ausdrückliche Aufforderung keinen Dev-Server, 
 
 ## Knowledge Writeback
 
-Nach substanziellen Änderungen nur verifizierte, langlebige Verträge unter `docs/ai/` ergänzen; keine Bug-Chronik, Balancekopie oder Einmalbeobachtung. Im Abschluss größerer Aufgaben genau eine Zeile nennen: `Knowledge writeback: No durable project knowledge discovered.` oder `Knowledge writeback: Updated <path> with <verified rule>.`
+`docs/ai/` ist eine Wissensbasis für langlebige, systemübergreifende Projektinvarianten und keine Implementierungschronik. Eine neue Regel braucht einen positiven, im aktuellen Code und in den passenden Types/Tests verifizierten Grund. Das ist insbesondere der Fall, wenn:
+
+- mehrere Systeme dieselbe nicht offensichtliche Grenze kennen müssen;
+- eine lokale Implementierung die Architektur allein nicht vermittelt;
+- ein falscher Ansatz bei neuen Features sehr wahrscheinlich wäre;
+- die Regel unabhängig von konkreten Balance-, Map- oder Featurewerten gilt;
+- die Regel einen stabilen fachlichen Owner besitzt.
+
+Kein ausreichender Grund für Knowledge Writeback ist dagegen, dass eine Implementierung kompliziert war, ein Bug schwer zu finden war, ein Performanceproblem teuer war, mehrere Korrekturschleifen nötig waren, ein Algorithmus technisch interessant ist oder eine konkrete Zahl gemessen wurde. Solche Details gehören in Code, Kommentare, Tests, authored Daten oder die Git-Historie.
+
+Der Normalfall nach einer Featureänderung darf ausdrücklich sein: `Knowledge writeback: No durable project knowledge discovered.` Im Abschluss größerer Aufgaben genau eine Zeile nennen: `Knowledge writeback: No durable project knowledge discovered.` oder `Knowledge writeback: Updated <path> with <verified rule>.`

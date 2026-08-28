@@ -12,15 +12,16 @@ vi.mock('phaser', () => ({
 
 import { buildLobbyWorldLayout } from '../src/arena/LobbyWorldLayout';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
-import { getAuthoredWorldMetricsProfile } from '../src/config';
+import { getAuthoredWorldMetricsProfile, HP_MAX } from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import { LOBBY_WORLD_DEFINITION_ID, getLobbyWorldDefinition } from '../src/config/authoring/lobbyWorld';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
+import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
-import type { PlayerNetState, SyncedPlaceableRock, SyncedRockSnapshot } from '../src/types';
+import type { LobbyLoadoutPreviewState, PlayerNetState, SyncedPlaceableRock, SyncedRockSnapshot } from '../src/types';
 import { resolvePlayerCapabilities } from '../src/world/PlayerCapabilities';
 import { PlayerWorldRuntime, resolvePlayerRuntimeFeatures } from '../src/world/PlayerWorldRuntime';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
@@ -333,27 +334,112 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
 });
 
 describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
-  it('behandelt alle unterschiedlichen LobbyWorld-Spieler unabhaengig vom gewaehlten Modus als Gegner', async () => {
+  it('wendet in derselben World DM-, Coop-, TDM- und CTB-Beziehungen an', async () => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network);
+    await addClientRoom(network);
     await addClientRoom(network);
     const host = bridgeFor(hostRoom);
     useRoom(hostRoom);
     host.publishLobbySync();
     host.setMatchHostId();
-    host.setGameMode('coop_defense');
     host.publishWorldAndActivity(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7302), null);
-    host.hostPublishWorldParticipation({ p0: 'interactive', p1: 'interactive' });
+    host.hostPublishWorldParticipation({ p0: 'interactive', p1: 'interactive', p2: 'interactive' });
 
-    expect(LOBBY_WORLD.actionPolicy?.playerRelationships).toBe('free-for-all');
+    expect(LOBBY_WORLD.actionPolicy?.playerRelationships).toBe('game-mode');
+    host.setGameMode('deathmatch');
     expect(host.areTeammates('p0', 'p1')).toBe(false);
     expect(host.isEnemyPair('p0', 'p1')).toBe(true);
     expect(host.isEnemyPair('p0', 'p0')).toBe(false);
 
+    host.setGameMode('coop_defense');
+    expect(host.areTeammates('p0', 'p1')).toBe(true);
+    expect(host.isEnemyPair('p0', 'p1')).toBe(false);
+
     host.setGameMode('team_deathmatch');
     host.hostAssignMissingTeams('team_deathmatch');
-    expect(host.isEnemyPair('p0', 'p1')).toBe(true);
-    expect(host.areTeammates('p0', 'p1')).toBe(false);
+    const blueIds = ['p0', 'p1', 'p2'].filter((id) => host.getPlayerTeam(id) === 'blue');
+    const redIds = ['p0', 'p1', 'p2'].filter((id) => host.getPlayerTeam(id) === 'red');
+    expect(blueIds.length).toBeGreaterThan(0);
+    expect(redIds.length).toBeGreaterThan(0);
+    const sameTeamIds = blueIds.length >= 2 ? blueIds : redIds;
+    expect(sameTeamIds.length).toBeGreaterThanOrEqual(2);
+    expect(host.areTeammates(sameTeamIds[0], sameTeamIds[1])).toBe(true);
+    expect(host.isEnemyPair(blueIds[0], redIds[0])).toBe(true);
+    expect(host.areTeammates(blueIds[0], redIds[0])).toBe(false);
+
+    host.setGameMode('capture_the_beer');
+    expect(host.areTeammates(sameTeamIds[0], sameTeamIds[1])).toBe(true);
+    expect(host.areTeammates(blueIds[0], redIds[0])).toBe(false);
+    expect(host.isEnemyPair(blueIds[0], redIds[0])).toBe(true);
+
+    // Modewechsel veraendert nur die Lobby-Semantik, nicht die laufende World-Instanz.
+    expect(host.getWorldDescriptor()?.worldRevision).toBe(7302);
+  });
+
+  it('repliziert den Live-Coop-Build getrennt vom Commit und raeumt ihn beim Moduswechsel auf', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const host = bridgeFor(hostRoom);
+    const client = bridgeFor(clientRoom);
+    useRoom(hostRoom);
+    host.publishLobbySync();
+    host.setMatchHostId();
+    host.setGameMode('coop_defense');
+    host.publishWorldAndActivity(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7305), null);
+    host.hostPublishWorldParticipation({ p0: 'interactive', p1: 'interactive' });
+
+    const livePreview: LobbyLoadoutPreviewState = {
+      coopDefenseClassId: 'inspector_gadachs',
+      coopDefenseProfile: {
+        upgrades: { hp: { unlocked: true, level: 2 } },
+        toolLoadout: [{ kind: 'construction', id: 'rock_barrier' }],
+        selectedTool: { kind: 'construction', id: 'rock_barrier' },
+      },
+      equippedItems: [{
+        uid: 'live-helmet',
+        slot: 'helmet',
+        rarity: 'blue',
+        itemLevel: 1,
+        baseValue: 1,
+        affixes: [],
+      }],
+      tools: [{ kind: 'construction', id: 'rock_barrier' }],
+    };
+    useRoom(clientRoom);
+    client.setLocalLoadoutSlot('weapon1', 'AK47');
+    client.setLocalLobbyLoadoutPreview(livePreview);
+
+    useRoom(hostRoom);
+    const current = host.getPlayerCurrentLoadoutSnapshot('p1');
+    expect(current?.weapon1).toBe('AK47');
+    expect(current?.coopDefenseClassId).toBe('inspector_gadachs');
+    expect(current?.coopDefenseProfile?.upgrades.hp.level).toBe(2);
+    expect(current?.equippedItems).toHaveLength(1);
+    expect(current?.tools).toEqual([{ kind: 'construction', id: 'rock_barrier' }]);
+    expect(host.getPlayerCommittedLoadout('p1')).toBeNull();
+
+    // Shooting range and Match verwenden dieselbe kanonische Modifier-Aufloesung; nur die
+    // Quelle des kleinen Coop-Build-Anteils unterscheidet sich.
+    const liveRuntime = new CoopDefensePlayerModifierSystem();
+    const matchRuntime = new CoopDefensePlayerModifierSystem();
+    liveRuntime.syncPlayer('p1', current);
+    matchRuntime.syncPlayer('p1', { ...current });
+    expect(liveRuntime.getMaxHp('p1')).toBeGreaterThan(HP_MAX);
+    expect(liveRuntime.getMaxHp('p1')).toBe(matchRuntime.getMaxHp('p1'));
+
+    host.setGameMode('deathmatch');
+    const cleared = host.getPlayerCurrentLoadoutSnapshot('p1');
+    expect(cleared?.coopDefenseClassId).toBeNull();
+    expect(cleared?.coopDefenseProfile).toBeNull();
+    expect(cleared?.equippedItems).toEqual([]);
+
+    host.setGameMode('coop_defense');
+    const restored = host.getPlayerCurrentLoadoutSnapshot('p1');
+    expect(restored?.coopDefenseClassId).toBe('inspector_gadachs');
+    expect(restored?.coopDefenseProfile).not.toBeNull();
+    expect(restored?.equippedItems).toHaveLength(1);
   });
 
   it('schreibt ohne Activity weder Frags noch Room-Statistik und erzeugt keine Kill-Drops', async () => {

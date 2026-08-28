@@ -188,12 +188,12 @@ export class RpcCoordinator {
       }
       let utility: UtilityConfig | undefined;
       if (toolRef) {
-        const committed = bridge.getPlayerCommittedLoadout(playerId);
+        const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
         if (toolRef.kind === 'construction') return false;
         if (
           toolRef.kind !== 'utility'
-          || committed?.coopDefenseClassId !== 'inspector_gadachs'
-          || !(committed.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id)
+          || currentLoadout?.coopDefenseClassId !== 'inspector_gadachs'
+          || !(currentLoadout.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id)
         ) return false;
         utility = getUtilityConfigForMode(
           toolRef.id,
@@ -214,7 +214,7 @@ export class RpcCoordinator {
       if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
-      const committed = bridge.getPlayerCommittedLoadout(senderId);
+      const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       let authoritativeParams = params;
       if (params?.globalDismantle) {
         if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle
@@ -241,7 +241,7 @@ export class RpcCoordinator {
         return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)
           ?? { ok: false, reason: 'blocked' };
       }
-      if (committed?.coopDefenseClassId === 'inspector_gadachs'
+      if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
         && slot === 'utility' && !params?.toolRef
         && bridge.getPlayerUtilityOverrideId(senderId) === '') {
         return { ok: false, reason: 'blocked' };
@@ -263,7 +263,7 @@ export class RpcCoordinator {
           ) ?? { ok: false, reason: 'blocked' };
         }
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
-        if (committed?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };
+        if (currentLoadout?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };
         if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
         const inspectorUtility = getUtilityConfigForMode(
           params.toolRef.id,

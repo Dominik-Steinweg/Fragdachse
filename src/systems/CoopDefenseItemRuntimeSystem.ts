@@ -7,12 +7,13 @@ import type { TargetStatusSystem } from './TargetStatusSystem';
  * Host-only: lebender Zustand der bedingten und ereignisbasierten Item-Affixe.
  *
  * Die gewuerfelten Affixwerte selbst liegen im `CoopDefensePlayerModifierSystem` – das ist eine
- * reine Projektion des committeten Loadouts und soll das bleiben. Alles, was sich waehrend einer
+ * reine Projektion des aktuell gueltigen Coop-Player-Builds (Live-Lobby oder Commit). Alles, was sich waehrend einer
  * Runde aendert (Stapel, Timer, Wegstrecke, Debuffs), gehoert hierher, damit weder
  * `CombatSystem` noch `ResourceSystem` weiter anwachsen und die Regeln an einer Stelle stehen.
  *
- * Round-Lifetime: die Instanz wird in `buildArena()` erzeugt und in `tearDownArena()` verworfen.
- * Keine Spieler- oder Gegner-ID darf eine Runde ueberleben.
+ * World-Lifetime: die Instanz wird in `buildArena()` erzeugt und in `tearDownArena()` verworfen.
+ * Damit kann sie auch in einer Activity-losen World leben; keine Spieler- oder Gegner-ID darf
+ * eine World-Instanz ueberleben.
  */
 
 /** Sichere Obergrenze fuer die je Frame anrechenbare Wegstrecke. */

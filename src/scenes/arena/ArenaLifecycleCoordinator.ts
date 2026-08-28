@@ -318,8 +318,9 @@ export class ArenaLifecycleCoordinator {
         run: ({ profile }) => { this.ctx.resourceSystem?.initPlayer(profile.id); },
       },
       {
-        id: 'mission-items',
-        feature: 'missionStatus',
+        // Coop-Build und Item-Affixe sind World-Gameplay; sie brauchen keine laufende Mission.
+        id: 'player-build',
+        feature: 'playerBuild',
         run: ({ profile }) => { this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id); },
       },
       {
@@ -361,8 +362,8 @@ export class ArenaLifecycleCoordinator {
         run: (playerId) => { this.ctx.resourceSystem?.removePlayer(playerId); },
       },
       {
-        id: 'mission-items',
-        feature: 'missionStatus',
+        id: 'player-build',
+        feature: 'playerBuild',
         run: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId); },
       },
       { id: 'burrow-state', feature: 'combatResources', run: (playerId) => { this.ctx.burrowSystem?.removePlayer(playerId); } },
@@ -845,10 +846,14 @@ export class ArenaLifecycleCoordinator {
   }
 
   syncHostLoadoutsFromCommittedSelections(): void {
-    if (!bridge.isHost() || !this.ctx.loadoutManager) return;
+    if (!bridge.isHost()) return;
+    this.syncHostCoopDefensePlayerModifiersFromCurrentBuild();
+    if (!this.ctx.loadoutManager) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (!this.ctx.playerManager.hasPlayer(profile.id)) continue;
       this.ctx.loadoutManager.syncSelectedLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+      this.ctx.combatSystem.reconcilePlayerRuntimeState(profile.id);
+      this.ctx.resourceSystem?.reconcilePlayerLimits(profile.id);
     }
   }
 
@@ -1038,8 +1043,8 @@ export class ArenaLifecycleCoordinator {
   }
 
   getActiveConstructionToolsForPlayer(playerId: string): readonly LoadoutToolRef[] {
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    return getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed));
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+    return getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout));
   }
 
   getConstructionCapacityForPlayer(playerId: string): number {
@@ -1756,11 +1761,10 @@ export class ArenaLifecycleCoordinator {
       );
     };
     if (bridge.isHost()) {
-      this.ctx.coopDefensePlayerModifierSystem = isCoopMission
-        ? new CoopDefensePlayerModifierSystem()
-        : null;
-      // Der lebende Affix-Zustand haengt am Modifier-System: ohne gerollte Affixwerte gibt es
-      // nichts zu verfolgen.
+      // Der Coop-Build gehoert zur laufenden World und kann deshalb auch in einer Activity-losen
+      // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
+      // `isCoopMission`/`missionMapConfig` gebunden.
+      this.ctx.coopDefensePlayerModifierSystem = new CoopDefensePlayerModifierSystem();
       this.ctx.coopDefenseItemRuntimeSystem = this.ctx.coopDefensePlayerModifierSystem
         ? new CoopDefenseItemRuntimeSystem({
           getAffixValue: (playerId, affixId) => (
@@ -1779,7 +1783,7 @@ export class ArenaLifecycleCoordinator {
         })
         : null;
       this.ctx.coopDefenseItemRuntimeSystem?.setTargetStatusSystem(this.ctx.targetStatusSystem);
-      this.syncHostCoopDefensePlayerModifiersFromCommittedSelections();
+      this.syncHostCoopDefensePlayerModifiersFromCurrentBuild();
 
       const obstacleCellProvider = () => {
         const staticRockCells = layout.rocks.flatMap((rock, index) => {
@@ -3994,8 +3998,7 @@ export class ArenaLifecycleCoordinator {
     if (!session || !site || !this.ctx.placementSystem) return;
 
     const hostId = bridge.getLocalPlayerId();
-    const committed = bridge.getPlayerCommittedLoadout(hostId);
-    const tools = this.buildPersistentRestoreTools(hostId, committed?.coopDefenseProfile ?? null);
+    const tools = this.buildPersistentRestoreTools(hostId);
     const capacityMax = this.getConstructionCapacity(hostId);
 
     const plan = planPersistentBaseRestore({
@@ -4031,11 +4034,7 @@ export class ArenaLifecycleCoordinator {
     const guestBlueprints = [...this.persistentBaseRoomState.getWorkingBlueprints()]
       .sort(compareGuestRestoreBlueprints);
     for (const blueprint of guestBlueprints) {
-      const guestCommitted = bridge.getPlayerCommittedLoadout(blueprint.ownerId);
-      const guestTools = this.buildPersistentRestoreTools(
-        blueprint.ownerId,
-        guestCommitted?.coopDefenseProfile ?? null,
-      );
+      const guestTools = this.buildPersistentRestoreTools(blueprint.ownerId);
       const guestPlan = planPersistentBaseRestore({
         state: {
           schemaVersion: session.workingState.schemaVersion,
@@ -4083,10 +4082,9 @@ export class ArenaLifecycleCoordinator {
 
   private buildPersistentRestoreTools(
     playerId: string,
-    profile: NonNullable<LoadoutCommitSnapshot['coopDefenseProfile']> | null,
   ): PersistentRestoreToolDefinition[] {
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    const accessContext = getConstructionAccessContext(this.resolveConfiguredGameMode(), committed);
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+    const accessContext = getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout);
     const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
     const constructionHpMultiplier = 1 + (
       this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
@@ -4751,10 +4749,10 @@ export class ArenaLifecycleCoordinator {
 
     const constructionId = getConstructionIdForUtility(cfg.id);
     if (constructionId) {
-      const committed = bridge.getPlayerCommittedLoadout(playerId);
+      const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
       const access = resolveConstructionAccess(
         constructionId,
-        getConstructionAccessContext(this.resolveConfiguredGameMode(), committed),
+        getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
       );
       if (!access.allowed || !this.hasFreeConstructionCapacity(playerId, access.definition?.capacityCost ?? 0)) return false;
     }
@@ -4796,10 +4794,10 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canPlace) return { ok: false, reason: 'blocked' };
     constructionId = canonicalConstructionId;
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
     const access = resolveConstructionAccess(
       constructionId,
-      getConstructionAccessContext(this.resolveConfiguredGameMode(), committed),
+      getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
     );
     if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -4898,11 +4896,11 @@ export class ArenaLifecycleCoordinator {
     params?: LoadoutUseParams,
   ): LoadoutUseResult {
     if (!bridge.isHost() || tool.kind !== 'utility') return { ok: false, reason: 'invalid' };
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (!committed || committed.coopDefenseClassId !== 'inspector_gadachs') {
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+    if (!currentLoadout || currentLoadout.coopDefenseClassId !== 'inspector_gadachs') {
       return { ok: false, reason: 'blocked' };
     }
-    if (!(committed.tools ?? []).some((entry) => (
+    if (!(currentLoadout.tools ?? []).some((entry) => (
       entry.kind === 'utility' && (entry.id === tool.id || normalizeConstructionId(entry.id) === normalizeConstructionId(tool.id))
     ))) {
       return { ok: false, reason: 'blocked' };
@@ -4913,7 +4911,7 @@ export class ArenaLifecycleCoordinator {
     if (constructionId) {
       const access = resolveConstructionAccess(
         constructionId,
-        getConstructionAccessContext(this.resolveConfiguredGameMode(), committed),
+        getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
       );
       if (!access.allowed) return { ok: false, reason: 'blocked' };
     }
@@ -4972,10 +4970,10 @@ export class ArenaLifecycleCoordinator {
 
   /** Persoenliches Kapazitaetsmaximum inklusive Item-Boni. Host-Autoritaet fuer das Bau-Gate. */
   private getConstructionCapacity(playerId: string): number {
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
     return resolveConstructionCapacity({
       gameMode: this.resolveConfiguredGameMode(),
-      classId: committed?.coopDefenseClassId,
+      classId: currentLoadout?.coopDefenseClassId,
       modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
         playerId,
         COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
@@ -5023,8 +5021,8 @@ export class ArenaLifecycleCoordinator {
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0) {
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout)).length === 0) {
       return { ok: false, reason: 'blocked' };
     }
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -5070,9 +5068,9 @@ export class ArenaLifecycleCoordinator {
   dismantleAllInspectorConstructions(playerId: string): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), committed)).length === 0
+    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout)).length === 0
       || !player?.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
@@ -5248,16 +5246,29 @@ export class ArenaLifecycleCoordinator {
     this.ctx.playerStatusRing?.update(hudData);
   }
 
-  private syncHostCoopDefensePlayerModifiersFromCommittedSelections(): void {
+  private syncHostCoopDefensePlayerModifiersFromCurrentBuild(): void {
     if (!bridge.isHost() || !this.ctx.coopDefensePlayerModifierSystem) return;
 
-    this.ctx.coopDefensePlayerModifierSystem.syncPlayers(
-      bridge.getConnectedPlayers().map((profile) => [profile.id, bridge.getPlayerCommittedLoadout(profile.id)] as const),
-    );
+    const currentBuilds = bridge.getConnectedPlayers().map((profile) => [
+      profile.id,
+      bridge.getPlayerCurrentLoadoutSnapshot(profile.id),
+    ] as const);
+    const changedPlayerIds = this.ctx.coopDefensePlayerModifierSystem.syncPlayers(currentBuilds);
+    for (const playerId of changedPlayerIds) {
+      const current = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+      if (current?.coopDefenseProfile || (current?.equippedItems?.length ?? 0) > 0) {
+        if (this.ctx.playerManager.hasPlayer(playerId)) {
+          this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(playerId);
+        }
+      } else {
+        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
+      }
+    }
   }
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
-    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    const activity = bridge.getActivityDescriptor();
+    const committed = activity ? bridge.getPlayerCommittedLoadout(playerId) : null;
     if (!committed) {
       // Eingefroren wird eine Auswahl nur fuer eine Runde. Ohne Activity gibt es nichts
       // einzufrieren – dort ist die laufende Lobby-Auswahl die richtige Quelle, kein Fehlerfall.
@@ -5266,7 +5277,10 @@ export class ArenaLifecycleCoordinator {
       if (this.worldLifecycle.activity.isActive()) {
         console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
       }
-      return this.resolveLoadoutSelection(playerId);
+      return this.resolveLoadoutSelection(
+        playerId,
+        activity ? null : bridge.getPlayerCurrentLoadoutSnapshot(playerId),
+      );
     }
     return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
@@ -5278,7 +5292,10 @@ export class ArenaLifecycleCoordinator {
     }, this.resolveConfiguredGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
   }
 
-  private resolveLoadoutSelection(playerId: string): LoadoutSelection {
+  private resolveLoadoutSelection(
+    playerId: string,
+    currentSnapshot: LoadoutCommitSnapshot | null = bridge.getPlayerCurrentLoadoutSnapshot(playerId),
+  ): LoadoutSelection {
     const w1Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon1');
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
@@ -5288,7 +5305,8 @@ export class ArenaLifecycleCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId  as keyof typeof UTILITY_CONFIGS]   : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, this.resolveConfiguredGameMode());
+    }, this.resolveConfiguredGameMode(), currentSnapshot?.coopDefenseProfile,
+    currentSnapshot?.coopDefenseClassId, currentSnapshot?.equippedItems);
   }
 
   /**

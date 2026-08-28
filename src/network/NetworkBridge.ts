@@ -69,7 +69,7 @@ import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { canJoinLobbyTeam, LOBBY_TEAM_CAPACITY, pickAutomaticTeam } from '../lobby/LobbyRosterLayout';
 import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
-import { getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import { DEFAULT_LOADOUT, getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getWorldDefinition } from '../config/authoring/authoredScenarios';
@@ -164,7 +164,7 @@ const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
-const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufende Lobby-Vorschau {c: classId, t: tool refs}
+const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufender Live-Build {c: classId, p: profile, i: items, t: tool refs}
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
 const KEY_UTILITY_OVERRIDE_ID = 'uon'; // per-player: string (stable utility ID, empty = no override)
@@ -1253,7 +1253,7 @@ export class NetworkBridge {
   }
 
   getEffectivePlayerColor(playerId: string): number | undefined {
-    if (!this.usesFreeForAllWorldRelationships() && usesTeamColors(this.getGameMode())) {
+    if (!this.usesFreeForAllWorldRelationships() && usesTeamColors(this.getActiveGameMode())) {
       const teamId = this.getPlayerTeam(playerId);
       if (teamId) return this.getTeamColor(teamId);
     }
@@ -1264,10 +1264,7 @@ export class NetworkBridge {
     return this.getStoredPlayerColor(playerId);
   }
 
-  /**
-   * Eine Activity besitzt ihre eigene Modus-/Teamsemantik. Ohne Activity darf dagegen die
-   * laufende World ihre Grundbeziehung authoren, ohne sie aus der Lobby-Auswahl abzuleiten.
-   */
+  /** Explizite World-Sonderregel; die LobbyWorld verwendet bewusst `game-mode`. */
   private usesFreeForAllWorldRelationships(): boolean {
     if (this.getActivityDescriptor() !== null) return false;
     const definitionId = this.getWorldDescriptor()?.definitionId;
@@ -1278,14 +1275,18 @@ export class NetworkBridge {
   areTeammates(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return true;
     if (this.usesFreeForAllWorldRelationships()) return false;
-    if (!isTeamGameMode(this.getGameMode())) return false;
-    if (isCoopDefenseMode(this.getGameMode())) {
+    const mode = this.getActiveGameMode();
+    if (!isTeamGameMode(mode)) return false;
+    if (isCoopDefenseMode(mode)) {
       if (firstPlayerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) {
         return this.connectedPlayers.has(secondPlayerId);
       }
       if (secondPlayerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) {
         return this.connectedPlayers.has(firstPlayerId);
       }
+      // Coop is a shared faction even if stale team state from an earlier team mode is still
+      // present for one frame. The connected player roster is the authoritative player set.
+      return this.connectedPlayers.has(firstPlayerId) && this.connectedPlayers.has(secondPlayerId);
     }
     const firstTeam = this.getPlayerTeam(firstPlayerId);
     const secondTeam = this.getPlayerTeam(secondPlayerId);
@@ -1295,7 +1296,11 @@ export class NetworkBridge {
   isEnemyPair(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return false;
     if (this.usesFreeForAllWorldRelationships()) return true;
-    if (!isTeamGameMode(this.getGameMode())) return true;
+    const mode = this.getActiveGameMode();
+    if (isCoopDefenseMode(mode)
+      && this.connectedPlayers.has(firstPlayerId)
+      && this.connectedPlayers.has(secondPlayerId)) return false;
+    if (!isTeamGameMode(mode)) return true;
     const firstTeam = this.getPlayerTeam(firstPlayerId);
     const secondTeam = this.getPlayerTeam(secondPlayerId);
     if (!firstTeam || !secondTeam) return true;
@@ -3650,45 +3655,78 @@ export class NetworkBridge {
 
   /**
    * Publiziert die laufende Lobby-Auswahl des lokalen Spielers. Dieser Zustand ist bewusst
-   * getrennt vom Ready-Commit: Die Lobby darf Inspector-Tools zeigen, ohne den verbindlichen
-   * LoadoutCommitSnapshot vorzeitig zu verwenden.
+   * getrennt vom Ready-Commit: Eine Activity-lose World darf den aktuellen Coop-Build direkt
+   * verwenden, ohne den verbindlichen LoadoutCommitSnapshot vorzeitig zu verwenden.
    */
   setLocalLobbyLoadoutPreview(preview: LobbyLoadoutPreviewState): void {
     const classId = isCoopDefenseClassId(preview.coopDefenseClassId)
       ? preview.coopDefenseClassId
       : null;
+    const profile = preview.coopDefenseProfile != null
+      ? sanitizeCoopDefenseUpgradeProfile(preview.coopDefenseProfile, classId ?? undefined)
+      : null;
     const tools = classId === 'inspector_gadachs'
-      ? preview.tools
-        .map((tool): LoadoutToolRef | null => {
-          if (tool.kind === 'construction') {
-            const id = normalizeConstructionId(tool.id);
-            return id ? { kind: 'construction', id } : null;
-          }
-          const id = getUtilityBaseId(tool.id) ?? tool.id;
-          return UTILITY_CONFIGS[id as keyof typeof UTILITY_CONFIGS] !== undefined
-            ? { kind: 'utility', id }
-            : null;
-        })
-        .filter((tool): tool is LoadoutToolRef => tool !== null)
-        .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS)
+      ? this.sanitizeLobbyLoadoutTools(preview.tools)
       : [];
-    const next = { c: classId, t: tools };
+    const equippedItems = sanitizeCoopDefenseEquippedItems(preview.equippedItems);
+    const next = { c: classId, p: profile, i: equippedItems, t: tools };
     const current = myPlayer().getState(KEY_LOBBY_LOADOUT_PREVIEW);
     if (JSON.stringify(current) === JSON.stringify(next)) return;
     myPlayer().setState(KEY_LOBBY_LOADOUT_PREVIEW, next, true);
   }
 
-  /** Liest die laufende Lobby-Auswahl; der Ready-Commit bleibt dafuer absichtlich unberuehrt. */
+  /** Liest den laufenden Live-Build; der Ready-Commit bleibt dafuer absichtlich unberuehrt. */
   getPlayerLobbyLoadoutPreview(playerId: string): LobbyLoadoutPreviewState | null {
     const raw = this.playerStateMap.get(playerId)?.getState(KEY_LOBBY_LOADOUT_PREVIEW);
     if (!raw || typeof raw !== 'object') return null;
-    const value = raw as { c?: unknown; t?: unknown };
+    const value = raw as { c?: unknown; p?: unknown; i?: unknown; t?: unknown };
     const classId = isCoopDefenseClassId(value.c) ? value.c : null;
-    if (classId === null) return { coopDefenseClassId: null, tools: [] };
-    if (classId !== 'inspector_gadachs' || !Array.isArray(value.t)) {
-      return { coopDefenseClassId: classId, tools: [] };
-    }
-    const tools = value.t
+    const profile = value.p != null
+      ? sanitizeCoopDefenseUpgradeProfile(value.p, classId ?? undefined)
+      : null;
+    // `t` ist der kanonische aktive Tool-Slot. Das Profil bleibt die Rueckfallquelle fuer bereits
+    // verbundene Peers, die nur die fruehere Inspector-Vorschau kennen.
+    const tools = classId === 'inspector_gadachs'
+      ? this.sanitizeLobbyLoadoutTools(value.t ?? profile?.toolLoadout)
+      : [];
+    return {
+      coopDefenseClassId: classId,
+      coopDefenseProfile: profile,
+      equippedItems: sanitizeCoopDefenseEquippedItems(value.i),
+      tools,
+    };
+  }
+
+  /**
+   * Aktuelle Loadout-Projektion fuer World-Gameplay. Bei laufender Activity bleibt der
+   * Commit-Snapshot die Quelle; ohne Activity werden Slots plus Live-Build kombiniert.
+   */
+  getPlayerCurrentLoadoutSnapshot(playerId: string): LoadoutCommitSnapshot | null {
+    if (this.getActivityDescriptor() !== null) return this.getPlayerCommittedLoadout(playerId);
+    if (!this.playerStateMap.has(playerId)) return null;
+
+    const preview = this.getPlayerLobbyLoadoutPreview(playerId);
+    const mode = this.getGameMode();
+    const weapon1 = this.getPlayerLoadoutSlot(playerId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id;
+    const weapon2 = this.getPlayerLoadoutSlot(playerId, 'weapon2') ?? DEFAULT_LOADOUT.weapon2.id;
+    const utility = this.getPlayerLoadoutSlot(playerId, 'utility') ?? DEFAULT_LOADOUT.utility.id;
+    const ultimate = this.getPlayerLoadoutSlot(playerId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id;
+    const coopDefenseClassId = isCoopDefenseMode(mode) ? preview?.coopDefenseClassId ?? null : null;
+    return {
+      weapon1,
+      weapon2,
+      utility,
+      ultimate,
+      coopDefenseClassId,
+      coopDefenseProfile: isCoopDefenseMode(mode) ? preview?.coopDefenseProfile ?? null : null,
+      tools: coopDefenseClassId === 'inspector_gadachs' ? preview?.tools.map((tool) => ({ ...tool })) : undefined,
+      equippedItems: isCoopDefenseMode(mode) ? preview?.equippedItems ?? [] : [],
+    };
+  }
+
+  private sanitizeLobbyLoadoutTools(raw: unknown): LoadoutToolRef[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
       .filter((tool): tool is { kind: 'construction' | 'utility'; id: string } => (
         !!tool
         && typeof tool === 'object'
@@ -3708,7 +3746,6 @@ export class NetworkBridge {
       })
       .filter((tool): tool is LoadoutToolRef => tool !== null)
       .slice(0, COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS);
-    return { coopDefenseClassId: classId, tools };
   }
 
   /** Host-only: Publiziert bis wann die Utility eines Spielers im Cooldown ist. */

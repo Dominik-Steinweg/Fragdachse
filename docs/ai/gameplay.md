@@ -1,64 +1,55 @@
 # Gameplay
 
-Gameplay-Regeln liegen in src/systems/, die Modus-IDs und gemeinsamen Verträge in src/types.ts und src/gameModes.ts. Aktuelle Balancewerte gehören in Code/JSON, nicht in diese Seite.
+## Geltungsbereich
 
-## Phasen
+Diese Seite hält die fachlichen Grenzen zwischen World-Spielraum, Activity/Runde, lokaler Eingabe und Player-Runtime fest. Konkrete Gegnerwerte, Waffenbalance, Map-Inhalte und Ablaufdetails gehören in authored Daten, Systems oder Tests.
 
-GamePhase kennt nur LOBBY und ARENA.
+## Host-authoritative Spielregeln
 
-- In der Lobby verwaltet der Host Modus, Map, Teams, Loadouts, Ready und Raumqualität; der Client zeigt den replizierten Stand.
-- In der Arena läuft zunächst ein eigenständiger schwarzer Ladeabschnitt ohne sichtbare Arena, Countdown, Input, Gameplay- oder Round-Timer-Fortschritt. Für jeden eingefrorenen Teilnehmer werden Name, Stufe, Prozent und Ready-Status angezeigt. Jeder Peer meldet erst nach vollständigem Aufbau seines initialen Working-Sets ein eigenes `ArenaLoadReadyState`; danach beginnt unmittelbar die gemeinsame Countdown-/Startphase und erst am autoritativen `arenaStartTime` die host-autoritativ aufgebaute Simulation. Round-Systeme existieren nur während dieser Phase.
-- ArenaLifecycleCoordinator führt Start, Ende und Rückkehr zur Lobby aus. RoundState beziehungsweise RoundResult sind replizierte Ergebnisse, keine dritte Netzwerkphase. Ergebnis- und Progressions-Overlays bleiben lokale Darstellung.
+Der Host entscheidet Simulation, Treffer, Ressourcen, Spawns, Ziele, Rundenzustand und persistente Ergebnisse. Clients senden Eingaben oder Aktionen; eine lokale Prediction oder ein UI-Zustand ist kein Beweis für eine erlaubte Aktion.
 
-Ein Host startet nur mit erfüllten Ready-/Loadout- und Modusbedingungen. Vorzeitige Abschlüsse laufen über hostCompleteRound() und verwenden den definierten RoundConclusion-Vertrag. Rewards und Freischaltungen prüfen ihre Eligibility getrennt vom sichtbaren Overlay.
+Die zuständige Netzwerkschnittstelle ist [NetworkBridge.ts](../../src/network/NetworkBridge.ts). Gameplay darf weder PeerJS noch Wire-Channel direkt importieren.
 
-## Modi
+## WorldParticipation und Fähigkeiten
 
-Die vier IDs sind deathmatch, team_deathmatch, capture_the_beer und coop_defense.
+[WorldParticipation.ts](../../src/world/WorldParticipation.ts) ist nicht aus GamePhase, RoundParticipation oder canPlayerAct abzuleiten. Room-Mitgliedschaft, World-Admission, Activity-Teilnahme und lokale Presentation sind getrennte Zustände.
 
-- Deathmatch ist frei für alle; Team Deathmatch und Capture the Beer verwenden gegnerische Teams.
-- Capture the Beer nutzt die erweiterte Arena und eine dynamische Kamera.
-- Coop Defense verwendet ein gemeinsames Team, hostseitige PvE-Systeme und map-authored Ziele.
+Der Host veröffentlicht die Participation. joining, interactive, observer und leaving können unterschiedliche Runtime- und Rechtefolgen haben; none bedeutet keine World-Teilnahme. Ein observer darf World-Daten und eine spectatorische Presentation erhalten, aber keine interaktive Player-Aktion senden.
 
-Gemeinsame Kernpfade für Spieler, Combat, Projektile, Ressourcen und Loadouts bleiben mode-agnostisch. Mode-spezifische Systeme werden in der Round-Verdrahtung erzeugt; keine dauerhaften Coop-Sonderfälle in allgemeine Systeme einbauen.
+[PlayerCapabilities.ts](../../src/world/PlayerCapabilities.ts) beschreibt die fachliche Erlaubnis in einzelnen Domänen, etwa Bewegung, Combat, Platzierung, Dismantling, Interaktion, Missionsaktionen und Kamerasteuerung. [InputPolicy.ts](../../src/world/InputPolicy.ts) entscheidet daraus zusammen mit lokalem UI-, Countdown- und Diagnosezustand, welche Eingabe angeboten wird. Der Host revalidiert die Aktion unabhängig davon.
 
-## Participation und Spectator
+## World, Activity und Runde
 
-NetworkBridge.hostStartRoundParticipants() friert die Teilnehmer beim Rundenstart ein. Später beitretende Spieler und Spieler nach freiwilligem Wechsel werden host-autoritativ Spectators. `canPlayerSpawnOrRespawn()`, `canPlayerAct()` und `canPlayerReceiveRoundRewards()` sind ausschließlich Round-Gates; World-Handlungen werden über `WorldParticipation` und die spezifischen `PlayerCapabilities` geprüft.
+World-Zustand umfasst dauerhafte Geometrie, Basen, World-Sites, World-Identität und WorldParticipation. Activity- und Round-Zustand umfasst Ziele, Timer, Gegner, Wellen, Missionsprogress, Respawns, Events und Ergebnis. Eine World ohne Activity ist ein gültiger Betriebszustand; ein Activity-Start darf World-Geometrie oder World-Identity nicht heimlich neu erzeugen.
 
-Die Participation-Revision und `arenaLoadReady` gehören zur technischen Startbarriere und ersetzen nicht das Lobby-Ready. Disconnects werden aus der aktuellen Teilnehmerprüfung entfernt; ein später beitretender Spectator setzt einen bereits geplanten Start nicht zurück. Ein vorbereiteter Rundenzustand bleibt bis zum gemeinsamen Startzeitpunkt verborgen.
+World Loading ist an worldRevision gebunden. Round Loading wartet auf die World-Readiness und die für den Aktivitätsstart nötigen Teilnehmer, bleibt aber ein eigener Vertrag. Siehe [WorldLoadReady.ts](../../src/world/WorldLoadReady.ts) und [WorldRoundLoadingContracts.test.ts](../../tests/WorldRoundLoadingContracts.test.ts).
 
-Eine Survival-Eliminierung ändert nicht automatisch die Netzwerkrolle: Der Spieler bleibt Reward-Teilnehmer, kann aber lokal keine Aktionen mehr ausführen und wird spectator-like dargestellt. Beim nächsten Rundenwechsel wird der Participation-Snapshot gelöscht.
+## Player-Runtime
 
-## Coop-Zielgrenzen
+[PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts) liefert eine gemeinsame Feature-Beschreibung für Entity, Navigation, Combat, Ressourcen, Loadout, Targeting, World-scoped Player-Build und Missionsstatus. Autoritative Simulationsfeatures sind hostgebunden; ein Client darf keinen Serverzustand aus einer lokalen Visualisierung herstellen. Build- und Item-Modifikatoren können in einer Activity-losen World laufen, während Missionsstatus Activity-spezifisch bleibt.
 
-Coop-Sieg und -Niederlage gehören ausschließlich CoopDefenseRoundStateSystem und den authored Objective-Verträgen. CoopDefenseRespawnBudgetSystem, CoopDefenseMapDirector, CoopDefenseBossSystem, CoopDefensePersistentPressureSystem und CoopDefenseMapEventDirector liefern jeweils nur ihren fachlichen Input.
+Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody ist der kanonische physische Körper; PlayerEntity und Sprite sind Präsentation. Attach- und Detach-Operationen sind atomar und müssen bei einem Fehler zurückrollen.
 
-Wer über den Team-Wipe verliert, führt ein Budget: `survive` und `advance` müssen `respawnsPerPlayer` authoren, alle anderen Ziele dürfen es nicht. `CoopDefenseRespawnBudgetSystem` ist die einzige Implementierung dieses Budgets; das Map-Ziel entscheidet nur, was aus dem erschöpften Team folgt. Zusätzlich muss `survive` seine Dauer authoren. Andere Coop-Ziele dürfen keinen impliziten Rundentimer aus einer Balance-Referenz ableiten.
+## Eingaben und Aktionen
 
-Nebenmissionen sind optionale, nicht siegrelevante Ziele mit den Archetypen destroy, hold und carry. Ihre authored Konfiguration, Lebenszyklus und Rewards gehören in coop-defense-authoring.md; die Netzrolle bleibt host-autoritativ.
+World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem Handler zentral geprüft. Activity- oder Round-Aktionen erhalten zusätzlich die fachlich nötige Activity-/Round-Identität. Ein alter Client kann so weder nach einem World-Wechsel noch nach einem Activity-Wechsel veraltete Aktionen ausführen.
 
-## Gameplay-Grenzen
+Für ein neues Eingabefeld oder eine neue Aktion zuerst festlegen:
 
-- Der Host ist die einzige Instanz für Schaden, Spawn, Ressourcenverbrauch und Sieg/Niederlage.
-- Raumweite Schadensstatistiken werden im zentralen CombatSystem nur aus tatsächlich verlorenen HP/Rüstung beziehungsweise Gegner-HP gespeist; Overkill, Selbst-, Freund-, Umwelt-, Fels- und Zugschaden bleiben ausgeschlossen. Spielerbesitz von Folgeeffekten wird vor der hostseitigen Anrechnung aufgelöst.
-- Waffenaktionen beanspruchen hostseitig exklusiv ihren Slot, bevor Cooldown oder Ressource geprüft werden; der Wechsel beendet den nicht-autonomen gehaltenen/kanalisierten Effekt des anderen Slots sofort. Explizit autonome Toggle-Upgrades bleiben davon ausgenommen.
-- Trefferherkunft wird über typisierte Damage-/Slot-Felder geführt, nicht über Anzeigenamen oder Rendererzustand.
-- Loadout- und Upgrade-Regeln gehören in Resolver und Systems. Neue Stats müssen über den gemeinsamen Host-/Client-Resolver laufen, damit Anzeige und Gate identisch bleiben.
-- Strategische Ziele und Navigation verwenden die vorhandenen Flowfield-/Obstacle-Services. Keine zweite Sichtlinien- oder Zielquellenliste neben den zentralen Services einführen. Sichtbare Coop-Gleise bleiben passierbar: Querbewegung nutzt die moderate Gleiskostenklasse, ein Schritt laengs von Gleiszelle zu Gleiszelle einen zentral konfigurierten Zusatzaufschlag. Der ArenaGenerator haelt authored Spawn-zu-freundlicher-Basis-Routen auf hoechstens `COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS` aufeinanderfolgenden Gleiszellen und verwirft unguenstige Layoutversuche.
-- Sichtlinie und Schusslinie sind getrennte Fragen: `CombatSystem.hasLineOfSight` prüft nur die statischen Hindernisse des `ArenaObstacleIndex` (Sehen, Spawn-Bewertung, Wegewahl), `CombatSystem.hasClearLineOfFire` zusätzlich die beweglichen physischen Blocker – zurzeit den Zug. Jede Entscheidung, die einen Schuss, Wurf oder Homing-Lock auslöst, fragt die Schusslinie; nur wer den beweglichen Blocker selbst angreift, bleibt bei der Sichtlinie, weil er sich sonst selbst verdeckt.
-- Radiale Projektilpulse werden über `ProjectileProximityPulseConfig` und den gemeinsamen `HostUpdateCoordinator`-Resolver abgewickelt. Der Coop-Puls zielt auf feindliche Gegner, Felsen und den Zug; BFG-Spielerziele bleiben eine separate Erweiterung. Gegnerziele müssen über `CombatSystem.canDamageTarget()` gefiltert werden, damit verbündete oder übernommene Gegner nicht getroffen werden.
-- Brand-Status (DoT), Stack-Buckets und Tick-Scheduling werden über die reine, zeit-parametrisierte `BurnStateMachine` (`src/combat/rules/BurnStateMachine.ts`) verwaltet. `CombatSystem` und Headless Balance Lab teilen diese Implementierung 1:1; die Schadensausführung verbleibt im autoritativen Schadens-Trichter des CombatSystems bzw. am Headless-Sink.
-- Visuelle Effekte reagieren auf entschiedene Zustände und besitzen keinen eigenen Gameplay-Authority-Pfad.
+- Welcher Capability-Bereich ist betroffen?
+- Ist es World-, Activity-, Round- oder rein lokale Interaktion?
+- Welcher Host-Handler validiert sie?
+- Welche replizierte Bestätigung verändert die sichtbare Darstellung?
 
-## Strukturen, Schaden und Modifikatoren
+## Fachliche Zeit
 
-Basen tragen Faction und Role aus der Map-Konfiguration. Dormante Strukturen verwenden BaseEntity.isInert() als gemeinsames Gate für Darstellung, Kollision, Licht, Türme, Spawns und Zielquellen. Räumliche Verbraucher müssen weiterhin alle Basen als Hindernisse kennen; nur Wirkungs- und Zielmengen filtern nach Faction oder Role. Zielmenge des Basis-Flowfields sind alle aktiven freundlichen Basen mit Role main sowie objective-gebundene Vorposten; dekorative Vorposten und Spawn-Points bleiben ausgenommen. Weil das Feld ein Mehrziel-Dijkstra ist, ergibt sich die Wahl der pfadnächsten Struktur ohne eigene Zielzuweisung je Gegner.
+Aktivitäts- und Rundensysteme arbeiten mit ihrer definierten Simulationszeit und replizierten Zuständen. Wellen, Gegner, Events und Ziele dürfen für fachliche Entscheidungen nicht von lokaler Wanduhr oder Date.now abhängen. Die Darstellung darf interpolieren, bleibt aber gegenüber Host-Zustand und Revisionen nachgeordnet.
 
-Strukturschaden läuft durch die zentralen CombatSystem-Callbacks. Direkttreffer, Hitscan, Nahkampf und Explosionen dürfen nicht je einen parallelen Basis-/Fels-Schadenspfad eröffnen. Die Herkunft eines Treffers wird über DamageApplicationOptions und sourceSlot geführt, nicht über weaponName oder Visuals. Besitzerwerte platzierter Konstrukte bleiben erhalten; ihre Schadensermittlung verwendet den gemeinsamen Resolver.
+## Verifikation und Einstiegspunkte
 
-Türme und unbewaffnete Power-up-Podeste sind verschiedene Verantwortlichkeiten: TurretSystem besitzt Zielsuche und Turmfeuer, PowerUpSystem besitzt Pickup und Respawn von Podesten. Ein Turm verwendet seine eigene TURRET-Konfiguration und darf nicht versehentlich die Spielerwaffe mit demselben Namen erben.
-
-Coop-Upgrades und Item-Affixe werden über dieselben additiven/percentualen Effekt-Buckets und resolveCoopDefenseStat() auf Host und Client aufgelöst. Der gespeicherte/committete Loadout ist die statische Projektion; Stapel, Timer und Laufzeitdebuffs gehören in CoopDefenseItemRuntimeSystem. Ein neuer Stat ist erst implementiert, wenn Descriptor, Resolver und beide Verbraucher existieren.
-
-Konstruktionskapazität ist ein gemeinsamer Regelvertrag, keine Adrenalinressource. Die Kosten werden aus der Konstruktion selbst abgeleitet und über die gemeinsame reine Summenfunktion auf Host, HUD und Platzierungsvorschau berechnet; nur das persönliche Maximum darf durch aufgelöste Stats verändert werden.
+- [src/world/PlayerCapabilities.ts](../../src/world/PlayerCapabilities.ts)
+- [src/world/InputPolicy.ts](../../src/world/InputPolicy.ts)
+- [src/world/PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts)
+- [tests/PlayerCapabilityContracts.test.ts](../../tests/PlayerCapabilityContracts.test.ts)
+- [tests/PlayerWorldRuntimeContracts.test.ts](../../tests/PlayerWorldRuntimeContracts.test.ts)
+- [tests/SharedWorldWithoutActivity.test.ts](../../tests/SharedWorldWithoutActivity.test.ts)

@@ -1,100 +1,71 @@
 # Coop-Defense-Authoring
 
-Coop-Maps sind authored Daten. Die JSON-Dateien unter src/config/coopDefenseMaps/ werden über src/config/coopDefenseMaps/index.ts registriert, in src/config/coopDefenseMaps.ts normalisiert und validiert und anschließend von Host und Client aus der replizierten Map-ID identisch aufgelöst.
+## Geltungsbereich
 
-## Map-Vertrag
+Coop Defense ist eine Activity auf einer World. Diese Seite beschreibt die stabile Aufteilung von authored Daten und die Grenzen für neue Missionen. Balancewerte, aktuelle Map-Listen und konkrete Eventdaten bleiben in authored JSON, Resolvern und Tests.
 
-CoopDefenseMapConfig bündelt Layout und Round-Inhalt:
+## Aufteilung des Authorings
 
-- Arena-Größe, Time-of-Day samt optionaler Runtime-Steuerung, Tutorial/Layout und optionales Rock-Field;
-- `rockWalls` authoriert Bänder aus ganz normalen zerstörbaren Felsen. Sie sind keine Missionsbarriere: Jede vorhandene Zerstörungs- und Bewegungsmechanik löst sie wie generierten Fels auf. `ArenaGenerator` stempelt sie erst **nach** Konnektivitäts-, Baum- und Routenprüfung ein – sonst läse `ensureConnected` ein bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf. Gleisspalten, Basisreservierungen, Barrierezellen und bereits gesetzte Bäume bleiben frei;
-- `tutorialAnchor` verschiebt Tutorial-Fenster und die Felsformation darunter gemeinsam an eine authored Zelle (`gridX` = Mittelspalte, `gridY` = obere Zeile). Ohne Anker bleibt das Fenster in der Arenamitte – auf einer Routenkarte läge diese Mitte aber weit weg vom Startbereich;
-- ein authored `rockField` ersetzt die prozedurale CA-Verteilung vollständig: Die Arena wird zugebaut, nur die Korridore werden freigefräst, und es wachsen keine Bäume. Ohne `rockField` steuert `rockFillRatio` die Ausgangsdichte vor dem Smoothing, das die effektive Felsfläche deutlich darunter drückt;
-- sichtbare vertikale Gleise werden über `trackPosition` authored: `left`, `center`, `right` oder `{ kind: "grid", gridX }`; `gridX` bezeichnet die linke Spalte des zweispaltigen Gleis-Fußabdrucks. Der Standard ist `center`, und jede Position muss den bestehenden Basisabstand einhalten;
-- bases, powerUps, persistentSpawns und endliche encounters;
-- optionale secondaryObjectives, boss und mapEvents;
-- genau ein Objective: repel-assault, survive, defeat-boss, destroy-hostile-bases oder advance.
-- Der Boss-Slot authoriert nur Boss-ID und Spawnzeit; Bosswerte bleiben zentral in `coopDefenseEnemies.json`.
-- Die Kampagnenregistry enthält Sandbox 00 sowie genau die Kampagnenmaps 01 bis 19; Map 1 ist die geführte Vorstoß-Tutorialroute, Map 9 basisloses Survival, Map 14 Survival mit Stellung, Map 16 repel-assault, Map 17 destroy-hostile-bases mit optionalem Carry und Map 18/19 die einfachen Persistent-Base-Foundation-Routen.
-- Klassenfreischaltungen sind pro Klasse über `unlockAfterMapId` authoriert; der Fortschritt speichert die freigeschalteten Klassen-IDs und leitet keine alten globalen Map-5-Freischaltungen mehr ab.
+[src/config/authoring/coopDefenseAuthoringAdapter.ts](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) nimmt ein normalisiertes Coop-Defense-Map-Format entgegen und projiziert es in zwei Verträge:
 
-Die Map-ID ist der gemeinsame Schlüssel. Alles, was beide Peers deterministisch aus der Map auflösen können, braucht keinen eigenen Netzwerk-Key. Dynamische Änderungen wie HP, aktive Lebenszyklen oder Carry-Positionen werden dagegen über die bestehenden Round-/Game-State-Verträge repliziert.
+- World-Inhalt: Arena-Geometrie und Metrics, Rocks und Trees, Track-Daten, World-Zeitbasis, World-Basen und die optionale persistente Base-Site.
+- Activity-Inhalt: Objective und Überlebensregeln, Respawns, Encounters, Spawns, Map-Events, Secondary Objectives, Missionsprogress, Boss, Power-Ups, Item-Drops, dynamische Activity-Umgebung und Tutorial.
 
-## Persistente Basis
+Der Adapter validiert diese Domänengrenze nicht durch implizite Defaults. Änderungen am Eingabeformat werden am normalisierten Map-Vertrag und am Round-Trip abgesichert; die Quelle bleibt die authored Definition, nicht die Adapterimplementierung.
 
-Maps mit `persistentBase.baseId` verwenden die vorhandene authored Friendly-Main-Base als stabilen Anker; eine zweite persistente Basis wird nicht erzeugt. Der Fortschritt liegt ausschließlich im V3-Progress-Dokument als map-relative Blueprints. Der Host lädt, validiert, plant und materialisiert diese Blueprints zu Rundenbeginn und commitet Änderungen erst nach einem Sieg.
+Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder für eine spätere Activity resident gehalten werden.
 
-Die aktive Zone wird aus dem gespeicherten Radius und dem gemeinsamen Anker-Grid berechnet. Der Generator reserviert unabhängig vom aktuellen Radius immer den maximalen Radius plus Clearance für Felsen, Bäume, Tracks, Hazards, Spawns und andere authored/prozedurale Hindernisse. Die Karten 18 und 19 authorieren deshalb unterschiedliche Anker und Arenaabmessungen, aber denselben deterministischen Persistent-Base-Vertrag.
+Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und verwendet persistentBase.baseId als Verweis auf eine bestehende authored freundliche Main-Base. Die Map-Normalisierung prüft die Referenz und räumliche Reservierung; sie ist kein freier Runtime- oder Campaign-Key.
 
-## Encounters und Druckquellen
+## Basen und Overlays
 
-CoopDefenseMapDirector steuert endliche Encounters. Eine Encounter-Gruppe beschreibt Gegnertyp, Anzahl, relative Verzögerung, Einzelspawn-Stagger und optional eine Front (west, north, east, south). Starts sind eine kleine discriminated union: time, after-previous, after-encounter, after-event, after-checkpoint, after-defense, boss-phase und base-destroyed. `after-defense` bedeutet dabei terminal aufgelöst (`completed` oder `failed`), nicht zwingend erfolgreich. Die beiden Missionstrigger werden im `ArenaLifecycleCoordinator` über semantische Callbacks aufgelöst; MapDirector und SecondaryObjectiveSystem importieren das Missionssystem nicht. Diese Union ist keine allgemeine Trigger-Engine.
+Eine Basis ist zunächst World-Geometrie und World-Identität: Position, Form, Faction, Rolle, maximale Struktur, Turrets und Spawn-Zentrum gehören zur World. Startzustand, Spieler-Skalierung, Dormancy und missionsbezogene Pedestals sind Activity-Overlay.
 
-Im scheduled-Modus können authored Encounters unabhängig geplant werden. repel-assault nutzt die Reihenfolge als Clear-/Rest-Kette. Clear wird aus dem konkreten Spawnaufruf und dessen Enemy-IDs abgeleitet; Präsentationsdaten dürfen diesen Zustand nicht entscheiden.
+Die dauerhafte Base-Konfiguration ist nicht mit dem laufenden HP- oder Cooldown-Zustand gleichzusetzen. Solche Laufzeitwerte gehören zur Activity-Simulation oder zur Replikation, nicht zum authored PersistentBase-Zustand.
 
-Eine Encounter-Gruppe authoriert entweder eine Front oder – sich gegenseitig ausschliessend – einen rechteckigen `spawnArea`. Die Front ist ein Randband der ganzen Arena und liegt auf einer langen Routenkarte fast immer im falschen Abschnitt; der Bereich verschiebt nur, wo `CoopDefenseSpawnExecutor` sucht, nicht wie er auswählt (begehbar, erreichbar, nicht in einem anderen Gegner). `ArenaGenerator.hasAcceptableSpawnToBaseRoutes` prüft für solche Gruppen denselben Bereich statt des Randbands.
+## Mission und Zeit
 
-CoopDefensePersistentPressureSystem taktet dauerhafte Quellen. Eine mapgebundene Quelle kann eine Front verwenden, eine basisgebundene Quelle bleibt an baseId/spawnCenter gebunden. CoopDefenseSpawnExecutor ist die gemeinsame Spawn-Grenze; neue Spawnarten dort anschließen, nicht parallel in Director, Scene und Renderer implementieren. Das Spawn-Flowfield folgt dem `movementTarget` des Gegners: Spielerziele verwenden das Spieler-Flowfield und dürfen auf basislosen Maps auch vor dem ersten dynamischen Ziel-Refresh aus einer begehbaren Randzelle starten.
+Der Host besitzt Objective, Pressure, Wellen, Gegner, Events, Missionsprogress und das Ergebnis. Clients visualisieren replizierte Activity-Daten und senden Aktionen; sie konstruieren keine Mission aus lokaler Uhr oder lokaler Presentation.
 
-## Gegnerwaffen und Waffenwahl
+Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zuständen. Date.now, lokale Renderzeit und Browser-Takt dürfen keine Entscheidungen über Sieg, Niederlage, Spawns oder Missionsfortschritt treffen. Darstellung darf zwischen validierten Zuständen interpolieren.
 
-Der optionale Salvenwert `targetDistribution: "round_robin"` prueft fuer Spieler-Salven pro Geschoss alle gueltigen Spielerziele neu, verteilt deterministisch und verwendet keine Mindestdistanz-Hysterese.
+## Persistente Base
 
-Gegnerwerte stehen in `coopDefenseEnemies.json`; die Waffe selbst bleibt eine normale `WeaponConfig`. Der Eintrag in `weapons` authoriert nur, wie der Gegner sie führt, und die Reihenfolge des Arrays ist die Waffenpriorität: Die erste Waffe mit gültigem Ziel gewinnt, und ist eine höher priorisierte Waffe im Cooldown, wartet der Gegner statt auf eine schwächere zu wechseln. Ausgenommen bleiben das Freibeißen von Felsen und der Angriff auf Basen – ein blockierter Gegner muss sich befreien bzw. weiter an seiner strategischen Basis arbeiten dürfen.
+Die persistente Base ist eine World-Site mit mission-local working copy:
 
-Verhaltensunterschiede zwischen Gegnern gehören als Waffen-Eigenschaft in die Registry, nicht als Fallunterscheidung nach Gegner-ID in ein System:
+- [PersistentBaseRepository.ts](../../src/persistentBase/PersistentBaseRepository.ts) bildet die lokale Speicherung als Domänengrenze ab.
+- [PersistentBaseSession.ts](../../src/persistentBase/PersistentBaseSession.ts) lädt einen Baseline-Zustand, führt die missionslokale Arbeitskopie und entscheidet Commit oder Discard.
+- [PersistentBaseRoomState.ts](../../src/persistentBase/PersistentBaseRoomState.ts) hält host-authoritativen Guest-Zustand im Raum und nicht im LocalStorage.
+- [PersistentBaseRoundOutcome.ts](../../src/persistentBase/PersistentBaseRoundOutcome.ts) koppelt Sieg an Commit und Niederlage, Abbruch oder fehlendes Ergebnis an Rollback.
+- [PersistentBaseRestorePlanner.ts](../../src/persistentBase/PersistentBaseRestorePlanner.ts) stellt Pläne deterministisch wieder her und behandelt gesperrte, unbekannte, außerhalb liegende oder kollidierende Einträge ohne stillen Weltumbau.
 
-- `attackMovementSpeedFactor` ersetzt den pauschalen Halt der Angriffspause durch einen Geschwindigkeitsanteil. Fehlt der Wert, bleibt der Gegner wie bisher stehen; bei Werten über 0 läuft er gebremst weiter und behält dabei die Blickrichtung auf sein Ziel.
-- `minTargetDistancePx` grenzt Fernwaffen nach unten ab. Zusammen mit der Waffenreichweite entstehen so Distanzbänder ohne eigene Entscheidungslogik; eine Lücke zwischen zwei Bändern lässt den Gegner weiter auf sein Ziel zulaufen, statt passiv zu stehen.
-- `salvo` gibt einer Waffe `count` Schuss im Abstand `intervalMs` und danach `cooldownMs` Pause. Der Salventakt läuft bewusst neben `attackScanIntervalMs` – über den Zielscan getaktet würde er auf dessen Raster einrasten. Eine abgebrochene Salve startet ihre Pause sofort, damit ein wiederholt blockierter Gegner nicht beliebig viele Salven ohne Cooldown feuert.
+Persistiert werden nur validierte, permanente host-owned Platzierungen. Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem PersistentBase-Blueprint heraus. Die authored Site liefert Radius und räumliche Bindung; der Laufzeitzustand gehört in die lokale Progress- und Room-Grenze.
 
-Utilities eines Gegners (Wurfwaffen, Translocator, Brandsätze) gehören dagegen ins `CoopDefenseEnemyAbilitySystem`. Es läuft im Host-Frame vor dem Angriffssystem und meldet über `blocksRegularAttacks()` an den `ActionBlockedChecker`, dass eine laufende Utility die regulären Waffen sperrt – darüber und nicht über eine eigene Prioritätsliste gewinnt eine bereite Utility gegen die Waffe im selben Distanzband.
+Eine spaetere LobbyWorld-Integration darf eine authored PersistentBase-Site nur materialisieren, wenn
+`selectedGameMode === coop_defense` und `persistentBaseUnlocked === true` gelten. Ein leerer oder
+nicht freigeschalteter PersistentBase-Zustand setzt diese Freischaltung nicht. L1-L3 implementieren
+diese Materialisierung und keine neue L4-Lifecycle-Architektur.
 
-Geworfene Gegner-Projektile teilen sich die Flugphysik des Translocator-Pucks: gedämpft mit `v(t) = v0 * decay^t` ab `frictionDelayMs`. Der pauschale Reibungsaufschlag darauf trägt nur, solange der Ankunftszeitpunkt frei wählbar ist – der Translocator teleportiert einfach dann, wenn der Puck angekommen ist. Ein Projektil mit fester Zündzeit explodiert dagegen dort, wo es zu diesem Zeitpunkt gerade ist: Seine Wurfgeschwindigkeit wird aus der Dämpfung zurückgerechnet, damit es zur Zündung auf dem Ziel liegt, und die Zieldistanz zählt ab der Mündung, nicht ab der Gegnermitte.
+## Erweiterung einer Mission
 
-## Events und Objectives
+Bei einer neuen Activity oder Map zuerst entscheiden, welche Daten World-weit und welche Activity-spezifisch sind. Danach:
 
-CoopDefenseMapEventDirector besitzt den Lifecycle der authored Events train, airstrike und ground-hazard: Trigger (`time`, `after-checkpoint`, `after-encounter`, `after-event`, `boss-phase`, `base-destroyed`), Warnverzögerung, Wiederholung und Presentation-Snapshot. Fachhandler delegieren Bewegung, Schaden und Visuals an die bestehenden Systeme (CoopDefenseTrainEventHandler, CoopDefenseAirstrikeEventHandler, CoopDefenseGroundHazardEventHandler). Ein Event-Handler darf keine eigene Completion- oder Wanduhrlogik neben dem Director führen. Zugmechanik und Zug-UI sind getrennt; Coop-Defense-Züge bleiben aktiv, erzeugen aber keine HUD-Ankündigungen.
+1. authored Definition und Registry-Eintrag anlegen;
+2. den vorhandenen Resolver/Adapter und die Validatoren verwenden;
+3. World- und Activity-Descriptor mit derselben World-Identität prüfen;
+4. host-authoritative Runtime und replizierten Snapshot ergänzen;
+5. Persistenz nur über die PersistentBase- und LocalPersistence-Verträge anbinden;
+6. passende Contract- und Round-Trip-Tests aktualisieren.
 
-Secondary Objectives sind destroy, hold oder carry. Destroy/Hold referenzieren Basen; Carry verwendet authored Spawn-/Delivery-Zonen. Jede so referenzierte Basis muss `dormant` sein, und dormante Missionsbasen werden mit genau einem Objective verknüpft und erst durch dessen Lifecycle aktiv. `focusUntil` steuert HUD-Fokus, nicht automatisch den Abschluss. Hold authoriert genau eines von `holdUntil` (absolute Rundenzeit) und `holdDurationMs` (Dauer ab tatsächlicher Aktivierung in Host-Rundenzeit). Hold kann mit `requiredSurvivors` eine Mindestzahl überlebender Targets authoren; fehlt der Wert, müssen alle Targets überleben. Objective-Rewards werden über die vorhandenen Objective-/Reward-Systeme verbucht, nicht aus dem HUD.
+Neue Map-Geometrie in Activity-Systemen, lokale Mission-Uhren oder konkrete Testwerte in dieser Seite wären Vertragsverletzungen.
 
-## Vorstoß-Routen und Missionsbarrieren
+## Einstiegspunkte und Tests
 
-Der optionale `missionProgress`-Block beschreibt ausschließlich geordneten Routenfortschritt. `checkpoints` besitzen eine ID, Grid-Position, `radiusCells` und optional `setRespawn`. Punkt- und Segmenttests laufen nur auf dem Host mit berechtigten Round-Participants; Spawn, Respawn und autoritative Teleports setzen die Positionshistorie zurück. Ein aktivierter Respawn-Checkpoint wird als bevorzugter Fokus in die vorhandene sichere Spawnbewertung gegeben, nie als erzwungene Spawnzelle. Solange keiner aktiviert ist, übernimmt der optionale `startArea` denselben Fokus – ohne ihn verteilt sich der Initialspawn einer langen Routenkarte über die ganze Arena. Solange keiner aktiviert ist, übernimmt der optionale  denselben Fokus – ohne ihn verteilt sich der Initialspawn einer langen Routenkarte über die ganze Arena.
-Auf Map 1 authoriert jeder Checkpoint `setRespawn: true`; der zuletzt erreichte Checkpoint wird damit automatisch zum Wiedereinstiegspunkt des nächsten Abschnitts.
-
-`mandatoryDefenses` verbinden eine Defense-ID und einen Checkpoint mit einem bestehenden Hold-Secondary-Objective. Das Hold muss mit `after-checkpoint` am selben Checkpoint starten. Mandatory bedeutet nicht überspringbar: Ab Checkpoint-Aktivierung sperrt die Defense den nächsten Routenabschnitt, bis das Hold `completed` oder `failed` ist, und übernimmt dafür den HUD-Fokus auch dann, wenn ein optionales Objective bereits fokussiert ist. Das optionale Objective bleibt aktiv und als Hintergrund-Objective zählbar. Nur `completed` führt die vorhandenen Reward-Hooks aus. Optionale Verteidigungen bleiben normale Hold-Secondary-Objectives und werden nicht zusätzlich unter `missionProgress` authoriert.
-
-Eine Defense kann zusätzlich `failureEndsMission` authoren. Damit meldet `isMissionFailed()` das gescheiterte Hold als Missionsniederlage, statt die Route nur ohne Reward freizugeben – gedacht für Stellungen, ohne die der Vorstoß gegenstandslos wäre. Ohne das Flag bleibt es bei der Grundregel, dass `failed` ein aufgelöster Zustand ist.
-
-Der Generator schneidet die authored Checkpoint-Kerne passend zu ihrer Laufzeit-Kreisgeometrie immer aus dem Fels frei und hält sie auch von Bäumen und nachträglich gesetzten authored Felswänden frei. Ein kleiner deterministischer, organisch welliger Rand verhindert dabei ein künstliches Rechteck um den Checkpoint.
-
-`barriers` reservieren stabile Grid-Zellen und öffnen einmalig über die kleine `openOn`-Union `after-checkpoint`, `after-defense` oder `after-encounter`. Reservierte Zellen bleiben frei von generierten Felsen, Bäumen, Podesten und Hazards. Geschlossene Barrieren blockieren Placement und Tunnel. Laufzeitseitig bleiben ihre Rect-Proxies stabil indexiert; beim Öffnen wechseln nur `active`, Arcade-Body, Flowfield-Belegung und Light-Occluder. Im ObstacleIndex haben sie einen eigenen Treffertyp, im Flowfield verwenden sie ohne neuen Cell-Code die bestehende nicht-destruktible Hard-Wall-Semantik. Gameplay-State und Geometrie besitzen keine Visuals; Checkpoints und Tore rendert ausschließlich der MissionProgressRenderer aus Konfiguration und repliziertem Zustand.
-
-`CoopDefenseMissionProgressSystem.isRouteComplete()` wird wahr, sobald der finale Checkpoint aktiviert ist und keine dort oder davor ausgelöste Mandatory Defense ungelöst bleibt. Für `advance` ist genau dieser Zustand die host-autoritative Siegbedingung.
-
-## Objective advance
-
-`advance` (Vorstoß) besitzt keine eigene Routen-, Respawn- oder Encounter-Architektur: der authored `missionProgress` *ist* die Route, sein letzter Checkpoint die Extraktion. Die Normalisierung verlangt deshalb einen `missionProgress`-Block mit mindestens einem Checkpoint, fordert im Gegenzug aber keine Friendly Main Base und verbietet `surviveDurationSec`. Wo die Respawns landen, authoriert `setRespawn` am Checkpoint; wie viele es sind, authoriert `respawnsPerPlayer` wie bei `survive`.
-
-`CoopDefenseRoundStateSystem` erhält für `advance` zwei eigene Callbacks: `isAdvanceComplete` liest `isRouteComplete()`, `isAdvanceFailed` liest `isMissionFailed()`. Da nur lebende, berechtigte Round-Participants Checkpoints auslösen, genügt ein einziger lebender Spieler an der Extraktion für den Teamsieg. Die Niederlage teilt sich `advance` mit `survive` über denselben `isTeamWipedOut`-Callback und dieselbe `CoopDefenseRespawnBudgetSystem.isTeamWiped()`-Quelle: verloren ist erst, wenn kein verbundener, aktiver Teilnehmer mehr lebt **und** keiner sein Budget noch einsetzen kann. Ein momentaner Team-Wipe mit freiem Budget ist damit kein Defeat; eine gefallene optionale Basis beendet die Mission nicht. Bei gleichzeitigem Signal hat die Niederlage Vorrang.
-
-Ohne gültiges Basisziel – der Regelfall auf einer basislosen Vorstoß-Map – lesen basisorientierte Gegner das vorhandene Spieler-Flowfield statt des zielleeren Basisfelds. Das gilt für Bewegung und Spawnplatzierung gleichermaßen und ist bewusst als Feld-Auswahl umgesetzt, nicht als zweite Navigation. Eine dormante Missionsbasis ist kein Ziel: Bis ihr Objective sie aktiviert, greifen auch basisorientierte Gegner die Spieler an – das reicht, um denselben Gegnertyp früh als Spielerdruck und später als Basisangreifer zu verwenden, ohne eine eigene Tutorial-Enemy-Config.
-
-## Gemeinsame Tutorial-Schritte
-
-`tutorialSteps` authoriert Step-ID, `checkpointId`, eine optionale World-Space-`anchor` und optional `durationMs`; der Text kommt über `map.tutorialStep.<id>` aus dem bestehenden Content-/i18n-Pfad, nicht aus der Map. Die Auswertung ist reine Präsentation: Die hostautoritative Missionsfortschreibung aktiviert den Checkpoint und repliziert diese Aktivierung bereits über `activatedCheckpoints` mit `activatedAtRoundMs`. Sobald ein berechtigter Spieler den Checkpoint aktiviert hat, projizieren alle Clients daraus denselben Tutorial-Hinweis. Der Step besitzt keine eigene Gameplay-Autorität, kein eigenes Physics-Triggergebiet und keine eigene Sonderreplikation. `checkpointId` bestimmt ausschließlich, welche gemeinsame Missionsaktivierung den Text startet; `anchor` bestimmt ausschließlich die Weltposition des Hinweises. `CenterHUD.updateTutorialStep()` verwendet dafür denselben World-Space-Panelpfad wie das Starttutorial. Die Felsen darunter kommen aus der deterministischen Arena-Generierung. Das ist ausdrücklich keine allgemeine Quest- oder Scripting-Engine.
-
-## Zeitbasis
-
-Directors akkumulieren delta in elapsedMs. Authored atMs, Verzögerungen und Wiederholungen beziehen sich auf diese Rundenuhr. Kein Map-Event darf Fälligkeit gegen Date.now() prüfen: Das würde bei Fokusverlust und Frame-Klemmung von der Phaser-Uhr abweichen und kann Completion-Ketten entkoppeln. Mission-Snapshots identifizieren sich durch `roundRevision` und eine nur bei semantischen Änderungen erhöhte `missionRevision`; Zeitfelder heißen ausdrücklich `activatedAtRoundMs`, `startedAtRoundMs`, `endsAtRoundMs` oder `resolvedAtRoundMs`. Der vollständige reliable Snapshot wird bei semantischen Änderungen publiziert und steht Late Joinern als aktueller Gesamtzustand zur Verfügung. `roundStartTime` und absolute `Date.now()`-Werte sind keine Mission-Snapshot-Identität.
-
-Die rein visuelle Arena-Uhr ist eine solche ausdrücklich synchronisierte Ausnahme: `ArenaTimeOfDayController` berechnet sie ohne Delta-Akkumulation aus `RoundState.roundStartTime` und `NetworkBridge.getSynchronizedNow()`. `timeOfDay` bleibt der Startwert. `dynamicTimeOfDay` kann eine kontinuierliche Rate sowie vorwärts laufende weiche Transitionen ab Rundenzeit oder dem tatsächlich erfolgreichen Boss-Spawn authoren; Maps ohne diesen Block bleiben statisch. Der Spawn publiziert dafür einmalig einen reliable Anker im RoundState, keinen laufenden Zeit-State. Bossphasen sind bereits replizierte Zustände und dürfen als abschließende, sofortige Zielzustände folgen. Sie starten keinen pro Client zeitversetzten lokalen Tween.
-
-## Erweiterungsmuster
-
-1. Zuerst den Vertrag als Type/JSON-Schema in coopDefenseMaps.ts festlegen und die Normalisierung/Referenzprüfung ergänzen.
-2. Abhängigkeiten (encounter, event, base) validieren; unbekannte IDs und Zyklen müssen den Map-Aufbau ablehnen.
-3. Einen zuständigen Round-Lifetime-Director oder Fachhandler erweitern. ArenaLifecycleCoordinator verdrahtet nur, CoopDefenseRoundStateSystem bleibt die einzige Abschlussinstanz.
-4. Presentation getrennt vom autoritativen Zustand replizieren und fehlende Daten defensiv behandeln.
-5. Tests für Normalisierung, Referenzintegrität, Lifecycle und Host-/Client-Parität hinzufügen; keine Balance-Snapshots als Vertrag verwenden.
+- [src/config/coopDefenseMaps.ts](../../src/config/coopDefenseMaps.ts)
+- [src/config/authoring/ActivityDefinition.ts](../../src/config/authoring/ActivityDefinition.ts)
+- [src/config/authoring/coopDefenseAuthoringAdapter.ts](../../src/config/authoring/coopDefenseAuthoringAdapter.ts)
+- [src/scenes/arena/ArenaLifecycleCoordinator.ts](../../src/scenes/arena/ArenaLifecycleCoordinator.ts)
+- [tests/WorldWithoutActivityProof.test.ts](../../tests/WorldWithoutActivityProof.test.ts)
+- [tests/PersistentBaseSession.test.ts](../../tests/PersistentBaseSession.test.ts)
+- [tests/PersistentBaseRoundOutcome.test.ts](../../tests/PersistentBaseRoundOutcome.test.ts)
+- [tests/PersistentBaseRestorePlanner.test.ts](../../tests/PersistentBaseRestorePlanner.test.ts)

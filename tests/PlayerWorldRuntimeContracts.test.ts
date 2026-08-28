@@ -29,6 +29,7 @@ function features(overrides: Partial<PlayerRuntimeFeatures> = {}): PlayerRuntime
     combat: true,
     combatResources: true,
     loadoutTools: true,
+    playerBuild: true,
     missionStatus: true,
     ...overrides,
   };
@@ -70,6 +71,7 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       combat: true,
       combatResources: true,
       loadoutTools: true,
+      playerBuild: true,
       missionStatus: true,
     });
 
@@ -115,6 +117,7 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       combat: false,
       combatResources: false,
       loadoutTools: false,
+      playerBuild: false,
       missionStatus: false,
     });
   });
