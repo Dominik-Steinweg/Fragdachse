@@ -11,8 +11,9 @@ import { ROCK_VEGETATION_MASK_MARGIN_PX } from './RockVegetationConfig';
  * unveraenderter Felsflaechen haengt:
  *
  * 1. Die Materialquelle (welche Zellen Flecken, Moos und Matten erzeugen) ist der **vollstaendige**
- *    Felsbestand der World und schrumpft nie. Nur die aktuelle Silhouette entscheidet, was davon
- *    sichtbar bleibt.
+ *    Felsbestand der laufenden World und schrumpft waehrend dieser Laufzeit nie. Nur die aktuelle
+ *    Silhouette entscheidet, was davon sichtbar bleibt; ein World-Rebind darf die Quelle auf die
+ *    neue authored Baseline reduzieren.
  * 2. Der Dirty-Bereich einer Aenderung ist die Reichweite der betroffenen *Masken*, nicht die
  *    Zelle selbst. Wer zu klein waehlt, hinterlaesst Saeume an den Chunkgrenzen; wer zu gross
  *    waehlt, backt Flaeche neu, die sich nicht aendern kann.
@@ -32,8 +33,9 @@ export interface RockOverlayFrameSize {
 }
 
 /**
- * Materialquelle der felsgebundenen Overlays: jede Zelle, auf der in dieser Runde je ein Fels
- * stand, dedupliziert. Eintraege werden nie entfernt – siehe Modulkommentar, Regel 1.
+ * Materialquelle der felsgebundenen Overlays: jede Zelle, auf der in dieser World je ein Fels
+ * stand, dedupliziert. Eintraege werden waehrend einer World-Laufzeit nicht entfernt; ein
+ * Fast-Reinstance darf die In-Place-Quelle auf seine authored Baseline reduzieren.
  */
 export interface RockOverlaySource {
   cells: RockCell[];

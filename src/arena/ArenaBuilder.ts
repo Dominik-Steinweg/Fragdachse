@@ -20,7 +20,11 @@ import { registerGraphicsObject } from '../effects/EffectUtils';
 import { ROCK_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
-import { createRockOverlaySource, syncRockOverlaySource } from './RockOverlayRegions';
+import {
+  createRockOverlaySource,
+  rockCellKey,
+  syncRockOverlaySource,
+} from './RockOverlayRegions';
 import type { RockOverlaySource } from './RockOverlayRegions';
 import { generateGroundCoverPlacements } from './GroundCoverField';
 import type { GroundCoverPlacement } from './GroundCoverField';
@@ -111,9 +115,10 @@ export interface ArenaBuilderResult {
   rockOverlaySurface: RockOverlayStreamer | null;
   /**
    * Materialquelle aller felsgebundenen Overlays: jede Zelle, auf der in dieser World je ein Fels
-   * stand. Sie waechst mit gebauten Felsen und schrumpft nie – nur so bleiben Materialflecken,
-   * Moos und Kantenmatten auf unbeteiligten Felsen nach einer Zerstoerung Pixel fuer Pixel stehen
-   * (siehe {@link ./RockOverlayRegions}).
+   * stand. Sie waechst waehrend der World-Laufzeit und schrumpft innerhalb dieser Laufzeit nie –
+   * nur so bleiben Materialflecken, Moos und Kantenmatten auf unbeteiligten Felsen nach einer
+   * Zerstoerung Pixel fuer Pixel stehen (siehe {@link ./RockOverlayRegions}). Beim Fast-Reinstance
+   * wird dieselbe Struktur explizit auf die authored Baseline der neuen World reduziert.
    */
   rockOverlaySource: RockOverlaySource;
   /**
@@ -371,8 +376,9 @@ export class ArenaBuilder {
    * Bindet eine neue World-Instanz an die unveraenderte authored Presentation.
    *
    * Nur die statischen Render-/Physics-Container bleiben erhalten. Rock-Zustaende, Proxy-Slots,
-   * Spatial Index und Overlay-Quelle werden vollstaendig aus der authored Baseline neu gesetzt;
-   * damit ist dies kein State-Migrationspfad fuer die alte World.
+   * Spatial Index und Overlay-Quelle werden aus der authored Baseline neu gebunden; bereits
+   * fertige Overlay-Chunks werden nur in betroffenen Regionen ersetzt. Damit ist dies kein
+   * State-Migrationspfad fuer die alte World.
    */
   rebindWorldRuntime(
     result: ArenaBuilderResult,
@@ -381,11 +387,11 @@ export class ArenaBuilder {
     worldMetrics: WorldMetrics,
     presentation = true,
   ): void {
+    const previousStates = result.rockVisualStates.states.slice();
+    const previousProxies = result.rockPhysicsProxies.slice();
     replaceArenaLayoutContents(layout, authoredLayout);
 
     const baselineRockCount = layout.rocks.length;
-    const previousStates = result.rockVisualStates.states.slice();
-    const previousProxies = result.rockPhysicsProxies.slice();
 
     // Nur alte, zusaetzlich platzierte Proxy-Slots muessen entfernt werden. Aktive authored
     // Felsen behalten ihren Physics-Proxy; zerstoerte Felsen bekommen einen neuen.
@@ -436,10 +442,21 @@ export class ArenaBuilder {
       );
     }
 
-    result.rockOverlaySource.cells.length = 0;
-    result.rockOverlaySource.keys.clear();
-    syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
-    result.rockOverlaySurface?.refreshAll();
+    const dirtyRockIds = collectRockRebindDirtyIds(
+      previousStates,
+      previousProxies,
+      result.rockVisualStates.states,
+      result.rockPhysicsProxies,
+      baselineRockCount,
+    );
+    if (dirtyRockIds.size > 0) result.rockOverlaySurface?.refreshRegions(dirtyRockIds);
+    // Die neue World bekommt nur ihre authored Materialquelle. Bereits bekannte authored Zellen
+    // bleiben dabei erhalten, damit ein unveraenderter Rebind nicht versehentlich alle Source-
+    // Zellen als neu meldet. Laufzeit-Zellen werden entfernt; der regionale Rebuild erhaelt ihre
+    // alte Position ueber den beibehaltenen inaktiven VisualState. Der Streamer erfasst veraltete
+    // Source-Zellen vor dem asynchronen Bake; hier wird die In-Place-Quelle abschliessend auch
+    // dann bereinigt, wenn keine Presentation-Surface vorhanden ist.
+    retainAuthoredRockOverlaySource(result.rockOverlaySource, layout.rocks);
     result.rockVisualSystem?.flush();
 
     // CTB-Basisflaechen sind eine kleine modusbezogene Presentation-Ausnahme. Die unveraenderte
@@ -1019,4 +1036,71 @@ function replaceArenaLayoutContents(target: ArenaLayout, authored: ArenaLayout):
     target.decals.length = 0;
   }
   target.groundHazardZones = authored.groundHazardZones;
+}
+
+/**
+ * Behält aus der alten World nur Materialquellen, die auch zur authored Baseline der neuen World
+ * gehören. Die Quelle selbst bleibt dieselbe In-Place-Struktur, damit der Overlay-Streamer seine
+ * bestehende Referenz weiter benutzen kann.
+ */
+function retainAuthoredRockOverlaySource(
+  source: RockOverlaySource,
+  authoredRocks: readonly RockCell[],
+): void {
+  const authoredByKey = new Map<number, RockCell>();
+  for (const cell of authoredRocks) authoredByKey.set(rockCellKey(cell), cell);
+
+  const retained: RockCell[] = [];
+  const retainedKeys = new Set<number>();
+  for (const previousCell of source.cells) {
+    const key = rockCellKey(previousCell);
+    const authoredCell = authoredByKey.get(key);
+    if (!authoredCell || retainedKeys.has(key)) continue;
+    retained.push(authoredCell);
+    retainedKeys.add(key);
+  }
+
+  source.cells.length = 0;
+  source.cells.push(...retained);
+  source.keys.clear();
+  for (const cell of retained) source.keys.add(rockCellKey(cell));
+}
+
+/**
+ * Ermittelt die kleinste Rebind-Aenderungsmenge fuer felsgebundene Overlays.
+ *
+ * Authored IDs werden nur bei einer sichtbaren Aktivitaets-/Silhouettenaenderung markiert. Alle
+ * zuvor belegten zusaetzlichen IDs bleiben dagegen relevant, auch wenn ihr VisualState bereits
+ * inaktiv ist: Ihre Source-Zelle kann noch in den alten, residenten Overlay-Chunks enthalten sein.
+ */
+export function collectRockRebindDirtyIds(
+  previousStates: readonly (RockVisualState | undefined)[],
+  previousProxies: readonly ({ readonly active: boolean } | null)[],
+  nextStates: readonly (RockVisualState | undefined)[],
+  nextProxies: readonly ({ readonly active: boolean } | null)[],
+  baselineRockCount: number,
+): Set<number> {
+  const dirtyRockIds = new Set<number>();
+
+  for (let id = 0; id < baselineRockCount; id += 1) {
+    const previousState = previousStates[id];
+    const nextState = nextStates[id];
+    const wasVisible = previousState?.active === true && previousProxies[id]?.active === true;
+    const isVisible = nextState?.active === true && nextProxies[id]?.active === true;
+    if (
+      wasVisible !== isVisible
+      || previousState?.gridX !== nextState?.gridX
+      || previousState?.gridY !== nextState?.gridY
+      || previousState?.frame !== nextState?.frame
+    ) {
+      dirtyRockIds.add(id);
+    }
+  }
+
+  const previousSlotCount = Math.max(previousStates.length, previousProxies.length);
+  for (let id = baselineRockCount; id < previousSlotCount; id += 1) {
+    if (previousStates[id] || previousProxies[id]) dirtyRockIds.add(id);
+  }
+
+  return dirtyRockIds;
 }

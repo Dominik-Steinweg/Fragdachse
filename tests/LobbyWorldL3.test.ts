@@ -616,8 +616,13 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(modeSetter).not.toContain('Presentation');
 
     const builder = read('src/arena/ArenaBuilder.ts');
-    expect(builder).toContain('replaceArenaLayoutContents(layout, authoredLayout);');
-    expect(builder).toContain('result.rockOverlaySurface?.refreshAll();');
-    expect(builder).toContain('result.rockVisualSystem?.flush();');
+    const rebindStart = builder.indexOf('  rebindWorldRuntime(');
+    const rebindEnd = builder.indexOf('\n  private static createAuthoredRockVisualState', rebindStart);
+    const rebind = builder.slice(rebindStart, rebindEnd);
+    expect(rebind).toContain('replaceArenaLayoutContents(layout, authoredLayout);');
+    expect(rebind).toContain('collectRockRebindDirtyIds(');
+    expect(rebind).toContain('result.rockOverlaySurface?.refreshRegions(dirtyRockIds);');
+    expect(rebind).not.toContain('result.rockOverlaySurface?.refreshAll();');
+    expect(rebind).toContain('result.rockVisualSystem?.flush();');
   });
 });

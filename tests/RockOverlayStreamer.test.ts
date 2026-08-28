@@ -6,7 +6,12 @@ vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFak
 import { CELL_SIZE } from '../src/config';
 import type { ArenaLayout, DecalCell } from '../src/types';
 import { ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE, isEnclosedRockDecal } from '../src/arena/DecalConfig';
-import { createRockOverlaySource, ROCK_OVERLAY_CHUNK_SIZE, syncRockOverlaySource } from '../src/arena/RockOverlayRegions';
+import {
+  createRockOverlaySource,
+  rockCellKey,
+  ROCK_OVERLAY_CHUNK_SIZE,
+  syncRockOverlaySource,
+} from '../src/arena/RockOverlayRegions';
 import {
   ROCK_OVERLAY_DECAL_LAYER_ID,
   ROCK_OVERLAY_MOSS_LAYER_ID,
@@ -123,7 +128,7 @@ function buildFixture(options: FixtureOptions = {}) {
   streamer.updateResidency(FULL_VIEW);
   ChunkedRenderSurface.drainBakeQueue(scene as never);
 
-  return { scene, layout, streamer, rockObjects, overlaySource };
+  return { scene, layout, streamer, rockObjects, rockVisualStates, overlaySource };
 }
 
 function chunkTexture(streamer: RockOverlayStreamer, layerId: string, cx: number, cy: number): FakeRenderTexture {
@@ -173,6 +178,7 @@ describe('rock overlay streamer', () => {
 
   it('does not leak the previous chunk into a chunk without any placements', () => {
     const { scene, streamer, rockObjects } = buildFixture();
+    expect(chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 1, 0).visible).toBe(true);
 
     rockObjects[2] = null; // Zelle (2, 1) zerstoert
     streamer.refreshRegions(new Set([2]));
@@ -187,6 +193,72 @@ describe('rock overlay streamer', () => {
       .toEqual([inChunk('rock_moss_01', 48, 48)]);
     expect(lastBlit(chunkTexture(streamer, ROCK_OVERLAY_VEGETATION_LAYER_ID, 0, 0)))
       .toEqual([inChunk('rock_vegetation_01_small', 64, 32)]);
+  });
+
+  it('keeps finished chunks visible while rebuilding a removed runtime slot', () => {
+    const { scene, layout, streamer, rockObjects, rockVisualStates, overlaySource } = buildFixture({
+      rocks: [...ROW_ROCKS, { gridX: 4, gridY: 1 }],
+    });
+    const dynamicId = ROW_ROCKS.length;
+    const left = chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 0, 0);
+    const blitsBefore = left.blits.length;
+
+    // Das ist der Zustand direkt nach dem Rebind: der Runtime-Slot ist aus dem Layout entfernt,
+    // sein alter VisualState bleibt als inaktiver Slot fuer die regionale Bereinigung erhalten.
+    layout.rocks.length = dynamicId;
+    rockObjects[dynamicId] = null;
+    const previousState = rockVisualStates[dynamicId];
+    expect(previousState).toBeTruthy();
+    previousState!.active = false;
+    previousState!.alpha = 0;
+    previousState!.scaleX = 0;
+    previousState!.scaleY = 0;
+    overlaySource.cells.length = dynamicId;
+    overlaySource.keys.clear();
+    for (const cell of layout.rocks) overlaySource.keys.add(rockCellKey(cell));
+
+    streamer.refreshRegions(new Set([dynamicId]));
+
+    // Regionale Invalidierung markiert keine fertige Presentation als global "not ready".
+    expect(left.visible).toBe(true);
+    expect(left.blits.length).toBe(blitsBefore);
+    ChunkedRenderSurface.drainBakeQueue(scene as never);
+    expect(left.visible).toBe(true);
+    expect(left.blits.length).toBeGreaterThan(blitsBefore);
+  });
+
+  it('rebuilds both old and new regions when an authored source cell moves', () => {
+    const oldCell = { gridX: 1, gridY: 1 };
+    const movedCell = { gridX: 4, gridY: 1 };
+    // Der zusaetzliche alte Runtime-Slot bildet den Fast-Reinstance-Fall ab: Die Source ist
+    // dadurch groesser als das neue Layout und kann vor dem Bake gezielt reduziert werden.
+    const { scene, layout, streamer, overlaySource } = buildFixture({
+      rocks: [oldCell, { gridX: 8, gridY: 1 }],
+    });
+    const oldChunk = chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 0, 0);
+    const newChunk = chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 1, 0);
+    const oldBlitsBefore = oldChunk.blits.length;
+    const newBlitsBefore = newChunk.blits.length;
+
+    layout.rocks[0] = movedCell;
+    layout.rocks.length = 1;
+    streamer.refreshRegions(new Set([0]));
+    ChunkedRenderSurface.drainBakeQueue(scene as never);
+
+    expect(overlaySource.cells).toEqual([movedCell]);
+    expect(oldChunk.blits.length).toBeGreaterThan(oldBlitsBefore);
+    expect(newChunk.blits.length).toBeGreaterThan(newBlitsBefore);
+  });
+
+  it('forwards preserveVisible to an optional full refresh', () => {
+    const { scene, streamer } = buildFixture();
+    const left = chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 0, 0);
+
+    streamer.refreshAll({ preserveVisible: true });
+
+    expect(left.visible).toBe(true);
+    ChunkedRenderSurface.drainBakeQueue(scene as never);
+    expect(left.visible).toBe(true);
   });
 
   it('keeps the material source stable across destruction', () => {

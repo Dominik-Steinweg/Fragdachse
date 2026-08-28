@@ -25,7 +25,12 @@ import {
 import type { RockOverlaySource } from '../RockOverlayRegions';
 import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './ChunkedRenderSurface';
 import type { ChunkSamplingMode } from './ChunkedRenderSurface';
-import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from './ChunkedRenderSurface';
+import type {
+  ChunkBakeRegion,
+  ChunkBakeSink,
+  ChunkedRenderSurfaceRefreshOptions,
+  ChunkedSurfaceLayerSpec,
+} from './ChunkedRenderSurface';
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 
 /**
@@ -43,7 +48,9 @@ import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
  * Die beiden Regeln, an denen die Pixelstabilitaet haengt, bleiben unveraendert (siehe
  * {@link ../RockOverlayRegions}):
  *
- * 1. Die Materialquelle ist der **vollstaendige** Felsbestand der World und schrumpft nie.
+ * 1. Die Materialquelle ist der **vollstaendige** Felsbestand der laufenden World und schrumpft
+ *    innerhalb dieser Laufzeit nie; beim Fast-Reinstance wird sie auf die authored Baseline
+ *    reduziert.
  * 2. Neu gebacken wird ausschliesslich der Schnitt auf den aktuell stehenden Bestand.
  */
 
@@ -238,9 +245,9 @@ export class RockOverlayStreamer {
   }
 
   /** Vollstaendiger Neuaufbau aller residenten Chunks – nach Aenderungen ohne Dirty-Menge. */
-  refreshAll(): void {
+  refreshAll(options: ChunkedRenderSurfaceRefreshOptions = {}): void {
     syncRockOverlaySource(this.overlaySource, this.layout.rocks);
-    this.surface.refreshAll();
+    this.surface.refreshAll(options);
   }
 
   /**
@@ -251,13 +258,43 @@ export class RockOverlayStreamer {
    */
   refreshRegions(dirtyRockIds: ReadonlySet<number>): void {
     if (dirtyRockIds.size === 0) return;
+    // Nur ein Rebind kann Source-Zellen hinterlassen, die nicht mehr im Layout stehen. Im
+    // normalen Zerstörungspfad bleibt die Quelle bewusst so gross wie das Layout; dadurch wird
+    // hier kein Vollscan des Felsbestands in den häufigen Dirty-Region-Pfad eingeführt.
+    const sourceMayContainRemovedCells = this.overlaySource.cells.length > this.layout.rocks.length;
+    const currentRockKeys = sourceMayContainRemovedCells
+      ? new Set(this.layout.rocks.map((cell) => rockCellKey(cell)))
+      : null;
+    const removedSourceCells = currentRockKeys
+      ? this.overlaySource.cells.filter((cell) => !currentRockKeys.has(rockCellKey(cell)))
+      : [];
     const addedSourceCells = syncRockOverlaySource(this.overlaySource, this.layout.rocks);
+    if (currentRockKeys && removedSourceCells.length > 0) {
+      const retained = this.overlaySource.cells.filter((cell) => currentRockKeys.has(rockCellKey(cell)));
+      this.overlaySource.cells.length = 0;
+      this.overlaySource.cells.push(...retained);
+      this.overlaySource.keys.clear();
+      for (const cell of retained) this.overlaySource.keys.add(rockCellKey(cell));
+    }
     const dirtyCells: RockCell[] = [];
     for (const id of dirtyRockIds) {
       const cell = this.layout.rocks[id];
-      if (cell) dirtyCells.push(cell);
+      if (cell) {
+        dirtyCells.push(cell);
+        continue;
+      }
+
+      // Beim Fast-Reinstance werden Runtime-Slots aus dem Layout entfernt. Der inaktive Visual
+      // State traegt weiterhin die alte Zelle, damit deren vorheriger Source-Beitrag und dessen
+      // groessere Mottle-Reichweite vollstaendig aus den residenten Chunks entfernt werden kann.
+      const previousCell = this.rockVisualStates[id];
+      if (previousCell) removedSourceCells.push(previousCell);
     }
-    const chunks = collectRockOverlayChunks(dirtyCells, addedSourceCells, this.frame);
+    const chunks = collectRockOverlayChunks(
+      dirtyCells,
+      [...addedSourceCells, ...removedSourceCells],
+      this.frame,
+    );
     for (const chunk of chunks) {
       this.surface.refreshRegion(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE);
     }
