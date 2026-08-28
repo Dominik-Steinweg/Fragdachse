@@ -1,5 +1,6 @@
 import {
   LOBBY_SPAWN_EXCLUSION_ZONES,
+  LOBBY_SPAWN_FOCUS_CELL,
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
 } from '../../arena/LobbyWorldLayout';
@@ -46,6 +47,9 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   presentationPolicy: { previewWithoutParticipation: true },
   participationPolicy: { selfAdmit: true },
   spawnExclusionZones: LOBBY_SPAWN_EXCLUSION_ZONES,
+  // Das Testgelaende ist eine Buehne, kein Gefecht: wer es betritt, soll mittendrin stehen statt
+  // erst quer ueber die World laufen zu muessen.
+  spawnFocusCell: LOBBY_SPAWN_FOCUS_CELL,
   // Die tatsaechliche Lobby-Uhrzeit ist host-autoritativ und wird beim Aufbau gelesen; dieser
   // Wert ist nur die Grundstimmung der World selbst.
   initialTimeOfDay: '12:00',

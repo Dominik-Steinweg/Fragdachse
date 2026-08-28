@@ -516,18 +516,37 @@ export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
 }
 
 /**
- * Dieselben Flaechen als authored Spawn-Sperre der World.
+ * Die Seitenmenues als authored Spawn-Sperre der World.
  *
  * Sie sind begehbar – wer das Testgelaende betritt, darf dort laufen. Nur starten soll niemand
- * unter dem Lobby-Panel oder hinter einem Seitenmenue, weil seine Figur dort verdeckt waere.
+ * hinter einem Seitenmenue, weil seine Figur dort dauerhaft verdeckt waere.
+ *
+ * Die Mittelflaeche traegt zwar das Lobby-Panel, ist aber ausdruecklich **keine** Spawn-Sperre:
+ * Wer die World betritt, verlaesst damit die Lobby-Oberflaeche, und das Panel ist fuer ihn
+ * ausgeblendet. Als Geometrie-Reserve ({@link LOBBY_UI_RESERVED_ZONES}) bleibt sie zugleich die
+ * grosse Freiflaeche der World – genau deshalb taugt sie als zentraler Startpunkt.
  */
-export const LOBBY_SPAWN_EXCLUSION_ZONES: readonly ArenaGridRegion[] = LOBBY_UI_RESERVED_ZONES
-  .map((rect) => ({
-    minGridX: rect.minX,
-    maxGridX: rect.maxX,
-    minGridY: rect.minY,
-    maxGridY: rect.maxY,
-  }));
+export const LOBBY_SPAWN_EXCLUSION_ZONES: readonly ArenaGridRegion[] = [
+  leftOverlayInfoQuietZone,
+  rightOverlayInfoQuietZone,
+].map((rect) => ({
+  minGridX: rect.minX,
+  maxGridX: rect.maxX,
+  minGridY: rect.minY,
+  maxGridY: rect.maxY,
+}));
+
+/**
+ * Mitte der LobbyWorld als authored Spawn-Fokus.
+ *
+ * Ohne ihn waere jede freie Zelle gleich gut und die Figur erschiene irgendwo am Rand. Der Fokus
+ * ist eine Praeferenz, keine Zusicherung: ist die Mitte belegt, faellt die Spawn-Bewertung auf
+ * die volle World zurueck.
+ */
+export const LOBBY_SPAWN_FOCUS_CELL = {
+  gridX: Math.floor(GRID_COLS / 2),
+  gridY: Math.floor(GRID_ROWS / 2),
+} as const;
 
 // -- Authored Geometrie ------------------------------------------------------
 

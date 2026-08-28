@@ -169,7 +169,13 @@ const OPTIONS_BTN_X = FULLSCREEN_BTN_X - FULLSCREEN_BTN_W / 2 - SYSTEM_BAR_GAP -
 const HELP_BTN_X = OPTIONS_BTN_X - OPTIONS_BTN_W / 2 - SYSTEM_BAR_GAP - HELP_BTN_W / 2;
 /** Der Exit bleibt auch bei ausgeblendetem Lobby-Panel im unteren Systembereich sichtbar. */
 const WORLD_EXIT_BTN_W = 268;
+/** Platz neben der sichtbaren Systemleiste – nur solange das Lobby-Panel noch steht. */
 const WORLD_EXIT_BTN_X = HELP_BTN_X - HELP_BTN_W / 2 - SYSTEM_BAR_GAP - WORLD_EXIT_BTN_W / 2;
+/**
+ * Regelfall: Wer in der World steht, sieht die Systemleiste nicht mehr. Der Exit rueckt dann an
+ * denselben rechten Rand, an dem sonst VOLLBILD sitzt – ohne ihn stuende er allein in der Mitte.
+ */
+const WORLD_EXIT_BTN_SOLO_X = GAME_WIDTH - SYSTEM_BAR_MARGIN - WORLD_EXIT_BTN_W / 2;
 const FULLSCREEN_HINT_MS = 2200;
 
 /**
@@ -795,7 +801,10 @@ export class LobbyOverlay {
       ?.setVisible(showEntry)
       .setEnabled(showEntry && this.worldEntryAvailable && this.worldEntryEnabled
         && !this.btnLocked && !this.connectionEnded);
-    this.worldExitBar?.setVisible(showExit);
+    // Der Button sitzt im eigenen Container; die Ankerwahl verschiebt ihn, statt ihn neu zu bauen.
+    this.worldExitBar
+      ?.setX(this.visible ? 0 : WORLD_EXIT_BTN_SOLO_X - WORLD_EXIT_BTN_X)
+      .setVisible(showExit);
     this.worldExitBtn?.setEnabled(showExit && !this.connectionEnded);
   }
 

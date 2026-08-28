@@ -1588,7 +1588,7 @@ export class ArenaScene extends Phaser.Scene {
       this.roomQualityMonitor,
     );
     this.clientUpdate.setPlayerWorldRuntime(
-      (profile) => this.lifecycle.attachPlayerToWorld(profile),
+      (profile, spawn) => this.lifecycle.attachPlayerToWorld(profile, false, spawn),
       (playerId) => this.lifecycle.detachPlayerFromWorld(playerId),
     );
     this.clientUpdate.setWorldPresentationResolver(
@@ -2023,16 +2023,21 @@ export class ArenaScene extends Phaser.Scene {
       if (this.arenaPanelsHeld) {
         this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
       }
-
-      if (this.ctx.arenaResult) {
-        const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null;
-        ArenaBuilder.updateCanopyTransparency(
-          this.ctx.arenaResult.canopyObjects,
-          localSprite,
-          (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
-        );
-      }
       if (diagnosticsActive) leaderboardCanopyMs = performance.now() - leaderboardCanopyStartedAt;
+    }
+
+    // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
+    // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
+    // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
+    if (presentationPolicy.showWorld && this.ctx.arenaResult) {
+      const canopyStartedAt = diagnosticsActive ? performance.now() : 0;
+      const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null;
+      ArenaBuilder.updateCanopyTransparency(
+        this.ctx.arenaResult.canopyObjects,
+        localSprite,
+        (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
+      );
+      if (diagnosticsActive) leaderboardCanopyMs += performance.now() - canopyStartedAt;
     }
 
     const arenaPanelStartedAt = diagnosticsActive ? performance.now() : 0;

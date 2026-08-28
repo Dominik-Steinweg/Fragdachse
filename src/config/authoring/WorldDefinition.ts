@@ -48,14 +48,28 @@ export interface WorldDefinition {
   /**
    * Zellbereiche, die diese World nicht als Startpunkt zulaesst.
    *
-   * Sie sind begehbar – nur kein Spawn. Die LobbyWorld haelt so die Flaechen frei, unter denen
-   * ihre Oberflaeche liegt; eine Figur dort waere hinter dem Panel unsichtbar.
+   * Sie sind begehbar – nur kein Spawn. Die LobbyWorld sperrt so die Flaechen ihrer
+   * Seitenmenues; eine Figur dort waere dauerhaft verdeckt.
    */
   readonly spawnExclusionZones?: readonly ArenaGridRegion[];
+  /**
+   * Zelle, in deren Naehe diese World ihre Spieler bevorzugt starten laesst.
+   *
+   * Eine Praeferenz, keine Zusicherung: ist dort nichts frei oder sicher, faellt die
+   * Spawn-Bewertung auf die volle World zurueck. Ein Missionsfokus der laufenden Activity
+   * (Startbereich, Respawn-Checkpoint) hat Vorrang vor diesem World-Wert.
+   */
+  readonly spawnFocusCell?: WorldSpawnFocusCell;
   /** Gesetzt: Diese World traegt eine persistente Basis an einer authored Stelle. */
   readonly persistentBaseSite?: WorldPersistentBaseSiteDefinition;
   /** Statische Arena-Uhrzeit als `"HH:MM"`. Laufzeitverlaeufe gehoeren zur Activity. */
   readonly initialTimeOfDay: string;
+}
+
+/** Bevorzugte Startzelle einer World. */
+export interface WorldSpawnFocusCell {
+  readonly gridX: number;
+  readonly gridY: number;
 }
 
 export interface WorldActionPolicy {

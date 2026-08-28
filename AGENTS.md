@@ -15,6 +15,7 @@ Fragdachse ist ein browserbasierter 2D-Arena-Shooter mit Phaser 4 und direkten W
 - `ArenaContext` trennt langlebige Scene-Systeme von World-, Activity- und Round-Runtime. Die Scene bleibt bestehen; eine Activity setzt eine vorhandene World voraus, während eine World ohne Activity/Round existieren kann. Activity-/Round-Ressourcen werden vom `ArenaLifecycleCoordinator` in der passenden Lifecycle-Phase erzeugt, vollständig entkoppelt und außerhalb ihrer Lifetime als `null` behandelt.
 - Scenes und Coordinators orchestrieren. Regeln gehören in `src/systems/`, Entity-Lifecycle in `src/entities/` und Darstellung in `src/effects/`, `src/arena/` oder `src/ui/`. Bestehende Manager, Resolver, Registry- und Callback-Verträge vor neuen Abstraktionen prüfen.
 - Authored Content bleibt in JSON/Registries und wird durch die vorhandenen Loader/Validatoren aufgelöst. Wire- und Ready-Snapshots führen IDs bzw. vertraglich definierte Zustände, keine zufällig rekonstruierten Konfigurationen.
+- Vor größeren Features oder Refactorings zuerst das [Architektur-Leitbild](docs/ai/architecture-principles.md) und danach die konkrete Vertragsseite im [AI-Router](docs/ai/index.md) lesen.
 
 ## Skills und visuelle Qualität
 

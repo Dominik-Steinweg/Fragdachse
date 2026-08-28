@@ -73,6 +73,13 @@ export interface PlayerAttachContext {
   readonly profile: PlayerProfile;
   /** True, wenn der Spieler nach einem Tod erneut in dieselbe Runde kommt. */
   readonly reconnectAfterDeath: boolean;
+  /**
+   * Autoritative Startposition dieses Eintritts in Weltkoordinaten.
+   *
+   * Der Host waehlt sie selbst und laesst das Feld leer. Ein Client traegt sie hier ein, sobald
+   * der replizierte World-Snapshot sie kennt – er darf keine eigene wuerfeln.
+   */
+  readonly spawn?: { readonly x: number; readonly y: number };
 }
 
 export interface PlayerAttachStep {

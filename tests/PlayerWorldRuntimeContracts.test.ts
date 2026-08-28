@@ -259,7 +259,8 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
     );
     expect(client).not.toContain('this.ctx.playerManager.addPlayer(');
     expect(client).not.toContain('this.ctx.playerManager.removePlayer(');
-    expect(client).toContain('this.attachPlayerToWorld?.(profile)');
+    // Der Client reicht die replizierte Position mit: er darf keinen eigenen Spawn wuerfeln.
+    expect(client).toContain('this.attachPlayerToWorld?.(profile, { x: ps.x, y: ps.y })');
     expect(client).toContain('this.detachPlayerFromWorld?.(player.id)');
   });
 });

@@ -104,7 +104,8 @@ export class ClientUpdateCoordinator {
   private inspectorSelectedTool: LoadoutToolRef | null = null;
 
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
-  private attachPlayerToWorld: ((profile: PlayerProfile) => boolean) | null = null;
+  private attachPlayerToWorld:
+    ((profile: PlayerProfile, spawn: { readonly x: number; readonly y: number }) => boolean) | null = null;
   private detachPlayerFromWorld: ((playerId: string) => void) | null = null;
   private getWorldPresentation: (() => WorldPresentationRequirement) | null = null;
 
@@ -127,7 +128,7 @@ export class ClientUpdateCoordinator {
 
   /** Verbindet den Client-Snapshot mit demselben PlayerWorldRuntime wie Host-Spawns. */
   setPlayerWorldRuntime(
-    attach: (profile: PlayerProfile) => boolean,
+    attach: (profile: PlayerProfile, spawn: { readonly x: number; readonly y: number }) => boolean,
     detach: (playerId: string) => void,
   ): void {
     this.attachPlayerToWorld = attach;
@@ -168,11 +169,13 @@ export class ClientUpdateCoordinator {
       this.detachPlayerFromWorld?.(player.id);
     }
     if (!state) return;
-    for (const id of Object.keys(state.players)) {
+    for (const [id, ps] of Object.entries(state.players)) {
       if (bridge.getWorldParticipation(id) !== 'interactive') continue;
       if (this.ctx.playerManager.hasPlayer(id)) continue;
       const profile = bridge.getConnectedPlayers().find((candidate) => candidate.id === id);
-      if (profile) this.attachPlayerToWorld?.(profile);
+      // Der Snapshot ist hier die einzige Spawn-Quelle: die Figur entsteht genau dort, wo der
+      // Host sie gesetzt hat, samt Materialisierungseffekt an derselben Stelle.
+      if (profile) this.attachPlayerToWorld?.(profile, { x: ps.x, y: ps.y });
     }
   }
 

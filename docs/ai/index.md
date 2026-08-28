@@ -6,6 +6,7 @@ Diese Seiten dokumentieren langlebige Architektur- und Fachverträge von Fragdac
 
 | Seite | Lesen, wenn ... |
 | --- | --- |
+| [architecture-principles.md](architecture-principles.md) | Vor größeren neuen Features, Refactorings oder Architekturentscheidungen: Owner, Authority, Lifetime, Abhängigkeiten und Abstraktionsbedarf prüfen. |
 | [architecture.md](architecture.md) | World, Activity, Lebenszyklus, Participation, Runtime oder Zuständigkeiten geändert werden. |
 | [networking.md](networking.md) | Netzwerkgrenzen, Channel, Snapshot/Deltas, RPCs, Revisionen oder Late Join betroffen sind. |
 | [content-and-config.md](content-and-config.md) | authored World-/Activity-Inhalte, Registries, IDs oder Resolver betroffen sind. |

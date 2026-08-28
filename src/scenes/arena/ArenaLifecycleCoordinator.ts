@@ -295,7 +295,18 @@ export class ArenaLifecycleCoordinator {
       {
         id: 'player-entity',
         feature: 'entity',
-        run: ({ profile }) => { this.ctx.playerManager.addPlayer(profile); },
+        // Spawns entscheidet der Host. Ein Client setzt die Figur ausschliesslich auf die
+        // replizierte Position; kennt er sie beim Eintritt noch nicht, entsteht sie still - ein
+        // Materialisierungseffekt an einer selbst gewuerfelten Stelle waere schlicht falsch.
+        run: ({ profile, spawn }) => {
+          const authoritativeSpawn = bridge.isHost() ? undefined : spawn;
+          this.ctx.playerManager.addPlayer(
+            profile,
+            bridge.isHost() || authoritativeSpawn
+              ? { spawn: authoritativeSpawn }
+              : { spawnEffect: false },
+          );
+        },
         rollback: ({ profile }) => { this.ctx.playerManager.removePlayer(profile.id); },
       },
       {
@@ -1439,10 +1450,19 @@ export class ArenaLifecycleCoordinator {
     });
   }
 
-  /** Einziger Attach-Pfad fuer Host und Client; WorldParticipation liefert den Kontext. */
-  attachPlayerToWorld(profile: PlayerProfile, reconnectAfterDeath = false): boolean {
+  /**
+   * Einziger Attach-Pfad fuer Host und Client; WorldParticipation liefert den Kontext.
+   *
+   * `spawn` traegt die autoritative Startposition, wo der Aufrufer sie kennt - beim Client die
+   * aus dem World-Snapshot gelesene. Der Host laesst sie leer und waehlt selbst.
+   */
+  attachPlayerToWorld(
+    profile: PlayerProfile,
+    reconnectAfterDeath = false,
+    spawn?: { readonly x: number; readonly y: number },
+  ): boolean {
     return this.playerRuntime.attach(
-      { profile, reconnectAfterDeath },
+      { profile, reconnectAfterDeath, spawn },
       this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
     );
   }
@@ -1644,6 +1664,8 @@ export class ArenaLifecycleCoordinator {
       captureTheBeerBasesActive: layoutMode === CAPTURE_THE_BEER_MODE,
       // Authored Startverbot dieser World; begehbar bleibt die Flaeche trotzdem.
       spawnExclusionZones: world.definition?.spawnExclusionZones,
+      // Authored Wunschmitte dieser World; ein Missionsfokus sticht sie.
+      spawnFocusCell: world.definition?.spawnFocusCell,
     });
     const locallyGeneratedLayout = prepared
       && prepared.descriptor.seed === worldDescriptor.seed

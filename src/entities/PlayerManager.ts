@@ -1,4 +1,5 @@
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type { WorldSpawnFocusCell } from '../config/authoring/WorldDefinition';
 import * as Phaser from 'phaser';
 import type {
   ArenaLayout,
@@ -125,6 +126,22 @@ export interface PlayerWorldGeometry {
    * begehbar; nur der Spawn meidet sie.
    */
   readonly spawnExclusionZones?: readonly ArenaGridRegion[];
+  /**
+   * Authored Zelle, in deren Naehe diese World ihre Spieler bevorzugt starten laesst. Ein
+   * Missionsfokus der laufenden Activity hat Vorrang.
+   */
+  readonly spawnFocusCell?: WorldSpawnFocusCell;
+}
+
+/** Wie eine Figur in ihre World kommt. */
+export interface PlayerSpawnOptions {
+  /**
+   * Autoritative Startposition in Weltkoordinaten. Ohne sie waehlt diese World den Punkt selbst –
+   * was ausschliesslich dem Host zusteht.
+   */
+  readonly spawn?: { readonly x: number; readonly y: number };
+  /** Materialisierungseffekt beim Anlegen; ohne Angabe entscheidet die Entity. */
+  readonly spawnEffect?: boolean;
 }
 
 const EMPTY_SPAWN_CONTEXT: SpawnContextSnapshot = {
@@ -217,18 +234,23 @@ export class PlayerManager implements OwnerVisualSource {
     this.layout = layout;
   }
 
-  /** Erstellt eine PlayerEntity an einer zufällig freien Arena-Position.
-   *  Wird nur aufgerufen wenn isReady === true. */
-  addPlayer(profile: PlayerProfile): void {
+  /**
+   * Erstellt eine PlayerEntity.
+   *
+   * Ohne autoritativ vorgegebene Position waehlt diese World eine zufaellig freie Zelle. Das ist
+   * eine Spawn-Entscheidung und gehoert damit dem Host; ein Client reicht die replizierte
+   * Position durch, statt eine eigene zu wuerfeln.
+   */
+  addPlayer(profile: PlayerProfile, options: PlayerSpawnOptions = {}): void {
     if (this.players.has(profile.id)) return;
-    const spawn = this.getWorldSpawnPoint(profile.id);
+    const spawn = options.spawn ?? this.getWorldSpawnPoint(profile.id);
     const entity = new PlayerEntity(
       this.scene, profile,
       spawn.x,
       spawn.y,
       this.localPlayerId !== null && this.resolveIsEnemy(profile.id),
       this.lighting,
-      { visuals: this.resolveVisualsEnabled() },
+      { visuals: this.resolveVisualsEnabled(), spawnEffect: options.spawnEffect },
     );
     // Die Beleuchtung geht ueber den Konstruktor, der Brandcontroller ueber den Setter – beide
     // sind scene-lifetime und muessen auch bei spaeter dazukommenden Spielern anliegen.
@@ -299,28 +321,44 @@ export class PlayerManager implements OwnerVisualSource {
     }
 
     const coopDefenseBase = this.resolveCoopDefenseSpawnBase(spawnContext);
+    // Der Missionsfokus der laufenden Activity gewinnt; ohne ihn gilt der authored Fokus der
+    // World. Beide sind Praeferenz, nicht Zusicherung.
+    const preferredFocus = spawnContext.preferredSpawnFocus ?? this.resolveWorldSpawnFocus();
     const evaluations = free.map(candidate => this.evaluateSpawnCandidate(
       candidate,
       requestingPlayerId,
       spawnContext,
       coopDefenseBase,
+      preferredFocus,
     ));
 
-    const hasMissionFocus = spawnContext.preferredSpawnFocus !== undefined;
-    const focusedEvaluations = hasMissionFocus
+    const hasPreferredFocus = preferredFocus !== null;
+    const focusedEvaluations = hasPreferredFocus
       ? evaluations.filter((evaluation) => evaluation.preferredFocusDistance <= COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX)
       : coopDefenseBase
         ? evaluations.filter((evaluation) => evaluation.coopBaseDistance <= COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX)
       : evaluations;
-    // Ein Missionsfokus ist nur eine Praeferenz. Sind alle nahen Kandidaten hart gefaehrdet,
-    // faellt die Auswahl auf die vollstaendige sichere Bewertung zurueck.
-    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations, !hasMissionFocus);
+    // Ein Fokus ist nur eine Praeferenz. Sind alle nahen Kandidaten hart gefaehrdet, faellt die
+    // Auswahl auf die vollstaendige sichere Bewertung zurueck.
+    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations, !hasPreferredFocus);
     if (focusedChoice) return focusedChoice;
 
     const globalChoice = focusedEvaluations === evaluations
       ? null
       : this.pickSpawnWithFallbacks(evaluations);
     return globalChoice ?? this.getEmergencySpawnOutsideGroundHazard();
+  }
+
+  /**
+   * Authored Spawn-Fokus der gebundenen World in Weltkoordinaten; `null`, wenn sie keinen hat.
+   */
+  private resolveWorldSpawnFocus(): { x: number; y: number } | null {
+    const focusCell = this.worldGeometry?.spawnFocusCell;
+    if (!focusCell) return null;
+    return {
+      x: this.metrics.offsetX + (focusCell.gridX + 0.5) * CELL_SIZE,
+      y: this.metrics.offsetY + (focusCell.gridY + 0.5) * CELL_SIZE,
+    };
   }
 
   /** Weltkoordinaten eines Spawns, einschliesslich des Offsets der gebundenen World. */
@@ -582,6 +620,7 @@ export class PlayerManager implements OwnerVisualSource {
     requestingPlayerId: string | null,
     spawnContext: SpawnContextSnapshot,
     coopDefenseBase: BaseSpec | null,
+    preferredFocus: { readonly x: number; readonly y: number } | null,
   ): SpawnEvaluation {
     let nearestOpponentDistance = Number.POSITIVE_INFINITY;
     for (const player of this.players.values()) {
@@ -630,12 +669,12 @@ export class PlayerManager implements OwnerVisualSource {
       score -= Math.max(0, coopBaseDistance - COOP_BASE_NEAR_SPAWN_RANGE_PX) * 0.8;
     }
 
-    const preferredFocusDistance = spawnContext.preferredSpawnFocus
+    const preferredFocusDistance = preferredFocus
       ? Phaser.Math.Distance.Between(
         candidate.worldX,
         candidate.worldY,
-        spawnContext.preferredSpawnFocus.x,
-        spawnContext.preferredSpawnFocus.y,
+        preferredFocus.x,
+        preferredFocus.y,
       )
       : Number.POSITIVE_INFINITY;
     if (Number.isFinite(preferredFocusDistance)) {
