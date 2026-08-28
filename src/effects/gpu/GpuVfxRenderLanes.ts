@@ -632,7 +632,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'Streaks und Tropfen bleiben untereinander bewusst reihenfolgearm; eine zweite Lane '
       + 'fuer minimale Depth-Unterschiede wuerde nur GPU-Kapazitaet duplizieren.',
     capacityRationale:
-      'Die 1,4-s-Death-Lifetime erlaubt bei 48 Haupt- plus hoechstens 14 dekorativen Dust-Membern '
+      'Die 1,4-s-Death-Lifetime erlaubt bei 48 Haupt- plus hoechstens 30 dekorativen Dust-Membern '
       + 'rund 52 voll ueberlappende Todesfaelle neben schwerem Blut-Spray. 4096 bleibt begrenzt '
       + 'und reserviert 512 Slots fuer Hauptfragmente und Hauptspray gegen Mikrodetails.',
   },

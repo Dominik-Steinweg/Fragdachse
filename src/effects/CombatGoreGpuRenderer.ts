@@ -18,14 +18,21 @@ import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 
 const DEATH_FRAGMENT_TEXTURE_SIZE = 4;
-/** Die authored Death-Morph-Quellen sind jetzt 24px statt 12px – gleicher World-Space-Footprint. */
-const DEATH_MORPH_SCALE_COMPENSATION = 0.5;
+/**
+ * Die authored Death-Morph-Quellen sind 48px gross, ihr sichtbarer World-Space-Footprint aber nur
+ * halb so breit. Die doppelte Texeldichte ist Absicht: darunter rasterisiert der Canvas die
+ * Staubkoerner zu Einzelpixeln, die das Spiel danach wieder aufzieht. Der Faktor haelt den
+ * Footprint gegenueber der frueheren 24px-Quelle unveraendert.
+ */
+const DEATH_MORPH_SCALE_COMPENSATION = 0.25;
 const DEATH_GLOW_TEXTURE_SIZE = 24;
 
 const DEATH_DUST_MOTE_FRAMES = [
   GpuVfxFrameId.DeathDustMoteA,
   GpuVfxFrameId.DeathDustMoteB,
   GpuVfxFrameId.DeathDustMoteC,
+  GpuVfxFrameId.DeathDustMoteD,
+  GpuVfxFrameId.DeathDustMoteE,
 ] as const;
 
 /** Sink fuer den unveraenderten, persistenten Blood-Stain-Lifecycle. */
@@ -649,12 +656,12 @@ export class CombatGoreGpuRenderer {
 
 function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathProfile {
   const profile = maxDimension <= 24
-    ? { main: 24, micro: 3, glow: 2, travelScale: 0.78 }
+    ? { main: 24, micro: 8, glow: 2, travelScale: 0.78 }
     : maxDimension <= 36
-      ? { main: 36, micro: 6, glow: 3, travelScale: 0.94 }
+      ? { main: 36, micro: 14, glow: 3, travelScale: 0.94 }
       : maxDimension <= 64
-        ? { main: 44, micro: 10, glow: 5, travelScale: 1.14 }
-        : { main: 48, micro: 14, glow: 8, travelScale: 1.34 };
+        ? { main: 44, micro: 22, glow: 5, travelScale: 1.14 }
+        : { main: 48, micro: 30, glow: 8, travelScale: 1.34 };
   return {
     main: Math.min(chunkCount, Math.min(DEATH_DISINTEGRATION_VFX.maxChunksPerEffect, profile.main)),
     micro: Math.min(chunkCount, profile.micro),

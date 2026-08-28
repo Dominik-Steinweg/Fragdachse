@@ -99,6 +99,8 @@ describe('gpu vfx system: lanes', () => {
         'death-morph-fragmented',
         'death-morph-dust',
         'death-morph-fine-dust',
+        'death-morph-haze',
+        'death-morph-vapor',
       ],
       duration: 1,
     }]);

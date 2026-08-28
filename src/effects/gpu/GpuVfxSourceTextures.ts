@@ -36,9 +36,13 @@ export const TEX_DEATH_MORPH_POROUS = '__death_morph_porous';
 export const TEX_DEATH_MORPH_FRAGMENTED = '__death_morph_fragmented';
 export const TEX_DEATH_MORPH_DUST = '__death_morph_dust';
 export const TEX_DEATH_MORPH_FINE_DUST = '__death_morph_fine_dust';
+export const TEX_DEATH_MORPH_HAZE = '__death_morph_haze';
+export const TEX_DEATH_MORPH_VAPOR = '__death_morph_vapor';
 export const TEX_DEATH_DUST_MOTE_A = '__death_dust_mote_a';
 export const TEX_DEATH_DUST_MOTE_B = '__death_dust_mote_b';
 export const TEX_DEATH_DUST_MOTE_C = '__death_dust_mote_c';
+export const TEX_DEATH_DUST_MOTE_D = '__death_dust_mote_d';
+export const TEX_DEATH_DUST_MOTE_E = '__death_dust_mote_e';
 export const TEX_DEATH_GLOW = '__death_glow';
 export const TEX_MUZZLE_FLASH = '__muzzle_flash';
 export const TEX_MUZZLE_ENERGY = '__muzzle_energy';
@@ -53,125 +57,215 @@ export function ensureDeathFragmentTexture(scene: Phaser.Scene): void {
 }
 
 /**
- * Sechs gleich grosse Alpha-Motive fuer den GPU-seitigen Death-Morph. Der gemeinsame 24px-Rahmen
+ * Acht gleich grosse Alpha-Motive fuer den GPU-seitigen Death-Morph. Der gemeinsame 48px-Rahmen
  * verhindert Groessen-/Pivot-Spruenge beim Framewechsel; nur die belegte Materialform waechst von
- * einem kompakten 8px-Kern zu locker verteiltem Staub. Die Motive bleiben weiss, damit der pro
- * Sprite-Chunk analysierte Member-Tint ueber die gesamte Aufloesung erhalten bleibt.
+ * einem kompakten Kern ueber Staub bis zum diffusen Auslauf. Die Motive bleiben weiss, damit der
+ * pro Sprite-Chunk analysierte Member-Tint ueber die gesamte Aufloesung erhalten bleibt.
+ *
+ * Die Aufloesung ist bewusst doppelt so hoch wie der World-Space-Footprint des Fragments;
+ * `DEATH_MORPH_SCALE_COMPENSATION` haelt den Footprint konstant. Der Grund steht in
+ * `drawSoftDeathMote`: unterhalb von rund einem Texel rasterisiert der Canvas einen
+ * Radialgradienten zu einem harten Einzelpixel, und genau der wird im Spiel wieder aufgezogen.
  */
 export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_COMPACT, 24, 24, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_COMPACT, 48, 48, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,1)';
     ctx.beginPath();
-    ctx.moveTo(8, 7.5);
-    ctx.lineTo(16.5, 8);
-    ctx.lineTo(16, 16.5);
-    ctx.lineTo(7.5, 16);
+    ctx.moveTo(16, 15);
+    ctx.lineTo(33, 16);
+    ctx.lineTo(32, 33);
+    ctx.lineTo(15, 32);
     ctx.closePath();
     ctx.fill();
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAYED, 24, 24, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAYED, 48, 48, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     ctx.beginPath();
-    ctx.moveTo(8, 7);
-    ctx.lineTo(14.5, 7.5);
-    ctx.lineTo(17.2, 10.2);
-    ctx.lineTo(16, 16.4);
-    ctx.lineTo(10.4, 17);
-    ctx.lineTo(7, 14.2);
+    ctx.moveTo(16, 14);
+    ctx.lineTo(29, 15);
+    ctx.lineTo(34.4, 20.4);
+    ctx.lineTo(32, 32.8);
+    ctx.lineTo(20.8, 34);
+    ctx.lineTo(14, 28.4);
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.68)';
-    ctx.fillRect(17, 12.2, 2.2, 1.6);
-    ctx.fillRect(6, 8.8, 1.6, 2.6);
-    ctx.fillRect(10.4, 5.4, 2.4, 1.4);
+    ctx.fillRect(34, 24.4, 4.4, 3.2);
+    ctx.fillRect(12, 17.6, 3.2, 5.2);
+    ctx.fillRect(20.8, 10.8, 4.8, 2.8);
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 24, 24, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 48, 48, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(6.4, 7.2, 4.8, 4.2);
-    ctx.fillRect(11.8, 6.2, 5.2, 4.6);
-    ctx.fillRect(8, 12.2, 4.2, 5.2);
-    ctx.fillRect(13, 11.6, 4.8, 4.2);
+    ctx.fillRect(12.8, 14.4, 9.6, 8.4);
+    ctx.fillRect(23.6, 12.4, 10.4, 9.2);
+    ctx.fillRect(16, 24.4, 8.4, 10.4);
+    ctx.fillRect(26, 23.2, 9.6, 8.4);
     ctx.fillStyle = 'rgba(255,255,255,0.58)';
-    ctx.fillRect(17.8, 9.6, 2.4, 2.2);
-    ctx.fillRect(4.4, 13.4, 2.6, 1.8);
-    ctx.fillRect(12.2, 17, 1.8, 2.2);
+    ctx.fillRect(35.6, 19.2, 4.8, 4.4);
+    ctx.fillRect(8.8, 26.8, 5.2, 3.6);
+    ctx.fillRect(24.4, 34, 3.6, 4.4);
   });
 
-  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAGMENTED, 24, 24, (ctx) => {
+  ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAGMENTED, 48, 48, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.82)';
-    ctx.fillRect(5, 6.2, 4.6, 3.6);
-    ctx.fillRect(11, 4.4, 3.6, 4.8);
-    ctx.fillRect(15.2, 9, 4.2, 3.4);
-    ctx.fillRect(8.4, 10.6, 4.4, 4.4);
-    ctx.fillRect(13.4, 14, 3.6, 4);
+    ctx.fillRect(10, 12.4, 9.2, 7.2);
+    ctx.fillRect(22, 8.8, 7.2, 9.6);
+    ctx.fillRect(30.4, 18, 8.4, 6.8);
+    ctx.fillRect(16.8, 21.2, 8.8, 8.8);
+    ctx.fillRect(26.8, 28, 7.2, 8);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillRect(3, 12.6, 2.4, 2.2);
-    ctx.fillRect(8, 17, 2.2, 2.4);
-    ctx.fillRect(19, 14.2, 1.8, 2.6);
+    ctx.fillRect(6, 25.2, 4.8, 4.4);
+    ctx.fillRect(16, 34, 4.4, 4.8);
+    ctx.fillRect(38, 28.4, 3.6, 5.2);
   });
 
+  // Ab hier traegt kein `fillRect` mehr: der Zerfall laeuft ueber weiche Koerner, deren kleinster
+  // Radius bewusst oberhalb eines Texels bleibt.
   drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_DUST, [
-    [3.7, 6.3, 1.45, 1.05, -0.3, 0.76],
-    [7.4, 3.9, 1.05, 1.42, 0.5, 0.63],
-    [11.9, 5.8, 1.4, 0.92, -0.4, 0.69],
-    [16.8, 4.3, 0.86, 1.12, 0.2, 0.54],
-    [20.2, 7.2, 1.08, 0.82, -0.5, 0.48],
-    [5.6, 11.4, 1.22, 0.92, 0.3, 0.62],
-    [9.6, 10.1, 0.78, 1.2, -0.6, 0.45],
-    [14.2, 9.5, 1.04, 0.74, 0.2, 0.57],
-    [18.2, 11.8, 1.25, 0.86, 0.55, 0.46],
-    [3.4, 16.5, 0.88, 1.08, -0.2, 0.44],
-    [7.3, 15.3, 1.16, 0.74, 0.5, 0.61],
-    [12.1, 14.9, 0.86, 1.12, -0.5, 0.39],
-    [16.1, 16.5, 1.08, 0.8, 0.3, 0.52],
-    [20.9, 15.5, 0.68, 0.98, -0.2, 0.34],
-    [9.6, 19.3, 0.92, 0.62, -0.3, 0.42],
-    [14.5, 19.6, 1.22, 0.7, 0.6, 0.47],
-    [18.7, 19.1, 0.62, 0.62, 0, 0.28],
+    [7.4, 12.6, 2.9, 2.1, -0.3, 0.76],
+    [14.8, 7.8, 2.1, 2.84, 0.5, 0.63],
+    [23.8, 11.6, 2.8, 1.84, -0.4, 0.69],
+    [33.6, 8.6, 1.72, 2.24, 0.2, 0.54],
+    [40.4, 14.4, 2.16, 1.64, -0.5, 0.48],
+    [11.2, 22.8, 2.44, 1.84, 0.3, 0.62],
+    [19.2, 20.2, 1.56, 2.4, -0.6, 0.45],
+    [28.4, 19, 2.08, 1.48, 0.2, 0.57],
+    [36.4, 23.6, 2.5, 1.72, 0.55, 0.46],
+    [6.8, 33, 1.76, 2.16, -0.2, 0.44],
+    [14.6, 30.6, 2.32, 1.48, 0.5, 0.61],
+    [24.2, 29.8, 1.72, 2.24, -0.5, 0.39],
+    [32.2, 33, 2.16, 1.6, 0.3, 0.52],
+    [41.8, 31, 1.36, 1.96, -0.2, 0.34],
+    [19.2, 38.6, 1.84, 1.24, -0.3, 0.42],
+    [29, 39.2, 2.44, 1.4, 0.6, 0.47],
+    [37.4, 38.2, 1.24, 1.24, 0, 0.28],
+    [4.2, 19.4, 1.28, 1.02, 0.4, 0.34],
+    [11, 4.6, 1.06, 1.34, -0.5, 0.3],
+    [19.6, 14.2, 1.5, 1.1, 0.2, 0.41],
+    [28.6, 5.4, 1.12, 1.44, 0.6, 0.28],
+    [37, 4.2, 1.34, 1.06, -0.3, 0.25],
+    [44, 20.6, 1.06, 1.5, 0.1, 0.29],
+    [7.6, 27.4, 1.44, 1.08, -0.6, 0.37],
+    [16.4, 26.2, 1.1, 1.38, 0.35, 0.33],
+    [24, 24.4, 1.52, 1.12, -0.25, 0.4],
+    [32.6, 27, 1.16, 1.46, 0.5, 0.31],
+    [40.2, 28.2, 1.3, 1, -0.4, 0.27],
+    [4.8, 38.4, 1.02, 1.28, 0.15, 0.24],
+    [10.8, 36.2, 1.42, 1.06, -0.35, 0.35],
+    [21.6, 34.2, 1.1, 1.4, 0.45, 0.3],
+    [34.4, 35.6, 1.36, 1.04, -0.15, 0.32],
+    [26.2, 43.6, 1.2, 1, 0.3, 0.22],
+    [43.4, 40, 1.04, 1.3, -0.5, 0.2],
   ]);
 
   drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_FINE_DUST, [
-    [2.6, 4.4, 0.38, 0.52, -0.3, 0.47],
-    [5.5, 2.2, 0.3, 0.34, 0.1, 0.38],
-    [8.2, 5.1, 0.46, 0.3, 0.5, 0.31],
-    [11.7, 2.9, 0.34, 0.48, -0.5, 0.43],
-    [15.4, 4.1, 0.48, 0.3, 0.2, 0.34],
-    [19.3, 2.7, 0.3, 0.42, -0.1, 0.39],
-    [21.4, 6.5, 0.44, 0.32, 0.6, 0.26],
-    [4.4, 8.5, 0.42, 0.3, -0.2, 0.33],
-    [7.1, 10.5, 0.3, 0.5, 0.4, 0.42],
-    [10.2, 8.2, 0.48, 0.32, -0.6, 0.3],
-    [13.7, 10.9, 0.34, 0.46, 0.2, 0.37],
-    [17.2, 8.6, 0.46, 0.3, -0.4, 0.29],
-    [20.7, 11.3, 0.3, 0.42, 0.1, 0.35],
-    [2.8, 15.2, 0.34, 0.3, 0.2, 0.24],
-    [5.7, 18.3, 0.48, 0.32, -0.5, 0.34],
-    [9.3, 14.9, 0.3, 0.44, 0.6, 0.29],
-    [12.8, 17.4, 0.44, 0.3, -0.2, 0.36],
-    [16.3, 14.8, 0.3, 0.48, 0.4, 0.28],
-    [19.2, 18.7, 0.42, 0.3, -0.6, 0.31],
-    [22, 16.1, 0.28, 0.38, 0.1, 0.23],
-    [7.8, 21.2, 0.34, 0.28, 0.5, 0.22],
-    [14.5, 21.3, 0.3, 0.4, -0.3, 0.26],
-    [18.1, 21.1, 0.4, 0.26, 0.2, 0.2],
+    [5.2, 8.8, 1.42, 1.06, -0.3, 0.42],
+    [11, 4.4, 1.08, 1.32, 0.1, 0.34],
+    [16.4, 10.2, 1.5, 1.04, 0.5, 0.29],
+    [23.4, 5.8, 1.16, 1.48, -0.5, 0.39],
+    [30.8, 8.2, 1.46, 1.02, 0.2, 0.31],
+    [38.6, 5.4, 1.04, 1.36, -0.1, 0.35],
+    [42.8, 13, 1.38, 1.08, 0.6, 0.24],
+    [8.8, 17, 1.34, 1.02, -0.2, 0.3],
+    [14.2, 21, 1.02, 1.52, 0.4, 0.38],
+    [20.4, 16.4, 1.56, 1.06, -0.6, 0.27],
+    [27.4, 21.8, 1.1, 1.44, 0.2, 0.33],
+    [34.4, 17.2, 1.48, 1, -0.4, 0.26],
+    [41.4, 22.6, 1, 1.34, 0.1, 0.32],
+    [5.6, 30.4, 1.12, 1.02, 0.2, 0.22],
+    [11.4, 36.6, 1.54, 1.06, -0.5, 0.31],
+    [18.6, 29.8, 1.02, 1.4, 0.6, 0.26],
+    [25.6, 34.8, 1.4, 1.02, -0.2, 0.33],
+    [32.6, 29.6, 1.02, 1.5, 0.4, 0.25],
+    [38.4, 37.4, 1.36, 1, -0.6, 0.28],
+    [44, 32.2, 1, 1.24, 0.1, 0.21],
+    [15.6, 42.4, 1.1, 1, 0.5, 0.2],
+    [29, 42.6, 1.02, 1.3, -0.3, 0.24],
+    [36.2, 42.2, 1.3, 1, 0.2, 0.19],
+    [2.6, 14.6, 1.06, 1.3, -0.45, 0.23],
+    [8, 12, 1.28, 1.02, 0.3, 0.28],
+    [19.8, 2.8, 1.02, 1.22, 0.15, 0.2],
+    [27, 12.4, 1.34, 1.06, -0.35, 0.3],
+    [34.6, 11.6, 1.06, 1.4, 0.45, 0.26],
+    [45.2, 8.4, 1.2, 1, -0.2, 0.18],
+    [3.4, 22.4, 1.24, 1.04, 0.55, 0.22],
+    [11.6, 25.6, 1.06, 1.36, -0.25, 0.29],
+    [17.6, 24, 1.42, 1.02, 0.35, 0.24],
+    [24, 26.4, 1.02, 1.28, -0.55, 0.31],
+    [30.6, 25, 1.3, 1.04, 0.25, 0.23],
+    [37.4, 26.2, 1.04, 1.44, -0.15, 0.27],
+    [44.6, 26.8, 1.18, 1, 0.4, 0.17],
+    [2.8, 35, 1, 1.26, -0.3, 0.19],
+    [8.4, 41.2, 1.32, 1.02, 0.5, 0.22],
+    [14.8, 33.4, 1.04, 1.38, -0.4, 0.28],
+    [22, 38.6, 1.26, 1, 0.15, 0.21],
+    [28.2, 31.2, 1.02, 1.32, 0.6, 0.26],
+    [35, 34.6, 1.36, 1.04, -0.25, 0.24],
+    [41, 44, 1, 1.2, 0.3, 0.16],
+    [21.4, 45.6, 1.14, 1, -0.5, 0.17],
+    [33.4, 45.8, 1, 1.24, 0.2, 0.18],
+    [45, 38.6, 1.22, 1.02, -0.35, 0.16],
+  ]);
+
+  // Uebergang von Korn zu Wolke: wenige breite, sehr schwache Lappen tragen die Flaeche, ein Rest
+  // an Koernern haelt den Fragmentcharakter noch lesbar.
+  drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_HAZE, [
+    [16, 18, 11, 8.5, -0.35, 0.16],
+    [30, 20, 9, 11, 0.4, 0.14],
+    [22, 32, 12, 8, 0.15, 0.13],
+    [36, 33, 7, 6, -0.5, 0.11],
+    [11, 31, 6.5, 7.5, 0.55, 0.12],
+    [26, 10, 7.5, 5.5, -0.2, 0.1],
+    [6.4, 16.2, 1.3, 1, 0.3, 0.22],
+    [13.2, 9.4, 1.1, 1.4, -0.4, 0.19],
+    [21, 6.6, 1.4, 1.05, 0.2, 0.17],
+    [34.6, 9.8, 1.05, 1.35, 0.5, 0.16],
+    [42, 17.4, 1.25, 1, -0.3, 0.15],
+    [3.6, 26.8, 1, 1.3, 0.15, 0.14],
+    [44.2, 29.6, 1.35, 1.05, -0.55, 0.13],
+    [8.2, 40.2, 1.1, 1.4, 0.35, 0.15],
+    [18.4, 43, 1.3, 1, -0.2, 0.14],
+    [30.8, 43.4, 1.05, 1.3, 0.45, 0.13],
+    [40.6, 40, 1.2, 1, -0.4, 0.12],
+    [24.4, 20.6, 1.4, 1.1, 0.25, 0.2],
+  ]);
+
+  // Reiner Auslauf: nur noch drei sehr breite, fast durchsichtige Lappen. Die Alpha-Kurve des
+  // Members loescht das Fragment waehrend dieses Frames ohnehin aus.
+  drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_VAPOR, [
+    [21, 23, 19, 15, -0.25, 0.1],
+    [31, 28, 14, 17, 0.45, 0.08],
+    [16, 31, 13, 12, 0.2, 0.07],
   ]);
 }
 
-/** Kleine Einzelmoten fuer die letzten, statischen Micro-Fragmente. */
+/** Kleine Einzelmoten fuer die statischen Micro-Fragmente; fuenf Varianten gegen Wiederholung. */
 export function ensureDeathDustMoteTextures(scene: Phaser.Scene): void {
   drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_A, [
-    [12.1, 11.8, 2.1, 1.34, -0.28, 0.7],
+    [24.2, 23.6, 4.2, 2.68, -0.28, 0.7],
   ]);
   drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_B, [
-    [8.8, 12.3, 1.28, 0.78, 0.34, 0.62],
-    [15.9, 10.1, 0.62, 1.05, -0.45, 0.42],
+    [17.6, 24.6, 2.56, 1.56, 0.34, 0.62],
+    [31.8, 20.2, 1.24, 2.1, -0.45, 0.42],
   ]);
   drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_C, [
-    [7.2, 8.4, 0.82, 0.56, -0.2, 0.5],
-    [12.8, 15.2, 0.58, 0.76, 0.5, 0.36],
-    [17.1, 7.6, 0.46, 0.46, -0.1, 0.3],
+    [14.4, 16.8, 1.64, 1.12, -0.2, 0.5],
+    [25.6, 30.4, 1.16, 1.52, 0.5, 0.36],
+    [34.2, 15.2, 1.05, 1.05, -0.1, 0.3],
+  ]);
+  drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_D, [
+    [19.4, 21.2, 3.1, 1.5, 0.42, 0.58],
+    [30.6, 27.8, 1.7, 2.6, -0.3, 0.44],
+    [25, 14.6, 1.3, 1.1, 0.15, 0.3],
+  ]);
+  drawDeathMorphDustTexture(scene, TEX_DEATH_DUST_MOTE_E, [
+    [15.8, 19.4, 1.5, 1.15, -0.35, 0.5],
+    [24.6, 25.2, 1.25, 1.6, 0.28, 0.44],
+    [32.4, 18.6, 1.35, 1.05, 0.55, 0.38],
+    [21, 32.4, 1.1, 1.4, -0.15, 0.32],
+    [33, 32, 1.2, 1.1, 0.4, 0.26],
   ]);
 }
 
@@ -189,13 +283,21 @@ function drawDeathMorphDustTexture(
   key: string,
   motes: readonly DeathDustMoteSpec[],
 ): void {
-  ensureCanvasTexture(scene.textures, key, 24, 24, (ctx) => {
+  ensureCanvasTexture(scene.textures, key, 48, 48, (ctx) => {
     for (const [x, y, radiusX, radiusY, rotation, alpha] of motes) {
       drawSoftDeathMote(ctx, x, y, radiusX, radiusY, rotation, alpha);
     }
   });
 }
 
+/**
+ * Ein weiches Staubkorn als rotierte, elliptisch skalierte Radialscheibe.
+ *
+ * `radiusX`/`radiusY` sind Texel im 48px-Rahmen und muessen ueber rund 1.0 bleiben: darunter
+ * rasterisiert der Canvas den Gradienten zu ein bis zwei vollflaechigen Pixeln, und der
+ * World-Space-Footprint des Fragments zieht genau diesen Pixel wieder auf. Das ist der Grund,
+ * warum die Morph-Quellen doppelt so hoch aufgeloest sind wie ihr sichtbarer Footprint.
+ */
 function drawSoftDeathMote(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -210,10 +312,13 @@ function drawSoftDeathMote(
   ctx.rotate(rotation);
   ctx.scale(radiusX, radiusY);
 
+  // Fuenf Stops statt vier: bei der hoeheren Aufloesung ist der Abfall gross genug, dass die
+  // groebere Kurve als sichtbarer Ring gelesen wurde.
   const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
   gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
-  gradient.addColorStop(0.34, `rgba(255,255,255,${alpha * 0.72})`);
-  gradient.addColorStop(0.74, `rgba(255,255,255,${alpha * 0.22})`);
+  gradient.addColorStop(0.3, `rgba(255,255,255,${alpha * 0.78})`);
+  gradient.addColorStop(0.55, `rgba(255,255,255,${alpha * 0.46})`);
+  gradient.addColorStop(0.78, `rgba(255,255,255,${alpha * 0.18})`);
   gradient.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = gradient;
   ctx.beginPath();

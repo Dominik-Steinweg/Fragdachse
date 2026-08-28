@@ -284,17 +284,20 @@ describe('combat gore gpu renderer', () => {
     const sample = playFullDeath(64);
     const primary = sample.main[0]!;
 
-    // Die 24px-Morph-Quellen werden mit halber Member-Skala gezeichnet; ihre sichtbare Form
-    // bleibt dadurch gleich gross, obwohl die Authoring-Aufloesung verdoppelt wurde.
-    expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeGreaterThan(1);
-    expect(evaluateFakeAnimation(primary.scaleY, 0)).toBeLessThan(1.4);
+    // Der sichtbare World-Footprint ist der Vertrag, nicht die rohe Member-Skala: die
+    // Morph-Quellen sind 48px gross und werden ueber DEATH_MORPH_SCALE_COMPENSATION mit
+    // entsprechend kleinerer Skala gezeichnet, damit die Form gleich gross bleibt.
+    const morphSourceSizePx = 48;
+    const footprintPx = evaluateFakeAnimation(primary.scaleY, 0) * morphSourceSizePx;
+    expect(footprintPx).toBeGreaterThan(24);
+    expect(footprintPx).toBeLessThan(33.6);
     expect(primary.scaleY.duration).toBeGreaterThanOrEqual(
       DEATH_DISINTEGRATION_VFX.durationMs - 80,
     );
     expect(primary.alpha.ease).toBe('Cubic.easeIn');
     expect(primary.frameAnimation).toMatchObject({
       name: 'death-disintegration',
-      amplitude: 6,
+      amplitude: 8,
       loop: false,
       yoyo: false,
     });
@@ -342,6 +345,8 @@ describe('combat gore gpu renderer', () => {
       member.frame === 'death-dust-mote-a'
       || member.frame === 'death-dust-mote-b'
       || member.frame === 'death-dust-mote-c'
+      || member.frame === 'death-dust-mote-d'
+      || member.frame === 'death-dust-mote-e'
     ))).toBe(true);
     expect(normal.micro.every((member) => member.frameAnimation === null)).toBe(true);
     expect(normal.micro.every((member) => evaluateFakeAnimation(member.alpha, 0) < 0.5)).toBe(true);

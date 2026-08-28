@@ -24,6 +24,10 @@ export const GPU_VFX_FRAME_ANIMATIONS: readonly GpuVfxFrameAnimationSpec[] = [
   {
     id: GpuVfxFrameAnimationId.DeathDisintegration,
     name: 'death-disintegration',
+    // Acht gleich lange Frames ueber die Member-Lifetime. Der Zuschnitt ist an `positionEase`
+    // CubicIn der Death-Fragmente gekoppelt: bei t = 0.5 sind erst 12,5 % der Flugstrecke
+    // zurueckgelegt, die sichtbare Flugphase ist also die zweite Haelfte. Genau dort liegen
+    // Dust, FineDust, Haze und Vapor.
     frames: [
       GpuVfxFrameId.DeathMorphCompact,
       GpuVfxFrameId.DeathMorphFrayed,
@@ -31,6 +35,8 @@ export const GPU_VFX_FRAME_ANIMATIONS: readonly GpuVfxFrameAnimationSpec[] = [
       GpuVfxFrameId.DeathMorphFragmented,
       GpuVfxFrameId.DeathMorphDust,
       GpuVfxFrameId.DeathMorphFineDust,
+      GpuVfxFrameId.DeathMorphHaze,
+      GpuVfxFrameId.DeathMorphVapor,
     ],
   },
 ];

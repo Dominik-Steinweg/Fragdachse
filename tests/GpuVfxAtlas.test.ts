@@ -32,9 +32,13 @@ import {
   TEX_DEATH_MORPH_FRAGMENTED,
   TEX_DEATH_MORPH_DUST,
   TEX_DEATH_MORPH_FINE_DUST,
+  TEX_DEATH_MORPH_HAZE,
+  TEX_DEATH_MORPH_VAPOR,
   TEX_DEATH_DUST_MOTE_A,
   TEX_DEATH_DUST_MOTE_B,
   TEX_DEATH_DUST_MOTE_C,
+  TEX_DEATH_DUST_MOTE_D,
+  TEX_DEATH_DUST_MOTE_E,
 } from '../src/effects/gpu/GpuVfxSourceTextures';
 import {
   TEX_FLAME_CORE,
@@ -162,11 +166,15 @@ describe('gpu vfx atlas', () => {
       TEX_DEATH_MORPH_FRAGMENTED,
       TEX_DEATH_MORPH_DUST,
       TEX_DEATH_MORPH_FINE_DUST,
+      TEX_DEATH_MORPH_HAZE,
+      TEX_DEATH_MORPH_VAPOR,
       TEX_DEATH_DUST_MOTE_A,
       TEX_DEATH_DUST_MOTE_B,
       TEX_DEATH_DUST_MOTE_C,
+      TEX_DEATH_DUST_MOTE_D,
+      TEX_DEATH_DUST_MOTE_E,
     ]) {
-      expect(scene.textures.get(key)).toMatchObject({ width: 24, height: 24 });
+      expect(scene.textures.get(key)).toMatchObject({ width: 48, height: 48 });
     }
   });
 
@@ -206,6 +214,10 @@ describe('gpu vfx atlas', () => {
     expect(getGpuVfxFrame(GpuVfxFrameId.DeathDustMoteA).name).toBe('death-dust-mote-a');
     expect(getGpuVfxFrame(GpuVfxFrameId.DeathDustMoteB).name).toBe('death-dust-mote-b');
     expect(getGpuVfxFrame(GpuVfxFrameId.DeathDustMoteC).name).toBe('death-dust-mote-c');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathDustMoteD).name).toBe('death-dust-mote-d');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathDustMoteE).name).toBe('death-dust-mote-e');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphHaze).name).toBe('death-morph-haze');
+    expect(getGpuVfxFrame(GpuVfxFrameId.DeathMorphVapor).name).toBe('death-morph-vapor');
     expect(GpuVfxFrameId.DeathMorphCompact).toBeGreaterThan(GpuVfxFrameId.MuzzleSpark);
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
   });
