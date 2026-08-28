@@ -385,14 +385,15 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
     expect(body).toContain('const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;');
   });
 
-  it('gattert den Uebergang ueber die World, den Rundenzustand nur mit Activity', () => {
+  it('gattert ARENA ueber den vollstaendigen World-/Activity-/Round-Zustand', () => {
     const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     const start = source.indexOf('  private onTransitionToArena(): void {');
     expect(start).toBeGreaterThan(0);
     const body = source.slice(start, source.indexOf('\n  }', start));
 
-    // Ohne Activity gibt es keinen Rundenzustand, auf den zu warten waere.
-    expect(body).toContain('const activityReady = activityDescriptor === null');
+    // In ARENA ist Activity-null kein Bereitschaftssignal; Activity-lose Worlds bleiben ausserhalb
+    // der ARENA-Phase moeglich.
+    expect(body).toContain('const activityReady = isArenaTransitionReady({');
     expect(body).toContain('if (!worldDescriptor || !activityReady) {');
     expect(body.includes('bridge.getArenaDescriptor()'), 'transition still gates on the round view')
       .toBe(false);
@@ -400,6 +401,7 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
     // Und die World baut sich am eigenen Kanal auf, nicht am Phasenwechsel.
     expect(source).toContain('detectWorldChange(): void {');
     expect(source).toContain('if (this.arenaBuilt || bridge.getActivityDescriptor() !== null) return;');
+    expect(source).toContain("import { isArenaTransitionReady } from './ArenaTransitionReadiness';");
   });
 
   it('laesst die Lobby stehen, wenn dieser Peer die World nicht betritt', () => {

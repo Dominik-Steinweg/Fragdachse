@@ -172,6 +172,7 @@ import { getWorldDefinition } from '../../config/authoring/authoredScenarios';
 import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
 import type { WorldDefinition } from '../../config/authoring/WorldDefinition';
 import { createAuthoredWorldDescriptor, generateWorldLayout } from '../../world/WorldLayout';
+import { isArenaTransitionReady } from './ArenaTransitionReadiness';
 import {
   createWorldRuntimeContext,
   isValidPersistentBaseSite,
@@ -194,7 +195,7 @@ import {
 import { resolvePlayerCapabilities, type PlayerCapabilities } from '../../world/PlayerCapabilities';
 import { resolveWorldPresentation, type WorldPresentationRequirement } from '../../world/WorldPresentation';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
-import type { WorldDescriptor, WorldParameters } from '../../world/WorldDescriptor';
+import { isSameWorldInstance, type WorldDescriptor, type WorldParameters } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBase/PersistentBaseTypes';
 
@@ -568,19 +569,33 @@ export class ArenaLifecycleCoordinator {
     // Eine neue Instanz derselben oder einer anderen World ersetzt die gebaute. Ohne diese
     // Pruefung bliebe nach einem LobbyWorld-Reset die alte Runtime stehen: es gibt eine World,
     // aber die lokal gebaute meint eine andere.
-    if (this.arenaBuilt && this.builtWorldRevision !== world.worldRevision) {
-      const previousDefinitionId = this.ctx.world?.descriptor.definitionId;
-      const canFastReinstance = this.pendingLobbyWorldReinstance
-        || (isLobbyWorldDefinitionId(previousDefinitionId ?? '')
-          && isLobbyWorldDefinitionId(world.definitionId)
-          && bridge.getActivityDescriptor() === null
-          && this.ctx.arenaResult !== null
-          && this.ctx.currentLayout !== null);
+    const localWorld = this.worldLifecycle.descriptor;
+    const worldChanged = this.arenaBuilt && (
+      this.builtWorldRevision !== world.worldRevision
+      || (localWorld !== null && !isSameWorldInstance(localWorld, world))
+    );
+    if (worldChanged) {
+      const previousDefinitionId = localWorld?.definitionId ?? this.ctx.world?.descriptor.definitionId;
+      const canFastReinstance = bridge.getGamePhase() !== 'ARENA'
+        && isLobbyWorldDefinitionId(world.definitionId)
+        && (this.pendingLobbyWorldReinstance
+          || (isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+            && bridge.getActivityDescriptor() === null
+            && this.ctx.arenaResult !== null
+            && this.ctx.currentLayout !== null));
       if (canFastReinstance) {
         // Clients still hold the old local lifecycle when the reliable replacement arrives.
         // The host already ended it while publishing the new descriptor; both paths converge
         // here before the new runtime is attached.
         if (!this.pendingLobbyWorldReinstance) this.prepareLobbyWorldReinstance();
+        this.onTransitionToArena();
+        return;
+      }
+      const lobbyToMatch = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+        && !isLobbyWorldDefinitionId(world.definitionId);
+      const matchToLobby = !isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+        && isLobbyWorldDefinitionId(world.definitionId);
+      if (lobbyToMatch || (bridge.getGamePhase() === 'ARENA' && !matchToLobby)) {
         this.onTransitionToArena();
         return;
       }
@@ -650,9 +665,7 @@ export class ArenaLifecycleCoordinator {
    */
   private prepareLobbyWorldReinstance(): void {
     this.pendingLobbyWorldReinstance = true;
-    this.detachAllWorldPlayers();
-    this.worldLifecycle.endInstance();
-    this.clearWorldAdmission();
+    this.synchronizeLocalWorldLifecycle(null);
     this.hostUpdate.setActive(false);
     this.localArenaLoadReady = false;
     this.terrainSnapshotReady = false;
@@ -4417,8 +4430,8 @@ export class ArenaLifecycleCoordinator {
         this.worldLifecycle.beginCreate(world, activity);
         this.onTransitionToArena();
       } catch (error) {
-        console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
-        this.terminateMatch('Lokale Arena-Erzeugung fehlgeschlagen (Generator/Fingerprint abweichend).');
+        console.error('[ArenaLifecycleCoordinator] Lokale Arena konnte nicht aufgebaut werden:', error);
+        this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');
       }
     });
   }
@@ -4441,23 +4454,26 @@ export class ArenaLifecycleCoordinator {
       this.lobbyOverlay.lockButton();
       this.lobbyOverlay.hide();
     }
-    // Die World ist die Bedingung dieses Aufbaus. Eine Activity ist optional - nur wenn eine
-    // laeuft, muss zusaetzlich ihr Rundenzustand stehen, weil Spielerzahl und Besetzung aus ihm
-    // kommen. Ohne Activity gibt es nichts zu erwarten.
+    // In ARENA ist die World erst mit ihrer Activity, dem aktiven Round-State und der passenden
+    // RoundParticipation vollstaendig. Nur echte Activity-lose Worlds (z. B. die Lobby) duerfen
+    // ausserhalb der ARENA-Phase ohne Activity aufgebaut werden.
     const worldDescriptor = bridge.getWorldDescriptor();
     const activityDescriptor = bridge.getActivityDescriptor();
     const roundState = bridge.getRoundState();
     const participation = bridge.getRoundParticipation();
-    const activityReady = activityDescriptor === null
-      || (roundState?.status === 'active'
-        && roundState.roundStartTime === bridge.getArenaStartTime()
-        && participation !== null
-        && participation.roundRevision === activityDescriptor.activityRevision);
+    const activityReady = isArenaTransitionReady({
+      phase: bridge.getGamePhase(),
+      worldDescriptor,
+      activityDescriptor,
+      roundState,
+      arenaStartTime: bridge.getArenaStartTime(),
+      participation,
+    });
     const pendingHostGeneration = this.pendingHostArenaGeneration;
     if (bridge.isHost()
       && pendingHostGeneration
       && participation?.roundRevision === pendingHostGeneration.roundRevision
-      && activityReady
+      && roundState?.status === 'active'
       && worldDescriptor?.worldRevision !== pendingHostGeneration.roundRevision) {
       this.scheduleHostArenaGeneration(pendingHostGeneration);
       return;
@@ -4485,14 +4501,15 @@ export class ArenaLifecycleCoordinator {
     const preserveLobbyPresentation = this.pendingLobbyWorldReinstance;
     const preserveTerrainSnapshot = preserveLobbyPresentation && this.terrainSnapshotReady;
     try {
+      this.synchronizeLocalWorldLifecycle(worldDescriptor);
       this.buildWorld(
         worldDescriptor,
         activityDescriptor,
         preserveLobbyPresentation,
       );
     } catch (error) {
-      console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
-      this.terminateMatch('Lokale Arena-Erzeugung fehlgeschlagen (Generator/Fingerprint abweichend).');
+      console.error('[ArenaLifecycleCoordinator] Lokale Arena konnte nicht aufgebaut werden:', error);
+      this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');
       return;
     }
     this.pendingLobbyWorldReinstance = false;
@@ -4580,6 +4597,23 @@ export class ArenaLifecycleCoordinator {
 
   private get localPlayerState() { return this.hostUpdate['localPlayerState']; }
 
+  /**
+   * Beendet eine alte lokale World-Instanz vor dem Aufbau einer anderen.
+   *
+   * `WorldLifecycle.attachRuntime()` bleibt absichtlich strikt: Die Replacement-Orchestrierung
+   * liegt hier, damit ein verzögertes Retry niemals eine Runtime an eine alte Instanz bindet.
+   * `null` wird beim Lobby-Fast-Reinstance verwendet, wenn der eingehende Descriptor noch nicht
+   * feststeht; in diesem Fall wird nur die aktuelle lokale Instanz beendet.
+   */
+  private synchronizeLocalWorldLifecycle(incomingWorld: WorldDescriptor | null): void {
+    const currentWorld = this.worldLifecycle.descriptor;
+    if (currentWorld && incomingWorld && isSameWorldInstance(currentWorld, incomingWorld)) return;
+
+    this.detachAllWorldPlayers();
+    if (currentWorld) this.worldLifecycle.endInstance();
+    this.clearWorldAdmission();
+  }
+
   private onTransitionToLobby(): void {
     this.arenaBuilt = false;
     this.builtWorldRevision = 0;
@@ -4596,13 +4630,10 @@ export class ArenaLifecycleCoordinator {
     this.resetLocalArenaHudState();
     this.ctx.gameAudioSystem.playMusic('music_lobby');
 
-    // Auch das Rundenende nimmt den gemeinsamen Weg hinaus; den Abbau der Spieler traegt der
-    // World-Teardown selbst.
+    // Auch das Rundenende nimmt den gemeinsamen lokalen World-Cleanup; die UI-Behandlung bleibt
+    // trotzdem exklusiv in diesem vollstaendigen Lobby-Uebergang.
+    this.synchronizeLocalWorldLifecycle(null);
     this.tearDownArena();
-    // Mit der Rueckkehr in die Lobby endet die World-Instanz auch lokal – auf Clients ist das
-    // der einzige Ort, an dem sie das erfahren.
-    this.worldLifecycle.endInstance();
-    this.clearWorldAdmission();
     this.syncLobbyTimeOfDay();
 
     this.syncLobbySurface(true);
