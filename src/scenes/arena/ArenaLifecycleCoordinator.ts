@@ -254,7 +254,8 @@ export class ArenaLifecycleCoordinator {
    */
   private lobbyWorldModeAtRevision: GameMode | null = null;
   /**
-   * Nur Vergleichsmarker fuer das Entitlement, mit dem die aktuelle LobbyWorld eroeffnet wurde.
+   * Nur Vergleichsmarker fuer den effektiven Lobby-Base-Stand (Coop plus gespeichertes
+   * Entitlement), mit dem die aktuelle LobbyWorld eroeffnet wurde.
    *
    * Der erste Sieg auf der Freischaltmap faellt zwischen zwei Lobby-Instanzen; ohne diesen
    * Marker haette die Reihenfolge von Sieg-Verbuchung und Lobby-Aufbau entschieden, ob die Basis
@@ -639,7 +640,8 @@ export class ArenaLifecycleCoordinator {
     if (bridge.getGamePhase() !== 'LOBBY' || this.roundStartPending) return;
 
     const currentMode = bridge.getActiveGameMode();
-    const persistentBaseUnlocked = getStoredPersistentBaseUnlocked();
+    const persistentBaseUnlocked = isCoopDefenseMode(currentMode)
+      && getStoredPersistentBaseUnlocked();
     const currentWorld = this.worldLifecycle.descriptor;
     if (currentWorld !== null) {
       if (isLobbyWorldDefinitionId(currentWorld.definitionId)
@@ -1794,16 +1796,31 @@ export class ArenaLifecycleCoordinator {
         worldMetrics: world.metrics,
         // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
         presentation,
-        enablePersistentBaseGravel: Boolean(world.persistentBaseSite),
+        // Die LobbyWorld traegt die Gravel-Layer auch ohne materialisierten Kern, damit der
+        // bestehende Fast-Reinstance beim Moduswechsel Coop <-> Nicht-Coop dieselbe Presentation
+        // wiederverwenden kann. Ohne Site bleibt der State leer; die Basis wird dadurch nicht
+        // sichtbar und nicht als World-Geometrie materialisiert.
+        enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
         persistentBaseGravel: persistentBaseSite
           ? {
             seed: worldDescriptor.seed,
             anchor: persistentBaseSite.anchor,
-            radiusCells: persistentBaseSite.radiusCells,
+            buildArea: persistentBaseSite.buildArea,
           }
           : undefined,
       });
     }
+    // Beim Fast-Reinstance muss der wiederverwendete Ground-Streamer vor dem ersten Residency-
+    // Bake bereits den neuen World-Zustand sehen; der regulaere Scene-Sync bestaetigt ihn danach.
+    this.ctx.arenaResult.groundSurface?.setPersistentBaseGravel(
+      persistentBaseSite
+        ? {
+          seed: worldDescriptor.seed,
+          anchor: persistentBaseSite.anchor,
+          buildArea: persistentBaseSite.buildArea,
+        }
+        : null,
+    );
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.

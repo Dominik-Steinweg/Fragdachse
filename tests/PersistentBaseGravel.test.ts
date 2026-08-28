@@ -18,6 +18,7 @@ import {
   getPersistentBaseGravelCells,
   persistentBaseGravelCellKey,
 } from '../src/arena/PersistentBaseGravelField';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import { GRAVEL_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { isCellInsidePersistentBaseZone } from '../src/persistentBase/PersistentBaseZone';
 import {
@@ -46,31 +47,60 @@ function drain(scene: object): void {
 }
 
 describe('persistent-base gravel field', () => {
-  it('uses exactly the active circular radius and never the reservation radius', () => {
+  it('uses exactly the resolved 3x3 build area and never the reservation radius', () => {
     const anchor = { gridX: 20, gridY: 12 };
-    const radiusCells = 2;
-    const cells = getPersistentBaseGravelCells(anchor, radiusCells, 40, 30);
+    const cells = getPersistentBaseGravelCells(anchor, DEFAULT_PERSISTENT_BASE_BUILD_AREA, 40, 30);
     const expected = [];
     for (let gridY = 0; gridY < 30; gridY += 1) {
       for (let gridX = 0; gridX < 40; gridX += 1) {
-        if (isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, radiusCells)) {
+        if (isCellInsidePersistentBaseZone(
+          gridX - anchor.gridX,
+          gridY - anchor.gridY,
+          DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+        )) {
           expected.push({ gridX, gridY });
         }
       }
     }
 
     expect(cells).toEqual(expected);
-    expect(cells.every((cell) => Math.hypot(cell.gridX - anchor.gridX, cell.gridY - anchor.gridY) <= radiusCells)).toBe(true);
+    expect(cells).toHaveLength(9);
     expect(cells.length).toBeLessThan(
-      getPersistentBaseGravelCells(anchor, MAX_PERSISTENT_BASE_RADIUS_CELLS, 40, 30).length,
+      getPersistentBaseGravelCells(
+        anchor,
+        { kind: 'radius', radiusCells: MAX_PERSISTENT_BASE_RADIUS_CELLS },
+        40,
+        30,
+      ).length,
     );
+  });
+
+  it('supports a future radius-based build area through the same generic rule', () => {
+    const anchor = { gridX: 20, gridY: 12 };
+    const buildArea = { kind: 'radius', radiusCells: 2 } as const;
+    const cells = getPersistentBaseGravelCells(anchor, buildArea, 40, 30);
+    const expected = [];
+    for (let gridY = 0; gridY < 30; gridY += 1) {
+      for (let gridX = 0; gridX < 40; gridX += 1) {
+        if (isCellInsidePersistentBaseZone(
+          gridX - anchor.gridX,
+          gridY - anchor.gridY,
+          buildArea,
+        )) {
+          expected.push({ gridX, gridY });
+        }
+      }
+    }
+
+    expect(cells).toEqual(expected);
+    expect(cells).toHaveLength(13);
   });
 
   it('keeps complete 47-blob neighbour context across a 128-px chunk boundary', () => {
     const state = createPersistentBaseGravelState({
       seed: 23,
       anchor: { gridX: 4, gridY: 1 },
-      radiusCells: 2,
+      buildArea: { kind: 'radius', radiusCells: 2 },
       frame: { offsetX: 0, offsetY: 0, width: 512, height: 128 },
     });
     const fullSet = state.cellKeys;
@@ -114,9 +144,9 @@ describe('persistent-base gravel field', () => {
       frame: { offsetX: 37, offsetY: 12, width: 640, height: 640 },
       config,
     };
-    const first = createPersistentBaseGravelState({ ...options, radiusCells: 3 });
-    const reload = createPersistentBaseGravelState({ ...options, radiusCells: 3 });
-    const expanded = createPersistentBaseGravelState({ ...options, radiusCells: 4 });
+    const first = createPersistentBaseGravelState({ ...options, buildArea: { kind: 'radius', radiusCells: 3 } });
+    const reload = createPersistentBaseGravelState({ ...options, buildArea: { kind: 'radius', radiusCells: 3 } });
+    const expanded = createPersistentBaseGravelState({ ...options, buildArea: { kind: 'radius', radiusCells: 4 } });
     const expandedByCell = new Map(
       expanded.decorations.map((decoration) => [
         persistentBaseGravelCellKey(decoration.gridX, decoration.gridY),
@@ -164,7 +194,7 @@ describe('persistent-base gravel streaming integration', () => {
       persistentBaseGravel: {
         seed: 17,
         anchor: { gridX: 4, gridY: 3 },
-        radiusCells: 3,
+        buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
       },
       chunkSize: 128,
     });
@@ -186,19 +216,36 @@ describe('persistent-base gravel streaming integration', () => {
 
     streamer.updateResidency(VIEW);
     drain(scene);
-    expect(streamer.getPersistentBaseGravelState()?.radiusCells).toBe(3);
+    const initialState = streamer.getPersistentBaseGravelState();
+    expect(initialState?.buildArea).toEqual(DEFAULT_PERSISTENT_BASE_BUILD_AREA);
+    expect(initialState?.cells).toHaveLength(9);
     expect(streamer.getChunkTexture(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, 0, 0)).not.toBeNull();
     expect(sceneImageCalls).toBe(0);
+
+    const initialKey = initialState?.key;
+    const changedRuleWithSameCells = streamer.setPersistentBaseGravel({
+      seed: 17,
+      anchor: { gridX: 4, gridY: 3 },
+      // Same nine integer cells as the square, but a different area rule and therefore a
+      // deliberately different state identity.
+      buildArea: { kind: 'radius', radiusCells: 1.5 },
+    });
+    expect(changedRuleWithSameCells).toBe(true);
+    expect(streamer.getPersistentBaseGravelState()?.cells).toHaveLength(9);
+    expect(streamer.getPersistentBaseGravelState()?.key).not.toBe(initialKey);
+    expect(streamer.getStats().pendingRegions).toBeGreaterThan(0);
+    drain(scene);
 
     const changed = streamer.setPersistentBaseGravel({
       seed: 17,
       anchor: { gridX: 4, gridY: 3 },
-      radiusCells: 4,
+      buildArea: { kind: 'radius', radiusCells: 4 },
     });
     expect(changed).toBe(true);
+    expect(streamer.getPersistentBaseGravelState()?.key).not.toBe(initialKey);
     expect(streamer.getStats().pendingRegions).toBeGreaterThan(0);
     drain(scene);
-    expect(streamer.getPersistentBaseGravelState()?.radiusCells).toBe(4);
+    expect(streamer.getPersistentBaseGravelState()?.buildArea).toEqual({ kind: 'radius', radiusCells: 4 });
 
     streamer.destroy();
     nonPersistent.destroy();

@@ -20,6 +20,7 @@ import {
 import { getPersistentBaseCoreSurfaceOffsets } from '../src/persistentBase/PersistentBaseCore';
 import { isValidPersistentBaseSite } from '../src/world/WorldRuntimeContext';
 import { ROCK_HP_MAX } from '../src/config';
+import type { GameMode } from '../src/types';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { resolveInputPolicy } from '../src/world/InputPolicy';
@@ -47,6 +48,25 @@ import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fak
 
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
+}
+
+function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean) {
+  const ownsPersistentBase = mode === 'coop_defense' && persistentBaseUnlocked;
+  const definition = getLobbyWorldDefinition();
+  return createWorldRuntimeContext({
+    descriptor: createAuthoredWorldDescriptor(
+      LOBBY_WORLD_DEFINITION_ID,
+      ownsPersistentBase ? 9 : 10,
+      ownsPersistentBase
+        ? { persistentBaseUnlocked: true, persistentBaseRadiusCells: 5 }
+        : undefined,
+    ),
+    metricsProfile: getAuthoredWorldMetricsProfile(
+      definition.metrics.widthCells,
+      definition.metrics.heightCells,
+    ),
+    definition,
+  });
 }
 
 describe('LobbyWorld – Authoring', () => {
@@ -258,6 +278,29 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(world.bases[0]?.cells.some((cell) => (
       cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY
     ))).toBe(false);
+  });
+
+  it('materialisiert den Kern in der Lobby nur fuer Coop mit Entitlement', () => {
+    const cases: Array<{ mode: GameMode; unlocked: boolean; hasBase: boolean }> = [
+      { mode: 'coop_defense', unlocked: true, hasBase: true },
+      { mode: 'coop_defense', unlocked: false, hasBase: false },
+      { mode: 'deathmatch', unlocked: true, hasBase: false },
+      { mode: 'team_deathmatch', unlocked: true, hasBase: false },
+      { mode: 'capture_the_beer', unlocked: true, hasBase: false },
+    ];
+
+    for (const testCase of cases) {
+      const world = lobbyWorldContextFor(testCase.mode, testCase.unlocked);
+      expect(world.persistentBaseSite !== null, `${testCase.mode}/${testCase.unlocked}`).toBe(testCase.hasBase);
+      expect(world.bases.length > 0, `${testCase.mode}/${testCase.unlocked}`).toBe(testCase.hasBase);
+    }
+
+    // Der Coordinator behaelt genau diese Entscheidung im bestehenden Lobby-Reinstance-Pfad;
+    // das Entitlement selbst wird dabei nicht aus dem Save entfernt.
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(lifecycle).toContain('const persistentBaseUnlocked = isCoopDefenseMode(currentMode)');
+    expect(lifecycle).toContain('&& getStoredPersistentBaseUnlocked();');
+    expect(lifecycle).toContain('this.lobbyWorldModeAtRevision !== currentMode');
   });
 
   it('haelt Konstruktionen an der Activity, nicht an der World', () => {

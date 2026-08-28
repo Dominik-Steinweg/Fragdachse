@@ -23,6 +23,7 @@ import type {
   PersistentBaseGravelState,
 } from '../PersistentBaseGravelField';
 import type { PersistentBaseAnchor } from '../../persistentBase/PersistentBaseTypes';
+import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
 import { RockGridIndex } from '../RockGridIndex';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
@@ -57,7 +58,7 @@ export const GROUND_DECAL_LAYER_ID = 'groundDecals';
 export interface GroundSurfacePersistentBaseGravelZone {
   readonly seed: number;
   readonly anchor: PersistentBaseAnchor;
-  readonly radiusCells: number;
+  readonly buildArea: PersistentBaseBuildArea;
 }
 
 export interface GroundSurfaceStreamerOptions {
@@ -250,15 +251,14 @@ export class GroundSurfaceStreamer {
 
   /**
    * Aktualisiert die sichtbare Persistent Zone. Die Szene ruft diesen Setter aus ihrem normalen
-   * Round-State-Sync auf; der State-Key verhindert jede Arbeit, solange Anchor, Radius und Seed
-   * unveraendert sind.
+   * Round-State-Sync auf; der State-Key verhindert jede Arbeit, solange Anchor, Build-Area und
+   * Seed unveraendert sind.
    */
   setPersistentBaseGravel(zone: GroundSurfacePersistentBaseGravelZone | null): boolean {
     if (!this.persistentBaseGravelEnabled) return false;
 
-    const radiusCells = normalizeRadiusCells(zone?.radiusCells);
     const nextKey = zone
-      ? getPersistentBaseGravelStateKey(zone.seed, zone.anchor, radiusCells)
+      ? getPersistentBaseGravelStateKey(zone.seed, zone.anchor, zone.buildArea)
       : 'none';
     if (nextKey === this.persistentBaseGravelKey) return false;
 
@@ -267,7 +267,7 @@ export class GroundSurfaceStreamer {
       ? createPersistentBaseGravelState({
         seed: zone.seed >>> 0,
         anchor: zone.anchor,
-        radiusCells,
+        buildArea: zone.buildArea,
         frame: this.frame,
       })
       : null;
@@ -536,10 +536,7 @@ export class GroundSurfaceStreamer {
       const key = persistentBaseGravelCellKey(cell.gridX, cell.gridY);
       if (!previousKeys.has(key)) changedCells.set(key, cell);
     }
-    const sourceChanged = previous && next
-      && (previous.seed !== next.seed
-        || previous.anchor.gridX !== next.anchor.gridX
-        || previous.anchor.gridY !== next.anchor.gridY);
+    const sourceChanged = previous && next && previous.key !== next.key;
     if (sourceChanged) {
       for (const cell of previous.cells) {
         changedCells.set(persistentBaseGravelCellKey(cell.gridX, cell.gridY), cell);
@@ -941,10 +938,4 @@ function maxGroundCoverRadius(placements: readonly GroundCoverPlacement[]): numb
     maxRadius = Math.max(maxRadius, getGroundCoverPlacementRadiusPx(placement));
   }
   return maxRadius;
-}
-
-function normalizeRadiusCells(radiusCells: number | undefined): number {
-  return typeof radiusCells === 'number' && Number.isFinite(radiusCells) && radiusCells >= 0
-    ? radiusCells
-    : 0;
 }

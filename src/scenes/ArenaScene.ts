@@ -2264,7 +2264,7 @@ export class ArenaScene extends Phaser.Scene {
         ? {
           seed: this.ctx.currentLayout.seed,
           anchor: persistentBaseSite.anchor,
-          radiusCells: persistentBaseSite.radiusCells,
+          buildArea: persistentBaseSite.buildArea,
         }
         : null,
     );

@@ -1,5 +1,9 @@
 import { CELL_SIZE } from '../config';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
+import {
+  getPersistentBaseBuildAreaExtentCells,
+  type PersistentBaseBuildArea,
+} from '../persistentBase/PersistentBaseCore';
 import { isCellInsidePersistentBaseZone } from '../persistentBase/PersistentBaseZone';
 import { hashSeededCell01 } from './CellHash';
 import {
@@ -29,7 +33,7 @@ export interface PersistentBaseGravelFrame {
 export interface PersistentBaseGravelFieldOptions {
   readonly seed: number;
   readonly anchor: PersistentBaseAnchor;
-  readonly radiusCells: number;
+  readonly buildArea: PersistentBaseBuildArea;
   readonly frame: PersistentBaseGravelFrame;
   readonly config?: PersistentBaseGravelDecorationConfig;
 }
@@ -38,7 +42,7 @@ export interface PersistentBaseGravelState {
   readonly key: string;
   readonly seed: number;
   readonly anchor: PersistentBaseAnchor;
-  readonly radiusCells: number;
+  readonly buildArea: PersistentBaseBuildArea;
   readonly cells: readonly PersistentBaseGravelCell[];
   readonly cellKeys: ReadonlySet<string>;
   readonly decorations: readonly PersistentBaseGravelDecoration[];
@@ -60,37 +64,40 @@ const DECORATION_SALTS = {
 export function getPersistentBaseGravelStateKey(
   seed: number,
   anchor: PersistentBaseAnchor,
-  radiusCells: number,
+  buildArea: PersistentBaseBuildArea,
 ): string {
-  return `${seed >>> 0}:${anchor.gridX}:${anchor.gridY}:${radiusCells}`;
+  const areaKey = buildArea.kind === 'square'
+    ? `square:${buildArea.sizeCells}`
+    : `radius:${buildArea.radiusCells}`;
+  return `${seed >>> 0}:${anchor.gridX}:${anchor.gridY}:${areaKey}`;
 }
 
 /**
- * Builds the complete current gravel cell set from the same zone predicate used by persistence.
- * The radius is intentionally the only extent input; MAX_RADIUS is only a generator reservation
- * and must never leak into this presentation field.
+ * Builds the complete current gravel cell set from the same build-area predicate used by
+ * placement and persistence. The active area is intentionally the only extent input;
+ * MAX_RADIUS is only a generator reservation and must never leak into this presentation field.
  */
 export function getPersistentBaseGravelCells(
   anchor: PersistentBaseAnchor,
-  radiusCells: number,
+  buildArea: PersistentBaseBuildArea,
   gridCols: number,
   gridRows: number,
 ): PersistentBaseGravelCell[] {
-  if (!Number.isFinite(radiusCells) || radiusCells < 0 || gridCols <= 0 || gridRows <= 0) return [];
+  const extent = getPersistentBaseBuildAreaExtentCells(buildArea);
+  if (!Number.isFinite(extent) || extent < 0 || gridCols <= 0 || gridRows <= 0) return [];
 
-  const radius = Math.ceil(radiusCells);
   const cells: PersistentBaseGravelCell[] = [];
   for (
-    let gridY = Math.max(0, anchor.gridY - radius);
-    gridY <= Math.min(gridRows - 1, anchor.gridY + radius);
+    let gridY = Math.max(0, anchor.gridY - extent);
+    gridY <= Math.min(gridRows - 1, anchor.gridY + extent);
     gridY += 1
   ) {
     for (
-      let gridX = Math.max(0, anchor.gridX - radius);
-      gridX <= Math.min(gridCols - 1, anchor.gridX + radius);
+      let gridX = Math.max(0, anchor.gridX - extent);
+      gridX <= Math.min(gridCols - 1, anchor.gridX + extent);
       gridX += 1
     ) {
-      if (!isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, radiusCells)) continue;
+      if (!isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, buildArea)) continue;
       cells.push({ gridX, gridY });
     }
   }
@@ -100,27 +107,24 @@ export function getPersistentBaseGravelCells(
 export function createPersistentBaseGravelState(
   options: PersistentBaseGravelFieldOptions,
 ): PersistentBaseGravelState {
-  const radiusCells = Number.isFinite(options.radiusCells) && options.radiusCells >= 0
-    ? options.radiusCells
-    : 0;
   const gridCols = Math.max(0, Math.ceil(options.frame.width / CELL_SIZE));
   const gridRows = Math.max(0, Math.ceil(options.frame.height / CELL_SIZE));
-  const cells = getPersistentBaseGravelCells(options.anchor, radiusCells, gridCols, gridRows);
+  const cells = getPersistentBaseGravelCells(options.anchor, options.buildArea, gridCols, gridRows);
   const cellKeys = new Set(cells.map((cell) => persistentBaseGravelCellKey(cell.gridX, cell.gridY)));
   const decorations = createPersistentBaseGravelDecorations(
     options.seed,
     options.anchor,
     cells,
-    radiusCells,
+    options.buildArea,
     options.frame,
     options.config ?? PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG,
   );
 
   return {
-    key: getPersistentBaseGravelStateKey(options.seed, options.anchor, radiusCells),
+    key: getPersistentBaseGravelStateKey(options.seed, options.anchor, options.buildArea),
     seed: options.seed,
     anchor: { ...options.anchor },
-    radiusCells,
+    buildArea: { ...options.buildArea },
     cells,
     cellKeys,
     decorations,
@@ -141,7 +145,7 @@ function createPersistentBaseGravelDecorations(
   seed: number,
   anchor: PersistentBaseAnchor,
   cells: readonly PersistentBaseGravelCell[],
-  radiusCells: number,
+  buildArea: PersistentBaseBuildArea,
   frame: PersistentBaseGravelFrame,
   config: PersistentBaseGravelDecorationConfig,
 ): PersistentBaseGravelDecoration[] {
@@ -163,12 +167,22 @@ function createPersistentBaseGravelDecorations(
       * 2 * config.maxOffsetCells;
     const sizeRoll = hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.size) ** config.sizeBias;
     const sizeCells = config.minSizeCells + (config.maxSizeCells - config.minSizeCells) * sizeRoll;
-    const centerDistance = Math.hypot(
+    const rotatedStampRadius = sizeCells * Math.SQRT2 * 0.5;
+    if (buildArea.kind === 'radius') {
+      const centerDistance = Math.hypot(
+        cell.gridX + offsetX - anchor.gridX,
+        cell.gridY + offsetY - anchor.gridY,
+      );
+      if (centerDistance + rotatedStampRadius > buildArea.radiusCells + config.maxOverhangCells) continue;
+    } else if (!isCellInsidePersistentBaseZone(
       cell.gridX + offsetX - anchor.gridX,
       cell.gridY + offsetY - anchor.gridY,
-    );
-    const rotatedStampRadius = sizeCells * Math.SQRT2 * 0.5;
-    if (centerDistance + rotatedStampRadius > radiusCells + config.maxOverhangCells) continue;
+      buildArea,
+    )) {
+      // Square areas keep their exact cell set; only the authored stamp itself may overhang
+      // that edge slightly. No circular fallback is allowed for the current 3x3 courtyard.
+      continue;
+    }
     const alphaRoll = hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.alpha);
     decorations.push({
       gridX: cell.gridX,
