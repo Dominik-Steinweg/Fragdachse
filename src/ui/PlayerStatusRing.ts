@@ -135,6 +135,22 @@ function canvasArcLayer(
   ctx.globalAlpha = alpha;
   ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
   ctx.fill();
+
+  // Die Endpunkte bekommen dieselbe halbe Bandbreite als Kreisradius wie die GPU-Kappen. Dadurch
+  // bleibt auch der einmalig gebackene, inaktive Ring frei von flachen Abschlusskanten.
+  const capRadius = Math.max(0, (outerRadius - innerRadius) * 0.5);
+  const capCenterRadius = (outerRadius + innerRadius) * 0.5;
+  for (const angle of [start, end]) {
+    ctx.beginPath();
+    ctx.arc(
+      center + Math.cos(angle) * capCenterRadius,
+      center + Math.sin(angle) * capCenterRadius,
+      capRadius,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
 }
 
 function ensureStatusRingStaticTexture(scene: Phaser.Scene): void {

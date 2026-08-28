@@ -48,6 +48,10 @@ const SEGMENT_END_FEATHER_RAD = 0.08;
 /** Schmale analytische Kanten fuer die normale Fuellung, ungefaehr ein sichtbarer Pixel. */
 const FILL_EDGE_FEATHER_PX = 0.75;
 const FILL_SEGMENT_END_FEATHER_RAD = 0.03;
+const LIVING_CAP_RADIUS = 3.8;
+const LIVING_CAP_FEATHER = 1.0;
+const AMBIENT_CAP_RADIUS = 4.2;
+const AMBIENT_CAP_FEATHER = 1.2;
 
 const RING_MASK_GLSL = [
   'float bandMask(float radius, float inner, float outer, float innerFeather, float outerFeather) {',
@@ -59,6 +63,22 @@ const RING_MASK_GLSL = [
   '  float startFade = smoothstep(-edge, 0.0, rel);',
   '  float endFade = 1.0 - smoothstep(width, width + edge, rel);',
   '  return startFade * endFade;',
+  '}',
+  'vec2 ringPoint(float angle, float radius) {',
+  '  return vec2(sin(angle), -cos(angle)) * radius;',
+  '}',
+  'float circleMask(vec2 local, vec2 center, float radius, float feather) {',
+  '  return 1.0 - smoothstep(radius - feather, radius + feather, distance(local, center));',
+  '}',
+  'float roundedSegmentMask(vec2 local, float radius, float startAngle, float signedWidth,',
+  '  float inner, float outer, float sector, float bodyFeather, float capRadius, float capFeather) {',
+  '  float body = bandMask(radius, inner, outer, bodyFeather, bodyFeather) * sector;',
+  '  float centerRadius = (inner + outer) * 0.5;',
+  '  vec2 startPoint = ringPoint(startAngle, centerRadius);',
+  '  vec2 endPoint = ringPoint(startAngle + signedWidth, centerRadius);',
+  '  float startCap = circleMask(local, startPoint, capRadius, capFeather);',
+  '  float endCap = circleMask(local, endPoint, capRadius, capFeather);',
+  '  return max(body, max(startCap, endCap));',
   '}',
 ].join('\n');
 
@@ -131,31 +151,37 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   // Bereich zurueckfalten, damit segmentMask() beide Enden symmetrisch auslaufen laesst.
   '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
   `    float sectorValue = segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
-  '    if (sectorValue <= 0.0) continue;',
   `    float activity = 1.0 + band.z * ${(ACTIVE_GAIN - 1).toFixed(3)};`,
   `    float gain = ${FIELD_GAIN.toFixed(3)} * activity * band.w;`,
   '    vec4 fill = uSegmentFill[i];',
   // Der permanente Glow nutzt dieselben analytischen Radial- und Winkelmasken wie die Blobs.
-  '    float glowWide = i == 3',
-  '      ? bandMask(radius, fill.x - 2.4, fill.y + 3.2, 1.8, 2.2)',
-  '      : bandMask(radius, fill.x - 4.2, fill.y + 4.2, 2.4, 2.4);',
-  '    float glowMid = i == 3',
-  '      ? bandMask(radius, fill.x - 0.8, fill.y + 1.8, 1.2, 1.5)',
-  '      : bandMask(radius, fill.x - 2.4, fill.y + 2.4, 1.8, 1.8);',
-  '    float glowNear = i == 3',
-  '      ? 0.0',
-  '      : bandMask(radius, fill.x - 0.8, fill.y + 1.2, 1.0, 1.2);',
+  `    float glowWide = i == 3
+      ? roundedSegmentMask(local, radius, arc.x, arc.y, fill.x - 2.4, fill.y + 3.2,
+        segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)}), 1.8, ${AMBIENT_CAP_RADIUS.toFixed(1)}, ${AMBIENT_CAP_FEATHER.toFixed(1)})
+      : roundedSegmentMask(local, radius, arc.x, arc.y, fill.x - 4.2, fill.y + 4.2,
+        segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)}), 2.4, ${AMBIENT_CAP_RADIUS.toFixed(1)}, ${AMBIENT_CAP_FEATHER.toFixed(1)});`,
+  `    float glowMid = i == 3
+      ? roundedSegmentMask(local, radius, arc.x, arc.y, fill.x - 0.8, fill.y + 1.8,
+        segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)}), 1.2, ${AMBIENT_CAP_RADIUS.toFixed(1)}, ${AMBIENT_CAP_FEATHER.toFixed(1)})
+      : roundedSegmentMask(local, radius, arc.x, arc.y, fill.x - 2.4, fill.y + 2.4,
+        segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)}), 1.8, ${AMBIENT_CAP_RADIUS.toFixed(1)}, ${AMBIENT_CAP_FEATHER.toFixed(1)});`,
+  `    float glowNear = i == 3
+      ? 0.0
+      : roundedSegmentMask(local, radius, arc.x, arc.y, fill.x - 0.8, fill.y + 1.2,
+        segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)}), 1.0, ${AMBIENT_CAP_RADIUS.toFixed(1)}, ${AMBIENT_CAP_FEATHER.toFixed(1)});`,
   '    float glowWideAlpha = i == 3 ? 0.07 : 0.055;',
   '    float glowMidAlpha = i == 3 ? 0.11 : 0.075;',
   `    float glowSector = segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
   '    float glowCoverage = (glowWide * glowWideAlpha + glowMid * glowMidAlpha + glowNear * 0.1)',
-  '      * glowSector * uAmbientPulse;',
+  '      * uAmbientPulse;',
   '    accum += (uSegmentTintMid[i] * glowWide * glowWideAlpha',
   '      + uSegmentTintLight[i] * (glowMid * glowMidAlpha + glowNear * 0.1))',
-  '      * glowSector * uAmbientPulse;',
+  '      * uAmbientPulse;',
   '    coverage += glowCoverage;',
-  `    float coreValue = core * bandMask(radius, arc.z, arc.w, ${CORE_INNER_FEATHER.toFixed(1)}, ${CORE_OUTER_FEATHER.toFixed(1)}) * gain * sectorValue;`,
-  `    float outerValue = outerLayer * bandMask(radius, band.x, band.y, ${OUTER_INNER_FEATHER.toFixed(1)}, ${OUTER_OUTER_FEATHER.toFixed(1)}) * gain * sectorValue;`,
+  `    float coreValue = core * roundedSegmentMask(local, radius, arc.x, arc.y, arc.z, arc.w,
+      sectorValue, ${CORE_INNER_FEATHER.toFixed(1)}, ${LIVING_CAP_RADIUS.toFixed(1)}, ${LIVING_CAP_FEATHER.toFixed(1)}) * gain;`,
+  `    float outerValue = outerLayer * roundedSegmentMask(local, radius, arc.x, arc.y, band.x, band.y,
+      sectorValue, ${OUTER_INNER_FEATHER.toFixed(1)}, ${LIVING_CAP_RADIUS.toFixed(1)}, ${LIVING_CAP_FEATHER.toFixed(1)}) * gain;`,
   // Die frueheren Tint-Listen waren [mid, dark, mid] fuer die Kern- und [dark, dark, mid] fuer
   // die Aussenschicht — im Mittel zwei Drittel mid bzw. zwei Drittel dark.
   '    accum += mix(uSegmentTintDark[i], uSegmentTintMid[i], 0.67) * coreValue;',
@@ -187,10 +213,10 @@ export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
   `uniform vec3 uSegmentTintLight[${STATUS_RING_SEGMENT_COUNT}];`,
   `uniform vec3 uSegmentTintDark[${STATUS_RING_SEGMENT_COUNT}];`,
   RING_MASK_GLSL,
-  'vec4 over(vec4 under, vec3 color, float alpha) {',
-  '  alpha = clamp(alpha, 0.0, 1.0);',
-  '  float remaining = 1.0 - under.a;',
-  '  return vec4(under.rgb + color * alpha * remaining, under.a + alpha * remaining);',
+  'vec4 over(vec4 dst, vec3 srcColor, float srcAlpha) {',
+  '  srcAlpha = clamp(srcAlpha, 0.0, 1.0);',
+  '  float remaining = 1.0 - srcAlpha;',
+  '  return vec4(srcColor * srcAlpha + dst.rgb * remaining, srcAlpha + dst.a * remaining);',
   '}',
   'void main () {',
   // ShaderQuad uses WebGL texture coordinates (y=1 at the visual top). Keep the ring's
@@ -208,12 +234,16 @@ export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
   `    float rel = arc.y >= 0.0 ? mod(angle - start + ${TAU}, ${TAU}) : mod(start - angle + ${TAU}, ${TAU});`,
   '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
   `    float sector = segmentMask(signedRel, width, ${FILL_SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
-  '    if (sector <= 0.0) continue;',
   // The small radial feather is deliberately close to one pixel: it removes polygon stair-steps
   // while keeping the authored six-pixel ring crisp.
-  `    float ring = bandMask(radius, fill.x, fill.y, ${FILL_EDGE_FEATHER_PX.toFixed(2)}, ${FILL_EDGE_FEATHER_PX.toFixed(2)}) * sector;`,
-  `    float highlight = bandMask(radius, fill.x + 0.9, min(fill.x + 3.3, fill.y), ${FILL_EDGE_FEATHER_PX.toFixed(2)}, ${FILL_EDGE_FEATHER_PX.toFixed(2)}) * sector;`,
-  `    float darkEdge = bandMask(radius, fill.y - 1.4, fill.y, ${FILL_EDGE_FEATHER_PX.toFixed(2)}, ${FILL_EDGE_FEATHER_PX.toFixed(2)}) * sector;`,
+  `    float ring = roundedSegmentMask(local, radius, arc.x, arc.y, fill.x, fill.y, sector,
+      ${FILL_EDGE_FEATHER_PX.toFixed(2)}, (fill.y - fill.x) * 0.5, ${FILL_EDGE_FEATHER_PX.toFixed(2)});`,
+  `    float highlightInner = fill.x + 0.9;`,
+  `    float highlightOuter = min(fill.x + 3.3, fill.y);`,
+  `    float highlight = roundedSegmentMask(local, radius, arc.x, arc.y, highlightInner, highlightOuter, sector,
+      ${FILL_EDGE_FEATHER_PX.toFixed(2)}, (highlightOuter - highlightInner) * 0.5, ${FILL_EDGE_FEATHER_PX.toFixed(2)});`,
+  `    float darkEdge = roundedSegmentMask(local, radius, arc.x, arc.y, fill.y - 1.4, fill.y, sector,
+      ${FILL_EDGE_FEATHER_PX.toFixed(2)}, 0.7, ${FILL_EDGE_FEATHER_PX.toFixed(2)});`,
   '    accum = over(accum, uSegmentTintMid[i], ring * fill.z);',
   '    accum = over(accum, uSegmentTintLight[i], highlight * fill.w);',
   '    accum = over(accum, uSegmentTintDark[i], darkEdge * 0.24);',
